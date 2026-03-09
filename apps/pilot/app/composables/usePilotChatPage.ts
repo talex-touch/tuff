@@ -241,6 +241,7 @@ export function usePilotChatPage() {
   const titleLoadingMap = ref<Record<string, boolean>>({})
 
   const streamAbortControllers = new Map<string, AbortController>()
+  const autoPauseSessionLocks = new Set<string>()
   let assistantDeltaBuffer = ''
   let assistantFlushTimer: ReturnType<typeof setTimeout> | null = null
   const traceKeySet = new Set<string>()
@@ -320,6 +321,58 @@ export function usePilotChatPage() {
     streamAbortControllers.delete(sessionId)
     controller.abort(reason)
     setSessionRunning(sessionId, false)
+  }
+
+  function markSessionPaused(sessionId: string, reason: PilotSession['pauseReason']) {
+    const nowIso = new Date().toISOString()
+    sessions.value = sessions.value.map((session) => {
+      if (session.sessionId !== sessionId) {
+        return session
+      }
+      return {
+        ...session,
+        status: 'paused_disconnect',
+        pauseReason: reason || 'heartbeat_timeout',
+        updatedAt: nowIso,
+      }
+    })
+  }
+
+  async function autoPauseSessionForTimeout(sessionId: string, timeoutReason: string): Promise<void> {
+    if (!sessionId || autoPauseSessionLocks.has(sessionId)) {
+      return
+    }
+
+    autoPauseSessionLocks.add(sessionId)
+    try {
+      await fetchJson(`/api/pilot/chat/sessions/${sessionId}/pause`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reason: 'heartbeat_timeout',
+        }),
+      })
+
+      markSessionPaused(sessionId, 'heartbeat_timeout')
+      if (activeSessionId.value === sessionId) {
+        reconnectHint.value = '会话长时间无有效响应，系统已自动终止。可点击“恢复 paused 会话”继续。'
+        appendTrace(mapTrace('session.paused', Math.max(1, lastSeq.value + 1), {
+          reason: 'heartbeat_timeout',
+          autoPaused: true,
+          timeoutReason,
+        }))
+      }
+    }
+    catch {
+      if (activeSessionId.value === sessionId) {
+        reconnectHint.value = '会话长时间无有效响应，系统自动终止失败，请手动恢复或刷新。'
+      }
+    }
+    finally {
+      autoPauseSessionLocks.delete(sessionId)
+    }
   }
 
   const chatListMessages = computed<ChatMessageModel[]>(() => {
@@ -1025,6 +1078,8 @@ export function usePilotChatPage() {
   async function openStream(payload: Record<string, unknown>) {
     const sessionId = await ensureActiveSession()
     const beforeSeq = lastSeq.value
+    const hasTurnMessage = Boolean(String(payload.message || '').trim())
+    const isConversationFollowStream = !hasTurnMessage
 
     abortSessionStream(sessionId, 'restart_same_session')
     const streamAbortController = new AbortController()
@@ -1060,8 +1115,14 @@ export function usePilotChatPage() {
     catch (error) {
       if (streamAbortController.signal.aborted) {
         const abortReason = String(streamAbortController.signal.reason || '')
-        if ((abortReason === 'stream_idle_timeout' || abortReason === 'stream_max_timeout') && isCurrentActiveSession()) {
-          streamError.value = error instanceof Error ? error.message : '流式响应超时'
+        const isTimeoutAbort = abortReason === 'stream_idle_timeout' || abortReason === 'stream_max_timeout'
+        if (isTimeoutAbort) {
+          if (isCurrentActiveSession()) {
+            streamError.value = error instanceof Error ? error.message : '流式响应超时'
+          }
+          if (isConversationFollowStream) {
+            await autoPauseSessionForTimeout(sessionId, abortReason)
+          }
         }
         return
       }
