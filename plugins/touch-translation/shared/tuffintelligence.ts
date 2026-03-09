@@ -33,7 +33,7 @@ function getIntelligenceClient() {
       const channel = (window as any)?.$channel
       if (channel && typeof channel.send === 'function') {
         rendererIntelligenceClient = createIntelligenceClient({
-          send: (eventName, payload) => channel.send(eventName, withSdkApi(payload)),
+          send: (eventName: string, payload: unknown) => channel.send(eventName, withSdkApi(payload)),
         })
       }
       else {

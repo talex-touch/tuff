@@ -15,6 +15,12 @@ const { makeWidgetId } = require('@talex-touch/utils/plugin/widget')
 
 const PLUGIN_NAME = 'touch-translation'
 const SOURCE_ID = 'plugin-features'
+const SUPPORTED_TRANSLATION_FEATURES = new Set(['touch-translate', 'screenshot-translate'])
+const NO_INPUT_TEXT_MESSAGE = '无输入：请输入要翻译的文本'
+const NO_INPUT_SCREENSHOT_MESSAGE = '无输入：请先截取图片或输入文本后再翻译'
+const NO_INPUT_OCR_MESSAGE = '无输入：截图中未识别到可翻译文本，请更换区域后重试'
+const PERMISSION_DENIED_MESSAGE = '权限被拒绝：请在插件设置中授予所需权限后重试'
+const CALL_FAILED_MESSAGE = '调用失败：翻译服务暂不可用，请稍后重试'
 
 function normalizeText(value) {
   return String(value ?? '').trim()
@@ -100,6 +106,78 @@ async function ensureAiPermission() {
   aiPermissionState = Boolean(granted)
   return aiPermissionState
 }
+
+function extractQueryText(query) {
+  if (typeof query === 'string') {
+    return query
+  }
+  if (query && typeof query === 'object' && typeof query.text === 'string') {
+    return query.text
+  }
+  return ''
+}
+
+function extractImageDataUrl(query) {
+  if (!query || typeof query !== 'object' || !Array.isArray(query.inputs)) {
+    return null
+  }
+
+  const imageInput = query.inputs.find(input =>
+    input?.type === 'image'
+    && typeof input?.content === 'string'
+    && input.content.startsWith('data:image/'))
+  return imageInput?.content || null
+}
+
+function normalizeCallFailureMessage(rawMessage) {
+  const message = typeof rawMessage === 'string' ? rawMessage.trim() : ''
+  return message ? `${CALL_FAILED_MESSAGE}（${message}）` : CALL_FAILED_MESSAGE
+}
+
+async function resolveTextToTranslate(featureId, query) {
+  const textQuery = extractQueryText(query).trim()
+  if (textQuery) {
+    return { text: textQuery }
+  }
+
+  if (featureId !== 'screenshot-translate') {
+    return { text: '', error: NO_INPUT_TEXT_MESSAGE }
+  }
+
+  const imageDataUrl = extractImageDataUrl(query)
+  if (!imageDataUrl) {
+    return { text: '', error: NO_INPUT_SCREENSHOT_MESSAGE }
+  }
+
+  const hasAiPermission = await ensureAiPermission()
+  if (!hasAiPermission) {
+    return { text: '', error: PERMISSION_DENIED_MESSAGE }
+  }
+
+  try {
+    const aiClient = createIntelligenceClient()
+    const ocrResult = await aiClient.invoke('vision.ocr', {
+      source: {
+        type: 'data-url',
+        dataUrl: imageDataUrl,
+      },
+      language: 'zh-CN',
+      includeLayout: false,
+      includeKeywords: false,
+    })
+    const ocrText = typeof ocrResult?.result?.text === 'string'
+      ? ocrResult.result.text.trim()
+      : ''
+    if (!ocrText) {
+      return { text: '', error: NO_INPUT_OCR_MESSAGE }
+    }
+    return { text: ocrText }
+  }
+  catch (error) {
+    return { text: '', error: normalizeCallFailureMessage(error instanceof Error ? error.message : '') }
+  }
+}
+
 async function startTranslationRequest(textToTranslate, featureId, signal, nextSeq) {
   plugin.search.updateQuery(textToTranslate)
   plugin.feature.clearItems()
@@ -128,7 +206,7 @@ async function startTranslationRequest(textToTranslate, featureId, signal, nextS
 
   const ok = await ensureNetworkPermission()
   if (!ok) {
-    state.error = '请在插件设置中授予网络权限以使用翻译功能'
+    state.error = PERMISSION_DENIED_MESSAGE
     upsertWidgetItem(featureId)
     return
   }
@@ -323,7 +401,7 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
           if (!(await ensureAiPermission())) {
             updateProviderState(featureId, provider.id, {
               status: 'error',
-              error: '请在插件设置中授予 AI 权限以使用智能翻译',
+              error: PERMISSION_DENIED_MESSAGE,
             })
             return
           }
@@ -396,7 +474,7 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
         return
 
       if (!result || result.error) {
-        const errorMessage = result?.error || 'translation failed'
+        const errorMessage = normalizeCallFailureMessage(result?.error || '')
         updateProviderState(featureId, provider.id, {
           status: 'error',
           error: errorMessage,
@@ -422,7 +500,7 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
     }
     const state = widgetStateByFeature.get(featureId)
     if (state) {
-      state.error = error instanceof Error ? error.message : 'translation failed'
+      state.error = normalizeCallFailureMessage(error instanceof Error ? error.message : '')
       upsertWidgetItem(featureId)
     }
   }
@@ -1015,15 +1093,20 @@ const pluginLifecycle = {
    */
   async onFeatureTriggered(featureId, query, _feature, signal) {
     try {
-      // 兼容新版本：query 可能是字符串或 TuffQuery 对象
-      const queryText = typeof query === 'string' ? query : query?.text
-
-      if (featureId === 'touch-translate') {
-        const textToTranslate = queryText?.trim() || ''
+      if (SUPPORTED_TRANSLATION_FEATURES.has(featureId)) {
+        const resolvedInput = await resolveTextToTranslate(featureId, query)
+        const textToTranslate = resolvedInput.text.trim()
 
         if (!textToTranslate) {
           lastQueryByFeature.delete(featureId)
           ensureIdleWidget(featureId)
+          if (resolvedInput.error) {
+            const state = widgetStateByFeature.get(featureId)
+            if (state) {
+              state.error = resolvedInput.error
+              upsertWidgetItem(featureId)
+            }
+          }
           return true
         }
 

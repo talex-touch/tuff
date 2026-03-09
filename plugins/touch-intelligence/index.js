@@ -5,8 +5,11 @@ const PLUGIN_NAME = 'touch-intelligence'
 const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'file', value: 'assets/logo.svg' }
 const ACTION_ID = 'intelligence-action'
+const DEFAULT_FEATURE_ID = 'intelligence-ask'
+const MAX_HISTORY_MESSAGES = 10
 
 const AI_SYSTEM_PROMPT = '你是 Talex Touch 桌面助手里的智能助手，请用简洁清晰的中文回答。'
+const conversationSessions = new Map()
 
 function resolveIntelligenceClient() {
   const { createIntelligenceClient } = require('@talex-touch/tuff-intelligence')
@@ -41,10 +44,66 @@ function normalizePrompt(raw) {
   return normalizeText(withoutPrefix || input)
 }
 
-function buildInvokePayload(prompt) {
+function resolveFeatureId(featureId) {
+  return normalizeText(featureId) || DEFAULT_FEATURE_ID
+}
+
+function normalizeHistory(messages) {
+  if (!Array.isArray(messages))
+    return []
+
+  return messages
+    .map((message) => {
+      const role = normalizeText(message?.role)
+      const content = normalizeText(message?.content)
+      if (!content)
+        return null
+      if (role !== 'user' && role !== 'assistant')
+        return null
+      return { role, content }
+    })
+    .filter(Boolean)
+}
+
+function cloneHistory(messages) {
+  return normalizeHistory(messages).map(message => ({ ...message }))
+}
+
+function keepNewestBusinessMessages(messages) {
+  const normalized = cloneHistory(messages)
+  if (normalized.length <= MAX_HISTORY_MESSAGES)
+    return normalized
+  return normalized.slice(normalized.length - MAX_HISTORY_MESSAGES)
+}
+
+function canCommitResponse(session, requestId) {
+  return session.activeRequestId === requestId && session.uiRequestId === requestId
+}
+
+function markPendingRequest(session, requestId) {
+  session.activeRequestId = requestId
+  session.uiRequestId = requestId
+}
+
+function getSession(featureId) {
+  const resolvedFeatureId = resolveFeatureId(featureId)
+  if (!conversationSessions.has(resolvedFeatureId)) {
+    conversationSessions.set(resolvedFeatureId, {
+      history: [],
+      activeRequestId: '',
+      uiRequestId: '',
+    })
+  }
+
+  return conversationSessions.get(resolvedFeatureId)
+}
+
+function buildInvokePayload(prompt, history = []) {
+  const normalizedHistory = normalizeHistory(history)
   return {
     messages: [
       { role: 'system', content: AI_SYSTEM_PROMPT },
+      ...normalizedHistory,
       { role: 'user', content: prompt },
     ],
   }
@@ -139,36 +198,63 @@ function buildReadyItem(featureId, state) {
   })
 }
 
-function buildErrorItem(featureId, prompt, message) {
+function buildErrorItem(featureId, prompt, message, history = []) {
   return buildInfoItem({
     id: `${featureId}-error-${Date.now()}`,
     featureId,
     title: prompt || 'AI 请求失败',
     subtitle: truncateText(message || '未知错误', 96),
     actionId: 'retry',
-    payload: { prompt },
+    payload: {
+      prompt,
+      history: cloneHistory(history),
+    },
   })
 }
 
-async function dispatchPrompt(featureId, prompt, requestId) {
+async function dispatchPrompt({ featureId, prompt, requestId, historySnapshot }) {
+  const resolvedFeatureId = resolveFeatureId(featureId)
+  const normalizedPrompt = normalizePrompt(prompt)
+  const session = getSession(resolvedFeatureId)
+  const resolvedHistory = cloneHistory(historySnapshot)
+
+  if (!normalizedPrompt)
+    return
+
   try {
     const client = resolveIntelligenceClient()
-    const payload = buildInvokePayload(prompt)
+    const payload = buildInvokePayload(normalizedPrompt, resolvedHistory)
     const result = await client.invoke('text.chat', payload)
-    const mapped = mapInvokeResult(result, prompt, requestId)
+    const mapped = mapInvokeResult(result, normalizedPrompt, requestId)
 
     if (!mapped.answer) {
       throw new Error('AI 未返回可用内容')
     }
 
+    if (!canCommitResponse(session, requestId))
+      return
+
+    session.history = keepNewestBusinessMessages([
+      ...resolvedHistory,
+      { role: 'user', content: normalizedPrompt },
+      { role: 'assistant', content: mapped.answer },
+    ])
+    session.activeRequestId = ''
+    session.uiRequestId = requestId
+
     plugin.feature.clearItems()
-    plugin.feature.pushItems([buildReadyItem(featureId, mapped)])
+    plugin.feature.pushItems([buildReadyItem(resolvedFeatureId, mapped)])
   }
   catch (error) {
+    if (!canCommitResponse(session, requestId))
+      return
+
+    session.activeRequestId = ''
+    session.uiRequestId = requestId
     logger?.error?.('[touch-intelligence] invoke failed', error)
     plugin.feature.clearItems()
     plugin.feature.pushItems([
-      buildErrorItem(featureId, prompt, error?.message || 'AI 调用失败'),
+      buildErrorItem(resolvedFeatureId, normalizedPrompt, error?.message || 'AI 调用失败', resolvedHistory),
     ])
   }
 }
@@ -188,16 +274,17 @@ async function copyAnswer(answer) {
 const pluginLifecycle = {
   async onFeatureTriggered(featureId, query) {
     try {
+      const resolvedFeatureId = resolveFeatureId(featureId)
       const prompt = normalizePrompt(getQueryText(query))
 
       plugin.feature.clearItems()
 
       if (!prompt) {
-        plugin.feature.pushItems([buildPlaceholderItem(featureId)])
+        plugin.feature.pushItems([buildPlaceholderItem(resolvedFeatureId)])
         return true
       }
 
-      plugin.feature.pushItems([buildSendItem(featureId, prompt)])
+      plugin.feature.pushItems([buildSendItem(resolvedFeatureId, prompt)])
       return true
     }
     catch (error) {
@@ -218,6 +305,8 @@ const pluginLifecycle = {
       const actionId = item.meta?.actionId
       const payload = item.meta?.payload || {}
       const prompt = normalizePrompt(payload.prompt)
+      const featureId = resolveFeatureId(item.meta?.featureId)
+      const session = getSession(featureId)
 
       if (actionId === 'copy-answer') {
         const answer = normalizeText(payload.answer)
@@ -244,10 +333,20 @@ const pluginLifecycle = {
         if (!hasPermission)
           return
 
+        const historySnapshot = actionId === 'retry' && Array.isArray(payload.history)
+          ? cloneHistory(payload.history)
+          : cloneHistory(session.history)
+
         const requestId = crypto.randomUUID()
+        markPendingRequest(session, requestId)
         plugin.feature.clearItems()
-        plugin.feature.pushItems([buildPendingItem(item.meta?.featureId || 'intelligence-ask', prompt, requestId)])
-        void dispatchPrompt(item.meta?.featureId || 'intelligence-ask', prompt, requestId)
+        plugin.feature.pushItems([buildPendingItem(featureId, prompt, requestId)])
+        void dispatchPrompt({
+          featureId,
+          prompt,
+          requestId,
+          historySnapshot,
+        })
         return { externalAction: true }
       }
     }
