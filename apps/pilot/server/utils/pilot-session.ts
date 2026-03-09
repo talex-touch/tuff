@@ -2,6 +2,7 @@ import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { createError, getCookie, getRequestURL, setCookie } from 'h3'
+import { resolvePilotConfigString } from './pilot-config'
 
 const DEFAULT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24
 const MIN_SECRET_LENGTH = 16
@@ -12,13 +13,6 @@ interface PilotSessionPayload {
   userId: string
   iat: number
   exp: number
-}
-
-function getPilotRuntimeConfig(event: H3Event): Record<string, unknown> {
-  const runtimeConfig = (event.context as { runtimeConfig?: Record<string, unknown> }).runtimeConfig
-  return runtimeConfig?.pilot && typeof runtimeConfig.pilot === 'object'
-    ? (runtimeConfig.pilot as Record<string, unknown>)
-    : {}
 }
 
 function base64UrlEncode(value: string): string {
@@ -40,8 +34,11 @@ function signPayload(payloadB64: string, secret: string): string {
 }
 
 function getSessionSecret(event: H3Event): string {
-  const pilotConfig = getPilotRuntimeConfig(event)
-  const secret = String(pilotConfig.cookieSecret || '').trim()
+  const secret = resolvePilotConfigString(
+    event,
+    'cookieSecret',
+    ['PILOT_COOKIE_SECRET'],
+  )
   if (secret.length < MIN_SECRET_LENGTH) {
     throw createError({
       statusCode: 500,
@@ -52,8 +49,11 @@ function getSessionSecret(event: H3Event): string {
 }
 
 function getSessionMaxAgeSeconds(event: H3Event): number {
-  const pilotConfig = getPilotRuntimeConfig(event)
-  const parsed = Number(pilotConfig.sessionCookieMaxAgeSec)
+  const parsed = Number(resolvePilotConfigString(
+    event,
+    'sessionCookieMaxAgeSec',
+    ['PILOT_SESSION_COOKIE_MAX_AGE_SEC'],
+  ))
   if (!Number.isFinite(parsed)) {
     return DEFAULT_SESSION_MAX_AGE_SECONDS
   }

@@ -4,7 +4,6 @@ import type {
   DeepAgentAuditRecord,
 } from '@talex-touch/tuff-intelligence'
 import type { H3Event } from 'h3'
-import process from 'node:process'
 import {
   AbstractAgentRuntime,
   CapabilityRegistry,
@@ -12,6 +11,7 @@ import {
   DeepAgentLangChainEngineAdapter,
   DefaultDecisionAdapter,
 } from '@talex-touch/tuff-intelligence'
+import { resolvePilotConfigString } from './pilot-config'
 import { createPilotStoreAdapter } from './pilot-store'
 
 const DEFAULT_RESPONSES_MODEL = 'gpt-5.4'
@@ -64,46 +64,6 @@ function createCapabilityRegistryV1(): CapabilityRegistry {
   return registry
 }
 
-function getPilotRuntimeConfig(event: H3Event): Record<string, unknown> {
-  const runtimeConfig = (event.context as { runtimeConfig?: Record<string, unknown> }).runtimeConfig
-  return runtimeConfig?.pilot && typeof runtimeConfig.pilot === 'object'
-    ? (runtimeConfig.pilot as Record<string, unknown>)
-    : {}
-}
-
-function toStringValue(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : ''
-}
-
-function resolvePilotConfigValue(
-  event: H3Event,
-  pilotConfig: Record<string, unknown>,
-  key: string,
-  envKeys: string[],
-): string {
-  const cloudflareEnv = (event.context.cloudflare as { env?: Record<string, unknown> } | undefined)?.env
-  for (const envKey of envKeys) {
-    const fromCloudflare = toStringValue(cloudflareEnv?.[envKey])
-    if (fromCloudflare) {
-      return fromCloudflare
-    }
-  }
-
-  for (const envKey of envKeys) {
-    const fromProcess = toStringValue(process.env[envKey])
-    if (fromProcess) {
-      return fromProcess
-    }
-  }
-
-  const fromRuntimeConfig = toStringValue(pilotConfig[key])
-  if (fromRuntimeConfig) {
-    return fromRuntimeConfig
-  }
-
-  return ''
-}
-
 export interface CreatePilotRuntimeOptions {
   event: H3Event
   userId: string
@@ -118,9 +78,8 @@ export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
   const dispatcher = new DecisionDispatcher({
     capabilityRegistry,
   })
-  const pilotConfig = getPilotRuntimeConfig(event)
-  const baseUrl = resolvePilotConfigValue(event, pilotConfig, 'baseUrl', BASE_URL_ENV_KEYS)
-  const apiKey = resolvePilotConfigValue(event, pilotConfig, 'apiKey', API_KEY_ENV_KEYS)
+  const baseUrl = resolvePilotConfigString(event, 'baseUrl', BASE_URL_ENV_KEYS)
+  const apiKey = resolvePilotConfigString(event, 'apiKey', API_KEY_ENV_KEYS)
 
   const engine = new DeepAgentLangChainEngineAdapter({
     baseUrl,

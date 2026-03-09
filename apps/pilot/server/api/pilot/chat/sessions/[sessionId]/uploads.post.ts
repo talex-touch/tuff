@@ -2,8 +2,13 @@ import type { H3Event } from 'h3'
 import { createHmac, randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { requirePilotAuth } from '../../../../../utils/auth'
+import {
+  buildPilotAttachmentPreviewUrl,
+  getPilotAttachmentUploadAvailability,
+  putPilotAttachmentObject,
+} from '../../../../../utils/pilot-attachment-storage'
 import { requireSessionId } from '../../../../../utils/pilot-http'
-import { createPilotStoreAdapter, getPilotAttachmentBucket } from '../../../../../utils/pilot-store'
+import { createPilotStoreAdapter } from '../../../../../utils/pilot-store'
 
 interface UploadRequestBody {
   name?: string
@@ -57,28 +62,42 @@ export default defineEventHandler(async (event) => {
   const signPayload = `${objectKey}:${expiresAt}:${size}`
   const signature = signUploadToken(secret, signPayload)
 
-  const bucket = getPilotAttachmentBucket(event)
-  if (bucket && typeof body?.contentBase64 === 'string' && body.contentBase64.length > 0) {
-    try {
-      const binary = decodeBase64ToBytes(body.contentBase64)
-      await bucket.put(objectKey, binary, {
-        httpMetadata: {
-          contentType: mimeType,
-        },
-      })
-    }
-    catch {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'contentBase64 is invalid',
-      })
-    }
+  const availability = await getPilotAttachmentUploadAvailability(event)
+  if (!availability.allowed) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: availability.reason || 'Attachments are unavailable in current environment.',
+    })
+  }
+
+  if (typeof body?.contentBase64 !== 'string' || !body.contentBase64.trim()) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'contentBase64 is required',
+    })
+  }
+
+  let storedRef = ''
+  try {
+    const binary = decodeBase64ToBytes(body.contentBase64)
+    const stored = await putPilotAttachmentObject(event, {
+      key: objectKey,
+      bytes: binary,
+      mimeType,
+    })
+    storedRef = stored.ref
+  }
+  catch {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'contentBase64 is invalid',
+    })
   }
 
   const store = createPilotStoreAdapter(event, userId)
   await store.runtime.ensureSchema()
 
-  const ref = `r2://${objectKey}`
+  const ref = storedRef || `memory://${objectKey}`
   await store.runtime.saveAttachment({
     id: attachmentId,
     sessionId,
@@ -98,6 +117,7 @@ export default defineEventHandler(async (event) => {
       mimeType,
       size,
       ref,
+      previewUrl: buildPilotAttachmentPreviewUrl(sessionId, attachmentId),
     },
     upload: {
       method: 'PUT',
@@ -106,6 +126,6 @@ export default defineEventHandler(async (event) => {
       signature,
       payload: signPayload,
     },
-    directUploaded: Boolean(bucket && body?.contentBase64),
+    directUploaded: true,
   }
 })

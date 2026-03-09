@@ -27,6 +27,10 @@ export interface PilotMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   createdAt: string
+  metadata?: {
+    attachments?: PilotMessageAttachmentMeta[]
+    [key: string]: unknown
+  }
 }
 
 export interface PilotAttachment {
@@ -37,7 +41,17 @@ export interface PilotAttachment {
   mimeType: string
   size: number
   ref: string
+  previewUrl?: string
   createdAt?: string
+}
+
+export interface PilotMessageAttachmentMeta {
+  id: string
+  type: 'image' | 'file'
+  ref: string
+  name?: string
+  mimeType?: string
+  previewUrl?: string
 }
 
 export interface PilotTrace {

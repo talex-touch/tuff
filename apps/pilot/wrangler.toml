@@ -8,16 +8,8 @@ compatibility_flags = [
 pages_build_output_dir = "dist"
 
 [vars]
-NUXT_PUBLIC_NEXUS_ORIGIN = ""
-PILOT_NEXUS_INTERNAL_ORIGIN = ""
-PILOT_NEXUS_BRIDGE_SECRET = ""
-PILOT_COOKIE_SECRET = ""
-PILOT_SESSION_COOKIE_MAX_AGE_SEC = "86400"
-NUXT_PILOT_BASE_URL = ""
-NUXT_PILOT_API_KEY = ""
-PILOT_ALLOW_LEGACY_HEADER_AUTH = "false"
-PILOT_ALLOW_LEGACY_BEARER_AUTH = "false"
-PILOT_ALLOW_LEGACY_COOKIE_AUTH = "true"
+NUXT_PUBLIC_NEXUS_ORIGIN = "https://tuff.tagzxia.com"
+NUXT_PILOT_BASE_URL = "https://sub2api-home.tagzxia.com"
 
 [env.preview]
 compatibility_date = "2024-09-23"
@@ -26,6 +18,10 @@ compatibility_flags = [
   "enable_nodejs_http_modules",
   "no_nodejs_compat_v2"
 ]
+
+[env.preview.vars]
+NUXT_PUBLIC_NEXUS_ORIGIN = "https://tuff.tagzxia.com"
+NUXT_PILOT_BASE_URL = "https://sub2api-home.tagzxia.com"
 
 [[env.preview.d1_databases]]
 binding = "DB"
@@ -43,6 +39,10 @@ compatibility_flags = [
   "enable_nodejs_http_modules",
   "no_nodejs_compat_v2"
 ]
+
+[env.production.vars]
+NUXT_PUBLIC_NEXUS_ORIGIN = "https://tuff.tagzxia.com"
+NUXT_PILOT_BASE_URL = "https://sub2api-home.tagzxia.com"
 
 [[env.production.d1_databases]]
 binding = "DB"

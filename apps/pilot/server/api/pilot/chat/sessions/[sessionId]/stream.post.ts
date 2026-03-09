@@ -2,8 +2,11 @@ import type {
   CreatePilotStreamEmitterOptions,
   DeepAgentAuditRecord,
   PilotStreamEvent,
+  TraceRecord,
+  UserMessageAttachment,
   UserMessageInput,
 } from '@talex-touch/tuff-intelligence'
+import type { H3Event } from 'h3'
 import {
   createPilotStreamEmitter,
   mapPilotAuditToStreamEvent,
@@ -16,12 +19,17 @@ import {
 } from '@talex-touch/tuff-intelligence'
 import { createError } from 'h3'
 import { requirePilotAuth } from '../../../../../utils/auth'
+import {
+  getPilotAttachmentObject,
+  resolvePilotAttachmentModelUrl,
+} from '../../../../../utils/pilot-attachment-storage'
 import { requireSessionId, toErrorMessage } from '../../../../../utils/pilot-http'
 import { createPilotRuntime } from '../../../../../utils/pilot-runtime'
 
 interface StreamBody {
   message?: string
   fromSeq?: number
+  follow?: boolean
   metadata?: Record<string, unknown>
   attachments?: UserMessageInput['attachments']
 }
@@ -29,6 +37,216 @@ interface StreamBody {
 interface StreamEventPayload extends PilotStreamEvent {
   sessionId: string
   timestamp: number
+}
+
+interface StreamConnectionContext {
+  closed: boolean
+  disconnected: boolean
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function encodeBytesToBase64(bytes: Uint8Array): string {
+  if (bytes.length <= 0) {
+    return ''
+  }
+
+  const chunkSize = 0x8000
+  let binary = ''
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize)
+    binary += String.fromCharCode(...chunk)
+  }
+  return btoa(binary)
+}
+
+function getWaitUntilHandler(event: H3Event): ((promise: Promise<unknown>) => void) | null {
+  const eventLike = event as unknown as {
+    waitUntil?: (promise: Promise<unknown>) => void
+    context?: {
+      waitUntil?: (promise: Promise<unknown>) => void
+      cloudflare?: {
+        context?: {
+          waitUntil?: (promise: Promise<unknown>) => void
+        }
+      }
+    }
+  }
+
+  if (typeof eventLike.waitUntil === 'function') {
+    return eventLike.waitUntil.bind(eventLike)
+  }
+
+  if (typeof eventLike.context?.waitUntil === 'function') {
+    return eventLike.context.waitUntil.bind(eventLike.context)
+  }
+
+  if (typeof eventLike.context?.cloudflare?.context?.waitUntil === 'function') {
+    return eventLike.context.cloudflare.context.waitUntil.bind(eventLike.context.cloudflare.context)
+  }
+
+  return null
+}
+
+function normalizeFollowFlag(body: StreamBody, fromSeq: number | undefined): boolean {
+  if (!Number.isFinite(fromSeq)) {
+    return false
+  }
+  return body.follow !== false
+}
+
+function mapTraceToStreamEvent(trace: TraceRecord): Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> {
+  const payload = toPilotSafeRecord(trace.payload)
+  const text = String(payload.text || '')
+
+  if (trace.type === 'assistant.delta') {
+    return {
+      type: 'assistant.delta',
+      seq: trace.seq,
+      delta: text,
+      payload,
+    }
+  }
+
+  if (trace.type === 'assistant.final') {
+    return {
+      type: 'assistant.final',
+      seq: trace.seq,
+      message: text,
+      payload,
+    }
+  }
+
+  if (trace.type === 'error') {
+    return {
+      type: 'error',
+      seq: trace.seq,
+      message: String(payload.message || 'Stream error'),
+      detail: toPilotSafeRecord(payload.detail),
+      payload,
+    }
+  }
+
+  return {
+    type: trace.type,
+    seq: trace.seq,
+    payload,
+  }
+}
+
+async function resolveMessageAttachments(
+  event: H3Event,
+  sessionId: string,
+  storeRuntime: {
+    listAttachments: (sessionId: string) => Promise<Array<{
+      id: string
+      kind: 'image' | 'file'
+      name: string
+      mimeType: string
+      size: number
+      ref: string
+    }>>
+  },
+  inputAttachments: UserMessageInput['attachments'],
+): Promise<UserMessageAttachment[]> {
+  if (!Array.isArray(inputAttachments) || inputAttachments.length <= 0) {
+    return []
+  }
+
+  const records = await storeRuntime.listAttachments(sessionId)
+  const recordMap = new Map(records.map(item => [item.id, item]))
+  const result: UserMessageAttachment[] = []
+
+  for (const item of inputAttachments) {
+    const attachmentId = String(item?.id || '').trim()
+    if (!attachmentId) {
+      continue
+    }
+
+    const record = recordMap.get(attachmentId)
+    if (!record) {
+      continue
+    }
+
+    const previewUrl = await resolvePilotAttachmentModelUrl(event, {
+      sessionId,
+      attachmentId: record.id,
+      ref: record.ref,
+    })
+    const hasExternalPreviewUrl = /^https?:\/\//i.test(previewUrl)
+
+    const attachment: UserMessageAttachment = {
+      id: record.id,
+      type: record.kind,
+      ref: record.ref,
+      name: record.name,
+      mimeType: record.mimeType,
+      size: record.size,
+      previewUrl,
+    }
+
+    if (attachment.type === 'image' && !hasExternalPreviewUrl) {
+      const object = await getPilotAttachmentObject(event, record.ref)
+      if (object && object.mimeType.startsWith('image/')) {
+        const encoded = encodeBytesToBase64(object.bytes)
+        attachment.dataUrl = `data:${object.mimeType};base64,${encoded}`
+      }
+    }
+
+    result.push(attachment)
+  }
+
+  return result
+}
+
+async function followTraceTail(options: {
+  storeRuntime: {
+    listTrace: (sessionId: string, fromSeq?: number, limit?: number) => Promise<TraceRecord[]>
+    getSession: (sessionId: string) => Promise<null | {
+      status: 'idle' | 'planning' | 'executing' | 'paused_disconnect' | 'completed' | 'failed'
+    }>
+  }
+  sessionId: string
+  fromSeq: number
+  emitEvent: (
+    payload: Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
+    emitOptions?: {
+      persist?: boolean
+      tracePayload?: Record<string, unknown>
+    },
+  ) => Promise<void>
+  streamEmitter: {
+    getSeqCursor: () => number
+  }
+  connection: StreamConnectionContext
+}): Promise<void> {
+  let nextSeq = Math.max(1, Math.floor(Number(options.fromSeq || 1)))
+  nextSeq = Math.max(nextSeq, options.streamEmitter.getSeqCursor() + 1)
+
+  while (!options.connection.closed && !options.connection.disconnected) {
+    const traces = await options.storeRuntime.listTrace(options.sessionId, nextSeq, 200)
+
+    if (traces.length > 0) {
+      for (const trace of traces) {
+        if (options.connection.closed || options.connection.disconnected) {
+          return
+        }
+        await options.emitEvent(mapTraceToStreamEvent(trace))
+        nextSeq = Math.max(nextSeq, Number(trace.seq || 0) + 1)
+      }
+      continue
+    }
+
+    const session = await options.storeRuntime.getSession(options.sessionId)
+    const running = session?.status === 'executing' || session?.status === 'planning'
+    if (!running) {
+      return
+    }
+
+    await sleep(320)
+  }
 }
 
 export default defineEventHandler(async (event) => {
@@ -41,6 +259,7 @@ export default defineEventHandler(async (event) => {
   const fromSeq = Number.isFinite(body?.fromSeq)
     ? Math.max(1, Math.floor(Number(body?.fromSeq)))
     : undefined
+  const follow = normalizeFollowFlag(body || {}, fromSeq)
 
   if (!message && !fromSeq) {
     throw createError({
@@ -50,19 +269,21 @@ export default defineEventHandler(async (event) => {
   }
 
   const encoder = new TextEncoder()
-  let disconnected = false
+  const connection: StreamConnectionContext = {
+    closed: false,
+    disconnected: false,
+  }
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      let closed = false
       let doneSent = false
       let keepaliveTimer: ReturnType<typeof setInterval> | null = null
 
       const close = () => {
-        if (closed) {
+        if (connection.closed) {
           return
         }
-        closed = true
+        connection.closed = true
         if (keepaliveTimer) {
           clearInterval(keepaliveTimer)
           keepaliveTimer = null
@@ -71,7 +292,7 @@ export default defineEventHandler(async (event) => {
       }
 
       const sendRaw = (payload: StreamEventPayload) => {
-        if (closed || disconnected) {
+        if (connection.closed || connection.disconnected) {
           return
         }
         try {
@@ -81,7 +302,7 @@ export default defineEventHandler(async (event) => {
           }
         }
         catch {
-          disconnected = true
+          connection.disconnected = true
         }
       }
 
@@ -97,6 +318,7 @@ export default defineEventHandler(async (event) => {
             }
           },
         })
+
         const createStreamEmitterOptions: CreatePilotStreamEmitterOptions = {
           sessionId,
           appendRetry: 3,
@@ -115,8 +337,6 @@ export default defineEventHandler(async (event) => {
         const emitEvent = streamEmitter.emit
 
         try {
-          await store.runtime.ensureSchema()
-
           let session = await store.runtime.getSession(sessionId)
           if (!session) {
             session = await store.runtime.createSession({
@@ -144,30 +364,42 @@ export default defineEventHandler(async (event) => {
               payload: {
                 ts: Date.now(),
               },
-            }).catch(() => {
-              disconnected = true
             })
           }, PILOT_DEFAULT_KEEPALIVE_MS)
+
+          const resolvedAttachments = await resolveMessageAttachments(
+            event,
+            sessionId,
+            store.runtime,
+            Array.isArray(body?.attachments) ? body.attachments : undefined,
+          )
 
           const result = await runPilotConversationStream({
             runtime,
             sessionId,
             message,
             fromSeq,
-            attachments: Array.isArray(body?.attachments) ? body.attachments : undefined,
+            attachments: resolvedAttachments,
             metadata: toPilotSafeRecord(body?.metadata),
             keepaliveMs: PILOT_DEFAULT_KEEPALIVE_MS,
             replayLimit: PILOT_DEFAULT_TRACE_REPLAY_LIMIT,
             listTrace: async (targetSessionId, targetFromSeq, limit) => {
               return await store.runtime.listTrace(targetSessionId, targetFromSeq, limit)
             },
-            isCancelled: () => closed || disconnected,
+            isCancelled: () => connection.closed,
             emit: emitEvent,
           })
 
-          if (disconnected) {
-            await store.runtime.pauseSession(sessionId, 'client_disconnect')
-            return
+          if (!message && Number.isFinite(fromSeq) && follow) {
+            const followFromSeq = Number.isFinite(fromSeq) ? Number(fromSeq) : 1
+            await followTraceTail({
+              storeRuntime: store.runtime,
+              sessionId,
+              fromSeq: followFromSeq,
+              emitEvent,
+              streamEmitter,
+              connection,
+            })
           }
 
           if (!doneSent) {
@@ -233,10 +465,15 @@ export default defineEventHandler(async (event) => {
         }
       }
 
-      void run()
+      const runPromise = run()
+      const waitUntil = getWaitUntilHandler(event)
+      if (waitUntil) {
+        waitUntil(runPromise)
+      }
+      void runPromise
     },
     cancel() {
-      disconnected = true
+      connection.disconnected = true
     },
   })
 

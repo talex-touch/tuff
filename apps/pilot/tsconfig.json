@@ -2,6 +2,8 @@
   "extends": "./.nuxt/tsconfig.json",
   "compilerOptions": {
     "paths": {
+      "@talex-touch/tuffex": ["../../packages/tuffex/packages/components/src/index.ts"],
+      "@talex-touch/tuffex/*": ["../../packages/tuffex/packages/components/src/*"],
       "@talex-touch/tuff-intelligence": ["../../packages/tuff-intelligence/src/index.ts"],
       "@talex-touch/tuff-intelligence/*": ["../../packages/tuff-intelligence/src/*"]
     },

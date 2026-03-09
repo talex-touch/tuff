@@ -75,18 +75,16 @@ function onAttachmentSelected(event: Event) {
 <template>
   <main class="pilot-chat">
     <div class="pilot-chat__shell">
-      <div class="pilot-chat__toolbar">
-        <TxButton
-          class="pilot-chat__trace-trigger"
-          size="small"
-          variant="ghost"
-          circle
-          icon="i-carbon-debug"
-          :disabled="!props.activeSessionId"
-          aria-label="展开 Trace"
-          @click="traceVisible = true"
-        />
-      </div>
+      <TxButton
+        class="pilot-chat__trace-trigger"
+        size="small"
+        variant="ghost"
+        circle
+        icon="i-carbon-debug"
+        :disabled="!props.activeSessionId"
+        aria-label="展开 Trace"
+        @click="traceVisible = true"
+      />
 
       <section class="pilot-chat__messages">
         <TxEmptyState
@@ -201,6 +199,7 @@ function onAttachmentSelected(event: Event) {
 }
 
 .pilot-chat__shell {
+  position: relative;
   flex: 1;
   min-height: 0;
   height: 100%;
@@ -212,14 +211,11 @@ function onAttachmentSelected(event: Event) {
   padding: 0;
 }
 
-.pilot-chat__toolbar {
-  display: flex;
-  justify-content: flex-end;
-  padding: 8px 10px 0;
-}
-
 .pilot-chat__trace-trigger {
-  flex-shrink: 0;
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 2;
 }
 
 .pilot-trace-item__meta,
@@ -253,6 +249,10 @@ function onAttachmentSelected(event: Event) {
 .pilot-chat__message-list :deep(.tx-chat-message__bubble) {
   background: color-mix(in srgb, var(--tx-bg-color-overlay) 88%, transparent);
   border-color: color-mix(in srgb, var(--tx-border-color) 72%, transparent);
+}
+
+.pilot-chat__message-list :deep(.tx-chat-message--assistant:last-child .tx-chat-message__bubble) {
+  animation: pilot-assistant-fade-in 220ms ease-out;
 }
 
 .pilot-chat__message-list :deep(.tx-chat-message--user .tx-chat-message__bubble) {
@@ -435,10 +435,25 @@ function onAttachmentSelected(event: Event) {
   }
 }
 
+@keyframes pilot-assistant-fade-in {
+  0% {
+    opacity: 0.62;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pilot-chat :deep(.tx-chat-composer.is-submitting)::after {
     animation: none;
     left: 48%;
+  }
+
+  .pilot-chat__message-list :deep(.tx-chat-message--assistant:last-child .tx-chat-message__bubble) {
+    animation: none;
   }
 }
 
@@ -448,8 +463,9 @@ function onAttachmentSelected(event: Event) {
     gap: 6px;
   }
 
-  .pilot-chat__toolbar {
-    padding: 8px 8px 0;
+  .pilot-chat__trace-trigger {
+    top: 8px;
+    right: 8px;
   }
 
   .pilot-chat :deep(.tx-drawer__panel) {
