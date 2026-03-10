@@ -113,7 +113,10 @@
 - [ ] [P0] M0 手工验收补录：`/` 进入 Quota 聊天、新建会话、流式回复、历史删除、`/pilot` 与 `/pilot/admin/storage` 可访问、非 M0 页面返回可预期“待迁移”提示。
 - [ ] [P1] M0 收口：`apps/pilot` Quota 存量 `typecheck` 分批清理（先 `app/components/article/**`，后 `app/pages/cms/**`，最后 `app/composables/**`）。
 - [ ] [P1] M0 收口：`apps/pilot` Quota 存量 `lint` 分批清理（先 `import/order + unused`，后风格类规则）。
-- [ ] [P1] M0 收口：构建内存策略固化（避免每次手动设置 `NODE_OPTIONS=--max-old-space-size=8192`）。
+- [x] [P1] M0 收口：构建内存策略固化（`build/generate/CI` 统一 `NODE_OPTIONS=--max-old-space-size=8192`）。
+- [x] [P1] M0 收口：本地开发启动优化（`dev` 默认轻量模式、Cloudflare 仿真拆分 `dev:cf`、UnoCSS dev safelist 降载）。
+- [x] [P1] M0 收口：新增 Pilot CI（`quality + static-dist + 1Panel webhook`）并支持 `master` push 自动触发部署钩子。
+- [ ] [P1] M0 收口：前端重依赖拆分（优先 `Milkdown/EditorMermaid/EditorCode/IconSelector`，持续压缩首屏与 Worker 体积）。
 - [ ] [P1] 部署策略收口：如需同域承载 `/api/*` 兼容层，需拆分轻量 API Worker 或升级 Cloudflare Workers 付费额度（当前免费额度无法承载 `nuxt build` Worker 体积）。
 - [ ] [P1] Pilot 服务端集成测试：断线 pause / SSE heartbeat 丢失处理 / idempotency key / `fromSeq` 补播。
 - [ ] [P2] Pilot 长对话压测：checkpoint 连续性、丢包率、pause/resume 成功率。

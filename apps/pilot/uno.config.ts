@@ -1,3 +1,4 @@
+import process from 'node:process'
 import {
   defineConfig,
   presetAttributify,
@@ -10,6 +11,9 @@ import {
 } from 'unocss'
 import fontCarbon from './app/constants/carbon.json'
 import fontMaterialSymbol from './app/constants/material-symbols.json'
+
+const isDev = process.env.NODE_ENV !== 'production'
+const useFullIconSafelist = process.env.NUXT_FULL_ICON_SAFELIST === 'true'
 
 export default defineConfig({
   shortcuts: [
@@ -25,17 +29,21 @@ export default defineConfig({
     presetTypography({
       selectorName: 'ProseMirror',
     }),
-    presetWebFonts({
-      fonts: {
-        sans: 'DM Sans',
-        serif: 'DM Serif Display',
-        mono: 'DM Mono',
-      },
-    }),
+    ...(!isDev
+      ? [
+          presetWebFonts({
+            fonts: {
+              sans: 'DM Sans',
+              serif: 'DM Serif Display',
+              mono: 'DM Mono',
+            },
+          }),
+        ]
+      : []),
   ],
   transformers: [
     transformerDirectives(),
     transformerVariantGroup(),
   ],
-  safelist: [...fontCarbon, ...fontMaterialSymbol],
+  safelist: useFullIconSafelist ? [...fontCarbon, ...fontMaterialSymbol] : [],
 })

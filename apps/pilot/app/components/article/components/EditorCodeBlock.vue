@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { useNodeViewContext } from '@prosemirror-adapter/vue'
-import EditorMindmap from './EditorMindmap.vue'
-import EditorEcharts from './EditorEcharts.vue'
-import EditorMermaid from './EditorMermaid.vue'
-import EditorAbc from './EditorAbc.vue'
-import EditorCode from './EditorCode.vue'
 
-const { contentRef, selected, node } = useNodeViewContext()
+const EditorMindmap = defineAsyncComponent(() => import('./EditorMindmap.vue'))
+const EditorEcharts = defineAsyncComponent(() => import('./EditorEcharts.vue'))
+const EditorMermaid = defineAsyncComponent(() => import('./EditorMermaid.vue'))
+const EditorAbc = defineAsyncComponent(() => import('./EditorAbc.vue'))
+const EditorCode = defineAsyncComponent(() => import('./EditorCode.vue'))
+
+const { selected, node } = useNodeViewContext()
 
 const lang = computed(() => node.value.attrs.language)
 
