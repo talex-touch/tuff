@@ -10,7 +10,8 @@
 
 **描述**:
 - 启动链路优化（`apps/pilot`）：
-  - `dev` 默认切换为本地轻量模式（`nuxt dev`），Cloudflare 仿真拆为 `dev:cf`。
+  - `dev` 默认切换为 Cloudflare runtime 绑定模式（`NUXT_USE_CLOUDFLARE_DEV=true` + `preview` 环境），本地可直接联调 D1/R2。
+  - 增加 `dev:local` 作为无 runtime 绑定的纯本地模式。
   - `build` 固化 `NODE_OPTIONS=--max-old-space-size=8192`，避免构建阶段 OOM。
   - `nuxt.config.ts` 中 `buildTime` 在 dev 固定为常量，避免每次启动触发 Vite 配置漂移。
   - `@talex-touch/tuffex` 源码 alias 改为开关模式（默认关闭，必要时通过 `NUXT_USE_WORKSPACE_SOURCE=true` 启用）。
