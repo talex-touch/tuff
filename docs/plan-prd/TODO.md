@@ -114,7 +114,7 @@
 - [ ] [P1] M0 收口：`apps/pilot` Quota 存量 `typecheck` 分批清理（先 `app/components/article/**`，后 `app/pages/cms/**`，最后 `app/composables/**`）。
 - [ ] [P1] M0 收口：`apps/pilot` Quota 存量 `lint` 分批清理（先 `import/order + unused`，后风格类规则）。
 - [x] [P1] M0 收口：构建内存策略固化（`build/generate/CI` 统一 `NODE_OPTIONS=--max-old-space-size=8192`）。
-- [x] [P1] M0 收口：本地开发启动优化（`dev` 默认轻量模式、Cloudflare 仿真拆分 `dev:cf`、UnoCSS dev safelist 降载）。
+- [x] [P1] M0 收口：本地开发启动优化（`dev` 默认 Cloudflare runtime 绑定，新增 `dev:local` 纯本地模式，UnoCSS dev safelist 降载）。
 - [x] [P1] M0 收口：新增 Pilot CI（`quality + static-dist + 1Panel webhook`）并支持 `master` push 自动触发部署钩子。
 - [ ] [P1] M0 收口：前端重依赖拆分（优先 `Milkdown/EditorMermaid/EditorCode/IconSelector`，持续压缩首屏与 Worker 体积）。
 - [ ] [P1] 部署策略收口：如需同域承载 `/api/*` 兼容层，需拆分轻量 API Worker 或升级 Cloudflare Workers 付费额度（当前免费额度无法承载 `nuxt build` Worker 体积）。
