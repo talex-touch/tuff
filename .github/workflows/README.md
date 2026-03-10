@@ -27,6 +27,12 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 - **`readme-contributors.yml`** - Contributors list automation
   - Updates README contributors list on `master` pushes
 
+- **`pilot-ci.yml`** - Pilot 前端 CI + 静态产物 + 1Panel 触发
+  - 触发条件：`apps/pilot/**` 相关变更
+  - `quality`：lint / typecheck（非阻塞）+ test / build（阻塞）
+  - `static-dist`：`nuxt generate` + `prepare:cf-static` 并上传 `pilot-dist` artifact
+  - `deploy-1panel`：在 `master` push 成功后，若存在 `ONEPANEL_WEBHOOK_URL` secret 则自动 POST webhook
+
 ### Package CI Workflows
 
 #### Reusable Workflow

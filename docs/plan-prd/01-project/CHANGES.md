@@ -4,6 +4,50 @@
 
 ## 2026-03-10
 
+### Pilot M0: 前端冷启动加速 + CI/1Panel 部署链路补齐
+
+**变更类型**: 性能优化 / 工程化增强
+
+**描述**:
+- 启动链路优化（`apps/pilot`）：
+  - `dev` 默认切换为本地轻量模式（`nuxt dev`），Cloudflare 仿真拆为 `dev:cf`。
+  - `build` 固化 `NODE_OPTIONS=--max-old-space-size=8192`，避免构建阶段 OOM。
+  - `nuxt.config.ts` 中 `buildTime` 在 dev 固定为常量，避免每次启动触发 Vite 配置漂移。
+  - `@talex-touch/tuffex` 源码 alias 改为开关模式（默认关闭，必要时通过 `NUXT_USE_WORKSPACE_SOURCE=true` 启用）。
+  - 代码块渲染器改为异步组件加载（`EditorCodeBlock` 下 `mindmap/echarts/mermaid/abc/code` 全部按需 `import()`）。
+- UnoCSS 编译负担优化（根因修复）：
+  - `uno.config.ts` 将全量 icon safelist 改为“默认关闭，按需开启”（`NUXT_FULL_ICON_SAFELIST=true` 时启用）。
+  - dev 环境不再启用 `presetWebFonts` 远程字体抓取，减少首轮编译阻塞。
+- 体积分析能力补齐：
+  - 新增 `pnpm -C "apps/pilot" run analyze:size` 与 `scripts/report-dist-size.mjs`，输出 `dist/_nuxt` 总体积、扩展名占比、Top 20 大文件。
+  - 实测重块集中在 `@antv/x6`、`abcjs`、`echarts`、`element-plus`、`Milkdown` 相关 chunk。
+- CI/部署链路补齐：
+  - 新增 `.github/workflows/pilot-ci.yml`：
+    - `quality`: `lint/typecheck/test/build`
+    - `static-dist`: `generate + prepare:cf-static + artifact`
+    - `deploy-1panel`: `master` push 成功后触发 `ONEPANEL_WEBHOOK_URL`
+  - 结合 M0 存量类型债，`quality` 中 `lint/typecheck` 先按“非阻塞告警”执行，`test/build` 仍作为部署阻塞门禁。
+  - 工作流文档同步更新 `.github/workflows/README.md`。
+
+**验证**:
+- `pnpm -C "apps/pilot" run test` ✅
+- `pnpm -C "apps/pilot" run build` ✅（8GB 堆内存下通过）
+- 本地冷启动基线对比（`/` 首次可访问）：
+  - 优化前约 `132s ~ 218s`
+  - 优化后约 `9s ~ 10s`
+
+**修改文件**:
+- `apps/pilot/package.json`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/uno.config.ts`
+- `apps/pilot/app/components/article/components/EditorCodeBlock.vue`
+- `apps/pilot/scripts/report-dist-size.mjs`
+- `.github/workflows/pilot-ci.yml`
+- `.github/workflows/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+
 ### Pilot M0: Cloudflare 部署改为静态发布（规避 Worker 3MiB 限制）
 
 **变更类型**: 部署策略调整 / 线上可用性修复

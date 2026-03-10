@@ -1,0 +1,146 @@
+name: Pilot CI
+
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - 'apps/pilot/**'
+      - '.github/workflows/pilot-ci.yml'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'apps/pilot/**'
+      - '.github/workflows/pilot-ci.yml'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: pilot-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Pilot Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      NUXT_FULL_ICON_SAFELIST: 'false'
+      NODE_OPTIONS: --max-old-space-size=8192
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        continue-on-error: true
+        run: pnpm -C "apps/pilot" run lint
+
+      - name: Typecheck
+        continue-on-error: true
+        run: pnpm -C "apps/pilot" run typecheck
+
+      - name: Test
+        run: pnpm -C "apps/pilot" run test
+
+      - name: Build
+        run: pnpm -C "apps/pilot" run build
+
+  static-dist:
+    name: Pilot Static Dist
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    if: ${{ github.event_name != 'pull_request' }}
+    needs:
+      - quality
+    env:
+      NUXT_FULL_ICON_SAFELIST: 'false'
+      NODE_OPTIONS: --max-old-space-size=8192
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate static site
+        run: pnpm -C "apps/pilot" run generate
+
+      - name: Prepare static routes
+        run: pnpm -C "apps/pilot" run prepare:cf-static
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pilot-dist
+          path: apps/pilot/dist
+          retention-days: 7
+
+  deploy-1panel:
+    name: Trigger 1Panel Deploy
+    runs-on: ubuntu-latest
+    if: >-
+      ${{
+        github.event_name == 'push' &&
+        github.ref == 'refs/heads/master' &&
+        secrets.ONEPANEL_WEBHOOK_URL != ''
+      }}
+    needs:
+      - static-dist
+    steps:
+      - name: Trigger webhook
+        env:
+          ONEPANEL_WEBHOOK_URL: ${{ secrets.ONEPANEL_WEBHOOK_URL }}
+          ONEPANEL_WEBHOOK_TOKEN: ${{ secrets.ONEPANEL_WEBHOOK_TOKEN }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          BODY=$(cat <<EOF
+          {
+            "repository": "${GITHUB_REPOSITORY}",
+            "branch": "${GITHUB_REF_NAME}",
+            "sha": "${GITHUB_SHA}"
+          }
+          EOF
+          )
+
+          if [ -n "${ONEPANEL_WEBHOOK_TOKEN}" ]; then
+            curl -fsS -X POST "${ONEPANEL_WEBHOOK_URL}" \
+              -H "Content-Type: application/json" \
+              -H "X-Webhook-Token: ${ONEPANEL_WEBHOOK_TOKEN}" \
+              -d "${BODY}"
+          else
+            curl -fsS -X POST "${ONEPANEL_WEBHOOK_URL}" \
+              -H "Content-Type: application/json" \
+              -d "${BODY}"
+          fi

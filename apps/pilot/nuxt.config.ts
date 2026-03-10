@@ -13,10 +13,11 @@ const vueuseComponentsShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/v
 const markmapViewShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-view.ts')
 const markmapCommonShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-common.ts')
 const markmapLibShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-lib.ts')
-const useWorkspaceSource = true
+const useWorkspaceSource = process.env.NUXT_USE_WORKSPACE_SOURCE === 'true'
 const isDev = process.env.NODE_ENV !== 'production'
+const enableDevtools = process.env.NUXT_DEVTOOLS === 'true'
 const DEFAULT_NEXUS_ORIGIN = isDev ? 'http://127.0.0.1:3200' : 'https://tuff.tagzxia.com'
-const buildTime = Date.now()
+const buildTime = Number(process.env.TUFFPILOT_BUILD_TIME || (isDev ? 0 : Date.now()))
 const thisAiVersion = firstDefined(
   process.env.TUFFPILOT_VERSION,
   process.env.VITE_APP_VERSION,
@@ -64,7 +65,7 @@ function envNumber(key: string, fallback: number): number {
 
 export default defineNuxtConfig({
   ssr: false,
-  devtools: { enabled: true },
+  devtools: { enabled: enableDevtools },
   compatibilityDate: '2026-03-08',
   srcDir: 'app/',
   modules: [
@@ -143,6 +144,15 @@ export default defineNuxtConfig({
       __BuildTime__: buildTime,
       __THISAI_VERSION__: JSON.stringify(thisAiVersion),
     },
+    optimizeDeps: {
+      exclude: [
+        '@milkdown/kit',
+        '@milkdown/vue',
+        '@antv/x6',
+        '@antv/x6-vue-shape',
+        'mermaid',
+      ],
+    },
     resolve: {
       alias: [
         ...(useWorkspaceSource
@@ -150,21 +160,25 @@ export default defineNuxtConfig({
               { find: /^@talex-touch\/tuffex$/, replacement: tuffexSourceEntry },
               { find: /^@talex-touch\/tuffex\/style\.css$/, replacement: tuffexStyleEntry },
               { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexUtilsEntry },
-              { find: /^refractor\/lang\/.+$/, replacement: refractorLangShimEntry },
-              { find: /^@vueuse\/components$/, replacement: vueuseComponentsShimEntry },
-              { find: /^@milkdown\/kit\/plugin\/prism$/, replacement: '@milkdown/plugin-prism' },
-              { find: /^markmap-view$/, replacement: markmapViewShimEntry },
-              { find: /^markmap-common$/, replacement: markmapCommonShimEntry },
-              { find: /^markmap-lib$/, replacement: markmapLibShimEntry },
             ]
           : []),
+        { find: /^refractor\/lang\/.+$/, replacement: refractorLangShimEntry },
+        { find: /^@vueuse\/components$/, replacement: vueuseComponentsShimEntry },
+        { find: /^@milkdown\/kit\/plugin\/prism$/, replacement: '@milkdown/plugin-prism' },
+        { find: /^markmap-view$/, replacement: markmapViewShimEntry },
+        { find: /^markmap-common$/, replacement: markmapCommonShimEntry },
+        { find: /^markmap-lib$/, replacement: markmapLibShimEntry },
       ],
     },
-    server: {
-      fs: {
-        allow: [workspaceRoot],
-      },
-    },
+    ...(useWorkspaceSource
+      ? {
+          server: {
+            fs: {
+              allow: [workspaceRoot],
+            },
+          },
+        }
+      : {}),
   },
   nitro: {
     preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',
@@ -183,10 +197,15 @@ export default defineNuxtConfig({
         }
       : {}),
   },
-  sourcemap: {
-    server: true,
-    client: 'hidden',
-  },
+  sourcemap: isDev
+    ? {
+        server: false,
+        client: false,
+      }
+    : {
+        server: true,
+        client: 'hidden',
+      },
   eslint: {
     config: {
       standalone: false,
