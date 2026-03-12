@@ -7,11 +7,13 @@ import type {
 } from './types'
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
+import { networkClient } from '../../network'
 import { PluginProviderType } from './types'
 
 const NPM_REGISTRY = 'https://registry.npmjs.org'
 const TUFF_PLUGIN_PREFIX = 'tuff-plugin-'
 const TUFF_PLUGIN_SCOPE = '@tuff/'
+const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
 
 export interface NpmPackageInfo {
   name: string
@@ -126,12 +128,12 @@ export class NpmProvider implements PluginProvider {
     }
 
     const tarballUrl = packageInfo.dist.tarball
-    const downloadRes = await fetch(tarballUrl)
-    if (!downloadRes.ok) {
-      throw new Error(`Failed to download package: ${downloadRes.statusText}`)
-    }
-
-    const arrayBuffer = await downloadRes.arrayBuffer()
+    const downloadRes = await networkClient.request<ArrayBuffer>({
+      method: 'GET',
+      url: tarballUrl,
+      responseType: 'arrayBuffer'
+    })
+    const arrayBuffer = downloadRes.data
     const tempDir = context?.tempDir ?? '/tmp'
     const safePackageName = packageName.replace(/[@/]/g, '-')
     const fileName = `${safePackageName}-${packageInfo.version}.tgz`
@@ -177,15 +179,19 @@ export class NpmProvider implements PluginProvider {
    */
   async getPackageInfo(packageName: string, version?: string): Promise<NpmPackageInfo | null> {
     const encodedName = encodeURIComponent(packageName).replace('%40', '@')
-    const res = await fetch(`${this.registry}/${encodedName}`)
+    const res = await networkClient.request<NpmPackageVersions>({
+      method: 'GET',
+      url: `${this.registry}/${encodedName}`,
+      validateStatus: ALL_HTTP_STATUS
+    })
 
-    if (!res.ok) {
+    if (res.status < 200 || res.status >= 300) {
       if (res.status === 404)
         return null
-      throw new Error(`Failed to fetch package info: ${res.statusText}`)
+      throw new Error(`Failed to fetch package info: HTTP ${res.status}`)
     }
 
-    const data: NpmPackageVersions = await res.json()
+    const data = res.data
     const targetVersion = version ?? data['dist-tags'].latest
 
     return data.versions[targetVersion] ?? null
@@ -200,17 +206,19 @@ export class NpmProvider implements PluginProvider {
       keyword ? `${keyword}` : '',
     ].filter(Boolean).join('+')
 
-    const res = await fetch(
-      `${this.registry}/-/v1/search?text=${encodeURIComponent(searchTerms)}&size=100`,
-    )
-
-    if (!res.ok) {
-      throw new Error(`Failed to search packages: ${res.statusText}`)
-    }
-
-    const data = await res.json() as {
+    const res = await networkClient.request<{
       objects: Array<{ package: NpmPackageInfo }>
+    }>({
+      method: 'GET',
+      url: `${this.registry}/-/v1/search?text=${encodeURIComponent(searchTerms)}&size=100`,
+      validateStatus: ALL_HTTP_STATUS
+    })
+
+    if (res.status < 200 || res.status >= 300) {
+      throw new Error(`Failed to search packages: HTTP ${res.status}`)
     }
+
+    const data = res.data
 
     return data.objects
       .map(obj => obj.package)

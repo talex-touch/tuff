@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { networkClient } from '@talex-touch/utils/network'
 import { createError } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { resolveRequestIp } from './ipSecurityStore'
@@ -42,19 +43,21 @@ export async function verifyTurnstileToken(event: H3Event, options: { token: unk
   let verification: TurnstileSiteverifyResponse | null = null
 
   try {
-    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+    const response = await networkClient.request<TurnstileSiteverifyResponse>({
       method: 'POST',
+      url: 'https://challenges.cloudflare.com/turnstile/v0/siteverify',
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
       },
       body: payload.toString(),
+      validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
     })
 
-    if (!response.ok) {
+    if (response.status < 200 || response.status >= 300) {
       throw createError({ statusCode: 502, statusMessage: 'Turnstile verify request failed.' })
     }
 
-    verification = await response.json() as TurnstileSiteverifyResponse
+    verification = response.data
   }
   catch (error: any) {
     if (error?.statusCode)

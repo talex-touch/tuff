@@ -1,24 +1,35 @@
+import { createNetworkClient } from './client'
 import { createNetworkGuard } from './guard'
-import { isHttpSource, isLocalHttpSource, resolveLocalFilePath, toTfileUrl } from './file'
-import { readBinary, readText, request } from './request'
+import { isHttpSource, isLocalHttpSource, resolveLocalFilePath } from './file'
+import { createWebNodeNetworkRuntime } from './runtime-web-node'
 
+export * from './client'
+export * from './core/errors'
 export * from './file'
 export * from './guard'
 export * from './request'
+export * from './runtime-electron-main'
+export * from './runtime-web-node'
 export * from './types'
 
 const sharedGuard = createNetworkGuard()
+const runtime = createWebNodeNetworkRuntime()
+
+export const networkClient = createNetworkClient(runtime, sharedGuard)
 
 export const network = {
-  request,
+  request: networkClient.request,
+  readText: networkClient.readText,
+  readBinary: networkClient.readBinary,
+  toTfileUrl: networkClient.toTfileUrl,
   file: {
-    toTfileUrl,
+    toTfileUrl: networkClient.toTfileUrl,
     resolveLocalFilePath,
-    readText,
-    readBinary,
+    readText: networkClient.readText,
+    readBinary: networkClient.readBinary,
     isHttpSource,
     isLocalHttpSource
   },
-  guard: sharedGuard,
+  guard: networkClient.guard,
   createGuard: createNetworkGuard
 }

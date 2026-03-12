@@ -29,6 +29,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@talex-touch/utils": "workspace:*",
     "@langchain/core": "^0.3.80",
     "@langchain/langgraph": "^0.2.74",
     "@langchain/openai": "^0.4.9",

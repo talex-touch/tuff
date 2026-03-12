@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { networkClient } from '@talex-touch/utils/network'
 import { createError, getQuery, getRequestURL, sendRedirect } from 'h3'
 import { resolvePilotConfigString, resolvePilotNexusOrigin } from '../../utils/pilot-config'
 import { mergePilotGuestDataAfterAuth } from '../../utils/pilot-guest-merge'
@@ -33,21 +34,23 @@ async function exchangeOauthCode(
     })
   }
 
-  let response: Response
+  let response: { status: number, headers: Record<string, string>, data: unknown }
   try {
-    response = await fetch(`${nexusOrigin}/api/pilot/oauth/token`, {
+    response = await networkClient.request({
       method: 'POST',
+      url: `${nexusOrigin}/api/pilot/oauth/token`,
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify({
+      body: {
         grant_type: 'authorization_code',
         client_id: oauthClientId,
         client_secret: oauthClientSecret,
         code,
         redirect_uri: redirectUri,
-      }),
+      },
+      validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
     })
   }
   catch {
@@ -57,14 +60,14 @@ async function exchangeOauthCode(
     })
   }
 
-  if (!response.ok) {
+  if (response.status < 200 || response.status >= 300) {
     throw createError({
       statusCode: response.status === 401 ? 401 : 502,
       statusMessage: 'Failed to exchange oauth code.',
     })
   }
 
-  const contentType = String(response.headers.get('content-type') || '').toLowerCase()
+  const contentType = String(response.headers['content-type'] || '').toLowerCase()
   if (!contentType.includes('application/json')) {
     throw createError({
       statusCode: 502,
@@ -72,16 +75,7 @@ async function exchangeOauthCode(
     })
   }
 
-  let payload: TokenExchangeResponse
-  try {
-    payload = await response.json() as TokenExchangeResponse
-  }
-  catch {
-    throw createError({
-      statusCode: 502,
-      statusMessage: 'Failed to exchange oauth code.',
-    })
-  }
+  const payload = response.data as TokenExchangeResponse
 
   const userId = String(payload?.userId || '').trim()
   if (!userId) {

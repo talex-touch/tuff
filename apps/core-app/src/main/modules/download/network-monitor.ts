@@ -1,5 +1,6 @@
 import type { NetworkStatus } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { getNetworkService } from '../network'
 
 type NetworkMonitorMode = 'full' | 'light'
 
@@ -236,20 +237,17 @@ export class NetworkMonitor {
       try {
         const startTime = Date.now()
 
-        const response = await fetch(testUrl, {
+        const response = await getNetworkService().request<ArrayBuffer>({
           method: 'GET',
-          signal: AbortSignal.timeout(5000)
+          url: testUrl,
+          timeoutMs: 5000,
+          responseType: 'arrayBuffer'
         })
 
-        if (!response.ok) {
-          continue
-        }
-
-        const buffer = await response.arrayBuffer()
         const endTime = Date.now()
 
         const duration = (endTime - startTime) / 1000
-        const speed = buffer.byteLength / duration
+        const speed = response.data.byteLength / duration
 
         this.addToHistory(this.speedHistory, speed)
         this.networkAvailable = true
@@ -288,16 +286,12 @@ export class NetworkMonitor {
       try {
         const startTime = Date.now()
 
-        const response = await fetch(testUrl, {
+        await getNetworkService().request<string>({
           method: 'HEAD',
-          signal: AbortSignal.timeout(3000)
+          url: testUrl,
+          timeoutMs: 3000,
+          responseType: 'text'
         })
-
-        if (!response.ok) {
-          continue
-        }
-
-        await response.blob()
         const endTime = Date.now()
 
         const latency = endTime - startTime

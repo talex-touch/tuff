@@ -1,3 +1,4 @@
+import { networkClient } from '@talex-touch/utils/network'
 import { useRuntimeConfig } from '#imports'
 
 interface EmailPayload {
@@ -15,18 +16,18 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
     return
   }
 
-  await fetch('https://api.resend.com/emails', {
+  await networkClient.request({
     method: 'POST',
+    url: 'https://api.resend.com/emails',
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
+    body: {
       from,
       to: payload.to,
       subject: payload.subject,
       html: payload.html
-    })
+    }
   })
 }
-

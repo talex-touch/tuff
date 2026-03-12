@@ -1,4 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
+import { networkClient } from '@talex-touch/utils/network'
 
 export class CustomTranslateProvider implements TranslationProvider {
   name = '自定义翻译'
@@ -30,13 +31,14 @@ export class CustomTranslateProvider implements TranslationProvider {
       const targetLanguageName = targetLanguageMap[targetLang] || '中文'
       const prompt = `请将以下文本翻译成${targetLanguageName}，只返回翻译结果，不要添加任何解释：\n\n${text}`
 
-      const response = await fetch(this.config.apiUrl, {
+      const response = await networkClient.request<any>({
         method: 'POST',
+        url: this.config.apiUrl,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.config.apiKey}`,
         },
-        body: JSON.stringify({
+        body: {
           model: this.config.model,
           messages: [
             {
@@ -46,14 +48,9 @@ export class CustomTranslateProvider implements TranslationProvider {
           ],
           temperature: 0.3,
           max_tokens: 1000,
-        }),
+        },
       })
-
-      if (!response.ok) {
-        throw new Error(`Custom API error: ${response.status}`)
-      }
-
-      const data = await response.json()
+      const data = response.data
       const translatedText = data.choices?.[0]?.message?.content?.trim() || text
 
       return {

@@ -2,6 +2,11 @@ import type { ITuffIcon, TuffQuery } from '@talex-touch/utils'
 import type { TuffItem } from '@talex-touch/utils/core-box'
 import type { ITouchEvent } from '@talex-touch/utils/eventbus'
 import type {
+  NetworkMethod,
+  NetworkRequestOptions,
+  NetworkResponseType
+} from '@talex-touch/utils/network'
+import type {
   IFeatureLifeCycle,
   IPlatform,
   IPluginDev,
@@ -36,7 +41,6 @@ import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/nod
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents, NotificationEvents, PluginEvents } from '@talex-touch/utils/transport/events'
-import axios from 'axios'
 import { app, clipboard, dialog, shell } from 'electron'
 import fse from 'fs-extra'
 import { genTouchApp } from '../../core'
@@ -120,6 +124,124 @@ const LEGACY_CHANNEL_SUCCESS = 200 as PluginStandardChannelData['code']
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
+}
+
+type PluginHttpResponseType = Extract<NetworkResponseType, 'json' | 'text'> | 'arraybuffer'
+type PluginHttpRequestConfig = {
+  url: string
+  method?: string
+  headers?: Record<string, string>
+  params?: Record<string, string | number | boolean | null | undefined>
+  data?: unknown
+  signal?: AbortSignal
+  timeout?: number
+  timeoutMs?: number
+  responseType?: PluginHttpResponseType
+}
+
+type PluginHttpResponse<T = unknown> = {
+  data: T
+  status: number
+  statusText: string
+  headers: Record<string, string>
+  config: PluginHttpRequestConfig
+  url: string
+}
+
+type PluginHttpClient = {
+  request: <T = unknown>(config: PluginHttpRequestConfig) => Promise<PluginHttpResponse<T>>
+  get: <T = unknown>(
+    url: string,
+    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
+  ) => Promise<PluginHttpResponse<T>>
+  post: <T = unknown>(
+    url: string,
+    data?: unknown,
+    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
+  ) => Promise<PluginHttpResponse<T>>
+  put: <T = unknown>(
+    url: string,
+    data?: unknown,
+    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
+  ) => Promise<PluginHttpResponse<T>>
+  patch: <T = unknown>(
+    url: string,
+    data?: unknown,
+    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
+  ) => Promise<PluginHttpResponse<T>>
+  delete: <T = unknown>(
+    url: string,
+    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
+  ) => Promise<PluginHttpResponse<T>>
+}
+
+const ALLOWED_HTTP_METHODS = new Set<NetworkMethod>([
+  'GET',
+  'POST',
+  'PUT',
+  'PATCH',
+  'DELETE',
+  'HEAD',
+  'OPTIONS'
+])
+
+function normalizeNetworkMethod(method?: string): NetworkMethod {
+  const normalized = typeof method === 'string' ? method.trim().toUpperCase() : 'GET'
+  if (ALLOWED_HTTP_METHODS.has(normalized as NetworkMethod)) {
+    return normalized as NetworkMethod
+  }
+  return 'GET'
+}
+
+function normalizeResponseType(
+  responseType: PluginHttpResponseType | undefined
+): NetworkRequestOptions['responseType'] {
+  if (responseType === 'arraybuffer') {
+    return 'arrayBuffer'
+  }
+  return responseType
+}
+
+function createPluginHttpClient(): PluginHttpClient {
+  const networkService = getNetworkService()
+
+  const send = async <T>(config: PluginHttpRequestConfig): Promise<PluginHttpResponse<T>> => {
+    const method = normalizeNetworkMethod(config.method)
+    const timeoutMs =
+      typeof config.timeoutMs === 'number'
+        ? config.timeoutMs
+        : typeof config.timeout === 'number'
+          ? config.timeout
+          : undefined
+    const response = await networkService.request<T>({
+      method,
+      url: config.url,
+      headers: config.headers,
+      query: config.params,
+      body: config.data,
+      signal: config.signal,
+      timeoutMs,
+      responseType: normalizeResponseType(config.responseType)
+    })
+
+    return {
+      data: response.data,
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+      config,
+      url: response.url
+    }
+  }
+
+  return {
+    request: send,
+    get: (url, config = {}) => send({ ...config, url, method: 'GET' }),
+    post: (url, data, config = {}) => send({ ...config, url, method: 'POST', data }),
+    put: (url, data, config = {}) => send({ ...config, url, method: 'PUT', data }),
+    patch: (url, data, config = {}) => send({ ...config, url, method: 'PATCH', data }),
+    delete: (url, config = {}) => send({ ...config, url, method: 'DELETE' })
+  }
 }
 
 /**
@@ -1181,7 +1303,7 @@ export class TouchPlugin implements ITouchPlugin {
     const transport = this.resolveTransport()
     const mainWindowId = appInstance.window.window.id
 
-    const http = axios
+    const http = createPluginHttpClient()
     const storage = this.createPluginStorageAPI(pluginName)
     const clipboardUtil = createClipboardManager(clipboard)
 

@@ -1,7 +1,9 @@
 import type { Ref } from 'vue'
+import { useNetworkSdk } from '@talex-touch/utils/renderer'
 import { ref, watch } from 'vue'
 
 export function useStoreReadme(readmeUrl: Ref<string | undefined>, t: (key: string) => string) {
+  const networkSdk = useNetworkSdk()
   const readmeMarkdown = ref('')
   const readmeLoading = ref(false)
   const readmeError = ref('')
@@ -14,10 +16,12 @@ export function useStoreReadme(readmeUrl: Ref<string | undefined>, t: (key: stri
     readmeMarkdown.value = ''
 
     try {
-      const response = await fetch(url)
-      if (!response.ok) throw new Error(`Failed to fetch README: ${response.status}`)
-      const markdown = await response.text()
-      readmeMarkdown.value = markdown
+      const response = await networkSdk.request<string>({
+        method: 'GET',
+        url,
+        responseType: 'text'
+      })
+      readmeMarkdown.value = response.data
     } catch (error) {
       console.error('[StoreDetail] Failed to load README:', error)
       readmeError.value = t('store.detailDialog.readmeError') || 'Failed to load README'

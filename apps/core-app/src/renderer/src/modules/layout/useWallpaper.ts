@@ -1,4 +1,5 @@
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { useNetworkSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { toast } from 'vue-sonner'
@@ -34,6 +35,7 @@ function toErrorMessage(error: unknown): string {
 
 export function useWallpaper() {
   const transport = useTuffTransport()
+  const networkSdk = useNetworkSdk()
   const pollingService = PollingService.getInstance()
   const { t } = useI18n()
 
@@ -114,8 +116,11 @@ export function useWallpaper() {
       return
     }
     try {
-      const response = await fetch('https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1')
-      const data = await response.json()
+      const response = await networkSdk.request<{ images?: Array<{ url?: string }> }>({
+        method: 'GET',
+        url: 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1'
+      })
+      const data = response.data
       const url = data?.images?.[0]?.url
       if (typeof url === 'string') {
         bingUrl.value = `https://www.bing.com${url}`

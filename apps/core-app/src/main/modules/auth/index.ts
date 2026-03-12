@@ -1,6 +1,7 @@
 import type { AuthState, AuthUser } from '@talex-touch/utils/auth'
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
+import type { NetworkMethod } from '@talex-touch/utils/network'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { StorageList } from '@talex-touch/utils'
@@ -15,6 +16,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { safeStorage, shell } from 'electron'
 import { BaseModule } from '../abstract-base-module'
+import { getNetworkService } from '../network'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 
 const authLog = getLogger('auth')
@@ -467,17 +469,21 @@ async function fetchRemoteUser(
 ): Promise<FetchRemoteUserResult> {
   try {
     const url = new URL('/api/v1/auth/me', resolveAuthBaseUrl()).toString()
-    const response = await fetch(url, {
+    const response = await getNetworkService().request<AuthUser>({
+      method: 'GET',
+      url,
       headers: { Authorization: normalizeBearerToken(token) },
-      signal
+      signal,
+      responseType: 'json',
+      validateStatus: [200, 401, 403]
     })
-    if (!response.ok) {
+    if (response.status !== 200) {
       if (response.status === 401 || response.status === 403) {
         return { kind: 'unauthorized' }
       }
       return { kind: 'unavailable' }
     }
-    const data = (await response.json()) as AuthUser
+    const data = response.data as AuthUser
     return { kind: 'success', user: toAuthUserProfile(data) }
   } catch {
     return { kind: 'unavailable' }
@@ -531,18 +537,20 @@ async function patchRemoteUserProfile(
   payload: { name?: string | null; bio?: string | null; image?: string | null }
 ): Promise<AuthUser> {
   const url = new URL('/api/v1/auth/profile', resolveAuthBaseUrl()).toString()
-  const response = await fetch(url, {
+  const response = await getNetworkService().request<AuthUser>({
     method: 'PATCH',
+    url,
     headers: {
       'Content-Type': 'application/json',
       Authorization: normalizeBearerToken(token)
     },
-    body: JSON.stringify(payload)
+    body: payload,
+    responseType: 'json'
   })
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}`)
   }
-  const data = (await response.json()) as AuthUser
+  const data = response.data as AuthUser
   return toAuthUserProfile(data)
 }
 
@@ -623,14 +631,6 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
   return true
 }
 
-function normalizeHeaders(headers: Headers): Record<string, string> {
-  const normalized: Record<string, string> = {}
-  headers.forEach((value, key) => {
-    normalized[key] = value
-  })
-  return normalized
-}
-
 async function performNexusRequest(
   payload: NexusRequestPayload
 ): Promise<NexusResponsePayload | null> {
@@ -644,14 +644,17 @@ async function performNexusRequest(
     throw new Error('Missing request url/path')
   }
   const url = rawUrl ? rawUrl : new URL(rawPath ?? '', resolveAuthBaseUrl()).toString()
-  const method = payload.method ? payload.method.toUpperCase() : 'GET'
+  const method = (payload.method ? payload.method.toUpperCase() : 'GET') as NetworkMethod
   const headers = new Headers(payload.headers ?? {})
   headers.set('Authorization', normalizeBearerToken(token))
 
-  const response = await fetch(url, {
+  const response = await getNetworkService().request<string>({
     method,
-    headers,
-    body: payload.body
+    url,
+    headers: Object.fromEntries(headers.entries()),
+    body: payload.body,
+    responseType: 'text',
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100)
   })
 
   if (response.status === 401) {
@@ -659,14 +662,12 @@ async function performNexusRequest(
     updateAuthState(null)
   }
 
-  const body = await response.text()
-
   return {
     status: response.status,
     statusText: response.statusText,
-    headers: normalizeHeaders(response.headers),
+    headers: response.headers,
     url: response.url || url,
-    body
+    body: response.data ?? ''
   }
 }
 
@@ -800,14 +801,16 @@ async function attestCurrentDevice(): Promise<boolean> {
   }
 
   const url = new URL('/api/v1/devices/attest', resolveAuthBaseUrl()).toString()
-  const response = await fetch(url, {
+  const response = await getNetworkService().request<string>({
     method: 'POST',
+    url,
     headers: {
       Authorization: normalizeBearerToken(token),
       'content-type': 'application/json',
       'x-device-id': deviceId
     },
-    body: JSON.stringify(payload)
+    body: payload,
+    responseType: 'text'
   })
 
   if (!response.ok) {

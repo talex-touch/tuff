@@ -95,6 +95,11 @@ export default tseslint.config(
               name: 'packages/utils/channel',
               message:
                 'Legacy channel API is restricted. Use @talex-touch/utils/transport or @talex-touch/utils/transport/legacy.'
+            },
+            {
+              name: 'axios',
+              message:
+                'Direct axios usage is restricted. Use @talex-touch/utils/network or renderer NetworkSDK.'
             }
           ]
         }
@@ -117,6 +122,11 @@ export default tseslint.config(
         {
           selector: "UnaryExpression[operator='typeof'][argument.name='navigator']",
           message: 'Use hasNavigator() from @talex-touch/utils/env instead of typeof navigator.'
+        },
+        {
+          selector: "CallExpression[callee.type='Identifier'][callee.name='fetch']",
+          message:
+            'Direct fetch is restricted. Use @talex-touch/utils/network or renderer NetworkSDK.'
         }
       ]
     }

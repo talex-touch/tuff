@@ -3,6 +3,7 @@ import type { TuffItem } from '@talex-touch/utils'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { isElectronRenderer } from '@talex-touch/utils/env'
+import { networkClient } from '@talex-touch/utils/network'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { TxMarkdownView } from '@talex-touch/tuffex'
@@ -52,13 +53,8 @@ onMounted(async () => {
         timeoutMs: READ_TIMEOUT_MS
       })
     } else {
-      // Fallback to fetch for non-Electron environments
       const url = buildTfileUrl(filePath)
-      const response = await fetch(url)
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-      content.value = await response.text()
+      content.value = await networkClient.readText(url)
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : ''

@@ -1,4 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
+import { networkClient } from '@talex-touch/utils/network'
 
 interface MyMemoryConfig {
   apiUrl: string
@@ -45,18 +46,14 @@ export class MyMemoryTranslateProvider implements TranslationProvider {
         params.append('de', this.config.email)
       }
 
-      const response = await fetch(`${this.config.apiUrl}?${params}`, {
+      const response = await networkClient.request<any>({
         method: 'GET',
+        url: `${this.config.apiUrl}?${params}`,
         headers: {
           Accept: 'application/json',
         },
       })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
+      const data = response.data
 
       if (data.responseStatus !== 200) {
         throw new Error(`MyMemory 错误: ${data.responseDetails || '未知错误'}`)

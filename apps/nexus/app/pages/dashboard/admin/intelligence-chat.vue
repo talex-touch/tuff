@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { networkClient } from '@talex-touch/utils/network'
 import { computed, onMounted, ref, watch } from 'vue'
 import { TuffInput, TxBaseSurface, TxButton, TxSpinner } from '@talex-touch/tuffex'
 
@@ -76,10 +77,14 @@ function appendAssistantDelta(delta: string) {
 
 async function loadHistory() {
   try {
-    const response = await fetch('/api/admin/intelligence/chat')
-    if (!response.ok)
-      throw new Error(await response.text())
-    const data = await response.json()
+    const response = await networkClient.request<unknown>({
+      url: '/api/admin/intelligence/chat',
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+      },
+    })
+    const data = response.data
     const history = Array.isArray(data) ? data : []
     messages.value = history.map((item: ChatMessage, index: number) => ({
       id: item.id || makeId(`history_${index}`),
@@ -109,11 +114,11 @@ function handleStreamEvent(event: ChatStreamEvent) {
   }
 }
 
-async function consumeSseResponse(response: Response) {
-  if (!response.body) {
+async function consumeSseResponse(streamBody: ReadableStream<Uint8Array> | null) {
+  if (!streamBody) {
     throw new Error('Empty stream response body.')
   }
-  const reader = response.body.getReader()
+  const reader = streamBody.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
 
@@ -164,18 +169,19 @@ async function sendMessage() {
   streamAbortController = new AbortController()
 
   try {
-    const response = await fetch('/api/admin/intelligence/chat', {
+    const response = await networkClient.request<ReadableStream<Uint8Array> | null>({
       method: 'POST',
+      url: '/api/admin/intelligence/chat',
       headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
+        'content-type': 'application/json',
+        accept: 'text/event-stream',
       },
-      body: JSON.stringify({ message }),
+      body: { message },
       signal: streamAbortController.signal,
+      responseType: 'stream',
     })
-    if (!response.ok)
-      throw new Error(await response.text())
-    await consumeSseResponse(response)
+
+    await consumeSseResponse(response.data)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '发送失败。'
     running.value = false

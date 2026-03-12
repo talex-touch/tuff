@@ -1,16 +1,32 @@
 import type {
   DownloadAsset,
   GitHubRelease,
+  NetworkRequestOptions,
+  NetworkResponse,
   UpdateError,
   UpdateProviderType,
   UpdateSourceConfig
 } from '@talex-touch/utils'
-import { AppPreviewChannel, UpdateErrorType, parseUpdateTag } from '@talex-touch/utils'
+import type { NetworkSdk } from '@talex-touch/utils/transport/sdk/domains/network'
+import {
+  AppPreviewChannel,
+  UpdateErrorType,
+  isElectronRenderer,
+  networkClient,
+  parseHttpStatusCode,
+  parseUpdateTag,
+  isTimeoutLikeError
+} from '@talex-touch/utils'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { createNetworkSdk } from '@talex-touch/utils/transport/sdk/domains/network'
 
 // 更新源抽象基类
 export abstract class UpdateProvider {
   abstract readonly name: string
   abstract readonly type: UpdateProviderType
+  private readonly networkSdk: NetworkSdk | null = isElectronRenderer()
+    ? createNetworkSdk(useTuffTransport())
+    : null
 
   // 检查是否可以处理该配置
   abstract canHandle(config: UpdateSourceConfig): boolean
@@ -23,6 +39,23 @@ export abstract class UpdateProvider {
 
   // 健康检查（可选）
   async healthCheck?(): Promise<boolean>
+
+  protected async request<T = unknown>(
+    options: NetworkRequestOptions
+  ): Promise<NetworkResponse<T>> {
+    if (this.networkSdk) {
+      return await this.networkSdk.request<T>(options)
+    }
+    return await networkClient.request<T>(options)
+  }
+
+  protected isRequestTimeout(error: unknown): boolean {
+    return isTimeoutLikeError(error)
+  }
+
+  protected getRequestStatusCode(error: unknown): number | null {
+    return parseHttpStatusCode(error)
+  }
 
   // 创建更新错误
   protected createError(

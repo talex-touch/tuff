@@ -8,6 +8,7 @@
  */
 
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { getNetworkService } from '../../../../network'
 import { createLogger } from '../../../../../utils/logger'
 
 const log = createLogger('FxRateProvider')
@@ -402,22 +403,17 @@ export class FxRateProvider {
    */
   private async fetchFromECB(): Promise<Record<string, number> | null> {
     try {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-
-      const response = await fetch(ECB_API, {
-        signal: controller.signal,
-        headers: { Accept: 'application/json' }
-      })
-
-      clearTimeout(timeout)
-
-      if (!response.ok) return null
-
-      const data = (await response.json()) as {
+      const response = await getNetworkService().request<{
         base: string
         rates: Record<string, number>
-      }
+      }>({
+        method: 'GET',
+        url: ECB_API,
+        timeoutMs: REQUEST_TIMEOUT_MS,
+        responseType: 'json',
+        headers: { Accept: 'application/json' }
+      })
+      const data = response.data
 
       // Convert to USD-based rates
       const rates: Record<string, number> = { USD: 1 }
@@ -437,22 +433,17 @@ export class FxRateProvider {
    */
   private async fetchFromBackup(): Promise<Record<string, number> | null> {
     try {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-
-      const response = await fetch(BACKUP_API, {
-        signal: controller.signal,
-        headers: { Accept: 'application/json' }
-      })
-
-      clearTimeout(timeout)
-
-      if (!response.ok) return null
-
-      const data = (await response.json()) as {
+      const response = await getNetworkService().request<{
         base_code: string
         rates: Record<string, number>
-      }
+      }>({
+        method: 'GET',
+        url: BACKUP_API,
+        timeoutMs: REQUEST_TIMEOUT_MS,
+        responseType: 'json',
+        headers: { Accept: 'application/json' }
+      })
+      const data = response.data
 
       return data.rates
     } catch (error) {

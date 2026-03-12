@@ -280,8 +280,7 @@ async function copy() {
 
   const url = canvas.toDataURL('image/png')
 
-  const data = await fetch(url)
-  const blob = await data.blob()
+  const blob = dataUrlToBlob(url)
   const ClipboardItem = window.ClipboardItem
   await navigator.clipboard.write([
     new ClipboardItem({
@@ -290,6 +289,17 @@ async function copy() {
   ])
 
   loading.value = false
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [meta = '', data = ''] = dataUrl.split(',', 2)
+  const mime = /data:(.*?);base64/.exec(meta)?.[1] || 'application/octet-stream'
+  const binary = atob(data)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return new Blob([bytes], { type: mime })
 }
 
 async function refreshPreview() {

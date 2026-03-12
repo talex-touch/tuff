@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-03-07  
+> 更新时间：2026-03-12  
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -160,3 +160,19 @@
 - 长对话必须具备 pause/resume 语义，断线场景不得“吞消息”。
 - SSE 必须提供 keepalive 与显式结束事件（`done`），避免前端状态悬挂。
 - 所有 Intelligence 核心类型与 Runtime 实现统一来源为 `@talex-touch/tuff-intelligence`，禁止新增 `@talex-touch/utils/intelligence*` 外部依赖。
+
+### 6.6 Network 套件全仓硬切（2026-03-12）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 统一入口 | `@talex-touch/utils/network`（request/file/guard） | 已落地 |
+| 覆盖范围 | `apps/core-app + apps/nexus + apps/pilot + packages + plugins` | 已收口 |
+| 业务层 direct `fetch/axios` | 0（network 套件内部除外） | 已达标 |
+| root 门禁 | `pnpm run network:guard`（全仓） | 已硬禁 |
+| ESLint 规则 | `no-restricted-imports(axios)` + `no-restricted-syntax(fetch)` | 已补齐关键 workspace |
+
+**质量约束落地**
+- Renderer（Electron）网络请求必须通过 Main 网关或统一 NetworkSDK，不允许直连扩散。
+- 本地文件读取统一走 network file API（`readText/readBinary/toTfileUrl`），避免分散路径解析策略。
+- 任意 workspace 新增 direct `fetch/axios` 视为门禁失败（CI fail），不得以临时 allowlist 作为长期方案。

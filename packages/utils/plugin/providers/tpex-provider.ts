@@ -8,9 +8,11 @@ import type {
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import { NEXUS_BASE_URL } from '../../env'
+import { networkClient } from '../../network'
 import { PluginProviderType } from './types'
 
 const DEFAULT_TPEX_API = NEXUS_BASE_URL
+const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
 
 /**
  * Check if source is a .tpex file path or URL
@@ -141,12 +143,12 @@ export class TpexProvider implements PluginProvider {
 
     if (isRemoteUrl(request.source)) {
       // Download remote .tpex file
-      const downloadRes = await fetch(request.source)
-      if (!downloadRes.ok) {
-        throw new Error(`Failed to download TPEX file: ${downloadRes.statusText}`)
-      }
-
-      arrayBuffer = await downloadRes.arrayBuffer()
+      const downloadRes = await networkClient.request<ArrayBuffer>({
+        method: 'GET',
+        url: request.source,
+        responseType: 'arrayBuffer'
+      })
+      arrayBuffer = downloadRes.data
       const tempDir = context?.tempDir ?? '/tmp'
       const fileName = `tpex-${Date.now()}.tpex`
       filePath = `${tempDir}/${fileName}`
@@ -183,15 +185,19 @@ export class TpexProvider implements PluginProvider {
 
     const { slug, version } = parsed
 
-    const detailRes = await fetch(`${this.apiBase}/api/store/plugins/${slug}`)
-    if (!detailRes.ok) {
+    const detailRes = await networkClient.request<TpexDetailResponse>({
+      method: 'GET',
+      url: `${this.apiBase}/api/store/plugins/${slug}`,
+      validateStatus: ALL_HTTP_STATUS
+    })
+    if (detailRes.status < 200 || detailRes.status >= 300) {
       if (detailRes.status === 404) {
         throw new Error(`Plugin not found: ${slug}`)
       }
-      throw new Error(`Failed to fetch plugin details: ${detailRes.statusText}`)
+      throw new Error(`Failed to fetch plugin details: HTTP ${detailRes.status}`)
     }
 
-    const detail: TpexDetailResponse = await detailRes.json()
+    const detail = detailRes.data
     const plugin = detail.plugin
 
     let targetVersion = plugin.latestVersion
@@ -207,12 +213,12 @@ export class TpexProvider implements PluginProvider {
       ? targetVersion.packageUrl
       : `${this.apiBase}${targetVersion.packageUrl}`
 
-    const downloadRes = await fetch(downloadUrl)
-    if (!downloadRes.ok) {
-      throw new Error(`Failed to download plugin package: ${downloadRes.statusText}`)
-    }
-
-    const arrayBuffer = await downloadRes.arrayBuffer()
+    const downloadRes = await networkClient.request<ArrayBuffer>({
+      method: 'GET',
+      url: downloadUrl,
+      responseType: 'arrayBuffer'
+    })
+    const arrayBuffer = downloadRes.data
     const tempDir = context?.tempDir ?? '/tmp'
     const fileName = `${slug}-${targetVersion.version}.tpex`
     const filePath = `${tempDir}/${fileName}`
@@ -258,12 +264,11 @@ export class TpexProvider implements PluginProvider {
     const listUrl = new URL(`${this.apiBase}/api/store/plugins`)
     listUrl.searchParams.set('compact', '1')
 
-    const res = await fetch(listUrl.toString())
-    if (!res.ok) {
-      throw new Error(`Failed to fetch plugin list: ${res.statusText}`)
-    }
-
-    const data: TpexListResponse = await res.json()
+    const res = await networkClient.request<TpexListResponse>({
+      method: 'GET',
+      url: listUrl.toString()
+    })
+    const data = res.data
     return data.plugins
   }
 
@@ -271,14 +276,18 @@ export class TpexProvider implements PluginProvider {
    * Get plugin details by slug
    */
   async getPlugin(slug: string): Promise<TpexDetailResponse['plugin'] | null> {
-    const res = await fetch(`${this.apiBase}/api/store/plugins/${slug}`)
-    if (!res.ok) {
+    const res = await networkClient.request<TpexDetailResponse>({
+      method: 'GET',
+      url: `${this.apiBase}/api/store/plugins/${slug}`,
+      validateStatus: ALL_HTTP_STATUS
+    })
+    if (res.status < 200 || res.status >= 300) {
       if (res.status === 404)
         return null
-      throw new Error(`Failed to fetch plugin: ${res.statusText}`)
+      throw new Error(`Failed to fetch plugin: HTTP ${res.status}`)
     }
 
-    const data: TpexDetailResponse = await res.json()
+    const data = res.data
     return data.plugin
   }
 

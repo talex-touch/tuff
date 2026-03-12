@@ -12,6 +12,7 @@ import { withSqliteRetry } from '../../db/sqlite-retry'
 import { BaseModule } from '../abstract-base-module'
 import { fxRateProvider } from '../box-tool/addon/preview/providers'
 import { databaseModule } from '../database'
+import { getNetworkService } from '../network'
 import { notificationModule } from '../notification'
 import {
   SystemConfigUpdatedEvent,
@@ -257,11 +258,20 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
     url.searchParams.set('scope', 'system')
     url.searchParams.set('channel', this.channel)
 
-    let response: Response
+    let response: {
+      status: number
+      headers: Record<string, string>
+      data: unknown
+      statusText: string
+    }
     try {
-      response = await fetch(url.toString(), {
+      response = await getNetworkService().request<{ updates?: DashboardUpdate[] }>({
+        method: 'GET',
+        url: url.toString(),
         headers,
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+        timeoutMs: FETCH_TIMEOUT_MS,
+        responseType: 'json',
+        validateStatus: [200, 304]
       })
     } catch (error) {
       log.warn('Failed to fetch system updates', { error })
@@ -274,21 +284,10 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
       return
     }
 
-    if (!response.ok) {
-      log.warn('System update request failed', { meta: { status: response.status } })
-      return
-    }
-
-    let payload: { updates?: DashboardUpdate[] } | null = null
-    try {
-      payload = (await response.json()) as { updates?: DashboardUpdate[] }
-    } catch (error) {
-      log.warn('System update response invalid', { error })
-      return
-    }
+    const payload = response.data as { updates?: DashboardUpdate[] } | null
 
     const updates = Array.isArray(payload?.updates) ? (payload?.updates ?? []) : []
-    const newEtag = response.headers.get('etag') ?? undefined
+    const newEtag = response.headers.etag ?? undefined
     const processedId = await this.applyUpdates(updates, state?.lastProcessedId ?? null)
 
     await this.saveState({
@@ -449,20 +448,20 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
   private async fetchPayload(update: DashboardUpdate): Promise<unknown | null> {
     if (!update.payloadUrl) return null
     const url = this.resolveBaseUrl(update.payloadUrl)
-    let response: Response
+    let response: { status: number; statusText: string; data: string }
     try {
-      response = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+      response = await getNetworkService().request<string>({
+        method: 'GET',
+        url,
+        timeoutMs: FETCH_TIMEOUT_MS,
+        responseType: 'text'
+      })
     } catch (error) {
       log.warn('Failed to fetch update payload', { error })
       return null
     }
-    if (!response.ok) {
-      log.warn('Update payload request failed', { meta: { status: response.status } })
-      return null
-    }
     try {
-      const text = await response.text()
-      return JSON.parse(text)
+      return JSON.parse(response.data)
     } catch (error) {
       log.warn('Update payload JSON parse failed', { error })
       return null

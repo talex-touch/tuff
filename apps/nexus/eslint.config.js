@@ -72,3 +72,38 @@ export default antfu(
       ],
     },
   })
+  .append({
+    files: ['**/*.{ts,tsx,js,jsx,vue}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'axios',
+              message: 'Direct axios usage is restricted. Use @talex-touch/utils/network.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "UnaryExpression[operator='typeof'][argument.name='window']",
+          message: 'Use hasWindow() from @talex-touch/utils/env instead of typeof window.',
+        },
+        {
+          selector: "UnaryExpression[operator='typeof'][argument.name='document']",
+          message: 'Use hasDocument() from @talex-touch/utils/env instead of typeof document.',
+        },
+        {
+          selector: "UnaryExpression[operator='typeof'][argument.name='navigator']",
+          message: 'Use hasNavigator() from @talex-touch/utils/env instead of typeof navigator.',
+        },
+        {
+          selector: "CallExpression[callee.type='Identifier'][callee.name='fetch']",
+          message: 'Direct fetch is restricted. Use @talex-touch/utils/network.',
+        },
+      ],
+    },
+  })

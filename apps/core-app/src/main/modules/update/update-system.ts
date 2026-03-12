@@ -25,7 +25,6 @@ import {
   splitUpdateTag
 } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import axios from 'axios'
 import compressing from 'compressing'
 import { and, eq } from 'drizzle-orm'
 import { app, shell } from 'electron'
@@ -35,6 +34,7 @@ import { SignatureVerifier } from '../../utils/release-signature'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { databaseModule } from '../database'
 import { getAnalyticsMessageStore } from '../analytics/message-store'
+import { getNetworkService } from '../network'
 
 /**
  * Version information interface
@@ -948,8 +948,11 @@ export class UpdateSystem {
    */
   private async fetchGitHubReleases(): Promise<GitHubRelease[]> {
     try {
-      const response = await axios.get(UPDATE_GITHUB_RELEASES_API, {
-        timeout: 10000,
+      const response = await getNetworkService().request<GitHubRelease[]>({
+        method: 'GET',
+        url: UPDATE_GITHUB_RELEASES_API,
+        timeoutMs: 10000,
+        responseType: 'json',
         headers: {
           Accept: 'application/vnd.github.v3+json',
           'User-Agent': 'TalexTouch-Updater/2.0'
@@ -1041,7 +1044,12 @@ export class UpdateSystem {
     }
 
     try {
-      const response = await axios.get(manifestUrl, { timeout: 8000 })
+      const response = await getNetworkService().request<unknown>({
+        method: 'GET',
+        url: manifestUrl,
+        timeoutMs: 8000,
+        responseType: 'json'
+      })
       const manifest = response.data
 
       if (!this.isReleaseManifest(manifest)) {

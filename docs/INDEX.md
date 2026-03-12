@@ -17,7 +17,7 @@
 
 ## 状态快照（压缩版，代码核对）
 
-- 2026-03 新增：core-app 完成 Network 套件首版收口：`packages/utils/network` + Transport `NetworkSDK` + Main `NetworkModule/NetworkService`，并完成 plugin/dev/store/download 首批请求入口迁移与 `TuffIconImpl` dev.source 判定修复；新增 `network:guard` 门禁脚本阻止新增散落 `fetch/axios`（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
+- 2026-03 新增：Network 套件完成全仓硬切（`apps/core-app + apps/nexus + apps/pilot + packages + plugins`）：业务层 direct `fetch/axios` 已清零（network 套件内部除外），SSE/文件读取统一改走 `@talex-touch/utils/network`，root `network:guard` 升级为硬禁并覆盖全仓（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
 - 2026-02 新增：`v2.4.7` 发版推进清单落地，明确 Gate A-E（版本基线/发布链路/质量门禁/发布资产/发布动作）与当前阻塞项，作为发布执行入口（`docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`）。
 - 2026-03 新增：Nexus 文档与入口收口（不含 Pilot）：Examples 改为单一来源索引、首页占位段清理、guide 补齐 CoreBox workflow/AI/翻译/壁纸现状，并新增发布资产核对清单（`docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md`）。
 - 2026-03 新增：Roadmap 任务01（TODO 现状校准）收口：清理“已落地但未闭环语义”混合标记，并将 CoreBox/Nexus 剩余优先级重排为 `SDK Hard-Cut E~F -> Gate D -> Gate E -> View Mode 安全收口 -> Nexus 设备授权风控`（`docs/plan-prd/TODO.md`）。
@@ -26,7 +26,7 @@
 - 2026-03 新增：Pilot 登录链路简化为“本地邮箱优先 + Nexus 并存”：新增 `/api/auth/email/register|login` 与 `/api/auth/logout`，`/api/auth/status` 增补 `guest/local/nexus` 来源语义；前端登录弹窗恢复全局挂载并保留 Nexus Beta 入口，短信/二维码入口改为“即将上线”占位；登录成功自动执行 guest 数据并入（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
 - 2026-03 新增：Pilot M0 修复聊天渲染阻塞：`ThContent.vue` 切换只读渲染到 `MilkContent.vue`，规避 `MilkdownError: Timer "SchemaReady" not found` / `editorViewOptions context not found`；并修复 `ChatLinkShare.vue` 的 `di` 标签告警（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
 - 2026-03 新增：Pilot Cloudflare 上线链路切换为静态发布（`nuxt generate -> .output/public`），规避免费版 Worker `3MiB` 限制；前端 API 基地址改为可由 `NUXT_PUBLIC_ENDS_URL` 注入（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
-- 2026-03 新增：Pilot 启动性能与 CI 链路收口：`dev` 默认 Cloudflare runtime 绑定（本地可直接联调 D1/R2），新增 `dev:local` 纯本地模式，UnoCSS dev safelist 降载、代码块重渲染器异步加载；新增 `pilot-ci.yml`（`lint/typecheck/test/build + static-dist + 1Panel webhook`）支撑 GitHub→1Panel 自动部署（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
+- 2026-03 新增：Pilot 启动性能与 CI 链路收口：`dev` 默认 Cloudflare runtime 绑定（本地可直接联调 D1/R2），新增 `dev:local` 纯本地模式，UnoCSS dev safelist 降载、代码块重渲染器异步加载；`pilot-ci.yml` 负责质量检查与静态产物，`pilot-image.yml` 负责 GHCR 发布并触发 1Panel webhook 部署（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
 - 2026-03 新增：Pilot 部署资产归档到 `apps/pilot/deploy/`，提供 `deploy-pilot-1panel.sh` 与 `deploy-pilot-1panel-webhook.sh`，并补齐双语教程（`README.zh-CN.md` / `README.md`），用于 1Panel 拉取 GHCR 镜像、解析 webhook payload 并执行健康检查回滚（`docs/plan-prd/01-project/CHANGES.md`）。
 - 2026-02 新增：CoreApp 新增 `FlipDialog` 统一封装并完成 16 个 `TxFlipOverlay` 场景迁移，默认宽弹框规格（`md/lg/xl/full`）与 reference 隐藏/恢复行为统一，页面侧不再重复声明 `Teleport`。
 - 2026-02 新增：Nexus 业务场景完成 15 处 `TxFlipOverlay -> FlipDialog` 迁移，统一 reference/source 隐藏恢复与 `size=md/lg/xl` 宽弹框策略；`pages/test` 与 `content/demos` 继续保留 `TxFlipOverlay` 作为测试/演示边界。

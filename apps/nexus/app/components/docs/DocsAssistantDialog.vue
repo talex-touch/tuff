@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { networkClient } from '@talex-touch/utils/network'
 import { TxButton, TxMarkdownView, TxSearchInput, TxSpinner } from '@talex-touch/tuffex'
 import { computed, nextTick, ref, watch } from 'vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
@@ -171,12 +172,18 @@ async function loadHistory() {
   errorMessage.value = ''
 
   try {
-    const response = await fetch(`/api/docs/assistant/history?${params.toString()}`)
-    const data = await response.json() as {
+    const response = await networkClient.request<{
       ok: boolean
       result?: { sessionId?: string | null; messages?: AssistantMessage[] }
       error?: string
-    }
+    }>({
+      url: `/api/docs/assistant/history?${params.toString()}`,
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+      },
+    })
+    const data = response.data
 
     if (!data.ok)
       throw new Error(data.error || 'Request failed')
@@ -217,18 +224,24 @@ async function requestAnswer() {
   messages.value.push(assistantMessage)
 
   try {
-    const response = await fetch('/api/docs/assistant', {
+    const response = await networkClient.request<ReadableStream<Uint8Array> | null>({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      url: '/api/docs/assistant',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'text/event-stream, application/json',
+      },
+      body: payload,
+      responseType: 'stream',
     })
 
-    const contentType = response.headers.get('content-type') || ''
+    const contentType = response.headers['content-type'] || ''
     if (contentType.includes('text/event-stream')) {
-      await readStreamResponse(response, assistantMessage)
+      await readStreamResponse(response.data, assistantMessage)
     }
     else {
-      const data = await response.json() as {
+      const text = await readStreamBodyText(response.data)
+      const data = JSON.parse(text || '{}') as {
         ok: boolean
         result?: { content?: string; sessionId?: string }
         error?: string
@@ -276,11 +289,27 @@ async function retrySend() {
   await requestAnswer()
 }
 
-async function readStreamResponse(response: Response, target: AssistantMessage) {
-  if (!response.body)
+async function readStreamBodyText(streamBody: ReadableStream<Uint8Array> | null): Promise<string> {
+  if (!streamBody) {
+    return ''
+  }
+  const reader = streamBody.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done)
+      break
+    buffer += decoder.decode(value, { stream: true })
+  }
+  return buffer
+}
+
+async function readStreamResponse(streamBody: ReadableStream<Uint8Array> | null, target: AssistantMessage) {
+  if (!streamBody)
     throw new Error(locale.value === 'zh' ? '流式响应不可用' : 'Streaming response unavailable.')
 
-  const reader = response.body.getReader()
+  const reader = streamBody.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
 

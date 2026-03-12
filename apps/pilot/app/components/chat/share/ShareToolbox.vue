@@ -97,8 +97,7 @@ async function duplicatingShareClick() {
   const dataURL = (await getCanvas()).toDataURL()
   shareOptions.loading = false
 
-  const data = await fetch(dataURL)
-  const blob = await data.blob()
+  const blob = dataUrlToBlob(dataURL)
   const ClipboardItem = window.ClipboardItem
   await navigator.clipboard.write([
     new ClipboardItem({
@@ -117,6 +116,17 @@ async function duplicatingShareClick() {
   setTimeout(() => {
     share.enable = false
   }, 200)
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [meta = '', data = ''] = dataUrl.split(',', 2)
+  const mime = /data:(.*?);base64/.exec(meta)?.[1] || 'application/octet-stream'
+  const binary = atob(data)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return new Blob([bytes], { type: mime })
 }
 
 async function copyChatContents() {

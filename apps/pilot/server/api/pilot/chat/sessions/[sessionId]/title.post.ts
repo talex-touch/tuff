@@ -1,5 +1,6 @@
 import type { MessageRecord } from '@talex-touch/tuff-intelligence'
 import type { H3Event } from 'h3'
+import { networkClient } from '@talex-touch/utils/network'
 import process from 'node:process'
 import { createError } from 'h3'
 import { requirePilotAuth } from '../../../../../utils/auth'
@@ -136,13 +137,14 @@ async function requestAiTitle(
   model: string,
   preview: string,
 ): Promise<string> {
-  const response = await fetch(endpoint, {
+  const response = await networkClient.request<Record<string, unknown> | string>({
     method: 'POST',
+    url: endpoint,
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
+    body: {
       model,
       max_output_tokens: 32,
       temperature: 0.2,
@@ -166,14 +168,16 @@ async function requestAiTitle(
           ],
         },
       ],
-    }),
+    },
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
   })
 
-  if (!response.ok) {
-    throw new Error(await response.text())
+  if (response.status < 200 || response.status >= 300) {
+    const errorMessage = typeof response.data === 'string' ? response.data : `HTTP ${response.status}`
+    throw new Error(errorMessage)
   }
 
-  const data = await response.json() as Record<string, unknown>
+  const data = (response.data || {}) as Record<string, unknown>
   return extractResponseText(data)
 }
 

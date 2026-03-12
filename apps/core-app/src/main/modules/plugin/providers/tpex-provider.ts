@@ -13,6 +13,7 @@ import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import compressing from 'compressing'
 import fse from 'fs-extra'
 import { getEnabledApiSources } from '../../../service/store-api.service'
+import { getNetworkService } from '../../network'
 import { createProviderLogger } from './logger'
 import { downloadToTempFile } from './utils'
 
@@ -270,15 +271,21 @@ export class TpexPluginProvider implements PluginProvider {
     )
     // endregion
 
-    const detailRes = await fetch(detailUrl)
-    if (!detailRes.ok) {
+    const detailRes = await getNetworkService().request<TpexDetailResponse>({
+      method: 'GET',
+      url: detailUrl,
+      timeoutMs: 30_000,
+      responseType: 'json',
+      validateStatus: [200, 404]
+    })
+    if (detailRes.status !== 200) {
       if (detailRes.status === 404) {
         throw new Error(`Plugin not found: ${slug}`)
       }
       throw new Error(`Failed to fetch plugin details: ${detailRes.statusText}`)
     }
 
-    const detail: TpexDetailResponse = await detailRes.json()
+    const detail: TpexDetailResponse = detailRes.data
     const plugin = detail.plugin
 
     let targetVersion = plugin.latestVersion

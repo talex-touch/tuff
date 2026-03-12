@@ -1,4 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
+import { networkClient } from '@talex-touch/utils/network'
 
 export class BingTranslateProvider implements TranslationProvider {
   name = 'Bing 翻译'
@@ -23,21 +24,17 @@ export class BingTranslateProvider implements TranslationProvider {
         params.append('from', sourceLang)
       }
 
-      const response = await fetch(`${this.config.apiUrl}?${params}`, {
+      const response = await networkClient.request<any>({
         method: 'POST',
+        url: `${this.config.apiUrl}?${params}`,
         headers: {
           'Ocp-Apim-Subscription-Key': this.config.apiKey,
           'Ocp-Apim-Subscription-Region': this.config.region,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify([{ text }]),
+        body: [{ text }],
       })
-
-      if (!response.ok) {
-        throw new Error(`Bing Translate API error: ${response.status}`)
-      }
-
-      const data = await response.json()
+      const data = response.data
       const translation = data[0]?.translations[0]
 
       return {

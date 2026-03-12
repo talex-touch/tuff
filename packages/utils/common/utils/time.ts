@@ -45,13 +45,13 @@ export class TimeoutError extends Error {
  *
  * async function fetchDataWithTimeout() {
  *   try {
- *     const result = await withTimeout(fetch('https://api.example.com/data'), 3000); // 3-second timeout
- *     console.log('Data fetched:', await result.json());
+ *     const result = await withTimeout(Promise.resolve('ok'), 3000); // 3-second timeout
+ *     console.log('Result:', result);
  *   } catch (error) {
  *     if (error instanceof TimeoutError) {
- *       console.error('Fetch request timed out!');
+ *       console.error('Request timed out!');
  *     } else {
- *       console.error('Fetch failed:', error);
+ *       console.error('Request failed:', error);
  *     }
  *   }
  * }
@@ -260,7 +260,7 @@ export function createRetrier(options: RetrierOptions = {}) {
         try {
           // Execute the original function with its original `this` context and arguments,
           // wrapped by the `withTimeout` utility.
-          const result = await withTimeout(func.apply(this, args), currentTimeoutMs)
+          const result = await withTimeout<T>(func.apply(this, args), currentTimeoutMs)
           onSuccess?.(result, currentAttempt) // Notify success
           return result // Return the successful result
         }

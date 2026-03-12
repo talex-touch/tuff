@@ -87,23 +87,19 @@ function stopPresenceHeartbeat(): void {
 async function reportPresence(state: 'opened' | 'heartbeat' | 'closed', keepalive = false): Promise<void> {
   if (import.meta.server || !code.value)
     return
-  const payload = JSON.stringify({
+  const payload = {
     code: code.value,
     state,
-  })
+  }
   try {
     if (keepalive && hasNavigator() && typeof navigator.sendBeacon === 'function') {
-      const sent = navigator.sendBeacon('/api/app-auth/device/presence', new Blob([payload], { type: 'application/json' }))
+      const sent = navigator.sendBeacon('/api/app-auth/device/presence', new Blob([JSON.stringify(payload)], { type: 'application/json' }))
       if (sent)
         return
     }
-    await fetch('/api/app-auth/device/presence', {
+    await $fetch('/api/app-auth/device/presence', {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-      },
       body: payload,
-      keepalive,
     })
   }
   catch {

@@ -14,6 +14,24 @@ export default rootConfig.append(
       'antfu/if-newline': 'off',
       'import/consistent-type-specifier-style': 'off',
       'jsdoc/check-alignment': 'off',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'axios',
+              message: 'Direct axios usage is restricted. Use @talex-touch/utils/network.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'CallExpression[callee.type=\'Identifier\'][callee.name=\'fetch\']',
+          message: 'Direct fetch is restricted. Use @talex-touch/utils/network.',
+        },
+      ],
       'node/prefer-global/process': 'off',
       'perfectionist/sort-exports': 'off',
       'perfectionist/sort-imports': 'off',

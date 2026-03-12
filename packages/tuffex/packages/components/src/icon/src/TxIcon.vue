@@ -136,20 +136,13 @@ const svgDataUrl = computed(() => {
 })
 
 async function fetchSvg(url: string) {
+  if (!svgFetcher.value) {
+    svgContent.value = ''
+    return
+  }
+
   try {
-    let content: string
-    if (svgFetcher.value) {
-      content = await svgFetcher.value(url)
-    }
-    else {
-      const res = await fetch(url)
-      if (!res.ok) {
-        svgContent.value = ''
-        return
-      }
-      content = await res.text()
-    }
-    svgContent.value = content
+    svgContent.value = await svgFetcher.value(url)
   }
   catch {
     svgContent.value = ''

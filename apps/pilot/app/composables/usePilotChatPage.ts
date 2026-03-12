@@ -13,6 +13,7 @@ import type {
   SessionTraceResponse,
   StreamEvent,
 } from './pilot-chat.types'
+import { networkClient } from '@talex-touch/utils/network'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const ASSISTANT_CHUNK_FLUSH_MS = 48
@@ -33,6 +34,22 @@ function clampInputText(value: string): string {
 
 function shortSessionId(sessionId: string): string {
   return sessionId.slice(-8)
+}
+
+function toNetworkMethod(method: string | undefined): 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS' {
+  const normalized = String(method || 'GET').toUpperCase()
+  switch (normalized) {
+    case 'POST':
+    case 'PUT':
+    case 'PATCH':
+    case 'DELETE':
+    case 'HEAD':
+    case 'OPTIONS':
+      return normalized
+    case 'GET':
+    default:
+      return 'GET'
+  }
 }
 
 function getStatusTone(status: PilotSession['status']): StatusTone {
@@ -63,19 +80,19 @@ function toReadableTime(value: string | undefined): string {
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init?.headers || {}),
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(await response.text())
+  const headers = new Headers(init?.headers || {})
+  if (!headers.has('accept')) {
+    headers.set('accept', 'application/json')
   }
 
-  return await response.json() as T
+  const response = await networkClient.request<T>({
+    url,
+    method: toNetworkMethod(init?.method),
+    headers: Object.fromEntries(headers.entries()),
+    body: init?.body,
+    signal: init?.signal,
+  })
+  return response.data
 }
 
 function sortSessions(list: PilotSession[]): PilotSession[] {
@@ -998,17 +1015,17 @@ export function usePilotChatPage() {
   }
 
   async function consumeSseResponse(
-    response: Response,
+    streamBody: ReadableStream<Uint8Array> | null,
     options: {
       sessionId: string
       abortController: AbortController
     },
   ) {
-    if (!response.body) {
+    if (!streamBody) {
       throw new Error('empty stream body')
     }
 
-    const reader = response.body.getReader()
+    const reader = streamBody.getReader()
     const decoder = new TextDecoder('utf-8')
     let buffer = ''
     let processedSinceYield = 0
@@ -1093,21 +1110,19 @@ export function usePilotChatPage() {
     }
 
     try {
-      const response = await fetch(`/api/pilot/chat/sessions/${sessionId}/stream`, {
+      const response = await networkClient.request<ReadableStream<Uint8Array> | null>({
         method: 'POST',
+        url: `/api/pilot/chat/sessions/${sessionId}/stream`,
         headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
+          'content-type': 'application/json',
+          'accept': 'text/event-stream',
         },
-        body: JSON.stringify(payload),
+        body: payload,
         signal: streamAbortController.signal,
+        responseType: 'stream',
       })
 
-      if (!response.ok) {
-        throw new Error(await response.text())
-      }
-
-      await consumeSseResponse(response, {
+      await consumeSseResponse(response.data, {
         sessionId,
         abortController: streamAbortController,
       })
