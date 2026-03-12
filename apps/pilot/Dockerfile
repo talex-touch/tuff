@@ -14,7 +14,7 @@ RUN corepack enable
 
 COPY . .
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --filter "@talex-touch/tuff-pilot..."
 RUN pnpm -C "apps/pilot" run build
 
 RUN pnpm --config.inject-workspace-packages=true --filter "@talex-touch/tuff-pilot" deploy --prod "/opt/pilot-runtime"
