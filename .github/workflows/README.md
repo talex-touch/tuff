@@ -36,7 +36,6 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - 触发条件：`master` push 且命中 `apps/pilot/**`、`packages/**` 或锁文件/工作流改动
   - 使用 `apps/pilot/Dockerfile` 构建 `ghcr.io/<owner>/tuff-pilot`
   - 推送标签：`pilot-<short_sha>` + `pilot-latest`
-  - 自动尝试将 GHCR `tuff-pilot` 包可见性设置为 `public`（使用内置 `GITHUB_TOKEN`）
   - 输出镜像 digest，供后续 1Panel 回滚与审计
   - 1Panel 部署改为手动执行服务器脚本，不再由 workflow 触发 webhook
 
