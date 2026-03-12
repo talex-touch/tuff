@@ -251,6 +251,34 @@ const _appSettingOriginData = {
   diagnostics: {
     verboseLogs: false,
   },
+  network: {
+    timeout: 15000,
+    retry: {
+      maxRetries: 2,
+      baseDelayMs: 400,
+      maxDelayMs: 5000,
+      backoffFactor: 2,
+      retryOnNetworkError: true,
+      retryOnTimeout: true,
+      retryableStatusCodes: [408, 425, 429, 500, 502, 503, 504],
+    },
+    cooldown: {
+      failureThreshold: 1,
+      cooldownMs: 3000,
+      autoResetOnSuccess: true,
+    },
+    proxy: {
+      mode: 'system' as 'direct' | 'system' | 'custom',
+      custom: {
+        httpProxy: '',
+        httpsProxy: '',
+        socksProxy: '',
+        pacUrl: '',
+        bypass: [] as string[],
+      },
+      authRef: '',
+    },
+  },
   recommendation: {
     enabled: true,
     maxItems: 10,

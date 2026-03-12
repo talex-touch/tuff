@@ -54,6 +54,7 @@ import { getCoreBoxWindow } from '../box-tool/core-box'
 import { CoreBoxManager } from '../box-tool/core-box/manager'
 import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { getBoxItemManager } from '../box-tool/item-sdk'
+import { getNetworkService } from '../network'
 import { deviceIdleService } from '../../service/device-idle-service'
 import {
   loadPluginFeatureContext,
@@ -688,7 +689,19 @@ export class TouchPlugin implements ITouchPlugin {
         // Dev mode: load from remote
         const remoteIndexUrl = new URL('index.js', this.dev.address).toString()
         this.logger.info(`[Dev] Fetching remote script from ${remoteIndexUrl}`)
-        const response = await axios.get(remoteIndexUrl, { timeout: 5000, proxy: false })
+        const response = await getNetworkService().request<string>({
+          method: 'GET',
+          url: remoteIndexUrl,
+          timeoutMs: 5000,
+          responseType: 'text',
+          retryPolicy: { maxRetries: 0 },
+          cooldownPolicy: {
+            key: `plugin-dev-prelude:${this.name}:${remoteIndexUrl}`,
+            failureThreshold: 1,
+            cooldownMs: 3000,
+            autoResetOnSuccess: true
+          }
+        })
         const scriptContent = response.data
         const bundledContent = shouldBundlePrelude
           ? await bundlePluginPreludeFromContent(

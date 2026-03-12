@@ -1,14 +1,26 @@
 import type { ChunkInfo, DownloadConfig, DownloadProgress, DownloadTask } from '@talex-touch/utils'
-import type { AxiosRequestConfig } from 'axios'
 import type { ChunkManager } from './chunk-manager'
 import type { NetworkMonitor } from './network-monitor'
 import { createWriteStream, promises as fs } from 'node:fs'
 import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { ChunkStatus, DownloadModule } from '@talex-touch/utils'
-import axios from 'axios'
 import { DownloadErrorClass } from './error-types'
+import { getNetworkService } from '../network'
 import { ProgressTracker } from './progress-tracker'
+
+function getNetworkStatusCode(error: unknown): number | null {
+  if (!(error instanceof Error)) {
+    return null
+  }
+
+  if (!error.message.startsWith('NETWORK_HTTP_STATUS_')) {
+    return null
+  }
+
+  const parsed = Number.parseInt(error.message.replace('NETWORK_HTTP_STATUS_', ''), 10)
+  return Number.isInteger(parsed) ? parsed : null
+}
 
 export class DownloadWorker {
   private readonly maxConcurrent: number
@@ -322,19 +334,17 @@ export class DownloadWorker {
     const outputPath = path.join(task.destination, task.filename)
     await fs.mkdir(path.dirname(outputPath), { recursive: true })
 
-    const response = await axios({
+    const response = await getNetworkService().requestStream({
       method: 'GET',
       url: task.url,
       headers,
       responseType: 'stream',
-      timeout: this.config.network.timeout,
-      validateStatus: (status) => status >= 200 && status < 300
+      timeoutMs: this.config.network.timeout,
+      retryPolicy: { maxRetries: 0 }
     })
 
-    const normalizedHeaders: Record<string, string | number | string[] | undefined | null> = {}
-    for (const [key, value] of Object.entries(response.headers ?? {})) {
-      if (typeof value === 'boolean') continue
-      normalizedHeaders[key] = value as string | number | string[] | null | undefined
+    const normalizedHeaders: Record<string, string | number | string[] | undefined | null> = {
+      ...response.headers
     }
 
     const totalSize = this.resolveTotalSize(normalizedHeaders)
@@ -344,7 +354,7 @@ export class DownloadWorker {
       progressTracker.updateProgress(0, totalSize)
     }
 
-    response.data.on('data', (data: Buffer) => {
+    response.stream.on('data', (data: Buffer) => {
       downloadedSize += data.length
       progressTracker.updateProgress(downloadedSize, totalSize)
     })
@@ -352,7 +362,7 @@ export class DownloadWorker {
     const writeStream = createWriteStream(outputPath, { flags: 'w' })
 
     try {
-      await pipeline(response.data, writeStream)
+      await pipeline(response.stream, writeStream)
     } catch (error) {
       writeStream.destroy()
       try {
@@ -484,7 +494,7 @@ export class DownloadWorker {
         }
 
         const requiresPartialContent = rangeStart > chunk.start
-        const config: AxiosRequestConfig = {
+        const response = await getNetworkService().requestStream({
           method: 'GET',
           url: task.url,
           headers: {
@@ -492,13 +502,12 @@ export class DownloadWorker {
             Range: `bytes=${rangeStart}-${chunk.end}`
           },
           responseType: 'stream',
-          timeout: this.config.network.timeout,
-          validateStatus: (status) =>
-            requiresPartialContent ? status === 206 : status === 206 || status === 200,
-          signal: abortSignal
-        }
+          timeoutMs: this.config.network.timeout,
+          signal: abortSignal,
+          validateStatus: requiresPartialContent ? [206] : [200, 206],
+          retryPolicy: { maxRetries: 0 }
+        })
 
-        const response = await axios(config)
         const writeStream = createWriteStream(chunk.filePath, {
           flags: chunk.downloaded > 0 ? 'a' : 'w'
         })
@@ -506,12 +515,12 @@ export class DownloadWorker {
         const onData = (data: Buffer) => {
           chunk.downloaded += data.length
         }
-        response.data.on('data', onData)
+        response.stream.on('data', onData)
 
         try {
-          await pipeline(response.data, writeStream)
+          await pipeline(response.stream, writeStream)
         } finally {
-          response.data.off('data', onData)
+          response.stream.off('data', onData)
         }
 
         if (chunk.downloaded < chunk.size) {
@@ -528,8 +537,8 @@ export class DownloadWorker {
           throw new Error('Task was cancelled')
         }
 
-        const isRangeIgnored =
-          axios.isAxiosError(error) && error.response?.status === 200 && chunk.downloaded > 0
+        const statusCode = getNetworkStatusCode(error)
+        const isRangeIgnored = statusCode === 200 && chunk.downloaded > 0
 
         if (isRangeIgnored) {
           chunk.downloaded = 0
@@ -562,14 +571,14 @@ export class DownloadWorker {
   // 获取文件大小
   private async getFileSize(url: string, headers?: Record<string, string>): Promise<number | null> {
     try {
-      const config: AxiosRequestConfig = {
+      const response = await getNetworkService().request({
         method: 'HEAD',
         url,
         headers,
-        timeout: this.config.network.timeout
-      }
-
-      const response = await axios(config)
+        timeoutMs: this.config.network.timeout,
+        responseType: 'text',
+        retryPolicy: { maxRetries: 0 }
+      })
       const contentLengthHeader = response.headers['content-length']
       const contentLengthValue = Array.isArray(contentLengthHeader)
         ? contentLengthHeader[0]

@@ -47,7 +47,7 @@ export class TuffIconImpl implements ITuffIcon {
     }
 
     // Dev mode: use dev server URL for icons
-    if (this.devConfig?.enable && this.devConfig?.address) {
+    if (this.devConfig?.enable && this.devConfig?.source && this.devConfig?.address) {
       try {
         const devIconUrl = new URL(this.value, this.devConfig.address).toString()
         this.type = 'url'

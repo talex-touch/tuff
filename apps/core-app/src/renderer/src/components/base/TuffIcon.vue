@@ -1,8 +1,8 @@
 <script lang="ts" name="TuffIcon" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
 import { isElectronRenderer } from '@talex-touch/utils/env'
+import { toTfileUrl } from '@talex-touch/utils/network'
 import { useSvgContent } from '~/modules/hooks/useSvgContent'
-import { buildTfileUrl } from '~/utils/tfile-url'
 
 const props = defineProps<{
   icon?: ITuffIcon | null
@@ -35,7 +35,7 @@ const url = computed(() => {
     if (!isElectron) {
       return ''
     }
-    return buildTfileUrl(safeIcon.value.value)
+    return toTfileUrl(safeIcon.value.value)
   }
 
   if (safeIcon.value.type === 'url') {
@@ -46,7 +46,7 @@ const url = computed(() => {
     // Only use tfile:// for local file paths (absolute paths starting with /)
     // but NOT for API paths like /api/... which should be HTTP URLs
     if (isElectron && urlPath.startsWith('/') && !urlPath.startsWith('/api/')) {
-      return buildTfileUrl(urlPath)
+      return toTfileUrl(urlPath)
     }
     if (!isElectron && urlPath.startsWith('tfile:')) {
       return ''
