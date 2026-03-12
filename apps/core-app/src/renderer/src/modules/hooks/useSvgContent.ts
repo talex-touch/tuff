@@ -7,11 +7,11 @@ import {
   isLocalhostUrl
 } from '@talex-touch/utils'
 import { isElectronRenderer } from '@talex-touch/utils/env'
-import { useDownloadSdk } from '@talex-touch/utils/renderer'
+import { toTfileUrl, type NetworkCooldownPolicy } from '@talex-touch/utils/network'
+import { useDownloadSdk, useNetworkSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents } from '@talex-touch/utils/transport/events'
-import { buildTfileUrl } from '~/utils/tfile-url'
 
 const svgFileCache = new Map<string, string>()
 const svgContentCache = new Map<string, string>()
@@ -19,6 +19,12 @@ const svgInflight = new Map<string, Promise<{ fileUrl: string; content: string }
 const REMOTE_SVG_CACHE_SUBDIR = 'temp/icons/svg-cache'
 const REMOTE_SVG_CACHE_PREFIX = 'tufficon'
 const REMOTE_SVG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
+const LOCAL_HTTP_RETRY_COOLDOWN_MS = 3_000
+const LOCAL_HTTP_COOLDOWN_POLICY: NetworkCooldownPolicy = {
+  failureThreshold: 1,
+  cooldownMs: LOCAL_HTTP_RETRY_COOLDOWN_MS,
+  autoResetOnSuccess: true
+}
 const pendingTasks = new Map<
   string,
   { resolve: () => void; reject: (error: Error) => void; timeoutId: number; promise: Promise<void> }
@@ -52,6 +58,7 @@ export function useSvgContent(
     'temp-file:create'
   )
   const downloadSdk = isElectronRenderer() ? useDownloadSdk() : null
+  const networkSdk = isElectronRenderer() ? useNetworkSdk() : null
   let remoteSvgCacheDirPromise: Promise<string | null> | null = null
   const defaultFetchTimeoutMs = 5_000
   const downloadTimeoutMs = 20_000
@@ -65,6 +72,10 @@ export function useSvgContent(
           return downloadTimeoutMs
         }
         return defaultFetchTimeoutMs
+      },
+      shouldRetry: () => {
+        const targetUrl = normalizeSource(url.value)
+        return !(targetUrl && isLocalHttpSource(targetUrl))
       }
     }
   )
@@ -114,14 +125,14 @@ export function useSvgContent(
   function ensureTfileUrl(source: string): string {
     if (source.startsWith('tfile:')) {
       const localPath = resolveLocalPath(source)
-      return localPath ? buildTfileUrl(localPath) : source
+      return localPath ? toTfileUrl(localPath) : source
     }
     if (source.startsWith('file:')) {
       const localPath = resolveLocalPath(source)
-      return localPath ? buildTfileUrl(localPath) : source
+      return localPath ? toTfileUrl(localPath) : source
     }
     if (source.startsWith('/') || source.startsWith('\\\\') || /^[a-z]:[\\/]/i.test(source)) {
-      return buildTfileUrl(source)
+      return toTfileUrl(source)
     }
     return source
   }
@@ -230,8 +241,12 @@ export function useSvgContent(
   }
 
   async function readSvgText(source: string, allowMissing = false): Promise<string | null> {
+    if (!networkSdk) {
+      return null
+    }
+
     try {
-      const svgText = await transport.send(AppEvents.system.readFile, { source, allowMissing })
+      const svgText = await networkSdk.readText(source, { allowMissing })
       if (!svgText || svgText.trim().length === 0) {
         return null
       }
@@ -261,7 +276,7 @@ export function useSvgContent(
     }
 
     const cacheFilePath = joinPath(cacheDir, buildRemoteCacheFilename(targetUrl))
-    const cacheFileUrl = buildTfileUrl(cacheFilePath)
+    const cacheFileUrl = toTfileUrl(cacheFilePath)
     const cachedText = await readSvgText(cacheFileUrl, true)
     if (!cachedText) {
       return null
@@ -394,7 +409,7 @@ export function useSvgContent(
         if (cacheDir) {
           filename = buildRemoteCacheFilename(targetUrl)
           destination = cacheDir
-          fileUrl = buildTfileUrl(joinPath(destination, filename))
+          fileUrl = toTfileUrl(joinPath(destination, filename))
         } else {
           const temp = await transport.send(tempFileCreateEvent, {
             namespace: 'icons/svg',
@@ -468,13 +483,13 @@ export function useSvgContent(
     if (!targetUrl) return ''
 
     if (isLocalSource(targetUrl)) {
-      if (!isElectronRenderer()) {
+      if (!isElectronRenderer() || !networkSdk) {
         resolvedUrl.value = ''
         return ''
       }
       const tfileUrl = ensureTfileUrl(targetUrl)
       resolvedUrl.value = tfileUrl
-      return await transport.send(AppEvents.system.readFile, { source: tfileUrl })
+      return await networkSdk.readText(tfileUrl)
     }
 
     if (isApiSource(targetUrl) || !isElectronRenderer()) {
@@ -485,8 +500,23 @@ export function useSvgContent(
 
     if (isLocalHttpSource(targetUrl)) {
       resolvedUrl.value = targetUrl
-      const response = await fetch(targetUrl)
-      return await response.text()
+      if (!networkSdk) {
+        const response = await fetch(targetUrl)
+        return await response.text()
+      }
+
+      const response = await networkSdk.request<string>({
+        method: 'GET',
+        url: targetUrl,
+        timeoutMs: defaultFetchTimeoutMs,
+        responseType: 'text',
+        retryPolicy: { maxRetries: 0 },
+        cooldownPolicy: {
+          ...LOCAL_HTTP_COOLDOWN_POLICY,
+          key: `svg-local-http:${targetUrl}`
+        }
+      })
+      return response.data
     }
 
     if (isRemoteHttp(targetUrl)) {
@@ -525,7 +555,9 @@ export function useSvgContent(
     } catch (err) {
       error.value = err instanceof Error ? err : new Error(String(err))
       content.value = null // Ensure content is cleared on error
-      console.error('fetchSvgContent failed after retries', url.value, err)
+      if (!isLocalHttpSource(targetUrl)) {
+        console.error('fetchSvgContent failed after retries', url.value, err)
+      }
     } finally {
       loading.value = false
     }

@@ -1,5 +1,5 @@
-import axios from 'axios'
 import chalk from 'chalk'
+import { getNetworkService } from '../modules/network'
 
 export interface OfficialPluginVersionEntry {
   version: string
@@ -44,6 +44,7 @@ const OFFICIAL_REPO_MANIFEST_URL =
 const OFFICIAL_REPO_BASE_URL =
   'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/'
 const CACHE_TTL_MS = 1000 * 60 * 30 // 30 minutes
+const OFFICIAL_STATUS_ACCEPTED = [...Array.from({ length: 100 }, (_, index) => index + 200), 304]
 
 let cached: OfficialPluginEntry[] | null = null
 let cachedAt = 0
@@ -105,11 +106,13 @@ export async function getOfficialPlugins(
   }
 
   try {
-    const response = await axios.get(OFFICIAL_REPO_MANIFEST_URL, {
+    const response = await getNetworkService().request<OfficialPluginManifestEntry[]>({
+      method: 'GET',
+      url: OFFICIAL_REPO_MANIFEST_URL,
       headers,
-      timeout: 15_000,
-      proxy: false,
-      validateStatus: (status) => (status >= 200 && status < 300) || status === 304
+      timeoutMs: 15_000,
+      responseType: 'json',
+      validateStatus: OFFICIAL_STATUS_ACCEPTED
     })
 
     if (response.status === 304 && cached) {

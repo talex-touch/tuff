@@ -1,9 +1,9 @@
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
-import axios from 'axios'
 import crypto from 'node:crypto'
 import path from 'node:path'
 import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
 import fse from 'fs-extra'
+import { getNetworkService } from '../../network'
 import { pushWidgetFeatureIssue } from './widget-issue'
 
 export interface WidgetSource {
@@ -137,10 +137,18 @@ export class WidgetLoader {
     try {
       const fetchUrl = new URL(widgetUrl)
       fetchUrl.searchParams.set('raw', '1')
-      const response = await axios.get(fetchUrl.toString(), {
-        timeout: 2000,
-        proxy: false,
-        responseType: 'text'
+      const response = await getNetworkService().request<string>({
+        method: 'GET',
+        url: fetchUrl.toString(),
+        timeoutMs: 2000,
+        responseType: 'text',
+        retryPolicy: { maxRetries: 0 },
+        cooldownPolicy: {
+          key: `plugin-widget:${plugin.name}:${feature.id}:${fetchUrl.toString()}`,
+          failureThreshold: 1,
+          cooldownMs: 3000,
+          autoResetOnSuccess: true
+        }
       })
       const source = typeof response.data === 'string' ? response.data : String(response.data ?? '')
       const hash = this.hashContent(source)

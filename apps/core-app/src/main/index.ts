@@ -28,6 +28,7 @@ import { flowBusModule } from './modules/flow-bus'
 import { shortcutModule } from './modules/global-shortcon'
 import { notificationModule } from './modules/notification'
 import { omniPanelModule } from './modules/omni-panel'
+import { networkModule } from './modules/network'
 import { PermissionModule } from './modules/permission'
 import { pluginModule } from './modules/plugin/plugin-module'
 import { sentryModule } from './modules/sentry'
@@ -138,6 +139,7 @@ const modulesToLoad = [
   shortcutModule,
   extensionLoaderModule,
   commonChannelModule,
+  networkModule,
   analyticsModule,
   permissionCheckerModule,
   permissionModule, // Plugin permission management - before plugin module

@@ -6,9 +6,9 @@ import type {
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { DevServerKeys, i18nMsg } from '@talex-touch/utils/i18n'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import axios from 'axios'
 import { useAliveTarget } from '../../hooks/use-electron-guard'
 import { createLogger } from '../../utils/logger'
+import { getNetworkService } from '../network'
 
 type PluginWindowInfo = {
   window?: {
@@ -17,17 +17,16 @@ type PluginWindowInfo = {
   }
 }
 type PluginWindows = Map<number, PluginWindowInfo>
+const HEALTH_ACCEPTED_STATUSES = Array.from({ length: 200 }, (_, index) => index + 200)
 const toErrorMessage = (error: unknown): string => {
-  if (axios.isAxiosError(error)) {
-    const detailParts = [
-      error.code,
-      typeof error.response?.status === 'number' ? `status ${error.response.status}` : undefined,
-      error.config?.url ? `url ${error.config.url}` : undefined
-    ].filter(Boolean)
-    const suffix = detailParts.length ? ` (${detailParts.join(', ')})` : ''
-    return `${error.message}${suffix}`
+  if (error instanceof Error) {
+    if (error.message.startsWith('NETWORK_HTTP_STATUS_')) {
+      const status = error.message.replace('NETWORK_HTTP_STATUS_', '')
+      return `Request failed (status ${status})`
+    }
+    return error.message
   }
-  return error instanceof Error ? error.message : String(error)
+  return String(error)
 }
 
 const monitorLog = createLogger('DevServerMonitor')
@@ -219,10 +218,19 @@ export class DevServerHealthMonitor {
     for (const endpoint of endpoints) {
       const healthUrl = new URL(endpoint, address).toString()
       try {
-        await axios.get(healthUrl, {
-          timeout: this.TIMEOUT,
-          proxy: false,
-          validateStatus: (status) => status >= 200 && status < 400
+        await getNetworkService().request({
+          method: 'GET',
+          url: healthUrl,
+          timeoutMs: this.TIMEOUT,
+          responseType: 'text',
+          validateStatus: HEALTH_ACCEPTED_STATUSES,
+          retryPolicy: { maxRetries: this.MAX_RETRIES },
+          cooldownPolicy: {
+            key: `plugin-dev-health:${healthUrl}`,
+            failureThreshold: 1,
+            cooldownMs: this.INTERVAL,
+            autoResetOnSuccess: true
+          }
         })
         return {
           healthy: true,

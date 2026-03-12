@@ -5,13 +5,26 @@ import type {
   PluginProviderContext
 } from '@talex-touch/utils/plugin/providers'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
-import axios from 'axios'
+import { getNetworkService } from '../../network'
 import { createProviderLogger } from './logger'
 import { downloadToTempFile, ensureRiskAccepted } from './utils'
 
 interface ParsedNpmSource {
   name: string
   version?: string
+}
+
+interface NpmVersionMetadata {
+  dist?: {
+    tarball?: string
+  }
+}
+
+interface NpmRegistryMetadata {
+  'dist-tags'?: {
+    latest?: string
+  }
+  versions?: Record<string, NpmVersionMetadata>
 }
 
 const OFFICIAL_NPM_PREFIX = '@talex-touch/'
@@ -105,7 +118,12 @@ export class NpmPluginProvider implements PluginProvider {
       this.log.debug('请求 NPM 元数据', {
         meta: { url: metadataUrl }
       })
-      const response = await axios.get(metadataUrl, { timeout: 30_000, proxy: false })
+      const response = await getNetworkService().request<NpmRegistryMetadata>({
+        method: 'GET',
+        url: metadataUrl,
+        timeoutMs: 30_000,
+        responseType: 'json'
+      })
       const body = response.data
 
       const version = parsed.version || body['dist-tags']?.latest

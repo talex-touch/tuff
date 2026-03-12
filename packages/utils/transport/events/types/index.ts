@@ -42,6 +42,9 @@ export * from './store'
 // MetaOverlay domain types
 export * from './meta-overlay'
 
+// Network domain types
+export * from './network'
+
 // Notification domain types
 export * from './notification'
 

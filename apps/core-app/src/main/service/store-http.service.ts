@@ -1,23 +1,15 @@
 import type { StoreHttpRequestOptions, StoreHttpResponse } from '@talex-touch/utils/store'
-import type { AxiosHeaderValue, AxiosResponseHeaders, Method, RawAxiosResponseHeaders } from 'axios'
-import axios from 'axios'
+import { getNetworkService } from '../modules/network'
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
 
-type HeaderSource = AxiosResponseHeaders | RawAxiosResponseHeaders | undefined
-
-function normalizeHeaders(headers: HeaderSource): Record<string, string> {
+function normalizeHeaders(headers: Record<string, unknown> | undefined): Record<string, string> {
   const normalized: Record<string, string> = {}
-
   if (!headers) {
     return normalized
   }
 
-  const raw = isAxiosHeaders(headers)
-    ? headers.toJSON()
-    : (headers as Record<string, AxiosHeaderValue | undefined>)
-
-  for (const [key, value] of Object.entries(raw)) {
+  for (const [key, value] of Object.entries(headers)) {
     if (value === null || typeof value === 'undefined') {
       continue
     }
@@ -33,10 +25,16 @@ function normalizeHeaders(headers: HeaderSource): Record<string, string> {
   return normalized
 }
 
-function isAxiosHeaders(
-  headers: AxiosResponseHeaders | RawAxiosResponseHeaders
-): headers is AxiosResponseHeaders {
-  return typeof (headers as AxiosResponseHeaders).toJSON === 'function'
+function mapResponseType(
+  responseType: StoreHttpRequestOptions['responseType']
+): 'json' | 'text' | 'arrayBuffer' {
+  if (responseType === 'text') {
+    return 'text'
+  }
+  if (responseType === 'arraybuffer') {
+    return 'arrayBuffer'
+  }
+  return 'json'
 }
 
 export async function performStoreHttpRequest<T = unknown>(
@@ -57,37 +55,37 @@ export async function performStoreHttpRequest<T = unknown>(
     throw new Error('STORE_HTTP_UNSUPPORTED_PROTOCOL')
   }
 
-  const method: Method = (options.method ?? 'GET').toUpperCase() as Method
+  const method = (options.method ?? 'GET').toUpperCase()
   const timeout = typeof options.timeout === 'number' ? options.timeout : 15_000
 
   try {
-    const response = await axios.request<T>({
+    const response = await getNetworkService().request<T>({
       url: options.url,
-      method,
+      method: method as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS',
       headers: options.headers,
-      params: options.params,
-      data: options.data,
-      timeout,
-      responseType: options.responseType ?? 'json',
-      proxy: false,
-      validateStatus: () => true
+      query: options.params,
+      body: options.data,
+      timeoutMs: timeout,
+      responseType: mapResponseType(options.responseType)
     })
-
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`STORE_HTTP_STATUS_${response.status}`)
-    }
 
     return {
       status: response.status,
       statusText: response.statusText,
       headers: normalizeHeaders(response.headers),
       data: response.data,
-      url: response.config.url ?? options.url
+      url: response.url || options.url
     }
   } catch (error: unknown) {
     if (error instanceof Error && error.message.startsWith('STORE_HTTP_')) {
       throw error
     }
+
+    if (error instanceof Error && error.message.startsWith('NETWORK_HTTP_STATUS_')) {
+      const status = error.message.replace('NETWORK_HTTP_STATUS_', '')
+      throw new Error(`STORE_HTTP_STATUS_${status}`)
+    }
+
     const message = error instanceof Error ? error.message : ''
     throw new Error(message.length > 0 ? message : 'STORE_HTTP_REQUEST_FAILED')
   }

@@ -8,8 +8,8 @@ import type { RiskLevel } from '@talex-touch/utils/plugin/risk'
 import crypto from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
-import axios from 'axios'
 import fse from 'fs-extra'
+import { getNetworkService } from '../../network'
 
 export async function downloadToTempFile(
   url: string,
@@ -30,10 +30,11 @@ export async function downloadToTempFile(
   const fileName = `talex-plugin-${Date.now()}-${crypto.randomBytes(6).toString('hex')}${resolvedExt}`
   const filePath = path.join(os.tmpdir(), fileName)
 
-  const response = await axios.get<NodeJS.ReadableStream>(url, {
-    responseType: 'stream',
-    timeout: requestTimeout,
-    proxy: false
+  const response = await getNetworkService().requestStream({
+    method: 'GET',
+    url,
+    timeoutMs: requestTimeout,
+    responseType: 'stream'
   })
 
   const totalLength = Number(response.headers['content-length'] ?? 0)
@@ -56,7 +57,7 @@ export async function downloadToTempFile(
   }
 
   await new Promise<void>((resolve, reject) => {
-    response.data
+    response.stream
       .on('data', (chunk: Buffer) => {
         downloaded += chunk.length
         if (totalLength > 0) {

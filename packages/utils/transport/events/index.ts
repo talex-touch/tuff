@@ -304,6 +304,15 @@ import type {
   StoreSearchResponse,
   StoreUpdatesAvailablePayload,
 } from './types/store'
+import type {
+  NetworkConfigGetResponse,
+  NetworkConfigUpdateRequest,
+  NetworkReadBinaryRequest,
+  NetworkReadTextRequest,
+  NetworkRequest,
+  NetworkRequestResponse,
+  NetworkToTfileRequest,
+} from './types/network'
 
 // ============================================================================
 // Store Events
@@ -2222,6 +2231,23 @@ export const StoreEvents = {
 } as const
 
 // ============================================================================
+// Network Events
+// ============================================================================
+
+export const NetworkEvents = {
+  api: {
+    request: defineRawEvent<NetworkRequest, NetworkRequestResponse>('network:request'),
+    readText: defineRawEvent<NetworkReadTextRequest, string>('network:read-text'),
+    readBinary: defineRawEvent<NetworkReadBinaryRequest, ArrayBuffer>('network:read-binary'),
+    toTfileUrl: defineRawEvent<NetworkToTfileRequest, string>('network:to-tfile-url'),
+    getConfig: defineRawEvent<void, NetworkConfigGetResponse>('network:get-config'),
+    updateConfig: defineRawEvent<NetworkConfigUpdateRequest, NetworkConfigGetResponse>(
+      'network:update-config'
+    ),
+  },
+} as const
+
+// ============================================================================
 // Notification Events
 // ============================================================================
 
@@ -2738,6 +2764,7 @@ export const TuffEvents = {
   storage: StorageEvents,
   plugin: PluginEvents,
   store: StoreEvents,
+  network: NetworkEvents,
   notification: NotificationEvents,
   permission: PermissionEvents,
   platform: PlatformEvents,

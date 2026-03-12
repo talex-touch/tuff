@@ -16,11 +16,11 @@ import {
   OMNI_TRANSFER_DECLARATIVE_MIN_VERSION,
   resolveSdkApiVersion
 } from '@talex-touch/utils/plugin'
-import axios from 'axios'
 import { app } from 'electron'
 import fse from 'fs-extra'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { parseManifestDivisionBoxConfig } from '../division-box/manifest-parser'
+import { getNetworkService } from '../network'
 import { TouchPlugin } from './plugin'
 import { PluginFeature } from './plugin-feature'
 
@@ -442,9 +442,12 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
 
     try {
       this.touchPlugin.logger.debug(`[Dev] Fetching remote manifest from ${remoteManifestUrl}`)
-      const response = await axios.get<PluginManifest>(remoteManifestUrl, {
-        timeout: 2000,
-        proxy: false,
+      const response = await getNetworkService().request<PluginManifest>({
+        method: 'GET',
+        url: remoteManifestUrl,
+        timeoutMs: 2000,
+        responseType: 'json',
+        retryPolicy: { maxRetries: 0 },
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
@@ -491,10 +494,12 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
         return this.touchPlugin
       }
       this.touchPlugin.logger.debug(`[Dev] Fetching remote README from ${remoteReadmeUrl}`)
-      const response = await axios.get(remoteReadmeUrl, {
-        timeout: 2000,
-        proxy: false,
-        responseType: 'text'
+      const response = await getNetworkService().request<string>({
+        method: 'GET',
+        url: remoteReadmeUrl,
+        timeoutMs: 2000,
+        responseType: 'text',
+        retryPolicy: { maxRetries: 0 }
       })
       this.touchPlugin.readme = response.data || ''
       this.touchPlugin.logger.debug(`[Dev] Remote README fetched successfully`)
