@@ -23,6 +23,7 @@ import {
   getPilotAttachmentObject,
   resolvePilotAttachmentModelUrl,
 } from '../../../../../utils/pilot-attachment-storage'
+import { resolvePilotChannelSelection } from '../../../../../utils/pilot-channel'
 import { requireSessionId, toErrorMessage } from '../../../../../utils/pilot-http'
 import { createPilotRuntime } from '../../../../../utils/pilot-runtime'
 import { getPilotStoreMetricsSnapshot } from '../../../../../utils/pilot-store'
@@ -31,6 +32,7 @@ interface StreamBody {
   message?: string
   fromSeq?: number
   follow?: boolean
+  channelId?: string
   metadata?: Record<string, unknown>
   attachments?: UserMessageInput['attachments']
 }
@@ -254,6 +256,9 @@ export default defineEventHandler(async (event) => {
   const { userId } = requirePilotAuth(event)
   const sessionId = requireSessionId(event)
   const body = await readBody<StreamBody>(event)
+  const selectedChannel = resolvePilotChannelSelection(event, {
+    requestChannelId: String(body?.channelId || '').trim(),
+  })
 
   const message = String(body?.message || '').trim()
   const persistStreamLifecycle = Boolean(message)
@@ -313,6 +318,14 @@ export default defineEventHandler(async (event) => {
         const { runtime, store } = createPilotRuntime({
           event,
           userId,
+          channel: {
+            channelId: selectedChannel.channelId,
+            baseUrl: selectedChannel.channel.baseUrl,
+            apiKey: selectedChannel.channel.apiKey,
+            model: selectedChannel.channel.model,
+            transport: selectedChannel.transport,
+            builtinTools: selectedChannel.channel.builtinTools,
+          },
           onAudit: async (record) => {
             if (emitAudit) {
               await emitAudit(record)
