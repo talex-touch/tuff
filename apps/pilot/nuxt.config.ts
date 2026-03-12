@@ -198,15 +198,10 @@ export default defineNuxtConfig({
         }
       : {}),
   },
-  sourcemap: isDev
-    ? {
-        server: false,
-        client: false,
-      }
-    : {
-        server: true,
-        client: 'hidden',
-      },
+  sourcemap: {
+    server: false,
+    client: false,
+  },
   eslint: {
     config: {
       standalone: false,

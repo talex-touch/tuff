@@ -43,6 +43,26 @@
 - `pnpm -C "apps/pilot" run typecheck` ⚠️（Quota 迁移存量类型错误仍在，未新增阻塞）
 - `pnpm -C "apps/pilot" run lint` ⚠️（Quota 迁移存量 lint 债务仍在，规则量级较大）
 
+### Pilot M1.1：构建与部署瘦身（sourcemap 关闭 + 静态发布剔除 worker）
+
+**变更类型**: 性能优化 / 部署可靠性增强
+
+**描述**:
+- `apps/pilot/nuxt.config.ts` 生产构建默认关闭 client/server sourcemap（避免发布产物被 `.map` 主导）。
+- `apps/pilot/uno.config.ts` 调整 WebFonts 策略：仅当 `NUXT_WEB_FONTS=true` 时启用，默认不走远程字体抓取，降低构建网络依赖。
+- `apps/pilot/package.json` 的 `prepare:cf-static` 新增 `rm -rf dist/_worker.js`，静态发布时显式剔除 worker 产物，规避 Cloudflare Worker 体积门槛影响。
+
+**验证**:
+- `pnpm -C "apps/pilot" run generate` ✅
+- `pnpm -C "apps/pilot" run prepare:cf-static` ✅
+- `node apps/pilot/scripts/report-dist-size.mjs` ✅（`dist/_nuxt` 从约 `51.36MB` 降至 `12.66MB`）
+
+**修改文件**:
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/uno.config.ts`
+- `apps/pilot/package.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 **修改文件**:
 - `apps/pilot/server/utils/pilot-channel.ts`
 - `apps/pilot/server/utils/pilot-runtime.ts`
