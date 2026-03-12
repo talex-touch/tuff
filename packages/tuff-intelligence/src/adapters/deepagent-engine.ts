@@ -79,15 +79,12 @@ function toBooleanFlag(value: unknown): boolean {
 
 function shouldUseDirectStream(options: DeepAgentEngineOptions): boolean {
   const metadata = toRecord(options.metadata)
+  if (toBooleanFlag(metadata.forceDirectStream)) {
+    return true
+  }
   if (toBooleanFlag(metadata.disableDirectStream)) {
     return false
   }
-
-  const channelAdapter = String(metadata.channelAdapter || metadata.adapter || '').trim().toLowerCase()
-  if (channelAdapter === 'legacy') {
-    return false
-  }
-
   return true
 }
 
@@ -1372,6 +1369,21 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
   }
 
   async *runStream(state: TurnState): AsyncIterable<unknown> {
+    const metadata = toRecord(this.options.metadata)
+    const forceNonStream = toBooleanFlag(metadata.disableStreamingPipeline)
+    if (forceNonStream) {
+      await this.options.onAudit?.({
+        type: 'upstream.stream_pipeline_skipped',
+        payload: {
+          reason: 'disabled_by_metadata',
+          adapter: String(metadata.channelAdapter || metadata.adapter || '').trim().toLowerCase() || null,
+          metadata,
+        },
+      })
+      yield await this.run(state)
+      return
+    }
+
     const relayBaseUrl = resolveRelayBaseUrl(this.options)
     const model = String(this.options.model || FALLBACK_MODEL).trim() || FALLBACK_MODEL
     const effectiveApiKey = String(this.options.apiKey || '').trim()
@@ -1434,7 +1446,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
       await this.options.onAudit?.({
         type: 'upstream.direct_stream_skipped',
         payload: {
-          reason: 'disabled_by_metadata_or_channel_adapter',
+          reason: 'disabled_by_metadata',
           endpoint,
           model,
           metadata: toRecord(this.options.metadata),

@@ -4,6 +4,7 @@ import type {
   DeepAgentAuditRecord,
 } from '@talex-touch/tuff-intelligence'
 import type { H3Event } from 'h3'
+import type { PilotBuiltinTool, PilotChannelAdapter, PilotChannelTransport } from './pilot-channel'
 import {
   AbstractAgentRuntime,
   CapabilityRegistry,
@@ -11,11 +12,13 @@ import {
   DeepAgentLangChainEngineAdapter,
   DefaultDecisionAdapter,
 } from '@talex-touch/tuff-intelligence'
-import type { PilotBuiltinTool, PilotChannelTransport } from './pilot-channel'
 import { resolvePilotConfigString } from './pilot-config'
 import { createPilotStoreAdapter } from './pilot-store'
 
-const DEFAULT_RESPONSES_MODEL = 'gpt-5.4'
+const DEFAULT_RESPONSES_MODEL = 'gpt-5.2'
+const DEFAULT_TIMEOUT_MS = 90_000
+const MIN_TIMEOUT_MS = 3_000
+const MAX_TIMEOUT_MS = 10 * 60 * 1000
 const DEFAULT_SYSTEM_PROMPT = [
   'You are Tuff Pilot, a concise and reliable AI assistant.',
   'Always provide direct, factual answers and show actionable next steps when useful.',
@@ -73,11 +76,28 @@ export interface CreatePilotRuntimeOptions {
     baseUrl: string
     apiKey: string
     model: string
-    transport: Exclude<PilotChannelTransport, 'auto'>
+    adapter: PilotChannelAdapter
+    transport: PilotChannelTransport
+    timeoutMs: number
     builtinTools: PilotBuiltinTool[]
   }
   emit?: (event: AgentEnvelope) => Promise<void>
   onAudit?: (record: DeepAgentAuditRecord) => Promise<void> | void
+}
+
+function normalizeTimeoutMs(value: unknown): number {
+  if (value === null || value === undefined) {
+    return DEFAULT_TIMEOUT_MS
+  }
+  if (typeof value === 'string' && !value.trim()) {
+    return DEFAULT_TIMEOUT_MS
+  }
+
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_TIMEOUT_MS
+  }
+  return Math.min(Math.max(Math.floor(parsed), MIN_TIMEOUT_MS), MAX_TIMEOUT_MS)
 }
 
 export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
@@ -90,22 +110,26 @@ export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
   const baseUrl = String(channel?.baseUrl || '').trim() || resolvePilotConfigString(event, 'baseUrl', BASE_URL_ENV_KEYS)
   const apiKey = String(channel?.apiKey || '').trim() || resolvePilotConfigString(event, 'apiKey', API_KEY_ENV_KEYS)
   const model = String(channel?.model || '').trim() || DEFAULT_RESPONSES_MODEL
+  const timeoutMs = normalizeTimeoutMs(channel?.timeoutMs)
   const builtinTools: PilotBuiltinTool[] = Array.isArray(channel?.builtinTools) && channel.builtinTools.length > 0
     ? channel.builtinTools
     : ['write_todos']
+  const retryCount = channel?.adapter === 'legacy' ? 0 : 1
 
   const engine = new DeepAgentLangChainEngineAdapter({
     baseUrl,
     apiKey,
     model,
-    transport: channel?.transport || 'auto',
-    retryCount: 1,
-    timeoutMs: 25_000,
+    transport: channel?.transport || 'responses',
+    retryCount,
+    timeoutMs,
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     builtinTools,
     metadata: {
       source: 'tuff-pilot',
       channelId: channel?.channelId,
+      channelAdapter: channel?.adapter,
+      channelTransport: channel?.transport,
     },
     onAudit,
   })

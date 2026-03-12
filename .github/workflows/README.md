@@ -27,11 +27,17 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 - **`readme-contributors.yml`** - Contributors list automation
   - Updates README contributors list on `master` pushes
 
-- **`pilot-ci.yml`** - Pilot 前端 CI + 静态产物 + 1Panel 触发
+- **`pilot-ci.yml`** - Pilot 前端 CI + 静态产物
   - 触发条件：`apps/pilot/**` 相关变更
   - `quality`：lint / typecheck（非阻塞）+ test / build（阻塞）
   - `static-dist`：`nuxt generate` + `prepare:cf-static` 并上传 `pilot-dist` artifact
-  - `deploy-1panel`：在 `master` push 成功后，若存在 `ONEPANEL_WEBHOOK_URL` secret 则自动 POST webhook
+
+- **`pilot-image.yml`** - Pilot Docker 镜像发布到 GHCR + 1Panel webhook
+  - 触发条件：`master` push 且命中 `apps/pilot/**`、`packages/**` 或锁文件/工作流改动
+  - 使用 `apps/pilot/Dockerfile` 构建 `ghcr.io/<owner>/tuff-pilot`
+  - 推送标签：`pilot-<short_sha>` + `pilot-latest`
+  - 输出镜像 digest，供后续 1Panel 回滚与审计
+  - 若配置 `ONEPANEL_WEBHOOK_URL`，发布后自动推送 webhook payload（`repository/branch/sha/image/tag/image_ref/digest`）
 
 ### Package CI Workflows
 

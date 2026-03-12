@@ -55,6 +55,19 @@ function normalizeExecutorErrorMessage(error: unknown): string {
   return '请求失败，请稍后重试'
 }
 
+function normalizeTimeoutMs(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return fallback
+  }
+  return Math.min(Math.max(Math.floor(parsed), min), max)
+}
+
 async function handleExecutorItem(item: string, callback: (data: any) => void) {
   if (item === '[DONE]') {
     callback({
@@ -112,7 +125,13 @@ function parseSseFrame(frame: string): { event: string, data: string } | null {
   }
 }
 
-async function handleExecutorResult(reader: ReadableStreamDefaultReader<string>, callback: (data: any) => void) {
+async function handleExecutorResult(
+  reader: ReadableStreamDefaultReader<string>,
+  callback: (data: any) => void,
+  hooks?: {
+    onChunk?: () => void
+  },
+) {
   let buffer = ''
 
   const flushBuffer = async () => {
@@ -160,6 +179,7 @@ async function handleExecutorResult(reader: ReadableStreamDefaultReader<string>,
 
   while (true) {
     const { value, done } = await reader.read()
+    hooks?.onChunk?.()
 
     if (done) {
       if (buffer.trim().length) {
@@ -270,6 +290,58 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
   const wrappedCallback = _callback()
 
   async function _func() {
+    const runtimePublic = useRuntimeConfig().public as Record<string, unknown>
+    const idleTimeoutMs = normalizeTimeoutMs(
+      runtimePublic.pilotStreamIdleTimeoutMs,
+      45_000,
+      5_000,
+      10 * 60_000,
+    )
+    const maxDurationMs = normalizeTimeoutMs(
+      runtimePublic.pilotStreamMaxDurationMs,
+      8 * 60_000,
+      10_000,
+      30 * 60_000,
+    )
+    const streamController = new AbortController()
+    const upstreamSignal = body.signal
+
+    if (upstreamSignal) {
+      if (upstreamSignal.aborted) {
+        streamController.abort(upstreamSignal.reason || '用户主动取消')
+      }
+      else {
+        upstreamSignal.addEventListener('abort', () => {
+          streamController.abort(upstreamSignal.reason || '用户主动取消')
+        }, { once: true })
+      }
+    }
+
+    let idleTimer: ReturnType<typeof setTimeout> | null = null
+    let maxTimer: ReturnType<typeof setTimeout> | null = null
+    const resetIdleTimer = () => {
+      if (idleTimer)
+        clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => {
+        streamController.abort(`上游长时间无响应（>${idleTimeoutMs}ms）`)
+      }, idleTimeoutMs)
+    }
+    const clearTimers = () => {
+      if (idleTimer) {
+        clearTimeout(idleTimer)
+        idleTimer = null
+      }
+      if (maxTimer) {
+        clearTimeout(maxTimer)
+        maxTimer = null
+      }
+    }
+
+    resetIdleTimer()
+    maxTimer = setTimeout(() => {
+      streamController.abort(`响应耗时过长（>${maxDurationMs}ms）`)
+    }, maxDurationMs)
+
     try {
       const res: ReadableStream = await endHttp.$http({
         url: 'aigc/executor',
@@ -285,26 +357,38 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
         },
         adapter: 'fetch',
         responseType: 'stream',
-        signal: body.signal || new AbortController().signal,
+        signal: streamController.signal,
       })
 
       const reader = res.pipeThrough(new TextDecoderStream()).getReader()
 
-      await handleExecutorResult(reader, wrappedCallback)
+      await handleExecutorResult(reader, wrappedCallback, {
+        onChunk: resetIdleTimer,
+      })
     }
     catch (e) {
       console.error(e)
+
+      let message = normalizeExecutorErrorMessage(e)
+      if (streamController.signal.aborted) {
+        const reason = String(streamController.signal.reason || '')
+        if (reason)
+          message = reason
+      }
 
       wrappedCallback({
         done: false,
         event: 'error',
         status: 'failed',
         id: 'assistant',
-        message: normalizeExecutorErrorMessage(e),
+        message,
       })
       wrappedCallback({
         done: true,
       })
+    }
+    finally {
+      clearTimers()
     }
 
     resolve!(void 0)
@@ -627,11 +711,24 @@ export const $completion = {
             }
             else if (event === 'completion') {
               const innerMeta = innerMsg.value.at(-1)
+              const chunk = typeof res.content === 'string' ? res.content : ''
+              const isCompleted = Boolean(res.completed)
 
               if (innerMeta?.type === 'markdown' && !innerMeta.extra?.done) {
-                innerMeta.value += res.content
-                if (res.completed) {
-                  innerMeta.value = res.content
+                if (!isCompleted && chunk) {
+                  innerMeta.value += chunk
+                }
+                else if (isCompleted && chunk) {
+                  // 兼容旧协议（completed=true 且 content 为全文）。
+                  if (chunk.startsWith(innerMeta.value) || chunk.length >= innerMeta.value.length) {
+                    innerMeta.value = chunk
+                  }
+                  else {
+                    innerMeta.value += chunk
+                  }
+                }
+
+                if (isCompleted) {
                   innerMeta.extra = {
                     ...innerMeta.extra,
                     done: true,
@@ -641,11 +738,19 @@ export const $completion = {
               else {
                 innerMsg.value.push({
                   type: 'markdown',
-                  value: res.content,
+                  value: chunk,
+                  ...(isCompleted
+                    ? {
+                        extra: {
+                          done: true,
+                        },
+                      }
+                    : {}),
                 })
               }
 
-              handler.onCompletion?.(name, res.content)
+              if (chunk)
+                handler.onCompletion?.(name, chunk)
             }
             else if (event === 'suggest') {
               innerMsg.value.push({
