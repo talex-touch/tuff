@@ -1,0 +1,120 @@
+name: Pilot Image Publish
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'apps/pilot/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.dockerignore'
+      - '.github/workflows/pilot-image.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: pilot-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish-ghcr:
+    name: Build and Push Pilot Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve image name
+        id: image
+        env:
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          owner="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          echo "name=ghcr.io/${owner}/tuff-pilot" >> "${GITHUB_OUTPUT}"
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=sha,prefix=pilot-,format=short
+            type=raw,value=pilot-latest
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/pilot/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image digest
+        run: |
+          echo "Image: ${{ steps.image.outputs.name }}"
+          echo "Tags:"
+          echo "${{ steps.meta.outputs.tags }}"
+          echo "Digest: ${{ steps.build.outputs.digest }}"
+
+      - name: Trigger 1Panel webhook
+        env:
+          ONEPANEL_WEBHOOK_URL: ${{ secrets.ONEPANEL_WEBHOOK_URL }}
+          ONEPANEL_WEBHOOK_TOKEN: ${{ secrets.ONEPANEL_WEBHOOK_TOKEN }}
+          IMAGE_REPO: ${{ steps.image.outputs.name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          if [ -z "${ONEPANEL_WEBHOOK_URL}" ]; then
+            echo "ONEPANEL_WEBHOOK_URL is empty, skip deploy trigger."
+            exit 0
+          fi
+
+          short_sha="$(printf '%s' "${GITHUB_SHA}" | cut -c1-7 | tr '[:upper:]' '[:lower:]')"
+          image_tag="pilot-${short_sha}"
+          image_ref="${IMAGE_REPO}:${image_tag}"
+
+          BODY=$(cat <<EOF
+          {
+            "repository": "${GITHUB_REPOSITORY}",
+            "branch": "${GITHUB_REF_NAME}",
+            "sha": "${GITHUB_SHA}",
+            "image": "${IMAGE_REPO}",
+            "tag": "${image_tag}",
+            "image_ref": "${image_ref}",
+            "digest": "${IMAGE_DIGEST}"
+          }
+          EOF
+          )
+
+          if [ -n "${ONEPANEL_WEBHOOK_TOKEN}" ]; then
+            curl -fsS -X POST "${ONEPANEL_WEBHOOK_URL}" \
+              -H "Content-Type: application/json" \
+              -H "X-Webhook-Token: ${ONEPANEL_WEBHOOK_TOKEN}" \
+              -d "${BODY}"
+          else
+            curl -fsS -X POST "${ONEPANEL_WEBHOOK_URL}" \
+              -H "Content-Type: application/json" \
+              -d "${BODY}"
+          fi

@@ -163,7 +163,7 @@ async function innerSend(conversation: IChatConversation, chatItem: IChatItem, i
   if (userConfig.value.pri_info.appearance.immersive && conversation.messages.length <= 2)
     userConfig.value.pri_info.appearance.expand = false
 
-  conversation.sync = PersistStatus.MODIFIED
+  conversation.sync = PersistStatus.PENDING
 
   const chatCompletion = $completion.createCompletion(conversation, chatItem, index)
 
@@ -209,8 +209,8 @@ async function innerSend(conversation: IChatConversation, chatItem: IChatItem, i
   return chatCompletion
 }
 
-function handleSync() {
-  $historyManager.syncHistory(pageOptions.conversation)
+async function handleSync() {
+  await $historyManager.syncHistory(pageOptions.conversation)
 }
 
 // 重新生成某条消息 只需要给消息索引即可 还需要传入目标inner 如果有新的参数赋值则传options替换

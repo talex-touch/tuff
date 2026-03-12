@@ -7,7 +7,7 @@ import { requirePilotAuth } from '../../../../../utils/auth'
 import { requireSessionId } from '../../../../../utils/pilot-http'
 import { createPilotStoreAdapter } from '../../../../../utils/pilot-store'
 
-const DEFAULT_TITLE_MODEL = 'gpt-5.4'
+const DEFAULT_TITLE_MODEL = 'gpt-5.2'
 const BASE_URL_ENV_KEYS = ['NUXT_PILOT_BASE_URL']
 const API_KEY_ENV_KEYS = ['NUXT_PILOT_API_KEY']
 const MODEL_ENV_KEYS = ['NUXT_PILOT_MODEL']

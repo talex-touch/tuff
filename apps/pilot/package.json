@@ -5,9 +5,9 @@
   "private": true,
   "packageManager": "pnpm@10.30.3",
   "scripts": {
-    "dev": "NODE_OPTIONS=--max-old-space-size=8192 NUXT_USE_CLOUDFLARE_DEV=true CLOUDFLARE_DEV_ENVIRONMENT=preview nuxt dev --host 127.0.0.1 --port 3300",
-    "dev:cf": "NODE_OPTIONS=--max-old-space-size=8192 NUXT_USE_CLOUDFLARE_DEV=true CLOUDFLARE_DEV_ENVIRONMENT=preview nuxt dev --host 127.0.0.1 --port 3300",
-    "dev:local": "NODE_OPTIONS=--max-old-space-size=6144 nuxt dev --host 127.0.0.1 --port 3300",
+    "dev": "NODE_OPTIONS=--max-old-space-size=8192 PILOT_EXECUTOR_DEBUG=1 NUXT_USE_CLOUDFLARE_DEV=true CLOUDFLARE_DEV_ENVIRONMENT=preview nuxt dev --host 127.0.0.1 --port 3300",
+    "dev:cf": "NODE_OPTIONS=--max-old-space-size=8192 PILOT_EXECUTOR_DEBUG=1 NUXT_USE_CLOUDFLARE_DEV=true CLOUDFLARE_DEV_ENVIRONMENT=preview nuxt dev --host 127.0.0.1 --port 3300",
+    "dev:local": "NODE_OPTIONS=--max-old-space-size=6144 PILOT_EXECUTOR_DEBUG=1 nuxt dev --host 127.0.0.1 --port 3300",
     "build": "NODE_OPTIONS=--max-old-space-size=8192 nuxt build",
     "generate": "NODE_OPTIONS=--max-old-space-size=8192 nuxt generate",
     "analyze:size": "pnpm generate && node ./scripts/report-dist-size.mjs",

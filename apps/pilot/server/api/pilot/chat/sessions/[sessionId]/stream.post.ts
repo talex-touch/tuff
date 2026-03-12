@@ -323,7 +323,9 @@ export default defineEventHandler(async (event) => {
             baseUrl: selectedChannel.channel.baseUrl,
             apiKey: selectedChannel.channel.apiKey,
             model: selectedChannel.channel.model,
+            adapter: selectedChannel.adapter,
             transport: selectedChannel.transport,
+            timeoutMs: selectedChannel.channel.timeoutMs,
             builtinTools: selectedChannel.channel.builtinTools,
           },
           onAudit: async (record) => {

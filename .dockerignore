@@ -1,0 +1,12 @@
+.git
+.github
+.pnpm-store
+node_modules
+**/node_modules
+**/.nuxt
+**/.output
+**/dist
+**/coverage
+tmp
+reports
+shots
