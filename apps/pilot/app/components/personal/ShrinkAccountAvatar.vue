@@ -1,7 +1,4 @@
 <script setup lang="ts">
-import { $event } from '~/composables/events'
-import { globalOptions } from '~/constants'
-
 const router = useRouter()
 
 const appOptions: any = inject('appOptions')!
@@ -16,7 +13,7 @@ function openSetting() {
     <div
       v-if="!userStore.isLogin"
       class="ShrinkAccountAvatar-Wrapper"
-      @click="appOptions.model.login = !appOptions.model.login"
+      @click="appOptions.model.login = true"
     >
       <el-avatar>
         <span style="transform: scale(0.75)">登录</span>

@@ -1,9 +1,9 @@
-import './index'
+import type { QuotaModel } from './api/base/v1/aigc/completion-types'
 import { getAccountDetail, getPermissionList, getUserSubscription } from './api/account'
 import { endHttp } from './api/axios'
 import { $endApi } from './api/base'
 import { $event } from './events'
-import type { QuotaModel } from './api/base/v1/aigc/completion-types'
+import './index'
 
 export interface AccountDetail {
   id: number
@@ -172,6 +172,29 @@ export async function syncPilotAuthStatus() {
     userStore.value.isLogin = false
     return false
   }
+}
+
+export async function hydratePilotSessionUser() {
+  const hasSession = await syncPilotAuthStatus()
+  if (!hasSession || !userStore.value.isLogin) {
+    return false
+  }
+
+  await refreshCurrentUserRPM()
+  await refreshUserSubscription()
+  await refreshUserDummy()
+  return true
+}
+
+export async function logoutPilotSession() {
+  try {
+    await $endApi.v1.auth.logout()
+  }
+  catch (error) {
+    console.warn('pilot session logout request failed', error)
+  }
+
+  $event.emit('USER_LOGOUT_SUCCESS', LogoutType.USER_LOGOUT)
 }
 
 export async function refreshUserDummy() {

@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3'
 import { createError, getQuery, getRequestURL, sendRedirect } from 'h3'
 import { resolvePilotConfigString, resolvePilotNexusOrigin } from '../../utils/pilot-config'
+import { mergePilotGuestDataAfterAuth } from '../../utils/pilot-guest-merge'
 import { parsePilotOauthReturnTo, requirePilotOauthState } from '../../utils/pilot-oauth'
 import { writePilotSessionCookie } from '../../utils/pilot-session'
 
@@ -110,6 +111,7 @@ export default defineEventHandler(async (event) => {
   const userId = await exchangeOauthCode(event, oauthCode, redirectUri)
 
   writePilotSessionCookie(event, userId)
+  await mergePilotGuestDataAfterAuth(event, userId, 'login')
 
   return sendRedirect(event, returnTo, 302)
 })

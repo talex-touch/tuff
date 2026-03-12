@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { useDeviceAdapter } from './composables/hook/device-adapter'
-import { $event } from './composables/events'
-import { appName, globalOptions } from '~/constants'
-import 'element-plus/theme-chalk/dark/css-vars.css'
-import { detectWallpaper, useColorTheme } from '~/composables/theme/colors'
 import feishuInit from '~/composables/feishu/init'
+import { detectWallpaper, useColorTheme } from '~/composables/theme/colors'
+import { appName, globalOptions } from '~/constants'
+import { $event } from './composables/events'
+import { useDeviceAdapter } from './composables/hook/device-adapter'
+import 'element-plus/theme-chalk/dark/css-vars.css'
 
 useHead({
   title: appName,
@@ -76,12 +76,7 @@ onMounted(async () => {
   detectWallpaper()
   useDeviceAdapter()
 
-  const hasSession = await syncPilotAuthStatus()
-  if (hasSession && userStore.value.isLogin) {
-    await refreshCurrentUserRPM()
-    await refreshUserSubscription()
-    await refreshUserDummy()
-  }
+  await hydratePilotSessionUser()
 })
 
 router.afterEach(() => {
@@ -104,6 +99,9 @@ provide('appOptions', pageOptions)
 
   <ClientOnly>
     <ChoreTutorial />
+  </ClientOnly>
+  <ClientOnly>
+    <ChoreLogin v-model:show="pageOptions.model.login" />
   </ClientOnly>
   <!-- </div> -->
 

@@ -1,20 +1,17 @@
 <script setup lang="ts">
 import dayjs from 'dayjs'
-import AccountModuleLink from './account/AccountModuleLink.vue'
-import AccountModuleDeveloper from './account/AccountModuleDeveloper.vue'
-import AccountModuleHistory from './account/AccountModuleHistory.vue'
-
-import AccountModulePersonal from './account/AccountModulePersonal.vue'
-import AccountModuleFortune from './account/AccountModuleFortune.vue'
-import AccountModuleInvitation from './account/AccountModuleInvitation.vue'
-import AccountModulePlan from './account/AccountModulePlan.vue'
-import AccountModuleDummy from './account/AccountModuleDummy.vue'
-import AccountModuleSignIn from './account/AccountModuleSignIn.vue'
-import { getHistoryList } from '~/composables/api/account'
-import ImageUpload from '~/components/personal/ImageUpload.vue'
-import { $event } from '~/composables/events'
-import { $endApi } from '~/composables/api/base'
 import ChatLinkShare from '~/components/chat/head/ChatLinkShare.vue'
+import { getHistoryList } from '~/composables/api/account'
+import { $endApi } from '~/composables/api/base'
+import AccountModuleDeveloper from './account/AccountModuleDeveloper.vue'
+import AccountModuleDummy from './account/AccountModuleDummy.vue'
+import AccountModuleFortune from './account/AccountModuleFortune.vue'
+import AccountModuleHistory from './account/AccountModuleHistory.vue'
+import AccountModuleInvitation from './account/AccountModuleInvitation.vue'
+import AccountModuleLink from './account/AccountModuleLink.vue'
+import AccountModulePersonal from './account/AccountModulePersonal.vue'
+import AccountModulePlan from './account/AccountModulePlan.vue'
+import AccountModuleSignIn from './account/AccountModuleSignIn.vue'
 
 const historyList = ref()
 const invitationList = ref()
@@ -96,7 +93,7 @@ const registeredCountDay = computed(() => {
 })
 
 function handleLogout() {
-  $event.emit('USER_LOGOUT_SUCCESS', LogoutType.USER_LOGOUT)
+  logoutPilotSession()
 }
 
 const dialogOptions = reactive<{

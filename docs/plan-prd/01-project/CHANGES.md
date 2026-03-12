@@ -2,6 +2,244 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-03-12
+
+### core-app：Network 套件统一改造（Main 网关 + Proxy + tfile + SDK）
+
+**变更类型**: 架构收敛 / 稳定性修复 / 可扩展能力补齐
+
+**描述**:
+- 在 `packages/utils` 新增 `network` 套件（`request/file/guard`），统一抽象请求参数、代理配置、重试与冷却策略。
+- 新增 Transport `NetworkEvents` + Domain `NetworkSDK` + renderer `useNetworkSdk`，Renderer 网络访问统一可经 Main 网关执行。
+- Main 新增 `NetworkModule` 与 `NetworkService`：
+  - 统一承接 HTTP 请求、文件读取（`file://` / `tfile://` / 绝对路径）与 `toTfileUrl` 转换。
+  - 代理策略支持 `direct/system/custom`，首版覆盖 `HTTP/HTTPS + SOCKS + PAC + bypass`。
+  - 配置接入 `app-setting.network`（`proxy/retry/cooldown/timeout`）。
+- 首批迁移完成（移除分散 `proxy:false`）：
+  - `plugin-loaders` / `plugin.ts`（dev prelude）
+  - `dev-server-monitor`
+  - `widget-loader`
+  - `store-http.service`
+  - `download-worker`
+  - `plugin providers`（`npm-provider`、`providers/utils`）
+  - `official-plugin.service`
+- 渲染侧图标链路收口：
+  - `useSvgContent` 统一接入 `NetworkSDK` 文件读取与本地 URL 冷却策略。
+  - `TuffIcon.vue` 改为复用 network `toTfileUrl`。
+- 修复你确认的 1/2：
+  - `TuffIconImpl` 仅在 `dev.enable && dev.source && dev.address` 时才走 dev 远程 URL。
+  - localhost SVG 失败冷却从局部实现抽离为 network policy 复用。
+- 新增收口门禁：`apps/core-app/scripts/check-network-boundaries.js`（`pnpm -C \"apps/core-app\" run network:guard`）用于禁止新增散落 `fetch/axios` 入口。
+
+**验证**:
+- `pnpm -C "packages/utils" run lint` ✅
+- `pnpm -C "packages/utils" exec vitest run "__tests__/network-guard.test.ts"` ✅
+- `pnpm -C "apps/core-app" exec vitest run "src/main/core/tuff-icon.test.ts"` ✅
+- `pnpm -C "apps/core-app" run network:guard` ✅
+- `pnpm -C "apps/core-app" run typecheck:node` ⚠️（存在既有 Sentry 类型冲突，`src/main/modules/sentry/sentry-service.ts:574`，与本次改动无关）
+- `pnpm -C "apps/core-app" run typecheck:web` ⚠️（存在既有 Milkdown 版本类型冲突，`src/renderer/src/components/base/input/FlatMarkdown.vue:68`，与本次改动无关）
+
+**修改文件**:
+- `packages/utils/network/*`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/events/types/{index.ts,network.ts}`
+- `packages/utils/transport/sdk/domains/{index.ts,network.ts}`
+- `packages/utils/renderer/hooks/{index.ts,use-network-sdk.ts}`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `packages/utils/index.ts`
+- `apps/core-app/src/main/modules/network/*`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/main/core/tuff-icon.ts`
+- `apps/core-app/src/main/modules/plugin/{plugin.ts,plugin-loaders.ts,dev-server-monitor.ts}`
+- `apps/core-app/src/main/modules/plugin/widget/widget-loader.ts`
+- `apps/core-app/src/main/modules/plugin/providers/{npm-provider.ts,utils.ts}`
+- `apps/core-app/src/main/modules/download/download-worker.ts`
+- `apps/core-app/src/main/service/{store-http.service.ts,official-plugin.service.ts}`
+- `apps/core-app/src/renderer/src/modules/hooks/useSvgContent.ts`
+- `apps/core-app/src/renderer/src/components/base/TuffIcon.vue`
+- `apps/core-app/src/renderer/src/base/axios.ts`
+- `apps/core-app/scripts/check-network-boundaries.js`
+- `apps/core-app/package.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot 登录简化：本地邮箱优先 + Nexus 并存（M1.4）
+
+**变更类型**: 认证链路收敛 / 体验修复 / 数据一致性增强
+
+**描述**:
+- 新增本地邮箱认证能力（`/api/auth/email/register`、`/api/auth/email/login`、`/api/auth/logout`），统一写入 `pilot_auth_session` Cookie，不引入邮箱验证码流程。
+- `GET /api/auth/status` 升级为登录来源可识别（`guest/local/nexus`），并在本地账号场景返回基础 profile（`nickname/email`）。
+- 前端登录弹窗重新挂载到全局根（`app.vue`），保留双入口：邮箱登录/注册为主链路，Nexus OAuth 入口继续可用。
+- 原短信/微信二维码登录入口改为“即将上线（Nexus）”占位，避免调用当前未迁移接口导致误报。
+- 新增访客数据并入：登录成功后基于 device guest id 自动迁移会话/历史/运行时记录到登录账号，并输出后端合并审计日志。
+
+**验证**:
+- `pnpm -C "apps/pilot" run test` ✅
+- `pnpm -C "apps/pilot" run build` ✅
+- `pnpm -C "apps/pilot" run typecheck` ⚠️（存在大量存量 TS 错误，集中在 Quota 旧页面与 CMS 模块，与本次登录改造无直接耦合）
+- `pnpm -C "apps/pilot" run lint` ⚠️（存在存量 lint debt，已在 `TODO.md` 的 M0 收口条目持续跟踪）
+
+**修改文件**:
+- `apps/pilot/server/utils/pilot-local-auth.ts`
+- `apps/pilot/server/utils/pilot-guest-merge.ts`
+- `apps/pilot/server/api/auth/email/register.post.ts`
+- `apps/pilot/server/api/auth/email/login.post.ts`
+- `apps/pilot/server/api/auth/logout.post.ts`
+- `apps/pilot/server/api/auth/status.get.ts`
+- `apps/pilot/server/api/account/profile.get.ts`
+- `apps/pilot/server/routes/auth/callback.get.ts`
+- `apps/pilot/app/components/chore/Login.vue`
+- `apps/pilot/app/app.vue`
+- `apps/pilot/app/composables/user.ts`
+- `apps/pilot/app/composables/api/base/v1/auth.ts`
+- `apps/pilot/app/composables/api/auth.ts`
+- `apps/pilot/server/utils/__tests__/pilot-local-auth.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot M1.3：渠道 Adapter 化（禁用自动协议降级，legacy 固定 responses）
+
+**变更类型**: 架构收敛 / 兼容策略调整
+
+**描述**:
+- 根据渠道差异，后端从“自动降级”切换为“按渠道 Adapter 显式路由”：
+  - 新增 `adapter` 语义（`legacy | openai`），在 `PILOT_CHANNELS_JSON` 可按渠道配置。
+  - `legacy` 渠道强制走 `responses`，不会再尝试 `chat.completions`。
+  - `openai` 渠道按 `transport` 显式选择（`responses | chat.completions`），不再隐式 fallback。
+- 默认渠道策略可配置：
+  - 新增 `PILOT_CHANNEL_DEFAULT_ADAPTER`（默认 `legacy`）。
+  - 保留 `PILOT_CHANNEL_DEFAULT_TRANSPORT`，但在 `legacy` 下会被收敛为 `responses`。
+- `POST /api/aigc/executor` 事件补充：
+  - `session_bound` 新增 `adapter`，明确当前会话实际使用的渠道适配器。
+- 诊断增强：
+  - 当渠道报 `Unsupported legacy protocol: /v1/chat/completions is not supported` 时，返回可读提示，指导将该渠道改为 `responses`/`legacy` 配置。
+  - `executor` 错误事件新增 `detail` 结构（`status_code/status_message/endpoint/model/phase/cause`），并在后端输出 `[pilot-executor-error]` 结构化日志，便于排查 `Connection error` 与网关链路问题。
+- 管理接口增强：
+  - `GET /api/pilot/admin/channels` 返回 `adapter` 字段，便于后台排查渠道配置。
+
+**验证**:
+- `pnpm -C "apps/pilot" run test` ✅
+- `pnpm -C "apps/pilot" run build` ✅（本次改动文件通过构建）
+
+**修改文件**:
+- `apps/pilot/server/utils/pilot-channel.ts`
+- `apps/pilot/server/utils/pilot-runtime.ts`
+- `apps/pilot/server/api/aigc/executor.post.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/server/api/pilot/admin/channels.get.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot M1.2：Executor 超时治理（渠道超时配置化 + 自动降级 + 可诊断错误）
+
+**变更类型**: 稳定性修复 / 兼容性增强
+
+**描述**:
+- 修复 `POST /api/aigc/executor` 在 `responses` 通道下频繁返回 `Request timed out.` 的问题根因：
+  - 渠道超时阈值从固定 `25_000ms` 升级为可配置，并统一默认到 `90_000ms`（下限 `3000ms`，上限 `10min`）。
+  - 支持全局变量 `PILOT_CHANNEL_TIMEOUT_MS`，并允许 `PILOT_CHANNELS_JSON` 渠道项单独指定 `timeoutMs`（未指定时继承全局默认）。
+- 自动协议降级增强：
+  - `transport=auto` 且 `responses` 超时时，允许自动降级到 `chat.completions`（原先仅覆盖 404/405/501）。
+  - 新增对 `504/524` 与超时关键字（`timed out/timeout/AbortError`）的降级判定。
+  - 注：该策略已在同日 `Pilot M1.3` 切换为 Adapter 显式路由（默认不再自动降级）。
+- SSE 诊断信息增强：
+  - `session_bound` 事件新增 `timeout_ms` 字段，便于定位当前渠道阈值。
+  - 错误消息对超时场景改为可读提示：包含超时阈值与渠道信息，不再只有笼统 `Request timed out.`。
+- 管理接口增强：
+  - `GET /api/pilot/admin/channels` 增加 `timeoutMs` 脱敏可见字段。
+
+**验证**:
+- `pnpm -C "apps/pilot" run test` ✅
+- `pnpm -C "apps/pilot" run build` ✅（本次改动文件通过类型与构建校验）
+
+**修改文件**:
+- `apps/pilot/server/utils/pilot-channel.ts`
+- `apps/pilot/server/utils/pilot-runtime.ts`
+- `apps/pilot/server/api/aigc/executor.post.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/server/api/pilot/admin/channels.get.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot M0：GHCR 镜像发布链路落地（master + packages 触发）
+
+**变更类型**: 工程化增强 / 发布链路补齐
+
+**描述**:
+- 新增 `apps/pilot/Dockerfile`，将 Pilot 构建链路固定为 `NITRO_PRESET=node-server`，产出可直接运行的容器镜像。
+- Docker 构建阶段使用 `pnpm deploy` 生成运行时依赖并拷贝 `.output`，同时清理 `.nuxt`/`dist`/源码目录，降低镜像冗余体积。
+- 新增仓库级 `.dockerignore`，避免把 `node_modules`、`.git`、构建产物等无关内容打入构建上下文。
+- 新增 `.github/workflows/pilot-image.yml`：
+  - 触发条件：`master` push 且命中 `apps/pilot/**`、`packages/**`、锁文件或工作流自身改动。
+  - 发布目标：`ghcr.io/<owner>/tuff-pilot`。
+  - 标签策略：`pilot-<short_sha>`（不可变）+ `pilot-latest`（环境跟随）。
+  - 输出镜像 digest，便于后续 1Panel 部署审计与回滚定位。
+  - 若配置 `ONEPANEL_WEBHOOK_URL`，发布后自动触发 webhook，并发送 `repository/branch/sha/image/tag/image_ref/digest`。
+- `pilot-ci.yml` 下线 `deploy-1panel` 任务，避免与镜像发布链路重复触发；1Panel 触发统一收口到 `pilot-image.yml`。
+- 工作流文档同步更新 `.github/workflows/README.md`。
+
+**验证**:
+- `pnpm -C "apps/pilot" run build` ✅（在本地以 `NITRO_PRESET=node-server` 验证构建可通过）
+
+**修改文件**:
+- `.dockerignore`
+- `apps/pilot/Dockerfile`
+- `.github/workflows/pilot-image.yml`
+- `.github/workflows/pilot-ci.yml`
+- `.github/workflows/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot M0：1Panel 部署脚本（GHCR 拉取 + 健康检查回滚）
+
+**变更类型**: 工程化增强 / 部署可靠性提升
+
+**描述**:
+- 新增 `apps/pilot/deploy/deploy-pilot-1panel.sh`，用于在 1Panel 服务器执行 Pilot 容器更新。
+- 脚本支持从 GHCR 拉取指定镜像（`--image + --tag` 或 `--image-ref`），并通过 compose 仅更新指定服务。
+- 增加可选健康检查（`--health-url`），失败时默认自动回滚到上一个运行镜像。
+- 同时兼容 `docker compose` 与 `docker-compose`，并支持可选 GHCR 登录参数（私有镜像场景）。
+- 新增 `apps/pilot/deploy/deploy-pilot-1panel-webhook.sh`，支持 webhook payload 解析（`image/tag/sha`）与 `sha -> pilot-<short_sha>` 自动映射，并转发到主部署脚本。
+- 新增部署模板与双语教程：
+  - `apps/pilot/deploy/deploy-pilot-1panel.env.example`
+  - `apps/pilot/deploy/deploy-pilot-1panel-webhook.env.example`
+  - `apps/pilot/deploy/README.zh-CN.md`
+  - `apps/pilot/deploy/README.md`
+- 根目录 `scripts/deploy-pilot-1panel.sh` 与 `scripts/deploy-pilot-1panel-webhook.sh` 保留为兼容入口，转发到 `apps/pilot/deploy/`。
+
+**验证**:
+- `bash -n "apps/pilot/deploy/deploy-pilot-1panel.sh"` ✅
+- `apps/pilot/deploy/deploy-pilot-1panel.sh --help` ✅
+- `bash -n "apps/pilot/deploy/deploy-pilot-1panel-webhook.sh"` ✅
+- `apps/pilot/deploy/deploy-pilot-1panel-webhook.sh --dry-run --payload-json '{"sha":"abcdef123456","branch":"master"}'` ✅
+
+**修改文件**:
+- `apps/pilot/deploy/deploy-pilot-1panel.sh`
+- `apps/pilot/deploy/deploy-pilot-1panel.env.example`
+- `apps/pilot/deploy/deploy-pilot-1panel-webhook.sh`
+- `apps/pilot/deploy/deploy-pilot-1panel-webhook.env.example`
+- `apps/pilot/deploy/README.zh-CN.md`
+- `apps/pilot/deploy/README.md`
+- `scripts/deploy-pilot-1panel.sh`
+- `scripts/deploy-pilot-1panel.env.example`
+- `scripts/deploy-pilot-1panel-webhook.sh`
+- `scripts/deploy-pilot-1panel-webhook.env.example`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### core-app：本地 SVG 源连接失败降噪（localhost 重试节流）
+
+**变更类型**: 稳定性修复 / 开发体验优化
+
+**描述**:
+- 修复渲染层图标加载在 `localhost` SVG 资源不可达时的错误刷屏问题（典型报错：`ERR_CONNECTION_REFUSED`）。
+- `useSvgContent` 对本地 HTTP 源（`localhost` / `127.0.0.1`）增加“失败后短暂冷却”策略（3s），避免同一地址在短时间内被高频重复请求。
+- 调整重试策略：本地 HTTP 源失败后不再走 retrier 多次重试，减少无效网络请求与控制台噪音。
+- 调整日志策略：对本地 HTTP 源失败不再输出 `fetchSvgContent failed after retries` 错误日志（仍保留组件错误态），远程源行为不变。
+
+**验证**:
+- `pnpm -C "apps/core-app" exec eslint "src/renderer/src/modules/hooks/useSvgContent.ts"` ✅
+- `pnpm -C "apps/core-app" run typecheck:web` ⚠️（存在既有 `Milkdown` 版本类型冲突，报错位于 `src/renderer/src/components/base/input/FlatMarkdown.vue:68`，与本次改动无关）
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/hooks/useSvgContent.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-03-11
 
 ### Pilot M1：多渠道 + Completions 兼容 + 后端会话主导（第一批 API 拆分）

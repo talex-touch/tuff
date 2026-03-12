@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2026-03-11
+> 更新时间: 2026-03-12
 
 ---
 
@@ -22,6 +22,15 @@
   - 现状：Tray 在部分环境中“对象创建成功但菜单栏不可见”，当前暂无稳定修复路径。
   - 策略：Tray 改为实验特性，默认关闭，需显式启用（`setup.experimentalTray=true`）。
   - 入口保障：默认使用 Dock 作为主入口，不依赖 Tray。
+
+## 🌐 2026-03 Network 套件统一收口（Main/Renderer）
+
+- [x] `packages/utils/network` 首版落地：统一 request/file/guard 能力与类型（proxy/retry/cooldown/file）。
+- [x] Transport Domain SDK 新增 `NetworkSDK`（events + domain + renderer hook）。
+- [x] Main 新增 `NetworkModule + NetworkService`，Renderer 请求统一走 Main 网关。
+- [x] 首批迁移完成：`plugin-loaders`、`dev-server-monitor`、`widget-loader`、`store-http`、`download-worker`、`npm-provider`、`provider utils`。
+- [x] 图标链路修复：`TuffIconImpl` dev URL 判定改为 `dev.enable && dev.source && dev.address`。
+- [ ] 继续收口历史遗留 `fetch/axios` 调用（已由 `network:guard` 脚本建立“禁止新增”门禁）。
 
 ## 🧯 2026-03 主进程生命周期收敛（已落地）
 
@@ -123,6 +132,7 @@
 - [x] [P0] Pilot M1（2026-03-11）：后端会话真源落地（`pilot_quota_sessions`），流式结束自动快照历史，不再依赖前端补传为主链。
 - [x] [P0] Pilot M1（2026-03-11）：`POST /api/aigc/conversations` 调整为补写/覆盖语义；会话删除三向一致清理（history + mapping + runtime）。
 - [x] [P0] Pilot M1（2026-03-11）：第一批剩余 API 已迁移（`aigc share/detail/user`、`auth/renew_token`、`user-config`、`dummy`、`invitation/records`、`order/*`、`tools/upload*`）。
+- [x] [P0] Pilot M1.4（2026-03-12）：登录链路简化完成（本地邮箱注册/登录 + `logout`，保留 Nexus OAuth 并存，登录成功自动触发 guest->account 数据并入）。
 - [ ] [P1] Pilot M1 回归补强：渠道矩阵测试（`responses-only` / `chat.completions-only` / `auto fallback`）与 executor SSE 契约断言补齐。
 - [ ] [P1] Pilot M2 API 迁移（运营后台常用，保持“先读后写”）：
   - [ ] `tools/storage/*`

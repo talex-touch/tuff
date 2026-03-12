@@ -1,350 +1,152 @@
 <script setup lang="ts">
+import ThCheckBox from '~/components/checkbox/ThCheckBox.vue'
+import { emailLogin, emailRegister } from '~/composables/api/auth'
+import { hydratePilotSessionUser } from '~/composables/user'
 import LoadingIcon from '../icon/LoadingIcon.vue'
 import LoginCore from './login/LoginCore.vue'
-import { Platform, getQrCodeStatus, postQrCodeReq, qrCodeLogin, sendSMSCode, useSMSLogin } from '~/composables/api/auth'
-import ThCheckBox from '~/components/checkbox/ThCheckBox.vue'
-import { $handleUserLogin } from '~/composables/user'
-import { createTapTip, forWikiDialogTip } from '~/composables/tip'
 
 const props = defineProps<{
   show: boolean
 }>()
 
 const emits = defineEmits<{
-  (e: 'modelValue:show'): void
+  (e: 'update:show', show: boolean): void
 }>()
 
-const codeStatus = ref(0)
-let startTime = Date.now()
-
-function formatter(value: string) {
-  // 移除所有非数字字符
-  const cleaned = value.replace(/\D/g, '')
-
-  // 判断手机号长度
-  if (cleaned.length >= 8) {
-    const part1 = cleaned.slice(0, 3)
-    const part2 = cleaned.slice(3, 7)
-    const part3 = cleaned.slice(7, 11)
-    return `${part1} ${part2} ${part3}`
-  }
-  else if (cleaned.length >= 4 && cleaned.length < 8) {
-    const part1 = cleaned.slice(0, 3)
-    const part2 = cleaned.slice(3)
-    return `${part1} ${part2}`
-  }
-  else if (cleaned.length < 4) {
-    return cleaned
-  }
-  else {
-    // 如果长度不符合手机号码规则，返回原始值
-    return value
-  }
-}
-
-function parser(input: string) {
-  // 去除前后空格并保留原始格式
-  let trimmedInput = input.trim()
-
-  // 确保输入只包含数字和空格
-  if (!/^\d+( \d+)*$/.test(trimmedInput))
-    return input // 返回原始输入
-
-  // 去除多余的空格
-  trimmedInput = trimmedInput.replace(/\s+/g, ' ').trim()
-
-  // 处理不同情况
-  const match = trimmedInput.match(/^(1\d{0,10})$/)
-  if (match) {
-    if (match[1].length <= 3)
-      return match[1]
-    else if (match[1].length <= 7)
-      return `${match[1].slice(0, 3)} ${match[1].slice(3)}`
-    else
-      return `${match[1].slice(0, 3)} ${match[1].slice(3, 7)} ${match[1].slice(7)}`
-  }
-
-  return input // 返回原始输入
-}
-
+const route = useRoute()
 const show = useVModel(props, 'show', emits)
-const codeData = useLocalStorage('code-data', {
-  active: 'phone',
-  expired: true,
-  loading: false,
-  lastFetch: -1,
-  data: {},
-})
-const data = reactive({
-  account: '',
-  code: '',
+const activeTab = ref<'email-login' | 'email-register' | 'sms'>('email-login')
+
+const authForm = reactive({
+  email: '',
+  password: '',
+  nickname: '',
   agreement: true,
-  user: '',
-  pass: '',
-})
-
-const smsOptions = reactive({
-  lastSent: -1,
   loading: false,
-  title: '发送验证码',
-  disabled: false,
-  smsLogin: false,
 })
 
-async function handleSendCode() {
-  const tapTip = createTapTip('正在发送短信验证码')
+const nexusLoginHref = computed(() => {
+  const returnTo = route.fullPath || '/'
+  return `/auth/login?returnTo=${encodeURIComponent(returnTo)}`
+})
 
-  tapTip.setLoading(true).setType(TipType.INFO)
-  tapTip.show()
+function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase()
+}
 
-  await sleep(600)
+function isLikelyEmail(email: string): boolean {
+  const atIndex = email.indexOf('@')
+  if (atIndex <= 0 || atIndex >= email.length - 1) {
+    return false
+  }
 
-  if (!data.agreement) {
-    tapTip.setLoading(false).setMessage('请先同意协议！').setType(TipType.WARNING)
+  const domain = email.slice(atIndex + 1)
+  if (!domain || domain.startsWith('.') || domain.endsWith('.')) {
+    return false
+  }
+
+  return domain.includes('.')
+}
+
+function validateAuthInput(options: { register: boolean }): string | null {
+  if (!authForm.agreement) {
+    return '请先同意服务协议和隐私协议'
+  }
+
+  const email = normalizeEmail(authForm.email)
+  if (!email || !isLikelyEmail(email)) {
+    return '请输入正确的邮箱地址'
+  }
+
+  if (!authForm.password || authForm.password.length < 6) {
+    return '密码至少 6 位'
+  }
+
+  if (authForm.password.length > 128) {
+    return '密码长度需不超过 128 位'
+  }
+
+  if (options.register && authForm.nickname.trim().length > 32) {
+    return '昵称长度需不超过 32 位'
+  }
+
+  return null
+}
+
+async function refreshAfterLogin() {
+  const hasSession = await hydratePilotSessionUser()
+  if (!hasSession) {
+    ElMessage.error('登录状态同步失败，请刷新页面后重试')
     return
   }
 
-  const phone = data.account.replaceAll(' ', '')
-  if (phone.length !== 11) {
-    tapTip.setLoading(false).setMessage('请输入正确的手机号！').setType(TipType.WARNING)
+  ElMessage.success('登录成功')
+  show.value = false
+}
+
+async function submitEmailLogin() {
+  const errorMessage = validateAuthInput({ register: false })
+  if (errorMessage) {
+    ElMessage.warning(errorMessage)
     return
   }
 
-  if (smsOptions.disabled)
-    return
-
-  smsOptions.loading = true
-
+  authForm.loading = true
   try {
-    const res = await sendSMSCode(data.account.replaceAll(' ', ''))
-
-    if (res.message === 'sms-sent-err') {
-      tapTip.setLoading(false).setMessage('无法向目标手机号发送消息').setType(TipType.ERROR)
+    const response: any = await emailLogin(normalizeEmail(authForm.email), authForm.password)
+    if (response.code !== 200) {
+      ElMessage.error(response.message || '登录失败，请稍后重试')
+      return
     }
-    else if (res.code === 200) {
-      smsOptions.lastSent = Date.now()
-
-      refreshSmsTitle()
-
-      tapTip.setLoading(false).setMessage('验证码发送成功!').setType(TipType.SUCCESS)
-    }
+    await refreshAfterLogin()
   }
-  catch (e: any) {
-    console.error(e)
-
-    tapTip.setLoading(false).setMessage(`发送失败(${e.message || 'error'})！`).setType(TipType.ERROR)
+  catch (error: any) {
+    ElMessage.error(error?.message || '登录失败，请稍后重试')
   }
-
-  smsOptions.loading = false
+  finally {
+    authForm.loading = false
+  }
 }
 
-async function handleLogin() {
-  const tapTip = createTapTip('正在准备登录')
-
-  tapTip.setLoading(true).setType(TipType.INFO)
-  tapTip.show()
-
-  await sleep(600)
-
-  if (!data.agreement) {
-    tapTip.setLoading(false).setMessage('请先同意协议！').setType(TipType.WARNING)
+async function submitEmailRegister() {
+  const errorMessage = validateAuthInput({ register: true })
+  if (errorMessage) {
+    ElMessage.warning(errorMessage)
     return
   }
 
-  const phone = data.account.replaceAll(' ', '')
-  if (phone.length !== 11) {
-    tapTip.setLoading(false).setMessage('请输入正确的手机号！').setType(TipType.WARNING)
-    return
-  }
-
-  if (+data.code < 100000 || +data.code > 999999) {
-    tapTip.setLoading(false).setMessage('请输入正确的验证码！').setType(TipType.WARNING)
-    return
-  }
-
-  // Internal Test
-  // const res = await doAccountExist(phone)
-  // if (!res.data) {
-  //   ElMessage.error('请先通过内测资格后再登录使用！')
-  //   return
-  // }
-
-  // const button = document.getElementById('captcha-button')
-  // button?.click()
-
+  authForm.loading = true
   try {
-    smsOptions.smsLogin = true
-    const state = (codeStatus.value !== 4 || codeData.value.expired) ? undefined : (codeData.value.data as any)?.loginCode
-
-    const res = await useSMSLogin(data.account.replaceAll(' ', ''), data.code, '', state)
-
-    if (res.code === 1003) {
-      tapTip.setLoading(false).setMessage('短信验证码有误！').setType(TipType.ERROR)
+    const response: any = await emailRegister(
+      normalizeEmail(authForm.email),
+      authForm.password,
+      authForm.nickname.trim(),
+    )
+    if (response.code !== 200) {
+      ElMessage.error(response.message || '注册失败，请稍后重试')
+      return
     }
-    else if (res.code === 200) {
-      if (!res.data) {
-        tapTip.setLoading(false).setMessage(res.message).setType(TipType.ERROR)
-        smsOptions.smsLogin = false
-      }
-      else {
-        localStorage.removeItem('code-data')
-
-        $handleUserLogin(res.data)
-
-        tapTip.setLoading(false).setMessage('登录成功！').setType(TipType.SUCCESS)
-
-        setTimeout(() => {
-          show.value = false
-        }, 1200)
-      }
-    }
-
-    console.error(res)
+    await refreshAfterLogin()
   }
-  catch (e: any) {
-    console.error(e)
-
-    tapTip.setLoading(false).setMessage(`发送失败(${e.message || 'error'})！`).setType(TipType.ERROR)
+  catch (error: any) {
+    ElMessage.error(error?.message || '注册失败，请稍后重试')
+  }
+  finally {
+    authForm.loading = false
   }
 }
 
-function refreshSmsTitle() {
-  const diff = Date.now() - smsOptions.lastSent
-  if (diff > 60000) {
-    smsOptions.title = '发送验证码'
-    smsOptions.disabled = false
-  }
-  else {
-    smsOptions.disabled = true
-    smsOptions.title = `${(60 - Math.floor(diff / 1000)).toString().padStart(2, '0')}s后重发`
-    setTimeout(refreshSmsTitle, 1000)
-  }
+function handleComingSoonClick() {
+  ElMessage.info('短信与二维码登录正在迁移到 Nexus，敬请期待。')
 }
-
-watch(() => show.value, (val) => {
-  if (val)
-    startTime = Date.now()
-})
-
-onMounted(async () => {
-  if (document.body.classList.contains('mobile'))
-    return
-
-  if (!codeData.value.active)
-    codeData.value.active = 'phone'
-
-  await fetchCode()
-
-  codeStatusTimer()
-})
-
-async function fetchCode() {
-  codeData.value.loading = true
-
-  let { lastFetch, data: _data, expired } = codeData.value
-
-  if (Date.now() - lastFetch >= 280000 || expired) {
-    codeData.value.lastFetch = Date.now()
-
-    const res: any = await postQrCodeReq(Platform.WECHAT)
-
-    if (res.code === 200) {
-      codeData.value.data = _data = res.data
-      codeData.value.expired = false
-    }
-  }
-
-  codeData.value.loading = false
-}
-
-async function codeStatusTimer() {
-  if (userStore.value.isLogin)
-    return
-
-  // 如果超过2分钟用户啥也没做就不要她登陆了 免得一直ddos后台
-  if (Date.now() - startTime >= 120000)
-    show.value = false
-
-  if (props.show && !document.body.classList.contains('mobile'))
-    await _codeStatusTimer()
-
-  setTimeout(codeStatusTimer, 2000)
-}
-
-async function _codeStatusTimer() {
-  const _codeData: any = codeData.value.data
-  if (!_codeData || !_codeData.loginCode)
-    return await fetchCode()
-
-  if (codeData.value.expired)
-    return
-
-  const { lastFetch, data: _data } = codeData.value
-  const res = await getQrCodeStatus(Platform.WECHAT, _codeData.loginCode)
-  if (res.data === null || Date.now() - lastFetch >= 280000) {
-    codeData.value.expired = true
-    codeStatus.value = 0
-    return
-  }
-
-  codeStatus.value = res.data
-}
-
-watch(() => codeStatus.value, async (status) => {
-  if (status !== 3)
-    return
-
-  // 用户已经用短信验证码登录了就不要处理这个请求了 防止二次无效登录
-  if (smsOptions.smsLogin)
-    return
-
-  const _codeData: any = codeData.value.data
-
-  const res: any = await qrCodeLogin(_codeData.loginCode)
-
-  localStorage.removeItem('code-data')
-
-  if (res.code !== 200) {
-    ElMessage({
-      message: `登录失败(${res.message || 'error'})！`,
-      grouping: true,
-      type: 'error',
-      plain: true,
-    })
-    return
-  }
-
-  setTimeout(async () => {
-    await $handleUserLogin(res.data)
-    // userStore.value.token = (res.data.token)
-
-    ElMessage({
-      message: `已成功登录！`,
-      grouping: true,
-      type: 'success',
-      plain: true,
-    })
-
-    show.value = false
-  }, 800)
-})
-
-function handleAccountLogin() {
-  // forWikiTip('正在登录，请稍后...', 2600, TipType.INFO, true)
-
-  forWikiDialogTip('Hi', 'there')
-}
-
-// @ts-expect-error force exist
-const codeUrl = computed(() => `https://mp.weixin.qq.com/cgi-bin/showqrcode?ticket=${codeData.value.data?.ticket}`)
 </script>
 
 <template>
   <div :class="{ show }" class="Login" @click="show = false">
-    <div class="Login-Container" @click.stop="show = true">
+    <div class="Login-Container" @click.stop>
       <div class="Login-Head">
         <h1 font-bold>
-          <p>登录后</p>
+          <p>登录后可同步会话</p>
           尽情和<span class="name">ThisAI</span>畅聊
         </h1>
 
@@ -352,105 +154,97 @@ const codeUrl = computed(() => `https://mp.weixin.qq.com/cgi-bin/showqrcode?tick
       </div>
 
       <div class="Login-Main">
-        <div :class="{ bind: codeStatus === 4 }" class="Login-Main-Major">
-          <el-tabs v-model="codeData.active">
-            <el-tab-pane name="phone" label="手机号登录">
+        <div class="Login-Main-Major">
+          <el-tabs v-model="activeTab">
+            <el-tab-pane name="email-login" label="邮箱登录">
               <br>
 
               <el-form>
-                <el-input v-model="data.account" maxlength="13" :parser="parser" :formatter="formatter" size="large">
-                  <template #prepend>
-                    +86
-                  </template>
+                <el-input v-model="authForm.email" autocomplete="email" placeholder="name@example.com" size="large">
+                  <template #prepend>邮箱</template>
                 </el-input>
-                <el-input v-model="data.code" maxlength="6" size="large">
-                  <template #append>
-                    <el-button
-                      v-wave :loading="smsOptions.loading"
-                      :disabled="smsOptions.disabled || data.account.length !== 13" @click="handleSendCode"
-                    >
-                      {{ smsOptions.title }}
-                    </el-button>
-                  </template>
-                </el-input>
-                <el-button v-wave size="large" type="primary" :disabled="data.code.length !== 6" @click="handleLogin">
-                  登 录
-                </el-button>
-              </el-form>
-            </el-tab-pane>
-            <el-tab-pane name="account" label="账号密码登录">
-              <br>
-
-              <el-form>
-                <el-input v-model="data.user" size="large">
-                  <template #prepend>
-                    账号
-                  </template>
-                </el-input>
-                <el-input v-model="data.pass" type="password" size="large">
-                  <template #prepend>
-                    密码
-                  </template>
+                <el-input
+                  v-model="authForm.password"
+                  autocomplete="current-password"
+                  type="password"
+                  placeholder="至少 6 位密码"
+                  size="large"
+                >
+                  <template #prepend>密码</template>
                 </el-input>
                 <el-button
-                  v-wave :disabled="!data.user || !data.pass" size="large" type="primary"
-                  @click="handleAccountLogin"
+                  v-wave
+                  :loading="authForm.loading"
+                  size="large"
+                  type="primary"
+                  @click="submitEmailLogin"
                 >
-                  登 录
+                  登录
                 </el-button>
               </el-form>
             </el-tab-pane>
-          </el-tabs>
-          <!-- <p>手机登录</p> -->
+            <el-tab-pane name="email-register" label="邮箱注册">
+              <br>
 
-          <div id="captcha-element" absolute />
-          <button id="captcha-button" absolute />
+              <el-form>
+                <el-input v-model="authForm.nickname" maxlength="32" placeholder="默认使用邮箱前缀" size="large">
+                  <template #prepend>昵称</template>
+                </el-input>
+                <el-input v-model="authForm.email" autocomplete="email" placeholder="name@example.com" size="large">
+                  <template #prepend>邮箱</template>
+                </el-input>
+                <el-input
+                  v-model="authForm.password"
+                  autocomplete="new-password"
+                  type="password"
+                  placeholder="至少 6 位密码"
+                  size="large"
+                >
+                  <template #prepend>密码</template>
+                </el-input>
+                <el-button
+                  v-wave
+                  :loading="authForm.loading"
+                  size="large"
+                  type="primary"
+                  @click="submitEmailRegister"
+                >
+                  注册并登录
+                </el-button>
+              </el-form>
+            </el-tab-pane>
+            <el-tab-pane name="sms" label="短信登录">
+              <div class="coming-soon-panel">
+                <p>短信验证码登录将迁移至 Nexus。</p>
+                <span>当前版本请使用邮箱登录，或使用右侧 Nexus 登录入口。</span>
+                <el-button v-wave type="primary" plain @click="handleComingSoonClick">
+                  即将上线
+                </el-button>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
 
           <div class="indicator" />
         </div>
         <div class="Login-Main-Vice only-pc-display">
-          <p>微信扫码登录</p>
+          <p>Nexus 登录</p>
 
           <div class="Login-Main-Vice-Wrapper">
-            <div v-if="!data.agreement" class="scanned">
-              <div i-carbon:list-checked />
-              <p>协议</p>
-              <span>你需要同意协议</span>
-            </div>
-            <div v-else-if="codeData.loading" class="scanned">
+            <div class="scanned">
               <LoadingIcon />
-              <p>正在加载</p>
-              <span>正在获取验证码</span>
+              <p>即将上线</p>
+              <span>微信二维码登录将迁移到 Nexus</span>
+              <a class="nexus-beta-link" :href="nexusLoginHref">Nexus 登录（Beta）</a>
             </div>
-            <div v-else-if="codeData.expired" cursor-pointer class="scanned" @click="fetchCode">
-              <div i-carbon:ibm-cloud-direct-link-1-dedicated />
-              <p>已过期</p>
-              <span>点击刷新验证码</span>
+            <div class="login-qrcode-placeholder">
+              <div i-carbon:qr-code />
             </div>
-
-            <div v-else-if="codeStatus === 4" class="scanned">
-              <div i-carbon:notification />
-              <p>需要绑定</p>
-              <span>请输入手机号进行绑定</span>
-            </div>
-            <div v-else-if="codeStatus === 3" cursor-pointer class="scanned" @click="fetchCode">
-              <div i-carbon:devices />
-              <p>正在登录</p>
-              <span>请稍等，正在登录...</span>
-            </div>
-            <div v-else-if="codeStatus !== 0" cursor-pointer class="scanned" @click="fetchCode">
-              <div i-carbon:checkmark-filled />
-              <p>已扫码</p>
-              <span>请在手机上确认登录</span>
-            </div>
-
-            <el-image style=" border-radius: 12px;aspect-ratio: 1 / 1;min-height: 120px;" :src="`${codeUrl}`" />
           </div>
         </div>
       </div>
 
       <div class="Login-Supper">
-        <ThCheckBox v-model="data.agreement" />&nbsp;<el-text>
+        <ThCheckBox v-model="authForm.agreement" />&nbsp;<el-text>
           登录即代表您已阅读同意<el-link
             target="_blank"
             href="https://jcn6saobodid.feishu.cn/wiki/MPcuwXOTAiJdiNklwTpcGTw8nhd?from=from_copylink"
@@ -463,12 +257,55 @@ const codeUrl = computed(() => `https://mp.weixin.qq.com/cgi-bin/showqrcode?tick
             《用户隐私协议》
           </el-link>
         </el-text>
+        <a class="nexus-beta-link" :href="nexusLoginHref">Nexus 登录（Beta）</a>
       </div>
     </div>
   </div>
 </template>
 
 <style lang="scss">
+.coming-soon-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+}
+
+.coming-soon-panel p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.coming-soon-panel span {
+  color: var(--el-text-color-secondary);
+}
+
+.nexus-beta-link {
+  color: var(--el-color-primary);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.nexus-beta-link:hover {
+  text-decoration: underline;
+}
+
+.login-qrcode-placeholder {
+  width: 172px;
+  height: 172px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  color: #ffffff30;
+  background: #1f2937;
+}
+
 .Login-Main-Vice-Wrapper {
   position: relative;
 

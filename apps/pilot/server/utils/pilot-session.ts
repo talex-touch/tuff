@@ -136,3 +136,14 @@ export function writePilotSessionCookie(event: H3Event, userId: string): void {
     maxAge,
   })
 }
+
+export function clearPilotSessionCookie(event: H3Event): void {
+  const secure = getRequestURL(event).protocol === 'https:'
+  setCookie(event, PILOT_SESSION_COOKIE_NAME, '', {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+    maxAge: 0,
+  })
+}

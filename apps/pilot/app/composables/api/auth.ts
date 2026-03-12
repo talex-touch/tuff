@@ -1,5 +1,4 @@
 import { endHttp } from './axios'
-import { globalOptions } from '~/constants'
 
 export async function sendSMSCode(phone: string) {
   return endHttp.post('auth/sms_code', {
@@ -15,6 +14,25 @@ export async function useSMSLogin(phone: string, code: string, param: string, st
     state,
     param: '',
   })
+}
+
+export async function emailRegister(email: string, password: string, nickname = '') {
+  return endHttp.post('auth/email/register', {
+    email,
+    password,
+    nickname,
+  })
+}
+
+export async function emailLogin(email: string, password: string) {
+  return endHttp.post('auth/email/login', {
+    email,
+    password,
+  })
+}
+
+export async function logoutSession() {
+  return endHttp.post('auth/logout')
 }
 
 export function doAccountExist(account?: string) {
