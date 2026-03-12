@@ -76,45 +76,42 @@ jobs:
           echo "${{ steps.meta.outputs.tags }}"
           echo "Digest: ${{ steps.build.outputs.digest }}"
 
-      - name: Trigger 1Panel webhook
+      - name: Ensure GHCR package is public
         env:
-          ONEPANEL_WEBHOOK_URL: ${{ secrets.ONEPANEL_WEBHOOK_URL }}
-          ONEPANEL_WEBHOOK_TOKEN: ${{ secrets.ONEPANEL_WEBHOOK_TOKEN }}
-          IMAGE_REPO: ${{ steps.image.outputs.name }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-          GITHUB_SHA: ${{ github.sha }}
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          GITHUB_API_URL: ${{ github.api_url }}
         run: |
-          if [ -z "${ONEPANEL_WEBHOOK_URL}" ]; then
-            echo "ONEPANEL_WEBHOOK_URL is empty, skip deploy trigger."
+          token="${GITHUB_TOKEN}"
+          if [ -z "${token}" ]; then
+            echo "::warning::No token available for GHCR visibility update, skip."
             exit 0
           fi
 
-          short_sha="$(printf '%s' "${GITHUB_SHA}" | cut -c1-7 | tr '[:upper:]' '[:lower:]')"
-          image_tag="pilot-${short_sha}"
-          image_ref="${IMAGE_REPO}:${image_tag}"
+          owner="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          owner_json="$(curl -fsSL \
+            -H "Authorization: Bearer ${token}" \
+            -H "Accept: application/vnd.github+json" \
+            "${GITHUB_API_URL}/users/${owner}")"
+          owner_type="$(OWNER_JSON="${owner_json}" python3 -c 'import json, os; print(json.loads(os.environ[\"OWNER_JSON\"]).get(\"type\", \"\"))')"
 
-          BODY=$(cat <<EOF
-          {
-            "repository": "${GITHUB_REPOSITORY}",
-            "branch": "${GITHUB_REF_NAME}",
-            "sha": "${GITHUB_SHA}",
-            "image": "${IMAGE_REPO}",
-            "tag": "${image_tag}",
-            "image_ref": "${image_ref}",
-            "digest": "${IMAGE_DIGEST}"
-          }
-          EOF
-          )
-
-          if [ -n "${ONEPANEL_WEBHOOK_TOKEN}" ]; then
-            curl -fsS -X POST "${ONEPANEL_WEBHOOK_URL}" \
-              -H "Content-Type: application/json" \
-              -H "X-Webhook-Token: ${ONEPANEL_WEBHOOK_TOKEN}" \
-              -d "${BODY}"
+          if [ "${owner_type}" = "Organization" ]; then
+            endpoint="${GITHUB_API_URL}/orgs/${owner}/packages/container/tuff-pilot/visibility"
           else
-            curl -fsS -X POST "${ONEPANEL_WEBHOOK_URL}" \
-              -H "Content-Type: application/json" \
-              -d "${BODY}"
+            endpoint="${GITHUB_API_URL}/user/packages/container/tuff-pilot/visibility"
           fi
+
+          code="$(curl -sS -o /tmp/ghcr-visibility-response.json -w '%{http_code}' \
+            -X PATCH "${endpoint}" \
+            -H "Authorization: Bearer ${token}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            -d '{"visibility":"public"}')"
+
+          if [ "${code}" = "200" ] || [ "${code}" = "204" ]; then
+            echo "GHCR package visibility ensured: public"
+            exit 0
+          fi
+
+          echo "::warning::Failed to set GHCR package visibility to public (HTTP ${code}). Configure package visibility manually once in GitHub Packages."
+          cat /tmp/ghcr-visibility-response.json || true

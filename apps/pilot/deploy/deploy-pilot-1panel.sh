@@ -23,9 +23,12 @@ Options:
   --image <repo>                Image repo, for example ghcr.io/acme/tuff-pilot
   --tag <tag>                   Image tag (default: pilot-latest)
   --image-ref <value>           Full image ref (repo:tag or repo@digest)
+  --bootstrap-compose           Create a minimal compose file when missing
+  --bootstrap-http-port <port>  Host port for generated compose (default: 3300)
   --health-url <url>            Optional health check URL
   --health-attempts <number>    Health check attempts (default: 20)
   --health-interval <seconds>   Health check interval seconds (default: 3)
+  --pull-only                   Only pull target image and exit, do not restart service
   --no-rollback                 Disable rollback when health check fails
   --ghcr-username <value>       Optional GHCR username
   --ghcr-token <value>          Optional GHCR token
@@ -38,6 +41,8 @@ Environment fallback:
   PILOT_IMAGE_REPO
   PILOT_IMAGE_TAG
   PILOT_IMAGE_REF
+  PILOT_BOOTSTRAP_COMPOSE=true|false
+  PILOT_BOOTSTRAP_HTTP_PORT
   PILOT_HEALTHCHECK_URL
   PILOT_HEALTHCHECK_ATTEMPTS
   PILOT_HEALTHCHECK_INTERVAL_SEC
@@ -71,6 +76,97 @@ to_bool() {
   esac
 }
 
+escape_regex() {
+  sed 's/[][(){}.^$?+*|\\/]/\\&/g' <<<"$1"
+}
+
+autodetect_compose_target() {
+  local image_repo_regex=""
+  if [[ -n "$IMAGE_REPO" ]]; then
+    image_repo_regex="$(escape_regex "$IMAGE_REPO")"
+  fi
+
+  local best_file=""
+  local best_score=-1
+  local roots=(
+    "/opt/1panel/apps"
+    "/opt/1panel/resources/apps"
+    "/opt/1panel"
+  )
+
+  for root in "${roots[@]}"; do
+    if [[ ! -d "$root" ]]; then
+      continue
+    fi
+
+    while IFS= read -r file; do
+      local score=0
+      if grep -Eq "^[[:space:]]{2}${SERVICE_NAME}:[[:space:]]*$" "$file"; then
+        score=$((score + 2))
+      fi
+      if [[ -n "$image_repo_regex" ]] && grep -Eiq "image:[[:space:]]*${image_repo_regex}([:@][^[:space:]]*)?" "$file"; then
+        score=$((score + 3))
+      fi
+      if grep -Eiq "image:[[:space:]]*ghcr\\.io/.*/tuff-pilot([:@][^[:space:]]*)?" "$file"; then
+        score=$((score + 1))
+      fi
+
+      if ((score > best_score)); then
+        best_score="$score"
+        best_file="$file"
+      fi
+    done < <(find "$root" -maxdepth 4 -type f \( -name "docker-compose.yml" -o -name "docker-compose.yaml" -o -name "compose.yml" -o -name "compose.yaml" \) 2>/dev/null)
+  done
+
+  if [[ -z "$best_file" ]]; then
+    return 1
+  fi
+  if ((best_score <= 0)); then
+    return 1
+  fi
+
+  PROJECT_DIR="$(cd "$(dirname "$best_file")" && pwd)"
+  COMPOSE_FILE="$(basename "$best_file")"
+  log "Auto-detected compose file: ${PROJECT_DIR}/${COMPOSE_FILE}"
+  return 0
+}
+
+resolve_compose_file_path() {
+  if [[ "$COMPOSE_FILE" == /* ]]; then
+    printf '%s' "$COMPOSE_FILE"
+    return 0
+  fi
+  printf '%s/%s' "$PROJECT_DIR" "$COMPOSE_FILE"
+}
+
+bootstrap_compose_file() {
+  local compose_target
+  compose_target="$(resolve_compose_file_path)"
+  mkdir -p "$(dirname "$compose_target")"
+  cat > "$compose_target" <<EOF
+services:
+  $SERVICE_NAME:
+    image: $IMAGE_REF
+    restart: unless-stopped
+    ports:
+      - "${BOOTSTRAP_HTTP_PORT}:3300"
+    environment:
+      NODE_ENV: production
+      PORT: 3300
+      NUXT_HOST: 0.0.0.0
+      NUXT_PORT: 3300
+      NUXT_PILOT_BASE_URL: \${NUXT_PILOT_BASE_URL:-}
+      NUXT_PILOT_API_KEY: \${NUXT_PILOT_API_KEY:-}
+      NUXT_PUBLIC_NEXUS_ORIGIN: \${NUXT_PUBLIC_NEXUS_ORIGIN:-https://tuff.tagzxia.com}
+      PILOT_NEXUS_INTERNAL_ORIGIN: \${PILOT_NEXUS_INTERNAL_ORIGIN:-}
+      PILOT_NEXUS_OAUTH_CLIENT_ID: \${PILOT_NEXUS_OAUTH_CLIENT_ID:-}
+      PILOT_NEXUS_OAUTH_CLIENT_SECRET: \${PILOT_NEXUS_OAUTH_CLIENT_SECRET:-}
+      PILOT_COOKIE_SECRET: \${PILOT_COOKIE_SECRET:-change-me-before-production}
+      PILOT_EXECUTOR_DEBUG: \${PILOT_EXECUTOR_DEBUG:-0}
+EOF
+  log "Compose file created: $compose_target"
+}
+
 resolve_compose_cmd() {
   if docker compose version >/dev/null 2>&1; then
     COMPOSE_CMD=(docker compose)
@@ -96,6 +192,9 @@ HEALTHCHECK_INTERVAL_SEC="${PILOT_HEALTHCHECK_INTERVAL_SEC:-3}"
 ROLLBACK_ON_FAILURE="$(to_bool "${PILOT_ROLLBACK_ON_FAILURE:-true}")"
 GHCR_USERNAME="${PILOT_GHCR_USERNAME:-}"
 GHCR_TOKEN="${PILOT_GHCR_TOKEN:-}"
+PULL_ONLY="false"
+BOOTSTRAP_COMPOSE="$(to_bool "${PILOT_BOOTSTRAP_COMPOSE:-false}")"
+BOOTSTRAP_HTTP_PORT="${PILOT_BOOTSTRAP_HTTP_PORT:-3300}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -123,6 +222,14 @@ while [[ $# -gt 0 ]]; do
       IMAGE_REF="${2:-}"
       shift 2
       ;;
+    --bootstrap-compose)
+      BOOTSTRAP_COMPOSE="true"
+      shift
+      ;;
+    --bootstrap-http-port)
+      BOOTSTRAP_HTTP_PORT="${2:-}"
+      shift 2
+      ;;
     --health-url)
       HEALTHCHECK_URL="${2:-}"
       shift 2
@@ -134,6 +241,10 @@ while [[ $# -gt 0 ]]; do
     --health-interval)
       HEALTHCHECK_INTERVAL_SEC="${2:-}"
       shift 2
+      ;;
+    --pull-only)
+      PULL_ONLY="true"
+      shift
       ;;
     --no-rollback)
       ROLLBACK_ON_FAILURE="false"
@@ -164,8 +275,13 @@ if [[ -z "$PROJECT_DIR" ]]; then
   exit 1
 fi
 if [[ ! -d "$PROJECT_DIR" ]]; then
-  error "Project directory not found: $PROJECT_DIR"
-  exit 1
+  if [[ "$BOOTSTRAP_COMPOSE" == "true" ]]; then
+    mkdir -p "$PROJECT_DIR"
+    log "Project directory created: $PROJECT_DIR"
+  else
+    error "Project directory not found: $PROJECT_DIR"
+    exit 1
+  fi
 fi
 
 if [[ -z "$IMAGE_REF" ]]; then
@@ -182,6 +298,10 @@ if ! is_positive_integer "$HEALTHCHECK_ATTEMPTS"; then
 fi
 if ! is_positive_integer "$HEALTHCHECK_INTERVAL_SEC"; then
   error "health-interval must be a positive integer: $HEALTHCHECK_INTERVAL_SEC"
+  exit 1
+fi
+if ! is_positive_integer "$BOOTSTRAP_HTTP_PORT"; then
+  error "bootstrap-http-port must be a positive integer: $BOOTSTRAP_HTTP_PORT"
   exit 1
 fi
 
@@ -204,8 +324,17 @@ fi
 cd "$PROJECT_DIR"
 
 if [[ ! -f "$COMPOSE_FILE" ]]; then
-  error "Compose file not found: $PROJECT_DIR/$COMPOSE_FILE"
-  exit 1
+  if [[ "${COMPOSE_FILE}" != /* ]] && autodetect_compose_target; then
+    cd "$PROJECT_DIR"
+  elif [[ "$BOOTSTRAP_COMPOSE" == "true" ]]; then
+    bootstrap_compose_file
+  else
+    error "Compose file not found: $(resolve_compose_file_path)"
+    error "Hint: set PILOT_PROJECT_DIR to your 1Panel app path, for example /opt/1panel/apps/tuff-pilot"
+    error "Hint: set PILOT_COMPOSE_FILE to docker-compose.yml or absolute compose file path"
+    error "Hint: pass --bootstrap-compose to auto-create a minimal compose file"
+    exit 1
+  fi
 fi
 
 compose_base=("${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE")
@@ -260,6 +389,12 @@ fi
 
 write_override "$IMAGE_REF"
 compose_with_override pull "$SERVICE_NAME"
+
+if [[ "$PULL_ONLY" == "true" ]]; then
+  log "Pull-only mode enabled, image fetched successfully. Service was not restarted."
+  exit 0
+fi
+
 compose_with_override up -d "$SERVICE_NAME"
 
 if check_health; then

@@ -2,7 +2,7 @@
 
 This folder contains the standardized deployment assets for Pilot on 1Panel:
 
-- `deploy-pilot-1panel.sh`: deployment script with health check and auto rollback
+- `deploy-pilot-1panel.sh`: deployment script with health check, auto rollback, and pull-only mode
 - `deploy-pilot-1panel.env.example`: environment template
 
 ---
@@ -24,7 +24,7 @@ The server must have:
 
 - Docker (`docker`)
 - Compose (`docker compose` or `docker-compose`)
-- An existing Pilot compose project in 1Panel
+- A target directory for Pilot compose project in 1Panel (existing compose is optional)
 - If GHCR package is private: GHCR credentials (PAT with minimum `read:packages`)
 
 ---
@@ -104,6 +104,38 @@ set +a
   --image "ghcr.io/talex-touch/tuff-pilot" \
   --tag "pilot-a1b2c3d"
 ```
+
+### 5.4 Pull image only (manual prefetch, no restart)
+
+```bash
+"/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.sh" \
+  --project-dir "/opt/1panel/apps/tuff-pilot" \
+  --image "ghcr.io/talex-touch/tuff-pilot" \
+  --tag "pilot-latest" \
+  --pull-only
+```
+
+Use this mode when you only want to warm up image layers before a maintenance window.
+
+### 5.5 First-time bootstrap (when compose file does not exist)
+
+```bash
+"/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.sh" \
+  --project-dir "/opt/1panel/apps/tuff-pilot" \
+  --compose-file "docker-compose.yml" \
+  --service "pilot" \
+  --image "ghcr.io/talex-touch/tuff-pilot" \
+  --tag "pilot-latest" \
+  --bootstrap-compose \
+  --bootstrap-http-port "3300" \
+  --health-url "http://127.0.0.1:3300/api/auth/status"
+```
+
+Behavior:
+
+- if compose is missing, script creates a minimal compose file first
+- then it performs normal deploy flow (pull + restart + health check + rollback)
+- `--bootstrap-http-port` controls host port mapping (`<hostPort>:3300`)
 
 ---
 
@@ -228,6 +260,18 @@ Check:
 ### Q3: Health check fails but service looks up
 
 Verify `PILOT_HEALTHCHECK_URL` is reachable from the host context. You can temporarily disable health check to isolate deployment issues.
+
+### Q4: `Compose file not found: .../docker-compose.yml`
+
+Most cases mean `PILOT_PROJECT_DIR` points to the script directory instead of the real 1Panel app directory.  
+Set:
+
+- `PILOT_PROJECT_DIR=/opt/1panel/apps/<your-app>`
+- `PILOT_COMPOSE_FILE=docker-compose.yml` (or absolute compose path)
+
+The script now auto-detects compose files under common 1Panel roots when the configured relative file is missing, but it only accepts candidates that match Pilot service/image hints.
+
+If this is a first-time deployment and there is no compose yet, run once with `--bootstrap-compose`.
 
 ---
 

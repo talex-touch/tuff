@@ -2,7 +2,7 @@
 
 本目录提供 Pilot 在 1Panel 上的标准化部署资产：
 
-- `deploy-pilot-1panel.sh`：主部署脚本（支持健康检查 + 自动回滚）
+- `deploy-pilot-1panel.sh`：主部署脚本（支持健康检查 + 自动回滚 + 仅拉取镜像模式）
 - `deploy-pilot-1panel.env.example`：环境变量模板
 
 ---
@@ -24,7 +24,7 @@
 
 - 已安装 Docker（`docker`）
 - 已安装 Compose（`docker compose` 或 `docker-compose`）
-- 1Panel 中已有 Pilot 的 Compose 项目
+- 1Panel 中有一个用于 Pilot 的项目目录（是否已有 compose 文件都可）
 - 若 GHCR 包是私有：准备 GHCR 凭据（建议 PAT，最小权限 `read:packages`）
 
 ---
@@ -104,6 +104,38 @@ set +a
   --image "ghcr.io/talex-touch/tuff-pilot" \
   --tag "pilot-a1b2c3d"
 ```
+
+### 5.4 仅拉取镜像（不重启服务）
+
+```bash
+"/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.sh" \
+  --project-dir "/opt/1panel/apps/tuff-pilot" \
+  --image "ghcr.io/talex-touch/tuff-pilot" \
+  --tag "pilot-latest" \
+  --pull-only
+```
+
+适用于你要先预拉取镜像层、等维护窗口再重启服务的场景。
+
+### 5.5 首次部署（没有 compose 文件时自动初始化）
+
+```bash
+"/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.sh" \
+  --project-dir "/opt/1panel/apps/tuff-pilot" \
+  --compose-file "docker-compose.yml" \
+  --service "pilot" \
+  --image "ghcr.io/talex-touch/tuff-pilot" \
+  --tag "pilot-latest" \
+  --bootstrap-compose \
+  --bootstrap-http-port "3300" \
+  --health-url "http://127.0.0.1:3300/api/auth/status"
+```
+
+行为说明：
+
+- 如果 compose 不存在，脚本会先生成一份最小可运行 compose 文件；
+- 然后继续执行正常部署（拉取 + 重启 + 健康检查 + 失败回滚）；
+- `--bootstrap-http-port` 用于控制宿主机端口映射（`<hostPort>:3300`）。
 
 ---
 
@@ -231,6 +263,17 @@ set +a
 ### Q3: 健康检查失败但服务实际上可用
 
 检查 `PILOT_HEALTHCHECK_URL` 是否为容器可访问地址。可先临时去掉健康检查验证部署链路，再恢复。
+
+### Q4: 报错 `Compose file not found: .../docker-compose.yml`
+
+这通常是 `PILOT_PROJECT_DIR` 指到了脚本目录，而不是 1Panel 应用目录。建议明确配置：
+
+- `PILOT_PROJECT_DIR=/opt/1panel/apps/<你的应用目录>`
+- `PILOT_COMPOSE_FILE=docker-compose.yml`（或 compose 绝对路径）
+
+现在脚本会在常见 1Panel 根目录下自动探测 compose 文件，但只会接受能命中 Pilot 服务/镜像特征的候选，避免误命中其它项目。
+
+如果是首次部署且确实没有 compose 文件，直接使用 `--bootstrap-compose` 初始化一次即可。
 
 ---
 
