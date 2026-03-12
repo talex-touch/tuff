@@ -56,6 +56,7 @@ PILOT_SERVICE_NAME=pilot
 
 PILOT_IMAGE_REPO=ghcr.io/talex-touch/tuff-pilot
 PILOT_IMAGE_TAG=pilot-latest
+PILOT_DB_FILE=/app/data/pilot.sqlite
 
 PILOT_HEALTHCHECK_URL=http://127.0.0.1:3300/api/auth/status
 PILOT_HEALTHCHECK_ATTEMPTS=20
@@ -71,6 +72,7 @@ Important fields:
 - `PILOT_PROJECT_DIR`: compose project directory (required)
 - `PILOT_SERVICE_NAME`: target service to update (default `pilot`)
 - `PILOT_IMAGE_TAG`: default `pilot-latest`, can be pinned to a release tag such as `pilot-a1b2c3d`
+- `PILOT_DB_FILE`: runtime SQLite path for Node deployment (default recommended: `/app/data/pilot.sqlite`)
 - `PILOT_HEALTHCHECK_URL`: recommended for post-deploy validation
 
 ---
@@ -134,6 +136,7 @@ Use this mode when you only want to warm up image layers before a maintenance wi
 Behavior:
 
 - if compose is missing, script creates a minimal compose file first
+- generated compose includes `./data:/app/data` volume for persistent runtime database
 - then it performs normal deploy flow (pull + restart + health check + rollback)
 - `--bootstrap-http-port` controls host port mapping (`<hostPort>:3300`)
 
@@ -272,6 +275,11 @@ Set:
 The script now auto-detects compose files under common 1Panel roots when the configured relative file is missing, but it only accepts candidates that match Pilot service/image hints.
 
 If this is a first-time deployment and there is no compose yet, run once with `--bootstrap-compose`.
+
+### Q5: `Cloudflare D1 binding "DB" is required for Pilot runtime`
+
+This means the service is running on Node server mode without a database file configured.  
+Set `PILOT_DB_FILE=/app/data/pilot.sqlite` and keep a persistent volume like `./data:/app/data`.
 
 ---
 

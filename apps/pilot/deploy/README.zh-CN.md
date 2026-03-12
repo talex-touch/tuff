@@ -56,6 +56,7 @@ PILOT_SERVICE_NAME=pilot
 
 PILOT_IMAGE_REPO=ghcr.io/talex-touch/tuff-pilot
 PILOT_IMAGE_TAG=pilot-latest
+PILOT_DB_FILE=/app/data/pilot.sqlite
 
 PILOT_HEALTHCHECK_URL=http://127.0.0.1:3300/api/auth/status
 PILOT_HEALTHCHECK_ATTEMPTS=20
@@ -71,6 +72,7 @@ PILOT_GHCR_TOKEN=
 - `PILOT_PROJECT_DIR`：Compose 项目目录（必须）
 - `PILOT_SERVICE_NAME`：需要更新的服务名，默认 `pilot`
 - `PILOT_IMAGE_TAG`：默认 `pilot-latest`，也可指定某次发布标签（例如 `pilot-a1b2c3d`）
+- `PILOT_DB_FILE`：Node 部署模式下运行时 SQLite 文件路径（建议 `/app/data/pilot.sqlite`）
 - `PILOT_HEALTHCHECK_URL`：建议配置，用于部署后探活
 
 ---
@@ -134,6 +136,7 @@ set +a
 行为说明：
 
 - 如果 compose 不存在，脚本会先生成一份最小可运行 compose 文件；
+- 生成的 compose 默认包含 `./data:/app/data` 挂载，用于持久化运行时数据库；
 - 然后继续执行正常部署（拉取 + 重启 + 健康检查 + 失败回滚）；
 - `--bootstrap-http-port` 用于控制宿主机端口映射（`<hostPort>:3300`）。
 
@@ -274,6 +277,11 @@ set +a
 现在脚本会在常见 1Panel 根目录下自动探测 compose 文件，但只会接受能命中 Pilot 服务/镜像特征的候选，避免误命中其它项目。
 
 如果是首次部署且确实没有 compose 文件，直接使用 `--bootstrap-compose` 初始化一次即可。
+
+### Q5: 报错 `Cloudflare D1 binding "DB" is required for Pilot runtime`
+
+这表示你当前是 Node 服务器部署，但没有配置本地数据库文件。  
+请设置 `PILOT_DB_FILE=/app/data/pilot.sqlite`，并确保有持久化挂载（例如 `./data:/app/data`）。
 
 ---
 

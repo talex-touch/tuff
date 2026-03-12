@@ -150,11 +150,14 @@ services:
     restart: unless-stopped
     ports:
       - "${BOOTSTRAP_HTTP_PORT}:3300"
+    volumes:
+      - "./data:/app/data"
     environment:
       NODE_ENV: production
       PORT: 3300
       NUXT_HOST: 0.0.0.0
       NUXT_PORT: 3300
+      PILOT_DB_FILE: \${PILOT_DB_FILE:-/app/data/pilot.sqlite}
       NUXT_PILOT_BASE_URL: \${NUXT_PILOT_BASE_URL:-}
       NUXT_PILOT_API_KEY: \${NUXT_PILOT_API_KEY:-}
       NUXT_PUBLIC_NEXUS_ORIGIN: \${NUXT_PUBLIC_NEXUS_ORIGIN:-https://tuff.tagzxia.com}
