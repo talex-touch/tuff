@@ -1,6 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai'
 import { createDeepAgent } from 'deepagents'
 import type { SubAgent } from 'deepagents'
+import { networkClient } from '@talex-touch/utils/network'
 import type { AgentEngineAdapter } from './engine'
 import type { AgentErrorDetail } from '../protocol/error-detail'
 import type { TurnState, UserMessageAttachment } from '../protocol/session'
@@ -66,6 +67,28 @@ function normalizeTransport(value: unknown): 'auto' | 'responses' | 'chat.comple
     return 'chat.completions'
   }
   return 'auto'
+}
+
+function toBooleanFlag(value: unknown): boolean {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return normalized === '1'
+    || normalized === 'true'
+    || normalized === 'yes'
+    || normalized === 'on'
+}
+
+function shouldUseDirectStream(options: DeepAgentEngineOptions): boolean {
+  const metadata = toRecord(options.metadata)
+  if (toBooleanFlag(metadata.disableDirectStream)) {
+    return false
+  }
+
+  const channelAdapter = String(metadata.channelAdapter || metadata.adapter || '').trim().toLowerCase()
+  if (channelAdapter === 'legacy') {
+    return false
+  }
+
+  return true
 }
 
 function trimSuffixSlash(value: string): string {
@@ -743,24 +766,69 @@ function resolveTimeoutMs(options: DeepAgentEngineOptions): number {
   return Math.max(3_000, Number(options.timeoutMs || 25_000))
 }
 
+interface RelayFetchResponse {
+  status: number
+  statusText: string
+  ok: boolean
+  headers: Record<string, string>
+  bodyText: string
+}
+
+function toNetworkHeaders(headers?: HeadersInit): Record<string, string> {
+  const normalized = new Headers(headers || {})
+  return Object.fromEntries(normalized.entries())
+}
+
+function toNetworkMethod(method: string | undefined): 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS' {
+  const normalized = String(method || 'GET').toUpperCase()
+  switch (normalized) {
+    case 'POST':
+    case 'PUT':
+    case 'PATCH':
+    case 'DELETE':
+    case 'HEAD':
+    case 'OPTIONS':
+      return normalized
+    case 'GET':
+    default:
+      return 'GET'
+  }
+}
+
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
   timeoutMs: number,
   detail: { endpoint: string, model?: string, phase: string },
-): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
+): Promise<RelayFetchResponse> {
   try {
-    return await fetch(url, {
-      ...init,
-      signal: controller.signal,
+    const response = await networkClient.request<string>({
+      url,
+      method: toNetworkMethod(init.method),
+      headers: toNetworkHeaders(init.headers),
+      body: init.body,
+      timeoutMs,
+      responseType: 'text',
+      validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
     })
+    return {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: response.headers,
+      bodyText: String(response.data || ''),
+    }
   }
   catch (error) {
     const message = String((error as Error)?.message || '').toLowerCase()
     const name = String((error as Error)?.name || '').toLowerCase()
-    if (name === 'aborterror' || message.includes('aborted') || message.includes('abort')) {
+    if (
+      name === 'aborterror'
+      || message.includes('aborted')
+      || message.includes('abort')
+      || message.includes('timeout')
+      || message.includes('timed out')
+    ) {
       throw createDeepAgentError(
         `[deepagent-timeout] request timed out after ${timeoutMs}ms`,
         {
@@ -772,9 +840,6 @@ async function fetchWithTimeout(
       )
     }
     throw error
-  }
-  finally {
-    clearTimeout(timer)
   }
 }
 
@@ -971,7 +1036,7 @@ async function invokeResponsesCompatibilityFallback(params: {
     })
 
     if (response.status >= 500) {
-      const retryBody = normalizeErrorBody(await response.text(), response.status, response.statusText)
+      const retryBody = normalizeErrorBody(response.bodyText, response.status, response.statusText)
       throw createDeepAgentError(
         `[deepagent-responses-retryable] ${response.status} ${retryBody || response.statusText}`,
         {
@@ -988,8 +1053,7 @@ async function invokeResponsesCompatibilityFallback(params: {
   }, retryCount)
 
   if (!response.ok) {
-    const text = await response.text()
-    const bodyPreview = normalizeErrorBody(text, response.status, response.statusText)
+    const bodyPreview = normalizeErrorBody(response.bodyText, response.status, response.statusText)
     await options.onAudit?.({
       type: 'upstream.response_error',
       payload: {
@@ -1012,7 +1076,13 @@ async function invokeResponsesCompatibilityFallback(params: {
     )
   }
 
-  const data = toRecord(await response.json())
+  let parsedData: unknown = {}
+  try {
+    parsedData = JSON.parse(response.bodyText || '{}')
+  }
+  catch {}
+
+  const data = toRecord(parsedData)
   const content = extractResponsesText(data)
   if (!content) {
     throw createDeepAgentError(
@@ -1358,77 +1428,91 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
     const startedAt = Date.now()
     let fullText = ''
     let chunkCount = 0
+    const directStreamEnabled = shouldUseDirectStream(this.options)
 
-    // Prefer direct ChatOpenAI stream for token-level output.
-    // If this path fails or emits nothing, fallback to deepagents stream.
-    try {
-      const directMessages = buildDeepAgentMessages(state).map(item => ({
-        role: item.type,
-        content: item.content,
-      }))
-      if (instructions) {
-        directMessages.unshift({
-          role: 'system',
-          content: instructions,
-        })
-      }
-
-      const directLlm = new ChatOpenAI({
-        apiKey: effectiveApiKey,
-        model,
-        useResponsesApi,
-        streaming: true,
-        temperature: this.options.temperature,
-        maxTokens: this.options.maxTokens,
-        timeout: timeoutMs,
-        maxRetries: 0,
-        configuration: {
-          baseURL: relayBaseUrl,
-        },
-      })
-
-      const stream = await directLlm.stream(directMessages as any)
-      for await (const chunk of stream as AsyncIterable<unknown>) {
-        const row = toRecord(chunk)
-        let delta = extractTextPartsPreserve(row.content)
-        if (!delta && typeof row.text === 'string') {
-          delta = row.text
-        }
-        if (!delta && typeof row.output_text === 'string') {
-          delta = row.output_text
-        }
-        if (!delta) {
-          continue
-        }
-
-        if (fullText && delta.startsWith(fullText)) {
-          delta = delta.slice(fullText.length)
-        }
-        if (!delta) {
-          continue
-        }
-
-        fullText += delta
-        chunkCount += 1
-        yield {
-          text: delta,
-          done: false,
-          metadata: {
-            provider: 'openai-responses',
-            model,
-          },
-        }
-      }
-    }
-    catch (error) {
+    if (!directStreamEnabled) {
       await this.options.onAudit?.({
-        type: 'upstream.direct_stream_error',
+        type: 'upstream.direct_stream_skipped',
         payload: {
-          reason: errorMessageOf(error),
+          reason: 'disabled_by_metadata_or_channel_adapter',
           endpoint,
           model,
+          metadata: toRecord(this.options.metadata),
         },
       })
+    }
+    else {
+      // Prefer direct ChatOpenAI stream for token-level output.
+      // If this path fails or emits nothing, fallback to deepagents stream.
+      try {
+        const directMessages = buildDeepAgentMessages(state).map(item => ({
+          role: item.type,
+          content: item.content,
+        }))
+        if (instructions) {
+          directMessages.unshift({
+            role: 'system',
+            content: instructions,
+          })
+        }
+
+        const directLlm = new ChatOpenAI({
+          apiKey: effectiveApiKey,
+          model,
+          useResponsesApi,
+          streaming: true,
+          temperature: this.options.temperature,
+          maxTokens: this.options.maxTokens,
+          timeout: timeoutMs,
+          maxRetries: 0,
+          configuration: {
+            baseURL: relayBaseUrl,
+          },
+        })
+
+        const stream = await directLlm.stream(directMessages as any)
+        for await (const chunk of stream as AsyncIterable<unknown>) {
+          const row = toRecord(chunk)
+          let delta = extractTextPartsPreserve(row.content)
+          if (!delta && typeof row.text === 'string') {
+            delta = row.text
+          }
+          if (!delta && typeof row.output_text === 'string') {
+            delta = row.output_text
+          }
+          if (!delta) {
+            continue
+          }
+
+          if (fullText && delta.startsWith(fullText)) {
+            delta = delta.slice(fullText.length)
+          }
+          if (!delta) {
+            continue
+          }
+
+          fullText += delta
+          chunkCount += 1
+          yield {
+            text: delta,
+            done: false,
+            metadata: {
+              provider: 'openai-responses',
+              model,
+            },
+          }
+        }
+      }
+      catch (error) {
+        await this.options.onAudit?.({
+          type: 'upstream.direct_stream_error',
+          payload: {
+            reason: errorMessageOf(error),
+            endpoint,
+            model,
+          },
+        })
+      }
     }
 
     if (chunkCount > 0) {

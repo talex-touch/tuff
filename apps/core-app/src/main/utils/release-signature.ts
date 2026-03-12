@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 import { promises as fs } from 'node:fs'
-import axios from 'axios'
+import { getNetworkService } from '../modules/network'
 
 export interface SignatureVerificationResult {
   valid: boolean
@@ -89,8 +89,11 @@ export class SignatureVerifier {
     }
 
     try {
-      const response = await axios.get(resolvedUrl, {
-        timeout: 8000,
+      const response = await getNetworkService().request<string>({
+        method: 'GET',
+        url: resolvedUrl,
+        timeoutMs: 8000,
+        responseType: 'text',
         headers: {
           Accept: 'application/json,text/plain',
           'User-Agent': 'TalexTouch-Updater/2.0'
@@ -98,8 +101,9 @@ export class SignatureVerifier {
       })
 
       let key: string | null = null
-      if (typeof response.data === 'string') {
-        const raw = response.data.trim()
+      const rawPayload = response.data
+      if (typeof rawPayload === 'string') {
+        const raw = rawPayload.trim()
         if (raw.startsWith('{')) {
           try {
             const parsed = JSON.parse(raw) as { publicKey?: string; key?: string }
@@ -110,10 +114,6 @@ export class SignatureVerifier {
         } else {
           key = raw
         }
-      } else if (response.data && typeof response.data.publicKey === 'string') {
-        key = response.data.publicKey
-      } else if (response.data && typeof response.data.key === 'string') {
-        key = response.data.key
       }
 
       if (!key || !key.trim()) {
@@ -135,9 +135,11 @@ export class SignatureVerifier {
 
   private async fetchSignaturePayload(signatureUrl: string): Promise<Buffer | null> {
     try {
-      const response = await axios.get(signatureUrl, {
-        timeout: 10000,
-        responseType: 'arraybuffer',
+      const response = await getNetworkService().request<ArrayBuffer>({
+        method: 'GET',
+        url: signatureUrl,
+        timeoutMs: 10000,
+        responseType: 'arrayBuffer',
         headers: {
           Accept: '*/*',
           'User-Agent': 'TalexTouch-Updater/2.0'

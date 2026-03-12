@@ -1,4 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
+import { networkClient } from '@talex-touch/utils/network'
 
 export class GoogleTranslateProvider implements TranslationProvider {
   name = 'Google 翻译'
@@ -12,18 +13,14 @@ export class GoogleTranslateProvider implements TranslationProvider {
       // 使用 Google Translate 的免费 API
       const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`
 
-      const response = await fetch(url, {
+      const response = await networkClient.request<any>({
         method: 'GET',
+        url,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         },
       })
-
-      if (!response.ok) {
-        throw new Error(`Google Translate API error: ${response.status}`)
-      }
-
-      const data = await response.json()
+      const data = response.data
 
       // 解析 Google Translate 响应格式
       let translatedText = ''

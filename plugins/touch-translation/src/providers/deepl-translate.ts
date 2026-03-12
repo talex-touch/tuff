@@ -1,4 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
+import { networkClient } from '@talex-touch/utils/network'
 
 export class DeepLTranslateProvider implements TranslationProvider {
   name = 'DeepL'
@@ -13,24 +14,20 @@ export class DeepLTranslateProvider implements TranslationProvider {
   async translate(request: TranslationProviderRequest): Promise<TranslationResult> {
     const { text, targetLanguage: targetLang = 'ZH', sourceLanguage: sourceLang = 'auto' } = request
     try {
-      const response = await fetch(this.config.apiUrl, {
+      const response = await networkClient.request<any>({
         method: 'POST',
+        url: this.config.apiUrl,
         headers: {
           'Authorization': `DeepL-Auth-Key ${this.config.apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
+        body: {
           text,
           source_lang: sourceLang === 'auto' ? 'auto' : sourceLang,
           target_lang: targetLang,
-        }),
+        },
       })
-
-      if (!response.ok) {
-        throw new Error(`DeepL API error: ${response.status}`)
-      }
-
-      const data = await response.json()
+      const data = response.data
 
       if (data.code !== 200) {
         throw new Error(`DeepL API error: ${data.message || 'Unknown error'}`)

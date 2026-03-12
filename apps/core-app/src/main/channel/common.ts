@@ -74,6 +74,7 @@ import {
   registerDefaultPlatformCapabilities
 } from '../modules/platform/capability-registry'
 import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage'
+import { getNetworkService } from '../modules/network'
 import { activeAppService } from '../modules/system/active-app'
 import { deviceIdleService } from '../service/device-idle-service'
 import {
@@ -1908,6 +1909,7 @@ export class CommonChannelModule extends BaseModule {
   private async readSystemFile(payload: ReadFileRequest): Promise<string> {
     const source = payload?.source?.trim()
     const resolvedPath = source ? resolveLocalFilePath(source) : null
+    const resolvedSource = source || resolvedPath || ''
     const allowMissing = payload?.allowMissing === true
     const timeoutMs =
       typeof payload?.timeoutMs === 'number' && Number.isFinite(payload.timeoutMs)
@@ -1918,6 +1920,12 @@ export class CommonChannelModule extends BaseModule {
       error !== null &&
       'name' in error &&
       (error as { name?: string }).name === 'AbortError'
+    const isNetworkTimeoutError = (error: unknown): boolean =>
+      (typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code?: string }).code === 'NETWORK_TIMEOUT') ||
+      (error instanceof Error && /NETWORK_TIMEOUT/i.test(error.message))
     const withTimeoutError = (timeout: number): Error => {
       const error = new Error(`Read file timeout after ${timeout}ms`) as Error & { code?: string }
       error.code = 'ETIMEDOUT'
@@ -1958,17 +1966,17 @@ export class CommonChannelModule extends BaseModule {
       cacheHit: false
     })
 
-    const task = fs
-      .readFile(resolvedPath, {
-        encoding: 'utf8',
-        signal: timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined
+    const task = getNetworkService()
+      .readText(resolvedSource, {
+        allowMissing,
+        timeoutMs: timeoutMs > 0 ? timeoutMs : undefined
       })
       .then((content) => {
         setCachedReadFile(resolvedPath, content)
         return content
       })
       .catch((error) => {
-        if (timeoutMs > 0 && isAbortError(error)) {
+        if (timeoutMs > 0 && (isAbortError(error) || isNetworkTimeoutError(error))) {
           throw withTimeoutError(timeoutMs)
         }
         if (allowMissing && isFileMissingError(error)) {

@@ -1,5 +1,6 @@
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { getNetworkService } from '../network'
 
 const DEFAULT_BASE_URLS: Partial<Record<IntelligenceProviderType, string>> = {
   [IntelligenceProviderType.OPENAI]: 'https://api.openai.com/v1',
@@ -54,14 +55,6 @@ function normalizeModelEntries(entries: unknown[]): string[] {
   return Array.from(new Set(normalized))
 }
 
-async function parseJsonBody(response: Response): Promise<unknown> {
-  try {
-    return await response.json()
-  } catch {
-    return null
-  }
-}
-
 export async function fetchProviderModels(provider: IntelligenceProviderConfig): Promise<string[]> {
   if (provider.type === IntelligenceProviderType.LOCAL) {
     return provider.models?.length ? [...new Set(provider.models)] : []
@@ -80,19 +73,14 @@ export async function fetchProviderModels(provider: IntelligenceProviderConfig):
   }
 
   const endpoint = joinUrl(baseUrl, 'models')
-  const response = await fetch(endpoint, {
+  const response = await getNetworkService().request<unknown>({
     method: 'GET',
-    headers
+    url: endpoint,
+    headers,
+    responseType: 'json'
   })
 
-  if (!response.ok) {
-    const message = await response.text().catch(() => response.statusText)
-    throw new Error(
-      `Failed to fetch models: ${response.status} ${response.statusText} - ${message}`
-    )
-  }
-
-  const body = await parseJsonBody(response)
+  const body = response.data
   const bodyRecord = isRecord(body) ? body : {}
   const rawEntries = Array.isArray(bodyRecord.data)
     ? bodyRecord.data

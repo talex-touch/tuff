@@ -13,6 +13,7 @@ import {
   normalizeBaseUrl,
   setRuntimeEnv,
 } from '@talex-touch/utils/env'
+import { networkClient } from '@talex-touch/utils/network'
 import { parseBuildArgs, parseDevArgs } from '../cli/args'
 import { runCreate } from '../cli/commands'
 import {
@@ -54,6 +55,7 @@ const OFFICIAL_SITE_URL = 'https://tuff.tagzxia.com'
 const GITHUB_REPO_URL = 'https://github.com/talex-touch/tuff'
 const DEFAULT_LOCAL_BASE_URL = 'http://localhost:3200'
 const DEVICE_AUTH_TIMEOUT_MS = 2 * 60 * 1000
+const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
 
 let cliLocalMode = false
 let cliCustomBase = false
@@ -192,24 +194,28 @@ async function startDeviceAuth(): Promise<{
     devicePlatform,
     clientType: 'cli',
   }
-  const response = await fetch(`${baseUrl}/api/app-auth/device/start`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  })
-  if (!response.ok) {
-    const text = await response.text().catch(() => '')
-    throw new Error(text || `HTTP ${response.status}`)
-  }
-  return await response.json() as {
+  const response = await networkClient.request<{
     deviceCode: string
     userCode: string
     authorizeUrl: string
     expiresAt: string
     intervalSeconds: number
+    message?: string
+  }>({
+    method: 'POST',
+    url: `${baseUrl}/api/app-auth/device/start`,
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: payload,
+    validateStatus: ALL_HTTP_STATUS
+  })
+  if (response.status < 200 || response.status >= 300) {
+    const message =
+      typeof response.data?.message === 'string' ? response.data.message : `HTTP ${response.status}`
+    throw new Error(message)
   }
+  return response.data
 }
 
 async function pollDeviceAuth(
@@ -238,15 +244,7 @@ async function pollDeviceAuth(
         return
       }
       try {
-        const res = await fetch(`${baseUrl}/api/app-auth/device/poll?device_code=${encodeURIComponent(deviceCode)}`, {
-          method: 'GET',
-          headers: {
-            'cache-control': 'no-cache',
-          },
-        })
-        if (!res.ok)
-          return
-        const data = await res.json() as {
+        const res = await networkClient.request<{
           status?: string
           appToken?: string
           grantType?: 'short' | 'long'
@@ -256,7 +254,18 @@ async function pollDeviceAuth(
           message?: string | null
           requestIp?: string | null
           currentIp?: string | null
-        }
+        }>({
+          method: 'GET',
+          url: `${baseUrl}/api/app-auth/device/poll`,
+          query: { device_code: deviceCode },
+          headers: {
+            'cache-control': 'no-cache',
+          },
+          validateStatus: ALL_HTTP_STATUS
+        })
+        if (res.status < 200 || res.status >= 300)
+          return
+        const data = res.data
         if (data?.status === 'approved' && data.appToken) {
           clearInterval(timer)
           resolve({
@@ -300,12 +309,14 @@ async function pollDeviceAuth(
 async function abortDeviceAuth(deviceCode: string): Promise<void> {
   const baseUrl = getTuffBaseUrl()
   try {
-    await fetch(`${baseUrl}/api/app-auth/device/abort`, {
+    await networkClient.request({
       method: 'POST',
+      url: `${baseUrl}/api/app-auth/device/abort`,
       headers: {
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ deviceCode }),
+      body: { deviceCode },
+      validateStatus: ALL_HTTP_STATUS
     })
   }
   catch {
@@ -683,14 +694,17 @@ async function fetchAccountProfile(): Promise<AccountProfile | null> {
   if (!token)
     return null
   try {
-    const response = await fetch(`${getTuffBaseUrl()}/api/auth/me`, {
+    const response = await networkClient.request<AccountProfile>({
+      method: 'GET',
+      url: `${getTuffBaseUrl()}/api/auth/me`,
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      validateStatus: ALL_HTTP_STATUS
     })
-    if (!response.ok)
+    if (response.status < 200 || response.status >= 300)
       return null
-    return await response.json() as AccountProfile
+    return response.data
   }
   catch {
     return null
@@ -702,14 +716,17 @@ async function fetchUserPlugins(): Promise<{ total: number, plugins: any[] } | n
   if (!token)
     return null
   try {
-    const response = await fetch(`${getTuffBaseUrl()}/api/dashboard/plugins`, {
+    const response = await networkClient.request<{ total?: number, plugins?: any[] }>({
+      method: 'GET',
+      url: `${getTuffBaseUrl()}/api/dashboard/plugins`,
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      validateStatus: ALL_HTTP_STATUS
     })
-    if (!response.ok)
+    if (response.status < 200 || response.status >= 300)
       return null
-    const data = await response.json() as { total?: number, plugins?: any[] }
+    const data = response.data
     return {
       total: typeof data.total === 'number' ? data.total : (data.plugins?.length ?? 0),
       plugins: Array.isArray(data.plugins) ? data.plugins : [],

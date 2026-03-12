@@ -7,7 +7,12 @@ import {
   isLocalhostUrl
 } from '@talex-touch/utils'
 import { isElectronRenderer } from '@talex-touch/utils/env'
-import { toTfileUrl, type NetworkCooldownPolicy } from '@talex-touch/utils/network'
+import {
+  networkClient,
+  resolveLocalFilePath,
+  toTfileUrl,
+  type NetworkCooldownPolicy
+} from '@talex-touch/utils/network'
 import { useDownloadSdk, useNetworkSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -124,72 +129,17 @@ export function useSvgContent(
 
   function ensureTfileUrl(source: string): string {
     if (source.startsWith('tfile:')) {
-      const localPath = resolveLocalPath(source)
+      const localPath = resolveLocalFilePath(source)
       return localPath ? toTfileUrl(localPath) : source
     }
     if (source.startsWith('file:')) {
-      const localPath = resolveLocalPath(source)
+      const localPath = resolveLocalFilePath(source)
       return localPath ? toTfileUrl(localPath) : source
     }
     if (source.startsWith('/') || source.startsWith('\\\\') || /^[a-z]:[\\/]/i.test(source)) {
       return toTfileUrl(source)
     }
     return source
-  }
-
-  function resolveLocalPath(targetUrl: string): string {
-    const normalizeLocalPath = (value: string): string => {
-      const normalized = value.replace(/\\/g, '/')
-      if (/^\/[a-z]:\//i.test(normalized)) {
-        return normalized.slice(1)
-      }
-      return normalized
-    }
-
-    const decodeStable = (value: string): string => {
-      let decoded = value
-      for (let i = 0; i < 3; i++) {
-        try {
-          const next = decodeURIComponent(decoded)
-          if (next === decoded) break
-          decoded = next
-        } catch {
-          break
-        }
-      }
-      return decoded
-    }
-
-    if (targetUrl.startsWith('file:')) {
-      try {
-        return normalizeLocalPath(decodeStable(new URL(targetUrl).pathname))
-      } catch {
-        return ''
-      }
-    }
-
-    if (targetUrl.startsWith('tfile:')) {
-      try {
-        const parsed = new URL(targetUrl)
-        if (
-          parsed.hostname &&
-          /^[a-z]$/i.test(parsed.hostname) &&
-          parsed.pathname.startsWith('/')
-        ) {
-          return normalizeLocalPath(decodeStable(`${parsed.hostname}:${parsed.pathname}`))
-        }
-        const host = parsed.hostname || ''
-        const pathname = parsed.pathname || ''
-        const merged = host ? `/${host}${pathname}` : pathname
-        return normalizeLocalPath(decodeStable(merged))
-      } catch {
-        const raw = targetUrl.replace(/^tfile:\/\//, '').split(/[?#]/)[0] ?? ''
-        const normalized = raw.startsWith('/') ? raw : `/${raw}`
-        return normalizeLocalPath(decodeStable(normalized))
-      }
-    }
-
-    return targetUrl
   }
 
   function splitPath(filePath: string): { destination: string; filename: string } {
@@ -419,7 +369,7 @@ export function useSvgContent(
           })
 
           fileUrl = temp.url
-          const filePath = resolveLocalPath(fileUrl)
+          const filePath = resolveLocalFilePath(fileUrl)
           if (!filePath) {
             throw new Error('Invalid temp file path')
           }
@@ -494,18 +444,25 @@ export function useSvgContent(
 
     if (isApiSource(targetUrl) || !isElectronRenderer()) {
       resolvedUrl.value = targetUrl
-      const response = await fetch(targetUrl)
-      return await response.text()
+      if (networkSdk) {
+        const response = await networkSdk.request<string>({
+          method: 'GET',
+          url: targetUrl,
+          responseType: 'text'
+        })
+        return response.data
+      }
+      const response = await networkClient.request<string>({
+        method: 'GET',
+        url: targetUrl,
+        responseType: 'text'
+      })
+      return response.data
     }
 
     if (isLocalHttpSource(targetUrl)) {
       resolvedUrl.value = targetUrl
-      if (!networkSdk) {
-        const response = await fetch(targetUrl)
-        return await response.text()
-      }
-
-      const response = await networkSdk.request<string>({
+      const requestOptions = {
         method: 'GET',
         url: targetUrl,
         timeoutMs: defaultFetchTimeoutMs,
@@ -515,7 +472,12 @@ export function useSvgContent(
           ...LOCAL_HTTP_COOLDOWN_POLICY,
           key: `svg-local-http:${targetUrl}`
         }
-      })
+      } as const
+      if (networkSdk) {
+        const response = await networkSdk.request<string>(requestOptions)
+        return response.data
+      }
+      const response = await networkClient.request<string>(requestOptions)
       return response.data
     }
 
@@ -525,7 +487,7 @@ export function useSvgContent(
       return content
     }
 
-    // All other cases failed - throw error instead of trying invalid fetch(tfile://)
+    // All other cases failed - throw explicit unsupported source error
     throw new Error(`Unsupported icon source: ${targetUrl}`)
   }
 

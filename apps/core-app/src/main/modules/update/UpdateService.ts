@@ -23,7 +23,6 @@ import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { UpdateEvents } from '@talex-touch/utils/transport/events'
-import axios from 'axios'
 import { and, desc, eq } from 'drizzle-orm'
 import { app, Notification } from 'electron'
 import { autoUpdater } from 'electron-updater'
@@ -38,6 +37,7 @@ import { getSentryService } from '../sentry'
  */
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
+import { getNetworkService } from '../network'
 import { UpdateRecordStatus, UpdateRepository } from './update-repository'
 import { UpdateSystem } from './update-system'
 import type { DownloadCenterModule } from '../download/download-center'
@@ -1545,11 +1545,22 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           headers['If-Modified-Since'] = cacheEntry.lastModified
         }
 
-        const response = await axios.get(UPDATE_GITHUB_RELEASES_API, {
-          timeout: 8000,
+        const response = await getNetworkService().request<GitHubRelease[]>({
+          method: 'GET',
+          url: UPDATE_GITHUB_RELEASES_API,
+          timeoutMs: 8000,
           headers,
-          validateStatus: (status) => status === 200 || status === 304
+          responseType: 'json',
+          validateStatus: [200, 304, 403, 429]
         })
+
+        if (response.status === 403 || response.status === 429) {
+          const statusError = new Error(`NETWORK_HTTP_STATUS_${response.status}`) as Error & {
+            headers?: Record<string, string>
+          }
+          statusError.headers = response.headers
+          throw statusError
+        }
 
         const rateLimit = this.extractRateLimitInfo(response.headers)
         const etag = this.getHeaderValue(response.headers, 'etag')
@@ -1696,7 +1707,15 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     try {
       const url = new URL('/api/releases/latest', this.resolveOfficialBaseUrl())
       url.searchParams.set('channel', channel)
-      const response = await axios.get(url.toString(), { timeout: 8000 })
+      const response = await getNetworkService().request<{
+        release?: OfficialRelease | null
+        message?: string
+      }>({
+        method: 'GET',
+        url: url.toString(),
+        timeoutMs: 8000,
+        responseType: 'json'
+      })
       const release = response.data?.release as OfficialRelease | null
 
       if (!release) {
@@ -2310,23 +2329,47 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     return Number.isNaN(parsed) ? undefined : parsed
   }
 
+  private getErrorStatus(error: unknown): number | undefined {
+    if (!(error instanceof Error)) {
+      return undefined
+    }
+    const matched = error.message.match(/NETWORK_HTTP_STATUS_(\d{3})/)
+    if (!matched) {
+      return undefined
+    }
+    const status = Number.parseInt(matched[1], 10)
+    return Number.isInteger(status) ? status : undefined
+  }
+
+  private getErrorHeaders(error: unknown): Record<string, unknown> | undefined {
+    if (!error || typeof error !== 'object') {
+      return undefined
+    }
+    const headers = (error as { headers?: unknown }).headers
+    if (!headers || typeof headers !== 'object') {
+      return undefined
+    }
+    return headers as Record<string, unknown>
+  }
+
   private isRetryableError(error: unknown): boolean {
-    if (!axios.isAxiosError(error)) {
+    const status = this.getErrorStatus(error)
+    if (status && (status >= 500 || status === 403 || status === 429)) {
+      return true
+    }
+
+    if (!(error instanceof Error)) {
       return false
     }
-    const status = error.response?.status
-    if (status && status >= 500) {
+
+    if (/NETWORK_TIMEOUT|timeout|etimedout/i.test(error.message)) {
       return true
     }
-    if (status === 403 || status === 429) {
+
+    if (/enotfound|econnreset|eai_again|network/i.test(error.message)) {
       return true
     }
-    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
-      return true
-    }
-    if (error.request && !error.response) {
-      return true
-    }
+
     return false
   }
 
@@ -2341,9 +2384,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   }
 
   private recordFetchFailure(channel: AppPreviewChannel, error: unknown): void {
-    if (this.settings.rateLimitEnabled && axios.isAxiosError(error)) {
-      const status = error.response?.status
-      const headers = error.response?.headers as Record<string, unknown> | undefined
+    if (this.settings.rateLimitEnabled) {
+      const status = this.getErrorStatus(error)
+      const headers = this.getErrorHeaders(error)
       if (status === 403 || status === 429) {
         const rateLimit = headers ? this.extractRateLimitInfo(headers) : undefined
         const cooldownUntil = rateLimit?.resetAt ?? Date.now() + 60 * 60 * 1000

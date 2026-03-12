@@ -9,22 +9,28 @@ import type {
 } from '@talex-touch/utils/network'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { ProxyConfig, Session } from 'electron'
+import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
+import path from 'node:path'
 import process from 'node:process'
 import { Readable } from 'node:stream'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { StorageList } from '@talex-touch/utils'
 import {
   NetworkCooldownError,
+  NetworkHttpStatusError,
+  NetworkTimeoutError,
   createNetworkGuard,
   isHttpSource,
+  isTimeoutLikeError,
   resolveLocalFilePath,
   toTfileUrl
 } from '@talex-touch/utils/network'
 import { normalizeAbsolutePath, resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
-import { app, session } from 'electron'
+import { app, safeStorage, session } from 'electron'
+import { APP_FOLDER_NAME } from '../../config/default'
 import { getMainConfig, saveMainConfig } from '../storage'
 import { createLogger } from '../../utils/logger'
 
@@ -59,18 +65,8 @@ const DEFAULT_NETWORK_CONFIG: NetworkConfigSnapshot = {
   timeoutMs: 15000
 }
 
-interface NetworkStatusErrorContext {
-  status: number
-  statusText: string
-  url: string
-}
-
-class NetworkStatusError extends Error {
-  constructor(public readonly context: NetworkStatusErrorContext) {
-    super(`NETWORK_HTTP_STATUS_${context.status}`)
-    this.name = 'NetworkStatusError'
-  }
-}
+const SECURE_STORE_FILE = 'secure-store.json'
+const SECURE_STORE_KEY_PATTERN = /^[a-z0-9._-]{1,80}$/i
 
 interface NetworkStreamResponse {
   status: number
@@ -269,18 +265,6 @@ function isSuccessStatus(status: number, validateStatus?: number[]): boolean {
   return status >= 200 && status < 300
 }
 
-function isTimeoutError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false
-  }
-
-  if (error.name === 'TimeoutError') {
-    return true
-  }
-
-  return /timeout|aborted/i.test(error.message)
-}
-
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copied = new Uint8Array(bytes.byteLength)
   copied.set(bytes)
@@ -359,6 +343,119 @@ function isAllowedPath(filePath: string, roots: string[]): boolean {
   })
 }
 
+function resolveAppRootPath(): string {
+  if (app.isPackaged) {
+    return path.join(appPathSafe('userData'), APP_FOLDER_NAME)
+  }
+
+  try {
+    return path.join(app.getAppPath(), APP_FOLDER_NAME)
+  } catch {
+    return path.join(process.cwd(), APP_FOLDER_NAME)
+  }
+}
+
+async function readSecureStore(): Promise<Record<string, string>> {
+  const storePath = path.join(resolveAppRootPath(), 'config', SECURE_STORE_FILE)
+  try {
+    const raw = await fs.readFile(storePath, 'utf-8')
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const result: Record<string, string> = {}
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === 'string') {
+        result[key] = value
+      }
+    }
+    return result
+  } catch (error) {
+    const code = isRecord(error) && typeof error.code === 'string' ? error.code : ''
+    if (code === 'ENOENT') {
+      return {}
+    }
+    log.warn('Failed to read secure store for network proxy auth', { error })
+    return {}
+  }
+}
+
+async function resolveProxyCredential(
+  authRef?: string | null
+): Promise<{ username: string; password: string } | null> {
+  const key = typeof authRef === 'string' ? authRef.trim() : ''
+  if (!key || !SECURE_STORE_KEY_PATTERN.test(key)) {
+    return null
+  }
+
+  if (!safeStorage.isEncryptionAvailable()) {
+    return null
+  }
+
+  const store = await readSecureStore()
+  const encrypted = store[key]
+  if (!encrypted) {
+    return null
+  }
+
+  try {
+    const decrypted = safeStorage.decryptString(Buffer.from(encrypted, 'base64')).trim()
+    if (!decrypted) {
+      return null
+    }
+
+    if (decrypted.startsWith('{')) {
+      const parsed = JSON.parse(decrypted) as { username?: unknown; password?: unknown }
+      const username = typeof parsed.username === 'string' ? parsed.username : ''
+      const password = typeof parsed.password === 'string' ? parsed.password : ''
+      if (username) {
+        return { username, password }
+      }
+      return null
+    }
+
+    const sep = decrypted.indexOf(':')
+    if (sep <= 0) {
+      return null
+    }
+
+    const username = decrypted.slice(0, sep).trim()
+    const password = decrypted.slice(sep + 1)
+    if (!username) {
+      return null
+    }
+    return { username, password }
+  } catch (error) {
+    log.warn('Failed to parse proxy auth from secure store', { error })
+    return null
+  }
+}
+
+function applyProxyCredential(
+  rawProxy: string,
+  credential: { username: string; password: string } | null
+): string {
+  if (!rawProxy || !credential) {
+    return rawProxy
+  }
+
+  const normalized = rawProxy.trim()
+  if (!normalized) {
+    return normalized
+  }
+
+  try {
+    const parsed = new URL(normalized.includes('://') ? normalized : `http://${normalized}`)
+    if (parsed.username) {
+      return normalized
+    }
+    parsed.username = credential.username
+    parsed.password = credential.password
+    return normalized.includes('://')
+      ? parsed.toString()
+      : parsed.toString().replace(/^http:\/\//, '')
+  } catch {
+    return normalized
+  }
+}
+
 export class NetworkService {
   private readonly guard = createNetworkGuard(DEFAULT_NETWORK_CONFIG.cooldown)
   private readonly sessionCache = new Map<string, Session>()
@@ -435,8 +532,22 @@ export class NetworkService {
 
     try {
       const encoding = (options.encoding || 'utf-8') as BufferEncoding
-      return await fs.readFile(localPath, encoding)
+      const timeoutMs =
+        typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
+          ? Math.max(100, Math.floor(options.timeoutMs))
+          : 0
+      return await fs.readFile(localPath, {
+        encoding,
+        signal: timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined
+      })
     } catch (error) {
+      if (
+        typeof options.timeoutMs === 'number' &&
+        Number.isFinite(options.timeoutMs) &&
+        isTimeoutLikeError(error)
+      ) {
+        throw new NetworkTimeoutError(options.timeoutMs)
+      }
       const code = isRecord(error) && typeof error.code === 'string' ? error.code : ''
       if (options.allowMissing && code === 'ENOENT') {
         return ''
@@ -469,9 +580,22 @@ export class NetworkService {
     }
 
     try {
-      const bytes = await fs.readFile(localPath)
+      const timeoutMs =
+        typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
+          ? Math.max(100, Math.floor(options.timeoutMs))
+          : 0
+      const bytes = await fs.readFile(localPath, {
+        signal: timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined
+      })
       return toArrayBuffer(bytes)
     } catch (error) {
+      if (
+        typeof options.timeoutMs === 'number' &&
+        Number.isFinite(options.timeoutMs) &&
+        isTimeoutLikeError(error)
+      ) {
+        throw new NetworkTimeoutError(options.timeoutMs)
+      }
       const code = isRecord(error) && typeof error.code === 'string' ? error.code : ''
       if (options.allowMissing && code === 'ENOENT') {
         return new ArrayBuffer(0)
@@ -570,11 +694,11 @@ export class NetworkService {
       return false
     }
 
-    if (error instanceof NetworkStatusError) {
-      return (retryPolicy.retryableStatusCodes ?? []).includes(error.context.status)
+    if (error instanceof NetworkHttpStatusError) {
+      return (retryPolicy.retryableStatusCodes ?? []).includes(error.status)
     }
 
-    if (isTimeoutError(error)) {
+    if (isTimeoutLikeError(error)) {
       return retryPolicy.retryOnTimeout !== false
     }
 
@@ -604,19 +728,23 @@ export class NetworkService {
     const headers = new Headers(options.headers ?? {})
     const body = getBody(method, options.body, headers)
 
-    const response = await sessionInstance.fetch(targetUrl, {
-      method,
-      headers,
-      body,
-      signal: options.signal ?? AbortSignal.timeout(timeoutMs)
-    })
+    let response: Response
+    try {
+      response = await sessionInstance.fetch(targetUrl, {
+        method,
+        headers,
+        body,
+        signal: options.signal ?? AbortSignal.timeout(timeoutMs)
+      })
+    } catch (error) {
+      if (isTimeoutLikeError(error)) {
+        throw new NetworkTimeoutError(timeoutMs)
+      }
+      throw error
+    }
 
     if (!isSuccessStatus(response.status, options.validateStatus)) {
-      throw new NetworkStatusError({
-        status: response.status,
-        statusText: response.statusText,
-        url: response.url
-      })
+      throw new NetworkHttpStatusError(response.status, response.statusText, response.url)
     }
 
     return response
@@ -670,7 +798,7 @@ export class NetworkService {
     sessionKey: string,
     proxyConfig: NetworkProxyConfig
   ): Promise<void> {
-    const electronConfig = this.toElectronProxyConfig(proxyConfig)
+    const electronConfig = await this.toElectronProxyConfig(proxyConfig)
     const signature = JSON.stringify(electronConfig)
     const current = this.sessionProxyCache.get(sessionKey)
 
@@ -682,7 +810,7 @@ export class NetworkService {
     this.sessionProxyCache.set(sessionKey, signature)
   }
 
-  private toElectronProxyConfig(proxyConfig: NetworkProxyConfig): ProxyConfig {
+  private async toElectronProxyConfig(proxyConfig: NetworkProxyConfig): Promise<ProxyConfig> {
     if (proxyConfig.mode === 'direct') {
       return { mode: 'direct' }
     }
@@ -692,6 +820,7 @@ export class NetworkService {
     }
 
     const custom = proxyConfig.custom ?? {}
+    const credential = await resolveProxyCredential(proxyConfig.authRef)
     const bypass = Array.isArray(custom.bypass) ? custom.bypass.filter(Boolean) : []
 
     if (custom.pacUrl) {
@@ -704,13 +833,13 @@ export class NetworkService {
 
     const rules: string[] = []
     if (custom.httpProxy) {
-      rules.push(`http=${custom.httpProxy}`)
+      rules.push(`http=${applyProxyCredential(custom.httpProxy, credential)}`)
     }
     if (custom.httpsProxy) {
-      rules.push(`https=${custom.httpsProxy}`)
+      rules.push(`https=${applyProxyCredential(custom.httpsProxy, credential)}`)
     }
     if (custom.socksProxy) {
-      rules.push(`socks=${custom.socksProxy}`)
+      rules.push(`socks=${applyProxyCredential(custom.socksProxy, credential)}`)
     }
 
     if (rules.length === 0) {

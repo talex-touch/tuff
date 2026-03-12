@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { networkClient } from '@talex-touch/utils/network'
 import { createError } from 'h3'
 import { randomUUID } from 'node:crypto'
 import { useRuntimeConfig } from '#imports'
@@ -157,11 +158,14 @@ async function requestUsdRates(event: H3Event, config: ExchangeRateConfig): Prom
   }
 
   const endpoint = buildLatestEndpoint(config.baseUrl, config.apiKey)
-  let response: Response
+  let response: { status: number, data: unknown }
 
   try {
-    response = await fetch(endpoint, {
-      signal: AbortSignal.timeout(config.timeoutMs),
+    response = await networkClient.request({
+      method: 'GET',
+      url: endpoint,
+      timeoutMs: config.timeoutMs,
+      validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
     })
   }
   catch (error: any) {
@@ -176,23 +180,9 @@ async function requestUsdRates(event: H3Event, config: ExchangeRateConfig): Prom
   }
 
   const fetchedAt = Date.now()
-  let payload: ExchangeRateApiSuccess | ExchangeRateApiError | null = null
+  const payload = (response.data ?? null) as ExchangeRateApiSuccess | ExchangeRateApiError | null
 
-  try {
-    payload = await response.json() as ExchangeRateApiSuccess | ExchangeRateApiError
-  }
-  catch {
-    await recordExchangeRateError(event, {
-      title: 'Exchange rate response invalid',
-      message: 'Failed to parse exchange rate response JSON.',
-      errorType: 'invalid-json',
-      status: 502,
-      meta: { endpoint, status: response.status },
-    })
-    throw createError({ statusCode: 502, statusMessage: 'Exchange rate response invalid.' })
-  }
-
-  if (response.ok && payload && (payload as ExchangeRateApiSuccess).result === 'success') {
+  if (response.status >= 200 && response.status < 300 && payload && (payload as ExchangeRateApiSuccess).result === 'success') {
     return { payload: payload as ExchangeRateApiSuccess, fetchedAt }
   }
 

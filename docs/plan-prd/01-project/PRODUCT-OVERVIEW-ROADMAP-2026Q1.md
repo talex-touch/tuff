@@ -1,6 +1,6 @@
 # Tuff 产品总览与 8 周路线图（2026-Q1）
 
-> 更新时间：2026-03-07  
+> 更新时间：2026-03-12  
 > 适用范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`
 
 ## 1. 产品总览（是什么）
@@ -44,6 +44,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 不允许新增未类型约束的跨层调用（禁止新增 raw event 直连）。
 - 新增模块必须提供最小可回归验证（lint/typecheck/test 至少 1 项）。
 - 不得通过“关闭规则/降级配置”绕过质量问题（除非有明确豁免文档）。
+- 网络边界硬约束：业务层禁止新增 direct `fetch/axios`，统一走 `@talex-touch/utils/network`（network 套件内部除外），并由 root `network:guard` + ESLint 双门禁拦截。
 
 ### 3.2 架构约束
 - 主流程优先复用 SDK 与现有模块，不允许重复造轮子。
@@ -82,6 +83,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 质量闸门：
   - 新增迁移点无 raw event；
   - 定向 lint + 回归测试通过。
+- 进展（2026-03-12）：Network 相关 renderer/main/plugin 直连调用已完成全仓收口，root `network:guard` 已硬禁生效。
 
 ### Week 3：SDK Hard-Cut（F 批次）
 - 目标：清理 main/plugin 侧 legacy 分支并收口导出。

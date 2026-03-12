@@ -50,7 +50,6 @@ import {
   TuffInputType,
   TuffSearchResultBuilder
 } from '@talex-touch/utils'
-import { isIndexableFile as isBaseIndexableFile } from '@talex-touch/utils/common/file-scan-utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -89,6 +88,7 @@ import { getMainConfig, saveMainConfig } from '../../../storage'
 import FileSystemWatcher from '../../file-system-watcher'
 import { searchLogger } from '../../search-engine/search-logger'
 import {
+  BLACKLISTED_EXTENSIONS,
   CONTENT_INDEXABLE_EXTENSIONS,
   getContentSizeLimitMB,
   getTypeTagsForExtension,
@@ -2511,6 +2511,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   ): Promise<void> {
     if (!this.dbUtils) return
     const db = this.dbUtils.getDb()
+    const manualEntries = entries.filter(([, payload]) => payload.manual === true)
+    const manualPaths = new Set(
+      manualEntries.map(([, payload]) => this.normalizePath(payload.rawPath))
+    )
 
     const recordMap = new Map<string, typeof filesSchema.$inferInsert>()
     for (const [, payload] of entries) {
@@ -2523,8 +2527,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (recordMap.size === 0) {
+      if (manualEntries.length > 0) {
+        console.log('[FileProvider] incremental manual summary', {
+          total: manualEntries.length,
+          accepted: 0,
+          inserted: 0,
+          updated: 0,
+          unchanged: 0
+        })
+      }
       return
     }
+
+    const manualAccepted = Array.from(recordMap.keys()).reduce((count, filePath) => {
+      return count + (manualPaths.has(this.normalizePath(filePath)) ? 1 : 0)
+    }, 0)
 
     const targetPaths = Array.from(recordMap.keys())
     const existingRows = await db
@@ -2599,6 +2616,23 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (unchangedCount > 0) {
       this.logDebug(`Skipped ${unchangedCount} unchanged file(s) during incremental sync.`)
     }
+
+    if (manualEntries.length > 0) {
+      const manualInserted = filesToInsert.reduce((count, file) => {
+        return count + (manualPaths.has(this.normalizePath(file.path)) ? 1 : 0)
+      }, 0)
+      const manualUpdated = filesToUpdate.reduce((count, file) => {
+        return count + (manualPaths.has(this.normalizePath(file.path)) ? 1 : 0)
+      }, 0)
+      const manualUnchanged = Math.max(0, manualAccepted - manualInserted - manualUpdated)
+      console.log('[FileProvider] incremental manual summary', {
+        total: manualEntries.length,
+        accepted: manualAccepted,
+        inserted: manualInserted,
+        updated: manualUpdated,
+        unchanged: manualUnchanged
+      })
+    }
   }
 
   private async buildFileRecord(
@@ -2616,13 +2650,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       const extension = path.extname(name).toLowerCase()
 
       if (manualForce) {
-        if (!isBaseIndexableFile(rawPath, extension, name)) {
-          console.log('[FileProvider] buildFileRecord filtered(base)', {
+        if (extension && BLACKLISTED_EXTENSIONS.has(extension)) {
+          console.log('[FileProvider] buildFileRecord filtered(manual-blacklist)', {
             path: rawPath,
             extension,
-            reason: 'base-filter'
+            reason: 'blacklisted-extension'
           })
-          this.logDebug('Skipped manual incremental file: blocked by base filter', {
+          this.logDebug('Skipped manual incremental file: blacklisted extension', {
             path: rawPath,
             extension
           })

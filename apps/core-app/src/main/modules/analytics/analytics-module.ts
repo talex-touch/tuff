@@ -45,6 +45,7 @@ import { setPerfSummaryReporter } from '../../utils/perf-monitor'
 import { BaseModule } from '../abstract-base-module'
 import { getAuthToken, subscribeAuthState } from '../auth'
 import { databaseModule } from '../database'
+import { getNetworkService } from '../network'
 import { pluginModule } from '../plugin/plugin-module'
 import { getMainConfig } from '../storage'
 import { SystemSampler } from './collectors/system-sampler'
@@ -734,17 +735,13 @@ export class AnalyticsModule extends BaseModule {
         }))
       }
 
-      const response = await fetch(endpoint, {
+      await getNetworkService().request<string>({
         method: 'POST',
+        url: endpoint,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: payload,
+        responseType: 'text'
       })
-      if (!response.ok) {
-        const text = await response.text().catch(() => '')
-        throw new Error(
-          `Message report failed: ${response.status} ${response.statusText} ${text}`.trim()
-        )
-      }
 
       for (const entry of batch) {
         this.messageReportIndex.delete(entry.key)

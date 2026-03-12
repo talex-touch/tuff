@@ -5,6 +5,7 @@ import type {
   IntelligenceMessage,
   TuffIntelligenceApprovalTicket,
 } from '@talex-touch/tuff-intelligence'
+import { networkClient } from '@talex-touch/utils/network'
 import { TuffInput, TxBaseSurface, TxButton, TxCard, TxCollapse, TxCollapseItem, TxGlowText, TxSkeleton, TxSpinner, TxTimeline, TxTimelineItem } from '@talex-touch/tuffex'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 
@@ -1092,12 +1093,12 @@ function handleStreamEvent(eventItem: LabStreamEvent, options?: { fromHistory?: 
   }
 }
 
-async function consumeSseResponse(response: Response) {
-  if (!response.body) {
+async function consumeSseResponse(streamBody: ReadableStream<Uint8Array> | null) {
+  if (!streamBody) {
     throw new Error('Empty stream response body.')
   }
 
-  const reader = response.body.getReader()
+  const reader = streamBody.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
 
@@ -1157,25 +1158,23 @@ async function sendMessage() {
   streamAbortController = new AbortController()
 
   try {
-    const response = await fetch('/api/admin/intelligence-agent/session/stream', {
+    const response = await networkClient.request<ReadableStream<Uint8Array> | null>({
       method: 'POST',
+      url: '/api/admin/intelligence-agent/session/stream',
       headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
+        'content-type': 'application/json',
+        accept: 'text/event-stream',
       },
-      body: JSON.stringify({
+      body: {
         message,
         sessionId: sessionId.value || undefined,
         history: extractHistoryMessages(),
-      }),
+      },
       signal: streamAbortController.signal,
+      responseType: 'stream',
     })
 
-    if (!response.ok) {
-      throw new Error(await response.text())
-    }
-
-    await consumeSseResponse(response)
+    await consumeSseResponse(response.data)
   }
   catch (error) {
     errorMessage.value = normalizeError(error, labText('dashboard.intelligenceLab.errors.sendFailed', 'Failed to send message.'))

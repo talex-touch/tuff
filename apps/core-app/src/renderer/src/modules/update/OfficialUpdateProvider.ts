@@ -1,12 +1,10 @@
 import type { DownloadAsset, GitHubRelease, UpdateSourceConfig } from '@talex-touch/utils'
-import type { AxiosRequestConfig } from 'axios'
 import {
   AppPreviewChannel,
   UpdateErrorType,
   UpdateProviderType,
   hasNavigator
 } from '@talex-touch/utils'
-import axios from 'axios'
 import { appSetting } from '~/modules/channel/storage'
 import { UpdateProvider } from './UpdateProvider'
 
@@ -147,21 +145,19 @@ export class OfficialUpdateProvider extends UpdateProvider {
       const apiChannel = this.mapChannelToApi(channel)
       const platform = this.getCurrentPlatform()
 
-      const config: AxiosRequestConfig = {
+      const response = await this.request<NexusLatestResponse>({
         method: 'GET',
         url: `${this.apiUrl}/latest`,
-        params: {
+        query: {
           channel: apiChannel,
           platform
         },
-        timeout: this.timeout,
+        timeoutMs: this.timeout,
         headers: {
           Accept: 'application/json',
           'User-Agent': 'TalexTouch-Updater/2.0'
         }
-      }
-
-      const response = await axios(config)
+      })
 
       if (response.status !== 200) {
         throw this.createError(
@@ -189,21 +185,13 @@ export class OfficialUpdateProvider extends UpdateProvider {
       return release
     } catch (error: unknown) {
       const maybeError =
-        error && typeof error === 'object'
-          ? (error as {
-              type?: unknown
-              code?: unknown
-              response?: { status?: number }
-              request?: unknown
-            })
-          : undefined
+        error && typeof error === 'object' ? (error as { type?: unknown }) : undefined
 
       if (maybeError?.type) {
         throw error
       }
 
-      const errorCode = typeof maybeError?.code === 'string' ? maybeError.code : undefined
-      if (errorCode === 'ECONNABORTED' || errorCode === 'ETIMEDOUT') {
+      if (this.isRequestTimeout(error)) {
         throw this.createError(
           UpdateErrorType.TIMEOUT_ERROR,
           'Request to Official API timed out',
@@ -211,10 +199,9 @@ export class OfficialUpdateProvider extends UpdateProvider {
         )
       }
 
-      if (maybeError?.response) {
-        const statusCode = maybeError.response?.status
-
-        if (typeof statusCode === 'number' && statusCode >= 500) {
+      const statusCode = this.getRequestStatusCode(error)
+      if (typeof statusCode === 'number') {
+        if (statusCode >= 500) {
           throw this.createError(UpdateErrorType.API_ERROR, 'Official API server error', error)
         } else if (statusCode === 404) {
           throw this.createError(UpdateErrorType.API_ERROR, 'Release not found', error)
@@ -227,7 +214,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
         }
       }
 
-      if (maybeError?.request) {
+      if (error instanceof Error) {
         throw this.createError(
           UpdateErrorType.NETWORK_ERROR,
           'Unable to connect to Official API',
@@ -269,18 +256,16 @@ export class OfficialUpdateProvider extends UpdateProvider {
   // 健康检查
   async healthCheck(): Promise<boolean> {
     try {
-      const config: AxiosRequestConfig = {
+      const response = await this.request({
         method: 'GET',
         url: `${this.apiUrl}/latest`,
-        params: { channel: 'RELEASE' },
-        timeout: 5000,
+        query: { channel: 'RELEASE' },
+        timeoutMs: 5000,
         headers: {
           Accept: 'application/json',
           'User-Agent': 'TalexTouch-Updater/2.0'
         }
-      }
-
-      const response = await axios(config)
+      })
       return response.status === 200
     } catch (error) {
       console.warn('[OfficialUpdateProvider] Health check failed:', error)

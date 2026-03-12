@@ -12,7 +12,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import * as Sentry from '@sentry/electron/main'
-import { makeNodeTransport } from '@sentry/node'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
@@ -24,6 +23,7 @@ import { getAppVersionSafe } from '../../utils/version-util'
 import { BaseModule } from '../abstract-base-module'
 import { getOrCreateTelemetryClientId } from '../analytics/telemetry-client'
 import { databaseModule } from '../database'
+import { getNetworkService } from '../network'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 import { TelemetryUploadStatsStore } from './telemetry-upload-stats-store'
 
@@ -594,7 +594,6 @@ export class SentryServiceModule extends BaseModule {
         },
         ...(isDevelopmentRuntime
           ? {
-              transport: makeNodeTransport,
               integrations(defaultIntegrations) {
                 return defaultIntegrations.filter(
                   (integration) => !DEV_DISABLED_SENTRY_INTEGRATIONS.has(integration.name)
@@ -1013,14 +1012,17 @@ export class SentryServiceModule extends BaseModule {
 
       sentryLog.debug('Uploading telemetry batch', { meta: { count: events.length, url } })
 
-      const response = await fetch(url, {
+      const response = await getNetworkService().request<string>({
         method: 'POST',
+        url,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ events })
+        body: JSON.stringify({ events }),
+        responseType: 'text',
+        validateStatus: Array.from({ length: 500 }, (_, index) => index + 100)
       })
 
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unknown error')
+      if (response.status < 200 || response.status >= 300) {
+        const errorText = response.data || 'Unknown error'
         if (response.status === 403) {
           this.telemetryCooldownUntil = Date.now() + 60 * 60_000
           this.recordTelemetryFailure('Telemetry blocked by server', {

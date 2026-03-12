@@ -5,7 +5,6 @@ import type {
   GitHubRelease,
   UpdateSourceConfig
 } from '@talex-touch/utils'
-import type { AxiosRequestConfig } from 'axios'
 
 type CustomDownloadEntry = {
   filename?: string
@@ -29,7 +28,6 @@ type CustomUpdatePayload = {
 
 type DownloadAssetWithSignature = DownloadAsset & { signatureUrl?: string }
 import { UpdateErrorType, UpdateProviderType } from '@talex-touch/utils'
-import axios from 'axios'
 import { UpdateProvider } from './UpdateProvider'
 
 export class CustomUpdateProvider extends UpdateProvider {
@@ -56,18 +54,16 @@ export class CustomUpdateProvider extends UpdateProvider {
   // 获取最新版本信息
   async fetchLatestRelease(_channel: AppPreviewChannel): Promise<GitHubRelease> {
     try {
-      const config: AxiosRequestConfig = {
+      const response = await this.request({
         method: 'GET',
         url: this.apiUrl,
-        timeout: this.timeout,
+        timeoutMs: this.timeout,
         headers: {
           Accept: 'application/json',
           'User-Agent': 'TalexTouch-Updater/1.0',
           ...this.headers
         }
-      }
-
-      const response = await axios(config)
+      })
 
       if (response.status !== 200) {
         throw this.createError(
@@ -91,13 +87,7 @@ export class CustomUpdateProvider extends UpdateProvider {
         throw error
       }
 
-      const axiosError = error as {
-        code?: string
-        response?: { status?: number }
-        request?: unknown
-      }
-
-      if (axiosError.code === 'ECONNABORTED' || axiosError.code === 'ETIMEDOUT') {
+      if (this.isRequestTimeout(error)) {
         throw this.createError(
           UpdateErrorType.TIMEOUT_ERROR,
           'Request to custom API timed out',
@@ -105,10 +95,9 @@ export class CustomUpdateProvider extends UpdateProvider {
         )
       }
 
-      if (axiosError.response) {
-        const statusCode = axiosError.response.status
-
-        if (statusCode && statusCode >= 500) {
+      const statusCode = this.getRequestStatusCode(error)
+      if (typeof statusCode === 'number') {
+        if (statusCode >= 500) {
           throw this.createError(UpdateErrorType.API_ERROR, 'Custom API server error', error)
         } else if (statusCode === 404) {
           throw this.createError(UpdateErrorType.API_ERROR, 'Custom API endpoint not found', error)
@@ -127,7 +116,7 @@ export class CustomUpdateProvider extends UpdateProvider {
         }
       }
 
-      if (axiosError.request) {
+      if (error instanceof Error) {
         throw this.createError(
           UpdateErrorType.NETWORK_ERROR,
           'Unable to connect to custom API',
@@ -167,18 +156,16 @@ export class CustomUpdateProvider extends UpdateProvider {
   // 健康检查
   async healthCheck(): Promise<boolean> {
     try {
-      const config: AxiosRequestConfig = {
+      const response = await this.request({
         method: 'GET',
         url: this.apiUrl,
-        timeout: 5000,
+        timeoutMs: 5000,
         headers: {
           Accept: 'application/json',
           'User-Agent': 'TalexTouch-Updater/1.0',
           ...this.headers
         }
-      }
-
-      const response = await axios(config)
+      })
       return response.status === 200
     } catch (error) {
       console.warn('Custom API health check failed:', error)
@@ -343,17 +330,16 @@ export class CustomUpdateProvider extends UpdateProvider {
     const startTime = Date.now()
 
     try {
-      const config: AxiosRequestConfig = {
+      const response = await this.request({
         method: 'HEAD',
         url: this.apiUrl,
-        timeout: 5000,
+        timeoutMs: 5000,
         headers: {
           'User-Agent': 'TalexTouch-Updater/1.0',
           ...this.headers
-        }
-      }
-
-      const response = await axios(config)
+        },
+        responseType: 'text'
+      })
       const responseTime = Date.now() - startTime
 
       return {

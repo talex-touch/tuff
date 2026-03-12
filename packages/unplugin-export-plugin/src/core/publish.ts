@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
 import { NEXUS_BASE_URL, getTuffBaseUrl, normalizeBaseUrl } from '@talex-touch/utils/env'
+import { networkClient } from '@talex-touch/utils/network'
 import fs from 'fs-extra'
 import { parsePublishArgs } from '../cli/args'
 import { ensureCliDeviceInfo } from '../cli/device'
@@ -228,17 +229,19 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
 
     form.set('package', new Blob([content]), target.filename)
 
-    const publishRes = await fetch(apiUrl, {
+    const publishRes = await networkClient.request<string>({
       method: 'POST',
+      url: apiUrl,
       headers: {
         Authorization: `Bearer ${token}`,
       },
-      body: form,
+      body: form as unknown as BodyInit,
+      responseType: 'text',
+      validateStatus: Array.from({ length: 500 }, (_, index) => index + 100)
     })
 
-    if (!publishRes.ok) {
-      const error = await publishRes.text()
-      throw new Error(`Failed to publish package: ${error}`)
+    if (publishRes.status < 200 || publishRes.status >= 300) {
+      throw new Error(`Failed to publish package: ${publishRes.data || `HTTP ${publishRes.status}`}`)
     }
 
     console.log('\n✅ Plugin package published successfully!')

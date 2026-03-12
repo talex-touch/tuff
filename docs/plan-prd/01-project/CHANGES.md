@@ -4,6 +4,57 @@
 
 ## 2026-03-12
 
+### 全仓 Network 套件硬切（四阶段收口补齐）
+
+**变更类型**: 架构收敛 / 质量门禁升级 / 跨工作区迁移
+
+**描述**:
+- 全仓 direct `fetch/axios` 清零（network 套件内部除外）：
+  - 迁移 `apps/nexus`（Intelligence SSE 页面、Docs Assistant、`/api/docs/assistant` 服务端 provider 调用）。
+  - 迁移 `apps/pilot`（`usePilotChatPage` JSON/SSE 请求统一改为 `networkClient`）。
+  - 迁移 `packages/tuff-intelligence`（DeepAgent relay fallback 请求改为 `networkClient`，保留 timeout/retry/error 语义）。
+  - 迁移 `packages/tuffex`（`TxIcon` 移除内部裸 `fetch`，统一依赖注入 `svgFetcher`；未注入时降级为 `<img>` 渲染）。
+- root 级网络边界门禁收紧：
+  - `scripts/check-network-boundaries.mjs` 移除临时 allowlist，仅保留 `packages/utils/network/request.ts`。
+  - `pnpm run network:guard` 现覆盖 `apps/* + packages/* + plugins/*` 且 0 违规。
+- ESLint 硬禁补齐（最小必要范围）：
+  - `apps/nexus`、`apps/pilot`、`packages/tuff-intelligence`、`packages/tuffex`、`packages/unplugin-export-plugin`、`plugins/touch-{translation,image,music}` 新增 `no-restricted-imports(axios)` + `no-restricted-syntax(fetch)`。
+- 修复迁移引入的类型回归：
+  - `packages/utils/common/utils/time.ts` 的 retrier 返回值泛型推导修正（`withTimeout<T>`）。
+  - `apps/pilot/app/composables/usePilotChatPage.ts` 与 `packages/tuff-intelligence/src/adapters/deepagent-engine.ts` 补齐 `NetworkMethod` 映射。
+
+**验证**:
+- `pnpm run network:guard` ✅
+- `pnpm -C "apps/core-app" run typecheck:node` ✅
+- `pnpm -C "apps/nexus" run typecheck` ✅
+- `pnpm -C "apps/nexus" exec eslint app/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue app/components/docs/DocsAssistantDialog.vue app/pages/dashboard/admin/intelligence-chat.vue server/api/docs/assistant.post.ts` ✅
+- `pnpm -C "apps/pilot" exec eslint app/composables/usePilotChatPage.ts` ✅
+- `pnpm -C "packages/tuff-intelligence" exec eslint src/adapters/deepagent-engine.ts` ✅
+- `pnpm -C "packages/tuff-intelligence" exec tsc --noEmit` ✅
+- `pnpm -C "packages/tuffex" exec eslint packages/components/src/icon/src/TxIcon.vue` ✅
+- `pnpm -C "apps/pilot" run typecheck` ⚠️（存在大量历史存量错误，当前改动相关错误已清理）
+
+**修改文件（本批次）**:
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue`
+- `apps/nexus/app/components/docs/DocsAssistantDialog.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence-chat.vue`
+- `apps/nexus/server/api/docs/assistant.post.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `packages/tuff-intelligence/src/types/path-browserify.d.ts`
+- `packages/tuff-intelligence/package.json`
+- `packages/tuffex/packages/components/src/icon/src/TxIcon.vue`
+- `packages/utils/common/utils/time.ts`
+- `scripts/check-network-boundaries.mjs`
+- `apps/nexus/eslint.config.js`
+- `apps/pilot/eslint.config.js`
+- `packages/tuff-intelligence/eslint.config.js`
+- `packages/tuffex/eslint.config.js`
+- `packages/unplugin-export-plugin/eslint.config.js`
+- `plugins/touch-translation/eslint.config.js`
+- `plugins/touch-image/eslint.config.js`
+- `plugins/touch-music/eslint.config.js`
+
 ### core-app：Network 套件统一改造（Main 网关 + Proxy + tfile + SDK）
 
 **变更类型**: 架构收敛 / 稳定性修复 / 可扩展能力补齐
@@ -207,7 +258,7 @@
 - `bash -n "apps/pilot/deploy/deploy-pilot-1panel.sh"` ✅
 - `apps/pilot/deploy/deploy-pilot-1panel.sh --help` ✅
 - `bash -n "apps/pilot/deploy/deploy-pilot-1panel-webhook.sh"` ✅
-- `apps/pilot/deploy/deploy-pilot-1panel-webhook.sh --dry-run --payload-json '{"sha":"abcdef123456","branch":"master"}'` ✅
+- `apps/pilot/deploy/deploy-pilot-1panel-webhook.sh --dry-run --payload-json '{"repository":"talex-touch/tuff","sha":"abcdef123456","branch":"master"}'` ✅
 
 **修改文件**:
 - `apps/pilot/deploy/deploy-pilot-1panel.sh`

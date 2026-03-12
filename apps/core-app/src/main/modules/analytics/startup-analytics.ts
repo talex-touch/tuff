@@ -25,6 +25,7 @@ import {
 import { app } from 'electron'
 import { createLogger } from '../../utils/logger'
 import { databaseModule } from '../database'
+import { getNetworkService } from '../network'
 import { getMainConfig, saveMainConfig } from '../storage'
 import { ReportQueueStore } from './report-queue-store'
 import { getOrCreateTelemetryClientId } from './telemetry-client'
@@ -298,17 +299,13 @@ export class StartupAnalytics {
       attempted += 1
       try {
         const target = item.endpoint || endpoint
-        const response = await fetch(target, {
+        await getNetworkService().request<string>({
           method: 'POST',
+          url: target,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(item.payload)
+          body: item.payload,
+          responseType: 'text'
         })
-        if (!response.ok) {
-          const text = await response.text().catch(() => '')
-          throw new Error(
-            `Queued report failed: ${response.status} ${response.statusText} ${text}`.trim()
-          )
-        }
         succeeded += 1
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
@@ -368,17 +365,13 @@ export class StartupAnalytics {
       attempted += 1
       try {
         const target = item.endpoint || endpoint
-        const response = await fetch(target, {
+        await getNetworkService().request<string>({
           method: 'POST',
+          url: target,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(item.payload)
+          body: item.payload,
+          responseType: 'text'
         })
-        if (!response.ok) {
-          const text = await response.text().catch(() => '')
-          throw new Error(
-            `Queued report failed: ${response.status} ${response.statusText} ${text}`.trim()
-          )
-        }
         await store.remove(item.id)
         succeeded += 1
       } catch (error) {
@@ -578,18 +571,13 @@ export class StartupAnalytics {
         }
       }
 
-      const response = await fetch(url, {
+      await getNetworkService().request<string>({
         method: 'POST',
+        url,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: payload,
+        responseType: 'text'
       })
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => '')
-        throw new Error(
-          `Startup analytics report failed: ${response.status} ${response.statusText} ${text}`.trim()
-        )
-      }
 
       analyticsLog.success('Metrics reported (anonymous)')
     } catch (error) {

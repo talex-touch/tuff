@@ -2,13 +2,13 @@ import type { MaybePromise, ModuleInitContext } from '@talex-touch/utils'
 import path from 'node:path'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { AppEvents } from '@talex-touch/utils/transport/events'
-import axios from 'axios'
 import { app, BrowserWindow } from 'electron'
 import fse from 'fs-extra'
 import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { createLogger } from '../../utils/logger'
 import { SignatureVerifier } from '../../utils/release-signature'
 import { BaseModule } from '../abstract-base-module'
+import { getNetworkService } from '../network'
 
 type BuildReleaseAsset = {
   platform?: 'darwin' | 'win32' | 'linux'
@@ -117,8 +117,11 @@ export class BuildVerificationModule extends BaseModule {
 
   private async fetchReleaseByTag(apiBase: string, tag: string): Promise<BuildReleaseInfo | null> {
     try {
-      const response = await axios.get(`${apiBase}/${encodeURIComponent(tag)}`, {
-        timeout: 8000,
+      const response = await getNetworkService().request<{ release?: BuildReleaseInfo }>({
+        method: 'GET',
+        url: `${apiBase}/${encodeURIComponent(tag)}`,
+        timeoutMs: 8000,
+        responseType: 'json',
         headers: {
           Accept: 'application/json',
           'User-Agent': 'TalexTouch-Client/2.0'
@@ -136,9 +139,12 @@ export class BuildVerificationModule extends BaseModule {
     platform: 'darwin' | 'win32' | 'linux'
   ): Promise<BuildReleaseInfo | null> {
     try {
-      const response = await axios.get(`${apiBase}/latest`, {
-        timeout: 8000,
-        params: { channel, platform },
+      const response = await getNetworkService().request<{ release?: BuildReleaseInfo }>({
+        method: 'GET',
+        url: `${apiBase}/latest`,
+        timeoutMs: 8000,
+        responseType: 'json',
+        query: { channel, platform },
         headers: {
           Accept: 'application/json',
           'User-Agent': 'TalexTouch-Client/2.0'

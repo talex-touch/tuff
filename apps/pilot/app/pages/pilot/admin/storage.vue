@@ -57,15 +57,11 @@ async function loadSettings() {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const response = await fetch('/api/pilot/admin/storage-config', {
+    const data = await $fetch<{ settings?: Partial<StorageConfigForm> }>('/api/pilot/admin/storage-config', {
       headers: {
         Accept: 'application/json',
       },
     })
-    if (!response.ok) {
-      throw new Error(await response.text())
-    }
-    const data = await response.json() as { settings?: Partial<StorageConfigForm> }
     applySettings(data.settings || {})
   }
   catch (error) {
@@ -81,13 +77,13 @@ async function saveSettings() {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const response = await fetch('/api/pilot/admin/storage-config', {
+    const data = await $fetch<{ settings?: Partial<StorageConfigForm> }>('/api/pilot/admin/storage-config', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify({
+      body: {
         attachmentProvider: form.attachmentProvider,
         attachmentPublicBaseUrl: form.attachmentPublicBaseUrl,
         minioEndpoint: form.minioEndpoint,
@@ -98,12 +94,8 @@ async function saveSettings() {
         minioRegion: form.minioRegion,
         minioForcePathStyle: form.minioForcePathStyle,
         minioPublicBaseUrl: form.minioPublicBaseUrl,
-      }),
+      },
     })
-    if (!response.ok) {
-      throw new Error(await response.text())
-    }
-    const data = await response.json() as { settings?: Partial<StorageConfigForm> }
     applySettings(data.settings || {})
     successMessage.value = '保存成功，后续上传会按新配置生效。'
   }

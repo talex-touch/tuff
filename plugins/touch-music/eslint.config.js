@@ -17,7 +17,24 @@ export default antfu(
       'no-console': 'off',
       'no-undef': 'off',
       'no-prototype-builtins': 'off',
-      'no-restricted-syntax': 'off',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'axios',
+              message: 'Direct axios usage is restricted. Use @talex-touch/utils/network.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'CallExpression[callee.type=\'Identifier\'][callee.name=\'fetch\']',
+          message: 'Direct fetch is restricted. Use @talex-touch/utils/network.',
+        },
+      ],
       'no-unused-vars': 'off',
       'prefer-rest-params': 'off',
       'style/max-statements-per-line': 'off',

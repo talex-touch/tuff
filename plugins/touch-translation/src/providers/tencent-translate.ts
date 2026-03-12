@@ -1,4 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
+import { networkClient } from '@talex-touch/utils/network'
 
 interface TencentConfig {
   secretId: string
@@ -86,8 +87,9 @@ export class TencentTranslateProvider implements TranslationProvider {
 
       const authorization = await this.generateSignature(payload, timestamp)
 
-      const response = await fetch(this.config.apiUrl, {
+      const response = await networkClient.request<any>({
         method: 'POST',
+        url: this.config.apiUrl,
         headers: {
           'Authorization': authorization,
           'Content-Type': 'application/json; charset=utf-8',
@@ -98,13 +100,9 @@ export class TencentTranslateProvider implements TranslationProvider {
           'X-TC-Region': this.config.region,
         },
         body: payload,
+        responseType: 'json'
       })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
+      const data = response.data
 
       if (data.Response.Error) {
         throw new Error(`腾讯翻译错误: ${data.Response.Error.Message}`)

@@ -1,5 +1,6 @@
 import type { NetworkFileOptions, NetworkRequestOptions, NetworkResponse } from './types'
 import { isHttpSource, resolveLocalFilePath, toTfileUrl } from './file'
+import { NetworkHttpStatusError, NetworkTimeoutError, isTimeoutLikeError } from './core/errors'
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype
@@ -116,12 +117,20 @@ export async function request<T = unknown>(
   const url = appendQuery(options.url, options.query)
   const body = toBodyInit(options.body, headers, method)
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body,
-    signal: options.signal ?? createAbortSignal(options.timeoutMs)
-  })
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body,
+      signal: options.signal ?? createAbortSignal(options.timeoutMs)
+    })
+  } catch (error) {
+    if (isTimeoutLikeError(error)) {
+      throw new NetworkTimeoutError(options.timeoutMs)
+    }
+    throw error
+  }
 
   const data = (await parseResponseData(response, options.responseType ?? 'json')) as T
   const normalizedResponse: NetworkResponse<T> = {
@@ -134,9 +143,7 @@ export async function request<T = unknown>(
   }
 
   if (!shouldTreatAsSuccess(response.status, options.validateStatus)) {
-    const statusError = new Error(`NETWORK_HTTP_STATUS_${response.status}`)
-    ;(statusError as Error & { response?: NetworkResponse<T> }).response = normalizedResponse
-    throw statusError
+    throw new NetworkHttpStatusError(response.status, response.statusText, response.url || url)
   }
 
   return normalizedResponse

@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { networkClient } from '@talex-touch/utils/network'
 import { defineEventHandler, getRequestURL, setCookie, setResponseStatus } from 'h3'
 import { NuxtAuthHandler } from '#auth'
 import { useRuntimeConfig } from '#imports'
@@ -13,6 +14,7 @@ import { sendEmail } from '../../utils/email'
 
 const CredentialsProvider = (Credentials as any).default ?? Credentials
 const GitHubProvider = (GitHub as any).default ?? GitHub
+const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
 
 type AuthRequestHeaders = Record<string, string | string[] | undefined>
 interface OAuthTokenRequestContext {
@@ -241,8 +243,7 @@ function toRecord(value: unknown) {
   return {}
 }
 
-async function parseOauthPayload(response: Response) {
-  const text = await response.text()
+async function parseOauthPayload(text: string) {
   if (!text)
     return {}
 
@@ -340,18 +341,21 @@ async function requestOauthTokenByFetch(input: {
     input.includeRedirectUri !== false,
   )
 
-  const response = await fetch(input.tokenUrl, {
+  const response = await networkClient.request<string>({
     method: 'POST',
+    url: input.tokenUrl,
     headers: {
       accept: 'application/json',
       'content-type': 'application/x-www-form-urlencoded',
       ...input.headers,
     },
     body: requestBody.toString(),
+    responseType: 'text',
+    validateStatus: ALL_HTTP_STATUS
   })
 
-  const payload = normalizeOauthTokenPayload(await parseOauthPayload(response))
-  if (!response.ok || typeof payload.error === 'string') {
+  const payload = normalizeOauthTokenPayload(await parseOauthPayload(response.data))
+  if (response.status < 200 || response.status >= 300 || typeof payload.error === 'string') {
     throw new Error(formatOauthError(`${input.providerName}_token_exchange_failed`, payload, response.status))
   }
 
@@ -368,17 +372,19 @@ async function requestOauthProfileByFetch(input: {
   providerName: string
   headers?: Record<string, string>
 }) {
-  const response = await fetch(input.userInfoUrl, {
+  const response = await networkClient.request<Record<string, unknown>>({
     method: 'GET',
+    url: input.userInfoUrl,
     headers: {
       accept: 'application/json',
       authorization: `Bearer ${input.accessToken}`,
       ...input.headers,
     },
+    validateStatus: ALL_HTTP_STATUS
   })
 
-  const payload = toRecord(await response.json().catch(() => ({})))
-  if (!response.ok) {
+  const payload = toRecord(response.data)
+  if (response.status < 200 || response.status >= 300) {
     throw new Error(formatOauthError(`${input.providerName}_userinfo_failed`, payload, response.status))
   }
 
@@ -475,16 +481,18 @@ function getAuthOptions(): AuthOptions {
           })
 
           if (!profile.email) {
-            const emailResponse = await fetch('https://api.github.com/user/emails', {
+            const emailResponse = await networkClient.request<Array<Record<string, unknown>>>({
               method: 'GET',
+              url: 'https://api.github.com/user/emails',
               headers: {
                 ...headers,
                 authorization: `Bearer ${accessToken}`,
               },
+              validateStatus: ALL_HTTP_STATUS
             })
 
-            if (emailResponse.ok) {
-              const emails = await emailResponse.json().catch(() => []) as Array<Record<string, unknown>>
+            if (emailResponse.status >= 200 && emailResponse.status < 300) {
+              const emails = Array.isArray(emailResponse.data) ? emailResponse.data : []
               if (Array.isArray(emails)) {
                 const primary = emails.find((item) => {
                   return item

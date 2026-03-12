@@ -1,4 +1,5 @@
 import type { Ref } from 'vue'
+import { useNetworkSdk } from '@talex-touch/utils/renderer'
 import { ref, watch } from 'vue'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
@@ -13,6 +14,7 @@ interface RatingApiResponse {
 }
 
 export function useStoreRating(slug: Ref<string | undefined>) {
+  const networkSdk = useNetworkSdk()
   const loading = ref(false)
   const submitting = ref(false)
   const error = ref<string | null>(null)
@@ -34,17 +36,19 @@ export function useStoreRating(slug: Ref<string | undefined>) {
     error.value = null
     try {
       const baseUrl = getAuthBaseUrl()
-      const response = await fetch(`${baseUrl}/api/store/plugins/${currentSlug}/rating`, {
+      const response = await networkSdk.request<RatingApiResponse>({
         method: 'GET',
-        headers: { Accept: 'application/json' }
+        url: `${baseUrl}/api/store/plugins/${currentSlug}/rating`,
+        headers: { Accept: 'application/json' },
+        validateStatus: Array.from({ length: 500 }, (_, index) => index + 100)
       })
 
-      if (!response.ok) {
+      if (response.status < 200 || response.status >= 300) {
         error.value = `HTTP_ERROR_${response.status}`
         return
       }
 
-      const data = (await response.json()) as RatingApiResponse
+      const data = response.data
       average.value = data.rating.average
       count.value = data.rating.count
     } catch (err) {

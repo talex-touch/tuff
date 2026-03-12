@@ -4,7 +4,6 @@ import type {
   GitHubRelease,
   UpdateSourceConfig
 } from '@talex-touch/utils'
-import type { AxiosRequestConfig } from 'axios'
 import {
   UpdateErrorType,
   UpdateProviderType,
@@ -13,7 +12,6 @@ import {
   type UpdateReleaseArtifact,
   type UpdateReleaseManifest
 } from '@talex-touch/utils'
-import axios from 'axios'
 import { compareVersions } from '~/composables/store/useVersionCompare'
 import { getBuildInfo } from '~/utils/build-info'
 import { UpdateProvider } from './UpdateProvider'
@@ -56,32 +54,18 @@ export class GithubUpdateProvider extends UpdateProvider {
           )
         }
 
-        const config: AxiosRequestConfig = {
+        const response = await this.request<GitHubRelease[]>({
           method: 'GET',
           url: this.apiUrl,
-          timeout: this.timeout,
+          timeoutMs: this.timeout,
           headers: {
             Accept: 'application/vnd.github.v3+json',
             'User-Agent': 'TalexTouch-Updater/1.0'
           }
-        }
-
-        const response = await axios(config)
+        })
 
         // Update rate limit information from response headers
-        const headerEntries = Object.entries(response.headers)
-        const normalizedHeaders = headerEntries.reduce<Record<string, string>>(
-          (acc, [key, value]) => {
-            if (Array.isArray(value)) {
-              acc[key] = value.join(',')
-            } else if (value !== undefined && value !== null) {
-              acc[key] = String(value)
-            }
-            return acc
-          },
-          {}
-        )
-        rateLimitManager.updateRateLimit('github', normalizedHeaders)
+        rateLimitManager.updateRateLimit('github', response.headers)
 
         if (response.status !== 200) {
           throw this.createError(
@@ -146,10 +130,7 @@ export class GithubUpdateProvider extends UpdateProvider {
           throw error // 重新抛出已知错误
         }
 
-        if (
-          axios.isAxiosError(error) &&
-          (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT')
-        ) {
+        if (this.isRequestTimeout(error)) {
           throw this.createError(
             UpdateErrorType.TIMEOUT_ERROR,
             'Request to GitHub API timed out',
@@ -157,9 +138,8 @@ export class GithubUpdateProvider extends UpdateProvider {
           )
         }
 
-        if (axios.isAxiosError(error) && error.response) {
-          const statusCode = error.response.status
-
+        const statusCode = this.getRequestStatusCode(error)
+        if (typeof statusCode === 'number') {
           if (statusCode >= 500) {
             throw this.createError(UpdateErrorType.API_ERROR, 'GitHub API server error', error)
           } else if (statusCode === 404) {
@@ -179,7 +159,7 @@ export class GithubUpdateProvider extends UpdateProvider {
           }
         }
 
-        if (axios.isAxiosError(error) && error.request) {
+        if (error instanceof Error) {
           throw this.createError(
             UpdateErrorType.NETWORK_ERROR,
             'Unable to connect to GitHub API',
@@ -309,7 +289,11 @@ export class GithubUpdateProvider extends UpdateProvider {
     }
 
     try {
-      const response = await axios.get(manifestUrl, { timeout: this.timeout })
+      const response = await this.request<UpdateReleaseManifest>({
+        method: 'GET',
+        url: manifestUrl,
+        timeoutMs: this.timeout
+      })
       const manifest = response.data
 
       if (!this.isReleaseManifest(manifest)) {
@@ -340,17 +324,15 @@ export class GithubUpdateProvider extends UpdateProvider {
   // 健康检查
   async healthCheck(): Promise<boolean> {
     try {
-      const config: AxiosRequestConfig = {
+      const response = await this.request({
         method: 'GET',
         url: 'https://api.github.com',
-        timeout: 5000,
+        timeoutMs: 5000,
         headers: {
           Accept: 'application/vnd.github.v3+json',
           'User-Agent': 'TalexTouch-Updater/1.0'
         }
-      }
-
-      const response = await axios(config)
+      })
       return response.status === 200
     } catch (error) {
       console.warn('GitHub health check failed:', error)
@@ -551,30 +533,20 @@ export class GithubUpdateProvider extends UpdateProvider {
 
   // 检查错误是否可重试
   private isRetryableError(error: unknown): boolean {
-    // Network errors are retryable
-    if (axios.isAxiosError(error)) {
-      if (
-        error.code === 'ECONNABORTED' ||
-        error.code === 'ETIMEDOUT' ||
-        error.code === 'ENOTFOUND'
-      ) {
-        return true
-      }
+    if (this.isRequestTimeout(error)) {
+      return true
+    }
 
-      // Server errors (5xx) are retryable
-      if (error.response && error.response.status >= 500) {
-        return true
-      }
+    const statusCode = this.getRequestStatusCode(error)
+    if (typeof statusCode === 'number' && (statusCode >= 500 || statusCode === 403)) {
+      return true
+    }
 
-      // Rate limit errors are retryable
-      if (error.response && error.response.status === 403) {
-        return true
-      }
-
-      // Network connectivity issues are retryable
-      if (error.request && !error.response) {
-        return true
-      }
+    if (
+      error instanceof Error &&
+      /(ENOTFOUND|EAI_AGAIN|ECONNRESET|NETWORK_TIMEOUT)/i.test(error.message)
+    ) {
+      return true
     }
 
     return false

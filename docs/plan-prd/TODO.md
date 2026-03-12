@@ -30,7 +30,9 @@
 - [x] Main 新增 `NetworkModule + NetworkService`，Renderer 请求统一走 Main 网关。
 - [x] 首批迁移完成：`plugin-loaders`、`dev-server-monitor`、`widget-loader`、`store-http`、`download-worker`、`npm-provider`、`provider utils`。
 - [x] 图标链路修复：`TuffIconImpl` dev URL 判定改为 `dev.enable && dev.source && dev.address`。
-- [ ] 继续收口历史遗留 `fetch/axios` 调用（已由 `network:guard` 脚本建立“禁止新增”门禁）。
+- [x] 全仓历史遗留 `fetch/axios` 调用收口完成（仅允许 `packages/utils/network/request.ts` 内部使用）。
+- [x] root 门禁升级为硬禁：`pnpm run network:guard` 覆盖 `apps/* + packages/* + plugins/*` 并已 0 违规。
+- [x] ESLint 规则补齐：`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*` 关键 workspace 新增 `no-restricted-imports(axios)` + `no-restricted-syntax(fetch)`。
 
 ## 🧯 2026-03 主进程生命周期收敛（已落地）
 
@@ -134,6 +136,14 @@
 - [x] [P0] Pilot M1（2026-03-11）：第一批剩余 API 已迁移（`aigc share/detail/user`、`auth/renew_token`、`user-config`、`dummy`、`invitation/records`、`order/*`、`tools/upload*`）。
 - [x] [P0] Pilot M1.4（2026-03-12）：登录链路简化完成（本地邮箱注册/登录 + `logout`，保留 Nexus OAuth 并存，登录成功自动触发 guest->account 数据并入）。
 - [ ] [P1] Pilot M1 回归补强：渠道矩阵测试（`responses-only` / `chat.completions-only` / `auto fallback`）与 executor SSE 契约断言补齐。
+- [ ] [P1] Pilot × Nexus 登录联调补强（本地邮箱 + Nexus OAuth 并存）：
+  - [ ] 覆盖 `register/login/logout/status` 与 `/auth/login -> /auth/authorize -> /auth/callback` 全链路（含 `returnTo` 与 state 校验）。
+  - [ ] 验证 guest 数据并入（Quota history + pilot_quota_sessions + runtime 会话）在本地账号与 Nexus 账号两条路径均生效。
+  - [ ] 补充自动化 smoke（至少 1 条成功链路 + 1 条失败链路）并接入 Pilot CI 非阻塞阶段。
+- [ ] [P1] Pilot 搜索/工具网关（SearXNG 优先）：
+  - [ ] 增加 `search` 工具适配层（建议 `server/utils/pilot-tools/search-adapter.ts`），支持 `searxng` 与 `mock`。
+  - [ ] 环境变量收口：`PILOT_SEARCH_PROVIDER`、`PILOT_SEARXNG_BASE_URL`、`PILOT_SEARXNG_API_KEY`、`PILOT_SEARXNG_ENGINES`、`PILOT_SEARXNG_TIMEOUT_MS`。
+  - [ ] 工具事件与 Quota 协议对齐（`status_updated(calling/result)` + `verbose`），失败返回可消费降级结果而非白屏。
 - [ ] [P1] Pilot M2 API 迁移（运营后台常用，保持“先读后写”）：
   - [ ] `tools/storage/*`
   - [ ] `marketing/banner/*`

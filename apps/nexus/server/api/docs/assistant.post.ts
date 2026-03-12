@@ -2,6 +2,7 @@ import { getRequestHeader, getRequestIP, setResponseStatus } from 'h3'
 import crypto from 'node:crypto'
 import type { IntelligenceMessage } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { networkClient } from '@talex-touch/utils/network'
 import { requireAuth } from '../../utils/auth'
 import { consumeCredits } from '../../utils/creditsStore'
 import { createAssistantMessage, createAssistantSession, getAssistantSession, getLatestAssistantSessionByDoc, updateAssistantSession } from '../../utils/docAssistantStore'
@@ -45,6 +46,7 @@ const DOC_CONTEXT_LIMIT = 8000
 const DEFAULT_TIMEOUT_MS = 60000
 const MAX_CONTEXT_MESSAGES = 16
 const SUMMARY_CHAR_LIMIT = 1600
+const FULL_HTTP_STATUS_RANGE = Array.from({ length: 500 }, (_, index) => index + 100)
 
 const OPENAI_COMPATIBLE_TYPES = new Set([
   IntelligenceProviderType.OPENAI,
@@ -482,12 +484,36 @@ async function recordAudit(
   } catch {}
 }
 
-function resolveRequestId(headers: Headers) {
+function resolveHeader(headers: Record<string, string>, name: string): string {
+  return headers[name.toLowerCase()] || headers[name] || ''
+}
+
+function isHttpSuccess(status: number): boolean {
+  return status >= 200 && status < 300
+}
+
+async function readStreamBodyText(streamBody: ReadableStream<Uint8Array> | null): Promise<string> {
+  if (!streamBody) {
+    return ''
+  }
+  const reader = streamBody.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) {
+      break
+    }
+    buffer += decoder.decode(value, { stream: true })
+  }
+  return buffer
+}
+
+function resolveRequestId(headers: Record<string, string>) {
   return (
-    headers.get('x-request-id')
-    || headers.get('request-id')
-    || headers.get('openai-request-id')
-    || headers.get('x-request-id')
+    resolveHeader(headers, 'x-request-id')
+    || resolveHeader(headers, 'request-id')
+    || resolveHeader(headers, 'openai-request-id')
     || undefined
   )
 }
@@ -928,35 +954,38 @@ async function invokeAnthropicChat(params: {
   const conversation = params.messages.filter(message => message.role !== 'system')
   const endpoint = `${params.baseUrl}/messages`
 
-  const response = await fetch(endpoint, {
+  const response = await networkClient.request<string>({
+    url: endpoint,
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'content-type': 'application/json',
       'x-api-key': params.apiKey || '',
       'anthropic-version': '2023-06-01'
     },
-    body: JSON.stringify({
+    body: {
       model: params.model,
       system: systemMessage,
       messages: conversation,
       max_tokens: 1024,
       temperature: 0.7
-    }),
-    signal: AbortSignal.timeout(params.timeout ?? DEFAULT_TIMEOUT_MS)
+    },
+    timeoutMs: params.timeout ?? DEFAULT_TIMEOUT_MS,
+    responseType: 'text',
+    validateStatus: FULL_HTTP_STATUS_RANGE,
   })
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => '')
+  if (!isHttpSuccess(response.status)) {
+    const text = response.data || ''
     const error = new Error(`Anthropic API error: ${response.status} ${text}`) as ProviderChatError
     error.status = response.status
     error.endpoint = endpoint
     error.requestId = resolveRequestId(response.headers)
-    error.contentType = response.headers.get('content-type') || undefined
+    error.contentType = resolveHeader(response.headers, 'content-type') || undefined
     error.responseSnippet = text.slice(0, 400)
     throw error
   }
 
-  const data = await response.json() as { content?: Array<{ text?: string }> }
+  const data = JSON.parse(response.data || '{}') as { content?: Array<{ text?: string }> }
   return {
     content: data.content?.[0]?.text || '',
     endpoint,
@@ -972,28 +1001,31 @@ async function invokeLocalChat(params: {
   timeout?: number
 }): Promise<{ content: string; endpoint: string; status: number; requestId?: string }> {
   const endpoint = `${params.baseUrl}/chat`
-  const response = await fetch(endpoint, {
+  const response = await networkClient.request<string>({
+    url: endpoint,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    headers: { 'content-type': 'application/json' },
+    body: {
       model: params.model,
       messages: params.messages
-    }),
-    signal: AbortSignal.timeout(params.timeout ?? DEFAULT_TIMEOUT_MS)
+    },
+    timeoutMs: params.timeout ?? DEFAULT_TIMEOUT_MS,
+    responseType: 'text',
+    validateStatus: FULL_HTTP_STATUS_RANGE,
   })
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => '')
+  if (!isHttpSuccess(response.status)) {
+    const text = response.data || ''
     const error = new Error(`Local provider error: ${response.status} ${text}`) as ProviderChatError
     error.status = response.status
     error.endpoint = endpoint
     error.requestId = resolveRequestId(response.headers)
-    error.contentType = response.headers.get('content-type') || undefined
+    error.contentType = resolveHeader(response.headers, 'content-type') || undefined
     error.responseSnippet = text.slice(0, 400)
     throw error
   }
 
-  const data = await response.json() as { result?: string }
+  const data = JSON.parse(response.data || '{}') as { result?: string }
   return {
     content: data.result || '',
     endpoint,
@@ -1310,25 +1342,28 @@ async function fetchOpenAiCompletion(params: {
   }
 
   const requestOnce = async (endpoint: string, toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } }) => {
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${params.apiKey ?? ''}`
-        },
-        body: JSON.stringify({
-          model: params.model,
-          messages: params.messages,
-          temperature: 0.2,
-          tools: params.tools,
-          tool_choice: toolChoice
-        }),
-        signal: AbortSignal.timeout(params.timeout ?? DEFAULT_TIMEOUT_MS)
-      })
+    const response = await networkClient.request<string>({
+      url: endpoint,
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${params.apiKey ?? ''}`
+      },
+      body: {
+        model: params.model,
+        messages: params.messages,
+        temperature: 0.2,
+        tools: params.tools,
+        tool_choice: toolChoice
+      },
+      timeoutMs: params.timeout ?? DEFAULT_TIMEOUT_MS,
+      responseType: 'text',
+      validateStatus: FULL_HTTP_STATUS_RANGE,
+    })
 
-    const raw = await response.text()
-    const contentType = response.headers.get('content-type') || ''
-    if (!response.ok) {
+    const raw = response.data || ''
+    const contentType = resolveHeader(response.headers, 'content-type')
+    if (!isHttpSuccess(response.status)) {
       let detail = ''
       if (contentType.includes('application/json')) {
         try {
@@ -1448,25 +1483,28 @@ async function streamOpenAiCompletion(params: {
 
   for (const endpoint of params.endpoints) {
     try {
-      const response = await fetch(endpoint, {
+      const response = await networkClient.request<ReadableStream<Uint8Array> | null>({
+        url: endpoint,
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${params.apiKey ?? ''}`,
-          Accept: 'text/event-stream',
+          'content-type': 'application/json',
+          authorization: `Bearer ${params.apiKey ?? ''}`,
+          accept: 'text/event-stream',
         },
-        body: JSON.stringify({
+        body: {
           model: params.model,
           messages: params.messages,
           temperature: 0.2,
           stream: true,
-        }),
-        signal: AbortSignal.timeout(params.timeout ?? DEFAULT_TIMEOUT_MS)
+        },
+        timeoutMs: params.timeout ?? DEFAULT_TIMEOUT_MS,
+        responseType: 'stream',
+        validateStatus: FULL_HTTP_STATUS_RANGE,
       })
 
-      const contentType = response.headers.get('content-type') || ''
-      if (!response.ok) {
-        const text = await response.text().catch(() => '')
+      const contentType = resolveHeader(response.headers, 'content-type')
+      if (!isHttpSuccess(response.status)) {
+        const text = await readStreamBodyText(response.data)
         const error = new Error(`OpenAI API error: ${response.status} (POST ${endpoint})`) as ProviderChatError
         error.status = response.status
         error.endpoint = endpoint
@@ -1478,7 +1516,7 @@ async function streamOpenAiCompletion(params: {
         continue
       }
 
-      if (!response.body) {
+      if (!response.data) {
         const error = new Error('OpenAI API stream body is empty.') as ProviderChatError
         error.endpoint = endpoint
         error.status = response.status
@@ -1487,7 +1525,7 @@ async function streamOpenAiCompletion(params: {
         continue
       }
 
-      const reader = response.body.getReader()
+      const reader = response.data.getReader()
       let buffer = ''
       let content = ''
       let done = false
@@ -1566,27 +1604,30 @@ async function streamOpenAiCompletionWithTools(params: {
   const fallbackToolChoice = typeof params.toolChoice === 'object' ? 'auto' : undefined
 
   const streamOnce = async (endpoint: string, toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } }) => {
-    const response = await fetch(endpoint, {
+    const response = await networkClient.request<ReadableStream<Uint8Array> | null>({
+      url: endpoint,
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${params.apiKey ?? ''}`,
-        Accept: 'text/event-stream',
+        'content-type': 'application/json',
+        authorization: `Bearer ${params.apiKey ?? ''}`,
+        accept: 'text/event-stream',
       },
-      body: JSON.stringify({
+      body: {
         model: params.model,
         messages: params.messages,
         temperature: 0.2,
         stream: true,
         tools: params.tools,
         tool_choice: toolChoice,
-      }),
-      signal: AbortSignal.timeout(params.timeout ?? DEFAULT_TIMEOUT_MS)
+      },
+      timeoutMs: params.timeout ?? DEFAULT_TIMEOUT_MS,
+      responseType: 'stream',
+      validateStatus: FULL_HTTP_STATUS_RANGE,
     })
 
-    const contentType = response.headers.get('content-type') || ''
-    if (!response.ok) {
-      const text = await response.text().catch(() => '')
+    const contentType = resolveHeader(response.headers, 'content-type')
+    if (!isHttpSuccess(response.status)) {
+      const text = await readStreamBodyText(response.data)
       let detail = ''
       if (contentType.includes('application/json')) {
         try {
@@ -1606,7 +1647,7 @@ async function streamOpenAiCompletionWithTools(params: {
       return { error }
     }
 
-    if (!response.body) {
+    if (!response.data) {
       const error = new Error('OpenAI API stream body is empty.') as ProviderChatError
       error.endpoint = endpoint
       error.status = response.status
@@ -1614,7 +1655,7 @@ async function streamOpenAiCompletionWithTools(params: {
       return { error }
     }
 
-    const reader = response.body.getReader()
+    const reader = response.data.getReader()
     let buffer = ''
     let content = ''
     const toolCallMap = new Map<number, { id?: string; name?: string; args: string }>()

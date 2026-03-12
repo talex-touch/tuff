@@ -1,3 +1,5 @@
+import { networkClient } from '@talex-touch/utils/network'
+
 const DEFAULT_BASE_URLS: Record<string, string> = {
   openai: 'https://api.openai.com/v1',
   anthropic: 'https://api.anthropic.com/v1',
@@ -56,30 +58,37 @@ export async function fetchProviderModels(options: {
   apiKey?: string | null
 }): Promise<string[]> {
   const resolvedBaseUrl = resolveProviderBaseUrl(options.type, options.baseUrl)
+  const allStatus = Array.from({ length: 500 }, (_, index) => index + 100)
 
   if (options.type === 'local') {
-    const res = await fetch(`${resolvedBaseUrl}/api/tags`, {
-      signal: AbortSignal.timeout(10000),
+    const res = await networkClient.request<{ models?: Array<{ name: string }> }>({
+      method: 'GET',
+      url: `${resolvedBaseUrl}/api/tags`,
+      timeoutMs: 10000,
+      validateStatus: allStatus
     })
-    if (!res.ok)
+    if (res.status < 200 || res.status >= 300)
       throw new Error(`Local server returned ${res.status}`)
-    const data = await res.json() as { models?: Array<{ name: string }> }
+    const data = res.data
     return (data.models || []).map(model => model.name)
   }
 
   if (options.type === 'anthropic') {
-    const res = await fetch(`${resolvedBaseUrl}/models`, {
+    const res = await networkClient.request<{ data?: Array<{ id: string }> } | string>({
+      method: 'GET',
+      url: `${resolvedBaseUrl}/models`,
       headers: {
         'x-api-key': options.apiKey || '',
         'anthropic-version': '2023-06-01',
       },
-      signal: AbortSignal.timeout(15000),
+      timeoutMs: 15000,
+      validateStatus: allStatus
     })
-    if (!res.ok) {
-      const text = await res.text().catch(() => '')
+    if (res.status < 200 || res.status >= 300) {
+      const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data)
       throw new Error(`Anthropic API returned ${res.status}: ${text.slice(0, 200)}`)
     }
-    const data = await res.json() as { data?: Array<{ id: string }> }
+    const data = res.data as { data?: Array<{ id: string }> }
     return (data.data || []).map(model => model.id)
   }
 
@@ -92,17 +101,20 @@ export async function fetchProviderModels(options: {
 
   for (const endpoint of endpoints) {
     try {
-      const res = await fetch(endpoint, {
+      const res = await networkClient.request<{ data?: Array<{ id: string }> } | string>({
+        method: 'GET',
+        url: endpoint,
         headers: {
           Authorization: `Bearer ${options.apiKey || ''}`,
         },
-        signal: AbortSignal.timeout(15000),
+        timeoutMs: 15000,
+        validateStatus: allStatus
       })
-      if (!res.ok) {
-        const text = await res.text().catch(() => '')
+      if (res.status < 200 || res.status >= 300) {
+        const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data)
         throw new Error(`API returned ${res.status}: ${text.slice(0, 200)}`)
       }
-      const data = await res.json() as { data?: Array<{ id: string }> }
+      const data = res.data as { data?: Array<{ id: string }> }
       return (data.data || []).map(model => model.id)
     }
     catch (error: any) {

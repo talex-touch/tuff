@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { hasWindow } from '@talex-touch/utils/env'
+import { networkClient } from '@talex-touch/utils/network'
 import { usePreferredReducedMotion } from '@vueuse/core'
 import { gsap } from 'gsap'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -271,8 +272,7 @@ async function resolveGifDuration(src: string) {
   if (durationCache.has(src))
     return durationCache.get(src) ?? DEFAULT_ROTATION_DURATION
 
-  const response = await fetch(src)
-  const buffer = await response.arrayBuffer()
+  const buffer = await networkClient.readBinary(src)
   const duration = parseGifDuration(new Uint8Array(buffer))
   const normalized = duration > 0 ? duration : DEFAULT_ROTATION_DURATION
   durationCache.set(src, normalized)

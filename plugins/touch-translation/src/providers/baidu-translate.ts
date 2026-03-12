@@ -1,4 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
+import { networkClient } from '@talex-touch/utils/network'
 
 interface BaiduConfig {
   appId: string
@@ -80,19 +81,16 @@ export class BaiduTranslateProvider implements TranslationProvider {
         sign,
       })
 
-      const response = await fetch(this.config.apiUrl, {
+      const response = await networkClient.request<any>({
         method: 'POST',
+        url: this.config.apiUrl,
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: params,
+        body: params.toString(),
+        responseType: 'json'
       })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
+      const data = response.data
 
       if (data.error_code) {
         throw new Error(`百度翻译错误: ${data.error_msg || data.error_code}`)

@@ -28,6 +28,24 @@ export default antfu(
       'import/consistent-type-specifier-style': 'off',
       'import/first': 'off',
       'no-console': 'off',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'axios',
+              message: 'Direct axios usage is restricted. Use network sdk/fetcher injection.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.type='Identifier'][callee.name='fetch']",
+          message: 'Direct fetch is restricted. Use injected fetcher or shared network client.',
+        },
+      ],
       'no-unsafe-finally': 'off',
       'no-restricted-globals': 'off',
       'no-unused-expressions': 'off',
