@@ -329,7 +329,9 @@ async function mounter() {
   eventScope.on('REQUEST_TOGGLE_SIDEBAR', (visible?: boolean) => {
     expand.value = visible !== undefined ? visible : !expand.value
   })
-  eventScope.on('USER_LOGOUT_SUCCESS', () => { pageOptions.conversation = $completion.emptyHistory() })
+  eventScope.on('USER_LOGOUT_SUCCESS', () => {
+    pageOptions.conversation = $completion.emptyHistory()
+  })
   eventScope.on('REQUEST_CREATE_NEW_CONVERSATION', () => {
     handleCreate()
   })
@@ -412,7 +414,7 @@ function handleLogin() {
       <AigcChatStatusBar>
         <template #start>
           <span v-if="!viewMode && !userStore.isLogin" class="tag warning shining">
-            未登录无法使用
+            访客模式（部分功能受限）
           </span>
 
           <!-- <span v-if="pageOptions.inputProperty.internet" class="tag success">

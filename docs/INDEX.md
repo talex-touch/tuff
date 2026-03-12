@@ -17,14 +17,17 @@
 
 ## 状态快照（压缩版，代码核对）
 
+- 2026-03 新增：core-app 完成 Network 套件首版收口：`packages/utils/network` + Transport `NetworkSDK` + Main `NetworkModule/NetworkService`，并完成 plugin/dev/store/download 首批请求入口迁移与 `TuffIconImpl` dev.source 判定修复；新增 `network:guard` 门禁脚本阻止新增散落 `fetch/axios`（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
 - 2026-02 新增：`v2.4.7` 发版推进清单落地，明确 Gate A-E（版本基线/发布链路/质量门禁/发布资产/发布动作）与当前阻塞项，作为发布执行入口（`docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`）。
 - 2026-03 新增：Nexus 文档与入口收口（不含 Pilot）：Examples 改为单一来源索引、首页占位段清理、guide 补齐 CoreBox workflow/AI/翻译/壁纸现状，并新增发布资产核对清单（`docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md`）。
 - 2026-03 新增：Roadmap 任务01（TODO 现状校准）收口：清理“已落地但未闭环语义”混合标记，并将 CoreBox/Nexus 剩余优先级重排为 `SDK Hard-Cut E~F -> Gate D -> Gate E -> View Mode 安全收口 -> Nexus 设备授权风控`（`docs/plan-prd/TODO.md`）。
 - 2026-03 新增：Pilot M0 完成 Quota 融合落地（`apps/pilot`）：前端路由切换为 `/ -> Quota` 与 `/pilot/* -> 原 Pilot`，Nuxt `server/api` 补齐 M0 兼容接口（统一 `{ code, message, data }`，含 `/api/aigc/executor` SSE 映射），认证主链路切换为 Pilot Cookie 会话/访客模式，非 M0 接口统一 501 包装（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
 - 2026-03 新增：Pilot M1 完成第一批后端增强：多渠道 resolver（`request > session > default`）与 `responses/chat.completions` 自动回退、`executor` 新增 `session_bound` 与工具事件映射（`calling/result`）、后端会话真源 `pilot_quota_sessions` 与自动历史快照；并补齐首批剩余 API（`aigc share/detail/user`、`renew_token`、`user-config`、`dummy`、`invitation`、`order`、`upload`）。M2/M3 台账已在 `TODO.md` 分批（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
+- 2026-03 新增：Pilot 登录链路简化为“本地邮箱优先 + Nexus 并存”：新增 `/api/auth/email/register|login` 与 `/api/auth/logout`，`/api/auth/status` 增补 `guest/local/nexus` 来源语义；前端登录弹窗恢复全局挂载并保留 Nexus Beta 入口，短信/二维码入口改为“即将上线”占位；登录成功自动执行 guest 数据并入（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
 - 2026-03 新增：Pilot M0 修复聊天渲染阻塞：`ThContent.vue` 切换只读渲染到 `MilkContent.vue`，规避 `MilkdownError: Timer "SchemaReady" not found` / `editorViewOptions context not found`；并修复 `ChatLinkShare.vue` 的 `di` 标签告警（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
 - 2026-03 新增：Pilot Cloudflare 上线链路切换为静态发布（`nuxt generate -> .output/public`），规避免费版 Worker `3MiB` 限制；前端 API 基地址改为可由 `NUXT_PUBLIC_ENDS_URL` 注入（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
 - 2026-03 新增：Pilot 启动性能与 CI 链路收口：`dev` 默认 Cloudflare runtime 绑定（本地可直接联调 D1/R2），新增 `dev:local` 纯本地模式，UnoCSS dev safelist 降载、代码块重渲染器异步加载；新增 `pilot-ci.yml`（`lint/typecheck/test/build + static-dist + 1Panel webhook`）支撑 GitHub→1Panel 自动部署（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
+- 2026-03 新增：Pilot 部署资产归档到 `apps/pilot/deploy/`，提供 `deploy-pilot-1panel.sh` 与 `deploy-pilot-1panel-webhook.sh`，并补齐双语教程（`README.zh-CN.md` / `README.md`），用于 1Panel 拉取 GHCR 镜像、解析 webhook payload 并执行健康检查回滚（`docs/plan-prd/01-project/CHANGES.md`）。
 - 2026-02 新增：CoreApp 新增 `FlipDialog` 统一封装并完成 16 个 `TxFlipOverlay` 场景迁移，默认宽弹框规格（`md/lg/xl/full`）与 reference 隐藏/恢复行为统一，页面侧不再重复声明 `Teleport`。
 - 2026-02 新增：Nexus 业务场景完成 15 处 `TxFlipOverlay -> FlipDialog` 迁移，统一 reference/source 隐藏恢复与 `size=md/lg/xl` 宽弹框策略；`pages/test` 与 `content/demos` 继续保留 `TxFlipOverlay` 作为测试/演示边界。
 - 2026-02 新增：Intelligence Agent 一次切换（Nexus + Core-App）完成 `intelligence-agent` 命名空间上线；旧 `intelligence-lab` 路由统一返回 `410`；Prompt Registry（registry + binding）完成 schema 对齐与默认提示词落库引导；`session/stream` 主链切换 LangGraph 五阶段状态机并提供 Prompt Registry 管理 API/UI。

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { $event } from '~/composables/events'
 import { globalOptions } from '~/constants'
 
 const router = useRouter()
@@ -45,7 +44,7 @@ const menus = reactive([
     label: '退出登录',
     show: true,
     click: async () => {
-      $event.emit('USER_LOGOUT_SUCCESS', LogoutType.USER_LOGOUT)
+      await logoutPilotSession()
     },
   },
 ])
@@ -67,7 +66,7 @@ const avatarUrl = computed(() => {
   <div class="AccountAvatar">
     <div
       v-if="!userStore.isLogin" class="AccountAvatar-Wrapper"
-      @click="appOptions.model.login = !appOptions.model.login"
+      @click="appOptions.model.login = true"
     >
       <el-avatar>
         <span style="transform: scale(.75)">登录</span>
