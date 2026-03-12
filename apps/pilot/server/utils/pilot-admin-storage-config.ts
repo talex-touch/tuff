@@ -78,6 +78,10 @@ function parseBoolean(value: string | null | undefined): boolean | undefined {
   return undefined
 }
 
+function nowIso(): string {
+  return new Date().toISOString()
+}
+
 async function ensurePilotAdminSettingsSchema(event: H3Event): Promise<void> {
   const db = getPilotDatabase(event)
   if (!db) {
@@ -88,7 +92,7 @@ async function ensurePilotAdminSettingsSchema(event: H3Event): Promise<void> {
     CREATE TABLE IF NOT EXISTS ${SETTINGS_TABLE} (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
-      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      updated_at TEXT NOT NULL
     );
   `).run()
 }
@@ -145,13 +149,14 @@ export async function getPilotAdminStorageSettings(event: H3Event): Promise<Pilo
 
 async function upsertSetting(event: H3Event, key: string, value: string): Promise<void> {
   const db = requirePilotDatabase(event)
+  const now = nowIso()
   await db.prepare(`
     INSERT INTO ${SETTINGS_TABLE} (key, value, updated_at)
-    VALUES (?1, ?2, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    VALUES (?1, ?2, ?3)
     ON CONFLICT(key) DO UPDATE SET
       value = excluded.value,
       updated_at = excluded.updated_at
-  `).bind(key, value).run()
+  `).bind(key, value, now).run()
 }
 
 async function deleteSetting(event: H3Event, key: string): Promise<void> {

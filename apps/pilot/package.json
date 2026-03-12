@@ -73,6 +73,7 @@
     "lottie": "^0.0.1",
     "mermaid": "^11.12.3",
     "nuxt": "catalog:build",
+    "pg": "^8.20.0",
     "prism-themes": "^1.9.0",
     "qrcode": "^1.5.4",
     "v-viewer": "^3.0.22",
