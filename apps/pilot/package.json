@@ -13,7 +13,7 @@
     "analyze:size": "pnpm generate && node ./scripts/report-dist-size.mjs",
     "preview": "nuxt preview",
     "cf:whoami": "npx wrangler whoami",
-    "prepare:cf-static": "cp dist/200.html dist/index.html && mkdir -p dist/pilot/admin/storage && cp dist/200.html dist/pilot/index.html && cp dist/200.html dist/pilot/admin/storage/index.html && printf '/* /index.html 200\\n' > dist/_redirects && rm -f dist/_routes.json",
+    "prepare:cf-static": "cp dist/200.html dist/index.html && mkdir -p dist/pilot/admin/storage && cp dist/200.html dist/pilot/index.html && cp dist/200.html dist/pilot/admin/storage/index.html && printf '/* /index.html 200\\n' > dist/_redirects && rm -f dist/_routes.json && rm -rf dist/_worker.js",
     "preview:cf": "pnpm generate && pnpm run prepare:cf-static && npx wrangler pages dev dist --compatibility-date=2024-09-23",
     "deploy:cf": "pnpm generate && pnpm run prepare:cf-static && npx wrangler pages deploy dist --project-name tuff-pilot",
     "lint": "eslint .",

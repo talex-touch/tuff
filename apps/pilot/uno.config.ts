@@ -14,6 +14,7 @@ import fontMaterialSymbol from './app/constants/material-symbols.json'
 
 const isDev = process.env.NODE_ENV !== 'production'
 const useFullIconSafelist = process.env.NUXT_FULL_ICON_SAFELIST === 'true'
+const useWebFonts = process.env.NUXT_WEB_FONTS === 'true'
 
 export default defineConfig({
   shortcuts: [
@@ -29,7 +30,7 @@ export default defineConfig({
     presetTypography({
       selectorName: 'ProseMirror',
     }),
-    ...(!isDev
+    ...(!isDev && useWebFonts
       ? [
           presetWebFonts({
             fonts: {
