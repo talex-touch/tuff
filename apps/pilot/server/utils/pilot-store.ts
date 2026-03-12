@@ -1,8 +1,10 @@
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types'
 import type { AgentEnvelope, RuntimeStoreAdapter, StoreAdapter } from '@talex-touch/tuff-intelligence'
 import type { H3Event } from 'h3'
+import process from 'node:process'
 import { D1RuntimeStoreAdapter } from '@talex-touch/tuff-intelligence'
 import { pruneExpiredPilotHistoryOnce } from './pilot-history'
+import { getNodePilotDatabase } from './pilot-node-d1'
 
 const PILOT_STORE_METRICS_KEY = '__pilotStoreMetrics'
 
@@ -15,13 +17,22 @@ type PilotEventContext = H3Event['context'] & {
 }
 
 export function getPilotDatabase(event: H3Event): D1Database | null {
-  return (event.context.cloudflare?.env?.DB as D1Database | undefined) ?? null
+  const cloudflareDb = (event.context.cloudflare?.env?.DB as D1Database | undefined) ?? null
+  if (cloudflareDb) {
+    return cloudflareDb
+  }
+
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    return getNodePilotDatabase()
+  }
+
+  return null
 }
 
 export function requirePilotDatabase(event: H3Event): D1Database {
   const db = getPilotDatabase(event)
   if (!db) {
-    throw new Error('Cloudflare D1 binding "DB" is required for Pilot runtime.')
+    throw new Error('Pilot database is not configured. Set PILOT_DB_FILE for Node deployment, or bind Cloudflare D1 "DB".')
   }
   return db
 }
