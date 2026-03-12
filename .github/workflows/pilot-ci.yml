@@ -111,8 +111,7 @@ jobs:
     if: >-
       ${{
         github.event_name == 'push' &&
-        github.ref == 'refs/heads/master' &&
-        secrets.ONEPANEL_WEBHOOK_URL != ''
+        github.ref == 'refs/heads/master'
       }}
     needs:
       - static-dist
@@ -125,6 +124,11 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
+          if [ -z "${ONEPANEL_WEBHOOK_URL}" ]; then
+            echo "ONEPANEL_WEBHOOK_URL is empty, skip deploy trigger."
+            exit 0
+          fi
+
           BODY=$(cat <<EOF
           {
             "repository": "${GITHUB_REPOSITORY}",
