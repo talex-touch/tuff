@@ -34,6 +34,7 @@ const DEFAULT_PILOT_BASE_URL = firstDefined(
   process.env.NUXT_PUBLIC_ENDS_URL,
   process.env.NUXT_PILOT_BASE_URL,
 ) || 'https://sub2api-home.tagzxia.com'
+const FORBIDDEN_DEV_PORT = 3000
 
 function firstDefined(...values: Array<string | undefined>): string | undefined {
   for (const value of values) {
@@ -63,6 +64,46 @@ function envNumber(key: string, fallback: number): number {
   }
   return parsed
 }
+
+function parseCliDevPort(argv: string[]): number | undefined {
+  let resolved: number | undefined
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index]
+    if (arg === '--port' || arg === '-p') {
+      const next = argv[index + 1]
+      const parsed = Number(next)
+      if (Number.isFinite(parsed)) {
+        resolved = parsed
+      }
+      continue
+    }
+    if (arg.startsWith('--port=')) {
+      const parsed = Number(arg.slice('--port='.length))
+      if (Number.isFinite(parsed)) {
+        resolved = parsed
+      }
+    }
+  }
+  return resolved
+}
+
+function assertDevPortGuard() {
+  if (!process.argv.includes('dev')) {
+    return
+  }
+  const argv = process.argv.slice(2)
+  const cliPort = parseCliDevPort(argv)
+  const envPort = Number(envString('NUXT_PORT', 'PORT'))
+  const resolvedPort = Number.isFinite(cliPort)
+    ? cliPort
+    : (Number.isFinite(envPort) ? envPort : 3300)
+
+  if (resolvedPort === FORBIDDEN_DEV_PORT) {
+    throw new Error('[pilot] Local dev forbids port 3000. Please use --port 3300 (or any non-3000 port).')
+  }
+}
+
+assertDevPortGuard()
 
 export default defineNuxtConfig({
   ssr: false,
