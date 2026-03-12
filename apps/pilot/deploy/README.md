@@ -3,6 +3,7 @@
 This folder contains the standardized deployment assets for Pilot on 1Panel:
 
 - `deploy-pilot-1panel.sh`: deployment script with health check, auto rollback, and pull-only mode
+- `deploy-pilot-1panel-cron.sh`: scheduled wrapper with env loading and concurrency lock
 - `deploy-pilot-1panel.env.example`: environment template
 
 ---
@@ -34,12 +35,14 @@ The server must have:
 Upload these files to your server (example path: `/opt/1panel/scripts/pilot-deploy`):
 
 - `apps/pilot/deploy/deploy-pilot-1panel.sh`
+- `apps/pilot/deploy/deploy-pilot-1panel-cron.sh`
 - `apps/pilot/deploy/deploy-pilot-1panel.env.example`
 
 Then run:
 
 ```bash
 chmod +x "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.sh"
+chmod +x "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel-cron.sh"
 cp "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.env.example" "/opt/1panel/scripts/pilot-deploy/pilot-deploy.env"
 ```
 
@@ -50,13 +53,17 @@ cp "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.env.example" "/opt/1pan
 Edit `pilot-deploy.env`:
 
 ```bash
-PILOT_PROJECT_DIR=/opt/1panel/apps/tuff-pilot
+# Optional. Keep empty to auto-detect compose under cwd and /opt/1panel.
+PILOT_PROJECT_DIR=
 PILOT_COMPOSE_FILE=docker-compose.yml
 PILOT_SERVICE_NAME=pilot
 
 PILOT_IMAGE_REPO=ghcr.io/talex-touch/tuff-pilot
 PILOT_IMAGE_TAG=pilot-latest
+PILOT_DB_DRIVER=sqlite
 PILOT_DB_FILE=/app/data/pilot.sqlite
+PILOT_POSTGRES_URL=
+PILOT_REDIS_URL=redis://redis:6379/0
 
 PILOT_HEALTHCHECK_URL=http://127.0.0.1:3300/api/auth/status
 PILOT_HEALTHCHECK_ATTEMPTS=20
@@ -69,10 +76,13 @@ PILOT_GHCR_TOKEN=
 
 Important fields:
 
-- `PILOT_PROJECT_DIR`: compose project directory (required)
+- `PILOT_PROJECT_DIR`: compose project directory (optional, supports auto-detection)
 - `PILOT_SERVICE_NAME`: target service to update (default `pilot`)
 - `PILOT_IMAGE_TAG`: default `pilot-latest`, can be pinned to a release tag such as `pilot-a1b2c3d`
-- `PILOT_DB_FILE`: runtime SQLite path for Node deployment (default recommended: `/app/data/pilot.sqlite`)
+- `PILOT_DB_DRIVER`: `sqlite` / `postgres` (default `sqlite`)
+- `PILOT_DB_FILE`: runtime SQLite path for Node deployment
+- `PILOT_POSTGRES_URL`: postgres DSN used when `PILOT_DB_DRIVER=postgres`
+- `PILOT_REDIS_URL`: redis DSN (reserved for runtime integration)
 - `PILOT_HEALTHCHECK_URL`: recommended for post-deploy validation
 
 ---
@@ -87,6 +97,8 @@ source "/opt/1panel/scripts/pilot-deploy/pilot-deploy.env"
 set +a
 "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.sh"
 ```
+
+> Auto-detection is enabled now: if you omit `--project-dir/--image/--service`, the script infers them from compose files.
 
 ### 5.2 Deploy with CLI arguments
 
@@ -142,86 +154,25 @@ Behavior:
 
 ---
 
-## 6. Configure 1Panel Automation
+## 6. Schedule Daily Deployment
 
-Option A (recommended): 1Panel script task
-
-1. Create a script task in 1Panel
-2. Use this command:
+Recommended cron entry:
 
 ```bash
-set -a
-source "/opt/1panel/scripts/pilot-deploy/pilot-deploy.env"
-set +a
-"/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.sh"
+0 4 * * * /opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel-cron.sh >> /var/log/pilot-deploy.log 2>&1
 ```
 
-3. Validate manually before enabling webhook or schedule
+Wrapper behavior:
 
-Option B: 1Panel webhook + GitHub Actions
+1. loads `pilot-deploy.env`
+2. acquires a lock to avoid overlapping runs
+3. executes `deploy-pilot-1panel.sh` (pull + restart + health check + rollback)
 
-Use the dedicated webhook entry script:
-
-- `deploy-pilot-1panel-webhook.sh`
-- `deploy-pilot-1panel-webhook.env.example`
-
-It handles:
-
-1. webhook token validation (optional)
-2. payload parsing (`image/tag/sha`)
-3. auto mapping `sha -> pilot-<short_sha>` when `tag` is missing
-4. calling `deploy-pilot-1panel.sh` for the actual deployment
-
-### 6.1 Initialize webhook env
+To force a specific tag in cron:
 
 ```bash
-cp "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel-webhook.env.example" "/opt/1panel/scripts/pilot-deploy/pilot-webhook.env"
+PILOT_IMAGE_TAG=pilot-latest /opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel-cron.sh
 ```
-
-Edit `pilot-webhook.env`:
-
-```bash
-PILOT_WEBHOOK_TOKEN=replace-with-secure-token
-PILOT_WEBHOOK_ALLOWED_BRANCH=master
-PILOT_WEBHOOK_ALLOWED_REPOSITORY=talex-touch/tuff
-PILOT_WEBHOOK_DEFAULT_IMAGE=ghcr.io/talex-touch/tuff-pilot
-PILOT_WEBHOOK_DEFAULT_TAG=pilot-latest
-PILOT_WEBHOOK_DEPLOY_SCRIPT=/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.sh
-```
-
-### 6.2 1Panel webhook task command
-
-> This example assumes 1Panel writes webhook body to `/tmp/pilot-webhook.json` and request token to env `ONEPANEL_WEBHOOK_TOKEN_IN`.  
-> Replace these with your real 1Panel variables.
-
-```bash
-set -a
-source "/opt/1panel/scripts/pilot-deploy/pilot-deploy.env"
-source "/opt/1panel/scripts/pilot-deploy/pilot-webhook.env"
-set +a
-"/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel-webhook.sh" \
-  --payload-file "/tmp/pilot-webhook.json" \
-  --request-token "${ONEPANEL_WEBHOOK_TOKEN_IN:-}"
-```
-
-### 6.3 Suggested GitHub webhook payload
-
-```json
-{
-  "repository": "talex-touch/tuff",
-  "branch": "master",
-  "sha": "abcdef1234567890",
-  "image": "ghcr.io/talex-touch/tuff-pilot",
-  "tag": "pilot-abcdef1"
-}
-```
-
-Resolution rules:
-
-- if `image_ref` exists, deploy by full image ref first (for example `ghcr.io/talex-touch/tuff-pilot@sha256:...`)
-- else if `image + tag` exist, deploy by tag
-- else if only `sha` exists, auto use `pilot-<short_sha>`
-- else fallback to `PILOT_WEBHOOK_DEFAULT_IMAGE + PILOT_WEBHOOK_DEFAULT_TAG`
 
 ---
 
@@ -287,5 +238,4 @@ Set `PILOT_DB_FILE=/app/data/pilot.sqlite` and keep a persistent volume like `./
 
 - Use least-privilege GHCR token (`read:packages`)
 - Never commit GHCR token into Git
-- Protect 1Panel webhook with token/signature verification
 - Prefer immutable tags (`pilot-<sha>`) in production over floating `latest`

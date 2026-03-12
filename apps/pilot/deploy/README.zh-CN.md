@@ -3,6 +3,7 @@
 本目录提供 Pilot 在 1Panel 上的标准化部署资产：
 
 - `deploy-pilot-1panel.sh`：主部署脚本（支持健康检查 + 自动回滚 + 仅拉取镜像模式）
+- `deploy-pilot-1panel-cron.sh`：定时执行封装（自动加载 env + 防并发）
 - `deploy-pilot-1panel.env.example`：环境变量模板
 
 ---
@@ -34,12 +35,14 @@
 将以下文件上传到服务器（示例路径 `/opt/1panel/scripts/pilot-deploy`）：
 
 - `apps/pilot/deploy/deploy-pilot-1panel.sh`
+- `apps/pilot/deploy/deploy-pilot-1panel-cron.sh`
 - `apps/pilot/deploy/deploy-pilot-1panel.env.example`
 
 然后执行：
 
 ```bash
 chmod +x "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.sh"
+chmod +x "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel-cron.sh"
 cp "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.env.example" "/opt/1panel/scripts/pilot-deploy/pilot-deploy.env"
 ```
 
@@ -50,13 +53,17 @@ cp "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.env.example" "/opt/1pan
 编辑 `pilot-deploy.env`：
 
 ```bash
-PILOT_PROJECT_DIR=/opt/1panel/apps/tuff-pilot
+# 可留空；脚本会在当前目录和 /opt/1panel 下自动探测 compose。
+PILOT_PROJECT_DIR=
 PILOT_COMPOSE_FILE=docker-compose.yml
 PILOT_SERVICE_NAME=pilot
 
 PILOT_IMAGE_REPO=ghcr.io/talex-touch/tuff-pilot
 PILOT_IMAGE_TAG=pilot-latest
+PILOT_DB_DRIVER=sqlite
 PILOT_DB_FILE=/app/data/pilot.sqlite
+PILOT_POSTGRES_URL=
+PILOT_REDIS_URL=redis://redis:6379/0
 
 PILOT_HEALTHCHECK_URL=http://127.0.0.1:3300/api/auth/status
 PILOT_HEALTHCHECK_ATTEMPTS=20
@@ -69,10 +76,13 @@ PILOT_GHCR_TOKEN=
 
 关键字段说明：
 
-- `PILOT_PROJECT_DIR`：Compose 项目目录（必须）
+- `PILOT_PROJECT_DIR`：Compose 项目目录（可选，留空自动探测）
 - `PILOT_SERVICE_NAME`：需要更新的服务名，默认 `pilot`
 - `PILOT_IMAGE_TAG`：默认 `pilot-latest`，也可指定某次发布标签（例如 `pilot-a1b2c3d`）
-- `PILOT_DB_FILE`：Node 部署模式下运行时 SQLite 文件路径（建议 `/app/data/pilot.sqlite`）
+- `PILOT_DB_DRIVER`：`sqlite` / `postgres`，默认 `sqlite`
+- `PILOT_DB_FILE`：SQLite 模式下运行时数据库文件（建议 `/app/data/pilot.sqlite`）
+- `PILOT_POSTGRES_URL`：Postgres 连接串（仅 `postgres` 模式使用）
+- `PILOT_REDIS_URL`：Redis 连接串（当前先做运行时保留配置）
 - `PILOT_HEALTHCHECK_URL`：建议配置，用于部署后探活
 
 ---
@@ -87,6 +97,8 @@ source "/opt/1panel/scripts/pilot-deploy/pilot-deploy.env"
 set +a
 "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.sh"
 ```
+
+> 现在支持自动检测：不传 `--project-dir/--image/--service` 时，脚本会优先从 compose 推断目标服务和镜像。
 
 ### 5.2 直接命令行传参部署
 
@@ -142,89 +154,25 @@ set +a
 
 ---
 
-## 6. 在 1Panel 中配置自动执行
+## 6. 定时自动部署（每日一次）
 
-可选方式 A（推荐）：1Panel 脚本任务
-
-1. 在 1Panel 创建脚本任务
-2. 命令写入：
+推荐用 cron 调度封装脚本：
 
 ```bash
-set -a
-source "/opt/1panel/scripts/pilot-deploy/pilot-deploy.env"
-set +a
-"/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.sh"
+0 4 * * * /opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel-cron.sh >> /var/log/pilot-deploy.log 2>&1
 ```
 
-3. 先手动执行验证通过，再挂 webhook 或定时
+封装脚本行为：
 
-可选方式 B：1Panel Webhook + GitHub Actions 调用
+1. 自动加载 `pilot-deploy.env`
+2. 自动加锁，避免并发重复部署
+3. 调用 `deploy-pilot-1panel.sh` 执行拉取 + 重启 + 健康检查 + 失败回滚
 
-推荐使用本目录的 webhook 入口脚本：
-
-- `deploy-pilot-1panel-webhook.sh`
-- `deploy-pilot-1panel-webhook.env.example`
-
-它会自动做这些事：
-
-1. 验证 webhook token（可选）
-2. 校验仓库与分支（`PILOT_WEBHOOK_ALLOWED_REPOSITORY` / `PILOT_WEBHOOK_ALLOWED_BRANCH`）
-3. 从 payload 读取 `image/tag/sha`
-4. 若没有 `tag` 但有 `sha`，自动映射为 `pilot-<short_sha>`
-5. 调用 `deploy-pilot-1panel.sh` 执行真正部署
-
-### 6.1 Webhook 入口脚本初始化
+如果你希望强制某个镜像标签，可在 cron 命令前覆盖变量：
 
 ```bash
-cp "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel-webhook.env.example" "/opt/1panel/scripts/pilot-deploy/pilot-webhook.env"
+PILOT_IMAGE_TAG=pilot-latest /opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel-cron.sh
 ```
-
-编辑 `pilot-webhook.env`：
-
-```bash
-PILOT_WEBHOOK_TOKEN=replace-with-secure-token
-PILOT_WEBHOOK_ALLOWED_BRANCH=master
-PILOT_WEBHOOK_ALLOWED_REPOSITORY=talex-touch/tuff
-PILOT_WEBHOOK_DEFAULT_IMAGE=ghcr.io/talex-touch/tuff-pilot
-PILOT_WEBHOOK_DEFAULT_TAG=pilot-latest
-PILOT_WEBHOOK_DEPLOY_SCRIPT=/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.sh
-```
-
-### 6.2 1Panel 脚本任务命令（Webhook 场景）
-
-> 以下示例假设 1Panel 会把 webhook body 写到 `/tmp/pilot-webhook.json`，并把请求头 token 写到环境变量 `ONEPANEL_WEBHOOK_TOKEN_IN`。  
-> 如果你的 1Panel 字段名不同，替换成你实际变量即可。
-
-```bash
-set -a
-source "/opt/1panel/scripts/pilot-deploy/pilot-deploy.env"
-source "/opt/1panel/scripts/pilot-deploy/pilot-webhook.env"
-set +a
-"/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel-webhook.sh" \
-  --payload-file "/tmp/pilot-webhook.json" \
-  --request-token "${ONEPANEL_WEBHOOK_TOKEN_IN:-}"
-```
-
-### 6.3 GitHub Actions 到 Webhook 的 payload 建议
-
-推荐发送：
-
-```json
-{
-  "repository": "talex-touch/tuff",
-  "branch": "master",
-  "sha": "abcdef1234567890",
-  "image": "ghcr.io/talex-touch/tuff-pilot",
-  "tag": "pilot-abcdef1"
-}
-```
-
-兼容规则：
-
-- 若存在 `image_ref`，优先按完整引用部署（如 `ghcr.io/talex-touch/tuff-pilot@sha256:...`）
-- 若存在 `image + tag`，按标签部署
-- 若只有 `sha`，自动转成 `pilot-<short_sha>`
-- 若都没有，回退到 `PILOT_WEBHOOK_DEFAULT_IMAGE + PILOT_WEBHOOK_DEFAULT_TAG`
 
 ---
 
@@ -289,5 +237,4 @@ set +a
 
 - 仅授予 GHCR 最小权限（`read:packages`）
 - 不要把 GHCR Token 写入 Git 仓库
-- 1Panel webhook 建议配置签名校验或 Token 校验
 - 生产环境建议固定部署不可变标签（`pilot-<sha>`），避免 `latest` 漂移

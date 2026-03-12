@@ -5,6 +5,7 @@ import process from 'node:process'
 import { D1RuntimeStoreAdapter } from '@talex-touch/tuff-intelligence'
 import { pruneExpiredPilotHistoryOnce } from './pilot-history'
 import { getNodePilotDatabase } from './pilot-node-d1'
+import { getNodePilotPostgresDatabase } from './pilot-node-pg-d1'
 
 const PILOT_STORE_METRICS_KEY = '__pilotStoreMetrics'
 
@@ -23,6 +24,10 @@ export function getPilotDatabase(event: H3Event): D1Database | null {
   }
 
   if (typeof process !== 'undefined' && process.versions?.node) {
+    const driver = String(process.env.PILOT_DB_DRIVER || 'sqlite').trim().toLowerCase()
+    if (driver === 'postgres' || driver === 'pg') {
+      return getNodePilotPostgresDatabase()
+    }
     return getNodePilotDatabase()
   }
 

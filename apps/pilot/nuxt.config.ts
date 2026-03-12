@@ -14,6 +14,7 @@ const vueuseComponentsShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/v
 const markmapViewShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-view.ts')
 const markmapCommonShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-common.ts')
 const markmapLibShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-lib.ts')
+const pgNativeShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/pg-native.cjs')
 const useWorkspaceSource = process.env.NUXT_USE_WORKSPACE_SOURCE === 'true'
 const isDev = process.env.NODE_ENV !== 'production'
 const enableDevtools = process.env.NUXT_DEVTOOLS === 'true'
@@ -210,6 +211,7 @@ export default defineNuxtConfig({
         { find: /^markmap-view$/, replacement: markmapViewShimEntry },
         { find: /^markmap-common$/, replacement: markmapCommonShimEntry },
         { find: /^markmap-lib$/, replacement: markmapLibShimEntry },
+        { find: /^pg-native$/, replacement: pgNativeShimEntry },
       ],
     },
     ...(useWorkspaceSource
@@ -224,6 +226,9 @@ export default defineNuxtConfig({
   },
   nitro: {
     preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',
+    alias: {
+      'pg-native': pgNativeShimEntry,
+    },
     esbuild: {
       options: {
         target: 'esnext',
