@@ -710,63 +710,78 @@ importers:
       '@floating-ui/vue':
         specifier: ^1.1.10
         version: 1.1.10(vue@3.5.29(typescript@5.9.3))
+      '@langchain/core':
+        specifier: ^0.3.80
+        version: 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+      '@langchain/langgraph':
+        specifier: ^0.2.74
+        version: 0.2.74(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod-to-json-schema@3.25.1(zod@3.25.76))
+      '@langchain/openai':
+        specifier: ^0.4.9
+        version: 0.4.9(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       '@milkdown/core':
-        specifier: ^7.4.0
-        version: 7.18.0
+        specifier: ^7.19.0
+        version: 7.19.0
       '@milkdown/ctx':
-        specifier: ^7.4.0
-        version: 7.18.0
+        specifier: ^7.19.0
+        version: 7.19.0
       '@milkdown/kit':
-        specifier: ^7.5.5
+        specifier: ^7.19.0
         version: 7.19.0(@codemirror/language@6.12.2)(@codemirror/state@6.5.4)(@codemirror/view@6.39.15)(typescript@5.9.3)
       '@milkdown/plugin-clipboard':
-        specifier: ^7.5.0
+        specifier: ^7.19.0
         version: 7.19.0
       '@milkdown/plugin-diagram':
-        specifier: ^7.4.0
-        version: 7.7.0(@milkdown/core@7.18.0)(@milkdown/ctx@7.18.0)(@milkdown/prose@7.18.0)(@milkdown/transformer@7.18.0)
+        specifier: ^7.7.0
+        version: 7.7.0(@milkdown/core@7.19.0)(@milkdown/ctx@7.19.0)(@milkdown/prose@7.19.0)(@milkdown/transformer@7.19.0)
       '@milkdown/plugin-history':
-        specifier: ^7.5.0
+        specifier: ^7.19.0
         version: 7.19.0
       '@milkdown/plugin-listener':
-        specifier: ^7.4.0
-        version: 7.18.0
+        specifier: ^7.19.0
+        version: 7.19.0
       '@milkdown/plugin-math':
-        specifier: ^7.4.0
-        version: 7.5.9(@milkdown/core@7.18.0)(@milkdown/ctx@7.18.0)(@milkdown/prose@7.18.0)(@milkdown/transformer@7.18.0)
+        specifier: ^7.5.9
+        version: 7.5.9(@milkdown/core@7.19.0)(@milkdown/ctx@7.19.0)(@milkdown/prose@7.19.0)(@milkdown/transformer@7.19.0)
       '@milkdown/plugin-prism':
-        specifier: ^7.4.0
+        specifier: ^7.19.0
         version: 7.19.0
       '@milkdown/plugin-slash':
-        specifier: ^7.5.0
+        specifier: ^7.19.0
         version: 7.19.0
       '@milkdown/plugin-tooltip':
-        specifier: ^7.5.0
+        specifier: ^7.19.0
         version: 7.19.0
       '@milkdown/plugin-trailing':
-        specifier: ^7.5.0
+        specifier: ^7.19.0
         version: 7.19.0
       '@milkdown/plugin-upload':
-        specifier: ^7.5.0
+        specifier: ^7.19.0
         version: 7.19.0
       '@milkdown/preset-commonmark':
-        specifier: ^7.4.0
-        version: 7.18.0
+        specifier: ^7.19.0
+        version: 7.19.0
       '@milkdown/preset-gfm':
-        specifier: ^7.4.0
+        specifier: ^7.19.0
         version: 7.19.0
       '@milkdown/prose':
-        specifier: ^7.4.0
-        version: 7.18.0
+        specifier: ^7.19.0
+        version: 7.19.0
       '@milkdown/theme-nord':
-        specifier: ^7.4.0
-        version: 7.18.0
+        specifier: ^7.19.0
+        version: 7.19.0
       '@milkdown/transformer':
-        specifier: ^7.4.0
-        version: 7.18.0
+        specifier: ^7.19.0
+        version: 7.19.0
+      '@milkdown/utils':
+        specifier: ^7.19.0
+        version: 7.19.0
       '@milkdown/vue':
-        specifier: ^7.4.0
+        specifier: ^7.19.0
         version: 7.19.0(@codemirror/language@6.12.2)(@codemirror/state@6.5.4)(@codemirror/view@6.39.15)(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.3)(typescript@5.9.3)(vue@3.5.29(typescript@5.9.3))
+      '@number-flow/vue':
+        specifier: ^0.4.12
+        version: 0.4.12(vue@3.5.29(typescript@5.9.3))
       '@prosemirror-adapter/vue':
         specifier: ^0.2.6
         version: 0.2.6(vue@3.5.29(typescript@5.9.3))
@@ -797,6 +812,9 @@ importers:
       dayjs:
         specifier: ^1.11.11
         version: 1.11.19
+      deepagents:
+        specifier: 0.0.2
+        version: 0.0.2(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))(zod-to-json-schema@3.25.1(zod@3.25.76))
       element-plus:
         specifier: ^2.11.5
         version: 2.13.5(typescript@5.9.3)(vue@3.5.29(typescript@5.9.3))
@@ -5974,6 +5992,9 @@ packages:
 
   '@milkdown/theme-nord@7.18.0':
     resolution: {integrity: sha512-3t5Fb0Zwsmf2VDkhZm6U5C6/CWiU7UN+Z+/tpbOC1Stsid4CJ3y7j7m/3oRZlQyUEI07dHvAAOHqzyGoYl0FZw==}
+
+  '@milkdown/theme-nord@7.19.0':
+    resolution: {integrity: sha512-TBbUuAJT8wiw3wZVVpDuA0U+UmNUulRgdtXnu72y2QNHdMLmYalw0Yjfx11cDEB52/Ld/z+xHuRvPNf30OSMjw==}
 
   '@milkdown/transformer@7.18.0':
     resolution: {integrity: sha512-AzTgqDktQw9nzgrpICjYNxScYwwnxmALPSyZ39Y0wNZJafi8QMVqLv4w2bhyYkxITXolPHdLAAsZXPKuMjrmNA==}
@@ -25954,6 +25975,21 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@milkdown/plugin-diagram@7.7.0(@milkdown/core@7.19.0)(@milkdown/ctx@7.19.0)(@milkdown/prose@7.19.0)(@milkdown/transformer@7.19.0)':
+    dependencies:
+      '@milkdown/core': 7.19.0
+      '@milkdown/ctx': 7.19.0
+      '@milkdown/exception': 7.7.0
+      '@milkdown/prose': 7.19.0
+      '@milkdown/transformer': 7.19.0
+      '@milkdown/utils': 7.7.0(@milkdown/core@7.19.0)(@milkdown/ctx@7.19.0)(@milkdown/prose@7.19.0)(@milkdown/transformer@7.19.0)
+      mermaid: 10.9.5
+      nanoid: 5.1.6
+      tslib: 2.8.1
+      unist-util-visit: 5.1.0
+    transitivePeerDependencies:
+      - supports-color
+
   '@milkdown/plugin-history@7.19.0':
     dependencies:
       '@milkdown/core': 7.19.0
@@ -25998,6 +26034,21 @@ snapshots:
       '@milkdown/exception': 7.5.9
       '@milkdown/prose': 7.18.0
       '@milkdown/utils': 7.5.9(@milkdown/core@7.18.0)(@milkdown/ctx@7.18.0)(@milkdown/prose@7.18.0)(@milkdown/transformer@7.18.0)
+      '@types/katex': 0.16.8
+      katex: 0.16.28
+      remark-math: 6.0.0
+      tslib: 2.8.1
+    transitivePeerDependencies:
+      - '@milkdown/transformer'
+      - supports-color
+
+  '@milkdown/plugin-math@7.5.9(@milkdown/core@7.19.0)(@milkdown/ctx@7.19.0)(@milkdown/prose@7.19.0)(@milkdown/transformer@7.19.0)':
+    dependencies:
+      '@milkdown/core': 7.19.0
+      '@milkdown/ctx': 7.19.0
+      '@milkdown/exception': 7.5.9
+      '@milkdown/prose': 7.19.0
+      '@milkdown/utils': 7.5.9(@milkdown/core@7.19.0)(@milkdown/ctx@7.19.0)(@milkdown/prose@7.19.0)(@milkdown/transformer@7.19.0)
       '@types/katex': 0.16.8
       katex: 0.16.28
       remark-math: 6.0.0
@@ -26141,6 +26192,15 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@milkdown/theme-nord@7.19.0':
+    dependencies:
+      '@milkdown/core': 7.19.0
+      '@milkdown/ctx': 7.19.0
+      '@milkdown/prose': 7.19.0
+      clsx: 2.1.1
+    transitivePeerDependencies:
+      - supports-color
+
   '@milkdown/transformer@7.18.0':
     dependencies:
       '@milkdown/exception': 7.18.0
@@ -26191,6 +26251,16 @@ snapshots:
       nanoid: 5.1.6
       tslib: 2.8.1
 
+  '@milkdown/utils@7.5.9(@milkdown/core@7.19.0)(@milkdown/ctx@7.19.0)(@milkdown/prose@7.19.0)(@milkdown/transformer@7.19.0)':
+    dependencies:
+      '@milkdown/core': 7.19.0
+      '@milkdown/ctx': 7.19.0
+      '@milkdown/exception': 7.5.9
+      '@milkdown/prose': 7.19.0
+      '@milkdown/transformer': 7.19.0
+      nanoid: 5.1.6
+      tslib: 2.8.1
+
   '@milkdown/utils@7.7.0(@milkdown/core@7.18.0)(@milkdown/ctx@7.18.0)(@milkdown/prose@7.18.0)(@milkdown/transformer@7.18.0)':
     dependencies:
       '@milkdown/core': 7.18.0
@@ -26198,6 +26268,16 @@ snapshots:
       '@milkdown/exception': 7.7.0
       '@milkdown/prose': 7.18.0
       '@milkdown/transformer': 7.18.0
+      nanoid: 5.1.6
+      tslib: 2.8.1
+
+  '@milkdown/utils@7.7.0(@milkdown/core@7.19.0)(@milkdown/ctx@7.19.0)(@milkdown/prose@7.19.0)(@milkdown/transformer@7.19.0)':
+    dependencies:
+      '@milkdown/core': 7.19.0
+      '@milkdown/ctx': 7.19.0
+      '@milkdown/exception': 7.7.0
+      '@milkdown/prose': 7.19.0
+      '@milkdown/transformer': 7.19.0
       nanoid: 5.1.6
       tslib: 2.8.1
 

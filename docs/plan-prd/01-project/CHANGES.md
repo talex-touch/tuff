@@ -2,7 +2,113 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-03-11
+
+### Pilot M1：多渠道 + Completions 兼容 + 后端会话主导（第一批 API 拆分）
+
+**变更类型**: 融合增强 / 兼容迁移 / 稳定性修复
+
+**描述**:
+- 新增渠道解析与协议兼容层（`apps/pilot/server/utils/pilot-channel.ts`）：
+  - 支持 `PILOT_CHANNELS_JSON` 与 `PILOT_DEFAULT_CHANNEL_ID`（含 runtime/env 回退）。
+  - 选择优先级固定为：`request channel_id > 会话绑定 channel_id > default channel`。
+  - `transport=auto` 下先走 `responses`，命中不支持特征后自动回退 `chat.completions`，并做短期能力缓存。
+- 聊天执行器 `POST /api/aigc/executor` 完成 M1 升级（`apps/pilot/server/api/aigc/executor.post.ts`）：
+  - `chat_id` 改为可选（后端可创建），新增可选 `channel_id`。
+  - SSE 新增 `session_bound` 事件，返回最终 `chat_id/runtime_session_id/channel_id/transport`。
+  - 兼容旧工具事件映射：`capability.call -> status_updated(calling)`、`capability.result -> status_updated(result)`；保留 `completion/error/[DONE]`。
+  - 流式结束后由后端自动快照历史，不再依赖前端单独补写 `conversations`。
+- 新增后端会话映射真源（`apps/pilot/server/utils/pilot-quota-session.ts`）：
+  - 表 `pilot_quota_sessions(chat_id/user_id/runtime_session_id/channel_id/topic/created_at/updated_at)`。
+  - 删除会话时统一清理：`quota history + session mapping + runtime session`，避免脏数据。
+- 兼容接口语义收口：
+  - `POST /api/aigc/conversations` 调整为“兼容补写/覆盖元数据”，不再作为主同步通道。
+  - `GET /api/pilot/admin/channels` 新增 env 渠道脱敏查看；`POST /api/pilot/admin/channels` 在 M1 返回 501（保持 env 只读策略）。
+- 完成 M1 第一批剩余 API 迁移（主链路/用户态）：
+  - `aigc` 扩展：`prompts/detail`、`prompts/user`、`conversation/share*`。
+  - `auth`：`renew_token`。
+  - `user-config`、`dummy`、`invitation/records`、`order/*`、`tools/upload*`。
+- 延续 M0 既定口径：
+  - 路由继续保持 `/ -> Quota`、`/pilot/* -> 原 Pilot`。
+  - 认证主链路继续使用 Pilot Cookie 会话/访客模式（Bearer Token 非主路径）。
+  - 兼容 API 继续输出 `{ code, message, data }`。
+- 前端错误态兼容增强（`apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts` + `ErrorCard.vue`）：
+  - 支持同时解析 `event:error` 与 `data.event=error` 两类 SSE 错误帧，优先展示后端 `message`。
+  - 传输层异常统一提取可读错误文本，避免退化为不可读对象。
+  - 修复错误卡片 CTA 误判：未知错误/渠道熔断不再默认显示“立即升级”，`503 熔断/无可用渠道` 改为“稍后重试或切换渠道”提示。
+
+**验证**:
+- `pnpm -C "apps/pilot" run test` ✅
+- `NODE_OPTIONS=--max-old-space-size=8192 pnpm -C "apps/pilot" run build` ✅
+- `pnpm -C "apps/pilot" run typecheck` ⚠️（Quota 迁移存量类型错误仍在，未新增阻塞）
+- `pnpm -C "apps/pilot" run lint` ⚠️（Quota 迁移存量 lint 债务仍在，规则量级较大）
+
+**修改文件**:
+- `apps/pilot/server/utils/pilot-channel.ts`
+- `apps/pilot/server/utils/pilot-runtime.ts`
+- `apps/pilot/server/utils/pilot-quota-session.ts`
+- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+- `apps/pilot/server/utils/quota-share-store.ts`
+- `apps/pilot/server/utils/quota-user-store.ts`
+- `apps/pilot/server/utils/quota-upload-store.ts`
+- `apps/pilot/server/api/aigc/executor.post.ts`
+- `apps/pilot/server/api/aigc/conversations.post.ts`
+- `apps/pilot/server/api/aigc/conversations/[id].delete.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/server/api/pilot/admin/channels.get.ts`
+- `apps/pilot/server/api/pilot/admin/channels.post.ts`
+- `apps/pilot/server/api/aigc/prompts/user.get.ts`
+- `apps/pilot/server/api/aigc/prompts/detail/[id]/index.get.ts`
+- `apps/pilot/server/api/aigc/conversation/share/[id]/index.get.ts`
+- `apps/pilot/server/api/aigc/conversation/share/[id]/index.post.ts`
+- `apps/pilot/server/api/aigc/conversation/share_chat/[id]/index.get.ts`
+- `apps/pilot/server/api/aigc/conversation/share_list.get.ts`
+- `apps/pilot/server/api/auth/renew_token.get.ts`
+- `apps/pilot/server/api/user-config.get.ts`
+- `apps/pilot/server/api/user-config.post.ts`
+- `apps/pilot/server/api/user-config/user/[uid]/index.get.ts`
+- `apps/pilot/server/api/dummy/*`
+- `apps/pilot/server/api/invitation/records.get.ts`
+- `apps/pilot/server/api/order/*`
+- `apps/pilot/server/api/tools/upload.post.ts`
+- `apps/pilot/server/api/tools/upload/content/[id]/index.get.ts`
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-03-10
+
+### Pilot M0: 聊天未渲染修复（SSE 分片解析 + Milkdown 时序 + 运行时缺包）
+
+**变更类型**: 稳定性修复 / 依赖治理
+
+**描述**:
+- 修复 Quota 聊天流式结果在前端解析时出现半包/残片导致不渲染的问题：
+  - `app/composables/api/base/v1/aigc/completion/index.ts` 的 `handleExecutorResult` 改为标准 SSE 帧缓冲解析（按 `\n\n` 分帧，支持跨 chunk 聚合），不再按 `split('\n')` 粗暴处理。
+  - 保留 `event:error` 处理并统一 data 聚合，兼容 `[DONE]` 结束帧。
+- 修复 `MilkdownError: Timer "SchemaReady" not found`：
+  - `MilkContent.vue` 增加 `SchemaReady` 等待与重试兜底，避免初始化时序下 `replaceAll` 触发 token 未就绪。
+  - 增加组件卸载时 `editor.destroy()` 清理，避免重复挂载导致状态污染。
+  - `MilkContent.vue` 的 `refractor` 语言导入路径从 `refractor/lang/*` 更正为 `refractor/*`，修复 `Expected function for syntax` 报错。
+- 修复 dev 运行时缺包导致首页 500：
+  - `apps/pilot/package.json` 显式补齐 `@langchain/core`、`@langchain/langgraph`、`@langchain/openai`、`deepagents`。
+- 统一 `apps/pilot` 中 `@milkdown/*` 主干依赖版本并显式声明 `@milkdown/utils`，降低 token 版本漂移风险。
+- `server/api/aigc/executor` 增加 final-only 流式兜底：当上游只返回 `assistant.final` 时，按字符块拆分成多条 `completion(completed:false)` 后再补 `completed:true`，保证前端可见流式输出。
+- 修复 dev 环境 CSS 资源 404：
+  - `nuxt.config.ts` 的全局 `css` 改为显式文件路径（`tuffex` 样式入口与 UnoCSS reset 实体文件），避免 `/_nuxt/@talex-touch/tuffex/style.css` 与 `/_nuxt/@unocss/reset/tailwind.css` 404。
+- `executor` 对上游 `530 status code` 增加可读错误提示，明确指向 `NUXT_PILOT_BASE_URL` / `NUXT_PILOT_API_KEY` 配置排查。
+
+**验证**:
+- `pnpm -C "apps/pilot" exec eslint app/components/article/MilkContent.vue app/composables/api/base/v1/aigc/completion/index.ts` ✅
+- `curl http://127.0.0.1:<dev-port>/api/auth/status` ✅
+- `curl -N POST /api/aigc/executor` SSE 实测输出 `status_updated -> completion -> [DONE]` ✅
+- `pnpm -C "apps/pilot" run typecheck` ⚠️（仍有 Quota 迁移存量类型错误，与本次修复无关）
+
+**修改文件**:
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `apps/pilot/app/components/article/MilkContent.vue`
+- `apps/pilot/package.json`
+- `pnpm-lock.yaml`
+- `docs/plan-prd/01-project/CHANGES.md`
 
 ### Pilot M0: 前端冷启动加速 + CI/1Panel 部署链路补齐
 

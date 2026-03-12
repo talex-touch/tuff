@@ -11,6 +11,7 @@ import {
   DeepAgentLangChainEngineAdapter,
   DefaultDecisionAdapter,
 } from '@talex-touch/tuff-intelligence'
+import type { PilotBuiltinTool, PilotChannelTransport } from './pilot-channel'
 import { resolvePilotConfigString } from './pilot-config'
 import { createPilotStoreAdapter } from './pilot-store'
 
@@ -67,30 +68,44 @@ function createCapabilityRegistryV1(): CapabilityRegistry {
 export interface CreatePilotRuntimeOptions {
   event: H3Event
   userId: string
+  channel?: {
+    channelId: string
+    baseUrl: string
+    apiKey: string
+    model: string
+    transport: Exclude<PilotChannelTransport, 'auto'>
+    builtinTools: PilotBuiltinTool[]
+  }
   emit?: (event: AgentEnvelope) => Promise<void>
   onAudit?: (record: DeepAgentAuditRecord) => Promise<void> | void
 }
 
 export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
-  const { event, userId, emit, onAudit } = options
+  const { event, userId, emit, onAudit, channel } = options
   const store = createPilotStoreAdapter(event, userId, emit)
   const capabilityRegistry = createCapabilityRegistryV1()
   const dispatcher = new DecisionDispatcher({
     capabilityRegistry,
   })
-  const baseUrl = resolvePilotConfigString(event, 'baseUrl', BASE_URL_ENV_KEYS)
-  const apiKey = resolvePilotConfigString(event, 'apiKey', API_KEY_ENV_KEYS)
+  const baseUrl = String(channel?.baseUrl || '').trim() || resolvePilotConfigString(event, 'baseUrl', BASE_URL_ENV_KEYS)
+  const apiKey = String(channel?.apiKey || '').trim() || resolvePilotConfigString(event, 'apiKey', API_KEY_ENV_KEYS)
+  const model = String(channel?.model || '').trim() || DEFAULT_RESPONSES_MODEL
+  const builtinTools: PilotBuiltinTool[] = Array.isArray(channel?.builtinTools) && channel.builtinTools.length > 0
+    ? channel.builtinTools
+    : ['write_todos']
 
   const engine = new DeepAgentLangChainEngineAdapter({
     baseUrl,
     apiKey,
-    model: DEFAULT_RESPONSES_MODEL,
+    model,
+    transport: channel?.transport || 'auto',
     retryCount: 1,
     timeoutMs: 25_000,
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
-    builtinTools: ['write_todos'],
+    builtinTools,
     metadata: {
       source: 'tuff-pilot',
+      channelId: channel?.channelId,
     },
     onAudit,
   })

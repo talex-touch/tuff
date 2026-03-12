@@ -1,4 +1,9 @@
 import { requirePilotAuth } from '../../utils/auth'
+import {
+  ensurePilotQuotaSessionSchema,
+  getPilotQuotaSessionByChatId,
+  upsertPilotQuotaSession,
+} from '../../utils/pilot-quota-session'
 import { quotaError, quotaOk } from '../../utils/quota-api'
 import {
   ensureQuotaHistorySchema,
@@ -8,9 +13,14 @@ import { createPilotStoreAdapter } from '../../utils/pilot-store'
 
 interface UploadConversationBody {
   chat_id?: string
+  channel_id?: string
   topic?: string
   value?: string
   meta?: string
+}
+
+function randomRuntimeSessionId(): string {
+  return `session-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString().slice(-6)}`
 }
 
 export default defineEventHandler(async (event) => {
@@ -24,6 +34,7 @@ export default defineEventHandler(async (event) => {
   }
 
   await ensureQuotaHistorySchema(event)
+  await ensurePilotQuotaSessionSchema(event)
   const history = await upsertQuotaHistory(event, {
     chatId,
     userId: auth.userId,
@@ -33,23 +44,36 @@ export default defineEventHandler(async (event) => {
   })
 
   try {
+    const mapped = await getPilotQuotaSessionByChatId(event, auth.userId, chatId)
+    const runtimeSessionId = mapped?.runtimeSessionId || randomRuntimeSessionId()
+    const channelId = String(body?.channel_id || mapped?.channelId || 'default').trim() || 'default'
+
+    await upsertPilotQuotaSession(event, {
+      chatId,
+      userId: auth.userId,
+      runtimeSessionId,
+      channelId,
+      topic: history.topic,
+    })
+
     const store = createPilotStoreAdapter(event, auth.userId)
     await store.runtime.ensureSchema()
-    const existing = await store.runtime.getSession(chatId)
+    const existing = await store.runtime.getSession(runtimeSessionId)
     if (!existing) {
       await store.runtime.createSession({
-        sessionId: chatId,
+        sessionId: runtimeSessionId,
         message: '',
         metadata: {
           source: 'quota-history',
+          chatId,
         },
       })
-      await store.runtime.completeSession(chatId, 'idle')
+      await store.runtime.completeSession(runtimeSessionId, 'idle')
     }
 
     const topic = String(history.topic || '').trim()
     if (topic) {
-      await store.runtime.setSessionTitle(chatId, topic)
+      await store.runtime.setSessionTitle(runtimeSessionId, topic)
     }
   }
   catch {

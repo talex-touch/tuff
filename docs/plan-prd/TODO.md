@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2026-03-10
+> 更新时间: 2026-03-11
 
 ---
 
@@ -118,6 +118,28 @@
 - [x] [P1] M0 收口：新增 Pilot CI（`quality + static-dist + 1Panel webhook`）并支持 `master` push 自动触发部署钩子。
 - [ ] [P1] M0 收口：前端重依赖拆分（优先 `Milkdown/EditorMermaid/EditorCode/IconSelector`，持续压缩首屏与 Worker 体积）。
 - [ ] [P1] 部署策略收口：如需同域承载 `/api/*` 兼容层，需拆分轻量 API Worker 或升级 Cloudflare Workers 付费额度（当前免费额度无法承载 `nuxt build` Worker 体积）。
+- [x] [P0] Pilot M1（2026-03-11）：多渠道解析与协议兼容落地（`request > session > default`，`auto: responses -> chat.completions` 回退 + 缓存）。
+- [x] [P0] Pilot M1（2026-03-11）：`POST /api/aigc/executor` 支持 `channel_id` + `chat_id` 可选，新增 `session_bound` 事件，并兼容工具调用事件 `calling/result`。
+- [x] [P0] Pilot M1（2026-03-11）：后端会话真源落地（`pilot_quota_sessions`），流式结束自动快照历史，不再依赖前端补传为主链。
+- [x] [P0] Pilot M1（2026-03-11）：`POST /api/aigc/conversations` 调整为补写/覆盖语义；会话删除三向一致清理（history + mapping + runtime）。
+- [x] [P0] Pilot M1（2026-03-11）：第一批剩余 API 已迁移（`aigc share/detail/user`、`auth/renew_token`、`user-config`、`dummy`、`invitation/records`、`order/*`、`tools/upload*`）。
+- [ ] [P1] Pilot M1 回归补强：渠道矩阵测试（`responses-only` / `chat.completions-only` / `auto fallback`）与 executor SSE 契约断言补齐。
+- [ ] [P1] Pilot M2 API 迁移（运营后台常用，保持“先读后写”）：
+  - [ ] `tools/storage/*`
+  - [ ] `marketing/banner/*`
+  - [ ] `livechat/*`
+  - [ ] `feedback/*`
+  - [ ] `subscribe/*`
+  - [ ] `system/serve/stat`
+- [ ] [P2] Pilot M3 API 迁移（重 CRUD，按“list/get -> create/update/delete”推进）：
+  - [ ] `doc/*`
+  - [ ] `system/users/*`
+  - [ ] `system/roles/*`
+  - [ ] `system/menus/*`
+  - [ ] `system/depts/*`
+  - [ ] `system/dict/*`
+  - [ ] `system/tasks/*`
+  - [ ] `system/param-config/*`
 - [ ] [P1] Pilot 服务端集成测试：断线 pause / SSE heartbeat 丢失处理 / idempotency key / `fromSeq` 补播。
 - [ ] [P2] Pilot 长对话压测：checkpoint 连续性、丢包率、pause/resume 成功率。
 - [ ] [P2] 鉴权联调：Pilot 复用 Nexus 登录态（session/app token）与 quota 限流。

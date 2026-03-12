@@ -1,4 +1,9 @@
 import { requirePilotAuth } from '../../../utils/auth'
+import {
+  deletePilotQuotaSessionByChatId,
+  ensurePilotQuotaSessionSchema,
+  getPilotQuotaSessionByChatId,
+} from '../../../utils/pilot-quota-session'
 import { quotaError, quotaOk } from '../../../utils/quota-api'
 import {
   deleteQuotaHistory,
@@ -14,12 +19,16 @@ export default defineEventHandler(async (event) => {
   }
 
   await ensureQuotaHistorySchema(event)
+  await ensurePilotQuotaSessionSchema(event)
   await deleteQuotaHistory(event, auth.userId, chatId)
+  const mapped = await getPilotQuotaSessionByChatId(event, auth.userId, chatId)
+  await deletePilotQuotaSessionByChatId(event, auth.userId, chatId)
 
   try {
     const store = createPilotStoreAdapter(event, auth.userId)
     await store.runtime.ensureSchema()
-    await store.runtime.deleteSession(chatId)
+    const runtimeSessionId = mapped?.runtimeSessionId || chatId
+    await store.runtime.deleteSession(runtimeSessionId)
   }
   catch {
     // keep compat behavior, deleting history should still succeed

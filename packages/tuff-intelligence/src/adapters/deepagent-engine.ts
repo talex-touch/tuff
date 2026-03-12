@@ -36,6 +36,7 @@ export interface DeepAgentEngineOptions {
   baseUrl?: string
   apiKey?: string
   model?: string
+  transport?: 'auto' | 'responses' | 'chat.completions'
   timeoutMs?: number
   retryCount?: number
   temperature?: number
@@ -55,6 +56,17 @@ const OPENAI_CHAT_SUFFIXES = ['/chat/completions', '/completions']
 const OPENAI_RESPONSES_SUFFIXES = ['/v1/responses', '/responses']
 const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']
 const UNSUPPORTED_CHAT_COMPLETIONS_BASE_URLS = new Set<string>()
+
+function normalizeTransport(value: unknown): 'auto' | 'responses' | 'chat.completions' {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'responses') {
+    return 'responses'
+  }
+  if (normalized === 'chat.completions' || normalized === 'chat_completions' || normalized === 'completions') {
+    return 'chat.completions'
+  }
+  return 'auto'
+}
 
 function trimSuffixSlash(value: string): string {
   return value.replace(/\/+$/, '')
@@ -874,6 +886,22 @@ function shouldUseResponsesCompatibilityFallback(error: unknown): boolean {
     || message.includes('/v1/chat/completions is not supported')
 }
 
+function shouldFallbackToChatCompletions(error: unknown): boolean {
+  const statusCode = extractStatusCode(error)
+  if (statusCode === 404 || statusCode === 405 || statusCode === 501) {
+    return true
+  }
+
+  const message = errorMessageOf(error).toLowerCase()
+  if (!message.includes('/responses')) {
+    return false
+  }
+
+  return message.includes('not found')
+    || message.includes('unsupported')
+    || message.includes('legacy protocol')
+}
+
 function resolveResponsesEndpoint(
   relayBaseUrl: string,
 ): string {
@@ -1016,9 +1044,10 @@ async function invokeResponsesCompatibilityFallback(params: {
   }
 }
 
-async function invokeDeepAgentWithRelay(
+async function invokeDeepAgentWithTransport(
   state: TurnState,
   options: DeepAgentEngineOptions,
+  transport: 'responses' | 'chat.completions',
 ): Promise<DeepAgentResponsesResult> {
   const relayBaseUrl = resolveRelayBaseUrl(options)
   const model = String(options.model || FALLBACK_MODEL).trim() || FALLBACK_MODEL
@@ -1051,10 +1080,12 @@ async function invokeDeepAgentWithRelay(
   const builtinTools = Array.isArray(options.builtinTools) && options.builtinTools.length > 0
     ? options.builtinTools
     : DEFAULT_BUILTIN_TOOLS
-  const useResponsesApi = true
+  const useResponsesApi = transport === 'responses'
 
   const invokeMessages = buildDeepAgentMessages(state)
-  const endpoint = `${trimSuffixSlash(relayBaseUrl)}/responses`
+  const endpoint = useResponsesApi
+    ? `${trimSuffixSlash(relayBaseUrl)}/responses`
+    : `${trimSuffixSlash(relayBaseUrl)}/chat/completions`
 
   const llm = new ChatOpenAI({
     apiKey: effectiveApiKey,
@@ -1069,7 +1100,7 @@ async function invokeDeepAgentWithRelay(
     },
   })
 
-  if (UNSUPPORTED_CHAT_COMPLETIONS_BASE_URLS.has(relayBaseUrl)) {
+  if (useResponsesApi && UNSUPPORTED_CHAT_COMPLETIONS_BASE_URLS.has(relayBaseUrl)) {
     return await invokeResponsesCompatibilityFallback({
       state,
       options,
@@ -1128,7 +1159,7 @@ async function invokeDeepAgentWithRelay(
     }, retryCount)
   }
   catch (error) {
-    if (shouldUseResponsesCompatibilityFallback(error)) {
+    if (useResponsesApi && shouldUseResponsesCompatibilityFallback(error)) {
       UNSUPPORTED_CHAT_COMPLETIONS_BASE_URLS.add(relayBaseUrl)
       return await invokeResponsesCompatibilityFallback({
         state,
@@ -1171,6 +1202,36 @@ async function invokeDeepAgentWithRelay(
     content,
     provider: 'langchain-deepagents',
     model,
+  }
+}
+
+async function invokeDeepAgentWithRelay(
+  state: TurnState,
+  options: DeepAgentEngineOptions,
+): Promise<DeepAgentResponsesResult> {
+  const preferredTransport = normalizeTransport(options.transport)
+  if (preferredTransport === 'responses' || preferredTransport === 'chat.completions') {
+    return await invokeDeepAgentWithTransport(state, options, preferredTransport)
+  }
+
+  try {
+    return await invokeDeepAgentWithTransport(state, options, 'responses')
+  }
+  catch (error) {
+    if (!shouldFallbackToChatCompletions(error)) {
+      throw error
+    }
+
+    await options.onAudit?.({
+      type: 'upstream.transport_fallback',
+      payload: {
+        from: 'responses',
+        to: 'chat.completions',
+        reason: errorMessageOf(error),
+      },
+    })
+
+    return await invokeDeepAgentWithTransport(state, options, 'chat.completions')
   }
 }
 
@@ -1245,6 +1306,8 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
     const model = String(this.options.model || FALLBACK_MODEL).trim() || FALLBACK_MODEL
     const effectiveApiKey = String(this.options.apiKey || '').trim()
     const timeoutMs = resolveTimeoutMs(this.options)
+    const transport = normalizeTransport(this.options.transport)
+    const useResponsesApi = transport !== 'chat.completions'
 
     if (!relayBaseUrl || !effectiveApiKey) {
       yield await this.run(state)
@@ -1257,12 +1320,14 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
       ? this.options.builtinTools
       : DEFAULT_BUILTIN_TOOLS
     const invokeMessages = buildDeepAgentMessages(state)
-    const endpoint = `${trimSuffixSlash(relayBaseUrl)}/responses`
+    const endpoint = useResponsesApi
+      ? `${trimSuffixSlash(relayBaseUrl)}/responses`
+      : `${trimSuffixSlash(relayBaseUrl)}/chat/completions`
 
     const llm = new ChatOpenAI({
       apiKey: effectiveApiKey,
       model,
-      useResponsesApi: true,
+      useResponsesApi,
       streaming: true,
       temperature: this.options.temperature,
       maxTokens: this.options.maxTokens,
@@ -1280,7 +1345,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
         method: 'POST',
         model,
         strategy: 'deepagents.createDeepAgent.stream',
-        transport: 'responses.stream',
+        transport: useResponsesApi ? 'responses.stream' : 'chat.completions.stream',
         messageCount: invokeMessages.length,
         hasInstructions: Boolean(instructions),
         subAgentCount: subagents.length,
@@ -1311,7 +1376,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
       const directLlm = new ChatOpenAI({
         apiKey: effectiveApiKey,
         model,
-        useResponsesApi: true,
+        useResponsesApi,
         streaming: true,
         temperature: this.options.temperature,
         maxTokens: this.options.maxTokens,

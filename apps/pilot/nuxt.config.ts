@@ -8,6 +8,7 @@ const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const tuffexSourceEntry = resolve(workspaceRoot, 'packages/tuffex/packages/components/src/index.ts')
 const tuffexStyleEntry = resolve(workspaceRoot, 'packages/tuffex/packages/components/style/index.scss')
 const tuffexUtilsEntry = resolve(workspaceRoot, 'packages/tuffex/packages/utils/index.ts')
+const unoResetStyleEntry = resolve(workspaceRoot, 'node_modules/@unocss/reset/tailwind.css')
 const refractorLangShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/refractor-lang.ts')
 const vueuseComponentsShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/vueuse-components.ts')
 const markmapViewShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-view.ts')
@@ -86,8 +87,8 @@ export default defineNuxtConfig({
     }],
   ],
   css: [
-    '@talex-touch/tuffex/style.css',
-    '@unocss/reset/tailwind.css',
+    tuffexStyleEntry,
+    unoResetStyleEntry,
   ],
   colorMode: {
     classSuffix: '',

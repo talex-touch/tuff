@@ -1,8 +1,60 @@
-import { type IInnerItemType, calculateConversation, mapStrStatus } from './entity'
+import type { IInnerItemType } from './entity'
+import type { IChatBody, IChatConversation, IChatInnerItem, IChatItem, ICompletionHandler, IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
 import { endHttp } from '~/composables/api/axios'
-import { type IChatBody, type IChatConversation, type IChatInnerItem, type IChatItem, IChatItemStatus, IChatRole, type ICompletionHandler, type IInnerItemMeta, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
+import { IChatItemStatus, IChatRole, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
+import { calculateConversation, mapStrStatus } from './entity'
 
-let lastReceive = ''
+function parseJsonSafe<T>(value: string): T | null {
+  try {
+    return JSON.parse(value) as T
+  }
+  catch {
+    return null
+  }
+}
+
+function normalizeExecutorErrorMessage(error: unknown): string {
+  if (typeof error === 'string')
+    return error
+
+  if (error instanceof Error)
+    return error.message || '请求失败，请稍后重试'
+
+  if (error && typeof error === 'object') {
+    const payload = error as Record<string, any>
+    const directMessage = payload.message
+      || payload.error
+      || payload.detail
+      || payload.statusText
+
+    if (typeof directMessage === 'string' && directMessage.trim())
+      return directMessage.trim()
+
+    const response = payload.response && typeof payload.response === 'object'
+      ? payload.response as Record<string, any>
+      : null
+    const responseData = payload.data ?? response?.data
+
+    if (typeof responseData === 'string' && responseData.trim())
+      return responseData.trim()
+
+    if (responseData && typeof responseData === 'object') {
+      const data = responseData as Record<string, any>
+      const dataMessage = data.message || data.error
+      if (typeof dataMessage === 'string' && dataMessage.trim()) {
+        const code = typeof data.code === 'number' ? data.code : response?.status
+        return code ? `${code} ${dataMessage.trim()}` : dataMessage.trim()
+      }
+    }
+
+    const statusCode = payload.status ?? response?.status
+    if (typeof statusCode === 'number')
+      return `${statusCode} 请求失败，请稍后重试`
+  }
+
+  return '请求失败，请稍后重试'
+}
+
 async function handleExecutorItem(item: string, callback: (data: any) => void) {
   if (item === '[DONE]') {
     callback({
@@ -11,14 +63,7 @@ async function handleExecutorItem(item: string, callback: (data: any) => void) {
   }
   else {
     try {
-      let _item = item
-
-      if (lastReceive) {
-        _item = lastReceive + item
-        lastReceive = ''
-      }
-
-      const json = JSON.parse(_item)
+      const json = JSON.parse(item)
 
       callback({
         done: false,
@@ -26,16 +71,8 @@ async function handleExecutorItem(item: string, callback: (data: any) => void) {
       })
     }
     catch (e: any) {
-      if (e.message.includes('in JSON') || e instanceof SyntaxError) {
-        lastReceive = item
-
-        console.warn('Item Not Completed, continuing receiving ...', item)
-
-        return
-      }
-
+      console.error('Failed to parse executor SSE data frame', item, e)
       console.log('item', item)
-      console.error(e)
 
       callback({
         done: true,
@@ -45,11 +82,92 @@ async function handleExecutorItem(item: string, callback: (data: any) => void) {
   }
 }
 
+function parseSseFrame(frame: string): { event: string, data: string } | null {
+  const lines = frame.split('\n')
+  let event = 'message'
+  const dataLines: string[] = []
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd()
+    if (!line || line.startsWith(':'))
+      continue
+
+    if (line.startsWith('event:')) {
+      event = line.slice(6).trim() || 'message'
+      continue
+    }
+
+    if (line.startsWith('data:')) {
+      const data = line.slice(5)
+      dataLines.push(data.startsWith(' ') ? data.slice(1) : data)
+    }
+  }
+
+  if (!dataLines.length)
+    return null
+
+  return {
+    event,
+    data: dataLines.join('\n'),
+  }
+}
+
 async function handleExecutorResult(reader: ReadableStreamDefaultReader<string>, callback: (data: any) => void) {
+  let buffer = ''
+
+  const flushBuffer = async () => {
+    let frameEndIndex = buffer.indexOf('\n\n')
+
+    while (frameEndIndex !== -1) {
+      const frame = buffer.slice(0, frameEndIndex)
+      buffer = buffer.slice(frameEndIndex + 2)
+
+      const parsed = parseSseFrame(frame)
+      if (!parsed) {
+        frameEndIndex = buffer.indexOf('\n\n')
+        continue
+      }
+
+      if (parsed.event === 'error') {
+        const payload = parseJsonSafe<Record<string, any>>(parsed.data)
+        if (payload) {
+          callback({
+            done: false,
+            event: typeof payload.event === 'string' ? payload.event : 'error',
+            status: typeof payload.status === 'string' ? payload.status : 'failed',
+            id: payload.id || 'assistant',
+            name: payload.name,
+            data: payload.data,
+            message: normalizeExecutorErrorMessage(payload.message || payload.error || payload.data || parsed.data),
+          })
+          frameEndIndex = buffer.indexOf('\n\n')
+          continue
+        }
+
+        callback({
+          done: false,
+          error: true,
+          e: normalizeExecutorErrorMessage(parsed.data),
+        })
+        frameEndIndex = buffer.indexOf('\n\n')
+        continue
+      }
+
+      await handleExecutorItem(parsed.data, callback)
+      frameEndIndex = buffer.indexOf('\n\n')
+    }
+  }
+
   while (true) {
     const { value, done } = await reader.read()
 
     if (done) {
+      if (buffer.trim().length) {
+        const parsed = parseSseFrame(buffer)
+        if (parsed)
+          await handleExecutorItem(parsed.data, callback)
+      }
+
       callback({
         done: true,
       })
@@ -60,78 +178,8 @@ async function handleExecutorResult(reader: ReadableStreamDefaultReader<string>,
     if (!value.length)
       continue
 
-    if (value.includes('code') && value.includes('1101')) {
-      callback({
-        done: false,
-        error: true,
-        e: value,
-      })
-
-      return
-    }
-
-    const _value = value
-
-    const arr = _value.split('\n')
-
-    for (let i = 0; i < arr.length; i++) {
-      const item = arr[i]
-
-      if (item.startsWith('data: ')) { handleExecutorItem(item.slice(6), callback) }
-      else if (item.startsWith('event: error')) {
-        callback({
-          done: false,
-          error: true,
-          e: arr?.[i + 2] || _value,
-        })
-        break
-      }
-      else {
-        if (arr.length === 1) {
-          handleExecutorItem(item, callback)
-
-          continue
-        }
-
-        const prevItem = arr[1]
-
-        if (!prevItem.startsWith('event: error'))
-          continue
-
-        const dataItem = arr[3]
-        const v = dataItem.slice(6)
-
-        try {
-          continue
-        }
-        catch (_ignore) {
-          callback({
-            done: true,
-            error: true,
-            e: v,
-          })
-        }
-
-        // try {
-        //   const data = JSON.parse(item)
-
-        //   if (data.code === 1101)
-        //     $handleUserLogout()
-
-        //   if (data?.message && !data?.data)
-        //     ElMessage.error(data.message)
-        // }
-        // catch (_ignored) {
-        //   console.error('error in chat', _ignored, item)
-
-        //   callback({
-        //     done: true,
-        //     error: true,
-        //     e: item,
-        //   })
-        // }
-      }
-    }
+    buffer += value.replace(/\r\n/g, '\n')
+    await flushBuffer()
   }
 }
 
@@ -248,9 +296,14 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
       console.error(e)
 
       wrappedCallback({
+        done: false,
+        event: 'error',
+        status: 'failed',
+        id: 'assistant',
+        message: normalizeExecutorErrorMessage(e),
+      })
+      wrappedCallback({
         done: true,
-        error: true,
-        e,
       })
     }
 
@@ -480,6 +533,7 @@ export const $completion = {
 
             if (res.error) {
               console.error('@completion error response', res)
+              const errorMessage = normalizeExecutorErrorMessage(res.e)
 
               innerMsg.status = IChatItemStatus.ERROR
 
@@ -491,7 +545,7 @@ export const $completion = {
 
               innerMsg.value.push({
                 type: 'error',
-                value: res.e.message || res.e,
+                value: errorMessage,
               })
 
               complete()
@@ -500,7 +554,14 @@ export const $completion = {
             }
 
             if (res.done) {
-              innerMsg.status = IChatItemStatus.AVAILABLE
+              if (
+                innerMsg.status !== IChatItemStatus.ERROR
+                && innerMsg.status !== IChatItemStatus.BANNED
+                && innerMsg.status !== IChatItemStatus.REJECTED
+                && innerMsg.status !== IChatItemStatus.CANCELLED
+              ) {
+                innerMsg.status = IChatItemStatus.AVAILABLE
+              }
               complete()
 
               return

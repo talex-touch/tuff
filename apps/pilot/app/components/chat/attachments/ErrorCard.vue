@@ -15,15 +15,22 @@ const _text = computed(() => {
   if (text.includes('code') && text.includes('1101'))
     return [`登录状态异常`, '1101']
 
-  if (!text.includes(' ('))
-    return [`${text}`, '500']
+  if (!text.includes(' (')) {
+    const errCode = text.match(/\d{3}/)?.[0]
+    if (!errCode) {
+      return [`${text}`, '500']
+    }
+
+    const value = text.replace(errCode, '').trim()
+    return [value || text, errCode]
+  }
 
   const reg = /\((.*?)\)/g
 
   const content = text.replace(reg, '')
 
   // 提取文本中的错误码 比如：401 该令牌状态不可用 => 401
-  const errCode = content.match(/[0-9]{3}/)?.[0]
+  const errCode = content.match(/\d{3}/)?.[0]
 
   const value = content.replace(errCode || '', '').trim()
   // 如果得到的内容是 当前分组 default 下对于模型 gpt-4o-mini 计费模式 [按量计费,按次计费] 无可用渠道
@@ -43,33 +50,48 @@ const _bracket = computed(() => {
 
   // 提取括号中的内容 比如：(2323124你好) => 2323124你好
   // 然后括号中的内容会是 request id: 123456456456456465 => 只提取这一串不定长数字
-  const bracketContent = content.match(/[0-9]{3,}/)?.[0] || ''
+  const bracketContent = content.match(/\d{3,}/)?.[0] || ''
 
   return bracketContent
 })
 
 const description = computed(() => {
   const title = _text.value[0]
-  if (!title)
+  if (!title) {
     return null
+  }
 
-  if (title.includes('状态不可用'))
+  if (title.includes('状态不可用')) {
     return [0, '由于您长时间未进行任何操作，系统为保障安全已自动注销您的会话。请您重新登录以获取新的访问令牌，以便继续正常使用系统各项功能。感谢您的理解与配合。']
-
-  else if (title.includes('额度已用尽'))
+  }
+  else if (title.includes('额度已用尽')) {
     return [1, '您已达到限制，升级订阅计划以继续使用科塔智爱。为确保服务不受影响，建议您尽快完成订阅计划升级。如有任何疑问，欢迎随时联系客服咨询。感谢您的支持与理解。']
-  else if (+_text.value[1]! === 503)
+  }
+  else if (
+    +_text.value[1]! === 503
+    && (title.includes('熔断') || title.includes('无可用渠道') || title.includes('供应商'))
+  ) {
+    return [5, '当前渠道暂不可用，请稍后重试，或切换模型/渠道后再次发送。']
+  }
+  else if (+_text.value[1]! === 503) {
     return [2, '当前模型的使用需升级至更高级的订阅计划。请前往订阅页面选择合适的套餐进行升级，以便继续使用该模型的所有功能。感谢您的理解和支持。']
-  else if (title.includes('未登录'))
+  }
+  else if (title.includes('未登录')) {
     return [3, '您尚未登录，请先登录以继续使用科塔智爱系统的全部功能。为确保正常体验，请前往登录页面完成登录操作。如有任何疑问，欢迎联系客服获取帮助。感谢您的理解与支持。']
-  else if (+_text.value[1]! === 500)
+  }
+  else if (+_text.value[1]! === 500) {
     return [0, '发生未知错误，请联系管理员以获取进一步支持。我们将尽快为您解决问题，感谢您的理解和配合。']
-  else if (+_text.value[1]! === 1100)
+  }
+  else if (+_text.value[1]! === 1100) {
     return [4, '由于手动取消了请求，当前请求已被终止。请尝试重新发起请求以发起新对话。']
-  else if (+_text.value[1]! === 1101)
+  }
+  else if (+_text.value[1]! === 1101) {
     return [3, '检测到您的登录状态出现异常，建议您尝试重新发送消息以恢复正常使用。']
+  }
 
-  else return [-1, props.block.value]
+  else {
+    return [-1, props.block.value]
+  }
 })
 
 const pageOptions: any = inject('appOptions')!
@@ -120,11 +142,16 @@ function handleClick() {
     </div>
   </div>
 
-  <div v-if="description && +description[0] !== 4" v-wave class="ErrorCard-Addon" @click="handleClick">
+  <div
+    v-if="description && +description[0] !== 4 && +description[0] !== -1 && +description[0] !== 5"
+    v-wave
+    class="ErrorCard-Addon"
+    @click="handleClick"
+  >
     <template v-if="+description[0] === 0">
       <i i-carbon:chat-bot block /> 联系客服
     </template>
-    <template v-else-if="+description[0] <= 2">
+    <template v-else-if="+description[0] === 1 || +description[0] === 2">
       <div class="primary bg" />
 
       <span text-white font-bold><i i-carbon:upgrade block /> 立即升级</span>
