@@ -11,6 +11,7 @@ ENV NUXT_FULL_ICON_SAFELIST=false
 WORKDIR /workspace
 
 RUN corepack enable
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
