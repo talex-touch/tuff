@@ -97,9 +97,6 @@ jobs:
       - name: Generate static site
         run: pnpm -C "apps/pilot" run generate
 
-      - name: Prepare static routes
-        run: pnpm -C "apps/pilot" run prepare:cf-static
-
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
