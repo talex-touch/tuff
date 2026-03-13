@@ -104,7 +104,7 @@ export default defineEventHandler(async (event) => {
   const redirectUri = new URL('/auth/callback', getRequestURL(event).origin).toString()
   const userId = await exchangeOauthCode(event, oauthCode, redirectUri)
 
-  writePilotSessionCookie(event, userId)
+  await writePilotSessionCookie(event, userId)
   await mergePilotGuestDataAfterAuth(event, userId, 'login')
 
   return sendRedirect(event, returnTo, 302)

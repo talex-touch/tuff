@@ -6,11 +6,6 @@ const basePort = Number(process.env.PILOT_DEV_PORT || 3300)
 const range = Number(process.env.PILOT_DEV_PORT_RANGE || 20)
 const host = String(process.env.HOST || '127.0.0.1')
 
-if (!process.env.NUXT_USE_CLOUDFLARE_DEV)
-  process.env.NUXT_USE_CLOUDFLARE_DEV = 'true'
-if (!process.env.CLOUDFLARE_DEV_ENVIRONMENT)
-  process.env.CLOUDFLARE_DEV_ENVIRONMENT = 'preview'
-
 function checkPort(targetPort) {
   return new Promise((resolve) => {
     const server = net.createServer()

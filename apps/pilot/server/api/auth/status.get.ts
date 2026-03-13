@@ -1,4 +1,5 @@
 import { requirePilotAuth } from '../../utils/auth'
+import { resolvePilotAdmin } from '../../utils/pilot-admin-auth'
 import { ensurePilotLocalAuthSchema, getPilotLocalUserByUserId, isPilotLocalUserId } from '../../utils/pilot-local-auth'
 import { quotaOk } from '../../utils/quota-api'
 
@@ -20,6 +21,9 @@ export default defineEventHandler(async (event) => {
       localProfile = null
     }
   }
+  const admin = await resolvePilotAdmin(event)
+  const roles = admin.isAdmin ? ['admin'] : []
+  const permissions = admin.isAdmin ? ['pilot:admin'] : []
 
   return quotaOk({
     isLogin,
@@ -30,8 +34,9 @@ export default defineEventHandler(async (event) => {
           nickname: localProfile?.nickname || `Pilot-${auth.userId.slice(-6)}`,
           avatar: '',
           email: localProfile?.email || '',
-          roles: [],
-          permissions: [],
+          roles,
+          permissions,
+          isAdmin: admin.isAdmin,
         }
       : null,
   })

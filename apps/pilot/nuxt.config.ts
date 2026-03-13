@@ -27,14 +27,7 @@ const thisAiVersion = firstDefined(
   process.env.COMMIT_SHA,
   process.env.npm_package_version,
 ) || 'dev'
-const useCloudflareDev = isDev && (
-  process.env.NUXT_USE_CLOUDFLARE_DEV === 'true'
-  || process.env.NITRO_PRESET === 'cloudflare-pages'
-)
-const DEFAULT_PILOT_BASE_URL = firstDefined(
-  process.env.NUXT_PUBLIC_ENDS_URL,
-  process.env.NUXT_PILOT_BASE_URL,
-) || 'https://sub2api-home.tagzxia.com'
+const DEFAULT_PILOT_BASE_URL = '/'
 const FORBIDDEN_DEV_PORT = 3000
 
 function firstDefined(...values: Array<string | undefined>): string | undefined {
@@ -52,18 +45,6 @@ function firstDefined(...values: Array<string | undefined>): string | undefined 
 function envString(...keys: string[]): string {
   const values = keys.map(key => process.env[key])
   return firstDefined(...values) || ''
-}
-
-function envNumber(key: string, fallback: number): number {
-  const raw = envString(key)
-  if (!raw) {
-    return fallback
-  }
-  const parsed = Number(raw)
-  if (!Number.isFinite(parsed)) {
-    return fallback
-  }
-  return parsed
 }
 
 function parseCliDevPort(argv: string[]): number | undefined {
@@ -225,7 +206,7 @@ export default defineNuxtConfig({
       : {}),
   },
   nitro: {
-    preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',
+    preset: 'node-server',
     alias: {
       'pg-native': pgNativeShimEntry,
     },
@@ -234,15 +215,6 @@ export default defineNuxtConfig({
         target: 'esnext',
       },
     },
-    ...(useCloudflareDev
-      ? {
-          cloudflareDev: {
-            environment: process.env.CLOUDFLARE_DEV_ENVIRONMENT,
-            configPath: resolve(workspaceRoot, 'apps/pilot/wrangler.toml'),
-            persistDir: resolve(workspaceRoot, '.wrangler/state/v3/pilot'),
-          },
-        }
-      : {}),
   },
   sourcemap: {
     server: false,
@@ -255,26 +227,18 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     pilot: {
-      baseUrl: envString('NUXT_PILOT_BASE_URL') || DEFAULT_PILOT_BASE_URL,
-      apiKey: envString('NUXT_PILOT_API_KEY'),
       nexusOrigin: envString('NUXT_PUBLIC_NEXUS_ORIGIN') || DEFAULT_NEXUS_ORIGIN,
-      nexusInternalOrigin: envString('PILOT_NEXUS_INTERNAL_ORIGIN')
-        || envString('NUXT_PUBLIC_NEXUS_ORIGIN')
-        || DEFAULT_NEXUS_ORIGIN,
       nexusOauthClientId: envString('PILOT_NEXUS_OAUTH_CLIENT_ID'),
       nexusOauthClientSecret: envString('PILOT_NEXUS_OAUTH_CLIENT_SECRET'),
       cookieSecret: envString('PILOT_COOKIE_SECRET'),
-      sessionCookieMaxAgeSec: Number(envString('PILOT_SESSION_COOKIE_MAX_AGE_SEC') || 86_400),
     },
     public: {
       pilotTitle: 'Tuff Pilot',
       appName,
-      endsBaseUrl: envString('NUXT_PUBLIC_ENDS_URL')
-        || envString('NUXT_PILOT_BASE_URL')
-        || DEFAULT_PILOT_BASE_URL,
+      endsBaseUrl: DEFAULT_PILOT_BASE_URL,
       nexusOrigin: envString('NUXT_PUBLIC_NEXUS_ORIGIN') || DEFAULT_NEXUS_ORIGIN,
-      pilotStreamIdleTimeoutMs: envNumber('NUXT_PUBLIC_PILOT_STREAM_IDLE_TIMEOUT_MS', 45_000),
-      pilotStreamMaxDurationMs: envNumber('NUXT_PUBLIC_PILOT_STREAM_MAX_DURATION_MS', 8 * 60_000),
+      pilotStreamIdleTimeoutMs: 45_000,
+      pilotStreamMaxDurationMs: 8 * 60_000,
     },
   },
 })

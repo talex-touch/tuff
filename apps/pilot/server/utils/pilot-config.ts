@@ -15,17 +15,6 @@ export function getPilotRuntimeConfig(event: H3Event): Record<string, unknown> {
     : {}
 }
 
-function resolveCloudflareConfigString(event: H3Event, envKeys: string[]): string {
-  const cloudflareEnv = (event.context.cloudflare as { env?: Record<string, unknown> } | undefined)?.env
-  for (const envKey of envKeys) {
-    const fromCloudflare = toStringValue(cloudflareEnv?.[envKey])
-    if (fromCloudflare) {
-      return fromCloudflare
-    }
-  }
-  return ''
-}
-
 function resolveProcessConfigString(envKeys: string[]): string {
   for (const envKey of envKeys) {
     const fromProcess = toStringValue(process.env[envKey])
@@ -47,11 +36,6 @@ export function resolvePilotConfigString(
   envKeys: string[],
   fallback = '',
 ): string {
-  const fromCloudflare = resolveCloudflareConfigString(event, envKeys)
-  if (fromCloudflare) {
-    return fromCloudflare
-  }
-
   const fromProcess = resolveProcessConfigString(envKeys)
   if (fromProcess) {
     return fromProcess
@@ -79,28 +63,8 @@ export interface ResolvePilotNexusOriginOptions {
 
 export function resolvePilotNexusOrigin(
   event: H3Event,
-  options: ResolvePilotNexusOriginOptions = {},
+  _options: ResolvePilotNexusOriginOptions = {},
 ): string {
-  const runtimeKey = options.internal ? 'nexusInternalOrigin' : 'nexusOrigin'
-  const envKeys = options.internal
-    ? ['PILOT_NEXUS_INTERNAL_ORIGIN', 'NUXT_PUBLIC_NEXUS_ORIGIN']
-    : ['NUXT_PUBLIC_NEXUS_ORIGIN']
   const fallback = defaultPilotNexusOrigin()
-
-  if (isDevelopmentRuntime()) {
-    // Cloudflare dev injects wrangler vars; prefer local values in dev to avoid redirecting to production Nexus.
-    const fromProcess = resolveProcessConfigString(envKeys)
-    if (fromProcess) {
-      return fromProcess
-    }
-
-    const fromRuntime = resolveRuntimeConfigString(event, runtimeKey)
-    if (fromRuntime) {
-      return fromRuntime
-    }
-
-    return fallback
-  }
-
-  return resolvePilotConfigString(event, runtimeKey, envKeys, fallback)
+  return resolvePilotConfigString(event, 'nexusOrigin', ['NUXT_PUBLIC_NEXUS_ORIGIN'], fallback)
 }

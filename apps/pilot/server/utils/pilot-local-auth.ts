@@ -240,6 +240,58 @@ export async function createPilotLocalUser(
   }
 }
 
+export async function upsertPilotLocalUserByEmail(
+  event: H3Event,
+  input: {
+    email: string
+    password: string
+    nickname?: string
+  },
+): Promise<PilotLocalUserRecord & { created: boolean }> {
+  const db = requirePilotDatabase(event)
+  const email = normalizePilotLocalEmail(input.email)
+  const nickname = normalizePilotLocalNickname(input.nickname, email)
+  const existing = await getPilotLocalUserByEmail(event, email)
+
+  if (!existing) {
+    const created = await createPilotLocalUser(event, {
+      email,
+      password: input.password,
+      nickname,
+    })
+    return {
+      ...created,
+      created: true,
+    }
+  }
+
+  const now = nowIso()
+  const passwordHash = createPasswordDigest(input.password)
+  await db.prepare(`
+    UPDATE ${LOCAL_USER_TABLE}
+    SET nickname = ?2,
+        status = ?3,
+        password_hash = ?4,
+        updated_at = ?5
+    WHERE user_id = ?1
+  `).bind(
+    existing.userId,
+    nickname,
+    DEFAULT_USER_STATUS,
+    passwordHash,
+    now,
+  ).run()
+
+  return {
+    ...existing,
+    nickname,
+    status: DEFAULT_USER_STATUS,
+    passwordHash,
+    updatedAt: now,
+    created: false,
+  }
+}
+
 export async function verifyPilotLocalUserLogin(
   event: H3Event,
   input: {

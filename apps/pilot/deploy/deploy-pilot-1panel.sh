@@ -29,35 +29,29 @@ Options:
   --health-interval <seconds>   Health check interval seconds (default: 3)
   --pull-only                   Only pull target image and exit, do not restart service
   --no-rollback                 Disable rollback when health check fails
-  --ghcr-username <value>       Optional GHCR username
-  --ghcr-token <value>          Optional GHCR token
   -h, --help                    Show this help
 
 Environment fallback:
-  PILOT_PROJECT_DIR
-  PILOT_COMPOSE_FILE
-  PILOT_SERVICE_NAME
-  PILOT_IMAGE_REPO
   PILOT_IMAGE_TAG
-  PILOT_IMAGE_REF
-  PILOT_DEFAULT_IMAGE_REPO
   PILOT_BOOTSTRAP_COMPOSE=true|false
   PILOT_BOOTSTRAP_HTTP_PORT
   PILOT_HEALTHCHECK_URL
   PILOT_HEALTHCHECK_ATTEMPTS
   PILOT_HEALTHCHECK_INTERVAL_SEC
   PILOT_ROLLBACK_ON_FAILURE=true|false
-  PILOT_GHCR_USERNAME
-  PILOT_GHCR_TOKEN
-
 Runtime env passthrough (for compose variable substitution):
-  PILOT_DB_DRIVER
-  PILOT_DB_FILE
   PILOT_POSTGRES_URL
   PILOT_REDIS_URL
-  PILOT_PG_DB
-  PILOT_PG_USER
-  PILOT_PG_PASSWORD
+  PILOT_JWT_ACCESS_SECRET
+  PILOT_JWT_REFRESH_SECRET
+  PILOT_COOKIE_SECRET
+  PILOT_CONFIG_ENCRYPTION_KEY
+  PILOT_BOOTSTRAP_ADMIN_EMAIL
+  PILOT_BOOTSTRAP_ADMIN_PASSWORD
+  PILOT_EXECUTOR_DEBUG
+  NUXT_PUBLIC_NEXUS_ORIGIN
+  PILOT_NEXUS_OAUTH_CLIENT_ID
+  PILOT_NEXUS_OAUTH_CLIENT_SECRET
 EOF
 }
 
@@ -333,30 +327,30 @@ services:
       PORT: 3300
       NUXT_HOST: 0.0.0.0
       NUXT_PORT: 3300
-      PILOT_DB_DRIVER: \${PILOT_DB_DRIVER:-sqlite}
-      PILOT_DB_FILE: \${PILOT_DB_FILE:-/app/data/pilot.sqlite}
-      PILOT_POSTGRES_URL: \${PILOT_POSTGRES_URL:-}
+      PILOT_POSTGRES_URL: \${PILOT_POSTGRES_URL:-postgresql://pilot:pilot_change_me@postgres:5432/pilot}
       PILOT_REDIS_URL: \${PILOT_REDIS_URL:-redis://redis:6379/0}
-      NUXT_PILOT_BASE_URL: \${NUXT_PILOT_BASE_URL:-}
-      NUXT_PILOT_API_KEY: \${NUXT_PILOT_API_KEY:-}
+      PILOT_JWT_ACCESS_SECRET: \${PILOT_JWT_ACCESS_SECRET:-replace-with-access-secret-min-16}
+      PILOT_JWT_REFRESH_SECRET: \${PILOT_JWT_REFRESH_SECRET:-replace-with-refresh-secret-min-16}
+      PILOT_COOKIE_SECRET: \${PILOT_COOKIE_SECRET:-replace-with-cookie-secret-min-16}
+      PILOT_CONFIG_ENCRYPTION_KEY: \${PILOT_CONFIG_ENCRYPTION_KEY:-replace-with-config-key-min-16}
+      PILOT_BOOTSTRAP_ADMIN_EMAIL: \${PILOT_BOOTSTRAP_ADMIN_EMAIL:-admin@pilot.local}
+      PILOT_BOOTSTRAP_ADMIN_PASSWORD: \${PILOT_BOOTSTRAP_ADMIN_PASSWORD:-admin}
       NUXT_PUBLIC_NEXUS_ORIGIN: \${NUXT_PUBLIC_NEXUS_ORIGIN:-https://tuff.tagzxia.com}
-      PILOT_NEXUS_INTERNAL_ORIGIN: \${PILOT_NEXUS_INTERNAL_ORIGIN:-}
       PILOT_NEXUS_OAUTH_CLIENT_ID: \${PILOT_NEXUS_OAUTH_CLIENT_ID:-}
       PILOT_NEXUS_OAUTH_CLIENT_SECRET: \${PILOT_NEXUS_OAUTH_CLIENT_SECRET:-}
-      PILOT_COOKIE_SECRET: \${PILOT_COOKIE_SECRET:-change-me-before-production}
       PILOT_EXECUTOR_DEBUG: \${PILOT_EXECUTOR_DEBUG:-0}
 
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: \${PILOT_PG_DB:-pilot}
-      POSTGRES_USER: \${PILOT_PG_USER:-pilot}
-      POSTGRES_PASSWORD: \${PILOT_PG_PASSWORD:-pilot_change_me}
+      POSTGRES_DB: pilot
+      POSTGRES_USER: pilot
+      POSTGRES_PASSWORD: pilot_change_me
     volumes:
       - "./postgres-data:/var/lib/postgresql/data"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \${PILOT_PG_USER:-pilot} -d \${PILOT_PG_DB:-pilot}"]
+      test: ["CMD-SHELL", "pg_isready -U pilot -d pilot"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -389,19 +383,17 @@ resolve_compose_cmd() {
   exit 1
 }
 
-PROJECT_DIR="${PILOT_PROJECT_DIR:-$(pwd)}"
-COMPOSE_FILE="${PILOT_COMPOSE_FILE:-docker-compose.yml}"
-SERVICE_NAME="${PILOT_SERVICE_NAME:-pilot}"
-IMAGE_REPO="${PILOT_IMAGE_REPO:-}"
+PROJECT_DIR="$(pwd)"
+COMPOSE_FILE="docker-compose.yml"
+SERVICE_NAME="pilot"
+IMAGE_REPO=""
 IMAGE_TAG="${PILOT_IMAGE_TAG:-pilot-latest}"
-IMAGE_REF="${PILOT_IMAGE_REF:-}"
-DEFAULT_IMAGE_REPO="${PILOT_DEFAULT_IMAGE_REPO:-ghcr.io/talex-touch/tuff-pilot}"
+IMAGE_REF=""
+DEFAULT_IMAGE_REPO="ghcr.io/talex-touch/tuff-pilot"
 HEALTHCHECK_URL="${PILOT_HEALTHCHECK_URL:-}"
 HEALTHCHECK_ATTEMPTS="${PILOT_HEALTHCHECK_ATTEMPTS:-20}"
 HEALTHCHECK_INTERVAL_SEC="${PILOT_HEALTHCHECK_INTERVAL_SEC:-3}"
 ROLLBACK_ON_FAILURE="$(to_bool "${PILOT_ROLLBACK_ON_FAILURE:-true}")"
-GHCR_USERNAME="${PILOT_GHCR_USERNAME:-}"
-GHCR_TOKEN="${PILOT_GHCR_TOKEN:-}"
 PULL_ONLY="false"
 BOOTSTRAP_COMPOSE="$(to_bool "${PILOT_BOOTSTRAP_COMPOSE:-false}")"
 BOOTSTRAP_HTTP_PORT="${PILOT_BOOTSTRAP_HTTP_PORT:-3300}"
@@ -460,14 +452,6 @@ while [[ $# -gt 0 ]]; do
       ROLLBACK_ON_FAILURE="false"
       shift
       ;;
-    --ghcr-username)
-      GHCR_USERNAME="${2:-}"
-      shift 2
-      ;;
-    --ghcr-token)
-      GHCR_TOKEN="${2:-}"
-      shift 2
-      ;;
     -h|--help)
       usage
       exit 0
@@ -510,15 +494,6 @@ if [[ -n "$HEALTHCHECK_URL" ]]; then
   require_cmd curl
 fi
 
-if [[ -n "$GHCR_USERNAME" || -n "$GHCR_TOKEN" ]]; then
-  if [[ -z "$GHCR_USERNAME" || -z "$GHCR_TOKEN" ]]; then
-    error "Both ghcr username and token are required when one is set"
-    exit 1
-  fi
-  log "Logging in to GHCR as $GHCR_USERNAME"
-  printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin >/dev/null
-fi
-
 cd "$PROJECT_DIR"
 
 if [[ ! -f "$COMPOSE_FILE" ]]; then
@@ -529,8 +504,8 @@ if [[ ! -f "$COMPOSE_FILE" ]]; then
     bootstrap_compose_file
   else
     error "Compose file not found: $(resolve_compose_file_path)"
-    error "Hint: set PILOT_PROJECT_DIR to your 1Panel app path, for example /opt/1panel/apps/tuff-pilot"
-    error "Hint: set PILOT_COMPOSE_FILE to docker-compose.yml or absolute compose file path"
+    error "Hint: run from your 1Panel app path or pass --project-dir /opt/1panel/apps/tuff-pilot"
+    error "Hint: pass --compose-file docker-compose.yml (or absolute compose file path)"
     error "Hint: pass --bootstrap-compose to auto-create a minimal compose file"
     exit 1
   fi

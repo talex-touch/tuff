@@ -6,7 +6,7 @@ definePageMeta({
 })
 
 interface StorageConfigForm {
-  attachmentProvider: 'auto' | 'memory' | 'r2' | 's3'
+  attachmentProvider: 'auto' | 'memory' | 's3'
   attachmentPublicBaseUrl: string
   minioEndpoint: string
   minioBucket: string
@@ -133,13 +133,10 @@ onMounted(() => {
           <span>附件存储 Provider</span>
           <select v-model="form.attachmentProvider">
             <option value="auto">
-              auto（优先 R2，再 MinIO，最后内存）
+              auto（优先 MinIO，最后内存）
             </option>
             <option value="memory">
               memory
-            </option>
-            <option value="r2">
-              r2
             </option>
             <option value="s3">
               s3/minio

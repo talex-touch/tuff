@@ -39,8 +39,7 @@ RUN cp -R "apps/pilot/.output" "/opt/pilot-runtime/.output" \
   "/opt/pilot-runtime/shims-compat.d.ts" \
   "/opt/pilot-runtime/tsconfig.json" \
   "/opt/pilot-runtime/uno.config.ts" \
-  "/opt/pilot-runtime/vitest.config.ts" \
-  "/opt/pilot-runtime/wrangler.toml"
+  "/opt/pilot-runtime/vitest.config.ts"
 
 FROM node:22-bookworm-slim AS runner
 

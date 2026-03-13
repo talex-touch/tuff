@@ -70,11 +70,6 @@ function getWaitUntilHandler(event: H3Event): ((promise: Promise<unknown>) => vo
     waitUntil?: (promise: Promise<unknown>) => void
     context?: {
       waitUntil?: (promise: Promise<unknown>) => void
-      cloudflare?: {
-        context?: {
-          waitUntil?: (promise: Promise<unknown>) => void
-        }
-      }
     }
   }
 
@@ -84,10 +79,6 @@ function getWaitUntilHandler(event: H3Event): ((promise: Promise<unknown>) => vo
 
   if (typeof eventLike.context?.waitUntil === 'function') {
     return eventLike.context.waitUntil.bind(eventLike.context)
-  }
-
-  if (typeof eventLike.context?.cloudflare?.context?.waitUntil === 'function') {
-    return eventLike.context.cloudflare.context.waitUntil.bind(eventLike.context.cloudflare.context)
   }
 
   return null
@@ -256,7 +247,7 @@ export default defineEventHandler(async (event) => {
   const { userId } = requirePilotAuth(event)
   const sessionId = requireSessionId(event)
   const body = await readBody<StreamBody>(event)
-  const selectedChannel = resolvePilotChannelSelection(event, {
+  const selectedChannel = await resolvePilotChannelSelection(event, {
     requestChannelId: String(body?.channelId || '').trim(),
   })
 

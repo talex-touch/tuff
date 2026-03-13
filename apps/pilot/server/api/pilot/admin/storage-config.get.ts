@@ -1,8 +1,8 @@
-import { requirePilotAuth } from '../../../utils/auth'
+import { requirePilotAdmin } from '../../../utils/pilot-admin-auth'
 import { getPilotAdminStorageSettings } from '../../../utils/pilot-admin-storage-config'
 
 export default defineEventHandler(async (event) => {
-  requirePilotAuth(event)
+  await requirePilotAdmin(event)
   const settings = await getPilotAdminStorageSettings(event)
 
   return {

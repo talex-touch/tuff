@@ -1,4 +1,3 @@
-import type { H3Event } from 'h3'
 import { createHmac, randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { requirePilotAuth } from '../../../../../utils/auth'
@@ -7,6 +6,7 @@ import {
   getPilotAttachmentUploadAvailability,
   putPilotAttachmentObject,
 } from '../../../../../utils/pilot-attachment-storage'
+import { resolvePilotConfigString } from '../../../../../utils/pilot-config'
 import { requireSessionId } from '../../../../../utils/pilot-http'
 import { createPilotStoreAdapter } from '../../../../../utils/pilot-store'
 
@@ -35,13 +35,6 @@ function decodeBase64ToBytes(contentBase64: string): Uint8Array {
   return bytes
 }
 
-function getPilotRuntimeConfig(event: H3Event): Record<string, unknown> {
-  const runtimeConfig = (event.context as { runtimeConfig?: Record<string, unknown> }).runtimeConfig
-  return runtimeConfig?.pilot && typeof runtimeConfig.pilot === 'object'
-    ? (runtimeConfig.pilot as Record<string, unknown>)
-    : {}
-}
-
 export default defineEventHandler(async (event) => {
   const { userId } = requirePilotAuth(event)
   const sessionId = requireSessionId(event)
@@ -54,9 +47,8 @@ export default defineEventHandler(async (event) => {
   const attachmentId = randomUUID()
   const objectKey = `pilot/${userId}/${sessionId}/${attachmentId}/${name}`
 
-  const runtimeConfig = getPilotRuntimeConfig(event)
-  const secret = String(runtimeConfig.uploadSignSecret || '').trim() || 'pilot-dev-secret'
-  const publicBase = String(runtimeConfig.uploadPublicBase || '').trim() || '/r2/pilot'
+  const secret = resolvePilotConfigString(event, 'cookieSecret', ['PILOT_COOKIE_SECRET']) || 'pilot-dev-secret'
+  const publicBase = '/attachments/pilot'
 
   const expiresAt = Date.now() + 10 * 60 * 1000
   const signPayload = `${objectKey}:${expiresAt}:${size}`

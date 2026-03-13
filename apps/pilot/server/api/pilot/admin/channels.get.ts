@@ -1,4 +1,4 @@
-import { requirePilotAuth } from '../../../utils/auth'
+import { requirePilotAdmin } from '../../../utils/pilot-admin-auth'
 import { getPilotChannelCatalog } from '../../../utils/pilot-channel'
 import { quotaOk } from '../../../utils/quota-api'
 
@@ -10,9 +10,9 @@ function maskSecret(value: string): string {
   return `${text.slice(0, 4)}...${text.slice(-4)}`
 }
 
-export default defineEventHandler((event) => {
-  requirePilotAuth(event)
-  const catalog = getPilotChannelCatalog(event)
+export default defineEventHandler(async (event) => {
+  await requirePilotAdmin(event)
+  const catalog = await getPilotChannelCatalog(event)
 
   return quotaOk({
     defaultChannelId: catalog.defaultChannelId,
@@ -28,7 +28,7 @@ export default defineEventHandler((event) => {
       builtinTools: channel.builtinTools,
       enabled: channel.enabled,
     })),
-    writable: false,
-    source: 'env',
+    writable: true,
+    source: 'database',
   })
 })

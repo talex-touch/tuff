@@ -12,7 +12,6 @@ import {
   DeepAgentLangChainEngineAdapter,
   DefaultDecisionAdapter,
 } from '@talex-touch/tuff-intelligence'
-import { resolvePilotConfigString } from './pilot-config'
 import { createPilotStoreAdapter } from './pilot-store'
 
 const DEFAULT_RESPONSES_MODEL = 'gpt-5.2'
@@ -23,8 +22,6 @@ const DEFAULT_SYSTEM_PROMPT = [
   'You are Tuff Pilot, a concise and reliable AI assistant.',
   'Always provide direct, factual answers and show actionable next steps when useful.',
 ].join('\n')
-const BASE_URL_ENV_KEYS = ['NUXT_PILOT_BASE_URL']
-const API_KEY_ENV_KEYS = ['NUXT_PILOT_API_KEY']
 
 class PilotAgentRuntime extends AbstractAgentRuntime {}
 
@@ -102,13 +99,16 @@ function normalizeTimeoutMs(value: unknown): number {
 
 export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
   const { event, userId, emit, onAudit, channel } = options
+  if (!channel?.baseUrl || !channel.apiKey) {
+    throw new Error('Pilot channel is not configured.')
+  }
   const store = createPilotStoreAdapter(event, userId, emit)
   const capabilityRegistry = createCapabilityRegistryV1()
   const dispatcher = new DecisionDispatcher({
     capabilityRegistry,
   })
-  const baseUrl = String(channel?.baseUrl || '').trim() || resolvePilotConfigString(event, 'baseUrl', BASE_URL_ENV_KEYS)
-  const apiKey = String(channel?.apiKey || '').trim() || resolvePilotConfigString(event, 'apiKey', API_KEY_ENV_KEYS)
+  const baseUrl = String(channel.baseUrl || '').trim()
+  const apiKey = String(channel.apiKey || '').trim()
   const model = String(channel?.model || '').trim() || DEFAULT_RESPONSES_MODEL
   const timeoutMs = normalizeTimeoutMs(channel?.timeoutMs)
   const builtinTools: PilotBuiltinTool[] = Array.isArray(channel?.builtinTools) && channel.builtinTools.length > 0
