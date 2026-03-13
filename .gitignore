@@ -64,6 +64,7 @@ apps/core-app/src/renderer/src/distinformation.json
 .cache/
 .parcel-cache/
 .temp/
+tmp/
 .grunt/
 .lock-wscript
 .rpt2_cache/
@@ -124,6 +125,7 @@ apps/nexus/.output/
 apps/nexus/.nuxt/
 apps/nexus/.data/
 apps/pilot/.env
+apps/pilot/.output/
 
 # ========================
 # Project-specific (core-app)

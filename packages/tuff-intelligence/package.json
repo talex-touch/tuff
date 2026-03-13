@@ -29,15 +29,15 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@talex-touch/utils": "workspace:*",
     "@langchain/core": "^0.3.80",
     "@langchain/langgraph": "^0.2.74",
     "@langchain/openai": "^0.4.9",
+    "@talex-touch/utils": "workspace:*",
     "deepagents": "0.0.2"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260305.0",
-    "eslint": "^9.39.3",
+    "@cloudflare/workers-types": "^4.20260313.1",
+    "eslint": "^9.39.4",
     "rimraf": "^5.0.10",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"

@@ -11,7 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@milkdown/theme-nord": "^7.18.0",
+    "@milkdown/theme-nord": "^7.19.0",
     "@types/howler": "^2.2.12",
     "axios": "^1.13.6",
     "granim": "^2.0.0",
@@ -20,13 +20,13 @@
     "remixicon": "^4.9.1",
     "rgbaster": "^2.1.1",
     "typescript": "^5.9.3",
-    "vue": "^3.5.29",
-    "wavesurfer.js": "^7.12.1",
+    "vue": "^3.5.30",
+    "wavesurfer.js": "^7.12.2",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.4",
+    "@vitejs/plugin-vue": "^6.0.5",
     "vite": "^7.3.1"
   }
 }
