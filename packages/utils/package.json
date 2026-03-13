@@ -31,9 +31,9 @@
   },
   "dependencies": {
     "@vueuse/core": "^14.2.1",
-    "marked": "^17.0.3",
+    "marked": "^17.0.4",
     "path-browserify": "^1.0.1",
-    "vue": "^3.5.29"
+    "vue": "^3.5.30"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^3.2.4",
