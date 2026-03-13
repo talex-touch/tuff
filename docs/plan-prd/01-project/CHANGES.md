@@ -4,6 +4,85 @@
 
 ## 2026-03-12
 
+### Pilot：环境变量收敛清单固化（Postgres + Redis + DB Config）
+
+**变更类型**: 配置治理 / 部署简化 / 兼容收口
+
+**描述**:
+- 运行时环境变量进一步收敛到最小集合：
+  - 必填：`PILOT_POSTGRES_URL`、`PILOT_REDIS_URL`、`PILOT_JWT_ACCESS_SECRET`、`PILOT_JWT_REFRESH_SECRET`、`PILOT_COOKIE_SECRET`、`PILOT_CONFIG_ENCRYPTION_KEY`、`PILOT_BOOTSTRAP_ADMIN_PASSWORD`。
+  - 可选：`PILOT_BOOTSTRAP_ADMIN_EMAIL`、`PILOT_EXECUTOR_DEBUG`、`NUXT_PUBLIC_NEXUS_ORIGIN`、`PILOT_NEXUS_OAUTH_CLIENT_ID`、`PILOT_NEXUS_OAUTH_CLIENT_SECRET`。
+- JWT TTL 固定为 Access 2h + Refresh 30d，不再从 env 读取过期时间，避免配置漂移。
+- 前端 `endsBaseUrl` 固定本地同源（`/`），移除 `NUXT_PUBLIC_ENDS_URL` 入口，避免部署侧多余配置。
+- 1Panel 部署脚本改为“自动探测优先”：
+  - 不再依赖 `PILOT_PROJECT_DIR/PILOT_COMPOSE_FILE/PILOT_SERVICE_NAME` 等定位 env；
+  - 部署侧仅保留 `PILOT_IMAGE_TAG` 与健康检查变量（`PILOT_HEALTHCHECK_*` + `PILOT_ROLLBACK_ON_FAILURE`）。
+- 部署示例 env 同步精简；如需首次生成 compose，改为命令参数显式触发 `--bootstrap-compose`。
+
+**修改文件（核心）**:
+- `apps/pilot/.env.example`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/server/utils/pilot-session.ts`
+- `apps/pilot/deploy/deploy-pilot-1panel.sh`
+- `apps/pilot/deploy/deploy-pilot-1panel.env.example`
+- `apps/pilot/deploy/README.md`
+- `apps/pilot/deploy/README.zh-CN.md`
+- `scripts/deploy-pilot-1panel.env.example`
+
+### Pilot：环境变量收敛 + Node Runtime 固化（Postgres/Redis + JWT 双 Token）
+
+**变更类型**: 架构收敛 / 部署链路清理 / 认证升级
+
+**描述**:
+- `apps/pilot` 运行时收敛为 Node Server，移除 Cloudflare 运行分支与 wrangler 相关配置；Nuxt Nitro 固定 `node-server`。
+- 数据与会话依赖收敛为强制 `Postgres + Redis`：
+  - 移除 `sqlite/D1` 路径与旧别名变量（`PILOT_DB_DRIVER`、`PILOT_DB_FILE`、`PILOT_PG_DSN`、`DATABASE_URL`）。
+  - 新增 Redis 会话存储工具，作为 refresh token 状态管理基础。
+- 认证升级为 JWT Access/Refresh + HttpOnly Cookie：
+  - access 默认 2h，refresh 默认 30d，`renew_token` 改为真实续签。
+  - 登录/注册成功返回 token 结构并写 Cookie；登出执行 refresh 撤销与双 Cookie 清理。
+- 管理员引导策略调整：
+  - 默认账号 `admin@pilot.local / admin`（可由 env 覆盖）。
+  - 启动日志不再输出管理员明文密码。
+- 渠道与附件配置改为数据库真源：
+  - `channels` 从 env 迁移到 admin DB 配置，并增加 `PILOT_CONFIG_ENCRYPTION_KEY` 对敏感字段加密。
+  - 附件存储移除 R2/Cloudflare 分支，仅保留 `memory/s3(minio)`，并移除 `PILOT_S3_*` 别名。
+- 部署资产收敛到 1Panel 脚本：
+  - 删除 webhook 脚本与 GHCR 私有鉴权变量路径。
+  - 部署 env 示例精简为镜像标签 + 健康检查 + 最小运行时变量。
+
+**修改文件（核心）**:
+- `apps/pilot/server/utils/pilot-session.ts`
+- `apps/pilot/server/utils/pilot-channel.ts`
+- `apps/pilot/server/utils/pilot-admin-channel-config.ts`
+- `apps/pilot/server/utils/pilot-admin-storage-config.ts`
+- `apps/pilot/server/utils/pilot-attachment-storage.ts`
+- `apps/pilot/server/utils/pilot-store.ts`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/package.json`
+- `apps/pilot/deploy/*`
+- `apps/pilot/.env.example`
+
+### Pilot：legacy responses SSE 兼容修复（`Cannot use 'in' operator`）
+
+**变更类型**: 稳定性修复 / 协议兼容增强
+
+**描述**:
+- 修复 Pilot 在 `adapter=legacy` + `transport=responses` 渠道下，偶发抛出
+  `Cannot use 'in' operator to search for 'object' in event: response.created...` 导致流式会话失败的问题。
+- `packages/tuff-intelligence` 中新增两层兜底：
+  - 识别该异常签名后自动切换到 `responses.direct` 兼容路径（跳过不稳定的 SDK 解析分支）。
+  - 当上游返回 `text/event-stream` 文本体时，支持解析 `response.output_text.delta/done/completed` 事件并提取最终文本。
+- 保持现有对外接口不变，仅增强 legacy 网关兼容性与容错能力。
+
+**验证**:
+- `pnpm -C "packages/tuff-intelligence" exec eslint "src/adapters/deepagent-engine.ts"` ✅
+- `pnpm -C "packages/tuff-intelligence" exec tsc --noEmit` ✅
+
+**修改文件**:
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### 全仓 Network 套件硬切（四阶段收口补齐）
 
 **变更类型**: 架构收敛 / 质量门禁升级 / 跨工作区迁移

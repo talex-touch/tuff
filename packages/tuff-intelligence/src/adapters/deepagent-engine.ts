@@ -342,6 +342,119 @@ function extractResponsesText(payload: Record<string, unknown>): string {
   return ''
 }
 
+interface ParsedResponsesSsePayload {
+  content: string
+  model?: string
+}
+
+function trimSseDataPrefix(line: string): string {
+  if (!line.startsWith('data:')) {
+    return line
+  }
+  const sliced = line.slice(5)
+  return sliced.startsWith(' ') ? sliced.slice(1) : sliced
+}
+
+function tryParseResponsesSsePayload(bodyText: string): ParsedResponsesSsePayload | null {
+  const raw = String(bodyText || '')
+  if (!raw.includes('data:') || !raw.includes('event:')) {
+    return null
+  }
+
+  const lines = raw.split(/\r?\n/)
+  const dataLines: string[] = []
+  let mergedDelta = ''
+  let resolvedText = ''
+  let resolvedModel = ''
+
+  const flushData = () => {
+    if (dataLines.length <= 0) {
+      return
+    }
+
+    const payloadText = dataLines.join('\n').trim()
+    dataLines.length = 0
+    if (!payloadText || payloadText === '[DONE]') {
+      return
+    }
+
+    let parsed: unknown = null
+    try {
+      parsed = JSON.parse(payloadText)
+    }
+    catch {
+      return
+    }
+
+    const row = toRecord(parsed)
+    const type = String(row.type || '').trim().toLowerCase()
+    const responseRow = toRecord(row.response)
+    const model = String(responseRow.model || '').trim()
+    if (model) {
+      resolvedModel = model
+    }
+
+    if (type === 'response.output_text.delta') {
+      const delta = typeof row.delta === 'string' ? row.delta : ''
+      if (delta) {
+        mergedDelta += delta
+      }
+      return
+    }
+
+    if (type === 'response.output_text.done') {
+      const doneText = typeof row.text === 'string' ? row.text.trim() : ''
+      if (doneText) {
+        resolvedText = doneText
+      }
+      return
+    }
+
+    if (type === 'response.completed') {
+      const doneText = extractResponsesText(responseRow)
+      if (doneText) {
+        resolvedText = doneText
+      }
+      return
+    }
+
+    const directText = extractResponsesText(row)
+    if (directText) {
+      resolvedText = directText
+    }
+  }
+
+  for (const line of lines) {
+    if (!line.trim()) {
+      flushData()
+      continue
+    }
+    if (line.startsWith('event:')) {
+      flushData()
+      continue
+    }
+    if (line.startsWith('data:')) {
+      dataLines.push(trimSseDataPrefix(line))
+      continue
+    }
+
+    if (dataLines.length > 0) {
+      dataLines.push(line)
+    }
+  }
+  flushData()
+
+  const content = (resolvedText || mergedDelta).trim()
+  if (!content) {
+    return null
+  }
+
+  return {
+    content,
+    model: resolvedModel || undefined,
+  }
+}
+
 function stripKnownSuffix(value: string, suffixes: string[]): string {
   const normalized = trimSuffixSlash(value)
   const lower = normalized.toLowerCase()
@@ -946,6 +1059,10 @@ function shouldUseResponsesCompatibilityFallback(error: unknown): boolean {
   const message = errorMessageOf(error).toLowerCase()
   return message.includes('unsupported legacy protocol')
     || message.includes('/v1/chat/completions is not supported')
+    || (
+      message.includes("cannot use 'in' operator to search for 'object'")
+      && message.includes('event: response.')
+    )
 }
 
 function shouldFallbackToChatCompletions(error: unknown): boolean {
@@ -1080,7 +1197,15 @@ async function invokeResponsesCompatibilityFallback(params: {
   catch {}
 
   const data = toRecord(parsedData)
-  const content = extractResponsesText(data)
+  let content = extractResponsesText(data)
+  let resolvedModel = typeof data.model === 'string' ? data.model : model
+  if (!content) {
+    const parsedSse = tryParseResponsesSsePayload(response.bodyText)
+    if (parsedSse) {
+      content = parsedSse.content
+      resolvedModel = parsedSse.model || resolvedModel
+    }
+  }
   if (!content) {
     throw createDeepAgentError(
       '[deepagent-responses] empty response content',
@@ -1097,7 +1222,7 @@ async function invokeResponsesCompatibilityFallback(params: {
     payload: {
       endpoint,
       status: response.status,
-      model: typeof data.model === 'string' ? data.model : model,
+      model: resolvedModel,
       outputChars: content.length,
       retryAttempt: lastAttempt,
       strategy: 'responses.direct',
@@ -1107,7 +1232,7 @@ async function invokeResponsesCompatibilityFallback(params: {
   return {
     content,
     provider: 'openai-responses',
-    model: typeof data.model === 'string' ? data.model : model,
+    model: resolvedModel,
   }
 }
 

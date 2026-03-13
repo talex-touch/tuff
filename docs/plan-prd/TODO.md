@@ -80,7 +80,7 @@
 
 ## 🛰️ Pilot × Intelligence（Protocol-first Runtime）
 
-- [x] 新建 `apps/pilot`（Nuxt + Cloudflare Pages preset）并接入 `@talex-touch/tuff-intelligence`
+- [x] 新建 `apps/pilot`（Nuxt Node Server）并接入 `@talex-touch/tuff-intelligence`
 - [x] 实现 Pilot API 基础面：
   - `POST /api/pilot/chat/sessions`
   - `GET /api/pilot/chat/sessions`
@@ -96,7 +96,7 @@
 - [x] 根脚本补齐：`pilot:dev` / `pilot:build` / `pilot:typecheck` / `pilot:lint`
 - [x] 新增下一阶段执行文档：`docs/plan-prd/docs/PILOT-NEXUS-OAUTH-CLI-TEST-PLAN.md`（测试优先 + OAuth + CLI + channel routing）
 - [x] Pilot 高标准交付（2026-03-09）：
-  - [x] 附件存储抽象落地（`memory` + `R2`），上传统一对象写入，补齐附件内容读取接口（鉴权 + 会话归属）。
+  - [x] 附件存储抽象落地（`memory` + `s3/minio`），上传统一对象写入，补齐附件内容读取接口（鉴权 + 会话归属）。
   - [x] 本地 MinIO（S3 兼容）接入：支持 `s3://` ref 与模型可访问 URL（签名 URL / public base URL）。
   - [x] 无 MinIO 回退：支持 `attachmentPublicBaseUrl` 生成签名附件 URL（模型可直接拉取，不依赖登录 cookie）。
   - [x] Admin 动态配置：新增 `/admin/storage` 与 `/api/pilot/admin/storage-config`（D1 持久化）。
@@ -105,10 +105,10 @@
   - [x] `fromSeq + follow` 自动追尾续接：刷新后自动恢复到最新 `done`，断连不再默认暂停推理。
   - [x] Markdown 渲染观感优化：`assistant.delta` 分块刷新（80-160ms窗口，当前120ms）+ assistant 气泡淡入（含 reduced-motion 降级）。
   - [x] 门禁回归：`apps/pilot`（test/typecheck/lint）+ `packages/tuff-intelligence`（lint/tsc --noEmit）全部通过。
-- [x] Pilot Cloudflare Dashboard 配置基线（2026-03-09）：
-  - [x] `tuff-pilot` 的 `preview/production` 已写入 secrets：`PILOT_ATTACHMENT_PROVIDER=auto`、`PILOT_ATTACHMENT_PUBLIC_BASE_URL`、`PILOT_ATTACHMENT_SIGNING_SECRET`、`PILOT_MINIO_REGION=us-east-1`、`PILOT_MINIO_FORCE_PATH_STYLE=true`。
-  - [ ] 仍需人工按环境补齐：`PILOT_NEXUS_OAUTH_CLIENT_ID`、`PILOT_NEXUS_OAUTH_CLIENT_SECRET`、`PILOT_NEXUS_INTERNAL_ORIGIN`（按需）。
-  - [ ] MinIO 启用时仍需人工补齐：`PILOT_MINIO_ENDPOINT`、`PILOT_MINIO_BUCKET`、`PILOT_MINIO_ACCESS_KEY`、`PILOT_MINIO_SECRET_KEY`、`PILOT_MINIO_PUBLIC_BASE_URL`（可选）。
+- [x] Pilot 运行时收敛（2026-03-12）：
+  - [x] Cloudflare runtime / wrangler / D1/R2 分支已移除，部署统一为 1Panel + Docker Compose。
+  - [x] 运行时最小 env 收敛为 `Postgres + Redis + JWT(access/refresh) + cookie secret + config encryption key`。
+  - [x] 渠道与附件配置迁移为数据库真源（admin 配置），不再使用渠道/附件 env 作为主配置源。
 - [x] Pilot M0（Quota 融合，2026-03-09）：
   - [x] 前端并入：Quota 页面体系迁入 `apps/pilot/app`，路由切换为 `/ -> Quota`、`/pilot -> 原 Pilot 聊天`、`/pilot/admin/storage -> 原 Pilot 管理页`。
   - [x] 认证策略收口：改为 Pilot Cookie 会话/访客模式，移除 Quota 强制登录门禁，不再以 Bearer Token 作为 M0 主链路。
@@ -120,15 +120,15 @@
 - [x] [P0] 兼容阻塞修复：`apps/pilot/package.json` 将 `@element-plus/nuxt` 迁入 `dependencies`，避免生产依赖安装/生产模式下出现 `Could not load '@element-plus/nuxt'` 启动错误（2026-03-09）。
 - [x] [P0] 兼容阻塞修复：`apps/pilot/nuxt.config.ts` 注入 `__BuildTime__` 与 `__THISAI_VERSION__` 编译期常量，消除 SSR `__BuildTime__ is not defined` 500 错误（2026-03-09）。
 - [x] [P0] 渲染阻塞修复：`apps/pilot/app/components/article/ThContent.vue` 已切换只读渲染到 `MilkContent.vue`，规避 `MilkdownError: Timer "SchemaReady" not found` 与 `editorViewOptions context not found`；`ChatLinkShare.vue` 同步修复 `di -> div` 组件告警（2026-03-09）。
-- [x] [P0] Cloudflare 上线阻塞修复：`apps/pilot` 切换为静态发布链路（`nuxt generate`），避免 `_worker.js` 超过免费版 `3MiB` 限制导致部署失败；同时接入 `NUXT_PUBLIC_ENDS_URL` 作为前端 API 基地址（2026-03-10）。
+- [x] [P0] 历史 Cloudflare 上线阻塞修复（2026-03-10）已归档，不再作为当前部署路径。
 - [ ] [P0] M0 手工验收补录：`/` 进入 Quota 聊天、新建会话、流式回复、历史删除、`/pilot` 与 `/pilot/admin/storage` 可访问、非 M0 页面返回可预期“待迁移”提示。
 - [ ] [P1] M0 收口：`apps/pilot` Quota 存量 `typecheck` 分批清理（先 `app/components/article/**`，后 `app/pages/cms/**`，最后 `app/composables/**`）。
 - [ ] [P1] M0 收口：`apps/pilot` Quota 存量 `lint` 分批清理（先 `import/order + unused`，后风格类规则）。
 - [x] [P1] M0 收口：构建内存策略固化（`build/generate/CI` 统一 `NODE_OPTIONS=--max-old-space-size=8192`）。
-- [x] [P1] M0 收口：本地开发启动优化（`dev` 默认 Cloudflare runtime 绑定，新增 `dev:local` 纯本地模式，UnoCSS dev safelist 降载）。
-- [x] [P1] M0 收口：新增 Pilot CI（`quality + static-dist + 1Panel webhook`）并支持 `master` push 自动触发部署钩子。
+- [x] [P1] M0 收口：本地开发启动优化（`dev` 默认 Node 本地模式，UnoCSS dev safelist 降载）。
+- [x] [P1] M0 收口：新增 Pilot CI（`quality + static-dist`）与 1Panel 脚本化部署基线，当前采用“手动触发/定时 cron”替代 webhook。
 - [ ] [P1] M0 收口：前端重依赖拆分（优先 `Milkdown/EditorMermaid/EditorCode/IconSelector`，持续压缩首屏与 Worker 体积）。
-- [ ] [P1] 部署策略收口：如需同域承载 `/api/*` 兼容层，需拆分轻量 API Worker 或升级 Cloudflare Workers 付费额度（当前免费额度无法承载 `nuxt build` Worker 体积）。
+- [x] [P1] 部署策略收口：当前统一服务器部署（1Panel + Docker Compose），Cloudflare 适配不再纳入当前里程碑。
 - [x] [P0] Pilot M1（2026-03-11）：多渠道解析与协议兼容落地（`request > session > default`，`auto: responses -> chat.completions` 回退 + 缓存）。
 - [x] [P0] Pilot M1（2026-03-11）：`POST /api/aigc/executor` 支持 `channel_id` + `chat_id` 可选，新增 `session_bound` 事件，并兼容工具调用事件 `calling/result`。
 - [x] [P0] Pilot M1（2026-03-11）：后端会话真源落地（`pilot_quota_sessions`），流式结束自动快照历史，不再依赖前端补传为主链。

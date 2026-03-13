@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
     return quotaError(401, '邮箱或密码错误', null)
   }
 
-  writePilotSessionCookie(event, user.userId)
+  const token = await writePilotSessionCookie(event, user.userId)
   const mergeReport = await mergePilotGuestDataAfterAuth(event, user.userId, 'login')
 
   return quotaOk({
@@ -46,6 +46,12 @@ export default defineEventHandler(async (event) => {
     email: user.email,
     nickname: user.nickname,
     source: 'local',
+    token: {
+      accessToken: token.accessToken,
+      refreshToken: token.refreshToken,
+      expiresIn: token.expiresIn,
+      refreshExpiresIn: token.refreshExpiresIn,
+    },
     merged: mergeReport,
   })
 })

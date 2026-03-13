@@ -1,5 +1,5 @@
 import { createError } from 'h3'
-import { requirePilotAuth } from '../../../utils/auth'
+import { requirePilotAdmin } from '../../../utils/pilot-admin-auth'
 import { updatePilotAdminStorageSettings } from '../../../utils/pilot-admin-storage-config'
 
 interface StorageConfigBody {
@@ -15,9 +15,9 @@ interface StorageConfigBody {
   minioPublicBaseUrl?: string
 }
 
-function normalizeProvider(value: string): 'auto' | 'memory' | 'r2' | 's3' {
+function normalizeProvider(value: string): 'auto' | 'memory' | 's3' {
   const normalized = String(value || '').trim().toLowerCase()
-  if (normalized === 'memory' || normalized === 'r2' || normalized === 's3') {
+  if (normalized === 'memory' || normalized === 's3') {
     return normalized
   }
   if (normalized === 'minio') {
@@ -27,7 +27,7 @@ function normalizeProvider(value: string): 'auto' | 'memory' | 'r2' | 's3' {
 }
 
 export default defineEventHandler(async (event) => {
-  requirePilotAuth(event)
+  await requirePilotAdmin(event)
   const body = await readBody<StorageConfigBody>(event)
 
   const attachmentProvider = normalizeProvider(String(body?.attachmentProvider || 'auto'))

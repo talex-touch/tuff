@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { decryptConfigValue, encryptConfigValue } from './pilot-config-crypto'
 import { getPilotDatabase, requirePilotDatabase } from './pilot-store'
 
 const SETTINGS_TABLE = 'pilot_admin_settings'
@@ -18,7 +19,7 @@ const STORAGE_KEYS = {
 } as const
 
 export interface PilotAdminStorageSettings {
-  attachmentProvider?: 'auto' | 'memory' | 'r2' | 's3'
+  attachmentProvider?: 'auto' | 'memory' | 's3'
   attachmentPublicBaseUrl?: string
   minioEndpoint?: string
   minioBucket?: string
@@ -47,7 +48,7 @@ type PilotEventContext = H3Event['context'] & {
 
 function normalizeStorageProvider(value: string | null | undefined): PilotAdminStorageSettings['attachmentProvider'] {
   const normalized = String(value || '').trim().toLowerCase()
-  if (normalized === 'auto' || normalized === 'memory' || normalized === 'r2' || normalized === 's3') {
+  if (normalized === 'auto' || normalized === 'memory' || normalized === 's3') {
     return normalized
   }
   if (normalized === 'minio') {
@@ -84,10 +85,6 @@ function nowIso(): string {
 
 async function ensurePilotAdminSettingsSchema(event: H3Event): Promise<void> {
   const db = getPilotDatabase(event)
-  if (!db) {
-    return
-  }
-
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS ${SETTINGS_TABLE} (
       key TEXT PRIMARY KEY,
@@ -100,14 +97,16 @@ async function ensurePilotAdminSettingsSchema(event: H3Event): Promise<void> {
 function parseSettingsRows(rows: Array<{ key: string, value: string }>): PilotAdminStorageSettings {
   const rowMap = new Map(rows.map(item => [item.key, item.value]))
   const attachmentProvider = normalizeStorageProvider(rowMap.get(STORAGE_KEYS.attachmentProvider))
+  const minioAccessKeyRaw = normalizeString(rowMap.get(STORAGE_KEYS.minioAccessKey))
+  const minioSecretKeyRaw = normalizeString(rowMap.get(STORAGE_KEYS.minioSecretKey))
 
   return {
     attachmentProvider,
     attachmentPublicBaseUrl: normalizeUrl(rowMap.get(STORAGE_KEYS.attachmentPublicBaseUrl)),
     minioEndpoint: normalizeUrl(rowMap.get(STORAGE_KEYS.minioEndpoint)),
     minioBucket: normalizeString(rowMap.get(STORAGE_KEYS.minioBucket)),
-    minioAccessKey: normalizeString(rowMap.get(STORAGE_KEYS.minioAccessKey)),
-    minioSecretKey: normalizeString(rowMap.get(STORAGE_KEYS.minioSecretKey)),
+    minioAccessKey: minioAccessKeyRaw ? decryptConfigValue(minioAccessKeyRaw) : '',
+    minioSecretKey: minioSecretKeyRaw ? decryptConfigValue(minioSecretKeyRaw) : '',
     minioRegion: normalizeString(rowMap.get(STORAGE_KEYS.minioRegion)),
     minioForcePathStyle: parseBoolean(rowMap.get(STORAGE_KEYS.minioForcePathStyle)),
     minioPublicBaseUrl: normalizeUrl(rowMap.get(STORAGE_KEYS.minioPublicBaseUrl)),
@@ -121,10 +120,6 @@ function clearCache(event: H3Event): void {
 
 async function readSettingsRows(event: H3Event): Promise<Array<{ key: string, value: string }>> {
   const db = getPilotDatabase(event)
-  if (!db) {
-    return []
-  }
-
   await ensurePilotAdminSettingsSchema(event)
   const { results } = await db.prepare(`
     SELECT key, value
@@ -179,6 +174,18 @@ async function upsertOptionalString(event: H3Event, key: string, value: string |
   await upsertSetting(event, key, normalized)
 }
 
+async function upsertOptionalSecret(event: H3Event, key: string, value: string | null | undefined): Promise<void> {
+  if (value === undefined) {
+    return
+  }
+  const normalized = normalizeString(value)
+  if (!normalized) {
+    await deleteSetting(event, key)
+    return
+  }
+  await upsertSetting(event, key, encryptConfigValue(normalized))
+}
+
 export async function updatePilotAdminStorageSettings(
   event: H3Event,
   input: UpdatePilotAdminStorageSettingsInput,
@@ -198,8 +205,8 @@ export async function updatePilotAdminStorageSettings(
   await upsertOptionalString(event, STORAGE_KEYS.attachmentPublicBaseUrl, input.attachmentPublicBaseUrl, value => value.trim().replace(/\/+$/, ''))
   await upsertOptionalString(event, STORAGE_KEYS.minioEndpoint, input.minioEndpoint, value => value.trim().replace(/\/+$/, ''))
   await upsertOptionalString(event, STORAGE_KEYS.minioBucket, input.minioBucket, value => value.trim())
-  await upsertOptionalString(event, STORAGE_KEYS.minioAccessKey, input.minioAccessKey, value => value.trim())
-  await upsertOptionalString(event, STORAGE_KEYS.minioSecretKey, input.minioSecretKey, value => value.trim())
+  await upsertOptionalSecret(event, STORAGE_KEYS.minioAccessKey, input.minioAccessKey)
+  await upsertOptionalSecret(event, STORAGE_KEYS.minioSecretKey, input.minioSecretKey)
   await upsertOptionalString(event, STORAGE_KEYS.minioRegion, input.minioRegion, value => value.trim())
   await upsertOptionalString(event, STORAGE_KEYS.minioPublicBaseUrl, input.minioPublicBaseUrl, value => value.trim().replace(/\/+$/, ''))
 

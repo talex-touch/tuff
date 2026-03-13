@@ -1,4 +1,3 @@
-import type { R2Bucket } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { createHmac } from 'node:crypto'
 import { AwsClient } from 'aws4fetch'
@@ -6,7 +5,7 @@ import { getRequestURL } from 'h3'
 import { getPilotAdminStorageSettings } from './pilot-admin-storage-config'
 import { resolvePilotConfigString } from './pilot-config'
 
-export type PilotAttachmentStorageProvider = 'memory' | 'r2' | 's3'
+export type PilotAttachmentStorageProvider = 'memory' | 's3'
 
 export interface PilotAttachmentRef {
   provider: PilotAttachmentStorageProvider
@@ -69,16 +68,6 @@ type PilotEventContext = H3Event['context'] & {
 
 const memoryStorage = new Map<string, MemoryObject>()
 const S3_REGION_FALLBACK = 'us-east-1'
-const STORAGE_PROVIDER_ENV_KEYS = ['PILOT_ATTACHMENT_PROVIDER']
-const S3_ENDPOINT_ENV_KEYS = ['PILOT_MINIO_ENDPOINT', 'PILOT_S3_ENDPOINT']
-const S3_BUCKET_ENV_KEYS = ['PILOT_MINIO_BUCKET', 'PILOT_S3_BUCKET']
-const S3_ACCESS_KEY_ENV_KEYS = ['PILOT_MINIO_ACCESS_KEY', 'PILOT_S3_ACCESS_KEY']
-const S3_SECRET_KEY_ENV_KEYS = ['PILOT_MINIO_SECRET_KEY', 'PILOT_S3_SECRET_KEY']
-const S3_REGION_ENV_KEYS = ['PILOT_MINIO_REGION', 'PILOT_S3_REGION']
-const S3_FORCE_PATH_STYLE_ENV_KEYS = ['PILOT_MINIO_FORCE_PATH_STYLE', 'PILOT_S3_FORCE_PATH_STYLE']
-const S3_PUBLIC_BASE_URL_ENV_KEYS = ['PILOT_MINIO_PUBLIC_BASE_URL', 'PILOT_S3_PUBLIC_BASE_URL']
-const ATTACHMENT_PUBLIC_BASE_URL_ENV_KEYS = ['PILOT_ATTACHMENT_PUBLIC_BASE_URL']
-const ATTACHMENT_SIGNING_SECRET_ENV_KEYS = ['PILOT_ATTACHMENT_SIGNING_SECRET', 'PILOT_COOKIE_SECRET']
 const ATTACHMENT_SIGN_EXPIRES_MS = 10 * 60 * 1000
 const ATTACHMENT_SIGN_MAX_SKEW_MS = 24 * 60 * 60 * 1000
 
@@ -96,7 +85,7 @@ function normalizeMimeType(value: unknown): string {
 
 function normalizeStorageProviderMode(value: string | null | undefined): StorageProviderMode {
   const normalized = String(value || '').trim().toLowerCase()
-  if (normalized === 'memory' || normalized === 'r2' || normalized === 's3') {
+  if (normalized === 'memory' || normalized === 's3') {
     return normalized
   }
   if (normalized === 'minio') {
@@ -117,14 +106,6 @@ function toBoolean(value: string, fallback: boolean): boolean {
     return false
   }
   return fallback
-}
-
-function getPilotAttachmentBucket(event: H3Event): R2Bucket | null {
-  return (
-    (event.context.cloudflare?.env?.PILOT_ATTACHMENTS as R2Bucket | undefined)
-    ?? (event.context.cloudflare?.env?.R2 as R2Bucket | undefined)
-    ?? null
-  )
 }
 
 function createS3Client(config: PilotS3Config): AwsClient {
@@ -221,31 +202,29 @@ function buildS3PublicObjectUrl(config: PilotS3Config, key: string): string {
   return buildS3EndpointObjectUrl(config, key)
 }
 
-function resolveStorageProviderMode(event: H3Event, adminProvider: string | undefined): StorageProviderMode {
+function resolveStorageProviderMode(adminProvider: string | undefined): StorageProviderMode {
   const fromAdmin = normalizeStorageProviderMode(adminProvider)
   if (fromAdmin !== 'auto') {
     return fromAdmin
   }
-
-  const fromEnv = resolvePilotConfigString(event, 'attachmentProvider', STORAGE_PROVIDER_ENV_KEYS, 'auto')
-  return normalizeStorageProviderMode(fromEnv)
+  return 'auto'
 }
 
-function resolvePilotS3Config(event: H3Event, adminConfig: Awaited<ReturnType<typeof getPilotAdminStorageSettings>>): PilotS3Config | null {
-  const endpoint = normalizeUrl(adminConfig.minioEndpoint || resolvePilotConfigString(event, 'minioEndpoint', S3_ENDPOINT_ENV_KEYS))
-  const bucket = String(adminConfig.minioBucket || resolvePilotConfigString(event, 'minioBucket', S3_BUCKET_ENV_KEYS)).trim()
-  const accessKeyId = String(adminConfig.minioAccessKey || resolvePilotConfigString(event, 'minioAccessKey', S3_ACCESS_KEY_ENV_KEYS)).trim()
-  const secretAccessKey = String(adminConfig.minioSecretKey || resolvePilotConfigString(event, 'minioSecretKey', S3_SECRET_KEY_ENV_KEYS)).trim()
+function resolvePilotS3Config(adminConfig: Awaited<ReturnType<typeof getPilotAdminStorageSettings>>): PilotS3Config | null {
+  const endpoint = normalizeUrl(adminConfig.minioEndpoint)
+  const bucket = String(adminConfig.minioBucket || '').trim()
+  const accessKeyId = String(adminConfig.minioAccessKey || '').trim()
+  const secretAccessKey = String(adminConfig.minioSecretKey || '').trim()
 
   if (!endpoint || !bucket || !accessKeyId || !secretAccessKey) {
     return null
   }
 
-  const region = String(adminConfig.minioRegion || resolvePilotConfigString(event, 'minioRegion', S3_REGION_ENV_KEYS, S3_REGION_FALLBACK)).trim() || S3_REGION_FALLBACK
+  const region = String(adminConfig.minioRegion || S3_REGION_FALLBACK).trim() || S3_REGION_FALLBACK
   const forcePathStyleRaw = adminConfig.minioForcePathStyle === undefined
-    ? resolvePilotConfigString(event, 'minioForcePathStyle', S3_FORCE_PATH_STYLE_ENV_KEYS, 'true')
+    ? 'true'
     : (adminConfig.minioForcePathStyle ? 'true' : 'false')
-  const publicBaseUrl = normalizeUrl(adminConfig.minioPublicBaseUrl || resolvePilotConfigString(event, 'minioPublicBaseUrl', S3_PUBLIC_BASE_URL_ENV_KEYS))
+  const publicBaseUrl = normalizeUrl(adminConfig.minioPublicBaseUrl)
 
   return {
     endpoint,
@@ -259,7 +238,7 @@ function resolvePilotS3Config(event: H3Event, adminConfig: Awaited<ReturnType<ty
 }
 
 function resolveAttachmentPublicBaseUrl(event: H3Event, adminConfig: Awaited<ReturnType<typeof getPilotAdminStorageSettings>>): string {
-  const configured = normalizeUrl(adminConfig.attachmentPublicBaseUrl || resolvePilotConfigString(event, 'attachmentPublicBaseUrl', ATTACHMENT_PUBLIC_BASE_URL_ENV_KEYS))
+  const configured = normalizeUrl(adminConfig.attachmentPublicBaseUrl)
   if (configured) {
     return configured
   }
@@ -267,7 +246,7 @@ function resolveAttachmentPublicBaseUrl(event: H3Event, adminConfig: Awaited<Ret
 }
 
 function resolveAttachmentSigningSecret(event: H3Event): string {
-  return String(resolvePilotConfigString(event, 'attachmentSigningSecret', ATTACHMENT_SIGNING_SECRET_ENV_KEYS)).trim()
+  return String(resolvePilotConfigString(event, 'cookieSecret', ['PILOT_COOKIE_SECRET'])).trim()
 }
 
 async function resolvePilotAttachmentRuntimeConfig(event: H3Event): Promise<PilotAttachmentRuntimeConfig> {
@@ -278,8 +257,8 @@ async function resolvePilotAttachmentRuntimeConfig(event: H3Event): Promise<Pilo
         (): Awaited<ReturnType<typeof getPilotAdminStorageSettings>> => ({}),
       )
       return {
-        providerMode: resolveStorageProviderMode(event, adminConfig.attachmentProvider),
-        s3Config: resolvePilotS3Config(event, adminConfig),
+        providerMode: resolveStorageProviderMode(adminConfig.attachmentProvider),
+        s3Config: resolvePilotS3Config(adminConfig),
         attachmentPublicBaseUrl: resolveAttachmentPublicBaseUrl(event, adminConfig),
         attachmentSigningSecret: resolveAttachmentSigningSecret(event),
       }
@@ -389,7 +368,7 @@ export function parsePilotAttachmentRef(ref: string | null | undefined): PilotAt
     if (!key) {
       return null
     }
-    if (scheme === 'memory' || scheme === 'r2' || scheme === 's3') {
+    if (scheme === 'memory' || scheme === 's3') {
       return {
         provider: scheme,
         key,
@@ -404,13 +383,6 @@ export function parsePilotAttachmentRef(ref: string | null | undefined): PilotAt
     return null
   }
 
-  if (raw.startsWith('pilot/')) {
-    return {
-      provider: 'r2',
-      key: raw,
-    }
-  }
-
   return null
 }
 
@@ -422,14 +394,10 @@ export function buildPilotAttachmentPreviewUrl(sessionId: string, attachmentId: 
 
 function resolveWriteProvider(
   mode: StorageProviderMode,
-  bucket: R2Bucket | null,
   s3Config: PilotS3Config | null,
 ): PilotAttachmentStorageProvider {
-  if (mode === 'memory' || mode === 'r2' || mode === 's3') {
+  if (mode === 'memory' || mode === 's3') {
     return mode
-  }
-  if (bucket) {
-    return 'r2'
   }
   if (s3Config) {
     return 's3'
@@ -439,8 +407,7 @@ function resolveWriteProvider(
 
 export async function getPilotAttachmentUploadAvailability(event: H3Event): Promise<PilotAttachmentUploadAvailability> {
   const runtimeConfig = await resolvePilotAttachmentRuntimeConfig(event)
-  const bucket = getPilotAttachmentBucket(event)
-  const provider = resolveWriteProvider(runtimeConfig.providerMode, bucket, runtimeConfig.s3Config)
+  const provider = resolveWriteProvider(runtimeConfig.providerMode, runtimeConfig.s3Config)
   const hasS3Config = Boolean(runtimeConfig.s3Config)
   const hasPublicBaseUrl = Boolean(runtimeConfig.attachmentPublicBaseUrl)
 
@@ -454,18 +421,8 @@ export async function getPilotAttachmentUploadAvailability(event: H3Event): Prom
     }
   }
 
-  if (hasS3Config || hasPublicBaseUrl) {
-    return {
-      allowed: true,
-      provider,
-      hasS3Config,
-      hasPublicBaseUrl,
-    }
-  }
-
   return {
-    allowed: false,
-    reason: 'Attachments are disabled on local/private environments without MinIO or attachment public base URL.',
+    allowed: true,
     provider,
     hasS3Config,
     hasPublicBaseUrl,
@@ -484,24 +441,7 @@ export async function putPilotAttachmentObject(
   const mimeType = normalizeMimeType(input.mimeType)
   const bytes = cloneBytes(input.bytes)
   const runtimeConfig = await resolvePilotAttachmentRuntimeConfig(event)
-  const bucket = getPilotAttachmentBucket(event)
-  const provider = resolveWriteProvider(runtimeConfig.providerMode, bucket, runtimeConfig.s3Config)
-
-  if (provider === 'r2') {
-    if (!bucket) {
-      throw new Error('R2 is not configured.')
-    }
-    await bucket.put(key, bytes, {
-      httpMetadata: {
-        contentType: mimeType,
-      },
-    })
-    return {
-      provider: 'r2',
-      key,
-      ref: createPilotAttachmentRef('r2', key),
-    }
-  }
+  const provider = resolveWriteProvider(runtimeConfig.providerMode, runtimeConfig.s3Config)
 
   if (provider === 's3') {
     if (!runtimeConfig.s3Config) {
@@ -524,23 +464,6 @@ export async function putPilotAttachmentObject(
     provider: 'memory',
     key,
     ref: createPilotAttachmentRef('memory', key),
-  }
-}
-
-async function readObjectFromR2(bucket: R2Bucket, key: string): Promise<PilotAttachmentObject | null> {
-  const object = await bucket.get(key)
-  if (!object) {
-    return null
-  }
-
-  const buffer = new Uint8Array(await object.arrayBuffer())
-  const mimeType = normalizeMimeType(object.httpMetadata?.contentType)
-  return {
-    provider: 'r2',
-    key,
-    bytes: buffer,
-    mimeType,
-    size: buffer.byteLength,
   }
 }
 
@@ -570,20 +493,11 @@ export async function getPilotAttachmentObject(event: H3Event, ref: string): Pro
     return readObjectFromMemory(parsed.key)
   }
 
-  if (parsed.provider === 's3') {
-    const runtimeConfig = await resolvePilotAttachmentRuntimeConfig(event)
-    if (!runtimeConfig.s3Config) {
-      return null
-    }
-    return await readObjectFromS3(runtimeConfig.s3Config, parsed.key)
+  const runtimeConfig = await resolvePilotAttachmentRuntimeConfig(event)
+  if (!runtimeConfig.s3Config) {
+    return null
   }
-
-  const bucket = getPilotAttachmentBucket(event)
-  if (bucket) {
-    return await readObjectFromR2(bucket, parsed.key)
-  }
-
-  return null
+  return await readObjectFromS3(runtimeConfig.s3Config, parsed.key)
 }
 
 export async function deletePilotAttachmentObject(event: H3Event, ref: string): Promise<void> {
@@ -597,17 +511,9 @@ export async function deletePilotAttachmentObject(event: H3Event, ref: string): 
     return
   }
 
-  if (parsed.provider === 's3') {
-    const runtimeConfig = await resolvePilotAttachmentRuntimeConfig(event)
-    if (runtimeConfig.s3Config) {
-      await deleteObjectFromS3(runtimeConfig.s3Config, parsed.key)
-    }
-    return
-  }
-
-  const bucket = getPilotAttachmentBucket(event)
-  if (bucket) {
-    await bucket.delete(parsed.key)
+  const runtimeConfig = await resolvePilotAttachmentRuntimeConfig(event)
+  if (runtimeConfig.s3Config) {
+    await deleteObjectFromS3(runtimeConfig.s3Config, parsed.key)
   }
 }
 
@@ -676,11 +582,7 @@ export async function resolvePilotAttachmentModelUrl(
 ): Promise<string> {
   const fallback = await buildPilotAttachmentSignedPreviewUrl(event, input.sessionId, input.attachmentId)
   const parsed = parsePilotAttachmentRef(input.ref)
-  if (!parsed) {
-    return fallback
-  }
-
-  if (parsed.provider !== 's3') {
+  if (!parsed || parsed.provider !== 's3') {
     return fallback
   }
 

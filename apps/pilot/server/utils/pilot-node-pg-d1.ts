@@ -1,11 +1,11 @@
-import type { D1Database, D1PreparedStatement, D1Result } from '@cloudflare/workers-types'
+import type { PilotDatabase, PilotDbPreparedStatement, PilotDbResult } from '../types/pilot-db'
 import process from 'node:process'
 import { Pool } from 'pg'
 
 const NODE_PG_D1_CACHE_KEY = '__pilotNodePgD1Cache'
 
 type GlobalNodePgD1Cache = typeof globalThis & {
-  [NODE_PG_D1_CACHE_KEY]?: Map<string, D1Database>
+  [NODE_PG_D1_CACHE_KEY]?: Map<string, PilotDatabase>
 }
 
 function normalizeParam(value: unknown): unknown {
@@ -75,8 +75,8 @@ class NodePgPreparedStatement {
     private readonly params: unknown[] = [],
   ) {}
 
-  bind(...values: unknown[]): D1PreparedStatement {
-    return new NodePgPreparedStatement(this.pool, this.sql, values.map(normalizeParam)) as unknown as D1PreparedStatement
+  bind(...values: unknown[]): PilotDbPreparedStatement {
+    return new NodePgPreparedStatement(this.pool, this.sql, values.map(normalizeParam)) as unknown as PilotDbPreparedStatement
   }
 
   async first<T = unknown>(columnName?: string): Promise<T | null> {
@@ -91,22 +91,22 @@ class NodePgPreparedStatement {
     return row as T
   }
 
-  async run<T = unknown>(): Promise<D1Result<T>> {
+  async run<T = unknown>(): Promise<PilotDbResult<T>> {
     const query = await this.pool.query(toPgSql(this.sql), this.params as any[])
     return {
       success: true,
       meta: toMeta({ rowCount: query.rowCount }),
       results: [],
-    } as D1Result<T>
+    } as PilotDbResult<T>
   }
 
-  async all<T = unknown>(): Promise<D1Result<T>> {
+  async all<T = unknown>(): Promise<PilotDbResult<T>> {
     const query = await this.pool.query(toPgSql(this.sql), this.params as any[])
     return {
       success: true,
       meta: toMeta({ rowCount: query.rowCount }),
       results: query.rows as T[],
-    } as D1Result<T>
+    } as PilotDbResult<T>
   }
 
   async raw<T = unknown>(options?: { columnNames?: boolean }): Promise<T[] | [string[], ...T[]]> {
@@ -132,11 +132,11 @@ class NodePgPreparedStatement {
 class NodePgDatabase {
   constructor(private readonly pool: Pool) {}
 
-  prepare(query: string): D1PreparedStatement {
-    return new NodePgPreparedStatement(this.pool, query) as unknown as D1PreparedStatement
+  prepare(query: string): PilotDbPreparedStatement {
+    return new NodePgPreparedStatement(this.pool, query) as unknown as PilotDbPreparedStatement
   }
 
-  async batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]> {
+  async batch<T = unknown>(statements: PilotDbPreparedStatement[]): Promise<PilotDbResult<T>[]> {
     const executable = statements.map((statement) => {
       if (!(statement instanceof NodePgPreparedStatement)) {
         throw new TypeError('Node PG D1 adapter only accepts statements created by the same adapter instance.')
@@ -147,14 +147,14 @@ class NodePgDatabase {
     const client = await this.pool.connect()
     try {
       await client.query('BEGIN')
-      const results: D1Result<T>[] = []
+      const results: PilotDbResult<T>[] = []
       for (const statement of executable) {
         const query = await client.query(toPgSql(statement.getSql()), statement.getParams() as any[])
         results.push({
           success: true,
           meta: toMeta({ rowCount: query.rowCount }),
           results: [],
-        } as D1Result<T>)
+        } as PilotDbResult<T>)
       }
       await client.query('COMMIT')
       return results
@@ -186,31 +186,26 @@ class NodePgDatabase {
 }
 
 function resolvePostgresDsn(): string {
-  const dsn = String(
-    process.env.PILOT_POSTGRES_URL
-    || process.env.PILOT_PG_DSN
-    || process.env.DATABASE_URL
-    || '',
-  ).trim()
+  const dsn = String(process.env.PILOT_POSTGRES_URL || '').trim()
   if (!dsn) {
-    throw new Error('Postgres mode requires PILOT_POSTGRES_URL (or PILOT_PG_DSN / DATABASE_URL).')
+    throw new Error('Postgres mode requires PILOT_POSTGRES_URL.')
   }
   return dsn
 }
 
-function createNodePgDatabase(dsn: string): D1Database {
-  const max = Number(process.env.PILOT_POSTGRES_POOL_MAX || 10)
+function createNodePgDatabase(dsn: string): PilotDatabase {
+  const max = 10
   const pool = new Pool({
     connectionString: dsn,
     max: Number.isFinite(max) && max > 0 ? Math.floor(max) : 10,
   })
-  return new NodePgDatabase(pool) as unknown as D1Database
+  return new NodePgDatabase(pool) as unknown as PilotDatabase
 }
 
-export function getNodePilotPostgresDatabase(): D1Database {
+export function getNodePilotPostgresDatabase(): PilotDatabase {
   const globalCache = globalThis as GlobalNodePgD1Cache
   if (!globalCache[NODE_PG_D1_CACHE_KEY]) {
-    globalCache[NODE_PG_D1_CACHE_KEY] = new Map<string, D1Database>()
+    globalCache[NODE_PG_D1_CACHE_KEY] = new Map<string, PilotDatabase>()
   }
 
   const dsn = resolvePostgresDsn()

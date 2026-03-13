@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildPilotAttachmentPreviewUrl,
   buildPilotAttachmentSignedPreviewUrl,
@@ -13,11 +13,22 @@ import {
   verifyPilotAttachmentSignedAccess,
 } from '../pilot-attachment-storage'
 
+let mockAdminStorageSettings: Record<string, unknown> = {}
+
+vi.mock('../pilot-admin-storage-config', () => ({
+  getPilotAdminStorageSettings: vi.fn(async () => mockAdminStorageSettings),
+}))
+
 function createEvent(): H3Event {
   return {
     context: {},
   } as unknown as H3Event
 }
+
+afterEach(() => {
+  mockAdminStorageSettings = {}
+  delete process.env.PILOT_COOKIE_SECRET
+})
 
 describe('pilot-attachment-storage', () => {
   it('supports ref create and parse', () => {
@@ -64,78 +75,60 @@ describe('pilot-attachment-storage', () => {
 
   it('builds model url from minio public base when s3 ref is used', async () => {
     const event = createEvent()
-    process.env.PILOT_MINIO_ENDPOINT = 'https://minio.local'
-    process.env.PILOT_MINIO_BUCKET = 'pilot-attachments'
-    process.env.PILOT_MINIO_ACCESS_KEY = 'access'
-    process.env.PILOT_MINIO_SECRET_KEY = 'secret'
-    process.env.PILOT_MINIO_PUBLIC_BASE_URL = 'https://cdn.example.com/pilot-attachments'
+    mockAdminStorageSettings = {
+      minioEndpoint: 'https://minio.local',
+      minioBucket: 'pilot-attachments',
+      minioAccessKey: 'access',
+      minioSecretKey: 'secret',
+      minioPublicBaseUrl: 'https://cdn.example.com/pilot-attachments',
+    }
 
-    try {
-      const url = await resolvePilotAttachmentModelUrl(event, {
-        sessionId: 'session-123',
-        attachmentId: 'att-456',
-        ref: 's3://pilot/u/s/att-456/image.png',
-      })
-      expect(url).toBe('https://cdn.example.com/pilot-attachments/pilot/u/s/att-456/image.png')
-    }
-    finally {
-      delete process.env.PILOT_MINIO_ENDPOINT
-      delete process.env.PILOT_MINIO_BUCKET
-      delete process.env.PILOT_MINIO_ACCESS_KEY
-      delete process.env.PILOT_MINIO_SECRET_KEY
-      delete process.env.PILOT_MINIO_PUBLIC_BASE_URL
-    }
+    const url = await resolvePilotAttachmentModelUrl(event, {
+      sessionId: 'session-123',
+      attachmentId: 'att-456',
+      ref: 's3://pilot/u/s/att-456/image.png',
+    })
+    expect(url).toBe('https://cdn.example.com/pilot-attachments/pilot/u/s/att-456/image.png')
   })
 
   it('builds signed preview url when base url is configured', async () => {
     const event = createEvent()
-    process.env.PILOT_ATTACHMENT_PUBLIC_BASE_URL = 'https://pilot.example.com'
+    mockAdminStorageSettings = {
+      attachmentPublicBaseUrl: 'https://pilot.example.com',
+    }
     process.env.PILOT_COOKIE_SECRET = 'unit-test-secret'
 
-    try {
-      const url = await buildPilotAttachmentSignedPreviewUrl(event, 'session-123', 'att-456')
-      const parsed = new URL(url)
-      expect(`${parsed.origin}${parsed.pathname}`).toBe('https://pilot.example.com/api/pilot/chat/sessions/session-123/attachments/att-456/content')
-      const expiresAt = Number(parsed.searchParams.get('exp') || 0)
-      const signature = String(parsed.searchParams.get('sig') || '')
-      expect(verifyPilotAttachmentSignedAccess(event, {
-        sessionId: 'session-123',
-        attachmentId: 'att-456',
-        expiresAt,
-        signature,
-      })).toBe(true)
-    }
-    finally {
-      delete process.env.PILOT_ATTACHMENT_PUBLIC_BASE_URL
-      delete process.env.PILOT_COOKIE_SECRET
-    }
+    const url = await buildPilotAttachmentSignedPreviewUrl(event, 'session-123', 'att-456')
+    const parsed = new URL(url)
+    expect(`${parsed.origin}${parsed.pathname}`).toBe('https://pilot.example.com/api/pilot/chat/sessions/session-123/attachments/att-456/content')
+    const expiresAt = Number(parsed.searchParams.get('exp') || 0)
+    const signature = String(parsed.searchParams.get('sig') || '')
+    expect(verifyPilotAttachmentSignedAccess(event, {
+      sessionId: 'session-123',
+      attachmentId: 'att-456',
+      expiresAt,
+      signature,
+    })).toBe(true)
   })
 
-  it('disables attachment upload in local/private mode without minio or base url', async () => {
+  it('falls back to memory upload when no storage config is provided', async () => {
     const event = createEvent()
     const availability = await getPilotAttachmentUploadAvailability(event)
-    expect(availability.allowed).toBe(false)
+    expect(availability.allowed).toBe(true)
+    expect(availability.provider).toBe('memory')
   })
 
   it('enables attachment upload when minio config exists', async () => {
     const event = createEvent()
-    process.env.PILOT_MINIO_ENDPOINT = 'https://minio.local'
-    process.env.PILOT_MINIO_BUCKET = 'pilot-attachments'
-    process.env.PILOT_MINIO_ACCESS_KEY = 'access'
-    process.env.PILOT_MINIO_SECRET_KEY = 'secret'
-    process.env.PILOT_ATTACHMENT_PROVIDER = 's3'
-
-    try {
-      const availability = await getPilotAttachmentUploadAvailability(event)
-      expect(availability.allowed).toBe(true)
-      expect(availability.hasS3Config).toBe(true)
+    mockAdminStorageSettings = {
+      attachmentProvider: 's3',
+      minioEndpoint: 'https://minio.local',
+      minioBucket: 'pilot-attachments',
+      minioAccessKey: 'access',
+      minioSecretKey: 'secret',
     }
-    finally {
-      delete process.env.PILOT_MINIO_ENDPOINT
-      delete process.env.PILOT_MINIO_BUCKET
-      delete process.env.PILOT_MINIO_ACCESS_KEY
-      delete process.env.PILOT_MINIO_SECRET_KEY
-      delete process.env.PILOT_ATTACHMENT_PROVIDER
-    }
+    const availability = await getPilotAttachmentUploadAvailability(event)
+    expect(availability.allowed).toBe(true)
+    expect(availability.hasS3Config).toBe(true)
   })
 })

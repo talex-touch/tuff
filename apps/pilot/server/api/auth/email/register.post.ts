@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
     nickname,
   })
 
-  writePilotSessionCookie(event, user.userId)
+  const token = await writePilotSessionCookie(event, user.userId)
   const mergeReport = await mergePilotGuestDataAfterAuth(event, user.userId, 'register')
 
   return quotaOk({
@@ -56,6 +56,12 @@ export default defineEventHandler(async (event) => {
     email: user.email,
     nickname: user.nickname,
     source: 'local',
+    token: {
+      accessToken: token.accessToken,
+      refreshToken: token.refreshToken,
+      expiresIn: token.expiresIn,
+      refreshExpiresIn: token.refreshExpiresIn,
+    },
     merged: mergeReport,
   })
 })

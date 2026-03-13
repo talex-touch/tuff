@@ -1,16 +1,12 @@
 import type { MessageRecord } from '@talex-touch/tuff-intelligence'
-import type { H3Event } from 'h3'
 import { networkClient } from '@talex-touch/utils/network'
-import process from 'node:process'
 import { createError } from 'h3'
 import { requirePilotAuth } from '../../../../../utils/auth'
+import { resolvePilotChannelSelection } from '../../../../../utils/pilot-channel'
 import { requireSessionId } from '../../../../../utils/pilot-http'
 import { createPilotStoreAdapter } from '../../../../../utils/pilot-store'
 
 const DEFAULT_TITLE_MODEL = 'gpt-5.2'
-const BASE_URL_ENV_KEYS = ['NUXT_PILOT_BASE_URL']
-const API_KEY_ENV_KEYS = ['NUXT_PILOT_API_KEY']
-const MODEL_ENV_KEYS = ['NUXT_PILOT_MODEL']
 
 interface TitleBody {
   force?: boolean
@@ -36,37 +32,6 @@ function buildResponsesEndpoint(baseUrl: string): string {
     return `${normalized}/responses`
   }
   return `${normalized}/v1/responses`
-}
-
-function getPilotRuntimeConfig(event: H3Event): Record<string, unknown> {
-  const runtimeConfig = (event.context as { runtimeConfig?: Record<string, unknown> }).runtimeConfig
-  return runtimeConfig?.pilot && typeof runtimeConfig.pilot === 'object'
-    ? (runtimeConfig.pilot as Record<string, unknown>)
-    : {}
-}
-
-function resolvePilotConfigValue(
-  event: H3Event,
-  pilotConfig: Record<string, unknown>,
-  key: string,
-  envKeys: string[],
-): string {
-  const cloudflareEnv = (event.context.cloudflare as { env?: Record<string, unknown> } | undefined)?.env
-  for (const envKey of envKeys) {
-    const fromCloudflare = toStringValue(cloudflareEnv?.[envKey])
-    if (fromCloudflare) {
-      return fromCloudflare
-    }
-  }
-
-  for (const envKey of envKeys) {
-    const fromProcess = toStringValue(process.env[envKey])
-    if (fromProcess) {
-      return fromProcess
-    }
-  }
-
-  return toStringValue(pilotConfig[key])
 }
 
 function normalizeMessagePreview(content: string): string {
@@ -214,10 +179,10 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const pilotConfig = getPilotRuntimeConfig(event)
-  const baseUrl = resolvePilotConfigValue(event, pilotConfig, 'baseUrl', BASE_URL_ENV_KEYS)
-  const apiKey = resolvePilotConfigValue(event, pilotConfig, 'apiKey', API_KEY_ENV_KEYS)
-  const model = resolvePilotConfigValue(event, pilotConfig, 'model', MODEL_ENV_KEYS) || DEFAULT_TITLE_MODEL
+  const selectedChannel = await resolvePilotChannelSelection(event)
+  const baseUrl = selectedChannel.channel.baseUrl
+  const apiKey = selectedChannel.channel.apiKey
+  const model = selectedChannel.channel.model || DEFAULT_TITLE_MODEL
   const preview = buildConversationPreview(messages)
 
   let titleSource: 'ai' | 'fallback' = 'fallback'

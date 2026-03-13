@@ -71,7 +71,7 @@ interface ExecutorTraceContext {
   method: string
   path: string
   host: string
-  runtime: 'cloudflare' | 'node'
+  runtime: 'node'
   userId: string
   chatId: string
   runtimeSessionId: string
@@ -309,18 +309,10 @@ function toBooleanFlag(value: unknown): boolean {
 function resolveExecutorDebugEnabled(event: H3Event): boolean {
   const eventLike = event as unknown as {
     context?: {
-      cloudflare?: {
-        env?: Record<string, unknown>
-      }
       runtimeConfig?: {
         pilot?: Record<string, unknown>
       }
     }
-  }
-
-  const cloudflareValue = eventLike.context?.cloudflare?.env?.PILOT_EXECUTOR_DEBUG
-  if (toBooleanFlag(cloudflareValue)) {
-    return true
   }
 
   const runtimePilot = eventLike.context?.runtimeConfig?.pilot
@@ -335,7 +327,7 @@ function resolveRequestMeta(event: H3Event): {
   method: string
   path: string
   host: string
-  runtime: 'cloudflare' | 'node'
+  runtime: 'node'
 } {
   const eventLike = event as unknown as {
     method?: string
@@ -347,22 +339,17 @@ function resolveRequestMeta(event: H3Event): {
         headers?: Record<string, string | string[] | undefined>
       }
     }
-    context?: {
-      cloudflare?: unknown
-    }
   }
 
   const method = String(eventLike.method || eventLike.node?.req?.method || 'POST').toUpperCase()
   const path = String(eventLike.path || eventLike.node?.req?.url || '')
   const hostValue = eventLike.node?.req?.headers?.host
   const host = Array.isArray(hostValue) ? String(hostValue[0] || '') : String(hostValue || '')
-  const runtime = eventLike.context?.cloudflare ? 'cloudflare' : 'node'
-
   return {
     method,
     path,
     host,
-    runtime,
+    runtime: 'node',
   }
 }
 
@@ -511,7 +498,7 @@ function mapExecutorErrorMessage(
 ): string {
   const raw = error instanceof Error ? error.message : String(error || 'executor failed')
   if (raw.includes('530 status code')) {
-    return '上游 AIAPI 不可达，请检查 NUXT_PILOT_BASE_URL 与 NUXT_PILOT_API_KEY'
+    return '上游 AIAPI 不可达，请检查后台渠道配置与网关状态'
   }
   const normalized = raw.toLowerCase()
   if (
@@ -593,11 +580,6 @@ function getWaitUntilHandler(event: H3Event): ((promise: Promise<unknown>) => vo
     waitUntil?: (promise: Promise<unknown>) => void
     context?: {
       waitUntil?: (promise: Promise<unknown>) => void
-      cloudflare?: {
-        context?: {
-          waitUntil?: (promise: Promise<unknown>) => void
-        }
-      }
     }
   }
 
@@ -607,10 +589,6 @@ function getWaitUntilHandler(event: H3Event): ((promise: Promise<unknown>) => vo
   if (typeof eventLike.context?.waitUntil === 'function') {
     return eventLike.context.waitUntil.bind(eventLike.context)
   }
-  if (typeof eventLike.context?.cloudflare?.context?.waitUntil === 'function') {
-    return eventLike.context.cloudflare.context.waitUntil.bind(eventLike.context.cloudflare.context)
-  }
-
   return null
 }
 
@@ -660,10 +638,34 @@ export default defineEventHandler(async (event) => {
   const chatId = requestedChatId || existingSession?.chatId || randomId('Chat')
   const runtimeSessionId = existingSession?.runtimeSessionId || randomId('session')
 
-  const selectedChannel = resolvePilotChannelSelection(event, {
-    requestChannelId: String(body?.channel_id || '').trim(),
-    sessionChannelId: existingSession?.channelId,
-  })
+  let selectedChannel: Awaited<ReturnType<typeof resolvePilotChannelSelection>>
+  try {
+    selectedChannel = await resolvePilotChannelSelection(event, {
+      requestChannelId: String(body?.channel_id || '').trim(),
+      sessionChannelId: existingSession?.channelId,
+    })
+  }
+  catch (error: any) {
+    const message = String(error?.statusMessage || error?.message || '所有供应商已熔断，无可用渠道')
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'status_updated', status: 'start', id: 'assistant' })}\n\n`))
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'error', status: 'failed', message })}\n\n`))
+        controller.enqueue(encoder.encode('data: [DONE]\\n\\n'))
+        controller.close()
+      },
+    })
+
+    return new Response(stream, {
+      status: 503,
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+      },
+    })
+  }
 
   await upsertPilotQuotaSession(event, {
     chatId,
