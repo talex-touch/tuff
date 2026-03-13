@@ -39,8 +39,6 @@ jobs:
 
       - name: Setup PNPM
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.3
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -82,8 +80,6 @@ jobs:
 
       - name: Setup PNPM
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.3
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
