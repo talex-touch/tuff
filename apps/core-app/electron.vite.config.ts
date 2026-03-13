@@ -21,11 +21,13 @@ const basePath = path.join(__dirname, 'src')
 const rendererPath = path.join(basePath, 'renderer', 'src')
 const tuffexRoot = path.join(workspaceRoot, 'packages', 'tuffex')
 const tuffBusinessRoot = path.join(workspaceRoot, 'packages', 'tuff-business')
+const tuffIntelligenceRoot = path.join(workspaceRoot, 'packages', 'tuff-intelligence')
 const utilsRoot = path.join(workspaceRoot, 'packages', 'utils')
 const tuffexSourceEntry = path.join(tuffexRoot, 'packages', 'components', 'src', 'index.ts')
 const tuffexStyleEntry = path.join(tuffexRoot, 'packages', 'components', 'style', 'index.scss')
 const tuffexUtilsEntry = path.join(tuffexRoot, 'packages', 'utils', 'index.ts')
 const tuffBusinessSourceEntry = path.join(tuffBusinessRoot, 'src', 'index.ts')
+const tuffIntelligenceRendererEntry = path.join(tuffIntelligenceRoot, 'src', 'renderer.ts')
 const utilsRendererEntry = path.join(utilsRoot, 'renderer', 'index.ts')
 const devServerHost = process.env.TUFF_DEV_SERVER_HOST ?? '127.0.0.1'
 const devServerPortValue = Number(process.env.TUFF_DEV_SERVER_PORT)
@@ -45,6 +47,9 @@ const tuffexAliases = isProduction
     ]
 const tuffBusinessAliases = [
   { find: /^@talex-touch\/tuff-business$/, replacement: tuffBusinessSourceEntry }
+]
+const tuffIntelligenceAliases = [
+  { find: /^@talex-touch\/tuff-intelligence$/, replacement: tuffIntelligenceRendererEntry }
 ]
 const utilsAliases = [{ find: /^@talex-touch\/utils\/renderer$/, replacement: utilsRendererEntry }]
 const tuffexDevPlugins: PluginOption[] = isProduction
@@ -177,6 +182,7 @@ export default defineConfig({
         },
         ...tuffexAliases,
         ...tuffBusinessAliases,
+        ...tuffIntelligenceAliases,
         ...utilsAliases
       ]
     },

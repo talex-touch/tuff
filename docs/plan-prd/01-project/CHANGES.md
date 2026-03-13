@@ -2,6 +2,30 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-03-13
+
+### CI：修复 Pilot PNPM 版本冲突 + core-app 构建对 deepagents 的错误引入
+
+**变更类型**: CI 稳定性修复 / 构建边界收敛
+
+**描述**:
+- 修复 `Pilot CI` 在 `pnpm/action-setup@v4` 阶段失败的问题：
+  - 根因：workflow 固定 `pnpm 10.30.3`，而仓库 `packageManager` 已升级为 `pnpm@10.32.1`，触发 `ERR_PNPM_BAD_PM_VERSION`。
+  - 方案：移除 workflow 中的硬编码 `version`，统一跟随仓库 `packageManager`。
+- 修复 `core-app` 渲染端构建因 `deepagents -> @langchain/langgraph@0.4.x` 引入 `node:async_hooks` 导致的 Rollup 失败：
+  - 新增 `packages/tuff-intelligence/src/renderer.ts` 作为渲染端安全入口，仅导出 `client/types/sdk` 必需能力。
+  - 在 `apps/core-app/electron.vite.config.ts` 的 renderer alias 中将 `@talex-touch/tuff-intelligence` 指向该入口，避免渲染 bundle 解析 server-only adapter 链路。
+
+**验证**:
+- `pnpm -C "apps/core-app" exec electron-vite build` ✅
+- `gh run view 23049285164 --job 66946118791 --log`（确认历史失败根因）✅
+
+**修改文件**:
+- `.github/workflows/pilot-ci.yml`
+- `apps/core-app/electron.vite.config.ts`
+- `packages/tuff-intelligence/src/renderer.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-03-12
 
 ### Pilot：环境变量收敛清单固化（Postgres + Redis + DB Config）
