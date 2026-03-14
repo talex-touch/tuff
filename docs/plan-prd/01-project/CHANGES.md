@@ -29,10 +29,187 @@
 **描述**:
 - 在 `apps/pilot/nuxt.config.ts` 增加显式 env 文件加载逻辑，不再依赖 Nuxt 默认加载顺序。
 - 按固定顺序覆盖：先加载 `.env`，再 `.env.dev`，再 `.env.prod`，最后 `.env.local`，确保最终优先级为 `.env.local > .env.prod > .env.dev > .env`。
-- 修复“本地已在 `.env.local` 配置但默认 `pnpm run dev` 仍提示缺少关键 env”的不确定行为。
+- 新增共享加载器 `apps/pilot/shared/pilot-env-loader.ts`，并在 Postgres DSN 解析前强制一次性应用优先级，避免 Nitro 运行时与 Nuxt 配置阶段出现读取不一致。
+- 修复“本地已在 `.env.local` 配置但默认 `pnpm run dev` 仍报 Postgres 密码错误”的不确定行为。
 
 **修改文件**:
 - `apps/pilot/nuxt.config.ts`
+- `apps/pilot/shared/pilot-env-loader.ts`
+- `apps/pilot/server/utils/pilot-node-pg-d1.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot：渠道不可用诊断增强（503 可观测性修复）
+
+**变更类型**: 运行时诊断增强 / 错误信息可观测性
+
+**描述**:
+- `resolvePilotChannelSelection` 在无可用渠道时输出结构化日志（包含 `db` 目标、配置渠道列表、启用渠道列表、默认渠道、请求渠道）。
+- `/api/aigc/executor` 的 503 SSE 错误事件补充 `code/reason/message`，并将文案细化为可执行指引（例如 `no_channels_configured`）。
+- 修复 h3 警告：避免使用长 `statusMessage`，改为短状态 + 详细 `message`。
+- 启动期 bootstrap 检查日志增加数据库目标定位，便于快速判断“连到了空库”还是“渠道被禁用”。
+
+**修改文件**:
+- `apps/pilot/server/utils/pilot-channel.ts`
+- `apps/pilot/server/api/aigc/executor.post.ts`
+- `apps/pilot/server/plugins/pilot-channel-bootstrap-check.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot：Postgres 兼容性修复（登录合并链路）
+
+**变更类型**: 运行时稳定性修复 / 跨数据库兼容
+
+**描述**:
+- 修复 `D1RuntimeStoreAdapter.ensureSchema` 在 Postgres 下对重复列异常识别不全的问题（`42701` / `column ... already exists`），避免登录后访客数据合并阶段异常中断。
+- 修复访客合并 SQL 中 SQLite 专用函数 `randomblob()` 导致的 Postgres 500。
+- 将 `INSERT OR IGNORE` 改为 `ON CONFLICT ... DO NOTHING`，统一兼容 SQLite + Postgres。
+
+**修改文件**:
+- `packages/tuff-intelligence/src/store/d1-runtime-store.ts`
+- `apps/pilot/server/utils/pilot-guest-merge.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot：管理后台新增渠道设置页（复用存储页风格）
+
+**变更类型**: 管理能力补齐 / 配置可视化
+
+**描述**:
+- 新增 ` /pilot/admin/channels ` 页面，支持增删渠道、默认渠道选择、超时与工具配置。
+- 复用 `storage` 管理页的布局与视觉风格，并在侧边栏与存储页头部增加“渠道设置”入口。
+- 渠道保存支持“留空 API Key 保持不变”，避免每次编辑都重复输入密钥。
+- 修复加密配置解密前缀解析错误（`enc:v1`），解决渠道配置“保存成功但读取为空”的问题。
+
+**修改文件**:
+- `apps/pilot/app/pages/pilot/admin/channels.vue`
+- `apps/pilot/app/pages/pilot/admin/storage.vue`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `apps/pilot/server/utils/pilot-admin-channel-config.ts`
+- `apps/pilot/server/utils/pilot-config-crypto.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-App：OmniPanel 稳定版 MVP Gate（真实窗口 smoke + 失败路径回归）
+
+**变更类型**: 发布门禁补强 / 回归覆盖扩展 / 稳定性收口
+
+**描述**:
+- 为 OmniPanel 增加发布级最小链路验证：`show -> execute builtin.corebox-search -> hide`（真实 Electron runtime）。
+- 新增主进程 smoke probe（`TUFF_OMNIPANEL_SMOKE=1`），超时与异常返回非 0 退出码，避免 silent failure。
+- 补齐 `main/modules/omni-panel` 失败路径与触发稳定性回归测试（plugin unavailable / plugin missing / no context / shortcut fallback / combo active / input-hook cleanup）。
+- 新增独立 CI 工作流 `.github/workflows/omnipanel-gate.yml`，将 `typecheck + scoped lint + unit + build + smoke` 作为 2.4.8 Gate 主线。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/omni-panel/index.test.ts`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/package.json`
+- `.github/workflows/omnipanel-gate.yml`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Docs：主文档口径矩阵统一与压缩治理（2.4.8）
+
+**变更类型**: 文档治理 / 口径修复 / 冗余压缩
+
+**描述**:
+- 建立并落地“单一口径矩阵”：统一 `TODO/README/Roadmap/Release 清单/Quality Baseline/INDEX` 六份主文档的状态、日期与下一动作。
+- 修复关键冲突：
+  - `v2.4.7 Gate C` 统一为 `Done`；
+  - `Pilot Runtime` 统一为 `Node Server + Postgres/Redis` 主路径；
+  - `TODO` 顶部与文末更新时间统一为 `2026-03-14`；
+  - `INDEX` 改为“入口 + 高价值快照”并移除错误的“待完成/未发现”聚合条目。
+- 生态文档修正：`06-ecosystem/README.md` 将过期 `tuffex-ui` 路径更新为 `packages/tuffex/`。
+- 对 `next-edit` 给出降权规则：仅作为草稿池，不参与发布状态判定。
+
+**修改文件**:
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/06-ecosystem/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-App：SDK Hard-Cut E~F 持续迁移（Everything + Sync Storage + Plugin + Migration + Widget Registry）
+
+**变更类型**: 架构收敛 / renderer 直连清理 / 事件契约统一
+
+**描述**:
+- `SettingEverything` 从 legacy channel 直调迁移到 typed transport 事件：
+  - 移除 `tryUseChannel().send('everything:*')`；
+  - 改为 `transport.send(everythingStatusEvent/everythingToggleEvent/everythingTestEvent)`。
+- 新增共享事件契约 `src/shared/events/everything.ts`，主渲复用同一事件与类型，避免字符串事件散落。
+- `everything-provider` 主进程注册逻辑切换为复用共享事件定义，保持行为不变（仅收敛调用方式）。
+- `sync-item-mapper` 移除 `window.$channel.send('plugin:storage:*')` 直连，统一改为
+  `PluginEvents.storage.listSyncItems/applySyncItem/deleteSyncItem` typed transport 调用。
+- `PluginNew` 创建页移除 `tryUseChannel` 初始化路径，`EnvDetector` 改为直接复用 `useTuffTransport()`，减少 renderer 侧 legacy channel 入口扩散。
+- `MigrationProgress` 下载迁移面板移除 `window.electron.ipcRenderer` 直连：
+  - 请求链路改为 `transport.send(DownloadEvents.migration.checkNeeded/start/retry)`；
+  - 进度/结果监听改为 transport listener（raw event），统一走 transport 协议入口。
+- `ViewPlugin` 移除 `tryUseChannel().regChannel('plugin:message-transport')`：
+  - 改为 `transport.on(raw event)` 监听插件消息；
+  - 使用 Promise resolver 保留“webview 处理后再 reply”的异步回包语义，并补充 unmount cleanup。
+- `plugin-sdk` 移除 `tryUseChannel` 前置判断：
+  - 改为 transport listener 绑定失败即轮询重试；
+  - 保留插件状态推送订阅语义与已有回调分发逻辑。
+- `widget-registry` 移除 `tryUseChannel` 检查：
+  - 改为 `bindTransportHandlers` 捕获失败并清理半注册状态；
+  - 使用既有 polling 任务重试绑定，避免启动早期 transport 未就绪导致漏绑定。
+- `useClipboard` 移除 `tryUseChannel + polling` 预检查：
+  - 改为直接尝试 `useClipboardChannel` 初始化；
+  - 初始化失败时回退为 reset `initAttempted` + 定时重试，保持启动期可恢复能力。
+- 存储初始化链路（`main.ts` / `useAppLifecycle.ts` / `modules/channel/storage/base.ts`）移除 `tryUseChannel`：
+  - 改为 `useChannel + safe resolve`，在 channel 未注入时保持无异常跳过；
+  - 保留既有 `initStorageTransport + initStorageChannel + initStorageSubscription` 行为，不改变存储同步语义。
+- `account-channel` 移除 legacy `touchChannel.regChannel('auth:get-fingerprint-hash')`：
+  - 改为 `useTuffTransport().on(raw event)`；
+  - 保持主进程 `requestRendererValue('auth:get-fingerprint-hash')` 事件名与返回语义不变。
+
+**修改文件**:
+- `apps/core-app/src/shared/events/everything.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `apps/core-app/src/renderer/src/modules/sync/sync-item-mapper.ts`
+- `apps/core-app/src/renderer/src/views/base/plugin/PluginNew.vue`
+- `apps/core-app/src/renderer/src/components/download/MigrationProgress.vue`
+- `apps/core-app/src/renderer/src/views/base/plugin/ViewPlugin.vue`
+- `apps/core-app/src/renderer/src/modules/sdk/plugin-sdk.ts`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useClipboard.ts`
+- `apps/core-app/src/renderer/src/main.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useAppLifecycle.ts`
+- `apps/core-app/src/renderer/src/modules/channel/storage/base.ts`
+- `apps/core-app/src/renderer/src/modules/auth/account-channel.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Release：v2.4.7 Gate D/E 预检自动化 + 口径收口（2026-03-14）
+
+**变更类型**: 发布门禁治理 / 文档口径同步 / 可执行脚本新增
+
+**描述**:
+- 新增 `scripts/check-release-gates.mjs`，提供 Gate D/E 本地 + 远端只读预检能力（支持 `--base-url`）：
+  - 校验 release notes `zh/en` 是否存在且非空；
+  - 校验风险门禁（`P0` 不可为 `Open/In Progress`）；
+  - 校验版本基线（`root/core-app` 与目标 tag 版本一致性）；
+  - 校验本地 manifest（存在时调用 `update-validate-release-manifest.mjs`，缺失时给出 pending/fail）。
+- 用预检脚本完成 `v2.4.7` Gate D 本地核对并回填文档：
+  - `gate-d` 结果通过（notes + P0）；
+  - `gate-e --strict` 演练失败（当前工作区 `2.4.8-beta.3` 与 `2.4.7` 基线不一致，且本地无 manifest 实体）。
+- 完成 Nexus 公开接口远端只读核对（`/api/releases/v2.4.7*`）：
+  - 已确认 `notes/notesHtml` 为 `{ zh, en }` 且 `latest?channel=RELEASE` 命中 `v2.4.7`；
+  - 下载链路 `download/{platform}/{arch}` 返回 `302`；
+  - 发现 Gate D 阻塞：`signature/{platform}/{arch}` 返回 `404`、assets `sha256/signatureUrl` 缺失、`tuff-release-manifest.json` 资产缺失。
+- 同步 `TODO/README/INDEX/Roadmap/Quality Baseline/Release Checklist`，统一口径为：
+  - `SDK Hard-Cut E~F` 已完成；
+  - 主线顺序切换到 `Gate D -> Gate E`；
+  - Gate E 前阻塞项（版本基线 + signature/sha256/manifest 实体）显式化。
+
+**修改文件**:
+- `scripts/check-release-gates.mjs`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ## 2026-03-13

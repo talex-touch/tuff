@@ -65,8 +65,9 @@ export function decryptConfigValue(value: string): string {
     return raw
   }
 
-  const [prefix, ivHex, encryptedHex, authTagHex] = raw.split(':')
-  if (prefix !== ENC_PREFIX || !ivHex || !encryptedHex || !authTagHex) {
+  const [prefix, version, ivHex, encryptedHex, authTagHex] = raw.split(':')
+  const resolvedPrefix = `${prefix || ''}:${version || ''}`
+  if (resolvedPrefix !== ENC_PREFIX || !ivHex || !encryptedHex || !authTagHex) {
     throw createError({
       statusCode: 500,
       statusMessage: 'Encrypted config payload is invalid.',

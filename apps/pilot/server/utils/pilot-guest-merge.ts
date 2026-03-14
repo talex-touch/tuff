@@ -128,7 +128,7 @@ export async function mergePilotGuestDataToUser(
     INSERT INTO pilot_quota_shares
       (share_id, chat_id, user_id, topic, value, created_at, updated_at)
     SELECT
-      'share_' || lower(hex(randomblob(8))) || lower(hex(randomblob(4))),
+      share_id,
       chat_id,
       ?1,
       topic,
@@ -145,27 +145,30 @@ export async function mergePilotGuestDataToUser(
   `).bind(targetUserId, sourceUserId).run())
 
   report.stats.quotaUserConfigInserted += toChanges(await db.prepare(`
-    INSERT OR IGNORE INTO pilot_quota_user_config
+    INSERT INTO pilot_quota_user_config
       (user_id, pub_info, pri_info, created_at, updated_at)
     SELECT ?1, pub_info, pri_info, created_at, updated_at
     FROM pilot_quota_user_config
     WHERE user_id = ?2
+    ON CONFLICT(user_id) DO NOTHING
   `).bind(targetUserId, sourceUserId).run())
 
   report.stats.quotaDummyInserted += toChanges(await db.prepare(`
-    INSERT OR IGNORE INTO pilot_quota_dummy_state
+    INSERT INTO pilot_quota_dummy_state
       (user_id, points, signin_count, last_signin_date, created_at, updated_at)
     SELECT ?1, points, signin_count, last_signin_date, created_at, updated_at
     FROM pilot_quota_dummy_state
     WHERE user_id = ?2
+    ON CONFLICT(user_id) DO NOTHING
   `).bind(targetUserId, sourceUserId).run())
 
   report.stats.quotaSigninInserted += toChanges(await db.prepare(`
-    INSERT OR IGNORE INTO pilot_quota_signin_log
+    INSERT INTO pilot_quota_signin_log
       (user_id, sign_date, created_at)
     SELECT ?1, sign_date, created_at
     FROM pilot_quota_signin_log
     WHERE user_id = ?2
+    ON CONFLICT(user_id, sign_date) DO NOTHING
   `).bind(targetUserId, sourceUserId).run())
 
   const cleanupTables = [
