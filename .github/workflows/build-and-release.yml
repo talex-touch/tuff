@@ -951,6 +951,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Fetch GitHub release metadata
         run: |
           curl -sS \
@@ -1183,6 +1188,17 @@ jobs:
               -d "${payload}" \
               -o /tmp/nexus-release-link.json
           done < <(jq -r '.assets[] | @base64' /tmp/github-release.json)
+
+      - name: Backfill Nexus asset metadata from GitHub manifest (v2.4.7 only)
+        if: env.TAG == 'v2.4.7'
+        run: |
+          set -euo pipefail
+          node scripts/backfill-release-assets-from-github.mjs \
+            --tag "${TAG}" \
+            --base-url "${NEXUS_BASE_URL}" \
+            --nexus-key "${NEXUS_API_KEY}" \
+            --github-token "${GITHUB_TOKEN}" \
+            --repo "${GITHUB_REPOSITORY}"
 
       - name: Publish Nexus release
         run: |

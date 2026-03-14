@@ -1,11 +1,12 @@
 # Nexus Release Assets 核对清单（可执行）
 
-> 用途：作为 `v2.4.7` Gate D 的执行清单，确保 release notes、assets、signature、manifest 可被 Nexus API 正确消费。
+> 用途：作为 `v2.4.9` Gate D 的执行清单，确保 release notes、assets、signature、manifest 可被 Nexus API 正确消费。
 > 适用范围：`/api/releases/*`（Nexus 发布链路）。
+> 严格模式：本清单默认要求 `manifest + sha256 + signatureUrl` 全量完整；`v2.4.7` 历史豁免不在本清单覆盖范围内。
 
 ## 0. 输入参数
 
-- `TAG`：例如 `v2.4.7`
+- `TAG`：例如 `v2.4.9`
 - `BASE_URL`：例如 `https://tuff.tagzxia.com`
 - `CHANNEL`：`RELEASE | BETA | SNAPSHOT`
 - `TARGET_MATRIX`：本次发布目标平台/架构矩阵（例如 `win32/x64`、`darwin/arm64`、`linux/x64`）
@@ -16,7 +17,7 @@
 | --- | --- | --- | --- |
 | Release 元数据 | `GET /api/releases/{tag}?assets=true` | Release Owner | `tag/version/channel/status/notes` 符合第 1 节全部约束 |
 | Assets 矩阵 | `GET /api/releases/{tag}/assets` | Release Owner + Build Owner | `TARGET_MATRIX` 每个 `platform/arch` 至少 1 个有效资产，且无重复冲突 |
-| Signature | `GET /api/releases/{tag}/signature/{platform}/{arch}` | Security Owner | 签名可获取（200）且与资产一一对应 |
+| Signature | `GET /api/releases/{tag}/signature/{platform}/{arch}` | Security Owner | 签名可获取（200）且与资产一一对应（不允许豁免） |
 | Manifest | `scripts/update-validate-release-manifest.mjs` + `tuff-release-manifest.json` | Build Owner | 脚本校验通过，manifest 字段与发布信息一致 |
 | 下载链路 | `GET /api/releases/latest` + `GET /api/releases/{tag}/download/{platform}/{arch}` | Release Owner | latest 命中当前发布，download 返回可下载结果（直链或 302） |
 | 发布前门禁 | `docs/plan-prd/TODO.md`（Gate C~E） | Tech Lead | Gate C 通过且本清单第 1~5 节全部打勾，才可进入 Gate E |
@@ -48,7 +49,7 @@ curl -s "${BASE_URL}/api/releases/${TAG}/assets" | jq '.assets[] | {platform,arc
 
 ## 3. Signature 核对
 
-- [ ] 目标 `platform/arch` 均可获取 `signatureUrl`（若本次发布要求签名）。
+- [ ] 目标 `platform/arch` 均可获取 `signatureUrl`（本轮为强制要求）。
 - [ ] `GET /api/releases/{tag}/signature/{platform}/{arch}` 返回 200。
 - [ ] 签名文件与资产一一对应（文件名后缀 `.sig`）。
 

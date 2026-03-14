@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档索引，包含所有 PRD、设计文档、实现指南
-> 更新时间: 2026-03-09
+> 更新时间: 2026-03-14
 
  ## PRD Index（以代码实现为准）
  
@@ -16,13 +16,21 @@
 
  - **[产品总览与 8 周路线图](./01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md)**：统一产品目标、质量约束与推进节奏
  - **[v2.4.7 发版推进清单](./01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md)**：文档进展、发布门禁与阻塞项单一入口
- - **[Nexus Release Assets 核对清单](./docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md)**：Gate D 执行清单（notes/assets/signature/manifest）
+- **[Nexus Release Assets 核对清单](./docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md)**：`v2.4.9` Gate D 严格执行清单（notes/assets/signature/manifest）
  - **[项目待办](./TODO.md)**：以 PRD 提炼的任务清单（需持续与代码同步）
  - **[Roadmap 任务01（TODO 现状校准）](./TODO.md)**：CoreBox/Nexus 剩余优先级与“变更前/后”对照
  - **[PRD 质量基线](./docs/PRD-QUALITY-BASELINE.md)**：活跃 PRD 必备章节与质量门禁
  - **[Pilot API/事件契约](./docs/PILOT-INTELLIGENCE-API-CONTRACT.md)**：`apps/pilot` 的 SSE、Checkpoint/Resume、错误码与时序
  - **[变更记录](./01-project/CHANGES.md)**：历史记录（不在本索引重复）
  - **[DivisionBox 文档索引](./docs/DIVISION_BOX_INDEX.md)**：DivisionBox 详细文档入口
+
+## 单一口径矩阵（2026-03-14）
+
+- **2.4.8 Gate 主线**：OmniPanel 稳定版 MVP 已落地（真实窗口 smoke CI + 失败路径回归 + 触发稳定性回归）。
+- **v2.4.7 发布门禁**：Gate A/B/C/E = Done（Gate E 为 historical）；Gate D = In Progress（仅剩 `sha256 + manifest` 元数据回填）。
+  - **执行方式**：本地仅做对账，实际 release 资产写入统一由 GitHub CI（`build-and-release.yml` / `sync-nexus-release`）执行；CI 已接入 `backfill-release-assets-from-github`，仅对 `v2.4.7` 启用。
+- **Pilot Runtime 主路径**：Node Server + Postgres/Redis + JWT Cookie；Cloudflare runtime/D1/R2 仅保留历史归档描述。
+- **后续顺序（锁定）**：`v2.4.7 Gate D -> View Mode 安全收口 -> Nexus 设备授权风控`（`SDK Hard-Cut E~F` 与 `v2.4.7 Gate E` 已完成）。
 
 ## 项目最终目标（North Star）
 
@@ -54,13 +62,13 @@
     - `apps/core-app/src/main/` 移除对应内置实现
   - **状态**：已完成抽离 + 测试 + Nexus 文档
 
-- **SDK 统一 Hard-Cut**（2026-01 ~ 02，进行中）
+- **SDK 统一 Hard-Cut**（2026-01 ~ 03，已完成）
   - **代码**
     - `packages/utils/transport/` - Typed Transport Domain SDKs
     - `packages/utils/renderer/hooks/` - SDK Hooks 迁移
   - **状态**
     - 批次 A~D 已完成（Settings/Permission/Download/Cloud Sync/Channel → SDK Hooks）
-    - 批次 E~F（renderer 直连点清理）进行中
+    - 批次 E~F（renderer 直连点清理）已完成（2026-03-14）
   - **参考**：`docs/engineering/reports/sdk-unification-progress-2026-02-08.md`
   - **2.4.8 P0 收口计划**：`./04-implementation/LegacyChannelCleanup-2408.md`
 
@@ -93,8 +101,8 @@
   - **入口**
     - `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
   - **状态**
-    - Gate A/B 完成（版本对齐 + 发布链路）
-    - Gate C~E 待完成（质量门禁、发布资产、tag 发布动作）
+    - Gate A/B/C/E 已完成（Gate E 按历史闭环，不重发版）
+    - Gate D 进行中（仅资产元数据回填：`sha256 + manifest`）；`v2.4.7` 签名缺口按历史豁免
 
 - **Nexus 文档收口（不含 Pilot）**（2026-03，已落地）
   - **代码/文档**
@@ -111,17 +119,17 @@
     - 基于已完成项 `02/03/04/05/07/08` 重排剩余优先级
     - 对齐 `README.md` / `docs/INDEX.md` / `TODO.md` 导航与状态口径
   - **当前剩余优先级**
-    - `SDK Hard-Cut E~F` → `v2.4.7 Gate D` → `v2.4.7 Gate E` → `View Mode 安全收口` → `Nexus 设备授权风控`
+    - `OmniPanel Gate（已完成）` → `SDK Hard-Cut E~F（已完成）` → `v2.4.7 Gate D` → `View Mode 安全收口` → `Nexus 设备授权风控`
 
 - **Pilot × Intelligence（Protocol-first Runtime）**（2026-03，进行中）
   - **代码**
-    - `apps/pilot/`：Nuxt + Cloudflare Pages/Edge API（会话、消息、SSE、pause、trace、upload）
+    - `apps/pilot/`：Nuxt Node Server（会话、消息、SSE、pause、trace、upload）
     - `packages/tuff-intelligence/src/{protocol,runtime,registry,policy,store,adapters}`：统一 Runtime/Protocol
   - **状态**
-    - V1 Chat-first 页面已可运行（会话列表、消息流、附件、Trace 抽屉）。
-    - SSE 已支持 `assistant.delta/final`、`run.metrics`、`session.paused`、`done` 与 `fromSeq` 补播。
+    - Runtime 已收敛为 `Postgres + Redis + JWT(access/refresh) + HttpOnly Cookie`，并移除 Cloudflare runtime/wrangler/D1/R2 主路径。
+    - V1 Chat-first 页面可运行（会话列表、消息流、附件、Trace 抽屉），SSE 已支持 `assistant.delta/final`、`run.metrics`、`session.paused`、`done` 与 `fromSeq` 补播。
   - **缺口**
-    - 端到端压测、D1/R2 配额治理、发布环境鉴权联调（Nexus token/session）。
+    - 端到端压测、渠道矩阵回归、发布环境鉴权联调（Nexus token/session）。
 
 - **插件权限中心**（Phase 1-4 已落地）
   - **代码**
@@ -229,7 +237,7 @@
      - `packages/tuff-intelligence/`
    - **缺口**
      - `apps/pilot` 对 `tuff-intelligence` 的 pause/resume 单测与服务端集成测试
-     - Edge 预算切片执行（20-25s）自动续跑的生产级回合编排
+     - 长会话预算切片执行（20-25s）自动续跑的生产级回合编排
      - 登录鉴权与 Nexus account/配额策略完全对齐
 
  - **Assistant 实验功能（悬浮球 + 语音唤醒）**
@@ -256,14 +264,16 @@
      - 主进程执行链补齐结构化错误码、refresh reason 扩展、plugin unavailable reason 透传。
      - 渲染层完成键盘交互（↑/↓/Enter/Cmd/Ctrl+F/Esc）与执行中态收敛。
      - 视图拆分为 Header/Context/SearchBar/ActionItem/ActionList，过滤逻辑纯函数化并补测试。
-   - **剩余缺口**
-     - 端到端真实窗口烟雾用例（依赖 Electron UI 运行时）需要在 CI 环境补充。
+   - **稳定版 Gate（2026-03-14）**
+     - 已补齐真实窗口 smoke（CI）与失败路径回归（plugin 不可用/插件缺失/无上下文/异常提示）。
+     - 后续仅做回归稳定化，不扩新能力点。
 
- - **SDK 统一 Hard-Cut 剩余**（批次 E~F）
+ - **SDK 统一 Hard-Cut（批次 E~F 已完成）**
    - **参考**：`docs/engineering/reports/sdk-unification-progress-2026-02-08.md`
-   - **缺口**
-     - renderer 直连 IPC 点清理（使用 SDK hooks 替换）
-     - 旧 Channel 通道最终移除
+   - **状态**
+     - renderer 直连 IPC 清理已完成（2026-03-14）。
+   - **后续**
+     - 旧 `channel-core` 彻底移除与插件 process message 协议统一，作为后续结构化债务推进，不阻塞当前 Gate D 与 View Mode 主线。
 
  - **平台能力体系（能力目录 + 管理 UI 基础已落地）**
    - **PRD**：`./02-architecture/platform-capabilities-prd.md`

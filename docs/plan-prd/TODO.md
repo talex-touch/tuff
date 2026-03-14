@@ -1,7 +1,18 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2026-03-12
+> 更新时间: 2026-03-14
+
+---
+
+## 🧭 单一口径矩阵（2.4.8 / 2026-03-14）
+
+| 主题 | 统一口径 | 下一动作 | 强制同步文档 |
+| --- | --- | --- | --- |
+| 2.4.8 主线 Gate | OmniPanel 稳定版 MVP 已作为 Gate 主线落地（含真实窗口 smoke CI） | `SDK Hard-Cut E~F` 已完成，推进 `v2.4.7 Gate D` | `TODO` / `README` / `INDEX` / `CHANGES` |
+| v2.4.7 Gate 状态 | Gate A/B/C/E = ✅ Done（Gate E 为 historical）；Gate D = 🟡 In Progress | Gate D 本地仅做 dry-run 对账；资产写入统一走 GitHub CI `sync-nexus-release`（已接入 `backfill-release-assets-from-github`，仅 `v2.4.7` 启用），签名缺口按历史豁免登记 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
+| Pilot Runtime 主路径 | Node Server + Postgres/Redis + JWT Cookie，Cloudflare 相关仅保留历史归档 | 持续补强 M0/M1 回归与部署脚本 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
+| 文档治理 | 更新时间统一到 2026-03-14；`next-edit` 仅作草稿池，不作为发布判定来源 | 每周例行同步 6 份主文档状态/日期/下一动作 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
 
 ---
 
@@ -60,7 +71,7 @@
 - [x] **Examples 单一来源收口**：`apps/nexus/content/docs/dev/reference/examples.{zh,en}.mdc` 改为索引页，源码统一指向仓库 `examples/`。
 - [x] **首页占位整改**：`apps/nexus/app/components/tuff/TuffHome.vue` 与 `useTuffHomeSections.ts` 清理长期关闭的占位 section 与锚点残留。
 - [x] **文档对齐 CoreBox 现状**：补齐 workflow / AI / 翻译 / 壁纸说明与入口（guide features + plugins index + sidebar）。
-- [x] **Release assets 核对清单落地**：新增 `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md`，作为 Gate D 执行清单。
+- [x] **Release assets 核对清单落地**：新增 `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md`，作为 `v2.4.9` Gate D 严格执行清单。
 
 ## 🧭 Roadmap 任务01：TODO 现状校准（CoreBox/Nexus）
 
@@ -73,8 +84,8 @@
 | 维度 | 变更前 | 变更后 |
 | --- | --- | --- |
 | 已完成项口径 | 已完成项分散在多个章节，部分仍混在“待实现”语义中 | `02/03/04/05/07/08` 统一按“已完成”归档，未闭环项只保留真实缺口 |
-| Q1 剩余执行顺序 | `View Mode` 与 `SDK E~F` 顺序靠后且分散 | 1) `SDK Hard-Cut E~F` → 2) `Gate D 发布资产执行` → 3) `Gate E 发布动作` |
-| CoreBox/Nexus 收尾项 | 缺少统一优先级锚点 | 4) `View Mode 安全与协议限制` → 5) `Nexus 设备授权风控` → 6) `OmniPanel e2e CI` |
+| Q1 剩余执行顺序 | `View Mode` 与 `SDK E~F` 顺序靠后且分散 | 1) `OmniPanel Gate（已完成）` → 2) `SDK Hard-Cut E~F（已完成）` → 3) `Gate D 资产元数据回填` → 4) `View Mode 安全收口` |
+| CoreBox/Nexus 收尾项 | 缺少统一优先级锚点 | 5) `View Mode 安全与协议限制` → 6) `Nexus 设备授权风控` |
 
 ---
 
@@ -172,7 +183,8 @@
 
 > 单一入口：`docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
 
-- [x] `package.json` 与 `apps/core-app/package.json` 版本对齐为 `2.4.7`
+- [x]（历史）`package.json` 与 `apps/core-app/package.json` 曾对齐为 `2.4.7`
+- [x] Gate A（historical）：历史 `v2.4.7` 发布窗口已满足版本基线；当前 `2.4.8-beta.3` 工作区不再阻塞历史 Gate。
 - [x] 文档入口同步（`README.md` / `TODO.md` / `CHANGES.md` / `docs/INDEX.md`）
 - [x] 发布链路确认：`build-and-release.yml` + Nexus release 自动同步 + CLI 四包 npm 自动发布
 - [x] 质量门禁清零：`apps/nexus` typecheck 与 `packages/tuff-native`/`apps/nexus` lint error 归零
@@ -181,8 +193,13 @@
   - [x] C3：修复 `apps/nexus` auth/device/fetch typing 相关 TS 错误
   - [x] C4：执行全量复扫并回写 Gate C 结论（`pnpm -r --if-present --no-bail run typecheck` 与全仓 eslint 已通过）
 - [x] 发布资产核对清单（文档）：`docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md`
-- [ ] 发布资产执行：按清单完成 Nexus Release notes `{ zh, en }` + assets + signature + manifest 实体核对
-- [ ] 发布动作：创建并推送 `v2.4.7` tag，验证 GitHub Release 与 Nexus release 同步
+- [ ] 发布资产执行（Gate D）：仅保留“资产元数据一致性闭环”（本地 dry-run 对账 + CI 自动写入）
+  - [x] Gate D 本地预检（2026-03-14）：`node scripts/check-release-gates.mjs --tag v2.4.7 --stage gate-d --base-url https://tuff.tagzxia.com` 已通过（notes/远端只读链路通过，P0=0）。
+  - [x] Gate D 远端只读核对（2026-03-14）：`/api/releases/v2.4.7?assets=true` 与 `/assets` 已验证 `notes/notesHtml` 为 `{zh,en}`，且存在 `win32/x64`、`darwin/x64`、`linux/x64` 三平台资产。
+  - [ ] Gate D 待办：执行 `node scripts/backfill-release-assets-from-github.mjs --tag v2.4.7 --base-url https://tuff.tagzxia.com --dry-run` 做差异对账；写入动作由 GitHub Actions `build-and-release.yml` 的 `sync-nexus-release` 自动执行（`Backfill Nexus asset metadata from GitHub manifest` 步骤，仅 `v2.4.7` 启用）。
+  - [ ] Gate D 回填后复核：`GET /api/releases/v2.4.7/assets` 中 `sha256` 完整，且存在 `tuff-release-manifest.json` 资产记录。
+  - [x] 签名缺口豁免：`v2.4.7` `.sig` 缺失按历史豁免（Accepted），不阻塞 Gate D 收口。
+- [x] 发布动作（Gate E）历史闭环：`v2.4.7` tag 已存在，Nexus release 已 `published`，`latest?channel=RELEASE` 命中 `v2.4.7`；不做重发版。
 
 ---
 
@@ -267,7 +284,21 @@
   - 已形成执行文档并落地（`docs/plan-prd/04-implementation/NexusLocaleBackfillRunbook-260226.md`）
 
 ### 🟡 进行中
-- [ ] **SDK Hard-Cut 批次 E~F**：renderer 直连点清理
+- [x] **SDK Hard-Cut 批次 E~F**：renderer 直连点清理（已收口，2026-03-14）
+  - [x] E1（2026-03-14）：`SettingEverything.vue` 从 `tryUseChannel().send('everything:*')` 迁移为 typed transport 事件（`everythingStatus/toggle/test`）。
+  - [x] E1（2026-03-14）：新增 `src/shared/events/everything.ts`，收敛 Everything 主渲事件契约，主进程与渲染复用同一类型定义。
+  - [x] E2（2026-03-14）：`sync-item-mapper.ts` 移除 `window.$channel.send('plugin:storage:*')`，改为 `PluginEvents.storage.{listSyncItems,applySyncItem,deleteSyncItem}` typed transport 调用。
+  - [x] E3（2026-03-14）：`PluginNew.vue` 移除 `tryUseChannel` 初始化分支，`EnvDetector` 统一改为复用 `useTuffTransport()`，避免 renderer 继续引入 legacy channel 入口。
+  - [x] E4（2026-03-14）：`MigrationProgress.vue` 移除 `window.electron.ipcRenderer.*` 直连，迁移为 `DownloadEvents.migration.*` + transport listener（raw event）模式。
+  - [x] E5（2026-03-14）：`ViewPlugin.vue` 移除 `tryUseChannel().regChannel('plugin:message-transport')`，改为 `transport.on(raw event)` 并保留异步 reply 语义。
+  - [x] E6（2026-03-14）：`plugin-sdk.ts` 移除 `tryUseChannel` 前置判断，改为 transport 绑定失败即轮询重试（保持订阅与回调语义不变）。
+  - [x] E7（2026-03-14）：`widget-registry.ts` 移除 `tryUseChannel` 检查，改为 `bindTransportHandlers` 捕获失败并轮询重试绑定。
+  - [x] E8（2026-03-14）：`useClipboard.ts` 移除 `tryUseChannel + polling` 预检查，改为直接初始化并在失败时 reset `initAttempted` 后重试。
+  - [x] E9（2026-03-14）：`main.ts` 渲染存储初始化移除 `tryUseChannel`，改为 `useChannel + safe resolve`（不可用时跳过，保持启动容错）。
+  - [x] E10（2026-03-14）：`useAppLifecycle.ts` 初始化链路移除 `tryUseChannel`，统一 `useChannel + safe resolve`，避免重复 legacy 检查分支。
+  - [x] E11（2026-03-14）：`modules/channel/storage/base.ts` 移除 `tryUseChannel`，改为 `useChannel + safe resolve` 进行存储桥接初始化。
+  - [x] E12（2026-03-14）：`modules/auth/account-channel.ts` 移除 `touchChannel.regChannel('auth:get-fingerprint-hash')`，改为 `useTuffTransport().on(raw event)`，保持主进程 `requestRendererValue('auth:get-fingerprint-hash')` 兼容。
+  - [x] 收口验证（2026-03-14）：`rg "tryUseChannel|window.$channel|window.electron.ipcRenderer.(send|invoke|on|removeListener)|touchChannel.regChannel"` 在 `apps/core-app/src/renderer/src` 命中为 0。
 - [ ] **Intelligence 管理 UI**：Capabilities/Channels/AuditLogs 组件开发中
 - [ ] **Assistant 实验功能收口**：补齐设置页开关与参数配置，并固化环境变量门禁回归用例（`04-implementation/AssistantExperiment-VoiceFloatingBall-260223.md`）
 
@@ -277,7 +308,9 @@
 - [ ] Release Pipeline（剩余项）：OIDC + RSA 签名信任链增强与 GA 发布治理（`plan/planprd-release-pipeline.md`）
 - [ ] SQLite 重试机制回退到 Retrier（`docs/plan-prd/04-implementation/SqliteRetryRetrier260222.md`）
 - [ ] Nexus 设备授权风控增强（`plan/2026-02-22_23-30-00-nexus-device-auth-risk-control.md`）
-- [ ] OmniPanel 真实窗口 e2e 烟雾场景接入 CI（显示 -> 执行 builtin -> 关闭）
+- [x] OmniPanel 真实窗口 e2e 烟雾场景接入 CI（显示 -> 执行 builtin -> 关闭）
+  - [x] 已新增 `.github/workflows/omnipanel-gate.yml`，并纳入 `typecheck/lint/unit/build/smoke` 发布级门禁。
+  - [x] 主进程 smoke probe 已接入 `TUFF_OMNIPANEL_SMOKE=1`（真实窗口显示 -> 执行 builtin -> 关闭）。
 
 ### ❓ 需人工确认
 - [ ] Stash 弹出恢复处理（`plan/2026-01-20_21-17-14-stash-pop-recovery.md`）
@@ -908,12 +941,12 @@
 4. ~~SDK 统一 Hard-Cut A~D (P1)~~ - ✅ 已完成
 5. ~~Nexus OAuth 稳定化 (P1)~~ - ✅ 已闭环
 6. ~~更新系统增强 (P2)~~ - ✅ 已落地
-7. SDK Hard-Cut E~F (P1) - 进行中（CoreBox/Nexus 主链优先）
-8. v2.4.7 Gate D 发布资产执行 (P1) - 待执行
-9. v2.4.7 Gate E 发布动作 (P1) - 待执行
-10. View Mode 增强（安全 URL / 生产协议限制）(P1) - 待推进
-11. Nexus 设备授权风控增强 (P1) - 待推进
-12. OmniPanel 真实窗口 e2e 烟雾场景接入 CI (P2) - 待推进
+7. OmniPanel 稳定版 MVP Gate（P0）- ✅ 已完成（真实窗口 smoke CI 已接入）
+8. ~~SDK Hard-Cut E~F (P1)~~ - ✅ 已完成（2026-03-14）
+9. v2.4.7 Gate D 资产一致性收口 (P1) - 进行中（本地 dry-run 对账 + GitHub CI 自动同步后收口）
+10. ~~v2.4.7 Gate E 发布动作 (P1)~~ - ✅ 历史已执行（不重发版）
+11. View Mode 增强（安全 URL / 生产协议限制）(P1) - 下一主线
+12. Nexus 设备授权风控增强 (P1) - 后置
 
 ### Q2 2026 (4-6月)
 5. 多视图并行 (P2) - 10-15天
@@ -956,5 +989,5 @@
 ---
 
 **文档版本**: v1.14
-**更新时间**: 2026-03-09
+**更新时间**: 2026-03-14
 **维护者**: Development Team
