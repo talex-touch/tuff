@@ -68,6 +68,8 @@ function normalizeTimeoutMs(
   return Math.min(Math.max(Math.floor(parsed), min), max)
 }
 
+const MARKDOWN_STREAM_FLUSH_MS = 80
+
 async function handleExecutorItem(item: string, callback: (data: any) => void) {
   if (item === '[DONE]') {
     callback({
@@ -591,6 +593,68 @@ export const $completion = {
         innerMsg.status = IChatItemStatus.WAITING
 
         const signal = new AbortController()
+        let pendingMarkdownBuffer = ''
+        let markdownFlushTimer: ReturnType<typeof setTimeout> | null = null
+        let lastCompletionName = ''
+
+        function clearMarkdownFlushTimer() {
+          if (!markdownFlushTimer)
+            return
+          clearTimeout(markdownFlushTimer)
+          markdownFlushTimer = null
+        }
+
+        function getOrCreateStreamingMarkdownBlock(): IInnerItemMeta {
+          const current = innerMsg.value.at(-1)
+          if (current?.type === 'markdown' && !current.extra?.done) {
+            return current
+          }
+
+          const created: IInnerItemMeta = {
+            type: 'markdown' as IInnerItemType,
+            value: '',
+            extra: {},
+          }
+          innerMsg.value.push(created)
+          return created
+        }
+
+        function flushPendingMarkdownBuffer(options: { markDone?: boolean } = {}): string {
+          clearMarkdownFlushTimer()
+
+          const chunk = pendingMarkdownBuffer
+          const markDone = Boolean(options.markDone)
+          if (!chunk && !markDone) {
+            return ''
+          }
+
+          const markdownBlock = getOrCreateStreamingMarkdownBlock()
+          if (chunk) {
+            markdownBlock.value += chunk
+            pendingMarkdownBuffer = ''
+            if (lastCompletionName)
+              handler.onCompletion?.(lastCompletionName, chunk)
+          }
+
+          if (markDone) {
+            markdownBlock.extra = {
+              ...(markdownBlock.extra || {}),
+              done: true,
+            }
+          }
+
+          return chunk
+        }
+
+        function scheduleMarkdownBufferFlush() {
+          if (markdownFlushTimer) {
+            return
+          }
+          markdownFlushTimer = setTimeout(() => {
+            markdownFlushTimer = null
+            flushPendingMarkdownBuffer()
+          }, MARKDOWN_STREAM_FLUSH_MS)
+        }
 
         // signal.signal.addEventListener('abort', () => {
         //   innerMsg.status = IChatItemStatus.CANCELLED
@@ -616,6 +680,7 @@ export const $completion = {
             }
 
             if (res.error) {
+              flushPendingMarkdownBuffer()
               console.error('@completion error response', res)
               const errorMessage = normalizeExecutorErrorMessage(res.e)
 
@@ -638,6 +703,9 @@ export const $completion = {
             }
 
             if (res.done) {
+              flushPendingMarkdownBuffer({
+                markDone: true,
+              })
               if (
                 innerMsg.status !== IChatItemStatus.ERROR
                 && innerMsg.status !== IChatItemStatus.BANNED
@@ -652,6 +720,7 @@ export const $completion = {
             }
 
             const { event, name, data } = res
+            lastCompletionName = typeof name === 'string' ? name : lastCompletionName
             // console.log('RES', res, res.event)
             if (event === 'status_updated') {
               const mappedStatus = mapStrStatus(res.status)
@@ -710,47 +779,44 @@ export const $completion = {
               }
             }
             else if (event === 'completion') {
-              const innerMeta = innerMsg.value.at(-1)
               const chunk = typeof res.content === 'string' ? res.content : ''
               const isCompleted = Boolean(res.completed)
 
-              if (innerMeta?.type === 'markdown' && !innerMeta.extra?.done) {
-                if (!isCompleted && chunk) {
-                  innerMeta.value += chunk
-                }
-                else if (isCompleted && chunk) {
-                  // 兼容旧协议（completed=true 且 content 为全文）。
-                  if (chunk.startsWith(innerMeta.value) || chunk.length >= innerMeta.value.length) {
-                    innerMeta.value = chunk
-                  }
-                  else {
-                    innerMeta.value += chunk
-                  }
-                }
-
-                if (isCompleted) {
-                  innerMeta.extra = {
-                    ...innerMeta.extra,
-                    done: true,
-                  }
+              if (!isCompleted) {
+                if (chunk) {
+                  pendingMarkdownBuffer += chunk
+                  scheduleMarkdownBufferFlush()
                 }
               }
               else {
-                innerMsg.value.push({
-                  type: 'markdown',
-                  value: chunk,
-                  ...(isCompleted
-                    ? {
-                        extra: {
-                          done: true,
-                        },
-                      }
-                    : {}),
-                })
-              }
+                const markdownBlock = getOrCreateStreamingMarkdownBlock()
+                flushPendingMarkdownBuffer()
 
-              if (chunk)
-                handler.onCompletion?.(name, chunk)
+                let emitChunk = ''
+                if (chunk) {
+                  // 兼容旧协议（completed=true 且 content 为全文）。
+                  if (chunk.startsWith(markdownBlock.value)) {
+                    emitChunk = chunk.slice(markdownBlock.value.length)
+                    markdownBlock.value = chunk
+                  }
+                  else if (chunk.length >= markdownBlock.value.length) {
+                    emitChunk = chunk
+                    markdownBlock.value = chunk
+                  }
+                  else {
+                    emitChunk = chunk
+                    markdownBlock.value += chunk
+                  }
+                }
+
+                markdownBlock.extra = {
+                  ...(markdownBlock.extra || {}),
+                  done: true,
+                }
+
+                if (emitChunk)
+                  handler.onCompletion?.(lastCompletionName || name, emitChunk)
+              }
             }
             else if (event === 'suggest') {
               innerMsg.value.push({
@@ -771,6 +837,7 @@ export const $completion = {
               })
             }
             else if (event === 'error') {
+              flushPendingMarkdownBuffer()
               handler.onError?.()
 
               const mappedStatus = mapStrStatus(res.status)

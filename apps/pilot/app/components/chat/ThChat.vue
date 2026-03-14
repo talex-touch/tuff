@@ -91,7 +91,7 @@ function handleBackToBottom(animation: boolean = true) {
 
   el.scrollTo({
     top: el.scrollHeight,
-    behavior: animation ? 'smooth' : 'instant',
+    behavior: animation ? 'smooth' : 'auto',
   })
 }
 
@@ -110,11 +110,11 @@ const stop = computed(() =>
 
 defineExpose({
   handleBackToBottom,
-  generateScroll: () => {
+  generateScroll: (mode: 'stream' | 'final' = 'stream') => {
     handleScroll()
 
     if (!options.backToBottom)
-      handleBackToBottom()
+      handleBackToBottom(mode === 'final')
   },
   // getDictMeta: () => msgMeta,
 })
