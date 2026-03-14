@@ -2,6 +2,39 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-03-14
+
+### Pilot：管理员引导密码改为强制 env 注入（最小 6 位）
+
+**变更类型**: 安全基线收敛 / 配置约束增强
+
+**描述**:
+- `pilot-bootstrap-admin` 不再使用默认管理员密码，`PILOT_BOOTSTRAP_ADMIN_PASSWORD` 必须显式提供。
+- 启动时管理员密码最小长度约束从 3 位提升到 6 位；不满足时跳过 bootstrap 并输出提示日志。
+- 部署与示例配置同步：移除 `admin` 默认回退，模板改为 `replace-with-admin-password-min-6` 占位值。
+
+**修改文件**:
+- `apps/pilot/server/plugins/pilot-bootstrap-admin.ts`
+- `apps/pilot/.env.example`
+- `apps/pilot/deploy/deploy-pilot-1panel.env.example`
+- `apps/pilot/deploy/deploy-pilot-1panel.sh`
+- `apps/pilot/deploy/README.md`
+- `apps/pilot/deploy/README.zh-CN.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot：显式 env 加载优先级固化（`.env.local > .env.prod > .env.dev > .env`）
+
+**变更类型**: 配置行为固化 / 本地开发一致性修复
+
+**描述**:
+- 在 `apps/pilot/nuxt.config.ts` 增加显式 env 文件加载逻辑，不再依赖 Nuxt 默认加载顺序。
+- 按固定顺序覆盖：先加载 `.env`，再 `.env.dev`，再 `.env.prod`，最后 `.env.local`，确保最终优先级为 `.env.local > .env.prod > .env.dev > .env`。
+- 修复“本地已在 `.env.local` 配置但默认 `pnpm run dev` 仍提示缺少关键 env”的不确定行为。
+
+**修改文件**:
+- `apps/pilot/nuxt.config.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-03-13
 
 ### CI：修复 Pilot PNPM 版本冲突 + core-app 构建对 deepagents 的错误引入

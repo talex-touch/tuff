@@ -32,7 +32,7 @@ cp "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.env.example" "/opt/1pan
 - `PILOT_JWT_REFRESH_SECRET`
 - `PILOT_COOKIE_SECRET`
 - `PILOT_CONFIG_ENCRYPTION_KEY`
-- `PILOT_BOOTSTRAP_ADMIN_PASSWORD`（默认 `admin`，生产必须覆盖）
+- `PILOT_BOOTSTRAP_ADMIN_PASSWORD`（必须显式配置，至少 6 位）
 
 ### 运行时可选
 
@@ -87,5 +87,5 @@ set +a
 
 - 当前部署链路仅支持 Node Server（不再使用 Cloudflare runtime）
 - 运行时强制依赖 PostgreSQL + Redis
-- 管理员账号默认 `admin@pilot.local` / `admin`（未覆盖时）
+- 管理员邮箱默认 `admin@pilot.local`；管理员密码必须通过 `PILOT_BOOTSTRAP_ADMIN_PASSWORD` 提供（至少 6 位）
 - 生产环境首次部署后请立即修改管理员密码

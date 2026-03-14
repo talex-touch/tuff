@@ -8,6 +8,7 @@ import {
 } from '../utils/pilot-local-auth'
 
 const BOOTSTRAP_CACHE_KEY = '__pilotBootstrapAdminInitialized'
+const MIN_BOOTSTRAP_ADMIN_PASSWORD_LENGTH = 6
 
 type GlobalBootstrapCache = typeof globalThis & {
   [BOOTSTRAP_CACHE_KEY]?: boolean
@@ -23,7 +24,7 @@ function resolveAdminEmail(): string {
 function resolveAdminPassword(): string {
   return String(
     process.env.PILOT_BOOTSTRAP_ADMIN_PASSWORD
-    || 'admin',
+    || '',
   ).trim()
 }
 
@@ -51,8 +52,13 @@ export default defineNitroPlugin(async () => {
 
   const email = resolveAdminEmail()
   const password = resolveAdminPassword()
-  if (!email || !password || password.length < 3) {
-    console.info('[pilot][admin] bootstrap skipped (missing valid admin email/password)')
+  if (!email) {
+    console.info('[pilot][admin] bootstrap skipped (missing valid admin email)')
+    return
+  }
+
+  if (password.length < MIN_BOOTSTRAP_ADMIN_PASSWORD_LENGTH) {
+    console.info(`[pilot][admin] bootstrap skipped (PILOT_BOOTSTRAP_ADMIN_PASSWORD must be set and at least ${MIN_BOOTSTRAP_ADMIN_PASSWORD_LENGTH} chars)`)
     return
   }
 
