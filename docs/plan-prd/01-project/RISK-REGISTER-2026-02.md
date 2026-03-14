@@ -1,7 +1,7 @@
 # 风险点登记（2026-02）
 
 > 本文档用于收敛高风险项，并作为发布前风险门禁依据。
-> 更新时间：2026-02-28
+> 更新时间：2026-03-14
 
 ---
 
@@ -26,6 +26,7 @@
 | RISK-003 | P1 | 超大文件职责过重导致维护与回归风险 | CoreApp Architecture | 本期先完成 Owner/边界/测试基线，不执行大文件拆分；拆分排入后续迭代 | `docs/engineering/legacy-debt-report-2026-02-21.md` | 2.4.8 | 2026-03-15 | 拆分实施期按模块逐步迁移，保持接口不变并可按文件回滚 | Accepted（Deferred by decision） |
 | RISK-004 | P2 | 依赖版本漂移（Vue/Vite/TS/ESLint/Vitest/Unocss/Electron） | Workspace Maintainer | 工具链与运行时基线收敛，锁定统一版本窗口 | `pnpm-workspace.yaml`、`package.json` | 2.4.7 | 2026-02-28 | 发现兼容异常时按 workspace 回滚到上一锁文件 | Done |
 | RISK-005 | P2 | 迁移壳层/Deprecated 仍较集中 | SDK/Transport Maintainer | 按 Hard-Cut 批次收口旧入口，迁移完成后删除 deprecated API | `packages/utils/channel/index.ts`、`packages/utils/transport/index.ts`、`docs/plan-prd/04-implementation/LegacyChannelCleanup-2408.md` | 2.4.8 | 2026-03-31 | 保留最小兼容窗；若异常，临时恢复 adapter 层并记录 telemetry | In Progress |
+| RISK-006 | P1 | `v2.4.7` 历史发布缺少 `.sig` 与 signature 字段，无法满足当前签名门禁 | Release Owner | 限定版本豁免：仅 `v2.4.7` 接受 `signature` 缺口；Gate D 仅补齐 `sha256 + manifest` 元数据并留档 | `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`、`docs/plan-prd/01-project/CHANGES.md` | 2.4.7 | 2026-03-14 | 如需撤销豁免，走新版本重发流程（`>=2.4.8` 强制签名全量） | Accepted（Historical waiver） |
 
 ---
 

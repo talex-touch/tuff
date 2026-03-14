@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-03-12  
+> 更新时间：2026-03-14  
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -133,23 +133,25 @@
 **现状指标**
 | 项目 | 结果 | 结论 |
 | --- | --- | --- |
-| 版本基线 | `package.json` / `apps/core-app/package.json` = `2.4.7` | 已完成 |
+| 版本基线 | 历史 `v2.4.7` 发布窗口已满足；当前工作区为 `2.4.8-beta.3` | 作为历史 Gate 记录，不再阻塞当前主线 |
 | 发布链路 | `build-and-release` + Nexus release + CLI npm 自动发布 | 已完成 |
-| 质量门禁 | lint/typecheck 仍有阻塞 | 进行中 |
-| 发布资产结构 | notes/notesHtml `{ zh, en }` | 待核对 |
-| tag 发布动作 | `v2.4.7` | 待执行 |
+| 质量门禁 | lint/typecheck 阻塞项已清零（C1~C4） | 已完成 |
+| 发布资产结构 | notes/notesHtml `{ zh, en }` | Gate D 仅剩元数据回填：`sha256 + manifest`；写入统一由 GitHub CI `sync-nexus-release` 执行（已接入 backfill，且仅 `v2.4.7` 启用）；`signature` 对 `v2.4.7` 按历史豁免 |
+| tag 发布动作 | `v2.4.7` | 历史已执行（tag 存在，release 已 published，latest 命中） |
 
 **质量约束落地**
 - 发布前必须完成 Gate C（阻塞级 lint/typecheck 清零或豁免清单显式备案）。
 - 发布资产必须满足多语言结构约束（`notes`/`notesHtml` 仅 `zh|en`）。
 - 发布执行以 `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md` 作为单一追踪入口，避免口径分叉。
+- Gate D/E 统一预检命令：`node scripts/check-release-gates.mjs --tag v2.4.7 --stage gate-d|gate-e --base-url https://tuff.tagzxia.com`。
+- 历史豁免边界：`v2.4.7` 允许 `signature` 缺口豁免；`>=2.4.8` 必须恢复 `manifest + sha256 + signatureUrl` 严格门禁。
 
 ### 6.5 Pilot × Intelligence（2026-03-07）
 
 **现状指标**
 | 项目 | 结果 | 结论 |
 | --- | --- | --- |
-| 新应用 | `apps/pilot`（Nuxt + Cloudflare Pages） | 已创建 |
+| 新应用 | `apps/pilot`（Nuxt Node Server + Postgres/Redis） | 已创建并作为主路径运行 |
 | Runtime 收口 | `packages/tuff-intelligence`（protocol/runtime/registry/policy/store） | 已落地 |
 | 流式 API | `POST /api/pilot/chat/sessions/:sessionId/stream` | 已上线 |
 | 事件契约 | `assistant.delta/final`、`run.metrics`、`session.paused`、`error`、`done` | 已实现 |

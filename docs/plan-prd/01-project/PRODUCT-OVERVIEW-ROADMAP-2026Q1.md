@@ -1,6 +1,6 @@
 # Tuff 产品总览与 8 周路线图（2026-Q1）
 
-> 更新时间：2026-03-12  
+> 更新时间：2026-03-14  
 > 适用范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`
 
 ## 1. 产品总览（是什么）
@@ -36,7 +36,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 ### G5. Pilot 目标（可独立部署）
 - `apps/pilot` 形成独立 Chat-first 入口，复用 Intelligence Provider/Quota/Prompt 配置体系。
-- 面向 Edge 运行时提供长会话能力：SSE、checkpoint、pause/resume、`fromSeq` 补播。
+- 面向 Node Server 运行时提供长会话能力：SSE、checkpoint、pause/resume、`fromSeq` 补播。
 
 ## 3. 质量约束（全项目强制）
 
@@ -95,11 +95,11 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
   - 新增代码 0 个 legacy channel 直连；
   - 迁移报告可追踪（变更点、风险、回滚点）。
 
-### Week 4.5：Pilot（Edge）能力闭环
+### Week 4.5：Pilot（Node Runtime）能力闭环
 - 目标：完成 Pilot 会话链路与恢复语义联调。
 - 交付：
   - Chat Sessions API、SSE stream（含内置 heartbeat 事件）、pause、trace 补播；
-  - D1/R2 存储适配与附件签名上传链路；
+  - Postgres/Redis + JWT Cookie 主路径收敛；
   - Trace 抽屉与主聊天区分离展示。
 - 质量闸门：
   - `apps/pilot` lint/typecheck/build 全通过；
@@ -157,12 +157,24 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 ## 4.1 v2.4.7 GA 收口里程碑（发布推进）
 
-- **Gate A（已完成）**：版本基线对齐（root/core-app = `2.4.7`）。
+- **Gate A（历史已完成）**：`v2.4.7` 历史发布窗口已满足版本基线；当前 `2.4.8-beta.3` 工作区不再阻塞历史 Gate。
 - **Gate B（已完成）**：发布链路收敛（`build-and-release` + Nexus release 同步 + CLI 四包 npm 自动发布）。
-- **Gate C（进行中）**：质量门禁清零（lint/typecheck 阻塞项收口）。
-- **Gate D（进行中）**：发布资产核对（release notes `{ zh, en }`、assets、signature、manifest）。
-- **Gate E（待执行）**：创建并推送 `v2.4.7` tag，完成 GitHub Release 与 Nexus 发布联动验收。
+- **Gate C（已完成）**：质量门禁清零（lint/typecheck 阻塞项收口）。
+- **Gate D（进行中）**：仅保留资产元数据回填（`sha256 + manifest`）；回填来源为 GitHub `v2.4.7` manifest 与 release 资产列表。
+  - 执行口径：本地仅做 dry-run 对账，实际写入由 GitHub CI `build-and-release.yml` 的 `sync-nexus-release` 自动执行。
+  - CI 事实：已接入 `backfill-release-assets-from-github`，且仅对 `v2.4.7` 启用，避免影响 `v2.4.9` 严格发布门禁。
+- **Gate E（历史已完成）**：`v2.4.7` tag 已存在且 Nexus release 已 `published`；`latest?channel=RELEASE` 命中 `v2.4.7`，不执行重发版。
+- **签名缺口豁免（仅 v2.4.7）**：GitHub 原始 `v2.4.7` 无 `.sig` 资产，manifest 也无 signature 字段；按 `Accepted waiver` 处理，不扩展到 `>=2.4.8`。
 - **执行入口**：`docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+
+## 4.2 v2.4.8 OmniPanel 稳定版 MVP Gate（主线）
+
+- **状态（2026-03-14）**：已通过最小发布门槛。
+- **完成项**：
+  - 真实窗口 smoke（CI）：`show -> execute builtin -> hide`；
+  - 失败路径回归：plugin 不可用/插件缺失/无上下文/异常提示（无 silent failure）；
+  - 触发稳定性回归：快捷键 fallback、combo active、input-hook 生命周期清理。
+- **后续顺序（锁定）**：`v2.4.7 Gate D -> View Mode 安全收口 -> Nexus 设备授权风控`（`SDK Hard-Cut E~F` 与 `v2.4.7 Gate E` 已完成）。
 
 ## 5. 里程碑验收标准（跨周）
 

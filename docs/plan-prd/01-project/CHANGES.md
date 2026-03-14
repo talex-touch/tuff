@@ -4,6 +4,79 @@
 
 ## 2026-03-14
 
+### Pilot：邮箱登录自动注册 + 仅附件消息可发送
+
+**变更类型**: 登录流程简化 / 聊天交互可用性修复
+
+**描述**:
+- 邮箱登录改为“未注册自动创建账号并登录”，无需单独走邮箱注册入口；已存在账号仍按密码校验登录。
+- 登录接口统一密码长度校验（`6-128` 位），并根据“登录/自动注册”区分访客数据合并来源。
+- 新 Pilot 会话链路支持“仅附件发送”（空文本 + 附件），并同步修复流式接口校验与运行时 turn 判定，避免附件消息被拒绝。
+- 旧 QuotaGPTView 输入框发送条件优化：仅在“文件仍在上传中”时禁发；已失败文件不再阻塞文本/已上传文件发送。
+- 登录弹窗移除邮箱注册 tab，邮箱登录按钮改为“登录 / 自动注册”并补充提示文案，降低使用歧义。
+
+**修改文件**:
+- `apps/pilot/server/api/auth/email/login.post.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `packages/tuff-intelligence/src/business/pilot/stream.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `packages/tuffex/packages/components/src/chat/src/types.ts`
+- `packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue`
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `apps/pilot/app/components/input/ThInput.vue`
+- `apps/pilot/app/components/chore/Login.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CI：sync-nexus-release 接入 Gate D backfill（仅 v2.4.7）
+
+**变更类型**: 发布流程补齐 / 风险收敛
+
+**描述**:
+- `build-and-release.yml` 的 `sync-nexus-release` job 已接入 `scripts/backfill-release-assets-from-github.mjs`。
+- backfill 步骤增加 tag 守卫，**仅当 `TAG == v2.4.7` 执行**，避免影响 `>=2.4.8`（含 `v2.4.9`）严格发布资产流程。
+- 本地 dry-run 命令校验通过：可稳定产出 `sha256 + manifest` 的差异计划。
+
+**修改文件**:
+- `.github/workflows/build-and-release.yml`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Docs：Release assets 核对清单切换到 v2.4.9 严格口径
+
+**变更类型**: 文档口径切换 / 发布治理前移
+
+**描述**:
+- `NEXUS-RELEASE-ASSETS-CHECKLIST` 从 `v2.4.7` 语境切换为 `v2.4.9` Gate D 严格执行清单。
+- 明确默认规则为 `manifest + sha256 + signatureUrl` 全量完整，且 `signature` 不允许豁免。
+- 保留说明：`v2.4.7` 历史豁免不在该清单覆盖范围内，避免新旧版本口径混用。
+- 同步更新 `README/INDEX/TODO` 中对此清单的入口描述，统一为 `v2.4.9` 严格核对入口。
+
+**修改文件**:
+- `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Docs：Gate D 执行方式统一为 GitHub CI 自动同步
+
+**变更类型**: 发布流程口径修正 / 执行路径统一
+
+**描述**:
+- `v2.4.7 Gate D` 的写入动作统一改为 GitHub Actions 自动执行（`build-and-release.yml` / `sync-nexus-release`）。
+- 本地脚本仅保留 dry-run 对账用途，不再要求手工 `--nexus-key` 回填。
+- 同步更新 `TODO/README/INDEX/Release Checklist` 的“下一动作”描述，避免手工路径与 CI 主路径并存。
+
+**修改文件**:
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Release：v2.4.7 Gate D 回填脚本落地 + Gate E 历史闭环
 
 **变更类型**: 发布治理收口 / 历史版本豁免记录 / 文档一致性修复
