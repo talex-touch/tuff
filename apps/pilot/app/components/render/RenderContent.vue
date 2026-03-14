@@ -11,6 +11,9 @@ const inner = ref()
 const dot = ref<HTMLDivElement>()
 
 let timer: any
+let dotUpdateTimer: any
+let lastDotUpdateAt = 0
+const DOT_UPDATE_THROTTLE_MS = 80
 
 function handleGeneratingDotUpdate(rootEl: HTMLElement, cursor: HTMLElement) {
   if (!props.dotEnable || !rootEl || !cursor)
@@ -68,6 +71,38 @@ function handleGeneratingDotUpdate(rootEl: HTMLElement, cursor: HTMLElement) {
   // setTimeout(() => handleGeneratingDotUpdate(rootEl, cursor), 20)
 }
 
+function clearDotUpdateTimer() {
+  if (!dotUpdateTimer) {
+    return
+  }
+  clearTimeout(dotUpdateTimer)
+  dotUpdateTimer = null
+}
+
+function scheduleGeneratingDotUpdate(rootEl: HTMLElement, cursor: HTMLElement) {
+  if (!props.dotEnable || !rootEl || !cursor) {
+    return
+  }
+
+  const now = Date.now()
+  const elapsed = now - lastDotUpdateAt
+  if (elapsed >= DOT_UPDATE_THROTTLE_MS) {
+    lastDotUpdateAt = now
+    handleGeneratingDotUpdate(rootEl, cursor)
+    return
+  }
+
+  if (dotUpdateTimer) {
+    return
+  }
+
+  dotUpdateTimer = setTimeout(() => {
+    dotUpdateTimer = null
+    lastDotUpdateAt = Date.now()
+    handleGeneratingDotUpdate(rootEl, cursor)
+  }, Math.max(0, DOT_UPDATE_THROTTLE_MS - elapsed))
+}
+
 const value = ref('')
 
 watchEffect(() => {
@@ -79,7 +114,12 @@ watchEffect(() => {
 
   const dom = el.querySelector('.MilkContent')
 
-  nextTick(() => handleGeneratingDotUpdate(dom, dot.value!))
+  nextTick(() => scheduleGeneratingDotUpdate(dom, dot.value!))
+})
+
+onBeforeUnmount(() => {
+  timer && clearTimeout(timer)
+  clearDotUpdateTimer()
 })
 </script>
 

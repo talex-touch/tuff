@@ -25,6 +25,7 @@ const chatRef = ref()
 const route = useRoute()
 const router = useRouter()
 const viewMode = computed(() => route.query?.share)
+const STREAM_SCROLL_THROTTLE_MS = 120
 const initConversation = $completion.emptyHistory()
 const pageOptions = reactive<{
   select: string
@@ -157,6 +158,36 @@ function handleCreate() {
 }
 
 let curController: AbortController | null = null
+let streamScrollTimer: ReturnType<typeof setTimeout> | null = null
+let streamScrollPending = false
+
+function clearStreamScrollTimer() {
+  if (!streamScrollTimer) {
+    return
+  }
+  clearTimeout(streamScrollTimer)
+  streamScrollTimer = null
+}
+
+function flushStreamScroll(mode: 'stream' | 'final' = 'stream') {
+  clearStreamScrollTimer()
+  if (mode === 'stream' && !streamScrollPending) {
+    return
+  }
+  streamScrollPending = false
+  chatRef.value?.generateScroll(mode)
+}
+
+function scheduleStreamScroll() {
+  streamScrollPending = true
+  if (streamScrollTimer) {
+    return
+  }
+  streamScrollTimer = setTimeout(() => {
+    streamScrollTimer = null
+    flushStreamScroll('stream')
+  }, STREAM_SCROLL_THROTTLE_MS)
+}
 
 async function innerSend(conversation: IChatConversation, chatItem: IChatItem, index: number) {
   // 判断如果 conversation 是2条消息
@@ -169,16 +200,27 @@ async function innerSend(conversation: IChatConversation, chatItem: IChatItem, i
 
   chatCompletion.registerHandler({
     onCompletion: () => {
-      chatRef.value?.generateScroll()
+      scheduleStreamScroll()
 
       return true
     },
     onTriggerStatus(status) {
       pageOptions.status = status
 
-      chatRef.value?.generateScroll()
+      if (
+        status === IChatItemStatus.GENERATING
+        || status === IChatItemStatus.WAITING
+        || status === IChatItemStatus.TOOL_CALLING
+        || status === IChatItemStatus.TOOL_RESULT
+      ) {
+        scheduleStreamScroll()
+        return
+      }
+
+      flushStreamScroll('final')
     },
     async onReqCompleted() {
+      flushStreamScroll('stream')
       // 判断如果是第一条消息那么就要生成title
       if (conversation.messages.length === 2) {
         const shiftItem = [...conversation.messages].shift()
@@ -187,16 +229,14 @@ async function innerSend(conversation: IChatConversation, chatItem: IChatItem, i
       }
       // await genTitle(pageOptions.select)
 
-      chatRef.value?.generateScroll()
+      chatRef.value?.generateScroll('final')
 
       await $historyManager.syncHistory(conversation)
-
-      setTimeout(() => chatRef.value?.generateScroll(), 800)
 
       useVibrate('medium')
 
       setTimeout(() => {
-        chatRef.value?.generateScroll()
+        chatRef.value?.generateScroll('final')
       }, 200)
     },
     onFrequentLimit() {
@@ -301,6 +341,8 @@ function handleShare() {
 }
 
 function handleCancelReq() {
+  clearStreamScrollTimer()
+  streamScrollPending = false
   if (curController)
     curController.abort()
 }
@@ -347,6 +389,8 @@ async function mounter() {
     expand.value = true
 
   onUnmounted(() => {
+    clearStreamScrollTimer()
+    streamScrollPending = false
     eventScope.endScope()
     hotKeyScope()
   })

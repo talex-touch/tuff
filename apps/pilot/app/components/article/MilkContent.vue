@@ -31,6 +31,84 @@ const editorDom = ref()
 let editorInstance = null
 let watchStopHandle = null
 let renderToken = 0
+let renderTimer = null
+let pendingContent = ''
+let lastRenderedContent = ''
+
+const MARKDOWN_RENDER_FLUSH_MS = 80
+
+function clearRenderTimer() {
+  if (!renderTimer) {
+    return
+  }
+  clearTimeout(renderTimer)
+  renderTimer = null
+}
+
+async function applyMarkdownContent(content) {
+  if (!editorInstance || content === lastRenderedContent) {
+    return
+  }
+
+  const currentToken = ++renderToken
+
+  try {
+    editorInstance.action(replaceAll(content || ''))
+  }
+  catch (error) {
+    const msg = typeof error?.message === 'string' ? error.message : ''
+    if (!msg.includes('SchemaReady')) {
+      throw error
+    }
+
+    await editorInstance.action(async (ctx) => {
+      await ctx.wait(SchemaReady)
+    })
+
+    if (currentToken !== renderToken || !editorInstance)
+      return
+
+    editorInstance.action(replaceAll(content || ''))
+  }
+
+  if (currentToken !== renderToken || !editorInstance) {
+    return
+  }
+
+  lastRenderedContent = content || ''
+
+  if (props.disableRich)
+    return
+
+  setTimeout(() => {
+    if (!editorInstance)
+      return
+
+    useRichArticle(editorDom.value)
+
+    const _outline = editorInstance.action(outline)(editorInstance.ctx)
+
+    emits('outline', _outline)
+  }, 10)
+}
+
+function flushPendingContent() {
+  clearRenderTimer()
+  if (!editorInstance) {
+    return
+  }
+  void applyMarkdownContent(pendingContent)
+}
+
+function scheduleRenderContentFlush() {
+  if (renderTimer) {
+    return
+  }
+  renderTimer = setTimeout(() => {
+    renderTimer = null
+    flushPendingContent()
+  }, MARKDOWN_RENDER_FLUSH_MS)
+}
 
 onMounted(async () => {
   editorInstance = await Editor.make()
@@ -69,52 +147,23 @@ onMounted(async () => {
     .use(math)
     .create()
 
+  pendingContent = props.content || ''
+  lastRenderedContent = props.content || ''
+
   watchStopHandle = watch(
     () => props.content,
-    async (content) => {
+    (content) => {
+      pendingContent = content || ''
       if (!editorInstance)
         return
-
-      const currentToken = ++renderToken
-
-      try {
-        editorInstance.action(replaceAll(content || ''))
-      }
-      catch (error) {
-        const msg = typeof error?.message === 'string' ? error.message : ''
-        if (!msg.includes('SchemaReady')) {
-          throw error
-        }
-
-        await editorInstance.action(async (ctx) => {
-          await ctx.wait(SchemaReady)
-        })
-
-        if (currentToken !== renderToken || !editorInstance)
-          return
-
-        editorInstance.action(replaceAll(content || ''))
-      }
-
-      if (props.disableRich)
-        return
-
-      setTimeout(() => {
-        if (!editorInstance)
-          return
-
-        useRichArticle(editorDom.value)
-
-        const _outline = editorInstance.action(outline)(editorInstance.ctx)
-
-        emits('outline', _outline)
-      }, 10)
+      scheduleRenderContentFlush()
     },
     { immediate: true },
   )
 })
 
 onBeforeUnmount(() => {
+  clearRenderTimer()
   watchStopHandle?.()
   watchStopHandle = null
 

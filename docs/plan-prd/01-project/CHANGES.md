@@ -4,6 +4,36 @@
 
 ## 2026-03-14
 
+### Release：v2.4.7 Gate D 回填脚本落地 + Gate E 历史闭环
+
+**变更类型**: 发布治理收口 / 历史版本豁免记录 / 文档一致性修复
+
+**描述**:
+- 新增 `scripts/backfill-release-assets-from-github.mjs`，用于 `v2.4.7` Gate D 数据补齐：
+  - 从 GitHub `talex-touch/tuff` release 拉取资产与 `tuff-release-manifest.json`；
+  - 按 `platform/arch/filename` 对齐 Nexus 资产，回填 `sha256` 与 manifest 资产记录；
+  - 支持 `--dry-run` 输出“将更新/已更新”差异清单。
+- `Gate E` 统一改为 `Done (historical)`，并固定证据链：
+  - `v2.4.7` tag 存在（本地与远端）；
+  - Nexus release 已 `published`；
+  - `latest?channel=RELEASE` 命中 `v2.4.7`。
+- `v2.4.7` 签名缺口登记为历史豁免（Accepted waiver）：
+  - GitHub 原始 `v2.4.7` 无 `.sig` 资产；
+  - manifest 无 signature 字段；
+  - 豁免仅作用于 `v2.4.7`，不扩展到 `>=2.4.8`。
+- 同步收口 `TODO/README/INDEX/Roadmap/Quality Baseline/Release Checklist` 六份主文档，主线顺序统一为 `Gate D -> View Mode`。
+
+**修改文件**:
+- `scripts/backfill-release-assets-from-github.mjs`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/01-project/RISK-REGISTER-2026-02.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Pilot：管理员引导密码改为强制 env 注入（最小 6 位）
 
 **变更类型**: 安全基线收敛 / 配置约束增强
@@ -84,6 +114,24 @@
 - `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
 - `apps/pilot/server/utils/pilot-admin-channel-config.ts`
 - `apps/pilot/server/utils/pilot-config-crypto.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot：旧 QuotaGPTView 流式 Markdown 实时性优化（executor 链路）
+
+**变更类型**: 交互性能优化 / 流式体验修复
+
+**描述**:
+- 对旧 `executor` 聊天链路增加前端 80ms Markdown 合帧写入，避免逐 token 触发重渲染导致“看似缓冲”。
+- `MilkContent` 增加 80ms 内容刷新调度与重复内容跳过，减少 `replaceAll` 频率并保留持续 Markdown 渲染。
+- 生成期滚动改为节流触发 + `auto` 滚动，完成后再 `smooth` 校正一次，降低滚动动画抢占主线程问题。
+- 生成光标定位改为低频更新（80ms），减少每次 chunk 的 Range 计算和布局抖动。
+
+**修改文件**:
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `apps/pilot/app/components/article/MilkContent.vue`
+- `apps/pilot/app/components/chat/ThChat.vue`
+- `apps/pilot/app/components/render/RenderContent.vue`
+- `apps/pilot/app/pages/index.vue`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ### Core-App：OmniPanel 稳定版 MVP Gate（真实窗口 smoke + 失败路径回归）
