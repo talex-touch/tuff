@@ -39,10 +39,20 @@ function stringify(value: unknown): string {
 }
 
 function isDuplicateColumnError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
+  if (!error || typeof error !== 'object') {
     return false
   }
-  return /duplicate column name/i.test(error.message)
+
+  const maybePgCode = (error as { code?: unknown }).code
+  if (typeof maybePgCode === 'string' && maybePgCode.trim() === '42701') {
+    return true
+  }
+
+  const message = error instanceof Error
+    ? error.message
+    : String((error as { message?: unknown }).message || '')
+
+  return /duplicate column name|column\s+['"]?[\w$]+['"]?\s+of relation\s+['"]?[\w$]+['"]?\s+already exists/i.test(message)
 }
 
 export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {

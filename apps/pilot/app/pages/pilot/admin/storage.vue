@@ -117,7 +117,10 @@ onMounted(() => {
     <section class="pilot-admin-storage__panel">
       <header class="pilot-admin-storage__header">
         <h1>Pilot 存储配置</h1>
-        <a href="/">返回聊天页</a>
+        <div class="pilot-admin-storage__links">
+          <a href="/pilot/admin/channels">渠道配置</a>
+          <a href="/">返回聊天页</a>
+        </div>
       </header>
 
       <p class="pilot-admin-storage__desc">
@@ -247,6 +250,12 @@ onMounted(() => {
   font-size: 20px;
 }
 
+.pilot-admin-storage__links {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .pilot-admin-storage__desc {
   margin: 10px 0 18px;
   color: var(--tx-text-color-secondary);
@@ -324,6 +333,10 @@ onMounted(() => {
   .pilot-admin-storage__header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .pilot-admin-storage__links {
+    flex-wrap: wrap;
   }
 }
 </style>

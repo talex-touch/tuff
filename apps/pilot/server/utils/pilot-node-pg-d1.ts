@@ -1,6 +1,7 @@
 import type { PilotDatabase, PilotDbPreparedStatement, PilotDbResult } from '../types/pilot-db'
 import process from 'node:process'
 import { Pool } from 'pg'
+import { ensurePilotEnvPrecedenceApplied } from '../../shared/pilot-env-loader'
 
 const NODE_PG_D1_CACHE_KEY = '__pilotNodePgD1Cache'
 
@@ -186,6 +187,7 @@ class NodePgDatabase {
 }
 
 function resolvePostgresDsn(): string {
+  ensurePilotEnvPrecedenceApplied()
   const dsn = String(process.env.PILOT_POSTGRES_URL || '').trim()
   if (!dsn) {
     throw new Error('Postgres mode requires PILOT_POSTGRES_URL.')

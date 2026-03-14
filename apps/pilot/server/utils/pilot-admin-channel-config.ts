@@ -143,6 +143,22 @@ function clearCache(event: H3Event): void {
   delete context[CACHE_KEY]
 }
 
+function mergeChannelInputWithExisting(
+  row: Partial<PilotAdminChannelItem> & { id: string },
+  existingMap: Map<string, PilotAdminChannelItem>,
+): Record<string, unknown> {
+  const id = normalizeText(row.id)
+  const existing = existingMap.get(id)
+  const nextApiKey = normalizeText(row.apiKey)
+
+  return {
+    ...existing,
+    ...row,
+    id,
+    apiKey: nextApiKey || existing?.apiKey || '',
+  }
+}
+
 function normalizeChannelRow(raw: unknown): PilotAdminChannelItem | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return null
@@ -228,13 +244,53 @@ export async function updatePilotAdminChannelCatalog(
   event: H3Event,
   input: UpdatePilotAdminChannelCatalogInput,
 ): Promise<PilotAdminChannelCatalog> {
-  const normalizedChannels = input.channels
-    .map(row => normalizeChannelRow(row))
-    .filter((item): item is PilotAdminChannelItem => Boolean(item))
+  const existingCatalog = await getPilotAdminChannelCatalog(event)
+  const existingMap = new Map<string, PilotAdminChannelItem>(
+    existingCatalog.channels.map(item => [item.id, item]),
+  )
+
+  const normalizedChannels: PilotAdminChannelItem[] = []
+  const rejectedChannels: Array<{ id: string, missing: string[] }> = []
+
+  for (const row of input.channels) {
+    const merged = mergeChannelInputWithExisting(row, existingMap)
+    const normalized = normalizeChannelRow(merged)
+    if (normalized) {
+      normalizedChannels.push(normalized)
+      continue
+    }
+
+    const missing: string[] = []
+    if (!normalizeText(merged.id)) {
+      missing.push('id')
+    }
+    if (!normalizeText(merged.baseUrl)) {
+      missing.push('baseUrl')
+    }
+    if (!normalizeText(merged.apiKey)) {
+      missing.push('apiKey')
+    }
+    rejectedChannels.push({
+      id: normalizeText(row.id) || '(empty)',
+      missing,
+    })
+  }
+
+  if (rejectedChannels.length > 0) {
+    console.warn('[pilot][channel] ignored invalid channels when saving catalog', {
+      rejectedChannels,
+    })
+  }
 
   await upsertSetting(event, CHANNELS_KEY, encodeChannels(normalizedChannels))
   const defaultChannelId = normalizeText(input.defaultChannelId)
   await upsertSetting(event, DEFAULT_CHANNEL_KEY, defaultChannelId)
+
+  console.info('[pilot][channel] catalog updated', {
+    inputCount: input.channels.length,
+    savedCount: normalizedChannels.length,
+    defaultChannelId,
+  })
 
   clearCache(event)
   return await getPilotAdminChannelCatalog(event)

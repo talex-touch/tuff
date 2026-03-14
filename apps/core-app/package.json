@@ -15,6 +15,8 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "pnpm -F @talex-touch/tuffex run build && vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
+    "test:omnipanel": "vitest run src/main/modules/omni-panel/index.test.ts src/renderer/src/views/omni-panel/filter-features.test.ts src/renderer/src/views/omni-panel/interaction.test.ts",
+    "smoke:omnipanel": "cross-env TUFF_OMNIPANEL_SMOKE=1 electron-vite preview",
     "start": "electron-vite preview",
     "dev": "cross-env NODE_OPTIONS='--max-old-space-size=8192' pnpm exec electron-vite dev",
     "build": "pnpm run typecheck && electron-vite build",

@@ -646,12 +646,37 @@ export default defineEventHandler(async (event) => {
     })
   }
   catch (error: any) {
-    const message = String(error?.statusMessage || error?.message || '所有供应商已熔断，无可用渠道')
+    const detail = error?.data && typeof error.data === 'object'
+      ? (error.data as Record<string, unknown>)
+      : {}
+    const message = String(error?.message || error?.statusMessage || '当前无可用渠道，请检查渠道配置。')
+    const code = String(detail.code || 'PILOT_CHANNEL_UNAVAILABLE')
+    const reason = String(detail.reason || '').trim()
+
+    console.warn('[pilot][executor] channel selection failed', {
+      user_id: auth.userId,
+      chat_id: chatId,
+      requested_chat_id: requestedChatId || null,
+      request_channel_id: String(body?.channel_id || '').trim() || null,
+      session_channel_id: existingSession?.channelId || null,
+      code,
+      reason: reason || null,
+      status_code: Number(error?.statusCode || 503),
+      message,
+      detail,
+    })
+
     const encoder = new TextEncoder()
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'status_updated', status: 'start', id: 'assistant' })}\n\n`))
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'error', status: 'failed', message })}\n\n`))
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          event: 'error',
+          status: 'failed',
+          code,
+          reason,
+          message,
+        })}\n\n`))
         controller.enqueue(encoder.encode('data: [DONE]\\n\\n'))
         controller.close()
       },
