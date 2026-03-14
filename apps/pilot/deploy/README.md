@@ -32,7 +32,7 @@ cp "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.env.example" "/opt/1pan
 - `PILOT_JWT_REFRESH_SECRET`
 - `PILOT_COOKIE_SECRET`
 - `PILOT_CONFIG_ENCRYPTION_KEY`
-- `PILOT_BOOTSTRAP_ADMIN_PASSWORD` (default is `admin`, override in production)
+- `PILOT_BOOTSTRAP_ADMIN_PASSWORD` (must be explicitly provided, minimum length 6)
 
 ### Optional runtime vars
 
@@ -87,5 +87,5 @@ The cron wrapper automatically:
 
 - This deployment flow is Node server only (no Cloudflare runtime)
 - Runtime requires PostgreSQL + Redis
-- Admin account defaults to `admin@pilot.local` + `admin` if not overridden
+- Admin email defaults to `admin@pilot.local`; admin password must come from `PILOT_BOOTSTRAP_ADMIN_PASSWORD` (minimum length 6)
 - For production, change admin password immediately after first deployment
