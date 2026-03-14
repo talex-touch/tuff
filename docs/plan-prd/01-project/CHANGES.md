@@ -4,6 +4,29 @@
 
 ## 2026-03-14
 
+### Pilot：附件空正文提示 + MinIO env 直连兜底
+
+**变更类型**: 交互可读性修复 / 存储配置增强
+
+**描述**:
+- 聊天输入仅上传附件且未输入文本时，自动补充正文占位 `"(无正文内容)"`，避免消息气泡出现空正文。
+- 新旧聊天入口统一该行为：`pilot` 新会话页与旧 QuotaGPTView 输入框在“仅附件发送”场景都会补齐占位文本。
+- 附件存储增加 MinIO 环境变量直连兜底：当后台存储配置未设置时，可直接通过 env 启用 `s3/minio` 写入。
+- 支持 env 键：`PILOT_ATTACHMENT_PROVIDER`、`PILOT_ATTACHMENT_PUBLIC_BASE_URL`、`PILOT_ATTACHMENT_SIGNING_SECRET`、`PILOT_MINIO_*`。
+- 签名密钥优先读取 `PILOT_ATTACHMENT_SIGNING_SECRET`，为空时回退 `PILOT_COOKIE_SECRET`。
+- 当 provider 设为 `s3/minio` 但配置缺失或上传失败时，服务端自动回退到 `memory` 并输出日志，优先保证附件功能可用。
+
+**修改文件**:
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `apps/pilot/app/components/input/ThInput.vue`
+- `apps/pilot/server/utils/pilot-attachment-storage.ts`
+- `apps/pilot/server/utils/__tests__/pilot-attachment-storage.test.ts`
+- `apps/pilot/.env.example`
+- `apps/pilot/deploy/deploy-pilot-1panel.env.example`
+- `apps/pilot/deploy/README.md`
+- `apps/pilot/deploy/README.zh-CN.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Pilot：邮箱登录自动注册 + 仅附件消息可发送
 
 **变更类型**: 登录流程简化 / 聊天交互可用性修复
@@ -41,6 +64,21 @@
 - `docs/plan-prd/TODO.md`
 - `docs/plan-prd/README.md`
 - `docs/INDEX.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CI：build-and-release 支持手动 `sync_tag` 触发 Nexus 同步
+
+**变更类型**: 发布自动化增强 / 执行路径补齐
+
+**描述**:
+- `build-and-release.yml` 新增 `workflow_dispatch.inputs.sync_tag`，可手动指定已有 tag（如 `v2.4.7`）直接执行 `sync-nexus-release`。
+- 当 `sync_tag` 存在时，`build-and-release` 与 `create-release` 路径会被跳过，改走“仅同步”流程，避免重复构建与额外 draft release。
+- `sync-nexus-release` 新增 tag 格式校验，并继续保留 `v2.4.7` 专属 backfill 守卫。
+
+**修改文件**:
+- `.github/workflows/build-and-release.yml`
+- `docs/plan-prd/TODO.md`
 - `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
 - `docs/plan-prd/01-project/CHANGES.md`
 

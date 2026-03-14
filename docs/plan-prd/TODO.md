@@ -196,7 +196,7 @@
 - [ ] 发布资产执行（Gate D）：仅保留“资产元数据一致性闭环”（本地 dry-run 对账 + CI 自动写入）
   - [x] Gate D 本地预检（2026-03-14）：`node scripts/check-release-gates.mjs --tag v2.4.7 --stage gate-d --base-url https://tuff.tagzxia.com` 已通过（notes/远端只读链路通过，P0=0）。
   - [x] Gate D 远端只读核对（2026-03-14）：`/api/releases/v2.4.7?assets=true` 与 `/assets` 已验证 `notes/notesHtml` 为 `{zh,en}`，且存在 `win32/x64`、`darwin/x64`、`linux/x64` 三平台资产。
-  - [ ] Gate D 待办：执行 `node scripts/backfill-release-assets-from-github.mjs --tag v2.4.7 --base-url https://tuff.tagzxia.com --dry-run` 做差异对账；写入动作由 GitHub Actions `build-and-release.yml` 的 `sync-nexus-release` 自动执行（`Backfill Nexus asset metadata from GitHub manifest` 步骤，仅 `v2.4.7` 启用）。
+  - [ ] Gate D 待办：执行 `node scripts/backfill-release-assets-from-github.mjs --tag v2.4.7 --base-url https://tuff.tagzxia.com --dry-run` 做差异对账；写入动作由 GitHub Actions `build-and-release.yml` 的 `sync-nexus-release` 自动执行（`Backfill Nexus asset metadata from GitHub manifest` 步骤，仅 `v2.4.7` 启用；支持 `workflow_dispatch` + `sync_tag=v2.4.7` 手动触发同步）。
   - [ ] Gate D 回填后复核：`GET /api/releases/v2.4.7/assets` 中 `sha256` 完整，且存在 `tuff-release-manifest.json` 资产记录。
   - [x] 签名缺口豁免：`v2.4.7` `.sig` 缺失按历史豁免（Accepted），不阻塞 Gate D 收口。
 - [x] 发布动作（Gate E）历史闭环：`v2.4.7` tag 已存在，Nexus release 已 `published`，`latest?channel=RELEASE` 命中 `v2.4.7`；不做重发版。

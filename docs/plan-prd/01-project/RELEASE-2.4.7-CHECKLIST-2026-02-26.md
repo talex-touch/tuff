@@ -71,7 +71,7 @@
 ## 4. 建议执行顺序（最小可行）
 
 1. 执行 Gate D 本地对账：`node scripts/backfill-release-assets-from-github.mjs --tag v2.4.7 --base-url https://tuff.tagzxia.com --dry-run`（确认差异）。
-2. 触发 GitHub Actions `build-and-release.yml` 的 `sync-nexus-release` 路径完成自动同步写入（已接入 `Backfill Nexus asset metadata from GitHub manifest`，仅 `v2.4.7` 启用；不做本地手工 API key 写入）。
+2. 触发 GitHub Actions `build-and-release.yml` 的 `sync-nexus-release` 路径完成自动同步写入（已接入 `Backfill Nexus asset metadata from GitHub manifest`，仅 `v2.4.7` 启用；不做本地手工 API key 写入）。手动触发时可使用 `workflow_dispatch` 并传入 `sync_tag=v2.4.7` 走“仅同步”路径。
 3. 同步后复核：`node scripts/check-release-gates.mjs --tag v2.4.7 --stage gate-d --base-url https://tuff.tagzxia.com`，确保结果 `pass`。
 4. 在 `RISK-REGISTER` 与本清单同步记录 `v2.4.7` 签名历史豁免（Accepted）。
 5. Gate D 关闭后主线切换到 `View Mode 安全收口`，不再执行 `v2.4.7` Gate E 发布动作。
