@@ -1,11 +1,11 @@
 # TuffCLI - 插件开发命令行工具
 
-> 版本: v1.0.0 (计划中)
-> 状态: 规划中
+> 版本: v1.0.0
+> 状态: Phase1+2 已完成（2026-03-15）
 
 ## 概述
 
-TuffCLI 是 Tuff 插件生态系统的命令行工具，用于简化插件开发、构建和发布流程。
+TuffCLI 是 Tuff 插件生态系统的命令行工具，用于简化插件开发、构建和发布流程。当前已完成主入口、核心命令迁移与兼容层收口。
 
 ## 核心功能
 
@@ -131,32 +131,43 @@ export default defineConfig({
    ```
 3. 发布时自动使用认证
 
+## 当前实现状态（2026-03-15）
+
+- 已落地：
+  - `@talex-touch/tuff-cli` 承接 `tuff` 主入口。
+  - `@talex-touch/tuff-cli-core` 已承接核心编排（`args/config/auth/publish/validate/runtime`）。
+  - 兼容入口保留并输出 deprecation 提示（迁移指向 `@talex-touch/tuff-cli`，旧 `unplugin` 入口已 shim 转发）。
+  - `tuff validate` 命令已上线（manifest/sdkapi/category/permissions 校验，支持非交互失败码）。
+  - `@talex-touch/tuffcli` 兼容导出 `defineConfig/types` 已可用。
+  - 文档与示例包名已统一到新包层（保留兼容说明）。
+
 ## 实现计划
 
 ### Phase 1: 基础框架 (3天)
 
-- [ ] 项目初始化 (Commander.js + Inquirer.js)
-- [ ] `tuff create` 基础脚手架
-- [ ] 模板系统
+- [x] 项目初始化（主入口与兼容层）
+- [x] `tuff create` 基础脚手架
+- [x] 核心编排迁移到 `tuff-cli-core`（2026-03-15）
+- [ ] 模板系统治理（版本化/来源可控）
 
 ### Phase 2: 构建系统 (5天)
 
-- [ ] `tuff build` 实现
-- [ ] TypeScript 编译
-- [ ] Widget 打包
-- [ ] 资源处理
+- [x] `tuff build` 实现
+- [x] TypeScript 编译
+- [x] Widget 打包
+- [x] 资源处理
 
 ### Phase 3: 发布系统 (3天)
 
-- [ ] `tuff publish` 实现
-- [ ] API Key 认证
-- [ ] 版本管理
+- [x] `tuff publish` 实现
+- [x] API Key 认证
+- [x] 版本管理增强（分包迁移后统一，保持 dist-tag 兼容）
 
 ### Phase 4: 开发体验 (4天)
 
-- [ ] `tuff dev` 热重载
-- [ ] 无参数交互模式
-- [ ] 错误提示优化
+- [x] `tuff dev` 热重载
+- [x] 无参数交互模式
+- [x] 错误提示与文案收敛（兼容入口 deprecation + 非交互失败码）
 
 ## 技术栈
 

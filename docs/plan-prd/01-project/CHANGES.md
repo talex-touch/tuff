@@ -4,6 +4,65 @@
 
 ## 2026-03-15
 
+### Release：v2.4.9-beta.4 基线快照固化（工作区治理起点）
+
+**变更类型**: 发布基线固化 / 工作区治理
+
+**描述**:
+- 固化当前工作区基线为 `2.4.9-beta.4`，作为后续“全仓历史债务清理”的统一起点。
+- 已记录并核对发布事实：
+  - commit: `d93e4bec599bed2c0793aa8602ba6462a39bfbbe`
+  - tag: `v2.4.9-beta.4`
+  - CI 结果：
+    - Build and Release: https://github.com/talex-touch/tuff/actions/runs/23106614270
+    - Contributes: https://github.com/talex-touch/tuff/actions/runs/23106610206
+    - Pilot Image Publish: https://github.com/talex-touch/tuff/actions/runs/23106610203
+    - CodeQL: https://github.com/talex-touch/tuff/actions/runs/23106609938
+- 工作区卫生同步收口：将 `output/` 明确纳入 `.gitignore`，避免 Playwright 截图产物污染提交。
+
+**验证结果**:
+- `git ls-remote --tags origin v2.4.9-beta.4` ✅
+- 上述 4 条 CI workflow 全部 `completed/success` ✅
+
+### Docs：主文档压缩与债务分层（2.4.9 基线）
+
+**变更类型**: 文档治理 / 状态口径压缩
+
+**描述**:
+- `TODO` 拆分为“当前执行清单（2周）+ 历史债务池（长期）+ Wave A/B/C”三层入口，减少短期主线与长期债务混杂。
+- 任务统计改为 checkbox 实时计数口径（`184 done / 76 todo / 260 total`，71%）。
+- 主文档中的“当前工作区版本”统一更新为 `2.4.9-beta.4`（历史语境保留，不改 historical 结论）。
+- CLI 生态文档同步为“Phase1+2 已完成 + 兼容层保留期”，去除“纯规划态”误导描述。
+
+**修改文件（关键）**:
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/06-ecosystem/{README.md,TUFFCLI-PRD.md,TUFFCLI-SPLIT-PLAN.md}`
+
+### CLI：Phase1+2 完整迁移收口（`tuff-cli` + `tuff-cli-core` + shim）
+
+**变更类型**: 包层迁移 / 兼容收口 / 工具链修复
+
+**描述**:
+- `@talex-touch/tuff-cli` 成为 `tuff` 命令主入口，运行时加载自身 `dist/bin/tuff.js`。
+- `@talex-touch/tuff-cli-core` 承接核心编排与共享逻辑：`args/config/auth/publish/validate/runtime-config/device/repositories`。
+- `@talex-touch/unplugin-export-plugin` 的 CLI 入口降级为兼容 shim：保留转发能力并输出 deprecation 提示，不再承载主命令逻辑。
+- 补齐 `tuff-cli`、`tuff-cli-core`、`tuffcli` 的 `tsup` 构建入口，修复三包 `No input files` 构建失败。
+- 迁移并补齐回归测试：CLI 参数、配置、publish smoke、validate 失败码，以及 shim 转发链路。
+
+**验证结果**:
+- `pnpm -C "packages/tuff-cli-core" run lint && pnpm -C "packages/tuff-cli-core" run build && pnpm -C "packages/tuff-cli-core" run test` ✅
+- `pnpm -C "packages/tuff-cli" run lint && pnpm -C "packages/tuff-cli" run build` ✅
+- `pnpm -C "packages/tuffcli" run lint && pnpm -C "packages/tuffcli" run build` ✅
+- `pnpm -C "packages/unplugin-export-plugin" run lint && pnpm -C "packages/unplugin-export-plugin" run build && pnpm -C "packages/unplugin-export-plugin" run test` ✅
+- `node packages/tuff-cli/bin/tuff.js --help` / `validate --help` ✅
+- 无效 manifest 执行 `tuff validate --strict` 返回非 0（`exit code=1`）✅
+- `node packages/unplugin-export-plugin/dist/bin/tuff.js --help` 输出 deprecation 并成功转发 ✅
+
 ### Pilot：M2/M3 接口迁移收口（含微信豁免 + 支付 3 秒自动结算）
 
 **变更类型**: API 兼容迁移 / 豁免策略落地 / 运维脚本补齐
@@ -6045,6 +6104,27 @@
 
 **修改文件**:
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+
+---
+
+## 2026-03-15
+
+### 修复: Pilot 图片发送语义统一为单条 user 多模态 content
+
+**变更类型**: Bug 修复
+
+**描述**: 明确并固化 `text + image` 发送语义为“同一条 user 消息内多内容块”，避免拆分为两条 user turn 导致上下文丢失。
+
+**主要变更**:
+1. `ThInput` 保持单 turn 发送，图片上传保留 `dataUrl` 到 `inputMeta.data`，供后端优先内联。
+2. Quota 与 Pilot Stream 两条后端链路统一内联阈值（单图 5MB / 总量 12MB），并优先使用 `dataUrl`。
+3. 补充回归测试，覆盖：
+   - 同 turn 的 `input_text + input_image` 组包断言
+   - 仅图片场景可消费文本块断言
+   - `dataUrl > previewUrl > ref` 优先级断言
+   - “拆两条 user turn 会丢文本”风险断言
+
+**影响**: 多模态识别链路更稳定，减少“模型只看到 URL 文本”导致的识别失败。
 
 ---
 

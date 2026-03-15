@@ -133,7 +133,7 @@
 **现状指标**
 | 项目 | 结果 | 结论 |
 | --- | --- | --- |
-| 版本基线 | 历史 `v2.4.7` 发布窗口已满足；当前工作区为 `2.4.8-beta.3` | 作为历史 Gate 记录，不再阻塞当前主线 |
+| 版本基线 | 历史 `v2.4.7` 发布窗口已满足；当前工作区为 `2.4.9-beta.4` | 作为历史 Gate 记录，不再阻塞当前主线 |
 | 发布链路 | `build-and-release` + Nexus release + CLI npm 自动发布 | 已完成 |
 | 质量门禁 | lint/typecheck 阻塞项已清零（C1~C4） | 已完成 |
 | 发布资产结构 | notes/notesHtml `{ zh, en }` + assets manifest + sha256 | Gate D 已完成（run `23091014958`）；`signature` 对 `v2.4.7` 按历史豁免 |

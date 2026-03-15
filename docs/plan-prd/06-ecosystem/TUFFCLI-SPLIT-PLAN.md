@@ -1,11 +1,11 @@
-# Tuff CLI 分包与迁移提案
+# Tuff CLI 分包与迁移提案（执行回填版）
 
-> 更新时间: 2026-01-31  
-> 依据: 现有实现集中在 `packages/unplugin-export-plugin`（bin/cli/core/types 同包）
+> 更新时间: 2026-03-15  
+> 执行结论: Phase1 + Phase2 已完成（`tuff-cli` 主入口、`tuff-cli-core` 核心编排、`unplugin` 兼容 shim）
 
-## 1. 背景与现状
+## 1. 背景与现状（历史）
 
-当前 `tuff` CLI 由 `@talex-touch/unplugin-export-plugin` 提供：
+历史上 `tuff` CLI 由 `@talex-touch/unplugin-export-plugin` 提供：
 - **入口**: `packages/unplugin-export-plugin/src/bin/tuff.ts`
 - **CLI 层**: `src/cli/*`（交互、i18n、create 命令）
 - **核心能力**: `src/core/*`（config/dev/build/publish/export）
@@ -94,8 +94,8 @@ tuff-cli (bin + prompts)
 
 ## 8. 最小任务清单（MVP 拆包）
 
-- [ ] 新建 `packages/tuff-cli-core` 并迁移 `core/*` + `types.ts`
-- [ ] 新建 `packages/tuff-cli` 并迁移 `bin` + `cli/*`
-- [ ] `unplugin-export-plugin` 改为依赖 `tuff-cli-core`（保留原 exports）
-- [ ] 文档与 PRD 修正：`@talex-touch/tuffcli` 指向新包
-- [ ] 增加回归测试：命令输出 + 核心流程 smoke test
+- [x] 新建 `packages/tuff-cli-core` 并迁移 `core/*` + `types.ts`（2026-03-15 已完成）
+- [x] 新建 `packages/tuff-cli` 并迁移 `bin` + `cli/*`（主入口已切换，兼容层保留）
+- [x] `unplugin-export-plugin` CLI 降级为 shim（deprecation + 转发），保留原 exports（2026-03-15）
+- [x] 文档与 PRD 修正：`@talex-touch/tuffcli` 指向新包（2026-03-15）
+- [x] 增加回归测试：命令输出 + 核心流程 smoke test（`help/create/build/dev/publish/validate` 最小烟雾已验证）

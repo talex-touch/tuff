@@ -24,15 +24,23 @@
  - **[Pilot API/事件契约](./docs/PILOT-INTELLIGENCE-API-CONTRACT.md)**：`apps/pilot` 的 SSE、Checkpoint/Resume、错误码与时序
  - **[变更记录](./01-project/CHANGES.md)**：历史记录（不在本索引重复）
  - **[DivisionBox 文档索引](./docs/DIVISION_BOX_INDEX.md)**：DivisionBox 详细文档入口
+ - **[v2.4.9-beta.4 发布基线快照](./01-project/CHANGES.md)**：commit/tag/CI run 汇总（用于后续债务治理基线）
 
 ## 单一口径矩阵（2026-03-15）
 
-- **2.4.9 Gate 主线**：插件完善主线执行中，`权限中心 Phase 5` 已完成；`View Mode 安全闭环 + 类型增强` 与 `CLI 切换收口`进入同版本 Gate 验收。
+- **2.4.9 Gate 主线**：插件完善主线执行中，`权限中心 Phase 5`、`View Mode Phase 2~4`、`CLI 分包迁移（Phase1+2）`、`主文档同步验收`已完成。
+- **当前工作区基线**：`2.4.9-beta.4`（tag: `v2.4.9-beta.4`，CI: Build and Release / Contributes / Pilot Image Publish / CodeQL 全绿）。
 - **2.4.8 Gate 主线（historical）**：OmniPanel 稳定版 MVP 已落地（真实窗口 smoke CI + 失败路径回归 + 触发稳定性回归）。
 - **v2.4.7 发布门禁**：Gate A/B/C/D/E = Done（Gate E 为 historical，Gate D 为 historical backfill）。
   - **执行方式**：Gate D 已由 GitHub Actions `Build and Release`（run `23091014958`）通过 `workflow_dispatch(sync_tag=v2.4.7)` 完成自动回填与发布同步。
 - **Pilot Runtime 主路径**：Node Server + Postgres/Redis + JWT Cookie；Cloudflare runtime/D1/R2 仅保留历史归档描述。
-- **后续顺序（锁定）**：`权限中心 Phase 5（已完成） -> View Mode 安全闭环+类型增强 -> CLI 切换收口 -> 主文档同步验收 -> Nexus 设备授权风控`（`OmniPanel Gate`、`SDK Hard-Cut E~F`、`v2.4.7 Gate D/E` 已完成）。
+- **后续顺序（锁定）**：`Nexus 设备授权风控`（前序 `CLI 分包迁移收口（core 真迁移 + 文档统一）` 与 `主文档同步验收` 已完成）。
+
+## 当前执行清单（2周）
+
+- 完成工作区卫生与文档基线核对（状态/日期/下一动作三字段一致）。
+- 完成 CLI 分包迁移（`tuff-cli-core` 真迁移 + `@talex-touch/tuffcli` 兼容导出与示例统一）并通过命令烟雾回归。
+- 输出 Wave A/B/C 的分波次执行清单与验收命令，作为后续全仓债务治理入口。
 
 ## 项目最终目标（North Star）
 
@@ -121,7 +129,7 @@
     - 基于已完成项 `02/03/04/05/07/08` 重排剩余优先级
     - 对齐 `README.md` / `docs/INDEX.md` / `TODO.md` 导航与状态口径
   - **当前剩余优先级**
-    - `OmniPanel Gate（已完成）` → `SDK Hard-Cut E~F（已完成）` → `权限中心 Phase 5（已完成）` → `View Mode 安全闭环+类型增强` → `CLI 切换收口` → `主文档同步验收` → `Nexus 设备授权风控`
+    - `OmniPanel Gate（已完成）` → `SDK Hard-Cut E~F（已完成）` → `权限中心 Phase 5（已完成）` → `View Mode 安全闭环+类型增强（已完成）` → `CLI 切换收口（已完成）` → `主文档同步验收（已完成）` → `Nexus 设备授权风控`
 
 - **Pilot × Intelligence（Protocol-first Runtime）**（2026-03，进行中）
   - **代码**
@@ -275,7 +283,7 @@
    - **状态**
      - renderer 直连 IPC 清理已完成（2026-03-14）。
    - **后续**
-     - 旧 `channel-core` 彻底移除与插件 process message 协议统一，作为后续结构化债务推进，不阻塞当前 Gate D 与 View Mode 主线。
+     - 旧 `channel-core` 彻底移除与插件 process message 协议统一，作为后续结构化债务推进，不阻塞当前 CLI 分包迁移主线。
 
  - **平台能力体系（能力目录 + 管理 UI 基础已落地）**
    - **PRD**：`./02-architecture/platform-capabilities-prd.md`

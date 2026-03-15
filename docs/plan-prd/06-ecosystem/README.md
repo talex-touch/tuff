@@ -6,16 +6,21 @@
 
 ### 1. TuffCLI
 
-命令行工具，用于插件开发、构建和发布。整合了 `unplugin-export-plugin` 的核心功能。
+命令行工具，用于插件开发、构建和发布。当前已完成“新入口 + 兼容壳 + 分包落地”结构。
 
 - **文档**: [TUFFCLI-PRD.md](./TUFFCLI-PRD.md)
 - **分包提案**: [TUFFCLI-SPLIT-PLAN.md](./TUFFCLI-SPLIT-PLAN.md)
-- **核心包**: `packages/unplugin-export-plugin/` (底层实现)
+- **现状包层（2026-03-15）**:
+  - `packages/tuff-cli/`（`tuff` 主入口）
+  - `packages/tuff-cli-core/`（核心编排 + validate/publish/config/auth/runtime）
+  - `packages/tuffcli/`（兼容导出层）
+  - `packages/unplugin-export-plugin/`（构建插件 + CLI 兼容入口 shim）
 - **功能**:
   - 插件脚手架创建 (`tuff create`)
   - 插件构建打包 (`tuff build`)
   - 插件发布到市场 (`tuff publish`)
   - 本地开发服务器 (`tuff dev`)
+  - manifest 校验 (`tuff validate`)
 
 ### 2. TuffEx
 
@@ -27,11 +32,13 @@ Tuff 组件库文档站点。
 
 ### 3. Unplugin Export Plugin
 
-Vite/Webpack 插件，用于导出插件元数据。**现已集成到 TuffCLI 工具链中**。
+Vite/Webpack 插件，用于导出插件元数据。当前聚焦构建插件能力，并保留 CLI 兼容入口。
 
 - **位置**: `packages/unplugin-export-plugin/`
-- **状态**: 活跃（作为 TuffCLI 底层）
-- **使用方式**: 通过 `tuff` 命令调用
+- **状态**: 活跃（构建插件主包；CLI 入口已降级为兼容 shim + deprecation）
+- **使用方式**:
+  - 常规用户：通过 `tuff` 命令调用（`@talex-touch/tuff-cli`）
+  - 兼容路径：旧入口仍可调用，但会提示迁移
 
 ## 使用指南
 
