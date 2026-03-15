@@ -1,0 +1,53 @@
+name: OmniPanel Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  omnipanel-gate:
+    name: OmniPanel Stable MVP Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (core-app)
+        run: |
+          pnpm -C "apps/core-app" run typecheck:node
+          pnpm -C "apps/core-app" run typecheck:web
+
+      - name: Lint (OmniPanel scoped)
+        run: |
+          pnpm -C "apps/core-app" exec eslint \
+            "src/shared/events/omni-panel.ts" \
+            "src/main/modules/omni-panel/**/*.ts" \
+            "src/renderer/src/views/omni-panel/**/*.{ts,vue}"
+
+      - name: Unit tests (OmniPanel scoped)
+        run: pnpm -C "apps/core-app" run test:omnipanel
+
+      - name: Build app for smoke
+        run: pnpm -C "apps/core-app" exec electron-vite build
+
+      - name: Smoke e2e (real window lifecycle)
+        run: xvfb-run -a pnpm -C "apps/core-app" run smoke:omnipanel

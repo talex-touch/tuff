@@ -10,6 +10,7 @@
     "build": "NODE_OPTIONS=--max-old-space-size=8192 nuxt build",
     "generate": "NODE_OPTIONS=--max-old-space-size=8192 nuxt generate",
     "analyze:size": "pnpm generate && node ./scripts/report-dist-size.mjs",
+    "channels:merge:ends": "node ./scripts/merge-ends-channels.mjs",
     "preview": "nuxt preview",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",

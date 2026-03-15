@@ -230,10 +230,10 @@ export async function getPilotAdminChannelCatalog(event: H3Event): Promise<Pilot
   const channels = decodeChannels(channelsRaw)
   const configuredDefault = await readSetting(event, DEFAULT_CHANNEL_KEY)
   const enabled = channels.filter(item => item.enabled)
-  const candidates = enabled.length > 0 ? enabled : channels
-  const defaultChannelId = candidates.find(item => item.id === configuredDefault)?.id || candidates[0]?.id || ''
+  const defaultCandidates = enabled.length > 0 ? enabled : channels
+  const defaultChannelId = defaultCandidates.find(item => item.id === configuredDefault)?.id || defaultCandidates[0]?.id || ''
   const catalog: PilotAdminChannelCatalog = {
-    channels: candidates,
+    channels,
     defaultChannelId,
   }
   context[CACHE_KEY] = catalog

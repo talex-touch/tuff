@@ -155,22 +155,28 @@
   - [ ] 增加 `search` 工具适配层（建议 `server/utils/pilot-tools/search-adapter.ts`），支持 `searxng` 与 `mock`。
   - [ ] 环境变量收口：`PILOT_SEARCH_PROVIDER`、`PILOT_SEARXNG_BASE_URL`、`PILOT_SEARXNG_API_KEY`、`PILOT_SEARXNG_ENGINES`、`PILOT_SEARXNG_TIMEOUT_MS`。
   - [ ] 工具事件与 Quota 协议对齐（`status_updated(calling/result)` + `verbose`），失败返回可消费降级结果而非白屏。
-- [ ] [P1] Pilot M2 API 迁移（运营后台常用，保持“先读后写”）：
-  - [ ] `tools/storage/*`
-  - [ ] `marketing/banner/*`
-  - [ ] `livechat/*`
-  - [ ] `feedback/*`
-  - [ ] `subscribe/*`
-  - [ ] `system/serve/stat`
-- [ ] [P2] Pilot M3 API 迁移（重 CRUD，按“list/get -> create/update/delete”推进）：
-  - [ ] `doc/*`
-  - [ ] `system/users/*`
-  - [ ] `system/roles/*`
-  - [ ] `system/menus/*`
-  - [ ] `system/depts/*`
-  - [ ] `system/dict/*`
-  - [ ] `system/tasks/*`
-  - [ ] `system/param-config/*`
+- [x] [P1] Pilot M2 API 迁移（2026-03-15 已完成，运营后台常用路径全部落地）：
+  - [x] `tools/storage/*`
+  - [x] `marketing/banner/*`
+  - [x] `livechat/*`（微信域豁免模式，可消费响应，不接真实微信网关）
+  - [x] `feedback/*`
+  - [x] `subscribe/*`
+  - [x] `system/serve/stat`
+- [x] [P2] Pilot M3 API 迁移（2026-03-15 已按批次完成，含支付/微信豁免策略）：
+  - [x] `doc/*`
+  - [x] `system/users/*`
+  - [x] `system/roles/*`
+  - [x] `system/menus/*`
+  - [x] `system/depts/*`
+  - [x] `system/dict/*`
+  - [x] `system/tasks/*`
+  - [x] `system/param-config/*`
+  - [x] `order/*` + `coupon/*` 保留协议，走本地模拟支付（下单 3 秒自动结算成功）
+  - [x] `auth/sms_*`、`auth/platform_login*`、`platform/qrcode*` 进入豁免模式（协议兼容）
+- [x] [P1] Pilot channels 合并（2026-03-15）：
+  - [x] Pilot DB 配置为 SoT，Ends 仅补齐缺失项（按 `id` 去重，冲突保留 Pilot）。
+  - [x] 新增 `POST /api/pilot/admin/channels/merge-ends` 管理端触发接口。
+  - [x] 新增一次性脚本：`pnpm -C "apps/pilot" run channels:merge:ends`。
 - [ ] [P1] Pilot 服务端集成测试：断线 pause / SSE heartbeat 丢失处理 / idempotency key / `fromSeq` 补播。
 - [ ] [P2] Pilot 长对话压测：checkpoint 连续性、丢包率、pause/resume 成功率。
 - [ ] [P2] 鉴权联调：Pilot 复用 Nexus 登录态（session/app token）与 quota 限流。

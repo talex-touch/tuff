@@ -1,14 +1,14 @@
 <script name="ThInput" setup lang="ts">
-import { encode } from 'gpt-tokenizer'
-import { useFloating } from '@floating-ui/vue'
 import type { ITip, ITipItem } from '../chat/input-tips'
-import { cur, tipsVisible } from '../chat/input-tips'
-import ThInputPlus from './ThInputPlus.vue'
-import type { InputPlusProperty } from './input'
-import InputHeaderFiles from './addon/InputHeaderFiles.vue'
-import { type IChatInnerItemMeta, IChatItemStatus, type IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
+import type { IChatInnerItemMeta, IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
+import { useFloating } from '@floating-ui/vue'
+import { encode } from 'gpt-tokenizer'
 import { $endApi } from '~/composables/api/base'
+import { IChatItemStatus } from '~/composables/api/base/v1/aigc/completion-types'
 import { globalOptions } from '~/constants'
+import { cur, tipsVisible } from '../chat/input-tips'
+import InputHeaderFiles from './addon/InputHeaderFiles.vue'
+import ThInputPlus from './ThInputPlus.vue'
 
 const props = defineProps<{
   status: IChatItemStatus
@@ -37,11 +37,12 @@ const input = ref<{
 })
 // const textInput = computed(() => input.value.filter((item: IInnerItemMeta) => item.type === 'text').map(item => item.value).join(''))
 const nonPlusMode = computed(() => props.templateEnable && !template.value?.title && (input.value.text.startsWith('/') || input.value.text.startsWith('@')))
-const fileUploaded = computed(() => input.value.files.filter(item => !item.extra?.sync).length === 0)
+const syncedFiles = computed(() => input.value.files.filter(item => item.extra?.sync && item.value))
+const hasUploadingFiles = computed(() => input.value.files.some(item => item.extra?.syncing))
 const inputHistories = useLocalStorage<string[]>('inputHistories', [])
 const inputHistoryIndex = ref(inputHistories.value.length - 1)
-const showSend = computed(() => input.value.text?.length || input.value.files?.length)
-const canSend = computed(() => fileUploaded.value && showSend.value && (props.status === IChatItemStatus.AVAILABLE || props.status === IChatItemStatus.CANCELLED || props.status === IChatItemStatus.ERROR))
+const showSend = computed(() => Boolean(input.value.text.trim()) || syncedFiles.value.length > 0)
+const canSend = computed(() => !hasUploadingFiles.value && showSend.value && (props.status === IChatItemStatus.AVAILABLE || props.status === IChatItemStatus.CANCELLED || props.status === IChatItemStatus.ERROR))
 
 function handleSend(event: Event) {
   if (!canSend.value)
@@ -66,10 +67,11 @@ function handleSend(event: Event) {
     ...item,
     extra: undefined,
   }))
+  const normalizedText = input.value.text || (files.length > 0 ? '(无正文内容)' : '')
 
   const textMeta: IInnerItemMeta = {
     type: 'text',
-    value: input.value.text,
+    value: normalizedText,
   }
 
   const inputMeta: IInnerItemMeta[] = [
@@ -224,6 +226,8 @@ function handleModelSelect(model: string) {
 
 const tokenLimit = computed(() => userStore.value.isLogin ? 8192 : 256)
 
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+
 function handleImageUpload(file: File) {
   const obj = reactive<any>({
     sync: false,
@@ -259,9 +263,9 @@ function handleImageUpload(file: File) {
     obj.img = img
     obj.url = dataUrl
 
-    // 多余10M的图片不允许传
-    if (file.size > 10 * 1024 * 1024) {
-      obj.error = '文件太大，无法上传'
+    // 超过 10MB 的图片不允许上传
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      obj.error = '文件太大，最多 10MB'
 
       return
     }
@@ -274,6 +278,13 @@ function handleImageUpload(file: File) {
       obj.syncing = false
 
       if (res.code === 200) {
+        const absoluteUrl = String(res.data?.url || '').trim()
+        if (absoluteUrl.startsWith('http://') || absoluteUrl.startsWith('https://')) {
+          obj.url = meta.value = absoluteUrl
+          obj.sync = true
+          return
+        }
+
         let endsUrl = globalOptions.getEndsUrl()
 
         // 去除endsUrl的最后一个/

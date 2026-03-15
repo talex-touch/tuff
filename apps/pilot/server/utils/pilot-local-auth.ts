@@ -335,3 +335,41 @@ export async function touchPilotLocalUserLogin(event: H3Event, userId: string): 
     WHERE user_id = ?1
   `).bind(normalizedUserId, now).run()
 }
+
+export async function updatePilotLocalUserProfile(
+  event: H3Event,
+  userId: string,
+  input: {
+    nickname?: string
+  },
+): Promise<PilotLocalUserRecord | null> {
+  const db = requirePilotDatabase(event)
+  const normalizedUserId = normalizeText(userId)
+  if (!normalizedUserId) {
+    return null
+  }
+
+  const existing = await getPilotLocalUserByUserId(event, normalizedUserId)
+  if (!existing) {
+    return null
+  }
+
+  const nickname = normalizePilotLocalNickname(input.nickname, existing.email)
+  const now = nowIso()
+  await db.prepare(`
+    UPDATE ${LOCAL_USER_TABLE}
+    SET nickname = ?2,
+        updated_at = ?3
+    WHERE user_id = ?1
+  `).bind(
+    normalizedUserId,
+    nickname,
+    now,
+  ).run()
+
+  return {
+    ...existing,
+    nickname,
+    updatedAt: now,
+  }
+}

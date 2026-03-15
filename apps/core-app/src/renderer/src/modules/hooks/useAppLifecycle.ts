@@ -9,7 +9,7 @@ import {
   initStorageChannel,
   initStorageTransport,
   isCoreBox,
-  tryUseChannel
+  useChannel
 } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { appSetting } from '~/modules/channel/storage/index'
@@ -81,12 +81,10 @@ export function useAppLifecycle() {
 
       preloadDebugStep('Initializing Touch SDK and storage channels', 0.05)
       const transport = useTuffTransport()
-      const channel = tryUseChannel()
-      const hasStorageChannel = (value: typeof channel): boolean =>
-        !!value && typeof value.send === 'function' && typeof value.unRegChannel === 'function'
-      if (hasStorageChannel(channel)) {
+      const channel = resolveStorageChannel()
+      if (channel) {
         initStorageTransport(transport)
-        initStorageChannel(channel as IStorageChannel)
+        initStorageChannel(channel)
       }
 
       preloadDebugStep('Initializing Sentry...', 0.01)
@@ -132,6 +130,18 @@ export function useAppLifecycle() {
     executeMainTask,
     executeCoreboxTask
   }
+}
+
+function resolveStorageChannel(): IStorageChannel | null {
+  try {
+    const channel = useChannel()
+    if (typeof channel.send === 'function' && typeof channel.unRegChannel === 'function') {
+      return channel as IStorageChannel
+    }
+  } catch {
+    // Channel may not be ready during early lifecycle warmup.
+  }
+  return null
 }
 
 /**

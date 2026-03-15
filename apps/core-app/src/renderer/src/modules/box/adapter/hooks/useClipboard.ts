@@ -1,9 +1,7 @@
 import type { IBoxOptions } from '..'
 import type { IClipboardHook, IClipboardItem, IClipboardOptions } from './types'
 import { ref } from 'vue'
-import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
-import { tryUseChannel } from '@talex-touch/utils/renderer'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
 import { isUrlLikeClipboardText } from './clipboard-text-utils'
@@ -13,7 +11,6 @@ const AUTOFILL_INPUT_TEXT_LIMIT = 80
 const AUTOFILL_TIMESTAMP_TTL = 60 * 60 * 1000
 const AUTOFILL_CLEANUP_PROBABILITY = 0.1
 const autoPastedTimestamps = new Set<number>()
-const pollingService = PollingService.getInstance()
 
 type HandlePasteOptions = {
   overrideDismissed?: boolean
@@ -342,32 +339,14 @@ export function useClipboard(
     } catch (error) {
       // TouchChannel not available yet, retry on next tick
       console.warn('[useClipboard] TouchChannel not available, retrying...', error)
+      initAttempted = false
       setTimeout(initClipboardChannel, 100)
     }
   }
 
   // Initialize after component is mounted
   if (hasWindow()) {
-    // Check if TouchChannel is available
-    if (tryUseChannel()) {
-      initClipboardChannel()
-    } else {
-      // Wait for channel to be injected
-      const checkTaskId = `clipboard.channel-check.${Date.now()}`
-      pollingService.register(
-        checkTaskId,
-        () => {
-          if (tryUseChannel()) {
-            pollingService.unregister(checkTaskId)
-            initClipboardChannel()
-          }
-        },
-        { interval: 50, unit: 'milliseconds' }
-      )
-      pollingService.start()
-      // Cleanup poller after 5 seconds
-      setTimeout(() => pollingService.unregister(checkTaskId), 5000)
-    }
+    initClipboardChannel()
   }
 
   return {

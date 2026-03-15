@@ -123,6 +123,7 @@ function onAttachmentSelected(event: Event) {
           :disabled="composerDisabled"
           :submitting="props.running"
           :attachments="props.composerAttachments"
+          allow-empty-send
           :placeholder="props.running ? 'Tuff Pilot 正在生成中...' : '输入消息...'"
           :min-rows="1"
           :max-rows="6"

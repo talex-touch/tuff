@@ -32,7 +32,15 @@ Options:
   -h, --help                    Show this help
 
 Environment fallback:
+  PILOT_PROJECT_DIR
+  PILOT_COMPOSE_FILE
+  PILOT_SERVICE_NAME
+  PILOT_IMAGE_REPO
   PILOT_IMAGE_TAG
+  PILOT_IMAGE_REF
+  PILOT_DEFAULT_IMAGE_REPO
+  PILOT_RUNTIME_ENV_FILES (comma separated, default: .env,.env.dev,.env.prod,.env.local)
+  PILOT_FORCE_RECREATE=true|false
   PILOT_BOOTSTRAP_COMPOSE=true|false
   PILOT_BOOTSTRAP_HTTP_PORT
   PILOT_HEALTHCHECK_URL
@@ -52,6 +60,16 @@ Runtime env passthrough (for compose variable substitution):
   NUXT_PUBLIC_NEXUS_ORIGIN
   PILOT_NEXUS_OAUTH_CLIENT_ID
   PILOT_NEXUS_OAUTH_CLIENT_SECRET
+  PILOT_ATTACHMENT_PROVIDER
+  PILOT_ATTACHMENT_PUBLIC_BASE_URL
+  PILOT_ATTACHMENT_SIGNING_SECRET
+  PILOT_MINIO_ENDPOINT
+  PILOT_MINIO_BUCKET
+  PILOT_MINIO_ACCESS_KEY
+  PILOT_MINIO_SECRET_KEY
+  PILOT_MINIO_REGION
+  PILOT_MINIO_FORCE_PATH_STYLE
+  PILOT_MINIO_PUBLIC_BASE_URL
 EOF
 }
 
@@ -166,6 +184,60 @@ normalize_image_ref() {
   raw="${raw#\'}"
   raw="${raw%\'}"
   printf '%s' "$raw"
+}
+
+trim_spaces() {
+  local value="$1"
+  value="$(printf '%s' "$value" | sed -E 's/^[[:space:]]+//;s/[[:space:]]+$//')"
+  printf '%s' "$value"
+}
+
+resolve_runtime_env_file_list() {
+  local raw_list="$1"
+  local item=""
+  local candidate=""
+  local -a temp_list=()
+
+  IFS=',' read -r -a temp_list <<< "$raw_list"
+  for item in "${temp_list[@]}"; do
+    item="$(trim_spaces "$item")"
+    if [[ -z "$item" ]]; then
+      continue
+    fi
+
+    if [[ "$item" == /* ]]; then
+      candidate="$item"
+    else
+      candidate="$PROJECT_DIR/$item"
+    fi
+
+    if [[ -f "$candidate" ]]; then
+      RUNTIME_ENV_FILE_PATHS+=("$candidate")
+    fi
+  done
+}
+
+load_runtime_env_files() {
+  local env_file=""
+  if [[ ${#RUNTIME_ENV_FILE_PATHS[@]} -eq 0 ]]; then
+    log "Runtime env files: <none>"
+    return
+  fi
+
+  log "Runtime env files: ${RUNTIME_ENV_FILE_PATHS[*]}"
+  for env_file in "${RUNTIME_ENV_FILE_PATHS[@]}"; do
+    set -a
+    # shellcheck disable=SC1090
+    source "$env_file"
+    set +a
+  done
+}
+
+validate_runtime_settings() {
+  if [[ -n "${PILOT_BOOTSTRAP_ADMIN_PASSWORD:-}" ]] && [[ ${#PILOT_BOOTSTRAP_ADMIN_PASSWORD} -lt 6 ]]; then
+    error "PILOT_BOOTSTRAP_ADMIN_PASSWORD must be at least 6 characters"
+    exit 1
+  fi
 }
 
 extract_image_ref_from_compose_service() {
@@ -339,6 +411,16 @@ services:
       PILOT_NEXUS_OAUTH_CLIENT_ID: \${PILOT_NEXUS_OAUTH_CLIENT_ID:-}
       PILOT_NEXUS_OAUTH_CLIENT_SECRET: \${PILOT_NEXUS_OAUTH_CLIENT_SECRET:-}
       PILOT_EXECUTOR_DEBUG: \${PILOT_EXECUTOR_DEBUG:-0}
+      PILOT_ATTACHMENT_PROVIDER: \${PILOT_ATTACHMENT_PROVIDER:-memory}
+      PILOT_ATTACHMENT_PUBLIC_BASE_URL: \${PILOT_ATTACHMENT_PUBLIC_BASE_URL:-}
+      PILOT_ATTACHMENT_SIGNING_SECRET: \${PILOT_ATTACHMENT_SIGNING_SECRET:-}
+      PILOT_MINIO_ENDPOINT: \${PILOT_MINIO_ENDPOINT:-}
+      PILOT_MINIO_BUCKET: \${PILOT_MINIO_BUCKET:-}
+      PILOT_MINIO_ACCESS_KEY: \${PILOT_MINIO_ACCESS_KEY:-}
+      PILOT_MINIO_SECRET_KEY: \${PILOT_MINIO_SECRET_KEY:-}
+      PILOT_MINIO_REGION: \${PILOT_MINIO_REGION:-us-east-1}
+      PILOT_MINIO_FORCE_PATH_STYLE: \${PILOT_MINIO_FORCE_PATH_STYLE:-true}
+      PILOT_MINIO_PUBLIC_BASE_URL: \${PILOT_MINIO_PUBLIC_BASE_URL:-}
 
   postgres:
     image: postgres:16-alpine
@@ -383,17 +465,20 @@ resolve_compose_cmd() {
   exit 1
 }
 
-PROJECT_DIR="$(pwd)"
-COMPOSE_FILE="docker-compose.yml"
-SERVICE_NAME="pilot"
-IMAGE_REPO=""
+PROJECT_DIR="${PILOT_PROJECT_DIR:-$(pwd)}"
+COMPOSE_FILE="${PILOT_COMPOSE_FILE:-docker-compose.yml}"
+SERVICE_NAME="${PILOT_SERVICE_NAME:-pilot}"
+IMAGE_REPO="${PILOT_IMAGE_REPO:-}"
 IMAGE_TAG="${PILOT_IMAGE_TAG:-pilot-latest}"
-IMAGE_REF=""
-DEFAULT_IMAGE_REPO="ghcr.io/talex-touch/tuff-pilot"
+IMAGE_REF="${PILOT_IMAGE_REF:-}"
+DEFAULT_IMAGE_REPO="${PILOT_DEFAULT_IMAGE_REPO:-ghcr.io/talex-touch/tuff-pilot}"
+RUNTIME_ENV_FILES="${PILOT_RUNTIME_ENV_FILES:-.env,.env.dev,.env.prod,.env.local}"
+RUNTIME_ENV_FILE_PATHS=()
 HEALTHCHECK_URL="${PILOT_HEALTHCHECK_URL:-}"
 HEALTHCHECK_ATTEMPTS="${PILOT_HEALTHCHECK_ATTEMPTS:-20}"
 HEALTHCHECK_INTERVAL_SEC="${PILOT_HEALTHCHECK_INTERVAL_SEC:-3}"
 ROLLBACK_ON_FAILURE="$(to_bool "${PILOT_ROLLBACK_ON_FAILURE:-true}")"
+FORCE_RECREATE="$(to_bool "${PILOT_FORCE_RECREATE:-true}")"
 PULL_ONLY="false"
 BOOTSTRAP_COMPOSE="$(to_bool "${PILOT_BOOTSTRAP_COMPOSE:-false}")"
 BOOTSTRAP_HTTP_PORT="${PILOT_BOOTSTRAP_HTTP_PORT:-3300}"
@@ -512,6 +597,9 @@ if [[ ! -f "$COMPOSE_FILE" ]]; then
 fi
 
 ensure_image_target "$(resolve_compose_file_path)"
+resolve_runtime_env_file_list "$RUNTIME_ENV_FILES"
+load_runtime_env_files
+validate_runtime_settings
 
 compose_base=("${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE")
 current_container_id="$("${compose_base[@]}" ps -q "$SERVICE_NAME" 2>/dev/null || true)"
@@ -532,6 +620,50 @@ write_override() {
 services:
   $SERVICE_NAME:
     image: $image_ref
+EOF
+
+  if [[ ${#RUNTIME_ENV_FILE_PATHS[@]} -gt 0 ]]; then
+    {
+      echo "    env_file:"
+      for env_file in "${RUNTIME_ENV_FILE_PATHS[@]}"; do
+        printf '      - "%s"\n' "$env_file"
+      done
+    } >> "$override_file"
+  fi
+
+  cat >> "$override_file" <<'EOF'
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3300}
+      NUXT_HOST: ${NUXT_HOST:-0.0.0.0}
+      NUXT_PORT: ${NUXT_PORT:-3300}
+      PILOT_DB_DRIVER: ${PILOT_DB_DRIVER:-}
+      PILOT_DB_FILE: ${PILOT_DB_FILE:-}
+      PILOT_POSTGRES_URL: ${PILOT_POSTGRES_URL:-}
+      PILOT_REDIS_URL: ${PILOT_REDIS_URL:-}
+      PILOT_JWT_ACCESS_SECRET: ${PILOT_JWT_ACCESS_SECRET:-}
+      PILOT_JWT_REFRESH_SECRET: ${PILOT_JWT_REFRESH_SECRET:-}
+      PILOT_COOKIE_SECRET: ${PILOT_COOKIE_SECRET:-}
+      PILOT_CONFIG_ENCRYPTION_KEY: ${PILOT_CONFIG_ENCRYPTION_KEY:-}
+      PILOT_BOOTSTRAP_ADMIN_EMAIL: ${PILOT_BOOTSTRAP_ADMIN_EMAIL:-}
+      PILOT_BOOTSTRAP_ADMIN_PASSWORD: ${PILOT_BOOTSTRAP_ADMIN_PASSWORD:-}
+      PILOT_EXECUTOR_DEBUG: ${PILOT_EXECUTOR_DEBUG:-0}
+      NUXT_PUBLIC_NEXUS_ORIGIN: ${NUXT_PUBLIC_NEXUS_ORIGIN:-}
+      PILOT_NEXUS_OAUTH_CLIENT_ID: ${PILOT_NEXUS_OAUTH_CLIENT_ID:-}
+      PILOT_NEXUS_OAUTH_CLIENT_SECRET: ${PILOT_NEXUS_OAUTH_CLIENT_SECRET:-}
+      PILOT_NEXUS_INTERNAL_ORIGIN: ${PILOT_NEXUS_INTERNAL_ORIGIN:-}
+      NUXT_PILOT_BASE_URL: ${NUXT_PILOT_BASE_URL:-}
+      NUXT_PILOT_API_KEY: ${NUXT_PILOT_API_KEY:-}
+      PILOT_ATTACHMENT_PROVIDER: ${PILOT_ATTACHMENT_PROVIDER:-memory}
+      PILOT_ATTACHMENT_PUBLIC_BASE_URL: ${PILOT_ATTACHMENT_PUBLIC_BASE_URL:-}
+      PILOT_ATTACHMENT_SIGNING_SECRET: ${PILOT_ATTACHMENT_SIGNING_SECRET:-}
+      PILOT_MINIO_ENDPOINT: ${PILOT_MINIO_ENDPOINT:-}
+      PILOT_MINIO_BUCKET: ${PILOT_MINIO_BUCKET:-}
+      PILOT_MINIO_ACCESS_KEY: ${PILOT_MINIO_ACCESS_KEY:-}
+      PILOT_MINIO_SECRET_KEY: ${PILOT_MINIO_SECRET_KEY:-}
+      PILOT_MINIO_REGION: ${PILOT_MINIO_REGION:-us-east-1}
+      PILOT_MINIO_FORCE_PATH_STYLE: ${PILOT_MINIO_FORCE_PATH_STYLE:-true}
+      PILOT_MINIO_PUBLIC_BASE_URL: ${PILOT_MINIO_PUBLIC_BASE_URL:-}
 EOF
 }
 
@@ -571,7 +703,11 @@ if [[ "$PULL_ONLY" == "true" ]]; then
   exit 0
 fi
 
-compose_with_override up -d "$SERVICE_NAME"
+if [[ "$FORCE_RECREATE" == "true" ]]; then
+  compose_with_override up -d --force-recreate "$SERVICE_NAME"
+else
+  compose_with_override up -d "$SERVICE_NAME"
+fi
 
 if check_health; then
   log "Deployment succeeded"
@@ -595,7 +731,11 @@ fi
 log "Rolling back to previous image: $previous_image"
 write_override "$previous_image"
 compose_with_override pull "$SERVICE_NAME" || true
-compose_with_override up -d "$SERVICE_NAME"
+if [[ "$FORCE_RECREATE" == "true" ]]; then
+  compose_with_override up -d --force-recreate "$SERVICE_NAME"
+else
+  compose_with_override up -d "$SERVICE_NAME"
+fi
 
 if check_health; then
   log "Rollback succeeded"

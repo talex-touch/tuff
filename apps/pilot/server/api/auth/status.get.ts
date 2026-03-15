@@ -1,5 +1,6 @@
 import { requirePilotAuth } from '../../utils/auth'
 import { resolvePilotAdmin } from '../../utils/pilot-admin-auth'
+import { getPilotCompatEntity } from '../../utils/pilot-compat-store'
 import { ensurePilotLocalAuthSchema, getPilotLocalUserByUserId, isPilotLocalUserId } from '../../utils/pilot-local-auth'
 import { quotaOk } from '../../utils/quota-api'
 
@@ -22,6 +23,7 @@ export default defineEventHandler(async (event) => {
     }
   }
   const admin = await resolvePilotAdmin(event)
+  const profilePatch = await getPilotCompatEntity(event, 'account.profile', auth.userId)
   const roles = admin.isAdmin ? ['admin'] : []
   const permissions = admin.isAdmin ? ['pilot:admin'] : []
 
@@ -31,8 +33,8 @@ export default defineEventHandler(async (event) => {
     userId: auth.userId,
     profile: isLogin
       ? {
-          nickname: localProfile?.nickname || `Pilot-${auth.userId.slice(-6)}`,
-          avatar: '',
+          nickname: String(profilePatch?.nickname || localProfile?.nickname || `Pilot-${auth.userId.slice(-6)}`),
+          avatar: String(profilePatch?.avatar || ''),
           email: localProfile?.email || '',
           roles,
           permissions,

@@ -15,7 +15,6 @@ import type {
   TriggerFeatureRequest
 } from '@talex-touch/utils/plugin/sdk/types'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { tryUseChannel } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 
@@ -62,34 +61,70 @@ class PluginSDK {
   private initializeEventListener(): void {
     if (this.initialized) return
 
-    if (!tryUseChannel()) {
-      this.scheduleEventListenerInit()
-      return
-    }
+    const localDisposers: Array<() => void> = []
 
-    this.transportDisposers.push(
-      pluginTransportSdk.onStateChanged((event) => {
-        this.subscribers.forEach((callback) => {
-          try {
-            callback(event)
-          } catch (error) {
-            console.error('[PluginSDK] Error in state change subscriber:', error)
+    try {
+      localDisposers.push(
+        pluginTransportSdk.onStateChanged((event) => {
+          this.subscribers.forEach((callback) => {
+            try {
+              callback(event)
+            } catch (error) {
+              console.error('[PluginSDK] Error in state change subscriber:', error)
+            }
+          })
+
+          if (
+            event.type === 'added' ||
+            event.type === 'updated' ||
+            event.type === 'status-changed' ||
+            event.type === 'readme-updated' ||
+            event.type === 'issue-created' ||
+            event.type === 'issue-updated' ||
+            event.type === 'issue-deleted' ||
+            event.type === 'issues-reset'
+          ) {
+            const pluginName = event.type === 'added' ? event.plugin.name : event.name
+            const callbacks = this.pluginSubscribers.get(pluginName)
+
+            if (callbacks && callbacks.size > 0) {
+              this.get(pluginName)
+                .then((plugin) => {
+                  if (plugin) {
+                    callbacks.forEach((callback) => {
+                      try {
+                        callback(plugin)
+                      } catch (error) {
+                        console.error('[PluginSDK] Error in plugin-specific subscriber:', error)
+                      }
+                    })
+                  }
+                })
+                .catch((error) => {
+                  console.error('[PluginSDK] Failed to fetch plugin data for subscribers:', error)
+                })
+            }
           }
         })
+      )
 
-        if (
-          event.type === 'added' ||
-          event.type === 'updated' ||
-          event.type === 'status-changed' ||
-          event.type === 'readme-updated' ||
-          event.type === 'issue-created' ||
-          event.type === 'issue-updated' ||
-          event.type === 'issue-deleted' ||
-          event.type === 'issues-reset'
-        ) {
-          const pluginName = event.type === 'added' ? event.plugin.name : event.name
+      localDisposers.push(
+        pluginTransportSdk.onStatusUpdated(({ plugin: pluginName, status }) => {
+          const event: PluginStateEvent = {
+            type: 'status-changed',
+            name: pluginName,
+            status
+          }
+
+          this.subscribers.forEach((callback) => {
+            try {
+              callback(event)
+            } catch (error) {
+              console.error('[PluginSDK] Error in status update subscriber:', error)
+            }
+          })
+
           const callbacks = this.pluginSubscribers.get(pluginName)
-
           if (callbacks && callbacks.size > 0) {
             this.get(pluginName)
               .then((plugin) => {
@@ -98,60 +133,37 @@ class PluginSDK {
                     try {
                       callback(plugin)
                     } catch (error) {
-                      console.error('[PluginSDK] Error in plugin-specific subscriber:', error)
+                      console.error(
+                        '[PluginSDK] Error in plugin-specific status subscriber:',
+                        error
+                      )
                     }
                   })
                 }
               })
               .catch((error) => {
-                console.error('[PluginSDK] Failed to fetch plugin data for subscribers:', error)
+                console.error(
+                  '[PluginSDK] Failed to fetch plugin data for status subscribers:',
+                  error
+                )
               })
           }
-        }
-      })
-    )
-
-    this.transportDisposers.push(
-      pluginTransportSdk.onStatusUpdated(({ plugin: pluginName, status }) => {
-        const event: PluginStateEvent = {
-          type: 'status-changed',
-          name: pluginName,
-          status
-        }
-
-        this.subscribers.forEach((callback) => {
-          try {
-            callback(event)
-          } catch (error) {
-            console.error('[PluginSDK] Error in status update subscriber:', error)
-          }
         })
+      )
 
-        const callbacks = this.pluginSubscribers.get(pluginName)
-        if (callbacks && callbacks.size > 0) {
-          this.get(pluginName)
-            .then((plugin) => {
-              if (plugin) {
-                callbacks.forEach((callback) => {
-                  try {
-                    callback(plugin)
-                  } catch (error) {
-                    console.error('[PluginSDK] Error in plugin-specific status subscriber:', error)
-                  }
-                })
-              }
-            })
-            .catch((error) => {
-              console.error(
-                '[PluginSDK] Failed to fetch plugin data for status subscribers:',
-                error
-              )
-            })
+      this.transportDisposers.push(...localDisposers)
+      this.initialized = true
+    } catch (error) {
+      localDisposers.forEach((dispose) => {
+        try {
+          dispose()
+        } catch {
+          // ignore listener cleanup errors during retry init
         }
       })
-    )
-
-    this.initialized = true
+      console.warn('[PluginSDK] Transport not ready, scheduling listener init retry', error)
+      this.scheduleEventListenerInit()
+    }
   }
 
   private scheduleEventListenerInit(): void {
@@ -168,10 +180,11 @@ class PluginSDK {
           this.initRetryTaskId = null
           return
         }
-        if (tryUseChannel()) {
+
+        this.initializeEventListener()
+        if (this.initialized) {
           pollingService.unregister(taskId)
           this.initRetryTaskId = null
-          this.initializeEventListener()
         }
       },
       { interval: 100, unit: 'milliseconds' }

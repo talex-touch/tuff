@@ -1,34 +1,27 @@
 <script setup lang="ts" name="SettingEverything">
 import { TxButton } from '@talex-touch/tuffex'
-import { tryUseChannel } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { toast } from 'vue-sonner'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import {
+  everythingStatusEvent,
+  everythingTestEvent,
+  everythingToggleEvent,
+  type EverythingBackendType,
+  type EverythingStatusResponse
+} from '../../../../../shared/events/everything'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
 const { t } = useI18n()
-const channel = tryUseChannel()
+const transport = useTuffTransport()
 
-type EverythingBackend = 'sdk-napi' | 'cli' | 'unavailable'
-
-interface EverythingStatus {
-  enabled: boolean
-  available: boolean
-  backend: EverythingBackend
-  version: string | null
-  esPath: string | null
-  error: string | null
-  lastBackendError: string | null
-  fallbackChain: EverythingBackend[]
-  lastChecked: number | null
-}
-
-const everythingStatus = ref<EverythingStatus | null>(null)
+const everythingStatus = ref<EverythingStatusResponse | null>(null)
 const isChecking = ref(false)
 const isTesting = ref(false)
 
-function mapBackendLabel(backend: EverythingBackend): string {
+function mapBackendLabel(backend: EverythingBackendType): string {
   if (backend === 'sdk-napi') return t('settings.settingEverything.backendSdk')
   if (backend === 'cli') return t('settings.settingEverything.backendCli')
   return t('settings.settingEverything.backendUnavailable')
@@ -37,11 +30,11 @@ function mapBackendLabel(backend: EverythingBackend): string {
 let statusCheckInterval: NodeJS.Timeout | null = null
 
 async function checkStatus() {
-  if (isChecking.value || !channel) return
+  if (isChecking.value) return
 
   isChecking.value = true
   try {
-    const status = await channel.send('everything:status')
+    const status = await transport.send(everythingStatusEvent)
     everythingStatus.value = status
   } catch (error) {
     console.error('[SettingEverything] Failed to get status:', error)
@@ -51,12 +44,12 @@ async function checkStatus() {
 }
 
 async function toggleEverything() {
-  if (!everythingStatus.value || !channel) return
+  if (!everythingStatus.value) return
 
   const newEnabled = !everythingStatus.value.enabled
 
   try {
-    await channel.send('everything:toggle', { enabled: newEnabled })
+    await transport.send(everythingToggleEvent, { enabled: newEnabled })
     everythingStatus.value.enabled = newEnabled
 
     toast.success(
@@ -76,11 +69,11 @@ async function toggleEverything() {
 }
 
 async function testSearch() {
-  if (isTesting.value || !channel) return
+  if (isTesting.value) return
 
   isTesting.value = true
   try {
-    const result = await channel.send('everything:test')
+    const result = await transport.send(everythingTestEvent)
 
     if (result.success) {
       toast.success(

@@ -17,6 +17,7 @@ import { networkClient } from '@talex-touch/utils/network'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const ASSISTANT_CHUNK_FLUSH_MS = 48
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 45_000
 const DEFAULT_STREAM_MAX_DURATION_MS = 8 * 60_000
 const STREAM_IDLE_TIMEOUT_MIN_MS = 10_000
@@ -185,7 +186,7 @@ function getMessageAttachments(message: PilotMessage): PilotMessageAttachmentMet
   return normalizeMessageAttachments(message.metadata?.attachments)
 }
 
-function formatAttachmentSummary(attachments: PilotMessageAttachmentMeta[]): string {
+function formatAttachmentSummary(attachments: PilotMessageAttachmentMeta[], withDivider = true): string {
   if (attachments.length <= 0) {
     return ''
   }
@@ -195,6 +196,10 @@ function formatAttachmentSummary(attachments: PilotMessageAttachmentMeta[]): str
     const mimeType = String(item.mimeType || '').trim() || (item.type === 'image' ? 'image/*' : 'application/octet-stream')
     return `- ${name} (${mimeType})`
   })
+
+  if (!withDivider) {
+    return `附件:\n${lines.join('\n')}`
+  }
 
   return `\n\n---\n附件:\n${lines.join('\n')}`
 }
@@ -396,8 +401,9 @@ export function usePilotChatPage() {
     return messages.value.map((item) => {
       const stamp = Date.parse(item.createdAt)
       const messageAttachments = getMessageAttachments(item)
+      const baseContent = String(item.content || '')
       const attachmentSummary = item.role === 'user'
-        ? formatAttachmentSummary(messageAttachments)
+        ? formatAttachmentSummary(messageAttachments, Boolean(baseContent.trim()))
         : ''
       const imageAttachments = messageAttachments.reduce<NonNullable<ChatMessageModel['attachments']>>((list, attachment) => {
         if (!isImageAttachment(attachment)) {
@@ -418,7 +424,7 @@ export function usePilotChatPage() {
       return {
         id: item.id,
         role: item.role,
-        content: `${item.content}${attachmentSummary}`,
+        content: `${baseContent}${attachmentSummary}`,
         createdAt: Number.isFinite(stamp) ? stamp : undefined,
         attachments: imageAttachments,
       }
@@ -1096,6 +1102,7 @@ export function usePilotChatPage() {
     const sessionId = await ensureActiveSession()
     const beforeSeq = lastSeq.value
     const hasTurnMessage = Boolean(String(payload.message || '').trim())
+      || (Array.isArray(payload.attachments) && payload.attachments.length > 0)
     const isConversationFollowStream = !hasTurnMessage
 
     abortSessionStream(sessionId, 'restart_same_session')
@@ -1182,20 +1189,21 @@ export function usePilotChatPage() {
 
   async function sendMessage() {
     const content = clampInputText(draft.value)
-    if (!content) {
+    const outgoingAttachments = [...pendingAttachments.value]
+    if (!content && outgoingAttachments.length <= 0) {
       return
     }
+    const displayContent = content || (outgoingAttachments.length > 0 ? '(无正文内容)' : '')
 
     const sessionId = await ensureActiveSession()
     if (isSessionRunning(sessionId)) {
       return
     }
-    const outgoingAttachments = [...pendingAttachments.value]
 
     messages.value.push({
       id: makeId('msg_user'),
       role: 'user',
-      content,
+      content: displayContent,
       createdAt: new Date().toISOString(),
       metadata: outgoingAttachments.length > 0
         ? {
@@ -1246,6 +1254,10 @@ export function usePilotChatPage() {
   }
 
   async function uploadAttachment(file: File) {
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      throw new Error('附件大小不能超过 10MB')
+    }
+
     const sessionId = await ensureActiveSession()
     const base64 = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader()

@@ -41,6 +41,17 @@ cp "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.env.example" "/opt/1pan
 - `NUXT_PUBLIC_NEXUS_ORIGIN`
 - `PILOT_NEXUS_OAUTH_CLIENT_ID`
 - `PILOT_NEXUS_OAUTH_CLIENT_SECRET`
+- `PILOT_ATTACHMENT_PROVIDER` (`memory|auto|s3`, default `memory`, recommend `memory` first)
+- `PILOT_ATTACHMENT_PUBLIC_BASE_URL`
+- `PILOT_ATTACHMENT_SIGNING_SECRET` (optional; falls back to `PILOT_COOKIE_SECRET` when empty)
+- Configure the following only when `PILOT_ATTACHMENT_PROVIDER=s3`:
+- `PILOT_MINIO_ENDPOINT`
+- `PILOT_MINIO_BUCKET`
+- `PILOT_MINIO_ACCESS_KEY`
+- `PILOT_MINIO_SECRET_KEY`
+- `PILOT_MINIO_REGION` (default `us-east-1`)
+- `PILOT_MINIO_FORCE_PATH_STYLE` (default `true`)
+- `PILOT_MINIO_PUBLIC_BASE_URL` (optional, bucket root URL)
 
 ### Deployment vars
 

@@ -16,6 +16,7 @@ const props = withDefaults(defineProps<ChatComposerProps>(), {
   minRows: 3,
   sendOnEnter: true,
   sendOnMetaEnter: true,
+  allowEmptySend: false,
   sendButtonText: 'Send',
   showAttachmentButton: false,
   attachmentButtonText: 'Attach',
@@ -34,16 +35,24 @@ const attachmentItems = computed<ChatComposerAttachment[]>(() => {
   return Array.isArray(props.attachments) ? props.attachments : []
 })
 const hasCustomToolbar = computed(() => Boolean(slots.toolbar))
+const canSend = computed(() => {
+  if (props.disabled || props.submitting) {
+    return false
+  }
+  const text = (value.value ?? '').trim()
+  if (text) {
+    return true
+  }
+  return Boolean(props.allowEmptySend && attachmentItems.value.length > 0)
+})
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 void textareaRef.value
 
 function trySend(): void {
-  if (props.disabled || props.submitting)
+  if (!canSend.value)
     return
   const text = (value.value ?? '').trim()
-  if (!text)
-    return
   emit('send', { text })
 }
 
@@ -134,10 +143,10 @@ function onKeydown(e: KeyboardEvent): void {
       </div>
 
       <div class="tx-chat-composer__actions-right">
-        <slot name="actions" :send="trySend" :disabled="disabled || submitting" />
+        <slot name="actions" :send="trySend" :disabled="!canSend" />
         <TxButton
           type="primary"
-          :disabled="disabled || submitting"
+          :disabled="!canSend"
           @click="trySend"
         >
           {{ sendButtonText }}

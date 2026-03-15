@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ThCheckBox from '~/components/checkbox/ThCheckBox.vue'
-import { emailLogin, emailRegister } from '~/composables/api/auth'
+import { emailLogin } from '~/composables/api/auth'
 import { hydratePilotSessionUser } from '~/composables/user'
 import LoadingIcon from '../icon/LoadingIcon.vue'
 import LoginCore from './login/LoginCore.vue'
@@ -15,12 +15,11 @@ const emits = defineEmits<{
 
 const route = useRoute()
 const show = useVModel(props, 'show', emits)
-const activeTab = ref<'email-login' | 'email-register' | 'sms'>('email-login')
+const activeTab = ref<'email-login' | 'sms'>('email-login')
 
 const authForm = reactive({
   email: '',
   password: '',
-  nickname: '',
   agreement: true,
   loading: false,
 })
@@ -48,7 +47,7 @@ function isLikelyEmail(email: string): boolean {
   return domain.includes('.')
 }
 
-function validateAuthInput(options: { register: boolean }): string | null {
+function validateAuthInput(): string | null {
   if (!authForm.agreement) {
     return '请先同意服务协议和隐私协议'
   }
@@ -66,10 +65,6 @@ function validateAuthInput(options: { register: boolean }): string | null {
     return '密码长度需不超过 128 位'
   }
 
-  if (options.register && authForm.nickname.trim().length > 32) {
-    return '昵称长度需不超过 32 位'
-  }
-
   return null
 }
 
@@ -85,7 +80,7 @@ async function refreshAfterLogin() {
 }
 
 async function submitEmailLogin() {
-  const errorMessage = validateAuthInput({ register: false })
+  const errorMessage = validateAuthInput()
   if (errorMessage) {
     ElMessage.warning(errorMessage)
     return
@@ -102,34 +97,6 @@ async function submitEmailLogin() {
   }
   catch (error: any) {
     ElMessage.error(error?.message || '登录失败，请稍后重试')
-  }
-  finally {
-    authForm.loading = false
-  }
-}
-
-async function submitEmailRegister() {
-  const errorMessage = validateAuthInput({ register: true })
-  if (errorMessage) {
-    ElMessage.warning(errorMessage)
-    return
-  }
-
-  authForm.loading = true
-  try {
-    const response: any = await emailRegister(
-      normalizeEmail(authForm.email),
-      authForm.password,
-      authForm.nickname.trim(),
-    )
-    if (response.code !== 200) {
-      ElMessage.error(response.message || '注册失败，请稍后重试')
-      return
-    }
-    await refreshAfterLogin()
-  }
-  catch (error: any) {
-    ElMessage.error(error?.message || '注册失败，请稍后重试')
   }
   finally {
     authForm.loading = false
@@ -161,7 +128,9 @@ function handleComingSoonClick() {
 
               <el-form>
                 <el-input v-model="authForm.email" autocomplete="email" placeholder="name@example.com" size="large">
-                  <template #prepend>邮箱</template>
+                  <template #prepend>
+                    邮箱
+                  </template>
                 </el-input>
                 <el-input
                   v-model="authForm.password"
@@ -170,7 +139,9 @@ function handleComingSoonClick() {
                   placeholder="至少 6 位密码"
                   size="large"
                 >
-                  <template #prepend>密码</template>
+                  <template #prepend>
+                    密码
+                  </template>
                 </el-input>
                 <el-button
                   v-wave
@@ -179,38 +150,11 @@ function handleComingSoonClick() {
                   type="primary"
                   @click="submitEmailLogin"
                 >
-                  登录
+                  登录 / 自动注册
                 </el-button>
-              </el-form>
-            </el-tab-pane>
-            <el-tab-pane name="email-register" label="邮箱注册">
-              <br>
-
-              <el-form>
-                <el-input v-model="authForm.nickname" maxlength="32" placeholder="默认使用邮箱前缀" size="large">
-                  <template #prepend>昵称</template>
-                </el-input>
-                <el-input v-model="authForm.email" autocomplete="email" placeholder="name@example.com" size="large">
-                  <template #prepend>邮箱</template>
-                </el-input>
-                <el-input
-                  v-model="authForm.password"
-                  autocomplete="new-password"
-                  type="password"
-                  placeholder="至少 6 位密码"
-                  size="large"
-                >
-                  <template #prepend>密码</template>
-                </el-input>
-                <el-button
-                  v-wave
-                  :loading="authForm.loading"
-                  size="large"
-                  type="primary"
-                  @click="submitEmailRegister"
-                >
-                  注册并登录
-                </el-button>
+                <p class="auto-register-hint">
+                  首次使用该邮箱登录时会自动创建账号
+                </p>
               </el-form>
             </el-tab-pane>
             <el-tab-pane name="sms" label="短信登录">
@@ -264,6 +208,12 @@ function handleComingSoonClick() {
 </template>
 
 <style lang="scss">
+.auto-register-hint {
+  margin: 0.5rem 0 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
 .coming-soon-panel {
   display: flex;
   flex-direction: column;

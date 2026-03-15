@@ -17,6 +17,8 @@ interface UploadRequestBody {
   contentBase64?: string
 }
 
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+
 function safeFileName(value: string): string {
   return value.replace(/[^\w.-]/g, '_').slice(0, 80) || 'attachment.bin'
 }
@@ -43,6 +45,12 @@ export default defineEventHandler(async (event) => {
   const name = safeFileName(String(body?.name || 'attachment.bin'))
   const mimeType = String(body?.mimeType || 'application/octet-stream').slice(0, 120)
   const size = Number.isFinite(body?.size) ? Math.max(0, Number(body?.size)) : 0
+  if (size > MAX_ATTACHMENT_BYTES) {
+    throw createError({
+      statusCode: 413,
+      statusMessage: 'file is too large (max 10MB)',
+    })
+  }
 
   const attachmentId = randomUUID()
   const objectKey = `pilot/${userId}/${sessionId}/${attachmentId}/${name}`
@@ -69,9 +77,33 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  let binary: Uint8Array
+  try {
+    binary = decodeBase64ToBytes(body.contentBase64)
+  }
+  catch {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'contentBase64 is invalid',
+    })
+  }
+
+  if (binary.byteLength <= 0) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'file is empty',
+    })
+  }
+
+  if (binary.byteLength > MAX_ATTACHMENT_BYTES) {
+    throw createError({
+      statusCode: 413,
+      statusMessage: 'file is too large (max 10MB)',
+    })
+  }
+
   let storedRef = ''
   try {
-    const binary = decodeBase64ToBytes(body.contentBase64)
     const stored = await putPilotAttachmentObject(event, {
       key: objectKey,
       bytes: binary,
@@ -79,10 +111,18 @@ export default defineEventHandler(async (event) => {
     })
     storedRef = stored.ref
   }
-  catch {
+  catch (error) {
+    console.error('[pilot][attachment] upload failed', {
+      sessionId,
+      attachmentId,
+      objectKey,
+      mimeType,
+      size,
+      error: error instanceof Error ? error.message : String(error),
+    })
     throw createError({
-      statusCode: 400,
-      statusMessage: 'contentBase64 is invalid',
+      statusCode: 503,
+      statusMessage: 'Attachment storage is temporarily unavailable.',
     })
   }
 

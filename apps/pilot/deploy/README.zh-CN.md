@@ -41,6 +41,17 @@ cp "/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel.env.example" "/opt/1pan
 - `NUXT_PUBLIC_NEXUS_ORIGIN`
 - `PILOT_NEXUS_OAUTH_CLIENT_ID`
 - `PILOT_NEXUS_OAUTH_CLIENT_SECRET`
+- `PILOT_ATTACHMENT_PROVIDER`（`memory|auto|s3`，默认 `memory`，建议先用 `memory` 跑通）
+- `PILOT_ATTACHMENT_PUBLIC_BASE_URL`
+- `PILOT_ATTACHMENT_SIGNING_SECRET`（可选；为空时回退 `PILOT_COOKIE_SECRET`）
+- 启用 `s3` 时再配置：
+- `PILOT_MINIO_ENDPOINT`
+- `PILOT_MINIO_BUCKET`
+- `PILOT_MINIO_ACCESS_KEY`
+- `PILOT_MINIO_SECRET_KEY`
+- `PILOT_MINIO_REGION`（默认 `us-east-1`）
+- `PILOT_MINIO_FORCE_PATH_STYLE`（默认 `true`）
+- `PILOT_MINIO_PUBLIC_BASE_URL`（可选，bucket 根地址）
 
 ### 部署变量
 
