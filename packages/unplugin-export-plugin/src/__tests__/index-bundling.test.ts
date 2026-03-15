@@ -19,6 +19,7 @@ async function createProject({
     version: '1.0.0',
   })
   await fs.writeJson(path.join(root, 'manifest.json'), {
+    id: 'com.demo.plugin',
     name: 'demo-plugin',
     version: '1.0.0',
     build: manifestBuild,
