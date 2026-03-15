@@ -11,7 +11,7 @@
 | `docs/plan-prd/README.md` | 已同步 | 增加 `v2.4.7` 发版推进里程碑与执行入口。 |
 | `docs/plan-prd/TODO.md` | 已同步 | 增加 `v2.4.7` 发布清单（门禁/资产/发布动作）。 |
 | `docs/plan-prd/01-project/CHANGES.md` | 已同步 | 记录本次“文档梳理 + 2.4.7 发版推进”变更。 |
-| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步 | 新增 `v2.4.7` GA 收口里程碑（Gate A/B/C/E 完成，Gate D 进行中）。 |
+| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步 | 新增 `v2.4.7` GA 收口里程碑（Gate A/B/C/D/E 完成）。 |
 | `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` | 已同步 | 新增 `v2.4.7` 发版门禁执行记录（含 CI 自动回填与历史豁免边界）。 |
 
 ## 2. v2.4.7 发布门禁（Release Gates）
@@ -21,7 +21,7 @@
 | Gate A: 版本基线 | 根包与 core-app 版本一致且为稳定版 | ✅ Done（historical） | 历史 `v2.4.7` 发布窗口已满足；当前 `2.4.8-beta.3` 工作区仅用于后续开发，不再阻塞历史 Gate。 |
 | Gate B: 发布链路 | `build-and-release.yml`、Nexus release 同步、CLI npm 自动发布链路可用 | ✅ Done | 发布主线已收敛，Cloudflare Pages 使用平台侧 Git 部署。 |
 | Gate C: 质量门禁 | lint/typecheck 通过或阻塞项明确可豁免 | ✅ Done | C1~C4 已完成：`packages/tuff-native`/`apps/nexus` lint 通过，全仓 typecheck + eslint 复扫通过。 |
-| Gate D: 发布资产 | release notes（`zh/en`）与资产清单完备 | 🟡 In Progress | 当前只保留“资产元数据一致性”动作：本地 dry-run 对账 + GitHub CI `sync-nexus-release` 自动写入（已接入 backfill，且仅 `v2.4.7` 启用）。 |
+| Gate D: 发布资产 | release notes（`zh/en`）与资产清单完备 | ✅ Done（historical backfill） | `Build and Release` run `23091014958`（`workflow_dispatch + sync_tag=v2.4.7`）已完成自动写入，manifest 与 sha256 已补齐。 |
 | Gate E: 发布动作 | 创建并推送 `v2.4.7` tag，触发 CI 发布 | ✅ Done（historical） | 历史动作已完成：tag 已存在、Nexus release 已 `published`、`latest?channel=RELEASE` 命中 `v2.4.7`；不做重发版。 |
 
 ## 2.1 风险门禁补充（与 Gate E 绑定）
@@ -33,22 +33,22 @@
   - `signature` 缺口按历史豁免处理（`Accepted waiver`）：GitHub 原始 `v2.4.7` 无 `.sig` 资产，manifest 也无 signature 字段；
   - 豁免仅对 `v2.4.7` 生效，`>=2.4.8` 恢复 `manifest + sha256 + signatureUrl` 严格要求。
 
-## 3. 当前阻塞（必须处理）
+## 3. 当前结论（已收口）
 
-1. 远端只读核对显示 release notes/notesHtml 已为 `{ zh, en }`（与 `v2.4.7` 对齐），该项已通过。
-2. Gate D 剩余唯一动作：完成 Nexus assets 元数据一致性闭环（优先 `sha256` + manifest 资产记录）。
-3. `v2.4.7` 签名缺口按历史豁免登记，不作为本轮 Gate D 关闭阻塞。
+1. Gate D 已完成：`v2.4.7` 的 manifest 资产记录与 `sha256` 元数据已在 Nexus 侧回填闭环。
+2. Gate E 保持 `Done (historical)`：历史 tag/release/latest 证据链成立，不做重发版。
+3. `v2.4.7` 签名缺口继续按历史豁免（Accepted），且明确不扩展到 `>=2.4.8`。
 
-## 3.1 Gate D 本地预检记录（2026-03-14）
+## 3.1 Gate D 验收记录（2026-03-14）
 
-- 预检命令：`node scripts/check-release-gates.mjs --tag v2.4.7 --stage gate-d --base-url https://tuff.tagzxia.com`
-- 结果：`pass`（notes zh/en 非空、`P0=0`）；`manifest` 为 `pending`（本地未获取 release 资产）。
-- Gate E 硬门禁演练：`node scripts/check-release-gates.mjs --tag v2.4.7 --stage gate-e --base-url https://tuff.tagzxia.com --strict true` 返回 `fail`（版本基线漂移 + signature/sha256/manifest 缺失）。
-- 远端只读核对（公开接口）：
+- 执行方式：GitHub Actions `Build and Release` 手动触发，参数 `workflow_dispatch + sync_tag=v2.4.7`。
+- 运行记录：run `23091014958`，`Sync Nexus Release` 全步骤成功（含 backfill）。
+- 复核命令：`node scripts/check-release-gates.mjs --tag v2.4.7 --stage gate-d --base-url https://tuff.tagzxia.com` 结果 `pass`。
+- 远端核对（公开接口）：
   - `GET /api/releases/v2.4.7?assets=true`：`status=published`，`notes/notesHtml` 均为 `{ zh, en }`。
-  - `GET /api/releases/v2.4.7/assets`：仅 3 个平台资产（win32/linux/darwin x64），`sha256/signatureUrl` 为空，且无 `tuff-release-manifest.json`。
-  - `GET /api/releases/v2.4.7/signature/{platform}/{arch}`：当前返回 `404`。
+  - `GET /api/releases/v2.4.7/assets`：当前 4 个资产，包含 `tuff-release-manifest.json`，且资产 `sha256` 已完整。
   - `GET /api/releases/v2.4.7/download/{platform}/{arch}`：当前返回 `302`（可跳转下载）。
+  - `GET /api/releases/v2.4.7/signature/{platform}/{arch}`：当前返回 `404`（历史豁免范围内）。
 
 ## 3.2 历史 Gate E 证据（2026-03-14 核对）
 
@@ -68,10 +68,8 @@
 
 > 备注：`docs/reports/quality-scan-2026-02-26.md` 为历史快照，最新口径以本清单 Gate C 复扫结果为准。
 
-## 4. 建议执行顺序（最小可行）
+## 4. 后续主线（Gate D 收口后）
 
-1. 执行 Gate D 本地对账：`node scripts/backfill-release-assets-from-github.mjs --tag v2.4.7 --base-url https://tuff.tagzxia.com --dry-run`（确认差异）。
-2. 触发 GitHub Actions `build-and-release.yml` 的 `sync-nexus-release` 路径完成自动同步写入（已接入 `Backfill Nexus asset metadata from GitHub manifest`，仅 `v2.4.7` 启用；不做本地手工 API key 写入）。手动触发时可使用 `workflow_dispatch` 并传入 `sync_tag=v2.4.7` 走“仅同步”路径。
-3. 同步后复核：`node scripts/check-release-gates.mjs --tag v2.4.7 --stage gate-d --base-url https://tuff.tagzxia.com`，确保结果 `pass`。
-4. 在 `RISK-REGISTER` 与本清单同步记录 `v2.4.7` 签名历史豁免（Accepted）。
-5. Gate D 关闭后主线切换到 `View Mode 安全收口`，不再执行 `v2.4.7` Gate E 发布动作。
+1. 切换到 `View Mode 安全收口`（安全 URL / 生产协议限制）并作为当前 P1 主线。
+2. `Nexus 设备授权风控` 作为下一阶段后置项推进。
+3. `v2.4.9` 起恢复严格门禁：`manifest + sha256 + signatureUrl` 全量完整，不沿用 `v2.4.7` 豁免。

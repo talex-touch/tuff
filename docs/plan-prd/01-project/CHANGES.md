@@ -15,6 +15,8 @@
 - 支持 env 键：`PILOT_ATTACHMENT_PROVIDER`、`PILOT_ATTACHMENT_PUBLIC_BASE_URL`、`PILOT_ATTACHMENT_SIGNING_SECRET`、`PILOT_MINIO_*`。
 - 签名密钥优先读取 `PILOT_ATTACHMENT_SIGNING_SECRET`，为空时回退 `PILOT_COOKIE_SECRET`。
 - 当 provider 设为 `s3/minio` 但配置缺失或上传失败时，服务端自动回退到 `memory` 并输出日志，优先保证附件功能可用。
+- 上传大小限制统一为 **10MB**（旧 `tools/upload` 与新 `pilot` 会话附件上传接口都生效），前端同步拦截超限文件。
+- 旧上传接口补充绝对 `url` 返回字段，前端优先使用该地址，减少自拼接 URL 导致的访问错误。
 
 **修改文件**:
 - `apps/pilot/app/composables/usePilotChatPage.ts`
@@ -80,6 +82,25 @@
 - `.github/workflows/build-and-release.yml`
 - `docs/plan-prd/TODO.md`
 - `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Release：v2.4.7 Gate D 收口完成（CI 手动同步）
+
+**变更类型**: 发布门禁闭环 / 文档状态收口
+
+**描述**:
+- 通过 GitHub Actions `Build and Release`（run `23091014958`）执行 `workflow_dispatch + sync_tag=v2.4.7`，`Sync Nexus Release` 全流程成功。
+- `v2.4.7` 远端资产从 3 项收口到 4 项，已包含 `tuff-release-manifest.json`，且资产 `sha256` 已补齐。
+- 六份主文档口径统一更新为：`Gate A/B/C/D/E = Done`（其中 `Gate E` historical、`Gate D` historical backfill）。
+- 主线顺序同步切换为：`View Mode 安全收口 -> Nexus 设备授权风控`。
+
+**修改文件**:
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ### Docs：Release assets 核对清单切换到 v2.4.9 严格口径

@@ -128,7 +128,7 @@
 - Prompt 渲染来源必须优先走 registry binding，缺失时允许回退并记录可迁移默认值。
 - 高风险工具调用必须走审批票据，不得绕过 `high/critical` 审批门禁。
 
-### 6.4 v2.4.7 发版门禁跟踪（2026-02-26）
+### 6.4 v2.4.7 发版门禁跟踪（2026-03-14）
 
 **现状指标**
 | 项目 | 结果 | 结论 |
@@ -136,7 +136,7 @@
 | 版本基线 | 历史 `v2.4.7` 发布窗口已满足；当前工作区为 `2.4.8-beta.3` | 作为历史 Gate 记录，不再阻塞当前主线 |
 | 发布链路 | `build-and-release` + Nexus release + CLI npm 自动发布 | 已完成 |
 | 质量门禁 | lint/typecheck 阻塞项已清零（C1~C4） | 已完成 |
-| 发布资产结构 | notes/notesHtml `{ zh, en }` | Gate D 仅剩元数据回填：`sha256 + manifest`；写入统一由 GitHub CI `sync-nexus-release` 执行（已接入 backfill，且仅 `v2.4.7` 启用）；`signature` 对 `v2.4.7` 按历史豁免 |
+| 发布资产结构 | notes/notesHtml `{ zh, en }` + assets manifest + sha256 | Gate D 已完成（run `23091014958`）；`signature` 对 `v2.4.7` 按历史豁免 |
 | tag 发布动作 | `v2.4.7` | 历史已执行（tag 存在，release 已 published，latest 命中） |
 
 **质量约束落地**
@@ -144,6 +144,7 @@
 - 发布资产必须满足多语言结构约束（`notes`/`notesHtml` 仅 `zh|en`）。
 - 发布执行以 `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md` 作为单一追踪入口，避免口径分叉。
 - Gate D/E 统一预检命令：`node scripts/check-release-gates.mjs --tag v2.4.7 --stage gate-d|gate-e --base-url https://tuff.tagzxia.com`。
+- Gate D 收口证据：GitHub Actions `Build and Release` run `23091014958`（`workflow_dispatch + sync_tag=v2.4.7`）成功。
 - 历史豁免边界：`v2.4.7` 允许 `signature` 缺口豁免；`>=2.4.8` 必须恢复 `manifest + sha256 + signatureUrl` 严格门禁。
 
 ### 6.5 Pilot × Intelligence（2026-03-07）
