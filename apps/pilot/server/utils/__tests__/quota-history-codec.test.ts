@@ -63,4 +63,27 @@ describe('quota-history-codec', () => {
 
     expect(text).toBe('https://example.com/only-image.png')
   })
+
+  it('split user turns 会导致只读取最后一条 turn（文本与图片应同 turn 发送）', () => {
+    const turn = extractLatestQuotaUserTurn([
+      {
+        role: 'user',
+        content: [{ type: 'text', value: '请帮我识别这张图' }],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'image', value: 'https://example.com/split-image.png' }],
+      },
+    ])
+
+    expect(turn.text).toBe('')
+    expect(turn.attachments).toEqual([
+      {
+        type: 'image',
+        value: 'https://example.com/split-image.png',
+        name: undefined,
+        data: undefined,
+      },
+    ])
+  })
 })

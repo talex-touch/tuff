@@ -47,6 +47,9 @@ interface StreamConnectionContext {
   disconnected: boolean
 }
 
+const INLINE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+const INLINE_IMAGE_TOTAL_MAX_BYTES = 12 * 1024 * 1024
+
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -152,6 +155,7 @@ async function resolveMessageAttachments(
   const records = await storeRuntime.listAttachments(sessionId)
   const recordMap = new Map(records.map(item => [item.id, item]))
   const result: UserMessageAttachment[] = []
+  let inlineImageBytes = 0
 
   for (const item of inputAttachments) {
     const attachmentId = String(item?.id || '').trim()
@@ -169,7 +173,6 @@ async function resolveMessageAttachments(
       attachmentId: record.id,
       ref: record.ref,
     })
-    const hasExternalPreviewUrl = /^https?:\/\//i.test(previewUrl)
 
     const attachment: UserMessageAttachment = {
       id: record.id,
@@ -181,11 +184,18 @@ async function resolveMessageAttachments(
       previewUrl,
     }
 
-    if (attachment.type === 'image' && !hasExternalPreviewUrl) {
+    if (attachment.type === 'image') {
       const object = await getPilotAttachmentObject(event, record.ref)
       if (object && object.mimeType.startsWith('image/')) {
-        const encoded = encodeBytesToBase64(object.bytes)
-        attachment.dataUrl = `data:${object.mimeType};base64,${encoded}`
+        const objectBytes = Number(object.bytes.byteLength || 0)
+        const canInline = objectBytes > 0
+          && objectBytes <= INLINE_IMAGE_MAX_BYTES
+          && (inlineImageBytes + objectBytes) <= INLINE_IMAGE_TOTAL_MAX_BYTES
+        if (canInline) {
+          const encoded = encodeBytesToBase64(object.bytes)
+          attachment.dataUrl = `data:${object.mimeType};base64,${encoded}`
+          inlineImageBytes += objectBytes
+        }
       }
     }
 

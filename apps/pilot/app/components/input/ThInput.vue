@@ -243,6 +243,7 @@ function handleImageUpload(file: File) {
   const meta = reactive({
     type: 'image',
     value: '',
+    data: '',
     extra: obj,
   }) as any
 
@@ -262,6 +263,7 @@ function handleImageUpload(file: File) {
 
     obj.img = img
     obj.url = dataUrl
+    meta.data = dataUrl
 
     // 超过 10MB 的图片不允许上传
     if (file.size > MAX_ATTACHMENT_BYTES) {

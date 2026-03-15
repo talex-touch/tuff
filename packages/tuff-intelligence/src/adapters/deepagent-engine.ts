@@ -150,7 +150,7 @@ function formatAttachmentSize(size: number | undefined): string {
   return `${size} B`
 }
 
-function resolveAttachmentImageUrl(attachment: UserMessageAttachment): string {
+export function resolveAttachmentImageUrl(attachment: UserMessageAttachment): string {
   const candidates = [
     attachment.dataUrl,
     attachment.previewUrl,
@@ -194,7 +194,7 @@ function buildAttachmentAwareText(baseText: string, attachments: UserMessageAtta
   return `Please analyze the provided attachments.${metadataBlock}`
 }
 
-function buildChatMessageContent(baseText: string, attachments: UserMessageAttachment[]): unknown {
+export function buildChatMessageContent(baseText: string, attachments: UserMessageAttachment[]): unknown {
   if (attachments.length <= 0) {
     return String(baseText || '').trim()
   }
@@ -251,7 +251,7 @@ function buildDeepAgentMessages(state: TurnState): DeepAgentInvokeMessage[] {
   return messages
 }
 
-function buildResponsesInput(state: TurnState): Array<Record<string, unknown>> {
+export function buildResponsesInput(state: TurnState): Array<Record<string, unknown>> {
   const input: Array<Record<string, unknown>> = []
   const attachments = normalizeTurnAttachments(state)
   const lastMessageIndex = state.messages.length - 1

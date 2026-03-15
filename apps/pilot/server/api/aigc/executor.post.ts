@@ -98,8 +98,8 @@ const STREAM_HEARTBEAT_IDLE_MS = 12_000
 const SNAPSHOT_PERSIST_INTERVAL_MS = 0
 const STREAM_DELTA_EMIT_CHUNK_SIZE = 32
 const TITLE_STREAM_CHUNK_SIZE = 6
-const INLINE_IMAGE_MAX_BYTES = 256 * 1024
-const INLINE_IMAGE_TOTAL_MAX_BYTES = 1024 * 1024
+const INLINE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+const INLINE_IMAGE_TOTAL_MAX_BYTES = 12 * 1024 * 1024
 
 function resolveExecutorModel(rawModel: unknown, fallbackModel: string): string {
   const candidate = String(rawModel || '').trim()
@@ -363,6 +363,20 @@ function parseQuotaUploadIdFromUrl(input: string): string {
   }
 }
 
+function estimateDataUrlBytes(dataUrl: string): number {
+  const match = String(dataUrl || '').match(/^data:[^;]+;base64,([A-Za-z0-9+/=\s]+)$/i)
+  if (!match) {
+    return 0
+  }
+  const base64 = match[1].replace(/\s+/g, '')
+  if (!base64) {
+    return 0
+  }
+  const padding = (base64.match(/=+$/)?.[0].length) || 0
+  const size = Math.floor(base64.length * 3 / 4) - padding
+  return Number.isFinite(size) && size > 0 ? size : 0
+}
+
 function resolveLegacyAttachments(
   event: H3Event,
   rawAttachments: QuotaUserTurnAttachment[],
@@ -399,6 +413,18 @@ function resolveLegacyAttachments(
         continue
       }
 
+      const dataUrl = String(item.data || '').trim()
+      const dataUrlBytes = estimateDataUrlBytes(dataUrl)
+      const canInlineDataUrl = dataUrl.startsWith('data:image/')
+        && dataUrlBytes > 0
+        && dataUrlBytes <= INLINE_IMAGE_MAX_BYTES
+        && (inlineImageBytes + dataUrlBytes) <= INLINE_IMAGE_TOTAL_MAX_BYTES
+      if (canInlineDataUrl) {
+        attachment.dataUrl = dataUrl
+        inlineImageCount += 1
+        inlineImageBytes += dataUrlBytes
+      }
+
       const uploadId = parseQuotaUploadIdFromUrl(rawValue)
       if (uploadId) {
         const object = getQuotaUploadObject(uploadId)
@@ -409,7 +435,7 @@ function resolveLegacyAttachments(
             && object.data.byteLength <= INLINE_IMAGE_MAX_BYTES
             && (inlineImageBytes + object.data.byteLength) <= INLINE_IMAGE_TOTAL_MAX_BYTES
 
-          if (shouldInline) {
+          if (shouldInline && !attachment.dataUrl) {
             attachment.dataUrl = `data:${object.mimeType};base64,${Buffer.from(object.data).toString('base64')}`
             inlineImageCount += 1
             inlineImageBytes += object.data.byteLength

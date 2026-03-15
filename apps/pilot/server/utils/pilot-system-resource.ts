@@ -79,13 +79,54 @@ function toResource(value: string): PilotSystemResource | null {
   return RESOURCE_CONFIG_MAP[resource] ? resource : null
 }
 
-function buildTree(list: Array<Record<string, any>>): Array<Record<string, any>> {
-  const mapped = list.map((item) => {
+function normalizeTreeRows(list: Array<Record<string, any>>): Array<Record<string, any>> {
+  const byId = new Map<string, Record<string, any>>()
+
+  const walk = (item: Record<string, any>, fallbackParentId: string | null = null) => {
+    const id = normalizeText(item.id)
+    if (!id) {
+      return
+    }
+
+    const explicitParentId = normalizeText(item.parentId)
+    const parentId = explicitParentId || fallbackParentId || null
+
     const current: Record<string, any> = {
+      ...item,
+      id,
+      parentId,
+      children: [],
+    }
+    const previous = byId.get(id)
+    byId.set(id, previous
+      ? { ...previous, ...current, children: [] }
+      : current)
+
+    const children = Array.isArray(item.children) ? item.children : []
+    for (const child of children) {
+      if (!child || typeof child !== 'object' || Array.isArray(child)) {
+        continue
+      }
+      walk(child as Record<string, any>, id)
+    }
+  }
+
+  for (const item of list) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue
+    }
+    walk(item)
+  }
+
+  return Array.from(byId.values())
+}
+
+export function buildTree(list: Array<Record<string, any>>): Array<Record<string, any>> {
+  const mapped = normalizeTreeRows(list).map((item) => {
+    return {
       ...item,
       children: [],
     }
-    return current
   })
   const byId = new Map<string, Record<string, any>>()
   for (const item of mapped) {
@@ -95,7 +136,7 @@ function buildTree(list: Array<Record<string, any>>): Array<Record<string, any>>
   const roots: Array<Record<string, any>> = []
   for (const item of mapped) {
     const parentId = normalizeText(item.parentId)
-    if (!parentId || parentId === '-1') {
+    if (!parentId || parentId === '-1' || parentId === normalizeText(item.id)) {
       roots.push(item)
       continue
     }
