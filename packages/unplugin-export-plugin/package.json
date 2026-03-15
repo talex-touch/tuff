@@ -84,6 +84,7 @@
     "unplugin": "^1.16.1"
   },
   "dependencies": {
+    "@talex-touch/tuff-cli": "workspace:*",
     "@talex-touch/utils": "workspace:*"
   },
   "devDependencies": {
