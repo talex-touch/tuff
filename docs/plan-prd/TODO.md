@@ -1,18 +1,19 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2026-03-14
+> 更新时间: 2026-03-15
 
 ---
 
-## 🧭 单一口径矩阵（2.4.8 / 2026-03-14）
+## 🧭 单一口径矩阵（2.4.9 / 2026-03-15）
 
 | 主题 | 统一口径 | 下一动作 | 强制同步文档 |
 | --- | --- | --- | --- |
-| 2.4.8 主线 Gate | OmniPanel 稳定版 MVP 已作为 Gate 主线落地（含真实窗口 smoke CI） | `SDK Hard-Cut E~F` 与 `v2.4.7 Gate D/E` 已完成，推进 `View Mode 安全收口` | `TODO` / `README` / `INDEX` / `CHANGES` |
-| v2.4.7 Gate 状态 | Gate A/B/C/D/E = ✅ Done（Gate E 为 historical；Gate D 为 historical backfill） | 保留证据链（run `23091014958` + assets/manifest/sha256）并切换 View Mode 主线 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
+| 2.4.9 主线 Gate | 插件完善主线执行中：`权限中心 Phase 5` 已完成（SQLite 主存储 + 安装权限确认）；`View Mode 安全闭环 + 类型增强`、`CLI 切换收口`已进入同版本收口 | 完成 `View Mode` 边界回归 + `CLI` 回归（help/create/build/dev/publish/validate）并同步主文档验收 | `TODO` / `README` / `INDEX` / `CHANGES` |
+| 2.4.8 主线 Gate（historical） | OmniPanel 稳定版 MVP 已落地（含真实窗口 smoke CI） | 仅保留历史验收记录，不再作为当前开发主线 | `TODO` / `README` / `INDEX` / `CHANGES` |
+| v2.4.7 Gate 状态 | Gate A/B/C/D/E = ✅ Done（Gate E 为 historical；Gate D 为 historical backfill） | 保留证据链（run `23091014958` + assets/manifest/sha256），作为历史版本闭环档案 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
 | Pilot Runtime 主路径 | Node Server + Postgres/Redis + JWT Cookie，Cloudflare 相关仅保留历史归档 | 持续补强 M0/M1 回归与部署脚本 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
-| 文档治理 | 更新时间统一到 2026-03-14；`next-edit` 仅作草稿池，不作为发布判定来源 | 每周例行同步 6 份主文档状态/日期/下一动作 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
+| 文档治理 | 更新时间统一到 2026-03-15；`next-edit` 仅作草稿池，不作为发布判定来源 | 每周例行同步 6 份主文档状态/日期/下一动作 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
 
 ---
 
@@ -226,14 +227,14 @@
 - [x] Nexus Examples 单一来源策略收口（文档只保留索引，源码统一在 `examples/`）（`plan/2026-01-21_13-22-14-nexus-examples-section.md`）
 - [ ] Transport MessagePort 支持已在 SDK 落地，业务高频通道迁移待推进（`plan/2026-01-21_03-01-57-transport-message-port.md`）
 - [ ] TuffTransport 全量迁移与 async 任务模型，清理 sendSync（renderer 仍保留旧 Channel）（`plan/2026-01-21_01-29-05-transport-migration-async.md`）
-- [ ] CLI refine：主流程已实现，`tuff validate` 与 manifest 校验待补（`plan/2026-01-20_18-48-52-plugin-cli-refine.md`）
+- [x] CLI refine：主流程已实现，`tuff validate` 与 manifest 校验已补齐（2026-03-15）（`plan/2026-01-20_18-48-52-plugin-cli-refine.md`）
 
 ### 🧰 Tuff CLI 分包与迁移
 - [ ] 抽出 `@talex-touch/tuff-cli-core`（core/types 迁移与依赖关系整理）（`docs/plan-prd/06-ecosystem/TUFFCLI-SPLIT-PLAN.md`）
-- [ ] 新建 `@talex-touch/tuff-cli` 接管 `tuff` bin（旧包保留 shim + 提示迁移）
+- [x] 新建 `@talex-touch/tuff-cli` 接管 `tuff` bin（旧包保留 shim + 提示迁移）（2026-03-15）
 - [ ] 兼容包 `@talex-touch/tuffcli` 对外导出 `defineConfig`/types（对齐 PRD 示例）
 - [ ] 文档与示例统一新包名（PRD + Nexus docs + README）
-- [ ] CLI 回归验证：help/create/build/dev/publish + dry-run
+- [x] CLI 回归验证：help/create/build/dev/publish/validate 最小烟雾 + 非交互失败码校验（2026-03-15）
 
 ---
 
@@ -483,7 +484,7 @@
 
 ---
 
-### 2. 插件市场多源支持 🟡 进行中
+### 2. 插件市场多源支持 ✅ 已验收
 **来源**: `plan-prd/03-features/plugin/plugin-store-provider-frontend-plan.md`
 **工期**: 5.5 天
 
@@ -495,7 +496,7 @@
 - [x] 扩展 Provider - NPM (npm-package-provider.ts) ✅ (2025-12-10)
 - [x] 扩展 Provider - GitHub/Gitee (repository-provider.ts) ✅ (2025-12-11)
 - [x] NPM Provider 完整实现 ✅ (2025-12-11)
-- [ ] 验收 & 文档 (0.5d)
+- [x] 验收 & 文档 (0.5d)（2026-03-15，见 `docs/plan-prd/docs/PLUGIN-STORE-MULTI-SOURCE-ACCEPTANCE-2026-03-15.md`）
 
 #### 2.1 ✅ Nexus 联动与账号登录优化 (2025-12-09)
 - [x] Nexus app-callback 页面 - 浏览器登录后回调到 App
@@ -537,16 +538,16 @@
   - [x] usePermissionRegistry hooks
   - [x] 插件加载器权限解析
 
-- [ ] **Phase 5**: 测试与优化 (2天)
-  - [ ] SQLite 迁移与数据库脚本（PermissionStore 当前为 JSON）
-  - [ ] 安装时权限确认弹窗
+- [x] **Phase 5**: 测试与优化 (2天) ✅ (2026-03-15)
+  - [x] SQLite 迁移与数据库脚本（PermissionStore 已切换 SQLite 主存储，JSON 仅迁移备份）
+  - [x] 安装时权限确认弹窗（always/session/deny）
 
 **已实现文件**:
 - `packages/utils/permission/types.ts` - 权限类型定义
 - `packages/utils/permission/registry.ts` - 17 种权限注册
 - `packages/utils/permission/index.ts` - 核心函数
 - `apps/core-app/src/main/modules/permission/index.ts` - PermissionModule
-- `apps/core-app/src/main/modules/permission/permission-store.ts` - JSON 存储
+- `apps/core-app/src/main/modules/permission/permission-store.ts` - SQLite 主存储 + JSON 迁移/回退
 - `apps/core-app/src/main/modules/permission/permission-guard.ts` - 运行时拦截
 - `apps/core-app/src/main/modules/permission/channel-guard.ts` - Channel wrapper
 - `packages/utils/renderer/hooks/use-permission.ts` - Vue hooks
@@ -572,17 +573,17 @@
 - [ ] **Phase 1**: 结构拆分 (2天)
   - [ ] 拆分 plugin-core.ts
 
-- [ ] **Phase 2**: 类型增强 (1天)
-  - [ ] 增强 IPluginWebview (改为 Map)
-  - [ ] 增强 IPluginDev (添加 source)
-  - [ ] 扩展 PluginIssue (code/suggestion/timestamp)
+- [x] **Phase 2**: 类型增强 (1天) ✅ (2026-03-15，兼容增强)
+  - [x] 增强 IPluginWebview (改为 Map)
+  - [x] 增强 IPluginDev (添加 source)
+  - [x] 扩展 PluginIssue (code/suggestion/timestamp)
 
-- [ ] **Phase 3**: 核心改造 (4-5天)
-  - [ ] 插件加载逻辑 - 远程 manifest 覆盖
+- [x] **Phase 3**: 核心改造 (4-5天) ✅ (2026-03-15，安全闭环范围)
+  - [x] 插件加载逻辑 - 远程 manifest 覆盖
   - [x] Dev Server 健康探测机制 ✅ (2025-12-11) - 断连通知而非关闭窗口
-  - [ ] CoreBoxManager 安全 URL 构造
-  - [ ] 协议限制 (生产环境禁止 http)
-  - [ ] Hash 路由强制检查
+  - [x] CoreBoxManager 安全 URL 构造（通过 `plugin-view-loader` 统一路径规范化）
+  - [x] 协议限制 (生产环境禁止 http/https 远程 dev.source)
+  - [x] Hash 路由强制检查
 
 - [ ] **Phase 4**: 配置插件 (2-3天)
   - [ ] touch-translation 插件 dev 配置
@@ -994,6 +995,6 @@
 
 ---
 
-**文档版本**: v1.14
-**更新时间**: 2026-03-14
+**文档版本**: v1.15
+**更新时间**: 2026-03-15
 **维护者**: Development Team

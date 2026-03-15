@@ -54,6 +54,22 @@ function getTranslator(): (key: string, params?: Record<string, unknown>) => str
     if (key === 'store.installation.beforeExitPrompt') {
       return '仍有插件安装进行中，确认要退出吗？'
     }
+    if (key === 'store.installation.permissionConfirmTitle') {
+      return '插件权限确认'
+    }
+    if (key === 'store.installation.permissionConfirmMessage') {
+      const permissions = typeof params?.permissions === 'string' ? params.permissions : ''
+      return `插件 “${params?.name ?? ''}” 需要以下权限：\n${permissions}\n\n请选择授权方式。`
+    }
+    if (key === 'store.installation.permissionAllowAlways') {
+      return '始终允许'
+    }
+    if (key === 'store.installation.permissionAllowSession') {
+      return '仅本次会话'
+    }
+    if (key === 'store.installation.permissionReject') {
+      return '拒绝安装'
+    }
     return key
   })
   return t
@@ -112,33 +128,90 @@ async function sendDecision(response: PluginInstallConfirmResponse): Promise<voi
 async function handleConfirm(request: PluginInstallConfirmRequest): Promise<void> {
   const t = getTranslator()
   const name = request.pluginName || request.pluginId || request.source || 'plugin'
+  const confirmKind = request.kind || 'source'
 
   let decisionMade = false
 
-  await forTouchTip(
-    t('store.installation.confirmTitle'),
-    t('store.installation.confirmMessage', { name }),
-    [
-      {
-        content: t('store.installation.confirmInstall'),
-        type: 'success',
-        onClick: async () => {
-          decisionMade = true
-          await sendDecision({ taskId: request.taskId, decision: 'accept' })
-          return true
+  if (confirmKind === 'permissions') {
+    const required = request.permissions?.required || []
+    const reasons = request.permissions?.reasons || {}
+    const permissionLines = required
+      .map((permissionId) => {
+        const reason = reasons[permissionId]
+        return reason ? `- ${permissionId} (${reason})` : `- ${permissionId}`
+      })
+      .join('\n')
+
+    await forTouchTip(
+      t('store.installation.permissionConfirmTitle'),
+      t('store.installation.permissionConfirmMessage', {
+        name,
+        permissions: permissionLines || '- (none)'
+      }),
+      [
+        {
+          content: t('store.installation.permissionAllowAlways'),
+          type: 'success',
+          onClick: async () => {
+            decisionMade = true
+            await sendDecision({
+              taskId: request.taskId,
+              decision: 'accept',
+              grantMode: 'always'
+            })
+            return true
+          }
+        },
+        {
+          content: t('store.installation.permissionAllowSession'),
+          type: 'default',
+          onClick: async () => {
+            decisionMade = true
+            await sendDecision({
+              taskId: request.taskId,
+              decision: 'accept',
+              grantMode: 'session'
+            })
+            return true
+          }
+        },
+        {
+          content: t('store.installation.permissionReject'),
+          type: 'warning',
+          onClick: async () => {
+            decisionMade = true
+            await sendDecision({ taskId: request.taskId, decision: 'reject' })
+            return true
+          }
         }
-      },
-      {
-        content: t('store.installation.confirmReject'),
-        type: 'warning',
-        onClick: async () => {
-          decisionMade = true
-          await sendDecision({ taskId: request.taskId, decision: 'reject' })
-          return true
+      ]
+    )
+  } else {
+    await forTouchTip(
+      t('store.installation.confirmTitle'),
+      t('store.installation.confirmMessage', { name }),
+      [
+        {
+          content: t('store.installation.confirmInstall'),
+          type: 'success',
+          onClick: async () => {
+            decisionMade = true
+            await sendDecision({ taskId: request.taskId, decision: 'accept' })
+            return true
+          }
+        },
+        {
+          content: t('store.installation.confirmReject'),
+          type: 'warning',
+          onClick: async () => {
+            decisionMade = true
+            await sendDecision({ taskId: request.taskId, decision: 'reject' })
+            return true
+          }
         }
-      }
-    ]
-  )
+      ]
+    )
+  }
 
   if (!decisionMade) {
     await sendDecision({ taskId: request.taskId, decision: 'reject' })

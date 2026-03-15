@@ -35,12 +35,20 @@ export interface PluginInstallConfirmRequest {
   pluginId?: string
   source?: string
   official?: boolean
+  kind?: 'source' | 'permissions'
+  permissions?: {
+    required: string[]
+    optional: string[]
+    reasons?: Record<string, string>
+  }
 }
 
 export type PluginInstallConfirmDecision = 'accept' | 'reject'
+export type PluginInstallPermissionGrantMode = 'always' | 'session'
 
 export interface PluginInstallConfirmResponse {
   taskId: string
   decision: PluginInstallConfirmDecision
   reason?: string
+  grantMode?: PluginInstallPermissionGrantMode
 }

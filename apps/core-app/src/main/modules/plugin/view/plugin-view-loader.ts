@@ -75,6 +75,21 @@ function normalizeHashRoute(interactionPath: string): string | null {
   return routePath.startsWith('/') ? routePath : `/${routePath}`
 }
 
+function normalizeRemoteRoute(interactionPath: string): string | null {
+  const routePath = interactionPath.trim()
+  if (!routePath) return null
+  if (routePath.startsWith('#')) {
+    return normalizeHashRoute(routePath)
+  }
+  if (routePath.startsWith('//')) {
+    return null
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(routePath)) {
+    return null
+  }
+  return routePath.startsWith('/') ? routePath : `/${routePath}`
+}
+
 export class PluginViewLoader {
   public static async loadPluginView(
     plugin: TouchPlugin,
@@ -126,9 +141,7 @@ export class PluginViewLoader {
         return null
       }
 
-      const remotePath = interactionPath.startsWith('#')
-        ? normalizeHashRoute(interactionPath)
-        : interactionPath
+      const remotePath = normalizeRemoteRoute(interactionPath)
       if (!remotePath) {
         pushViewIssue(
           plugin,

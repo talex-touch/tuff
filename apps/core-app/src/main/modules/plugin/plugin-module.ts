@@ -25,7 +25,7 @@ import { createClient } from '@libsql/client'
 import { sleep } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
-import { generatePermissionIssue } from '@talex-touch/utils/permission'
+import { generatePermissionIssue, parseManifestPermissions } from '@talex-touch/utils/permission'
 import { PluginStatus, SdkApi } from '@talex-touch/utils/plugin'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -646,6 +646,60 @@ function createPluginModuleInternal(
           new PluginInstallCompletedEvent(pluginName, request.source, Date.now())
         )
       }
+    },
+    resolvePermissionConfirmation: async ({ request, manifest, clientMetadata }) => {
+      if (!manifest?.name) return null
+      const permissionModule = getPermissionModule()
+      if (!permissionModule) return null
+      const declared = parseManifestPermissions(manifest as any)
+      if (declared.required.length === 0) return null
+      if (
+        !permissionModule.needsPermissionConfirmation(manifest.name, manifest.sdkapi, {
+          required: declared.required,
+          optional: declared.optional
+        })
+      ) {
+        return null
+      }
+
+      const missing = permissionModule.getMissingPermissions(manifest.name, manifest.sdkapi, {
+        required: declared.required,
+        optional: declared.optional
+      })
+      if (missing.required.length === 0) return null
+
+      const clientPluginName =
+        typeof clientMetadata?.pluginName === 'string' &&
+        clientMetadata.pluginName.trim().length > 0
+          ? clientMetadata.pluginName.trim()
+          : ''
+
+      return {
+        taskId: '',
+        kind: 'permissions',
+        pluginId: manifest.name,
+        pluginName: clientPluginName || manifest.name,
+        source: request.source,
+        permissions: {
+          required: missing.required,
+          optional: missing.optional,
+          reasons: declared.reasons
+        }
+      }
+    },
+    onPermissionConfirmed: async ({ request, response }) => {
+      if (response.decision !== 'accept') return
+      const permissionModule = getPermissionModule()
+      if (!permissionModule) return
+      const pluginId = request.pluginId
+      const requiredPermissions = request.permissions?.required || []
+      if (!pluginId || requiredPermissions.length === 0) return
+
+      if (response.grantMode === 'session') {
+        permissionModule.grantSession(pluginId, requiredPermissions)
+        return
+      }
+      await permissionModule.grantAll(pluginId, requiredPermissions, 'user')
     }
   })
   const localProvider = new LocalPluginProvider(pluginPath)

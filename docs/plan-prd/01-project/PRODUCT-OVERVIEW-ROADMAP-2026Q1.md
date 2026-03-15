@@ -1,6 +1,6 @@
 # Tuff 产品总览与 8 周路线图（2026-Q1）
 
-> 更新时间：2026-03-14  
+> 更新时间：2026-03-15  
 > 适用范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`
 
 ## 1. 产品总览（是什么）
@@ -167,14 +167,17 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - **签名缺口豁免（仅 v2.4.7）**：GitHub 原始 `v2.4.7` 无 `.sig` 资产，manifest 也无 signature 字段；按 `Accepted waiver` 处理，不扩展到 `>=2.4.8`。
 - **执行入口**：`docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
 
-## 4.2 v2.4.8 OmniPanel 稳定版 MVP Gate（主线）
+## 4.2 v2.4.9 插件完善 Gate（当前主线）
 
-- **状态（2026-03-14）**：已通过最小发布门槛。
+- **状态（2026-03-15）**：进入同版本收口验收阶段。
 - **完成项**：
-  - 真实窗口 smoke（CI）：`show -> execute builtin -> hide`；
-  - 失败路径回归：plugin 不可用/插件缺失/无上下文/异常提示（无 silent failure）；
-  - 触发稳定性回归：快捷键 fallback、combo active、input-hook 生命周期清理。
-- **后续顺序（锁定）**：`View Mode 安全收口 -> Nexus 设备授权风控`（`OmniPanel Gate`、`SDK Hard-Cut E~F`、`v2.4.7 Gate D/E` 已完成）。
+  - 权限中心 Phase 5：`PermissionStore` 切换 SQLite 主存储，支持 `JSON -> SQLite` 一次性迁移与失败只读回退；
+  - 安装链路权限确认：安装阶段支持 `always/session/deny` 三分支并显式失败反馈；
+  - View Mode 安全闭环：协议限制、路径规范化、hash 路由、非法路径拦截测试补齐；
+  - CLI 收口：`tuff` 主入口接管 + `tuff validate` 校验 + 旧入口 deprecation 提示。
+- **历史完成（2.4.8）**：
+  - OmniPanel 稳定版 MVP 已通过真实窗口 smoke 与关键失败路径回归，不再作为当前开发主线。
+- **后续顺序（锁定）**：`View Mode 安全闭环+类型增强 -> CLI 切换收口 -> 主文档同步验收 -> Nexus 设备授权风控`（`OmniPanel Gate`、`SDK Hard-Cut E~F`、`v2.4.7 Gate D/E`、`权限中心 Phase 5` 已完成）。
 
 ## 5. 里程碑验收标准（跨周）
 

@@ -47,6 +47,16 @@ interface PluginInstallQueueOptions {
     manifest?: PreparedPluginInstall['manifest']
     providerResult: PreparedPluginInstall['providerResult']
   }) => Promise<void> | void
+  resolvePermissionConfirmation?: (payload: {
+    request: PluginInstallRequest
+    manifest?: PreparedPluginInstall['manifest']
+    clientMetadata?: Record<string, unknown>
+  }) => Promise<PluginInstallConfirmRequest | null> | PluginInstallConfirmRequest | null
+  onPermissionConfirmed?: (payload: {
+    request: PluginInstallConfirmRequest
+    response: PluginInstallConfirmResponse
+    manifest?: PreparedPluginInstall['manifest']
+  }) => Promise<void> | void
 }
 
 function extractClientString(
@@ -65,7 +75,7 @@ export class PluginInstallQueue {
   private readonly targetWindowId: number
   private readonly confirmResolvers = new Map<
     string,
-    { resolve: (decision: 'accept' | 'reject') => void; reject: (reason: Error) => void }
+    { resolve: (response: PluginInstallConfirmResponse) => void; reject: (reason: Error) => void }
   >()
 
   private readonly options?: PluginInstallQueueOptions
@@ -126,7 +136,7 @@ export class PluginInstallQueue {
     this.confirmResolvers.delete(response.taskId)
 
     if (response.decision === 'accept') {
-      resolver.resolve('accept')
+      resolver.resolve(response)
     } else {
       const reasonMessage = response.reason || 'User rejected installation'
       resolver.reject(new Error(reasonMessage))
@@ -192,7 +202,37 @@ export class PluginInstallQueue {
       // 2. User already confirmed on client side (trustedHint)
       const needsConfirmation = !task.officialActual && !task.trustedHint
       if (needsConfirmation) {
-        await this.requestConfirmation(task)
+        await this.requestConfirmation(task, {
+          taskId: task.id,
+          kind: 'source',
+          official: Boolean(task.prepared.providerResult.official),
+          pluginId: extractClientString(task.clientMetadata, 'pluginId'),
+          pluginName:
+            extractClientString(task.clientMetadata, 'pluginName') || task.prepared.manifest?.name,
+          source: task.request.source
+        })
+      }
+
+      const permissionRequest = await this.options?.resolvePermissionConfirmation?.({
+        request: task.request,
+        manifest: task.prepared.manifest,
+        clientMetadata: task.clientMetadata
+      })
+      if (permissionRequest) {
+        const response = await this.requestConfirmation(task, {
+          ...permissionRequest,
+          taskId: task.id,
+          kind: 'permissions'
+        })
+        await this.options?.onPermissionConfirmed?.({
+          request: {
+            ...permissionRequest,
+            taskId: task.id,
+            kind: 'permissions'
+          },
+          response,
+          manifest: task.prepared.manifest
+        })
       }
 
       this.emitProgress(task, 'installing', { progress: 0 })
@@ -269,29 +309,21 @@ export class PluginInstallQueue {
     return Boolean(task.officialActual ?? task.officialHint)
   }
 
-  private async requestConfirmation(task: InstallTask): Promise<void> {
-    if (!task.prepared) return
-
-    const payload: PluginInstallConfirmRequest = {
-      taskId: task.id,
-      official: Boolean(task.prepared.providerResult.official),
-      pluginId: extractClientString(task.clientMetadata, 'pluginId'),
-      pluginName:
-        extractClientString(task.clientMetadata, 'pluginName') || task.prepared.manifest?.name,
-      source: task.request.source
+  private async requestConfirmation(
+    task: InstallTask,
+    request: PluginInstallConfirmRequest
+  ): Promise<PluginInstallConfirmResponse> {
+    if (!task.prepared) {
+      throw new Error('Install task is not prepared')
     }
 
     this.emitProgress(task, 'awaiting-confirmation', { progress: 100 })
 
-    await this.transport
-      .sendToWindow(this.targetWindowId, PluginEvents.install.confirm, payload)
-      .catch((error) => {
-        console.warn('[PluginInstallQueue] Failed to dispatch confirmation event:', error)
-      })
+    await this.transport.sendToWindow(this.targetWindowId, PluginEvents.install.confirm, request)
 
-    await new Promise<void>((resolve, reject) => {
+    return await new Promise<PluginInstallConfirmResponse>((resolve, reject) => {
       this.confirmResolvers.set(task.id, {
-        resolve: () => resolve(),
+        resolve: (response) => resolve(response),
         reject: async (reason) => {
           if (task.prepared) {
             await this.installer.discardPrepared(task.prepared).catch((cleanupError) => {
