@@ -16,8 +16,13 @@ import { promisify } from 'node:util'
 import { StorageList, TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { shell } from 'electron'
+import {
+  everythingStatusEvent,
+  everythingTestEvent,
+  everythingToggleEvent,
+  type EverythingBackendType
+} from '../../../../../shared/events/everything'
 import { formatDuration } from '../../../../utils/logger'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
@@ -47,42 +52,11 @@ interface EverythingSearchResult {
   ctime: Date
 }
 
-type EverythingBackendType = 'sdk-napi' | 'cli' | 'unavailable'
-
 interface EverythingSdkAddon {
   search?: (query: string, options?: { maxResults?: number }) => unknown
   query?: (query: string, options?: { maxResults?: number }) => unknown
   getVersion?: () => string
 }
-
-const everythingStatusEvent = defineRawEvent<
-  void,
-  {
-    enabled: boolean
-    available: boolean
-    backend: EverythingBackendType
-    version: string | null
-    esPath: string | null
-    error: string | null
-    lastBackendError: string | null
-    fallbackChain: EverythingBackendType[]
-    lastChecked: number | null
-  }
->('everything:status')
-const everythingToggleEvent = defineRawEvent<
-  { enabled: boolean },
-  { success: boolean; enabled: boolean }
->('everything:toggle')
-const everythingTestEvent = defineRawEvent<
-  void,
-  {
-    success: boolean
-    backend?: EverythingBackendType
-    error?: string
-    resultCount?: number
-    duration?: number
-  }
->('everything:test')
 
 /**
  * Everything Provider for Windows

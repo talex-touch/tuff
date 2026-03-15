@@ -1,10 +1,6 @@
 import { setRuntimeEnv } from '@talex-touch/utils/env'
 import { preloadDebugStep, preloadLog, preloadState } from '@talex-touch/utils/preload'
-import {
-  initStorageChannel,
-  initStorageTransport,
-  tryUseChannel
-} from '@talex-touch/utils/renderer'
+import { initStorageChannel, initStorageTransport, useChannel } from '@talex-touch/utils/renderer'
 import { isAssistantWindow, isCoreBox } from '@talex-touch/utils/renderer/hooks/arg-mapper'
 import type { IStorageChannel } from '@talex-touch/utils/renderer/storage'
 import { initStorageSubscription } from '@talex-touch/utils/renderer/storage/storage-subscription'
@@ -55,16 +51,26 @@ registerBatteryStatusListener()
 registerLifecycleEvents()
 
 function initializeRendererStorage(): void {
-  const channel = tryUseChannel()
-  const hasStorageChannel = (value: typeof channel): boolean =>
-    !!value && typeof value.send === 'function' && typeof value.unRegChannel === 'function'
-  if (!hasStorageChannel(channel)) {
+  const channel = resolveStorageChannel()
+  if (!channel) {
     return
   }
 
   initStorageTransport(transport)
-  initStorageChannel(channel as IStorageChannel)
-  initStorageSubscription(channel as IStorageChannel, transport)
+  initStorageChannel(channel)
+  initStorageSubscription(channel, transport)
+}
+
+function resolveStorageChannel(): IStorageChannel | null {
+  try {
+    const channel = useChannel()
+    if (typeof channel.send === 'function' && typeof channel.unRegChannel === 'function') {
+      return channel as IStorageChannel
+    }
+  } catch {
+    // Storage channel can be unavailable during early renderer bootstrap.
+  }
+  return null
 }
 
 function registerRouterEvents(instance: Router): void {

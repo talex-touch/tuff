@@ -3,9 +3,7 @@ import type { IManifest } from '@talex-touch/utils/plugin'
 import type { PluginInstallSourceRequest } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers/types'
-import { tryUseChannel } from '@talex-touch/utils/renderer/hooks/use-channel'
 import { EnvDetector } from '@talex-touch/utils/renderer/touch-sdk/env'
-import type { ITuffTransport } from '@talex-touch/utils/transport'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import type { PluginInstallSourceResponse } from '@talex-touch/utils/transport/events/types/plugin'
@@ -170,10 +168,7 @@ watch(
 
 // Lifecycle hook to initialize component
 onMounted(() => {
-  const channel = tryUseChannel()
-  if (channel) {
-    EnvDetector.init(channel as unknown as ITuffTransport)
-  }
+  EnvDetector.init(transport)
   envCheck()
 })
 

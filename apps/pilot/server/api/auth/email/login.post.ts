@@ -1,7 +1,9 @@
 import { readBody } from 'h3'
 import { mergePilotGuestDataAfterAuth } from '../../../utils/pilot-guest-merge'
 import {
+  createPilotLocalUser,
   ensurePilotLocalAuthSchema,
+  getPilotLocalUserByEmail,
   isPilotLocalEmail,
   normalizePilotLocalEmail,
   verifyPilotLocalUserLogin,
@@ -29,17 +31,42 @@ export default defineEventHandler(async (event) => {
     return quotaError(400, '密码不能为空', null)
   }
 
-  const user = await verifyPilotLocalUserLogin(event, {
-    email,
-    password,
-  })
+  if (password.length < 6 || password.length > 128) {
+    return quotaError(400, '密码长度需为 6-128 位', null)
+  }
+
+  const existed = await getPilotLocalUserByEmail(event, email)
+  let mergeReason: 'login' | 'register' = 'login'
+  let user: Awaited<ReturnType<typeof verifyPilotLocalUserLogin>> = null
+
+  if (!existed) {
+    try {
+      user = await createPilotLocalUser(event, {
+        email,
+        password,
+      })
+      mergeReason = 'register'
+    }
+    catch {
+      user = await verifyPilotLocalUserLogin(event, {
+        email,
+        password,
+      })
+    }
+  }
+  else {
+    user = await verifyPilotLocalUserLogin(event, {
+      email,
+      password,
+    })
+  }
 
   if (!user) {
     return quotaError(401, '邮箱或密码错误', null)
   }
 
   const token = await writePilotSessionCookie(event, user.userId)
-  const mergeReport = await mergePilotGuestDataAfterAuth(event, user.userId, 'login')
+  const mergeReport = await mergePilotGuestDataAfterAuth(event, user.userId, mergeReason)
 
   return quotaOk({
     userId: user.userId,

@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 interface MigrationProgress {
@@ -20,6 +23,18 @@ interface MigrationResult {
 }
 
 const visible = ref(false)
+const transport = useTuffTransport()
+
+const downloadMigrationProgressEvent = defineRawEvent<MigrationProgress, void>(
+  'download:migration-progress'
+)
+const downloadMigrationResultEvent = defineRawEvent<MigrationResult, void>(
+  'download:migration-result'
+)
+
+let disposeProgressListener: (() => void) | null = null
+let disposeResultListener: (() => void) | null = null
+
 const progress = ref<MigrationProgress>({
   phase: 'scanning',
   current: 0,
@@ -86,8 +101,12 @@ function handleClose() {
   visible.value = false
 }
 
-function handleRetry() {
-  window.electron?.ipcRenderer.send('download:retry-migration')
+async function handleRetry() {
+  try {
+    await transport.send(DownloadEvents.migration.retry)
+  } catch (error) {
+    console.error('Failed to retry migration:', error)
+  }
 }
 
 function handleProgress(_event: unknown, data: MigrationProgress) {
@@ -100,10 +119,10 @@ function handleResult(_event: unknown, data: MigrationResult) {
 
 async function checkMigrationNeeded() {
   try {
-    const needed = await window.electron?.ipcRenderer.invoke('download:check-migration-needed')
-    if (needed) {
+    const response = await transport.send(DownloadEvents.migration.checkNeeded)
+    if (response.success && response.needed) {
       visible.value = true
-      window.electron?.ipcRenderer.send('download:start-migration')
+      await transport.send(DownloadEvents.migration.start)
     }
   } catch (error) {
     console.error('Failed to check migration status:', error)
@@ -111,16 +130,26 @@ async function checkMigrationNeeded() {
 }
 
 onMounted(() => {
-  window.electron?.ipcRenderer.on('download:migration-progress', handleProgress)
-  window.electron?.ipcRenderer.on('download:migration-result', handleResult)
+  try {
+    disposeProgressListener = transport.on(downloadMigrationProgressEvent, (payload) => {
+      handleProgress(undefined, payload)
+    })
+    disposeResultListener = transport.on(downloadMigrationResultEvent, (payload) => {
+      handleResult(undefined, payload)
+    })
+  } catch (error) {
+    console.warn('[MigrationProgress] Failed to bind migration listeners:', error)
+  }
 
   // Check if migration is needed on mount
   checkMigrationNeeded()
 })
 
 onUnmounted(() => {
-  window.electron?.ipcRenderer.removeListener('download:migration-progress', handleProgress)
-  window.electron?.ipcRenderer.removeListener('download:migration-result', handleResult)
+  disposeProgressListener?.()
+  disposeResultListener?.()
+  disposeProgressListener = null
+  disposeResultListener = null
 })
 </script>
 

@@ -1,7 +1,11 @@
-import type { AgentEnvelope, DeepAgentAuditRecord } from '@talex-touch/tuff-intelligence'
+import type { AgentEnvelope, DeepAgentAuditRecord, UserMessageAttachment } from '@talex-touch/tuff-intelligence'
 import type { H3Event } from 'h3'
+import type { QuotaUserTurnAttachment } from '../../utils/quota-history-codec'
+import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import { toDeepAgentErrorDetail } from '@talex-touch/tuff-intelligence'
+import { networkClient } from '@talex-touch/utils/network'
+import { getRequestURL } from 'h3'
 import { requirePilotAuth } from '../../utils/auth'
 import {
   resolvePilotChannelSelection,
@@ -14,12 +18,13 @@ import {
 import { createPilotRuntime } from '../../utils/pilot-runtime'
 import { quotaError } from '../../utils/quota-api'
 import { buildQuotaConversationSnapshot } from '../../utils/quota-conversation-snapshot'
-import { extractLatestQuotaUserMessage } from '../../utils/quota-history-codec'
+import { extractLatestQuotaUserTurn } from '../../utils/quota-history-codec'
 import {
   ensureQuotaHistorySchema,
   getQuotaHistory,
   upsertQuotaHistory,
 } from '../../utils/quota-history-store'
+import { getQuotaUploadObject } from '../../utils/quota-upload-store'
 
 interface QuotaExecutorBody {
   chat_id?: string
@@ -27,10 +32,12 @@ interface QuotaExecutorBody {
   topic?: string
   model?: string
   temperature?: number
+  generateTitle?: boolean
   messages?: unknown[]
 }
 
 const LEGACY_QUOTA_MODEL_ALIASES = new Set([
+  'this-title',
   'this-normal',
   'this-normal-turbo',
   'this-normal-ultra',
@@ -90,6 +97,9 @@ const STREAM_HEARTBEAT_INTERVAL_MS = 15_000
 const STREAM_HEARTBEAT_IDLE_MS = 12_000
 const SNAPSHOT_PERSIST_INTERVAL_MS = 0
 const STREAM_DELTA_EMIT_CHUNK_SIZE = 32
+const TITLE_STREAM_CHUNK_SIZE = 6
+const INLINE_IMAGE_MAX_BYTES = 256 * 1024
+const INLINE_IMAGE_TOTAL_MAX_BYTES = 1024 * 1024
 
 function resolveExecutorModel(rawModel: unknown, fallbackModel: string): string {
   const candidate = String(rawModel || '').trim()
@@ -113,6 +123,366 @@ function splitTextIntoChunks(text: string, chunkSize = 24): string[] {
     chunks.push(chars.slice(index, index + chunkSize).join(''))
   }
   return chunks
+}
+
+function stringifyUnknown(value: unknown): string {
+  if (typeof value === 'string') {
+    return value
+  }
+  if (!Array.isArray(value)) {
+    return ''
+  }
+
+  const chunks = value
+    .map((item) => {
+      if (typeof item === 'string') {
+        return item
+      }
+      if (item && typeof item === 'object' && typeof (item as { value?: unknown }).value === 'string') {
+        return String((item as { value?: string }).value)
+      }
+      return ''
+    })
+    .filter(Boolean)
+
+  return chunks.join('\n')
+}
+
+function stringifyQuotaMessageContent(content: unknown): string {
+  const text = stringifyUnknown(content).trim()
+  if (text) {
+    return text
+  }
+  if (typeof content === 'string') {
+    return content.trim()
+  }
+  return ''
+}
+
+function normalizeMessagePreview(content: string): string {
+  return content
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 220)
+}
+
+function buildConversationPreview(messages: unknown): string {
+  if (!Array.isArray(messages)) {
+    return ''
+  }
+
+  const rows = messages
+    .map((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return null
+      }
+      const row = item as Record<string, unknown>
+      const role = String(row.role || '').trim().toLowerCase()
+      if (role !== 'user' && role !== 'assistant') {
+        return null
+      }
+      const text = normalizeMessagePreview(stringifyQuotaMessageContent(row.content))
+      if (!text) {
+        return null
+      }
+      return {
+        role,
+        text,
+      }
+    })
+    .filter((item): item is { role: string, text: string } => Boolean(item))
+    .slice(0, 6)
+
+  return rows
+    .map((item, index) => `${index + 1}. ${item.role}: ${item.text}`)
+    .join('\n')
+}
+
+function fallbackTitle(messages: unknown): string {
+  if (!Array.isArray(messages)) {
+    return '新的聊天'
+  }
+
+  for (const item of messages) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue
+    }
+    const row = item as Record<string, unknown>
+    if (String(row.role || '').trim().toLowerCase() !== 'user') {
+      continue
+    }
+    const text = normalizeMessagePreview(stringifyQuotaMessageContent(row.content))
+    if (text) {
+      return text.slice(0, 24) || '新的聊天'
+    }
+  }
+
+  return '新的聊天'
+}
+
+function sanitizeTitle(raw: string): string {
+  return raw
+    .replace(/\r?\n/g, ' ')
+    .replace(/^\s*(title|标题)\s*[:：-]\s*/i, '')
+    .replace(/["'`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 40)
+}
+
+function extractResponseText(data: Record<string, unknown>): string {
+  const outputText = String(data.output_text || '').trim()
+  if (outputText) {
+    return outputText
+  }
+
+  const output = Array.isArray(data.output) ? data.output : []
+  for (const item of output) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue
+    }
+    const row = item as Record<string, unknown>
+    const content = Array.isArray(row.content) ? row.content : []
+    for (const block of content) {
+      if (!block || typeof block !== 'object' || Array.isArray(block)) {
+        continue
+      }
+      const blockRow = block as Record<string, unknown>
+      const text = String(blockRow.text || blockRow.output_text || '').trim()
+      if (text) {
+        return text
+      }
+    }
+  }
+
+  return ''
+}
+
+function buildResponsesEndpoint(baseUrl: string): string {
+  const normalized = trimSuffixSlash(String(baseUrl || '').trim())
+  if (!normalized) {
+    return 'https://api.openai.com/v1/responses'
+  }
+  if (normalized.endsWith('/responses') || normalized.endsWith('/v1/responses')) {
+    return normalized
+  }
+  if (normalized.endsWith('/v1')) {
+    return `${normalized}/responses`
+  }
+  return `${normalized}/v1/responses`
+}
+
+async function requestAiTitle(endpoint: string, apiKey: string, model: string, preview: string): Promise<string> {
+  const response = await networkClient.request<Record<string, unknown> | string>({
+    method: 'POST',
+    url: endpoint,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: {
+      model,
+      max_output_tokens: 32,
+      temperature: 0.2,
+      input: [
+        {
+          role: 'system',
+          content: [
+            {
+              type: 'input_text',
+              text: 'Generate a short conversation title. Return title only.',
+            },
+          ],
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: `Conversation preview:\n${preview}\n\nTitle rules:\n- 4 to 12 words\n- keep source language when obvious\n- avoid generic words like "新聊天"\n- return title only`,
+            },
+          ],
+        },
+      ],
+    },
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+  })
+
+  if (response.status < 200 || response.status >= 300) {
+    const message = typeof response.data === 'string' ? response.data : `HTTP ${response.status}`
+    throw new Error(message)
+  }
+
+  const payload = response.data && typeof response.data === 'object'
+    ? (response.data as Record<string, unknown>)
+    : {}
+
+  return extractResponseText(payload)
+}
+
+function resolveAbsoluteAttachmentUrl(event: H3Event, input: string): string {
+  const raw = String(input || '').trim()
+  if (!raw) {
+    return ''
+  }
+  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) {
+    return raw
+  }
+  if (!raw.startsWith('/')) {
+    return raw
+  }
+  const requestUrl = getRequestURL(event)
+  return `${requestUrl.protocol}//${requestUrl.host}${raw}`
+}
+
+function parseQuotaUploadIdFromUrl(input: string): string {
+  const raw = String(input || '').trim()
+  if (!raw) {
+    return ''
+  }
+
+  let pathname = raw
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    try {
+      pathname = new URL(raw).pathname
+    }
+    catch {
+      return ''
+    }
+  }
+
+  const match = pathname.match(/\/api\/tools\/upload\/content\/([^/?#]+)/)
+  if (!match) {
+    return ''
+  }
+  try {
+    return decodeURIComponent(match[1] || '')
+  }
+  catch {
+    return String(match[1] || '')
+  }
+}
+
+function resolveLegacyAttachments(
+  event: H3Event,
+  rawAttachments: QuotaUserTurnAttachment[],
+): {
+  attachments: UserMessageAttachment[]
+  inlineImageCount: number
+  inlineImageBytes: number
+} {
+  const attachments: UserMessageAttachment[] = []
+  let inlineImageCount = 0
+  let inlineImageBytes = 0
+
+  for (let index = 0; index < rawAttachments.length; index += 1) {
+    const item = rawAttachments[index]
+    const rawValue = String(item.value || '').trim()
+    if (!rawValue) {
+      continue
+    }
+
+    const id = randomId('legacy-attachment')
+    const ref = resolveAbsoluteAttachmentUrl(event, rawValue)
+
+    if (item.type === 'image') {
+      const attachment: UserMessageAttachment = {
+        id,
+        type: 'image',
+        ref,
+        name: item.name,
+      }
+
+      if (rawValue.startsWith('data:image/')) {
+        attachment.dataUrl = rawValue
+        attachments.push(attachment)
+        continue
+      }
+
+      const uploadId = parseQuotaUploadIdFromUrl(rawValue)
+      if (uploadId) {
+        const object = getQuotaUploadObject(uploadId)
+        if (object && object.data.byteLength > 0) {
+          attachment.mimeType = object.mimeType
+          attachment.size = object.data.byteLength
+          const shouldInline = object.mimeType.startsWith('image/')
+            && object.data.byteLength <= INLINE_IMAGE_MAX_BYTES
+            && (inlineImageBytes + object.data.byteLength) <= INLINE_IMAGE_TOTAL_MAX_BYTES
+
+          if (shouldInline) {
+            attachment.dataUrl = `data:${object.mimeType};base64,${Buffer.from(object.data).toString('base64')}`
+            inlineImageCount += 1
+            inlineImageBytes += object.data.byteLength
+          }
+          else if (ref.startsWith('http://') || ref.startsWith('https://')) {
+            attachment.previewUrl = ref
+          }
+
+          attachments.push(attachment)
+          continue
+        }
+      }
+
+      if (ref.startsWith('http://') || ref.startsWith('https://')) {
+        attachment.previewUrl = ref
+      }
+      attachments.push(attachment)
+      continue
+    }
+
+    attachments.push({
+      id,
+      type: 'file',
+      ref,
+      name: item.name,
+      mimeType: item.data,
+    })
+  }
+
+  return {
+    attachments,
+    inlineImageCount,
+    inlineImageBytes,
+  }
+}
+
+function createTitleSseResponse(title: string): Response {
+  const encoder = new TextEncoder()
+  const value = String(title || '').trim()
+  const chunks = splitTextIntoChunks(value, TITLE_STREAM_CHUNK_SIZE)
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'status_updated', status: 'start', id: 'assistant' })}\n\n`))
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'status_updated', status: 'progress', id: 'assistant' })}\n\n`))
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          event: 'completion',
+          id: 'assistant',
+          name: 'assistant',
+          content: chunk,
+          completed: false,
+        })}\n\n`))
+      }
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+        event: 'completion',
+        id: 'assistant',
+        name: 'assistant',
+        content: '',
+        completed: true,
+      })}\n\n`))
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'status_updated', status: 'end', id: 'assistant' })}\n\n`))
+      controller.enqueue(encoder.encode('data: [DONE]\\n\\n'))
+      controller.close()
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+    },
+  })
 }
 
 function randomId(prefix: string): string {
@@ -621,9 +991,12 @@ function extractCapabilityInfo(envelope: AgentEnvelope): {
 export default defineEventHandler(async (event) => {
   const auth = requirePilotAuth(event)
   const body = await readBody<QuotaExecutorBody>(event)
+  const latestUserTurn = extractLatestQuotaUserTurn(body?.messages)
+  const message = String(latestUserTurn.text || '').trim()
+  const isTitleRequest = Boolean(body?.generateTitle)
+  const resolvedLegacyAttachments = resolveLegacyAttachments(event, latestUserTurn.attachments)
 
-  const message = extractLatestQuotaUserMessage(body?.messages)
-  if (!message) {
+  if (!isTitleRequest && !message && resolvedLegacyAttachments.attachments.length <= 0) {
     return quotaError(400, 'user message is required', null)
   }
 
@@ -726,6 +1099,54 @@ export default defineEventHandler(async (event) => {
     selectionSource: selectedChannel.selectionSource,
   }
 
+  if (isTitleRequest) {
+    const preview = buildConversationPreview(body?.messages)
+    let titleMode: 'ai' | 'fallback' = 'fallback'
+    let generatedTitle = fallbackTitle(body?.messages)
+
+    if (preview && selectedChannel.channel.apiKey) {
+      try {
+        const output = sanitizeTitle(await requestAiTitle(
+          buildResponsesEndpoint(selectedChannel.channel.baseUrl),
+          selectedChannel.channel.apiKey,
+          selectedModel,
+          preview,
+        ))
+        if (output) {
+          generatedTitle = output
+          titleMode = 'ai'
+        }
+      }
+      catch (error) {
+        logExecutorEvent('warn', 'title', {
+          phase: 'title.generate.failed',
+          request_id: trace.requestId,
+          chat_id: trace.chatId,
+          channel_id: trace.channelId,
+          adapter: trace.adapter,
+          transport: trace.transport,
+          title_model: selectedModel,
+          error: buildErrorMeta(error),
+        })
+      }
+    }
+
+    logExecutorEvent('info', 'title', {
+      phase: 'title.generated',
+      request_id: trace.requestId,
+      chat_id: trace.chatId,
+      channel_id: trace.channelId,
+      adapter: trace.adapter,
+      transport: trace.transport,
+      title_mode: titleMode,
+      title_model: selectedModel,
+      title_preview_chars: preview.length,
+      title_chars: generatedTitle.length,
+    })
+
+    return createTitleSseResponse(generatedTitle || fallbackTitle(body?.messages))
+  }
+
   logExecutorEvent('info', 'request', {
     phase: 'request.start',
     request_id: trace.requestId,
@@ -744,6 +1165,9 @@ export default defineEventHandler(async (event) => {
     model: trace.model,
     message_chars: message.length,
     message_preview: truncateText(message, 120),
+    attachment_count: resolvedLegacyAttachments.attachments.length,
+    inline_image_count: resolvedLegacyAttachments.inlineImageCount,
+    inline_image_bytes: resolvedLegacyAttachments.inlineImageBytes,
     requested_chat_id: requestedChatId || null,
     selection_source: trace.selectionSource,
     debug_enabled: debugEnabled,
@@ -972,6 +1396,9 @@ export default defineEventHandler(async (event) => {
             for await (const envelope of runtime.onMessage({
               sessionId: runtimeSessionId,
               message,
+              attachments: resolvedLegacyAttachments.attachments.length > 0
+                ? resolvedLegacyAttachments.attachments
+                : undefined,
               metadata: {
                 source: 'quota-executor',
                 model: selectedModel,
@@ -979,6 +1406,9 @@ export default defineEventHandler(async (event) => {
                 channelId: selectedChannel.channelId,
                 channelAdapter: selectedChannel.adapter,
                 channelTransport: selectedChannel.transport,
+                attachmentCount: resolvedLegacyAttachments.attachments.length,
+                inlineImageCount: resolvedLegacyAttachments.inlineImageCount,
+                inlineImageBytes: resolvedLegacyAttachments.inlineImageBytes,
               },
             })) {
               if (closed) {
@@ -1135,6 +1565,9 @@ export default defineEventHandler(async (event) => {
               adapter: trace.adapter,
               transport: trace.transport,
               output_chars: completedText.length,
+              attachment_count: resolvedLegacyAttachments.attachments.length,
+              inline_image_count: resolvedLegacyAttachments.inlineImageCount,
+              inline_image_bytes: resolvedLegacyAttachments.inlineImageBytes,
               error: streamErrorDetail,
             })
             return
@@ -1172,6 +1605,9 @@ export default defineEventHandler(async (event) => {
             output_chars: completedText.length,
             streamed_delta: streamedDelta,
             completion_emitted: completedSent || completedText.length > 0,
+            attachment_count: resolvedLegacyAttachments.attachments.length,
+            inline_image_count: resolvedLegacyAttachments.inlineImageCount,
+            inline_image_bytes: resolvedLegacyAttachments.inlineImageBytes,
           })
         }
         catch (error) {

@@ -2,11 +2,11 @@ import type { AgentEnvelope } from '../../protocol/envelope'
 import type { UserMessageInput } from '../../protocol/session'
 import type { ConversationAgentPort } from '../../runtime/conversation-agent-port'
 import type { TraceRecord } from '../../store/store-adapter'
+import type { PilotStreamEmitOptions, PilotStreamEvent } from './types'
 import {
   buildPilotPlanningTodos,
   mapAgentEnvelopeToPilotStreamEvent,
 } from './types'
-import type { PilotStreamEmitOptions, PilotStreamEvent } from './types'
 
 export const PILOT_DEFAULT_KEEPALIVE_MS = 10_000
 export const PILOT_DEFAULT_TRACE_REPLAY_LIMIT = 1_000
@@ -122,11 +122,12 @@ function toTurnInput(options: RunPilotConversationStreamOptions): UserMessageInp
 
 async function runTurn(options: RunPilotConversationStreamOptions): Promise<boolean> {
   const message = String(options.message || '').trim()
-  if (!message) {
+  const attachmentCount = Array.isArray(options.attachments) ? options.attachments.length : 0
+
+  if (!message && attachmentCount <= 0) {
     return false
   }
 
-  const attachmentCount = Array.isArray(options.attachments) ? options.attachments.length : 0
   const planningTodos = buildPilotPlanningTodos(message, attachmentCount)
   const turnStartedAt = Date.now()
 
@@ -222,26 +223,30 @@ export async function runPilotConversationStream(
   options: RunPilotConversationStreamOptions,
 ): Promise<RunPilotConversationStreamResult> {
   const hasTurnMessage = Boolean(String(options.message || '').trim())
+  const attachmentCount = Array.isArray(options.attachments) ? options.attachments.length : 0
+  const hasTurnInput = hasTurnMessage || attachmentCount > 0
 
   await emit(options, {
     type: 'stream.started',
     payload: {
-      hasMessage: hasTurnMessage,
+      hasMessage: hasTurnInput,
       fromSeq: Number.isFinite(options.fromSeq) ? Math.max(1, Math.floor(Number(options.fromSeq))) : null,
       keepaliveMs: Number(options.keepaliveMs || PILOT_DEFAULT_KEEPALIVE_MS),
+      attachmentCount,
     },
-  }, hasTurnMessage
+  }, hasTurnInput
     ? {
         persist: true,
         tracePayload: {
-          hasMessage: hasTurnMessage,
+          hasMessage: hasTurnInput,
           fromSeq: Number.isFinite(options.fromSeq) ? Math.max(1, Math.floor(Number(options.fromSeq))) : null,
           keepaliveMs: Number(options.keepaliveMs || PILOT_DEFAULT_KEEPALIVE_MS),
+          attachmentCount,
         },
       }
     : undefined)
 
-  await replayTrace(options, hasTurnMessage)
+  await replayTrace(options, hasTurnInput)
   if (isCancelled(options)) {
     return { aborted: true, hasTurn: false }
   }
@@ -249,6 +254,6 @@ export async function runPilotConversationStream(
   const aborted = await runTurn(options)
   return {
     aborted,
-    hasTurn: hasTurnMessage,
+    hasTurn: hasTurnInput,
   }
 }

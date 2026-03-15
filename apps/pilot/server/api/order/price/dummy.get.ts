@@ -1,7 +1,8 @@
 import { requirePilotAuth } from '../../../utils/auth'
+import { calcDummyPrice } from '../../../utils/pilot-compat-payment'
 import { quotaError, quotaOk } from '../../../utils/quota-api'
 
-export default defineEventHandler((event) => {
+export default defineEventHandler(async (event) => {
   requirePilotAuth(event)
   const query = getQuery(event)
   const value = Number(query.value)
@@ -10,18 +11,14 @@ export default defineEventHandler((event) => {
     return quotaError(400, 'value must be a positive number', null)
   }
 
-  const couponCode = String(query.couponCode || '').trim()
-  const discount = couponCode ? Math.min(value * 0.1, 100) : 0
-  const feeTax = Math.max(0, Number((value - discount).toFixed(2)))
+  const priced = await calcDummyPrice(event, {
+    value,
+    couponCode: String(query.couponCode || ''),
+  })
 
   return quotaOk({
+    ...priced,
     type: 'DUMMY',
     value,
-    couponCode,
-    meta: {
-      feeTax,
-      discount,
-      rawValue: value,
-    },
   })
 })

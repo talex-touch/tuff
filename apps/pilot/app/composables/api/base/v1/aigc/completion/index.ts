@@ -2,7 +2,7 @@ import type { IInnerItemType } from './entity'
 import type { IChatBody, IChatConversation, IChatInnerItem, IChatItem, ICompletionHandler, IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
 import { endHttp } from '~/composables/api/axios'
 import { IChatItemStatus, IChatRole, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
-import { calculateConversation, mapStrStatus } from './entity'
+import { mapStrStatus } from './entity'
 
 function parseJsonSafe<T>(value: string): T | null {
   try {
@@ -205,73 +205,91 @@ async function handleExecutorResult(
   }
 }
 
-function processMessageEach({ ques, ans }: { ques: IChatItem, ans: IChatItem }) {
-  const quesContent = ques.content[ques.page]!
-  const ansContent = ans.content[ans.page]!
+function resolveActiveInnerItem(message: IChatItem): IChatInnerItem | null {
+  const byPage = message.content.find(item => item?.page === message.page)
+  if (byPage) {
+    return byPage
+  }
 
-  // 判断ans的状态不是 AVAILABLE 直接返回
-  if (ansContent.status !== IChatItemStatus.AVAILABLE)
-    return false
+  const byIndex = message.content[message.page]
+  if (byIndex) {
+    return byIndex
+  }
 
-  if (!ansContent.value.length)
-    return false
+  return message.content.find(item => Boolean(item)) || null
+}
 
-  const quesText = quesContent.value
-  const ansText = ansContent.value
+function normalizeInnerMetaList(value: unknown): IInnerItemMeta[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
 
-  return [quesText, ansText]
+  const list: IInnerItemMeta[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object') {
+      continue
+    }
+
+    const row = item as Record<string, unknown>
+    const content = typeof row.value === 'string' ? row.value : ''
+    if (!content) {
+      continue
+    }
+
+    list.push({
+      type: String(row.type || 'text') as IInnerItemType,
+      value: content,
+      name: typeof row.name === 'string' ? row.name : undefined,
+      data: typeof row.data === 'string' ? row.data : undefined,
+    })
+  }
+
+  return list
+}
+
+function serializeConversationForExecutor(messages: IChatItem[]): Array<{
+  id: string
+  role: IChatRole
+  content: IInnerItemMeta[]
+}> {
+  const list: Array<{
+    id: string
+    role: IChatRole
+    content: IInnerItemMeta[]
+  }> = []
+
+  for (const message of messages) {
+    const inner = resolveActiveInnerItem(message)
+    if (!inner) {
+      continue
+    }
+
+    if (message.role === IChatRole.ASSISTANT && inner.status !== IChatItemStatus.AVAILABLE) {
+      continue
+    }
+
+    const content = normalizeInnerMetaList(inner.value)
+    if (content.length <= 0) {
+      continue
+    }
+
+    list.push({
+      id: message.id,
+      role: message.role,
+      content,
+    })
+  }
+
+  return list
 }
 
 async function useCompletionExecutor(body: IChatBody, callback: (data: any) => void) {
-  const messages = ref(body.messages)
-
-  messages.value = calculateConversation(messages)
-
-  const msgList = messages.value
-  const convertedMsgList: any = []
-
-  msgList.pop()
-
-  // 先将msgList按照2个划分为一组
-  for (let i = 0; i < msgList.length - 2; i += 2) {
-    const obj = {
-      ques: msgList[i],
-      ans: msgList[i + 1],
-    }
-
-    const res = processMessageEach(obj)
-
-    if (!res)
-      continue
-
-    convertedMsgList.push({
-      ...obj.ques,
-      content: res[0],
-    })
-
-    convertedMsgList.push({
-      ...obj.ans,
-      content: res[1],
-    })
+  const convertedMsgList = serializeConversationForExecutor(body.messages || [])
+  if (convertedMsgList.length <= 0) {
+    throw new Error('No valid conversation messages to execute')
   }
 
-  const lastOne = msgList[msgList.length - 1]
-  const lastContent = lastOne.content.find(item => item?.page === lastOne.page)
-
-  if (!lastContent) {
-    console.warn('lastContent', lastContent, msgList)
-
-    throw new Error('LastContent is null!')
-  }
-
-  convertedMsgList.push({
-    ...lastOne,
-    content: lastContent?.value,
-  })
-
-  // console.log('msgList', convertedMsgList)
-
-  body.messages = convertedMsgList
+  body.messages = convertedMsgList as any
 
   const { promise, resolve } = withResolvers()
 

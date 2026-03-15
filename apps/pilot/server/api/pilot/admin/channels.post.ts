@@ -1,5 +1,6 @@
 import { requirePilotAdmin } from '../../../utils/pilot-admin-auth'
 import { updatePilotAdminChannelCatalog } from '../../../utils/pilot-admin-channel-config'
+import type { PilotBuiltinTool, PilotChannelAdapter, PilotChannelTransport } from '../../../utils/pilot-channel'
 import { quotaOk } from '../../../utils/quota-api'
 
 interface ChannelsUpdateBody {
@@ -10,10 +11,10 @@ interface ChannelsUpdateBody {
     baseUrl?: string
     apiKey?: string
     model?: string
-    adapter?: string
-    transport?: string
+    adapter?: PilotChannelAdapter
+    transport?: PilotChannelTransport
     timeoutMs?: number
-    builtinTools?: string[]
+    builtinTools?: PilotBuiltinTool[]
     enabled?: boolean
   }>
 }

@@ -41,6 +41,7 @@ export interface ChatComposerProps {
   maxRows?: number
   sendOnEnter?: boolean
   sendOnMetaEnter?: boolean
+  allowEmptySend?: boolean
   sendButtonText?: string
   showAttachmentButton?: boolean
   attachmentButtonText?: string

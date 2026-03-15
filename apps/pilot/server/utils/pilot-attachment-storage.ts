@@ -70,6 +70,7 @@ const memoryStorage = new Map<string, MemoryObject>()
 const S3_REGION_FALLBACK = 'us-east-1'
 const ATTACHMENT_SIGN_EXPIRES_MS = 10 * 60 * 1000
 const ATTACHMENT_SIGN_MAX_SKEW_MS = 24 * 60 * 60 * 1000
+let hasWarnedS3Fallback = false
 
 function cloneBytes(bytes: Uint8Array): Uint8Array {
   return bytes.slice()
@@ -202,6 +203,14 @@ function buildS3PublicObjectUrl(config: PilotS3Config, key: string): string {
   return buildS3EndpointObjectUrl(config, key)
 }
 
+function logS3Fallback(message: string): void {
+  if (hasWarnedS3Fallback) {
+    return
+  }
+  hasWarnedS3Fallback = true
+  console.warn(`[pilot][attachment] ${message}; fallback to memory storage`)
+}
+
 function resolveStorageProviderMode(adminProvider: string | undefined): StorageProviderMode {
   const fromAdmin = normalizeStorageProviderMode(adminProvider)
   if (fromAdmin !== 'auto') {
@@ -210,21 +219,41 @@ function resolveStorageProviderMode(adminProvider: string | undefined): StorageP
   return 'auto'
 }
 
-function resolvePilotS3Config(adminConfig: Awaited<ReturnType<typeof getPilotAdminStorageSettings>>): PilotS3Config | null {
-  const endpoint = normalizeUrl(adminConfig.minioEndpoint)
-  const bucket = String(adminConfig.minioBucket || '').trim()
-  const accessKeyId = String(adminConfig.minioAccessKey || '').trim()
-  const secretAccessKey = String(adminConfig.minioSecretKey || '').trim()
+function resolveStorageProviderModeWithEnv(
+  event: H3Event,
+  adminProvider: string | undefined,
+): StorageProviderMode {
+  const fromAdmin = resolveStorageProviderMode(adminProvider)
+  if (fromAdmin !== 'auto') {
+    return fromAdmin
+  }
+  const fromEnv = normalizeStorageProviderMode(
+    resolvePilotConfigString(event, 'attachmentProvider', ['PILOT_ATTACHMENT_PROVIDER']),
+  )
+  if (fromEnv !== 'auto') {
+    return fromEnv
+  }
+  return 'auto'
+}
+
+function resolvePilotS3Config(
+  event: H3Event,
+  adminConfig: Awaited<ReturnType<typeof getPilotAdminStorageSettings>>,
+): PilotS3Config | null {
+  const endpoint = normalizeUrl(adminConfig.minioEndpoint || resolvePilotConfigString(event, 'minioEndpoint', ['PILOT_MINIO_ENDPOINT']))
+  const bucket = String(adminConfig.minioBucket || resolvePilotConfigString(event, 'minioBucket', ['PILOT_MINIO_BUCKET'])).trim()
+  const accessKeyId = String(adminConfig.minioAccessKey || resolvePilotConfigString(event, 'minioAccessKey', ['PILOT_MINIO_ACCESS_KEY'])).trim()
+  const secretAccessKey = String(adminConfig.minioSecretKey || resolvePilotConfigString(event, 'minioSecretKey', ['PILOT_MINIO_SECRET_KEY'])).trim()
 
   if (!endpoint || !bucket || !accessKeyId || !secretAccessKey) {
     return null
   }
 
-  const region = String(adminConfig.minioRegion || S3_REGION_FALLBACK).trim() || S3_REGION_FALLBACK
+  const region = String(adminConfig.minioRegion || resolvePilotConfigString(event, 'minioRegion', ['PILOT_MINIO_REGION'], S3_REGION_FALLBACK)).trim() || S3_REGION_FALLBACK
   const forcePathStyleRaw = adminConfig.minioForcePathStyle === undefined
-    ? 'true'
+    ? resolvePilotConfigString(event, 'minioForcePathStyle', ['PILOT_MINIO_FORCE_PATH_STYLE'], 'true')
     : (adminConfig.minioForcePathStyle ? 'true' : 'false')
-  const publicBaseUrl = normalizeUrl(adminConfig.minioPublicBaseUrl)
+  const publicBaseUrl = normalizeUrl(adminConfig.minioPublicBaseUrl || resolvePilotConfigString(event, 'minioPublicBaseUrl', ['PILOT_MINIO_PUBLIC_BASE_URL']))
 
   return {
     endpoint,
@@ -238,7 +267,10 @@ function resolvePilotS3Config(adminConfig: Awaited<ReturnType<typeof getPilotAdm
 }
 
 function resolveAttachmentPublicBaseUrl(event: H3Event, adminConfig: Awaited<ReturnType<typeof getPilotAdminStorageSettings>>): string {
-  const configured = normalizeUrl(adminConfig.attachmentPublicBaseUrl)
+  const configured = normalizeUrl(
+    adminConfig.attachmentPublicBaseUrl
+    || resolvePilotConfigString(event, 'attachmentPublicBaseUrl', ['PILOT_ATTACHMENT_PUBLIC_BASE_URL']),
+  )
   if (configured) {
     return configured
   }
@@ -246,6 +278,12 @@ function resolveAttachmentPublicBaseUrl(event: H3Event, adminConfig: Awaited<Ret
 }
 
 function resolveAttachmentSigningSecret(event: H3Event): string {
+  const attachmentSigningSecret = String(
+    resolvePilotConfigString(event, 'attachmentSigningSecret', ['PILOT_ATTACHMENT_SIGNING_SECRET']),
+  ).trim()
+  if (attachmentSigningSecret) {
+    return attachmentSigningSecret
+  }
   return String(resolvePilotConfigString(event, 'cookieSecret', ['PILOT_COOKIE_SECRET'])).trim()
 }
 
@@ -257,8 +295,8 @@ async function resolvePilotAttachmentRuntimeConfig(event: H3Event): Promise<Pilo
         (): Awaited<ReturnType<typeof getPilotAdminStorageSettings>> => ({}),
       )
       return {
-        providerMode: resolveStorageProviderMode(adminConfig.attachmentProvider),
-        s3Config: resolvePilotS3Config(adminConfig),
+        providerMode: resolveStorageProviderModeWithEnv(event, adminConfig.attachmentProvider),
+        s3Config: resolvePilotS3Config(event, adminConfig),
         attachmentPublicBaseUrl: resolveAttachmentPublicBaseUrl(event, adminConfig),
         attachmentSigningSecret: resolveAttachmentSigningSecret(event),
       }
@@ -396,8 +434,15 @@ function resolveWriteProvider(
   mode: StorageProviderMode,
   s3Config: PilotS3Config | null,
 ): PilotAttachmentStorageProvider {
-  if (mode === 'memory' || mode === 's3') {
-    return mode
+  if (mode === 'memory') {
+    return 'memory'
+  }
+  if (mode === 's3') {
+    if (s3Config) {
+      return 's3'
+    }
+    logS3Fallback('attachment provider is s3/minio but MinIO config is incomplete')
+    return 'memory'
   }
   if (s3Config) {
     return 's3'
@@ -410,19 +455,13 @@ export async function getPilotAttachmentUploadAvailability(event: H3Event): Prom
   const provider = resolveWriteProvider(runtimeConfig.providerMode, runtimeConfig.s3Config)
   const hasS3Config = Boolean(runtimeConfig.s3Config)
   const hasPublicBaseUrl = Boolean(runtimeConfig.attachmentPublicBaseUrl)
-
-  if (provider === 's3' && !hasS3Config) {
-    return {
-      allowed: false,
-      reason: 'Attachment provider is set to s3/minio but MinIO configuration is incomplete.',
-      provider,
-      hasS3Config,
-      hasPublicBaseUrl,
-    }
-  }
+  const reason = runtimeConfig.providerMode === 's3' && !hasS3Config
+    ? 'Attachment provider is set to s3/minio but MinIO configuration is incomplete. Fallback to memory.'
+    : undefined
 
   return {
     allowed: true,
+    reason,
     provider,
     hasS3Config,
     hasPublicBaseUrl,
@@ -445,13 +484,23 @@ export async function putPilotAttachmentObject(
 
   if (provider === 's3') {
     if (!runtimeConfig.s3Config) {
-      throw new Error('S3/MinIO is not configured.')
+      logS3Fallback('attachment provider resolved to s3 but runtime MinIO config is missing')
     }
-    await putObjectToS3(runtimeConfig.s3Config, key, bytes, mimeType)
-    return {
-      provider: 's3',
-      key,
-      ref: createPilotAttachmentRef('s3', key),
+    else {
+      try {
+        await putObjectToS3(runtimeConfig.s3Config, key, bytes, mimeType)
+        return {
+          provider: 's3',
+          key,
+          ref: createPilotAttachmentRef('s3', key),
+        }
+      }
+      catch (error) {
+        console.error('[pilot][attachment] failed to upload object to MinIO/S3, fallback to memory storage', {
+          key,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
     }
   }
 

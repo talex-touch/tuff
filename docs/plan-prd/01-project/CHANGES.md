@@ -2,6 +2,62 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-03-15
+
+### Pilot：M2/M3 接口迁移收口（含微信豁免 + 支付 3 秒自动结算）
+
+**变更类型**: API 兼容迁移 / 豁免策略落地 / 运维脚本补齐
+
+**描述**:
+- 基于 `g-wggu...ends` 与 `g-wggu...view` 口径，Pilot 侧完成 M2/M3 迁移收口：
+  - 运营后台常用域：`tools/storage/*`、`marketing/banner/*`、`feedback/*`、`subscribe/*`、`system/serve/stat`。
+  - 重 CRUD 域：`doc/*`、`system/users|roles|menus|depts|dict|tasks|param-config/*`。
+  - AIGC 管理域：`aigc/chat_log*`、`aigc/consumption_statistics`、`aigc/prompts*`（list/create/get/update/audit/status/tags/statistics）。
+- 微信相关接口统一进入豁免模式（协议可消费，暂不接第三方）：
+  - `livechat/*`、`platform/qrcode*`、`auth/sms_*`、`auth/platform_login*`。
+- 支付相关接口保留协议并切换为本地 mock：
+  - `order/*`、`coupon/*` 下单后固定 **3 秒自动结算成功**，`order/status/target` 可轮询拿到完成态。
+- 渠道治理收口：
+  - 新增 `ends -> pilot` 渠道合并能力，按 `id` 去重、Pilot 优先、Ends 仅补缺。
+  - 新增管理端触发接口：`POST /api/pilot/admin/channels/merge-ends`。
+  - 新增一次性脚本：`pnpm -C "apps/pilot" run channels:merge:ends`。
+  - 渠道敏感字段继续通过 `PILOT_CONFIG_ENCRYPTION_KEY` 加密存储。
+- 目录治理：
+  - `.gitignore` 新增忽略：`apps/g-wggu5114-thisai-thisai-ends-/`、`apps/g-wggu5114-thisai-thisai-view-/`。
+
+**验证结果**:
+- 前端 endpoint 对照复核：从 `g-wggu...view` 抽取的 `endHttp` 调用（101 条）已全部在 `apps/pilot/server/api` 匹配到明确路由，未发现 501 落兜底路径。
+- `pnpm -C "apps/pilot" run test` ✅
+- `pnpm -C "apps/pilot" run typecheck` ⚠️（存在大量存量错误；本次新增 `merge-ends` 与 channel 类型约束相关错误已清理）
+
+**修改文件（关键）**:
+- `.gitignore`
+- `apps/pilot/server/utils/pilot-compat-store.ts`
+- `apps/pilot/server/utils/pilot-compat-payment.ts`
+- `apps/pilot/server/utils/pilot-compat-seeds.ts`
+- `apps/pilot/server/utils/pilot-system-resource.ts`
+- `apps/pilot/server/utils/pilot-compat-aigc.ts`
+- `apps/pilot/server/utils/pilot-local-auth.ts`
+- `apps/pilot/server/utils/pilot-admin-channel-config.ts`
+- `apps/pilot/server/utils/pilot-channel-merge-ends.ts`
+- `apps/pilot/server/api/pilot/admin/channels/merge-ends.post.ts`
+- `apps/pilot/scripts/merge-ends-channels.mjs`
+- `apps/pilot/package.json`
+- `apps/pilot/server/api/system/**`
+- `apps/pilot/server/api/aigc/**`
+- `apps/pilot/server/api/order/**`
+- `apps/pilot/server/api/coupon/**`
+- `apps/pilot/server/api/doc/**`
+- `apps/pilot/server/api/feedback/**`
+- `apps/pilot/server/api/marketing/banner/**`
+- `apps/pilot/server/api/subscribe/**`
+- `apps/pilot/server/api/livechat/**`
+- `apps/pilot/server/api/platform/**`
+- `apps/pilot/server/api/auth/**`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/INDEX.md`
+
 ## 2026-03-14
 
 ### Pilot：附件空正文提示 + MinIO env 直连兜底
@@ -5938,6 +5994,30 @@
 
 **修改文件**:
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+
+---
+
+## 2026-03-15
+
+### 修复: Pilot 旧 QuotaGPTView 对话链路消息完整性与图片输入兼容
+
+**变更类型**: 对话链路修复 / 兼容性增强
+
+**描述**:
+- 修复旧 `aigc/executor` 链路中消息重组导致的上下文丢失风险，改为按原顺序无损序列化发送。
+- 服务端由“仅提取最后一条用户文本”升级为“提取最后用户轮次（文本 + 附件）”。
+- 新增图片分级策略：小图（<=256KB）内联 `dataUrl`，并增加单次内联总量上限（1MB）。
+- 补齐旧链路 `this-title` 适配：显式支持 `generateTitle`，标题模型跟随当前渠道模型并提供回退标题。
+
+**修改文件**:
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `apps/pilot/server/utils/quota-history-codec.ts`
+- `apps/pilot/server/api/aigc/executor.post.ts`
+- `apps/pilot/server/utils/__tests__/quota-history-codec.test.ts`
+
+**影响**:
+- 旧 QuotaGPTView 连续对话稳定性提升，减少“历史看起来被合并/覆盖”现象。
+- 图片上传后在渠道无法直接拉取 URL 的场景下可优先通过内联小图提升可读性。
 
 ---
 

@@ -28,6 +28,16 @@ function createEvent(): H3Event {
 afterEach(() => {
   mockAdminStorageSettings = {}
   delete process.env.PILOT_COOKIE_SECRET
+  delete process.env.PILOT_ATTACHMENT_PROVIDER
+  delete process.env.PILOT_ATTACHMENT_PUBLIC_BASE_URL
+  delete process.env.PILOT_ATTACHMENT_SIGNING_SECRET
+  delete process.env.PILOT_MINIO_ENDPOINT
+  delete process.env.PILOT_MINIO_BUCKET
+  delete process.env.PILOT_MINIO_ACCESS_KEY
+  delete process.env.PILOT_MINIO_SECRET_KEY
+  delete process.env.PILOT_MINIO_REGION
+  delete process.env.PILOT_MINIO_FORCE_PATH_STYLE
+  delete process.env.PILOT_MINIO_PUBLIC_BASE_URL
 })
 
 describe('pilot-attachment-storage', () => {
@@ -129,6 +139,34 @@ describe('pilot-attachment-storage', () => {
     }
     const availability = await getPilotAttachmentUploadAvailability(event)
     expect(availability.allowed).toBe(true)
+    expect(availability.hasS3Config).toBe(true)
+  })
+
+  it('falls back to memory when provider is s3 but config is incomplete', async () => {
+    const event = createEvent()
+    mockAdminStorageSettings = {
+      attachmentProvider: 's3',
+      minioEndpoint: '',
+      minioBucket: '',
+    }
+
+    const availability = await getPilotAttachmentUploadAvailability(event)
+    expect(availability.allowed).toBe(true)
+    expect(availability.provider).toBe('memory')
+    expect(availability.hasS3Config).toBe(false)
+  })
+
+  it('enables attachment upload when minio config is provided by env', async () => {
+    const event = createEvent()
+    process.env.PILOT_ATTACHMENT_PROVIDER = 's3'
+    process.env.PILOT_MINIO_ENDPOINT = 'https://minio.env.local'
+    process.env.PILOT_MINIO_BUCKET = 'pilot-attachments'
+    process.env.PILOT_MINIO_ACCESS_KEY = 'env-access'
+    process.env.PILOT_MINIO_SECRET_KEY = 'env-secret'
+
+    const availability = await getPilotAttachmentUploadAvailability(event)
+    expect(availability.allowed).toBe(true)
+    expect(availability.provider).toBe('s3')
     expect(availability.hasS3Config).toBe(true)
   })
 })

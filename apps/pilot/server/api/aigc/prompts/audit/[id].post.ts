@@ -1,0 +1,19 @@
+import { requirePilotAuth } from '../../../../utils/auth'
+import { auditPrompt } from '../../../../utils/pilot-compat-aigc'
+import { quotaError, quotaOk } from '../../../../utils/quota-api'
+
+export default defineEventHandler(async (event) => {
+  const auth = requirePilotAuth(event)
+  const id = String(event.context.params?.id || '').trim()
+  if (!id) {
+    return quotaError(400, 'id is required', null)
+  }
+  const body = await readBody<Record<string, any>>(event)
+  const status = Number(body?.status ?? 0)
+  const reason = String(body?.reason || '')
+  const data = await auditPrompt(event, id, status, reason, auth.userId)
+  if (!data) {
+    return quotaError(404, 'prompt not found', null)
+  }
+  return quotaOk(data)
+})

@@ -17,13 +17,13 @@
   - 插件发布到市场 (`tuff publish`)
   - 本地开发服务器 (`tuff dev`)
 
-### 2. TuffEx-UI
+### 2. TuffEx
 
 Tuff 组件库文档站点。
 
 - **文档**: [../03-features/tuff-ui/TUFF-UI-MIGRATION-PRD.md](../03-features/tuff-ui/TUFF-UI-MIGRATION-PRD.md)
-- **位置**: `packages/tuffex-ui/`
-- **状态**: 活跃
+- **位置**: `packages/tuffex/`
+- **状态**: 活跃（`tuffex-ui` 已迁移为历史名称）
 
 ### 3. Unplugin Export Plugin
 

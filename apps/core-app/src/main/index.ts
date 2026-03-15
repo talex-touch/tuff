@@ -4,6 +4,7 @@ import type { LogLevel } from './utils/logger'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { app, protocol } from 'electron'
 import { commonChannelModule } from './channel/common'
 import { genTouchApp } from './core'
@@ -46,6 +47,11 @@ import { updateServiceModule } from './modules/update/UpdateService'
 import { pluginLogModule } from './service/plugin-log.service'
 
 import { loggerManager, mainLog } from './utils/logger'
+import {
+  omniPanelFeatureExecuteEvent,
+  omniPanelHideEvent,
+  omniPanelShowEvent
+} from '../shared/events/omni-panel'
 import './polyfills'
 import './core/precore'
 
@@ -68,6 +74,13 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let lastVerboseLogsState: boolean | null = null
+const OMNI_PANEL_SMOKE_TIMEOUT_MS = 45_000
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -125,6 +138,51 @@ function applyLoggerConfig(appSettings: unknown): void {
   })
   ;(globalThis as typeof globalThis & { __TALEX_VERBOSE_LOGS__?: boolean }).__TALEX_VERBOSE_LOGS__ =
     verboseLogs
+}
+
+async function runOmniPanelSmokeProbeIfNeeded(): Promise<void> {
+  if (process.env.TUFF_OMNIPANEL_SMOKE !== '1') return
+
+  mainLog.info('[OmniPanel Smoke] Starting smoke probe in real Electron runtime')
+
+  const channel = genTouchApp().channel
+  const keyManager = (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+  const transport = getTuffTransportMain(channel, keyManager)
+
+  const timeoutHandle = setTimeout(() => {
+    mainLog.error('[OmniPanel Smoke] Timed out')
+    app.exit(1)
+  }, OMNI_PANEL_SMOKE_TIMEOUT_MS)
+
+  try {
+    await waitMs(300)
+    await transport.invoke(omniPanelShowEvent, {
+      captureSelection: false,
+      source: 'command'
+    })
+
+    await waitMs(350)
+    const executeResult = await transport.invoke(omniPanelFeatureExecuteEvent, {
+      id: 'builtin.corebox-search',
+      contextText: 'omni-panel smoke',
+      source: 'command'
+    })
+
+    if (!executeResult || executeResult.success !== true) {
+      throw new Error(`[OmniPanel Smoke] Execute failed: ${JSON.stringify(executeResult ?? null)}`)
+    }
+
+    await transport.invoke(omniPanelHideEvent, undefined)
+    await waitMs(200)
+
+    mainLog.info('[OmniPanel Smoke] Passed')
+    app.exit(0)
+  } catch (error) {
+    mainLog.error('[OmniPanel Smoke] Failed', { error })
+    app.exit(1)
+  } finally {
+    clearTimeout(timeoutHandle)
+  }
 }
 
 applyLoggerConfig({ diagnostics: { verboseLogs: false } })
@@ -261,4 +319,6 @@ app.whenReady().then(async () => {
   startupTimer.end('All modules loaded', {
     meta: { modules: modulesToLoad.length }
   })
+
+  void runOmniPanelSmokeProbeIfNeeded()
 })

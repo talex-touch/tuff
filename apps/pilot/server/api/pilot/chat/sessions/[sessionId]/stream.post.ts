@@ -252,16 +252,18 @@ export default defineEventHandler(async (event) => {
   })
 
   const message = String(body?.message || '').trim()
-  const persistStreamLifecycle = Boolean(message)
+  const inputAttachments = Array.isArray(body?.attachments) ? body.attachments : undefined
+  const hasInputAttachments = Boolean(inputAttachments && inputAttachments.length > 0)
+  const persistStreamLifecycle = Boolean(message) || hasInputAttachments
   const fromSeq = Number.isFinite(body?.fromSeq)
     ? Math.max(1, Math.floor(Number(body?.fromSeq)))
     : undefined
   const follow = normalizeFollowFlag(body || {}, fromSeq)
 
-  if (!message && !fromSeq) {
+  if (!message && !fromSeq && !hasInputAttachments) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'message or fromSeq is required',
+      statusMessage: 'message, attachments or fromSeq is required',
     })
   }
 
@@ -378,7 +380,7 @@ export default defineEventHandler(async (event) => {
             event,
             sessionId,
             store.runtime,
-            Array.isArray(body?.attachments) ? body.attachments : undefined,
+            inputAttachments,
           )
 
           const result = await runPilotConversationStream({

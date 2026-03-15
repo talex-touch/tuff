@@ -1,6 +1,8 @@
 import type { CloudSyncSDK, SyncItemInput, SyncItemOutput } from '@talex-touch/utils'
 import { hasWindow } from '@talex-touch/utils/env'
 import { storages } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { PluginEvents } from '@talex-touch/utils/transport/events'
 
 const STORAGE_ITEM_PREFIX = 'storage::'
 const STORAGE_ITEM_TYPE = 'storage.snapshot'
@@ -25,10 +27,6 @@ interface PluginStorageSyncItemPayload {
   fileName: string
   qualifiedName: string
   content: unknown
-}
-
-type RendererChannelLike = {
-  send: (eventName: string, arg?: unknown) => Promise<unknown>
 }
 
 function toBase64(value: Uint8Array): string {
@@ -73,11 +71,11 @@ async function sha256Hex(value: string): Promise<string> {
     .join('')
 }
 
-function getRendererChannel(): RendererChannelLike | null {
-  if (!hasWindow() || !window.$channel) {
+function getRendererTransport() {
+  if (!hasWindow()) {
     return null
   }
-  return window.$channel
+  return useTuffTransport()
 }
 
 export function isPluginStorageQualifiedName(value: string): boolean {
@@ -124,14 +122,14 @@ export function parsePluginStorageQualifiedName(
 async function listPluginSyncItems(
   qualifiedNames?: string[]
 ): Promise<PluginStorageSyncItemPayload[]> {
-  const channel = getRendererChannel()
-  if (!channel) {
+  const transport = getRendererTransport()
+  if (!transport) {
     return []
   }
 
   try {
-    const payload = qualifiedNames && qualifiedNames.length > 0 ? { qualifiedNames } : undefined
-    const response = await channel.send('plugin:storage:list-sync-items', payload)
+    const payload = qualifiedNames && qualifiedNames.length > 0 ? { qualifiedNames } : {}
+    const response = await transport.send(PluginEvents.storage.listSyncItems, payload)
     if (!Array.isArray(response)) {
       return []
     }
@@ -381,12 +379,12 @@ async function applyPluginStorageSnapshot(
     console.warn(`[AutoSync] Failed to compare local plugin payload for "${qualifiedName}"`, error)
   }
 
-  const channel = getRendererChannel()
-  if (!channel) {
+  const transport = getRendererTransport()
+  if (!transport) {
     return false
   }
 
-  const result = await channel.send('plugin:storage:apply-sync-item', {
+  const result = await transport.send(PluginEvents.storage.applySyncItem, {
     pluginName: parsedQualifiedName.pluginName,
     fileName: parsedQualifiedName.fileName,
     content: parsedPayload
@@ -410,12 +408,12 @@ async function applyPluginStorageDeletion(qualifiedName: string): Promise<boolea
     return false
   }
 
-  const channel = getRendererChannel()
-  if (!channel) {
+  const transport = getRendererTransport()
+  if (!transport) {
     return false
   }
 
-  const result = await channel.send('plugin:storage:delete-sync-item', {
+  const result = await transport.send(PluginEvents.storage.deleteSyncItem, {
     pluginName: parsedQualifiedName.pluginName,
     fileName: parsedQualifiedName.fileName
   })

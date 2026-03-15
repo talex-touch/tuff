@@ -143,7 +143,7 @@ describe('OmniPanelModule execute dispatch', () => {
         target: 'corebox' | 'plugin' | 'system'
       }>
       executeFeature: (payload: { id: string }) => Promise<{ success: boolean; code?: string }>
-      resolveFeatureItemPayload: (...args: any[]) => unknown
+      resolveFeatureItemPayload: (...args: unknown[]) => unknown
       executeBuiltinFeature: (...args: unknown[]) => Promise<{ success: boolean }>
       executeCoreBoxTransfer: (...args: unknown[]) => Promise<{ success: boolean }>
       executePluginFeature: (...args: unknown[]) => Promise<{ success: boolean }>
@@ -178,7 +178,7 @@ describe('OmniPanelModule execute dispatch', () => {
     module.executeBuiltinFeature = builtinMock
     module.executeCoreBoxTransfer = coreboxMock
     module.executePluginFeature = pluginMock
-    module.resolveFeatureItemPayload = resolveMock as (...args: any[]) => unknown
+    module.resolveFeatureItemPayload = resolveMock as (...args: unknown[]) => unknown
 
     await module.executeFeature({ id: 'builtin.search' })
     await module.executeFeature({ id: 'plugin:demo:corebox' })
@@ -280,7 +280,7 @@ describe('OmniPanel smoke', () => {
       pushContext: (text: string, source: string) => Promise<void>
       notifyFeatureRefresh: (reason: string) => void
       captureSelectionText: () => Promise<string>
-      resolveFeatureItemPayload: (...args: any[]) => unknown
+      resolveFeatureItemPayload: (...args: unknown[]) => unknown
       executeBuiltinFeature: (...args: unknown[]) => Promise<{ success: boolean }>
       hide: () => void
       transport: null | { sendTo: () => Promise<void> }
@@ -312,7 +312,7 @@ describe('OmniPanel smoke', () => {
         ...item,
         unavailable: false
       })
-    ) as (...args: any[]) => unknown
+    ) as (...args: unknown[]) => unknown
     module.executeBuiltinFeature = vi.fn(async () => ({ success: true }))
     module.hide = hideMock
 
@@ -326,5 +326,201 @@ describe('OmniPanel smoke', () => {
     expect(showInactiveMock).toHaveBeenCalledTimes(1)
     expect(result.success).toBe(true)
     expect(hideMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('OmniPanel execute failure paths', () => {
+  it('returns FEATURE_UNAVAILABLE when resolved feature is unavailable', async () => {
+    const module = new OmniPanelModule() as unknown as {
+      featureRegistry: Array<Record<string, unknown>>
+      executeFeature: (payload: {
+        id: string
+      }) => Promise<{ success: boolean; code?: string; error?: string }>
+      resolveFeatureItemPayload: (...args: unknown[]) => unknown
+      executeBuiltinFeature: (...args: unknown[]) => Promise<{ success: boolean }>
+      executeCoreBoxTransfer: (...args: unknown[]) => Promise<{ success: boolean }>
+      executePluginFeature: (...args: unknown[]) => Promise<{ success: boolean }>
+    }
+
+    module.featureRegistry = [{ id: 'plugin:demo:run', source: 'plugin', target: 'plugin' }]
+    module.resolveFeatureItemPayload = vi.fn(() => ({
+      id: 'plugin:demo:run',
+      source: 'plugin',
+      target: 'plugin',
+      unavailable: true,
+      unavailableReason: {
+        code: 'PLUGIN_UNAVAILABLE',
+        message: 'plugin temporarily unavailable'
+      }
+    })) as (...args: unknown[]) => unknown
+
+    module.executeBuiltinFeature = vi.fn(async () => ({ success: true }))
+    module.executeCoreBoxTransfer = vi.fn(async () => ({ success: true }))
+    module.executePluginFeature = vi.fn(async () => ({ success: true }))
+
+    const result = await module.executeFeature({ id: 'plugin:demo:run' })
+
+    expect(result.success).toBe(false)
+    expect(result.code).toBe('FEATURE_UNAVAILABLE')
+    expect(result.error).toContain('unavailable')
+  })
+
+  it('returns SELECTION_REQUIRED when builtin system actions have empty context', async () => {
+    const module = new OmniPanelModule() as unknown as {
+      executeBuiltinFeature: (
+        featureId: string,
+        contextText: string,
+        source: 'manual'
+      ) => Promise<{ success: boolean; code?: string }>
+    }
+
+    await expect(module.executeBuiltinFeature('builtin.copy', '', 'manual')).resolves.toMatchObject(
+      {
+        success: false,
+        code: 'SELECTION_REQUIRED'
+      }
+    )
+    await expect(
+      module.executeBuiltinFeature('builtin.search', '   ', 'manual')
+    ).resolves.toMatchObject({
+      success: false,
+      code: 'SELECTION_REQUIRED'
+    })
+    await expect(
+      module.executeBuiltinFeature('builtin.translate', '', 'manual')
+    ).resolves.toMatchObject({
+      success: false,
+      code: 'SELECTION_REQUIRED'
+    })
+  })
+
+  it('returns PLUGIN_NOT_FOUND when plugin feature target plugin is missing', async () => {
+    const module = new OmniPanelModule() as unknown as {
+      executePluginFeature: (
+        item: {
+          pluginName?: string
+          featureId?: string
+          acceptedInputTypes?: string[]
+          id: string
+          source: 'plugin'
+          target: 'plugin'
+          title: string
+          subtitle: string
+          icon: null
+          enabled: boolean
+          order: number
+          createdAt: number
+          updatedAt: number
+        },
+        contextText: string,
+        source: 'manual'
+      ) => Promise<{ success: boolean; code?: string }>
+      getPluginInstance: (pluginName?: string) => unknown
+    }
+
+    module.getPluginInstance = vi.fn(() => undefined)
+    const result = await module.executePluginFeature(
+      {
+        id: 'plugin:demo:run',
+        source: 'plugin',
+        target: 'plugin',
+        pluginName: 'demo-plugin',
+        featureId: 'run',
+        title: 'run',
+        subtitle: '',
+        icon: null,
+        enabled: true,
+        order: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      },
+      'hello',
+      'manual'
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.code).toBe('PLUGIN_NOT_FOUND')
+  })
+})
+
+describe('OmniPanel shortcut and input-hook guards', () => {
+  it('falls back to toggle immediately when shortcut key map is unavailable', () => {
+    const module = new OmniPanelModule() as unknown as {
+      shortcutHoldEnabled: boolean
+      inputHookKeys: null
+      handleShortcutPressed: () => void
+      toggle: (options: { captureSelection: boolean; source: string }) => void
+    }
+
+    const toggleMock = vi.fn()
+    module.shortcutHoldEnabled = true
+    module.inputHookKeys = null
+    module.toggle = toggleMock as unknown as (options: {
+      captureSelection: boolean
+      source: string
+    }) => void
+
+    module.handleShortcutPressed()
+    expect(toggleMock).toHaveBeenCalledWith({ captureSelection: true, source: 'shortcut' })
+  })
+
+  it('re-arms and triggers shortcut when combo already active long enough', () => {
+    const module = new OmniPanelModule() as unknown as {
+      shortcutHoldEnabled: boolean
+      inputHookKeys: { P: number }
+      shortcutComboActive: boolean
+      shortcutComboStartedAt: number | null
+      shortcutTriggerArmed: boolean
+      handleShortcutPressed: () => void
+      triggerArmedShortcut: () => void
+    }
+
+    const triggerMock = vi.fn()
+    module.shortcutHoldEnabled = true
+    module.inputHookKeys = { P: 25 }
+    module.shortcutComboActive = true
+    module.shortcutComboStartedAt = Date.now() - 500
+    module.shortcutTriggerArmed = false
+    module.triggerArmedShortcut = triggerMock as unknown as () => void
+
+    module.handleShortcutPressed()
+
+    expect(module.shortcutTriggerArmed).toBe(true)
+    expect(triggerMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('cleans up input hook when both mouse long press and shortcut hold are disabled', () => {
+    const module = new OmniPanelModule() as unknown as {
+      mouseLongPressEnabled: boolean
+      shortcutHoldEnabled: boolean
+      syncInputHookState: () => void
+      clearLongPressTimer: () => void
+      clearShortcutHoldTimer: () => void
+      clearShortcutArmExpiryTimer: () => void
+      resetShortcutHoldState: () => void
+      cleanupInputHook: () => void
+    }
+
+    const clearLongPressTimer = vi.fn()
+    const clearShortcutHoldTimer = vi.fn()
+    const clearShortcutArmExpiryTimer = vi.fn()
+    const resetShortcutHoldState = vi.fn()
+    const cleanupInputHook = vi.fn()
+
+    module.mouseLongPressEnabled = false
+    module.shortcutHoldEnabled = false
+    module.clearLongPressTimer = clearLongPressTimer
+    module.clearShortcutHoldTimer = clearShortcutHoldTimer
+    module.clearShortcutArmExpiryTimer = clearShortcutArmExpiryTimer
+    module.resetShortcutHoldState = resetShortcutHoldState
+    module.cleanupInputHook = cleanupInputHook
+
+    module.syncInputHookState()
+
+    expect(clearLongPressTimer).toHaveBeenCalledTimes(1)
+    expect(clearShortcutHoldTimer).toHaveBeenCalledTimes(1)
+    expect(clearShortcutArmExpiryTimer).toHaveBeenCalledTimes(1)
+    expect(resetShortcutHoldState).toHaveBeenCalledTimes(1)
+    expect(cleanupInputHook).toHaveBeenCalledTimes(1)
   })
 })

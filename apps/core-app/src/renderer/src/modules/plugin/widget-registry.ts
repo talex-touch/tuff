@@ -6,7 +6,6 @@ import * as TalexUtilsCoreBox from '@talex-touch/utils/core-box'
 import * as TalexUtilsPlugin from '@talex-touch/utils/plugin'
 import * as TalexUtilsPluginSdk from '@talex-touch/utils/plugin/sdk'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { tryUseChannel } from '@talex-touch/utils/renderer'
 import * as TalexUtilsTransportLegacy from '@talex-touch/utils/transport/legacy'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
@@ -1078,19 +1077,32 @@ function handleWidgetUnregister({ widgetId }: { widgetId: string }): void {
   }
 }
 
-function bindTransportHandlers(): void {
-  if (transportBindingsReady) return
-  transportBindingsReady = true
-  transport.on(widgetRegisterEvent, handleWidgetRegister)
-  transport.on(widgetUpdateEvent, handleWidgetUpdate)
-  transport.on(widgetUnregisterEvent, handleWidgetUnregister)
+function bindTransportHandlers(): boolean {
+  if (transportBindingsReady) return true
+  const disposers: Array<() => void> = []
+  try {
+    disposers.push(transport.on(widgetRegisterEvent, handleWidgetRegister))
+    disposers.push(transport.on(widgetUpdateEvent, handleWidgetUpdate))
+    disposers.push(transport.on(widgetUnregisterEvent, handleWidgetUnregister))
+    transportBindingsReady = true
+    return true
+  } catch (error) {
+    disposers.forEach((dispose) => {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors during transport binding retry
+      }
+    })
+    console.warn('[WidgetRegistry] Transport not ready, will retry binding handlers', error)
+    return false
+  }
 }
 
 function ensureTransportHandlersReady(): void {
   if (transportBindingsReady) return
 
-  if (tryUseChannel()) {
-    bindTransportHandlers()
+  if (bindTransportHandlers()) {
     return
   }
 
@@ -1109,8 +1121,7 @@ function ensureTransportHandlersReady(): void {
         return
       }
 
-      if (tryUseChannel()) {
-        bindTransportHandlers()
+      if (bindTransportHandlers()) {
         pollingService.unregister(taskId)
         if (transportBindingTaskId === taskId) {
           transportBindingTaskId = null
