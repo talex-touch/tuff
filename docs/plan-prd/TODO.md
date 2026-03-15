@@ -160,7 +160,7 @@
 - [ ] [P1] M0 收口：`apps/pilot` Quota 存量 `lint` 分批清理（先 `import/order + unused`，后风格类规则）。
 - [x] [P1] M0 收口：构建内存策略固化（`build/generate/CI` 统一 `NODE_OPTIONS=--max-old-space-size=8192`）。
 - [x] [P1] M0 收口：本地开发启动优化（`dev` 默认 Node 本地模式，UnoCSS dev safelist 降载）。
-- [x] [P1] M0 收口：新增 Pilot CI（`quality + static-dist`）与 1Panel 脚本化部署基线，当前采用“手动触发/定时 cron”替代 webhook。
+- [x] [P1] M0 收口：新增 Pilot CI（`quality + static-dist`）与 1Panel 脚本化部署基线，已恢复 `pilot-image` 发布后 webhook 自动触发重建（密钥校验 + 分支/仓库白名单）。
 - [ ] [P1] M0 收口：前端重依赖拆分（优先 `Milkdown/EditorMermaid/EditorCode/IconSelector`，持续压缩首屏与 Worker 体积）。
 - [x] [P1] 部署策略收口：当前统一服务器部署（1Panel + Docker Compose），Cloudflare 适配不再纳入当前里程碑。
 - [x] [P0] Pilot M1（2026-03-11）：多渠道解析与协议兼容落地（`request > session > default`，`auto: responses -> chat.completions` 回退 + 缓存）。
