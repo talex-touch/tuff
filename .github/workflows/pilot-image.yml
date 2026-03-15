@@ -75,3 +75,42 @@ jobs:
           echo "Tags:"
           echo "${{ steps.meta.outputs.tags }}"
           echo "Digest: ${{ steps.build.outputs.digest }}"
+
+      - name: Trigger 1Panel deploy webhook
+        if: ${{ secrets.ONEPANEL_WEBHOOK_URL != '' && secrets.ONEPANEL_WEBHOOK_TOKEN != '' }}
+        env:
+          WEBHOOK_URL: ${{ secrets.ONEPANEL_WEBHOOK_URL }}
+          WEBHOOK_TOKEN: ${{ secrets.ONEPANEL_WEBHOOK_TOKEN }}
+          IMAGE_REPO: ${{ steps.image.outputs.name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          payload="$(cat <<EOF
+          {
+            "repository": "${GITHUB_REPOSITORY}",
+            "branch": "${GITHUB_REF_NAME}",
+            "sha": "${GITHUB_SHA}",
+            "image": "${IMAGE_REPO}",
+            "tag": "pilot-latest",
+            "image_ref": "${IMAGE_REPO}@${IMAGE_DIGEST}",
+            "digest": "${IMAGE_DIGEST}",
+            "workflow": "pilot-image"
+          }
+          EOF
+          )"
+
+          curl --fail --show-error --silent \
+            --request POST \
+            --header "Content-Type: application/json" \
+            --header "X-Pilot-Token: ${WEBHOOK_TOKEN}" \
+            --data "${payload}" \
+            "${WEBHOOK_URL}/deploy"
+
+      - name: Webhook skipped notice
+        if: ${{ secrets.ONEPANEL_WEBHOOK_URL == '' || secrets.ONEPANEL_WEBHOOK_TOKEN == '' }}
+        run: |
+          echo "ONEPANEL_WEBHOOK_URL or ONEPANEL_WEBHOOK_TOKEN is empty, skip webhook deploy trigger."

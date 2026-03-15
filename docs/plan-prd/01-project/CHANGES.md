@@ -4,6 +4,42 @@
 
 ## 2026-03-15
 
+### Pilot：恢复 GitHub -> 1Panel webhook 自动部署（含密钥校验）
+
+**变更类型**: CI/CD 自动化 / 运维安全加固
+
+**描述**:
+- 恢复并标准化 Pilot 自动部署链路：`pilot-image.yml` 推送 GHCR 成功后，自动 `POST` 1Panel webhook 触发重建。
+- 新增 webhook 安全约束：
+  - 请求必须携带 `X-Pilot-Token`（或 `Authorization: Bearer`）；
+  - 服务端使用 `PILOT_WEBHOOK_TOKEN` 严格匹配；
+  - 可选仓库/分支白名单：`PILOT_WEBHOOK_ALLOWED_REPOSITORY`、`PILOT_WEBHOOK_ALLOWED_BRANCH`。
+- 新增轻量 HTTP webhook 服务与状态页：
+  - `GET /`：查看最近一次部署状态与输出；
+  - `GET /health`：健康检查；
+  - `POST /deploy`：接收 payload 并调用部署脚本。
+- 兼容入口补齐：根目录 `scripts/` 新增 webhook 兼容脚本与 env 示例，继续转发到 `apps/pilot/deploy` 真正实现。
+
+**验证结果**:
+- `bash -n "apps/pilot/deploy/deploy-pilot-1panel-webhook.sh"` ✅
+- `python3 -m py_compile "apps/pilot/deploy/pilot-deploy-webhook-server.py"` ✅
+- `bash -n "scripts/deploy-pilot-1panel-webhook.sh"` ✅
+
+**修改文件（关键）**:
+- `.github/workflows/pilot-image.yml`
+- `.github/workflows/README.md`
+- `apps/pilot/deploy/deploy-pilot-1panel-webhook.sh`
+- `apps/pilot/deploy/deploy-pilot-1panel-webhook.env.example`
+- `apps/pilot/deploy/pilot-deploy-webhook-server.py`
+- `apps/pilot/deploy/pilot-deploy-webhook.service.example`
+- `apps/pilot/deploy/README.md`
+- `apps/pilot/deploy/README.zh-CN.md`
+- `scripts/deploy-pilot-1panel-webhook.sh`
+- `scripts/deploy-pilot-1panel-webhook.env.example`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### 修复: CMS 应用菜单为空（tree 资源 children 兼容）
 
 **变更类型**: Bug 修复

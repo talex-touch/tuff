@@ -1,0 +1,17 @@
+[Unit]
+Description=Pilot Deploy Webhook Server
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/1panel/scripts/pilot-deploy
+EnvironmentFile=-/opt/1panel/scripts/pilot-deploy/deploy-pilot-1panel-webhook.env
+ExecStart=/usr/bin/env python3 /opt/1panel/scripts/pilot-deploy/pilot-deploy-webhook-server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
