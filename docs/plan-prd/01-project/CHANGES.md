@@ -4,6 +4,25 @@
 
 ## 2026-03-15
 
+### 修复: CMS 应用菜单为空（tree 资源 children 兼容）
+
+**变更类型**: Bug 修复
+
+**描述**: 修复 `system.menus` / `system.depts` 在兼容 seed 为“嵌套 children 存储”时被树构建重置为 `children: []` 的问题，导致管理后台“我的应用”无可选项。
+
+**主要变更**:
+1. `pilot-system-resource` 的树构建新增兼容归一化：同时支持“嵌套 children”与“扁平行 parentId”两种存储形态。
+2. 保持既有数据可读，不需要清库或重建 seed。
+3. 新增回归测试覆盖：
+   - 嵌套 children 结构恢复树
+   - 混合数据（嵌套 + 扁平）归并恢复树
+
+**影响**: `GET /api/account/menus` 与 `GET /api/system/depts` 能返回完整子节点，CMS “我的应用”恢复可配置与可展示。
+
+---
+
+## 2026-03-15
+
 ### Release：v2.4.9-beta.4 基线快照固化（工作区治理起点）
 
 **变更类型**: 发布基线固化 / 工作区治理
