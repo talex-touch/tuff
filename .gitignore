@@ -116,6 +116,7 @@ tmp/
 # ========================
 readme.local.md
 .doc.local/
+output/
 
 # ========================
 # Project-specific (nexus)

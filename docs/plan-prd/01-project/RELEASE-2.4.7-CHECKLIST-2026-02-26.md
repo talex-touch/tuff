@@ -18,7 +18,7 @@
 
 | Gate | 条件 | 当前状态 | 备注 |
 | --- | --- | --- | --- |
-| Gate A: 版本基线 | 根包与 core-app 版本一致且为稳定版 | ✅ Done（historical） | 历史 `v2.4.7` 发布窗口已满足；当前 `2.4.8-beta.3` 工作区仅用于后续开发，不再阻塞历史 Gate。 |
+| Gate A: 版本基线 | 根包与 core-app 版本一致且为稳定版 | ✅ Done（historical） | 历史 `v2.4.7` 发布窗口已满足；当前 `2.4.9-beta.4` 工作区仅用于后续开发，不再阻塞历史 Gate。 |
 | Gate B: 发布链路 | `build-and-release.yml`、Nexus release 同步、CLI npm 自动发布链路可用 | ✅ Done | 发布主线已收敛，Cloudflare Pages 使用平台侧 Git 部署。 |
 | Gate C: 质量门禁 | lint/typecheck 通过或阻塞项明确可豁免 | ✅ Done | C1~C4 已完成：`packages/tuff-native`/`apps/nexus` lint 通过，全仓 typecheck + eslint 复扫通过。 |
 | Gate D: 发布资产 | release notes（`zh/en`）与资产清单完备 | ✅ Done（historical backfill） | `Build and Release` run `23091014958`（`workflow_dispatch + sync_tag=v2.4.7`）已完成自动写入，manifest 与 sha256 已补齐。 |
@@ -70,6 +70,8 @@
 
 ## 4. 后续主线（Gate D 收口后）
 
-1. `2.4.9` 主线执行顺序固定为：`权限中心 Phase 5（已完成） -> View Mode 安全闭环+类型增强 -> CLI 切换收口 -> 主文档同步验收`。
+1. `2.4.9` 主线执行顺序固定为：`CLI 分包迁移收口（core 真迁移 + 文档统一） -> 主文档同步验收`（`权限中心 Phase 5`、`View Mode Phase2~4` 已完成）。
 2. `Nexus 设备授权风控` 作为下一阶段后置项推进。
 3. `>=2.4.8` 发布恢复严格门禁：`manifest + sha256 + signatureUrl` 全量完整，不沿用 `v2.4.7` 豁免。
+
+> 2026-03-15 更新：`View Mode Phase4` 已完成，当前下一动作聚焦 `CLI 分包迁移（tuff-cli-core 真迁移 + tuffcli 文档统一）` 与主文档同步验收。

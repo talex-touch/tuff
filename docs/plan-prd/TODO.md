@@ -9,13 +9,35 @@
 
 | 主题 | 统一口径 | 下一动作 | 强制同步文档 |
 | --- | --- | --- | --- |
-| 2.4.9 主线 Gate | 插件完善主线执行中：`权限中心 Phase 5` 已完成（SQLite 主存储 + 安装权限确认）；`View Mode 安全闭环 + 类型增强`、`CLI 切换收口`已进入同版本收口 | 完成 `View Mode` 边界回归 + `CLI` 回归（help/create/build/dev/publish/validate）并同步主文档验收 | `TODO` / `README` / `INDEX` / `CHANGES` |
+| 2.4.9 主线 Gate | 插件完善主线执行中：`权限中心 Phase 5`、`View Mode Phase 2~4`、`CLI 分包迁移（Phase1+2）`、`主文档同步验收`已完成 | 推进 `Nexus 设备授权风控`，并维持 CLI 兼容层回归稳定 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | 2.4.8 主线 Gate（historical） | OmniPanel 稳定版 MVP 已落地（含真实窗口 smoke CI） | 仅保留历史验收记录，不再作为当前开发主线 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | v2.4.7 Gate 状态 | Gate A/B/C/D/E = ✅ Done（Gate E 为 historical；Gate D 为 historical backfill） | 保留证据链（run `23091014958` + assets/manifest/sha256），作为历史版本闭环档案 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
 | Pilot Runtime 主路径 | Node Server + Postgres/Redis + JWT Cookie，Cloudflare 相关仅保留历史归档 | 持续补强 M0/M1 回归与部署脚本 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
 | 文档治理 | 更新时间统一到 2026-03-15；`next-edit` 仅作草稿池，不作为发布判定来源 | 每周例行同步 6 份主文档状态/日期/下一动作 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
 
 ---
+
+## 🔧 当前执行清单（2周）
+
+- [x] 工作区卫生：`output/playwright` 已纳入忽略，后续开发工作区保持 0 噪音产物（2026-03-15）。
+- [x] 文档基线快照：已在 `CHANGES` 固化 `v2.4.9-beta.4`（tag/commit/CI run）发布事实（2026-03-15）。
+- [x] 主文档一致性：`TODO/README/INDEX/Roadmap/Release Checklist/Quality Baseline` 的状态/日期/下一动作三字段已对齐（2026-03-15）。
+- [x] View Mode Phase4 收口：`touch-translation` dev 配置与多源 view feature 验收证据已补齐（2026-03-15）。
+- [x] CLI 分包推进：`tuff-cli-core` 核心迁移清单落地、`@talex-touch/tuffcli` 兼容导出与文档示例统一（2026-03-15）。
+- [ ] Nexus 设备授权风控：进入下一阶段实现与验收。
+
+## 🌊 债务分波次推进（W2-W4）
+
+- [ ] Wave A（Transport）：MessagePort 高频通道迁移、`sendSync` 清理、兼容层降权。
+- [ ] Wave B（Pilot）：`typecheck/lint` 存量清理 + SSE/鉴权/渠道矩阵联调回归。
+- [ ] Wave C（架构质量）：`plugin-module` / `search-core` / `file-provider` SRP 拆分与高风险清单收口。
+- [ ] 每波产出固定证据：`CHANGES` 记录 + `TODO` 状态更新 + 可复现门禁命令集。
+
+---
+
+## 📚 历史债务池（长期）
+
+> 以下内容为中长期债务与历史事项池；以“当前执行清单（2周）”作为近期优先级入口。
 
 ## 📊 PRD 状态总览
 
@@ -85,8 +107,8 @@
 | 维度 | 变更前 | 变更后 |
 | --- | --- | --- |
 | 已完成项口径 | 已完成项分散在多个章节，部分仍混在“待实现”语义中 | `02/03/04/05/07/08` 统一按“已完成”归档，未闭环项只保留真实缺口 |
-| Q1 剩余执行顺序 | `View Mode` 与 `SDK E~F` 顺序靠后且分散 | 1) `OmniPanel Gate（已完成）` → 2) `SDK Hard-Cut E~F（已完成）` → 3) `v2.4.7 Gate D/E（已完成）` → 4) `View Mode 安全收口` |
-| CoreBox/Nexus 收尾项 | 缺少统一优先级锚点 | 5) `View Mode 安全与协议限制` → 6) `Nexus 设备授权风控` |
+| Q1 剩余执行顺序 | `View Mode` 与 `SDK E~F` 顺序靠后且分散 | 1) `OmniPanel Gate（已完成）` → 2) `SDK Hard-Cut E~F（已完成）` → 3) `v2.4.7 Gate D/E（已完成）` → 4) `View Mode 安全收口（已完成）` → 5) `CLI 分包迁移收口（已完成）` |
+| CoreBox/Nexus 收尾项 | 缺少统一优先级锚点 | 6) `主文档同步验收（已完成）` → 7) `Nexus 设备授权风控` |
 
 ---
 
@@ -191,7 +213,7 @@
 > 单一入口：`docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
 
 - [x]（历史）`package.json` 与 `apps/core-app/package.json` 曾对齐为 `2.4.7`
-- [x] Gate A（historical）：历史 `v2.4.7` 发布窗口已满足版本基线；当前 `2.4.8-beta.3` 工作区不再阻塞历史 Gate。
+- [x] Gate A（historical）：历史 `v2.4.7` 发布窗口已满足版本基线；当前 `2.4.9-beta.4` 工作区不再阻塞历史 Gate。
 - [x] 文档入口同步（`README.md` / `TODO.md` / `CHANGES.md` / `docs/INDEX.md`）
 - [x] 发布链路确认：`build-and-release.yml` + Nexus release 自动同步 + CLI 四包 npm 自动发布
 - [x] 质量门禁清零：`apps/nexus` typecheck 与 `packages/tuff-native`/`apps/nexus` lint error 归零
@@ -230,10 +252,10 @@
 - [x] CLI refine：主流程已实现，`tuff validate` 与 manifest 校验已补齐（2026-03-15）（`plan/2026-01-20_18-48-52-plugin-cli-refine.md`）
 
 ### 🧰 Tuff CLI 分包与迁移
-- [ ] 抽出 `@talex-touch/tuff-cli-core`（core/types 迁移与依赖关系整理）（`docs/plan-prd/06-ecosystem/TUFFCLI-SPLIT-PLAN.md`）
+- [x] 抽出 `@talex-touch/tuff-cli-core`（core/types 迁移与依赖关系整理）（2026-03-15）
 - [x] 新建 `@talex-touch/tuff-cli` 接管 `tuff` bin（旧包保留 shim + 提示迁移）（2026-03-15）
-- [ ] 兼容包 `@talex-touch/tuffcli` 对外导出 `defineConfig`/types（对齐 PRD 示例）
-- [ ] 文档与示例统一新包名（PRD + Nexus docs + README）
+- [x] 兼容包 `@talex-touch/tuffcli` 对外导出 `defineConfig`/types（对齐 PRD 示例）（2026-03-15）
+- [x] 文档与示例统一新包名（PRD + Nexus docs + README）（2026-03-15）
 - [x] CLI 回归验证：help/create/build/dev/publish/validate 最小烟雾 + 非交互失败码校验（2026-03-15）
 
 ---
@@ -585,9 +607,9 @@
   - [x] 协议限制 (生产环境禁止 http/https 远程 dev.source)
   - [x] Hash 路由强制检查
 
-- [ ] **Phase 4**: 配置插件 (2-3天)
-  - [ ] touch-translation 插件 dev 配置
-  - [ ] 添加"多源翻译" view feature
+- [x] **Phase 4**: 配置插件 (2-3天) ✅ (2026-03-15)
+  - [x] touch-translation 插件 dev 配置（`dev.source=true`）
+  - [x] 添加"多源翻译" view feature（`multi-source-translate` + `interaction.type=webcontent`）
 
 **验收标准**:
 - view 模式在生产/调试/源码开发三种模式均正常
@@ -924,18 +946,14 @@
 
 ## 📊 任务统计
 
-| 分组 | 任务数 | 已完成 | 剩余 | 状态 |
-|------|--------|--------|------|------|
-| 文档治理与路线图 | 5 | 3 | 2 | 基线文档与节奏同步 |
-| Plan 目录对照（2026-01） | 16 | 5 | 11 | 计划落地差距与收尾 |
-| 2026-02 新增进展 | 17 | 8 | 9 | 新增能力与收尾项 |
-| P0 紧急 | 12 | 4 | 8 | TuffEx 收尾与高优先级 |
-| P1 重要 | 31 | 22 | 9 | 关键能力与验收补齐 |
-| P2 增强 | 23 | 12 | 11 | 体验与性能增强 |
-| P3 长期 | 39 | 26 | 13 | 路线图与长周期专题 |
-| **总计** | **143** | **80** | **63** | **56% 完成** |
+| 统计项 | 数值 |
+| --- | --- |
+| 已完成 (`- [x]`) | 184 |
+| 未完成 (`- [ ]`) | 76 |
+| 总计 | 260 |
+| 完成率 | 71% |
 
-> 统计口径：仅统计本文件内勾选项；不含 pre-release 清单 6 项（见 `docs/plan-prd/03-features/download-update/pre-release-validation.md`）。
+> 统计时间：2026-03-15。口径为本文件内 checkbox 实时计数，不含外链 checklist。
 
 ---
 
@@ -952,8 +970,9 @@
 8. ~~SDK Hard-Cut E~F (P1)~~ - ✅ 已完成（2026-03-14）
 9. ~~v2.4.7 Gate D 资产一致性收口 (P1)~~ - ✅ 已完成（run `23091014958`）
 10. ~~v2.4.7 Gate E 发布动作 (P1)~~ - ✅ 历史已执行（不重发版）
-11. View Mode 增强（安全 URL / 生产协议限制）(P1) - 下一主线
-12. Nexus 设备授权风控增强 (P1) - 后置
+11. View Mode 增强（安全 URL / 生产协议限制 + Phase4）(P1) - ✅ 已完成（2026-03-15）
+12. ~~CLI 分包迁移（tuff-cli-core / tuffcli 兼容导出 / 文档统一）(P1)~~ - ✅ 已完成（2026-03-15）
+13. Nexus 设备授权风控增强 (P1) - 当前主线
 
 ### Q2 2026 (4-6月)
 5. 多视图并行 (P2) - 10-15天
@@ -995,6 +1014,6 @@
 
 ---
 
-**文档版本**: v1.15
+**文档版本**: v1.16
 **更新时间**: 2026-03-15
 **维护者**: Development Team

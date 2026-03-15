@@ -157,7 +157,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 ## 4.1 v2.4.7 GA 收口里程碑（发布推进）
 
-- **Gate A（历史已完成）**：`v2.4.7` 历史发布窗口已满足版本基线；当前 `2.4.8-beta.3` 工作区不再阻塞历史 Gate。
+- **Gate A（历史已完成）**：`v2.4.7` 历史发布窗口已满足版本基线；当前 `2.4.9-beta.4` 工作区不再阻塞历史 Gate。
 - **Gate B（已完成）**：发布链路收敛（`build-and-release` + Nexus release 同步 + CLI 四包 npm 自动发布）。
 - **Gate C（已完成）**：质量门禁清零（lint/typecheck 阻塞项收口）。
 - **Gate D（已完成）**：`sha256 + manifest` 元数据回填已收口；执行来源为 GitHub `v2.4.7` manifest 与 release 资产列表。
@@ -174,10 +174,11 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
   - 权限中心 Phase 5：`PermissionStore` 切换 SQLite 主存储，支持 `JSON -> SQLite` 一次性迁移与失败只读回退；
   - 安装链路权限确认：安装阶段支持 `always/session/deny` 三分支并显式失败反馈；
   - View Mode 安全闭环：协议限制、路径规范化、hash 路由、非法路径拦截测试补齐；
+  - View Mode Phase4：`touch-translation` 已启用 `dev.source` 与 `multi-source-translate` webcontent feature；
   - CLI 收口：`tuff` 主入口接管 + `tuff validate` 校验 + 旧入口 deprecation 提示。
 - **历史完成（2.4.8）**：
   - OmniPanel 稳定版 MVP 已通过真实窗口 smoke 与关键失败路径回归，不再作为当前开发主线。
-- **后续顺序（锁定）**：`View Mode 安全闭环+类型增强 -> CLI 切换收口 -> 主文档同步验收 -> Nexus 设备授权风控`（`OmniPanel Gate`、`SDK Hard-Cut E~F`、`v2.4.7 Gate D/E`、`权限中心 Phase 5` 已完成）。
+- **后续顺序（锁定）**：`CLI 分包迁移收口（core 真迁移 + 文档统一） -> 主文档同步验收 -> Nexus 设备授权风控`（`OmniPanel Gate`、`SDK Hard-Cut E~F`、`v2.4.7 Gate D/E`、`权限中心 Phase 5`、`View Mode Phase2~4` 已完成）。
 
 ## 5. 里程碑验收标准（跨周）
 
