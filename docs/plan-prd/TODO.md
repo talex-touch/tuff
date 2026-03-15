@@ -9,8 +9,8 @@
 
 | 主题 | 统一口径 | 下一动作 | 强制同步文档 |
 | --- | --- | --- | --- |
-| 2.4.8 主线 Gate | OmniPanel 稳定版 MVP 已作为 Gate 主线落地（含真实窗口 smoke CI） | `SDK Hard-Cut E~F` 已完成，推进 `v2.4.7 Gate D` | `TODO` / `README` / `INDEX` / `CHANGES` |
-| v2.4.7 Gate 状态 | Gate A/B/C/E = ✅ Done（Gate E 为 historical）；Gate D = 🟡 In Progress | Gate D 本地仅做 dry-run 对账；资产写入统一走 GitHub CI `sync-nexus-release`（已接入 `backfill-release-assets-from-github`，仅 `v2.4.7` 启用），签名缺口按历史豁免登记 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
+| 2.4.8 主线 Gate | OmniPanel 稳定版 MVP 已作为 Gate 主线落地（含真实窗口 smoke CI） | `SDK Hard-Cut E~F` 与 `v2.4.7 Gate D/E` 已完成，推进 `View Mode 安全收口` | `TODO` / `README` / `INDEX` / `CHANGES` |
+| v2.4.7 Gate 状态 | Gate A/B/C/D/E = ✅ Done（Gate E 为 historical；Gate D 为 historical backfill） | 保留证据链（run `23091014958` + assets/manifest/sha256）并切换 View Mode 主线 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
 | Pilot Runtime 主路径 | Node Server + Postgres/Redis + JWT Cookie，Cloudflare 相关仅保留历史归档 | 持续补强 M0/M1 回归与部署脚本 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
 | 文档治理 | 更新时间统一到 2026-03-14；`next-edit` 仅作草稿池，不作为发布判定来源 | 每周例行同步 6 份主文档状态/日期/下一动作 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
 
@@ -84,7 +84,7 @@
 | 维度 | 变更前 | 变更后 |
 | --- | --- | --- |
 | 已完成项口径 | 已完成项分散在多个章节，部分仍混在“待实现”语义中 | `02/03/04/05/07/08` 统一按“已完成”归档，未闭环项只保留真实缺口 |
-| Q1 剩余执行顺序 | `View Mode` 与 `SDK E~F` 顺序靠后且分散 | 1) `OmniPanel Gate（已完成）` → 2) `SDK Hard-Cut E~F（已完成）` → 3) `Gate D 资产元数据回填` → 4) `View Mode 安全收口` |
+| Q1 剩余执行顺序 | `View Mode` 与 `SDK E~F` 顺序靠后且分散 | 1) `OmniPanel Gate（已完成）` → 2) `SDK Hard-Cut E~F（已完成）` → 3) `v2.4.7 Gate D/E（已完成）` → 4) `View Mode 安全收口` |
 | CoreBox/Nexus 收尾项 | 缺少统一优先级锚点 | 5) `View Mode 安全与协议限制` → 6) `Nexus 设备授权风控` |
 
 ---
@@ -179,7 +179,7 @@
 
 ---
 
-## 🚀 v2.4.7 发版推进（当前）
+## 🚀 v2.4.7 发版推进（已收口）
 
 > 单一入口：`docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
 
@@ -193,11 +193,11 @@
   - [x] C3：修复 `apps/nexus` auth/device/fetch typing 相关 TS 错误
   - [x] C4：执行全量复扫并回写 Gate C 结论（`pnpm -r --if-present --no-bail run typecheck` 与全仓 eslint 已通过）
 - [x] 发布资产核对清单（文档）：`docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md`
-- [ ] 发布资产执行（Gate D）：仅保留“资产元数据一致性闭环”（本地 dry-run 对账 + CI 自动写入）
+- [x] 发布资产执行（Gate D）：资产元数据一致性已闭环（`sha256 + manifest` 已回填）
   - [x] Gate D 本地预检（2026-03-14）：`node scripts/check-release-gates.mjs --tag v2.4.7 --stage gate-d --base-url https://tuff.tagzxia.com` 已通过（notes/远端只读链路通过，P0=0）。
   - [x] Gate D 远端只读核对（2026-03-14）：`/api/releases/v2.4.7?assets=true` 与 `/assets` 已验证 `notes/notesHtml` 为 `{zh,en}`，且存在 `win32/x64`、`darwin/x64`、`linux/x64` 三平台资产。
-  - [ ] Gate D 待办：执行 `node scripts/backfill-release-assets-from-github.mjs --tag v2.4.7 --base-url https://tuff.tagzxia.com --dry-run` 做差异对账；写入动作由 GitHub Actions `build-and-release.yml` 的 `sync-nexus-release` 自动执行（`Backfill Nexus asset metadata from GitHub manifest` 步骤，仅 `v2.4.7` 启用；支持 `workflow_dispatch` + `sync_tag=v2.4.7` 手动触发同步）。
-  - [ ] Gate D 回填后复核：`GET /api/releases/v2.4.7/assets` 中 `sha256` 完整，且存在 `tuff-release-manifest.json` 资产记录。
+  - [x] Gate D 自动回填执行（2026-03-14）：GitHub Actions `Build and Release` run `23091014958`（`workflow_dispatch` + `sync_tag=v2.4.7`）完成 `sync-nexus-release` 与 backfill。
+  - [x] Gate D 回填后复核（2026-03-14）：`GET /api/releases/v2.4.7/assets` 已存在 `tuff-release-manifest.json`，且资产 `sha256` 完整。
   - [x] 签名缺口豁免：`v2.4.7` `.sig` 缺失按历史豁免（Accepted），不阻塞 Gate D 收口。
 - [x] 发布动作（Gate E）历史闭环：`v2.4.7` tag 已存在，Nexus release 已 `published`，`latest?channel=RELEASE` 命中 `v2.4.7`；不做重发版。
 
@@ -943,7 +943,7 @@
 6. ~~更新系统增强 (P2)~~ - ✅ 已落地
 7. OmniPanel 稳定版 MVP Gate（P0）- ✅ 已完成（真实窗口 smoke CI 已接入）
 8. ~~SDK Hard-Cut E~F (P1)~~ - ✅ 已完成（2026-03-14）
-9. v2.4.7 Gate D 资产一致性收口 (P1) - 进行中（本地 dry-run 对账 + GitHub CI 自动同步后收口）
+9. ~~v2.4.7 Gate D 资产一致性收口 (P1)~~ - ✅ 已完成（run `23091014958`）
 10. ~~v2.4.7 Gate E 发布动作 (P1)~~ - ✅ 历史已执行（不重发版）
 11. View Mode 增强（安全 URL / 生产协议限制）(P1) - 下一主线
 12. Nexus 设备授权风控增强 (P1) - 后置

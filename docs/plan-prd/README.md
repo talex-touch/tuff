@@ -27,10 +27,10 @@
 ## 单一口径矩阵（2026-03-14）
 
 - **2.4.8 Gate 主线**：OmniPanel 稳定版 MVP 已落地（真实窗口 smoke CI + 失败路径回归 + 触发稳定性回归）。
-- **v2.4.7 发布门禁**：Gate A/B/C/E = Done（Gate E 为 historical）；Gate D = In Progress（仅剩 `sha256 + manifest` 元数据回填）。
-  - **执行方式**：本地仅做对账，实际 release 资产写入统一由 GitHub CI（`build-and-release.yml` / `sync-nexus-release`）执行；CI 已接入 `backfill-release-assets-from-github`，仅对 `v2.4.7` 启用。
+- **v2.4.7 发布门禁**：Gate A/B/C/D/E = Done（Gate E 为 historical，Gate D 为 historical backfill）。
+  - **执行方式**：Gate D 已由 GitHub Actions `Build and Release`（run `23091014958`）通过 `workflow_dispatch(sync_tag=v2.4.7)` 完成自动回填与发布同步。
 - **Pilot Runtime 主路径**：Node Server + Postgres/Redis + JWT Cookie；Cloudflare runtime/D1/R2 仅保留历史归档描述。
-- **后续顺序（锁定）**：`v2.4.7 Gate D -> View Mode 安全收口 -> Nexus 设备授权风控`（`SDK Hard-Cut E~F` 与 `v2.4.7 Gate E` 已完成）。
+- **后续顺序（锁定）**：`View Mode 安全收口 -> Nexus 设备授权风控`（`OmniPanel Gate`、`SDK Hard-Cut E~F`、`v2.4.7 Gate D/E` 已完成）。
 
 ## 项目最终目标（North Star）
 
@@ -97,12 +97,12 @@
     - `apps/nexus/server/api/releases/*`、`apps/nexus/server/utils/auth.ts` - release scope 粒度化与兼容层
   - **状态**：GitHub Release / Nexus Release / npm CLI 发布三链路自动化闭环；官网部署由 Cloudflare Pages 平台侧 Git 自动部署
 
-- **v2.4.7 发版推进**（2026-02，进行中）
+- **v2.4.7 发版推进**（2026-02，已收口）
   - **入口**
     - `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
   - **状态**
-    - Gate A/B/C/E 已完成（Gate E 按历史闭环，不重发版）
-    - Gate D 进行中（仅资产元数据回填：`sha256 + manifest`）；`v2.4.7` 签名缺口按历史豁免
+    - Gate A/B/C/D/E 已完成（Gate E 按历史闭环，不重发版；Gate D 已完成历史回填）
+    - `v2.4.7` 签名缺口按历史豁免（Accepted waiver）
 
 - **Nexus 文档收口（不含 Pilot）**（2026-03，已落地）
   - **代码/文档**
@@ -119,7 +119,7 @@
     - 基于已完成项 `02/03/04/05/07/08` 重排剩余优先级
     - 对齐 `README.md` / `docs/INDEX.md` / `TODO.md` 导航与状态口径
   - **当前剩余优先级**
-    - `OmniPanel Gate（已完成）` → `SDK Hard-Cut E~F（已完成）` → `v2.4.7 Gate D` → `View Mode 安全收口` → `Nexus 设备授权风控`
+    - `OmniPanel Gate（已完成）` → `SDK Hard-Cut E~F（已完成）` → `View Mode 安全收口` → `Nexus 设备授权风控`
 
 - **Pilot × Intelligence（Protocol-first Runtime）**（2026-03，进行中）
   - **代码**

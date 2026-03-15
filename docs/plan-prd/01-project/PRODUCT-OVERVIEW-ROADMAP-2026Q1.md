@@ -160,9 +160,9 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - **Gate A（历史已完成）**：`v2.4.7` 历史发布窗口已满足版本基线；当前 `2.4.8-beta.3` 工作区不再阻塞历史 Gate。
 - **Gate B（已完成）**：发布链路收敛（`build-and-release` + Nexus release 同步 + CLI 四包 npm 自动发布）。
 - **Gate C（已完成）**：质量门禁清零（lint/typecheck 阻塞项收口）。
-- **Gate D（进行中）**：仅保留资产元数据回填（`sha256 + manifest`）；回填来源为 GitHub `v2.4.7` manifest 与 release 资产列表。
-  - 执行口径：本地仅做 dry-run 对账，实际写入由 GitHub CI `build-and-release.yml` 的 `sync-nexus-release` 自动执行。
-  - CI 事实：已接入 `backfill-release-assets-from-github`，且仅对 `v2.4.7` 启用，避免影响 `v2.4.9` 严格发布门禁。
+- **Gate D（已完成）**：`sha256 + manifest` 元数据回填已收口；执行来源为 GitHub `v2.4.7` manifest 与 release 资产列表。
+  - 执行口径：Gate D 写入由 GitHub CI `build-and-release.yml` 的 `sync-nexus-release` 自动执行。
+  - 验收证据：`Build and Release` run `23091014958`（`workflow_dispatch + sync_tag=v2.4.7`）成功，`/api/releases/v2.4.7/assets` 已补齐 manifest 与 sha256。
 - **Gate E（历史已完成）**：`v2.4.7` tag 已存在且 Nexus release 已 `published`；`latest?channel=RELEASE` 命中 `v2.4.7`，不执行重发版。
 - **签名缺口豁免（仅 v2.4.7）**：GitHub 原始 `v2.4.7` 无 `.sig` 资产，manifest 也无 signature 字段；按 `Accepted waiver` 处理，不扩展到 `>=2.4.8`。
 - **执行入口**：`docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
@@ -174,7 +174,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
   - 真实窗口 smoke（CI）：`show -> execute builtin -> hide`；
   - 失败路径回归：plugin 不可用/插件缺失/无上下文/异常提示（无 silent failure）；
   - 触发稳定性回归：快捷键 fallback、combo active、input-hook 生命周期清理。
-- **后续顺序（锁定）**：`v2.4.7 Gate D -> View Mode 安全收口 -> Nexus 设备授权风控`（`SDK Hard-Cut E~F` 与 `v2.4.7 Gate E` 已完成）。
+- **后续顺序（锁定）**：`View Mode 安全收口 -> Nexus 设备授权风控`（`OmniPanel Gate`、`SDK Hard-Cut E~F`、`v2.4.7 Gate D/E` 已完成）。
 
 ## 5. 里程碑验收标准（跨周）
 
