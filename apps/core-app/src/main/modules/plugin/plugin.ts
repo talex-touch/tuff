@@ -11,6 +11,7 @@ import type {
   IPlatform,
   IPluginDev,
   IPluginFeature,
+  IPluginWebview,
   ITargetFeatureLifeCycle,
   ITouchPlugin,
   PluginIssue,
@@ -310,7 +311,7 @@ export class TouchPlugin implements ITouchPlugin {
   _status: PluginStatus = PluginStatus.DISABLED
   webViewInit: boolean = false
 
-  _windows: Map<number, TouchWindow> = new Map()
+  _windows: IPluginWebview<TouchWindow> = new Map()
 
   _searchItems: TuffItem[] = []
   _lastSearchQuery: string = ''

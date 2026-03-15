@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档索引，包含所有 PRD、设计文档、实现指南
-> 更新时间: 2026-03-14
+> 更新时间: 2026-03-15
 
  ## PRD Index（以代码实现为准）
  
@@ -17,6 +17,7 @@
  - **[产品总览与 8 周路线图](./01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md)**：统一产品目标、质量约束与推进节奏
  - **[v2.4.7 发版推进清单](./01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md)**：文档进展、发布门禁与阻塞项单一入口
 - **[Nexus Release Assets 核对清单](./docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md)**：`v2.4.9` Gate D 严格执行清单（notes/assets/signature/manifest）
+- **[插件市场多源验收清单](./docs/PLUGIN-STORE-MULTI-SOURCE-ACCEPTANCE-2026-03-15.md)**：Provider 能力矩阵 + 安装链路 + 失败回滚
  - **[项目待办](./TODO.md)**：以 PRD 提炼的任务清单（需持续与代码同步）
  - **[Roadmap 任务01（TODO 现状校准）](./TODO.md)**：CoreBox/Nexus 剩余优先级与“变更前/后”对照
  - **[PRD 质量基线](./docs/PRD-QUALITY-BASELINE.md)**：活跃 PRD 必备章节与质量门禁
@@ -24,13 +25,14 @@
  - **[变更记录](./01-project/CHANGES.md)**：历史记录（不在本索引重复）
  - **[DivisionBox 文档索引](./docs/DIVISION_BOX_INDEX.md)**：DivisionBox 详细文档入口
 
-## 单一口径矩阵（2026-03-14）
+## 单一口径矩阵（2026-03-15）
 
-- **2.4.8 Gate 主线**：OmniPanel 稳定版 MVP 已落地（真实窗口 smoke CI + 失败路径回归 + 触发稳定性回归）。
+- **2.4.9 Gate 主线**：插件完善主线执行中，`权限中心 Phase 5` 已完成；`View Mode 安全闭环 + 类型增强` 与 `CLI 切换收口`进入同版本 Gate 验收。
+- **2.4.8 Gate 主线（historical）**：OmniPanel 稳定版 MVP 已落地（真实窗口 smoke CI + 失败路径回归 + 触发稳定性回归）。
 - **v2.4.7 发布门禁**：Gate A/B/C/D/E = Done（Gate E 为 historical，Gate D 为 historical backfill）。
   - **执行方式**：Gate D 已由 GitHub Actions `Build and Release`（run `23091014958`）通过 `workflow_dispatch(sync_tag=v2.4.7)` 完成自动回填与发布同步。
 - **Pilot Runtime 主路径**：Node Server + Postgres/Redis + JWT Cookie；Cloudflare runtime/D1/R2 仅保留历史归档描述。
-- **后续顺序（锁定）**：`View Mode 安全收口 -> Nexus 设备授权风控`（`OmniPanel Gate`、`SDK Hard-Cut E~F`、`v2.4.7 Gate D/E` 已完成）。
+- **后续顺序（锁定）**：`权限中心 Phase 5（已完成） -> View Mode 安全闭环+类型增强 -> CLI 切换收口 -> 主文档同步验收 -> Nexus 设备授权风控`（`OmniPanel Gate`、`SDK Hard-Cut E~F`、`v2.4.7 Gate D/E` 已完成）。
 
 ## 项目最终目标（North Star）
 
@@ -119,7 +121,7 @@
     - 基于已完成项 `02/03/04/05/07/08` 重排剩余优先级
     - 对齐 `README.md` / `docs/INDEX.md` / `TODO.md` 导航与状态口径
   - **当前剩余优先级**
-    - `OmniPanel Gate（已完成）` → `SDK Hard-Cut E~F（已完成）` → `View Mode 安全收口` → `Nexus 设备授权风控`
+    - `OmniPanel Gate（已完成）` → `SDK Hard-Cut E~F（已完成）` → `权限中心 Phase 5（已完成）` → `View Mode 安全闭环+类型增强` → `CLI 切换收口` → `主文档同步验收` → `Nexus 设备授权风控`
 
 - **Pilot × Intelligence（Protocol-first Runtime）**（2026-03，进行中）
   - **代码**
@@ -136,7 +138,7 @@
     - `apps/core-app/src/main/modules/permission/`
     - `packages/utils/permission/`
   - **状态**
-    - 核心已完成；Phase 5（测试/性能验证）已落地
+    - 核心已完成；Phase 5（SQLite 主存储迁移 + 安装时权限确认）已落地（2026-03-15）
 
 - **模块日志系统**（Phase 1-4 已落地）
   - **PRD**：`./02-architecture/module-logging-system-prd.md`
@@ -206,12 +208,12 @@
    - **缺口**
      - Warm/Cold 分层、Score 模型、Idle preload、SDK 接口、可视化/调试工具
 
- - **View Mode 与开发模式增强**（部分能力已落地）
+ - **View Mode 与开发模式增强**（安全子项已收口，结构拆分待推进）
    - **PRD**：`./03-features/view/view-mode-prd.md`
    - **代码**
      - `apps/core-app/src/main/modules/plugin/dev-server-monitor.ts`
    - **缺口**
-     - plugin-core 拆分、URL 安全构造、生产环境协议限制、Hash 路由校验
+     - plugin-core 拆分、translation dev 配置与多源翻译 feature 最终收口
 
  - **Intelligence Agents（Phase 3 部分落地）**
    - **PRD**：`./02-architecture/intelligence-agents-system-prd.md`

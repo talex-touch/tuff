@@ -124,4 +124,53 @@ describe('PluginViewLoader', () => {
     const viewUrl = enterUIModeMock.mock.calls[0]?.[0] as string
     expect(viewUrl).toBe('http://localhost:3733/multi-translate')
   })
+
+  it('blocks invalid remote route with scheme when dev.source is enabled', async () => {
+    const plugin = createPlugin({
+      dev: { enable: true, source: true, address: 'http://localhost:3733/' }
+    })
+    const feature = createFeature('javascript:alert(1)')
+
+    const result = await PluginViewLoader.loadPluginView(plugin, feature)
+
+    expect(result).toBeNull()
+    expect(enterUIModeMock).not.toHaveBeenCalled()
+    expect(plugin.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'INVALID_VIEW_PATH',
+          source: 'feature:multi-source-translate'
+        })
+      ])
+    )
+  })
+
+  it('blocks invalid local route that starts with double slash', async () => {
+    const plugin = createPlugin()
+    const feature = createFeature('//evil.example/path')
+
+    const result = await PluginViewLoader.loadPluginView(plugin, feature)
+
+    expect(result).toBeNull()
+    expect(enterUIModeMock).not.toHaveBeenCalled()
+    expect(plugin.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'INVALID_VIEW_PATH',
+          source: 'feature:multi-source-translate'
+        })
+      ])
+    )
+  })
+
+  it('loads explicit html file path from plugin root', async () => {
+    const plugin = createPlugin()
+    const feature = createFeature('views/index.html')
+
+    await PluginViewLoader.loadPluginView(plugin, feature)
+
+    expect(enterUIModeMock).toHaveBeenCalledTimes(1)
+    const viewUrl = enterUIModeMock.mock.calls[0]?.[0] as string
+    expect(viewUrl).toBe('file:///tmp/touch-translation/views/index.html')
+  })
 })

@@ -54,6 +54,11 @@ export class PermissionModule extends BaseModule {
   onInit({ file }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     // Initialize permission store
     this.store = new PermissionStore(file.dirPath!)
+    return this.initializeModule()
+  }
+
+  private async initializeModule(): Promise<void> {
+    await this.store.initialize()
 
     // Initialize permission guard
     this.guard = new PermissionGuard(this.store)
@@ -79,7 +84,7 @@ export class PermissionModule extends BaseModule {
     // Set global reference
     setPermissionModule(this)
 
-    permLog.success('Permission module initialized')
+    permLog.success(`Permission module initialized (${this.store.getBackendMode()})`)
   }
 
   private registerChannels(): void {
@@ -272,6 +277,11 @@ export class PermissionModule extends BaseModule {
     this.broadcastUpdate(pluginId)
   }
 
+  grantSession(pluginId: string, permissions: string[]): void {
+    this.store.grantSessionMultiple(pluginId, permissions)
+    this.broadcastUpdate(pluginId)
+  }
+
   /**
    * Check if plugin needs permission confirmation (for startup)
    */
@@ -313,7 +323,7 @@ export class PermissionModule extends BaseModule {
     this.broadcastUpdate(pluginId)
   }
 
-  onDestroy(): MaybePromise<void> {
+  async onDestroy(): Promise<void> {
     // Log final performance stats
     const stats = this.guard.getPerformanceStats()
     if (stats.totalChecks > 0) {
@@ -321,8 +331,8 @@ export class PermissionModule extends BaseModule {
         `Performance: ${stats.totalChecks} checks, avg ${stats.avgDurationMs}ms, max ${stats.maxDurationMs}ms, target met: ${stats.meetsTarget}`
       )
     }
-    // Save any pending changes
-    this.store.save()
+    // Flush and close backend
+    await this.store.shutdown()
     permLog.info('Permission module destroyed')
   }
 }

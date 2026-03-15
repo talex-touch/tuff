@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-03-14  
+> 更新时间：2026-03-15  
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -179,3 +179,19 @@
 - Renderer（Electron）网络请求必须通过 Main 网关或统一 NetworkSDK，不允许直连扩散。
 - 本地文件读取统一走 network file API（`readText/readBinary/toTfileUrl`），避免分散路径解析策略。
 - 任意 workspace 新增 direct `fetch/axios` 视为门禁失败（CI fail），不得以临时 allowlist 作为长期方案。
+
+### 6.7 2.4.9 插件完善主线（2026-03-15）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 权限中心 Phase 5 | SQLite 主存储 + JSON 一次性迁移 + 失败只读回退 | 已完成 |
+| 安装权限确认 | `always/session/deny` 三分支 | 已完成 |
+| View Mode 安全闭环 | 协议/path/hash/dev-prod 边界用例补齐 | 已完成 |
+| CLI 收口 | `tuff` 主入口 + `tuff validate` + 兼容入口提示 | 已完成 |
+| 校验门禁 | `typecheck:node`/`typecheck:web`/定向 vitest/CLI smoke | 已通过 |
+
+**质量约束落地**
+- 安装失败路径必须可见（拒绝授权、异常、超时均不得 silent failure）。
+- 事件/类型变更仅允许可选字段追加，禁止破坏既有语义与兼容性。
+- `@talex-touch/tuff-cli` 为命令主入口，旧入口仅兼容 shim + deprecation，不承载新命令逻辑。

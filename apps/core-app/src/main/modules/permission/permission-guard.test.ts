@@ -18,11 +18,13 @@ describe('permissionGuardPerformance', () => {
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'permission-perf-'))
     store = new PermissionStore(tempDir)
+    await store.initialize()
     await store.grant(TEST_PLUGIN_ID, TEST_PERMISSION_ID, 'user')
     guard = new PermissionGuard(store)
   })
 
   afterEach(async () => {
+    await store?.shutdown()
     if (!tempDir) return
     await fs.rm(tempDir, { recursive: true, force: true })
   })

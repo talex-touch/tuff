@@ -7,6 +7,7 @@ import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
+import fs from 'fs-extra'
 import {
   getEnvOrDefault,
   getTuffBaseUrl,
@@ -14,6 +15,14 @@ import {
   setRuntimeEnv,
 } from '@talex-touch/utils/env'
 import { networkClient } from '@talex-touch/utils/network'
+import {
+  CATEGORY_REQUIRED_MIN_VERSION,
+  CURRENT_SDK_VERSION,
+} from '@talex-touch/utils/plugin'
+import {
+  normalizePermissionId,
+  permissionRegistry,
+} from '@talex-touch/utils/permission'
 import { parseBuildArgs, parseDevArgs } from '../cli/args'
 import { runCreate } from '../cli/commands'
 import {
@@ -93,6 +102,12 @@ function getPrivacyUrl(): string {
 // Initialize i18n with system locale
 initI18n()
 
+if (process.env.TUFF_CLI_ENTRY !== '@talex-touch/tuff-cli') {
+  console.warn(
+    '[DEPRECATED] `@talex-touch/unplugin-export-plugin` CLI entry is deprecated. Please use `@talex-touch/tuff-cli`.',
+  )
+}
+
 function printHelp() {
   console.log('Usage: tuff <command> [options]')
   console.log('')
@@ -102,6 +117,7 @@ function printHelp() {
   console.log('  builder     Package existing build output into .tpex')
   console.log('  dev         Start Vite dev server for plugin development')
   console.log('  publish     Publish plugin package to Tuff Nexus')
+  console.log('  validate    Validate manifest.json and permission declarations')
   console.log('  login       Authenticate with Tuff Nexus')
   console.log('  logout      Clear authentication')
   console.log('  help        Show this help message')
@@ -130,6 +146,7 @@ function printAbout() {
   console.log('  - builder: Package existing build output into .tpex')
   console.log('  - dev:     Start a Vite dev server for plugin development')
   console.log('  - publish: Publish plugin packages to Nexus server')
+  console.log('  - validate: Validate manifest compatibility and permissions')
 }
 
 function printBuildHelp() {
@@ -151,6 +168,16 @@ function printDevHelp() {
   console.log('  --host [host]   Dev server host (omit value to listen on all)')
   console.log('  --open          Open browser on start')
   console.log('  --help, -h      Show this help message')
+  console.log('')
+}
+
+function printValidateHelp() {
+  console.log('Usage: tuff validate [options]')
+  console.log('')
+  console.log('Options:')
+  console.log('  --manifest <path>  Manifest file path (default: ./manifest.json)')
+  console.log('  --strict           Treat warnings as errors')
+  console.log('  --help, -h         Show this help message')
   console.log('')
 }
 
@@ -498,6 +525,135 @@ async function runDev(args: string[] = []) {
     const message = error instanceof Error ? error.message : String(error)
     console.error(`tuff dev failed: ${message}`)
     process.exitCode = 1
+  }
+}
+
+interface ValidateOptions {
+  manifestPath: string
+  strict: boolean
+}
+
+function parseValidateArgs(args: string[]): ValidateOptions {
+  let strict = false
+  let manifestPath = path.resolve(process.cwd(), 'manifest.json')
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i]
+    if (arg === '--strict') {
+      strict = true
+      continue
+    }
+    if (arg === '--manifest') {
+      const next = args[i + 1]
+      if (!next || next.startsWith('-')) {
+        throw new Error('Missing value for --manifest')
+      }
+      manifestPath = path.resolve(process.cwd(), next)
+      i += 1
+      continue
+    }
+    if (arg.startsWith('--manifest=')) {
+      const value = arg.slice('--manifest='.length)
+      if (!value) {
+        throw new Error('Missing value for --manifest')
+      }
+      manifestPath = path.resolve(process.cwd(), value)
+      continue
+    }
+  }
+
+  return { manifestPath, strict }
+}
+
+function collectRawPermissionIds(manifest: Record<string, unknown>): string[] {
+  const permissions = manifest.permissions
+  if (Array.isArray(permissions)) {
+    return permissions.filter((id): id is string => typeof id === 'string')
+  }
+  if (!permissions || typeof permissions !== 'object') {
+    return []
+  }
+  const required = Array.isArray((permissions as { required?: unknown }).required)
+    ? ((permissions as { required?: unknown[] }).required || [])
+    : []
+  const optional = Array.isArray((permissions as { optional?: unknown }).optional)
+    ? ((permissions as { optional?: unknown[] }).optional || [])
+    : []
+  return [...required, ...optional].filter((id): id is string => typeof id === 'string')
+}
+
+async function runValidate(args: string[] = []) {
+  if (args.includes('--help') || args.includes('-h')) {
+    printValidateHelp()
+    return
+  }
+
+  const options = parseValidateArgs(args)
+  if (!(await fs.pathExists(options.manifestPath))) {
+    throw new Error(`Manifest not found: ${options.manifestPath}`)
+  }
+
+  let manifest: Record<string, unknown>
+  try {
+    manifest = (await fs.readJson(options.manifestPath)) as Record<string, unknown>
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Invalid JSON in manifest: ${message}`)
+  }
+
+  const errors: string[] = []
+  const warnings: string[] = []
+
+  const name = typeof manifest.name === 'string' ? manifest.name.trim() : ''
+  if (!name) {
+    errors.push('Missing required field: "name"')
+  }
+  const version = typeof manifest.version === 'string' ? manifest.version.trim() : ''
+  if (!version) {
+    errors.push('Missing required field: "version"')
+  }
+
+  const sdkapi = manifest.sdkapi
+  if (typeof sdkapi !== 'number' || !Number.isFinite(sdkapi)) {
+    errors.push(`Missing or invalid "sdkapi". Current required sdkapi: ${CURRENT_SDK_VERSION}`)
+  } else if (sdkapi < CURRENT_SDK_VERSION) {
+    warnings.push(`Outdated sdkapi (${sdkapi}). Recommended: ${CURRENT_SDK_VERSION}`)
+  }
+
+  const category = typeof manifest.category === 'string' ? manifest.category.trim() : ''
+  if (typeof sdkapi === 'number' && sdkapi >= CATEGORY_REQUIRED_MIN_VERSION && !category) {
+    errors.push(
+      `Missing required "category" when sdkapi >= ${CATEGORY_REQUIRED_MIN_VERSION}`,
+    )
+  }
+
+  const rawPermissionIds = collectRawPermissionIds(manifest)
+  const normalizedPermissionIds = [...new Set(rawPermissionIds.map(id => normalizePermissionId(id)))]
+  const unknownPermissions = normalizedPermissionIds.filter(id => !permissionRegistry.has(id))
+  if (unknownPermissions.length > 0) {
+    errors.push(`Unknown permissions: ${unknownPermissions.join(', ')}`)
+  }
+
+  if (normalizedPermissionIds.length === 0) {
+    warnings.push('No declared permissions found in manifest.permissions')
+  }
+
+  const resultWarnings = options.strict ? [...warnings] : warnings
+  if (options.strict && warnings.length > 0) {
+    errors.push('Strict mode enabled: warnings treated as errors')
+  }
+
+  if (errors.length > 0) {
+    errors.forEach((message) => console.error(`✖ ${message}`))
+    if (resultWarnings.length > 0) {
+      resultWarnings.forEach((message) => console.warn(`⚠ ${message}`))
+    }
+    throw new Error(`Manifest validation failed (${errors.length} error(s))`)
+  }
+
+  console.log(`✔ Manifest is valid: ${options.manifestPath}`)
+  if (warnings.length > 0) {
+    warnings.forEach((message) => console.warn(`⚠ ${message}`))
   }
 }
 
@@ -1163,6 +1319,9 @@ async function main() {
     }
     else if (command === 'dev') {
       await runDev(commandArgs)
+    }
+    else if (command === 'validate') {
+      await runValidate(commandArgs)
     }
     else if (command === 'publish') {
       const { printPublishHelp } = await loadPublishModule()

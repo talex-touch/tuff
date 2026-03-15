@@ -74,8 +74,13 @@ export interface IPluginBaseInfo {
 export interface IPluginDev {
   enable: boolean
   address: string
+  /**
+   * Enable loading manifest/view/readme from dev server.
+   */
   source?: boolean
 }
+
+export type IPluginWebview<TWindow = unknown> = Map<number, TWindow>
 
 /**
  * SDK API version for plugin compatibility checking.

@@ -58,6 +58,57 @@
 - `docs/plan-prd/01-project/CHANGES.md`
 - `docs/INDEX.md`
 
+### Core-app：2.4.9 插件主线收口（权限 Phase5 + View 安全 + CLI validate）
+
+**变更类型**: 插件治理收口 / 安装链路增强 / CLI 兼容升级
+
+**描述**:
+- 权限中心 Phase 5 落地：
+  - `PermissionStore` 切换为 SQLite 主存储（`permissions.db`）；
+  - 启动时支持 `permissions.json -> SQLite` 一次性迁移，迁移后保留 JSON 备份；
+  - SQLite 不可用时进入 JSON 只读回退并输出告警。
+- 插件安装链路新增权限确认：
+  - 安装队列在 finalize 前增加 `permissions` 确认阶段；
+  - 渲染侧支持 `always/session/deny` 三选一；
+  - 拒绝授权时安装失败可感知，不再 silent failure。
+- View Mode 安全回归补齐：
+  - 增加非法协议、双斜杠路径、显式 html 文件路径等边界测试；
+  - 类型侧补齐 `IPluginWebview`，`IPluginDev.source` 与 `PluginIssue` 字段语义对齐。
+- CLI 收口：
+  - `tuff` 新增 `validate` 子命令（manifest/sdkapi/category/permissions 校验）；
+  - `@talex-touch/tuff-cli` 入口标记为主入口；
+  - `@talex-touch/unplugin-export-plugin` 保留兼容入口并输出迁移提示。
+- 文档闭环：
+  - 新增插件市场多源验收文档并同步 `TODO/README/INDEX` 状态口径；
+  - 六份主文档（`TODO/README/INDEX/Roadmap/Release Checklist/Quality Baseline`）更新时间与 `2.4.9` 主线顺序已统一到 `2026-03-15`。
+
+**验证结果**:
+- `pnpm -C "apps/core-app" run typecheck:node` ✅
+- `pnpm -C "apps/core-app" run typecheck:web` ✅
+- `pnpm -C "apps/core-app" exec vitest run "src/main/modules/permission/permission-store.test.ts" "src/main/modules/permission/permission-guard.test.ts" "src/main/modules/plugin/install-queue.test.ts" "src/main/modules/plugin/view/plugin-view-loader.test.ts"` ✅（17 tests passed）
+- `node packages/tuff-cli/bin/tuff.js --help|create --help|build --help|dev --help|publish --help|validate --help` ✅
+- `node packages/tuff-cli/bin/tuff.js validate --manifest <invalid> --strict` 返回非交互失败码 `1` ✅
+- `node packages/unplugin-export-plugin/dist/bin/tuff.js --help` 输出 deprecation 提示 ✅
+
+**修改文件（关键）**:
+- `apps/core-app/src/main/modules/permission/permission-store.ts`
+- `apps/core-app/src/main/modules/permission/index.ts`
+- `apps/core-app/src/main/modules/plugin/install-queue.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/renderer/src/modules/install/install-manager.ts`
+- `apps/core-app/src/main/modules/plugin/view/plugin-view-loader.test.ts`
+- `apps/core-app/src/main/modules/plugin/install-queue.test.ts`
+- `apps/core-app/src/main/modules/permission/permission-store.test.ts`
+- `packages/utils/plugin/install.ts`
+- `packages/utils/plugin/index.ts`
+- `packages/unplugin-export-plugin/src/bin/tuff.ts`
+- `packages/tuff-cli/bin/tuff.js`
+- `docs/plan-prd/docs/PLUGIN-STORE-MULTI-SOURCE-ACCEPTANCE-2026-03-15.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-03-14
 
 ### Pilot：附件空正文提示 + MinIO env 直连兜底
