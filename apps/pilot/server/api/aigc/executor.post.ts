@@ -100,6 +100,8 @@ const STREAM_DELTA_EMIT_CHUNK_SIZE = 32
 const TITLE_STREAM_CHUNK_SIZE = 6
 const INLINE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
 const INLINE_IMAGE_TOTAL_MAX_BYTES = 12 * 1024 * 1024
+const INLINE_FILE_MAX_BYTES = 10 * 1024 * 1024
+const INLINE_FILE_TOTAL_MAX_BYTES = 16 * 1024 * 1024
 
 function resolveExecutorModel(rawModel: unknown, fallbackModel: string): string {
   const candidate = String(rawModel || '').trim()
@@ -254,6 +256,7 @@ function resolveLegacyAttachments(
   const attachments: UserMessageAttachment[] = []
   let inlineImageCount = 0
   let inlineImageBytes = 0
+  let inlineFileBytes = 0
 
   for (let index = 0; index < rawAttachments.length; index += 1) {
     const item = rawAttachments[index]
@@ -322,13 +325,42 @@ function resolveLegacyAttachments(
       continue
     }
 
-    attachments.push({
+    const attachment: UserMessageAttachment = {
       id,
       type: 'file',
       ref,
       name: item.name,
       mimeType: item.data,
-    })
+    }
+
+    const uploadId = parseQuotaUploadIdFromUrl(rawValue)
+    if (uploadId) {
+      const object = getQuotaUploadObject(uploadId)
+      if (object && object.data.byteLength > 0) {
+        const objectBytes = object.data.byteLength
+        attachment.mimeType = object.mimeType || attachment.mimeType
+        attachment.size = objectBytes
+
+        const canInlineFile = objectBytes <= INLINE_FILE_MAX_BYTES
+          && (inlineFileBytes + objectBytes) <= INLINE_FILE_TOTAL_MAX_BYTES
+        if (canInlineFile) {
+          const mimeType = attachment.mimeType || 'application/octet-stream'
+          attachment.dataUrl = `data:${mimeType};base64,${Buffer.from(object.data).toString('base64')}`
+          inlineFileBytes += objectBytes
+        }
+        else if (ref.startsWith('http://') || ref.startsWith('https://')) {
+          attachment.previewUrl = ref
+        }
+
+        attachments.push(attachment)
+        continue
+      }
+    }
+
+    if (ref.startsWith('http://') || ref.startsWith('https://')) {
+      attachment.previewUrl = ref
+    }
+    attachments.push(attachment)
   }
 
   return {
