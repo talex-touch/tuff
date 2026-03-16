@@ -2312,9 +2312,6 @@ importers:
 
   packages/unplugin-export-plugin:
     dependencies:
-      '@talex-touch/tuff-cli':
-        specifier: workspace:*
-        version: link:../tuff-cli
       '@talex-touch/utils':
         specifier: workspace:*
         version: link:../utils
