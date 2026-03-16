@@ -38,7 +38,7 @@ const emit = defineEmits<{
 
 const attachmentInputRef = ref<HTMLInputElement | null>(null)
 
-const composerDisabled = computed(() => props.running || !props.activeSessionId)
+const composerDisabled = computed(() => !props.activeSessionId)
 const traceVisible = computed({
   get: () => props.traceDrawerOpen,
   set: value => emit('update:traceDrawerOpen', value),
@@ -50,6 +50,18 @@ function onDraftChange(value: string) {
 
 function onComposerSend(payload: { text: string }) {
   emit('send', payload)
+}
+
+function onComposerPaste(event: ClipboardEvent) {
+  if (composerDisabled.value) {
+    return
+  }
+  const files = Array.from(event.clipboardData?.files || []).filter(file => file.size > 0)
+  if (files.length <= 0) {
+    return
+  }
+  event.preventDefault()
+  emit('uploadFiles', files)
 }
 
 function triggerAttachmentPicker() {
@@ -122,6 +134,7 @@ function onAttachmentSelected(event: Event) {
           :model-value="props.draft"
           :disabled="composerDisabled"
           :submitting="props.running"
+          allow-attachment-while-submitting
           :attachments="props.composerAttachments"
           allow-empty-send
           :placeholder="props.running ? 'Tuff Pilot 正在生成中...' : '输入消息...'"
@@ -133,11 +146,13 @@ function onAttachmentSelected(event: Event) {
           send-button-text="发送"
           @update:model-value="onDraftChange"
           @attachment-click="triggerAttachmentPicker"
+          @paste="onComposerPaste"
           @send="onComposerSend"
         />
         <input
           ref="attachmentInputRef"
           type="file"
+          accept="image/*,application/pdf,text/*,.md,.json,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
           multiple
           class="pilot-hidden-input"
           @change="onAttachmentSelected"

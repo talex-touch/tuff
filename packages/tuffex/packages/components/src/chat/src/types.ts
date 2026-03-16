@@ -37,6 +37,7 @@ export interface ChatComposerProps {
   placeholder?: string
   disabled?: boolean
   submitting?: boolean
+  allowAttachmentWhileSubmitting?: boolean
   minRows?: number
   maxRows?: number
   sendOnEnter?: boolean
@@ -59,6 +60,7 @@ export interface ChatComposerEmits {
   (e: 'update:modelValue', value: string): void
   (e: 'send', payload: { text: string }): void
   (e: 'attachmentClick'): void
+  (e: 'paste', event: ClipboardEvent): void
   (e: 'focus', event: FocusEvent): void
   (e: 'blur', event: FocusEvent): void
 }
