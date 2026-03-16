@@ -1,6 +1,6 @@
 # Tuff CLI 分包与迁移提案（执行回填版）
 
-> 更新时间: 2026-03-15  
+> 更新时间: 2026-03-16  
 > 执行结论: Phase1 + Phase2 已完成（`tuff-cli` 主入口、`tuff-cli-core` 核心编排、`unplugin` 兼容 shim）
 
 ## 1. 背景与现状（历史）
@@ -59,6 +59,9 @@ tuff-cli (bin + prompts)
 3. **配置导出迁移**：
    - `@talex-touch/tuffcli` 提供 `defineConfig` 与类型，内部转发到 `tuff-cli-core`。
    - `@talex-touch/unplugin-export-plugin/types` 继续保留一段时间。
+4. **退场时间窗（锁定）**：
+   - `2.4.x`：保留旧 CLI shim（仅转发 + 提示）。
+   - `2.5.0`：移除 shim，旧入口不再承载 CLI 命令逻辑。
 
 ## 6. 迁移阶段（建议）
 

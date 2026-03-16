@@ -17,7 +17,8 @@
  - **[产品总览与 8 周路线图](./01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md)**：统一产品目标、质量约束与推进节奏
  - **[v2.4.7 发版推进清单](./01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md)**：文档进展、发布门禁与阻塞项单一入口
 - **[Nexus Release Assets 核对清单](./docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md)**：`v2.4.9` Gate D 严格执行清单（notes/assets/signature/manifest）
-- **[插件市场多源验收清单](./docs/PLUGIN-STORE-MULTI-SOURCE-ACCEPTANCE-2026-03-15.md)**：Provider 能力矩阵 + 安装链路 + 失败回滚
+ - **[插件市场多源验收清单](./docs/PLUGIN-STORE-MULTI-SOURCE-ACCEPTANCE-2026-03-15.md)**：Provider 能力矩阵 + 安装链路 + 失败回滚
+ - **[Nexus 设备授权风控实施方案](./04-implementation/NexusDeviceAuthRiskControl-260316.md)**：`2.4.9` 下一主线执行入口（目标/分期/验收/回滚）
  - **[项目待办](./TODO.md)**：以 PRD 提炼的任务清单（需持续与代码同步）
  - **[Roadmap 任务01（TODO 现状校准）](./TODO.md)**：CoreBox/Nexus 剩余优先级与“变更前/后”对照
  - **[PRD 质量基线](./docs/PRD-QUALITY-BASELINE.md)**：活跃 PRD 必备章节与质量门禁
@@ -28,18 +29,19 @@
 
 ## 单一口径矩阵（2026-03-16）
 
-- **2.4.9 Gate 主线**：插件完善主线执行中，`权限中心 Phase 5`、`View Mode Phase 2~4`、`CLI 分包迁移（Phase1+2）`、`主文档同步验收`已完成。
+- **2.4.9 Gate 主线**：插件完善主线收口完成，当前进入 `Nexus 设备授权风控` 文档化与实施阶段。
 - **当前工作区基线**：`2.4.9-beta.4`（tag: `v2.4.9-beta.4`，CI: Build and Release / Contributes / Pilot Image Publish / CodeQL 全绿）。
 - **2.4.8 Gate 主线（historical）**：OmniPanel 稳定版 MVP 已落地（真实窗口 smoke CI + 失败路径回归 + 触发稳定性回归）。
 - **v2.4.7 发布门禁**：Gate A/B/C/D/E = Done（Gate E 为 historical，Gate D 为 historical backfill）。
   - **执行方式**：Gate D 已由 GitHub Actions `Build and Release`（run `23091014958`）通过 `workflow_dispatch(sync_tag=v2.4.7)` 完成自动回填与发布同步。
 - **Pilot Runtime 主路径**：Node Server + Postgres/Redis + JWT Cookie；Cloudflare runtime/D1/R2 仅保留历史归档描述。
-- **后续顺序（锁定）**：`Nexus 设备授权风控`（前序 `CLI 分包迁移收口（core 真迁移 + 文档统一）` 与 `主文档同步验收` 已完成）。
+- **后续顺序（锁定）**：`Nexus 设备授权风控`（执行入口：`04-implementation/NexusDeviceAuthRiskControl-260316.md`；前序 `CLI 分包迁移收口（core 真迁移 + 文档统一）` 与 `主文档同步验收` 已完成）。
 
 ## 当前执行清单（2周）
 
 - 完成工作区卫生与文档基线核对（状态/日期/下一动作三字段一致）。
 - 完成 CLI 分包迁移（`tuff-cli-core` 真迁移 + `@talex-touch/tuffcli` 兼容导出与示例统一）并通过命令烟雾回归。
+- 固化 CLI 兼容层生命周期：`2.4.x` 保留 `unplugin` shim，计划在 `2.5.0` 退场。
 - 输出 Wave A/B/C 的分波次执行清单与验收命令，作为后续全仓债务治理入口。
 
 ## 项目最终目标（North Star）

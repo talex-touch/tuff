@@ -71,7 +71,8 @@
 ## 4. 后续主线（Gate D 收口后）
 
 1. `2.4.9` 主线下一动作固定为：`Nexus 设备授权风控`（`权限中心 Phase 5`、`View Mode Phase2~4`、`CLI 分包迁移收口`、`主文档同步验收` 已完成）。
-2. `Nexus 设备授权风控` 作为下一阶段后置项推进。
-3. `>=2.4.8` 发布恢复严格门禁：`manifest + sha256 + signatureUrl` 全量完整，不沿用 `v2.4.7` 豁免。
+2. `Nexus 设备授权风控` 作为下一阶段后置项推进（执行入口：`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md`）。
+3. CLI 兼容层生命周期固定为：`2.4.x` 保留 `unplugin` shim，`2.5.0` 退场。
+4. `>=2.4.8` 发布恢复严格门禁：`manifest + sha256 + signatureUrl` 全量完整，不沿用 `v2.4.7` 豁免。
 
 > 2026-03-16 更新：`CLI 分包迁移` 与 `主文档同步验收` 已完成，当前下一动作聚焦 `Nexus 设备授权风控`。

@@ -1,6 +1,6 @@
 # Pilot × Intelligence API / 事件契约（V1）
 
-> 更新时间：2026-03-09  
+> 更新时间：2026-03-16  
 > 适用范围：`apps/pilot`、`packages/tuff-intelligence`
 
 ## 1. 目标与范围
@@ -9,15 +9,17 @@
 - 运行模型：SSE + checkpoint/replay，优先保障长对话与断线恢复。
 - 协议基线：内部事件以 `aep/1` 为核心，服务端流式层做最小包装。
 
-## 2. 存储模型（D1/R2）
+## 2. 存储模型（Node Server 主路径）
 
-- D1 SoT（会话/消息/trace/checkpoint/附件元数据）
+- Postgres SoT（会话/消息/trace/checkpoint/附件元数据）
   - `pilot_chat_sessions`
   - `pilot_chat_messages`
   - `pilot_chat_trace`
   - `pilot_chat_checkpoints`
   - `pilot_chat_attachments`
-- R2：附件二进制对象。
+- Redis：会话态与流式辅助缓存（执行态、心跳、短期幂等）。
+- MinIO（S3 兼容）：附件二进制对象主路径（`s3://` ref）。
+- 历史语境：Cloudflare runtime / D1 / R2 仅保留在 `CHANGES` 与归档文档，不再作为当前主路径。
 - 规则：业务明文不通过 JSON 文件落地同步，遵循 SoT 约束。
 
 ## 3. HTTP API
@@ -37,7 +39,7 @@
   - 出参：`{ messages, attachments }`
   - 约定：
     - `messages[].metadata.attachments?`：当前用户消息携带的附件快照（无 `dataUrl` 大字段）。
-    - `attachments[]`：会话附件清单，包含 `ref`（`memory://` 或 `r2://`）与 `previewUrl`（受控预览地址）。
+    - `attachments[]`：会话附件清单，包含 `ref`（`memory://` 或 `s3://`）与 `previewUrl`（受控预览地址）。
 
 - `GET /api/pilot/chat/sessions/:sessionId/trace?fromSeq=&limit=`
   - 出参：`{ traces }`
@@ -48,7 +50,7 @@
   - 入参：`{ name, mimeType, size, contentBase64 }`
   - 约束：若运行环境为本地/私网且未配置 MinIO（或未配置可用公网 Base URL），接口返回 `400` 并拒绝附件上传。
   - 出参：
-    - `attachment`（D1 元数据，含 `previewUrl`）
+    - `attachment`（Postgres 元数据，含 `previewUrl`）
     - `upload`（签名 URL 元信息）
     - `directUploaded`（本次请求已写入对象存储）
 
@@ -62,7 +64,7 @@
 - 图片附件：服务端优先转 `data URL`，在模型侧按多模态输入（`image_url` / `input_image`）注入。
 - 当附件存储为 MinIO（`s3://`）且存在可访问对象 URL 时，优先使用 URL 注入，避免大图 `data URL` 膨胀。
 - 非图片附件：当前仅注入结构化元数据（`name/mimeType/size/ref`），不做 PDF/Office/OCR 通用解析。
-- 存储迁移位：当前支持 `memory` 与 `R2`，通过统一 `ref` 协议兼容后续 MinIO（S3 兼容）迁移。
+- 存储策略：当前支持 `memory` 与 `s3(minio)`；历史 `r2://` 仅作为兼容读取语境，不作为新增写入目标。
 
 #### 3.3.2 本地 MinIO 联调（新增）
 
@@ -72,33 +74,26 @@
   - `PILOT_MINIO_BUCKET`
   - `PILOT_MINIO_ACCESS_KEY`
   - `PILOT_MINIO_SECRET_KEY`
-  - 可选：`PILOT_MINIO_REGION`（默认 `us-east-1`）、`PILOT_MINIO_FORCE_PATH_STYLE`（默认 `true`）
-  - 可选：`PILOT_MINIO_PUBLIC_BASE_URL`（推荐为 bucket root URL，用于直接返回模型可访问 URL）
+- 可选：`PILOT_MINIO_REGION`（默认 `us-east-1`）、`PILOT_MINIO_FORCE_PATH_STYLE`（默认 `true`）
+- 可选：`PILOT_MINIO_PUBLIC_BASE_URL`（推荐为 bucket root URL，用于直接返回模型可访问 URL）
 - 无 MinIO 时可仅配置 `PILOT_ATTACHMENT_PUBLIC_BASE_URL`，系统会返回签名的附件内容 URL（`/attachments/:id/content?exp&sig`）。
-- 支持运行时动态配置（D1 持久化）：
+- 支持运行时动态配置（数据库持久化）：
   - `GET /api/pilot/admin/storage-config`
   - `POST /api/pilot/admin/storage-config`
   - 页面入口：`/admin/storage`
 
-#### 3.3.3 Cloudflare Dashboard 配置基线（2026-03-09）
+#### 3.3.3 当前运维配置基线（Node Server / 1Panel）
 
-已在 `tuff-pilot` 项目 `preview/production` 环境写入（Secrets）：
-- `PILOT_ATTACHMENT_PROVIDER=auto`
-- `PILOT_ATTACHMENT_PUBLIC_BASE_URL`
-- `PILOT_ATTACHMENT_SIGNING_SECRET`
-- `PILOT_MINIO_REGION=us-east-1`
-- `PILOT_MINIO_FORCE_PATH_STYLE=true`
-
-仍需人工填入真实值（按环境）：
-- `PILOT_NEXUS_OAUTH_CLIENT_ID`
-- `PILOT_NEXUS_OAUTH_CLIENT_SECRET`
-- `PILOT_NEXUS_INTERNAL_ORIGIN`（如有内网回调）
-- MinIO 启用时：
+- 认证主路径：JWT(access/refresh) + HttpOnly Cookie（含 `PILOT_COOKIE_SECRET`）。
+- 存储主路径：Postgres + Redis + MinIO（数据库配置可在 `/admin/storage` 动态调整）。
+- 推荐最小变量：
+  - `PILOT_ATTACHMENT_PROVIDER`
+  - `PILOT_ATTACHMENT_PUBLIC_BASE_URL`
+  - `PILOT_ATTACHMENT_SIGNING_SECRET`
   - `PILOT_MINIO_ENDPOINT`
   - `PILOT_MINIO_BUCKET`
   - `PILOT_MINIO_ACCESS_KEY`
   - `PILOT_MINIO_SECRET_KEY`
-  - `PILOT_MINIO_PUBLIC_BASE_URL`（可选）
 
 ### 3.4 会话控制
 
@@ -208,20 +203,20 @@ sequenceDiagram
   participant UI as Pilot UI
   participant API as Pilot API
   participant RT as Agent Runtime
-  participant D1 as D1 Store
+  participant PG as Postgres Store
 
   UI->>API: POST /stream (message)
   API->>RT: onMessage()
-  RT->>D1: appendTrace(seq++) + checkpoint
+  RT->>PG: appendTrace(seq++) + checkpoint
   API-->>UI: SSE assistant.delta/final
   API-->>UI: SSE stream.heartbeat (interval)
 
   UI-x API: network disconnect
   API->>RT: keep running in background (waitUntil)
-  RT->>D1: continue appendTrace(seq++)
+  RT->>PG: continue appendTrace(seq++)
 
   UI->>API: POST /stream ({fromSeq:lastSeq+1, follow:true})
-  API->>D1: listTrace(fromSeq)
+  API->>PG: listTrace(fromSeq)
   API-->>UI: SSE replay events (replay=true)
   API-->>UI: SSE tail events (replay=false)
   API-->>UI: SSE done
@@ -251,7 +246,7 @@ sequenceDiagram
 
 - `packages/tuff-intelligence`：Protocol/Runtime/Registry/Policy/Store 抽象与默认实现。
 - DeepAgent 最小实现（LangChain engine + Responses 调用 + 审计/错误类型）统一由 `packages/tuff-intelligence/src/adapters/deepagent-engine.ts` 提供。
-- `apps/pilot`：HTTP 入口、SSE 桥接、页面交互、Edge 运行时适配。
+- `apps/pilot`：HTTP 入口、SSE 桥接、页面交互、Node Server 运行时适配。
 - 约束：业务层禁止直接依赖 OpenAI/Anthropic 原始响应格式，统一通过 DecisionAdapter 归一化。
 
 ## 11. 统一事件契约（Pilot/Nexus/Core）

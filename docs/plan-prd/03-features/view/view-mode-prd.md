@@ -1,5 +1,8 @@
 # PRD: 插件系统 "View Mode" 与开发模式增强 (v2.0)
 
+> 更新时间：2026-03-16  
+> 当前状态：Phase 2~4 已落地并完成安全回归；结构拆分项保留为后续债务清理项
+
 ## 1. 背景与目标
 
 当前插件系统需要一种机制，允许插件开发者声明一个 `feature` 作为一种特殊的 **“视图模式” (View Mode)**。当用户触发此类 `feature` 时，系统应自动展开主窗口并加载一个由该插件提供的 Web UI 界面。
@@ -133,11 +136,29 @@ function buildViewUrl(feature: Feature, env: RuntimeEnv) {
 ## 4. 实施计划 (TODO List)
 
 1.  **[ ] (结构) 拆分 `plugin-core.ts`**
-2.  **[ ] (类型) 增强 `IPluginWebview`, `IPluginDev`, `PluginIssue` 等类型定义并添加 TSDoc**
-3.  **[ ] (核心) 改造插件加载逻辑 (`plugin-manager.ts`)**，实现远程 manifest 覆盖、失败回退、日志规范化。
-4.  **[ ] (核心) 实现 Dev Server 健康探测机制**，包括超时、重试和断连处理。
-5.  **[ ] (核心) 改造 `CoreBoxManager` 执行逻辑 (`manager.ts`)**，实现安全的 URL 构造、协议限制和路由模式检查。
-6.  **[ ] (配置) 配置 `touch-translation` 插件**，添加 `dev` 配置 (`source: true`) 和“多源翻译” `view` feature。
+2.  **[x] (类型) 增强 `IPluginWebview`, `IPluginDev`, `PluginIssue` 等类型定义并添加 TSDoc（2026-03-15）**
+3.  **[x] (核心) 改造插件加载逻辑 (`plugin-manager.ts`)**，实现远程 manifest 覆盖、失败回退、日志规范化（2026-03-15）。
+4.  **[x] (核心) 实现 Dev Server 健康探测机制**，包括超时、重试和断连处理（2026-03-15）。
+5.  **[x] (核心) 改造 `CoreBoxManager` 执行逻辑 (`manager.ts`)**，实现安全的 URL 构造、协议限制和路由模式检查（2026-03-15）。
+6.  **[x] (配置) 配置 `touch-translation` 插件**，添加 `dev` 配置 (`source: true`) 和“多源翻译” `view` feature（2026-03-15）。
+
+### 4.1 已落地能力（Phase2~4）
+
+- 安全矩阵：协议限制、路径规范化、hash 路由、非法路径拦截、dev/prod 分支一致性回归完成。
+- 类型增强：`IPluginWebview`、`IPluginDev.source`、`PluginIssue` 关键字段（`code/suggestion/timestamp`）已在主流程保障可用。
+- 配置联动：`touch-translation` 已启用 `dev.source` 与 `multi-source-translate` view feature。
+- 文档对齐：对应 `TODO` 条目“View Mode 增强（安全 URL / 生产协议限制 + Phase4）”已标记完成（2026-03-15）。
+
+### 4.2 未闭环项
+
+- `plugin-core` 的结构级 SRP 拆分未在本轮执行（遵循“中档范围，不做大拆”决策）。
+- View Mode 仍需在后续债务波次继续做结构清理与可维护性优化。
+
+### 4.3 验收证据
+
+- 代码与测试：`apps/core-app/src/main/modules/plugin/view/plugin-view-loader.test.ts`（边界回归补齐）。
+- 主线记录：`docs/plan-prd/01-project/CHANGES.md`（2026-03-15, 2.4.9 插件主线收口）。
+- 任务口径：`docs/plan-prd/TODO.md`（View Mode 条目与状态一致）。
 
 ## 5. 验收标准
 

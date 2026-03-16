@@ -1,7 +1,7 @@
 # TuffCLI - 插件开发命令行工具
 
 > 版本: v1.0.0
-> 状态: Phase1+2 已完成（2026-03-15）
+> 状态: Phase1+2 已完成（2026-03-15），兼容层生命周期已锁定（2026-03-16）
 
 ## 概述
 
@@ -140,6 +140,12 @@ export default defineConfig({
   - `tuff validate` 命令已上线（manifest/sdkapi/category/permissions 校验，支持非交互失败码）。
   - `@talex-touch/tuffcli` 兼容导出 `defineConfig/types` 已可用。
   - 文档与示例包名已统一到新包层（保留兼容说明）。
+
+## 兼容生命周期策略（锁定）
+
+- `2.4.x`：保留 `@talex-touch/unplugin-export-plugin` CLI 兼容 shim（deprecation + 转发）。
+- `2.5.0`：移除旧 CLI shim，仅保留构建插件能力；CLI 入口统一为 `@talex-touch/tuff-cli`。
+- 兼容窗口内保证命令语义不变：`help/create/build/dev/publish/validate/login/logout`。
 
 ## 实现计划
 

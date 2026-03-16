@@ -14,7 +14,7 @@
 
 ## 状态快照（2026-03-16，统一口径）
 
-- **2.4.9 主线 Gate**：插件完善主线执行中，`权限中心 Phase 5`、`View Mode Phase 2~4`、`CLI 分包迁移（Phase1+2）`、`主文档同步验收`已完成。
+- **2.4.9 主线 Gate**：插件完善主线收口完成，当前进入 `Nexus 设备授权风控` 文档化与实施阶段。
 - **当前工作区基线**：`2.4.9-beta.4`（tag `v2.4.9-beta.4`，发布相关 CI 已通过）。
 - **发布快照证据**：见 `CHANGES` 中 `v2.4.9-beta.4` 基线条目（含 commit/tag/CI run 链接）。
 - **2.4.8 主线 Gate（historical）**：OmniPanel 稳定版 MVP 已落地（真实窗口 smoke CI + 失败路径回归 + 触发稳定性回归）。
@@ -23,7 +23,7 @@
 - **Pilot 接口迁移（M2/M3）**：已完成收口；微信相关接口进入豁免模式，支付链路切换为本地 mock（下单 3 秒自动成功）。
 - **Pilot channels 治理**：已新增 `POST /api/pilot/admin/channels/merge-ends` 与一次性脚本，执行“Pilot 优先、Ends 补缺”。
 - **Pilot 自动部署**：`pilot-image.yml` 支持发布后自动调用 1Panel webhook，强制 `X-Pilot-Token` 校验并支持仓库/分支白名单。
-- **执行顺序（锁定）**：`Nexus 设备授权风控`（前序 `CLI 分包迁移收口（core 真迁移 + 文档统一）` 与 `主文档同步验收` 已完成）。
+- **执行顺序（锁定）**：`Nexus 设备授权风控`（执行入口：`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md`；前序 `CLI 分包迁移收口（core 真迁移 + 文档统一）` 与 `主文档同步验收` 已完成）。
 - **质量边界**：Network 套件全仓硬禁生效，业务层 direct `fetch/axios` 继续保持 0 违规。
 
 ## 当前两周重点
@@ -36,12 +36,12 @@
 
 | 文档 | 当前状态 | 下一动作 |
 | --- | --- | --- |
-| `docs/plan-prd/TODO.md` | 已同步到 2026-03-16 | 推进 `Nexus 设备授权风控` 并维护 CLI 兼容层回归 |
-| `docs/plan-prd/README.md` | 已同步到 2026-03-16 | 保持“近 3 个月里程碑 + 未闭环能力”口径 |
-| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步到 2026-03-16 | 按锁定顺序推进 `Nexus 设备授权风控` 收口 |
+| `docs/plan-prd/TODO.md` | 已同步到 2026-03-16 | 按 `NexusDeviceAuthRiskControl-260316` 推进风控实施与验收 |
+| `docs/plan-prd/README.md` | 已同步到 2026-03-16 | 推进 `Nexus 设备授权风控` 并维护“近 3 个月里程碑 + 未闭环能力”口径 |
+| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步到 2026-03-16 | 按锁定顺序推进 `Nexus 设备授权风控`（实施文档已入库） |
 | `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md` | Gate A/B/C/D/E 已完成（D/E historical，2026-03-16 已复核） | 保留证据链并切换到 `2.4.9` 后续主线 |
 | `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` | 已同步到 2026-03-16（新增文档治理门禁记录） | 保持 `v2.4.7` 豁免仅限历史版本，`>=2.4.8` 严格门禁 |
-| `docs/plan-prd/01-project/CHANGES.md` | 已同步到 2026-03-16（含文档治理门禁） | 持续记录 `Nexus 设备授权风控` 推进证据 |
+| `docs/plan-prd/01-project/CHANGES.md` | 已同步到 2026-03-16（含文档治理门禁） | 持续记录 `Nexus 设备授权风控` 推进证据与 CI 结果 |
 | `docs/INDEX.md` | 本页（入口+快照）已压缩 | 仅维护导航与高价值快照 |
 
 ## 归档与降权
@@ -53,6 +53,7 @@
 
 - `docs/plan-prd/03-features/omni-panel/OMNIPANEL-FEATURE-HUB-PRD.md` - OmniPanel Feature Hub PRD
 - `docs/plan-prd/04-implementation/LegacyChannelCleanup-2408.md` - Legacy Channel Cleanup 2.4.8
+- `docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` - Nexus 设备授权风控实施方案（2.4.9 主线入口）
 - `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md` - `v2.4.9` Gate D 发布资产核对（严格签名）
 - `docs/plan-prd/docs/PLUGIN-STORE-MULTI-SOURCE-ACCEPTANCE-2026-03-15.md` - 插件市场多源验收结论
 - `apps/pilot/deploy/README.zh-CN.md` - Pilot 在 1Panel 的标准部署手册（脚本 + env + 回滚 + cron + webhook 自动部署）
