@@ -1,10 +1,9 @@
 <script name="ThInput" setup lang="ts">
 import type { ITip, ITipItem } from '../chat/input-tips'
-import type { IChatInnerItemMeta, IInnerItemMeta, ISendState } from '~/composables/api/base/v1/aigc/completion-types'
+import type { IChatInnerItemMeta, IChatItemStatus, IInnerItemMeta, ISendState } from '~/composables/api/base/v1/aigc/completion-types'
 import { useFloating } from '@floating-ui/vue'
 import { encode } from 'gpt-tokenizer'
 import { $endApi } from '~/composables/api/base'
-import { IChatItemStatus } from '~/composables/api/base/v1/aigc/completion-types'
 import { globalOptions } from '~/constants'
 import { cur, tipsVisible } from '../chat/input-tips'
 import InputHeaderFiles from './addon/InputHeaderFiles.vue'
@@ -229,7 +228,27 @@ const tokenLimit = computed(() => userStore.value.isLogin ? 8192 : 256)
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 
-function handleImageUpload(file: File) {
+function resolveUploadedFileUrl(payload: Record<string, any>): string {
+  const absoluteUrl = String(payload?.url || '').trim()
+  if (absoluteUrl.startsWith('http://') || absoluteUrl.startsWith('https://')) {
+    return absoluteUrl
+  }
+
+  let endsUrl = globalOptions.getEndsUrl()
+  if (endsUrl.endsWith('/')) {
+    endsUrl = endsUrl.slice(0, -1)
+  }
+
+  const filename = String(payload?.filename || '').trim()
+  if (!filename) {
+    return ''
+  }
+
+  return new URL(`${endsUrl}${filename}`).href
+}
+
+function handleAttachmentUpload(file: File) {
+  const isImage = file.type.startsWith('image/')
   const obj = reactive<any>({
     sync: false,
     width: 0,
@@ -242,19 +261,49 @@ function handleImageUpload(file: File) {
   })
 
   const meta = reactive({
-    type: 'image',
+    type: isImage ? 'image' : 'file',
     value: '',
-    data: '',
+    data: isImage ? '' : (file.type || 'application/octet-stream'),
+    name: file.name,
     extra: obj,
   }) as any
 
   input.value.files.push(meta)
 
-  const reader = new FileReader()
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    obj.error = '文件太大，最多 10MB'
+    return
+  }
 
+  const uploadNow = async () => {
+    obj.syncing = true
+    const res = await $endApi.v1.common.upload(file)
+    obj.syncing = false
+
+    if (res.code === 200) {
+      const uploadedUrl = resolveUploadedFileUrl(res.data || {})
+      if (uploadedUrl) {
+        obj.url = uploadedUrl
+        meta.value = uploadedUrl
+        obj.sync = true
+        return
+      }
+
+      obj.error = '附件地址解析失败'
+      return
+    }
+
+    obj.error = res.message
+  }
+
+  if (!isImage) {
+    void uploadNow()
+    return
+  }
+
+  const reader = new FileReader()
   reader.onload = function (e) {
     const dataUrl = e.target?.result as string
-
     const img = new Image()
 
     img.onload = function () {
@@ -266,43 +315,11 @@ function handleImageUpload(file: File) {
     obj.url = dataUrl
     meta.data = dataUrl
 
-    // 超过 10MB 的图片不允许上传
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      obj.error = '文件太大，最多 10MB'
+    void uploadNow()
+  }
 
-      return
-    }
-
-    setTimeout(async () => {
-      obj.syncing = true
-
-      const res = await $endApi.v1.common.upload(file)
-
-      obj.syncing = false
-
-      if (res.code === 200) {
-        const absoluteUrl = String(res.data?.url || '').trim()
-        if (absoluteUrl.startsWith('http://') || absoluteUrl.startsWith('https://')) {
-          obj.url = meta.value = absoluteUrl
-          obj.sync = true
-          return
-        }
-
-        let endsUrl = globalOptions.getEndsUrl()
-
-        // 去除endsUrl的最后一个/
-        if (endsUrl.endsWith('/'))
-          endsUrl = endsUrl.slice(0, -1)
-
-        const url = new URL(`${endsUrl}${res.data.filename}`)
-
-        obj.url = meta.value = url.href
-        obj.sync = true
-      }
-      else {
-        obj.error = res.message
-      }
-    })
+  reader.onerror = () => {
+    obj.error = '图片读取失败'
   }
 
   reader.readAsDataURL(file)
@@ -312,46 +329,24 @@ function handlePaste(e: ClipboardEvent) {
   if (!e.clipboardData)
     return
 
-  const { files } = e.clipboardData
+  const directFiles = Array.from(e.clipboardData.files || []).filter(file => file.size > 0)
+  const files = directFiles.length > 0
+    ? directFiles
+    : (e.clipboardData.items
+        ? Array.from(e.clipboardData.items)
+            .filter(item => item.kind === 'file')
+            .map(item => item.getAsFile())
+            .filter((file): file is File => Boolean(file && file.size > 0))
+        : [])
 
-  if (!files.length)
+  if (files.length <= 0)
     return
 
   e.preventDefault()
 
-  for (let i = 0; i < files.length; i++) {
-    const item = files[i]
-
-    /* if (item.type.startsWith('text')) {
-      item.getAsString((data) => {
-        input.value.text += data
-      })
-    }
-    else */ if (item.type.startsWith('image')) {
-      const file = item
-      if (!file)
-        continue
-
-      handleImageUpload(file)
-    }
-    else {
-      console.warn('unhandled clipboard data type:', item.type)
-
-      ElMessage({
-        message: '暂时不支持文件分析',
-        type: 'warning',
-        plain: true,
-        grouping: true,
-        duration: 2000,
-        showClose: true,
-      })
-    }
-    // else if (item.type.startsWith('image')) {
-    //   const blob= item.getAsFile()
-    // }
+  for (const file of files) {
+    handleAttachmentUpload(file)
   }
-
-  // e.preventDefault()
 }
 
 function handleDeleteFile(index: number) {
@@ -359,7 +354,7 @@ function handleDeleteFile(index: number) {
 }
 
 const { open, reset, onChange } = useFileDialog({
-  accept: 'image/*',
+  accept: 'image/*,application/pdf,text/*,.md,.json,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx',
   directory: false,
 })
 
@@ -368,7 +363,7 @@ onChange((files) => {
     return
 
   for (const file of files)
-    handleImageUpload(file)
+    handleAttachmentUpload(file)
 })
 
 function handleImagePlus() {
