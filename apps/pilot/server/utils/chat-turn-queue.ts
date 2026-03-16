@@ -87,24 +87,61 @@ export function randomTurnId(prefix: 'request' | 'turn'): string {
 export async function ensureChatTurnQueueSchema(event: H3Event): Promise<void> {
   const db = requirePilotDatabase(event)
 
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${CHAT_TURN_QUEUE_TABLE} (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      request_id TEXT NOT NULL,
-      turn_id TEXT NOT NULL,
-      turn_no INTEGER NOT NULL,
-      model TEXT NOT NULL,
-      payload TEXT NOT NULL,
-      status TEXT NOT NULL,
-      response_text TEXT,
-      error_text TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE(session_id, user_id, request_id)
-    );
-  `).run()
+  const createTableSqlList = [
+    `
+      CREATE TABLE IF NOT EXISTS ${CHAT_TURN_QUEUE_TABLE} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        request_id TEXT NOT NULL,
+        turn_id TEXT NOT NULL,
+        turn_no INTEGER NOT NULL,
+        model TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        status TEXT NOT NULL,
+        response_text TEXT,
+        error_text TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(session_id, user_id, request_id)
+      );
+    `,
+    `
+      CREATE TABLE IF NOT EXISTS ${CHAT_TURN_QUEUE_TABLE} (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        request_id TEXT NOT NULL,
+        turn_id TEXT NOT NULL,
+        turn_no INTEGER NOT NULL,
+        model TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        status TEXT NOT NULL,
+        response_text TEXT,
+        error_text TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(session_id, user_id, request_id)
+      );
+    `,
+  ]
+
+  let tableReady = false
+  let lastError: unknown = null
+  for (const sql of createTableSqlList) {
+    try {
+      await db.prepare(sql).run()
+      tableReady = true
+      break
+    }
+    catch (error) {
+      lastError = error
+    }
+  }
+
+  if (!tableReady) {
+    throw lastError instanceof Error ? lastError : new Error('Failed to create chat turn queue table')
+  }
 
   await db.prepare(`
     CREATE INDEX IF NOT EXISTS idx_turn_queue_session_status_created
