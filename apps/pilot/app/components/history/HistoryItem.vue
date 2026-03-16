@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { autoUpdate, flip, offset, useFloating } from '@floating-ui/vue'
+import type { IChatConversation } from '~/composables/api/base/v1/aigc/completion-types'
 import { Loading } from '@element-plus/icons-vue'
-import PopoverComp from '../template/PopoverComp.vue'
-import ChatLinkShare from '../chat/head/ChatLinkShare.vue'
-import { type IChatConversation, PersistStatus } from '~/composables/api/base/v1/aigc/completion-types'
-import { $historyManager } from '~/composables/api/base/v1/aigc/history'
-import { $completion } from '~/composables/api/base/v1/aigc/completion'
+import { autoUpdate, flip, offset, useFloating } from '@floating-ui/vue'
 import { $endApi } from '~/composables/api/base'
-import { createTapTip } from '~/composables/tip'
+import { PersistStatus } from '~/composables/api/base/v1/aigc/completion-types'
+import { $historyManager } from '~/composables/api/base/v1/aigc/history'
+import ChatLinkShare from '../chat/head/ChatLinkShare.vue'
 
 const props = defineProps<{
   modelValue: IChatConversation
@@ -131,12 +129,44 @@ async function handleSelect(e?: Event) {
 
   loading.value = true
 
-  const res = await $endApi.v1.aigc.getConversation(props.modelValue.id)
+  try {
+    const res = await $endApi.v1.aigc.getConversation(props.modelValue.id)
+    if (!responseMessage(res, { success: '', triggerOnDataNull: true })) {
+      return
+    }
 
-  if (responseMessage(res, { success: '', triggerOnDataNull: true }))
-    emits('click', decodeObject(res.data.value))
+    const rawData = (res.data || {}) as Record<string, unknown>
+    const rawValue = rawData.value
+    const decoded = (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue))
+      ? rawValue as IChatConversation
+      : decodeObject(String(rawValue || '')) as IChatConversation
 
-  loading.value = false
+    const chatId = String(rawData.chat_id || decoded.id || props.modelValue.id).trim()
+    const runtimeState = String(rawData.run_state || (decoded as any).runtimeState || '').trim().toLowerCase()
+    const pendingRaw = Number(rawData.pending_count ?? (decoded as any).pendingCount ?? 0)
+    const pendingCount = Number.isFinite(pendingRaw) ? pendingRaw : 0
+    const activeTurnId = String(rawData.active_turn_id || (decoded as any).activeTurnId || '').trim()
+
+    emits('click', {
+      ...decoded,
+      id: chatId,
+      runtimeState,
+      pendingCount,
+      activeTurnId: activeTurnId || null,
+    } as IChatConversation)
+  }
+  catch (error) {
+    console.error('[history] failed to load conversation detail', error)
+    ElMessage({
+      message: '加载历史记录失败，请重试',
+      grouping: true,
+      type: 'error',
+      plain: true,
+    })
+  }
+  finally {
+    loading.value = false
+  }
 }
 
 watch(route, () => {
