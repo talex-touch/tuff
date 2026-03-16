@@ -1,8 +1,9 @@
 # Widget 沙箱隔离与持久化收口计划 (v1.0)
 
-> 状态: Draft  
-> 更新时间: 2026-02-21  
-> 适用范围: CoreBox widget（renderer）+ 插件运行时沙箱
+> 状态: 历史/待重写（部分能力已落地，当前不作为 2.4.9 主线）  
+> 更新时间: 2026-03-16  
+> 适用范围: CoreBox widget（renderer）+ 插件运行时沙箱  
+> 替代入口: `docs/plan-prd/TODO.md`、`docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`、`docs/plan-prd/01-project/CHANGES.md`
 
 ## 背景
 

@@ -1,8 +1,9 @@
 # Assistant 实验功能落地说明（260223）
 
-> 状态：实验中（默认关闭）  
-> 更新时间：2026-02-23  
-> 适用范围：`apps/core-app`
+> 状态：历史/待重写（实验能力，默认关闭）  
+> 更新时间：2026-03-16  
+> 适用范围：`apps/core-app`  
+> 替代入口：`docs/plan-prd/TODO.md`、`docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`、`docs/plan-prd/01-project/CHANGES.md`
 
 ---
 
@@ -96,4 +97,3 @@ TUFF_ENABLE_ASSISTANT_EXPERIMENT=1 pnpm core:dev
 1. 在设置页补齐 Assistant 实验配置入口（总开关/悬浮球/语音唤醒）。
 2. 增加语音能力可用性探测与降级提示（不同平台/内核差异）。
 3. 增加最小回归测试：环境变量门禁、默认关闭态、手动开启链路。
-

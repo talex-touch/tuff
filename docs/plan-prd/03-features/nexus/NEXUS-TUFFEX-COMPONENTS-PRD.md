@@ -1,7 +1,9 @@
 # Nexus Tuffex 组件展示整合 PRD（草案）
 
-Status: Draft
-Last Updated: 2026-02-19
+> 状态: 历史/待重写（迁移阶段文档，当前主线已收口）  
+> 更新时间: 2026-03-16  
+> 适用范围: `apps/nexus` 组件文档展示体系  
+> 替代入口: `docs/plan-prd/TODO.md`、`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/06-ecosystem/README.md`
 
 ## 当前迁移进度（截至 2026-02-12）
 

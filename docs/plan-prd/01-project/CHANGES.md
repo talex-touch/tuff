@@ -20,6 +20,29 @@
 - 完成长文档分层：Telemetry/Search/Transport/DivisionBox 原文下沉到 `*.deep-dive-2026-03.md`。
 - 完成历史文档降权：Draft/实验文档补齐“状态/更新时间/适用范围/替代入口”头标。
 
+### feat(pilot): 附件慢链路治理 + CMS 设置合并（稳定优先）
+
+- 新旧链路统一附件投递：`provider file id > public https url > base64`（仅兜底时读取对象，不再无条件内联）。
+- `apps/pilot/server/utils/pilot-attachment-delivery.ts` 接入 `pilot stream` 与 `aigc executor`，并发固定 `3`，失败错误码统一：
+  - `ATTACHMENT_UNREACHABLE`
+  - `ATTACHMENT_TOO_LARGE_FOR_INLINE`
+  - `ATTACHMENT_LOAD_FAILED`
+- `POST /api/pilot/chat/sessions/:sessionId/uploads` 新增 `multipart/form-data`（兼容保留 `contentBase64`）。
+- 新增附件能力探测：`GET /api/pilot/chat/attachments/capability`，Pilot 与 legacy 输入框统一使用。
+- 新增聚合后台设置 API：`GET/POST /api/pilot/admin/settings`；旧 `channels/storage-config` 接口保留兼容并转调。
+- 新增 CMS 系统页：`/cms/system/pilot-settings`（Channels + Storage 同页编辑）；旧 `/pilot/admin/*` 页面增加迁移提示。
+- 配置权威源保持 `pilot_admin_settings`，密钥字段脱敏返回；空值不覆写，需显式 clear 才会删除。
+
+### fix(plugin-dev): watcher 止血 + CLI 依赖环切断
+
+- `DevPluginWatcher` 改为“受控监听目标”：仅监听插件顶层关键文件（`manifest.json/index.js/preload.js/index.html/README.md`），不再递归监听整目录。
+- chokidar 选项增强：`followSymlinks: false`、`depth: 1`、`ignorePermissionErrors: true`，并显式忽略 `node_modules/.git/.vite/dist/logs`，降低符号链接与深层目录导致的句柄风暴风险。
+- watcher 增加 fatal 降级：命中 `EMFILE/ENOSPC/ENAMETOOLONG` 后记录高优先级日志并自动停用 dev watcher，避免日志雪崩与开发进程异常退出。
+- `change` 回调增加全链路 `try/catch`，reload 失败只记录日志，不再向上冒泡成未处理异常。
+- 切断 `@talex-touch/unplugin-export-plugin` 与 `@talex-touch/tuff-cli` 的双向 workspace 依赖：移除前者对后者的直接依赖，打断 `node_modules` 递归链。
+- 旧 CLI 入口兼容策略更新：从 `@talex-touch/unplugin-export-plugin` 调用 `tuff` 时，若未安装 `@talex-touch/tuff-cli`，改为“显式报错 + 安装指引 + 非 0 退出”。
+- 插件安装复制链路新增 `node_modules` 自动剔除：`PluginResolver` 与 `DevPluginInstaller` 在目录复制时过滤 `node_modules`，并在解包后做一次递归清理，防止历史残留再次落盘到运行态插件目录。
+
 ### feat(pilot): Chat/Turn 新协议与单 SSE 尾段 Title
 
 - 新增 `POST /api/v1/chat/sessions/:sessionId/turns`（会话入队，返回 `request_id/turn_id/queue_pos`）。
@@ -55,6 +78,64 @@
 - 新增 `scripts/check-doc-governance.mjs`。
 - 新增命令：`pnpm docs:guard`（report-only）与 `pnpm docs:guard:strict`（严格模式）。
 - CI 已接入 `docs:guard` 报告步骤（本轮仍不阻塞发布流水线）。
+
+### feat(quality): legacy debt 冻结门禁（Phase 0）
+
+- 新增 `scripts/check-legacy-boundaries.mjs`，冻结两类新增债务：
+  - 新增 `legacy` 关键词命中（视为新增兼容分支）；
+  - 新增 `channel.send('x:y')` raw event 字符串调用。
+- 新增基线白名单 `scripts/legacy-boundary-allowlist.json`：
+  - 存量债务按文件 + 命中次数备案；
+  - 每条债务强制要求 `expiresVersion`（当前统一 `2.5.0`）。
+- root scripts 新增 `pnpm legacy:guard`，并接入 `lint/lint:fix` 作为默认门禁。
+- Phase 1 最小收口落地（兼容不改行为）：
+  - `packages/utils/plugin/sdk/channel.ts`：`sendSync` fallback 一次性退场告警；
+  - `packages/utils/renderer/storage/base-storage.ts` 与 `storage-subscription.ts`：legacy storage channel 通路一次性退场告警。
+
+### feat(governance): 统一实施 PRD 与五工作包并行口径
+
+- 新增统一蓝图文档：`02-architecture/UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md`，明确“单一蓝图 + 五工作包并行 + 统一里程碑验收”。
+- 新增兼容债务清册 SoT：`docs/plan-prd/docs/compatibility-debt-registry.csv`，固定字段：
+  - `domain / symbol_or_path / reason / compatibility_contract / expires_version / removal_condition / test_case_id / owner`
+- 新增清册门禁：`scripts/check-compatibility-debt-registry.mjs`（覆盖校验 + 过期校验）。
+- 新增超长文件门禁：`scripts/check-large-file-boundaries.mjs` + `scripts/large-file-boundary-allowlist.json`（阈值 `>=1200` 冻结增长）。
+- `legacy:guard` 升级为统一门禁入口：
+  - `check-legacy-boundaries` + `compat:registry:guard` + `size:guard`。
+- `check-legacy-boundaries` 新增规则：
+  - 冻结新增 `transport/legacy` 与 `permission/legacy` 导入扩散。
+- `pnpm-workspace.yaml` 与 root `lint/lint:fix` 默认范围改为主线：
+  - `apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`；
+  - 影子应用 `apps/g-*`、`apps/quota-*` 从默认 workspace 扫描隔离。
+- 退场窗口标注补齐：
+  - `packages/utils/transport/legacy.ts`
+  - `packages/utils/permission/legacy.ts`
+  - 明确 `v2.5.0` 前清退，不允许新增引用。
+- 新增定向回归命令：`pnpm test:targeted`（utils/core-app/nexus 三段稳定用例）。
+- 新增聚合门禁命令：`pnpm quality:gate`（`legacy:guard + network:guard + test:targeted + typecheck(node/web) + docs:guard`）。
+- 新增 Sync 兼容壳自动化断言：
+  - `apps/nexus/server/api/sync/__tests__/sync-routes-410.test.ts`
+  - 固化 `/api/sync/pull|push` 必须返回 `410`，并断言 `statusMessage/data.message` 含 v1 迁移目标路径。
+- 债务扫描口径升级为“显式白名单 + 漏扫报错 + scanScope 输出”：
+  - `check-legacy-boundaries.mjs`
+  - `check-compatibility-debt-registry.mjs`
+- 超长文件门禁升级：
+  - `--write-baseline` 不再允许自动上调 `maxLines`；
+  - 引入 `growthExceptions` 显式增长豁免并校验 `CHANGES + compatibility registry` 同步。
+- 本次临时增长豁免登记：
+  - `SIZE-GROWTH-2026-03-16-AIGC-EXECUTOR` -> `apps/pilot/server/api/aigc/executor.post.ts`
+  - `SIZE-GROWTH-2026-03-16-DEEPAGENT` -> `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- 兼容债务清册清理：
+  - 移除 2 条主线扫描口径外的陈旧条目（`apps/pilot/shims-compat.d.ts`、`apps/nexus/i18n.config.ts`）。
+  - `size-growth-exception` 调整为 registry-only domain，不再触发误判式 cleanup warning。
+- 结构治理补丁：
+  - 修复 Nexus 异常文件名：`apps/nexus/ sentry.server.config.ts` → `apps/nexus/sentry.server.config.ts`。
+  - 同步扫描脚本豁免路径，移除异常路径分支。
+- Transport legacy 第一轮收口（非破坏式）：
+  - `packages/utils/plugin/preload.ts`、`packages/utils/renderer/storage/base-storage.ts` 改为从 `@talex-touch/utils/transport` 统一入口取类型，不再直连 `transport/legacy`。
+  - `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts` 改为注入 `@talex-touch/utils/transport` 命名空间，同时保持 `@talex-touch/utils/transport/legacy` 兼容映射键。
+  - `packages/utils/index.ts` 由 `export * from './transport/legacy'` 改为从 `./transport` 重导出兼容符号。
+  - 结果：`legacy-transport-import` 从 `4 files / 4 hits` 降至 `0 files / 0 hits`（主线扫描口径）。
+  - 同步清理 `compatibility-debt-registry.csv` 中 4 条 `legacy-transport-import` 条目与 2 条陈旧 `legacy-keyword` 条目。
 
 ---
 

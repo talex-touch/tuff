@@ -10,6 +10,7 @@
 | 主题 | 当前事实 | 下一动作 | 强制同步文档 |
 | --- | --- | --- | --- |
 | 版本主线 | 当前工作区基线为 `2.4.9-beta.4` | 推进 `Nexus 设备授权风控` | `TODO` / `README` / `INDEX` / `CHANGES` |
+| Legacy/兼容/结构治理 | 已锁定统一实施 PRD（五工作包并行） | 按统一门禁执行收口，不再按 Phase 口径拆分决策 | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | 2.4.8 Gate | OmniPanel 稳定版 MVP 已完成（historical） | 保留历史验收证据，不再作为当前开发主线 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | v2.4.7 Gate | A/B/C/D/E 全部完成（D/E historical） | 保留 run/manifest/sha256 证据链 | `TODO` / `README` / `Roadmap` / `Release Checklist` / `Quality Baseline` / `INDEX` |
 | Pilot Runtime | Node Server + Postgres/Redis + JWT Cookie 主路径 | 继续补齐稳定性与部署回归 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
@@ -24,6 +25,16 @@
 - [x] 六主文档“下一动作”统一为 `Nexus 设备授权风控`。
 - [x] `CHANGES` 完成“近 30 天主文件 + 历史月度归档”拆分。
 - [x] `README/INDEX` 入口压缩为高价值快照。
+- [x] Phase 0：新增 `legacy:guard`（冻结新增 `legacy` 分支与 `channel.send('x:y')` raw event）。
+- [x] Phase 0：建立 `scripts/legacy-boundary-allowlist.json`，存量兼容债务全部附 `expiresVersion=2.5.0`。
+- [x] 统一治理 SoT：新增 `docs/plan-prd/docs/compatibility-debt-registry.csv`（固定字段与 owner/expires/test_case）。
+- [x] 统一治理门禁：新增 `pnpm compat:registry:guard` + `pnpm size:guard`，并并入 `pnpm legacy:guard`。
+- [x] 统一主线验收入口：新增 `pnpm quality:gate` 聚合命令（`legacy/network/test:targeted/typecheck/docs`）。
+- [x] 超长文件冻结：新增 `scripts/large-file-boundary-allowlist.json`（主线基线 `47` 个）。
+- [x] 主线隔离：root workspace 与 root lint 默认仅覆盖 `core-app/nexus/pilot/packages/plugins`。
+- [x] Sync 兼容壳行为固化：补充 `/api/sync/pull|push` 返回 410 的自动化测试断言。
+- [x] 债务扫描口径显式化：主线改为显式白名单 + 漏扫报错 + `scanScope` 摘要输出。
+- [x] 超长文件防漂移：`--write-baseline` 禁止自动上调，新增 `growthExceptions` 显式豁免机制。
 - [ ] `TODO` 主文件压缩到 400 行以内并稳定维护。
 - [ ] 第二批历史文档统一加“历史/待重写”头标。
 
@@ -40,6 +51,48 @@
 - [ ] 连续 5 次 `docs:guard` 零告警（升级 strict 前置条件之一）。
 - [ ] 连续 2 周无“状态回退/口径漂移”冲突。
 - [ ] 达成条件后将 CI 从 report-only 升级为 strict 阻塞。
+
+### D. 本轮回滚预案（2026-03-16 Findings 修复）
+
+- 回滚触发条件：
+  - `apps/nexus` 在 Sentry server config 加载路径上出现异常（启动失败或配置未生效）。
+  - `compat:registry:guard` 出现非预期 coverage 回退。
+- 回滚步骤（提交粒度）：
+  - 文件名回滚：`apps/nexus/sentry.server.config.ts` 按需恢复到异常旧名路径，仅用于应急回退验证。
+  - 清册回滚：恢复本轮清理的两条 registry 行（`apps/pilot/shims-compat.d.ts`、`apps/nexus/i18n.config.ts`）。
+  - 脚本回滚：撤销 `check-compatibility-debt-registry.mjs` 中 `registry-only domain` 改动。
+- 回滚后必跑：
+  - `pnpm compat:registry:guard`
+  - `pnpm legacy:guard`
+  - `pnpm quality:gate`
+
+### E. Transport Legacy 清退清单（启动项，目标 v2.5.0）
+
+- 清单文档：`docs/plan-prd/docs/TRANSPORT-LEGACY-RETIREMENT-CHECKLIST-2026-03.md`
+- [x] 第一轮入口收口完成：`legacy-transport-import` 从 `4 files / 4 hits` 降到 `0 files / 0 hits`。
+- 现状说明：
+  - 兼容符号仍通过 `@talex-touch/utils/transport` 统一入口转出（保留兼容，不再直连 `transport/legacy` 路径）。
+- 统一替换策略：
+  - 对外入口优先 `@talex-touch/utils/transport` typed SDK，不新增 legacy 导出。
+  - legacy 仅保留读兼容和 warn-and-forward，不再承载新能力。
+- 执行顺序（单链路）：
+  - [x] `packages/utils/plugin/preload.ts` 与 `packages/utils/renderer/storage/base-storage.ts`（内部调用侧）。
+  - [x] `apps/core-app/.../widget-registry.ts`（renderer 暴露面）。
+  - [x] `packages/utils/index.ts`（统一出口重导向）。
+  - [ ] `v2.5.0` 前移除 transport 中 legacy 兼容符号对外转出（破坏性变更窗口）。
+- 验收口径：
+  - [x] `legacy-transport-import` = `0 files / 0 hits`。
+  - `pnpm quality:gate` 全绿且无新增兼容债务。
+
+### F. Pilot 附件慢链路治理 + CMS 设置合并（2026-03-16）
+
+- [x] 新旧链路统一附件投递策略：`id > https url > base64`（并发=3，快速失败错误码透出）。
+- [x] `pilot stream` 与 `legacy executor` 接入统一解析器，并补充 `attachment.resolve.start/end` 与 `attachment.delivery.summary` 埋点。
+- [x] `/api/pilot/chat/sessions/:sessionId/uploads` 支持 `multipart/form-data`，兼容保留 `contentBase64`。
+- [x] 新增 `GET /api/pilot/chat/attachments/capability`，Pilot/legacy 输入框共用探测能力。
+- [x] 新增聚合后台设置接口：`GET/POST /api/pilot/admin/settings`。
+- [x] 新增 CMS 页面：`/cms/system/pilot-settings`，Channels + Storage 同页保存；旧 `/pilot/admin/*` 页面保留兼容提示。
+- [x] 管理配置 SoT 保持 `pilot_admin_settings`；密钥字段脱敏展示、写入加密、空值不覆写。
 
 ---
 
@@ -91,10 +144,10 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 16 |
+| 已完成 (`- [x]`) | 34 |
 | 未完成 (`- [ ]`) | 16 |
-| 总计 | 32 |
-| 完成率 | 50% |
+| 总计 | 50 |
+| 完成率 | 68% |
 
 > 统计时间: 2026-03-16（按本文件实时 checkbox 计数）。
 
