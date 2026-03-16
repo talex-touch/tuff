@@ -15,6 +15,9 @@
   - `packages/tuff-cli-core/`（核心编排 + validate/publish/config/auth/runtime）
   - `packages/tuffcli/`（兼容导出层）
   - `packages/unplugin-export-plugin/`（构建插件 + CLI 兼容入口 shim）
+- **兼容生命周期（锁定）**:
+  - `2.4.x` 保留 `unplugin` CLI shim（deprecation + 转发）
+  - `2.5.0` 移除 shim，CLI 入口统一到 `@talex-touch/tuff-cli`
 - **功能**:
   - 插件脚手架创建 (`tuff create`)
   - 插件构建打包 (`tuff build`)

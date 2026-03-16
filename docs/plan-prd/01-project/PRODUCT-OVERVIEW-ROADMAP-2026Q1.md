@@ -170,6 +170,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 ## 4.2 v2.4.9 插件完善 Gate（当前主线）
 
 - **状态（2026-03-16）**：插件完善主线收口完成，进入 `Nexus 设备授权风控` 下一主线。
+- **执行入口**：`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md`
 - **完成项**：
   - 权限中心 Phase 5：`PermissionStore` 切换 SQLite 主存储，支持 `JSON -> SQLite` 一次性迁移与失败只读回退；
   - 安装链路权限确认：安装阶段支持 `always/session/deny` 三分支并显式失败反馈；
@@ -179,6 +180,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - **历史完成（2.4.8）**：
   - OmniPanel 稳定版 MVP 已通过真实窗口 smoke 与关键失败路径回归，不再作为当前开发主线。
 - **后续顺序（锁定）**：`Nexus 设备授权风控`（`OmniPanel Gate`、`SDK Hard-Cut E~F`、`v2.4.7 Gate D/E`、`权限中心 Phase 5`、`View Mode Phase2~4`、`CLI 分包迁移收口`、`主文档同步验收` 已完成）。
+- **CLI 兼容策略（锁定）**：`2.4.x` 保留 `@talex-touch/unplugin-export-plugin` CLI shim，`2.5.0` 退场。
 
 ## 5. 里程碑验收标准（跨周）
 

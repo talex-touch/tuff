@@ -9,11 +9,11 @@
 
 | 主题 | 统一口径 | 下一动作 | 强制同步文档 |
 | --- | --- | --- | --- |
-| 2.4.9 主线 Gate | 插件完善主线执行中：`权限中心 Phase 5`、`View Mode Phase 2~4`、`CLI 分包迁移（Phase1+2）`、`主文档同步验收`已完成 | 推进 `Nexus 设备授权风控`，并维持 CLI 兼容层回归稳定 | `TODO` / `README` / `INDEX` / `CHANGES` |
+| 2.4.9 主线 Gate | 插件完善主线收口完成：`权限中心 Phase 5`、`View Mode Phase 2~4`、`CLI 分包迁移（Phase1+2）`、`主文档同步验收`已完成 | 推进 `Nexus 设备授权风控`（执行入口：`04-implementation/NexusDeviceAuthRiskControl-260316.md`），并维持 CLI 兼容层回归稳定 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | 2.4.8 主线 Gate（historical） | OmniPanel 稳定版 MVP 已落地（含真实窗口 smoke CI） | 仅保留历史验收记录，不再作为当前开发主线 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | v2.4.7 Gate 状态 | Gate A/B/C/D/E = ✅ Done（Gate E 为 historical；Gate D 为 historical backfill） | 保留证据链（run `23091014958` + assets/manifest/sha256），作为历史版本闭环档案 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
 | Pilot Runtime 主路径 | Node Server + Postgres/Redis + JWT Cookie，Cloudflare 相关仅保留历史归档 | 持续补强 M0/M1 回归与部署脚本 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
-| 文档治理 | 更新时间统一到 2026-03-16；`next-edit` 仅作草稿池，不作为发布判定来源 | 每周例行同步 6 份主文档状态/日期/下一动作 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
+| 文档治理 | 更新时间统一到 2026-03-16；`next-edit` 仅作草稿池，不作为发布判定来源 | 每周例行同步 6 份主文档状态/日期/下一动作，并维持 `docs:guard` 告警噪音清零 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
 
 ---
 
@@ -25,6 +25,10 @@
 - [x] View Mode Phase4 收口：`touch-translation` dev 配置与多源 view feature 验收证据已补齐（2026-03-15）。
 - [x] CLI 分包推进：`tuff-cli-core` 核心迁移清单落地、`@talex-touch/tuffcli` 兼容导出与文档示例统一（2026-03-15）。
 - [ ] Nexus 设备授权风控：进入下一阶段实现与验收。
+  - 执行文档：`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md`
+  - 当前优先：Phase 0 验收证据补齐 + Phase 1 速率限制/冷却/审计策略落地。
+  - CLI 兼容窗口：`2.4.x` 保留 `unplugin` shim，`2.5.0` 退场。
+  - `docs:guard` 升级 strict 前置条件：连续 5 次 CI `docs:guard` 零告警 + 2 周内无主文档回退冲突。
 
 ## 🌊 债务分波次推进（W2-W4）
 
@@ -336,7 +340,7 @@
 - [ ] Perf Log 优化项：core-box:query 同步改造、/setting 路由拆分、tfile 路径兼容（`plan/2026-01-19_11-10-40-perf-log-analysis.md`）
 - [ ] Release Pipeline（剩余项）：OIDC + RSA 签名信任链增强与 GA 发布治理（`plan/planprd-release-pipeline.md`）
 - [ ] SQLite 重试机制回退到 Retrier（`docs/plan-prd/04-implementation/SqliteRetryRetrier260222.md`）
-- [ ] Nexus 设备授权风控增强（`plan/2026-02-22_23-30-00-nexus-device-auth-risk-control.md`）
+- [ ] Nexus 设备授权风控增强（`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md`）
 - [x] OmniPanel 真实窗口 e2e 烟雾场景接入 CI（显示 -> 执行 builtin -> 关闭）
   - [x] 已新增 `.github/workflows/omnipanel-gate.yml`，并纳入 `typecheck/lint/unit/build/smoke` 发布级门禁。
   - [x] 主进程 smoke probe 已接入 `TUFF_OMNIPANEL_SMOKE=1`（真实窗口显示 -> 执行 builtin -> 关闭）。

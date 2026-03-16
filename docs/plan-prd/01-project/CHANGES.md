@@ -76,6 +76,27 @@
 - 根脚本入口补齐：`pnpm docs:guard` 与 `pnpm docs:guard:strict`。
 - CI 先接入 `docs:guard` 报告步骤（不改发布触发逻辑，不阻塞流水线）。
 
+### Docs：Nexus 风控主线文档收口（实施入口 + 契约回填 + 兼容策略固化）
+
+**变更类型**: 文档治理 / 主线收口
+
+**描述**:
+- `Nexus 设备授权风控` 正式实施文档入库：`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md`（目标/范围/分期/验收/回滚/豁免边界）。
+- 六主文档与生态文档同步回填：
+  - `TODO/README/INDEX/Roadmap/Release Checklist/Quality Baseline` 的“下一动作”统一指向 `Nexus 设备授权风控` 实施入口；
+  - `PILOT-INTELLIGENCE-API-CONTRACT` 更新为当前主路径（Node Server + Postgres/Redis + JWT Cookie + MinIO），Cloudflare/D1/R2 切为历史语境；
+  - `view-mode-prd` 新增“已落地能力（Phase2~4）/未闭环项/验收证据”；
+  - `TUFFCLI-PRD` / `TUFFCLI-SPLIT-PLAN` 固化 shim 生命周期（`2.4.x` 兼容，`2.5.0` 退场）。
+- `TODO` 同步补充 `docs:guard` 升级 strict 的前置条件（连续零告警 + 无口径回退）。
+
+**基线推送证据（commit `c1542556`）**:
+- commit: `c1542556b7d4782b34a7b51691689fc917eb5562`
+- CI run：
+  - Contributes: https://github.com/talex-touch/tuff/actions/runs/23125828534（completed/success）
+  - CodeQL: https://github.com/talex-touch/tuff/actions/runs/23125828282（completed/success）
+  - Pilot Image Publish: https://github.com/talex-touch/tuff/actions/runs/23125828532（in_progress，持续观测）
+  - Pilot CI: https://github.com/talex-touch/tuff/actions/runs/23125828545（in_progress，持续观测）
+
 ---
 
 ## 2026-03-15
