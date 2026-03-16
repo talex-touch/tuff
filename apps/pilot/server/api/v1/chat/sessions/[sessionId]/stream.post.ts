@@ -11,8 +11,18 @@ import {
 } from '../../../../../utils/chat-turn-queue'
 import { resolvePilotChannelSelection } from '../../../../../utils/pilot-channel'
 import { requireSessionId, toErrorMessage } from '../../../../../utils/pilot-http'
+import {
+  getPilotQuotaSessionByChatId,
+  upsertPilotQuotaSession,
+} from '../../../../../utils/pilot-quota-session'
 import { createPilotStoreAdapter } from '../../../../../utils/pilot-store'
 import { generateTitle } from '../../../../../utils/pilot-title'
+import { decodeQuotaConversation } from '../../../../../utils/quota-history-codec'
+import {
+  ensureQuotaHistorySchema,
+  getQuotaHistory,
+  upsertQuotaHistory,
+} from '../../../../../utils/quota-history-store'
 
 interface StreamBody {
   request_id?: string
@@ -20,6 +30,7 @@ interface StreamBody {
 
 interface TurnPayload extends Record<string, unknown> {
   chat_id?: string
+  messages?: unknown[]
 }
 
 function sleep(ms: number): Promise<void> {
@@ -42,6 +53,120 @@ function parseSseFrame(frame: string): string | null {
     return null
   }
   return dataLines.join('\n')
+}
+
+function normalizeTitleText(content: unknown): string {
+  if (typeof content === 'string') {
+    return content.trim()
+  }
+  if (!Array.isArray(content)) {
+    return ''
+  }
+
+  const chunks: string[] = []
+  for (const item of content) {
+    if (typeof item === 'string') {
+      const text = item.trim()
+      if (text) {
+        chunks.push(text)
+      }
+      continue
+    }
+    if (!item || typeof item !== 'object') {
+      continue
+    }
+    const row = item as Record<string, unknown>
+    const text = typeof row.value === 'string' ? row.value.trim() : ''
+    if (text) {
+      chunks.push(text)
+    }
+  }
+
+  return chunks.join('\n').trim()
+}
+
+function isPlaceholderTitle(value: unknown): boolean {
+  const title = String(value || '').trim().toLowerCase()
+  if (!title) {
+    return true
+  }
+  return title === 'new chat' || title === '新的聊天'
+}
+
+function resolveTitleMessages(payload: TurnPayload, assistantText: string): Array<{ role: string, content: string }> {
+  const list: Array<{ role: string, content: string }> = []
+  const rawMessages = Array.isArray(payload.messages) ? payload.messages : []
+  for (const item of rawMessages) {
+    if (!item || typeof item !== 'object') {
+      continue
+    }
+    const row = item as Record<string, unknown>
+    const role = String(row.role || '').trim().toLowerCase()
+    if (role !== 'user' && role !== 'assistant') {
+      continue
+    }
+    const text = normalizeTitleText(row.content)
+    if (!text) {
+      continue
+    }
+    list.push({
+      role,
+      content: text,
+    })
+  }
+
+  const answer = String(assistantText || '').trim()
+  if (answer) {
+    const last = list[list.length - 1]
+    if (!last || last.role !== 'assistant' || last.content !== answer) {
+      list.push({
+        role: 'assistant',
+        content: answer,
+      })
+    }
+  }
+
+  return list
+}
+
+async function syncLegacyTitle(event: Parameters<typeof requirePilotAuth>[0], userId: string, sessionId: string, title: string): Promise<void> {
+  const normalizedTitle = String(title || '').trim()
+  if (!normalizedTitle) {
+    return
+  }
+
+  await ensureQuotaHistorySchema(event)
+  const record = await getQuotaHistory(event, userId, sessionId)
+  if (record) {
+    const decoded = decodeQuotaConversation(record.value) || {}
+    const payload = {
+      ...decoded,
+      id: sessionId,
+      topic: normalizedTitle,
+      lastUpdate: Date.now(),
+      sync: decoded.sync || 'success',
+    }
+    await upsertQuotaHistory(event, {
+      chatId: sessionId,
+      userId,
+      topic: normalizedTitle,
+      value: JSON.stringify(payload),
+      meta: record.meta,
+    })
+  }
+
+  const mapped = await getPilotQuotaSessionByChatId(event, userId, sessionId)
+  if (!mapped) {
+    return
+  }
+
+  await upsertPilotQuotaSession(event, {
+    chatId: mapped.chatId,
+    userId,
+    runtimeSessionId: mapped.runtimeSessionId,
+    channelId: mapped.channelId,
+    topic: normalizedTitle,
+  })
 }
 
 async function proxyExecutorStream(options: {
@@ -336,7 +461,7 @@ export default defineEventHandler(async (event) => {
               const store = createPilotStoreAdapter(event, userId)
               await store.runtime.ensureSchema()
               const session = await store.runtime.getSession(sessionId)
-              const needsTitle = row.turnNo === 1 && !String(session?.title || '').trim()
+              const needsTitle = row.turnNo === 1 && isPlaceholderTitle(session?.title)
               if (needsTitle) {
                 await updateChatTurnStatus(event, userId, sessionId, requestId, 'title', {
                   responseText: assistantText,
@@ -345,19 +470,17 @@ export default defineEventHandler(async (event) => {
                 try {
                   const selectedChannel = await resolvePilotChannelSelection(event)
                   const titleModel = String(parsedPayload.model || selectedChannel.channel.model || '').trim() || 'gpt-5.2'
-                  const messages = await store.runtime.listMessages(sessionId)
+                  const messages = resolveTitleMessages(parsedPayload, assistantText)
                   const result = await generateTitle({
                     baseUrl: selectedChannel.channel.baseUrl,
                     apiKey: selectedChannel.channel.apiKey,
                     model: titleModel,
-                    messages: messages.map(item => ({
-                      role: item.role,
-                      content: item.content,
-                    })),
+                    messages,
                   })
 
                   if (result.title) {
                     await store.runtime.setSessionTitle(sessionId, result.title)
+                    await syncLegacyTitle(event, userId, sessionId, result.title)
                   }
 
                   emit({
