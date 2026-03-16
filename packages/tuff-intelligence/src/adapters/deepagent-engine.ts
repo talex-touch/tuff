@@ -171,6 +171,54 @@ export function resolveAttachmentImageUrl(attachment: UserMessageAttachment): st
   return ''
 }
 
+function normalizeBase64Payload(raw: string): string {
+  const normalized = String(raw || '').replace(/\s+/g, '')
+  if (!normalized) {
+    return ''
+  }
+  if (!/^[A-Z0-9+/]+={0,2}$/i.test(normalized)) {
+    return ''
+  }
+  return normalized
+}
+
+function resolveAttachmentFileData(attachment: UserMessageAttachment): string {
+  const dataUrl = String(attachment.dataUrl || '').trim()
+  if (!dataUrl) {
+    return ''
+  }
+
+  const dataUrlMatch = dataUrl.match(/^data:[^;]+;base64,([A-Z0-9+/=\s]+)$/i)
+  if (dataUrlMatch) {
+    return normalizeBase64Payload(dataUrlMatch[1] || '')
+  }
+
+  return normalizeBase64Payload(dataUrl)
+}
+
+function buildInputFileAttachmentPart(attachment: UserMessageAttachment): Record<string, unknown> | null {
+  if (attachment.type === 'image') {
+    return null
+  }
+
+  const fileData = resolveAttachmentFileData(attachment)
+  if (!fileData) {
+    return null
+  }
+
+  const part: Record<string, unknown> = {
+    type: 'input_file',
+    file_data: fileData,
+  }
+
+  const filename = String(attachment.name || '').trim()
+  if (filename) {
+    part.filename = filename
+  }
+
+  return part
+}
+
 function buildFileAttachmentMetadata(attachments: UserMessageAttachment[]): string {
   const files = attachments.filter(item => item.type !== 'image')
   if (files.length <= 0) {
@@ -194,7 +242,15 @@ function buildAttachmentAwareText(baseText: string, attachments: UserMessageAtta
   return `Please analyze the provided attachments.${metadataBlock}`
 }
 
-export function buildChatMessageContent(baseText: string, attachments: UserMessageAttachment[]): unknown {
+interface BuildChatMessageContentOptions {
+  includeInputFiles?: boolean
+}
+
+export function buildChatMessageContent(
+  baseText: string,
+  attachments: UserMessageAttachment[],
+  options?: BuildChatMessageContentOptions,
+): unknown {
   if (attachments.length <= 0) {
     return String(baseText || '').trim()
   }
@@ -205,7 +261,12 @@ export function buildChatMessageContent(baseText: string, attachments: UserMessa
     .filter(Boolean)
 
   const text = buildAttachmentAwareText(baseText, attachments)
-  if (imageUrls.length <= 0) {
+  const fileParts = options?.includeInputFiles === false
+    ? []
+    : attachments
+        .map(buildInputFileAttachmentPart)
+        .filter((item): item is Record<string, unknown> => Boolean(item))
+  if (imageUrls.length <= 0 && fileParts.length <= 0) {
     return text
   }
 
@@ -223,10 +284,22 @@ export function buildChatMessageContent(baseText: string, attachments: UserMessa
       },
     })
   }
+
+  for (const item of fileParts) {
+    parts.push(item)
+  }
+
   return parts
 }
 
-function buildDeepAgentMessages(state: TurnState): DeepAgentInvokeMessage[] {
+interface BuildDeepAgentMessagesOptions {
+  includeInputFiles?: boolean
+}
+
+function buildDeepAgentMessages(
+  state: TurnState,
+  options?: BuildDeepAgentMessagesOptions,
+): DeepAgentInvokeMessage[] {
   const messages: DeepAgentInvokeMessage[] = []
   const attachments = normalizeTurnAttachments(state)
   const lastMessageIndex = state.messages.length - 1
@@ -241,7 +314,9 @@ function buildDeepAgentMessages(state: TurnState): DeepAgentInvokeMessage[] {
       continue
     }
     const content = isTurnUserMessage
-      ? buildChatMessageContent(text, attachments)
+      ? buildChatMessageContent(text, attachments, {
+          includeInputFiles: options?.includeInputFiles,
+        })
       : text
     messages.push({
       type: role,
@@ -276,6 +351,10 @@ export function buildResponsesInput(state: TurnState): Array<Record<string, unkn
 
       for (const attachment of attachments) {
         if (attachment.type !== 'image') {
+          const inputFile = buildInputFileAttachmentPart(attachment)
+          if (inputFile) {
+            content.push(inputFile)
+          }
           continue
         }
 
@@ -1274,7 +1353,9 @@ async function invokeDeepAgentWithTransport(
     : DEFAULT_BUILTIN_TOOLS
   const useResponsesApi = transport === 'responses'
 
-  const invokeMessages = buildDeepAgentMessages(state)
+  const invokeMessages = buildDeepAgentMessages(state, {
+    includeInputFiles: useResponsesApi,
+  })
   const endpoint = useResponsesApi
     ? `${trimSuffixSlash(relayBaseUrl)}/responses`
     : `${trimSuffixSlash(relayBaseUrl)}/chat/completions`
@@ -1526,7 +1607,9 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
     const builtinTools = Array.isArray(this.options.builtinTools) && this.options.builtinTools.length > 0
       ? this.options.builtinTools
       : DEFAULT_BUILTIN_TOOLS
-    const invokeMessages = buildDeepAgentMessages(state)
+    const invokeMessages = buildDeepAgentMessages(state, {
+      includeInputFiles: useResponsesApi,
+    })
     const endpoint = useResponsesApi
       ? `${trimSuffixSlash(relayBaseUrl)}/responses`
       : `${trimSuffixSlash(relayBaseUrl)}/chat/completions`
@@ -1582,7 +1665,9 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
       // Prefer direct ChatOpenAI stream for token-level output.
       // If this path fails or emits nothing, fallback to deepagents stream.
       try {
-        const directMessages = buildDeepAgentMessages(state).map(item => ({
+        const directMessages = buildDeepAgentMessages(state, {
+          includeInputFiles: useResponsesApi,
+        }).map(item => ({
           role: item.type,
           content: item.content,
         }))

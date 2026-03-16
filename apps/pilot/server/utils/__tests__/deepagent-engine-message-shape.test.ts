@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildChatMessageContent,
   buildResponsesInput,
   resolveAttachmentImageUrl,
 } from '../../../../../packages/tuff-intelligence/src/adapters/deepagent-engine'
@@ -100,6 +101,66 @@ describe('deepagent message shape', () => {
         { type: 'input_image', image_url: 'https://cdn.example.com/turn2.png' },
       ],
     })
+  })
+
+  it('非图片附件会生成 input_file 块（使用 base64 file_data）', () => {
+    const state = {
+      ...createBaseState(),
+      messages: [
+        { role: 'user', content: '请阅读附件' },
+      ],
+      attachments: [
+        {
+          id: 'att-file',
+          type: 'file',
+          ref: 'memory://pilot/file.docx',
+          name: 'file.docx',
+          dataUrl: 'data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,QUJDREVGRw==',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          size: 7,
+        },
+      ],
+    } as any
+
+    const input = buildResponsesInput(state)
+    expect(input).toHaveLength(1)
+    const content = input[0].content as Array<Record<string, unknown>>
+    const inputFile = content.find(item => item.type === 'input_file')
+    expect(inputFile).toEqual({
+      type: 'input_file',
+      file_data: 'QUJDREVGRw==',
+      filename: 'file.docx',
+    })
+  })
+
+  it('buildChatMessageContent 可按开关附带 input_file', () => {
+    const attachments = [
+      {
+        id: 'att-file-toggle',
+        type: 'file',
+        ref: 'memory://pilot/file.pdf',
+        name: 'file.pdf',
+        dataUrl: 'data:application/pdf;base64,QUJD',
+        mimeType: 'application/pdf',
+        size: 3,
+      },
+    ] as any
+
+    const withFile = buildChatMessageContent('分析附件', attachments)
+    expect(withFile).toEqual([
+      {
+        type: 'text',
+        text: '分析附件\n\n[Attachment metadata]\n1. file.pdf (application/pdf, 3 B)',
+      },
+      {
+        type: 'input_file',
+        file_data: 'QUJD',
+        filename: 'file.pdf',
+      },
+    ])
+
+    const withoutFile = buildChatMessageContent('分析附件', attachments, { includeInputFiles: false })
+    expect(withoutFile).toBe('分析附件\n\n[Attachment metadata]\n1. file.pdf (application/pdf, 3 B)')
   })
 
   it('图片 URL 选择优先级为 dataUrl > previewUrl > ref', () => {

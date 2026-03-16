@@ -49,6 +49,8 @@ interface StreamConnectionContext {
 
 const INLINE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
 const INLINE_IMAGE_TOTAL_MAX_BYTES = 12 * 1024 * 1024
+const INLINE_FILE_MAX_BYTES = 10 * 1024 * 1024
+const INLINE_FILE_TOTAL_MAX_BYTES = 16 * 1024 * 1024
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -156,6 +158,7 @@ async function resolveMessageAttachments(
   const recordMap = new Map(records.map(item => [item.id, item]))
   const result: UserMessageAttachment[] = []
   let inlineImageBytes = 0
+  let inlineFileBytes = 0
 
   for (const item of inputAttachments) {
     const attachmentId = String(item?.id || '').trim()
@@ -184,8 +187,8 @@ async function resolveMessageAttachments(
       previewUrl,
     }
 
+    const object = await getPilotAttachmentObject(event, record.ref)
     if (attachment.type === 'image') {
-      const object = await getPilotAttachmentObject(event, record.ref)
       if (object && object.mimeType.startsWith('image/')) {
         const objectBytes = Number(object.bytes.byteLength || 0)
         const canInline = objectBytes > 0
@@ -196,6 +199,19 @@ async function resolveMessageAttachments(
           attachment.dataUrl = `data:${object.mimeType};base64,${encoded}`
           inlineImageBytes += objectBytes
         }
+      }
+    }
+    else if (object && object.bytes.byteLength > 0) {
+      const objectBytes = Number(object.bytes.byteLength || 0)
+      attachment.mimeType = attachment.mimeType || object.mimeType
+      attachment.size = attachment.size || objectBytes
+      const canInline = objectBytes <= INLINE_FILE_MAX_BYTES
+        && (inlineFileBytes + objectBytes) <= INLINE_FILE_TOTAL_MAX_BYTES
+      if (canInline) {
+        const mimeType = attachment.mimeType || object.mimeType || 'application/octet-stream'
+        const encoded = encodeBytesToBase64(object.bytes)
+        attachment.dataUrl = `data:${mimeType};base64,${encoded}`
+        inlineFileBytes += objectBytes
       }
     }
 
