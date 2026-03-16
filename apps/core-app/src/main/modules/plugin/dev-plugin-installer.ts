@@ -4,6 +4,7 @@ import fse from 'fs-extra'
 import { isSafePathSegment } from '@talex-touch/utils/common/utils/safe-path'
 import { checkDirWithCreate } from '../../utils/common-util'
 import { pluginModule } from './plugin-module'
+import { shouldSkipNodeModulesPath } from './plugin-install-copy-utils'
 
 export type DevPluginInstallStatus = 'success' | 'error' | 'exists'
 
@@ -82,7 +83,19 @@ export async function installDevPluginFromPath(
     }
 
     await checkDirWithCreate(targetDir, true)
-    await fse.copy(sourceDir, targetDir, { overwrite: true, errorOnExist: false })
+    let skippedNodeModules = false
+    await fse.copy(sourceDir, targetDir, {
+      overwrite: true,
+      errorOnExist: false,
+      filter: (filePath) => {
+        const shouldSkip = shouldSkipNodeModulesPath(filePath)
+        if (shouldSkip) skippedNodeModules = true
+        return !shouldSkip
+      }
+    })
+    if (skippedNodeModules) {
+      console.warn('[DevPluginInstaller] Skipped node_modules during plugin copy')
+    }
 
     const normalized = normalizeDevManifest(manifest)
     const targetManifestPath = path.join(targetDir, 'manifest.json')

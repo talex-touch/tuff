@@ -7,6 +7,7 @@ import { isSafePathSegment } from '@talex-touch/utils/common/utils/safe-path'
 import { CURRENT_SDK_VERSION } from '@talex-touch/utils/plugin'
 import { checkDirWithCreate } from '../../utils/common-util'
 import { pluginModule } from './plugin-module'
+import { removeNodeModulesDirs, shouldSkipNodeModulesPath } from './plugin-install-copy-utils'
 
 type ResolverEvent = { msg: unknown }
 const toErrorMessage = (error: unknown): string =>
@@ -66,7 +67,18 @@ export class PluginResolver {
 
     const stat = await fse.stat(source).catch(() => null)
     if (stat?.isDirectory()) {
-      await fse.copy(source, target, { overwrite: true })
+      let skippedNodeModules = false
+      await fse.copy(source, target, {
+        overwrite: true,
+        filter: (filePath) => {
+          const shouldSkip = shouldSkipNodeModulesPath(filePath)
+          if (shouldSkip) skippedNodeModules = true
+          return !shouldSkip
+        }
+      })
+      if (skippedNodeModules) {
+        console.warn('[PluginResolver] Skipped node_modules during source directory install copy')
+      }
       return
     }
 
@@ -125,6 +137,7 @@ export class PluginResolver {
 
     try {
       await this.uncompress(this.filePath, _target)
+      await this.sanitizeNodeModules(_target)
       await this.applyInstallOptions(manifest, _target, options)
 
       // Load the new plugin
@@ -159,6 +172,7 @@ export class PluginResolver {
     try {
       await fse.ensureDir(tempDir)
       await this.uncompress(this.filePath, tempDir)
+      await this.sanitizeNodeModules(tempDir)
 
       const manifestPath = path.join(tempDir, 'manifest.json')
       const keyPath = path.join(tempDir, 'key.talex')
@@ -217,6 +231,15 @@ export class PluginResolver {
   ): Promise<void> {
     if (!options?.enforceProdMode) return
     await this.disableDevMode(manifest, targetDir)
+  }
+
+  private async sanitizeNodeModules(rootDir: string): Promise<void> {
+    const removed = await removeNodeModulesDirs(rootDir)
+    if (removed.length > 0) {
+      console.warn(
+        `[PluginResolver] Removed ${removed.length} node_modules directories from install payload`
+      )
+    }
   }
 
   private async disableDevMode(manifest: IManifest, targetDir: string): Promise<void> {
