@@ -126,6 +126,11 @@ onMounted(() => {
       <p class="pilot-admin-storage__desc">
         这里用于动态配置附件存储。若未配置 MinIO，也可只配置“附件公网 Base URL”用于模型回源读取。
       </p>
+      <p class="pilot-admin-storage__desc">
+        管理入口已迁移到
+        <a href="/cms/system/pilot-settings">/cms/system/pilot-settings</a>
+        ，此页面将在兼容窗口结束后下线。
+      </p>
 
       <div v-if="loading" class="pilot-admin-storage__hint">
         正在加载配置...

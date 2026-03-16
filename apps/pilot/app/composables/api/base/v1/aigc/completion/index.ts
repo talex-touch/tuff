@@ -14,6 +14,22 @@ function parseJsonSafe<T>(value: string): T | null {
 }
 
 function normalizeExecutorErrorMessage(error: unknown): string {
+  const rawText = typeof error === 'string'
+    ? error
+    : error instanceof Error
+      ? (error.message || '')
+      : String((error as any)?.message || '')
+  const normalizedRaw = rawText.trim()
+  if (normalizedRaw.includes('ATTACHMENT_UNREACHABLE')) {
+    return '附件不可达：请配置可公网访问的附件 Base URL（https）后重试。'
+  }
+  if (normalizedRaw.includes('ATTACHMENT_TOO_LARGE_FOR_INLINE')) {
+    return '附件过大且无法走 URL/ID 投递，请缩小文件或先配置公网附件地址。'
+  }
+  if (normalizedRaw.includes('ATTACHMENT_LOAD_FAILED')) {
+    return '附件读取失败，请重新上传后重试。'
+  }
+
   if (typeof error === 'string')
     return error
 

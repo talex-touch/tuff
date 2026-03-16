@@ -8,6 +8,9 @@ export interface UserMessageAttachment {
   name?: string
   mimeType?: string
   previewUrl?: string
+  modelUrl?: string
+  providerFileId?: string
+  deliverySource?: 'id' | 'url' | 'base64'
   dataUrl?: string
   size?: number
 }

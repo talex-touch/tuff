@@ -133,6 +133,43 @@ describe('deepagent message shape', () => {
     })
   })
 
+  it('非图片附件优先使用 providerFileId / file_url，再回退 file_data', () => {
+    const withFileId = buildResponsesInput({
+      ...createBaseState(),
+      messages: [{ role: 'user', content: '请分析附件' }],
+      attachments: [{
+        id: 'att-file-id',
+        type: 'file',
+        ref: 'memory://pilot/file.pdf',
+        name: 'file.pdf',
+        providerFileId: 'file-abc123',
+      }],
+    } as any)
+    const fileIdPart = (withFileId[0].content as Array<Record<string, unknown>>).find(item => item.type === 'input_file')
+    expect(fileIdPart).toEqual({
+      type: 'input_file',
+      file_id: 'file-abc123',
+      filename: 'file.pdf',
+    })
+
+    const withFileUrl = buildResponsesInput({
+      ...createBaseState(),
+      messages: [{ role: 'user', content: '请分析附件' }],
+      attachments: [{
+        id: 'att-file-url',
+        type: 'file',
+        ref: 'https://cdn.example.com/file.pdf',
+        name: 'file.pdf',
+      }],
+    } as any)
+    const fileUrlPart = (withFileUrl[0].content as Array<Record<string, unknown>>).find(item => item.type === 'input_file')
+    expect(fileUrlPart).toEqual({
+      type: 'input_file',
+      file_url: 'https://cdn.example.com/file.pdf',
+      filename: 'file.pdf',
+    })
+  })
+
   it('buildChatMessageContent 可按开关附带 input_file', () => {
     const attachments = [
       {

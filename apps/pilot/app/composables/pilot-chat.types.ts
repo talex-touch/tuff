@@ -38,11 +38,15 @@ export interface PilotAttachment {
   id: string
   sessionId: string
   kind: 'image' | 'file'
+  type?: 'image' | 'file'
   name: string
   mimeType: string
   size: number
   ref: string
   previewUrl?: string
+  modelUrl?: string
+  providerFileId?: string
+  deliverySource?: 'id' | 'url' | 'base64'
   createdAt?: string
 }
 

@@ -15,6 +15,7 @@ import type {
 } from './pilot-chat.types'
 import { networkClient } from '@talex-touch/utils/network'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useAttachmentCapability } from './useAttachmentCapability'
 
 const ASSISTANT_CHUNK_FLUSH_MS = 48
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
@@ -182,6 +183,10 @@ function normalizeMessageAttachments(value: unknown): PilotMessageAttachmentMeta
   return attachments
 }
 
+function resolveAttachmentKind(item: Pick<PilotAttachment, 'kind' | 'type'>): 'image' | 'file' {
+  return item.kind === 'image' || item.type === 'image' ? 'image' : 'file'
+}
+
 function getMessageAttachments(message: PilotMessage): PilotMessageAttachmentMeta[] {
   return normalizeMessageAttachments(message.metadata?.attachments)
 }
@@ -230,6 +235,11 @@ function normalizeTimeoutMs(
 
 export function usePilotChatPage() {
   const runtimePublic = useRuntimeConfig().public as Record<string, unknown>
+  const {
+    refreshCapability,
+    ensureAttachmentAllowed,
+    normalizeAttachmentError,
+  } = useAttachmentCapability()
   const pilotTitle = String(runtimePublic.pilotTitle || 'Tuff Pilot')
   const streamIdleTimeoutMs = normalizeTimeoutMs(
     runtimePublic.pilotStreamIdleTimeoutMs,
@@ -437,7 +447,7 @@ export function usePilotChatPage() {
       return {
         id: item.id,
         label: item.name,
-        kind: item.kind,
+        kind: resolveAttachmentKind(item),
         pending: pendingSet.has(item.id),
       }
     })
@@ -1209,7 +1219,7 @@ export function usePilotChatPage() {
         ? {
             attachments: outgoingAttachments.map(item => ({
               id: item.id,
-              type: item.kind,
+              type: resolveAttachmentKind(item),
               ref: item.ref,
               name: item.name,
               mimeType: item.mimeType,
@@ -1227,7 +1237,7 @@ export function usePilotChatPage() {
       sessionId,
       attachments: outgoingAttachments.map(item => ({
         id: item.id,
-        type: item.kind,
+        type: resolveAttachmentKind(item),
         ref: item.ref,
         name: item.name,
         mimeType: item.mimeType,
@@ -1254,29 +1264,22 @@ export function usePilotChatPage() {
   }
 
   async function uploadAttachment(file: File) {
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      throw new Error('附件大小不能超过 10MB')
+    const capability = await ensureAttachmentAllowed()
+    const maxBytes = Number.isFinite(capability.maxBytes) ? capability.maxBytes : MAX_ATTACHMENT_BYTES
+    if (file.size > maxBytes) {
+      const maxMb = Math.max(1, Math.floor(maxBytes / 1024 / 1024))
+      throw new Error(`附件大小不能超过 ${maxMb}MB`)
     }
 
     const sessionId = await ensureActiveSession()
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onerror = () => reject(new Error('读取附件失败'))
-      reader.onload = () => resolve(String(reader.result || ''))
-      reader.readAsDataURL(file)
-    })
-
+    const formData = new FormData()
+    formData.append('file', file, file.name)
+    formData.append('name', file.name)
+    formData.append('mimeType', file.type || 'application/octet-stream')
+    formData.append('size', String(file.size))
     const response = await fetchJson<{ attachment: PilotAttachment }>(`/api/pilot/chat/sessions/${sessionId}/uploads`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        size: file.size,
-        contentBase64: base64,
-      }),
+      body: formData,
     })
 
     pendingAttachments.value.push(response.attachment)
@@ -1293,7 +1296,7 @@ export function usePilotChatPage() {
         await uploadAttachment(file)
       }
       catch (error) {
-        streamError.value = error instanceof Error ? error.message : '附件上传失败'
+        streamError.value = normalizeAttachmentError(error)
         break
       }
     }
@@ -1305,6 +1308,7 @@ export function usePilotChatPage() {
   }
 
   async function bootstrap() {
+    await refreshCapability()
     await refreshSessions()
 
     if (!activeSessionId.value) {

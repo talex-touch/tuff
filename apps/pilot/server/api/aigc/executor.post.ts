@@ -1,11 +1,14 @@
 import type { AgentEnvelope, DeepAgentAuditRecord, UserMessageAttachment } from '@talex-touch/tuff-intelligence'
 import type { H3Event } from 'h3'
 import type { QuotaUserTurnAttachment } from '../../utils/quota-history-codec'
-import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import { toDeepAgentErrorDetail } from '@talex-touch/tuff-intelligence'
 import { getRequestURL } from 'h3'
 import { requirePilotAuth } from '../../utils/auth'
+import {
+  PilotAttachmentDeliveryError,
+  resolvePilotAttachmentDeliveriesOrThrow,
+} from '../../utils/pilot-attachment-delivery'
 import {
   resolvePilotChannelSelection,
 } from '../../utils/pilot-channel'
@@ -15,6 +18,7 @@ import {
   upsertPilotQuotaSession,
 } from '../../utils/pilot-quota-session'
 import { createPilotRuntime } from '../../utils/pilot-runtime'
+import { generateTitle } from '../../utils/pilot-title'
 import { quotaError } from '../../utils/quota-api'
 import { buildQuotaConversationSnapshot } from '../../utils/quota-conversation-snapshot'
 import { extractLatestQuotaUserTurn } from '../../utils/quota-history-codec'
@@ -23,7 +27,6 @@ import {
   getQuotaHistory,
   upsertQuotaHistory,
 } from '../../utils/quota-history-store'
-import { generateTitle } from '../../utils/pilot-title'
 import { getQuotaUploadObject } from '../../utils/quota-upload-store'
 
 interface QuotaExecutorBody {
@@ -98,10 +101,6 @@ const STREAM_HEARTBEAT_IDLE_MS = 12_000
 const SNAPSHOT_PERSIST_INTERVAL_MS = 0
 const STREAM_DELTA_EMIT_CHUNK_SIZE = 32
 const TITLE_STREAM_CHUNK_SIZE = 6
-const INLINE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
-const INLINE_IMAGE_TOTAL_MAX_BYTES = 12 * 1024 * 1024
-const INLINE_FILE_MAX_BYTES = 10 * 1024 * 1024
-const INLINE_FILE_TOTAL_MAX_BYTES = 16 * 1024 * 1024
 
 function resolveExecutorModel(rawModel: unknown, fallbackModel: string): string {
   const candidate = String(rawModel || '').trim()
@@ -231,33 +230,31 @@ function parseQuotaUploadIdFromUrl(input: string): string {
   }
 }
 
-function estimateDataUrlBytes(dataUrl: string): number {
-  const match = String(dataUrl || '').match(/^data:[^;]+;base64,([A-Za-z0-9+/=\s]+)$/i)
-  if (!match) {
-    return 0
-  }
-  const base64 = match[1].replace(/\s+/g, '')
-  if (!base64) {
-    return 0
-  }
-  const padding = (base64.match(/=+$/)?.[0].length) || 0
-  const size = Math.floor(base64.length * 3 / 4) - padding
-  return Number.isFinite(size) && size > 0 ? size : 0
-}
-
-function resolveLegacyAttachments(
+async function resolveLegacyAttachments(
   event: H3Event,
   rawAttachments: QuotaUserTurnAttachment[],
-): {
+): Promise<{
   attachments: UserMessageAttachment[]
-  inlineImageCount: number
-  inlineImageBytes: number
-} {
-  const attachments: UserMessageAttachment[] = []
-  let inlineImageCount = 0
-  let inlineImageBytes = 0
-  let inlineFileBytes = 0
+  summary: Record<string, unknown>
+}> {
+  if (!Array.isArray(rawAttachments) || rawAttachments.length <= 0) {
+    return {
+      attachments: [],
+      summary: {
+        total: 0,
+        resolved: 0,
+        unresolved: 0,
+        idCount: 0,
+        urlCount: 0,
+        base64Count: 0,
+        loadedObjectCount: 0,
+        inlinedImageBytes: 0,
+        inlinedFileBytes: 0,
+      },
+    }
+  }
 
+  const deliveryInputs = []
   for (let index = 0; index < rawAttachments.length; index += 1) {
     const item = rawAttachments[index]
     const rawValue = String(item.value || '').trim()
@@ -267,106 +264,45 @@ function resolveLegacyAttachments(
 
     const id = randomId('legacy-attachment')
     const ref = resolveAbsoluteAttachmentUrl(event, rawValue)
+    const uploadId = parseQuotaUploadIdFromUrl(rawValue)
+    const itemData = String(item.data || '').trim()
+    const dataUrlFromValue = rawValue.startsWith('data:') ? rawValue : ''
+    const dataUrl = dataUrlFromValue || (itemData.startsWith('data:') ? itemData : '')
+    const inferredMimeType = item.type === 'file' && !itemData.startsWith('data:')
+      ? itemData
+      : undefined
 
-    if (item.type === 'image') {
-      const attachment: UserMessageAttachment = {
-        id,
-        type: 'image',
-        ref,
-        name: item.name,
-      }
-
-      if (rawValue.startsWith('data:image/')) {
-        attachment.dataUrl = rawValue
-        attachments.push(attachment)
-        continue
-      }
-
-      const dataUrl = String(item.data || '').trim()
-      const dataUrlBytes = estimateDataUrlBytes(dataUrl)
-      const canInlineDataUrl = dataUrl.startsWith('data:image/')
-        && dataUrlBytes > 0
-        && dataUrlBytes <= INLINE_IMAGE_MAX_BYTES
-        && (inlineImageBytes + dataUrlBytes) <= INLINE_IMAGE_TOTAL_MAX_BYTES
-      if (canInlineDataUrl) {
-        attachment.dataUrl = dataUrl
-        inlineImageCount += 1
-        inlineImageBytes += dataUrlBytes
-      }
-
-      const uploadId = parseQuotaUploadIdFromUrl(rawValue)
-      if (uploadId) {
-        const object = getQuotaUploadObject(uploadId)
-        if (object && object.data.byteLength > 0) {
-          attachment.mimeType = object.mimeType
-          attachment.size = object.data.byteLength
-          const shouldInline = object.mimeType.startsWith('image/')
-            && object.data.byteLength <= INLINE_IMAGE_MAX_BYTES
-            && (inlineImageBytes + object.data.byteLength) <= INLINE_IMAGE_TOTAL_MAX_BYTES
-
-          if (shouldInline && !attachment.dataUrl) {
-            attachment.dataUrl = `data:${object.mimeType};base64,${Buffer.from(object.data).toString('base64')}`
-            inlineImageCount += 1
-            inlineImageBytes += object.data.byteLength
-          }
-          else if (ref.startsWith('http://') || ref.startsWith('https://')) {
-            attachment.previewUrl = ref
-          }
-
-          attachments.push(attachment)
-          continue
-        }
-      }
-
-      if (ref.startsWith('http://') || ref.startsWith('https://')) {
-        attachment.previewUrl = ref
-      }
-      attachments.push(attachment)
-      continue
-    }
-
-    const attachment: UserMessageAttachment = {
+    deliveryInputs.push({
       id,
-      type: 'file',
+      type: item.type,
       ref,
       name: item.name,
-      mimeType: item.data,
-    }
-
-    const uploadId = parseQuotaUploadIdFromUrl(rawValue)
-    if (uploadId) {
-      const object = getQuotaUploadObject(uploadId)
-      if (object && object.data.byteLength > 0) {
-        const objectBytes = object.data.byteLength
-        attachment.mimeType = object.mimeType || attachment.mimeType
-        attachment.size = objectBytes
-
-        const canInlineFile = objectBytes <= INLINE_FILE_MAX_BYTES
-          && (inlineFileBytes + objectBytes) <= INLINE_FILE_TOTAL_MAX_BYTES
-        if (canInlineFile) {
-          const mimeType = attachment.mimeType || 'application/octet-stream'
-          attachment.dataUrl = `data:${mimeType};base64,${Buffer.from(object.data).toString('base64')}`
-          inlineFileBytes += objectBytes
+      mimeType: inferredMimeType,
+      previewUrl: ref,
+      modelUrl: ref,
+      dataUrl,
+      loadObject: uploadId
+        ? async () => {
+          const object = getQuotaUploadObject(uploadId)
+          if (!object || object.data.byteLength <= 0) {
+            return null
+          }
+          return {
+            bytes: object.data,
+            mimeType: object.mimeType,
+            size: object.data.byteLength,
+          }
         }
-        else if (ref.startsWith('http://') || ref.startsWith('https://')) {
-          attachment.previewUrl = ref
-        }
-
-        attachments.push(attachment)
-        continue
-      }
-    }
-
-    if (ref.startsWith('http://') || ref.startsWith('https://')) {
-      attachment.previewUrl = ref
-    }
-    attachments.push(attachment)
+        : undefined,
+    })
   }
 
+  const resolved = await resolvePilotAttachmentDeliveriesOrThrow(deliveryInputs, {
+    concurrency: 3,
+  })
   return {
-    attachments,
-    inlineImageCount,
-    inlineImageBytes,
+    attachments: resolved.attachments,
+    summary: resolved.summary as unknown as Record<string, unknown>,
   }
 }
 
@@ -790,6 +726,17 @@ function mapExecutorErrorMessage(
   context?: ExecutorErrorContext,
   detail?: ExecutorErrorDetailPayload,
 ): string {
+  const detailCode = String(detail?.code || '').trim().toUpperCase()
+  if (detailCode === 'ATTACHMENT_UNREACHABLE') {
+    return '附件不可达：请配置可公网访问的附件 URL（推荐 https）或 provider file id。'
+  }
+  if (detailCode === 'ATTACHMENT_TOO_LARGE_FOR_INLINE') {
+    return '附件过大且无法走 URL/ID 投递：请缩小文件，或先配置可公网访问的附件地址。'
+  }
+  if (detailCode === 'ATTACHMENT_LOAD_FAILED') {
+    return '附件读取失败，请重试上传后再发送。'
+  }
+
   const raw = error instanceof Error ? error.message : String(error || 'executor failed')
   if (raw.includes('530 status code')) {
     return '上游 AIAPI 不可达，请检查后台渠道配置与网关状态'
@@ -918,9 +865,9 @@ export default defineEventHandler(async (event) => {
   const latestUserTurn = extractLatestQuotaUserTurn(body?.messages)
   const message = String(latestUserTurn.text || '').trim()
   const isTitleRequest = Boolean(body?.generateTitle)
-  const resolvedLegacyAttachments = resolveLegacyAttachments(event, latestUserTurn.attachments)
+  const hasRawAttachments = latestUserTurn.attachments.some(item => String(item?.value || '').trim())
 
-  if (!isTitleRequest && !message && resolvedLegacyAttachments.attachments.length <= 0) {
+  if (!isTitleRequest && !message && !hasRawAttachments) {
     return quotaError(400, 'user message is required', null)
   }
 
@@ -1085,9 +1032,8 @@ export default defineEventHandler(async (event) => {
     model: trace.model,
     message_chars: message.length,
     message_preview: truncateText(message, 120),
-    attachment_count: resolvedLegacyAttachments.attachments.length,
-    inline_image_count: resolvedLegacyAttachments.inlineImageCount,
-    inline_image_bytes: resolvedLegacyAttachments.inlineImageBytes,
+    attachment_count: latestUserTurn.attachments.length,
+    has_raw_attachments: hasRawAttachments,
     requested_chat_id: requestedChatId || null,
     selection_source: trace.selectionSource,
     debug_enabled: debugEnabled,
@@ -1132,6 +1078,23 @@ export default defineEventHandler(async (event) => {
         let lastPersistAt = 0
         let lastPersistedReply = ''
         let persistPromise: Promise<void> = Promise.resolve()
+        let resolvedLegacyAttachments: {
+          attachments: UserMessageAttachment[]
+          summary: Record<string, unknown>
+        } = {
+          attachments: [],
+          summary: {
+            total: 0,
+            resolved: 0,
+            unresolved: 0,
+            idCount: 0,
+            urlCount: 0,
+            base64Count: 0,
+            loadedObjectCount: 0,
+            inlinedImageBytes: 0,
+            inlinedFileBytes: 0,
+          },
+        }
 
         const touchStreamEventAt = () => {
           lastStreamEventAt = Date.now()
@@ -1282,6 +1245,119 @@ export default defineEventHandler(async (event) => {
           touchStreamEventAt()
           startHeartbeat()
 
+          if (hasRawAttachments) {
+            const attachmentResolveStartedAt = Date.now()
+            const attachmentCount = latestUserTurn.attachments.length
+            emit({
+              event: 'status_updated',
+              status: 'verbose',
+              id: 'assistant',
+              name: 'attachment.resolve.start',
+              data: `count:${attachmentCount}`,
+            })
+            touchStreamEventAt()
+            logExecutorEvent('info', 'attachment', {
+              phase: 'attachment.resolve.start',
+              request_id: trace.requestId,
+              chat_id: trace.chatId,
+              attachment_count: attachmentCount,
+            })
+
+            try {
+              resolvedLegacyAttachments = await resolveLegacyAttachments(event, latestUserTurn.attachments)
+              const durationMs = Date.now() - attachmentResolveStartedAt
+              const summary = resolvedLegacyAttachments.summary
+              logExecutorEvent('info', 'attachment', {
+                phase: 'attachment.resolve.end',
+                request_id: trace.requestId,
+                chat_id: trace.chatId,
+                duration_ms: durationMs,
+                status: 'ok',
+                summary,
+              })
+              logExecutorEvent('info', 'attachment', {
+                phase: 'attachment.delivery.summary',
+                request_id: trace.requestId,
+                chat_id: trace.chatId,
+                summary,
+              })
+              emit({
+                event: 'status_updated',
+                status: 'verbose',
+                id: 'assistant',
+                name: 'attachment.delivery.summary',
+                data: JSON.stringify(summary),
+              })
+              touchStreamEventAt()
+            }
+            catch (error) {
+              if (error instanceof PilotAttachmentDeliveryError) {
+                const context: ExecutorErrorContext = {
+                  requestId: trace.requestId,
+                  startedAt: trace.startedAt,
+                  timeoutMs: selectedChannel.channel.timeoutMs,
+                  channelId: selectedChannel.channelId,
+                  adapter: selectedChannel.adapter,
+                  transport: selectedChannel.transport,
+                  endpoint: trace.endpoint,
+                  model: trace.model,
+                }
+                const detail = buildExecutorErrorDetail(error, context)
+                const durationMs = Date.now() - attachmentResolveStartedAt
+                const message = mapExecutorErrorMessage(error, context, detail)
+                streamFailed = true
+                streamErrorDetail = detail
+                await queuePersistSnapshot({
+                  force: true,
+                  status: 'failed',
+                  allowEmptyReply: true,
+                  errorDetail: detail,
+                })
+                logExecutorEvent('warn', 'attachment', {
+                  phase: 'attachment.resolve.end',
+                  request_id: trace.requestId,
+                  chat_id: trace.chatId,
+                  duration_ms: durationMs,
+                  status: 'failed',
+                  code: error.code,
+                  failure_count: error.failures.length,
+                  summary: error.summary,
+                })
+                logExecutorEvent('warn', 'attachment', {
+                  phase: 'attachment.delivery.summary',
+                  request_id: trace.requestId,
+                  chat_id: trace.chatId,
+                  status: 'failed',
+                  code: error.code,
+                  failure_count: error.failures.length,
+                  summary: error.summary,
+                })
+                emit({
+                  event: 'status_updated',
+                  status: 'verbose',
+                  id: 'assistant',
+                  name: 'attachment.resolve.end',
+                  data: `failed:${error.code}`,
+                })
+                touchStreamEventAt()
+                emit({
+                  event: 'error',
+                  status: 'failed',
+                  code: error.code,
+                  message,
+                  detail: {
+                    ...detail,
+                    code: error.code,
+                    failures: error.failures,
+                    summary: error.summary,
+                  },
+                })
+                return
+              }
+              throw error
+            }
+          }
+
           const runWithChannel = async () => {
             logExecutorEvent('info', 'request', {
               phase: 'upstream.invoke.start',
@@ -1327,8 +1403,7 @@ export default defineEventHandler(async (event) => {
                 channelAdapter: selectedChannel.adapter,
                 channelTransport: selectedChannel.transport,
                 attachmentCount: resolvedLegacyAttachments.attachments.length,
-                inlineImageCount: resolvedLegacyAttachments.inlineImageCount,
-                inlineImageBytes: resolvedLegacyAttachments.inlineImageBytes,
+                attachmentSummary: resolvedLegacyAttachments.summary,
               },
             })) {
               if (closed) {
@@ -1486,8 +1561,7 @@ export default defineEventHandler(async (event) => {
               transport: trace.transport,
               output_chars: completedText.length,
               attachment_count: resolvedLegacyAttachments.attachments.length,
-              inline_image_count: resolvedLegacyAttachments.inlineImageCount,
-              inline_image_bytes: resolvedLegacyAttachments.inlineImageBytes,
+              attachment_summary: resolvedLegacyAttachments.summary,
               error: streamErrorDetail,
             })
             return
@@ -1526,8 +1600,7 @@ export default defineEventHandler(async (event) => {
             streamed_delta: streamedDelta,
             completion_emitted: completedSent || completedText.length > 0,
             attachment_count: resolvedLegacyAttachments.attachments.length,
-            inline_image_count: resolvedLegacyAttachments.inlineImageCount,
-            inline_image_bytes: resolvedLegacyAttachments.inlineImageBytes,
+            attachment_summary: resolvedLegacyAttachments.summary,
           })
         }
         catch (error) {

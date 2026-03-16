@@ -47,24 +47,36 @@
 ### 3.3 附件
 
 - `POST /api/pilot/chat/sessions/:sessionId/uploads`
-  - 入参：`{ name, mimeType, size, contentBase64 }`
-  - 约束：若运行环境为本地/私网且未配置 MinIO（或未配置可用公网 Base URL），接口返回 `400` 并拒绝附件上传。
+  - 入参（兼容双模式）：
+    - `multipart/form-data`（推荐，`file`）
+    - JSON 兼容：`{ name, mimeType, size, contentBase64 }`
+  - 约束：单文件最大 `10MB`。
   - 出参：
-    - `attachment`（Postgres 元数据，含 `previewUrl`）
+    - `attachment`（Postgres 元数据，含 `previewUrl/modelUrl/deliverySource`）
     - `upload`（签名 URL 元信息）
     - `directUploaded`（本次请求已写入对象存储）
+
+- `GET /api/pilot/chat/attachments/capability`
+  - 出参：`{ allowed, reason, provider, maxBytes, supports }`
+  - 用途：Pilot/legacy 输入框统一能力探测，避免前端误判“暂不支持附件”。
 
 - `GET /api/pilot/chat/sessions/:sessionId/attachments/:attachmentId/content`
   - 返回附件二进制内容（鉴权 + 会话归属校验）
   - 用途：前端预览与模型读取桥接
   - 支持签名访问参数：`?exp=<ms>&sig=<hmac>`（用于模型侧无登录态拉取）
 
-#### 3.3.1 附件输入边界（V1）
+#### 3.3.1 附件投递策略（V1，稳定优先）
 
-- 图片附件：服务端优先转 `data URL`，在模型侧按多模态输入（`image_url` / `input_image`）注入。
-- 当附件存储为 MinIO（`s3://`）且存在可访问对象 URL 时，优先使用 URL 注入，避免大图 `data URL` 膨胀。
-- 非图片附件：当前仅注入结构化元数据（`name/mimeType/size/ref`），不做 PDF/Office/OCR 通用解析。
-- 存储策略：当前支持 `memory` 与 `s3(minio)`；历史 `r2://` 仅作为兼容读取语境，不作为新增写入目标。
+- URL/ID-first（新旧链路统一）：
+  1. `provider file id`（`deliverySource=id`）
+  2. 公网可访问 `https URL`（`deliverySource=url`）
+  3. `base64` 兜底（`deliverySource=base64`，受单文件/总量阈值约束）
+- 三源均不可用时快速失败，错误码：
+  - `ATTACHMENT_UNREACHABLE`
+  - `ATTACHMENT_TOO_LARGE_FOR_INLINE`
+  - `ATTACHMENT_LOAD_FAILED`
+- 入模前不再“无条件读取对象并内联 base64”；仅在必须走 `base64` 兜底时才读取对象。
+- 附件解析并发固定 `3`，兼顾多文件吞吐与单次负载。
 
 #### 3.3.2 本地 MinIO 联调（新增）
 
@@ -78,9 +90,13 @@
 - 可选：`PILOT_MINIO_PUBLIC_BASE_URL`（推荐为 bucket root URL，用于直接返回模型可访问 URL）
 - 无 MinIO 时可仅配置 `PILOT_ATTACHMENT_PUBLIC_BASE_URL`，系统会返回签名的附件内容 URL（`/attachments/:id/content?exp&sig`）。
 - 支持运行时动态配置（数据库持久化）：
+  - `GET /api/pilot/admin/settings`
+  - `POST /api/pilot/admin/settings`
   - `GET /api/pilot/admin/storage-config`
   - `POST /api/pilot/admin/storage-config`
-  - 页面入口：`/admin/storage`
+  - `GET /api/pilot/admin/channels`
+  - `POST /api/pilot/admin/channels`
+  - 页面入口：`/cms/system/pilot-settings`（旧 `/pilot/admin/*` 进入兼容窗口）
 
 #### 3.3.3 当前运维配置基线（Node Server / 1Panel）
 
