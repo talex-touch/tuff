@@ -1,8 +1,9 @@
 # OmniPanel Feature Hub PRD（260223）
 
-> 状态：进行中（Wave-1~Wave-4 已落地，Wave-5 文档台账推进中）  
-> 更新时间：2026-03-01  
+> 状态：historical done（2.4.8 Gate 已完成，不再作为当前主线）  
+> 更新时间：2026-03-16  
 > 适用范围：`apps/core-app` / `packages/utils`
+> 验收证据：真实窗口 smoke CI + 失败路径回归 + 触发稳定性回归（详见 `docs/plan-prd/01-project/CHANGES.md`）
 
 ---
 
