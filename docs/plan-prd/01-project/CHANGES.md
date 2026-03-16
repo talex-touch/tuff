@@ -2,7 +2,7 @@
 
 > 记录项目的重大变更和改进
 
-## 2026-03-15
+## 2026-03-16
 
 ### Pilot：恢复 GitHub -> 1Panel webhook 自动部署（含密钥校验）
 
@@ -54,6 +54,27 @@
    - 混合数据（嵌套 + 扁平）归并恢复树
 
 **影响**: `GET /api/account/menus` 与 `GET /api/system/depts` 能返回完整子节点，CMS “我的应用”恢复可配置与可展示。
+
+### 修复: Pilot 多模态输入链路稳定性（单条 user 多内容块）
+
+**变更类型**: Bug 修复
+
+**描述**:
+- 统一 `text + image` 请求语义为“同一条 user 消息中的多模态 content”，避免拆成两条 user turn 导致上下文丢失。
+- stream 与 quota 路径统一 `dataUrl > previewUrl > ref` 选取优先级，并补齐对应回归断言。
+
+**验证结果**:
+- `pnpm -C "apps/pilot" run test -- --runInBand` ✅（包含新增多模态消息形态断言）
+
+### Docs：文档治理门禁脚本（warn 模式）落地
+
+**变更类型**: 文档治理 / CI 门禁
+
+**描述**:
+- 新增 `scripts/check-doc-governance.mjs`，统一检查六主文档日期、下一动作口径、TODO 统计、陈旧文案与关键运维文档字段一致性。
+- 默认 `warn` 模式（报告不阻塞）；支持 `--strict true` 切换为阻塞。
+- 根脚本入口补齐：`pnpm docs:guard` 与 `pnpm docs:guard:strict`。
+- CI 先接入 `docs:guard` 报告步骤（不改发布触发逻辑，不阻塞流水线）。
 
 ---
 

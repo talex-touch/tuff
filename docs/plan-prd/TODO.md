@@ -1,11 +1,11 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2026-03-15
+> 更新时间: 2026-03-16
 
 ---
 
-## 🧭 单一口径矩阵（2.4.9 / 2026-03-15）
+## 🧭 单一口径矩阵（2.4.9 / 2026-03-16）
 
 | 主题 | 统一口径 | 下一动作 | 强制同步文档 |
 | --- | --- | --- | --- |
@@ -13,7 +13,7 @@
 | 2.4.8 主线 Gate（historical） | OmniPanel 稳定版 MVP 已落地（含真实窗口 smoke CI） | 仅保留历史验收记录，不再作为当前开发主线 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | v2.4.7 Gate 状态 | Gate A/B/C/D/E = ✅ Done（Gate E 为 historical；Gate D 为 historical backfill） | 保留证据链（run `23091014958` + assets/manifest/sha256），作为历史版本闭环档案 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
 | Pilot Runtime 主路径 | Node Server + Postgres/Redis + JWT Cookie，Cloudflare 相关仅保留历史归档 | 持续补强 M0/M1 回归与部署脚本 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
-| 文档治理 | 更新时间统一到 2026-03-15；`next-edit` 仅作草稿池，不作为发布判定来源 | 每周例行同步 6 份主文档状态/日期/下一动作 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
+| 文档治理 | 更新时间统一到 2026-03-16；`next-edit` 仅作草稿池，不作为发布判定来源 | 每周例行同步 6 份主文档状态/日期/下一动作 | `TODO` / `README` / `Roadmap` / `Release 清单` / `Quality Baseline` / `INDEX` |
 
 ---
 
@@ -953,7 +953,7 @@
 | 总计 | 260 |
 | 完成率 | 71% |
 
-> 统计时间：2026-03-15。口径为本文件内 checkbox 实时计数，不含外链 checklist。
+> 统计时间：2026-03-16。口径为本文件内 checkbox 实时计数，不含外链 checklist。
 
 ---
 
@@ -1015,5 +1015,5 @@
 ---
 
 **文档版本**: v1.16
-**更新时间**: 2026-03-15
+**更新时间**: 2026-03-16
 **维护者**: Development Team

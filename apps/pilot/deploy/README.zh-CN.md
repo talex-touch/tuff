@@ -126,7 +126,7 @@ curl "http://127.0.0.1:19021/health"
 4. 配置 GitHub 仓库密钥：
    - `ONEPANEL_WEBHOOK_URL`（例如 `http://<frp-host>:23301`）
    - `ONEPANEL_WEBHOOK_TOKEN`（与 `PILOT_WEBHOOK_TOKEN` 保持一致）
-5. `pilot-image.yml` 在镜像发布后会自动 `POST /deploy` 触发重建。
+5. `pilot-image.yml`（`master` push 触发）在镜像发布后会自动 `POST /deploy` 触发重建，并携带 `X-Pilot-Token` 请求头。
 
 ## 6）回滚机制
 
