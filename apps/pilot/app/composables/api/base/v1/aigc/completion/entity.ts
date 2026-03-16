@@ -1,5 +1,5 @@
-import type { WritableComputedRef } from 'vue'
-import { type IChatInnerItem, type IChatInnerItemMeta, type IChatItem, IChatItemStatus, IChatRole, type IInnerItemMeta, type IInnerItemType, QuotaModel } from '../completion-types'
+import type { IChatInnerItem, IChatInnerItemMeta, IChatItem, IInnerItemMeta, IInnerItemType } from '../completion-types'
+import { IChatItemStatus, IChatRole, QuotaModel } from '../completion-types'
 
 export function randomUUID(type: 'Chat' | 'Item') {
   // 获取最后的时间戳6位
@@ -24,7 +24,7 @@ export function mapStrStatus(str: string) {
   else if (str === 'failed')
     return IChatItemStatus.ERROR
   else if (str === 'verbose')
-    return IChatItemStatus.VERBOSE
+    return IChatItemStatus.WAITING
 
   console.error('unknown status', str)
 
@@ -87,7 +87,7 @@ export class ChatItem implements IChatItem {
 
 export class ChatInnerItem implements IChatInnerItem {
   page: number
-  model: QuotaModel
+  model: QuotaModel | string
   status: IChatItemStatus
   timestamp: number
   value: IInnerItemMeta[]
@@ -125,4 +125,4 @@ export class InnerItemMeta implements IInnerItemMeta {
     this.extra = extra
   }
 }
-export { IInnerItemType }
+export type { IInnerItemType }

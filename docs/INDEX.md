@@ -20,6 +20,8 @@
 - **2.4.8 主线 Gate（historical）**：OmniPanel 稳定版 MVP 已落地（真实窗口 smoke CI + 失败路径回归 + 触发稳定性回归）。
 - **v2.4.7 发布门禁**：Gate A/B/C/D/E 已完成（Gate E 为 historical，Gate D 已通过手动 `workflow_dispatch(sync_tag=v2.4.7)` 收口）。
 - **Pilot Runtime 主路径**：Node Server + Postgres/Redis + JWT Cookie；Cloudflare runtime/D1/R2 仅保留历史归档。
+- **Pilot Chat/Turn 新协议**：`/api/v1/chat/sessions/:sessionId/{turns,stream,messages}` 已落地（会话级串行队列、SSE 尾段 title、运行态回传）。
+- **Pilot 历史存储格式**：`pilot_quota_history.value` 已统一为 JSON 字符串（旧 base64 记录已迁移，历史接口默认回包结构化 JSON）。
 - **Pilot 接口迁移（M2/M3）**：已完成收口；微信相关接口进入豁免模式，支付链路切换为本地 mock（下单 3 秒自动成功）。
 - **Pilot channels 治理**：已新增 `POST /api/pilot/admin/channels/merge-ends` 与一次性脚本，执行“Pilot 优先、Ends 补缺”。
 - **Pilot 自动部署**：`pilot-image.yml` 支持发布后自动调用 1Panel webhook，强制 `X-Pilot-Token` 校验并支持仓库/分支白名单。

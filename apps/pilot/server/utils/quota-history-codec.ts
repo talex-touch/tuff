@@ -15,8 +15,31 @@ export interface QuotaUserTurn {
   attachments: QuotaUserTurnAttachment[]
 }
 
-function decodeText(value: string): string {
-  return decodeURIComponent(atob(value))
+function parseJsonObject(raw: string): Record<string, unknown> | null {
+  const text = String(raw || '').trim()
+  if (!text) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(text)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null
+    }
+    return parsed as Record<string, unknown>
+  }
+  catch {
+    return null
+  }
+}
+
+function decodeLegacyText(value: string): string | null {
+  try {
+    return decodeURIComponent(atob(value))
+  }
+  catch {
+    return null
+  }
 }
 
 function stringifyUnknown(value: unknown): string {
@@ -135,22 +158,21 @@ function parseQuotaUserTurn(content: unknown): QuotaUserTurn {
 }
 
 export function decodeQuotaConversation(value: string): Record<string, unknown> | null {
+  return parseJsonObject(value)
+}
+
+export function decodeLegacyQuotaConversation(value: string): Record<string, unknown> | null {
   const raw = String(value || '').trim()
   if (!raw) {
     return null
   }
 
-  try {
-    const decoded = decodeText(raw)
-    const parsed = JSON.parse(decoded)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return null
-    }
-    return parsed as Record<string, unknown>
-  }
-  catch {
+  const decoded = decodeLegacyText(raw)
+  if (!decoded) {
     return null
   }
+
+  return parseJsonObject(decoded)
 }
 
 export function extractLatestQuotaUserTurn(messages: unknown): QuotaUserTurn {

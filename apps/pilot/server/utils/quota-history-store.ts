@@ -1,7 +1,9 @@
 import type { H3Event } from 'h3'
 import { requirePilotDatabase } from './pilot-store'
+import { decodeLegacyQuotaConversation, decodeQuotaConversation } from './quota-history-codec'
 
 const QUOTA_HISTORY_TABLE = 'pilot_quota_history'
+let quotaHistoryJsonMigrated = false
 
 export interface QuotaHistoryRecord {
   chatId: string
@@ -47,6 +49,55 @@ export async function ensureQuotaHistorySchema(event: H3Event): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_pilot_quota_history_user_updated
     ON ${QUOTA_HISTORY_TABLE}(user_id, updated_at DESC);
   `).run()
+
+  if (!quotaHistoryJsonMigrated) {
+    await migrateQuotaHistoryPayloadToJson(event)
+    quotaHistoryJsonMigrated = true
+  }
+}
+
+async function migrateQuotaHistoryPayloadToJson(event: H3Event): Promise<void> {
+  const db = requirePilotDatabase(event)
+  const rows = await db.prepare(`
+    SELECT chat_id, user_id, value
+    FROM ${QUOTA_HISTORY_TABLE}
+  `).all<{
+    chat_id: string
+    user_id: string
+    value: string
+  }>()
+
+  const candidates = rows.results || []
+  for (const row of candidates) {
+    const rawValue = String(row.value || '').trim()
+    if (!rawValue) {
+      continue
+    }
+
+    const currentJson = decodeQuotaConversation(rawValue)
+    if (currentJson) {
+      const normalized = JSON.stringify(currentJson)
+      if (normalized !== rawValue) {
+        await db.prepare(`
+          UPDATE ${QUOTA_HISTORY_TABLE}
+          SET value = ?1
+          WHERE chat_id = ?2 AND user_id = ?3
+        `).bind(normalized, row.chat_id, row.user_id).run()
+      }
+      continue
+    }
+
+    const legacy = decodeLegacyQuotaConversation(rawValue)
+    if (!legacy) {
+      continue
+    }
+
+    await db.prepare(`
+      UPDATE ${QUOTA_HISTORY_TABLE}
+      SET value = ?1
+      WHERE chat_id = ?2 AND user_id = ?3
+    `).bind(JSON.stringify(legacy), row.chat_id, row.user_id).run()
+  }
 }
 
 export async function upsertQuotaHistory(

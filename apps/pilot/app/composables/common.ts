@@ -1,7 +1,7 @@
+import type { IStandardResponse } from './api/base/index.type'
 import dayjs from 'dayjs'
 import duration from 'dayjs/plugin/duration'
 import gsap from 'gsap'
-import type { IStandardResponse } from './api/base/index.type'
 import { globalOptions } from '~/constants'
 
 dayjs.extend(duration)
@@ -110,7 +110,16 @@ export function encodeObject(obj: any) {
 }
 
 export function decodeObject(str: string) {
-  return JSON.parse(decodeText(str))
+  const raw = String(str || '').trim()
+  if (!raw)
+    throw new Error('decodeObject input is empty')
+
+  try {
+    return JSON.parse(raw)
+  }
+  catch {
+    return JSON.parse(decodeText(raw))
+  }
 }
 
 export function randomStr(len: number = 16) {
@@ -159,7 +168,7 @@ function isCrossOriginUrl(url: string) {
  *
  * @param url url -> image
  */
-function loadImage(url) {
+function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
 
@@ -204,8 +213,8 @@ export async function svgToPng(xml: string) {
 }
 
 /**
- *
- * @param 读取文件内容
+ * @param file File 对象
+ * @param dataType 读取类型
  */
 export function readFile(file, dataType = 'DataURL') {
   return new Promise((resolve, reject) => {

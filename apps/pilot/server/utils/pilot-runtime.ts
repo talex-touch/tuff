@@ -19,8 +19,10 @@ const DEFAULT_TIMEOUT_MS = 90_000
 const MIN_TIMEOUT_MS = 3_000
 const MAX_TIMEOUT_MS = 10 * 60 * 1000
 const DEFAULT_SYSTEM_PROMPT = [
-  'You are Tuff Pilot, a concise and reliable AI assistant.',
-  'Always provide direct, factual answers and show actionable next steps when useful.',
+  'You are Tuff Pilot.',
+  'Reply with concise, factual answers.',
+  'When useful, add short actionable next steps.',
+  'If uncertain, state the uncertainty briefly instead of guessing.',
 ].join('\n')
 
 class PilotAgentRuntime extends AbstractAgentRuntime {}

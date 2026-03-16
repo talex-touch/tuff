@@ -1,7 +1,6 @@
 import type { IChatConversation } from '~/composables/api/base/v1/aigc/completion-types'
 import { $endApi } from '~/composables/api/base'
 import { PersistStatus } from '~/composables/api/base/v1/aigc/completion-types'
-import { decodeObject, encodeObject } from '~/composables/common'
 import { $event } from '~/composables/events'
 
 export interface IHistoryManager {
@@ -62,17 +61,35 @@ export class HistoryManager implements IHistoryManager {
     if (!chatId)
       return null
 
-    const rawValue = String((row.value || '') as string).trim()
-    if (!rawValue)
-      return null
+    const decoded = (() => {
+      const value = row.value
+      if (value && typeof value === 'object' && !Array.isArray(value))
+        return value as Record<string, unknown>
 
-    let decoded: any
-    try {
-      decoded = decodeObject(rawValue)
-    }
-    catch {
+      const rawValue = typeof value === 'string' ? value.trim() : ''
+      if (rawValue) {
+        try {
+          const parsed = JSON.parse(rawValue)
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+            return parsed as Record<string, unknown>
+        }
+        catch {
+          // ignore invalid payload
+        }
+      }
+
+      if (Array.isArray(row.messages)) {
+        return {
+          id: chatId,
+          topic: row.topic,
+          messages: row.messages,
+        } as Record<string, unknown>
+      }
+
       return null
-    }
+    })()
+    if (!decoded)
+      return null
 
     const updatedAt = new Date(String((row.updatedAt || '') as string)).getTime()
     const lastUpdate = Number.isFinite(updatedAt)
@@ -93,6 +110,9 @@ export class HistoryManager implements IHistoryManager {
       return {} as Record<string, unknown>
     })()
     const syncStatus = String(meta.sync_status || decoded?.sync || '').trim().toLowerCase()
+    const runtimeState = String((row.run_state || meta.run_state || '') as string).trim().toLowerCase()
+    const pendingCount = Number(row.pending_count ?? meta.pending_count ?? 0)
+    const activeTurnId = String((row.active_turn_id || meta.active_turn_id || '') as string).trim()
     let sync = PersistStatus.SUCCESS
     if (syncStatus === PersistStatus.PENDING || syncStatus === 'streaming')
       sync = PersistStatus.PENDING
@@ -106,6 +126,9 @@ export class HistoryManager implements IHistoryManager {
       messages: Array.isArray(decoded?.messages) ? decoded.messages : [],
       lastUpdate,
       sync,
+      runtimeState,
+      pendingCount: Number.isFinite(pendingCount) ? pendingCount : 0,
+      activeTurnId: activeTurnId || null,
     } as IChatConversation
   }
 
@@ -207,7 +230,7 @@ export class HistoryManager implements IHistoryManager {
       const uploadQuery = {
         chat_id: history.id,
         topic: history.topic,
-        value: encodeObject(history),
+        value: JSON.stringify(history),
         meta: '',
       }
 

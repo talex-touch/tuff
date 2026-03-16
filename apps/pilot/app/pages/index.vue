@@ -1,20 +1,20 @@
 <script setup lang="ts">
-import ThChat from '~/components/chat/ThChat.vue'
-import ThInput from '~/components/input/ThInput.vue'
-import History from '~/components/history/index.vue'
-import ShareSection from '~/components/chat/ShareSection.vue'
-import ModelSelector from '~/components/model/ModelSelector.vue'
-import { getTargetPrompt } from '~/composables/api/chat'
-import { $completion } from '~/composables/api/base/v1/aigc/completion'
-import { type IChatConversation, type IChatInnerItem, type IChatInnerItemMeta, type IChatItem, IChatItemStatus, type IInnerItemMeta, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
-import { $historyManager } from '~/composables/api/base/v1/aigc/history'
-import { $endApi } from '~/composables/api/base'
-import { $event } from '~/composables/events'
+import type { IChatConversation, IChatInnerItem, IChatInnerItemMeta, IChatItem, IInnerItemMeta, ISendState } from '~/composables/api/base/v1/aigc/completion-types'
 import EmptyGuide from '~/components/chat/EmptyGuide.vue'
+import ShareSection from '~/components/chat/ShareSection.vue'
+import ThChat from '~/components/chat/ThChat.vue'
+import History from '~/components/history/index.vue'
+import ThInput from '~/components/input/ThInput.vue'
+import ModelSelector from '~/components/model/ModelSelector.vue'
 import { useHotKeysHook } from '~/composables/aigc'
+import { $endApi } from '~/composables/api/base'
+import { $completion } from '~/composables/api/base/v1/aigc/completion'
+import { IChatItemStatus, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
 import { calculateConversation } from '~/composables/api/base/v1/aigc/completion/entity'
-import '~/composables/index.d.ts'
+import { $historyManager } from '~/composables/api/base/v1/aigc/history'
+import { $event } from '~/composables/events'
 import { globalConfigModel } from '~/composables/user'
+import '~/composables/index.d.ts'
 
 definePageMeta({
   layout: 'default',
@@ -32,6 +32,7 @@ const pageOptions = reactive<{
   conversation: IChatConversation
   share: any
   status: IChatItemStatus
+  sendState: ISendState
   feedback: any
   view: any
 }>({
@@ -53,6 +54,7 @@ const pageOptions = reactive<{
   },
   view: null,
   status: IChatItemStatus.AVAILABLE,
+  sendState: 'idle',
 })
 
 const expand = computed({
@@ -118,9 +120,15 @@ watch(
         const lastMsg = conversation.messages.at(-1)
 
         const content = lastMsg?.content[lastMsg.page]
+        const runtimeState = String((conversation as any)?.runtimeState || '').trim().toLowerCase()
 
         globalConfigModel.value = content?.model || QuotaModel.QUOTA_THIS_NORMAL
-        pageOptions.status = content?.status || IChatItemStatus.AVAILABLE
+        if (runtimeState === 'queued')
+          pageOptions.status = IChatItemStatus.WAITING
+        else if (runtimeState === 'executing' || runtimeState === 'title')
+          pageOptions.status = IChatItemStatus.GENERATING
+        else
+          pageOptions.status = content?.status || IChatItemStatus.AVAILABLE
       }
       else {
         pageOptions.status = IChatItemStatus.AVAILABLE
@@ -199,6 +207,9 @@ async function innerSend(conversation: IChatConversation, chatItem: IChatItem, i
   const chatCompletion = $completion.createCompletion(conversation, chatItem, index)
 
   chatCompletion.registerHandler({
+    onAccepted() {
+      pageOptions.sendState = 'idle'
+    },
     onCompletion: () => {
       scheduleStreamScroll()
 
@@ -206,6 +217,8 @@ async function innerSend(conversation: IChatConversation, chatItem: IChatItem, i
     },
     onTriggerStatus(status) {
       pageOptions.status = status
+      if (pageOptions.sendState === 'sending_until_accepted' && status !== IChatItemStatus.WAITING)
+        pageOptions.sendState = 'idle'
 
       if (
         status === IChatItemStatus.GENERATING
@@ -220,15 +233,8 @@ async function innerSend(conversation: IChatConversation, chatItem: IChatItem, i
       flushStreamScroll('final')
     },
     async onReqCompleted() {
+      pageOptions.sendState = 'idle'
       flushStreamScroll('stream')
-      // 判断如果是第一条消息那么就要生成title
-      if (conversation.messages.length === 2) {
-        const shiftItem = [...conversation.messages].shift()
-        if (shiftItem?.content.length === 1)
-          await chatCompletion.getTitle()
-      }
-      // await genTitle(pageOptions.select)
-
       chatRef.value?.generateScroll('final')
 
       await $historyManager.syncHistory(conversation)
@@ -241,6 +247,9 @@ async function innerSend(conversation: IChatConversation, chatItem: IChatItem, i
     },
     onFrequentLimit() {
       // chatManager.cancelCurrentReq()
+    },
+    onError() {
+      pageOptions.sendState = 'idle'
     },
   })
 
@@ -255,8 +264,6 @@ async function handleSync() {
 
 // 重新生成某条消息 只需要给消息索引即可 还需要传入目标inner 如果有新的参数赋值则传options替换
 async function handleRetry(index: number, page: number, innerItem: IChatInnerItem) {
-  handleCancelReq()
-
   const conversation = pageOptions.conversation
 
   const chatItem = conversation.messages[index]
@@ -273,6 +280,7 @@ async function handleRetry(index: number, page: number, innerItem: IChatInnerIte
 
   const completion = await innerSend(conversation, chatItem, page)
 
+  pageOptions.sendState = 'sending_until_accepted'
   curController = completion.send()
 
   globalConfigModel.value = innerItem.model
@@ -281,8 +289,6 @@ async function handleRetry(index: number, page: number, innerItem: IChatInnerIte
 }
 
 async function handleSend(query: IInnerItemMeta[], meta: IChatInnerItemMeta) {
-  handleCancelReq()
-
   const conversation = pageOptions.conversation
 
   if (!$historyManager.options.list.get(conversation.id))
@@ -324,6 +330,7 @@ async function handleSend(query: IInnerItemMeta[], meta: IChatInnerItemMeta) {
 
   completion.innerMsg.model = globalConfigModel.value
 
+  pageOptions.sendState = 'sending_until_accepted'
   curController = completion.send()
 
   chatRef.value?.handleBackToBottom()
@@ -343,6 +350,7 @@ function handleShare() {
 function handleCancelReq() {
   clearStreamScrollTimer()
   streamScrollPending = false
+  pageOptions.sendState = 'idle'
   if (curController)
     curController.abort()
 }
@@ -449,6 +457,7 @@ function handleLogin() {
         <template #default="{ tip }">
           <ThInput
             :template-enable="!pageOptions.conversation.messages.length" :status="pageOptions.status"
+            :send-state="pageOptions.sendState"
             :hide="pageOptions.share.enable" :center="pageOptions.conversation.messages?.length < 1" :tip="tip"
             @send="handleSend" @select-template="handleSelectTemplate"
           />
