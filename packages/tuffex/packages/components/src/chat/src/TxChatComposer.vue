@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<ChatComposerProps>(), {
   placeholder: 'Message…',
   disabled: false,
   submitting: false,
+  allowAttachmentWhileSubmitting: false,
   maxRows: 6,
   minRows: 3,
   sendOnEnter: true,
@@ -35,6 +36,15 @@ const attachmentItems = computed<ChatComposerAttachment[]>(() => {
   return Array.isArray(props.attachments) ? props.attachments : []
 })
 const hasCustomToolbar = computed(() => Boolean(slots.toolbar))
+const canAttach = computed(() => {
+  if (props.disabled) {
+    return false
+  }
+  if (props.submitting && !props.allowAttachmentWhileSubmitting) {
+    return false
+  }
+  return true
+})
 const canSend = computed(() => {
   if (props.disabled || props.submitting) {
     return false
@@ -57,7 +67,7 @@ function trySend(): void {
 }
 
 function onAttachmentClick(): void {
-  if (props.disabled || props.submitting)
+  if (!canAttach.value)
     return
   emit('attachmentClick')
 }
@@ -113,6 +123,7 @@ function onKeydown(e: KeyboardEvent): void {
         :disabled="disabled"
         :rows="minRows"
         @keydown="onKeydown"
+        @paste="emit('paste', $event as ClipboardEvent)"
         @focus="emit('focus', $event)"
         @blur="emit('blur', $event)"
       />
@@ -133,7 +144,7 @@ function onKeydown(e: KeyboardEvent): void {
           v-if="showAttachmentButton"
           variant="ghost"
           size="small"
-          :disabled="disabled || submitting"
+          :disabled="!canAttach"
           @click="onAttachmentClick"
         >
           <span class="tx-chat-composer__plus" aria-hidden="true">+</span>
