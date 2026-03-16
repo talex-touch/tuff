@@ -22,6 +22,7 @@
 - **Pilot Runtime 主路径**：Node Server + Postgres/Redis + JWT Cookie；Cloudflare runtime/D1/R2 仅保留历史归档。
 - **Pilot Chat/Turn 新协议**：`/api/v1/chat/sessions/:sessionId/{turns,stream,messages}` 已落地（会话级串行队列、SSE 尾段 title、运行态回传）。
 - **Pilot 历史存储格式**：`pilot_quota_history.value` 已统一为 JSON 字符串（旧 base64 记录已迁移，历史接口默认回包结构化 JSON）。
+- **Pilot 会话兼容回填**：`GET /api/aigc/conversation/:id` 在 quota history 缺记录时，会自动从 runtime session 生成 snapshot 回填，避免刷新时误报 `conversation not found`。
 - **Pilot 接口迁移（M2/M3）**：已完成收口；微信相关接口进入豁免模式，支付链路切换为本地 mock（下单 3 秒自动成功）。
 - **Pilot channels 治理**：已新增 `POST /api/pilot/admin/channels/merge-ends` 与一次性脚本，执行“Pilot 优先、Ends 补缺”。
 - **Pilot 自动部署**：`pilot-image.yml` 支持发布后自动调用 1Panel webhook，强制 `X-Pilot-Token` 校验并支持仓库/分支白名单。
