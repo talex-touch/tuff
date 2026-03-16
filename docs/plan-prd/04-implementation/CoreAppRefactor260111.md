@@ -1,8 +1,9 @@
 # Core-App 改造实施计划
 
->日期: 2026-01-11  
-> 版本: 1.0  
-> 状态: 待审核
+> 状态: 历史/待重写（早期改造草案，非当前主线）  
+> 更新时间: 2026-03-16  
+> 适用范围: `apps/core-app` 架构与工程治理  
+> 替代入口: `docs/plan-prd/TODO.md`、`docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`、`docs/plan-prd/01-project/CHANGES.md`
 
 ## 概述
 

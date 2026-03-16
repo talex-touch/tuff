@@ -1,0 +1,7734 @@
+# 变更日志
+
+> 记录项目的重大变更和改进
+
+## 2026-03-16
+
+### Pilot：恢复 GitHub -> 1Panel webhook 自动部署（含密钥校验）
+
+**变更类型**: CI/CD 自动化 / 运维安全加固
+
+**描述**:
+- 恢复并标准化 Pilot 自动部署链路：`pilot-image.yml` 推送 GHCR 成功后，自动 `POST` 1Panel webhook 触发重建。
+- 新增 webhook 安全约束：
+  - 请求必须携带 `X-Pilot-Token`（或 `Authorization: Bearer`）；
+  - 服务端使用 `PILOT_WEBHOOK_TOKEN` 严格匹配；
+  - 可选仓库/分支白名单：`PILOT_WEBHOOK_ALLOWED_REPOSITORY`、`PILOT_WEBHOOK_ALLOWED_BRANCH`。
+- 新增轻量 HTTP webhook 服务与状态页：
+  - `GET /`：查看最近一次部署状态与输出；
+  - `GET /health`：健康检查；
+  - `POST /deploy`：接收 payload 并调用部署脚本。
+- 兼容入口补齐：根目录 `scripts/` 新增 webhook 兼容脚本与 env 示例，继续转发到 `apps/pilot/deploy` 真正实现。
+
+**验证结果**:
+- `bash -n "apps/pilot/deploy/deploy-pilot-1panel-webhook.sh"` ✅
+- `python3 -m py_compile "apps/pilot/deploy/pilot-deploy-webhook-server.py"` ✅
+- `bash -n "scripts/deploy-pilot-1panel-webhook.sh"` ✅
+
+**修改文件（关键）**:
+- `.github/workflows/pilot-image.yml`
+- `.github/workflows/README.md`
+- `apps/pilot/deploy/deploy-pilot-1panel-webhook.sh`
+- `apps/pilot/deploy/deploy-pilot-1panel-webhook.env.example`
+- `apps/pilot/deploy/pilot-deploy-webhook-server.py`
+- `apps/pilot/deploy/pilot-deploy-webhook.service.example`
+- `apps/pilot/deploy/README.md`
+- `apps/pilot/deploy/README.zh-CN.md`
+- `scripts/deploy-pilot-1panel-webhook.sh`
+- `scripts/deploy-pilot-1panel-webhook.env.example`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 修复: CMS 应用菜单为空（tree 资源 children 兼容）
+
+**变更类型**: Bug 修复
+
+**描述**: 修复 `system.menus` / `system.depts` 在兼容 seed 为“嵌套 children 存储”时被树构建重置为 `children: []` 的问题，导致管理后台“我的应用”无可选项。
+
+**主要变更**:
+1. `pilot-system-resource` 的树构建新增兼容归一化：同时支持“嵌套 children”与“扁平行 parentId”两种存储形态。
+2. 保持既有数据可读，不需要清库或重建 seed。
+3. 新增回归测试覆盖：
+   - 嵌套 children 结构恢复树
+   - 混合数据（嵌套 + 扁平）归并恢复树
+
+**影响**: `GET /api/account/menus` 与 `GET /api/system/depts` 能返回完整子节点，CMS “我的应用”恢复可配置与可展示。
+
+### 修复: Pilot 多模态输入链路稳定性（单条 user 多内容块）
+
+**变更类型**: Bug 修复
+
+**描述**:
+- 统一 `text + image` 请求语义为“同一条 user 消息中的多模态 content”，避免拆成两条 user turn 导致上下文丢失。
+- stream 与 quota 路径统一 `dataUrl > previewUrl > ref` 选取优先级，并补齐对应回归断言。
+
+**验证结果**:
+- `pnpm -C "apps/pilot" run test -- --runInBand` ✅（包含新增多模态消息形态断言）
+
+### Docs：文档治理门禁脚本（warn 模式）落地
+
+**变更类型**: 文档治理 / CI 门禁
+
+**描述**:
+- 新增 `scripts/check-doc-governance.mjs`，统一检查六主文档日期、下一动作口径、TODO 统计、陈旧文案与关键运维文档字段一致性。
+- 默认 `warn` 模式（报告不阻塞）；支持 `--strict true` 切换为阻塞。
+- 根脚本入口补齐：`pnpm docs:guard` 与 `pnpm docs:guard:strict`。
+- CI 先接入 `docs:guard` 报告步骤（不改发布触发逻辑，不阻塞流水线）。
+
+### Docs：Nexus 风控主线文档收口（实施入口 + 契约回填 + 兼容策略固化）
+
+**变更类型**: 文档治理 / 主线收口
+
+**描述**:
+- `Nexus 设备授权风控` 正式实施文档入库：`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md`（目标/范围/分期/验收/回滚/豁免边界）。
+- 六主文档与生态文档同步回填：
+  - `TODO/README/INDEX/Roadmap/Release Checklist/Quality Baseline` 的“下一动作”统一指向 `Nexus 设备授权风控` 实施入口；
+  - `PILOT-INTELLIGENCE-API-CONTRACT` 更新为当前主路径（Node Server + Postgres/Redis + JWT Cookie + MinIO），Cloudflare/D1/R2 切为历史语境；
+  - `view-mode-prd` 新增“已落地能力（Phase2~4）/未闭环项/验收证据”；
+  - `TUFFCLI-PRD` / `TUFFCLI-SPLIT-PLAN` 固化 shim 生命周期（`2.4.x` 兼容，`2.5.0` 退场）。
+- `TODO` 同步补充 `docs:guard` 升级 strict 的前置条件（连续零告警 + 无口径回退）。
+
+**基线推送证据（commit `c1542556`）**:
+- commit: `c1542556b7d4782b34a7b51691689fc917eb5562`
+- CI run：
+  - Contributes: https://github.com/talex-touch/tuff/actions/runs/23125828534（completed/success）
+  - CodeQL: https://github.com/talex-touch/tuff/actions/runs/23125828282（completed/success）
+  - Pilot Image Publish: https://github.com/talex-touch/tuff/actions/runs/23125828532（completed/failure）
+  - Pilot CI: https://github.com/talex-touch/tuff/actions/runs/23125828545（completed/success）
+
+### Docs：文档清债第二轮（遗留文档收口）
+
+**变更类型**: 文档治理 / 历史债务收口
+
+**描述**:
+- 完成证据层修正：补录提交 `223cb514` 的 CI 事实，并将 `c1542556` 条目中的运行态更新为最终态。
+- 活跃文档对齐：
+  - `OMNIPANEL-FEATURE-HUB-PRD` 改为 historical done（2.4.8 Gate），不再作为当前主线；
+  - `PILOT-NEXUS-OAUTH-CLI-TEST-PLAN` 重写为“已落地 vs 未启动”快照，明确 `tuff-pilot-cli` 仍为 backlog；
+  - `TUFFCLI-INVENTORY` 改为 `tuff-cli` 主入口口径，保留 `unplugin` shim 兼容窗口（2.4.x 保留 / 2.5.0 退场）。
+- 历史文档降权：`NEXUS-SUBSCRIPTION-PRD` 与 `NEXUS-PLUGIN-COMMUNITY-PRD` 增加“历史/待重写”头部标记与替代入口（`CHANGES`/`TODO`）。
+- `TODO` 增加“文档债务池（第二轮）”小节，记录本轮已处理与剩余文档清单。
+
+**本次提交证据（commit `223cb514`）**:
+- commit: `223cb5146de06644f7567bd0a5704f835696257a`
+- CI run：
+  - Contributes: https://github.com/talex-touch/tuff/actions/runs/23126138554（completed/success）
+  - CodeQL: https://github.com/talex-touch/tuff/actions/runs/23126138304（completed/success）
+
+---
+
+## 2026-03-16
+
+### feat(pilot): Chat/Turn 新协议与单 SSE 尾段 Title
+
+- 新增 `v1/chat/sessions/:sessionId` 路由族：
+  - `POST /turns`：按会话入队，返回 `request_id/turn_id/queue_pos`
+  - `POST /stream`：按 turn 流式回传 `turn.accepted/queued/started/delta/completed`，并在同一 SSE 尾段返回 `title.generated/title.failed`，最后 `[DONE]`
+  - `GET /messages`：返回 `messages` 同时附带 `run_state/active_turn_id/pending_count`
+- 新增服务端 `chat-turn-queue`（会话级串行执行锁 + 队列状态持久化）。
+- 旧 `aigc/history|conversations|conversation/:id` 回包增加 `run_state` 相关字段，支持刷新恢复时读取后端运行态。
+
+### fix(chat-ui): 输入区 loading 与发送解耦
+
+- 输入区新增 `send_state`（`idle | sending_until_accepted`），底部 loading 仅在等待受理时展示。
+- 发送逻辑改为允许连续发送，不再在每次发送前强制 abort 上一个请求。
+- 修复 `verbose` 状态映射错误与 `ChatItem` 结束态误判（避免无内容时显示“分析失败”）。
+
+### refactor(prompt): 标题生成 prompt 收敛
+
+- 抽取 `server/utils/pilot-title.ts`，统一 `executor` 与 `title` 接口的标题生成逻辑与短 prompt。
+- `pilot-runtime` 默认系统提示压缩为短、稳、可执行导向文案。
+
+## 2026-03-15
+
+### Release：v2.4.9-beta.4 基线快照固化（工作区治理起点）
+
+**变更类型**: 发布基线固化 / 工作区治理
+
+**描述**:
+- 固化当前工作区基线为 `2.4.9-beta.4`，作为后续“全仓历史债务清理”的统一起点。
+- 已记录并核对发布事实：
+  - commit: `d93e4bec599bed2c0793aa8602ba6462a39bfbbe`
+  - tag: `v2.4.9-beta.4`
+  - CI 结果：
+    - Build and Release: https://github.com/talex-touch/tuff/actions/runs/23106614270
+    - Contributes: https://github.com/talex-touch/tuff/actions/runs/23106610206
+    - Pilot Image Publish: https://github.com/talex-touch/tuff/actions/runs/23106610203
+    - CodeQL: https://github.com/talex-touch/tuff/actions/runs/23106609938
+- 工作区卫生同步收口：将 `output/` 明确纳入 `.gitignore`，避免 Playwright 截图产物污染提交。
+
+**验证结果**:
+- `git ls-remote --tags origin v2.4.9-beta.4` ✅
+- 上述 4 条 CI workflow 全部 `completed/success` ✅
+
+### Docs：主文档压缩与债务分层（2.4.9 基线）
+
+**变更类型**: 文档治理 / 状态口径压缩
+
+**描述**:
+- `TODO` 拆分为“当前执行清单（2周）+ 历史债务池（长期）+ Wave A/B/C”三层入口，减少短期主线与长期债务混杂。
+- 任务统计改为 checkbox 实时计数口径（`184 done / 76 todo / 260 total`，71%）。
+- 主文档中的“当前工作区版本”统一更新为 `2.4.9-beta.4`（历史语境保留，不改 historical 结论）。
+- CLI 生态文档同步为“Phase1+2 已完成 + 兼容层保留期”，去除“纯规划态”误导描述。
+
+**修改文件（关键）**:
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/06-ecosystem/{README.md,TUFFCLI-PRD.md,TUFFCLI-SPLIT-PLAN.md}`
+
+### CLI：Phase1+2 完整迁移收口（`tuff-cli` + `tuff-cli-core` + shim）
+
+**变更类型**: 包层迁移 / 兼容收口 / 工具链修复
+
+**描述**:
+- `@talex-touch/tuff-cli` 成为 `tuff` 命令主入口，运行时加载自身 `dist/bin/tuff.js`。
+- `@talex-touch/tuff-cli-core` 承接核心编排与共享逻辑：`args/config/auth/publish/validate/runtime-config/device/repositories`。
+- `@talex-touch/unplugin-export-plugin` 的 CLI 入口降级为兼容 shim：保留转发能力并输出 deprecation 提示，不再承载主命令逻辑。
+- 补齐 `tuff-cli`、`tuff-cli-core`、`tuffcli` 的 `tsup` 构建入口，修复三包 `No input files` 构建失败。
+- 迁移并补齐回归测试：CLI 参数、配置、publish smoke、validate 失败码，以及 shim 转发链路。
+
+**验证结果**:
+- `pnpm -C "packages/tuff-cli-core" run lint && pnpm -C "packages/tuff-cli-core" run build && pnpm -C "packages/tuff-cli-core" run test` ✅
+- `pnpm -C "packages/tuff-cli" run lint && pnpm -C "packages/tuff-cli" run build` ✅
+- `pnpm -C "packages/tuffcli" run lint && pnpm -C "packages/tuffcli" run build` ✅
+- `pnpm -C "packages/unplugin-export-plugin" run lint && pnpm -C "packages/unplugin-export-plugin" run build && pnpm -C "packages/unplugin-export-plugin" run test` ✅
+- `node packages/tuff-cli/bin/tuff.js --help` / `validate --help` ✅
+- 无效 manifest 执行 `tuff validate --strict` 返回非 0（`exit code=1`）✅
+- `node packages/unplugin-export-plugin/dist/bin/tuff.js --help` 输出 deprecation 并成功转发 ✅
+
+### Pilot：M2/M3 接口迁移收口（含微信豁免 + 支付 3 秒自动结算）
+
+**变更类型**: API 兼容迁移 / 豁免策略落地 / 运维脚本补齐
+
+**描述**:
+- 基于 `g-wggu...ends` 与 `g-wggu...view` 口径，Pilot 侧完成 M2/M3 迁移收口：
+  - 运营后台常用域：`tools/storage/*`、`marketing/banner/*`、`feedback/*`、`subscribe/*`、`system/serve/stat`。
+  - 重 CRUD 域：`doc/*`、`system/users|roles|menus|depts|dict|tasks|param-config/*`。
+  - AIGC 管理域：`aigc/chat_log*`、`aigc/consumption_statistics`、`aigc/prompts*`（list/create/get/update/audit/status/tags/statistics）。
+- 微信相关接口统一进入豁免模式（协议可消费，暂不接第三方）：
+  - `livechat/*`、`platform/qrcode*`、`auth/sms_*`、`auth/platform_login*`。
+- 支付相关接口保留协议并切换为本地 mock：
+  - `order/*`、`coupon/*` 下单后固定 **3 秒自动结算成功**，`order/status/target` 可轮询拿到完成态。
+- 渠道治理收口：
+  - 新增 `ends -> pilot` 渠道合并能力，按 `id` 去重、Pilot 优先、Ends 仅补缺。
+  - 新增管理端触发接口：`POST /api/pilot/admin/channels/merge-ends`。
+  - 新增一次性脚本：`pnpm -C "apps/pilot" run channels:merge:ends`。
+  - 渠道敏感字段继续通过 `PILOT_CONFIG_ENCRYPTION_KEY` 加密存储。
+- 目录治理：
+  - `.gitignore` 新增忽略：`apps/g-wggu5114-thisai-thisai-ends-/`、`apps/g-wggu5114-thisai-thisai-view-/`。
+
+**验证结果**:
+- 前端 endpoint 对照复核：从 `g-wggu...view` 抽取的 `endHttp` 调用（101 条）已全部在 `apps/pilot/server/api` 匹配到明确路由，未发现 501 落兜底路径。
+- `pnpm -C "apps/pilot" run test` ✅
+- `pnpm -C "apps/pilot" run typecheck` ⚠️（存在大量存量错误；本次新增 `merge-ends` 与 channel 类型约束相关错误已清理）
+
+**修改文件（关键）**:
+- `.gitignore`
+- `apps/pilot/server/utils/pilot-compat-store.ts`
+- `apps/pilot/server/utils/pilot-compat-payment.ts`
+- `apps/pilot/server/utils/pilot-compat-seeds.ts`
+- `apps/pilot/server/utils/pilot-system-resource.ts`
+- `apps/pilot/server/utils/pilot-compat-aigc.ts`
+- `apps/pilot/server/utils/pilot-local-auth.ts`
+- `apps/pilot/server/utils/pilot-admin-channel-config.ts`
+- `apps/pilot/server/utils/pilot-channel-merge-ends.ts`
+- `apps/pilot/server/api/pilot/admin/channels/merge-ends.post.ts`
+- `apps/pilot/scripts/merge-ends-channels.mjs`
+- `apps/pilot/package.json`
+- `apps/pilot/server/api/system/**`
+- `apps/pilot/server/api/aigc/**`
+- `apps/pilot/server/api/order/**`
+- `apps/pilot/server/api/coupon/**`
+- `apps/pilot/server/api/doc/**`
+- `apps/pilot/server/api/feedback/**`
+- `apps/pilot/server/api/marketing/banner/**`
+- `apps/pilot/server/api/subscribe/**`
+- `apps/pilot/server/api/livechat/**`
+- `apps/pilot/server/api/platform/**`
+- `apps/pilot/server/api/auth/**`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/INDEX.md`
+
+### Core-app：2.4.9 插件主线收口（权限 Phase5 + View 安全 + CLI validate）
+
+**变更类型**: 插件治理收口 / 安装链路增强 / CLI 兼容升级
+
+**描述**:
+- 权限中心 Phase 5 落地：
+  - `PermissionStore` 切换为 SQLite 主存储（`permissions.db`）；
+  - 启动时支持 `permissions.json -> SQLite` 一次性迁移，迁移后保留 JSON 备份；
+  - SQLite 不可用时进入 JSON 只读回退并输出告警。
+- 插件安装链路新增权限确认：
+  - 安装队列在 finalize 前增加 `permissions` 确认阶段；
+  - 渲染侧支持 `always/session/deny` 三选一；
+  - 拒绝授权时安装失败可感知，不再 silent failure。
+- View Mode 安全回归补齐：
+  - 增加非法协议、双斜杠路径、显式 html 文件路径等边界测试；
+  - 类型侧补齐 `IPluginWebview`，`IPluginDev.source` 与 `PluginIssue` 字段语义对齐。
+- CLI 收口：
+  - `tuff` 新增 `validate` 子命令（manifest/sdkapi/category/permissions 校验）；
+  - `@talex-touch/tuff-cli` 入口标记为主入口；
+  - `@talex-touch/unplugin-export-plugin` 保留兼容入口并输出迁移提示。
+- 文档闭环：
+  - 新增插件市场多源验收文档并同步 `TODO/README/INDEX` 状态口径；
+  - 六份主文档（`TODO/README/INDEX/Roadmap/Release Checklist/Quality Baseline`）更新时间与 `2.4.9` 主线顺序已统一到 `2026-03-15`。
+
+**验证结果**:
+- `pnpm -C "apps/core-app" run typecheck:node` ✅
+- `pnpm -C "apps/core-app" run typecheck:web` ✅
+- `pnpm -C "apps/core-app" exec vitest run "src/main/modules/permission/permission-store.test.ts" "src/main/modules/permission/permission-guard.test.ts" "src/main/modules/plugin/install-queue.test.ts" "src/main/modules/plugin/view/plugin-view-loader.test.ts"` ✅（17 tests passed）
+- `node packages/tuff-cli/bin/tuff.js --help|create --help|build --help|dev --help|publish --help|validate --help` ✅
+- `node packages/tuff-cli/bin/tuff.js validate --manifest <invalid> --strict` 返回非交互失败码 `1` ✅
+- `node packages/unplugin-export-plugin/dist/bin/tuff.js --help` 输出 deprecation 提示 ✅
+
+**修改文件（关键）**:
+- `apps/core-app/src/main/modules/permission/permission-store.ts`
+- `apps/core-app/src/main/modules/permission/index.ts`
+- `apps/core-app/src/main/modules/plugin/install-queue.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/renderer/src/modules/install/install-manager.ts`
+- `apps/core-app/src/main/modules/plugin/view/plugin-view-loader.test.ts`
+- `apps/core-app/src/main/modules/plugin/install-queue.test.ts`
+- `apps/core-app/src/main/modules/permission/permission-store.test.ts`
+- `packages/utils/plugin/install.ts`
+- `packages/utils/plugin/index.ts`
+- `packages/unplugin-export-plugin/src/bin/tuff.ts`
+- `packages/tuff-cli/bin/tuff.js`
+- `docs/plan-prd/docs/PLUGIN-STORE-MULTI-SOURCE-ACCEPTANCE-2026-03-15.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-03-14
+
+### Pilot：附件空正文提示 + MinIO env 直连兜底
+
+**变更类型**: 交互可读性修复 / 存储配置增强
+
+**描述**:
+- 聊天输入仅上传附件且未输入文本时，自动补充正文占位 `"(无正文内容)"`，避免消息气泡出现空正文。
+- 新旧聊天入口统一该行为：`pilot` 新会话页与旧 QuotaGPTView 输入框在“仅附件发送”场景都会补齐占位文本。
+- 附件存储增加 MinIO 环境变量直连兜底：当后台存储配置未设置时，可直接通过 env 启用 `s3/minio` 写入。
+- 支持 env 键：`PILOT_ATTACHMENT_PROVIDER`、`PILOT_ATTACHMENT_PUBLIC_BASE_URL`、`PILOT_ATTACHMENT_SIGNING_SECRET`、`PILOT_MINIO_*`。
+- 签名密钥优先读取 `PILOT_ATTACHMENT_SIGNING_SECRET`，为空时回退 `PILOT_COOKIE_SECRET`。
+- 当 provider 设为 `s3/minio` 但配置缺失或上传失败时，服务端自动回退到 `memory` 并输出日志，优先保证附件功能可用。
+- 上传大小限制统一为 **10MB**（旧 `tools/upload` 与新 `pilot` 会话附件上传接口都生效），前端同步拦截超限文件。
+- 旧上传接口补充绝对 `url` 返回字段，前端优先使用该地址，减少自拼接 URL 导致的访问错误。
+
+**修改文件**:
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `apps/pilot/app/components/input/ThInput.vue`
+- `apps/pilot/server/utils/pilot-attachment-storage.ts`
+- `apps/pilot/server/utils/__tests__/pilot-attachment-storage.test.ts`
+- `apps/pilot/.env.example`
+- `apps/pilot/deploy/deploy-pilot-1panel.env.example`
+- `apps/pilot/deploy/README.md`
+- `apps/pilot/deploy/README.zh-CN.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot：邮箱登录自动注册 + 仅附件消息可发送
+
+**变更类型**: 登录流程简化 / 聊天交互可用性修复
+
+**描述**:
+- 邮箱登录改为“未注册自动创建账号并登录”，无需单独走邮箱注册入口；已存在账号仍按密码校验登录。
+- 登录接口统一密码长度校验（`6-128` 位），并根据“登录/自动注册”区分访客数据合并来源。
+- 新 Pilot 会话链路支持“仅附件发送”（空文本 + 附件），并同步修复流式接口校验与运行时 turn 判定，避免附件消息被拒绝。
+- 旧 QuotaGPTView 输入框发送条件优化：仅在“文件仍在上传中”时禁发；已失败文件不再阻塞文本/已上传文件发送。
+- 登录弹窗移除邮箱注册 tab，邮箱登录按钮改为“登录 / 自动注册”并补充提示文案，降低使用歧义。
+
+**修改文件**:
+- `apps/pilot/server/api/auth/email/login.post.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `packages/tuff-intelligence/src/business/pilot/stream.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `packages/tuffex/packages/components/src/chat/src/types.ts`
+- `packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue`
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `apps/pilot/app/components/input/ThInput.vue`
+- `apps/pilot/app/components/chore/Login.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CI：sync-nexus-release 接入 Gate D backfill（仅 v2.4.7）
+
+**变更类型**: 发布流程补齐 / 风险收敛
+
+**描述**:
+- `build-and-release.yml` 的 `sync-nexus-release` job 已接入 `scripts/backfill-release-assets-from-github.mjs`。
+- backfill 步骤增加 tag 守卫，**仅当 `TAG == v2.4.7` 执行**，避免影响 `>=2.4.8`（含 `v2.4.9`）严格发布资产流程。
+- 本地 dry-run 命令校验通过：可稳定产出 `sha256 + manifest` 的差异计划。
+
+**修改文件**:
+- `.github/workflows/build-and-release.yml`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CI：build-and-release 支持手动 `sync_tag` 触发 Nexus 同步
+
+**变更类型**: 发布自动化增强 / 执行路径补齐
+
+**描述**:
+- `build-and-release.yml` 新增 `workflow_dispatch.inputs.sync_tag`，可手动指定已有 tag（如 `v2.4.7`）直接执行 `sync-nexus-release`。
+- 当 `sync_tag` 存在时，`build-and-release` 与 `create-release` 路径会被跳过，改走“仅同步”流程，避免重复构建与额外 draft release。
+- `sync-nexus-release` 新增 tag 格式校验，并继续保留 `v2.4.7` 专属 backfill 守卫。
+
+**修改文件**:
+- `.github/workflows/build-and-release.yml`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Release：v2.4.7 Gate D 收口完成（CI 手动同步）
+
+**变更类型**: 发布门禁闭环 / 文档状态收口
+
+**描述**:
+- 通过 GitHub Actions `Build and Release`（run `23091014958`）执行 `workflow_dispatch + sync_tag=v2.4.7`，`Sync Nexus Release` 全流程成功。
+- `v2.4.7` 远端资产从 3 项收口到 4 项，已包含 `tuff-release-manifest.json`，且资产 `sha256` 已补齐。
+- 六份主文档口径统一更新为：`Gate A/B/C/D/E = Done`（其中 `Gate E` historical、`Gate D` historical backfill）。
+- 主线顺序同步切换为：`View Mode 安全收口 -> Nexus 设备授权风控`。
+
+**修改文件**:
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Docs：Release assets 核对清单切换到 v2.4.9 严格口径
+
+**变更类型**: 文档口径切换 / 发布治理前移
+
+**描述**:
+- `NEXUS-RELEASE-ASSETS-CHECKLIST` 从 `v2.4.7` 语境切换为 `v2.4.9` Gate D 严格执行清单。
+- 明确默认规则为 `manifest + sha256 + signatureUrl` 全量完整，且 `signature` 不允许豁免。
+- 保留说明：`v2.4.7` 历史豁免不在该清单覆盖范围内，避免新旧版本口径混用。
+- 同步更新 `README/INDEX/TODO` 中对此清单的入口描述，统一为 `v2.4.9` 严格核对入口。
+
+**修改文件**:
+- `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Docs：Gate D 执行方式统一为 GitHub CI 自动同步
+
+**变更类型**: 发布流程口径修正 / 执行路径统一
+
+**描述**:
+- `v2.4.7 Gate D` 的写入动作统一改为 GitHub Actions 自动执行（`build-and-release.yml` / `sync-nexus-release`）。
+- 本地脚本仅保留 dry-run 对账用途，不再要求手工 `--nexus-key` 回填。
+- 同步更新 `TODO/README/INDEX/Release Checklist` 的“下一动作”描述，避免手工路径与 CI 主路径并存。
+
+**修改文件**:
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Release：v2.4.7 Gate D 回填脚本落地 + Gate E 历史闭环
+
+**变更类型**: 发布治理收口 / 历史版本豁免记录 / 文档一致性修复
+
+**描述**:
+- 新增 `scripts/backfill-release-assets-from-github.mjs`，用于 `v2.4.7` Gate D 数据补齐：
+  - 从 GitHub `talex-touch/tuff` release 拉取资产与 `tuff-release-manifest.json`；
+  - 按 `platform/arch/filename` 对齐 Nexus 资产，回填 `sha256` 与 manifest 资产记录；
+  - 支持 `--dry-run` 输出“将更新/已更新”差异清单。
+- `Gate E` 统一改为 `Done (historical)`，并固定证据链：
+  - `v2.4.7` tag 存在（本地与远端）；
+  - Nexus release 已 `published`；
+  - `latest?channel=RELEASE` 命中 `v2.4.7`。
+- `v2.4.7` 签名缺口登记为历史豁免（Accepted waiver）：
+  - GitHub 原始 `v2.4.7` 无 `.sig` 资产；
+  - manifest 无 signature 字段；
+  - 豁免仅作用于 `v2.4.7`，不扩展到 `>=2.4.8`。
+- 同步收口 `TODO/README/INDEX/Roadmap/Quality Baseline/Release Checklist` 六份主文档，主线顺序统一为 `Gate D -> View Mode`。
+
+**修改文件**:
+- `scripts/backfill-release-assets-from-github.mjs`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/01-project/RISK-REGISTER-2026-02.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot：管理员引导密码改为强制 env 注入（最小 6 位）
+
+**变更类型**: 安全基线收敛 / 配置约束增强
+
+**描述**:
+- `pilot-bootstrap-admin` 不再使用默认管理员密码，`PILOT_BOOTSTRAP_ADMIN_PASSWORD` 必须显式提供。
+- 启动时管理员密码最小长度约束从 3 位提升到 6 位；不满足时跳过 bootstrap 并输出提示日志。
+- 部署与示例配置同步：移除 `admin` 默认回退，模板改为 `replace-with-admin-password-min-6` 占位值。
+
+**修改文件**:
+- `apps/pilot/server/plugins/pilot-bootstrap-admin.ts`
+- `apps/pilot/.env.example`
+- `apps/pilot/deploy/deploy-pilot-1panel.env.example`
+- `apps/pilot/deploy/deploy-pilot-1panel.sh`
+- `apps/pilot/deploy/README.md`
+- `apps/pilot/deploy/README.zh-CN.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot：显式 env 加载优先级固化（`.env.local > .env.prod > .env.dev > .env`）
+
+**变更类型**: 配置行为固化 / 本地开发一致性修复
+
+**描述**:
+- 在 `apps/pilot/nuxt.config.ts` 增加显式 env 文件加载逻辑，不再依赖 Nuxt 默认加载顺序。
+- 按固定顺序覆盖：先加载 `.env`，再 `.env.dev`，再 `.env.prod`，最后 `.env.local`，确保最终优先级为 `.env.local > .env.prod > .env.dev > .env`。
+- 新增共享加载器 `apps/pilot/shared/pilot-env-loader.ts`，并在 Postgres DSN 解析前强制一次性应用优先级，避免 Nitro 运行时与 Nuxt 配置阶段出现读取不一致。
+- 修复“本地已在 `.env.local` 配置但默认 `pnpm run dev` 仍报 Postgres 密码错误”的不确定行为。
+
+**修改文件**:
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/shared/pilot-env-loader.ts`
+- `apps/pilot/server/utils/pilot-node-pg-d1.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot：渠道不可用诊断增强（503 可观测性修复）
+
+**变更类型**: 运行时诊断增强 / 错误信息可观测性
+
+**描述**:
+- `resolvePilotChannelSelection` 在无可用渠道时输出结构化日志（包含 `db` 目标、配置渠道列表、启用渠道列表、默认渠道、请求渠道）。
+- `/api/aigc/executor` 的 503 SSE 错误事件补充 `code/reason/message`，并将文案细化为可执行指引（例如 `no_channels_configured`）。
+- 修复 h3 警告：避免使用长 `statusMessage`，改为短状态 + 详细 `message`。
+- 启动期 bootstrap 检查日志增加数据库目标定位，便于快速判断“连到了空库”还是“渠道被禁用”。
+
+**修改文件**:
+- `apps/pilot/server/utils/pilot-channel.ts`
+- `apps/pilot/server/api/aigc/executor.post.ts`
+- `apps/pilot/server/plugins/pilot-channel-bootstrap-check.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot：Postgres 兼容性修复（登录合并链路）
+
+**变更类型**: 运行时稳定性修复 / 跨数据库兼容
+
+**描述**:
+- 修复 `D1RuntimeStoreAdapter.ensureSchema` 在 Postgres 下对重复列异常识别不全的问题（`42701` / `column ... already exists`），避免登录后访客数据合并阶段异常中断。
+- 修复访客合并 SQL 中 SQLite 专用函数 `randomblob()` 导致的 Postgres 500。
+- 将 `INSERT OR IGNORE` 改为 `ON CONFLICT ... DO NOTHING`，统一兼容 SQLite + Postgres。
+
+**修改文件**:
+- `packages/tuff-intelligence/src/store/d1-runtime-store.ts`
+- `apps/pilot/server/utils/pilot-guest-merge.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot：管理后台新增渠道设置页（复用存储页风格）
+
+**变更类型**: 管理能力补齐 / 配置可视化
+
+**描述**:
+- 新增 ` /pilot/admin/channels ` 页面，支持增删渠道、默认渠道选择、超时与工具配置。
+- 复用 `storage` 管理页的布局与视觉风格，并在侧边栏与存储页头部增加“渠道设置”入口。
+- 渠道保存支持“留空 API Key 保持不变”，避免每次编辑都重复输入密钥。
+- 修复加密配置解密前缀解析错误（`enc:v1`），解决渠道配置“保存成功但读取为空”的问题。
+
+**修改文件**:
+- `apps/pilot/app/pages/pilot/admin/channels.vue`
+- `apps/pilot/app/pages/pilot/admin/storage.vue`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `apps/pilot/server/utils/pilot-admin-channel-config.ts`
+- `apps/pilot/server/utils/pilot-config-crypto.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot：旧 QuotaGPTView 流式 Markdown 实时性优化（executor 链路）
+
+**变更类型**: 交互性能优化 / 流式体验修复
+
+**描述**:
+- 对旧 `executor` 聊天链路增加前端 80ms Markdown 合帧写入，避免逐 token 触发重渲染导致“看似缓冲”。
+- `MilkContent` 增加 80ms 内容刷新调度与重复内容跳过，减少 `replaceAll` 频率并保留持续 Markdown 渲染。
+- 生成期滚动改为节流触发 + `auto` 滚动，完成后再 `smooth` 校正一次，降低滚动动画抢占主线程问题。
+- 生成光标定位改为低频更新（80ms），减少每次 chunk 的 Range 计算和布局抖动。
+
+**修改文件**:
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `apps/pilot/app/components/article/MilkContent.vue`
+- `apps/pilot/app/components/chat/ThChat.vue`
+- `apps/pilot/app/components/render/RenderContent.vue`
+- `apps/pilot/app/pages/index.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-App：OmniPanel 稳定版 MVP Gate（真实窗口 smoke + 失败路径回归）
+
+**变更类型**: 发布门禁补强 / 回归覆盖扩展 / 稳定性收口
+
+**描述**:
+- 为 OmniPanel 增加发布级最小链路验证：`show -> execute builtin.corebox-search -> hide`（真实 Electron runtime）。
+- 新增主进程 smoke probe（`TUFF_OMNIPANEL_SMOKE=1`），超时与异常返回非 0 退出码，避免 silent failure。
+- 补齐 `main/modules/omni-panel` 失败路径与触发稳定性回归测试（plugin unavailable / plugin missing / no context / shortcut fallback / combo active / input-hook cleanup）。
+- 新增独立 CI 工作流 `.github/workflows/omnipanel-gate.yml`，将 `typecheck + scoped lint + unit + build + smoke` 作为 2.4.8 Gate 主线。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/omni-panel/index.test.ts`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/package.json`
+- `.github/workflows/omnipanel-gate.yml`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Docs：主文档口径矩阵统一与压缩治理（2.4.8）
+
+**变更类型**: 文档治理 / 口径修复 / 冗余压缩
+
+**描述**:
+- 建立并落地“单一口径矩阵”：统一 `TODO/README/Roadmap/Release 清单/Quality Baseline/INDEX` 六份主文档的状态、日期与下一动作。
+- 修复关键冲突：
+  - `v2.4.7 Gate C` 统一为 `Done`；
+  - `Pilot Runtime` 统一为 `Node Server + Postgres/Redis` 主路径；
+  - `TODO` 顶部与文末更新时间统一为 `2026-03-14`；
+  - `INDEX` 改为“入口 + 高价值快照”并移除错误的“待完成/未发现”聚合条目。
+- 生态文档修正：`06-ecosystem/README.md` 将过期 `tuffex-ui` 路径更新为 `packages/tuffex/`。
+- 对 `next-edit` 给出降权规则：仅作为草稿池，不参与发布状态判定。
+
+**修改文件**:
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/06-ecosystem/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-App：SDK Hard-Cut E~F 持续迁移（Everything + Sync Storage + Plugin + Migration + Widget Registry）
+
+**变更类型**: 架构收敛 / renderer 直连清理 / 事件契约统一
+
+**描述**:
+- `SettingEverything` 从 legacy channel 直调迁移到 typed transport 事件：
+  - 移除 `tryUseChannel().send('everything:*')`；
+  - 改为 `transport.send(everythingStatusEvent/everythingToggleEvent/everythingTestEvent)`。
+- 新增共享事件契约 `src/shared/events/everything.ts`，主渲复用同一事件与类型，避免字符串事件散落。
+- `everything-provider` 主进程注册逻辑切换为复用共享事件定义，保持行为不变（仅收敛调用方式）。
+- `sync-item-mapper` 移除 `window.$channel.send('plugin:storage:*')` 直连，统一改为
+  `PluginEvents.storage.listSyncItems/applySyncItem/deleteSyncItem` typed transport 调用。
+- `PluginNew` 创建页移除 `tryUseChannel` 初始化路径，`EnvDetector` 改为直接复用 `useTuffTransport()`，减少 renderer 侧 legacy channel 入口扩散。
+- `MigrationProgress` 下载迁移面板移除 `window.electron.ipcRenderer` 直连：
+  - 请求链路改为 `transport.send(DownloadEvents.migration.checkNeeded/start/retry)`；
+  - 进度/结果监听改为 transport listener（raw event），统一走 transport 协议入口。
+- `ViewPlugin` 移除 `tryUseChannel().regChannel('plugin:message-transport')`：
+  - 改为 `transport.on(raw event)` 监听插件消息；
+  - 使用 Promise resolver 保留“webview 处理后再 reply”的异步回包语义，并补充 unmount cleanup。
+- `plugin-sdk` 移除 `tryUseChannel` 前置判断：
+  - 改为 transport listener 绑定失败即轮询重试；
+  - 保留插件状态推送订阅语义与已有回调分发逻辑。
+- `widget-registry` 移除 `tryUseChannel` 检查：
+  - 改为 `bindTransportHandlers` 捕获失败并清理半注册状态；
+  - 使用既有 polling 任务重试绑定，避免启动早期 transport 未就绪导致漏绑定。
+- `useClipboard` 移除 `tryUseChannel + polling` 预检查：
+  - 改为直接尝试 `useClipboardChannel` 初始化；
+  - 初始化失败时回退为 reset `initAttempted` + 定时重试，保持启动期可恢复能力。
+- 存储初始化链路（`main.ts` / `useAppLifecycle.ts` / `modules/channel/storage/base.ts`）移除 `tryUseChannel`：
+  - 改为 `useChannel + safe resolve`，在 channel 未注入时保持无异常跳过；
+  - 保留既有 `initStorageTransport + initStorageChannel + initStorageSubscription` 行为，不改变存储同步语义。
+- `account-channel` 移除 legacy `touchChannel.regChannel('auth:get-fingerprint-hash')`：
+  - 改为 `useTuffTransport().on(raw event)`；
+  - 保持主进程 `requestRendererValue('auth:get-fingerprint-hash')` 事件名与返回语义不变。
+
+**修改文件**:
+- `apps/core-app/src/shared/events/everything.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `apps/core-app/src/renderer/src/modules/sync/sync-item-mapper.ts`
+- `apps/core-app/src/renderer/src/views/base/plugin/PluginNew.vue`
+- `apps/core-app/src/renderer/src/components/download/MigrationProgress.vue`
+- `apps/core-app/src/renderer/src/views/base/plugin/ViewPlugin.vue`
+- `apps/core-app/src/renderer/src/modules/sdk/plugin-sdk.ts`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useClipboard.ts`
+- `apps/core-app/src/renderer/src/main.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useAppLifecycle.ts`
+- `apps/core-app/src/renderer/src/modules/channel/storage/base.ts`
+- `apps/core-app/src/renderer/src/modules/auth/account-channel.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Release：v2.4.7 Gate D/E 预检自动化 + 口径收口（2026-03-14）
+
+**变更类型**: 发布门禁治理 / 文档口径同步 / 可执行脚本新增
+
+**描述**:
+- 新增 `scripts/check-release-gates.mjs`，提供 Gate D/E 本地 + 远端只读预检能力（支持 `--base-url`）：
+  - 校验 release notes `zh/en` 是否存在且非空；
+  - 校验风险门禁（`P0` 不可为 `Open/In Progress`）；
+  - 校验版本基线（`root/core-app` 与目标 tag 版本一致性）；
+  - 校验本地 manifest（存在时调用 `update-validate-release-manifest.mjs`，缺失时给出 pending/fail）。
+- 用预检脚本完成 `v2.4.7` Gate D 本地核对并回填文档：
+  - `gate-d` 结果通过（notes + P0）；
+  - `gate-e --strict` 演练失败（当前工作区 `2.4.8-beta.3` 与 `2.4.7` 基线不一致，且本地无 manifest 实体）。
+- 完成 Nexus 公开接口远端只读核对（`/api/releases/v2.4.7*`）：
+  - 已确认 `notes/notesHtml` 为 `{ zh, en }` 且 `latest?channel=RELEASE` 命中 `v2.4.7`；
+  - 下载链路 `download/{platform}/{arch}` 返回 `302`；
+  - 发现 Gate D 阻塞：`signature/{platform}/{arch}` 返回 `404`、assets `sha256/signatureUrl` 缺失、`tuff-release-manifest.json` 资产缺失。
+- 同步 `TODO/README/INDEX/Roadmap/Quality Baseline/Release Checklist`，统一口径为：
+  - `SDK Hard-Cut E~F` 已完成；
+  - 主线顺序切换到 `Gate D -> Gate E`；
+  - Gate E 前阻塞项（版本基线 + signature/sha256/manifest 实体）显式化。
+
+**修改文件**:
+- `scripts/check-release-gates.mjs`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-03-13
+
+### CI：修复 Pilot PNPM 版本冲突 + core-app 构建对 deepagents 的错误引入
+
+**变更类型**: CI 稳定性修复 / 构建边界收敛
+
+**描述**:
+- 修复 `Pilot CI` 在 `pnpm/action-setup@v4` 阶段失败的问题：
+  - 根因：workflow 固定 `pnpm 10.30.3`，而仓库 `packageManager` 已升级为 `pnpm@10.32.1`，触发 `ERR_PNPM_BAD_PM_VERSION`。
+  - 方案：移除 workflow 中的硬编码 `version`，统一跟随仓库 `packageManager`。
+- 修复 `core-app` 渲染端构建因 `deepagents -> @langchain/langgraph@0.4.x` 引入 `node:async_hooks` 导致的 Rollup 失败：
+  - 新增 `packages/tuff-intelligence/src/renderer.ts` 作为渲染端安全入口，仅导出 `client/types/sdk` 必需能力。
+  - 在 `apps/core-app/electron.vite.config.ts` 的 renderer alias 中将 `@talex-touch/tuff-intelligence` 指向该入口，避免渲染 bundle 解析 server-only adapter 链路。
+
+**验证**:
+- `pnpm -C "apps/core-app" exec electron-vite build` ✅
+- `gh run view 23049285164 --job 66946118791 --log`（确认历史失败根因）✅
+
+**修改文件**:
+- `.github/workflows/pilot-ci.yml`
+- `apps/core-app/electron.vite.config.ts`
+- `packages/tuff-intelligence/src/renderer.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-03-12
+
+### Pilot：环境变量收敛清单固化（Postgres + Redis + DB Config）
+
+**变更类型**: 配置治理 / 部署简化 / 兼容收口
+
+**描述**:
+- 运行时环境变量进一步收敛到最小集合：
+  - 必填：`PILOT_POSTGRES_URL`、`PILOT_REDIS_URL`、`PILOT_JWT_ACCESS_SECRET`、`PILOT_JWT_REFRESH_SECRET`、`PILOT_COOKIE_SECRET`、`PILOT_CONFIG_ENCRYPTION_KEY`、`PILOT_BOOTSTRAP_ADMIN_PASSWORD`。
+  - 可选：`PILOT_BOOTSTRAP_ADMIN_EMAIL`、`PILOT_EXECUTOR_DEBUG`、`NUXT_PUBLIC_NEXUS_ORIGIN`、`PILOT_NEXUS_OAUTH_CLIENT_ID`、`PILOT_NEXUS_OAUTH_CLIENT_SECRET`。
+- JWT TTL 固定为 Access 2h + Refresh 30d，不再从 env 读取过期时间，避免配置漂移。
+- 前端 `endsBaseUrl` 固定本地同源（`/`），移除 `NUXT_PUBLIC_ENDS_URL` 入口，避免部署侧多余配置。
+- 1Panel 部署脚本改为“自动探测优先”：
+  - 不再依赖 `PILOT_PROJECT_DIR/PILOT_COMPOSE_FILE/PILOT_SERVICE_NAME` 等定位 env；
+  - 部署侧仅保留 `PILOT_IMAGE_TAG` 与健康检查变量（`PILOT_HEALTHCHECK_*` + `PILOT_ROLLBACK_ON_FAILURE`）。
+- 部署示例 env 同步精简；如需首次生成 compose，改为命令参数显式触发 `--bootstrap-compose`。
+
+**修改文件（核心）**:
+- `apps/pilot/.env.example`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/server/utils/pilot-session.ts`
+- `apps/pilot/deploy/deploy-pilot-1panel.sh`
+- `apps/pilot/deploy/deploy-pilot-1panel.env.example`
+- `apps/pilot/deploy/README.md`
+- `apps/pilot/deploy/README.zh-CN.md`
+- `scripts/deploy-pilot-1panel.env.example`
+
+### Pilot：环境变量收敛 + Node Runtime 固化（Postgres/Redis + JWT 双 Token）
+
+**变更类型**: 架构收敛 / 部署链路清理 / 认证升级
+
+**描述**:
+- `apps/pilot` 运行时收敛为 Node Server，移除 Cloudflare 运行分支与 wrangler 相关配置；Nuxt Nitro 固定 `node-server`。
+- 数据与会话依赖收敛为强制 `Postgres + Redis`：
+  - 移除 `sqlite/D1` 路径与旧别名变量（`PILOT_DB_DRIVER`、`PILOT_DB_FILE`、`PILOT_PG_DSN`、`DATABASE_URL`）。
+  - 新增 Redis 会话存储工具，作为 refresh token 状态管理基础。
+- 认证升级为 JWT Access/Refresh + HttpOnly Cookie：
+  - access 默认 2h，refresh 默认 30d，`renew_token` 改为真实续签。
+  - 登录/注册成功返回 token 结构并写 Cookie；登出执行 refresh 撤销与双 Cookie 清理。
+- 管理员引导策略调整：
+  - 默认账号 `admin@pilot.local / admin`（可由 env 覆盖）。
+  - 启动日志不再输出管理员明文密码。
+- 渠道与附件配置改为数据库真源：
+  - `channels` 从 env 迁移到 admin DB 配置，并增加 `PILOT_CONFIG_ENCRYPTION_KEY` 对敏感字段加密。
+  - 附件存储移除 R2/Cloudflare 分支，仅保留 `memory/s3(minio)`，并移除 `PILOT_S3_*` 别名。
+- 部署资产收敛到 1Panel 脚本：
+  - 删除 webhook 脚本与 GHCR 私有鉴权变量路径。
+  - 部署 env 示例精简为镜像标签 + 健康检查 + 最小运行时变量。
+
+**修改文件（核心）**:
+- `apps/pilot/server/utils/pilot-session.ts`
+- `apps/pilot/server/utils/pilot-channel.ts`
+- `apps/pilot/server/utils/pilot-admin-channel-config.ts`
+- `apps/pilot/server/utils/pilot-admin-storage-config.ts`
+- `apps/pilot/server/utils/pilot-attachment-storage.ts`
+- `apps/pilot/server/utils/pilot-store.ts`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/package.json`
+- `apps/pilot/deploy/*`
+- `apps/pilot/.env.example`
+
+### Pilot：legacy responses SSE 兼容修复（`Cannot use 'in' operator`）
+
+**变更类型**: 稳定性修复 / 协议兼容增强
+
+**描述**:
+- 修复 Pilot 在 `adapter=legacy` + `transport=responses` 渠道下，偶发抛出
+  `Cannot use 'in' operator to search for 'object' in event: response.created...` 导致流式会话失败的问题。
+- `packages/tuff-intelligence` 中新增两层兜底：
+  - 识别该异常签名后自动切换到 `responses.direct` 兼容路径（跳过不稳定的 SDK 解析分支）。
+  - 当上游返回 `text/event-stream` 文本体时，支持解析 `response.output_text.delta/done/completed` 事件并提取最终文本。
+- 保持现有对外接口不变，仅增强 legacy 网关兼容性与容错能力。
+
+**验证**:
+- `pnpm -C "packages/tuff-intelligence" exec eslint "src/adapters/deepagent-engine.ts"` ✅
+- `pnpm -C "packages/tuff-intelligence" exec tsc --noEmit` ✅
+
+**修改文件**:
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 全仓 Network 套件硬切（四阶段收口补齐）
+
+**变更类型**: 架构收敛 / 质量门禁升级 / 跨工作区迁移
+
+**描述**:
+- 全仓 direct `fetch/axios` 清零（network 套件内部除外）：
+  - 迁移 `apps/nexus`（Intelligence SSE 页面、Docs Assistant、`/api/docs/assistant` 服务端 provider 调用）。
+  - 迁移 `apps/pilot`（`usePilotChatPage` JSON/SSE 请求统一改为 `networkClient`）。
+  - 迁移 `packages/tuff-intelligence`（DeepAgent relay fallback 请求改为 `networkClient`，保留 timeout/retry/error 语义）。
+  - 迁移 `packages/tuffex`（`TxIcon` 移除内部裸 `fetch`，统一依赖注入 `svgFetcher`；未注入时降级为 `<img>` 渲染）。
+- root 级网络边界门禁收紧：
+  - `scripts/check-network-boundaries.mjs` 移除临时 allowlist，仅保留 `packages/utils/network/request.ts`。
+  - `pnpm run network:guard` 现覆盖 `apps/* + packages/* + plugins/*` 且 0 违规。
+- ESLint 硬禁补齐（最小必要范围）：
+  - `apps/nexus`、`apps/pilot`、`packages/tuff-intelligence`、`packages/tuffex`、`packages/unplugin-export-plugin`、`plugins/touch-{translation,image,music}` 新增 `no-restricted-imports(axios)` + `no-restricted-syntax(fetch)`。
+- 修复迁移引入的类型回归：
+  - `packages/utils/common/utils/time.ts` 的 retrier 返回值泛型推导修正（`withTimeout<T>`）。
+  - `apps/pilot/app/composables/usePilotChatPage.ts` 与 `packages/tuff-intelligence/src/adapters/deepagent-engine.ts` 补齐 `NetworkMethod` 映射。
+
+**验证**:
+- `pnpm run network:guard` ✅
+- `pnpm -C "apps/core-app" run typecheck:node` ✅
+- `pnpm -C "apps/nexus" run typecheck` ✅
+- `pnpm -C "apps/nexus" exec eslint app/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue app/components/docs/DocsAssistantDialog.vue app/pages/dashboard/admin/intelligence-chat.vue server/api/docs/assistant.post.ts` ✅
+- `pnpm -C "apps/pilot" exec eslint app/composables/usePilotChatPage.ts` ✅
+- `pnpm -C "packages/tuff-intelligence" exec eslint src/adapters/deepagent-engine.ts` ✅
+- `pnpm -C "packages/tuff-intelligence" exec tsc --noEmit` ✅
+- `pnpm -C "packages/tuffex" exec eslint packages/components/src/icon/src/TxIcon.vue` ✅
+- `pnpm -C "apps/pilot" run typecheck` ⚠️（存在大量历史存量错误，当前改动相关错误已清理）
+
+**修改文件（本批次）**:
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue`
+- `apps/nexus/app/components/docs/DocsAssistantDialog.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence-chat.vue`
+- `apps/nexus/server/api/docs/assistant.post.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `packages/tuff-intelligence/src/types/path-browserify.d.ts`
+- `packages/tuff-intelligence/package.json`
+- `packages/tuffex/packages/components/src/icon/src/TxIcon.vue`
+- `packages/utils/common/utils/time.ts`
+- `scripts/check-network-boundaries.mjs`
+- `apps/nexus/eslint.config.js`
+- `apps/pilot/eslint.config.js`
+- `packages/tuff-intelligence/eslint.config.js`
+- `packages/tuffex/eslint.config.js`
+- `packages/unplugin-export-plugin/eslint.config.js`
+- `plugins/touch-translation/eslint.config.js`
+- `plugins/touch-image/eslint.config.js`
+- `plugins/touch-music/eslint.config.js`
+
+### core-app：Network 套件统一改造（Main 网关 + Proxy + tfile + SDK）
+
+**变更类型**: 架构收敛 / 稳定性修复 / 可扩展能力补齐
+
+**描述**:
+- 在 `packages/utils` 新增 `network` 套件（`request/file/guard`），统一抽象请求参数、代理配置、重试与冷却策略。
+- 新增 Transport `NetworkEvents` + Domain `NetworkSDK` + renderer `useNetworkSdk`，Renderer 网络访问统一可经 Main 网关执行。
+- Main 新增 `NetworkModule` 与 `NetworkService`：
+  - 统一承接 HTTP 请求、文件读取（`file://` / `tfile://` / 绝对路径）与 `toTfileUrl` 转换。
+  - 代理策略支持 `direct/system/custom`，首版覆盖 `HTTP/HTTPS + SOCKS + PAC + bypass`。
+  - 配置接入 `app-setting.network`（`proxy/retry/cooldown/timeout`）。
+- 首批迁移完成（移除分散 `proxy:false`）：
+  - `plugin-loaders` / `plugin.ts`（dev prelude）
+  - `dev-server-monitor`
+  - `widget-loader`
+  - `store-http.service`
+  - `download-worker`
+  - `plugin providers`（`npm-provider`、`providers/utils`）
+  - `official-plugin.service`
+- 渲染侧图标链路收口：
+  - `useSvgContent` 统一接入 `NetworkSDK` 文件读取与本地 URL 冷却策略。
+  - `TuffIcon.vue` 改为复用 network `toTfileUrl`。
+- 修复你确认的 1/2：
+  - `TuffIconImpl` 仅在 `dev.enable && dev.source && dev.address` 时才走 dev 远程 URL。
+  - localhost SVG 失败冷却从局部实现抽离为 network policy 复用。
+- 新增收口门禁：`apps/core-app/scripts/check-network-boundaries.js`（`pnpm -C \"apps/core-app\" run network:guard`）用于禁止新增散落 `fetch/axios` 入口。
+
+**验证**:
+- `pnpm -C "packages/utils" run lint` ✅
+- `pnpm -C "packages/utils" exec vitest run "__tests__/network-guard.test.ts"` ✅
+- `pnpm -C "apps/core-app" exec vitest run "src/main/core/tuff-icon.test.ts"` ✅
+- `pnpm -C "apps/core-app" run network:guard` ✅
+- `pnpm -C "apps/core-app" run typecheck:node` ⚠️（存在既有 Sentry 类型冲突，`src/main/modules/sentry/sentry-service.ts:574`，与本次改动无关）
+- `pnpm -C "apps/core-app" run typecheck:web` ⚠️（存在既有 Milkdown 版本类型冲突，`src/renderer/src/components/base/input/FlatMarkdown.vue:68`，与本次改动无关）
+
+**修改文件**:
+- `packages/utils/network/*`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/events/types/{index.ts,network.ts}`
+- `packages/utils/transport/sdk/domains/{index.ts,network.ts}`
+- `packages/utils/renderer/hooks/{index.ts,use-network-sdk.ts}`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `packages/utils/index.ts`
+- `apps/core-app/src/main/modules/network/*`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/main/core/tuff-icon.ts`
+- `apps/core-app/src/main/modules/plugin/{plugin.ts,plugin-loaders.ts,dev-server-monitor.ts}`
+- `apps/core-app/src/main/modules/plugin/widget/widget-loader.ts`
+- `apps/core-app/src/main/modules/plugin/providers/{npm-provider.ts,utils.ts}`
+- `apps/core-app/src/main/modules/download/download-worker.ts`
+- `apps/core-app/src/main/service/{store-http.service.ts,official-plugin.service.ts}`
+- `apps/core-app/src/renderer/src/modules/hooks/useSvgContent.ts`
+- `apps/core-app/src/renderer/src/components/base/TuffIcon.vue`
+- `apps/core-app/src/renderer/src/base/axios.ts`
+- `apps/core-app/scripts/check-network-boundaries.js`
+- `apps/core-app/package.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot 登录简化：本地邮箱优先 + Nexus 并存（M1.4）
+
+**变更类型**: 认证链路收敛 / 体验修复 / 数据一致性增强
+
+**描述**:
+- 新增本地邮箱认证能力（`/api/auth/email/register`、`/api/auth/email/login`、`/api/auth/logout`），统一写入 `pilot_auth_session` Cookie，不引入邮箱验证码流程。
+- `GET /api/auth/status` 升级为登录来源可识别（`guest/local/nexus`），并在本地账号场景返回基础 profile（`nickname/email`）。
+- 前端登录弹窗重新挂载到全局根（`app.vue`），保留双入口：邮箱登录/注册为主链路，Nexus OAuth 入口继续可用。
+- 原短信/微信二维码登录入口改为“即将上线（Nexus）”占位，避免调用当前未迁移接口导致误报。
+- 新增访客数据并入：登录成功后基于 device guest id 自动迁移会话/历史/运行时记录到登录账号，并输出后端合并审计日志。
+
+**验证**:
+- `pnpm -C "apps/pilot" run test` ✅
+- `pnpm -C "apps/pilot" run build` ✅
+- `pnpm -C "apps/pilot" run typecheck` ⚠️（存在大量存量 TS 错误，集中在 Quota 旧页面与 CMS 模块，与本次登录改造无直接耦合）
+- `pnpm -C "apps/pilot" run lint` ⚠️（存在存量 lint debt，已在 `TODO.md` 的 M0 收口条目持续跟踪）
+
+**修改文件**:
+- `apps/pilot/server/utils/pilot-local-auth.ts`
+- `apps/pilot/server/utils/pilot-guest-merge.ts`
+- `apps/pilot/server/api/auth/email/register.post.ts`
+- `apps/pilot/server/api/auth/email/login.post.ts`
+- `apps/pilot/server/api/auth/logout.post.ts`
+- `apps/pilot/server/api/auth/status.get.ts`
+- `apps/pilot/server/api/account/profile.get.ts`
+- `apps/pilot/server/routes/auth/callback.get.ts`
+- `apps/pilot/app/components/chore/Login.vue`
+- `apps/pilot/app/app.vue`
+- `apps/pilot/app/composables/user.ts`
+- `apps/pilot/app/composables/api/base/v1/auth.ts`
+- `apps/pilot/app/composables/api/auth.ts`
+- `apps/pilot/server/utils/__tests__/pilot-local-auth.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot M1.3：渠道 Adapter 化（禁用自动协议降级，legacy 固定 responses）
+
+**变更类型**: 架构收敛 / 兼容策略调整
+
+**描述**:
+- 根据渠道差异，后端从“自动降级”切换为“按渠道 Adapter 显式路由”：
+  - 新增 `adapter` 语义（`legacy | openai`），在 `PILOT_CHANNELS_JSON` 可按渠道配置。
+  - `legacy` 渠道强制走 `responses`，不会再尝试 `chat.completions`。
+  - `openai` 渠道按 `transport` 显式选择（`responses | chat.completions`），不再隐式 fallback。
+- 默认渠道策略可配置：
+  - 新增 `PILOT_CHANNEL_DEFAULT_ADAPTER`（默认 `legacy`）。
+  - 保留 `PILOT_CHANNEL_DEFAULT_TRANSPORT`，但在 `legacy` 下会被收敛为 `responses`。
+- `POST /api/aigc/executor` 事件补充：
+  - `session_bound` 新增 `adapter`，明确当前会话实际使用的渠道适配器。
+- 诊断增强：
+  - 当渠道报 `Unsupported legacy protocol: /v1/chat/completions is not supported` 时，返回可读提示，指导将该渠道改为 `responses`/`legacy` 配置。
+  - `executor` 错误事件新增 `detail` 结构（`status_code/status_message/endpoint/model/phase/cause`），并在后端输出 `[pilot-executor-error]` 结构化日志，便于排查 `Connection error` 与网关链路问题。
+- 管理接口增强：
+  - `GET /api/pilot/admin/channels` 返回 `adapter` 字段，便于后台排查渠道配置。
+
+**验证**:
+- `pnpm -C "apps/pilot" run test` ✅
+- `pnpm -C "apps/pilot" run build` ✅（本次改动文件通过构建）
+
+**修改文件**:
+- `apps/pilot/server/utils/pilot-channel.ts`
+- `apps/pilot/server/utils/pilot-runtime.ts`
+- `apps/pilot/server/api/aigc/executor.post.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/server/api/pilot/admin/channels.get.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot M1.2：Executor 超时治理（渠道超时配置化 + 自动降级 + 可诊断错误）
+
+**变更类型**: 稳定性修复 / 兼容性增强
+
+**描述**:
+- 修复 `POST /api/aigc/executor` 在 `responses` 通道下频繁返回 `Request timed out.` 的问题根因：
+  - 渠道超时阈值从固定 `25_000ms` 升级为可配置，并统一默认到 `90_000ms`（下限 `3000ms`，上限 `10min`）。
+  - 支持全局变量 `PILOT_CHANNEL_TIMEOUT_MS`，并允许 `PILOT_CHANNELS_JSON` 渠道项单独指定 `timeoutMs`（未指定时继承全局默认）。
+- 自动协议降级增强：
+  - `transport=auto` 且 `responses` 超时时，允许自动降级到 `chat.completions`（原先仅覆盖 404/405/501）。
+  - 新增对 `504/524` 与超时关键字（`timed out/timeout/AbortError`）的降级判定。
+  - 注：该策略已在同日 `Pilot M1.3` 切换为 Adapter 显式路由（默认不再自动降级）。
+- SSE 诊断信息增强：
+  - `session_bound` 事件新增 `timeout_ms` 字段，便于定位当前渠道阈值。
+  - 错误消息对超时场景改为可读提示：包含超时阈值与渠道信息，不再只有笼统 `Request timed out.`。
+- 管理接口增强：
+  - `GET /api/pilot/admin/channels` 增加 `timeoutMs` 脱敏可见字段。
+
+**验证**:
+- `pnpm -C "apps/pilot" run test` ✅
+- `pnpm -C "apps/pilot" run build` ✅（本次改动文件通过类型与构建校验）
+
+**修改文件**:
+- `apps/pilot/server/utils/pilot-channel.ts`
+- `apps/pilot/server/utils/pilot-runtime.ts`
+- `apps/pilot/server/api/aigc/executor.post.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/server/api/pilot/admin/channels.get.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot M0：GHCR 镜像发布链路落地（master + packages 触发）
+
+**变更类型**: 工程化增强 / 发布链路补齐
+
+**描述**:
+- 新增 `apps/pilot/Dockerfile`，将 Pilot 构建链路固定为 `NITRO_PRESET=node-server`，产出可直接运行的容器镜像。
+- Docker 构建阶段使用 `pnpm deploy` 生成运行时依赖并拷贝 `.output`，同时清理 `.nuxt`/`dist`/源码目录，降低镜像冗余体积。
+- 新增仓库级 `.dockerignore`，避免把 `node_modules`、`.git`、构建产物等无关内容打入构建上下文。
+- 新增 `.github/workflows/pilot-image.yml`：
+  - 触发条件：`master` push 且命中 `apps/pilot/**`、`packages/**`、锁文件或工作流自身改动。
+  - 发布目标：`ghcr.io/<owner>/tuff-pilot`。
+  - 标签策略：`pilot-<short_sha>`（不可变）+ `pilot-latest`（环境跟随）。
+  - 输出镜像 digest，便于后续 1Panel 部署审计与回滚定位。
+  - 若配置 `ONEPANEL_WEBHOOK_URL`，发布后自动触发 webhook，并发送 `repository/branch/sha/image/tag/image_ref/digest`。
+- `pilot-ci.yml` 下线 `deploy-1panel` 任务，避免与镜像发布链路重复触发；1Panel 触发统一收口到 `pilot-image.yml`。
+- 工作流文档同步更新 `.github/workflows/README.md`。
+
+**验证**:
+- `pnpm -C "apps/pilot" run build` ✅（在本地以 `NITRO_PRESET=node-server` 验证构建可通过）
+
+**修改文件**:
+- `.dockerignore`
+- `apps/pilot/Dockerfile`
+- `.github/workflows/pilot-image.yml`
+- `.github/workflows/pilot-ci.yml`
+- `.github/workflows/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot M0：1Panel 部署脚本（GHCR 拉取 + 健康检查回滚）
+
+**变更类型**: 工程化增强 / 部署可靠性提升
+
+**描述**:
+- 新增 `apps/pilot/deploy/deploy-pilot-1panel.sh`，用于在 1Panel 服务器执行 Pilot 容器更新。
+- 脚本支持从 GHCR 拉取指定镜像（`--image + --tag` 或 `--image-ref`），并通过 compose 仅更新指定服务。
+- 增加可选健康检查（`--health-url`），失败时默认自动回滚到上一个运行镜像。
+- 同时兼容 `docker compose` 与 `docker-compose`，并支持可选 GHCR 登录参数（私有镜像场景）。
+- 新增 `apps/pilot/deploy/deploy-pilot-1panel-webhook.sh`，支持 webhook payload 解析（`image/tag/sha`）与 `sha -> pilot-<short_sha>` 自动映射，并转发到主部署脚本。
+- 新增部署模板与双语教程：
+  - `apps/pilot/deploy/deploy-pilot-1panel.env.example`
+  - `apps/pilot/deploy/deploy-pilot-1panel-webhook.env.example`
+  - `apps/pilot/deploy/README.zh-CN.md`
+  - `apps/pilot/deploy/README.md`
+- 根目录 `scripts/deploy-pilot-1panel.sh` 与 `scripts/deploy-pilot-1panel-webhook.sh` 保留为兼容入口，转发到 `apps/pilot/deploy/`。
+
+**验证**:
+- `bash -n "apps/pilot/deploy/deploy-pilot-1panel.sh"` ✅
+- `apps/pilot/deploy/deploy-pilot-1panel.sh --help` ✅
+- `bash -n "apps/pilot/deploy/deploy-pilot-1panel-webhook.sh"` ✅
+- `apps/pilot/deploy/deploy-pilot-1panel-webhook.sh --dry-run --payload-json '{"repository":"talex-touch/tuff","sha":"abcdef123456","branch":"master"}'` ✅
+
+**修改文件**:
+- `apps/pilot/deploy/deploy-pilot-1panel.sh`
+- `apps/pilot/deploy/deploy-pilot-1panel.env.example`
+- `apps/pilot/deploy/deploy-pilot-1panel-webhook.sh`
+- `apps/pilot/deploy/deploy-pilot-1panel-webhook.env.example`
+- `apps/pilot/deploy/README.zh-CN.md`
+- `apps/pilot/deploy/README.md`
+- `scripts/deploy-pilot-1panel.sh`
+- `scripts/deploy-pilot-1panel.env.example`
+- `scripts/deploy-pilot-1panel-webhook.sh`
+- `scripts/deploy-pilot-1panel-webhook.env.example`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### core-app：本地 SVG 源连接失败降噪（localhost 重试节流）
+
+**变更类型**: 稳定性修复 / 开发体验优化
+
+**描述**:
+- 修复渲染层图标加载在 `localhost` SVG 资源不可达时的错误刷屏问题（典型报错：`ERR_CONNECTION_REFUSED`）。
+- `useSvgContent` 对本地 HTTP 源（`localhost` / `127.0.0.1`）增加“失败后短暂冷却”策略（3s），避免同一地址在短时间内被高频重复请求。
+- 调整重试策略：本地 HTTP 源失败后不再走 retrier 多次重试，减少无效网络请求与控制台噪音。
+- 调整日志策略：对本地 HTTP 源失败不再输出 `fetchSvgContent failed after retries` 错误日志（仍保留组件错误态），远程源行为不变。
+
+**验证**:
+- `pnpm -C "apps/core-app" exec eslint "src/renderer/src/modules/hooks/useSvgContent.ts"` ✅
+- `pnpm -C "apps/core-app" run typecheck:web` ⚠️（存在既有 `Milkdown` 版本类型冲突，报错位于 `src/renderer/src/components/base/input/FlatMarkdown.vue:68`，与本次改动无关）
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/hooks/useSvgContent.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-03-11
+
+### Pilot M1：多渠道 + Completions 兼容 + 后端会话主导（第一批 API 拆分）
+
+**变更类型**: 融合增强 / 兼容迁移 / 稳定性修复
+
+**描述**:
+- 新增渠道解析与协议兼容层（`apps/pilot/server/utils/pilot-channel.ts`）：
+  - 支持 `PILOT_CHANNELS_JSON` 与 `PILOT_DEFAULT_CHANNEL_ID`（含 runtime/env 回退）。
+  - 选择优先级固定为：`request channel_id > 会话绑定 channel_id > default channel`。
+  - `transport=auto` 下先走 `responses`，命中不支持特征后自动回退 `chat.completions`，并做短期能力缓存。
+- 聊天执行器 `POST /api/aigc/executor` 完成 M1 升级（`apps/pilot/server/api/aigc/executor.post.ts`）：
+  - `chat_id` 改为可选（后端可创建），新增可选 `channel_id`。
+  - SSE 新增 `session_bound` 事件，返回最终 `chat_id/runtime_session_id/channel_id/transport`。
+  - 兼容旧工具事件映射：`capability.call -> status_updated(calling)`、`capability.result -> status_updated(result)`；保留 `completion/error/[DONE]`。
+  - 流式结束后由后端自动快照历史，不再依赖前端单独补写 `conversations`。
+- 新增后端会话映射真源（`apps/pilot/server/utils/pilot-quota-session.ts`）：
+  - 表 `pilot_quota_sessions(chat_id/user_id/runtime_session_id/channel_id/topic/created_at/updated_at)`。
+  - 删除会话时统一清理：`quota history + session mapping + runtime session`，避免脏数据。
+- 兼容接口语义收口：
+  - `POST /api/aigc/conversations` 调整为“兼容补写/覆盖元数据”，不再作为主同步通道。
+  - `GET /api/pilot/admin/channels` 新增 env 渠道脱敏查看；`POST /api/pilot/admin/channels` 在 M1 返回 501（保持 env 只读策略）。
+- 完成 M1 第一批剩余 API 迁移（主链路/用户态）：
+  - `aigc` 扩展：`prompts/detail`、`prompts/user`、`conversation/share*`。
+  - `auth`：`renew_token`。
+  - `user-config`、`dummy`、`invitation/records`、`order/*`、`tools/upload*`。
+- 延续 M0 既定口径：
+  - 路由继续保持 `/ -> Quota`、`/pilot/* -> 原 Pilot`。
+  - 认证主链路继续使用 Pilot Cookie 会话/访客模式（Bearer Token 非主路径）。
+  - 兼容 API 继续输出 `{ code, message, data }`。
+- 前端错误态兼容增强（`apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts` + `ErrorCard.vue`）：
+  - 支持同时解析 `event:error` 与 `data.event=error` 两类 SSE 错误帧，优先展示后端 `message`。
+  - 传输层异常统一提取可读错误文本，避免退化为不可读对象。
+  - 修复错误卡片 CTA 误判：未知错误/渠道熔断不再默认显示“立即升级”，`503 熔断/无可用渠道` 改为“稍后重试或切换渠道”提示。
+
+**验证**:
+- `pnpm -C "apps/pilot" run test` ✅
+- `NODE_OPTIONS=--max-old-space-size=8192 pnpm -C "apps/pilot" run build` ✅
+- `pnpm -C "apps/pilot" run typecheck` ⚠️（Quota 迁移存量类型错误仍在，未新增阻塞）
+- `pnpm -C "apps/pilot" run lint` ⚠️（Quota 迁移存量 lint 债务仍在，规则量级较大）
+
+### Pilot M1.1：构建与部署瘦身（sourcemap 关闭 + 静态发布剔除 worker）
+
+**变更类型**: 性能优化 / 部署可靠性增强
+
+**描述**:
+- `apps/pilot/nuxt.config.ts` 生产构建默认关闭 client/server sourcemap（避免发布产物被 `.map` 主导）。
+- `apps/pilot/uno.config.ts` 调整 WebFonts 策略：仅当 `NUXT_WEB_FONTS=true` 时启用，默认不走远程字体抓取，降低构建网络依赖。
+- `apps/pilot/package.json` 的 `prepare:cf-static` 新增 `rm -rf dist/_worker.js`，静态发布时显式剔除 worker 产物，规避 Cloudflare Worker 体积门槛影响。
+
+**验证**:
+- `pnpm -C "apps/pilot" run generate` ✅
+- `pnpm -C "apps/pilot" run prepare:cf-static` ✅
+- `node apps/pilot/scripts/report-dist-size.mjs` ✅（`dist/_nuxt` 从约 `51.36MB` 降至 `12.66MB`）
+
+**修改文件**:
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/uno.config.ts`
+- `apps/pilot/package.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+**修改文件**:
+- `apps/pilot/server/utils/pilot-channel.ts`
+- `apps/pilot/server/utils/pilot-runtime.ts`
+- `apps/pilot/server/utils/pilot-quota-session.ts`
+- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+- `apps/pilot/server/utils/quota-share-store.ts`
+- `apps/pilot/server/utils/quota-user-store.ts`
+- `apps/pilot/server/utils/quota-upload-store.ts`
+- `apps/pilot/server/api/aigc/executor.post.ts`
+- `apps/pilot/server/api/aigc/conversations.post.ts`
+- `apps/pilot/server/api/aigc/conversations/[id].delete.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/server/api/pilot/admin/channels.get.ts`
+- `apps/pilot/server/api/pilot/admin/channels.post.ts`
+- `apps/pilot/server/api/aigc/prompts/user.get.ts`
+- `apps/pilot/server/api/aigc/prompts/detail/[id]/index.get.ts`
+- `apps/pilot/server/api/aigc/conversation/share/[id]/index.get.ts`
+- `apps/pilot/server/api/aigc/conversation/share/[id]/index.post.ts`
+- `apps/pilot/server/api/aigc/conversation/share_chat/[id]/index.get.ts`
+- `apps/pilot/server/api/aigc/conversation/share_list.get.ts`
+- `apps/pilot/server/api/auth/renew_token.get.ts`
+- `apps/pilot/server/api/user-config.get.ts`
+- `apps/pilot/server/api/user-config.post.ts`
+- `apps/pilot/server/api/user-config/user/[uid]/index.get.ts`
+- `apps/pilot/server/api/dummy/*`
+- `apps/pilot/server/api/invitation/records.get.ts`
+- `apps/pilot/server/api/order/*`
+- `apps/pilot/server/api/tools/upload.post.ts`
+- `apps/pilot/server/api/tools/upload/content/[id]/index.get.ts`
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-03-10
+
+### Pilot M0: 聊天未渲染修复（SSE 分片解析 + Milkdown 时序 + 运行时缺包）
+
+**变更类型**: 稳定性修复 / 依赖治理
+
+**描述**:
+- 修复 Quota 聊天流式结果在前端解析时出现半包/残片导致不渲染的问题：
+  - `app/composables/api/base/v1/aigc/completion/index.ts` 的 `handleExecutorResult` 改为标准 SSE 帧缓冲解析（按 `\n\n` 分帧，支持跨 chunk 聚合），不再按 `split('\n')` 粗暴处理。
+  - 保留 `event:error` 处理并统一 data 聚合，兼容 `[DONE]` 结束帧。
+- 修复 `MilkdownError: Timer "SchemaReady" not found`：
+  - `MilkContent.vue` 增加 `SchemaReady` 等待与重试兜底，避免初始化时序下 `replaceAll` 触发 token 未就绪。
+  - 增加组件卸载时 `editor.destroy()` 清理，避免重复挂载导致状态污染。
+  - `MilkContent.vue` 的 `refractor` 语言导入路径从 `refractor/lang/*` 更正为 `refractor/*`，修复 `Expected function for syntax` 报错。
+- 修复 dev 运行时缺包导致首页 500：
+  - `apps/pilot/package.json` 显式补齐 `@langchain/core`、`@langchain/langgraph`、`@langchain/openai`、`deepagents`。
+- 统一 `apps/pilot` 中 `@milkdown/*` 主干依赖版本并显式声明 `@milkdown/utils`，降低 token 版本漂移风险。
+- `server/api/aigc/executor` 增加 final-only 流式兜底：当上游只返回 `assistant.final` 时，按字符块拆分成多条 `completion(completed:false)` 后再补 `completed:true`，保证前端可见流式输出。
+- 修复 dev 环境 CSS 资源 404：
+  - `nuxt.config.ts` 的全局 `css` 改为显式文件路径（`tuffex` 样式入口与 UnoCSS reset 实体文件），避免 `/_nuxt/@talex-touch/tuffex/style.css` 与 `/_nuxt/@unocss/reset/tailwind.css` 404。
+- `executor` 对上游 `530 status code` 增加可读错误提示，明确指向 `NUXT_PILOT_BASE_URL` / `NUXT_PILOT_API_KEY` 配置排查。
+
+**验证**:
+- `pnpm -C "apps/pilot" exec eslint app/components/article/MilkContent.vue app/composables/api/base/v1/aigc/completion/index.ts` ✅
+- `curl http://127.0.0.1:<dev-port>/api/auth/status` ✅
+- `curl -N POST /api/aigc/executor` SSE 实测输出 `status_updated -> completion -> [DONE]` ✅
+- `pnpm -C "apps/pilot" run typecheck` ⚠️（仍有 Quota 迁移存量类型错误，与本次修复无关）
+
+**修改文件**:
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `apps/pilot/app/components/article/MilkContent.vue`
+- `apps/pilot/package.json`
+- `pnpm-lock.yaml`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot M0: 前端冷启动加速 + CI/1Panel 部署链路补齐
+
+**变更类型**: 性能优化 / 工程化增强
+
+**描述**:
+- 启动链路优化（`apps/pilot`）：
+  - `dev` 默认切换为 Cloudflare runtime 绑定模式（`NUXT_USE_CLOUDFLARE_DEV=true` + `preview` 环境），本地可直接联调 D1/R2。
+  - 增加 `dev:local` 作为无 runtime 绑定的纯本地模式。
+  - `build` 固化 `NODE_OPTIONS=--max-old-space-size=8192`，避免构建阶段 OOM。
+  - `nuxt.config.ts` 中 `buildTime` 在 dev 固定为常量，避免每次启动触发 Vite 配置漂移。
+  - `@talex-touch/tuffex` 源码 alias 改为开关模式（默认关闭，必要时通过 `NUXT_USE_WORKSPACE_SOURCE=true` 启用）。
+  - 代码块渲染器改为异步组件加载（`EditorCodeBlock` 下 `mindmap/echarts/mermaid/abc/code` 全部按需 `import()`）。
+- UnoCSS 编译负担优化（根因修复）：
+  - `uno.config.ts` 将全量 icon safelist 改为“默认关闭，按需开启”（`NUXT_FULL_ICON_SAFELIST=true` 时启用）。
+  - dev 环境不再启用 `presetWebFonts` 远程字体抓取，减少首轮编译阻塞。
+- 体积分析能力补齐：
+  - 新增 `pnpm -C "apps/pilot" run analyze:size` 与 `scripts/report-dist-size.mjs`，输出 `dist/_nuxt` 总体积、扩展名占比、Top 20 大文件。
+  - 实测重块集中在 `@antv/x6`、`abcjs`、`echarts`、`element-plus`、`Milkdown` 相关 chunk。
+- CI/部署链路补齐：
+  - 新增 `.github/workflows/pilot-ci.yml`：
+    - `quality`: `lint/typecheck/test/build`
+    - `static-dist`: `generate + prepare:cf-static + artifact`
+    - `deploy-1panel`: `master` push 成功后触发 `ONEPANEL_WEBHOOK_URL`
+  - 结合 M0 存量类型债，`quality` 中 `lint/typecheck` 先按“非阻塞告警”执行，`test/build` 仍作为部署阻塞门禁。
+  - 工作流文档同步更新 `.github/workflows/README.md`。
+
+**验证**:
+- `pnpm -C "apps/pilot" run test` ✅
+- `pnpm -C "apps/pilot" run build` ✅（8GB 堆内存下通过）
+- 本地冷启动基线对比（`/` 首次可访问）：
+  - 优化前约 `132s ~ 218s`
+  - 优化后约 `9s ~ 10s`
+
+**修改文件**:
+- `apps/pilot/package.json`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/uno.config.ts`
+- `apps/pilot/app/components/article/components/EditorCodeBlock.vue`
+- `apps/pilot/scripts/report-dist-size.mjs`
+- `.github/workflows/pilot-ci.yml`
+- `.github/workflows/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+
+### Pilot M0: Cloudflare 部署改为静态发布（规避 Worker 3MiB 限制）
+
+**变更类型**: 部署策略调整 / 线上可用性修复
+
+**描述**:
+- Cloudflare Pages 免费额度下，`nuxt build` 产物中的 `_worker.js` 模块体积约 `13MB`，发布时报错 `Worker exceeded 3 MiB`。
+- 为保证 M0 可上线，`apps/pilot` 的 Cloudflare 脚本切换为静态发布链路：
+  - `preview:cf` 改为 `nuxt generate + prepare:cf-static + wrangler pages dev dist`
+  - `deploy:cf` 改为 `nuxt generate + prepare:cf-static + wrangler pages deploy dist`
+- 静态发布补齐路由兜底：
+  - 发布前移除 `dist/_routes.json`（避免 Pages 把全路由误导向不存在的 Functions）。
+  - 自动生成 `dist/index.html`、`dist/pilot/index.html`、`dist/pilot/admin/storage/index.html`（由 `200.html` 复制），并写入 `/* /index.html 200` 到 `_redirects`，避免 ` /`、`/pilot`、`/pilot/admin/storage` 线上白屏/404。
+- 新增运行时 API 基地址注入：
+  - `runtimeConfig.public.endsBaseUrl`（优先 `NUXT_PUBLIC_ENDS_URL`，回退 `NUXT_PILOT_BASE_URL`）
+  - `app.vue` 启动时优先把 `endsBaseUrl` 写入 `globalOptions`，确保前端 API 请求可按环境变量指向当前 AIAPI。
+- `wrangler.toml` 增补 `NUXT_PUBLIC_ENDS_URL`（preview/production 同步），与现有 env 保持一致。
+
+**测试**:
+- `pnpm -C "apps/pilot" run generate` ✅
+- `npx wrangler pages deploy .output/public --project-name tuff-pilot --branch main` ✅
+
+**修改文件**:
+- `apps/pilot/package.json`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/app/app.vue`
+- `apps/pilot/wrangler.toml`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-03-09
+
+### Pilot M0: 聊天渲染链路修复（Milkdown `SchemaReady` 冲突）
+
+**变更类型**: 稳定性修复 / 运行时兼容
+
+**描述**:
+- 修复 Quota 聊天页面在流式回复场景下出现的 `MilkdownError: Timer "SchemaReady" not found` 报错与消息未渲染问题。
+- `ThContent.vue` 的渲染实现切换为 `MilkContent.vue`（只读渲染），规避 `@milkdown/vue + useEditor` 在当前依赖组合下的上下文注入时序问题。
+- 保留 `disableRich=true`，避免渲染期附加增强逻辑影响聊天主链路稳定性。
+- 顺带修复聊天页告警：`ChatLinkShare.vue` 将误写标签 `<di>` 更正为 `<div>`，消除 `Failed to resolve component: di`。
+
+**测试**:
+- `pnpm -C "apps/pilot" exec nuxi prepare` ✅
+- `pnpm -C "apps/pilot" run dev` ✅（本地构建通过，可进入聊天页面）
+
+**修改文件**:
+- `apps/pilot/app/components/article/MilkdownRender.vue`
+- `apps/pilot/app/components/article/ThContent.vue`
+- `apps/pilot/app/components/chat/head/ChatLinkShare.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+
+### Pilot: Cloudflare Dashboard Secrets 基线配置落地
+
+**变更类型**: 运维配置 / 文档同步
+
+**描述**:
+- 已在 Cloudflare Pages 项目 `tuff-pilot` 的 `preview` 与 `production` 环境完成首批 secrets 写入，确保附件链路具备统一默认基线：
+  - `PILOT_ATTACHMENT_PROVIDER=auto`
+  - `PILOT_ATTACHMENT_PUBLIC_BASE_URL`
+  - `PILOT_ATTACHMENT_SIGNING_SECRET`
+  - `PILOT_MINIO_REGION=us-east-1`
+  - `PILOT_MINIO_FORCE_PATH_STYLE=true`
+- 待人工补齐环境相关敏感项（按环境值）：
+  - OAuth：`PILOT_NEXUS_OAUTH_CLIENT_ID`、`PILOT_NEXUS_OAUTH_CLIENT_SECRET`、`PILOT_NEXUS_INTERNAL_ORIGIN`（按需）
+  - MinIO（启用时）：`PILOT_MINIO_ENDPOINT`、`PILOT_MINIO_BUCKET`、`PILOT_MINIO_ACCESS_KEY`、`PILOT_MINIO_SECRET_KEY`、`PILOT_MINIO_PUBLIC_BASE_URL`（可选）
+- 本次仅完成 Dashboard 配置，不含部署动作。
+
+**测试**:
+- `npx wrangler pages secret list --project-name tuff-pilot --env preview` ✅
+- `npx wrangler pages secret list --project-name tuff-pilot --env production` ✅
+
+**修改文件**:
+- `docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/INDEX.md`
+
+### Pilot: 开发端口固定 3300 并移除 dev.mjs 启动入口
+
+**变更类型**: 开发体验清理 / 启动链路收敛
+
+**描述**:
+- `apps/pilot` 的 `dev` 脚本改为直接执行 `nuxt dev`，不再通过 `scripts/dev.mjs` 包装启动。
+- 开发端口固定从 `3300` 启动（`--port 3300`），并显式绑定 `127.0.0.1`。
+- 保持 Cloudflare dev 默认开启（`NUXT_USE_CLOUDFLARE_DEV=true`，`CLOUDFLARE_DEV_ENVIRONMENT=preview`），减少本地联调入口分叉。
+
+**测试**:
+- `pnpm pilot:dev` ✅（本地启动成功：`http://127.0.0.1:3300/`）
+- `pnpm -C "apps/pilot" run test` ✅（`3` files, `14` tests passed）
+
+**修改文件**:
+- `apps/pilot/package.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus: UnoCSS WebFonts 子路径兼容修复
+
+**变更类型**: 稳定性修复 / 开发环境兼容
+
+**描述**:
+- 修复 Nexus 在 Nuxt 开发期可能出现的 UnoCSS 配置加载失败（`Package subpath './local' is not defined by "exports"`）问题。
+- `apps/nexus/uno.config.ts` 中将 `presetWebFonts` 从 `unocss` 聚合导入改为直接导入 `@unocss/preset-web-fonts`，规避混合版本依赖树下的子路径解析冲突。
+- 保持现有 WebFonts 配置与功能行为不变（`google/none` provider 逻辑不变）。
+
+**测试**:
+- `pnpm -C "apps/nexus" run typecheck` ✅
+- `pnpm -C "apps/nexus" run dev:pure` ✅（Nuxt 启动通过）
+
+**修改文件**:
+- `apps/nexus/uno.config.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot M0: Quota 前端并入 + Nuxt 兼容 API 落地
+
+**变更类型**: 融合交付 / 兼容迁移
+
+**描述**:
+- `apps/pilot` 完成 Quota 前端体系并入（`pages/layouts/components/composables/plugins/constants`），并切换路由语义：
+  - `/` 使用 Quota 页面体系
+  - `/pilot` 使用原 Pilot 聊天页
+  - `/pilot/admin/storage` 使用原 Pilot 管理页
+- 根壳保留 Pilot `app.vue`，新增 Quota 运行时桥接（`appOptions/globalOptions`、指令/插件注册），并移除 Quota 强制登录门禁，改为 Pilot 会话/访客态可用。
+- Nuxt `server/api` 新增 M0 兼容层并统一返回 `{ code, message, data }`，覆盖：
+  - `POST /api/aigc/executor`（SSE 映射为 `status_updated/completion/error/[DONE]`）
+  - `POST /api/aigc/conversations`
+  - `GET /api/aigc/history`
+  - `GET /api/aigc/conversation/:id`
+  - `DELETE /api/aigc/conversations/:id`
+  - `GET /api/auth/status`
+  - `GET /api/account/profile`
+  - `GET /api/account/permissions`
+  - `GET /api/aigc/prompts/hot|search|tags/recommend`（M0 返回空列表）
+- 非 M0 接口统一由 `server/api/[...path].ts` 返回 501 包装，避免页面白屏或 404 误判。
+- 聊天链路复用 Pilot Runtime，兼容历史存储保留 `chat_id/topic/value/meta` 结构；删除会话时同步清理兼容记录与 Pilot 会话。
+- 根 `.gitignore` 新增 `apps/quota-gpt-view/` 与 `apps/quota-gpt-ends/`，迁移参考目录不纳入提交。
+
+**测试**:
+- `pnpm -C "apps/pilot" run test` ✅
+- `pnpm -C "apps/pilot" run typecheck` ⚠️（Quota 迁移存量类型问题，集中在 article/cms 等模块）
+- `pnpm -C "apps/pilot" run lint` ⚠️（Quota 迁移存量 lint 问题）
+- `NODE_OPTIONS=--max-old-space-size=8192 pnpm -C "apps/pilot" run build` ✅
+
+**修改文件**:
+- `apps/pilot/app/app.vue`
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/app/pages/pilot/index.vue`
+- `apps/pilot/app/pages/pilot/admin/storage.vue`
+- `apps/pilot/app/layouts/pilot.vue`
+- `apps/pilot/server/api/aigc/*`
+- `apps/pilot/server/api/auth/status.get.ts`
+- `apps/pilot/server/api/account/*`
+- `apps/pilot/server/api/[...path].ts`
+- `apps/pilot/server/utils/quota-api.ts`
+- `apps/pilot/server/utils/quota-history-store.ts`
+- `apps/pilot/server/utils/quota-history-codec.ts`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/package.json`
+- `apps/pilot/uno.config.ts`
+- `.gitignore`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 多会话并行与流式超时兜底
+
+**变更类型**: 稳定性修复 / 体验优化
+
+**描述**:
+- 前端会话运行态从全局 `running` 收敛为“按 session 追踪”，允许一个会话生成时切换并继续操作其他会话。
+- 同 session 重试时仅中断该 session 的旧流，不再全局中断其它会话流。
+- SSE 消费新增双超时兜底：
+  - 空闲超时：`45s` 无事件自动中断并提示。
+  - 总时长超时：`8min` 自动中断并提示。
+- 超时参数改为可配置：支持通过 `NUXT_PUBLIC_PILOT_STREAM_IDLE_TIMEOUT_MS` 与 `NUXT_PUBLIC_PILOT_STREAM_MAX_DURATION_MS` 调整（含前端边界夹取）。
+- 当用户进入会话触发 `fromSeq/follow` 且超时后，前端会自动调用 `POST /api/pilot/chat/sessions/:sessionId/pause`（`reason=heartbeat_timeout`）终止会话，避免长期 loading 卡住。
+- 会话列表删除按钮改为按行禁用（仅禁用正在运行中的会话），新建会话按钮不再因其它会话运行而锁死。
+
+**测试**:
+- `pnpm -C "apps/pilot" run test`
+- `pnpm -C "apps/pilot" run typecheck`
+
+**修改文件**:
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `apps/pilot/app/composables/pilot-chat.types.ts`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `apps/pilot/app/components/pilot/PilotSidebarHeader.vue`
+- `apps/pilot/app/pages/index.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-App: Channel 销毁态广播兜底 + Invoke Handler 常驻注册
+
+**变更类型**: 稳定性修复 / 关停阶段容错
+
+**描述**:
+- 修复 `Object has been destroyed`：`channel-core` 的 `getWebContents` 新增销毁态与异常兜底，避免在插件 `disable` 状态广播时读取已销毁窗口对象导致未处理 Promise 拒绝。
+- 修复 `No handler registered for "storage:app:save"` 噪声：`main-transport` 的 `ipcMain.handle` 改为“首次注册后常驻”，当事件暂无订阅处理器时返回 `undefined`，不再移除 handler，避免窗口/模块 teardown 窗口期触发 Electron 级 no-handler 报错。
+
+**测试**:
+- `pnpm -C "apps/core-app" run typecheck:node`
+
+**修改文件**:
+- `apps/core-app/src/main/core/channel-core.ts`
+- `packages/utils/transport/sdk/main-transport.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: Cloudflare 流式响应延迟优化（SSE / D1 热路径）
+
+**变更类型**: 性能优化 / 体验优化
+
+**描述**:
+- 降低流式阶段的高频持久化压力：`run.metrics` 保留实时事件发送，不再逐条写入 trace 存储。
+- 优化 stream emitter 的序号分配：不再每次落库前都读取 `lastSeq`，改为本地游标递增，遇到 `seq` 冲突时再回退同步。
+- 优化 runtime 事件持久化：`persistEvent` 移除每事件 `getSession` 读取，改为本地序号优先 + 冲突重试，减少 D1 往返。
+- 优化 D1 trace 写入链路：`appendTrace` 由两次独立 `run()` 改为 `batch()` 合并提交（`INSERT trace + UPDATE session`）。
+- 新增 `assistant.delta` 服务端批量持久化：默认按 `160ms` 时间窗或 `320` 字符阈值聚合后写入，SSE 仍保持逐增量实时输出。
+- 新增每轮流式请求持久化汇总指标（`run.metrics` + Cloudflare 日志）：`delta 批次数 / 平均批字符数 / runtime trace 写入数 / store appendTrace 总数`。
+- 移除流接口热路径中的重复 `ensureSchema` 调用，保持由 store adapter 统一懒初始化。
+- 下调前端助手文本 flush 窗口（`120ms -> 48ms`），改善“吐字”实时观感。
+
+**测试**:
+- `pnpm -C "apps/pilot" run typecheck`
+
+**修改文件**:
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `packages/tuff-intelligence/src/business/pilot/stream.ts`
+- `packages/tuff-intelligence/src/business/pilot/emitter.ts`
+- `packages/tuff-intelligence/src/runtime/agent-runtime.ts`
+- `packages/tuff-intelligence/src/store/d1-runtime-store.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus OAuth Apps: 支持编辑与密钥轮换
+
+**变更类型**: 能力补齐 / 管理体验增强
+
+**描述**:
+- OAuth 应用管理新增“编辑应用”能力：支持修改 `name`、`description`、`redirectUris`。
+- OAuth 应用管理新增“重新生成 Secret”能力：服务端轮换 `client_secret_hash` 与 `client_secret_hint`，新 `client_secret` 仅返回一次。
+- Dashboard OAuth 页面新增动作按钮：
+  - `Edit`：应用级内联编辑表单并保存。
+  - `Regenerate Secret`：即时轮换并展示新 secret（可复制）。
+- 新增管理 API：
+  - `PATCH /api/dashboard/oauth/clients/:id`
+  - `POST /api/dashboard/oauth/clients/:id/rotate-secret`
+
+**测试**:
+- `pnpm -C "apps/nexus" exec vitest run server/api/dashboard/oauth/__tests__/clients.post.test.ts server/api/dashboard/oauth/__tests__/clients.[id].patch.test.ts server/api/dashboard/oauth/__tests__/clients.[id].rotate-secret.post.test.ts`
+
+**修改文件**:
+- `apps/nexus/server/utils/oauthClientStore.ts`
+- `apps/nexus/server/api/dashboard/oauth/clients/[id].patch.ts`
+- `apps/nexus/server/api/dashboard/oauth/clients/[id]/rotate-secret.post.ts`
+- `apps/nexus/server/api/dashboard/oauth/__tests__/clients.[id].patch.test.ts`
+- `apps/nexus/server/api/dashboard/oauth/__tests__/clients.[id].rotate-secret.post.test.ts`
+- `apps/nexus/app/pages/dashboard/oauth.vue`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot OAuth: 清理 bridge legacy + API/CLI 调用收口
+
+**变更类型**: 认证链路收敛 / 兼容清理
+
+**描述**:
+- Pilot 回调链路改为严格 OAuth：`GET /auth/callback` 仅接受 `code + state`，移除 `ticket` 回退消费逻辑。
+- Nexus 侧下线全部 bridge 接口与实现：`/api/pilot/auth/bridge-ticket`、`/api/pilot/auth/bridge-consume`、`/api/pilot/auth/bridge-start`。
+- `authStore` 移除 `auth_pilot_bridge_tickets` 相关表初始化、类型与读写函数，避免后续误接入 legacy。
+- OAuth token 交换路径收敛为标准授权码模式：统一要求 `client_id + client_secret`，不再接受 `x-pilot-oauth-secret`。
+- Nexus OAuth 授权端点移除 `pilot_web + redirect allowlist` 分支，统一按 OAuth 应用注册的 `redirectUris` 校验。
+- Pilot 配置与类型同步收口：
+  - `runtimeConfig.pilot` 改为 `nexusOauthClientId` + `nexusOauthClientSecret`。
+  - `.env.example` / Cloudflare env 类型改为 `PILOT_NEXUS_OAUTH_CLIENT_ID` / `PILOT_NEXUS_OAUTH_CLIENT_SECRET`。
+- 文档补齐 API/CLI 调用与本地回调配置口径，统一“dev 本地 / prod 线上”的回跳策略说明。
+
+**测试**:
+- `pnpm -C "apps/nexus" exec vitest run server/api/pilot/oauth/__tests__/authorize.get.test.ts server/api/pilot/oauth/__tests__/token.post.test.ts server/api/dashboard/oauth/__tests__/clients.post.test.ts server/utils/__tests__/oauth-access.test.ts`
+- `pnpm -C "apps/nexus" run typecheck`
+- `pnpm -C "apps/pilot" run test`
+- `pnpm -C "apps/pilot" run typecheck`
+
+**修改文件**:
+- `apps/pilot/server/routes/auth/authorize.get.ts`
+- `apps/pilot/server/routes/auth/callback.get.ts`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/.env.example`
+- `apps/pilot/types/cloudflare-env.d.ts`
+- `apps/nexus/server/api/pilot/oauth/authorize.get.ts`
+- `apps/nexus/server/api/pilot/oauth/token.post.ts`
+- `apps/nexus/server/api/pilot/oauth/__tests__/authorize.get.test.ts`
+- `apps/nexus/server/api/pilot/oauth/__tests__/token.post.test.ts`
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/server/api/pilot/auth/bridge-ticket.post.ts`
+- `apps/nexus/server/api/pilot/auth/bridge-consume.post.ts`
+- `apps/nexus/server/api/pilot/auth/bridge-start.get.ts`
+- `apps/nexus/server/api/pilot/auth/__tests__/bridge-ticket.post.test.ts`
+- `apps/nexus/server/api/pilot/auth/__tests__/bridge-consume.post.test.ts`
+- `docs/plan-prd/docs/PILOT-NEXUS-OAUTH-CLI-TEST-PLAN.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/INDEX.md`
+
+### CoreBox: Search Core SRP + Perf 第1阶段（query/providers/merge-rank）
+
+**变更类型**: 架构解耦 / 可观测性增强
+
+**描述**:
+- 在 `search-core` 内将搜索主链路按职责拆分为三段私有编排方法，保持现有结果协议与交互行为不变：
+  - 查询编排：`orchestrateSearchQuery`（trim、`@provider` 解析、clipboard inputs 解析、cache key 统一生成）。
+  - Provider 聚合：`aggregateProvidersForQuery`（输入类型过滤、`@provider` 过滤、refractory 跳过策略）。
+  - 结果合并排序：`mergeAndRankItems`（usage/pinned/completion 注入 + sort）。
+- 新增分段耗时埋点，覆盖 `parse -> providers -> merge/rank` 三段：
+  - `Search.pipeline.parse`
+  - `Search.pipeline.providers`
+  - `Search.pipeline.merge-rank`
+- 搜索指标上报补充分段耗时字段（`parseDuration`、`providerAggregationDuration`、`mergeRankDuration`），便于后续性能回归对比。
+
+**测试**:
+- `pnpm -C "apps/core-app" run typecheck:node`
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox: Roadmap 06-C 回归矩阵与性能基线最小集
+
+**变更类型**: 测试基线 / 回归可复测性增强
+
+**描述**:
+- 为 roadmap 06-C 建立最小回归矩阵，覆盖：
+  - CoreBox Search：纯文本、`@provider`、clipboard 输入三类路径。
+  - Plugin Loader：packaged `dev.source` 回退、本地 dev 远程加载两类关键路径。
+- 新增 `search-core` 基线采样测试辅助文件，采集 `parse/providers/merge-rank` 三段耗时样例，并输出 `ROADMAP_06C_BASELINE` 结构化日志。
+- 输出三组基线数据样例，作为后续 06-A/06-B 重构后回归对照（不作为绝对 SLA）。
+- 新增 06-C 专项文档，记录回归矩阵、基线数据与复测命令。
+
+**测试**:
+- `npm exec --yes pnpm -- -C "apps/core-app" run typecheck:node`
+- `npm exec --yes pnpm -- -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts" "src/main/modules/plugin/plugin-loaders.test.ts" "src/main/modules/plugin/view/plugin-view-loader.test.ts"`
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts`
+- `docs/plan-prd/docs/COREBOX-ROADMAP-06C-REGRESSION-BASELINE.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Docs: Roadmap 任务01（TODO 现状校准）收口（CoreBox/Nexus）
+
+**变更类型**: 文档口径校准 / 优先级重排
+
+**描述**:
+- 清理 `TODO.md` 中“已落地但仍处于待实现语义”的混合标记，拆分为“已完成能力”与“真实剩余项”。
+- 新增 CoreBox/Nexus 优先级“变更前/后”对照，并将剩余执行顺序重排为：
+  - `SDK Hard-Cut E~F` → `v2.4.7 Gate D` → `v2.4.7 Gate E` → `View Mode 安全收口` → `Nexus 设备授权风控`。
+- 同步 `README.md` 与 `docs/INDEX.md` 导航入口，确保三处入口对齐同一状态口径。
+
+**修改文件**:
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 高标准交付（附件识别发送 / 可插拔存储 / 刷新续接 / Markdown 分块渲染）
+
+**变更类型**: 会话可靠性增强 / 多模态能力补齐 / 体验优化
+
+**描述**:
+- 附件上传链路升级为可插拔存储：
+  - 新增 `PilotAttachmentStorage` 抽象实现（`memory` + `R2`），`POST /uploads` 统一写入对象存储，不再只保留元数据。
+  - 新增本地 MinIO（S3 兼容）provider，支持 `s3://` ref 与签名/公网 URL 输出，解决本地联调模型无法访问内网附件 URL 的问题。
+  - 新增无 MinIO 回退：可配置 `attachmentPublicBaseUrl` 输出签名附件 URL（`/attachments/:id/content?exp&sig`），模型无需登录态即可回源读取。
+  - 新增本地私网上传门禁：若未配置 MinIO 且无可用公网 Base URL，`POST /uploads` 拒绝附件上传（避免模型侧无法读取附件）。
+  - 新增 Admin 存储配置后台：`/admin/storage` + `/api/pilot/admin/storage-config`（D1 持久化），支持运行时动态改 MinIO 与 Base URL 配置。
+  - 附件记录补齐 `previewUrl`，新增 `GET /attachments/:attachmentId/content` 二进制读取接口（鉴权 + 会话归属）。
+- 附件“识别发送”能力补齐：
+  - `stream` 会解析当前轮附件上下文并注入 runtime `TurnState.attachments`。
+  - 图片附件优先转为 `data URL` 并映射到多模态输入（`image_url` / `input_image`）。
+  - 非图片文件先按能力边界注入结构化元数据（name/mime/size/ref），暂不做通用文档 OCR 解析。
+- 刷新自动续接主路径落地：
+  - `POST /stream` 支持 `fromSeq + follow`，可先 replay 再 tail 新 trace 直到会话退出 `executing/planning`。
+  - 客户端断开默认不再立即 `pause`，服务端通过 `waitUntil` 保持后台推理继续执行。
+  - 前端会话切换/页面刷新时，若会话仍在执行中会自动发起追尾续接。
+- Markdown 流式观感优化：
+  - `assistant.delta` 改为分块刷新（120ms flush，遇换行/句末标点提前 flush）。
+  - `assistant.final` 到达时强制 flush 并做最终对齐。
+  - 最新 assistant 气泡增加轻量淡入，并对 `prefers-reduced-motion` 自动降级。
+
+**测试**:
+- `pnpm -C "apps/pilot" run test`
+- `pnpm -C "apps/pilot" run typecheck`
+- `pnpm -C "apps/pilot" run lint`
+- `pnpm -C "packages/tuff-intelligence" run lint`
+- `pnpm -C "packages/tuff-intelligence" exec tsc --noEmit`
+
+**修改文件**:
+- `apps/pilot/server/utils/pilot-attachment-storage.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/uploads.post.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/attachments/[attachmentId]/content.get.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/messages.get.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/index.delete.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/server/utils/__tests__/pilot-attachment-storage.test.ts`
+- `apps/pilot/app/composables/pilot-chat.types.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `packages/tuff-intelligence/src/protocol/session.ts`
+- `packages/tuff-intelligence/src/runtime/agent-runtime.ts`
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/INDEX.md`
+
+### CoreBox: touch-translation 链路收口与 View Mode 安全回归
+
+**变更类型**: 插件链路修复 / 安全回归
+
+**描述**:
+- 收口翻译插件三条入口链路：
+  - `fy`（`touch-translate`）保持 widget 翻译流程；
+  - `fy-multi`（`multi-source-translate`）回归到稳定 webcontent 路由加载；
+  - `s-fy`（`screenshot-translate`）补齐缺失 widget 文件并接入图片 OCR 文本解析流程。
+- 三条链路统一错误提示语义：权限拒绝、无输入、调用失败均使用统一前缀文案，避免各入口提示分裂。
+- 截图翻译新增明确失败提示：无图片输入、AI 权限拒绝、OCR 失败/无文本场景均返回可读错误信息，避免静默失败。
+- View Mode 安全回归：
+  - `plugin-view-loader` 增加本地路径越界拦截与路由规范化（兼容 `/path` 与 `#/path`）；
+  - 生产环境继续阻断远程 `http/https` 协议；
+  - 本地文件路径改为安全解析，禁止绝对路径逃逸插件目录。
+- `plugin-loaders` 增加生产环境 `dev.source` 降级：打包态强制回退本地资源，开发态保持 `dev.source` 远程流程不变。
+- 新增回归测试覆盖 `plugin-view-loader` 与 `plugin-loaders` 关键分支，防止协议阻断与 hash 路由逻辑再次回归。
+
+**修改文件**:
+- `plugins/touch-translation/index.js`
+- `plugins/touch-translation/index/main.ts`
+- `plugins/touch-translation/widgets/screenshot-translate.vue`
+- `apps/core-app/src/main/modules/plugin/view/plugin-view-loader.ts`
+- `apps/core-app/src/main/modules/plugin/view/plugin-view-loader.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox: Workflow Editor MVP（workflow.execute + workflow-agent 闭环）
+
+**变更类型**: Intelligence 能力补全 / 可视化执行闭环
+
+**描述**:
+- 新增 Intelligence 工作流编辑页（`/intelligence/workflows`），提供最小可用 Workflow Editor：
+  - 默认 3 步草稿，支持步骤新增/删除、`stepId/agentId/type/input(JSON)` 编辑。
+  - 支持 `continueOnError` 开关并直连 `workflow.execute`。
+- 基于现有 `workflow.execute + builtin.workflow-agent`，打通执行闭环：
+  - 页面通过 `useIntelligenceSdk().invoke('workflow.execute')` 统一调用层触发执行（无 legacy channel 直连）。
+  - 页面可触发执行并展示运行摘要（状态、success/failed/not-run 计数、traceId、latency、provider/model、tokens）。
+  - 支持每个 step 的成功/失败状态、错误信息与输出回显（含未执行步骤标识）。
+- JSON 输入校验升级为字段级可见错误（步骤索引 + 字段 + 失败原因），同时提供 inline 提示与 toast 提示，避免静默失败。
+- Step 输出回显增加安全序列化兜底（循环引用等异常场景不会中断页面渲染）。
+- Intelligence 首页入口补齐：在 `Cloud & Sharing` 区块新增 Workflow 入口。
+- 新增 `useWorkflowEditor` hook，统一承载步骤校验、JSON 解析、执行调用与结果状态管理。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceWorkflowPage.vue`
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/base/router.ts`
+- `apps/core-app/src/renderer/src/components/intelligence/IntelligenceFuture.vue`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox: touch-intelligence 升级为多轮上下文对话（兼容 ai/@ai/智能 指令）
+
+**变更类型**: 插件能力增强 / 交互可靠性修复
+
+**描述**:
+- `plugins/touch-intelligence` 新增按 `featureId` 的内存会话状态，自动携带最近对话上下文参与下一轮提问，支持连续追问。
+- 历史窗口固定上限 10 条，仅保留 `user/assistant` 业务消息并按“最旧优先淘汰”收敛；`system prompt` 不入历史，只在请求时注入一次。
+- AI 请求增加双重并发隔离（`requestId` + UI request guard）：仅当前活跃请求可落盘 UI 与历史，避免 stale response 覆盖最新 pending/ready。
+- `retry` 动作改为复用失败前最后一次成功上下文快照重放，失败轮次与 error item 均不会写入会话历史。
+- 保留 `copy-answer` 与 `retry` 动作行为，触发词与指令兼容性保持不变（`ai`/`@ai`/`/ai`/`智能`/`问答`）。
+
+**修改文件**:
+- `plugins/touch-intelligence/index.js`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox: 自定义壁纸链路收口（模式切换/入库同步/异常可见性）
+
+**变更类型**: 稳定性修复 / 回归可测性增强
+
+**描述**:
+- 收敛 `custom/folder/desktop` 模式切换链路：切换到 `custom/folder` 且未配置路径时，自动触发选择流程；用户取消选择时自动回退到上一模式，避免进入无效态。
+- 优化壁纸库 copy/sync 行为：开启 `sync` 时主动触发一次入库；`folder` 入库改为逐文件容错，跳过损坏或不可读文件并持续处理。
+- 主进程壁纸通道增加参数校验与错误返回（`wallpaper:get-desktop`、`wallpaper:copy-to-library`），并补充结构化日志，便于定位异常路径。
+- 渲染侧补充用户可见反馈：选择失败、桌面壁纸不可用、入库失败场景统一给出 toast 提示。
+- 修复文件夹轮播首帧索引问题（顺序模式首张不再被跳过），并补充空目录/加载失败日志。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue`
+- `apps/core-app/src/renderer/src/modules/layout/useWallpaper.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus: 通用 OAuth Client 申请（team admin / nexus admin）+ Pilot OAuth 多客户端兼容
+
+**变更类型**: 认证能力扩展 / 权限治理
+
+**描述**:
+- 新增通用 OAuth Client 申请与管理接口（Nexus Dashboard API）：
+  - `GET /api/dashboard/oauth/clients`
+  - `POST /api/dashboard/oauth/clients`
+  - `DELETE /api/dashboard/oauth/clients/:id`
+- Nexus Dashboard 左侧导航新增 `OAuth 应用` 入口，并落地页面 `GET /dashboard/oauth`（支持 scope 切换、创建、列表与吊销）。
+- 权限收敛：仅允许 `team admin`（组织团队 owner/admin）或 `nexus admin` 使用申请能力；普通用户与个人团队 owner 不可用。
+- 新增 OAuth Client 存储 `oauth_clients`（D1 自动建表）：
+  - 持久化 `client_id`、`client_secret_hash`、`redirect_uris`、owner scope（`team|nexus`）与状态字段。
+  - `client_secret` 仅在创建时返回一次，后续仅暴露 hint。
+- Pilot OAuth 端点升级为多客户端兼容：
+  - `GET /api/pilot/oauth/authorize` 保留 `pilot_web` 旧行为，同时支持已注册 `client_id`（按注册 `redirect_uris` 校验）。
+  - `POST /api/pilot/oauth/token` 保留 legacy header secret 路径，同时支持非 `pilot_web` 客户端通过 `client_secret` 换码。
+- 本地联调变量补齐：
+  - Pilot `.env.example` 增加 `PILOT_NEXUS_INTERNAL_ORIGIN` 与 `PILOT_NEXUS_OAUTH_SECRET`。
+
+**测试**:
+- 新增/更新测试：
+  - `apps/nexus/server/api/dashboard/oauth/__tests__/clients.post.test.ts`
+  - `apps/nexus/server/utils/__tests__/oauth-access.test.ts`
+  - `apps/nexus/server/api/pilot/oauth/__tests__/authorize.get.test.ts`
+  - `apps/nexus/server/api/pilot/oauth/__tests__/token.post.test.ts`
+
+**修改文件**:
+- `apps/nexus/server/utils/oauthClientStore.ts`
+- `apps/nexus/server/utils/oauthAccess.ts`
+- `apps/nexus/server/api/dashboard/oauth/clients.get.ts`
+- `apps/nexus/server/api/dashboard/oauth/clients.post.ts`
+- `apps/nexus/server/api/dashboard/oauth/clients/[id].delete.ts`
+- `apps/nexus/server/api/pilot/oauth/authorize.get.ts`
+- `apps/nexus/server/api/pilot/oauth/token.post.ts`
+- `apps/nexus/server/api/dashboard/oauth/__tests__/clients.post.test.ts`
+- `apps/nexus/server/utils/__tests__/oauth-access.test.ts`
+- `apps/nexus/server/api/pilot/oauth/__tests__/authorize.get.test.ts`
+- `apps/nexus/server/api/pilot/oauth/__tests__/token.post.test.ts`
+- `apps/pilot/.env.example`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-03-08
+
+### Pilot: Dev 环境 Nexus 回跳默认改为本地（避免本地误跳线上）
+
+**变更类型**: 认证链路修复 / 环境解析收敛
+
+**描述**:
+- 新增 `resolvePilotNexusOrigin` 专用解析逻辑，仅用于 Pilot -> Nexus 的授权与回调链路。
+- 开发环境（`NODE_ENV !== production`）默认使用 `http://127.0.0.1:3200`，并忽略 Cloudflare dev 注入的 `NUXT_PUBLIC_NEXUS_ORIGIN`，避免本地调试被 `wrangler.toml` 线上值覆盖。
+- 非开发环境保持线上默认 `https://tuff.tagzxia.com`，继续支持 `PILOT_NEXUS_INTERNAL_ORIGIN` 覆盖内部回调地址。
+- `apps/pilot/nuxt.config.ts` 的 `nexusOrigin` 默认值同步为“dev 本地 / prod 线上”。
+- 新增配置单测覆盖 dev/prod 优先级与 internal 回退顺序。
+
+**修改文件**:
+- `apps/pilot/server/utils/pilot-config.ts`
+- `apps/pilot/server/routes/auth/authorize.get.ts`
+- `apps/pilot/server/routes/auth/callback.get.ts`
+- `apps/pilot/server/utils/__tests__/pilot-config.test.ts`
+- `apps/pilot/nuxt.config.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 修复流式消息空格丢失与 final 重复拼接
+
+**变更类型**: 流式渲染缺陷修复
+
+**描述**:
+- 修复 `assistant.delta` 文本映射时错误 `trim()` 导致的 token 前导空格丢失（英文句子出现 `WhatcanIhelpyouwith` 这类连写）。
+- 修复 `assistant.final` 到达时与当前增量内容不一致的处理逻辑：由“追加”改为“覆盖”，避免出现“无空格版本 + 正常版本”重复展示。
+
+**修改文件**:
+- `packages/tuff-intelligence/src/business/pilot/types.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 登录页授权 + 访客可用 + 历史 3 天有效期
+
+**变更类型**: 登录体验调整 / 存储策略收敛
+
+**描述**:
+- Pilot 新增“先展示再授权”的登录页：`GET /auth/login` 不再自动跳转 Nexus，而是显示授权说明页，用户点击后走 `GET /auth/authorize` 发起授权。
+- OAuth 授权链路：`/auth/authorize -> Nexus /api/pilot/oauth/authorize -> /auth/callback`。
+- 页面不再强制登录拦截：未登录也可直接使用聊天能力。
+- 未登录用户历史改为绑定本地设备 ID（`pilot_device_id` cookie），ID 丢失则访客历史不可恢复。
+- 会话历史增加统一过期策略：按 `updated_at` 保留最近 3 天，超期会话及其消息/trace/checkpoint/附件自动清理。
+- 侧边栏新增“授权登录 Nexus”入口，用户可在访客模式下按需升级登录。
+
+**修改文件**:
+- `apps/pilot/server/routes/auth/login.get.ts`
+- `apps/pilot/server/routes/auth/authorize.get.ts`
+- `apps/pilot/server/middleware/require-pilot-page-auth.ts`
+- `apps/pilot/server/utils/pilot-device.ts`
+- `apps/pilot/server/utils/auth.ts`
+- `apps/pilot/server/utils/pilot-history.ts`
+- `apps/pilot/server/utils/pilot-store.ts`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `apps/pilot/server/utils/__tests__/auth.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot × Nexus: OAuth 授权码兑换（兼容 bridge secret）
+
+**变更类型**: 认证协议升级 / API 增强
+
+**描述**:
+- Nexus 新增 Pilot OAuth 端点：
+  - `GET /api/pilot/oauth/authorize`：校验 `client_id=pilot_web`、`redirect_uri` allowlist，登录后签发一次性 `code` 回跳。
+  - `POST /api/pilot/oauth/token`：Pilot 服务端带 shared secret 兑换 `code`，返回 `userId`。
+- Pilot 回调逻辑升级：
+  - `/auth/callback` 优先处理 OAuth `code + state`，服务端换取用户身份后写入 `pilot_auth_session`。
+  - `state` 使用 `pilot_oauth_state` cookie 校验，防止回调伪造。
+- 兼容策略：
+  - `/auth/callback` 保留 legacy `ticket` 回调兜底（迁移窗口兼容）。
+  - token 端点 secret 默认兼容 `PILOT_NEXUS_BRIDGE_SECRET`，可选独立 `PILOT_NEXUS_OAUTH_SECRET`。
+  - redirect allowlist 可通过 `PILOT_OAUTH_REDIRECT_ALLOWLIST` 覆盖，未配置使用内置安全默认值。
+
+**测试**:
+- 新增 Nexus OAuth API 单测：
+  - `apps/nexus/server/api/pilot/oauth/__tests__/authorize.get.test.ts`
+  - `apps/nexus/server/api/pilot/oauth/__tests__/token.post.test.ts`
+
+**修改文件**:
+- `apps/nexus/server/api/pilot/oauth/authorize.get.ts`
+- `apps/nexus/server/api/pilot/oauth/token.post.ts`
+- `apps/nexus/server/api/pilot/oauth/__tests__/authorize.get.test.ts`
+- `apps/nexus/server/api/pilot/oauth/__tests__/token.post.test.ts`
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/nuxt.config.ts`
+- `apps/pilot/server/routes/auth/authorize.get.ts`
+- `apps/pilot/server/routes/auth/callback.get.ts`
+- `apps/pilot/server/utils/pilot-oauth.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: Legacy Auth 全量移除 + Cloudflare 变量最小化
+
+**变更类型**: 认证收敛 / 部署配置治理
+
+**描述**:
+- Pilot 鉴权收敛为单路径：`requirePilotAuth` 仅接受签名会话 cookie `pilot_auth_session`。
+- 移除所有 legacy 兼容入口：`x-pilot-user-id`、`x-user-id`、`pilot_user_id`、`Bearer`、localhost dev bypass。
+- `GET /auth/callback` 停止写入 legacy `pilot_user_id` cookie，仅写新会话 cookie。
+- `apps/pilot/wrangler.toml` 改为最小变量集合：
+  - 固定 `NUXT_PUBLIC_NEXUS_ORIGIN=https://tuff.tagzxia.com`
+  - 保留 `NUXT_PILOT_BASE_URL`（其余走默认值）
+  - `PILOT_NEXUS_BRIDGE_SECRET` / `PILOT_COOKIE_SECRET` / `NUXT_PILOT_API_KEY` 统一走 Cloudflare secrets
+- 明确保留并绑定 Pilot 独立存储：
+  - D1：`tuff-pilot-preview` / `tuff-pilot-production`
+  - R2：`tuff-pilot-preview-attachments` / `tuff-pilot-production-attachments`
+
+**测试**:
+- 更新 `apps/pilot/server/utils/__tests__/auth.test.ts`：
+  - `session-cookie` 成功路径；
+  - 未登录 401；
+  - legacy header/cookie/bearer 输入不再放行。
+
+**修改文件**:
+- `apps/pilot/server/utils/auth.ts`
+- `apps/pilot/server/routes/auth/callback.get.ts`
+- `apps/pilot/server/utils/__tests__/auth.test.ts`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/.env.example`
+- `apps/pilot/wrangler.toml`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: Main 区域头部精简与 Trace 入口收敛
+
+**变更类型**: UI 体验优化
+
+**描述**:
+- 移除 `PilotChatWorkspace` 头部的会话标题与 session id 展示，主区聚焦消息与输入。
+- Trace 入口从文字按钮调整为右上角单图标按钮（仅保留一个入口控件）。
+- 收紧主区外层冗余边距：去除主容器额外 margin/宽度限制，减少无效 padding。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `apps/pilot/app/pages/index.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: Nexus 登录桥接 + 用户历史隔离保持 + Markdown 渲染 + 独立 Cloudflare 配置
+
+**变更类型**: 认证集成 / 体验改进 / 部署治理
+
+**描述**:
+- Nexus 新增 Pilot 登录桥接票据能力：
+  - `POST /api/pilot/auth/bridge-ticket`（需 Nexus 登录态）签发 60s 一次性票据。
+  - `POST /api/pilot/auth/bridge-consume`（共享密钥校验）消费票据并返回用户身份。
+  - `GET /api/pilot/auth/bridge-start` 作为浏览器登录入口：未登录时跳转 `sign-in`，登录后签发票据并重定向回 Pilot 回调地址。
+- Pilot 新增登录桥接流程：
+  - `GET /auth/login` 首版阶段为直接跳转 Nexus 登录桥接入口（后续改为“授权说明页 + 手动点击”）。
+  - `GET /auth/callback` 消费票据并写入新会话 cookie 后回跳目标页面（legacy 写入策略已在同日后续迭代移除，见上方“Legacy Auth 全量移除”）。
+  - 页面级 server middleware 首版为未认证自动重定向（后续已改为“访客可用 + 手动授权”，见上方“登录页授权 + 访客可用”）。
+- `requirePilotAuth` 在首版桥接阶段采用“新优先、旧兼容”；该兼容路径已在同日后续迭代移除，当前仅保留 `pilot_auth_session`。
+- 聊天渲染改为 Markdown：`PilotChatWorkspace` 的 `TxChatList` 开启 `:markdown=\"true\"`，沿用 tuffex sanitize 默认策略。
+- Cloudflare 独立部署能力：
+  - 新增 `apps/pilot/wrangler.toml`，与根 wrangler 配置解耦。
+  - `apps/pilot/package.json` 的 `preview:cf/deploy:cf` 强制使用 Pilot 专属 config 与 project-name（`tuff-pilot`）。
+  - Nuxt Cloudflare Dev 配置改为读取 `apps/pilot/wrangler.toml`。
+
+**测试**:
+- 新增 Nexus API 单测：
+  - `bridge-ticket.post.test.ts`（签发/TTL/禁用用户）
+  - `bridge-consume.post.test.ts`（密钥校验/过期票据/禁用用户）
+- 新增 Pilot 鉴权单测：
+  - `auth.test.ts`（session-cookie 路径与未登录拒绝）
+
+**修改文件**:
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/api/pilot/auth/bridge-ticket.post.ts`
+- `apps/nexus/server/api/pilot/auth/bridge-consume.post.ts`
+- `apps/nexus/server/api/pilot/auth/bridge-start.get.ts`
+- `apps/nexus/server/api/pilot/auth/__tests__/bridge-ticket.post.test.ts`
+- `apps/nexus/server/api/pilot/auth/__tests__/bridge-consume.post.test.ts`
+- `apps/nexus/nuxt.config.ts`
+- `apps/pilot/server/utils/pilot-session.ts`
+- `apps/pilot/server/utils/auth.ts`
+- `apps/pilot/server/middleware/require-pilot-page-auth.ts`
+- `apps/pilot/server/routes/auth/login.get.ts`
+- `apps/pilot/server/routes/auth/callback.get.ts`
+- `apps/pilot/server/utils/__tests__/auth.test.ts`
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `apps/pilot/package.json`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/wrangler.toml`
+- `apps/pilot/.env.example`
+- `apps/pilot/vitest.config.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/INDEX.md`
+
+### Pilot: DeepAgent 真增量流式渲染修复 + Legacy 兼容梳理
+
+**变更类型**: 流式体验修复 / 兼容治理
+
+**描述**:
+- 修复 Pilot “回答需等待全部生成后才一次性渲染”的问题：
+  - `DeepAgentLangChainEngineAdapter` 新增 `runStream()`，通过 `deepagents` 的 LangGraph `streamMode: 'messages'` 持续产出 assistant 增量片段。
+  - `AbstractAgentRuntime` 支持优先消费 `engine.runStream()`，保持老 `run()` 路径兼容回退。
+  - 当上游流式不可用时自动回退到原 `run()` 单次输出，避免破坏既有运行链路。
+- 前端补齐 `assistant.final` 去重拼接策略，避免“增量 + final”双写造成内容重复。
+- 形成本轮 Legacy 兼容面清单（旧接口保留 + 新接口补齐）：
+  - 旧 `intelligence:agent:session:stream` 继续保留查询语义。
+  - 新 `intelligence:agent:session:subscribe` 承担实时推流。
+  - trace `seq` 与 `fromSeq` 续播保持向后兼容（老 trace 无 `seq` 自动补齐）。
+
+**修改文件**:
+- `packages/tuff-intelligence/src/adapters/engine.ts`
+- `packages/tuff-intelligence/src/runtime/agent-runtime.ts`
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Intelligence × Pilot: 会话流式推送统一（兼容版）
+
+**变更类型**: 架构收敛 / 流式能力增强
+
+**描述**:
+- 保持 `intelligence:agent:session:stream` 兼容语义（一次性 trace 查询）不变。
+- 新增 `intelligence:agent:session:subscribe`，基于 Transport `stream/onStream` 提供 Core-App 侧真推流能力。
+- Core Runtime trace 增补单调 `seq`，`queryTrace(fromSeq)` 从“数组下标切片”收敛为“按 `seq` 过滤”，并兼容老会话（无 `seq` 自动补齐）。
+- 新增会话级 trace 订阅器（subscribe/unsubscribe），实时推送 trace 事件并支持断开资源释放。
+- Core stream 链路补齐生命周期事件：`stream.started`、`replay.started/finished`、`stream.heartbeat`、`done`。
+- 客户端断开时，若会话仍在运行态，自动写入 `paused_disconnect`。
+- Nexus `intelligence-agent/session/stream` keepalive 补齐 `stream.heartbeat` 事件语义（保留原有注释 heartbeat 兼容）。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/ai/tuff-intelligence-runtime.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `apps/nexus/server/api/admin/intelligence-agent/session/stream.post.ts`
+- `packages/utils/transport/sdk/domains/intelligence.ts`
+- `packages/tuff-intelligence/src/transport/sdk/domains/intelligence.ts`
+- `packages/utils/types/intelligence.ts`
+- `packages/tuff-intelligence/src/types/intelligence.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+- `apps/core-app/src/main/modules/ai/tuff-intelligence-runtime.test.ts`
+- `docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus: 组件文档页性能修复与无效导入清理
+
+**变更类型**: 性能优化 / 稳定性修复
+
+**描述**:
+- 清理 `apps/nexus/content/docs/dev/components/*.mdc` 中无效导入，移除仅包含 import 的 `<script setup>`（共 58 个组件文档文件），降低组件文档解析与首屏执行负担。
+- `DocsSidebar` 组件页元数据查询改为最小字段读取（`path/title/category/meta/syncStatus/verified`），并在 `useAsyncData.transform` 预处理 `_normalizedPath/_meta/_syncStatus`，将后续计算收敛为轻量分组与排序。
+- `docs/[...slug].vue` 代码块增强链路增加 `data-code-enhanced` 幂等标记，并收敛为单次调度（timer/raf 去重 + 卸载清理），减少切页重复扫描。
+- `highlight.client.ts` 跳过 `.tuff-code-block__code` 节点并增加同帧调度去重，避免与页面内代码块高亮重复重扫。
+- `docs` 布局抽屉内容改为按需挂载（仅可见时挂载 `DocsSidebar/DocsOutline`），降低隐藏态实例开销。
+- 修复 `GradualBlurAnimatedDemo` 的 `wheel` 监听与 timeout 清理，避免 demo 组件反复挂载造成监听泄漏。
+
+**修改文件**:
+- `apps/nexus/content/docs/dev/components/*.mdc`
+- `apps/nexus/app/components/DocsSidebar.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/plugins/highlight.client.ts`
+- `apps/nexus/app/layouts/docs.vue`
+- `apps/nexus/app/components/content/demos/GradualBlurAnimatedDemo.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 会话切换路由参数同步 + 标题溢出 Tooltip
+
+**变更类型**: 体验优化 / 导航可恢复性增强
+
+**描述**:
+- 会话切换时将当前 `sessionId` 同步到页面路径参数（query），支持刷新或分享链接后恢复到目标会话。
+- 页面初始化时优先读取路径参数中的 `sessionId`，若存在且有效则直接定位该会话。
+- 会话列表标题改为 `TxTooltip` 悬浮提示，保留单行省略（ellipsis）样式，hover 显示完整标题。
+
+**修改文件**:
+- `apps/pilot/app/pages/index.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core App: 修复 tuff-intelligence 在主进程运行时的 ESM 导入失败
+
+**变更类型**: 缺陷修复 / 构建配置收敛
+
+**描述**:
+- 修复 Core App 启动时 `ERR_MODULE_NOT_FOUND`（`@talex-touch/tuff-intelligence` -> `src/adapters/index`）问题。
+- 根因是主进程将 `@talex-touch/tuff-intelligence` externalize 后，Node 运行时直接加载 TS ESM 源码并触发无扩展名相对导入解析失败。
+- 在 `electron-vite` 的 `main/preload` 配置中将该 workspace 包加入 `exclude`，确保由构建器打包处理，避免运行时 ESM 解析差异。
+
+**修改文件**:
+- `apps/core-app/electron.vite.config.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: SSE 可观测性增强 + DeepAgent 风格阶段事件 + 默认模型升级
+
+**变更类型**: 功能增强 / 可靠性修复
+
+**描述**:
+- 修复 Pilot 多轮对话 trace `seq` 冲突问题（按会话 `lastSeq` 续号），避免第二轮写入唯一索引冲突。
+- `POST /api/pilot/chat/sessions/:sessionId/stream` 增强：
+  - 首帧 `stream.started`，避免“长时间无事件返回”。
+  - 新增阶段事件：`planning.started` / `planning.updated` / `planning.finished`、`turn.started` / `turn.finished`、`replay.started` / `replay.finished`。
+  - 新增 `run.audit`，透传上游调用审计（request / response / network_error / response_error）。
+  - `error` 事件补充结构化 `detail`（phase、endpoint、status、stack/cause）。
+- DeepAgent 最小封装迁入 `@talex-touch/tuff-intelligence`：
+  - 新增 `DeepAgentLangChainEngineAdapter`，Pilot 不再内联拼装 `/v1/responses` 请求。
+  - `DeepAgentAuditRecord` / `DeepAgentErrorDetail` / `toDeepAgentErrorDetail` 由 intelligence 包统一输出。
+  - `DeepAgentLangChainEngineAdapter` 改为通过 `deepagents.createDeepAgent` 运行（非手写 fetch loop），并按 `claude-relay-service` 约定归一化上游地址：
+    - 配置 `base_url=http://localhost:3000/openai` 时，运行时自动转换为 LangChain 所需的 `http://localhost:3000/openai/v1`。
+    - 仍兼容完整 `responses` 地址（如 `.../openai/v1/responses`）输入，统一收敛到 DeepAgent + ChatCompletions 通道。
+  - 针对上游 `socket hang up / 长时间无响应` 增加请求级超时保护（默认 25s/次），两次重试后返回结构化 `504 Gateway Timeout`，避免 SSE 长时间仅 keepalive 无结果。
+  - 新增 `proxy: false` 网络执行策略：在 Pilot runtime 调用链中禁用 `HTTP_PROXY/HTTPS_PROXY/ALL_PROXY`，并强制注入 `NO_PROXY=localhost,127.0.0.1,::1`，用于排除本机 upstream 误走系统代理。
+  - Pilot 上游配置改为本地 `.env` 驱动：
+    - 移除 `nuxt.config.ts` 与 `pilot-runtime.ts` 内置 API Key / endpoint 硬编码。
+    - 新增 `apps/pilot/.env.example`（`NUXT_PILOT_*`）用于本地配置渠道、预算、重试与 proxy 策略。
+  - 进一步精简环境变量：Pilot AI 渠道仅保留 `NUXT_PILOT_BASE_URL` / `NUXT_PILOT_API_KEY` / `NUXT_PILOT_MODEL`（默认 baseUrl 为 `http://localhost:3000/openai`），删除 `endpoint/upstreamChat` 入口，减少配置歧义。
+- Pilot 前端 Trace 抽屉增强：展示 `run.audit` 和结构化错误详情；流结束后按增量 trace 合并，避免覆盖流内审计事件。
+- 默认模型升级为 `gpt-5.4`（Nuxt runtimeConfig + runtime fallback）。
+
+**修改文件**:
+- `packages/tuff-intelligence/src/runtime/agent-runtime.ts`
+- `apps/pilot/server/utils/pilot-runtime.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/nuxt.config.ts`
+- `docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`
+
+### Pilot: 页面层优先复用 tuffex 组件
+
+**变更类型**: UI 架构收敛 / 组件复用
+
+**描述**:
+- Pilot 聊天页从自定义原生控件切换为优先使用 `@talex-touch/tuffex` 组件，统一视觉与交互语义。
+- 保持现有行为约束不变：
+  - 页面整体不滚动；
+  - 中间聊天区全高撑开；
+  - 输入区固定底部；
+  - Trace 通过按钮打开右侧抽屉并在抽屉内滚动。
+
+**主要变更**:
+1. 引入并接入 `TxButton`、`TxChatList`、`TxChatComposer`、`TxDrawer`、`TxEmptyState`、`TxStatusBadge`、`TxTag`、`TxTypingIndicator`。
+2. `apps/pilot` 引入 `@talex-touch/tuffex` 依赖，并在 Nuxt 配置中补齐样式、transpile 与 workspace source alias。
+3. 会话列表状态徽标、消息列表、输入区、Trace 抽屉与空状态全部切换到 tuffex 组件实现。
+4. 扩展 `TxChatComposer`，新增“附件+输入一体化”能力（附件列表、附件按钮、左侧工具栏插槽），Pilot 底部输入区改为统一 Composer，不再分离独立附件区。
+5. `TxChatComposer` 新增 `toolbar` 具名插槽，Pilot 通过插槽实现类似 Web 搜索模式的底部操作条（附件入口 + 模式/搜索项 + 右侧语音圆按钮）。
+
+**修改文件**:
+- `apps/pilot/package.json`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/app/pages/index.vue`
+- `packages/tuffex/packages/components/src/chat/src/types.ts`
+- `packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue`
+- `packages/tuffex/packages/components/src/chat/index.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 聊天页空态与底部输入区视觉修正
+
+**变更类型**: UI 缺陷修复 / 体验一致性优化
+
+**描述**:
+- 修复 Pilot 聊天页“视觉怪异”问题：消息空态由 `blank-slate` 插画改为 `custom + card` 轻量空态，避免大插画在主聊天区造成视觉突兀。
+- 收敛底部输入区层次：降低透明叠层感，增强 Composer 与工具按钮对比度，保留“附件 + 输入一体化”结构。
+- Trace 抽屉内部滚动行为补齐：右侧 Trace 内容区改为独立滚动，避免内容增长时影响整体布局观感。
+
+**主要变更**:
+1. 消息区空态替换为 `TxEmptyState(variant=custom, surface=card)`，并限制空态区域宽度与居中布局。
+2. 聊天区消息容器增加 `overflow: hidden`，继续保证“整页不滚动、仅局部滚动”。
+3. 底部 Dock 与 `TxChatComposer` 背景/边框/阴影调优，工具栏与按钮增加 hover/对比度优化。
+4. Trace 内容区增加 `flex: 1 + overflow: auto`，确保抽屉内滚动稳定。
+
+**修改文件**:
+- `apps/pilot/app/pages/index.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 首页结构拆分（左侧/中间组件 + 页面 composable）
+
+**变更类型**: 架构整理 / 可维护性提升
+
+**描述**:
+- 将 Pilot 首页从单文件大组件拆分为“页面组装层 + 左侧会话组件 + 中间聊天组件 + 逻辑 composable”，降低页面耦合并便于后续迭代。
+- 保持现有行为与交互不变：双栏布局、整页不滚动、消息区独立滚动、底部输入固定、Trace 右侧抽屉。
+
+**主要变更**:
+1. 抽离左侧会话区组件 `PilotSessionsPanel`，承载会话列表渲染与交互事件。
+2. 抽离中间聊天区组件 `PilotChatWorkspace`，承载消息区、底部一体化输入、Trace 抽屉与附件选择器。
+3. 新增 `usePilotChatPage` composable，统一收敛会话状态、SSE 流处理、消息发送、附件上传、标题总结与回放逻辑。
+4. 新增 `pilot-chat.types.ts` 统一页面与组件共享类型，减少页面内联类型噪音。
+5. `index.vue` 收敛为布局组装层，仅负责连接 props / emits / v-model。
+
+**修改文件**:
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `apps/pilot/app/composables/pilot-chat.types.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 移除聊天头部冗余控制按钮
+
+**变更类型**: 交互收敛 / 界面简化
+
+**描述**:
+- 移除右上角“补播恢复”“停止”按钮，头部仅保留 `Trace` 入口，避免与底部恢复入口重复。
+- 清理对应页面事件与 composable 中不再使用的 `stop` 流程，减少无效代码路径。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 页面版式收敛（间距清理 + 响应式比例 + 内容居中）
+
+**变更类型**: UI 布局优化 / 响应式适配
+
+**描述**:
+- 清理 Pilot 页面多余 `margin/padding`，统一左右栏与聊天区间距节奏，降低视觉拥挤与空洞并存问题。
+- 左右栏比例调整为更接近 ChatGPT 的宽度关系：左侧固定范围收敛，右侧主区域获得更稳定的阅读空间。
+- 右侧聊天区新增居中壳层并限制最大宽度，兼容大屏与中屏，避免内容“贴边拉长”。
+
+**主要变更**:
+1. `pilot-page` 网格列调整为 `clamp(248px, 19vw, 292px) + 1fr`。
+2. `PilotChatWorkspace` 新增 `pilot-chat__shell`，右侧内容采用 `margin-inline: auto` 居中并设置最大宽度限制。
+3. 聊天区与会话区统一收敛内边距、间距和卡片密度，减少多余空白。
+4. 补充 `1200px / 960px` 响应式细化，确保不同屏幕下布局稳定。
+
+**修改文件**:
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 输入区收敛（底部锚定 + 隐藏预留功能按钮）
+
+**变更类型**: 交互优化 / 功能收敛
+
+**描述**:
+- 修复输入区视觉与布局问题：输入框高度收敛、底部区域稳定锚定，避免输入区显得“过高/漂浮”。
+- 底部预留能力按钮暂时隐藏：移除 `Pro/Search/Mic/语音` 相关展示，仅保留“附件 + 发送”的核心输入能力。
+- 恢复按钮仅在 paused 状态展示，常态下不再占位，保证输入区贴底观感。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: Composer 紧凑化修正（高度与底部贴合）
+
+**变更类型**: UI 缺陷修复 / 版式修正
+
+**描述**:
+- 针对输入区仍显过高的问题，进一步收敛 `TxChatComposer` 的内边距、间距与 textarea 初始高度。
+- 聊天壳层补充 `height: 100%`，确保输入区在不同屏幕下稳定贴底。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 左侧会话区文本化展示
+
+**变更类型**: UI 收敛 / 信息层级简化
+
+**描述**:
+- 按需求将左侧会话区调整为纯文本表达，移除状态徽章组件展示。
+- 会话列表由卡片样式收敛为文本行样式，仅保留标题、状态文本、更新时间与会话元信息。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 左侧列表状态文案精简与边框语义
+
+**变更类型**: UI 规则收敛
+
+**描述**:
+- 左侧会话列表不再显示 `id` 和状态文案（如 `completed`），保持纯文本列表简洁性。
+- 状态反馈改为边框语义：
+  - `failed` 使用红色边框；
+  - `completed` 使用蓝色边框。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 左侧列表极简化（隐藏时间 + 尾部状态点 + Hover 删除）
+
+**变更类型**: UI 细节优化
+
+**描述**:
+- 左侧会话列表进一步简化，不再展示时间信息。
+- 默认无边框；状态反馈由边框改为尾部指示点（该阶段语义，后续已统一为“通知蓝点”语义）。
+- 删除按钮改为仅在列表项 hover/focus 时显示，常态下不干扰文本阅读。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 会话完成通知蓝点（独立通知接口）
+
+**变更类型**: 功能增强 / 交互语义修正
+
+**描述**:
+- 蓝点语义调整为“通知”而非状态：仅在“用户发起新消息并完成后”置位。
+- 新增独立通知接口用于读取/清除会话通知状态，前端不再依赖会话状态文案推断蓝点。
+- 左侧列表蓝点改为读取通知字段；点击进入会话后调用通知接口清除蓝点。
+- 当前正在查看的会话会自动清除 `unread`，不展示蓝点；仅离开当前会话后再收到完成通知时显示蓝点。
+
+**新增接口**:
+- `GET /api/pilot/chat/sessions/notifications`
+- `POST /api/pilot/chat/sessions/:sessionId/notification`
+
+**修改文件**:
+- `packages/tuff-intelligence/src/store/store-adapter.ts`
+- `packages/tuff-intelligence/src/store/d1-runtime-store.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/notifications.get.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/notification.post.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/app/composables/pilot-chat.types.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 右侧主区内部滚动收敛
+
+**变更类型**: 交互一致性优化
+
+**描述**:
+- 右侧聊天主区改为容器内部纵向滚动，避免页面级滚动。
+- 保持主布局 100vh 锁定，滚动行为限定在右侧内容区域。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 主题变量收敛（tuffex token）+ 系统亮暗自动切换
+
+**变更类型**: 视觉一致性优化 / 主题适配增强
+
+**描述**:
+- Pilot 首页与左右栏样式中硬编码颜色收敛为 `tuffex` CSS 变量（`--tx-*`），减少页面私有色值分叉。
+- 页面背景、边框、文本、消息气泡、输入区与 Trace 面板统一改为 token 驱动。
+- 新增系统亮暗模式自动跟随：基于 `prefers-color-scheme` 自动设置 `html[data-theme]`，并在系统主题变化时实时切换。
+
+**修改文件**:
+- `apps/pilot/app/app.vue`
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 渠道配置极简化（仅 BASE_URL + API_KEY）与读取修复
+
+**变更类型**: 配置收敛 / 缺陷修复
+
+**描述**:
+- 修复 `api key is not configured` 误报：`pilot-runtime` 改为多层读取顺序（`runtimeConfig -> Cloudflare env -> process.env`），避免本地 `.env` 或 worker env 已配置但运行时读空。
+- Pilot 配置入口收敛为仅两项：
+  - `NUXT_PILOT_BASE_URL`
+  - `NUXT_PILOT_API_KEY`
+- 移除 proxy/no-proxy/model 等 env 入口，默认模型固定 `gpt-5.4`（代码常量）。
+- 移除历史兼容键名与回退：`PILOT_*`、`NUXT_PILOT_UPSTREAM_RESPONSES_*` 不再生效。
+- 移除 `Authorization` 头作为 API Key 的回退来源，统一只使用配置项 `NUXT_PILOT_API_KEY`。
+- `@langchain/openai` 升级至支持 Responses API 的版本，并在 DeepAgent `ChatOpenAI` 中启用 `useResponsesApi`，默认直接走 `/v1/responses`。
+- 新增 `packages/tuff-intelligence/src/business/pilot/*`，将 `planning / run.metrics / replay` 流式编排逻辑从 `apps/pilot` 下沉到 intelligence 包。
+- Pilot 心跳改为 SSE 内部事件（`stream.heartbeat`），前端移除额外 `/heartbeat` 请求链路。
+- `appendTrace + seq 冲突重试 + emit` 下沉到 `business/pilot/emitter.ts`，`stream.post.ts` 收敛为传输层编排。
+- `toJsonSafe/toSafeRecord/stream error detail` 统一下沉到 `packages/tuff-intelligence/src/business/pilot/utils.ts`，`stream.post.ts` 不再内联同类实现。
+- 彻底清理前端历史 heartbeat 残留（`postHeartbeat/startHeartbeat/stopHeartbeat` 与计时器状态），仅保留 SSE 内置 `stream.heartbeat`。
+- 修复流式文本拼接失真：assistant delta 不再按片段 `trim`，保留空格与换行。
+- 修复 replay-only 写入副作用：`fromSeq` 只读补播场景不再新增 `stream.started/replay.* /done/error` trace 记录。
+- 删除 `POST /api/pilot/chat/sessions/:sessionId/heartbeat` 路由入口。
+- `DeepAgent` 适配层移除 proxy 注入链路与 upstream chat fallback 分支，仅保留 relay baseUrl 路径，减少配置歧义。
+- 新增根忽略规则：`apps/pilot/.env`，避免本地密钥误提交。
+
+**修改文件**:
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/server/utils/pilot-runtime.ts`
+- `apps/pilot/.env.example`
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `packages/tuff-intelligence/src/business/pilot/{stream.ts,types.ts,emitter.ts,utils.ts}`
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `.gitignore`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot 下一阶段执行文档落地（测试优先 + OAuth + CLI + channel routing）
+
+**变更类型**: 文档规划 / 执行顺序收敛
+
+**描述**: 基于 Pilot 首版上线状态，新增下一阶段执行文档，明确后续按“测试优先”推进，并串联 Nexus OAuth 登录、`tuff-pilot-cli` 与后端渠道可配置能力，作为后续实现统一入口。
+
+**主要变更**:
+1. 新增文档 `docs/plan-prd/docs/PILOT-NEXUS-OAUTH-CLI-TEST-PLAN.md`。
+2. 固化硬顺序：`T0 测试 -> T1 OAuth -> T2 CLI -> T3 channel routing`。
+3. 补充阶段门禁（Gate A-D）与非目标边界，避免本轮任务扩散。
+
+**修改文件**:
+- `docs/plan-prd/docs/PILOT-NEXUS-OAUTH-CLI-TEST-PLAN.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot dev 启动稳定性修复（Nuxt Cloudflare + checker）
+
+**变更类型**: 开发体验修复 / 配置收敛
+
+**描述**: 修复 `apps/pilot` 在 `nuxt dev` 下因 `vite-plugin-checker` 触发 `typescript/lib/typesMap.json` 拷贝失败导致的启动异常；同时修正 Cloudflare dev 的兼容日期配置入口。
+
+**主要变更**:
+1. `apps/pilot/nuxt.config.ts` 将 `compatibilityDate` 提升到 Nuxt 顶层并更新到 `2026-03-08`。
+2. `apps/pilot/nuxt.config.ts` 关闭 dev 内置 `typescript.typeCheck`，改为通过 `pnpm pilot:typecheck` 独立执行类型检查。
+
+**修改文件**:
+- `apps/pilot/nuxt.config.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot 本地联调通路补齐（Cloudflare 绑定 + 内置 Responses mock upstream）
+
+**变更类型**: 本地联调能力增强 / 测试配置落地
+
+**描述**: 为 Pilot 测试阶段补齐本地可用链路。`nuxt dev` 在 cloudflare-dev 模式下显式复用根 `wrangler.toml`（含 D1/R2 绑定与持久化目录）；同时内置固定 Responses upstream（用户提供的 mock 地址与 token），让 Chat 流程可直接联调。
+
+**主要变更**:
+1. `apps/pilot/nuxt.config.ts` 新增 `nitro.cloudflareDev`（`configPath` + `persistDir` + `environment`），本地调试可读取 `DB` 绑定并持久化到 `.wrangler/state/v3`。
+2. `apps/pilot/server/utils/pilot-runtime.ts` 增加 OpenAI Responses 请求路径（`/v1/responses`）与多格式响应文本提取逻辑。
+3. Pilot runtime config 增加内置 `upstreamResponsesBaseUrl` / `upstreamResponsesApiKey` / `upstreamResponsesModel` 默认值，用于本地 mock 联调。
+4. `apps/pilot/server/utils/pilot-store.ts` 附件桶读取增加 `R2` fallback（兼容根 wrangler 绑定名）。
+5. `apps/pilot/types/cloudflare-env.d.ts` 增加 `R2` 绑定类型声明。
+
+**修改文件**:
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/server/utils/pilot-runtime.ts`
+- `apps/pilot/server/utils/pilot-store.ts`
+- `apps/pilot/types/cloudflare-env.d.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-03-07
+
+### Pilot（Nuxt Edge）上线首版 + Intelligence Hard-Cut 收口
+
+**变更类型**: 新增应用 / 架构收口 / 协议落地
+
+**描述**: 新增 `apps/pilot` 作为独立部署的 AI Chat-first 应用，并将 Agent Runtime/Protocol 核心统一收口到 `packages/tuff-intelligence`。Pilot 服务端采用 SSE + checkpoint/replay 模式，具备长会话断线恢复的基础能力。
+
+**主要变更**:
+1. 新建 `apps/pilot`（Nuxt + `cloudflare-pages` preset），实现会话、消息、trace、heartbeat、pause、upload、stream API。
+2. 新增 `POST /api/pilot/chat/sessions/:sessionId/stream`，支持 `assistant.delta/final`、`run.metrics`、`session.paused`、`error`、`done` 与 `fromSeq` 补播。
+3. 新增 Pilot 前端 V1 聊天页：会话列表、消息流、附件上传、停止、补播恢复、Trace 抽屉。
+4. `tuff-intelligence` Runtime 增强：会话历史注入、trace `seq` 写回 envelope `meta`、周期 checkpoint。
+5. 全仓清理旧 Intelligence 直连：移除 `@talex-touch/utils/intelligence*` 外部依赖，核心改用 `@talex-touch/tuff-intelligence`。
+6. `packages/utils` 切断 Intelligence 聚合导出（root/types/renderer/hooks/plugin-sdk/transport-domain）。
+7. 根脚本补齐 `pilot:dev`、`pilot:build`、`pilot:typecheck`、`pilot:lint`。
+
+**修改文件（核心）**:
+- `apps/pilot/**`
+- `packages/tuff-intelligence/src/runtime/agent-runtime.ts`
+- `packages/tuff-intelligence/src/{client.ts,index.ts,transport/**,store/**,protocol/**}`
+- `apps/core-app/src/main/modules/ocr/ocr-service.ts`
+- `apps/core-app/src/renderer/src/components/intelligence/**`
+- `apps/core-app/tuff/modules/plugins/touch-translation/shared/tuffintelligence.ts`
+- `packages/utils/index.ts`
+- `packages/utils/types/index.ts`
+- `packages/utils/renderer/index.ts`
+- `packages/utils/renderer/hooks/index.ts`
+- `packages/utils/plugin/sdk/index.ts`
+- `packages/utils/transport/sdk/domains/index.ts`
+- `package.json`
+- `scripts/check-intelligence-no-todo.mjs`
+
+### 主进程退出链路 + Tray/设置事件重构
+
+**变更类型**: 架构重构 / 稳定性修复 / 公共事件收敛
+
+**描述**: 针对开发环境高频崩溃链路（`Object has been destroyed` + 异常退出 + native hook fatal）进行一次性收敛。退出流程改为“标准 quit 优先、超时兜底强退”，并将 Tray 相关设置通道从旧 `TrayEvents` 迁移到 `AppEvents.system.*`，同时收敛模块监听生命周期。
+
+**主要变更**:
+1. `DevProcessManager` 改为两阶段退出：先 `app.quit()` 走标准卸载链路，5 秒超时后再执行强制清理并 `process.exit(1)`；正常路径不再主动 `process.exit(0)`。
+2. `ModuleManager` 新增幂等 `unloadAll(reason)`，`BEFORE_APP_QUIT` 统一走该入口，避免重复 unload 与竞态。
+3. Tray 模块改为启动时按 `appSetting.setup.experimentalTray` 动态加载；关闭实验开关时 Tray 模块完全不进入运行态。
+4. `TrayManager` 增加统一 listener disposer 管理（`app/window/eventbus`），并在窗口激活/显示链路补齐 destroyed guard。
+5. `AddonOpenerModule` 补齐 `app.on` 与 transport handler 的集中释放机制，减少退出期回调悬挂风险。
+6. 移除旧 `TrayEvents` 通道，新增 `AppEvents.system.autoStartGet/autoStartUpdate/traySettingsGet/traySettingsUpdate`，并在 `CommonChannel` 常驻注册处理。
+7. 渲染端设置页与引导页全部迁移到新 system 事件；`experimentalTray=false` 时隐藏 `showTray/hideDock` UI 开关，`autoStart` 保持可用。
+8. OmniPanel 在 `BEFORE_APP_QUIT` 提前执行 `cleanupInputHook`，降低 `uiohook-napi` 退出竞态。
+
+**修改文件（核心）**:
+- `apps/core-app/src/main/utils/dev-process-manager.ts`
+- `apps/core-app/src/main/core/module-manager.ts`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+- `apps/core-app/src/main/modules/addon-opener.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/events/types/app.ts`
+- `packages/utils/transport/events/types/index.ts`
+- `packages/utils/transport/sdk/domains/settings.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingWindow.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Done.vue`
+- `apps/core-app/src/main/core/module-manager.test.ts`
+- `apps/core-app/src/main/utils/dev-process-manager.test.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.test.ts`
+
+## 2026-03-05
+
+### Nexus Auth 路由在 Cloudflare 环境 500 修复
+
+**变更类型**: 缺陷修复 / 线上可用性恢复
+
+**描述**: 修复 Nexus 在 Cloudflare Pages/Worker 环境下，`/api/auth/*` 全部返回 500 的问题。根因是 auth 路由静态引入 `next-auth/providers/email`，会连带 `nodemailer` 进入 Worker 运行时并导致初始化失败。
+
+**主要变更**:
+1. 移除 `server/api/auth/[...].ts` 对 `next-auth/providers/email` 的静态导入，避免 Worker 侧加载 Node 邮件依赖。
+2. 在 auth 路由内使用轻量 email provider（仅声明 `email` 类型和 `sendVerificationRequest`），保持现有邮件登录流程与 `sendEmail` 能力不变。
+3. 仅在 `AUTH_EMAIL_SERVER` 与 `AUTH_EMAIL_FROM` 同时存在时注册 email provider，行为与原有门控保持一致。
+
+**修改文件**:
+- `apps/nexus/server/api/auth/[...].ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-03-04
+
+### Nexus 官网同步：性能落地公告与文档入口
+
+**变更类型**: 官网内容同步 / 发布可见性增强
+
+**描述**: 将本轮 Core App 的数据库写压治理与统计降频优化同步到 Nexus 官网。新增中英文性能落地文档，并在公开更新流注入一条官方公告，确保用户可在 `/updates` 第一时间看到性能升级说明并跳转详情。
+
+**主要变更**:
+1. `/api/updates` 数据源新增官方公告注入（中英文标题与摘要），并按 `id` 去重，避免与后台写入数据冲突。
+2. 公告类型设为 `announcement`，覆盖 `RELEASE/BETA/SNAPSHOT`，默认对 web/system 双端可见。
+3. 新增 release 文档页 `performance-persistence`（zh/en），完整说明 stats/analytics 降频、OCR 写压治理、调度器观测等策略。
+4. `release` 文档索引与 Docs 侧边栏新增“性能落地（2026-03）”入口，保证站内可检索与可导航。
+5. 新增幂等同步接口 `POST /api/dashboard/updates/sync-official`，可将官方公告 upsert 到 D1（或内存存储），返回 inserted/updated 计数用于运维确认。
+
+**修改文件**:
+- `apps/nexus/server/utils/dashboardStore.ts`
+- `apps/nexus/content/docs/dev/release/performance-persistence.zh.md`
+- `apps/nexus/content/docs/dev/release/performance-persistence.en.md`
+- `apps/nexus/content/docs/dev/release/index.zh.md`
+- `apps/nexus/content/docs/dev/release/index.en.md`
+- `apps/nexus/app/components/DocsSidebar.vue`
+- `apps/nexus/server/api/dashboard/updates/sync-official.post.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-03-02
+
+### MetaOverlay（MetaK）动作执行链路修复
+
+**变更类型**: 缺陷修复 / 交互可用性恢复
+
+**描述**: 修复 MetaOverlay（MetaK）中点击动作“无响应”的回归问题。内建动作恢复为主进程直接执行，避免依赖 renderer 转发链路造成执行失败；同时增强 item 上下文兜底，减少请求载荷不完整导致的全链路中断。
+
+**主要变更**:
+1. 内建动作（固定/复制/定位/流转）恢复由主进程直接分发执行。
+2. MetaOverlay 执行动作时支持使用当前面板缓存的 item 上下文兜底。
+3. `meta-overlay:action.execute` IPC 不再因 `item` 缺失立即抛错，交由 manager 统一处理。
+4. MetaOverlay renderer 发送执行请求时不再因本地 `item` 为空直接短路。
+5. MetaOverlay 未匹配到内建动作时，renderer 侧回退到 `CoreBoxEvents.item.execute`，避免 `system-action-*` 等 item action 被吞掉。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `apps/core-app/src/renderer/src/views/meta/MetaOverlay.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 文件系统动作“加入文件索引”补索引修复（复制文件场景）
+
+**变更类型**: 缺陷修复 / 索引链路补偿
+
+**描述**: 修复“复制文件后触发加入文件索引但搜索仍不可见”的场景。当目标文件所在目录已在 watch roots 内时，原逻辑会直接返回 `exists`，未触发该文件的补索引。现已在 `exists` 分支补充增量索引入队。
+
+**主要变更**:
+1. `addWatchPath` 在 `exists` 返回前，对“文件目标”执行 `enqueueIncrementalUpdate(path, 'add')`。
+2. 新增关键日志，标记“命中已监听路径但已触发增量补索引”。
+3. 新增“新增 watchPath 后的文件目标”补索引入队，降低首次可搜索延迟。
+4. `SystemActionsProvider` 的 `file-index` 动作改为传递原始候选路径（文件保持文件路径），避免被提前降级成目录路径导致单文件补索引分支失效。
+5. `file-index` 动作增加 start/result 日志，便于排查是否命中 `added/exists/invalid` 分支。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/system/system-actions-provider.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Search Stats/Analytics 落盘节流与队列分层
+
+**变更类型**: 性能优化 / 数据落盘策略收敛 / SQLite 竞争缓解
+
+**描述**: 针对启动与高频检索阶段的 SQLite 写竞争，收敛 `usage-stats` 与 `analytics` 的持久化频率：低价值高频 `search` 统计转为内存聚合+低频批量落盘，执行类行为单独队列保障可靠性，同时提升 analytics 快照最小落盘间隔，降低写放大与锁竞争。
+
+**主要变更**:
+1. `UsageStatsQueue` 升级为分层内存聚合：`search` 与 `action(execute/cancel)` 分离计时与阈值触发。
+2. `search` 队列默认 30 分钟批量落盘，`action` 队列默认 10 分钟批量落盘，并支持事件阈值提前触发。
+3. 引入基于 `dbWriteScheduler` 队列深度的 `search` 采样背压，写压高时自动降采样。
+4. `usage-stats.search.flush` 采用可丢弃策略；`usage-stats.action.flush` 保持不可丢弃并在失败时回灌内存队列。
+5. `analytics` 快照最小落盘间隔调整为：`15m=10分钟`、`1h=20分钟`、`24h=60分钟`。
+6. `query-completions.record` 接入 `dbWriteScheduler + withSqliteRetry`，执行路径统一串行写队列，减少 direct write 抢锁。
+7. `analytics report queue` 的插入/重试标记/删除/清理统一走写调度器，保持数据库写入策略一致。
+8. OCR 队列在写压高时跳过 `ocr.jobs.start` 中间态落库，仅保留成功/失败/重试等最终状态写入，并在终态写入时补齐 attempts。
+9. `ocr:last-dispatch` 配置写入新增队列深度门控与 30 秒最小落盘间隔，高压下自动跳过非关键状态写入。
+10. `ocr:last-queued` 配置写入同样启用队列深度门控与 30 秒最小落盘间隔，进一步减少入队阶段的非关键写入。
+11. `ocr:last-success` 配置写入启用同级门控（队列深度 + 30 秒最小间隔 + droppable），降低高频成功场景下的附加写压力。
+12. `ocr:last-failure` 仅在任务状态首次转为 `failed` 时落盘，避免失败风暴下重复覆盖写入。
+13. `ocr:queue-disabled` 配置增加“语义签名”去重，重复状态（仅时间戳变化）不再重复落库。
+14. `ocr.config` 的 `last-*` 与 `queue-disabled` 落盘策略收敛为统一策略表，减少分散硬编码与后续维护成本。
+15. OCR 配置策略抽取为 `ocr-config-policy` 独立模块，`ocr-service` 仅消费策略解析结果，进一步降低服务文件复杂度。
+16. `ocr.config` 的语义签名计算逻辑下沉到 `ocr-config-policy`，`ocr-service` 仅保留写入编排职责。
+17. `ocr.config` 的“是否跳过落盘”判定也下沉到 `ocr-config-policy`，服务层仅传入运行态上下文（队列深度/上次落盘时间）。
+18. `ocr.config` 写入 label 按 key 细分（如 `ocr.config.last-dispatch`），提升队列/日志观测粒度。
+19. `dbWriteScheduler` 新增按 label 的轻量聚合监控，并按分钟输出 TopN（含 enqueued/executed/failed/dropped/avgWait/maxWait），便于压测期定位写压热点。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/usage-stats-queue.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/analytics/storage/db-store.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/query-completion-service.ts`
+- `apps/core-app/src/main/modules/analytics/report-queue-store.ts`
+- `apps/core-app/src/main/db/db-write-scheduler.ts`
+- `apps/core-app/src/main/modules/ocr/ocr-config-policy.ts`
+- `apps/core-app/src/main/modules/ocr/ocr-service.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### OmniPanel 搜索增强（Fuse + 拼音）与底部选中文本提示收敛
+
+**变更类型**: 功能增强 / 交互收敛
+
+**描述**: OmniPanel 搜索切换为 `Fuse.js` 模糊检索并补齐拼音能力（全拼/首字母）；同时移除“复制内容大卡片”的主展示路径，改为底部统一提示“已选中 xxx”。
+
+**主要变更**:
+1. `filterOmniPanelFeatures` 接入 `Fuse.js`，支持英文模糊匹配（如 `serch` -> `search`）。
+2. 标题、副标题、插件名补齐拼音 token（全拼 + 首字母），支持拼音检索。
+3. 面板底部固定提示选中文本摘要，未选中时显示 `已选中 0 字符`。
+4. 补充 OmniPanel 过滤单测，覆盖拼音与英文模糊检索场景。
+
+**修改文件**:
+- `apps/core-app/package.json`
+- `apps/core-app/src/renderer/src/views/omni-panel/filter-features.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/filter-features.test.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### OmniPanel 窗口宽度继续收窄（保持三列网格）
+
+**变更类型**: 交互优化 / 视觉密度调整
+
+**描述**: 进一步收窄 OmniPanel 浮层宽度，减少遮挡；保持“一排最多三个”网格展示与键盘导航列数不变。
+
+**主要变更**:
+1. `OmniPanelWindowOption.width` 从 `460` 调整为 `400`。
+2. `OmniPanelWindowOption.minWidth` 从 `380` 调整为 `340`。
+3. Grid 列数仍保持 3 列，不改变 Feature 排布与交互路径。
+
+**修改文件**:
+- `apps/core-app/src/main/config/default.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-03-01
+
+### OmniPanel 浮层化与方形 Grid 卡片
+
+**变更类型**: 交互优化 / 窗口行为调整 / UI 收敛
+
+**描述**: OmniPanel 对齐 CoreBox 的浮层窗口语义，展示时不再抢焦点；同时移除头部关闭按钮，Feature 卡片改为方形 Grid 形态。
+
+**主要变更**:
+1. OmniPanel 窗口切换为 `panel` 类型，并设置 `alwaysOnTop(floating)` 与 `visibleOnAllWorkspaces`。
+2. 唤起时改用 `showInactive()`，避免干扰当前活跃窗口；保持失焦自动隐藏。
+3. Header 移除关闭按钮，仅保留标题信息。
+4. Action 区升级为三列 Grid，卡片统一 `1:1` 方形样式并改为“图标居中 + 底部标题”。
+5. 移除面板顶部标题块，区块间补充分割线（divider）提高视觉层次。
+
+**修改文件**:
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelHeader.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelActionItem.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelActionList.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelContextCard.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### OmniPanel 窗口进一步收敛（更小体积 + 失焦自动隐藏）
+
+**变更类型**: 交互优化 / 窗口行为调整
+
+**描述**: OmniPanel 再次收敛为更小窗口体积，并移除对 macOS 红绿灯样式/位置的控制；同时新增失焦自动隐藏，强化临时面板的使用预期。
+
+**主要变更**:
+1. `OmniPanelWindowOption` 尺寸下调为 `460x320`，最小尺寸调整为 `380x260`。
+2. 移除 OmniPanel 的 `titleBarStyle/trafficLightPosition/titleBarOverlay` 配置，不再主动控制红绿灯。
+3. OmniPanel 窗口新增 `blur` 事件处理，失去焦点后自动隐藏。
+
+**修改文件**:
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### OmniPanel Grid 展示与快捷键按住触发收敛
+
+**变更类型**: 交互优化 / 触发行为修正
+
+**描述**: OmniPanel 的 Feature 区域从 list 改为双列 grid 展示；同时快捷键触发改为“按住达到阈值再触发”，避免短按或松手瞬间误触。
+
+**主要变更**:
+1. Feature 列表改为 grid 布局，并补齐 `←/→` 导航，`↑/↓` 按列跳行。
+2. 主进程新增快捷键按住阈值判定（500ms），支持按住触发与松手回调兼容窗口。
+3. 短按未达到阈值不触发 OmniPanel，保持鼠标右键长按路径不变。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/interaction.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/interaction.test.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelActionList.vue`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### OmniPanel 紧凑化样式与窗口策略收敛
+
+**变更类型**: 交互优化 / 视觉一致性 / 窗口行为调整
+
+**描述**: OmniPanel 调整为更紧凑的窗口与布局密度，统一改用主题变量渲染，减少硬编码深色样式；同时收敛窗口行为为固定尺寸+隐藏任务栏，强化“临时面板”使用语义。
+
+**主要变更**:
+1. `OmniPanelWindowOption` 调整为更小尺寸、不可缩放、`skipTaskbar=true`，匹配快速调用场景。
+2. 渲染层主容器与子组件（Header/Context/Search/Action）统一采用 `tx` 主题变量，降低主题割裂。
+3. Action 列表增加最大高度与滚动，避免大量 Feature 撑高窗口。
+
+**修改文件**:
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelActionItem.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelActionList.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelContextCard.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelHeader.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelSearchBar.vue`
+
+### macOS App 名称扫描补强（首扫与本地化 plist 解析）
+
+**变更类型**: 稳定性优化 / 本地化体验修复
+
+**描述**: AppProvider 在 macOS 场景新增“首次 mdls 扫描全量触发”策略，并将本地化 `InfoPlist.strings` 读取切换为 `simple-plist` 解析，提升首轮应用名称本地化命中率并降低格式兼容问题。
+
+**主要变更**:
+1. 启动阶段当 `lastLocale` 为空时视为首次 mdls 扫描，强制全量扫描，避免首轮英文回退名称长期残留。
+2. `darwin` 扫描器读取 `InfoPlist.strings` 改用 `simple-plist`，兼容二进制/文本 plist。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
+
+### OmniPanel 去除 Feature 显式启停展示（默认可执行）
+
+**变更类型**: 交互收敛 / 执行策略调整
+
+**描述**: OmniPanel 面板内移除 Feature 的“启用/停用”显式展示与切换入口；执行链路不再受 `enabled` 状态阻断，避免历史配置中停用项导致可见但不可执行。
+
+**主要变更**:
+1. 渲染层移除 Feature 启停按钮与状态文案，只保留执行与排序操作。
+2. 主进程执行分发移除 `FEATURE_DISABLED` 门控，统一按可用性（插件存在、feature 可执行）判定。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### OmniPanel 40 点推进（Wave-1~Wave-4 首批落地）
+
+**变更类型**: 功能完善 / 可测试性提升 / 协议收敛
+
+**描述**: 面向 OmniPanel 40 点推进计划，完成首批核心能力收敛：渲染层组件拆分、键盘交互、过滤纯函数、主进程调度与自动装载稳定性测试，并建立后续台账与汇总文档基础。
+
+**主要变更**:
+1. 渲染层拆分为 `OmniPanelHeader/ContextCard/SearchBar/ActionItem/ActionList`，主容器聚焦流程编排。
+2. 新增交互能力：`↑/↓` 聚焦、`Enter` 执行、`Cmd/Ctrl+F` 聚焦搜索、`Esc` 关闭并恢复焦点。
+3. 过滤逻辑抽为 `filterOmniPanelFeatures` 纯函数；焦点/导航抽为 `interaction` 工具并补单测。
+4. 主进程导出 `OmniPanelModule` 以便单测覆盖：registry 初始化、执行分发、自动装载优先级与去重、最小 smoke。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/*`
+- `apps/core-app/src/renderer/src/views/omni-panel/filter-features.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/interaction.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.test.ts`
+
+## 2026-02-28
+
+### 启动拉取策略优化：Auth 缓存优先 + Sentry Dev 传输降噪
+
+**变更类型**: 启动性能优化 / 开发体验治理 / 兼容性修复
+
+**描述**: 针对“前端加载慢 + 启动期网络链路竞争 + Node 22 deprecation 噪声”，调整启动阶段策略：`Auth` 先用本地缓存恢复态，再延后远端刷新，并将登录凭证系统加密存储改为用户可选（默认开启长期安全存储，用户可手动关闭）；`Sentry` 在开发态切换到 Node transport 并移除 ElectronNet/ElectronBreadcrumbs 默认集成，避免 `DEP0169` 与 `console-message` 相关噪声干扰排查。
+
+**主要变更**:
+1. `AuthModule` 启动流程改为缓存优先，远端用户信息刷新延后执行，并增加请求超时与不可用分支兜底。
+2. 登录回调链路在远端暂时不可达时不立即破坏本地会话，优先复用缓存用户并重试刷新。
+3. `SentryService` 在开发态切换 `makeNodeTransport`，并过滤 `ElectronNet`/`ElectronBreadcrumbs` 集成以规避 `DEP0169` 与旧 console-message 监听告警。
+4. `DivisionBoxModule` 在缺失模块上下文事件总线时回退全局 `touchEventBus`，保持 deferred 初始化行为一致。
+5. `AppProvider` 的“开发态”判定扩展到 dev-server 运行态（不仅 `is.dev`），确保启动期 backfill / mdls 重任务在该场景也被延后。
+6. `Auth` 登录凭证持久化改为用户可选：默认开启系统安全存储（长期保存）；用户关闭后退回会话模式，并在首次会话登录时给出提醒。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+- `apps/core-app/src/main/modules/division-box/module.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 迁移壳收口（第一批）：弱化 channel 直依赖
+
+**变更类型**: 架构收敛 / 兼容壳层减耦
+
+**描述**: 继续推进 `channel -> transport` 收口，先清理一批高频模块的直接类型耦合：主进程插件日志服务改为显式接收 transport，plugin/renderer SDK 改为最小 channel 接口，减少对 `@talex-touch/utils/channel` 的扩散引用。
+
+**主要变更**:
+1. `PluginLogModule.setupIpcHandlers` 改为接收 `getTuffTransportMain(...)` 结果，服务层不再声明 `ITouchChannel` 依赖。
+2. 新增 `PluginChannelClient` 最小接口，`box-sdk` / `power` / `performance` 切换为该接口类型。
+3. `renderer/touch-sdk` 改为本地 `TouchClientChannelLike`，避免直接引用 legacy channel 类型。
+
+**修改文件**:
+- `apps/core-app/src/main/service/plugin-log.service.ts`
+- `packages/utils/plugin/sdk/channel-client.ts`
+- `packages/utils/plugin/sdk/box-sdk.ts`
+- `packages/utils/plugin/sdk/power.ts`
+- `packages/utils/plugin/sdk/performance.ts`
+- `packages/utils/renderer/touch-sdk/index.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### OmniPanel Module 取消 Env 门控（默认参与加载）
+
+**变更类型**: 架构行为调整 / 模块加载策略收敛
+
+**描述**: 移除 `OmniPanelModule` 对 `TUFF_ENABLE_OMNIPANEL_EXPERIMENT` 的声明式 env 依赖，模块改为默认参与主进程加载链路，不再需要通过环境变量显式开启。
+
+**主要变更**:
+1. `OmniPanelModule` 构造器移除第三个 `env` 参数，保持与常规模块一致的默认加载行为。
+2. 保留现有快捷键、鼠标长按与 Feature Hub 逻辑，不引入额外行为分叉。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 启动阶段卡顿治理（前端首屏加载竞争缓解）
+
+**变更类型**: 性能优化 / 启动时序治理 / 主线程阻塞缓解
+
+**描述**: 针对开发环境启动日志中出现的前端加载慢与事件循环 lag，收敛启动阶段重任务执行时机：补齐模块事件上下文、延后 DivisionBox 预热窗口、推迟 AppProvider 的 dev 启动扫描，并对 Storage 落盘做内容级去重，降低主线程竞争。
+
+**主要变更**:
+1. `TouchApp` 创建 `ModuleManager` 时注入 `touchEventBus` 与 `BEFORE_APP_QUIT`，恢复模块 `start` 阶段事件上下文。
+2. `DivisionBoxModule` 在预热窗口池前等待主渲染器完成加载，避免与主窗口 dev server 首次编译并发竞争。
+3. `AppProvider` 在 dev 模式下将 startup backfill / mdls 初扫延后到 45s，并在主渲染器加载中继续延后重任务。
+4. `StorageModule` 增加 `persistedContent` 去重缓存，跳过重复内容写入；`persistConfig` 改为异步 `ensureFile`，减少同步 IO 阻塞。
+5. `Intelligence` 配置加载增加 runtime 签名去重，避免同配置重复应用导致 provider 重复注册。
+
+**修改文件**:
+- `apps/core-app/src/main/core/touch-app.ts`
+- `apps/core-app/src/main/modules/division-box/module.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/storage/index.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-config.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### MetaOverlay 启动高度与 CoreBox 一次性同步（Meta+K）
+
+**变更类型**: 交互稳定性修复 / CoreBox 视图一致性
+
+**描述**: 修复 Meta+K 打开 MetaOverlay 时与 CoreBox 扩窗动画存在的高度竞态。除 MetaOverlay 侧一次延迟同步外，新增 CoreBox 主窗口高度变更时的主动同步，确保启动与动画阶段高度持续对齐。
+
+**主要变更**:
+1. `MetaOverlayManager.show` 在 `setVisible(true)` 后调度一次延迟高度同步，避免过早同步。
+2. `WindowManager` 在 CoreBox 各类高度变更路径（动画/直接 setBounds）统一触发 `MetaOverlay` bounds 同步。
+3. `hide/destroy` 阶段统一清理同步定时器，避免悬挂定时任务。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 风险治理流程固化（P0）与技术债里程碑落地（不执行大文件拆分）
+
+**变更类型**: 文档治理 / 发布门禁收敛 / 风险管理
+
+**描述**: 将风险登记从“记录型文档”升级为“发布门禁输入”，补齐 Owner、目标日期、缓解与回滚策略、证据字段，并将 Gate E 与风险状态绑定；同时基于深度技术债报告落地 TD-M1~M3 里程碑。本轮明确“大文件拆分先不执行”，仅保留边界与测试基线规划。
+
+**主要变更**:
+1. `RISK-REGISTER` 新增 GA 风险模板与 Gate 判定规则（P0 未收口禁止 Gate E）。
+2. 风险表补齐 Owner/目标日期/回滚策略/状态；同步更新同步链路与 auth 迁移状态。
+3. `TODO` 的 P0 风险治理与技术债落地条目改为已完成，并记录“本轮不拆分大文件”决策。
+4. 发布清单补充风险门禁规则，Gate E 显式依赖 `P0=0`。
+
+**修改文件**:
+- `docs/plan-prd/01-project/RISK-REGISTER-2026-02.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### v2.4.7 Gate C 质量门禁拆解（C1~C4）
+
+**变更类型**: 发布治理 / 质量门禁执行计划
+
+**描述**: 将 Gate C 从“阻塞描述”细化为可执行批次（C1~C4），明确按文件分组、建议负责人、验收命令与推进顺序，避免发布前质量收口无 owner、无节奏。
+
+**主要变更**:
+1. 发布清单新增 Gate C 批次表（C1 lint 阻断清零、C2 watermark 类型收口、C3 auth/device 类型收口、C4 全量复扫）。
+2. TODO 的 `v2.4.7 发版推进` 同步增加 C1~C4 子任务，便于追踪 Gate C 实际进度。
+3. 发布清单更新时间更新为 2026-02-28，并保留风险门禁与 Gate E 绑定规则。
+
+**修改文件**:
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### v2.4.7 Gate C 质量门禁收口（C1~C4 全部通过）
+
+**变更类型**: 发布治理 / 质量门禁闭环
+
+**描述**: 按 Gate C 批次执行并完成 C1~C4 校验，`apps/nexus` 与 `packages/tuff-native` 的 lint/typecheck 阻塞项已收口，全仓复扫通过，Gate C 状态更新为 Done。
+
+**主要变更**:
+1. C1 定向 lint 验证通过：`packages/tuff-native` 与 Nexus 指定测试文件无阻塞错误。
+2. C2/C3 定向 typecheck 验证通过：`apps/nexus` 类型门禁恢复。
+3. C4 全仓复扫通过：`pnpm -r --if-present --no-bail run typecheck` 与全仓 eslint 扫描均通过。
+4. 发布清单与 TODO 同步回写 Gate C 完成状态，保留 Gate D/E 待办。
+
+**修改文件**:
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Workspace 依赖统一（P0~P5）与 Catalog 冲突收敛
+
+**变更类型**: 工程治理 / 依赖一致性 / 前端运行时收敛
+
+**描述**: 完成 workspace 依赖统一升级（P0~P5 范围），清理 `pnpm-workspace.yaml` 中历史 `conflicts_*` catalog 分组，并移除 `@lobehub/icons`、`react/react-dom`、`motion-v` 的直接依赖入口，统一到纯 Vue 动画实现，避免 catalog 冲突和跨栈依赖漂移。
+
+**主要变更**:
+1. Catalog 全量升级到统一基线（default/build/dev/frontend/icons），并移除 `conflicts_*` 分组。
+2. Nexus 侧移除 `motion-v` 与 React 直接依赖，相关 UI 动画改为 CSS 过渡/关键帧实现。
+3. 补齐 `electron-builder-squirrel-windows` 以收敛 Electron Builder peer 提示。
+4. 根 `pnpm.peerDependencyRules` 增加统一规则（`ignoreMissing` + `allowedVersions`）以减少跨生态弱约束噪音。
+
+**修改文件**:
+- `pnpm-workspace.yaml`
+- `pnpm-lock.yaml`
+- `package.json`
+- `apps/nexus/package.json`
+- `apps/core-app/package.json`
+- `apps/nexus/app/components/tuff/VortexBackground.vue`
+- `apps/nexus/app/components/tuff/carousel/apple/AppleCard.vue`
+- `apps/nexus/app/components/tuff/carousel/apple/AppleCarouselItem.vue`
+- `apps/nexus/app/components/tuff/landing/TuffLandingAuroraBar.vue`
+- `plugins/touch-translation/package.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Plugin Injection 生命周期防护（`Object has been destroyed` 竞态修复）
+
+**变更类型**: 稳定性修复 / 生命周期守卫抽取
+
+**描述**: 修复插件注入链路在窗口或 `webContents` 已销毁时触发 `TypeError: Object has been destroyed` 的竞态问题。将注入构建与 Electron 销毁态判断抽取为复用 hooks，统一在 CoreBox / DivisionBox / Plugin Window 链路接入，避免未处理异常放大为主进程错误。
+
+**主要变更**:
+1. 新增 `use-electron-guard` hooks，统一封装 `isDestroyed()` 守卫与 `userAgent` 安全读取。
+2. `TouchPlugin.__getInjections__` 改为使用安全 `userAgent` 解析，并在主窗口已销毁时回退到稳定值。
+3. 新增 `usePluginInjections`，统一包装注入构建异常处理，避免调用侧直接崩溃。
+4. CoreBox / DivisionBox / Plugin Module 的注入入口统一切换到 `usePluginInjections`，并复用 `useAliveWebContents` 做视图可用性判断。
+5. 扩展到 MetaOverlay / ViewCache / DevServerMonitor / DivisionBox StateSync，统一复用 `useAliveTarget/useAliveWebContents` 处理窗口与视图销毁态，减少重复判定分支。
+
+**修改文件**:
+- `apps/core-app/src/main/hooks/use-electron-guard.ts`
+- `apps/core-app/src/main/modules/plugin/runtime/plugin-injections.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/view-cache.ts`
+- `apps/core-app/src/main/modules/division-box/session.ts`
+- `apps/core-app/src/main/modules/division-box/state-sync.ts`
+- `apps/core-app/src/main/modules/plugin/dev-server-monitor.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Legacy Channel 2.4.8 P0（Phase A/B/C/D）首轮收口
+
+**变更类型**: 架构收敛 / 传输层统一 / 兼容语义迁移
+
+**描述**: 按 `LegacyChannelCleanup-2408` 的 P0 范围完成首轮收口：CoreBox 触发链路移除 `ChannelType` 过滤参数；Clipboard legacy 事件发送/接收路径下线并统一到 `ClipboardEvents`；DivisionBox/FlowBus IPC 构造改为直接注入 `ITuffTransportMain`；Plugin 主链路移除对 raw `channelMap` 的读取，并通过 `transport.invoke(...)` 保留本地 reply 语义。
+
+**主要变更**:
+1. CoreBox `CoreBoxTransport` 改为 `scope: 'main' | 'plugin'` 过滤，输入/键盘注册链路不再依赖 `ChannelType`。
+2. CoreBox `window.ts` 触发广播统一改为 `transport.broadcastToWindow(...)`。
+3. DivisionBox / FlowBus IPC 改为 transport 注入，模块初始化阶段统一构建并传入 transport 实例。
+4. Plugin 主链路移除 `channelMap` 访问，新增 `ITuffTransportMain.invoke(...)` + `TuffMainTransport.invoke(...)` 以支持主进程内事件派发与 reply 语义。
+5. Clipboard legacy handler（`clipboardLegacy*`）下线，新增 `ClipboardEvents.queryMeta` 承接内部 `clipboard:query` 查询能力；CoreBox MetaOverlay 与预览历史模块改用 `ClipboardEvents.write/queryMeta/change`。
+6. WidgetManager / Clipboard 注册入口去除 `ITouchChannel` 类型依赖。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/transport/core-box-transport.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/input-transport.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/key-transport.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.ts`
+- `apps/core-app/src/main/modules/division-box/module.ts`
+- `apps/core-app/src/main/modules/flow-bus/ipc.ts`
+- `apps/core-app/src/main/modules/flow-bus/module.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/usePreviewHistory.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/events/types/clipboard.ts`
+- `packages/utils/transport/types.ts`
+- `packages/utils/transport/sdk/main-transport.ts`
+- `packages/utils/transport/index.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox BoxItem 同步回包超时修复（改为 fire-and-forget）
+
+**变更类型**: 稳定性修复 / IPC 交互语义收敛
+
+**描述**: 修复 `box-item:sync-response` 在渲染端未挂载或主线程阻塞时可能触发 60s 回包超时的问题。主进程从“请求-应答”发送改为 fire-and-forget 广播，移除不必要的回包等待，避免日志噪音和超时堆积。
+
+**主要变更**:
+1. `BoxItemManager.emitToRenderer` 从 `transport.sendToWindow(...)` 切换为 `transport.broadcastToWindow(...)`。
+2. 事件泛型约束收敛为 `TuffEvent<TReq, void>`，明确该链路仅做单向通知。
+3. 同步 TODO 风险项状态，标记该 P1 问题已完成。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Flow ↔ DivisionBox 权限 actor 解析收敛（corebox 免检 + sdkapi 优先级）
+
+**变更类型**: 稳定性修复 / 权限判定一致性
+
+**描述**: 收敛 DivisionBox 侧 Flow 入口的调用方识别策略，避免 `actorPluginId` 缺失或 `corebox` 来源时误判为插件调用，并补齐最小回归用例覆盖 `_sdkapi` 优先级与双权限校验行为。
+
+**主要变更**:
+1. `DivisionBoxIPC` 抽出 `resolveDivisionBoxPermissionActor`，统一 `context.plugin -> actorPluginId -> nested sourcePluginId` 解析顺序。
+2. `actorPluginId = corebox` 或 actor 缺失时直接返回空 actor，不再回退 `payload.pluginId`，避免误触发插件权限校验。
+3. `_sdkapi` 优先级明确为“payload 覆盖插件声明 sdkapi”，并通过单测固化。
+4. 新增权限最小用例：`division-box:flow:trigger` 缺任一 `window.create` / `storage.shared` 均拒绝，双权限齐备后放行。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/division-box/ipc.ts`
+- `apps/core-app/src/main/modules/division-box/permission-actor.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.actor.test.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 修复 Windows Release 误发布裸 EXE（避免 ICU 启动失败）
+
+**变更类型**: 发布链路修复 / Windows 安装包可靠性
+
+**描述**: 修复 `build-and-release` 在收集发布资产时递归匹配所有 `.exe` 导致 `win-unpacked/tuff.exe` 被误发布的问题。用户下载裸 EXE 后缺少 `resources/icudtl.dat` 等运行时文件，会触发 ICU 初始化失败并无法启动。现统一只发布 `*-setup.exe` 安装包，并显式排除 `win-unpacked` 与 `__uninstaller-*.exe`。
+
+**主要变更**:
+1. Release 资产列表改为仅展示 Windows `*-setup.exe`，避免误导下载。
+2. 资产收集规则从“所有 `.exe`”收敛为“仅 `*-setup.exe` + 其他平台产物”。
+3. 新增守卫校验：若未收集到 `*-setup.exe`，工作流直接失败，阻止错误资产发布。
+4. Nexus 资产同步阶段新增过滤：非 `*-setup.exe` 的 Windows `.exe` 不再写入发布记录，保持下载入口一致。
+
+**修改文件**:
+- `.github/workflows/build-and-release.yml`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 清理失效/过期 CI 工作流（Sync Guard / Legacy Release / opencode）
+
+**变更类型**: 工程脚本清理 / CI 噪音收敛
+
+**描述**: 移除已失效或已不再参与当前发布链路的 GitHub Actions 工作流，避免重复门禁与“脚本已删除但仍被 CI 调用”的必失败噪音；当前发布仍以 `build-and-release.yml`（tag 驱动）为唯一主链路。
+
+**主要变更**:
+1. 删除 `Sync Guard` 工作流：原流程依赖的 `scripts/check-no-legacy-sync-value-json.mjs` 已移除，导致 CI 必失败。
+2. 删除 legacy/manual 的 release 工作流：`release-core/release-renderer/release-extensions`。
+3. 删除 `opencode` 评论触发工作流（依赖外部 secret，且当前维护价值较低）。
+
+**修改文件**:
+- `.github/workflows/sync-guard.yml`（删除）
+- `.github/workflows/release-core.yml`（删除）
+- `.github/workflows/release-renderer.yml`（删除）
+- `.github/workflows/release-extensions.yml`（删除）
+- `.github/workflows/opencode.yml`（删除）
+- `.github/workflows/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Auth 敏感配置迁移到安全存储（localStorage -> safeStorage）
+
+**变更类型**: 安全加固 / 渲染层敏感数据治理
+
+**描述**: 收敛渲染端历史明文配置风险。登录初始化阶段新增一次性迁移逻辑，将 legacy `localStorage` 中的鉴权敏感项写入主进程 `safeStorage` 通道并清理旧键，避免长期明文驻留。
+
+**主要变更**:
+1. `auth-env.ts` 新增 `get/setAuthSensitiveValue`，统一通过 `AppEvents.system.getSecureValue/setSecureValue` 读写敏感字段。
+2. 新增 `migrateLegacyAuthEnvToSecureStorage()`，首次启动自动迁移并删除 legacy 键。
+3. `useAuth.initializeAuth()` 前置执行迁移，保证后续登录流程读取到安全存储数据。
+4. 补齐 `auth-env.test.ts`，覆盖迁移与清理行为。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/auth/auth-env.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/modules/auth/auth-env.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Flow -> DivisionBox 权限回归补齐（结构化错误 + 前端提示）
+
+**变更类型**: 稳定性修复 / 权限反馈一致性
+
+**描述**: 针对 Flow 触发 DivisionBox 的权限拒绝场景，补齐“主进程结构化错误返回 + 渲染层定向提示”链路，避免仅凭字符串错误导致提示不稳定。
+
+**主要变更**:
+1. `flow-bus/ipc.ts` 统一 `FlowEvents.dispatch` 异常出口，返回 `{ success: false, error }` 结构并透出 `code/permissionId`。
+2. `FlowDispatchResponse.error` 类型扩展为可携带 `code`、`permissionId`、`showRequest`，减少前后端语义漂移。
+3. `useDetach.ts` 针对 `PERMISSION_DENIED` 给出必需权限提示，其余失败路径保持既有错误提示策略。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/flow-bus/ipc.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+- `packages/utils/transport/events/types/flow.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus Release 下载链路签名化（Signed URL + TTL + fallback）
+
+**变更类型**: 发布链路增强 / 下载安全治理
+
+**描述**: Release API 默认下发带签名的下载地址，下载端点校验签名并支持 TTL；在迁移阶段可通过配置控制 unsigned fallback，兼顾存量链接兼容。
+
+**主要变更**:
+1. 新增 `releaseDownloadSignature` 工具，封装签名 URL 生成、解析与校验逻辑。
+2. `releaseSignature` 增加 `attachSignatureUrls(...)`，为 release 资产附加 signed `downloadUrl`，并保留 `fallbackDownloadUrl`。
+3. `releases/latest|index|[tag]|[tag]/assets` API 统一接入签名 URL 输出。
+4. `releases/[tag]/download/[platform]/[arch]` 支持签名校验、外链 302 跳转与 unsigned fallback 开关。
+5. `nuxt.config.ts` 新增 `releaseDownload.secret/signedTtlSeconds/allowUnsignedFallback` 运行时配置。
+
+**修改文件**:
+- `apps/nexus/server/utils/releaseDownloadSignature.ts`
+- `apps/nexus/server/utils/releaseSignature.ts`
+- `apps/nexus/server/api/releases/latest.get.ts`
+- `apps/nexus/server/api/releases/index.get.ts`
+- `apps/nexus/server/api/releases/[tag].get.ts`
+- `apps/nexus/server/api/releases/[tag]/assets.get.ts`
+- `apps/nexus/server/api/releases/[tag]/download/[platform]/[arch].get.ts`
+- `apps/nexus/nuxt.config.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-02-27
+
+### Meta+K Quick Actions 打开时强制最大展开
+
+**变更类型**: 交互一致性优化 / 新链路收敛
+
+**描述**: 在新的 Quick Actions 链路中，触发 `Meta+K` 后 CoreBox 可能保持当前高度，导致操作面板显示空间不足。现统一在 `MetaOverlayEvents.ui.show` 处理时先将 CoreBox 扩展到最大高度，再展示面板。
+
+**主要变更**:
+1. `MetaOverlayEvents.ui.show` 收到请求后先执行 `coreBoxManager.expand({ forceMax: true })`。
+2. 保持现有 action 注册/执行协议不变，仅调整展示前的窗口尺寸策略。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Meta+K Quick Actions 叠层可见性修复（WebContentsView 定向投递）
+
+**变更类型**: 稳定性修复 / 交互可见性修复
+
+**描述**: 修复 `Meta+K` 打开后仅出现透明层、无任何内容的故障。根因是主进程向 `WebContentsView.webContents` 发送事件时，`TuffMainTransport.sendTo` 实际回落到了 `BrowserWindow.webContents`，导致 MetaOverlay 渲染器收不到 `ui.show/ui.hide`。
+
+**主要变更**:
+1. `TuffMainTransport.sendTo` 改为以“传入目标 WebContents”为准发送，不再通过窗口查找回退。
+2. 保持现有 API 不变，兼容 `WebContents` 与带 `webContents` 字段的目标对象（如窗口/视图宿主）。
+3. `MetaOverlayManager` 现有 `sendTo(this.metaView.webContents, ...)` 链路可正确命中 MetaOverlay 进程，叠层内容恢复显示并可跟随 CoreBox。
+
+**修改文件**:
+- `packages/utils/transport/sdk/main-transport.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox UI View 生命周期竞态修复（webContents 空指针防护）
+
+**变更类型**: 稳定性修复 / 崩溃防护
+
+**描述**: 修复 CoreBox 在 show/focus 异步回调与 UI View detach/销毁并发时，访问 `this.uiView.webContents.isDestroyed()` 触发 `TypeError` 的问题。该异常会被 `DevProcessManager` 识别为 uncaught exception 并触发开发进程退出。
+
+**主要变更**:
+1. 在 `WindowManager` 新增 `getAliveUIViewWebContents()`，统一做 `uiView`/`webContents` 存活检查。
+2. `show()` 的延时 focus、`Cmd/Ctrl+R` 的 UI reload、缓存 view 恢复、`sendToUIView`、键盘转发、插件 DevTools 打开等路径统一改为通过安全检查访问 `webContents`。
+3. 保持现有行为不变，仅在 `webContents` 不可用时短路返回，避免空指针导致主进程崩溃。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox 搜索排序修复（取消 app 硬置顶，启用匹配优先 + 使用频次提升）
+
+**变更类型**: 搜索体验修复 / 排序策略优化
+
+**描述**: 修复 `app` 与 `feature` 共存时 `app` 因 kind 权重过高被强制置顶的问题。排序改为“匹配分主导 + 使用频次/时效补充 + 类型软偏置”，并对 `feature/command` 的频次学习信号做适度增强，确保高匹配和高使用项能稳定前置。
+
+**主要变更**:
+1. `tuff-sorter` 评分模型从“kind 强主导”改为“match 主导 + usage/recency + kind 软偏置”。
+2. 降低类型权重对最终排序的影响，消除 `app` 对 `feature` 的结构性压制。
+3. 为 `feature/command` 增加频次权重系数，提升常用功能的自动前置能力。
+4. 收敛 `tag/path/description` 来源的伪高亮加分，避免别名命中通过 fallback 高亮压过真实标题命中（如 `cleaner` 场景）。
+5. 新增 `tuff-sorter` 单测，覆盖“强匹配 feature 前置”“高频 feature 前置”“明显强匹配仍优先”“别名伪高亮不越级”回归场景。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Clipboard 历史检索补齐 OCR 元数据命中
+
+**变更类型**: 检索能力修复 / 行为一致性增强
+
+**描述**: 修复 Clipboard 历史 `keyword` 查询只匹配 `content` 的问题，统一扩展为同时匹配 `content`、`rawContent` 与 `metadata`，使 OCR 写入的 `ocr_text / ocr_excerpt / ocr_keywords` 能被关键词检索命中。
+
+**主要变更**:
+1. `ClipboardEvents.getHistory` 查询条件由单字段 `content LIKE` 扩展为多字段 OR 匹配。
+2. legacy `clipboard:get-history` 查询路径同步扩展同样条件，避免新旧通道行为不一致。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Tray 改为实验特性（默认关闭）
+
+**变更类型**: 稳定性修复 / 开发体验优化
+
+**描述**: 针对 macOS 环境中“托盘对象创建成功但菜单栏不可见”的系统级可见性问题，当前版本将 Tray 收敛为实验特性，默认关闭，避免影响主流程入口。当前阶段暂无稳定修复方案，统一通过 Dock 作为默认入口。
+
+**主要变更**:
+1. Tray 新增实验开关：`setup.experimentalTray`（默认 `false`），需显式开启。
+2. Tray 默认不初始化，移除原有健康检查重试与大量调试输出，保留基础生命周期与菜单更新逻辑。
+3. 在 Tray 未启用时，macOS 强制 `regular` 激活策略并保持 Dock 可见，确保入口稳定。
+4. 运行时 `TrayEvents.show.set` 在实验开关关闭时直接拒绝，并返回明确告警。
+5. 文档明确已知问题：托盘可见性缺陷暂未稳定解决，当前阶段不默认开启。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/tray/tray-icon-provider.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 插件安装门禁升级（无 sdkapi 视为过时插件并拒绝安装）
+
+**变更类型**: 安装门禁 / 兼容策略收紧
+
+**描述**: 对未声明 `manifest.sdkapi` 的插件，不再兼容安装。安装预检、安装解析与加载阶段统一改为硬拒绝，避免旧插件绕过 capability 认证基线。
+
+**主要变更**:
+1. `PluginInstaller.prepareInstall` 增加 `sdkapi` 强校验：缺失即抛错并中止安装流程。
+2. `PluginResolver.resolve/install` 增加 `sdkapi` 强校验：缺失即返回 error，不进入安装落盘。
+3. `plugin-loaders` 将缺失 `sdkapi` 从 warning 升级为 error（`SDK_VERSION_MISSING`），与安装门禁一致。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/plugin/plugin-installer.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-resolver.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 插件能力认证基线升级（sdkapi 260228 + Clipboard/OCR 不支持修复）
+
+**变更类型**: 安全加固 / 权限认证收敛 / 能力降级修复
+
+**描述**: 新增 `sdkapi 260228` 作为插件能力认证基线。权限中间件改为优先使用已加载插件声明的 `sdkapi` 做鉴权，避免通过 payload 伪造降级绕过；Clipboard transport 全链路补齐插件调用鉴权；当 Clipboard 或 Intelligence（如 `vision.ocr`）能力不支持时，返回可识别的稳定错误标识，便于插件侧兜底。
+
+**主要变更**:
+1. `packages/utils/plugin/sdk-version.ts` 新增 `SdkApi.V260228`，并将 `CURRENT_SDK_VERSION` 升级为 `260228`，补充 `CAPABILITY_AUTH_MIN_VERSION` 常量。
+2. `channel-guard` 权限中间件改为优先读取已加载插件声明 `sdkapi`；`sdkapi >= 260228` 时若 payload 与声明不一致，拒绝调用（`SDKAPI_MISMATCH`）。
+3. Clipboard SDK 的写类/查询类请求统一注入 `_sdkapi`；主进程 `ClipboardEvents.*` 全量 handler 增加插件权限校验（读/写分级）。
+4. `ClipboardEvents.change` 流式订阅上下文补齐插件信息，支持流式权限校验。
+5. Clipboard 权限拒绝统一映射为 `CLIPBOARD_CAPABILITY_UNAVAILABLE`；Intelligence invoke/test 对“不支持能力”错误统一映射为 `INTELLIGENCE_CAPABILITY_UNSUPPORTED`（覆盖 native OCR 不支持场景）。
+
+**修改文件**:
+- `packages/utils/plugin/sdk-version.ts`
+- `packages/utils/plugin/sdk/clipboard.ts`
+- `packages/utils/transport/events/types/clipboard.ts`
+- `packages/utils/transport/types.ts`
+- `packages/utils/transport/sdk/main-transport.ts`
+- `apps/core-app/src/main/modules/permission/channel-guard.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Clipboard 即时监听可靠性修复（startWatch 导出兼容）
+
+**变更类型**: 稳定性修复 / 剪贴板监听可靠性
+
+**描述**: 针对 `Clipboard native watcher module has no startWatch API` 告警导致 watcher 未生效的问题，补齐 `@crosscopy/clipboard` 在不同构建导出形态下（含 `default`、`module.exports` 及嵌套）的解析兜底，确保能稳定获取 `startWatch` 并即时触发检测。
+
+**主要变更**:
+1. `ClipboardModule.resolveClipboardWatcherModule` 从单一导出判定改为多候选解析（`mod` / `mod.default` / `mod['module.exports']` 及其嵌套），兼容 ESM/CJS 打包差异。
+2. 保持 CoreBox 可见态高频轮询兜底（`500ms`）不变，确保 watcher 异常时仍不漏录。
+3. watcher 不可解析时输出导出键诊断信息，便于快速定位运行时导出形态。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Clipboard SDK Transport-First 迁移（剪贴板 API 收敛）
+
+**变更类型**: 架构收敛 / SDK 迁移 / 文档同步
+
+**描述**: 将插件侧 `useClipboard()` 主通道迁移到 `ClipboardEvents.*`，减少对 `clipboard:*` raw channel 的依赖；同时补齐 transport clipboard 事件域与主进程 handler，覆盖读写、历史、清空、图片 URL、复制粘贴等能力。
+
+**主要变更**:
+1. 扩展 transport clipboard 类型定义与事件集合：新增 `clearHistory`、`getImageUrl`、`read`、`readImage`、`readFiles`、`clear`、`copyAndPaste` 等事件。
+2. `packages/utils/plugin/sdk/clipboard.ts` 改为 transport-first 实现，历史查询、变更订阅、读写与粘贴统一走 `ClipboardEvents.*`。
+3. 主进程 `ClipboardModule` 补齐新增 transport 事件处理，并增强 `ClipboardEvents.getHistory` 过滤能力（关键词、时间范围、来源应用、收藏、排序、files 类型）。
+4. 同步 Nexus 文档：更新 Clipboard/Transport API 示例与 Channel 文档示例，明确新插件应走 SDK/Transport 路径。
+
+**修改文件**:
+- `packages/utils/transport/events/types/clipboard.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/plugin/sdk/clipboard.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/nexus/content/docs/dev/api/clipboard.zh.mdc`
+- `apps/nexus/content/docs/dev/api/clipboard.en.mdc`
+- `apps/nexus/content/docs/dev/api/transport.zh.mdc`
+- `apps/nexus/content/docs/dev/api/transport.en.mdc`
+- `apps/nexus/content/docs/dev/api/channel.zh.mdc`
+- `apps/nexus/content/docs/dev/api/channel.en.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox 搜索卡顿收敛（Clipboard 轮询降压 + 零结果诊断节流）
+
+**变更类型**: 性能优化 / 搜索体验修复 / 日志降噪
+
+**描述**: 针对“搜索时偶发顿一下”的反馈，收敛两条高频热路径：其一是搜索零结果时每次都执行额外 `count(*)` 诊断查询并打 warning；其二是 native clipboard watcher 在 ESM/CJS 导出形态下可能接入失败。修复后保持 CoreBox 可见态高频轮询兜底，避免漏录，同时让 watcher 事件触发链路更稳定。
+
+**主要变更**:
+1. `Clipboard` 保持 CoreBox 可见态 `500ms` 轮询兜底，优先保障剪贴板变化不漏录。
+2. `Clipboard` native watcher 增加导出兼容解析（`mod.startWatch` + `mod.default.startWatch`），修复“模块存在但识别不到 startWatch”的接入失败场景。
+3. `SearchIndexService` 新增零结果诊断节流（按 provider，30s 窗口），避免每次 miss 都触发额外 `count(*)` 查询和 warning。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Clipboard History 插件迁移落地（插件可用化 + SDK legacy 桥接补齐）
+
+**变更类型**: 功能迁移 / 插件可用化 / 兼容性修复
+
+**描述**: 将 `clipboard-history` 插件迁入 monorepo 后，完成最小可运行适配：修复插件依赖配置、清理错误 prelude 逻辑，并补齐 Clipboard SDK 对应 legacy 通道桥接，确保图片场景和旧通道下的调用可用。
+
+**主要变更**:
+1. 修复运行目录插件：`apps/core-app/tuff/modules/plugins/clipboard-history/index.js` 从错误的 translation mock 切换为 `clipboard-history` feature 入口逻辑。
+2. 修复插件 `package.json` 中无效 `catalog:*` 占位，改为可解析的 `workspace:^` 与明确版本依赖，避免 workspace 安装/校验失败。
+3. 重写插件 `index.js` prelude：移除误植的 translation mock，仅保留 `clipboard-history` feature 的查询同步逻辑。
+4. 主进程 Clipboard 模块补齐 legacy 事件：
+   - `clipboard:get-latest`
+   - `clipboard:get-image-url`
+5. `packages/utils/plugin/sdk/clipboard.ts` 增加兼容兜底：
+   - `getLatest()` 在 legacy 事件缺失时回退到 `getHistory(page=1,pageSize=1)`
+   - `getHistoryImageUrl()` 事件异常时返回 `null`，避免插件侧直接抛错
+
+**修改文件**:
+- `apps/core-app/tuff/modules/plugins/clipboard-history/index.js`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `packages/utils/plugin/sdk/clipboard.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Clipboard 轮询漏录修复（快照签名 + 合并补跑 + 元数据落库兜底）
+
+**变更类型**: 稳定性修复 / 数据完整性修复 / 轮询策略优化
+
+**描述**: 针对日志中 `Clipboard check slow`、`Clipboard check failed`、`clipboard_history_meta FOREIGN KEY` 及 `SQLITE_BUSY` 相关问题，收敛剪贴板轮询路径中的“漏检 + 过长冷却 + 异步落库未兜底”三类风险，降低高频复制场景下的漏录概率与未处理 rejection 噪音。
+
+**主要变更**:
+1. 快速变更检测签名升级：由“格式 + 文本前 100 字符”改为“格式 + 文本长度/首尾摘要 + 文件签名 + 图片签名”，修复前缀相同文本与图片变更漏检。
+2. 预读取缓存收敛：在单次轮询中复用 text/files/image 读取结果，避免重复读取导致额外阻塞。
+3. 轮询执行改为 in-flight 合并补跑：检查进行中若收到新触发会标记 pending，当前轮次结束后立即补跑一轮，减少长任务期间的变化丢失。
+4. 慢检查冷却改为动态窗口（有上限）：避免固定 5s 冷却带来的大漏录窗口，同时保留慢路径退让能力。
+5. `clipboard_history_meta` 异步写入增加安全封装：统一 catch 队列丢弃/外键异常，避免未处理 rejection；外键场景降级为告警并跳过。
+6. 设置页默认轮询间隔从 5s 调整到 3s，并与主进程 fallback 保持一致。
+7. 新增 JS 原生监听尝试：优先加载 `@crosscopy/clipboard` 的 `startWatch` 作为变更触发器（触发即补跑且可绕过 cooldown），失败时自动降级为轮询；支持 `TUFF_CLIPBOARD_NATIVE_WATCH=0|false|off` 显式关闭。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/package.json`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### macOS 托盘可见性收口（内置模板图标 + 启动策略兜底）
+
+**变更类型**: 运行稳定性修复 / macOS 托盘可见性增强
+
+**描述**: 针对 `startSilent + hideDock` 场景下“托盘不可见导致无入口”的问题，继续收敛托盘图标来源与激活策略。内置图标从 SVG data-url 方案切换为内置 PNG buffer（`nativeImage.createFromBuffer`），规避部分环境下 SVG 模板图标创建失败；同时补充托盘启动可观测日志与无入口恢复兜底，降低“Dock 隐藏但托盘未出现”的概率。
+
+**主要变更**:
+1. `TrayIconProvider` 内置 macOS 模板图标改为 PNG buffer 方案（`createFromBuffer`），默认优先使用并记录实际图标来源（built-in/file/empty）。
+2. 保留文件图标回退路径，并提供 `TUFF_TRAY_USE_FILE_ICON=1` 显式切回旧行为。
+3. `TrayManager.applyActivationPolicy` 新增配置推断：当 `hideDock=true` 或 `startSilent=true` 且未指定 `TUFF_TRAY_ACTIVATION` 时，自动设置为 `accessory`。
+4. macOS 在 `hideDock=true` 或 `startSilent=true` 默认启用托盘标题兜底（默认标题 `T`），确保即使图标渲染异常仍有可见入口；可通过 `TUFF_TRAY_TITLE_FALLBACK=0` 关闭，`TUFF_TRAY_TITLE` 自定义标题。
+5. `TrayManager` 新增托盘启动关键日志（图标来源、尺寸、title fallback 等），便于用户日志直观定位“托盘对象存在但不可见”的场景。
+6. 托盘可用性判断增加“安全入口模式”边界校验（`hideDock/startSilent` 下对异常 `bounds` 判定为不可用），避免 Tray 对象存在但仍不可见。
+7. `TrayManager` 增加托盘 bounds 快照日志（创建后 + 健康检查），补齐定位链路。
+8. 托盘不可用时恢复策略升级为切换 `regular` 激活策略并同时拉起 Dock 与主窗口，避免无入口死锁。
+9. 增加 text-only 标题兜底能力（`TUFF_TRAY_TEXT_ONLY=1` 显式启用），用于特定环境下的菜单栏可见性排查。
+10. 新增“本次会话 Dock 兜底锁定”：若托盘在创建后出现空 bounds 或边界异常，则该会话保持 Dock 可见，避免托盘间歇性失效导致入口丢失。
+11. Dock 兜底锁定触发后立即生效（无需等待后续窗口事件），减少“启动后瞬时无入口”窗口。
+12. 托盘健康检查延后到启动后约 2.6s，并将 Dock 兜底触发条件收敛为“重试后仍失败”，避免启动早期 bounds 抖动导致误判。
+13. macOS dev 模式在 `hideDock/startSilent` 时默认强制 `regular` 激活策略并保持 Dock 可见（可用 `TUFF_TRAY_DEV_FORCE_REGULAR=0` 关闭），优先保证开发可用入口稳定。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/tray/tray-icon-provider.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox `Object has been destroyed` 闪退链路修复（窗口销毁竞态 + 插件事件降噪）
+
+**变更类型**: 稳定性修复 / 生命周期竞态治理 / 通道超时降噪
+
+**描述**: 针对日志中 `core-box:deactivate-providers -> closeDevTools -> Object has been destroyed` 的闪退链路，补齐窗口销毁态守卫；同时将不需要响应的插件通知改为广播，避免 `plugin:lifecycle:active`、`core-box:ui-resume`、`core-box:clipboard-meta-updated` 一类 60s 超时告警放大。
+
+**主要变更**:
+1. `WindowManager.hide` 增加销毁态检查与 `setPosition` 异常保护，避免定时器回调访问已销毁窗口。
+2. `WindowManager.detachUIView` 关闭 DevTools 前增加 `isDevToolsOpened`/异常保护，规避 `closeDevTools` 空引用竞态。
+3. CoreBox 的 `ui-resume`、`plugin:lifecycle:inactive`、`core-box:input-change`（UI转发链路）改为插件广播发送，减少无目标 view 时的请求超时。
+4. PluginManager 的 `lifecycle active/inactive` 通知改为广播，避免 UI 未附着时 `sendToPlugin` 进入 60s request timeout。
+5. OCR 的 `core-box:clipboard-meta-updated` 改为广播发送，降低插件 UI 关闭期间的无效请求告警。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/main/modules/ocr/ocr-service.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 退出流程梳理与收口（避免重复退出与关窗竞态）
+
+**变更类型**: 生命周期一致性修复 / 退出链路稳定性治理
+
+**描述**: 针对退出阶段“`window-all-closed` / `before-quit` / CoreBox 布局更新”并发触发导致的竞态，统一退出态标记并移除重复强退路径，避免关窗过程中继续触发布局缩放和 UI 解绑逻辑。
+
+**主要变更**:
+1. `precore` 在 `before-quit` 与 `window-all-closed` 统一标记 `isQuitting`，并在 dev graceful shutdown 进行中跳过重复 `app.quit()`。
+2. `window-all-closed` 移除直接 `process.exit(0)`，改为依赖标准 `app.quit()` 链路，避免截断模块清理阶段。
+3. CoreBox 布局更新在应用退出/DevProcessManager 关停中直接跳过，避免退出阶段触发 `shrink/detach` 竞态。
+4. `CoreBoxManager.exitUIMode` 在应用退出态下快速短路，仅收敛状态，不再触发窗口操作。
+5. 修正 `WindowAllClosedEvent` 的事件名误配（`WILL_QUIT` -> `WINDOW_ALL_CLOSED`），确保事件语义一致。
+
+**修改文件**:
+- `apps/core-app/src/main/core/precore.ts`
+- `apps/core-app/src/main/core/eventbus/touch-event.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/manager.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox 输入转发收敛（含 breaking 契约升级）
+
+**变更类型**: 架构收敛 / 事件契约升级（Breaking Change）
+
+**描述**: 将 CoreBox 输入转发链路从“分散组装 + 多点转发”收敛为统一入口 `input-forwarding`，并将 `core-box:input-change` 契约升级为强制完整载荷（`input/query/source` 必填）。该变更会影响任何仍发送不完整 payload 的调用方（需要补齐字段）。
+
+**主要变更**:
+1. 新增 `CoreBoxInputForwarding`，统一负责输入 payload 规范化与路由（UI attach 转发 + 激活 feature 转发）。
+2. `PluginFeaturesAdapter.handleActiveFeatureInput` 改为接收标准化 payload，移除分散字段推断。
+3. `CoreBoxInputChangeRequest` 升级为必填字段（`input`、`query`、`source`），作为统一输入事件契约。
+4. `DivisionBox` 到插件的输入同步链路补齐 `source` 字段，避免契约断层。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/input-forwarding.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/input-transport.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.ts`
+- `packages/utils/transport/events/types/core-box.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-02-26
+
+### 移除 sync:guard lint 门禁脚本
+
+**变更类型**: 工程脚本清理 / 质量门禁调整
+
+**描述**: 根据当前开发流程，移除已不再使用的 `sync:guard` 门禁脚本与 lint 链路依赖，避免 `pnpm lint` 因缺失脚本报错中断。
+
+**主要变更**:
+1. 根 `package.json` 的 `lint` 与 `lint:fix` 移除 `pnpm sync:guard` 调用。
+2. 删除脚本文件 `scripts/check-no-legacy-sync-value-json.mjs`。
+3. 保留 `intelligence:check` 作为 lint 链路中的附加检查项。
+
+**修改文件**:
+- `package.json`
+- `scripts/check-no-legacy-sync-value-json.mjs`（删除）
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Release Notes 落地（Nexus Notes 页面 + GitHub 同步入库）
+
+**变更类型**: 发布能力增强 / 更新通道体验补齐
+
+**描述**: 新增版本化发布日志机制，约定 notes 路径为 `/notes/update_<version>`。Nexus release 更新项自动链接到 notes 页面；GitHub tag 发布后同步 Nexus release 时，会优先读取仓库 `notes/update_<version>.{zh,en}.md` 并写入 `notes/notesHtml`，实现“发布内容一次维护，多端统一展示”。
+
+**主要变更**:
+1. **Nexus Notes 路由**：新增 `/notes/[slug]` 页面与 `/api/notes/[slug]` 接口，按版本 slug 展示发布日志。
+2. **Release Update 链接收敛**：发布类 updates 的 `link` 从 `updates#tag` 改为 `/notes/update_<version>`。
+3. **GitHub → Nexus 同步增强**：`build-and-release` 在同步阶段优先读取 `notes/update_<version>.zh.md` / `.en.md`（或 `.md`）并渲染为 HTML 后写入 Nexus release。
+4. **首个版本日志落地**：新增 `notes/update_2.4.7.zh.md` 与 `notes/update_2.4.7.en.md`。
+5. **发布范围补齐**：`update_2.4.7` 内容按 `2.4.6 -> 2.4.7` 区间提交重新梳理，按 Intelligence/Release Pipeline/Nexus/Core-App/SDK/UI 六条主线归纳。
+6. **提交级细化**：新增区间规模统计（提交量/触达文件/热区）与代表提交附录，便于后续审计与回溯。
+
+**修改文件**:
+- `apps/nexus/server/utils/releaseNotesPath.ts`
+- `apps/nexus/server/utils/dashboardStore.ts`
+- `apps/nexus/server/api/notes/[slug].get.ts`
+- `apps/nexus/app/pages/notes/[slug].vue`
+- `.github/workflows/build-and-release.yml`
+- `notes/update_2.4.7.zh.md`
+- `notes/update_2.4.7.en.md`
+- `notes/update_2.4.7.appendix.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### v2.4.7 发版推进：文档进展梳理 + 版本基线对齐
+
+**变更类型**: 发布推进 / 文档治理 / 版本管理
+
+**描述**: 梳理当前项目文档进展并建立 `v2.4.7` 发版单一入口清单，统一记录发布门禁（Gate A~E）和阻塞项；同时将根包与 core-app 版本从 `2.4.7-beta.25` 对齐到稳定版 `2.4.7`，用于后续 tag 发布。
+
+**主要变更**:
+1. 新增发版推进文档：`RELEASE-2.4.7-CHECKLIST-2026-02-26.md`，沉淀文档进展矩阵、Gate 状态、阻塞与执行顺序。
+2. 同步更新文档入口：`docs/INDEX.md`、`docs/plan-prd/README.md`、`docs/plan-prd/TODO.md` 增加发版推进入口与清单。
+3. 路线图与质量基线补充 `v2.4.7` 发版门禁跟踪，明确 Gate A/B/C 的当前状态与后续收口动作。
+4. 版本基线对齐：`package.json` 与 `apps/core-app/package.json` 统一为 `2.4.7`。
+
+**修改文件**:
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `package.json`
+- `apps/core-app/package.json`
+
+### Tuff Intelligence Planner 超时与重试策略收口
+
+**变更类型**: 运行稳定性修复 / Agent 执行策略细化
+
+**描述**: 修复 Lab 实测中 planner 在 30s 超时直接失败且无有效重试的问题。统一将 Agent provider 调用超时下限收敛为 45s，并补齐“仅可重试错误”的单 provider 重试一次策略，避免短超时抖动导致编排链路提前中断。
+
+**主要变更**:
+1. Provider 调用超时下限统一为 `45_000ms`（即使 provider 配置为 30s，也会在 agent 调用链中按 45s 执行）。
+2. 调用失败新增 retryable 判定（timeout/429/5xx/网络瞬断等），命中后同 provider 自动重试 1 次。
+3. `retryCount` 指标改为“实际触发重试次数”，并在审计 metadata 中记录 `providerAttempt/retryable/willRetry`。
+
+**修改文件**:
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/server/utils/__tests__/intelligence-agent-policy.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Legacy SyncStore 下线（移除遗留明文同步实现）
+
+**变更类型**: P0 风险收口 / 架构清理
+
+**描述**: 下线 `apps/nexus/server/utils/syncStore.ts`，移除遗留 `/api/sync/*` 时代的明文 `value_json` 同步实现，避免后续新功能误接入旧存储路径。当前同步能力继续仅保留 `/api/v1/sync/*` 主链路。
+
+**主要变更**:
+1. 删除 `apps/nexus/server/utils/syncStore.ts`（legacy 明文同步实现）。
+2. 同步更新风险待办描述，明确 `syncStore.ts` 已清理，后续仅剩 `authStore.ts` 中历史 `value_json` 写入兼容清理。
+3. 清理 `mergeUsers` 对 `sync_items` 的 `value_json` 明文写入 SQL，改为仅通过时间优先规则做冲突删除 + `user_id` 迁移，不再显式写 `value_json`。
+4. 新增 CI 守卫工作流与检查脚本，禁止 `apps/nexus/server` 回归 `value_json` 关键字。
+5. 新增 `mergeLegacySyncItemsForUsers` 单测，覆盖 source/target 新旧时间戳冲突场景。
+
+**修改文件**:
+- `apps/nexus/server/utils/syncStore.ts`（删除）
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/utils/__tests__/authStore.sync-items-merge.test.ts`
+- `scripts/check-no-legacy-sync-value-json.mjs`
+- `.github/workflows/sync-guard.yml`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### FlipDialog 透传属性失效修复（遮罩误关根因）
+
+**变更类型**: P1 行为修复 / 组件封装稳定性修复
+
+**描述**: 系统性排查发现 `FlipDialog` 使用 `interface extends Omit<FlipOverlayProps, ...>` 的类型透传方案时，Vue SFC 编译后的 runtime props 仅保留显式声明字段，导致 `maskClosable/preventAccidentalClose/header/...` 等透传属性在运行时为 `undefined`。结果是业务层即使传入 `:prevent-accidental-close="true"`，实际未生效，遮罩点击仍按默认可关闭执行。
+
+**主要变更**:
+1. **透传策略调整**：`FlipDialog` 新增 `useAttrs()`，并通过 `v-bind="attrs"` 将未声明属性原样透传给 `TxFlipOverlay`。
+2. **移除伪默认值**：移除 `maskClosable/closable/scrollable` 在 `FlipDialog` 内的无效默认声明，避免制造“看似配置成功但运行时丢失”的假象。
+3. **双端一致修复**：同步修复 `apps/core-app` 与 `apps/nexus` 两套 `FlipDialog`，避免后续行为分叉。
+4. **问题场景恢复**：`dashboard/api-keys` 的 `:mask-closable="false" + :prevent-accidental-close="true"` 现在会真实生效，遮罩点击不再直接关闭。
+
+**修改文件**:
+- `apps/nexus/app/components/base/dialog/FlipDialog.vue`
+- `apps/core-app/src/renderer/src/components/base/dialog/FlipDialog.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreApp FlipDialog P0 尺寸收敛（去最大化观感）
+
+**变更类型**: UI 体验收敛 / 弹框规范治理 / 低风险样式与调用调整
+
+**描述**: 针对 CoreApp 弹框“默认偏大”问题执行 P0 收口：下调 `FlipDialog` 全局尺寸 token，并将业务详情类弹框的 `size="xl"` 收敛到 `size="lg"`；仅保留样式编辑器等重编辑场景继续使用 `xl`。
+
+**主要变更**:
+1. **全局尺寸下调**：`md/lg/xl` 宽度 token 调整为 `760/920/1040` 基线（保留移动端收敛与 `full` 能力）。
+2. **默认兜底宽度同步**：`FlipDialog` 卡片默认宽度 fallback 同步为新 `lg` 基线，减少样式变量失效时的“过大”回退。
+3. **业务场景收敛**：以下弹框从 `xl` 调整为 `lg`，统一观感并降低“最大化”感受：
+   - `TuffUserInfo`
+   - `IntelligenceAuditOverlay`
+   - `PluginDetails`
+   - `PluginFeatures`
+   - `PluginStorage`
+   - `Store`
+   - `ShortcutDialog`
+   - `StoreSourceEditor`
+4. **编辑器场景保留**：`CoreBoxEditorOverlay` / `MainLayoutEditorOverlay` / `RemotePresetOverlay` 继续使用 `xl`，用于高密度编辑内容。
+
+**修改文件（核心）**:
+- `apps/core-app/src/renderer/src/components/base/dialog/flip-dialog.utils.ts`
+- `apps/core-app/src/renderer/src/components/base/dialog/FlipDialog.vue`
+- `apps/core-app/src/renderer/src/components/base/TuffUserInfo.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/audit/IntelligenceAuditOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatures.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/components/ShortcutDialog.vue`
+- `apps/core-app/src/renderer/src/views/base/store/StoreSourceEditor.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### API Key 弹窗遮罩误触反馈修复（局部增强）
+
+**变更类型**: 交互可用性修复 / 低风险样式调整
+
+**描述**: `dashboard/api-keys` 创建弹窗开启 `preventAccidentalClose` 后，因全局 warning 红光已大幅减弱，遮罩误触时反馈不够可感知。为避免影响其它 overlay，改为在 API Key 弹窗局部增强遮罩误触反馈。
+
+**主要变更**:
+1. **局部 mask 标识**：API Key 创建弹窗新增 `mask-class="ApiKeyOverlay-Mask"`，只对该弹窗生效。
+2. **误触可见性增强**：为 `ApiKeyOverlay-Mask` 增加更清晰的 warning 动画（遮罩红晕 + 卡片 glow），不改动全局 `TxFlipOverlay` warning 强度。
+3. **交互提示补充**：遮罩区域增加 `not-allowed` 光标，明确“当前不可通过遮罩关闭”。
+4. **danger 阴影慢淡出**：局部 warning glow 动画时长从 `720ms` 拉长到 `980ms`，并新增中段衰减关键帧（`52%`）让淡出更平缓。
+5. **整卡弹动替代内层弹动**：禁用 API Key 场景下内层 `TxFlipOverlay-Shell` 的 focus 动画，改为在 `FlipDialog-Card` 上做整卡 scale 弹动，反馈更整体。
+6. **关闭入口回归内置**：移除 API Key 页面手写 close 按钮，改为使用 `FlipDialog/TxFlipOverlay` 内置 header close，并透传 `headerTitle/headerDesc/closeAriaLabel`。
+
+**修改文件**:
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Monorepo P0 稳定性收口（workspace 边界 + 包身份 + 根脚本）
+
+**变更类型**: 工程稳定性修复 / 构建链路收敛 / 低风险配置治理
+
+**描述**: 处理 workspace 误纳入构建产物目录导致的依赖解析波动（含 preload 模块加载异常场景）。本次将 `pnpm-workspace` 规则从宽匹配改为明确包目录 + 生成目录排除，并补齐缺失包身份信息（`name/private`）与根脚本契约，降低本地/CI 安装与运行时不确定性。
+
+**主要变更**:
+1. **workspace 边界收紧**：`apps/* + packages/* + plugins/*` 明确纳入，排除 `out/dist/.output/.nuxt/.vitepress/node_modules` 及 `apps/core-app/tuff/modules/plugins/**`。
+2. **包身份补齐**：`touch-translation` 补齐包名并设为私有；`core-app/test/tuff-business/touch-music` 显式 `private: true`，降低误发布风险。
+3. **根脚本收敛**：根 `lint/lint:fix` 统一为递归代码文件扫描命令，去掉对 `../../node_modules/eslint` 的硬路径耦合。
+4. **pnpm 基线声明**：根包补齐 `packageManager`，并统一已修改子包的 `packageManager` 为同一版本。
+
+**修改文件（核心）**:
+- `pnpm-workspace.yaml`
+- `package.json`
+- `apps/core-app/package.json`
+- `apps/nexus/package.json`
+- `packages/test/package.json`
+- `packages/tuff-business/package.json`
+- `plugins/touch-music/package.json`
+- `plugins/touch-translation/package.json`
+
+### Tuff Intelligence Agent 一次切换收口（1+2+3+4）
+
+**变更类型**: 架构收口 / Breaking 契约升级 / Lab 管理能力补齐
+
+**描述**: 按一次切换策略完成 `intelligence-agent` 主链路增强：Provider 路由契约收口、Nexus/Core schema 对齐、Prompt Registry 管理 API + Lab UI 落地、`session.start -> plan -> execute -> reflect -> finalize` LangGraph 状态机接管 stream 运行主线。
+
+**主要变更**:
+1. **Provider 路由契约收口**：前端移除 `:id.probe/:id.test` legacy fallback；legacy 点号路由与中间件兼容入口统一返回 `410`，仅保留标准斜杠路由 `:id/probe|test`。
+2. **共享 schema 对齐**：`packages/utils/types/intelligence.ts` 新增 Provider Sync DTO、Prompt Registry/Binding 管理 DTO、agent trace contract 常量，Nexus sync API 与 Core 渲染侧统一消费同一类型。
+3. **Prompt Registry 管理能力补齐**：新增 `/api/admin/intelligence-agent/prompts*` 与 `/prompt-bindings*`（GET/POST/DELETE），并在 `IntelligenceAgentWorkspace` 增加 Prompt Registry 管理弹窗（记录与绑定的增删改查）。
+4. **LangGraph 接管 stream 执行链**：新增 `intelligenceAgentGraphRunner`，将 `session/stream` 执行链切换为显式五阶段节点编排，保留审批门控、trace/checkpoint、pause/disconnect 和 metrics/audit 出口。
+5. **执行策略收口**：执行阶段默认 `fail-fast`；仅当 action 显式 `continueOnError=true` 且满足“低风险读工具”策略时允许继续执行。
+6. **Core 编排同构补齐**：Core 新增 `intelligence-agent-graph-runner`（LangGraph 五阶段节点），并在 `session:start` 增加 `autoRunGraph` 可选开关，支持按同构状态机一键运行 `plan -> execute -> reflect -> finalize`。
+
+**修改文件（核心）**:
+- `apps/nexus/server/utils/intelligenceAgentGraphRunner.ts`
+- `apps/nexus/server/api/admin/intelligence-agent/session/stream.post.ts`
+- `apps/nexus/server/api/admin/intelligence-agent/prompts.{get,post,delete}.ts`
+- `apps/nexus/server/api/admin/intelligence-agent/prompt-bindings.{get,post,delete}.ts`
+- `apps/nexus/server/middleware/intelligence-route-compat.ts`
+- `apps/nexus/server/api/dashboard/intelligence/providers/[id].{probe,test}.post.ts`
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/server/api/dashboard/intelligence/providers/sync.get.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceChannelsPage.vue`
+- `packages/utils/types/intelligence.ts`
+
+### Nexus i18n 去 Query 化与 Locale 编排层收敛
+
+**变更类型**: 稳定性修复 / 行为约束收口 / 兼容迁移
+
+**描述**: Nexus i18n 改为 `no_prefix + cookie + 账号偏好` 主流模式，移除前端 `?lang` 生成与依赖；新增统一 Locale Orchestrator 串行化 `setLocale`，解决登录/回调/路由切换期间语言随机回退英文的问题。服务端同步收口 locale 为 `en|zh|null`，并对 profile patch 入参加入校验与归一化。
+
+**主要变更**:
+1. **统一编排层**：新增 `useLocaleOrchestrator`，统一处理初始化、归一化、持久化、legacy `lang` 一次性兼容读取与 URL 清理、登录后 profile locale 同步。
+2. **前端去 query 化**：`app.vue`、`useSignIn`、`LanguageToggle`、`HeaderUserMenu`、`TheHeader`、`TuffLandingWaitlist`、`sign-up` 链路移除 `lang` 拼接/消费，不再在地址栏暴露语言参数。
+3. **OAuth 回调参数收敛**：`buildOauthCallbackUrl` 不再注入 `lang`，相关单测更新，避免认证链路再次污染 query。
+4. **服务端 locale 规范化**：新增 `server/utils/locale.ts`，`profile.patch` 三条接口仅接受 `en|zh|null`（兼容 `en-US/zh-CN` 自动归一化，非法值返回 400）。
+5. **authStore 一致性**：`createUser/updateUserProfile/mapUser` 写入与读取统一归一化 locale；`me` 系列接口统一输出规范 locale。
+6. **测试补齐**：新增 `server/utils/__tests__/locale.test.ts` 覆盖 locale 归一化与合法性判断。
+
+**修改文件（核心）**:
+- `apps/nexus/app/composables/useLocaleOrchestrator.ts`
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/composables/useSignIn.ts`
+- `apps/nexus/app/composables/useOauthContext.ts`
+- `apps/nexus/app/composables/useUserLocale.ts`
+- `apps/nexus/app/components/LanguageToggle.vue`
+- `apps/nexus/app/components/HeaderUserMenu.vue`
+- `apps/nexus/app/components/TheHeader.vue`
+- `apps/nexus/app/components/tuff/landing/TuffLandingWaitlist.vue`
+- `apps/nexus/app/pages/sign-up/index.vue`
+- `apps/nexus/server/utils/locale.ts`
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/api/user/profile.patch.ts`
+- `apps/nexus/server/api/auth/profile.patch.ts`
+- `apps/nexus/server/api/v1/auth/profile.patch.ts`
+- `apps/nexus/server/api/user/me.get.ts`
+- `apps/nexus/server/api/auth/me.get.ts`
+- `apps/nexus/server/api/v1/auth/me.get.ts`
+- `apps/nexus/server/utils/__tests__/locale.test.ts`
+
+### API Key 弹窗 i18n 收敛与显式关闭按钮补齐
+
+**变更类型**: Dashboard 可用性修复 / 国际化完善
+
+**描述**: 修复 API Key 创建弹窗缺少显式关闭按钮的问题，并将页面与弹窗内文案全面接入 `apps/nexus` i18n（`en/zh`），避免中英文混杂与硬编码文本。
+
+**主要变更**:
+1. **显式关闭入口**：API Key 创建弹窗顶部新增独立 close 按钮（`TxButton`），不依赖遮罩点击关闭。
+2. **弹窗文案全量 i18n**：标题、副标题、表单字段、权限风险提示、按钮文本、创建中态文案全部改为 `t('dashboard.sections.apiKeys.*')`。
+3. **列表与状态文案 i18n**：页面标题、空态、创建成功提示、创建/最近使用/过期状态文案、复制按钮文案统一 i18n 化。
+4. **错误与确认文案 i18n**：加载/创建/删除失败错误文案与删除确认弹窗文案统一迁移到语言包。
+5. **权限树与过期选项 i18n**：`scopeTree` 与 `expiryOptions` 改为 computed + `t()` 生成，跟随语言切换实时更新。
+
+**修改文件**:
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### TxFlipOverlay close warning 红色强度下调（再次减弱）
+
+**变更类型**: 交互视觉微调 / 低风险样式调整
+
+**描述**: `TxFlipOverlay` 的 close-guard warning 红色提示仍偏浓。保持原有动画节奏与范围不变，在上一版基础上继续将遮罩红晕与卡片 glow 的透明度再下调 80%，进一步降低视觉压迫感。
+
+**主要变更**:
+1. **遮罩红晕继续减弱**：`tx-flip-overlay-mask-warning` 的红色径向渐变 alpha 从 `0.11/0.06` 调整为 `0.022/0.012`（在上一版基础上再减 80%）。
+2. **卡片 glow 继续减弱**：`tx-flip-overlay-close-guard-warning` 的三层 red drop-shadow alpha 从 `0.49/0.36/0.25` 调整为 `0.098/0.072/0.05`（在上一版基础上再减 80%）。
+
+**修改文件**:
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus Intelligence Providers 测试能力升级（详细弹窗 + 模型选择 + 响应展示）
+
+**变更类型**: 管理后台体验增强 / Provider 诊断能力补齐 / 低风险接口扩展
+
+**描述**: Nexus Intelligence 管理页将 providers 的“测试连接”从列表轻量提示升级为 `TxFlipOverlay` 详细测试弹窗，支持选择模型、输入测试 prompt，并展示模型返回文本、延迟、endpoint、trace 及错误片段。后端新增 provider probe 接口，复用 LangChain 调用链执行真实模型探测。
+
+**主要变更**:
+1. **前端测试交互升级**：`/dashboard/admin/intelligence` 的 provider 测试按钮改为打开详细测试弹窗，不再仅展示列表内 success/fail 提示。
+2. **可选模型测试**：弹窗支持从 provider 已配置模型中选择目标模型（可回退默认模型）。
+3. **响应细节可视化**：展示模型正文输出、latency、endpoint、traceId、retry 次数和错误响应片段。
+4. **后端 probe 能力新增**：新增 `/api/dashboard/intelligence/providers/:id/probe`，以 LangChain 调用 provider 并返回结构化诊断结果。
+5. **调用链复用**：`tuffIntelligenceLabService` 新增 `probeIntelligenceLabProvider` 导出，避免重复实现模型调用逻辑。
+6. **风险功能门控降级**：当 `/api/dashboard/intelligence/ip-bans` 在当前环境被 feature-gate 关闭（`404 Feature not found`）时，前端自动降级隐藏 IP 封禁面板，不再持续显示错误噪音。
+7. **路由命名修正**：补充 `providers/[id]/probe.post.ts` 与 `providers/[id]/test.post.ts`，确保前端调用的 `/providers/:id/probe` 与 `/providers/:id/test` 命中正确 API 路由（避免误落到页面 HTML 响应）。
+8. **前端调用硬切换**：Provider Probe 与编辑态模型拉取统一只调用 `/providers/:id/probe|test`，不再做 legacy 回退。
+9. **HTML 回包显式失败**：当错误路由返回 `200 + text/html`（非 API JSON）时，前端直接判定为错误，避免“表面 200 实际失败”的假成功场景。
+10. **服务端契约硬收口**：`intelligence-route-compat` 中间件对 legacy 点号路由直接返回 `410`，不再执行重定向兼容。
+
+**修改文件**:
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/server/api/dashboard/intelligence/providers/[id].probe.post.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### FlipDialog 统一落地（Nexus 业务 FlipOverlay 场景迁移）
+
+**变更类型**: 交互一致性优化 / 弹框体系收敛 / 中低风险页面改造
+
+**描述**: 延续 CoreApp 的 `FlipDialog` 方案，在 Nexus `app/pages + app/components` 的业务场景中完成 `TxFlipOverlay` 迁移。统一 reference 传递、遮罩行为、source 隐藏恢复与宽弹框尺寸约束（`md/lg/xl`），并移除页面级重复 `Teleport`。文档演示与测试页（`content/demos`、`pages/test`）保留 `TxFlipOverlay`，用于组件示例与堆叠行为验证。
+
+**主要变更**:
+1. **Nexus 统一组件新增**：新增 `apps/nexus/app/components/base/dialog/FlipDialog.vue` 与 `flip-dialog.utils.ts`，复用 `reference` 优先级、自动隐藏 source、宽弹框尺寸映射与移动端收敛规则。
+2. **业务页迁移完成**：Nexus 业务范围内历史 `TxFlipOverlay` 调用迁移到 `FlipDialog`，并统一 `source -> reference`。
+3. **页面结构收敛**：移除业务页中包裹 `TxFlipOverlay` 的 `Teleport to="body"`，统一由 `FlipDialog` 内部承载。
+4. **尺寸规范落地**：按场景设置 `size=md/lg/xl`，避免高瘦弹框和各页面自定义尺寸漂移。
+5. **保留边界明确**：`apps/nexus/app/pages/test/flip-overlay-stack.vue` 与 `apps/nexus/app/components/content/demos/FlipOverlayFlipOverlayDemo.vue` 继续使用 `TxFlipOverlay`，不纳入业务迁移闭环。
+
+**修改文件（核心）**:
+- `apps/nexus/app/components/base/dialog/FlipDialog.vue`
+- `apps/nexus/app/components/base/dialog/flip-dialog.utils.ts`
+- `apps/nexus/app/components/assets/create/AssetCreateOverlay.vue`
+- `apps/nexus/app/components/CreatePluginDrawer.vue`
+- `apps/nexus/app/components/dashboard/ReviewModalOverlay.vue`
+- `apps/nexus/app/components/VersionDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginMetadataOverlay.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue`
+- `apps/nexus/app/components/docs/DocsAssistantDialog.vue`
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `apps/nexus/app/pages/dashboard/storage.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/app/pages/dashboard/account.vue`
+- `apps/nexus/app/pages/dashboard/team.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/pages/store.vue`
+
+## 2026-02-25
+
+### FlipDialog 统一落地（CoreApp FlipOverlay 场景收敛）
+
+**变更类型**: 交互一致性优化 / 组件封装升级 / 页面调用收敛
+
+**描述**: 在渲染层新增 `FlipDialog` 统一封装，替代业务页直接使用 `TxFlipOverlay + Teleport` 的分散实现。新组件统一了 reference 输入方式、遮罩行为、source 隐藏策略与宽弹框尺寸规则，并完成现有 16 个 `TxFlipOverlay` 场景迁移。
+
+**主要变更**:
+1. **统一组件新增**：新增 `FlipDialog`，支持 `reference` 参数与 `#reference` 插槽，且 `reference` 参数优先级最高。
+2. **触发与可控打开**：`#reference` 默认点击自动打开（可通过 `referenceAutoOpen=false` 关闭），支持手动 `open/close/toggle`。
+3. **source 隐藏策略**：打开时自动隐藏 reference 元素（`opacity: 0 + pointer-events: none`），关闭时恢复；`DOMRect` 场景优先隐藏 reference 插槽元素。
+4. **尺寸体系统一**：新增 `size=md/lg/xl/full` 宽弹框规范，支持 `width/maxHeight/minHeight` 覆盖，移动端统一降维宽高策略。
+5. **基础能力补齐**：`TxFlipOverlay` 增加 `cardStyle` 能力并接入模板，以支持上层统一尺寸透传。
+6. **场景迁移完成**：以下 16 个场景完成 `TxFlipOverlay -> FlipDialog` 迁移，并移除页面级重复 `Teleport`：
+   - `StoreHeader`
+   - `IntelligenceAuditOverlay`
+   - `TuffUserInfo`
+   - `StoreSourceEditor`
+   - `PluginInfo`
+   - `PluginStorage`
+   - `PluginFeatures`
+   - `PluginDevSettingsOverlay`
+   - `PluginDetails`
+   - `RemotePresetOverlay`
+   - `CoreBoxEditorOverlay`
+   - `FlatDownload`
+   - `MainLayoutEditorOverlay`
+   - `Plugin`
+   - `ShortcutDialog`
+   - `Store`
+
+**修改文件（核心）**:
+- `apps/core-app/src/renderer/src/components/base/dialog/FlipDialog.vue`
+- `apps/core-app/src/renderer/src/components/base/dialog/flip-dialog.utils.ts`
+- `apps/core-app/src/renderer/src/components/base/dialog/FlipDialog.test.ts`
+- `apps/core-app/src/renderer/src/components/store/StoreHeader.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/audit/IntelligenceAuditOverlay.vue`
+- `apps/core-app/src/renderer/src/components/base/TuffUserInfo.vue`
+- `apps/core-app/src/renderer/src/views/base/store/StoreSourceEditor.vue`
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatures.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDevSettingsOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/editors/RemotePresetOverlay.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/editors/CoreBoxEditorOverlay.vue`
+- `apps/core-app/src/renderer/src/components/download/FlatDownload.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/editors/MainLayoutEditorOverlay.vue`
+- `apps/core-app/src/renderer/src/views/base/Plugin.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/components/ShortcutDialog.vue`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/src/types.ts`
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts`
+
+### Intelligence Agent/Lab 页面收敛为共享工作台（Admin）
+
+**变更类型**: 联调支持 / 页面能力恢复 / 低风险前台改造
+
+**描述**: `intelligence-agent` 页面能力（会话流、历史回放、trace 详情、审批门控）抽取为共享工作台组件，`intelligence-agent` 与 `intelligence-lab` 两个路由统一复用，消除双维护。
+
+**主要变更**:
+1. **共享组件抽取**：新增 `IntelligenceAgentWorkspace`，承载完整 Agent 工作台交互。
+2. **双路由复用**：`/dashboard/admin/intelligence-agent` 与 `/dashboard/admin/intelligence-lab` 统一渲染共享组件。
+3. **能力对齐**：Lab 路由直接拥有 history/trace/approval 等完整能力，不再使用简化页。
+
+**修改文件**:
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence-agent.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence-lab.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Intelligence 渠道同步（Nexus -> Core-App）与 Nexus LLM 优先链路
+
+**变更类型**: 配置治理 / 渠道同步 / 运行链路优化
+
+**描述**: 新增 Nexus 渠道同步接口，Core-App 渠道页支持一键拉取 Nexus providers 并合并本地配置；同时强化 `tuff-nexus` provider 的运行时 token 注入，确保 Core-App 在无手填 API Key 场景下优先可用 Nexus LLM。
+
+**主要变更**:
+1. **Nexus 同步接口**：新增 `/api/dashboard/intelligence/providers/sync`，输出标准化 provider schema（不回传明文 apiKey）。
+2. **Core-App 同步入口**：`IntelligenceChannelsPage` 新增“从 Nexus 同步”操作，支持拉取并合并 providers。
+3. **Nexus 优先保障**：同步后确保 `tuff-nexus-default` 保持启用与高优先级；无登录态时提示认证。
+4. **运行时注入**：Core 主进程在 `testProvider/fetchModels` 场景为 `tuff-nexus` 自动注入 auth token（缺省回退 guest），避免手填 API Key。
+5. **前端校验放宽**：`tuff-nexus` 渠道不再被前端 API Key 必填规则阻塞，配置错误提示更准确。
+
+**修改文件**:
+- `apps/nexus/server/api/dashboard/intelligence/providers/sync.get.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceChannelsPage.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/config/IntelligenceApiConfig.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/layout/IntelligenceItem.vue`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Assets 版本驳回重提（Re-edit）与审核时间线
+
+**变更类型**: 审核流能力补齐 / 交互优化 / 数据模型扩展
+
+**描述**: Dashboard Assets 支持对 `rejected` 版本进行 Re-edit 并重新提交审核；审核驳回原因可透传并持久化到版本记录。同时新增插件级“流程时间线”，管理员与发布者可查看插件与版本在审核链路中的关键状态演进。
+
+**主要变更**:
+1. **Re-edit 闭环**：在版本详情中为 `rejected` 版本新增 `Re-edit` 入口，复用 `VersionDrawer`（`create/reedit` 双模式），支持替换包与更新 changelog 后重新提审。
+2. **后端重提接口**：新增 `PATCH /api/dashboard/plugins/:id/versions/:versionId/reedit`，仅 owner/admin 可操作，且仅允许 `rejected` 版本重提；重提后版本状态置为 `pending`。
+3. **驳回原因落库**：版本状态接口支持 `reason` 入参；`rejected` 时写入 `reject_reason`，重新提审或通过时清空该字段。
+4. **时间线事件流**：新增插件审核时间线存储与查询，记录 `plugin.created / plugin.status.changed / version.created / version.status.changed / version.reedited` 事件，并在详情抽屉展示。
+5. **可见性控制**：时间线接口与前端展示仅对管理员与插件发布者开放。
+
+**修改文件**:
+- `apps/nexus/server/utils/pluginsStore.ts`
+- `apps/nexus/server/api/dashboard/plugins/[id]/status.patch.ts`
+- `apps/nexus/server/api/dashboard/plugins/[id]/versions/[versionId].patch.ts`
+- `apps/nexus/server/api/dashboard/plugins/[id]/versions/[versionId]/reedit.patch.ts`
+- `apps/nexus/server/api/dashboard/plugins/[id]/timeline.get.ts`
+- `apps/nexus/app/pages/dashboard/assets.vue`
+- `apps/nexus/app/components/VersionDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Intelligence 模型调用全量切到 LangChain（Core + Nexus）
+
+**变更类型**: Breaking Change / 架构收敛 / Provider 调用链重构
+
+**描述**: Core 与 Nexus 的 Intelligence 模型调用路径从 provider 直连 HTTP（`/chat/completions`、`/messages`、`/api/chat`）切换为 LangChain 统一入口。Core 侧 OpenAI/DeepSeek/Siliconflow/Anthropic/Local provider 统一使用 LangChain adapter；Nexus agent 调用层同步切换为 LangChain 模型实例调用，保留现有审批、trace、fallback、retry、session contract。
+
+**主要变更**:
+1. **Core Provider 收敛**：新增 OpenAI-compatible LangChain provider 基座，OpenAI/DeepSeek/Siliconflow/Local 统一继承；Anthropic provider 切到 `@langchain/anthropic`。
+2. **Nexus Agent 调用收敛**：`tuffIntelligenceLabService` 的 OpenAI-compatible / Anthropic / Local 模型调用改为 LangChain。
+3. **直连移除**：从核心模型执行路径移除 provider 直连 fetch 调用，改为 LangChain runtime 调用。
+4. **依赖补齐**：Core/Nexus 增加 `@langchain/anthropic`，Core 增加 `@langchain/openai` 显式依赖。
+
+**修改文件（核心）**:
+- `apps/core-app/src/main/modules/ai/providers/langchain-openai-compatible-provider.ts`
+- `apps/core-app/src/main/modules/ai/providers/openai-provider.ts`
+- `apps/core-app/src/main/modules/ai/providers/deepseek-provider.ts`
+- `apps/core-app/src/main/modules/ai/providers/siliconflow-provider.ts`
+- `apps/core-app/src/main/modules/ai/providers/anthropic-provider.ts`
+- `apps/core-app/src/main/modules/ai/providers/local-provider.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/core-app/package.json`
+- `apps/nexus/package.json`
+
+### Store 命名硬切换（CoreApp + Nexus + Utils）
+
+**变更类型**: Breaking Change / 协议与路由统一 / 数据迁移
+
+**描述**: 插件与 Agent 的 `market` 体系执行无兼容硬切换为 `store`。`packages/utils`、`apps/core-app`、`apps/nexus` 的事件、SDK、路由、API 与页面路径统一改名；CoreApp 插件商店详情在市场页改为 `TxFlipOverlay` 展示。旧 `market` 命名仅保留在一次性迁移来源常量（历史表名/KV key）中用于数据复制，迁移后仅读写 `store` 命名。
+
+**主要变更**:
+1. **协议域统一**：插件与 Agent 事件域统一改为 `store` 命名（旧 `market` 命名空间已移除）。
+2. **路由与页面统一**：CoreApp 与 Nexus 统一 `/store*`，移除 `/market*`。
+3. **CoreApp 交互改造**：`/store` 详情改为 `TxFlipOverlay`，支持 source-aware FLIP；`/store/installed` 维持原展示方式。
+4. **Nexus API 硬切换**：插件与审核接口统一切换到 `/api/store/*` 与 `/api/admin/store/reviews/*`。
+5. **一次性数据迁移**：评分/评论表与 KV key 从 legacy `market` 命名迁移到 `store` 命名，仅在新命名无数据且旧命名有数据时执行复制（幂等）。
+6. **文档全量同步**：`docs` 与 `apps/nexus/content` 的产品域术语、事件与路径完成 `market -> store` 全量替换（保留第三方固定链接语义）。
+
+**修改文件（核心）**:
+- `packages/utils/store/*`
+- `packages/utils/transport/events/types/store.ts`
+- `packages/utils/transport/sdk/domains/store.ts`
+- `packages/utils/transport/sdk/domains/agents-store.ts`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+- `apps/core-app/src/renderer/src/views/base/store/StoreDetailOverlay.vue`
+- `apps/core-app/src/main/service/store-api.service.ts`
+- `apps/core-app/src/main/service/agent-store.service.ts`
+- `apps/nexus/app/pages/store.vue`
+- `apps/nexus/app/layouts/store.vue`
+- `apps/nexus/server/api/store/*`
+- `apps/nexus/server/api/admin/store/reviews/*`
+- `apps/nexus/server/utils/pluginRatingStore.ts`
+- `apps/nexus/server/utils/pluginReviewStore.ts`
+
+### FlipOverlay 关闭按钮内置化（业务页收敛）
+
+**变更类型**: 交互一致性优化 / 组件用法收敛
+
+**描述**: 清理业务页面中 `TxFlipOverlay` 场景的手写 close 按钮，统一回收为组件内置 close 入口，并将部分弹层标题/说明迁移到内置 header 配置，降低调用侧重复实现。
+
+**主要变更**:
+1. **关闭入口统一**：移除多个 overlay 里的手写 `CloseBtn`/`i-carbon-close` 按钮，改为 `TxFlipOverlay` 内置 close。
+2. **header 配置收敛**：在可复用场景切换为 `header-title/header-desc/header-actions`，减少调用侧自管头部结构。
+3. **复杂头部保留策略**：对仍需保留业务操作区（如刷新、筛选、步骤导航）的弹层，仅去除手写 close，保持原交互不变。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/components/base/TuffUserInfo.vue`
+- `apps/core-app/src/renderer/src/components/download/FlatDownload.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/audit/IntelligenceAuditOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDevSettingsOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `apps/core-app/src/renderer/src/views/base/store/StoreSourceEditor.vue`
+- `apps/nexus/app/components/CreatePluginDrawer.vue`
+- `apps/nexus/app/components/VersionDrawer.vue`
+- `apps/nexus/app/components/assets/create/AssetCreateOverlay.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginMetadataOverlay.vue`
+- `apps/nexus/app/components/docs/DocsAssistantDialog.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence-agent.vue`
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `apps/nexus/app/pages/dashboard/storage.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### FlipOverlay 全量内置参数收敛（去手动动画/样式透传）
+
+**变更类型**: 组件用法统一 / 样式收敛
+
+**描述**: 在不新增 Core/Nexus 包装层的前提下，批量将业务侧 `TxFlipOverlay` 切换为组件内置默认行为，移除重复透传的动画与样式参数（`duration/rotate/speed/transition-name/mask-class/card-class`），保留必要业务特例（如 `closable=false`、`mask-closable=false`、`prevent-accidental-close=true`）。
+
+**主要变更**:
+1. **动画参数统一**：业务页不再手动传 `:duration/:rotate-x/:rotate-y/:speed-boost`，统一使用 `TxFlipOverlay` 内置默认动画。
+2. **样式入口收敛**：业务页不再依赖 `transition-name/mask-class/card-class` 覆盖默认表现，统一使用组件内置 mask/card 风格。
+3. **特例保留**：仅保留交互语义特例配置（如禁用右上角 close、防误关闭），避免破坏关键流程。
+4. **冗余常量清理**：删除调用侧遗留 `FLIP_* / ISSUE_FLIP_* / ADD_DIALOG_FLIP_*` 常量，减少重复配置面。
+5. **动态宽度场景内移**：`AssetCreateOverlay` 的宽窄切换从 `card-class` 下沉到内容容器类，避免对外部 card class 的依赖。
+
+**修改文件（核心）**:
+- `apps/core-app/src/renderer/src/components/base/TuffUserInfo.vue`
+- `apps/core-app/src/renderer/src/components/download/FlatDownload.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/audit/IntelligenceAuditOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDevSettingsOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatures.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `apps/core-app/src/renderer/src/views/base/Plugin.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/components/ShortcutDialog.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/editors/CoreBoxEditorOverlay.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/editors/MainLayoutEditorOverlay.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/editors/RemotePresetOverlay.vue`
+- `apps/nexus/app/components/CreatePluginDrawer.vue`
+- `apps/nexus/app/components/VersionDrawer.vue`
+- `apps/nexus/app/components/assets/create/AssetCreateOverlay.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/docs/DocsAssistantDialog.vue`
+- `apps/nexus/app/pages/dashboard/account.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `apps/nexus/app/pages/dashboard/storage.vue`
+- `apps/nexus/app/pages/dashboard/team.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### FlipOverlay 第二轮全量清理（移除遗留死样式）
+
+**变更类型**: 组件用法统一 / 样式债务清理
+
+**描述**: 在第一轮参数收敛后，继续对 CoreApp + Nexus 全量 `TxFlipOverlay` 使用点做二次扫描，移除已无调用入口的 `*-Mask/*-Card` 与 `TxFlipOverlay-*` 覆盖样式，统一回归组件内置样式与动画。
+
+**主要变更**:
+1. **死样式清理**：删除历史透传类名对应样式（如 `UserProfileOverlay-* / ProviderOverlay-* / StoreDetailOverlay-*` 等）。
+2. **覆盖项归零**：清理 `:global(.XxxOverlay-Card .TxFlipOverlay-Header/Close/Actions)` 这类对内置结构的外部覆盖。
+3. **范围补齐**：补齐第一轮未覆盖文件（`StoreSourceEditor`、`StoreHeader`、`PluginStorage`、`PluginDevSettingsOverlay`、`FlatDownload` 等）。
+4. **保留策略不变**：仅保留业务语义开关（如 `closable=false`、`mask-closable=false`、`prevent-accidental-close=true`），不新增 wrapper。
+
+**修改文件（节选）**:
+- `apps/core-app/src/renderer/src/components/base/TuffUserInfo.vue`
+- `apps/core-app/src/renderer/src/components/download/FlatDownload.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDevSettingsOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `apps/core-app/src/renderer/src/components/store/StoreHeader.vue`
+- `apps/core-app/src/renderer/src/views/base/store/StoreSourceEditor.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/editors/CoreBoxEditorOverlay.vue`
+- `apps/nexus/app/components/CreatePluginDrawer.vue`
+- `apps/nexus/app/components/VersionDrawer.vue`
+- `apps/nexus/app/components/docs/DocsAssistantDialog.vue`
+- `apps/nexus/app/pages/dashboard/account.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `apps/nexus/app/pages/dashboard/storage.vue`
+- `apps/nexus/app/pages/dashboard/team.vue`
+- `apps/nexus/app/pages/store.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 修复: Assets 列表状态悬浮提示审核中
+
+**变更类型**: 交互细节优化 / Bug 修复
+
+**描述**: 在 Dashboard Assets「我的发布物」表格中，当发布物存在待审核项（插件本身待审核或任一版本待审核）时，状态徽标悬浮提示“正在审核中”，避免仅显示“已通过”造成误解。
+
+**主要变更**:
+1. **待审核判定补齐**：新增 `hasPluginPendingReview`，并由后端透出 `hasPendingReview/pendingReviewCount`，统一判定插件与版本层面的 pending 状态。
+2. **状态悬浮提示**：状态徽标与最新版本徽标均改为 `TxTooltip` 提示，在命中待审核项时 hover 显示“正在审核中”。
+3. **i18n 文案补齐**：新增 `dashboard.sections.plugins.reviewingHint` 中英文文案。
+
+**修改文件**:
+- `apps/nexus/app/pages/dashboard/assets.vue`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Intelligence Agent 一次切换（LangGraph + Prompt Registry）
+
+**变更类型**: 架构切换 / Breaking API / 配置治理
+
+**描述**: Intelligence 编排统一切换到 `agent` 命名空间，Core IPC 与 Nexus Admin API 同步改为 `intelligence-agent` 路径；Prompt 从 capability 内嵌模板迁移到独立 Prompt Registry（record + binding）并在 Core(SQLite) / Nexus(D1) 对齐 schema。旧 `intelligence-lab` 路由统一返回 `410`。
+
+**主要变更**:
+1. **Core IPC 命名收敛**：新增并启用 `intelligence:agent:session:{start,heartbeat,pause,recoverable,resume,cancel,get-state,stream,history,trace}` 与 `tool:approve`/`session:trace:export`。
+2. **Nexus API 切换**：新增 `/api/admin/intelligence-agent/*`，页面调用全部切换；旧 `/api/admin/intelligence-lab/*` 入口停用。
+3. **Prompt Registry 落库**：Core `aisdk-config` 增加 `promptRegistry/promptBindings`；Nexus D1 新增 `intelligence_prompt_registry` 与 `intelligence_prompt_bindings` 表，并提供解析能力。
+4. **审批与风险门控**：保持 `high/critical` 必审；V1 工具集移除高风险写工具示例，仅保留读为主 + 低风险偏好写。
+5. **Trace 契约升级**：会话流事件 `contractVersion` 升级到 `3`，统一 session 维度查询链路。
+6. **收口补齐（1+2）**：`/api/admin/intelligence-agent/orchestrator/{plan,execute,reflect}` 统一下线为 `410`（引导到 `/session/stream`）；Dashboard 管理页路由与导航语义统一为 `/dashboard/admin/intelligence-agent`，旧 `/dashboard/admin/intelligence-lab` 页面同样返回 `410`（不再跳转）。
+
+### TxFlipOverlay 多实例叠层升级（单层 Mask + 稳态位移）
+
+**变更类型**: 组件能力增强 / 交互一致性优化
+
+**描述**: `TxFlipOverlay` 新增多实例堆叠行为：连续打开多个 overlay 时使用单例全局遮罩层（位于所有卡片下方）+ 顶层交互层；尺寸匹配时自动触发旧层上移收缩；超出 3 层后按层级渐隐直至隐藏。新增 Nexus 独立测试页用于手工验证叠层表现。
+
+**主要变更**:
+1. **单层遮罩策略**：引入组件内部 stack registry + 单例全局遮罩层，遮罩始终下沉到所有 overlay 卡片层之下；仅顶层保留可交互点击层，下层交互层禁用交互，不再遮挡下层卡片露边。
+2. **尺寸匹配叠层判定**：相邻层宽高分别满足 `|delta| <= max(8px, 上一层尺寸 * 5%)` 时，触发稳态叠层位移。
+3. **递进位移与缩放**：匹配链路下层按深度应用 `-18/-36/-54px` 位移与 `0.95/0.90/0.85` 缩放，形成“旧层收缩、新层展开”效果。
+4. **超层渐隐收敛**：深度超过 3 层后按透明度表递减（`1.00 → 0.92 → 0.78 → 0.62 → 0.38 → 0.16 → 0`），最旧层自动隐藏。
+5. **测试与验证页补齐**：新增 flip-overlay 多实例单测覆盖 mask owner、尺寸匹配/不匹配、超层隐藏和 body lock 计数；新增 `/test/flip-overlay-stack` 页面用于可视化回归验证。
+6. **文档同步**：同步 Tuffex/Nexus 中英文组件文档，补充多实例叠层规则与判定标准说明。
+
+**修改文件**:
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts`
+- `apps/nexus/app/pages/test/flip-overlay-stack.vue`
+- `packages/tuffex/docs/components/flip-overlay.md`
+- `apps/nexus/content/docs/dev/components/flip-overlay.zh.mdc`
+- `apps/nexus/content/docs/dev/components/flip-overlay.en.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Assets Review 改为表格入口并使用 FlipOverlay 弹窗
+
+**变更类型**: 交互优化 / 审核流可视化
+
+**描述**: 将 Dashboard Assets 页顶部的待审核卡片列表改为表格结构，审核入口收敛为行内 `Review` 按钮；点击后由 `TxFlipOverlay` 从触发源位置展开审核弹窗，替换原普通 Modal 形态。
+
+**主要变更**:
+1. **待审核区域表格化**：`pendingReviewItems` 以时间倒序渲染到 table，按发布物、审核类型、提交信息、更新时间、操作展示。
+2. **行内触发审核**：表格行和 `Review` 按钮均可触发审核，保留管理员待审处理路径不变。
+3. **审核弹窗 FlipOverlay 化**：`ReviewModalOverlay` 内部容器迁移为 `TxFlipOverlay`，新增 `source` 入参并接入 source-aware 动画。
+4. **source 链路补齐**：`assets.vue` 新增 `reviewOverlaySource` 状态，打开/关闭时同步维护触发源引用。
+5. **头部通用化**：审核弹窗改用 `TxFlipOverlay` 默认 close 区域，并通过 `header-display` 复用 `PluginMetaHeader`，统一头部呈现风格。
+6. **引用链去歧义**：`assets.vue` 审核组件标签更名为 `ReviewOverlayDialog`，并删除 `ReviewModal.vue` 旧入口，仅保留 `ReviewModalOverlay.vue`，避免自动导入命名冲突导致旧弹窗被误命中。
+7. **底部取消按钮收敛**：审核弹窗移除底部“Cancel（关闭）”，统一由右上角 close 关闭弹层；拒绝流程中的次级按钮改为“Back/返回”仅用于返回上一步。
+8. **高度策略收敛**：审核弹窗由固定高改为 `max-height` 约束，并将上限收敛到 `min(68dvh, 560px)`，减少视觉压迫感。
+9. **防误关闭开关收敛**：审核弹窗改为使用 `preventAccidentalClose=true`，统一拦截遮罩点击关闭并使用组件内置防误关交互。
+
+**修改文件**:
+- `apps/nexus/app/pages/dashboard/assets.vue`
+- `apps/nexus/app/components/dashboard/ReviewModalOverlay.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 修复: Assets 发布流程 License 步骤勾选控件缺失
+
+**变更类型**: Bug 修复
+
+**描述**: 修复 Dashboard Assets 页面发布版本弹层在 License 步骤中勾选控件未渲染的问题，恢复“同意协议”勾选交互与提交流程可见性。
+
+**主要变更**:
+1. **补齐组件导入**：在 `VersionDrawer` 中补充 `Switch` 组件导入，解决 `Failed to resolve component: Switch` 运行时告警。
+2. **恢复协议确认交互**：License 步骤重新显示勾选控件，用户可明确勾选后再提交审核。
+
+**修改文件**:
+- `apps/nexus/app/components/VersionDrawer.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus Store 插件详情改为 Header + Content + TxTabs
+
+**变更类型**: 交互优化 / 信息架构调整
+
+**描述**: 调整 Nexus `store` 页面插件详情展示结构。详情弹层由单列内容重构为 `Header + Content` 双区块，内容区接入 `TxTabs` 分页，降低信息堆叠感并提升浏览路径清晰度。
+
+**主要变更**:
+1. **结构拆分**：详情区拆分为插件头部信息（Header）和内容区（Content），头部集中展示图标、名称、官方标识、版本与安装量信息。
+2. **Tabs 接入**：内容区引入 `TxTabs`，新增 `Overview / Versions / Reviews` 三个页签。
+3. **内容复用**：复用 shared 组件 `SharedPluginDetailHeader`、`SharedPluginDetailReadme`、`SharedPluginDetailVersions`，避免重复实现。
+4. **评论逻辑保留**：原有评论加载、分页、提交与登录态校验逻辑整体迁移到 `Reviews` Tab，行为不变。
+5. **多语言补齐**：新增 `store.detail.tabs.*` 中英文文案键。
+
+**修改文件**:
+- `apps/nexus/app/pages/store.vue`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### API Key 权限树与 FlipOverlay 防误关闭增强
+
+**变更类型**: 交互优化 / 组件能力增强
+
+**描述**: 优化 Dashboard API Key 创建弹层中的权限选择体验，权限从平铺列表升级为分组树状结构（无一键全选入口）；同时为 `TxFlipOverlay` 新增语义化“防误关闭”配置，支持遮罩点击拦截、页面退出拦截与误关闭红光警示，并在 API Key 场景启用。
+
+**主要变更**:
+1. **权限结构重构**：`api-keys` 页面将权限改为 `Plugins / Account / Releases` 分组树，子节点独立勾选，去除“快速全选”路径，保留最小授权思路。
+2. **语义化防误关闭开关**：`TxFlipOverlay` 新增 `preventAccidentalClose`，开启后自动拦截遮罩点击关闭与页面退出（刷新/关闭）行为。
+3. **误关闭即时反馈**：当触发被拦截的关闭动作时，overlay 卡片外围触发红色警示光效，提醒用户当前操作被保护。
+4. **API Key 场景落地**：创建 API Key 弹层启用 `:prevent-accidental-close=\"true\"`，避免填写过程中误关闭导致信息丢失。
+5. **测试与文档同步**：新增 flip-overlay 相关单测，并同步更新 Tuffex 与 Nexus 组件文档说明。
+
+**修改文件**:
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/src/types.ts`
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts`
+- `packages/tuffex/docs/components/flip-overlay.md`
+- `apps/nexus/content/docs/dev/components/flip-overlay.zh.mdc`
+- `apps/nexus/content/docs/dev/components/flip-overlay.en.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus Dashboard Assets 页面梳理（表格化 + 内置操作 + FlipOverlay）
+
+**变更类型**: 交互优化 / 信息架构调整
+
+**描述**: 参考 Dashboard「更新与要闻」页的管理结构，重排 Assets（发布物）页列表区域。将核心操作按钮收敛到列表卡片头部，新增显式刷新入口，并将详情展开从 Drawer 切换为 FlipOverlay，降低上下文跳转感。
+
+**主要变更**:
+1. **列表区重构为 table**：`myPlugins` 展示从卡片列表改为表格，增加类型/分类、状态、版本、安装量、更新时间等列。
+2. **按钮收敛进列表区**：将「创建发布物 / 刷新」统一放入发布物 table 卡片头部，并移除「探索市场」入口，减少页面主标题区噪音。
+3. **新增刷新按钮**：在列表头部增加刷新入口并复用既有 `refreshPlugins()` 数据刷新链路。
+4. **详情容器迁移**：`PluginDetailDrawer` 内部容器由 `Drawer` 改为 `TxFlipOverlay`，支持由点击源位置翻转展开。
+5. **编辑入口弹窗化**：详情里的“编辑信息”改为独立 `TxFlipOverlay` 弹窗承载表单，展开时保持详情层不关闭；弹窗 source 绑定到点击的「Edit metadata」按钮。
+6. **头部展示组件化**：抽离统一 `PluginMetaHeader`，并通过 `TxFlipOverlay` 的 `header` 插槽承载自定义头部（含关闭按钮），确保展示一致且可复用。
+7. **编辑弹窗组件化与尺寸统一**：将 metadata 编辑弹窗从 `assets.vue` 内联模板抽离为 `PluginMetadataOverlay` 组件，并将弹窗尺寸对齐编辑插件信息弹窗规格（宽度 `min(900px, 94vw)`）。
+8. **创建发布物流程防闪回**：`AssetCreateOverlay` 步骤切换改为“直接切 step + `settled` 后统一解锁并刷新”，移除切换期 `runWithAutoSizer` 包裹与定时解锁，避免中间态尺寸被回写；同步通过 `AssetPluginFormStep.suspendLayoutEmit` 抑制切换期布局回传，消除“先新后旧再新”的回弹链路。
+9. **Plugin 选择直达表单**：在创建发布物流程中，点击 `Plugin` 类型后直接进入 `plugin_form`，移除中间提示页，减少一步跳转与额外尺寸切换。
+10. **高度测量与宽度抖动修正**：新增 overlay 已展开门控（`@opened` 后才允许 `TxAutoSizer.refresh`），并将 refresh 调度重构为“单一队列（pending）+ 条件满足自动 flush + opened 后双 RAF 补刷”，避免门控期与 ref 未就绪场景丢刷新；子表单 `layout-change` 统一路由到队列入口。为收敛视觉抖动，`TxFlipOverlay` 外层滚动关闭（仅保留内部滚动容器），并给创建弹窗容器补上宽度过渡，避免步骤切换时宽度硬跳。
+
+**修改文件**:
+- `apps/nexus/app/pages/dashboard/assets.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginMetaHeader.vue`
+- `apps/nexus/app/components/dashboard/PluginMetadataOverlay.vue`
+- `apps/nexus/app/components/assets/create/AssetCreateOverlay.vue`
+- `apps/nexus/app/components/assets/create/AssetPluginFormStep.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core App 新建插件改为二级弹窗（非全屏）
+
+**变更类型**: 交互优化 / 可用性改进
+
+**描述**: 插件页底部“Add”打开的新建插件界面由全屏覆盖调整为居中二级弹窗，保留背景上下文，降低操作打断感。
+
+**主要变更**:
+1. **弹层尺寸收敛**：`PluginDrawer-Card` 从 `100vw x 100vh` 调整为受限宽高（`min(1060px, 92vw)` / `min(760px, 86vh)`）。
+2. **视觉层级优化**：增加圆角、边框与阴影，明确二级弹窗层次。
+3. **遮罩体验优化**：提升遮罩与背景模糊强度，强化焦点但不再表现为“页面切换”。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/Plugin.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### TxFlipOverlay 头部系统增强与全仓迁移
+
+**变更类型**: 组件能力升级 / 交互一致性修复
+
+**描述**: `TxFlipOverlay` 新增统一头部体系（默认圆形 close、分区插槽、可关闭开关），并对 Nexus/Core App 主要 overlay 调用完成迁移，消除双关闭按钮与部分场景交互不一致问题。
+
+**主要变更**:
+1. **头部 API 升级**：新增 `header/headerTitle/headerDesc/closable/closeAriaLabel`，保留 `maskClosable` 语义并延续 `scrollable` 默认内部滚动。
+2. **插槽体系增强**：支持 `header`（全量覆盖）、`header-display`、`header-actions`、`header-close`，并统一向插槽暴露 `close/expanded/animating/closable/headerTitle/headerDesc`。
+3. **默认关闭按钮标准化**：内置右上角圆形 close，支持 hover/active/focus-visible 与可配置 `aria-label`。
+4. **滚动语义统一**：overlay 卡片改为 `header + body` 列布局，body 内部滚动，避免仅靠 `max-height` 导致内容不可滚动。
+5. **弹层高度与页面滚动收敛**：FlipOverlay 卡片最大高度统一收敛到 `90dvh`（基于原参数缩减 10%），并在 overlay 打开时锁定 `body` 背景滚动，关闭后自动恢复。
+6. **调用点迁移**：对保留自定义关闭按钮的业务 overlay 显式设置 `:closable=\"false\"`，避免双 close；官网 store 与 app store 场景同步适配新 header 能力。
+7. **文档与 Demo 同步**：组件文档、Nexus 中英文文档与 demo 全面更新新 props/slots 与优先级说明。
+8. **组件测试补齐**：新增 flip-overlay 测试，覆盖默认 header、插槽优先级、`closable=false`、close 事件链与滚动行为。
+9. **视觉内置化迁移**：`TxFlipOverlay` 卡片默认内置 `surface + border`（`surface` 可配置 `pure/mask/blur/glass/refraction`，默认 `mask`），并新增 `globalMask`（默认启用）控制全局遮罩；Nexus/Core App overlay 调用侧移除外部背景/边框样式，统一由组件内部控制。
+
+**修改文件**:
+- `packages/tuffex/packages/components/src/flip-overlay/src/types.ts`
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts`
+- `apps/nexus/app/pages/store.vue`
+- `apps/core-app/src/renderer/src/components/store/MarketHeader.vue`
+- `apps/nexus/app/pages/dashboard/updates.vue`
+- `apps/nexus/app/pages/dashboard/storage.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence-lab.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/components/docs/DocsAssistantDialog.vue`
+- `apps/nexus/app/components/CreatePluginDrawer.vue`
+- `apps/nexus/app/components/VersionDrawer.vue`
+- `apps/nexus/app/components/assets/create/AssetCreateOverlay.vue`
+- `apps/core-app/src/renderer/src/views/base/store/MarketSourceEditor.vue`
+- `apps/core-app/src/renderer/src/views/base/Plugin.vue`
+- `apps/core-app/src/renderer/src/components/download/FlatDownload.vue`
+- `apps/core-app/src/renderer/src/components/base/TuffUserInfo.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/audit/IntelligenceAuditOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDevSettingsOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatures.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `packages/tuffex/docs/components/flip-overlay.md`
+- `apps/nexus/content/docs/dev/components/flip-overlay.zh.mdc`
+- `apps/nexus/content/docs/dev/components/flip-overlay.en.mdc`
+- `apps/nexus/app/components/content/demos/FlipOverlayFlipOverlayDemo.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox 系统噪音 App 过滤（单开关）
+
+**变更类型**: 搜索体验优化 / 设置项新增
+
+**描述**: 针对 CoreBox 应用搜索中的系统噪音项（如 `DiscHelper`、`OSDUIHelper`、`TMHelperAgent`、`Simulator` 等）新增“仅搜索结果过滤”能力。采用代码内置规则，不改扫描入库；系统设置新增单开关（默认开启），可一键回退到原行为。
+
+**主要变更**:
+1. **固定规则过滤器**：新增 `app-noise-filter.ts`，内置 Simulator、CoreServices Helper/Agent、开发辅助入口等判定规则，并加入主应用保护名单。
+2. **搜索阶段按开关过滤**：`app-provider` 在 `onSearch` 返回阶段执行过滤，开关关闭即完全回退；新增 debug 日志输出过滤数量与规则命中分布。
+3. **设置模型扩展**：`AppIndexSettings` 增加 `hideNoisySystemApps`，默认 `true`，并在主进程做旧配置缺省补齐，保持向后兼容。
+4. **设置页单开关落地**：在“通用配置”中新增“过滤系统噪音应用”开关（仅高级设置可见），沿用既有加载/保存流程。
+5. **测试补齐**：新增噪音判定单测，覆盖典型命中、误杀保护与边界输入。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-noise-filter.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-noise-filter.test.ts`
+- `packages/utils/transport/events/types/app-index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 发布链路收敛（Build 主线 + Nexus 同步 + CLI 四包自动发布）
+
+**变更类型**: CI/CD 重构 / 发布治理
+
+**描述**: 收敛桌面与 CLI 发布链路。桌面发版统一由 `build-and-release` 承担；Nexus release 与 updates 支持 API Key 细粒度权限；CLI 四包版本变更后自动发布 npm 并同步 Nexus 更新公告。官网部署由 Cloudflare Pages 平台侧 Git 自动部署，仓库不再维护独立 deploy workflow。
+
+**主要变更**:
+1. **桌面发版主线统一**：`build-and-release` 成为唯一 tag 发布入口；构建失败不再创建 Release。
+2. **发布资产规范化**：自动生成并随 Release 上传 `tuff-release-manifest.json`（含核心资产 `sha256/platform/arch`）。
+3. **Nexus release 自动同步**：tag 发布后自动创建/更新 Nexus release、链接 GitHub 资产并发布。
+4. **权限模型粒度化**：release API 改为 `release:write/release:assets/release:publish`，并保留 `release:sync` 兼容映射；updates 新增 `release:news` API Key 通道。
+5. **release 资产幂等写入**：按 `releaseId + platform + arch` upsert，避免重复同步产生多条资产记录。
+6. **发布态防空资产**：release 发布前必须至少存在一个可下载资产，否则拒绝发布。
+7. **CLI 四包自动发布**：新增 workflow 按顺序发布 `@talex-touch/tuff-cli-core` → `@talex-touch/tuffcli` → `@talex-touch/unplugin-export-plugin` → `@talex-touch/tuff-cli`；稳定版走 `latest`，预发布走 `next`。
+8. **官网部署策略调整**：改为 Cloudflare Pages 平台侧 Git 自动部署，移除仓库内 `nexus-deploy.yml`。
+9. **Legacy workflow 降级**：`release-core/release-renderer/release-extensions` 仅保留手动触发（归档/调试用途）。
+
+**修改文件**:
+- `.github/workflows/build-and-release.yml`
+- `.github/workflows/release-core.yml`
+- `.github/workflows/release-renderer.yml`
+- `.github/workflows/release-extensions.yml`
+- `.github/workflows/package-tuff-cli-publish.yml`
+- `apps/nexus/server/utils/auth.ts`
+- `apps/nexus/server/utils/releasesStore.ts`
+- `apps/nexus/server/api/releases/index.post.ts`
+- `apps/nexus/server/api/releases/[tag].patch.ts`
+- `apps/nexus/server/api/releases/[tag]/assets.post.ts`
+- `apps/nexus/server/api/releases/[tag]/link-github.post.ts`
+- `apps/nexus/server/api/releases/[tag]/publish.post.ts`
+- `apps/nexus/server/api/dashboard/updates.post.ts`
+- `apps/nexus/server/api/dashboard/api-keys.post.ts`
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `.github/workflows/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+
+### `tuff-native` OCR 显式加载修复（多 target 误载防回归）
+
+**变更类型**: Bug 修复 / 原生模块加载稳定性
+
+**描述**: 修复 `@talex-touch/tuff-native` 在多 `.node` target 场景下可能误加载到 `tuff_native_everything.node` 的问题，导致 `vision.ocr` 路径缺失 `getNativeOcrSupport/recognizeImageText` 并报 `native-module-not-loaded`。现在改为按入口显式加载目标模块，并增加导出契约校验。
+
+**主要变更**:
+1. **统一原生加载器**：新增 `native-loader.js`，显式加载 `build/Release/<module>.node`，并支持 `expectedExports` 校验。
+2. **OCR 入口固定 target**：`index.js` 仅加载 `tuff_native_ocr.node`，并校验 `getNativeOcrSupport/recognizeImageText`。
+3. **Everything 入口保持隔离**：`everything.js` 仅加载 `tuff_native_everything.node`，并校验 `search/query/getVersion`。
+4. **错误可诊断性增强**：导出缺失时报 `ERR_NATIVE_EXPORT_MISMATCH`，错误信息包含缺失导出与实际导出列表。
+5. **包清单收敛**：`package.json` `files` 增加 `native-loader.js`，移除未使用依赖 `node-gyp-build`。
+
+**修改文件**:
+- `packages/tuff-native/native-loader.js`
+- `packages/tuff-native/index.js`
+- `packages/tuff-native/everything.js`
+- `packages/tuff-native/package.json`
+- `pnpm-lock.yaml`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Quick Actions 常用项直推 + 高危动作二次确认
+
+**变更类型**: 交互优化 / 安全增强
+
+**描述**: 调整 `touch-quick-actions` 的默认行为，空查询时直接推送常用动作（含重启、关机）；同时为高风险动作引入二次确认，降低误触系统级操作风险。
+
+**主要变更**:
+1. **常用项直推**：`onFeatureTriggered` 在空查询场景不再按分组头渲染，直接推送常用动作列表（优先 `restart/shutdown/lock-screen/mute-toggle/focus-settings`）。
+2. **动作补齐**：Windows/macOS 快捷动作新增 `重启` 与 `关机`。
+3. **二次确认**：`restart` / `shutdown` 增加双弹窗确认（两次“确定”后才执行命令）；取消时返回 `操作已取消`。
+4. **测试覆盖**：补充 quick-actions 用例，验证常用项包含重启/关机、空查询直推行为及高危动作二次确认。
+
+**修改文件**:
+- `plugins/touch-quick-actions/index.js`
+- `packages/test/src/plugins/quick-actions.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Plugin Feature ID 规范收敛（统一 `-`，拒绝 `.`）
+
+**变更类型**: 规范收敛 / 插件生态一致性
+
+**描述**: 明确并落实官方插件 `feature.id` 命名规范：仅允许字母、数字、下划线与连字符（`[A-Za-z0-9_-]`），不再使用点号分段（`.`）。此次将官方插件清单与脚本引用统一迁移为连字符写法，避免被运行时校验拒绝后出现“功能数 0 / 无法添加 Feature”的问题。
+
+**主要变更**:
+1. **清单统一**：官方插件 `manifest.json` 中的点号 `feature.id` 全部改为连字符形式（如 `system.actions` → `system-actions`）。
+2. **脚本同步**：插件 Prelude 中按 `featureId` 分支的逻辑同步更新到新 ID，避免触发路径失联。
+3. **测试同步**：`system-actions` 相关测试用例改用连字符 ID，保持行为断言一致。
+
+**修改文件**:
+- `plugins/touch-*/manifest.json`（含 browser/code-snippets/intelligence/snipaste/system/text/window/workspace 系列）
+- `plugins/touch-code-snippets/index.js`
+- `plugins/touch-text-snippets/index.js`
+- `plugins/touch-intelligence/index.js`
+- `packages/test/src/plugins/system-actions.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Widget 编译缓存命中修复（避免旧代码复用）
+
+**变更类型**: Bug 修复 / 插件运行时稳定性
+
+**描述**: 修复生产插件在 widget 路径不变时可能复用旧编译缓存的问题。此前缓存预热阶段仅按 `filePath/mtime` 判定，未强制比对 source hash，导致“同路径新内容”场景仍可能命中旧 `.cjs` 缓存，引发线上行为与源码不一致（如持续报旧行号错误）。
+
+**主要变更**:
+1. **预热阶段补齐 hash**：`WidgetManager.registerWidget` 在非 dev 模式下先加载一次 widget source，拿到 `hash` 后再尝试命中 compiled cache。
+2. **避免重复加载**：若已预加载 source，则后续编译流程复用该结果，不再二次读取同一 widget 文件。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### WidgetRegistry 渲染补丁修复（Proxy 读取语义对齐）
+
+**变更类型**: Bug 修复 / 渲染稳定性
+
+**描述**: 修复 widget 渲染补丁在合并 `setupState` 时使用 `target[key]` 直接解引用的问题。该实现会绕过 getter 的标准 receiver 语义，在跨上下文 Proxy 场景下可能触发 `TypeError: Illegal invocation`。
+
+**主要变更**:
+1. **Proxy 读取改为 Reflect**：`renderWithSetupState` 的 `get` trap 统一改为 `Reflect.get(..., receiver)`，保持原生属性访问语义。
+2. **补齐 has trap**：新增 `has` trap，确保 `setupState` 字段参与 `in` 检测，减少模板编译产物的上下文判定偏差。
+3. **开发态定位增强**：新增 widget 运行时代码片段缓存与错误行回溯日志，渲染报错时可直接输出 `<anonymous>:line:col` 对应代码片段，缩短定位路径。
+4. **沙箱方法绑定修复**：`createSandboxWindow/createSandboxDocument` 的 Proxy `get` 对函数成员统一返回 `bind(target)` 后的方法，修复 `window.addEventListener/removeEventListener` 等调用在沙箱上下文触发的 `Illegal invocation`。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### PluginInfo 问题按钮修复（TxButton 适配 + Warning 波纹）
+
+**变更类型**: Bug 修复 / 交互反馈优化
+
+**描述**: 修复插件详情页右下角“问题”按钮在迁移到 `TxButton` 后的两个问题：按钮使用了不受支持的 `variant="icon"`，以及翻转弹层锚点 `source` 引用到了组件实例而非 `HTMLElement`。同时将 `warning` 态视觉升级为“从按钮中心向整个 PluginInfo 传递”的波纹扩散，并将 FAB 抽离为独立组件。
+
+**主要变更**:
+1. **TxButton 规范化**：将问题按钮改为 `variant="flat"` 并根据问题级别映射 `type`（warning/error），移除非法 variant 用法。
+2. **Overlay 锚点修复**：由 `PluginFab` 通过 `source-change` 事件回传按钮锚点元素，确保 `TxFlipOverlay.source` 始终为 `HTMLElement`。
+3. **组件抽离 + 波纹升级**：新增独立组件 `PluginFab`（结构：`TxButton + Waving`），并实现从按钮中心向整个 `PluginInfo` 容器扩散的双层延迟波纹；`error` 态继续保留高强度发光提示。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/renderer/src/components/plugin/PluginFab.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Store 展示一致性修复（官网 + Core App）
+
+**变更类型**: Bug 修复 / 数据契约对齐
+
+**描述**: 修复官网与 Core App 插件 Store 的多处展示不一致问题，重点解决详情 README 空白、安装状态误判、路由与标签页脱钩、以及更新检查重复触发。
+
+**主要变更**:
+1. **官网详情 README 对齐**：`/api/store/plugins/[slug]` 补充 `readmeMarkdown`（插件级 + 版本级），修复详情页 README 数据缺失。
+2. **官网详情首屏优化**：详情主数据与社区数据（评分/评论）解耦，打开详情后先渲染主体，再异步加载社区模块。
+3. **App 安装状态匹配增强**：安装状态识别从“仅插件名”扩展为“providerId + pluginId + name 多键匹配”，并透出 `installSource` 给渲染层用于精确对齐官方插件标识。
+4. **Store 路由同步**：`tabs` 与路由双向同步，补齐 `/store/cli` 路由，避免刷新或前进后退后视图状态错位。
+5. **更新检查去重**：移除重复的 `StoreEvents.api.checkUpdates` 注册，避免单次调用触发两次检查。
+6. **安装来源状态保持**：`plugin store` 在增量推送覆盖时保留 `installSource`，并在 Store Grid 侧补齐 `providerId + pluginId` 复合键匹配，修复同名/同 ID 跨源状态串联与闪回误判。
+7. **列表接口轻量化（兼容）**：`/api/store/plugins` 新增 `compact=1` 精简返回模式（移除列表态 `versions` 与版本大字段），并同步官网页面与 Core App/TPEX Provider 默认走轻量请求，降低列表首屏 payload。
+8. **官网详情 Flip 动画与滚动体验**：官网 `store` 详情弹层切换为 `TxFlipOverlay`，从卡片源触发 FLIP 开合；同时增强 `TxFlipOverlay` 通用滚动容器（默认 `scrollable`），修复“仅 max-height 限高但内容不可滚动”的交互问题。
+
+**修改文件**:
+- `apps/nexus/server/api/store/plugins/[slug].get.ts`
+- `apps/nexus/app/pages/store.vue`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/renderer/src/composables/store/usePluginVersionStatus.ts`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+- `apps/core-app/src/renderer/src/components/store/MarketGridView.vue`
+- `apps/core-app/src/renderer/src/base/router.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Dev 插件加载判定修复（避免 `dev.source=false` 误走远程 URL）
+
+**变更类型**: Bug 修复 / 插件加载稳定性
+
+**描述**: 修复通过系统动作安装本地目录插件后，`manifest.dev.source=false` 仍被误判为远程 Dev Loader，进而在 `dev.address` 为空时触发 `TypeError: Invalid URL` 的问题。
+
+**主要变更**:
+1. **Loader 选择收敛**：仅当 `dev.enable=true` 且 `dev.source=true` 且 `dev.address` 为合法 `http(s)` URL 时，才使用 `DevPluginLoader`。
+2. **异常兜底修复**：`DevPluginLoader` 在 dev 地址非法时直接记录 issue 并返回，避免在 `catch` 中二次构造 URL 导致 fatal。
+3. **行为一致性**：与插件运行/视图加载链路中的 `dev.source` 语义保持一致（`source=false` 默认走本地资源）。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox 推荐态展开高度修复（避免窗口尺寸“锁高”）
+
+**变更类型**: Bug 修复 / 交互稳定性
+
+**描述**: 修复 CoreBox 在推荐态（`recommend`）下，窗口高度偶发无法随内容减少而收缩的问题。根因是高度计算链路依赖 `TxScroll` 容器高度，而其内容层存在 `min-height: 100%` 约束，导致“当前窗口高度”被反向带入下一轮计算，形成尺寸锁定。
+
+**主要变更**:
+1. **测量对象调整**：`useResize` 优先改为测量 `.CoreBoxRes-ScrollContent` 的真实内容高度，不再优先依赖 scroll wrapper。
+2. **保留兜底路径**：当内容节点不可用时，仍沿用原有 wrapper 测量逻辑，保证兼容性与回退能力。
+3. **行为结果**：推荐结果数量减少后，CoreBox 高度可随内容正常回落，减少空白区域与视觉“过展开”。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Widget 分离窗口修复（Detached 模式状态回填）
+
+**变更类型**: Bug 修复 / DivisionBox 稳定性
+
+**描述**: 修复 Widget 从 CoreBox 分离到独立窗口后内容异常的问题。根因是 `tuff://detached` 场景仍走 `WebContentsView.loadURL`，导致分离窗口未正确复用 CoreBox 渲染链路，同时缺少分离项上下文回填。
+
+**主要变更**:
+1. **主进程分流**：DivisionBox 会对 `tuff://detached` URL 跳过 `attachUIView`，直接启用原生 DivisionBox CoreBox 渲染层。
+2. **会话状态回填**：分离成功后将当前 item/query 写入 session state（`detachedPayload`），供新窗口启动时恢复上下文。
+3. **渲染端恢复**：`useSearch` 在 detached 模式下优先读取 session state 恢复目标 item；若恢复失败则回退到 query 搜索，并按 `itemId/source` 过滤结果，避免窗口展示偏移。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/division-box/manager.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus 首管理员初始化提权（ADMINSECRET + 首用户校验）
+
+**变更类型**: 安全增强 / 认证流程改进
+
+**描述**: 新增“首管理员初始化”流程：当系统检测到尚无管理员账号时，登录用户会被引导到管理员初始化页面，输入 `ADMINSECRET` 后完成提权。提权严格限制为“首个活跃用户”且使用原子条件更新，避免并发下重复提权。
+
+**主要变更**:
+1. **后端状态与提权 API**：新增 `GET /api/admin-bootstrap/status` 与 `POST /api/admin-bootstrap/promote`（避开 `/api/auth/[...]` catch-all 冲突）。
+2. **首用户原子校验**：新增 `getAdminBootstrapState` 与 `promoteFirstUserToAdmin`，仅当“无管理员 + 当前用户为首个活跃用户”时允许提权。
+3. **运行时配置**：新增 server-only 配置 `ADMINSECRET`（同时兼容 `ADMIN_SECRET`）。
+4. **登录后强制引导**：当用户已登录且系统无管理员时，前端全局路由自动跳转 `/auth/admin-bootstrap`。
+5. **初始化页面**：新增管理员认证页面，支持状态提示、secret 提交、成功后自动返回目标页面。
+6. **测试覆盖**：补充首管理员初始化状态与提权接口单测（成功、secret 错误、非首用户、已有管理员）。
+
+**修改文件**:
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/api/auth/admin-bootstrap/status.get.ts`
+- `apps/nexus/server/api/auth/admin-bootstrap/promote.post.ts`
+- `apps/nexus/server/api/user/me.get.ts`
+- `apps/nexus/server/api/auth/me.get.ts`
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/pages/auth/admin-bootstrap.vue`
+- `apps/nexus/app/composables/useCurrentUserApi.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/server/api/auth/admin-bootstrap/__tests__/status.get.test.ts`
+- `apps/nexus/server/api/auth/admin-bootstrap/__tests__/promote.post.test.ts`
+- `apps/nexus/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### touch-translation 列表可读性与键盘导航优化（右侧默认焦点）
+
+**变更类型**: 交互优化 / 可用性增强
+
+**描述**: 优化翻译面板左右列表的焦点模型与结果卡片可读性。默认焦点切到右侧结果列表，支持键盘上下选择、回车复制；并新增左右列表焦点切换快捷键（`Meta/Ctrl + ←/→`）。
+
+**主要变更**:
+1. **焦点与选择模型**：新增 `providers/history` 双焦点区，默认焦点为右侧 `providers`。
+2. **键盘交互**：支持 `ArrowUp/ArrowDown` 在当前焦点列表中移动选择；`Enter` 在右侧复制当前选中结果（成功复制译文，失败复制错误摘要）；在左侧触发历史项回填。
+3. **焦点切换快捷键**：支持 `Meta/Ctrl + ArrowLeft` 切到左侧历史，`Meta/Ctrl + ArrowRight` 切回右侧结果。
+4. **结果卡片可读性优化**：右侧卡片支持选中态高亮、状态徽标统一（翻译中/已完成/失败），并增加长错误摘要折叠（查看详情/收起详情）。
+5. **布局稳定性优化**：右侧结果区与左侧历史区都改为限高内部滚动，避免长错误文本撑坏整体布局；修复复制按钮在长文本场景下易被挤压的问题。
+6. **Widget 沙箱兼容修复**：移除对 `window.addEventListener` 的直接依赖，改为监听 `core-box:key-event`；同时对 `payload/history` 做 plain 数据归一化，并去除高风险 deep watch / 链式数组操作，规避 Proxy 跨上下文导致的 `Illegal invocation`。
+7. **Provider 字段读取容错**：历史结果写入前统一走 `normalizeProviders` 安全读取（带 try/catch），避免跨上下文 payload getter 在 watch 回调内直接解引用导致渲染期 `Illegal invocation`。
+8. **Payload 链路防崩溃**：`normalizeWidgetPayload` 与 `item.render.custom.data` 读取统一改为安全访问（try/catch），即使上游注入的是跨上下文 Proxy 也不再直接抛出渲染错误。
+
+**修改文件**:
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-02-24
+
+### TuffCLI 设备授权状态回传增强（拒绝原因/IP 明细/标签页关闭感知）
+
+**变更类型**: 认证体验修复 / 设备授权链路增强
+
+**描述**: 修复设备码授权链路中“浏览器侧已拒绝但 CLI 仅超时”的盲区，并补齐授权页手动关闭的可观测性。CLI 现在可感知 Nexus 拒绝态、展示 IP 不一致明细，并在授权页关闭时提示“重新打开 or 关闭本次授权”。
+
+**主要变更**:
+1. **拒绝态显式回传**：Nexus 在 IP 不一致时将设备授权标记为 `rejected`，并记录拒绝原因与 IP 上下文；CLI 轮询到拒绝后会在终端提示并询问是否重试。
+2. **IP 明细可见**：当拒绝原因为 `ip_mismatch` 时，CLI 展示“申请 IP / 当前访问 IP”。
+3. **授权页可见性跟踪**：新增 `/api/app-auth/device/presence`，授权页上报 `opened/heartbeat/closed`；CLI 检测到标签页关闭后，提示“重新打开授权页 / 关闭本次授权”。
+4. **授权中止接口**：新增 `/api/app-auth/device/abort`，CLI 选择关闭本次授权时可主动中止请求。
+5. **短期/长期提示与刷新约束**：设备码成功后 CLI 提示当前授权类型与时长（短期 24h / 长期 30d）；短期授权明确不可刷新，`/api/auth/sign-in-token` 仅允许长期 app token 刷新。
+
+**修改文件**:
+- `packages/unplugin-export-plugin/src/bin/tuff.ts`
+- `packages/unplugin-export-plugin/src/cli/i18n/locales/zh.ts`
+- `packages/unplugin-export-plugin/src/cli/i18n/locales/en.ts`
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/utils/auth.ts`
+- `apps/nexus/server/api/app-auth/device/approve.post.ts`
+- `apps/nexus/server/api/app-auth/device/poll.get.ts`
+- `apps/nexus/server/api/app-auth/device/info.get.ts`
+- `apps/nexus/server/api/app-auth/device/presence.post.ts`
+- `apps/nexus/server/api/app-auth/device/abort.post.ts`
+- `apps/nexus/server/api/auth/sign-in-token.post.ts`
+- `apps/nexus/app/pages/device-auth.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox 复制文件无输入时不触发搜索修复（剪贴板 files 判重补全）
+
+**变更类型**: Bug 修复 / 搜索触发稳定性
+
+**描述**: 修复 CoreBox 在“仅复制文件、输入框为空”场景下偶发不触发搜索的问题。根因是主进程剪贴板快路径判重仅使用 `formats + text`，会漏检“文件列表变化但文本不变”的更新。
+
+**主要变更**:
+1. **快路径判重补全 files 维度**：在剪贴板含文件格式时，将文件列表签名纳入 quick hash，避免误判“无变化”。
+2. **避免重复读取**：将快路径读取到的文件列表在本轮检查中复用，减少重复 `readClipboardFiles()` 调用。
+3. **行为保持最小改动**：仅调整主进程 clipboard 变更检测，不修改 CoreBox 查询协议与 provider 处理逻辑。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus Store 页面 `process is not defined` 修复（收敛 renderer 导入范围）
+
+**变更类型**: 运行时修复 / 前端稳定性
+
+**描述**: 修复 `https://tuff.tagzxia.com/store` 在客户端初始化时偶发进入 Nuxt 500（`process is not defined`）的问题。根因是页面从 `@talex-touch/utils/renderer` 的 barrel 导入组件，导致无关模块被一并打包，最终把依赖 `process.platform` 的 Node 侧常量带入浏览器运行时。
+
+**主要变更**:
+1. **按需深路径导入**：`store.vue` 改为直接从 `@talex-touch/utils/renderer/shared/*` 导入 `SharedPluginDetailContent` 和类型，避免触发 renderer 总入口的全量 re-export 链。
+2. **隔离 Node-only 代码影响面**：减少客户端 bundle 中对 `file-scan`/`file-parser` 相关模块的意外引入，避免浏览器侧访问 `process.*`。
+
+**修改文件**:
+- `apps/nexus/app/pages/store.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### touch-translation Prelude 打包修复（移除 `process is not defined`）
+
+**变更类型**: 构建修复 / 运行时稳定性
+
+**描述**: 修复 `touch-translation` 插件打包后在 plugin prelude VM 中报错 `ReferenceError: process is not defined`。根因是 prelude 侧间接打入 Vue CJS 包，触发 `process.env.NODE_ENV` 访问。
+
+**主要变更**:
+1. **收敛翻译客户端依赖**：`shared/tuffintelligence.ts` 移除对 `@talex-touch/utils/plugin/sdk/intelligence` 的静态依赖，改为基于 `createIntelligenceClient` 构建最小调用链。
+2. **Renderer 通道兼容**：在 renderer 场景优先复用 `window.$channel`，并透传 `_sdkapi`（来自 `window.$plugin.sdkapi`）保持权限校验语义一致。
+3. **Prelude 运行时兼容**：在非 renderer 场景继续走默认 channel resolver，避免引入 browser-only/renderer-only 依赖。
+4. **产物体积回归正常**：`dist/build/index.js` 从异常膨胀降至轻量体积，且不再包含 `process.env.NODE_ENV` 引用。
+
+**修改文件**:
+- `plugins/touch-translation/shared/tuffintelligence.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox 启动应用前先隐藏窗口（避免 hide 与 execute 并发）
+
+**变更类型**: 交互修复 / 行为时序优化
+
+**描述**: 调整 CoreBox 执行项的时序，执行应用启动前先等待 CoreBox 隐藏完成，避免 `ui.hide` 与 `item.execute` 并发触发导致的视觉闪烁或前后台切换突兀。
+
+**主要变更**:
+1. **执行链路串行化**：`handleExecute` 中非插件功能且不要求保持窗口打开时，`CoreBoxEvents.ui.hide` 改为 `await`，确保先隐藏再执行。
+2. **最小改动范围**：仅调整 renderer 侧执行流程，不改 provider 执行语义，保持插件功能与 `keepCoreBoxOpen` 逻辑不变。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 后台轮询错峰与性能日志降噪（SystemUpdate/FxRate/PerfMonitor）
+
+**变更类型**: 性能优化 / 稳定性修复
+
+**描述**: 针对 `system-update.poll` 与 `fx-rate.refresh` 在同一时间窗触发导致的事件循环抖动，以及休眠恢复场景下日志噪音过高问题，新增轮询错峰、慢任务退避与 sleep/suspend 日志节流机制。
+
+**主要变更**:
+1. **轮询错峰**：`system-update.poll` 与 `fx-rate.refresh` 首轮执行延迟引入固定偏移 + 随机抖动，避免小时级任务同窗叠加。
+2. **慢任务退避**：当轮询任务单次执行耗时超过 800ms 时，自动延后下一轮调度窗口，降低持续高负载下的抖动风险。
+3. **启动期解耦**：`SystemUpdateModule` 先执行一次启动刷新，再启动 FX 定时刷新，减少启动阶段并发网络任务竞争。
+4. **日志降噪**：`PerfMonitor` 对 `System sleep/suspend detected ... skipping event loop lag report` 增加 60s 节流，保留关键信号同时抑制刷屏。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/system-update/index.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/providers/fx-rate-provider.ts`
+- `apps/core-app/src/main/utils/perf-monitor.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus 认证入口统一到 AUTH_ORIGIN（防止 OAuth 跨域回调失败）
+
+**变更类型**: 部署稳定性 / 登录修复
+
+**描述**: Pages 默认域与自定义域并存时，用户若从非 `AUTH_ORIGIN` 域发起 OAuth，会出现 state cookie 与 callback 域不一致，导致回调失败。现新增 canonical origin 中间件，对页面请求统一重定向到 `AUTH_ORIGIN`。
+
+**主要变更**:
+1. **域名收敛**：生产环境下，非 `AUTH_ORIGIN` 的页面 GET/HEAD 请求统一 307 到 canonical origin。
+2. **范围控制**：跳过 `/api/*`、`/_nuxt/*` 与 `__nuxt_error`，避免影响 API 与静态资源路径。
+3. **开发保护**：开发环境与 localhost 请求保持原行为，不影响本地调试。
+
+**修改文件**:
+- `apps/nexus/server/middleware/canonical-origin.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus OAuth 回调修复（Cloudflare Pages 下移除对 Node `https.request` 依赖）
+
+**变更类型**: 登录修复 / 运行时兼容性
+
+**描述**: 生产环境 `OAuthCallback` 报错定位为 `https.request is not implemented yet`。根因是 `next-auth` 的默认 OAuth 回调链路依赖 `openid-client`，其 token/userinfo 交换会走 Node `https` 模块；而 Nitro `cloudflare-pages` 产物对 `http/https` 仍为 unenv stub。现将 GitHub/LinuxDO 的 token 与 userinfo 交换改为 `fetch`，规避该运行时限制。
+
+**主要变更**:
+1. **OAuth 交换改造**：为 GitHub/LinuxDO provider 增加 `token.request` 与 `userinfo.request` 自定义实现，统一改用 `fetch`。
+2. **行为兼容**：保留现有账号绑定策略（`allowDangerousEmailAccountLinking`）；GitHub 额外补齐 `/user/emails` 拉取，维持邮箱可用性。
+3. **运行时兜底**：Pages 根环境与 preview 继续保留 `enable_nodejs_http_modules`，减少后续依赖升级时的兼容风险。
+4. **回调稳定性增强**：`token.request` 透传 next-auth `checks.code_verifier`（PKCE），并对 GitHub token 交换改为不强制提交 `redirect_uri`，降低 provider 侧 `redirect_uri_mismatch` 触发概率。
+5. **部署配置对齐**：`wrangler.toml` 生产配置显式迁移到 `env.production`，避免根级 `[vars]` 在本地 CLI 部署时覆盖/偏离 Dashboard 的生产环境绑定。
+6. **Dashboard 构建兼容**：保留根级 `compatibility_flags`（`nodejs_compat` 等）与生产一致，避免 Dashboard 集成构建路径落到无 `nodejs_compat` 配置后触发 `crypto.getHashes` unenv 报错。
+
+**修改文件**:
+- `apps/nexus/server/api/auth/[...].ts`
+- `wrangler.toml`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus 登录与账户邮箱展示优化（长邮箱省略）
+
+**变更类型**: 交互优化 / 可读性改进
+
+**描述**: 优化长邮箱在账户菜单与登录流程中的展示。原先长邮箱可能出现难读换行或撑破布局，现统一改为单行省略并保留 `title` 全量提示。
+
+**主要变更**:
+1. **账户菜单**：`HeaderUserMenu` 邮箱文本改为单行省略，避免 `break-all` 导致的域名断裂。
+2. **登录流程**：登录/注册步骤里的邮箱预览改为单行省略，防止长邮箱挤压“更换邮箱”操作按钮。
+3. **可访问性**：邮箱字段增加 `title`，鼠标悬停可查看完整邮箱。
+
+**修改文件**:
+- `apps/nexus/app/components/HeaderUserMenu.vue`
+- `apps/nexus/app/pages/sign-in/components/SignInLoginStep.vue`
+- `apps/nexus/app/pages/sign-in/components/SignInSignupStep.vue`
+- `apps/nexus/app/pages/sign-in/index.vue`
+
+### Core-app 首引导完成页 Welcome 收敛（对齐 Hello）+ ShortKey 组件
+
+**变更类型**: 交互优化 / 视觉一致性
+
+**描述**: 完成页 Welcome 动效布局对齐语言页 Hello 视觉比例，并新增独立 ShortKey 组件用于展示系统快捷键提示。
+
+**主要变更**:
+1. **Welcome 对齐 Hello 结构**：完成页动效区域改为固定容器 + 内部缩放，避免全屏占位导致主视觉失衡。
+2. **ShortKey 独立组件**：新增 `BeginShortcutKey`，将按键外观与 hover/active 动效封装，供引导页复用。
+3. **组合键展示完善**：完成页快捷键区改为 `Command/Ctrl + E` 双键展示，右侧补充独立 `E` 键位。
+4. **Done 阶段快捷标记**：进入 Done 页面时标记 `beginner.shortcutArmed`，即使 `beginner.init=false` 也可响应 `Meta/Ctrl + E` 快捷触发。
+5. **按键联动反馈**：监听 `Meta/Ctrl` 与 `E` 键盘事件，按下时同步触发双键帽“按压态”，随后追加绿色发光阴影。
+6. **延迟唤起 CoreBox**：在 Done 步骤按下 `Meta/Ctrl + E` 后先播放按压+发光反馈，延迟后自动完成引导、隐藏主窗口并唤起 CoreBox。
+7. **i18n 补齐**：`zh-CN/en-US` 新增 `beginner.done.shortcut.*` 文案键，并补充“可在设置中修改快捷键”提示。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Done.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/components/BeginShortcutKey.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 引导语言切换实时保存（点击即生效）
+
+**变更类型**: 交互优化
+
+**描述**: 首引导语言列表点击语言项后立即落盘并生效，不再依赖点击 Continue 才持久化。
+
+**主要变更**:
+1. **点击即保存**：语言列表点击时立刻更新 `followSystem` 与语言偏好。
+2. **状态同步**：选择系统语言时实时切回 follow-system；选择其他语言时实时切换并持久化。
+3. **返回默认态即跟随设备**：从语言列表返回默认卡片时强制切回系统语言并开启 follow-system，保证“默认=跟随设备”语义一致。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/internal/LanguageSetup.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 首引导统一返回导航（跨步骤回退）
+
+**变更类型**: 交互优化 / 流程修复
+
+**描述**: 为首引导容器增加统一返回按钮，并修复原“仅记忆上一步”的回退逻辑，支持多步骤连续回退，避免来回跳转。
+
+**主要变更**:
+1. **统一返回入口**：在 `Beginner` 容器顶部新增 `TxButton` 返回按钮，所有引导步骤都可见。
+2. **历史栈回退**：将原单一 `last_component` 改为历史栈，实现 `A -> B -> C -> Back -> B -> Back -> A` 的正确行为。
+3. **回退一致性**：`provide('back')` 统一走容器回退逻辑，内嵌步骤调用与顶部按钮行为一致。
+4. **首屏无返回按钮**：当无历史页面时隐藏返回入口，避免在 hello/首步骤出现无意义返回操作。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/Beginner.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 引导语言页 startup 音效可听性修复（资源打包 + 交互重试）
+
+**变更类型**: Bug 修复 / 体验优化
+
+**描述**: 修复首引导语言页 startup 音效在部分环境“无声”的问题，避免静态资源未进包与自动播放策略拦截导致的失声。
+
+**主要变更**:
+1. **音效资源入包**：将 startup 音效放入 renderer 资产目录并通过 `import.meta.url` 解析，确保 dev/build 下路径一致可访问。
+2. **自动播放失败兜底**：首次播放失败时自动绑定用户交互重试（pointer/keyboard），首个交互后自动重放并清理监听。
+3. **音量微调**：引导音效默认音量从 `0.45` 调整为 `0.65`，提升可感知度。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/internal/LanguageSetup.vue`
+- `apps/core-app/src/renderer/src/assets/sounds/startup.m4a`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 引导页 i18n 全量补齐（Begin Flow）
+
+**变更类型**: 体验优化 / 国际化一致性
+
+**描述**: 对首引导 `begin` 流程进行全量文案排查，移除页面硬编码文案并统一接入 `vue-i18n`，确保中英文切换下引导体验一致。
+
+**主要变更**:
+1. **文案全量收敛到 i18n**：`AccountDo / Done / Forbidden / OptionMode / License` 中所有用户可见文案改为 `t(...)` 获取，去除模板硬编码字符串。
+2. **交互提示国际化**：账号引导页登录成功/失败 toast 统一改为 i18n key，避免固定中文提示。
+3. **语言包补齐**：`zh-CN/en-US` 新增 `beginner.account / beginner.done / beginner.forbidden / beginner.optionMode / beginner.license` 文案分组。
+4. **代码清理**：删除引导页内无效注释与废弃注释代码，降低噪音并保持结构清晰。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/internal/AccountDo.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Done.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Forbidden.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/OptionMode.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/License.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app SetupPermissions 首引导页可继续性修复（Tx 组件化收敛）
+
+**变更类型**: Bug 修复 / 交互优化
+
+**描述**: 修复权限页“已授权但继续按钮不可点”的体验问题，并将权限条目状态展示收敛到 Tuffex 组件，减少自定义样式复杂度。
+
+**主要变更**:
+1. **继续按钮可操作性修复**：移除基于同步状态的 `disabled` 门禁，改为点击时执行异步校验并给出提示，避免状态短暂未同步导致按钮“看起来不可点”。
+2. **防重复提交**：新增 `isContinuing` 保护，继续动作进入加载态，避免多次点击触发重复跳转。
+3. **Tx 组件替换**：权限条目容器切换为 `TxCard`，状态展示切换为 `TxStatusBadge`，保留 `TxButton` 操作入口。
+4. **设置区组件化**：开关区切到 `TxCardItem + TuffSwitch` 组合，统一条目结构与交互语义，减少自定义块级布局。
+5. **样式简化**：删除对 legacy `TBlockSelection` 的依赖样式，改为更扁平的结构样式与响应式收敛。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app SetupPermissions 权限页切换为 GroupBlock 方案（对齐 Settings 视觉）
+
+**变更类型**: 交互优化 / 视觉一致性
+
+**描述**: 首引导权限页移除 `TxCard` 形态，改为与 App Settings 一致的 `groupblock` 套件组织结构，减少样式分叉，提升组件一致性。
+
+**主要变更**:
+1. **权限区收敛**：权限条目统一使用 `TuffGroupBlock + TuffBlockSlot + TuffStatusBadge`，移除 `TxCard/TxCardItem` 组合。
+2. **设置区收敛**：开关项统一使用 `TuffBlockSwitch`，保持与设置页相同交互语义。
+3. **操作入口保留**：继续沿用 `TxButton` 作为重检/继续入口，兼容当前引导流程按钮交互。
+4. **样式降复杂**：删除卡片特化样式，保留最小必要布局样式（状态区与响应式按钮排列）。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 首次引导收敛为单页语言确认（内嵌 Hello 动效）
+
+**变更类型**: 交互优化 / 流程简化
+
+**描述**: 根据最新交互调整，将原本独立的 Hello 页面合并进语言确认页顶部展示，移除单独 Hello 步骤，首次引导直接从 LanguageSetup 开始。
+
+**主要变更**:
+1. **移除独立 Hello 步骤**：`Beginner` 首屏恢复为 `LanguageSetup`，删除 `Greeting` 页面链路，减少一次页面切换。
+2. **首屏主视觉替换**：语言页头部从“欢迎来到 Tuff”文本替换为 `hello.json` Lottie 动效，保留“我们已将您的语言设置为 {lang}”说明文案。
+3. **流程保持稳定**：默认仍为系统语言确认，点击 `Change Language` 才展开列表，`Continue` 进入账号步骤。
+4. **交互收敛到 Tuffex 组件**：语言信息区改为 `TxCard`，减少超宽占位并统一卡片视觉；底部 `Change Language` 保持 `TxButton`。
+5. **列表可回退 + 过渡动画**：语言列表新增返回入口，支持从列表回到默认态，并增加入场/退场过渡动画；`hello` 动效与 startup 音效在语言页持续可见可听。
+6. **尺寸与对齐再收敛**：语言区块整体缩小并左对齐，语言默认态与语言列表项前增加语言 icon，提升信息密度与识别度。
+7. **布局回归居中与样式简化**：语言页整体重新居中，默认语言卡片采用“左侧语言 icon + 右侧文案”的结构，并合并样式规则以减少组件级微调代码。
+8. **字号继续收敛 + 默认勾选态显式化**：语言页文本字号整体再收缩约 40%，并在默认态与列表态的右侧统一展示 checkmark（选中填充、未选中描边）。
+9. **动效速度微调**：语言页 `hello` 动效恢复默认速率（1x）；完成页 `welcome` 动效在加载后设置 `setSpeed(1.5)`，保证节奏更紧凑但不突兀。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/Beginner.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/LanguageSetup.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Greeting.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Done.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 首次引导语言流程重排（Hello 自动切换 + 系统语言默认确认）
+
+**变更类型**: 交互优化 / 流程修正
+
+**描述**: 调整首次引导顺序为「Hello 动画页 → 语言确认页 → 账号步骤」，并将语言页默认交互改为“系统语言直接继续、点击 Change Language 再进入列表选择”。
+
+**主要变更**:
+1. **引导链路重排**：`Beginner` 首屏改为 `Greeting`，`LanguageSetup` 的下一步改为 `AccountDo`，去除“语言页后再进 Hello 页”的反直觉路径。
+2. **Hello 自动过渡**：`Greeting` 阶段监听 Lottie 播放完成与启动音效结束，二者都完成后延迟 1 秒自动跳转语言页，无需手动点击。
+3. **语言页默认态收敛**：首屏文案改为“欢迎来到 Tuff / 我们已将您的语言设置为 {lang}”，默认按系统语言继续；点击底部 `Change Language` 才展开语言列表。
+4. **Lottie 组件事件补齐**：`LottieFrame` 新增 `complete` 事件与卸载清理，支撑引导页对动画结束时机的精确编排。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/Beginner.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Greeting.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/LanguageSetup.vue`
+- `apps/core-app/src/renderer/src/components/icon/lotties/LottieFrame.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 首次引导体验修复（索引延后 + 登录态修正 + Hello 音效 + 语言页美化）
+
+**变更类型**: Bug 修复 / 体验优化
+
+**描述**: 修复首次引导阶段“索引任务与引导并发导致启动期噪音/卡顿体感”与“登录按钮长期 loading”问题；同时补齐 Hello 阶段音效与语言选择页视觉优化。
+
+**主要变更**:
+1. **索引任务延后**：SearchEngine provider 加载改为“首次引导完成后再启动”，并通过 `appSetting.beginner.init` 订阅恢复加载，减少首次引导期间的扫描/索引竞争。
+2. **登录 loading 语义修正**：引导登录页按钮 loading 改为仅跟随登录动作（`isSigningIn/isLoggingIn`），不再绑定认证初始化状态。
+3. **Learn more 接入 Nexus**：引导登录说明链接切到 `getAuthBaseUrl()/sign-in`，统一走 Nexus 入口。
+4. **Hello 音效**：Greeting 阶段挂载时播放 `public/sound/startup.m4a`，离开阶段自动停止。
+5. **语言选择页视觉优化**：增强卡片层次、渐变背景、选中态与按钮反馈，保持现有流程与交互不变。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/AccountDo.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Greeting.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/LanguageSetup.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app OCR 队列失败熔断与延迟重试收敛（降低 SQLite 写争用）
+
+**变更类型**: Bug 修复 / 稳定性增强
+
+**描述**: 针对 OCR 高频失败导致的 `ocr_jobs` 重试风暴与 SQLite 写入争用，新增“按错误分类延迟重试 + 失败熔断自动停队列 + 用户提醒”机制，优先抑制异常配置或外部服务故障带来的持续回压。
+
+**主要变更**:
+1. **重试策略延长**：补充 `Native OCR module unavailable`、`OCR provider network failure` 等错误分类，并拉长相应重试间隔。
+2. **持久化重试时间**：调度改为依赖 `ocr_jobs.nextRetryAt` 过滤可执行任务，移除仅内存重试节流依赖，避免重启后行为漂移。
+3. **自动熔断停队列**：在时间窗内连续失败达到阈值后自动暂停 OCR 队列，并在 24h 内重复触发时按阶梯拉长冷却（30m → 1h → 2h …，上限 12h），避免持续冲击数据库写队列。
+4. **用户可感知告警**：触发自动暂停时写入通知 Inbox，提示“多次错误已自动暂停”并附带恢复时间与排查建议。
+5. **状态可观测**：OCR dashboard 快照新增 `queueDisabled` 状态，便于排障与运维观测。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/ocr/ocr-service.ts`
+- `apps/core-app/src/main/modules/ocr/ocr-service.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 性能诊断与重试日志降噪（聚合输出）
+
+**变更类型**: 观测优化 / 稳定性增强
+
+**描述**: 针对 `D.2026-02-24.log` 中高频重复日志（`DbRetry`、`AnalyticsStore`、`Perf:EventLoop`、`AuditLogger`）引发的信噪比下降问题，改为“按窗口聚合 + 节流输出”，保留关键异常可见性并显著降低刷屏。
+
+**主要变更**:
+1. **DbRetry 聚合节流**：`SQLITE_BUSY` 重试日志默认节流窗口从 5s 提升至 30s，并追加 `suppressedRetries` 聚合计数。
+2. **AnalyticsStore 汇总**：快照/插件/清理的 queue-pressure 日志收敛为 60s 周期汇总，避免同类 warn 高频重复。
+3. **EventLoop diagnostics 收敛**：`Event loop lag diagnostics` 改为“根因变化或高严重度窗口触发”再输出，减少重复诊断行。
+4. **Perf summary 门禁**：`Perf summary / Top slow` 仅在存在 error 或慢事件超阈值时输出。
+5. **AuditLogger 错误节流**：`flush` 与 `usage stats` 失败日志改为节流聚合，保留首条与 suppression 计数。
+6. **Clipboard.persist 上下文释放修复**：将 `Clipboard.persist` 性能上下文释放迁移到 `finally`，避免异常路径遗漏释放导致事件循环诊断出现“超长持续中”误报。
+
+**修改文件**:
+- `apps/core-app/src/main/db/sqlite-retry.ts`
+- `apps/core-app/src/main/modules/analytics/storage/db-store.ts`
+- `apps/core-app/src/main/utils/perf-monitor.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 启动链路卡顿治理（Storage Polling 不再被 AppTask 长时间阻塞）
+
+**变更类型**: 性能修复 / 稳定性增强
+
+**描述**: 结合 `D.2026-02-24.log` 与 `E.2026-02-24.err` 中 `storage.polling` 长时间活跃（12s/18s）与 `AppProvider.startupBackfill` 同窗问题，收敛主线程调度阻塞链路，避免“单任务长占用”放大为全局 perf 告警。
+
+**主要变更**:
+1. **AppTaskGate 支持超时等待**：`waitForIdle(timeoutMs)` 新增超时返回与 waiter 清理，避免等待队列在超时场景累积。
+2. **Storage 持久化等待预算化**：`persistConfig` 对 app task 空闲等待增加 250ms 上限，超时后继续落盘，避免 `storage.polling` callback 长时间占用 PollingService 调度循环。
+3. **Backfill 启动延后**：`AppProvider` 启动补漏从 500ms 延后至 15s，降低冷启动阶段与配置持久化、渲染初始化的竞争。
+4. **BoxItem 同步通道前置注册**：CoreBox IPC register 阶段主动初始化 `BoxItemManager`，消除冷启动窗口期 `box-item:sync` 无 handler 错误。
+
+**修改文件**:
+- `apps/core-app/src/main/service/app-task-gate.ts`
+- `apps/core-app/src/main/modules/storage/index.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app Analytics 上报压缩与失败熔断（减少高频重试与噪音）
+
+**变更类型**: 观测优化 / 稳定性增强
+
+**描述**: 针对 `analytics messages` 在网络异常下高频重试、重复告警与上报节奏过密问题，改为“批量压缩 + 抖动调度 + 失败熔断 + 节流日志”策略，降低上报风暴与日志噪音。
+
+**主要变更**:
+1. **上报节奏压缩**：基础 flush 周期由 30s 调整到 2min，批次由 10 提升到 25，减少请求频率。
+2. **请求抖动分散**：flush 调度增加 ±20% jitter，避免多实例同周期集中上报。
+3. **失败熔断**：连续失败达到阈值后开启 circuit cooldown（10m 起步，指数拉长，最大 60m），冷却期内暂停主动上报。
+4. **日志节流聚合**：`Failed to report analytics messages` 改为 3min 节流输出，并附 `suppressedFailures` 汇总。
+5. **队列元信息增强**：上报 payload 增加 `firstAt/lastAt/avgIntervalMs/count` 聚合字段，便于服务端按窗口做均值/频次分析。
+6. **快照持久化降频**：`15m/1h/24h` 窗口写入增加最小持久化间隔（2min/5min/15min），并输出 `snapshotsThrottled` 汇总，减少 DB 写放大与无效上报。
+7. **窗口封口写入**：`AnalyticsCore` 增加最小记录间隔 + 窗口强制封口策略，避免高频事件导致 1m 扇出快照过密。
+8. **动态采样**：插件 SDK 非关键埋点按 DB 队列深度动态降采样（100%/50%/25%/10%），高压时优先保护主流程。
+9. **健康指标日志**：新增 5min reporter health 指标（`requestsPerMin`、`queueDepth`、`dropRate`、`failRate`、`sdkSampleDropRate`），便于量化压缩收益。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/analytics/analytics-module.ts`
+- `apps/core-app/src/main/modules/analytics/core/analytics-core.ts`
+- `apps/core-app/src/main/modules/analytics/storage/db-store.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 构建阶段预打包内置插件 Prelude（修复 utils 子路径 require 失败）
+
+**变更类型**: Bug 修复 / 构建链增强
+
+**描述**: 修复内置插件 `index.js` 在构建产物运行时直接 `require('@talex-touch/utils/*')` 子路径可能触发 `Cannot find module` 的问题。构建脚本新增“内置插件 Prelude 预打包”步骤，在 `npm run build` 前统一将 `tuff/modules/plugins/*` 的 `manifest.main` 入口打包为单文件，避免运行时再解析 workspace 子路径。
+
+**主要变更**:
+1. **构建前统一预打包**：`build-target.js` 增加内置插件 Prelude bundling 步骤，覆盖 `apps/core-app/tuff/modules/plugins` 下可执行插件入口。
+2. **解析路径显式兜底**：预打包时注入 `nodePaths`（`apps/core-app/node_modules` + workspace 解析链），确保可解析 `@talex-touch/utils/*` 子路径。
+3. **失败即中断构建**：任一插件 Prelude 预打包失败时直接中止打包流程，避免生成带隐患构建产物。
+
+**修改文件**:
+- `apps/core-app/scripts/build-target.js`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app OmniPanel Feature Hub 首期落地（自动装载 + Feature 执行链）
+
+**变更类型**: 功能增强 / 架构收敛
+
+**描述**: OmniPanel 从固定快捷动作升级为 Feature Hub，支持插件 Feature 执行、安装后自动装载首个 Feature、声明式 omniTransfer（含 SDK 门槛）与主渲染协议统一事件。
+
+**主要变更**:
+1. **Feature Hub 协议**：`omni-panel` 事件新增 `list/toggle/reorder/execute/refresh` typed payload，替代纯前端固定动作。
+2. **主进程执行链**：OmniPanel 主进程模块新增注册表持久化、builtin/plugin/corebox 分发执行、上下文注入与刷新广播。
+3. **自动装载策略**：新增安装后自动装载逻辑（声明式优先，回退首个可执行 feature），并接入插件安装完成事件。
+4. **设置项落地**：通用设置新增 `autoMountFirstFeatureOnPluginInstall` 开关，默认关闭。
+5. **SDK 与类型扩展**：插件类型新增 `feature.omniTransfer`；SDK 新增 `260225` 与声明式门槛常量。
+6. **面板 UI 重构**：OmniPanel 渲染层改为 Feature 列表视图，支持启停、排序、搜索与执行反馈。
+
+**修改文件**:
+- `apps/core-app/src/shared/events/omni-panel.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/core/eventbus/touch-event.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-feature.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `packages/utils/plugin/index.ts`
+- `packages/utils/plugin/sdk-version.ts`
+
+## 2026-02-23
+
+### Core-app Widget Feature issue 降级为 warning，并忽略非开发模式下隐藏实验特性
+
+**变更类型**: Bug 修复 / 噪音收敛
+
+**描述**: 修复 widget feature 在资源缺失或编译失败时统一上报为 error 的问题，改为 warning；同时对 `experimental` 且插件非开发模式的 feature，不再触发 widget 预编译与 issue 上报，避免对正式可见功能造成干扰告警。
+
+**主要变更**:
+1. **issue 级别收敛**：widget loader/manager/compiler/processors 的 feature 级问题统一走 warning。
+2. **隐藏实验特性免打扰**：新增 `isWidgetFeatureEnabled` 判定，非开发模式下跳过 `experimental` feature 的 issue 产生。
+3. **预编译流程对齐可见性**：插件加载阶段的 widget 预编译与未使用扫描仅处理当前模式可见 feature。
+4. **复用统一入口**：新增 `pushWidgetFeatureIssue`，统一注入 source/timestamp 并减少重复实现。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/plugin/widget/widget-issue.ts`
+- `apps/core-app/src/main/modules/plugin/widget/widget-loader.ts`
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts`
+- `apps/core-app/src/main/modules/plugin/widget/widget-compiler.ts`
+- `apps/core-app/src/main/modules/plugin/widget/processors/script-processor.ts`
+- `apps/core-app/src/main/modules/plugin/widget/processors/tsx-processor.ts`
+- `apps/core-app/src/main/modules/plugin/widget/processors/vue-processor.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 窗口偏好切换为 pure/refraction/filter 并修正语义
+
+**变更类型**: 交互修复 / 语义收敛
+
+**描述**: 窗口偏好统一为 `pure` / `refraction` / `filter` 三档，并修正“普通与 Mica 观感反向”的问题。`pure` 使用纯色背景阻断窗口材质透出，`refraction` 保持材质透出，`filter` 在透出基础上叠加滤镜。
+
+**主要变更**:
+1. **偏好值统一**：窗口偏好类型改为 `pure/refraction/filter`，并兼容历史 `Default/Mica/Filter` 自动归一化。
+2. **设置页切换**：ThemeStyle 的窗口偏好入口改为三档新值，Filter 可直接选择。
+3. **渲染语义修复**：`AppLayout` 重新对齐 pure/refraction/filter 的透明度策略与 touch-blur 触发条件，pure 下增加纯色底阻断窗口特效透出。
+4. **Header 分区透明度对齐**：Header 左侧（侧栏对应区）跟随 aside 透明度，右侧使用 header 透明度，消除左右明暗错位。
+5. **壁纸链路兼容**：壁纸模糊与透明度附加策略改为基于 pure/refraction/filter 判定。
+6. **文案与预览更新**：窗口偏好文案改为首字母大写（Pure/Refraction/Filter），ThemePreference 展示与预览样式切换到新值语义。
+7. **切换反馈增强**：切换窗口偏好后增加全屏遮罩 + Spinner 短暂加载态，明确“窗口效果应用中”状态。
+
+**修改文件**:
+- `packages/utils/common/storage/entity/layout-atom-types.ts`
+- `packages/utils/__tests__/preset-export-types.test.ts`
+- `apps/core-app/src/renderer/src/modules/storage/theme-style.ts`
+- `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/SectionItem.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/sub/ThemePreference.vue`
+- `apps/core-app/src/renderer/src/views/layout/AppLayout.vue`
+- `apps/core-app/src/renderer/src/styles/layout/_layout-shell.scss`
+- `apps/core-app/src/renderer/src/modules/layout/useWallpaper.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 插件 Manifest 保存通道克隆失败修复
+
+**变更类型**: Bug 修复 / 传输稳定性
+
+**描述**: 修复插件详情页保存 dev 配置时，`manifest` 通过 transport 发送前携带 Vue 响应式代理对象，触发 `An object could not be cloned` 导致保存失败的问题。
+
+**主要变更**:
+1. **发送前序列化**：`pluginSDK.saveManifest` 在发送前统一将 `manifest` 转换为 JSON 可序列化的普通对象，避免 Proxy 进入 IPC payload。
+2. **失败可观测**：当 `manifest` 不可 JSON 序列化时记录明确错误日志并返回失败，避免继续发送导致 transport 层克隆异常。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/sdk/plugin-sdk.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 低电量阈值配置移除（保留低电量模式开关）
+
+**变更类型**: 配置收敛 / UI 简化
+
+**描述**: 动效设置中移除“低电量阈值”滑块与相关可配置字段，低电量模式仅保留开关；阈值改为统一跟随 `DeviceIdle` 电量策略，避免重复配置。
+
+**主要变更**:
+1. **设置页简化**：`ThemeStyle` 移除阈值滑块，仅保留“低电量模式”开关。
+2. **运行时收敛**：`useBatteryOptimizer` 不再读取用户阈值配置，统一读取 `DeviceIdle.blockBatteryBelowPercent` 作为低电量判定阈值。
+3. **配置模型清理**：`app-settings` 默认配置移除 `animation.lowBatteryThreshold` 字段，并清理对应 i18n 文案键。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue`
+- `apps/core-app/src/renderer/src/modules/hooks/useBatteryOptimizer.ts`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 后台索引调度电量策略抽离（BatteryPolicy）
+
+**变更类型**: 架构收敛 / 调度策略复用
+
+**描述**: 将后台索引调度相关的“低电量禁区”判断抽离为统一 `BatteryPolicy`，并将插件电量 SDK、渲染侧低电量动效判定统一接入同一阈值来源，避免多处重复实现与阈值漂移。
+
+**主要变更**:
+1. **统一策略模型**：在 `packages/utils/common` 新增 `BatteryPolicy`、`normalizeBatteryPolicy`、`evaluateBatteryPolicy` 与 `clampBatteryPercent`。
+2. **服务判定复用**：`DeviceIdleService.canRun` 改用统一策略评估函数返回 `battery-low / battery-critical`。
+3. **索引策略单源化**：`FileProvider` 移除本地电量阈值字段，自动扫描/手动重建统一以 `DeviceIdleService` 电量策略为准。
+4. **插件与渲染对齐**：插件 `power` SDK 默认阈值与渲染侧 `useBatteryOptimizer` 统一读取 `DeviceIdle.blockBatteryBelowPercent`。
+5. **前端入口下沉**：`SettingFileIndex` 的策略配置组改为常显，用户可直接配置统一 BatteryPolicy。
+6. **回归保障**：新增 `battery-policy` 单测，覆盖策略归一化、critical 优先级、充电豁免与阈值裁剪行为。
+
+**修改文件**:
+- `packages/utils/common/battery-policy.ts`
+- `packages/utils/common/index.ts`
+- `packages/utils/__tests__/battery-policy.test.ts`
+- `apps/core-app/src/main/service/device-idle-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useBatteryOptimizer.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 剪贴板自动粘贴/自动清除时间档位收敛
+
+**变更类型**: 配置优化 / Bug 修复
+
+**描述**: 调整工具设置中的时间档位，自动粘贴默认值改为 5 秒，自动清除默认值改为 5 分钟；同时将时间范围收敛为最短 1 秒、最长 5 分钟，并修复自动粘贴在从“禁用”切回定时值后偶发不生效的问题。
+
+**主要变更**:
+1. **默认值调整**：`tools.autoPaste.time` 默认改为 `5`（秒），`tools.autoClear` 默认改为 `300`（秒）。
+2. **档位范围收敛**：自动粘贴/自动清除时间档位统一为 `1s ~ 5min`，移除 `10min/15min` 档位。
+3. **生效逻辑修复**：`autoPaste.enable` 与 `autoPaste.time` 强绑定，避免历史 `enable=false` 遗留导致时间已切回但仍不触发自动粘贴。
+4. **历史值兼容**：对超出新档位的历史时间值按最近档位归一，减少迁移冲击。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 剪贴板省电轮询项高级设置门禁修复
+
+**变更类型**: Bug 修复 / 设置门禁一致性
+
+**描述**: 修复工具设置中「剪贴板省电轮询策略」「剪贴板省电轮询间隔」在未开启高级设置时仍可见的问题，现仅在 `advancedSettings` 开启后展示。
+
+**主要变更**:
+1. **显示门禁补齐**：`SettingTools` 新增 `showAdvancedSettings` 计算属性，并将两个省电轮询项包裹在高级设置条件渲染下。
+2. **行为一致性恢复**：与项目其他高级项保持一致，默认模式下不暴露高级策略配置。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app Nexus 数据上传说明与匿名模式登录门禁
+
+**变更类型**: 体验优化 / 隐私策略收敛
+
+**描述**: Nexus 数据分析设置移除独立说明行，改为“启用数据上传”后的帮助 Tooltip；匿名模式默认关闭且未登录时不可切换，并在运行时对未登录状态强制按 `false` 生效。
+
+**主要变更**:
+1. **说明形态调整**：将原“说明”文案收敛到“启用数据上传”后的 `?` 图标 Tooltip，并精简提示文本。
+2. **匿名门禁**：匿名模式开关在未登录时禁用，UI 展示固定为关闭；登录后才允许切换。
+3. **生效逻辑收敛**：主进程对匿名模式新增登录态门禁，未登录即使配置为开启也按关闭执行。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSentry.vue`
+- `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+- `apps/core-app/src/main/modules/analytics/analytics-module.ts`
+- `apps/core-app/src/main/modules/storage/main-storage-registry.ts`
+
+### Core-app 静默启动配置链路修复（dev/prod）
+
+**变更类型**: Bug 修复 / 配置一致性修复
+
+**描述**: 修复“静默启动”在开发与生产环境均可能不生效的问题。根因是设置页部分入口仍在读写历史分散键（如 `app.window.startSilent` 独立文件），而启动阶段与托盘逻辑读取的是 `app-setting.ini` 的 `window.startSilent`，导致配置来源不一致。
+
+**主要变更**:
+1. **主进程启动兼容**：`TouchApp` 启动前读取 `app-setting.ini` 时，兼容合并历史 `app.window.startSilent` 文件值（仅在历史文件更新更晚或主配置缺失时生效），并回写到 `app-setting.ini`，保证后续链路单一来源。
+2. **设置页写入收敛（Window）**：`SettingWindow` 改为直接读写 `appSetting.window.*` 与 `appSetting.setup.autoStart`，不再写入历史分散键文件。
+3. **设置页写入收敛（Setup）**：`SettingSetup` 移除对历史分散键的读写，统一使用 `appSetting` 持久化并保留托盘/开机自启实时同步调用。
+4. **行为结果**：静默启动设置可在 dev/prod 一致生效，且后续修改不会再被历史分散键污染。
+5. **开发环境窗口行为修复**：静默启动时不再自动打开 DevTools，避免 dev 下因 DevTools 自动弹出导致主窗口被显式激活。
+
+**修改文件**:
+- `apps/core-app/src/main/core/touch-app.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingWindow.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 布局方案与窗口透明度解耦
+
+**变更类型**: 交互一致性修复 / 视觉策略收敛
+
+**描述**: 布局方案（simple/flat/compact 等）不再驱动主界面 header/aside 的透明度。透明度统一由窗口偏好（Default/Mica/Filter）控制，避免切换布局时出现非预期明暗变化。
+
+**主要变更**:
+1. **类型模型清理**：`LayoutAtomConfig` 移除 `header.opacity` 与 `aside.opacity` 字段，布局模型不再承载透明度语义。
+2. **默认值与预设清理**：应用默认布局原子与各布局 preset（simple/flat/compact/minimal/classic/card/dock）移除 opacity 字段，避免旧预设继续影响透明度。
+3. **布局原子解析收敛**：`resolveLayoutAtomsToCSSVars` 不再输出 `header/aside` 的 opacity 变量，只保留布局结构相关变量（边框、高度、宽度、位置等）。
+4. **Layout Shell 变量改造**：`header/aside` 的 fake opacity 改为读取 `--layout-window-*` 变量，不再依赖 `--layout-*opacity`。
+5. **窗口偏好接管透明度**：`AppLayout` 按 `theme.window` 计算并注入 `--layout-window-header-opacity` / `--layout-window-aside-opacity`，实现“窗口偏好影响透明度，布局方案仅影响布局”。
+6. **预设默认清理**：移除 `LayoutShell` 中按布局 preset 注入的透明度变量，避免默认值回流干扰。
+7. **历史配置自动清洗**：主进程 Storage 在读取/保存 `app-setting.ini` 时自动移除 `layoutAtomConfig.header/aside.opacity` 遗留字段，并在后续持久化时写回清洗结果。
+
+**修改文件**:
+- `packages/utils/common/storage/entity/layout-atom-types.ts`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/renderer/src/modules/layout/atoms/presets.ts`
+- `apps/core-app/src/renderer/src/modules/layout/atoms/atomResolver.ts`
+- `apps/core-app/src/renderer/src/styles/layout/_layout-shell.scss`
+- `apps/core-app/src/renderer/src/views/layout/shared/LayoutShell.vue`
+- `apps/core-app/src/renderer/src/views/layout/AppLayout.vue`
+- `packages/utils/__tests__/preset-export-types.test.ts`
+- `apps/core-app/src/main/modules/storage/main-storage-registry.ts`
+- `apps/core-app/src/main/modules/storage/index.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 布局预设编辑入口双门禁（Dev + 高级设置）
+
+**变更类型**: 体验收敛 / 权限边界修正
+
+**描述**: “自定义主界面 / 自定义 CoreBox / Nexus 预设” 三个 Beta 入口改为仅在 `dev` 启动版本且开启 `advancedSettings` 时可见，避免普通用户误触开发中能力。
+
+**主要变更**:
+1. **门禁条件统一**：`LayoutSection` 新增 `showPresetEditors`，仅在 `startupInfo.isDev === true && appSetting.dev.advancedSettings === true` 时显示入口。
+2. **可见性收敛**：三个入口统一切换为条件渲染，非门禁状态下不占位、不展示。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/styles/LayoutSection.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app Header 左右分区透明度对齐 Sidebar
+
+**变更类型**: 视觉一致性修复
+
+**描述**: 窗口 Header 透明度按左右区域拆分：左侧（或右侧 Sidebar 对应区）与 Sidebar 保持相同透明度，另一侧保持 Header 透明度，避免顶部与侧栏交界处明暗不一致。
+
+**主要变更**:
+1. **Header 分区渲染**：将 Header 背景拆分为“侧栏对应区 + 主内容区”两段透明度。
+2. **透明度对齐规则**：侧栏对应区使用 `--layout-window-aside-opacity`，主内容区使用 `--layout-window-header-opacity`。
+3. **位置兼容**：适配 `aside-right`、`aside-bottom`、`aside-hidden` 三种布局位置，确保各模式下透明度行为一致。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/styles/layout/_layout-shell.scss`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 关于页条款入口接入官网文档跳转
+
+**变更类型**: 体验修复 / 链路补齐
+
+**描述**: 设置页「应用程序规范（Touch）」中的 `TalexTouch 服务条款` 与 `TalexTouch 软件许可证` 由仅展示文本改为可点击跳转，直接打开官网对应文档页面。
+
+**主要变更**:
+1. **条款链接接入**：点击 `服务条款` 跳转至 `Nexus /license`（服务条款页）。
+2. **许可证链接接入**：点击 `软件许可证` 跳转至 `Nexus /protocol`（软件许可证页）。
+3. **URL 来源统一**：链接基于 `getTuffBaseUrl()` 生成，避免硬编码域名。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 插件权限历史授权软禁用与预览读文件超时收敛
+
+**变更类型**: 安全修复 / 稳定性修复 / 体验优化
+
+**描述**: 修复插件权限在 Manifest 缩减后仍可沿用历史授权的问题。现在历史授权记录保留在本地存储中，但当权限未被当前 Manifest 声明时，运行时将拒绝访问；插件权限页同步提示“历史授权已禁用”。同时修复文件预览 `app:system:read-file` 在不可达路径场景下长时间阻塞导致的 IPC 超时报错。
+
+**主要变更**:
+1. **运行时权限收敛**：权限检查新增“声明态”约束，未在当前 Manifest 中声明的非默认权限即使历史上已授予，也不会在运行时生效。
+2. **历史记录保留**：权限存储不删除历史授权记录，新增 `deprecatedGranted` 状态用于标记“保留但失效”的历史授权。
+3. **插件页提醒**：插件详情权限页新增历史授权禁用提示区，按“应用更新后已过时 / 插件不再需要（曾授予）”两类标记展示，状态摘要支持显示“历史授权已禁用”。
+4. **读文件超时控制**：`app:system:read-file` 新增可选超时参数并在主进程执行超时中断，Code/Text/Markdown 预览对超时给出用户友好提示，减少控制台噪音。
+5. **快捷键入口迁移**：将“插件注册的全局快捷键”管理区从权限页迁移到详情页，权限页聚焦权限治理，详情页集中展示插件基础信息与运行配置。
+6. **快捷键空态样式收敛**：插件详情页快捷键分组中的空态内层卡片去除圆角，避免与外层分组圆角叠加造成视觉噪点。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/permission/permission-store.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.ts`
+- `apps/core-app/src/main/modules/permission/index.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginPermissions.vue`
+- `apps/core-app/src/renderer/src/components/render/addon/preview/CodePreview.vue`
+- `apps/core-app/src/renderer/src/components/render/addon/preview/TextPreview.vue`
+- `apps/core-app/src/renderer/src/components/render/addon/preview/MarkdownPreview.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `packages/utils/permission/index.ts`
+- `packages/utils/permission/types.ts`
+- `packages/utils/transport/events/types/app.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.test.ts`
+- `packages/utils/__tests__/permission-status.test.ts`
+
+### Core-app Store 新增 Tuff CLI Beta 页签联动
+
+**变更类型**: 新功能 / 市场联动（Beta）
+
+**描述**: Core-app 市场页新增 Tuff CLI 联动能力：当系统检测到已安装 `tuff` CLI 时，市场顶部出现 `CLI` 页签；当前阶段该页签仅提供 Beta 占位说明，标注“开发中”。
+
+**主要变更**:
+1. **安装检测接入**：平台能力列表查询时动态探测 `tuff --version`（含 Windows 候选命令），并引入 TTL 缓存降低探测频率。
+2. **能力映射收敛**：检测通过后动态注入 `platform.tuff-cli` Beta 能力，供渲染层统一读取。
+3. **市场页签联动**：`Store` 页按能力结果动态展示 `CLI` 页签，且在能力不可用时自动回退到 `store` 页签。
+4. **Beta 占位页**：新增 `MarketCliBeta` 视图，展示“Beta Feature / 开发中”提示，明确当前交付状态。
+5. **i18n 补齐**：补充中英文市场 CLI 文案键，保证多语言一致。
+
+**修改文件**:
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+- `apps/core-app/src/renderer/src/components/store/MarketHeader.vue`
+- `apps/core-app/src/renderer/src/views/base/store/MarketCliBeta.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
+### Core-app PluginInfo 问题入口改为悬浮按钮 + Flip 弹窗
+
+**变更类型**: 交互优化 / 可视反馈增强
+
+**描述**: PluginInfo 页面移除独立「问题」Tab，改为右下角常驻悬浮 `?` 按钮；点击后使用 Flip 动画打开问题弹窗。按钮根据问题等级显示差异化呼吸光效，无问题时不展示入口。
+
+**主要变更**:
+1. **入口形态调整**：移除 `Issues` Tab，仅在存在 `plugin.issues` 时渲染右下角悬浮按钮。
+2. **Flip 弹层接入**：接入 `TxFlipOverlay`，以悬浮按钮为 source 打开问题弹窗，弹层内复用 `PluginIssues` 内容。
+3. **风险视觉分级**：warning 显示浅黄色呼吸环；error 显示更强红色呼吸光效并叠加阴影，提升问题感知优先级。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+
+### Core-app 插件存储页汉化与配置分组迁移
+
+**变更类型**: 体验优化 / i18n 收敛 / UI 组件标准化
+
+**描述**: 插件存储页完成全量 i18n 接入，替换原自定义统计卡为 tuffex `TxStatCard`，并将插件详情页中的“配置系统（路径目录）”信息迁移到存储页，统一“存储 + 路径”操作入口。
+
+**主要变更**:
+1. **统计卡标准化**：存储页顶部四个数据卡改为 `TxStatCard`（含占用率 progress 变体），移除重复样式实现。
+2. **页面文案汉化**：存储页标题、按钮、空态、表头、状态栏、路径配置区全部接入 i18n，不再存在硬编码英文。
+3. **配置系统迁移**：在存储页新增 `TuffGroupBlock` 配置分组，承载插件路径/数据目录/配置目录/日志目录，并支持直接打开对应路径。
+4. **详情入口下移**：存储文件表格从主卡片主体迁移为“配置系统”中的“详细信息”入口，点击按钮通过 `TxFlipOverlay` 打开完整表格详情。
+5. **文案字典补齐**：补充 `plugin.storage.*` 中英文键，覆盖统计、空态、表格、底栏、配置区、详情入口与路径打开失败提示。
+6. **路径展示收敛**：配置系统中的路径展示统一为 `~/` 别名样式（如 `~/data/`、`~/data/config/`），右侧操作入口统一使用 `TxButton` 图标按钮。
+7. **整块迁移完成**：原“存储文件”整块（标题、操作按钮、文件表格、底栏状态）整体迁移到“详细信息”弹窗中；配置系统仅保留“详细信息”入口与路径配置项。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 插件详情开发设置分组下移与保存链路收敛
+
+**变更类型**: 体验优化 / 可维护性修复
+
+**描述**: 插件详情页改为“基础信息 + 开发设置分组”结构。开发配置不再通过弹窗管理，而是新增独立 `TuffGroupBlock` 下移展示；同时修复开发设置保存链路中的状态漂移问题，并补齐 manifest 全文查看能力。
+
+**主要变更**:
+1. **基础信息收敛**：详情页仅展示插件 ID、插件名称、插件描述；插件 ID 支持点击复制，hover 时仅对 ID 值增加下划线提示可复制。
+2. **基础信息增强**：`自动启动` 从开发设置分组上移到基础信息分组；在“插件开发模式启用”或“应用处于 dev 环境”时提供 `manifest.json` 全文查看入口，后者显示 `Dev Only` 标记；点击后通过 Flip 动画弹出对话框，并以只读 JSON 编辑器展示全文。
+3. **开发设置分组下移**：仅在插件启用开发模式时，在基础信息下方新增独立 `开发设置` 分组，展示保存、热重载、开发地址、源码模式。
+4. **保存流程修复**：开发设置加载时统一读取最新 manifest 并建立快照，保存时合并写回 `manifest.dev`；主进程详情 API 改为按插件显示名/目录名双路匹配，避免保存请求命中失败。
+5. **Dev 配置优先级修复**：开发模式加载远端 manifest 时，`plugin.dev` 统一以本地 manifest 的 dev 配置为准，避免热重载/开发地址/源码模式保存后被远端 manifest 覆盖。
+6. **i18n 补齐**：新增中英文文案，覆盖插件名称、复制反馈、manifest 展开文案与加载态提示。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+
+### Core-app Source Store Editor 滚动修复
+
+**变更类型**: Bug 修复 / 交互可用性
+
+**描述**: 修复 Source Store Editor 在来源项较多时无法滚动的问题，避免底部来源项被裁切后不可见。
+
+**主要变更**:
+1. **弹窗结构重写**：将 Source Editor 从绝对定位面板重构为 `TxFlipOverlay` 弹窗，统一使用 body 级遮罩和卡片容器，消除父级布局裁剪影响。
+2. **新增入口上移**：新增来源入口改为 Header 区按钮。
+3. **二次 Flip 弹窗**：新增来源表单改为独立 `TxFlipOverlay`（二级弹窗），与主来源弹窗解耦，打开/关闭均使用 Flip 动画。
+4. **过时来源分区展示**：带 `outdated` 标记的来源在非高级模式默认隐藏；开启高级设置后在列表底部单独分区展示，不参与上方主列表排序索引。
+5. **过时基线收敛**：默认来源中仅 `Tuff Nexus` 与 `NPM` 标记为非过时，其余内置来源标记为过时；对历史存储数据增加兼容归一化。
+6. **拖拽排序保留**：主来源列表继续支持拖拽排序，且排序范围仅限非过时来源，避免与过时项发生索引干扰。
+7. **滚动链路重建**：列表区改为 `TouchScroll native` 承载，使用 `flex + min-height: 0` 固定可滚动区域，确保长列表稳定可达。
+8. **Flip 动画收敛**：来源列表使用 `TransitionGroup(source-flip)`，拖拽排序将 Sortable `animation` 设为 `0`，由 FLIP 过渡统一处理重排动画。
+9. **来源定位增强**：市场页来源按钮点击时透传 source 元素，弹窗打开动画从触发点起始，交互反馈更明确。
+10. **i18n 收敛**：Source Editor 页面文案（标题、副标题、按钮、占位符、来源类型与状态标签）接入中英文语言包，移除硬编码文本。
+11. **弹窗尺寸微调**：主来源弹窗尺寸下调，降低遮挡；新增来源二级弹窗尺寸上调，提升表单可读性与可操作空间。
+12. **表单组件统一**：新增来源二级弹窗内部输入控件统一替换为 tuffex `TxInput` / `TxSelect` / `TxSelectItem`，移除原生 `select` 与旧输入组件。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/store/MarketSourceEditor.vue`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+- `apps/core-app/src/renderer/src/components/store/MarketHeader.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/storage/store-sources.ts`
+- `packages/utils/store/constants.ts`
+
+### Core App 工具设置下拉框返显修复
+
+**变更类型**: Bug 修复 / 设置兼容性
+
+**描述**: 修复 App Settings 中工具设置下拉框（自动粘贴、自动清除、剪贴板轮询）在旧配置数据下选择后不返显、持续显示“请选择”的问题。根因是历史数据存在字符串数值与结构漂移（如 `autoPaste` 形态不一致），导致 `TxSelect` 无法匹配当前值。
+
+**主要变更**:
+1. **配置形态校正**：在 `SettingTools` 初始化阶段补齐 `tools.autoPaste` 对象结构，避免 `v-model="appSetting.tools.autoPaste.time"` 在旧数据下写入失败。
+2. **数值归一化**：对 `autoPaste.time`、`autoClear`、`clipboardPolling.interval`、`lowBatteryPolicy.interval` 增加统一的数字与可选值归一化，兼容历史字符串值并回落到安全默认值。
+3. **禁用语义对齐**：当 `autoPaste.time === -1` 时同步修正 `autoPaste.enable`，避免 UI 与实际行为状态不一致。
+4. **下拉值匹配增强**：`TxSelect` 增加字符串/数字值宽松匹配（如 `"180"` 与 `180`），避免历史字符串配置导致选项已存在但不回显。
+5. **首屏返显修复**：`TuffBlockSelect` 改为 eager 挂载下拉内容，避免选项未挂载时 `TxSelect` 无法建立值到文案映射而首屏显示“请选择”。
+6. **文案提取增强**：`TxSelectItem` 支持从默认 slot 文本提取 label（未显式传 `label` 时），避免选择后仅显示数字值（如 `180`）而不是“3 分钟”。
+7. **兜底映射增强**：`TxSelect` 新增从 slot VNode 直接解析 value/label 的兜底逻辑，即使选项注册时机滞后也能在首屏用当前值解析展示文案。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/components/tuff/TuffBlockSelect.vue`
+- `packages/tuffex/packages/components/src/select/src/TxSelect.vue`
+- `packages/tuffex/packages/components/src/select/src/TxSelectItem.vue`
+- `packages/tuffex/packages/components/src/popover/src/TxPopover.vue`
+- `packages/tuffex/packages/components/src/popover/src/types.ts`
+- `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`
+- `packages/tuffex/packages/components/src/base-anchor/src/types.ts`
+- `packages/tuffex/packages/components/src/select/src/types.ts`
+
+### Nexus OAuth 在 Cloudflare Workers 的 HKDF 兼容修复
+
+**变更类型**: 登录稳定性 / Edge 兼容
+
+**描述**: 修复 Nexus 在 Cloudflare Pages/Workers 上点击 LinuxDO OAuth 即返回 `OAuthSignin` 的问题。根因是 Workers 打包后 `@panva/hkdf` 被包装为 namespace，`next-auth` CJS 默认导入在运行时得到非函数对象，导致 state/pkce cookie 生成失败。
+
+**主要变更**:
+1. **依赖收敛**：通过 workspace overrides 固定 `@panva/hkdf` 版本，避免漂移引发的运行时导出形态不一致。
+2. **入口强制收敛**：在 `nuxt.config.ts` 的 `nitro.alias` 与 `vite.resolve.alias` 中将 `@panva/hkdf` 强制映射到 `dist/node/cjs/index.js`，避免 Workers 打包选中 `worker` 条件导出后被 CJS 默认导入误包装。
+3. **运行链路一致化**：Edge SSR 与 Functions 统一走 CJS 入口，保证 `next-auth` 的 HKDF 默认导入在 Cloudflare 运行时可调用。
+
+**修改文件**:
+- `package.json`
+- `apps/nexus/nuxt.config.ts`
+
+### Nexus 组件文档页 SSR 崩溃修复（NumberFlow）
+
+**变更类型**: 稳定性修复 / Edge SSR 兼容
+
+**描述**: 修复 `https://tuff.tagzxia.com/docs/dev/components/index` 在 Cloudflare Pages/Workers 上返回 500 的问题。根因是 `@number-flow/vue` 在 SSR 打包路径中触发 `HTMLElement is not defined`，导致页面服务端渲染异常。
+
+**主要变更**:
+1. **SSR 导入收敛**：将相关组件中的 `@number-flow/vue` 从静态导入改为 `import.meta.client` 条件下的异步组件加载，避免 server bundle 初始化时触发浏览器全局对象引用。
+2. **降级渲染兜底**：在 NumberFlow 组件不可用时回退为纯文本数值渲染，确保 SSR 输出稳定可用。
+3. **示例页同步修复**：同步修复 Nexus docs 相关 demo 组件，消除文档页触发同类崩溃的入口。
+
+**修改文件**:
+- `packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`
+- `apps/nexus/app/components/content/demos/AutoSizerNumberFlowDemo.vue`
+- `apps/nexus/app/components/content/demos/StatCardBasicDemo.vue`
+- `apps/nexus/app/components/content/demos/StatCardInsightVariantDemo.vue`
+- `apps/nexus/app/components/content/demos/StatCardProgressVariantDemo.vue`
+- `apps/nexus/app/components/content/demos/StatCardStatCardDemo.vue`
+
+### Nexus docs 页面 hydration mismatch 收敛
+
+**变更类型**: 稳定性修复 / SSR 一致性
+
+**描述**: 修复 docs 页面在部署环境中偶发 `Hydration completed but contains mismatches` 的问题。根因是 SSR 与客户端在语言和右侧文档辅助区渲染时机不一致，导致 `DocsOutline` / `DocsAsideCards` 节点树不一致。
+
+**主要变更**:
+1. **语言首屏一致性**：`app.vue` 在服务端优先基于 `Accept-Language` 判定首屏语言，并在 SSR 阶段 `await setLocale(...)`，避免首屏英文渲染后客户端切换中文引发的 hydration mismatch。
+2. **右侧文档辅助区客户端化**：`docs` 布局将右侧 `DocsOutline` 与 `DocsAsideCards` 包裹在 `ClientOnly` 内，规避依赖客户端状态的节点在 SSR 阶段与客户端阶段结构不一致。
+
+**修改文件**:
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/layouts/docs.vue`
+
+### Nexus PWA 导航回退冲突修复（刷新回首页）
+
+**变更类型**: 部署稳定性 / PWA 与 SSR 兼容
+
+**描述**: 修复部署后在 docs、OAuth 回调等路由刷新或回跳时被错误落到首页的问题。根因是 Workbox `navigateFallback: '/'` 与 SSR 路由冲突，Service Worker 将导航请求统一回退到首页 HTML，导致页面错配与 hydration mismatch。
+
+**主要变更**:
+1. **禁用导航回退匹配**：将 `workbox.navigateFallbackDenylist` 收敛为全量拒绝（`/.*/`），避免 Service Worker 对 SSR 页面导航请求命中首页回退。
+2. **开发配置同步收敛**：删除 `devOptions.navigateFallback`，保证本地预览与线上行为一致。
+
+**修改文件**:
+- `apps/nexus/app/config/pwa.ts`
+
+### Nexus Cloudflare 变量绑定冲突收敛（LINUXDO_ISSUER）
+
+**变更类型**: 部署稳定性 / 配置收敛
+
+**描述**: Cloudflare Functions 发布阶段出现 `Binding name 'LINUXDO_ISSUER' already in use`。将 `LINUXDO_ISSUER` 收敛为单处 wrangler 定义，避免环境变量重复绑定冲突。
+
+**主要变更**:
+1. **单点定义**：移除 `env.preview.vars` 中的 `LINUXDO_ISSUER`，仅保留顶层 `[vars]` 定义。
+
+**修改文件**:
+- `wrangler.toml`
+
+### Nexus 实验内容噪点水印隐藏策略收敛
+
+**变更类型**: 体验修复 / 水印策略
+
+**描述**: Nexus 风控与水印策略收敛为环境变量单开关，未启用时统一关闭导航入口、页面访问与服务端 API，避免“入口隐藏但链路仍可访问”的不一致行为。
+
+**主要变更**:
+1. **单一开关**：新增 `NUXT_PUBLIC_WATERMARK_ENABLED` 与 `NUXT_PUBLIC_RISK_CONTROL_ENABLED`（默认关闭），分别控制水印与风险控制能力。
+2. **导航统一收敛**：Dashboard Nav 根据开关动态隐藏 `watermark` 与 `risk` 入口。
+3. **路由统一拦截**：新增全局路由中间件，关闭时阻断 `/dashboard/watermark`、`/dashboard/admin/risk` 与 `/admin/emergency` 访问。
+4. **服务端统一拦截**：新增服务端特性中间件，关闭时对风险/水印 API 返回 404，避免绕过前端直连调用。
+5. **水印链路收敛**：`useWatermarkDisplayPolicy` 与 `watermark-risk` 插件只读取环境开关；关闭时不挂载噪点层、风险弹层，也不注入水印 token header。
+6. **运行时配置补齐**：`nuxt.config.ts` 同步暴露 `runtimeConfig.{watermark,riskControl}.enabled` 与 `runtimeConfig.public` 对应字段。
+
+**修改文件**:
+- `apps/nexus/app/composables/useWatermarkDisplayPolicy.ts`
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/components/dashboard/DashboardNav.vue`
+- `apps/nexus/app/plugins/watermark-risk.client.ts`
+- `apps/nexus/app/middleware/feature-gates.global.ts`
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/server/middleware/feature-gates.ts`
+- `apps/nexus/server/middleware/watermark-guard.ts`
+- `apps/nexus/server/utils/runtime-features.ts`
+- `apps/nexus/README.md`
+
+### Core-app 设置项位置调整（详细信息与搜索引擎日志）
+
+**变更类型**: 体验优化 / 设置分组整理
+
+**描述**: 将「详细信息」与「搜索引擎日志」两个开关从「实用工具」分组迁移到「应用程序规范（Touch）」分组，保证设置语义与分组一致。
+
+**主要变更**:
+1. **分组迁移**：在 `SettingAbout` 中新增两个开关入口，并复用原有配置字段。
+2. **工具页收敛**：从 `SettingTools` 移除上述两个开关，减少实用工具分组噪音。
+3. **高级设置门禁**：仅当“高级设置”开启后显示这两个开关，默认隐藏。
+4. **国际化迁移**：中英文文案从 `settingTools` 收敛到 `settingAbout`。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
+### Core-app 窗口协议统一（WindowRole）
+
+**变更类型**: 架构治理 / 稳定性修复
+
+**描述**: 统一 main/preload/renderer 的窗口参数协议解析与模式判定，消除 `touchType/coreType/assistantType/metaOverlay` 在多处手写字符串导致的漂移风险；`omni-panel` 全链路由单一协议模块驱动。
+
+**主要变更**:
+1. **协议单一来源**：新增 `window-role` 模块，统一导出窗口角色常量、类型、参数构建/解析与渲染模式解析函数。
+2. **主进程发参收敛**：所有窗口 `additionalArguments` 改为通过 `buildWindowArgs` 生成，移除分散手写参数字符串。
+3. **解析链路统一**：`arg-mapper` 改为复用统一协议解析，同时保留原有 API 外观与原始未知值记录能力。
+4. **入口路由收敛**：`AppEntrance` 改为单入口 mode 分发；未知 `coreType` 在开发态告警并安全回退 CoreBox。
+5. **预加载收敛**：移除 DivisionBox 预加载全局特判标记，改为协议判定；保留 MetaOverlay hash/参数双路径识别。
+6. **测试补齐**：新增 `window-role` 单测，覆盖构建、解析、未知值降级和模式映射。
+
+**修改文件**:
+- `packages/utils/renderer/window-role.ts`
+- `packages/utils/renderer/hooks/arg-mapper.ts`
+- `packages/utils/renderer/index.ts`
+- `packages/utils/__tests__/renderer/window-role.test.ts`
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/preload/index.ts`
+- `apps/core-app/src/renderer/src/AppEntrance.vue`
+- `apps/core-app/src/renderer/src/modules/devtools/app-entrance-log.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/core-box.ts`
+
+## 2026-02-22
+
+### Core-app Assistant（阿洛 aler）悬浮球与语音唤醒
+
+**变更类型**: 新功能 / AI 默认能力接入
+
+**描述**: 新增 Assistant 悬浮球与语音面板窗口，语音唤醒从 Porcupine 路线切换为浏览器 SpeechRecognition；同时 Intelligence 默认绑定内置 Tuff Nexus provider，并在主进程注入登录令牌，用户无需手动配置 provider 即可直接使用 AI 能力。
+
+**主要变更**:
+1. **悬浮球窗口**：新增独立 assistant touchType 的悬浮球窗口，支持位置拖拽与持久化。
+2. **语音唤醒**：悬浮球侧实现 Web Speech 连续监听，默认唤醒词为“阿洛 / aler”，命中后打开语音面板。
+3. **语音面板**：新增语音转写面板，可将识别文本直接提交到 CoreBox 输入并触发后续搜索流程。
+4. **快捷键策略**：CoreBox 相关系统快捷键改为默认注册但禁用，避免首次安装即占用默认组合键。
+5. **Intelligence 默认 provider**：`tuff-nexus-default` 默认启用并绑定核心文本能力；主进程加载配置时自动注入 auth token（无 token 时走 guest 占位）。
+6. **权限能力扩展**：系统权限检查增加麦克风权限查询/请求通道，为语音能力提供统一权限入口。
+7. **实验开关默认态**：Assistant 实验开关默认关闭，且悬浮球与语音唤醒默认关闭；仅在用户显式启用后生效。主进程需带 `TUFF_ENABLE_ASSISTANT_EXPERIMENT=1` 启动参数才会加载 Assistant 模块。
+
+**修改文件**:
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/main/modules/assistant/module.ts`
+- `apps/core-app/src/main/modules/assistant/index.ts`
+- `apps/core-app/src/main/modules/global-shortcon.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-config.ts`
+- `apps/core-app/src/main/modules/system/permission-checker.ts`
+- `apps/core-app/src/renderer/src/AppEntrance.vue`
+- `apps/core-app/src/renderer/src/App.vue`
+- `apps/core-app/src/renderer/src/main.ts`
+- `apps/core-app/src/renderer/src/views/assistant/FloatingBall.vue`
+- `apps/core-app/src/renderer/src/views/assistant/VoicePanel.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `packages/utils/renderer/hooks/arg-mapper.ts`
+- `packages/utils/transport/events/assistant.ts`
+- `packages/utils/types/intelligence.ts`
+
+**实现说明**:
+- `docs/plan-prd/04-implementation/AssistantExperiment-VoiceFloatingBall-260223.md`
+
+### Core-app OmniPanel（全景面板）命名统一与配置入口
+
+**变更类型**: 功能增强 / 交互入口
+
+**描述**: 全景面板统一命名为 `OmniPanel`，并新增设置页配置入口，支持按需启停快捷键与右键长按唤起。
+
+**主要变更**:
+1. **命名统一**：主进程模块、事件、窗口参数、preload 标记与渲染入口统一为 `omni-panel` / `OmniPanel`。
+2. **配置入口**：设置页增加 `OmniPanel 快捷键` 与 `OmniPanel 右键长按唤起` 两个开关。
+3. **运行时生效**：主进程监听 APP_SETTING 变化，实时更新全局快捷键启用状态与鼠标长按 Hook。
+4. **快捷键可读性**：快捷键管理面板增加 `core.omniPanel.toggle` 的中英文展示文案。
+5. **国际化键收敛**：补齐 `corebox.omniPanel.*` 文案并新增统一 i18n key 常量，避免硬编码。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/preload/index.ts`
+- `apps/core-app/src/shared/events/omni-panel.ts`
+- `apps/core-app/src/renderer/src/AppEntrance.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `packages/utils/renderer/hooks/arg-mapper.ts`
+- `packages/utils/i18n/message-keys.ts`
+- `packages/utils/i18n/index.ts`
+
+### Core-app OmniPanel 触发方式接入快捷方式管理
+
+**变更类型**: 功能增强 / 交互一致性
+
+**描述**: OmniPanel 的键盘快捷键与鼠标右键长按触发统一接入 `global-shortcon` 管理，快捷方式弹窗可直接查看并启停两种触发方式。
+
+**主要变更**:
+1. **ShortcutType 扩展**：新增 `trigger` 类型，支持非键盘触发方式的统一存储与展示。
+2. **主进程接入**：`global-shortcon` 新增 `registerMainTrigger`，触发项参与状态管理但不走 `globalShortcut.register`。
+3. **OmniPanel 注册**：主进程注册 `core.omniPanel.toggle`（键盘）与 `core.omniPanel.mouseLongPress`（鼠标右键长按）两条系统触发项。
+4. **设置页收敛**：移除 OmniPanel 独立开关，改为在快捷方式管理弹窗集中配置启停。
+5. **弹窗展示增强**：快捷方式表格支持“快捷键/触发方式”混合展示，鼠标触发显示为只读触发标签。
+6. **文案补齐**：中英文补充 OmniPanel 鼠标触发标签与行描述，保证可读性一致。
+
+**修改文件**:
+- `packages/utils/common/storage/entity/shortcut-settings.ts`
+- `apps/core-app/src/main/modules/global-shortcon.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/components/shortcut-dialog.types.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/components/ShortcutDialogRow.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
+### Core-app OmniPanel 启动链路修复与模块 Env Gate
+
+**变更类型**: 稳定性修复 / 架构治理
+
+**描述**: 修复 OmniPanel 未进入主进程加载链路与渲染入口误路由问题；同时为 `BaseModule` 增加 `env` 自动启用门控，支持按环境变量控制模块加载。
+
+**主要变更**:
+1. **模块 Env Gate**：`BaseModule` / `IBaseModule` 新增 `env` 属性，ModuleManager 仅在对应 env flag 启用时自动加载模块。
+2. **Assistant 收敛**：Assistant 改为声明式 env 门控（`TUFF_ENABLE_ASSISTANT_EXPERIMENT`），移除模块内部重复判断逻辑。
+3. **OmniPanel Env 门控**：OmniPanel 改为声明式 env 门控（`TUFF_ENABLE_OMNIPANEL_EXPERIMENT`），与 Assistant 保持一致的模块启用策略。
+4. **OmniPanel 主进程接入**：`omniPanelModule` 正式加入 `modulesToLoad`，快捷键、鼠标触发与 IPC 处理器可正常初始化。
+5. **OmniPanel 渲染入口**：AppEntrance 按 `coreType=omni-panel` 渲染独立 `OmniPanel` 视图，不再误落到 CoreBox。
+6. **arg-mapper 类型补齐**：`coreType` 增加 `omni-panel`，并新增 `isOmniPanel()` 判断函数。
+7. **选中文本捕获优化**：macOS 优先尝试通过 AXSelectedText 直读选中文本；复制兜底路径改为完整剪贴板快照恢复，避免覆盖图片/文件/HTML 剪贴板内容。
+
+**修改文件**:
+- `packages/utils/types/modules/module.ts`
+- `apps/core-app/src/main/modules/abstract-base-module.ts`
+- `apps/core-app/src/main/core/module-manager.ts`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/main/modules/assistant/module.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `packages/utils/renderer/hooks/arg-mapper.ts`
+- `apps/core-app/src/renderer/src/AppEntrance.vue`
+
+### Nexus 多层水印与风险验证
+
+**变更类型**: 安全与溯源 / 前端体验
+
+**描述**: Nexus 全站引入隐写水印与结构指纹，Dashboard 追加明水印；水印异常或服务端风险信号触发 Turnstile 强制验证，提升溯源与防绕过能力。
+
+**主要变更**:
+1. **隐写水印**：全站覆盖的噪声纹理水印，肉眼不可见且支持拍照/着色场景的服务端检测。
+2. **结构指纹**：通过 CSS 变量对导航、文档侧边栏、目录与 Footer 做轻微扰动，增强溯源。
+3. **明水印**：仅 Dashboard layout 显示可见水印，其他页面保持纯净展示。
+4. **风险阻断**：新增 Turnstile 验证弹窗，接收 428 风险码或检测到篡改即强制验证。
+5. **防删监测**：水印 DOM 被移除/隐藏时自动恢复并触发风险上报。
+
+**修改文件**:
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/layouts/dashboard.vue`
+- `apps/nexus/app/components/TheHeader.vue`
+- `apps/nexus/app/components/DocsSidebar.vue`
+- `apps/nexus/app/components/DocsOutline.vue`
+- `apps/nexus/app/components/TuffFooter.vue`
+- `apps/nexus/app/components/watermark/InvisibleWatermark.vue`
+- `apps/nexus/app/components/watermark/VisibleWatermark.vue`
+- `apps/nexus/app/components/watermark/WatermarkRiskModal.vue`
+- `apps/nexus/app/composables/useWatermarkToken.ts`
+- `apps/nexus/app/composables/useWatermarkFingerprint.ts`
+- `apps/nexus/app/composables/useWatermarkRisk.ts`
+- `apps/nexus/app/composables/useWatermarkGuard.ts`
+- `apps/nexus/app/composables/useTurnstileWidget.ts`
+- `apps/nexus/app/plugins/watermark-risk.client.ts`
+- `apps/nexus/app/utils/watermark.ts`
+- `apps/nexus/server/api/watermark/issue.post.ts`
+- `apps/nexus/server/api/watermark/turnstile/verify.post.ts`
+- `apps/nexus/server/utils/watermarkToken.ts`
+- `apps/nexus/server/utils/turnstile.ts`
+- `apps/nexus/server/utils/watermarkGuard.ts`
+- `apps/nexus/server/middleware/watermark-guard.ts`
+- `apps/nexus/server/utils/watermarkDecode.ts`
+- `apps/nexus/server/utils/watermarkStore.ts`
+- `apps/nexus/server/api/watermark/resolve.post.ts`
+- `apps/nexus/app/composables/useWatermarkDecode.ts`
+- `apps/nexus/nuxt.config.ts`
+
+### Nexus 水印溯源解码增强与测试入口
+
+**变更类型**: 安全与溯源 / 管理工具
+
+**描述**: 补强水印多频段解码与旋转/缩放容错，新增 Dashboard 水印溯源入口用于上传截图快速追溯用户与设备。
+
+**主要变更**:
+1. **多频段解码**：引入三频段噪声配置与派生种子，提升压缩图与拍照场景命中率。
+2. **容错检测**：增加小角度旋转/缩放容错扫描，降低拍照倾斜对相关性计算的影响。
+3. **测试入口**：Dashboard 增加水印解析页面，展示置信度与溯源信息。
+4. **溯源留存**：水印种子记录保留 7 天，避免截图延迟解析导致错配。
+5. **开发环境放开解析**：Resolve API 在非生产环境放开为登录用户可用，便于联调与验证。
+6. **水印信号增强**：移除混合模式与模糊处理、提升噪声幅度与整体透明度，提升截图/拍照可检测性。
+7. **块状噪声编码**：水印噪声改为块状低频编码，提升压缩/缩放场景相关性，减少重采样带来的相位漂移。
+8. **二维码溯源**：新增固定追踪码二维码平铺水印，支持截图直接解码追溯用户与设备。
+
+**修改文件**:
+- `apps/nexus/shared/watermark/config.ts`
+- `apps/nexus/app/utils/watermark-config.ts`
+- `apps/nexus/app/utils/watermark.ts`
+- `apps/nexus/app/composables/useWatermarkTrackingCode.ts`
+- `apps/nexus/app/components/watermark/VisibleWatermark.vue`
+- `apps/nexus/server/utils/watermarkTrackingStore.ts`
+- `apps/nexus/server/utils/watermarkQr.ts`
+- `apps/nexus/server/api/watermark/tracking.post.ts`
+- `apps/nexus/package.json`
+- `apps/nexus/app/components/watermark/InvisibleWatermark.vue`
+- `apps/nexus/app/components/dashboard/DashboardNav.vue`
+- `apps/nexus/app/pages/dashboard/watermark.vue`
+- `apps/nexus/app/composables/useWatermarkDecode.ts`
+- `apps/nexus/server/utils/watermarkDecode.ts`
+- `apps/nexus/server/api/watermark/resolve.post.ts`
+- `apps/nexus/server/utils/watermarkStore.ts`
+- `apps/nexus/server/api/watermark/issue.post.ts`
+- `apps/nexus/app/utils/role.ts`
+
+### 设置页高级选项收起开关
+
+**变更类型**: 体验优化 / 设置
+
+**描述**: 在“应用程序规范”中新增高级设置开关，默认关闭；启用后才显示后台索引策略、应用索引调度与下载设置，减少设置页噪音。
+
+**主要变更**:
+1. **新增开关**：高级设置开关落地到 appSetting 并持久化。
+2. **按需展示**：下载设置与索引策略/调度分组仅在开关启用后显示。
+
+**修改文件**:
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/AppSettings.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
+### Core-app 认证/凭证/同步触发收敛到主进程
+
+**变更类型**: 架构调整 / 安全与一致性
+
+**描述**: 登录、凭证、设备标识与同步触发统一由主进程持有与执行，渲染进程仅发送意图请求并监听状态，避免 token/设备信息停留在 renderer 导致的存储与同步冲突。
+
+**主要变更**:
+1. **AuthModule**：新增主进程 AuthModule，token 使用 safeStorage 持久化，device profile 写入 appSetting，并统一 `/api/v1/auth/*` 请求与状态广播。
+2. **回调收敛**：登录与 step-up 回调由 addon-opener 直接交给主进程处理，token 变化联动同步启停。
+3. **渲染端降级为代理**：`useAuth`/`account-channel` 仅保留 IPC、legacy 迁移与 fingerprint hash 计算。
+4. **Nexus 请求统一**：渲染端发起的认证请求改为 `auth:nexus-request` 由主进程代理。
+5. **Legacy 兼容移除**：移除 renderer 侧 auth/device 的 localStorage 迁移逻辑。
+6. **Widget 沙箱收敛**：widget 执行强制依赖沙箱上下文，不再回退到 window.localStorage/sessionStorage。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/main/modules/addon-opener.ts`
+- `apps/core-app/src/main/modules/sync/index.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/index.ts`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/modules/auth/account-channel.ts`
+- `apps/core-app/src/renderer/src/modules/auth/auth-env.ts`
+- `apps/core-app/src/renderer/src/modules/auth/device-attest.ts`
+- `apps/core-app/src/renderer/src/modules/store/auth-token-service.ts`
+- `apps/core-app/src/renderer/src/modules/store/nexus-auth-client.ts`
+
+### Core-app 同步迁移到主进程
+
+**变更类型**: 架构调整 / 数据一致性
+
+**描述**: 同步拉取/推送与冲突处理由主进程统一接管，渲染进程仅触发指令与展示状态，确保落盘与冲突裁决在主进程完成，避免同步数据停留在 renderer 内存导致重启回滚。
+
+**主要变更**:
+1. **同步主流程迁移**：新增主进程同步模块，使用 CloudSyncSDK 进行拉取/推送与冲突处理。
+2. **存储统一裁决**：拉取结果直接写入主进程存储并落盘，必要时合并本地脏数据后回推。
+3. **渲染端降级为代理**：renderer 仅发送 start/stop/trigger 指令，状态从主进程存储同步。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/sync/index.ts`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/renderer/src/modules/sync/auto-sync-manager.ts`
+
+### Tuffex Anchor reference class 透传
+
+**变更类型**: 体验修复 / 组件
+
+**描述**: BaseAnchor reference 容器新增 `referenceClass` 透传，Popover / DropdownMenu 可通过 class 调整 reference 容器布局（例如全宽）。
+
+**主要变更**:
+1. **Reference class**：`TxBaseAnchor` 新增 `referenceClass` 并支持 `is-full-width`。
+2. **透传链路**：`TxPopover`/`TxDropdownMenu` 新增 `referenceClass`，`referenceFullWidth` 同步影响 Anchor reference。
+
+**修改文件**:
+- `packages/tuffex/packages/components/src/base-anchor/src/types.ts`
+- `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`
+- `packages/tuffex/packages/components/src/popover/src/types.ts`
+- `packages/tuffex/packages/components/src/popover/src/TxPopover.vue`
+- `packages/tuffex/packages/components/src/dropdown-menu/src/types.ts`
+- `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue`
+
+### Nexus Header 用户菜单语言子菜单宽度修复
+
+**变更类型**: 体验修复 / 账号菜单
+
+**描述**: Header 用户菜单语言子菜单改用 reference class 撑满触发区域，确保列表项高亮与子菜单对齐一致。
+
+**主要变更**:
+1. **Reference class**：Language 子菜单 `TxPopover` 使用 `reference-class` 控制外层参考宽度。
+2. **样式补齐**：针对 reference class 设置 100% 宽度，保证触发区域覆盖整行。
+
+**修改文件**:
+- `apps/nexus/app/components/HeaderUserMenu.vue`
+
+### CI 构建引入 Electron 下载镜像与缓存路径
+
+**变更类型**: 稳定性 / 构建修复
+
+**描述**: GitHub Actions 拉取 Electron 产物时出现 502，构建改为使用镜像源并固定缓存目录，降低外网波动影响。
+
+**主要变更**:
+1. **镜像下载**：设置 `ELECTRON_MIRROR` 与 `ELECTRON_BUILDER_BINARIES_MIRROR`。
+2. **缓存路径**：统一 `ELECTRON_CACHE` 与 `ELECTRON_BUILDER_CACHE` 到 workspace 内。
+
+**修改文件**:
+- `.github/workflows/build-and-release.yml`
+
+### macOS 自动更新通道校验与旧包清理
+
+**变更类型**: 行为修复 / 更新稳定性
+
+**描述**: 修正 macOS 自动更新在渠道错配与旧包残留情况下触发降级安装的问题，同时避免持久化更新记录与待安装版本在当前版本更高时继续提示更新。
+
+**主要变更**:
+1. **待安装版本校验**：仅允许与当前有效渠道匹配且版本更高的 pending install 进入可安装状态。
+2. **缓存记录过滤**：持久化更新记录在版本不满足更新条件时不再触发提示。
+3. **默认通道对齐**：更新通道缺失时改为对齐当前版本通道，避免 beta 用户回退到 Release 检测。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+
+### Core-app DB 写入队列与剪贴板持久化优化
+
+**变更类型**: 稳定性 / 性能
+
+**描述**: 解决事件循环阻塞与 SQLite 写入争用导致的分析持久化积压，剪贴板写入改为走串行队列与重试机制，并在队列压力下主动跳过非关键 analytics 写入。
+
+**主要变更**:
+1. **剪贴板持久化串行化**：clipboard history 与 metadata 写入改走 `DbWriteScheduler + withSqliteRetry`。
+2. **Analytics 压力削峰**：队列深度过高时跳过 snapshots / cleanup / plugin analytics，减少锁争用与阻塞。
+3. **队列压力日志节流**：压力告警增加 5s 级别节流，避免刷屏。
+4. **剪贴板元数据降级**：队列压力下跳过 meta 表写入，正常情况下改为异步 + 可丢弃写入。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/analytics/storage/db-store.ts`
+
+### CoreBox 剪贴板输入索引化与 ESC 搜索刷新
+
+**变更类型**: 体验修复 / 性能
+
+**描述**: CoreBox 搜索输入为剪贴板图片/文件补充 `clipboardId` 指引与预览信息，减少重复传输大体积内容；ESC 清除附件时强制触发搜索刷新，保持结果与输入一致。
+
+**主要变更**:
+1. **输入指引**：图片/文件输入 metadata 增加 `clipboardId` 与 `contentKind`，支持按需解析原始内容。
+2. **预览标记**：图片输入补充 `canResolveOriginal` 标记，预览数据保持轻量。
+3. **ESC 清理刷新**：清除附件时无论是否存在 clipboard 数据都触发搜索刷新。
+4. **主进程补齐**：搜索与插件执行阶段按 `clipboardId` 自动补齐文件输入内容。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useClipboardState.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts`
+
+### 快捷键管理列表布局优化
+
+**变更类型**: 体验优化 / 设置
+
+**描述**: 快捷键管理列表提升可读性，快捷键列加宽、来源列后置，并支持命令 ID 一键复制与横向滚动。
+
+**主要变更**:
+1. **列顺序调整**：来源列移动到末尾，关键内容优先展示。
+2. **快捷键列加宽**：输入框宽度与列宽提升，避免组合键被截断。
+3. **命令 ID 复制**：命令 ID 支持点击复制并在 hover 时显示下划线。
+4. **默认无横向滚动**：压缩列宽并省略长文本，保证默认视口内可读。
+5. **保存状态视觉反馈**：保存中 shimmer、成功淡绿、失败淡红并使用 Carbon 图标。
+6. **启用/状态合并**：启用与状态合并同列并保持默认可见。
+7. **命令 ID 复制提示**：复制后显示成功/失败提示。
+8. **复制工具统一**：ID 复制统一使用 clipboard 工具，移除旧式 execCommand 兼容逻辑。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+
+### Nexus 登录页底部协议按钮可点击
+
+**变更类型**: 体验修复 / 登录页
+
+**描述**: 登录页底部协议/隐私按钮被主内容层覆盖导致无法点击，现提升 footer 层级避免遮挡。
+
+**主要变更**:
+1. **层级提升**：登录页法律 footer 增加更高层级，确保点击交互可用。
+
+**修改文件**:
+- `apps/nexus/app/components/auth/AuthLegalFooter.vue`
+
+### Nexus Credits 额度优化、签到与支付抽象
+
+**变更类型**: 计费与权益 / 体验增强
+
+**描述**: Free 个人额度调整为每月 5；完成邮箱验证 + OAuth + Passkey 后可领取当月提升额度（下月起自动 100）；Plus/Pro 个人额度分别为 500/1200，Team/Enterprise 个人额度为 5000；Team 计划团队池默认 10000（含 5 席位），每新增 1 席位团队池增加 2000；新增每日签到领积分；引入支付抽象接口以支持多支付方式扩展。
+
+**主要变更**:
+1. **额度规则**：个人额度按资格与月份初始化，新增提升领取与签到奖励。
+2. **API 扩展**：新增 credits claim/checkin/status 接口，summary 增加 boost 信息。
+3. **前端入口**：Credits 页面新增领取与签到卡片、提示与动作。
+4. **支付抽象**：新增 billing provider 接口与注册表，暂不接入真实支付。
+5. **数据可视化**：Credits 页面新增趋势图、个人占比与模型/审计/签到 Tabs，补充趋势与模型/签到日历数据接口。
+
+**修改文件**:
+- `apps/nexus/server/utils/creditsStore.ts`
+- `apps/nexus/server/api/credits/claim.post.ts`
+- `apps/nexus/server/api/credits/checkin.post.ts`
+- `apps/nexus/server/api/credits/checkin/status.get.ts`
+- `apps/nexus/server/api/credits/trend.get.ts`
+- `apps/nexus/server/api/credits/models.get.ts`
+- `apps/nexus/server/api/credits/checkin/month.get.ts`
+- `apps/nexus/app/pages/dashboard/credits.vue`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/server/utils/billing/`
+
+### Tuff CLI 交互式引导与登录门控
+
+**变更类型**: 体验增强 / CLI
+
+**描述**: CLI 默认交互模式升级为上下选择，并在首次进入时新增语言/条款引导与 Nexus 登录门控，确保用户完成登录后再进入主菜单。
+
+**主要变更**:
+1. **交互式选择**：菜单选项支持 ↑/↓ + Enter 操作。
+2. **首次引导**：首次运行要求选择语言并确认条款，状态写入 `~/.tuff/cli.json`。
+3. **登录门控**：未登录时要求输入 Nexus Token，完成后进入主菜单。
+4. **存储提示**：进入主菜单前提示本地配置与登录信息存储路径。
+5. **设备码 OAuth**：CLI 支持浏览器授权 + 2 分钟心跳轮询，无需本地回调服务。
+6. **官网条款链接**：首次引导直接展示官网服务条款与隐私政策地址。
+7. **ASCII Logo**：CLI 进入交互模式输出 ASCII TUFF 标识。
+8. **本地 URL 支持**：`--local` 时 CLI 使用本地 Nexus URL（默认 http://localhost:3200）。
+9. **授权入口归一**：设备授权链接改为先进入登录页，再跳转到设备确认页面。
+10. **全局参数增强**：新增 `--api-base`、`--config-dir`、`--non-interactive` 以适配多环境与脚本场景。
+11. **设备授权扩展**：新增短期/长期/取消选项，授权完成自动关闭页面，并在 CLI 提示妥善保管 Token。
+
+**修改文件**:
+- `packages/unplugin-export-plugin/src/cli/prompts.ts`
+- `packages/unplugin-export-plugin/src/bin/tuff.ts`
+- `packages/unplugin-export-plugin/src/cli/runtime-config.ts`
+- `packages/unplugin-export-plugin/src/core/auth.ts`
+- `packages/unplugin-export-plugin/src/core/publish.ts`
+- `packages/unplugin-export-plugin/src/cli/i18n/locales/zh.ts`
+- `packages/unplugin-export-plugin/src/cli/i18n/locales/en.ts`
+- `packages/unplugin-export-plugin/src/cli/prompts.ts`
+- `apps/nexus/server/api/app-auth/device/start.post.ts`
+- `apps/nexus/server/api/app-auth/device/poll.get.ts`
+- `apps/nexus/server/api/app-auth/device/info.get.ts`
+- `apps/nexus/server/api/app-auth/device/approve.post.ts`
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/app/pages/device-auth.vue`
+
+### Nexus 登录历史与设备管理展示授权来源
+
+**变更类型**: 体验增强 / 安全可见性
+
+**描述**: 登录历史与设备管理新增授权来源标识（App / CLI / External），便于识别设备授权渠道并随时撤回可疑来源。
+
+**主要变更**:
+1. **登录历史来源**：记录并返回 clientType，Dashboard 显示授权来源。
+2. **设备来源标记**：设备列表展示授权来源标签，CLI 设备可直接撤回。
+3. **设备授权补全**：CLI 设备授权写入来源与设备元信息。
+
+**修改文件**:
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/utils/auth.ts`
+- `apps/nexus/server/api/login-history.get.ts`
+- `apps/nexus/server/api/app-auth/device/start.post.ts`
+- `apps/nexus/server/api/app-auth/device/poll.get.ts`
+- `apps/nexus/server/api/auth/[...].ts`
+- `apps/nexus/server/api/passkeys/verify.post.ts`
+- `apps/nexus/app/plugins/device-headers.client.ts`
+- `apps/nexus/app/pages/dashboard/overview.vue`
+- `apps/nexus/app/pages/dashboard/account.vue`
+- `apps/nexus/app/pages/dashboard/devices.vue`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+
+### Nexus 设备授权风控增强
+
+**变更类型**: 安全加固 / 设备授权
+
+**描述**: 设备授权新增 IP 校验与长期授权风控，非常用设备或登录地将被限制长期授权；授权完成后尝试更完整的自动关闭。
+
+**主要变更**:
+1. **IP 校验**：设备授权确认时校验 CLI 发起 IP 与浏览器 IP，不一致拒绝。
+2. **长期授权风控**：仅在常用设备 + 常用登录地组合下允许长期授权。
+3. **自动关闭增强**：授权完成后尝试多种关闭策略。
+
+**修改文件**:
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/utils/auth.ts`
+- `apps/nexus/server/api/app-auth/device/approve.post.ts`
+- `apps/nexus/server/api/app-auth/device/info.get.ts`
+- `apps/nexus/app/pages/device-auth.vue`
+
+### Nexus OAuth 回跳支持同源绝对 redirect_url
+
+**变更类型**: 行为修复 / 登录体验
+
+**描述**: OAuth 回调在生产环境可能携带同源绝对 `redirect_url`，此前会被丢弃并回落到默认首页，导致登录后无法回到原页面。现支持识别同源绝对地址并回退为站内路径。
+
+**主要变更**:
+1. **同源回跳**：绝对地址回跳在同源时转换为站内路径保留。
+2. **安全回退**：非同源或非法回跳仍回落到默认路径。
+
+**修改文件**:
+- `apps/nexus/app/composables/useOauthContext.ts`
+
+### Nexus Cloudflare Pages SSR 输出路径对齐
+
+**变更类型**: 部署稳定性 / 路由回落
+
+**描述**: Cloudflare Pages + Workers 场景下，生产构建强制启用 SSR，预览/部署脚本与指引统一使用 `dist` 输出，避免误用静态目录导致刷新回首页。
+
+**主要变更**:
+1. **SSR 强制**：生产环境保持 SSR 启用，确保 Pages Functions 生效。
+2. **输出对齐**：`preview:cf`/`deploy:cf` 与 Cloudflare 指引统一使用 `dist` 目录。
+
+**修改文件**:
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/package.json`
+- `apps/nexus/SETUP.md`
+
+### Nexus OAuth redirect_url 套娃与 sign-in 500 修复
+
+**变更类型**: 行为修复 / 登录稳定性
+
+**描述**: 登录失败重试场景下，`callbackUrl/error/oauth` 等中间态参数可能被带入 `redirect_url` 并反复嵌套，导致 URL 膨胀、刷新 `/sign-in` 出现 500。现统一净化回跳地址并阻断回跳到认证中间页。
+
+**主要变更**:
+1. **统一净化**：`sanitizeRedirect` 清理 `callbackUrl/callback_url/oauth/error` 等临时参数。
+2. **认证路径阻断**：回跳目标命中 `/sign-in` 或 `/api/auth/signin` 时回落到安全默认页。
+3. **入口收敛**：Header、用户菜单、全局认证重定向、sign-up 跳转统一复用净化逻辑。
+4. **同源 fallback 拒绝**：OAuth 授权地址若解析为同源 URL（如 `/?callbackUrl=...`）直接判定为 provider fallback 错误，阻断 `window.location.assign`。
+5. **服务端重定向兜底**：Auth redirect callback 识别并收敛 `/?callbackUrl=...` 异常回跳，统一回落到 `/sign-in` 错误页，避免前端缓存旧逻辑时再次套娃。
+6. **Auth 响应层改写**：对 `/api/auth/signin/*` 的 JSON `url` 与 `Location` 响应头统一执行 fallback 规范化，确保旧前端缓存命中时也不会继续跳转到 `/?callbackUrl=...`。
+
+**修改文件**:
+- `apps/nexus/app/composables/useOauthContext.ts`
+- `apps/nexus/app/components/TheHeader.vue`
+- `apps/nexus/app/components/HeaderUserMenu.vue`
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/pages/sign-up/index.vue`
+- `apps/nexus/server/utils/__tests__/useOauthContext.test.ts`
+- `apps/nexus/server/api/auth/[...].ts`
+
+### CoreBox UI 恢复事件 URL 修正与索引 addPath 类型收敛
+
+**变更类型**: 稳定性 / 构建修复
+
+**描述**: 修正 CoreBox 插件 UI 恢复事件在无 query 场景使用未定义 URL 的问题，并为 file/app index addPath 事件显式标注返回类型，避免 typecheck 失败。
+
+**主要变更**:
+1. **恢复事件 URL**：无 query 时恢复事件使用当前 attach URL。
+2. **addPath 类型约束**：file/app index addPath 事件 handler 显式标注请求/返回类型，消除返回值类型漂移。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/channel/common.ts`
+
+### DivisionBox 窗口池延后初始化
+
+**变更类型**: 性能优化 / 启动体验
+
+**描述**: DivisionBox 窗口池初始化延后到全部模块加载完成后异步触发，避免启动阶段被预热窗口阻塞。
+
+**主要变更**:
+1. **延后时机**：监听 `ALL_MODULES_LOADED` 后再调度 window pool 初始化。
+2. **异步调度**：初始化改为非阻塞调度，避免影响模块加载链路。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/division-box/module.ts`
+
+### CoreBox Dev 插件视图路由按 manifest 直出
+
+**变更类型**: 行为调整 / 插件开发
+
+**描述**: Dev 插件视图不再强制 hash 路由，交互路径按 manifest 原样生成；需要 hash 路由时请在 manifest 的 interaction.path 中显式配置 `#/...`。
+
+**主要变更**:
+1. **移除强制 hash**：dev 插件 URL 不再自动改写为 `/#/`。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+
+### Intelligence 审计用量写入 Upsert 化以降低锁冲突
+
+**变更类型**: 稳定性 / 数据持久化
+
+**描述**: Intelligence 审计用量统计写入改为 `INSERT ... ON CONFLICT DO UPDATE`，避免事务内先读后写导致的 `SQLITE_BUSY_SNAPSHOT` 争用。
+
+**主要变更**:
+1. **Upsert 统计**：用量统计直接累加写入，减少读写锁竞争窗口。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts`
+
+### AppProvider 配置写入串行化避免 SQLITE_BUSY
+
+**变更类型**: 稳定性 / 数据持久化
+
+**描述**: AppProvider 写入 config 表时改为走 `DbWriteScheduler + withSqliteRetry`，降低与索引 worker 并发写入时触发 `SQLITE_BUSY` 的概率，并避免未处理的 Promise 拒绝。
+
+**主要变更**:
+1. **统一配置写入**：mdls 扫描时间/locale、缺失图标缓存、待删除缓存写入走统一写入函数。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+
+---
+
+## 2026-03-15
+
+### 修复: Pilot 图片发送语义统一为单条 user 多模态 content
+
+**变更类型**: Bug 修复
+
+**描述**: 明确并固化 `text + image` 发送语义为“同一条 user 消息内多内容块”，避免拆分为两条 user turn 导致上下文丢失。
+
+**主要变更**:
+1. `ThInput` 保持单 turn 发送，图片上传保留 `dataUrl` 到 `inputMeta.data`，供后端优先内联。
+2. Quota 与 Pilot Stream 两条后端链路统一内联阈值（单图 5MB / 总量 12MB），并优先使用 `dataUrl`。
+3. 补充回归测试，覆盖：
+   - 同 turn 的 `input_text + input_image` 组包断言
+   - 仅图片场景可消费文本块断言
+   - `dataUrl > previewUrl > ref` 优先级断言
+   - “拆两条 user turn 会丢文本”风险断言
+
+**影响**: 多模态识别链路更稳定，减少“模型只看到 URL 文本”导致的识别失败。
+
+---
+
+## 2026-03-15
+
+### 修复: Pilot 旧 QuotaGPTView 对话链路消息完整性与图片输入兼容
+
+**变更类型**: 对话链路修复 / 兼容性增强
+
+**描述**:
+- 修复旧 `aigc/executor` 链路中消息重组导致的上下文丢失风险，改为按原顺序无损序列化发送。
+- 服务端由“仅提取最后一条用户文本”升级为“提取最后用户轮次（文本 + 附件）”。
+- 新增图片分级策略：小图（<=256KB）内联 `dataUrl`，并增加单次内联总量上限（1MB）。
+- 补齐旧链路 `this-title` 适配：显式支持 `generateTitle`，标题模型跟随当前渠道模型并提供回退标题。
+
+**修改文件**:
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `apps/pilot/server/utils/quota-history-codec.ts`
+- `apps/pilot/server/api/aigc/executor.post.ts`
+- `apps/pilot/server/utils/__tests__/quota-history-codec.test.ts`
+
+**影响**:
+- 旧 QuotaGPTView 连续对话稳定性提升，减少“历史看起来被合并/覆盖”现象。
+- 图片上传后在渠道无法直接拉取 URL 的场景下可优先通过内联小图提升可读性。
+
+---
+
+## 2026-03-08
+
+### 新增: Pilot 双栏会话体验与 AI 标题总结
+
+**变更类型**: 功能增强
+
+**描述**: Pilot 聊天页升级为 ChatGPT 风格双栏交互，支持会话删除与 AI 自动命名标题。
+
+**主要变更**:
+1. **会话侧栏体验升级**:
+   - 左侧会话列表支持直接删除会话（含消息/附件/trace 全量清理）
+   - 会话卡片展示 AI 总结标题、状态、更新时间与 seq 信息
+   - 新建会话后自动进入当前会话上下文
+
+2. **聊天区布局重构**:
+   - 页面改为固定高度双栏布局，整体页面不滚动
+   - 中间聊天区撑满可视高度，输入区固定底部
+   - 消息区与 Trace 区域改为内部独立滚动
+
+3. **Trace 抽屉行为调整**:
+   - Trace 改为按钮触发的右侧抽屉展开/收起
+   - 桌面端右侧并排展开，移动端改为覆盖抽屉
+
+4. **会话标题 AI 总结能力**:
+   - 新增 `POST /api/pilot/chat/sessions/:sessionId/title` 接口
+   - 基于会话消息调用模型总结短标题并持久化到会话表
+   - 无模型可用时回退为首条用户消息摘要
+
+5. **存储能力扩展**:
+   - `pilot_chat_sessions` 新增 `title` 字段并兼容老表结构
+   - Runtime Store 新增 `setSessionTitle` / `deleteSession` 方法
+
+**修改文件**:
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/index.delete.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/title.post.ts`
+- `packages/tuff-intelligence/src/store/store-adapter.ts`
+- `packages/tuff-intelligence/src/store/d1-runtime-store.ts`
+
+**影响**:
+- Pilot 对话管理更接近主流 AI 聊天产品交互
+- 会话可读性与检索效率提升（标题化）
+- 会话清理与 trace 查看路径更清晰
+
+---
+
+### 修复: CoreBox 手动文件索引入库与附件执行后自动清空
+
+**变更类型**: Bug 修复
+
+**描述**: 修复 `file-index` 对非白名单扩展名（如 `.jar`）触发后不入库的问题，并在 CoreBox 执行携带附件的动作后自动清空附件状态，减少重复手动清理。
+
+**主要修复**:
+1. **手动文件索引补偿**:
+   - `addWatchPath` 对文件目标入队时标记 `manual`。
+   - 增量入库 `buildFileRecord` 新增 `manualForce` 分支：绕过扩展名白名单与系统路径过滤，仅保留最小黑名单扩展过滤。
+   - 对手动补偿路径新增 console/log 输出，明确 `accepted(manual-force)` 与 `filtered(manual-blacklist)` 结果。
+
+2. **系统动作日志语义修正**:
+   - `file-index result` 日志改为 `{ requestPath, result }`，避免 `path` 字段被合并覆盖导致误判。
+
+3. **附件执行后自动清空**:
+   - `useSearch.handleExecute` 在执行携带 `files/image/html` 输入后自动清空附件状态。
+   - 文件模式附件执行后重置 `boxOptions.mode/file`。
+   - 剪贴板附件执行后写入 `lastClearedTimestamp` 并清空 `last/detectedAt`，避免同一条目被立即回填。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/system/system-actions-provider.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+
+**影响**:
+- 复制/拖拽后触发“加入文件索引”可覆盖更多扩展名场景（至少保证路径级可搜索）
+- CoreBox 附件执行链路体验更符合“执行即消费”预期
+- `file-index` 调试日志更容易定位请求路径与结果路径
+
+---
+
+## 2026-03-01
+
+### 修复: CoreBox Action 链路与插件 DevTools 事件断链
+
+**变更类型**: Bug 修复
+
+**描述**: 修复了 CoreBox MetaOverlay 内置动作在主渲染链路上的事件断链问题，并补齐插件 DevTools 的 legacy 事件处理器。
+
+**主要修复**:
+1. **MetaOverlay 内置动作统一下发**:
+   - 将 `toggle-pin / copy-title / reveal-in-finder / flow-transfer` 统一改为 `meta-overlay:item-action` 下发到 renderer 执行
+   - 修复 `core-box:toggle-pin` 等仅发送无消费导致的动作失效
+
+2. **Renderer Action 执行通道补齐**:
+   - `useActionPanel` 新增对 `meta-overlay:item-action` 的监听
+   - 复用现有 action 执行逻辑，确保 pin/copy/reveal/flow 与 ActionPanel 行为一致
+
+3. **插件 DevTools legacy 事件补齐**:
+   - 在 `CommonChannel` 新增 `plugin:open-devtools` 处理器并返回打开结果
+   - 同步补齐 `plugin:explorer` 与 `reload-plugin` legacy 处理器
+   - 前端打开 DevTools 时改为校验返回值，失败时明确提示
+
+4. **Clipboard 清空语义与 SDK 反馈一致性修复**:
+   - 修复 `ClipboardEvents.clearHistory` 仅清理最近 1 小时记录的问题，改为复用 `cleanupHistory({ type: 'all' })` 全量清理
+   - `TouchSDK.openPluginDevTools` 改为校验 `plugin:open-devtools` 返回值，失败时抛出明确错误，避免 SDK 调用侧静默失败
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useActionPanel.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `packages/utils/renderer/touch-sdk/index.ts`
+
+**影响**:
+- CoreBox 快捷动作执行链路恢复可用
+- 插件 DevTools 打开失败从“静默失败”改为“可感知失败”
+- 插件侧“清空历史”语义与文案、SDK 注释保持一致（真正全量清空）
+
+---
+
+## 2026-02-27
+
+### 新增: Tuff Quick Actions SDK（兼容 MetaSDK）
+
+**变更类型**: 接口增强 / 开发者体验优化
+
+**描述**: 基于 TuffDSL 扩展了 Quick Actions 动作类型，并新增 `QuickActionsSDK`，用于统一插件在 `⌘K / Ctrl+K` 动作层注册与清理动作；保留 `MetaSDK` 作为兼容别名。
+
+**主要变更**:
+1. **TuffDSL 扩展**:
+   - 新增 `TuffQuickActionRender` 与 `TuffQuickAction` 类型定义。
+   - MetaOverlay 事件类型复用 TuffDSL 动作结构，避免重复定义。
+
+2. **SDK 新增与兼容**:
+   - 新增 `packages/utils/plugin/sdk/quick-actions-sdk.ts`（`createQuickActionsSDK`）。
+   - `meta-sdk.ts` 改为兼容层，内部转发到 `QuickActionsSDK`。
+   - SDK 索引新增导出 `quick-actions-sdk`。
+
+3. **插件运行时 API 接入**:
+   - 插件上下文新增 `quickActions`（同时保留 `meta`）。
+   - `meta` 与 `quickActions` 复用同一 SDK 实例，避免重复监听与重复注册风险。
+
+4. **类型与测试同步**:
+   - `MetaUnregisterActionsRequest` 增加可选 `actionId`，与现有主进程处理对齐。
+   - 增加 Quick Actions 生命周期测试，覆盖监听释放行为。
+
+**修改文件**:
+- `packages/utils/core-box/tuff/tuff-dsl.ts`
+- `packages/utils/transport/events/types/meta-overlay.ts`
+- `packages/utils/plugin/sdk/quick-actions-sdk.ts`
+- `packages/utils/plugin/sdk/meta-sdk.ts`
+- `packages/utils/plugin/sdk/index.ts`
+- `packages/utils/plugin/sdk/types.ts`
+- `packages/utils/__tests__/plugin-sdk-lifecycle.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+
+---
+
+## 2026-02-26
+
+### 修复: CoreBox/推荐引擎/系统轮询稳定性与日志降噪
+
+**变更类型**: 稳定性修复
+
+**描述**: 修复了近期日志中高频出现的 DB 锁竞争、CoreBox 视图销毁竞态与错误日志放大问题。
+
+**主要修复**:
+1. **SQLite 写入竞争缓解**:
+   - `system-update` 相关写入（state/config/fx rates）统一接入 `dbWriteScheduler + withSqliteRetry`
+   - `recommendation_cache` 写入接入串行调度与重试，并允许在高压队列下按策略丢弃
+   - 推荐性能埋点写入改为 droppable，降低主业务路径写入冲突
+
+2. **推荐缓存大 payload 收敛**:
+   - 缓存落库前对 `data:image/...base64` 大字段进行裁剪
+   - 对失效 data-url icon 自动移除，避免把超大图标数据重复写入 DB 与错误日志
+
+3. **CoreBox 窗口竞态修复**:
+   - `detachUIView` 增加重入保护和 WebContents 存活检查
+   - `hide` 延时回调增加 `isDestroyed` 判定，避免 `Object has been destroyed`
+   - 规避 `closeDevTools` 空对象链路触发的异常
+
+4. **错误日志降噪与可诊断性增强**:
+   - RecommendationEngine 错误日志改为结构化精简 meta，避免输出超大异常对象
+   - OpenAI JSON 解析失败时补充 HTML 响应提示，明确指向 baseUrl 配置错误场景
+   - `system-update` 轮询内捕获刷新异常，避免 PollingService 持续放大错误堆栈
+
+5. **macOS ActiveApp 稳定性增强**:
+   - 增加并发中的解析复用（in-flight）
+   - 对 `EBADF` 增加一次短延迟重试，降低瞬时 spawn 句柄错误
+
+**修改文件**:
+- `apps/core-app/src/main/db/utils.ts`
+- `apps/core-app/src/main/modules/system-update/index.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/ai/runtime/base-provider.ts`
+- `apps/core-app/src/main/modules/system/active-app.ts`
+
+**影响**:
+- 显著降低 `SQLITE_BUSY` 风险与错误日志体积
+- 提升 CoreBox UI 视图切换时的稳定性
+- 改善异常定位效率并减少重复噪声日志
+
+---
+
+## 2026-02-26
+
+### 修复: Translation Widget 键盘交互与错误展示稳定性
+
+**变更类型**: Bug 修复 / 交互优化
+
+**描述**: 优化 translation 插件的 widget 列表交互，移除高风险键盘监听方式，补齐焦点切换与快捷复制流程，避免运行时 `Illegal invocation` 风险并提升可用性。
+
+**主要变更**:
+1. **键盘事件接入调整**:
+   - 从直接 `window.addEventListener('keydown')` 切换为监听 `core-box:key-event`
+   - 按 `Meta/Ctrl + ←/→` 在历史列与翻译结果列切换焦点
+
+2. **列表导航与动作增强**:
+   - `↑/↓` 在当前焦点列循环移动选中项
+   - `Enter` 在结果列复制当前选中项，在历史列回填当前选中历史文本
+   - 默认焦点设为右侧结果列
+
+3. **数据与渲染稳定性**:
+   - 增加 payload/provider/history 归一化处理，避免运行时结构差异导致异常
+   - 错误信息支持折叠/展开，避免长错误文本撑坏布局
+   - 历史记录更新改为不可变更新路径，减少深层 watch 带来的副作用
+
+4. **插件版本同步**:
+   - `touch-translation` 版本升级至 `1.0.2`（manifest / package.json 同步）
+
+**修改文件**:
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `plugins/touch-translation/manifest.json`
+- `plugins/touch-translation/package.json`
+
+**影响**:
+- Translation widget 键盘可达性与列表操作一致性提升
+- 降低跨上下文事件调用导致运行时异常的概率
+
+---
+
+## 2026-02-25
+
+### 审计: TxFlipOverlay 关闭按钮二轮排查总结
+
+**变更类型**: 文档/审计记录
+
+**审计范围**:
+- `apps/core-app`
+- `apps/nexus/app`
+- 聚焦 `TxFlipOverlay` 使用点，排查是否仍存在“重复自写右上角 close”与内置 close 冲突
+
+**审计结论**:
+- 二轮复核未发现新的生产级冲突点。
+- 当前命中的 `@click="close"` 主要为流程型“取消/关闭当前步骤”按钮，不属于重复右上角关闭。
+- `:closable="false"` 的场景为设计特例（由业务内容自身控制关闭），未发现无关闭路径问题。
+
+**保留项（业务可接受）**:
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/src/renderer/src/views/base/settings/components/ShortcutDialog.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/src/renderer/src/views/base/styles/editors/RemotePresetOverlay.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/src/renderer/src/views/base/styles/editors/CoreBoxEditorOverlay.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/src/renderer/src/views/base/styles/editors/MainLayoutEditorOverlay.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/pages/dashboard/account.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/pages/dashboard/team.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/pages/dashboard/api-keys.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/components/dashboard/ReviewModalOverlay.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/components/dashboard/PluginMetadataOverlay.vue`
+
+**测试/演示页例外（不纳入生产问题）**:
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/pages/test/flip-overlay-stack.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/components/content/demos/FlipOverlayFlipOverlayDemo.vue`
+
+**后续建议**:
+- 若后续需要执行“零手写 close”规范，可在不影响流程可用性的前提下，统一保留内置 close 并移除非必要 `Cancel/Close` 按钮。
+
+---
+
+## 2026-02-21
+
+### CoreBox 路径动作提示与索引扩展
+
+**变更类型**: 体验增强 / 行为补齐
+
+**描述**: CoreBox 识别拖拽/剪贴板路径时提供系统动作提示，支持一键添加 Dev 插件、TPEX 插件、应用索引与文件索引；文件索引新增 `extraPaths` 并支持动态追加监控路径。
+
+**主要变更**:
+1. **系统动作 Provider**：新增 system actions provider，识别 manifest.json / .tpex / 应用 / 文件路径并生成操作项。
+2. **文件索引扩展路径**：file-provider 支持 `extraPaths` + 动态 watch，新增 addPath 入口并自动触发索引。
+3. **应用索引手动添加**：app-provider 新增 addPath 入口，复用现有更新逻辑。
+4. **传输事件与文案**：新增 app/file index addPath 事件与 SDK 方法，补齐 i18n 文案。
+5. **插件安装反馈**：插件添加成功或失败后，主窗口弹出通知并在成功/已存在时自动打开对应插件详情。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/system/system-actions-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `packages/utils/transport/events/types/file-index.ts`
+- `packages/utils/transport/events/types/app-index.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/sdk/domains/settings.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
+### Core-app 托盘模块恢复 TrayManager
+
+**变更类型**: 行为恢复 / 稳定性
+
+**描述**: 托盘模块切回 TrayManager，恢复统一的托盘事件处理与 IPC 处理链路。
+
+**主要变更**:
+1. **托盘加载恢复**：core-app 启动模块切回 TrayManagerModule。
+
+**修改文件**:
+- `apps/core-app/src/main/index.ts`
+
+### 文件索引错误提示 Popover 与重建确认修复
+
+**变更类型**: 体验修复 / 行为一致性
+
+**描述**: 文件索引错误详情改为按钮触发 Popover 查看，避免错误文本直接铺满面板；重建索引在电量低场景避免重复确认，保留关键电量阈值变更时的二次确认。
+
+**主要变更**:
+1. **错误 Popover 接入**：错误详情区域显示按钮并通过 Popover 展示错误细节。
+2. **确认逻辑修复**：电量低确认不再重复弹窗，仅在阈值变更或电量未知时二次确认。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
+### CoreBox 图标 base64 规范修复
+
+**变更类型**: 体验修复 / 稳定性
+
+**描述**: 修复图标提取在 worker 返回 Uint8Array 时被错误拼接为数字串的 data URL，导致 `ERR_INVALID_URL`；新增 base64 合法性校验与无效缓存重提取，避免脏数据重复进入渲染。
+
+**主要变更**:
+1. **Buffer 归一化**：Icon worker 结果强制转为 Buffer，确保 base64 输出正确。
+2. **合法性校验**：缓存 icon 不符合 base64 规范时跳过并触发重提取。
+3. **Windows 图标修复**：Windows 应用图标写入前统一 Buffer，避免错误格式落盘。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/icon-worker-client.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/search-processing-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.ts`
+
+### tfile 路径规范化与缩略图后台生成优化
+
+**变更类型**: 性能优化 / 体验修复
+
+**描述**: tfile URL 解析补充 `tfile://` 路径拼接容错与 macOS `/users` 规范化；文件索引缩略图改由后台 worker 队列生成，缺失缩略图时先展示占位图，避免主线程阻塞与频繁 IO。
+
+**主要变更**:
+1. **tfile 解析容错**：构建/解析 `tfile://` URL 时避免 hostname 小写化导致的 `/users` 路径异常。
+2. **缩略图 worker**：新增 ThumbnailWorker 队列异步生成缩略图，索引后批量补齐与按需触发。
+3. **占位预览**：图片无缩略图时先渲染占位图，避免直接加载原图引发卡顿。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/files/thumbnail-config.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/thumbnail-worker.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/thumbnail-worker-client.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/utils.ts`
+- `apps/core-app/src/main/modules/file-protocol/index.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+
+### CoreBox widget 加载保持最大高度
+
+**变更类型**: 体验修复 / 行为一致性
+
+**描述**: widget 激活期间 CoreBox 不再因空结果收缩，强制保持最大高度，避免加载过程窗口抖动。
+
+**主要变更**:
+1. **布局更新扩展**：layout payload 支持 `forceMax` 标记。
+2. **窗口尺寸策略**：检测 widget 激活时强制走最大高度分支，跳过空结果收缩。
+3. **结果更新容错**：BoxItem update 在目标不存在时自动 upsert，避免 widget 结果首次更新丢失。
+4. **事件广播补全**：widget 注册/更新事件同步发送至 CoreBox 窗口，确保自定义渲染可用。
+5. **展示模式优化**：widget 模式下禁用外层滚动并使用全高渲染容器，避免 footer 抖动与列表滚动干扰。
+6. **Widget 沙箱隔离**：为 widget 注入独立的 localStorage/sessionStorage/document.cookie，并改用 secure storage 持久化 localStorage + cookie，追加单条/总量限制以约束访问。
+7. **隔离命名空间**：为 widget 提供独立的 BroadcastChannel / indexedDB / caches 命名空间，阻断跨插件通道。
+8. **窗口逃逸拦截**：阻断 widget 通过 window/self/top/parent/opener/document.defaultView 获取真实窗口上下文。
+9. **CoreBox 输入兼容**：补充 `core-box:set-query` handler，避免 widget 通过旧事件设置输入时报错。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+- `packages/utils/transport/events/types/core-box.ts`
+- `apps/core-app/src/renderer/src/utils/tfile-url.ts`
+
+### Core-app UI 安全与按钮一致性修复
+
+**变更类型**: 体验修复 / 安全加固
+
+**描述**: App 列表与市场来源列表移除 `v-html` 渲染避免注入；文件树文件类型识别更稳健；主题过渡兼容无 ViewTransition 环境；预加载消息发送限制 targetOrigin；多个原生 button 统一为 tuffex 按钮。
+
+**主要变更**:
+1. **安全渲染**：AppList / MarketSourceEditor 改为文本渲染，避免注入风险。
+2. **文件类型判断**：FileTree 兼容 `isFile` / `type` / Symbol 标记。
+3. **主题过渡兼容**：无 ViewTransition 时直接切换主题。
+4. **postMessage 限域**：预加载消息按 origin 发送。
+5. **按钮一致性**：settings/浮动导航/返回/预览句柄统一 TxButton。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/application/AppList.vue`
+- `apps/core-app/src/renderer/src/views/base/store/MarketSourceEditor.vue`
+- `apps/core-app/src/renderer/src/components/tree/FileTree.vue`
+- `apps/core-app/src/renderer/src/modules/storage/theme-style.ts`
+- `apps/core-app/src/preload/index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/components/FailedFilesListDialog.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/views/layout/shared/FloatingNav.vue`
+- `apps/core-app/src/renderer/src/components/layout/LayoutBackButton.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatureDetailCard.vue`
+
+### Renderer 调试日志收敛与 devLog 封装
+
+**变更类型**: 体验修复 / 可维护性
+
+**描述**: 清理 renderer 侧测试/示例日志输出，运行期调试日志统一走 devLog（仅 DEV 输出），避免生产噪音；保留关键错误日志。
+
+**主要变更**:
+1. **devLog 封装**：新增 `utils/dev-log.ts` 统一开发态日志输出。
+2. **测试/示例日志移除**：LoginTest/MemoryLeakTest/UpdatePromptExample 等不再输出 console.log。
+3. **运行期调试收敛**：CoreBox/更新/市场/对话框等模块日志改为 devLog。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/utils/dev-log.ts`
+- `apps/core-app/src/renderer/src/base/axios.ts`
+- `apps/core-app/src/renderer/src/components/addon/TerminalTemplate.vue`
+- `apps/core-app/src/renderer/src/components/download/UpdatePromptExample.vue`
+- `apps/core-app/src/renderer/src/components/plugin/PluginView.vue`
+- `apps/core-app/src/renderer/src/components/plugin/action/PluginStatus.vue`
+- `apps/core-app/src/renderer/src/components/tree/FileTree.vue`
+- `apps/core-app/src/renderer/src/components/tuff/template/TuffItemTemplateExample.vue`
+- `apps/core-app/src/renderer/src/composables/useFileIndexMonitor.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useActionPanel.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/usePreviewHistory.ts`
+- `apps/core-app/src/renderer/src/modules/channel/storage/accounter.ts`
+- `apps/core-app/src/renderer/src/modules/division-box/components/DivisionBoxShell.vue`
+- `apps/core-app/src/renderer/src/modules/hooks/application-hooks.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useAppLifecycle.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useLanguageSettings.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useUpdate.ts`
+- `apps/core-app/src/renderer/src/modules/store/providers/nexus-store-provider.ts`
+- `apps/core-app/src/renderer/src/modules/update/UpdateProviderManager.ts`
+- `apps/core-app/src/renderer/src/views/base/application/AppList.vue`
+- `apps/core-app/src/renderer/src/views/base/application/ApplicationIndex.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingWindow.vue`
+- `apps/core-app/src/renderer/src/views/test/LoginTest.vue`
+- `apps/core-app/src/renderer/src/views/test/MemoryLeakTest.vue`
+
+### Renderer 旧组件库全量迁移至 Tuffex
+
+**变更类型**: 体验一致性 / 组件统一
+
+**描述**: core-app renderer 全面移除旧组件库依赖，改为 Tuffex 组件体系；新增 Transfer 组件与 Tree 叶子节点支持以补齐迁移能力。
+
+**主要变更**:
+1. **组件替换**：Alert/Collapse/Dropdown/Empty/Form/Pagination/Skeleton/Tree 等组件全部迁移至 Tuffex。
+2. **能力补齐**：新增 `TxTransfer` 组件与 `TxTree` 的 `leaf` 能力，覆盖模型管理与文件树场景。
+3. **插件移除**：renderer 启动流程移除旧组件库全量注册。
+4. **用例同步**：文档模板示例切换到 TxButton/TxTag。
+5. **构建清理**：移除旧组件库自动导入/组件解析器与依赖声明，清理 renderer 主题入口残留。
+
+**修改文件**:
+- `packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue`
+- `packages/tuffex/packages/components/src/transfer/index.ts`
+- `packages/tuffex/packages/components/src/tree/src/TxTree.vue`
+- `packages/tuffex/packages/components/src/tree/src/types.ts`
+- `packages/tuffex/packages/components/src/alert/src/TxAlert.vue`
+- `apps/core-app/src/renderer/src/main.ts`
+- `apps/core-app/src/renderer/src/components/intelligence/config/IntelligenceModelConfig.vue`
+- `apps/core-app/src/renderer/src/components/tree/FileTree.vue`
+- `apps/core-app/src/renderer/src/components/download/DownloadHistoryView.vue`
+- `apps/core-app/src/renderer/src/components/download/DownloadSettings.vue`
+- `apps/core-app/src/renderer/src/components/download/DownloadTask.vue`
+- `apps/core-app/src/renderer/src/components/download/TaskCard.vue`
+- `apps/core-app/src/renderer/src/components/permission/PermissionRequestDialog.vue`
+- `apps/core-app/src/renderer/src/components/permission/PermissionStatusCard.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/LayoutAtomEditor.vue`
+
+### Nexus / Touch Music 移除旧组件库
+
+**变更类型**: 依赖清理 / 组件统一
+
+**描述**: Nexus 与 touch-music 插件清理旧组件库依赖与锁文件残留，插件 UI 迁移到 Tuffex（TxScroll/TxSlider/TxInput），并统一使用 `--tx-*` 主题变量。
+
+**主要变更**:
+1. **Nexus 清理**：锁文件移除旧组件库与 icons-vue 依赖。
+2. **插件迁移**：touch-music 用 TxScroll/TxSlider/TxInput 替换旧组件库组件，并移除旧样式入口。
+3. **主题变量**：touch-music 相关样式变量统一替换为 `--tx-*`。
+
+**修改文件**:
+- `apps/nexus/pnpm-lock.yaml`
+- `plugins/touch-music/src/main.js`
+- `plugins/touch-music/src/style.css`
+- `plugins/touch-music/src/components/music/base/PlayProgressBar.vue`
+- `plugins/touch-music/src/components/music/FooterFunction.vue`
+- `plugins/touch-music/src/components/music/layout/Header.vue`
+- `plugins/touch-music/src/components/music/layout/SearchResults.vue`
+- `plugins/touch-music/src/components/music/PlayList.vue`
+- `plugins/touch-music/src/components/music/word-lyric/WordLyricScroller.vue`
+- `plugins/touch-music/src/components/music/word-lyric/leaf/LyricScroller.vue`
+- `plugins/touch-music/src/components/music/base/PlayProgressBar.old.old.vue`
+
+### 全仓清理旧组件库痕迹
+
+**变更类型**: 依赖清理 / 文档一致性
+
+**描述**: 全仓移除旧变量兼容与旧示例，统一为 Tuffex 变量与组件命名。
+
+**主要变更**:
+1. **样式兼容移除**：tuffex 组件去除旧变量回退，避免残留引用。
+2. **插件更新**：touch-translation 样式变量统一为 `--tx-*`。
+3. **文档同步**：PRD 示例组件统一切换为 Tuffex 组件命名。
+
+**修改文件**:
+- `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue`
+- `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelectItem.vue`
+- `packages/tuffex/packages/components/src/flat-radio/src/TxFlatRadio.vue`
+- `packages/tuffex/packages/components/src/flat-radio/src/TxFlatRadioItem.vue`
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `docs/plan-prd/02-architecture/telemetry-error-reporting-system-prd.md`
+- `docs/plan-prd/03-features/search/quick-launch-and-search-optimization-prd.md`
+- `docs/plan-prd/TODO.md`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue`
+- `apps/core-app/src/renderer/src/components/tuff/template/TuffItemTemplate.md`
+- `apps/core-app/src/renderer/src/components/tuff/template/DESIGN_EXTENSIONS.md`
+
+## 2026-02-20
+
+### CI Windows 构建命令执行修复
+
+**变更类型**: 工具链修复 / CI 稳定性
+
+**描述**: 修复 Windows Runner 上 `tuffex` build 触发的 `spawn EINVAL`，改为通过 `cmd.exe` 执行构建命令，确保 Build and Release / Release Core Assets 的 Windows 阶段可稳定完成。
+
+**主要变更**:
+1. **命令执行修复**：Windows 下使用 `cmd.exe /d /s /c` 调用构建命令。
+2. **参数安全处理**：统一命令行转义与拼接，保持非 Windows 行为不变。
+
+**修改文件**:
+- `packages/tuffex/packages/script/build/run.ts`
+
+### Nexus 头像入口补充控制台跳转
+
+**变更类型**: 体验修复 / 导航
+
+**描述**: Header 用户菜单补充控制台入口；支持 hover 的设备点击头像可直接进入控制台，触屏设备保持菜单可用。
+
+**主要变更**:
+1. **头像快捷跳转**：hover 设备点击头像跳转 `/dashboard`。
+2. **菜单入口**：用户菜单新增“控制台”项，触屏点击头像后也可进入。
+
+**修改文件**:
+- `apps/nexus/app/components/HeaderUserMenu.vue`
+
+### Nexus 文档代码块高亮补全
+
+**变更类型**: 体验修复 / 文档渲染
+
+**描述**: 修复 ClientOnly/示例代码块挂载后未触发高亮的问题，确保代码在展开或渲染后立即着色。
+
+**主要变更**:
+1. **高亮解析复用**：抽离 highlight.js 解析逻辑供插件与代码块组件共享。
+2. **挂载后高亮**：TuffCodeBlock 在挂载与内容变更时触发高亮，避免漏染。
+
+**修改文件**:
+- `apps/nexus/app/utils/highlight.ts`
+- `apps/nexus/app/plugins/highlight.client.ts`
+- `apps/nexus/app/components/content/TuffCodeBlock.vue`
+
+### 更新系统实验性 Renderer Override 与 Nexus 版本分布统计
+
+**变更类型**: 行为增强 / 可观测性
+
+**描述**: Renderer Override 需要手动开启并受环境变量约束；更新检查/下载/安装失败与 Renderer Override 关键异常写入 Nexus 遥测消息；更新检查/下载/安装追加结构化 telemetry 事件并扩展 Update 行为分布统计（action/stage/result/channel/source/tag/itemKind）；Nexus 管理台新增版本分布统计（按近 N 天 visit 事件统计）。
+
+**主要变更**:
+1. **手动开关**：更新设置新增 Renderer Override 实验性开关（默认关闭，需 `TUFF_ENABLE_RENDERER_OVERRIDE=1` 生效）。
+2. **异常上报**：更新检查/下载/安装失败与 Renderer Override 关键异常上报至 Nexus telemetry messages。
+3. **更新埋点**：更新检查/下载/安装补充结构化 telemetry 事件（feature_use）。
+4. **更新分布**：Nexus Analytics 增加 Update 行为/阶段/结果/渠道/来源/版本/触发方式分布统计卡片。
+5. **版本分布**：Nexus Analytics 增加版本分布统计与饼图展示（基于 visit 事件）。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/update/update-system.ts`
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `apps/core-app/src/main/core/touch-app.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUpdate.vue`
+- `apps/core-app/src/renderer/src/modules/hooks/useUpdate.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `packages/utils/types/update.ts`
+- `apps/nexus/server/utils/telemetryStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/analytics.vue`
+
+### DivisionBox / Flow 权限入口对齐
+
+**变更类型**: 权限闭环 / 行为一致性
+
+**描述**: 统一 Flow 触发与 DivisionBox 打开场景的权限判定与入口归因，补齐 CoreBox 触发链路的权限校验与用户反馈。
+
+**主要变更**:
+1. **权限归因**：Flow Dispatch 增加 `actorPluginId`，仅在插件来源时写入；DivisionBox 打开入口仅对插件来源透传 pluginId。
+2. **权限判定**：FlowBus 与 DivisionBox IPC 统一按 payload/context 解析 actor 与 sdkapi，避免误用默认版本。
+3. **权限映射**：`division-box:flow:trigger` 绑定 `window.create` + `storage.shared` 双权限。
+4. **用户反馈**：UI 模式触发 Flow 前置权限校验，拒绝时弹出 toast 提示。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+- `packages/utils/transport/events/types/flow.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.ts`
+- `apps/core-app/src/main/modules/flow-bus/ipc.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.ts`
+- `apps/core-app/src/main/modules/flow-bus/module.ts`
+
+### 旧同步链路禁用（/api/sync/*）
+
+**变更类型**: 行为收口 / 兼容性
+
+**描述**: 旧 `/api/sync/push` 与 `/api/sync/pull` 全部禁用并提示迁移至 `/api/v1/sync/*`，旧链路不再兼容。
+
+**主要变更**:
+1. **禁写提示**：旧 push 返回 410 并提示迁移路径。
+2. **禁读提示**：旧 pull 返回 410 并提示迁移路径。
+
+**修改文件**:
+- `apps/nexus/server/api/sync/push.post.ts`
+- `apps/nexus/server/api/sync/pull.get.ts`
+
+### 翻译插件 SDK 升级与实验性功能隐藏
+
+**变更类型**: 权限治理 / 行为一致性
+
+**描述**: 翻译插件升级到最新 sdkapi，补充分类与 AI 权限；新增 feature.experimental 标记，非 dev 模式自动隐藏实验性功能（截图翻译默认隐藏）。
+
+**主要变更**:
+1. **SDK 与权限**：touch-translation 补齐 `sdkapi`、`category` 与 `intelligence.basic` 权限说明。
+2. **实验性特性**：支持 `feature.experimental` 并在非 dev 模式过滤展示。
+3. **权限前置**：智能翻译调用前增加 AI 权限校验与提示。
+
+**修改文件**:
+- `packages/utils/plugin/index.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-feature.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `plugins/touch-translation/manifest.json`
+- `plugins/touch-translation/index.js`
+- `plugins/touch-translation/index/main.ts`
+
+### Webcontent 插件 Transport 注入修复
+
+**变更类型**: 稳定性 / 行为修复
+
+**描述**: webcontent 动态 preload 脚本在临时目录执行时无法解析 `@talex-touch/utils/transport`，导致插件页面无法建立通信通道；统一通过 utils transport prelude 输出通道注入脚本，预加载仅负责 `$channel`，`$transport` 由插件前端 prelude 初始化。
+
+**主要变更**:
+1. **Prelude 注入**：主进程通过 `@talex-touch/utils/transport/prelude` 生成通道脚本并注入 preload。
+2. **通道初始化**：CoreBox 与 DivisionBox 的 webcontent 注入一致化处理，避免特定容器失效。
+
+**修改文件**:
+- `packages/utils/transport/prelude.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/division-box/session.ts`
+
+### Intelligence 审计写入降噪
+
+**变更类型**: 性能优化 / 稳定性
+
+**描述**: intelligence audit flush 在主线程批量序列化与写库时可能引发 event loop lag；缩小单批写入规模，并引入异步调度与分段 flush，降低阻塞时长。
+
+**主要变更**:
+1. **批次缩小**：flush 批次从 50 降至 20。
+2. **延迟写入**：达到批次阈值后使用异步调度再写入，避免请求路径阻塞。
+3. **分段 flush**：flush 过程按批次分段并让出事件循环，避免长时间占用主线程。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts`
+
+## 2026-02-19
+
+### Intelligence OpenAI 兼容 Base URL 归一化
+
+**变更类型**: 兼容性修复 / 管理台提示
+
+**描述**: OpenAI 兼容提供商默认自动补全 `/v1`，避免误落到 UI 路径；如需 `/api/v1` 或 `/openai/v1`，需在 Base URL 中显式填写。
+
+**主要变更**:
+1. **Base URL 归一化**：OpenAI 兼容路径仅自动补全 `/v1`，不再尝试多种变体。
+2. **提示更新**：管理台 Base URL 提示明确写法。
+
+**修改文件**:
+- `apps/nexus/server/utils/intelligenceModels.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+
+### Intelligence OpenAI 兼容输出提取增强
+
+**变更类型**: 兼容性修复 / 运行稳定性
+
+**描述**: 支持 OpenAI-compatible 响应仅返回 `reasoning_content` 的场景，避免被误判为“空响应”。
+
+**主要变更**:
+1. **输出提取**：当 `content` 为空时，依次回落到 `reasoning_content` / `reasoning` / `analysis` 字段。
+2. **响应解析**：从 `message` 根对象提取内容，兼容非标准字段。
+
+**修改文件**:
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+
+### Intelligence System Prompt 上下文补充
+
+**变更类型**: 能力增强 / 可追溯性
+
+**描述**: TuffIntelligence Lab 所有模型调用增加统一系统上下文（角色、当前时间、当前用户、会话 ID）。
+
+**主要变更**:
+1. **系统上下文**：在 intent / planner / executor / reviewer / follow-up / final responder 等阶段注入统一提示。
+2. **时间信息**：包含本地时间与 ISO 时间，便于审计与复盘。
+
+**修改文件**:
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+
+### Nexus Intelligence 模块整合积分
+
+**变更类型**: 体验优化 / 管理台信息整合
+
+**描述**: 管理后台将 AI 积分从独立导航合并到 Intelligence 模块，并统一命名为 Intelligence 模块，方便管理员在单页内查看渠道配置、审计与积分消耗。
+
+**主要变更**:
+1. **导航合并**：管理员侧移除单独的 AI Credits 菜单，合并到 Intelligence 模块页签。
+2. **模块命名**：菜单与页面标题统一为 “Intelligence 模块”，同步中英文文案。
+3. **积分视图**：原有积分消耗/流水视图作为新页签嵌入。
+
+**修改文件**:
+- `apps/nexus/app/components/dashboard/DashboardNav.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+
+### Nexus 汇率服务（USD 基准 + 历史归档）
+
+**变更类型**: 能力接入 / 服务端数据
+
+**描述**: 新增 ExchangeRate-API 汇率服务，统一 USD 作为 base，按请求触发 + 8h TTL 缓存；成功响应写入 D1 历史表并将错误归档到 telemetry。
+
+**主要变更**:
+1. **运行时配置扩展**：新增 `exchangeRate` 配置项，包含 API Key、Base URL、TTL 与超时。
+2. **双层缓存与历史记录**：新增 `exchange_rate_snapshots` 表并保留完整 payload，useStorage 作为 fallback。
+3. **对外换算 API**：新增 `/api/exchange/convert`（仅支持 USD base）。
+4. **错误归档**：上游错误写入 `telemetry_messages`，便于检索与审计。
+
+**修改文件**:
+- `apps/nexus/nuxt.config.ts`
+- `wrangler.toml`
+- `apps/nexus/server/utils/exchangeRateStore.ts`
+- `apps/nexus/server/utils/exchangeRateService.ts`
+- `apps/nexus/server/api/exchange/convert.get.ts`
+- `apps/nexus/server/utils/__tests__/exchangeRateService.test.ts`
+- `.spec/features/exchange-rate-service.md`
+- `.spec/modules/exchange-rate-cache.md`
+- `.spec/index.md`
+
+### Nexus 汇率历史查询（非免费用户）
+
+**变更类型**: 能力增强 / 高级权限
+
+**描述**: 在 USD 基准汇率服务上新增历史查询能力，非 FREE 用户可访问历史曲线；新增归一化历史表并支持可选 payload 返回。
+
+**主要变更**:
+1. **历史查询 API**：新增 `/api/exchange/history`，支持按币种 + 时间范围查询。
+2. **权限门槛**：非 FREE 用户可访问；`includePayload` 仅管理员允许。
+3. **归一化历史表**：新增 `exchange_rate_rates`，便于时间序列查询。
+4. **保留策略**：支持 `historyRetentionDays` 控制清理（默认不清理）。
+5. **管理后台视图**：Admin Analytics 新增 Exchange 区块用于查看历史数据。
+
+**修改文件**:
+- `apps/nexus/nuxt.config.ts`
+- `wrangler.toml`
+- `apps/nexus/server/utils/exchangeRateStore.ts`
+- `apps/nexus/server/utils/exchangeRateService.ts`
+- `apps/nexus/server/api/exchange/history.get.ts`
+- `apps/nexus/server/utils/__tests__/exchangeRateHistory.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/analytics.vue`
+- `.spec/features/exchange-rate-service.md`
+- `.spec/modules/exchange-rate-cache.md`
+- `.spec/index.md`
+
+### Nexus 汇率 API 计费与 Latest 接口
+
+**变更类型**: 计费策略 / 接口扩展
+
+**描述**: 汇率服务新增 `/api/exchange/latest`（USD 基准倍率表）并建立积分扣费规则；`convert` 每次扣 0.1，`latest` 每次扣 1，`history` 每次扣 2。
+
+**主要变更**:
+1. **Latest 接口**：新增 `/api/exchange/latest` 返回 USD 基准倍率与更新时间字段。
+2. **扣费策略**：`convert`/`latest`/`history` 分别扣 0.1/1/2 credits。
+3. **表结构优化**：credits 表字段使用 REAL 并统一保留 2 位小数。
+
+**修改文件**:
+- `apps/nexus/server/api/exchange/convert.get.ts`
+- `apps/nexus/server/api/exchange/latest.get.ts`
+- `apps/nexus/server/api/exchange/history.get.ts`
+- `apps/nexus/server/utils/creditsStore.ts`
+
+### 统一更新与汇率热数据链路（Nexus + CoreApp）
+
+**变更类型**: 统一更新 / 热数据分发
+
+**描述**: 扩展 Nexus Updates/Release 体系支持系统更新（公告/配置/热数据），新增 payload 存储与读取；CoreApp 增加 SystemUpdate 拉取与 fx-rate 热数据回填，更新服务支持 Official 源，并在汇率换算 API 中暴露更新时间字段。
+
+**主要变更**:
+1. **Updates 扩展**：`dashboard_updates` 增加 scope/type/channels 与 payload 元数据，新增 `/api/updates/:id/payload`。
+2. **汇率更新时间暴露**：`/api/exchange/convert` 返回 `providerUpdatedAt/fetchedAt/providerNextUpdateAt`。
+3. **汇率热数据刷新**：新增 fx-rate 刷新入口与 provider 客户端占位。
+4. **CoreApp 系统更新拉取**：新增 SystemUpdateModule、fx_rates/system_config/system_update_state 表。
+5. **官方更新源支持**：UpdateService 增加 OFFICIAL provider 并对接 Nexus `/api/releases/latest`。
+
+**修改文件**:
+- `apps/nexus/server/utils/dashboardStore.ts`
+- `apps/nexus/server/utils/updateAssetStorage.ts`
+- `apps/nexus/server/api/updates.get.ts`
+- `apps/nexus/server/api/updates/[id]/payload.get.ts`
+- `apps/nexus/server/api/dashboard/updates/fx-rate/refresh.post.ts`
+- `apps/nexus/server/utils/fxRateProviderClient.ts`
+- `apps/nexus/server/utils/exchangeRateService.ts`
+- `apps/nexus/server/api/exchange/convert.get.ts`
+- `apps/nexus/app/components/dashboard/UpdateFormDrawer.vue`
+- `apps/nexus/app/pages/dashboard/updates.vue`
+- `apps/nexus/app/pages/updates.vue`
+- `apps/nexus/app/composables/useDashboardData.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/core-app/src/main/modules/system-update/index.ts`
+- `apps/core-app/src/main/db/schema.ts`
+- `apps/core-app/resources/db/migrations/0020_system_update_tables.sql`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/providers/fx-rate-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/abilities/currency-ability.ts`
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `apps/core-app/src/main/core/eventbus/touch-event.ts`
+
+### CoreApp 页面标题 i18n 规范化
+
+**变更类型**: 体验一致性 / 国际化
+
+**描述**: CoreApp 页面标题支持 `$I18n:` 前缀解析，路由与布局标题统一走 i18n 解析逻辑。
+
+**主要变更**:
+1. **新增标题前缀约定**：`$I18n:<key>` 用于标记需要国际化的页面标题与路由名。
+2. **布局标题解析**：ViewTemplate 与布局控制器统一解析前缀并回退到原文。
+3. **路由标题本地化**：核心路由名替换为 i18n key 并补充双语文案。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/base/router.ts`
+- `apps/core-app/src/renderer/src/components/base/template/ViewTemplate.vue`
+- `apps/core-app/src/renderer/src/composables/layout/useLayoutController.ts`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/I18N_IMPLEMENTATION.md`
+
+### Setting About 更新通道显示调整
+
+**变更类型**: 体验一致性 / 信息展示
+
+**描述**: 设置页关于模块的通道信息改为展示用户订阅的更新通道，避免与构建类型重复。
+
+**主要变更**:
+1. **更新通道替换**：将 Channel 字段改为 Update Channel，并读取更新订阅通道。
+2. **订阅标识**：通道值附加 `sub` 标记便于区分构建类型。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`
+
+### Nexus App 登录回调失焦自动关闭
+
+**变更类型**: 行为优化 / 体验改进
+
+**描述**: 登录回调页在拉起客户端后检测到页面失焦即视为成功并关闭标签页，避免 dev token 提示干扰。
+
+**主要变更**:
+1. **失焦即关闭**：协议拉起后页面失焦触发自动关闭标签页。
+2. **取消 dev token 提示**：成功且失焦时不再展示 dev-mode token 复制提示。
+
+**修改文件**:
+- `apps/nexus/app/pages/auth/app-callback.vue`
+
+### 同步阻塞系统通知
+
+**变更类型**: 行为优化 / 可观测性
+
+**描述**: 同步连续失败后触发一次系统通知，提示配额/设备/鉴权问题，避免多次 toast 被忽略。
+
+**主要变更**:
+1. **失败阈值通知**：连续失败达到 3 次后发送系统通知（按原因去重）。
+2. **发送端本地化**：同步通知文案在 renderer 侧完成 i18n 解析后发送。
+3. **成功后重置**：同步成功后清理通知去重状态，下一轮可重新提示。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/sync/auto-sync-manager.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
+### 同步设备自动回收
+
+**变更类型**: 行为优化 / 账号安全
+
+**描述**: 新设备开始同步时，超过设备上限会自动回收最久未活跃设备，并在当前设备提示回收结果。
+
+**主要变更**:
+1. **自动回收旧设备**：同步握手时先回收 30 天未活跃设备，仍超限则按 `last_seen_at` 从旧到新回收。
+2. **同步握手提示**：握手返回回收列表（含设备名/平台/最近活跃），客户端弹出系统通知提醒。
+3. **API 类型同步**：更新 Sync handshake 响应与类型定义。
+
+**修改文件**:
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/api/v1/sync/handshake.post.ts`
+- `apps/nexus/openapi/nexus-sync.yaml`
+- `apps/nexus/types/sync-api.d.ts`
+- `packages/utils/types/cloud-sync.ts`
+- `packages/utils/cloud-sync/cloud-sync-sdk.ts`
+- `apps/core-app/src/renderer/src/modules/sync/auto-sync-manager.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
+### 文档治理基线与路线图收敛
+
+**变更类型**: 文档治理 / 规划收敛
+
+**描述**: 补齐“项目定义 → PRD 目标 → 质量约束 → 执行路线图”的文档闭环，统一后续迭代的执行标准。
+
+**主要变更**:
+1. **AGENTS 项目定义增强**：新增项目定位、交付边界、阶段性最终目标与文档同步责任。
+2. **PRD 索引增强**：`docs/plan-prd/README.md` 增加 North Star 与活跃 PRD 质量约束。
+3. **新增产品总览与 8 周路线图**：`docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`。
+4. **新增 PRD 质量基线文档**：`docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`，要求活跃 PRD 必含目标、约束、验收、回滚。
+5. **新增 Week 1 执行清单**：`docs/plan-prd/01-project/WEEK1-EXECUTION-PLAN-2026Q1.md`。
+6. **补齐模块日志 PRD 质量段落**：`docs/plan-prd/02-architecture/module-logging-system-prd.md` 新增最终目标/质量约束/回滚策略。
+7. **TODO 与索引对齐**：`docs/plan-prd/TODO.md`、`docs/INDEX.md` 新增治理入口与执行项。
+
+### TuffIntelligence Lab 流式对话语义修正
+
+**变更类型**: 行为调整 / 体验优化
+
+**描述**: 调整 TuffIntelligence Lab 的对话恢复语义为“历史即上下文”，断链后无需显式恢复；状态日志改为模型原文直出，最终回答使用流式输出。
+
+**主要变更**:
+1. **取消显式恢复流程**：前端移除 recoverable/resume 交互，只保留历史加载与继续对话。
+2. **状态日志直出**：意图、动作选择、动作结果统一采用模型原文作为状态消息。
+3. **最终回答流式**：最终回答优先走流式推送，失败时回退为普通流。
+4. **断链语义简化**：保留 `session.paused` 事件作为日志提示，不提供 recoverable/resume API。
+5. **移除外部桥接依赖**：仅使用已启用 provider 执行链路。
+6. **原始输出可追溯**：plan/reflect/followup 的原始输出与错误详情写入 stream detail，便于溯源与排障。
+7. **快捷测试入口**：管理端对话页提供默认提示词按钮，便于快速验证工具能力。
+8. **错误追踪增强**：错误事件补充 providerId/model/endpoint/status/responseSnippet 等详细字段。
+
+**修改文件**:
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/app/pages/dashboard/admin/intelligence-lab.vue`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+
+### LangChain + Nuxt 流式对话接入（管理员测试页）
+
+**变更类型**: 能力接入 / 测试通道
+
+**描述**: 在 Nexus 内接入 LangChain，并新增管理员专用的流式对话测试页，支持历史回放。
+
+**主要变更**:
+1. **LangChain 接入**：新增 LangChain 流式调用与消息历史管理。
+2. **Admin API**：新增 `/api/admin/intelligence/chat` GET/POST 路由，支持流式对话与历史回放。
+3. **测试页面**：新增 `/dashboard/admin/intelligence-chat` 页面用于对话验证。
+4. **Provider 对齐**：LangChain 调用复用 intelligence provider 配置，不再读取环境变量。
+
+**修改文件**:
+- `apps/nexus/server/api/admin/intelligence/chat.ts`
+- `apps/nexus/app/pages/dashboard/admin/intelligence-chat.vue`
+- `apps/nexus/package.json`
+- `apps/nexus/nuxt.config.ts`
+
+### 安全加固：路径与命令执行防护
+
+**变更类型**: 安全加固 / 风险收敛
+
+**描述**: 统一路径校验与命令执行封装，限制可疑路径访问并修复通道 key 回收问题。
+
+**主要变更**:
+1. **新增安全封装**：`safe-path` 与 `safe-shell` 统一路径校验与非 shell 执行。
+2. **插件存储路径校验**：插件存储读写删/详情均限制在插件配置目录内。
+3. **文件访问限制**：`fs:read-file`/`fs:write-file` 仅允许对话框批准路径；`tfile://` 访问限制在白名单根目录。
+4. **命令执行去 shell**：App Scanner、Darwin app icon、Native Share、Terminal、Open-in-editor 等改为安全执行，并为终端执行增加权限校验。
+5. **通道 key 回收修复**：修复 revokeKey 删除顺序导致的 key 残留。
+
+---
+
+## 2026-02-10
+
+### CoreBox 内置能力抽离为独立插件
+
+**变更类型**: 架构重构
+
+**描述**: 将 CoreBox 的 7 个内置能力抽离为独立插件，实现核心框架与业务能力的解耦。
+
+**主要变更**:
+1. **新增 7 个独立插件**:
+   - `touch-browser-open` - 浏览器打开 / URL 系统
+   - `touch-browser-bookmarks` - 浏览器书签搜索
+   - `touch-quick-actions` - 快捷操作
+   - `touch-window-presets` - 窗口预设
+   - `touch-workspace-scripts` - 工作区脚本
+   - `touch-system-actions` - 系统操作
+   - `touch-intelligence-actions` - AI 智能操作
+2. **移除内置实现**: `apps/core-app/src/main/` 中对应内置 URL 系统和内部 AI providers 已移除
+3. **测试与文档**: 每个插件含 shared loader 测试 + Nexus onboarding 文档
+
+**相关提交**: `a304911e`, `17c48a79`, `30ba3518`, `6c2b7320`, `67c4a001`, `9fd6ca5f`
+
+---
+
+### SDK 统一 Hard-Cut 进展
+
+**变更类型**: 架构治理
+
+**描述**: 推进 SDK 统一 Hard-Cut，将 renderer 直连 IPC 迁移到 Typed Transport Domain SDKs。
+
+**主要变更**:
+1. **批次 A~D 已完成**: Settings/Permission/Download/Cloud Sync/Channel 迁移到 SDK Hooks
+2. **Typed Transport Domain SDKs**: `packages/utils/transport/` 新增类型化域 SDK 和 event payloads
+3. **Renderer SDK Hooks**: `packages/utils/renderer/hooks/` 迁移完成
+4. **Safe handler wrappers**: Channel 和 download 模块增加安全处理器包装
+
+**参考**: `docs/engineering/reports/sdk-unification-progress-2026-02-08.md`
+
+---
+
+### Nexus OAuth 稳定化
+
+**变更类型**: Bug 修复 + 安全增强
+
+**描述**: 修复 Nexus 认证流程中的多个问题，提升安全性。
+
+**主要变更**:
+1. **sign-in callback 修复**: 稳定化 OAuth 回调流程
+2. **auth guard 拆分**: session 和 app auth guard 独立，避免相互干扰
+3. **Turnstile + Passkey**: 新增 Turnstile 验证和 Passkey step-up flow
+4. **设备认证**: 新增 device attestation flow 和 secure local seed handling
+
+**相关提交**: `bf87e09e`, `1bea54ce`, `9b137b49`, `919064c2`
+
+---
+
+### 更新系统增强
+
+**变更类型**: 功能增强
+
+**描述**: 实现可复用更新任务和增强下载管理。
+
+**主要变更**:
+1. **reusable update tasks**: 更新任务可复用，减少重复代码
+2. **下载管理增强**: 改进下载流程和错误处理
+3. **版本守护**: 启动时版本校验（startup version guard）
+
+**相关提交**: `7d5b479d`, `f4cc525e`
+
+---
+
+### 原生能力集成
+
+**变更类型**: 功能增强
+
+**描述**: 引入原生能力支持，增强系统集成。
+
+**主要变更**:
+1. **tuff-native**: 新增 workspace 包和构建接入
+2. **本地 OCR**: 新增系统 OCR provider 和 native integration
+3. **Everything SDK**: fallback chain 和后端诊断功能
+4. **PowerSDK**: 低功耗适配支持
+
+**相关提交**: `3ecac208`, `846413fa`, `e0bf259b`, `1a1fce3e`
+
+---
+
+### 代码质量治理
+
+**变更类型**: 代码质量
+
+**描述**: 系统性代码质量提升，达到 B+ 评级。
+
+**参考**: `docs/engineering/reports/code-quality-2026-02-03.md`
+
+---
+
+## 2026-01
+
+### Nexus 数据同步协议与审核系统
+
+**变更类型**: 功能增强
+
+**主要变更**:
+1. **Nexus 统计扩展**: 搜索/执行细分指标、模块耗时可视化、隐私约束（不采集搜索词）
+2. **Nexus 审核系统**: Review states 细化、auth gate、回归文档（NEXUS-REV-040~060）
+3. **Nexus 文档迁移**: 组件 demo wrapper pattern、migration status banners
+
+---
+
+### 更新系统统一
+
+**变更类型**: 功能增强
+
+**主要变更**:
+1. **兼容性标志更新**: compatibility flags 和 versioning 调整
+2. **记录清理**: update repository 实现 record clearing
+3. **Release 脚本增强**: Windows/macOS/Linux artifact 处理改进
+
+---
+
+### TuffEx 迁移与 CLI 分包规划
+
+**变更类型**: 架构规划
+
+**主要变更**:
+1. **TuffEx 组件库迁移**: tuffex-ui → tuffex 重命名和构建脚本修复
+2. **Tuff CLI 分包**: `@talex-touch/tuff-cli-core` + `@talex-touch/tuff-cli` 拆分规划
+
+---
+
+### 从 README.md 归档的旧里程碑（超过 3 个月）
+
+以下条目从 README.md 近期里程碑中移出：
+- **插件市场多源**（2025-12 完成）：TpexApi + Nexus + NPM + GitHub Provider
+- **Search DSL**（2025-12 完成）：`@xxx` provider filter + pinned
+- **Nexus Team Invite**（2025-12 完成）：邀请 + join 页面
+- **直接预览计算**（2025-12 完成）：表达式 + 单位换算 + 汇率 + 时间
+- **Widget 动态加载**（2025-12 完成）：Loader + Compiler + Manager
+
+---
+
+## 2025-11-27
+
+### 完成: 代码质量迭代与文档整理
+
+**变更类型**: 代码质量 + 文档整理
+
+**核心工作**:
+
+#### 1. 代码质量扫描 📊
+- **中文硬编码识别**: 发现 2000+ 处中文字符（主要在注释）
+- **日志系统碎片化**: 发现 300+ 处 `console.log` 待迁移
+- **TODO 标记梳理**: 识别 17 处待实现功能
+- **Extract Icon API 验证**: 确认 `tfile://` 协议全面实施完成
+
+#### 2. 已完成功能归档 ✅
+- **tfile:// 协议迁移**: 18 个组件已完成，性能提升 70%+
+- **UI/UX 改进总结**: 记录 2025-11 月完成的 15+ 页面重构
+  - 登录页面简化 (会话 31ef54b4)
+  - 个人资料页三页重构 (会话 36a89e8a, 98b2468a, ebd24d48)
+  - 欢迎页面优化 (会话 432448fe, aab8db44)
+  - 打卡页面重设计 (会话 6bbe5bda)
+  - 统计页面增强 (会话 73ab0bd6, 056e2013)
+  - 状态栏全局移除 (会话 09fe75f4, 63e55aba)
+  - Geek 风格统一 (会话 5d448a55, 2554c9d6)
+
+#### 3. 文档更新 📝
+- **新增**: 代码质量分析报告 (`code_quality_report.md`)
+- **新增**: 已完成功能总结 (`completed_features_summary.md`)
+- **更新**: `TODO.md` 移除 extract-icon API 任务
+- **更新**: 任务统计 (13 → 12 项)
+
+**下一步建议**:
+1. 实施模块日志系统 PRD (P0)
+2. 托盘系统优化 (P1)
+3. 日志国际化改造
+4. 清理高频 console.log
+
+---
+
+## 2025-11-20
+
+### 完成: PRD清理与功能归档
+
+**变更类型**: 文档整理
+
+**已完成功能归档**:
+
+#### 1. 搜索排序系统优化 ✅
+- **来源**: `search-source-id-ranking-plan.md` + `search-optimization-implementation-summary.md`
+- **核心成果**:
+  - 实现 `source.id + item.id` 组合键统计
+  - 新增 `item_usage_stats` 表,支持 search/execute/cancel 三种行为计数
+  - 排序公式优化: `score = weight * 1e6 + match * 1e4 + recency * 1e2 + (executeCount*1 + searchCount*0.3 + cancelCount*(-0.5)) * exp(-0.1*days)`
+  - 添加索引 `idx_item_usage_source_type`, `idx_item_usage_updated`
+  - 实现 `QueryCompletionService` 查询补全系统
+  - 实现 `UsageSummaryService` 定期汇总与清理
+  - 批量查询优化,避免N+1问题
+- **性能提升**: 查询耗时 5-10ms (P95), 排序更智能, 命中率>70%
+- **迁移**: 0007_remarkable_silver_sable.sql
+
+#### 2. 使用数据记录与清理 ✅
+- **来源**: `USAGE_LOGGING_PLAN.md` + `TUFF_USAGE_TRACKING_PRD.md` + `search-usage-data-cleanup-plan.md`
+- **核心成果**:
+  - `usage_logs` 表记录所有搜索/执行行为
+  - 自动清理过期日志(默认30天)
+  - 定期汇总到 `item_usage_stats`
+  - 异步写入不阻塞搜索流程
+
+#### 3. 插件存储机制调研 ✅
+- **来源**: `plugin-storage-research.md`
+- **核心成果**:
+  - 调研 Raycast/uTools/HapiGo 存储方案
+  - 确定采用 JSON 文件 + 异步 Promise API
+  - 每插件10MB限制,自动隔离
+  - 实现 `StorageModule` 统一管理
+
+#### 4. 下载中心系统 ✅
+- **来源**: `DOWNLOAD_CENTER_API.md` + `UPDATE_SYSTEM.md` + `MIGRATION_GUIDE.md`
+- **核心成果**:
+  - 统一下载中心模块,支持切片下载、断点续传
+  - 智能优先级调度(P0-P10)
+  - 网络自适应并发控制(1-10)
+  - SHA256校验、错误重试、进度节流
+  - 完整的迁移系统,支持从旧系统无缝迁移
+  - 更新系统集成,自动下载应用更新
+- **性能优化**: 虚拟滚动(>50项)、数据库索引、任务缓存
+- **文件位置**: `apps/core-app/src/main/modules/download/`
+
+#### 5. 性能优化实施 ✅
+- **来源**: `PERFORMANCE_OPTIMIZATIONS.md`
+- **核心成果**:
+  - 数据库索引优化(status/created/priority)
+  - 虚拟滚动组件(VirtualTaskList.vue)
+  - 搜索防抖(300ms)
+  - 进度更新节流(1秒/任务)
+  - 性能监控器(PerformanceMonitor)
+- **性能提升**:
+  - 500项列表渲染: 200ms → 20ms (10x)
+  - 搜索响应: 150ms → 30ms (5x)
+  - 数据库查询: 50-100ms → 5-10ms (5-10x)
+
+#### 6. 更新提示UI实现 ✅
+- **来源**: `UPDATE_PROMPT_IMPLEMENTATION.md` + `UPDATE_PROMPT_DIALOG.md`
+- **核心成果**:
+  - UpdatePromptDialog 组件
+  - 支持RELEASE/BETA/SNAPSHOT频道
+  - 自动下载、忽略版本、手动检查
+  - 集成下载中心显示进度
+
+#### 7. CoreBox Completion 分析 ✅
+- **来源**: `corebox-completion-analysis.md`
+- **核心成果**:
+  - 识别性能、准确性、安全性问题
+  - 提出缓存、智能权重、上下文感知改进方向
+  - XSS安全修复建议
+
+#### 8. 系统性架构分析 ✅
+- **来源**: `PROJECT_ANALYSIS.md`
+- **核心成果**:
+  - 识别优势: 模块化架构、插件系统、IPC通道、tfile://协议
+  - 识别不足: 插件加载死循环、日志混乱、托盘功能薄弱
+  - 技术债务清单与优先级建议
+  - 内容已整合到 `CLAUDE.md`
+
+**删除文件**:
+- `plan-prd/01-project/PROJECT_ANALYSIS.md`
+- `plan-prd/03-features/search/search-source-id-ranking-plan.md`
+- `plan-prd/03-features/search/search-optimization-implementation-summary.md`
+- `plan-prd/03-features/search/USAGE_LOGGING_PLAN.md`
+- `plan-prd/03-features/search/TUFF_USAGE_TRACKING_PRD.md`
+- `plan-prd/03-features/search/search-usage-data-cleanup-plan.md`
+- `plan-prd/03-features/plugin/plugin-storage-research.md`
+- `plan-prd/04-implementation/corebox-completion-analysis.md`
+- `plan-prd/04-implementation/components/UPDATE_PROMPT_*.md` (2个)
+- `plan-prd/05-archive/*` (README_ANALYSIS.md, PRD-CLEANUP-REPORT.md, plan.md)
+
+**影响**:
+- PRD文件从35个减少到23个
+- 已完成功能有明确历史记录
+- 聚焦未实现的核心功能规划
+
+---
+
+## 2025-11-14
+
+### 新增: 直接预览计算能力 PRD
+
+**变更类型**: 文档/规划
+
+**描述**:
+- 新增 `plan-prd/direct-preview-calculation-prd.md`，定义搜索框直接预览计算的背景、范围、技术方案与里程碑。
+- 将该能力纳入 PRD 索引的 P1 重要优化列表，并更新总 PRD 统计（17 个）。
+- 补充 `plan-prd/README.md` 中的工期估算（新增 6-10 天）与整体工期区间。
+- 新增「计算历史」保留策略（30 天 / 500 条）、单箭头入口、复用剪贴板历史（source 字段）方案。
+- 扩展能力范围：新增颜色解析（HEX/RGB/HSL 互转 + 色块预览）与 ColorEngine 组件说明。
+
+**修改文件**:
+- `plan-prd/direct-preview-calculation-prd.md`
+- `plan-prd/README.md`
+- `plan-prd/CHANGES.md`
+
+**影响**:
+- 搜索体验有了明确的“直接预览计算”建设路线，可与插件搜索结果解耦，后续开发优先级明确。
+- PRD 指标统计保持最新，方便规划人力。
+
+---
+
+# 2026-01-XX
+
+### Analytics: Nexus 统计扩展与隐私约束
+
+**变更类型**: 功能增强 + 隐私改进
+
+**描述**: Nexus 分析面板新增搜索/执行细分指标与模块耗时可视化，同时强制不采集搜索词。
+
+**主要变更**:
+1. **隐私**:
+   - 关闭搜索词采集与展示，仅保留长度/类型/耗时等聚合数据
+2. **Nexus 指标扩展**:
+   - 搜索场景/输入类型/Provider 分布
+   - 平均排序耗时、平均结果数、平均执行延迟
+3. **模块耗时**:
+   - 统计模块加载耗时（avg/max/min/ratio）并可视化
+4. **UI 优化**:
+   - 二级 Breakdown Drawer 收纳细分分布
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/nexus/server/utils/telemetryStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/analytics.vue`
+- `docs/analytics-data-prd.md`
+
+---
+
+## 2025-01-XX
+
+### 清理: 移除冗余的窗口关闭处理代码
+
+**变更类型**: 清理/重构
+
+**描述**:
+- 移除了 `TouchApp` 中冗余的 `_setupWindowCloseHandler()` 方法
+- 窗口关闭事件处理已由 `TrayManager` 模块统一管理（在 `registerWindowEvents()` 方法中）
+- 清理了相关的注释和代码
+
+**修改文件**:
+- `apps/core-app/src/main/core/touch-app.ts`: 移除 `_setupWindowCloseHandler` 方法和相关调用
+
+**技术细节**:
+- 窗口关闭到托盘功能现在完全由 Tray 模块负责：
+  - `TrayManager.registerWindowEvents()` 方法处理窗口关闭事件
+  - 根据 `closeToTray` 配置决定是否最小化到托盘
+  - 避免了代码重复和维护问题
+
+**影响**:
+- 代码结构更清晰，职责分离更明确
+- 消除了代码重复和潜在的维护问题
+
+---
+
+## 2025-01-XX
+
+### 修复: TypeScript 编译错误
+
+**变更类型**: Bug 修复
+
+**描述**: 修复了构建过程中的所有 TypeScript 类型错误
+
+**主要修复**:
+1. **未使用的声明 (TS6133)**:
+   - 移除了未使用的导入（`path`, `fs`, `ModuleDestroyContext`）
+   - 移除了未使用的私有方法（`_syncFileFromDevServer`）
+   - 修复了未使用参数的警告
+
+2. **类型不匹配 (TS2322)**:
+   - 修复了 `Primitive` 类型错误（将 `unknown` 转换为 `string`）
+   - 修复了 icon 类型错误（`'base64'` → `'url'`，字符串 → `ITuffIcon` 对象）
+   - 修复了 `boolean | undefined` 类型问题
+
+3. **属性不存在 (TS2339)**:
+   - 修复了 `DevServerHealthCheckResult.data` 属性移除
+   - 修复了 `ITouchPlugin._windows` 访问（使用类型断言）
+
+4. **导入错误 (TS2304)**:
+   - 修复了 `useAuthState.ts` 中缺少 `computed` 导入
+   - 修复了 `useAuthConfig.ts` 中环境变量类型问题
+
+5. **参数类型错误 (TS2345)**:
+   - 修复了事件处理器类型，使用 `ITouchEvent` 基类并类型断言
+
+**修改文件**:
+- `apps/core-app/src/main/modules/analytics/startup-analytics.ts`
+- `apps/core-app/src/main/modules/plugin/dev-server-monitor.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/search-processing-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/utils.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/providers/clipboard.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+- `apps/core-app/src/main/service/failed-files-cleanup-task.ts`
+- `packages/utils/core-box/builder/tuff-builder.ts`
+- `packages/utils/search/types.ts`
+- `packages/utils/auth/useAuthState.ts`
+- `packages/utils/auth/useAuthConfig.ts`
+
+**影响**: 项目现在可以通过 TypeScript 类型检查，构建流程正常
+
+---
+
+## 2025-01-XX
+
+### 优化: GitHub Actions 构建发布流程
+
+**变更类型**: 工作流优化
+
+**描述**: 简化了构建发布流程，移除了手动触发时的版本号和标签创建
+
+**主要变更**:
+1. **简化手动触发**:
+   - 移除了 `version` 输入字段
+   - 移除了手动触发时的 Git 标签创建步骤
+   - 手动触发时直接构建，不处理版本号
+
+2. **标签触发优化**:
+   - 保留标签推送触发机制（使用 bumpp 打好的标签自动触发）
+   - 从标签自动提取版本号并更新 package.json
+
+**修改文件**:
+- `.github/workflows/build-and-release.yml`
+
+**新的工作流程**:
+- **方式 1**: 使用 `bumpp` 打标签后自动触发构建和发布
+- **方式 2**: 手动触发构建（不创建标签，直接构建并创建 draft Release）
+
+**影响**: 构建流程更简洁，符合团队工作流
+
+---

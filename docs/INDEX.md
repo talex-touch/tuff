@@ -26,6 +26,8 @@
 - **Pilot Chat/Turn 新协议**：`/api/v1/chat/sessions/:sessionId/{turns,stream,messages}` 已落地（会话级串行队列、SSE 尾段 title、运行态回传）。
 - **Pilot 标题自动生成修复**：首轮 turn 的 title 阶段改为直接基于 turn payload 生成，并在生成后同步回写 runtime + quota history，避免历史列表长期显示“新的聊天”。
 - **Pilot 附件交互修复**：聊天生成中不再禁用输入区粘贴与附件选择；支持粘贴图片/文件直传，并显式放开图片等常见文件类型选择。
+- **Pilot 附件慢链路治理（URL/ID-first）**：入模策略统一为 `id > https url > base64`，并新增附件能力探测接口 `GET /api/pilot/chat/attachments/capability`。
+- **Pilot 后台设置入口合并**：新增 `/cms/system/pilot-settings`（Channels + Storage 同页），旧 `/pilot/admin/*` 进入兼容迁移窗口。
 - **Legacy 聊天输入框附件修复**：`ThInput` 旧输入框已支持粘贴与选择文件附件（不再仅限图片，也不再提示“暂时不支持附件/文件分析”）。
 - **Pilot/Legacy 附件可读性修复**：非图片附件在大小阈值内会内联为 `input_file.file_data` 传给模型，不再只传文件名/类型元信息。
 - **Legacy 历史加载状态修复**：`GET /api/aigc/conversation/:id` 返回 JSON `value` 时，历史项点击流程已兼容对象解码并确保异常时也会退出 loading。
