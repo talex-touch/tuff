@@ -1,25 +1,25 @@
 import type { H3Event } from 'h3'
 import { requirePilotDatabase } from './pilot-store'
 
-export type ChatTurnStatus =
-  | 'pending'
-  | 'accepted'
-  | 'executing'
-  | 'title'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-  | 'timeout'
+export type ChatTurnStatus
+  = | 'pending'
+    | 'accepted'
+    | 'executing'
+    | 'title'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
+    | 'timeout'
 
-export type ChatRunState =
-  | 'idle'
-  | 'queued'
-  | 'executing'
-  | 'title'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-  | 'timeout'
+export type ChatRunState
+  = | 'idle'
+    | 'queued'
+    | 'executing'
+    | 'title'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
+    | 'timeout'
 
 export interface ChatTurnQueueRow {
   id: number
@@ -317,10 +317,10 @@ export async function getSessionRunState(
   userId: string,
   sessionId: string,
 ): Promise<{
-    runState: ChatRunState
-    activeTurnId: string | null
-    pendingCount: number
-  }> {
+  runState: ChatRunState
+  activeTurnId: string | null
+  pendingCount: number
+}> {
   const db = requirePilotDatabase(event)
 
   const active = await db.prepare(`
@@ -390,6 +390,34 @@ export async function getSessionRunState(
   }
 
   return { runState: 'idle', activeTurnId: null, pendingCount }
+}
+
+export async function getSessionRunStateSafe(
+  event: H3Event,
+  userId: string,
+  sessionId: string,
+): Promise<{
+  runState: ChatRunState
+  activeTurnId: string | null
+  pendingCount: number
+}> {
+  try {
+    await ensureChatTurnQueueSchema(event)
+    return await getSessionRunState(event, userId, sessionId)
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error || '')
+    console.error('[pilot][turn-queue] run_state fallback to idle', {
+      userId,
+      sessionId,
+      error: message,
+    })
+    return {
+      runState: 'idle',
+      activeTurnId: null,
+      pendingCount: 0,
+    }
+  }
 }
 
 export function tryAcquireSessionExecutionLock(sessionId: string, owner: string): boolean {

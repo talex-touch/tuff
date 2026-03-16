@@ -28,6 +28,11 @@
 - 服务端补齐 `chat-turn-queue`（会话级串行执行与状态持久化）。
 - 历史会话链路改为 JSON：`pilot_quota_history.value` 完成一次性 base64 -> JSON 迁移，后续读写统一 JSON 字符串并回包结构化 `value/messages`。
 
+### fix(pilot): run_state 查询故障降级，避免会话读取 500
+
+- `aigc/conversation`、`aigc/conversations`、`aigc/history` 与 `v1/chat/sessions/:id/messages` 在运行态查询失败时统一降级为 `run_state=idle`，确保历史消息可读。
+- 新增 `getSessionRunStateSafe` 兜底方法，避免队列表异常导致前端刷新误判“分析失败”。
+
 ### fix(chat-ui): 输入区 loading 与发送解耦
 
 - 输入区状态拆分为 `send_state=idle|sending_until_accepted`，仅“等待受理”阶段显示 loading。
