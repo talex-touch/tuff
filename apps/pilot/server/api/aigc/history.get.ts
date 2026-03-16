@@ -1,5 +1,5 @@
 import { requirePilotAuth } from '../../utils/auth'
-import { ensureChatTurnQueueSchema, getSessionRunState } from '../../utils/chat-turn-queue'
+import { getSessionRunStateSafe } from '../../utils/chat-turn-queue'
 import { quotaOk, toBoundedPositiveInt } from '../../utils/quota-api'
 import { decodeQuotaConversation } from '../../utils/quota-history-codec'
 import {
@@ -51,7 +51,6 @@ export default defineEventHandler(async (event) => {
   const topic = String(query.topic || '').trim()
 
   await ensureQuotaHistorySchema(event)
-  await ensureChatTurnQueueSchema(event)
   const result = await listQuotaHistory(event, {
     userId: auth.userId,
     page,
@@ -63,7 +62,7 @@ export default defineEventHandler(async (event) => {
     ? 0
     : Math.ceil(result.totalItems / pageSize)
   const items = await Promise.all(result.items.map(async (record) => {
-    const runtime = await getSessionRunState(event, auth.userId, record.chatId)
+    const runtime = await getSessionRunStateSafe(event, auth.userId, record.chatId)
     return toHistoryItem(record, runtime)
   }))
 

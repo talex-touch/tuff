@@ -1,7 +1,6 @@
 import { requirePilotAuth } from '../../../../../utils/auth'
 import {
-  ensureChatTurnQueueSchema,
-  getSessionRunState,
+  getSessionRunStateSafe,
 } from '../../../../../utils/chat-turn-queue'
 import { buildPilotAttachmentPreviewUrl } from '../../../../../utils/pilot-attachment-storage'
 import { requireSessionId } from '../../../../../utils/pilot-http'
@@ -12,14 +11,13 @@ export default defineEventHandler(async (event) => {
   const sessionId = requireSessionId(event)
   const store = createPilotStoreAdapter(event, userId)
   await store.runtime.ensureSchema()
-  await ensureChatTurnQueueSchema(event)
 
   const messages = await store.runtime.listMessages(sessionId)
   const attachments = (await store.runtime.listAttachments(sessionId)).map(item => ({
     ...item,
     previewUrl: buildPilotAttachmentPreviewUrl(sessionId, item.id),
   }))
-  const runtimeState = await getSessionRunState(event, userId, sessionId)
+  const runtimeState = await getSessionRunStateSafe(event, userId, sessionId)
   const session = await store.runtime.getSession(sessionId)
 
   return {
