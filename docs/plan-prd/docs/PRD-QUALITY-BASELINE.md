@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-03-15  
+> 更新时间：2026-03-16  
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -195,3 +195,4 @@
 - 安装失败路径必须可见（拒绝授权、异常、超时均不得 silent failure）。
 - 事件/类型变更仅允许可选字段追加，禁止破坏既有语义与兼容性。
 - `@talex-touch/tuff-cli` 为命令主入口，旧入口仅兼容 shim + deprecation，不承载新命令逻辑。
+- 下一动作已统一为 `Nexus 设备授权风控`，不再把 CLI 分包迁移视为待办主线。

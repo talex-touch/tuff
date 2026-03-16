@@ -49,7 +49,9 @@
     "version:minor": "node scripts/version-sync.mjs --minor",
     "version:major": "node scripts/version-sync.mjs --major",
     "plugins:validate": "node scripts/validate-plugins.mjs",
-    "intelligence:check": "node scripts/check-intelligence-no-todo.mjs"
+    "intelligence:check": "node scripts/check-intelligence-no-todo.mjs",
+    "docs:guard": "node scripts/check-doc-governance.mjs",
+    "docs:guard:strict": "node scripts/check-doc-governance.mjs --strict true"
   },
   "dependencies": {
     "@sentry/vite-plugin": "^4.9.1",

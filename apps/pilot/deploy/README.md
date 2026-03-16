@@ -126,7 +126,7 @@ curl "http://127.0.0.1:19021/health"
 4. Set GitHub repository secrets:
    - `ONEPANEL_WEBHOOK_URL` (for example `http://<frp-host>:23301`)
    - `ONEPANEL_WEBHOOK_TOKEN` (same value as `PILOT_WEBHOOK_TOKEN`)
-5. `pilot-image.yml` will trigger `POST /deploy` after pushing `pilot-latest`.
+5. `pilot-image.yml` (triggered on `master` push) will trigger `POST /deploy` after pushing `pilot-latest`, with `X-Pilot-Token` header.
 
 ## 6) Rollback behavior
 

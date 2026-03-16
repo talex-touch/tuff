@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档索引，包含所有 PRD、设计文档、实现指南
-> 更新时间: 2026-03-15
+> 更新时间: 2026-03-16
 
  ## PRD Index（以代码实现为准）
  
@@ -26,7 +26,7 @@
  - **[DivisionBox 文档索引](./docs/DIVISION_BOX_INDEX.md)**：DivisionBox 详细文档入口
  - **[v2.4.9-beta.4 发布基线快照](./01-project/CHANGES.md)**：commit/tag/CI run 汇总（用于后续债务治理基线）
 
-## 单一口径矩阵（2026-03-15）
+## 单一口径矩阵（2026-03-16）
 
 - **2.4.9 Gate 主线**：插件完善主线执行中，`权限中心 Phase 5`、`View Mode Phase 2~4`、`CLI 分包迁移（Phase1+2）`、`主文档同步验收`已完成。
 - **当前工作区基线**：`2.4.9-beta.4`（tag: `v2.4.9-beta.4`，CI: Build and Release / Contributes / Pilot Image Publish / CodeQL 全绿）。

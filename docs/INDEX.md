@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-03-15  
+> 更新时间：2026-03-16  
 > 本页仅保留入口与高价值快照；历史细节以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主要入口
@@ -12,7 +12,7 @@
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` - PRD 质量基线与门禁约束
 - `docs/plan-prd/01-project/CHANGES.md` - 全历史变更记录（唯一历史源）
 
-## 状态快照（2026-03-15，统一口径）
+## 状态快照（2026-03-16，统一口径）
 
 - **2.4.9 主线 Gate**：插件完善主线执行中，`权限中心 Phase 5`、`View Mode Phase 2~4`、`CLI 分包迁移（Phase1+2）`、`主文档同步验收`已完成。
 - **当前工作区基线**：`2.4.9-beta.4`（tag `v2.4.9-beta.4`，发布相关 CI 已通过）。
@@ -36,12 +36,12 @@
 
 | 文档 | 当前状态 | 下一动作 |
 | --- | --- | --- |
-| `docs/plan-prd/TODO.md` | 已同步到 2026-03-15 | 推进 `Nexus 设备授权风控` 并维护 CLI 兼容层回归 |
-| `docs/plan-prd/README.md` | 已同步到 2026-03-15 | 保持“近 3 个月里程碑 + 未闭环能力”口径 |
-| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步到 2026-03-15 | 按锁定顺序推进 `CLI -> 文档验收 -> Nexus 设备授权风控` |
-| `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md` | Gate A/B/C/D/E 已完成（D/E historical，2026-03-15 已复核） | 保留证据链并切换到 `2.4.9` 插件主线收口 |
-| `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` | 已同步到 2026-03-15（新增 2.4.9 插件主线质量记录） | 保持 `v2.4.7` 豁免仅限历史版本，`>=2.4.8` 严格门禁 |
-| `docs/plan-prd/01-project/CHANGES.md` | 已同步到 2026-03-15（含 CLI Phase1+2 收口） | 持续记录 `Nexus 设备授权风控` 推进证据 |
+| `docs/plan-prd/TODO.md` | 已同步到 2026-03-16 | 推进 `Nexus 设备授权风控` 并维护 CLI 兼容层回归 |
+| `docs/plan-prd/README.md` | 已同步到 2026-03-16 | 保持“近 3 个月里程碑 + 未闭环能力”口径 |
+| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步到 2026-03-16 | 按锁定顺序推进 `Nexus 设备授权风控` 收口 |
+| `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md` | Gate A/B/C/D/E 已完成（D/E historical，2026-03-16 已复核） | 保留证据链并切换到 `2.4.9` 后续主线 |
+| `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` | 已同步到 2026-03-16（新增文档治理门禁记录） | 保持 `v2.4.7` 豁免仅限历史版本，`>=2.4.8` 严格门禁 |
+| `docs/plan-prd/01-project/CHANGES.md` | 已同步到 2026-03-16（含文档治理门禁） | 持续记录 `Nexus 设备授权风控` 推进证据 |
 | `docs/INDEX.md` | 本页（入口+快照）已压缩 | 仅维护导航与高价值快照 |
 
 ## 归档与降权

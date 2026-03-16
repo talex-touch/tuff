@@ -37,7 +37,8 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - 使用 `apps/pilot/Dockerfile` 构建 `ghcr.io/<owner>/tuff-pilot`
   - 推送标签：`pilot-<short_sha>` + `pilot-latest`
   - 输出镜像 digest，供后续 1Panel 回滚与审计
-  - 若配置 `ONEPANEL_WEBHOOK_URL` + `ONEPANEL_WEBHOOK_TOKEN`，镜像发布后自动调用 1Panel webhook 触发重建
+  - 若配置 `ONEPANEL_WEBHOOK_URL` + `ONEPANEL_WEBHOOK_TOKEN`，镜像发布后自动 `POST /deploy`
+  - webhook 鉴权使用 `X-Pilot-Token: $ONEPANEL_WEBHOOK_TOKEN`（服务端变量为 `PILOT_WEBHOOK_TOKEN`）
 
 ### Package CI Workflows
 
