@@ -94,8 +94,27 @@
 - CI run：
   - Contributes: https://github.com/talex-touch/tuff/actions/runs/23125828534（completed/success）
   - CodeQL: https://github.com/talex-touch/tuff/actions/runs/23125828282（completed/success）
-  - Pilot Image Publish: https://github.com/talex-touch/tuff/actions/runs/23125828532（in_progress，持续观测）
-  - Pilot CI: https://github.com/talex-touch/tuff/actions/runs/23125828545（in_progress，持续观测）
+  - Pilot Image Publish: https://github.com/talex-touch/tuff/actions/runs/23125828532（completed/failure）
+  - Pilot CI: https://github.com/talex-touch/tuff/actions/runs/23125828545（completed/success）
+
+### Docs：文档清债第二轮（遗留文档收口）
+
+**变更类型**: 文档治理 / 历史债务收口
+
+**描述**:
+- 完成证据层修正：补录提交 `223cb514` 的 CI 事实，并将 `c1542556` 条目中的运行态更新为最终态。
+- 活跃文档对齐：
+  - `OMNIPANEL-FEATURE-HUB-PRD` 改为 historical done（2.4.8 Gate），不再作为当前主线；
+  - `PILOT-NEXUS-OAUTH-CLI-TEST-PLAN` 重写为“已落地 vs 未启动”快照，明确 `tuff-pilot-cli` 仍为 backlog；
+  - `TUFFCLI-INVENTORY` 改为 `tuff-cli` 主入口口径，保留 `unplugin` shim 兼容窗口（2.4.x 保留 / 2.5.0 退场）。
+- 历史文档降权：`NEXUS-SUBSCRIPTION-PRD` 与 `NEXUS-PLUGIN-COMMUNITY-PRD` 增加“历史/待重写”头部标记与替代入口（`CHANGES`/`TODO`）。
+- `TODO` 增加“文档债务池（第二轮）”小节，记录本轮已处理与剩余文档清单。
+
+**本次提交证据（commit `223cb514`）**:
+- commit: `223cb5146de06644f7567bd0a5704f835696257a`
+- CI run：
+  - Contributes: https://github.com/talex-touch/tuff/actions/runs/23126138554（completed/success）
+  - CodeQL: https://github.com/talex-touch/tuff/actions/runs/23126138304（completed/success）
 
 ---
 

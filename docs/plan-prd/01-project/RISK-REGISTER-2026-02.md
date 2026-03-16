@@ -1,7 +1,7 @@
 # 风险点登记（2026-02）
 
 > 本文档用于收敛高风险项，并作为发布前风险门禁依据。
-> 更新时间：2026-03-14
+> 更新时间：2026-03-16
 
 ---
 
@@ -27,6 +27,7 @@
 | RISK-004 | P2 | 依赖版本漂移（Vue/Vite/TS/ESLint/Vitest/Unocss/Electron） | Workspace Maintainer | 工具链与运行时基线收敛，锁定统一版本窗口 | `pnpm-workspace.yaml`、`package.json` | 2.4.7 | 2026-02-28 | 发现兼容异常时按 workspace 回滚到上一锁文件 | Done |
 | RISK-005 | P2 | 迁移壳层/Deprecated 仍较集中 | SDK/Transport Maintainer | 按 Hard-Cut 批次收口旧入口，迁移完成后删除 deprecated API | `packages/utils/channel/index.ts`、`packages/utils/transport/index.ts`、`docs/plan-prd/04-implementation/LegacyChannelCleanup-2408.md` | 2.4.8 | 2026-03-31 | 保留最小兼容窗；若异常，临时恢复 adapter 层并记录 telemetry | In Progress |
 | RISK-006 | P1 | `v2.4.7` 历史发布缺少 `.sig` 与 signature 字段，无法满足当前签名门禁 | Release Owner | 限定版本豁免：仅 `v2.4.7` 接受 `signature` 缺口；Gate D 仅补齐 `sha256 + manifest` 元数据并留档 | `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`、`docs/plan-prd/01-project/CHANGES.md` | 2.4.7 | 2026-03-14 | 如需撤销豁免，走新版本重发流程（`>=2.4.8` 强制签名全量） | Accepted（Historical waiver） |
+| RISK-007 | P1 | 文档事实与 CI 证据存在漂移风险（文档写入时状态与最终运行态不一致） | Docs Governance Owner | 固化“提交后 1 次回填 + 每日巡检 1 次”的证据更新节奏，关键 run 必须写入最终 `status/conclusion` | `docs/plan-prd/01-project/CHANGES.md`、`scripts/check-doc-governance.mjs` | 2.4.9 | 2026-03-22 | 若证据无法当日回填，临时标记“待最终态回写”并在下次文档提交强制补齐 | In Progress |
 
 ---
 

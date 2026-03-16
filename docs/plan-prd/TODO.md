@@ -30,6 +30,19 @@
   - CLI 兼容窗口：`2.4.x` 保留 `unplugin` shim，`2.5.0` 退场。
   - `docs:guard` 升级 strict 前置条件：连续 5 次 CI `docs:guard` 零告警 + 2 周内无主文档回退冲突。
 
+### 文档债务池（第二轮 / 2026-03-16）
+
+- 本轮已处理：
+  - `CHANGES`：补录提交 `223cb514` 与 CI 证据，修正 `c1542556` 运行态为最终态。
+  - `RISK-REGISTER`：新增“文档事实与 CI 证据漂移”风险项（RISK-007）。
+  - `OMNIPANEL-FEATURE-HUB-PRD`：状态改为 historical done（2.4.8 Gate）。
+  - `PILOT-NEXUS-OAUTH-CLI-TEST-PLAN`：改为执行态快照（已落地 vs 未启动）。
+  - `TUFFCLI-INVENTORY`：改为 `tuff-cli` 主入口 + `unplugin` shim 兼容窗口口径。
+  - `NEXUS-SUBSCRIPTION-PRD`、`NEXUS-PLUGIN-COMMUNITY-PRD`：加历史/待重写降权标记。
+- 剩余待处理：
+  - 继续清点 `04-implementation` 中 Draft 文档并分批标注“当前有效 / 历史归档”状态。
+  - 在后续周更中持续补齐文档与 CI 证据同日闭环，防止状态回漂。
+
 ## 🌊 债务分波次推进（W2-W4）
 
 - [ ] Wave A（Transport）：MessagePort 高频通道迁移、`sendSync` 清理、兼容层降权。
