@@ -9,10 +9,6 @@ function randomId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString().slice(-6)}`
 }
 
-function encodeText(value: string): string {
-  return btoa(encodeURIComponent(value))
-}
-
 function toMessageRole(value: unknown): PlainQuotaMessage['role'] {
   const normalized = String(value || '').trim().toLowerCase()
   if (normalized === 'assistant') {
@@ -156,7 +152,7 @@ export function buildQuotaConversationSnapshot(input: {
 
   return {
     topic,
-    value: encodeText(JSON.stringify(payload)),
+    value: JSON.stringify(payload),
     payload,
   }
 }

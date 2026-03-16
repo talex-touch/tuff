@@ -1,6 +1,6 @@
 <script name="ThInput" setup lang="ts">
 import type { ITip, ITipItem } from '../chat/input-tips'
-import type { IChatInnerItemMeta, IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
+import type { IChatInnerItemMeta, IInnerItemMeta, ISendState } from '~/composables/api/base/v1/aigc/completion-types'
 import { useFloating } from '@floating-ui/vue'
 import { encode } from 'gpt-tokenizer'
 import { $endApi } from '~/composables/api/base'
@@ -12,6 +12,7 @@ import ThInputPlus from './ThInputPlus.vue'
 
 const props = defineProps<{
   status: IChatItemStatus
+  sendState?: ISendState
   hide: boolean
   center: boolean
   templateEnable: boolean
@@ -42,7 +43,7 @@ const hasUploadingFiles = computed(() => input.value.files.some(item => item.ext
 const inputHistories = useLocalStorage<string[]>('inputHistories', [])
 const inputHistoryIndex = ref(inputHistories.value.length - 1)
 const showSend = computed(() => Boolean(input.value.text.trim()) || syncedFiles.value.length > 0)
-const canSend = computed(() => !hasUploadingFiles.value && showSend.value && (props.status === IChatItemStatus.AVAILABLE || props.status === IChatItemStatus.CANCELLED || props.status === IChatItemStatus.ERROR))
+const canSend = computed(() => !hasUploadingFiles.value && showSend.value && props.sendState !== 'sending_until_accepted')
 
 function handleSend(event: Event) {
   if (!canSend.value)
@@ -435,7 +436,7 @@ onStartTyping(focusInput)
       disabled: !canSend,
       collapse: nonPlusMode,
       showSend,
-      generating: status === 1,
+      generating: sendState === 'sending_until_accepted',
 
     }" class="ThInput" @paste="handlePaste"
   >
@@ -493,7 +494,7 @@ onStartTyping(focusInput)
       <IconAnimateIcon>
         <IconSvgArrowUpSvg />
       </IconAnimateIcon>
-      <span v-if="status === 1" mr-4 text-lg text-black font-bold op-75>等待响应中</span>
+      <span v-if="sendState === 'sending_until_accepted'" mr-4 text-lg text-black font-bold op-75>等待受理中</span>
     </div>
 
     <div class="ThInput-StatusBar" />

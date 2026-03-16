@@ -57,7 +57,11 @@ const timeAgo = computed(() => innerItem.value ? dayjs(innerItem.value.timestamp
 const isUser = computed(() => props.item.role === IChatRole.USER)
 
 const endStatus = [IChatItemStatus.AVAILABLE, IChatItemStatus.BANNED, IChatItemStatus.CANCELLED, IChatItemStatus.ERROR, IChatItemStatus.REJECTED, IChatItemStatus.TIMEOUT, IChatItemStatus.TOOL_ERROR]
-const isEnd = computed(() => endStatus.includes(innerItem.value?.status || 0))
+const isEnd = computed(() => {
+  if (!innerItem.value || typeof innerItem.value.status !== 'number')
+    return false
+  return endStatus.includes(innerItem.value.status)
+})
 
 const tools = reactive([
   {

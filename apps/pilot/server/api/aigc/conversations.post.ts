@@ -4,19 +4,44 @@ import {
   getPilotQuotaSessionByChatId,
   upsertPilotQuotaSession,
 } from '../../utils/pilot-quota-session'
+import { createPilotStoreAdapter } from '../../utils/pilot-store'
 import { quotaError, quotaOk } from '../../utils/quota-api'
 import {
   ensureQuotaHistorySchema,
   upsertQuotaHistory,
 } from '../../utils/quota-history-store'
-import { createPilotStoreAdapter } from '../../utils/pilot-store'
 
 interface UploadConversationBody {
   chat_id?: string
   channel_id?: string
   topic?: string
-  value?: string
+  value?: string | Record<string, unknown>
   meta?: string
+}
+
+function normalizeConversationValue(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const raw = value.trim()
+  if (!raw) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null
+    }
+    return parsed as Record<string, unknown>
+  }
+  catch {
+    return null
+  }
 }
 
 function randomRuntimeSessionId(): string {
@@ -27,18 +52,20 @@ export default defineEventHandler(async (event) => {
   const auth = requirePilotAuth(event)
   const body = await readBody<UploadConversationBody>(event)
   const chatId = String(body?.chat_id || '').trim()
-  const value = String(body?.value || '').trim()
+  const payload = normalizeConversationValue(body?.value)
 
-  if (!chatId || !value) {
+  if (!chatId || !payload) {
     return quotaError(400, 'chat_id and value are required', null)
   }
+
+  const value = JSON.stringify(payload)
 
   await ensureQuotaHistorySchema(event)
   await ensurePilotQuotaSessionSchema(event)
   const history = await upsertQuotaHistory(event, {
     chatId,
     userId: auth.userId,
-    topic: body?.topic,
+    topic: body?.topic || String(payload.topic || ''),
     value,
     meta: body?.meta || '',
   })
@@ -83,7 +110,8 @@ export default defineEventHandler(async (event) => {
   return quotaOk({
     chat_id: history.chatId,
     topic: history.topic,
-    value: history.value,
+    value: payload,
+    raw_value: history.value,
     meta: history.meta,
     createdAt: history.createdAt,
     updatedAt: history.updatedAt,

@@ -4,7 +4,6 @@ import type { QuotaUserTurnAttachment } from '../../utils/quota-history-codec'
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import { toDeepAgentErrorDetail } from '@talex-touch/tuff-intelligence'
-import { networkClient } from '@talex-touch/utils/network'
 import { getRequestURL } from 'h3'
 import { requirePilotAuth } from '../../utils/auth'
 import {
@@ -24,6 +23,7 @@ import {
   getQuotaHistory,
   upsertQuotaHistory,
 } from '../../utils/quota-history-store'
+import { generateTitle } from '../../utils/pilot-title'
 import { getQuotaUploadObject } from '../../utils/quota-upload-store'
 
 interface QuotaExecutorBody {
@@ -159,19 +159,12 @@ function stringifyQuotaMessageContent(content: unknown): string {
   return ''
 }
 
-function normalizeMessagePreview(content: string): string {
-  return content
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 220)
-}
-
-function buildConversationPreview(messages: unknown): string {
+function toTitleMessages(messages: unknown): Array<{ role: string, content: string }> {
   if (!Array.isArray(messages)) {
-    return ''
+    return []
   }
 
-  const rows = messages
+  return messages
     .map((item) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) {
         return null
@@ -181,143 +174,16 @@ function buildConversationPreview(messages: unknown): string {
       if (role !== 'user' && role !== 'assistant') {
         return null
       }
-      const text = normalizeMessagePreview(stringifyQuotaMessageContent(row.content))
-      if (!text) {
+      const content = stringifyQuotaMessageContent(row.content)
+      if (!content) {
         return null
       }
       return {
         role,
-        text,
+        content,
       }
     })
-    .filter((item): item is { role: string, text: string } => Boolean(item))
-    .slice(0, 6)
-
-  return rows
-    .map((item, index) => `${index + 1}. ${item.role}: ${item.text}`)
-    .join('\n')
-}
-
-function fallbackTitle(messages: unknown): string {
-  if (!Array.isArray(messages)) {
-    return '新的聊天'
-  }
-
-  for (const item of messages) {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      continue
-    }
-    const row = item as Record<string, unknown>
-    if (String(row.role || '').trim().toLowerCase() !== 'user') {
-      continue
-    }
-    const text = normalizeMessagePreview(stringifyQuotaMessageContent(row.content))
-    if (text) {
-      return text.slice(0, 24) || '新的聊天'
-    }
-  }
-
-  return '新的聊天'
-}
-
-function sanitizeTitle(raw: string): string {
-  return raw
-    .replace(/\r?\n/g, ' ')
-    .replace(/^\s*(title|标题)\s*[:：-]\s*/i, '')
-    .replace(/["'`]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 40)
-}
-
-function extractResponseText(data: Record<string, unknown>): string {
-  const outputText = String(data.output_text || '').trim()
-  if (outputText) {
-    return outputText
-  }
-
-  const output = Array.isArray(data.output) ? data.output : []
-  for (const item of output) {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      continue
-    }
-    const row = item as Record<string, unknown>
-    const content = Array.isArray(row.content) ? row.content : []
-    for (const block of content) {
-      if (!block || typeof block !== 'object' || Array.isArray(block)) {
-        continue
-      }
-      const blockRow = block as Record<string, unknown>
-      const text = String(blockRow.text || blockRow.output_text || '').trim()
-      if (text) {
-        return text
-      }
-    }
-  }
-
-  return ''
-}
-
-function buildResponsesEndpoint(baseUrl: string): string {
-  const normalized = trimSuffixSlash(String(baseUrl || '').trim())
-  if (!normalized) {
-    return 'https://api.openai.com/v1/responses'
-  }
-  if (normalized.endsWith('/responses') || normalized.endsWith('/v1/responses')) {
-    return normalized
-  }
-  if (normalized.endsWith('/v1')) {
-    return `${normalized}/responses`
-  }
-  return `${normalized}/v1/responses`
-}
-
-async function requestAiTitle(endpoint: string, apiKey: string, model: string, preview: string): Promise<string> {
-  const response = await networkClient.request<Record<string, unknown> | string>({
-    method: 'POST',
-    url: endpoint,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: {
-      model,
-      max_output_tokens: 32,
-      temperature: 0.2,
-      input: [
-        {
-          role: 'system',
-          content: [
-            {
-              type: 'input_text',
-              text: 'Generate a short conversation title. Return title only.',
-            },
-          ],
-        },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'input_text',
-              text: `Conversation preview:\n${preview}\n\nTitle rules:\n- 4 to 12 words\n- keep source language when obvious\n- avoid generic words like "新聊天"\n- return title only`,
-            },
-          ],
-        },
-      ],
-    },
-    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
-  })
-
-  if (response.status < 200 || response.status >= 300) {
-    const message = typeof response.data === 'string' ? response.data : `HTTP ${response.status}`
-    throw new Error(message)
-  }
-
-  const payload = response.data && typeof response.data === 'object'
-    ? (response.data as Record<string, unknown>)
-    : {}
-
-  return extractResponseText(payload)
+    .filter((item): item is { role: string, content: string } => Boolean(item))
 }
 
 function resolveAbsoluteAttachmentUrl(event: H3Event, input: string): string {
@@ -1126,35 +992,31 @@ export default defineEventHandler(async (event) => {
   }
 
   if (isTitleRequest) {
-    const preview = buildConversationPreview(body?.messages)
-    let titleMode: 'ai' | 'fallback' = 'fallback'
-    let generatedTitle = fallbackTitle(body?.messages)
+    const titleMessages = toTitleMessages(body?.messages)
+    let titleMode: 'ai' | 'fallback' | 'empty' = 'fallback'
+    let generatedTitle = '新的聊天'
 
-    if (preview && selectedChannel.channel.apiKey) {
-      try {
-        const output = sanitizeTitle(await requestAiTitle(
-          buildResponsesEndpoint(selectedChannel.channel.baseUrl),
-          selectedChannel.channel.apiKey,
-          selectedModel,
-          preview,
-        ))
-        if (output) {
-          generatedTitle = output
-          titleMode = 'ai'
-        }
-      }
-      catch (error) {
-        logExecutorEvent('warn', 'title', {
-          phase: 'title.generate.failed',
-          request_id: trace.requestId,
-          chat_id: trace.chatId,
-          channel_id: trace.channelId,
-          adapter: trace.adapter,
-          transport: trace.transport,
-          title_model: selectedModel,
-          error: buildErrorMeta(error),
-        })
-      }
+    try {
+      const result = await generateTitle({
+        baseUrl: selectedChannel.channel.baseUrl,
+        apiKey: selectedChannel.channel.apiKey,
+        model: selectedModel,
+        messages: titleMessages,
+      })
+      titleMode = result.source
+      generatedTitle = result.title || '新的聊天'
+    }
+    catch (error) {
+      logExecutorEvent('warn', 'title', {
+        phase: 'title.generate.failed',
+        request_id: trace.requestId,
+        chat_id: trace.chatId,
+        channel_id: trace.channelId,
+        adapter: trace.adapter,
+        transport: trace.transport,
+        title_model: selectedModel,
+        error: buildErrorMeta(error),
+      })
     }
 
     logExecutorEvent('info', 'title', {
@@ -1166,11 +1028,11 @@ export default defineEventHandler(async (event) => {
       transport: trace.transport,
       title_mode: titleMode,
       title_model: selectedModel,
-      title_preview_chars: preview.length,
+      title_preview_chars: titleMessages.reduce((sum, row) => sum + row.content.length, 0),
       title_chars: generatedTitle.length,
     })
 
-    return createTitleSseResponse(generatedTitle || fallbackTitle(body?.messages))
+    return createTitleSseResponse(generatedTitle || '新的聊天')
   }
 
   logExecutorEvent('info', 'request', {

@@ -363,14 +363,37 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
     }, maxDurationMs)
 
     try {
-      const res: ReadableStream = await endHttp.$http({
-        url: 'aigc/executor',
+      const sessionId = String(body?.chat_id || '').trim()
+      if (!sessionId) {
+        throw new Error('chat_id is required')
+      }
+
+      const turn = await endHttp.$http({
+        url: `v1/chat/sessions/${encodeURIComponent(sessionId)}/turns`,
         method: 'POST',
         data: {
           ...body,
         },
-        params: {
-          uid: userStore.value.id,
+        signal: streamController.signal,
+      }) as Record<string, any>
+
+      const requestId = String(turn?.request_id || '').trim()
+      if (!requestId) {
+        throw new Error('request_id is missing')
+      }
+      wrappedCallback({
+        done: false,
+        event: 'turn.accepted',
+        request_id: requestId,
+        turn_id: String(turn?.turn_id || '').trim(),
+        queue_pos: Number(turn?.queue_pos || 0),
+      })
+
+      const res: ReadableStream = await endHttp.$http({
+        url: `v1/chat/sessions/${encodeURIComponent(sessionId)}/stream`,
+        method: 'POST',
+        data: {
+          request_id: requestId,
         },
         headers: {
           Accept: 'text/event-stream',
@@ -740,7 +763,72 @@ export const $completion = {
             const { event, name, data } = res
             lastCompletionName = typeof name === 'string' ? name : lastCompletionName
             // console.log('RES', res, res.event)
-            if (event === 'status_updated') {
+            if (event === 'turn.accepted') {
+              innerMsg.status = IChatItemStatus.WAITING
+              handler.onAccepted?.({
+                requestId: res.request_id,
+                turnId: res.turn_id,
+                queuePos: res.queue_pos,
+              })
+              handler?.onTriggerStatus?.(innerMsg.status)
+            }
+            else if (event === 'turn.queued') {
+              innerMsg.status = IChatItemStatus.WAITING
+              handler?.onTriggerStatus?.(innerMsg.status)
+            }
+            else if (event === 'turn.started') {
+              innerMsg.status = IChatItemStatus.GENERATING
+              handler?.onTriggerStatus?.(innerMsg.status)
+            }
+            else if (event === 'turn.delta') {
+              const chunk = typeof res.delta === 'string' ? res.delta : ''
+              if (chunk) {
+                pendingMarkdownBuffer += chunk
+                scheduleMarkdownBufferFlush()
+              }
+              if (innerMsg.status !== IChatItemStatus.GENERATING) {
+                innerMsg.status = IChatItemStatus.GENERATING
+                handler?.onTriggerStatus?.(innerMsg.status)
+              }
+            }
+            else if (event === 'turn.completed') {
+              const markdownBlock = getOrCreateStreamingMarkdownBlock()
+              const finalText = typeof res.message === 'string' ? res.message : ''
+              const flushed = flushPendingMarkdownBuffer()
+              if (finalText) {
+                if (finalText.length >= markdownBlock.value.length)
+                  markdownBlock.value = finalText
+                else if (!markdownBlock.value)
+                  markdownBlock.value = finalText
+              }
+              markdownBlock.extra = {
+                ...(markdownBlock.extra || {}),
+                done: true,
+              }
+              if (finalText && finalText !== flushed)
+                handler.onCompletion?.(lastCompletionName || name, finalText)
+            }
+            else if (event === 'turn.failed') {
+              flushPendingMarkdownBuffer()
+              const message = String(res.message || '请求失败，请稍后重试')
+              innerMsg.status = IChatItemStatus.ERROR
+              handler.onError?.()
+              handler?.onTriggerStatus?.(innerMsg.status)
+              innerMsg.value.push({
+                type: 'error',
+                value: message,
+              })
+            }
+            else if (event === 'title.generated') {
+              const title = String(res.title || '').trim()
+              if (title)
+                conversation.topic = title
+              handler.onVerbose?.('title.generated', title)
+            }
+            else if (event === 'title.failed') {
+              handler.onVerbose?.('title.failed', String(res.message || ''))
+            }
+            else if (event === 'status_updated') {
               const mappedStatus = mapStrStatus(res.status)
               // if (mappedStatus === IChatItemStatus.GENERATING && innerMsg.status !== IChatItemStatus.WAITING)
               //   return

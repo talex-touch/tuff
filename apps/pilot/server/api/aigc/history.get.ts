@@ -1,4 +1,5 @@
 import { requirePilotAuth } from '../../utils/auth'
+import { ensureChatTurnQueueSchema, getSessionRunState } from '../../utils/chat-turn-queue'
 import { quotaOk, toBoundedPositiveInt } from '../../utils/quota-api'
 import { decodeQuotaConversation } from '../../utils/quota-history-codec'
 import {
@@ -13,6 +14,10 @@ function toHistoryItem(record: {
   meta: string
   createdAt: string
   updatedAt: string
+}, runtime?: {
+  runState: string
+  activeTurnId: string | null
+  pendingCount: number
 }): Record<string, unknown> {
   const decoded = decodeQuotaConversation(record.value) || {}
   const topic = String((decoded.topic as string) || record.topic || '新的聊天').trim() || '新的聊天'
@@ -27,8 +32,12 @@ function toHistoryItem(record: {
     messages,
     sync: decoded.sync || 'success',
     lastUpdate: Number.isFinite(lastUpdate) ? lastUpdate : Date.now(),
-    value: record.value,
+    value: decoded,
+    raw_value: record.value,
     meta: record.meta,
+    run_state: runtime?.runState || 'idle',
+    active_turn_id: runtime?.activeTurnId || null,
+    pending_count: runtime?.pendingCount || 0,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   }
@@ -42,6 +51,7 @@ export default defineEventHandler(async (event) => {
   const topic = String(query.topic || '').trim()
 
   await ensureQuotaHistorySchema(event)
+  await ensureChatTurnQueueSchema(event)
   const result = await listQuotaHistory(event, {
     userId: auth.userId,
     page,
@@ -52,7 +62,10 @@ export default defineEventHandler(async (event) => {
   const totalPages = result.totalItems <= 0
     ? 0
     : Math.ceil(result.totalItems / pageSize)
-  const items = result.items.map(toHistoryItem)
+  const items = await Promise.all(result.items.map(async (record) => {
+    const runtime = await getSessionRunState(event, auth.userId, record.chatId)
+    return toHistoryItem(record, runtime)
+  }))
 
   return quotaOk({
     items,

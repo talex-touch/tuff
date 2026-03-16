@@ -81,7 +81,7 @@ export interface IChatInnerItemMeta {
   // TODO: context memory
 }
 
-type IInnerItemType = 'markdown' | 'text' | 'tool' | 'card' | 'error' | 'file' | 'image'
+export type IInnerItemType = 'markdown' | 'text' | 'tool' | 'card' | 'error' | 'file' | 'image'
 
 export interface IInnerItemMeta {
   type: IInnerItemType
@@ -118,6 +118,8 @@ export enum PersistStatus {
   FAILED = 'failed',
   MODIFIED = 'modified',
 }
+
+export type ISendState = 'idle' | 'sending_until_accepted'
 
 export interface IChatPersist {
   sync: PersistStatus
@@ -170,12 +172,12 @@ export interface IHistoryUploadQuery {
   topic: string
 
   /**
-   * 对话详细内容 必须encode
+   * 对话详细内容（JSON 字符串）
    */
   value: string
 
   /**
-   * 对话的附属信息 必须encode
+   * 对话的附属信息（JSON 字符串）
    */
   meta: string
 }
@@ -184,6 +186,7 @@ export interface ICompletionHandler {
   onTriggerStatus?: (status: IChatItemStatus) => void
   onReqCompleted?: () => void
   onFrequentLimit?: () => void
+  onAccepted?: (payload?: Record<string, unknown>) => void
   // return true to deny auto add
   onCompletion?: (name: string, text: string) => boolean
   onCompletionStart?: (name: string) => void
