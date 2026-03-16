@@ -129,6 +129,11 @@ function normalizeTurnAttachments(state: TurnState): UserMessageAttachment[] {
       name: typeof item?.name === 'string' ? item.name : undefined,
       mimeType: typeof item?.mimeType === 'string' ? item.mimeType : undefined,
       previewUrl: typeof item?.previewUrl === 'string' ? item.previewUrl : undefined,
+      modelUrl: typeof item?.modelUrl === 'string' ? item.modelUrl : undefined,
+      providerFileId: typeof item?.providerFileId === 'string' ? item.providerFileId : undefined,
+      deliverySource: item?.deliverySource === 'id' || item?.deliverySource === 'url' || item?.deliverySource === 'base64'
+        ? item.deliverySource
+        : undefined,
       dataUrl: typeof item?.dataUrl === 'string' ? item.dataUrl : undefined,
       size: Number.isFinite(item?.size) ? Number(item?.size) : undefined,
     })
@@ -153,6 +158,7 @@ function formatAttachmentSize(size: number | undefined): string {
 export function resolveAttachmentImageUrl(attachment: UserMessageAttachment): string {
   const candidates = [
     attachment.dataUrl,
+    attachment.modelUrl,
     attachment.previewUrl,
     attachment.ref,
   ]
@@ -163,6 +169,24 @@ export function resolveAttachmentImageUrl(attachment: UserMessageAttachment): st
     }
     if (raw.startsWith('data:image/')) {
       return raw
+    }
+    if (raw.startsWith('https://') || raw.startsWith('http://')) {
+      return raw
+    }
+  }
+  return ''
+}
+
+function resolveAttachmentFileUrl(attachment: UserMessageAttachment): string {
+  const candidates = [
+    attachment.modelUrl,
+    attachment.previewUrl,
+    attachment.ref,
+  ]
+  for (const candidate of candidates) {
+    const raw = String(candidate || '').trim()
+    if (!raw) {
+      continue
     }
     if (raw.startsWith('https://') || raw.startsWith('http://')) {
       return raw
@@ -201,17 +225,35 @@ function buildInputFileAttachmentPart(attachment: UserMessageAttachment): Record
     return null
   }
 
+  const part: Record<string, unknown> = {
+    type: 'input_file',
+  }
+
+  const filename = String(attachment.name || '').trim()
+  const providerFileId = String(attachment.providerFileId || '').trim()
+  if (providerFileId) {
+    part.file_id = providerFileId
+    if (filename) {
+      part.filename = filename
+    }
+    return part
+  }
+
+  const fileUrl = resolveAttachmentFileUrl(attachment)
+  if (fileUrl) {
+    part.file_url = fileUrl
+    if (filename) {
+      part.filename = filename
+    }
+    return part
+  }
+
   const fileData = resolveAttachmentFileData(attachment)
   if (!fileData) {
     return null
   }
 
-  const part: Record<string, unknown> = {
-    type: 'input_file',
-    file_data: fileData,
-  }
-
-  const filename = String(attachment.name || '').trim()
+  part.file_data = fileData
   if (filename) {
     part.filename = filename
   }

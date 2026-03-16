@@ -4,6 +4,7 @@ import type { IChatInnerItemMeta, IChatItemStatus, IInnerItemMeta, ISendState } 
 import { useFloating } from '@floating-ui/vue'
 import { encode } from 'gpt-tokenizer'
 import { $endApi } from '~/composables/api/base'
+import { useAttachmentCapability } from '~/composables/useAttachmentCapability'
 import { globalOptions } from '~/constants'
 import { cur, tipsVisible } from '../chat/input-tips'
 import InputHeaderFiles from './addon/InputHeaderFiles.vue'
@@ -201,6 +202,15 @@ watch(
 
 // watch(() => template.value, (val) => { emits('selectTemplate', val?.description ? val : null) })
 
+const tokenLimit = computed(() => userStore.value.isLogin ? 8192 : 256)
+
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+const {
+  refreshCapability,
+  ensureAttachmentAllowed,
+  normalizeAttachmentError,
+} = useAttachmentCapability()
+
 function focusInput() {
   const el = document.getElementById('main-input')
 
@@ -209,7 +219,10 @@ function focusInput() {
   })
 }
 
-onMounted(focusInput)
+onMounted(() => {
+  focusInput()
+  void refreshCapability()
+})
 
 function handleTemplateSelect(data: any) {
   template.value = data
@@ -223,10 +236,6 @@ function handleModelSelect(model: string) {
 
   input.value.text = ''
 }
-
-const tokenLimit = computed(() => userStore.value.isLogin ? 8192 : 256)
-
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 
 function resolveUploadedFileUrl(payload: Record<string, any>): string {
   const absoluteUrl = String(payload?.url || '').trim()
@@ -247,7 +256,7 @@ function resolveUploadedFileUrl(payload: Record<string, any>): string {
   return new URL(`${endsUrl}${filename}`).href
 }
 
-function handleAttachmentUpload(file: File) {
+async function handleAttachmentUpload(file: File) {
   const isImage = file.type.startsWith('image/')
   const obj = reactive<any>({
     sync: false,
@@ -270,14 +279,33 @@ function handleAttachmentUpload(file: File) {
 
   input.value.files.push(meta)
 
-  if (file.size > MAX_ATTACHMENT_BYTES) {
-    obj.error = '文件太大，最多 10MB'
+  let maxBytes = MAX_ATTACHMENT_BYTES
+  try {
+    const capability = await ensureAttachmentAllowed()
+    maxBytes = Number.isFinite(capability.maxBytes) ? capability.maxBytes : MAX_ATTACHMENT_BYTES
+  }
+  catch (error) {
+    obj.error = normalizeAttachmentError(error)
+    return
+  }
+
+  if (file.size > maxBytes) {
+    const maxMb = Math.max(1, Math.floor(maxBytes / 1024 / 1024))
+    obj.error = `文件太大，最多 ${maxMb}MB`
     return
   }
 
   const uploadNow = async () => {
     obj.syncing = true
-    const res = await $endApi.v1.common.upload(file)
+    let res: any
+    try {
+      res = await $endApi.v1.common.upload(file)
+    }
+    catch (error) {
+      obj.syncing = false
+      obj.error = normalizeAttachmentError(error)
+      return
+    }
     obj.syncing = false
 
     if (res.code === 200) {
@@ -293,7 +321,7 @@ function handleAttachmentUpload(file: File) {
       return
     }
 
-    obj.error = res.message
+    obj.error = normalizeAttachmentError(res.message || '附件上传失败')
   }
 
   if (!isImage) {
@@ -345,7 +373,7 @@ function handlePaste(e: ClipboardEvent) {
   e.preventDefault()
 
   for (const file of files) {
-    handleAttachmentUpload(file)
+    void handleAttachmentUpload(file)
   }
 }
 
@@ -363,7 +391,7 @@ onChange((files) => {
     return
 
   for (const file of files)
-    handleAttachmentUpload(file)
+    void handleAttachmentUpload(file)
 })
 
 function handleImagePlus() {

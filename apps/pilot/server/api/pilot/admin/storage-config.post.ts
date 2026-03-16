@@ -1,6 +1,6 @@
 import { createError } from 'h3'
 import { requirePilotAdmin } from '../../../utils/pilot-admin-auth'
-import { updatePilotAdminStorageSettings } from '../../../utils/pilot-admin-storage-config'
+import { updatePilotAdminSettings } from '../../../utils/pilot-admin-settings'
 
 interface StorageConfigBody {
   attachmentProvider?: string
@@ -8,6 +8,7 @@ interface StorageConfigBody {
   minioEndpoint?: string
   minioBucket?: string
   minioAccessKey?: string
+  clearMinioAccessKey?: boolean
   minioSecretKey?: string
   clearMinioSecretKey?: boolean
   minioRegion?: string
@@ -38,30 +39,24 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const settings = await updatePilotAdminStorageSettings(event, {
-    attachmentProvider,
-    attachmentPublicBaseUrl: body?.attachmentPublicBaseUrl,
-    minioEndpoint: body?.minioEndpoint,
-    minioBucket: body?.minioBucket,
-    minioAccessKey: body?.minioAccessKey,
-    minioSecretKey: body?.clearMinioSecretKey ? '' : body?.minioSecretKey,
-    minioRegion: body?.minioRegion,
-    minioForcePathStyle: body?.minioForcePathStyle,
-    minioPublicBaseUrl: body?.minioPublicBaseUrl,
+  const settings = await updatePilotAdminSettings(event, {
+    storage: {
+      attachmentProvider,
+      attachmentPublicBaseUrl: body?.attachmentPublicBaseUrl,
+      minioEndpoint: body?.minioEndpoint,
+      minioBucket: body?.minioBucket,
+      minioAccessKey: body?.minioAccessKey,
+      clearMinioAccessKey: body?.clearMinioAccessKey,
+      minioSecretKey: body?.minioSecretKey,
+      clearMinioSecretKey: body?.clearMinioSecretKey,
+      minioRegion: body?.minioRegion,
+      minioForcePathStyle: body?.minioForcePathStyle,
+      minioPublicBaseUrl: body?.minioPublicBaseUrl,
+    },
   })
 
   return {
     ok: true,
-    settings: {
-      attachmentProvider: settings.attachmentProvider || 'auto',
-      attachmentPublicBaseUrl: settings.attachmentPublicBaseUrl || '',
-      minioEndpoint: settings.minioEndpoint || '',
-      minioBucket: settings.minioBucket || '',
-      minioAccessKey: settings.minioAccessKey || '',
-      minioRegion: settings.minioRegion || 'us-east-1',
-      minioForcePathStyle: settings.minioForcePathStyle !== false,
-      minioPublicBaseUrl: settings.minioPublicBaseUrl || '',
-      hasMinioSecretKey: Boolean(settings.minioSecretKey),
-    },
+    settings: settings.storage,
   }
 })

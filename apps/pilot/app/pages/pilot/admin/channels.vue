@@ -295,6 +295,11 @@ onMounted(() => {
       <p class="pilot-admin-channels__desc">
         配置可用模型渠道。默认渠道用于未指定 channel_id 的请求。
       </p>
+      <p class="pilot-admin-channels__desc">
+        管理入口已迁移到
+        <a href="/cms/system/pilot-settings">/cms/system/pilot-settings</a>
+        ，此页面将在兼容窗口结束后下线。
+      </p>
 
       <div v-if="loading" class="pilot-admin-channels__hint">
         正在加载渠道配置...

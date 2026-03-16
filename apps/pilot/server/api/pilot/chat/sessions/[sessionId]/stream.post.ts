@@ -20,6 +20,10 @@ import {
 import { createError } from 'h3'
 import { requirePilotAuth } from '../../../../../utils/auth'
 import {
+  PilotAttachmentDeliveryError,
+  resolvePilotAttachmentDeliveriesOrThrow,
+} from '../../../../../utils/pilot-attachment-delivery'
+import {
   getPilotAttachmentObject,
   resolvePilotAttachmentModelUrl,
 } from '../../../../../utils/pilot-attachment-storage'
@@ -47,27 +51,8 @@ interface StreamConnectionContext {
   disconnected: boolean
 }
 
-const INLINE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
-const INLINE_IMAGE_TOTAL_MAX_BYTES = 12 * 1024 * 1024
-const INLINE_FILE_MAX_BYTES = 10 * 1024 * 1024
-const INLINE_FILE_TOTAL_MAX_BYTES = 16 * 1024 * 1024
-
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-function encodeBytesToBase64(bytes: Uint8Array): string {
-  if (bytes.length <= 0) {
-    return ''
-  }
-
-  const chunkSize = 0x8000
-  let binary = ''
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    const chunk = bytes.subarray(index, index + chunkSize)
-    binary += String.fromCharCode(...chunk)
-  }
-  return btoa(binary)
 }
 
 function getWaitUntilHandler(event: H3Event): ((promise: Promise<unknown>) => void) | null {
@@ -149,76 +134,78 @@ async function resolveMessageAttachments(
     }>>
   },
   inputAttachments: UserMessageInput['attachments'],
-): Promise<UserMessageAttachment[]> {
+): Promise<{
+  attachments: UserMessageAttachment[]
+  summary: Record<string, unknown>
+}> {
   if (!Array.isArray(inputAttachments) || inputAttachments.length <= 0) {
-    return []
+    return {
+      attachments: [],
+      summary: {
+        total: 0,
+        resolved: 0,
+        unresolved: 0,
+        idCount: 0,
+        urlCount: 0,
+        base64Count: 0,
+        loadedObjectCount: 0,
+        inlinedImageBytes: 0,
+        inlinedFileBytes: 0,
+      },
+    }
   }
 
   const records = await storeRuntime.listAttachments(sessionId)
   const recordMap = new Map(records.map(item => [item.id, item]))
-  const result: UserMessageAttachment[] = []
-  let inlineImageBytes = 0
-  let inlineFileBytes = 0
-
-  for (const item of inputAttachments) {
-    const attachmentId = String(item?.id || '').trim()
-    if (!attachmentId) {
-      continue
-    }
-
-    const record = recordMap.get(attachmentId)
-    if (!record) {
-      continue
-    }
-
-    const previewUrl = await resolvePilotAttachmentModelUrl(event, {
-      sessionId,
-      attachmentId: record.id,
-      ref: record.ref,
-    })
-
-    const attachment: UserMessageAttachment = {
-      id: record.id,
-      type: record.kind,
-      ref: record.ref,
-      name: record.name,
-      mimeType: record.mimeType,
-      size: record.size,
-      previewUrl,
-    }
-
-    const object = await getPilotAttachmentObject(event, record.ref)
-    if (attachment.type === 'image') {
-      if (object && object.mimeType.startsWith('image/')) {
-        const objectBytes = Number(object.bytes.byteLength || 0)
-        const canInline = objectBytes > 0
-          && objectBytes <= INLINE_IMAGE_MAX_BYTES
-          && (inlineImageBytes + objectBytes) <= INLINE_IMAGE_TOTAL_MAX_BYTES
-        if (canInline) {
-          const encoded = encodeBytesToBase64(object.bytes)
-          attachment.dataUrl = `data:${object.mimeType};base64,${encoded}`
-          inlineImageBytes += objectBytes
-        }
+  const deliveryInputs = await Promise.all(
+    inputAttachments.map(async (item) => {
+      const attachmentId = String(item?.id || '').trim()
+      if (!attachmentId) {
+        return null
       }
-    }
-    else if (object && object.bytes.byteLength > 0) {
-      const objectBytes = Number(object.bytes.byteLength || 0)
-      attachment.mimeType = attachment.mimeType || object.mimeType
-      attachment.size = attachment.size || objectBytes
-      const canInline = objectBytes <= INLINE_FILE_MAX_BYTES
-        && (inlineFileBytes + objectBytes) <= INLINE_FILE_TOTAL_MAX_BYTES
-      if (canInline) {
-        const mimeType = attachment.mimeType || object.mimeType || 'application/octet-stream'
-        const encoded = encodeBytesToBase64(object.bytes)
-        attachment.dataUrl = `data:${mimeType};base64,${encoded}`
-        inlineFileBytes += objectBytes
+      const record = recordMap.get(attachmentId)
+      if (!record) {
+        return null
       }
-    }
 
-    result.push(attachment)
+      const modelUrl = await resolvePilotAttachmentModelUrl(event, {
+        sessionId,
+        attachmentId: record.id,
+        ref: record.ref,
+      })
+
+      return {
+        id: record.id,
+        type: record.kind,
+        ref: record.ref,
+        name: record.name,
+        mimeType: record.mimeType,
+        size: record.size,
+        modelUrl,
+        previewUrl: modelUrl,
+        loadObject: async () => {
+          const object = await getPilotAttachmentObject(event, record.ref)
+          if (!object) {
+            return null
+          }
+          return {
+            bytes: object.bytes,
+            mimeType: object.mimeType,
+            size: object.size,
+          }
+        },
+      }
+    }),
+  )
+
+  const normalizedInputs = deliveryInputs.filter((item): item is NonNullable<typeof item> => Boolean(item))
+  const resolved = await resolvePilotAttachmentDeliveriesOrThrow(normalizedInputs, {
+    concurrency: 3,
+  })
+  return {
+    attachments: resolved.attachments,
+    summary: resolved.summary as unknown as Record<string, unknown>,
   }
-
-  return result
 }
 
 async function followTraceTail(options: {
@@ -402,19 +389,155 @@ export default defineEventHandler(async (event) => {
             })
           }, PILOT_DEFAULT_KEEPALIVE_MS)
 
-          const resolvedAttachments = await resolveMessageAttachments(
-            event,
-            sessionId,
-            store.runtime,
-            inputAttachments,
-          )
+          let resolvedAttachments: {
+            attachments: UserMessageAttachment[]
+            summary: Record<string, unknown>
+          } = {
+            attachments: [],
+            summary: {
+              total: 0,
+              resolved: 0,
+              unresolved: 0,
+              idCount: 0,
+              urlCount: 0,
+              base64Count: 0,
+              loadedObjectCount: 0,
+              inlinedImageBytes: 0,
+              inlinedFileBytes: 0,
+            },
+          }
+
+          if (hasInputAttachments) {
+            const attachmentResolveStartedAt = Date.now()
+            await emitEvent({
+              type: 'run.audit',
+              payload: {
+                auditType: 'attachment.resolve.start',
+                attachmentCount: inputAttachments?.length || 0,
+              },
+            }, persistStreamLifecycle
+              ? {
+                  persist: true,
+                  tracePayload: {
+                    auditType: 'attachment.resolve.start',
+                    attachmentCount: inputAttachments?.length || 0,
+                  },
+                }
+              : undefined)
+
+            try {
+              resolvedAttachments = await resolveMessageAttachments(
+                event,
+                sessionId,
+                store.runtime,
+                inputAttachments,
+              )
+
+              await emitEvent({
+                type: 'run.audit',
+                payload: {
+                  auditType: 'attachment.resolve.end',
+                  status: 'ok',
+                  durationMs: Date.now() - attachmentResolveStartedAt,
+                  ...resolvedAttachments.summary,
+                },
+              }, persistStreamLifecycle
+                ? {
+                    persist: true,
+                    tracePayload: {
+                      auditType: 'attachment.resolve.end',
+                      status: 'ok',
+                      durationMs: Date.now() - attachmentResolveStartedAt,
+                      ...resolvedAttachments.summary,
+                    },
+                  }
+                : undefined)
+
+              await emitEvent({
+                type: 'run.audit',
+                payload: {
+                  auditType: 'attachment.delivery.summary',
+                  ...resolvedAttachments.summary,
+                },
+              }, persistStreamLifecycle
+                ? {
+                    persist: true,
+                    tracePayload: {
+                      auditType: 'attachment.delivery.summary',
+                      ...resolvedAttachments.summary,
+                    },
+                  }
+                : undefined)
+            }
+            catch (error) {
+              if (error instanceof PilotAttachmentDeliveryError) {
+                const durationMs = Date.now() - attachmentResolveStartedAt
+                await emitEvent({
+                  type: 'run.audit',
+                  payload: {
+                    auditType: 'attachment.resolve.end',
+                    status: 'failed',
+                    code: error.code,
+                    durationMs,
+                    failureCount: error.failures.length,
+                    ...error.summary,
+                  },
+                }, persistStreamLifecycle
+                  ? {
+                      persist: true,
+                      tracePayload: {
+                        auditType: 'attachment.resolve.end',
+                        status: 'failed',
+                        code: error.code,
+                        durationMs,
+                        failureCount: error.failures.length,
+                        ...error.summary,
+                      },
+                    }
+                  : undefined)
+
+                await emitEvent({
+                  type: 'run.audit',
+                  payload: {
+                    auditType: 'attachment.delivery.summary',
+                    status: 'failed',
+                    code: error.code,
+                    failureCount: error.failures.length,
+                    ...error.summary,
+                  },
+                }, persistStreamLifecycle
+                  ? {
+                      persist: true,
+                      tracePayload: {
+                        auditType: 'attachment.delivery.summary',
+                        status: 'failed',
+                        code: error.code,
+                        failureCount: error.failures.length,
+                        ...error.summary,
+                      },
+                    }
+                  : undefined)
+
+                throw createError({
+                  statusCode: 422,
+                  statusMessage: error.message,
+                  data: {
+                    code: error.code,
+                    failures: error.failures,
+                    summary: error.summary,
+                  },
+                })
+              }
+              throw error
+            }
+          }
 
           const result = await runPilotConversationStream({
             runtime,
             sessionId,
             message,
             fromSeq,
-            attachments: resolvedAttachments,
+            attachments: resolvedAttachments.attachments,
             metadata: toPilotSafeRecord(body?.metadata),
             keepaliveMs: PILOT_DEFAULT_KEEPALIVE_MS,
             replayLimit: PILOT_DEFAULT_TRACE_REPLAY_LIMIT,

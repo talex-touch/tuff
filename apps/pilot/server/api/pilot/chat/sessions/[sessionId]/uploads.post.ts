@@ -1,10 +1,12 @@
+import type { H3Event } from 'h3'
 import { createHmac, randomUUID } from 'node:crypto'
-import { createError } from 'h3'
+import { createError, getHeader } from 'h3'
 import { requirePilotAuth } from '../../../../../utils/auth'
 import {
   buildPilotAttachmentPreviewUrl,
   getPilotAttachmentUploadAvailability,
   putPilotAttachmentObject,
+  resolvePilotAttachmentModelUrl,
 } from '../../../../../utils/pilot-attachment-storage'
 import { resolvePilotConfigString } from '../../../../../utils/pilot-config'
 import { requireSessionId } from '../../../../../utils/pilot-http'
@@ -15,6 +17,13 @@ interface UploadRequestBody {
   mimeType?: string
   size?: number
   contentBase64?: string
+}
+
+interface ParsedUploadPayload {
+  name: string
+  mimeType: string
+  bytes: Uint8Array
+  source: 'base64' | 'multipart'
 }
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
@@ -37,20 +46,63 @@ function decodeBase64ToBytes(contentBase64: string): Uint8Array {
   return bytes
 }
 
+async function parseMultipartUpload(event: H3Event): Promise<ParsedUploadPayload> {
+  const files = await readMultipartFormData(event)
+  const first = files?.find(item => item?.data && item.data.byteLength > 0)
+  if (!first || !first.data) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'file is required',
+    })
+  }
+
+  return {
+    name: safeFileName(String(first.filename || 'attachment.bin')),
+    mimeType: String(first.type || 'application/octet-stream').slice(0, 120),
+    bytes: Uint8Array.from(first.data),
+    source: 'multipart',
+  }
+}
+
+async function parseBase64Upload(event: H3Event): Promise<ParsedUploadPayload> {
+  const body = await readBody<UploadRequestBody>(event)
+  if (typeof body?.contentBase64 !== 'string' || !body.contentBase64.trim()) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'contentBase64 is required',
+    })
+  }
+
+  let bytes: Uint8Array
+  try {
+    bytes = decodeBase64ToBytes(body.contentBase64)
+  }
+  catch {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'contentBase64 is invalid',
+    })
+  }
+
+  return {
+    name: safeFileName(String(body?.name || 'attachment.bin')),
+    mimeType: String(body?.mimeType || 'application/octet-stream').slice(0, 120),
+    bytes,
+    source: 'base64',
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const { userId } = requirePilotAuth(event)
   const sessionId = requireSessionId(event)
-  const body = await readBody<UploadRequestBody>(event)
-
-  const name = safeFileName(String(body?.name || 'attachment.bin'))
-  const mimeType = String(body?.mimeType || 'application/octet-stream').slice(0, 120)
-  const size = Number.isFinite(body?.size) ? Math.max(0, Number(body?.size)) : 0
-  if (size > MAX_ATTACHMENT_BYTES) {
-    throw createError({
-      statusCode: 413,
-      statusMessage: 'file is too large (max 10MB)',
-    })
-  }
+  const contentType = String(getHeader(event, 'content-type') || '').toLowerCase()
+  const parsed = contentType.includes('multipart/form-data')
+    ? await parseMultipartUpload(event)
+    : await parseBase64Upload(event)
+  const name = parsed.name
+  const mimeType = parsed.mimeType
+  const binary = parsed.bytes
+  const size = binary.byteLength
 
   const attachmentId = randomUUID()
   const objectKey = `pilot/${userId}/${sessionId}/${attachmentId}/${name}`
@@ -67,24 +119,6 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 400,
       statusMessage: availability.reason || 'Attachments are unavailable in current environment.',
-    })
-  }
-
-  if (typeof body?.contentBase64 !== 'string' || !body.contentBase64.trim()) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'contentBase64 is required',
-    })
-  }
-
-  let binary: Uint8Array
-  try {
-    binary = decodeBase64ToBytes(body.contentBase64)
-  }
-  catch {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'contentBase64 is invalid',
     })
   }
 
@@ -130,15 +164,22 @@ export default defineEventHandler(async (event) => {
   await store.runtime.ensureSchema()
 
   const ref = storedRef || `memory://${objectKey}`
+  const kind = mimeType.startsWith('image/') ? 'image' : 'file'
   await store.runtime.saveAttachment({
     id: attachmentId,
     sessionId,
-    kind: mimeType.startsWith('image/') ? 'image' : 'file',
+    kind,
     name,
     mimeType,
     size,
     ref,
     createdAt: new Date().toISOString(),
+  })
+  const previewUrl = buildPilotAttachmentPreviewUrl(sessionId, attachmentId)
+  const modelUrl = await resolvePilotAttachmentModelUrl(event, {
+    sessionId,
+    attachmentId,
+    ref,
   })
 
   return {
@@ -148,8 +189,12 @@ export default defineEventHandler(async (event) => {
       name,
       mimeType,
       size,
+      kind,
+      type: kind,
       ref,
-      previewUrl: buildPilotAttachmentPreviewUrl(sessionId, attachmentId),
+      previewUrl,
+      modelUrl,
+      deliverySource: 'url',
     },
     upload: {
       method: 'PUT',
@@ -159,5 +204,6 @@ export default defineEventHandler(async (event) => {
       payload: signPayload,
     },
     directUploaded: true,
+    source: parsed.source,
   }
 })
