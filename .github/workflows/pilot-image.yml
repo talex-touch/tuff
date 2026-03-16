@@ -77,7 +77,6 @@ jobs:
           echo "Digest: ${{ steps.build.outputs.digest }}"
 
       - name: Trigger 1Panel deploy webhook
-        if: ${{ secrets.ONEPANEL_WEBHOOK_URL != '' && secrets.ONEPANEL_WEBHOOK_TOKEN != '' }}
         env:
           WEBHOOK_URL: ${{ secrets.ONEPANEL_WEBHOOK_URL }}
           WEBHOOK_TOKEN: ${{ secrets.ONEPANEL_WEBHOOK_TOKEN }}
@@ -88,6 +87,11 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+
+          if [ -z "${WEBHOOK_URL}" ] || [ -z "${WEBHOOK_TOKEN}" ]; then
+            echo "ONEPANEL_WEBHOOK_URL or ONEPANEL_WEBHOOK_TOKEN is empty, skip webhook deploy trigger."
+            exit 0
+          fi
 
           payload="$(cat <<EOF
           {
@@ -109,8 +113,3 @@ jobs:
             --header "X-Pilot-Token: ${WEBHOOK_TOKEN}" \
             --data "${payload}" \
             "${WEBHOOK_URL}/deploy"
-
-      - name: Webhook skipped notice
-        if: ${{ secrets.ONEPANEL_WEBHOOK_URL == '' || secrets.ONEPANEL_WEBHOOK_TOKEN == '' }}
-        run: |
-          echo "ONEPANEL_WEBHOOK_URL or ONEPANEL_WEBHOOK_TOKEN is empty, skip webhook deploy trigger."
