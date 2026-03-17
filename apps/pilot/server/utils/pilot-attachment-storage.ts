@@ -427,7 +427,7 @@ export function parsePilotAttachmentRef(ref: string | null | undefined): PilotAt
 export function buildPilotAttachmentPreviewUrl(sessionId: string, attachmentId: string): string {
   const normalizedSessionId = encodeURIComponent(String(sessionId || '').trim())
   const normalizedAttachmentId = encodeURIComponent(String(attachmentId || '').trim())
-  return `/api/pilot/chat/sessions/${normalizedSessionId}/attachments/${normalizedAttachmentId}/content`
+  return `/api/chat/sessions/${normalizedSessionId}/attachments/${normalizedAttachmentId}/content`
 }
 
 function resolveWriteProvider(

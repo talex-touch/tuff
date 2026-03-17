@@ -14,7 +14,11 @@ interface CreateTurnBody extends Record<string, unknown> {
   message?: string
   attachments?: unknown[]
   topic?: string
+  modelId?: string
   model?: string
+  internet?: boolean
+  thinking?: boolean
+  routeComboId?: string
 }
 
 export default defineEventHandler(async (event) => {
@@ -63,9 +67,13 @@ export default defineEventHandler(async (event) => {
     chat_id: sessionId,
     message,
     attachments: inlineAttachments,
+    modelId: String(body?.modelId || body?.model || '').trim() || undefined,
+    routeComboId: String(body?.routeComboId || '').trim() || undefined,
+    internet: typeof body?.internet === 'boolean' ? body.internet : undefined,
+    thinking: typeof body?.thinking === 'boolean' ? body.thinking : undefined,
   })
 
-  const model = String(body?.model || '').trim()
+  const model = String(body?.modelId || body?.model || '').trim()
   const queued = await enqueueChatTurn(event, {
     sessionId,
     userId,

@@ -128,6 +128,13 @@ curl "http://127.0.0.1:19021/health"
    - `ONEPANEL_WEBHOOK_TOKEN`（与 `PILOT_WEBHOOK_TOKEN` 保持一致）
 5. `pilot-image.yml`（`master` push 触发）在镜像发布后会自动 `POST /deploy` 触发重建，并携带 `X-Pilot-Token` 请求头。
 
+### 5.1）自动触发前提（常见误区）
+
+- 本地 `git commit` 不会触发 1Panel 自动更新；必须 `git push origin master`（且命中 `pilot-image.yml` 的 `paths` 过滤）才会运行部署流水线。
+- GitHub Actions 侧必须配置 `ONEPANEL_WEBHOOK_URL` 与 `ONEPANEL_WEBHOOK_TOKEN`；任一为空会直接 `skip webhook deploy trigger`。
+- 1Panel 侧 webhook 服务必须健康且可达（`/health` 正常、`X-Pilot-Token` 与 `PILOT_WEBHOOK_TOKEN` 一致、仓库/分支白名单匹配）。
+- 若自动触发未生效，可走 `ssh home` 手动兜底（见“3）手动部署”步骤）。
+
 ## 6）回滚机制
 
 - 记录当前运行镜像

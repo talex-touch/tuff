@@ -1,7 +1,82 @@
 import type { H3Event } from 'h3'
-import { ensurePilotCompatSeed } from './pilot-compat-store'
+import {
+  ensurePilotCompatSeed,
+  getPilotCompatEntity,
+  upsertPilotCompatEntity,
+} from './pilot-compat-store'
 
 const now = () => new Date().toISOString()
+
+type MenuSeedNode = Record<string, any> & {
+  id: string
+  children?: MenuSeedNode[]
+}
+
+function flattenMenuSeedTree(list: MenuSeedNode[]): MenuSeedNode[] {
+  const rows: MenuSeedNode[] = []
+
+  const visit = (item: MenuSeedNode, fallbackParentId: string | null = null) => {
+    const id = String(item.id || '').trim()
+    if (!id) {
+      return
+    }
+
+    const { children, ...rest } = item
+    rows.push({
+      ...rest,
+      id,
+      parentId: item.parentId ?? fallbackParentId ?? null,
+    })
+
+    if (!Array.isArray(children) || children.length <= 0) {
+      return
+    }
+
+    for (const child of children) {
+      if (!child || typeof child !== 'object') {
+        continue
+      }
+      visit(child as MenuSeedNode, id)
+    }
+  }
+
+  for (const item of list) {
+    if (!item || typeof item !== 'object') {
+      continue
+    }
+    visit(item)
+  }
+
+  return rows
+}
+
+async function ensureSystemMenuBackfill(event: H3Event, seeds: MenuSeedNode[]): Promise<void> {
+  const rows = flattenMenuSeedTree(seeds)
+  for (const row of rows) {
+    const id = String(row.id || '').trim()
+    if (!id) {
+      continue
+    }
+
+    const existing = await getPilotCompatEntity(event, 'system.menus', id)
+    if (existing) {
+      continue
+    }
+
+    const createdAt = String(row.createdAt || now())
+    await upsertPilotCompatEntity(event, {
+      domain: 'system.menus',
+      id,
+      payload: {
+        ...row,
+        id,
+        createdAt,
+        updatedAt: createdAt,
+      },
+      merge: false,
+    })
+  }
+}
 
 export async function ensureSystemRoleSeed(event: H3Event): Promise<void> {
   const createdAt = now()
@@ -70,7 +145,7 @@ export async function ensureSystemDeptSeed(event: H3Event): Promise<void> {
 
 export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
   const createdAt = now()
-  await ensurePilotCompatSeed(event, 'system.menus', [
+  const menuSeeds: MenuSeedNode[] = [
     {
       id: 'menu_system',
       name: '系统管理',
@@ -93,7 +168,7 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
           type: 1,
           orderNo: 10,
           path: '/system/user',
-          component: '/pages/cms/system/user.vue',
+          component: '/pages/admin/system/user.vue',
           parentId: 'menu_system',
           keepAlive: 1,
           show: 1,
@@ -111,7 +186,7 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
           type: 1,
           orderNo: 20,
           path: '/system/role',
-          component: '/pages/cms/system/role.vue',
+          component: '/pages/admin/system/role.vue',
           parentId: 'menu_system',
           keepAlive: 1,
           show: 1,
@@ -129,7 +204,7 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
           type: 1,
           orderNo: 30,
           path: '/system/menu',
-          component: '/pages/cms/system/menu.vue',
+          component: '/pages/admin/system/menu.vue',
           parentId: 'menu_system',
           keepAlive: 1,
           show: 1,
@@ -147,7 +222,7 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
           type: 1,
           orderNo: 40,
           path: '/system/dept',
-          component: '/pages/cms/system/dept.vue',
+          component: '/pages/admin/system/dept.vue',
           parentId: 'menu_system',
           keepAlive: 1,
           show: 1,
@@ -165,7 +240,7 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
           type: 1,
           orderNo: 50,
           path: '/system/dict-type',
-          component: '/pages/cms/system/dict-type.vue',
+          component: '/pages/admin/system/dict-type.vue',
           parentId: 'menu_system',
           keepAlive: 1,
           show: 1,
@@ -183,7 +258,7 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
           type: 1,
           orderNo: 60,
           path: '/system/dict-item',
-          component: '/pages/cms/system/dict-item.vue',
+          component: '/pages/admin/system/dict-item.vue',
           parentId: 'menu_system',
           keepAlive: 1,
           show: 1,
@@ -201,7 +276,7 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
           type: 1,
           orderNo: 70,
           path: '/system/orders',
-          component: '/pages/cms/system/orders.vue',
+          component: '/pages/admin/system/orders.vue',
           parentId: 'menu_system',
           keepAlive: 1,
           show: 1,
@@ -219,7 +294,7 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
           type: 1,
           orderNo: 80,
           path: '/system/coupon',
-          component: '/pages/cms/system/coupon.vue',
+          component: '/pages/admin/system/coupon.vue',
           parentId: 'menu_system',
           keepAlive: 1,
           show: 1,
@@ -257,7 +332,7 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
           type: 1,
           orderNo: 10,
           path: '/content/doc',
-          component: '/pages/cms/content/document.vue',
+          component: '/pages/admin/content/document.vue',
           parentId: 'menu_content',
           keepAlive: 1,
           show: 1,
@@ -275,7 +350,7 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
           type: 1,
           orderNo: 20,
           path: '/content/banner',
-          component: '/pages/cms/content/banner.vue',
+          component: '/pages/admin/content/banner.vue',
           parentId: 'menu_content',
           keepAlive: 1,
           show: 1,
@@ -293,7 +368,7 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
           type: 1,
           orderNo: 30,
           path: '/system/feedbackManage',
-          component: '/pages/cms/system/feedbackManage.vue',
+          component: '/pages/admin/system/feedbackManage.vue',
           parentId: 'menu_content',
           keepAlive: 1,
           show: 1,
@@ -301,6 +376,62 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
           meta: {
             show: true,
             icon: 'i-carbon-chat',
+          },
+          createdAt,
+          updatedAt: createdAt,
+        },
+      ],
+      createdAt,
+      updatedAt: createdAt,
+    },
+    {
+      id: 'menu_app',
+      name: 'App 管理',
+      type: 0,
+      orderNo: 70,
+      path: '/app',
+      component: '',
+      parentId: null,
+      keepAlive: 1,
+      show: 1,
+      status: 1,
+      meta: {
+        show: true,
+        icon: 'i-carbon-application',
+      },
+      children: [
+        {
+          id: 'menu_app_channels',
+          name: 'Channels',
+          type: 1,
+          orderNo: 10,
+          path: '/system/channels',
+          component: '/pages/admin/system/channels.vue',
+          parentId: 'menu_app',
+          keepAlive: 1,
+          show: 1,
+          status: 1,
+          meta: {
+            show: true,
+            icon: 'i-carbon-settings-adjust',
+          },
+          createdAt,
+          updatedAt: createdAt,
+        },
+        {
+          id: 'menu_app_storage',
+          name: 'Storage',
+          type: 1,
+          orderNo: 20,
+          path: '/system/storage',
+          component: '/pages/admin/system/storage.vue',
+          parentId: 'menu_app',
+          keepAlive: 1,
+          show: 1,
+          status: 1,
+          meta: {
+            show: true,
+            icon: 'i-carbon-document',
           },
           createdAt,
           updatedAt: createdAt,
@@ -331,7 +462,7 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
           type: 1,
           orderNo: 10,
           path: '/aigc/prompt',
-          component: '/pages/cms/aigc/prompt.vue',
+          component: '/pages/admin/aigc/prompt.vue',
           parentId: 'menu_aigc',
           keepAlive: 1,
           show: 1,
@@ -349,7 +480,7 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
           type: 1,
           orderNo: 20,
           path: '/aigc/log',
-          component: '/pages/cms/aigc/log.vue',
+          component: '/pages/admin/aigc/log.vue',
           parentId: 'menu_aigc',
           keepAlive: 1,
           show: 1,
@@ -365,7 +496,10 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
       createdAt,
       updatedAt: createdAt,
     },
-  ])
+  ]
+
+  await ensurePilotCompatSeed(event, 'system.menus', menuSeeds)
+  await ensureSystemMenuBackfill(event, menuSeeds)
 }
 
 export async function ensureAccountHistorySeed(event: H3Event): Promise<void> {

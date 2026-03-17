@@ -1,22 +1,34 @@
 import type { AgentEnvelope, DeepAgentAuditRecord, UserMessageAttachment } from '@talex-touch/tuff-intelligence'
 import type { H3Event } from 'h3'
-import type { QuotaUserTurnAttachment } from '../../utils/quota-history-codec'
 import process from 'node:process'
 import { toDeepAgentErrorDetail } from '@talex-touch/tuff-intelligence'
-import { getRequestURL } from 'h3'
 import { requirePilotAuth } from '../../utils/auth'
+import { getPilotAdminRoutingConfig } from '../../utils/pilot-admin-routing-config'
 import {
   PilotAttachmentDeliveryError,
-  resolvePilotAttachmentDeliveriesOrThrow,
 } from '../../utils/pilot-attachment-delivery'
 import {
-  resolvePilotChannelSelection,
-} from '../../utils/pilot-channel'
+  createTitleSseResponse,
+  randomId,
+  resolveCompatAttachments,
+  resolveExecutorModel,
+  runWithExecutorTimeout,
+  splitTextIntoChunks,
+  toTitleMessages,
+} from '../../utils/pilot-executor-utils'
+import { resolveLangGraphOrchestratorDecision } from '../../utils/pilot-langgraph-orchestrator'
 import {
   ensurePilotQuotaSessionSchema,
   getPilotQuotaSessionByChatId,
   upsertPilotQuotaSession,
 } from '../../utils/pilot-quota-session'
+import { markRouteFailure, markRouteSuccess } from '../../utils/pilot-route-health'
+import {
+  recordPilotRoutingMetric,
+} from '../../utils/pilot-routing-metrics'
+import {
+  resolvePilotRoutingSelection,
+} from '../../utils/pilot-routing-resolver'
 import { createPilotRuntime } from '../../utils/pilot-runtime'
 import { generateTitle } from '../../utils/pilot-title'
 import { quotaError } from '../../utils/quota-api'
@@ -27,25 +39,21 @@ import {
   getQuotaHistory,
   upsertQuotaHistory,
 } from '../../utils/quota-history-store'
-import { getQuotaUploadObject } from '../../utils/quota-upload-store'
 
 interface QuotaExecutorBody {
   chat_id?: string
   channel_id?: string
   topic?: string
+  modelId?: string
   model?: string
+  internet?: boolean
+  thinking?: boolean
+  routeComboId?: string
+  queueWaitMs?: number
   temperature?: number
   generateTitle?: boolean
   messages?: unknown[]
 }
-
-const LEGACY_QUOTA_MODEL_ALIASES = new Set([
-  'this-title',
-  'this-normal',
-  'this-normal-turbo',
-  'this-normal-ultra',
-  'this-normal-ultimate',
-])
 
 interface ExecutorErrorContext {
   requestId?: string
@@ -91,7 +99,19 @@ interface ExecutorTraceContext {
   endpoint: string
   timeoutMs: number
   model: string
+  modelId: string
+  providerModel: string
+  routeComboId: string
+  queueWaitMs: number
+  thinking: boolean
+  internet: boolean
+  builtinTools: string[]
+  selectionReason: string
   selectionSource: string
+  orchestratorMode: 'langgraph-local' | 'deepagent'
+  orchestratorReason: string
+  orchestratorAssistantId?: string
+  orchestratorGraphProfile?: string
 }
 
 type SnapshotPersistStatus = 'streaming' | 'completed' | 'failed'
@@ -100,298 +120,6 @@ const STREAM_HEARTBEAT_INTERVAL_MS = 15_000
 const STREAM_HEARTBEAT_IDLE_MS = 12_000
 const SNAPSHOT_PERSIST_INTERVAL_MS = 0
 const STREAM_DELTA_EMIT_CHUNK_SIZE = 32
-const TITLE_STREAM_CHUNK_SIZE = 6
-
-function resolveExecutorModel(rawModel: unknown, fallbackModel: string): string {
-  const candidate = String(rawModel || '').trim()
-  if (!candidate) {
-    return fallbackModel
-  }
-  if (LEGACY_QUOTA_MODEL_ALIASES.has(candidate.toLowerCase())) {
-    return fallbackModel
-  }
-  return candidate
-}
-
-function splitTextIntoChunks(text: string, chunkSize = 24): string[] {
-  const chars = Array.from(text)
-  if (chars.length <= chunkSize) {
-    return [text]
-  }
-
-  const chunks: string[] = []
-  for (let index = 0; index < chars.length; index += chunkSize) {
-    chunks.push(chars.slice(index, index + chunkSize).join(''))
-  }
-  return chunks
-}
-
-function stringifyUnknown(value: unknown): string {
-  if (typeof value === 'string') {
-    return value
-  }
-  if (!Array.isArray(value)) {
-    return ''
-  }
-
-  const chunks = value
-    .map((item) => {
-      if (typeof item === 'string') {
-        return item
-      }
-      if (item && typeof item === 'object' && typeof (item as { value?: unknown }).value === 'string') {
-        return String((item as { value?: string }).value)
-      }
-      return ''
-    })
-    .filter(Boolean)
-
-  return chunks.join('\n')
-}
-
-function stringifyQuotaMessageContent(content: unknown): string {
-  const text = stringifyUnknown(content).trim()
-  if (text) {
-    return text
-  }
-  if (typeof content === 'string') {
-    return content.trim()
-  }
-  return ''
-}
-
-function toTitleMessages(messages: unknown): Array<{ role: string, content: string }> {
-  if (!Array.isArray(messages)) {
-    return []
-  }
-
-  return messages
-    .map((item) => {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) {
-        return null
-      }
-      const row = item as Record<string, unknown>
-      const role = String(row.role || '').trim().toLowerCase()
-      if (role !== 'user' && role !== 'assistant') {
-        return null
-      }
-      const content = stringifyQuotaMessageContent(row.content)
-      if (!content) {
-        return null
-      }
-      return {
-        role,
-        content,
-      }
-    })
-    .filter((item): item is { role: string, content: string } => Boolean(item))
-}
-
-function resolveAbsoluteAttachmentUrl(event: H3Event, input: string): string {
-  const raw = String(input || '').trim()
-  if (!raw) {
-    return ''
-  }
-  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) {
-    return raw
-  }
-  if (!raw.startsWith('/')) {
-    return raw
-  }
-  const requestUrl = getRequestURL(event)
-  return `${requestUrl.protocol}//${requestUrl.host}${raw}`
-}
-
-function parseQuotaUploadIdFromUrl(input: string): string {
-  const raw = String(input || '').trim()
-  if (!raw) {
-    return ''
-  }
-
-  let pathname = raw
-  if (raw.startsWith('http://') || raw.startsWith('https://')) {
-    try {
-      pathname = new URL(raw).pathname
-    }
-    catch {
-      return ''
-    }
-  }
-
-  const match = pathname.match(/\/api\/tools\/upload\/content\/([^/?#]+)/)
-  if (!match) {
-    return ''
-  }
-  try {
-    return decodeURIComponent(match[1] || '')
-  }
-  catch {
-    return String(match[1] || '')
-  }
-}
-
-async function resolveLegacyAttachments(
-  event: H3Event,
-  rawAttachments: QuotaUserTurnAttachment[],
-): Promise<{
-  attachments: UserMessageAttachment[]
-  summary: Record<string, unknown>
-}> {
-  if (!Array.isArray(rawAttachments) || rawAttachments.length <= 0) {
-    return {
-      attachments: [],
-      summary: {
-        total: 0,
-        resolved: 0,
-        unresolved: 0,
-        idCount: 0,
-        urlCount: 0,
-        base64Count: 0,
-        loadedObjectCount: 0,
-        inlinedImageBytes: 0,
-        inlinedFileBytes: 0,
-      },
-    }
-  }
-
-  const deliveryInputs = []
-  for (let index = 0; index < rawAttachments.length; index += 1) {
-    const item = rawAttachments[index]
-    const rawValue = String(item.value || '').trim()
-    if (!rawValue) {
-      continue
-    }
-
-    const id = randomId('legacy-attachment')
-    const ref = resolveAbsoluteAttachmentUrl(event, rawValue)
-    const uploadId = parseQuotaUploadIdFromUrl(rawValue)
-    const itemData = String(item.data || '').trim()
-    const dataUrlFromValue = rawValue.startsWith('data:') ? rawValue : ''
-    const dataUrl = dataUrlFromValue || (itemData.startsWith('data:') ? itemData : '')
-    const inferredMimeType = item.type === 'file' && !itemData.startsWith('data:')
-      ? itemData
-      : undefined
-
-    deliveryInputs.push({
-      id,
-      type: item.type,
-      ref,
-      name: item.name,
-      mimeType: inferredMimeType,
-      previewUrl: ref,
-      modelUrl: ref,
-      dataUrl,
-      loadObject: uploadId
-        ? async () => {
-          const object = getQuotaUploadObject(uploadId)
-          if (!object || object.data.byteLength <= 0) {
-            return null
-          }
-          return {
-            bytes: object.data,
-            mimeType: object.mimeType,
-            size: object.data.byteLength,
-          }
-        }
-        : undefined,
-    })
-  }
-
-  const resolved = await resolvePilotAttachmentDeliveriesOrThrow(deliveryInputs, {
-    concurrency: 3,
-  })
-  return {
-    attachments: resolved.attachments,
-    summary: resolved.summary as unknown as Record<string, unknown>,
-  }
-}
-
-function createTitleSseResponse(title: string): Response {
-  const encoder = new TextEncoder()
-  const value = String(title || '').trim()
-  const chunks = splitTextIntoChunks(value, TITLE_STREAM_CHUNK_SIZE)
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'status_updated', status: 'start', id: 'assistant' })}\n\n`))
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'status_updated', status: 'progress', id: 'assistant' })}\n\n`))
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-          event: 'completion',
-          id: 'assistant',
-          name: 'assistant',
-          content: chunk,
-          completed: false,
-        })}\n\n`))
-      }
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-        event: 'completion',
-        id: 'assistant',
-        name: 'assistant',
-        content: '',
-        completed: true,
-      })}\n\n`))
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'status_updated', status: 'end', id: 'assistant' })}\n\n`))
-      controller.enqueue(encoder.encode('data: [DONE]\\n\\n'))
-      controller.close()
-    },
-  })
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
-    },
-  })
-}
-
-function randomId(prefix: string): string {
-  return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString().slice(-6)}`
-}
-
-function createExecutorTimeoutError(timeoutMs: number): Error {
-  const safeTimeout = Math.max(3_000, Math.floor(timeoutMs))
-  const error = new Error(`[executor-timeout] stream stalled for ${safeTimeout}ms`)
-  Object.assign(error, {
-    code: 'EXECUTOR_STREAM_TIMEOUT',
-    statusCode: 504,
-    statusMessage: 'Gateway Timeout',
-    phase: 'upstream.stream.wait',
-  })
-  return error
-}
-
-async function runWithExecutorTimeout<T>(task: () => Promise<T>, timeoutMs: number): Promise<T> {
-  const safeTimeout = Math.max(3_000, Math.floor(timeoutMs))
-  return await new Promise<T>((resolve, reject) => {
-    let settled = false
-    const timer = setTimeout(() => {
-      if (settled) {
-        return
-      }
-      settled = true
-      reject(createExecutorTimeoutError(safeTimeout))
-    }, safeTimeout)
-
-    task()
-      .then((result) => {
-        if (settled) {
-          return
-        }
-        settled = true
-        clearTimeout(timer)
-        resolve(result)
-      })
-      .catch((error) => {
-        if (settled) {
-          return
-        }
-        settled = true
-        clearTimeout(timer)
-        reject(error)
-      })
-  })
-}
 
 function getEnvelopeText(envelope: AgentEnvelope): string {
   const payload = envelope.payload as Record<string, unknown> | null | undefined
@@ -478,6 +206,18 @@ function buildSnapshotMetaPayload(
     adapter: trace.adapter,
     transport: trace.transport,
     model: trace.model,
+    model_id: trace.modelId,
+    provider_model: trace.providerModel,
+    route_combo_id: trace.routeComboId,
+    queue_wait_ms: trace.queueWaitMs,
+    internet: trace.internet,
+    thinking: trace.thinking,
+    selection_source: trace.selectionSource,
+    selection_reason: trace.selectionReason,
+    orchestrator_mode: trace.orchestratorMode,
+    orchestrator_reason: trace.orchestratorReason,
+    orchestrator_assistant_id: trace.orchestratorAssistantId,
+    orchestrator_graph_profile: trace.orchestratorGraphProfile,
   }
 
   if (status === 'failed' && detail) {
@@ -811,7 +551,19 @@ function logExecutorError(
     endpoint: trace.endpoint,
     timeout_ms: trace.timeoutMs,
     model: trace.model,
+    model_id: trace.modelId,
+    provider_model: trace.providerModel,
+    route_combo_id: trace.routeComboId,
+    queue_wait_ms: trace.queueWaitMs,
+    internet: trace.internet,
+    thinking: trace.thinking,
+    builtin_tools: trace.builtinTools,
+    selection_reason: trace.selectionReason,
     selection_source: trace.selectionSource,
+    orchestrator_mode: trace.orchestratorMode,
+    orchestrator_reason: trace.orchestratorReason,
+    orchestrator_assistant_id: trace.orchestratorAssistantId,
+    orchestrator_graph_profile: trace.orchestratorGraphProfile,
     raw_error: buildErrorMeta(error),
   })
 }
@@ -882,11 +634,16 @@ export default defineEventHandler(async (event) => {
   const chatId = requestedChatId || existingSession?.chatId || randomId('Chat')
   const runtimeSessionId = existingSession?.runtimeSessionId || randomId('session')
 
-  let selectedChannel: Awaited<ReturnType<typeof resolvePilotChannelSelection>>
+  let selectedChannel: Awaited<ReturnType<typeof resolvePilotRoutingSelection>>
   try {
-    selectedChannel = await resolvePilotChannelSelection(event, {
+    const requestedModelId = String(body?.modelId || body?.model || '').trim()
+    selectedChannel = await resolvePilotRoutingSelection(event, {
       requestChannelId: String(body?.channel_id || '').trim(),
       sessionChannelId: existingSession?.channelId,
+      requestedModelId,
+      routeComboId: String(body?.routeComboId || '').trim(),
+      internet: body?.internet,
+      thinking: body?.thinking,
     })
   }
   catch (error: any) {
@@ -945,8 +702,42 @@ export default defineEventHandler(async (event) => {
   })
 
   const selectedModel = resolveExecutorModel(
-    body?.model,
-    selectedChannel.channel.model,
+    body?.modelId || body?.model,
+    selectedChannel.providerModel || selectedChannel.channel.model,
+  )
+  const routingConfig = await getPilotAdminRoutingConfig(event).catch(() => ({
+    modelCatalog: [],
+    routeCombos: [],
+    routingPolicy: {
+      defaultModelId: 'quota-auto',
+      defaultRouteComboId: 'default-auto',
+      quotaAutoStrategy: 'speed-first' as const,
+      explorationRate: 0.08,
+    },
+    lbPolicy: {
+      metricWindowHours: 24,
+      recentRequestWindow: 200,
+      circuitBreakerFailureThreshold: 3,
+      circuitBreakerCooldownMs: 60_000,
+      halfOpenProbeCount: 1,
+    },
+    memoryPolicy: {
+      enabledByDefault: true,
+      allowUserDisable: true,
+      allowUserClear: true,
+    },
+  }))
+  const healthPolicy = {
+    failureThreshold: routingConfig.lbPolicy.circuitBreakerFailureThreshold,
+    cooldownMs: routingConfig.lbPolicy.circuitBreakerCooldownMs,
+    halfOpenProbeCount: routingConfig.lbPolicy.halfOpenProbeCount,
+  }
+  const queueWaitMs = Number.isFinite(Number(body?.queueWaitMs))
+    ? Math.max(0, Math.floor(Number(body?.queueWaitMs)))
+    : 0
+  const orchestratorDecision = await resolveLangGraphOrchestratorDecision(
+    event,
+    selectedChannel.routeComboId || 'default-auto',
   )
   const requestMeta = resolveRequestMeta(event)
   const requestId = randomId('req')
@@ -967,7 +758,19 @@ export default defineEventHandler(async (event) => {
     endpoint: buildUpstreamEndpoint(selectedChannel.channel.baseUrl, selectedChannel.transport),
     timeoutMs: selectedChannel.channel.timeoutMs,
     model: selectedModel,
+    modelId: selectedChannel.modelId || selectedModel,
+    providerModel: selectedChannel.providerModel || selectedModel,
+    routeComboId: selectedChannel.routeComboId || 'default-auto',
+    queueWaitMs,
+    thinking: selectedChannel.thinking,
+    internet: selectedChannel.internet,
+    builtinTools: selectedChannel.builtinTools,
+    selectionReason: selectedChannel.selectionReason,
     selectionSource: selectedChannel.selectionSource,
+    orchestratorMode: orchestratorDecision.mode,
+    orchestratorReason: orchestratorDecision.reason,
+    orchestratorAssistantId: orchestratorDecision.assistantId,
+    orchestratorGraphProfile: orchestratorDecision.graphProfile,
   }
 
   if (isTitleRequest) {
@@ -1030,6 +833,18 @@ export default defineEventHandler(async (event) => {
     endpoint: trace.endpoint,
     timeout_ms: trace.timeoutMs,
     model: trace.model,
+    model_id: trace.modelId,
+    provider_model: trace.providerModel,
+    route_combo_id: trace.routeComboId,
+    queue_wait_ms: trace.queueWaitMs,
+    internet: trace.internet,
+    thinking: trace.thinking,
+    builtin_tools: trace.builtinTools,
+    selection_reason: trace.selectionReason,
+    orchestrator_mode: trace.orchestratorMode,
+    orchestrator_reason: trace.orchestratorReason,
+    orchestrator_assistant_id: trace.orchestratorAssistantId,
+    orchestrator_graph_profile: trace.orchestratorGraphProfile,
     message_chars: message.length,
     message_preview: truncateText(message, 120),
     attachment_count: latestUserTurn.attachments.length,
@@ -1069,6 +884,11 @@ export default defineEventHandler(async (event) => {
         let streamedDelta = false
         let streamFailed = false
         let streamErrorDetail: ExecutorErrorDetailPayload | null = null
+        let metricSuccess = false
+        let metricFinishReason = 'error'
+        let metricErrorCode = ''
+        let ttftMs = 0
+        let firstDeltaAt = 0
         let lastStreamEventAt = Date.now()
         let heartbeatTimer: ReturnType<typeof setInterval> | null = null
         let snapshotSeedLoaded = false
@@ -1235,6 +1055,18 @@ export default defineEventHandler(async (event) => {
             adapter: selectedChannel.adapter,
             transport: selectedChannel.transport,
             timeout_ms: selectedChannel.channel.timeoutMs,
+            model_id: trace.modelId,
+            provider_model: trace.providerModel,
+            route_combo_id: trace.routeComboId,
+            internet: trace.internet,
+            thinking: trace.thinking,
+            selection_source: trace.selectionSource,
+            selection_reason: trace.selectionReason,
+            builtin_tools: trace.builtinTools,
+            orchestrator_mode: trace.orchestratorMode,
+            orchestrator_reason: trace.orchestratorReason,
+            orchestrator_assistant_id: trace.orchestratorAssistantId,
+            orchestrator_graph_profile: trace.orchestratorGraphProfile,
           })
 
           emit({
@@ -1264,7 +1096,7 @@ export default defineEventHandler(async (event) => {
             })
 
             try {
-              resolvedLegacyAttachments = await resolveLegacyAttachments(event, latestUserTurn.attachments)
+              resolvedLegacyAttachments = await resolveCompatAttachments(event, latestUserTurn.attachments)
               const durationMs = Date.now() - attachmentResolveStartedAt
               const summary = resolvedLegacyAttachments.summary
               logExecutorEvent('info', 'attachment', {
@@ -1307,6 +1139,8 @@ export default defineEventHandler(async (event) => {
                 const message = mapExecutorErrorMessage(error, context, detail)
                 streamFailed = true
                 streamErrorDetail = detail
+                metricFinishReason = 'attachment_error'
+                metricErrorCode = String(detail.code || error.code || 'ATTACHMENT_DELIVERY_FAILED')
                 await queuePersistSnapshot({
                   force: true,
                   status: 'failed',
@@ -1369,6 +1203,10 @@ export default defineEventHandler(async (event) => {
               endpoint: trace.endpoint,
               timeout_ms: trace.timeoutMs,
               model: trace.model,
+              model_id: trace.modelId,
+              provider_model: trace.providerModel,
+              route_combo_id: trace.routeComboId,
+              selection_reason: trace.selectionReason,
             })
             const { runtime, store } = createPilotRuntime({
               event,
@@ -1381,7 +1219,14 @@ export default defineEventHandler(async (event) => {
                 adapter: selectedChannel.adapter,
                 transport: selectedChannel.transport,
                 timeoutMs: selectedChannel.channel.timeoutMs,
-                builtinTools: selectedChannel.channel.builtinTools,
+                builtinTools: selectedChannel.builtinTools,
+              },
+              orchestrator: {
+                mode: orchestratorDecision.mode,
+                endpoint: orchestratorDecision.endpoint,
+                apiKey: orchestratorDecision.apiKey,
+                assistantId: orchestratorDecision.assistantId,
+                graphProfile: orchestratorDecision.graphProfile,
               },
               onAudit: (record) => {
                 logExecutorAuditRecord(record, trace, debugEnabled)
@@ -1398,12 +1243,25 @@ export default defineEventHandler(async (event) => {
               metadata: {
                 source: 'quota-executor',
                 model: selectedModel,
+                modelId: trace.modelId,
+                providerModel: trace.providerModel,
+                routeComboId: trace.routeComboId,
+                queueWaitMs: trace.queueWaitMs,
+                ttftMs: ttftMs || undefined,
+                internet: trace.internet,
+                thinking: trace.thinking,
+                selectionReason: trace.selectionReason,
+                orchestratorMode: trace.orchestratorMode,
+                orchestratorReason: trace.orchestratorReason,
+                orchestratorAssistantId: trace.orchestratorAssistantId,
+                orchestratorGraphProfile: trace.orchestratorGraphProfile,
                 temperature: Number(body?.temperature ?? 0.5),
                 channelId: selectedChannel.channelId,
                 channelAdapter: selectedChannel.adapter,
                 channelTransport: selectedChannel.transport,
                 attachmentCount: resolvedLegacyAttachments.attachments.length,
                 attachmentSummary: resolvedLegacyAttachments.summary,
+                builtinTools: selectedChannel.builtinTools,
               },
             })) {
               if (closed) {
@@ -1415,6 +1273,10 @@ export default defineEventHandler(async (event) => {
                 const rawDelta = getEnvelopeText(envelope)
                 if (!rawDelta) {
                   continue
+                }
+                if (!firstDeltaAt) {
+                  firstDeltaAt = Date.now()
+                  ttftMs = Math.max(0, firstDeltaAt - trace.startedAt)
                 }
                 streamedDelta = true
 
@@ -1445,6 +1307,10 @@ export default defineEventHandler(async (event) => {
               if (envelope.type === 'assistant.final') {
                 touchStreamEventAt()
                 const finalText = getEnvelopeText(envelope) || completedText
+                if (!firstDeltaAt && finalText) {
+                  firstDeltaAt = Date.now()
+                  ttftMs = Math.max(0, firstDeltaAt - trace.startedAt)
+                }
 
                 // Some upstream providers may only emit `assistant.final` without deltas.
                 // Convert final text into small pseudo-deltas so Quota UI keeps streaming behavior.
@@ -1526,6 +1392,8 @@ export default defineEventHandler(async (event) => {
                 )
                 streamFailed = true
                 streamErrorDetail = detail
+                metricFinishReason = 'runtime_error'
+                metricErrorCode = String(detail.code || 'RUNTIME_ENVELOPE_ERROR')
                 await queuePersistSnapshot({
                   force: true,
                   status: 'failed',
@@ -1550,6 +1418,10 @@ export default defineEventHandler(async (event) => {
           )
 
           if (streamFailed) {
+            metricSuccess = false
+            if (!metricFinishReason) {
+              metricFinishReason = 'runtime_error'
+            }
             logExecutorEvent('warn', 'request', {
               phase: 'request.completed_with_runtime_error',
               request_id: trace.requestId,
@@ -1580,6 +1452,9 @@ export default defineEventHandler(async (event) => {
             force: true,
             status: 'completed',
           })
+          metricSuccess = true
+          metricFinishReason = 'completed'
+          metricErrorCode = ''
 
           emit({
             event: 'status_updated',
@@ -1596,6 +1471,15 @@ export default defineEventHandler(async (event) => {
             channel_id: trace.channelId,
             adapter: trace.adapter,
             transport: trace.transport,
+            model_id: trace.modelId,
+            provider_model: trace.providerModel,
+            route_combo_id: trace.routeComboId,
+            queue_wait_ms: trace.queueWaitMs,
+            ttft_ms: ttftMs,
+            internet: trace.internet,
+            thinking: trace.thinking,
+            orchestrator_mode: trace.orchestratorMode,
+            orchestrator_reason: trace.orchestratorReason,
             output_chars: completedText.length,
             streamed_delta: streamedDelta,
             completion_emitted: completedSent || completedText.length > 0,
@@ -1616,6 +1500,9 @@ export default defineEventHandler(async (event) => {
           }
           const detail = buildExecutorErrorDetail(error, context)
           const message = mapExecutorErrorMessage(error, context, detail)
+          metricSuccess = false
+          metricFinishReason = 'executor_error'
+          metricErrorCode = String(detail.code || 'EXECUTOR_ERROR')
           await queuePersistSnapshot({
             force: true,
             status: 'failed',
@@ -1632,11 +1519,84 @@ export default defineEventHandler(async (event) => {
         }
         finally {
           stopHeartbeat()
+          const totalDurationMs = Math.max(0, Date.now() - trace.startedAt)
+          const resolvedTtftMs = ttftMs > 0
+            ? ttftMs
+            : (metricSuccess && completedText ? totalDurationMs : 0)
+
+          try {
+            if (metricSuccess) {
+              markRouteSuccess(selectedChannel.routeKey)
+            }
+            else {
+              markRouteFailure(selectedChannel.routeKey, healthPolicy)
+            }
+          }
+          catch (error) {
+            logExecutorEvent('warn', 'routing-health', {
+              phase: 'routing.health.update.failed',
+              request_id: trace.requestId,
+              route_key: selectedChannel.routeKey,
+              success: metricSuccess,
+              error: buildErrorMeta(error),
+            })
+          }
+
+          try {
+            await recordPilotRoutingMetric(event, {
+              requestId: trace.requestId,
+              sessionId: chatId,
+              userId: auth.userId,
+              modelId: trace.modelId,
+              routeComboId: trace.routeComboId,
+              channelId: trace.channelId,
+              providerModel: trace.providerModel || trace.model,
+              queueWaitMs: trace.queueWaitMs,
+              ttftMs: resolvedTtftMs,
+              totalDurationMs,
+              outputChars: completedText.length,
+              success: metricSuccess,
+              errorCode: metricSuccess ? '' : metricErrorCode,
+              finishReason: metricFinishReason || (metricSuccess ? 'completed' : 'failed'),
+              metadata: {
+                selectionSource: trace.selectionSource,
+                selectionReason: trace.selectionReason,
+                adapter: trace.adapter,
+                transport: trace.transport,
+                endpoint: trace.endpoint,
+                thinking: trace.thinking,
+                internet: trace.internet,
+                builtinTools: trace.builtinTools,
+                orchestratorMode: trace.orchestratorMode,
+                orchestratorReason: trace.orchestratorReason,
+                orchestratorAssistantId: trace.orchestratorAssistantId,
+                orchestratorGraphProfile: trace.orchestratorGraphProfile,
+              },
+            })
+          }
+          catch (error) {
+            logExecutorEvent('warn', 'routing-metrics', {
+              phase: 'routing.metric.record.failed',
+              request_id: trace.requestId,
+              error: buildErrorMeta(error),
+            })
+          }
+
           logExecutorEvent('info', 'request', {
             phase: 'request.finally',
             request_id: trace.requestId,
-            elapsed_ms: Math.max(0, Date.now() - trace.startedAt),
+            elapsed_ms: totalDurationMs,
             closed,
+            success: metricSuccess,
+            output_chars: completedText.length,
+            ttft_ms: resolvedTtftMs,
+            route_combo_id: trace.routeComboId,
+            provider_model: trace.providerModel,
+            selection_reason: trace.selectionReason,
+            orchestrator_mode: trace.orchestratorMode,
+            orchestrator_reason: trace.orchestratorReason,
+            error_code: metricSuccess ? null : metricErrorCode,
+            finish_reason: metricFinishReason,
           })
           emit('[DONE]')
           close()

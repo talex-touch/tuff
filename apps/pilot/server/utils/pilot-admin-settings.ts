@@ -4,6 +4,17 @@ import {
   getPilotAdminChannelCatalog,
   updatePilotAdminChannelCatalog,
 } from './pilot-admin-channel-config'
+import type {
+  PilotLoadBalancePolicy,
+  PilotMemoryPolicy,
+  PilotModelCatalogItem,
+  PilotRouteComboItem,
+  PilotRoutingPolicy,
+} from './pilot-admin-routing-config'
+import {
+  getPilotAdminRoutingConfig,
+  updatePilotAdminRoutingConfig,
+} from './pilot-admin-routing-config'
 import {
   getPilotAdminStorageSettings,
   updatePilotAdminStorageSettings,
@@ -16,6 +27,15 @@ export interface PilotAdminSettingsView {
       id: string
       name: string
       model: string
+      defaultModelId?: string
+      models?: Array<{
+        id: string
+        label?: string
+        enabled?: boolean
+        thinkingSupported?: boolean
+        thinkingDefaultEnabled?: boolean
+        metadata?: Record<string, unknown>
+      }>
       baseUrl: string
       apiKeyMasked: string
       adapter: PilotChannelAdapter
@@ -23,6 +43,8 @@ export interface PilotAdminSettingsView {
       timeoutMs: number
       builtinTools: PilotBuiltinTool[]
       enabled: boolean
+      modelsLastSyncedAt?: string
+      modelsSyncError?: string
     }>
     writable: boolean
     source: 'database'
@@ -41,6 +63,13 @@ export interface PilotAdminSettingsView {
     hasMinioAccessKey: boolean
     hasMinioSecretKey: boolean
   }
+  routing: {
+    modelCatalog: PilotModelCatalogItem[]
+    routeCombos: PilotRouteComboItem[]
+    routingPolicy: PilotRoutingPolicy
+    lbPolicy: PilotLoadBalancePolicy
+    memoryPolicy: PilotMemoryPolicy
+  }
 }
 
 export interface PilotAdminSettingsPatch {
@@ -57,6 +86,17 @@ export interface PilotAdminSettingsPatch {
       timeoutMs?: number
       builtinTools?: PilotBuiltinTool[]
       enabled?: boolean
+      defaultModelId?: string
+      models?: Array<{
+        id: string
+        label?: string
+        enabled?: boolean
+        thinkingSupported?: boolean
+        thinkingDefaultEnabled?: boolean
+        metadata?: Record<string, unknown>
+      }>
+      modelsLastSyncedAt?: string
+      modelsSyncError?: string
     }>
   }
   storage?: {
@@ -71,6 +111,13 @@ export interface PilotAdminSettingsPatch {
     minioRegion?: string
     minioForcePathStyle?: boolean
     minioPublicBaseUrl?: string
+  }
+  routing?: {
+    modelCatalog?: PilotModelCatalogItem[]
+    routeCombos?: PilotRouteComboItem[]
+    routingPolicy?: Partial<PilotRoutingPolicy>
+    lbPolicy?: Partial<PilotLoadBalancePolicy>
+    memoryPolicy?: Partial<PilotMemoryPolicy>
   }
 }
 
@@ -94,9 +141,10 @@ function normalizeProvider(value: string): 'auto' | 'memory' | 's3' {
 }
 
 async function buildPilotAdminSettingsView(event: H3Event): Promise<PilotAdminSettingsView> {
-  const [catalog, storage] = await Promise.all([
+  const [catalog, storage, routing] = await Promise.all([
     getPilotAdminChannelCatalog(event),
     getPilotAdminStorageSettings(event),
+    getPilotAdminRoutingConfig(event),
   ])
 
   return {
@@ -106,6 +154,8 @@ async function buildPilotAdminSettingsView(event: H3Event): Promise<PilotAdminSe
         id: channel.id,
         name: channel.name,
         model: channel.model,
+        defaultModelId: channel.defaultModelId,
+        models: channel.models,
         baseUrl: channel.baseUrl,
         apiKeyMasked: maskSecret(channel.apiKey),
         adapter: channel.adapter,
@@ -113,6 +163,8 @@ async function buildPilotAdminSettingsView(event: H3Event): Promise<PilotAdminSe
         timeoutMs: channel.timeoutMs,
         builtinTools: channel.builtinTools,
         enabled: channel.enabled,
+        modelsLastSyncedAt: channel.modelsLastSyncedAt,
+        modelsSyncError: channel.modelsSyncError,
       })),
       writable: true,
       source: 'database',
@@ -130,6 +182,13 @@ async function buildPilotAdminSettingsView(event: H3Event): Promise<PilotAdminSe
       minioSecretKeyMasked: maskSecret(storage.minioSecretKey || ''),
       hasMinioAccessKey: Boolean(storage.minioAccessKey),
       hasMinioSecretKey: Boolean(storage.minioSecretKey),
+    },
+    routing: {
+      modelCatalog: routing.modelCatalog,
+      routeCombos: routing.routeCombos,
+      routingPolicy: routing.routingPolicy,
+      lbPolicy: routing.lbPolicy,
+      memoryPolicy: routing.memoryPolicy,
     },
   }
 }
@@ -183,6 +242,17 @@ export async function updatePilotAdminSettings(
         ? storagePatch.minioForcePathStyle
         : undefined,
       minioPublicBaseUrl: storagePatch.minioPublicBaseUrl,
+    })
+  }
+
+  const routingPatch = patch.routing
+  if (routingPatch) {
+    await updatePilotAdminRoutingConfig(event, {
+      modelCatalog: Array.isArray(routingPatch.modelCatalog) ? routingPatch.modelCatalog : undefined,
+      routeCombos: Array.isArray(routingPatch.routeCombos) ? routingPatch.routeCombos : undefined,
+      routingPolicy: routingPatch.routingPolicy,
+      lbPolicy: routingPatch.lbPolicy,
+      memoryPolicy: routingPatch.memoryPolicy,
     })
   }
 

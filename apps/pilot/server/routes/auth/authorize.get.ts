@@ -35,7 +35,7 @@ export default defineEventHandler((event) => {
   const state = createPilotOauthState(returnTo)
   writePilotOauthStateCookie(event, state)
 
-  const authorizeUrl = new URL('/api/pilot/oauth/authorize', nexusOrigin)
+  const authorizeUrl = new URL('/api/oauth/authorize', nexusOrigin)
   authorizeUrl.searchParams.set('response_type', 'code')
   authorizeUrl.searchParams.set('client_id', clientId)
   authorizeUrl.searchParams.set('redirect_uri', redirectUri)
