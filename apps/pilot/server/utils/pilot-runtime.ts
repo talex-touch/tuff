@@ -1,4 +1,5 @@
 import type {
+  AgentEngineAdapter,
   AgentEnvelope,
   AgentEventType,
   DeepAgentAuditRecord,
@@ -12,6 +13,7 @@ import {
   DeepAgentLangChainEngineAdapter,
   DefaultDecisionAdapter,
 } from '@talex-touch/tuff-intelligence'
+import { LangGraphLocalServerEngineAdapter } from './pilot-langgraph-engine'
 import { createPilotStoreAdapter } from './pilot-store'
 
 const DEFAULT_RESPONSES_MODEL = 'gpt-5.2'
@@ -82,6 +84,13 @@ export interface CreatePilotRuntimeOptions {
   }
   emit?: (event: AgentEnvelope) => Promise<void>
   onAudit?: (record: DeepAgentAuditRecord) => Promise<void> | void
+  orchestrator?: {
+    mode?: 'langgraph-local' | 'deepagent'
+    endpoint?: string
+    apiKey?: string
+    assistantId?: string
+    graphProfile?: string
+  }
 }
 
 function normalizeTimeoutMs(value: unknown): number {
@@ -99,8 +108,85 @@ function normalizeTimeoutMs(value: unknown): number {
   return Math.min(Math.max(Math.floor(parsed), MIN_TIMEOUT_MS), MAX_TIMEOUT_MS)
 }
 
+class PilotFallbackEngineAdapter implements AgentEngineAdapter {
+  readonly id = 'pilot-fallback-engine'
+
+  constructor(
+    private readonly primary: AgentEngineAdapter,
+    private readonly fallback: AgentEngineAdapter,
+    private readonly onFallback?: (payload: {
+      reason: 'primary_error' | 'primary_empty'
+      error?: unknown
+      primaryEngineId: string
+      fallbackEngineId: string
+    }) => Promise<void> | void,
+  ) {}
+
+  async run(state: Parameters<AgentEngineAdapter['run']>[0]): Promise<unknown> {
+    try {
+      return await this.primary.run(state)
+    }
+    catch (error) {
+      await this.onFallback?.({
+        reason: 'primary_error',
+        error,
+        primaryEngineId: this.primary.id,
+        fallbackEngineId: this.fallback.id,
+      })
+      return await this.fallback.run(state)
+    }
+  }
+
+  async* runStream(state: Parameters<AgentEngineAdapter['run']>[0]): AsyncIterable<unknown> {
+    let emitted = false
+    try {
+      const source = typeof this.primary.runStream === 'function'
+        ? this.primary.runStream(state)
+        : this.singleRunAsStream(this.primary, state)
+
+      for await (const item of source) {
+        emitted = true
+        yield item
+      }
+      if (emitted) {
+        return
+      }
+      await this.onFallback?.({
+        reason: 'primary_empty',
+        primaryEngineId: this.primary.id,
+        fallbackEngineId: this.fallback.id,
+      })
+    }
+    catch (error) {
+      if (emitted) {
+        throw error
+      }
+      await this.onFallback?.({
+        reason: 'primary_error',
+        error,
+        primaryEngineId: this.primary.id,
+        fallbackEngineId: this.fallback.id,
+      })
+    }
+
+    const fallbackSource = typeof this.fallback.runStream === 'function'
+      ? this.fallback.runStream(state)
+      : this.singleRunAsStream(this.fallback, state)
+    for await (const item of fallbackSource) {
+      yield item
+    }
+  }
+
+  private async* singleRunAsStream(
+    engine: AgentEngineAdapter,
+    state: Parameters<AgentEngineAdapter['run']>[0],
+  ): AsyncIterable<unknown> {
+    yield await engine.run(state)
+  }
+}
+
 export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
-  const { event, userId, emit, onAudit, channel } = options
+  const { event, userId, emit, onAudit, channel, orchestrator } = options
   if (!channel?.baseUrl || !channel.apiKey) {
     throw new Error('Pilot channel is not configured.')
   }
@@ -116,9 +202,14 @@ export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
   const builtinTools: PilotBuiltinTool[] = Array.isArray(channel?.builtinTools) && channel.builtinTools.length > 0
     ? channel.builtinTools
     : ['write_todos']
+  const engineBuiltinTools = builtinTools
+    .filter((tool): tool is Exclude<PilotBuiltinTool, 'websearch'> => tool !== 'websearch')
+  if (engineBuiltinTools.length <= 0) {
+    engineBuiltinTools.push('write_todos')
+  }
   const retryCount = channel?.adapter === 'legacy' ? 0 : 1
 
-  const engine = new DeepAgentLangChainEngineAdapter({
+  const deepAgentEngine = new DeepAgentLangChainEngineAdapter({
     baseUrl,
     apiKey,
     model,
@@ -126,15 +217,58 @@ export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
     retryCount,
     timeoutMs,
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
-    builtinTools,
+    builtinTools: engineBuiltinTools,
     metadata: {
       source: 'tuff-pilot',
       channelId: channel?.channelId,
       channelAdapter: channel?.adapter,
       channelTransport: channel?.transport,
+      requestedBuiltinTools: builtinTools,
+      websearchEnabled: builtinTools.includes('websearch'),
     },
     onAudit,
   })
+
+  let engine: AgentEngineAdapter = deepAgentEngine
+  if (
+    orchestrator?.mode === 'langgraph-local'
+    && String(orchestrator.assistantId || '').trim()
+    && String(orchestrator.endpoint || '').trim()
+  ) {
+    const langGraphEngine = new LangGraphLocalServerEngineAdapter({
+      baseUrl: String(orchestrator.endpoint || '').trim(),
+      apiKey: String(orchestrator.apiKey || '').trim(),
+      assistantId: String(orchestrator.assistantId || '').trim(),
+      graphProfile: String(orchestrator.graphProfile || '').trim() || undefined,
+      timeoutMs,
+      metadata: {
+        source: 'tuff-pilot',
+        channelId: channel?.channelId,
+        model,
+        requestedBuiltinTools: builtinTools,
+      },
+      onAudit,
+    })
+
+    engine = new PilotFallbackEngineAdapter(
+      langGraphEngine,
+      deepAgentEngine,
+      async (payload) => {
+        await onAudit?.({
+          type: 'orchestrator.fallback',
+          payload: {
+            ...payload,
+            reason: payload.reason,
+            error: payload.error instanceof Error
+              ? payload.error.message
+              : payload.error
+                ? String(payload.error)
+                : undefined,
+          },
+        })
+      },
+    )
+  }
 
   const decision = new DefaultDecisionAdapter()
   const runtime = new PilotAgentRuntime({

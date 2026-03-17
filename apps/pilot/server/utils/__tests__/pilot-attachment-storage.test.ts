@@ -80,7 +80,7 @@ describe('pilot-attachment-storage', () => {
 
   it('builds preview url by session and attachment id', () => {
     const preview = buildPilotAttachmentPreviewUrl('session-123', 'att-456')
-    expect(preview).toBe('/api/pilot/chat/sessions/session-123/attachments/att-456/content')
+    expect(preview).toBe('/api/chat/sessions/session-123/attachments/att-456/content')
   })
 
   it('builds model url from minio public base when s3 ref is used', async () => {
@@ -110,7 +110,7 @@ describe('pilot-attachment-storage', () => {
 
     const url = await buildPilotAttachmentSignedPreviewUrl(event, 'session-123', 'att-456')
     const parsed = new URL(url)
-    expect(`${parsed.origin}${parsed.pathname}`).toBe('https://pilot.example.com/api/pilot/chat/sessions/session-123/attachments/att-456/content')
+    expect(`${parsed.origin}${parsed.pathname}`).toBe('https://pilot.example.com/api/chat/sessions/session-123/attachments/att-456/content')
     const expiresAt = Number(parsed.searchParams.get('exp') || 0)
     const signature = String(parsed.searchParams.get('sig') || '')
     expect(verifyPilotAttachmentSignedAccess(event, {

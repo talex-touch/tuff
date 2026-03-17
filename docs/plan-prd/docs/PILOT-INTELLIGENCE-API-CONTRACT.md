@@ -26,27 +26,27 @@
 
 ### 3.1 会话
 
-- `POST /api/pilot/chat/sessions`
+- `POST /api/chat/sessions`
   - 入参：`{ sessionId?: string }`
   - 出参：`{ session }`
 
-- `GET /api/pilot/chat/sessions?limit=`
+- `GET /api/chat/sessions?limit=`
   - 出参：`{ sessions }`
 
 ### 3.2 消息与追踪
 
-- `GET /api/pilot/chat/sessions/:sessionId/messages`
+- `GET /api/chat/sessions/:sessionId/messages`
   - 出参：`{ messages, attachments }`
   - 约定：
     - `messages[].metadata.attachments?`：当前用户消息携带的附件快照（无 `dataUrl` 大字段）。
     - `attachments[]`：会话附件清单，包含 `ref`（`memory://` 或 `s3://`）与 `previewUrl`（受控预览地址）。
 
-- `GET /api/pilot/chat/sessions/:sessionId/trace?fromSeq=&limit=`
+- `GET /api/chat/sessions/:sessionId/trace?fromSeq=&limit=`
   - 出参：`{ traces }`
 
 ### 3.3 附件
 
-- `POST /api/pilot/chat/sessions/:sessionId/uploads`
+- `POST /api/chat/sessions/:sessionId/uploads`
   - 入参（兼容双模式）：
     - `multipart/form-data`（推荐，`file`）
     - JSON 兼容：`{ name, mimeType, size, contentBase64 }`
@@ -56,11 +56,11 @@
     - `upload`（签名 URL 元信息）
     - `directUploaded`（本次请求已写入对象存储）
 
-- `GET /api/pilot/chat/attachments/capability`
+- `GET /api/chat/attachments/capability`
   - 出参：`{ allowed, reason, provider, maxBytes, supports }`
   - 用途：Pilot/legacy 输入框统一能力探测，避免前端误判“暂不支持附件”。
 
-- `GET /api/pilot/chat/sessions/:sessionId/attachments/:attachmentId/content`
+- `GET /api/chat/sessions/:sessionId/attachments/:attachmentId/content`
   - 返回附件二进制内容（鉴权 + 会话归属校验）
   - 用途：前端预览与模型读取桥接
   - 支持签名访问参数：`?exp=<ms>&sig=<hmac>`（用于模型侧无登录态拉取）
@@ -90,18 +90,18 @@
 - 可选：`PILOT_MINIO_PUBLIC_BASE_URL`（推荐为 bucket root URL，用于直接返回模型可访问 URL）
 - 无 MinIO 时可仅配置 `PILOT_ATTACHMENT_PUBLIC_BASE_URL`，系统会返回签名的附件内容 URL（`/attachments/:id/content?exp&sig`）。
 - 支持运行时动态配置（数据库持久化）：
-  - `GET /api/pilot/admin/settings`
-  - `POST /api/pilot/admin/settings`
-  - `GET /api/pilot/admin/storage-config`
-  - `POST /api/pilot/admin/storage-config`
-  - `GET /api/pilot/admin/channels`
-  - `POST /api/pilot/admin/channels`
-  - 页面入口：`/cms/system/pilot-settings`（旧 `/pilot/admin/*` 进入兼容窗口）
+  - `GET /api/admin/settings`
+  - `POST /api/admin/settings`
+  - `GET /api/admin/storage-config`
+  - `POST /api/admin/storage-config`
+  - `GET /api/admin/channels`
+  - `POST /api/admin/channels`
+  - 页面入口：`/admin/system/channels`、`/admin/system/storage`（`/cms/*` 仅保留 Legacy 跳转）
 
 #### 3.3.3 当前运维配置基线（Node Server / 1Panel）
 
 - 认证主路径：JWT(access/refresh) + HttpOnly Cookie（含 `PILOT_COOKIE_SECRET`）。
-- 存储主路径：Postgres + Redis + MinIO（数据库配置可在 `/admin/storage` 动态调整）。
+- 存储主路径：Postgres + Redis + MinIO（数据库配置可在 `/admin/system/storage` 动态调整）。
 - 推荐最小变量：
   - `PILOT_ATTACHMENT_PROVIDER`
   - `PILOT_ATTACHMENT_PUBLIC_BASE_URL`
@@ -113,13 +113,13 @@
 
 ### 3.4 会话控制
 
-- `POST /api/pilot/chat/sessions/:sessionId/pause`
+- `POST /api/chat/sessions/:sessionId/pause`
   - 入参：`{ reason }`
   - `reason`：`client_disconnect | heartbeat_timeout | manual_pause | system_preempted`
 
 ### 3.5 流式
 
-- `POST /api/pilot/chat/sessions/:sessionId/stream`
+- `POST /api/chat/sessions/:sessionId/stream`
   - Header：`Accept: text/event-stream`
   - 入参：
     - 发起新轮次：`{ message, attachments?, metadata? }`

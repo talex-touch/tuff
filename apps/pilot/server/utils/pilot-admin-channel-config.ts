@@ -1,5 +1,10 @@
 import type { H3Event } from 'h3'
-import type { PilotBuiltinTool, PilotChannelAdapter, PilotChannelTransport } from './pilot-channel'
+import type {
+  PilotBuiltinTool,
+  PilotChannelAdapter,
+  PilotChannelModelConfig,
+  PilotChannelTransport,
+} from './pilot-channel'
 import { decryptConfigValue, encryptConfigValue } from './pilot-config-crypto'
 import { getPilotDatabase, requirePilotDatabase } from './pilot-store'
 
@@ -16,6 +21,7 @@ const SUPPORTED_BUILTIN_TOOLS: PilotBuiltinTool[] = [
   'write_file',
   'edit_file',
   'ls',
+  'websearch',
 ]
 
 type PilotEventContext = H3Event['context'] & {
@@ -28,11 +34,15 @@ export interface PilotAdminChannelItem {
   baseUrl: string
   apiKey: string
   model: string
+  defaultModelId?: string
+  models?: PilotChannelModelConfig[]
   adapter: PilotChannelAdapter
   transport: PilotChannelTransport
   timeoutMs: number
   builtinTools: PilotBuiltinTool[]
   enabled: boolean
+  modelsLastSyncedAt?: string
+  modelsSyncError?: string
 }
 
 export interface PilotAdminChannelCatalog {
@@ -98,6 +108,78 @@ function normalizeBoolean(value: unknown, fallback = true): boolean {
   return fallback
 }
 
+function normalizeChannelModelRow(raw: unknown): PilotChannelModelConfig | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null
+  }
+  const row = raw as Record<string, unknown>
+  const id = normalizeText(row.id)
+  if (!id) {
+    return null
+  }
+  return {
+    id,
+    label: normalizeText(row.label) || undefined,
+    enabled: normalizeBoolean(row.enabled, true),
+    thinkingSupported: normalizeBoolean(row.thinkingSupported, true),
+    thinkingDefaultEnabled: normalizeBoolean(row.thinkingDefaultEnabled, false),
+    metadata: row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+      ? row.metadata as Record<string, unknown>
+      : undefined,
+  }
+}
+
+function normalizeChannelModels(value: unknown, fallbackModel: string): PilotChannelModelConfig[] {
+  const models = Array.isArray(value)
+    ? value
+      .map(item => normalizeChannelModelRow(item))
+      .filter((item): item is PilotChannelModelConfig => Boolean(item))
+    : []
+
+  if (models.length <= 0) {
+    const fallbackId = normalizeText(fallbackModel) || 'gpt-5.2'
+    return [{
+      id: fallbackId,
+      label: fallbackId,
+      enabled: true,
+      thinkingSupported: true,
+      thinkingDefaultEnabled: false,
+    }]
+  }
+
+  const deduped = new Map<string, PilotChannelModelConfig>()
+  for (const item of models) {
+    if (!deduped.has(item.id)) {
+      deduped.set(item.id, item)
+      continue
+    }
+    const existing = deduped.get(item.id)!
+    deduped.set(item.id, {
+      ...existing,
+      ...item,
+    })
+  }
+  return Array.from(deduped.values())
+}
+
+function normalizeDefaultModelId(
+  value: unknown,
+  models: PilotChannelModelConfig[],
+  fallbackModel: string,
+): string {
+  const modelId = normalizeText(value)
+  if (modelId && models.some(item => item.id === modelId)) {
+    return modelId
+  }
+
+  const fallbackId = normalizeText(fallbackModel)
+  if (fallbackId && models.some(item => item.id === fallbackId)) {
+    return fallbackId
+  }
+
+  return models.find(item => item.enabled !== false)?.id || models[0]?.id || 'gpt-5.2'
+}
+
 function nowIso(): string {
   return new Date().toISOString()
 }
@@ -156,6 +238,12 @@ function mergeChannelInputWithExisting(
     ...row,
     id,
     apiKey: nextApiKey || existing?.apiKey || '',
+    models: Array.isArray(row.models) ? row.models : existing?.models,
+    defaultModelId: normalizeText(row.defaultModelId) || existing?.defaultModelId,
+    modelsLastSyncedAt: normalizeText(row.modelsLastSyncedAt) || existing?.modelsLastSyncedAt,
+    modelsSyncError: typeof row.modelsSyncError === 'string'
+      ? row.modelsSyncError
+      : existing?.modelsSyncError,
   }
 }
 
@@ -171,17 +259,26 @@ function normalizeChannelRow(raw: unknown): PilotAdminChannelItem | null {
     return null
   }
   const adapter = normalizeAdapter(row.adapter)
+  const fallbackModel = normalizeText(row.model) || 'gpt-5.2'
+  const models = normalizeChannelModels(row.models, fallbackModel)
+  const defaultModelId = normalizeDefaultModelId(row.defaultModelId, models, fallbackModel)
   return {
     id,
     name: normalizeText(row.name) || id,
     baseUrl,
     apiKey,
-    model: normalizeText(row.model) || 'gpt-5.2',
+    model: defaultModelId,
+    defaultModelId,
+    models,
     adapter,
     transport: normalizeTransport(row.transport, adapter),
     timeoutMs: normalizeTimeoutMs(row.timeoutMs ?? row.timeout),
     builtinTools: normalizeTools(row.builtinTools),
     enabled: normalizeBoolean(row.enabled, true),
+    modelsLastSyncedAt: normalizeText(row.modelsLastSyncedAt) || undefined,
+    modelsSyncError: typeof row.modelsSyncError === 'string'
+      ? normalizeText(row.modelsSyncError) || undefined
+      : undefined,
   }
 }
 

@@ -5,7 +5,16 @@ import { getPilotAdminChannelCatalog } from './pilot-admin-channel-config'
 
 export type PilotChannelAdapter = 'legacy' | 'openai'
 export type PilotChannelTransport = 'responses' | 'chat.completions'
-export type PilotBuiltinTool = 'write_todos' | 'read_file' | 'write_file' | 'edit_file' | 'ls'
+export type PilotBuiltinTool = 'write_todos' | 'read_file' | 'write_file' | 'edit_file' | 'ls' | 'websearch'
+
+export interface PilotChannelModelConfig {
+  id: string
+  label?: string
+  enabled?: boolean
+  thinkingSupported?: boolean
+  thinkingDefaultEnabled?: boolean
+  metadata?: Record<string, unknown>
+}
 
 export interface PilotChannelConfig {
   id: string
@@ -13,11 +22,15 @@ export interface PilotChannelConfig {
   baseUrl: string
   apiKey: string
   model: string
+  defaultModelId?: string
+  models?: PilotChannelModelConfig[]
   adapter: PilotChannelAdapter
   transport: PilotChannelTransport
   timeoutMs: number
   builtinTools: PilotBuiltinTool[]
   enabled: boolean
+  modelsLastSyncedAt?: string
+  modelsSyncError?: string
 }
 
 export interface PilotChannelCatalog {

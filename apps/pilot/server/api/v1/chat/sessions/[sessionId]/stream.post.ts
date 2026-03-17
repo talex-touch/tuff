@@ -9,12 +9,12 @@ import {
   tryAcquireSessionExecutionLock,
   updateChatTurnStatus,
 } from '../../../../../utils/chat-turn-queue'
-import { resolvePilotChannelSelection } from '../../../../../utils/pilot-channel'
 import { requireSessionId, toErrorMessage } from '../../../../../utils/pilot-http'
 import {
   getPilotQuotaSessionByChatId,
   upsertPilotQuotaSession,
 } from '../../../../../utils/pilot-quota-session'
+import { resolvePilotRoutingSelection } from '../../../../../utils/pilot-routing-resolver'
 import { createPilotStoreAdapter } from '../../../../../utils/pilot-store'
 import { generateTitle } from '../../../../../utils/pilot-title'
 import { decodeQuotaConversation } from '../../../../../utils/quota-history-codec'
@@ -30,6 +30,12 @@ interface StreamBody {
 
 interface TurnPayload extends Record<string, unknown> {
   chat_id?: string
+  modelId?: string
+  model?: string
+  internet?: boolean
+  thinking?: boolean
+  routeComboId?: string
+  queueWaitMs?: number
   messages?: unknown[]
 }
 
@@ -491,6 +497,11 @@ export default defineEventHandler(async (event) => {
 
               const parsedPayload = JSON.parse(row.payload || '{}') as TurnPayload
               parsedPayload.chat_id = sessionId
+              parsedPayload.modelId = String(parsedPayload.modelId || parsedPayload.model || row.model || '').trim() || undefined
+              const queuedAt = Date.parse(String(row.createdAt || ''))
+              parsedPayload.queueWaitMs = Number.isFinite(queuedAt)
+                ? Math.max(0, Date.now() - queuedAt)
+                : 0
               assistantText = await proxyExecutorStream({
                 event,
                 payload: parsedPayload,
@@ -529,8 +540,13 @@ export default defineEventHandler(async (event) => {
                 })
 
                 try {
-                  const selectedChannel = await resolvePilotChannelSelection(event)
-                  const titleModel = String(parsedPayload.model || selectedChannel.channel.model || '').trim() || 'gpt-5.2'
+                  const selectedChannel = await resolvePilotRoutingSelection(event, {
+                    requestedModelId: String(parsedPayload.modelId || parsedPayload.model || '').trim(),
+                    routeComboId: String(parsedPayload.routeComboId || '').trim(),
+                    internet: parsedPayload.internet,
+                    thinking: parsedPayload.thinking,
+                  })
+                  const titleModel = String(selectedChannel.providerModel || '').trim() || 'gpt-5.2'
                   const messages = resolveTitleMessages(parsedPayload, assistantText)
                   const result = await generateTitle({
                     baseUrl: selectedChannel.channel.baseUrl,

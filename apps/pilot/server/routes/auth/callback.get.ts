@@ -38,7 +38,7 @@ async function exchangeOauthCode(
   try {
     response = await networkClient.request({
       method: 'POST',
-      url: `${nexusOrigin}/api/pilot/oauth/token`,
+      url: `${nexusOrigin}/api/oauth/token`,
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
