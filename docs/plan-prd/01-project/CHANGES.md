@@ -13,6 +13,95 @@
 
 ## 2026-03-17
 
+### Docs：文档盘点与下一步路线执行锚点固化
+
+- 新增统一执行文档：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`。
+- 固化盘点统计口径：全仓 Markdown `396`、`docs` `146`、`docs/plan-prd` `110`，并记录子域分布。
+- 六主文档补齐锚点同步：`INDEX/README/TODO/Roadmap/Quality Baseline/CHANGES` 全部指向同一执行口径。
+- 锁定优先级保持：先 `Nexus 设备授权风控`，再推进文档 strict 化与 Wave A/B/C 并行治理。
+
+### refactor(pilot): CMS Admin 化 + `/api/pilot/*` 路径硬切
+
+- 页面路由完成迁移：`/admin/**` 成为管理主入口，`/cms/**` 降级为 Legacy 跳转层。
+- 管理导航切换为静态分组导航（系统管理/内容运营/AIGC/App 管理），不再依赖 CMS 动态菜单作为主链路导航来源。
+- `channels/storage` 统一为列表页 + 添加/编辑弹框，主入口：
+  - `/admin/system/channels`
+  - `/admin/system/storage`
+- API 路径完成硬切（不保留 `/api/pilot/*` 兼容别名）：
+  - `/api/pilot/admin/*` -> `/api/admin/*`
+  - `/api/pilot/chat/*` -> `/api/chat/*`
+  - `/api/pilot/runtime/*` -> `/api/runtime/*`
+- Pilot 附件预览路径改为 `/api/chat/sessions/:sessionId/attachments/:attachmentId/content`，并同步更新对应测试断言。
+- Nexus OAuth 统一路径：
+  - `/api/pilot/oauth/authorize` -> `/api/oauth/authorize`
+  - `/api/pilot/oauth/token` -> `/api/oauth/token`
+  - Pilot 登录回调链路已同步切换到新 OAuth 路径。
+
+### feat(pilot): Pilot 合并升级 V2（渠道负载均衡 + 模型目录 + 路由组合）
+
+- 执行链路统一接入 `resolvePilotRoutingSelection`：
+  - `POST /api/aigc/executor`
+  - `POST /api/v1/chat/sessions/:sessionId/stream`
+  - `POST /api/pilot/chat/sessions/:sessionId/stream`
+- 请求参数扩展并兼容旧字段：
+  - `modelId`（兼容旧 `model`）
+  - `internet`
+  - `thinking`
+  - `routeComboId`
+  - `queueWaitMs`
+- 路由评比与负载均衡落地：
+  - 新增 `pilot_routing_metrics` 指标落库；
+  - 新增 `ChannelModelScorer`（成功率 + TTFT + 总耗时综合评分）；
+  - `Quota Auto` 速度优先选路 + 小流量探索；
+  - 新增熔断/恢复（失败阈值、冷却窗口、半开探测）。
+- 模型与渠道能力：
+  - 每渠道支持多模型列表与默认模型；
+  - 新增渠道模型发现与同步（OpenAI-compatible `/v1/models`）；
+  - 新增全局模型目录（名称/描述/icon/thinking/websearch/成本速度质量标记）；
+  - 新增路由组合管理（候选渠道模型、优先级、权重、降级链）。
+- 运行时与前端：
+  - 新增 `GET /api/pilot/runtime/models`；
+  - gptview（`/`）模型选择改为后端动态目录驱动；
+  - 输入区新增 `thinking` 开关并与 `internet` 一起透传后端；
+  - `/pilot` 改为兼容跳转到 `/`。
+- LangGraph 编排联动第一阶段：
+  - 新增 `pilot-langgraph-orchestrator` 可用性探测；
+  - 路由组合绑定 `langgraphAssistantId/graphProfile` 时优先探测本地服务，不可用自动回退 deepagent。
+- LangGraph 编排联动第二阶段：
+  - 新增 `pilot-langgraph-engine`，`createPilotRuntime` 支持 `langgraph-local` 主引擎直连 `/runs/stream`；
+  - 执行链路改为“LangGraph 主执行 + deepagent 自动回退（启动错误/空流）”，`executor` 与 `pilot chat stream` 双入口复用；
+  - `pilot-settings` 后台升级为统一控制台：渠道多模型、模型目录（icon/thinking/websearch）、路由组合（含 LangGraph 绑定）、LB/Memory 策略、渠道模型同步与评比看板。
+- 测试：
+  - 新增 `pilot-route-health.test.ts`；
+  - 新增 `pilot-channel-scorer.test.ts`；
+  - `pnpm -C apps/pilot run test -- server/utils/__tests__/pilot-route-health.test.ts server/utils/__tests__/pilot-channel-scorer.test.ts` 通过。
+
+### fix(pilot): 移除 CMS 第三方内容源板块，避免外部接口导致前台崩溃
+
+- 移除 `apps/pilot/app/pages/cms/index.vue` 中对 `https://api.vvhan.com` 的 3 处请求：
+  - `dailyEnglish`
+  - `hotlist/woShiPm`
+  - `visitor.info`
+- 同步删除对应展示区块：
+  - 访客信息提示
+  - 推荐阅读（产品经理）
+  - 今日精彩
+- 目的：消除第三方接口抖动/断连触发的页面运行时异常（`Cannot read properties of undefined (reading 'location')`），确保 CMS 基础功能稳定可用。
+
+### fix(pilot): 恢复 App 管理下 Channels/Storage 菜单入口（含存量数据补齐）
+
+- 菜单种子新增 `App 管理` 目录与子项：
+  - `Channels` -> `/cms/system/channels`
+  - `Storage` -> `/cms/system/storage`
+- 新增存量菜单补齐逻辑：`ensureSystemMenuSeed` 在已有数据库场景下会自动补缺失菜单 ID，不再依赖“空库一次性初始化”。
+- `Channels` / `Storage` 页面改为“列表 + 添加/编辑弹框”交互：
+  - `Channels` 支持列表浏览、添加渠道、编辑渠道、切换默认渠道
+  - `Storage` 支持配置列表浏览、新增配置、编辑配置
+- 新增页面文件：
+  - `apps/pilot/app/pages/cms/system/channels.vue`
+  - `apps/pilot/app/pages/cms/system/storage.vue`
+- 两个页面统一复用 `/api/pilot/admin/settings` 读写设置，保持后端配置权威源一致。
+
 ### Docs：新增治理看板（Legacy / Compat / Size）
 
 - 新增单页治理看板：`docs/plan-prd/docs/DEBT-GOVERNANCE-BOARD-2026-03-17.md`。

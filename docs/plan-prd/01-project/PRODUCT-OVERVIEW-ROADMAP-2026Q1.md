@@ -1,6 +1,6 @@
 # Tuff 产品总览与 8 周路线图（2026-Q1）
 
-> 更新时间：2026-03-16  
+> 更新时间：2026-03-17  
 > 适用范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`
 
 ## 1. 产品总览（是什么）
@@ -37,6 +37,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 ### G5. Pilot 目标（可独立部署）
 - `apps/pilot` 形成独立 Chat-first 入口，复用 Intelligence Provider/Quota/Prompt 配置体系。
 - 面向 Node Server 运行时提供长会话能力：SSE、checkpoint、pause/resume、`fromSeq` 补播。
+- Pilot 路由 V2（模型目录 + 路由组合 + 渠道负载均衡）进入可观测运行态：可记录 `queue/ttft/total/success` 并驱动 `Quota Auto` 自动选路。
 
 ## 3. 质量约束（全项目强制）
 
@@ -44,6 +45,9 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 不允许新增未类型约束的跨层调用（禁止新增 raw event 直连）。
 - 新增模块必须提供最小可回归验证（lint/typecheck/test 至少 1 项）。
 - 不得通过“关闭规则/降级配置”绕过质量问题（除非有明确豁免文档）。
+- 兼容债务冻结门禁：`legacy:guard` 必须通过，禁止新增 `channel.send('x:y')` 与新增 `legacy` 分支；存量债务仅允许白名单承载并附 `expiresVersion`（当前收口版本 `2.5.0`）。
+- 兼容债务清册门禁：`compatibility-debt-registry.csv` 必须覆盖全部存量兼容债务；新增债务无登记禁止合入。
+- 超长文件门禁：`size:guard` 必须通过，阈值 `>=1200` 的存量文件禁止继续增长，新增超长文件禁止合入。
 - 网络边界硬约束：业务层禁止新增 direct `fetch/axios`，统一走 `@talex-touch/utils/network`（network 套件内部除外），并由 root `network:guard` + ESLint 双门禁拦截。
 
 ### 3.2 架构约束
@@ -60,6 +64,11 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 功能行为变化需同步 `README.md` / `plan-prd` / `docs/INDEX.md` 至少一处。
 - 活跃 PRD 必须包含“最终目标、验收标准、质量约束、回滚策略”。
 
+### 3.5 文档治理执行锚点（2026-03-17）
+- 文档盘点与下一步路线以 `docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md` 为统一引用。
+- 当前执行优先级保持：先 `Nexus 设备授权风控`，再推进文档 strict 化与 Wave A/B/C。
+- 升级 strict 前置条件固定：连续 5 次 `docs:guard` 零告警 + 连续 2 周无口径漂移。
+
 ## 4. 8 周路线图（建议执行窗口：2026-02-23 ~ 2026-04-19）
 
 ### Week 1：基线收敛（质量止血）
@@ -69,9 +78,10 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
   - 清理 `packages/tuffex` 阻塞类型错误；
   - 固化“最小必跑校验清单”。
   - 详细执行清单：`docs/plan-prd/01-project/WEEK1-EXECUTION-PLAN-2026Q1.md`
-- 质量闸门：
+  - 质量闸门：
   - `pnpm -C "apps/core-app" run typecheck:node` 通过；
   - `pnpm -C "apps/core-app" run typecheck:web` 通过。
+  - `pnpm legacy:guard`（含 `compat:registry:guard` + `size:guard`）通过。
 
 ### Week 2：SDK Hard-Cut（E 批次）
 - 目标：清理 renderer 侧主要直连调用点。
@@ -104,6 +114,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 质量闸门：
   - `apps/pilot` lint/typecheck/build 全通过；
   - 断线恢复与 `fromSeq` 补播用例可复现。
+  - 路由指标可观测（TTFT/成功率/耗时）与熔断恢复行为可复现。
 
 ### Week 4：Storage 统一推进（配置域）
 - 目标：把高风险配置域纳入 SoT 规则并完成迁移验证。
@@ -180,6 +191,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - **历史完成（2.4.8）**：
   - OmniPanel 稳定版 MVP 已通过真实窗口 smoke 与关键失败路径回归，不再作为当前开发主线。
 - **后续顺序（锁定）**：`Nexus 设备授权风控`（`OmniPanel Gate`、`SDK Hard-Cut E~F`、`v2.4.7 Gate D/E`、`权限中心 Phase 5`、`View Mode Phase2~4`、`CLI 分包迁移收口`、`主文档同步验收` 已完成）。
+- **治理口径（锁定）**：Legacy/兼容/结构治理统一采用 `UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md`，按五工作包并行推进与统一里程碑验收。
 - **CLI 兼容策略（锁定）**：`2.4.x` 保留 `@talex-touch/unplugin-export-plugin` CLI shim，`2.5.0` 退场。
 
 ## 5. 里程碑验收标准（跨周）
