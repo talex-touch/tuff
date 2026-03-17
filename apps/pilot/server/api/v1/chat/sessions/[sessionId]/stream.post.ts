@@ -1,4 +1,4 @@
-import { networkClient } from '@talex-touch/utils/network'
+import { networkClient, parseHttpStatusCode } from '@talex-touch/utils/network'
 import { createError, getHeader, getRequestURL } from 'h3'
 import { requirePilotAuth } from '../../../../../utils/auth'
 import {
@@ -35,6 +35,63 @@ interface TurnPayload extends Record<string, unknown> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+interface TurnFailureInfo {
+  message: string
+  code?: string
+  statusCode?: number
+  detail?: Record<string, unknown>
+}
+
+function extractKnownStatusCode(raw: string): number | undefined {
+  const matched = raw.match(/\b(502|503|504)\b/)
+  if (!matched) {
+    return undefined
+  }
+  const parsed = Number(matched[1])
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function normalizeTurnFailure(error: unknown): TurnFailureInfo {
+  const rawMessage = toErrorMessage(error)
+  const statusCode = parseHttpStatusCode(error) || extractKnownStatusCode(rawMessage)
+  let message = rawMessage
+  let code: string | undefined
+
+  if (statusCode === 502) {
+    message = '上游网关连接失败（502），请检查渠道网关可用性后重试。'
+    code = 'UPSTREAM_BAD_GATEWAY'
+  }
+  else if (statusCode === 503) {
+    message = '上游服务暂时不可用（503），请稍后重试或切换渠道。'
+    code = 'UPSTREAM_UNAVAILABLE'
+  }
+  else if (statusCode === 504) {
+    message = '上游请求超时（504），请稍后重试或提高渠道超时阈值。'
+    code = 'UPSTREAM_TIMEOUT'
+  }
+  else if (/upstream request failed/i.test(rawMessage)) {
+    message = '上游请求失败，请检查渠道状态后重试。'
+    code = 'UPSTREAM_REQUEST_FAILED'
+  }
+
+  const detail: Record<string, unknown> = {
+    raw_message: rawMessage,
+  }
+  if (Number.isFinite(Number(statusCode))) {
+    detail.status_code = Number(statusCode)
+  }
+  if (code) {
+    detail.code = code
+  }
+
+  return {
+    message,
+    code,
+    statusCode,
+    detail,
+  }
 }
 
 function parseSseFrame(frame: string): string | null {
@@ -378,13 +435,17 @@ export default defineEventHandler(async (event) => {
             }
 
             if (row.status === 'failed') {
+              const failure = normalizeTurnFailure(row.errorText || 'Turn failed')
               emit({
                 event: 'turn.failed',
                 phase: 'reply',
                 request_id: requestId,
                 turn_id: row.turnId,
                 queue_pos: 0,
-                message: row.errorText || 'Turn failed',
+                message: failure.message,
+                code: failure.code,
+                status_code: failure.statusCode,
+                detail: failure.detail,
               })
               emitDone()
               close()
@@ -521,9 +582,10 @@ export default defineEventHandler(async (event) => {
           }
         }
         catch (error) {
+          const failure = normalizeTurnFailure(error)
           await updateChatTurnStatus(event, userId, sessionId, requestId, 'failed', {
             responseText: assistantText,
-            errorText: toErrorMessage(error),
+            errorText: failure.message,
           })
           emit({
             event: 'turn.failed',
@@ -531,7 +593,10 @@ export default defineEventHandler(async (event) => {
             request_id: requestId,
             turn_id: queued.turnId,
             queue_pos: 0,
-            message: toErrorMessage(error),
+            message: failure.message,
+            code: failure.code,
+            status_code: failure.statusCode,
+            detail: failure.detail,
           })
           emitDone()
           close()

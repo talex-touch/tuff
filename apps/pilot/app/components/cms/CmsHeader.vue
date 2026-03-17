@@ -1,9 +1,8 @@
 <script setup lang="ts">
+import { $endApi } from '~/composables/api/base'
+import { ENDS_URL, globalOptions } from '~/constants'
 import Logo from '../chore/Logo.vue'
 import AccountAvatar from '../personal/AccountAvatar.vue'
-import { ENDS_URL, globalOptions } from '~/constants'
-import CmsMenu from '~/components/cms/CmsMenu.vue'
-import { $endApi } from '~/composables/api/base'
 
 defineProps<{
   cur: string
@@ -27,7 +26,9 @@ watch(() => endUrl.value, async (val) => {
       return
   }
 
-  setTimeout(() => location.reload(), 500)
+  if (import.meta.client) {
+    setTimeout(() => window.location.reload(), 500)
+  }
 })
 </script>
 

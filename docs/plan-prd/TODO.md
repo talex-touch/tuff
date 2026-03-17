@@ -93,6 +93,11 @@
 - [x] 新增聚合后台设置接口：`GET/POST /api/pilot/admin/settings`。
 - [x] 新增 CMS 页面：`/cms/system/pilot-settings`，Channels + Storage 同页保存；旧 `/pilot/admin/*` 页面保留兼容提示。
 - [x] 管理配置 SoT 保持 `pilot_admin_settings`；密钥字段脱敏展示、写入加密、空值不覆写。
+- [x] 自动部署口径澄清并固化：`commit != deploy`，仅 `push master` 命中 workflow 且 webhook secrets + 1Panel webhook 健康时自动触发；保留 `ssh home` 手动兜底路径。
+- [x] SSE 前端兼容层补齐：`event/session_id/[DONE]` 统一映射到 `type/sessionId/done`，支持 `turn.*` 全链路事件消费。
+- [x] `turn.failed` 错误可见性修复：消息区强制追加 assistant 失败消息，底部保留诊断详情（`code/status_code/request_id`）。
+- [x] CMS 收口补丁：`/cms/system/pilot-settings` 可滚动，Pilot 侧入口与旧 `/pilot/admin/channels|storage` 统一跳转到 CMS 新页。
+- [x] `/cms` 防御性修复：browser-only API 增加客户端守卫，`router.back()` 增加无历史栈 fallback。
 
 ---
 
@@ -144,10 +149,10 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 34 |
+| 已完成 (`- [x]`) | 35 |
 | 未完成 (`- [ ]`) | 16 |
-| 总计 | 50 |
-| 完成率 | 68% |
+| 总计 | 51 |
+| 完成率 | 69% |
 
 > 统计时间: 2026-03-16（按本文件实时 checkbox 计数）。
 

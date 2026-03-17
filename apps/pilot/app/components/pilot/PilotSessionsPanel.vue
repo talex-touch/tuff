@@ -51,11 +51,8 @@ function onToggleCollapse() {
       <a class="pilot-auth-entry__link" href="/auth/login?returnTo=%2F">
         授权登录 Nexus
       </a>
-      <a class="pilot-auth-entry__link pilot-auth-entry__link--admin" href="/pilot/admin/channels">
-        渠道设置
-      </a>
-      <a class="pilot-auth-entry__link pilot-auth-entry__link--admin" href="/pilot/admin/storage">
-        存储设置
+      <a class="pilot-auth-entry__link pilot-auth-entry__link--admin" href="/cms/system/pilot-settings">
+        Pilot 设置
       </a>
     </div>
 

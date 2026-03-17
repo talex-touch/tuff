@@ -1,14 +1,30 @@
 <script setup lang="ts">
-import UserAccountAvatar from '~/components/personal/UserAccountAvatar.vue'
-import IndexNavbar from '~/components/chore/IndexNavbar.vue'
-
 const route = useRoute()
 const router = useRouter()
+
+function safeBack(fallback = '/') {
+  if (!import.meta.client) {
+    void router.replace(fallback)
+    return
+  }
+  if (window.history.length > 1) {
+    router.back()
+    return
+  }
+  void router.replace(fallback)
+}
 
 function handleBack() {
   const any: any = route.meta.back
 
-  any?.() && router.back()
+  if (typeof any === 'function') {
+    if (any()) {
+      safeBack()
+    }
+    return
+  }
+
+  safeBack()
 }
 </script>
 

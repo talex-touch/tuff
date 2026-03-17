@@ -1,7 +1,7 @@
 # 变更日志
 
-> 更新时间: 2026-03-16
-> 说明: 主文件仅保留近 30 天（2026-02-23 ~ 2026-03-16）详细记录；更早历史已按月归档。
+> 更新时间: 2026-03-17
+> 说明: 主文件仅保留近 30 天（2026-02-24 ~ 2026-03-17）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
@@ -10,6 +10,25 @@
 - 旧记录入口：见文末“历史索引导航”。
 
 ---
+
+## 2026-03-17
+
+### Docs：新增治理看板（Legacy / Compat / Size）
+
+- 新增单页治理看板：`docs/plan-prd/docs/DEBT-GOVERNANCE-BOARD-2026-03-17.md`。
+- 新增执行清单：`docs/plan-prd/docs/DEBT-GOVERNANCE-EXECUTION-CHECKLIST-2026-03-17.md`（owner/ticket/验收命令对齐）。
+- 看板固定按 `domain / owner / ticket / expiresVersion` 汇总当前债务与增长豁免：
+  - registry 总量 `120`（`legacy-keyword 79` / `compat-file 26` / `raw-channel-send 13` / `size-growth-exception 2`）；
+  - 超长文件基线 `46`，增长豁免 `2`。
+- 明确“只减不增”执行口径：新增债务必须先入清册，`growthExceptions` 变更必须同步 `CHANGES + registry`，默认清退门槛维持 `v2.5.0`。
+
+### refactor(pilot): 首批 growth-exception 清退动作（1+2）
+
+- `apps/pilot/app/composables/usePilotChatPage.ts` 抽离工具函数到 `app/composables/pilot-chat.utils.ts`，行数 `1366 -> 1175`（退出超长文件集合）。
+- `apps/pilot/server/api/aigc/executor.post.ts` 抽离执行器工具到 `server/utils/pilot-executor-utils.ts`，行数 `1666 -> 1370`（仍在治理窗口，继续压降）。
+- 清退 `SIZE-GROWTH-2026-03-16-PILOT-CHAT-PAGE`：
+  - 从 `scripts/large-file-boundary-allowlist.json` 移除该文件 baseline + growth exception；
+  - 从 `docs/plan-prd/docs/compatibility-debt-registry.csv` 移除对应 `size-growth-exception` 条目。
 
 ## 2026-03-16
 
@@ -72,6 +91,16 @@
 - `pilot-image.yml` 在 GHCR 推送成功后自动触发 `POST /deploy`。
 - 安全约束：`X-Pilot-Token` / `Authorization: Bearer` 校验、仓库/分支白名单。
 - 文档与运维说明同步至：`.github/workflows/README.md`、`apps/pilot/deploy/README*.md`。
+- 自动触发口径澄清：仅远端 `master` push（命中 workflow path）会触发，**本地 commit 不会触发 1Panel 自动更新**。
+- 排障与兜底路径固化：当 webhook secrets 缺失或 1Panel webhook 不可达时，统一走 `ssh home` 手动执行部署脚本。
+
+### fix(pilot): 流式失败可见性 + CMS 设置收口修复
+
+- 前端 SSE 解析新增兼容层：支持 `event/session_id/[DONE]` 到 `type/sessionId/done` 统一映射，并补齐 `turn.accepted/queued/started/delta/completed/failed` 处理。
+- `turn.failed` 改为“双通道可见”：消息区强制追加 assistant 失败消息，底部保留带 `code/status_code/request_id` 的诊断信息。
+- `v1/chat/sessions/:sessionId/stream` 的失败语义增强：`turn.failed` 增加可选 `code/status_code/detail`，并对 502/503/504 返回可操作文案（兼容保留 `message`）。
+- CMS 收口补丁：`/cms/system/pilot-settings` 页面独立滚动；Pilot 侧设置入口统一到该页；旧 `/pilot/admin/channels|storage` 改为直接跳转。
+- `/cms` 防御性修复：CMS 路径 browser-only API 增加客户端守卫，`router.back()` 增加无历史记录 fallback，降低 500 风险。
 
 ### Docs：文档治理门禁脚本落地
 
@@ -124,6 +153,7 @@
 - 本次临时增长豁免登记：
   - `SIZE-GROWTH-2026-03-16-AIGC-EXECUTOR` -> `apps/pilot/server/api/aigc/executor.post.ts`
   - `SIZE-GROWTH-2026-03-16-DEEPAGENT` -> `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+  - `SIZE-GROWTH-2026-03-16-PILOT-CHAT-PAGE` -> `apps/pilot/app/composables/usePilotChatPage.ts`
 - 兼容债务清册清理：
   - 移除 2 条主线扫描口径外的陈旧条目（`apps/pilot/shims-compat.d.ts`、`apps/nexus/i18n.config.ts`）。
   - `size-growth-exception` 调整为 registry-only domain，不再触发误判式 cleanup warning。
@@ -137,8 +167,9 @@
   - 结果：`legacy-transport-import` 从 `4 files / 4 hits` 降至 `0 files / 0 hits`（主线扫描口径）。
   - 同步清理 `compatibility-debt-registry.csv` 中 4 条 `legacy-transport-import` 条目与 2 条陈旧 `legacy-keyword` 条目。
 - 大文件增长豁免上限更新（同 ticket 续期内）：
-  - `SIZE-GROWTH-2026-03-16-AIGC-EXECUTOR`：`apps/pilot/server/api/aigc/executor.post.ts` 上限 `1593 -> 1642`。
-  - `SIZE-GROWTH-2026-03-16-DEEPAGENT`：`packages/tuff-intelligence/src/adapters/deepagent-engine.ts` 上限 `1882 -> 1919`。
+  - `SIZE-GROWTH-2026-03-16-AIGC-EXECUTOR`：`apps/pilot/server/api/aigc/executor.post.ts` 上限 `1642 -> 1666`。
+  - `SIZE-GROWTH-2026-03-16-DEEPAGENT`：`packages/tuff-intelligence/src/adapters/deepagent-engine.ts` 上限 `1919 -> 1924`。
+  - `SIZE-GROWTH-2026-03-16-PILOT-CHAT-PAGE`：`apps/pilot/app/composables/usePilotChatPage.ts` 新增上限 `1366`（baseline 仍为 `1362`）。
   - 目的：恢复 `size:guard` 基线一致性，后续仍按 `v2.5.0` 前拆分退场执行。
 
 ---
