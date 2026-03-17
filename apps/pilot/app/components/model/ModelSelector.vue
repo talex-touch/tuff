@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { autoUpdate, flip, offset, useFloating } from '@floating-ui/vue'
-import { models } from './model'
+import { resolveRuntimeModelIconSource, usePilotRuntimeModels } from '~/composables/usePilotRuntimeModels'
 
 const props = defineProps<{
   modelValue: string
@@ -14,13 +14,22 @@ const hover = ref(false)
 const hoverMode = debouncedRef(hover, 200)
 
 const model = useVModel(props, 'modelValue', emits)
-
-const curSelect = computed(() => models.find(item => item.key === model.value))
+const { models, defaultModelId, ensureLoaded, findModel } = usePilotRuntimeModels()
+const curSelect = computed(() => findModel(model.value) || models.value[0])
+const curIcon = computed(() => {
+  if (!curSelect.value) {
+    return {
+      type: 'class' as const,
+      value: 'i-carbon-machine-learning-model',
+    }
+  }
+  return resolveRuntimeModelIconSource(curSelect.value)
+})
 
 const modelSelector = ref()
 const modelFloating = ref()
 
-const isMobile = document.body.classList.contains('mobile')
+const isMobile = process.client && document.body.classList.contains('mobile')
 
 const { floatingStyles } = useFloating(modelSelector, modelFloating, {
   placement: isMobile ? 'bottom' : 'top-start',
@@ -29,6 +38,19 @@ const { floatingStyles } = useFloating(modelSelector, modelFloating, {
   }) */), flip()],
   whileElementsMounted: autoUpdate,
 })
+
+onMounted(async () => {
+  await ensureLoaded()
+  if (!findModel(model.value)) {
+    model.value = defaultModelId.value
+  }
+})
+
+watch(() => model.value, () => {
+  if (!findModel(model.value) && defaultModelId.value) {
+    model.value = defaultModelId.value
+  }
+})
 </script>
 
 <template>
@@ -36,8 +58,11 @@ const { floatingStyles } = useFloating(modelSelector, modelFloating, {
     ref="modelSelector" :class="{ expand: hoverMode }" class="ModelSelector" @mouseenter="hoverMode = hover = true"
     @mouseleave="hover = false"
   >
-    <span class="model-name" :class="[curSelect!.key]">
-      <img :src="curSelect!.img">{{ curSelect!.name }}
+    <span class="model-name" :class="[curSelect?.key]">
+      <img v-if="curIcon.type === 'image'" :src="curIcon.value">
+      <span v-else-if="curIcon.type === 'emoji'" class="icon-emoji">{{ curIcon.value }}</span>
+      <i v-else :class="curIcon.value" class="icon-class" />
+      {{ curSelect?.name || model }}
       <div i-carbon-chevron-up />
     </span>
   </div>
@@ -150,6 +175,23 @@ const { floatingStyles } = useFloating(modelSelector, modelFloating, {
     img {
       width: 24px;
       height: 24px;
+    }
+
+    .icon-class {
+      width: 24px;
+      height: 24px;
+      font-size: 22px;
+      line-height: 24px;
+    }
+
+    .icon-emoji {
+      display: inline-flex;
+      width: 24px;
+      height: 24px;
+      font-size: 20px;
+      line-height: 24px;
+      align-items: center;
+      justify-content: center;
     }
 
     &.this-normal-turbo {

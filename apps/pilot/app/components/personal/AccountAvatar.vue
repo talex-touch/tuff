@@ -30,7 +30,7 @@ const menus = reactive([
     label: '系统设置',
     show: computed(() => userStore.value.isAdmin),
     click: () => {
-      router.push('/cms')
+      router.push('/admin')
     },
   },
   {

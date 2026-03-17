@@ -26,6 +26,7 @@ const emits = defineEmits<{
 const template = ref<any>()
 const inputProperty = ref<IChatInnerItemMeta>({
   internet: true,
+  thinking: true,
   temperature: 50,
 })
 

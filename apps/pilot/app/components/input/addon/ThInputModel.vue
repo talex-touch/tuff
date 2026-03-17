@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { autoUpdate, flip, offset, useFloating } from '@floating-ui/vue'
-import UserAvatar from '~/components/personal/UserAvatar.vue'
-import { $endApi } from '~/composables/api/base'
-import { models } from '~/components/model/model'
+import { resolveRuntimeModelIconSource, usePilotRuntimeModels } from '~/composables/usePilotRuntimeModels'
 
 const props = defineProps<{
   input: string
@@ -15,7 +13,8 @@ const emits = defineEmits<{
 }>()
 
 const index = ref(0)
-const list = ref(models)
+const { models, ensureLoaded } = usePilotRuntimeModels()
+const list = computed(() => models.value)
 
 function handleSelect(ind: number) {
   index.value = ind
@@ -61,6 +60,7 @@ function handleKeyDown(e: KeyboardEvent) {
 }
 
 onMounted(() => {
+  void ensureLoaded()
   document.addEventListener('keydown', handleKeyDown)
 })
 onUnmounted(() => document.removeEventListener('keydown', handleKeyDown))
@@ -77,7 +77,7 @@ const { floatingStyles } = useFloating(inputRef, floatingRef, {
 })
 
 watch(() => globalConfigModel.value, () => {
-  index.value = models.findIndex(item => item.key === globalConfigModel.value) || 0
+  index.value = Math.max(0, list.value.findIndex(item => item.key === globalConfigModel.value))
 })
 </script>
 
@@ -94,7 +94,9 @@ watch(() => globalConfigModel.value, () => {
               v-for="(item, ind) in list" :id="`slash-model-${ind}`" :key="ind" v-wave
               :class="{ active: index === ind }" class="ThInputModel-Item" @click="handleSelect(ind)"
             >
-              <img :src="item.img">
+              <img v-if="resolveRuntimeModelIconSource(item).type === 'image'" :src="resolveRuntimeModelIconSource(item).value">
+              <span v-else-if="resolveRuntimeModelIconSource(item).type === 'emoji'" class="icon-emoji">{{ resolveRuntimeModelIconSource(item).value }}</span>
+              <i v-else :class="resolveRuntimeModelIconSource(item).value" class="icon-class" />
               <div class="ThInputModel-Item-Info fake-background">
                 <p>{{ item.name }}</p>
               </div>
@@ -149,6 +151,26 @@ watch(() => globalConfigModel.value, () => {
 
     width: 32px;
     height: 32px;
+  }
+
+  .icon-class {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    font-size: 24px;
+    text-align: center;
+  }
+
+  .icon-emoji {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    font-size: 22px;
+    align-items: center;
+    justify-content: center;
   }
 
   &-Info {

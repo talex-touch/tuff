@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { autoUpdate, flip, offset, useFloating } from '@floating-ui/vue'
-import { models } from '~/components/model/model'
-import { QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
+import { resolveRuntimeModelIconSource, usePilotRuntimeModels } from '~/composables/usePilotRuntimeModels'
 
 const props = defineProps<{
   modelValue: string
@@ -11,44 +10,17 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   (e: 'update:modelValue', value: string): void
-  (e: 'retry', model?: QuotaModel): void
+  (e: 'retry', model?: string): void
 }>()
 
 const expand = ref(!false)
 const hover = ref(false)
 const hoverMode = debouncedRef(hover, 200)
 const model = useVModel(props, 'modelValue', emits)
+const { models, ensureLoaded, findModel } = usePilotRuntimeModels()
 
-const modelInfo = reactive([
-  {
-    icon: 'i-carbon:flash-filled',
-    name: '标准',
-    label: '标准模型',
-    value: 'this-normal',
-    model: QuotaModel.QUOTA_THIS_NORMAL,
-    desc: '快到极致，迅猛如电',
-  },
-  {
-    icon: 'i-carbon:circle-filled',
-    name: '强化',
-    label: '强化模型',
-    value: 'this-normal-turbo',
-    desc: '复杂任务的好手，更应手',
-    model: QuotaModel.QUOTA_THIS_NORMAL_TURBO,
-    lock: () => userStore.value?.subscription?.type === 'STANDARD' || userStore.value?.subscription?.type === 'ULTIMATE',
-  },
-  {
-    icon: 'i-carbon:watsonx-ai',
-    name: '高级',
-    label: '高级模型',
-    value: 'this-normal-ultimate',
-    desc: '不只是模态能力，来试试',
-    model: QuotaModel.QUOTA_THIS_NORMAL_ULTRA,
-    lock: () => userStore.value?.subscription?.type === 'ULTIMATE',
-  },
-])
-
-const curModel = computed(() => models.find(_model => _model.key === model.value))
+const modelInfo = computed(() => models.value)
+const curModel = computed(() => findModel(model.value) || models.value[0])
 
 const modelSelector = ref()
 const modelFloating = ref()
@@ -74,14 +46,17 @@ watchEffect(() => {
   }
 })
 
-async function handleRetry(model?: any) {
+onMounted(() => {
+  void ensureLoaded()
+})
+
+function iconOf(modelItem: (typeof modelInfo.value)[number]) {
+  return resolveRuntimeModelIconSource(modelItem)
+}
+
+async function handleRetry(modelId?: string) {
   await sleep(400)
-
-  const lockable = model?.lock?.() ?? true
-  if (!lockable)
-    return
-
-  emits('retry', model?.model)
+  emits('retry', modelId)
 }
 </script>
 
@@ -108,23 +83,21 @@ async function handleRetry(model?: any) {
         </p>
         <div class="model-selector-content">
           <div
-            v-for="_model in modelInfo" :key="_model.value" v-wave :class="{ lock: !(_model.lock?.() ?? true) }"
-            class="model-popover-item" @click="handleRetry(_model)"
+            v-for="_model in modelInfo" :key="_model.key" v-wave
+            class="model-popover-item" @click="handleRetry(_model.key)"
           >
             <div class="icon fake-background">
-              <i :class="_model.icon" />
+              <img v-if="iconOf(_model).type === 'image'" :src="iconOf(_model).value" alt="model icon">
+              <span v-else-if="iconOf(_model).type === 'emoji'" class="icon-emoji">{{ iconOf(_model).value }}</span>
+              <i v-else :class="iconOf(_model).value" />
             </div>
             <div class="main">
               <p class="title">
-                {{ _model.label }}
+                {{ _model.name }}
               </p>
               <p class="desc">
-                {{ _model.desc }}
+                {{ _model.description || '可用于当前会话的候选模型' }}
               </p>
-            </div>
-
-            <div class="lock">
-              <div i-carbon:locked />
             </div>
           </div>
         </div>
@@ -140,7 +113,7 @@ async function handleRetry(model?: any) {
                   再次尝试
                 </p>
                 <p class="desc">
-                  {{ curModel.label }}
+                  {{ curModel.name }}
                 </p>
               </div>
             </div>
@@ -188,6 +161,14 @@ async function handleRetry(model?: any) {
     .icon {
       i {
         display: block;
+      }
+      img {
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+      }
+      .icon-emoji {
+        font-size: 20px;
       }
       // z-index: 1;
       position: relative;

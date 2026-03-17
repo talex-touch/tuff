@@ -44,7 +44,7 @@ const rawUserConfig = {
     home: {
       index: {},
       chat: {
-        model: 'this-normal',
+        model: 'quota-auto',
       },
     },
     info: {

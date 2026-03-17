@@ -54,7 +54,7 @@ export default (router: RouterTyped) => {
 
   window.h5sdk.ready(async () => {
     if (userStore.value.isLogin) {
-      await router.push('/cms')
+      await router.push('/admin')
 
       ElMessage.success('已通过风险环境异常检测')
     }

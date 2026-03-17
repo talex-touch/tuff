@@ -188,7 +188,7 @@ export function usePilotChatPage() {
 
     autoPauseSessionLocks.add(sessionId)
     try {
-      await fetchJson(`/api/pilot/chat/sessions/${sessionId}/pause`, {
+      await fetchJson(`/api/chat/sessions/${sessionId}/pause`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -284,7 +284,7 @@ export function usePilotChatPage() {
   }
 
   async function createSession(): Promise<string> {
-    const data = await fetchJson<{ session: PilotSession }>('/api/pilot/chat/sessions', {
+    const data = await fetchJson<{ session: PilotSession }>('/api/chat/sessions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -300,8 +300,8 @@ export function usePilotChatPage() {
     loadingSessions.value = true
     try {
       const [sessionData, notificationData] = await Promise.all([
-        fetchJson<{ sessions: PilotSession[] }>('/api/pilot/chat/sessions?limit=50'),
-        fetchJson<SessionNotificationsResponse>('/api/pilot/chat/sessions/notifications?limit=100')
+        fetchJson<{ sessions: PilotSession[] }>('/api/chat/sessions?limit=50'),
+        fetchJson<SessionNotificationsResponse>('/api/chat/sessions/notifications?limit=100')
           .catch(() => ({ notifications: [] })),
       ])
 
@@ -356,7 +356,7 @@ export function usePilotChatPage() {
     ))
 
     try {
-      await fetchJson(`/api/pilot/chat/sessions/${sessionId}/notification`, {
+      await fetchJson(`/api/chat/sessions/${sessionId}/notification`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -379,7 +379,7 @@ export function usePilotChatPage() {
     setSessionTitleLoading(sessionId, true)
 
     try {
-      const data = await fetchJson<SessionTitleResponse>(`/api/pilot/chat/sessions/${sessionId}/title`, {
+      const data = await fetchJson<SessionTitleResponse>(`/api/chat/sessions/${sessionId}/title`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -606,7 +606,7 @@ export function usePilotChatPage() {
 
     loadingMessages.value = true
     try {
-      const data = await fetchJson<SessionMessagesResponse>(`/api/pilot/chat/sessions/${sessionId}/messages`)
+      const data = await fetchJson<SessionMessagesResponse>(`/api/chat/sessions/${sessionId}/messages`)
       messages.value = Array.isArray(data.messages) ? data.messages : []
       attachments.value = Array.isArray(data.attachments) ? data.attachments : []
       pendingAttachments.value = []
@@ -623,7 +623,7 @@ export function usePilotChatPage() {
     if (!sessionId)
       return
 
-    const data = await fetchJson<SessionTraceResponse>(`/api/pilot/chat/sessions/${sessionId}/trace?fromSeq=${fromSeq}&limit=500`)
+    const data = await fetchJson<SessionTraceResponse>(`/api/chat/sessions/${sessionId}/trace?fromSeq=${fromSeq}&limit=500`)
     const items = Array.isArray(data.traces) ? data.traces : []
 
     if (!append) {
@@ -683,7 +683,7 @@ export function usePilotChatPage() {
         abortSessionStream(sessionId, 'session_deleted')
       }
 
-      await fetchJson<{ ok: boolean }>(`/api/pilot/chat/sessions/${sessionId}`, {
+      await fetchJson<{ ok: boolean }>(`/api/chat/sessions/${sessionId}`, {
         method: 'DELETE',
       })
 
@@ -1089,7 +1089,7 @@ export function usePilotChatPage() {
     try {
       const response = await networkClient.request<ReadableStream<Uint8Array> | null>({
         method: 'POST',
-        url: `/api/pilot/chat/sessions/${sessionId}/stream`,
+        url: `/api/chat/sessions/${sessionId}/stream`,
         headers: {
           'content-type': 'application/json',
           'accept': 'text/event-stream',
@@ -1246,7 +1246,7 @@ export function usePilotChatPage() {
     formData.append('name', file.name)
     formData.append('mimeType', file.type || 'application/octet-stream')
     formData.append('size', String(file.size))
-    const response = await fetchJson<{ attachment: PilotAttachment }>(`/api/pilot/chat/sessions/${sessionId}/uploads`, {
+    const response = await fetchJson<{ attachment: PilotAttachment }>(`/api/chat/sessions/${sessionId}/uploads`, {
       method: 'POST',
       body: formData,
     })

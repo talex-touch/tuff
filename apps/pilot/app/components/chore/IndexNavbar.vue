@@ -39,7 +39,7 @@ async function push(path: string) {
     <AnimateIcon tip="效率工具" :active="route.name === 'powerpoint'" @click="push('/powerpoint')">
       <IconSvgPptSvg />
     </AnimateIcon> -->
-    <AnimateIcon v-if="userStore.isAdmin" tip="管理" @click="$router.push('/cms')">
+    <AnimateIcon v-if="userStore.isAdmin" tip="管理" @click="$router.push('/admin')">
       <IconSvgCopSvg />
     </AnimateIcon>
   </div>
