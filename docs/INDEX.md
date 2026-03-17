@@ -30,12 +30,14 @@
 - **Pilot 后台设置入口合并**：新增 `/cms/system/pilot-settings`（Channels + Storage 同页），旧 `/pilot/admin/*` 进入兼容迁移窗口。
 - **Legacy 聊天输入框附件修复**：`ThInput` 旧输入框已支持粘贴与选择文件附件（不再仅限图片，也不再提示“暂时不支持附件/文件分析”）。
 - **Pilot/Legacy 附件可读性修复**：非图片附件在大小阈值内会内联为 `input_file.file_data` 传给模型，不再只传文件名/类型元信息。
+- **Pilot 流式失败可见性修复**：前端已兼容 `event/session_id/[DONE]` 协议差异，并对 `turn.failed` 同时提供消息区可见失败消息与底部诊断详情。
 - **Legacy 历史加载状态修复**：`GET /api/aigc/conversation/:id` 返回 JSON `value` 时，历史项点击流程已兼容对象解码并确保异常时也会退出 loading。
 - **Pilot 历史存储格式**：`pilot_quota_history.value` 已统一为 JSON 字符串（旧 base64 记录已迁移，历史接口默认回包结构化 JSON）。
 - **Pilot 会话兼容回填**：`GET /api/aigc/conversation/:id` 在 quota history 缺记录时，会自动从 runtime session 生成 snapshot 回填，避免刷新时误报 `conversation not found`。
 - **Pilot 接口迁移（M2/M3）**：已完成收口；微信相关接口进入豁免模式，支付链路切换为本地 mock（下单 3 秒自动成功）。
 - **Pilot channels 治理**：已新增 `POST /api/pilot/admin/channels/merge-ends` 与一次性脚本，执行“Pilot 优先、Ends 补缺”。
-- **Pilot 自动部署**：`pilot-image.yml` 支持发布后自动调用 1Panel webhook，强制 `X-Pilot-Token` 校验并支持仓库/分支白名单。
+- **Pilot 自动部署**：仅在 `master` 的远端 `push`（非本地 `commit`）且命中 `pilot-image.yml` 路径过滤后触发；需同时满足 `ONEPANEL_WEBHOOK_URL/TOKEN` 已配置与 1Panel webhook 健康可达，否则需走 `ssh home` 手动部署兜底。
+- **Pilot 设置入口收口**：`/cms/system/pilot-settings` 已成为 channels/storage 唯一主入口，旧 `/pilot/admin/channels|storage` 路由会自动跳转。
 - **执行顺序（锁定）**：`Nexus 设备授权风控`（执行入口：`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md`；前序 `CLI 分包迁移收口（core 真迁移 + 文档统一）` 与 `主文档同步验收` 已完成）。
 - **质量边界**：Network 套件全仓硬禁生效，业务层 direct `fetch/axios` 继续保持 0 违规。
 

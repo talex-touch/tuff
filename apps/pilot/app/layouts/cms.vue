@@ -1,29 +1,56 @@
 <script setup lang="ts">
-const { isChrome, isDesktop } = useDevice()
 const expand = ref(userConfig.value.pri_info.cms.expand)
 const router = useRouter()
+const device = import.meta.client
+  ? useDevice()
+  : {
+      isChrome: true,
+      isDesktop: false,
+    }
+
+function safeBack(fallback = '/cms') {
+  if (!import.meta.client) {
+    void router.replace(fallback)
+    return
+  }
+  if (window.history.length > 1) {
+    router.back()
+    return
+  }
+  void router.replace(fallback)
+}
 
 definePageMeta({
   layout: 'cms',
 })
 
-const cur = ref()
+const cur = ref('')
+
+function normalizeRouteName(name: unknown, fallbackPath: string): string {
+  if (typeof name === 'string' && name.trim()) {
+    return name
+  }
+  if (typeof name === 'symbol') {
+    return String(name.description || fallbackPath)
+  }
+  return fallbackPath
+}
 
 onBeforeMount(async () => {
   if (!userStore.value.isAdmin) {
-    router.back()
+    safeBack('/')
 
     return false
   }
 
-  if (isDesktop && !isChrome) {
+  if (device.isDesktop && !device.isChrome) {
     ElNotification({
       duration: 60000,
       title: '使用 Chrome 以继续',
       message: h('i', { style: 'color: teal' }, '请勿使用未受信任的浏览器操作！'),
     })
 
-    router.back()
+    safeBack('/')
   }
 })
 
@@ -98,16 +125,17 @@ router.afterEach((to) => {
   if (path === tabOptions.value.active)
     return
 
-  cur.value = name
+  const currentName = normalizeRouteName(name, path)
+  cur.value = currentName
 
   setTimeout(() => {
     changeActiveRoute(path)
     // tabOptions.value.active = path
 
-    const index = tabOptions.value.tabs.findIndex(item => item.name === cur.value)
+    const index = tabOptions.value.tabs.findIndex(item => item.name === currentName)
 
     if (index === -1)
-      tabOptions.value.tabs.push({ path, name })
+      tabOptions.value.tabs.push({ path, name: currentName })
   }, 200)
 })
 </script>

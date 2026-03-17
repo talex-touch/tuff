@@ -1,9 +1,8 @@
-import type { ChatMessageModel, StatusTone } from '@talex-touch/tuffex'
+import type { ChatMessageModel } from '@talex-touch/tuffex'
 import type {
   PilotAttachment,
   PilotComposerAttachment,
   PilotMessage,
-  PilotMessageAttachmentMeta,
   PilotSession,
   PilotSessionRow,
   PilotTrace,
@@ -15,223 +14,34 @@ import type {
 } from './pilot-chat.types'
 import { networkClient } from '@talex-touch/utils/network'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import {
+  ASSISTANT_CHUNK_FLUSH_MS,
+  clampInputText,
+  createNotificationMap,
+  DEFAULT_STREAM_IDLE_TIMEOUT_MS,
+  DEFAULT_STREAM_MAX_DURATION_MS,
+  fetchJson,
+  formatAttachmentSummary,
+  getMessageAttachments,
+  getStatusTone,
+  isImageAttachment,
+  makeId,
+  MAX_ATTACHMENT_BYTES,
+  normalizeTimeoutMs,
+  parseSseChunks,
+  resolveAttachmentKind,
+  shortSessionId,
+  shouldFlushImmediately,
+  sortSessions,
+  STREAM_IDLE_TIMEOUT_MAX_MS,
+  STREAM_IDLE_TIMEOUT_MIN_MS,
+  STREAM_MAX_DURATION_MAX_MS,
+  STREAM_MAX_DURATION_MIN_MS,
+  toPrettyErrorMessage,
+  toReadableTime,
+  yieldToUiFrame,
+} from './pilot-chat.utils'
 import { useAttachmentCapability } from './useAttachmentCapability'
-
-const ASSISTANT_CHUNK_FLUSH_MS = 48
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
-const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 45_000
-const DEFAULT_STREAM_MAX_DURATION_MS = 8 * 60_000
-const STREAM_IDLE_TIMEOUT_MIN_MS = 10_000
-const STREAM_IDLE_TIMEOUT_MAX_MS = 5 * 60_000
-const STREAM_MAX_DURATION_MIN_MS = 30_000
-const STREAM_MAX_DURATION_MAX_MS = 60 * 60_000
-
-function makeId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
-}
-
-function clampInputText(value: string): string {
-  return value.trim().slice(0, 4000)
-}
-
-function shortSessionId(sessionId: string): string {
-  return sessionId.slice(-8)
-}
-
-function toNetworkMethod(method: string | undefined): 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS' {
-  const normalized = String(method || 'GET').toUpperCase()
-  switch (normalized) {
-    case 'POST':
-    case 'PUT':
-    case 'PATCH':
-    case 'DELETE':
-    case 'HEAD':
-    case 'OPTIONS':
-      return normalized
-    case 'GET':
-    default:
-      return 'GET'
-  }
-}
-
-function getStatusTone(status: PilotSession['status']): StatusTone {
-  if (status === 'completed') {
-    return 'success'
-  }
-  if (status === 'executing' || status === 'planning') {
-    return 'warning'
-  }
-  if (status === 'failed') {
-    return 'danger'
-  }
-  if (status === 'paused_disconnect') {
-    return 'info'
-  }
-  return 'muted'
-}
-
-function toReadableTime(value: string | undefined): string {
-  if (!value)
-    return '--'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime()))
-    return '--'
-  return date.toLocaleString('zh-CN', {
-    hour12: false,
-  })
-}
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const headers = new Headers(init?.headers || {})
-  if (!headers.has('accept')) {
-    headers.set('accept', 'application/json')
-  }
-
-  const response = await networkClient.request<T>({
-    url,
-    method: toNetworkMethod(init?.method),
-    headers: Object.fromEntries(headers.entries()),
-    body: init?.body,
-    signal: init?.signal,
-  })
-  return response.data
-}
-
-function sortSessions(list: PilotSession[]): PilotSession[] {
-  return [...list].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
-}
-
-function createNotificationMap(response: SessionNotificationsResponse | null | undefined): Map<string, boolean> {
-  const map = new Map<string, boolean>()
-  const rows = Array.isArray(response?.notifications) ? response.notifications : []
-  for (const row of rows) {
-    const sessionId = String(row?.sessionId || '').trim()
-    if (!sessionId) {
-      continue
-    }
-    map.set(sessionId, Boolean(row?.unread))
-  }
-  return map
-}
-
-function parseSseChunks(chunk: string): StreamEvent[] {
-  const lines = chunk
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean)
-
-  const events: StreamEvent[] = []
-
-  for (const line of lines) {
-    if (!line.startsWith('data:')) {
-      continue
-    }
-    const raw = line.slice(5).trim()
-    if (!raw) {
-      continue
-    }
-    try {
-      events.push(JSON.parse(raw) as StreamEvent)
-    }
-    catch {
-      // Ignore malformed SSE payloads.
-    }
-  }
-
-  return events
-}
-
-function yieldToUiFrame(): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, 0))
-}
-
-function toPrettyErrorMessage(message: string, detail?: Record<string, unknown>): string {
-  const text = String(message || '').trim()
-  if (!detail || Object.keys(detail).length <= 0) {
-    return text || 'Stream error'
-  }
-  const normalized = { ...detail }
-  if (normalized.message === text) {
-    delete normalized.message
-  }
-  return `${text || 'Stream error'}\n${JSON.stringify(normalized, null, 2)}`
-}
-
-function normalizeMessageAttachments(value: unknown): PilotMessageAttachmentMeta[] {
-  if (!Array.isArray(value)) {
-    return []
-  }
-
-  const attachments: PilotMessageAttachmentMeta[] = []
-  for (const item of value) {
-    const id = String((item as Record<string, unknown>)?.id || '').trim()
-    const ref = String((item as Record<string, unknown>)?.ref || '').trim()
-    if (!id || !ref) {
-      continue
-    }
-
-    attachments.push({
-      id,
-      type: String((item as Record<string, unknown>)?.type || '').trim() === 'image' ? 'image' : 'file',
-      ref,
-      name: typeof (item as Record<string, unknown>)?.name === 'string' ? String((item as Record<string, unknown>).name) : undefined,
-      mimeType: typeof (item as Record<string, unknown>)?.mimeType === 'string' ? String((item as Record<string, unknown>).mimeType) : undefined,
-      previewUrl: typeof (item as Record<string, unknown>)?.previewUrl === 'string' ? String((item as Record<string, unknown>).previewUrl) : undefined,
-    })
-  }
-
-  return attachments
-}
-
-function resolveAttachmentKind(item: Pick<PilotAttachment, 'kind' | 'type'>): 'image' | 'file' {
-  return item.kind === 'image' || item.type === 'image' ? 'image' : 'file'
-}
-
-function getMessageAttachments(message: PilotMessage): PilotMessageAttachmentMeta[] {
-  return normalizeMessageAttachments(message.metadata?.attachments)
-}
-
-function formatAttachmentSummary(attachments: PilotMessageAttachmentMeta[], withDivider = true): string {
-  if (attachments.length <= 0) {
-    return ''
-  }
-
-  const lines = attachments.map((item) => {
-    const name = String(item.name || '').trim() || item.id
-    const mimeType = String(item.mimeType || '').trim() || (item.type === 'image' ? 'image/*' : 'application/octet-stream')
-    return `- ${name} (${mimeType})`
-  })
-
-  if (!withDivider) {
-    return `附件:\n${lines.join('\n')}`
-  }
-
-  return `\n\n---\n附件:\n${lines.join('\n')}`
-}
-
-function isImageAttachment(item: PilotMessageAttachmentMeta): boolean {
-  if (item.type === 'image') {
-    return true
-  }
-  return String(item.mimeType || '').toLowerCase().startsWith('image/')
-}
-
-function shouldFlushImmediately(delta: string): boolean {
-  return /[\n。！？.!?]$/.test(delta)
-}
-
-function normalizeTimeoutMs(
-  value: unknown,
-  fallback: number,
-  min: number,
-  max: number,
-): number {
-  const numeric = Number(value)
-  if (!Number.isFinite(numeric)) {
-    return fallback
-  }
-  return Math.min(Math.max(Math.floor(numeric), min), max)
-}
 
 export function usePilotChatPage() {
   const runtimePublic = useRuntimeConfig().public as Record<string, unknown>
@@ -274,6 +84,7 @@ export function usePilotChatPage() {
 
   const streamAbortControllers = new Map<string, AbortController>()
   const autoPauseSessionLocks = new Set<string>()
+  const streamHandledFailureMessageSessions = new Set<string>()
   let assistantDeltaBuffer = ''
   let assistantFlushTimer: ReturnType<typeof setTimeout> | null = null
   const traceKeySet = new Set<string>()
@@ -773,6 +584,22 @@ export function usePilotChatPage() {
     activeMessage.content = finalText
   }
 
+  function appendAssistantFailure(message: string, detail?: Record<string, unknown>) {
+    const normalizedMessage = String(message || '').trim() || '请求失败，请稍后重试'
+    const diagnostics = detail && Object.keys(detail).length > 0
+      ? `\n\n---\n诊断信息:\n\`\`\`json\n${JSON.stringify(detail, null, 2)}\n\`\`\``
+      : ''
+
+    flushAssistantDeltaBuffer()
+    activeAssistantMessageId.value = null
+    messages.value.push({
+      id: makeId('msg_assistant_error'),
+      role: 'assistant',
+      content: `请求失败：${normalizedMessage}${diagnostics}`,
+      createdAt: new Date().toISOString(),
+    })
+  }
+
   async function loadSessionMessages(sessionId: string) {
     if (!sessionId)
       return
@@ -902,10 +729,15 @@ export function usePilotChatPage() {
   }
 
   function applyStreamEvent(item: StreamEvent) {
+    const eventType = String(item.type || item.event || '').trim()
     const eventSessionId = String(item.sessionId || activeSessionId.value || '').trim()
     const isActiveSessionEvent = eventSessionId !== '' && eventSessionId === activeSessionId.value
+    const eventSeq = Number(item.seq || lastSeq.value || 1)
+    const normalizedSeq = Number.isFinite(eventSeq) && eventSeq > 0
+      ? Math.floor(eventSeq)
+      : Math.max(1, lastSeq.value)
 
-    if (!eventSessionId) {
+    if (!eventSessionId || !eventType) {
       return
     }
 
@@ -915,102 +747,230 @@ export function usePilotChatPage() {
       }
     }
 
-    if (
-      item.type === 'stream.started'
-      || item.type === 'planning.started'
-      || item.type === 'planning.updated'
-      || item.type === 'planning.finished'
-      || item.type === 'replay.started'
-      || item.type === 'replay.finished'
-      || item.type === 'turn.started'
-      || item.type === 'turn.finished'
-    ) {
+    if (eventType === 'turn.accepted' || eventType === 'turn.queued' || eventType === 'turn.started') {
+      if (eventType === 'turn.accepted' || eventType === 'turn.queued' || eventType === 'turn.started') {
+        setSessionRunning(eventSessionId, true)
+      }
       if (!isActiveSessionEvent) {
         return
       }
-      appendTrace(mapTrace(item.type, Number(item.seq || lastSeq.value), {
-        ...(item.payload || {}),
-        replay: Boolean(item.replay),
+      appendTrace(mapTrace(eventType, normalizedSeq, {
+        request_id: item.request_id,
+        turn_id: item.turn_id || item.turnId,
+        queue_pos: item.queue_pos,
+        phase: item.phase,
       }))
       return
     }
 
-    if (item.type === 'run.audit') {
-      if (!isActiveSessionEvent) {
-        return
-      }
-      appendTrace(mapTrace('run.audit', Number(item.seq || lastSeq.value), {
-        ...(item.payload || {}),
-        replay: Boolean(item.replay),
-      }))
-      return
-    }
-
-    if (item.type === 'assistant.delta') {
+    if (eventType === 'turn.delta') {
       if (!isActiveSessionEvent) {
         return
       }
       appendAssistantDelta(String(item.delta || ''))
       if (traceDrawerOpen.value) {
-        appendTrace(mapTrace('assistant.delta', Number(item.seq || lastSeq.value), {
+        appendTrace(mapTrace('turn.delta', normalizedSeq, {
+          request_id: item.request_id,
+          turn_id: item.turn_id || item.turnId,
+          queue_pos: item.queue_pos,
+          phase: item.phase,
           replay: Boolean(item.replay),
         }))
       }
       return
     }
 
-    if (item.type === 'assistant.final') {
+    if (eventType === 'turn.completed') {
+      setSessionRunning(eventSessionId, false)
       if (!isActiveSessionEvent) {
         return
       }
       appendAssistantFinal(String(item.message || ''))
       activeAssistantMessageId.value = null
-      appendTrace(mapTrace('assistant.final', Number(item.seq || lastSeq.value), {
+      appendTrace(mapTrace('turn.completed', normalizedSeq, {
+        request_id: item.request_id,
+        turn_id: item.turn_id || item.turnId,
+        queue_pos: item.queue_pos,
+        phase: item.phase,
         replay: Boolean(item.replay),
       }))
       return
     }
 
-    if (item.type === 'session.paused') {
+    if (eventType === 'turn.failed') {
+      setSessionRunning(eventSessionId, false)
+      if (!isActiveSessionEvent) {
+        return
+      }
+
+      const message = String(item.message || '请求失败，请稍后重试')
+      const detail: Record<string, unknown> = {
+        ...(item.detail || {}),
+      }
+      if (item.code) {
+        detail.code = item.code
+      }
+      if (Number.isFinite(Number(item.status_code))) {
+        detail.status_code = Number(item.status_code)
+      }
+      if (item.request_id) {
+        detail.request_id = item.request_id
+      }
+      if (item.turn_id || item.turnId) {
+        detail.turn_id = item.turn_id || item.turnId
+      }
+      if (item.phase) {
+        detail.phase = item.phase
+      }
+
+      const diagnostic = Object.keys(detail).length > 0 ? detail : undefined
+      streamError.value = toPrettyErrorMessage(message, diagnostic)
+      appendAssistantFailure(message, diagnostic)
+      streamHandledFailureMessageSessions.add(eventSessionId)
+      appendTrace(mapTrace('turn.failed', normalizedSeq, {
+        ...detail,
+        message,
+      }))
+      return
+    }
+
+    if (eventType === 'title.generated') {
+      if (!isActiveSessionEvent) {
+        return
+      }
+      const titleEvent = item as unknown as Record<string, unknown>
+      const title = String(titleEvent.title || '').trim()
+      if (title) {
+        sessions.value = sessions.value.map((row) => {
+          if (row.sessionId !== eventSessionId) {
+            return row
+          }
+          return {
+            ...row,
+            title,
+            updatedAt: new Date().toISOString(),
+          }
+        })
+      }
+      appendTrace(mapTrace('title.generated', normalizedSeq, {
+        request_id: item.request_id,
+        turn_id: item.turn_id || item.turnId,
+        title,
+        source: titleEvent.source,
+        generated: titleEvent.generated,
+        phase: item.phase,
+      }))
+      return
+    }
+
+    if (eventType === 'title.failed') {
+      if (!isActiveSessionEvent) {
+        return
+      }
+      appendTrace(mapTrace('title.failed', normalizedSeq, {
+        request_id: item.request_id,
+        turn_id: item.turn_id || item.turnId,
+        message: String(item.message || ''),
+        phase: item.phase,
+      }))
+      return
+    }
+
+    if (
+      eventType === 'stream.started'
+      || eventType === 'planning.started'
+      || eventType === 'planning.updated'
+      || eventType === 'planning.finished'
+      || eventType === 'replay.started'
+      || eventType === 'replay.finished'
+      || eventType === 'turn.finished'
+    ) {
+      if (!isActiveSessionEvent) {
+        return
+      }
+      appendTrace(mapTrace(eventType, normalizedSeq, {
+        ...(item.payload || {}),
+        replay: Boolean(item.replay),
+      }))
+      return
+    }
+
+    if (eventType === 'run.audit') {
+      if (!isActiveSessionEvent) {
+        return
+      }
+      appendTrace(mapTrace('run.audit', normalizedSeq, {
+        ...(item.payload || {}),
+        replay: Boolean(item.replay),
+      }))
+      return
+    }
+
+    if (eventType === 'assistant.delta') {
+      if (!isActiveSessionEvent) {
+        return
+      }
+      appendAssistantDelta(String(item.delta || ''))
+      if (traceDrawerOpen.value) {
+        appendTrace(mapTrace('assistant.delta', normalizedSeq, {
+          replay: Boolean(item.replay),
+        }))
+      }
+      return
+    }
+
+    if (eventType === 'assistant.final') {
+      if (!isActiveSessionEvent) {
+        return
+      }
+      appendAssistantFinal(String(item.message || ''))
+      activeAssistantMessageId.value = null
+      appendTrace(mapTrace('assistant.final', normalizedSeq, {
+        replay: Boolean(item.replay),
+      }))
+      return
+    }
+
+    if (eventType === 'session.paused') {
       setSessionRunning(eventSessionId, false)
       if (!isActiveSessionEvent) {
         return
       }
       flushAssistantDeltaBuffer()
       reconnectHint.value = `会话已暂停：${item.reason || 'unknown'}`
-      appendTrace(mapTrace('session.paused', Number(item.seq || lastSeq.value), {
+      appendTrace(mapTrace('session.paused', normalizedSeq, {
         reason: item.reason,
       }))
       return
     }
 
-    if (item.type === 'run.metrics') {
+    if (eventType === 'run.metrics') {
       if (!isActiveSessionEvent) {
         return
       }
       if (traceDrawerOpen.value) {
-        appendTrace(mapTrace('run.metrics', Number(item.seq || lastSeq.value), {
+        appendTrace(mapTrace('run.metrics', normalizedSeq, {
           ...(item.payload || {}),
         }))
       }
       return
     }
 
-    if (item.type === 'error') {
+    if (eventType === 'error') {
       setSessionRunning(eventSessionId, false)
       if (!isActiveSessionEvent) {
         return
       }
       flushAssistantDeltaBuffer()
       streamError.value = toPrettyErrorMessage(String(item.message || 'Stream error'), item.detail)
-      appendTrace(mapTrace('error', Number(item.seq || lastSeq.value), {
+      appendTrace(mapTrace('error', normalizedSeq, {
         message: String(item.message || 'Stream error'),
         detail: item.detail || {},
       }))
       return
     }
 
-    if (item.type === 'done') {
+    if (eventType === 'done') {
       setSessionRunning(eventSessionId, false)
       if (!isActiveSessionEvent) {
         return
@@ -1024,7 +984,7 @@ export function usePilotChatPage() {
       return
     }
 
-    appendTrace(mapTrace(item.type || 'unknown', Number(item.seq || lastSeq.value), {
+    appendTrace(mapTrace(eventType || 'unknown', normalizedSeq, {
       ...(item.payload || {}),
       replay: Boolean(item.replay),
     }))
@@ -1160,7 +1120,10 @@ export function usePilotChatPage() {
       }
 
       if (isCurrentActiveSession()) {
-        streamError.value = error instanceof Error ? error.message : '流式请求失败'
+        const errorMessage = error instanceof Error ? error.message : '流式请求失败'
+        streamError.value = errorMessage
+        appendAssistantFailure(errorMessage)
+        streamHandledFailureMessageSessions.add(sessionId)
       }
       return
     }
@@ -1186,11 +1149,17 @@ export function usePilotChatPage() {
 
       // Avoid replacing the whole message list after each stream completion.
       // Full sync is still applied when stream errors happen.
-      if (isCurrentActiveSession() && streamError.value) {
+      if (isCurrentActiveSession() && streamError.value && !streamHandledFailureMessageSessions.has(sessionId)) {
         tasks.push(loadSessionMessages(sessionId))
       }
 
-      await Promise.all(tasks)
+      try {
+        await Promise.all(tasks)
+      }
+      finally {
+        streamHandledFailureMessageSessions.delete(sessionId)
+      }
+
       if (isCurrentActiveSession()) {
         void maybeSummarizeActiveSessionTitle(sessionId)
       }

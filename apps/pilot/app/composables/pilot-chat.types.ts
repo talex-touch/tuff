@@ -76,11 +76,20 @@ export interface PilotComposerAttachment {
 
 export interface StreamEvent {
   type: string
+  event?: string
+  phase?: string
   sessionId?: string
+  session_id?: string
   turnId?: string
+  turn_id?: string
   seq?: number
   delta?: string
   message?: string
+  request_id?: string
+  queue_pos?: number
+  code?: string
+  status_code?: number
+  status?: string
   reason?: string
   detail?: Record<string, unknown>
   envelope?: Record<string, unknown>

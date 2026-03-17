@@ -159,8 +159,19 @@ export function formatNumber(num: string) {
   return `${num}`.replace(/(\d)(?=(?:\d{3})+$)/g, '$1,')
 }
 
+function getBrowserLocation(): Location | null {
+  if (typeof window === 'undefined' || !window.location) {
+    return null
+  }
+  return window.location
+}
+
 function isCrossOriginUrl(url: string) {
-  const origin = location.host
+  const locationRef = getBrowserLocation()
+  if (!locationRef) {
+    return false
+  }
+  const origin = locationRef.host
 
   return url.indexOf('data:') !== 0 && !url.includes(origin)
 }
@@ -275,7 +286,11 @@ export function useTypedRef<T extends abstract new (...args: any) => any>(_comp:
 }
 
 export function getProtocolUrl(key: string) {
-  return `${location.origin}/guide/protocol?key=${key}`
+  const locationRef = getBrowserLocation()
+  if (!locationRef) {
+    return `/guide/protocol?key=${key}`
+  }
+  return `${locationRef.origin}/guide/protocol?key=${key}`
 }
 
 // 从a-b区间映射到c-d分区间

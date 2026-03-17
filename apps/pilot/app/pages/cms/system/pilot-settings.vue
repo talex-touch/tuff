@@ -562,10 +562,16 @@ onMounted(() => {
 
 <style scoped>
 .pilot-settings-page {
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
   padding: 18px;
+  overflow: auto;
 }
 
 .pilot-settings-panel {
+  width: min(1080px, 100%);
+  margin: 0 auto;
   background: #fff;
   border-radius: 12px;
   border: 1px solid #ececec;
