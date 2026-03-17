@@ -28,9 +28,9 @@ vi.mock('h3', async () => {
   }
 })
 
-vi.mock('../../../../utils/auth', () => authMocks)
-vi.mock('../../../../utils/authStore', () => authStoreMocks)
-vi.mock('../../../../utils/oauthClientStore', () => oauthClientStoreMocks)
+vi.mock('../../../utils/auth', () => authMocks)
+vi.mock('../../../utils/authStore', () => authStoreMocks)
+vi.mock('../../../utils/oauthClientStore', () => oauthClientStoreMocks)
 
 let handler: (event: any) => Promise<any>
 
@@ -39,7 +39,7 @@ beforeAll(async () => {
   handler = (await import('../authorize.get')).default as (event: any) => Promise<any>
 })
 
-describe('/api/pilot/oauth/authorize', () => {
+describe('/api/oauth/authorize', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     h3Mocks.getQuery.mockReturnValue({
@@ -48,7 +48,7 @@ describe('/api/pilot/oauth/authorize', () => {
       redirect_uri: 'https://app.example.com/oauth/callback',
       state: 'state_abc',
     })
-    h3Mocks.getRequestURL.mockReturnValue(new URL('https://tuff.tagzxia.com/api/pilot/oauth/authorize'))
+    h3Mocks.getRequestURL.mockReturnValue(new URL('https://tuff.tagzxia.com/api/oauth/authorize'))
     h3Mocks.sendRedirect.mockImplementation((_event, url, code) => ({ url, code }))
     authMocks.requireSessionAuth.mockResolvedValue({ userId: 'u1' })
     authStoreMocks.createPilotOauthCode.mockResolvedValue({
@@ -89,7 +89,7 @@ describe('/api/pilot/oauth/authorize', () => {
     const result = await handler({ context: {} })
 
     expect(result).toEqual({
-      url: 'https://tuff.tagzxia.com/api/auth/signin?callbackUrl=https%3A%2F%2Ftuff.tagzxia.com%2Fapi%2Fpilot%2Foauth%2Fauthorize',
+      url: 'https://tuff.tagzxia.com/api/auth/signin?callbackUrl=https%3A%2F%2Ftuff.tagzxia.com%2Fapi%2Foauth%2Fauthorize',
       code: 302,
     })
     expect(authStoreMocks.createPilotOauthCode).not.toHaveBeenCalled()

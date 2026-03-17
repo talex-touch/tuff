@@ -1,8 +1,8 @@
 import type { H3Event } from 'h3'
 import { createError, getQuery, getRequestURL, sendRedirect } from 'h3'
-import { requireSessionAuth } from '../../../utils/auth'
-import { createPilotOauthCode } from '../../../utils/authStore'
-import { getActiveOauthClientByClientId } from '../../../utils/oauthClientStore'
+import { requireSessionAuth } from '../../utils/auth'
+import { createPilotOauthCode } from '../../utils/authStore'
+import { getActiveOauthClientByClientId } from '../../utils/oauthClientStore'
 
 const DEFAULT_CODE_TTL_MS = 60_000
 
