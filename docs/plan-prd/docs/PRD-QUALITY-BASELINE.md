@@ -1,12 +1,18 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-03-16  
+> 更新时间：2026-03-17  
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
 
 统一活跃 PRD 的编写与验收标准，避免“有方案无目标、有实现无质量门禁”。  
 从本文件生效后，新增或继续推进的 PRD 均应满足下述最小结构。
+
+## 1.1 文档治理执行锚点（2026-03-17）
+
+- 文档盘点与优先级路线统一参考：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`。
+- 主线动作必须同步六文档：`INDEX / README / TODO / CHANGES / Roadmap / Quality Baseline`。
+- 文档门禁升级前置保持不变：连续 5 次 `pnpm docs:guard` 零告警 + 连续 2 周无口径漂移。
 
 ## 2. 每个活跃 PRD 必须包含的章节（MUST）
 
@@ -34,10 +40,14 @@
 ### 3.1 类型与调用约束
 - 不得新增未类型化的跨层通信。
 - 优先复用 domain SDK，禁止新增 raw event 字符串分发。
+- 强制启用 `legacy:guard`：禁止新增 `channel.send('x:y')` 与新增 `legacy` 分支命中；新增兼容债务必须进入白名单并附退场版本（当前基线 `2.5.0`）。
+- 强制启用 `compat:registry:guard`：兼容债务清册（`docs/plan-prd/docs/compatibility-debt-registry.csv`）必须完整覆盖存量命中，缺字段/缺条目/过期未清理均失败。
+- 强制启用 `size:guard`：超长文件阈值 `>=1200` 基线冻结，禁止新增和增长；仅允许通过 `growthExceptions` 临时豁免，并要求同步 `CHANGES + compatibility registry`。
 
 ### 3.2 可靠性约束
 - 关键路径需有显式错误处理与用户可见反馈。
 - 对异步流程必须定义超时与失败回退。
+- Pilot 路由链路必须具备可观测指标（至少含 `queue wait`、`TTFT`、`total duration`、`success/error`），并支持熔断恢复策略。
 
 ### 3.3 性能约束
 - 为关键路径提供预算（如启动、搜索响应、任务执行耗时）。
@@ -50,6 +60,7 @@
 ### 3.5 文档约束
 - PRD 状态变化（进行中/完成/归档）必须同步 `README.md` 与 `TODO.md`。
 - 对外行为变化必须同步 Nexus 对应开发文档。
+- 推荐统一验收入口：`pnpm quality:gate`（`legacy:guard + network:guard + test:targeted + typecheck(node/web) + docs:guard`）。
 
 ## 4. 验收执行模板（建议复制到 PRD）
 
@@ -154,7 +165,7 @@
 | --- | --- | --- |
 | 新应用 | `apps/pilot`（Nuxt Node Server + Postgres/Redis） | 已创建并作为主路径运行 |
 | Runtime 收口 | `packages/tuff-intelligence`（protocol/runtime/registry/policy/store） | 已落地 |
-| 流式 API | `POST /api/pilot/chat/sessions/:sessionId/stream` | 已上线 |
+| 流式 API | `POST /api/chat/sessions/:sessionId/stream`（2026-03-17 从 `/api/pilot/*` 硬切） | 已上线 |
 | 事件契约 | `assistant.delta/final`、`run.metrics`、`session.paused`、`error`、`done` | 已实现 |
 | 补播机制 | `fromSeq` trace replay + checkpoint | 已实现（基础版） |
 | 校验 | `apps/pilot` lint/typecheck/build | 已通过 |
@@ -211,3 +222,19 @@
 - 风控策略调整必须同时更新实施文档与 `CHANGES`，形成同日证据闭环。
 - 豁免必须具备责任人、时间窗和原因，不允许全局无限期豁免。
 - 文档门禁仍保持 `docs:guard` report-only，strict 升级需满足连续零告警前置条件。
+
+### 6.9 Pilot 路由 V2（2026-03-17）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 执行入口 | `/api/aigc/executor`、`/api/v1/chat/sessions/*`、`/api/chat/sessions/*` | 已统一接入 |
+| 路由策略 | `Quota Auto` 速度优先 + 探索流量 | 已落地 |
+| 评比指标 | `queueWaitMs/ttftMs/totalDurationMs/success/errorCode/finishReason` | 已落库 |
+| 熔断恢复 | 失败阈值 + 冷却 + 半开探测 | 已落地 |
+| 运行时模型目录 | `/api/runtime/models` 驱动前端模型选择 | 已落地 |
+
+**质量约束落地**
+- 路由决策必须可解释：需输出 `selectionSource + selectionReason + routeComboId`。
+- 模型开关必须可控：`internet`、`thinking` 均需透传至后端执行链路。
+- 路由异常必须自动回退：LangGraph Local Server 不可用时回退 deepagent，不得阻断主对话链路。

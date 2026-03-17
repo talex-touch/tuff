@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-03-16
+> 更新时间: 2026-03-17
 
 ---
 
@@ -14,6 +14,14 @@
 | 2.4.8 Gate | OmniPanel 稳定版 MVP 已完成（historical） | 保留历史验收证据，不再作为当前开发主线 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | v2.4.7 Gate | A/B/C/D/E 全部完成（D/E historical） | 保留 run/manifest/sha256 证据链 | `TODO` / `README` / `Roadmap` / `Release Checklist` / `Quality Baseline` / `INDEX` |
 | Pilot Runtime | Node Server + Postgres/Redis + JWT Cookie 主路径 | 继续补齐稳定性与部署回归 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
+
+---
+
+## 📚 文档盘点锚点（2026-03-17）
+
+- 全仓 Markdown：`396`；`docs`：`146`；`docs/plan-prd`：`110`。
+- 子域分布：`03-features 32`、`docs 20`、`04-implementation 17`、`01-project 12`、`05-archive 11`、`02-architecture 8`、`06-ecosystem 4`。
+- 统一口径文档：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`。
 
 ---
 
@@ -88,16 +96,26 @@
 
 - [x] 新旧链路统一附件投递策略：`id > https url > base64`（并发=3，快速失败错误码透出）。
 - [x] `pilot stream` 与 `legacy executor` 接入统一解析器，并补充 `attachment.resolve.start/end` 与 `attachment.delivery.summary` 埋点。
-- [x] `/api/pilot/chat/sessions/:sessionId/uploads` 支持 `multipart/form-data`，兼容保留 `contentBase64`。
-- [x] 新增 `GET /api/pilot/chat/attachments/capability`，Pilot/legacy 输入框共用探测能力。
-- [x] 新增聚合后台设置接口：`GET/POST /api/pilot/admin/settings`。
-- [x] 新增 CMS 页面：`/cms/system/pilot-settings`，Channels + Storage 同页保存；旧 `/pilot/admin/*` 页面保留兼容提示。
+- [x] `/api/chat/sessions/:sessionId/uploads` 支持 `multipart/form-data`，兼容保留 `contentBase64`。
+- [x] 新增 `GET /api/chat/attachments/capability`，Pilot/legacy 输入框共用探测能力。
+- [x] 新增聚合后台设置接口：`GET/POST /api/admin/settings`。
+- [x] 新增 Admin 页面：`/admin/system/channels`、`/admin/system/storage`（列表 + 添加/编辑弹框），`/cms/*` 退化为 Legacy 跳转层。
 - [x] 管理配置 SoT 保持 `pilot_admin_settings`；密钥字段脱敏展示、写入加密、空值不覆写。
 - [x] 自动部署口径澄清并固化：`commit != deploy`，仅 `push master` 命中 workflow 且 webhook secrets + 1Panel webhook 健康时自动触发；保留 `ssh home` 手动兜底路径。
 - [x] SSE 前端兼容层补齐：`event/session_id/[DONE]` 统一映射到 `type/sessionId/done`，支持 `turn.*` 全链路事件消费。
 - [x] `turn.failed` 错误可见性修复：消息区强制追加 assistant 失败消息，底部保留诊断详情（`code/status_code/request_id`）。
-- [x] CMS 收口补丁：`/cms/system/pilot-settings` 可滚动，Pilot 侧入口与旧 `/pilot/admin/channels|storage` 统一跳转到 CMS 新页。
+- [x] CMS 收口补丁：`/admin/*` 作为管理主入口，`/cms/*` 统一跳转到对应 `/admin/*`。
 - [x] `/cms` 防御性修复：browser-only API 增加客户端守卫，`router.back()` 增加无历史栈 fallback。
+
+### G. Pilot 合并升级 V2（2026-03-17）
+
+- [x] 统一执行链路：`/api/aigc/executor`、`/api/v1/chat/sessions/*`、`/api/chat/sessions/*` 接入路由解析与指标采集。
+- [x] 新增渠道评比指标：记录 `queueWaitMs/ttftMs/totalDurationMs/success/errorCode/finishReason/channel+model/routeCombo`。
+- [x] 新增渠道熔断状态机：按失败阈值摘除，冷却后半开探测恢复。
+- [x] 新增模型目录与路由组合后台接口：`models/route-combos/channel-models/sync/routing-metrics/runtime-models`。
+- [x] 前端 gptview 切换为运行时模型目录驱动，支持 `internet/thinking` 开关透传。
+- [x] 兼容入口收口：`/pilot` 保留兼容跳转到 `/`。
+- [x] 接入真实 LangGraph Local Server 运行图：`createPilotRuntime` 已支持 `langgraph-local` 主引擎执行，启动失败/空流自动回退 deepagent。
 
 ---
 
@@ -149,12 +167,12 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 35 |
+| 已完成 (`- [x]`) | 46 |
 | 未完成 (`- [ ]`) | 16 |
-| 总计 | 51 |
-| 完成率 | 69% |
+| 总计 | 62 |
+| 完成率 | 74% |
 
-> 统计时间: 2026-03-16（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-03-17（按本文件实时 checkbox 计数）。
 
 ---
 
