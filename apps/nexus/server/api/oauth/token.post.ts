@@ -1,6 +1,6 @@
 import { createError, readBody } from 'h3'
-import { consumePilotOauthCode, getUserById } from '../../../utils/authStore'
-import { verifyOauthClientSecret } from '../../../utils/oauthClientStore'
+import { consumePilotOauthCode, getUserById } from '../../utils/authStore'
+import { verifyOauthClientSecret } from '../../utils/oauthClientStore'
 
 interface OauthTokenBody {
   grant_type?: string

@@ -100,6 +100,9 @@
 - [x] 新增 `GET /api/chat/attachments/capability`，Pilot/legacy 输入框共用探测能力。
 - [x] 新增聚合后台设置接口：`GET/POST /api/admin/settings`。
 - [x] 新增 Admin 页面：`/admin/system/channels`、`/admin/system/storage`（列表 + 添加/编辑弹框），`/cms/*` 退化为 Legacy 跳转层。
+- [x] App 管理进一步拆页：`model-groups / route-combos / routing-policy / routing-metrics` 独立入口；`pilot-settings` 退化为总览跳转页。
+- [x] Channels 升级为多模型配置：每渠道维护模型列表、默认模型与启用模型列表。
+- [x] 左侧导航滚动修复并精简系统管理入口（默认隐藏 `角色管理 / 菜单管理 / 字典项`）。
 - [x] 管理配置 SoT 保持 `pilot_admin_settings`；密钥字段脱敏展示、写入加密、空值不覆写。
 - [x] 自动部署口径澄清并固化：`commit != deploy`，仅 `push master` 命中 workflow 且 webhook secrets + 1Panel webhook 健康时自动触发；保留 `ssh home` 手动兜底路径。
 - [x] SSE 前端兼容层补齐：`event/session_id/[DONE]` 统一映射到 `type/sessionId/done`，支持 `turn.*` 全链路事件消费。

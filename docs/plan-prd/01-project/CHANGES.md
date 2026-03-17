@@ -37,6 +37,23 @@
   - `/api/pilot/oauth/token` -> `/api/oauth/token`
   - Pilot 登录回调链路已同步切换到新 OAuth 路径。
 
+### refactor(pilot-admin): App 管理按功能独立拆页
+
+- 修复 Admin 左侧导航不可滚动问题：侧栏容器改为 `flex + overflow hidden`，菜单区单独 `el-scrollbar` 承担滚动。
+- App 管理入口进一步拆分为独立页面：
+  - `/admin/system/channels`
+  - `/admin/system/storage`
+  - `/admin/system/model-groups`
+  - `/admin/system/route-combos`
+  - `/admin/system/routing-policy`
+  - `/admin/system/routing-metrics`
+- `/admin/system/pilot-settings` 调整为“管理总览页”，仅保留分功能入口跳转，不再承载聚合编辑表单。
+- `Channels` 管理增强为“每渠道多模型”：
+  - 每渠道可配置模型列表、默认模型、模型启用状态（不再是单一模型字符串）；
+  - 列表页展示“模型列表 + 启用模型列表”。
+- `Model Groups` 独立页新增 icon 配置与分组维度字段（icon type/value、质量/速度/成本评分、渠道模型映射）。
+- 系统管理导航精简：默认隐藏 `角色管理 / 菜单管理 / 字典项` 入口（页面文件保留，后续按退场窗口统一下线）。
+
 ### feat(pilot): Pilot 合并升级 V2（渠道负载均衡 + 模型目录 + 路由组合）
 
 - 执行链路统一接入 `resolvePilotRoutingSelection`：

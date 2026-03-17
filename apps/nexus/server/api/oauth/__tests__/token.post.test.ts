@@ -19,8 +19,8 @@ vi.mock('h3', async () => {
   }
 })
 
-vi.mock('../../../../utils/authStore', () => authStoreMocks)
-vi.mock('../../../../utils/oauthClientStore', () => oauthClientStoreMocks)
+vi.mock('../../../utils/authStore', () => authStoreMocks)
+vi.mock('../../../utils/oauthClientStore', () => oauthClientStoreMocks)
 
 let handler: (event: any) => Promise<any>
 
@@ -33,7 +33,7 @@ function createEvent() {
   return {}
 }
 
-describe('/api/pilot/oauth/token', () => {
+describe('/api/oauth/token', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     readBodyMock.mockResolvedValue({
