@@ -76,6 +76,7 @@ export enum IChatRole {
 
 export interface IChatInnerItemMeta {
   internet?: boolean
+  thinking?: boolean
   temperature?: number
 
   // TODO: context memory
@@ -152,6 +153,10 @@ export interface IChatBody {
   chat_id: string
   index: number
   model: QuotaModel | string
+  modelId?: string
+  routeComboId?: string
+  internet?: boolean
+  thinking?: boolean
   messages: IChatItem[]
   temperature: number
   templateId: number

@@ -1,18 +1,17 @@
 <script setup lang="ts">
+import type { IChatInnerItem, IChatItem, IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
 import dayjs from 'dayjs'
 import zhLocale from 'dayjs/locale/zh-cn'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import { api as viewerApi } from 'v-viewer'
+import { IChatItemStatus, IChatRole } from '~/composables/api/base/v1/aigc/completion-types'
+import { resolveRuntimeModelIconSource, usePilotRuntimeModels } from '~/composables/usePilotRuntimeModels'
+import ThCheckBox from '../checkbox/ThCheckBox.vue'
 import RoundLoading from '../loaders/RoundLoading.vue'
 import TextShaving from '../other/TextShaving.vue'
-import ThCheckBox from '../checkbox/ThCheckBox.vue'
-import { models } from '../model/model'
-import ChatAttachment from './ChatAttachment.vue'
 import ItemModelSelector from './addon/ItemModelSelector.vue'
 import ErrorCard from './attachments/ErrorCard.vue'
-import type { IChatInnerItem, IChatItem, IInnerItemMeta, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
-import { IChatItemStatus, IChatRole } from '~/composables/api/base/v1/aigc/completion-types'
-import { InnerItemMeta } from '~/composables/api/base/v1/aigc/completion/entity'
+import ChatAttachment from './ChatAttachment.vue'
 
 interface IChatItemProp {
   item: IChatItem
@@ -38,6 +37,7 @@ const route = useRoute()
 const viewMode = computed(() => route.query?.share)
 const msgItem = useVModel(props, 'item', emits)
 const dom = ref()
+const { ensureLoaded, findModel } = usePilotRuntimeModels()
 
 dayjs.locale(zhLocale)
 dayjs.extend(relativeTime)
@@ -92,7 +92,7 @@ const tools = reactive([
   // { name: '朗读', icon: 'i-carbon-user-speaker' },
 ])
 
-function handleRetry(model?: QuotaModel) {
+function handleRetry(model?: string) {
   const inner: IChatInnerItem = JSON.parse(JSON.stringify(innerItem.value!))
 
   if (model)
@@ -146,10 +146,15 @@ function noneCard(block: IInnerItemMeta) {
 }
 
 const targetModel = computed(() =>
-  models.find(model => model.key === innerItem.value?.model),
+  findModel(innerItem.value?.model),
 )
+const targetModelIcon = computed(() => targetModel.value ? resolveRuntimeModelIconSource(targetModel.value) : null)
 
 const contentsLength = computed(() => (innerItem.value?.value || []).reduce((amo, item) => amo + (item?.data === 'suggest' ? 0 : (item?.value?.length || 0)), 0))
+
+onMounted(() => {
+  void ensureLoaded()
+})
 </script>
 
 <template>
@@ -160,7 +165,10 @@ const contentsLength = computed(() => (innerItem.value?.value || []).reduce((amo
 
     <div class="ChatItem-Avatar">
       <PersonalUserAvatar v-if="template?.avatar" :avatar="template.avatar" />
-      <img v-else :src="targetModel?.img || '/logo.png'">
+      <img v-else-if="targetModelIcon?.type === 'image'" :src="targetModelIcon.value">
+      <span v-else-if="targetModelIcon?.type === 'emoji'" class="model-emoji">{{ targetModelIcon.value }}</span>
+      <i v-else-if="targetModelIcon?.type === 'class'" :class="targetModelIcon.value" />
+      <img v-else src="/logo.png">
     </div>
     <!-- error: innerItem.status === IChatItemStatus.ERROR, -->
     <div v-if="innerItem" class="ChatItem-Wrapper">
@@ -266,9 +274,7 @@ const contentsLength = computed(() => (innerItem.value?.value || []).reduce((amo
         </template>
         <template v-else-if="!isUser">
           <span class="info">
-            <span v-if="innerItem.model === 'this-normal'">4</span>
-            <span v-else-if="innerItem.model === 'this-normal-turbo'">4o</span>
-            <span v-else-if="innerItem.model === 'this-normal-ultra'">5</span>
+            <span>{{ targetModel?.name || innerItem.model }}</span>
           </span>
         </template>
 
@@ -642,6 +648,14 @@ div.ChatItem-Wrapper.error div.ChatItem-Content-Inner {
     img {
       width: 32px;
       height: 32px;
+    }
+    .model-emoji {
+      font-size: 22px;
+      line-height: 32px;
+    }
+    i {
+      font-size: 24px;
+      line-height: 32px;
     }
     position: relative;
     display: flex;

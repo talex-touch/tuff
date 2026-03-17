@@ -9,10 +9,11 @@ import ModelSelector from '~/components/model/ModelSelector.vue'
 import { useHotKeysHook } from '~/composables/aigc'
 import { $endApi } from '~/composables/api/base'
 import { $completion } from '~/composables/api/base/v1/aigc/completion'
-import { IChatItemStatus, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
+import { IChatItemStatus, PersistStatus } from '~/composables/api/base/v1/aigc/completion-types'
 import { calculateConversation } from '~/composables/api/base/v1/aigc/completion/entity'
 import { $historyManager } from '~/composables/api/base/v1/aigc/history'
 import { $event } from '~/composables/events'
+import { usePilotRuntimeModels } from '~/composables/usePilotRuntimeModels'
 import { globalConfigModel } from '~/composables/user'
 import '~/composables/index.d.ts'
 
@@ -24,6 +25,11 @@ definePageMeta({
 const chatRef = ref()
 const route = useRoute()
 const router = useRouter()
+const {
+  ensureLoaded: ensureRuntimeModelsLoaded,
+  defaultModelId,
+  findModel,
+} = usePilotRuntimeModels()
 const viewMode = computed(() => route.query?.share)
 const STREAM_SCROLL_THROTTLE_MS = 120
 const initConversation = $completion.emptyHistory()
@@ -122,7 +128,10 @@ watch(
         const content = lastMsg?.content[lastMsg.page]
         const runtimeState = String((conversation as any)?.runtimeState || '').trim().toLowerCase()
 
-        globalConfigModel.value = content?.model || QuotaModel.QUOTA_THIS_NORMAL
+        globalConfigModel.value = content?.model || defaultModelId.value
+        if (!findModel(globalConfigModel.value)) {
+          globalConfigModel.value = defaultModelId.value
+        }
         if (runtimeState === 'queued')
           pageOptions.status = IChatItemStatus.WAITING
         else if (runtimeState === 'executing' || runtimeState === 'title')
@@ -303,11 +312,11 @@ async function handleSend(query: IInnerItemMeta[], meta: IChatInnerItemMeta) {
 
   function getModel() {
     if (!shiftItem)
-      return globalConfigModel.value
+      return findModel(globalConfigModel.value) ? globalConfigModel.value : defaultModelId.value
 
     const inner = shiftItem.content[shiftItem.page]
-
-    return inner?.model || globalConfigModel.value
+    const modelId = String(inner?.model || globalConfigModel.value || '').trim()
+    return findModel(modelId) ? modelId : defaultModelId.value
   }
 
   const chatItem = $completion.emptyChatItem()
@@ -358,6 +367,11 @@ function handleCancelReq() {
 const mount = ref(false)
 
 async function mounter() {
+  await ensureRuntimeModelsLoaded()
+  if (!findModel(globalConfigModel.value)) {
+    globalConfigModel.value = defaultModelId.value
+  }
+
   setTimeout(() => {
     mount.value = true
   }, 200)

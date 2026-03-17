@@ -73,7 +73,7 @@ export function useAttachmentCapability() {
     }
 
     try {
-      const payload = await $fetch<AttachmentCapabilityResponse>('/api/pilot/chat/attachments/capability', {
+      const payload = await $fetch<AttachmentCapabilityResponse>('/api/chat/attachments/capability', {
         headers: {
           Accept: 'application/json',
         },

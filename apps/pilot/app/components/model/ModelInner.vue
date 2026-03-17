@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { models } from './model'
+import { resolveRuntimeModelIconSource, usePilotRuntimeModels } from '~/composables/usePilotRuntimeModels'
 
 const props = defineProps<{
   modelValue: string
@@ -11,6 +11,11 @@ const emits = defineEmits<{
 
 const modelRef = ref()
 const model = useVModel(props, 'modelValue', emits)
+const { models, ensureLoaded } = usePilotRuntimeModels()
+
+onMounted(() => {
+  void ensureLoaded()
+})
 
 function handleClick(item: any) {
   if (item?.valuable)
@@ -51,7 +56,9 @@ function handleClick(item: any) {
         <!-- valuable: item.valuable, -->
         <!-- <div v-if="item.valuable" i-carbon-locked />
       <div v-else i-carbon-unlocked /> -->
-        <img :src="item.img">
+        <img v-if="resolveRuntimeModelIconSource(item).type === 'image'" :src="resolveRuntimeModelIconSource(item).value">
+        <span v-else-if="resolveRuntimeModelIconSource(item).type === 'emoji'" class="icon-emoji">{{ resolveRuntimeModelIconSource(item).value }}</span>
+        <i v-else :class="resolveRuntimeModelIconSource(item).value" class="icon-class" />
         {{ item.name }}
       </div>
     </el-scrollbar>
@@ -79,6 +86,24 @@ function handleClick(item: any) {
   img {
     width: 32px;
     height: 32px;
+  }
+
+  .icon-class {
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    font-size: 26px;
+    text-align: center;
+  }
+
+  .icon-emoji {
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    font-size: 24px;
+    align-items: center;
+    justify-content: center;
   }
 
   position: relative;

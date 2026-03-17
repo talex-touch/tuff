@@ -1,6 +1,6 @@
 import { endHttp } from '../../axios'
 import type { ILivechat, ILivechatQuery, IUpdateLivechat } from './wechat.type'
-import Livechat from '~/pages/cms/wechat/livechat.vue'
+import Livechat from '~/pages/admin/wechat/livechat.vue'
 
 export default {
   Livechat: {

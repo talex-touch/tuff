@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { autoUpdate, flip, offset, useFloating } from '@floating-ui/vue'
 import type { IChatInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
+import { autoUpdate, flip, offset, useFloating } from '@floating-ui/vue'
 
 const props = defineProps<{
   hide: boolean
@@ -92,6 +92,16 @@ const options: any = reactive([
       property.value.internet = !property.value.internet
     },
     checked: () => property.value.internet,
+  },
+  {
+    icon: 'i-carbon:flash',
+    type: 'checkbox',
+    label: '思考模式',
+    info: '开启后优先使用支持 thinking 的模型能力，复杂问题通常更稳。可随时关闭。',
+    onclick: () => {
+      property.value.thinking = !property.value.thinking
+    },
+    checked: () => property.value.thinking !== false,
   },
   isSupported.value
     ? {
@@ -194,7 +204,7 @@ watch(hoverMode, update)
   z-index: 2;
 
   width: 180px;
-  height: 196px;
+  height: 236px;
 
   pointer-events: none;
 }

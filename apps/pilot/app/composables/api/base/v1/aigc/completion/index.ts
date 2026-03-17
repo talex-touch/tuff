@@ -728,6 +728,9 @@ export const $completion = {
             index: index === -1 ? 0 : index,
             chat_id: conversation.id,
             model: innerMsg.model,
+            modelId: String(innerMsg.model || ''),
+            internet: innerMsg.meta.internet !== false,
+            thinking: innerMsg.meta.thinking !== false,
             signal: signal.signal,
           },
           (res) => {
