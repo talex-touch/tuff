@@ -1,14 +1,24 @@
 <script setup lang="ts">
+import { TxIcon, TxRadio, TxRadioGroup } from '@talex-touch/tuffex'
+
 const props = withDefaults(defineProps<{
   codeResolver: () => string
   language: string
   previewable?: boolean
+  toggleable?: boolean
+  expandable?: boolean
+  mode?: 'preview' | 'code'
 }>(), {
   previewable: false,
+  toggleable: false,
+  expandable: false,
+  mode: 'code',
 })
 
 const emits = defineEmits<{
   (event: 'preview', payload: { language: string, code: string }): void
+  (event: 'modeChange', mode: 'preview' | 'code'): void
+  (event: 'expand', payload: { language: string, code: string }): void
 }>()
 
 const didCopy = ref(false)
@@ -49,6 +59,22 @@ function handlePreview() {
   })
 }
 
+const modeModel = computed<'preview' | 'code'>({
+  get() {
+    return props.mode || 'code'
+  },
+  set(value) {
+    emits('modeChange', value)
+  },
+})
+
+function handleExpand() {
+  emits('expand', {
+    language: props.language,
+    code: props.codeResolver?.() || '',
+  })
+}
+
 onBeforeUnmount(() => {
   clearCopyTimer()
 })
@@ -61,9 +87,36 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="EditorCode-HeaderActions">
-      <button type="button" class="rich-article rich-copy" :class="{ did: didCopy }" @click="handleCopy">
-        <span class="un">复制</span>
-        <span class="did">已复制!</span>
+      <TxRadioGroup
+        v-if="toggleable"
+        v-model="modeModel"
+        type="button"
+        direction="row"
+        class="rich-mode-radio"
+      >
+        <TxRadio value="preview" label="预览" />
+        <TxRadio value="code" label="代码" />
+      </TxRadioGroup>
+
+      <button
+        type="button"
+        class="rich-article rich-copy"
+        :class="{ did: didCopy }"
+        :title="didCopy ? '已复制' : '复制代码'"
+        @click="handleCopy"
+      >
+        <TxIcon v-if="didCopy" name="i-ri-check-line" :size="14" />
+        <TxIcon v-else name="i-ri-file-copy-line" :size="14" />
+      </button>
+
+      <button
+        v-if="expandable"
+        type="button"
+        class="rich-article rich-expand"
+        title="展开预览"
+        @click="handleExpand"
+      >
+        <TxIcon name="i-ri-fullscreen-line" :size="14" />
       </button>
 
       <button v-if="previewable" type="button" class="rich-article rich-preview" @click="handlePreview">
