@@ -38,7 +38,6 @@ const selectedModelRuntime = computed(() => findModel(globalConfigModel.value))
 const inputCapabilities = computed(() => ({
   thinking: selectedModelRuntime.value?.thinkingSupported !== false,
   websearch: selectedModelRuntime.value?.allowWebsearch !== false,
-  image: selectedModelRuntime.value?.allowImageAnalysis !== false,
   file: selectedModelRuntime.value?.allowFileAnalysis !== false,
 }))
 
@@ -58,52 +57,34 @@ const inputHistoryIndex = ref(inputHistories.value.length - 1)
 const showSend = computed(() => Boolean(input.value.text.trim()) || syncedFiles.value.length > 0)
 const canSend = computed(() => !hasUploadingFiles.value && showSend.value && props.sendState !== 'sending_until_accepted')
 
-function getCapabilityDisabledMessage(kind: 'thinking' | 'websearch' | 'image' | 'file'): string {
+function getCapabilityDisabledMessage(kind: 'thinking' | 'websearch' | 'file'): string {
   if (kind === 'thinking') {
     return '当前模型组未开启思考能力。'
   }
   if (kind === 'websearch') {
     return '当前模型组未开启联网能力。'
   }
-  if (kind === 'image') {
-    return '当前模型组未开启图片分析能力，请切换模型或联系管理员开启。'
-  }
   return '当前模型组未开启文件分析能力，请切换模型或联系管理员开启。'
 }
 
-function ensureAttachmentTypeAllowed(kind: 'image' | 'file', notify = true): boolean {
-  const allowed = kind === 'image' ? inputCapabilities.value.image : inputCapabilities.value.file
+function ensureAttachmentAnalysisAllowed(notify = true): boolean {
+  const allowed = inputCapabilities.value.file
   if (allowed) {
     return true
   }
   if (notify) {
-    ElMessage.warning(getCapabilityDisabledMessage(kind))
+    ElMessage.warning(getCapabilityDisabledMessage('file'))
   }
   return false
 }
 
 function handleAttachmentBatch(files: Iterable<File>) {
-  let blockedImage = false
-  let blockedFile = false
+  if (!ensureAttachmentAnalysisAllowed()) {
+    return
+  }
 
   for (const file of files) {
-    const isImage = file.type.startsWith('image/')
-    if (isImage && !ensureAttachmentTypeAllowed('image', false)) {
-      blockedImage = true
-      continue
-    }
-    if (!isImage && !ensureAttachmentTypeAllowed('file', false)) {
-      blockedFile = true
-      continue
-    }
     void handleAttachmentUpload(file)
-  }
-
-  if (blockedImage) {
-    ElMessage.warning(getCapabilityDisabledMessage('image'))
-  }
-  if (blockedFile) {
-    ElMessage.warning(getCapabilityDisabledMessage('file'))
   }
 }
 
@@ -303,8 +284,8 @@ watch(() => selectedModelRuntime.value, () => {
 })
 
 watch(
-  () => [inputCapabilities.value.thinking, inputCapabilities.value.websearch, inputCapabilities.value.image, inputCapabilities.value.file] as const,
-  ([thinkingAllowed, websearchAllowed, imageAllowed, fileAllowed]) => {
+  () => [inputCapabilities.value.thinking, inputCapabilities.value.websearch, inputCapabilities.value.file] as const,
+  ([thinkingAllowed, websearchAllowed, fileAllowed]) => {
     if (!thinkingAllowed) {
       inputProperty.value.thinking = false
     }
@@ -316,15 +297,7 @@ watch(
       return
     }
 
-    const filtered = input.value.files.filter((item) => {
-      if (item.type === 'image') {
-        return imageAllowed
-      }
-      if (item.type === 'file') {
-        return fileAllowed
-      }
-      return true
-    })
+    const filtered = fileAllowed ? input.value.files : []
     const removed = input.value.files.length - filtered.length
     if (removed > 0) {
       input.value.files = filtered
@@ -382,10 +355,10 @@ function resolveUploadedFileUrl(payload: Record<string, any>): string {
 }
 
 async function handleAttachmentUpload(file: File) {
-  const isImage = file.type.startsWith('image/')
-  if (!ensureAttachmentTypeAllowed(isImage ? 'image' : 'file')) {
+  if (!ensureAttachmentAnalysisAllowed()) {
     return
   }
+  const isImage = file.type.startsWith('image/')
 
   const obj = reactive<any>({
     sync: false,
@@ -507,21 +480,9 @@ function handleDeleteFile(index: number) {
   input.value.files.splice(index, 1)
 }
 
-const { open: openImageDialog, reset: resetImageDialog, onChange: onImageDialogChange } = useFileDialog({
-  accept: 'image/*',
-  directory: false,
-})
-
 const { open: openFileDialog, reset: resetFileDialog, onChange: onFileDialogChange } = useFileDialog({
-  accept: 'application/pdf,text/*,.md,.json,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx',
+  accept: 'image/*,application/pdf,text/*,.md,.json,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx',
   directory: false,
-})
-
-onImageDialogChange((files) => {
-  if (!files)
-    return
-
-  handleAttachmentBatch(files)
 })
 
 onFileDialogChange((files) => {
@@ -531,16 +492,8 @@ onFileDialogChange((files) => {
   handleAttachmentBatch(files)
 })
 
-function handleImagePlus() {
-  if (!ensureAttachmentTypeAllowed('image')) {
-    return
-  }
-  resetImageDialog()
-  openImageDialog()
-}
-
 function handleFilePlus() {
-  if (!ensureAttachmentTypeAllowed('file')) {
+  if (!ensureAttachmentAnalysisAllowed()) {
     return
   }
   resetFileDialog()
@@ -630,7 +583,6 @@ onStartTyping(focusInput)
 
     <ThInputPlus
       v-model="inputProperty" :capabilities="inputCapabilities" :hide="input.text.startsWith('@') || template?.title"
-      @image="handleImagePlus"
       @file="handleFilePlus"
     />
 
