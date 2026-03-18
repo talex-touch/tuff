@@ -120,6 +120,7 @@ function normalizeChannelModelRow(raw: unknown): PilotChannelModelConfig | null 
   return {
     id,
     label: normalizeText(row.label) || undefined,
+    format: normalizeText(row.format) || undefined,
     enabled: normalizeBoolean(row.enabled, true),
     thinkingSupported: normalizeBoolean(row.thinkingSupported, true),
     thinkingDefaultEnabled: normalizeBoolean(row.thinkingDefaultEnabled, false),
@@ -132,8 +133,8 @@ function normalizeChannelModelRow(raw: unknown): PilotChannelModelConfig | null 
 function normalizeChannelModels(value: unknown, fallbackModel: string): PilotChannelModelConfig[] {
   const models = Array.isArray(value)
     ? value
-      .map(item => normalizeChannelModelRow(item))
-      .filter((item): item is PilotChannelModelConfig => Boolean(item))
+        .map(item => normalizeChannelModelRow(item))
+        .filter((item): item is PilotChannelModelConfig => Boolean(item))
     : []
 
   if (models.length <= 0) {

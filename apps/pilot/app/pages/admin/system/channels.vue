@@ -16,6 +16,7 @@ type PilotBuiltinTool = 'write_todos' | 'read_file' | 'write_file' | 'edit_file'
 interface ChannelModelFormItem {
   id: string
   label: string
+  format: string
   enabled: boolean
   thinkingSupported: boolean
   thinkingDefaultEnabled: boolean
@@ -46,6 +47,11 @@ const TOOL_OPTIONS: Array<{ value: PilotBuiltinTool, label: string }> = [
   { value: 'websearch', label: 'websearch' },
 ]
 
+const MODEL_FORMAT_OPTIONS = [
+  'responses',
+  'chat.completions',
+]
+
 const loading = ref(false)
 const saving = ref(false)
 const channels = ref<ChannelFormItem[]>([])
@@ -57,12 +63,14 @@ const dialog = reactive<{
   visible: boolean
   mode: 'new' | 'edit'
   submitting: boolean
+  modelSyncing: boolean
   sourceId: string
   form: ChannelFormItem
 }>({
   visible: false,
   mode: 'new',
   submitting: false,
+  modelSyncing: false,
   sourceId: '',
   form: createEmptyChannel(),
 })
@@ -118,16 +126,18 @@ function normalizeChannelModel(raw: Partial<ChannelModelFormItem>): ChannelModel
   return {
     id,
     label: normalizeText(raw.label) || id,
+    format: normalizeText(raw.format),
     enabled: raw.enabled !== false,
     thinkingSupported: raw.thinkingSupported !== false,
     thinkingDefaultEnabled: raw.thinkingDefaultEnabled === true,
   }
 }
 
-function createEmptyChannelModel(id = ''): ChannelModelFormItem {
+function createEmptyChannelModel(id = '', format = ''): ChannelModelFormItem {
   return normalizeChannelModel({
     id: normalizeText(id) || createDefaultChannelModelId(),
     label: normalizeText(id) || 'gpt-5.2',
+    format: normalizeText(format),
     enabled: true,
     thinkingSupported: true,
     thinkingDefaultEnabled: false,
@@ -246,6 +256,7 @@ function buildSavePayload(list: ChannelFormItem[]) {
       models: item.models.map(model => ({
         id: model.id,
         label: model.label,
+        format: normalizeText(model.format) || undefined,
         enabled: model.enabled,
         thinkingSupported: model.thinkingSupported,
         thinkingDefaultEnabled: model.thinkingDefaultEnabled,
@@ -293,6 +304,7 @@ async function saveChannels(nextChannels: ChannelFormItem[], preferredDefault = 
 
 function openCreateDialog() {
   dialog.mode = 'new'
+  dialog.modelSyncing = false
   dialog.sourceId = ''
   dialog.form = createEmptyChannel()
   dialog.visible = true
@@ -300,6 +312,7 @@ function openCreateDialog() {
 
 function openEditDialog(row: ChannelFormItem) {
   dialog.mode = 'edit'
+  dialog.modelSyncing = false
   dialog.sourceId = row.id
   dialog.form = normalizeChannelFormItem({
     ...row,
@@ -417,19 +430,65 @@ async function setDefaultChannel(id: string) {
   await saveChannels(next, nextId)
 }
 
-function resolveEnabledModelList(row: ChannelFormItem): string {
-  const enabled = row.models.filter(item => item.enabled)
-  if (enabled.length <= 0) {
-    return '-'
+async function discoverDialogModels() {
+  const baseUrl = normalizeText(dialog.form.baseUrl)
+  if (!baseUrl) {
+    ElMessage.warning('请先填写 Base URL 再拉取模型')
+    return
   }
-  return enabled.map(item => item.label || item.id).join(', ')
+
+  if (dialog.mode === 'new' && !normalizeText(dialog.form.apiKey)) {
+    ElMessage.warning('新增渠道请先填写 API Key，再拉取模型')
+    return
+  }
+
+  dialog.modelSyncing = true
+  try {
+    const payload: any = await endHttp.post('admin/channel-models/discover', {
+      channelId: dialog.mode === 'edit' ? normalizeText(dialog.sourceId || dialog.form.id) : undefined,
+      baseUrl,
+      apiKey: normalizeText(dialog.form.apiKey),
+      timeoutMs: dialog.form.timeoutMs,
+    })
+
+    const discovered = Array.isArray(payload?.models)
+      ? payload.models.map((item: unknown) => normalizeText(item)).filter(Boolean)
+      : []
+    if (discovered.length <= 0) {
+      ElMessage.warning('未发现可用模型')
+      return
+    }
+
+    const existing = new Map<string, ChannelModelFormItem>()
+    for (const model of dialog.form.models) {
+      const normalized = normalizeChannelModel(model)
+      existing.set(normalized.id, normalized)
+    }
+
+    let appended = 0
+    for (const modelId of discovered) {
+      if (existing.has(modelId)) {
+        continue
+      }
+      appended += 1
+      existing.set(modelId, createEmptyChannelModel(modelId, dialog.form.transport))
+    }
+
+    dialog.form.models = Array.from(existing.values())
+    ensureDefaultModelId(dialog.form)
+
+    ElMessage.success(`模型拉取完成，共 ${discovered.length} 个，新增 ${appended} 个`)
+  }
+  catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '拉取渠道模型失败')
+  }
+  finally {
+    dialog.modelSyncing = false
+  }
 }
 
-function resolveModelList(row: ChannelFormItem): string {
-  if (row.models.length <= 0) {
-    return '-'
-  }
-  return row.models.map(item => item.label || item.id).join(', ')
+function resolveModelCount(row: ChannelFormItem): number {
+  return Array.isArray(row.models) ? row.models.length : 0
 }
 
 onMounted(() => {
@@ -453,14 +512,14 @@ onMounted(() => {
         <el-table-column prop="id" label="ID" min-width="170" />
         <el-table-column prop="name" label="名称" min-width="130" />
         <el-table-column prop="baseUrl" label="Base URL" min-width="220" />
-        <el-table-column label="模型列表" min-width="220">
+        <el-table-column label="模型" min-width="180">
           <template #default="{ row }">
-            {{ resolveModelList(row) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="启用模型" min-width="220">
-          <template #default="{ row }">
-            {{ resolveEnabledModelList(row) }}
+            <div class="model-overview-cell">
+              <span>共计 {{ resolveModelCount(row) }} 个模型</span>
+              <el-button text type="primary" @click="openEditDialog(row)">
+                总览
+              </el-button>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="默认模型" min-width="140">
@@ -502,13 +561,16 @@ onMounted(() => {
     </el-main>
   </el-container>
 
-  <el-dialog
+  <el-drawer
     v-model="dialog.visible"
     :title="dialog.mode === 'new' ? '新增渠道' : '编辑渠道'"
-    width="980px"
+    size="72%"
+    direction="rtl"
     :close-on-click-modal="false"
+    :destroy-on-close="false"
+    class="channel-editor-drawer"
   >
-    <el-form label-width="130px">
+    <el-form label-width="130px" class="channel-editor-form">
       <el-form-item label="渠道 ID" required>
         <el-input v-model="dialog.form.id" :disabled="dialog.mode === 'edit'" placeholder="channel-main" />
       </el-form-item>
@@ -578,9 +640,24 @@ onMounted(() => {
         <el-button type="primary" plain size="small" @click="addDialogModel">
           新增模型
         </el-button>
+        <el-button
+          plain
+          size="small"
+          :loading="dialog.modelSyncing"
+          @click="discoverDialogModels"
+        >
+          {{ dialog.modelSyncing ? '拉取中...' : '拉取渠道模型' }}
+        </el-button>
       </div>
 
-      <el-table border table-layout="auto" :data="dialog.form.models" style="width: 100%">
+      <el-table
+        border
+        table-layout="auto"
+        :data="dialog.form.models"
+        row-key="id"
+        max-height="460"
+        style="width: 100%"
+      >
         <el-table-column label="Model ID" min-width="180">
           <template #default="{ row }">
             <el-input v-model="row.id" placeholder="gpt-5.4" />
@@ -589,6 +666,26 @@ onMounted(() => {
         <el-table-column label="Label" min-width="180">
           <template #default="{ row }">
             <el-input v-model="row.label" placeholder="GPT 5.4" />
+          </template>
+        </el-table-column>
+        <el-table-column label="格式" min-width="180">
+          <template #default="{ row }">
+            <el-select
+              v-model="row.format"
+              style="width: 100%"
+              filterable
+              allow-create
+              clearable
+              default-first-option
+              placeholder="如 responses"
+            >
+              <el-option
+                v-for="format in MODEL_FORMAT_OPTIONS"
+                :key="format"
+                :label="format"
+                :value="format"
+              />
+            </el-select>
           </template>
         </el-table-column>
         <el-table-column label="启用" width="90">
@@ -620,11 +717,11 @@ onMounted(() => {
       <el-button @click="dialog.visible = false">
         取消
       </el-button>
-      <el-button type="primary" :loading="dialog.submitting || saving" @click="submitDialog">
+      <el-button type="primary" :loading="dialog.submitting || saving || dialog.modelSyncing" @click="submitDialog">
         保存
       </el-button>
     </template>
-  </el-dialog>
+  </el-drawer>
 </template>
 
 <style scoped lang="scss">
@@ -637,5 +734,18 @@ onMounted(() => {
 
 .channel-model-toolbar {
   margin-bottom: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+.model-overview-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.channel-editor-form {
+  padding-right: 8px;
 }
 </style>

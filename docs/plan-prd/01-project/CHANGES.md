@@ -1,7 +1,7 @@
 # 变更日志
 
-> 更新时间: 2026-03-17
-> 说明: 主文件仅保留近 30 天（2026-02-24 ~ 2026-03-17）详细记录；更早历史已按月归档。
+> 更新时间: 2026-03-18
+> 说明: 主文件仅保留近 30 天（2026-02-24 ~ 2026-03-18）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
@@ -10,6 +10,58 @@
 - 旧记录入口：见文末“历史索引导航”。
 
 ---
+
+## 2026-03-18
+
+### feat(pilot-admin): Channels 支持模型同步与按模型配置格式
+
+- `Channels` 管理页新增“同步渠道模型”按钮，复用 `POST /api/admin/channel-models/sync`，同步后自动刷新渠道配置。
+- 渠道模型配置新增 `format` 字段（每个模型独立），支持在管理页直接配置并持久化到数据库设置。
+- 路由解析新增“模型级格式覆盖”能力：当模型 `format` 为 `responses/chat.completions` 时，优先覆盖渠道级 `transport`。
+- 模型同步时为新发现模型回填默认 `format`（继承渠道当前 `transport`），避免新增模型缺省格式为空。
+- `Channels` 新增按渠道拉取模型接口：`POST /api/admin/channel-models/discover`（支持编辑态复用已保存 API Key，新增态可用表单 API Key 直接拉取）。
+- 渠道编辑 UI 从弹窗改为右侧 Drawer，模型列表支持更长内容；“拉取渠道模型”入口迁移到编辑面板内。
+- 渠道列表中的模型展示改为“共计 x 个模型 + 编辑按钮”，避免首页表格被超长模型字符串撑开。
+- 渠道列表模型区按钮文案调整为“总览”，并恢复操作区独立“编辑”入口，降低误解成本。
+- 管理端移除“管理总览”入口：`AdminSideNav` 不再展示该菜单；`/admin/system/pilot-settings` 改为自动跳转到 `Channels`；Pilot 侧边栏管理入口同步指向 `Channels`。
+
+### refactor(pilot-admin): 管理首页移除“我的应用/工作日历”并下线运势功能
+
+- 管理首页（`/admin`）移除以下模块：
+  - “我的应用”卡片（`lazy-cms-application`）
+  - “工作日历”卡片（`el-calendar`）
+  - 运势卡片（`ChorePersonalFortuneCard`）
+- 个人中心账号页移除运势入口与弹窗打开逻辑：
+  - 删除 `fortuneList` 拉取与展示标签
+  - 删除 `AccountModuleFortune` 调起链路
+- 前后端运势接口统一下线：
+  - 前端移除 `$endApi.v1.account.dailyFortune()`
+  - 后端 `GET /api/dummy/fortune` 返回 `410 fortune feature removed`
+- 聊天附件渲染移除星座运势映射：
+  - `QuotaVeTool` 删除 `xingzuoyunshi-star` 组件映射，避免继续渲染运势卡片。
+
+### refactor(pilot-admin): 下线部门/指南/监控/微信管理并移除 Legacy CMS 路由
+
+- 管理导航精简，移除以下入口：
+  - 部门管理（`/admin/system/dept`）
+  - 系统指南（`/admin/system/guide`）
+  - 系统监控（`/admin/system/monitor`）
+  - LiveChat（`/admin/wechat/livechat`）
+  - 微信公众号菜单（`/admin/wechat/menu`）
+- 管理首页继续裁剪：
+  - 删除“系统监控”卡片（不再渲染 `monitor` 模块）。
+- 页面路由已物理删除（直接 404）：
+  - `apps/pilot/app/pages/admin/system/dept.vue`
+  - `apps/pilot/app/pages/admin/system/guide.vue`
+  - `apps/pilot/app/pages/admin/system/monitor.vue`
+  - `apps/pilot/app/pages/admin/wechat/livechat.vue`
+  - `apps/pilot/app/pages/admin/wechat/menu.vue`
+- Legacy CMS 兼容层彻底移除：
+  - 删除 `apps/pilot/app/pages/cms/index.vue`
+  - 删除 `apps/pilot/app/pages/cms/[...path].vue`
+- 同步清理配套残留：
+  - `weChat.ts` 移除对已删除页面组件的错误导入；
+  - `pilot-compat-seeds` 删除 `menu_system_dept` 种子，避免新环境继续回填该入口。
 
 ## 2026-03-17
 

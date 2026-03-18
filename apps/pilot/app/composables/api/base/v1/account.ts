@@ -1,11 +1,7 @@
-import { endHttp } from '../../axios'
 import type { IDataResponse } from '../index.type'
-import type { ILoginToken } from './auth.type'
+import { endHttp } from '../../axios'
 
 export default {
-  dailyFortune() {
-    return endHttp.get('dummy/fortune')
-  },
   getUserConfig() {
     return endHttp.get('user-config') as Promise<IDataResponse<any>>
   },

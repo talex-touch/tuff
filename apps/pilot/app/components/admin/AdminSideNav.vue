@@ -23,13 +23,10 @@ const groups: AdminNavGroup[] = [
     title: '系统管理',
     items: [
       { path: '/admin/system/user', label: '用户管理', icon: 'i-carbon-user-multiple' },
-      { path: '/admin/system/dept', label: '部门管理', icon: 'i-carbon-tree' },
       { path: '/admin/system/dict-type', label: '字典类型', icon: 'i-carbon-catalog' },
       { path: '/admin/system/orders', label: '订单管理', icon: 'i-carbon-purchase' },
       { path: '/admin/system/coupon', label: '券码管理', icon: 'i-carbon-ticket' },
       { path: '/admin/system/feedbackManage', label: '反馈管理', icon: 'i-carbon-chat' },
-      { path: '/admin/system/guide', label: '系统指南', icon: 'i-carbon-book' },
-      { path: '/admin/system/monitor', label: '系统监控', icon: 'i-carbon-chart-line' },
       { path: '/admin/system/param-config', label: '参数配置', icon: 'i-carbon-settings-check' },
       { path: '/admin/system/schedule', label: '任务调度', icon: 'i-carbon-timer' },
       { path: '/admin/system/subscriptions', label: '订阅管理', icon: 'i-carbon-certificate' },
@@ -39,8 +36,6 @@ const groups: AdminNavGroup[] = [
     title: '内容运营',
     items: [
       { path: '/admin/marketing/banners', label: 'Banner 管理', icon: 'i-carbon-image' },
-      { path: '/admin/wechat/livechat', label: 'LiveChat', icon: 'i-carbon-chat-bot' },
-      { path: '/admin/wechat/menu', label: '微信公众号菜单', icon: 'i-carbon-logo-wechat' },
       { path: '/admin/tool/storage', label: '文件存储', icon: 'i-carbon-document' },
     ],
   },
@@ -61,7 +56,6 @@ const groups: AdminNavGroup[] = [
       { path: '/admin/system/route-combos', label: 'Route Combos', icon: 'i-carbon-flow-data' },
       { path: '/admin/system/routing-policy', label: 'Routing Policy', icon: 'i-carbon-settings-check' },
       { path: '/admin/system/routing-metrics', label: 'Routing Metrics', icon: 'i-carbon-chart-line' },
-      { path: '/admin/system/pilot-settings', label: '管理总览', icon: 'i-carbon-dashboard' },
     ],
   },
 ]
@@ -80,7 +74,7 @@ function isActive(path: string): boolean {
       <img src="/logo.png" alt="Pilot">
       <div>
         <strong>Pilot Admin</strong>
-        <p>Legacy CMS 已迁移</p>
+        <p>Legacy CMS 已下线</p>
       </div>
     </div>
 

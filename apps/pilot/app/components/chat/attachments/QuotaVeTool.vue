@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import Imagable from './ve-tool/Imagable.vue'
+import type { IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
 import BingSearch from './ve-tool/BingSearch.vue'
 import Calculator from './ve-tool/Calculator.vue'
-import Music from './ve-tool/Music.vue'
-import Lucky from './ve-tool/Lucky.vue'
-import Weather from './ve-tool/Weather.vue'
-import Flight from './ve-tool/Flight.vue'
-import Job from './ve-tool/Job.vue'
 import Data from './ve-tool/Data.vue'
-import type { IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
+import Flight from './ve-tool/Flight.vue'
+import Imagable from './ve-tool/Imagable.vue'
+import Job from './ve-tool/Job.vue'
+import Music from './ve-tool/Music.vue'
+import Weather from './ve-tool/Weather.vue'
 
 const props = defineProps<{
   block: IInnerItemMeta
@@ -23,7 +22,7 @@ const value = computed(() => {
     try {
       return JSON.parse(props.block.value)
     }
-    catch (error) {
+    catch {
       return {}
     }
   }
@@ -62,12 +61,6 @@ const compMapper = reactive({
     comp: Music,
     expandable: true,
     query: computed(() => isEnd.value ? '已生成' : '生成中'),
-  },
-  'xingzuoyunshi-star': {
-    icon: 'i-carbon:bee',
-    comp: Lucky,
-    expandable: true,
-    query: computed(() => data.value.arguments?.consName || data.value.name),
   },
   'mojitianqi-DayWeather': {
     icon: 'i-carbon:cloud',
