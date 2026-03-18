@@ -22,6 +22,7 @@ export interface PilotChannelConfig {
   name: string
   baseUrl: string
   apiKey: string
+  priority?: number
   model: string
   defaultModelId?: string
   models?: PilotChannelModelConfig[]
@@ -53,10 +54,28 @@ export interface ResolvedPilotChannelSelection {
   defaultChannelId: string
 }
 
-type PilotChannelUnavailableReason = 'no_channels_configured' | 'all_channels_disabled' | 'missing_default_channel'
+type PilotChannelUnavailableReason = 'no_channels_configured' | 'all_channels_disabled'
 
 function normalizeText(value: unknown): string {
   return String(value || '').trim()
+}
+
+function normalizePriority(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return 100
+  }
+  return Math.min(Math.max(Math.floor(parsed), 1), 9999)
+}
+
+function sortChannelsByPriority<T extends { id: string, priority?: number }>(channels: T[]): T[] {
+  return [...channels].sort((a, b) => {
+    const priorityDiff = normalizePriority(a.priority) - normalizePriority(b.priority)
+    if (priorityDiff !== 0) {
+      return priorityDiff
+    }
+    return normalizeText(a.id).localeCompare(normalizeText(b.id))
+  })
 }
 
 function resolvePostgresTarget(): string {
@@ -81,8 +100,6 @@ function resolveChannelUnavailableMessage(reason: PilotChannelUnavailableReason)
       return '当前数据库未配置任何渠道，请在管理后台先添加并启用至少一个渠道。'
     case 'all_channels_disabled':
       return '渠道已配置但全部被禁用，请在管理后台启用至少一个渠道后重试。'
-    case 'missing_default_channel':
-      return '默认渠道缺失，请在管理后台设置默认渠道后重试。'
     default:
       return '当前无可用渠道，请检查渠道配置。'
   }
@@ -127,8 +144,8 @@ export async function resolvePilotChannelSelection(
   const catalog = await getPilotChannelCatalog(event)
   const requestChannelId = normalizeText(options.requestChannelId)
   const sessionChannelId = normalizeText(options.sessionChannelId)
-  const allChannels = catalog.channels
-  const channels = allChannels.filter(item => item.enabled)
+  const allChannels = sortChannelsByPriority(catalog.channels)
+  const channels = sortChannelsByPriority(allChannels.filter(item => item.enabled))
   const details = {
     requestChannelId: requestChannelId || null,
     sessionChannelId: sessionChannelId || null,
@@ -142,9 +159,6 @@ export async function resolvePilotChannelSelection(
   }
   if (channels.length <= 0) {
     throw createChannelUnavailableError('all_channels_disabled', details)
-  }
-  if (!catalog.defaultChannelId) {
-    throw createChannelUnavailableError('missing_default_channel', details)
   }
 
   const sourceCandidates: Array<{ value: string, source: ResolvedPilotChannelSelection['selectionSource'] }> = [

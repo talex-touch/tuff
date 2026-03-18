@@ -27,6 +27,8 @@ export interface ModelGroupFormItem {
   thinkingSupported: boolean
   thinkingDefaultEnabled: boolean
   allowWebsearch: boolean
+  allowImageAnalysis: boolean
+  allowFileAnalysis: boolean
   defaultRouteComboId: string
   bindings: ModelBindingFormItem[]
 }
@@ -235,6 +237,8 @@ export function createEmptyModelGroup(): ModelGroupFormItem {
     thinkingSupported: true,
     thinkingDefaultEnabled: true,
     allowWebsearch: true,
+    allowImageAnalysis: true,
+    allowFileAnalysis: true,
     defaultRouteComboId: '',
     bindings: [],
   }
@@ -298,6 +302,8 @@ export function normalizeModelGroup(raw: Partial<ModelGroupFormItem> & {
     thinkingSupported: toBoolean(raw.thinkingSupported, true),
     thinkingDefaultEnabled: toBoolean(raw.thinkingDefaultEnabled, true),
     allowWebsearch: toBoolean(raw.allowWebsearch, true),
+    allowImageAnalysis: toBoolean(raw.allowImageAnalysis, true),
+    allowFileAnalysis: toBoolean(raw.allowFileAnalysis, true),
     defaultRouteComboId: normalizeText(raw.defaultRouteComboId),
     bindings: Array.isArray(raw.bindings)
       ? raw.bindings.map(item => ({
@@ -365,6 +371,8 @@ export function buildModelGroupPayload(list: ModelGroupFormItem[]) {
     thinkingSupported: item.thinkingSupported,
     thinkingDefaultEnabled: item.thinkingDefaultEnabled,
     allowWebsearch: item.allowWebsearch,
+    allowImageAnalysis: item.allowImageAnalysis,
+    allowFileAnalysis: item.allowFileAnalysis,
     defaultRouteComboId: normalizeText(item.defaultRouteComboId) || undefined,
     bindings: item.bindings.map(binding => ({
       channelId: normalizeText(binding.channelId),

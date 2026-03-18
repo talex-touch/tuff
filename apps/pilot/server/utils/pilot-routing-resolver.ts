@@ -12,6 +12,7 @@ interface RouteCandidate {
   modelId: string
   routeComboId: string
   priority: number
+  channelPriority: number
   weight: number
   reason: string
 }
@@ -79,6 +80,10 @@ function normalizeFloat(value: unknown, fallback: number, min = 0, max = 1): num
   return Math.min(Math.max(parsed, min), max)
 }
 
+function resolveChannelPriority(channel: PilotChannelConfig | undefined): number {
+  return normalizeNumber(channel?.priority, 100, 1, 9999)
+}
+
 function normalizeModelFormat(value: unknown): PilotRoutingResolveResult['transport'] | '' {
   const normalized = normalizeText(value).toLowerCase()
   if (!normalized) {
@@ -129,7 +134,7 @@ function uniqueCandidates(list: RouteCandidate[]): RouteCandidate[] {
     }
 
     const current = map.get(key)!
-    if (item.priority < current.priority) {
+    if (item.priority < current.priority || (item.priority === current.priority && item.channelPriority < current.channelPriority)) {
       map.set(key, {
         ...current,
         ...item,
@@ -239,6 +244,7 @@ function buildComboCandidates(
       modelId: modelId || providerModel,
       routeComboId: combo.id,
       priority: normalizeNumber(route.priority, 100, 1, 9999),
+      channelPriority: resolveChannelPriority(channels.get(channelId)),
       weight: normalizeNumber(route.weight, 100, 1, 1000),
       reason: `route-combo:${combo.id}`,
     })
@@ -249,6 +255,7 @@ function buildComboCandidates(
 
 function buildModelCandidates(
   model: PilotModelCatalogItem,
+  channels: Map<string, PilotChannelConfig>,
 ): RouteCandidate[] {
   const list: RouteCandidate[] = []
   for (const binding of model.bindings || []) {
@@ -267,6 +274,7 @@ function buildModelCandidates(
       modelId: model.id,
       routeComboId: normalizeText(model.defaultRouteComboId) || 'default-auto',
       priority: normalizeNumber(binding.priority, 100, 1, 9999),
+      channelPriority: resolveChannelPriority(channels.get(channelId)),
       weight: normalizeNumber(binding.weight, 100, 1, 1000),
       reason: `model-binding:${model.id}`,
     })
@@ -347,7 +355,8 @@ export async function resolvePilotRoutingSelection(
             providerModel,
             modelId: defaultModelId,
             routeComboId: defaultComboId,
-            priority: 100,
+            priority: resolveChannelPriority(channel),
+            channelPriority: resolveChannelPriority(channel),
             weight: 100,
             reason: 'quota-auto-speed-first',
           })
@@ -357,7 +366,7 @@ export async function resolvePilotRoutingSelection(
     else {
       const model = modelMap.get(defaultModelId)
       if (model) {
-        candidates = buildModelCandidates(model)
+        candidates = buildModelCandidates(model, channelMap)
         if (candidates.length > 0) {
           selectionSource = 'model-binding'
         }
@@ -390,7 +399,7 @@ export async function resolvePilotRoutingSelection(
       modelId: fallbackModelConfig?.id || fallbackModel || defaultModelId,
       providerModel: fallbackModel,
       routeComboId: defaultComboId,
-      selectionReason: 'fallback:default-channel',
+      selectionReason: 'fallback:priority-channel',
       selectionSource: 'fallback',
       builtinTools: resolveTools(fallback.channel, internetRequested, allowWebsearch),
       internet: internetRequested,
@@ -435,6 +444,9 @@ export async function resolvePilotRoutingSelection(
       }
       if (a.candidate.priority !== b.candidate.priority) {
         return a.candidate.priority - b.candidate.priority
+      }
+      if (a.candidate.channelPriority !== b.candidate.channelPriority) {
+        return a.candidate.channelPriority - b.candidate.channelPriority
       }
       return b.candidate.weight - a.candidate.weight
     })

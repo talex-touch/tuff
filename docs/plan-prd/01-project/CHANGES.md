@@ -24,6 +24,20 @@
 - 渠道列表中的模型展示改为“共计 x 个模型 + 编辑按钮”，避免首页表格被超长模型字符串撑开。
 - 渠道列表模型区按钮文案调整为“总览”，并恢复操作区独立“编辑”入口，降低误解成本。
 - 管理端移除“管理总览”入口：`AdminSideNav` 不再展示该菜单；`/admin/system/pilot-settings` 改为自动跳转到 `Channels`；Pilot 侧边栏管理入口同步指向 `Channels`。
+- 管理页顶部右侧移除 `Legacy CMS 已进入退场阶段` 提示标签，替换为用户头像组件 `AccountAvatar`。
+- `Channels` 列表支持直接操作：状态可在列表一键开关、新增删除渠道操作、新增优先级字段（列表与编辑态均可配置）。
+- 渠道“设为默认”入口移除，后台改为按渠道优先级参与自动调度（同分时按渠道 ID 稳定排序）。
+
+### feat(pilot-runtime): Runtime 模型改为仅返回 ModelGroup，并补齐 image/file 能力开关
+
+- `GET /api/runtime/models` 不再直接透出渠道发现的全量 provider models，改为仅返回 `routing.modelCatalog` 中启用且可见的模型组（ModelGroup）。
+- Runtime 模型响应新增能力字段：
+  - `allowImageAnalysis`
+  - `allowFileAnalysis`
+- 管理端 `Model Groups` 编辑页新增上述两项能力开关，并在列表新增能力摘要列，便于核对组能力配置。
+- 输入区能力与模型组配置对齐：
+  - `ThInputPlus` 新增独立“分析文件”入口，并支持按模型组能力禁用 `thinking/websearch/image/file`；
+  - `ThInput` 在上传、粘贴、发送前增加能力约束：不支持图片/文件时阻止附件进入，不支持 `thinking/websearch` 时发送前强制关闭对应开关。
 
 ### refactor(pilot-admin): 管理首页移除“我的应用/工作日历”并下线运势功能
 

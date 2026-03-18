@@ -47,6 +47,8 @@ export interface PilotModelCatalogItem {
   thinkingSupported?: boolean
   thinkingDefaultEnabled?: boolean
   allowWebsearch?: boolean
+  allowImageAnalysis?: boolean
+  allowFileAnalysis?: boolean
   defaultRouteComboId?: string
   bindings: PilotModelBinding[]
   metadata?: Record<string, unknown>
@@ -270,8 +272,8 @@ function normalizeModelCatalogItem(raw: unknown): PilotModelCatalogItem | null {
 
   const bindings = Array.isArray(row.bindings)
     ? row.bindings
-      .map(item => normalizeModelBinding(item))
-      .filter((item): item is PilotModelBinding => Boolean(item))
+        .map(item => normalizeModelBinding(item))
+        .filter((item): item is PilotModelBinding => Boolean(item))
     : []
 
   return {
@@ -293,6 +295,8 @@ function normalizeModelCatalogItem(raw: unknown): PilotModelCatalogItem | null {
     thinkingSupported: normalizeBoolean(row.thinkingSupported, true),
     thinkingDefaultEnabled: normalizeBoolean(row.thinkingDefaultEnabled, false),
     allowWebsearch: normalizeBoolean(row.allowWebsearch, true),
+    allowImageAnalysis: normalizeBoolean(row.allowImageAnalysis, true),
+    allowFileAnalysis: normalizeBoolean(row.allowFileAnalysis, true),
     defaultRouteComboId: normalizeText(row.defaultRouteComboId) || undefined,
     bindings,
     metadata: row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
@@ -313,8 +317,8 @@ function normalizeRouteComboItem(raw: unknown): PilotRouteComboItem | null {
 
   const routes = Array.isArray(row.routes)
     ? row.routes
-      .map(item => normalizeRouteComboRoute(item))
-      .filter((item): item is PilotRouteComboRoute => Boolean(item))
+        .map(item => normalizeRouteComboRoute(item))
+        .filter((item): item is PilotRouteComboRoute => Boolean(item))
     : []
 
   return {
@@ -346,6 +350,8 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       thinkingSupported: true,
       thinkingDefaultEnabled: true,
       allowWebsearch: true,
+      allowImageAnalysis: true,
+      allowFileAnalysis: true,
       bindings: [],
     },
     {
@@ -358,6 +364,8 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       thinkingSupported: true,
       thinkingDefaultEnabled: true,
       allowWebsearch: true,
+      allowImageAnalysis: true,
+      allowFileAnalysis: true,
       bindings: [],
     },
     {
@@ -370,6 +378,8 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       thinkingSupported: true,
       thinkingDefaultEnabled: true,
       allowWebsearch: true,
+      allowImageAnalysis: true,
+      allowFileAnalysis: true,
       bindings: [],
     },
     {
@@ -382,6 +392,8 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       thinkingSupported: true,
       thinkingDefaultEnabled: true,
       allowWebsearch: true,
+      allowImageAnalysis: true,
+      allowFileAnalysis: true,
       bindings: [],
     },
     {
@@ -394,6 +406,8 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       thinkingSupported: true,
       thinkingDefaultEnabled: true,
       allowWebsearch: true,
+      allowImageAnalysis: true,
+      allowFileAnalysis: true,
       bindings: [],
     },
     {
@@ -406,6 +420,8 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       thinkingSupported: true,
       thinkingDefaultEnabled: true,
       allowWebsearch: true,
+      allowImageAnalysis: true,
+      allowFileAnalysis: true,
       bindings: [],
     },
     {
@@ -418,6 +434,8 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       thinkingSupported: true,
       thinkingDefaultEnabled: true,
       allowWebsearch: true,
+      allowImageAnalysis: true,
+      allowFileAnalysis: true,
       bindings: [],
     },
   ]
@@ -697,6 +715,8 @@ export async function mergeDiscoveredModelsIntoCatalog(
     label?: string
     thinkingSupported?: boolean
     thinkingDefaultEnabled?: boolean
+    allowImageAnalysis?: boolean
+    allowFileAnalysis?: boolean
   }>,
 ): Promise<PilotAdminRoutingConfig> {
   const current = await getPilotAdminRoutingConfig(event)
@@ -735,6 +755,8 @@ export async function mergeDiscoveredModelsIntoCatalog(
         thinkingSupported: normalizeBoolean(item.thinkingSupported, true),
         thinkingDefaultEnabled: normalizeBoolean(item.thinkingDefaultEnabled, false),
         allowWebsearch: true,
+        allowImageAnalysis: normalizeBoolean(item.allowImageAnalysis, true),
+        allowFileAnalysis: normalizeBoolean(item.allowFileAnalysis, true),
         bindings: [binding],
       })
       continue
