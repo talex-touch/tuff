@@ -44,7 +44,9 @@ let lastRenderedContent = ''
 let richDestroy: (() => void) | null = null
 
 const MARKDOWN_RENDER_FLUSH_MS = 16
-const previewableCodeLangSet = new Set(['html', 'svg', 'mermaid'])
+const previewableCodeLangSet = new Set<string>()
+const inlinePreviewCodeLangSet = new Set(['html', 'svg', 'mermaid'])
+const expandableCodeLangSet = new Set(['html'])
 let mermaidRuntimePromise: Promise<typeof import('mermaid').default> | null = null
 let mermaidPreviewRenderIndex = 0
 
@@ -77,9 +79,9 @@ async function resolveMermaidRuntime() {
   return mermaidRuntimePromise
 }
 
-async function renderMermaidPreview(code: string, target: HTMLElement) {
+function createMermaidLoadingNode(className: string) {
   const loading = document.createElement('div')
-  loading.className = 'RichCodePreview-MermaidStatus'
+  loading.className = className
   const spinner = document.createElement('span')
   spinner.className = 'RichCodePreview-MermaidSpinner'
   spinner.setAttribute('aria-hidden', 'true')
@@ -87,17 +89,35 @@ async function renderMermaidPreview(code: string, target: HTMLElement) {
   loadingText.textContent = 'Mermaid 渲染中...'
   loading.appendChild(spinner)
   loading.appendChild(loadingText)
+  return loading
+}
+
+async function renderMermaidInto(
+  code: string,
+  target: HTMLElement,
+  options: {
+    loadingClassName: string
+    errorClassName: string
+    isStale?: () => boolean
+  },
+) {
+  const isStale = options.isStale
+  const loading = createMermaidLoadingNode(options.loadingClassName)
   target.replaceChildren(loading)
 
   try {
     const runtime = await resolveMermaidRuntime()
+    if (isStale?.()) {
+      return
+    }
+
     mermaidPreviewRenderIndex += 1
     const renderResult: RenderResult = await runtime.render(
       `rich-code-mermaid-preview-${Date.now()}-${mermaidPreviewRenderIndex}`,
       code,
     )
 
-    if (!target.isConnected) {
+    if (!target.isConnected || isStale?.()) {
       return
     }
 
@@ -105,15 +125,97 @@ async function renderMermaidPreview(code: string, target: HTMLElement) {
     renderResult.bindFunctions?.(target)
   }
   catch (error) {
-    if (!target.isConnected) {
+    if (!target.isConnected || isStale?.()) {
       return
     }
 
     const errorView = document.createElement('pre')
-    errorView.className = 'RichCodePreview-MermaidError'
+    errorView.className = options.errorClassName
     errorView.textContent = `[Mermaid 渲染失败]\n${resolveErrorMessage(error)}`
     target.replaceChildren(errorView)
   }
+}
+
+async function renderMermaidPreview(code: string, target: HTMLElement) {
+  await renderMermaidInto(code, target, {
+    loadingClassName: 'RichCodePreview-MermaidStatus',
+    errorClassName: 'RichCodePreview-MermaidError',
+  })
+}
+
+function renderSvgInto(code: string, target: HTMLElement, errorClassName: string) {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'EditorCode-InlineSvgHost'
+  wrapper.innerHTML = code
+  const svg = wrapper.querySelector('svg')
+  if (!svg) {
+    const errorView = document.createElement('pre')
+    errorView.className = errorClassName
+    errorView.textContent = '[SVG 预览失败]\n未检测到有效的 <svg> 根节点。'
+    target.replaceChildren(errorView)
+    return
+  }
+  target.replaceChildren(wrapper)
+}
+
+function renderHtmlInto(code: string, target: HTMLElement) {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'EditorCode-InlineHtmlHost'
+  const iframe = document.createElement('iframe')
+  iframe.className = 'EditorCode-InlineFrame'
+  iframe.setAttribute('sandbox', 'allow-scripts')
+  iframe.srcdoc = code
+  wrapper.appendChild(iframe)
+  target.replaceChildren(wrapper)
+}
+
+async function renderInlineCodePreview(
+  language: string,
+  code: string,
+  target: HTMLElement,
+  isStale?: () => boolean,
+) {
+  if (language === 'mermaid') {
+    await renderMermaidInto(code, target, {
+      loadingClassName: 'EditorCode-InlinePreviewStatus',
+      errorClassName: 'EditorCode-InlinePreviewError',
+      isStale,
+    })
+    return
+  }
+
+  const loading = createMermaidLoadingNode('EditorCode-InlinePreviewStatus')
+  target.replaceChildren(loading)
+
+  if (!target.isConnected || isStale?.()) {
+    return
+  }
+
+  try {
+    if (language === 'svg') {
+      renderSvgInto(code, target, 'EditorCode-InlinePreviewError')
+      return
+    }
+    if (language === 'html') {
+      renderHtmlInto(code, target)
+      return
+    }
+  }
+  catch (error) {
+    if (!target.isConnected || isStale?.()) {
+      return
+    }
+    const errorView = document.createElement('pre')
+    errorView.className = 'EditorCode-InlinePreviewError'
+    errorView.textContent = `[预览失败]\n${resolveErrorMessage(error)}`
+    target.replaceChildren(errorView)
+    return
+  }
+
+  const errorView = document.createElement('pre')
+  errorView.className = 'EditorCode-InlinePreviewError'
+  errorView.textContent = `[预览失败]\n当前语言 ${language} 暂不支持内联预览。`
+  target.replaceChildren(errorView)
 }
 
 function openCodePreview(language: string, code: string) {
@@ -187,8 +289,11 @@ function openCodePreview(language: string, code: string) {
 function createReadonlyCodeBlockView() {
   return (node: any) => {
     let currentNode = node
-    let currentLanguage = normalizeCodeLanguage(currentNode?.attrs?.language)
+    let currentLanguage = ''
+    let currentMode: 'preview' | 'code' = 'code'
     let headerApp: App<Element> | null = null
+    let inlinePreviewRenderTimer: ReturnType<typeof setTimeout> | null = null
+    let inlinePreviewRenderToken = 0
 
     const dom = document.createElement('div')
     dom.className = 'rich-article EditorCode EditorCode--Readonly'
@@ -201,19 +306,90 @@ function createReadonlyCodeBlockView() {
 
     const pre = document.createElement('pre')
     const code = document.createElement('code')
+    const inlinePreview = document.createElement('div')
+    inlinePreview.className = 'EditorCode-InlinePreview'
     pre.appendChild(code)
 
     content.appendChild(pre)
+    content.appendChild(inlinePreview)
     dom.appendChild(headerHost)
     dom.appendChild(content)
 
+    function clearInlinePreviewRenderTimer() {
+      if (!inlinePreviewRenderTimer) {
+        return
+      }
+      clearTimeout(inlinePreviewRenderTimer)
+      inlinePreviewRenderTimer = null
+    }
+
+    function invalidateInlinePreviewRender() {
+      inlinePreviewRenderToken += 1
+      clearInlinePreviewRenderTimer()
+    }
+
+    function scheduleInlinePreviewRender() {
+      if (!inlinePreviewCodeLangSet.has(currentLanguage) || currentMode !== 'preview') {
+        return
+      }
+
+      clearInlinePreviewRenderTimer()
+      inlinePreviewRenderTimer = setTimeout(() => {
+        inlinePreviewRenderTimer = null
+        const token = ++inlinePreviewRenderToken
+        void renderInlineCodePreview(
+          currentLanguage,
+          code.textContent || '',
+          inlinePreview,
+          () => {
+            return token !== inlinePreviewRenderToken
+              || !dom.isConnected
+              || !inlinePreviewCodeLangSet.has(currentLanguage)
+              || currentMode !== 'preview'
+          },
+        )
+      }, 0)
+    }
+
+    function applyMode() {
+      const previewMode = inlinePreviewCodeLangSet.has(currentLanguage) && currentMode === 'preview'
+      pre.style.display = previewMode ? 'none' : 'block'
+      inlinePreview.style.display = previewMode ? 'flex' : 'none'
+
+      if (previewMode) {
+        scheduleInlinePreviewRender()
+      }
+      else {
+        invalidateInlinePreviewRender()
+      }
+    }
+
+    function updateMode(mode: 'preview' | 'code') {
+      if (!inlinePreviewCodeLangSet.has(currentLanguage)) {
+        return
+      }
+      currentMode = mode
+      mountHeader()
+      applyMode()
+    }
+
     function mountHeader() {
       headerApp?.unmount()
+      const useInlinePreview = inlinePreviewCodeLangSet.has(currentLanguage)
       headerApp = createApp(RenderCodeHeader, {
         language: currentLanguage,
-        previewable: previewableCodeLangSet.has(currentLanguage),
+        mode: currentMode,
+        toggleable: useInlinePreview,
+        expandable: currentMode === 'preview' && expandableCodeLangSet.has(currentLanguage),
+        previewable: !useInlinePreview && previewableCodeLangSet.has(currentLanguage),
         codeResolver: () => code.textContent || '',
         onPreview: ({ language, code: previewCode }: { language: string, code: string }) => {
+          openCodePreview(language, previewCode)
+        },
+        onModeChange: (mode: 'preview' | 'code') => {
+          updateMode(mode)
+        },
+        onExpand: ({ language, code: previewCode }: { language: string, code: string }) => {
           openCodePreview(language, previewCode)
         },
       })
@@ -221,10 +397,17 @@ function createReadonlyCodeBlockView() {
     }
 
     function syncLanguage(nodeData: any) {
-      currentLanguage = normalizeCodeLanguage(nodeData?.attrs?.language)
+      const nextLanguage = normalizeCodeLanguage(nodeData?.attrs?.language)
+      const languageChanged = nextLanguage !== currentLanguage
+      currentLanguage = nextLanguage
+      if (languageChanged) {
+        currentMode = inlinePreviewCodeLangSet.has(currentLanguage) ? 'preview' : 'code'
+      }
       code.className = ''
       code.classList.add(`language-${currentLanguage}`)
       mountHeader()
+      applyMode()
+      scheduleInlinePreviewRender()
     }
 
     syncLanguage(currentNode)
@@ -233,6 +416,7 @@ function createReadonlyCodeBlockView() {
       dom,
       contentDOM: code,
       destroy: () => {
+        invalidateInlinePreviewRender()
         headerApp?.unmount()
         headerApp = null
       },
@@ -246,6 +430,7 @@ function createReadonlyCodeBlockView() {
         }
         currentNode = nextNode
         syncLanguage(nextNode)
+        scheduleInlinePreviewRender()
         return true
       },
     }
