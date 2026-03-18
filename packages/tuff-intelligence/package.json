@@ -20,6 +20,11 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./pilot-conversation": {
+      "types": "./src/pilot-conversation.ts",
+      "import": "./src/pilot-conversation.ts",
+      "default": "./src/pilot-conversation.ts"
+    },
     "./pilot": {
       "types": "./src/pilot.ts",
       "import": "./src/pilot.ts",

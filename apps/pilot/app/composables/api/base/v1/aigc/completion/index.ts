@@ -1,7 +1,7 @@
 import type { IInnerItemType } from './entity'
 import type { ToolApprovalTicket } from './flow'
 import type { IChatBody, IChatConversation, IChatInnerItem, IChatItem, ICompletionHandler, IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
-import { serializePilotExecutorMessages } from '@talex-touch/tuff-intelligence/pilot'
+import { serializePilotExecutorMessages } from '@talex-touch/tuff-intelligence/pilot-conversation'
 import { endHttp } from '~/composables/api/axios'
 import { IChatItemStatus, IChatRole, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
 import { mapStrStatus } from './entity'
