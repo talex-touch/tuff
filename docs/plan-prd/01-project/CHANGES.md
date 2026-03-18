@@ -1,7 +1,7 @@
 # 变更日志
 
-> 更新时间: 2026-03-18
-> 说明: 主文件仅保留近 30 天（2026-02-24 ~ 2026-03-18）详细记录；更早历史已按月归档。
+> 更新时间: 2026-03-19
+> 说明: 主文件仅保留近 30 天（2026-02-24 ~ 2026-03-19）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
@@ -11,6 +11,14 @@
 
 ---
 
+## 2026-03-19
+
+### refactor(pilot-input): 合并“分析图片/分析文件”为单一“分析文件”入口
+
+- 输入区 `ThInputPlus` 移除独立“分析图片”入口，统一为一个“分析文件”按钮（支持图片 + 文档）。
+- `ThInput` 侧统一附件能力判定为 `allowFileAnalysis`，粘贴/上传/文件选择不再区分 image/file 双开关。
+- 运行时模型能力兼容：`allowFileAnalysis` 优先，缺省回退历史 `allowImageAnalysis`；对外返回保持两字段同值，避免旧客户端语义分叉。
+
 ## 2026-03-18
 
 ### fix(pilot-build): 拆分前端安全子入口，修复 `AsyncLocalStorage` 运行时异常
@@ -18,6 +26,12 @@
 - 新增 `@talex-touch/tuff-intelligence/pilot-conversation` 子入口（`packages/tuff-intelligence/src/pilot-conversation.ts`），仅导出 `serializePilotExecutorMessages`，避免前端链路误引入 `deepagents/langgraph` 的 Node-only 依赖。
 - `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts` 改为从 `pilot-conversation` 引用序列化能力，不再通过 `@talex-touch/tuff-intelligence/pilot` 聚合入口取值。
 - 结果：消除浏览器打包链路对 `node:async_hooks` 的依赖，修复 `import_node_async_hooks.AsyncLocalStorage is not a constructor` 导致的 500 问题。
+
+### fix(pilot-executor): 渠道路由失败错误透传到前端可见
+
+- `apps/pilot/server/api/aigc/executor.post.ts` 在渠道选择失败分支补齐并下发结构化错误信息：`code/reason/request_id/status_code/detail`，并附带 `model_id/provider_model/route_combo_id/selection_reason/selection_source` 等诊断字段。
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts` 保留 SSE `error` 事件中的结构化字段，错误 block 写入 `extra`（`requestId/statusCode/code/reason/detail`），不再只保留 message。
+- `apps/pilot/app/components/chat/attachments/ErrorCard.vue` 优先读取结构化 `extra`，补充展示诊断摘要与路由上下文，并稳定展示可复制的 `requestId`，便于用户感知与问题定位。
 
 ### fix(pilot-intelligence): 前后端会话结构统一 + websearch 按意图触发
 

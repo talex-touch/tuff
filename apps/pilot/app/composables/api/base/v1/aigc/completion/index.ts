@@ -200,6 +200,46 @@ function mapToolAuditTypeToChatStatus(auditType: string): IChatItemStatus | null
   return null
 }
 
+function buildErrorBlockExtra(payload: Record<string, any>): Record<string, unknown> | undefined {
+  const detail = payload?.detail && typeof payload.detail === 'object' && !Array.isArray(payload.detail)
+    ? payload.detail as Record<string, unknown>
+    : null
+  const detailRecord = detail as Record<string, any> | null
+  const code = String(payload?.code || detailRecord?.code || '').trim()
+  const reason = String(payload?.reason || detailRecord?.reason || '').trim()
+  const requestId = String(
+    payload?.request_id
+    || payload?.requestId
+    || detailRecord?.request_id
+    || detailRecord?.requestId
+    || '',
+  ).trim()
+  const statusCodeRaw = payload?.status_code
+    ?? payload?.statusCode
+    ?? detailRecord?.status_code
+    ?? detailRecord?.statusCode
+  const statusCode = Number(statusCodeRaw)
+  const extra: Record<string, unknown> = {}
+
+  if (code) {
+    extra.code = code
+  }
+  if (reason) {
+    extra.reason = reason
+  }
+  if (requestId) {
+    extra.requestId = requestId
+  }
+  if (Number.isFinite(statusCode)) {
+    extra.statusCode = statusCode
+  }
+  if (detail && Object.keys(detail).length > 0) {
+    extra.detail = detail
+  }
+
+  return Object.keys(extra).length > 0 ? extra : undefined
+}
+
 async function handleExecutorItem(item: string, callback: (data: any) => void) {
   if (item === '[DONE]') {
     callback({
@@ -283,6 +323,7 @@ async function handleExecutorResult(
         const payload = parseJsonSafe<Record<string, any>>(parsed.data)
         if (payload) {
           callback({
+            ...payload,
             done: false,
             event: typeof payload.event === 'string' ? payload.event : 'error',
             status: typeof payload.status === 'string' ? payload.status : 'failed',
@@ -1066,9 +1107,11 @@ export const $completion = {
             if (signal.signal.aborted)
               innerMsg.status = IChatItemStatus.CANCELLED
 
+            const extra = buildErrorBlockExtra(res)
             innerMsg.value.push({
               type: 'error',
               value: errorMessage,
+              extra,
             })
 
             complete()
@@ -1162,9 +1205,11 @@ export const $completion = {
             innerMsg.status = IChatItemStatus.ERROR
             handler.onError?.()
             handler?.onTriggerStatus?.(innerMsg.status)
+            const extra = buildErrorBlockExtra(res)
             innerMsg.value.push({
               type: 'error',
               value: message,
+              extra,
             })
           }
           else if (event === 'turn.approval_required') {
@@ -1332,10 +1377,12 @@ export const $completion = {
               console.error('@completion mapped error response', res)
 
               const message: string = res.message
+              const extra = buildErrorBlockExtra(res)
 
               innerMsg.value.push({
                 type: 'error',
                 value: message,
+                extra,
               })
 
               if (message.includes('状态不可用'))
