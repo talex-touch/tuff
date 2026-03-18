@@ -5,6 +5,58 @@ const props = defineProps<{
   block: IInnerItemMeta
 }>()
 
+const errorMeta = computed(() => {
+  const extra = props.block.extra && typeof props.block.extra === 'object' && !Array.isArray(props.block.extra)
+    ? props.block.extra as Record<string, unknown>
+    : {}
+  const detail = extra.detail && typeof extra.detail === 'object' && !Array.isArray(extra.detail)
+    ? extra.detail as Record<string, unknown>
+    : {}
+  const detailRecord = detail as Record<string, any>
+  const statusCodeRaw = extra.statusCode
+    ?? extra.status_code
+    ?? detailRecord.status_code
+    ?? detailRecord.statusCode
+  const statusCode = Number(statusCodeRaw)
+
+  return {
+    code: String(extra.code || detailRecord.code || '').trim(),
+    reason: String(extra.reason || detailRecord.reason || '').trim(),
+    requestId: String(extra.requestId || detailRecord.request_id || detailRecord.requestId || '').trim(),
+    statusCode: Number.isFinite(statusCode) ? statusCode : null,
+    routeComboId: String(detailRecord.route_combo_id || detailRecord.routeComboId || '').trim(),
+    modelId: String(detailRecord.model_id || detailRecord.modelId || '').trim(),
+    providerModel: String(detailRecord.provider_model || detailRecord.providerModel || '').trim(),
+    channelId: String(detailRecord.channel_id || detailRecord.channelId || '').trim(),
+    selectionSource: String(detailRecord.selection_source || detailRecord.selectionSource || '').trim(),
+    selectionReason: String(detailRecord.selection_reason || detailRecord.selectionReason || '').trim(),
+  }
+})
+
+const diagnosticSummary = computed(() => {
+  const list: string[] = []
+  if (errorMeta.value.statusCode)
+    list.push(`HTTP ${errorMeta.value.statusCode}`)
+  if (errorMeta.value.code)
+    list.push(errorMeta.value.code)
+  if (errorMeta.value.reason)
+    list.push(errorMeta.value.reason)
+  return list.join(' · ')
+})
+
+const routingSummary = computed(() => {
+  const list: string[] = []
+  if (errorMeta.value.routeComboId)
+    list.push(`route=${errorMeta.value.routeComboId}`)
+  if (errorMeta.value.modelId)
+    list.push(`model=${errorMeta.value.modelId}`)
+  if (errorMeta.value.providerModel)
+    list.push(`provider=${errorMeta.value.providerModel}`)
+  if (errorMeta.value.channelId)
+    list.push(`channel=${errorMeta.value.channelId}`)
+  return list.join(' · ')
+})
+
 // 去除文本中的括号以及括号内的内容 比如 a (2323124你好) => a [包括a后面的空格也要去除]
 const _text = computed(() => {
   const text = props.block.value
@@ -41,8 +93,18 @@ const _text = computed(() => {
   return [value, errCode]
 })
 
+const statusCodeValue = computed(() => {
+  const parsed = Number(_text.value[1])
+  if (Number.isFinite(parsed))
+    return parsed
+  return errorMeta.value.statusCode || 500
+})
+
 // 获取文本中括号的内容
 const _bracket = computed(() => {
+  if (errorMeta.value.requestId)
+    return errorMeta.value.requestId
+
   const text = props.block.value
   const reg = /\((.*?)\)/g
 
@@ -68,24 +130,24 @@ const description = computed(() => {
     return [1, '您已达到限制，升级订阅计划以继续使用科塔智爱。为确保服务不受影响，建议您尽快完成订阅计划升级。如有任何疑问，欢迎随时联系客服咨询。感谢您的支持与理解。']
   }
   else if (
-    +_text.value[1]! === 503
+    statusCodeValue.value === 503
     && (title.includes('熔断') || title.includes('无可用渠道') || title.includes('供应商'))
   ) {
     return [5, '当前渠道暂不可用，请稍后重试，或切换模型/渠道后再次发送。']
   }
-  else if (+_text.value[1]! === 503) {
+  else if (statusCodeValue.value === 503) {
     return [2, '当前模型的使用需升级至更高级的订阅计划。请前往订阅页面选择合适的套餐进行升级，以便继续使用该模型的所有功能。感谢您的理解和支持。']
   }
   else if (title.includes('未登录')) {
     return [3, '您尚未登录，请先登录以继续使用科塔智爱系统的全部功能。为确保正常体验，请前往登录页面完成登录操作。如有任何疑问，欢迎联系客服获取帮助。感谢您的理解与支持。']
   }
-  else if (+_text.value[1]! === 500) {
+  else if (statusCodeValue.value === 500) {
     return [0, '发生未知错误，请联系管理员以获取进一步支持。我们将尽快为您解决问题，感谢您的理解和配合。']
   }
-  else if (+_text.value[1]! === 1100) {
+  else if (statusCodeValue.value === 1100) {
     return [4, '由于手动取消了请求，当前请求已被终止。请尝试重新发起请求以发起新对话。']
   }
-  else if (+_text.value[1]! === 1101) {
+  else if (statusCodeValue.value === 1101) {
     return [3, '检测到您的登录状态出现异常，建议您尝试重新发送消息以恢复正常使用。']
   }
 
@@ -124,6 +186,9 @@ function handleClick() {
       <p v-else>
         无法寻找到解决方案，请尝试重新登录！
       </p>
+      <p v-if="diagnosticSummary" class="ErrorCard-Diagnostic" v-text="diagnosticSummary" />
+      <p v-if="routingSummary" class="ErrorCard-Diagnostic" v-text="routingSummary" />
+      <p v-if="errorMeta.selectionReason" class="ErrorCard-Diagnostic" v-text="errorMeta.selectionReason" />
       <!-- <el-tooltip content="为何发生此问题？">
 
       </el-tooltip> -->
@@ -215,6 +280,15 @@ function handleClick() {
 
     font-size: 14px;
     // color: var(--el-text-color-secondary);
+  }
+
+  &-Diagnostic {
+    margin-top: 0.35rem;
+
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--el-text-color-secondary);
+    word-break: break-all;
   }
 
   &-Header {

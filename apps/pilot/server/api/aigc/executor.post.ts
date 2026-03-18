@@ -722,6 +722,7 @@ export default defineEventHandler(async (event) => {
 
   const chatId = requestedChatId || existingSession?.chatId || randomId('Chat')
   const runtimeSessionId = existingSession?.runtimeSessionId || randomId('session')
+  const requestId = randomId('req')
   const requestedModelId = String(body?.modelId || body?.model || '').trim()
   const requestedRouteComboId = String(body?.routeComboId || '').trim()
   const intentDecision = isTitleRequest
@@ -763,6 +764,63 @@ export default defineEventHandler(async (event) => {
     const message = String(error?.message || error?.statusMessage || '当前无可用渠道，请检查渠道配置。')
     const code = String(detail.code || 'PILOT_CHANNEL_UNAVAILABLE')
     const reason = String(detail.reason || '').trim()
+    const statusCode = Number.isFinite(Number(error?.statusCode))
+      ? Math.max(400, Math.floor(Number(error.statusCode)))
+      : 503
+    const normalizedDetail: Record<string, unknown> = {
+      ...detail,
+      code,
+      reason: reason || 'channel_selection_failed',
+      status_code: Number.isFinite(Number(detail.status_code))
+        ? Math.max(400, Math.floor(Number(detail.status_code)))
+        : statusCode,
+      request_id: String(detail.request_id || requestId).trim() || requestId,
+      intent_type: intentDecision.intentType,
+      intent_reason: intentDecision.reason,
+      model_id: String(
+        detail.model_id
+        || detail.modelId
+        || requestedModelId
+        || 'quota-auto',
+      ).trim() || 'quota-auto',
+      provider_model: String(
+        detail.provider_model
+        || detail.providerModel
+        || requestedModelId
+        || 'quota-auto',
+      ).trim() || 'quota-auto',
+      route_combo_id: String(
+        detail.route_combo_id
+        || detail.routeComboId
+        || requestedRouteComboId
+        || 'default-auto',
+      ).trim() || 'default-auto',
+      selection_source: String(
+        detail.selection_source
+        || detail.selectionSource
+        || 'routing-resolver',
+      ).trim() || 'routing-resolver',
+      selection_reason: String(
+        detail.selection_reason
+        || detail.selectionReason
+        || reason
+        || 'channel_selection_failed',
+      ).trim() || 'channel_selection_failed',
+      orchestrator_reason: String(
+        detail.orchestrator_reason
+        || detail.orchestratorReason
+        || '',
+      ).trim(),
+      channel_id: String(
+        detail.channel_id
+        || detail.channelId
+        || body?.channel_id
+        || existingSession?.channelId
+        || '',
+      ).trim(),
+      session_channel_id: String(existingSession?.channelId || '').trim(),
+      request_channel_id: String(body?.channel_id || '').trim(),
+    }
 
     console.warn('[pilot][executor] channel selection failed', {
       user_id: auth.userId,
@@ -772,9 +830,9 @@ export default defineEventHandler(async (event) => {
       session_channel_id: existingSession?.channelId || null,
       code,
       reason: reason || null,
-      status_code: Number(error?.statusCode || 503),
+      status_code: statusCode,
       message,
-      detail,
+      detail: normalizedDetail,
     })
 
     const encoder = new TextEncoder()
@@ -785,8 +843,11 @@ export default defineEventHandler(async (event) => {
           event: 'error',
           status: 'failed',
           code,
-          reason,
+          reason: String(normalizedDetail.reason || reason || 'channel_selection_failed'),
           message,
+          request_id: normalizedDetail.request_id,
+          status_code: normalizedDetail.status_code,
+          detail: normalizedDetail,
         })}\n\n`))
         controller.enqueue(encoder.encode('data: [DONE]\\n\\n'))
         controller.close()
@@ -794,7 +855,7 @@ export default defineEventHandler(async (event) => {
     })
 
     return new Response(stream, {
-      status: 503,
+      status: statusCode,
       headers: {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
@@ -865,7 +926,6 @@ export default defineEventHandler(async (event) => {
     },
   )
   const requestMeta = resolveRequestMeta(event)
-  const requestId = randomId('req')
   const debugEnabled = resolveExecutorDebugEnabled(event)
   const trace: ExecutorTraceContext = {
     requestId,
