@@ -2,14 +2,35 @@
 import type { IChatInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
 import { autoUpdate, flip, offset, useFloating } from '@floating-ui/vue'
 
+interface ThInputCapabilities {
+  thinking: boolean
+  websearch: boolean
+  image: boolean
+  file: boolean
+}
+
+interface InputOption {
+  icon: string
+  type: 'button' | 'checkbox' | 'slider'
+  label: string
+  info: string
+  onclick?: () => void
+  checked?: () => boolean
+  disabled?: () => boolean
+  disabledTip?: string
+  model?: number
+}
+
 const props = defineProps<{
   hide: boolean
   modelValue: IChatInnerItemMeta
+  capabilities?: Partial<ThInputCapabilities>
 }>()
 
 const emits = defineEmits<{
   (name: 'update:modelValue', data: IChatInnerItemMeta): void
   (event: 'image'): void
+  (event: 'file'): void
 }>()
 
 const hover = ref(false)
@@ -17,6 +38,12 @@ const hoverMode = debouncedRef(hover, 200)
 
 const stareMode = ref(false)
 const property = useVModel(props, 'modelValue', emits)
+const normalizedCapabilities = computed<ThInputCapabilities>(() => ({
+  thinking: props.capabilities?.thinking !== false,
+  websearch: props.capabilities?.websearch !== false,
+  image: props.capabilities?.image !== false,
+  file: props.capabilities?.file !== false,
+}))
 
 const { isSupported, isActive, request, release } = useWakeLock()
 const { charging, level } = useBattery()
@@ -68,73 +95,98 @@ watch(() => now.value - startTime, (val) => {
   }
 })
 
-const options: any = reactive([
-  {
-    icon: 'i-carbon-image',
-    type: 'button',
-    label: '分析图片',
-    info: '从本地图库中选择或者拍取一张照片',
-    onclick: () => {
-      emits('image')
+const options = computed<InputOption[]>(() => {
+  const rows: Array<InputOption | undefined> = [
+    {
+      icon: 'i-carbon-image',
+      type: 'button',
+      label: '分析图片',
+      info: '从本地图库中选择图片。',
+      onclick: () => {
+        emits('image')
+      },
+      disabled: () => !normalizedCapabilities.value.image,
+      disabledTip: '当前模型组未开启图片分析能力。',
     },
-  },
-  // {
-  //   icon: 'i-carbon-document',
-  //   type: 'button',
-  //   label: '分析文件',
-  // },
-  {
-    icon: 'i-carbon-ibm-cloud-internet-services',
-    type: 'checkbox',
-    label: '联网能力',
-    info: '联网能力将允许模型访问互联网，以获取更准确的结果。',
-    onclick: () => {
-      property.value.internet = !property.value.internet
+    {
+      icon: 'i-carbon-document',
+      type: 'button',
+      label: '分析文件',
+      info: '选择文档、表格、PDF 等文件进行分析。',
+      onclick: () => {
+        emits('file')
+      },
+      disabled: () => !normalizedCapabilities.value.file,
+      disabledTip: '当前模型组未开启文件分析能力。',
     },
-    checked: () => property.value.internet,
-  },
-  {
-    icon: 'i-carbon:flash',
-    type: 'checkbox',
-    label: '思考模式',
-    info: '开启后优先使用支持 thinking 的模型能力，复杂问题通常更稳。可随时关闭。',
-    onclick: () => {
-      property.value.thinking = !property.value.thinking
+    {
+      icon: 'i-carbon-ibm-cloud-internet-services',
+      type: 'checkbox',
+      label: '联网能力',
+      info: '联网能力将允许模型访问互联网，以获取更准确的结果。',
+      onclick: () => {
+        property.value.internet = !property.value.internet
+      },
+      checked: () => normalizedCapabilities.value.websearch && property.value.internet !== false,
+      disabled: () => !normalizedCapabilities.value.websearch,
+      disabledTip: '当前模型组未开启联网能力。',
     },
-    checked: () => property.value.thinking !== false,
-  },
-  isSupported.value
-    ? {
-        icon: 'i-carbon:cube-view',
-        type: 'checkbox',
-        label: '凝视模式',
-        info: '凝视模式会阻止屏幕息屏，在电量过低时会自动取消。',
-        onclick: () => {
-          const curMode = stareMode.value
+    {
+      icon: 'i-carbon:flash',
+      type: 'checkbox',
+      label: '思考模式',
+      info: '开启后优先使用支持 thinking 的模型能力，复杂问题通常更稳。可随时关闭。',
+      onclick: () => {
+        property.value.thinking = !property.value.thinking
+      },
+      checked: () => normalizedCapabilities.value.thinking && property.value.thinking !== false,
+      disabled: () => !normalizedCapabilities.value.thinking,
+      disabledTip: '当前模型组未开启 thinking 能力。',
+    },
+    isSupported.value
+      ? {
+          icon: 'i-carbon:cube-view',
+          type: 'checkbox',
+          label: '凝视模式',
+          info: '凝视模式会阻止屏幕息屏，在电量过低时会自动取消。',
+          onclick: () => {
+            const curMode = stareMode.value
 
-          if (curMode) {
-            release()
+            if (curMode) {
+              release()
 
-            stareMode.value = false
-          }
-          else {
-            request('screen')
+              stareMode.value = false
+            }
+            else {
+              request('screen')
 
-            if (isActive.value)
-              stareMode.value = true
-          }
-        },
-        checked: () => stareMode.value,
-      }
-    : undefined,
-  {
-    icon: 'i-carbon:temperature-celsius-alt',
-    type: 'slider',
-    label: '随机性',
-    info: '随机性越大，模型越容易产生不连贯的文本，但同时，它也会更难理解。',
-    model: property.value.temperature,
-  },
-].filter(i => i))
+              if (isActive.value)
+                stareMode.value = true
+            }
+          },
+          checked: () => stareMode.value,
+        }
+      : undefined,
+    {
+      icon: 'i-carbon:temperature-celsius-alt',
+      type: 'slider',
+      label: '随机性',
+      info: '随机性越大，模型越容易产生不连贯的文本，但同时，它也会更难理解。',
+      model: property.value.temperature,
+    },
+  ]
+  return rows.filter((item): item is InputOption => Boolean(item))
+})
+
+function handleOptionClick(option: InputOption) {
+  if (option.disabled?.()) {
+    if (option.disabledTip) {
+      ElMessage.warning(option.disabledTip)
+    }
+    return
+  }
+  option.onclick?.()
+}
 
 const buttonTrigger = ref()
 const popoverFloating = ref()
@@ -157,9 +209,9 @@ watch(hoverMode, update)
     <div ref="popoverFloating" :class="{ hover: hoverMode }" :style="floatingStyles" class="ThInput-PlusWrapper">
       <div class="ThInput-Plus-Option fake-background">
         <div
-          v-for="option in options" :key="option.label" v-wave :class="{ checked: option.checked?.() }"
+          v-for="option in options" :key="option.label" v-wave :class="{ checked: option.checked?.(), disabled: option.disabled?.() }"
           class="ThInput-Plus-Option-Item" @mouseenter="hoverMode = hover = true" @mouseleave="hover = false"
-          @click="option.onclick"
+          @click="handleOptionClick(option)"
         >
           <template v-if="option.type === 'button'">
             <div :class="option.icon" />
@@ -203,8 +255,8 @@ watch(hoverMode, update)
   }
   z-index: 2;
 
-  width: 180px;
-  height: 236px;
+  width: 190px;
+  height: 320px;
 
   pointer-events: none;
 }
@@ -308,6 +360,18 @@ watch(hoverMode, update)
 
       border-radius: 12px;
       background-color: var(--el-border-color-extra-light);
+    }
+
+    &.disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: auto;
+      color: var(--el-text-color-secondary);
+
+      &:hover {
+        color: var(--el-text-color-secondary);
+        background-color: transparent;
+      }
     }
 
     &.checked {

@@ -26,6 +26,7 @@ export interface PilotAdminSettingsView {
     channels: Array<{
       id: string
       name: string
+      priority: number
       model: string
       defaultModelId?: string
       models?: Array<{
@@ -79,6 +80,7 @@ export interface PilotAdminSettingsPatch {
     channels?: Array<{
       id: string
       name?: string
+      priority?: number
       baseUrl?: string
       apiKey?: string
       model?: string
@@ -155,6 +157,7 @@ async function buildPilotAdminSettingsView(event: H3Event): Promise<PilotAdminSe
       channels: catalog.channels.map(channel => ({
         id: channel.id,
         name: channel.name,
+        priority: channel.priority,
         model: channel.model,
         defaultModelId: channel.defaultModelId,
         models: channel.models,
@@ -209,7 +212,7 @@ export async function updatePilotAdminSettings(
     await updatePilotAdminChannelCatalog(event, {
       defaultChannelId: typeof channelPatch.defaultChannelId === 'string'
         ? channelPatch.defaultChannelId
-        : current.defaultChannelId,
+        : undefined,
       channels: Array.isArray(channelPatch.channels)
         ? channelPatch.channels
         : current.channels,

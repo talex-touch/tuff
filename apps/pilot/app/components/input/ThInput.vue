@@ -5,6 +5,7 @@ import { useFloating } from '@floating-ui/vue'
 import { encode } from 'gpt-tokenizer'
 import { $endApi } from '~/composables/api/base'
 import { useAttachmentCapability } from '~/composables/useAttachmentCapability'
+import { usePilotRuntimeModels } from '~/composables/usePilotRuntimeModels'
 import { globalOptions } from '~/constants'
 import { cur, tipsVisible } from '../chat/input-tips'
 import InputHeaderFiles from './addon/InputHeaderFiles.vue'
@@ -29,6 +30,17 @@ const inputProperty = ref<IChatInnerItemMeta>({
   thinking: true,
   temperature: 50,
 })
+const {
+  findModel,
+  ensureLoaded: ensureRuntimeModelsLoaded,
+} = usePilotRuntimeModels()
+const selectedModelRuntime = computed(() => findModel(globalConfigModel.value))
+const inputCapabilities = computed(() => ({
+  thinking: selectedModelRuntime.value?.thinkingSupported !== false,
+  websearch: selectedModelRuntime.value?.allowWebsearch !== false,
+  image: selectedModelRuntime.value?.allowImageAnalysis !== false,
+  file: selectedModelRuntime.value?.allowFileAnalysis !== false,
+}))
 
 const input = ref<{
   text: string
@@ -45,6 +57,55 @@ const inputHistories = useLocalStorage<string[]>('inputHistories', [])
 const inputHistoryIndex = ref(inputHistories.value.length - 1)
 const showSend = computed(() => Boolean(input.value.text.trim()) || syncedFiles.value.length > 0)
 const canSend = computed(() => !hasUploadingFiles.value && showSend.value && props.sendState !== 'sending_until_accepted')
+
+function getCapabilityDisabledMessage(kind: 'thinking' | 'websearch' | 'image' | 'file'): string {
+  if (kind === 'thinking') {
+    return '当前模型组未开启思考能力。'
+  }
+  if (kind === 'websearch') {
+    return '当前模型组未开启联网能力。'
+  }
+  if (kind === 'image') {
+    return '当前模型组未开启图片分析能力，请切换模型或联系管理员开启。'
+  }
+  return '当前模型组未开启文件分析能力，请切换模型或联系管理员开启。'
+}
+
+function ensureAttachmentTypeAllowed(kind: 'image' | 'file', notify = true): boolean {
+  const allowed = kind === 'image' ? inputCapabilities.value.image : inputCapabilities.value.file
+  if (allowed) {
+    return true
+  }
+  if (notify) {
+    ElMessage.warning(getCapabilityDisabledMessage(kind))
+  }
+  return false
+}
+
+function handleAttachmentBatch(files: Iterable<File>) {
+  let blockedImage = false
+  let blockedFile = false
+
+  for (const file of files) {
+    const isImage = file.type.startsWith('image/')
+    if (isImage && !ensureAttachmentTypeAllowed('image', false)) {
+      blockedImage = true
+      continue
+    }
+    if (!isImage && !ensureAttachmentTypeAllowed('file', false)) {
+      blockedFile = true
+      continue
+    }
+    void handleAttachmentUpload(file)
+  }
+
+  if (blockedImage) {
+    ElMessage.warning(getCapabilityDisabledMessage('image'))
+  }
+  if (blockedFile) {
+    ElMessage.warning(getCapabilityDisabledMessage('file'))
+  }
+}
 
 function handleSend(event: Event) {
   if (!canSend.value)
@@ -83,10 +144,18 @@ function handleSend(event: Event) {
 
   emits('selectTemplate', template.value?.id ? template.value : null)
 
-  emits('send', inputMeta, {
+  const payloadMeta: IChatInnerItemMeta = {
     ...inputProperty.value,
     temperature: (inputProperty.value.temperature || 0) / 100,
-  })
+  }
+  if (!inputCapabilities.value.thinking) {
+    payloadMeta.thinking = false
+  }
+  if (!inputCapabilities.value.websearch) {
+    payloadMeta.internet = false
+  }
+
+  emits('send', inputMeta, payloadMeta)
 
   input.value = {
     text: '',
@@ -212,6 +281,59 @@ const {
   normalizeAttachmentError,
 } = useAttachmentCapability()
 
+function syncInputFlagsByModel() {
+  const model = selectedModelRuntime.value
+  if (!model) {
+    return
+  }
+  inputProperty.value.thinking = model.thinkingSupported === false
+    ? false
+    : model.thinkingDefaultEnabled !== false
+  if (model.allowWebsearch === false) {
+    inputProperty.value.internet = false
+  }
+}
+
+watch(() => globalConfigModel.value, () => {
+  syncInputFlagsByModel()
+}, { immediate: true })
+
+watch(() => selectedModelRuntime.value, () => {
+  syncInputFlagsByModel()
+})
+
+watch(
+  () => [inputCapabilities.value.thinking, inputCapabilities.value.websearch, inputCapabilities.value.image, inputCapabilities.value.file] as const,
+  ([thinkingAllowed, websearchAllowed, imageAllowed, fileAllowed]) => {
+    if (!thinkingAllowed) {
+      inputProperty.value.thinking = false
+    }
+    if (!websearchAllowed) {
+      inputProperty.value.internet = false
+    }
+
+    if (input.value.files.length <= 0) {
+      return
+    }
+
+    const filtered = input.value.files.filter((item) => {
+      if (item.type === 'image') {
+        return imageAllowed
+      }
+      if (item.type === 'file') {
+        return fileAllowed
+      }
+      return true
+    })
+    const removed = input.value.files.length - filtered.length
+    if (removed > 0) {
+      input.value.files = filtered
+      ElMessage.warning(`当前模型组不支持部分已选附件，已自动移除 ${removed} 个。`)
+    }
+  },
+  { immediate: true },
+)
+
 function focusInput() {
   const el = document.getElementById('main-input')
 
@@ -222,6 +344,8 @@ function focusInput() {
 
 onMounted(() => {
   focusInput()
+  void ensureRuntimeModelsLoaded()
+  syncInputFlagsByModel()
   void refreshCapability()
 })
 
@@ -259,6 +383,10 @@ function resolveUploadedFileUrl(payload: Record<string, any>): string {
 
 async function handleAttachmentUpload(file: File) {
   const isImage = file.type.startsWith('image/')
+  if (!ensureAttachmentTypeAllowed(isImage ? 'image' : 'file')) {
+    return
+  }
+
   const obj = reactive<any>({
     sync: false,
     width: 0,
@@ -372,33 +500,51 @@ function handlePaste(e: ClipboardEvent) {
     return
 
   e.preventDefault()
-
-  for (const file of files) {
-    void handleAttachmentUpload(file)
-  }
+  handleAttachmentBatch(files)
 }
 
 function handleDeleteFile(index: number) {
   input.value.files.splice(index, 1)
 }
 
-const { open, reset, onChange } = useFileDialog({
-  accept: 'image/*,application/pdf,text/*,.md,.json,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx',
+const { open: openImageDialog, reset: resetImageDialog, onChange: onImageDialogChange } = useFileDialog({
+  accept: 'image/*',
   directory: false,
 })
 
-onChange((files) => {
+const { open: openFileDialog, reset: resetFileDialog, onChange: onFileDialogChange } = useFileDialog({
+  accept: 'application/pdf,text/*,.md,.json,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx',
+  directory: false,
+})
+
+onImageDialogChange((files) => {
   if (!files)
     return
 
-  for (const file of files)
-    void handleAttachmentUpload(file)
+  handleAttachmentBatch(files)
+})
+
+onFileDialogChange((files) => {
+  if (!files)
+    return
+
+  handleAttachmentBatch(files)
 })
 
 function handleImagePlus() {
-  // 调用浏览器文件选择框
-  reset()
-  open()
+  if (!ensureAttachmentTypeAllowed('image')) {
+    return
+  }
+  resetImageDialog()
+  openImageDialog()
+}
+
+function handleFilePlus() {
+  if (!ensureAttachmentTypeAllowed('file')) {
+    return
+  }
+  resetFileDialog()
+  openFileDialog()
 }
 
 watch(() => focus.value, (val) => {
@@ -483,8 +629,9 @@ onStartTyping(focusInput)
     />
 
     <ThInputPlus
-      v-model="inputProperty" :hide="input.text.startsWith('@') || template?.title"
+      v-model="inputProperty" :capabilities="inputCapabilities" :hide="input.text.startsWith('@') || template?.title"
       @image="handleImagePlus"
+      @file="handleFilePlus"
     />
 
     <div flex class="ThInput-Input">

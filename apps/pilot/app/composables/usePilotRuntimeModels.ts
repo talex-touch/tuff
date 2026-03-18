@@ -16,6 +16,8 @@ export interface PilotRuntimeModelOption {
   thinkingSupported: boolean
   thinkingDefaultEnabled: boolean
   allowWebsearch: boolean
+  allowImageAnalysis: boolean
+  allowFileAnalysis: boolean
   source: string
 }
 
@@ -39,6 +41,8 @@ interface RuntimeModelsResponse {
     thinkingSupported?: boolean
     thinkingDefaultEnabled?: boolean
     allowWebsearch?: boolean
+    allowImageAnalysis?: boolean
+    allowFileAnalysis?: boolean
     source?: string
   }>
   defaultModelId?: string
@@ -53,6 +57,8 @@ const FALLBACK_MODELS: PilotRuntimeModelOption[] = [
     thinkingSupported: true,
     thinkingDefaultEnabled: true,
     allowWebsearch: true,
+    allowImageAnalysis: true,
+    allowFileAnalysis: true,
     source: 'system',
   },
   {
@@ -62,6 +68,8 @@ const FALLBACK_MODELS: PilotRuntimeModelOption[] = [
     thinkingSupported: true,
     thinkingDefaultEnabled: true,
     allowWebsearch: true,
+    allowImageAnalysis: true,
+    allowFileAnalysis: true,
     source: 'system',
   },
   {
@@ -71,6 +79,8 @@ const FALLBACK_MODELS: PilotRuntimeModelOption[] = [
     thinkingSupported: true,
     thinkingDefaultEnabled: true,
     allowWebsearch: true,
+    allowImageAnalysis: true,
+    allowFileAnalysis: true,
     source: 'system',
   },
   {
@@ -80,6 +90,8 @@ const FALLBACK_MODELS: PilotRuntimeModelOption[] = [
     thinkingSupported: true,
     thinkingDefaultEnabled: true,
     allowWebsearch: true,
+    allowImageAnalysis: true,
+    allowFileAnalysis: true,
     source: 'system',
   },
   {
@@ -89,6 +101,8 @@ const FALLBACK_MODELS: PilotRuntimeModelOption[] = [
     thinkingSupported: true,
     thinkingDefaultEnabled: true,
     allowWebsearch: true,
+    allowImageAnalysis: true,
+    allowFileAnalysis: true,
     source: 'system',
   },
   {
@@ -98,6 +112,8 @@ const FALLBACK_MODELS: PilotRuntimeModelOption[] = [
     thinkingSupported: true,
     thinkingDefaultEnabled: true,
     allowWebsearch: true,
+    allowImageAnalysis: true,
+    allowFileAnalysis: true,
     source: 'system',
   },
   {
@@ -107,6 +123,8 @@ const FALLBACK_MODELS: PilotRuntimeModelOption[] = [
     thinkingSupported: true,
     thinkingDefaultEnabled: true,
     allowWebsearch: true,
+    allowImageAnalysis: true,
+    allowFileAnalysis: true,
     source: 'system',
   },
 ]
@@ -166,6 +184,8 @@ function normalizeModelList(value: unknown): PilotRuntimeModelOption[] {
       thinkingSupported: toBoolean(row.thinkingSupported, true),
       thinkingDefaultEnabled: toBoolean(row.thinkingDefaultEnabled, true),
       allowWebsearch: toBoolean(row.allowWebsearch, true),
+      allowImageAnalysis: toBoolean(row.allowImageAnalysis, true),
+      allowFileAnalysis: toBoolean(row.allowFileAnalysis, true),
       source: normalizeText(row.source) || 'runtime',
     })
   }

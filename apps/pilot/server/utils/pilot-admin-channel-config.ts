@@ -15,6 +15,9 @@ const CACHE_KEY = '__pilotAdminChannelCatalog'
 const DEFAULT_TIMEOUT_MS = 90_000
 const MIN_TIMEOUT_MS = 3_000
 const MAX_TIMEOUT_MS = 10 * 60 * 1000
+const DEFAULT_PRIORITY = 100
+const MIN_PRIORITY = 1
+const MAX_PRIORITY = 9999
 const SUPPORTED_BUILTIN_TOOLS: PilotBuiltinTool[] = [
   'write_todos',
   'read_file',
@@ -33,6 +36,7 @@ export interface PilotAdminChannelItem {
   name: string
   baseUrl: string
   apiKey: string
+  priority: number
   model: string
   defaultModelId?: string
   models?: PilotChannelModelConfig[]
@@ -81,6 +85,14 @@ function normalizeTimeoutMs(value: unknown): number {
   return Math.min(Math.max(Math.floor(parsed), MIN_TIMEOUT_MS), MAX_TIMEOUT_MS)
 }
 
+function normalizePriority(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_PRIORITY
+  }
+  return Math.min(Math.max(Math.floor(parsed), MIN_PRIORITY), MAX_PRIORITY)
+}
+
 function normalizeTools(value: unknown): PilotBuiltinTool[] {
   if (!Array.isArray(value)) {
     return ['write_todos']
@@ -106,6 +118,16 @@ function normalizeBoolean(value: unknown, fallback = true): boolean {
     return false
   }
   return fallback
+}
+
+function sortChannelsByPriority<T extends { id: string, priority?: number }>(channels: T[]): T[] {
+  return [...channels].sort((a, b) => {
+    const priorityDiff = normalizePriority(a.priority) - normalizePriority(b.priority)
+    if (priorityDiff !== 0) {
+      return priorityDiff
+    }
+    return normalizeText(a.id).localeCompare(normalizeText(b.id))
+  })
 }
 
 function normalizeChannelModelRow(raw: unknown): PilotChannelModelConfig | null {
@@ -239,6 +261,7 @@ function mergeChannelInputWithExisting(
     ...row,
     id,
     apiKey: nextApiKey || existing?.apiKey || '',
+    priority: row.priority ?? existing?.priority ?? DEFAULT_PRIORITY,
     models: Array.isArray(row.models) ? row.models : existing?.models,
     defaultModelId: normalizeText(row.defaultModelId) || existing?.defaultModelId,
     modelsLastSyncedAt: normalizeText(row.modelsLastSyncedAt) || existing?.modelsLastSyncedAt,
@@ -268,6 +291,7 @@ function normalizeChannelRow(raw: unknown): PilotAdminChannelItem | null {
     name: normalizeText(row.name) || id,
     baseUrl,
     apiKey,
+    priority: normalizePriority(row.priority),
     model: defaultModelId,
     defaultModelId,
     models,
@@ -318,6 +342,21 @@ function decodeChannels(raw: string): PilotAdminChannelItem[] {
   }
 }
 
+function resolveCatalogDefaultChannelId(
+  channels: PilotAdminChannelItem[],
+  preferred?: string,
+): string {
+  const sorted = sortChannelsByPriority(channels)
+  const preferredId = normalizeText(preferred)
+  const enabled = sorted.filter(item => item.enabled)
+  const candidates = enabled.length > 0 ? enabled : sorted
+
+  if (preferredId && candidates.some(item => item.id === preferredId)) {
+    return preferredId
+  }
+  return candidates[0]?.id || ''
+}
+
 export async function getPilotAdminChannelCatalog(event: H3Event): Promise<PilotAdminChannelCatalog> {
   const context = event.context as PilotEventContext
   if (context[CACHE_KEY]) {
@@ -325,11 +364,9 @@ export async function getPilotAdminChannelCatalog(event: H3Event): Promise<Pilot
   }
 
   const channelsRaw = await readSetting(event, CHANNELS_KEY)
-  const channels = decodeChannels(channelsRaw)
+  const channels = sortChannelsByPriority(decodeChannels(channelsRaw))
   const configuredDefault = await readSetting(event, DEFAULT_CHANNEL_KEY)
-  const enabled = channels.filter(item => item.enabled)
-  const defaultCandidates = enabled.length > 0 ? enabled : channels
-  const defaultChannelId = defaultCandidates.find(item => item.id === configuredDefault)?.id || defaultCandidates[0]?.id || ''
+  const defaultChannelId = resolveCatalogDefaultChannelId(channels, configuredDefault)
   const catalog: PilotAdminChannelCatalog = {
     channels,
     defaultChannelId,
@@ -380,13 +417,14 @@ export async function updatePilotAdminChannelCatalog(
     })
   }
 
-  await upsertSetting(event, CHANNELS_KEY, encodeChannels(normalizedChannels))
-  const defaultChannelId = normalizeText(input.defaultChannelId)
+  const sortedChannels = sortChannelsByPriority(normalizedChannels)
+  await upsertSetting(event, CHANNELS_KEY, encodeChannels(sortedChannels))
+  const defaultChannelId = resolveCatalogDefaultChannelId(sortedChannels, input.defaultChannelId)
   await upsertSetting(event, DEFAULT_CHANNEL_KEY, defaultChannelId)
 
   console.info('[pilot][channel] catalog updated', {
     inputCount: input.channels.length,
-    savedCount: normalizedChannels.length,
+    savedCount: sortedChannels.length,
     defaultChannelId,
   })
 

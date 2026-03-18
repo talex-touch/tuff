@@ -28,6 +28,7 @@ interface ChannelFormItem {
   baseUrl: string
   apiKey: string
   apiKeyMasked: string
+  priority: number
   model: string
   defaultModelId: string
   models: ChannelModelFormItem[]
@@ -55,7 +56,6 @@ const MODEL_FORMAT_OPTIONS = [
 const loading = ref(false)
 const saving = ref(false)
 const channels = ref<ChannelFormItem[]>([])
-const defaultChannelId = ref('')
 let channelSequence = 0
 let channelModelSequence = 0
 
@@ -95,6 +95,14 @@ function toTimeoutMs(value: unknown): number {
     return 90_000
   }
   return Math.min(Math.max(Math.floor(parsed), 3_000), 10 * 60 * 1000)
+}
+
+function toPriority(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return 100
+  }
+  return Math.min(Math.max(Math.floor(parsed), 1), 9999)
 }
 
 function toAdapter(value: unknown): PilotChannelAdapter {
@@ -165,6 +173,7 @@ function createEmptyChannel(): ChannelFormItem {
     baseUrl: '',
     apiKey: '',
     apiKeyMasked: '',
+    priority: 100,
     model: firstModel.id,
     defaultModelId: firstModel.id,
     models: [firstModel],
@@ -188,6 +197,7 @@ function normalizeChannelFormItem(raw: Partial<ChannelFormItem>): ChannelFormIte
     baseUrl: normalizeText(raw.baseUrl),
     apiKey: normalizeText(raw.apiKey),
     apiKeyMasked: normalizeText(raw.apiKeyMasked),
+    priority: toPriority(raw.priority),
     model: normalizeText(raw.model),
     defaultModelId: normalizeText(raw.defaultModelId) || normalizeText(raw.model),
     models,
@@ -201,29 +211,10 @@ function normalizeChannelFormItem(raw: Partial<ChannelFormItem>): ChannelFormIte
   return item
 }
 
-function resolveDefaultChannelId(list: ChannelFormItem[], preferred?: string): string {
-  const preferredId = normalizeText(preferred)
-  if (preferredId && list.some(item => item.id === preferredId)) {
-    return preferredId
-  }
-
-  const current = normalizeText(defaultChannelId.value)
-  if (current && list.some(item => item.id === current)) {
-    return current
-  }
-
-  const enabled = list.find(item => item.enabled)
-  if (enabled) {
-    return enabled.id
-  }
-  return list[0]?.id || ''
-}
-
 function applyChannelSettings(payload: any) {
   const incoming = Array.isArray(payload?.channels) ? payload.channels : []
   const mapped = incoming.map((item: any) => normalizeChannelFormItem(item || {}))
   channels.value = mapped
-  defaultChannelId.value = resolveDefaultChannelId(mapped, payload?.defaultChannelId)
 }
 
 async function fetchSettings() {
@@ -243,14 +234,19 @@ async function fetchSettings() {
 }
 
 function buildSavePayload(list: ChannelFormItem[]) {
-  const ordered = [...list].sort((a, b) => a.id.localeCompare(b.id))
+  const ordered = [...list].sort((a, b) => {
+    if (a.priority !== b.priority) {
+      return a.priority - b.priority
+    }
+    return a.id.localeCompare(b.id)
+  })
   return {
-    defaultChannelId: resolveDefaultChannelId(ordered),
     channels: ordered.map(item => ({
       id: item.id,
       name: item.name,
       baseUrl: item.baseUrl,
       apiKey: item.apiKey,
+      priority: item.priority,
       model: item.defaultModelId,
       defaultModelId: item.defaultModelId,
       models: item.models.map(model => ({
@@ -270,14 +266,18 @@ function buildSavePayload(list: ChannelFormItem[]) {
   }
 }
 
-async function saveChannels(nextChannels: ChannelFormItem[], preferredDefault = ''): Promise<boolean> {
-  const resolvedDefault = resolveDefaultChannelId(nextChannels, preferredDefault)
+async function saveChannels(
+  nextChannels: ChannelFormItem[],
+  options: {
+    successMessage?: string
+    silentSuccess?: boolean
+  } = {},
+): Promise<boolean> {
   saving.value = true
   try {
     const res: any = await endHttp.post('admin/settings', {
       channels: {
         ...buildSavePayload(nextChannels),
-        defaultChannelId: resolvedDefault,
       },
     })
     if (!res?.ok) {
@@ -291,10 +291,11 @@ async function saveChannels(nextChannels: ChannelFormItem[], preferredDefault = 
     }
     else {
       channels.value = nextChannels.map(item => normalizeChannelFormItem(item))
-      defaultChannelId.value = resolveDefaultChannelId(channels.value, resolvedDefault)
     }
 
-    ElMessage.success('Channels 保存成功')
+    if (!options.silentSuccess) {
+      ElMessage.success(options.successMessage || 'Channels 保存成功')
+    }
     return true
   }
   finally {
@@ -408,10 +409,7 @@ async function submitDialog() {
       next.splice(index, 1, valid)
     }
 
-    const preferredDefault = dialog.mode === 'new' && !defaultChannelId.value
-      ? valid.id
-      : defaultChannelId.value
-    const saved = await saveChannels(next, preferredDefault)
+    const saved = await saveChannels(next)
     if (saved) {
       dialog.visible = false
     }
@@ -421,13 +419,76 @@ async function submitDialog() {
   }
 }
 
-async function setDefaultChannel(id: string) {
-  const nextId = normalizeText(id)
-  if (!nextId || nextId === defaultChannelId.value) {
+async function toggleChannelStatus(channelId: string, value: boolean) {
+  const nextId = normalizeText(channelId)
+  if (!nextId) {
     return
   }
   const next = channels.value.map(item => normalizeChannelFormItem(item))
-  await saveChannels(next, nextId)
+  const target = next.find(item => item.id === nextId)
+  if (!target || target.enabled === value) {
+    return
+  }
+  target.enabled = value
+
+  const saved = await saveChannels(next, {
+    successMessage: value ? '渠道已启用' : '渠道已禁用',
+  })
+  if (!saved) {
+    await fetchSettings()
+  }
+}
+
+async function updateChannelPriority(channelId: string, value: unknown) {
+  const nextId = normalizeText(channelId)
+  if (!nextId) {
+    return
+  }
+  const nextPriority = toPriority(value)
+  const next = channels.value.map(item => normalizeChannelFormItem(item))
+  const target = next.find(item => item.id === nextId)
+  if (!target || target.priority === nextPriority) {
+    return
+  }
+  target.priority = nextPriority
+
+  const saved = await saveChannels(next, {
+    successMessage: `优先级已更新为 ${nextPriority}`,
+  })
+  if (!saved) {
+    await fetchSettings()
+  }
+}
+
+async function deleteChannel(row: ChannelFormItem) {
+  const id = normalizeText(row.id)
+  if (!id) {
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定删除渠道「${row.name || id}」吗？删除后不可恢复。`,
+      '删除渠道',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+      },
+    )
+  }
+  catch {
+    return
+  }
+
+  const next = channels.value
+    .map(item => normalizeChannelFormItem(item))
+    .filter(item => item.id !== id)
+  const saved = await saveChannels(next, {
+    successMessage: '渠道已删除',
+  })
+  if (!saved) {
+    await fetchSettings()
+  }
 }
 
 async function discoverDialogModels() {
@@ -512,6 +573,19 @@ onMounted(() => {
         <el-table-column prop="id" label="ID" min-width="170" />
         <el-table-column prop="name" label="名称" min-width="130" />
         <el-table-column prop="baseUrl" label="Base URL" min-width="220" />
+        <el-table-column label="优先级" width="160">
+          <template #default="{ row }">
+            <el-input-number
+              :model-value="row.priority"
+              :min="1"
+              :max="9999"
+              :step="1"
+              controls-position="right"
+              :disabled="loading || saving"
+              @change="(value) => updateChannelPriority(row.id, value)"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="模型" min-width="180">
           <template #default="{ row }">
             <div class="model-overview-cell">
@@ -534,26 +608,20 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="状态" width="95">
           <template #default="{ row }">
-            <el-tag :type="row.enabled ? 'success' : 'danger'">
-              {{ row.enabled ? '启用' : '禁用' }}
-            </el-tag>
+            <el-switch
+              :model-value="row.enabled"
+              :disabled="loading || saving"
+              @change="(value) => toggleChannelStatus(row.id, Boolean(value))"
+            />
           </template>
         </el-table-column>
-        <el-table-column label="默认" width="90">
-          <template #default="{ row }">
-            <el-tag v-if="row.id === defaultChannelId" type="success">
-              默认
-            </el-tag>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" fixed="right" width="190">
+        <el-table-column label="操作" fixed="right" width="250">
           <template #default="{ row }">
             <el-button text type="primary" @click="openEditDialog(row)">
               编辑
             </el-button>
-            <el-button text :disabled="row.id === defaultChannelId" @click="setDefaultChannel(row.id)">
-              设为默认
+            <el-button text type="danger" :disabled="loading || saving" @click="deleteChannel(row)">
+              删除
             </el-button>
           </template>
         </el-table-column>
@@ -591,7 +659,7 @@ onMounted(() => {
       </el-form-item>
 
       <el-row :gutter="12">
-        <el-col :span="8">
+        <el-col :span="6">
           <el-form-item label="适配器">
             <el-select v-model="dialog.form.adapter" style="width: 100%" @change="onAdapterChange">
               <el-option label="legacy" value="legacy" />
@@ -599,7 +667,7 @@ onMounted(() => {
             </el-select>
           </el-form-item>
         </el-col>
-        <el-col :span="8">
+        <el-col :span="6">
           <el-form-item label="传输协议">
             <el-select v-model="dialog.form.transport" style="width: 100%" :disabled="dialog.form.adapter === 'legacy'">
               <el-option label="responses" value="responses" />
@@ -607,7 +675,12 @@ onMounted(() => {
             </el-select>
           </el-form-item>
         </el-col>
-        <el-col :span="8">
+        <el-col :span="6">
+          <el-form-item label="优先级">
+            <el-input-number v-model="dialog.form.priority" :min="1" :max="9999" :step="1" controls-position="right" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="6">
           <el-form-item label="超时(ms)">
             <el-input-number v-model="dialog.form.timeoutMs" :min="3000" :max="600000" :step="1000" controls-position="right" />
           </el-form-item>

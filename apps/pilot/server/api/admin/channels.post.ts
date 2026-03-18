@@ -8,6 +8,7 @@ interface ChannelsUpdateBody {
   channels?: Array<{
     id: string
     name?: string
+    priority?: number
     baseUrl?: string
     apiKey?: string
     model?: string

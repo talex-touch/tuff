@@ -44,6 +44,23 @@ function normalizeText(value: unknown): string {
   return String(value || '').trim()
 }
 
+function summarizeCapabilities(item: ModelGroupFormItem): string {
+  const labels: string[] = []
+  if (item.thinkingSupported) {
+    labels.push(item.thinkingDefaultEnabled ? 'thinking(默认开)' : 'thinking')
+  }
+  if (item.allowWebsearch) {
+    labels.push('websearch')
+  }
+  if (item.allowImageAnalysis) {
+    labels.push('image')
+  }
+  if (item.allowFileAnalysis) {
+    labels.push('file')
+  }
+  return labels.length > 0 ? labels.join(' / ') : '无'
+}
+
 function mapFromSettings(rows: ModelGroupFormItem[]): ModelGroupFormItem[] {
   return rows.map(item => normalizeModelGroup({
     ...item,
@@ -203,6 +220,12 @@ async function syncModels() {
 onMounted(() => {
   fetchSettings()
 })
+
+watch(() => dialog.form.thinkingSupported, (enabled) => {
+  if (!enabled) {
+    dialog.form.thinkingDefaultEnabled = false
+  }
+})
 </script>
 
 <template>
@@ -240,6 +263,11 @@ onMounted(() => {
         <el-table-column label="评分(Q/S/C)" width="180">
           <template #default="{ row }">
             {{ row.qualityScore }} / {{ row.speedScore }} / {{ row.costScore }}
+          </template>
+        </el-table-column>
+        <el-table-column label="能力" min-width="220">
+          <template #default="{ row }">
+            {{ summarizeCapabilities(row) }}
           </template>
         </el-table-column>
         <el-table-column label="状态" width="130">
@@ -339,10 +367,16 @@ onMounted(() => {
           <el-checkbox v-model="dialog.form.allowWebsearch">
             allowWebsearch
           </el-checkbox>
+          <el-checkbox v-model="dialog.form.allowImageAnalysis">
+            allowImageAnalysis
+          </el-checkbox>
+          <el-checkbox v-model="dialog.form.allowFileAnalysis">
+            allowFileAnalysis
+          </el-checkbox>
           <el-checkbox v-model="dialog.form.thinkingSupported">
             thinkingSupported
           </el-checkbox>
-          <el-checkbox v-model="dialog.form.thinkingDefaultEnabled">
+          <el-checkbox v-model="dialog.form.thinkingDefaultEnabled" :disabled="!dialog.form.thinkingSupported">
             thinkingDefaultEnabled
           </el-checkbox>
         </el-space>

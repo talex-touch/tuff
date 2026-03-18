@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AccountAvatar from '~/components/personal/AccountAvatar.vue'
+
 const router = useRouter()
 const route = useRoute()
 
@@ -80,9 +82,7 @@ const pageTitle = computed(() => {
           </el-breadcrumb>
         </div>
         <div class="AdminHeader-End">
-          <el-tag type="warning" effect="plain">
-            Legacy CMS 已进入退场阶段
-          </el-tag>
+          <AccountAvatar />
         </div>
       </el-header>
 
