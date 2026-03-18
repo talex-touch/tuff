@@ -7,20 +7,28 @@ export default defineEventHandler(async (event) => {
   const routingConfig = await getPilotAdminRoutingConfig(event)
 
   const models = routingConfig.modelCatalog
-    .map(item => ({
-      id: item.id,
-      name: item.name,
-      description: item.description,
-      icon: item.icon,
-      enabled: item.enabled !== false,
-      visible: item.visible !== false,
-      source: item.source,
-      thinkingSupported: item.thinkingSupported !== false,
-      thinkingDefaultEnabled: item.thinkingDefaultEnabled === true,
-      allowWebsearch: item.allowWebsearch !== false,
-      allowImageAnalysis: item.allowImageAnalysis !== false,
-      allowFileAnalysis: item.allowFileAnalysis !== false,
-    }))
+    .map((item) => {
+      const allowFileAnalysis = typeof item.allowFileAnalysis === 'boolean'
+        ? item.allowFileAnalysis
+        : item.allowImageAnalysis !== false
+
+      return {
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        icon: item.icon,
+        enabled: item.enabled !== false,
+        visible: item.visible !== false,
+        source: item.source,
+        thinkingSupported: item.thinkingSupported !== false,
+        thinkingDefaultEnabled: item.thinkingDefaultEnabled === true,
+        allowWebsearch: item.allowWebsearch !== false,
+        // 兼容旧字段：统一返回同一能力值，避免前端出现“双开关”语义分叉。
+        allowImageAnalysis: allowFileAnalysis,
+        allowImageGeneration: item.allowImageGeneration !== false,
+        allowFileAnalysis,
+      }
+    })
     .filter(item => item.enabled && item.visible)
 
   return {

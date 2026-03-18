@@ -5,7 +5,6 @@ import { autoUpdate, flip, offset, useFloating } from '@floating-ui/vue'
 interface ThInputCapabilities {
   thinking: boolean
   websearch: boolean
-  image: boolean
   file: boolean
 }
 
@@ -29,7 +28,6 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   (name: 'update:modelValue', data: IChatInnerItemMeta): void
-  (event: 'image'): void
   (event: 'file'): void
 }>()
 
@@ -41,7 +39,6 @@ const property = useVModel(props, 'modelValue', emits)
 const normalizedCapabilities = computed<ThInputCapabilities>(() => ({
   thinking: props.capabilities?.thinking !== false,
   websearch: props.capabilities?.websearch !== false,
-  image: props.capabilities?.image !== false,
   file: props.capabilities?.file !== false,
 }))
 
@@ -98,21 +95,10 @@ watch(() => now.value - startTime, (val) => {
 const options = computed<InputOption[]>(() => {
   const rows: Array<InputOption | undefined> = [
     {
-      icon: 'i-carbon-image',
-      type: 'button',
-      label: '分析图片',
-      info: '从本地图库中选择图片。',
-      onclick: () => {
-        emits('image')
-      },
-      disabled: () => !normalizedCapabilities.value.image,
-      disabledTip: '当前模型组未开启图片分析能力。',
-    },
-    {
-      icon: 'i-carbon-document',
+      icon: 'i-carbon-document-attachment',
       type: 'button',
       label: '分析文件',
-      info: '选择文档、表格、PDF 等文件进行分析。',
+      info: '选择图片、文档、表格、PDF 等文件进行分析。',
       onclick: () => {
         emits('file')
       },
