@@ -167,6 +167,32 @@ export async function upsertPilotQuotaSession(
   }
 }
 
+export async function listPilotQuotaSessions(
+  event: H3Event,
+  userId: string,
+  limit = 500,
+): Promise<PilotQuotaSessionRecord[]> {
+  const db = requirePilotDatabase(event)
+  const bounded = Math.min(Math.max(Math.floor(Number(limit || 0)), 1), 10_000)
+  const { results } = await db.prepare(`
+    SELECT chat_id, user_id, runtime_session_id, channel_id, topic, created_at, updated_at
+    FROM ${QUOTA_SESSION_TABLE}
+    WHERE user_id = ?1
+    ORDER BY updated_at DESC
+    LIMIT ?2
+  `).bind(userId, bounded).all<{
+    chat_id: string
+    user_id: string
+    runtime_session_id: string
+    channel_id: string
+    topic: string
+    created_at: string
+    updated_at: string
+  }>()
+
+  return (results || []).map(mapRow)
+}
+
 export async function deletePilotQuotaSessionByChatId(
   event: H3Event,
   userId: string,
