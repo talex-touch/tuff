@@ -31,12 +31,14 @@ import {
   resolvePilotAttachmentModelUrl,
 } from '../../../../utils/pilot-attachment-storage'
 import { requireSessionId, toErrorMessage } from '../../../../utils/pilot-http'
+import { resolvePilotIntent } from '../../../../utils/pilot-intent-resolver'
 import { resolveLangGraphOrchestratorDecision } from '../../../../utils/pilot-langgraph-orchestrator'
 import { markRouteFailure, markRouteSuccess } from '../../../../utils/pilot-route-health'
 import { recordPilotRoutingMetric } from '../../../../utils/pilot-routing-metrics'
 import { resolvePilotRoutingSelection } from '../../../../utils/pilot-routing-resolver'
 import { createPilotRuntime } from '../../../../utils/pilot-runtime'
 import { getPilotStoreMetricsSnapshot } from '../../../../utils/pilot-store'
+import { executePilotImageGenerateTool } from '../../../../utils/pilot-tool-gateway'
 
 interface StreamBody {
   message?: string
@@ -47,6 +49,7 @@ interface StreamBody {
   routeComboId?: string
   internet?: boolean
   thinking?: boolean
+  pilotMode?: boolean
   metadata?: Record<string, unknown>
   attachments?: UserMessageInput['attachments']
 }
@@ -89,6 +92,18 @@ function normalizeFollowFlag(body: StreamBody, fromSeq: number | undefined): boo
     return false
   }
   return body.follow !== false
+}
+
+function buildImageMarkdown(urls: string[]): string {
+  const list = urls
+    .map(item => String(item || '').trim())
+    .filter(Boolean)
+  if (list.length <= 0) {
+    return ''
+  }
+  return list
+    .map((url, index) => `![Generated image ${index + 1}](${url})`)
+    .join('\n\n')
 }
 
 function mapTraceToStreamEvent(trace: TraceRecord): Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> {
@@ -270,24 +285,43 @@ export default defineEventHandler(async (event) => {
   const { userId } = requirePilotAuth(event)
   const sessionId = requireSessionId(event)
   const body = await readBody<StreamBody>(event)
+  const message = String(body?.message || '').trim()
+  const requestedModelId = String(body?.modelId || '').trim()
+  const requestedRouteComboId = String(body?.routeComboId || '').trim()
+  const intentDecision = message
+    ? await resolvePilotIntent({
+        event,
+        message,
+        requestChannelId: String(body?.channelId || '').trim(),
+        requestedModelId,
+        routeComboId: requestedRouteComboId,
+      })
+    : {
+        intentType: 'chat' as const,
+        prompt: message,
+        strategy: 'fallback' as const,
+        confidence: 0,
+        reason: 'empty_message',
+      }
+  const routedMessage = intentDecision.prompt || message
   const selectedChannel = await resolvePilotRoutingSelection(event, {
     requestChannelId: String(body?.channelId || '').trim(),
-    requestedModelId: String(body?.modelId || '').trim(),
-    routeComboId: String(body?.routeComboId || '').trim(),
+    requestedModelId,
+    routeComboId: requestedRouteComboId,
     internet: body?.internet,
     thinking: body?.thinking,
+    intentType: intentDecision.intentType,
   })
 
-  const message = String(body?.message || '').trim()
   const inputAttachments = Array.isArray(body?.attachments) ? body.attachments : undefined
   const hasInputAttachments = Boolean(inputAttachments && inputAttachments.length > 0)
-  const persistStreamLifecycle = Boolean(message) || hasInputAttachments
+  const persistStreamLifecycle = Boolean(routedMessage) || hasInputAttachments
   const fromSeq = Number.isFinite(body?.fromSeq)
     ? Math.max(1, Math.floor(Number(body?.fromSeq)))
     : undefined
   const follow = normalizeFollowFlag(body || {}, fromSeq)
 
-  if (!message && !fromSeq && !hasInputAttachments) {
+  if (!routedMessage && !fromSeq && !hasInputAttachments) {
     throw createError({
       statusCode: 400,
       statusMessage: 'message, attachments or fromSeq is required',
@@ -335,7 +369,7 @@ export default defineEventHandler(async (event) => {
       const run = async () => {
         let emitAudit: ((record: DeepAgentAuditRecord) => Promise<void>) | null = null
         const runStartedAt = Date.now()
-        const shouldRecordRoutingMetric = Boolean(message)
+        const shouldRecordRoutingMetric = Boolean(routedMessage)
         let firstDeltaAt = 0
         let ttftMs = 0
         let outputChars = 0
@@ -351,6 +385,9 @@ export default defineEventHandler(async (event) => {
         const orchestratorDecision = await resolveLangGraphOrchestratorDecision(
           event,
           selectedChannel.routeComboId || 'default-auto',
+          {
+            preferLangGraph: body?.pilotMode === true,
+          },
         )
 
         const { runtime, store } = createPilotRuntime({
@@ -462,6 +499,10 @@ export default defineEventHandler(async (event) => {
               routeComboId: selectedChannel.routeComboId,
               selectionSource: selectedChannel.selectionSource,
               selectionReason: selectedChannel.selectionReason,
+              intentType: intentDecision.intentType,
+              intentStrategy: intentDecision.strategy,
+              intentReason: intentDecision.reason,
+              intentConfidence: intentDecision.confidence,
               internet: selectedChannel.internet,
               thinking: selectedChannel.thinking,
               builtinTools: selectedChannel.builtinTools,
@@ -481,6 +522,10 @@ export default defineEventHandler(async (event) => {
                   routeComboId: selectedChannel.routeComboId,
                   selectionSource: selectedChannel.selectionSource,
                   selectionReason: selectedChannel.selectionReason,
+                  intentType: intentDecision.intentType,
+                  intentStrategy: intentDecision.strategy,
+                  intentReason: intentDecision.reason,
+                  intentConfidence: intentDecision.confidence,
                   internet: selectedChannel.internet,
                   thinking: selectedChannel.thinking,
                   orchestratorMode: orchestratorDecision.mode,
@@ -524,6 +569,109 @@ export default defineEventHandler(async (event) => {
               inlinedImageBytes: 0,
               inlinedFileBytes: 0,
             },
+          }
+
+          if (intentDecision.intentType === 'image_generate' && routedMessage) {
+            const imageToolResult = await executePilotImageGenerateTool({
+              event,
+              userId,
+              sessionId,
+              requestId: `${sessionId}_${Date.now().toString(36)}`,
+              prompt: routedMessage,
+              channel: {
+                baseUrl: selectedChannel.channel.baseUrl,
+                apiKey: selectedChannel.channel.apiKey,
+                model: selectedChannel.providerModel || selectedChannel.channel.model,
+                adapter: selectedChannel.adapter,
+                transport: selectedChannel.transport,
+                timeoutMs: selectedChannel.channel.timeoutMs,
+              },
+              emitAudit: async (payload) => {
+                const normalizedPayload = toPilotSafeRecord(payload)
+                await emitEvent({
+                  type: 'run.audit',
+                  payload: normalizedPayload,
+                }, {
+                  persist: true,
+                  tracePayload: normalizedPayload,
+                })
+              },
+            })
+
+            const markdown = buildImageMarkdown((imageToolResult?.images || []).map(item => item.url))
+            if (!markdown) {
+              throw createError({
+                statusCode: 502,
+                statusMessage: 'Image generation returned empty output',
+              })
+            }
+
+            await store.runtime.completeSession(sessionId, 'executing')
+            await store.runtime.saveMessage({
+              id: `msg_user_${Date.now().toString(36)}`,
+              sessionId,
+              role: 'user',
+              content: routedMessage,
+              createdAt: new Date().toISOString(),
+              metadata: toPilotSafeRecord({
+                ...(body?.metadata || {}),
+                intentType: intentDecision.intentType,
+                intentStrategy: intentDecision.strategy,
+                intentReason: intentDecision.reason,
+                intentConfidence: intentDecision.confidence,
+              }),
+            })
+            await store.runtime.saveMessage({
+              id: `msg_assistant_${Date.now().toString(36)}`,
+              sessionId,
+              role: 'assistant',
+              content: markdown,
+              createdAt: new Date().toISOString(),
+              metadata: toPilotSafeRecord({
+                intentType: intentDecision.intentType,
+                toolId: imageToolResult?.toolId || 'tool.image.generate',
+                sources: imageToolResult?.sources || [],
+              }),
+            })
+            await store.runtime.completeSession(sessionId, 'completed')
+
+            await emitEvent({
+              type: 'assistant.final',
+              message: markdown,
+              payload: {
+                text: markdown,
+                intentType: intentDecision.intentType,
+              },
+            }, {
+              persist: true,
+              tracePayload: {
+                text: markdown,
+                intentType: intentDecision.intentType,
+              },
+            })
+
+            metricSuccess = true
+            metricFinishReason = 'completed'
+            metricErrorCode = ''
+
+            if (!doneSent) {
+              await emitEvent({
+                type: 'done',
+                payload: {
+                  status: 'ok',
+                },
+              }, persistStreamLifecycle
+                ? {
+                    persist: true,
+                    tracePayload: {
+                      status: 'ok',
+                    },
+                  }
+                : undefined)
+            }
+
+            await store.runtime.setSessionNotification(sessionId, true)
+            return
           }
 
           if (hasInputAttachments) {
@@ -654,7 +802,7 @@ export default defineEventHandler(async (event) => {
           const result = await runPilotConversationStream({
             runtime,
             sessionId,
-            message,
+            message: routedMessage,
             fromSeq,
             attachments: resolvedAttachments.attachments,
             metadata: toPilotSafeRecord({
@@ -664,6 +812,10 @@ export default defineEventHandler(async (event) => {
               routeComboId: selectedChannel.routeComboId,
               selectionSource: selectedChannel.selectionSource,
               selectionReason: selectedChannel.selectionReason,
+              intentType: intentDecision.intentType,
+              intentStrategy: intentDecision.strategy,
+              intentReason: intentDecision.reason,
+              intentConfidence: intentDecision.confidence,
               internet: selectedChannel.internet,
               thinking: selectedChannel.thinking,
               builtinTools: selectedChannel.builtinTools,
@@ -681,7 +833,7 @@ export default defineEventHandler(async (event) => {
             emit: emitEvent,
           })
 
-          if (!message && Number.isFinite(fromSeq) && follow) {
+          if (!routedMessage && Number.isFinite(fromSeq) && follow) {
             const followFromSeq = Number.isFinite(fromSeq) ? Number(fromSeq) : 1
             await followTraceTail({
               storeRuntime: store.runtime,
@@ -710,7 +862,7 @@ export default defineEventHandler(async (event) => {
             runtimeDeltaPersistAvgChars: runtimePersistMetrics?.deltaPersistAvgChars ?? 0,
             runtimeTracePersistCount: runtimePersistMetrics?.runtimeTracePersistCount ?? 0,
             storeAppendTraceCount: storeMetrics.appendTraceCount,
-            hasMessage: Boolean(message),
+            hasMessage: Boolean(routedMessage),
           }
 
           await emitEvent({
@@ -739,7 +891,7 @@ export default defineEventHandler(async (event) => {
               : undefined)
           }
 
-          if (message && !result.aborted) {
+          if (routedMessage && !result.aborted) {
             await store.runtime.setSessionNotification(sessionId, true)
           }
         }
@@ -824,6 +976,10 @@ export default defineEventHandler(async (event) => {
                   source: 'pilot-chat-stream',
                   selectionSource: selectedChannel.selectionSource,
                   selectionReason: selectedChannel.selectionReason,
+                  intentType: intentDecision.intentType,
+                  intentStrategy: intentDecision.strategy,
+                  intentReason: intentDecision.reason,
+                  intentConfidence: intentDecision.confidence,
                   adapter: selectedChannel.adapter,
                   transport: selectedChannel.transport,
                   internet: selectedChannel.internet,

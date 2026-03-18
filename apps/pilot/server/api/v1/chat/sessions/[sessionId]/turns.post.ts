@@ -18,6 +18,8 @@ interface CreateTurnBody extends Record<string, unknown> {
   model?: string
   internet?: boolean
   thinking?: boolean
+  memoryEnabled?: boolean
+  pilotMode?: boolean
   routeComboId?: string
 }
 
@@ -71,6 +73,8 @@ export default defineEventHandler(async (event) => {
     routeComboId: String(body?.routeComboId || '').trim() || undefined,
     internet: typeof body?.internet === 'boolean' ? body.internet : undefined,
     thinking: typeof body?.thinking === 'boolean' ? body.thinking : undefined,
+    memoryEnabled: typeof body?.memoryEnabled === 'boolean' ? body.memoryEnabled : undefined,
+    pilotMode: typeof body?.pilotMode === 'boolean' ? body.pilotMode : undefined,
   })
 
   const model = String(body?.modelId || body?.model || '').trim()

@@ -1,5 +1,6 @@
 import type { AgentEnvelope, DeepAgentAuditRecord, UserMessageAttachment } from '@talex-touch/tuff-intelligence'
 import type { H3Event } from 'h3'
+import type { PilotIntentType } from '../../utils/pilot-routing-resolver'
 import process from 'node:process'
 import { toDeepAgentErrorDetail } from '@talex-touch/tuff-intelligence'
 import { requirePilotAuth } from '../../utils/auth'
@@ -7,6 +8,11 @@ import { getPilotAdminRoutingConfig } from '../../utils/pilot-admin-routing-conf
 import {
   PilotAttachmentDeliveryError,
 } from '../../utils/pilot-attachment-delivery'
+import {
+  getPilotMemoryUserPreference,
+  normalizePilotMemoryPolicy,
+  resolvePilotMemoryEnabled,
+} from '../../utils/pilot-chat-memory'
 import {
   createTitleSseResponse,
   randomId,
@@ -16,6 +22,7 @@ import {
   splitTextIntoChunks,
   toTitleMessages,
 } from '../../utils/pilot-executor-utils'
+import { resolvePilotIntent } from '../../utils/pilot-intent-resolver'
 import { resolveLangGraphOrchestratorDecision } from '../../utils/pilot-langgraph-orchestrator'
 import {
   ensurePilotQuotaSessionSchema,
@@ -30,7 +37,16 @@ import {
   resolvePilotRoutingSelection,
 } from '../../utils/pilot-routing-resolver'
 import { createPilotRuntime } from '../../utils/pilot-runtime'
-import { generateTitle } from '../../utils/pilot-title'
+import {
+  generateTitle,
+} from '../../utils/pilot-title'
+import {
+  executePilotImageGenerateTool,
+  executePilotWebsearchTool,
+  mergeWebsearchContextIntoMessage,
+  PilotToolApprovalRejectedError,
+  PilotToolApprovalRequiredError,
+} from '../../utils/pilot-tool-gateway'
 import { quotaError } from '../../utils/quota-api'
 import { buildQuotaConversationSnapshot } from '../../utils/quota-conversation-snapshot'
 import { extractLatestQuotaUserTurn } from '../../utils/quota-history-codec'
@@ -48,6 +64,8 @@ interface QuotaExecutorBody {
   model?: string
   internet?: boolean
   thinking?: boolean
+  memoryEnabled?: boolean
+  pilotMode?: boolean
   routeComboId?: string
   queueWaitMs?: number
   temperature?: number
@@ -103,8 +121,14 @@ interface ExecutorTraceContext {
   providerModel: string
   routeComboId: string
   queueWaitMs: number
+  intentType: Exclude<PilotIntentType, 'intent_classification'>
+  intentStrategy: string
+  intentReason: string
+  intentConfidence: number
   thinking: boolean
   internet: boolean
+  memoryEnabled: boolean
+  pilotMode: boolean
   builtinTools: string[]
   selectionReason: string
   selectionSource: string
@@ -152,6 +176,18 @@ function truncateText(value: string, maxLength = 240): string {
     return ''
   }
   return text.length <= maxLength ? text : `${text.slice(0, maxLength)}...`
+}
+
+function buildImageMarkdown(urls: string[]): string {
+  const list = urls
+    .map(item => String(item || '').trim())
+    .filter(Boolean)
+  if (list.length <= 0) {
+    return ''
+  }
+  return list
+    .map((url, index) => `![Generated image ${index + 1}](${url})`)
+    .join('\n\n')
 }
 
 function normalizeErrorCause(cause: unknown): string | undefined {
@@ -210,8 +246,14 @@ function buildSnapshotMetaPayload(
     provider_model: trace.providerModel,
     route_combo_id: trace.routeComboId,
     queue_wait_ms: trace.queueWaitMs,
+    intent_type: trace.intentType,
+    intent_strategy: trace.intentStrategy,
+    intent_reason: trace.intentReason,
+    intent_confidence: trace.intentConfidence,
     internet: trace.internet,
     thinking: trace.thinking,
+    memory_enabled: trace.memoryEnabled,
+    pilot_mode: trace.pilotMode,
     selection_source: trace.selectionSource,
     selection_reason: trace.selectionReason,
     orchestrator_mode: trace.orchestratorMode,
@@ -555,6 +597,10 @@ function logExecutorError(
     provider_model: trace.providerModel,
     route_combo_id: trace.routeComboId,
     queue_wait_ms: trace.queueWaitMs,
+    intent_type: trace.intentType,
+    intent_strategy: trace.intentStrategy,
+    intent_reason: trace.intentReason,
+    intent_confidence: trace.intentConfidence,
     internet: trace.internet,
     thinking: trace.thinking,
     builtin_tools: trace.builtinTools,
@@ -611,6 +657,49 @@ function extractCapabilityInfo(envelope: AgentEnvelope): {
   }
 }
 
+function normalizeToolAuditPayload(
+  payload: unknown,
+): {
+  auditType: string
+  callId: string
+  toolId: string
+  toolName: string
+  outputPreview: string
+  inputPreview: string
+  ticketId: string
+  sources: Array<Record<string, unknown>>
+  status: string
+  errorCode: string
+  errorMessage: string
+  durationMs: number
+} {
+  const row = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : {}
+  const sources = Array.isArray(row.sources)
+    ? row.sources
+        .filter(item => item && typeof item === 'object' && !Array.isArray(item))
+        .map(item => item as Record<string, unknown>)
+    : []
+
+  return {
+    auditType: String(row.auditType || '').trim(),
+    callId: String(row.callId || '').trim(),
+    toolId: String(row.toolId || '').trim() || 'tool.unknown',
+    toolName: String(row.toolName || '').trim() || 'tool',
+    outputPreview: String(row.outputPreview || '').trim(),
+    inputPreview: String(row.inputPreview || '').trim(),
+    ticketId: String(row.ticketId || '').trim(),
+    sources,
+    status: String(row.status || '').trim(),
+    errorCode: String(row.errorCode || '').trim(),
+    errorMessage: String(row.errorMessage || '').trim(),
+    durationMs: Number.isFinite(Number(row.durationMs))
+      ? Math.max(0, Number(row.durationMs))
+      : 0,
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const auth = requirePilotAuth(event)
   const body = await readBody<QuotaExecutorBody>(event)
@@ -633,17 +722,36 @@ export default defineEventHandler(async (event) => {
 
   const chatId = requestedChatId || existingSession?.chatId || randomId('Chat')
   const runtimeSessionId = existingSession?.runtimeSessionId || randomId('session')
+  const requestedModelId = String(body?.modelId || body?.model || '').trim()
+  const requestedRouteComboId = String(body?.routeComboId || '').trim()
+  const intentDecision = isTitleRequest
+    ? {
+        intentType: 'chat' as const,
+        prompt: message,
+        strategy: 'fallback' as const,
+        confidence: 0,
+        reason: 'title_request',
+      }
+    : await resolvePilotIntent({
+        event,
+        message,
+        requestChannelId: String(body?.channel_id || '').trim(),
+        sessionChannelId: existingSession?.channelId,
+        requestedModelId,
+        routeComboId: requestedRouteComboId,
+      })
+  const routedMessage = intentDecision.prompt || message
 
   let selectedChannel: Awaited<ReturnType<typeof resolvePilotRoutingSelection>>
   try {
-    const requestedModelId = String(body?.modelId || body?.model || '').trim()
     selectedChannel = await resolvePilotRoutingSelection(event, {
       requestChannelId: String(body?.channel_id || '').trim(),
       sessionChannelId: existingSession?.channelId,
       requestedModelId,
-      routeComboId: String(body?.routeComboId || '').trim(),
+      routeComboId: requestedRouteComboId,
       internet: body?.internet,
       thinking: body?.thinking,
+      intentType: intentDecision.intentType,
     })
   }
   catch (error: any) {
@@ -701,10 +809,12 @@ export default defineEventHandler(async (event) => {
     topic: String(body?.topic || existingSession?.topic || '').trim() || '新的聊天',
   })
 
-  const selectedModel = resolveExecutorModel(
-    body?.modelId || body?.model,
-    selectedChannel.providerModel || selectedChannel.channel.model,
-  )
+  const selectedModel = intentDecision.intentType === 'chat'
+    ? resolveExecutorModel(
+        body?.modelId || body?.model,
+        selectedChannel.providerModel || selectedChannel.channel.model,
+      )
+    : (selectedChannel.providerModel || selectedChannel.channel.model)
   const routingConfig = await getPilotAdminRoutingConfig(event).catch(() => ({
     modelCatalog: [],
     routeCombos: [],
@@ -713,6 +823,10 @@ export default defineEventHandler(async (event) => {
       defaultRouteComboId: 'default-auto',
       quotaAutoStrategy: 'speed-first' as const,
       explorationRate: 0.08,
+      intentNanoModelId: '',
+      intentRouteComboId: '',
+      imageGenerationModelId: '',
+      imageRouteComboId: '',
     },
     lbPolicy: {
       metricWindowHours: 24,
@@ -732,12 +846,21 @@ export default defineEventHandler(async (event) => {
     cooldownMs: routingConfig.lbPolicy.circuitBreakerCooldownMs,
     halfOpenProbeCount: routingConfig.lbPolicy.halfOpenProbeCount,
   }
+  const memoryPolicy = normalizePilotMemoryPolicy(routingConfig.memoryPolicy)
+  const memoryUserPreference = typeof body?.memoryEnabled === 'boolean'
+    ? null
+    : await getPilotMemoryUserPreference(event, auth.userId)
+  const memoryEnabled = resolvePilotMemoryEnabled(memoryPolicy, body?.memoryEnabled, memoryUserPreference)
+  const pilotMode = body?.pilotMode === true
   const queueWaitMs = Number.isFinite(Number(body?.queueWaitMs))
     ? Math.max(0, Math.floor(Number(body?.queueWaitMs)))
     : 0
   const orchestratorDecision = await resolveLangGraphOrchestratorDecision(
     event,
     selectedChannel.routeComboId || 'default-auto',
+    {
+      preferLangGraph: pilotMode,
+    },
   )
   const requestMeta = resolveRequestMeta(event)
   const requestId = randomId('req')
@@ -762,8 +885,14 @@ export default defineEventHandler(async (event) => {
     providerModel: selectedChannel.providerModel || selectedModel,
     routeComboId: selectedChannel.routeComboId || 'default-auto',
     queueWaitMs,
+    intentType: intentDecision.intentType,
+    intentStrategy: intentDecision.strategy,
+    intentReason: intentDecision.reason,
+    intentConfidence: intentDecision.confidence,
     thinking: selectedChannel.thinking,
     internet: selectedChannel.internet,
+    memoryEnabled,
+    pilotMode,
     builtinTools: selectedChannel.builtinTools,
     selectionReason: selectedChannel.selectionReason,
     selectionSource: selectedChannel.selectionSource,
@@ -837,6 +966,10 @@ export default defineEventHandler(async (event) => {
     provider_model: trace.providerModel,
     route_combo_id: trace.routeComboId,
     queue_wait_ms: trace.queueWaitMs,
+    intent_type: trace.intentType,
+    intent_strategy: trace.intentStrategy,
+    intent_reason: trace.intentReason,
+    intent_confidence: trace.intentConfidence,
     internet: trace.internet,
     thinking: trace.thinking,
     builtin_tools: trace.builtinTools,
@@ -845,8 +978,8 @@ export default defineEventHandler(async (event) => {
     orchestrator_reason: trace.orchestratorReason,
     orchestrator_assistant_id: trace.orchestratorAssistantId,
     orchestrator_graph_profile: trace.orchestratorGraphProfile,
-    message_chars: message.length,
-    message_preview: truncateText(message, 120),
+    message_chars: routedMessage.length,
+    message_preview: truncateText(routedMessage, 120),
     attachment_count: latestUserTurn.attachments.length,
     has_raw_attachments: hasRawAttachments,
     requested_chat_id: requestedChatId || null,
@@ -915,9 +1048,35 @@ export default defineEventHandler(async (event) => {
             inlinedFileBytes: 0,
           },
         }
+        let websearchContextText = ''
+        let websearchSources: Array<Record<string, unknown>> = []
 
         const touchStreamEventAt = () => {
           lastStreamEventAt = Date.now()
+        }
+
+        const emitToolAudit = (payload: Record<string, unknown>) => {
+          const normalized = normalizeToolAuditPayload(payload)
+          const riskLevel = String(payload.riskLevel || 'low')
+          emit({
+            event: 'run.audit',
+            payload: {
+              auditType: normalized.auditType,
+              callId: normalized.callId,
+              toolId: normalized.toolId,
+              toolName: normalized.toolName,
+              riskLevel,
+              status: normalized.status,
+              inputPreview: normalized.inputPreview,
+              outputPreview: normalized.outputPreview,
+              durationMs: normalized.durationMs,
+              ticketId: normalized.ticketId,
+              sources: normalized.sources,
+              errorCode: normalized.errorCode,
+              errorMessage: normalized.errorMessage,
+            },
+          })
+          touchStreamEventAt()
         }
 
         const startHeartbeat = () => {
@@ -1058,8 +1217,13 @@ export default defineEventHandler(async (event) => {
             model_id: trace.modelId,
             provider_model: trace.providerModel,
             route_combo_id: trace.routeComboId,
+            intent_type: trace.intentType,
+            intent_strategy: trace.intentStrategy,
+            intent_reason: trace.intentReason,
+            intent_confidence: trace.intentConfidence,
             internet: trace.internet,
             thinking: trace.thinking,
+            memory_enabled: trace.memoryEnabled,
             selection_source: trace.selectionSource,
             selection_reason: trace.selectionReason,
             builtin_tools: trace.builtinTools,
@@ -1076,6 +1240,106 @@ export default defineEventHandler(async (event) => {
           })
           touchStreamEventAt()
           startHeartbeat()
+
+          if (trace.intentType === 'image_generate') {
+            try {
+              const imageToolResult = await executePilotImageGenerateTool({
+                event,
+                userId: auth.userId,
+                sessionId: chatId,
+                requestId: trace.requestId,
+                prompt: routedMessage,
+                channel: {
+                  baseUrl: selectedChannel.channel.baseUrl,
+                  apiKey: selectedChannel.channel.apiKey,
+                  model: selectedModel,
+                  adapter: selectedChannel.adapter,
+                  transport: selectedChannel.transport,
+                  timeoutMs: selectedChannel.channel.timeoutMs,
+                },
+                emitAudit: async (audit) => {
+                  emitToolAudit({
+                    ...audit,
+                  })
+                },
+              })
+
+              const markdown = buildImageMarkdown((imageToolResult?.images || []).map(item => item.url))
+              if (!markdown) {
+                const emptyError = new Error('Image generation returned empty markdown')
+                ;(emptyError as Error & { code?: string }).code = 'IMAGE_TOOL_EMPTY_RESULT'
+                throw emptyError
+              }
+
+              completedText = markdown
+              emit({
+                event: 'status_updated',
+                status: 'progress',
+                id: 'assistant',
+              })
+              emit({
+                event: 'completion',
+                id: 'assistant',
+                name: 'assistant',
+                content: markdown,
+                completed: false,
+              })
+              emit({
+                event: 'completion',
+                id: 'assistant',
+                name: 'assistant',
+                content: '',
+                completed: true,
+              })
+              completedSent = true
+              await queuePersistSnapshot({
+                force: true,
+                status: 'completed',
+              })
+              metricSuccess = true
+              metricFinishReason = 'completed'
+              metricErrorCode = ''
+              emit({
+                event: 'status_updated',
+                status: 'end',
+                id: 'assistant',
+              })
+              return
+            }
+            catch (error) {
+              const context: ExecutorErrorContext = {
+                requestId: trace.requestId,
+                startedAt: trace.startedAt,
+                timeoutMs: selectedChannel.channel.timeoutMs,
+                channelId: selectedChannel.channelId,
+                adapter: selectedChannel.adapter,
+                transport: selectedChannel.transport,
+                endpoint: trace.endpoint,
+                model: trace.model,
+              }
+              const detail = buildExecutorErrorDetail(error, context)
+              const message = mapExecutorErrorMessage(error, context, detail)
+              streamFailed = true
+              streamErrorDetail = detail
+              metricSuccess = false
+              metricFinishReason = 'runtime_error'
+              metricErrorCode = String(detail.code || 'IMAGE_TOOL_FAILED')
+              await queuePersistSnapshot({
+                force: true,
+                status: 'failed',
+                allowEmptyReply: true,
+                errorDetail: detail,
+              })
+              emit({
+                event: 'error',
+                status: 'failed',
+                code: detail.code || 'IMAGE_TOOL_FAILED',
+                message,
+                detail,
+              })
+              return
+            }
+          }
 
           if (hasRawAttachments) {
             const attachmentResolveStartedAt = Date.now()
@@ -1192,6 +1456,116 @@ export default defineEventHandler(async (event) => {
             }
           }
 
+          if (trace.internet && selectedChannel.builtinTools.includes('websearch') && routedMessage) {
+            try {
+              const websearchResult = await executePilotWebsearchTool({
+                event,
+                userId: auth.userId,
+                sessionId: chatId,
+                requestId: trace.requestId,
+                query: routedMessage,
+                emitAudit: async (audit) => {
+                  emitToolAudit({
+                    ...audit,
+                  })
+                },
+              })
+
+              if (websearchResult) {
+                websearchContextText = websearchResult.contextText
+                websearchSources = websearchResult.sources
+                  .map(item => ({
+                    id: item.id,
+                    url: item.url,
+                    title: item.title,
+                    snippet: item.snippet,
+                    domain: item.domain,
+                    sourceType: item.sourceType,
+                  }))
+              }
+            }
+            catch (error) {
+              if (error instanceof PilotToolApprovalRequiredError) {
+                streamFailed = true
+                metricFinishReason = 'approval_required'
+                metricErrorCode = error.code
+                const detail: ExecutorErrorDetailPayload = {
+                  message: error.message,
+                  code: error.code,
+                  request_id: trace.requestId,
+                  elapsed_ms: Math.max(0, Date.now() - trace.startedAt),
+                  channel_id: trace.channelId,
+                  adapter: trace.adapter,
+                  transport: trace.transport,
+                  endpoint: trace.endpoint,
+                  model: trace.model,
+                  phase: 'tool.approval_required',
+                }
+                streamErrorDetail = detail
+                await queuePersistSnapshot({
+                  force: true,
+                  status: 'failed',
+                  allowEmptyReply: true,
+                  errorDetail: detail,
+                })
+                emit({
+                  event: 'error',
+                  status: 'failed',
+                  code: error.code,
+                  message: '高风险数据抓取需要审批，请完成审批后重试。',
+                  detail: {
+                    ...detail,
+                    ticket_id: error.ticketId,
+                    call_id: error.callId,
+                    tool_name: error.toolName,
+                    risk_level: error.riskLevel,
+                  },
+                })
+                return
+              }
+
+              if (error instanceof PilotToolApprovalRejectedError) {
+                streamFailed = true
+                metricFinishReason = 'approval_rejected'
+                metricErrorCode = error.code
+                const detail: ExecutorErrorDetailPayload = {
+                  message: error.message,
+                  code: error.code,
+                  request_id: trace.requestId,
+                  elapsed_ms: Math.max(0, Date.now() - trace.startedAt),
+                  channel_id: trace.channelId,
+                  adapter: trace.adapter,
+                  transport: trace.transport,
+                  endpoint: trace.endpoint,
+                  model: trace.model,
+                  phase: 'tool.approval_rejected',
+                }
+                streamErrorDetail = detail
+                await queuePersistSnapshot({
+                  force: true,
+                  status: 'failed',
+                  allowEmptyReply: true,
+                  errorDetail: detail,
+                })
+                emit({
+                  event: 'error',
+                  status: 'failed',
+                  code: error.code,
+                  message: '高风险数据抓取审批被拒绝，请调整后再试。',
+                  detail: {
+                    ...detail,
+                    ticket_id: error.ticketId,
+                    call_id: error.callId,
+                    tool_name: error.toolName,
+                    risk_level: error.riskLevel,
+                  },
+                })
+                return
+              }
+              throw error
+            }
+          }
+
           const runWithChannel = async () => {
             logExecutorEvent('info', 'request', {
               phase: 'upstream.invoke.start',
@@ -1206,6 +1580,8 @@ export default defineEventHandler(async (event) => {
               model_id: trace.modelId,
               provider_model: trace.providerModel,
               route_combo_id: trace.routeComboId,
+              intent_type: trace.intentType,
+              intent_strategy: trace.intentStrategy,
               selection_reason: trace.selectionReason,
             })
             const { runtime, store } = createPilotRuntime({
@@ -1233,10 +1609,11 @@ export default defineEventHandler(async (event) => {
               },
             })
             await store.runtime.ensureSchema()
+            const runtimeMessage = mergeWebsearchContextIntoMessage(routedMessage, websearchContextText)
 
             for await (const envelope of runtime.onMessage({
               sessionId: runtimeSessionId,
-              message,
+              message: runtimeMessage,
               attachments: resolvedLegacyAttachments.attachments.length > 0
                 ? resolvedLegacyAttachments.attachments
                 : undefined,
@@ -1248,8 +1625,13 @@ export default defineEventHandler(async (event) => {
                 routeComboId: trace.routeComboId,
                 queueWaitMs: trace.queueWaitMs,
                 ttftMs: ttftMs || undefined,
+                intentType: trace.intentType,
+                intentStrategy: trace.intentStrategy,
+                intentReason: trace.intentReason,
+                intentConfidence: trace.intentConfidence,
                 internet: trace.internet,
                 thinking: trace.thinking,
+                memoryEnabled: trace.memoryEnabled,
                 selectionReason: trace.selectionReason,
                 orchestratorMode: trace.orchestratorMode,
                 orchestratorReason: trace.orchestratorReason,
@@ -1262,6 +1644,8 @@ export default defineEventHandler(async (event) => {
                 attachmentCount: resolvedLegacyAttachments.attachments.length,
                 attachmentSummary: resolvedLegacyAttachments.summary,
                 builtinTools: selectedChannel.builtinTools,
+                toolSources: websearchSources,
+                websearchSourceCount: websearchSources.length,
               },
             })) {
               if (closed) {
@@ -1358,6 +1742,28 @@ export default defineEventHandler(async (event) => {
               if (envelope.type === 'capability.call' || envelope.type === 'capability.result') {
                 touchStreamEventAt()
                 const capability = extractCapabilityInfo(envelope)
+                const payload = envelope.payload && typeof envelope.payload === 'object'
+                  ? envelope.payload as Record<string, unknown>
+                  : {}
+                const callId = String(payload.callId || payload.call_id || payload.id || `${trace.requestId}_${capability.name}`)
+                emit({
+                  event: 'run.audit',
+                  payload: {
+                    auditType: envelope.type === 'capability.call' ? 'tool.call.started' : 'tool.call.completed',
+                    callId,
+                    toolId: String(payload.capabilityId || payload.toolId || capability.name || ''),
+                    toolName: capability.name,
+                    riskLevel: 'low',
+                    status: envelope.type === 'capability.call' ? 'started' : 'completed',
+                    inputPreview: envelope.type === 'capability.call' ? truncateText(capability.data, 600) : '',
+                    outputPreview: envelope.type === 'capability.result' ? truncateText(capability.data, 600) : '',
+                    durationMs: Number.isFinite(Number(payload.durationMs)) ? Number(payload.durationMs) : 0,
+                    ticketId: '',
+                    sources: [],
+                    errorCode: '',
+                    errorMessage: '',
+                  },
+                })
                 emit({
                   event: 'status_updated',
                   status: envelope.type === 'capability.call' ? 'calling' : 'result',
@@ -1431,9 +1837,12 @@ export default defineEventHandler(async (event) => {
               channel_id: trace.channelId,
               adapter: trace.adapter,
               transport: trace.transport,
+              intent_type: trace.intentType,
+              intent_strategy: trace.intentStrategy,
               output_chars: completedText.length,
               attachment_count: resolvedLegacyAttachments.attachments.length,
               attachment_summary: resolvedLegacyAttachments.summary,
+              websearch_source_count: websearchSources.length,
               error: streamErrorDetail,
             })
             return
@@ -1475,6 +1884,10 @@ export default defineEventHandler(async (event) => {
             provider_model: trace.providerModel,
             route_combo_id: trace.routeComboId,
             queue_wait_ms: trace.queueWaitMs,
+            intent_type: trace.intentType,
+            intent_strategy: trace.intentStrategy,
+            intent_reason: trace.intentReason,
+            intent_confidence: trace.intentConfidence,
             ttft_ms: ttftMs,
             internet: trace.internet,
             thinking: trace.thinking,
@@ -1485,6 +1898,7 @@ export default defineEventHandler(async (event) => {
             completion_emitted: completedSent || completedText.length > 0,
             attachment_count: resolvedLegacyAttachments.attachments.length,
             attachment_summary: resolvedLegacyAttachments.summary,
+            websearch_source_count: websearchSources.length,
           })
         }
         catch (error) {
@@ -1564,9 +1978,15 @@ export default defineEventHandler(async (event) => {
                 adapter: trace.adapter,
                 transport: trace.transport,
                 endpoint: trace.endpoint,
+                intentType: trace.intentType,
+                intentStrategy: trace.intentStrategy,
+                intentReason: trace.intentReason,
+                intentConfidence: trace.intentConfidence,
                 thinking: trace.thinking,
                 internet: trace.internet,
+                memoryEnabled: trace.memoryEnabled,
                 builtinTools: trace.builtinTools,
+                websearchSourceCount: websearchSources.length,
                 orchestratorMode: trace.orchestratorMode,
                 orchestratorReason: trace.orchestratorReason,
                 orchestratorAssistantId: trace.orchestratorAssistantId,
@@ -1593,6 +2013,8 @@ export default defineEventHandler(async (event) => {
             route_combo_id: trace.routeComboId,
             provider_model: trace.providerModel,
             selection_reason: trace.selectionReason,
+            intent_type: trace.intentType,
+            intent_strategy: trace.intentStrategy,
             orchestrator_mode: trace.orchestratorMode,
             orchestrator_reason: trace.orchestratorReason,
             error_code: metricSuccess ? null : metricErrorCode,

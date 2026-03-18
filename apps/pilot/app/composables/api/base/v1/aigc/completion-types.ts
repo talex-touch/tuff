@@ -78,8 +78,8 @@ export interface IChatInnerItemMeta {
   internet?: boolean
   thinking?: boolean
   temperature?: number
-
-  // TODO: context memory
+  memoryEnabled?: boolean
+  pilotMode?: boolean
 }
 
 export type IInnerItemType = 'markdown' | 'text' | 'tool' | 'card' | 'error' | 'file' | 'image'
@@ -147,6 +147,8 @@ export interface IChatConversation extends IChatPersist {
     title: string
     description: string
   }
+
+  pilotMode?: boolean
 }
 
 export interface IChatBody {
@@ -157,6 +159,8 @@ export interface IChatBody {
   routeComboId?: string
   internet?: boolean
   thinking?: boolean
+  memoryEnabled?: boolean
+  pilotMode?: boolean
   messages: IChatItem[]
   temperature: number
   templateId: number
