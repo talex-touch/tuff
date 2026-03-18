@@ -13,6 +13,12 @@
 
 ## 2026-03-18
 
+### fix(pilot-build): 拆分前端安全子入口，修复 `AsyncLocalStorage` 运行时异常
+
+- 新增 `@talex-touch/tuff-intelligence/pilot-conversation` 子入口（`packages/tuff-intelligence/src/pilot-conversation.ts`），仅导出 `serializePilotExecutorMessages`，避免前端链路误引入 `deepagents/langgraph` 的 Node-only 依赖。
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts` 改为从 `pilot-conversation` 引用序列化能力，不再通过 `@talex-touch/tuff-intelligence/pilot` 聚合入口取值。
+- 结果：消除浏览器打包链路对 `node:async_hooks` 的依赖，修复 `import_node_async_hooks.AsyncLocalStorage is not a constructor` 导致的 500 问题。
+
 ### fix(pilot-intelligence): 前后端会话结构统一 + websearch 按意图触发
 
 - 新增 `packages/tuff-intelligence/src/business/pilot/conversation.ts` 共享 util，并在前后端同时接入：
