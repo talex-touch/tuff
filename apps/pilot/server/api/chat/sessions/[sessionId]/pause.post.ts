@@ -1,4 +1,4 @@
-import type { SessionRecord } from '@talex-touch/tuff-intelligence'
+import type { SessionRecord } from '@talex-touch/tuff-intelligence/pilot'
 import { requirePilotAuth } from '../../../../utils/auth'
 import { requireSessionId } from '../../../../utils/pilot-http'
 import { createPilotStoreAdapter } from '../../../../utils/pilot-store'

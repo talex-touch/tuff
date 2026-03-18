@@ -1,6 +1,7 @@
-import type { UserMessageAttachment } from '@talex-touch/tuff-intelligence'
+import type { UserMessageAttachment } from '@talex-touch/tuff-intelligence/pilot'
 import type { H3Event } from 'h3'
 import type { QuotaUserTurnAttachment } from './quota-history-codec'
+import { buildPilotTitleMessages } from '@talex-touch/tuff-intelligence/pilot'
 import { getRequestURL } from 'h3'
 import { resolvePilotAttachmentDeliveriesOrThrow } from './pilot-attachment-delivery'
 import { getQuotaUploadObject } from './quota-upload-store'
@@ -39,65 +40,11 @@ export function splitTextIntoChunks(text: string, chunkSize = 24): string[] {
   return chunks
 }
 
-function stringifyUnknown(value: unknown): string {
-  if (typeof value === 'string') {
-    return value
-  }
-  if (!Array.isArray(value)) {
-    return ''
-  }
-
-  const chunks = value
-    .map((item) => {
-      if (typeof item === 'string') {
-        return item
-      }
-      if (item && typeof item === 'object' && typeof (item as { value?: unknown }).value === 'string') {
-        return String((item as { value?: string }).value)
-      }
-      return ''
-    })
-    .filter(Boolean)
-
-  return chunks.join('\n')
-}
-
-function stringifyQuotaMessageContent(content: unknown): string {
-  const text = stringifyUnknown(content).trim()
-  if (text) {
-    return text
-  }
-  if (typeof content === 'string') {
-    return content.trim()
-  }
-  return ''
-}
-
 export function toTitleMessages(messages: unknown): Array<{ role: string, content: string }> {
-  if (!Array.isArray(messages)) {
-    return []
-  }
-
-  return messages
-    .map((item) => {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) {
-        return null
-      }
-      const row = item as Record<string, unknown>
-      const role = String(row.role || '').trim().toLowerCase()
-      if (role !== 'user' && role !== 'assistant') {
-        return null
-      }
-      const content = stringifyQuotaMessageContent(row.content)
-      if (!content) {
-        return null
-      }
-      return {
-        role,
-        content,
-      }
-    })
-    .filter((item): item is { role: string, content: string } => Boolean(item))
+  return buildPilotTitleMessages(messages).map(item => ({
+    role: item.role,
+    content: item.content,
+  }))
 }
 
 function resolveAbsoluteAttachmentUrl(event: H3Event, input: string): string {

@@ -1,6 +1,7 @@
 import type { IInnerItemType } from './entity'
 import type { ToolApprovalTicket } from './flow'
 import type { IChatBody, IChatConversation, IChatInnerItem, IChatItem, ICompletionHandler, IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
+import { serializePilotExecutorMessages } from '@talex-touch/tuff-intelligence/pilot'
 import { endHttp } from '~/composables/api/axios'
 import { IChatItemStatus, IChatRole, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
 import { mapStrStatus } from './entity'
@@ -334,87 +335,13 @@ async function handleExecutorResult(
   }
 }
 
-function resolveActiveInnerItem(message: IChatItem): IChatInnerItem | null {
-  const byPage = message.content.find(item => item?.page === message.page)
-  if (byPage) {
-    return byPage
-  }
-
-  const byIndex = message.content[message.page]
-  if (byIndex) {
-    return byIndex
-  }
-
-  return message.content.find(item => Boolean(item)) || null
-}
-
-function normalizeInnerMetaList(value: unknown): IInnerItemMeta[] {
-  if (!Array.isArray(value)) {
-    return []
-  }
-
-  const list: IInnerItemMeta[] = []
-  for (const item of value) {
-    if (!item || typeof item !== 'object') {
-      continue
-    }
-
-    const row = item as Record<string, unknown>
-    const content = typeof row.value === 'string' ? row.value : ''
-    if (!content) {
-      continue
-    }
-
-    list.push({
-      type: String(row.type || 'text') as IInnerItemType,
-      value: content,
-      name: typeof row.name === 'string' ? row.name : undefined,
-      data: typeof row.data === 'string' ? row.data : undefined,
-    })
-  }
-
-  return list
-}
-
-function serializeConversationForExecutor(messages: IChatItem[]): Array<{
-  id: string
-  role: IChatRole
-  content: IInnerItemMeta[]
-}> {
-  const list: Array<{
-    id: string
-    role: IChatRole
-    content: IInnerItemMeta[]
-  }> = []
-
-  for (const message of messages) {
-    const inner = resolveActiveInnerItem(message)
-    if (!inner) {
-      continue
-    }
-
-    if (message.role === IChatRole.ASSISTANT && inner.status !== IChatItemStatus.AVAILABLE) {
-      continue
-    }
-
-    const content = normalizeInnerMetaList(inner.value)
-    if (content.length <= 0) {
-      continue
-    }
-
-    list.push({
-      id: message.id,
-      role: message.role,
-      content,
-    })
-  }
-
-  return list
-}
-
 async function useCompletionExecutor(body: IChatBody, callback: (data: any) => void) {
   const existingRequestId = String((body as unknown as Record<string, unknown>)?.requestId || '').trim()
-  const convertedMsgList = serializeConversationForExecutor(body.messages || [])
+  const convertedMsgList = serializePilotExecutorMessages(body.messages || [], {
+    assistantAvailableStatus: IChatItemStatus.AVAILABLE,
+    skipUnavailableAssistant: true,
+    keepNonTextWithoutValue: true,
+  })
   if (convertedMsgList.length <= 0) {
     throw new Error('No valid conversation messages to execute')
   }

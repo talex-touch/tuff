@@ -1,0 +1,442 @@
+import type { H3Event } from 'h3'
+import type { PilotIntentType, PilotRoutingResolveResult } from './pilot-routing-resolver'
+import { networkClient } from '@talex-touch/utils/network'
+import { resolvePilotRoutingSelection } from './pilot-routing-resolver'
+
+const DEFAULT_CLASSIFIER_TIMEOUT_MS = 6_000
+const MIN_CLASSIFIER_TIMEOUT_MS = 1_500
+const MAX_CLASSIFIER_TIMEOUT_MS = 20_000
+const IMAGE_COMMAND_PREFIX = /^\/(?:image|img)\b/i
+const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
+
+export interface ResolvePilotIntentInput {
+  event: H3Event
+  message: string
+  requestChannelId?: string
+  sessionChannelId?: string
+  requestedModelId?: string
+  routeComboId?: string
+  timeoutMs?: number
+}
+
+export interface ResolvePilotIntentResult {
+  intentType: Extract<PilotIntentType, 'chat' | 'image_generate'>
+  prompt: string
+  strategy: 'command' | 'rule' | 'nano' | 'fallback'
+  confidence: number
+  reason: string
+  websearchRequired: boolean
+  websearchReason: string
+  classifier?: {
+    channelId: string
+    modelId: string
+    providerModel: string
+    routeComboId: string
+    selectionSource: string
+  }
+}
+
+interface IntentClassifierResult {
+  intentType: Extract<PilotIntentType, 'chat' | 'image_generate'>
+  confidence: number
+  reason: string
+  prompt: string
+  websearchRequired: boolean
+}
+
+function normalizeText(value: unknown): string {
+  return String(value || '').trim()
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min
+  }
+  return Math.min(Math.max(value, min), max)
+}
+
+function normalizeTimeoutMs(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_CLASSIFIER_TIMEOUT_MS
+  }
+  return Math.floor(clamp(parsed, MIN_CLASSIFIER_TIMEOUT_MS, MAX_CLASSIFIER_TIMEOUT_MS))
+}
+
+function normalizeBooleanFlag(value: unknown, fallback = false): boolean {
+  if (typeof value === 'boolean') {
+    return value
+  }
+  const normalized = normalizeText(value).toLowerCase()
+  if (!normalized) {
+    return fallback
+  }
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') {
+    return true
+  }
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') {
+    return false
+  }
+  return fallback
+}
+
+function normalizeIntentType(value: unknown): IntentClassifierResult['intentType'] {
+  const text = normalizeText(value).toLowerCase()
+  if (
+    text === 'image_generate'
+    || text === 'image-generate'
+    || text === 'image'
+    || text === 'generate_image'
+  ) {
+    return 'image_generate'
+  }
+  return 'chat'
+}
+
+function buildPromptFromCommand(message: string): string {
+  const withoutCommand = message.replace(IMAGE_COMMAND_PREFIX, '').trim()
+  return withoutCommand || message
+}
+
+function isImageCommand(message: string): boolean {
+  const trimmed = normalizeText(message)
+  return IMAGE_COMMAND_PREFIX.test(trimmed)
+}
+
+function shouldRouteToImageByRule(message: string): boolean {
+  const text = normalizeText(message)
+  if (!text) {
+    return false
+  }
+
+  const lower = text.toLowerCase()
+
+  const negativePatterns = [
+    /分析.*图片/,
+    /识别.*图片/,
+    /解释.*图片/,
+    /describe.*image/i,
+    /analy[sz]e.*image/i,
+    /what(?:'s| is).*(?:in|inside).*(?:image|picture)/i,
+  ]
+  if (negativePatterns.some(pattern => pattern.test(text))) {
+    return false
+  }
+
+  const positivePatterns = [
+    /(生成|创建|做|画|绘制|设计).{0,12}(图(?:片|标)?|插画|海报|封面|壁纸|logo)/i,
+    /(图(?:片|标)?|插画|海报|封面|壁纸|logo).{0,12}(生成|创建|做|画|绘制|设计)/i,
+    /\b(text[- ]?to[- ]?image|t2i)\b/i,
+    /\b(generate|create|draw|design|make)\b.{1,16}\b(image|picture|illustration|poster|cover|wallpaper|logo|icon)\b/i,
+    /\b(image|picture|illustration|poster|cover|wallpaper|logo|icon)\b.{1,16}\b(generate|create|draw|design|make)\b/i,
+  ]
+
+  if (positivePatterns.some(pattern => pattern.test(text))) {
+    return true
+  }
+
+  if (
+    lower.startsWith('画一张')
+    || lower.startsWith('画个')
+    || lower.startsWith('帮我画')
+    || lower.startsWith('生成一张')
+    || lower.startsWith('create an image')
+    || lower.startsWith('generate an image')
+  ) {
+    return true
+  }
+
+  return false
+}
+
+function buildClassifierSystemPrompt(): string {
+  return [
+    'You are an intent classifier for Tuff Pilot.',
+    'Classify user request into one intent: "chat" or "image_generate".',
+    'Return only strict JSON with fields: intent, confidence, reason, prompt, needs_websearch.',
+    'confidence must be between 0 and 1.',
+    'needs_websearch must be true only when external/latest web information is required.',
+    'If user asks to create/draw/generate a new image, choose image_generate.',
+    'If user asks to analyze/describe an existing image or asks normal questions, choose chat.',
+    'prompt should be cleaned user request text for downstream image generation when intent=image_generate.',
+    'No markdown, no extra keys.',
+  ].join('\n')
+}
+
+function resolveResponseEndpoint(baseUrl: string, transport: PilotRoutingResolveResult['transport']): string {
+  const normalized = normalizeText(baseUrl).replace(/\/+$/, '')
+  if (!normalized) {
+    return ''
+  }
+  const hasVersionPrefix = normalized.endsWith('/v1')
+  if (transport === 'chat.completions') {
+    return hasVersionPrefix ? `${normalized}/chat/completions` : `${normalized}/v1/chat/completions`
+  }
+  return hasVersionPrefix ? `${normalized}/responses` : `${normalized}/v1/responses`
+}
+
+function parseResponsesOutputText(payload: Record<string, unknown>): string {
+  if (typeof payload.output_text === 'string' && payload.output_text.trim()) {
+    return payload.output_text.trim()
+  }
+
+  const output = Array.isArray(payload.output) ? payload.output : []
+  const chunks: string[] = []
+  for (const item of output) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue
+    }
+    const row = item as Record<string, unknown>
+    const content = Array.isArray(row.content) ? row.content : []
+    for (const part of content) {
+      if (!part || typeof part !== 'object' || Array.isArray(part)) {
+        continue
+      }
+      const partRow = part as Record<string, unknown>
+      const text = normalizeText(partRow.text)
+      if (text) {
+        chunks.push(text)
+      }
+    }
+  }
+
+  return chunks.join('\n').trim()
+}
+
+function parseChatCompletionsOutputText(payload: Record<string, unknown>): string {
+  const choices = Array.isArray(payload.choices) ? payload.choices : []
+  for (const item of choices) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue
+    }
+    const row = item as Record<string, unknown>
+    const message = row.message && typeof row.message === 'object' && !Array.isArray(row.message)
+      ? row.message as Record<string, unknown>
+      : {}
+    const content = normalizeText(message.content)
+    if (content) {
+      return content
+    }
+  }
+  return ''
+}
+
+function parseClassifierJson(content: string, message: string): IntentClassifierResult {
+  const normalizedMessage = normalizeText(message)
+  if (!content) {
+    return {
+      intentType: 'chat',
+      confidence: 0,
+      reason: 'empty_response',
+      prompt: normalizedMessage,
+      websearchRequired: false,
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(content)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('invalid classifier response')
+    }
+    const row = parsed as Record<string, unknown>
+    return {
+      intentType: normalizeIntentType(row.intent),
+      confidence: clamp(Number(row.confidence), 0, 1),
+      reason: normalizeText(row.reason) || 'classified',
+      prompt: normalizeText(row.prompt) || normalizedMessage,
+      websearchRequired: normalizeBooleanFlag(row.needs_websearch, false),
+    }
+  }
+  catch {
+    return {
+      intentType: 'chat',
+      confidence: 0,
+      reason: 'json_parse_failed',
+      prompt: normalizedMessage,
+      websearchRequired: false,
+    }
+  }
+}
+
+function formatErrorPayload(value: unknown): string {
+  if (typeof value === 'string') {
+    return value.trim()
+  }
+  if (value === null || typeof value === 'undefined') {
+    return ''
+  }
+  try {
+    return JSON.stringify(value)
+  }
+  catch {
+    return ''
+  }
+}
+
+async function classifyIntentByModel(input: {
+  message: string
+  timeoutMs: number
+  route: PilotRoutingResolveResult
+}): Promise<IntentClassifierResult> {
+  const endpoint = resolveResponseEndpoint(input.route.channel.baseUrl, input.route.transport)
+  if (!endpoint) {
+    throw new Error('Classifier endpoint is not configured')
+  }
+
+  const payload: Record<string, unknown> = input.route.transport === 'chat.completions'
+    ? {
+        model: input.route.providerModel,
+        temperature: 0,
+        max_tokens: 180,
+        response_format: {
+          type: 'json_object',
+        },
+        messages: [
+          { role: 'system', content: buildClassifierSystemPrompt() },
+          { role: 'user', content: input.message },
+        ],
+      }
+    : {
+        model: input.route.providerModel,
+        temperature: 0,
+        max_output_tokens: 180,
+        input: [
+          { role: 'system', content: buildClassifierSystemPrompt() },
+          { role: 'user', content: input.message },
+        ],
+      }
+
+  const response = await networkClient.request<Record<string, unknown> | string>({
+    method: 'POST',
+    url: endpoint,
+    timeoutMs: input.timeoutMs,
+    headers: {
+      'content-type': 'application/json',
+      'authorization': `Bearer ${input.route.channel.apiKey}`,
+    },
+    body: payload,
+    validateStatus: ALL_HTTP_STATUS,
+  })
+
+  if (response.status < 200 || response.status >= 300) {
+    const details = formatErrorPayload(response.data)
+    throw new Error(`Classifier request failed: ${response.status}${details ? ` ${details}` : ''}`)
+  }
+
+  const row = response.data && typeof response.data === 'object' && !Array.isArray(response.data)
+    ? response.data as Record<string, unknown>
+    : {}
+
+  const content = input.route.transport === 'chat.completions'
+    ? parseChatCompletionsOutputText(row)
+    : parseResponsesOutputText(row)
+
+  return parseClassifierJson(content, input.message)
+}
+
+export async function resolvePilotIntent(input: ResolvePilotIntentInput): Promise<ResolvePilotIntentResult> {
+  const message = normalizeText(input.message)
+  if (!message) {
+    return {
+      intentType: 'chat',
+      prompt: '',
+      strategy: 'fallback',
+      confidence: 0,
+      reason: 'empty_message',
+      websearchRequired: false,
+      websearchReason: 'empty_message',
+    }
+  }
+
+  if (isImageCommand(message)) {
+    return {
+      intentType: 'image_generate',
+      prompt: buildPromptFromCommand(message),
+      strategy: 'command',
+      confidence: 1,
+      reason: 'explicit_command',
+      websearchRequired: false,
+      websearchReason: 'image_command',
+    }
+  }
+
+  if (shouldRouteToImageByRule(message)) {
+    return {
+      intentType: 'image_generate',
+      prompt: message,
+      strategy: 'rule',
+      confidence: 0.92,
+      reason: 'rule_match',
+      websearchRequired: false,
+      websearchReason: 'image_rule',
+    }
+  }
+
+  const timeoutMs = normalizeTimeoutMs(input.timeoutMs)
+  try {
+    const classifierRoute = await resolvePilotRoutingSelection(input.event, {
+      requestChannelId: input.requestChannelId,
+      sessionChannelId: input.sessionChannelId,
+      requestedModelId: input.requestedModelId,
+      routeComboId: input.routeComboId,
+      internet: false,
+      thinking: false,
+      intentType: 'intent_classification',
+    })
+
+    const classification = await classifyIntentByModel({
+      message,
+      timeoutMs,
+      route: classifierRoute,
+    })
+
+    if (classification.intentType === 'image_generate' && classification.confidence >= 0.55) {
+      return {
+        intentType: 'image_generate',
+        prompt: classification.prompt || message,
+        strategy: 'nano',
+        confidence: classification.confidence,
+        reason: classification.reason || 'nano_classified',
+        websearchRequired: false,
+        websearchReason: 'image_intent',
+        classifier: {
+          channelId: classifierRoute.channelId,
+          modelId: classifierRoute.modelId,
+          providerModel: classifierRoute.providerModel,
+          routeComboId: classifierRoute.routeComboId,
+          selectionSource: classifierRoute.selectionSource,
+        },
+      }
+    }
+
+    return {
+      intentType: 'chat',
+      prompt: message,
+      strategy: 'nano',
+      confidence: classification.confidence,
+      reason: classification.reason || 'nano_classified_chat',
+      websearchRequired: classification.websearchRequired,
+      websearchReason: classification.websearchRequired
+        ? 'nano_requires_websearch'
+        : 'nano_chat_no_websearch',
+      classifier: {
+        channelId: classifierRoute.channelId,
+        modelId: classifierRoute.modelId,
+        providerModel: classifierRoute.providerModel,
+        routeComboId: classifierRoute.routeComboId,
+        selectionSource: classifierRoute.selectionSource,
+      },
+    }
+  }
+  catch {
+    return {
+      intentType: 'chat',
+      prompt: message,
+      strategy: 'fallback',
+      confidence: 0,
+      reason: 'classifier_failed',
+      websearchRequired: false,
+      websearchReason: 'classifier_failed',
+    }
+  }
+}

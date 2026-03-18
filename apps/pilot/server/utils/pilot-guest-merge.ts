@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { D1RuntimeStoreAdapter } from '@talex-touch/tuff-intelligence'
+import { D1RuntimeStoreAdapter } from '@talex-touch/tuff-intelligence/pilot'
 import { toGuestUserId } from './auth'
 import { readPilotDeviceId } from './pilot-device'
 import { ensurePilotQuotaSessionSchema } from './pilot-quota-session'

@@ -5,7 +5,7 @@ import type {
   TraceRecord,
   UserMessageAttachment,
   UserMessageInput,
-} from '@talex-touch/tuff-intelligence'
+} from '@talex-touch/tuff-intelligence/pilot'
 import type { H3Event } from 'h3'
 import {
   createPilotStreamEmitter,
@@ -16,7 +16,7 @@ import {
   toPilotJsonSafe,
   toPilotSafeRecord,
   toPilotStreamErrorDetail,
-} from '@talex-touch/tuff-intelligence'
+} from '@talex-touch/tuff-intelligence/pilot'
 import { createError } from 'h3'
 import { requirePilotAuth } from '../../../../utils/auth'
 import {

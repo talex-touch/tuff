@@ -1,0 +1,125 @@
+import {
+  buildPilotConversationSnapshot,
+  buildPilotTitleMessages,
+  serializePilotExecutorMessages,
+  shouldExecutePilotWebsearch,
+} from '@talex-touch/tuff-intelligence/pilot'
+import { describe, expect, it } from 'vitest'
+
+describe('pilot conversation shared utils', () => {
+  it('serializePilotExecutorMessages 保留 card/tool block（即使 value 为空）', () => {
+    const messages = serializePilotExecutorMessages([
+      {
+        id: 'u1',
+        role: 'user',
+        page: 0,
+        content: [{
+          page: 0,
+          status: 0,
+          value: [{ type: 'text', value: '查一下最新 AI 新闻' }],
+        }],
+      },
+      {
+        id: 'a1',
+        role: 'assistant',
+        page: 0,
+        content: [{
+          page: 0,
+          status: 0,
+          value: [
+            { type: 'markdown', value: '这是结果' },
+            { type: 'card', name: 'pilot_tool_card', value: '', data: '{"tool":"websearch"}' },
+          ],
+        }],
+      },
+    ], {
+      assistantAvailableStatus: 0,
+      skipUnavailableAssistant: true,
+      keepNonTextWithoutValue: true,
+    })
+
+    expect(messages).toHaveLength(2)
+    expect(messages[1]?.content).toEqual([
+      { type: 'markdown', value: '这是结果', name: undefined, data: undefined },
+      { type: 'card', value: '', name: 'pilot_tool_card', data: '{"tool":"websearch"}' },
+    ])
+  })
+
+  it('buildPilotConversationSnapshot 保留结构化 block（含 card）', () => {
+    const snapshot = buildPilotConversationSnapshot({
+      chatId: 'chat-1',
+      messages: [
+        {
+          id: 'u1',
+          role: 'user',
+          content: [{ type: 'text', value: 'hello' }],
+        },
+        {
+          id: 'a1',
+          role: 'assistant',
+          content: [
+            { type: 'markdown', value: 'world' },
+            { type: 'card', name: 'pilot_tool_card', value: '', data: '{"ok":true}' },
+          ],
+        },
+      ],
+      assistantReply: '',
+      topicHint: '测试会话',
+    })
+
+    const payloadMessages = Array.isArray(snapshot.payload.messages) ? snapshot.payload.messages : []
+    const assistant = payloadMessages[1] as Record<string, any>
+    const valueBlocks = assistant?.content?.[0]?.value || []
+    expect(valueBlocks).toEqual([
+      { type: 'markdown', value: 'world' },
+      { type: 'card', value: '', name: 'pilot_tool_card', data: '{"ok":true}' },
+    ])
+  })
+
+  it('buildPilotTitleMessages 忽略附件与 card，只保留可读文本', () => {
+    const messages = buildPilotTitleMessages([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', value: '今天 AAPL 股价多少' },
+          { type: 'image', value: 'https://example.com/demo.png' },
+        ],
+      },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'markdown', value: '这是回答' },
+          { type: 'card', value: '', data: '{"tool":"websearch"}' },
+        ],
+      },
+    ], '')
+
+    expect(messages).toEqual([
+      { role: 'user', content: '今天 AAPL 股价多少' },
+      { role: 'assistant', content: '这是回答' },
+    ])
+  })
+
+  it('shouldExecutePilotWebsearch 先看意图，再走启发式兜底', () => {
+    const byIntent = shouldExecutePilotWebsearch({
+      message: '介绍一下 JavaScript 闭包',
+      intentType: 'chat',
+      internetEnabled: true,
+      builtinTools: ['write_todos', 'websearch'],
+      intentWebsearchRequired: false,
+    })
+    expect(byIntent).toEqual({
+      enabled: false,
+      reason: 'intent_not_required',
+    })
+
+    const byHeuristic = shouldExecutePilotWebsearch({
+      message: '帮我查一下今天苹果股价',
+      intentType: 'chat',
+      internetEnabled: true,
+      builtinTools: ['write_todos', 'websearch'],
+    })
+    expect(byHeuristic.enabled).toBe(true)
+    expect(byHeuristic.reason).toBe('heuristic_required')
+  })
+})
