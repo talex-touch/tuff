@@ -208,11 +208,21 @@ onMounted(() => {
 
             <pre v-else-if="block.type === 'text'" class="inner" v-text="block.value" />
 
-            <RenderContent v-else-if="block.type === 'markdown'" :dot-enable="!isEnd" readonly :data="block.value" />
+            <RenderContent
+              v-else-if="block.type === 'markdown'"
+              :dot-enable="!isEnd"
+              :streaming-gradient="true"
+              readonly
+              :data="block.value"
+            />
 
             <div v-else-if="block.type === 'card'">
+              <ChatAttachmentsCardPilotToolCard
+                v-if="block.name === 'pilot_tool_card'"
+                :block="block"
+              />
               <ChatAttachmentsCardMultiAgentJumpCard
-                v-if="block.name === 'multi_agents_jump_to_agent'"
+                v-else-if="block.name === 'multi_agents_jump_to_agent'"
                 :block="block"
               />
               <ChatAttachmentsCardTimeCapsuleRecallCard

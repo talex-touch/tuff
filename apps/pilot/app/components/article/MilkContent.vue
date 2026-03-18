@@ -35,7 +35,7 @@ let renderTimer = null
 let pendingContent = ''
 let lastRenderedContent = ''
 
-const MARKDOWN_RENDER_FLUSH_MS = 80
+const MARKDOWN_RENDER_FLUSH_MS = 16
 
 function clearRenderTimer() {
   if (!renderTimer) {
