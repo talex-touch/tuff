@@ -16,6 +16,7 @@ const vueuseComponentsShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/v
 const markmapViewShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-view.ts')
 const markmapCommonShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-common.ts')
 const markmapLibShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-lib.ts')
+const sanitizeUrlShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/braintree-sanitize-url.ts')
 const pgNativeShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/pg-native.cjs')
 
 applyPilotEnvPrecedence()
@@ -50,6 +51,29 @@ function firstDefined(...values: Array<string | undefined>): string | undefined 
 function envString(...keys: string[]): string {
   const values = keys.map(key => process.env[key])
   return firstDefined(...values) || ''
+}
+
+function envBoolean(keys: string[], fallback: boolean): boolean {
+  const raw = envString(...keys).toLowerCase()
+  if (!raw) {
+    return fallback
+  }
+  if (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on') {
+    return true
+  }
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') {
+    return false
+  }
+  return fallback
+}
+
+function envNumber(keys: string[], fallback: number, min: number, max: number): number {
+  const raw = envString(...keys)
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) {
+    return fallback
+  }
+  return Math.min(Math.max(Math.floor(parsed), min), max)
 }
 
 function parseCliDevPort(argv: string[]): number | undefined {
@@ -194,6 +218,7 @@ export default defineNuxtConfig({
         { find: /^refractor\/lang\/.+$/, replacement: refractorLangShimEntry },
         { find: /^@vueuse\/components$/, replacement: vueuseComponentsShimEntry },
         { find: /^@milkdown\/kit\/plugin\/prism$/, replacement: '@milkdown/plugin-prism' },
+        { find: /^@braintree\/sanitize-url$/, replacement: sanitizeUrlShimEntry },
         { find: /^markmap-view$/, replacement: markmapViewShimEntry },
         { find: /^markmap-common$/, replacement: markmapCommonShimEntry },
         { find: /^markmap-lib$/, replacement: markmapLibShimEntry },
@@ -244,6 +269,13 @@ export default defineNuxtConfig({
       nexusOrigin: envString('NUXT_PUBLIC_NEXUS_ORIGIN') || DEFAULT_NEXUS_ORIGIN,
       pilotStreamIdleTimeoutMs: 45_000,
       pilotStreamMaxDurationMs: 8 * 60_000,
+      pilotToolApprovalAutoResume: envBoolean(['NUXT_PUBLIC_PILOT_TOOL_APPROVAL_AUTO_RESUME'], true),
+      pilotToolApprovalPollIntervalMs: envNumber(['NUXT_PUBLIC_PILOT_TOOL_APPROVAL_POLL_INTERVAL_MS'], 1_500, 500, 15_000),
+      pilotToolApprovalPollTimeoutMs: envNumber(['NUXT_PUBLIC_PILOT_TOOL_APPROVAL_POLL_TIMEOUT_MS'], 10 * 60_000, 5_000, 60 * 60_000),
+      pilotEnableLegacyExecutorEventCompat: envBoolean(['NUXT_PUBLIC_PILOT_ENABLE_LEGACY_EXECUTOR_EVENT_COMPAT'], false),
     },
+  },
+  devServer: {
+    port: 3300,
   },
 })

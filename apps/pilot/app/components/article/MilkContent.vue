@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { RenderResult } from 'mermaid'
 import type { App } from 'vue'
 import { defaultValueCtx, Editor, editorViewOptionsCtx, rootCtx, SchemaReady } from '@milkdown/core'
 import { katexOptionsCtx, math } from '@milkdown/plugin-math'
@@ -43,16 +44,82 @@ let lastRenderedContent = ''
 let richDestroy: (() => void) | null = null
 
 const MARKDOWN_RENDER_FLUSH_MS = 16
-const previewableCodeLangSet = new Set(['html', 'svg'])
+const previewableCodeLangSet = new Set(['html', 'svg', 'mermaid'])
+let mermaidRuntimePromise: Promise<typeof import('mermaid').default> | null = null
+let mermaidPreviewRenderIndex = 0
 
 function normalizeCodeLanguage(value: unknown): string {
   const language = typeof value === 'string' ? value.trim().toLowerCase() : ''
   return language || 'text'
 }
 
+function resolveErrorMessage(error: unknown): string {
+  if (error instanceof Error && typeof error.message === 'string') {
+    return error.message
+  }
+  if (typeof error === 'string') {
+    return error
+  }
+  return 'Unknown error'
+}
+
+async function resolveMermaidRuntime() {
+  if (!mermaidRuntimePromise) {
+    mermaidRuntimePromise = import('mermaid').then((mod) => {
+      const runtime = mod.default
+      runtime.initialize({
+        startOnLoad: false,
+        securityLevel: 'loose',
+      })
+      return runtime
+    })
+  }
+  return mermaidRuntimePromise
+}
+
+async function renderMermaidPreview(code: string, target: HTMLElement) {
+  const loading = document.createElement('div')
+  loading.className = 'RichCodePreview-MermaidStatus'
+  const spinner = document.createElement('span')
+  spinner.className = 'RichCodePreview-MermaidSpinner'
+  spinner.setAttribute('aria-hidden', 'true')
+  const loadingText = document.createElement('span')
+  loadingText.textContent = 'Mermaid 渲染中...'
+  loading.appendChild(spinner)
+  loading.appendChild(loadingText)
+  target.replaceChildren(loading)
+
+  try {
+    const runtime = await resolveMermaidRuntime()
+    mermaidPreviewRenderIndex += 1
+    const renderResult: RenderResult = await runtime.render(
+      `rich-code-mermaid-preview-${Date.now()}-${mermaidPreviewRenderIndex}`,
+      code,
+    )
+
+    if (!target.isConnected) {
+      return
+    }
+
+    target.innerHTML = renderResult.svg
+    renderResult.bindFunctions?.(target)
+  }
+  catch (error) {
+    if (!target.isConnected) {
+      return
+    }
+
+    const errorView = document.createElement('pre')
+    errorView.className = 'RichCodePreview-MermaidError'
+    errorView.textContent = `[Mermaid 渲染失败]\n${resolveErrorMessage(error)}`
+    target.replaceChildren(errorView)
+  }
+}
+
 function openCodePreview(language: string, code: string) {
   const legacyMasks = document.querySelectorAll<HTMLElement>('.RichCodePreview-Mask')
   legacyMasks.forEach(mask => mask.remove())
+  const normalizedLanguage = normalizeCodeLanguage(language)
 
   const mask = document.createElement('div')
   mask.className = 'RichCodePreview-Mask'
@@ -64,7 +131,7 @@ function openCodePreview(language: string, code: string) {
   header.className = 'RichCodePreview-Header'
 
   const title = document.createElement('span')
-  title.textContent = `${language.toUpperCase()} 预览`
+  title.textContent = `${normalizedLanguage.toUpperCase()} 预览`
 
   const closeDom = document.createElement('button')
   closeDom.className = 'RichCodePreview-Close'
@@ -74,14 +141,23 @@ function openCodePreview(language: string, code: string) {
   const body = document.createElement('div')
   body.className = 'RichCodePreview-Body'
 
-  const iframe = document.createElement('iframe')
-  iframe.className = 'RichCodePreview-Frame'
-  iframe.setAttribute('sandbox', 'allow-scripts')
-  iframe.srcdoc = code
-
   header.appendChild(title)
   header.appendChild(closeDom)
-  body.appendChild(iframe)
+
+  if (normalizedLanguage === 'mermaid') {
+    const mermaidWrapper = document.createElement('div')
+    mermaidWrapper.className = 'RichCodePreview-Mermaid'
+    body.appendChild(mermaidWrapper)
+    void renderMermaidPreview(code, mermaidWrapper)
+  }
+  else {
+    const iframe = document.createElement('iframe')
+    iframe.className = 'RichCodePreview-Frame'
+    iframe.setAttribute('sandbox', 'allow-scripts')
+    iframe.srcdoc = code
+    body.appendChild(iframe)
+  }
+
   panel.appendChild(header)
   panel.appendChild(body)
   mask.appendChild(panel)

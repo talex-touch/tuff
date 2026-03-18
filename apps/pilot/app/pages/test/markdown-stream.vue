@@ -42,6 +42,66 @@ function sum(a: number, b: number) {
   return a + b
 }
 \`\`\`
+
+## 数学公式
+
+行内公式：$E = mc^2$，用于观察流式阶段的公式稳定性。
+
+$$
+\\int_0^1 x^2 \\, dx = \\frac{1}{3}
+$$
+
+## Mermaid（代码块展示）
+
+\`\`\`mermaid
+graph TD
+  A[用户输入] --> B{解析意图}
+  B -->|chat| C[文本回复]
+  B -->|image| D[图像生成]
+  C --> E[写回会话]
+  D --> E
+\`\`\`
+
+## SVG 预览测试
+
+\`\`\`svg
+<svg width="420" height="120" viewBox="0 0 420 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#22c55e"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" rx="14" ry="14" width="404" height="104" fill="#f8fafc" stroke="#cbd5e1"/>
+  <circle cx="56" cy="60" r="20" fill="url(#g1)"/>
+  <text x="92" y="68" font-size="24" fill="#334155" font-family="Menlo, Consolas, monospace">SVG Preview OK</text>
+</svg>
+\`\`\`
+
+## HTML 网页预览测试
+
+\`\`\`html
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Preview Demo</title>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; background: #f8fafc; }
+      .card { margin: 20px; padding: 16px; border-radius: 12px; background: #fff; border: 1px solid #e2e8f0; }
+      h2 { margin: 0 0 8px; color: #0f172a; }
+      p { margin: 0; color: #475569; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h2>HTML Preview OK</h2>
+      <p>这个块用于验证代码块“预览”按钮和弹层效果。</p>
+    </div>
+  </body>
+</html>
+\`\`\`
 `.trim()
 
 const sourceMarkdown = ref(defaultMarkdown)
@@ -246,6 +306,7 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .MarkdownStreamDemo {
+  --demo-panel-height: min(72vh, 760px);
   margin: 0 auto;
   padding: 1rem 1.25rem 1.5rem;
   max-width: 1400px;
@@ -313,7 +374,10 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   padding: 0.75rem;
   background: var(--el-bg-color);
-  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: var(--demo-panel-height);
 
   h2 {
     margin: 0 0 0.625rem;
@@ -322,9 +386,11 @@ onBeforeUnmount(() => {
   }
 
   textarea {
+    flex: 1;
     width: 100%;
-    min-height: 560px;
-    resize: vertical;
+    min-height: 0;
+    height: 100%;
+    resize: none;
     border: 1px solid var(--el-border-color);
     border-radius: 8px;
     padding: 0.625rem 0.75rem;
@@ -338,9 +404,11 @@ onBeforeUnmount(() => {
 .preview {
   :deep(.RenderContent) {
     position: relative;
-    min-height: 560px;
+    flex: 1;
+    min-height: 0;
+    max-height: 100%;
     border-radius: 8px;
-    overflow: hidden;
+    overflow: auto;
     background: var(--el-fill-color-blank);
   }
 }

@@ -264,12 +264,47 @@
     position: relative;
     padding: 0.6rem 0.85rem;
     background-color: var(--el-fill-color-light);
+
+    pre[class*='language-'],
+    code[class*='language-'] {
+      margin: 0;
+      padding: 0 !important;
+      border-radius: 0;
+      box-shadow: none !important;
+      background: transparent !important;
+    }
+
+    pre > code,
+    pre[class*='language-'] > code[class*='language-'] {
+      display: block;
+      width: 100%;
+      padding: 0 !important;
+      border-radius: 0;
+      box-shadow: none !important;
+      background: transparent !important;
+    }
+
+    .token {
+      background: transparent !important;
+    }
   }
 
   pre {
     margin: 0;
     border-radius: 8px;
     background: transparent;
+
+    &::after {
+      display: none;
+    }
+  }
+
+  code {
+    padding: 0;
+
+    &::after {
+      display: none;
+    }
   }
 
   .rich-lang {
@@ -381,13 +416,80 @@
 
 .RichCodePreview-Body {
   flex: 1;
-  background-color: #fff;
+  overflow: auto;
+  background-color: var(--el-bg-color-page);
 }
 
 .RichCodePreview-Frame {
   width: 100%;
   height: 100%;
   border: none;
+}
+
+.RichCodePreview-Mermaid {
+  min-height: 100%;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--el-fill-color-blank);
+
+  svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+}
+
+.RichCodePreview-MermaidStatus {
+  padding: 0.5rem 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--el-border-color);
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  background-color: var(--el-fill-color-light);
+}
+
+.RichCodePreview-MermaidSpinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--el-border-color);
+  border-top-color: var(--el-color-primary);
+  animation: rich-mermaid-spin 0.85s linear infinite;
+}
+
+.RichCodePreview-MermaidError {
+  margin: 0;
+  width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: 8px;
+  border: 1px solid var(--el-border-color);
+  padding: 0.75rem;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-color-danger);
+  background-color: var(--el-fill-color-light);
+}
+
+@keyframes rich-mermaid-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .RichCodePreview-MermaidSpinner {
+    animation: none;
+  }
 }
 
 .rich-quote-shadow.enter::before {
