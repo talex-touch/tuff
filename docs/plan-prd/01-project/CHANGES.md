@@ -19,6 +19,12 @@
 - `ThInput` 侧统一附件能力判定为 `allowFileAnalysis`，粘贴/上传/文件选择不再区分 image/file 双开关。
 - 运行时模型能力兼容：`allowFileAnalysis` 优先，缺省回退历史 `allowImageAnalysis`；对外返回保持两字段同值，避免旧客户端语义分叉。
 
+### fix(pilot-input): 优化输入面板高度并补齐记忆系统快捷开关
+
+- `ThInputPlus` 去除固定 `320px` 高度，改为按内容自适应，避免在“分析文件”合并后出现大面积空白。
+- 在输入面板新增“记忆系统”开关项，复用现有 `v1/chat/memory/settings` 能力切换当前会话记忆状态。
+- `ThInput` / `pages/index.vue` 打通记忆开关状态与禁用提示，策略或提交中状态下保持只读并给出明确提示。
+
 ## 2026-03-18
 
 ### fix(pilot-build): 拆分前端安全子入口，修复 `AsyncLocalStorage` 运行时异常

@@ -78,6 +78,16 @@ const memoryPolicy = reactive<PilotMemoryPolicy>({
 const memoryEnabled = ref(true)
 const memoryLoading = ref(false)
 const memorySubmitting = ref(false)
+const memoryToggleDisabled = computed(() => memoryLoading.value || memorySubmitting.value || !memoryPolicy.allowUserDisable)
+const memoryToggleDisabledTip = computed(() => {
+  if (memoryLoading.value || memorySubmitting.value) {
+    return '记忆系统状态同步中，请稍后再试。'
+  }
+  if (!memoryPolicy.allowUserDisable) {
+    return '当前策略不允许用户切换记忆系统。'
+  }
+  return '记忆系统暂不可用。'
+})
 
 function applyMemorySettings(payload: any) {
   const data = payload?.data && typeof payload.data === 'object'
@@ -152,6 +162,14 @@ async function handleMemorySwitchChange(value: unknown) {
   finally {
     memorySubmitting.value = false
   }
+}
+
+function handleMemoryToggleFromInput() {
+  if (memoryToggleDisabled.value) {
+    ElMessage.warning(memoryToggleDisabledTip.value)
+    return
+  }
+  void handleMemorySwitchChange(!memoryEnabled.value)
 }
 
 function resetConversationMessages(conversation: IChatConversation) {
@@ -777,8 +795,11 @@ function handleLogin() {
           <ThInput
             :template-enable="!pageOptions.conversation.messages.length" :status="pageOptions.status"
             :send-state="pageOptions.sendState"
+            :memory-enabled="memoryEnabled"
+            :memory-toggle-disabled="memoryToggleDisabled"
+            :memory-disabled-tip="memoryToggleDisabledTip"
             :hide="pageOptions.share.enable" :center="pageOptions.conversation.messages?.length < 1" :tip="tip"
-            @send="handleSend" @select-template="handleSelectTemplate"
+            @send="handleSend" @select-template="handleSelectTemplate" @toggle-memory="handleMemoryToggleFromInput"
           />
         </template>
       </EmptyGuide>

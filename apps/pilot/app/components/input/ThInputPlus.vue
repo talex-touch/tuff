@@ -8,6 +8,12 @@ interface ThInputCapabilities {
   file: boolean
 }
 
+interface ThInputMemoryState {
+  enabled: boolean
+  disabled: boolean
+  disabledTip: string
+}
+
 interface InputOption {
   icon: string
   type: 'button' | 'checkbox' | 'slider'
@@ -24,11 +30,13 @@ const props = defineProps<{
   hide: boolean
   modelValue: IChatInnerItemMeta
   capabilities?: Partial<ThInputCapabilities>
+  memory?: Partial<ThInputMemoryState>
 }>()
 
 const emits = defineEmits<{
   (name: 'update:modelValue', data: IChatInnerItemMeta): void
   (event: 'file'): void
+  (event: 'toggleMemory'): void
 }>()
 
 const hover = ref(false)
@@ -40,6 +48,11 @@ const normalizedCapabilities = computed<ThInputCapabilities>(() => ({
   thinking: props.capabilities?.thinking !== false,
   websearch: props.capabilities?.websearch !== false,
   file: props.capabilities?.file !== false,
+}))
+const normalizedMemory = computed<ThInputMemoryState>(() => ({
+  enabled: props.memory?.enabled !== false,
+  disabled: props.memory?.disabled === true,
+  disabledTip: props.memory?.disabledTip || '当前策略不允许切换记忆系统。',
 }))
 
 const { isSupported, isActive, request, release } = useWakeLock()
@@ -128,6 +141,18 @@ const options = computed<InputOption[]>(() => {
       checked: () => normalizedCapabilities.value.thinking && property.value.thinking !== false,
       disabled: () => !normalizedCapabilities.value.thinking,
       disabledTip: '当前模型组未开启 thinking 能力。',
+    },
+    {
+      icon: 'i-carbon-data-base',
+      type: 'checkbox',
+      label: '记忆系统',
+      info: '开启后将为当前会话保留上下文记忆，提升连续对话体验。',
+      onclick: () => {
+        emits('toggleMemory')
+      },
+      checked: () => normalizedMemory.value.enabled,
+      disabled: () => normalizedMemory.value.disabled,
+      disabledTip: normalizedMemory.value.disabledTip,
     },
     isSupported.value
       ? {
@@ -242,7 +267,7 @@ watch(hoverMode, update)
   z-index: 2;
 
   width: 190px;
-  height: 320px;
+  height: auto;
 
   pointer-events: none;
 }
@@ -388,7 +413,7 @@ watch(hoverMode, update)
   padding: 0.5rem 0.5rem;
 
   width: 100%;
-  height: 100%;
+  height: auto;
 
   border-radius: 18px;
   box-shadow: var(--el-box-shadow);

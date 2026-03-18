@@ -18,10 +18,14 @@ const props = defineProps<{
   center: boolean
   templateEnable: boolean
   tip: ITip | null
+  memoryEnabled?: boolean
+  memoryToggleDisabled?: boolean
+  memoryDisabledTip?: string
 }>()
 const emits = defineEmits<{
   (event: 'selectTemplate', data: any): void
   (event: 'send', data: IInnerItemMeta[], meta: IChatInnerItemMeta): void
+  (event: 'toggleMemory'): void
 }>()
 
 const template = ref<any>()
@@ -56,6 +60,11 @@ const inputHistories = useLocalStorage<string[]>('inputHistories', [])
 const inputHistoryIndex = ref(inputHistories.value.length - 1)
 const showSend = computed(() => Boolean(input.value.text.trim()) || syncedFiles.value.length > 0)
 const canSend = computed(() => !hasUploadingFiles.value && showSend.value && props.sendState !== 'sending_until_accepted')
+const memoryOption = computed(() => ({
+  enabled: props.memoryEnabled !== false,
+  disabled: props.memoryToggleDisabled === true,
+  disabledTip: props.memoryDisabledTip || '当前策略不允许切换记忆系统。',
+}))
 
 function getCapabilityDisabledMessage(kind: 'thinking' | 'websearch' | 'file'): string {
   if (kind === 'thinking') {
@@ -582,7 +591,9 @@ onStartTyping(focusInput)
     />
 
     <ThInputPlus
-      v-model="inputProperty" :capabilities="inputCapabilities" :hide="input.text.startsWith('@') || template?.title"
+      v-model="inputProperty" :capabilities="inputCapabilities" :memory="memoryOption"
+      :hide="input.text.startsWith('@') || template?.title"
+      @toggle-memory="emits('toggleMemory')"
       @file="handleFilePlus"
     />
 
