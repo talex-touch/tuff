@@ -13,6 +13,19 @@
 
 ## 2026-03-18
 
+### fix(pilot-intelligence): 前后端会话结构统一 + websearch 按意图触发
+
+- 新增 `packages/tuff-intelligence/src/business/pilot/conversation.ts` 共享 util，并在前后端同时接入：
+  - `serializePilotExecutorMessages`：统一会话消息序列化，保留 `card/tool` 等非 markdown block（即使 `value` 为空也不丢失）。
+  - `buildPilotConversationSnapshot`：统一会话快照构建，避免后端将历史消息退化为纯 markdown 文本导致 toolcall/tool card 信息丢失。
+  - `extractLatestPilotUserTurn` / `buildPilotTitleMessages`：统一最新用户轮提取与标题消息抽取规则。
+- `legacy executor` websearch 触发策略收敛：
+  - 新增 `shouldExecutePilotWebsearch` 判定，websearch 不再“联网开关开启即调用”；
+  - 优先使用意图分类结果（`websearchRequired`），仅在意图要求时触发；
+  - 意图缺失时走启发式兜底（如“最新/实时/查一下/today/latest”等时效检索场景）。
+- `pilot-intent-resolver` 输出新增 `websearchRequired/websearchReason`，并在 `executor` 侧落地判定与观测字段（`websearchDecision`）。
+- 新增回归测试：`apps/pilot/server/utils/__tests__/pilot-conversation-shared.test.ts`，覆盖 block 保留、快照结构、标题抽取与 websearch 判定逻辑。
+
 ### feat(pilot-graph): 新建会话可选 Pilot 模式（Graph 优先，DeepAgent 回退）
 
 - 前端主聊天页（`/`）新建会话新增模式选择：
@@ -113,6 +126,10 @@
   - 主聊天 Markdown 代码块改为组件化头部：新增 `RenderCodeHeader`，统一承载语言类型标签、复制按钮与 `html/svg` 预览入口，并通过 `useRichArticle` 在只读渲染链路按代码块增量挂载；
   - 移除嵌套列表伪元素圆点，避免与默认 marker 叠加导致“双圆点”；
   - 表格样式改为轻边框、单行分隔、柔和表头与 hover，整体更简洁。
+  - 修复只读代码块暗色背景冲突：统一覆盖 `EditorCode` 下 `pre/code/token` 背景，去除逐行黑底块与额外底色噪音；
+  - 代码块预览能力扩展到 `mermaid`，并增加 `@braintree/sanitize-url` shim alias 兼容，修复预览渲染依赖导出错误；
+  - Mermaid 预览加载态增强：弹层内增加 spinner + 状态条，弱网/首次加载时反馈更明确；
+  - 开发测试页 `/test/markdown-stream` 右侧 `Stream Preview` 改为固定高度内部滚动，长内容回放不再推高整页滚动。
 - 对 `@milkdown/*` 执行最新稳定版本核验：当前 `core/kit` 最新为 `7.19.0`，`plugin-math` 最新为 `7.5.9`，`plugin-diagram` 最新为 `7.7.0`（上游已标记 deprecated），本次未引入额外版本漂移。
 
 ### feat(pilot): 增加会话记忆管理（用户开关 + 清空当前/全部）
