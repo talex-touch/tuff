@@ -13,6 +13,125 @@
 
 ## 2026-03-18
 
+### feat(pilot-graph): 新建会话可选 Pilot 模式（Graph 优先，DeepAgent 回退）
+
+- 前端主聊天页（`/`）新建会话新增模式选择：
+  - 可选择“启用 Pilot 模式（Graph 优先）”或“普通模式”；
+  - 会话级持久化字段新增 `pilotMode`，并在聊天头部展示当前会话模式标签。
+- v1 链路透传补齐：
+  - `POST /api/v1/chat/sessions/:sessionId/turns` 入队 payload 新增 `pilotMode`；
+  - `POST /api/v1/chat/sessions/:sessionId/stream` 代理 executor 时透传 `pilotMode`。
+- 执行器编排决策增强：
+  - `executor` 在 `pilotMode=true` 时向 orchestrator 传入 `preferLangGraph=true`；
+  - orchestrator 会优先选择可用且绑定 `langgraphAssistantId` 的 route combo；
+  - 若本地 Graph 服务不可用或无可用 Graph combo，保持自动回退 `deepagent`，不影响现有稳定性。
+
+### feat(pilot-tools): 通用工具调用提示 + AI 数据源抓取（V1 双线并行）
+
+- 新增 `PilotToolGateway` 与 `websearch` connector 抽象（`search/fetch/extract`），并接入可配置网关主路径。
+- 新增 `datasource.websearch` 配置（`gatewayBaseUrl/apiKeyRef/allowlistDomains/timeoutMs/maxResults/crawlEnabled/ttlMinutes`）并纳入 Admin settings 聚合读写。
+- 新增工具审批票据存储与 API：
+  - `GET /api/v1/chat/sessions/:sessionId/tool-approvals?status=pending`
+  - `POST /api/v1/chat/sessions/:sessionId/tool-approvals/:ticketId`
+- 工具生命周期统一输出 `run.audit`（`tool.call.started/approval_required/approved/rejected/completed/failed`），payload 固定字段对齐 `callId/toolId/toolName/riskLevel/status/inputPreview/outputPreview/durationMs/ticketId/sources/errorCode/errorMessage`。
+- `legacy executor` 与 `v1 chat stream` 打通工具事件透传：已清理 `status_updated(calling/result)` 的工具兼容映射，统一以 `run.audit` 作为工具卡片唯一事件源，并对高风险场景启用阻塞式审批。
+- 前端补齐统一解析：
+  - Tool 卡片统一由 `run.audit` 驱动（不再消费 legacy `status_updated(calling/result)` 生成工具卡）；
+  - 增加 `PilotToolCard` 渲染组件，展示工具状态、输入/输出预览、来源链接、审批 ticket 信息。
+
+### feat(pilot-approval): 审批通过自动续跑 + Legacy 工具事件 Phase 2 收口
+
+- 旧聊天页 `$completion` 增加审批自动续跑：
+  - 收到 `turn.approval_required` 后自动轮询 `GET /api/v1/chat/sessions/:sessionId/tool-approvals`；
+  - 票据 `approved` 后复用原 `request_id` 自动恢复 `stream` 执行；
+  - 票据 `rejected` 或轮询超时时，统一写入 Tool 卡片失败态并落错误消息。
+- 新增运行时公共配置（含回滚开关）：
+  - `pilotToolApprovalAutoResume`（默认 `true`）
+  - `pilotToolApprovalPollIntervalMs`（默认 `1500`）
+  - `pilotToolApprovalPollTimeoutMs`（默认 `600000`）
+  - `pilotEnableLegacyExecutorEventCompat`（默认 `false`）
+- 补充审批自动续跑回归测试：
+  - 新增 completion flow 单测，覆盖 `request_id` 复用（跳过 turn 创建）与审批 `approved/rejected/timeout` 三条分支状态映射。
+- Legacy Phase 2（工具提示相关）：
+  - `$completion` 默认关闭 legacy `completion/verbose/status_updated(tool)` 兼容分支；
+  - 主链路统一为 `turn.* + run.audit`；
+  - 通过 `NUXT_PUBLIC_PILOT_ENABLE_LEGACY_EXECUTOR_EVENT_COMPAT=true` 可回滚兼容旧事件解析。
+
+### feat(pilot-intent-image): Intent 图像路由 + image.generate 工具闭环（V1）
+
+- 新增 `PilotIntentResolver`（混合策略）：
+  - 显式命令优先：`/image`、`/img`；
+  - 规则命中：中英文图像生成语义匹配；
+  - nano 分类兜底：结构化 JSON 输出 `intent/confidence/reason/prompt`，失败默认回退 `chat`（fail-open）。
+- 路由能力扩展：
+  - `PilotRoutingPolicy` 新增 `intentNanoModelId/intentRouteComboId/imageGenerationModelId/imageRouteComboId`；
+  - `PilotModelCatalogItem` 新增 `allowImageGeneration`；
+  - `resolvePilotRoutingSelection` 新增 `intentType`（`chat | image_generate | intent_classification`）并按 intent 选择模型与 route combo。
+- 运行时模型接口增强：
+  - `GET /api/runtime/models` 新增 `allowImageGeneration`；
+  - Admin 模型组与路由策略页面同步支持新字段编辑与展示。
+- 工具网关新增 `image.generate`：
+  - 生命周期统一发 `run.audit`（`tool.call.started/.../completed/failed`）；
+  - V1 仅支持 `openai` 适配器执行图像生成，非支持适配器返回明确错误码并写入 `tool.call.failed`。
+- 新旧两条会话链路并行接入：
+  - `legacy executor` 与 `chat sessions stream` 均支持意图命中后图像短路执行，返回 Markdown 图片内容并同步 Tool 卡片审计事件。
+- Legacy 收口（Phase 1）：
+  - 前端工具卡状态仅由 `run.audit + tool.call.*` 驱动；
+  - `turn.approval_required` 统一映射为标准工具审计 payload；
+  - 去除 tool parser 中 `websearch` 硬编码兜底（改为通用 `tool/tool.unknown`）。
+
+### feat(pilot-ui): 主聊天 Markdown 流式增量渐变显示
+
+- 仅在 Pilot 主聊天链路生效：`ThChat -> ChatItem -> RenderContent -> ThContent -> MilkContent`。
+- `RenderContent` 新增可选属性 `streamingGradient`（默认关闭），仅在 `dotEnable=true` 且 markdown 内容持续增量时触发节流渐变 pulse。
+- 新增独立 overlay 扫光动画，保留原有 `Generating-Dot` 光标行为，并在组件卸载时清理 pulse/dot 相关计时器。
+- 增加 `prefers-reduced-motion` 自动降级：系统开启“减少动态效果”时不触发渐变 pulse。
+- `ChatItem` 仅对 `block.type === 'markdown'` 主聊天渲染接入 `streaming-gradient`，不影响分享图、后台 Prompt 预览和其他产品线。
+
+### fix(pilot-markdown): Milkdown 渲染兼容修复与版本核验
+
+- 修复 `refractor` 语言模块导入路径兼容性：统一为 `refractor/*`，避免 `refractor/lang/*` 在 Bundler 模式下触发模块解析失败。
+- 修复 `MilkdownRenderStashed` 的 prism 插件导入错误：从 `@milkdown/kit/plugin/prism` 更正为 `@milkdown/plugin-prism`。
+- 修复 `MilkdownEditor` 上传器类型签名不兼容：对齐 `Uploader` 新签名参数，移除错误的 DOM `Node[]` 强类型约束。
+- 优化主聊天流式 markdown 刷新策略：改为“优先按换行边界增量刷出 + 超时强制刷出”，减少有序/无序列表在流式阶段的半截语法重排抖动。
+- 清理 `MilkdownRenderStashed` 的重复实现，改为复用 `MilkdownRender` 薄封装，降低后续配置漂移与维护成本。
+- 新增开发态专用测试路由：`/test/markdown-stream`，用于可视化验证主聊天 Markdown 流式渐变与列表稳定性（非 dev 环境访问返回 404）。
+- 测试页新增 `autoplay/speed` 查询参数（示例：`/test/markdown-stream?autoplay=1&speed=70`），便于稳定复现实录与截图对比。
+- 测试页默认回放速度调整为 `16ms`，并将速度滑块/查询参数下限同步为 `16`，便于高频流式回归。
+- 根据主聊天体验回归进一步微调：
+  - 渐变效果收敛为“底部横线扫光”，并改为仅在增量包含换行（行完成）时触发；
+  - `Generating-Dot` 跟随节流从 `80ms` 提升至 `24ms`，并增加 `requestAnimationFrame` 持续追踪，减少光标滞后；
+  - 进一步将 `Generating-Dot` 改为帧级即时定位（去除位置过渡拖影），并将无换行场景 markdown 强制刷出窗口从 `320ms` 下调到 `64ms`，提升“贴尾”感；
+  - 修复 `Generating-Dot` 在代码块场景的横向偏移：定位改为“最后可见文本节点末尾的折叠 Range”，并排除无文本尾节点（如 copy 按钮）锚点污染；
+  - `Generating-Dot` 定位继续增强：改为“文本节点优先 + 列表/段落/代码块兜底锚点”，避免在半结构态（如仅出现列表 marker）时回跳到上一个标题行；
+  - 修正 `Generating-Dot` 锚点优先级：仅在无法取得文本尾锚点时才使用兜底锚点，避免 dot 被列表节点覆盖导致错位；
+  - `Generating-Dot` 定位坐标改为基于 `cursor.offsetParent` 统一换算，并在空列表项（仅 marker）场景允许兜底锚点前置，降低列表阶段横向偏移；
+  - `Generating-Dot` 闪烁动画改为 CSS 常驻，不再在每次位置刷新时重置 animation，避免高频更新下出现“看起来跟不上”的视觉滞后；
+  - `Generating-Dot` 进一步修正列表中间态锚点抢占：当已有有效文本尾锚点时，后续空 `LI` 不再抢占 fallback，避免 dot 回跳到列表起始位；
+  - `Generating-Dot` 纵向基线下调 `+3px`，贴近中文正文基线，减少“看起来偏上”的观感误差；
+  - `MilkContent` 流式渲染 flush 间隔从 `80ms` 下调到 `16ms`，减少可见内容与光标跟随的时间差；
+  - 主聊天 Markdown 代码块改为组件化头部：新增 `RenderCodeHeader`，统一承载语言类型标签、复制按钮与 `html/svg` 预览入口，并通过 `useRichArticle` 在只读渲染链路按代码块增量挂载；
+  - 移除嵌套列表伪元素圆点，避免与默认 marker 叠加导致“双圆点”；
+  - 表格样式改为轻边框、单行分隔、柔和表头与 hover，整体更简洁。
+- 对 `@milkdown/*` 执行最新稳定版本核验：当前 `core/kit` 最新为 `7.19.0`，`plugin-math` 最新为 `7.5.9`，`plugin-diagram` 最新为 `7.7.0`（上游已标记 deprecated），本次未引入额外版本漂移。
+
+### feat(pilot): 增加会话记忆管理（用户开关 + 清空当前/全部）
+
+- 新增用户侧记忆配置接口：
+  - `GET /api/v1/chat/memory/settings`
+  - `POST /api/v1/chat/memory/settings`
+  - `POST /api/v1/chat/memory/clear`
+- 记忆配置与后台 `memoryPolicy` 打通：
+  - `allowUserDisable=false` 时，用户端不允许切换记忆开关；
+  - `allowUserClear=false` 时，用户端不允许清空记忆。
+- `executor` 链路新增 `memoryEnabled` 透传与策略收敛：
+  - 支持前端显式传入 `memoryEnabled`；
+  - 未显式传入时读取用户偏好，并回退到后台默认策略。
+- runtime 记忆加载改造：`memoryEnabled=false` 时，本轮不加载历史消息上下文（仅当前输入参与推理），但仍保留会话日志落库能力。
+- 前端聊天页（`/`）新增记忆管理入口：
+  - 记忆开关（持久化到服务端偏好）；
+  - “清空当前”“清空全部”动作（带二次确认与执行态保护）。
+
 ### feat(pilot-admin): Channels 支持模型同步与按模型配置格式
 
 - `Channels` 管理页新增“同步渠道模型”按钮，复用 `POST /api/admin/channel-models/sync`，同步后自动刷新渠道配置。

@@ -34,6 +34,8 @@ interface TurnPayload extends Record<string, unknown> {
   model?: string
   internet?: boolean
   thinking?: boolean
+  memoryEnabled?: boolean
+  pilotMode?: boolean
   routeComboId?: string
   queueWaitMs?: number
   messages?: unknown[]
@@ -232,11 +234,19 @@ async function syncLegacyTitle(event: Parameters<typeof requirePilotAuth>[0], us
   })
 }
 
+interface ProxyExecutorStreamResult {
+  text: string
+  terminalErrorCode?: string
+  terminalErrorMessage?: string
+  terminalErrorDetail?: Record<string, unknown>
+}
+
 async function proxyExecutorStream(options: {
   event: Parameters<typeof requirePilotAuth>[0]
   payload: TurnPayload
   onDelta: (delta: string) => Promise<void>
-}): Promise<string> {
+  onEvent?: (payload: Record<string, unknown>) => Promise<void>
+}): Promise<ProxyExecutorStreamResult> {
   const requestUrl = getRequestURL(options.event)
   const endpoint = `${requestUrl.protocol}//${requestUrl.host}/api/aigc/executor`
   const headers: Record<string, string> = {
@@ -268,6 +278,9 @@ async function proxyExecutorStream(options: {
   const decoder = new TextDecoder()
   let buffer = ''
   let text = ''
+  let terminalErrorCode = ''
+  let terminalErrorMessage = ''
+  let terminalErrorDetail: Record<string, unknown> | undefined
 
   while (true) {
     const { value, done } = await reader.read()
@@ -311,11 +324,55 @@ async function proxyExecutorStream(options: {
       }
 
       if (payload.error === true) {
-        throw new Error(String(payload.e || payload.message || 'Executor stream failed'))
+        const message = String(payload.e || payload.message || 'Executor stream failed')
+        const detail = payload.detail && typeof payload.detail === 'object'
+          ? payload.detail as Record<string, unknown>
+          : {}
+        const code = String(payload.code || detail.code || '').trim()
+        if (code === 'TOOL_APPROVAL_REQUIRED' || code === 'TOOL_APPROVAL_REJECTED') {
+          terminalErrorCode = code
+          terminalErrorMessage = message
+          terminalErrorDetail = detail
+          await options.onEvent?.({
+            event: 'error',
+            status: 'failed',
+            code,
+            message,
+            detail,
+          })
+          return {
+            text,
+            terminalErrorCode,
+            terminalErrorMessage,
+            terminalErrorDetail,
+          }
+        }
+        throw new Error(message)
       }
 
       if (payload.event === 'error') {
-        throw new Error(String(payload.message || payload.data || 'Executor stream failed'))
+        const message = String(payload.message || payload.data || 'Executor stream failed')
+        const detail = payload.detail && typeof payload.detail === 'object'
+          ? payload.detail as Record<string, unknown>
+          : {}
+        const code = String(payload.code || detail.code || '').trim()
+        if (code === 'TOOL_APPROVAL_REQUIRED' || code === 'TOOL_APPROVAL_REJECTED') {
+          terminalErrorCode = code
+          terminalErrorMessage = message
+          terminalErrorDetail = detail
+          await options.onEvent?.({
+            ...payload,
+            message,
+            detail,
+          })
+          return {
+            text,
+            terminalErrorCode,
+            terminalErrorMessage,
+            terminalErrorDetail,
+          }
+        }
+        throw new Error(message)
       }
 
       if (payload.event === 'completion') {
@@ -328,11 +385,19 @@ async function proxyExecutorStream(options: {
         else if (completed && content && content.length > text.length) {
           text = content
         }
+        continue
       }
+
+      await options.onEvent?.(payload)
     }
   }
 
-  return text
+  return {
+    text,
+    terminalErrorCode,
+    terminalErrorMessage,
+    terminalErrorDetail,
+  }
 }
 
 export default defineEventHandler(async (event) => {
@@ -498,11 +563,14 @@ export default defineEventHandler(async (event) => {
               const parsedPayload = JSON.parse(row.payload || '{}') as TurnPayload
               parsedPayload.chat_id = sessionId
               parsedPayload.modelId = String(parsedPayload.modelId || parsedPayload.model || row.model || '').trim() || undefined
+              parsedPayload.pilotMode = typeof parsedPayload.pilotMode === 'boolean'
+                ? parsedPayload.pilotMode
+                : undefined
               const queuedAt = Date.parse(String(row.createdAt || ''))
               parsedPayload.queueWaitMs = Number.isFinite(queuedAt)
                 ? Math.max(0, Date.now() - queuedAt)
                 : 0
-              assistantText = await proxyExecutorStream({
+              const proxyResult = await proxyExecutorStream({
                 event,
                 payload: parsedPayload,
                 onDelta: async (delta) => {
@@ -515,7 +583,68 @@ export default defineEventHandler(async (event) => {
                     delta,
                   })
                 },
+                onEvent: async (upstreamEvent) => {
+                  const upstreamType = String(upstreamEvent.event || '').trim()
+                  if (!upstreamType) {
+                    return
+                  }
+                  if (upstreamType === 'completion') {
+                    return
+                  }
+                  if (upstreamType === 'error') {
+                    return
+                  }
+                  emit({
+                    ...upstreamEvent,
+                    event: upstreamType,
+                    phase: 'reply',
+                    request_id: requestId,
+                    turn_id: row.turnId,
+                    queue_pos: 0,
+                  })
+                },
               })
+              assistantText = proxyResult.text
+
+              if (proxyResult.terminalErrorCode === 'TOOL_APPROVAL_REQUIRED') {
+                await updateChatTurnStatus(event, userId, sessionId, requestId, 'accepted', {
+                  responseText: assistantText,
+                  errorText: '',
+                })
+                emit({
+                  event: 'turn.approval_required',
+                  phase: 'reply',
+                  request_id: requestId,
+                  turn_id: row.turnId,
+                  queue_pos: 0,
+                  message: proxyResult.terminalErrorMessage || '工具调用需要审批，请审批后重试。',
+                  code: proxyResult.terminalErrorCode,
+                  detail: proxyResult.terminalErrorDetail || {},
+                })
+                emitDone()
+                close()
+                return
+              }
+
+              if (proxyResult.terminalErrorCode === 'TOOL_APPROVAL_REJECTED') {
+                await updateChatTurnStatus(event, userId, sessionId, requestId, 'failed', {
+                  responseText: assistantText,
+                  errorText: proxyResult.terminalErrorMessage || '工具审批被拒绝',
+                })
+                emit({
+                  event: 'turn.failed',
+                  phase: 'reply',
+                  request_id: requestId,
+                  turn_id: row.turnId,
+                  queue_pos: 0,
+                  message: proxyResult.terminalErrorMessage || '工具审批被拒绝',
+                  code: proxyResult.terminalErrorCode,
+                  detail: proxyResult.terminalErrorDetail || {},
+                })
+                emitDone()
+                close()
+                return
+              }
 
               await updateChatTurnStatus(event, userId, sessionId, requestId, 'completed', {
                 responseText: assistantText,
