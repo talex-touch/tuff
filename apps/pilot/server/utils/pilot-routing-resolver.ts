@@ -1,10 +1,10 @@
 import type { H3Event } from 'h3'
-import type { PilotBuiltinTool, PilotChannelConfig } from './pilot-channel'
 import type { PilotModelCatalogItem, PilotRouteComboItem } from './pilot-admin-routing-config'
+import type { PilotBuiltinTool, PilotChannelConfig } from './pilot-channel'
 import { getPilotAdminRoutingConfig } from './pilot-admin-routing-config'
+import { getPilotChannelCatalog, resolvePilotChannelSelection } from './pilot-channel'
 import { computeChannelModelStats } from './pilot-channel-scorer'
 import { buildRouteKey, isRouteHealthy } from './pilot-route-health'
-import { getPilotChannelCatalog, resolvePilotChannelSelection } from './pilot-channel'
 
 interface RouteCandidate {
   channelId: string
@@ -77,6 +77,32 @@ function normalizeFloat(value: unknown, fallback: number, min = 0, max = 1): num
     return fallback
   }
   return Math.min(Math.max(parsed, min), max)
+}
+
+function normalizeModelFormat(value: unknown): PilotRoutingResolveResult['transport'] | '' {
+  const normalized = normalizeText(value).toLowerCase()
+  if (!normalized) {
+    return ''
+  }
+  if (normalized === 'chat.completions' || normalized === 'chat_completions' || normalized === 'completions') {
+    return 'chat.completions'
+  }
+  if (normalized === 'responses') {
+    return 'responses'
+  }
+  return ''
+}
+
+function resolveTransportByModel(
+  channel: PilotChannelConfig,
+  providerModel: string,
+): PilotRoutingResolveResult['transport'] {
+  const modelId = normalizeText(providerModel)
+  if (!modelId) {
+    return channel.transport
+  }
+  const modelConfig = (channel.models || []).find(model => normalizeText(model.id) === modelId)
+  return normalizeModelFormat(modelConfig?.format) || channel.transport
 }
 
 function uniqueCandidates(list: RouteCandidate[]): RouteCandidate[] {
@@ -354,12 +380,13 @@ export async function resolvePilotRoutingSelection(
     const thinking = thinkingSupported
       ? normalizeBoolean(input.thinking, normalizeBoolean(fallbackModelConfig?.thinkingDefaultEnabled, true))
       : false
+    const fallbackTransport = resolveTransportByModel(fallback.channel, fallbackModel)
 
     return {
       channel: fallback.channel,
       channelId: fallback.channelId,
       adapter: fallback.adapter,
-      transport: fallback.transport,
+      transport: fallbackTransport,
       modelId: fallbackModelConfig?.id || fallbackModel || defaultModelId,
       providerModel: fallbackModel,
       routeComboId: defaultComboId,
@@ -389,7 +416,7 @@ export async function resolvePilotRoutingSelection(
   }
 
   const scored = candidates
-    .map(candidate => {
+    .map((candidate) => {
       const routeKey = buildRouteKey(candidate.channelId, candidate.providerModel)
       const stats = candidateStats.get(routeKey)
       const health = isRouteHealthy(routeKey, healthPolicy)
@@ -432,12 +459,13 @@ export async function resolvePilotRoutingSelection(
   const thinking = thinkingSupported
     ? normalizeBoolean(input.thinking, normalizeBoolean(modelConfig?.thinkingDefaultEnabled, true))
     : false
+  const selectedTransport = resolveTransportByModel(selectedChannel, picked.candidate.providerModel)
 
   return {
     channel: selectedChannel,
     channelId: selectedChannel.id,
     adapter: selectedChannel.adapter,
-    transport: selectedChannel.transport,
+    transport: selectedTransport,
     modelId: modelConfig?.id || picked.candidate.modelId,
     providerModel: picked.candidate.providerModel,
     routeComboId: picked.candidate.routeComboId || defaultComboId,

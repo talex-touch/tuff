@@ -1,7 +1,8 @@
 import type { H3Event } from 'h3'
 import type { PilotChannelModelConfig } from './pilot-channel'
-import { mergeDiscoveredModelsIntoCatalog } from './pilot-admin-routing-config'
+import { networkClient } from '@talex-touch/utils/network'
 import { getPilotAdminChannelCatalog, updatePilotAdminChannelCatalog } from './pilot-admin-channel-config'
+import { mergeDiscoveredModelsIntoCatalog } from './pilot-admin-routing-config'
 
 export interface PilotChannelModelSyncResult {
   syncedAt: string
@@ -15,6 +16,18 @@ export interface PilotChannelModelSyncResult {
     discoveredModels: string[]
     error?: string
   }>
+}
+
+export interface DiscoverPilotChannelModelsInput {
+  channelId?: string
+  baseUrl?: string
+  apiKey?: string
+  timeoutMs?: number
+}
+
+export interface DiscoverPilotChannelModelsResult {
+  channelId: string
+  models: string[]
 }
 
 function nowIso(): string {
@@ -36,56 +49,92 @@ function normalizeBaseUrl(baseUrl: string): string {
   return `${raw}/v1`
 }
 
+function normalizeTimeoutMs(value: unknown, fallback = 90_000): number {
+  return Math.min(Math.max(Math.floor(Number(value || fallback)), 3_000), 120_000)
+}
+
 async function fetchChannelModels(input: {
   baseUrl: string
   apiKey: string
   timeoutMs: number
 }): Promise<string[]> {
   const endpoint = `${normalizeBaseUrl(input.baseUrl)}/models`
-  const controller = new AbortController()
-  const timeout = setTimeout(() => {
-    controller.abort('channel_model_sync_timeout')
-  }, Math.min(Math.max(Math.floor(Number(input.timeoutMs || 90_000)), 3_000), 120_000))
+  const response = await networkClient.request<{
+    data?: Array<{ id?: string }>
+    models?: Array<{ id?: string }>
+  } | string>({
+    method: 'GET',
+    url: endpoint,
+    timeoutMs: normalizeTimeoutMs(input.timeoutMs, 90_000),
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${input.apiKey}`,
+    },
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+  })
 
-  try {
-    const response = await fetch(endpoint, {
-      method: 'GET',
-      signal: controller.signal,
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${input.apiKey}`,
-      },
-    })
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`HTTP ${response.status}`)
+  }
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-
-    const payload = await response.json() as {
+  const payloadData = response.data
+  const payload = payloadData && typeof payloadData === 'object' && !Array.isArray(payloadData)
+    ? payloadData as {
       data?: Array<{ id?: string }>
       models?: Array<{ id?: string }>
     }
+    : {}
 
-    const source = Array.isArray(payload?.data)
-      ? payload.data
-      : Array.isArray(payload?.models)
-        ? payload.models
-        : []
+  const source = Array.isArray(payload.data)
+    ? payload.data
+    : Array.isArray(payload.models)
+      ? payload.models
+      : []
 
-    const modelIds = source
-      .map(item => normalizeText(item?.id))
-      .filter(Boolean)
+  const modelIds = source
+    .map(item => normalizeText(item?.id))
+    .filter(Boolean)
 
-    return Array.from(new Set(modelIds))
+  return Array.from(new Set(modelIds))
+}
+
+export async function discoverPilotChannelModels(
+  event: H3Event,
+  input: DiscoverPilotChannelModelsInput = {},
+): Promise<DiscoverPilotChannelModelsResult> {
+  const catalog = await getPilotAdminChannelCatalog(event)
+  const channelId = normalizeText(input.channelId)
+  const channel = channelId
+    ? catalog.channels.find(item => item.id === channelId)
+    : undefined
+
+  const baseUrl = normalizeText(input.baseUrl) || normalizeText(channel?.baseUrl)
+  const apiKey = normalizeText(input.apiKey) || normalizeText(channel?.apiKey)
+  const timeoutMs = normalizeTimeoutMs(input.timeoutMs, channel?.timeoutMs || 90_000)
+
+  if (!baseUrl) {
+    throw new Error('Base URL 不能为空')
   }
-  finally {
-    clearTimeout(timeout)
+  if (!apiKey) {
+    throw new Error('API Key 不能为空')
+  }
+
+  const models = await fetchChannelModels({
+    baseUrl,
+    apiKey,
+    timeoutMs,
+  })
+
+  return {
+    channelId: channel?.id || channelId || '',
+    models,
   }
 }
 
 function mergeModelsWithExisting(
   existing: PilotChannelModelConfig[] | undefined,
   discovered: string[],
+  defaultFormat: string,
 ): PilotChannelModelConfig[] {
   const existingMap = new Map((existing || []).map(item => [item.id, item]))
 
@@ -96,6 +145,7 @@ function mergeModelsWithExisting(
     existingMap.set(modelId, {
       id: modelId,
       label: modelId,
+      format: normalizeText(defaultFormat) || undefined,
       enabled: true,
       thinkingSupported: true,
       thinkingDefaultEnabled: false,
@@ -107,6 +157,7 @@ function mergeModelsWithExisting(
     return discovered.map(modelId => ({
       id: modelId,
       label: modelId,
+      format: normalizeText(defaultFormat) || undefined,
       enabled: true,
       thinkingSupported: true,
       thinkingDefaultEnabled: false,
@@ -147,7 +198,7 @@ export async function syncPilotChannelModels(event: H3Event): Promise<PilotChann
         timeoutMs: channel.timeoutMs,
       })
 
-      const mergedModels = mergeModelsWithExisting(channel.models, discoveredModels)
+      const mergedModels = mergeModelsWithExisting(channel.models, discoveredModels, channel.transport)
       const defaultModelId = normalizeText(channel.defaultModelId)
       const nextDefault = mergedModels.some(item => item.id === defaultModelId)
         ? defaultModelId

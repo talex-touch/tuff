@@ -5,7 +5,6 @@ import { getHistoryList } from '~/composables/api/account'
 import { $endApi } from '~/composables/api/base'
 import AccountModuleDeveloper from './account/AccountModuleDeveloper.vue'
 import AccountModuleDummy from './account/AccountModuleDummy.vue'
-import AccountModuleFortune from './account/AccountModuleFortune.vue'
 import AccountModuleHistory from './account/AccountModuleHistory.vue'
 import AccountModuleInvitation from './account/AccountModuleInvitation.vue'
 import AccountModuleLink from './account/AccountModuleLink.vue'
@@ -16,7 +15,6 @@ import AccountModuleSignIn from './account/AccountModuleSignIn.vue'
 const historyList = ref()
 const invitationList = ref()
 const shareList = ref()
-const fortuneList = ref()
 const signinData = ref<{
   data: any
   daily: any
@@ -65,24 +63,11 @@ async function fetchShareListData() {
   shareList.value = res.data
 }
 
-async function fetchFortuneListData() {
-  const res: any = await $endApi.v1.account.dailyFortune()
-
-  if (res.code !== 200)
-    return ElMessage.error(res.message)
-
-  fortuneList.value = res.data
-
-  if (fortuneList.value.content)
-    fortuneList.value.content = JSON.parse(decodeText(fortuneList.value.content) || '[]')
-}
-
 onMounted(() => {
   fetchSigninData()
   fetchHistoryData()
   fetchInvitationData()
   fetchShareListData()
-  fetchFortuneListData()
 })
 
 // 计算注册了多少天
@@ -121,14 +106,6 @@ async function openConfigurePage() {
     visible: true,
     component: AccountModulePersonal,
     data: null,
-  })
-}
-
-async function openFortunePage() {
-  Object.assign(dialogOptions, {
-    visible: true,
-    component: AccountModuleFortune,
-    data: fortuneList.value,
   })
 }
 
@@ -191,7 +168,7 @@ const isSignedToday = computed(() => {
 async function handleDailySignin() {
   const res = await $endApi.v1.account.dailySignin()
 
-  if (responseMessage(res, { success: '签到成功！' })) {
+  if (responseMessage(res, { success: '签到成功！', triggerOnDataNull: false })) {
     fetchSigninData()
 
     signinData.value.daily = res.data
@@ -263,14 +240,6 @@ function openSignPage() {
           <span v-else class="tag fill">普通用户</span>
           <span v-wave cursor-pointer class="tag" @click="openInvitationPage">已邀请 {{ invitationList?.length || 0 }}
             人</span>
-          <span v-if="fortuneList" v-wave cursor-pointer class="tag" @click="openFortunePage">
-            <span v-if="fortuneList.main === '大吉'">运势极佳 · 五福临门</span>
-            <span v-if="fortuneList.main === '中吉'">运势上好</span>
-            <span v-if="fortuneList.main === '小吉'">运势不错</span>
-            <span v-if="fortuneList.main === '凶'">小心行事</span>
-            <span v-if="fortuneList.main === '大凶'">多多行善</span>
-            <span v-if="fortuneList.main === '极恶'">天打雷劈</span>
-          </span>
           <span class="tag">注册 {{ registeredCountDay }} 天</span>
         </div>
 

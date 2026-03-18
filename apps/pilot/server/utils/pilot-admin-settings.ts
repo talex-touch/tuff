@@ -1,9 +1,4 @@
 import type { H3Event } from 'h3'
-import type { PilotBuiltinTool, PilotChannelAdapter, PilotChannelTransport } from './pilot-channel'
-import {
-  getPilotAdminChannelCatalog,
-  updatePilotAdminChannelCatalog,
-} from './pilot-admin-channel-config'
 import type {
   PilotLoadBalancePolicy,
   PilotMemoryPolicy,
@@ -11,6 +6,11 @@ import type {
   PilotRouteComboItem,
   PilotRoutingPolicy,
 } from './pilot-admin-routing-config'
+import type { PilotBuiltinTool, PilotChannelAdapter, PilotChannelTransport } from './pilot-channel'
+import {
+  getPilotAdminChannelCatalog,
+  updatePilotAdminChannelCatalog,
+} from './pilot-admin-channel-config'
 import {
   getPilotAdminRoutingConfig,
   updatePilotAdminRoutingConfig,
@@ -31,6 +31,7 @@ export interface PilotAdminSettingsView {
       models?: Array<{
         id: string
         label?: string
+        format?: string
         enabled?: boolean
         thinkingSupported?: boolean
         thinkingDefaultEnabled?: boolean
@@ -90,6 +91,7 @@ export interface PilotAdminSettingsPatch {
       models?: Array<{
         id: string
         label?: string
+        format?: string
         enabled?: boolean
         thinkingSupported?: boolean
         thinkingDefaultEnabled?: boolean

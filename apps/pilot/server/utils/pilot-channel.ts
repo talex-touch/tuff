@@ -10,6 +10,7 @@ export type PilotBuiltinTool = 'write_todos' | 'read_file' | 'write_file' | 'edi
 export interface PilotChannelModelConfig {
   id: string
   label?: string
+  format?: string
   enabled?: boolean
   thinkingSupported?: boolean
   thinkingDefaultEnabled?: boolean

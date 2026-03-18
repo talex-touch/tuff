@@ -1,7 +1,4 @@
 <script setup lang="ts">
-import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
-import monitor from './system/monitor.vue'
-
 definePageMeta({
   name: '管理中心',
   layout: 'admin',
@@ -37,9 +34,6 @@ const greeting = computed(() => {
               </div>
             </div>
           </el-card>
-          <el-card class="Cms-Application cms-card">
-            <lazy-cms-application />
-          </el-card>
         </div>
 
         <div class="Cms-Content">
@@ -57,47 +51,10 @@ const greeting = computed(() => {
               </div>
             </div>
           </el-card>
-          <el-card class="cms-card">
-            <div class="cms-header">
-              <div class="cms-start">
-                <IconMimicIcon color="var(--el-color-primary);color: #fff" icon="i-carbon:application-web" />
-                系统监控
-              </div>
-
-              <div class="cms-end">
-                <el-link type="primary">
-                  查看更多
-                </el-link>
-              </div>
-            </div>
-
-            <monitor />
-          </el-card>
         </div>
 
         <div class="Cms-User">
           <LazyCmsUser />
-
-          <el-card class="cms-card">
-            <el-config-provider :locale="zhCn">
-              <el-calendar>
-                <template #date-cell="{ data }">
-                  <p :class="data.isSelected ? 'is-selected' : ''">
-                    {{ data.day.split('-').slice(2).join('') }}
-                    {{ data.isSelected ? '✔️' : '' }}
-                  </p>
-                </template>
-                <template #header="{ date }">
-                  <span>工作日历</span>
-                  <span>{{ date }}</span>
-                </template>
-              </el-calendar>
-            </el-config-provider>
-          </el-card>
-
-          <el-card class="cms-card">
-            <ChorePersonalFortuneCard />
-          </el-card>
         </div>
       </div>
     </el-scrollbar>
@@ -113,10 +70,6 @@ const greeting = computed(() => {
 
   width: 100%;
   height: calc(100% - 72px);
-}
-
-.Cms-Application {
-  height: 40%;
 }
 
 .cms-card {

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { ComponentSize, FormInstance, FormRules, UploadProps } from 'element-plus'
+import type { ComponentSize, FormInstance, FormRules } from 'element-plus'
 import dayjs from 'dayjs'
-import { getAccountDetail } from '~/composables/api/account'
 import ImageUpload from '~/components/personal/ImageUpload.vue'
+import { getAccountDetail } from '~/composables/api/account'
 
 interface RuleForm {
   nickname: string
@@ -12,10 +12,6 @@ interface RuleForm {
   email: string
   remark: string
 }
-
-const props = defineProps<{
-  data: any
-}>()
 
 const loading = ref(false)
 const formSize = ref<ComponentSize>('default')
@@ -122,7 +118,6 @@ const lastEditTime = computed(() => dayjs(userStore.value.updatedAt).format('DD 
         </el-form-item>
       </el-form>
 
-      <ChorePersonalFortuneCard v-if="false" />
       <ChorePersonalInvitationCard v-if="false" />
     </div>
 
