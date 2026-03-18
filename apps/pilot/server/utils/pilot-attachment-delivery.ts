@@ -1,4 +1,4 @@
-import type { UserMessageAttachment } from '@talex-touch/tuff-intelligence'
+import type { UserMessageAttachment } from '@talex-touch/tuff-intelligence/pilot'
 import { Buffer } from 'node:buffer'
 
 export type PilotAttachmentDeliverySource = 'id' | 'url' | 'base64'

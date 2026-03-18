@@ -3,7 +3,7 @@ import type {
   AgentEnvelope,
   AgentEventType,
   DeepAgentAuditRecord,
-} from '@talex-touch/tuff-intelligence'
+} from '@talex-touch/tuff-intelligence/pilot'
 import type { H3Event } from 'h3'
 import type { PilotBuiltinTool, PilotChannelAdapter, PilotChannelTransport } from './pilot-channel'
 import {
@@ -12,7 +12,7 @@ import {
   DecisionDispatcher,
   DeepAgentLangChainEngineAdapter,
   DefaultDecisionAdapter,
-} from '@talex-touch/tuff-intelligence'
+} from '@talex-touch/tuff-intelligence/pilot'
 import { LangGraphLocalServerEngineAdapter } from './pilot-langgraph-engine'
 import { createPilotStoreAdapter } from './pilot-store'
 

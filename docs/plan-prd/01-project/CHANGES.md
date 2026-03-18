@@ -25,6 +25,8 @@
   - 意图缺失时走启发式兜底（如“最新/实时/查一下/today/latest”等时效检索场景）。
 - `pilot-intent-resolver` 输出新增 `websearchRequired/websearchReason`，并在 `executor` 侧落地判定与观测字段（`websearchDecision`）。
 - 新增回归测试：`apps/pilot/server/utils/__tests__/pilot-conversation-shared.test.ts`，覆盖 block 保留、快照结构、标题抽取与 websearch 判定逻辑。
+- 新增稳定子入口 `@talex-touch/tuff-intelligence/pilot`（`src/pilot.ts` + package exports），Pilot 前后端调用从深路径/根聚合出口收敛到领域子入口，降低路径耦合与误引入风险。
+- 补齐 `pilot` 子入口导出清单（含 runtime/store/protocol/adapters 的 Pilot 侧必需符号），并将 `apps/pilot` 中原 `@talex-touch/tuff-intelligence` 根出口引用全部迁移到 `@talex-touch/tuff-intelligence/pilot`。
 
 ### feat(pilot-graph): 新建会话可选 Pilot 模式（Graph 优先，DeepAgent 回退）
 
@@ -129,6 +131,9 @@
   - 修复只读代码块暗色背景冲突：统一覆盖 `EditorCode` 下 `pre/code/token` 背景，去除逐行黑底块与额外底色噪音；
   - 代码块预览能力扩展到 `mermaid`，并增加 `@braintree/sanitize-url` shim alias 兼容，修复预览渲染依赖导出错误；
   - Mermaid 预览加载态增强：弹层内增加 spinner + 状态条，弱网/首次加载时反馈更明确；
+  - Mermaid 代码块交互优化：默认以内联预览展示，并支持一键切换到代码视图（预览/代码双态）；
+  - SVG/HTML 代码块改为默认内联预览并限制最大展示尺寸；HTML 额外支持“展开”弹层查看完整页面；
+  - 代码块“预览/代码”切换控件改为 `TxRadioGroup`，复制按钮改为图标态反馈；
   - 开发测试页 `/test/markdown-stream` 右侧 `Stream Preview` 改为固定高度内部滚动，长内容回放不再推高整页滚动。
 - 对 `@milkdown/*` 执行最新稳定版本核验：当前 `core/kit` 最新为 `7.19.0`，`plugin-math` 最新为 `7.5.9`，`plugin-diagram` 最新为 `7.7.0`（上游已标记 deprecated），本次未引入额外版本漂移。
 

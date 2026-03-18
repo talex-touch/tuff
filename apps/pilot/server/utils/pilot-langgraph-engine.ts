@@ -3,7 +3,7 @@ import type {
   DeepAgentAuditRecord,
   TurnState,
   UserMessageAttachment,
-} from '@talex-touch/tuff-intelligence'
+} from '@talex-touch/tuff-intelligence/pilot'
 import { networkClient, parseHttpStatusCode } from '@talex-touch/utils/network'
 
 const DEFAULT_TIMEOUT_MS = 90_000

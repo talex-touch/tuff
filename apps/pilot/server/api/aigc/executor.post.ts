@@ -1,8 +1,8 @@
-import type { AgentEnvelope, DeepAgentAuditRecord, UserMessageAttachment } from '@talex-touch/tuff-intelligence'
+import type { AgentEnvelope, DeepAgentAuditRecord, UserMessageAttachment } from '@talex-touch/tuff-intelligence/pilot'
 import type { H3Event } from 'h3'
 import type { PilotIntentType } from '../../utils/pilot-routing-resolver'
 import process from 'node:process'
-import { toDeepAgentErrorDetail } from '@talex-touch/tuff-intelligence'
+import { shouldExecutePilotWebsearch, toDeepAgentErrorDetail } from '@talex-touch/tuff-intelligence/pilot'
 import { requirePilotAuth } from '../../utils/auth'
 import { getPilotAdminRoutingConfig } from '../../utils/pilot-admin-routing-config'
 import {
@@ -731,6 +731,8 @@ export default defineEventHandler(async (event) => {
         strategy: 'fallback' as const,
         confidence: 0,
         reason: 'title_request',
+        websearchRequired: false,
+        websearchReason: 'title_request',
       }
     : await resolvePilotIntent({
         event,
@@ -1050,6 +1052,13 @@ export default defineEventHandler(async (event) => {
         }
         let websearchContextText = ''
         let websearchSources: Array<Record<string, unknown>> = []
+        const websearchDecision = shouldExecutePilotWebsearch({
+          message: routedMessage,
+          intentType: intentDecision.intentType,
+          internetEnabled: trace.internet,
+          builtinTools: selectedChannel.builtinTools,
+          intentWebsearchRequired: intentDecision.websearchRequired,
+        })
 
         const touchStreamEventAt = () => {
           lastStreamEventAt = Date.now()
@@ -1456,7 +1465,7 @@ export default defineEventHandler(async (event) => {
             }
           }
 
-          if (trace.internet && selectedChannel.builtinTools.includes('websearch') && routedMessage) {
+          if (websearchDecision.enabled) {
             try {
               const websearchResult = await executePilotWebsearchTool({
                 event,
@@ -1646,6 +1655,7 @@ export default defineEventHandler(async (event) => {
                 builtinTools: selectedChannel.builtinTools,
                 toolSources: websearchSources,
                 websearchSourceCount: websearchSources.length,
+                websearchDecision: websearchDecision.reason,
               },
             })) {
               if (closed) {
@@ -1987,6 +1997,7 @@ export default defineEventHandler(async (event) => {
                 memoryEnabled: trace.memoryEnabled,
                 builtinTools: trace.builtinTools,
                 websearchSourceCount: websearchSources.length,
+                websearchDecision: websearchDecision.reason,
                 orchestratorMode: trace.orchestratorMode,
                 orchestratorReason: trace.orchestratorReason,
                 orchestratorAssistantId: trace.orchestratorAssistantId,

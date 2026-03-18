@@ -1,3 +1,4 @@
+export * from './conversation'
 export * from './emitter'
 export * from './stream'
 export * from './types'
