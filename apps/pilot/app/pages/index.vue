@@ -7,13 +7,13 @@ import History from '~/components/history/index.vue'
 import ThInput from '~/components/input/ThInput.vue'
 import ModelSelector from '~/components/model/ModelSelector.vue'
 import { useHotKeysHook } from '~/composables/aigc'
-import { endHttp } from '~/composables/api/axios'
 import { $endApi } from '~/composables/api/base'
 import { $completion } from '~/composables/api/base/v1/aigc/completion'
 import { IChatItemStatus, PersistStatus } from '~/composables/api/base/v1/aigc/completion-types'
 import { calculateConversation } from '~/composables/api/base/v1/aigc/completion/entity'
 import { $historyManager } from '~/composables/api/base/v1/aigc/history'
 import { $event } from '~/composables/events'
+import { usePilotMemorySettings } from '~/composables/usePilotMemorySettings'
 import { usePilotRuntimeModels } from '~/composables/usePilotRuntimeModels'
 import { globalConfigModel } from '~/composables/user'
 import '~/composables/index.d.ts'
@@ -63,237 +63,10 @@ const pageOptions = reactive<{
   status: IChatItemStatus.AVAILABLE,
   sendState: 'idle',
 })
-
-interface PilotMemoryPolicy {
-  enabledByDefault: boolean
-  allowUserDisable: boolean
-  allowUserClear: boolean
-}
-
-const memoryPolicy = reactive<PilotMemoryPolicy>({
-  enabledByDefault: true,
-  allowUserDisable: true,
-  allowUserClear: true,
-})
-const memoryEnabled = ref(true)
-const memoryLoading = ref(false)
-const memorySubmitting = ref(false)
-const memoryToggleDisabled = computed(() => memoryLoading.value || memorySubmitting.value || !memoryPolicy.allowUserDisable)
-const memoryToggleDisabledTip = computed(() => {
-  if (memoryLoading.value || memorySubmitting.value) {
-    return '记忆系统状态同步中，请稍后再试。'
-  }
-  if (!memoryPolicy.allowUserDisable) {
-    return '当前策略不允许用户切换记忆系统。'
-  }
-  return '记忆系统暂不可用。'
-})
-
-function applyMemorySettings(payload: any) {
-  const data = payload?.data && typeof payload.data === 'object'
-    ? payload.data
-    : payload
-
-  const policy = data?.memoryPolicy && typeof data.memoryPolicy === 'object'
-    ? data.memoryPolicy
-    : {}
-  memoryPolicy.enabledByDefault = policy.enabledByDefault !== false
-  memoryPolicy.allowUserDisable = policy.allowUserDisable !== false
-  memoryPolicy.allowUserClear = policy.allowUserClear !== false
-
-  if (typeof data?.memoryEnabled === 'boolean') {
-    memoryEnabled.value = data.memoryEnabled
-    return
-  }
-
-  memoryEnabled.value = memoryPolicy.enabledByDefault
-}
-
-function extractResponseMessage(error: unknown): string {
-  if (!error || typeof error !== 'object') {
-    return String(error || '')
-  }
-  const row = error as Record<string, any>
-  const message = row?.message
-    || row?.response?.data?.message
-    || row?.data?.message
-  return typeof message === 'string' ? message : ''
-}
-
-async function loadMemorySettings() {
-  memoryLoading.value = true
-  try {
-    const res: any = await endHttp.get('v1/chat/memory/settings')
-    applyMemorySettings(res)
-  }
-  catch {
-    memoryEnabled.value = true
-  }
-  finally {
-    memoryLoading.value = false
-  }
-}
-
-async function handleMemorySwitchChange(value: unknown) {
-  const nextEnabled = Boolean(value)
-  if (memorySubmitting.value || memoryLoading.value) {
-    return
-  }
-  if (!memoryPolicy.allowUserDisable) {
-    memoryEnabled.value = memoryPolicy.enabledByDefault
-    return
-  }
-
-  memorySubmitting.value = true
-  try {
-    const res: any = await endHttp.post('v1/chat/memory/settings', {
-      memoryEnabled: nextEnabled,
-    })
-    if (Number(res?.code || 200) !== 200) {
-      throw new Error(String(res?.message || '设置记忆开关失败'))
-    }
-    applyMemorySettings(res)
-    ElMessage.success(memoryEnabled.value ? '已开启上下文记忆' : '已关闭上下文记忆')
-  }
-  catch (error) {
-    await loadMemorySettings()
-    ElMessage.error(extractResponseMessage(error) || '设置记忆开关失败')
-  }
-  finally {
-    memorySubmitting.value = false
-  }
-}
-
-function handleMemoryToggleFromInput() {
-  if (memoryToggleDisabled.value) {
-    ElMessage.warning(memoryToggleDisabledTip.value)
-    return
-  }
-  void handleMemorySwitchChange(!memoryEnabled.value)
-}
-
-function resetConversationMessages(conversation: IChatConversation) {
-  conversation.messages = []
-  conversation.lastUpdate = Date.now()
-  conversation.sync = PersistStatus.SUCCESS
-}
-
-function isConversationBusy(): boolean {
-  if (pageOptions.sendState === 'sending_until_accepted') {
-    return true
-  }
-  return pageOptions.status === IChatItemStatus.WAITING
-    || pageOptions.status === IChatItemStatus.GENERATING
-    || pageOptions.status === IChatItemStatus.TOOL_CALLING
-    || pageOptions.status === IChatItemStatus.TOOL_RESULT
-}
-
-async function handleClearCurrentMemory() {
-  if (!memoryPolicy.allowUserClear || memorySubmitting.value) {
-    return
-  }
-  if (isConversationBusy()) {
-    ElMessage.warning('当前会话仍在执行中，请稍后再清空记忆')
-    return
-  }
-
-  const chatId = String(pageOptions.conversation?.id || '').trim()
-  if (!chatId) {
-    ElMessage.warning('当前会话不可用')
-    return
-  }
-
-  await ElMessageBox.confirm(
-    '将清空当前会话的上下文记忆（消息上下文与运行态记忆），是否继续？',
-    '清空当前记忆',
-    {
-      type: 'warning',
-      confirmButtonText: '确认清空',
-      cancelButtonText: '取消',
-    },
-  )
-
-  memorySubmitting.value = true
-  try {
-    const res: any = await endHttp.post('v1/chat/memory/clear', {
-      scope: 'session',
-      chatId,
-    })
-    if (Number(res?.code || 200) !== 200) {
-      throw new Error(String(res?.message || '清空当前会话记忆失败'))
-    }
-
-    resetConversationMessages(pageOptions.conversation)
-    pageOptions.status = IChatItemStatus.AVAILABLE
-    pageOptions.sendState = 'idle'
-    pageOptions.share.enable = false
-    pageOptions.share.selected = []
-    chatRef.value?.handleBackToBottom(false)
-
-    ElMessage.success('当前会话记忆已清空')
-  }
-  catch (error: any) {
-    if (error === 'cancel' || error === 'close') {
-      return
-    }
-    ElMessage.error(extractResponseMessage(error) || '清空当前会话记忆失败')
-  }
-  finally {
-    memorySubmitting.value = false
-  }
-}
-
-async function handleClearAllMemory() {
-  if (!memoryPolicy.allowUserClear || memorySubmitting.value) {
-    return
-  }
-  if (isConversationBusy()) {
-    ElMessage.warning('会话仍在执行中，请稍后再清空全部记忆')
-    return
-  }
-
-  await ElMessageBox.confirm(
-    '将清空全部会话的上下文记忆，此操作不可撤销，是否继续？',
-    '清空全部记忆',
-    {
-      type: 'warning',
-      confirmButtonText: '确认清空',
-      cancelButtonText: '取消',
-    },
-  )
-
-  memorySubmitting.value = true
-  try {
-    const res: any = await endHttp.post('v1/chat/memory/clear', {
-      scope: 'all',
-    })
-    if (Number(res?.code || 200) !== 200) {
-      throw new Error(String(res?.message || '清空全部会话记忆失败'))
-    }
-
-    $historyManager.options.list.forEach((conversation: IChatConversation) => {
-      resetConversationMessages(conversation)
-    })
-    resetConversationMessages(pageOptions.conversation)
-    pageOptions.status = IChatItemStatus.AVAILABLE
-    pageOptions.sendState = 'idle'
-    pageOptions.share.enable = false
-    pageOptions.share.selected = []
-    chatRef.value?.handleBackToBottom(false)
-
-    const clearedCount = Number(res?.data?.clearedCount || 0)
-    ElMessage.success(clearedCount > 0 ? `已清空 ${clearedCount} 个会话记忆` : '已清空全部会话记忆')
-  }
-  catch (error: any) {
-    if (error === 'cancel' || error === 'close') {
-      return
-    }
-    ElMessage.error(extractResponseMessage(error) || '清空全部会话记忆失败')
-  }
-  finally {
-    memorySubmitting.value = false
-  }
-}
+const {
+  memoryEnabled,
+  loadMemorySettings,
+} = usePilotMemorySettings()
 
 const expand = computed({
   set(val: boolean) {
@@ -319,7 +92,7 @@ async function handleDelete(id: string) {
   }
 
   if (id === pageOptions.select)
-    await createConversation({ skipModeSelection: true })
+    await createConversation()
 
   $historyManager.options.list.delete(id)
 }
@@ -386,52 +159,15 @@ watch(
   { deep: true },
 )
 
-interface CreateConversationOptions {
-  skipModeSelection?: boolean
-}
-
-async function resolvePilotModeSelection(skipModeSelection = false): Promise<boolean | null> {
-  if (skipModeSelection) {
-    return false
-  }
-  try {
-    await ElMessageBox.confirm(
-      '启用 Pilot 模式后，该会话将优先走 Graph 编排；当 Graph 不可用时会自动回退到 DeepAgent。是否启用？',
-      '新建会话模式',
-      {
-        type: 'info',
-        distinguishCancelAndClose: true,
-        confirmButtonText: '启用 Pilot 模式',
-        cancelButtonText: '普通模式',
-      },
-    )
-    return true
-  }
-  catch (error) {
-    if (error === 'cancel') {
-      return false
-    }
-    if (error === 'close') {
-      return null
-    }
-    throw error
-  }
-}
-
-async function createConversation(options: CreateConversationOptions = {}) {
-  const selectedPilotMode = await resolvePilotModeSelection(options.skipModeSelection === true)
-  if (selectedPilotMode === null) {
-    return false
-  }
-
+async function createConversation() {
   if (!pageOptions.conversation.messages.length) {
-    pageOptions.conversation.pilotMode = selectedPilotMode
+    pageOptions.conversation.pilotMode = false
     pageOptions.conversation.lastUpdate = Date.now()
     return true
   }
 
   const conversation = $completion.emptyHistory()
-  conversation.pilotMode = selectedPilotMode
+  conversation.pilotMode = false
 
   $historyManager.options.list.set(conversation.id, conversation)
 
@@ -588,7 +324,9 @@ async function handleSend(query: IInnerItemMeta[], meta: IChatInnerItemMeta) {
   const resolvedMeta: IChatInnerItemMeta = {
     ...meta,
     memoryEnabled: memoryEnabled.value,
+    pilotMode: meta.pilotMode === true || conversation.pilotMode === true,
   }
+  conversation.pilotMode = resolvedMeta.pilotMode === true
 
   if (!$historyManager.options.list.get(conversation.id))
     $historyManager.options.list.set(conversation.id, conversation)
@@ -751,38 +489,6 @@ function handleLogin() {
 
           <ModelSelector v-if="mount" v-model="globalConfigModel" />
 
-          <el-tag class="pilot-mode-tag" size="small" effect="plain" :type="pageOptions.conversation.pilotMode ? 'success' : 'info'">
-            {{ pageOptions.conversation.pilotMode ? 'Pilot 模式' : '普通模式' }}
-          </el-tag>
-
-          <div class="memory-tools">
-            <el-switch
-              :model-value="memoryEnabled"
-              :disabled="memoryLoading || memorySubmitting || !memoryPolicy.allowUserDisable"
-              size="small"
-              inline-prompt
-              active-text="记忆开"
-              inactive-text="记忆关"
-              @change="handleMemorySwitchChange"
-            />
-            <el-button
-              text
-              size="small"
-              :disabled="memorySubmitting || !memoryPolicy.allowUserClear"
-              @click="handleClearCurrentMemory"
-            >
-              清空当前
-            </el-button>
-            <el-button
-              text
-              size="small"
-              :disabled="memorySubmitting || !memoryPolicy.allowUserClear"
-              @click="handleClearAllMemory"
-            >
-              清空全部
-            </el-button>
-          </div>
-
           <div v-if="userStore.isLogin" style="font-size: 16px" i-carbon:edit @click="handleCreate" />
           <div v-else class="login-tag" @click="handleLogin">
             登录
@@ -795,11 +501,9 @@ function handleLogin() {
           <ThInput
             :template-enable="!pageOptions.conversation.messages.length" :status="pageOptions.status"
             :send-state="pageOptions.sendState"
-            :memory-enabled="memoryEnabled"
-            :memory-toggle-disabled="memoryToggleDisabled"
-            :memory-disabled-tip="memoryToggleDisabledTip"
+            :pilot-mode-default="pageOptions.conversation.pilotMode === true"
             :hide="pageOptions.share.enable" :center="pageOptions.conversation.messages?.length < 1" :tip="tip"
-            @send="handleSend" @select-template="handleSelectTemplate" @toggle-memory="handleMemoryToggleFromInput"
+            @send="handleSend" @select-template="handleSelectTemplate"
           />
         </template>
       </EmptyGuide>
@@ -855,17 +559,6 @@ function handleLogin() {
 
   border-radius: 12px;
   background-color: var(--el-bg-color-page);
-}
-
-.memory-tools {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  margin-left: 0.5rem;
-}
-
-.pilot-mode-tag {
-  margin-left: 0.5rem;
 }
 
 .ViewModeBar {

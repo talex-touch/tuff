@@ -8,12 +8,6 @@ interface ThInputCapabilities {
   file: boolean
 }
 
-interface ThInputMemoryState {
-  enabled: boolean
-  disabled: boolean
-  disabledTip: string
-}
-
 interface InputOption {
   icon: string
   type: 'button' | 'checkbox' | 'slider'
@@ -30,13 +24,13 @@ const props = defineProps<{
   hide: boolean
   modelValue: IChatInnerItemMeta
   capabilities?: Partial<ThInputCapabilities>
-  memory?: Partial<ThInputMemoryState>
+  pilotMode?: boolean
 }>()
 
 const emits = defineEmits<{
   (name: 'update:modelValue', data: IChatInnerItemMeta): void
   (event: 'file'): void
-  (event: 'toggleMemory'): void
+  (event: 'togglePilotMode'): void
 }>()
 
 const hover = ref(false)
@@ -48,11 +42,6 @@ const normalizedCapabilities = computed<ThInputCapabilities>(() => ({
   thinking: props.capabilities?.thinking !== false,
   websearch: props.capabilities?.websearch !== false,
   file: props.capabilities?.file !== false,
-}))
-const normalizedMemory = computed<ThInputMemoryState>(() => ({
-  enabled: props.memory?.enabled !== false,
-  disabled: props.memory?.disabled === true,
-  disabledTip: props.memory?.disabledTip || '当前策略不允许切换记忆系统。',
 }))
 
 const { isSupported, isActive, request, release } = useWakeLock()
@@ -143,16 +132,14 @@ const options = computed<InputOption[]>(() => {
       disabledTip: '当前模型组未开启 thinking 能力。',
     },
     {
-      icon: 'i-carbon-data-base',
+      icon: 'i-carbon-machine-learning-model',
       type: 'checkbox',
-      label: '记忆系统',
-      info: '开启后将为当前会话保留上下文记忆，提升连续对话体验。',
+      label: 'Pilot 模式',
+      info: '开启后优先走 Pilot 编排链路（Graph 优先），用于复杂任务协同。',
       onclick: () => {
-        emits('toggleMemory')
+        emits('togglePilotMode')
       },
-      checked: () => normalizedMemory.value.enabled,
-      disabled: () => normalizedMemory.value.disabled,
-      disabledTip: normalizedMemory.value.disabledTip,
+      checked: () => props.pilotMode === true,
     },
     isSupported.value
       ? {

@@ -17,6 +17,7 @@ export interface PilotRuntimeModelOption {
   thinkingDefaultEnabled: boolean
   allowWebsearch: boolean
   allowImageAnalysis: boolean
+  allowImageGeneration: boolean
   allowFileAnalysis: boolean
   source: string
 }
@@ -42,6 +43,7 @@ interface RuntimeModelsResponse {
     thinkingDefaultEnabled?: boolean
     allowWebsearch?: boolean
     allowImageAnalysis?: boolean
+    allowImageGeneration?: boolean
     allowFileAnalysis?: boolean
     source?: string
   }>
@@ -49,85 +51,19 @@ interface RuntimeModelsResponse {
   defaultRouteComboId?: string
 }
 
-const FALLBACK_MODELS: PilotRuntimeModelOption[] = [
-  {
-    key: 'quota-auto',
-    name: 'Quota Auto',
-    icon: { type: 'class', value: 'i-carbon-flow-data' },
-    thinkingSupported: true,
-    thinkingDefaultEnabled: true,
-    allowWebsearch: true,
-    allowImageAnalysis: true,
-    allowFileAnalysis: true,
-    source: 'system',
-  },
-  {
-    key: 'gpt-5.2',
-    name: 'GPT 5.2',
-    icon: { type: 'class', value: 'i-carbon-logo-openai' },
-    thinkingSupported: true,
-    thinkingDefaultEnabled: true,
-    allowWebsearch: true,
-    allowImageAnalysis: true,
-    allowFileAnalysis: true,
-    source: 'system',
-  },
-  {
-    key: 'gpt-5.4',
-    name: 'GPT 5.4',
-    icon: { type: 'class', value: 'i-carbon-logo-openai' },
-    thinkingSupported: true,
-    thinkingDefaultEnabled: true,
-    allowWebsearch: true,
-    allowImageAnalysis: true,
-    allowFileAnalysis: true,
-    source: 'system',
-  },
-  {
-    key: 'gemini-2.5-pro',
-    name: 'Gemini 2.5 Pro',
-    icon: { type: 'class', value: 'i-carbon-ai-status' },
-    thinkingSupported: true,
-    thinkingDefaultEnabled: true,
-    allowWebsearch: true,
-    allowImageAnalysis: true,
-    allowFileAnalysis: true,
-    source: 'system',
-  },
-  {
-    key: 'gemini-3-pro',
-    name: 'Gemini 3 Pro',
-    icon: { type: 'class', value: 'i-carbon-ai-status-complete' },
-    thinkingSupported: true,
-    thinkingDefaultEnabled: true,
-    allowWebsearch: true,
-    allowImageAnalysis: true,
-    allowFileAnalysis: true,
-    source: 'system',
-  },
-  {
-    key: 'claudecode-opus-4.6',
-    name: 'ClaudeCode Opus 4.6',
-    icon: { type: 'class', value: 'i-carbon-machine-learning-model' },
-    thinkingSupported: true,
-    thinkingDefaultEnabled: true,
-    allowWebsearch: true,
-    allowImageAnalysis: true,
-    allowFileAnalysis: true,
-    source: 'system',
-  },
-  {
-    key: 'claudecode-sonnet-4.6',
-    name: 'ClaudeCode Sonnet 4.6',
-    icon: { type: 'class', value: 'i-carbon-machine-learning-model' },
-    thinkingSupported: true,
-    thinkingDefaultEnabled: true,
-    allowWebsearch: true,
-    allowImageAnalysis: true,
-    allowFileAnalysis: true,
-    source: 'system',
-  },
-]
+const AUTO_MODEL: PilotRuntimeModelOption = {
+  key: 'quota-auto',
+  name: 'Auto',
+  description: '根据路由策略自动选择模型',
+  icon: { type: 'class', value: 'i-carbon-flow-data' },
+  thinkingSupported: true,
+  thinkingDefaultEnabled: true,
+  allowWebsearch: true,
+  allowImageAnalysis: true,
+  allowImageGeneration: true,
+  allowFileAnalysis: true,
+  source: 'auto',
+}
 
 let runtimeModelsInflight: Promise<void> | null = null
 
@@ -176,6 +112,7 @@ function normalizeModelList(value: unknown): PilotRuntimeModelOption[] {
     if (!id) {
       continue
     }
+    const allowFileAnalysis = toBoolean(row.allowFileAnalysis, toBoolean(row.allowImageAnalysis, true))
     list.push({
       key: id,
       name: normalizeText(row.name) || id,
@@ -184,13 +121,36 @@ function normalizeModelList(value: unknown): PilotRuntimeModelOption[] {
       thinkingSupported: toBoolean(row.thinkingSupported, true),
       thinkingDefaultEnabled: toBoolean(row.thinkingDefaultEnabled, true),
       allowWebsearch: toBoolean(row.allowWebsearch, true),
-      allowImageAnalysis: toBoolean(row.allowImageAnalysis, true),
-      allowFileAnalysis: toBoolean(row.allowFileAnalysis, true),
+      // 兼容历史字段：运行时对外统一为“分析文件”能力。
+      allowImageAnalysis: allowFileAnalysis,
+      allowImageGeneration: toBoolean(row.allowImageGeneration, true),
+      allowFileAnalysis,
       source: normalizeText(row.source) || 'runtime',
     })
   }
 
   return Array.from(new Map(list.map(item => [item.key, item])).values())
+}
+
+function mergeWithAutoModel(runtimeModels: PilotRuntimeModelOption[]): PilotRuntimeModelOption[] {
+  const mergedMap = new Map<string, PilotRuntimeModelOption>()
+  mergedMap.set(AUTO_MODEL.key, { ...AUTO_MODEL })
+
+  for (const item of runtimeModels) {
+    if (item.key === AUTO_MODEL.key) {
+      mergedMap.set(AUTO_MODEL.key, {
+        ...AUTO_MODEL,
+        ...item,
+        name: normalizeText(item.name) || AUTO_MODEL.name,
+        description: normalizeText(item.description) || AUTO_MODEL.description,
+        source: normalizeText(item.source) || AUTO_MODEL.source,
+      })
+      continue
+    }
+    mergedMap.set(item.key, item)
+  }
+
+  return Array.from(mergedMap.values())
 }
 
 function ensureDefaultModelId(models: PilotRuntimeModelOption[], preferred: string): string {
@@ -216,16 +176,14 @@ async function loadRuntimeModels(state: Ref<RuntimeModelsState>, force: boolean)
     try {
       const payload = await $fetch<RuntimeModelsResponse>('/api/runtime/models')
       const runtimeModels = normalizeModelList(payload?.models)
-      const models = runtimeModels.length > 0 ? runtimeModels : [...FALLBACK_MODELS]
+      const models = mergeWithAutoModel(runtimeModels)
       state.value.models = models
       state.value.defaultModelId = ensureDefaultModelId(models, normalizeText(payload?.defaultModelId))
       state.value.defaultRouteComboId = normalizeText(payload?.defaultRouteComboId) || 'default-auto'
       state.value.loaded = true
     }
     catch {
-      if (state.value.models.length <= 0) {
-        state.value.models = [...FALLBACK_MODELS]
-      }
+      state.value.models = mergeWithAutoModel([])
       state.value.defaultModelId = ensureDefaultModelId(state.value.models, state.value.defaultModelId)
       state.value.defaultRouteComboId = state.value.defaultRouteComboId || 'default-auto'
       state.value.loaded = true
@@ -274,10 +232,10 @@ export function usePilotRuntimeModels() {
     loading: false,
     defaultModelId: 'quota-auto',
     defaultRouteComboId: 'default-auto',
-    models: [...FALLBACK_MODELS],
+    models: [{ ...AUTO_MODEL }],
   }))
 
-  const models = computed(() => state.value.models.length > 0 ? state.value.models : FALLBACK_MODELS)
+  const models = computed(() => state.value.models.length > 0 ? state.value.models : [{ ...AUTO_MODEL }])
   const modelMap = computed(() => new Map(models.value.map(item => [item.key, item])))
   const defaultModelId = computed(() => ensureDefaultModelId(models.value, state.value.defaultModelId))
 
