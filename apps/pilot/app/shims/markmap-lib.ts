@@ -1,14 +1,5 @@
-export class Transformer {
-  getAssets() {
-    return {
-      scripts: [],
-      styles: [],
-    }
-  }
+import * as markmapLibModule from 'markmap-lib/no-plugins'
 
-  transform(_content: unknown) {
-    return {
-      root: {},
-    }
-  }
-}
+export const Transformer = markmapLibModule.Transformer
+
+export default markmapLibModule

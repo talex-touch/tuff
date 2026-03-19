@@ -9,7 +9,7 @@ definePageMeta({
   },
 })
 
-type PilotChannelAdapter = 'legacy' | 'openai'
+type PilotChannelAdapter = 'openai'
 type PilotChannelTransport = 'responses' | 'chat.completions'
 type PilotBuiltinTool = 'write_todos' | 'read_file' | 'write_file' | 'edit_file' | 'ls' | 'websearch'
 
@@ -105,14 +105,11 @@ function toPriority(value: unknown): number {
   return Math.min(Math.max(Math.floor(parsed), 1), 9999)
 }
 
-function toAdapter(value: unknown): PilotChannelAdapter {
-  return normalizeText(value).toLowerCase() === 'openai' ? 'openai' : 'legacy'
+function toAdapter(_value: unknown): PilotChannelAdapter {
+  return 'openai'
 }
 
-function toTransport(value: unknown, adapter: PilotChannelAdapter): PilotChannelTransport {
-  if (adapter === 'legacy') {
-    return 'responses'
-  }
+function toTransport(value: unknown): PilotChannelTransport {
   return normalizeText(value).toLowerCase() === 'chat.completions' ? 'chat.completions' : 'responses'
 }
 
@@ -177,7 +174,7 @@ function createEmptyChannel(): ChannelFormItem {
     model: firstModel.id,
     defaultModelId: firstModel.id,
     models: [firstModel],
-    adapter: 'legacy',
+    adapter: 'openai',
     transport: 'responses',
     timeoutMs: 90_000,
     builtinTools: ['write_todos'],
@@ -202,7 +199,7 @@ function normalizeChannelFormItem(raw: Partial<ChannelFormItem>): ChannelFormIte
     defaultModelId: normalizeText(raw.defaultModelId) || normalizeText(raw.model),
     models,
     adapter,
-    transport: toTransport(raw.transport, adapter),
+    transport: toTransport(raw.transport),
     timeoutMs: toTimeoutMs(raw.timeoutMs),
     builtinTools: normalizeTools(raw.builtinTools),
     enabled: raw.enabled !== false,
@@ -381,11 +378,6 @@ function validateDialogForm(): ChannelFormItem | null {
     return null
   }
   return next
-}
-
-function onAdapterChange() {
-  dialog.form.adapter = toAdapter(dialog.form.adapter)
-  dialog.form.transport = toTransport(dialog.form.transport, dialog.form.adapter)
 }
 
 async function submitDialog() {
@@ -661,15 +653,12 @@ onMounted(() => {
       <el-row :gutter="12">
         <el-col :span="6">
           <el-form-item label="适配器">
-            <el-select v-model="dialog.form.adapter" style="width: 100%" @change="onAdapterChange">
-              <el-option label="legacy" value="legacy" />
-              <el-option label="openai" value="openai" />
-            </el-select>
+            <el-input v-model="dialog.form.adapter" disabled />
           </el-form-item>
         </el-col>
         <el-col :span="6">
           <el-form-item label="传输协议">
-            <el-select v-model="dialog.form.transport" style="width: 100%" :disabled="dialog.form.adapter === 'legacy'">
+            <el-select v-model="dialog.form.transport" style="width: 100%">
               <el-option label="responses" value="responses" />
               <el-option label="chat.completions" value="chat.completions" />
             </el-select>

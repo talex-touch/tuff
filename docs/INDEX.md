@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-03-17  
+> 更新时间：2026-03-19  
 > 本页仅保留入口与高价值快照；历史细节以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主要入口
@@ -14,7 +14,7 @@
 - `docs/plan-prd/02-architecture/UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md` - Legacy/兼容/结构治理统一实施 PRD（单一蓝图）
 - `docs/plan-prd/01-project/CHANGES.md` - 全历史变更记录（唯一历史源）
 
-## 文档盘点快照（2026-03-17）
+## 文档盘点快照（2026-03-19）
 
 - 全仓 Markdown：`396`；其中 `docs`：`146`。
 - `docs` 内部分布：`plan-prd 110`、`engineering 20`、其他专题入口 `16`。
@@ -34,6 +34,8 @@
 - **Pilot Chat/Turn 新协议**：`/api/v1/chat/sessions/:sessionId/{turns,stream,messages}` 已落地（会话级串行队列、SSE 尾段 title、运行态回传）。
 - **Pilot 标题自动生成修复**：首轮 turn 的 title 阶段改为直接基于 turn payload 生成，并在生成后同步回写 runtime + quota history，避免历史列表长期显示“新的聊天”。
 - **Pilot 合并升级 V2**：`/` 作为统一入口，`/pilot` 兼容跳转；已接入渠道多模型发现、模型目录、路由组合、`Quota Auto` 速度优先自动路由与评比指标采集（TTFT/总耗时/成功率）。
+- **Pilot 旧 UI 会话卡片化硬切**：保留 `ThChat/ThInput/History`，运行态统一改为会话内 `pilot_run_event_card` 推送（`intent/routing/memory/websearch/thinking`），不再使用全局运行态条。
+- **Pilot 流式协议收敛**：旧 UI 执行器统一消费 `/api/chat/sessions/:sessionId/stream` 新事件族；legacy 事件（`turn.* / status_updated / completion / verbose / session_bound`）仅忽略告警。
 - **Pilot 附件交互修复**：聊天生成中不再禁用输入区粘贴与附件选择；支持粘贴图片/文件直传，并显式放开图片等常见文件类型选择。
 - **Pilot 附件慢链路治理（URL/ID-first）**：入模策略统一为 `id > https url > base64`，并新增附件能力探测接口 `GET /api/chat/attachments/capability`。
 - **Pilot 后台设置入口升级**：管理主入口已迁移到 `/admin/*`，`/cms/*` 仅保留 Legacy 跳转层。

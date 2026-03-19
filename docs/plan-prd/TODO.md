@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-03-17
+> 更新时间: 2026-03-19
 
 ---
 
@@ -119,6 +119,40 @@
 - [x] 前端 gptview 切换为运行时模型目录驱动，支持 `internet/thinking` 开关透传。
 - [x] 兼容入口收口：`/pilot` 保留兼容跳转到 `/`。
 - [x] 接入真实 LangGraph Local Server 运行图：`createPilotRuntime` 已支持 `langgraph-local` 主引擎执行，启动失败/空流自动回退 deepagent。
+
+### H. Pilot 工具调用提示 + 数据源抓取 V1（2026-03-18）
+
+- [x] 新增 `PilotToolGateway` 与 `websearch` connector 三段接口（`search/fetch/extract`），形成统一工具执行入口。
+- [x] 新增 `datasource.websearch` 配置并并入 Admin settings 聚合接口。
+- [x] 新增 `tool-approvals` 审批票据存储与 `GET/POST` API，支持 `pending/approved/rejected` 生命周期。
+- [x] `executor` 输出标准 `run.audit` 工具事件，已移除 `status_updated(calling/result)` 工具兼容映射。
+- [x] `v1 chat stream` 透传 `run.audit/status_updated`，高风险审批命中后进入阻塞等待（`turn.approval_required`）。
+- [x] 前端统一解析 `run.audit` 工具事件（`status_updated` 仅保留通用流状态），新增 Tool 卡片视图（含来源链接与审批上下文）。
+- [x] Intent 混合识别（`/image|/img` 显式命令 + 规则 + nano 分类兜底）落地，默认 nano 未配置时跟随主模型。
+- [x] 路由策略扩展：`intentNanoModelId/intentRouteComboId/imageGenerationModelId/imageRouteComboId` 与 `allowImageGeneration` 已接入配置与运行时模型输出。
+- [x] 新增 `image.generate` 工具并接入新旧两条会话链路短路执行（命中图像意图时直接返回 Markdown 图片 + Tool 卡片审计事件）。
+- [x] 增加“审批通过后自动续跑”前端交互：命中 `turn.approval_required` 后自动轮询审批票据，`approved` 时复用原 `request_id` 自动续跑，`rejected/timeout` 明确失败收口。
+- [x] Legacy Phase 2（工具提示链路）收口：`$completion` 默认关闭 legacy `completion/verbose/status_updated(tool)` 兼容分支，统一以 `turn.* + run.audit` 为主链路；保留环境开关回滚。
+- [x] 增补回归测试：覆盖 `request_id` 复用分支与审批 `approved/rejected/timeout` 状态映射，确保自动续跑与失败收口可持续回归。
+
+### I. Pilot 严格模式 + 可感知差异 + 提示词升级（2026-03-19）
+
+- [x] `pilotMode=true` 时禁降级：`executor` 与 `chat stream` 均在 LangGraph 不可用场景返回 `PILOT_STRICT_MODE_UNAVAILABLE`。
+- [x] `createPilotRuntime` 支持 `strictPilotMode/allowDeepAgentFallback`，严格模式下禁用 fallback adapter。
+- [x] 顶部 `PILOT` 可视化落地：主聊天 header + 状态栏均可识别 Pilot 模式。
+- [x] 新增 ThisAi Prompt Builder：运行时系统提示词统一从 builder 注入 `name/ip/ua` 与安全约束。
+- [x] websearch 增强：保留“意图优先 + 启发式兜底”，并在 datasource 未配置时回退 Responses 内置检索。
+- [x] 审计可观测性增强：补齐 `memory.context` / `websearch.decision` / connector 来源，避免“命中无感”。
+- [ ] 回归补充：补齐 `executor/stream` 端到端 strict 错误码回归用例（含 HTTP status 与 SSE payload 断言）。
+- [ ] 线上观测：新增 `PILOT_STRICT_MODE_UNAVAILABLE` 告警阈值和 7 天趋势看板。
+
+### J. Pilot 旧 UI 会话卡片化硬切（2026-03-19）
+
+- [x] 旧 UI 执行器仅走 `POST /api/chat/sessions/:sessionId/stream`，不再依赖 `v1 turns/stream`。
+- [x] 运行态事件统一卡片化：`intent/routing/memory/websearch/thinking` 全部落入会话消息流并持久化回放。
+- [x] `thinking.delta -> thinking.final` 采用同一卡片增量拼接，完整文本可视化展示。
+- [x] legacy 事件 `turn.* / status_updated / completion / verbose / session_bound` 不再驱动 UI 状态，仅告警忽略。
+- [x] 管理端渠道 `adapter` 固定 `openai`，移除 `legacy` 可编辑入口。
 
 ---
 
