@@ -13,6 +13,14 @@
 
 ## 2026-03-19
 
+### feat(pilot-chat): 记忆开关迁移个人设置 + 模型列表收敛后端配置 + Pilot 入口并入 `+`
+
+- 记忆系统开关从主聊天输入面板迁移到「个人设置 -> 外观」，支持一键开关；关闭时自动执行 `memory/clear(scope=all)` 并同步写入 `memory/settings`。
+- 主聊天输入区 `ThInputPlus` 移除“记忆系统”，新增“Pilot 模式”开关，作为会话与发送 meta 的统一入口（放入 `+` 面板）。
+- 运行时模型前端列表改为“仅后端配置可见 + 默认 Auto 项”：
+  - 去除前端 GPT/Gemini/Claude 硬编码 fallback；
+  - API 失败或空配置时仅保留 `Auto(quota-auto)`，避免展示未在后端配置的模型。
+
 ### refactor(pilot-input): 合并“分析图片/分析文件”为单一“分析文件”入口
 
 - 输入区 `ThInputPlus` 移除独立“分析图片”入口，统一为一个“分析文件”按钮（支持图片 + 文档）。
@@ -24,6 +32,13 @@
 - `ThInputPlus` 去除固定 `320px` 高度，改为按内容自适应，避免在“分析文件”合并后出现大面积空白。
 - 在输入面板新增“记忆系统”开关项，复用现有 `v1/chat/memory/settings` 能力切换当前会话记忆状态。
 - `ThInput` / `pages/index.vue` 打通记忆开关状态与禁用提示，策略或提交中状态下保持只读并给出明确提示。
+
+### fix(pilot-chat): turns 失败响应脱敏（隐藏连接端点与本地路径）
+
+- `POST /api/v1/chat/sessions/:sessionId/turns` 增加统一异常兜底：数据库/网络异常不再把底层错误对象直接冒泡到前端。
+- 新增服务端错误脱敏工具（`server/utils/pilot-http.ts`）：对 `IP:PORT`、域名端口、绝对本机路径执行遮罩处理。
+- 对瞬时连接类错误（如 `ETIMEDOUT/ECONNREFUSED`）返回统一可读文案与稳定状态码（`503`），降低前端日志泄露内部拓扑风险。
+- 前端 `completion` 错误文案解析增加二次脱敏，确保即使上游异常信息带敏感连接串，也不会直接展示给用户。
 
 ## 2026-03-18
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { currentWallpaper, setWallpaper, theme, viewTransition, wallpapers } from '~/composables/theme/colors'
+import { usePilotMemorySettings } from '~/composables/usePilotMemorySettings'
 
 async function toggleTheme(event: MouseEvent, theme: 'auto' | 'light' | 'dark') {
   viewTransition(event, theme)
@@ -69,6 +70,35 @@ const options = reactive({
   loading: false,
   visible: false,
 })
+
+const {
+  memoryEnabled,
+  memoryLoading,
+  memorySubmitting,
+  memoryToggleDisabled,
+  memoryToggleDisabledTip,
+  loadMemorySettings,
+  setMemoryEnabled,
+} = usePilotMemorySettings()
+
+const memoryDesc = computed(() => (
+  memoryToggleDisabled.value
+    ? memoryToggleDisabledTip.value
+    : '关闭后会自动清空已存储记忆。'
+))
+
+const memorySwitchLoading = computed(() => memoryLoading.value || memorySubmitting.value)
+
+async function handleMemorySwitchChange(nextValue: string | number | boolean) {
+  const enabled = Boolean(nextValue)
+  await setMemoryEnabled(enabled, {
+    purgeOnDisable: !enabled,
+  })
+}
+
+onMounted(() => {
+  void loadMemorySettings()
+})
 </script>
 
 <template>
@@ -86,6 +116,14 @@ const options = reactive({
     <div class="Appearance-Base">
       <TemplateLineForm title="沉浸模式" desc="当启用对话时自动打开沉浸模式，更专注">
         <el-switch v-model="figurations.immersive.value" @click="figurations.immersive.click" />
+      </TemplateLineForm>
+      <TemplateLineForm title="记忆系统" :desc="memoryDesc">
+        <el-switch
+          :model-value="memoryEnabled"
+          :loading="memorySwitchLoading"
+          :disabled="memoryToggleDisabled"
+          @change="handleMemorySwitchChange"
+        />
       </TemplateLineForm>
       <TemplateLineForm title="光晕动画" desc="光晕动画让界面更流畅，但是会增加耗电量">
         <el-switch v-model="figurations.animation.value" @click="figurations.animation.click" />
