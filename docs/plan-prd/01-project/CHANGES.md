@@ -13,6 +13,49 @@
 
 ## 2026-03-19
 
+### feat(pilot-strict): Pilot 严格模式禁降级 + 顶部 PILOT 标识 + 提示词升级
+
+- `executor` 与 `chat stream` 双链路新增严格模式拦截：`pilotMode=true` 且 LangGraph 不可用时直接返回结构化错误 `PILOT_STRICT_MODE_UNAVAILABLE`，不再回退 `deepagent`。
+- `createPilotRuntime` 新增严格控制参数（`strictPilotMode/allowDeepAgentFallback`），严格模式下关闭 `PilotFallbackEngineAdapter`，LangGraph 运行失败直接透传失败。
+- 新增 `pilot-system-prompt` Builder，运行时系统提示词升级为 ThisAi 模板，并注入 `name/ip/ua`（不可得时安全降级）。
+- `index.vue` 顶部 header 与状态栏新增显式 `PILOT` 模式标签，普通模式显示“普通模式”，提升模式可感知差异。
+- `executor/stream` 统一补齐记忆与联网审计：新增 `memory.context`、`websearch.decision`（含触发/未触发原因）等审计事件，并将 `memoryEnabled`、历史条数与 websearch connector 来源透传到 runtime metadata / routing metrics。
+
+### feat(pilot-websearch): datasource 缺失时新增 Responses 内置检索 fallback
+
+- `pilot-tool-gateway` 新增 websearch 后备路径：当 datasource gateway 未配置时，优先使用 OpenAI Responses 内置 websearch 工具执行检索。
+- 工具审计 payload 新增 `connectorSource/connectorReason`，可区分 `gateway`、`responses_builtin` 与不可用原因（不再静默无感）。
+- websearch 工具非审批类失败改为返回 `null + tool.call.failed` 审计，不中断主对话链路；审批 required/rejected 仍保持阻塞失败。
+- 新增单测覆盖：strict runtime 行为、prompt builder 插值、websearch fallback 与失败可观测分支。
+
+### feat(pilot-ui): 旧 UI 硬切换到会话级事件卡片流（无全局运行态）
+
+- 保留 `ThChat/ThInput/History` 旧界面骨架，移除运行态全局条作为状态主承载；运行态改为会话消息内卡片长期留存。
+- `completion/index.ts` 事件消费改为新事件族单通道：统一解析 `event || type`，主流程仅消费 `intent.* / routing.selected / memory.context / websearch.* / thinking.* / assistant.* / run.audit / error / done`。
+- 新增 `pilot_run_event_card` 渲染组件并接入 `ChatItem`；支持 `intent/routing/memory/websearch/thinking` 卡片 upsert、流式增量（thinking）与会话隔离（`sessionId+turnId` 作用域）。
+- Legacy 事件（`turn.* / status_updated / completion / verbose / session_bound`）前端不再驱动状态，仅做一次性告警忽略。
+- 管理端渠道配置硬切：`adapter` 固定 `openai`，不再提供 `legacy` 选项；`transport` 仅保留 `responses/chat.completions`。
+
+### fix(pilot-markdown): 修复 Mermaid Mindmap 在 Milkdown 只读渲染链路失效
+
+- 根因修复：`mermaid mindmap` 动态依赖 `cytoscape-cose-bilkent` 时触发 CJS/ESM 默认导出不兼容，导致预览渲染失败。
+- 新增前端构建 shim：`cytoscape-cose-bilkent`、`cytoscape-fcose` 统一导出稳定 `default`，并在 `nuxt.config.ts` 中接入 alias。
+- 保持 `MilkContent` 渲染交互不变，仅在 dev 环境补充 Mermaid 渲染失败错误码日志（如 `E_MERMAID_ESM_EXPORT`）便于定位。
+
+### refactor(pilot-markdown): 复用图渲染内核 + 代码头双层 Sticky
+
+- 新增 `article/renderers` 共享渲染内核：
+  - `mermaid-renderer`：统一初始化、渲染与错误码上报；
+  - `markmap-renderer`：统一 transform/mount/fit/reset/destroy 生命周期。
+- 编辑态 `EditorMermaid`、`EditorMindmap` 改为复用共享内核，保留原有工具栏与下载/复制交互。
+- 只读链路 `MilkContent` code block 改为复用同一内核，语言路由收敛：
+  - `mermaid` / `flowchart` -> Mermaid；
+  - `mindmap` -> Markmap。
+- `MilkContent` 新增可选接口（默认向后兼容）：
+  - `stickyCodeHeader?: boolean = true`
+  - `codeContentMaxHeight?: string = 'min(56vh, 680px)'`
+- 代码块结构升级为 `EditorCode-Chrome + HeaderHost + Content`，实现“页面滚动可见 + 块内滚动可见”的双层 sticky 体验。
+
 ### feat(pilot-chat): 记忆开关迁移个人设置 + 模型列表收敛后端配置 + Pilot 入口并入 `+`
 
 - 记忆系统开关从主聊天输入面板迁移到「个人设置 -> 外观」，支持一键开关；关闭时自动执行 `memory/clear(scope=all)` 并同步写入 `memory/settings`。

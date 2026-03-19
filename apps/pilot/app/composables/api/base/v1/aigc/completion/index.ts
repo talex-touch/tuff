@@ -4,13 +4,11 @@ import type { IChatBody, IChatConversation, IChatInnerItem, IChatItem, ICompleti
 import { serializePilotExecutorMessages } from '@talex-touch/tuff-intelligence/pilot-conversation'
 import { endHttp } from '~/composables/api/axios'
 import { IChatItemStatus, IChatRole, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
-import { mapStrStatus } from './entity'
 import {
   buildApprovalMonitorFailureAuditPatch,
   buildRejectedApprovalAuditPatch,
   normalizeToolApprovalTicket,
   pollToolApprovalDecision,
-  resolveStreamRequestId,
 } from './flow'
 
 function parseJsonSafe<T>(value: string): T | null {
@@ -20,6 +18,24 @@ function parseJsonSafe<T>(value: string): T | null {
   catch {
     return null
   }
+}
+
+const SENSITIVE_ERROR_ENDPOINT_RE = /\b(?:(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}|localhost):\d{2,5}\b/g
+const SENSITIVE_ERROR_PATH_RE = /\/(?:Users|home|var|opt|private)\/[^\s)\],]+/g
+
+function sanitizeClientErrorText(value: unknown): string {
+  const raw = String(value || '').trim()
+  if (!raw) {
+    return ''
+  }
+  return raw
+    .replace(/connect\s+ETIMEDOUT\s+[^\s)]+/gi, 'connect ETIMEDOUT [REDACTED_ENDPOINT]')
+    .replace(/connect\s+ECONNREFUSED\s+[^\s)]+/gi, 'connect ECONNREFUSED [REDACTED_ENDPOINT]')
+    .replace(/connect\s+EHOSTUNREACH\s+[^\s)]+/gi, 'connect EHOSTUNREACH [REDACTED_ENDPOINT]')
+    .replace(/connect\s+ENETUNREACH\s+[^\s)]+/gi, 'connect ENETUNREACH [REDACTED_ENDPOINT]')
+    .replace(SENSITIVE_ERROR_ENDPOINT_RE, '[REDACTED_ENDPOINT]')
+    .replace(SENSITIVE_ERROR_PATH_RE, '[REDACTED_PATH]')
+    .trim()
 }
 
 function normalizeExecutorErrorMessage(error: unknown): string {
@@ -40,10 +56,10 @@ function normalizeExecutorErrorMessage(error: unknown): string {
   }
 
   if (typeof error === 'string')
-    return error
+    return sanitizeClientErrorText(error) || '请求失败，请稍后重试'
 
   if (error instanceof Error)
-    return error.message || '请求失败，请稍后重试'
+    return sanitizeClientErrorText(error.message) || '请求失败，请稍后重试'
 
   if (error && typeof error === 'object') {
     const payload = error as Record<string, any>
@@ -53,7 +69,7 @@ function normalizeExecutorErrorMessage(error: unknown): string {
       || payload.statusText
 
     if (typeof directMessage === 'string' && directMessage.trim())
-      return directMessage.trim()
+      return sanitizeClientErrorText(directMessage.trim()) || '请求失败，请稍后重试'
 
     const response = payload.response && typeof payload.response === 'object'
       ? payload.response as Record<string, any>
@@ -61,14 +77,15 @@ function normalizeExecutorErrorMessage(error: unknown): string {
     const responseData = payload.data ?? response?.data
 
     if (typeof responseData === 'string' && responseData.trim())
-      return responseData.trim()
+      return sanitizeClientErrorText(responseData.trim()) || '请求失败，请稍后重试'
 
     if (responseData && typeof responseData === 'object') {
       const data = responseData as Record<string, any>
       const dataMessage = data.message || data.error
       if (typeof dataMessage === 'string' && dataMessage.trim()) {
         const code = typeof data.code === 'number' ? data.code : response?.status
-        return code ? `${code} ${dataMessage.trim()}` : dataMessage.trim()
+        const normalizedMessage = sanitizeClientErrorText(dataMessage.trim()) || '请求失败，请稍后重试'
+        return code ? `${code} ${normalizedMessage}` : normalizedMessage
       }
     }
 
@@ -156,6 +173,19 @@ interface ToolAuditCardPayload {
   auditType: string
 }
 
+interface RunEventCardPayload {
+  sessionId: string
+  cardType: 'intent' | 'routing' | 'memory' | 'websearch' | 'thinking'
+  eventType: string
+  status: 'running' | 'completed' | 'skipped' | 'failed'
+  title: string
+  summary: string
+  turnId: string
+  seq: number
+  content: string
+  detail: Record<string, unknown>
+}
+
 function normalizeToolAuditCardPayload(value: unknown): ToolAuditCardPayload {
   const row = value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -238,6 +268,15 @@ function buildErrorBlockExtra(payload: Record<string, any>): Record<string, unkn
   }
 
   return Object.keys(extra).length > 0 ? extra : undefined
+}
+
+function normalizeRunEventText(value: unknown): string {
+  return String(value || '').trim()
+}
+
+function toFiniteSeq(value: unknown): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0
 }
 
 async function handleExecutorItem(item: string, callback: (data: any) => void) {
@@ -376,8 +415,80 @@ async function handleExecutorResult(
   }
 }
 
+interface LegacyUiStreamInputPayload {
+  message: string
+}
+
+function normalizeLegacyText(value: unknown): string {
+  return String(value || '').trim()
+}
+
+function resolveLegacyUiStreamInput(messages: unknown): LegacyUiStreamInputPayload {
+  if (!Array.isArray(messages)) {
+    return {
+      message: '',
+    }
+  }
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const item = messages[index]
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue
+    }
+    const row = item as Record<string, unknown>
+    const role = normalizeLegacyText(row.role).toLowerCase()
+    if (role !== 'user') {
+      continue
+    }
+
+    const contentBlocks = Array.isArray(row.content) ? row.content : []
+    const textParts: string[] = []
+    const attachmentLines: string[] = []
+
+    for (const block of contentBlocks) {
+      if (!block || typeof block !== 'object' || Array.isArray(block)) {
+        continue
+      }
+      const blockRow = block as Record<string, unknown>
+      const type = normalizeLegacyText(blockRow.type).toLowerCase()
+      const value = normalizeLegacyText(blockRow.value)
+      if (!value) {
+        continue
+      }
+
+      if (type === 'image' || type === 'file') {
+        const name = normalizeLegacyText(blockRow.name) || 'unnamed'
+        const mimeType = normalizeLegacyText(blockRow.data)
+        attachmentLines.push(`- [${type}] ${name}${mimeType ? ` (${mimeType})` : ''}: ${value}`)
+        continue
+      }
+
+      if (type === 'card' || type === 'tool' || type === 'error') {
+        continue
+      }
+
+      textParts.push(value)
+    }
+
+    const text = textParts.join('\n').trim()
+    if (attachmentLines.length > 0) {
+      const attachmentContext = ['[Attachment references]', ...attachmentLines].join('\n')
+      return {
+        message: text ? `${text}\n\n${attachmentContext}` : attachmentContext,
+      }
+    }
+
+    return {
+      message: text,
+    }
+  }
+
+  return {
+    message: '',
+  }
+}
+
 async function useCompletionExecutor(body: IChatBody, callback: (data: any) => void) {
-  const existingRequestId = String((body as unknown as Record<string, unknown>)?.requestId || '').trim()
   const convertedMsgList = serializePilotExecutorMessages(body.messages || [], {
     assistantAvailableStatus: IChatItemStatus.AVAILABLE,
     skipUnavailableAssistant: true,
@@ -466,40 +577,26 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
         throw new Error('chat_id is required')
       }
 
-      const requestId = await resolveStreamRequestId({
-        existingRequestId,
-        createTurn: async () => {
-          const turn = await endHttp.$http({
-            url: `v1/chat/sessions/${encodeURIComponent(sessionId)}/turns`,
-            method: 'POST',
-            data: {
-              ...body,
-            },
-            signal: streamController.signal,
-          }) as Record<string, any>
-
-          return {
-            requestId: String(turn?.request_id || '').trim(),
-            turnId: String(turn?.turn_id || '').trim(),
-            queuePos: Number(turn?.queue_pos || 0),
-          }
-        },
-        onTurnAccepted: (turn) => {
-          wrappedCallback({
-            done: false,
-            event: 'turn.accepted',
-            request_id: turn.requestId,
-            turn_id: turn.turnId,
-            queue_pos: turn.queuePos,
-          })
-        },
-      })
+      const latestTurn = resolveLegacyUiStreamInput(convertedMsgList)
+      if (!latestTurn.message) {
+        throw new Error('latest user turn is empty')
+      }
 
       const res: ReadableStream = await endHttp.$http({
-        url: `v1/chat/sessions/${encodeURIComponent(sessionId)}/stream`,
+        url: `chat/sessions/${encodeURIComponent(sessionId)}/stream`,
         method: 'POST',
         data: {
-          request_id: requestId,
+          message: latestTurn.message,
+          modelId: String(body.modelId || body.model || '').trim() || undefined,
+          routeComboId: String(body.routeComboId || '').trim() || undefined,
+          internet: body.internet !== false,
+          thinking: body.thinking !== false,
+          memoryEnabled: body.memoryEnabled !== false,
+          pilotMode: body.pilotMode === true,
+          metadata: {
+            source: 'legacy-ui-completion',
+            index: body.index,
+          },
         },
         headers: {
           Accept: 'text/event-stream',
@@ -698,51 +795,30 @@ export const $completion = {
           status: IChatItemStatus.AVAILABLE,
         })
 
-        await useCompletionExecutor(
-          {
-            temperature: 0,
-            templateId: -1,
-            generateTitle: true,
-            messages: JSON.parse(JSON.stringify(conversation.messages)),
-            index: index === -1 ? 0 : index,
-            chat_id: conversation.id,
-            model: QuotaModel.QUOTA_THIS_TITLE,
-          },
-          (res) => {
-            if (res.error) {
-              titleOptions.status = IChatItemStatus.ERROR
+        titleOptions.status = IChatItemStatus.GENERATING
+        try {
+          const payload = await endHttp.$http({
+            url: `chat/sessions/${encodeURIComponent(conversation.id)}/title`,
+            method: 'POST',
+            data: {},
+          }) as Record<string, unknown>
 
-              if (res.frequentLimit)
-                handler.onFrequentLimit?.()
+          const title = String(
+            payload?.title
+            || (payload?.data as Record<string, unknown> | undefined)?.title
+            || '',
+          ).trim()
 
-              return
-            }
-
-            if (res.done) {
-              titleOptions.status = IChatItemStatus.AVAILABLE
-
-              return
-            }
-
-            const { event } = res
-            if (event === 'status_updated') {
-              const mappedStatus = mapStrStatus(res.status)
-              if (mappedStatus === IChatItemStatus.GENERATING && innerMsg.status !== IChatItemStatus.WAITING)
-                return
-              titleOptions.status = mappedStatus
-            }
-            else if (event === 'completion') {
-              if (res.completed)
-                return
-              titleOptions.value += res.content
-
-              conversation.topic = titleOptions.value
-
-              // 截取前12位
-              conversation.topic = conversation.topic.slice(0, 12)
-            }
-          },
-        )
+          if (title) {
+            titleOptions.value = title
+            conversation.topic = title.slice(0, 12)
+          }
+          titleOptions.status = IChatItemStatus.AVAILABLE
+        }
+        catch (error) {
+          console.error('[completion] title generation failed', error)
+          titleOptions.status = IChatItemStatus.ERROR
+        }
 
         return titleOptions
       },
@@ -753,13 +829,25 @@ export const $completion = {
         let pendingMarkdownBuffer = ''
         let pendingMarkdownSince = 0
         let markdownFlushTimer: ReturnType<typeof setTimeout> | null = null
-        let lastCompletionName = ''
+        let lastCompletionName = 'assistant'
         let waitingToolApproval = false
-        let activeRequestId = ''
         let approvalMonitorActive = false
         let approvalMonitorCompleted = false
+        const legacyIgnoredEvents = new Set([
+          'turn.accepted',
+          'turn.queued',
+          'turn.started',
+          'turn.delta',
+          'turn.completed',
+          'turn.failed',
+          'turn.approval_required',
+          'status_updated',
+          'completion',
+          'verbose',
+          'session_bound',
+        ])
+        const legacyWarnedEvents = new Set<string>()
         const runtimePublic = useRuntimeConfig().public as Record<string, unknown>
-        const legacyEventCompatEnabled = normalizeBoolean(runtimePublic.pilotEnableLegacyExecutorEventCompat, false)
         const toolApprovalAutoResumeEnabled = normalizeBoolean(runtimePublic.pilotToolApprovalAutoResume, true)
         const toolApprovalPollIntervalMs = normalizeTimeoutMs(
           runtimePublic.pilotToolApprovalPollIntervalMs,
@@ -953,6 +1041,121 @@ export const $completion = {
           return created
         }
 
+        const runEventCardMap = new Map<string, IInnerItemMeta>()
+
+        function resolveRunEventCardKey(payload: RunEventCardPayload): string {
+          const sessionScope = payload.sessionId || conversation.id
+          if (payload.cardType === 'thinking') {
+            return payload.turnId
+              ? `thinking:${sessionScope}:${payload.turnId}`
+              : `thinking:${sessionScope}`
+          }
+          if (payload.cardType === 'websearch') {
+            const segment = payload.eventType === 'websearch.decision' ? 'decision' : 'execution'
+            return payload.turnId
+              ? `websearch:${segment}:${sessionScope}:${payload.turnId}`
+              : `websearch:${segment}:${sessionScope}`
+          }
+          if (payload.cardType === 'intent') {
+            return payload.turnId
+              ? `intent:${sessionScope}:${payload.turnId}`
+              : `intent:${sessionScope}`
+          }
+          if (payload.cardType === 'routing') {
+            return payload.turnId
+              ? `routing:${sessionScope}:${payload.turnId}`
+              : `routing:${sessionScope}`
+          }
+          if (payload.cardType === 'memory') {
+            return payload.turnId
+              ? `memory:${sessionScope}:${payload.turnId}`
+              : `memory:${sessionScope}`
+          }
+          return payload.turnId
+            ? `${payload.cardType}:${sessionScope}:${payload.turnId}:${payload.seq}`
+            : `${payload.cardType}:${sessionScope}:${payload.seq}`
+        }
+
+        function upsertRunEventCard(payload: RunEventCardPayload): IInnerItemMeta {
+          const key = resolveRunEventCardKey(payload)
+          const prev = runEventCardMap.get(key)
+          const now = Date.now()
+
+          const prevData = parseJsonSafe<Record<string, unknown>>(String(prev?.data || '')) || {}
+          const prevContent = normalizeRunEventText(prevData.content)
+          let mergedContent = payload.content || prevContent
+          if (payload.cardType === 'thinking') {
+            const incoming = payload.content
+            if (!incoming) {
+              mergedContent = prevContent
+            }
+            else if (payload.status === 'completed') {
+              if (!prevContent) {
+                mergedContent = incoming
+              }
+              else if (incoming.startsWith(prevContent)) {
+                mergedContent = incoming
+              }
+              else if (prevContent.startsWith(incoming)) {
+                mergedContent = prevContent
+              }
+              else {
+                mergedContent = `${prevContent}${incoming}`
+              }
+            }
+            else {
+              mergedContent = `${prevContent}${incoming}`
+            }
+          }
+
+          const nextData = JSON.stringify({
+            sessionId: payload.sessionId || conversation.id,
+            cardType: payload.cardType,
+            eventType: payload.eventType,
+            status: payload.status,
+            title: payload.title,
+            summary: payload.summary,
+            turnId: payload.turnId,
+            seq: payload.seq,
+            content: mergedContent,
+            detail: payload.detail,
+          })
+
+          const nextExtra = {
+            ...(prev?.extra || {}),
+            start: prev?.extra?.start || now,
+            end: payload.status === 'completed' || payload.status === 'skipped' || payload.status === 'failed'
+              ? now
+              : prev?.extra?.end,
+            status: payload.status,
+            cardType: payload.cardType,
+            eventType: payload.eventType,
+            seq: payload.seq || prev?.extra?.seq || 0,
+            sessionId: payload.sessionId || prev?.extra?.sessionId || conversation.id,
+            turnId: payload.turnId || prev?.extra?.turnId || '',
+          }
+
+          if (prev) {
+            prev.name = 'pilot_run_event_card'
+            prev.type = 'card'
+            prev.value = ''
+            prev.data = nextData
+            prev.extra = nextExtra
+            return prev
+          }
+
+          const created: IInnerItemMeta = {
+            type: 'card',
+            name: 'pilot_run_event_card',
+            value: '',
+            data: nextData,
+            extra: nextExtra,
+          }
+          innerMsg.value.push(created)
+          runEventCardMap.set(key, created)
+          return created
+        }
+
         function buildExecutorBody(requestId = ''): IChatBody & { requestId?: string } {
           const resolvedPilotMode = typeof innerMsg.meta.pilotMode === 'boolean'
             ? innerMsg.meta.pilotMode
@@ -1002,7 +1205,7 @@ export const $completion = {
           if (!toolApprovalAutoResumeEnabled || approvalMonitorActive || approvalMonitorCompleted) {
             return false
           }
-          if (!payload.ticketId || !activeRequestId) {
+          if (!payload.ticketId) {
             return false
           }
 
@@ -1025,7 +1228,7 @@ export const $completion = {
                 waitingToolApproval = false
                 innerMsg.status = IChatItemStatus.TOOL_CALLING
                 handler?.onTriggerStatus?.(innerMsg.status)
-                startExecutorStream(activeRequestId)
+                startExecutorStream()
                 return
               }
 
@@ -1078,6 +1281,167 @@ export const $completion = {
             }
           })()
           return true
+        }
+
+        function pushRunEventCardFromStream(eventType: string, payload: Record<string, any>) {
+          const seq = toFiniteSeq(payload.seq)
+          const sessionId = normalizeRunEventText(payload.session_id || payload.sessionId || conversation.id) || conversation.id
+          const turnId = normalizeRunEventText(payload.turn_id || payload.turnId)
+          const detail = payload?.payload && typeof payload.payload === 'object'
+            ? payload.payload as Record<string, unknown>
+            : (payload?.detail && typeof payload.detail === 'object'
+                ? payload.detail as Record<string, unknown>
+                : {})
+
+          if (eventType === 'intent.started') {
+            upsertRunEventCard({
+              sessionId,
+              cardType: 'intent',
+              eventType,
+              status: 'running',
+              title: '意图分析',
+              summary: '正在分析意图',
+              turnId,
+              seq,
+              content: '',
+              detail,
+            })
+            return
+          }
+
+          if (eventType === 'intent.completed') {
+            const confidence = Number(detail.confidence)
+            upsertRunEventCard({
+              sessionId,
+              cardType: 'intent',
+              eventType,
+              status: 'completed',
+              title: '意图分析',
+              summary: `意图=${normalizeRunEventText(detail.intentType) || 'chat'}，置信=${Number.isFinite(confidence) ? `${(confidence * 100).toFixed(1)}%` : '-'}`,
+              turnId,
+              seq,
+              content: '',
+              detail,
+            })
+            return
+          }
+
+          if (eventType === 'routing.selected') {
+            upsertRunEventCard({
+              sessionId,
+              cardType: 'routing',
+              eventType,
+              status: 'completed',
+              title: '路由落点',
+              summary: `请求模型=${normalizeRunEventText(detail.modelId) || '-'}，实际=${normalizeRunEventText(detail.providerModel) || '-'}，通道=${normalizeRunEventText(detail.channelId) || '-'}`,
+              turnId,
+              seq,
+              content: '',
+              detail,
+            })
+            return
+          }
+
+          if (eventType === 'memory.context') {
+            const historyCount = Number(detail.memoryHistoryMessageCount)
+            upsertRunEventCard({
+              sessionId,
+              cardType: 'memory',
+              eventType,
+              status: 'completed',
+              title: '记忆上下文',
+              summary: `memory=${detail.memoryEnabled === true ? 'on' : 'off'}，history=${Number.isFinite(historyCount) ? historyCount : 0}`,
+              turnId,
+              seq,
+              content: '',
+              detail,
+            })
+            return
+          }
+
+          if (eventType === 'websearch.decision') {
+            upsertRunEventCard({
+              sessionId,
+              cardType: 'websearch',
+              eventType,
+              status: detail.enabled === true ? 'running' : 'skipped',
+              title: '联网检索决策',
+              summary: detail.enabled === true
+                ? `触发检索（${normalizeRunEventText(detail.reason) || '-'})`
+                : `不触发（${normalizeRunEventText(detail.reason) || '-'})`,
+              turnId,
+              seq,
+              content: '',
+              detail,
+            })
+            return
+          }
+
+          if (eventType === 'websearch.executed') {
+            const sourceCount = Number(detail.sourceCount)
+            upsertRunEventCard({
+              sessionId,
+              cardType: 'websearch',
+              eventType,
+              status: 'completed',
+              title: '联网检索执行',
+              summary: `来源=${normalizeRunEventText(detail.source) || '-'}，命中=${Number.isFinite(sourceCount) ? sourceCount : 0}`,
+              turnId,
+              seq,
+              content: '',
+              detail,
+            })
+            return
+          }
+
+          if (eventType === 'websearch.skipped') {
+            upsertRunEventCard({
+              sessionId,
+              cardType: 'websearch',
+              eventType,
+              status: 'skipped',
+              title: '联网检索执行',
+              summary: `跳过（${normalizeRunEventText(detail.reason) || '-'})`,
+              turnId,
+              seq,
+              content: '',
+              detail,
+            })
+            return
+          }
+
+          if (eventType === 'thinking.delta') {
+            const chunk = normalizeRunEventText(payload.delta || detail.text)
+            upsertRunEventCard({
+              sessionId,
+              cardType: 'thinking',
+              eventType,
+              status: 'running',
+              title: 'Thinking',
+              summary: '思考中',
+              turnId,
+              seq,
+              content: chunk,
+              detail,
+            })
+            return
+          }
+
+          if (eventType === 'thinking.final') {
+            const finalText = normalizeRunEventText(payload.message || detail.text)
+            upsertRunEventCard({
+              sessionId,
+              cardType: 'thinking',
+              eventType,
+              status: 'completed',
+              title: 'Thinking',
+              summary: '思考完成',
+              turnId,
+              seq,
+              content: finalText,
+              detail,
+            })
+          }
         }
 
         // signal.signal.addEventListener('abort', () => {
@@ -1144,116 +1508,78 @@ export const $completion = {
             return
           }
 
-          const { event, name, data } = res
-          lastCompletionName = typeof name === 'string' ? name : lastCompletionName
-          // console.log('RES', res, res.event)
-          if (event === 'turn.accepted') {
-            activeRequestId = String(res.request_id || activeRequestId || '').trim()
-            innerMsg.status = IChatItemStatus.WAITING
-            handler.onAccepted?.({
-              requestId: res.request_id,
-              turnId: res.turn_id,
-              queuePos: res.queue_pos,
-            })
-            handler?.onTriggerStatus?.(innerMsg.status)
+          const eventType = String(res.event || res.type || '').trim()
+          const eventName = typeof res.name === 'string' ? res.name.trim() : ''
+          if (eventName) {
+            lastCompletionName = eventName
           }
-          else if (event === 'turn.queued') {
-            innerMsg.status = IChatItemStatus.WAITING
-            handler?.onTriggerStatus?.(innerMsg.status)
+          if (!eventType || eventType === 'stream.heartbeat') {
+            return
           }
-          else if (event === 'turn.started') {
-            innerMsg.status = IChatItemStatus.GENERATING
-            handler?.onTriggerStatus?.(innerMsg.status)
-          }
-          else if (event === 'turn.delta') {
-            const chunk = typeof res.delta === 'string' ? res.delta : ''
+
+          if (eventType === 'assistant.delta') {
+            const chunk = typeof res.delta === 'string'
+              ? res.delta
+              : normalizeRunEventText(res?.payload?.text)
             if (chunk) {
               appendPendingMarkdownChunk(chunk)
               scheduleMarkdownBufferFlush()
+              handler?.onCompletionStart?.(lastCompletionName || 'assistant')
             }
             if (innerMsg.status !== IChatItemStatus.GENERATING) {
               innerMsg.status = IChatItemStatus.GENERATING
               handler?.onTriggerStatus?.(innerMsg.status)
             }
+            return
           }
-          else if (event === 'turn.completed') {
+
+          if (eventType === 'assistant.final') {
             waitingToolApproval = false
             const markdownBlock = getOrCreateStreamingMarkdownBlock()
-            const finalText = typeof res.message === 'string' ? res.message : ''
+            const finalText = typeof res.message === 'string'
+              ? res.message
+              : normalizeRunEventText(res?.payload?.text)
             const flushed = flushPendingMarkdownBuffer({
               markDone: true,
             })
             if (finalText) {
-              if (finalText.length >= markdownBlock.value.length)
+              if (finalText.length >= markdownBlock.value.length) {
                 markdownBlock.value = finalText
-              else if (!markdownBlock.value)
+              }
+              else if (!markdownBlock.value) {
                 markdownBlock.value = finalText
+              }
             }
             markdownBlock.extra = {
               ...(markdownBlock.extra || {}),
               done: true,
             }
-            if (finalText && finalText !== flushed)
-              handler.onCompletion?.(lastCompletionName || name, finalText)
-          }
-          else if (event === 'turn.failed') {
-            waitingToolApproval = false
-            flushPendingMarkdownBuffer({
-              force: true,
-            })
-            const message = String(res.message || '请求失败，请稍后重试')
-            innerMsg.status = IChatItemStatus.ERROR
-            handler.onError?.()
-            handler?.onTriggerStatus?.(innerMsg.status)
-            const extra = buildErrorBlockExtra(res)
-            innerMsg.value.push({
-              type: 'error',
-              value: message,
-              extra,
-            })
-          }
-          else if (event === 'turn.approval_required') {
-            flushPendingMarkdownBuffer({
-              force: true,
-            })
-            waitingToolApproval = true
-            const detail = res.detail && typeof res.detail === 'object'
-              ? res.detail as Record<string, unknown>
-              : {}
-            const toolName = String(detail.tool_name || detail.toolName || 'tool').trim() || 'tool'
-            const payload: ToolAuditCardPayload = {
-              callId: String(detail.call_id || detail.callId || '').trim() || `approval_${Date.now().toString(36)}`,
-              toolId: String(detail.tool_id || detail.toolId || '').trim() || 'tool.unknown',
-              toolName,
-              riskLevel: String(detail.risk_level || detail.riskLevel || 'high').trim() || 'high',
-              status: 'approval_required',
-              inputPreview: '',
-              outputPreview: '',
-              durationMs: 0,
-              ticketId: String(detail.ticket_id || detail.ticketId || '').trim(),
-              sources: [],
-              errorCode: String(res.code || detail.code || '').trim(),
-              errorMessage: String(res.message || '高风险工具调用需要审批').trim(),
-              auditType: 'tool.call.approval_required',
+            if (finalText && finalText !== flushed) {
+              handler.onCompletion?.(lastCompletionName || 'assistant', finalText)
             }
-            innerMsg.status = IChatItemStatus.TOOL_CALLING
-            handler?.onTriggerStatus?.(innerMsg.status)
-            upsertToolCard(payload)
-            const monitorStarted = startApprovalMonitor(payload)
-            if (!monitorStarted) {
-              approvalMonitorCompleted = true
+            return
+          }
+
+          if (
+            eventType === 'intent.started'
+            || eventType === 'intent.completed'
+            || eventType === 'routing.selected'
+            || eventType === 'memory.context'
+            || eventType === 'websearch.decision'
+            || eventType === 'websearch.executed'
+            || eventType === 'websearch.skipped'
+            || eventType === 'thinking.delta'
+            || eventType === 'thinking.final'
+          ) {
+            pushRunEventCardFromStream(eventType, res)
+            if (eventType === 'thinking.delta' && innerMsg.status !== IChatItemStatus.GENERATING) {
+              innerMsg.status = IChatItemStatus.GENERATING
+              handler?.onTriggerStatus?.(innerMsg.status)
             }
+            return
           }
-          else if (event === 'title.generated') {
-            const title = String(res.title || '').trim()
-            if (title)
-              conversation.topic = title
-            handler.onVerbose?.('title.generated', title)
-          }
-          else if (event === 'title.failed') {
-            handler.onVerbose?.('title.failed', String(res.message || ''))
-          }
-          else if (event === 'run.audit') {
+
+          if (eventType === 'run.audit') {
             const payload = normalizeToolAuditCardPayload(res.payload)
             const mappedStatus = mapToolAuditTypeToChatStatus(payload.auditType)
 
@@ -1267,9 +1593,18 @@ export const $completion = {
               handler.onToolStart?.(payload.toolName, payload.inputPreview)
             }
             else if (payload.auditType === 'tool.call.completed') {
+              waitingToolApproval = false
               handler.onToolEnd?.(payload.toolName, payload.outputPreview)
             }
+            else if (payload.auditType === 'tool.call.approval_required') {
+              waitingToolApproval = true
+              const monitorStarted = startApprovalMonitor(payload)
+              if (!monitorStarted) {
+                approvalMonitorCompleted = true
+              }
+            }
             else if (payload.auditType === 'tool.call.failed' || payload.auditType === 'tool.call.rejected') {
+              waitingToolApproval = false
               if (payload.errorMessage) {
                 innerMsg.value.push({
                   type: 'error',
@@ -1277,123 +1612,85 @@ export const $completion = {
                 })
               }
             }
+            return
           }
-          else if (event === 'status_updated') {
-            const mappedStatus = mapStrStatus(res.status)
-            // if (mappedStatus === IChatItemStatus.GENERATING && innerMsg.status !== IChatItemStatus.WAITING)
-            //   return
-            innerMsg.status = mappedStatus
-            handler?.onTriggerStatus?.(mappedStatus)
 
-            if (res.status === 'start')
-              handler?.onCompletionStart?.(res.id)
-
-            if (res.status === 'end')
-              handler?.onChainEnd?.(res.id)
-
-            if (legacyEventCompatEnabled) {
-              if (mappedStatus === IChatItemStatus.TOOL_CALLING) {
-                handler.onVerbose?.(name, data)
-              }
-              else if (mappedStatus === IChatItemStatus.TOOL_RESULT) {
-                handler.onToolEnd?.(name, data)
-              }
-            }
-          }
-          else if (event === 'completion') {
-            if (!legacyEventCompatEnabled) {
-              return
-            }
-            const chunk = typeof res.content === 'string' ? res.content : ''
-            const isCompleted = Boolean(res.completed)
-
-            if (!isCompleted) {
-              if (chunk) {
-                appendPendingMarkdownChunk(chunk)
-                scheduleMarkdownBufferFlush()
-              }
-            }
-            else {
-              const markdownBlock = getOrCreateStreamingMarkdownBlock()
-              flushPendingMarkdownBuffer({
-                markDone: true,
-              })
-
-              let emitChunk = ''
-              if (chunk) {
-                // 兼容旧协议（completed=true 且 content 为全文）。
-                if (chunk.startsWith(markdownBlock.value)) {
-                  emitChunk = chunk.slice(markdownBlock.value.length)
-                  markdownBlock.value = chunk
-                }
-                else if (chunk.length >= markdownBlock.value.length) {
-                  emitChunk = chunk
-                  markdownBlock.value = chunk
-                }
-                else {
-                  emitChunk = chunk
-                  markdownBlock.value += chunk
-                }
-              }
-
-              markdownBlock.extra = {
-                ...(markdownBlock.extra || {}),
-                done: true,
-              }
-
-              if (emitChunk)
-                handler.onCompletion?.(lastCompletionName || name, emitChunk)
-            }
-          }
-          else if (event === 'suggest') {
+          if (eventType === 'suggest') {
             innerMsg.value.push({
               data: 'suggest',
               type: res.content_type as any,
               value: res.content,
             })
+            return
           }
-          else if (event === 'verbose') {
-            if (!legacyEventCompatEnabled) {
+
+          if (eventType === 'title.generated') {
+            const title = String(res.title || '').trim()
+            if (title) {
+              conversation.topic = title
+            }
+            handler.onVerbose?.('title.generated', title)
+            return
+          }
+
+          if (eventType === 'title.failed') {
+            handler.onVerbose?.('title.failed', String(res.message || ''))
+            return
+          }
+
+          if (eventType === 'done') {
+            if (waitingToolApproval && toolApprovalAutoResumeEnabled && approvalMonitorActive) {
+              innerMsg.status = IChatItemStatus.TOOL_CALLING
+              handler?.onTriggerStatus?.(innerMsg.status)
               return
             }
-            handler.onVerbose?.(name, data)
-            console.log('verbose calling', res)
-
-            innerMsg.value.push({
-              type: 'card',
-              value: res.addon,
-              data,
-              name,
+            flushPendingMarkdownBuffer({
+              markDone: true,
             })
+            if (waitingToolApproval) {
+              innerMsg.status = IChatItemStatus.TOOL_CALLING
+            }
+            else if (
+              innerMsg.status !== IChatItemStatus.ERROR
+              && innerMsg.status !== IChatItemStatus.BANNED
+              && innerMsg.status !== IChatItemStatus.REJECTED
+              && innerMsg.status !== IChatItemStatus.CANCELLED
+            ) {
+              innerMsg.status = IChatItemStatus.AVAILABLE
+            }
+            complete()
+            return
           }
-          else if (event === 'error') {
+
+          if (eventType === 'error') {
             flushPendingMarkdownBuffer({
               force: true,
             })
             handler.onError?.()
+            console.error('@completion mapped error response', res)
 
-            const mappedStatus = mapStrStatus(res.status)
-            if (mappedStatus === IChatItemStatus.ERROR) {
-              console.error('@completion mapped error response', res)
+            const message = normalizeExecutorErrorMessage(res.message || res.error || res.detail)
+            const extra = buildErrorBlockExtra(res)
 
-              const message: string = res.message
-              const extra = buildErrorBlockExtra(res)
+            innerMsg.value.push({
+              type: 'error',
+              value: message,
+              extra,
+            })
 
-              innerMsg.value.push({
-                type: 'error',
-                value: message,
-                extra,
-              })
+            if (message.includes('状态不可用'))
+              innerMsg.status = IChatItemStatus.BANNED
+            else if (message.includes('额度已用尽'))
+              innerMsg.status = IChatItemStatus.REJECTED
+            else
+              innerMsg.status = IChatItemStatus.ERROR
+            return
+          }
 
-              if (message.includes('状态不可用'))
-                innerMsg.status = IChatItemStatus.BANNED
-              else if (message.includes('额度已用尽'))
-                innerMsg.status = IChatItemStatus.REJECTED
-              else
-                innerMsg.status = IChatItemStatus.ERROR
-            }
-            else {
-              innerMsg.status = mappedStatus
+          if (legacyIgnoredEvents.has(eventType)) {
+            if (!legacyWarnedEvents.has(eventType)) {
+              legacyWarnedEvents.add(eventType)
+              console.warn('[completion] ignored legacy stream event', eventType)
             }
           }
         }

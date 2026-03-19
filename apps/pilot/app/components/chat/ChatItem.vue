@@ -93,14 +93,20 @@ const tools = reactive([
 ])
 
 function handleRetry(model?: string) {
-  const inner: IChatInnerItem = JSON.parse(JSON.stringify(innerItem.value!))
+  if (!innerItem.value) {
+    console.warn('[ChatItem] retry skipped: innerItem missing', { ind: props.ind, index: props.index })
+    return
+  }
+
+  const inner: IChatInnerItem = JSON.parse(JSON.stringify(innerItem.value))
 
   if (model)
     inner.model = model
 
   emits('retry', inner)
 
-  msgItem.value.page = props.item.page + 1
+  const currentPage = typeof props.item.page === 'number' ? props.item.page : 0
+  msgItem.value.page = currentPage + 1
 }
 
 function handleCommandTranslate() {
@@ -219,6 +225,10 @@ onMounted(() => {
             <div v-else-if="block.type === 'card'">
               <ChatAttachmentsCardPilotToolCard
                 v-if="block.name === 'pilot_tool_card'"
+                :block="block"
+              />
+              <ChatAttachmentsCardPilotRunEventCard
+                v-else-if="block.name === 'pilot_run_event_card'"
                 :block="block"
               />
               <ChatAttachmentsCardMultiAgentJumpCard
