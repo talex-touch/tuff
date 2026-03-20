@@ -1,72 +1,90 @@
-import type { RemovableRef } from '@vueuse/core'
-import { useDark, usePreferredDark, useStorage } from '@vueuse/core'
-import { watchEffect } from 'vue'
+import type { WritableComputedRef } from 'vue'
+import { StorageList } from '@talex-touch/utils'
+import { hasDocument, hasWindow } from '@talex-touch/utils/env'
+import { createStorageProxy, TouchStorage } from '@talex-touch/utils/renderer/storage/base-storage'
+import { useDark, usePreferredDark } from '@vueuse/core'
+import { computed, watchEffect } from 'vue'
+import {
+  areThemeStylesEqual,
+  createDefaultThemeStyle,
+  normalizeThemeStyle,
+  parseLegacyThemeStyle,
+  resolveThemeModeState,
+  type ThemeMode,
+  type ThemeModeState,
+  type ThemeStyleState
+} from './theme-style.utils'
 
-export type ThemeWindowPreference = 'pure' | 'refraction' | 'filter'
+export {
+  normalizeWindowPreference,
+  type ThemeMode,
+  type ThemeStyleState,
+  type ThemeTransitionRoute,
+  type ThemeWindowPreference
+} from './theme-style.utils'
 
-export function normalizeWindowPreference(value: unknown): ThemeWindowPreference {
-  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
+const THEME_STYLE_STORAGE_SINGLETON_KEY = `storage:${StorageList.THEME_STYLE}`
+const LEGACY_THEME_STYLE_LOCAL_STORAGE_KEY = 'theme-style'
 
-  if (normalized === 'pure' || normalized === 'default') {
-    return 'pure'
+class ThemeStyleStorage extends TouchStorage<ThemeStyleState> {
+  constructor() {
+    super(StorageList.THEME_STYLE, createDefaultThemeStyle())
+    this.setAutoSave(true)
+
+    void this.whenHydrated().then(() => {
+      this.migrateLegacyThemeStyle()
+      this.normalizeCurrentState()
+    })
   }
-  if (normalized === 'refraction' || normalized === 'mica') {
-    return 'refraction'
-  }
-  if (normalized === 'filter') {
-    return 'filter'
+
+  private normalizeCurrentState(): void {
+    const current = normalizeThemeStyle(this.get())
+    if (areThemeStylesEqual(this.get(), current)) {
+      return
+    }
+
+    this.set(current)
   }
 
-  return 'refraction'
+  private migrateLegacyThemeStyle(): void {
+    if (!hasWindow() || !window.localStorage) {
+      return
+    }
+
+    let rawLegacyValue: string | null = null
+    try {
+      rawLegacyValue = window.localStorage.getItem(LEGACY_THEME_STYLE_LOCAL_STORAGE_KEY)
+      if (rawLegacyValue === null) {
+        return
+      }
+      window.localStorage.removeItem(LEGACY_THEME_STYLE_LOCAL_STORAGE_KEY)
+    } catch {
+      return
+    }
+
+    const migrated = parseLegacyThemeStyle(rawLegacyValue)
+    if (!migrated) {
+      return
+    }
+
+    const current = normalizeThemeStyle(this.get())
+    const fallback = createDefaultThemeStyle()
+    if (areThemeStylesEqual(current, fallback)) {
+      this.set(migrated)
+    }
+  }
 }
 
-/**
- * Interface for theme style configuration
- */
-interface IThemeStyle {
-  theme: {
-    window: ThemeWindowPreference
-    style: {
-      dark: boolean
-      auto: boolean
-    }
-    addon: {
-      contrast: boolean
-      coloring: boolean
-    }
-    transition: {
-      route: 'slide' | 'fade' | 'zoom'
-    }
-  }
-}
+const themeStyleStorage = createStorageProxy(THEME_STYLE_STORAGE_SINGLETON_KEY, () => {
+  return new ThemeStyleStorage()
+})
 
-/**
- * Default theme style configuration
- */
-const defaultThemeStyle: IThemeStyle = {
-  theme: {
-    window: 'refraction',
-    style: {
-      dark: false,
-      auto: true
-    },
-    addon: {
-      contrast: false,
-      coloring: false
-    },
-    transition: {
-      route: 'slide'
-    }
+export const themeStyle: WritableComputedRef<ThemeStyleState> = computed({
+  get: () => themeStyleStorage.data as ThemeStyleState,
+  set: (nextValue) => {
+    themeStyleStorage.set(normalizeThemeStyle(nextValue))
   }
-}
-
-/**
- * Persistent storage for theme preferences
- */
-export const themeStyle: RemovableRef<IThemeStyle> = useStorage<IThemeStyle>(
-  'theme-style',
-  defaultThemeStyle
-)
+})
 
 /**
  * Reactive dark mode state
@@ -78,22 +96,36 @@ export const isDark = useDark()
  */
 export const systemDarkMode = usePreferredDark()
 
-watchEffect(() => {
-  const normalizedWindow = normalizeWindowPreference(themeStyle.value.theme.window)
-  if (themeStyle.value.theme.window !== normalizedWindow) {
-    themeStyle.value.theme.window = normalizedWindow
+function ensureThemeStyleStateNormalized(): void {
+  const normalized = normalizeThemeStyle(themeStyle.value)
+  if (areThemeStylesEqual(themeStyle.value, normalized)) {
+    return
   }
+
+  themeStyle.value = normalized
+}
+
+watchEffect(() => {
+  ensureThemeStyleStateNormalized()
 })
 
 // Automatically sync theme with system when in auto mode
 watchEffect(() => {
-  if (themeStyle.value.theme.style.auto) {
-    const newDarkValue = systemDarkMode.value
-    if (isDark.value !== newDarkValue) {
-      isDark.value = newDarkValue
-      updateDocumentClass(newDarkValue)
-    }
+  const style = themeStyle.value.theme.style
+  if (!style.auto) {
+    return
   }
+
+  const autoState = resolveThemeModeState('auto', systemDarkMode.value)
+
+  if (style.dark !== autoState.dark) {
+    style.dark = autoState.dark
+  }
+  if (isDark.value !== autoState.isDark) {
+    isDark.value = autoState.isDark
+  }
+
+  updateDocumentClass(autoState.isDark)
 })
 
 /**
@@ -101,14 +133,27 @@ watchEffect(() => {
  * @param isDarkMode - Whether dark mode is active
  */
 function updateDocumentClass(isDarkMode: boolean): void {
+  if (!hasDocument()) {
+    return
+  }
+
   const classList = document.documentElement.classList
   isDarkMode ? classList.add('dark') : classList.remove('dark')
 }
 
-/**
- * Theme mode type
- */
-export type ThemeMode = 'auto' | 'dark' | 'light'
+function applyThemeMode(mode: ThemeMode): ThemeModeState {
+  const nextThemeState = resolveThemeModeState(mode, systemDarkMode.value)
+
+  themeStyle.value.theme.style.auto = nextThemeState.auto
+  themeStyle.value.theme.style.dark = nextThemeState.dark
+
+  if (isDark.value !== nextThemeState.isDark) {
+    isDark.value = nextThemeState.isDark
+  }
+
+  updateDocumentClass(nextThemeState.isDark)
+  return nextThemeState
+}
 
 /**
  * Triggers a theme transition with a circular animation effect
@@ -121,7 +166,7 @@ export async function triggerThemeTransition(
   mode: ThemeMode
 ): Promise<void> {
   const [x, y] = pos
-  const isChangingToDark = mode === 'dark' || (mode === 'auto' && systemDarkMode.value)
+  const isChangingToDark = resolveThemeModeState(mode, systemDarkMode.value).isDark
 
   const viewTransitionDocument = document as Document & {
     startViewTransition?: (callback: () => void) => { ready: Promise<void> }
@@ -130,25 +175,12 @@ export async function triggerThemeTransition(
   const startViewTransition =
     viewTransitionDocument.startViewTransition?.bind(viewTransitionDocument)
   if (!startViewTransition) {
-    themeStyle.value.theme.style.auto = mode === 'auto'
-    isDark.value = mode === 'dark' || (mode === 'auto' && systemDarkMode.value)
-    updateDocumentClass(isDark.value)
+    applyThemeMode(mode)
     return
   }
 
   const transition = startViewTransition(() => {
-    // Update theme settings
-    themeStyle.value.theme.style.auto = mode === 'auto'
-
-    // Set dark value based on mode
-    if (mode === 'auto') {
-      isDark.value = systemDarkMode.value
-    } else {
-      isDark.value = mode === 'dark'
-    }
-
-    // Update document class
-    updateDocumentClass(isDark.value)
+    applyThemeMode(mode)
   })
 
   // Calculate animation radius

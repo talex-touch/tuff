@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import UserProfileEditor from '~/components/base/UserProfileEditor.vue'
+import { computeSubscriptionActive } from '~/components/base/user-subscription'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { useAuth } from '~/modules/auth/useAuth'
 import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
@@ -54,7 +55,7 @@ const planStatus = computed(() => {
   if (!subscriptionStatus.value) {
     return '-'
   }
-  return subscriptionStatus.value.isActive
+  return computeSubscriptionActive(subscriptionStatus.value)
     ? t('userProfile.planActive', 'Active')
     : t('userProfile.planExpired', 'Expired')
 })
@@ -96,7 +97,8 @@ interface SubscriptionStatus {
   plan: string
   expiresAt: string | null
   activatedAt: string | null
-  isActive: boolean
+  isActive?: boolean
+  status?: string | null
   features: {
     aiRequests: { limit: number; used: number }
     aiTokens: { limit: number; used: number }
