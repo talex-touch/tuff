@@ -47,6 +47,7 @@ export enum IntelligenceCapabilityType {
   IMAGE_ANALYZE = 'image-analyze',
   IMAGE_GENERATE = 'image-generate',
   IMAGE_EDIT = 'image-edit',
+  VIDEO_GENERATE = 'video-generate',
   // RAG & Search capabilities
   RAG_QUERY = 'rag-query',
   SEMANTIC_SEARCH = 'semantic-search',
@@ -218,6 +219,11 @@ export interface IntelligenceInvokeOptions {
   metadata?: Record<string, any>
   /** Mark as test run. */
   testRun?: boolean
+  /** Output control options. */
+  output?: {
+    /** Whether to include base64 payload for media outputs. */
+    includeBase64?: boolean
+  }
 }
 
 /**
@@ -753,6 +759,10 @@ export interface IntelligenceTTSPayload {
 export interface IntelligenceTTSResult {
   /** Audio data. */
   audio: ArrayBuffer | string
+  /** URL to generated audio (recommended for renderer IPC payload size). */
+  url?: string
+  /** Base64 audio payload (optional). */
+  base64?: string
   /** Audio format. */
   format: string
   /** Duration in seconds. */
@@ -979,6 +989,46 @@ export interface IntelligenceImageEditResult {
   }
   /** Revised prompt. */
   revisedPrompt?: string
+}
+
+/**
+ * Payload for video generation capability.
+ * Note: current implementation is config/runtime placeholder.
+ */
+export interface IntelligenceVideoGeneratePayload {
+  /** Generation prompt. */
+  prompt: string
+  /** Negative prompt. */
+  negativePrompt?: string
+  /** Duration in seconds. */
+  duration?: number
+  /** Width in pixels. */
+  width?: number
+  /** Height in pixels. */
+  height?: number
+  /** Frames per second. */
+  fps?: number
+  /** Style preset. */
+  style?: string
+  /** Number of videos to generate. */
+  count?: number
+  /** Random seed. */
+  seed?: number
+}
+
+/**
+ * Result from video generation capability.
+ * Note: current implementation is config/runtime placeholder.
+ */
+export interface IntelligenceVideoGenerateResult {
+  /** Generated videos. */
+  videos: Array<{
+    url?: string
+    base64?: string
+    revisedPrompt?: string
+  }>
+  /** Seed used for generation. */
+  seed?: number
 }
 
 // ============================================================================
@@ -1703,6 +1753,7 @@ export interface IntelligenceProviderAdapter {
   imageAnalyze?: (payload: IntelligenceImageAnalyzePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageAnalyzeResult>>
   imageGenerate?: (payload: IntelligenceImageGeneratePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageGenerateResult>>
   imageEdit?: (payload: IntelligenceImageEditPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageEditResult>>
+  videoGenerate?: (payload: IntelligenceVideoGeneratePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceVideoGenerateResult>>
 
   // Audio capabilities
   tts?: (payload: IntelligenceTTSPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceTTSResult>>
@@ -2158,6 +2209,120 @@ export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> 
         providerId: 'anthropic-default',
         models: ['claude-3-5-sonnet-20241022'],
         priority: 3,
+        enabled: false,
+      },
+    ],
+  },
+  'image.generate': {
+    id: 'image.generate',
+    label: '图像生成 / Image Generation',
+    description: '根据文本提示生成图片',
+    providers: [
+      {
+        providerId: 'siliconflow-default',
+        models: ['Kwai-Kolors/Kolors'],
+        priority: 1,
+        enabled: true,
+      },
+      {
+        providerId: 'openai-default',
+        models: ['gpt-image-1'],
+        priority: 2,
+        enabled: false,
+      },
+      {
+        providerId: 'deepseek-default',
+        priority: 3,
+        enabled: false,
+      },
+      {
+        providerId: 'anthropic-default',
+        priority: 4,
+        enabled: false,
+      },
+    ],
+  },
+  'image.edit': {
+    id: 'image.edit',
+    label: '图像编辑 / Image Editing',
+    description: '根据提示编辑图像（重绘/变体/扩图）',
+    providers: [
+      {
+        providerId: 'openai-default',
+        models: ['gpt-image-1'],
+        priority: 1,
+        enabled: false,
+      },
+      {
+        providerId: 'siliconflow-default',
+        models: ['Kwai-Kolors/Kolors'],
+        priority: 2,
+        enabled: true,
+      },
+      {
+        providerId: 'deepseek-default',
+        priority: 3,
+        enabled: false,
+      },
+      {
+        providerId: 'anthropic-default',
+        priority: 4,
+        enabled: false,
+      },
+    ],
+  },
+  'audio.stt': {
+    id: 'audio.stt',
+    label: '语音识别 / Speech-to-Text',
+    description: '将语音内容识别为文本',
+    providers: [
+      {
+        providerId: 'siliconflow-default',
+        models: ['TeleAI/TeleSpeechASR'],
+        priority: 1,
+        enabled: true,
+      },
+      {
+        providerId: 'openai-default',
+        models: ['whisper-1'],
+        priority: 2,
+        enabled: false,
+      },
+      {
+        providerId: 'deepseek-default',
+        priority: 3,
+        enabled: false,
+      },
+      {
+        providerId: 'anthropic-default',
+        priority: 4,
+        enabled: false,
+      },
+    ],
+  },
+  'video.generate': {
+    id: 'video.generate',
+    label: '视频生成 / Video Generation',
+    description: '根据文本提示生成视频（配置层占位，运行时待接入）',
+    providers: [
+      {
+        providerId: 'siliconflow-default',
+        priority: 1,
+        enabled: false,
+      },
+      {
+        providerId: 'openai-default',
+        priority: 2,
+        enabled: false,
+      },
+      {
+        providerId: 'deepseek-default',
+        priority: 3,
+        enabled: false,
+      },
+      {
+        providerId: 'anthropic-default',
+        priority: 4,
         enabled: false,
       },
     ],

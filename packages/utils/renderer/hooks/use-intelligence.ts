@@ -1,5 +1,7 @@
 import type { Ref } from 'vue'
 import type {
+  IntelligenceAudioTranscribePayload,
+  IntelligenceAudioTranscribeResult,
   IntelligenceAgentPayload,
   IntelligenceAgentResult,
   IntelligenceChatPayload,
@@ -24,6 +26,8 @@ import type {
   IntelligenceImageAnalyzeResult,
   IntelligenceImageCaptionPayload,
   IntelligenceImageCaptionResult,
+  IntelligenceImageEditPayload,
+  IntelligenceImageEditResult,
   IntelligenceImageGeneratePayload,
   IntelligenceImageGenerateResult,
   IntelligenceIntentDetectPayload,
@@ -43,8 +47,14 @@ import type {
   IntelligenceSemanticSearchResult,
   IntelligenceSentimentAnalyzePayload,
   IntelligenceSentimentAnalyzeResult,
+  IntelligenceSTTPayload,
+  IntelligenceSTTResult,
   IntelligenceSummarizePayload,
+  IntelligenceTTSPayload,
+  IntelligenceTTSResult,
   IntelligenceTranslatePayload,
+  IntelligenceVideoGeneratePayload,
+  IntelligenceVideoGenerateResult,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult,
 } from '../../types/intelligence'
@@ -136,6 +146,19 @@ interface IntelligenceComposable {
     caption: (payload: IntelligenceImageCaptionPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageCaptionResult>>
     analyze: (payload: IntelligenceImageAnalyzePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageAnalyzeResult>>
     generate: (payload: IntelligenceImageGeneratePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageGenerateResult>>
+    edit: (payload: IntelligenceImageEditPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageEditResult>>
+  }
+
+  // Audio methods
+  audio: {
+    tts: (payload: IntelligenceTTSPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceTTSResult>>
+    stt: (payload: IntelligenceSTTPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceSTTResult>>
+    transcribe: (payload: IntelligenceAudioTranscribePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceAudioTranscribeResult>>
+  }
+
+  // Video methods
+  video: {
+    generate: (payload: IntelligenceVideoGeneratePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceVideoGenerateResult>>
   }
 
   // RAG methods
@@ -310,6 +333,28 @@ export function useIntelligence(_options: UseIntelligenceOptions = {}): Intellig
 
       generate: (payload: IntelligenceImageGeneratePayload, options?: IntelligenceInvokeOptions) =>
         invokeCapability<IntelligenceImageGenerateResult>('image.generate', payload, options),
+
+      edit: (payload: IntelligenceImageEditPayload, options?: IntelligenceInvokeOptions) =>
+        invokeCapability<IntelligenceImageEditResult>('image.edit', payload, options),
+    },
+
+    audio: {
+      tts: (payload: IntelligenceTTSPayload, options?: IntelligenceInvokeOptions) =>
+        invokeCapability<IntelligenceTTSResult>('audio.tts', payload, options),
+
+      stt: (payload: IntelligenceSTTPayload, options?: IntelligenceInvokeOptions) =>
+        invokeCapability<IntelligenceSTTResult>('audio.stt', payload, options),
+
+      transcribe: (
+        payload: IntelligenceAudioTranscribePayload,
+        options?: IntelligenceInvokeOptions,
+      ) =>
+        invokeCapability<IntelligenceAudioTranscribeResult>('audio.transcribe', payload, options),
+    },
+
+    video: {
+      generate: (payload: IntelligenceVideoGeneratePayload, options?: IntelligenceInvokeOptions) =>
+        invokeCapability<IntelligenceVideoGenerateResult>('video.generate', payload, options),
     },
 
     rag: {

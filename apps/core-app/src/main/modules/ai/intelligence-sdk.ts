@@ -25,6 +25,8 @@ import type {
   IntelligenceImageCaptionResult,
   IntelligenceImageGeneratePayload,
   IntelligenceImageGenerateResult,
+  IntelligenceImageEditPayload,
+  IntelligenceImageEditResult,
   IntelligenceIntentDetectPayload,
   IntelligenceIntentDetectResult,
   IntelligenceInvokeOptions,
@@ -50,8 +52,16 @@ import type {
   IntelligenceSentimentAnalyzePayload,
   IntelligenceSentimentAnalyzeResult,
   IntelligenceStreamChunk,
+  IntelligenceSTTPayload,
+  IntelligenceSTTResult,
   IntelligenceSummarizePayload,
+  IntelligenceTTSPayload,
+  IntelligenceTTSResult,
+  IntelligenceAudioTranscribePayload,
+  IntelligenceAudioTranscribeResult,
   IntelligenceTranslatePayload,
+  IntelligenceVideoGeneratePayload,
+  IntelligenceVideoGenerateResult,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
@@ -158,6 +168,7 @@ const CAPABILITY_METHOD_MAP: Record<
   'image-analyze': { method: 'imageAnalyze', requiresOverride: true },
   'image-generate': { method: 'imageGenerate', requiresOverride: true },
   'image-edit': { method: 'imageEdit', requiresOverride: true },
+  'video-generate': { method: 'videoGenerate', requiresOverride: true },
   tts: { method: 'tts', requiresOverride: true },
   stt: { method: 'stt', requiresOverride: true },
   'audio-transcribe': { method: 'audioTranscribe', requiresOverride: true },
@@ -1301,6 +1312,31 @@ export class TuffIntelligenceSDK {
           payload as IntelligenceImageGeneratePayload,
           runtimeOptions
         )) as IntelligenceInvokeResult<T>
+      case 'image-edit':
+        return (await provider.imageEdit!(
+          payload as IntelligenceImageEditPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'video-generate':
+        return (await provider.videoGenerate!(
+          payload as IntelligenceVideoGeneratePayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'tts':
+        return (await provider.tts!(
+          payload as IntelligenceTTSPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'stt':
+        return (await provider.stt!(
+          payload as IntelligenceSTTPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'audio-transcribe':
+        return (await provider.audioTranscribe!(
+          payload as IntelligenceAudioTranscribePayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
 
       case 'rag-query':
         return (await provider.ragQuery!(
@@ -1825,7 +1861,28 @@ export class TuffIntelligenceSDK {
       this.invoke<IntelligenceImageAnalyzeResult>('image.analyze', payload, options),
 
     generate: (payload: IntelligenceImageGeneratePayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceImageGenerateResult>('image.generate', payload, options)
+      this.invoke<IntelligenceImageGenerateResult>('image.generate', payload, options),
+
+    edit: (payload: IntelligenceImageEditPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceImageEditResult>('image.edit', payload, options)
+  }
+
+  audio = {
+    tts: (payload: IntelligenceTTSPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceTTSResult>('audio.tts', payload, options),
+
+    stt: (payload: IntelligenceSTTPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceSTTResult>('audio.stt', payload, options),
+
+    transcribe: (
+      payload: IntelligenceAudioTranscribePayload,
+      options?: IntelligenceInvokeOptions
+    ) => this.invoke<IntelligenceAudioTranscribeResult>('audio.transcribe', payload, options)
+  }
+
+  video = {
+    generate: (payload: IntelligenceVideoGeneratePayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceVideoGenerateResult>('video.generate', payload, options)
   }
 
   rag = {
