@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-03-19
+> 更新时间: 2026-03-20
 
 ---
 
@@ -153,6 +153,26 @@
 - [x] `thinking.delta -> thinking.final` 采用同一卡片增量拼接，完整文本可视化展示。
 - [x] legacy 事件 `turn.* / status_updated / completion / verbose / session_bound` 不再驱动 UI 状态，仅告警忽略。
 - [x] 管理端渠道 `adapter` 固定 `openai`，移除 `legacy` 可编辑入口。
+
+### K. Intelligence 多模态 Provider 统一配置与运行时打通（2026-03-20）
+
+- [x] 能力矩阵补齐：`image.generate`、`image.edit`、`audio.stt`、`video.generate`（保留 `audio.tts`、`audio.transcribe`）。
+- [x] 历史配置回填升级为“按缺项补齐”，不覆盖用户已有能力绑定/优先级/Prompt。
+- [x] 运行时分发补齐 `image.edit/audio.tts/audio.stt/audio.transcribe/video.generate`，避免注册后不可调用。
+- [x] OpenAI-compatible Provider 完成媒体 REST 补齐（图片生成/编辑、语音合成、语音转写/翻译）。
+- [x] 缺失媒体端点 provider 显式 `unsupported`，并由策略层自动 fallback 到下一 provider。
+- [x] 媒体输出采用 URL-first（`tfile://`）并支持 `output.includeBase64=false` 默认可选扩展。
+- [x] 前端能力测试器补齐：`image.generate/image.edit/audio.tts/audio.stt/audio.transcribe`；`video.generate` 返回“配置已生效，运行时未实现”。
+- [ ] `video.generate` 真实运行时生成链路（Provider 端点接入 + 端到端成功路径）待下一迭代落地。
+
+### L. Pilot Websearch 全局 Provider 池聚合（2026-03-20）
+
+- [x] `datasource.websearch` 升级为全局池结构：`providers + aggregation + crawl`，并保留 legacy `gatewayBaseUrl/apiKeyRef` 读取兼容。
+- [x] Provider key 管理切换为“配置页入库 + 统一加密 + 脱敏回传（hasApiKey/apiKeyMasked）”，支持“留空不变/clearApiKey 清空”。
+- [x] `pilot-tool-gateway` 切换为优先级聚合执行：主 provider 先跑，结果不足按顺序补召回，去重后达标即停，不足则 fallback `responses_builtin`。
+- [x] `websearch.executed` 可观测性增强：补齐 `providerChain/providerUsed/fallbackUsed/dedupeCount` 并保持 `source/sourceReason/sourceCount`。
+- [x] 新增管理页 `/admin/system/websearch-providers`，支持全局 providers 列表维护与单页“聚合填写”（aggregation/crawl）。
+- [x] 回归测试补齐：`pilot-tool-gateway`、`pilot-websearch-connector`、`pilot-admin-datasource-config` 定向用例通过。
 
 ---
 

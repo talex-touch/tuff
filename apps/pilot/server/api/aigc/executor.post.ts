@@ -14,6 +14,10 @@ import {
   resolvePilotMemoryEnabled,
 } from '../../utils/pilot-chat-memory'
 import {
+  extractPilotMemoryFacts,
+  upsertPilotMemoryFacts,
+} from '../../utils/pilot-memory-facts'
+import {
   createTitleSseResponse,
   randomId,
   resolveCompatAttachments,
@@ -36,7 +40,8 @@ import {
 import {
   resolvePilotRoutingSelection,
 } from '../../utils/pilot-routing-resolver'
-import { createPilotRuntime } from '../../utils/pilot-runtime'
+import { createPilotRuntime, PILOT_STRICT_MODE_UNAVAILABLE_CODE } from '../../utils/pilot-runtime'
+import { executePilotMediaWithFallback } from '../../utils/pilot-media-fallback'
 import {
   generateTitle,
 } from '../../utils/pilot-title'
@@ -188,6 +193,39 @@ function buildImageMarkdown(urls: string[]): string {
   return list
     .map((url, index) => `![Generated image ${index + 1}](${url})`)
     .join('\n\n')
+}
+
+function resolveMemoryUpdateReason(input: {
+  memoryEnabled: boolean
+  requestedMemoryEnabled: boolean | undefined
+  memoryUserPreference: boolean | null
+  shouldStoreByIntent: boolean
+  memoryDecisionReason: string
+  addedCount: number
+  extractorFailed: boolean
+}): 'stored' | 'disabled_by_user' | 'policy_disabled' | 'intent_skip' | 'no_fact_extracted' | 'extractor_failed' {
+  if (!input.memoryEnabled) {
+    if (input.requestedMemoryEnabled === false || input.memoryUserPreference === false) {
+      return 'disabled_by_user'
+    }
+    return 'policy_disabled'
+  }
+
+  if (!input.shouldStoreByIntent) {
+    if (input.memoryDecisionReason === 'intent_skip') {
+      return 'intent_skip'
+    }
+    return 'no_fact_extracted'
+  }
+
+  if (input.extractorFailed) {
+    return 'extractor_failed'
+  }
+
+  if (input.addedCount > 0) {
+    return 'stored'
+  }
+  return 'no_fact_extracted'
 }
 
 function normalizeErrorCause(cause: unknown): string | undefined {
@@ -603,6 +641,7 @@ function logExecutorError(
     intent_confidence: trace.intentConfidence,
     internet: trace.internet,
     thinking: trace.thinking,
+    memory_enabled: trace.memoryEnabled,
     builtin_tools: trace.builtinTools,
     selection_reason: trace.selectionReason,
     selection_source: trace.selectionSource,
@@ -672,6 +711,8 @@ function normalizeToolAuditPayload(
   errorCode: string
   errorMessage: string
   durationMs: number
+  connectorSource: string
+  connectorReason: string
 } {
   const row = payload && typeof payload === 'object' && !Array.isArray(payload)
     ? payload as Record<string, unknown>
@@ -697,6 +738,8 @@ function normalizeToolAuditPayload(
     durationMs: Number.isFinite(Number(row.durationMs))
       ? Math.max(0, Number(row.durationMs))
       : 0,
+    connectorSource: String(row.connectorSource || '').trim(),
+    connectorReason: String(row.connectorReason || '').trim(),
   }
 }
 
@@ -734,6 +777,10 @@ export default defineEventHandler(async (event) => {
         reason: 'title_request',
         websearchRequired: false,
         websearchReason: 'title_request',
+        memoryDecision: {
+          shouldStore: false,
+          reason: 'intent_skip' as const,
+        },
       }
     : await resolvePilotIntent({
         event,
@@ -1008,6 +1055,66 @@ export default defineEventHandler(async (event) => {
     return createTitleSseResponse(generatedTitle || '新的聊天')
   }
 
+  if (pilotMode && orchestratorDecision.mode !== 'langgraph-local') {
+    const statusCode = 503
+    const detail: Record<string, unknown> = {
+      code: PILOT_STRICT_MODE_UNAVAILABLE_CODE,
+      reason: String(orchestratorDecision.reason || '').trim() || 'pilot_strict_mode_unavailable',
+      status_code: statusCode,
+      message: 'Pilot 严格模式不可用：当前未满足 LangGraph 运行条件，请检查配置后重试。',
+      request_id: trace.requestId,
+      pilot_mode: true,
+      orchestrator_mode: orchestratorDecision.mode,
+      orchestrator_reason: orchestratorDecision.reason,
+      orchestrator_assistant_id: orchestratorDecision.assistantId,
+      orchestrator_graph_profile: orchestratorDecision.graphProfile,
+      orchestrator_endpoint: orchestratorDecision.endpoint,
+      route_combo_id: trace.routeComboId,
+      channel_id: trace.channelId,
+      adapter: trace.adapter,
+      transport: trace.transport,
+      model_id: trace.modelId,
+      provider_model: trace.providerModel,
+    }
+
+    logExecutorEvent('warn', 'request', {
+      phase: 'request.strict_mode_unavailable',
+      request_id: trace.requestId,
+      elapsed_ms: Math.max(0, Date.now() - trace.startedAt),
+      chat_id: trace.chatId,
+      runtime_session_id: trace.runtimeSessionId,
+      ...detail,
+    })
+
+    const strictEncoder = new TextEncoder()
+    const strictStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(strictEncoder.encode(`data: ${JSON.stringify({ event: 'status_updated', status: 'start', id: 'assistant' })}\n\n`))
+        controller.enqueue(strictEncoder.encode(`data: ${JSON.stringify({
+          event: 'error',
+          status: 'failed',
+          code: PILOT_STRICT_MODE_UNAVAILABLE_CODE,
+          reason: detail.reason,
+          message: detail.message,
+          request_id: detail.request_id,
+          status_code: detail.status_code,
+          detail,
+        })}\n\n`))
+        controller.enqueue(strictEncoder.encode('data: [DONE]\\n\\n'))
+        controller.close()
+      },
+    })
+
+    return new Response(strictStream, {
+      status: statusCode,
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+      },
+    })
+  }
+
   logExecutorEvent('info', 'request', {
     phase: 'request.start',
     request_id: trace.requestId,
@@ -1078,6 +1185,7 @@ export default defineEventHandler(async (event) => {
         let completedSent = false
         let streamedDelta = false
         let streamFailed = false
+        let streamWaitingApproval = false
         let streamErrorDetail: ExecutorErrorDetailPayload | null = null
         let metricSuccess = false
         let metricFinishReason = 'error'
@@ -1112,6 +1220,14 @@ export default defineEventHandler(async (event) => {
         }
         let websearchContextText = ''
         let websearchSources: Array<Record<string, unknown>> = []
+        let websearchConnectorSource: 'gateway' | 'responses_builtin' | 'none' = 'none'
+        let websearchConnectorReason = 'not_evaluated'
+        const memoryHistoryMessageCount = Array.isArray(body?.messages)
+          ? body.messages.length
+          : 0
+        let memoryHistoryAfterMessageCount = memoryHistoryMessageCount
+        let memoryAddedCount = 0
+        let memoryExtractorFailed = false
         const websearchDecision = shouldExecutePilotWebsearch({
           message: routedMessage,
           intentType: intentDecision.intentType,
@@ -1119,6 +1235,8 @@ export default defineEventHandler(async (event) => {
           builtinTools: selectedChannel.builtinTools,
           intentWebsearchRequired: intentDecision.websearchRequired,
         })
+        websearchConnectorReason = websearchDecision.reason
+        let runtimeStore: ReturnType<typeof createPilotRuntime>['store'] | null = null
 
         const touchStreamEventAt = () => {
           lastStreamEventAt = Date.now()
@@ -1143,6 +1261,71 @@ export default defineEventHandler(async (event) => {
               sources: normalized.sources,
               errorCode: normalized.errorCode,
               errorMessage: normalized.errorMessage,
+              connectorSource: normalized.connectorSource,
+              connectorReason: normalized.connectorReason,
+            },
+          })
+          touchStreamEventAt()
+        }
+
+        const emitMemoryUpdatedEvent = async (assistantReply = '') => {
+          const runtimeMessages = memoryEnabled && runtimeStore
+            ? await runtimeStore.runtime.listMessages(runtimeSessionId).catch(() => [])
+            : []
+          memoryHistoryAfterMessageCount = runtimeMessages.length
+          memoryAddedCount = 0
+          memoryExtractorFailed = false
+          const shouldStoreByIntent = intentDecision.memoryDecision.shouldStore === true
+          if (memoryEnabled && shouldStoreByIntent && routedMessage) {
+            const latestAssistantReply = runtimeMessages
+              .filter(item => item.role === 'assistant')
+              .at(-1)?.content || assistantReply
+            try {
+              const facts = await extractPilotMemoryFacts({
+                message: routedMessage,
+                assistantReply: latestAssistantReply,
+                channel: {
+                  baseUrl: selectedChannel.channel.baseUrl,
+                  apiKey: selectedChannel.channel.apiKey,
+                  model: selectedModel,
+                  transport: selectedChannel.transport,
+                  timeoutMs: selectedChannel.channel.timeoutMs,
+                },
+              })
+              if (facts.length > 0) {
+                const upserted = await upsertPilotMemoryFacts(event, {
+                  sessionId: runtimeSessionId,
+                  userId: auth.userId,
+                  sourceText: routedMessage,
+                  facts,
+                })
+                memoryAddedCount = upserted.addedCount
+              }
+            }
+            catch {
+              memoryExtractorFailed = true
+            }
+          }
+
+          const reason = resolveMemoryUpdateReason({
+            memoryEnabled,
+            requestedMemoryEnabled: body?.memoryEnabled,
+            memoryUserPreference,
+            shouldStoreByIntent,
+            memoryDecisionReason: String(intentDecision.memoryDecision.reason || '').trim(),
+            addedCount: memoryAddedCount,
+            extractorFailed: memoryExtractorFailed,
+          })
+          const stored = memoryAddedCount > 0
+          emit({
+            event: 'memory.updated',
+            payload: {
+              memoryEnabled,
+              historyBefore: memoryHistoryMessageCount,
+              historyAfter: memoryHistoryAfterMessageCount,
+              addedCount: memoryAddedCount,
+              stored,
+              reason,
             },
           })
           touchStreamEventAt()
@@ -1293,6 +1476,11 @@ export default defineEventHandler(async (event) => {
             internet: trace.internet,
             thinking: trace.thinking,
             memory_enabled: trace.memoryEnabled,
+            memory_history_message_count: memoryHistoryMessageCount,
+            memory_decision_should_store: intentDecision.memoryDecision.shouldStore === true,
+            memory_decision_reason: intentDecision.memoryDecision.reason,
+            memory_policy_enabled_by_default: memoryPolicy.enabledByDefault,
+            memory_user_preference: memoryUserPreference,
             selection_source: trace.selectionSource,
             selection_reason: trace.selectionReason,
             builtin_tools: trace.builtinTools,
@@ -1310,28 +1498,73 @@ export default defineEventHandler(async (event) => {
           touchStreamEventAt()
           startHeartbeat()
 
+          emit({
+            event: 'run.audit',
+            payload: {
+              auditType: 'memory.context',
+              memoryEnabled: trace.memoryEnabled,
+              memoryHistoryMessageCount,
+              memoryDecision: intentDecision.memoryDecision,
+              memoryPolicyEnabledByDefault: memoryPolicy.enabledByDefault,
+              memoryPolicyAllowUserDisable: memoryPolicy.allowUserDisable,
+              memoryUserPreference,
+            },
+          })
+          touchStreamEventAt()
+
+          emit({
+            event: 'run.audit',
+            payload: {
+              auditType: 'websearch.decision',
+              enabled: websearchDecision.enabled,
+              reason: websearchDecision.reason,
+              intentWebsearchRequired: intentDecision.websearchRequired === true,
+              intentWebsearchReason: intentDecision.websearchReason,
+              internetEnabled: trace.internet,
+              builtinTools: trace.builtinTools,
+            },
+          })
+          touchStreamEventAt()
+
           if (trace.intentType === 'image_generate') {
             try {
-              const imageToolResult = await executePilotImageGenerateTool({
+              const imageExecution = await executePilotMediaWithFallback({
                 event,
-                userId: auth.userId,
-                sessionId: chatId,
-                requestId: trace.requestId,
-                prompt: routedMessage,
-                channel: {
-                  baseUrl: selectedChannel.channel.baseUrl,
-                  apiKey: selectedChannel.channel.apiKey,
-                  model: selectedModel,
-                  adapter: selectedChannel.adapter,
-                  transport: selectedChannel.transport,
-                  timeoutMs: selectedChannel.channel.timeoutMs,
+                capability: 'image.generate',
+                initialSelection: selectedChannel,
+                context: {
+                  requestChannelId: body?.channel_id,
+                  sessionChannelId: trace.channelId,
+                  requestedModelId: body?.modelId || body?.model,
+                  routeComboId: body?.routeComboId,
+                  internet: false,
+                  thinking: false,
+                  intentType: trace.intentType,
                 },
-                emitAudit: async (audit) => {
-                  emitToolAudit({
-                    ...audit,
+                execute: async (routeSelection) => {
+                  return await executePilotImageGenerateTool({
+                    event,
+                    userId: auth.userId,
+                    sessionId: chatId,
+                    requestId: trace.requestId,
+                    prompt: routedMessage,
+                    channel: {
+                      baseUrl: routeSelection.channel.baseUrl,
+                      apiKey: routeSelection.channel.apiKey,
+                      model: routeSelection.providerModel || routeSelection.channel.model,
+                      adapter: routeSelection.adapter,
+                      transport: routeSelection.transport,
+                      timeoutMs: routeSelection.channel.timeoutMs,
+                    },
+                    emitAudit: async (audit) => {
+                      emitToolAudit({
+                        ...audit,
+                      })
+                    },
                   })
                 },
               })
+              const imageToolResult = imageExecution.result
 
               const markdown = buildImageMarkdown((imageToolResult?.images || []).map(item => item.url))
               if (!markdown) {
@@ -1365,6 +1598,7 @@ export default defineEventHandler(async (event) => {
                 force: true,
                 status: 'completed',
               })
+              await emitMemoryUpdatedEvent(markdown)
               metricSuccess = true
               metricFinishReason = 'completed'
               metricErrorCode = ''
@@ -1533,6 +1767,14 @@ export default defineEventHandler(async (event) => {
                 sessionId: chatId,
                 requestId: trace.requestId,
                 query: routedMessage,
+                channel: {
+                  baseUrl: selectedChannel.channel.baseUrl,
+                  apiKey: selectedChannel.channel.apiKey,
+                  model: selectedModel,
+                  adapter: selectedChannel.adapter,
+                  transport: selectedChannel.transport,
+                  timeoutMs: selectedChannel.channel.timeoutMs,
+                },
                 emitAudit: async (audit) => {
                   emitToolAudit({
                     ...audit,
@@ -1541,6 +1783,8 @@ export default defineEventHandler(async (event) => {
               })
 
               if (websearchResult) {
+                websearchConnectorSource = websearchResult.connectorSource
+                websearchConnectorReason = websearchResult.connectorReason
                 websearchContextText = websearchResult.contextText
                 websearchSources = websearchResult.sources
                   .map(item => ({
@@ -1551,43 +1795,62 @@ export default defineEventHandler(async (event) => {
                     domain: item.domain,
                     sourceType: item.sourceType,
                   }))
+                emit({
+                  event: 'run.audit',
+                  payload: {
+                    auditType: 'websearch.executed',
+                    enabled: true,
+                    source: websearchConnectorSource,
+                    sourceReason: websearchConnectorReason,
+                    sourceCount: websearchSources.length,
+                    providerChain: websearchResult.providerChain,
+                    providerUsed: websearchResult.providerUsed,
+                    fallbackUsed: websearchResult.fallbackUsed,
+                    dedupeCount: websearchResult.dedupeCount,
+                  },
+                })
+                touchStreamEventAt()
+              }
+              else {
+                websearchConnectorSource = 'none'
+                websearchConnectorReason = 'tool_failed_or_empty_result'
+                emit({
+                  event: 'run.audit',
+                  payload: {
+                    auditType: 'websearch.skipped',
+                    enabled: false,
+                    reason: websearchConnectorReason,
+                  },
+                })
+                touchStreamEventAt()
               }
             }
             catch (error) {
               if (error instanceof PilotToolApprovalRequiredError) {
-                streamFailed = true
+                streamWaitingApproval = true
                 metricFinishReason = 'approval_required'
                 metricErrorCode = error.code
-                const detail: ExecutorErrorDetailPayload = {
-                  message: error.message,
+                const approvalMessage = '高风险数据抓取需要审批，请完成审批后重试。'
+                const approvalPayload = {
                   code: error.code,
-                  request_id: trace.requestId,
-                  elapsed_ms: Math.max(0, Date.now() - trace.startedAt),
-                  channel_id: trace.channelId,
-                  adapter: trace.adapter,
-                  transport: trace.transport,
-                  endpoint: trace.endpoint,
-                  model: trace.model,
-                  phase: 'tool.approval_required',
+                  message: approvalMessage,
+                  ticket_id: error.ticketId,
+                  call_id: error.callId,
+                  tool_id: 'tool.websearch',
+                  tool_name: error.toolName,
+                  risk_level: error.riskLevel,
                 }
-                streamErrorDetail = detail
-                await queuePersistSnapshot({
-                  force: true,
-                  status: 'failed',
-                  allowEmptyReply: true,
-                  errorDetail: detail,
+                emit({
+                  event: 'turn.approval_required',
+                  code: error.code,
+                  message: approvalMessage,
+                  detail: approvalPayload,
+                  payload: approvalPayload,
                 })
                 emit({
-                  event: 'error',
-                  status: 'failed',
-                  code: error.code,
-                  message: '高风险数据抓取需要审批，请完成审批后重试。',
-                  detail: {
-                    ...detail,
-                    ticket_id: error.ticketId,
-                    call_id: error.callId,
-                    tool_name: error.toolName,
-                    risk_level: error.riskLevel,
+                  event: 'done',
+                  payload: {
+                    status: 'waiting_approval',
                   },
                 })
                 return
@@ -1631,7 +1894,18 @@ export default defineEventHandler(async (event) => {
                 })
                 return
               }
-              throw error
+
+              websearchConnectorSource = 'none'
+              websearchConnectorReason = `tool_exception:${truncateText(error instanceof Error ? error.message : String(error || ''), 160)}`
+              emit({
+                event: 'run.audit',
+                payload: {
+                  auditType: 'websearch.skipped',
+                  enabled: false,
+                  reason: websearchConnectorReason,
+                },
+              })
+              touchStreamEventAt()
             }
           }
 
@@ -1656,6 +1930,8 @@ export default defineEventHandler(async (event) => {
             const { runtime, store } = createPilotRuntime({
               event,
               userId: auth.userId,
+              strictPilotMode: pilotMode,
+              allowDeepAgentFallback: !pilotMode,
               channel: {
                 channelId: selectedChannel.channelId,
                 baseUrl: selectedChannel.channel.baseUrl,
@@ -1668,6 +1944,7 @@ export default defineEventHandler(async (event) => {
               },
               orchestrator: {
                 mode: orchestratorDecision.mode,
+                reason: orchestratorDecision.reason,
                 endpoint: orchestratorDecision.endpoint,
                 apiKey: orchestratorDecision.apiKey,
                 assistantId: orchestratorDecision.assistantId,
@@ -1677,6 +1954,7 @@ export default defineEventHandler(async (event) => {
                 logExecutorAuditRecord(record, trace, debugEnabled)
               },
             })
+            runtimeStore = store
             await store.runtime.ensureSchema()
             const runtimeMessage = mergeWebsearchContextIntoMessage(routedMessage, websearchContextText)
 
@@ -1701,6 +1979,7 @@ export default defineEventHandler(async (event) => {
                 internet: trace.internet,
                 thinking: trace.thinking,
                 memoryEnabled: trace.memoryEnabled,
+                memoryHistoryMessageCount,
                 selectionReason: trace.selectionReason,
                 orchestratorMode: trace.orchestratorMode,
                 orchestratorReason: trace.orchestratorReason,
@@ -1716,6 +1995,8 @@ export default defineEventHandler(async (event) => {
                 toolSources: websearchSources,
                 websearchSourceCount: websearchSources.length,
                 websearchDecision: websearchDecision.reason,
+                websearchConnectorSource,
+                websearchConnectorReason,
               },
             })) {
               if (closed) {
@@ -1893,6 +2174,29 @@ export default defineEventHandler(async (event) => {
             selectedChannel.channel.timeoutMs,
           )
 
+          if (streamWaitingApproval) {
+            metricSuccess = false
+            logExecutorEvent('info', 'request', {
+              phase: 'request.waiting_approval',
+              request_id: trace.requestId,
+              elapsed_ms: Math.max(0, Date.now() - trace.startedAt),
+              chat_id: trace.chatId,
+              runtime_session_id: trace.runtimeSessionId,
+              channel_id: trace.channelId,
+              adapter: trace.adapter,
+              transport: trace.transport,
+              intent_type: trace.intentType,
+              intent_strategy: trace.intentStrategy,
+              attachment_count: resolvedLegacyAttachments.attachments.length,
+              websearch_source_count: websearchSources.length,
+            })
+            return
+          }
+
+          if (!streamFailed) {
+            await emitMemoryUpdatedEvent(completedText)
+          }
+
           if (streamFailed) {
             metricSuccess = false
             if (!metricFinishReason) {
@@ -1969,6 +2273,9 @@ export default defineEventHandler(async (event) => {
             attachment_count: resolvedLegacyAttachments.attachments.length,
             attachment_summary: resolvedLegacyAttachments.summary,
             websearch_source_count: websearchSources.length,
+            websearch_connector_source: websearchConnectorSource,
+            websearch_connector_reason: websearchConnectorReason,
+            memory_history_message_count: memoryHistoryMessageCount,
           })
         }
         catch (error) {
@@ -2055,9 +2362,12 @@ export default defineEventHandler(async (event) => {
                 thinking: trace.thinking,
                 internet: trace.internet,
                 memoryEnabled: trace.memoryEnabled,
+                memoryHistoryMessageCount,
                 builtinTools: trace.builtinTools,
                 websearchSourceCount: websearchSources.length,
                 websearchDecision: websearchDecision.reason,
+                websearchConnectorSource,
+                websearchConnectorReason,
                 orchestratorMode: trace.orchestratorMode,
                 orchestratorReason: trace.orchestratorReason,
                 orchestratorAssistantId: trace.orchestratorAssistantId,

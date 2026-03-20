@@ -1,5 +1,5 @@
 import { requirePilotAuth } from '../../utils/auth'
-import { getPilotAdminRoutingConfig } from '../../utils/pilot-admin-routing-config'
+import { getPilotAdminRoutingConfig, resolvePilotModelCapabilities } from '../../utils/pilot-admin-routing-config'
 
 export default defineEventHandler(async (event) => {
   requirePilotAuth(event)
@@ -8,9 +8,14 @@ export default defineEventHandler(async (event) => {
 
   const models = routingConfig.modelCatalog
     .map((item) => {
-      const allowFileAnalysis = typeof item.allowFileAnalysis === 'boolean'
-        ? item.allowFileAnalysis
-        : item.allowImageAnalysis !== false
+      const capabilities = resolvePilotModelCapabilities(item.capabilities, {
+        allowWebsearch: item.allowWebsearch,
+        allowImageGeneration: item.allowImageGeneration,
+        allowFileAnalysis: item.allowFileAnalysis,
+        allowImageAnalysis: item.allowImageAnalysis,
+      })
+
+      const allowFileAnalysis = capabilities['file.analyze'] !== false
 
       return {
         id: item.id,
@@ -22,10 +27,11 @@ export default defineEventHandler(async (event) => {
         source: item.source,
         thinkingSupported: item.thinkingSupported !== false,
         thinkingDefaultEnabled: item.thinkingDefaultEnabled === true,
-        allowWebsearch: item.allowWebsearch !== false,
+        capabilities,
+        allowWebsearch: capabilities.websearch !== false,
         // 兼容旧字段：统一返回同一能力值，避免前端出现“双开关”语义分叉。
         allowImageAnalysis: allowFileAnalysis,
-        allowImageGeneration: item.allowImageGeneration !== false,
+        allowImageGeneration: capabilities['image.generate'] !== false,
         allowFileAnalysis,
       }
     })
