@@ -53,6 +53,8 @@ import type {
   IntelligenceTranslatePayload,
   IntelligenceTTSPayload,
   IntelligenceTTSResult,
+  IntelligenceVideoGeneratePayload,
+  IntelligenceVideoGenerateResult,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
@@ -470,6 +472,17 @@ export abstract class IntelligenceProvider implements IntelligenceProviderAdapte
     _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceAudioTranscribeResult>> {
     return Promise.reject(new Error(`[${this.type}] Audio transcribe capability is unsupported`))
+  }
+
+  // ============================================================================
+  // Video Capabilities (Optional - default unsupported)
+  // ============================================================================
+
+  videoGenerate(
+    _payload: IntelligenceVideoGeneratePayload,
+    _options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<IntelligenceVideoGenerateResult>> {
+    return Promise.reject(new Error(`[${this.type}] Video generate capability is unsupported`))
   }
 
   // ============================================================================

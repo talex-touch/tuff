@@ -7,6 +7,14 @@ import {
 import { ChatCapabilityTester } from './chat-tester'
 import { CodeGenerateTester, CodeReviewTester } from './code-tester'
 import { EmbeddingCapabilityTester } from './embedding-tester'
+import {
+  AudioSTTTester,
+  AudioTranscribeTester,
+  AudioTTSTester,
+  ImageEditTester,
+  ImageGenerateTester,
+  VideoGenerateTester
+} from './media-tester'
 import { SummarizeCapabilityTester } from './summarize-tester'
 import { TranslateCapabilityTester } from './translate-tester'
 import { VisionCapabilityTester } from './vision-tester'
@@ -39,6 +47,9 @@ capabilityTesterRegistry.register('embedding.generate', new EmbeddingCapabilityT
 
 // Vision capabilities
 capabilityTesterRegistry.register('vision.ocr', new VisionCapabilityTester())
+capabilityTesterRegistry.register('image.generate', new ImageGenerateTester())
+capabilityTesterRegistry.register('image.edit', new ImageEditTester())
+capabilityTesterRegistry.register('video.generate', new VideoGenerateTester())
 
 // Code capabilities
 capabilityTesterRegistry.register('code.generate', new CodeGenerateTester())
@@ -48,3 +59,8 @@ capabilityTesterRegistry.register('code.review', new CodeReviewTester())
 capabilityTesterRegistry.register('intent.detect', new IntentDetectTester())
 capabilityTesterRegistry.register('sentiment.analyze', new SentimentAnalyzeTester())
 capabilityTesterRegistry.register('keywords.extract', new KeywordsExtractTester())
+
+// Audio capabilities
+capabilityTesterRegistry.register('audio.tts', new AudioTTSTester())
+capabilityTesterRegistry.register('audio.stt', new AudioSTTTester())
+capabilityTesterRegistry.register('audio.transcribe', new AudioTranscribeTester())

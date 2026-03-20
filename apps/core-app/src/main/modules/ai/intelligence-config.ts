@@ -333,10 +333,15 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
     changed = true
   }
 
-  if (!config.capabilities['text.chat']) {
-    config.capabilities['text.chat'] = cloneValue(DEFAULT_CAPABILITIES['text.chat'])
-    changed = true
-  } else if (
+  for (const [capabilityId, capabilityConfig] of Object.entries(DEFAULT_CAPABILITIES)) {
+    if (!config.capabilities[capabilityId]) {
+      config.capabilities[capabilityId] = cloneValue(capabilityConfig)
+      changed = true
+    }
+  }
+
+  if (
+    config.capabilities['text.chat'] &&
     Array.isArray(config.capabilities['text.chat'].providers) &&
     !config.capabilities['text.chat'].providers.some(
       (binding) => binding.providerId === TUFF_NEXUS_PROVIDER_ID

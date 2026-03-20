@@ -862,6 +862,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       ]
     })
 
+    intelligenceCapabilityRegistry.register({
+      id: 'video.generate',
+      type: IntelligenceCapabilityType.VIDEO_GENERATE,
+      name: 'Video Generation',
+      description: 'Generate videos from text prompts (runtime placeholder)',
+      supportedProviders: ALL_PROVIDERS
+    })
+
     // ========================================================================
     // RAG & Search Capabilities
     // ========================================================================
@@ -1118,6 +1126,17 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
       intelligenceLog.info(`Testing capability: ${capabilityId}`)
       const payload = await tester.generateTestPayload({ providerId, userInput, ...rest })
+
+      if (capabilityId === 'video.generate') {
+        return {
+          success: false,
+          message: 'video.generate 已配置，但当前版本仅支持配置层占位，运行时尚未接入。',
+          textPreview: '请先完成 provider 侧视频生成端点接入后再执行能力测试。',
+          provider: providerId || 'auto',
+          model: model || 'not-implemented',
+          latency: 0
+        }
+      }
 
       let result: IntelligenceInvokeResult<unknown>
       try {

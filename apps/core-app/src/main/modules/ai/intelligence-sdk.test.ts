@@ -7,6 +7,8 @@ import {
   type IntelligenceProviderAdapter,
   type IntelligenceProviderConfig,
   type IntelligenceProviderManagerAdapter,
+  type IntelligenceTTSPayload,
+  type IntelligenceTTSResult,
   type IntelligenceVisionOcrPayload,
   type IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
@@ -296,5 +298,96 @@ describe('TuffIntelligenceSDK invoke', () => {
       content: 'You are OCR assistant'
     })
     expect(payload.messages[1]).toEqual({ role: 'user', content: 'hello' })
+  })
+
+  it('dispatches audio.tts capability to provider tts implementation', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'audio.tts',
+      type: IntelligenceCapabilityType.TTS,
+      name: 'Audio TTS',
+      description: 'text to speech',
+      supportedProviders: [IntelligenceProviderType.LOCAL]
+    })
+
+    const ttsInvoke = vi.fn().mockResolvedValue({
+      result: {
+        audio: 'tfile://audio/sample.mp3',
+        url: 'tfile://audio/sample.mp3',
+        format: 'mp3'
+      } as IntelligenceTTSResult,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      model: 'tts-local',
+      latency: 9,
+      traceId: 'trace-tts',
+      provider: IntelligenceProviderType.LOCAL
+    })
+
+    const provider = createProvider(
+      {
+        id: 'local-tts',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Local TTS',
+        enabled: true,
+        priority: 1,
+        models: ['tts-local'],
+        capabilities: ['audio.tts']
+      },
+      vi.fn()
+    )
+    provider.tts = ttsInvoke
+
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false
+    })
+
+    const payload: IntelligenceTTSPayload = {
+      text: 'hello',
+      format: 'mp3'
+    }
+    const result = await sdk.invoke<IntelligenceTTSResult>('audio.tts', payload)
+
+    expect(result.result.url).toBe('tfile://audio/sample.mp3')
+    expect(ttsInvoke).toHaveBeenCalledOnce()
+  })
+
+  it('reports unsupported error for video.generate placeholder capability', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'video.generate',
+      type: IntelligenceCapabilityType.VIDEO_GENERATE,
+      name: 'Video Generation',
+      description: 'video generation placeholder',
+      supportedProviders: [IntelligenceProviderType.LOCAL]
+    })
+
+    const provider = createProvider(
+      {
+        id: 'local-video',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Local Video',
+        enabled: true,
+        priority: 1,
+        models: ['video-local'],
+        capabilities: ['video.generate']
+      },
+      vi.fn()
+    )
+
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false
+    })
+
+    await expect(
+      sdk.invoke('video.generate', {
+        prompt: 'sunset over city'
+      })
+    ).rejects.toThrow('capability not supported')
   })
 })
