@@ -1,10 +1,19 @@
 import type { H3Event } from 'h3'
-import type { PilotModelCatalogItem, PilotRouteComboItem } from './pilot-admin-routing-config'
+import type {
+  PilotCapabilityId,
+  PilotModelCatalogItem,
+  PilotRouteComboItem,
+} from './pilot-admin-routing-config'
 import type { PilotBuiltinTool, PilotChannelConfig } from './pilot-channel'
-import { getPilotAdminRoutingConfig } from './pilot-admin-routing-config'
+import {
+  getPilotAdminRoutingConfig,
+  resolvePilotModelCapabilities,
+} from './pilot-admin-routing-config'
 import { getPilotChannelCatalog, resolvePilotChannelSelection } from './pilot-channel'
 import { computeChannelModelStats } from './pilot-channel-scorer'
 import { buildRouteKey, isRouteHealthy } from './pilot-route-health'
+
+export const PILOT_CAPABILITY_UNSUPPORTED_CODE = 'PILOT_CAPABILITY_UNSUPPORTED'
 
 interface RouteCandidate {
   channelId: string
@@ -17,13 +26,24 @@ interface RouteCandidate {
   reason: string
 }
 
+interface ChannelModelOption {
+  id: string
+  enabled?: boolean
+  format?: string
+}
+
+export type PilotIntentType = 'chat' | 'image_generate' | 'intent_classification'
+
 export interface PilotRoutingResolveInput {
   requestChannelId?: string
   sessionChannelId?: string
   requestedModelId?: string
   routeComboId?: string
+  requiredCapability?: PilotCapabilityId
+  excludeRouteKeys?: string[]
   internet?: boolean
   thinking?: boolean
+  intentType?: PilotIntentType
 }
 
 export interface PilotRoutingResolveResult {
@@ -39,6 +59,8 @@ export interface PilotRoutingResolveResult {
   builtinTools: PilotBuiltinTool[]
   internet: boolean
   thinking: boolean
+  intentType: PilotIntentType
+  requiredCapability?: PilotCapabilityId
   score: number
   routeKey: string
 }
@@ -80,8 +102,184 @@ function normalizeFloat(value: unknown, fallback: number, min = 0, max = 1): num
   return Math.min(Math.max(parsed, min), max)
 }
 
+function normalizeIntentType(value: unknown): PilotIntentType {
+  const normalized = normalizeText(value).toLowerCase()
+  if (normalized === 'image_generate' || normalized === 'image-generate') {
+    return 'image_generate'
+  }
+  if (normalized === 'intent_classification' || normalized === 'intent-classification') {
+    return 'intent_classification'
+  }
+  return 'chat'
+}
+
+function normalizeCapabilityId(value: unknown): PilotCapabilityId | undefined {
+  const normalized = normalizeText(value).toLowerCase()
+  if (
+    normalized === 'websearch'
+    || normalized === 'file.analyze'
+    || normalized === 'image.generate'
+    || normalized === 'image.edit'
+    || normalized === 'audio.tts'
+    || normalized === 'audio.stt'
+    || normalized === 'audio.transcribe'
+    || normalized === 'video.generate'
+  ) {
+    return normalized as PilotCapabilityId
+  }
+  return undefined
+}
+
+function createCapabilityUnsupportedError(capability: PilotCapabilityId): Error {
+  const error = new Error(`No available provider supports capability: ${capability}`)
+  ;(error as Error & { code?: string, capability?: string }).code = PILOT_CAPABILITY_UNSUPPORTED_CODE
+  ;(error as Error & { code?: string, capability?: string }).capability = capability
+  return error
+}
+
+function isIntentModelAllowed(model: PilotModelCatalogItem | undefined, intentType: PilotIntentType): boolean {
+  if (!model) {
+    return true
+  }
+  if (model.enabled === false) {
+    return false
+  }
+  if (intentType === 'image_generate') {
+    const capabilities = resolvePilotModelCapabilities(model.capabilities, {
+      allowWebsearch: model.allowWebsearch,
+      allowImageGeneration: model.allowImageGeneration,
+      allowFileAnalysis: model.allowFileAnalysis,
+      allowImageAnalysis: model.allowImageAnalysis,
+    })
+    return capabilities['image.generate'] !== false
+  }
+  return true
+}
+
+function isModelCapabilityAllowed(
+  model: PilotModelCatalogItem | undefined,
+  capability: PilotCapabilityId | undefined,
+): boolean {
+  if (!capability) {
+    return true
+  }
+  if (!model) {
+    return true
+  }
+  if (model.enabled === false) {
+    return false
+  }
+  const capabilities = resolvePilotModelCapabilities(model.capabilities, {
+    allowWebsearch: model.allowWebsearch,
+    allowImageGeneration: model.allowImageGeneration,
+    allowFileAnalysis: model.allowFileAnalysis,
+    allowImageAnalysis: model.allowImageAnalysis,
+  })
+  return capabilities[capability] !== false
+}
+
+function isIntentCandidateAllowed(
+  candidate: RouteCandidate,
+  modelMap: Map<string, PilotModelCatalogItem>,
+  intentType: PilotIntentType,
+  requiredCapability?: PilotCapabilityId,
+): boolean {
+  const model = modelMap.get(candidate.modelId) || modelMap.get(candidate.providerModel)
+  return isIntentModelAllowed(model, intentType) && isModelCapabilityAllowed(model, requiredCapability)
+}
+
 function resolveChannelPriority(channel: PilotChannelConfig | undefined): number {
   return normalizeNumber(channel?.priority, 100, 1, 9999)
+}
+
+function resolveChannelModelPriority(
+  model: NonNullable<PilotChannelConfig['models']>[number],
+  channel: PilotChannelConfig,
+): number {
+  return normalizeNumber(model?.priority, resolveChannelPriority(channel), 1, 9999)
+}
+
+function listChannelModelOptions(channel: PilotChannelConfig | undefined): ChannelModelOption[] {
+  if (!channel) {
+    return []
+  }
+  const source = Array.isArray(channel.models)
+    ? channel.models
+    : []
+
+  const map = new Map<string, ChannelModelOption>()
+  for (const item of source) {
+    const id = normalizeText(item?.id)
+    if (!id) {
+      continue
+    }
+    if (!map.has(id)) {
+      map.set(id, {
+        id,
+        enabled: item.enabled !== false,
+        format: normalizeText(item.format) || undefined,
+      })
+      continue
+    }
+
+    const existing = map.get(id)!
+    map.set(id, {
+      ...existing,
+      enabled: existing.enabled !== false && item.enabled !== false,
+      format: existing.format || normalizeText(item.format) || undefined,
+    })
+  }
+
+  const fallbackIds = [
+    normalizeText(channel.defaultModelId),
+    normalizeText(channel.model),
+  ].filter(Boolean)
+  for (const modelId of fallbackIds) {
+    if (!map.has(modelId)) {
+      map.set(modelId, {
+        id: modelId,
+        enabled: true,
+      })
+    }
+  }
+
+  return Array.from(map.values())
+}
+
+function isProviderModelEnabledOnChannel(
+  channel: PilotChannelConfig | undefined,
+  providerModel: string,
+): boolean {
+  const modelId = normalizeText(providerModel)
+  if (!modelId) {
+    return false
+  }
+  const models = listChannelModelOptions(channel)
+  if (models.length <= 0) {
+    return false
+  }
+  const matched = models.find(item => normalizeText(item.id) === modelId)
+  return Boolean(matched && matched.enabled !== false)
+}
+
+function resolvePreferredProviderModel(
+  channel: PilotChannelConfig | undefined,
+  preferredModelId: unknown,
+): string {
+  const preferred = normalizeText(preferredModelId)
+  const models = listChannelModelOptions(channel)
+  if (models.length <= 0) {
+    return preferred
+  }
+
+  if (preferred) {
+    const matched = models.find(item => normalizeText(item.id) === preferred && item.enabled !== false)
+    if (matched) {
+      return normalizeText(matched.id)
+    }
+  }
+
+  return normalizeText(models.find(item => item.enabled !== false)?.id || models[0]?.id)
 }
 
 function normalizeModelFormat(value: unknown): PilotRoutingResolveResult['transport'] | '' {
@@ -177,12 +375,17 @@ function resolveModelCatalog(
           source: 'discovered',
           thinkingSupported: model.thinkingSupported !== false,
           thinkingDefaultEnabled: model.thinkingDefaultEnabled === true,
+          capabilities: resolvePilotModelCapabilities({}),
           allowWebsearch: true,
+          allowImageAnalysis: true,
+          allowImageGeneration: true,
+          allowFileAnalysis: true,
+          builtinTools: ['write_todos'],
           bindings: [{
             channelId: channel.id,
             providerModel,
             enabled: true,
-            priority: 100,
+            priority: resolveChannelModelPriority(model, channel),
             weight: 100,
           }],
         })
@@ -195,7 +398,7 @@ function resolveModelCatalog(
           channelId: channel.id,
           providerModel,
           enabled: true,
-          priority: 100,
+          priority: resolveChannelModelPriority(model, channel),
           weight: 100,
         })
       }
@@ -231,10 +434,14 @@ function buildComboCandidates(
 
     if (!providerModel) {
       const channel = channels.get(channelId)!
-      providerModel = normalizeText(channel.defaultModelId || channel.model)
+      providerModel = resolvePreferredProviderModel(channel, channel.defaultModelId || channel.model)
     }
 
     if (!providerModel) {
+      continue
+    }
+
+    if (!isProviderModelEnabledOnChannel(channels.get(channelId), providerModel)) {
       continue
     }
 
@@ -267,6 +474,9 @@ function buildModelCandidates(
     if (!channelId || !providerModel) {
       continue
     }
+    if (!isProviderModelEnabledOnChannel(channels.get(channelId), providerModel)) {
+      continue
+    }
 
     list.push({
       channelId,
@@ -282,11 +492,21 @@ function buildModelCandidates(
   return list
 }
 
-function resolveTools(channel: PilotChannelConfig, internet: boolean, allowWebsearch: boolean): PilotBuiltinTool[] {
+function resolveTools(
+  model: PilotModelCatalogItem | undefined,
+  channel: PilotChannelConfig,
+  internet: boolean,
+  allowWebsearch: boolean,
+): PilotBuiltinTool[] {
+  const modelBuiltinTools = Array.isArray(model?.builtinTools) && model.builtinTools.length > 0
+    ? model.builtinTools
+    : []
   const source = new Set<PilotBuiltinTool>(
-    Array.isArray(channel.builtinTools) && channel.builtinTools.length > 0
-      ? channel.builtinTools
-      : ['write_todos'],
+    modelBuiltinTools.length > 0
+      ? modelBuiltinTools
+      : Array.isArray(channel.builtinTools) && channel.builtinTools.length > 0
+        ? channel.builtinTools
+        : ['write_todos'],
   )
 
   if (internet && allowWebsearch) {
@@ -303,13 +523,94 @@ function resolveTools(channel: PilotChannelConfig, internet: boolean, allowWebse
   return Array.from(source)
 }
 
+interface CapabilityFallbackCandidate {
+  channel: PilotChannelConfig
+  channelId: string
+  providerModel: string
+  model: PilotModelCatalogItem
+  routeComboId: string
+  priority: number
+  channelPriority: number
+  weight: number
+}
+
+function findCapabilityFallbackCandidate(
+  modelCatalog: PilotModelCatalogItem[],
+  channelMap: Map<string, PilotChannelConfig>,
+  intentType: PilotIntentType,
+  requiredCapability: PilotCapabilityId,
+  excludedRouteKeys: Set<string>,
+): CapabilityFallbackCandidate | null {
+  const list: CapabilityFallbackCandidate[] = []
+  for (const model of modelCatalog) {
+    if (!isIntentModelAllowed(model, intentType) || !isModelCapabilityAllowed(model, requiredCapability)) {
+      continue
+    }
+
+    for (const binding of model.bindings || []) {
+      if (binding.enabled === false) {
+        continue
+      }
+      const channelId = normalizeText(binding.channelId)
+      const providerModel = normalizeText(binding.providerModel)
+      if (!channelId || !providerModel) {
+        continue
+      }
+      const channel = channelMap.get(channelId)
+      if (!channel || channel.enabled === false) {
+        continue
+      }
+      if (!isProviderModelEnabledOnChannel(channel, providerModel)) {
+        continue
+      }
+
+      const routeKey = buildRouteKey(channelId, providerModel)
+      if (excludedRouteKeys.has(routeKey)) {
+        continue
+      }
+
+      list.push({
+        channel,
+        channelId,
+        providerModel,
+        model,
+        routeComboId: normalizeText(model.defaultRouteComboId) || 'default-auto',
+        priority: normalizeNumber(binding.priority, 100, 1, 9999),
+        channelPriority: resolveChannelPriority(channel),
+        weight: normalizeNumber(binding.weight, 100, 1, 1000),
+      })
+    }
+  }
+
+  if (list.length <= 0) {
+    return null
+  }
+
+  return list.sort((a, b) => {
+    if (a.priority !== b.priority) {
+      return a.priority - b.priority
+    }
+    if (a.channelPriority !== b.channelPriority) {
+      return a.channelPriority - b.channelPriority
+    }
+    return b.weight - a.weight
+  })[0]
+}
+
 export async function resolvePilotRoutingSelection(
   event: H3Event,
   input: PilotRoutingResolveInput,
 ): Promise<PilotRoutingResolveResult> {
   const requestedModelId = normalizeText(input.requestedModelId)
   const requestedComboId = normalizeText(input.routeComboId)
+  const requiredCapability = normalizeCapabilityId(input.requiredCapability)
+  const excludedRouteKeys = new Set(
+    (Array.isArray(input.excludeRouteKeys) ? input.excludeRouteKeys : [])
+      .map(item => normalizeText(item))
+      .filter(Boolean),
+  )
   const internetRequested = normalizeBoolean(input.internet, false)
+  const intentType = normalizeIntentType(input.intentType)
 
   const catalog = await getPilotChannelCatalog(event)
   const enabledChannels = catalog.channels.filter(channel => channel.enabled)
@@ -320,8 +621,23 @@ export async function resolvePilotRoutingSelection(
   const modelMap = new Map(modelCatalog.map(item => [item.id, item]))
   const comboMap = new Map(routingConfig.routeCombos.map(item => [item.id, item]))
 
-  const defaultModelId = requestedModelId || routingConfig.routingPolicy.defaultModelId || 'quota-auto'
-  const defaultComboId = requestedComboId || routingConfig.routingPolicy.defaultRouteComboId || 'default-auto'
+  const intentModelId = intentType === 'intent_classification'
+    ? normalizeText(routingConfig.routingPolicy.intentNanoModelId)
+    : intentType === 'image_generate'
+      ? normalizeText(routingConfig.routingPolicy.imageGenerationModelId)
+      : ''
+  const intentRouteComboId = intentType === 'intent_classification'
+    ? normalizeText(routingConfig.routingPolicy.intentRouteComboId)
+    : intentType === 'image_generate'
+      ? normalizeText(routingConfig.routingPolicy.imageRouteComboId)
+      : ''
+
+  const defaultModelId = intentType === 'chat'
+    ? (requestedModelId || routingConfig.routingPolicy.defaultModelId || 'quota-auto')
+    : (intentModelId || requestedModelId || routingConfig.routingPolicy.defaultModelId || 'quota-auto')
+  const defaultComboId = intentType === 'chat'
+    ? (requestedComboId || routingConfig.routingPolicy.defaultRouteComboId || 'default-auto')
+    : (intentRouteComboId || requestedComboId || routingConfig.routingPolicy.defaultRouteComboId || 'default-auto')
 
   let candidates: RouteCandidate[] = []
   let selectionSource: PilotRoutingResolveResult['selectionSource'] = 'fallback'
@@ -355,7 +671,7 @@ export async function resolvePilotRoutingSelection(
             providerModel,
             modelId: defaultModelId,
             routeComboId: defaultComboId,
-            priority: resolveChannelPriority(channel),
+            priority: resolveChannelModelPriority(model, channel),
             channelPriority: resolveChannelPriority(channel),
             weight: 100,
             reason: 'quota-auto-speed-first',
@@ -376,14 +692,75 @@ export async function resolvePilotRoutingSelection(
 
   candidates = uniqueCandidates(candidates)
   candidates = candidates.filter(candidate => channelMap.has(candidate.channelId))
+  candidates = candidates.filter(candidate => isProviderModelEnabledOnChannel(
+    channelMap.get(candidate.channelId),
+    candidate.providerModel,
+  ))
+  candidates = candidates.filter(candidate => isIntentCandidateAllowed(candidate, modelMap, intentType, requiredCapability))
+  if (excludedRouteKeys.size > 0) {
+    candidates = candidates.filter(candidate => !excludedRouteKeys.has(buildRouteKey(candidate.channelId, candidate.providerModel)))
+  }
 
   if (candidates.length <= 0) {
+    if (requiredCapability) {
+      const capabilityFallback = findCapabilityFallbackCandidate(
+        modelCatalog,
+        channelMap,
+        intentType,
+        requiredCapability,
+        excludedRouteKeys,
+      )
+      if (!capabilityFallback) {
+        throw createCapabilityUnsupportedError(requiredCapability)
+      }
+
+      const allowWebsearch = capabilityFallback.model.allowWebsearch !== false
+      const thinkingSupported = capabilityFallback.model.thinkingSupported !== false
+      const thinking = thinkingSupported
+        ? normalizeBoolean(input.thinking, normalizeBoolean(capabilityFallback.model.thinkingDefaultEnabled, true))
+        : false
+      const fallbackTransport = resolveTransportByModel(capabilityFallback.channel, capabilityFallback.providerModel)
+
+      return {
+        channel: capabilityFallback.channel,
+        channelId: capabilityFallback.channelId,
+        adapter: capabilityFallback.channel.adapter,
+        transport: fallbackTransport,
+        modelId: capabilityFallback.model.id,
+        providerModel: capabilityFallback.providerModel,
+        routeComboId: capabilityFallback.routeComboId,
+        selectionReason: `fallback:capability=${requiredCapability};intent=${intentType}`,
+        selectionSource: 'fallback',
+        builtinTools: resolveTools(capabilityFallback.model, capabilityFallback.channel, internetRequested, allowWebsearch),
+        internet: internetRequested,
+        thinking,
+        intentType,
+        requiredCapability,
+        score: 0,
+        routeKey: buildRouteKey(capabilityFallback.channelId, capabilityFallback.providerModel),
+      }
+    }
+
     const fallback = await resolvePilotChannelSelection(event, {
       requestChannelId: input.requestChannelId,
       sessionChannelId: input.sessionChannelId,
     })
-    const fallbackModel = normalizeText(fallback.channel.defaultModelId || fallback.channel.model)
-    const fallbackModelConfig = modelMap.get(defaultModelId) || modelMap.get(fallbackModel)
+    let fallbackModel = resolvePreferredProviderModel(
+      fallback.channel,
+      fallback.channel.defaultModelId || fallback.channel.model,
+    )
+    let fallbackModelConfig = modelMap.get(defaultModelId) || modelMap.get(fallbackModel)
+    if (!isIntentModelAllowed(fallbackModelConfig, intentType)) {
+      const allowed = modelCatalog.find(item => (
+        isIntentModelAllowed(item, intentType)
+        && (item.bindings || []).some(binding => binding.enabled !== false && binding.channelId === fallback.channelId)
+      ))
+      const binding = allowed?.bindings.find(item => item.enabled !== false && item.channelId === fallback.channelId)
+      if (allowed && binding) {
+        fallbackModelConfig = allowed
+        fallbackModel = normalizeText(binding.providerModel) || fallbackModel
+      }
+    }
     const allowWebsearch = fallbackModelConfig?.allowWebsearch !== false
     const thinkingSupported = fallbackModelConfig?.thinkingSupported !== false
     const thinking = thinkingSupported
@@ -399,11 +776,13 @@ export async function resolvePilotRoutingSelection(
       modelId: fallbackModelConfig?.id || fallbackModel || defaultModelId,
       providerModel: fallbackModel,
       routeComboId: defaultComboId,
-      selectionReason: 'fallback:priority-channel',
+      selectionReason: `fallback:priority-channel;intent=${intentType}`,
       selectionSource: 'fallback',
-      builtinTools: resolveTools(fallback.channel, internetRequested, allowWebsearch),
+      builtinTools: resolveTools(fallbackModelConfig, fallback.channel, internetRequested, allowWebsearch),
       internet: internetRequested,
       thinking,
+      intentType,
+      requiredCapability,
       score: 0,
       routeKey: buildRouteKey(fallback.channelId, fallbackModel),
     }
@@ -455,10 +834,12 @@ export async function resolvePilotRoutingSelection(
   const pool = healthy.length > 0 ? healthy : scored
 
   const explorationRate = normalizeFloat(routingConfig.routingPolicy.explorationRate, 0.08, 0, 0.5)
-  const shouldExplore = selectionSource === 'quota-auto' && pool.length > 1 && Math.random() < explorationRate
+  const intentPool = pool.filter(item => isIntentCandidateAllowed(item.candidate, modelMap, intentType, requiredCapability))
+  const effectivePool = intentPool.length > 0 ? intentPool : pool
+  const shouldExplore = selectionSource === 'quota-auto' && effectivePool.length > 1 && Math.random() < explorationRate
   const picked = shouldExplore
-    ? pool[Math.floor(Math.random() * pool.length)]
-    : pool[0]
+    ? effectivePool[Math.floor(Math.random() * effectivePool.length)]
+    : effectivePool[0]
 
   const selectedChannel = channelMap.get(picked.candidate.channelId)
   if (!selectedChannel) {
@@ -481,11 +862,13 @@ export async function resolvePilotRoutingSelection(
     modelId: modelConfig?.id || picked.candidate.modelId,
     providerModel: picked.candidate.providerModel,
     routeComboId: picked.candidate.routeComboId || defaultComboId,
-    selectionReason: `${picked.candidate.reason};score=${picked.score.toFixed(2)};health=${picked.health.state}`,
+    selectionReason: `${picked.candidate.reason};score=${picked.score.toFixed(2)};health=${picked.health.state};intent=${intentType}`,
     selectionSource,
-    builtinTools: resolveTools(selectedChannel, internetRequested, allowWebsearch),
+    builtinTools: resolveTools(modelConfig, selectedChannel, internetRequested, allowWebsearch),
     internet: internetRequested,
     thinking,
+    intentType,
+    requiredCapability,
     score: picked.score,
     routeKey: picked.routeKey,
   }

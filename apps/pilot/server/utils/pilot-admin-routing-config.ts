@@ -21,6 +21,40 @@ export interface PilotIconConfig {
   value: string
 }
 
+export type PilotCapabilityId =
+  | 'websearch'
+  | 'file.analyze'
+  | 'image.generate'
+  | 'image.edit'
+  | 'audio.tts'
+  | 'audio.stt'
+  | 'audio.transcribe'
+  | 'video.generate'
+
+export type PilotModelCapabilities = Partial<Record<PilotCapabilityId, boolean>>
+
+const PILOT_CAPABILITY_IDS: PilotCapabilityId[] = [
+  'websearch',
+  'file.analyze',
+  'image.generate',
+  'image.edit',
+  'audio.tts',
+  'audio.stt',
+  'audio.transcribe',
+  'video.generate',
+]
+
+const DEFAULT_MODEL_CAPABILITIES: Record<PilotCapabilityId, boolean> = {
+  websearch: true,
+  'file.analyze': true,
+  'image.generate': true,
+  'image.edit': true,
+  'audio.tts': true,
+  'audio.stt': true,
+  'audio.transcribe': true,
+  'video.generate': true,
+}
+
 export interface PilotModelBinding {
   channelId: string
   providerModel: string
@@ -46,9 +80,12 @@ export interface PilotModelCatalogItem {
   costScore?: number
   thinkingSupported?: boolean
   thinkingDefaultEnabled?: boolean
+  capabilities?: PilotModelCapabilities
   allowWebsearch?: boolean
   allowImageAnalysis?: boolean
+  allowImageGeneration?: boolean
   allowFileAnalysis?: boolean
+  builtinTools?: PilotBuiltinTool[]
   defaultRouteComboId?: string
   bindings: PilotModelBinding[]
   metadata?: Record<string, unknown>
@@ -84,6 +121,10 @@ export interface PilotRoutingPolicy {
   defaultRouteComboId: string
   quotaAutoStrategy: 'speed-first'
   explorationRate: number
+  intentNanoModelId: string
+  intentRouteComboId: string
+  imageGenerationModelId: string
+  imageRouteComboId: string
 }
 
 export interface PilotLoadBalancePolicy {
@@ -157,6 +198,46 @@ function normalizeFloat(value: unknown, fallback: number, min: number, max: numb
   return Math.min(Math.max(parsed, min), max)
 }
 
+function toCapabilityBoolean(value: unknown, fallback: boolean): boolean {
+  return normalizeBoolean(value, fallback)
+}
+
+export function resolvePilotModelCapabilities(
+  value: unknown,
+  legacy?: {
+    allowWebsearch?: unknown
+    allowImageGeneration?: unknown
+    allowFileAnalysis?: unknown
+    allowImageAnalysis?: unknown
+  },
+): PilotModelCapabilities {
+  const row = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+
+  const allowFileAnalysis = normalizeBoolean(
+    legacy?.allowFileAnalysis,
+    normalizeBoolean(legacy?.allowImageAnalysis, DEFAULT_MODEL_CAPABILITIES['file.analyze']),
+  )
+
+  const capabilityFallback: Record<PilotCapabilityId, boolean> = {
+    websearch: normalizeBoolean(legacy?.allowWebsearch, DEFAULT_MODEL_CAPABILITIES.websearch),
+    'file.analyze': allowFileAnalysis,
+    'image.generate': normalizeBoolean(legacy?.allowImageGeneration, DEFAULT_MODEL_CAPABILITIES['image.generate']),
+    'image.edit': DEFAULT_MODEL_CAPABILITIES['image.edit'],
+    'audio.tts': DEFAULT_MODEL_CAPABILITIES['audio.tts'],
+    'audio.stt': DEFAULT_MODEL_CAPABILITIES['audio.stt'],
+    'audio.transcribe': DEFAULT_MODEL_CAPABILITIES['audio.transcribe'],
+    'video.generate': DEFAULT_MODEL_CAPABILITIES['video.generate'],
+  }
+
+  const normalized: PilotModelCapabilities = {}
+  for (const capability of PILOT_CAPABILITY_IDS) {
+    normalized[capability] = toCapabilityBoolean(row[capability], capabilityFallback[capability])
+  }
+  return normalized
+}
+
 function normalizeBuiltinTools(value: unknown): PilotBuiltinTool[] | undefined {
   if (!Array.isArray(value)) {
     return undefined
@@ -169,6 +250,10 @@ function normalizeBuiltinTools(value: unknown): PilotBuiltinTool[] | undefined {
     return undefined
   }
   return Array.from(new Set(list))
+}
+
+function normalizeModelBuiltinTools(value: unknown): PilotBuiltinTool[] {
+  return normalizeBuiltinTools(value) || ['write_todos']
 }
 
 function normalizeStringArray(value: unknown): string[] | undefined {
@@ -276,6 +361,17 @@ function normalizeModelCatalogItem(raw: unknown): PilotModelCatalogItem | null {
         .filter((item): item is PilotModelBinding => Boolean(item))
     : []
 
+  const capabilities = resolvePilotModelCapabilities(row.capabilities, {
+    allowWebsearch: row.allowWebsearch,
+    allowImageGeneration: row.allowImageGeneration,
+    allowFileAnalysis: row.allowFileAnalysis,
+    allowImageAnalysis: row.allowImageAnalysis,
+  })
+
+  const allowWebsearch = capabilities.websearch !== false
+  const allowFileAnalysis = capabilities['file.analyze'] !== false
+  const allowImageGeneration = capabilities['image.generate'] !== false
+
   return {
     id,
     name: normalizeText(row.name) || id,
@@ -294,9 +390,12 @@ function normalizeModelCatalogItem(raw: unknown): PilotModelCatalogItem | null {
     costScore: Number.isFinite(Number(row.costScore)) ? normalizeFloat(row.costScore, 50, 0, 100) : undefined,
     thinkingSupported: normalizeBoolean(row.thinkingSupported, true),
     thinkingDefaultEnabled: normalizeBoolean(row.thinkingDefaultEnabled, false),
-    allowWebsearch: normalizeBoolean(row.allowWebsearch, true),
-    allowImageAnalysis: normalizeBoolean(row.allowImageAnalysis, true),
-    allowFileAnalysis: normalizeBoolean(row.allowFileAnalysis, true),
+    capabilities,
+    allowWebsearch,
+    allowImageAnalysis: allowFileAnalysis,
+    allowImageGeneration,
+    allowFileAnalysis,
+    builtinTools: normalizeModelBuiltinTools(row.builtinTools),
     defaultRouteComboId: normalizeText(row.defaultRouteComboId) || undefined,
     bindings,
     metadata: row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
@@ -349,9 +448,12 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       tags: ['auto', 'routing'],
       thinkingSupported: true,
       thinkingDefaultEnabled: true,
+      capabilities: resolvePilotModelCapabilities({}),
       allowWebsearch: true,
       allowImageAnalysis: true,
+      allowImageGeneration: true,
       allowFileAnalysis: true,
+      builtinTools: ['write_todos'],
       bindings: [],
     },
     {
@@ -363,9 +465,12 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       icon: { type: 'class', value: 'i-carbon-logo-openai' },
       thinkingSupported: true,
       thinkingDefaultEnabled: true,
+      capabilities: resolvePilotModelCapabilities({}),
       allowWebsearch: true,
       allowImageAnalysis: true,
+      allowImageGeneration: true,
       allowFileAnalysis: true,
+      builtinTools: ['write_todos'],
       bindings: [],
     },
     {
@@ -377,9 +482,12 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       icon: { type: 'class', value: 'i-carbon-logo-openai' },
       thinkingSupported: true,
       thinkingDefaultEnabled: true,
+      capabilities: resolvePilotModelCapabilities({}),
       allowWebsearch: true,
       allowImageAnalysis: true,
+      allowImageGeneration: true,
       allowFileAnalysis: true,
+      builtinTools: ['write_todos'],
       bindings: [],
     },
     {
@@ -391,9 +499,12 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       icon: { type: 'class', value: 'i-carbon-ai-status' },
       thinkingSupported: true,
       thinkingDefaultEnabled: true,
+      capabilities: resolvePilotModelCapabilities({}),
       allowWebsearch: true,
       allowImageAnalysis: true,
+      allowImageGeneration: true,
       allowFileAnalysis: true,
+      builtinTools: ['write_todos'],
       bindings: [],
     },
     {
@@ -405,9 +516,12 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       icon: { type: 'class', value: 'i-carbon-ai-status-complete' },
       thinkingSupported: true,
       thinkingDefaultEnabled: true,
+      capabilities: resolvePilotModelCapabilities({}),
       allowWebsearch: true,
       allowImageAnalysis: true,
+      allowImageGeneration: true,
       allowFileAnalysis: true,
+      builtinTools: ['write_todos'],
       bindings: [],
     },
     {
@@ -419,9 +533,12 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       icon: { type: 'class', value: 'i-carbon-machine-learning-model' },
       thinkingSupported: true,
       thinkingDefaultEnabled: true,
+      capabilities: resolvePilotModelCapabilities({}),
       allowWebsearch: true,
       allowImageAnalysis: true,
+      allowImageGeneration: true,
       allowFileAnalysis: true,
+      builtinTools: ['write_todos'],
       bindings: [],
     },
     {
@@ -433,9 +550,12 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       icon: { type: 'class', value: 'i-carbon-machine-learning-model' },
       thinkingSupported: true,
       thinkingDefaultEnabled: true,
+      capabilities: resolvePilotModelCapabilities({}),
       allowWebsearch: true,
       allowImageAnalysis: true,
+      allowImageGeneration: true,
       allowFileAnalysis: true,
+      builtinTools: ['write_todos'],
       bindings: [],
     },
   ]
@@ -459,6 +579,10 @@ function getDefaultRoutingPolicy(): PilotRoutingPolicy {
     defaultRouteComboId: 'default-auto',
     quotaAutoStrategy: 'speed-first',
     explorationRate: 0.08,
+    intentNanoModelId: '',
+    intentRouteComboId: '',
+    imageGenerationModelId: '',
+    imageRouteComboId: '',
   }
 }
 
@@ -559,6 +683,10 @@ function normalizeRoutingPolicy(raw: unknown): PilotRoutingPolicy {
     defaultRouteComboId: normalizeText(row.defaultRouteComboId) || defaults.defaultRouteComboId,
     quotaAutoStrategy: 'speed-first',
     explorationRate: normalizeFloat(row.explorationRate, defaults.explorationRate, 0, 0.5),
+    intentNanoModelId: normalizeText(row.intentNanoModelId) || defaults.intentNanoModelId,
+    intentRouteComboId: normalizeText(row.intentRouteComboId) || defaults.intentRouteComboId,
+    imageGenerationModelId: normalizeText(row.imageGenerationModelId) || defaults.imageGenerationModelId,
+    imageRouteComboId: normalizeText(row.imageRouteComboId) || defaults.imageRouteComboId,
   }
 }
 
@@ -715,7 +843,9 @@ export async function mergeDiscoveredModelsIntoCatalog(
     label?: string
     thinkingSupported?: boolean
     thinkingDefaultEnabled?: boolean
+    capabilities?: PilotModelCapabilities
     allowImageAnalysis?: boolean
+    allowImageGeneration?: boolean
     allowFileAnalysis?: boolean
   }>,
 ): Promise<PilotAdminRoutingConfig> {
@@ -746,6 +876,12 @@ export async function mergeDiscoveredModelsIntoCatalog(
     }
 
     if (!existing) {
+      const capabilities = resolvePilotModelCapabilities(item.capabilities, {
+        allowWebsearch: true,
+        allowImageGeneration: item.allowImageGeneration,
+        allowFileAnalysis: item.allowFileAnalysis,
+        allowImageAnalysis: item.allowImageAnalysis,
+      })
       modelMap.set(modelId, {
         id: modelId,
         name: normalizeText(item.label) || modelId,
@@ -754,9 +890,12 @@ export async function mergeDiscoveredModelsIntoCatalog(
         source: 'discovered',
         thinkingSupported: normalizeBoolean(item.thinkingSupported, true),
         thinkingDefaultEnabled: normalizeBoolean(item.thinkingDefaultEnabled, false),
-        allowWebsearch: true,
-        allowImageAnalysis: normalizeBoolean(item.allowImageAnalysis, true),
-        allowFileAnalysis: normalizeBoolean(item.allowFileAnalysis, true),
+        capabilities,
+        allowWebsearch: capabilities.websearch !== false,
+        allowImageAnalysis: capabilities['file.analyze'] !== false,
+        allowImageGeneration: capabilities['image.generate'] !== false,
+        allowFileAnalysis: capabilities['file.analyze'] !== false,
+        builtinTools: ['write_todos'],
         bindings: [binding],
       })
       continue

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   buildModelGroupPayload,
+  BUILTIN_TOOL_OPTIONS,
   createEmptyBinding,
   createEmptyModelGroup,
   fetchPilotRoutingSettings,
@@ -49,14 +50,29 @@ function summarizeCapabilities(item: ModelGroupFormItem): string {
   if (item.thinkingSupported) {
     labels.push(item.thinkingDefaultEnabled ? 'thinking(默认开)' : 'thinking')
   }
-  if (item.allowWebsearch) {
+  if (item.capabilities.websearch) {
     labels.push('websearch')
   }
-  if (item.allowImageAnalysis) {
-    labels.push('image')
+  if (item.capabilities['file.analyze']) {
+    labels.push('file.analyze')
   }
-  if (item.allowFileAnalysis) {
-    labels.push('file')
+  if (item.capabilities['image.generate']) {
+    labels.push('image.generate')
+  }
+  if (item.capabilities['image.edit']) {
+    labels.push('image.edit')
+  }
+  if (item.capabilities['audio.tts']) {
+    labels.push('audio.tts')
+  }
+  if (item.capabilities['audio.stt']) {
+    labels.push('audio.stt')
+  }
+  if (item.capabilities['audio.transcribe']) {
+    labels.push('audio.transcribe')
+  }
+  if (item.capabilities['video.generate']) {
+    labels.push('video.generate')
   }
   return labels.length > 0 ? labels.join(' / ') : '无'
 }
@@ -364,14 +380,29 @@ watch(() => dialog.form.thinkingSupported, (enabled) => {
           <el-checkbox v-model="dialog.form.visible">
             visible
           </el-checkbox>
-          <el-checkbox v-model="dialog.form.allowWebsearch">
-            allowWebsearch
+          <el-checkbox v-model="dialog.form.capabilities.websearch">
+            websearch
           </el-checkbox>
-          <el-checkbox v-model="dialog.form.allowImageAnalysis">
-            allowImageAnalysis
+          <el-checkbox v-model="dialog.form.capabilities['file.analyze']">
+            file.analyze
           </el-checkbox>
-          <el-checkbox v-model="dialog.form.allowFileAnalysis">
-            allowFileAnalysis
+          <el-checkbox v-model="dialog.form.capabilities['image.generate']">
+            image.generate
+          </el-checkbox>
+          <el-checkbox v-model="dialog.form.capabilities['image.edit']">
+            image.edit
+          </el-checkbox>
+          <el-checkbox v-model="dialog.form.capabilities['audio.tts']">
+            audio.tts
+          </el-checkbox>
+          <el-checkbox v-model="dialog.form.capabilities['audio.stt']">
+            audio.stt
+          </el-checkbox>
+          <el-checkbox v-model="dialog.form.capabilities['audio.transcribe']">
+            audio.transcribe
+          </el-checkbox>
+          <el-checkbox v-model="dialog.form.capabilities['video.generate']">
+            video.generate
           </el-checkbox>
           <el-checkbox v-model="dialog.form.thinkingSupported">
             thinkingSupported
@@ -380,6 +411,18 @@ watch(() => dialog.form.thinkingSupported, (enabled) => {
             thinkingDefaultEnabled
           </el-checkbox>
         </el-space>
+      </el-form-item>
+
+      <el-form-item label="内置工具">
+        <el-checkbox-group v-model="dialog.form.builtinTools">
+          <el-checkbox
+            v-for="tool in BUILTIN_TOOL_OPTIONS"
+            :key="tool.value"
+            :value="tool.value"
+          >
+            {{ tool.label }}
+          </el-checkbox>
+        </el-checkbox-group>
       </el-form-item>
 
       <el-divider content-position="left">

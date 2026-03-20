@@ -2,6 +2,18 @@ import { endHttp } from '~/composables/api/axios'
 
 export type PilotIconType = 'class' | 'url' | 'emoji' | 'file'
 export type PilotModelSource = 'system' | 'manual' | 'discovered'
+export type PilotBuiltinTool = 'write_todos' | 'read_file' | 'write_file' | 'edit_file' | 'ls' | 'websearch'
+export type PilotCapabilityId =
+  | 'websearch'
+  | 'file.analyze'
+  | 'image.generate'
+  | 'image.edit'
+  | 'audio.tts'
+  | 'audio.stt'
+  | 'audio.transcribe'
+  | 'video.generate'
+
+export type PilotModelCapabilitiesForm = Record<PilotCapabilityId, boolean>
 
 export interface ModelBindingFormItem {
   channelId: string
@@ -26,9 +38,12 @@ export interface ModelGroupFormItem {
   costScore: number
   thinkingSupported: boolean
   thinkingDefaultEnabled: boolean
+  capabilities: PilotModelCapabilitiesForm
   allowWebsearch: boolean
   allowImageAnalysis: boolean
+  allowImageGeneration: boolean
   allowFileAnalysis: boolean
+  builtinTools: PilotBuiltinTool[]
   defaultRouteComboId: string
   bindings: ModelBindingFormItem[]
 }
@@ -60,6 +75,10 @@ export interface PilotRoutingPolicyForm {
   defaultModelId: string
   defaultRouteComboId: string
   explorationRate: number
+  intentNanoModelId: string
+  intentRouteComboId: string
+  imageGenerationModelId: string
+  imageRouteComboId: string
 }
 
 export interface PilotLoadBalancePolicyForm {
@@ -141,6 +160,15 @@ export const ICON_TYPE_OPTIONS: Array<{ value: PilotIconType, label: string }> =
   { value: 'file', label: 'file' },
 ]
 
+export const BUILTIN_TOOL_OPTIONS: Array<{ value: PilotBuiltinTool, label: string }> = [
+  { value: 'write_todos', label: 'write_todos' },
+  { value: 'read_file', label: 'read_file' },
+  { value: 'write_file', label: 'write_file' },
+  { value: 'edit_file', label: 'edit_file' },
+  { value: 'ls', label: 'ls' },
+  { value: 'websearch', label: 'websearch' },
+]
+
 let modelSequence = 0
 let routeComboSequence = 0
 let routeSequence = 0
@@ -194,6 +222,67 @@ function normalizeIconType(value: unknown): PilotIconType {
   return 'class'
 }
 
+function normalizeBuiltinTools(value: unknown): PilotBuiltinTool[] {
+  if (!Array.isArray(value)) {
+    return ['write_todos']
+  }
+  const allowed = new Set(BUILTIN_TOOL_OPTIONS.map(item => item.value))
+  const list = value
+    .map(item => normalizeText(item))
+    .filter(item => allowed.has(item as PilotBuiltinTool)) as PilotBuiltinTool[]
+  if (list.length <= 0) {
+    return ['write_todos']
+  }
+  return Array.from(new Set(list))
+}
+
+function createDefaultCapabilitiesForm(): PilotModelCapabilitiesForm {
+  return {
+    websearch: true,
+    'file.analyze': true,
+    'image.generate': true,
+    'image.edit': true,
+    'audio.tts': true,
+    'audio.stt': true,
+    'audio.transcribe': true,
+    'video.generate': true,
+  }
+}
+
+function normalizeCapabilitiesForm(
+  rawCapabilities: unknown,
+  legacy: {
+    allowWebsearch?: unknown
+    allowFileAnalysis?: unknown
+    allowImageAnalysis?: unknown
+    allowImageGeneration?: unknown
+  },
+): PilotModelCapabilitiesForm {
+  const row = rawCapabilities && typeof rawCapabilities === 'object' && !Array.isArray(rawCapabilities)
+    ? rawCapabilities as Record<string, unknown>
+    : {}
+  const defaults = createDefaultCapabilitiesForm()
+  const allowWebsearch = toBoolean(legacy.allowWebsearch, toBoolean(row.websearch, defaults.websearch))
+  const allowFileAnalysis = toBoolean(
+    legacy.allowFileAnalysis,
+    toBoolean(legacy.allowImageAnalysis, toBoolean(row['file.analyze'], defaults['file.analyze'])),
+  )
+  const allowImageGeneration = toBoolean(
+    legacy.allowImageGeneration,
+    toBoolean(row['image.generate'], defaults['image.generate']),
+  )
+  return {
+    websearch: allowWebsearch,
+    'file.analyze': allowFileAnalysis,
+    'image.generate': allowImageGeneration,
+    'image.edit': toBoolean(row['image.edit'], defaults['image.edit']),
+    'audio.tts': toBoolean(row['audio.tts'], defaults['audio.tts']),
+    'audio.stt': toBoolean(row['audio.stt'], defaults['audio.stt']),
+    'audio.transcribe': toBoolean(row['audio.transcribe'], defaults['audio.transcribe']),
+    'video.generate': toBoolean(row['video.generate'], defaults['video.generate']),
+  }
+}
+
 function createDefaultModelId(): string {
   modelSequence += 1
   return `group-${nowId()}-${modelSequence}`
@@ -221,6 +310,7 @@ export function createEmptyBinding(): ModelBindingFormItem {
 
 export function createEmptyModelGroup(): ModelGroupFormItem {
   const id = createDefaultModelId()
+  const capabilities = createDefaultCapabilitiesForm()
   return {
     id,
     name: id,
@@ -236,9 +326,12 @@ export function createEmptyModelGroup(): ModelGroupFormItem {
     costScore: 50,
     thinkingSupported: true,
     thinkingDefaultEnabled: true,
-    allowWebsearch: true,
-    allowImageAnalysis: true,
-    allowFileAnalysis: true,
+    capabilities,
+    allowWebsearch: capabilities.websearch,
+    allowImageAnalysis: capabilities['file.analyze'],
+    allowImageGeneration: capabilities['image.generate'],
+    allowFileAnalysis: capabilities['file.analyze'],
+    builtinTools: ['write_todos'],
     defaultRouteComboId: '',
     bindings: [],
   }
@@ -280,8 +373,16 @@ export function normalizeModelGroup(raw: Partial<ModelGroupFormItem> & {
   }
   bindings?: Array<Partial<ModelBindingFormItem>>
   tags?: unknown
+  capabilities?: Partial<Record<PilotCapabilityId, unknown>>
 }): ModelGroupFormItem {
   const id = normalizeText(raw.id) || createDefaultModelId()
+  const capabilities = normalizeCapabilitiesForm(raw.capabilities, {
+    allowWebsearch: raw.allowWebsearch,
+    allowFileAnalysis: raw.allowFileAnalysis,
+    allowImageAnalysis: raw.allowImageAnalysis,
+    allowImageGeneration: raw.allowImageGeneration,
+  })
+  const allowFileAnalysis = capabilities['file.analyze']
   const tags = Array.isArray(raw.tags)
     ? raw.tags.map(item => normalizeText(item)).filter(Boolean).join(',')
     : normalizeText(raw.tags)
@@ -301,9 +402,13 @@ export function normalizeModelGroup(raw: Partial<ModelGroupFormItem> & {
     costScore: toNumber(raw.costScore, 50, 0, 100),
     thinkingSupported: toBoolean(raw.thinkingSupported, true),
     thinkingDefaultEnabled: toBoolean(raw.thinkingDefaultEnabled, true),
-    allowWebsearch: toBoolean(raw.allowWebsearch, true),
-    allowImageAnalysis: toBoolean(raw.allowImageAnalysis, true),
-    allowFileAnalysis: toBoolean(raw.allowFileAnalysis, true),
+    capabilities,
+    allowWebsearch: capabilities.websearch,
+    // 兼容历史字段：统一“分析文件”能力为唯一开关。
+    allowImageAnalysis: allowFileAnalysis,
+    allowImageGeneration: capabilities['image.generate'],
+    allowFileAnalysis,
+    builtinTools: normalizeBuiltinTools(raw.builtinTools),
     defaultRouteComboId: normalizeText(raw.defaultRouteComboId),
     bindings: Array.isArray(raw.bindings)
       ? raw.bindings.map(item => ({
@@ -354,6 +459,16 @@ function normalizeModelTagList(value: string): string[] {
 
 export function buildModelGroupPayload(list: ModelGroupFormItem[]) {
   return list.map(item => ({
+    capabilities: {
+      websearch: item.capabilities.websearch !== false,
+      'file.analyze': item.capabilities['file.analyze'] !== false,
+      'image.generate': item.capabilities['image.generate'] !== false,
+      'image.edit': item.capabilities['image.edit'] !== false,
+      'audio.tts': item.capabilities['audio.tts'] !== false,
+      'audio.stt': item.capabilities['audio.stt'] !== false,
+      'audio.transcribe': item.capabilities['audio.transcribe'] !== false,
+      'video.generate': item.capabilities['video.generate'] !== false,
+    },
     id: normalizeText(item.id),
     name: normalizeText(item.name),
     description: normalizeText(item.description),
@@ -370,9 +485,12 @@ export function buildModelGroupPayload(list: ModelGroupFormItem[]) {
     costScore: toNumber(item.costScore, 50, 0, 100),
     thinkingSupported: item.thinkingSupported,
     thinkingDefaultEnabled: item.thinkingDefaultEnabled,
-    allowWebsearch: item.allowWebsearch,
-    allowImageAnalysis: item.allowImageAnalysis,
-    allowFileAnalysis: item.allowFileAnalysis,
+    allowWebsearch: item.capabilities.websearch !== false,
+    // 统一写回双字段，保证旧读取路径不会分叉。
+    allowImageAnalysis: item.capabilities['file.analyze'] !== false,
+    allowImageGeneration: item.capabilities['image.generate'] !== false,
+    allowFileAnalysis: item.capabilities['file.analyze'] !== false,
+    builtinTools: normalizeBuiltinTools(item.builtinTools),
     defaultRouteComboId: normalizeText(item.defaultRouteComboId) || undefined,
     bindings: item.bindings.map(binding => ({
       channelId: normalizeText(binding.channelId),
@@ -420,6 +538,10 @@ function parseRoutingSettings(payload: any) {
       defaultModelId: normalizeText(routing.routingPolicy?.defaultModelId) || 'quota-auto',
       defaultRouteComboId: normalizeText(routing.routingPolicy?.defaultRouteComboId) || 'default-auto',
       explorationRate: Number(toNumber(routing.routingPolicy?.explorationRate, 0.08, 0, 0.5).toFixed(2)),
+      intentNanoModelId: normalizeText(routing.routingPolicy?.intentNanoModelId),
+      intentRouteComboId: normalizeText(routing.routingPolicy?.intentRouteComboId),
+      imageGenerationModelId: normalizeText(routing.routingPolicy?.imageGenerationModelId),
+      imageRouteComboId: normalizeText(routing.routingPolicy?.imageRouteComboId),
     } as PilotRoutingPolicyForm,
     lbPolicy: {
       metricWindowHours: toNumber(routing.lbPolicy?.metricWindowHours, 24, 1, 24 * 7),
@@ -501,9 +623,12 @@ export async function fetchPilotRoutingMetrics(limit = 200): Promise<{
   metrics: PilotRoutingMetricRow[]
   summary: PilotRoutingMetricSummary
 }> {
-  const payload: PilotRoutingMetricsResponse = await endHttp.get('admin/routing-metrics', {
+  const rawPayload: any = await endHttp.get('admin/routing-metrics', {
     limit,
   })
+  const payload: PilotRoutingMetricsResponse = rawPayload?.data && typeof rawPayload.data === 'object'
+    ? rawPayload.data as PilotRoutingMetricsResponse
+    : rawPayload as PilotRoutingMetricsResponse
   return {
     metrics: Array.isArray(payload.metrics)
       ? payload.metrics.map(item => normalizeRoutingMetric(item || {}))

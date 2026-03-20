@@ -1,7 +1,7 @@
 # 变更日志
 
-> 更新时间: 2026-03-19
-> 说明: 主文件仅保留近 30 天（2026-02-24 ~ 2026-03-19）详细记录；更早历史已按月归档。
+> 更新时间: 2026-03-21
+> 说明: 主文件仅保留近 30 天（2026-02-24 ~ 2026-03-21）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
@@ -10,6 +10,149 @@
 - 旧记录入口：见文末“历史索引导航”。
 
 ---
+
+## 2026-03-21
+
+### feat(pilot-multimodal): Provider 多模态能力配置统一到 `capabilities` 并打通媒体运行时回退
+
+- 模型组配置升级为统一能力映射：
+  - `PilotModelCatalogItem` 新增 `capabilities`（`websearch/file.analyze/image.generate/image.edit/audio.tts/audio.stt/audio.transcribe/video.generate`）。
+  - 保留并兼容 legacy 字段（`allowWebsearch/allowImageGeneration/allowFileAnalysis/allowImageAnalysis`），读取时自动合并回填，写回时同步双轨字段。
+  - 旧配置自动“仅补缺不覆盖”补齐缺失能力位，不改用户已有绑定/优先级/路由策略。
+- 路由解析新增能力门控与排除重试：
+  - `resolvePilotRoutingSelection` 新增 `requiredCapability` 与 `excludeRouteKeys`；
+  - 当能力不匹配时自动过滤候选；无可用候选时返回统一错误码 `PILOT_CAPABILITY_UNSUPPORTED`。
+- 媒体调用链路新增自动回退：
+  - 新增 `executePilotMediaWithFallback`，对媒体能力执行“失败/unsupported 后按 routeKey 回退到下一 provider”；
+  - `chat stream` 与 `aigc executor` 的 `image_generate` 分支接入该回退链路。
+- Tool Gateway 新增多模态 REST 能力：
+  - 新增 `image.edit`、`audio.tts`、`audio.stt`、`audio.transcribe`；
+  - `video.generate` 返回明确未实现错误 `PILOT_MEDIA_VIDEO_NOT_IMPLEMENTED`。
+- 媒体输出统一为 URL-first：
+  - 新增运行时媒体缓存与 `GET /api/runtime/media-cache/:id`；
+  - 图片/音频二进制默认落缓存 URL 返回；
+  - 支持 `output.includeBase64` 可选返回 `base64`（默认关闭）。
+- 能力测试入口升级：
+  - 新增 `POST /api/runtime/capability-test/invoke`，统一测试 `image.generate/image.edit/audio.tts/audio.stt/audio.transcribe/video.generate`；
+  - `apps/pilot/app/pages/test/image-lab.vue` 升级为 capability lab，展示路由结果、回退尝试链路与媒体结果。
+- 测试补齐：
+  - 新增 `pilot-admin-routing-config.capabilities.test.ts`；
+  - 扩展 `pilot-routing-resolver.intent.test.ts`（能力门控、排除已失败 route）；
+  - 扩展 `pilot-tool-gateway.test.ts`（image.edit/audio.tts/audio.stt/audio.transcribe/video 未实现）。
+
+## 2026-03-20
+
+### feat(core-intelligence): 多模态 Provider 统一配置与运行时分发（LangChain 优先）
+
+- 能力配置统一补齐（保持点号能力 ID 不变）：
+  - 新增/补齐默认能力：`image.generate`、`image.edit`、`audio.stt`、`video.generate`（保留既有 `audio.tts`、`audio.transcribe`）。
+  - 配置回填策略升级为“仅补缺不覆盖”：历史配置缺失能力自动回填，不改写用户已有模型绑定、优先级与 Prompt。
+- 运行时分发补齐：
+  - `invoke` 分发新增 `image.edit`、`audio.tts`、`audio.stt`、`audio.transcribe`、`video.generate` case，避免“已注册但不可调用”。
+  - 保持失败策略：首 provider `unsupported/失败` 后自动回退下一 provider，全部尝试后再返回最终错误。
+- Provider 适配（LangChain + REST 补齐）：
+  - LangChain 主链继续承接 `chat/embedding/vision`；
+  - OpenAI-compatible（含 OpenAI / SiliconFlow / Custom）新增媒体 REST 能力：
+    - `POST /images/generations`、`POST /images/edits`
+    - `POST /audio/speech`、`POST /audio/transcriptions`、`POST /audio/translations`
+  - `Anthropic / DeepSeek` 对缺失媒体端点显式返回 `unsupported`，由策略层自动回退。
+- 媒体结果返回规范：
+  - 默认 URL-first：图片/音频落临时文件并返回 `tfile://` URL；
+  - 新增 `output.includeBase64`（默认 `false`）可选返回 base64，控制 IPC 体积；
+  - 输出结构保持向后兼容，在原字段上新增可选 `url/base64`。
+- `video.generate` 范围约束：
+  - 本期仅落配置与能力注册（含测试器提示“配置已生效，运行时未实现”），真实视频生成端点延后实现。
+- 回归验证：
+  - 已通过定向测试：`intelligence-sdk`、`local-provider`、`tuff-intelligence-runtime`；
+  - `typecheck:node` 已通过。
+
+### feat(pilot-websearch): 全局 Provider 池聚合配置落地（SearXNG/Serper/Tavily + builtin 兜底）
+
+- `datasource.websearch` 升级为“纯全局池”结构：
+  - 新增 `providers[]`（`id/type/enabled/priority/baseUrl/apiKeyEncrypted/timeoutMs/maxResults`）；
+  - 新增 `aggregation`（`mode/targetResults/minPerProvider/dedupeKey/stopWhenEnough`）；
+  - 新增 `crawl`（`enabled/timeoutMs/maxContentChars`）。
+- 保留 legacy 字段兼容映射：
+  - 当新 `providers` 为空时，自动把 `gatewayBaseUrl/apiKeyRef` 映射为 `legacy-gateway` 单 provider；
+  - 新结构写回后清空 legacy 字段扩展入口，仅保留读取兼容。
+- `pilot-tool-gateway` 执行链路切换为 provider 聚合：
+  - 按 `priority` 执行主 provider，不足 `targetResults` 时按顺序补召回；
+  - 基于 `dedupeKey(url | url+content)` 去重，并在达到目标后停止；
+  - 仍不足时回退 `responses_builtin`（OpenAI Responses 内置检索）。
+- 管理端新增全局配置页面：`/admin/system/websearch-providers`：
+  - 支持 provider 列表增删改、启停、排序、key 维护（留空不变 / clear 清空）；
+  - 支持单页维护 `aggregation` 与 `crawl`（“聚合填写”入口）。
+- 审计与观测增强：
+  - `websearch.executed` 新增 `providerChain/providerUsed/fallbackUsed/dedupeCount`；
+  - 保持并透传 `source/sourceReason/sourceCount` 便于排障。
+- 单测补齐：
+  - 新增 `pilot-admin-datasource-config.test.ts`（legacy 映射、加密/脱敏、key 保持与清空）；
+  - 更新 `pilot-tool-gateway.test.ts` 适配 provider 池聚合与 fallback 分支；
+  - 保留 `pilot-websearch-connector.test.ts` 去重与 allowlist 回归。
+
+### feat(pilot-image-lab): 新增 LangChain 兼容图像直连测试页与 Runtime API
+
+- 新增页面 `apps/pilot/app/pages/test/image-lab.vue`：
+  - 提供 `Base URL / API Key / Model / Prompt / size / count / timeoutMs` 手动输入；
+  - 支持“拉取模型 + 生成图像 + 清空结果”流程；
+  - 展示图片预览、`revisedPrompt`、`callId`、耗时与错误信息；
+  - `apiKey` 仅保存在页面内存态，不写入 URL 和本地持久化。
+- 新增 runtime 接口（登录可用）：
+  - `POST /api/runtime/image-test/models`：按手填 `baseUrl/apiKey` 拉取可用模型列表；
+  - `POST /api/runtime/image-test/generate`：按手填配置直接触发图像生成并返回图片结果。
+- 后端能力复用与扩展：
+  - 复用 `discoverPilotChannelModels` 实现模型发现；
+  - 复用 `executePilotImageGenerateTool` 实现图像生成，并扩展支持 `size/count`（默认 `1024x1024`、`1`）。
+- 测试覆盖新增：
+  - `pilot-tool-gateway` 增加 `size/count` 默认与透传用例、空结果失败用例；
+  - 新增 runtime image-test API handler 单测，覆盖参数校验与上游错误映射。
+
+### fix(pilot-routing): Route Combo 跳过已关闭模型，避免继续命中无效 providerModel
+
+- `apps/pilot/server/utils/pilot-routing-resolver.ts`：
+  - 新增渠道模型可用性校验，Route Combo / 模型绑定 / 候选池筛选阶段统一跳过“渠道内已禁用或不存在”的 `providerModel`；
+  - fallback 选模策略增强：优先回退到渠道内启用模型，避免落到已关闭模型导致 400（`Model does not exist`）持续报错。
+- `apps/pilot/server/utils/__tests__/pilot-routing-resolver.intent.test.ts`：
+  - 新增回归用例：当 Route Combo 同时包含已关闭模型与可用模型时，验证路由会自动忽略已关闭模型并选择可用模型。
+
+### feat(pilot-routing-admin): 渠道模型批量管理 + 模型优先级 + 内置工具迁移到模型组
+
+- `apps/pilot/app/pages/admin/system/channels.vue`：
+  - 渠道模型列表新增「一键清空 / 全部启用 / 全部禁用」；
+  - 渠道模型新增 `priority` 字段并参与保存。
+- `apps/pilot/server/utils/pilot-admin-channel-config.ts` / `pilot-channel-model-sync.ts`：
+  - 渠道模型配置支持 `priority` 归一化与同步默认值（默认 `100`）。
+- `apps/pilot/app/pages/admin/system/model-groups.vue` / `app/composables/usePilotRoutingAdmin.ts`：
+  - 模型组新增 `builtinTools` 配置入口，并写入 routing 配置。
+- `apps/pilot/server/utils/pilot-routing-resolver.ts`：
+  - 内置工具优先读取模型组配置；若模型组未配置则兼容回退到渠道配置；
+  - `quota-auto` 选择时支持渠道模型 `priority` 参与排序。
+
+### fix(pilot-markdown): MilkContent 只读代码块移除高度上限与顶部偏移
+
+- `MilkContent` 的 `createReadonlyCodeBlockView` 移除 `--editor-code-content-max-height` 注入，代码块视图不再受 `max-height` 变量限制。
+- `style.scss` 中 `EditorCode-Content` 与 `EditorCode-InlinePreview` 去除 `max-height`，保持内容自然撑开；保留横向/纵向溢出滚动能力。
+- `EditorCode--Sticky` 的 `HeaderHost` 统一改为 `top: 0`，不再使用 `84px` 顶部偏移变量。
+
+### fix(pilot-markdown-ui): 修复只读代码块右侧复制按钮可见性
+
+- `RenderCodeHeader` 的复制按钮从“仅图标”调整为“图标 + 文案（复制/已复制）”，避免图标字体未命中时出现按钮空白。
+- 同步微调复制按钮尺寸与间距（`min-width/gap`），保证代码头右侧操作区在浅色主题下稳定可辨识。
+
+### fix(pilot-runtime-ui): 运行事件最小化前台展示 + 审批协议统一
+
+- `POST /api/chat/sessions/:sessionId/stream` 与 `POST /api/aigc/executor` 的高风险 websearch 审批分支统一从 `error` 语义切换为 `turn.approval_required`，并以 `done(status=waiting_approval)` 收束，不再误判为失败轮次。
+- 意图解析链路合并记忆沉淀决策：`intent.completed` 新增 `memoryDecision(shouldStore/reason)`，轮次结束按该决策触发事实抽取与写入，不再以消息条数变化误判“已沉淀”。
+- 新增 `pilot_chat_memory_facts` 事实存储与去重写入；`memory.updated` 改为沉淀语义（`addedCount/stored/reason` 为主，`historyBefore/historyAfter` 仅兼容），前端仅在 `stored=true` 时展示“已沉淀记忆/已沉淀 X 条记忆”，并移除记忆卡调试字段展示。
+- `PilotRunEventCard` 改为默认收起（失败态默认展开），新增“详情/收起”交互；联网卡片仅在 `websearch.executed && sourceCount>0` 显示。
+- 修复只读代码块 header 双重 sticky：保留 `HeaderHost` sticky，取消内层 header sticky，并在聊天只读渲染链路默认关闭 sticky header。
+
+### fix(pilot-markdown-compat): 旧聊天页 Markdown 原样显示兼容修复
+
+- 旧聊天页 `ChatItem` 对 assistant 的 `text` block 增加兼容渲染：改走 `RenderContent`（Markdown），user 侧 `text` 仍保持 `<pre>` 文本展示，避免语义回归。
+- `@talex-touch/tuff-intelligence/pilot-conversation` 新增 `normalizeLooseMarkdownForRender`，统一做轻量渲染归一化：`CRLF -> LF`，并修复智能引号包裹 fence（如 “```cpp 与 ```” 这类分隔符写法）。
+- `ThContent -> MilkContent` 接入该归一化函数，减少非标准 fence 导致的代码块降级为纯文本问题。
+- 会话快照序列化前向修复：assistant 纯字符串块默认映射为 `markdown`（user/system 保持 `text`），阻止新快照继续产出旧形态。
 
 ## 2026-03-19
 
@@ -76,12 +219,38 @@
 - 在输入面板新增“记忆系统”开关项，复用现有 `v1/chat/memory/settings` 能力切换当前会话记忆状态。
 - `ThInput` / `pages/index.vue` 打通记忆开关状态与禁用提示，策略或提交中状态下保持只读并给出明确提示。
 
+### fix(pilot-input): 修复 Legacy UI 中 Pilot 开关关闭后仍透传 `pilotMode=true`
+
+- 修复 `pages/index.vue` 中发送元数据合并逻辑：`pilotMode` 改为“显式输入优先，未提供时回退会话状态”，不再使用 `OR` 强制吸附历史会话值。
+- 结果：当用户在 `ThInputPlus` 中关闭 `Pilot 模式` 后，本轮请求可正确透传 `pilotMode=false`；仅在未显式设置时沿用会话级默认。
+- 聊天页顶部与底部模式标签改为会话联动展示：`pilotMode=true` 显示 `PILOT`，关闭后显示 `普通模式`，避免静态 `PILOT` 误导。
+
 ### fix(pilot-chat): turns 失败响应脱敏（隐藏连接端点与本地路径）
 
 - `POST /api/v1/chat/sessions/:sessionId/turns` 增加统一异常兜底：数据库/网络异常不再把底层错误对象直接冒泡到前端。
 - 新增服务端错误脱敏工具（`server/utils/pilot-http.ts`）：对 `IP:PORT`、域名端口、绝对本机路径执行遮罩处理。
 - 对瞬时连接类错误（如 `ETIMEDOUT/ECONNREFUSED`）返回统一可读文案与稳定状态码（`503`），降低前端日志泄露内部拓扑风险。
 - 前端 `completion` 错误文案解析增加二次脱敏，确保即使上游异常信息带敏感连接串，也不会直接展示给用户。
+
+### fix(pilot-sync): chat sessions 流式链路回灌 quota 历史快照
+
+- `POST /api/chat/sessions/:sessionId/stream` 在流结束阶段新增“兼容快照回灌”：从 runtime 会话实时读取 `messages + title`，统一写入 `pilot_quota_history`，避免旧 `syncHistory` 拉到陈旧快照后覆盖本地会话。
+- 同步维护 `pilot_quota_sessions` 映射（`chat_id = runtime_session_id`），保证旧会话入口与新 runtime 会话保持一致可追踪。
+- 回灌链路采用 best-effort（失败仅 `warn`，不阻断主流式响应），优先保障对话主链路稳定。
+
+### fix(pilot-sync-ui): 旧聊天页发送完成后停用 legacy 会话拉取覆盖
+
+- `apps/pilot/app/pages/index.vue` 移除发送完成阶段对 `syncHistory()` 的依赖，不再请求 `GET /api/aigc/conversation/:id` 回填当前会话。
+- 会话同步状态改为本地收敛：发送开始置 `pending`，请求完成按最终状态置 `success/failed`，并仅更新本地 `history list` 快照，避免空 `messages` 响应覆盖本地上下文。
+- `REQUEST_SAVE_CURRENT_CONVERSATION`（含 `Ctrl+S` 与状态栏同步按钮）改为本地快照保存，不再触发 legacy 会话详情接口。
+
+### fix(pilot-approval-ui): 补齐工具审批入口并移除审批超时失败分支
+
+- 旧聊天页 `pilot_tool_card` 新增内联“批准/拒绝”按钮：当 `status=approval_required` 且存在 `ticketId/sessionId` 时，可直接调用 `POST /api/v1/chat/sessions/:sessionId/tool-approvals/:ticketId` 完成审批。
+- 工具卡 payload 补充 `sessionId`，避免 UI 端审批动作缺少上下文导致无法提交。
+- 审批链路改为“前端显式决策 + 单次事件续跑”：去除前端轮询审批状态，不再生成“审批等待超时（>Ns）”错误卡。
+- 前端审批成功后通过 `pilot-tool-approval-decision` 事件回传当前会话，触发流式链路 resume；拒绝时直接落工具拒绝态并结束当前轮次。
+- 对 `event=error` 且 `code=TOOL_APPROVAL_REQUIRED` 的流事件改为“等待审批态”处理，不再额外渲染错误卡干扰审批流程。
 
 ## 2026-03-18
 

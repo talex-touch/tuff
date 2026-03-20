@@ -1,6 +1,17 @@
 import type { Ref } from 'vue'
 
 export type PilotRuntimeIconType = 'class' | 'url' | 'emoji' | 'file'
+export type PilotRuntimeCapabilityId =
+  | 'websearch'
+  | 'file.analyze'
+  | 'image.generate'
+  | 'image.edit'
+  | 'audio.tts'
+  | 'audio.stt'
+  | 'audio.transcribe'
+  | 'video.generate'
+
+export type PilotRuntimeModelCapabilities = Partial<Record<PilotRuntimeCapabilityId, boolean>>
 
 export interface PilotRuntimeIconConfig {
   type: PilotRuntimeIconType
@@ -13,6 +24,7 @@ export interface PilotRuntimeModelOption {
   description?: string
   img?: string
   icon?: PilotRuntimeIconConfig
+  capabilities: PilotRuntimeModelCapabilities
   thinkingSupported: boolean
   thinkingDefaultEnabled: boolean
   allowWebsearch: boolean
@@ -41,6 +53,7 @@ interface RuntimeModelsResponse {
     }
     thinkingSupported?: boolean
     thinkingDefaultEnabled?: boolean
+    capabilities?: PilotRuntimeModelCapabilities
     allowWebsearch?: boolean
     allowImageAnalysis?: boolean
     allowImageGeneration?: boolean
@@ -56,6 +69,16 @@ const AUTO_MODEL: PilotRuntimeModelOption = {
   name: 'Auto',
   description: '根据路由策略自动选择模型',
   icon: { type: 'class', value: 'i-carbon-flow-data' },
+  capabilities: {
+    websearch: true,
+    'file.analyze': true,
+    'image.generate': true,
+    'image.edit': true,
+    'audio.tts': true,
+    'audio.stt': true,
+    'audio.transcribe': true,
+    'video.generate': true,
+  },
   thinkingSupported: true,
   thinkingDefaultEnabled: true,
   allowWebsearch: true,
@@ -112,18 +135,37 @@ function normalizeModelList(value: unknown): PilotRuntimeModelOption[] {
     if (!id) {
       continue
     }
-    const allowFileAnalysis = toBoolean(row.allowFileAnalysis, toBoolean(row.allowImageAnalysis, true))
+    const capabilitiesRow = row.capabilities && typeof row.capabilities === 'object' && !Array.isArray(row.capabilities)
+      ? row.capabilities as Record<string, unknown>
+      : {}
+    const allowWebsearch = toBoolean(row.allowWebsearch, toBoolean(capabilitiesRow.websearch, true))
+    const allowFileAnalysis = toBoolean(
+      row.allowFileAnalysis,
+      toBoolean(row.allowImageAnalysis, toBoolean(capabilitiesRow['file.analyze'], true)),
+    )
+    const allowImageGeneration = toBoolean(row.allowImageGeneration, toBoolean(capabilitiesRow['image.generate'], true))
+    const capabilities: PilotRuntimeModelCapabilities = {
+      websearch: allowWebsearch,
+      'file.analyze': allowFileAnalysis,
+      'image.generate': allowImageGeneration,
+      'image.edit': toBoolean(capabilitiesRow['image.edit'], true),
+      'audio.tts': toBoolean(capabilitiesRow['audio.tts'], true),
+      'audio.stt': toBoolean(capabilitiesRow['audio.stt'], true),
+      'audio.transcribe': toBoolean(capabilitiesRow['audio.transcribe'], true),
+      'video.generate': toBoolean(capabilitiesRow['video.generate'], true),
+    }
     list.push({
       key: id,
       name: normalizeText(row.name) || id,
       description: normalizeText(row.description) || undefined,
       icon: normalizeIcon(row.icon),
+      capabilities,
       thinkingSupported: toBoolean(row.thinkingSupported, true),
       thinkingDefaultEnabled: toBoolean(row.thinkingDefaultEnabled, true),
-      allowWebsearch: toBoolean(row.allowWebsearch, true),
+      allowWebsearch,
       // 兼容历史字段：运行时对外统一为“分析文件”能力。
       allowImageAnalysis: allowFileAnalysis,
-      allowImageGeneration: toBoolean(row.allowImageGeneration, true),
+      allowImageGeneration,
       allowFileAnalysis,
       source: normalizeText(row.source) || 'runtime',
     })
