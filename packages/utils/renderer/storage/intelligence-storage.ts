@@ -57,6 +57,28 @@ function buildPromptSchemaFromCapabilities(
   }
 }
 
+function patchMissingCapabilities(
+  capabilities: Record<string, { promptTemplate?: string }> | undefined
+): {
+  changed: boolean
+  capabilities: Record<string, { promptTemplate?: string }>
+} {
+  const nextCapabilities = { ...(capabilities || {}) }
+  let changed = false
+
+  for (const [capabilityId, capabilityConfig] of Object.entries(DEFAULT_CAPABILITIES)) {
+    if (!nextCapabilities[capabilityId]) {
+      nextCapabilities[capabilityId] = { ...capabilityConfig }
+      changed = true
+    }
+  }
+
+  return {
+    changed,
+    capabilities: nextCapabilities,
+  }
+}
+
 const defaultPromptSchema = buildPromptSchemaFromCapabilities(DEFAULT_CAPABILITIES)
 
 const defaultIntelligenceData: IntelligenceStorageData = {
@@ -232,17 +254,32 @@ export async function migrateIntelligenceSettings(): Promise<void> {
     intelligenceStorageLog.info(`Migration to v2 complete, capabilities count: ${Object.keys(DEFAULT_CAPABILITIES).length}`)
   }
   else {
-    if (!Array.isArray(currentData.promptRegistry) || !Array.isArray(currentData.promptBindings)) {
-      const promptSchema = buildPromptSchemaFromCapabilities(currentData.capabilities || DEFAULT_CAPABILITIES)
+    const patched = patchMissingCapabilities(currentData.capabilities)
+    const hasPromptSchema
+      = Array.isArray(currentData.promptRegistry) && Array.isArray(currentData.promptBindings)
+
+    if (patched.changed || !hasPromptSchema) {
+      const promptSchema = buildPromptSchemaFromCapabilities(patched.capabilities)
       intelligenceStorage.applyData({
         ...currentData,
-        promptRegistry: promptSchema.promptRegistry,
-        promptBindings: promptSchema.promptBindings,
+        capabilities: patched.capabilities,
+        promptRegistry: hasPromptSchema ? currentData.promptRegistry : promptSchema.promptRegistry,
+        promptBindings: hasPromptSchema ? currentData.promptBindings : promptSchema.promptBindings,
         version: currentData.version || 2,
       })
       await intelligenceStorage.saveToRemote({ force: true })
+      if (patched.changed) {
+        intelligenceStorageLog.info(
+          `Patched missing capabilities for v${currentData.version || 2}, total: ${Object.keys(patched.capabilities).length}`,
+        )
+      }
+      else {
+        intelligenceStorageLog.info(`Prompt schema repaired for version: ${currentData.version || 2}`)
+      }
     }
-    intelligenceStorageLog.info(`No migration needed, current version: ${currentData.version}`)
+    else {
+      intelligenceStorageLog.info(`No migration needed, current version: ${currentData.version}`)
+    }
   }
 
   intelligenceStorageLog.info(`Final providers count: ${intelligenceStorage.data.providers.length}`)
