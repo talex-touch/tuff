@@ -6,8 +6,25 @@ import type {
   TestResult
 } from '@talex-touch/tuff-intelligence'
 import type { ComputedRef, Ref } from 'vue'
-import { intelligenceData, intelligenceSettings } from '@talex-touch/utils/renderer/storage'
+import {
+  intelligenceData,
+  intelligenceSettings,
+  migrateIntelligenceSettings
+} from '@talex-touch/utils/renderer/storage'
 import { computed, ref, watch } from 'vue'
+
+let intelligenceMigrationPromise: Promise<void> | null = null
+
+function ensureIntelligenceMigration(): Promise<void> {
+  if (!intelligenceMigrationPromise) {
+    intelligenceMigrationPromise = migrateIntelligenceSettings().catch((error) => {
+      console.warn('[useIntelligenceManager] migrateIntelligenceSettings failed', error)
+      intelligenceMigrationPromise = null
+      throw error
+    })
+  }
+  return intelligenceMigrationPromise
+}
 
 /**
  * Return type for the useIntelligenceManager composable
@@ -124,6 +141,11 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
 
   const testResults = ref<Map<string, TestResult>>(new Map())
   const loading = ref(false)
+
+  loading.value = true
+  void ensureIntelligenceMigration().finally(() => {
+    loading.value = false
+  })
 
   /**
    * Currently selected provider object.
