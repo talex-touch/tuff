@@ -21,6 +21,7 @@ import { appSetting } from '../channel/storage/index'
 import { migrateLegacyAuthEnvToSecureStorage } from './auth-env'
 import { attestCurrentDevice } from './device-attest'
 import { applyDefaultSyncOnLogin, getSyncPreferenceState } from './sync-preferences'
+import { canShowLoginResumePrompt, resolveAuthMountAction } from './use-auth-policies'
 
 let authStateCleanup: (() => void) | null = null
 let focusPromptCleanup: (() => void) | null = null
@@ -650,12 +651,13 @@ function setupAuthFocusPrompt(): void {
   }
 
   const canPrompt = () => {
-    if (!appSetting?.beginner?.init) return false
-    if (!pendingBrowserLogin.value) return false
-    if (authState.isSignedIn) return false
-    if (isHandlingExternalAuthCallback.value) return false
-    if (promptActive) return false
-    return true
+    return canShowLoginResumePrompt({
+      beginnerInit: appSetting?.beginner?.init,
+      hasPendingBrowserLogin: Boolean(pendingBrowserLogin.value),
+      isSignedIn: authState.isSignedIn,
+      isHandlingExternalAuthCallback: isHandlingExternalAuthCallback.value,
+      promptActive
+    })
   }
 
   const runPrompt = () => {
@@ -737,11 +739,9 @@ export function useAuth() {
     setupAuthStateListener()
     setupAuthFocusPrompt()
 
-    if (!appSetting?.beginner?.init) {
-      return
-    }
+    const mountAction = resolveAuthMountAction(isInitialized)
 
-    if (!isInitialized) {
+    if (mountAction === 'initialize') {
       initializeAuth()
       return
     }
