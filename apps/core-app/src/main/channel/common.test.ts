@@ -121,11 +121,13 @@ vi.mock('@sentry/electron/main', () => ({
   setTag: vi.fn(),
   setContext: vi.fn(),
   setUser: vi.fn(),
-  withScope: vi.fn((fn: (scope: any) => void) => fn({
-    setTag: vi.fn(),
-    setContext: vi.fn(),
-    setExtra: vi.fn()
-  })),
+  withScope: vi.fn((fn: (scope: any) => void) =>
+    fn({
+      setTag: vi.fn(),
+      setContext: vi.fn(),
+      setExtra: vi.fn()
+    })
+  ),
   getCurrentScope: vi.fn(() => ({
     setTag: vi.fn(),
     setContext: vi.fn(),
