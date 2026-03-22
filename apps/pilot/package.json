@@ -67,6 +67,8 @@
     "html2canvas": "^1.4.1",
     "js-confetti": "^0.12.0",
     "lottie": "^0.0.1",
+    "markmap-lib": "^0.17.2",
+    "markmap-view": "^0.17.2",
     "mermaid": "^11.13.0",
     "nuxt": "catalog:build",
     "pg": "^8.20.0",
