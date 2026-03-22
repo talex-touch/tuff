@@ -13,6 +13,31 @@
 
 ## 2026-03-22
 
+### feat(core-search-observability): 搜索卡顿诊断观测增强（主日志 + 自动短开）
+
+- 搜索主链路新增 `search-trace/v1` 结构化日志（仅主进程现有日志，不新增 JSONL）：
+  - 覆盖事件：`ipc.query.received`、`session.start`、`first.result`、`session.end`、`session.cancel`、`session.error`。
+  - 统一字段：`sessionId/event/ts`、`query.len/query.hash`、`inputCount/inputTypes`、阶段耗时（parse/providerSelect/mergeRank/total）、结果计数、provider 汇总、争用快照（DB 队列 + 最近 event loop lag + app task gate）。
+- 查询日志脱敏：搜索诊断日志不再写 query 明文，统一改为 `len + sha1(hash,12)`。
+- SearchLogger 升级为“双态开关”：
+  - 手动开关沿用 `appSetting.searchEngine.logsEnabled`；
+  - 新增内存态 `enableBurst(durationMs, reason)`，到期自动失效，不持久化配置。
+- PerfMonitor 增加严重卡顿窗口触发能力与 lag 快照接口：
+  - 触发条件：`lag >= 2000ms` 且 `30s` 窗口内出现 `2` 次；
+  - 冷却：`120s`；
+  - 提供订阅接口供业务模块注册 burst 行为。
+- CoreBox 模块接入自动短开：
+  - 监听 PerfMonitor 严重 lag 触发事件；
+  - 自动启用 `30s` 搜索诊断 burst，便于复现时快速抓取搜索链路证据。
+
+### fix(pilot-chat): Markdown 只读渲染去除尾部空行
+
+- 在 `apps/pilot/app/components/render/RenderContent.vue` 新增只读渲染范围样式：`.RenderContent .MilkContent.markdown-body .ProseMirror[contenteditable="false"]`。
+- 处理规则：
+  - 隐藏末尾空段落（覆盖 `p:last-child:empty` 与 `p:last-child:has(> br.ProseMirror-trailingBreak)`）。
+  - 强制最后可见块元素 `margin-bottom: 0`，消除聊天消息尾部多余空白行。
+- 兼容性兜底：在不支持 `:has` 的环境下，通过运行时 class（`ProseMirror--TailEmpty`）保持同等效果；不改动原始 Markdown 文本与存储语义。
+
 ### chore(governance): 文档门禁恢复可用（日期口径 + TODO 统计）
 
 - 六主文档 `更新时间` 统一到 `2026-03-22`（`INDEX/README/TODO/Roadmap/Release Checklist/Quality Baseline`）。

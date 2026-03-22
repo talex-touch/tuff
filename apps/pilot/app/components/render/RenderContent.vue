@@ -37,6 +37,49 @@ const DOT_ANCHOR_IGNORE_SELECTOR = [
   '.EditorCode-ContentFav',
   '.EditorCode-ContentActions',
 ].join(',')
+const HAS_SELECTOR_QUERY = 'selector(:has(*))'
+
+function supportsHasSelector() {
+  if (typeof window === 'undefined' || typeof CSS === 'undefined' || typeof CSS.supports !== 'function') {
+    return true
+  }
+
+  try {
+    return CSS.supports(HAS_SELECTOR_QUERY)
+  }
+  catch {
+    return true
+  }
+}
+
+const hasSelectorSupport = supportsHasSelector()
+
+function hasTrailingEmptyParagraph(paragraph: HTMLElement | null): boolean {
+  if (!paragraph || paragraph.tagName !== 'P') {
+    return false
+  }
+
+  if (paragraph.querySelector('br.ProseMirror-trailingBreak')) {
+    return true
+  }
+
+  const normalizedText = String(paragraph.textContent || '').replace(/\u200B/g, '').trim()
+  return normalizedText.length === 0
+}
+
+function applyLegacyTrailingParagraphFallback(rootEl: HTMLElement) {
+  if (hasSelectorSupport) {
+    return
+  }
+
+  const proseMirror = rootEl.querySelector<HTMLElement>('.ProseMirror[contenteditable="false"]')
+  if (!proseMirror) {
+    return
+  }
+
+  const shouldMarkTailEmpty = hasTrailingEmptyParagraph(proseMirror.lastElementChild as HTMLElement | null)
+  proseMirror.classList.toggle('ProseMirror--TailEmpty', shouldMarkTailEmpty)
+}
 
 function handleGeneratingDotUpdate(rootEl: HTMLElement, cursor: HTMLElement) {
   if (!props.dotEnable || !rootEl || !cursor)
@@ -480,13 +523,21 @@ const value = ref('')
 watchEffect(() => {
   value.value = props.data
 
-  const dom = resolveMarkdownRoot()
-  const cursor = dot.value
-  if (!dom || !cursor) {
-    return
-  }
+  nextTick(() => {
+    const dom = resolveMarkdownRoot()
+    if (!dom) {
+      return
+    }
 
-  nextTick(() => scheduleGeneratingDotUpdate(dom, cursor))
+    applyLegacyTrailingParagraphFallback(dom)
+
+    const cursor = dot.value
+    if (!cursor) {
+      return
+    }
+
+    scheduleGeneratingDotUpdate(dom, cursor)
+  })
 })
 
 watch(gradientEnabled, (enabled) => {
@@ -549,6 +600,27 @@ onBeforeUnmount(() => {
 .RenderContent {
   .MilkContent {
     padding: 0;
+
+    .ProseMirror[contenteditable='false'] {
+      > p:last-child:empty,
+      > p:last-child:has(> br.ProseMirror-trailingBreak) {
+        display: none;
+      }
+
+      &.ProseMirror--TailEmpty > p:last-child {
+        display: none;
+      }
+
+      > :last-child {
+        margin-bottom: 0 !important;
+      }
+
+      &:has(> p:last-child:empty) > :nth-last-child(2),
+      &:has(> p:last-child:has(> br.ProseMirror-trailingBreak)) > :nth-last-child(2),
+      &.ProseMirror--TailEmpty > :nth-last-child(2) {
+        margin-bottom: 0 !important;
+      }
+    }
   }
 }
 
