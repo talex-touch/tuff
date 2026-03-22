@@ -20,6 +20,24 @@ vi.mock('../../../db/utils', () => ({
   createDbUtils: () => null
 }))
 
+vi.mock('../../../db/db-write-scheduler', () => ({
+  dbWriteScheduler: {
+    getStats: () => ({ queued: 0, processing: false, currentTaskLabel: null })
+  }
+}))
+
+vi.mock('../../../service/app-task-gate', () => ({
+  appTaskGate: {
+    getSnapshot: () => ({ activeCount: 0, activeLabels: {} })
+  }
+}))
+
+vi.mock('../../../utils/perf-monitor', () => ({
+  perfMonitor: {
+    getRecentEventLoopLagSnapshot: () => null
+  }
+}))
+
 vi.mock('../../database', () => ({
   databaseModule: {}
 }))
