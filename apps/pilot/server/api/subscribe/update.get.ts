@@ -1,4 +1,4 @@
-import { upsertPilotCompatEntity } from '../../utils/pilot-compat-store'
+import { upsertPilotEntity } from '../../utils/pilot-entity-store'
 import { quotaError, quotaOk } from '../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {
@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
     return quotaError(400, 'uid is required', null)
   }
   const now = new Date().toISOString()
-  const data = await upsertPilotCompatEntity(event, {
+  const data = await upsertPilotEntity(event, {
     domain: 'order.subscriptions',
     id: uid,
     payload: {

@@ -1,10 +1,10 @@
-import { upsertPilotCompatEntity } from '../../utils/pilot-compat-store'
+import { upsertPilotEntity } from '../../utils/pilot-entity-store'
 import { quotaOk } from '../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<Record<string, any>>(event)
   const now = new Date().toISOString()
-  const data = await upsertPilotCompatEntity(event, {
+  const data = await upsertPilotEntity(event, {
     domain: 'doc.documents',
     id: String(body?.id || ''),
     payload: {

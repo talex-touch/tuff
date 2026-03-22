@@ -278,6 +278,9 @@ const AUDIO_STT_TOOL_NAME = 'audio.stt'
 const AUDIO_STT_TOOL_ID = 'tool.audio.stt'
 const AUDIO_TRANSCRIBE_TOOL_NAME = 'audio.transcribe'
 const AUDIO_TRANSCRIBE_TOOL_ID = 'tool.audio.transcribe'
+const TOOL_APPROVAL_POLICY: Readonly<Record<string, boolean>> = {
+  [TOOL_NAME]: false,
+}
 export const PILOT_MEDIA_UNSUPPORTED_CODE = 'PILOT_MEDIA_UNSUPPORTED'
 export const PILOT_MEDIA_VIDEO_NOT_IMPLEMENTED_CODE = 'PILOT_MEDIA_VIDEO_NOT_IMPLEMENTED'
 const IMAGE_TOOL_TIMEOUT_MS = 90_000
@@ -386,6 +389,13 @@ function evaluateRiskLevel(input: {
   return 'medium'
 }
 
+function shouldRequireToolApproval(toolName: string, riskLevel: PilotToolRiskLevel): boolean {
+  if (riskLevel !== 'high' && riskLevel !== 'critical') {
+    return false
+  }
+  return TOOL_APPROVAL_POLICY[toolName] === true
+}
+
 function mapDocumentsToSources(docs: PilotWebsearchNormalizedDocument[]): PilotToolSource[] {
   return docs.map((item, index) => ({
     id: `${item.urlHash.slice(0, 8)}_${index}`,
@@ -432,18 +442,6 @@ function resolveResponsesEndpoint(baseUrl: string): string {
   return normalized.endsWith('/v1')
     ? `${normalized}/responses`
     : `${normalized}/v1/responses`
-}
-
-function canUseResponsesBuiltinFallback(
-  channel: ExecutePilotWebsearchToolInput['channel'],
-): channel is NonNullable<ExecutePilotWebsearchToolInput['channel']> {
-  if (!channel) {
-    return false
-  }
-  if (channel.adapter !== 'openai' || channel.transport !== 'responses') {
-    return false
-  }
-  return Boolean(resolveResponsesEndpoint(channel.baseUrl))
 }
 
 function parseResponsesOutputText(payload: Record<string, unknown>): string {
@@ -673,6 +671,20 @@ async function executeResponsesBuiltinWebsearch(input: {
   const requestError = new Error(lastErrorText || 'responses_builtin_websearch_failed')
   ;(requestError as Error & { code?: string }).code = 'WEBSEARCH_FALLBACK_EXECUTION_FAILED'
   throw requestError
+}
+
+function resolveFallbackUnavailableReason(error: unknown): string {
+  const code = normalizeText((error as Record<string, unknown>)?.code).toUpperCase()
+  if (code === 'WEBSEARCH_FALLBACK_UNSUPPORTED_CHANNEL') {
+    return 'fallback_unsupported_channel'
+  }
+  if (code === 'WEBSEARCH_FALLBACK_ENDPOINT_MISSING') {
+    return 'fallback_endpoint_missing'
+  }
+  if (code === 'WEBSEARCH_FALLBACK_EXECUTION_FAILED') {
+    return 'fallback_execution_failed'
+  }
+  return 'fallback_execution_failed'
 }
 
 async function emitToolAudit(
@@ -1000,6 +1012,7 @@ export async function executePilotWebsearchTool(
     .map(item => item.id)
   const providerUsed: string[] = []
   let fallbackUsed = false
+  let fallbackFailureReason = ''
   let dedupeCount = 0
   const inputPreview = toInputPreview(query)
   const sources: PilotToolSource[] = []
@@ -1106,40 +1119,48 @@ export async function executePilotWebsearchTool(
       }
     }
 
-    if (docMap.size < targetResults && canUseResponsesBuiltinFallback(input.channel)) {
-      try {
-        const fallback = await executeResponsesBuiltinWebsearch({
-          query,
-          channel: input.channel,
-          maxResults: targetResults,
-        })
-        fallbackUsed = true
-        connectorSource = 'responses_builtin'
-        connectorReason = fallback.connectorReason
-        summaryText = fallback.summaryText
-        domainCandidates.push(...fallback.docs.map(item => normalizeText(item.domain).toLowerCase()).filter(Boolean))
-        for (const doc of fallback.docs) {
-          const dedupeKey = buildDocDedupeKey(doc, dedupeMode)
-          if (docMap.has(dedupeKey)) {
-            dedupeCount += 1
-            continue
-          }
-          docMap.set(dedupeKey, doc)
-          if (docMap.size >= targetResults) {
-            break
+    if (docMap.size < targetResults) {
+      if (!input.channel) {
+        fallbackFailureReason = 'fallback_unsupported_channel'
+      }
+      else {
+        try {
+          const fallback = await executeResponsesBuiltinWebsearch({
+            query,
+            channel: input.channel,
+            maxResults: targetResults,
+          })
+          fallbackUsed = true
+          connectorSource = 'responses_builtin'
+          connectorReason = fallback.connectorReason
+          summaryText = fallback.summaryText
+          domainCandidates.push(...fallback.docs.map(item => normalizeText(item.domain).toLowerCase()).filter(Boolean))
+          for (const doc of fallback.docs) {
+            const dedupeKey = buildDocDedupeKey(doc, dedupeMode)
+            if (docMap.has(dedupeKey)) {
+              dedupeCount += 1
+              continue
+            }
+            docMap.set(dedupeKey, doc)
+            if (docMap.size >= targetResults) {
+              break
+            }
           }
         }
-      }
-      catch (fallbackError) {
-        if (docMap.size <= 0) {
-          throw fallbackError
+        catch (fallbackError) {
+          fallbackFailureReason = resolveFallbackUnavailableReason(fallbackError)
+          if (docMap.size <= 0) {
+            connectorSource = 'none'
+            connectorReason = fallbackFailureReason
+            throw fallbackError
+          }
         }
       }
     }
 
     if (docMap.size <= 0) {
       connectorSource = 'none'
-      connectorReason = 'provider_pool_empty_and_fallback_unavailable'
+      connectorReason = fallbackFailureReason || 'provider_pool_empty'
       const missingError = new Error(connectorReason)
       ;(missingError as Error & { code?: string }).code = 'WEBSEARCH_DATASOURCE_UNAVAILABLE'
       throw missingError
@@ -1161,7 +1182,7 @@ export async function executePilotWebsearchTool(
     let docs = Array.from(docMap.values())
     docs = dedupeNormalizedDocuments(docs).slice(0, targetResults)
 
-    if (currentRisk === 'high' || currentRisk === 'critical') {
+    if (shouldRequireToolApproval(TOOL_NAME, currentRisk)) {
       const existingTicket = await findLatestPilotToolApprovalByRequestHash(input.event, {
         sessionId: input.sessionId,
         userId: input.userId,
@@ -2049,10 +2070,20 @@ export async function executePilotAudioTranscribeTool(
   return await executePilotAudioTranscribeInternal(input, 'audio.transcribe')
 }
 
-export function mergeWebsearchContextIntoMessage(message: string, contextText: string): string {
+export function mergeWebsearchContextIntoMessage(
+  message: string,
+  contextText: string,
+  options: { requireNoSourceGuard?: boolean } = {},
+): string {
   const question = normalizeText(message)
   const context = normalizeText(contextText)
-  if (!question || !context) {
+  if (!question) {
+    return question
+  }
+  if (!context && options.requireNoSourceGuard) {
+    return `${question}\n\n[No External Sources Retrieved]\nNo external web sources were retrieved for this turn. Do not fabricate specific latest/news facts. Explicitly state that external sources are unavailable when needed.`
+  }
+  if (!context) {
     return question
   }
   return `${question}\n\n[External Sources]\n${context}\n\nPlease prioritize factual consistency with the references above and cite source indices when useful.`

@@ -1,9 +1,9 @@
 import type { H3Event } from 'h3'
 import {
-  ensurePilotCompatSeed,
-  getPilotCompatEntity,
-  upsertPilotCompatEntity,
-} from './pilot-compat-store'
+  ensurePilotEntitySeed,
+  getPilotEntity,
+  upsertPilotEntity,
+} from './pilot-entity-store'
 
 const now = () => new Date().toISOString()
 
@@ -58,13 +58,13 @@ async function ensureSystemMenuBackfill(event: H3Event, seeds: MenuSeedNode[]): 
       continue
     }
 
-    const existing = await getPilotCompatEntity(event, 'system.menus', id)
+    const existing = await getPilotEntity(event, 'system.menus', id)
     if (existing) {
       continue
     }
 
     const createdAt = String(row.createdAt || now())
-    await upsertPilotCompatEntity(event, {
+    await upsertPilotEntity(event, {
       domain: 'system.menus',
       id,
       payload: {
@@ -80,7 +80,7 @@ async function ensureSystemMenuBackfill(event: H3Event, seeds: MenuSeedNode[]): 
 
 export async function ensureSystemRoleSeed(event: H3Event): Promise<void> {
   const createdAt = now()
-  await ensurePilotCompatSeed(event, 'system.roles', [
+  await ensurePilotEntitySeed(event, 'system.roles', [
     {
       id: 'role_admin',
       name: '管理员',
@@ -108,7 +108,7 @@ export async function ensureSystemRoleSeed(event: H3Event): Promise<void> {
 
 export async function ensureSystemDeptSeed(event: H3Event): Promise<void> {
   const createdAt = now()
-  await ensurePilotCompatSeed(event, 'system.depts', [
+  await ensurePilotEntitySeed(event, 'system.depts', [
     {
       id: 'dept_root',
       name: '平台',
@@ -480,13 +480,13 @@ export async function ensureSystemMenuSeed(event: H3Event): Promise<void> {
     },
   ]
 
-  await ensurePilotCompatSeed(event, 'system.menus', menuSeeds)
+  await ensurePilotEntitySeed(event, 'system.menus', menuSeeds)
   await ensureSystemMenuBackfill(event, menuSeeds)
 }
 
 export async function ensureAccountHistorySeed(event: H3Event): Promise<void> {
   const createdAt = now()
-  await ensurePilotCompatSeed(event, 'account.login_histories', [
+  await ensurePilotEntitySeed(event, 'account.login_histories', [
     {
       id: 'history_init',
       ip: '127.0.0.1',
@@ -503,7 +503,7 @@ export async function ensureAccountHistorySeed(event: H3Event): Promise<void> {
 
 export async function ensureSubscribePlanSeed(event: H3Event): Promise<void> {
   const createdAt = now()
-  await ensurePilotCompatSeed(event, 'subscribe.plans', [
+  await ensurePilotEntitySeed(event, 'subscribe.plans', [
     {
       id: 'plan_standard_month',
       name: '标准订阅计划（月）',

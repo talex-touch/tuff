@@ -1,14 +1,4 @@
 import type { IpcRenderer, IpcRendererEvent } from 'electron'
-import type {
-  ITouchClientChannel,
-  RawChannelSyncData,
-  RawStandardChannelData,
-  StandardChannelData,
-} from '../transport/legacy'
-import {
-  ChannelType,
-  DataCode,
-} from '../transport/legacy'
 import { getLogger } from '../common/logger'
 import { findCloneIssue, isCloneError, summarizeClonePayload } from '../common/utils/clone-diagnostics'
 import { formatPayloadPreview } from '../common/utils/payload-preview'
@@ -18,6 +8,51 @@ const CHANNEL_DEFAULT_TIMEOUT = 60_000
 
 let cachedIpcRenderer: IpcRenderer | null = null
 const channelLog = getLogger('plugin-channel')
+
+enum ChannelType {
+  MAIN = 'main',
+  PLUGIN = 'plugin',
+}
+
+enum DataCode {
+  SUCCESS = 200,
+  NETWORK_ERROR = 500,
+  ERROR = 100,
+}
+
+interface RawChannelSyncData {
+  timeStamp: number
+  timeout: number
+  id: string
+}
+
+interface RawChannelHeaderData {
+  status: 'reply' | 'request'
+  type: ChannelType
+  _originData?: unknown
+  event?: IpcRendererEvent
+  plugin?: string
+}
+
+interface RawStandardChannelData {
+  name: string
+  header: RawChannelHeaderData
+  code: DataCode
+  data?: unknown
+  plugin?: string
+  sync?: RawChannelSyncData
+}
+
+interface StandardChannelData extends RawStandardChannelData {
+  reply: (code: DataCode, data: unknown) => void
+}
+
+interface ITouchClientChannel {
+  regChannel: (eventName: string, callback: (data: StandardChannelData) => unknown) => () => void
+  unRegChannel: (eventName: string, callback: (data: StandardChannelData) => unknown) => boolean
+  send: (eventName: string, arg?: unknown) => Promise<unknown>
+  sendSync: (eventName: string, arg?: unknown) => unknown
+}
 
 type PluginWindow = Window & {
   $plugin?: { name?: string }

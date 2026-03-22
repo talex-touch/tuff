@@ -27,7 +27,6 @@ import type {
   TraySettingsUpdateResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { Locale } from '../utils/i18n-helper'
-import type { StorageUsageIncludeOptions } from '../utils/storage-usage'
 import { execFile } from 'node:child_process'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
@@ -63,11 +62,8 @@ import { BaseModule } from '../modules/abstract-base-module'
 import { getStartupAnalytics } from '../modules/analytics'
 import { appProvider } from '../modules/box-tool/addon/apps/app-provider'
 import { fileProvider } from '../modules/box-tool/addon/files/file-provider'
-import { windowManager } from '../modules/box-tool/core-box/window'
 import { buildVerificationModule } from '../modules/build-verification'
-import { clipboardModule } from '../modules/clipboard'
 import { databaseModule } from '../modules/database'
-import { pluginModule } from '../modules/plugin/plugin-module'
 import { createDbUtils } from '../db/utils'
 import {
   platformCapabilityRegistry,
@@ -75,41 +71,13 @@ import {
 } from '../modules/platform/capability-registry'
 import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage'
 import { getNetworkService } from '../modules/network'
-import { activeAppService } from '../modules/system/active-app'
 import { deviceIdleService } from '../service/device-idle-service'
-import {
-  cleanupAnalytics,
-  cleanupClipboard,
-  cleanupConfig,
-  cleanupDownloads,
-  cleanupFileIndex,
-  cleanupIntelligence,
-  cleanupLogs,
-  cleanupOcr,
-  cleanupTemp,
-  cleanupUpdates,
-  cleanupUsage
-} from '../service/storage-maintenance'
-import type {
-  CleanupAnalyticsOptions,
-  CleanupClipboardOptions,
-  CleanupDownloadsOptions,
-  CleanupFileIndexOptions,
-  CleanupIntelligenceOptions,
-  CleanupLogsOptions,
-  CleanupOcrOptions,
-  CleanupTempOptions,
-  CleanupUsageOptions
-} from '../service/storage-maintenance'
-import { tempFileService } from '../service/temp-file.service'
 import { TalexTouch } from '../types'
-import { checkPlatformCompatibility } from '../utils/common-util'
 import { setLocale } from '../utils/i18n-helper'
 import { createLogger } from '../utils/logger'
 import { safeOpHandler, toErrorMessage } from '../utils/safe-handler'
 import { enterPerfContext } from '../utils/perf-context'
 import { perfMonitor } from '../utils/perf-monitor'
-import { getStorageUsageReport } from '../utils/storage-usage'
 
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
 const pollingService = PollingService.getInstance()
@@ -119,7 +87,6 @@ const READ_FILE_CACHE_TTL_MS = 60_000
 const READ_FILE_CACHE_MAX_ENTRIES = 120
 const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
 const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
-const PLUGIN_TEMP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 const SECURE_STORE_FILE = 'secure-store.json'
 const SECURE_STORE_KEY_PATTERN = /^[a-z0-9._-]{1,80}$/i
 const DIALOG_APPROVED_TTL_MS = 10 * 60 * 1000
@@ -152,26 +119,6 @@ type RuntimeTrayManager = {
 const dialogApprovedPaths = new Map<string, number>()
 let tuffCliDetectionCache: { available: boolean; checkedAt: number } | null = null
 
-const legacyCloseEvent = defineRawEvent<void, void>('close')
-const legacyHideEvent = defineRawEvent<void, void>('hide')
-const legacyMinimizeEvent = defineRawEvent<void, void>('minimize')
-const legacyDevToolsEvent = defineRawEvent<void, void>('dev-tools')
-const legacyGetPackageEvent = defineRawEvent<void, PackageInfo>('get-package')
-const legacyOpenExternalEvent = defineRawEvent<{ url: string }, void>('open-external')
-const legacyGetOsEvent = defineRawEvent<void, OSInformation>('get-os')
-const legacyCommonCwdEvent = defineRawEvent<void, string>('common:cwd')
-const legacyCommonGetPathEvent = defineRawEvent<{ name: string }, string | null>('common:get-path')
-const legacyFolderOpenEvent = defineRawEvent<{ path: string }, void>('folder:open')
-const legacyModuleFolderEvent = defineRawEvent<{ name: string }, void>('module:folder')
-const legacyPluginFolderEvent = defineRawEvent<string, void>('plugin:explorer')
-const legacyPluginDevToolsEvent = defineRawEvent<string, boolean>('plugin:open-devtools')
-const legacyPluginReloadEvent = defineRawEvent<{ name: string }, void>('reload-plugin')
-const legacyExecuteCmdEvent = defineRawEvent<
-  { command: string },
-  { success: boolean; error?: string }
->('execute:cmd')
-const legacyAppOpenEvent = defineRawEvent<{ appName?: string; path?: string }, void>('app:open')
-
 // Preset import/export events
 const dialogOpenFileEvent = defineRawEvent<
   {
@@ -195,42 +142,6 @@ const fsWriteFileEvent = defineRawEvent<{ path: string; data: string }, { succes
 const fsReadFileEvent = defineRawEvent<{ path: string }, { data?: string; error?: string }>(
   'fs:read-file'
 )
-const legacyUrlOpenEvent = defineRawEvent<string, boolean>('url:open')
-const legacyFilesIndexProgressEvent = defineRawEvent<{ paths?: string[] }, unknown>(
-  'files:index-progress'
-)
-const legacySystemGetActiveAppEvent = defineRawEvent<{ forceRefresh?: boolean }, unknown>(
-  'system:get-active-app'
-)
-const legacySystemGetStorageUsageEvent = defineRawEvent<{ include?: string[] }, unknown>(
-  'system:get-storage-usage'
-)
-const legacyTempFileCreateEvent = defineRawEvent<
-  unknown,
-  { url: string; sizeBytes: number; createdAt: number }
->('temp-file:create')
-const legacyTempFileDeleteEvent = defineRawEvent<unknown, { success: boolean }>('temp-file:delete')
-const legacyStorageCleanupClipboardEvent = defineRawEvent<unknown, unknown>(
-  'storage:cleanup:clipboard'
-)
-const legacyStorageCleanupFileIndexEvent = defineRawEvent<unknown, unknown>(
-  'storage:cleanup:file-index'
-)
-const legacyStorageCleanupLogsEvent = defineRawEvent<unknown, unknown>('storage:cleanup:logs')
-const legacyStorageCleanupTempEvent = defineRawEvent<unknown, unknown>('storage:cleanup:temp')
-const legacyStorageCleanupAnalyticsEvent = defineRawEvent<unknown, unknown>(
-  'storage:cleanup:analytics'
-)
-const legacyStorageCleanupUsageEvent = defineRawEvent<unknown, unknown>('storage:cleanup:usage')
-const legacyStorageCleanupOcrEvent = defineRawEvent<unknown, unknown>('storage:cleanup:ocr')
-const legacyStorageCleanupDownloadsEvent = defineRawEvent<unknown, unknown>(
-  'storage:cleanup:downloads'
-)
-const legacyStorageCleanupIntelligenceEvent = defineRawEvent<unknown, unknown>(
-  'storage:cleanup:intelligence'
-)
-const legacyStorageCleanupConfigEvent = defineRawEvent<void, unknown>('storage:cleanup:config')
-const legacyStorageCleanupUpdatesEvent = defineRawEvent<void, unknown>('storage:cleanup:updates')
 const wallpaperListImagesEvent = defineRawEvent<
   { folderPath: string; recursive?: boolean },
   { images: string[] }
@@ -242,12 +153,7 @@ const wallpaperCopyToLibraryEvent = defineRawEvent<
   { sourcePath: string; type: 'file' | 'folder' },
   { storedPath: string | null; skippedCount: number; error?: string }
 >('wallpaper:copy-to-library')
-const legacyBuildVerificationEvent = AppEvents.build.getVerificationStatusLegacy
-const legacyBatteryStatusEvent = AppEvents.power.batteryStatus
-
-function safeNamespaceSegment(value: string): string {
-  return value.replace(/[^\w.-]+/g, '-').slice(0, 64) || 'unknown'
-}
+const batteryStatusEvent = AppEvents.power.batteryStatus
 
 function resolveTfilePath(urlOrPath: string): string {
   if (!urlOrPath) return ''
@@ -859,13 +765,9 @@ export class CommonChannelModule extends BaseModule {
     }
 
     this.setupBatteryStatusBroadcast(transport)
-    this.registerLegacyLifecycleHandlers(transport, touchApp)
-    this.registerLegacyTempFileHandlers(transport)
-    this.registerLegacyStorageCleanupHandlers(transport)
     this.registerLegacyDialogWallpaperHandlers(transport, touchApp)
 
-    const onOpenUrl = this.createOpenUrlHandler(transport, touchApp)
-    this.registerLegacyCommonHandlers(transport, touchApp, onOpenUrl)
+    const onOpenUrl = this.createOpenUrlHandler(touchApp)
     this.bindOpenUrlListeners(touchApp, onOpenUrl)
 
     this.registerBuildVerificationStatusHandlers(transport)
@@ -883,7 +785,7 @@ export class CommonChannelModule extends BaseModule {
       const windows = BrowserWindow.getAllWindows()
       for (const win of windows) {
         try {
-          transport.broadcastToWindow(win.id, legacyBatteryStatusEvent, payload)
+          transport.broadcastToWindow(win.id, batteryStatusEvent, payload)
         } catch {
           // Ignore broadcast errors
         }
@@ -924,221 +826,6 @@ export class CommonChannelModule extends BaseModule {
     } catch (error) {
       log.warn('[CommonChannel] Failed to initialize battery status broadcaster:', { error })
     }
-  }
-
-  private registerLegacyLifecycleHandlers(
-    transport: NonNullable<CommonChannelModule['transport']>,
-    touchApp: TalexTouch.TouchApp
-  ): void {
-    this.transportDisposers.push(
-      transport.on(legacyCloseEvent, () => closeApp(touchApp)),
-      transport.on(legacyHideEvent, () => touchApp.window.window.hide()),
-      transport.on(legacyMinimizeEvent, () => touchApp.window.minimize()),
-      transport.on(legacyDevToolsEvent, () => {
-        log.debug('[dev-tools] Open dev tools!')
-        touchApp.window.openDevTools({ mode: 'undocked' })
-        touchApp.window.openDevTools({ mode: 'detach' })
-        touchApp.window.openDevTools({ mode: 'right' })
-      }),
-      transport.on(legacyGetPackageEvent, () => packageJson),
-      transport.on(legacyOpenExternalEvent, (payload) => {
-        const url = payload?.url
-        if (url) {
-          return shell.openExternal(url)
-        }
-        return undefined
-      }),
-      transport.on(legacyGetOsEvent, () => getOSInformation()),
-      transport.on(legacySystemGetActiveAppEvent, (payload) =>
-        activeAppService.getActiveApp(Boolean(payload?.forceRefresh))
-      )
-    )
-  }
-
-  private registerLegacyTempFileHandlers(
-    transport: NonNullable<CommonChannelModule['transport']>
-  ): void {
-    const registeredTempNamespaces = new Map<string, number | null>()
-    const ensureTempNamespace = (namespace: string, retentionMs: number | null) => {
-      const normalized = namespace.replace(/^\/+/, '').replace(/\\/g, '/')
-      if (registeredTempNamespaces.has(normalized)) return
-      registeredTempNamespaces.set(normalized, retentionMs)
-      tempFileService.registerNamespace({ namespace: normalized, retentionMs })
-      tempFileService.startCleanup()
-    }
-
-    this.transportDisposers.push(
-      transport.on(legacyTempFileCreateEvent, async (payload, context) => {
-        const tempPayload = isRecord(payload) ? payload : {}
-        const pluginName = context.plugin?.name
-
-        if (pluginName) {
-          const segment = safeNamespaceSegment(pluginName)
-          const namespace = `plugins/${segment}`
-          const retentionMs =
-            typeof tempPayload.retentionMs === 'number' &&
-            Number.isFinite(tempPayload.retentionMs) &&
-            tempPayload.retentionMs > 0
-              ? Number(tempPayload.retentionMs)
-              : PLUGIN_TEMP_RETENTION_MS
-
-          ensureTempNamespace(namespace, retentionMs)
-
-          const res = await tempFileService.createFile({
-            namespace,
-            ext: typeof tempPayload.ext === 'string' ? tempPayload.ext : undefined,
-            text: typeof tempPayload.text === 'string' ? tempPayload.text : undefined,
-            base64: typeof tempPayload.base64 === 'string' ? tempPayload.base64 : undefined,
-            prefix: typeof tempPayload.prefix === 'string' ? tempPayload.prefix : segment
-          })
-
-          return {
-            url: buildTfileUrl(res.path),
-            sizeBytes: res.sizeBytes,
-            createdAt: res.createdAt
-          }
-        }
-
-        const namespace = typeof tempPayload.namespace === 'string' ? tempPayload.namespace : 'misc'
-        const retentionMs =
-          typeof tempPayload.retentionMs === 'number' &&
-          Number.isFinite(tempPayload.retentionMs) &&
-          tempPayload.retentionMs > 0
-            ? Number(tempPayload.retentionMs)
-            : 24 * 60 * 60 * 1000
-
-        ensureTempNamespace(namespace, retentionMs)
-
-        const res = await tempFileService.createFile({
-          namespace,
-          ext: typeof tempPayload.ext === 'string' ? tempPayload.ext : undefined,
-          text: typeof tempPayload.text === 'string' ? tempPayload.text : undefined,
-          base64: typeof tempPayload.base64 === 'string' ? tempPayload.base64 : undefined,
-          prefix: typeof tempPayload.prefix === 'string' ? tempPayload.prefix : 'temp'
-        })
-
-        return {
-          url: buildTfileUrl(res.path),
-          sizeBytes: res.sizeBytes,
-          createdAt: res.createdAt
-        }
-      }),
-      transport.on(legacyTempFileDeleteEvent, async (payload, context) => {
-        const tempPayload = isRecord(payload) ? payload : {}
-        const pluginName = context.plugin?.name
-        if (pluginName) {
-          const segment = safeNamespaceSegment(pluginName)
-          const pluginDir = tempFileService.resolveNamespaceDir(`plugins/${segment}`)
-
-          const target =
-            typeof tempPayload.url === 'string'
-              ? tempPayload.url
-              : typeof tempPayload.path === 'string'
-                ? tempPayload.path
-                : ''
-          const filePath = resolveTfilePath(target)
-          if (!filePath) return { success: false }
-
-          const resolvedPluginDir = path.resolve(pluginDir)
-          const resolvedFilePath = path.resolve(filePath)
-          if (!resolvedFilePath.startsWith(`${resolvedPluginDir}${path.sep}`)) {
-            return { success: false }
-          }
-
-          const success = await tempFileService.deleteFile(resolvedFilePath)
-          return { success }
-        }
-
-        const target =
-          typeof tempPayload.url === 'string'
-            ? tempPayload.url
-            : typeof tempPayload.path === 'string'
-              ? tempPayload.path
-              : ''
-        const filePath = resolveTfilePath(target)
-        const success = filePath ? await tempFileService.deleteFile(filePath) : false
-        return { success }
-      })
-    )
-  }
-
-  private registerLegacyStorageCleanupHandlers(
-    transport: NonNullable<CommonChannelModule['transport']>
-  ): void {
-    this.transportDisposers.push(
-      transport.on(legacySystemGetStorageUsageEvent, async (payload) => {
-        const usagePayload = isRecord(payload) ? payload : {}
-        const storageStats = storageModule.getCacheStats()
-        const clipboardStats = clipboardModule.getCacheStats()
-        const includeList = Array.isArray(usagePayload.include) ? usagePayload.include : undefined
-        const include = includeList
-          ? includeList.reduce<StorageUsageIncludeOptions>((acc, key) => {
-              if (
-                key === 'modules' ||
-                key === 'plugins' ||
-                key === 'database' ||
-                key === 'databaseTables' ||
-                key === 'caches' ||
-                key === 'includeOther'
-              ) {
-                acc[key] = true
-              }
-              return acc
-            }, {})
-          : undefined
-        return await getStorageUsageReport({
-          dbClient: databaseModule.getClient(),
-          cacheStats: {
-            'storage.lru': storageStats.cachedConfigs,
-            'storage.plugins': storageStats.pluginConfigs,
-            'clipboard.memory': clipboardStats.memoryItems
-          },
-          include
-        })
-      }),
-      transport.on(legacyStorageCleanupClipboardEvent, async (payload) => {
-        const options = isRecord(payload) ? (payload as CleanupClipboardOptions) : undefined
-        return await cleanupClipboard(options)
-      }),
-      transport.on(legacyStorageCleanupFileIndexEvent, async (payload) => {
-        const options = isRecord(payload) ? (payload as CleanupFileIndexOptions) : undefined
-        return await cleanupFileIndex(options)
-      }),
-      transport.on(legacyStorageCleanupLogsEvent, async (payload) => {
-        const options = isRecord(payload) ? (payload as CleanupLogsOptions) : undefined
-        return await cleanupLogs(options)
-      }),
-      transport.on(legacyStorageCleanupTempEvent, async (payload) => {
-        const options = isRecord(payload) ? (payload as CleanupTempOptions) : undefined
-        return await cleanupTemp(options)
-      }),
-      transport.on(legacyStorageCleanupAnalyticsEvent, async (payload) => {
-        const options = isRecord(payload) ? (payload as CleanupAnalyticsOptions) : undefined
-        return await cleanupAnalytics(options)
-      }),
-      transport.on(legacyStorageCleanupUsageEvent, async (payload) => {
-        const options = isRecord(payload) ? (payload as CleanupUsageOptions) : undefined
-        return await cleanupUsage(options)
-      }),
-      transport.on(legacyStorageCleanupOcrEvent, async (payload) => {
-        const options = isRecord(payload) ? (payload as CleanupOcrOptions) : undefined
-        return await cleanupOcr(options)
-      }),
-      transport.on(legacyStorageCleanupDownloadsEvent, async (payload) => {
-        const options = isRecord(payload) ? (payload as CleanupDownloadsOptions) : undefined
-        return await cleanupDownloads(options)
-      }),
-      transport.on(legacyStorageCleanupIntelligenceEvent, async (payload) => {
-        const options = isRecord(payload) ? (payload as CleanupIntelligenceOptions) : undefined
-        return await cleanupIntelligence(options)
-      }),
-      transport.on(legacyStorageCleanupConfigEvent, async () => {
-        return await cleanupConfig()
-      }),
-      transport.on(legacyStorageCleanupUpdatesEvent, async () => {
-        return await cleanupUpdates()
-      })
-    )
   }
 
   private registerLegacyDialogWallpaperHandlers(
@@ -1249,10 +936,7 @@ export class CommonChannelModule extends BaseModule {
     )
   }
 
-  private createOpenUrlHandler(
-    transport: NonNullable<CommonChannelModule['transport']>,
-    touchApp: TalexTouch.TouchApp
-  ): (url: string) => Promise<void> {
+  private createOpenUrlHandler(touchApp: TalexTouch.TouchApp): (url: string) => Promise<void> {
     type OpenUrlDecision = 'skip' | 'open' | 'confirm'
 
     const shouldSkipPromptProtocols = new Set([APP_SCHEMA, FILE_SCHEMA])
@@ -1308,117 +992,9 @@ export class CommonChannelModule extends BaseModule {
         return
       }
 
-      const data = await transport.sendTo(
-        touchApp.window.window.webContents,
-        legacyUrlOpenEvent,
-        url
-      )
-      log.debug('open url', { meta: { url, data } })
-
-      if (data) {
-        shell.openExternal(url)
-      }
+      log.debug('open url', { meta: { url, decision } })
+      shell.openExternal(url)
     }
-  }
-
-  private registerLegacyCommonHandlers(
-    transport: NonNullable<CommonChannelModule['transport']>,
-    touchApp: TalexTouch.TouchApp,
-    onOpenUrl: (url: string) => Promise<void>
-  ): void {
-    this.transportDisposers.push(
-      transport.on(legacyCommonCwdEvent, () => process.cwd()),
-      transport.on(legacyCommonGetPathEvent, (payload) => {
-        const name = typeof payload?.name === 'string' ? payload.name : ''
-        if (!name) {
-          return null
-        }
-        try {
-          return touchApp.app.getPath(name as AppPathName)
-        } catch (error) {
-          log.warn(`[CommonChannel] Failed to resolve app path: ${name}`, { error })
-          return null
-        }
-      }),
-      transport.on(legacyFolderOpenEvent, (payload) => {
-        if (payload?.path) {
-          shell.showItemInFolder(payload.path)
-        }
-      }),
-      transport.on(legacyModuleFolderEvent, (payload) => {
-        if (payload?.name) {
-          const modulePath = path.join(touchApp.rootPath, 'modules', payload.name)
-          shell.openPath(modulePath)
-
-          log.debug(
-            `[Channel] Open path [${modulePath}] with module folder @${payload?.name ?? 'defaults'}`
-          )
-        }
-      }),
-      transport.on(legacyPluginFolderEvent, (pluginName) => {
-        if (!pluginName) return
-        const plugin = pluginModule.pluginManager?.getPluginByName(pluginName)
-        if (!plugin) {
-          log.warn(`[CommonChannel] Plugin not found when opening folder: ${pluginName}`)
-          return
-        }
-        shell.openPath(plugin.pluginPath)
-      }),
-      transport.on(legacyPluginDevToolsEvent, (pluginName) => {
-        if (!pluginName) return false
-        const opened = windowManager.openPluginDevTools(pluginName)
-        if (!opened) {
-          log.warn(`[CommonChannel] Failed to open plugin DevTools: ${pluginName}`)
-        }
-        return opened
-      }),
-      transport.on(legacyPluginReloadEvent, async (payload) => {
-        const pluginName = payload?.name
-        if (!pluginName) return
-        const manager = pluginModule.pluginManager
-        if (!manager) {
-          log.warn('[CommonChannel] Plugin manager unavailable for reload-plugin')
-          return
-        }
-        await manager.reloadPlugin(pluginName)
-      }),
-      transport.on(legacyExecuteCmdEvent, async (payload) => {
-        if (payload?.command) {
-          try {
-            const error = await shell.openPath(payload.command)
-            if (error) {
-              log.error(`[CommonChannel] Failed to open path: ${payload.command}`, { error })
-              return { success: false, error }
-            }
-            return { success: true }
-          } catch (error) {
-            log.error(`[CommonChannel] Error opening path: ${payload.command}`, { error })
-            return { success: false, error: error instanceof Error ? error.message : String(error) }
-          }
-        }
-        return { success: false, error: 'No command provided' }
-      }),
-      transport.on(legacyAppOpenEvent, (payload) => {
-        const target = payload?.appName ?? payload?.path
-        if (target) {
-          shell.openPath(target)
-        }
-      }),
-      transport.on(legacyUrlOpenEvent, (payload) => {
-        if (typeof payload === 'string') {
-          void onOpenUrl(payload)
-          return true
-        }
-        return false
-      }),
-      transport.on(legacyFilesIndexProgressEvent, async (payload) => {
-        const payloadPaths = (payload as { paths?: unknown })?.paths
-        const paths = Array.isArray(payloadPaths)
-          ? payloadPaths.filter((item): item is string => typeof item === 'string')
-          : undefined
-        return fileProvider.getIndexingProgress(paths)
-      })
-    )
   }
 
   private bindOpenUrlListeners(
@@ -1465,7 +1041,6 @@ export class CommonChannelModule extends BaseModule {
     }
 
     this.transportDisposers.push(
-      transport.on(legacyBuildVerificationEvent, resolveBuildVerificationStatus),
       transport.on(AppEvents.build.getVerificationStatus, resolveBuildVerificationStatus)
     )
   }
@@ -1648,7 +1223,6 @@ export class CommonChannelModule extends BaseModule {
             isRelease: touchApp.version === TalexTouch.AppVersion.RELEASE,
             platform: process.platform,
             arch: process.arch,
-            platformWarning: checkPlatformCompatibility() ?? undefined,
             t: {
               _s: process.getCreationTime() ?? Date.now(),
               s: rendererStartTime,

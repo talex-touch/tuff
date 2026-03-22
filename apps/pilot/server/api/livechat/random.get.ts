@@ -1,8 +1,8 @@
-import { listPilotCompatEntitiesAll } from '../../utils/pilot-compat-store'
+import { listPilotEntitiesAll } from '../../utils/pilot-entity-store'
 import { quotaOk } from '../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {
-  const list = await listPilotCompatEntitiesAll<Record<string, any>>(event, 'wechat.livechat')
+  const list = await listPilotEntitiesAll<Record<string, any>>(event, 'wechat.livechat')
   if (list.length <= 0) {
     return quotaOk({
       id: 'livechat_exempted',

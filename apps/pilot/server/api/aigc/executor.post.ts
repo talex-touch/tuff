@@ -713,6 +713,10 @@ function normalizeToolAuditPayload(
   durationMs: number
   connectorSource: string
   connectorReason: string
+  providerChain: string[]
+  providerUsed: string[]
+  fallbackUsed: boolean
+  dedupeCount: number
 } {
   const row = payload && typeof payload === 'object' && !Array.isArray(payload)
     ? payload as Record<string, unknown>
@@ -721,6 +725,12 @@ function normalizeToolAuditPayload(
     ? row.sources
         .filter(item => item && typeof item === 'object' && !Array.isArray(item))
         .map(item => item as Record<string, unknown>)
+    : []
+  const providerChain = Array.isArray(row.providerChain)
+    ? row.providerChain.map(item => String(item || '').trim()).filter(Boolean)
+    : []
+  const providerUsed = Array.isArray(row.providerUsed)
+    ? row.providerUsed.map(item => String(item || '').trim()).filter(Boolean)
     : []
 
   return {
@@ -740,6 +750,12 @@ function normalizeToolAuditPayload(
       : 0,
     connectorSource: String(row.connectorSource || '').trim(),
     connectorReason: String(row.connectorReason || '').trim(),
+    providerChain,
+    providerUsed,
+    fallbackUsed: row.fallbackUsed === true,
+    dedupeCount: Number.isFinite(Number(row.dedupeCount))
+      ? Math.max(0, Number(row.dedupeCount))
+      : 0,
   }
 }
 
@@ -1222,6 +1238,8 @@ export default defineEventHandler(async (event) => {
         let websearchSources: Array<Record<string, unknown>> = []
         let websearchConnectorSource: 'gateway' | 'responses_builtin' | 'none' = 'none'
         let websearchConnectorReason = 'not_evaluated'
+        let websearchDecisionDispatched = false
+        let websearchSettled = false
         const memoryHistoryMessageCount = Array.isArray(body?.messages)
           ? body.messages.length
           : 0
@@ -1263,9 +1281,43 @@ export default defineEventHandler(async (event) => {
               errorMessage: normalized.errorMessage,
               connectorSource: normalized.connectorSource,
               connectorReason: normalized.connectorReason,
+              providerChain: normalized.providerChain,
+              providerUsed: normalized.providerUsed,
+              fallbackUsed: normalized.fallbackUsed,
+              dedupeCount: normalized.dedupeCount,
             },
           })
           touchStreamEventAt()
+        }
+
+        const emitWebsearchSkippedAudit = (reason: string) => {
+          if (websearchSettled) {
+            return
+          }
+          const normalizedReason = String(reason || '').trim() || 'websearch_skipped'
+          websearchSettled = true
+          websearchConnectorSource = 'none'
+          websearchConnectorReason = normalizedReason
+          emit({
+            event: 'run.audit',
+            payload: {
+              auditType: 'websearch.skipped',
+              enabled: false,
+              reason: normalizedReason,
+            },
+          })
+          touchStreamEventAt()
+        }
+
+        const markWebsearchExecuted = () => {
+          websearchSettled = true
+        }
+
+        const ensureWebsearchSettled = (reason = 'terminal_finalize') => {
+          if (!websearchDecisionDispatched || websearchSettled) {
+            return
+          }
+          emitWebsearchSkippedAudit(reason)
         }
 
         const emitMemoryUpdatedEvent = async (assistantReply = '') => {
@@ -1525,6 +1577,10 @@ export default defineEventHandler(async (event) => {
             },
           })
           touchStreamEventAt()
+          websearchDecisionDispatched = true
+          if (!websearchDecision.enabled) {
+            emitWebsearchSkippedAudit(websearchDecision.reason || 'decision_disabled')
+          }
 
           if (trace.intentType === 'image_generate') {
             try {
@@ -1810,23 +1866,15 @@ export default defineEventHandler(async (event) => {
                   },
                 })
                 touchStreamEventAt()
+                markWebsearchExecuted()
               }
               else {
-                websearchConnectorSource = 'none'
-                websearchConnectorReason = 'tool_failed_or_empty_result'
-                emit({
-                  event: 'run.audit',
-                  payload: {
-                    auditType: 'websearch.skipped',
-                    enabled: false,
-                    reason: websearchConnectorReason,
-                  },
-                })
-                touchStreamEventAt()
+                emitWebsearchSkippedAudit('tool_failed_or_empty_result')
               }
             }
             catch (error) {
               if (error instanceof PilotToolApprovalRequiredError) {
+                emitWebsearchSkippedAudit('approval_required')
                 streamWaitingApproval = true
                 metricFinishReason = 'approval_required'
                 metricErrorCode = error.code
@@ -1857,6 +1905,7 @@ export default defineEventHandler(async (event) => {
               }
 
               if (error instanceof PilotToolApprovalRejectedError) {
+                emitWebsearchSkippedAudit('approval_rejected')
                 streamFailed = true
                 metricFinishReason = 'approval_rejected'
                 metricErrorCode = error.code
@@ -1895,17 +1944,7 @@ export default defineEventHandler(async (event) => {
                 return
               }
 
-              websearchConnectorSource = 'none'
-              websearchConnectorReason = `tool_exception:${truncateText(error instanceof Error ? error.message : String(error || ''), 160)}`
-              emit({
-                event: 'run.audit',
-                payload: {
-                  auditType: 'websearch.skipped',
-                  enabled: false,
-                  reason: websearchConnectorReason,
-                },
-              })
-              touchStreamEventAt()
+              emitWebsearchSkippedAudit(`tool_exception:${truncateText(error instanceof Error ? error.message : String(error || ''), 160)}`)
             }
           }
 
@@ -1956,7 +1995,11 @@ export default defineEventHandler(async (event) => {
             })
             runtimeStore = store
             await store.runtime.ensureSchema()
-            const runtimeMessage = mergeWebsearchContextIntoMessage(routedMessage, websearchContextText)
+            const requireNoSourceGuard = (intentDecision.websearchRequired === true)
+              && websearchSources.length <= 0
+            const runtimeMessage = mergeWebsearchContextIntoMessage(routedMessage, websearchContextText, {
+              requireNoSourceGuard,
+            })
 
             for await (const envelope of runtime.onMessage({
               sessionId: runtimeSessionId,
@@ -2310,6 +2353,7 @@ export default defineEventHandler(async (event) => {
         }
         finally {
           stopHeartbeat()
+          ensureWebsearchSettled('terminal_finalize')
           const totalDurationMs = Math.max(0, Date.now() - trace.startedAt)
           const resolvedTtftMs = ttftMs > 0
             ? ttftMs

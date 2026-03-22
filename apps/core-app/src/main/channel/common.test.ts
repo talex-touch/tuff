@@ -319,7 +319,6 @@ vi.mock('../types', () => ({
 }))
 
 vi.mock('../utils/common-util', () => ({
-  checkPlatformCompatibility: vi.fn(() => null),
   checkDirWithCreate: vi.fn(() => true)
 }))
 

@@ -2,13 +2,13 @@ import type { H3Event } from 'h3'
 import { randomUUID } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import {
-  deletePilotCompatEntity,
-  ensurePilotCompatSeed,
-  getPilotCompatEntity,
-  listPilotCompatEntities,
-  listPilotCompatEntitiesAll,
-  upsertPilotCompatEntity,
-} from './pilot-compat-store'
+  deletePilotEntity,
+  ensurePilotEntitySeed,
+  getPilotEntity,
+  listPilotEntities,
+  listPilotEntitiesAll,
+  upsertPilotEntity,
+} from './pilot-entity-store'
 
 const ORDER_DOMAIN = 'order.orders'
 const COUPON_DOMAIN = 'order.coupons'
@@ -251,12 +251,12 @@ async function findCouponByCode(event: H3Event, code: string): Promise<MockCoupo
   if (!normalizedCode) {
     return null
   }
-  const list = await listPilotCompatEntitiesAll<MockCoupon>(event, COUPON_DOMAIN)
+  const list = await listPilotEntitiesAll<MockCoupon>(event, COUPON_DOMAIN)
   return list.find(item => normalizeCouponCode(item.mainCode) === normalizedCode || normalizeCouponCode(item.code) === normalizedCode) || null
 }
 
 async function markCouponUsed(event: H3Event, coupon: MockCoupon): Promise<void> {
-  await upsertPilotCompatEntity(event, {
+  await upsertPilotEntity(event, {
     domain: COUPON_DOMAIN,
     id: coupon.id,
     payload: {
@@ -289,7 +289,7 @@ async function settleOrderIfNeeded(event: H3Event, order: MockOrder): Promise<Mo
   }
 
   if (elapsed > ORDER_EXPIRE_MS) {
-    const expired = await upsertPilotCompatEntity(event, {
+    const expired = await upsertPilotEntity(event, {
       domain: ORDER_DOMAIN,
       id: order.id,
       payload: {
@@ -302,7 +302,7 @@ async function settleOrderIfNeeded(event: H3Event, order: MockOrder): Promise<Mo
   }
 
   const paidAt = nowIso()
-  const settled = await upsertPilotCompatEntity(event, {
+  const settled = await upsertPilotEntity(event, {
     domain: ORDER_DOMAIN,
     id: order.id,
     payload: {
@@ -315,7 +315,7 @@ async function settleOrderIfNeeded(event: H3Event, order: MockOrder): Promise<Mo
 
   if (settled.type === 'STANDARD' || settled.type === 'ULTIMATE') {
     const plan = resolvePlan(settled.type, settled.time)
-    await upsertPilotCompatEntity(event, {
+    await upsertPilotEntity(event, {
       domain: SUBSCRIPTION_DOMAIN,
       id: settled.userId,
       payload: {
@@ -344,7 +344,7 @@ async function settleOrderIfNeeded(event: H3Event, order: MockOrder): Promise<Mo
 }
 
 async function refreshOrdersByUser(event: H3Event, userId: string): Promise<MockOrder[]> {
-  const list = await listPilotCompatEntitiesAll<MockOrder>(event, ORDER_DOMAIN)
+  const list = await listPilotEntitiesAll<MockOrder>(event, ORDER_DOMAIN)
   const userOrders = list.filter(item => normalizeText(item.userId) === normalizeText(userId))
   const refreshed: MockOrder[] = []
   for (const order of userOrders) {
@@ -354,7 +354,7 @@ async function refreshOrdersByUser(event: H3Event, userId: string): Promise<Mock
 }
 
 export async function ensureMockCouponSeed(event: H3Event): Promise<void> {
-  await ensurePilotCompatSeed(event, COUPON_DOMAIN, [
+  await ensurePilotEntitySeed(event, COUPON_DOMAIN, [
     {
       id: 'welcome_200',
       code: 'WELCOME-200',
@@ -440,7 +440,7 @@ export async function createSubscriptionOrder(
     payTime: '',
   }
 
-  await upsertPilotCompatEntity(event, {
+  await upsertPilotEntity(event, {
     domain: ORDER_DOMAIN,
     id: order.id,
     payload: order,
@@ -488,7 +488,7 @@ export async function createDummyOrder(
     payTime: '',
   }
 
-  await upsertPilotCompatEntity(event, {
+  await upsertPilotEntity(event, {
     domain: ORDER_DOMAIN,
     id: order.id,
     payload: order,
@@ -520,7 +520,7 @@ export async function getOrderById(
   event: H3Event,
   orderId: string,
 ): Promise<MockOrder | null> {
-  const order = await getPilotCompatEntity(event, ORDER_DOMAIN, orderId) as MockOrder | null
+  const order = await getPilotEntity(event, ORDER_DOMAIN, orderId) as MockOrder | null
   if (!order) {
     return null
   }
@@ -537,8 +537,8 @@ export async function getOrderListByUser(
 export async function listOrderPage(
   event: H3Event,
   query: Record<string, unknown>,
-): Promise<Awaited<ReturnType<typeof listPilotCompatEntities<MockOrder>>>> {
-  const page = await listPilotCompatEntities<MockOrder>(event, ORDER_DOMAIN, {
+): Promise<Awaited<ReturnType<typeof listPilotEntities<MockOrder>>>> {
+  const page = await listPilotEntities<MockOrder>(event, ORDER_DOMAIN, {
     query,
     sorter: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   })
@@ -558,7 +558,7 @@ export async function getOrderStatistics(event: H3Event): Promise<{
   price: { submit: number, success: number }
   totalPrice: number
 }> {
-  const orders = await listPilotCompatEntitiesAll<MockOrder>(event, ORDER_DOMAIN)
+  const orders = await listPilotEntitiesAll<MockOrder>(event, ORDER_DOMAIN)
   const refreshed: MockOrder[] = []
   for (const order of orders) {
     refreshed.push(await settleOrderIfNeeded(event, order))
@@ -590,7 +590,7 @@ export async function getOrderStatistics(event: H3Event): Promise<{
 }
 
 export async function getUserSubscription(event: H3Event, userId: string): Promise<Record<string, any> | null> {
-  const subscription = await getPilotCompatEntity(event, SUBSCRIPTION_DOMAIN, userId)
+  const subscription = await getPilotEntity(event, SUBSCRIPTION_DOMAIN, userId)
   if (!subscription) {
     return null
   }
@@ -599,7 +599,7 @@ export async function getUserSubscription(event: H3Event, userId: string): Promi
 
 export async function listCouponByUser(event: H3Event, userId: string): Promise<MockCoupon[]> {
   await ensureMockCouponSeed(event)
-  const list = await listPilotCompatEntitiesAll<MockCoupon>(event, COUPON_DOMAIN)
+  const list = await listPilotEntitiesAll<MockCoupon>(event, COUPON_DOMAIN)
   return list
     .filter((item) => {
       const uid = normalizeText(item.uid)
@@ -639,7 +639,7 @@ export async function bindCouponToUser(
     }
   }
 
-  const next = await upsertPilotCompatEntity(event, {
+  const next = await upsertPilotEntity(event, {
     domain: COUPON_DOMAIN,
     id: coupon.id,
     payload: {
@@ -655,9 +655,9 @@ export async function bindCouponToUser(
 export async function listCouponPage(
   event: H3Event,
   query: Record<string, unknown>,
-): Promise<Awaited<ReturnType<typeof listPilotCompatEntities<MockCoupon>>>> {
+): Promise<Awaited<ReturnType<typeof listPilotEntities<MockCoupon>>>> {
   await ensureMockCouponSeed(event)
-  return await listPilotCompatEntities<MockCoupon>(event, COUPON_DOMAIN, {
+  return await listPilotEntities<MockCoupon>(event, COUPON_DOMAIN, {
     query,
     sorter: (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   })
@@ -679,7 +679,7 @@ export async function createCouponBatches(
   const now = nowIso()
   for (let index = 1; index <= quantity; index += 1) {
     const code = createCouponCode(prefix, index)
-    const coupon = await upsertPilotCompatEntity(event, {
+    const coupon = await upsertPilotEntity(event, {
       domain: COUPON_DOMAIN,
       id: `${code.toLowerCase()}_${Date.now().toString(36)}_${index}`,
       payload: {
@@ -715,7 +715,7 @@ export async function assignCouponToUser(
   if (!coupon) {
     return null
   }
-  const next = await upsertPilotCompatEntity(event, {
+  const next = await upsertPilotEntity(event, {
     domain: COUPON_DOMAIN,
     id: coupon.id,
     payload: {
@@ -735,7 +735,7 @@ export async function invalidateCoupon(
   if (!coupon) {
     return false
   }
-  await upsertPilotCompatEntity(event, {
+  await upsertPilotEntity(event, {
     domain: COUPON_DOMAIN,
     id: coupon.id,
     payload: {
@@ -749,5 +749,5 @@ export async function invalidateCoupon(
 }
 
 export async function removeCouponById(event: H3Event, couponId: string): Promise<boolean> {
-  return await deletePilotCompatEntity(event, COUPON_DOMAIN, couponId)
+  return await deletePilotEntity(event, COUPON_DOMAIN, couponId)
 }

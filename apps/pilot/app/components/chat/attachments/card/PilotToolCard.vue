@@ -32,14 +32,63 @@ const blockExtra = computed(() => (
     : {}
 ))
 
+function includesToolApprovalRequired(value: unknown): boolean {
+  const text = String(value || '').trim().toUpperCase()
+  if (!text) {
+    return false
+  }
+  return text === 'TOOL_APPROVAL_REQUIRED' || text.includes('TOOL_APPROVAL_REQUIRED')
+}
+
+const payloadDetail = computed(() => (
+  payload.value.detail && typeof payload.value.detail === 'object' && !Array.isArray(payload.value.detail)
+    ? payload.value.detail as Record<string, unknown>
+    : {}
+))
+
 const approvalStatus = computed(() => String(payload.value.status || '').trim().toLowerCase())
-const ticketId = computed(() => String(payload.value.ticketId || blockExtra.value.ticketId || '').trim())
-const sessionId = computed(() => String(payload.value.sessionId || blockExtra.value.sessionId || route.query.id || '').trim())
-const canDecideApproval = computed(() => (
+const ticketId = computed(() => String(
+  payload.value.ticketId
+  || payload.value.ticket_id
+  || payloadDetail.value.ticketId
+  || payloadDetail.value.ticket_id
+  || blockExtra.value.ticketId
+  || blockExtra.value.ticket_id
+  || '',
+).trim())
+const sessionId = computed(() => String(
+  payload.value.sessionId
+  || payload.value.session_id
+  || payloadDetail.value.sessionId
+  || payloadDetail.value.session_id
+  || blockExtra.value.sessionId
+  || blockExtra.value.session_id
+  || route.query.id
+  || '',
+).trim())
+const isShareView = computed(() => {
+  const raw = route.query.share
+  if (raw === undefined || raw === null) {
+    return false
+  }
+  const text = String(raw).trim().toLowerCase()
+  if (!text || text === '0' || text === 'false' || text === 'no' || text === 'off') {
+    return false
+  }
+  return true
+})
+const isApprovalRequired = computed(() => (
   approvalStatus.value === 'approval_required'
+  || approvalStatus.value === 'waiting_approval'
+  || includesToolApprovalRequired(payload.value.errorCode)
+  || includesToolApprovalRequired(payload.value.code)
+  || includesToolApprovalRequired(payloadDetail.value.code)
+))
+const canDecideApproval = computed(() => (
+  isApprovalRequired.value
   && ticketId.value.length > 0
   && sessionId.value.length > 0
-  && !route.query.share
+  && !isShareView.value
 ))
 
 function patchToolCardPayload(patch: Record<string, unknown>) {
@@ -198,7 +247,7 @@ const riskLevelText = computed(() => {
 
     <footer class="PilotToolCard-Footer">
       <span v-if="payload.durationMs">耗时 {{ (Number(payload.durationMs) / 1000).toFixed(2) }}s</span>
-      <span v-if="payload.ticketId">ticket: {{ payload.ticketId }}</span>
+      <span v-if="ticketId">ticket: {{ ticketId }}</span>
       <span v-if="payload.callId">call: {{ payload.callId }}</span>
     </footer>
 

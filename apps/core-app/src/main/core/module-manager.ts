@@ -757,22 +757,17 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
 
   /**
    * Computes the final entry file path for a module.
-   * This method first checks for a legacy `module.filePath` property. If present, that path takes precedence.
-   * Otherwise, if the module is configured to create a directory (`file.create` is `true`) and `file.dirPath` is valid,
+   * If the module is configured to create a directory (`file.create` is `true`) and `file.dirPath` is valid,
    * it defaults to `index.js` within that directory as the entry file.
    *
-   * @param module - The module instance, used to check for a legacy `filePath`.
+   * @param _module - The module instance (reserved for API stability).
    * @param file - The module's `ResolvedModuleFileConfig`, used to determine the directory path.
    * @returns The string representation of the module's entry file path. Returns `undefined` if the module does not require an entry file.
    */
   private resolveEntryPath(
-    module: TalexTouch.IModule<TalexEvents>,
+    _module: TalexTouch.IModule<TalexEvents>,
     file: ResolvedModuleFileConfig
   ): string | undefined {
-    const legacy = module.filePath
-    if (legacy)
-      return path.isAbsolute(legacy) ? legacy : path.join(file.dirPath ?? this.modulesRoot, legacy)
-
     if (file.create && file.dirPath) {
       return path.join(file.dirPath, 'index.js')
     }

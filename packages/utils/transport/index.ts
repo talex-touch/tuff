@@ -17,48 +17,6 @@
  */
 
 // ============================================================================
-// Event Builder
-// ============================================================================
-
-export {
-  /**
-   * @deprecated Use `useTuffTransport()` instead. Will be removed in v3.0.0.
-   */
-  ChannelType,
-  /**
-   * @deprecated Use `TuffTransportErrorCode` instead. Will be removed in v3.0.0.
-   */
-  DataCode,
-} from './legacy'
-
-// ============================================================================
-// Event Types
-// ============================================================================
-
-export type {
-  /**
-   * @deprecated Use `ITuffTransport` instead. Will be removed in v3.0.0.
-   */
-  ITouchChannel,
-  /**
-   * @deprecated Use `ITuffTransport` instead. Will be removed in v3.0.0.
-   */
-  ITouchClientChannel,
-  /**
-   * @deprecated Use TuffTransport types instead. Will be removed in v3.0.0.
-   */
-  RawChannelSyncData,
-  /**
-   * @deprecated Use TuffTransport types instead. Will be removed in v3.0.0.
-   */
-  RawStandardChannelData,
-  /**
-   * @deprecated Use TuffTransport types instead. Will be removed in v3.0.0.
-   */
-  StandardChannelData,
-} from './legacy'
-
-// ============================================================================
 // Predefined Events (by domain)
 // ============================================================================
 
@@ -94,6 +52,19 @@ export type {
   StreamConfig,
   TuffEvent,
 } from './event/types'
+
+export {
+  ChannelType,
+  DataCode,
+} from './channel-types'
+
+export type {
+  ITouchChannel,
+  ITouchClientChannel,
+  RawChannelSyncData,
+  RawStandardChannelData,
+  StandardChannelData,
+} from './channel-types'
 
 // ============================================================================
 // SDK Functions

@@ -1,6 +1,6 @@
 import type { H3Event } from 'h3'
 import { getPilotAdminRoutingConfig } from './pilot-admin-routing-config'
-import { getPilotCompatEntity, upsertPilotCompatEntity } from './pilot-compat-store'
+import { getPilotEntity, upsertPilotEntity } from './pilot-entity-store'
 
 const MEMORY_PREFERENCE_DOMAIN = 'chat.memory.preference'
 
@@ -47,7 +47,7 @@ export async function getPilotMemoryUserPreference(
   event: H3Event,
   userId: string,
 ): Promise<boolean | null> {
-  const entity = await getPilotCompatEntity(event, MEMORY_PREFERENCE_DOMAIN, userId)
+  const entity = await getPilotEntity(event, MEMORY_PREFERENCE_DOMAIN, userId)
   if (!entity || typeof entity !== 'object') {
     return null
   }
@@ -63,7 +63,7 @@ export async function setPilotMemoryUserPreference(
   memoryEnabled: boolean,
 ): Promise<boolean> {
   const normalized = Boolean(memoryEnabled)
-  const record = await upsertPilotCompatEntity(event, {
+  const record = await upsertPilotEntity(event, {
     domain: MEMORY_PREFERENCE_DOMAIN,
     id: userId,
     payload: {

@@ -11,7 +11,6 @@ import { useGlobalBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { useLanguage } from '~/modules/lang'
 import { captureAppContext } from '~/modules/mention/dialog-mention'
-import { capturePlatformWarningContext } from '~/modules/mention/platform-warning'
 import Beginner from '~/views/base/begin/Beginner.vue'
 import AppLayout from '~/views/layout/AppLayout.vue'
 import AppEntrance from './AppEntrance.vue'
@@ -23,7 +22,6 @@ useStartupInfo()
 const beginner = ref(false)
 
 captureAppContext()
-capturePlatformWarningContext()
 usePermissionStartup()
 useGlobalBatteryOptimizer()
 

@@ -494,6 +494,9 @@ function resolveProviderBaseUrl(type: PilotWebsearchProviderType, baseUrl: strin
   if (normalized) {
     return normalized
   }
+  if (type === 'sosearch') {
+    return ''
+  }
   if (type === 'serper') {
     return 'https://google.serper.dev'
   }
@@ -501,6 +504,67 @@ function resolveProviderBaseUrl(type: PilotWebsearchProviderType, baseUrl: strin
     return 'https://api.tavily.com'
   }
   return ''
+}
+
+function resolveSoSearchEndpoint(baseUrl: string, query: string): string {
+  const normalizedBase = resolveProviderBaseUrl('sosearch', baseUrl)
+  if (!normalizedBase) {
+    return ''
+  }
+
+  let endpoint = normalizedBase
+  try {
+    const parsedBase = new URL(normalizedBase)
+    const normalizedPath = normalizeText(parsedBase.pathname).replace(/\/+$/, '')
+    if (!normalizedPath.endsWith('/search')) {
+      parsedBase.pathname = `${normalizedPath || ''}/search`
+    }
+    parsedBase.searchParams.set('q', query)
+    return parsedBase.toString()
+  }
+  catch {
+    if (!endpoint.endsWith('/search')) {
+      endpoint = `${endpoint}/search`
+    }
+    const params = new URLSearchParams({
+      q: query,
+    })
+    return `${endpoint}?${params.toString()}`
+  }
+}
+
+function createSoSearchWebsearchConnector(input: {
+  baseUrl: string
+}): PilotWebsearchConnector {
+  const baseUrl = resolveProviderBaseUrl('sosearch', input.baseUrl)
+
+  return {
+    async search(query, ctx) {
+      const endpoint = resolveSoSearchEndpoint(baseUrl, query)
+      if (!endpoint) {
+        return []
+      }
+
+      const payload = await fetchJsonWithTimeout(endpoint, {
+        method: 'GET',
+      }, ctx.timeoutMs)
+
+      const rows = parseSearchList(payload)
+      const hits = rows
+        .map(item => normalizeSearchHit(item, ctx.builtinSources))
+        .filter((item): item is PilotWebsearchSearchHit => Boolean(item))
+
+      return hits.slice(0, ctx.maxResults)
+    },
+
+    async fetch(hit, ctx) {
+      return await fetchRawDocumentFromHit(hit, ctx)
+    },
+
+    async extract(raw, ctx) {
+      return normalizeExtractedDocument(raw, ctx.builtinSources)
+    },
+  }
 }
 
 function createSearxngWebsearchConnector(input: {
@@ -665,6 +729,11 @@ export function createWebsearchProviderConnector(input: {
   baseUrl: string
   apiKey?: string
 }): PilotWebsearchConnector {
+  if (input.providerType === 'sosearch') {
+    return createSoSearchWebsearchConnector({
+      baseUrl: input.baseUrl,
+    })
+  }
   if (input.providerType === 'serper') {
     return createSerperWebsearchConnector({
       baseUrl: input.baseUrl,

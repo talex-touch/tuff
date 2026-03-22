@@ -1,4 +1,4 @@
-import { getPilotCompatEntity, upsertPilotCompatEntity } from '../../../utils/pilot-compat-store'
+import { getPilotEntity, upsertPilotEntity } from '../../../utils/pilot-entity-store'
 import { quotaError, quotaOk } from '../../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {
@@ -8,12 +8,12 @@ export default defineEventHandler(async (event) => {
     return quotaError(400, 'id and key are required', null)
   }
 
-  const doc = await getPilotCompatEntity(event, 'doc.documents', id)
+  const doc = await getPilotEntity(event, 'doc.documents', id)
   if (!doc) {
     return quotaError(404, 'doc not found', null)
   }
 
-  const linked = await upsertPilotCompatEntity(event, {
+  const linked = await upsertPilotEntity(event, {
     domain: 'doc.agreements',
     id: key,
     payload: {

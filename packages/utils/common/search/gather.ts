@@ -11,40 +11,10 @@ export type SearchPriorityLayer = 'fast' | 'deferred'
  */
 export interface ITuffGatherOptions {
   /**
-   * The number of providers to run in parallel (legacy, used when layered mode is disabled).
-   * @default 4
-   */
-  concurrency?: number
-  /**
-   * The time to wait for more results before flushing the buffer.
-   * @default 50
-   */
-  coalesceGapMs?: number
-  /**
-   * A shorter grace period for the first batch to ensure a quick initial response.
-   * @default 20
-   */
-  firstBatchGraceMs?: number
-  /**
-   * A small debounce delay for the push function to avoid rapid-fire updates.
-   * @default 8
-   */
-  debouncePushMs?: number
-  /**
    * The maximum time to wait for a single provider to return results.
    * @default 3000
    */
   taskTimeoutMs?: number
-
-  // ==================== Layered Search Options ====================
-
-  /**
-   * Enable layered search mode (fast layer + deferred layer).
-   * When enabled, providers with priority='fast' run first with a timeout,
-   * then deferred providers run asynchronously.
-   * @default true
-   */
-  enableLayeredSearch?: boolean
 
   /**
    * Maximum wait time for all fast layer providers.

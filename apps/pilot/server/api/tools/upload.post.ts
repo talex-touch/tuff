@@ -1,6 +1,6 @@
 import { createError, getRequestURL } from 'h3'
 import { requirePilotAuth } from '../../utils/auth'
-import { upsertPilotCompatEntity } from '../../utils/pilot-compat-store'
+import { upsertPilotEntity } from '../../utils/pilot-entity-store'
 import { quotaOk } from '../../utils/quota-api'
 import { saveQuotaUploadObject } from '../../utils/quota-upload-store'
 
@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
   const url = `${requestUrl.protocol}//${requestUrl.host}${filename}`
   const now = new Date().toISOString()
 
-  await upsertPilotCompatEntity(event, {
+  await upsertPilotEntity(event, {
     domain: 'tools.storage',
     id: stored.id,
     payload: {

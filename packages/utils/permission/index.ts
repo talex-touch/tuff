@@ -21,7 +21,6 @@ import {
   permissionRegistry
 } from './registry'
 
-export * from './legacy'
 export * from './registry'
 export * from './types'
 

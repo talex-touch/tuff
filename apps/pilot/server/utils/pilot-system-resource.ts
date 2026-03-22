@@ -1,11 +1,11 @@
 import type { H3Event } from 'h3'
 import {
-  deletePilotCompatEntity,
-  getPilotCompatEntity,
-  listPilotCompatEntities,
-  listPilotCompatEntitiesAll,
-  upsertPilotCompatEntity,
-} from './pilot-compat-store'
+  deletePilotEntity,
+  getPilotEntity,
+  listPilotEntities,
+  listPilotEntitiesAll,
+  upsertPilotEntity,
+} from './pilot-entity-store'
 import {
   ensureSystemDeptSeed,
   ensureSystemMenuSeed,
@@ -286,10 +286,10 @@ export async function listPilotSystemResource(
   await ensureResourceSeed(event, resource)
   const config = RESOURCE_CONFIG_MAP[resource]
   if (config.listMode === 'tree') {
-    const list = await listPilotCompatEntitiesAll<Record<string, any>>(event, config.domain)
+    const list = await listPilotEntitiesAll<Record<string, any>>(event, config.domain)
     return buildTree(list)
   }
-  return await listPilotCompatEntities(event, config.domain, {
+  return await listPilotEntities(event, config.domain, {
     query,
   })
 }
@@ -300,7 +300,7 @@ export async function getPilotSystemResourceById(
   id: string,
 ): Promise<Record<string, any> | null> {
   await ensureResourceSeed(event, resource)
-  return await getPilotCompatEntity(event, RESOURCE_CONFIG_MAP[resource].domain, id)
+  return await getPilotEntity(event, RESOURCE_CONFIG_MAP[resource].domain, id)
 }
 
 export async function createPilotSystemResource(
@@ -309,7 +309,7 @@ export async function createPilotSystemResource(
   payload: Record<string, any>,
 ): Promise<Record<string, any>> {
   await ensureResourceSeed(event, resource)
-  return await upsertPilotCompatEntity(event, {
+  return await upsertPilotEntity(event, {
     domain: RESOURCE_CONFIG_MAP[resource].domain,
     id: normalizeText(payload.id),
     payload: normalizeResourcePayload(resource, payload),
@@ -323,7 +323,7 @@ export async function updatePilotSystemResource(
   payload: Record<string, any>,
 ): Promise<Record<string, any>> {
   await ensureResourceSeed(event, resource)
-  return await upsertPilotCompatEntity(event, {
+  return await upsertPilotEntity(event, {
     domain: RESOURCE_CONFIG_MAP[resource].domain,
     id,
     payload: normalizeResourcePayload(resource, payload),
@@ -335,7 +335,7 @@ export async function deletePilotSystemResource(
   resource: PilotSystemResource,
   id: string,
 ): Promise<boolean> {
-  return await deletePilotCompatEntity(event, RESOURCE_CONFIG_MAP[resource].domain, id)
+  return await deletePilotEntity(event, RESOURCE_CONFIG_MAP[resource].domain, id)
 }
 
 export async function searchSystemUsers(
@@ -343,7 +343,7 @@ export async function searchSystemUsers(
   query: string,
 ): Promise<[Array<Record<string, any>>, number]> {
   const keyword = normalizeText(query).toLowerCase()
-  const list = await listPilotCompatEntitiesAll<Record<string, any>>(event, RESOURCE_CONFIG_MAP.users.domain)
+  const list = await listPilotEntitiesAll<Record<string, any>>(event, RESOURCE_CONFIG_MAP.users.domain)
   const items = !keyword
     ? list.slice(0, 20)
     : list

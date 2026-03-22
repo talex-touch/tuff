@@ -19,8 +19,8 @@ import {
   executePilotImageEditTool,
   executePilotImageGenerateTool,
   executePilotWebsearchTool,
+  mergeWebsearchContextIntoMessage,
   PILOT_MEDIA_VIDEO_NOT_IMPLEMENTED_CODE,
-  PilotToolApprovalRequiredError,
 } from '../pilot-tool-gateway'
 import {
   createGatewayWebsearchConnector,
@@ -170,24 +170,8 @@ describe('pilot-tool-gateway', () => {
     expect(audits).toEqual(['tool.call.started', 'tool.call.completed'])
   })
 
-  it('高风险域名命中时触发审批 required', async () => {
+  it('高风险域名命中时 websearch 不触发审批', async () => {
     vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource())
-    vi.mocked(createPilotToolApprovalTicket).mockResolvedValue({
-      ticketId: 'ticket_1',
-      sessionId: 's1',
-      userId: 'u1',
-      requestId: 'r1',
-      requestHash: 'hash',
-      callId: 'call_1',
-      toolId: 'tool.websearch',
-      toolName: 'websearch',
-      riskLevel: 'high',
-      status: 'pending',
-      sources: [],
-      metadata: {},
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    } as any)
     vi.mocked(createWebsearchProviderConnector).mockReturnValue({
       search: vi.fn().mockResolvedValue([
         {
@@ -216,7 +200,7 @@ describe('pilot-tool-gateway', () => {
     } as any)
 
     const audits: string[] = []
-    await expect(() => executePilotWebsearchTool({
+    const result = await executePilotWebsearchTool({
       event: {} as any,
       userId: 'u1',
       sessionId: 's1',
@@ -225,9 +209,13 @@ describe('pilot-tool-gateway', () => {
       emitAudit: async (payload) => {
         audits.push(payload.auditType)
       },
-    })).rejects.toBeInstanceOf(PilotToolApprovalRequiredError)
+    })
 
-    expect(audits).toEqual(['tool.call.started', 'tool.call.approval_required'])
+    expect(result).toBeTruthy()
+    expect(result?.sources.length).toBe(1)
+    expect(result?.providerUsed).toEqual(['searxng-main'])
+    expect(audits).toEqual(['tool.call.started', 'tool.call.completed'])
+    expect(createPilotToolApprovalTicket).not.toHaveBeenCalled()
   })
 
   it('provider 结果不足时回退 responses_builtin', async () => {
@@ -376,7 +364,7 @@ describe('pilot-tool-gateway', () => {
     expect(networkClient.request).not.toHaveBeenCalled()
   })
 
-  it('provider 与 fallback 都不可用时返回 null 并记录失败审计', async () => {
+  it('provider 与 fallback 都不可用时返回 null，并记录 fallback_unsupported_channel', async () => {
     vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
       providers: [
         {
@@ -397,7 +385,7 @@ describe('pilot-tool-gateway', () => {
       extract: vi.fn(),
     } as any)
 
-    const audits: string[] = []
+    const audits: any[] = []
     const result = await executePilotWebsearchTool({
       event: {} as any,
       userId: 'u1',
@@ -405,12 +393,224 @@ describe('pilot-tool-gateway', () => {
       requestId: 'r1',
       query: 'no result',
       emitAudit: async (payload) => {
-        audits.push(payload.auditType)
+        audits.push(payload)
       },
     })
 
     expect(result).toBeNull()
-    expect(audits).toEqual(['tool.call.started', 'tool.call.failed'])
+    expect(audits.map(item => item.auditType)).toEqual(['tool.call.started', 'tool.call.failed'])
+    expect(audits.at(-1)?.errorCode).toBe('WEBSEARCH_DATASOURCE_UNAVAILABLE')
+    expect(audits.at(-1)?.connectorReason).toBe('fallback_unsupported_channel')
+    expect(audits.at(-1)?.providerChain).toEqual(['searxng-main'])
+    expect(audits.at(-1)?.providerUsed).toEqual([])
+    expect(audits.at(-1)?.fallbackUsed).toBe(false)
+  })
+
+  it('fallback 渠道不兼容时记录 fallback_unsupported_channel', async () => {
+    vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
+      providers: [
+        {
+          id: 'searxng-main',
+          type: 'searxng',
+          enabled: true,
+          priority: 10,
+          baseUrl: 'https://searxng.example.com',
+          apiKeyEncrypted: '',
+          timeoutMs: 8_000,
+          maxResults: 2,
+        },
+      ],
+    }))
+    vi.mocked(createWebsearchProviderConnector).mockReturnValue({
+      search: vi.fn().mockResolvedValue([]),
+      fetch: vi.fn(),
+      extract: vi.fn(),
+    } as any)
+
+    const audits: any[] = []
+    const result = await executePilotWebsearchTool({
+      event: {} as any,
+      userId: 'u1',
+      sessionId: 's1',
+      requestId: 'r1',
+      query: 'no result',
+      channel: {
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'key',
+        model: 'gpt-5.2',
+        adapter: 'openai',
+        transport: 'chat.completions',
+        timeoutMs: 12_000,
+      },
+      emitAudit: async (payload) => {
+        audits.push(payload)
+      },
+    })
+
+    expect(result).toBeNull()
+    expect(audits.at(-1)?.errorCode).toBe('WEBSEARCH_FALLBACK_UNSUPPORTED_CHANNEL')
+    expect(audits.at(-1)?.connectorReason).toBe('fallback_unsupported_channel')
+  })
+
+  it('fallback endpoint 缺失时记录 fallback_endpoint_missing', async () => {
+    vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
+      providers: [
+        {
+          id: 'searxng-main',
+          type: 'searxng',
+          enabled: true,
+          priority: 10,
+          baseUrl: 'https://searxng.example.com',
+          apiKeyEncrypted: '',
+          timeoutMs: 8_000,
+          maxResults: 2,
+        },
+      ],
+    }))
+    vi.mocked(createWebsearchProviderConnector).mockReturnValue({
+      search: vi.fn().mockResolvedValue([]),
+      fetch: vi.fn(),
+      extract: vi.fn(),
+    } as any)
+
+    const audits: any[] = []
+    const result = await executePilotWebsearchTool({
+      event: {} as any,
+      userId: 'u1',
+      sessionId: 's1',
+      requestId: 'r1',
+      query: 'no result',
+      channel: {
+        baseUrl: '',
+        apiKey: 'key',
+        model: 'gpt-5.2',
+        adapter: 'openai',
+        transport: 'responses',
+        timeoutMs: 12_000,
+      },
+      emitAudit: async (payload) => {
+        audits.push(payload)
+      },
+    })
+
+    expect(result).toBeNull()
+    expect(audits.at(-1)?.errorCode).toBe('WEBSEARCH_FALLBACK_ENDPOINT_MISSING')
+    expect(audits.at(-1)?.connectorReason).toBe('fallback_endpoint_missing')
+  })
+
+  it('fallback 执行失败时记录 fallback_execution_failed', async () => {
+    vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
+      providers: [
+        {
+          id: 'searxng-main',
+          type: 'searxng',
+          enabled: true,
+          priority: 10,
+          baseUrl: 'https://searxng.example.com',
+          apiKeyEncrypted: '',
+          timeoutMs: 8_000,
+          maxResults: 2,
+        },
+      ],
+    }))
+    vi.mocked(createWebsearchProviderConnector).mockReturnValue({
+      search: vi.fn().mockResolvedValue([]),
+      fetch: vi.fn(),
+      extract: vi.fn(),
+    } as any)
+    vi.mocked(networkClient.request).mockResolvedValue({
+      status: 500,
+      data: {
+        error: {
+          message: 'upstream failed',
+        },
+      },
+    } as any)
+
+    const audits: any[] = []
+    const result = await executePilotWebsearchTool({
+      event: {} as any,
+      userId: 'u1',
+      sessionId: 's1',
+      requestId: 'r1',
+      query: 'no result',
+      channel: {
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'key',
+        model: 'gpt-5.2',
+        adapter: 'openai',
+        transport: 'responses',
+        timeoutMs: 12_000,
+      },
+      emitAudit: async (payload) => {
+        audits.push(payload)
+      },
+    })
+
+    expect(result).toBeNull()
+    expect(audits.at(-1)?.errorCode).toBe('WEBSEARCH_FALLBACK_EXECUTION_FAILED')
+    expect(audits.at(-1)?.connectorReason).toBe('fallback_execution_failed')
+  })
+
+  it('fallback 成功但无来源时记录 provider_pool_empty', async () => {
+    vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
+      providers: [
+        {
+          id: 'searxng-main',
+          type: 'searxng',
+          enabled: true,
+          priority: 10,
+          baseUrl: 'https://searxng.example.com',
+          apiKeyEncrypted: '',
+          timeoutMs: 8_000,
+          maxResults: 2,
+        },
+      ],
+    }))
+    vi.mocked(createWebsearchProviderConnector).mockReturnValue({
+      search: vi.fn().mockResolvedValue([]),
+      fetch: vi.fn(),
+      extract: vi.fn(),
+    } as any)
+    vi.mocked(networkClient.request).mockResolvedValue({
+      status: 200,
+      data: {
+        output_text: 'no external url in payload',
+      },
+    } as any)
+
+    const audits: any[] = []
+    const result = await executePilotWebsearchTool({
+      event: {} as any,
+      userId: 'u1',
+      sessionId: 's1',
+      requestId: 'r1',
+      query: 'no result',
+      channel: {
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'key',
+        model: 'gpt-5.2',
+        adapter: 'openai',
+        transport: 'responses',
+        timeoutMs: 12_000,
+      },
+      emitAudit: async (payload) => {
+        audits.push(payload)
+      },
+    })
+
+    expect(result).toBeNull()
+    expect(audits.at(-1)?.errorCode).toBe('WEBSEARCH_DATASOURCE_UNAVAILABLE')
+    expect(audits.at(-1)?.connectorReason).toBe('provider_pool_empty')
+    expect(audits.at(-1)?.fallbackUsed).toBe(true)
+  })
+
+  it('无外部来源时可注入 no-source guard', () => {
+    const merged = mergeWebsearchContextIntoMessage('今天有什么最新新闻？', '', {
+      requireNoSourceGuard: true,
+    })
+    expect(merged).toContain('[No External Sources Retrieved]')
+    expect(merged).toContain('Do not fabricate specific latest/news facts')
   })
 
   it('emits started/completed for image generation', async () => {

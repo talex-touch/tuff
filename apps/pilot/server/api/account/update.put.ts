@@ -1,6 +1,6 @@
 import { requirePilotAuth } from '../../utils/auth'
 import { updatePilotLocalUserProfile, isPilotLocalUserId } from '../../utils/pilot-local-auth'
-import { getPilotCompatEntity, upsertPilotCompatEntity } from '../../utils/pilot-compat-store'
+import { getPilotEntity, upsertPilotEntity } from '../../utils/pilot-entity-store'
 import { quotaOk } from '../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {
@@ -26,8 +26,8 @@ export default defineEventHandler(async (event) => {
   }
 
   if (!profile) {
-    const existing = await getPilotCompatEntity(event, 'account.profile', auth.userId)
-    profile = await upsertPilotCompatEntity(event, {
+    const existing = await getPilotEntity(event, 'account.profile', auth.userId)
+    profile = await upsertPilotEntity(event, {
       domain: 'account.profile',
       id: auth.userId,
       payload: {

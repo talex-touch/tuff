@@ -13,6 +13,123 @@
 
 ## 2026-03-22
 
+### fix(core-platform): 移除 Windows 兼容性启动提醒
+
+- 主进程启动握手移除 `platformWarning` 下发：
+  - `apps/core-app/src/main/channel/common.ts` 不再写入 `startupInfo.platformWarning`。
+  - `apps/core-app/src/main/utils/common-util.ts` 删除 `checkPlatformCompatibility()` / `getMacOSVersion()` 及对应 `os` 依赖。
+- 渲染进程触发链路完整下线：
+  - `apps/core-app/src/renderer/src/App.vue` 删除 `capturePlatformWarningContext()`。
+  - `apps/core-app/src/renderer/src/modules/hooks/useAppLifecycle.ts` 删除 `maybeShowPlatformWarning()` 及相关调用。
+- 类型与组件声明同步清理：
+  - `apps/core-app/src/renderer/src/env.d.ts`、`packages/utils/types/startup-info.ts` 删除 `platformWarning?: string`。
+  - `apps/core-app/src/renderer/components.d.ts` 删除 `PlatformCompatibilityWarning` 全局声明。
+- 物理删除无用模块：
+  - `apps/core-app/src/renderer/src/modules/mention/platform-warning.ts`
+  - `apps/core-app/src/renderer/src/components/base/dialog/PlatformCompatibilityWarning.vue`
+- 测试同步：`apps/core-app/src/main/channel/common.test.ts` 清理 `checkPlatformCompatibility` mock。
+- 目标：彻底移除已过时的平台兼容性提示，避免“能力已可用但仍提示测试中”的用户误导。
+
+### feat(core-hardcut): legacy 通道与兼容桥一次性下线
+
+- `apps/core-app/src/main/channel/common.ts`：
+  - 删除 legacy raw-event 桥接注册（生命周期/临时文件/存储清理/URL confirm 等），仅保留 typed transport 主链路。
+  - `openExternal` 逻辑改为基于决策直接执行，不再经过 legacy confirm 事件。
+- `apps/core-app/src/main/modules/analytics/analytics-module.ts`：
+  - 删除 `analytics:get-summary`、`analytics:export` 兼容桥接。
+- `apps/core-app/src/main/core/module-manager.ts`：
+  - 删除 `module.filePath` legacy 回退，固定走 `ResolvedModuleFileConfig` 入口解析。
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-gather.ts` + `packages/utils/common/search/gather.ts`：
+  - 删除 legacy gather 分支与旧参数壳，固定 layered 搜索路径。
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`：
+  - 渲染端 analytics 调用切到 `AppEvents.analytics.*` typed 事件，不再发送 raw legacy 事件。
+
+### feat(pilot-hardcut): 实体存储与 legacy API 一次性切换
+
+- 新增 `apps/pilot/server/utils/pilot-entity-store.ts`：
+  - 正式表 `pilot_entities` + 迁移表 `pilot_entity_migrations`。
+  - 启动即执行一次性迁移：建表 -> 拷贝 -> 按 domain 对账 -> 写 marker -> 旧表 rename 备份。
+  - 迁移失败写 `failed` marker 并 fail-fast，阻断静默脏切。
+- Pilot server 全量调用已切换到 `pilot-entity-store`（`get/list/upsert/delete/seed` 新函数族）；`pilot-compat-store.ts` 已物理删除。
+- 物理删除 legacy 路由：
+  - `apps/pilot/server/api/v1/chat/sessions/[sessionId]/stream.post.ts`
+  - `apps/pilot/server/api/v1/chat/sessions/[sessionId]/turns.post.ts`
+
+### breaking(utils-hardcut): SDK legacy 出口移除
+
+- 物理删除：
+  - `packages/utils/transport/legacy.ts`
+  - `packages/utils/permission/legacy.ts`
+- `packages/utils/transport/index.ts` 与 `packages/utils/permission/index.ts` 移除 legacy re-export。
+- widget processor 与 renderer 注入白名单移除 `@talex-touch/utils/transport/legacy`。
+- ESLint 增加硬门禁：导入 `@talex-touch/utils/transport/legacy` / `@talex-touch/utils/permission/legacy` 直接报错。
+
+### chore(governance): compatibility 债务台账失效条目清理
+
+- `docs/plan-prd/docs/compatibility-debt-registry.csv` 清理已失效记录：
+  - 删除已物理移除文件 `PlatformCompatibilityWarning.vue` 的 compat-file 台账项。
+  - 删除 `compat:registry:guard` 标注为 stale 的 4 条 `legacy-keyword` 记录（`pilot-settings.vue`、`pages/pilot/admin/channels.vue`、`pilot-channel.ts`、`pilot-runtime.ts`）。
+- 验证：`pnpm compat:registry:guard` 无 warning，台账覆盖保持有效。
+
+### feat(pilot-websearch): SoSearch adapter 接入并设为默认主 provider
+
+- `apps/pilot/server/utils/pilot-websearch-connector.ts`：
+  - 新增 `SoSearch adapter`，接入 `GET {baseUrl}/search?q=...`（无鉴权）。
+  - 支持 `baseUrl` 已含 `/search` 的 endpoint 归一化，避免重复拼接路径。
+  - 复用现有 `search/fetch/extract` 标准链路与 fallback/去重策略，不改工具网关语义。
+- `apps/pilot/server/utils/pilot-admin-datasource-config.ts`：
+  - `PilotWebsearchProviderType` 新增 `sosearch`。
+  - 默认 provider 池升级为：`sosearch-main -> searxng-main -> serper-backup -> tavily-backup`。
+  - `sosearch-main` 默认 `baseUrl` 留空，部署后手填。
+- `apps/pilot/app/pages/admin/system/websearch-providers.vue`：
+  - 管理页新增 `SoSearch` provider 选项（快捷添加按钮 + Type 下拉项）。
+  - 前端默认 providers、归一化解析与空值回退逻辑补齐 `sosearch`。
+- 测试补齐：
+  - `pilot-websearch-connector.test.ts` 新增 SoSearch 响应解析、`/search` endpoint 去重、`baseUrl` 为空回退空结果用例。
+  - `pilot-admin-datasource-config.test.ts` 新增默认 provider 顺序与 `sosearch` 类型读写用例。
+
+### fix(pilot-approval): 工具审批通用化收敛 + websearch 免审批
+
+- `apps/pilot/server/utils/pilot-tool-gateway.ts`：
+  - 新增通用工具审批策略入口 `shouldRequireToolApproval()`，按工具维度判定是否启用审批。
+  - 默认将 `websearch` 审批策略关闭（`TOOL_APPROVAL_POLICY[websearch]=false`），高风险检索不再进入审批中断分支。
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`：
+  - 工具卡 `upsert` 增加通用身份归并（`callId/ticketId/toolName + 活跃态`），避免审批事件拆分成新卡，审批按钮可稳定嵌入同一工具卡。
+  - `send()` 增加取消收敛（Abort -> `CANCELLED`）与执行流计数，修复“停止生成无效/等待审批态无法收口”。
+  - 新增审批等待检查点回调，进入 `approval_required` 时可先完成本地会话快照，避免同步长期停留 `PENDING`。
+- `apps/pilot/app/pages/index.vue`：
+  - 接入 `onReqCheckpoint('approval_required')`，在等待审批阶段即时落盘会话并恢复发送状态。
+  - 会话同步状态判定中 `CANCELLED` 不再标记为 `FAILED`，保证停止后状态可收敛。
+- 测试更新：`pilot-tool-gateway.test.ts` 将高风险 websearch 场景改为“不中断审批，直接 completed”。
+
+### fix(pilot-admin-channels): 单渠道启用/禁用状态可正确持久化
+
+- `apps/pilot/server/utils/pilot-admin-channel-config.ts`：
+  - 修复布尔归一化链路：`normalizeText(false)` 不再被吞空，`enabled=false` 可正确落库并回读。
+  - 同步修复渠道模型布尔字段（`models[].enabled/thinkingSupported/thinkingDefaultEnabled`）的持久化正确性。
+- 新增测试：`apps/pilot/server/utils/__tests__/pilot-admin-channel-config.test.ts`
+  - 覆盖 `channel.enabled=false` 与 `models[].enabled=false` 的保存与回读回归场景。
+
+### fix(pilot-websearch): 终态事件收口 + fallback unavailable 可解释化 + 无来源防编造
+
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`：
+  - `websearch.decision` 保持判定语义；`enabled=false` 时立即发 `websearch.skipped`。
+  - 审批中断（`approval_required/rejected`）与工具异常路径统一先发 `websearch.skipped` 作为终态。
+  - `done/error` 前增加 `terminal_finalize` 兜底：若仍停留 decision 态，补发 `websearch.skipped`，避免前端“一直执行中”。
+  - 当本轮无来源且意图要求联网时，向运行时消息注入 `No External Sources Retrieved` guard，约束模型显式说明“未获取外部来源”，禁止编造“最新/新闻”事实。
+- `apps/pilot/server/api/aigc/executor.post.ts`：
+  - `run.audit` 流同步收口 `websearch.skipped` 终态（decision=false、审批分支、异常分支、terminal finalize）。
+  - `run.audit` 工具审计转发补齐 `providerChain/providerUsed/fallbackUsed/dedupeCount`，便于 unavailable 根因定位。
+  - 执行消息同样接入“无来源 guard”注入策略（仅在 `websearchRequired=true` 且 `sourceCount=0` 时触发）。
+- `apps/pilot/server/utils/pilot-tool-gateway.ts`：
+  - fallback unavailable reason 语义规范化：`provider_pool_empty`、`fallback_unsupported_channel`、`fallback_endpoint_missing`、`fallback_execution_failed`。
+  - 维持兼容错误码（含 `WEBSEARCH_DATASOURCE_UNAVAILABLE`），同时确保失败审计可解释“为何 unavailable”。
+- `apps/pilot/app/composables/usePilotChatPage.ts`：
+  - websearch 阶段卡状态调整：`executed => done`、`skipped => skipped`，`decided` 不再长期映射 running。
+  - `done/error` 本地兜底：若仍在 decision 态，自动转 `skipped(terminal_finalize)`，防止服务端漏发导致 UI 卡住。
+  - 新一轮消息发送前清空 `toolCallMap/toolCalls`，工具卡仅显示当前轮次，消除上一轮残留。
+- 测试补齐：`apps/pilot/server/utils/__tests__/pilot-tool-gateway.test.ts` 新增 fallback reason 分类与 no-source guard 用例。
+
 ### feat(core-search-observability): 搜索卡顿诊断观测增强（主日志 + 自动短开）
 
 - 搜索主链路新增 `search-trace/v1` 结构化日志（仅主进程现有日志，不新增 JSONL）：

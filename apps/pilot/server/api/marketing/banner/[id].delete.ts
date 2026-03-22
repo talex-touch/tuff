@@ -1,4 +1,4 @@
-import { deletePilotCompatEntity } from '../../../utils/pilot-compat-store'
+import { deletePilotEntity } from '../../../utils/pilot-entity-store'
 import { quotaError, quotaOk } from '../../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {
@@ -6,6 +6,6 @@ export default defineEventHandler(async (event) => {
   if (!id) {
     return quotaError(400, 'id is required', null)
   }
-  const deleted = await deletePilotCompatEntity(event, 'marketing.banner', id)
+  const deleted = await deletePilotEntity(event, 'marketing.banner', id)
   return quotaOk({ deleted })
 })

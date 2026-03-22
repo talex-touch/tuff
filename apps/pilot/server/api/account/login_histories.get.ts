@@ -1,13 +1,13 @@
 import { requirePilotAuth } from '../../utils/auth'
 import { ensureAccountHistorySeed } from '../../utils/pilot-compat-seeds'
-import { listPilotCompatEntities } from '../../utils/pilot-compat-store'
+import { listPilotEntities } from '../../utils/pilot-entity-store'
 import { quotaOk } from '../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {
   const auth = requirePilotAuth(event)
   await ensureAccountHistorySeed(event)
 
-  const page = await listPilotCompatEntities(event, 'account.login_histories', {
+  const page = await listPilotEntities(event, 'account.login_histories', {
     query: getQuery(event),
     defaultPageSize: 20,
   })

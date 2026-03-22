@@ -43,7 +43,6 @@ declare global {
     isRelease: boolean
     platform: string
     arch: string
-    platformWarning?: string
     t: {
       _s: number
       s: number

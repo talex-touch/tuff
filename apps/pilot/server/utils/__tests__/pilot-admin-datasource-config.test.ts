@@ -98,6 +98,15 @@ describe('pilot-admin-datasource-config', () => {
     expect(config.providers[0]?.maxResults).toBe(5)
   })
 
+  it('默认配置包含 sosearch-main 且优先级最高', async () => {
+    const config = await getPilotWebsearchDatasourceConfig(createEvent())
+
+    expect(config.providers.length).toBeGreaterThanOrEqual(4)
+    expect(config.providers[0]?.id).toBe('sosearch-main')
+    expect(config.providers[0]?.type).toBe('sosearch')
+    expect(config.providers[1]?.id).toBe('searxng-main')
+  })
+
   it('provider key 保存时会加密，读取视图时返回 hasApiKey/apiKeyMasked', async () => {
     const event = createEvent()
 
@@ -194,6 +203,30 @@ describe('pilot-admin-datasource-config', () => {
     const viewProvider = view.providers.find(item => item.id === 'tavily-backup')
     expect(viewProvider?.hasApiKey).toBe(false)
     expect(viewProvider?.apiKeyMasked).toBe('')
+  })
+
+  it('支持保存并读取 sosearch provider 类型', async () => {
+    const event = createEvent()
+    const updated = await updatePilotWebsearchDatasourceConfig(event, {
+      providers: [
+        {
+          id: 'sosearch-main',
+          type: 'sosearch',
+          enabled: true,
+          priority: 10,
+          baseUrl: 'https://sosearch.example.com',
+          timeoutMs: 9_000,
+          maxResults: 7,
+        },
+      ],
+    })
+
+    expect(updated.providers).toHaveLength(1)
+    expect(updated.providers[0]?.id).toBe('sosearch-main')
+    expect(updated.providers[0]?.type).toBe('sosearch')
+    expect(updated.providers[0]?.baseUrl).toBe('https://sosearch.example.com')
+    expect(updated.providers[0]?.timeoutMs).toBe(9_000)
+    expect(updated.providers[0]?.maxResults).toBe(7)
   })
 
   it('legacy provider 仍支持通过 apiKeyRef 环境变量解析 key', async () => {

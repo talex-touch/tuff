@@ -228,7 +228,7 @@
 **现状指标**
 | 项目 | 结果 | 结论 |
 | --- | --- | --- |
-| 执行入口 | `/api/aigc/executor`、`/api/v1/chat/sessions/*`、`/api/chat/sessions/*` | 已统一接入 |
+| 执行入口 | `/api/aigc/executor`、`/api/chat/sessions/*`（`/api/v1/chat/sessions/*` 仅保留非 stream/turns 子路由） | 已统一接入 |
 | 路由策略 | `Quota Auto` 速度优先 + 探索流量 | 已落地 |
 | 评比指标 | `queueWaitMs/ttftMs/totalDurationMs/success/errorCode/finishReason` | 已落库 |
 | 熔断恢复 | 失败阈值 + 冷却 + 半开探测 | 已落地 |
