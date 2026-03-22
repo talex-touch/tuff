@@ -27,8 +27,11 @@ import {
   TalexEvents,
   touchEventBus
 } from '../../../core/eventbus/touch-event'
+import { dbWriteScheduler } from '../../../db/db-write-scheduler'
 import { createDbUtils } from '../../../db/utils'
+import { appTaskGate } from '../../../service/app-task-gate'
 import { enterPerfContext } from '../../../utils/perf-context'
+import { perfMonitor } from '../../../utils/perf-monitor'
 import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { getSentryService } from '../../sentry'
@@ -60,6 +63,8 @@ interface SearchCacheEntry {
 
 const SEARCH_CACHE_TTL_MS = 5_000
 const SEARCH_CACHE_MAX_SIZE = 100
+const SEARCH_TRACE_SCHEMA = 'search-trace/v1'
+const SEARCH_TRACE_SLOW_THRESHOLD_MS = 800
 
 const searchEngineLog = getLogger('search-engine')
 const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
@@ -139,6 +144,20 @@ interface QueryOrchestrationResult {
 
 type ExtendedProviderStatus = 'success' | 'timeout' | 'error' | 'aborted'
 
+type SearchTraceSourceStat = {
+  providerId?: string
+  provider?: string
+  status?: ExtendedProviderStatus
+  duration?: number
+  resultCount?: number
+}
+
+interface SearchTraceProviderSummary {
+  total: number
+  byStatus: Partial<Record<ExtendedProviderStatus, number>>
+  topSlow: Array<{ providerId: string; durationMs: number; status: string; resultCount: number }>
+}
+
 interface ProviderHealth {
   failureCount: number
   timeoutCount: number
@@ -209,6 +228,41 @@ function buildSearchCacheKey(
   activatedProviders: Map<string, IProviderActivate> | null
 ): string {
   return `${queryText || ''}:${providerFilter || ''}:${activatedProviders ? Array.from(activatedProviders.keys()).join(',') : ''}`
+}
+
+function roundDuration(value: number | undefined): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
+  }
+  return Math.max(0, Math.round(value))
+}
+
+function toQueryHash(text: string): string {
+  return crypto.createHash('sha1').update(text).digest('hex').slice(0, 12)
+}
+
+function buildProviderSummary(sourceStats: SearchTraceSourceStat[]): SearchTraceProviderSummary {
+  const byStatus: Partial<Record<ExtendedProviderStatus, number>> = {}
+  for (const stat of sourceStats) {
+    const status = stat.status ?? 'success'
+    byStatus[status] = (byStatus[status] ?? 0) + 1
+  }
+
+  const topSlow = sourceStats
+    .map((stat) => ({
+      providerId: stat.providerId || stat.provider || 'unknown',
+      durationMs: roundDuration(stat.duration) ?? 0,
+      status: stat.status ?? 'success',
+      resultCount: typeof stat.resultCount === 'number' ? stat.resultCount : 0
+    }))
+    .sort((a, b) => b.durationMs - a.durationMs)
+    .slice(0, 3)
+
+  return {
+    total: sourceStats.length,
+    byStatus,
+    topSlow
+  }
 }
 
 export class SearchEngineCore
@@ -565,6 +619,98 @@ export class SearchEngineCore
       .filter((p): p is ISearchProvider<ProviderContext> => !!p)
   }
 
+  private logSearchTrace(params: {
+    event:
+      | 'ipc.query.received'
+      | 'session.start'
+      | 'first.result'
+      | 'session.end'
+      | 'session.cancel'
+      | 'session.error'
+    sessionId: string
+    query: TuffQuery
+    timings?: Partial<{
+      parseMs: number
+      providerSelectMs: number
+      mergeRankMs: number
+      totalMs: number
+    }>
+    result?: Partial<{ firstCount: number; totalCount: number }>
+    sourceStats?: SearchTraceSourceStat[]
+    includeDetails?: boolean
+    cancelled?: boolean
+    providerFilter?: string
+    error?: unknown
+  }): void {
+    if (!searchLogger.isEnabled()) return
+
+    const queryText = params.query.text || ''
+    const inputTypes = (params.query.inputs ?? []).map((input) => String(input.type))
+    const providerSummary = buildProviderSummary(params.sourceStats ?? [])
+    const dbQueue = dbWriteScheduler.getStats()
+    const loopLag = perfMonitor.getRecentEventLoopLagSnapshot()
+    const appTaskSnapshot = appTaskGate.getSnapshot()
+
+    const payload: Record<string, unknown> = {
+      schema: SEARCH_TRACE_SCHEMA,
+      event: params.event,
+      sessionId: params.sessionId,
+      ts: Date.now(),
+      query: {
+        len: queryText.length,
+        hash: toQueryHash(queryText)
+      },
+      inputCount: (params.query.inputs ?? []).length,
+      inputTypes,
+      timing: {
+        parseMs: roundDuration(params.timings?.parseMs),
+        providerSelectMs: roundDuration(params.timings?.providerSelectMs),
+        mergeRankMs: roundDuration(params.timings?.mergeRankMs),
+        totalMs: roundDuration(params.timings?.totalMs)
+      },
+      result: {
+        firstCount: params.result?.firstCount,
+        totalCount: params.result?.totalCount
+      },
+      providers: {
+        summary: params.includeDetails
+          ? providerSummary
+          : { total: providerSummary.total, byStatus: providerSummary.byStatus }
+      },
+      contention: {
+        dbQueue: {
+          queued: dbQueue.queued,
+          processing: dbQueue.processing,
+          currentTaskLabel: dbQueue.currentTaskLabel ?? undefined
+        },
+        loopLag:
+          loopLag === null
+            ? null
+            : {
+                lagMs: loopLag.lagMs,
+                severity: loopLag.severity,
+                at: loopLag.at
+              },
+        appTaskGate: appTaskSnapshot
+      },
+      cancelled: params.cancelled === true ? true : undefined,
+      providerFilter: params.providerFilter ?? undefined
+    }
+
+    if (params.error) {
+      payload.error =
+        params.error instanceof Error ? params.error.message : String(params.error ?? 'unknown')
+    }
+
+    try {
+      searchEngineLog.info(`[${SEARCH_TRACE_SCHEMA}] ${JSON.stringify(payload)}`)
+    } catch (error) {
+      searchEngineLog.warn('Failed to serialize search trace payload', {
+        meta: { event: params.event, sessionId: params.sessionId, error: String(error) }
+      })
+    }
+  }
+
   private _updateActivationState(newResults: TuffSearchResult[]): void {
     const allNewActivations = newResults.flatMap((res) => res.activate || [])
 
@@ -587,6 +733,13 @@ export class SearchEngineCore
       if (searchLogger.isEnabled()) {
         searchLogger.logSearchPhase('Cancel Search', `Cancelling search with ID: ${searchId}`)
       }
+      this.logSearchTrace({
+        event: 'session.cancel',
+        sessionId: searchId,
+        query: { text: this.lastSearchQuery, inputs: [] },
+        cancelled: true,
+        includeDetails: true
+      })
       this.currentGatherController.abort()
       this.currentGatherController = null
 
@@ -631,7 +784,7 @@ export class SearchEngineCore
       if (providerFilter) {
         query.text = parsedQuery.text
         searchEngineLog.debug(
-          `Provider filter detected: @${providerFilter}, query: "${query.text}"`
+          `Provider filter detected: @${providerFilter}, query.len=${query.text?.length ?? 0}, query.hash=${toQueryHash(query.text || '')}`
         )
       }
 
@@ -859,7 +1012,52 @@ export class SearchEngineCore
 
     const cachedEntry = this.searchCache.get(cacheKey)
     if (cachedEntry && Date.now() - cachedEntry.timestamp < SEARCH_CACHE_TTL_MS) {
-      searchEngineLog.debug(`Cache hit for query "${query.text}"`)
+      const cacheSessionId = cachedEntry.result.sessionId || crypto.randomUUID()
+      const cachedItems = cachedEntry.result.items?.length ?? 0
+      this.logSearchTrace({
+        event: 'ipc.query.received',
+        sessionId: cacheSessionId,
+        query,
+        timings: {
+          parseMs: pipelineDurations.parseDuration,
+          totalMs: pipelineDurations.parseDuration
+        }
+      })
+      this.logSearchTrace({
+        event: 'session.start',
+        sessionId: cacheSessionId,
+        query,
+        timings: {
+          parseMs: pipelineDurations.parseDuration,
+          totalMs: pipelineDurations.parseDuration
+        }
+      })
+      this.logSearchTrace({
+        event: 'first.result',
+        sessionId: cacheSessionId,
+        query,
+        timings: {
+          parseMs: pipelineDurations.parseDuration,
+          totalMs: pipelineDurations.parseDuration
+        },
+        result: { firstCount: cachedItems, totalCount: cachedItems }
+      })
+      this.logSearchTrace({
+        event: 'session.end',
+        sessionId: cacheSessionId,
+        query,
+        timings: {
+          parseMs: pipelineDurations.parseDuration,
+          totalMs: pipelineDurations.parseDuration
+        },
+        result: { firstCount: cachedItems, totalCount: cachedItems },
+        sourceStats: (cachedEntry.result.sources as SearchTraceSourceStat[] | undefined) ?? [],
+        providerFilter,
+        includeDetails: false
+      })
+      searchEngineLog.debug(
+        `Cache hit for query len=${query.text?.length ?? 0}, hash=${toQueryHash(query.text || '')}`
+      )
       return cachedEntry.result
     }
 
@@ -872,13 +1070,26 @@ export class SearchEngineCore
     searchLogger.searchSessionStart(query.text, sessionId)
     searchLogger.logSearchPhase(
       'Query Received',
-      `Text: "${query.text}", Inputs: ${query.inputs?.length || 0}`
+      `len=${query.text?.length ?? 0}, hash=${toQueryHash(query.text || '')}, inputs=${query.inputs?.length || 0}`
     )
+    this.logSearchTrace({
+      event: 'ipc.query.received',
+      sessionId,
+      query,
+      timings: { parseMs: pipelineDurations.parseDuration }
+    })
+    this.logSearchTrace({
+      event: 'session.start',
+      sessionId,
+      query,
+      timings: { parseMs: pipelineDurations.parseDuration }
+    })
 
     this.currentGatherController?.abort()
 
     this.latestSessionId = sessionId
     searchEngineLog.debug(`Starting search session ${sessionId}`)
+    const startTime = Date.now()
 
     // Empty query detection: return recommendations
     if ((!query.text || query.text === '') && (!query.inputs || query.inputs.length === 0)) {
@@ -897,11 +1108,21 @@ export class SearchEngineCore
             searchEngineLog.debug(
               `Discarding stale recommendation result ${sessionId} (latest: ${this.latestSessionId})`
             )
-            return new TuffSearchResultBuilder(query)
+            const staleResult = new TuffSearchResultBuilder(query)
               .setItems([])
               .setDuration(0)
               .setSources([])
               .build()
+            staleResult.sessionId = sessionId
+            this.logSearchTrace({
+              event: 'session.end',
+              sessionId,
+              query,
+              timings: { parseMs: pipelineDurations.parseDuration, totalMs: 0 },
+              result: { firstCount: 0, totalCount: 0 },
+              includeDetails: false
+            })
+            return staleResult
           }
 
           const result = new TuffSearchResultBuilder(query)
@@ -926,25 +1147,79 @@ export class SearchEngineCore
             }
           }
 
+          const totalDuration = Date.now() - startTime
+          const detail = totalDuration >= SEARCH_TRACE_SLOW_THRESHOLD_MS
+          this.logSearchTrace({
+            event: 'first.result',
+            sessionId,
+            query,
+            timings: {
+              parseMs: pipelineDurations.parseDuration,
+              totalMs: totalDuration
+            },
+            result: {
+              firstCount: recommendationResult.items.length,
+              totalCount: recommendationResult.items.length
+            }
+          })
+          this.logSearchTrace({
+            event: 'session.end',
+            sessionId,
+            query,
+            timings: {
+              parseMs: pipelineDurations.parseDuration,
+              totalMs: totalDuration
+            },
+            result: {
+              firstCount: recommendationResult.items.length,
+              totalCount: recommendationResult.items.length
+            },
+            includeDetails: detail
+          })
           return result
         } catch (error) {
           searchEngineLog.error('Failed to generate recommendations', { error })
+          this.logSearchTrace({
+            event: 'session.error',
+            sessionId,
+            query,
+            timings: {
+              parseMs: pipelineDurations.parseDuration,
+              totalMs: Date.now() - startTime
+            },
+            includeDetails: true,
+            error
+          })
 
           // fallback to empty result
-          return new TuffSearchResultBuilder(query)
+          const fallbackResult = new TuffSearchResultBuilder(query)
             .setItems([])
             .setDuration(0)
             .setSources([])
             .build()
+          fallbackResult.sessionId = sessionId
+          return fallbackResult
         }
       } else {
-        return new TuffSearchResultBuilder(query).setItems([]).setDuration(0).setSources([]).build()
+        const emptyResult = new TuffSearchResultBuilder(query)
+          .setItems([])
+          .setDuration(0)
+          .setSources([])
+          .build()
+        emptyResult.sessionId = sessionId
+        this.logSearchTrace({
+          event: 'session.end',
+          sessionId,
+          query,
+          timings: { parseMs: pipelineDurations.parseDuration, totalMs: Date.now() - startTime },
+          result: { firstCount: 0, totalCount: 0 },
+          includeDetails: false
+        })
+        return emptyResult
       }
     }
 
     this.lastSearchQuery = query.text || ''
-
-    const startTime = Date.now()
     this._recordSearchUsage(sessionId, query)
 
     return new Promise((resolve) => {
@@ -956,7 +1231,11 @@ export class SearchEngineCore
       const finalizeWithError = (error: unknown): void => {
         searchEngineLog.error('Search gather pipeline failed', {
           error,
-          meta: { sessionId, query: query.text }
+          meta: {
+            sessionId,
+            queryLen: query.text?.length ?? 0,
+            queryHash: toQueryHash(query.text || '')
+          }
         })
 
         try {
@@ -966,6 +1245,20 @@ export class SearchEngineCore
         }
 
         const totalDuration = Date.now() - startTime
+        this.logSearchTrace({
+          event: 'session.error',
+          sessionId,
+          query,
+          timings: {
+            parseMs: pipelineDurations.parseDuration,
+            providerSelectMs: pipelineDurations.providerAggregationDuration,
+            mergeRankMs: pipelineDurations.mergeRankDuration,
+            totalMs: totalDuration
+          },
+          includeDetails: true,
+          providerFilter,
+          error
+        })
         const failedResult = new TuffSearchResultBuilder(query)
           .setItems([])
           .setDuration(totalDuration)
@@ -1071,6 +1364,20 @@ export class SearchEngineCore
                 this._recordSearchResults(sessionId, sortedItems).catch((error) => {
                   searchEngineLog.error('Failed to record search results', { error })
                 })
+                this.logSearchTrace({
+                  event: 'first.result',
+                  sessionId,
+                  query,
+                  timings: {
+                    parseMs: pipelineDurations.parseDuration,
+                    providerSelectMs: pipelineDurations.providerAggregationDuration,
+                    mergeRankMs: pipelineDurations.mergeRankDuration,
+                    totalMs: totalDuration
+                  },
+                  result: { firstCount: sortedItems.length, totalCount: sortedItems.length },
+                  sourceStats: (update.sourceStats ?? []) as SearchTraceSourceStat[],
+                  providerFilter
+                })
 
                 if (this.latestSessionId !== sessionId) {
                   const staleResult = new TuffSearchResultBuilder(query)
@@ -1098,8 +1405,27 @@ export class SearchEngineCore
             }
 
             // Handle final state and notify frontend
-            const totalResults = update.newResults.reduce((acc, res) => acc + res.items.length, 0)
+            const totalResults =
+              typeof update.totalCount === 'number'
+                ? update.totalCount
+                : update.newResults.reduce((acc, res) => acc + res.items.length, 0)
             searchLogger.searchSessionEnd(sessionId, totalResults)
+            const totalDuration = Date.now() - startTime
+            this.logSearchTrace({
+              event: 'session.end',
+              sessionId,
+              query,
+              timings: {
+                parseMs: pipelineDurations.parseDuration,
+                providerSelectMs: pipelineDurations.providerAggregationDuration,
+                mergeRankMs: pipelineDurations.mergeRankDuration,
+                totalMs: totalDuration
+              },
+              result: { totalCount: totalResults },
+              sourceStats: (update.sourceStats ?? []) as SearchTraceSourceStat[],
+              providerFilter,
+              includeDetails: totalDuration >= SEARCH_TRACE_SLOW_THRESHOLD_MS
+            })
             this.currentGatherController = null
             this._updateActivationState(update.newResults)
             const coreBoxWindow = windowManager.current?.window
@@ -1168,6 +1494,20 @@ export class SearchEngineCore
             // 异步记录搜索结果统计（不阻塞返回）
             this._recordSearchResults(sessionId, sortedItems).catch((error) => {
               searchEngineLog.error('Failed to record search results', { error })
+            })
+            this.logSearchTrace({
+              event: 'first.result',
+              sessionId,
+              query,
+              timings: {
+                parseMs: pipelineDurations.parseDuration,
+                providerSelectMs: pipelineDurations.providerAggregationDuration,
+                mergeRankMs: pipelineDurations.mergeRankDuration,
+                totalMs: totalDuration
+              },
+              result: { firstCount: sortedItems.length, totalCount: sortedItems.length },
+              sourceStats: (update.sourceStats ?? []) as SearchTraceSourceStat[],
+              providerFilter
             })
 
             // 在返回前检查是否仍是最新搜索

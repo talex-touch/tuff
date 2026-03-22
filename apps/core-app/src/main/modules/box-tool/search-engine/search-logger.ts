@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { StorageList } from '@talex-touch/utils'
 import { loggerManager } from '@talex-touch/utils/common/logger'
@@ -10,6 +11,9 @@ import {
   subscribeMainConfig
 } from '../../storage'
 
+const SEARCH_LOGGER_BURST_MIN_MS = 1000
+const SEARCH_LOGGER_BURST_MAX_MS = 5 * 60 * 1000
+
 /**
  * Search Engine Logger
  * Provides unified logging for search engine components with configurable output.
@@ -17,7 +21,10 @@ import {
  */
 export class SearchLogger {
   private static instance: SearchLogger
-  private enabled: boolean = false
+  private manualEnabled: boolean = false
+  private burstUntil = 0
+  private burstReason: string | null = null
+  private burstTimer: NodeJS.Timeout | null = null
   private searchStartTime: number = 0
   private searchSteps: Array<{ step: string; timestamp: number; duration?: number }> = []
   private unsubscribe?: () => void
@@ -26,7 +33,7 @@ export class SearchLogger {
 
   private constructor() {
     // Register with LoggerManager for centralized control
-    loggerManager.getLogger('search-engine', { enabled: this.enabled, color: 'cyan' })
+    loggerManager.getLogger('search-engine', { enabled: this.manualEnabled, color: 'cyan' })
     this.setupStorageReadyHook()
   }
 
@@ -57,10 +64,10 @@ export class SearchLogger {
           const settings = data as AppSetting
           const newEnabled = settings.searchEngine?.logsEnabled === true
 
-          if (newEnabled !== this.enabled) {
-            this.enabled = newEnabled
+          if (newEnabled !== this.manualEnabled) {
+            this.manualEnabled = newEnabled
             console.debug(
-              `[SearchLogger] Settings changed: logging ${this.enabled ? 'enabled' : 'disabled'}`
+              `[SearchLogger] Settings changed: logging ${this.manualEnabled ? 'enabled' : 'disabled'}`
             )
           }
         } catch (error) {
@@ -71,7 +78,7 @@ export class SearchLogger {
     } catch (error) {
       console.error('[SearchLogger] Failed to setup settings watcher:', error)
       // Fallback to disabled state
-      this.enabled = false
+      this.manualEnabled = false
     }
   }
 
@@ -105,6 +112,9 @@ export class SearchLogger {
       this.unsubscribe()
       this.unsubscribe = undefined
     }
+    this.clearBurstTimer()
+    this.burstUntil = 0
+    this.burstReason = null
     this.initialized = false
   }
 
@@ -117,16 +127,16 @@ export class SearchLogger {
       const appSettingsData = getMainConfig(StorageList.APP_SETTING) as AppSetting
       const enabledFromAppSettings = appSettingsData?.searchEngine?.logsEnabled
       if (typeof enabledFromAppSettings === 'boolean') {
-        this.enabled = enabledFromAppSettings
+        this.manualEnabled = enabledFromAppSettings
         return
       }
 
       // Fallback to legacy setting
       const settings = getMainConfig(StorageList.SEARCH_ENGINE_LOGS_ENABLED)
-      this.enabled = settings === true
+      this.manualEnabled = settings === true
     } catch {
       // Silently fail if storage is not ready yet
-      this.enabled = false
+      this.manualEnabled = false
     }
   }
 
@@ -134,7 +144,7 @@ export class SearchLogger {
    * Enable or disable search engine logging
    */
   async setEnabled(enabled: boolean): Promise<void> {
-    this.enabled = enabled
+    this.manualEnabled = enabled
     try {
       // Update app settings
       const appSettingsData = getMainConfig(StorageList.APP_SETTING) as AppSetting
@@ -158,14 +168,70 @@ export class SearchLogger {
    * Check if logging is enabled
    */
   isEnabled(): boolean {
-    return this.enabled
+    return this.manualEnabled || Date.now() < this.burstUntil
+  }
+
+  /**
+   * Enable temporary high-signal diagnostics logging.
+   * This state is in-memory only and never persisted.
+   */
+  enableBurst(durationMs: number, reason = 'unspecified'): void {
+    const normalizedDuration = Math.max(
+      SEARCH_LOGGER_BURST_MIN_MS,
+      Math.min(SEARCH_LOGGER_BURST_MAX_MS, Math.round(durationMs))
+    )
+    const now = Date.now()
+    const nextUntil = now + normalizedDuration
+    this.burstUntil = Math.max(this.burstUntil, nextUntil)
+    this.burstReason = reason
+    this.refreshBurstTimer()
+    console.warn(
+      `[SearchLogger] Burst logging enabled for ${normalizedDuration}ms (reason: ${reason})`
+    )
+  }
+
+  getBurstState(): { active: boolean; until: number; reason: string | null } {
+    return {
+      active: Date.now() < this.burstUntil,
+      until: this.burstUntil,
+      reason: this.burstReason
+    }
+  }
+
+  private clearBurstTimer(): void {
+    if (!this.burstTimer) return
+    clearTimeout(this.burstTimer)
+    this.burstTimer = null
+  }
+
+  private refreshBurstTimer(): void {
+    this.clearBurstTimer()
+    const remaining = this.burstUntil - Date.now()
+    if (remaining <= 0) {
+      this.burstUntil = 0
+      this.burstReason = null
+      return
+    }
+    this.burstTimer = setTimeout(() => {
+      if (Date.now() >= this.burstUntil) {
+        this.burstUntil = 0
+        this.burstReason = null
+      }
+      this.clearBurstTimer()
+    }, remaining)
+  }
+
+  private summarizeQuery(query: string): string {
+    const normalized = typeof query === 'string' ? query : ''
+    const digest = crypto.createHash('sha1').update(normalized).digest('hex').slice(0, 12)
+    return `len=${normalized.length}, hash=${digest}`
   }
 
   /**
    * Log search session start with clear separators
    */
   searchSessionStart(query: string, sessionId: string): void {
-    if (!this.enabled) {
+    if (!this.isEnabled()) {
       return
     }
 
@@ -178,7 +244,7 @@ export class SearchLogger {
       chalk.bold.blue('🚀 SEARCH SESSION STARTED') +
         chalk.gray(` [${new Date().toLocaleTimeString()}]`)
     )
-    console.log(chalk.cyan('📝 Query: ') + chalk.white.bold(`"${query}"`))
+    console.log(chalk.cyan('📝 Query: ') + chalk.white.bold(this.summarizeQuery(query)))
     console.log(chalk.cyan('🆔 Session ID: ') + chalk.white(sessionId))
     console.log(`${'='.repeat(80)}\n`)
   }
@@ -187,7 +253,7 @@ export class SearchLogger {
    * Log search session end with summary
    */
   searchSessionEnd(sessionId: string, totalResults: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
 
     const totalDuration = Date.now() - this.searchStartTime
 
@@ -221,7 +287,7 @@ export class SearchLogger {
    * Log search step with timing
    */
   logSearchStep(step: string, duration?: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
 
     const timestamp = Date.now()
     this.searchSteps.push({ step, timestamp, duration })
@@ -239,17 +305,17 @@ export class SearchLogger {
    * Log search engine core events
    */
   searchStart(query: string, sessionId: string): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.blue.bold('[SearchEngine]') +
         chalk.cyan(' 🔍 Search started: ') +
-        chalk.white(`"${query}"`) +
+        chalk.white(this.summarizeQuery(query)) +
         chalk.gray(` (${sessionId})`)
     )
   }
 
   searchProviders(providers: string[]): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.blue.bold('[SearchEngine]') +
         chalk.yellow(' 🎯 Active providers: ') +
@@ -263,10 +329,10 @@ export class SearchLogger {
    * Log keyword analysis and processing
    */
   logKeywordAnalysis(query: string, terms: string[], typeFilters: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(chalk.blue.bold('[SearchEngine]') + chalk.cyan(' 🔤 Keyword Analysis:'))
-    console.log(chalk.gray('  📝 Original Query: ') + chalk.white(`"${query}"`))
-    console.log(chalk.gray('  🔍 Search Terms: ') + chalk.white(`[${terms.join(', ')}]`))
+    console.log(chalk.gray('  📝 Original Query: ') + chalk.white(this.summarizeQuery(query)))
+    console.log(chalk.gray('  🔍 Search Terms: ') + chalk.white(`count=${terms.length}`))
     console.log(chalk.gray('  🏷️ Type Filters: ') + chalk.white(`${typeFilters}`))
     this.logSearchStep(`Analyzed keywords: ${terms.length} terms, ${typeFilters} filters`)
   }
@@ -275,7 +341,7 @@ export class SearchLogger {
    * Log search phase transitions
    */
   logSearchPhase(phase: string, details?: string): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     const detailsStr = details ? ` - ${details}` : ''
     console.log(
       chalk.blue.bold('[SearchEngine]') +
@@ -290,19 +356,19 @@ export class SearchLogger {
    * Log provider-specific search details
    */
   logProviderSearch(providerId: string, query: string, searchType: string): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.blue.bold('[SearchEngine]') +
         chalk.cyan(' 🔍 Provider Search: ') +
         chalk.white(providerId) +
         chalk.gray(` (${searchType})`)
     )
-    console.log(chalk.gray('  📝 Query: ') + chalk.white(`"${query}"`))
+    console.log(chalk.gray('  📝 Query: ') + chalk.white(this.summarizeQuery(query)))
     this.logSearchStep(`${providerId} ${searchType} search started`)
   }
 
   searchUpdate(isDone: boolean, newResults: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.blue.bold('[SearchEngine]') +
         chalk.magenta(' 📊 Search update: ') +
@@ -312,7 +378,7 @@ export class SearchLogger {
   }
 
   searchComplete(duration: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.blue.bold('[SearchEngine]') +
         chalk.green(' ✅ Search completed in ') +
@@ -324,17 +390,17 @@ export class SearchLogger {
    * Log search gatherer events
    */
   gathererStart(providers: number, query: string): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
         chalk.blue(' 🚀 Starting search aggregator: ') +
         chalk.white(`${providers} providers`) +
-        chalk.gray(` for "${query}"`)
+        chalk.gray(` for ${this.summarizeQuery(query)}`)
     )
   }
 
   workerStart(workerId: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
         chalk.yellow(' 👷 Worker ') +
@@ -344,7 +410,7 @@ export class SearchLogger {
   }
 
   workerProcessing(workerId: number, providerId: string): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
         chalk.blue(' 🔄 Worker ') +
@@ -355,7 +421,7 @@ export class SearchLogger {
   }
 
   providerCall(providerId: string): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
         chalk.blue(' ⏱️ Calling provider: ') +
@@ -364,7 +430,7 @@ export class SearchLogger {
   }
 
   providerResult(providerId: string, resultCount: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
         chalk.green(' ✅ Provider ') +
@@ -375,7 +441,7 @@ export class SearchLogger {
   }
 
   providerTimeout(providerId: string, timeoutMs: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
         chalk.red(' ⏰ Provider ') +
@@ -386,7 +452,7 @@ export class SearchLogger {
   }
 
   providerError(providerId: string, error: string): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
         chalk.red(' ❌ Provider ') +
@@ -397,7 +463,7 @@ export class SearchLogger {
   }
 
   workerComplete(workerId: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
         chalk.green(' 🏁 Worker ') +
@@ -407,7 +473,7 @@ export class SearchLogger {
   }
 
   resultReceived(resultCount: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
         chalk.magenta(' 📥 Received provider result: ') +
@@ -416,7 +482,7 @@ export class SearchLogger {
   }
 
   firstBatch(graceMs: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
         chalk.yellow(' 🎯 First batch result, flushing in ') +
@@ -425,7 +491,7 @@ export class SearchLogger {
   }
 
   allProvidersComplete(): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
         chalk.green(' ✅ All providers completed, performing final flush')
@@ -436,16 +502,16 @@ export class SearchLogger {
    * Log file provider events
    */
   fileSearchStart(query: string): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.green.bold('[FileProvider]') +
         chalk.blue(' 🔍 Starting file search: ') +
-        chalk.white(`"${query}"`)
+        chalk.white(this.summarizeQuery(query))
     )
   }
 
   fileSearchNotInitialized(): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.green.bold('[FileProvider]') +
         chalk.red(' ❌ Database utils or search index not initialized')
@@ -453,17 +519,17 @@ export class SearchLogger {
   }
 
   fileSearchText(searchText: string, typeFilters: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.green.bold('[FileProvider]') +
         chalk.cyan(' 📝 Search text: ') +
-        chalk.white(`"${searchText}"`) +
+        chalk.white(this.summarizeQuery(searchText)) +
         chalk.gray(`, type filters: ${typeFilters}`)
     )
   }
 
   filePreciseSearch(terms: string[]): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.green.bold('[FileProvider]') +
         chalk.blue(' 🔎 Starting precise keyword search: ') +
@@ -472,7 +538,7 @@ export class SearchLogger {
   }
 
   filePreciseQueries(queryCount: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.green.bold('[FileProvider]') +
         chalk.cyan(' 📊 Executing ') +
@@ -482,7 +548,7 @@ export class SearchLogger {
   }
 
   filePreciseResults(matches: number[]): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.green.bold('[FileProvider]') +
         chalk.green(' 📈 Precise queries completed, matches per term: ') +
@@ -491,16 +557,16 @@ export class SearchLogger {
   }
 
   fileFtsQuery(query: string): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.green.bold('[FileProvider]') +
         chalk.blue(' 🔍 Building FTS query: ') +
-        chalk.white(`"${query}"`)
+        chalk.white(this.summarizeQuery(query))
     )
   }
 
   fileFtsResults(matches: number, duration: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.green.bold('[FileProvider]') +
         chalk.green(' 📊 FTS search completed: ') +
@@ -510,7 +576,7 @@ export class SearchLogger {
   }
 
   fileDataFetch(candidateCount: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.green.bold('[FileProvider]') +
         chalk.cyan(' 📥 Starting candidate file data fetch: ') +
@@ -519,7 +585,7 @@ export class SearchLogger {
   }
 
   fileDataResults(rows: number, duration: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.green.bold('[FileProvider]') +
         chalk.green(' 📊 Retrieved ') +
@@ -532,29 +598,29 @@ export class SearchLogger {
    * Log search index service events
    */
   indexSearchStart(providerId: string, query: string, limit: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.magenta.bold('[SearchIndex]') +
         chalk.blue(' 🔍 Starting FTS search: ') +
         chalk.white(`provider=${providerId}`) +
-        chalk.gray(`, query="${query}", limit=${limit}`)
+        chalk.gray(`, query=${this.summarizeQuery(query)}, limit=${limit}`)
     )
   }
 
   indexSearchEmpty(): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.magenta.bold('[SearchIndex]') + chalk.red(' ❌ Query is empty, returning empty results')
     )
   }
 
   indexSearchExecuting(): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(chalk.magenta.bold('[SearchIndex]') + chalk.cyan(' 📊 Executing SQL query'))
   }
 
   indexSearchComplete(matches: number, duration: number): void {
-    if (!this.enabled) return
+    if (!this.isEnabled()) return
     console.log(
       chalk.magenta.bold('[SearchIndex]') +
         chalk.green(' ✅ FTS search completed: ') +
