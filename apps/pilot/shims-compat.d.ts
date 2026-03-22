@@ -1,7 +1,7 @@
 import type { Language } from 'element-plus/es/locale'
 import type { Router } from 'vue-router'
 
-declare module 'refractor/lang/*' {
+declare module 'refractor/*' {
   const language: unknown
   export default language
 }

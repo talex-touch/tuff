@@ -4,6 +4,7 @@ import {
   serializePilotExecutorMessages,
   shouldExecutePilotWebsearch,
 } from '@talex-touch/tuff-intelligence/pilot'
+import { normalizeLooseMarkdownForRender } from '@talex-touch/tuff-intelligence/pilot-conversation'
 import { describe, expect, it } from 'vitest'
 
 describe('pilot conversation shared utils', () => {
@@ -100,18 +101,46 @@ describe('pilot conversation shared utils', () => {
     ])
   })
 
-  it('shouldExecutePilotWebsearch 先看意图，再走启发式兜底', () => {
-    const byIntent = shouldExecutePilotWebsearch({
-      message: '介绍一下 JavaScript 闭包',
+  it('serializePilotExecutorMessages 将 assistant 纯字符串映射为 markdown', () => {
+    const messages = serializePilotExecutorMessages([
+      {
+        id: 'u1',
+        role: 'user',
+        content: '用户提问',
+      },
+      {
+        id: 'a1',
+        role: 'assistant',
+        content: '```cpp\nint main() {}\n```',
+      },
+    ], {
+      assistantAvailableStatus: 0,
+      skipUnavailableAssistant: false,
+      keepNonTextWithoutValue: true,
+    })
+
+    expect(messages).toHaveLength(2)
+    expect(messages[0]?.content?.[0]?.type).toBe('text')
+    expect(messages[1]?.content?.[0]?.type).toBe('markdown')
+    expect(messages[1]?.content?.[0]?.value).toBe('```cpp\nint main() {}\n```')
+  })
+
+  it('normalizeLooseMarkdownForRender 仅修复 fence 智能引号并标准化换行', () => {
+    const input = '“```cpp\r\nint main() {}\r\n```”\r\n中文“引号”保持'
+    const output = normalizeLooseMarkdownForRender(input)
+    expect(output).toBe('```cpp\nint main() {}\n```\n中文“引号”保持')
+  })
+
+  it('shouldExecutePilotWebsearch 意图 false 时仍会走启发式兜底', () => {
+    const byHeuristicWhenIntentFalse = shouldExecutePilotWebsearch({
+      message: '帮我查一下今天苹果股价',
       intentType: 'chat',
       internetEnabled: true,
       builtinTools: ['write_todos', 'websearch'],
       intentWebsearchRequired: false,
     })
-    expect(byIntent).toEqual({
-      enabled: false,
-      reason: 'intent_not_required',
-    })
+    expect(byHeuristicWhenIntentFalse.enabled).toBe(true)
+    expect(byHeuristicWhenIntentFalse.reason).toBe('heuristic_required')
 
     const byHeuristic = shouldExecutePilotWebsearch({
       message: '帮我查一下今天苹果股价',
@@ -121,5 +150,17 @@ describe('pilot conversation shared utils', () => {
     })
     expect(byHeuristic.enabled).toBe(true)
     expect(byHeuristic.reason).toBe('heuristic_required')
+
+    const byUserDisable = shouldExecutePilotWebsearch({
+      message: '不要联网搜索，直接根据你已有知识回答',
+      intentType: 'chat',
+      internetEnabled: true,
+      builtinTools: ['write_todos', 'websearch'],
+      intentWebsearchRequired: false,
+    })
+    expect(byUserDisable).toEqual({
+      enabled: false,
+      reason: 'explicit_user_disable',
+    })
   })
 })

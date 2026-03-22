@@ -15,17 +15,13 @@ import {
 } from '@talex-touch/tuff-intelligence/pilot'
 import { LangGraphLocalServerEngineAdapter } from './pilot-langgraph-engine'
 import { createPilotStoreAdapter } from './pilot-store'
+import { buildPilotSystemPrompt } from './pilot-system-prompt'
 
 const DEFAULT_RESPONSES_MODEL = 'gpt-5.2'
 const DEFAULT_TIMEOUT_MS = 90_000
 const MIN_TIMEOUT_MS = 3_000
 const MAX_TIMEOUT_MS = 10 * 60 * 1000
-const DEFAULT_SYSTEM_PROMPT = [
-  'You are Tuff Pilot.',
-  'Reply with concise, factual answers.',
-  'When useful, add short actionable next steps.',
-  'If uncertain, state the uncertainty briefly instead of guessing.',
-].join('\n')
+export const PILOT_STRICT_MODE_UNAVAILABLE_CODE = 'PILOT_STRICT_MODE_UNAVAILABLE'
 
 class PilotAgentRuntime extends AbstractAgentRuntime {}
 
@@ -86,10 +82,52 @@ export interface CreatePilotRuntimeOptions {
   onAudit?: (record: DeepAgentAuditRecord) => Promise<void> | void
   orchestrator?: {
     mode?: 'langgraph-local' | 'deepagent'
+    reason?: string
     endpoint?: string
     apiKey?: string
     assistantId?: string
     graphProfile?: string
+  }
+  strictPilotMode?: boolean
+  allowDeepAgentFallback?: boolean
+  promptContext?: {
+    name?: string
+    ip?: string
+    ua?: string
+  }
+}
+
+interface PilotStrictModeUnavailableErrorData {
+  code: typeof PILOT_STRICT_MODE_UNAVAILABLE_CODE
+  reason: string
+  orchestratorMode: string
+  endpoint?: string
+  assistantId?: string
+  graphProfile?: string
+}
+
+export class PilotStrictModeUnavailableError extends Error {
+  readonly code = PILOT_STRICT_MODE_UNAVAILABLE_CODE
+  readonly statusCode = 503
+  readonly data: PilotStrictModeUnavailableErrorData
+
+  constructor(data: {
+    reason: string
+    orchestratorMode?: string
+    endpoint?: string
+    assistantId?: string
+    graphProfile?: string
+  }) {
+    super('Pilot strict mode requires available LangGraph runtime and cannot fallback to DeepAgent.')
+    this.name = 'PilotStrictModeUnavailableError'
+    this.data = {
+      code: PILOT_STRICT_MODE_UNAVAILABLE_CODE,
+      reason: String(data.reason || '').trim() || 'strict_mode_unavailable',
+      orchestratorMode: String(data.orchestratorMode || '').trim() || 'deepagent',
+      endpoint: String(data.endpoint || '').trim() || undefined,
+      assistantId: String(data.assistantId || '').trim() || undefined,
+      graphProfile: String(data.graphProfile || '').trim() || undefined,
+    }
   }
 }
 
@@ -190,6 +228,10 @@ export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
   if (!channel?.baseUrl || !channel.apiKey) {
     throw new Error('Pilot channel is not configured.')
   }
+  const strictPilotMode = options.strictPilotMode === true
+  const allowDeepAgentFallback = strictPilotMode
+    ? false
+    : options.allowDeepAgentFallback !== false
   const store = createPilotStoreAdapter(event, userId, emit)
   const capabilityRegistry = createCapabilityRegistryV1()
   const dispatcher = new DecisionDispatcher({
@@ -207,7 +249,14 @@ export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
   if (engineBuiltinTools.length <= 0) {
     engineBuiltinTools.push('write_todos')
   }
-  const retryCount = channel?.adapter === 'legacy' ? 0 : 1
+  const retryCount = 1
+  const systemPrompt = buildPilotSystemPrompt({
+    event,
+    userId,
+    name: options.promptContext?.name,
+    ip: options.promptContext?.ip,
+    ua: options.promptContext?.ua,
+  })
 
   const deepAgentEngine = new DeepAgentLangChainEngineAdapter({
     baseUrl,
@@ -216,7 +265,7 @@ export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
     transport: channel?.transport || 'responses',
     retryCount,
     timeoutMs,
-    systemPrompt: DEFAULT_SYSTEM_PROMPT,
+    systemPrompt,
     builtinTools: engineBuiltinTools,
     metadata: {
       source: 'tuff-pilot',
@@ -229,17 +278,30 @@ export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
     onAudit,
   })
 
+  const orchestratorMode = String(orchestrator?.mode || '').trim() || 'deepagent'
+  const orchestratorReason = String(orchestrator?.reason || '').trim() || 'orchestrator_mode_not_langgraph'
+  const assistantId = String(orchestrator?.assistantId || '').trim()
+  const endpoint = String(orchestrator?.endpoint || '').trim()
+  const graphProfile = String(orchestrator?.graphProfile || '').trim()
+  const langGraphReady = orchestratorMode === 'langgraph-local' && Boolean(assistantId) && Boolean(endpoint)
+
+  if (strictPilotMode && !langGraphReady) {
+    throw new PilotStrictModeUnavailableError({
+      reason: orchestratorReason || 'strict_mode_graph_runtime_unavailable',
+      orchestratorMode,
+      endpoint: endpoint || undefined,
+      assistantId: assistantId || undefined,
+      graphProfile: graphProfile || undefined,
+    })
+  }
+
   let engine: AgentEngineAdapter = deepAgentEngine
-  if (
-    orchestrator?.mode === 'langgraph-local'
-    && String(orchestrator.assistantId || '').trim()
-    && String(orchestrator.endpoint || '').trim()
-  ) {
+  if (langGraphReady) {
     const langGraphEngine = new LangGraphLocalServerEngineAdapter({
-      baseUrl: String(orchestrator.endpoint || '').trim(),
+      baseUrl: endpoint,
       apiKey: String(orchestrator.apiKey || '').trim(),
-      assistantId: String(orchestrator.assistantId || '').trim(),
-      graphProfile: String(orchestrator.graphProfile || '').trim() || undefined,
+      assistantId,
+      graphProfile: graphProfile || undefined,
       timeoutMs,
       metadata: {
         source: 'tuff-pilot',
@@ -250,24 +312,29 @@ export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
       onAudit,
     })
 
-    engine = new PilotFallbackEngineAdapter(
-      langGraphEngine,
-      deepAgentEngine,
-      async (payload) => {
-        await onAudit?.({
-          type: 'orchestrator.fallback',
-          payload: {
-            ...payload,
-            reason: payload.reason,
-            error: payload.error instanceof Error
-              ? payload.error.message
-              : payload.error
-                ? String(payload.error)
-                : undefined,
-          },
-        })
-      },
-    )
+    if (allowDeepAgentFallback) {
+      engine = new PilotFallbackEngineAdapter(
+        langGraphEngine,
+        deepAgentEngine,
+        async (payload) => {
+          await onAudit?.({
+            type: 'orchestrator.fallback',
+            payload: {
+              ...payload,
+              reason: payload.reason,
+              error: payload.error instanceof Error
+                ? payload.error.message
+                : payload.error
+                  ? String(payload.error)
+                  : undefined,
+            },
+          })
+        },
+      )
+    }
+    else {
+      engine = langGraphEngine
+    }
   }
 
   const decision = new DefaultDecisionAdapter()

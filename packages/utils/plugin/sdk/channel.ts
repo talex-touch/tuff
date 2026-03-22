@@ -11,6 +11,18 @@ type RendererWindowLike = Window & {
   $transport?: ITuffTransport
   $channel?: PluginChannelClient
 }
+const LEGACY_SEND_SYNC_REMOVE_VERSION = '2.5.0'
+let hasWarnedLegacySendSyncFallback = false
+
+function warnLegacySendSyncFallback(eventName: string): void {
+  if (hasWarnedLegacySendSyncFallback) {
+    return
+  }
+  hasWarnedLegacySendSyncFallback = true
+  console.warn(
+    `[Plugin SDK] sendSync fallback uses legacy channel and will be removed in v${LEGACY_SEND_SYNC_REMOVE_VERSION}. event=${eventName}`,
+  )
+}
 
 const ensureClientChannel = (): PluginChannelClient =>
   genChannel() as unknown as PluginChannelClient
@@ -89,6 +101,7 @@ function createTransportClientChannel(
     send: (eventName, arg) => transport.send(defineRawEvent(eventName), arg),
     sendSync: (eventName, arg) => {
       if (fallback?.sendSync) {
+        warnLegacySendSyncFallback(eventName)
         return fallback.sendSync(eventName, arg)
       }
       throw new Error(`[Plugin SDK] sendSync is not supported without legacy channel: ${eventName}`)
@@ -152,6 +165,7 @@ export function createPluginRendererChannel(): IPluginRendererChannel {
     },
 
     sendSync(eventName, payload) {
+      warnLegacySendSyncFallback(eventName)
       return client.sendSync(eventName, payload)
     },
 

@@ -1,13 +1,8 @@
 <script setup lang="ts">
-import ChatSetting from '../setting/ChatSetting.vue'
-import ChatItem from './ChatItem.vue'
-import EmptyGuide from './EmptyGuide.vue'
-import TrChatTitle from './head/TrChatTitle.vue'
-import TrSyncStatus from './head/TrSyncStatus.vue'
-import AccountAvatar from '~/components/personal/AccountAvatar.vue'
-import IconButton from '~/components/button/IconButton.vue'
-import { type IChatConversation, type IChatInnerItem, type IChatItem, IChatItemStatus } from '~/composables/api/base/v1/aigc/completion-types'
+import type { IChatConversation, IChatInnerItem } from '~/composables/api/base/v1/aigc/completion-types'
+import { IChatItemStatus } from '~/composables/api/base/v1/aigc/completion-types'
 import { calculateConversation } from '~/composables/api/base/v1/aigc/completion/entity'
+import ChatItem from './ChatItem.vue'
 
 const props = defineProps<{
   messages: IChatConversation
@@ -120,9 +115,15 @@ defineExpose({
 })
 
 function handleRetry(ind: number, item: IChatInnerItem) {
-  const chat = messagesModel.value.messages[ind]
+  const messages = messagesModel.value?.messages || []
+  const chat = messages[ind]
+  if (!chat) {
+    console.warn('[ThChat] retry target missing', { ind, total: messages.length })
+    return
+  }
 
-  emits('retry', ind, chat.page + 1, item)
+  const nextPage = typeof chat.page === 'number' ? chat.page + 1 : 1
+  emits('retry', ind, nextPage, item)
 }
 
 async function handleSuggest(content: string) {
@@ -134,7 +135,7 @@ async function handleSuggest(content: string) {
 }
 
 const processedMessageList = computed(() => {
-  const messageList = ref(messagesModel.value.messages)
+  const messageList = ref(messagesModel.value?.messages || [])
 
   return calculateConversation(messageList)
 })

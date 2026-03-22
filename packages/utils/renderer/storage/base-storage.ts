@@ -1,6 +1,5 @@
 import type { UnwrapNestedRefs, WatchHandle } from 'vue'
-import type { ITouchClientChannel } from '../../transport/legacy'
-import type { ITuffTransport } from '../../transport'
+import type { ITouchClientChannel, ITuffTransport } from '../../transport'
 import type {
   StorageGetVersionedResponse,
   StorageSaveRequest,
@@ -33,6 +32,17 @@ export interface TouchStorageOptions {
 
 let channel: IStorageChannel | null = null
 let transport: ITuffTransport | null = null
+let hasWarnedLegacyStorageChannel = false
+
+function warnLegacyStorageChannelPath(): void {
+  if (hasWarnedLegacyStorageChannel) {
+    return
+  }
+  hasWarnedLegacyStorageChannel = true
+  console.warn(
+    '[TouchStorage] Legacy channel storage path is active. Migrate to StorageEvents.app transport before v2.5.0.',
+  )
+}
 
 /**
  * Initializes the global channel for communication.
@@ -293,6 +303,7 @@ export class TouchStorage<T extends object> {
       return await transport.send(StorageEvents.app.getVersioned, { key: this.#qualifiedName })
     }
     if (channel) {
+      warnLegacyStorageChannelPath()
       return await channel.send('storage:get-versioned', this.#qualifiedName) as StorageGetVersionedResponse | null
     }
     return null
@@ -304,6 +315,7 @@ export class TouchStorage<T extends object> {
       return (data as Partial<T>) ?? {}
     }
     if (channel) {
+      warnLegacyStorageChannelPath()
       const result = await channel.send('storage:get', this.#qualifiedName)
       return result ? (result as Partial<T>) : {}
     }
@@ -315,6 +327,7 @@ export class TouchStorage<T extends object> {
       return await transport.send(StorageEvents.app.save, request)
     }
     if (channel) {
+      warnLegacyStorageChannelPath()
       return await channel.send('storage:save', request) as SaveResult
     }
     return { success: false, version: 0 }
@@ -342,6 +355,8 @@ export class TouchStorage<T extends object> {
     if (!channel) {
       return
     }
+
+    warnLegacyStorageChannelPath()
 
     // Register update listener - only triggered for OTHER windows' changes
     // (source window is excluded by main process)

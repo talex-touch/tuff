@@ -8,6 +8,8 @@ export type AgentEnvelopeSource =
 
 export type AgentEventType =
   | 'user.message'
+  | 'thinking.delta'
+  | 'thinking.final'
   | 'assistant.delta'
   | 'assistant.final'
   | 'capability.call'

@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import type { ChannelModelOptionIndex, RouteComboRouteFormItem } from '~/composables/usePilotRoutingAdmin'
 import {
   buildRouteComboPayload,
+  createEmptyChannelModelOptionIndex,
   createEmptyRouteCombo,
   createEmptyRouteComboRoute,
+  fetchPilotChannelModelOptionIndex,
   fetchPilotRoutingSettings,
   normalizeRouteCombo,
   savePilotRoutingSettings,
@@ -21,6 +24,7 @@ type RouteComboFormItem = ReturnType<typeof createEmptyRouteCombo>
 const loading = ref(false)
 const saving = ref(false)
 const routeCombos = ref<RouteComboFormItem[]>([])
+const channelModelIndex = ref<ChannelModelOptionIndex>(createEmptyChannelModelOptionIndex())
 
 const dialog = reactive<{
   visible: boolean
@@ -50,8 +54,12 @@ function mapFromSettings(rows: RouteComboFormItem[]): RouteComboFormItem[] {
 async function fetchSettings() {
   loading.value = true
   try {
-    const data = await fetchPilotRoutingSettings()
+    const [data, modelIndex] = await Promise.all([
+      fetchPilotRoutingSettings(),
+      fetchPilotChannelModelOptionIndex(),
+    ])
     routeCombos.value = mapFromSettings(data.routeCombos)
+    channelModelIndex.value = modelIndex
   }
   catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '加载 Route Combos 失败')
@@ -84,6 +92,77 @@ function addRoute() {
 
 function removeRoute(index: number) {
   dialog.form.routes.splice(index, 1)
+}
+
+const channelOptions = computed(() => {
+  return channelModelIndex.value.channels.map((channel) => {
+    return {
+      value: channel.id,
+      label: channel.enabled ? channel.name : `${channel.name}（渠道已禁用）`,
+    }
+  })
+})
+
+function resolveProviderModelOptionLabel(input: {
+  modelId: string
+  label?: string
+  format?: string
+  legacyStatus?: 'disabled' | 'missing'
+}): string {
+  const baseLabel = normalizeText(input.label) || normalizeText(input.modelId)
+  const format = normalizeText(input.format)
+  const withFormat = format ? `${baseLabel} (${format})` : baseLabel
+  if (input.legacyStatus === 'disabled') {
+    return `${withFormat}（已禁用）`
+  }
+  if (input.legacyStatus === 'missing') {
+    return `${withFormat}（不存在）`
+  }
+  return withFormat
+}
+
+function resolveRouteProviderModelOptions(row: RouteComboRouteFormItem): Array<{
+  value: string
+  label: string
+  disabled?: boolean
+}> {
+  const channelId = normalizeText(row.channelId)
+  if (!channelId) {
+    return []
+  }
+
+  const enabledOptions = channelModelIndex.value.enabledModelOptionsByChannel[channelId] || []
+  const allOptions = channelModelIndex.value.allModelOptionsByChannel[channelId] || []
+  const options = enabledOptions.map(item => ({
+    value: item.modelId,
+    label: resolveProviderModelOptionLabel({
+      modelId: item.modelId,
+      label: item.label,
+      format: item.format,
+    }),
+  }))
+
+  const currentModelId = normalizeText(row.providerModel)
+  if (!currentModelId || options.some(item => item.value === currentModelId)) {
+    return options
+  }
+
+  const legacy = allOptions.find(item => item.modelId === currentModelId)
+  options.unshift({
+    value: currentModelId,
+    label: resolveProviderModelOptionLabel({
+      modelId: currentModelId,
+      label: legacy?.label || currentModelId,
+      format: legacy?.format,
+      legacyStatus: legacy ? 'disabled' : 'missing',
+    }),
+    disabled: true,
+  })
+  return options
+}
+
+function onRouteChannelChanged(row: RouteComboRouteFormItem) {
+  row.providerModel = ''
 }
 
 function validateDialogForm(): RouteComboFormItem | null {
@@ -275,9 +354,23 @@ onMounted(() => {
       </div>
 
       <el-table border table-layout="auto" :data="dialog.form.routes" style="width: 100%">
-        <el-table-column label="channelId" min-width="150">
+        <el-table-column label="channelId" min-width="180">
           <template #default="{ row }">
-            <el-input v-model="row.channelId" placeholder="default" />
+            <el-select
+              v-model="row.channelId"
+              filterable
+              clearable
+              placeholder="选择渠道"
+              style="width: 100%"
+              @change="() => onRouteChannelChanged(row)"
+            >
+              <el-option
+                v-for="option in channelOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
           </template>
         </el-table-column>
         <el-table-column label="modelId" min-width="150">
@@ -285,9 +378,24 @@ onMounted(() => {
             <el-input v-model="row.modelId" placeholder="quota-auto" />
           </template>
         </el-table-column>
-        <el-table-column label="providerModel" min-width="160">
+        <el-table-column label="providerModel" min-width="220">
           <template #default="{ row }">
-            <el-input v-model="row.providerModel" placeholder="gpt-5.4" />
+            <el-select
+              v-model="row.providerModel"
+              filterable
+              clearable
+              :disabled="!row.channelId"
+              placeholder="选择渠道模型"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="option in resolveRouteProviderModelOptions(row)"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+                :disabled="option.disabled === true"
+              />
+            </el-select>
           </template>
         </el-table-column>
         <el-table-column label="priority" width="110">

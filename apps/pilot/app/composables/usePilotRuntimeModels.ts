@@ -1,17 +1,14 @@
 import type { Ref } from 'vue'
+import type { PilotCapabilityId } from '~~/shared/pilot-capability-meta'
+import {
+  createPilotDefaultCapabilities,
+  resolvePilotCapabilities,
+} from '~~/shared/pilot-capability-meta'
 
 export type PilotRuntimeIconType = 'class' | 'url' | 'emoji' | 'file'
-export type PilotRuntimeCapabilityId =
-  | 'websearch'
-  | 'file.analyze'
-  | 'image.generate'
-  | 'image.edit'
-  | 'audio.tts'
-  | 'audio.stt'
-  | 'audio.transcribe'
-  | 'video.generate'
+export type PilotRuntimeCapabilityId = PilotCapabilityId
 
-export type PilotRuntimeModelCapabilities = Partial<Record<PilotRuntimeCapabilityId, boolean>>
+export type PilotRuntimeModelCapabilities = Record<PilotRuntimeCapabilityId, boolean>
 
 export interface PilotRuntimeIconConfig {
   type: PilotRuntimeIconType
@@ -69,16 +66,7 @@ const AUTO_MODEL: PilotRuntimeModelOption = {
   name: 'Auto',
   description: '根据路由策略自动选择模型',
   icon: { type: 'class', value: 'i-carbon-flow-data' },
-  capabilities: {
-    websearch: true,
-    'file.analyze': true,
-    'image.generate': true,
-    'image.edit': true,
-    'audio.tts': true,
-    'audio.stt': true,
-    'audio.transcribe': true,
-    'video.generate': true,
-  },
+  capabilities: createPilotDefaultCapabilities(true),
   thinkingSupported: true,
   thinkingDefaultEnabled: true,
   allowWebsearch: true,
@@ -135,25 +123,15 @@ function normalizeModelList(value: unknown): PilotRuntimeModelOption[] {
     if (!id) {
       continue
     }
-    const capabilitiesRow = row.capabilities && typeof row.capabilities === 'object' && !Array.isArray(row.capabilities)
-      ? row.capabilities as Record<string, unknown>
-      : {}
-    const allowWebsearch = toBoolean(row.allowWebsearch, toBoolean(capabilitiesRow.websearch, true))
-    const allowFileAnalysis = toBoolean(
-      row.allowFileAnalysis,
-      toBoolean(row.allowImageAnalysis, toBoolean(capabilitiesRow['file.analyze'], true)),
-    )
-    const allowImageGeneration = toBoolean(row.allowImageGeneration, toBoolean(capabilitiesRow['image.generate'], true))
-    const capabilities: PilotRuntimeModelCapabilities = {
-      websearch: allowWebsearch,
-      'file.analyze': allowFileAnalysis,
-      'image.generate': allowImageGeneration,
-      'image.edit': toBoolean(capabilitiesRow['image.edit'], true),
-      'audio.tts': toBoolean(capabilitiesRow['audio.tts'], true),
-      'audio.stt': toBoolean(capabilitiesRow['audio.stt'], true),
-      'audio.transcribe': toBoolean(capabilitiesRow['audio.transcribe'], true),
-      'video.generate': toBoolean(capabilitiesRow['video.generate'], true),
-    }
+    const capabilities = resolvePilotCapabilities(row.capabilities, {
+      allowWebsearch: row.allowWebsearch,
+      allowImageGeneration: row.allowImageGeneration,
+      allowFileAnalysis: row.allowFileAnalysis,
+      allowImageAnalysis: row.allowImageAnalysis,
+    }, createPilotDefaultCapabilities(true))
+    const allowWebsearch = capabilities.websearch !== false
+    const allowFileAnalysis = capabilities['file.analyze'] !== false
+    const allowImageGeneration = capabilities['image.generate'] !== false
     list.push({
       key: id,
       name: normalizeText(row.name) || id,

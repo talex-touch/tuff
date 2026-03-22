@@ -1,0 +1,339 @@
+{
+  "schemaVersion": 2,
+  "threshold": 1200,
+  "updatedAt": "2026-03-22T00:00:00.000Z",
+  "currentVersion": "2.4.9-beta.4",
+  "entries": [
+    {
+      "file": "apps/core-app/src/main/channel/common.ts",
+      "maxLines": 2116,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/ai/intelligence-module.ts",
+      "maxLines": 1699,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/ai/intelligence-sdk.ts",
+      "maxLines": 1962,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/ai/tuff-intelligence-runtime.ts",
+      "maxLines": 1530,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts",
+      "maxLines": 2378,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts",
+      "maxLines": 4898,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/core-box/window.ts",
+      "maxLines": 1737,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts",
+      "maxLines": 1858,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts",
+      "maxLines": 2089,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/clipboard.ts",
+      "maxLines": 2688,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/download/download-center.ts",
+      "maxLines": 1508,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/ocr/ocr-service.ts",
+      "maxLines": 1399,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/omni-panel/index.ts",
+      "maxLines": 1724,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/plugin/plugin-module.ts",
+      "maxLines": 3627,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/plugin/plugin.ts",
+      "maxLines": 2252,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/sync/index.ts",
+      "maxLines": 1803,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/update/update-system.ts",
+      "maxLines": 1674,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/update/UpdateService.ts",
+      "maxLines": 2547,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/base/LingPan.vue",
+      "maxLines": 1931,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/app/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue",
+      "maxLines": 2192,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/app/composables/useSignIn.ts",
+      "maxLines": 1583,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/app/pages/dashboard/admin/analytics.vue",
+      "maxLines": 2062,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/app/pages/dashboard/admin/intelligence.vue",
+      "maxLines": 2174,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/app/pages/dashboard/assets.vue",
+      "maxLines": 1454,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/app/pages/dashboard/storage.vue",
+      "maxLines": 1419,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/app/pages/docs/[...slug].vue",
+      "maxLines": 2821,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/i18n/locales/en.ts",
+      "maxLines": 2693,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/i18n/locales/zh.ts",
+      "maxLines": 2678,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/server/api/docs/assistant.post.ts",
+      "maxLines": 1789,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/server/utils/authStore.ts",
+      "maxLines": 2136,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/server/utils/creditsStore.ts",
+      "maxLines": 1344,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/server/utils/dashboardStore.ts",
+      "maxLines": 1336,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/server/utils/docAnalyticsStore.ts",
+      "maxLines": 1260,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/server/utils/pluginsStore.ts",
+      "maxLines": 2413,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/server/utils/syncStoreV1.ts",
+      "maxLines": 1351,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/server/utils/telemetryStore.ts",
+      "maxLines": 1695,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/nexus/server/utils/tuffIntelligenceLabService.ts",
+      "maxLines": 3657,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/pilot/app/pages/buy.vue",
+      "maxLines": 1209,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/pilot/app/components/input/ThInput.vue",
+      "maxLines": 1244,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts",
+      "maxLines": 1686,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/pilot/app/composables/usePilotChatPage.ts",
+      "maxLines": 2013,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/pilot/server/api/aigc/executor.post.ts",
+      "maxLines": 1561,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts",
+      "maxLines": 1660,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/pilot/server/utils/pilot-tool-gateway.ts",
+      "maxLines": 2060,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "packages/tuff-cli/src/bin/tuff.ts",
+      "maxLines": 1240,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "packages/tuff-intelligence/src/adapters/deepagent-engine.ts",
+      "maxLines": 1797,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "packages/tuff-intelligence/src/types/intelligence.ts",
+      "maxLines": 2180,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue",
+      "maxLines": 1344,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "packages/utils/transport/events/index.ts",
+      "maxLines": 2783,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "packages/utils/types/intelligence.ts",
+      "maxLines": 2180,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "plugins/touch-translation/index.js",
+      "maxLines": 1211,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    }
+  ],
+  "scanScope": [
+    "apps/core-app",
+    "apps/nexus",
+    "apps/pilot",
+    "packages",
+    "plugins"
+  ],
+  "growthExceptions": [
+    {
+      "file": "apps/pilot/server/api/aigc/executor.post.ts",
+      "maxLines": 2429,
+      "reason": "Current business window requires temporary retention before service split.",
+      "owner": "pilot",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-03-16-AIGC-EXECUTOR"
+    },
+    {
+      "file": "packages/tuff-intelligence/src/adapters/deepagent-engine.ts",
+      "maxLines": 2081,
+      "reason": "Adapter consolidation pending extraction to domain service package.",
+      "owner": "packages-tuff-intelligence",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-03-16-DEEPAGENT"
+    }
+  ]
+}

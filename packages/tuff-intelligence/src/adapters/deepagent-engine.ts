@@ -730,6 +730,99 @@ function extractTextPartsPreserve(content: unknown): string {
   return ''
 }
 
+function extractThinkingPartsPreserve(content: unknown, depth = 0): string {
+  if (depth > 4 || content === null || content === undefined) {
+    return ''
+  }
+
+  if (typeof content === 'string') {
+    return content
+  }
+
+  if (Array.isArray(content)) {
+    const parts = content.map((entry) => {
+      if (typeof entry === 'string') {
+        return ''
+      }
+      const row = toRecord(entry)
+      const type = String(row.type || '').trim().toLowerCase()
+      if (type.includes('reasoning') || type.includes('thinking')) {
+        const direct = extractTextPartsPreserve(
+          row.text
+          ?? row.summary
+          ?? row.reasoning
+          ?? row.thinking
+          ?? row.content
+          ?? row.delta,
+        )
+        if (direct) {
+          return direct
+        }
+      }
+      return extractThinkingPartsPreserve(
+        row.reasoning
+        ?? row.thinking
+        ?? row.analysis
+        ?? row.summary
+        ?? row.delta
+        ?? row.payload,
+        depth + 1,
+      )
+    }).filter(Boolean)
+    return parts.join('')
+  }
+
+  const row = toRecord(content)
+  const directCandidates = [
+    row.reasoning_text,
+    row.thinking_text,
+    row.reasoning,
+    row.thinking,
+    row.analysis,
+    row.summary,
+  ]
+  for (const candidate of directCandidates) {
+    const direct = extractTextPartsPreserve(candidate)
+    if (direct) {
+      return direct
+    }
+  }
+
+  const nestedCandidates = [
+    row.delta,
+    row.kwargs,
+    row.lc_kwargs,
+    row.additional_kwargs,
+    row.response_metadata,
+    row.payload,
+    row.data,
+    row.message,
+    row.output,
+    row.result,
+  ]
+  for (const candidate of nestedCandidates) {
+    const nested = extractThinkingPartsPreserve(candidate, depth + 1)
+    if (nested) {
+      return nested
+    }
+  }
+
+  return ''
+}
+
+function toIncrementalChunk(previous: string, nextChunk: string): string {
+  if (!nextChunk) {
+    return ''
+  }
+  if (!previous) {
+    return nextChunk
+  }
+  if (nextChunk.startsWith(previous)) {
+    return nextChunk.slice(previous.length)
+  }
+  return nextChunk
+}
+
 function resolveMessageType(message: unknown): string {
   const row = toRecord(message)
   const role = normalizeMessageType(row.role || row.type)
@@ -887,6 +980,13 @@ function extractLangGraphEventDelta(event: unknown): string {
 
   const kwargs = toRecord(chunkRow.kwargs)
   return extractTextPartsPreserve(kwargs.content)
+}
+
+function extractLangGraphEventThinkingDelta(event: unknown): string {
+  const row = toRecord(event)
+  const data = toRecord(row.data)
+  const chunk = data.chunk ?? data.output ?? data.message ?? data.delta ?? data.text ?? data.reasoning
+  return extractThinkingPartsPreserve(chunk)
 }
 
 function extractDeepAgentText(payload: Record<string, unknown>): string {
@@ -1689,6 +1789,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
 
     const startedAt = Date.now()
     let fullText = ''
+    let fullThinking = ''
     let chunkCount = 0
     const directStreamEnabled = shouldUseDirectStream(this.options)
 
@@ -1737,6 +1838,28 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
         const stream = await directLlm.stream(directMessages as any)
         for await (const chunk of stream as AsyncIterable<unknown>) {
           const row = toRecord(chunk)
+          const rawThinking = extractThinkingPartsPreserve(
+            row.reasoning
+            ?? row.thinking
+            ?? row.analysis
+            ?? row.additional_kwargs
+            ?? row.response_metadata
+            ?? row.content,
+          )
+          const thinkingDelta = toIncrementalChunk(fullThinking, rawThinking)
+          if (thinkingDelta) {
+            fullThinking += thinkingDelta
+            yield {
+              thinking: thinkingDelta,
+              thinkingDone: false,
+              done: false,
+              metadata: {
+                provider: 'openai-responses',
+                model,
+              },
+            }
+          }
+
           let delta = extractTextPartsPreserve(row.content)
           if (!delta && typeof row.text === 'string') {
             delta = row.text
@@ -1748,9 +1871,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
             continue
           }
 
-          if (fullText && delta.startsWith(fullText)) {
-            delta = delta.slice(fullText.length)
-          }
+          delta = toIncrementalChunk(fullText, delta)
           if (!delta) {
             continue
           }
@@ -1795,6 +1916,8 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
 
       yield {
         text: fullText,
+        thinking: fullThinking || undefined,
+        thinkingDone: fullThinking ? true : undefined,
         done: true,
         metadata: {
           provider: 'openai-responses',
@@ -1822,14 +1945,27 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
         ) as AsyncIterable<unknown>
 
         for await (const event of eventStream) {
+          const rawThinking = extractLangGraphEventThinkingDelta(event)
+          const thinkingDelta = toIncrementalChunk(fullThinking, rawThinking)
+          if (thinkingDelta) {
+            fullThinking += thinkingDelta
+            yield {
+              thinking: thinkingDelta,
+              thinkingDone: false,
+              done: false,
+              metadata: {
+                provider: 'langchain-deepagents',
+                model,
+              },
+            }
+          }
+
           let delta = extractLangGraphEventDelta(event)
           if (!delta) {
             continue
           }
 
-          if (fullText && delta.startsWith(fullText)) {
-            delta = delta.slice(fullText.length)
-          }
+          delta = toIncrementalChunk(fullText, delta)
           if (!delta) {
             continue
           }
@@ -1860,14 +1996,33 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
           }
 
           const [message] = messageTuple
+          const rawThinking = extractThinkingPartsPreserve(
+            toRecord(message).reasoning
+            ?? toRecord(message).thinking
+            ?? toRecord(message).analysis
+            ?? toRecord(message).kwargs
+            ?? toRecord(message).additional_kwargs,
+          )
+          const thinkingDelta = toIncrementalChunk(fullThinking, rawThinking)
+          if (thinkingDelta) {
+            fullThinking += thinkingDelta
+            yield {
+              thinking: thinkingDelta,
+              thinkingDone: false,
+              done: false,
+              metadata: {
+                provider: 'langchain-deepagents',
+                model,
+              },
+            }
+          }
+
           let delta = extractAssistantDeltaFromMessage(message)
           if (!delta) {
             continue
           }
 
-          if (fullText && delta.startsWith(fullText)) {
-            delta = delta.slice(fullText.length)
-          }
+          delta = toIncrementalChunk(fullText, delta)
           if (!delta) {
             continue
           }
@@ -1913,6 +2068,8 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
 
     yield {
       text: fullText,
+      thinking: fullThinking || undefined,
+      thinkingDone: fullThinking ? true : undefined,
       done: true,
       metadata: {
         provider: 'langchain-deepagents',

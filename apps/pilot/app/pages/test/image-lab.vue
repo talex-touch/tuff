@@ -5,17 +5,13 @@ definePageMeta({
   layout: 'default',
 })
 
-type CapabilityId =
-  | 'image.generate'
-  | 'image.edit'
-  | 'audio.tts'
-  | 'audio.stt'
-  | 'audio.transcribe'
-  | 'video.generate'
+type CapabilityId = 'image.generate' | 'image.edit' | 'audio.tts' | 'audio.stt' | 'audio.transcribe' | 'video.generate'
 
 interface GeneratedImageItem {
   url: string
+  previewUrl: string
   revisedPrompt?: string
+  base64?: string
 }
 
 interface GeneratedAudioItem {
@@ -72,6 +68,21 @@ function normalizeErrorMessage(error: unknown, fallback: string): string {
     return error.message || fallback
   }
   return normalizeText(error) || fallback
+}
+
+function resolveImagePreviewUrl(item: Record<string, unknown>): string {
+  const url = normalizeText(item.url)
+  if (url) {
+    return url
+  }
+  const base64 = normalizeText(item.base64)
+  if (!base64) {
+    return ''
+  }
+  if (/^data:image\//i.test(base64)) {
+    return base64
+  }
+  return `data:image/png;base64,${base64}`
 }
 
 function resetResult() {
@@ -205,10 +216,21 @@ async function invokeCapability() {
     const result = data.result || {}
 
     const images = Array.isArray(result.images)
-      ? result.images.map((item: any) => ({
-        url: normalizeText(item?.url),
-        revisedPrompt: normalizeText(item?.revisedPrompt) || undefined,
-      })).filter((item: GeneratedImageItem) => Boolean(item.url))
+      ? result.images
+          .map((item: any) => {
+            const row = item && typeof item === 'object' && !Array.isArray(item)
+              ? item as Record<string, unknown>
+              : {}
+            const url = normalizeText(row.url)
+            const base64 = normalizeText(row.base64)
+            return {
+              url,
+              previewUrl: resolveImagePreviewUrl(row),
+              revisedPrompt: normalizeText(row.revisedPrompt || row.revised_prompt) || undefined,
+              base64: base64 || undefined,
+            }
+          })
+          .filter((item: GeneratedImageItem) => Boolean(item.previewUrl))
       : []
     resultImages.value = images
 
@@ -238,7 +260,7 @@ async function invokeCapability() {
   }
 }
 
-const imagePreviewList = computed(() => resultImages.value.map(item => item.url))
+const imagePreviewList = computed(() => resultImages.value.map(item => item.previewUrl))
 </script>
 
 <template>
@@ -398,7 +420,7 @@ const imagePreviewList = computed(() => resultImages.value.map(item => item.url)
         <div class="CapabilityLabGrid">
           <div v-for="(item, index) in resultImages" :key="`${item.url}-${index}`" class="CapabilityLabCard">
             <el-image
-              :src="item.url"
+              :src="item.previewUrl"
               fit="cover"
               :preview-src-list="imagePreviewList"
               :initial-index="index"

@@ -193,6 +193,8 @@ export function parseSseChunks(chunk: string): StreamEvent[] {
       seq: Number.isFinite(normalizedSeq) ? normalizedSeq : undefined,
       delta: typeof row.delta === 'string' ? row.delta : undefined,
       message: typeof row.message === 'string' ? row.message : undefined,
+      name: typeof row.name === 'string' ? row.name : undefined,
+      data: typeof row.data === 'string' ? row.data : undefined,
       code: typeof row.code === 'string'
         ? row.code
         : (typeof detail?.code === 'string' ? String(detail.code) : undefined),

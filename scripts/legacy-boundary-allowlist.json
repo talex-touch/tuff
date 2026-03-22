@@ -1,0 +1,620 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-03-22T00:00:00.000Z",
+  "currentVersion": "2.4.9-beta.4",
+  "rules": {
+    "legacy-keyword": {
+      "description": "Freeze legacy-branch debt: new legacy keyword matches must be allowlisted with an expiry version.",
+      "defaultExpiresVersion": "2.5.0",
+      "entries": [
+        {
+          "file": "apps/core-app/src/main/core/module-manager.ts",
+          "maxCount": 7,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/core/touch-app.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/ai/intelligence-config.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/ai/tuff-intelligence-runtime.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/box-tool/search-engine/search-gather.ts",
+          "maxCount": 5,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/box-tool/search-engine/search-logger.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/clipboard.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/division-box/ipc.actor.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/download/migration-manager.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/file-protocol/index.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/global-shortcon.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/omni-panel/index.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/permission/permission-guard.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/permission/permission-store.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/permission/permission-store.ts",
+          "maxCount": 4,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/plugin/plugin-loaders.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/plugin/widget/processors/script-processor.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/plugin/widget/processors/tsx-processor.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/plugin/widget/processors/vue-processor.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/storage/index.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/tray-holder.ts",
+          "maxCount": 5,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/service/agent-store.service.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/service/store-api.service.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/components/base/select/TSelectItem.vue",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/components/permission/PermissionStatusCard.vue",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/modules/auth/auth-env.test.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/modules/channel/main/shortcon.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/modules/lang/i18n.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/modules/layout/index.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/modules/store/providers/nexus-store-provider.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/modules/storage/theme-style.utils.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/modules/tuffex/index.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue",
+          "maxCount": 6,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/shared/events/omni-panel.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/nexus/app/composables/useLocaleOrchestrator.ts",
+          "maxCount": 5,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/nexus/app/data/tuffSdkItems.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/nexus/app/i18n.config.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/nexus/i18n.config.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/nexus/server/api/sync/pull.get.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/nexus/server/api/sync/push.post.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/nexus/server/middleware/__tests__/intelligence-route-compat.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/nexus/server/utils/__tests__/team-context.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/nexus/server/utils/auth.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/app/composables/api/base/v1/aigc/history/index.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/app/composables/usePilotChatPage.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/app/composables/usePilotRoutingAdmin.ts",
+          "maxCount": 5,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/app/components/admin/AdminSideNav.vue",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/app/pages/admin/system/model-groups.vue",
+          "maxCount": 4,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/app/pages/admin/system/route-combos.vue",
+          "maxCount": 4,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/app/pages/cms/system/pilot-settings.vue",
+          "maxCount": 6,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/app/pages/pilot/admin/channels.vue",
+          "maxCount": 7,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/shared/pilot-capability-meta.ts",
+          "maxCount": 5,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/api/aigc/executor.post.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/api/v1/chat/sessions/[sessionId]/stream.post.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/api/v1/chat/sessions/[sessionId]/turns.post.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/__tests__/auth.test.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/__tests__/pilot-admin-datasource-config.test.ts",
+          "maxCount": 8,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/__tests__/pilot-admin-routing-config.capabilities.test.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/__tests__/pilot-capability-meta.shared.test.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/__tests__/pilot-channel-model-sync.test.ts",
+          "maxCount": 4,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/__tests__/pilot-tool-gateway.test.ts",
+          "maxCount": 19,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/pilot-admin-datasource-config.ts",
+          "maxCount": 5,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/pilot-admin-channel-config.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/pilot-admin-routing-config.ts",
+          "maxCount": 5,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/pilot-channel.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/pilot-tool-gateway.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/pilot-runtime.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/quota-history-store.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/tuff-intelligence/src/adapters/deepagent-engine.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/tuffex/packages/components/src/code-editor/src/TxCodeEditor.vue",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/tuffex/packages/components/src/group-block/src/types.ts",
+          "maxCount": 7,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/unplugin-export-plugin/src/__tests__/cli-shim.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/__tests__/permission-status.test.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/__tests__/preset-export-types.test.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/common/search/gather.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/eslint.config.js",
+          "maxCount": 6,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/index.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/permission/index.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/permission/legacy.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/channel.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/index.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/log/types.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/preload.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/sdk-version.ts",
+          "maxCount": 5,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/sdk/channel.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/renderer/storage/base-storage.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/renderer/storage/storage-subscription.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/transport/event/builder.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/transport/events/index.ts",
+          "maxCount": 6,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/transport/events/types/storage.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/transport/index.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/transport/legacy.ts",
+          "maxCount": 11,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/transport/prelude.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/transport/sdk/main-transport.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/transport/sdk/renderer-transport.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "plugins/touch-image/src/main.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        }
+      ]
+    },
+    "raw-channel-send": {
+      "description": "Freeze raw event strings: block new channel.send('x:y') calls unless allowlisted.",
+      "defaultExpiresVersion": "2.5.0",
+      "entries": [
+        {
+          "file": "packages/utils/plugin/sdk/box-sdk.ts",
+          "maxCount": 14,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/sdk/common.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/sdk/core-box.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/sdk/performance.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/sdk/service/index.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/sdk/sqlite.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/sdk/storage.ts",
+          "maxCount": 9,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/sdk/system.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/sdk/temp-files.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/sdk/window/index.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/renderer/storage/base-storage.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/renderer/storage/storage-subscription.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "plugins/touch-translation/widgets/translate-panel.vue",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        }
+      ]
+    },
+    "legacy-transport-import": {
+      "description": "Freeze transport legacy API spread: block new imports from transport/legacy unless allowlisted.",
+      "defaultExpiresVersion": "2.5.0",
+      "entries": [
+        {
+          "file": "apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/index.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/channel.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/preload.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/renderer/storage/base-storage.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        }
+      ]
+    },
+    "legacy-permission-import": {
+      "description": "Freeze permission legacy API spread: block new imports from permission/legacy unless allowlisted.",
+      "defaultExpiresVersion": "2.5.0",
+      "entries": []
+    }
+  }
+}

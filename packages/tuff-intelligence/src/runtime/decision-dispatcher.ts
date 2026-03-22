@@ -17,6 +17,19 @@ export class DecisionDispatcher {
   constructor(private readonly deps: DecisionDispatcherDeps) {}
 
   async *dispatch(decision: AgentDecision, state: TurnState): AsyncIterable<AgentEnvelope> {
+    if (decision.thinkingText && decision.thinkingText.trim()) {
+      yield {
+        version: 'aep/1',
+        id: makeEventId('evt'),
+        sessionId: state.sessionId,
+        turnId: state.turnId,
+        source: 'assistant',
+        type: decision.thinkingDone ? 'thinking.final' : 'thinking.delta',
+        ts: new Date().toISOString(),
+        payload: { text: decision.thinkingText },
+      }
+    }
+
     if (decision.text && decision.text.trim()) {
       yield {
         version: 'aep/1',

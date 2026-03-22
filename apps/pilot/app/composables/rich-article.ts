@@ -1,182 +1,191 @@
+import type { App } from 'vue'
+import { createApp } from 'vue'
+import RenderCodeHeader from '~/components/article/components/RenderCodeHeader.vue'
+
+type RichArticleDestroy = () => void
+
 interface IRichFunc {
-  onClick?: (e: MouseEvent) => void
-  onBlur?: (e: FocusEvent) => void
-  onFocus?: (e: FocusEvent) => void
-  onKeydown?: (e: KeyboardEvent) => void
-  onKeyup?: (e: KeyboardEvent) => void
-  onEnter?: (e: Event) => void
-  onLeave?: (e: Event) => void
-  onMove?: (e: Event) => void
-  init: (editor: HTMLElement) => void
+  destroy: () => void
+  init: () => void
 }
 
-const preRich: IRichFunc = (() => {
-  let editor: HTMLElement | null = null
+const previewableLangSet = new Set(['html', 'svg'])
 
-  function _genCopy(dom: Element) {
-    const langDom = document.createElement('div')
+function resolveCodeLanguage(preDom: HTMLElement, codeDom: HTMLElement): string {
+  const attrSource = [
+    preDom.getAttribute('data-language') || '',
+    codeDom.getAttribute('data-language') || '',
+  ].join(' ')
+  const classSource = `${preDom.className || ''} ${codeDom.className || ''}`
+  const langSource = `${attrSource} ${classSource}`
+  const match = langSource.match(/(?:lang|language)-([\w-]+)/i)
 
-    langDom.innerHTML = dom.attributes[0].nodeValue!
-    langDom.className = 'rich-article rich-lang'
+  return (match?.[1] || 'text').toLowerCase()
+}
 
-    const copyDom = document.createElement('div')
+function openCodePreview(language: string, code: string) {
+  const legacyMasks = document.querySelectorAll<HTMLElement>('.RichCodePreview-Mask')
+  legacyMasks.forEach(mask => mask.remove())
 
-    copyDom.innerHTML = '<span class=\'un\'>Copy</span><span class=\'did\'>Copied!</copy>'
-    copyDom.className = 'rich-article rich-copy'
+  const mask = document.createElement('div')
+  mask.className = 'RichCodePreview-Mask'
 
-    copyDom.addEventListener('click', () => {
-      const codeDom: HTMLElement = dom.querySelector('code')!
+  const panel = document.createElement('div')
+  panel.className = 'RichCodePreview-Panel'
 
-      navigator.clipboard.writeText(codeDom.innerText)
+  const header = document.createElement('div')
+  header.className = 'RichCodePreview-Header'
 
-      // mention
-      copyDom.classList.add('did')
+  const title = document.createElement('span')
+  title.textContent = `${language.toUpperCase()} 预览`
 
-      setTimeout(() => {
-        copyDom.classList.remove('did')
-      }, 1000)
-    })
+  const closeDom = document.createElement('button')
+  closeDom.className = 'RichCodePreview-Close'
+  closeDom.type = 'button'
+  closeDom.textContent = '关闭'
 
-    dom.appendChild(langDom)
-    dom.appendChild(copyDom)
+  const body = document.createElement('div')
+  body.className = 'RichCodePreview-Body'
+
+  const iframe = document.createElement('iframe')
+  iframe.className = 'RichCodePreview-Frame'
+  iframe.setAttribute('sandbox', 'allow-scripts')
+  iframe.srcdoc = code
+
+  header.appendChild(title)
+  header.appendChild(closeDom)
+  body.appendChild(iframe)
+  panel.appendChild(header)
+  panel.appendChild(body)
+  mask.appendChild(panel)
+
+  function closePreview() {
+    document.removeEventListener('keydown', onKeydown)
+    mask.remove()
   }
 
-  function _genWatermark(dom: Element) {
-    const rect = dom.getBoundingClientRect()
-
-    if (rect.width < 1 || rect.height < 1)
-      return
-
-    const waterMark = document.createElement('div')
-
-    // 防君子不防小人2333
-    waterMark.className = 'rich-article rich-watermark'
-    waterMark.innerHTML = '<span class=\'watermark\'>QuotaWish</span>'
-
-    // 获取parent
-    const parentDom = dom.parentElement!
-
-    // 找到索引
-    const arr = [...parentDom.children]
-
-    const ind = arr.indexOf(dom)
-
-    // 替换指定位置的索引为watermark
-    parentDom.insertBefore(waterMark, arr[ind])
-    parentDom.removeChild(dom)
-    waterMark.appendChild(dom)
-  }
-
-  function _genQuoteShadow(dom: HTMLElement) {
-    const parentDom = dom.parentElement!
-
-    const arr = [...parentDom.children]
-    const ind = arr.indexOf(dom)
-
-    const shadow = document.createElement('div')
-    shadow.className = 'rich-article rich-quote-shadow'
-    parentDom.insertBefore(shadow, arr[ind])
-    parentDom.removeChild(dom)
-    shadow.innerHTML = dom.outerHTML
-
-    // 定义偏移幅度
-    const offsetX = 10
-    const offsetY = 5
-
-    function _getOffset(range, value, max) {
-      return value / max * (range[1] - range[0]) + range[0]
+  function onKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      closePreview()
     }
-
-    // 根据当前的x和y算出偏移
-    function genOffset(numX: number, numY: number) {
-      const rect = shadow.getBoundingClientRect()
-
-      const x = _getOffset([-offsetX, offsetX], numX, rect.width)
-      const y = _getOffset([-offsetY, offsetY], numY, rect.height)
-
-      return [x, y]
-    }
-
-    shadow.addEventListener('mouseleave', () => {
-      shadow.classList.remove('enter')
-
-      shadow.style.setProperty('--offX', '0px')
-      shadow.style.setProperty('--offY', '0px')
-    })
-
-    shadow.addEventListener('mouseenter', () => {
-      shadow.classList.add('enter')
-    })
-
-    shadow.addEventListener('mousemove', (e) => {
-      const x = e.offsetX - 10
-      const y = e.offsetY - 10
-
-      shadow.style.setProperty('--x', `${x}px`)
-      shadow.style.setProperty('--y', `${y}px`)
-
-      const [offX, offY] = genOffset(x, y)
-
-      shadow.style.setProperty('--offX', `${offX}px`)
-      shadow.style.setProperty('--offY', `${offY}px`)
-    })
   }
 
-  function genCopy() {
-    if (!editor)
-      return
+  closeDom.addEventListener('click', closePreview)
+  mask.addEventListener('click', (event) => {
+    if (event.target === mask) {
+      closePreview()
+    }
+  })
 
-    const dom = editor.children[0]!
+  document.addEventListener('keydown', onKeydown)
+  document.body.appendChild(mask)
+}
 
-    dom.querySelectorAll('img').forEach((element) => {
-      _genWatermark(element)
-    })
+function createCodeBlockRich(editor: HTMLElement): IRichFunc {
+  const mountedApps = new Map<HTMLElement, App<Element>>()
 
-    dom.querySelectorAll('blockquote').forEach((element) => {
-      _genQuoteShadow(element)
-    })
-
-    ;[...dom.children[0].children].forEach((e: Element) => {
-      if (e.tagName !== 'PRE')
+  function pruneUnmountedApps() {
+    mountedApps.forEach((app, wrapper) => {
+      if (wrapper.isConnected) {
         return
+      }
 
-      _genCopy(e)
+      app.unmount()
+      mountedApps.delete(wrapper)
+    })
+  }
+
+  function resolveEditorRoot(): HTMLElement {
+    const root = editor.querySelector('.editor')
+    return root instanceof HTMLElement ? root : editor
+  }
+
+  function enhanceCodeBlock(preDom: HTMLElement) {
+    const codeDom = preDom.querySelector('code')
+    if (!(codeDom instanceof HTMLElement)) {
+      return
+    }
+
+    const parentDom = preDom.parentElement
+    if (!parentDom) {
+      return
+    }
+
+    const language = resolveCodeLanguage(preDom, codeDom)
+
+    const wrapper = document.createElement('div')
+    wrapper.className = 'rich-article EditorCode EditorCode--Readonly'
+
+    const headerHost = document.createElement('div')
+    headerHost.className = 'EditorCode-HeaderHost'
+
+    const content = document.createElement('div')
+    content.className = 'EditorCode-Content'
+
+    parentDom.insertBefore(wrapper, preDom)
+    content.appendChild(preDom)
+    wrapper.appendChild(headerHost)
+    wrapper.appendChild(content)
+
+    const app = createApp(RenderCodeHeader, {
+      language,
+      previewable: previewableLangSet.has(language),
+      codeResolver: () => codeDom.textContent || '',
+      onPreview: ({ language: previewLang, code }: { language: string, code: string }) => {
+        openCodePreview(previewLang, code)
+      },
+    })
+
+    app.mount(headerHost)
+    mountedApps.set(wrapper, app)
+  }
+
+  function genCodeEnhancement() {
+    const root = resolveEditorRoot()
+
+    root.querySelectorAll('pre').forEach((node) => {
+      if (!(node instanceof HTMLElement)) {
+        return
+      }
+
+      if (node.closest('.EditorCode')) {
+        return
+      }
+
+      enhanceCodeBlock(node)
     })
   }
 
   return {
-    init(_editor) {
-      editor = _editor
-
-      genCopy()
+    init() {
+      pruneUnmountedApps()
+      genCodeEnhancement()
+    },
+    destroy() {
+      mountedApps.forEach((app) => {
+        app.unmount()
+      })
+      mountedApps.clear()
     },
   }
-})()
+}
 
-const funcs = new Array<IRichFunc>()
+const richMap = new WeakMap<HTMLElement, IRichFunc>()
 
-funcs.push(preRich)
-
-export function useRichArticle(editorDom: HTMLElement) {
-  [...funcs].forEach(func => func.init(editorDom))
-
-  editorDom.addEventListener('click', e => [...funcs].forEach(func => func?.onClick?.(e)))
-  editorDom.addEventListener('focus', e => [...funcs].forEach(func => func?.onFocus?.(e)))
-  editorDom.addEventListener('blur', e => [...funcs].forEach(func => func?.onBlur?.(e)))
-  editorDom.addEventListener('keydown', e => [...funcs].forEach(func => func?.onKeydown?.(e)))
-  editorDom.addEventListener('keyup', e => [...funcs].forEach(func => func?.onKeyup?.(e)))
-  editorDom.addEventListener('mouseenter', e => [...funcs].forEach(func => func?.onEnter?.(e)))
-  editorDom.addEventListener('mouseleave', e => [...funcs].forEach(func => func?.onLeave?.(e)))
-  editorDom.addEventListener('mousemove', e => [...funcs].forEach(func => func?.onMove?.(e)))
+export function useRichArticle(editorDom: HTMLElement): RichArticleDestroy {
+  let rich = richMap.get(editorDom)
+  if (!rich) {
+    rich = createCodeBlockRich(editorDom)
+    richMap.set(editorDom, rich)
+  }
+  rich.init()
 
   return () => {
-    editorDom.removeEventListener('click', e => [...funcs].forEach(func => func?.onClick?.(e)))
-    editorDom.removeEventListener('focus', e => [...funcs].forEach(func => func?.onFocus?.(e)))
-    editorDom.removeEventListener('blur', e => [...funcs].forEach(func => func?.onBlur?.(e)))
-    editorDom.removeEventListener('keydown', e => [...funcs].forEach(func => func?.onKeydown?.(e)))
-    editorDom.removeEventListener('keyup', e => [...funcs].forEach(func => func?.onKeyup?.(e)))
-    editorDom.removeEventListener('mouseenter', e => [...funcs].forEach(func => func?.onEnter?.(e)))
-    editorDom.removeEventListener('mouseleave', e => [...funcs].forEach(func => func?.onLeave?.(e)))
-    editorDom.removeEventListener('mousemove', e => [...funcs].forEach(func => func?.onMove?.(e)))
+    const activeRich = richMap.get(editorDom)
+    if (!activeRich) {
+      return
+    }
+    activeRich.destroy()
+    richMap.delete(editorDom)
   }
 }

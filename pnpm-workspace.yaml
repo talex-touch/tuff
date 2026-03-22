@@ -1,8 +1,12 @@
 packages:
   - 'packages/*'
   - packages/tuffex/packages/components
-  - 'apps/*'
+  - 'apps/core-app'
+  - 'apps/nexus'
+  - 'apps/pilot'
   - 'plugins/*'
+  - '!apps/g-*'
+  - '!apps/quota-*'
   - '!apps/**/out/**'
   - '!apps/**/dist/**'
   - '!apps/**/.output/**'

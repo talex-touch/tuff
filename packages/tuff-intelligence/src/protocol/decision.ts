@@ -37,6 +37,8 @@ export interface SubAgentTask {
 }
 
 export interface AgentDecision {
+  thinkingText?: string
+  thinkingDone?: boolean
   text?: string
   message?: IntelligenceMessage
   capabilityCalls?: CapabilityCall[]

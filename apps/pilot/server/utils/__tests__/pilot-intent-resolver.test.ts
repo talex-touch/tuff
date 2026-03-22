@@ -27,6 +27,8 @@ describe('pilot-intent-resolver', () => {
     expect(result.intentType).toBe('image_generate')
     expect(result.strategy).toBe('command')
     expect(result.prompt).toBe('画一只猫')
+    expect(result.memoryDecision.shouldStore).toBe(false)
+    expect(result.memoryDecision.reason).toBe('intent_skip')
     expect(vi.mocked(resolvePilotRoutingSelection)).not.toHaveBeenCalled()
   })
 
@@ -110,5 +112,20 @@ describe('pilot-intent-resolver', () => {
     expect(result.intentType).toBe('chat')
     expect(result.strategy).toBe('fallback')
     expect(result.reason).toBe('classifier_failed')
+    expect(result.memoryDecision.shouldStore).toBe(false)
+    expect(result.memoryDecision.reason).toBe('no_persistent_fact')
+  })
+
+  it('marks durable user profile facts as memory-eligible when classifier fails', async () => {
+    vi.mocked(resolvePilotRoutingSelection).mockRejectedValue(new Error('route failed'))
+
+    const result = await resolvePilotIntent({
+      event: {} as any,
+      message: '我长期用 Mac，偏好英文界面，请后续都按这个来',
+    })
+
+    expect(result.intentType).toBe('chat')
+    expect(result.memoryDecision.shouldStore).toBe(true)
+    expect(result.memoryDecision.reason).toBe('eligible')
   })
 })

@@ -2,7 +2,6 @@ import type { H3Event } from 'h3'
 import type { PilotChannelModelConfig } from './pilot-channel'
 import { networkClient } from '@talex-touch/utils/network'
 import { getPilotAdminChannelCatalog, updatePilotAdminChannelCatalog } from './pilot-admin-channel-config'
-import { mergeDiscoveredModelsIntoCatalog } from './pilot-admin-routing-config'
 
 export interface PilotChannelModelSyncResult {
   syncedAt: string
@@ -146,6 +145,7 @@ function mergeModelsWithExisting(
       id: modelId,
       label: modelId,
       format: normalizeText(defaultFormat) || undefined,
+      priority: 100,
       enabled: true,
       thinkingSupported: true,
       thinkingDefaultEnabled: false,
@@ -158,6 +158,7 @@ function mergeModelsWithExisting(
       id: modelId,
       label: modelId,
       format: normalizeText(defaultFormat) || undefined,
+      priority: 100,
       enabled: true,
       thinkingSupported: true,
       thinkingDefaultEnabled: false,
@@ -248,8 +249,6 @@ export async function syncPilotChannelModels(event: H3Event): Promise<PilotChann
     defaultChannelId: catalog.defaultChannelId,
     channels: channelUpdates,
   })
-
-  await mergeDiscoveredModelsIntoCatalog(event, discoveredForCatalog)
 
   const successChannels = channels.filter(item => item.status === 'ok').length
   const failedChannels = channels.filter(item => item.status === 'failed').length

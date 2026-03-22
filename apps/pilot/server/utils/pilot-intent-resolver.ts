@@ -27,6 +27,7 @@ export interface ResolvePilotIntentResult {
   reason: string
   websearchRequired: boolean
   websearchReason: string
+  memoryDecision: PilotIntentMemoryDecision
   classifier?: {
     channelId: string
     modelId: string
@@ -42,6 +43,12 @@ interface IntentClassifierResult {
   reason: string
   prompt: string
   websearchRequired: boolean
+  memoryDecision: PilotIntentMemoryDecision
+}
+
+export interface PilotIntentMemoryDecision {
+  shouldStore: boolean
+  reason: 'eligible' | 'no_persistent_fact' | 'intent_skip' | 'policy_disabled'
 }
 
 function normalizeText(value: unknown): string {
@@ -149,13 +156,106 @@ function shouldRouteToImageByRule(message: string): boolean {
   return false
 }
 
+function resolveMemoryDecisionByHeuristic(
+  message: string,
+  intentType: Extract<PilotIntentType, 'chat' | 'image_generate'>,
+): PilotIntentMemoryDecision {
+  if (intentType !== 'chat') {
+    return {
+      shouldStore: false,
+      reason: 'intent_skip',
+    }
+  }
+
+  const normalized = normalizeText(message)
+  if (!normalized) {
+    return {
+      shouldStore: false,
+      reason: 'intent_skip',
+    }
+  }
+
+  const lower = normalized.toLowerCase()
+  const transientPatterns = [
+    /今日|今天|刚刚|最新|实时|新闻|天气|股价|汇率|热搜/,
+    /today|latest|news|weather|stock|realtime|current/i,
+    /搜索|查一下|帮我查|lookup|search/i,
+  ]
+  for (const pattern of transientPatterns) {
+    if (pattern.test(lower)) {
+      return {
+        shouldStore: false,
+        reason: 'no_persistent_fact',
+      }
+    }
+  }
+
+  const persistentPatterns = [
+    /我叫|我是|我在|我来自|我的职业|我的工作|我的偏好|我偏好|我喜欢|我不喜欢|我常用|我长期|记住我/,
+    /my name is|i am|i prefer|i like|i dislike|i usually|remember that/i,
+  ]
+  for (const pattern of persistentPatterns) {
+    if (pattern.test(lower)) {
+      return {
+        shouldStore: true,
+        reason: 'eligible',
+      }
+    }
+  }
+
+  return {
+    shouldStore: false,
+    reason: 'no_persistent_fact',
+  }
+}
+
+function normalizeMemoryDecision(
+  rawShouldStore: unknown,
+  rawReason: unknown,
+  message: string,
+  intentType: Extract<PilotIntentType, 'chat' | 'image_generate'>,
+): PilotIntentMemoryDecision {
+  const fallback = resolveMemoryDecisionByHeuristic(message, intentType)
+  if (intentType !== 'chat') {
+    return {
+      shouldStore: false,
+      reason: 'intent_skip',
+    }
+  }
+
+  const normalizedReason = normalizeText(rawReason).toLowerCase()
+  const shouldStore = normalizeBooleanFlag(rawShouldStore, false)
+  if (shouldStore) {
+    return {
+      shouldStore: true,
+      reason: 'eligible',
+    }
+  }
+
+  if (
+    normalizedReason === 'eligible'
+    || normalizedReason === 'no_persistent_fact'
+    || normalizedReason === 'intent_skip'
+    || normalizedReason === 'policy_disabled'
+  ) {
+    return {
+      shouldStore: normalizedReason === 'eligible',
+      reason: normalizedReason as PilotIntentMemoryDecision['reason'],
+    }
+  }
+
+  return fallback
+}
+
 function buildClassifierSystemPrompt(): string {
   return [
     'You are an intent classifier for Tuff Pilot.',
     'Classify user request into one intent: "chat" or "image_generate".',
-    'Return only strict JSON with fields: intent, confidence, reason, prompt, needs_websearch.',
+    'Return only strict JSON with fields: intent, confidence, reason, prompt, needs_websearch, should_store_memory, memory_reason.',
     'confidence must be between 0 and 1.',
     'needs_websearch must be true only when external/latest web information is required.',
+    'should_store_memory is true only when user message contains durable long-term profile/preference facts.',
+    'memory_reason must be one of: eligible, no_persistent_fact, intent_skip, policy_disabled.',
     'If user asks to create/draw/generate a new image, choose image_generate.',
     'If user asks to analyze/describe an existing image or asks normal questions, choose chat.',
     'prompt should be cleaned user request text for downstream image generation when intent=image_generate.',
@@ -224,12 +324,14 @@ function parseChatCompletionsOutputText(payload: Record<string, unknown>): strin
 function parseClassifierJson(content: string, message: string): IntentClassifierResult {
   const normalizedMessage = normalizeText(message)
   if (!content) {
+    const memoryDecision = resolveMemoryDecisionByHeuristic(normalizedMessage, 'chat')
     return {
       intentType: 'chat',
       confidence: 0,
       reason: 'empty_response',
       prompt: normalizedMessage,
       websearchRequired: false,
+      memoryDecision,
     }
   }
 
@@ -239,21 +341,31 @@ function parseClassifierJson(content: string, message: string): IntentClassifier
       throw new Error('invalid classifier response')
     }
     const row = parsed as Record<string, unknown>
+    const intentType = normalizeIntentType(row.intent)
+    const memoryDecision = normalizeMemoryDecision(
+      row.should_store_memory,
+      row.memory_reason,
+      normalizedMessage,
+      intentType,
+    )
     return {
-      intentType: normalizeIntentType(row.intent),
+      intentType,
       confidence: clamp(Number(row.confidence), 0, 1),
       reason: normalizeText(row.reason) || 'classified',
       prompt: normalizeText(row.prompt) || normalizedMessage,
       websearchRequired: normalizeBooleanFlag(row.needs_websearch, false),
+      memoryDecision,
     }
   }
   catch {
+    const memoryDecision = resolveMemoryDecisionByHeuristic(normalizedMessage, 'chat')
     return {
       intentType: 'chat',
       confidence: 0,
       reason: 'json_parse_failed',
       prompt: normalizedMessage,
       websearchRequired: false,
+      memoryDecision,
     }
   }
 }
@@ -345,6 +457,10 @@ export async function resolvePilotIntent(input: ResolvePilotIntentInput): Promis
       reason: 'empty_message',
       websearchRequired: false,
       websearchReason: 'empty_message',
+      memoryDecision: {
+        shouldStore: false,
+        reason: 'intent_skip',
+      },
     }
   }
 
@@ -357,6 +473,10 @@ export async function resolvePilotIntent(input: ResolvePilotIntentInput): Promis
       reason: 'explicit_command',
       websearchRequired: false,
       websearchReason: 'image_command',
+      memoryDecision: {
+        shouldStore: false,
+        reason: 'intent_skip',
+      },
     }
   }
 
@@ -369,6 +489,10 @@ export async function resolvePilotIntent(input: ResolvePilotIntentInput): Promis
       reason: 'rule_match',
       websearchRequired: false,
       websearchReason: 'image_rule',
+      memoryDecision: {
+        shouldStore: false,
+        reason: 'intent_skip',
+      },
     }
   }
 
@@ -399,6 +523,10 @@ export async function resolvePilotIntent(input: ResolvePilotIntentInput): Promis
         reason: classification.reason || 'nano_classified',
         websearchRequired: false,
         websearchReason: 'image_intent',
+        memoryDecision: {
+          shouldStore: false,
+          reason: 'intent_skip',
+        },
         classifier: {
           channelId: classifierRoute.channelId,
           modelId: classifierRoute.modelId,
@@ -419,6 +547,7 @@ export async function resolvePilotIntent(input: ResolvePilotIntentInput): Promis
       websearchReason: classification.websearchRequired
         ? 'nano_requires_websearch'
         : 'nano_chat_no_websearch',
+      memoryDecision: classification.memoryDecision,
       classifier: {
         channelId: classifierRoute.channelId,
         modelId: classifierRoute.modelId,
@@ -429,6 +558,7 @@ export async function resolvePilotIntent(input: ResolvePilotIntentInput): Promis
     }
   }
   catch {
+    const memoryDecision = resolveMemoryDecisionByHeuristic(message, 'chat')
     return {
       intentType: 'chat',
       prompt: message,
@@ -437,6 +567,7 @@ export async function resolvePilotIntent(input: ResolvePilotIntentInput): Promis
       reason: 'classifier_failed',
       websearchRequired: false,
       websearchReason: 'classifier_failed',
+      memoryDecision,
     }
   }
 }

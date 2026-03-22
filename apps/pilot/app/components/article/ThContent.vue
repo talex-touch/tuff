@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { normalizeLooseMarkdownForRender } from '@talex-touch/tuff-intelligence/pilot-conversation'
 import MilkContent from '~/components/article/MilkContent.vue'
 
 const props = defineProps<{
@@ -11,10 +12,11 @@ const emits = defineEmits<{
 }>()
 
 const model = useVModel(props, 'modelValue', emits)
+const normalizedModel = computed(() => normalizeLooseMarkdownForRender(model.value))
 </script>
 
 <template>
-  <MilkContent :content="model" :disable-rich="true" />
+  <MilkContent :content="normalizedModel" :disable-rich="true" :sticky-code-header="false" />
 </template>
 
 <style lang="scss">

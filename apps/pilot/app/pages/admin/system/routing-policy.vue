@@ -16,6 +16,10 @@ const routingPolicy = reactive<PilotRoutingPolicyForm>({
   defaultModelId: 'quota-auto',
   defaultRouteComboId: 'default-auto',
   explorationRate: 0.08,
+  intentNanoModelId: '',
+  intentRouteComboId: '',
+  imageGenerationModelId: '',
+  imageRouteComboId: '',
 })
 
 const lbPolicy = reactive<PilotLoadBalancePolicyForm>({
@@ -39,6 +43,10 @@ async function fetchSettings() {
     routingPolicy.defaultModelId = data.routingPolicy.defaultModelId
     routingPolicy.defaultRouteComboId = data.routingPolicy.defaultRouteComboId
     routingPolicy.explorationRate = data.routingPolicy.explorationRate
+    routingPolicy.intentNanoModelId = data.routingPolicy.intentNanoModelId
+    routingPolicy.intentRouteComboId = data.routingPolicy.intentRouteComboId
+    routingPolicy.imageGenerationModelId = data.routingPolicy.imageGenerationModelId
+    routingPolicy.imageRouteComboId = data.routingPolicy.imageRouteComboId
     lbPolicy.metricWindowHours = data.lbPolicy.metricWindowHours
     lbPolicy.recentRequestWindow = data.lbPolicy.recentRequestWindow
     lbPolicy.circuitBreakerFailureThreshold = data.lbPolicy.circuitBreakerFailureThreshold
@@ -64,6 +72,10 @@ async function saveSettings() {
         defaultModelId: routingPolicy.defaultModelId,
         defaultRouteComboId: routingPolicy.defaultRouteComboId,
         explorationRate: routingPolicy.explorationRate,
+        intentNanoModelId: routingPolicy.intentNanoModelId,
+        intentRouteComboId: routingPolicy.intentRouteComboId,
+        imageGenerationModelId: routingPolicy.imageGenerationModelId,
+        imageRouteComboId: routingPolicy.imageRouteComboId,
       },
       lbPolicy: {
         metricWindowHours: lbPolicy.metricWindowHours,
@@ -118,6 +130,18 @@ onMounted(() => {
           </el-form-item>
           <el-form-item label="explorationRate">
             <el-input-number v-model="routingPolicy.explorationRate" :min="0" :max="0.5" :step="0.01" controls-position="right" />
+          </el-form-item>
+          <el-form-item label="intentNanoModelId">
+            <el-input v-model="routingPolicy.intentNanoModelId" placeholder="gpt-5.4-nano" />
+          </el-form-item>
+          <el-form-item label="intentRouteComboId">
+            <el-input v-model="routingPolicy.intentRouteComboId" placeholder="intent-auto" />
+          </el-form-item>
+          <el-form-item label="imageGenerationModelId">
+            <el-input v-model="routingPolicy.imageGenerationModelId" placeholder="gpt-image-1" />
+          </el-form-item>
+          <el-form-item label="imageRouteComboId">
+            <el-input v-model="routingPolicy.imageRouteComboId" placeholder="image-auto" />
           </el-form-item>
         </el-form>
       </el-card>

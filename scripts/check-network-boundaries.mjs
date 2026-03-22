@@ -28,6 +28,8 @@ const targetExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.vue', '.mjs', 
 const allowedFiles = new Set([
   // Network suite internals.
   'packages/utils/network/request.ts',
+  // Uses `networkClient`, but exposes connector methods named `fetch`.
+  'apps/pilot/server/utils/pilot-websearch-connector.ts',
 ])
 
 const forbiddenRules = [

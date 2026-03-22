@@ -1,4 +1,4 @@
-type RefractorLike = {
+interface RefractorLike {
   register?: (language: unknown) => void
 }
 

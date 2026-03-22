@@ -14,6 +14,7 @@ import { computeChannelModelStats } from './pilot-channel-scorer'
 import { buildRouteKey, isRouteHealthy } from './pilot-route-health'
 
 export const PILOT_CAPABILITY_UNSUPPORTED_CODE = 'PILOT_CAPABILITY_UNSUPPORTED'
+export const PILOT_NO_ENABLED_MODEL_CODE = 'PILOT_NO_ENABLED_MODEL'
 
 interface RouteCandidate {
   channelId: string
@@ -134,6 +135,13 @@ function createCapabilityUnsupportedError(capability: PilotCapabilityId): Error 
   const error = new Error(`No available provider supports capability: ${capability}`)
   ;(error as Error & { code?: string, capability?: string }).code = PILOT_CAPABILITY_UNSUPPORTED_CODE
   ;(error as Error & { code?: string, capability?: string }).capability = capability
+  return error
+}
+
+function createNoEnabledModelError(channelId: string): Error {
+  const error = new Error(`No enabled provider model available on channel: ${channelId}`)
+  ;(error as Error & { code?: string, channelId?: string }).code = PILOT_NO_ENABLED_MODEL_CODE
+  ;(error as Error & { code?: string, channelId?: string }).channelId = channelId
   return error
 }
 
@@ -279,7 +287,7 @@ function resolvePreferredProviderModel(
     }
   }
 
-  return normalizeText(models.find(item => item.enabled !== false)?.id || models[0]?.id)
+  return normalizeText(models.find(item => item.enabled !== false)?.id)
 }
 
 function normalizeModelFormat(value: unknown): PilotRoutingResolveResult['transport'] | '' {
@@ -750,16 +758,30 @@ export async function resolvePilotRoutingSelection(
       fallback.channel.defaultModelId || fallback.channel.model,
     )
     let fallbackModelConfig = modelMap.get(defaultModelId) || modelMap.get(fallbackModel)
+    if (!fallbackModel || !isProviderModelEnabledOnChannel(fallback.channel, fallbackModel)) {
+      throw createNoEnabledModelError(fallback.channelId)
+    }
     if (!isIntentModelAllowed(fallbackModelConfig, intentType)) {
       const allowed = modelCatalog.find(item => (
         isIntentModelAllowed(item, intentType)
-        && (item.bindings || []).some(binding => binding.enabled !== false && binding.channelId === fallback.channelId)
+        && (item.bindings || []).some(binding => (
+          binding.enabled !== false
+          && binding.channelId === fallback.channelId
+          && isProviderModelEnabledOnChannel(fallback.channel, normalizeText(binding.providerModel))
+        ))
       ))
-      const binding = allowed?.bindings.find(item => item.enabled !== false && item.channelId === fallback.channelId)
+      const binding = allowed?.bindings.find(item => (
+        item.enabled !== false
+        && item.channelId === fallback.channelId
+        && isProviderModelEnabledOnChannel(fallback.channel, normalizeText(item.providerModel))
+      ))
       if (allowed && binding) {
         fallbackModelConfig = allowed
         fallbackModel = normalizeText(binding.providerModel) || fallbackModel
       }
+    }
+    if (!fallbackModel || !isProviderModelEnabledOnChannel(fallback.channel, fallbackModel)) {
+      throw createNoEnabledModelError(fallback.channelId)
     }
     const allowWebsearch = fallbackModelConfig?.allowWebsearch !== false
     const thinkingSupported = fallbackModelConfig?.thinkingSupported !== false

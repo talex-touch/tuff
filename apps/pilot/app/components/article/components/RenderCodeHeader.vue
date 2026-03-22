@@ -105,8 +105,11 @@ onBeforeUnmount(() => {
         :title="didCopy ? '已复制' : '复制代码'"
         @click="handleCopy"
       >
-        <TxIcon v-if="didCopy" name="i-ri-check-line" :size="14" />
-        <TxIcon v-else name="i-ri-file-copy-line" :size="14" />
+        <TxIcon v-if="didCopy" class="rich-copy-icon" name="i-ri-check-line" :size="14" />
+        <TxIcon v-else class="rich-copy-icon" name="i-ri-file-copy-line" :size="14" />
+        <span class="rich-copy-text">
+          {{ didCopy ? '已复制' : '复制' }}
+        </span>
       </button>
 
       <button

@@ -63,6 +63,8 @@ const pageOptions = reactive<{
   status: IChatItemStatus.AVAILABLE,
   sendState: 'idle',
 })
+const pilotModeLabel = computed(() => pageOptions.conversation.pilotMode === true ? 'PILOT' : '普通模式')
+const pilotModeTagClass = computed(() => pageOptions.conversation.pilotMode === true ? 'pilot' : 'normal')
 const {
   memoryEnabled,
   loadMemorySettings,
@@ -219,6 +221,29 @@ function scheduleStreamScroll() {
   }, STREAM_SCROLL_THROTTLE_MS)
 }
 
+function resolveConversationSyncStatus(status: IChatItemStatus) {
+  if (
+    status === IChatItemStatus.ERROR
+    || status === IChatItemStatus.BANNED
+    || status === IChatItemStatus.REJECTED
+    || status === IChatItemStatus.CANCELLED
+  ) {
+    return PersistStatus.FAILED
+  }
+
+  return PersistStatus.SUCCESS
+}
+
+function saveConversationLocalSnapshot(conversation: IChatConversation, syncStatus: PersistStatus = PersistStatus.SUCCESS) {
+  if (!conversation?.id?.length) {
+    return
+  }
+
+  conversation.lastUpdate = Date.now()
+  conversation.sync = syncStatus
+  $historyManager.options.list.set(conversation.id, conversation)
+}
+
 async function innerSend(conversation: IChatConversation, chatItem: IChatItem, index: number) {
   // 判断如果 conversation 是2条消息
   if (userConfig.value.pri_info.appearance.immersive && conversation.messages.length <= 2)
@@ -254,12 +279,15 @@ async function innerSend(conversation: IChatConversation, chatItem: IChatItem, i
 
       flushStreamScroll('final')
     },
-    async onReqCompleted() {
+    onReqCompleted() {
       pageOptions.sendState = 'idle'
       flushStreamScroll('stream')
       chatRef.value?.generateScroll('final')
 
-      await $historyManager.syncHistory(conversation)
+      saveConversationLocalSnapshot(
+        conversation,
+        resolveConversationSyncStatus(pageOptions.status),
+      )
 
       useVibrate('medium')
 
@@ -272,6 +300,7 @@ async function innerSend(conversation: IChatConversation, chatItem: IChatItem, i
     },
     onError() {
       pageOptions.sendState = 'idle'
+      saveConversationLocalSnapshot(conversation, PersistStatus.FAILED)
     },
   })
 
@@ -280,8 +309,8 @@ async function innerSend(conversation: IChatConversation, chatItem: IChatItem, i
   return chatCompletion
 }
 
-async function handleSync() {
-  await $historyManager.syncHistory(pageOptions.conversation)
+function handleSync() {
+  saveConversationLocalSnapshot(pageOptions.conversation, PersistStatus.SUCCESS)
 }
 
 // 重新生成某条消息 只需要给消息索引即可 还需要传入目标inner 如果有新的参数赋值则传options替换
@@ -321,12 +350,15 @@ async function handleRetry(index: number, page: number, innerItem: IChatInnerIte
 
 async function handleSend(query: IInnerItemMeta[], meta: IChatInnerItemMeta) {
   const conversation = pageOptions.conversation
+  const resolvedPilotMode = typeof meta.pilotMode === 'boolean'
+    ? meta.pilotMode
+    : conversation.pilotMode === true
   const resolvedMeta: IChatInnerItemMeta = {
     ...meta,
     memoryEnabled: memoryEnabled.value,
-    pilotMode: meta.pilotMode === true || conversation.pilotMode === true,
+    pilotMode: resolvedPilotMode,
   }
-  conversation.pilotMode = resolvedMeta.pilotMode === true
+  conversation.pilotMode = resolvedPilotMode
 
   if (!$historyManager.options.list.get(conversation.id))
     $historyManager.options.list.set(conversation.id, conversation)
@@ -487,6 +519,8 @@ function handleLogin() {
           <CheckboxSwanCheckBox v-model="expand" />
           <!-- <div i-carbon:text-short-paragraph @click="userConfig.pri_info.appearance.expand = true" /> -->
 
+          <span class="pilot-top-badge" :class="pilotModeTagClass">{{ pilotModeLabel }}</span>
+
           <ModelSelector v-if="mount" v-model="globalConfigModel" />
 
           <div v-if="userStore.isLogin" style="font-size: 16px" i-carbon:edit @click="handleCreate" />
@@ -510,6 +544,10 @@ function handleLogin() {
 
       <AigcChatStatusBar>
         <template #start>
+          <span v-if="!viewMode" class="tag" :class="pilotModeTagClass">
+            {{ pilotModeLabel }}
+          </span>
+
           <span v-if="!viewMode && !userStore.isLogin" class="tag warning shining">
             访客模式（部分功能受限）
           </span>
@@ -559,6 +597,30 @@ function handleLogin() {
 
   border-radius: 12px;
   background-color: var(--el-bg-color-page);
+}
+
+.pilot-top-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.08rem 0.55rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #115e59, #164e63);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.tag.pilot {
+  color: #ecfeff;
+  background: linear-gradient(135deg, #115e59, #164e63);
+}
+
+.pilot-top-badge.normal,
+.tag.normal {
+  color: #e2e8f0;
+  background: linear-gradient(135deg, #334155, #475569);
 }
 
 .ViewModeBar {

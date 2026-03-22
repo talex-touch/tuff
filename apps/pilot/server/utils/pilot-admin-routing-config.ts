@@ -1,5 +1,12 @@
 import type { H3Event } from 'h3'
+import type { PilotCapabilityId as SharedPilotCapabilityId } from '../../shared/pilot-capability-meta'
 import type { PilotBuiltinTool } from './pilot-channel'
+import {
+  createPilotDefaultCapabilities,
+  normalizeThinkingFlags,
+  resolvePilotCapabilities,
+  sanitizeBuiltinToolsByCapabilities,
+} from '../../shared/pilot-capability-meta'
 import { getPilotDatabase, requirePilotDatabase } from './pilot-store'
 
 const SETTINGS_TABLE = 'pilot_admin_settings'
@@ -21,39 +28,9 @@ export interface PilotIconConfig {
   value: string
 }
 
-export type PilotCapabilityId =
-  | 'websearch'
-  | 'file.analyze'
-  | 'image.generate'
-  | 'image.edit'
-  | 'audio.tts'
-  | 'audio.stt'
-  | 'audio.transcribe'
-  | 'video.generate'
-
+export type PilotCapabilityId = SharedPilotCapabilityId
 export type PilotModelCapabilities = Partial<Record<PilotCapabilityId, boolean>>
-
-const PILOT_CAPABILITY_IDS: PilotCapabilityId[] = [
-  'websearch',
-  'file.analyze',
-  'image.generate',
-  'image.edit',
-  'audio.tts',
-  'audio.stt',
-  'audio.transcribe',
-  'video.generate',
-]
-
-const DEFAULT_MODEL_CAPABILITIES: Record<PilotCapabilityId, boolean> = {
-  websearch: true,
-  'file.analyze': true,
-  'image.generate': true,
-  'image.edit': true,
-  'audio.tts': true,
-  'audio.stt': true,
-  'audio.transcribe': true,
-  'video.generate': true,
-}
+const DEFAULT_MODEL_CAPABILITIES = createPilotDefaultCapabilities(true)
 
 export interface PilotModelBinding {
   channelId: string
@@ -198,10 +175,6 @@ function normalizeFloat(value: unknown, fallback: number, min: number, max: numb
   return Math.min(Math.max(parsed, min), max)
 }
 
-function toCapabilityBoolean(value: unknown, fallback: boolean): boolean {
-  return normalizeBoolean(value, fallback)
-}
-
 export function resolvePilotModelCapabilities(
   value: unknown,
   legacy?: {
@@ -211,31 +184,12 @@ export function resolvePilotModelCapabilities(
     allowImageAnalysis?: unknown
   },
 ): PilotModelCapabilities {
-  const row = value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
-
-  const allowFileAnalysis = normalizeBoolean(
-    legacy?.allowFileAnalysis,
-    normalizeBoolean(legacy?.allowImageAnalysis, DEFAULT_MODEL_CAPABILITIES['file.analyze']),
-  )
-
-  const capabilityFallback: Record<PilotCapabilityId, boolean> = {
-    websearch: normalizeBoolean(legacy?.allowWebsearch, DEFAULT_MODEL_CAPABILITIES.websearch),
-    'file.analyze': allowFileAnalysis,
-    'image.generate': normalizeBoolean(legacy?.allowImageGeneration, DEFAULT_MODEL_CAPABILITIES['image.generate']),
-    'image.edit': DEFAULT_MODEL_CAPABILITIES['image.edit'],
-    'audio.tts': DEFAULT_MODEL_CAPABILITIES['audio.tts'],
-    'audio.stt': DEFAULT_MODEL_CAPABILITIES['audio.stt'],
-    'audio.transcribe': DEFAULT_MODEL_CAPABILITIES['audio.transcribe'],
-    'video.generate': DEFAULT_MODEL_CAPABILITIES['video.generate'],
-  }
-
-  const normalized: PilotModelCapabilities = {}
-  for (const capability of PILOT_CAPABILITY_IDS) {
-    normalized[capability] = toCapabilityBoolean(row[capability], capabilityFallback[capability])
-  }
-  return normalized
+  return resolvePilotCapabilities(value, {
+    allowWebsearch: legacy?.allowWebsearch,
+    allowImageGeneration: legacy?.allowImageGeneration,
+    allowFileAnalysis: legacy?.allowFileAnalysis,
+    allowImageAnalysis: legacy?.allowImageAnalysis,
+  }, DEFAULT_MODEL_CAPABILITIES)
 }
 
 function normalizeBuiltinTools(value: unknown): PilotBuiltinTool[] | undefined {
@@ -371,6 +325,14 @@ function normalizeModelCatalogItem(raw: unknown): PilotModelCatalogItem | null {
   const allowWebsearch = capabilities.websearch !== false
   const allowFileAnalysis = capabilities['file.analyze'] !== false
   const allowImageGeneration = capabilities['image.generate'] !== false
+  const thinking = normalizeThinkingFlags(
+    normalizeBoolean(row.thinkingSupported, true),
+    normalizeBoolean(row.thinkingDefaultEnabled, false),
+  )
+  const builtinTools = sanitizeBuiltinToolsByCapabilities(normalizeModelBuiltinTools(row.builtinTools), {
+    ...DEFAULT_MODEL_CAPABILITIES,
+    ...(capabilities as Record<PilotCapabilityId, boolean>),
+  })
 
   return {
     id,
@@ -388,14 +350,14 @@ function normalizeModelCatalogItem(raw: unknown): PilotModelCatalogItem | null {
     qualityScore: Number.isFinite(Number(row.qualityScore)) ? normalizeFloat(row.qualityScore, 50, 0, 100) : undefined,
     speedScore: Number.isFinite(Number(row.speedScore)) ? normalizeFloat(row.speedScore, 50, 0, 100) : undefined,
     costScore: Number.isFinite(Number(row.costScore)) ? normalizeFloat(row.costScore, 50, 0, 100) : undefined,
-    thinkingSupported: normalizeBoolean(row.thinkingSupported, true),
-    thinkingDefaultEnabled: normalizeBoolean(row.thinkingDefaultEnabled, false),
+    thinkingSupported: thinking.thinkingSupported,
+    thinkingDefaultEnabled: thinking.thinkingDefaultEnabled,
     capabilities,
     allowWebsearch,
     allowImageAnalysis: allowFileAnalysis,
     allowImageGeneration,
     allowFileAnalysis,
-    builtinTools: normalizeModelBuiltinTools(row.builtinTools),
+    builtinTools,
     defaultRouteComboId: normalizeText(row.defaultRouteComboId) || undefined,
     bindings,
     metadata: row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
@@ -446,14 +408,13 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       source: 'system',
       icon: { type: 'class', value: 'i-carbon-flow-data' },
       tags: ['auto', 'routing'],
-      thinkingSupported: true,
-      thinkingDefaultEnabled: true,
+      ...normalizeThinkingFlags(true, true),
       capabilities: resolvePilotModelCapabilities({}),
       allowWebsearch: true,
       allowImageAnalysis: true,
       allowImageGeneration: true,
       allowFileAnalysis: true,
-      builtinTools: ['write_todos'],
+      builtinTools: sanitizeBuiltinToolsByCapabilities(['write_todos'], DEFAULT_MODEL_CAPABILITIES),
       bindings: [],
     },
     {
@@ -463,14 +424,13 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       visible: true,
       source: 'system',
       icon: { type: 'class', value: 'i-carbon-logo-openai' },
-      thinkingSupported: true,
-      thinkingDefaultEnabled: true,
+      ...normalizeThinkingFlags(true, true),
       capabilities: resolvePilotModelCapabilities({}),
       allowWebsearch: true,
       allowImageAnalysis: true,
       allowImageGeneration: true,
       allowFileAnalysis: true,
-      builtinTools: ['write_todos'],
+      builtinTools: sanitizeBuiltinToolsByCapabilities(['write_todos'], DEFAULT_MODEL_CAPABILITIES),
       bindings: [],
     },
     {
@@ -480,14 +440,13 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       visible: true,
       source: 'system',
       icon: { type: 'class', value: 'i-carbon-logo-openai' },
-      thinkingSupported: true,
-      thinkingDefaultEnabled: true,
+      ...normalizeThinkingFlags(true, true),
       capabilities: resolvePilotModelCapabilities({}),
       allowWebsearch: true,
       allowImageAnalysis: true,
       allowImageGeneration: true,
       allowFileAnalysis: true,
-      builtinTools: ['write_todos'],
+      builtinTools: sanitizeBuiltinToolsByCapabilities(['write_todos'], DEFAULT_MODEL_CAPABILITIES),
       bindings: [],
     },
     {
@@ -497,14 +456,13 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       visible: true,
       source: 'system',
       icon: { type: 'class', value: 'i-carbon-ai-status' },
-      thinkingSupported: true,
-      thinkingDefaultEnabled: true,
+      ...normalizeThinkingFlags(true, true),
       capabilities: resolvePilotModelCapabilities({}),
       allowWebsearch: true,
       allowImageAnalysis: true,
       allowImageGeneration: true,
       allowFileAnalysis: true,
-      builtinTools: ['write_todos'],
+      builtinTools: sanitizeBuiltinToolsByCapabilities(['write_todos'], DEFAULT_MODEL_CAPABILITIES),
       bindings: [],
     },
     {
@@ -514,14 +472,13 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       visible: true,
       source: 'system',
       icon: { type: 'class', value: 'i-carbon-ai-status-complete' },
-      thinkingSupported: true,
-      thinkingDefaultEnabled: true,
+      ...normalizeThinkingFlags(true, true),
       capabilities: resolvePilotModelCapabilities({}),
       allowWebsearch: true,
       allowImageAnalysis: true,
       allowImageGeneration: true,
       allowFileAnalysis: true,
-      builtinTools: ['write_todos'],
+      builtinTools: sanitizeBuiltinToolsByCapabilities(['write_todos'], DEFAULT_MODEL_CAPABILITIES),
       bindings: [],
     },
     {
@@ -531,14 +488,13 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       visible: true,
       source: 'system',
       icon: { type: 'class', value: 'i-carbon-machine-learning-model' },
-      thinkingSupported: true,
-      thinkingDefaultEnabled: true,
+      ...normalizeThinkingFlags(true, true),
       capabilities: resolvePilotModelCapabilities({}),
       allowWebsearch: true,
       allowImageAnalysis: true,
       allowImageGeneration: true,
       allowFileAnalysis: true,
-      builtinTools: ['write_todos'],
+      builtinTools: sanitizeBuiltinToolsByCapabilities(['write_todos'], DEFAULT_MODEL_CAPABILITIES),
       bindings: [],
     },
     {
@@ -548,14 +504,13 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       visible: true,
       source: 'system',
       icon: { type: 'class', value: 'i-carbon-machine-learning-model' },
-      thinkingSupported: true,
-      thinkingDefaultEnabled: true,
+      ...normalizeThinkingFlags(true, true),
       capabilities: resolvePilotModelCapabilities({}),
       allowWebsearch: true,
       allowImageAnalysis: true,
       allowImageGeneration: true,
       allowFileAnalysis: true,
-      builtinTools: ['write_todos'],
+      builtinTools: sanitizeBuiltinToolsByCapabilities(['write_todos'], DEFAULT_MODEL_CAPABILITIES),
       bindings: [],
     },
   ]
@@ -731,8 +686,13 @@ function normalizeModelCatalog(raw: unknown[]): PilotModelCatalogItem[] {
     .map(item => normalizeModelCatalogItem(item))
     .filter((item): item is PilotModelCatalogItem => Boolean(item))
 
+  const quotaAutoDefault = getDefaultModelCatalog().find(item => item.id === 'quota-auto')
+  if (!quotaAutoDefault) {
+    throw new Error('Missing required default model catalog item: quota-auto')
+  }
+
   if (list.length <= 0) {
-    return getDefaultModelCatalog()
+    return [quotaAutoDefault]
   }
 
   const deduped = new Map<string, PilotModelCatalogItem>()
@@ -742,11 +702,8 @@ function normalizeModelCatalog(raw: unknown[]): PilotModelCatalogItem[] {
     }
   }
 
-  const defaults = getDefaultModelCatalog()
-  for (const item of defaults) {
-    if (!deduped.has(item.id)) {
-      deduped.set(item.id, item)
-    }
+  if (!deduped.has(quotaAutoDefault.id)) {
+    deduped.set(quotaAutoDefault.id, quotaAutoDefault)
   }
 
   return Array.from(deduped.values())
@@ -882,20 +839,27 @@ export async function mergeDiscoveredModelsIntoCatalog(
         allowFileAnalysis: item.allowFileAnalysis,
         allowImageAnalysis: item.allowImageAnalysis,
       })
+      const thinking = normalizeThinkingFlags(
+        normalizeBoolean(item.thinkingSupported, true),
+        normalizeBoolean(item.thinkingDefaultEnabled, false),
+      )
       modelMap.set(modelId, {
         id: modelId,
         name: normalizeText(item.label) || modelId,
         enabled: true,
         visible: true,
         source: 'discovered',
-        thinkingSupported: normalizeBoolean(item.thinkingSupported, true),
-        thinkingDefaultEnabled: normalizeBoolean(item.thinkingDefaultEnabled, false),
+        thinkingSupported: thinking.thinkingSupported,
+        thinkingDefaultEnabled: thinking.thinkingDefaultEnabled,
         capabilities,
         allowWebsearch: capabilities.websearch !== false,
         allowImageAnalysis: capabilities['file.analyze'] !== false,
         allowImageGeneration: capabilities['image.generate'] !== false,
         allowFileAnalysis: capabilities['file.analyze'] !== false,
-        builtinTools: ['write_todos'],
+        builtinTools: sanitizeBuiltinToolsByCapabilities(['write_todos'], {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          ...(capabilities as Record<PilotCapabilityId, boolean>),
+        }),
         bindings: [binding],
       })
       continue

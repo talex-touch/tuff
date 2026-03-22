@@ -1,9 +1,5 @@
-export class Markmap {
-  static create(_element?: unknown) {
-    return new Markmap()
-  }
+import * as markmapViewModule from 'markmap-view/dist/index.js'
 
-  setData(_data: unknown) {}
-  fit() {}
-  zoom(_level: number) {}
-}
+export const Markmap = markmapViewModule.Markmap
+
+export default markmapViewModule

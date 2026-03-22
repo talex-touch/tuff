@@ -100,6 +100,7 @@ function shouldKeepBlockWithoutValue(
 function normalizeTextBlocksFromArray(
   content: unknown[],
   keepNonTextWithoutValue: boolean,
+  preferredTextBlockType: 'text' | 'markdown',
 ): PilotConversationContentBlock[] {
   const list: PilotConversationContentBlock[] = []
 
@@ -107,7 +108,7 @@ function normalizeTextBlocksFromArray(
     if (typeof item === 'string') {
       if (item) {
         list.push({
-          type: 'text',
+          type: preferredTextBlockType,
           value: item,
         })
       }
@@ -120,7 +121,7 @@ function normalizeTextBlocksFromArray(
 
     const row = item as Record<string, unknown>
     if (Array.isArray(row.value)) {
-      list.push(...normalizeTextBlocksFromArray(row.value, keepNonTextWithoutValue))
+      list.push(...normalizeTextBlocksFromArray(row.value, keepNonTextWithoutValue, preferredTextBlockType))
       continue
     }
 
@@ -143,31 +144,68 @@ function normalizeTextBlocksFromArray(
 
 export function normalizePilotConversationBlocks(
   content: unknown,
-  options: { keepNonTextWithoutValue?: boolean } = {},
+  options: { keepNonTextWithoutValue?: boolean, preferredTextBlockType?: 'text' | 'markdown' } = {},
 ): PilotConversationContentBlock[] {
   const keepNonTextWithoutValue = options.keepNonTextWithoutValue !== false
+  const preferredTextBlockType = options.preferredTextBlockType === 'markdown'
+    ? 'markdown'
+    : 'text'
   if (typeof content === 'string') {
     return content
       ? [{
-          type: 'text',
+          type: preferredTextBlockType,
           value: content,
         }]
       : []
   }
 
   if (Array.isArray(content)) {
-    return normalizeTextBlocksFromArray(content, keepNonTextWithoutValue)
+    return normalizeTextBlocksFromArray(content, keepNonTextWithoutValue, preferredTextBlockType)
   }
 
   const row = toRecord(content)
   if (typeof row.content === 'string' && row.content) {
     return [{
-      type: 'text',
+      type: preferredTextBlockType,
       value: row.content,
     }]
   }
 
   return []
+}
+
+export function normalizeLooseMarkdownForRender(value: unknown): string {
+  const raw = String(value || '')
+  if (!raw) {
+    return ''
+  }
+
+  const normalizedNewlines = raw.replace(/\r\n?/g, '\n')
+  return normalizedNewlines
+    .split('\n')
+    .map((line) => {
+      const indentMatch = line.match(/^(\s*)/)
+      const indent = indentMatch?.[1] || ''
+      let candidate = line.slice(indent.length).trim()
+
+      if (candidate.length >= 2) {
+        if (/^[“”"']/.test(candidate)) {
+          candidate = candidate.slice(1)
+        }
+        if (/[“”"']$/.test(candidate)) {
+          candidate = candidate.slice(0, -1)
+        }
+      }
+
+      const matched = candidate.match(/^```([^`]*)?\s*$/)
+      if (!matched) {
+        return line
+      }
+
+      const language = String(matched[1] || '').trim()
+      return `${indent}\`\`\`${language}`
+    })
+    .join('\n')
 }
 
 function resolveActiveInnerItem(message: Record<string, unknown>): Record<string, unknown> | null {
@@ -229,6 +267,7 @@ export function serializePilotExecutorMessages(
   for (const item of messages) {
     const row = toRecord(item)
     const role = normalizeRole(row.role)
+    const preferredTextBlockType: 'text' | 'markdown' = role === 'assistant' ? 'markdown' : 'text'
     const inner = resolveActiveInnerItem(row)
     if (skipUnavailableAssistant && role === 'assistant' && inner) {
       const status = Number(inner.status)
@@ -240,9 +279,11 @@ export function serializePilotExecutorMessages(
     const blocks = inner
       ? normalizePilotConversationBlocks(inner.value, {
           keepNonTextWithoutValue,
+          preferredTextBlockType,
         })
       : normalizePilotConversationBlocks(row.content, {
           keepNonTextWithoutValue,
+          preferredTextBlockType,
         })
 
     if (blocks.length <= 0) {
@@ -492,16 +533,7 @@ function messageLooksLikeWebsearchNeeded(message: string): boolean {
     return false
   }
 
-  const lower = text.toLowerCase()
-  if (/https?:\/\//i.test(text)) {
-    return true
-  }
-
-  const disablePatterns = [
-    /(不要|无需|不用|别).{0,6}(联网|搜索|查(网|询)?)/i,
-    /\b(no|without)\s+(web\s*search|internet|search)\b/i,
-  ]
-  if (disablePatterns.some(pattern => pattern.test(text))) {
+  if (messageExplicitlyDisablesWebsearch(text)) {
     return false
   }
 
@@ -513,11 +545,31 @@ function messageLooksLikeWebsearchNeeded(message: string): boolean {
     return true
   }
 
+  const lower = text.toLowerCase()
+  if (/https?:\/\//i.test(text)) {
+    return true
+  }
+
   if (lower.includes('what happened') || lower.includes('release note') || lower.includes('breaking')) {
     return true
   }
 
   return false
+}
+
+function messageExplicitlyDisablesWebsearch(message: string): boolean {
+  const text = String(message || '').trim()
+  if (!text) {
+    return false
+  }
+
+  const disablePatterns = [
+    /(不要|无需|不用|别).{0,6}(联网|搜索|查(网|询)?)/i,
+    /(只用|仅用).{0,8}(离线|本地|记忆)/i,
+    /\b(no|without|don'?t)\s+(web\s*search|internet|search|browse|browsing)\b/i,
+    /\boffline\s+only\b/i,
+  ]
+  return disablePatterns.some(pattern => pattern.test(text))
 }
 
 export function shouldExecutePilotWebsearch(
@@ -560,10 +612,10 @@ export function shouldExecutePilotWebsearch(
     }
   }
 
-  if (input.intentWebsearchRequired === false) {
+  if (messageExplicitlyDisablesWebsearch(message)) {
     return {
       enabled: false,
-      reason: 'intent_not_required',
+      reason: 'explicit_user_disable',
     }
   }
 
@@ -576,6 +628,8 @@ export function shouldExecutePilotWebsearch(
 
   return {
     enabled: false,
-    reason: 'heuristic_not_required',
+    reason: input.intentWebsearchRequired === false
+      ? 'intent_not_required_heuristic_bypassed'
+      : 'heuristic_not_required',
   }
 }

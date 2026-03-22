@@ -59,6 +59,17 @@ function isTraceSeqConflict(error: unknown): boolean {
   return normalized.includes('unique') && normalized.includes('seq')
 }
 
+function resolveMemoryEnabled(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return true
+  }
+  const row = metadata as Record<string, unknown>
+  if (typeof row.memoryEnabled === 'boolean') {
+    return row.memoryEnabled
+  }
+  return true
+}
+
 const ASSISTANT_DELTA_PERSIST_MAX_CHARS = 320
 const ASSISTANT_DELTA_PERSIST_MAX_MS = 160
 
@@ -130,10 +141,13 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
       ? await this.deps.store.runtime.getSession(input.sessionId)
       : null
     const created = session ?? await this.deps.store.runtime.createSession(input)
-    const history = (await this.deps.store.runtime.listMessages(created.sessionId)).map(message => ({
-      role: message.role,
-      content: message.content,
-    }))
+    const memoryEnabled = resolveMemoryEnabled(input.metadata)
+    const history = memoryEnabled
+      ? (await this.deps.store.runtime.listMessages(created.sessionId)).map(message => ({
+          role: message.role,
+          content: message.content,
+        }))
+      : []
 
     let state = this.createInitialState(created.sessionId, input, history, created.lastSeq)
     await this.deps.store.runtime.completeSession(created.sessionId, 'executing')

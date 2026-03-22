@@ -1,51 +1,77 @@
 <script lang="ts" setup>
 const props = defineProps(['outline', 'editor', 'editMode'])
 
+interface OutlineHeading {
+  level?: number | string
+  text?: string
+}
+
+type OutlineHeadingElement = HTMLElement & {
+  relative?: OutlineHeading
+}
+
 const pointer = ref<HTMLElement>()
-const eleArr = ref<HTMLElement[]>([])
-watchEffect(() => {
-  // eslint-disable-next-line no-restricted-syntax, no-labels, no-unused-expressions
-  $_ignored: [props.outline, props.editor]
+const eleArr = ref<OutlineHeadingElement[]>([])
+let rebuildTimer: ReturnType<typeof setTimeout> | null = null
+watch(
+  () => [props.outline, props.editor, props.editMode],
+  () => {
+    if (!props.editor)
+      return
 
-  if (!props.editor)
-    return
-
-  setTimeout(() => {
-    eleArr.value.length = 0
-
-    const editor = props.editor.$el // document.querySelector('#MilkEditor')!
-
-    ;[...editor.children[0].children[0].children]
-      .filter(ele => ele.tagName.match(/H[1-6]/))
-      .forEach((ele, ind) => {
-        eleArr.value.push(ele as HTMLElement)
-        eleArr.value[ind].relative = props.outline[ind]
-      })
-
-    // 获取url中的state
-    const { hash } = location
-
-    if (props.editMode && hash) {
-      const state = decodeURI(hash.substring(1))
-
-      for (let i = 0; i < eleArr.value.length; ++i) {
-        handleClick(i)
-
-        const ele = eleArr.value[i]
-
-        if (ele.textContent === state)
-          return
-      }
+    if (rebuildTimer) {
+      clearTimeout(rebuildTimer)
+      rebuildTimer = null
     }
 
-    fixPointerPos(0)
-    handleScroll()
-  }, 200)
-})
+    rebuildTimer = setTimeout(() => {
+      rebuildTimer = null
+
+      eleArr.value.length = 0
+
+      const editor = props.editor.$el // document.querySelector('#MilkEditor')!
+
+      ;[...editor.children[0].children[0].children]
+        .filter(ele => ele.tagName.match(/H[1-6]/))
+        .forEach((ele, ind) => {
+          eleArr.value.push(ele as OutlineHeadingElement)
+          eleArr.value[ind].relative = props.outline[ind]
+        })
+
+      // 获取url中的state
+      const { hash } = location
+
+      if (props.editMode && hash) {
+        const state = decodeURI(hash.substring(1))
+
+        for (let i = 0; i < eleArr.value.length; ++i) {
+          handleClick(i)
+
+          const ele = eleArr.value[i]
+
+          if (ele.textContent === state)
+            return
+        }
+      }
+
+      fixPointerPos(0)
+      handleScroll()
+    }, 200)
+  },
+  { immediate: true, deep: true },
+)
 
 const onScroll: any = inject('onScroll')
 onMounted(() => {
   onScroll(() => handleScroll())
+})
+
+onBeforeUnmount(() => {
+  if (!rebuildTimer) {
+    return
+  }
+  clearTimeout(rebuildTimer)
+  rebuildTimer = null
 })
 // onMounted(() => window.addEventListener('scroll', handleScroll))
 // onUnmounted(() => window.removeEventListener('scroll', handleScroll))
@@ -129,8 +155,16 @@ function fixPointerPos(index: number) {
   }, 200)
 }
 
-async function handleClick(index: number) {
-  const target = eleArr.value[index]
+async function handleClick(index: number | string) {
+  const normalizedIndex = typeof index === 'number' ? index : Number(index)
+  if (!Number.isFinite(normalizedIndex)) {
+    return
+  }
+
+  const target = eleArr.value[normalizedIndex]
+  if (!target) {
+    return
+  }
 
   target.scrollIntoView({
     behavior: 'smooth',

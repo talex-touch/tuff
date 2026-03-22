@@ -22,7 +22,7 @@ describe('pilot-admin-routing-config capabilities', () => {
 
   it('显式 capabilities 优先于 legacy 值', () => {
     const capabilities = resolvePilotModelCapabilities({
-      websearch: true,
+      'websearch': true,
       'audio.tts': false,
       'video.generate': false,
     }, {

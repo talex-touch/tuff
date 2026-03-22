@@ -67,11 +67,55 @@ export interface PilotTrace {
   payload: Record<string, unknown>
 }
 
+export interface PilotToolSource {
+  id?: string
+  url: string
+  title?: string
+  snippet?: string
+  domain?: string
+  sourceType?: string
+}
+
+export interface PilotToolCall {
+  callId: string
+  toolId: string
+  toolName: string
+  status: 'started' | 'approval_required' | 'approved' | 'rejected' | 'completed' | 'failed' | 'running'
+  riskLevel: 'low' | 'medium' | 'high' | 'critical'
+  inputPreview?: string
+  outputPreview?: string
+  durationMs?: number
+  ticketId?: string
+  sources: PilotToolSource[]
+  errorCode?: string
+  errorMessage?: string
+  updatedAt: string
+}
+
 export interface PilotComposerAttachment {
   id: string
   label: string
   kind?: string
   pending?: boolean
+}
+
+export interface PilotStageItem {
+  key: string
+  label: string
+  status: 'pending' | 'running' | 'done' | 'skipped'
+  detail?: string
+}
+
+export interface PilotRuntimeStatusSnapshot {
+  intentLabel: string
+  intentDetail: string
+  routeLabel: string
+  requestModelLabel: string
+  actualModelLabel: string
+  websearchLabel: string
+  memoryLabel: string
+  thinkingLabel: string
+  stages: PilotStageItem[]
 }
 
 export interface StreamEvent {
@@ -85,12 +129,27 @@ export interface StreamEvent {
   seq?: number
   delta?: string
   message?: string
+  name?: string
+  data?: string
   request_id?: string
   queue_pos?: number
   code?: string
   status_code?: number
   status?: string
   reason?: string
+  confidence?: number
+  providerModel?: string
+  modelId?: string
+  channelId?: string
+  routeComboId?: string
+  selectionSource?: string
+  selectionReason?: string
+  source?: string
+  sourceReason?: string
+  sourceCount?: number
+  enabled?: boolean
+  memoryEnabled?: boolean
+  memoryHistoryMessageCount?: number
   detail?: Record<string, unknown>
   envelope?: Record<string, unknown>
   payload?: Record<string, unknown>

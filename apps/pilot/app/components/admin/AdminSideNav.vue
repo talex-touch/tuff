@@ -56,6 +56,7 @@ const groups: AdminNavGroup[] = [
       { path: '/admin/system/route-combos', label: 'Route Combos', icon: 'i-carbon-flow-data' },
       { path: '/admin/system/routing-policy', label: 'Routing Policy', icon: 'i-carbon-settings-check' },
       { path: '/admin/system/routing-metrics', label: 'Routing Metrics', icon: 'i-carbon-chart-line' },
+      { path: '/admin/system/websearch-providers', label: 'Websearch Providers', icon: 'i-carbon-search' },
     ],
   },
 ]

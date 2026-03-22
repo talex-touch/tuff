@@ -117,11 +117,6 @@ const detailRows = computed(() => {
   }
 
   if (type === 'memory') {
-    const historyCount = Number(row.memoryHistoryMessageCount)
-    rows.push(
-      { label: 'Memory', value: row.memoryEnabled === true ? 'on' : 'off' },
-      { label: '历史条数', value: Number.isFinite(historyCount) ? String(historyCount) : '0' },
-    )
     return rows
   }
 
@@ -146,6 +141,22 @@ const detailRows = computed(() => {
 
 const thinkingText = computed(() => normalizeText(payload.value.content))
 const summaryText = computed(() => normalizeText(payload.value.summary))
+const manualExpanded = ref<boolean | null>(null)
+const defaultExpanded = computed(() => {
+  const status = normalizeText(payload.value.status).toLowerCase()
+  const cardType = normalizeText(payload.value.cardType).toLowerCase()
+  if (status === 'failed') {
+    return true
+  }
+  return cardType === 'thinking'
+})
+const expanded = computed(() => manualExpanded.value ?? defaultExpanded.value)
+const canToggleDetails = computed(() => {
+  return detailRows.value.length > 0 || (normalizeText(payload.value.cardType) === 'thinking' && thinkingText.value.length > 0)
+})
+function toggleExpanded() {
+  manualExpanded.value = !expanded.value
+}
 const seqText = computed(() => {
   const seq = Number(payload.value.seq)
   return Number.isFinite(seq) ? String(Math.floor(seq)) : '-'
@@ -163,6 +174,14 @@ const eventTypeText = computed(() => normalizeText(payload.value.eventType))
         <strong>{{ payload.title || cardTypeLabel }}</strong>
       </div>
       <div class="right">
+        <button
+          v-if="canToggleDetails"
+          type="button"
+          class="toggle"
+          @click="toggleExpanded"
+        >
+          {{ expanded ? '收起' : '详情' }}
+        </button>
         <span class="card-type">{{ cardTypeLabel }}</span>
         <span class="status">{{ statusText }}</span>
       </div>
@@ -172,16 +191,16 @@ const eventTypeText = computed(() => normalizeText(payload.value.eventType))
       {{ summaryText }}
     </p>
 
-    <dl v-if="detailRows.length > 0" class="details">
+    <dl v-if="expanded && detailRows.length > 0" class="details">
       <template v-for="(item, index) in detailRows" :key="`${item.label}-${index}`">
         <dt>{{ item.label }}</dt>
         <dd>{{ item.value }}</dd>
       </template>
     </dl>
 
-    <pre v-if="payload.cardType === 'thinking' && thinkingText" class="thinking">{{ thinkingText }}</pre>
+    <pre v-if="expanded && payload.cardType === 'thinking' && thinkingText" class="thinking">{{ thinkingText }}</pre>
 
-    <footer class="PilotRunEventCard-Footer">
+    <footer v-if="expanded" class="PilotRunEventCard-Footer">
       <span>seq: {{ seqText }}</span>
       <span v-if="turnIdText">turn: {{ turnIdText }}</span>
       <span v-if="sessionIdText">session: {{ sessionIdText }}</span>
@@ -221,6 +240,16 @@ const eventTypeText = computed(() => normalizeText(payload.value.eventType))
     gap: 8px;
     font-size: 12px;
   }
+}
+
+.toggle {
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--el-border-color) 70%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .card-type,

@@ -4,6 +4,18 @@ import type { IStorageChannel } from './base-storage'
 import { defineRawEvent } from '../../transport/event/builder'
 import { StorageEvents } from '../../transport/events'
 
+let hasWarnedLegacyStorageSubscriptionChannel = false
+
+function warnLegacyStorageSubscriptionChannelPath(): void {
+  if (hasWarnedLegacyStorageSubscriptionChannel) {
+    return
+  }
+  hasWarnedLegacyStorageSubscriptionChannel = true
+  console.warn(
+    '[StorageSubscription] Legacy storage channel path is active. Migrate to StorageEvents.app transport before v2.5.0.',
+  )
+}
+
 /**
  * Storage subscription callback type
  */
@@ -57,6 +69,7 @@ class StorageSubscriptionManager {
       }
 
       if (this.channel) {
+        warnLegacyStorageSubscriptionChannelPath()
         // Listen to storage:update events from main process
         this.channel.regChannel(StorageEvents.legacy.update.toEventName(), ({ data }) => {
           const { name, version } = data as { name: string, version?: number }
@@ -110,6 +123,7 @@ class StorageSubscriptionManager {
       }
     }
     else if (this.channel) {
+      warnLegacyStorageSubscriptionChannelPath()
       this.channel
         .send('storage:get', configName)
         .then((data) => {
@@ -191,9 +205,14 @@ class StorageSubscriptionManager {
     const timer = setTimeout(async () => {
       try {
         // Fetch latest data
-        const data = this.channel
-          ? await this.channel.send('storage:get', configName)
-          : await this.transport!.send(StorageEvents.app.get, { key: configName })
+        let data: unknown
+        if (this.channel) {
+          warnLegacyStorageSubscriptionChannelPath()
+          data = await this.channel.send('storage:get', configName)
+        }
+        else {
+          data = await this.transport!.send(StorageEvents.app.get, { key: configName })
+        }
 
         if (data === undefined || data === null) {
           this.pendingUpdates.delete(configName)

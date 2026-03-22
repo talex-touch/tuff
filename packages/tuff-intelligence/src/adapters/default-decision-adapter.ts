@@ -10,6 +10,83 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
 }
 
+function asText(value: unknown): string {
+  if (typeof value === 'string') {
+    return value
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  return ''
+}
+
+function extractThinkingText(value: unknown, depth = 0): string {
+  if (depth > 3 || value === null || value === undefined) {
+    return ''
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  if (Array.isArray(value)) {
+    const chunks = value
+      .map(item => extractThinkingText(item, depth + 1))
+      .filter(Boolean)
+    return chunks.join('\n').trim()
+  }
+  if (typeof value !== 'object') {
+    return ''
+  }
+
+  const row = asRecord(value)
+  const directCandidates = [
+    row.text,
+    row.content,
+    row.summary,
+    row.reasoning_text,
+    row.thinking_text,
+    row.output_text,
+  ]
+  for (const candidate of directCandidates) {
+    const text = asText(candidate).trim()
+    if (text) {
+      return text
+    }
+  }
+
+  const nestedCandidates = [
+    row.delta,
+    row.reasoning,
+    row.thinking,
+    row.analysis,
+    row.message,
+    row.payload,
+  ]
+  for (const candidate of nestedCandidates) {
+    const nested = extractThinkingText(candidate, depth + 1)
+    if (nested) {
+      return nested
+    }
+  }
+
+  return ''
+}
+
+function normalizeThinkingDone(row: Record<string, unknown>): boolean | undefined {
+  if (typeof row.thinkingDone === 'boolean') {
+    return row.thinkingDone
+  }
+  if (typeof row.reasoningDone === 'boolean') {
+    return row.reasoningDone
+  }
+  if (typeof row.thinking_done === 'boolean') {
+    return row.thinking_done
+  }
+  if (typeof row.reasoning_done === 'boolean') {
+    return row.reasoning_done
+  }
+  return undefined
+}
+
 export class DefaultDecisionAdapter implements DecisionAdapter {
   readonly id = 'default'
 
@@ -35,7 +112,18 @@ export class DefaultDecisionAdapter implements DecisionAdapter {
       props: asRecord(intent.props),
     }))
 
+    const thinkingText = extractThinkingText(
+      row.thinking
+      ?? row.reasoning
+      ?? row.analysis
+      ?? row.thinkingText
+      ?? row.reasoningText,
+    )
+    const thinkingDone = normalizeThinkingDone(row)
+
     return {
+      thinkingText: thinkingText || undefined,
+      thinkingDone,
       text: typeof row.text === 'string' ? row.text : undefined,
       capabilityCalls,
       viewIntents,

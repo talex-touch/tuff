@@ -1,17 +1,25 @@
+import type {
+  PilotCapabilityMeta,
+  PilotModelTemplateId,
+  PilotModelTemplatePreset,
+  PilotCapabilityId as SharedPilotCapabilityId,
+} from '~~/shared/pilot-capability-meta'
+import {
+  createPilotDefaultCapabilities,
+  getPilotModelTemplatePreset,
+  normalizeThinkingFlags,
+  PILOT_CAPABILITY_GROUP_LABELS,
+  PILOT_CAPABILITY_META,
+  resolvePilotCapabilities,
+  sanitizeBuiltinToolsByCapabilities,
+  PILOT_MODEL_TEMPLATE_PRESETS as SHARED_MODEL_TEMPLATE_PRESETS,
+} from '~~/shared/pilot-capability-meta'
 import { endHttp } from '~/composables/api/axios'
 
 export type PilotIconType = 'class' | 'url' | 'emoji' | 'file'
 export type PilotModelSource = 'system' | 'manual' | 'discovered'
 export type PilotBuiltinTool = 'write_todos' | 'read_file' | 'write_file' | 'edit_file' | 'ls' | 'websearch'
-export type PilotCapabilityId =
-  | 'websearch'
-  | 'file.analyze'
-  | 'image.generate'
-  | 'image.edit'
-  | 'audio.tts'
-  | 'audio.stt'
-  | 'audio.transcribe'
-  | 'video.generate'
+export type PilotCapabilityId = SharedPilotCapabilityId
 
 export type PilotModelCapabilitiesForm = Record<PilotCapabilityId, boolean>
 
@@ -120,8 +128,58 @@ export interface PilotRoutingMetricSummary {
   avgTotalDurationMs: number
 }
 
+export {
+  PILOT_CAPABILITY_GROUP_LABELS,
+  PILOT_CAPABILITY_META,
+}
+
+export type {
+  PilotCapabilityMeta,
+  PilotModelTemplateId,
+  PilotModelTemplatePreset,
+}
+
+export const PILOT_MODEL_TEMPLATE_PRESETS = [...SHARED_MODEL_TEMPLATE_PRESETS]
+
+export interface ChannelModelOption {
+  channelId: string
+  modelId: string
+  label: string
+  format: string
+  enabled: boolean
+}
+
+export interface ChannelOption {
+  id: string
+  name: string
+  enabled: boolean
+  priority: number
+}
+
+export interface ChannelModelOptionIndex {
+  channels: ChannelOption[]
+  enabledModelOptionsByChannel: Record<string, ChannelModelOption[]>
+  allModelOptionsByChannel: Record<string, ChannelModelOption[]>
+}
+
 interface PilotSettingsResponse {
   settings?: {
+    channels?: {
+      channels?: Array<{
+        id?: string
+        name?: string
+        enabled?: unknown
+        priority?: unknown
+        defaultModelId?: unknown
+        model?: unknown
+        models?: Array<{
+          id?: unknown
+          label?: unknown
+          format?: unknown
+          enabled?: unknown
+        }>
+      }>
+    }
     routing?: {
       modelCatalog?: Array<Partial<ModelGroupFormItem> & {
         icon?: {
@@ -172,6 +230,12 @@ export const BUILTIN_TOOL_OPTIONS: Array<{ value: PilotBuiltinTool, label: strin
 let modelSequence = 0
 let routeComboSequence = 0
 let routeSequence = 0
+
+const EMPTY_CHANNEL_MODEL_OPTION_INDEX: ChannelModelOptionIndex = {
+  channels: [],
+  enabledModelOptionsByChannel: {},
+  allModelOptionsByChannel: {},
+}
 
 function nowId(): string {
   return Date.now().toString(36)
@@ -237,16 +301,7 @@ function normalizeBuiltinTools(value: unknown): PilotBuiltinTool[] {
 }
 
 function createDefaultCapabilitiesForm(): PilotModelCapabilitiesForm {
-  return {
-    websearch: true,
-    'file.analyze': true,
-    'image.generate': true,
-    'image.edit': true,
-    'audio.tts': true,
-    'audio.stt': true,
-    'audio.transcribe': true,
-    'video.generate': true,
-  }
+  return createPilotDefaultCapabilities(true)
 }
 
 function normalizeCapabilitiesForm(
@@ -258,29 +313,12 @@ function normalizeCapabilitiesForm(
     allowImageGeneration?: unknown
   },
 ): PilotModelCapabilitiesForm {
-  const row = rawCapabilities && typeof rawCapabilities === 'object' && !Array.isArray(rawCapabilities)
-    ? rawCapabilities as Record<string, unknown>
-    : {}
-  const defaults = createDefaultCapabilitiesForm()
-  const allowWebsearch = toBoolean(legacy.allowWebsearch, toBoolean(row.websearch, defaults.websearch))
-  const allowFileAnalysis = toBoolean(
-    legacy.allowFileAnalysis,
-    toBoolean(legacy.allowImageAnalysis, toBoolean(row['file.analyze'], defaults['file.analyze'])),
-  )
-  const allowImageGeneration = toBoolean(
-    legacy.allowImageGeneration,
-    toBoolean(row['image.generate'], defaults['image.generate']),
-  )
-  return {
-    websearch: allowWebsearch,
-    'file.analyze': allowFileAnalysis,
-    'image.generate': allowImageGeneration,
-    'image.edit': toBoolean(row['image.edit'], defaults['image.edit']),
-    'audio.tts': toBoolean(row['audio.tts'], defaults['audio.tts']),
-    'audio.stt': toBoolean(row['audio.stt'], defaults['audio.stt']),
-    'audio.transcribe': toBoolean(row['audio.transcribe'], defaults['audio.transcribe']),
-    'video.generate': toBoolean(row['video.generate'], defaults['video.generate']),
-  }
+  return resolvePilotCapabilities(rawCapabilities, {
+    allowWebsearch: legacy.allowWebsearch,
+    allowFileAnalysis: legacy.allowFileAnalysis,
+    allowImageAnalysis: legacy.allowImageAnalysis,
+    allowImageGeneration: legacy.allowImageGeneration,
+  })
 }
 
 function createDefaultModelId(): string {
@@ -324,17 +362,35 @@ export function createEmptyModelGroup(): ModelGroupFormItem {
     qualityScore: 50,
     speedScore: 50,
     costScore: 50,
-    thinkingSupported: true,
-    thinkingDefaultEnabled: true,
+    ...normalizeThinkingFlags(true, true),
     capabilities,
     allowWebsearch: capabilities.websearch,
     allowImageAnalysis: capabilities['file.analyze'],
     allowImageGeneration: capabilities['image.generate'],
     allowFileAnalysis: capabilities['file.analyze'],
-    builtinTools: ['write_todos'],
+    builtinTools: sanitizeBuiltinToolsByCapabilities(['write_todos'], capabilities),
     defaultRouteComboId: '',
     bindings: [],
   }
+}
+
+export function applyModelGroupTemplate(target: ModelGroupFormItem, templateId: PilotModelTemplateId): ModelGroupFormItem {
+  const preset = getPilotModelTemplatePreset(templateId)
+  if (!preset) {
+    return target
+  }
+  target.capabilities = {
+    ...preset.capabilities,
+  }
+  const thinking = normalizeThinkingFlags(preset.thinkingSupported, preset.thinkingDefaultEnabled)
+  target.thinkingSupported = thinking.thinkingSupported
+  target.thinkingDefaultEnabled = thinking.thinkingDefaultEnabled
+  target.allowWebsearch = target.capabilities.websearch
+  target.allowImageAnalysis = target.capabilities['file.analyze']
+  target.allowImageGeneration = target.capabilities['image.generate']
+  target.allowFileAnalysis = target.capabilities['file.analyze']
+  target.builtinTools = sanitizeBuiltinToolsByCapabilities(normalizeBuiltinTools(target.builtinTools), target.capabilities)
+  return target
 }
 
 export function createEmptyRouteComboRoute(): RouteComboRouteFormItem {
@@ -386,6 +442,11 @@ export function normalizeModelGroup(raw: Partial<ModelGroupFormItem> & {
   const tags = Array.isArray(raw.tags)
     ? raw.tags.map(item => normalizeText(item)).filter(Boolean).join(',')
     : normalizeText(raw.tags)
+  const thinking = normalizeThinkingFlags(
+    toBoolean(raw.thinkingSupported, true),
+    toBoolean(raw.thinkingDefaultEnabled, true),
+  )
+  const builtinTools = sanitizeBuiltinToolsByCapabilities(normalizeBuiltinTools(raw.builtinTools), capabilities)
 
   return {
     id,
@@ -400,15 +461,15 @@ export function normalizeModelGroup(raw: Partial<ModelGroupFormItem> & {
     qualityScore: toNumber(raw.qualityScore, 50, 0, 100),
     speedScore: toNumber(raw.speedScore, 50, 0, 100),
     costScore: toNumber(raw.costScore, 50, 0, 100),
-    thinkingSupported: toBoolean(raw.thinkingSupported, true),
-    thinkingDefaultEnabled: toBoolean(raw.thinkingDefaultEnabled, true),
+    thinkingSupported: thinking.thinkingSupported,
+    thinkingDefaultEnabled: thinking.thinkingDefaultEnabled,
     capabilities,
     allowWebsearch: capabilities.websearch,
     // 兼容历史字段：统一“分析文件”能力为唯一开关。
     allowImageAnalysis: allowFileAnalysis,
     allowImageGeneration: capabilities['image.generate'],
     allowFileAnalysis,
-    builtinTools: normalizeBuiltinTools(raw.builtinTools),
+    builtinTools,
     defaultRouteComboId: normalizeText(raw.defaultRouteComboId),
     bindings: Array.isArray(raw.bindings)
       ? raw.bindings.map(item => ({
@@ -457,49 +518,135 @@ function normalizeModelTagList(value: string): string[] {
     .filter(Boolean)
 }
 
+function sortChannelModelOptions(list: ChannelModelOption[]): ChannelModelOption[] {
+  return [...list].sort((a, b) => a.modelId.localeCompare(b.modelId))
+}
+
+function parseChannelModelOptionIndex(payload: PilotSettingsResponse): ChannelModelOptionIndex {
+  const source = payload?.settings?.channels?.channels
+  if (!Array.isArray(source) || source.length <= 0) {
+    return {
+      channels: [],
+      enabledModelOptionsByChannel: {},
+      allModelOptionsByChannel: {},
+    }
+  }
+
+  const channels: ChannelOption[] = []
+  const enabledModelOptionsByChannel: Record<string, ChannelModelOption[]> = {}
+  const allModelOptionsByChannel: Record<string, ChannelModelOption[]> = {}
+
+  for (const rawChannel of source) {
+    const channelId = normalizeText(rawChannel?.id)
+    if (!channelId) {
+      continue
+    }
+    const channelEnabled = toBoolean(rawChannel?.enabled, true)
+    const channelPriority = toNumber(rawChannel?.priority, 100, 1, 9999)
+    const channelName = normalizeText(rawChannel?.name) || channelId
+    channels.push({
+      id: channelId,
+      name: channelName,
+      enabled: channelEnabled,
+      priority: channelPriority,
+    })
+
+    const modelRows = Array.isArray(rawChannel?.models)
+      ? rawChannel.models
+      : []
+    const allMap = new Map<string, ChannelModelOption>()
+    for (const rawModel of modelRows) {
+      const modelId = normalizeText(rawModel?.id)
+      if (!modelId) {
+        continue
+      }
+      const enabled = toBoolean(rawModel?.enabled, true)
+      allMap.set(modelId, {
+        channelId,
+        modelId,
+        label: normalizeText(rawModel?.label) || modelId,
+        format: normalizeText(rawModel?.format),
+        enabled,
+      })
+    }
+
+    if (allMap.size <= 0) {
+      const fallbackModelId = normalizeText(rawChannel?.defaultModelId || rawChannel?.model)
+      if (fallbackModelId) {
+        allMap.set(fallbackModelId, {
+          channelId,
+          modelId: fallbackModelId,
+          label: fallbackModelId,
+          format: '',
+          enabled: true,
+        })
+      }
+    }
+
+    const allOptions = sortChannelModelOptions(Array.from(allMap.values()))
+    allModelOptionsByChannel[channelId] = allOptions
+    enabledModelOptionsByChannel[channelId] = allOptions.filter(item => item.enabled)
+  }
+
+  channels.sort((a, b) => {
+    if (a.priority !== b.priority) {
+      return a.priority - b.priority
+    }
+    return a.id.localeCompare(b.id)
+  })
+
+  return {
+    channels,
+    enabledModelOptionsByChannel,
+    allModelOptionsByChannel,
+  }
+}
+
 export function buildModelGroupPayload(list: ModelGroupFormItem[]) {
-  return list.map(item => ({
-    capabilities: {
-      websearch: item.capabilities.websearch !== false,
-      'file.analyze': item.capabilities['file.analyze'] !== false,
-      'image.generate': item.capabilities['image.generate'] !== false,
-      'image.edit': item.capabilities['image.edit'] !== false,
-      'audio.tts': item.capabilities['audio.tts'] !== false,
-      'audio.stt': item.capabilities['audio.stt'] !== false,
-      'audio.transcribe': item.capabilities['audio.transcribe'] !== false,
-      'video.generate': item.capabilities['video.generate'] !== false,
-    },
-    id: normalizeText(item.id),
-    name: normalizeText(item.name),
-    description: normalizeText(item.description),
-    enabled: item.enabled,
-    visible: item.visible,
-    source: item.source,
-    icon: {
-      type: item.iconType,
-      value: normalizeText(item.iconValue),
-    },
-    tags: normalizeModelTagList(item.tags),
-    qualityScore: toNumber(item.qualityScore, 50, 0, 100),
-    speedScore: toNumber(item.speedScore, 50, 0, 100),
-    costScore: toNumber(item.costScore, 50, 0, 100),
-    thinkingSupported: item.thinkingSupported,
-    thinkingDefaultEnabled: item.thinkingDefaultEnabled,
-    allowWebsearch: item.capabilities.websearch !== false,
-    // 统一写回双字段，保证旧读取路径不会分叉。
-    allowImageAnalysis: item.capabilities['file.analyze'] !== false,
-    allowImageGeneration: item.capabilities['image.generate'] !== false,
-    allowFileAnalysis: item.capabilities['file.analyze'] !== false,
-    builtinTools: normalizeBuiltinTools(item.builtinTools),
-    defaultRouteComboId: normalizeText(item.defaultRouteComboId) || undefined,
-    bindings: item.bindings.map(binding => ({
-      channelId: normalizeText(binding.channelId),
-      providerModel: normalizeText(binding.providerModel),
-      enabled: binding.enabled,
-      priority: toNumber(binding.priority, 100, 1, 9999),
-      weight: toNumber(binding.weight, 100, 1, 1000),
-    })),
-  }))
+  return list.map((item) => {
+    const capabilities = resolvePilotCapabilities(item.capabilities, {
+      allowWebsearch: item.allowWebsearch,
+      allowFileAnalysis: item.allowFileAnalysis,
+      allowImageAnalysis: item.allowImageAnalysis,
+      allowImageGeneration: item.allowImageGeneration,
+    })
+    const thinking = normalizeThinkingFlags(item.thinkingSupported !== false, item.thinkingDefaultEnabled !== false)
+    const builtinTools = sanitizeBuiltinToolsByCapabilities(normalizeBuiltinTools(item.builtinTools), capabilities)
+
+    return {
+      capabilities,
+      id: normalizeText(item.id),
+      name: normalizeText(item.name),
+      description: normalizeText(item.description),
+      enabled: item.enabled,
+      visible: item.visible,
+      source: item.source,
+      icon: {
+        type: item.iconType,
+        value: normalizeText(item.iconValue),
+      },
+      tags: normalizeModelTagList(item.tags),
+      qualityScore: toNumber(item.qualityScore, 50, 0, 100),
+      speedScore: toNumber(item.speedScore, 50, 0, 100),
+      costScore: toNumber(item.costScore, 50, 0, 100),
+      thinkingSupported: thinking.thinkingSupported,
+      thinkingDefaultEnabled: thinking.thinkingDefaultEnabled,
+      allowWebsearch: capabilities.websearch !== false,
+      // 统一写回双字段，保证旧读取路径不会分叉。
+      allowImageAnalysis: capabilities['file.analyze'] !== false,
+      allowImageGeneration: capabilities['image.generate'] !== false,
+      allowFileAnalysis: capabilities['file.analyze'] !== false,
+      builtinTools,
+      defaultRouteComboId: normalizeText(item.defaultRouteComboId) || undefined,
+      bindings: item.bindings.map(binding => ({
+        channelId: normalizeText(binding.channelId),
+        providerModel: normalizeText(binding.providerModel),
+        enabled: binding.enabled,
+        priority: toNumber(binding.priority, 100, 1, 9999),
+        weight: toNumber(binding.weight, 100, 1, 1000),
+      })),
+    }
+  })
 }
 
 export function buildRouteComboPayload(list: RouteComboFormItem[]) {
@@ -579,6 +726,20 @@ function normalizeRoutingMetric(raw: Partial<PilotRoutingMetricRow>): PilotRouti
 export async function fetchPilotRoutingSettings() {
   const res: PilotSettingsResponse = await endHttp.get('admin/settings')
   return parseRoutingSettings(res)
+}
+
+export function createEmptyChannelModelOptionIndex(): ChannelModelOptionIndex {
+  return {
+    ...EMPTY_CHANNEL_MODEL_OPTION_INDEX,
+    channels: [],
+    enabledModelOptionsByChannel: {},
+    allModelOptionsByChannel: {},
+  }
+}
+
+export async function fetchPilotChannelModelOptionIndex(): Promise<ChannelModelOptionIndex> {
+  const res: PilotSettingsResponse = await endHttp.get('admin/settings')
+  return parseChannelModelOptionIndex(res)
 }
 
 export async function savePilotRoutingSettings(patch: {

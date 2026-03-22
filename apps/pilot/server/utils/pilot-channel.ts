@@ -3,7 +3,7 @@ import process from 'node:process'
 import { createError } from 'h3'
 import { getPilotAdminChannelCatalog } from './pilot-admin-channel-config'
 
-export type PilotChannelAdapter = 'legacy' | 'openai'
+export type PilotChannelAdapter = 'openai'
 export type PilotChannelTransport = 'responses' | 'chat.completions'
 export type PilotBuiltinTool = 'write_todos' | 'read_file' | 'write_file' | 'edit_file' | 'ls' | 'websearch'
 
@@ -11,6 +11,7 @@ export interface PilotChannelModelConfig {
   id: string
   label?: string
   format?: string
+  priority?: number
   enabled?: boolean
   thinkingSupported?: boolean
   thinkingDefaultEnabled?: boolean

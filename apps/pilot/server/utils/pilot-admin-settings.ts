@@ -1,5 +1,10 @@
 import type { H3Event } from 'h3'
 import type {
+  PilotBuiltinSourceRule,
+  PilotWebsearchDatasourceViewConfig,
+  UpdatePilotWebsearchDatasourceInput,
+} from './pilot-admin-datasource-config'
+import type {
   PilotLoadBalancePolicy,
   PilotMemoryPolicy,
   PilotModelCatalogItem,
@@ -11,6 +16,11 @@ import {
   getPilotAdminChannelCatalog,
   updatePilotAdminChannelCatalog,
 } from './pilot-admin-channel-config'
+import {
+  getPilotWebsearchDatasourceConfig,
+  toPilotWebsearchDatasourceView,
+  updatePilotWebsearchDatasourceConfig,
+} from './pilot-admin-datasource-config'
 import {
   getPilotAdminRoutingConfig,
   updatePilotAdminRoutingConfig,
@@ -33,6 +43,7 @@ export interface PilotAdminSettingsView {
         id: string
         label?: string
         format?: string
+        priority?: number
         enabled?: boolean
         thinkingSupported?: boolean
         thinkingDefaultEnabled?: boolean
@@ -72,6 +83,9 @@ export interface PilotAdminSettingsView {
     lbPolicy: PilotLoadBalancePolicy
     memoryPolicy: PilotMemoryPolicy
   }
+  datasource: {
+    websearch: PilotWebsearchDatasourceViewConfig
+  }
 }
 
 export interface PilotAdminSettingsPatch {
@@ -94,6 +108,7 @@ export interface PilotAdminSettingsPatch {
         id: string
         label?: string
         format?: string
+        priority?: number
         enabled?: boolean
         thinkingSupported?: boolean
         thinkingDefaultEnabled?: boolean
@@ -123,6 +138,11 @@ export interface PilotAdminSettingsPatch {
     lbPolicy?: Partial<PilotLoadBalancePolicy>
     memoryPolicy?: Partial<PilotMemoryPolicy>
   }
+  datasource?: {
+    websearch?: Partial<UpdatePilotWebsearchDatasourceInput> & {
+      builtinSources?: PilotBuiltinSourceRule[]
+    }
+  }
 }
 
 function maskSecret(value: string): string {
@@ -145,10 +165,11 @@ function normalizeProvider(value: string): 'auto' | 'memory' | 's3' {
 }
 
 async function buildPilotAdminSettingsView(event: H3Event): Promise<PilotAdminSettingsView> {
-  const [catalog, storage, routing] = await Promise.all([
+  const [catalog, storage, routing, websearchDatasource] = await Promise.all([
     getPilotAdminChannelCatalog(event),
     getPilotAdminStorageSettings(event),
     getPilotAdminRoutingConfig(event),
+    getPilotWebsearchDatasourceConfig(event),
   ])
 
   return {
@@ -194,6 +215,9 @@ async function buildPilotAdminSettingsView(event: H3Event): Promise<PilotAdminSe
       routingPolicy: routing.routingPolicy,
       lbPolicy: routing.lbPolicy,
       memoryPolicy: routing.memoryPolicy,
+    },
+    datasource: {
+      websearch: toPilotWebsearchDatasourceView(websearchDatasource),
     },
   }
 }
@@ -258,6 +282,33 @@ export async function updatePilotAdminSettings(
       routingPolicy: routingPatch.routingPolicy,
       lbPolicy: routingPatch.lbPolicy,
       memoryPolicy: routingPatch.memoryPolicy,
+    })
+  }
+
+  const datasourcePatch = patch.datasource
+  if (datasourcePatch?.websearch) {
+    const websearchPatch = datasourcePatch.websearch
+    await updatePilotWebsearchDatasourceConfig(event, {
+      ...websearchPatch,
+      providers: Array.isArray(websearchPatch.providers)
+        ? websearchPatch.providers
+        : undefined,
+      aggregation: websearchPatch.aggregation,
+      crawl: websearchPatch.crawl,
+      allowlistDomains: Array.isArray(websearchPatch.allowlistDomains)
+        ? websearchPatch.allowlistDomains
+        : undefined,
+      ttlMinutes: websearchPatch.ttlMinutes,
+      builtinSources: Array.isArray(websearchPatch.builtinSources)
+        ? websearchPatch.builtinSources
+        : undefined,
+      gatewayBaseUrl: websearchPatch.gatewayBaseUrl,
+      apiKeyRef: websearchPatch.apiKeyRef,
+      timeoutMs: websearchPatch.timeoutMs,
+      maxResults: websearchPatch.maxResults,
+      crawlEnabled: typeof websearchPatch.crawlEnabled === 'boolean'
+        ? websearchPatch.crawlEnabled
+        : undefined,
     })
   }
 

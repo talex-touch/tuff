@@ -1,42 +1,39 @@
 <script setup lang="ts">
-import { Milkdown, useEditor } from '@milkdown/vue'
-import { Editor, defaultValueCtx, editorViewOptionsCtx, rootCtx } from '@milkdown/kit/core'
-import { nord } from '@milkdown/theme-nord'
-import { blockquoteSchema, codeBlockSchema, commonmark } from '@milkdown/kit/preset/commonmark'
-import { gfm } from '@milkdown/kit/preset/gfm'
-import { listener } from '@milkdown/kit/plugin/listener'
-import { history } from '@milkdown/kit/plugin/history'
+import { defaultValueCtx, Editor, editorViewOptionsCtx, rootCtx } from '@milkdown/kit/core'
 import { clipboard } from '@milkdown/kit/plugin/clipboard'
+import { history } from '@milkdown/kit/plugin/history'
+import { listener } from '@milkdown/kit/plugin/listener'
+import { slashFactory, SlashProvider } from '@milkdown/kit/plugin/slash'
+import { tooltipFactory, TooltipProvider } from '@milkdown/kit/plugin/tooltip'
 import { trailing } from '@milkdown/kit/plugin/trailing'
-import { TooltipProvider, tooltipFactory } from '@milkdown/kit/plugin/tooltip'
-import { SlashProvider, slashFactory } from '@milkdown/kit/plugin/slash'
+import { commonmark } from '@milkdown/kit/preset/commonmark'
+import { gfm } from '@milkdown/kit/preset/gfm'
+import { replaceAll } from '@milkdown/kit/utils'
 import { prism, prismConfig } from '@milkdown/plugin-prism'
-import { $view, replaceAll } from '@milkdown/kit/utils'
+import { nord } from '@milkdown/theme-nord'
+import { Milkdown, useEditor } from '@milkdown/vue'
+import c from 'refractor/c'
+import cpp from 'refractor/cpp'
+import css from 'refractor/css'
+import java from 'refractor/java'
+
+import javascript from 'refractor/javascript'
+import jsx from 'refractor/jsx'
+import markdown from 'refractor/markdown'
+import python from 'refractor/python'
+import tsx from 'refractor/tsx'
+import typescript from 'refractor/typescript'
 import '@milkdown/theme-nord/style.css'
 import 'katex/dist/katex.min.css'
 import 'prism-themes/themes/prism-nord.css'
 import './style.scss'
-
-import markdown from 'refractor/lang/markdown'
-import css from 'refractor/lang/css'
-import javascript from 'refractor/lang/javascript'
-import typescript from 'refractor/lang/typescript'
-import jsx from 'refractor/lang/jsx'
-import tsx from 'refractor/lang/tsx'
-import cpp from 'refractor/lang/cpp'
-import c from 'refractor/lang/c'
-import python from 'refractor/lang/python'
-import java from 'refractor/lang/java'
-import { useNodeViewFactory } from '@prosemirror-adapter/vue'
-import EditorCodeBlock from '~/components/article/components/EditorCodeBlock.vue'
-import EditorBlockQuote from '~/components/article/components/EditorBlockQuote.vue'
 
 const props = defineProps<{
   content: string
   readonly: boolean
 }>()
 
-function useSlashPluginView(view: any) {
+function useSlashPluginView(_view: any) {
   const contentDom = document.createElement('div')
 
   const slashProvider = new SlashProvider({
@@ -54,7 +51,7 @@ function useSlashPluginView(view: any) {
   }
 }
 
-function tooltipPluginView(view: any) {
+function tooltipPluginView(_view: any) {
   const content = document.createElement('div')
 
   const provider = new TooltipProvider({
@@ -71,8 +68,6 @@ function tooltipPluginView(view: any) {
     },
   }
 }
-
-const nodeViewFactory = useNodeViewFactory()
 
 const slash = slashFactory('my-slash')
 const tooltip = tooltipFactory('my-tooltip')
@@ -121,12 +116,6 @@ const editor = useEditor((root) => {
     .use(prism)
     .use(trailing)
     .use(listener)
-    .use(
-      $view(codeBlockSchema.node, () => nodeViewFactory({ component: EditorCodeBlock })),
-    )
-    .use(
-      $view(blockquoteSchema.node, () => nodeViewFactory({ component: EditorBlockQuote })),
-    )
 })
 
 function applyRenderContent(content: string) {

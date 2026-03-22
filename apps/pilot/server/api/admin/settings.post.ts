@@ -9,6 +9,7 @@ export default defineEventHandler(async (event) => {
     channels: body?.channels,
     storage: body?.storage,
     routing: body?.routing,
+    datasource: body?.datasource,
   })
   return {
     ok: true,

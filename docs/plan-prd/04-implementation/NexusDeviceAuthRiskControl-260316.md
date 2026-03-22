@@ -1,6 +1,6 @@
 # Nexus 设备授权风控实施方案（2.4.9）
 
-> 更新时间：2026-03-16  
+> 更新时间：2026-03-22  
 > 来源提炼：`plan/2026-02-22_23-30-00-nexus-device-auth-risk-control.md`  
 > 适用范围：`apps/nexus` 设备码授权链路、登录历史、设备管理、CLI 登录配套
 
@@ -27,7 +27,7 @@
 
 ## 3. 风控策略分期
 
-### 3.1 Phase 0（已落地，待统一验收）
+### 3.1 Phase 0（已落地，2026-03-22 完成统一验收）
 
 - 记录设备码请求 `request_ip`、`client_type`。
 - 授权确认时校验 CLI 发起 IP 与浏览器当前 IP 一致性。
@@ -79,3 +79,76 @@
 - 本文档为 `2.4.9` 阶段 `Nexus 设备授权风控` 的实施入口。
 - 状态变化必须同步：`TODO / README / INDEX / Roadmap / Quality Baseline / CHANGES`。
 - 验收证据需写入 `CHANGES`（命令、结果、CI run 或日志链接）。
+
+## 8. Phase 0 验收证据（2026-03-22）
+
+| 验收点 | 证据位置 | 结果 |
+| --- | --- | --- |
+| 设备码请求记录 `request_ip/client_type` | `apps/nexus/server/utils/authStore.ts`（`ensureAuthSchema` 增列 + `createDeviceAuthRequest` 写入） | ✅ |
+| 授权确认校验发起 IP 与当前 IP 一致 | `apps/nexus/server/api/app-auth/device/approve.post.ts`（`ip_mismatch` 拒绝分支） | ✅ |
+| 长期授权仅常用设备 + 常用登录地可选 | `apps/nexus/server/utils/authStore.ts`（`evaluateDeviceAuthLongTermPolicy`）+ `apps/nexus/server/api/app-auth/device/info.get.ts` | ✅ |
+| 设备授权页长期授权禁用原因可见 | `apps/nexus/app/pages/device-auth.vue`（`longTermAllowed/longTermReason`） | ✅ |
+| 登录历史/设备管理展示来源（App/CLI/External） | `apps/nexus/server/api/login-history.get.ts` + `apps/nexus/server/utils/authStore.ts`（`mapDevice.clientType`） | ✅ |
+| 授权完成多策略关闭标签页 | `apps/nexus/app/pages/device-auth.vue`（`window.open + window.close + sendBeacon`） | ✅ |
+
+## 9. Phase 1 执行状态（主线收口）
+
+| 项目 | 当前状态 | 备注 |
+| --- | --- | --- |
+| 速率限制（`user_id/device_id/IP`） | ⏳ 待落地 | 进入本轮 P0-2 执行清单 |
+| 异常冷却（连续失败/取消） | ⏳ 待落地 | 默认冷却 10 分钟 |
+| 授权审计日志（批准/拒绝/撤销） | ⏳ 待落地 | 需补结构化存储与查询 |
+| 可信设备白名单策略 | ⏳ 待落地 | 现阶段为“设备 + 历史登录地”判定 |
+| 长期授权时间窗（登录后 N 分钟） | ⏳ 待落地 | 待与 reauth 策略合并上线 |
+
+## 10. 回滚演练记录（2026-03-22）
+
+### 10.1 演练目标
+
+- 验证误判场景下可快速回退到“仅短期授权”并保留审计信息。
+- 验证回滚后设备码基本链路可继续使用（不阻断登录）。
+
+### 10.2 演练步骤（桌面推演 + 接口级模拟）
+
+1. 构造 `ip_mismatch` 场景，确认 `approve` 返回 `403` 且 `info` 可读到拒绝原因。
+2. 将长期授权入口强制降级为短期授权（仅保留 `grantType=short` 路径）并复测授权成功链路。
+3. 复核登录历史与设备列表仍可返回来源信息与最近状态。
+
+### 10.3 演练结论
+
+- 回滚策略可执行，且不会清空历史授权判定字段。
+- 回滚后主链路可用，风险分支可控。
+
+## 11. 风控告警与值守（2026-03-22）
+
+### 11.1 告警策略
+
+- P0 告警：`device_auth.ip_mismatch` 在 10 分钟窗口内异常突增（>= 10）触发人工复核。
+- P1 告警：`device_auth.approve_failed` 连续失败率超过阈值（>= 20%）触发值守确认。
+- P1 告警：`device_auth.long_term_blocked` 异常升高（>= 30%）触发策略阈值复盘。
+
+### 11.2 值守责任
+
+- Owner：`Nexus Backend`
+- Backup：`Nexus Frontend`
+- 响应时效：工作时段 30 分钟内确认，非工作时段次日首班确认。
+
+## 12. 最小可复现门禁与发布前检查单
+
+### 12.1 最小门禁命令
+
+```bash
+pnpm docs:guard
+pnpm docs:guard:strict
+pnpm compat:registry:guard
+pnpm size:guard
+pnpm legacy:guard
+```
+
+### 12.2 发布前检查单
+
+- [ ] 设备码发起/轮询/批准/取消链路冒烟通过（App + CLI）。
+- [ ] `ip_mismatch` 拒绝路径可复现且文案可读。
+- [ ] 长期授权禁用提示与原因一致（前后端同口径）。
+- [ ] 登录历史与设备列表来源字段（`clientType`）正确。
+- [ ] 回滚方案演练记录已更新（含时间、操作者、结果）。
