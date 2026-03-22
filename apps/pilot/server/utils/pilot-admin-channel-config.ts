@@ -61,7 +61,7 @@ export interface UpdatePilotAdminChannelCatalogInput {
 }
 
 function normalizeText(value: unknown): string {
-  return String(value || '').trim()
+  return String(value ?? '').trim()
 }
 
 function normalizeAdapter(_value: unknown): PilotChannelAdapter {

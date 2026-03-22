@@ -20,7 +20,6 @@ export interface StartupInfo {
   isRelease: boolean
   platform: string
   arch: string
-  platformWarning?: string
   t: {
     _s: number
     s: number

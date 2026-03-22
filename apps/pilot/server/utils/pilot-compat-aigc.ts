@@ -1,11 +1,11 @@
 import type { H3Event } from 'h3'
 import {
-  ensurePilotCompatSeed,
-  getPilotCompatEntity,
-  listPilotCompatEntities,
-  listPilotCompatEntitiesAll,
-  upsertPilotCompatEntity,
-} from './pilot-compat-store'
+  ensurePilotEntitySeed,
+  getPilotEntity,
+  listPilotEntities,
+  listPilotEntitiesAll,
+  upsertPilotEntity,
+} from './pilot-entity-store'
 import { toBoundedPositiveInt } from './quota-api'
 
 const CHAT_LOG_DOMAIN = 'aigc.chat_logs'
@@ -31,7 +31,7 @@ function normalizeUser(uid: string) {
 
 export async function ensureAigcCompatSeed(event: H3Event): Promise<void> {
   const createdAt = nowIso()
-  await ensurePilotCompatSeed(event, TAG_DOMAIN, [
+  await ensurePilotEntitySeed(event, TAG_DOMAIN, [
     {
       id: 'tag_productivity',
       name: '生产力',
@@ -55,7 +55,7 @@ export async function ensureAigcCompatSeed(event: H3Event): Promise<void> {
       updatedAt: createdAt,
     },
   ])
-  await ensurePilotCompatSeed(event, PROMPT_DOMAIN, [
+  await ensurePilotEntitySeed(event, PROMPT_DOMAIN, [
     {
       id: 'prompt_seed_1',
       avatar: '',
@@ -76,7 +76,7 @@ export async function ensureAigcCompatSeed(event: H3Event): Promise<void> {
       updatedAt: createdAt,
     },
   ])
-  await ensurePilotCompatSeed(event, CHAT_LOG_DOMAIN, [
+  await ensurePilotEntitySeed(event, CHAT_LOG_DOMAIN, [
     {
       id: 'chat_log_seed_1',
       message_type: 1,
@@ -103,7 +103,7 @@ export async function listAigcChatLogs(
   query: Record<string, unknown>,
 ) {
   await ensureAigcCompatSeed(event)
-  return await listPilotCompatEntities(event, CHAT_LOG_DOMAIN, {
+  return await listPilotEntities(event, CHAT_LOG_DOMAIN, {
     query,
     defaultPageSize: 20,
   })
@@ -111,7 +111,7 @@ export async function listAigcChatLogs(
 
 export async function getAigcChatLogStatistics(event: H3Event): Promise<Array<Record<string, string>>> {
   await ensureAigcCompatSeed(event)
-  const list = await listPilotCompatEntitiesAll<Record<string, any>>(event, CHAT_LOG_DOMAIN)
+  const list = await listPilotEntitiesAll<Record<string, any>>(event, CHAT_LOG_DOMAIN)
   const grouped = new Map<string, {
     log_model: string
     log_message_type: string
@@ -160,7 +160,7 @@ export async function getAigcConsumptionStatistics(event: H3Event): Promise<{
   results: Array<Record<string, string>>
 }> {
   await ensureAigcCompatSeed(event)
-  const list = await listPilotCompatEntitiesAll<Record<string, any>>(event, CHAT_LOG_DOMAIN)
+  const list = await listPilotEntitiesAll<Record<string, any>>(event, CHAT_LOG_DOMAIN)
   const grouped = new Map<string, Map<string, {
     date: string
     total_prompt_tokens: number
@@ -224,7 +224,7 @@ export async function getAigcConsumptionStatistics(event: H3Event): Promise<{
 
 export async function listPromptPage(event: H3Event, query: Record<string, unknown>) {
   await ensureAigcCompatSeed(event)
-  return await listPilotCompatEntities(event, PROMPT_DOMAIN, {
+  return await listPilotEntities(event, PROMPT_DOMAIN, {
     query,
     defaultPageSize: 20,
   })
@@ -232,13 +232,13 @@ export async function listPromptPage(event: H3Event, query: Record<string, unkno
 
 export async function getPromptById(event: H3Event, id: string): Promise<Record<string, any> | null> {
   await ensureAigcCompatSeed(event)
-  return await getPilotCompatEntity(event, PROMPT_DOMAIN, id)
+  return await getPilotEntity(event, PROMPT_DOMAIN, id)
 }
 
 export async function createPrompt(event: H3Event, body: Record<string, any>, creatorId: string): Promise<Record<string, any>> {
   await ensureAigcCompatSeed(event)
   const now = nowIso()
-  return await upsertPilotCompatEntity(event, {
+  return await upsertPilotEntity(event, {
     domain: PROMPT_DOMAIN,
     id: normalizeText(body.id),
     payload: {
@@ -268,7 +268,7 @@ export async function updatePrompt(
   if (!existing) {
     return null
   }
-  return await upsertPilotCompatEntity(event, {
+  return await upsertPilotEntity(event, {
     domain: PROMPT_DOMAIN,
     id,
     payload: {
@@ -291,7 +291,7 @@ export async function auditPrompt(
   if (!existing) {
     return null
   }
-  return await upsertPilotCompatEntity(event, {
+  return await upsertPilotEntity(event, {
     domain: PROMPT_DOMAIN,
     id,
     payload: {
@@ -314,7 +314,7 @@ export async function publishPrompt(
   if (!existing) {
     return null
   }
-  return await upsertPilotCompatEntity(event, {
+  return await upsertPilotEntity(event, {
     domain: PROMPT_DOMAIN,
     id,
     payload: {
@@ -328,7 +328,7 @@ export async function publishPrompt(
 
 export async function getPromptStatistics(event: H3Event): Promise<Array<{ status: number, count: string }>> {
   await ensureAigcCompatSeed(event)
-  const list = await listPilotCompatEntitiesAll<Record<string, any>>(event, PROMPT_DOMAIN)
+  const list = await listPilotEntitiesAll<Record<string, any>>(event, PROMPT_DOMAIN)
   const counter = new Map<number, number>()
   for (const item of list) {
     const status = Number(item.status ?? 0)
@@ -343,7 +343,7 @@ export async function getPromptStatistics(event: H3Event): Promise<Array<{ statu
 export async function createPromptTag(event: H3Event, body: Record<string, any>) {
   await ensureAigcCompatSeed(event)
   const now = nowIso()
-  return await upsertPilotCompatEntity(event, {
+  return await upsertPilotEntity(event, {
     domain: TAG_DOMAIN,
     id: normalizeText(body.id),
     payload: {
@@ -362,11 +362,11 @@ export async function createPromptTag(event: H3Event, body: Record<string, any>)
 
 export async function updatePromptTag(event: H3Event, id: string, body: Record<string, any>) {
   await ensureAigcCompatSeed(event)
-  const existing = await getPilotCompatEntity(event, TAG_DOMAIN, id)
+  const existing = await getPilotEntity(event, TAG_DOMAIN, id)
   if (!existing) {
     return null
   }
-  return await upsertPilotCompatEntity(event, {
+  return await upsertPilotEntity(event, {
     domain: TAG_DOMAIN,
     id,
     payload: {
@@ -379,7 +379,7 @@ export async function updatePromptTag(event: H3Event, id: string, body: Record<s
 
 export async function listPromptTagPage(event: H3Event, query: Record<string, unknown>) {
   await ensureAigcCompatSeed(event)
-  return await listPilotCompatEntities(event, TAG_DOMAIN, {
+  return await listPilotEntities(event, TAG_DOMAIN, {
     query,
     defaultPageSize: 20,
   })
@@ -387,7 +387,7 @@ export async function listPromptTagPage(event: H3Event, query: Record<string, un
 
 export async function searchPromptTags(event: H3Event, keyword: string) {
   await ensureAigcCompatSeed(event)
-  const page = await listPilotCompatEntities(event, TAG_DOMAIN, {
+  const page = await listPilotEntities(event, TAG_DOMAIN, {
     query: {
       keyword,
       page: 1,
@@ -404,7 +404,7 @@ export async function assignPromptTags(event: H3Event, promptId: string, tags: u
     return null
   }
   const ids = Array.isArray(tags) ? tags.map(item => normalizeText(item)).filter(Boolean) : []
-  const allTags = await listPilotCompatEntitiesAll<Record<string, any>>(event, TAG_DOMAIN)
+  const allTags = await listPilotEntitiesAll<Record<string, any>>(event, TAG_DOMAIN)
   const attached = allTags
     .filter(item => ids.includes(normalizeText(item.id)))
     .map(item => ({
@@ -412,7 +412,7 @@ export async function assignPromptTags(event: H3Event, promptId: string, tags: u
       name: item.name,
     }))
 
-  return await upsertPilotCompatEntity(event, {
+  return await upsertPilotEntity(event, {
     domain: PROMPT_DOMAIN,
     id: promptId,
     payload: {

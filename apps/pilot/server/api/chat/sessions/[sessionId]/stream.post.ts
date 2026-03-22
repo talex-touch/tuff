@@ -528,6 +528,8 @@ export default defineEventHandler(async (event) => {
         let memoryExtractorFailed = false
         let websearchContextText = ''
         let websearchSources: Array<Record<string, unknown>> = []
+        let websearchDecisionDispatched = false
+        let websearchSettled = false
         const websearchDecision = shouldExecutePilotWebsearch({
           message: routedMessage,
           intentType: intentDecision.intentType,
@@ -756,6 +758,42 @@ export default defineEventHandler(async (event) => {
           return await rawEmitEvent(payload, emitOptions)
         }
 
+        const emitWebsearchSkipped = async (reason: string) => {
+          if (websearchSettled) {
+            return
+          }
+          const normalizedReason = String(reason || '').trim() || 'websearch_skipped'
+          websearchSettled = true
+          websearchConnectorSource = 'none'
+          websearchConnectorReason = normalizedReason
+          await emitEvent({
+            type: 'websearch.skipped',
+            payload: {
+              enabled: false,
+              reason: normalizedReason,
+            },
+          }, persistStreamLifecycle
+            ? {
+                persist: true,
+                tracePayload: {
+                  enabled: false,
+                  reason: normalizedReason,
+                },
+              }
+            : undefined)
+        }
+
+        const markWebsearchExecuted = () => {
+          websearchSettled = true
+        }
+
+        const ensureWebsearchSettled = async (reason = 'terminal_finalize') => {
+          if (!websearchDecisionDispatched || websearchSettled) {
+            return
+          }
+          await emitWebsearchSkipped(reason)
+        }
+
         try {
           let session = await store.runtime.getSession(sessionId)
           if (!session) {
@@ -913,6 +951,10 @@ export default defineEventHandler(async (event) => {
                 },
               }
             : undefined)
+          websearchDecisionDispatched = true
+          if (!websearchDecision.enabled) {
+            await emitWebsearchSkipped(websearchDecision.reason || 'decision_disabled')
+          }
 
           emitAudit = async (record) => {
             const auditEvent = mapPilotAuditToStreamEvent(record)
@@ -1051,6 +1093,7 @@ export default defineEventHandler(async (event) => {
             metricFinishReason = 'completed'
             metricErrorCode = ''
 
+            await ensureWebsearchSettled('terminal_finalize')
             if (!doneSent) {
               await emitEvent({
                 type: 'done',
@@ -1263,29 +1306,15 @@ export default defineEventHandler(async (event) => {
                       },
                     }
                   : undefined)
+                markWebsearchExecuted()
               }
               else {
-                websearchConnectorSource = 'none'
-                websearchConnectorReason = 'tool_failed_or_empty_result'
-                await emitEvent({
-                  type: 'websearch.skipped',
-                  payload: {
-                    enabled: false,
-                    reason: websearchConnectorReason,
-                  },
-                }, persistStreamLifecycle
-                  ? {
-                      persist: true,
-                      tracePayload: {
-                        enabled: false,
-                        reason: websearchConnectorReason,
-                      },
-                    }
-                  : undefined)
+                await emitWebsearchSkipped('tool_failed_or_empty_result')
               }
             }
             catch (error) {
               if (error instanceof PilotToolApprovalRequiredError) {
+                await emitWebsearchSkipped('approval_required')
                 if (shouldRecordRoutingMetric) {
                   metricSuccess = false
                   metricFinishReason = 'approval_required'
@@ -1331,6 +1360,7 @@ export default defineEventHandler(async (event) => {
               }
 
               if (error instanceof PilotToolApprovalRejectedError) {
+                await emitWebsearchSkipped('approval_rejected')
                 if (shouldRecordRoutingMetric) {
                   metricSuccess = false
                   metricFinishReason = 'approval_rejected'
@@ -1386,27 +1416,15 @@ export default defineEventHandler(async (event) => {
                 return
               }
 
-              websearchConnectorSource = 'none'
-              websearchConnectorReason = `tool_exception:${String(error instanceof Error ? error.message : error || '').slice(0, 120)}`
-              await emitEvent({
-                type: 'websearch.skipped',
-                payload: {
-                  enabled: false,
-                  reason: websearchConnectorReason,
-                },
-              }, persistStreamLifecycle
-                ? {
-                    persist: true,
-                    tracePayload: {
-                      enabled: false,
-                      reason: websearchConnectorReason,
-                    },
-                  }
-                : undefined)
+              await emitWebsearchSkipped(`tool_exception:${String(error instanceof Error ? error.message : error || '').slice(0, 120)}`)
             }
           }
 
-          const runtimeMessage = mergeWebsearchContextIntoMessage(routedMessage, websearchContextText)
+          const requireNoSourceGuard = (intentDecision.websearchRequired === true)
+            && websearchSources.length <= 0
+          const runtimeMessage = mergeWebsearchContextIntoMessage(routedMessage, websearchContextText, {
+            requireNoSourceGuard,
+          })
 
           const result = await runPilotConversationStream({
             runtime,
@@ -1492,6 +1510,7 @@ export default defineEventHandler(async (event) => {
             ...persistSummaryPayload,
           }))
 
+          await ensureWebsearchSettled('terminal_finalize')
           if (!doneSent) {
             await emitEvent({
               type: 'done',
@@ -1527,6 +1546,7 @@ export default defineEventHandler(async (event) => {
             metricFinishReason = 'error'
             metricErrorCode = String(detail.code || detail.statusCode || 'PILOT_STREAM_ERROR')
           }
+          await ensureWebsearchSettled('terminal_finalize')
           await emitEvent({
             type: 'error',
             message: detail.message ? String(detail.message) : toErrorMessage(error),

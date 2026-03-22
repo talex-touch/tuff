@@ -1,27 +1,6 @@
 import type { ITuffTransport, TuffEvent } from '@talex-touch/utils/transport'
+import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-
-const legacyCloseEvent = defineRawEvent<void, void>('close')
-const legacyHideEvent = defineRawEvent<void, void>('hide')
-const legacyMinimizeEvent = defineRawEvent<void, void>('minimize')
-const legacyDevToolsEvent = defineRawEvent<void, void>('dev-tools')
-const legacyCwdEvent = defineRawEvent<void, string>('common:cwd')
-const legacyPackageEvent = defineRawEvent<void, any>('get-package')
-const legacyOsEvent = defineRawEvent<void, any>('get-os')
-const legacyFolderOpenEvent = defineRawEvent<FolderOpenOptions, void>('folder:open')
-const legacyExecuteCmdEvent = defineRawEvent<ExecuteCommandOptions, void>('execute:cmd')
-const legacyAppOpenEvent = defineRawEvent<AppOpenOptions, void>('app:open')
-const legacyOpenExternalEvent = defineRawEvent<ExternalUrlOptions, void>('open-external')
-const legacyTempFileCreateEvent = defineRawEvent<TempFileCreateOptions, TempFileCreateResult>(
-  'temp-file:create',
-)
-const legacyTempFileDeleteEvent = defineRawEvent<TempFileDeleteOptions, TempFileDeleteResult>(
-  'temp-file:delete',
-)
-const legacyPluginFolderEvent = defineRawEvent<string, void>('plugin:explorer')
-const legacyPluginDevToolsEvent = defineRawEvent<string, boolean>('plugin:open-devtools')
-const legacyPluginReloadEvent = defineRawEvent<{ name: string }, void>('reload-plugin')
-const legacyModuleFolderEvent = defineRawEvent<{ name?: string }, void>('module:folder')
 
 export interface TouchClientChannelLike {
   regChannel: (eventName: string, callback: (data: any) => void) => () => void
@@ -103,68 +82,68 @@ export class TouchSDK {
    * System Operations
    */
   async closeApp(): Promise<void> {
-    return this.sendEvent(legacyCloseEvent)
+    return this.sendEvent(AppEvents.window.close)
   }
 
   async hideApp(): Promise<void> {
-    return this.sendEvent(legacyHideEvent)
+    return this.sendEvent(AppEvents.window.hide)
   }
 
   async minimizeApp(): Promise<void> {
-    return this.sendEvent(legacyMinimizeEvent)
+    return this.sendEvent(AppEvents.window.minimize)
   }
 
   async openDevTools(): Promise<void> {
-    return this.sendEvent(legacyDevToolsEvent)
+    return this.sendEvent(AppEvents.debug.openDevTools)
   }
 
   async getCurrentWorkingDirectory(): Promise<string> {
-    return this.sendEvent(legacyCwdEvent)
+    return this.sendEvent(AppEvents.system.getCwd)
   }
 
   async getPackageInfo(): Promise<any> {
-    return this.sendEvent(legacyPackageEvent)
+    return this.sendEvent(AppEvents.system.getPackage)
   }
 
   async getOSInfo(): Promise<any> {
-    return this.sendEvent(legacyOsEvent)
+    return this.sendEvent(AppEvents.system.getOS)
   }
 
   /**
    * File & Folder Operations
    */
   async openFolder(options: FolderOpenOptions): Promise<void> {
-    return this.sendEvent(legacyFolderOpenEvent, options)
+    return this.sendEvent(AppEvents.system.showInFolder, options)
   }
 
   async executeCommand(options: ExecuteCommandOptions): Promise<void> {
-    return this.sendEvent(legacyExecuteCmdEvent, options)
+    await this.sendEvent(AppEvents.system.executeCommand, options)
   }
 
   async openApp(options: AppOpenOptions): Promise<void> {
-    return this.sendEvent(legacyAppOpenEvent, options)
+    return this.sendEvent(AppEvents.system.openApp, options)
   }
 
   async openExternalUrl(options: ExternalUrlOptions): Promise<void> {
-    return this.sendEvent(legacyOpenExternalEvent, options)
+    return this.sendEvent(AppEvents.system.openExternal, options)
   }
 
   /**
    * Temp file operations
    */
-  async createTempFile(options: TempFileCreateOptions): Promise<TempFileCreateResult> {
-    return this.sendEvent(legacyTempFileCreateEvent, options)
+  async createTempFile(_options: TempFileCreateOptions): Promise<TempFileCreateResult> {
+    throw new Error('[TouchSDK] createTempFile has been removed in hard-cut mode.')
   }
 
-  async deleteTempFile(options: TempFileDeleteOptions): Promise<TempFileDeleteResult> {
-    return this.sendEvent(legacyTempFileDeleteEvent, options)
+  async deleteTempFile(_options: TempFileDeleteOptions): Promise<TempFileDeleteResult> {
+    throw new Error('[TouchSDK] deleteTempFile has been removed in hard-cut mode.')
   }
 
   /**
    * Plugin Operations
    */
   async openPluginFolder(pluginName: string): Promise<void> {
-    return this.sendEvent(legacyPluginFolderEvent, pluginName)
+    return this.sendEvent(PluginEvents.api.openFolder, { name: pluginName })
   }
 
   /**
@@ -173,10 +152,7 @@ export class TouchSDK {
    * @returns Promise that resolves when DevTools is opened
    */
   async openPluginDevTools(pluginName: string): Promise<void> {
-    const opened = await this.sendEvent(legacyPluginDevToolsEvent, pluginName)
-    if (!opened) {
-      throw new Error(`[TouchSDK] Failed to open plugin DevTools: ${pluginName}`)
-    }
+    throw new Error(`[TouchSDK] openPluginDevTools has been removed in hard-cut mode: ${pluginName}`)
   }
 
   /**
@@ -185,14 +161,16 @@ export class TouchSDK {
    * @returns Promise that resolves when the reload operation completes
    */
   async reloadPlugin(pluginName: string): Promise<void> {
-    return this.sendEvent(legacyPluginReloadEvent, { name: pluginName })
+    await this.sendEvent(PluginEvents.api.reload, { name: pluginName })
   }
 
   /**
    * Module Operations
    */
   async openModuleFolder(moduleName?: string): Promise<void> {
-    return this.sendEvent(legacyModuleFolderEvent, { name: moduleName })
+    throw new Error(
+      `[TouchSDK] openModuleFolder has been removed in hard-cut mode: ${moduleName || 'default'}`,
+    )
   }
 
   /**

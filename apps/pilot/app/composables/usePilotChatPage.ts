@@ -258,7 +258,7 @@ export function usePilotChatPage() {
       : websearchState.value.phase === 'skipped'
         ? 'skipped'
         : websearchState.value.phase === 'decided'
-          ? 'running'
+          ? 'pending'
           : (memoryStatus === 'done' ? 'running' : 'pending')
     const thinkingStatus: PilotStageItem['status'] = runPreferences.value.thinking === false
       ? 'skipped'
@@ -1068,6 +1068,15 @@ export function usePilotChatPage() {
 
     if (eventType === 'assistant.final' || eventType === 'done' || eventType === 'error') {
       thinkingStreaming.value = false
+      if ((eventType === 'done' || eventType === 'error') && websearchState.value.phase === 'decided') {
+        websearchState.value = {
+          phase: 'skipped',
+          enabled: false,
+          reason: websearchState.value.reason || 'terminal_finalize',
+          source: '',
+          sourceCount: 0,
+        }
+      }
     }
   }
 
@@ -1740,6 +1749,8 @@ export function usePilotChatPage() {
       streamError.value = ''
       reconnectHint.value = ''
       if (hasTurnMessage) {
+        toolCallMap.clear()
+        toolCalls.value = []
         intentState.value = {
           ...intentState.value,
           phase: 'running',

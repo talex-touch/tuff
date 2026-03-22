@@ -78,8 +78,9 @@
 
 - 清单文档：`docs/plan-prd/docs/TRANSPORT-LEGACY-RETIREMENT-CHECKLIST-2026-03.md`
 - [x] 第一轮入口收口完成：`legacy-transport-import` 从 `4 files / 4 hits` 降到 `0 files / 0 hits`。
+- [x] hard-cut 完成：`packages/utils/transport/legacy.ts` 与 `packages/utils/permission/legacy.ts` 已物理删除，SDK legacy 出口下线。
 - 现状说明：
-  - 兼容符号仍通过 `@talex-touch/utils/transport` 统一入口转出（保留兼容，不再直连 `transport/legacy` 路径）。
+  - 对外仅保留 `@talex-touch/utils/transport` / `@talex-touch/utils/permission` 正式入口，CI/Lint 已禁止 legacy import。
 - 统一替换策略：
   - 对外入口优先 `@talex-touch/utils/transport` typed SDK，不新增 legacy 导出。
   - legacy 仅保留读兼容和 warn-and-forward，不再承载新能力。
@@ -87,7 +88,7 @@
   - [x] `packages/utils/plugin/preload.ts` 与 `packages/utils/renderer/storage/base-storage.ts`（内部调用侧）。
   - [x] `apps/core-app/.../widget-registry.ts`（renderer 暴露面）。
   - [x] `packages/utils/index.ts`（统一出口重导向）。
-  - [ ] `v2.5.0` 前移除 transport 中 legacy 兼容符号对外转出（破坏性变更窗口）。
+  - [x] `v2.5.0` 前移除 transport 中 legacy 兼容符号对外转出（本轮已提前完成）。
 - 验收口径：
   - [x] `legacy-transport-import` = `0 files / 0 hits`。
   - `pnpm quality:gate` 全绿且无新增兼容债务。
@@ -112,7 +113,7 @@
 
 ### G. Pilot 合并升级 V2（2026-03-17）
 
-- [x] 统一执行链路：`/api/aigc/executor`、`/api/v1/chat/sessions/*`、`/api/chat/sessions/*` 接入路由解析与指标采集。
+- [x] 统一执行链路：`/api/aigc/executor` 与 `/api/chat/sessions/*` 接入路由解析与指标采集；`/api/v1/chat/sessions/*` 仅保留非 stream/turns 子路由。
 - [x] 新增渠道评比指标：记录 `queueWaitMs/ttftMs/totalDurationMs/success/errorCode/finishReason/channel+model/routeCombo`。
 - [x] 新增渠道熔断状态机：按失败阈值摘除，冷却后半开探测恢复。
 - [x] 新增模型目录与路由组合后台接口：`models/route-combos/channel-models/sync/routing-metrics/runtime-models`。
@@ -143,6 +144,7 @@
 - [x] 新增 ThisAi Prompt Builder：运行时系统提示词统一从 builder 注入 `name/ip/ua` 与安全约束。
 - [x] websearch 增强：保留“意图优先 + 启发式兜底”，并在 datasource 未配置时回退 Responses 内置检索。
 - [x] 审计可观测性增强：补齐 `memory.context` / `websearch.decision` / connector 来源，避免“命中无感”。
+- [x] websearch 终态一致性修复：`decision=false/审批中断/工具异常/terminal finalize` 统一收口到 `websearch.skipped`，并在无外部来源时注入 guard 禁止“新闻感编造”。
 - [ ] 回归补充：补齐 `executor/stream` 端到端 strict 错误码回归用例（含 HTTP status 与 SSE payload 断言）。
 - [ ] 线上观测：新增 `PILOT_STRICT_MODE_UNAVAILABLE` 告警阈值和 7 天趋势看板。
 
@@ -220,7 +222,7 @@
 - [x] `v2.4.7 Gate E`：按 historical done 关闭，不重发版。
 - [x] `2.4.9-beta.4`：发布基线与 CI 证据已固化。
 - [x] CLI Phase1+2：迁移完成，`2.4.x` shim 保留、`2.5.0` 退场。
-- [x] Pilot Chat/Turn 协议硬切：`/api/v1/chat/sessions/:sessionId/{turns,stream,messages}` 已落地，SSE 尾段 title + 队列运行态回传完成；历史 `pilot_quota_history.value` 已完成 base64 -> JSON 迁移并统一 JSON 读写。
+- [x] Pilot Chat/Turn 协议硬切：`/api/chat/sessions/:sessionId/stream` 为唯一主入口，`/api/v1/chat/sessions/:sessionId/{stream,turns}` 已物理删除；历史 `pilot_quota_history.value` 已完成 base64 -> JSON 迁移并统一 JSON 读写。
 
 ---
 
@@ -234,9 +236,9 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 95 |
+| 已完成 (`- [x]`) | 97 |
 | 未完成 (`- [ ]`) | 16 |
-| 总计 | 111 |
+| 总计 | 113 |
 | 完成率 | 86% |
 
 > 统计时间: 2026-03-22（按本文件实时 checkbox 计数）。

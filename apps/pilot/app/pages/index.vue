@@ -226,7 +226,6 @@ function resolveConversationSyncStatus(status: IChatItemStatus) {
     status === IChatItemStatus.ERROR
     || status === IChatItemStatus.BANNED
     || status === IChatItemStatus.REJECTED
-    || status === IChatItemStatus.CANCELLED
   ) {
     return PersistStatus.FAILED
   }
@@ -294,6 +293,16 @@ async function innerSend(conversation: IChatConversation, chatItem: IChatItem, i
       setTimeout(() => {
         chatRef.value?.generateScroll('final')
       }, 200)
+    },
+    onReqCheckpoint(reason) {
+      if (reason !== 'approval_required') {
+        return
+      }
+      pageOptions.sendState = 'idle'
+      saveConversationLocalSnapshot(
+        conversation,
+        PersistStatus.SUCCESS,
+      )
     },
     onFrequentLimit() {
       // chatManager.cancelCurrentReq()

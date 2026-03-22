@@ -8,11 +8,6 @@
       "defaultExpiresVersion": "2.5.0",
       "entries": [
         {
-          "file": "apps/core-app/src/main/core/module-manager.ts",
-          "maxCount": 7,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/core-app/src/main/core/touch-app.ts",
           "maxCount": 3,
           "expiresVersion": "2.5.0"
@@ -30,11 +25,6 @@
         {
           "file": "apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts",
           "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/main/modules/box-tool/search-engine/search-gather.ts",
-          "maxCount": 5,
           "expiresVersion": "2.5.0"
         },
         {
@@ -93,21 +83,6 @@
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "apps/core-app/src/main/modules/plugin/widget/processors/script-processor.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/main/modules/plugin/widget/processors/tsx-processor.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/main/modules/plugin/widget/processors/vue-processor.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/core-app/src/main/modules/storage/index.ts",
           "maxCount": 2,
           "expiresVersion": "2.5.0"
@@ -160,11 +135,6 @@
         {
           "file": "apps/core-app/src/renderer/src/modules/layout/index.ts",
           "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts",
-          "maxCount": 3,
           "expiresVersion": "2.5.0"
         },
         {
@@ -293,16 +263,6 @@
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "apps/pilot/server/api/v1/chat/sessions/[sessionId]/stream.post.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/pilot/server/api/v1/chat/sessions/[sessionId]/turns.post.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/pilot/server/utils/__tests__/auth.test.ts",
           "maxCount": 2,
           "expiresVersion": "2.5.0"
@@ -398,13 +358,8 @@
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "packages/utils/common/search/gather.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "packages/utils/eslint.config.js",
-          "maxCount": 6,
+          "maxCount": 13,
           "expiresVersion": "2.5.0"
         },
         {
@@ -414,16 +369,6 @@
         },
         {
           "file": "packages/utils/permission/index.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/permission/legacy.ts",
-          "maxCount": 3,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/plugin/channel.ts",
           "maxCount": 2,
           "expiresVersion": "2.5.0"
         },
@@ -480,16 +425,6 @@
         {
           "file": "packages/utils/transport/index.ts",
           "maxCount": 3,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/transport/legacy.ts",
-          "maxCount": 11,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/transport/prelude.ts",
-          "maxCount": 1,
           "expiresVersion": "2.5.0"
         },
         {
@@ -583,33 +518,7 @@
     "legacy-transport-import": {
       "description": "Freeze transport legacy API spread: block new imports from transport/legacy unless allowlisted.",
       "defaultExpiresVersion": "2.5.0",
-      "entries": [
-        {
-          "file": "apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/index.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/plugin/channel.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/plugin/preload.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/renderer/storage/base-storage.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        }
-      ]
+      "entries": []
     },
     "legacy-permission-import": {
       "description": "Freeze permission legacy API spread: block new imports from permission/legacy unless allowlisted.",

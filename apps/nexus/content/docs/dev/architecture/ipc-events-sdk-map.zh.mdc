@@ -300,12 +300,12 @@
 | `agents:task-failed` | `agentManager.on('task:failed') -> transport.broadcast`（`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`） | 渲染器（Agent 状态订阅者） |
 | `agents:task-cancelled` | `agentManager.on('task:cancelled') -> transport.broadcast`（`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`） | 渲染器（Agent 状态订阅者） |
 
-### C9. Analytics 兼容/遗留事件
+### C9. Analytics 事件
 
 | 事件名 | 发送端 | 处理端 |
 | --- | --- | --- |
-| `analytics:get-summary` | 渲染器（`apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`） | `AnalyticsModule.registerTransportHandlers -> startupAnalytics.getPerformanceSummary`（`apps/core-app/src/main/modules/analytics/analytics-module.ts`） |
-| `analytics:export` | 渲染器（`apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`） | `AnalyticsModule.registerTransportHandlers -> startupAnalytics.exportMetrics`（`apps/core-app/src/main/modules/analytics/analytics-module.ts`） |
+| `AppEvents.analytics.getSummary` | 渲染器（`apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`） | `AnalyticsModule.registerTransportHandlers -> startupAnalytics.getPerformanceSummary`（`apps/core-app/src/main/modules/analytics/analytics-module.ts`） |
+| `AppEvents.analytics.export` | 渲染器（`apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`） | `AnalyticsModule.registerTransportHandlers -> startupAnalytics.exportMetrics`（`apps/core-app/src/main/modules/analytics/analytics-module.ts`） |
 
 ### C10. AddonOpener / Drop raw 事件
 

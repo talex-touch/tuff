@@ -38,7 +38,7 @@ export interface PilotBuiltinSourceRule {
   metadata?: Record<string, unknown>
 }
 
-export type PilotWebsearchProviderType = 'searxng' | 'serper' | 'tavily'
+export type PilotWebsearchProviderType = 'sosearch' | 'searxng' | 'serper' | 'tavily'
 
 export interface PilotWebsearchProviderConfig {
   id: string
@@ -182,7 +182,7 @@ function normalizeDomains(value: unknown): string[] {
 
 function normalizeProviderType(value: unknown, fallback: PilotWebsearchProviderType = 'searxng'): PilotWebsearchProviderType {
   const normalized = normalizeText(value).toLowerCase()
-  if (normalized === 'serper' || normalized === 'tavily' || normalized === 'searxng') {
+  if (normalized === 'sosearch' || normalized === 'serper' || normalized === 'tavily' || normalized === 'searxng') {
     return normalized
   }
   return fallback
@@ -260,10 +260,20 @@ function getDefaultBuiltinSourceRules(): PilotBuiltinSourceRule[] {
 function getDefaultProviders(): PilotWebsearchProviderConfig[] {
   return [
     {
+      id: 'sosearch-main',
+      type: 'sosearch',
+      enabled: true,
+      priority: 10,
+      baseUrl: '',
+      apiKeyEncrypted: '',
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+      maxResults: DEFAULT_MAX_RESULTS,
+    },
+    {
       id: 'searxng-main',
       type: 'searxng',
       enabled: true,
-      priority: 10,
+      priority: 20,
       baseUrl: '',
       apiKeyEncrypted: '',
       timeoutMs: DEFAULT_TIMEOUT_MS,
@@ -273,7 +283,7 @@ function getDefaultProviders(): PilotWebsearchProviderConfig[] {
       id: 'serper-backup',
       type: 'serper',
       enabled: true,
-      priority: 20,
+      priority: 30,
       baseUrl: 'https://google.serper.dev',
       apiKeyEncrypted: '',
       timeoutMs: DEFAULT_TIMEOUT_MS,
@@ -283,7 +293,7 @@ function getDefaultProviders(): PilotWebsearchProviderConfig[] {
       id: 'tavily-backup',
       type: 'tavily',
       enabled: true,
-      priority: 30,
+      priority: 40,
       baseUrl: 'https://api.tavily.com',
       apiKeyEncrypted: '',
       timeoutMs: DEFAULT_TIMEOUT_MS,

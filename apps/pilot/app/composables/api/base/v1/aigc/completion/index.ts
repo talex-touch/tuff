@@ -189,21 +189,21 @@ function normalizeToolAuditCardPayload(value: unknown): ToolAuditCardPayload {
     : []
   return {
     sessionId: String(row.sessionId || row.session_id || '').trim(),
-    callId: String(row.callId || '').trim(),
-    toolId: String(row.toolId || '').trim(),
-    toolName: String(row.toolName || '').trim() || 'tool',
-    riskLevel: String(row.riskLevel || '').trim() || 'low',
+    callId: String(row.callId || row.call_id || '').trim(),
+    toolId: String(row.toolId || row.tool_id || '').trim(),
+    toolName: String(row.toolName || row.tool_name || '').trim() || 'tool',
+    riskLevel: String(row.riskLevel || row.risk_level || '').trim() || 'low',
     status: String(row.status || '').trim(),
-    inputPreview: String(row.inputPreview || '').trim(),
-    outputPreview: String(row.outputPreview || '').trim(),
+    inputPreview: String(row.inputPreview || row.input_preview || '').trim(),
+    outputPreview: String(row.outputPreview || row.output_preview || '').trim(),
     durationMs: Number.isFinite(Number(row.durationMs))
       ? Math.max(0, Number(row.durationMs))
       : 0,
-    ticketId: String(row.ticketId || '').trim(),
+    ticketId: String(row.ticketId || row.ticket_id || '').trim(),
     sources,
-    errorCode: String(row.errorCode || '').trim(),
-    errorMessage: String(row.errorMessage || '').trim(),
-    auditType: String(row.auditType || '').trim(),
+    errorCode: String(row.errorCode || row.error_code || '').trim(),
+    errorMessage: String(row.errorMessage || row.error_message || '').trim(),
+    auditType: String(row.auditType || row.audit_type || '').trim(),
   }
 }
 
@@ -221,6 +221,30 @@ function mapToolAuditTypeToChatStatus(auditType: string): IChatItemStatus | null
     return IChatItemStatus.TOOL_RESULT
   }
   return null
+}
+
+const TOOL_CARD_TERMINAL_STATUS = new Set(['completed', 'failed', 'rejected', 'cancelled'])
+
+function normalizeToolStatus(value: unknown): string {
+  return String(value || '').trim().toLowerCase()
+}
+
+function parseToolCardIdentity(block: IInnerItemMeta): {
+  callId: string
+  ticketId: string
+  toolName: string
+  status: string
+} {
+  const data = parseJsonSafe<Record<string, unknown>>(String(block.data || '')) || {}
+  const extra = block.extra && typeof block.extra === 'object' && !Array.isArray(block.extra)
+    ? block.extra as Record<string, unknown>
+    : {}
+  return {
+    callId: String(data.callId || data.call_id || extra.callId || extra.call_id || '').trim(),
+    ticketId: String(data.ticketId || data.ticket_id || extra.ticketId || extra.ticket_id || '').trim(),
+    toolName: String(data.toolName || data.tool_name || '').trim().toLowerCase(),
+    status: normalizeToolStatus(data.status || extra.status),
+  }
 }
 
 function buildErrorBlockExtra(payload: Record<string, any>): Record<string, unknown> | undefined {
@@ -833,6 +857,7 @@ export const $completion = {
         let markdownFlushTimer: ReturnType<typeof setTimeout> | null = null
         let lastCompletionName = 'assistant'
         let waitingToolApproval = false
+        let activeExecutorStreams = 0
         const legacyIgnoredEvents = new Set([
           'turn.accepted',
           'turn.queued',
@@ -852,6 +877,23 @@ export const $completion = {
             return
           clearTimeout(markdownFlushTimer)
           markdownFlushTimer = null
+        }
+
+        function finalizeAsCancelled(forceComplete = false) {
+          if (completionResolved) {
+            return
+          }
+          waitingToolApproval = false
+          flushPendingMarkdownBuffer({
+            force: true,
+          })
+          if (innerMsg.status !== IChatItemStatus.CANCELLED) {
+            innerMsg.status = IChatItemStatus.CANCELLED
+            handler?.onTriggerStatus?.(innerMsg.status)
+          }
+          if (forceComplete || activeExecutorStreams <= 0) {
+            complete()
+          }
         }
 
         function getOrCreateStreamingMarkdownBlock(): IInnerItemMeta {
@@ -961,51 +1003,147 @@ export const $completion = {
 
         const toolCardMap = new Map<string, IInnerItemMeta>()
 
-        function resolveToolCardKey(payload: ToolAuditCardPayload): string {
+        function bindToolCardIdentity(payload: ToolAuditCardPayload, block: IInnerItemMeta) {
+          const parsed = parseToolCardIdentity(block)
+          const callId = String(payload.callId || parsed.callId || '').trim()
+          const ticketId = String(payload.ticketId || parsed.ticketId || '').trim()
+          if (callId) {
+            toolCardMap.set(`call_${callId}`, block)
+          }
+          if (ticketId) {
+            toolCardMap.set(`ticket_${ticketId}`, block)
+          }
+        }
+
+        function resolveToolCardFromMap(payload: ToolAuditCardPayload): IInnerItemMeta | null {
+          const callId = String(payload.callId || '').trim()
+          if (callId) {
+            const fromCall = toolCardMap.get(`call_${callId}`)
+            if (fromCall) {
+              return fromCall
+            }
+          }
+
+          const ticketId = String(payload.ticketId || '').trim()
+          if (ticketId) {
+            const fromTicket = toolCardMap.get(`ticket_${ticketId}`)
+            if (fromTicket) {
+              return fromTicket
+            }
+          }
+
+          return null
+        }
+
+        function resolveToolCardFromHistory(payload: ToolAuditCardPayload): IInnerItemMeta | null {
+          const callId = String(payload.callId || '').trim()
+          const ticketId = String(payload.ticketId || '').trim()
+          const toolName = String(payload.toolName || '').trim().toLowerCase()
+          const payloadStatus = normalizeToolStatus(payload.status)
+          const canFallbackByTool = Boolean(toolName) && !TOOL_CARD_TERMINAL_STATUS.has(payloadStatus)
+          let toolCandidate: IInnerItemMeta | null = null
+
+          for (let index = innerMsg.value.length - 1; index >= 0; index -= 1) {
+            const item = innerMsg.value[index]
+            if (!item || item.type !== 'card' || item.name !== 'pilot_tool_card') {
+              continue
+            }
+            const identity = parseToolCardIdentity(item)
+            if (callId && identity.callId && identity.callId === callId) {
+              return item
+            }
+            if (ticketId && identity.ticketId && identity.ticketId === ticketId) {
+              return item
+            }
+            if (!canFallbackByTool || identity.toolName !== toolName) {
+              continue
+            }
+            if (TOOL_CARD_TERMINAL_STATUS.has(identity.status)) {
+              continue
+            }
+            if (ticketId && !identity.ticketId) {
+              return item
+            }
+            if (!toolCandidate) {
+              toolCandidate = item
+            }
+          }
+
+          return toolCandidate
+        }
+
+        function resolveExistingToolCard(payload: ToolAuditCardPayload): IInnerItemMeta | null {
+          return resolveToolCardFromMap(payload) || resolveToolCardFromHistory(payload)
+        }
+
+        function createToolCardStorageKey(payload: ToolAuditCardPayload): string {
           if (payload.callId) {
-            return payload.callId
+            return `call_${payload.callId}`
           }
           if (payload.ticketId) {
             return `ticket_${payload.ticketId}`
           }
-          if (payload.toolName) {
-            return `tool_${payload.toolName}`
-          }
-          return `tool_${Date.now()}`
+          return `tool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
         }
 
         function upsertToolCard(payload: ToolAuditCardPayload): IInnerItemMeta {
-          const key = resolveToolCardKey(payload)
-          const prev = toolCardMap.get(key)
+          const prev = resolveExistingToolCard(payload)
           const now = Date.now()
-          const sessionId = String(payload.sessionId || conversation.id).trim() || conversation.id
+          const prevData = parseJsonSafe<Record<string, unknown>>(String(prev?.data || '')) || {}
+          const prevIdentity = prev
+            ? parseToolCardIdentity(prev)
+            : {
+                callId: '',
+                ticketId: '',
+                toolName: '',
+                status: '',
+              }
+          const sessionId = String(payload.sessionId || prevData.sessionId || prevData.session_id || conversation.id).trim() || conversation.id
+          const resolvedCallId = String(payload.callId || prevIdentity.callId || prevData.callId || prevData.call_id || '').trim()
+          const resolvedTicketId = String(payload.ticketId || prevIdentity.ticketId || prevData.ticketId || prevData.ticket_id || '').trim()
+          const resolvedStatus = String(payload.status || prevData.status || prevIdentity.status || '').trim()
+          const resolvedToolId = String(payload.toolId || prevData.toolId || prevData.tool_id || '').trim() || 'tool.unknown'
+          const resolvedToolName = String(payload.toolName || prevData.toolName || prevData.tool_name || prevIdentity.toolName || 'tool').trim() || 'tool'
+          const resolvedRiskLevel = String(payload.riskLevel || prevData.riskLevel || prevData.risk_level || 'low').trim() || 'low'
+          const resolvedInputPreview = String(payload.inputPreview || prevData.inputPreview || prevData.input_preview || '').trim()
+          const resolvedOutputPreview = String(payload.outputPreview || prevData.outputPreview || prevData.output_preview || '').trim()
+          const resolvedDuration = Number.isFinite(payload.durationMs)
+            ? Math.max(0, payload.durationMs)
+            : (Number.isFinite(Number(prevData.durationMs)) ? Math.max(0, Number(prevData.durationMs)) : 0)
+          const resolvedErrorCode = String(payload.errorCode || prevData.errorCode || prevData.error_code || '').trim()
+          const resolvedErrorMessage = String(payload.errorMessage || prevData.errorMessage || prevData.error_message || '').trim()
+          const resolvedAuditType = String(payload.auditType || prevData.auditType || prevData.audit_type || '').trim()
+          const normalizedStatus = normalizeToolStatus(resolvedStatus)
           const nextExtra = {
             ...(prev?.extra || {}),
             start: prev?.extra?.start || now,
-            end: payload.status === 'completed' || payload.status === 'failed' || payload.status === 'rejected'
+            end: normalizedStatus === 'completed'
+              || normalizedStatus === 'failed'
+              || normalizedStatus === 'rejected'
+              || normalizedStatus === 'cancelled'
               ? now
               : prev?.extra?.end,
-            status: payload.status,
-            callId: payload.callId,
-            ticketId: payload.ticketId,
-            errorCode: payload.errorCode,
+            status: resolvedStatus,
+            callId: resolvedCallId,
+            ticketId: resolvedTicketId,
+            errorCode: resolvedErrorCode,
             sessionId,
           }
           const nextData = JSON.stringify({
             sessionId,
-            callId: payload.callId,
-            toolId: payload.toolId,
-            toolName: payload.toolName,
-            riskLevel: payload.riskLevel,
-            status: payload.status,
-            inputPreview: payload.inputPreview,
-            outputPreview: payload.outputPreview,
-            durationMs: payload.durationMs,
-            ticketId: payload.ticketId,
+            callId: resolvedCallId,
+            toolId: resolvedToolId,
+            toolName: resolvedToolName,
+            riskLevel: resolvedRiskLevel,
+            status: resolvedStatus,
+            inputPreview: resolvedInputPreview,
+            outputPreview: resolvedOutputPreview,
+            durationMs: resolvedDuration,
+            ticketId: resolvedTicketId,
             sources: payload.sources,
-            errorCode: payload.errorCode,
-            errorMessage: payload.errorMessage,
-            auditType: payload.auditType,
+            errorCode: resolvedErrorCode,
+            errorMessage: resolvedErrorMessage,
+            auditType: resolvedAuditType,
           })
 
           if (prev) {
@@ -1014,6 +1152,7 @@ export const $completion = {
             prev.value = ''
             prev.data = nextData
             prev.extra = nextExtra
+            bindToolCardIdentity(payload, prev)
             return prev
           }
 
@@ -1025,7 +1164,8 @@ export const $completion = {
             extra: nextExtra,
           }
           innerMsg.value.push(created)
-          toolCardMap.set(key, created)
+          toolCardMap.set(createToolCardStorageKey(payload), created)
+          bindToolCardIdentity(payload, created)
           return created
         }
 
@@ -1057,11 +1197,21 @@ export const $completion = {
         }
 
         const pendingToolApprovalMap = new Map<string, ToolAuditCardPayload>()
+        let approvalCheckpointEmitted = false
+
+        function emitApprovalCheckpoint() {
+          if (approvalCheckpointEmitted) {
+            return
+          }
+          approvalCheckpointEmitted = true
+          handler.onReqCheckpoint?.('approval_required')
+        }
 
         function applyApprovalRequiredState(payload: ToolAuditCardPayload) {
           waitingToolApproval = true
           innerMsg.status = IChatItemStatus.TOOL_CALLING
           handler?.onTriggerStatus?.(innerMsg.status)
+          emitApprovalCheckpoint()
           upsertToolCard(payload)
           if (payload.ticketId) {
             pendingToolApprovalMap.set(payload.ticketId, payload)
@@ -1152,10 +1302,18 @@ export const $completion = {
           registerCompleteCallback(() => {
             window.removeEventListener(TOOL_APPROVAL_DECISION_EVENT, handleToolApprovalDecisionEvent as EventListener)
           })
-          signal.signal.addEventListener('abort', () => {
-            window.removeEventListener(TOOL_APPROVAL_DECISION_EVENT, handleToolApprovalDecisionEvent as EventListener)
-          }, { once: true })
         }
+
+        const handleAbort = () => {
+          if (typeof window !== 'undefined') {
+            window.removeEventListener(TOOL_APPROVAL_DECISION_EVENT, handleToolApprovalDecisionEvent as EventListener)
+          }
+          finalizeAsCancelled()
+        }
+        signal.signal.addEventListener('abort', handleAbort, { once: true })
+        registerCompleteCallback(() => {
+          signal.signal.removeEventListener('abort', handleAbort)
+        })
 
         const runEventCardMap = new Map<string, IInnerItemMeta>()
 
@@ -1298,10 +1456,16 @@ export const $completion = {
         }
 
         function startExecutorStream(requestId = '') {
+          activeExecutorStreams += 1
           void useCompletionExecutor(
             buildExecutorBody(requestId),
             handleExecutorEvent,
-          )
+          ).finally(() => {
+            activeExecutorStreams = Math.max(0, activeExecutorStreams - 1)
+            if (signal.signal.aborted) {
+              finalizeAsCancelled(true)
+            }
+          })
         }
 
         function pushRunEventCardFromStream(eventType: string, payload: Record<string, any>) {
@@ -1432,12 +1596,19 @@ export const $completion = {
         // console.log('template', conversation, conversation.template, conversation.template?.id ?? -1)
 
         function handleExecutorEvent(res: Record<string, any>) {
+          if (completionResolved) {
+            return
+          }
           if (res?.code === 401) {
             res.error = true
             res.e = res.message
           }
 
           if (res.error) {
+            if (signal.signal.aborted) {
+              finalizeAsCancelled(true)
+              return
+            }
             flushPendingMarkdownBuffer({
               force: true,
             })
@@ -1639,6 +1810,10 @@ export const $completion = {
           }
 
           if (eventType === 'error') {
+            if (signal.signal.aborted) {
+              finalizeAsCancelled(true)
+              return
+            }
             flushPendingMarkdownBuffer({
               force: true,
             })

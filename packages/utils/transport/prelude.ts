@@ -1,9 +1,13 @@
-import { DataCode } from './legacy'
-
 type PluginChannelPreludeOptions = {
   uniqueKey: string
   initialData?: Record<string, unknown>
 }
+
+const DATA_CODE = {
+  SUCCESS: 200,
+  NETWORK_ERROR: 500,
+  ERROR: 100,
+} as const
 
 export function getPluginChannelPreludeCode(options: PluginChannelPreludeOptions): string {
   const initialData = options.initialData ?? {}
@@ -13,7 +17,7 @@ export function getPluginChannelPreludeCode(options: PluginChannelPreludeOptions
   const uniqueKey = ${JSON.stringify(options.uniqueKey)};
   window['$tuffInitialData'] = ${JSON.stringify(initialData)};
   const { ipcRenderer } = require('electron');
-  const DataCode = ${JSON.stringify(DataCode)};
+  const DataCode = ${JSON.stringify(DATA_CODE)};
   const CHANNEL_DEFAULT_TIMEOUT = 60000;
 
   class TouchChannel {

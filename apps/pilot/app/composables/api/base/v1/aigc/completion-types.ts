@@ -193,6 +193,7 @@ export interface IHistoryUploadQuery {
 
 export interface ICompletionHandler {
   onTriggerStatus?: (status: IChatItemStatus) => void
+  onReqCheckpoint?: (reason: 'approval_required') => void
   onReqCompleted?: () => void
   onFrequentLimit?: () => void
   onAccepted?: (payload?: Record<string, unknown>) => void

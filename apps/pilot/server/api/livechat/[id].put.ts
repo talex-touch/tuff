@@ -1,4 +1,4 @@
-import { getPilotCompatEntity, upsertPilotCompatEntity } from '../../utils/pilot-compat-store'
+import { getPilotEntity, upsertPilotEntity } from '../../utils/pilot-entity-store'
 import { quotaError, quotaOk } from '../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {
@@ -8,12 +8,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody<Record<string, any>>(event)
-  const existing = await getPilotCompatEntity(event, 'wechat.livechat', id)
+  const existing = await getPilotEntity(event, 'wechat.livechat', id)
   if (!existing) {
     return quotaError(404, 'livechat not found', null)
   }
 
-  const next = await upsertPilotCompatEntity(event, {
+  const next = await upsertPilotEntity(event, {
     domain: 'wechat.livechat',
     id,
     payload: {

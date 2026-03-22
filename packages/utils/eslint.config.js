@@ -34,6 +34,14 @@ module.exports = antfu(
             message: 'Legacy channel API is restricted. Use @talex-touch/utils/transport or local legacy wrappers.'
           },
           {
+            name: '@talex-touch/utils/transport/legacy',
+            message: 'Legacy transport API has been removed. Use @talex-touch/utils/transport.'
+          },
+          {
+            name: '@talex-touch/utils/permission/legacy',
+            message: 'Legacy permission API has been removed. Use @talex-touch/utils/permission.'
+          },
+          {
             name: 'axios',
             message: 'Direct axios usage is restricted. Use @talex-touch/utils/network.'
           },
@@ -67,7 +75,13 @@ module.exports = antfu(
     rules: {
       'no-restricted-syntax': ['error', {
         selector: "Literal[value='@talex-touch/utils/channel']",
-        message: 'Legacy channel entry has been removed. Use @talex-touch/utils/transport or @talex-touch/utils/transport/legacy.'
+        message: 'Legacy channel entry has been removed. Use @talex-touch/utils/transport.'
+      }, {
+        selector: "Literal[value='@talex-touch/utils/transport/legacy']",
+        message: 'Legacy transport entry has been removed. Use @talex-touch/utils/transport.'
+      }, {
+        selector: "Literal[value='@talex-touch/utils/permission/legacy']",
+        message: 'Legacy permission entry has been removed. Use @talex-touch/utils/permission.'
       }, {
         selector: "CallExpression[callee.type='Identifier'][callee.name='fetch']",
         message: 'Direct fetch is restricted. Use @talex-touch/utils/network.'

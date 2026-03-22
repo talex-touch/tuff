@@ -13,7 +13,6 @@ import { withTimeout } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 
 import chalk from 'chalk'
-import { debounce } from 'lodash'
 import { analyticsModule } from '../../analytics'
 import { searchLogger } from './search-logger'
 
@@ -37,13 +36,8 @@ interface ExtendedSourceStat {
  * @description Default configuration for the aggregator.
  */
 const defaultTuffGatherOptions: Required<ITuffGatherOptions> = {
-  concurrency: 4,
-  coalesceGapMs: 50,
-  firstBatchGraceMs: 20,
-  debouncePushMs: 8,
   taskTimeoutMs: 3000,
   // Layered search options
-  enableLayeredSearch: true,
   fastLayerTimeoutMs: 80,
   deferredLayerDelayMs: 50,
   fastLayerConcurrency: 3,
@@ -122,13 +116,7 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
   ): IGatherController {
     searchLogger.logSearchPhase('Gatherer Setup', `Initializing ${providers.length} providers`)
     searchLogger.gathererStart(providers.length, params.text)
-
-    // Use layered search if enabled, otherwise fall back to legacy mode
-    if (config.enableLayeredSearch) {
-      return createLayeredSearchController(providers, params, onUpdate, config)
-    } else {
-      return createLegacySearchController(providers, params, onUpdate, config)
-    }
+    return createLayeredSearchController(providers, params, onUpdate, config)
   }
 }
 
@@ -481,170 +469,6 @@ function logProviderCompletion(
   } else {
     gatherLog.warn(message)
   }
-}
-
-/**
- * Legacy search controller (non-layered mode).
- * Keeps the original behavior for backward compatibility.
- */
-function createLegacySearchController(
-  providers: ISearchProvider<ProviderContext>[],
-  params: TuffQuery,
-  onUpdate: TuffAggregatorCallback,
-  config: Required<ITuffGatherOptions>
-): IGatherController {
-  const { concurrency, coalesceGapMs, firstBatchGraceMs, debouncePushMs, taskTimeoutMs } = config
-
-  return createGatherController(async (signal, resolve) => {
-    const startTime = performance.now()
-    const allResults: TuffSearchResult[] = []
-    const sourceStats: ExtendedSourceStat[] = []
-    const taskQueue = [...providers]
-    let pushBuffer: TuffSearchResult[] = []
-
-    let completedCount = 0
-    let hasFlushedFirstBatch = false
-    let coalesceTimeoutId: NodeJS.Timeout | null = null
-
-    const flushBuffer = (isFinalFlush = false): void => {
-      if (coalesceTimeoutId) {
-        clearTimeout(coalesceTimeoutId)
-        coalesceTimeoutId = null
-      }
-
-      if (pushBuffer.length > 0) {
-        onUpdate({
-          newResults: pushBuffer,
-          totalCount: countItems(allResults),
-          isDone: false,
-          sourceStats: sourceStats as TuffSearchResult['sources']
-        })
-        pushBuffer = []
-      }
-
-      if (isFinalFlush) {
-        onUpdate({
-          newResults: [],
-          totalCount: countItems(allResults),
-          isDone: true,
-          sourceStats: sourceStats as TuffSearchResult['sources']
-        })
-        resolve(countItems(allResults))
-      }
-    }
-
-    const debouncedFlush = debounce(flushBuffer, debouncePushMs)
-    const finalizeMetrics = () => {
-      const totalDuration = performance.now() - startTime
-      const providerTimings = sourceStats.reduce<Record<string, number>>((acc, stat) => {
-        acc[stat.providerId || stat.providerName] = stat.duration
-        return acc
-      }, {})
-      analyticsModule.recordSearchMetrics(totalDuration, providerTimings)
-    }
-
-    const onNewResult = (result: TuffSearchResult): void => {
-      searchLogger.resultReceived(result.items.length)
-      allResults.push(result)
-      pushBuffer.push(result)
-      completedCount++
-
-      if (!hasFlushedFirstBatch) {
-        hasFlushedFirstBatch = true
-        searchLogger.firstBatch(firstBatchGraceMs)
-        coalesceTimeoutId = setTimeout(() => debouncedFlush(), firstBatchGraceMs)
-      } else {
-        if (coalesceTimeoutId) clearTimeout(coalesceTimeoutId)
-        coalesceTimeoutId = setTimeout(() => debouncedFlush(), coalesceGapMs)
-      }
-
-      if (completedCount === providers.length) {
-        searchLogger.allProvidersComplete()
-        debouncedFlush.flush()
-        flushBuffer(true)
-        finalizeMetrics()
-      }
-    }
-
-    // Set up abort handler
-    signal.addEventListener('abort', () => {
-      if (coalesceTimeoutId) {
-        clearTimeout(coalesceTimeoutId)
-        coalesceTimeoutId = null
-      }
-      debouncedFlush.cancel()
-
-      gatherLog.debug('Legacy search cancelled')
-      onUpdate({
-        newResults: [],
-        totalCount: countItems(allResults),
-        isDone: true,
-        cancelled: true,
-        sourceStats: sourceStats as TuffSearchResult['sources']
-      })
-      finalizeMetrics()
-      resolve(0)
-    })
-
-    searchLogger.logSearchPhase('Legacy Worker Pool', `Starting ${concurrency} workers`)
-
-    const workers = Array.from({ length: concurrency }, async (_, i) => {
-      await new Promise((r) => setTimeout(r, i * 10))
-      searchLogger.workerStart(i)
-
-      while (taskQueue.length > 0) {
-        const provider = taskQueue.shift()
-        if (!provider) continue
-
-        searchLogger.workerProcessing(i, provider.id)
-        const startTime = performance.now()
-        let status: ExtendedSourceStat['status'] = 'success'
-        let resultCount = 0
-
-        try {
-          if (signal.aborted) return
-
-          searchLogger.providerCall(provider.id)
-          const searchPromise = provider.onSearch(params, signal)
-          const searchResult = await withTimeout(searchPromise, taskTimeoutMs)
-
-          resultCount = searchResult.items.length
-          searchLogger.providerResult(provider.id, resultCount)
-          onNewResult(searchResult)
-        } catch (error) {
-          if (error instanceof Error && error.name === 'TimeoutError') {
-            status = 'timeout'
-            searchLogger.providerTimeout(provider.id, taskTimeoutMs)
-          } else {
-            status = 'error'
-            searchLogger.providerError(
-              provider.id,
-              error instanceof Error ? error.message : 'Unknown error'
-            )
-          }
-          gatherLog.error(`Provider [${provider.id}] failed`, { error })
-        } finally {
-          const duration = performance.now() - startTime
-          if (!signal.aborted) {
-            sourceStats.push({
-              providerId: provider.id,
-              providerName: provider.name || provider.id,
-              duration,
-              resultCount,
-              status
-            })
-          }
-        }
-      }
-      searchLogger.workerComplete(i)
-    })
-
-    await Promise.all(workers)
-    gatherLog.debug('All legacy search tasks completed')
-    flushBuffer(true)
-    finalizeMetrics()
-    return countItems(allResults)
-  })
 }
 
 export const gatherAggregator = createGatherAggregator()

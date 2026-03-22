@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto'
 import { requirePilotDatabase } from './pilot-store'
 import { toBoundedPositiveInt } from './quota-api'
 
-const COMPAT_ENTITY_TABLE = 'pilot_compat_entities'
+const ENTITY_TABLE = 'pilot_entities'
+const LEGACY_ENTITY_TABLE = 'pilot_compat_entities'
+const MIGRATION_TABLE = 'pilot_entity_migrations'
+const LEGACY_MIGRATION_KEY = 'compat_entities_to_entities_v1'
 const QUERY_IGNORE_KEYS = new Set([
   '_t',
   'page',
@@ -18,7 +21,7 @@ const QUERY_IGNORE_KEYS = new Set([
   'keyword',
 ])
 
-export interface PilotCompatPageMeta {
+export interface PilotPageMeta {
   totalItems: number
   itemCount: number
   itemsPerPage: number
@@ -26,12 +29,12 @@ export interface PilotCompatPageMeta {
   currentPage: number
 }
 
-export interface PilotCompatPageResult<T> {
+export interface PilotPageResult<T> {
   items: T[]
-  meta: PilotCompatPageMeta
+  meta: PilotPageMeta
 }
 
-interface CompatEntityRow {
+interface EntityRow {
   domain: string
   id: string
   payload: string
@@ -39,7 +42,20 @@ interface CompatEntityRow {
   updated_at: string
 }
 
-interface ListCompatEntitiesOptions<T = Record<string, any>> {
+interface LegacyDomainCount {
+  domain: string
+  count: number | string
+}
+
+interface MigrationRow {
+  id: string
+  status: string
+  details: string | null
+  created_at: string
+  updated_at: string
+}
+
+interface ListEntitiesOptions<T = Record<string, any>> {
   query?: Record<string, unknown>
   mapper?: (item: Record<string, any>) => T
   filter?: (item: Record<string, any>) => boolean
@@ -49,14 +65,15 @@ interface ListCompatEntitiesOptions<T = Record<string, any>> {
   maxPageSize?: number
 }
 
-interface UpsertCompatEntityInput {
+interface UpsertEntityInput {
   domain: string
   id?: string
   payload: Record<string, any>
   merge?: boolean
 }
 
-let compatSchemaReady = false
+let entitySchemaReady = false
+let ensureSchemaTask: Promise<void> | null = null
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -96,7 +113,7 @@ function safeJsonStringify(value: unknown): string {
   }
 }
 
-function createCompatId(domain: string): string {
+function createEntityId(domain: string): string {
   const prefix = normalizeRecordId(domain).replaceAll('.', '_').slice(-12) || 'item'
   const randomPart = randomUUID().replaceAll('-', '').slice(0, 10)
   return `${prefix}_${Date.now().toString(36)}_${randomPart}`
@@ -137,7 +154,7 @@ function matchesFilterValue(actual: unknown, expected: unknown): boolean {
   return actualText.includes(expectedText)
 }
 
-function buildPageMeta(totalItems: number, currentPage: number, itemsPerPage: number, itemCount: number): PilotCompatPageMeta {
+function buildPageMeta(totalItems: number, currentPage: number, itemsPerPage: number, itemCount: number): PilotPageMeta {
   const totalPages = totalItems <= 0 ? 0 : Math.ceil(totalItems / itemsPerPage)
   return {
     totalItems,
@@ -148,7 +165,7 @@ function buildPageMeta(totalItems: number, currentPage: number, itemsPerPage: nu
   }
 }
 
-function mapEntityRow(row: CompatEntityRow): Record<string, any> {
+function mapEntityRow(row: EntityRow): Record<string, any> {
   const payload = safeJsonParse(row.payload)
   const id = normalizeRecordId(payload.id || row.id)
   return {
@@ -159,34 +176,176 @@ function mapEntityRow(row: CompatEntityRow): Record<string, any> {
   }
 }
 
-export async function ensurePilotCompatSchema(event: H3Event): Promise<void> {
-  if (compatSchemaReady) {
-    return
-  }
-  const db = requirePilotDatabase(event)
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${COMPAT_ENTITY_TABLE} (
-      domain TEXT NOT NULL,
-      id TEXT NOT NULL,
-      payload TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (domain, id)
-    );
-  `).run()
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_pilot_compat_entities_domain_updated
-    ON ${COMPAT_ENTITY_TABLE}(domain, updated_at DESC);
-  `).run()
-  compatSchemaReady = true
+function buildMigrationDetails(details: Record<string, unknown>): string {
+  return safeJsonStringify(details)
 }
 
-export async function listPilotCompatEntities<T = Record<string, any>>(
+async function upsertMigrationMarker(
+  event: H3Event,
+  status: 'done' | 'failed',
+  details: Record<string, unknown>,
+): Promise<void> {
+  const db = requirePilotDatabase(event)
+  const now = nowIso()
+  await db.prepare(`
+    INSERT INTO ${MIGRATION_TABLE}
+      (id, status, details, created_at, updated_at)
+    VALUES (?1, ?2, ?3, ?4, ?5)
+    ON CONFLICT(id) DO UPDATE SET
+      status = excluded.status,
+      details = excluded.details,
+      updated_at = excluded.updated_at
+  `).bind(
+    LEGACY_MIGRATION_KEY,
+    status,
+    buildMigrationDetails(details),
+    now,
+    now,
+  ).run()
+}
+
+async function hasLegacyTable(event: H3Event): Promise<boolean> {
+  const db = requirePilotDatabase(event)
+  const row = await db.prepare(`
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'table' AND name = ?1
+    LIMIT 1
+  `).bind(LEGACY_ENTITY_TABLE).first<{ name: string }>()
+  return !!row?.name
+}
+
+async function getLegacyDomainCounts(event: H3Event): Promise<LegacyDomainCount[]> {
+  const db = requirePilotDatabase(event)
+  const { results } = await db.prepare(`
+    SELECT domain, COUNT(1) as count
+    FROM ${LEGACY_ENTITY_TABLE}
+    GROUP BY domain
+  `).all<LegacyDomainCount>()
+  return results || []
+}
+
+async function migrateLegacyEntities(event: H3Event): Promise<void> {
+  const db = requirePilotDatabase(event)
+
+  const migration = await db.prepare(`
+    SELECT id, status, details, created_at, updated_at
+    FROM ${MIGRATION_TABLE}
+    WHERE id = ?1
+    LIMIT 1
+  `).bind(LEGACY_MIGRATION_KEY).first<MigrationRow>()
+
+  if (migration?.status === 'done') {
+    return
+  }
+
+  const legacyExists = await hasLegacyTable(event)
+  if (!legacyExists) {
+    await upsertMigrationMarker(event, 'done', {
+      reason: 'legacy_table_missing',
+      table: LEGACY_ENTITY_TABLE,
+      finalizedAt: nowIso(),
+    })
+    return
+  }
+
+  try {
+    await db.prepare(`
+      INSERT INTO ${ENTITY_TABLE}
+        (domain, id, payload, created_at, updated_at)
+      SELECT domain, id, payload, created_at, updated_at
+      FROM ${LEGACY_ENTITY_TABLE}
+      ON CONFLICT(domain, id) DO UPDATE SET
+        payload = excluded.payload,
+        updated_at = excluded.updated_at
+    `).run()
+
+    const legacyDomainCounts = await getLegacyDomainCounts(event)
+    for (const row of legacyDomainCounts) {
+      const expected = Number(row.count || 0)
+      const current = await db.prepare(`
+        SELECT COUNT(1) as count
+        FROM ${ENTITY_TABLE}
+        WHERE domain = ?1
+      `).bind(row.domain).first<{ count: number | string }>()
+
+      if (Number(current?.count || 0) !== expected) {
+        throw new Error(
+          `Entity migration verification failed for domain=${row.domain}, expected=${expected}, actual=${Number(current?.count || 0)}`,
+        )
+      }
+    }
+
+    const backupTable = `${LEGACY_ENTITY_TABLE}_backup_${Date.now().toString(36)}`
+    await db.prepare(`ALTER TABLE ${LEGACY_ENTITY_TABLE} RENAME TO ${backupTable}`).run()
+
+    const totalLegacyRows = legacyDomainCounts.reduce((acc, item) => acc + Number(item.count || 0), 0)
+    await upsertMigrationMarker(event, 'done', {
+      from: LEGACY_ENTITY_TABLE,
+      to: ENTITY_TABLE,
+      backupTable,
+      totalRows: totalLegacyRows,
+      domains: legacyDomainCounts,
+      finalizedAt: nowIso(),
+    })
+  }
+  catch (error) {
+    await upsertMigrationMarker(event, 'failed', {
+      message: error instanceof Error ? error.message : String(error),
+      occurredAt: nowIso(),
+    })
+    throw error
+  }
+}
+
+export async function ensurePilotEntitySchema(event: H3Event): Promise<void> {
+  if (entitySchemaReady) {
+    return
+  }
+
+  if (!ensureSchemaTask) {
+    ensureSchemaTask = (async () => {
+      const db = requirePilotDatabase(event)
+      await db.prepare(`
+        CREATE TABLE IF NOT EXISTS ${ENTITY_TABLE} (
+          domain TEXT NOT NULL,
+          id TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (domain, id)
+        );
+      `).run()
+      await db.prepare(`
+        CREATE INDEX IF NOT EXISTS idx_pilot_entities_domain_updated
+        ON ${ENTITY_TABLE}(domain, updated_at DESC);
+      `).run()
+      await db.prepare(`
+        CREATE TABLE IF NOT EXISTS ${MIGRATION_TABLE} (
+          id TEXT PRIMARY KEY,
+          status TEXT NOT NULL,
+          details TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `).run()
+
+      await migrateLegacyEntities(event)
+      entitySchemaReady = true
+    })().finally(() => {
+      ensureSchemaTask = null
+    })
+  }
+
+  await ensureSchemaTask
+}
+
+export async function listPilotEntities<T = Record<string, any>>(
   event: H3Event,
   domain: string,
-  options: ListCompatEntitiesOptions<T> = {},
-): Promise<PilotCompatPageResult<T>> {
-  await ensurePilotCompatSchema(event)
+  options: ListEntitiesOptions<T> = {},
+): Promise<PilotPageResult<T>> {
+  await ensurePilotEntitySchema(event)
   const db = requirePilotDatabase(event)
   const query = options.query || {}
   const page = toBoundedPositiveInt(query.page, options.defaultPage ?? 1, 1, 100000)
@@ -202,10 +361,10 @@ export async function listPilotCompatEntities<T = Record<string, any>>(
 
   const { results } = await db.prepare(`
     SELECT domain, id, payload, created_at, updated_at
-    FROM ${COMPAT_ENTITY_TABLE}
+    FROM ${ENTITY_TABLE}
     WHERE domain = ?1
     ORDER BY updated_at DESC
-  `).bind(domain).all<CompatEntityRow>()
+  `).bind(domain).all<EntityRow>()
 
   const mapped = (results || []).map(mapEntityRow)
   const filtered = mapped.filter((item) => {
@@ -242,12 +401,12 @@ export async function listPilotCompatEntities<T = Record<string, any>>(
   }
 }
 
-export async function listPilotCompatEntitiesAll<T = Record<string, any>>(
+export async function listPilotEntitiesAll<T = Record<string, any>>(
   event: H3Event,
   domain: string,
   mapper?: (item: Record<string, any>) => T,
 ): Promise<T[]> {
-  const page = await listPilotCompatEntities<T>(event, domain, {
+  const page = await listPilotEntities<T>(event, domain, {
     query: {
       page: 1,
       pageSize: 10000,
@@ -257,12 +416,12 @@ export async function listPilotCompatEntitiesAll<T = Record<string, any>>(
   return page.items
 }
 
-export async function getPilotCompatEntity(
+export async function getPilotEntity(
   event: H3Event,
   domain: string,
   id: string | number,
 ): Promise<Record<string, any> | null> {
-  await ensurePilotCompatSchema(event)
+  await ensurePilotEntitySchema(event)
   const db = requirePilotDatabase(event)
   const normalizedId = normalizeRecordId(id)
   if (!normalizedId) {
@@ -270,22 +429,22 @@ export async function getPilotCompatEntity(
   }
   const row = await db.prepare(`
     SELECT domain, id, payload, created_at, updated_at
-    FROM ${COMPAT_ENTITY_TABLE}
+    FROM ${ENTITY_TABLE}
     WHERE domain = ?1 AND id = ?2
     LIMIT 1
-  `).bind(domain, normalizedId).first<CompatEntityRow>()
+  `).bind(domain, normalizedId).first<EntityRow>()
   return row ? mapEntityRow(row) : null
 }
 
-export async function upsertPilotCompatEntity(
+export async function upsertPilotEntity(
   event: H3Event,
-  input: UpsertCompatEntityInput,
+  input: UpsertEntityInput,
 ): Promise<Record<string, any>> {
-  await ensurePilotCompatSchema(event)
+  await ensurePilotEntitySchema(event)
   const db = requirePilotDatabase(event)
   const now = nowIso()
-  const id = normalizeRecordId(input.id || input.payload.id) || createCompatId(input.domain)
-  const existing = await getPilotCompatEntity(event, input.domain, id)
+  const id = normalizeRecordId(input.id || input.payload.id) || createEntityId(input.domain)
+  const existing = await getPilotEntity(event, input.domain, id)
   const merged = input.merge === false
     ? {
         ...input.payload,
@@ -303,7 +462,7 @@ export async function upsertPilotCompatEntity(
   }
 
   await db.prepare(`
-    INSERT INTO ${COMPAT_ENTITY_TABLE}
+    INSERT INTO ${ENTITY_TABLE}
       (domain, id, payload, created_at, updated_at)
     VALUES (?1, ?2, ?3, ?4, ?5)
     ON CONFLICT(domain, id) DO UPDATE SET
@@ -320,25 +479,25 @@ export async function upsertPilotCompatEntity(
   return record
 }
 
-export async function deletePilotCompatEntity(
+export async function deletePilotEntity(
   event: H3Event,
   domain: string,
   id: string | number,
 ): Promise<boolean> {
-  await ensurePilotCompatSchema(event)
+  await ensurePilotEntitySchema(event)
   const db = requirePilotDatabase(event)
   const normalizedId = normalizeRecordId(id)
   if (!normalizedId) {
     return false
   }
   const result = await db.prepare(`
-    DELETE FROM ${COMPAT_ENTITY_TABLE}
+    DELETE FROM ${ENTITY_TABLE}
     WHERE domain = ?1 AND id = ?2
   `).bind(domain, normalizedId).run()
   return Number(result.meta?.changes || 0) > 0
 }
 
-export async function deletePilotCompatEntities(
+export async function deletePilotEntities(
   event: H3Event,
   domain: string,
   ids: Array<string | number>,
@@ -346,13 +505,13 @@ export async function deletePilotCompatEntities(
   if (!Array.isArray(ids) || ids.length <= 0) {
     return 0
   }
-  await ensurePilotCompatSchema(event)
+  await ensurePilotEntitySchema(event)
   const db = requirePilotDatabase(event)
   const normalized = ids.map(id => normalizeRecordId(id)).filter(Boolean)
   let deleted = 0
   for (const id of normalized) {
     const result = await db.prepare(`
-      DELETE FROM ${COMPAT_ENTITY_TABLE}
+      DELETE FROM ${ENTITY_TABLE}
       WHERE domain = ?1 AND id = ?2
     `).bind(domain, id).run()
     deleted += Number(result.meta?.changes || 0)
@@ -360,7 +519,7 @@ export async function deletePilotCompatEntities(
   return deleted
 }
 
-export async function ensurePilotCompatSeed(
+export async function ensurePilotEntitySeed(
   event: H3Event,
   domain: string,
   seeds: Array<Record<string, any>>,
@@ -368,18 +527,18 @@ export async function ensurePilotCompatSeed(
   if (!Array.isArray(seeds) || seeds.length <= 0) {
     return
   }
-  await ensurePilotCompatSchema(event)
+  await ensurePilotEntitySchema(event)
   const db = requirePilotDatabase(event)
   const row = await db.prepare(`
     SELECT COUNT(1) as count
-    FROM ${COMPAT_ENTITY_TABLE}
+    FROM ${ENTITY_TABLE}
     WHERE domain = ?1
   `).bind(domain).first<{ count: number | string }>()
   if (Number(row?.count || 0) > 0) {
     return
   }
   for (const seed of seeds) {
-    await upsertPilotCompatEntity(event, {
+    await upsertPilotEntity(event, {
       domain,
       id: normalizeRecordId(seed.id),
       payload: seed,

@@ -9,7 +9,7 @@ definePageMeta({
   },
 })
 
-type ProviderType = 'searxng' | 'serper' | 'tavily'
+type ProviderType = 'sosearch' | 'searxng' | 'serper' | 'tavily'
 
 interface ProviderItem {
   id: string
@@ -49,8 +49,8 @@ interface WebsearchForm {
 
 const loading = ref(false)
 const saving = ref(false)
-const form = ref<WebsearchForm>(createEmptyForm())
 let providerSeq = 0
+const form = ref<WebsearchForm>(createEmptyForm())
 
 function normalizeText(value: unknown): string {
   return String(value || '').trim()
@@ -88,17 +88,21 @@ function createProviderId(type: ProviderType): string {
 
 function createProvider(type: ProviderType): ProviderItem {
   const defaults: Record<ProviderType, { baseUrl: string, priority: number }> = {
-    searxng: {
+    sosearch: {
       baseUrl: '',
       priority: 10,
     },
+    searxng: {
+      baseUrl: '',
+      priority: 20,
+    },
     serper: {
       baseUrl: 'https://google.serper.dev',
-      priority: 20,
+      priority: 30,
     },
     tavily: {
       baseUrl: 'https://api.tavily.com',
-      priority: 30,
+      priority: 40,
     },
   }
 
@@ -124,7 +128,7 @@ function getNextProviderPriority(list: ProviderItem[]): number {
 
 function createEmptyForm(): WebsearchForm {
   return {
-    providers: [createProvider('searxng'), createProvider('serper'), createProvider('tavily')],
+    providers: [createProvider('sosearch'), createProvider('searxng'), createProvider('serper'), createProvider('tavily')],
     aggregation: {
       mode: 'hybrid',
       targetResults: 6,
@@ -144,7 +148,7 @@ function createEmptyForm(): WebsearchForm {
 
 function normalizeProviderType(value: unknown): ProviderType {
   const text = normalizeText(value).toLowerCase()
-  if (text === 'serper' || text === 'tavily') {
+  if (text === 'sosearch' || text === 'serper' || text === 'tavily') {
     return text
   }
   return 'searxng'
@@ -152,7 +156,7 @@ function normalizeProviderType(value: unknown): ProviderType {
 
 function normalizeProviders(value: unknown): ProviderItem[] {
   if (!Array.isArray(value) || value.length <= 0) {
-    return [createProvider('searxng'), createProvider('serper'), createProvider('tavily')]
+    return [createProvider('sosearch'), createProvider('searxng'), createProvider('serper'), createProvider('tavily')]
   }
 
   const parsed = value
@@ -181,7 +185,7 @@ function normalizeProviders(value: unknown): ProviderItem[] {
     .filter((item): item is ProviderItem => Boolean(item))
     .sort((a, b) => a.priority - b.priority)
 
-  return parsed.length > 0 ? parsed : [createProvider('searxng')]
+  return parsed.length > 0 ? parsed : [createProvider('sosearch')]
 }
 
 function normalizeForm(raw: any): WebsearchForm {
@@ -189,8 +193,8 @@ function normalizeForm(raw: any): WebsearchForm {
   const crawlRaw = raw?.crawl || {}
   const allowlist = Array.isArray(raw?.allowlistDomains)
     ? raw.allowlistDomains
-      .map((item: unknown) => normalizeText(item).toLowerCase())
-      .filter(Boolean)
+        .map((item: unknown) => normalizeText(item).toLowerCase())
+        .filter(Boolean)
     : []
 
   return {
@@ -352,6 +356,9 @@ onMounted(() => {
         </template>
 
         <div class="provider-actions">
+          <el-button size="small" @click="addProvider('sosearch')">
+            + SoSearch
+          </el-button>
           <el-button size="small" @click="addProvider('searxng')">
             + SearXNG
           </el-button>
@@ -372,6 +379,7 @@ onMounted(() => {
           <el-table-column label="Type" width="140">
             <template #default="{ row }">
               <el-select v-model="row.type" style="width: 100%">
+                <el-option label="sosearch" value="sosearch" />
                 <el-option label="searxng" value="searxng" />
                 <el-option label="serper" value="serper" />
                 <el-option label="tavily" value="tavily" />

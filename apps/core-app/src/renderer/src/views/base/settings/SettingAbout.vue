@@ -9,7 +9,6 @@ import { AppPreviewChannel } from '@talex-touch/utils'
 import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -37,10 +36,13 @@ const appUpdate = computed(() => Boolean(startupInfo.value?.appUpdate))
 
 const dev = ref(false)
 interface PerformanceSummary {
-  mainProcessTime: number
-  rendererTime: number
+  mainProcessTime?: number
+  rendererTime?: number
   moduleCount?: number
   rating?: 'excellent' | 'good' | 'fair' | 'poor'
+  avgStartupTime?: number
+  avgMemoryUsage?: number
+  sampleCount?: number
 }
 
 const performanceSummary = ref<PerformanceSummary | null>(null)
@@ -78,10 +80,9 @@ onMounted(async () => {
 
   // Load performance summary
   try {
-    const analyticsSummary = defineRawEvent<void, PerformanceSummary | null>(
-      'analytics:get-summary'
-    )
-    const summary = await transport.send(analyticsSummary)
+    const summary = (await transport.send(
+      AppEvents.analytics.getSummary
+    )) as PerformanceSummary | null
     performanceSummary.value = summary
   } catch (error) {
     console.warn('Failed to load performance summary', error)
@@ -103,11 +104,17 @@ const startCosts = computed(() =>
 // Export performance data
 async function exportPerformanceData() {
   try {
-    const analyticsExport = defineRawEvent<void, string>('analytics:export')
-    const data = await transport.send(analyticsExport)
+    const now = Date.now()
+    const data = (await transport.send(AppEvents.analytics.export, {
+      windowType: '24h',
+      from: now - 24 * 60 * 60 * 1000,
+      to: now,
+      format: 'json'
+    })) as { content?: string } | string
+    const content = typeof data === 'string' ? data : String(data?.content || '')
 
     // Create a download link
-    const blob = new Blob([data], { type: 'application/json' })
+    const blob = new Blob([content], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -306,30 +313,34 @@ function openSoftwareLicense() {
     </TuffBlockLine>
     <template v-if="showPerformanceDetails && performanceSummary">
       <TuffBlockLine :title="t('settingAbout.mainProcessTime')">
-        <template #description> {{ performanceSummary.mainProcessTime.toFixed(3) }}s </template>
+        <template #description>
+          {{ Number(performanceSummary.mainProcessTime ?? 0).toFixed(3) }}s
+        </template>
       </TuffBlockLine>
       <TuffBlockLine :title="t('settingAbout.rendererTime')">
-        <template #description> {{ performanceSummary.rendererTime.toFixed(3) }}s </template>
+        <template #description>
+          {{ Number(performanceSummary.rendererTime ?? 0).toFixed(3) }}s
+        </template>
       </TuffBlockLine>
       <TuffBlockLine :title="t('settingAbout.modulesLoaded')">
         <template #description>
-          {{ performanceSummary.moduleCount }}
+          {{ performanceSummary.moduleCount ?? '--' }}
         </template>
       </TuffBlockLine>
       <TuffBlockLine :title="t('settingAbout.performanceRating')">
         <template #description>
           <span
             :style="`color: ${
-              performanceSummary.rating === 'excellent'
+              (performanceSummary.rating || 'fair') === 'excellent'
                 ? 'var(--tx-color-success)'
-                : performanceSummary.rating === 'good'
+                : (performanceSummary.rating || 'fair') === 'good'
                   ? 'var(--tx-color-warning)'
-                  : performanceSummary.rating === 'fair'
+                  : (performanceSummary.rating || 'fair') === 'fair'
                     ? 'var(--tx-color-error)'
                     : 'var(--tx-color-danger)'
             }`"
           >
-            {{ t(`settingAbout.rating.${performanceSummary.rating}`) }}
+            {{ t(`settingAbout.rating.${performanceSummary.rating || 'fair'}`) }}
           </span>
         </template>
       </TuffBlockLine>

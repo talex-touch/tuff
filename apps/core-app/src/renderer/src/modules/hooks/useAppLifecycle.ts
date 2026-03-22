@@ -13,10 +13,6 @@ import {
 } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { appSetting } from '~/modules/channel/storage/index'
-import {
-  shouldShowPlatformWarning,
-  showPlatformCompatibilityWarning
-} from '~/modules/mention/platform-warning'
 import { devLog } from '~/utils/dev-log'
 import { useCoreBox } from './core-box'
 import { useStartupInfo } from './useStartupInfo'
@@ -115,8 +111,6 @@ export function useAppLifecycle() {
       preloadLog('Tuff is ready.')
       preloadRemoveOverlay()
 
-      await maybeShowPlatformWarning()
-
       await start()
     } catch (error) {
       console.error('[useAppLifecycle] Initialization failed', error)
@@ -142,29 +136,4 @@ function resolveStorageChannel(): IStorageChannel | null {
     // Channel may not be ready during early lifecycle warmup.
   }
   return null
-}
-
-/**
- * 如果启动信息需要，则显示平台警告对话框
- */
-async function maybeShowPlatformWarning(): Promise<void> {
-  if (isCoreBox()) {
-    return
-  }
-
-  if (!shouldShowPlatformWarning()) {
-    return
-  }
-
-  const { startupInfo } = useStartupInfo()
-  const warningMessage = startupInfo.value?.platformWarning
-  if (!warningMessage) {
-    return
-  }
-
-  try {
-    await showPlatformCompatibilityWarning(warningMessage)
-  } catch (error) {
-    console.warn('[useAppLifecycle] 显示平台警告失败', error)
-  }
 }

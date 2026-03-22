@@ -300,12 +300,12 @@ This page maps `packages/utils/transport/sdk/domains/*` to main-process handlers
 | `agents:task-failed` | `agentManager.on('task:failed') -> transport.broadcast` (`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`) | Renderer (agent status subscribers) |
 | `agents:task-cancelled` | `agentManager.on('task:cancelled') -> transport.broadcast` (`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`) | Renderer (agent status subscribers) |
 
-### C9. Analytics legacy events
+### C9. Analytics events
 
 | Event Name | Sender | Handler |
 | --- | --- | --- |
-| `analytics:get-summary` | Renderer (`apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`) | `AnalyticsModule.registerTransportHandlers -> startupAnalytics.getPerformanceSummary` (`apps/core-app/src/main/modules/analytics/analytics-module.ts`) |
-| `analytics:export` | Renderer (`apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`) | `AnalyticsModule.registerTransportHandlers -> startupAnalytics.exportMetrics` (`apps/core-app/src/main/modules/analytics/analytics-module.ts`) |
+| `AppEvents.analytics.getSummary` | Renderer (`apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`) | `AnalyticsModule.registerTransportHandlers -> startupAnalytics.getPerformanceSummary` (`apps/core-app/src/main/modules/analytics/analytics-module.ts`) |
+| `AppEvents.analytics.export` | Renderer (`apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`) | `AnalyticsModule.registerTransportHandlers -> startupAnalytics.exportMetrics` (`apps/core-app/src/main/modules/analytics/analytics-module.ts`) |
 
 ### C10. AddonOpener / Drop raw events
 
