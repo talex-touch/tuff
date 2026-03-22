@@ -19,6 +19,13 @@ class AppTaskGate {
     return this.activeCount > 0
   }
 
+  getSnapshot(): { activeCount: number; activeLabels: Record<string, number> } {
+    return {
+      activeCount: this.activeCount,
+      activeLabels: Object.fromEntries(this.activeLabels.entries())
+    }
+  }
+
   async runAppTask<T>(task: () => Promise<T>, label: string = 'app-task'): Promise<T> {
     this.activeCount += 1
     const current = this.activeLabels.get(label) ?? 0

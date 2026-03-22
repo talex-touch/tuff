@@ -17,6 +17,7 @@ import type {
   MetaShowRequest
 } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import type { TouchApp } from '../../../core/touch-app'
+import crypto from 'node:crypto'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
@@ -238,9 +239,11 @@ export class IpcManager {
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.search.query, async ({ query }) => {
         if (searchLogger.isEnabled()) {
+          const text = query?.text ?? ''
+          const queryHash = crypto.createHash('sha1').update(text).digest('hex').slice(0, 12)
           searchLogger.logSearchPhase(
             'IPC Query',
-            `Text: "${query?.text ?? ''}", Inputs: ${query?.inputs?.length ?? 0}`
+            `len=${text.length}, hash=${queryHash}, inputs=${query?.inputs?.length ?? 0}`
           )
         }
         return await coreBoxManager.search(query)

@@ -63,6 +63,23 @@ interface PerfAggregate {
   lastAt: number
 }
 
+export interface EventLoopLagSnapshot {
+  lagMs: number
+  severity: 'warn' | 'error'
+  at: number
+}
+
+export interface SevereLagBurstEvent {
+  thresholdMs: number
+  windowMs: number
+  cooldownMs: number
+  triggerCount: number
+  latestLagMs: number
+  at: number
+}
+
+type SevereLagBurstListener = (event: SevereLagBurstEvent) => void
+
 const perfLog = createLogger('Perf')
 const ipcPerfLog = perfLog.child('IPC')
 const loopPerfLog = perfLog.child('EventLoop')
@@ -101,6 +118,10 @@ const LOOP_LAG_WARN_MS = 200
 const LOOP_LAG_ERROR_MS = 2_000
 /** Lags above this threshold are almost certainly caused by system sleep/suspend, not real event loop blocking. */
 const SYSTEM_SLEEP_THRESHOLD_MS = 30_000
+const SEVERE_LAG_BURST_THRESHOLD_MS = 2_000
+const SEVERE_LAG_BURST_WINDOW_MS = 30_000
+const SEVERE_LAG_BURST_TRIGGER_COUNT = 2
+const SEVERE_LAG_BURST_COOLDOWN_MS = 120_000
 
 const SUMMARY_INTERVAL_MS = 60_000
 const MAX_INCIDENTS = 80
@@ -240,6 +261,10 @@ export class PerfMonitor {
   private lastHeapSnapshotAt = 0
   private readonly heapSnapshotIntervalMs = 10_000
   private lastLoopDiagnosticKey = ''
+  private lastEventLoopLag: EventLoopLagSnapshot | null = null
+  private severeLagWindowHits: number[] = []
+  private lastSevereLagBurstAt = 0
+  private severeLagBurstListeners = new Set<SevereLagBurstListener>()
 
   /** Timestamp (Date.now) of the most recent system resume, or 0 if none. */
   private systemResumedAt = 0
@@ -254,6 +279,18 @@ export class PerfMonitor {
     }
     this.logThrottle.set(key, now)
     return true
+  }
+
+  onSevereLagBurst(listener: SevereLagBurstListener): () => void {
+    this.severeLagBurstListeners.add(listener)
+    return () => {
+      this.severeLagBurstListeners.delete(listener)
+    }
+  }
+
+  getRecentEventLoopLagSnapshot(): EventLoopLagSnapshot | null {
+    if (!this.lastEventLoopLag) return null
+    return { ...this.lastEventLoopLag }
   }
 
   start(): void {
@@ -329,6 +366,7 @@ export class PerfMonitor {
     pollingService.unregister(PERF_HEAP_TASK_ID)
     for (const dispose of this.powerListeners) dispose()
     this.powerListeners = []
+    this.severeLagWindowHits = []
   }
 
   /**
@@ -553,8 +591,56 @@ export class PerfMonitor {
     }
   }
 
+  private evaluateSevereLagBurst(lagMs: number, now: number): void {
+    if (lagMs < SEVERE_LAG_BURST_THRESHOLD_MS) {
+      return
+    }
+
+    const windowStart = now - SEVERE_LAG_BURST_WINDOW_MS
+    this.severeLagWindowHits = this.severeLagWindowHits.filter((ts) => ts >= windowStart)
+    this.severeLagWindowHits.push(now)
+
+    if (this.severeLagWindowHits.length < SEVERE_LAG_BURST_TRIGGER_COUNT) {
+      return
+    }
+
+    if (now - this.lastSevereLagBurstAt < SEVERE_LAG_BURST_COOLDOWN_MS) {
+      return
+    }
+
+    this.lastSevereLagBurstAt = now
+    this.severeLagWindowHits = []
+
+    const event: SevereLagBurstEvent = {
+      thresholdMs: SEVERE_LAG_BURST_THRESHOLD_MS,
+      windowMs: SEVERE_LAG_BURST_WINDOW_MS,
+      cooldownMs: SEVERE_LAG_BURST_COOLDOWN_MS,
+      triggerCount: SEVERE_LAG_BURST_TRIGGER_COUNT,
+      latestLagMs: Math.round(lagMs),
+      at: now
+    }
+
+    loopPerfLog.warn(
+      `Severe event-loop lag window reached (${event.triggerCount}x >= ${event.thresholdMs}ms in ${Math.round(event.windowMs / 1000)}s)`
+    )
+
+    for (const listener of this.severeLagBurstListeners) {
+      try {
+        listener(event)
+      } catch (error) {
+        loopPerfLog.warn('Severe lag burst listener failed', { meta: toLogMeta({ error }) })
+      }
+    }
+  }
+
   private recordEventLoopLag(lagMs: number, severity: 'warn' | 'error'): void {
     const now = Date.now()
+    this.lastEventLoopLag = {
+      lagMs: Math.round(lagMs),
+      severity,
+      at: now
+    }
+    this.evaluateSevereLagBurst(lagMs, now)
     this.loopLagAggregate.count += 1
     this.loopLagAggregate.lastAt = now
     this.loopLagAggregate.maxDurationMs = Math.max(this.loopLagAggregate.maxDurationMs, lagMs)

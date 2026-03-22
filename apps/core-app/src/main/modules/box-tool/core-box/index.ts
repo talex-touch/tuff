@@ -10,6 +10,7 @@ import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { genTouchApp } from '../../../core'
 import { createLogger } from '../../../utils/logger'
 import { devProcessManager } from '../../../utils/dev-process-manager'
+import { perfMonitor } from '../../../utils/perf-monitor'
 import { BaseModule } from '../../abstract-base-module'
 import { shortcutModule } from '../../global-shortcon'
 import { getMainConfig } from '../../storage'
@@ -20,6 +21,7 @@ import { windowManager } from './window'
 
 const coreBoxLog = createLogger('CoreBox')
 const COREBOX_MIN_HEIGHT = 64
+const SEARCH_DIAGNOSTICS_BURST_DURATION_MS = 30_000
 const beginnerShortcutTriggeredEvent = defineRawEvent<void, void>('beginner:shortcut-triggered')
 
 export { getCoreBoxWindow } from './window'
@@ -38,6 +40,7 @@ export class CoreBoxModule extends BaseModule {
 
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
+  private disposeLagBurstSubscription: (() => void) | null = null
 
   private pendingLayoutUpdate: CoreBoxLayoutUpdateRequest | null = null
   private layoutApplyTimer: NodeJS.Timeout | null = null
@@ -51,6 +54,18 @@ export class CoreBoxModule extends BaseModule {
   async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     await $app.moduleManager.loadModule(SearchEngineCore)
     await searchLogger.init()
+    this.disposeLagBurstSubscription = perfMonitor.onSevereLagBurst((event) => {
+      searchLogger.enableBurst(SEARCH_DIAGNOSTICS_BURST_DURATION_MS, 'event-loop-severe-lag')
+      coreBoxLog.warn('Auto-enabled search diagnostics burst after severe event-loop lag', {
+        meta: {
+          lagMs: event.latestLagMs,
+          thresholdMs: event.thresholdMs,
+          windowMs: event.windowMs,
+          cooldownMs: event.cooldownMs,
+          triggerCount: event.triggerCount
+        }
+      })
+    })
 
     const channel = genTouchApp().channel
     const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
@@ -154,6 +169,11 @@ export class CoreBoxModule extends BaseModule {
   }
 
   async onDestroy(): Promise<void> {
+    if (this.disposeLagBurstSubscription) {
+      this.disposeLagBurstSubscription()
+      this.disposeLagBurstSubscription = null
+    }
+
     if (this.layoutApplyTimer) {
       clearTimeout(this.layoutApplyTimer)
       this.layoutApplyTimer = null
