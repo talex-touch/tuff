@@ -61,6 +61,7 @@ export interface RuntimeStoreAdapter {
   setSessionTitle(sessionId: string, title: string): Promise<void>
   setSessionNotification(sessionId: string, unread: boolean): Promise<void>
   listSessionNotifications(limit?: number): Promise<SessionNotificationRecord[]>
+  clearSessionMemory(sessionId: string): Promise<void>
   deleteSession(sessionId: string): Promise<void>
   saveAttachment(record: AttachmentRecord): Promise<void>
   listAttachments(sessionId: string): Promise<AttachmentRecord[]>

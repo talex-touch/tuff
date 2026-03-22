@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { RenderResult } from 'mermaid'
 import type { App } from 'vue'
 import { defaultValueCtx, Editor, editorViewOptionsCtx, rootCtx, SchemaReady } from '@milkdown/core'
 import { katexOptionsCtx, math } from '@milkdown/plugin-math'
@@ -19,7 +18,10 @@ import python from 'refractor/python'
 import tsx from 'refractor/tsx'
 import typescript from 'refractor/typescript'
 import { createApp } from 'vue'
+import type { MarkmapRenderer } from '~/components/article/renderers/markmap-renderer'
 import RenderCodeHeader from '~/components/article/components/RenderCodeHeader.vue'
+import { createMarkmapRenderer, reportMarkmapError, resolveMarkmapErrorMessage } from '~/components/article/renderers/markmap-renderer'
+import { renderMermaidSvg, reportMermaidError, resolveMermaidErrorMessage } from '~/components/article/renderers/mermaid-renderer'
 import { useRichArticle } from '~/composables/rich-article'
 import '@milkdown/theme-nord/style.css'
 import '~/components/render/style.css'
@@ -29,8 +31,10 @@ import 'katex/dist/katex.min.css'
 const props = withDefaults(defineProps<{
   content: string
   disableRich?: boolean
+  stickyCodeHeader?: boolean
 }>(), {
   disableRich: false,
+  stickyCodeHeader: true,
 })
 const emits = defineEmits(['outline'])
 
@@ -45,48 +49,23 @@ let richDestroy: (() => void) | null = null
 
 const MARKDOWN_RENDER_FLUSH_MS = 16
 const previewableCodeLangSet = new Set<string>()
-const inlinePreviewCodeLangSet = new Set(['html', 'svg', 'mermaid'])
+const inlinePreviewCodeLangSet = new Set(['html', 'svg', 'mermaid', 'flowchart', 'mindmap'])
+const mermaidCodeLangSet = new Set(['mermaid', 'flowchart'])
 const expandableCodeLangSet = new Set(['html'])
-let mermaidRuntimePromise: Promise<typeof import('mermaid').default> | null = null
-let mermaidPreviewRenderIndex = 0
 
 function normalizeCodeLanguage(value: unknown): string {
   const language = typeof value === 'string' ? value.trim().toLowerCase() : ''
   return language || 'text'
 }
 
-function resolveErrorMessage(error: unknown): string {
-  if (error instanceof Error && typeof error.message === 'string') {
-    return error.message
-  }
-  if (typeof error === 'string') {
-    return error
-  }
-  return 'Unknown error'
-}
-
-async function resolveMermaidRuntime() {
-  if (!mermaidRuntimePromise) {
-    mermaidRuntimePromise = import('mermaid').then((mod) => {
-      const runtime = mod.default
-      runtime.initialize({
-        startOnLoad: false,
-        securityLevel: 'loose',
-      })
-      return runtime
-    })
-  }
-  return mermaidRuntimePromise
-}
-
-function createMermaidLoadingNode(className: string) {
+function createPreviewLoadingNode(className: string, text = '渲染中...') {
   const loading = document.createElement('div')
   loading.className = className
   const spinner = document.createElement('span')
   spinner.className = 'RichCodePreview-MermaidSpinner'
   spinner.setAttribute('aria-hidden', 'true')
   const loadingText = document.createElement('span')
-  loadingText.textContent = 'Mermaid 渲染中...'
+  loadingText.textContent = text
   loading.appendChild(spinner)
   loading.appendChild(loadingText)
   return loading
@@ -102,22 +81,16 @@ async function renderMermaidInto(
   },
 ) {
   const isStale = options.isStale
-  const loading = createMermaidLoadingNode(options.loadingClassName)
+  const loading = createPreviewLoadingNode(options.loadingClassName, 'Mermaid 渲染中...')
   target.replaceChildren(loading)
 
   try {
-    const runtime = await resolveMermaidRuntime()
-    if (isStale?.()) {
-      return
-    }
+    const renderResult = await renderMermaidSvg(code, {
+      idPrefix: 'rich-code-mermaid-preview',
+      isStale,
+    })
 
-    mermaidPreviewRenderIndex += 1
-    const renderResult: RenderResult = await runtime.render(
-      `rich-code-mermaid-preview-${Date.now()}-${mermaidPreviewRenderIndex}`,
-      code,
-    )
-
-    if (!target.isConnected || isStale?.()) {
+    if (!renderResult || !target.isConnected || isStale?.()) {
       return
     }
 
@@ -129,9 +102,11 @@ async function renderMermaidInto(
       return
     }
 
+    reportMermaidError('MilkContent', error)
+
     const errorView = document.createElement('pre')
     errorView.className = options.errorClassName
-    errorView.textContent = `[Mermaid 渲染失败]\n${resolveErrorMessage(error)}`
+    errorView.textContent = `[Mermaid 渲染失败]\n${resolveMermaidErrorMessage(error)}`
     target.replaceChildren(errorView)
   }
 }
@@ -141,6 +116,49 @@ async function renderMermaidPreview(code: string, target: HTMLElement) {
     loadingClassName: 'RichCodePreview-MermaidStatus',
     errorClassName: 'RichCodePreview-MermaidError',
   })
+}
+
+async function renderMarkmapInto(
+  code: string,
+  target: HTMLElement,
+  options: {
+    loadingClassName: string
+    errorClassName: string
+    isStale?: () => boolean
+    onReady?: (renderer: MarkmapRenderer) => void
+  },
+) {
+  const isStale = options.isStale
+  const loading = createPreviewLoadingNode(options.loadingClassName, 'Mindmap 渲染中...')
+  target.replaceChildren(loading)
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.classList.add('EditorCode-InlineMindmapSvg')
+  target.replaceChildren(svg)
+
+  let renderer: MarkmapRenderer | null = null
+  try {
+    renderer = await createMarkmapRenderer(svg)
+    if (isStale?.()) {
+      renderer.destroy()
+      return
+    }
+
+    renderer.update(code)
+    options.onReady?.(renderer)
+  }
+  catch (error) {
+    renderer?.destroy()
+    if (!target.isConnected || isStale?.()) {
+      return
+    }
+
+    reportMarkmapError('MilkContent', error)
+    const errorView = document.createElement('pre')
+    errorView.className = options.errorClassName
+    errorView.textContent = `[Mindmap 渲染失败]\n${resolveMarkmapErrorMessage(error)}`
+    target.replaceChildren(errorView)
+  }
 }
 
 function renderSvgInto(code: string, target: HTMLElement, errorClassName: string) {
@@ -173,21 +191,34 @@ async function renderInlineCodePreview(
   language: string,
   code: string,
   target: HTMLElement,
-  isStale?: () => boolean,
+  options: {
+    isStale?: () => boolean
+    onMarkmapReady?: (renderer: MarkmapRenderer) => void
+  } = {},
 ) {
-  if (language === 'mermaid') {
+  if (mermaidCodeLangSet.has(language)) {
     await renderMermaidInto(code, target, {
       loadingClassName: 'EditorCode-InlinePreviewStatus',
       errorClassName: 'EditorCode-InlinePreviewError',
-      isStale,
+      isStale: options.isStale,
     })
     return
   }
 
-  const loading = createMermaidLoadingNode('EditorCode-InlinePreviewStatus')
+  if (language === 'mindmap') {
+    await renderMarkmapInto(code, target, {
+      loadingClassName: 'EditorCode-InlinePreviewStatus',
+      errorClassName: 'EditorCode-InlinePreviewError',
+      isStale: options.isStale,
+      onReady: options.onMarkmapReady,
+    })
+    return
+  }
+
+  const loading = createPreviewLoadingNode('EditorCode-InlinePreviewStatus')
   target.replaceChildren(loading)
 
-  if (!target.isConnected || isStale?.()) {
+  if (!target.isConnected || options.isStale?.()) {
     return
   }
 
@@ -202,12 +233,12 @@ async function renderInlineCodePreview(
     }
   }
   catch (error) {
-    if (!target.isConnected || isStale?.()) {
+    if (!target.isConnected || options.isStale?.()) {
       return
     }
     const errorView = document.createElement('pre')
     errorView.className = 'EditorCode-InlinePreviewError'
-    errorView.textContent = `[预览失败]\n${resolveErrorMessage(error)}`
+    errorView.textContent = `[预览失败]\n${resolveMermaidErrorMessage(error)}`
     target.replaceChildren(errorView)
     return
   }
@@ -246,7 +277,7 @@ function openCodePreview(language: string, code: string) {
   header.appendChild(title)
   header.appendChild(closeDom)
 
-  if (normalizedLanguage === 'mermaid') {
+  if (mermaidCodeLangSet.has(normalizedLanguage)) {
     const mermaidWrapper = document.createElement('div')
     mermaidWrapper.className = 'RichCodePreview-Mermaid'
     body.appendChild(mermaidWrapper)
@@ -294,9 +325,16 @@ function createReadonlyCodeBlockView() {
     let headerApp: App<Element> | null = null
     let inlinePreviewRenderTimer: ReturnType<typeof setTimeout> | null = null
     let inlinePreviewRenderToken = 0
+    let inlineMarkmapRenderer: MarkmapRenderer | null = null
 
     const dom = document.createElement('div')
     dom.className = 'rich-article EditorCode EditorCode--Readonly'
+    if (props.stickyCodeHeader) {
+      dom.classList.add('EditorCode--Sticky')
+    }
+
+    const chrome = document.createElement('div')
+    chrome.className = 'EditorCode-Chrome'
 
     const headerHost = document.createElement('div')
     headerHost.className = 'EditorCode-HeaderHost'
@@ -312,8 +350,14 @@ function createReadonlyCodeBlockView() {
 
     content.appendChild(pre)
     content.appendChild(inlinePreview)
-    dom.appendChild(headerHost)
-    dom.appendChild(content)
+    chrome.appendChild(headerHost)
+    chrome.appendChild(content)
+    dom.appendChild(chrome)
+
+    function clearInlineMarkmapRenderer() {
+      inlineMarkmapRenderer?.destroy()
+      inlineMarkmapRenderer = null
+    }
 
     function clearInlinePreviewRenderTimer() {
       if (!inlinePreviewRenderTimer) {
@@ -326,6 +370,7 @@ function createReadonlyCodeBlockView() {
     function invalidateInlinePreviewRender() {
       inlinePreviewRenderToken += 1
       clearInlinePreviewRenderTimer()
+      clearInlineMarkmapRenderer()
     }
 
     function scheduleInlinePreviewRender() {
@@ -341,11 +386,17 @@ function createReadonlyCodeBlockView() {
           currentLanguage,
           code.textContent || '',
           inlinePreview,
-          () => {
-            return token !== inlinePreviewRenderToken
-              || !dom.isConnected
-              || !inlinePreviewCodeLangSet.has(currentLanguage)
-              || currentMode !== 'preview'
+          {
+            isStale: () => {
+              return token !== inlinePreviewRenderToken
+                || !dom.isConnected
+                || !inlinePreviewCodeLangSet.has(currentLanguage)
+                || currentMode !== 'preview'
+            },
+            onMarkmapReady: (renderer) => {
+              clearInlineMarkmapRenderer()
+              inlineMarkmapRenderer = renderer
+            },
           },
         )
       }, 0)
@@ -445,7 +496,7 @@ function clearRenderTimer() {
   renderTimer = null
 }
 
-async function applyMarkdownContent(content) {
+async function applyMarkdownContent(content: string) {
   if (!editorInstance || content === lastRenderedContent) {
     return
   }
@@ -519,9 +570,7 @@ onMounted(async () => {
       ctx.set(defaultValueCtx, props.content || '')
       ctx.set(rootCtx, editorDom.value)
 
-      ctx.set(katexOptionsCtx.key, {
-
-      })
+      ctx.set(katexOptionsCtx.key, {})
 
       ctx.update(editorViewOptionsCtx, prev => ({
         ...prev,

@@ -1,15 +1,8 @@
 import type { IInnerItemType } from './entity'
-import type { ToolApprovalTicket } from './flow'
 import type { IChatBody, IChatConversation, IChatInnerItem, IChatItem, ICompletionHandler, IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
 import { serializePilotExecutorMessages } from '@talex-touch/tuff-intelligence/pilot-conversation'
 import { endHttp } from '~/composables/api/axios'
 import { IChatItemStatus, IChatRole, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
-import {
-  buildApprovalMonitorFailureAuditPatch,
-  buildRejectedApprovalAuditPatch,
-  normalizeToolApprovalTicket,
-  pollToolApprovalDecision,
-} from './flow'
 
 function parseJsonSafe<T>(value: string): T | null {
   try {
@@ -97,6 +90,30 @@ function normalizeExecutorErrorMessage(error: unknown): string {
   return '请求失败，请稍后重试'
 }
 
+function includesToolApprovalRequired(value: unknown): boolean {
+  const text = String(value || '').trim().toUpperCase()
+  if (!text) {
+    return false
+  }
+  return text === 'TOOL_APPROVAL_REQUIRED' || text.includes('TOOL_APPROVAL_REQUIRED')
+}
+
+function isToolApprovalRequiredPayload(payload: Record<string, any>): boolean {
+  const detail = payload?.detail && typeof payload.detail === 'object' && !Array.isArray(payload.detail)
+    ? payload.detail as Record<string, any>
+    : null
+  return (
+    includesToolApprovalRequired(payload?.code)
+    || includesToolApprovalRequired(payload?.reason)
+    || includesToolApprovalRequired(payload?.errorCode)
+    || includesToolApprovalRequired(detail?.code)
+    || includesToolApprovalRequired(detail?.reason)
+    || includesToolApprovalRequired(payload?.message)
+    || includesToolApprovalRequired(payload?.error)
+    || includesToolApprovalRequired(payload?.detail)
+  )
+}
+
 function normalizeTimeoutMs(
   value: unknown,
   fallback: number,
@@ -127,37 +144,12 @@ function normalizeBoolean(value: unknown, fallback: boolean): boolean {
   return fallback
 }
 
-async function fetchToolApprovalTicket(options: {
-  sessionId: string
-  ticketId: string
-}): Promise<ToolApprovalTicket | null> {
-  const payload = await endHttp.$http({
-    method: 'GET',
-    url: `v1/chat/sessions/${encodeURIComponent(options.sessionId)}/tool-approvals`,
-    params: {},
-  }) as Record<string, unknown>
-  const body = payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
-    ? payload.data as Record<string, unknown>
-    : payload
-  const approvals = Array.isArray(body.approvals)
-    ? body.approvals
-    : []
-  for (const item of approvals) {
-    const normalized = normalizeToolApprovalTicket(item)
-    if (!normalized) {
-      continue
-    }
-    if (normalized.ticketId === options.ticketId) {
-      return normalized
-    }
-  }
-  return null
-}
-
 const MARKDOWN_STREAM_FLUSH_MS = 16
 const MARKDOWN_STREAM_FORCE_FLUSH_MS = 64
+const TOOL_APPROVAL_DECISION_EVENT = 'pilot-tool-approval-decision'
 
 interface ToolAuditCardPayload {
+  sessionId: string
   callId: string
   toolId: string
   toolName: string
@@ -196,6 +188,7 @@ function normalizeToolAuditCardPayload(value: unknown): ToolAuditCardPayload {
         .map(item => item as Record<string, unknown>)
     : []
   return {
+    sessionId: String(row.sessionId || row.session_id || '').trim(),
     callId: String(row.callId || '').trim(),
     toolId: String(row.toolId || '').trim(),
     toolName: String(row.toolName || '').trim() || 'tool',
@@ -771,11 +764,20 @@ export const $completion = {
     }
 
     let completionResolved = false
+    const completeCallbacks = new Set<() => void>()
+    function registerCompleteCallback(callback: () => void) {
+      completeCallbacks.add(callback)
+      return () => {
+        completeCallbacks.delete(callback)
+      }
+    }
     function complete() {
       if (completionResolved) {
         return
       }
       completionResolved = true
+      completeCallbacks.forEach(callback => callback())
+      completeCallbacks.clear()
       handleEndToolParser()
 
       setTimeout(() => {
@@ -831,8 +833,6 @@ export const $completion = {
         let markdownFlushTimer: ReturnType<typeof setTimeout> | null = null
         let lastCompletionName = 'assistant'
         let waitingToolApproval = false
-        let approvalMonitorActive = false
-        let approvalMonitorCompleted = false
         const legacyIgnoredEvents = new Set([
           'turn.accepted',
           'turn.queued',
@@ -840,27 +840,12 @@ export const $completion = {
           'turn.delta',
           'turn.completed',
           'turn.failed',
-          'turn.approval_required',
           'status_updated',
           'completion',
           'verbose',
           'session_bound',
         ])
         const legacyWarnedEvents = new Set<string>()
-        const runtimePublic = useRuntimeConfig().public as Record<string, unknown>
-        const toolApprovalAutoResumeEnabled = normalizeBoolean(runtimePublic.pilotToolApprovalAutoResume, true)
-        const toolApprovalPollIntervalMs = normalizeTimeoutMs(
-          runtimePublic.pilotToolApprovalPollIntervalMs,
-          1500,
-          500,
-          15_000,
-        )
-        const toolApprovalPollTimeoutMs = normalizeTimeoutMs(
-          runtimePublic.pilotToolApprovalPollTimeoutMs,
-          10 * 60_000,
-          5_000,
-          60 * 60_000,
-        )
 
         function clearMarkdownFlushTimer() {
           if (!markdownFlushTimer)
@@ -993,6 +978,7 @@ export const $completion = {
           const key = resolveToolCardKey(payload)
           const prev = toolCardMap.get(key)
           const now = Date.now()
+          const sessionId = String(payload.sessionId || conversation.id).trim() || conversation.id
           const nextExtra = {
             ...(prev?.extra || {}),
             start: prev?.extra?.start || now,
@@ -1003,8 +989,10 @@ export const $completion = {
             callId: payload.callId,
             ticketId: payload.ticketId,
             errorCode: payload.errorCode,
+            sessionId,
           }
           const nextData = JSON.stringify({
+            sessionId,
             callId: payload.callId,
             toolId: payload.toolId,
             toolName: payload.toolName,
@@ -1039,6 +1027,134 @@ export const $completion = {
           innerMsg.value.push(created)
           toolCardMap.set(key, created)
           return created
+        }
+
+        function buildApprovalRequiredToolPayload(eventPayload: Record<string, any>): ToolAuditCardPayload {
+          const detail = eventPayload?.detail && typeof eventPayload.detail === 'object' && !Array.isArray(eventPayload.detail)
+            ? eventPayload.detail as Record<string, any>
+            : {}
+          const ticketId = String(detail.ticket_id || detail.ticketId || '').trim()
+          const callId = String(detail.call_id || detail.callId || '').trim()
+            || (ticketId ? `ticket_${ticketId}` : `approval_${Date.now()}`)
+          const durationRaw = Number(detail.duration_ms ?? detail.durationMs)
+
+          return {
+            sessionId: conversation.id,
+            callId,
+            toolId: String(detail.tool_id || detail.toolId || '').trim() || 'tool.unknown',
+            toolName: String(detail.tool_name || detail.toolName || 'tool').trim() || 'tool',
+            riskLevel: String(detail.risk_level || detail.riskLevel || 'high').trim() || 'high',
+            status: 'approval_required',
+            inputPreview: String(detail.input_preview || detail.inputPreview || '').trim(),
+            outputPreview: String(detail.output_preview || detail.outputPreview || '').trim(),
+            durationMs: Number.isFinite(durationRaw) ? Math.max(0, durationRaw) : 0,
+            ticketId,
+            sources: [],
+            errorCode: String(eventPayload.code || detail.code || 'TOOL_APPROVAL_REQUIRED').trim() || 'TOOL_APPROVAL_REQUIRED',
+            errorMessage: String(eventPayload.message || eventPayload.error || detail.message || '工具调用需要审批，请审批后继续。').trim(),
+            auditType: 'tool.call.approval_required',
+          }
+        }
+
+        const pendingToolApprovalMap = new Map<string, ToolAuditCardPayload>()
+
+        function applyApprovalRequiredState(payload: ToolAuditCardPayload) {
+          waitingToolApproval = true
+          innerMsg.status = IChatItemStatus.TOOL_CALLING
+          handler?.onTriggerStatus?.(innerMsg.status)
+          upsertToolCard(payload)
+          if (payload.ticketId) {
+            pendingToolApprovalMap.set(payload.ticketId, payload)
+          }
+          else if (payload.callId) {
+            pendingToolApprovalMap.set(payload.callId, payload)
+          }
+        }
+
+        function resolvePendingApprovalPayload(detail: Record<string, any>): ToolAuditCardPayload | null {
+          const ticketId = String(detail.ticketId || detail.ticket_id || '').trim()
+          if (ticketId && pendingToolApprovalMap.has(ticketId)) {
+            return pendingToolApprovalMap.get(ticketId) || null
+          }
+          const callId = String(detail.callId || detail.call_id || '').trim()
+          if (callId && pendingToolApprovalMap.has(callId)) {
+            return pendingToolApprovalMap.get(callId) || null
+          }
+          return null
+        }
+
+        function handleManualApprovalDecision(detail: Record<string, any>) {
+          const sessionId = String(detail.sessionId || detail.session_id || '').trim()
+          if (sessionId && sessionId !== conversation.id) {
+            return
+          }
+          const approved = detail.approved === true
+          const pendingPayload = resolvePendingApprovalPayload(detail)
+          if (pendingPayload?.ticketId) {
+            pendingToolApprovalMap.delete(pendingPayload.ticketId)
+          }
+          if (pendingPayload?.callId) {
+            pendingToolApprovalMap.delete(pendingPayload.callId)
+          }
+
+          if (approved) {
+            const payload = pendingPayload || buildApprovalRequiredToolPayload({
+              detail,
+              code: 'TOOL_APPROVAL_REQUIRED',
+            })
+            upsertToolCard({
+              ...payload,
+              auditType: 'tool.call.approved',
+              status: 'approved',
+              errorCode: '',
+              errorMessage: '',
+            })
+            waitingToolApproval = false
+            innerMsg.status = IChatItemStatus.TOOL_CALLING
+            handler?.onTriggerStatus?.(innerMsg.status)
+            startExecutorStream()
+            return
+          }
+
+          const rejectedMessage = String(detail.reason || detail.errorMessage || '工具审批被拒绝').trim() || '工具审批被拒绝'
+          if (pendingPayload) {
+            upsertToolCard({
+              ...pendingPayload,
+              auditType: 'tool.call.rejected',
+              status: 'rejected',
+              errorCode: 'TOOL_APPROVAL_REJECTED',
+              errorMessage: rejectedMessage,
+            })
+          }
+          waitingToolApproval = false
+          innerMsg.status = IChatItemStatus.TOOL_ERROR
+          handler?.onTriggerStatus?.(innerMsg.status)
+          innerMsg.value.push({
+            type: 'error',
+            value: rejectedMessage,
+          })
+          complete()
+        }
+
+        const handleToolApprovalDecisionEvent = (event: Event) => {
+          const customEvent = event as CustomEvent<Record<string, any>>
+          const detail = customEvent.detail && typeof customEvent.detail === 'object' && !Array.isArray(customEvent.detail)
+            ? customEvent.detail as Record<string, any>
+            : null
+          if (!detail) {
+            return
+          }
+          handleManualApprovalDecision(detail)
+        }
+
+        if (typeof window !== 'undefined') {
+          window.addEventListener(TOOL_APPROVAL_DECISION_EVENT, handleToolApprovalDecisionEvent as EventListener)
+          registerCompleteCallback(() => {
+            window.removeEventListener(TOOL_APPROVAL_DECISION_EVENT, handleToolApprovalDecisionEvent as EventListener)
+          })
+          signal.signal.addEventListener('abort', () => {
+            window.removeEventListener(TOOL_APPROVAL_DECISION_EVENT, handleToolApprovalDecisionEvent as EventListener)
+          }, { once: true })
         }
 
         const runEventCardMap = new Map<string, IInnerItemMeta>()
@@ -1188,101 +1304,6 @@ export const $completion = {
           )
         }
 
-        async function waitApprovalDecision(ticketId: string): Promise<ToolApprovalTicket> {
-          return pollToolApprovalDecision({
-            ticketId,
-            timeoutMs: toolApprovalPollTimeoutMs,
-            intervalMs: toolApprovalPollIntervalMs,
-            fetchTicket: async (id: string) => fetchToolApprovalTicket({
-              sessionId: conversation.id,
-              ticketId: id,
-            }),
-            isAborted: () => signal.signal.aborted,
-          })
-        }
-
-        function startApprovalMonitor(payload: ToolAuditCardPayload): boolean {
-          if (!toolApprovalAutoResumeEnabled || approvalMonitorActive || approvalMonitorCompleted) {
-            return false
-          }
-          if (!payload.ticketId) {
-            return false
-          }
-
-          approvalMonitorActive = true
-          void (async () => {
-            try {
-              const ticket = await waitApprovalDecision(payload.ticketId)
-              if (signal.signal.aborted) {
-                return
-              }
-
-              if (ticket.status === 'approved') {
-                upsertToolCard({
-                  ...payload,
-                  auditType: 'tool.call.approved',
-                  status: 'approved',
-                  errorCode: '',
-                  errorMessage: '',
-                })
-                waitingToolApproval = false
-                innerMsg.status = IChatItemStatus.TOOL_CALLING
-                handler?.onTriggerStatus?.(innerMsg.status)
-                startExecutorStream()
-                return
-              }
-
-              waitingToolApproval = false
-              innerMsg.status = IChatItemStatus.TOOL_ERROR
-              handler?.onTriggerStatus?.(innerMsg.status)
-              const rejectedPatch = buildRejectedApprovalAuditPatch({
-                fallbackMessage: payload.errorMessage || '工具审批被拒绝',
-                ticket,
-              })
-              upsertToolCard({
-                ...payload,
-                ...rejectedPatch,
-              })
-              innerMsg.value.push({
-                type: 'error',
-                value: rejectedPatch.errorMessage,
-              })
-              complete()
-            }
-            catch (error) {
-              if (signal.signal.aborted) {
-                return
-              }
-              const raw = String(error instanceof Error ? error.message : error || '')
-              if (raw === 'APPROVAL_MONITOR_ABORTED') {
-                return
-              }
-
-              waitingToolApproval = false
-              innerMsg.status = IChatItemStatus.TOOL_ERROR
-              handler?.onTriggerStatus?.(innerMsg.status)
-              const failedPatch = buildApprovalMonitorFailureAuditPatch({
-                error,
-                timeoutMs: toolApprovalPollTimeoutMs,
-              })
-              upsertToolCard({
-                ...payload,
-                ...failedPatch,
-              })
-              innerMsg.value.push({
-                type: 'error',
-                value: failedPatch.errorMessage,
-              })
-              complete()
-            }
-            finally {
-              approvalMonitorActive = false
-              approvalMonitorCompleted = true
-            }
-          })()
-          return true
-        }
-
         function pushRunEventCardFromStream(eventType: string, payload: Record<string, any>) {
           const seq = toFiniteSeq(payload.seq)
           const sessionId = normalizeRunEventText(payload.session_id || payload.sessionId || conversation.id) || conversation.id
@@ -1326,49 +1347,22 @@ export const $completion = {
             return
           }
 
-          if (eventType === 'routing.selected') {
-            upsertRunEventCard({
-              sessionId,
-              cardType: 'routing',
-              eventType,
-              status: 'completed',
-              title: '路由落点',
-              summary: `请求模型=${normalizeRunEventText(detail.modelId) || '-'}，实际=${normalizeRunEventText(detail.providerModel) || '-'}，通道=${normalizeRunEventText(detail.channelId) || '-'}`,
-              turnId,
-              seq,
-              content: '',
-              detail,
-            })
-            return
-          }
-
-          if (eventType === 'memory.context') {
-            const historyCount = Number(detail.memoryHistoryMessageCount)
+          if (eventType === 'memory.updated') {
+            const addedCount = Number(detail.addedCount)
+            const stored = detail.stored === true
+            if (!stored) {
+              return
+            }
+            const addedCountText = Number.isFinite(addedCount) && addedCount > 0
+              ? `已沉淀 ${Math.floor(addedCount)} 条记忆`
+              : '已沉淀记忆'
             upsertRunEventCard({
               sessionId,
               cardType: 'memory',
               eventType,
               status: 'completed',
               title: '记忆上下文',
-              summary: `memory=${detail.memoryEnabled === true ? 'on' : 'off'}，history=${Number.isFinite(historyCount) ? historyCount : 0}`,
-              turnId,
-              seq,
-              content: '',
-              detail,
-            })
-            return
-          }
-
-          if (eventType === 'websearch.decision') {
-            upsertRunEventCard({
-              sessionId,
-              cardType: 'websearch',
-              eventType,
-              status: detail.enabled === true ? 'running' : 'skipped',
-              title: '联网检索决策',
-              summary: detail.enabled === true
-                ? `触发检索（${normalizeRunEventText(detail.reason) || '-'})`
-                : `不触发（${normalizeRunEventText(detail.reason) || '-'})`,
+              summary: addedCountText,
               turnId,
               seq,
               content: '',
@@ -1379,6 +1373,9 @@ export const $completion = {
 
           if (eventType === 'websearch.executed') {
             const sourceCount = Number(detail.sourceCount)
+            if (!Number.isFinite(sourceCount) || sourceCount <= 0) {
+              return
+            }
             upsertRunEventCard({
               sessionId,
               cardType: 'websearch',
@@ -1386,22 +1383,6 @@ export const $completion = {
               status: 'completed',
               title: '联网检索执行',
               summary: `来源=${normalizeRunEventText(detail.source) || '-'}，命中=${Number.isFinite(sourceCount) ? sourceCount : 0}`,
-              turnId,
-              seq,
-              content: '',
-              detail,
-            })
-            return
-          }
-
-          if (eventType === 'websearch.skipped') {
-            upsertRunEventCard({
-              sessionId,
-              cardType: 'websearch',
-              eventType,
-              status: 'skipped',
-              title: '联网检索执行',
-              summary: `跳过（${normalizeRunEventText(detail.reason) || '-'})`,
               turnId,
               seq,
               content: '',
@@ -1484,16 +1465,13 @@ export const $completion = {
           }
 
           if (res.done) {
-            if (waitingToolApproval && toolApprovalAutoResumeEnabled && approvalMonitorActive) {
-              innerMsg.status = IChatItemStatus.TOOL_CALLING
-              handler?.onTriggerStatus?.(innerMsg.status)
-              return
-            }
             flushPendingMarkdownBuffer({
               markDone: true,
             })
             if (waitingToolApproval) {
               innerMsg.status = IChatItemStatus.TOOL_CALLING
+              handler?.onTriggerStatus?.(innerMsg.status)
+              return
             }
             else if (
               innerMsg.status !== IChatItemStatus.ERROR
@@ -1563,11 +1541,8 @@ export const $completion = {
           if (
             eventType === 'intent.started'
             || eventType === 'intent.completed'
-            || eventType === 'routing.selected'
-            || eventType === 'memory.context'
-            || eventType === 'websearch.decision'
+            || eventType === 'memory.updated'
             || eventType === 'websearch.executed'
-            || eventType === 'websearch.skipped'
             || eventType === 'thinking.delta'
             || eventType === 'thinking.final'
           ) {
@@ -1581,6 +1556,9 @@ export const $completion = {
 
           if (eventType === 'run.audit') {
             const payload = normalizeToolAuditCardPayload(res.payload)
+            if (!payload.sessionId) {
+              payload.sessionId = conversation.id
+            }
             const mappedStatus = mapToolAuditTypeToChatStatus(payload.auditType)
 
             if (mappedStatus !== null) {
@@ -1597,11 +1575,7 @@ export const $completion = {
               handler.onToolEnd?.(payload.toolName, payload.outputPreview)
             }
             else if (payload.auditType === 'tool.call.approval_required') {
-              waitingToolApproval = true
-              const monitorStarted = startApprovalMonitor(payload)
-              if (!monitorStarted) {
-                approvalMonitorCompleted = true
-              }
+              applyApprovalRequiredState(payload)
             }
             else if (payload.auditType === 'tool.call.failed' || payload.auditType === 'tool.call.rejected') {
               waitingToolApproval = false
@@ -1612,6 +1586,11 @@ export const $completion = {
                 })
               }
             }
+            return
+          }
+
+          if (eventType === 'turn.approval_required') {
+            applyApprovalRequiredState(buildApprovalRequiredToolPayload(res))
             return
           }
 
@@ -1639,16 +1618,13 @@ export const $completion = {
           }
 
           if (eventType === 'done') {
-            if (waitingToolApproval && toolApprovalAutoResumeEnabled && approvalMonitorActive) {
-              innerMsg.status = IChatItemStatus.TOOL_CALLING
-              handler?.onTriggerStatus?.(innerMsg.status)
-              return
-            }
             flushPendingMarkdownBuffer({
               markDone: true,
             })
             if (waitingToolApproval) {
               innerMsg.status = IChatItemStatus.TOOL_CALLING
+              handler?.onTriggerStatus?.(innerMsg.status)
+              return
             }
             else if (
               innerMsg.status !== IChatItemStatus.ERROR
@@ -1666,6 +1642,11 @@ export const $completion = {
             flushPendingMarkdownBuffer({
               force: true,
             })
+            if (isToolApprovalRequiredPayload(res)) {
+              applyApprovalRequiredState(buildApprovalRequiredToolPayload(res))
+              return
+            }
+
             handler.onError?.()
             console.error('@completion mapped error response', res)
 

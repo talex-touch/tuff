@@ -212,10 +212,10 @@ onMounted(() => {
               </div>
             </div>
 
-            <pre v-else-if="block.type === 'text'" class="inner" v-text="block.value" />
+            <pre v-else-if="block.type === 'text' && isUser" class="inner" v-text="block.value" />
 
             <RenderContent
-              v-else-if="block.type === 'markdown'"
+              v-else-if="block.type === 'markdown' || (block.type === 'text' && !isUser)"
               :dot-enable="!isEnd"
               :streaming-gradient="true"
               readonly

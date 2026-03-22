@@ -1,47 +1,96 @@
-<script setup>
-import { Markmap } from 'markmap-view'
-import { loadCSS, loadJS } from 'markmap-common'
-import { Transformer } from 'markmap-lib'
+<script setup lang="ts">
+import type { MarkmapRenderer } from '~/components/article/renderers/markmap-renderer'
+import { createMarkmapRenderer, reportMarkmapError } from '~/components/article/renderers/markmap-renderer'
 import html2canvas from 'html2canvas'
 
 const props = defineProps(['node'])
 
-const transformer = new Transformer()
-const { scripts, styles } = transformer.getAssets()
-loadCSS(styles)
-loadJS(scripts)
-
-let mm, mmF
 const loading = ref(false)
-const svgRef = ref()
-const fullscreenSvg = ref()
+const fullscreen = ref(false)
+const svgRef = ref<SVGSVGElement>()
+const fullscreenSvg = ref<SVGSVGElement>()
 
-function update() {
-  const node = props.node
+let mainRenderer: MarkmapRenderer | null = null
+let fullscreenRenderer: MarkmapRenderer | null = null
 
-  nextTick(() => {
-    const { root } = transformer.transform(node.textContent)
-    mm.setData(root)
-    mm.fit()
-
-    mm.zoom(0)
-  })
+function resolveSource() {
+  return String(props.node?.textContent || '')
 }
 
-onMounted(() => {
-  mm = Markmap.create(svgRef.value)
+async function ensureRenderer(target: SVGSVGElement | undefined, scope: 'main' | 'fullscreen') {
+  if (!target) {
+    return null
+  }
 
-  watchEffect(update)
-})
+  if (scope === 'main' && mainRenderer) {
+    return mainRenderer
+  }
+  if (scope === 'fullscreen' && fullscreenRenderer) {
+    return fullscreenRenderer
+  }
+
+  try {
+    const renderer = await createMarkmapRenderer(target)
+    if (scope === 'main') {
+      mainRenderer = renderer
+    }
+    else {
+      fullscreenRenderer = renderer
+    }
+    return renderer
+  }
+  catch (renderError) {
+    reportMarkmapError('EditorMindmap', renderError)
+    return null
+  }
+}
+
+async function renderMain() {
+  const renderer = await ensureRenderer(svgRef.value, 'main')
+  if (!renderer) {
+    return
+  }
+
+  try {
+    renderer.update(resolveSource())
+  }
+  catch (renderError) {
+    reportMarkmapError('EditorMindmap', renderError)
+  }
+}
+
+async function renderFullscreen() {
+  const renderer = await ensureRenderer(fullscreenSvg.value, 'fullscreen')
+  if (!renderer) {
+    return
+  }
+
+  try {
+    renderer.update(resolveSource())
+  }
+  catch (renderError) {
+    reportMarkmapError('EditorMindmap', renderError)
+  }
+}
+
+function resetView() {
+  mainRenderer?.resetZoom()
+}
 
 async function download() {
   loading.value = true
 
-  mm.fit()
+  mainRenderer?.fit()
 
   await sleep(500)
 
-  const canvas = await html2canvas(svgRef.value.parentElement)
+  const host = svgRef.value?.parentElement
+  if (!host) {
+    loading.value = false
+    return
+  }
+
+  const canvas = await html2canvas(host)
 
   const url = canvas.toDataURL('image/png')
 
@@ -55,24 +104,39 @@ async function download() {
   loading.value = false
 }
 
-const fullscreen = ref(false)
-
 function toFullscreen() {
   fullscreen.value = true
-
-  if (!mmF)
-    mmF = Markmap.create(fullscreenSvg.value)
-
-  const node = props.node
-
-  nextTick(() => {
-    const { root } = transformer.transform(node.textContent)
-    mmF.setData(root)
-    mmF.fit()
-
-    mmF.zoom(0)
-  })
 }
+
+onMounted(() => {
+  void renderMain()
+
+  watch(
+    () => props.node?.textContent,
+    () => {
+      void renderMain()
+      if (fullscreen.value) {
+        void renderFullscreen()
+      }
+    },
+  )
+})
+
+watch(fullscreen, (visible) => {
+  if (!visible) {
+    return
+  }
+  nextTick(() => {
+    void renderFullscreen()
+  })
+})
+
+onBeforeUnmount(() => {
+  mainRenderer?.destroy()
+  mainRenderer = null
+  fullscreenRenderer?.destroy()
+  fullscreenRenderer = null
+})
 </script>
 
 <template>
@@ -95,7 +159,7 @@ function toFullscreen() {
       <!-- TODO: 代码编辑 -->
       <div i-carbon:fit-to-screen @click="toFullscreen" />
       <div i-carbon:download @click="download" />
-      <div i-carbon:reset @click="mm.fit()" />
+      <div i-carbon:reset @click="resetView" />
     </div>
 
     <DialogTouchDialog v-model="fullscreen">

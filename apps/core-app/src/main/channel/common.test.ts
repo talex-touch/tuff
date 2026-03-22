@@ -7,9 +7,13 @@ const { fsReadFileMock, loggerWarnMock, perfDisposeMock } = vi.hoisted(() => ({
   perfDisposeMock: vi.fn()
 }))
 
-vi.mock('@talex-touch/utils', () => ({
-  isLocalhostUrl: vi.fn(() => false)
-}))
+vi.mock('@talex-touch/utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@talex-touch/utils')>()
+  return {
+    ...actual,
+    isLocalhostUrl: vi.fn(() => false)
+  }
+})
 
 vi.mock('@talex-touch/utils/common/utils/polling', () => ({
   PollingService: {
@@ -35,7 +39,29 @@ vi.mock('node:fs/promises', () => ({
   }
 }))
 
+vi.mock('node:fs', () => ({
+  promises: {
+    readFile: fsReadFileMock,
+    writeFile: vi.fn(),
+    mkdir: vi.fn(),
+    rm: vi.fn(),
+    access: vi.fn()
+  },
+  existsSync: vi.fn(() => false),
+  readFileSync: vi.fn(() => ''),
+  writeFileSync: vi.fn(),
+  mkdirSync: vi.fn()
+}))
+
 vi.mock('electron', () => ({
+  app: {
+    getVersion: vi.fn(() => '2.4.9-test'),
+    getPath: vi.fn(() => '/tmp'),
+    getAppPath: vi.fn(() => '/tmp/app'),
+    setPath: vi.fn(),
+    setAppLogsPath: vi.fn(),
+    isPackaged: false
+  },
   BrowserWindow: {
     getAllWindows: vi.fn(() => []),
     getFocusedWindow: vi.fn(() => null)
@@ -43,6 +69,13 @@ vi.mock('electron', () => ({
   dialog: {
     showOpenDialog: vi.fn(),
     showSaveDialog: vi.fn()
+  },
+  screen: {
+    getPrimaryDisplay: vi.fn(() => ({
+      id: 1,
+      size: { width: 1920, height: 1080 },
+      workAreaSize: { width: 1920, height: 1040 }
+    }))
   },
   powerMonitor: {
     on: vi.fn()
@@ -56,10 +89,60 @@ vi.mock('electron', () => ({
     openExternal: vi.fn(),
     showItemInFolder: vi.fn(),
     openPath: vi.fn(async () => '')
+  },
+  default: {
+    app: {
+      getVersion: vi.fn(() => '2.4.9-test'),
+      getPath: vi.fn(() => '/tmp'),
+      getAppPath: vi.fn(() => '/tmp/app'),
+      setPath: vi.fn(),
+      setAppLogsPath: vi.fn(),
+      isPackaged: false
+    },
+    BrowserWindow: {
+      getAllWindows: vi.fn(() => []),
+      getFocusedWindow: vi.fn(() => null)
+    },
+    screen: {
+      getPrimaryDisplay: vi.fn(() => ({
+        id: 1,
+        size: { width: 1920, height: 1080 },
+        workAreaSize: { width: 1920, height: 1040 }
+      }))
+    }
   }
 }))
 
+vi.mock('@sentry/electron/main', () => ({
+  init: vi.fn(),
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
+  addBreadcrumb: vi.fn(),
+  setTag: vi.fn(),
+  setContext: vi.fn(),
+  setUser: vi.fn(),
+  withScope: vi.fn((fn: (scope: any) => void) => fn({
+    setTag: vi.fn(),
+    setContext: vi.fn(),
+    setExtra: vi.fn()
+  })),
+  getCurrentScope: vi.fn(() => ({
+    setTag: vi.fn(),
+    setContext: vi.fn(),
+    setUser: vi.fn()
+  })),
+  flush: vi.fn(async () => true)
+}))
+
+vi.mock('talex-mica-electron', () => ({
+  IS_WINDOWS_11: false,
+  MicaBrowserWindow: class {},
+  setMicaEffect: vi.fn(),
+  disableMicaEffect: vi.fn()
+}))
+
 vi.mock('../config/default', () => ({
+  APP_FOLDER_NAME: 'tuff',
   APP_SCHEMA: 'app',
   FILE_SCHEMA: 'tfile'
 }))
@@ -68,11 +151,18 @@ vi.mock('../core/channel-core', () => ({
   genTouchChannel: vi.fn(() => ({}))
 }))
 
+vi.mock('../core/precore', () => ({
+  rootPath: '/tmp/tuff',
+  innerRootPath: '/tmp/tuff',
+  getRootPath: vi.fn(() => '/tmp/tuff')
+}))
+
 vi.mock('../core/eventbus/touch-event', () => ({
   TalexEvents: {},
   touchEventBus: {
     on: vi.fn(),
-    off: vi.fn()
+    off: vi.fn(),
+    once: vi.fn()
   }
 }))
 
@@ -137,7 +227,48 @@ vi.mock('../modules/storage', () => ({
     getStorage: vi.fn(() => ({
       remove: vi.fn()
     }))
-  }
+  },
+  isMainStorageReady: vi.fn(() => true),
+  getMainConfig: vi.fn(() => ({})),
+  saveMainConfig: vi.fn(async () => undefined),
+  subscribeMainConfig: vi.fn(() => vi.fn())
+}))
+
+vi.mock('../modules/sentry/sentry-service', () => ({
+  sentryService: {
+    configure: vi.fn(),
+    captureException: vi.fn(),
+    captureMessage: vi.fn(),
+    trackSearchMetrics: vi.fn(),
+    isTelemetryEnabled: vi.fn(() => false),
+    queueNexusTelemetry: vi.fn(),
+    isEnabled: vi.fn(() => false),
+    recordSearchMetrics: vi.fn()
+  },
+  SentryServiceModule: class SentryServiceModule {
+    preInitBeforeReady = vi.fn()
+    onInit = vi.fn()
+    onDestroy = vi.fn()
+    configure = vi.fn()
+    captureException = vi.fn()
+    captureMessage = vi.fn()
+    trackSearchMetrics = vi.fn()
+    isTelemetryEnabled = vi.fn(() => false)
+    queueNexusTelemetry = vi.fn()
+    isEnabled = vi.fn(() => false)
+    recordSearchMetrics = vi.fn()
+  },
+  getSentryService: vi.fn(() => ({
+    configure: vi.fn(),
+    captureException: vi.fn(),
+    captureMessage: vi.fn(),
+    trackSearchMetrics: vi.fn(),
+    isTelemetryEnabled: vi.fn(() => false),
+    queueNexusTelemetry: vi.fn(),
+    isEnabled: vi.fn(() => false),
+    recordSearchMetrics: vi.fn()
+  })),
+  setSentryServiceInstance: vi.fn()
 }))
 
 vi.mock('../modules/system/active-app', () => ({
@@ -186,7 +317,8 @@ vi.mock('../types', () => ({
 }))
 
 vi.mock('../utils/common-util', () => ({
-  checkPlatformCompatibility: vi.fn(() => null)
+  checkPlatformCompatibility: vi.fn(() => null),
+  checkDirWithCreate: vi.fn(() => true)
 }))
 
 vi.mock('../utils/i18n-helper', () => ({
@@ -194,12 +326,22 @@ vi.mock('../utils/i18n-helper', () => ({
 }))
 
 vi.mock('../utils/logger', () => ({
-  createLogger: vi.fn(() => ({
-    warn: loggerWarnMock,
-    debug: vi.fn(),
-    info: vi.fn(),
-    error: vi.fn()
-  }))
+  createLogger: vi.fn(() => {
+    const buildLogger = (): Record<string, unknown> => ({
+      warn: loggerWarnMock,
+      debug: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      success: vi.fn(),
+      child: vi.fn(() => buildLogger()),
+      time: vi.fn(() => ({
+        end: vi.fn(),
+        split: vi.fn()
+      }))
+    })
+
+    return buildLogger()
+  })
 }))
 
 vi.mock('../utils/perf-context', () => ({

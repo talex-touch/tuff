@@ -4,6 +4,7 @@ import { deletePilotAttachmentObject } from '../../../../utils/pilot-attachment-
 import {
   getPilotMemoryPolicy,
 } from '../../../../utils/pilot-chat-memory'
+import { deletePilotMemoryFactsBySession } from '../../../../utils/pilot-memory-facts'
 import {
   ensurePilotQuotaSessionSchema,
   getPilotQuotaSessionByChatId,
@@ -111,6 +112,7 @@ async function clearConversationMemory(
   }
 
   await store.runtime.clearSessionMemory(runtimeSessionId)
+  await deletePilotMemoryFactsBySession(event, userId, runtimeSessionId)
   const runtimeSession = await store.runtime.getSession(runtimeSessionId)
   if (runtimeSession && snapshot.topic) {
     await store.runtime.setSessionTitle(runtimeSessionId, snapshot.topic)

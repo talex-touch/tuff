@@ -23,16 +23,16 @@ import '@milkdown/theme-nord/style.css'
 
 import 'prism-themes/themes/prism-nord.css'
 
-import markdown from 'refractor/lang/markdown'
-import css from 'refractor/lang/css'
-import javascript from 'refractor/lang/javascript'
-import typescript from 'refractor/lang/typescript'
-import jsx from 'refractor/lang/jsx'
-import tsx from 'refractor/lang/tsx'
-import cpp from 'refractor/lang/cpp'
-import c from 'refractor/lang/c'
-import python from 'refractor/lang/python'
-import java from 'refractor/lang/java'
+import markdown from 'refractor/markdown'
+import css from 'refractor/css'
+import javascript from 'refractor/javascript'
+import typescript from 'refractor/typescript'
+import jsx from 'refractor/jsx'
+import tsx from 'refractor/tsx'
+import cpp from 'refractor/cpp'
+import c from 'refractor/c'
+import python from 'refractor/python'
+import java from 'refractor/java'
 import { useNodeViewFactory } from '@prosemirror-adapter/vue'
 import EditorCodeBlock from '~/components/article/components/EditorCodeBlock.vue'
 import EditorBlockQuote from '~/components/article/components/EditorBlockQuote.vue'
@@ -89,7 +89,7 @@ function tooltipPluginView(view: any) {
   }
 }
 
-const uploader: Uploader = async (files, schema) => {
+const uploader: Uploader = async (files, schema, _ctx, _insertPos) => {
   const images: File[] = []
 
   for (let i = 0; i < files.length; i++) {
@@ -104,7 +104,7 @@ const uploader: Uploader = async (files, schema) => {
     images.push(file)
   }
 
-  const nodes: Node[] = await Promise.all(
+  const nodes = await Promise.all(
     images.map(async (image) => {
       const result = await $endApi.v1.common.upload(image)
 

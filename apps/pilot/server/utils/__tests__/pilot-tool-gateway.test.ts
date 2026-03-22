@@ -1,9 +1,11 @@
+import { Buffer } from 'node:buffer'
 import { networkClient } from '@talex-touch/utils/network'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getPilotWebsearchDatasourceConfig,
   resolveWebsearchProviderApiKey,
 } from '../pilot-admin-datasource-config'
+import { savePilotRuntimeMediaCache } from '../pilot-runtime-media-cache'
 import {
   createPilotToolApprovalTicket,
   findLatestPilotToolApprovalByRequestHash,
@@ -24,7 +26,6 @@ import {
   createGatewayWebsearchConnector,
   createWebsearchProviderConnector,
 } from '../pilot-websearch-connector'
-import { savePilotRuntimeMediaCache } from '../pilot-runtime-media-cache'
 
 vi.mock('../pilot-admin-datasource-config', () => ({
   getPilotWebsearchDatasourceConfig: vi.fn(),
@@ -302,6 +303,79 @@ describe('pilot-tool-gateway', () => {
     expect(result?.sources.length).toBeGreaterThan(0)
   })
 
+  it('provider 有结果但 channel 非 responses 时不因 fallback 失败', async () => {
+    vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
+      providers: [
+        {
+          id: 'searxng-main',
+          type: 'searxng',
+          enabled: true,
+          priority: 10,
+          baseUrl: 'https://searxng.example.com',
+          apiKeyEncrypted: '',
+          timeoutMs: 8_000,
+          maxResults: 2,
+        },
+      ],
+      aggregation: {
+        mode: 'hybrid',
+        targetResults: 2,
+        minPerProvider: 1,
+        dedupeKey: 'url',
+        stopWhenEnough: true,
+      },
+      allowlistDomains: ['docs.openai.com'],
+    }))
+    vi.mocked(createWebsearchProviderConnector).mockReturnValue({
+      search: vi.fn().mockResolvedValue([
+        {
+          url: 'https://docs.openai.com/models',
+          title: 'Models',
+          snippet: 'Models snippet',
+          domain: 'docs.openai.com',
+        },
+      ]),
+      fetch: vi.fn().mockResolvedValue({
+        url: 'https://docs.openai.com/models',
+        title: 'Models',
+        snippet: 'Models snippet',
+        content: 'Models content',
+        contentType: 'text/plain',
+      }),
+      extract: vi.fn().mockResolvedValue({
+        url: 'https://docs.openai.com/models',
+        title: 'Models',
+        snippet: 'Models snippet',
+        content: 'Models content',
+        domain: 'docs.openai.com',
+        urlHash: 'u-models',
+        contentHash: 'c-models',
+      }),
+    } as any)
+
+    const result = await executePilotWebsearchTool({
+      event: {} as any,
+      userId: 'u1',
+      sessionId: 's1',
+      requestId: 'r1',
+      query: 'openai models',
+      channel: {
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'key',
+        model: 'gpt-5.2',
+        adapter: 'openai',
+        transport: 'chat.completions',
+        timeoutMs: 12_000,
+      },
+    })
+
+    expect(result).toBeTruthy()
+    expect(result?.connectorSource).toBe('gateway')
+    expect(result?.fallbackUsed).toBe(false)
+    expect(result?.sources.length).toBe(1)
+    expect(networkClient.request).not.toHaveBeenCalled()
+  })
+
   it('provider 与 fallback 都不可用时返回 null 并记录失败审计', async () => {
     vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
       providers: [
@@ -381,6 +455,44 @@ describe('pilot-tool-gateway', () => {
     const payload = firstCall?.body ? JSON.parse(firstCall.body) : {}
     expect(payload.size).toBe('1024x1024')
     expect(payload.n).toBe(1)
+  })
+
+  it('normalizes base64-like url field to runtime media cache url', async () => {
+    vi.mocked(networkClient.request).mockResolvedValue({
+      status: 200,
+      data: {
+        data: [
+          {
+            url: Buffer.from('image-bytes').toString('base64'),
+            revised_prompt: 'Generated from base64-like url',
+          },
+        ],
+      },
+    } as any)
+
+    const result = await executePilotImageGenerateTool({
+      event: {} as any,
+      userId: 'u1',
+      sessionId: 's1',
+      requestId: 'r-base64-url',
+      prompt: 'Generate image',
+      output: {
+        includeBase64: true,
+      },
+      channel: {
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'key',
+        model: 'gpt-image-1',
+        adapter: 'openai',
+        transport: 'responses',
+        timeoutMs: 30_000,
+      },
+    })
+
+    expect(result?.images.length).toBe(1)
+    expect(result?.images[0]?.url).toBe('/api/runtime/media-cache/mock')
+    expect(result?.images[0]?.base64).toBeTruthy()
+    expect(savePilotRuntimeMediaCache).toHaveBeenCalled()
   })
 
   it('passes explicit image size/count to upstream request', async () => {

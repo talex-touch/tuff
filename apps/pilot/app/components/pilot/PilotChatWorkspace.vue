@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ChatMessageModel } from '@talex-touch/tuffex'
-import type { PilotComposerAttachment, PilotTrace } from '../../composables/pilot-chat.types'
+import type { PilotComposerAttachment, PilotRuntimeStatusSnapshot, PilotToolCall, PilotTrace } from '../../composables/pilot-chat.types'
 import {
   TxButton,
   TxChatComposer,
@@ -21,9 +21,13 @@ interface PilotChatWorkspaceProps {
   hasPausedSession: boolean
   streamError: string
   reconnectHint: string
+  toolCalls: PilotToolCall[]
   traceItems: PilotTrace[]
   lastSeq: number
   traceDrawerOpen: boolean
+  runtimeStatus: PilotRuntimeStatusSnapshot
+  thinkingText: string
+  thinkingStreaming: boolean
 }
 
 const props = defineProps<PilotChatWorkspaceProps>()
@@ -99,6 +103,50 @@ function onAttachmentSelected(event: Event) {
       />
 
       <section class="pilot-chat__messages">
+        <section class="pilot-runtime-bar">
+          <span class="pilot-runtime-pill">
+            Intent: {{ props.runtimeStatus.intentLabel }}
+          </span>
+          <span class="pilot-runtime-pill">
+            Route: {{ props.runtimeStatus.routeLabel }}
+          </span>
+          <span class="pilot-runtime-pill">
+            Req Model: {{ props.runtimeStatus.requestModelLabel }}
+          </span>
+          <span class="pilot-runtime-pill">
+            Actual: {{ props.runtimeStatus.actualModelLabel }}
+          </span>
+          <span class="pilot-runtime-pill">
+            Websearch: {{ props.runtimeStatus.websearchLabel }}
+          </span>
+          <span class="pilot-runtime-pill">
+            Memory: {{ props.runtimeStatus.memoryLabel }}
+          </span>
+          <span class="pilot-runtime-pill">
+            Thinking: {{ props.runtimeStatus.thinkingLabel }}
+          </span>
+        </section>
+
+        <section class="pilot-stage-timeline">
+          <article
+            v-for="item in props.runtimeStatus.stages"
+            :key="item.key"
+            class="pilot-stage-item"
+            :class="`is-${item.status}`"
+          >
+            <strong>{{ item.label }}</strong>
+            <span>{{ item.detail || '-' }}</span>
+          </article>
+        </section>
+
+        <section v-if="props.thinkingText" class="pilot-thinking-panel">
+          <header>
+            <strong>Thinking</strong>
+            <span>{{ props.thinkingStreaming ? 'streaming' : 'final' }}</span>
+          </header>
+          <pre>{{ props.thinkingText }}</pre>
+        </section>
+
         <TxEmptyState
           v-if="props.loadingMessages"
           class="pilot-chat__empty"
@@ -123,6 +171,36 @@ function onAttachmentSelected(event: Event) {
         <div v-else class="pilot-chat__message-list">
           <TxChatList :messages="props.messages" :markdown="true" :stagger="false" />
         </div>
+
+        <section v-if="props.toolCalls.length > 0" class="pilot-chat__tool-cards">
+          <article v-for="item in props.toolCalls" :key="item.callId" class="pilot-tool-card">
+            <header class="pilot-tool-card__header">
+              <strong>{{ item.toolName }}</strong>
+              <span class="pilot-tool-card__meta">
+                <span>{{ item.status }}</span>
+                <span>{{ item.riskLevel }}</span>
+              </span>
+            </header>
+            <p v-if="item.inputPreview" class="pilot-tool-card__line">
+              <span>Input:</span>
+              <span>{{ item.inputPreview }}</span>
+            </p>
+            <p v-if="item.outputPreview" class="pilot-tool-card__line">
+              <span>Output:</span>
+              <span>{{ item.outputPreview }}</span>
+            </p>
+            <p v-if="item.errorMessage" class="pilot-tool-card__error">
+              {{ item.errorMessage }}
+            </p>
+            <ul v-if="item.sources.length > 0" class="pilot-tool-card__sources">
+              <li v-for="(source, sourceIndex) in item.sources" :key="`${item.callId}-${sourceIndex}`">
+                <a :href="source.url" target="_blank" rel="noopener noreferrer">
+                  {{ source.title || source.url }}
+                </a>
+              </li>
+            </ul>
+          </article>
+        </section>
 
         <div v-if="props.running" class="pilot-chat__typing">
           <TxTypingIndicator variant="dots" text="Pilot 正在思考..." />
@@ -251,6 +329,94 @@ function onAttachmentSelected(event: Event) {
   overflow: hidden;
 }
 
+.pilot-runtime-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pilot-runtime-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1.3;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color) 70%, transparent);
+  background: color-mix(in srgb, var(--tx-fill-color-lighter) 58%, transparent);
+  color: var(--tx-text-color-regular);
+}
+
+.pilot-stage-timeline {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 6px;
+}
+
+.pilot-stage-item {
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--tx-fill-color-light) 54%, transparent);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pilot-stage-item strong {
+  font-size: 11px;
+}
+
+.pilot-stage-item span {
+  font-size: 11px;
+  color: var(--tx-text-color-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pilot-stage-item.is-running {
+  border-color: color-mix(in srgb, var(--tx-color-warning) 64%, transparent);
+  background: color-mix(in srgb, var(--tx-color-warning-light-9) 72%, transparent);
+}
+
+.pilot-stage-item.is-done {
+  border-color: color-mix(in srgb, var(--tx-color-success) 52%, transparent);
+}
+
+.pilot-stage-item.is-skipped {
+  opacity: 0.75;
+}
+
+.pilot-thinking-panel {
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--tx-bg-color-overlay) 90%, transparent);
+  padding: 8px;
+}
+
+.pilot-thinking-panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--tx-text-color-secondary);
+  margin-bottom: 6px;
+}
+
+.pilot-thinking-panel pre {
+  margin: 0;
+  max-height: 150px;
+  overflow: auto;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .pilot-chat__empty {
   width: min(100%, 420px);
   margin: auto;
@@ -284,6 +450,52 @@ function onAttachmentSelected(event: Event) {
   border-radius: 12px;
   background: color-mix(in srgb, var(--tx-fill-color-light) 78%, transparent);
   padding: 8px 10px;
+}
+
+.pilot-chat__tool-cards {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.pilot-tool-card {
+  border: 1px solid color-mix(in srgb, var(--tx-border-color) 72%, transparent);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--tx-fill-color-light) 64%, transparent);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pilot-tool-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pilot-tool-card__meta {
+  display: inline-flex;
+  gap: 8px;
+  color: var(--tx-text-color-secondary);
+}
+
+.pilot-tool-card__line {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pilot-tool-card__error {
+  margin: 0;
+  color: var(--tx-color-danger);
+}
+
+.pilot-tool-card__sources {
+  margin: 0;
+  padding-left: 14px;
 }
 
 .pilot-chat__dock {

@@ -11,12 +11,12 @@ definePageMeta({
 
 type PilotChannelAdapter = 'openai'
 type PilotChannelTransport = 'responses' | 'chat.completions'
-type PilotBuiltinTool = 'write_todos' | 'read_file' | 'write_file' | 'edit_file' | 'ls' | 'websearch'
 
 interface ChannelModelFormItem {
   id: string
   label: string
   format: string
+  priority: number
   enabled: boolean
   thinkingSupported: boolean
   thinkingDefaultEnabled: boolean
@@ -35,18 +35,8 @@ interface ChannelFormItem {
   adapter: PilotChannelAdapter
   transport: PilotChannelTransport
   timeoutMs: number
-  builtinTools: PilotBuiltinTool[]
   enabled: boolean
 }
-
-const TOOL_OPTIONS: Array<{ value: PilotBuiltinTool, label: string }> = [
-  { value: 'write_todos', label: 'write_todos' },
-  { value: 'read_file', label: 'read_file' },
-  { value: 'write_file', label: 'write_file' },
-  { value: 'edit_file', label: 'edit_file' },
-  { value: 'ls', label: 'ls' },
-  { value: 'websearch', label: 'websearch' },
-]
 
 const MODEL_FORMAT_OPTIONS = [
   'responses',
@@ -56,6 +46,7 @@ const MODEL_FORMAT_OPTIONS = [
 const loading = ref(false)
 const saving = ref(false)
 const channels = ref<ChannelFormItem[]>([])
+const modelSearchKeyword = ref('')
 let channelSequence = 0
 let channelModelSequence = 0
 
@@ -105,6 +96,14 @@ function toPriority(value: unknown): number {
   return Math.min(Math.max(Math.floor(parsed), 1), 9999)
 }
 
+function toModelPriority(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return 100
+  }
+  return Math.min(Math.max(Math.floor(parsed), 1), 9999)
+}
+
 function toAdapter(_value: unknown): PilotChannelAdapter {
   return 'openai'
 }
@@ -113,25 +112,13 @@ function toTransport(value: unknown): PilotChannelTransport {
   return normalizeText(value).toLowerCase() === 'chat.completions' ? 'chat.completions' : 'responses'
 }
 
-function normalizeTools(value: unknown): PilotBuiltinTool[] {
-  if (!Array.isArray(value)) {
-    return ['write_todos']
-  }
-  const list = value
-    .map(item => normalizeText(item))
-    .filter(item => TOOL_OPTIONS.some(option => option.value === item)) as PilotBuiltinTool[]
-  if (list.length <= 0) {
-    return ['write_todos']
-  }
-  return Array.from(new Set(list))
-}
-
 function normalizeChannelModel(raw: Partial<ChannelModelFormItem>): ChannelModelFormItem {
   const id = normalizeText(raw.id) || createDefaultChannelModelId()
   return {
     id,
     label: normalizeText(raw.label) || id,
     format: normalizeText(raw.format),
+    priority: toModelPriority(raw.priority),
     enabled: raw.enabled !== false,
     thinkingSupported: raw.thinkingSupported !== false,
     thinkingDefaultEnabled: raw.thinkingDefaultEnabled === true,
@@ -143,6 +130,7 @@ function createEmptyChannelModel(id = '', format = ''): ChannelModelFormItem {
     id: normalizeText(id) || createDefaultChannelModelId(),
     label: normalizeText(id) || 'gpt-5.2',
     format: normalizeText(format),
+    priority: 100,
     enabled: true,
     thinkingSupported: true,
     thinkingDefaultEnabled: false,
@@ -150,6 +138,11 @@ function createEmptyChannelModel(id = '', format = ''): ChannelModelFormItem {
 }
 
 function ensureDefaultModelId(item: ChannelFormItem) {
+  if (item.models.length <= 0) {
+    item.defaultModelId = ''
+    item.model = ''
+    return
+  }
   const preferred = normalizeText(item.defaultModelId || item.model)
   if (preferred && item.models.some(model => model.id === preferred)) {
     item.defaultModelId = preferred
@@ -177,7 +170,6 @@ function createEmptyChannel(): ChannelFormItem {
     adapter: 'openai',
     transport: 'responses',
     timeoutMs: 90_000,
-    builtinTools: ['write_todos'],
     enabled: true,
   }
 }
@@ -201,7 +193,6 @@ function normalizeChannelFormItem(raw: Partial<ChannelFormItem>): ChannelFormIte
     adapter,
     transport: toTransport(raw.transport),
     timeoutMs: toTimeoutMs(raw.timeoutMs),
-    builtinTools: normalizeTools(raw.builtinTools),
     enabled: raw.enabled !== false,
   }
   ensureDefaultModelId(item)
@@ -250,6 +241,7 @@ function buildSavePayload(list: ChannelFormItem[]) {
         id: model.id,
         label: model.label,
         format: normalizeText(model.format) || undefined,
+        priority: toModelPriority(model.priority),
         enabled: model.enabled,
         thinkingSupported: model.thinkingSupported,
         thinkingDefaultEnabled: model.thinkingDefaultEnabled,
@@ -257,7 +249,6 @@ function buildSavePayload(list: ChannelFormItem[]) {
       adapter: item.adapter,
       transport: item.transport,
       timeoutMs: item.timeoutMs,
-      builtinTools: item.builtinTools,
       enabled: item.enabled,
     })),
   }
@@ -305,6 +296,7 @@ function openCreateDialog() {
   dialog.modelSyncing = false
   dialog.sourceId = ''
   dialog.form = createEmptyChannel()
+  modelSearchKeyword.value = ''
   dialog.visible = true
 }
 
@@ -315,12 +307,28 @@ function openEditDialog(row: ChannelFormItem) {
   dialog.form = normalizeChannelFormItem({
     ...row,
     apiKey: '',
-    builtinTools: [...row.builtinTools],
     models: row.models.map(model => ({
       ...model,
     })),
   })
+  modelSearchKeyword.value = ''
   dialog.visible = true
+}
+
+function clearDialogModels() {
+  dialog.form.models = []
+  ensureDefaultModelId(dialog.form)
+}
+
+function toggleDialogModelsEnabled(value: boolean) {
+  if (dialog.form.models.length <= 0) {
+    return
+  }
+  dialog.form.models = dialog.form.models.map(model => ({
+    ...model,
+    enabled: value,
+  }))
+  ensureDefaultModelId(dialog.form)
 }
 
 function addDialogModel() {
@@ -328,13 +336,38 @@ function addDialogModel() {
   ensureDefaultModelId(dialog.form)
 }
 
-function removeDialogModel(index: number) {
+function removeDialogModel(modelId: string) {
+  const targetId = normalizeText(modelId)
+  if (!targetId) {
+    return
+  }
+  const index = dialog.form.models.findIndex(item => item.id === targetId)
+  if (index < 0) {
+    return
+  }
   dialog.form.models.splice(index, 1)
   if (dialog.form.models.length <= 0) {
     dialog.form.models.push(createEmptyChannelModel('gpt-5.2'))
   }
   ensureDefaultModelId(dialog.form)
 }
+
+const filteredDialogModels = computed(() => {
+  const keyword = normalizeText(modelSearchKeyword.value).toLowerCase()
+  if (!keyword) {
+    return dialog.form.models
+  }
+  return dialog.form.models.filter((model) => {
+    const haystack = [
+      model.id,
+      model.label,
+      model.format,
+    ]
+      .map(item => normalizeText(item).toLowerCase())
+      .join(' ')
+    return haystack.includes(keyword)
+  })
+})
 
 function validateDialogForm(): ChannelFormItem | null {
   const next = normalizeChannelFormItem(dialog.form)
@@ -682,14 +715,6 @@ onMounted(() => {
         </el-select>
       </el-form-item>
 
-      <el-form-item label="内置工具">
-        <el-checkbox-group v-model="dialog.form.builtinTools">
-          <el-checkbox v-for="tool in TOOL_OPTIONS" :key="tool.value" :value="tool.value">
-            {{ tool.label }}
-          </el-checkbox>
-        </el-checkbox-group>
-      </el-form-item>
-
       <el-form-item label="启用渠道">
         <el-switch v-model="dialog.form.enabled" />
       </el-form-item>
@@ -710,12 +735,28 @@ onMounted(() => {
         >
           {{ dialog.modelSyncing ? '拉取中...' : '拉取渠道模型' }}
         </el-button>
+        <el-button plain size="small" @click="clearDialogModels">
+          一键清空
+        </el-button>
+        <el-button plain size="small" @click="toggleDialogModelsEnabled(true)">
+          全部启用
+        </el-button>
+        <el-button plain size="small" @click="toggleDialogModelsEnabled(false)">
+          全部禁用
+        </el-button>
       </div>
+
+      <el-input
+        v-model="modelSearchKeyword"
+        clearable
+        placeholder="搜索模型（id / label / format）"
+        style="width: 280px"
+      />
 
       <el-table
         border
         table-layout="auto"
-        :data="dialog.form.models"
+        :data="filteredDialogModels"
         row-key="id"
         max-height="460"
         style="width: 100%"
@@ -750,6 +791,11 @@ onMounted(() => {
             </el-select>
           </template>
         </el-table-column>
+        <el-table-column label="优先级" width="160">
+          <template #default="{ row }">
+            <el-input-number v-model="row.priority" :min="1" :max="9999" :step="1" controls-position="right" />
+          </template>
+        </el-table-column>
         <el-table-column label="启用" width="90">
           <template #default="{ row }">
             <el-switch v-model="row.enabled" />
@@ -766,8 +812,8 @@ onMounted(() => {
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right">
-          <template #default="{ $index }">
-            <el-button text type="danger" @click="removeDialogModel($index)">
+          <template #default="{ row }">
+            <el-button text type="danger" @click="removeDialogModel(row.id)">
               删除
             </el-button>
           </template>

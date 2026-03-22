@@ -1,7 +1,7 @@
 # 变更日志
 
-> 更新时间: 2026-03-21
-> 说明: 主文件仅保留近 30 天（2026-02-24 ~ 2026-03-21）详细记录；更早历史已按月归档。
+> 更新时间: 2026-03-22
+> 说明: 主文件仅保留近 30 天（2026-02-24 ~ 2026-03-22）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
@@ -11,7 +11,93 @@
 
 ---
 
+## 2026-03-22
+
+### chore(governance): 文档门禁恢复可用（日期口径 + TODO 统计）
+
+- 六主文档 `更新时间` 统一到 `2026-03-22`（`INDEX/README/TODO/Roadmap/Release Checklist/Quality Baseline`）。
+- `TODO` 统计表改为实时计数结果（`done=95 / todo=16 / total=111 / 86%`），修复 `todo-stats` 漂移。
+- 验证结果：`pnpm docs:guard && pnpm docs:guard:strict` 全通过。
+
+### chore(governance): compat 扫描范围补齐 `apps/pilot/shared`
+
+- `scripts/check-compatibility-debt-registry.mjs` 扫描范围新增 `apps/pilot/shared`，修复 scope leak。
+- 补齐新增 `legacy-keyword` 命中项到 `compatibility-debt-registry.csv`，恢复 registry 覆盖完整性。
+- 验证结果：`pnpm compat:registry:guard` 通过（保留 cleanup candidate 警告）。
+
+### fix(governance): legacy transport import 多行检测漏检修复
+
+- `scripts/check-legacy-boundaries.mjs` 与 `scripts/check-compatibility-debt-registry.mjs` 的 `legacy-transport-import` / `legacy-permission-import` 正则支持多行 `import`，避免 `import { ... } from '.../legacy'` 被漏检。
+- 补齐 `packages/utils/plugin/channel.ts` 在 `legacy-transport-import` 维度的门禁基线与台账登记（allowlist + compatibility registry）。
+- 目标：确保 `legacy` 门禁统计真实反映源码状态，避免“0 命中”假阴性。
+
+### chore(governance): size guard 阻断恢复（基线同步）
+
+- 更新 `scripts/large-file-boundary-allowlist.json`：
+  - 新增本轮超长文件基线：`ThInput.vue`、`completion/index.ts`、`usePilotChatPage.ts`、`stream.post.ts`、`pilot-tool-gateway.ts`。
+  - 调整 growth exception cap：
+    - `SIZE-GROWTH-2026-03-16-AIGC-EXECUTOR` (`apps/pilot/server/api/aigc/executor.post.ts`) -> `2429`
+    - `SIZE-GROWTH-2026-03-16-DEEPAGENT` (`packages/tuff-intelligence/src/adapters/deepagent-engine.ts`) -> `2081`
+- 验证结果：`pnpm size:guard` 通过。
+
+### docs(nexus-risk): 设备授权风控文档闭环补齐
+
+- `NexusDeviceAuthRiskControl-260316.md` 增补：
+  - Phase 0 验收证据矩阵
+  - 回滚演练记录（2026-03-22）
+  - 风控告警与值守说明
+  - 最小可复现门禁命令与发布前检查单
+- `TODO` 对应项同步收口：
+  - `Phase 0 验收证据` -> 已完成
+  - `告警策略与值守` -> 已完成
+  - `发布前检查单` -> 已完成
+
 ## 2026-03-21
+
+### fix(pilot-websearch): 非 Responses 渠道不再触发 `responses_builtin` 硬失败
+
+- `pilot-tool-gateway` 增加 fallback 资格判断：仅当渠道为 `openai + responses` 且可解析 Responses endpoint 时，才尝试 `responses_builtin`。
+- 调整 fallback 容错：当 provider 池已有部分结果时，即使 fallback 请求异常，也不会中断整次 websearch，继续返回已命中的 provider 结果。
+- 新增回归测试 `pilot-tool-gateway.test.ts`：
+  - 覆盖“provider 有结果 + channel 为 `chat.completions`”场景；
+  - 断言不会调用 Responses 接口、不会因 fallback 报错、结果保持 `gateway` 成功返回。
+
+### fix(core-settings): 账号/主题/订阅状态一致性修复
+
+- `useAuth` 挂载初始化与 `beginner.init` 解耦：认证状态拉取与同步始终执行；登录恢复提示逻辑继续受 `beginner.init` 门控，修复“已登录却被判为未登录”体感问题。
+- 主题持久化 SoT 统一到 `StorageList.THEME_STYLE`（`theme-style.ini`）：
+  - renderer 侧改为 `TouchStorage` 存储，不再把 `localStorage('theme-style')` 作为常规读源；
+  - 新增一次性 legacy 迁移：当远端仍是默认态时，自动吸收旧 `theme-style` 并清理本地遗留键；
+  - 主题切换 `light/dark/auto` 三种模式均同步写入 `theme.style.auto + theme.style.dark`，避免模式切换后反复回到 auto。
+- `TuffUserInfo` 新增订阅兼容判定 `computeSubscriptionActive`：优先 `isActive`，次选 `status`（支持 `ACTIVE/TRIALING`），最后回落 `expiresAt`；缺字段默认避免误报“已过期”。
+- 新增回归测试：
+  - `theme-style.utils.test.ts`（模式映射与 legacy 解析）
+  - `use-auth-policies.test.ts`（认证初始化与登录恢复提示门控策略）
+  - `user-subscription.test.ts`（`isActive/status/expiresAt` 兼容判定）
+
+### fix(pilot-routing-admin): 渠道模型同步不再自动创建/更新 Model Groups（仅保留手动编排）
+
+- 调整 `syncPilotChannelModels`：同步流程仅更新渠道侧 `channels[].models/defaultModelId/modelsLastSyncedAt`，不再把 discovered 模型写入 routing `modelCatalog`。
+- 移除同步链路中的自动合并调用，避免在“模型组管理”中出现“未手动创建却被同步生成”的分组项。
+- 新增回归测试 `pilot-channel-model-sync.test.ts`，确保 `admin/channel-models/sync` 不会触发 `mergeDiscoveredModelsIntoCatalog`。
+
+### feat(pilot-routing-admin-ui): Model Groups 支持多选批量删除与分页
+
+- `admin/system/model-groups` 新增表格勾选列，支持多选批量删除（含二次确认与“至少保留一个模型组”约束）。
+- 新增分页器（`total/sizes/pager/jumper`），支持页大小切换（10/20/50/100）。
+- 新增跨分页选中同步逻辑：翻页后保留已选项，保存/删除后自动清理无效选中并回收越界页码。
+- `quota-auto` 设为系统保留模型组：行内删除禁用，批量删除自动排除，确保该分组始终可用。
+- 后端 `normalizeModelCatalog` 调整为“仅强制保留 `quota-auto`”，不再自动补回 `gpt/gemini/claudecode` 等 system 默认分组；新增回归测试覆盖该行为。
+
+### fix(pilot-image): image.generate 兼容“url 字段携带 base64”并修复 Capability Lab 预览
+
+- `pilot-tool-gateway` 的 `image.generate` 结果解析增强：
+  - 当上游把图片数据放在 `url` 字段（`data:image/...` 或 raw base64）时，自动识别并落 `runtime media cache`，继续对外返回 URL-first 结果；
+  - 保留原有 `b64_json` 解析路径，并补充 base64 payload 规范化，减少异常格式导致的空结果。
+- `apps/pilot/app/pages/test/image-lab.vue` 增加图片预览兜底：
+  - 优先 `url` 预览，缺失时回落到 `base64` 组装 `data:image/...` 预览；
+  - 避免“结果存在但页面不显示”的误判。
+- 新增回归测试 `pilot-tool-gateway.test.ts`：覆盖“`url` 字段为 base64 payload”场景，确保输出被归一到 runtime cache URL。
 
 ### feat(pilot-multimodal): Provider 多模态能力配置统一到 `capabilities` 并打通媒体运行时回退
 
@@ -39,6 +125,28 @@
   - 新增 `pilot-admin-routing-config.capabilities.test.ts`；
   - 扩展 `pilot-routing-resolver.intent.test.ts`（能力门控、排除已失败 route）；
   - 扩展 `pilot-tool-gateway.test.ts`（image.edit/audio.tts/audio.stt/audio.transcribe/video 未实现）。
+
+### feat(pilot-routing-admin-ui): 模型组能力开关重构为“模板化 + 分层配置 + 规则联动”
+
+- `admin/system/model-groups` 编辑弹窗重构为分层结构：
+  - 新增分区：`运行状态`、`推理策略`、`能力矩阵`、`工具权限`；
+  - 能力文案改为“中文主标签 + key 副文”，`video.generate` 显示“实验中”。
+- 新增模型组模板预设（可一键覆盖）：
+  - `通用对话`、`研究检索`、`多模态创作`、`语音助手`；
+  - 新建模型组默认套用 `通用对话`，减少手工点选成本。
+- 新增规则联动与保存校验：
+  - `thinkingSupported=false` 时强制 `thinkingDefaultEnabled=false`；
+  - 关闭 `websearch` 时自动移除 `builtinTools.websearch`；
+  - `defaultRouteComboId` 改为下拉选择，历史脏值展示“失效”并阻止保存。
+- 新增共享能力元数据与规则模块：
+  - 新增 `apps/pilot/shared/pilot-capability-meta.ts`，统一维护 `PilotCapabilityMeta`、能力分组、模板预设、legacy 回填、route combo 校验；
+  - 管理端、服务端与运行时消费同一份 capability 解析与联动规则。
+- 运行时对齐：
+  - `usePilotRuntimeModels` 与 `ThInput` 改为基于统一能力映射判断禁用状态与提示文案；
+  - `capabilities` 成为主语义源，`allow*` 保持兼容派生写回。
+- 回归测试：
+  - 新增 `pilot-capability-meta.shared.test.ts`（模板矩阵、thinking/websearch 联动、legacy 优先级、route combo 校验）；
+  - 更新 `pilot-admin-routing-config.capabilities.test.ts` 对齐显式 `capabilities` 优先断言。
 
 ## 2026-03-20
 

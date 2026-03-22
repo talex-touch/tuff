@@ -464,6 +464,38 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
     }))
   }
 
+  async clearSessionMemory(sessionId: string): Promise<void> {
+    await this.db.prepare(`
+      DELETE FROM ${TRACE_TABLE}
+      WHERE session_id = ?1 AND user_id = ?2
+    `).bind(sessionId, this.userId).run()
+
+    await this.db.prepare(`
+      DELETE FROM ${MESSAGES_TABLE}
+      WHERE session_id = ?1 AND user_id = ?2
+    `).bind(sessionId, this.userId).run()
+
+    await this.db.prepare(`
+      DELETE FROM ${CHECKPOINTS_TABLE}
+      WHERE session_id = ?1 AND user_id = ?2
+    `).bind(sessionId, this.userId).run()
+
+    await this.db.prepare(`
+      DELETE FROM ${ATTACHMENTS_TABLE}
+      WHERE session_id = ?1 AND user_id = ?2
+    `).bind(sessionId, this.userId).run()
+
+    await this.db.prepare(`
+      UPDATE ${SESSIONS_TABLE}
+      SET status = 'idle',
+          notify_unread = 0,
+          last_seq = 0,
+          pause_reason = NULL,
+          updated_at = ?1
+      WHERE session_id = ?2 AND user_id = ?3
+    `).bind(nowIso(), sessionId, this.userId).run()
+  }
+
   async deleteSession(sessionId: string): Promise<void> {
     await this.db.prepare(`
       DELETE FROM ${TRACE_TABLE}

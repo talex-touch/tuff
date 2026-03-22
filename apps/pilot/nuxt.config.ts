@@ -17,6 +17,8 @@ const markmapViewShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markma
 const markmapCommonShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-common.ts')
 const markmapLibShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-lib.ts')
 const sanitizeUrlShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/braintree-sanitize-url.ts')
+const cytoscapeCoseBilkentShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/cytoscape-cose-bilkent.ts')
+const cytoscapeFcoseShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/cytoscape-fcose.ts')
 const pgNativeShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/pg-native.cjs')
 
 applyPilotEnvPrecedence()
@@ -219,6 +221,8 @@ export default defineNuxtConfig({
         { find: /^@vueuse\/components$/, replacement: vueuseComponentsShimEntry },
         { find: /^@milkdown\/kit\/plugin\/prism$/, replacement: '@milkdown/plugin-prism' },
         { find: /^@braintree\/sanitize-url$/, replacement: sanitizeUrlShimEntry },
+        { find: /^cytoscape-cose-bilkent$/, replacement: cytoscapeCoseBilkentShimEntry },
+        { find: /^cytoscape-fcose$/, replacement: cytoscapeFcoseShimEntry },
         { find: /^markmap-view$/, replacement: markmapViewShimEntry },
         { find: /^markmap-common$/, replacement: markmapCommonShimEntry },
         { find: /^markmap-lib$/, replacement: markmapLibShimEntry },

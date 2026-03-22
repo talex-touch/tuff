@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getPilotAdminRoutingConfig } from '../pilot-admin-routing-config'
 import { getPilotChannelCatalog, resolvePilotChannelSelection } from '../pilot-channel'
-import { resolvePilotRoutingSelection } from '../pilot-routing-resolver'
+import { PILOT_NO_ENABLED_MODEL_CODE, resolvePilotRoutingSelection } from '../pilot-routing-resolver'
 
 vi.mock('../pilot-admin-routing-config', async (importOriginal) => {
   const original = await importOriginal<typeof import('../pilot-admin-routing-config')>()
@@ -367,7 +367,7 @@ describe('pilot-routing-resolver intent routing', () => {
           visible: true,
           source: 'manual',
           capabilities: {
-            websearch: true,
+            'websearch': true,
             'file.analyze': true,
             'image.generate': true,
             'image.edit': true,
@@ -440,5 +440,87 @@ describe('pilot-routing-resolver intent routing', () => {
 
     expect(result.routeKey).toBe('ch1::image-model')
     expect(result.providerModel).toBe('image-model')
+  })
+
+  it('当渠道模型全部禁用时返回稳定错误码', async () => {
+    vi.mocked(getPilotChannelCatalog).mockResolvedValueOnce({
+      defaultChannelId: 'ch1',
+      channels: [
+        {
+          id: 'ch1',
+          name: 'channel-1',
+          baseUrl: 'https://api.openai.com',
+          apiKey: 'key',
+          model: 'chat-model',
+          defaultModelId: 'chat-model',
+          adapter: 'openai',
+          transport: 'responses',
+          timeoutMs: 30_000,
+          builtinTools: ['write_todos'],
+          enabled: true,
+          models: [
+            { id: 'chat-model', enabled: false, priority: 1 },
+            { id: 'nano-model', enabled: false, priority: 2 },
+          ],
+        },
+      ],
+    } as any)
+
+    vi.mocked(resolvePilotChannelSelection).mockResolvedValueOnce({
+      channelId: 'ch1',
+      adapter: 'openai',
+      transport: 'responses',
+      channel: {
+        id: 'ch1',
+        name: 'channel-1',
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'key',
+        model: 'chat-model',
+        defaultModelId: 'chat-model',
+        adapter: 'openai',
+        transport: 'responses',
+        timeoutMs: 30_000,
+        builtinTools: ['write_todos'],
+        enabled: true,
+        models: [
+          { id: 'chat-model', enabled: false, priority: 1 },
+          { id: 'nano-model', enabled: false, priority: 2 },
+        ],
+      },
+    } as any)
+
+    vi.mocked(getPilotAdminRoutingConfig).mockResolvedValueOnce({
+      modelCatalog: [],
+      routeCombos: [],
+      routingPolicy: {
+        defaultModelId: 'chat-model',
+        defaultRouteComboId: 'default-auto',
+        quotaAutoStrategy: 'speed-first',
+        explorationRate: 0,
+        intentNanoModelId: '',
+        intentRouteComboId: '',
+        imageGenerationModelId: '',
+        imageRouteComboId: '',
+      },
+      lbPolicy: {
+        metricWindowHours: 24,
+        recentRequestWindow: 200,
+        circuitBreakerFailureThreshold: 3,
+        circuitBreakerCooldownMs: 60_000,
+        halfOpenProbeCount: 1,
+      },
+      memoryPolicy: {
+        enabledByDefault: true,
+        allowUserDisable: true,
+        allowUserClear: true,
+      },
+    } as any)
+
+    await expect(resolvePilotRoutingSelection({} as any, {
+      requestedModelId: 'chat-model',
+      intentType: 'chat',
+    })).rejects.toMatchObject({
+      code: PILOT_NO_ENABLED_MODEL_CODE,
+    })
   })
 })

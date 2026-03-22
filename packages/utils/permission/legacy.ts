@@ -3,6 +3,8 @@
  *
  * For backward compatibility with old permission-center.ts
  * @deprecated Use new permission system instead
+ * Removal window: v2.5.0.
+ * Policy: no new imports.
  */
 
 /**

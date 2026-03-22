@@ -1,17 +1,15 @@
 <script lang="ts" setup>
-import html2canvas from 'html2canvas'
 import type { RenderResult } from 'mermaid'
-import mermaid from 'mermaid'
-import { DataUri, Graph, Shape } from '@antv/x6'
-import { Scroller } from '@antv/x6-plugin-scroller'
+import html2canvas from 'html2canvas'
+import { Graph, Shape } from '@antv/x6'
 import { Export } from '@antv/x6-plugin-export'
+import { Scroller } from '@antv/x6-plugin-scroller'
+import { renderMermaidSvg, reportMermaidError, resolveMermaidErrorMessage } from '~/components/article/renderers/mermaid-renderer'
 
 const props = defineProps(['node'])
 const colorMode = useColorMode()
 const diagram = ref<RenderResult>()
 const id = ref(`mermaid-${randomStr(8)}`)
-
-mermaid.initialize({ startOnLoad: false, securityLevel: 'loose' })
 
 function initGraph(innerDom: HTMLElement, color: 'light' | 'dark', watermark: boolean = true) {
   const graph = new Graph({
@@ -70,7 +68,9 @@ function initGraph(innerDom: HTMLElement, color: 'light' | 'dark', watermark: bo
 }
 
 function initRender(color: 'light' | 'dark') {
-  return mermaid.render(id.value, `---\nconfig:\n  theme: ${color}\n  look: handDrawn\n---\n${props.node.textContent}`)
+  return renderMermaidSvg(`---\nconfig:\n  theme: ${color}\n  look: handDrawn\n---\n${props.node.textContent}`, {
+    idPrefix: id.value,
+  })
 }
 
 function postRender(graph: Graph, svgContent: string) {
@@ -161,20 +161,31 @@ const downloadPreview = ref<{
 
 let timer: any
 async function displayRender() {
-  diagram.value = await initRender(colorMode.value === 'light' ? 'light' : 'dark')
+  try {
+    const nextDiagram = await initRender(colorMode.value === 'light' ? 'light' : 'dark')
+    if (!nextDiagram) {
+      return
+    }
 
-  if (graph.value)
-    graph.value.dispose()
+    diagram.value = nextDiagram
 
-  graph.value = await render(innerRef.value, diagram.value!.svg, colorMode.value === 'light' ? 'light' : 'dark')
+    if (graph.value)
+      graph.value.dispose()
 
-  await sleep(200)
+    graph.value = await render(innerRef.value, diagram.value.svg, colorMode.value === 'light' ? 'light' : 'dark')
 
-  graph.value.zoomToFit()
+    await sleep(200)
 
-  await sleep(200)
+    graph.value.zoomToFit()
 
-  graph.value.fitToContent()
+    await sleep(200)
+
+    graph.value.fitToContent()
+  }
+  catch (renderError) {
+    reportMermaidError('EditorMermaid', renderError)
+    error.value = resolveMermaidErrorMessage(renderError)
+  }
 }
 
 onMounted(() => {
@@ -314,13 +325,29 @@ async function refreshPreview() {
 
   await sleep(500)
 
-  const diagram = await initRender(downloadPreview.value.model.theme)
+  try {
+    const nextDiagram = await initRender(downloadPreview.value.model.theme)
+    if (!nextDiagram) {
+      downloadPreview.value.loading = false
+      return
+    }
 
-  downloadPreview.value.graph = await render(el, diagram.svg, downloadPreview.value.model.theme, downloadPreview.value.model.watermark === 'true')
+    downloadPreview.value.graph = await render(
+      el,
+      nextDiagram.svg,
+      downloadPreview.value.model.theme,
+      downloadPreview.value.model.watermark === 'true',
+    )
 
-  await sleep(500)
-
-  downloadPreview.value.loading = false
+    await sleep(500)
+  }
+  catch (renderError) {
+    reportMermaidError('EditorMermaid', renderError)
+    error.value = resolveMermaidErrorMessage(renderError)
+  }
+  finally {
+    downloadPreview.value.loading = false
+  }
 }
 
 watch(() => downloadPreview.value.visible, (val) => {

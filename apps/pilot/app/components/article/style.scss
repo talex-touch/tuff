@@ -238,20 +238,39 @@
 // }
 
 .EditorCode {
+  position: relative;
   margin: 0.9rem 0 1rem;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid var(--el-border-color-lighter);
-  background-color: var(--el-fill-color-blank);
+
+  .EditorCode-Chrome {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--el-border-color-lighter);
+    background-color: var(--el-fill-color-blank);
+  }
+
+  .EditorCode-HeaderHost {
+    z-index: 12;
+    position: relative;
+  }
+
+  &.EditorCode--Sticky {
+    .EditorCode-HeaderHost {
+      position: sticky;
+      top: 0;
+    }
+  }
 
   .EditorCode-Header {
+    z-index: 2;
+    position: relative;
     padding: 0 0.85rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 38px;
+    min-height: 38px;
     border-bottom: 1px solid var(--el-border-color-lighter);
-    background-color: rgba(148, 163, 184, 0.1);
+    background-color: var(--el-fill-color-blank);
+    box-shadow: 0 1px 0 rgba(148, 163, 184, 0.2);
   }
 
   .EditorCode-HeaderActions {
@@ -262,6 +281,8 @@
 
   .EditorCode-Content {
     position: relative;
+    overflow: auto;
+    overscroll-behavior: contain;
     padding: 0.6rem 0.85rem;
     background-color: var(--el-fill-color-light);
 
@@ -292,7 +313,6 @@
   .EditorCode-InlinePreview {
     width: 100%;
     min-height: 180px;
-    max-height: 320px;
     overflow: auto;
     padding: 0.5rem;
     display: none;
@@ -306,6 +326,13 @@
       height: auto;
       display: block;
     }
+  }
+
+  .EditorCode-InlineMindmapSvg {
+    width: 100%;
+    min-height: 320px;
+    color: var(--el-text-color-primary);
+    background-color: var(--el-fill-color-blank);
   }
 
   .EditorCode-InlinePreviewStatus {
@@ -408,7 +435,19 @@
   }
 
   .rich-copy {
-    min-width: 28px;
+    min-width: 52px;
+    gap: 4px;
+    padding: 0 8px;
+  }
+
+  .rich-copy-icon {
+    flex: none;
+  }
+
+  .rich-copy-text {
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
   }
 
   .rich-copy.did {

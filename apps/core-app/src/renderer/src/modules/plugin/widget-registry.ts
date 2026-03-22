@@ -6,7 +6,7 @@ import * as TalexUtilsCoreBox from '@talex-touch/utils/core-box'
 import * as TalexUtilsPlugin from '@talex-touch/utils/plugin'
 import * as TalexUtilsPluginSdk from '@talex-touch/utils/plugin/sdk'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import * as TalexUtilsTransportLegacy from '@talex-touch/utils/transport/legacy'
+import * as TalexUtilsTransport from '@talex-touch/utils/transport'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import * as TalexUtilsTypes from '@talex-touch/utils/types'
@@ -605,6 +605,7 @@ const ALLOWED_PACKAGES = [
   '@talex-touch/utils/plugin',
   '@talex-touch/utils/plugin/sdk',
   '@talex-touch/utils/core-box',
+  '@talex-touch/utils/transport',
   '@talex-touch/utils/transport/legacy',
   '@talex-touch/utils/common',
   '@talex-touch/utils/types'
@@ -617,7 +618,8 @@ const preloadedModuleCache: Record<string, unknown> = {
   '@talex-touch/utils/plugin': TalexUtilsPlugin,
   '@talex-touch/utils/plugin/sdk': TalexUtilsPluginSdk,
   '@talex-touch/utils/core-box': TalexUtilsCoreBox,
-  '@talex-touch/utils/transport/legacy': TalexUtilsTransportLegacy,
+  '@talex-touch/utils/transport': TalexUtilsTransport,
+  '@talex-touch/utils/transport/legacy': TalexUtilsTransport,
   '@talex-touch/utils/common': TalexUtilsCommon,
   '@talex-touch/utils/types': TalexUtilsTypes
 }

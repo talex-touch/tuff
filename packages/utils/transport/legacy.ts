@@ -1,6 +1,8 @@
 /**
  * @deprecated Legacy channel compatibility types.
  * Prefer importing from `@talex-touch/utils/transport`.
+ * Removal window: v2.5.0.
+ * Policy: no new imports.
  */
 export enum ChannelType {
   MAIN = 'main',

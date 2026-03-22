@@ -2,7 +2,17 @@
 export * from './account'
 export * from './analytics'
 export * from './base'
-export * from './transport/legacy'
+export {
+  ChannelType,
+  DataCode,
+} from './transport'
+export type {
+  ITouchChannel,
+  ITouchClientChannel,
+  RawChannelSyncData,
+  RawStandardChannelData,
+  StandardChannelData,
+} from './transport'
 export * from './cloud-sync'
 export * from './common'
 export * from './core-box'

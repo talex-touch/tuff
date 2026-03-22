@@ -3,6 +3,7 @@ import type { ITip, ITipItem } from '../chat/input-tips'
 import type { IChatInnerItemMeta, IChatItemStatus, IInnerItemMeta, ISendState } from '~/composables/api/base/v1/aigc/completion-types'
 import { useFloating } from '@floating-ui/vue'
 import { encode } from 'gpt-tokenizer'
+import { PILOT_CAPABILITY_META_MAP } from '~~/shared/pilot-capability-meta'
 import { $endApi } from '~/composables/api/base'
 import { useAttachmentCapability } from '~/composables/useAttachmentCapability'
 import { usePilotRuntimeModels } from '~/composables/usePilotRuntimeModels'
@@ -39,8 +40,10 @@ const {
 const selectedModelRuntime = computed(() => findModel(globalConfigModel.value))
 const inputCapabilities = computed(() => ({
   thinking: selectedModelRuntime.value?.thinkingSupported !== false,
-  websearch: selectedModelRuntime.value?.allowWebsearch !== false,
-  file: selectedModelRuntime.value?.allowFileAnalysis !== false,
+  websearch: selectedModelRuntime.value?.capabilities?.websearch !== false
+    && selectedModelRuntime.value?.allowWebsearch !== false,
+  file: selectedModelRuntime.value?.capabilities?.['file.analyze'] !== false
+    && selectedModelRuntime.value?.allowFileAnalysis !== false,
 }))
 
 const input = ref<{
@@ -74,9 +77,11 @@ function getCapabilityDisabledMessage(kind: 'thinking' | 'websearch' | 'file'): 
     return '当前模型组未开启思考能力。'
   }
   if (kind === 'websearch') {
-    return '当前模型组未开启联网能力。'
+    const capability = PILOT_CAPABILITY_META_MAP.websearch
+    return `当前模型组未开启「${capability.label} (${capability.id})」能力。`
   }
-  return '当前模型组未开启文件分析能力，请切换模型或联系管理员开启。'
+  const capability = PILOT_CAPABILITY_META_MAP['file.analyze']
+  return `当前模型组未开启「${capability.label} (${capability.id})」能力，请切换模型或联系管理员开启。`
 }
 
 function ensureAttachmentAnalysisAllowed(notify = true): boolean {

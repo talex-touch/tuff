@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档入口（压缩版）
-> 更新时间: 2026-03-19
+> 更新时间: 2026-03-22
 
 ## 快速入口
 
@@ -17,7 +17,7 @@
 
 ---
 
-## 单一口径快照（2026-03-19）
+## 单一口径快照（2026-03-20）
 
 - 当前工作区基线：`2.4.9-beta.4`。
 - Legacy/兼容/结构治理已切换到“统一实施 PRD + 五工作包并行”口径（不再使用 Phase 1-3 决策叙事）。
@@ -27,7 +27,7 @@
 - `v2.4.7` Gate：A/B/C/D/E 已完成（historical），不重发版。
 - Pilot Runtime 主路径：Node Server + Postgres/Redis + JWT Cookie（Cloudflare 路径仅历史归档）。
 - Pilot Chat 路由 V2：已接入渠道多模型发现、模型目录、路由组合、速度优先自动路由与评比指标采集（TTFT/总耗时/成功率）。
-- Pilot 工具调用 V1：已落地统一 `run.audit` 工具生命周期、阻塞式审批票据 API、`datasource.websearch` 网关配置与前端 Tool 卡片聚合解析；新增 Intent 图像路由与 `image.generate` 工具闭环（legacy 处于 Phase 1 收口，Phase 2 物理删除待切流）。
+- Pilot 工具调用 V1：已落地统一 `run.audit` 工具生命周期、阻塞式审批票据 API、`datasource.websearch` 全局 provider 池（`SearXNG/Serper/Tavily + responses_builtin`）与前端 Tool 卡片聚合解析；新增 Intent 图像路由与 `image.generate` 工具闭环（legacy 处于 Phase 1 收口，Phase 2 物理删除待切流）。
 - Pilot 审批闭环：聊天端已支持审批票据自动轮询与自动续跑（approved 复用原 request 执行）；legacy 事件兼容分支默认关闭并提供环境开关回滚。
 - Pilot 旧 UI 已硬切会话卡片流：`intent/routing/memory/websearch/thinking` 改为消息流卡片事件，状态不再走全局运行态条。
 - Pilot 流式入口收敛：旧 UI 执行链路统一到 `POST /api/chat/sessions/:sessionId/stream`，legacy 事件仅告警忽略。

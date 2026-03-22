@@ -10,6 +10,7 @@ import {
   ensureQuotaHistorySchema,
 } from '../../../utils/quota-history-store'
 import { createPilotStoreAdapter } from '../../../utils/pilot-store'
+import { deletePilotMemoryFactsBySession } from '../../../utils/pilot-memory-facts'
 
 export default defineEventHandler(async (event) => {
   const auth = requirePilotAuth(event)
@@ -29,6 +30,7 @@ export default defineEventHandler(async (event) => {
     await store.runtime.ensureSchema()
     const runtimeSessionId = mapped?.runtimeSessionId || chatId
     await store.runtime.deleteSession(runtimeSessionId)
+    await deletePilotMemoryFactsBySession(event, auth.userId, runtimeSessionId)
   }
   catch {
     // keep compat behavior, deleting history should still succeed

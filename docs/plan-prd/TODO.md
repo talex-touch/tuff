@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-03-20
+> 更新时间: 2026-03-22
 
 ---
 
@@ -48,10 +48,10 @@
 
 ### B. Nexus 风控主线（下一开发动作）
 
-- [ ] Phase 0：补齐设备授权风控验收证据（含回滚演练记录）。
+- [x] Phase 0：补齐设备授权风控验收证据（含回滚演练记录）。
 - [ ] Phase 1：完成速率限制、冷却窗口、审计日志落地。
-- [ ] Phase 1：补齐风控告警策略与责任人值守说明。
-- [ ] 输出最小可复现门禁命令与发布前检查单。
+- [x] Phase 1：补齐风控告警策略与责任人值守说明。
+- [x] 输出最小可复现门禁命令与发布前检查单。
 
 ### C. 文档门禁节奏
 
@@ -174,6 +174,16 @@
 - [x] 新增管理页 `/admin/system/websearch-providers`，支持全局 providers 列表维护与单页“聚合填写”（aggregation/crawl）。
 - [x] 回归测试补齐：`pilot-tool-gateway`、`pilot-websearch-connector`、`pilot-admin-datasource-config` 定向用例通过。
 
+### M. Pilot 模型组能力开关治理（2026-03-21）
+
+- [x] `model-groups` 编辑页改为分层信息架构：`运行状态 / 推理策略 / 能力矩阵 / 工具权限`。
+- [x] 能力文案升级为“中文主标签 + key 副文”，并显式标注 `video.generate` 为实验能力。
+- [x] 新增模板预设：`通用对话 / 研究检索 / 多模态创作 / 语音助手`，新建模型组默认套用通用对话模板。
+- [x] 联动规则落地：`thinkingSupported=false => thinkingDefaultEnabled=false`，关闭 `websearch` 自动移除 `builtinTools.websearch`。
+- [x] `defaultRouteComboId` 改为 Route Combo 下拉选择；历史脏值标记失效并阻止保存。
+- [x] 新增共享规则模块 `shared/pilot-capability-meta.ts`，统一前后端能力元数据、legacy 回填、模板与路由校验。
+- [x] 新增/更新测试：`pilot-capability-meta.shared.test.ts`、`pilot-admin-routing-config.capabilities.test.ts`。
+
 ---
 
 ## 📚 文档债务池（第二轮 + 第三轮摘要）
@@ -224,12 +234,12 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 46 |
+| 已完成 (`- [x]`) | 95 |
 | 未完成 (`- [ ]`) | 16 |
-| 总计 | 62 |
-| 完成率 | 74% |
+| 总计 | 111 |
+| 完成率 | 86% |
 
-> 统计时间: 2026-03-17（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-03-22（按本文件实时 checkbox 计数）。
 
 ---
 

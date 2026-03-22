@@ -2,12 +2,14 @@ import type { H3Event } from 'h3'
 import type { PilotChannelAdapter, PilotChannelTransport } from './pilot-channel'
 import type { PilotToolRiskLevel } from './pilot-tool-approvals'
 import type { PilotWebsearchNormalizedDocument, PilotWebsearchSearchHit } from './pilot-websearch-connector'
+import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { networkClient } from '@talex-touch/utils/network'
 import {
   getPilotWebsearchDatasourceConfig,
   resolveWebsearchProviderApiKey,
 } from './pilot-admin-datasource-config'
+import { savePilotRuntimeMediaCache } from './pilot-runtime-media-cache'
 import {
   createPilotToolApprovalTicket,
   findLatestPilotToolApprovalByRequestHash,
@@ -19,7 +21,6 @@ import {
   dedupeNormalizedDocuments,
   isAllowlistedDomain,
 } from './pilot-websearch-connector'
-import { savePilotRuntimeMediaCache } from './pilot-runtime-media-cache'
 
 export type PilotToolAuditType = 'tool.call.started' | 'tool.call.approval_required' | 'tool.call.approved' | 'tool.call.rejected' | 'tool.call.completed' | 'tool.call.failed'
 
@@ -433,6 +434,18 @@ function resolveResponsesEndpoint(baseUrl: string): string {
     : `${normalized}/v1/responses`
 }
 
+function canUseResponsesBuiltinFallback(
+  channel: ExecutePilotWebsearchToolInput['channel'],
+): channel is NonNullable<ExecutePilotWebsearchToolInput['channel']> {
+  if (!channel) {
+    return false
+  }
+  if (channel.adapter !== 'openai' || channel.transport !== 'responses') {
+    return false
+  }
+  return Boolean(resolveResponsesEndpoint(channel.baseUrl))
+}
+
 function parseResponsesOutputText(payload: Record<string, unknown>): string {
   if (typeof payload.output_text === 'string' && payload.output_text.trim()) {
     return payload.output_text.trim()
@@ -780,6 +793,25 @@ function normalizeBase64(value: unknown): string {
   return String(value || '').trim().replace(/^data:[^;]+;base64,/i, '')
 }
 
+function normalizeBase64Payload(value: unknown): string {
+  const compact = normalizeBase64(value).replace(/\s+/g, '')
+  if (!compact) {
+    return ''
+  }
+  const normalized = compact
+  if (!/^[a-z0-9+/]+={0,2}$/i.test(normalized)) {
+    return ''
+  }
+  const remainder = normalized.length % 4
+  if (remainder === 1) {
+    return ''
+  }
+  if (remainder === 0) {
+    return normalized
+  }
+  return normalized.padEnd(normalized.length + (4 - remainder), '=')
+}
+
 function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
   const raw = Buffer.from(value, 'base64')
   return Uint8Array.from(raw) as Uint8Array<ArrayBuffer>
@@ -809,7 +841,7 @@ function appendFormFile(form: FormData, field: string, input: {
   mimeType?: string
   filename?: string
 }, fallbackName: string): void {
-  const b64 = normalizeBase64(input.base64)
+  const b64 = normalizeBase64Payload(input.base64)
   if (!b64) {
     return
   }
@@ -817,6 +849,67 @@ function appendFormFile(form: FormData, field: string, input: {
   const filename = normalizeText(input.filename) || fallbackName
   const bytes = decodeBase64(b64)
   form.append(field, new Blob([bytes], { type: mimeType }), filename)
+}
+
+function parseImageDataUrl(value: string): { mimeType: string, payload: string } | null {
+  const matched = value.match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i)
+  if (!matched) {
+    return null
+  }
+  const payload = normalizeBase64Payload(matched[2] || '')
+  if (!payload) {
+    return null
+  }
+  return {
+    mimeType: normalizeMimeType(matched[1], 'image/png'),
+    payload,
+  }
+}
+
+function resolveImageBinaryFromUrlField(value: string): { bytes: Uint8Array<ArrayBuffer>, mimeType: string } | null {
+  const raw = normalizeText(value)
+  if (!raw) {
+    return null
+  }
+
+  const parsedDataUrl = parseImageDataUrl(raw)
+  if (parsedDataUrl) {
+    const bytes = decodeBase64(parsedDataUrl.payload)
+    if (bytes.byteLength <= 0) {
+      return null
+    }
+    return {
+      bytes,
+      mimeType: parsedDataUrl.mimeType,
+    }
+  }
+
+  if (
+    raw.startsWith('/')
+    || /^https?:\/\//i.test(raw)
+    || raw.includes('://')
+    || raw.startsWith('file:')
+    || raw.startsWith('blob:')
+  ) {
+    return null
+  }
+
+  if (raw.length < 16) {
+    return null
+  }
+
+  const payload = normalizeBase64Payload(raw)
+  if (!payload) {
+    return null
+  }
+  const bytes = decodeBase64(payload)
+  if (bytes.byteLength <= 0) {
+    return null
+  }
+  return {
+    bytes,
+    mimeType: 'image/png',
+  }
 }
 
 function resolveAudioMimeTypeByFormat(format: string): string {
@@ -900,7 +993,7 @@ export async function executePilotWebsearchTool(
   let connectorSource: 'gateway' | 'responses_builtin' | 'none' = 'none'
   let connectorReason = 'pending'
   let summaryText = ''
-  let domainCandidates: string[] = []
+  const domainCandidates: string[] = []
   const providerChain = dataSource.providers
     .filter(item => item.enabled !== false)
     .sort((a, b) => a.priority - b.priority)
@@ -1013,26 +1106,33 @@ export async function executePilotWebsearchTool(
       }
     }
 
-    if (docMap.size < targetResults && input.channel) {
-      fallbackUsed = true
-      connectorSource = 'responses_builtin'
-      const fallback = await executeResponsesBuiltinWebsearch({
-        query,
-        channel: input.channel,
-        maxResults: targetResults,
-      })
-      connectorReason = fallback.connectorReason
-      summaryText = fallback.summaryText
-      domainCandidates.push(...fallback.docs.map(item => normalizeText(item.domain).toLowerCase()).filter(Boolean))
-      for (const doc of fallback.docs) {
-        const dedupeKey = buildDocDedupeKey(doc, dedupeMode)
-        if (docMap.has(dedupeKey)) {
-          dedupeCount += 1
-          continue
+    if (docMap.size < targetResults && canUseResponsesBuiltinFallback(input.channel)) {
+      try {
+        const fallback = await executeResponsesBuiltinWebsearch({
+          query,
+          channel: input.channel,
+          maxResults: targetResults,
+        })
+        fallbackUsed = true
+        connectorSource = 'responses_builtin'
+        connectorReason = fallback.connectorReason
+        summaryText = fallback.summaryText
+        domainCandidates.push(...fallback.docs.map(item => normalizeText(item.domain).toLowerCase()).filter(Boolean))
+        for (const doc of fallback.docs) {
+          const dedupeKey = buildDocDedupeKey(doc, dedupeMode)
+          if (docMap.has(dedupeKey)) {
+            dedupeCount += 1
+            continue
+          }
+          docMap.set(dedupeKey, doc)
+          if (docMap.size >= targetResults) {
+            break
+          }
         }
-        docMap.set(dedupeKey, doc)
-        if (docMap.size >= targetResults) {
-          break
+      }
+      catch (fallbackError) {
+        if (docMap.size <= 0) {
+          throw fallbackError
         }
       }
     }
@@ -1371,6 +1471,21 @@ export async function executePilotImageGenerateTool(
       const b64 = normalizeText(row.b64_json)
       const revisedPrompt = normalizeText(row.revised_prompt) || undefined
 
+      const imageFromUrl = resolveImageBinaryFromUrlField(url)
+      if (imageFromUrl) {
+        const media = toMediaUrlAndBase64({
+          bytes: imageFromUrl.bytes,
+          mimeType: imageFromUrl.mimeType,
+          output: input.output,
+        })
+        images.push({
+          url: media.url,
+          revisedPrompt,
+          base64: media.base64,
+        })
+        continue
+      }
+
       if (url) {
         images.push({
           url,
@@ -1380,7 +1495,11 @@ export async function executePilotImageGenerateTool(
       }
 
       if (b64) {
-        const bytes = decodeBase64(b64)
+        const b64Payload = normalizeBase64Payload(b64)
+        if (!b64Payload) {
+          continue
+        }
+        const bytes = decodeBase64(b64Payload)
         const media = toMediaUrlAndBase64({
           bytes,
           mimeType: 'image/png',
@@ -1673,7 +1792,7 @@ export async function executePilotAudioTtsTool(
         url: endpoint,
         headers: {
           'content-type': 'application/json',
-          authorization: `Bearer ${input.channel.apiKey}`,
+          'authorization': `Bearer ${input.channel.apiKey}`,
         },
         body: {
           model: normalizeText(input.channel.model),

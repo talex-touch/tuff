@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-03-20  
+> 更新时间：2026-03-22  
 > 本页仅保留入口与高价值快照；历史细节以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主要入口
@@ -38,6 +38,7 @@
 - **Pilot 旧 UI 会话卡片化硬切**：保留 `ThChat/ThInput/History`，运行态统一改为会话内 `pilot_run_event_card` 推送（`intent/routing/memory/websearch/thinking`），不再使用全局运行态条。
 - **Pilot 流式协议收敛**：旧 UI 执行器统一消费 `/api/chat/sessions/:sessionId/stream` 新事件族；legacy 事件（`turn.* / status_updated / completion / verbose / session_bound`）仅忽略告警。
 - **Intelligence 多模态能力打通**：`image.generate/image.edit/audio.tts/audio.stt/audio.transcribe` 已接入统一能力配置、运行时分发与 fallback；`video.generate` 进入配置矩阵并保留“运行时未实现”提示。
+- **Pilot 模型组能力开关重构**：`/admin/system/model-groups` 已升级为“模板预设 + 分层配置 + 联动校验”，并新增共享能力元数据模块统一前后端规则。
 - **Pilot 附件交互修复**：聊天生成中不再禁用输入区粘贴与附件选择；支持粘贴图片/文件直传，并显式放开图片等常见文件类型选择。
 - **Pilot 附件慢链路治理（URL/ID-first）**：入模策略统一为 `id > https url > base64`，并新增附件能力探测接口 `GET /api/chat/attachments/capability`。
 - **Pilot 后台设置入口升级**：管理主入口已迁移到 `/admin/*`，`/cms/*` 仅保留 Legacy 跳转层。

@@ -77,6 +77,14 @@ export function mapAgentEnvelopeToPilotStreamEvent(envelope: AgentEnvelope): Pil
     event.type = 'assistant.delta'
     event.delta = text
   }
+  else if (envelope.type === 'thinking.delta') {
+    event.type = 'thinking.delta'
+    event.delta = text
+  }
+  else if (envelope.type === 'thinking.final') {
+    event.type = 'thinking.final'
+    event.message = text
+  }
   else if (envelope.type === 'assistant.final') {
     event.type = 'assistant.final'
     event.message = text

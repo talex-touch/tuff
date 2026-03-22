@@ -18,6 +18,7 @@ const MAX_TIMEOUT_MS = 10 * 60 * 1000
 const DEFAULT_PRIORITY = 100
 const MIN_PRIORITY = 1
 const MAX_PRIORITY = 9999
+const LEGACY_ADAPTER_REMOVED_REASON = 'LEGACY_ADAPTER_REMOVED'
 const SUPPORTED_BUILTIN_TOOLS: PilotBuiltinTool[] = [
   'write_todos',
   'read_file',
@@ -63,14 +64,11 @@ function normalizeText(value: unknown): string {
   return String(value || '').trim()
 }
 
-function normalizeAdapter(value: unknown): PilotChannelAdapter {
-  return normalizeText(value).toLowerCase() === 'openai' ? 'openai' : 'legacy'
+function normalizeAdapter(_value: unknown): PilotChannelAdapter {
+  return 'openai'
 }
 
-function normalizeTransport(value: unknown, adapter: PilotChannelAdapter): PilotChannelTransport {
-  if (adapter === 'legacy') {
-    return 'responses'
-  }
+function normalizeTransport(value: unknown, _adapter: PilotChannelAdapter): PilotChannelTransport {
   const normalized = normalizeText(value).toLowerCase()
   return normalized === 'chat.completions' || normalized === 'chat_completions' || normalized === 'completions'
     ? 'chat.completions'
@@ -143,6 +141,7 @@ function normalizeChannelModelRow(raw: unknown): PilotChannelModelConfig | null 
     id,
     label: normalizeText(row.label) || undefined,
     format: normalizeText(row.format) || undefined,
+    priority: normalizePriority(row.priority),
     enabled: normalizeBoolean(row.enabled, true),
     thinkingSupported: normalizeBoolean(row.thinkingSupported, true),
     thinkingDefaultEnabled: normalizeBoolean(row.thinkingDefaultEnabled, false),
@@ -164,6 +163,7 @@ function normalizeChannelModels(value: unknown, fallbackModel: string): PilotCha
     return [{
       id: fallbackId,
       label: fallbackId,
+      priority: DEFAULT_PRIORITY,
       enabled: true,
       thinkingSupported: true,
       thinkingDefaultEnabled: false,
@@ -282,10 +282,18 @@ function normalizeChannelRow(raw: unknown): PilotAdminChannelItem | null {
   if (!id || !baseUrl || !apiKey) {
     return null
   }
+  const rawAdapter = normalizeText(row.adapter).toLowerCase()
   const adapter = normalizeAdapter(row.adapter)
+  const legacyMigrated = rawAdapter === 'legacy'
   const fallbackModel = normalizeText(row.model) || 'gpt-5.2'
   const models = normalizeChannelModels(row.models, fallbackModel)
   const defaultModelId = normalizeDefaultModelId(row.defaultModelId, models, fallbackModel)
+  const existingSyncError = typeof row.modelsSyncError === 'string'
+    ? normalizeText(row.modelsSyncError)
+    : ''
+  const migratedSyncError = legacyMigrated
+    ? [existingSyncError, LEGACY_ADAPTER_REMOVED_REASON].filter(Boolean).join(' | ')
+    : existingSyncError
   return {
     id,
     name: normalizeText(row.name) || id,
@@ -301,9 +309,7 @@ function normalizeChannelRow(raw: unknown): PilotAdminChannelItem | null {
     builtinTools: normalizeTools(row.builtinTools),
     enabled: normalizeBoolean(row.enabled, true),
     modelsLastSyncedAt: normalizeText(row.modelsLastSyncedAt) || undefined,
-    modelsSyncError: typeof row.modelsSyncError === 'string'
-      ? normalizeText(row.modelsSyncError) || undefined
-      : undefined,
+    modelsSyncError: migratedSyncError || undefined,
   }
 }
 
