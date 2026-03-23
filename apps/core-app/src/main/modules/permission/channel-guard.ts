@@ -8,7 +8,6 @@ import { getPermissionModule } from './index'
 export interface ProtectedChannelOptions {
   permissionId: string
   errorMessage?: string
-  allowLegacy?: boolean
 }
 
 export type ProtectedHandler<TReq = unknown, TRes = unknown> = (
@@ -105,7 +104,7 @@ export function withPermission<TReq = unknown, TRes = unknown>(
         pluginId?: string
         showRequest?: boolean
       }
-      error.code = 'PERMISSION_DENIED'
+      error.code = result.code ?? 'PERMISSION_DENIED'
       error.permissionId = permissionId
       error.pluginId = pluginId
       error.showRequest = result.showRequest

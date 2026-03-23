@@ -10,7 +10,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron'
 import fse from 'fs-extra'
-import { CURRENT_SDK_VERSION } from '@talex-touch/utils/plugin'
+import {
+  CURRENT_SDK_VERSION,
+  PERMISSION_ENFORCEMENT_MIN_VERSION,
+  resolveSdkApiVersion
+} from '@talex-touch/utils/plugin'
 import { ensureDefaultProvidersRegistered, installFromRegistry } from './providers'
 
 function createDialogRiskPrompt(): RiskPromptHandler {
@@ -99,13 +103,14 @@ export class PluginInstaller {
 
   private assertManifestSdkApi(manifest: IManifest | undefined): void {
     if (!manifest) return
-    const sdkapi = (manifest as { sdkapi?: unknown }).sdkapi
-    if (typeof sdkapi === 'number') {
+    const declared = (manifest as { sdkapi?: unknown }).sdkapi
+    const resolved = resolveSdkApiVersion(declared)
+    if (typeof resolved === 'number' && resolved >= PERMISSION_ENFORCEMENT_MIN_VERSION) {
       return
     }
     const pluginName = typeof manifest.name === 'string' ? manifest.name : 'unknown'
     throw new Error(
-      `Plugin "${pluginName}" is outdated: missing required "sdkapi" in manifest.json. Required current sdkapi: ${CURRENT_SDK_VERSION}.`
+      `[SDKAPI_BLOCKED] Plugin "${pluginName}" is blocked: sdkapi must be >= ${PERMISSION_ENFORCEMENT_MIN_VERSION}. Please migrate to sdkapi ${CURRENT_SDK_VERSION}.`
     )
   }
 

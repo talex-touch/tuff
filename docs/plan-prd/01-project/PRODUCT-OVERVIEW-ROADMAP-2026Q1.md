@@ -49,6 +49,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 兼容债务清册门禁：`compatibility-debt-registry.csv` 必须覆盖全部存量兼容债务；新增债务无登记禁止合入。
 - 超长文件门禁：`size:guard` 必须通过，阈值 `>=1200` 的存量文件禁止继续增长，新增超长文件禁止合入。
 - 网络边界硬约束：业务层禁止新增 direct `fetch/axios`，统一走 `@talex-touch/utils/network`（network 套件内部除外），并由 root `network:guard` + ESLint 双门禁拦截。
+- CoreApp 兼容硬切门禁：`window.$channel` 业务入口、legacy storage 协议（`storage:get/save/reload/save-sync/saveall`）、legacy `sdkapi` 放行逻辑必须保持 `0` 命中；新增插件/更新能力禁止“伪成功”返回。
 
 ### 3.2 架构约束
 - 主流程优先复用 SDK 与现有模块，不允许重复造轮子。
@@ -192,6 +193,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
   - OmniPanel 稳定版 MVP 已通过真实窗口 smoke 与关键失败路径回归，不再作为当前开发主线。
 - **后续顺序（锁定）**：`Nexus 设备授权风控`（`OmniPanel Gate`、`SDK Hard-Cut E~F`、`v2.4.7 Gate D/E`、`权限中心 Phase 5`、`View Mode Phase2~4`、`CLI 分包迁移收口`、`主文档同步验收` 已完成）。
 - **治理口径（锁定）**：Legacy/兼容/结构治理统一采用 `UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md`，按五工作包并行推进与统一里程碑验收。
+- **硬切进展（2026-03-23）**：`apps/core-app` 已完成一轮兼容债硬切（权限/Storage/Channel/插件 API/更新占位/AgentStore/Extension unload），下一步保留三平台人工回归与发布说明收口。
 - **CLI 兼容策略（锁定）**：`2.4.x` 保留 `@talex-touch/unplugin-export-plugin` CLI shim，`2.5.0` 退场。
 
 ## 5. 里程碑验收标准（跨周）

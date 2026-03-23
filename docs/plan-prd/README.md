@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档入口（压缩版）
-> 更新时间: 2026-03-22
+> 更新时间: 2026-03-23
 
 ## 快速入口
 
@@ -22,6 +22,7 @@
 - 当前工作区基线：`2.4.9-beta.4`。
 - Legacy/兼容/结构治理已切换到“统一实施 PRD + 五工作包并行”口径（不再使用 Phase 1-3 决策叙事）。
 - 治理基线：`legacy 81/184`、`raw channel 13/46`、超长文件（主线）`47`。
+- `apps/core-app` 已完成“兼容债立即硬切”首轮并行治理：`window.$channel` 业务入口清零、legacy storage 事件协议清零、权限 `sdkapi` legacy 放行移除、更新/平台识别收敛为显式 `unsupported` 策略。
 - 当前下一动作：`Nexus 设备授权风控`。
 - `2.4.8` 主线：OmniPanel Gate 已完成（historical）。
 - `v2.4.7` Gate：A/B/C/D/E 已完成（historical），不重发版。

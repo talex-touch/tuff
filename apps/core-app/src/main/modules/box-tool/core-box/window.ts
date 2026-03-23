@@ -1126,7 +1126,7 @@ export class WindowManager {
 
     const injections = usePluginInjections(plugin, 'core-box:attachUIView')
 
-    // Create dynamic preload script to inject window.$plugin and window.$channel before page scripts execute
+    // Create dynamic preload script to inject plugin API and channel bridge before page scripts execute
     let preloadPath = injections?._.preload
     if (plugin && injections?.js) {
       const tempPreloadPath = path.resolve(
@@ -1168,7 +1168,7 @@ export class WindowManager {
   try {
     ${channelScript}
   } catch (error) {
-    console.error('[CoreBox] Failed to inject window.$channel:', error);
+    console.error('[CoreBox] Failed to inject touch channel bridge:', error);
   }
 
   ${
@@ -1247,7 +1247,7 @@ export class WindowManager {
       }
     })
 
-    // window.$plugin and window.$channel are injected via preload script before page scripts execute
+    // Plugin API and touch channel bridge are injected via preload script before page scripts execute
     // Styles will be injected on dom-ready
 
     this.uiView.webContents.addListener('dom-ready', () => {

@@ -7,7 +7,7 @@
 
 import type { PermissionStore } from './permission-store'
 import { normalizePermissionId, permissionRegistry } from '@talex-touch/utils/permission'
-import { checkSdkCompatibility } from '@talex-touch/utils/plugin'
+import { PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
 
 /**
  * Permission check result
@@ -15,6 +15,8 @@ import { checkSdkCompatibility } from '@talex-touch/utils/plugin'
 export interface PermissionCheckResult {
   /** Whether permission is granted */
   allowed: boolean
+  /** Machine-readable error code */
+  code?: 'PERMISSION_DENIED' | 'SDKAPI_BLOCKED'
   /** Reason for denial if not allowed */
   reason?: string
   /** Whether to show permission request dialog */
@@ -28,7 +30,7 @@ export interface PermissionCheckResult {
 }
 
 type PermissionDeniedError = Error & {
-  code: 'PERMISSION_DENIED'
+  code: 'PERMISSION_DENIED' | 'SDKAPI_BLOCKED'
   permissionId: string
   pluginId: string
 }
@@ -148,17 +150,20 @@ export class PermissionGuard {
       }
     }
 
-    // Check SDK compatibility
-    const sdkCompat = checkSdkCompatibility(sdkapi, pluginId)
-    if (!sdkCompat.enforcePermissions) {
-      // Enforcement disabled for legacy plugins
+    if (
+      typeof sdkapi !== 'number' ||
+      !Number.isFinite(sdkapi) ||
+      sdkapi < PERMISSION_ENFORCEMENT_MIN_VERSION
+    ) {
       const duration = performance.now() - startTime
       this.recordPerformance(duration)
       return {
-        allowed: true,
+        allowed: false,
+        code: 'SDKAPI_BLOCKED',
         permissionId: requiredPermissions[0],
         pluginId,
-        reason: 'Permission enforcement disabled for legacy SDK',
+        reason: `Plugin "${pluginId}" blocked: sdkapi must be >= ${PERMISSION_ENFORCEMENT_MIN_VERSION}`,
+        showRequest: false,
         durationMs: duration
       }
     }
@@ -171,6 +176,17 @@ export class PermissionGuard {
       if (!accessState.allowed) {
         const duration = performance.now() - startTime
         this.recordPerformance(duration)
+        if (accessState.reason === 'sdkapi-blocked') {
+          return {
+            allowed: false,
+            code: 'SDKAPI_BLOCKED',
+            permissionId: normalizedPermissionId,
+            pluginId,
+            reason: `Plugin "${pluginId}" blocked: sdkapi must be >= ${PERMISSION_ENFORCEMENT_MIN_VERSION}`,
+            showRequest: false,
+            durationMs: duration
+          }
+        }
         const blockedByDeclaration = accessState.reason === 'not-declared'
         const reason = blockedByDeclaration
           ? accessState.hasHistoricalGrant
@@ -179,6 +195,7 @@ export class PermissionGuard {
           : `Permission '${normalizedPermissionId}' not granted`
         return {
           allowed: false,
+          code: 'PERMISSION_DENIED',
           permissionId: normalizedPermissionId,
           pluginId,
           reason,
@@ -254,7 +271,7 @@ export class PermissionGuard {
     const result = this.check(pluginId, apiName, sdkapi)
     if (!result.allowed) {
       const error = new Error(`Permission denied: ${result.reason}`) as PermissionDeniedError
-      error.code = 'PERMISSION_DENIED'
+      error.code = result.code ?? 'PERMISSION_DENIED'
       error.permissionId = result.permissionId
       error.pluginId = pluginId
       throw error

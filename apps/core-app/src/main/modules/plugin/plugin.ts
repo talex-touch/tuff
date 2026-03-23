@@ -1501,58 +1501,6 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
-    // 向后兼容：保留旧的 searchManager
-    const warnDeprecatedSearch = (method: string, replacement: string) => {
-      pluginSystemLog.warn(
-        `[Plugin ${this.name}] search.${method} is deprecated. Use ${replacement} instead.`
-      )
-    }
-
-    const searchManager = {
-      /**
-       * @deprecated 使用 boxItems.pushItems() 替代
-       * Pushes search items directly to the CoreBox window
-       * @param items - Array of search items to display
-       */
-      pushItems: async (items: TuffItem[]) => {
-        warnDeprecatedSearch('pushItems', 'boxItems.pushItems() / plugin.feature.pushItems()')
-        await boxItems.pushItems(items)
-        this._searchItems = [...items]
-        this._searchTimestamp = Date.now()
-      },
-
-      /**
-       * @deprecated 使用 boxItems.clear() 替代
-       * Clears search items from the CoreBox window
-       */
-      clearItems: () => {
-        warnDeprecatedSearch('clearItems', 'boxItems.clear() / plugin.feature.clearItems()')
-        this._searchItems = []
-        this._searchTimestamp = Date.now()
-        boxItems.clear()
-      },
-
-      /**
-       * @deprecated 使用 boxItems.getItems() 替代
-       */
-      getItems: (): TuffItem[] => {
-        warnDeprecatedSearch('getItems', 'boxItems.getItems() / plugin.feature.getItems()')
-        return boxItems.getItems()
-      },
-
-      updateQuery: (query: string) => {
-        this._lastSearchQuery = query
-      },
-
-      getQuery: (): string => {
-        return this._lastSearchQuery
-      },
-
-      getTimestamp: (): number => {
-        return this._searchTimestamp
-      }
-    }
-
     const powerSDK = this.createPowerSDK(pluginName, touchChannel)
 
     const recommendSDK = this.createRecommendSDK(pluginName)
@@ -1731,7 +1679,6 @@ export class TouchPlugin implements ITouchPlugin {
       ...pluginInfo,
       storage,
       feature: featureSDK,
-      search: searchManager,
       box: boxSDK,
       divisionBox: divisionBoxSDK,
       meta: quickActionsSDK,
@@ -1751,45 +1698,15 @@ export class TouchPlugin implements ITouchPlugin {
       channel: channelBridge,
       touchChannel,
       divisionBox: divisionBoxSDK,
-      box: boxSDK,
-      feature: featureSDK,
       meta: quickActionsSDK,
       quickActions: quickActionsSDK,
       power: powerSDK,
       recommend: recommendSDK,
       // 新的 BoxItemSDK API
       boxItems,
-      // 废弃的 API - 直接抛出错误
-      clearItems: () => {
-        pluginSystemLog.warn(
-          '[Plugin API] clearItems() is deprecated. Use plugin.feature.clearItems() instead.'
-        )
-        boxItems.clear()
-      },
-      pushItems: async (items: TuffItem[]) => {
-        pluginSystemLog.warn(
-          '[Plugin API] pushItems() is deprecated. Use plugin.feature.pushItems() instead.'
-        )
-        await boxItems.pushItems(items)
-      },
-      getItems: (): TuffItem[] => {
-        pluginSystemLog.warn(
-          '[Plugin API] getItems() is deprecated. Use plugin.feature.getItems() instead.'
-        )
-        return boxItems.getItems()
-      },
-      search: searchManager,
       features: featuresManager,
       plugin: pluginAPI,
       plugins: pluginsAPI,
-      $box: {
-        hide() {
-          throw new Error('[Plugin API] $box.hide() is deprecated. Use plugin.box.hide() instead.')
-        },
-        show() {
-          throw new Error('[Plugin API] $box.show() is deprecated. Use plugin.box.show() instead.')
-        }
-      },
       TuffItemBuilder,
       URLSearchParams
     }

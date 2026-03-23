@@ -15,12 +15,19 @@ import {
 import { compareVersions } from '~/composables/store/useVersionCompare'
 import { getBuildInfo } from '~/utils/build-info'
 import { UpdateProvider } from './UpdateProvider'
+import { resolveUpdateAssetTarget } from './platform-target'
 
 type GitHubApiAsset = {
   name?: string
   browser_download_url?: string
   url?: string
   size?: number
+}
+
+type ParsedDownloadAsset = DownloadAsset & {
+  signatureUrl?: string
+  component?: UpdateReleaseArtifact['component']
+  coreRange?: string
 }
 
 export class GithubUpdateProvider extends UpdateProvider {
@@ -200,39 +207,57 @@ export class GithubUpdateProvider extends UpdateProvider {
       }
     }
 
-    return assets
-      .filter((asset) => {
-        const name = asset.name ?? ''
-        return (
-          name.length > 0 &&
-          !this.isSignatureAsset(name) &&
-          !this.isChecksumAsset(name) &&
-          this.normalizeAssetKey(name) !== UPDATE_RELEASE_MANIFEST_NAME
-        )
+    const parsedAssets: ParsedDownloadAsset[] = []
+    for (const asset of assets) {
+      const name = asset.name ?? ''
+      if (
+        name.length <= 0 ||
+        this.isSignatureAsset(name) ||
+        this.isChecksumAsset(name) ||
+        this.normalizeAssetKey(name) === UPDATE_RELEASE_MANIFEST_NAME
+      ) {
+        continue
+      }
+
+      const signatureUrl = signatureMap.get(this.normalizeAssetKey(name))
+      const manifestChecksum = (asset as { sha256?: string; checksum?: string }).sha256
+      const checksum =
+        typeof manifestChecksum === 'string'
+          ? manifestChecksum
+          : typeof (asset as { checksum?: string }).checksum === 'string'
+            ? (asset as { checksum?: string }).checksum
+            : this.extractChecksum(asset)
+      const target = resolveUpdateAssetTarget(name)
+      if (!target) {
+        console.warn(`[GithubUpdateProvider] Skip unsupported asset target: ${name}`)
+        continue
+      }
+
+      parsedAssets.push({
+        name,
+        url: asset.browser_download_url || asset.url || '',
+        size: asset.size || 0,
+        platform: target.platform,
+        arch: target.arch,
+        checksum,
+        signatureUrl,
+        component: (asset as { component?: UpdateReleaseArtifact['component'] }).component,
+        coreRange: (asset as { coreRange?: string }).coreRange
       })
-      .map((asset) => {
-        const name = asset.name ?? ''
-        const signatureUrl = signatureMap.get(this.normalizeAssetKey(name))
-        const manifestChecksum = (asset as { sha256?: string; checksum?: string }).sha256
-        const checksum =
-          typeof manifestChecksum === 'string'
-            ? manifestChecksum
-            : typeof (asset as { checksum?: string }).checksum === 'string'
-              ? (asset as { checksum?: string }).checksum
-              : this.extractChecksum(asset)
-        return {
-          name,
-          url: asset.browser_download_url || asset.url || '',
-          size: asset.size || 0,
-          platform: this.detectPlatform(name),
-          arch: this.detectArch(name),
-          checksum,
-          signatureUrl,
-          component: (asset as { component?: UpdateReleaseArtifact['component'] }).component,
-          coreRange: (asset as { coreRange?: string }).coreRange
-        }
-      })
+    }
+
+    return parsedAssets
       .filter((asset) => !asset.coreRange || this.satisfiesCoreRange(asset.coreRange))
+      .map(
+        (asset): DownloadAsset => ({
+          name: asset.name,
+          url: asset.url,
+          size: asset.size,
+          platform: asset.platform,
+          arch: asset.arch,
+          ...(asset.checksum ? { checksum: asset.checksum } : {})
+        })
+      )
   }
 
   private async attachReleaseManifest(release: GitHubRelease): Promise<GitHubRelease> {
@@ -338,43 +363,6 @@ export class GithubUpdateProvider extends UpdateProvider {
       console.warn('GitHub health check failed:', error)
       return false
     }
-  }
-
-  // 检测平台
-  private detectPlatform(filename: string): 'win32' | 'darwin' | 'linux' {
-    const lower = filename.toLowerCase()
-
-    if (lower.includes('win') || lower.includes('windows') || lower.includes('.exe')) {
-      return 'win32'
-    } else if (lower.includes('mac') || lower.includes('darwin') || lower.includes('.dmg')) {
-      return 'darwin'
-    } else if (
-      lower.includes('linux') ||
-      lower.includes('ubuntu') ||
-      lower.includes('debian') ||
-      lower.includes('.deb') ||
-      lower.includes('.rpm') ||
-      lower.includes('.appimage')
-    ) {
-      return 'linux'
-    }
-
-    // 默认返回当前平台
-    return process.platform as 'win32' | 'darwin' | 'linux'
-  }
-
-  // 检测架构
-  private detectArch(filename: string): 'x64' | 'arm64' {
-    const lower = filename.toLowerCase()
-
-    if (lower.includes('arm64') || lower.includes('aarch64')) {
-      return 'arm64'
-    } else if (lower.includes('x64') || lower.includes('amd64') || lower.includes('x86_64')) {
-      return 'x64'
-    }
-
-    // 默认返回当前架构
-    return process.arch as 'x64' | 'arm64'
   }
 
   // 提取校验和

@@ -12,14 +12,9 @@ import {
   IntelligenceProviderType
 } from '@talex-touch/tuff-intelligence'
 import { StorageList } from '@talex-touch/utils'
-
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { getAuthToken } from '../auth'
-import { getMainConfig, saveMainConfig } from '../storage'
+import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 import { tuffIntelligence } from './intelligence-sdk'
-
-const storageUpdateEvent = StorageEvents.legacy.update
 
 const SUPPORTED_PROVIDER_TYPES = new Set([
   'openai',
@@ -51,6 +46,7 @@ const INTERNAL_SYSTEM_OCR_PROVIDER: IntelligenceProviderConfig = {
 }
 
 let lastAppliedRuntimeConfigSignature: string | null = null
+let teardownConfigUpdateListener: (() => void) | null = null
 
 function normalizeStrategyId(value?: string) {
   if (!value) return undefined
@@ -490,22 +486,15 @@ export function getCapabilitiesMap(): Record<string, IntelligenceCapabilityRouti
  * Setup storage update listener to reload config when it changes
  */
 export function setupConfigUpdateListener(): void {
-  const channel = $app.channel
-  if (!channel) {
+  if (teardownConfigUpdateListener) {
     return
   }
 
-  const keyManager = (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-  const transport = getTuffTransportMain(channel, keyManager)
-
-  transport.on(storageUpdateEvent, (data) => {
-    if (
-      data &&
-      typeof data === 'object' &&
-      'name' in data &&
-      data.name === StorageList.IntelligenceConfig
-    ) {
+  teardownConfigUpdateListener = subscribeMainConfig(StorageList.IntelligenceConfig, () => {
+    try {
       ensureIntelligenceConfigLoaded()
+    } catch {
+      // ignore transient storage readiness issues during startup
     }
   })
 }
