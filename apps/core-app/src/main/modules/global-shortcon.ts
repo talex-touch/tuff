@@ -9,6 +9,7 @@ import ShortcutStorage from '@talex-touch/utils/common/storage/shortcut-storage'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { BrowserWindow, globalShortcut } from 'electron'
+import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
 import { getPermissionModule } from './permission'
@@ -30,10 +31,15 @@ const shortconRegisterEvent = defineRawEvent<
 const shortconTriggerEvent = defineRawEvent<{ id: string }, void>('shortcon:trigger')
 
 // A runtime map to hold callbacks for 'main' type shortcuts
-const mainCallbackRegistry = new Map<string, () => void>()
+interface MainShortcutRegistration {
+  callback: () => void
+  owner?: string
+}
+const mainCallbackRegistry = new Map<string, MainShortcutRegistration>()
 interface MainTriggerRegistration {
   onStateChange?: (enabled: boolean) => void
   onTrigger?: () => void
+  owner?: string
 }
 const mainTriggerRegistry = new Map<string, MainTriggerRegistration>()
 const SYSTEM_SHORTCUT_AUTHOR = 'system'
@@ -52,12 +58,23 @@ interface ShortcutStatus {
     | 'register-failed'
     | 'register-error'
     | 'invalid'
+    | 'runtime-missing'
     | 'disabled'
   conflictWith?: string[]
   warnings?: ShortcutWarning[]
 }
 
 type ShortcutWithStatus = Shortcut & { status?: ShortcutStatus }
+type MainShortcutRegisterOptions = {
+  enabled?: boolean
+  owner?: string
+}
+type MainTriggerRegisterOptions = {
+  enabled?: boolean
+  onStateChange?: (enabled: boolean) => void
+  onTrigger?: () => void
+  owner?: string
+}
 
 const isMacPlatform = process.platform === 'darwin'
 const acceleratorTokenAlias = new Map<string, string>([
@@ -100,6 +117,7 @@ export class ShortcutModule extends BaseModule {
   private storage?: ShortcutStorage
   private shortcutStatusMap = new Map<string, ShortcutStatus>()
   private isEnabled: boolean = true
+  private disposeBeforeQuitListener: (() => void) | null = null
 
   constructor() {
     super(ShortcutModule.key, {
@@ -113,15 +131,17 @@ export class ShortcutModule extends BaseModule {
       getConfig: storage.getConfig.bind(storage),
       saveConfig: storage.saveConfig.bind(storage)
     })
+    this.registerBeforeQuitTeardownListener()
     this.setupIpcListeners()
     this.reregisterAllShortcuts()
   }
 
   onDestroy(): MaybePromise<void> {
-    this.syncMainTriggerStates(new Map<string, ShortcutStatus>())
-    globalShortcut.unregisterAll()
-    mainCallbackRegistry.clear()
-    mainTriggerRegistry.clear()
+    if (this.disposeBeforeQuitListener) {
+      this.disposeBeforeQuitListener()
+      this.disposeBeforeQuitListener = null
+    }
+    this.teardownRuntimeRegistrations()
   }
 
   /**
@@ -178,14 +198,17 @@ export class ShortcutModule extends BaseModule {
     id: string,
     defaultAccelerator: string,
     callback: () => void,
-    options?: { enabled?: boolean }
+    options?: MainShortcutRegisterOptions
   ): boolean {
     if (mainCallbackRegistry.has(id)) {
       shortconLog.warn(`Main shortcut with ID ${id} is already registered.`)
       return false
     }
 
-    mainCallbackRegistry.set(id, callback)
+    mainCallbackRegistry.set(id, {
+      callback,
+      owner: options?.owner
+    })
 
     const existingShortcut = this.storage!.getShortcutById(id)
     if (!existingShortcut) {
@@ -211,11 +234,7 @@ export class ShortcutModule extends BaseModule {
   registerMainTrigger(
     id: string,
     triggerKind: ShortcutTriggerKind | string,
-    options?: {
-      enabled?: boolean
-      onStateChange?: (enabled: boolean) => void
-      onTrigger?: () => void
-    }
+    options?: MainTriggerRegisterOptions
   ): boolean {
     if (mainTriggerRegistry.has(id)) {
       shortconLog.warn(`Main trigger with ID ${id} is already registered.`)
@@ -224,7 +243,8 @@ export class ShortcutModule extends BaseModule {
 
     mainTriggerRegistry.set(id, {
       onStateChange: options?.onStateChange,
-      onTrigger: options?.onTrigger
+      onTrigger: options?.onTrigger,
+      owner: options?.owner
     })
 
     const existingShortcut = this.storage!.getShortcutById(id)
@@ -272,6 +292,24 @@ export class ShortcutModule extends BaseModule {
 
     shortconLog.success(`Main trigger registered: ${id} (${triggerKind})`)
     this.reregisterAllShortcuts()
+    return true
+  }
+
+  unregisterMainShortcut(id: string): boolean {
+    const removed = mainCallbackRegistry.delete(id)
+    if (!removed) return false
+    if (this.storage) {
+      this.reregisterAllShortcuts()
+    }
+    return true
+  }
+
+  unregisterMainTrigger(id: string): boolean {
+    const removed = mainTriggerRegistry.delete(id)
+    if (!removed) return false
+    if (this.storage) {
+      this.reregisterAllShortcuts()
+    }
     return true
   }
 
@@ -413,6 +451,10 @@ export class ShortcutModule extends BaseModule {
         continue
       }
       if (shortcut.type === ShortcutType.TRIGGER) {
+        if (!mainTriggerRegistry.has(shortcut.id)) {
+          statusMap.set(shortcut.id, { state: 'unavailable', reason: 'runtime-missing' })
+          continue
+        }
         const triggerKind =
           typeof shortcut.meta?.triggerKind === 'string' &&
           shortcut.meta.triggerKind.trim().length > 0
@@ -436,6 +478,11 @@ export class ShortcutModule extends BaseModule {
         }
 
         statusMap.set(shortcut.id, { state: 'active' })
+        continue
+      }
+
+      if (shortcut.type === ShortcutType.MAIN && !mainCallbackRegistry.has(shortcut.id)) {
+        statusMap.set(shortcut.id, { state: 'unavailable', reason: 'runtime-missing' })
         continue
       }
 
@@ -637,9 +684,9 @@ export class ShortcutModule extends BaseModule {
   private handleTrigger(shortcut: Shortcut): void {
     switch (shortcut.type) {
       case ShortcutType.MAIN: {
-        const callback = mainCallbackRegistry.get(shortcut.id)
-        if (callback) {
-          callback()
+        const registration = mainCallbackRegistry.get(shortcut.id)
+        if (registration?.callback) {
+          registration.callback()
         } else {
           shortconLog.error(`No main-process callback found for shortcut ID: ${shortcut.id}`)
         }
@@ -726,6 +773,26 @@ export class ShortcutModule extends BaseModule {
     }
 
     return token.charAt(0).toUpperCase() + token.slice(1)
+  }
+
+  private registerBeforeQuitTeardownListener(): void {
+    if (this.disposeBeforeQuitListener) {
+      return
+    }
+    const handler = () => {
+      this.teardownRuntimeRegistrations()
+    }
+    touchEventBus.on(TalexEvents.BEFORE_APP_QUIT, handler)
+    this.disposeBeforeQuitListener = () => {
+      touchEventBus.off(TalexEvents.BEFORE_APP_QUIT, handler)
+    }
+  }
+
+  private teardownRuntimeRegistrations(): void {
+    globalShortcut.unregisterAll()
+    mainCallbackRegistry.clear()
+    mainTriggerRegistry.clear()
+    this.shortcutStatusMap = new Map()
   }
 }
 

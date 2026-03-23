@@ -70,6 +70,7 @@ const SHORTCUT_HOLD_MS = 500
 const SHORTCUT_RELEASE_GRACE_MS = 220
 const OMNI_PANEL_SHORTCUT_ID = 'core.omniPanel.toggle'
 const OMNI_PANEL_MOUSE_TRIGGER_ID = 'core.omniPanel.mouseLongPress'
+const OMNI_PANEL_SHORTCUT_OWNER = 'module.omni-panel'
 const OMNI_PANEL_SETTING_KEY = StorageList.APP_SETTING
 
 const OMNI_INPUT_TYPES = ['text', 'image', 'files', 'html'] as const
@@ -322,12 +323,14 @@ export class OmniPanelModule extends BaseModule {
     capturedAt: Date.now()
   }
   private handlingInstallEventPlugins = new Set<string>()
+  private destroying = false
 
   constructor() {
     super(OmniPanelModule.key, { create: false })
   }
 
   async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    this.destroying = false
     const channel = genTouchApp().channel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
@@ -358,11 +361,7 @@ export class OmniPanelModule extends BaseModule {
   }
 
   onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): MaybePromise<void> {
-    this.clearLongPressTimer()
-    this.clearShortcutHoldTimer()
-    this.clearShortcutArmExpiryTimer()
-    this.resetShortcutHoldState()
-    this.cleanupInputHook()
+    this.performShutdownCleanup()
 
     for (const dispose of this.transportDisposers) {
       try {
@@ -586,7 +585,7 @@ export class OmniPanelModule extends BaseModule {
       () => {
         this.handleShortcutPressed()
       },
-      { enabled }
+      { enabled, owner: OMNI_PANEL_SHORTCUT_OWNER }
     )
   }
 
@@ -600,7 +599,8 @@ export class OmniPanelModule extends BaseModule {
         enabled,
         onStateChange: (active) => {
           this.applyMouseLongPressSetting(active)
-        }
+        },
+        owner: OMNI_PANEL_SHORTCUT_OWNER
       }
     )
   }
@@ -615,6 +615,7 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private handleShortcutPressed(): void {
+    if (this.shouldSkipInputHookSetup()) return
     if (!this.shortcutHoldEnabled) return
 
     if (!this.inputHookKeys) {
@@ -658,6 +659,10 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private syncInputHookState(): void {
+    if (this.shouldSkipInputHookSetup()) {
+      this.cleanupInputHook()
+      return
+    }
     if (!this.mouseLongPressEnabled && !this.shortcutHoldEnabled) {
       this.clearLongPressTimer()
       this.clearShortcutHoldTimer()
@@ -697,11 +702,7 @@ export class OmniPanelModule extends BaseModule {
 
   private registerBeforeQuitListener(): void {
     const handler = () => {
-      this.clearLongPressTimer()
-      this.clearShortcutHoldTimer()
-      this.clearShortcutArmExpiryTimer()
-      this.resetShortcutHoldState()
-      this.cleanupInputHook()
+      this.performShutdownCleanup()
     }
     touchEventBus.on(MainEvents.BEFORE_APP_QUIT, handler)
     this.eventDisposers.push(() => {
@@ -1487,6 +1488,10 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private setupInputHook(): void {
+    if (this.shouldSkipInputHookSetup()) {
+      this.cleanupInputHook()
+      return
+    }
     if (this.inputHook) {
       return
     }
@@ -1717,6 +1722,26 @@ export class OmniPanelModule extends BaseModule {
         clearTimeout(timeoutId)
       }
     }
+  }
+
+  private performShutdownCleanup(): void {
+    this.destroying = true
+    this.mouseLongPressEnabled = false
+    this.shortcutHoldEnabled = false
+    this.clearLongPressTimer()
+    this.clearShortcutHoldTimer()
+    this.clearShortcutArmExpiryTimer()
+    this.resetShortcutHoldState()
+    this.cleanupInputHook()
+    shortcutModule.unregisterMainShortcut(OMNI_PANEL_SHORTCUT_ID)
+    shortcutModule.unregisterMainTrigger(OMNI_PANEL_MOUSE_TRIGGER_ID)
+  }
+
+  private shouldSkipInputHookSetup(): boolean {
+    if (this.destroying) {
+      return true
+    }
+    return (globalThis.$app as { isQuitting?: boolean } | undefined)?.isQuitting === true
   }
 }
 

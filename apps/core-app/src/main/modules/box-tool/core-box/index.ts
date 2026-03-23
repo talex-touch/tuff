@@ -23,6 +23,7 @@ const coreBoxLog = createLogger('CoreBox')
 const COREBOX_MIN_HEIGHT = 64
 const SEARCH_DIAGNOSTICS_BURST_DURATION_MS = 30_000
 const beginnerShortcutTriggeredEvent = defineRawEvent<void, void>('beginner:shortcut-triggered')
+const COREBOX_SHORTCUT_OWNER = 'module.corebox'
 
 export { getCoreBoxWindow } from './window'
 
@@ -126,7 +127,7 @@ export class CoreBoxModule extends BaseModule {
           lastScreenId = curScreen.id
         }
       },
-      { enabled: false }
+      { enabled: false, owner: COREBOX_SHORTCUT_OWNER }
     )
 
     shortcutModule.registerMainShortcut(
@@ -162,13 +163,16 @@ export class CoreBoxModule extends BaseModule {
             })
         }, 80)
       },
-      { enabled: false }
+      { enabled: false, owner: COREBOX_SHORTCUT_OWNER }
     )
 
     coreBoxLog.success('Core-box module initialized')
   }
 
   async onDestroy(): Promise<void> {
+    shortcutModule.unregisterMainShortcut('core.box.toggle')
+    shortcutModule.unregisterMainShortcut('core.box.aiQuickCall')
+
     if (this.disposeLagBurstSubscription) {
       this.disposeLagBurstSubscription()
       this.disposeLagBurstSubscription = null
