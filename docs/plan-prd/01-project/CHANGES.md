@@ -13,6 +13,18 @@
 
 ## 2026-03-23
 
+### fix(pilot): 补齐 Milkdown 数学样式依赖（katex CSS 解析失败）
+
+- 问题：
+  - `apps/pilot/app/components/article/MilkContent.vue` 与 `apps/pilot/app/components/article/MilkdownRender.vue` 直接导入 `katex/dist/katex.min.css`；
+  - 但 `apps/pilot/package.json` 未声明 `katex` 依赖，导致 Vite 在 dev 阶段报 `Failed to resolve import "katex/dist/katex.min.css"`。
+- 变更：
+  - `apps/pilot/package.json` 增加 `katex: ^0.16.28` 显式依赖；
+  - 同步 `pnpm-lock.yaml` 对应 importer 依赖项。
+- 验证：
+  - `pnpm -C "apps/pilot" exec node -p "require.resolve('katex/dist/katex.min.css')"` 成功返回解析路径；
+  - `apps/pilot/node_modules/katex/dist/katex.min.css` 文件存在。
+
 ### fix(pilot): Websearch 门控收紧 + 可恢复跳过 + 刷新卡片持久化
 
 - Websearch 决策统一收口为意图强门控（新旧链路一致）：
