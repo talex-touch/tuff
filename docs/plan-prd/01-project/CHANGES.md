@@ -96,6 +96,16 @@
   - 进一步降低 `perf-monitor` 复杂度，缩小变更影响面。
   - 让 summary 规则具备独立可测性，后续扩展指标时回归风险更低。
 
+### ref(core-app/clipboard): legacy IPC 事件与归一化适配器抽离
+
+- 变更：
+  - 新增 `apps/core-app/src/main/modules/clipboard/clipboard-legacy-bridge.ts`，集中维护 legacy raw 事件定义（`clipboard:get-history` 等）与请求归一化函数（copy-and-paste/write）。
+  - `apps/core-app/src/main/modules/clipboard.ts` 改为导入适配器，typed 与 legacy 两条写入/粘贴路径复用同一归一化逻辑，减少重复分支。
+  - 新增 `apps/core-app/src/main/modules/clipboard/clipboard-legacy-bridge.test.ts`，覆盖 payload 归一化与 legacy item 时间戳映射。
+- 价值：
+  - 降低 `ClipboardModule` 中 legacy 兼容层的耦合度，后续协议调整只改单模块。
+  - 减少 typed 与 legacy 分支行为漂移风险，增强回归可测性。
+
 ### fix(core-app/startup): 拆分模块加载与渲染器就绪计时口径，修正启动统计误读
 
 - 问题：
