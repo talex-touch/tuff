@@ -7,6 +7,12 @@ import { ipcMain, powerMonitor } from 'electron'
 import { getSentryService } from '../modules/sentry/sentry-service'
 import { createLogger, formatDuration } from './logger'
 import {
+  buildTopEvents,
+  buildTopPhaseCodes,
+  pickTopSlowIncidents,
+  summarizeIncidentKinds
+} from './perf-monitor-aggregator'
+import {
   IPC_ERROR_MS,
   IPC_LOG_THROTTLE_MS,
   IPC_WARN_MS,
@@ -863,23 +869,10 @@ export class PerfMonitor {
     if (snapshot.length === 0) return
 
     const errorCount = snapshot.filter((item) => item.severity === 'error').length
-
-    const byKind = new Map<string, number>()
-    for (const incident of snapshot) {
-      byKind.set(incident.kind, (byKind.get(incident.kind) ?? 0) + 1)
-    }
-
-    const kinds = Array.from(byKind.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([kind, count]) => `${kind}=${count}`)
-      .join(' ')
+    const kinds = summarizeIncidentKinds(snapshot)
 
     // Show top slow incidents
-    const slow = snapshot
-      .filter((i) => typeof i.durationMs === 'number')
-      .sort((a, b) => (b.durationMs ?? 0) - (a.durationMs ?? 0))
-      .slice(0, 5)
+    const slow = pickTopSlowIncidents(snapshot)
 
     const topSlowForLog = slow
       .filter((incident) => (incident.durationMs ?? 0) >= PERF_SUMMARY_TOP_SLOW_MIN_MS)
@@ -895,62 +888,8 @@ export class PerfMonitor {
         perfLog.warn(`Top slow: ${name} ${formatDuration(incident.durationMs ?? 0)}`)
       }
     }
-
-    const eventCounts = new Map<string, number>()
-    for (const incident of snapshot) {
-      if (!incident.eventName) continue
-      const channelType =
-        incident.meta && typeof incident.meta.channelType === 'string'
-          ? incident.meta.channelType
-          : undefined
-      const direction = incident.direction ? `:${incident.direction}` : ''
-      const channel = channelType ? `:${channelType}` : ''
-      const key = `${incident.kind}${direction}${channel}:${incident.eventName}`
-      eventCounts.set(key, (eventCounts.get(key) ?? 0) + 1)
-    }
-
-    const topEvents = Array.from(eventCounts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([key, count]) => ({ key, count }))
-
-    const phaseCodeStats = new Map<string, { count: number; maxDurationMs: number }>()
-    for (const incident of snapshot) {
-      const metaPhaseCode =
-        incident.meta && typeof incident.meta.phaseAlertCode === 'string'
-          ? incident.meta.phaseAlertCode
-          : undefined
-      const derivedPhaseCode =
-        incident.kind.startsWith('main.clipboard.') &&
-        typeof incident.eventName === 'string' &&
-        incident.eventName.trim().length > 0
-          ? incident.eventName.trim()
-          : undefined
-
-      const phaseCode = metaPhaseCode ?? derivedPhaseCode
-      if (!phaseCode) {
-        continue
-      }
-
-      const entry = phaseCodeStats.get(phaseCode) ?? { count: 0, maxDurationMs: 0 }
-      entry.count += 1
-      entry.maxDurationMs = Math.max(entry.maxDurationMs, Math.round(incident.durationMs ?? 0))
-      phaseCodeStats.set(phaseCode, entry)
-    }
-
-    const topPhaseCodes = Array.from(phaseCodeStats.entries())
-      .sort((a, b) => {
-        if (b[1].count !== a[1].count) {
-          return b[1].count - a[1].count
-        }
-        return b[1].maxDurationMs - a[1].maxDurationMs
-      })
-      .slice(0, 6)
-      .map(([code, value]) => ({
-        code,
-        count: value.count,
-        maxDurationMs: value.maxDurationMs
-      }))
+    const topEvents = buildTopEvents(snapshot)
+    const topPhaseCodes = buildTopPhaseCodes(snapshot)
 
     perfSummaryReporter?.({
       at: Date.now(),
