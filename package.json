@@ -10,7 +10,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "network:guard": "node scripts/check-network-boundaries.mjs && pnpm -C \"apps/core-app\" run network:guard",
+    "network:guard": "node scripts/check-network-boundaries.mjs",
     "compat:registry:guard": "node scripts/check-compatibility-debt-registry.mjs",
     "size:guard": "node scripts/check-large-file-boundaries.mjs",
     "legacy:guard": "node scripts/check-legacy-boundaries.mjs && pnpm compat:registry:guard && pnpm size:guard",

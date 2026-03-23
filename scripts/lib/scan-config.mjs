@@ -1,0 +1,85 @@
+export const WORKSPACE_SCAN_ROOTS = [
+  'apps/core-app',
+  'apps/nexus',
+  'apps/pilot',
+  'packages',
+  'plugins',
+]
+
+export const LEGACY_SCAN_ROOTS = [
+  'apps/core-app/src',
+  'apps/nexus/server',
+  'apps/nexus/app',
+  'apps/pilot/server',
+  'apps/pilot/app',
+  'apps/pilot/shared',
+  'packages',
+  'plugins',
+]
+
+export const SCOPE_GUARD_ROOTS = [...WORKSPACE_SCAN_ROOTS]
+
+export const SCOPE_GUARD_EXEMPT_FILES = new Set([
+  'apps/core-app/drizzle.config.ts',
+  'apps/core-app/electron.vite.config.ts',
+  'apps/core-app/eslint.config.mjs',
+  'apps/core-app/generator-information.ts',
+  'apps/core-app/scripts/build-target.js',
+  'apps/core-app/scripts/build-target/postprocess-mac.js',
+  'apps/core-app/scripts/ensure-platform-modules.js',
+  'apps/core-app/uno.config.ts',
+  'apps/nexus/sentry.server.config.ts',
+  'apps/nexus/content.config.ts',
+  'apps/nexus/eslint.config.js',
+  'apps/nexus/i18n/locales/en.ts',
+  'apps/nexus/i18n/locales/zh.ts',
+  'apps/nexus/i18n.config.ts',
+  'apps/nexus/nuxt.config.ts',
+  'apps/nexus/sentry.client.config.ts',
+  'apps/nexus/shared/watermark/config.ts',
+  'apps/nexus/test/mocks/nuxt-imports.ts',
+  'apps/nexus/types/cloudflare-env.d.ts',
+  'apps/nexus/types/qrcode.d.ts',
+  'apps/nexus/types/sidebase-auth.d.ts',
+  'apps/nexus/types/sync-api.d.ts',
+  'apps/nexus/uno.config.ts',
+  'apps/nexus/vitest.config.ts',
+  'apps/pilot/eslint.config.js',
+  'apps/pilot/nuxt.config.ts',
+  'apps/pilot/scripts/dev.mjs',
+  'apps/pilot/scripts/merge-ends-channels.mjs',
+  'apps/pilot/scripts/report-dist-size.mjs',
+  'apps/pilot/shared/pilot-env-loader.ts',
+  'apps/pilot/shims-compat.d.ts',
+  'apps/pilot/uno.config.ts',
+  'apps/pilot/vitest.config.ts',
+])
+
+export const DEFAULT_IGNORE_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'out',
+  '.nuxt',
+  '.wrangler',
+  '.output',
+  '.vitepress',
+  '--port',
+  'coverage',
+  'tuff',
+  '.workflow',
+  '.spec-workflow',
+  '.serena',
+  '.cursor',
+  '.cache',
+])
+
+export const TARGET_CODE_EXTENSIONS = new Set([
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.vue',
+  '.mjs',
+  '.cjs',
+])

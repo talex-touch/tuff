@@ -1,24 +1,7 @@
 import { createHash } from 'node:crypto'
 import process from 'node:process'
-
-function getArgValue(flag, fallback = null) {
-  const index = process.argv.indexOf(flag)
-  if (index === -1)
-    return fallback
-  return process.argv[index + 1] ?? fallback
-}
-
-function hasFlag(flag) {
-  return process.argv.includes(flag)
-}
-
-function toBool(value) {
-  return value === true || value === 'true' || value === '1'
-}
-
-function normalizeBaseUrl(url) {
-  return String(url || '').trim().replace(/\/+$/, '')
-}
+import { getArgValue, hasFlag, toBool } from './lib/argv-utils.mjs'
+import { fetchWithTimeout, normalizeBaseUrl } from './lib/http-utils.mjs'
 
 function normalizeSha(value) {
   const text = String(value || '').trim().toLowerCase()
@@ -128,17 +111,6 @@ function pickPreferredCandidate(existing, candidates) {
 
 function fileSha256Hex(content) {
   return createHash('sha256').update(content).digest('hex')
-}
-
-async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    return await fetch(url, { ...options, signal: controller.signal })
-  }
-  finally {
-    clearTimeout(timer)
-  }
 }
 
 function buildGitHubHeaders(token, extra = {}) {
@@ -485,18 +457,19 @@ function printUsage() {
 }
 
 async function main() {
-  if (hasFlag('--help') || hasFlag('-h')) {
+  const argv = process.argv
+  if (hasFlag(argv, '--help') || hasFlag(argv, '-h')) {
     printUsage()
     return
   }
 
-  const tag = getArgValue('--tag', 'v2.4.7')
-  const baseUrl = normalizeBaseUrl(getArgValue('--base-url', 'https://tuff.tagzxia.com'))
-  const repo = getArgValue('--repo', 'talex-touch/tuff')
-  const timeoutMs = Number(getArgValue('--timeout-ms', '20000')) || 20000
-  const dryRun = toBool(getArgValue('--dry-run', hasFlag('--dry-run')))
-  const nexusKey = getArgValue('--nexus-key', process.env.NEXUS_API_KEY ?? '')
-  const githubToken = getArgValue('--github-token', process.env.GITHUB_TOKEN ?? '')
+  const tag = getArgValue(argv, '--tag', 'v2.4.7')
+  const baseUrl = normalizeBaseUrl(getArgValue(argv, '--base-url', 'https://tuff.tagzxia.com'))
+  const repo = getArgValue(argv, '--repo', 'talex-touch/tuff')
+  const timeoutMs = Number(getArgValue(argv, '--timeout-ms', '20000')) || 20000
+  const dryRun = toBool(getArgValue(argv, '--dry-run', hasFlag(argv, '--dry-run')))
+  const nexusKey = getArgValue(argv, '--nexus-key', process.env.NEXUS_API_KEY ?? '')
+  const githubToken = getArgValue(argv, '--github-token', process.env.GITHUB_TOKEN ?? '')
 
   if (!dryRun && !nexusKey) {
     throw new Error('`--nexus-key` (or NEXUS_API_KEY) is required when --dry-run is false.')
