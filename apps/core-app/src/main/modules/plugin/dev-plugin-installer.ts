@@ -82,7 +82,7 @@ export async function installDevPluginFromPath(
       await fse.remove(targetDir)
     }
 
-    await checkDirWithCreate(targetDir, true)
+    checkDirWithCreate(targetDir, true)
     let skippedNodeModules = false
     await fse.copy(sourceDir, targetDir, {
       overwrite: true,

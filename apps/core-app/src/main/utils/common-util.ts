@@ -72,13 +72,9 @@ export async function sleep(time: number) {
   return new Promise((resolve) => setTimeout(() => resolve(time), time))
 }
 
-export async function checkDirWithCreate(url, abs = true) {
+export function checkDirWithCreate(url: string, abs = true): true {
   const p = abs ? url : path.join(process.cwd(), url)
-
-  if (!fse.existsSync(p)) {
-    return fse.mkdirSync(p)
-  }
-
+  fse.mkdirSync(p, { recursive: true })
   return true
 }
 
