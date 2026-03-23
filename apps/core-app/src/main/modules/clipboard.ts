@@ -62,16 +62,25 @@ import { getPermissionModule } from './permission'
 import { pluginModule } from './plugin/plugin-module'
 import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storage'
 import { activeAppService } from './system/active-app'
+import {
+  buildPhaseDiagnostics,
+  summarizePhaseDurations,
+  toPerfSeverity,
+  trackPhase,
+  trackPhaseAsync,
+  type ClipboardPhaseDurations
+} from './clipboard/clipboard-phase-diagnostics'
 
 const clipboardLog = createLogger('Clipboard')
 const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
+const CLIPBOARD_ACTIVE_APP_REFRESH_TASK_ID = 'clipboard.active-app.refresh'
+const CLIPBOARD_ACTIVE_APP_REFRESH_INTERVAL_MS = 1500
 const CLIPBOARD_VISIBLE_POLL_INTERVAL_MS = 500
 const CLIPBOARD_DEFAULT_POLL_INTERVAL_MS = 3000
 const CLIPBOARD_SLOW_THRESHOLD_MS = 200
 const CLIPBOARD_COOLDOWN_TRIGGER_MS = 500
 const CLIPBOARD_COOLDOWN_BASE_MS = 800
 const CLIPBOARD_COOLDOWN_MAX_MS = 3000
-const CLIPBOARD_PHASE_SUMMARY_LIMIT = 8
 const CLIPBOARD_NATIVE_WATCH_ENV = 'TUFF_CLIPBOARD_NATIVE_WATCH'
 const pollingService = PollingService.getInstance()
 
@@ -160,191 +169,6 @@ function isOnBatteryPowerSafe(): boolean {
 
 function includesAny(formats: string[], candidates: Set<string>): boolean {
   return formats.some((format) => candidates.has(format))
-}
-
-type ClipboardPhaseDurations = Record<string, number>
-type ClipboardPhaseAlertLevel = 'normal' | 'low' | 'medium' | 'high' | 'critical'
-
-interface ClipboardPhaseDiagnostics {
-  slowestPhase: string | null
-  slowestPhaseMs: number
-  phaseMs: string
-  phaseAlertLevel: ClipboardPhaseAlertLevel
-  phaseAlertCode: string
-  phaseAdvice: string
-  phaseTop2: string | null
-  phaseTop2Ms: number
-  phaseTop3: string | null
-  phaseTop3Ms: number
-}
-
-function trackPhase<T>(target: ClipboardPhaseDurations, phase: string, operation: () => T): T {
-  const startedAt = performance.now()
-  try {
-    return operation()
-  } finally {
-    target[phase] = (target[phase] ?? 0) + (performance.now() - startedAt)
-  }
-}
-
-async function trackPhaseAsync<T>(
-  target: ClipboardPhaseDurations,
-  phase: string,
-  operation: () => Promise<T>
-): Promise<T> {
-  const startedAt = performance.now()
-  try {
-    return await operation()
-  } finally {
-    target[phase] = (target[phase] ?? 0) + (performance.now() - startedAt)
-  }
-}
-
-function summarizePhaseDurations(
-  durations: ClipboardPhaseDurations,
-  maxEntries = CLIPBOARD_PHASE_SUMMARY_LIMIT
-): Record<string, number> {
-  return Object.fromEntries(
-    Object.entries(durations)
-      .filter(([, value]) => value >= 1)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, Math.max(1, maxEntries))
-      .map(([name, value]) => [name, Math.round(value)])
-  )
-}
-
-function getSlowestPhase(
-  durations: ClipboardPhaseDurations
-): { name: string; durationMs: number } | null {
-  const entries = Object.entries(durations)
-  if (entries.length === 0) {
-    return null
-  }
-  const [name, durationMs] = entries.sort((a, b) => b[1] - a[1])[0]
-  return { name, durationMs: Math.round(durationMs) }
-}
-
-function resolvePhaseAlertCode(slowestPhase: string | null): string {
-  if (!slowestPhase) {
-    return 'none'
-  }
-  if (slowestPhase === 'gate.waitForIdle') {
-    return 'gate_wait'
-  }
-  if (
-    slowestPhase === 'clipboard.readImage' ||
-    slowestPhase.startsWith('image.') ||
-    slowestPhase === 'eventLoop.yieldBeforeImageEncode'
-  ) {
-    return 'image_pipeline'
-  }
-  if (slowestPhase.startsWith('db.')) {
-    return 'db_persist'
-  }
-  if (slowestPhase === 'activeApp.snapshot') {
-    return 'active_app'
-  }
-  if (
-    slowestPhase === 'clipboard.readText' ||
-    slowestPhase === 'clipboard.readHTML' ||
-    slowestPhase === 'clipboard.readFiles'
-  ) {
-    return 'clipboard_read'
-  }
-  if (slowestPhase.startsWith('signature.') || slowestPhase.startsWith('diff.')) {
-    return 'signature_diff'
-  }
-  if (slowestPhase.startsWith('meta.')) {
-    return 'meta_serialize'
-  }
-  return 'mixed'
-}
-
-function resolvePhaseAdvice(phaseAlertCode: string): string {
-  switch (phaseAlertCode) {
-    case 'gate_wait':
-      return 'check appTaskGate backlog and startup task overlap'
-    case 'image_pipeline':
-      return 'reduce image encode work in poll path or defer heavy image handling'
-    case 'db_persist':
-      return 'inspect dbWrite queue depth and sqlite contention'
-    case 'active_app':
-      return 'prefer includeIcon=false and increase active-app cache ttl for poll path'
-    case 'clipboard_read':
-      return 'avoid unnecessary clipboard readHTML/readImage in fast path'
-    case 'signature_diff':
-      return 'optimize signature/diff computation and avoid repeated sorting'
-    case 'meta_serialize':
-      return 'reduce metadata payload size and serialization frequency'
-    default:
-      return 'inspect phaseMs top entries and correlate with event loop lag timeline'
-  }
-}
-
-function resolvePhaseAlertLevel(
-  slowestPhase: string | null,
-  slowestPhaseMs: number,
-  levelBaseDurationMs: number
-): ClipboardPhaseAlertLevel {
-  if (!slowestPhase) {
-    return 'normal'
-  }
-
-  if (slowestPhase === 'gate.waitForIdle') {
-    if (slowestPhaseMs >= 3000) return 'critical'
-    if (slowestPhaseMs >= 1800) return 'high'
-    if (slowestPhaseMs >= 900) return 'medium'
-    if (slowestPhaseMs >= 400) return 'low'
-    return 'normal'
-  }
-
-  const compositeDuration = Math.max(slowestPhaseMs, levelBaseDurationMs)
-  if (compositeDuration >= 2200) return 'critical'
-  if (compositeDuration >= 1200) return 'high'
-  if (compositeDuration >= 500) return 'medium'
-  if (compositeDuration >= 200) return 'low'
-  return 'normal'
-}
-
-function buildPhaseDiagnostics(
-  durations: ClipboardPhaseDurations,
-  levelBaseDurationMs: number
-): ClipboardPhaseDiagnostics {
-  const sortedEntries = Object.entries(durations)
-    .filter(([, value]) => value >= 1)
-    .sort((a, b) => b[1] - a[1])
-
-  const slowest = getSlowestPhase(durations)
-  const slowestPhase = slowest?.name ?? null
-  const slowestPhaseMs = slowest?.durationMs ?? 0
-  const phaseAlertCode = resolvePhaseAlertCode(slowestPhase)
-  const phaseAlertLevel = resolvePhaseAlertLevel(slowestPhase, slowestPhaseMs, levelBaseDurationMs)
-  const phaseSummary = summarizePhaseDurations(durations)
-  const second = sortedEntries[1]
-  const third = sortedEntries[2]
-
-  return {
-    slowestPhase,
-    slowestPhaseMs,
-    phaseMs: JSON.stringify(phaseSummary),
-    phaseAlertLevel,
-    phaseAlertCode,
-    phaseAdvice: resolvePhaseAdvice(phaseAlertCode),
-    phaseTop2: second?.[0] ?? null,
-    phaseTop2Ms: second ? Math.round(second[1]) : 0,
-    phaseTop3: third?.[0] ?? null,
-    phaseTop3Ms: third ? Math.round(third[1]) : 0
-  }
-}
-
-function toPerfSeverity(level: ClipboardPhaseAlertLevel): 'warn' | 'error' | null {
-  if (level === 'high' || level === 'critical') {
-    return 'error'
-  }
-  if (level === 'low' || level === 'medium') {
-    return 'warn'
-  }
-  return null
 }
 
 export interface IClipboardItem {
@@ -849,6 +673,7 @@ export class ClipboardModule extends BaseModule {
   private clipboardStageBJob: ClipboardStageBJob | null = null
   private clipboardStageBInFlight = false
   private clipboardStageBGeneration = 0
+  private activeAppRefreshInFlight = false
   private lastStageBLogAt = 0
   private clipboardNativeWatcher: ClipboardWatcherHandle | null = null
   private clipboardNativeWatchInitTried = false
@@ -2052,24 +1877,36 @@ export class ClipboardModule extends BaseModule {
     return JSON.stringify({ ...base, ...patch })
   }
 
-  private async getActiveAppSnapshot(): Promise<Awaited<
-    ReturnType<typeof activeAppService.getActiveApp>
-  > | null> {
+  private getActiveAppSnapshot(): Awaited<ReturnType<typeof activeAppService.getActiveApp>> | null {
     const now = Date.now()
     if (this.activeAppCache && now - this.activeAppCache.fetchedAt < this.activeAppCacheTtlMs) {
       return this.activeAppCache.value
     }
+    this.scheduleActiveAppRefresh()
+    return this.activeAppCache?.value ?? null
+  }
 
+  private scheduleActiveAppRefresh(): void {
+    if (this.activeAppRefreshInFlight || this.isDestroyed) return
+    this.activeAppRefreshInFlight = true
+    setImmediate(() => {
+      void this.refreshActiveAppSnapshot().finally(() => {
+        this.activeAppRefreshInFlight = false
+      })
+    })
+  }
+
+  private async refreshActiveAppSnapshot(): Promise<void> {
+    if (this.isDestroyed) return
+    const now = Date.now()
     try {
       const activeApp = await activeAppService.getActiveApp({
         includeIcon: false
       })
       this.activeAppCache = { value: activeApp, fetchedAt: now }
-      return activeApp
     } catch (error) {
-      clipboardLog.error('Failed to resolve active app info', { error })
+      clipboardLog.debug('Failed to refresh active app info', { error })
       this.activeAppCache = { value: null, fetchedAt: now }
-      return null
     }
   }
 
@@ -2148,7 +1985,7 @@ export class ClipboardModule extends BaseModule {
       clipboardLog.warn('Failed to enqueue clipboard OCR', { error })
     }
 
-    const activeApp = await this.getActiveAppSnapshot()
+    const activeApp = this.getActiveAppSnapshot()
     if (!activeApp) {
       return
     }
@@ -2380,7 +2217,33 @@ export class ClipboardModule extends BaseModule {
     }
 
     this.updateClipboardPolling(true)
+    this.ensureActiveAppRefreshTask()
+    this.scheduleActiveAppRefresh()
     void this.startNativeClipboardWatcher()
+  }
+
+  private ensureActiveAppRefreshTask(): void {
+    if (pollingService.isRegistered(CLIPBOARD_ACTIVE_APP_REFRESH_TASK_ID)) {
+      return
+    }
+
+    pollingService.register(
+      CLIPBOARD_ACTIVE_APP_REFRESH_TASK_ID,
+      () => {
+        this.scheduleActiveAppRefresh()
+      },
+      {
+        interval: CLIPBOARD_ACTIVE_APP_REFRESH_INTERVAL_MS,
+        unit: 'milliseconds',
+        lane: 'realtime',
+        backpressure: 'latest_wins',
+        dedupeKey: CLIPBOARD_ACTIVE_APP_REFRESH_TASK_ID,
+        maxInFlight: 1,
+        timeoutMs: 2000,
+        jitterMs: 120
+      }
+    )
+    pollingService.start()
   }
 
   private async runClipboardMonitor(options?: { bypassCooldown?: boolean }): Promise<void> {
@@ -3464,6 +3327,7 @@ export class ClipboardModule extends BaseModule {
   public destroy(): void {
     this.isDestroyed = true
     pollingService.unregister(CLIPBOARD_POLL_TASK_ID)
+    pollingService.unregister(CLIPBOARD_ACTIVE_APP_REFRESH_TASK_ID)
     this.stopNativeClipboardWatcher()
 
     if (this.unsubscribeAppSetting) {
@@ -3504,6 +3368,7 @@ export class ClipboardModule extends BaseModule {
     this.clipboardStageBJob = null
     this.clipboardStageBInFlight = false
     this.clipboardStageBGeneration = 0
+    this.activeAppRefreshInFlight = false
     this.clipboardCheckCooldownUntil = 0
     this.clipboardNativeWatchInitTried = false
     this.coreBoxVisible = false
