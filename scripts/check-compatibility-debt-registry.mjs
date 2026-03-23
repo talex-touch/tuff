@@ -2,8 +2,20 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
+import { normalizeRelativePath, walk } from './lib/file-scan.mjs'
+import {
+  DEFAULT_IGNORE_DIRS,
+  LEGACY_SCAN_ROOTS,
+  SCOPE_GUARD_EXEMPT_FILES,
+  SCOPE_GUARD_ROOTS,
+  TARGET_CODE_EXTENSIONS,
+} from './lib/scan-config.mjs'
+import { compareVersionCore, getProjectVersion, parseVersionCore } from './lib/version-utils.mjs'
 
-const workspaceRoot = process.cwd()
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const workspaceRoot = path.resolve(__dirname, '..')
 const registryPath = path.join(workspaceRoot, 'docs/plan-prd/docs/compatibility-debt-registry.csv')
 const writeBaseline = process.argv.includes('--write-baseline')
 const defaultExpiresVersion = '2.5.0'
@@ -20,81 +32,9 @@ const requiredColumns = [
 ]
 const registryOnlyDomains = new Set(['size-growth-exception'])
 
-const scanRoots = [
-  'apps/core-app/src',
-  'apps/nexus/server',
-  'apps/nexus/app',
-  'apps/pilot/server',
-  'apps/pilot/app',
-  'apps/pilot/shared',
-  'packages',
-  'plugins',
-]
-
-const scopeRoots = [
-  'apps/core-app',
-  'apps/nexus',
-  'apps/pilot',
-  'packages',
-  'plugins',
-]
-
-const scopeExemptFiles = new Set([
-  'apps/core-app/drizzle.config.ts',
-  'apps/core-app/electron.vite.config.ts',
-  'apps/core-app/eslint.config.mjs',
-  'apps/core-app/generator-information.ts',
-  'apps/core-app/scripts/build-target.js',
-  'apps/core-app/scripts/check-network-boundaries.js',
-  'apps/core-app/scripts/ensure-platform-modules.js',
-  'apps/core-app/uno.config.ts',
-  'apps/nexus/sentry.server.config.ts',
-  'apps/nexus/content.config.ts',
-  'apps/nexus/eslint.config.js',
-  'apps/nexus/i18n/locales/en.ts',
-  'apps/nexus/i18n/locales/zh.ts',
-  'apps/nexus/i18n.config.ts',
-  'apps/nexus/nuxt.config.ts',
-  'apps/nexus/sentry.client.config.ts',
-  'apps/nexus/shared/watermark/config.ts',
-  'apps/nexus/test/mocks/nuxt-imports.ts',
-  'apps/nexus/types/cloudflare-env.d.ts',
-  'apps/nexus/types/qrcode.d.ts',
-  'apps/nexus/types/sidebase-auth.d.ts',
-  'apps/nexus/types/sync-api.d.ts',
-  'apps/nexus/uno.config.ts',
-  'apps/nexus/vitest.config.ts',
-  'apps/pilot/eslint.config.js',
-  'apps/pilot/nuxt.config.ts',
-  'apps/pilot/scripts/dev.mjs',
-  'apps/pilot/scripts/merge-ends-channels.mjs',
-  'apps/pilot/scripts/report-dist-size.mjs',
-  'apps/pilot/shared/pilot-env-loader.ts',
-  'apps/pilot/shims-compat.d.ts',
-  'apps/pilot/uno.config.ts',
-  'apps/pilot/vitest.config.ts',
-])
-
-const ignoreDirs = new Set([
-  'node_modules',
-  '.git',
-  'dist',
-  'out',
-  '.nuxt',
-  '.wrangler',
-  '.output',
-  '.vitepress',
-  '--port',
-  'coverage',
-  'tuff',
-  '.workflow',
-  '.spec-workflow',
-  '.serena',
-  '.cursor',
-  '.cache',
-])
-
-const targetExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.vue', '.mjs', '.cjs'])
+const scanRoots = LEGACY_SCAN_ROOTS
+const scopeRoots = SCOPE_GUARD_ROOTS
+const scopeExemptFiles = SCOPE_GUARD_EXEMPT_FILES
 
 const domainRules = [
   {
@@ -144,72 +84,6 @@ const domainRules = [
   },
 ]
 
-function shouldIgnoreDir(dirName) {
-  return ignoreDirs.has(dirName)
-}
-
-function isTargetFile(fileName) {
-  return targetExtensions.has(path.extname(fileName)) || fileName.endsWith('.d.ts')
-}
-
-function walk(rootDir, result = []) {
-  if (!fs.existsSync(rootDir)) {
-    return result
-  }
-
-  const entries = fs.readdirSync(rootDir, { withFileTypes: true })
-  for (const entry of entries) {
-    const absolutePath = path.join(rootDir, entry.name)
-    if (entry.isDirectory()) {
-      if (shouldIgnoreDir(entry.name)) {
-        continue
-      }
-      walk(absolutePath, result)
-      continue
-    }
-
-    if (!isTargetFile(entry.name)) {
-      continue
-    }
-    result.push(absolutePath)
-  }
-
-  return result
-}
-
-function parseVersionCore(version) {
-  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(String(version).trim())
-  if (!match) {
-    return null
-  }
-  return {
-    major: Number.parseInt(match[1], 10),
-    minor: Number.parseInt(match[2], 10),
-    patch: Number.parseInt(match[3], 10),
-  }
-}
-
-function compareVersionCore(left, right) {
-  const l = parseVersionCore(left)
-  const r = parseVersionCore(right)
-  if (!l || !r) {
-    return null
-  }
-  if (l.major !== r.major) return l.major > r.major ? 1 : -1
-  if (l.minor !== r.minor) return l.minor > r.minor ? 1 : -1
-  if (l.patch !== r.patch) return l.patch > r.patch ? 1 : -1
-  return 0
-}
-
-function getProjectVersion() {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(workspaceRoot, 'package.json'), 'utf8'))
-    return typeof pkg.version === 'string' ? pkg.version : '0.0.0'
-  } catch {
-    return '0.0.0'
-  }
-}
-
 function countMatches(content, matcher) {
   const regex = new RegExp(matcher.source, matcher.flags)
   let count = 0
@@ -231,9 +105,13 @@ function collectScopeLeaks() {
   const leaks = []
   for (const relativeRoot of scopeRoots) {
     const absoluteRoot = path.join(workspaceRoot, relativeRoot)
-    const files = walk(absoluteRoot)
+    const files = walk(absoluteRoot, {
+      ignoreDirs: DEFAULT_IGNORE_DIRS,
+      targetExtensions: TARGET_CODE_EXTENSIONS,
+      includeDts: true,
+    })
     for (const filePath of files) {
-      const relativePath = path.relative(workspaceRoot, filePath).replace(/\\/g, '/')
+      const relativePath = normalizeRelativePath(workspaceRoot, filePath)
       if (scopeExemptFiles.has(relativePath)) {
         continue
       }
@@ -250,9 +128,13 @@ function collectFindings() {
 
   for (const relativeRoot of scanRoots) {
     const absoluteRoot = path.join(workspaceRoot, relativeRoot)
-    const files = walk(absoluteRoot)
+    const files = walk(absoluteRoot, {
+      ignoreDirs: DEFAULT_IGNORE_DIRS,
+      targetExtensions: TARGET_CODE_EXTENSIONS,
+      includeDts: true,
+    })
     for (const filePath of files) {
-      const relativePath = path.relative(workspaceRoot, filePath).replace(/\\/g, '/')
+      const relativePath = normalizeRelativePath(workspaceRoot, filePath)
       const content = fs.readFileSync(filePath, 'utf8')
 
       for (const rule of domainRules) {
@@ -494,7 +376,7 @@ function printScopeLeakViolations(scopeLeaks) {
 function main() {
   const scopeLeaks = collectScopeLeaks()
   const findings = collectFindings()
-  const currentVersion = getProjectVersion()
+  const currentVersion = getProjectVersion(workspaceRoot)
 
   if (scopeLeaks.length > 0) {
     summarizeFindings(findings)

@@ -13,6 +13,39 @@
 
 ## 2026-03-23
 
+### fix(pilot): Websearch 门控收紧 + 可恢复跳过 + 刷新卡片持久化
+
+- Websearch 决策统一收口为意图强门控（新旧链路一致）：
+  - `packages/tuff-intelligence/src/business/pilot/conversation.ts`
+    - `intentWebsearchRequired === false` 时强制关闭并返回 `intent_not_required`；
+    - 仅在 `intentWebsearchRequired` 缺失时才允许 heuristic 兜底。
+  - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - `apps/pilot/server/api/aigc/executor.post.ts`
+    - `websearch.decision` / `websearch.skipped` 增加 `gateMode: intent_strict` 审计字段；
+    - 当 gateway 返回可恢复跳过信号时，`websearch.skipped` 透传具体 reason，避免误判为工具硬失败。
+- Fallback 失败降级为可恢复跳过（不中断主回答）：
+  - `apps/pilot/server/utils/pilot-tool-gateway.ts`
+    - `fallback_unsupported_channel` / `fallback_endpoint_missing` 归类为 recoverable skip；
+    - 审计改为 `tool.call.completed + status=skipped`（保留 `connectorReason`），不再产出 `tool.call.failed` 噪音。
+  - 继续保留 no-source guard（需要联网但无来源时明确防幻觉约束）。
+- 修复刷新后意图/工具卡丢失：
+  - `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+    - 新增 runtime trace 重建逻辑，注入 `pilot_run_event_card` 与 `pilot_tool_card` 到 assistant block；
+    - 仅按“最新 turn”回填，避免跨 turn 卡片重复污染。
+  - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - `apps/pilot/server/api/aigc/conversation/[id].get.ts`
+    - 两条快照回填链路统一传入 runtime traces，确保首轮回填与刷新后表现一致。
+- 前端兼容显示优化（聊天页保持现状）：
+  - `apps/pilot/app/composables/usePilotChatPage.ts`
+  - `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+    - `websearch.skipped` 原因映射为中性文案（如通道不支持联网时自动离线回答），减少“系统故障”误解。
+- 测试：
+  - 更新：`apps/pilot/server/utils/__tests__/pilot-conversation-shared.test.ts`
+  - 更新：`apps/pilot/server/utils/__tests__/pilot-tool-gateway.test.ts`
+  - 新增：`apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+  - 通过：`pnpm -C "apps/pilot" test -- "server/utils/__tests__/pilot-conversation-shared.test.ts" "server/utils/__tests__/pilot-tool-gateway.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts"`
+  - `pnpm -C "apps/pilot" run typecheck` 失败，存在仓库既有大量 TS 问题（与本次改动无直接关联）。
+
 ### feat(core-app-hardcut): 兼容债务并行硬切（legacy channel/storage/插件 API/更新与 AgentStore）
 
 - 跨平台与更新识别收敛：
@@ -39,6 +72,33 @@
     - `pnpm -C "apps/core-app" run typecheck`
     - `pnpm -C "apps/core-app" run typecheck:node`
     - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/permission/permission-guard.test.ts" "src/main/modules/permission/permission-store.test.ts" "src/renderer/src/modules/update/platform-target.test.ts" "src/main/modules/extension-loader.test.ts" "src/main/service/agent-store.service.test.ts"`
+
+### chore(scripts): 门禁脚本去重 + 构建脚本拆分首轮（稳定性工程化）
+
+- guard 公共能力抽取：
+  - 新增 `scripts/lib/scan-config.mjs`、`scripts/lib/file-scan.mjs`、`scripts/lib/version-utils.mjs`；
+  - `legacy/compat/size/network` 四类脚本复用统一扫描与版本比较逻辑，减少重复维护点。
+- 网络门禁收敛为单实现：
+  - 删除 `apps/core-app/scripts/check-network-boundaries.js`（重复实现）；
+  - root `scripts/check-network-boundaries.mjs` 新增 `--scope`，支持按子目录精确扫描；
+  - `apps/core-app` 的 `network:guard` 改为复用 root 脚本（`--scope apps/core-app/src`）。
+- 构建脚本拆分首轮：
+  - 从 `apps/core-app/scripts/build-target.js` 提取 mac 后处理到 `apps/core-app/scripts/build-target/postprocess-mac.js`；
+  - 主脚本保留编排职责，降低单文件复杂度与后续改动风险。
+- 运维脚本去重：
+  - `scripts/debug-tuff.sh` 改为复用 `scripts/fix-app-permissions.sh`，避免权限/隔离属性逻辑双份维护。
+- CI 脚本去重（第二轮）：
+  - 新增 `scripts/ci/lib/github-client.mjs` 与 `scripts/ci/lib/openai-chat.mjs`；
+  - `scripts/ci/ai-review.mjs`、`scripts/ci/pr-translation.mjs` 改为复用公共 GitHub/OpenAI 客户端逻辑，避免双份 API 调用实现漂移。
+- 参数解析去重（第二轮）：
+  - 新增 `scripts/lib/argv-utils.mjs`；
+  - `scripts/check-doc-governance.mjs`、`scripts/check-release-gates.mjs`、`scripts/backfill-release-assets-from-github.mjs` 统一复用参数解析工具，减少重复实现与维护面。
+- 网络请求工具去重（第三轮）：
+  - 新增 `scripts/lib/http-utils.mjs`（`normalizeBaseUrl` + `fetchWithTimeout`）；
+  - `scripts/check-release-gates.mjs` 与 `scripts/backfill-release-assets-from-github.mjs` 统一复用，消除重复实现。
+- 发布门禁脚本拆分（第三轮）：
+  - 新增 `scripts/check-release-gates/local-checks.mjs` 与 `scripts/check-release-gates/remote-checks.mjs`；
+  - `scripts/check-release-gates.mjs` 收敛为编排入口，保留原有 JSON 输出契约与参数行为。
 
 ### fix(core-app): 关闭流程快捷键生命周期治理（修复 OmniPanel `uiohook` 退出竞态）
 

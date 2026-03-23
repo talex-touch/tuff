@@ -37,7 +37,7 @@
     "build:release:win": "node scripts/build-target.js --target=win --type=release",
     "build:release:mac": "node scripts/build-target.js --target=mac --type=release",
     "build:release:linux": "node scripts/build-target.js --target=linux --type=release",
-    "network:guard": "node scripts/check-network-boundaries.js"
+    "network:guard": "node \"../../scripts/check-network-boundaries.mjs\" --scope \"apps/core-app/src\""
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

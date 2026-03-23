@@ -43,6 +43,7 @@
 - 强制启用 `legacy:guard`：禁止新增 `channel.send('x:y')` 与新增 `legacy` 分支命中；新增兼容债务必须进入白名单并附退场版本（当前基线 `2.5.0`）。
 - 强制启用 `compat:registry:guard`：兼容债务清册（`docs/plan-prd/docs/compatibility-debt-registry.csv`）必须完整覆盖存量命中，缺字段/缺条目/过期未清理均失败。
 - 强制启用 `size:guard`：超长文件阈值 `>=1200` 基线冻结，禁止新增和增长；仅允许通过 `growthExceptions` 临时豁免，并要求同步 `CHANGES + compatibility registry`。
+- 强制启用统一 guard 基础库：`legacy/compat/size/network` 脚本必须复用 `scripts/lib/*` 公共扫描/版本能力，禁止重复实现目录遍历与版本比较逻辑。
 - CoreApp 硬切补充门禁：业务层 `window.$channel` 调用、legacy storage 旧协议（`storage:get/save/reload/save-sync/saveall`）与 legacy `sdkapi` 放行路径必须保持为 `0`；占位能力必须返回真实状态或显式 `unavailable + reason`，禁止固定假值“成功”。
 
 ### 3.2 可靠性约束
@@ -274,3 +275,18 @@
 - 生命周期观测必须包含可回归字段（`reason/appClosing/duration/failedCount`），用于“启停循环”稳定性对比。
 - 新模块默认通过 `ctx.runtime` 获取依赖，不得新增 `globalThis.$app` 读取点；存量兼容仅允许过渡期一次性告警。
 - 结构拆分必须保持外部 event 名称与 payload 兼容，且每次拆分补齐 direct tests，不以集成测试单点兜底。
+
+### 6.12 脚本治理去重首轮（2026-03-23）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| guard 公共库 | `scripts/lib/scan-config.mjs`、`file-scan.mjs`、`version-utils.mjs` | 已落地 |
+| 网络门禁入口 | root `check-network-boundaries.mjs` 支持 `--scope` | 已落地 |
+| CoreApp 网络门禁 | 改为复用 root 脚本，删除重复实现 | 已收口 |
+| 构建脚本拆分 | `build-target/postprocess-mac.js` 从主脚本抽离 | 已落地 |
+
+**质量约束落地**
+- 门禁脚本必须共享同一套扫描与版本比较基础能力，避免“规则一致、实现漂移”。
+- 同类质量门禁仅允许一个实现来源；workspace 侧脚本优先复用 root 实现（通过 `--scope` 等参数化）。
+- 大体量编排脚本必须按“编排层 + 平台实现层”拆分，降低单文件风险与回归成本。

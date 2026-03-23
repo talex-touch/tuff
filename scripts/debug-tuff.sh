@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Debug script to run tuff.app and capture output
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Try to find tuff.app
 if [ -d "$HOME/Downloads/tuff.app" ]; then
@@ -39,24 +40,13 @@ if [ ! -f "$APP_PATH" ]; then
     exit 1
 fi
 
-# Fix permissions if needed
-if [ ! -x "$APP_PATH" ]; then
-    echo "Setting execute permissions..."
-    chmod +x "$APP_PATH"
-    if [ ! -x "$APP_PATH" ]; then
-        echo "Error: Failed to set execute permissions on $APP_PATH"
-        echo "Current permissions:"
-        ls -la "$APP_PATH"
-        exit 1
-    fi
-fi
-
-echo "Executable permissions OK"
-
-# Remove quarantine attribute (macOS Gatekeeper)
+# Reuse the shared macOS permission fix script.
 APP_DIR=$(dirname "$(dirname "$(dirname "$APP_PATH")")")
-echo "Removing quarantine attribute from app bundle..."
-xattr -dr com.apple.quarantine "$APP_DIR" 2>/dev/null || echo "Warning: Could not remove quarantine attribute (may need to run manually)"
+echo "Applying shared permission/quarantine fix..."
+"${SCRIPT_DIR}/fix-app-permissions.sh" "$APP_DIR" || {
+    echo "Error: Failed to fix app permissions for $APP_DIR"
+    exit 1
+}
 echo ""
 
 # Run the app and capture all output
@@ -83,4 +73,3 @@ if [ -f "$HOME/Library/Application Support/com.tagzxia.app.tuff/tuff/logs/E.$(da
     echo "Found error log file:"
     tail -50 "$HOME/Library/Application Support/com.tagzxia.app.tuff/tuff/logs/E.$(date +%Y-%m-%d).err"
 fi
-
