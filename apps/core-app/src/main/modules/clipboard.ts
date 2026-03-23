@@ -38,7 +38,6 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { CAPABILITY_AUTH_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { TuffInputType } from '@talex-touch/utils/transport/events/types'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm'
 import { clipboard, nativeImage, powerMonitor } from 'electron'
@@ -70,6 +69,28 @@ import {
   trackPhaseAsync,
   type ClipboardPhaseDurations
 } from './clipboard/clipboard-phase-diagnostics'
+import {
+  buildApplyPayloadFromCopyAndPaste,
+  clipboardLegacyApplyToActiveAppEvent,
+  clipboardLegacyClearEvent,
+  clipboardLegacyClearHistoryEvent,
+  clipboardLegacyCopyAndPasteEvent,
+  clipboardLegacyDeleteItemEvent,
+  clipboardLegacyGetHistoryEvent,
+  clipboardLegacyGetImageUrlEvent,
+  clipboardLegacyGetLatestEvent,
+  clipboardLegacyReadEvent,
+  clipboardLegacyReadFilesEvent,
+  clipboardLegacyReadImageEvent,
+  clipboardLegacySetFavoriteEvent,
+  clipboardLegacyWriteEvent,
+  clipboardLegacyWriteTextEvent,
+  normalizeClipboardWritePayload,
+  toLegacyClipboardItem as mapToLegacyClipboardItem,
+  type LegacyClipboardItem,
+  type LegacyClipboardQueryRequest,
+  type LegacyClipboardQueryResponse
+} from './clipboard/clipboard-legacy-bridge'
 
 const clipboardLog = createLogger('Clipboard')
 const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
@@ -194,40 +215,6 @@ interface ClipboardApplyPayload {
   hideCoreBox?: boolean
 }
 
-interface LegacyClipboardItem {
-  id?: number
-  type: 'text' | 'image' | 'files'
-  content: string
-  thumbnail?: string | null
-  rawContent?: string | null
-  sourceApp?: string | null
-  timestamp?: number | null
-  isFavorite?: boolean | null
-  metadata?: string | null
-  meta?: Record<string, unknown> | null
-}
-
-interface LegacyClipboardQueryRequest {
-  keyword?: string
-  startTime?: number
-  endTime?: number
-  type?: 'all' | 'favorite' | 'text' | 'image' | 'files'
-  isFavorite?: boolean
-  sourceApp?: string
-  page?: number
-  pageSize?: number
-  limit?: number
-  sortOrder?: 'asc' | 'desc'
-}
-
-interface LegacyClipboardQueryResponse {
-  history: LegacyClipboardItem[]
-  total: number
-  page: number
-  pageSize: number
-  limit?: number
-}
-
 const PAGE_SIZE = 20
 const CACHE_MAX_COUNT = 20
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour
@@ -241,43 +228,6 @@ const CLIPBOARD_IMAGE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000
 const CLIPBOARD_META_QUEUE_LIMIT = 6
 const CLIPBOARD_META_LOG_THROTTLE_MS = 5_000
 const CLIPBOARD_STAGE_B_LOG_THROTTLE_MS = 5_000
-const clipboardLegacyGetLatestEvent = defineRawEvent<void, LegacyClipboardItem | null>(
-  'clipboard:get-latest'
-)
-const clipboardLegacyGetHistoryEvent = defineRawEvent<
-  LegacyClipboardQueryRequest,
-  LegacyClipboardQueryResponse
->('clipboard:get-history')
-const clipboardLegacySetFavoriteEvent = defineRawEvent<ClipboardSetFavoriteRequest, void>(
-  'clipboard:set-favorite'
-)
-const clipboardLegacyDeleteItemEvent = defineRawEvent<ClipboardDeleteRequest, void>(
-  'clipboard:delete-item'
-)
-const clipboardLegacyClearHistoryEvent = defineRawEvent<void, void>('clipboard:clear-history')
-const clipboardLegacyApplyToActiveAppEvent = defineRawEvent<
-  ClipboardApplyPayload,
-  ClipboardActionResult
->('clipboard:apply-to-active-app')
-const clipboardLegacyCopyAndPasteEvent = defineRawEvent<
-  ClipboardCopyAndPasteRequest,
-  ClipboardActionResult
->('clipboard:copy-and-paste')
-const clipboardLegacyWriteTextEvent = defineRawEvent<{ text?: string }, void>(
-  'clipboard:write-text'
-)
-const clipboardLegacyWriteEvent = defineRawEvent<ClipboardWriteRequest, void>('clipboard:write')
-const clipboardLegacyReadEvent = defineRawEvent<void, ClipboardReadResponse>('clipboard:read')
-const clipboardLegacyReadImageEvent = defineRawEvent<
-  ClipboardReadImageRequest,
-  ClipboardReadImageResponse | null
->('clipboard:read-image')
-const clipboardLegacyReadFilesEvent = defineRawEvent<void, string[]>('clipboard:read-files')
-const clipboardLegacyClearEvent = defineRawEvent<void, void>('clipboard:clear')
-const clipboardLegacyGetImageUrlEvent = defineRawEvent<
-  ClipboardGetImageUrlRequest,
-  ClipboardGetImageUrlResponse
->('clipboard:get-image-url')
 
 function toTfileUrl(filePath: string): string {
   const raw = filePath?.trim()
@@ -1354,28 +1304,7 @@ export class ClipboardModule extends BaseModule {
   }
 
   private toLegacyClipboardItem(item: IClipboardItem | null): LegacyClipboardItem | null {
-    const normalized = this.toClientItem(item)
-    if (!normalized) return null
-
-    const timestampValue =
-      normalized.timestamp instanceof Date
-        ? normalized.timestamp.getTime()
-        : normalized.timestamp
-          ? new Date(normalized.timestamp).getTime()
-          : null
-
-    return {
-      id: normalized.id,
-      type: normalized.type,
-      content: normalized.content ?? '',
-      thumbnail: normalized.thumbnail ?? null,
-      rawContent: normalized.rawContent ?? null,
-      sourceApp: normalized.sourceApp ?? null,
-      timestamp: Number.isFinite(timestampValue) ? timestampValue : null,
-      isFavorite: normalized.isFavorite ?? null,
-      metadata: normalized.metadata ?? null,
-      meta: normalized.meta ?? null
-    }
+    return mapToLegacyClipboardItem(this.toClientItem(item))
   }
 
   private toClipboardQueryRequest(
@@ -2960,32 +2889,9 @@ export class ClipboardModule extends BaseModule {
         ClipboardEvents.write,
         async (request: ClipboardWriteRequest, context: HandlerContext) => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          if (!request) return
-          const hasDirectPayload =
-            typeof request.text === 'string' ||
-            typeof request.html === 'string' ||
-            typeof request.image === 'string' ||
-            (Array.isArray(request.files) && request.files.length > 0)
-
-          if (hasDirectPayload) {
-            await writePayload({
-              text: request.text,
-              html: request.html,
-              image: request.image,
-              files: request.files
-            })
-            return
-          }
-
-          if (request.type === 'image') {
-            await writePayload({ image: request.value ?? '' })
-            return
-          }
-          if (request.type === 'html') {
-            await writePayload({ html: request.value ?? '' })
-            return
-          }
-          await writePayload({ text: request.value ?? '' })
+          const payload = normalizeClipboardWritePayload(request)
+          if (!payload) return
+          await writePayload(payload)
         }
       )
     )
@@ -3039,20 +2945,7 @@ export class ClipboardModule extends BaseModule {
         ): Promise<ClipboardActionResult> => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
           try {
-            const { text, html, image, files, delayMs, hideCoreBox } = request ?? {}
-            let applyPayload: ClipboardApplyPayload
-            if (image) {
-              applyPayload = {
-                type: 'image',
-                item: { type: 'image', content: image },
-                hideCoreBox,
-                delayMs
-              }
-            } else if (files && files.length > 0) {
-              applyPayload = { type: 'files', files, hideCoreBox, delayMs }
-            } else {
-              applyPayload = { type: 'text', text: text ?? '', html, hideCoreBox, delayMs }
-            }
+            const applyPayload: ClipboardApplyPayload = buildApplyPayloadFromCopyAndPaste(request)
             await this.applyToActiveApp(applyPayload)
             return { success: true }
           } catch (error) {
@@ -3197,20 +3090,7 @@ export class ClipboardModule extends BaseModule {
         ): Promise<ClipboardActionResult> => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
           try {
-            const { text, html, image, files, delayMs, hideCoreBox } = request ?? {}
-            let applyPayload: ClipboardApplyPayload
-            if (image) {
-              applyPayload = {
-                type: 'image',
-                item: { type: 'image', content: image },
-                hideCoreBox,
-                delayMs
-              }
-            } else if (files && files.length > 0) {
-              applyPayload = { type: 'files', files, hideCoreBox, delayMs }
-            } else {
-              applyPayload = { type: 'text', text: text ?? '', html, hideCoreBox, delayMs }
-            }
+            const applyPayload: ClipboardApplyPayload = buildApplyPayloadFromCopyAndPaste(request)
             await this.applyToActiveApp(applyPayload)
             return { success: true }
           } catch (error) {
@@ -3230,30 +3110,9 @@ export class ClipboardModule extends BaseModule {
         clipboardLegacyWriteEvent,
         async (request: ClipboardWriteRequest, context: HandlerContext) => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          if (!request) return
-          const hasDirectPayload =
-            typeof request.text === 'string' ||
-            typeof request.html === 'string' ||
-            typeof request.image === 'string' ||
-            (Array.isArray(request.files) && request.files.length > 0)
-          if (hasDirectPayload) {
-            await writePayload({
-              text: request.text,
-              html: request.html,
-              image: request.image,
-              files: request.files
-            })
-            return
-          }
-          if (request.type === 'image') {
-            await writePayload({ image: request.value ?? '' })
-            return
-          }
-          if (request.type === 'html') {
-            await writePayload({ html: request.value ?? '' })
-            return
-          }
-          await writePayload({ text: request.value ?? '' })
+          const payload = normalizeClipboardWritePayload(request)
+          if (!payload) return
+          await writePayload(payload)
         }
       ),
       this.transport.on(
