@@ -30,8 +30,8 @@ import {
 } from '@talex-touch/utils/network'
 import { normalizeAbsolutePath, resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
 import { app, safeStorage, session } from 'electron'
-import { APP_FOLDER_NAME } from '../../config/default'
 import { getMainConfig, saveMainConfig } from '../storage'
+import { resolveRuntimeRootPath } from '../../utils/app-root-path'
 import { createLogger } from '../../utils/logger'
 
 const log = createLogger('NetworkService')
@@ -344,15 +344,7 @@ function isAllowedPath(filePath: string, roots: string[]): boolean {
 }
 
 function resolveAppRootPath(): string {
-  if (app.isPackaged) {
-    return path.join(appPathSafe('userData'), APP_FOLDER_NAME)
-  }
-
-  try {
-    return path.join(app.getAppPath(), APP_FOLDER_NAME)
-  } catch {
-    return path.join(process.cwd(), APP_FOLDER_NAME)
-  }
+  return resolveRuntimeRootPath(app)
 }
 
 async function readSecureStore(): Promise<Record<string, string>> {
