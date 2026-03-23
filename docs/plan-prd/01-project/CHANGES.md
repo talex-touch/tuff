@@ -13,11 +13,84 @@
 
 ## 2026-03-23
 
+### fix(core-app): 关闭流程快捷键生命周期治理（修复 OmniPanel `uiohook` 退出竞态）
+
+- `apps/core-app/src/main/modules/global-shortcon.ts`
+  - 新增运行时反注册 API：`unregisterMainShortcut(id)`、`unregisterMainTrigger(id)`。
+  - `registerMainShortcut/registerMainTrigger` 新增可选 `owner` 字段（向后兼容）。
+  - 新增 `teardownRuntimeRegistrations()` 并在 `BEFORE_APP_QUIT` 与 `onDestroy` 执行幂等 runtime 清理。
+  - `reregisterAllShortcuts()` 增加 MAIN/TRIGGER 运行时处理器存在性校验；缺失时标记 `runtime-missing` 并跳过注册。
+  - `onDestroy()` 不再触发 trigger `onStateChange(false)`，避免销毁期回调反入业务模块。
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+  - 新增销毁态门禁：退出阶段阻断 `setupInputHook()`，防止清理后再次启用 `uiohook`。
+  - `BEFORE_APP_QUIT` 与 `onDestroy` 复用同一清理链路（关闭开关/清计时器/清 hook/反注册 shortcut+trigger）。
+- 双保险反注册补齐：
+  - `apps/core-app/src/main/modules/box-tool/core-box/index.ts`：`core.box.toggle`、`core.box.aiQuickCall` 在 `onDestroy` 显式反注册。
+  - `apps/core-app/src/main/modules/flow-bus/module.ts`：`flow:detach-to-divisionbox`、`flow:transfer-to-plugin` 在 `onDestroy` 显式反注册。
+  - `apps/core-app/src/main/modules/division-box/shortcut-trigger.ts`：`unregister/clear` 改为同步反注册主进程快捷键。
+  - `apps/core-app/src/main/modules/division-box/module.ts`：销毁时调用 `shortcutTriggerManager.clear()`。
+- 测试补齐：
+  - `apps/core-app/src/main/modules/omni-panel/index.test.ts` 新增“destroying 状态不再重启 input hook”用例。
+- 新增 `apps/core-app/src/main/modules/global-shortcon.test.ts`，覆盖 runtime 反注册、onDestroy/before-quit teardown、副作用回归。
+  - 新增 `apps/core-app/src/main/modules/division-box/shortcut-trigger.test.ts`，覆盖 `unregister/clear` 反注册行为。
+  - `apps/core-app/package.json` 新增 `test:shortcut-lifecycle`，使用固定测试文件列表替代 shell 通配符，规避 zsh `no matches found`。
+
 ### fix(core-app): 修复 `vue-sonner` 运行时缺失导致的 renderer 预编译阻塞
 
 - `apps/core-app/package.json`
   - 将 `vue-sonner` 从 `devDependencies` 迁回 `dependencies`，避免生产/精简安装场景出现运行时缺包。
 - 本次仅处理 P0 启动阻塞，`StartupAnalytics` 本地 telemetry、`Perf:EventLoop`、macOS IMK 系统日志保持为 P2 观察项，不在本补丁扩 scope。
+
+### fix(core-search): 文件搜索结果稳定性修复（快速层超时补发 + type 过滤零命中不再回退）
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-gather.ts`
+  - 修复 fast layer 超时后“慢完成结果丢失”问题：超时后的 fast provider 结果改为以 deferred 增量补发，不再静默丢弃。
+  - 最终 `isDone` 触发条件收敛为“deferred 层与超时 fast provider 全部完成”，避免总数与结果批次不一致。
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+  - 修复“文本 + type 过滤”场景零命中时错误回退为 type-only 结果的问题；现改为返回空结果，避免出现与查询文本无关的文件列表。
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-gather.test.ts`
+  - 新增回归测试，覆盖 fast layer 超时后 late result 补发与最终计数一致性。
+
+### fix(core-main): 启动/关停链路止血与生命周期契约收口
+
+- 启动 fail-fast 与主流程收敛：
+  - `apps/core-app/src/main/index.ts`
+    - 启动模块加载切换到 `loadStartupModules`，必需模块加载失败立即抛错并终止启动。
+    - `ALL_MODULES_LOADED` 与 polling 启动仅在模块加载 + `touchApp.waitUntilInitialized()` 完整成功后触发。
+    - 启动失败统一记录错误并 `app.quit()`，不再出现“假健康启动”。
+  - `apps/core-app/src/main/core/startup-module-loader.ts`
+    - 新增可复用启动模块加载器，支持 required/optional 分流、skip 策略与加载指标回调。
+- 退出链路统一（移除运行时硬退出）：
+  - `apps/core-app/src/main/channel/common.ts`
+  - `apps/core-app/src/main/modules/tray-holder.ts`
+  - `apps/core-app/src/main/modules/tray/tray-menu-builder.ts`
+  - 以上路径移除 `process.exit(0)` 退出分支，统一回归 `app.quit()` + 既有关停流程。
+- IPC 稳定性修复：
+  - `apps/core-app/src/main/channel/common.ts`
+    - `dialogOpenFileEvent` 双重注册收敛为单一注册点，并保留路径记忆兼容行为。
+- EventBus 契约修复：
+  - `apps/core-app/src/main/core/eventbus/touch-event.ts`
+    - `once` 监听器触发后即消费移除；
+    - `emit` / `emitAsync` 增加 handler 级异常隔离，单点异常不再中断后续 handler；
+    - 新增轻量诊断：`getDiagnostics()`（事件/handler 总数与 once 消费计数）。
+  - `packages/utils/eventbus/index.ts`
+    - `ITouchEventBus` 增加 `emitAsync` 与诊断接口定义。
+- 关停时序增强：
+  - `apps/core-app/src/main/core/precore.ts`
+    - `before-quit` 改为异步编排，先 `emitAsync(BEFORE_APP_QUIT)` 再推进退出。
+  - `apps/core-app/src/main/core/module-manager.ts`
+    - 退出卸载 reason 统一为 `app-quit`，`destroy` 上下文显式标记 `appClosing=true`。
+- 测试补齐：
+  - 新增：
+    - `apps/core-app/src/main/core/eventbus/touch-event.test.ts`
+    - `apps/core-app/src/main/core/startup-module-loader.test.ts`
+    - `apps/core-app/src/main/channel/common.registration.test.ts`
+    - `apps/core-app/src/main/core/quit-paths.test.ts`
+  - 更新：
+    - `apps/core-app/src/main/core/module-manager.test.ts`（新增 `appClosing` 断言）
+- 验证结果：
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/core/module-manager.test.ts" "src/main/channel/common.test.ts" "src/main/modules/tray/tray-manager.test.ts" "src/main/core/eventbus/touch-event.test.ts" "src/main/core/startup-module-loader.test.ts" "src/main/channel/common.registration.test.ts" "src/main/core/quit-paths.test.ts"` 通过（19 tests）。
+  - `pnpm -C "apps/core-app" run typecheck:node` 通过。
 
 ## 2026-03-22
 
