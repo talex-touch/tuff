@@ -73,6 +73,14 @@ describe('permissionGuardPerformance', () => {
     expect(result.allowed).toBe(true)
   })
 
+  it('blocks runtime access when sdkapi is missing', () => {
+    const result = guard.check(TEST_PLUGIN_ID, TEST_API, undefined)
+
+    expect(result.allowed).toBe(false)
+    expect(result.code).toBe('SDKAPI_BLOCKED')
+    expect(result.showRequest).toBe(false)
+  })
+
   it('requires both window.create and storage.shared for division-box flow trigger', async () => {
     const pluginId = 'flow-plugin'
     await store.grant(pluginId, 'window.create', 'user')

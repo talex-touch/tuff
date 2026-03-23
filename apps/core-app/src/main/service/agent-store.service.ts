@@ -5,6 +5,14 @@
  */
 
 import { StorageList, type AgentCapability, type AgentDescriptor } from '@talex-touch/utils'
+import { getTpexApiBase } from '@talex-touch/utils/env'
+import crypto from 'node:crypto'
+import os from 'node:os'
+import path from 'node:path'
+import compressing from 'compressing'
+import { app } from 'electron'
+import fse from 'fs-extra'
+import { getNetworkService } from '../modules/network'
 import {
   getConfig,
   getMainConfig,
@@ -16,6 +24,8 @@ import { createLogger } from '../utils/logger'
 
 const log = createLogger('AgentStore')
 const LEGACY_AGENT_STORE_KEY = 'agent-market.json'
+const REMOTE_CATALOG_CACHE_TTL_MS = 2 * 60 * 1000
+const NETWORK_TIMEOUT_MS = 20_000
 
 /**
  * Store agent metadata
@@ -97,12 +107,133 @@ interface AgentStoreState {
   installed: Record<string, string>
 }
 
+interface RemoteAgentPackage {
+  version: string
+  downloadUrl: string
+  checksum?: string
+}
+
+interface RemoteCatalogSnapshot {
+  fetchedAt: number
+  agents: StoreAgentInfo[]
+  packagesByAgent: Map<string, Map<string, RemoteAgentPackage>>
+}
+
 function isAgentStoreState(value: unknown): value is AgentStoreState {
   if (!value || typeof value !== 'object') {
     return false
   }
   const state = value as Partial<AgentStoreState>
   return Boolean(state.installed && typeof state.installed === 'object')
+}
+
+function safeString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value.trim() : fallback
+}
+
+function safeNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function normalizeTimestamp(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+  return Date.now()
+}
+
+function normalizeCategory(value: unknown): StoreAgentInfo['category'] {
+  const normalized = safeString(value).toLowerCase()
+  if (
+    normalized === 'productivity' ||
+    normalized === 'file-management' ||
+    normalized === 'data-processing' ||
+    normalized === 'search' ||
+    normalized === 'automation' ||
+    normalized === 'development' ||
+    normalized === 'custom'
+  ) {
+    return normalized
+  }
+  return 'custom'
+}
+
+function normalizeSource(value: unknown): StoreAgentInfo['source'] {
+  const normalized = safeString(value).toLowerCase()
+  if (normalized === 'official' || normalized === 'community' || normalized === 'local') {
+    return normalized
+  }
+  return 'community'
+}
+
+function normalizeTags(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.map((tag) => safeString(tag)).filter(Boolean)
+}
+
+function normalizeCapabilities(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.map((capability) => safeString(capability)).filter(Boolean)
+}
+
+function normalizePackage(value: unknown, fallbackVersion?: string): RemoteAgentPackage | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const obj = value as Record<string, unknown>
+  const version = safeString(obj.version, fallbackVersion || '')
+  const downloadUrl = safeString(obj.downloadUrl) || safeString(obj.url)
+  if (!version || !downloadUrl) {
+    return null
+  }
+  const checksum = safeString(obj.sha256) || safeString(obj.checksum)
+  return {
+    version,
+    downloadUrl,
+    checksum: checksum || undefined
+  }
+}
+
+function compareVersion(a: string, b: string): number {
+  const normalize = (version: string): Array<number | string> =>
+    version
+      .replace(/^v/i, '')
+      .split(/[.\-+_]/g)
+      .filter(Boolean)
+      .map((part) => {
+        const numeric = Number(part)
+        return Number.isFinite(numeric) ? numeric : part
+      })
+
+  const left = normalize(a)
+  const right = normalize(b)
+  const max = Math.max(left.length, right.length)
+
+  for (let i = 0; i < max; i += 1) {
+    const l = left[i]
+    const r = right[i]
+    if (l === undefined && r === undefined) return 0
+    if (l === undefined) return -1
+    if (r === undefined) return 1
+    if (typeof l === 'number' && typeof r === 'number') {
+      if (l > r) return 1
+      if (l < r) return -1
+      continue
+    }
+    const lStr = String(l)
+    const rStr = String(r)
+    if (lStr > rStr) return 1
+    if (lStr < rStr) return -1
+  }
+  return 0
 }
 
 // Built-in agents catalog
@@ -163,64 +294,6 @@ const BUILTIN_AGENTS: StoreAgentInfo[] = [
   }
 ]
 
-// Featured/recommended agents for the store
-const FEATURED_AGENTS: StoreAgentInfo[] = [
-  {
-    id: 'community.workflow-agent',
-    name: 'Workflow Agent',
-    description: '工作流自动化助手，支持创建和执行复杂的自动化任务流程',
-    version: '0.1.0',
-    author: 'Community',
-    category: 'automation',
-    capabilities: ['workflow.create', 'workflow.execute', 'workflow.schedule'],
-    tags: ['workflow', 'automation', 'schedule'],
-    downloads: 150,
-    rating: 4.5,
-    ratingCount: 12,
-    source: 'community',
-    isInstalled: false,
-    createdAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
-    updatedAt: Date.now() - 7 * 24 * 60 * 60 * 1000,
-    icon: 'i-carbon-flow'
-  },
-  {
-    id: 'community.code-agent',
-    name: 'Code Agent',
-    description: '代码辅助助手，支持代码分析、重构建议和文档生成',
-    version: '0.2.0',
-    author: 'Community',
-    category: 'development',
-    capabilities: ['code.analyze', 'code.refactor', 'code.document'],
-    tags: ['code', 'development', 'refactor'],
-    downloads: 89,
-    rating: 4.2,
-    ratingCount: 8,
-    source: 'community',
-    isInstalled: false,
-    createdAt: Date.now() - 45 * 24 * 60 * 60 * 1000,
-    updatedAt: Date.now() - 14 * 24 * 60 * 60 * 1000,
-    icon: 'i-carbon-code'
-  },
-  {
-    id: 'community.translator-agent',
-    name: 'Translator Agent',
-    description: '智能翻译助手，支持多语言翻译、术语管理和翻译记忆',
-    version: '0.1.5',
-    author: 'Community',
-    category: 'productivity',
-    capabilities: ['translate.text', 'translate.document', 'translate.batch'],
-    tags: ['translate', 'language', 'i18n'],
-    downloads: 234,
-    rating: 4.7,
-    ratingCount: 23,
-    source: 'community',
-    isInstalled: false,
-    createdAt: Date.now() - 60 * 24 * 60 * 60 * 1000,
-    updatedAt: Date.now() - 3 * 24 * 60 * 60 * 1000,
-    icon: 'i-carbon-translate'
-  }
-]
-
 const BUILTIN_AGENT_IDS = new Set(BUILTIN_AGENTS.map((agent) => agent.id))
 const BUILTIN_AGENT_VERSION_MAP = new Map(BUILTIN_AGENTS.map((agent) => [agent.id, agent.version]))
 
@@ -232,6 +305,158 @@ class AgentStoreService {
   private installedAgentVersions = new Map<string, string>(BUILTIN_AGENT_VERSION_MAP)
   private storageLoaded = false
   private pendingPersist = false
+  private remoteCatalog: RemoteCatalogSnapshot | null = null
+
+  private resolveCatalogBase(): string {
+    const base = getTpexApiBase().replace(/\/+$/, '')
+    return base
+  }
+
+  private getCatalogUrls(): string[] {
+    const base = this.resolveCatalogBase()
+    return [
+      `${base}/api/v1/agents/catalog`,
+      `${base}/api/v1/agents/index.json`,
+      `${base}/api/agents/index.json`
+    ]
+  }
+
+  private getInstallRoot(): string {
+    return path.join(app.getPath('userData'), 'agents-store')
+  }
+
+  private getAgentInstallDir(agentId: string): string {
+    const safeId = agentId.replace(/[^a-zA-Z0-9._-]/g, '_')
+    return path.join(this.getInstallRoot(), safeId)
+  }
+
+  private async fetchJson<T>(url: string): Promise<T> {
+    const response = await getNetworkService().request<T>({
+      url,
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Tuff-AgentStore/1.0'
+      },
+      timeoutMs: NETWORK_TIMEOUT_MS,
+      responseType: 'json'
+    })
+    return response.data
+  }
+
+  private parseRemoteCatalog(payload: unknown): RemoteCatalogSnapshot {
+    const rawAgents = Array.isArray(payload)
+      ? payload
+      : payload &&
+          typeof payload === 'object' &&
+          Array.isArray((payload as { agents?: unknown[] }).agents)
+        ? ((payload as { agents: unknown[] }).agents ?? [])
+        : []
+
+    const parsedAgents: StoreAgentInfo[] = []
+    const packagesByAgent = new Map<string, Map<string, RemoteAgentPackage>>()
+
+    for (const entry of rawAgents) {
+      if (!entry || typeof entry !== 'object') {
+        continue
+      }
+      const record = entry as Record<string, unknown>
+      const id = safeString(record.id)
+      if (!id || BUILTIN_AGENT_IDS.has(id)) {
+        continue
+      }
+
+      const packageMap = new Map<string, RemoteAgentPackage>()
+      const versions = Array.isArray(record.versions) ? record.versions : []
+      for (const versionEntry of versions) {
+        const pkg = normalizePackage(versionEntry)
+        if (pkg) {
+          packageMap.set(pkg.version, pkg)
+        }
+      }
+
+      const fallbackVersion = safeString(record.latestVersion) || safeString(record.version)
+      const fallbackPkg =
+        normalizePackage(record.package, fallbackVersion) ||
+        normalizePackage(record, fallbackVersion)
+      if (fallbackPkg) {
+        packageMap.set(fallbackPkg.version, fallbackPkg)
+      }
+
+      if (packageMap.size <= 0) {
+        continue
+      }
+
+      const latestVersion =
+        safeString(record.latestVersion) ||
+        safeString(record.version) ||
+        [...packageMap.keys()].sort(compareVersion).at(-1) ||
+        ''
+      if (!latestVersion) {
+        continue
+      }
+
+      const agent: StoreAgentInfo = {
+        id,
+        name: safeString(record.name, id),
+        description: safeString(record.description, 'No description'),
+        version: latestVersion,
+        author: safeString(record.author, 'Unknown'),
+        category: normalizeCategory(record.category),
+        capabilities: normalizeCapabilities(record.capabilities),
+        tags: normalizeTags(record.tags),
+        downloads: safeNumber(record.downloads, 0),
+        rating: safeNumber(record.rating, 0),
+        ratingCount: safeNumber(record.ratingCount, 0),
+        source: normalizeSource(record.source),
+        isInstalled: false,
+        createdAt: normalizeTimestamp(record.createdAt),
+        updatedAt: normalizeTimestamp(record.updatedAt),
+        icon: safeString(record.icon) || undefined,
+        homepage: safeString(record.homepage) || undefined,
+        repository: safeString(record.repository) || undefined
+      }
+
+      parsedAgents.push(agent)
+      packagesByAgent.set(agent.id, packageMap)
+    }
+
+    return {
+      fetchedAt: Date.now(),
+      agents: parsedAgents,
+      packagesByAgent
+    }
+  }
+
+  private async loadRemoteCatalog(force = false): Promise<RemoteCatalogSnapshot> {
+    if (
+      !force &&
+      this.remoteCatalog &&
+      Date.now() - this.remoteCatalog.fetchedAt < REMOTE_CATALOG_CACHE_TTL_MS
+    ) {
+      return this.remoteCatalog
+    }
+
+    const errors: string[] = []
+    for (const url of this.getCatalogUrls()) {
+      try {
+        const payload = await this.fetchJson<unknown>(url)
+        const snapshot = this.parseRemoteCatalog(payload)
+        this.remoteCatalog = snapshot
+        return snapshot
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error)
+        errors.push(`${url}: ${reason}`)
+      }
+    }
+
+    throw new Error(`Agent store catalog unavailable. ${errors.join(' | ')}`)
+  }
+
+  private async listRemoteAgents(force = false): Promise<StoreAgentInfo[]> {
+    const snapshot = await this.loadRemoteCatalog(force)
+    return snapshot.agents
+  }
 
   private migrateLegacyAgentStoreIfNeeded(): void {
     const currentRaw = getConfig(StorageList.AGENT_STORE)
@@ -311,12 +536,179 @@ class AgentStoreService {
   private applyInstallMeta(agent: StoreAgentInfo): StoreAgentInfo {
     const isInstalled = this.installedAgentIds.has(agent.id)
     const installedVersion = isInstalled ? this.resolveInstalledVersion(agent) : undefined
-    const hasUpdate = Boolean(isInstalled && installedVersion && installedVersion !== agent.version)
+    const hasUpdate = Boolean(
+      isInstalled && installedVersion && compareVersion(agent.version, installedVersion) > 0
+    )
     return {
       ...agent,
       isInstalled,
       installedVersion,
       hasUpdate
+    }
+  }
+
+  private async downloadPackage(url: string, outputPath: string): Promise<void> {
+    const response = await getNetworkService().request<ArrayBuffer>({
+      url,
+      method: 'GET',
+      headers: { 'User-Agent': 'Tuff-AgentStore/1.0' },
+      timeoutMs: NETWORK_TIMEOUT_MS,
+      responseType: 'arrayBuffer'
+    })
+    if (!(response.data instanceof ArrayBuffer)) {
+      throw new Error('Failed to download package: invalid payload')
+    }
+    const buffer = Buffer.from(response.data)
+    await fse.outputFile(outputPath, buffer)
+  }
+
+  private async verifyChecksumIfNeeded(filePath: string, expectedChecksum?: string): Promise<void> {
+    if (!expectedChecksum) {
+      return
+    }
+    const expected = expectedChecksum
+      .replace(/^sha256:/i, '')
+      .toLowerCase()
+      .trim()
+    if (!expected) {
+      return
+    }
+    const payload = await fse.readFile(filePath)
+    const actual = crypto.createHash('sha256').update(payload).digest('hex').toLowerCase()
+    if (actual !== expected) {
+      throw new Error(`Checksum mismatch: expected ${expected}, got ${actual}`)
+    }
+  }
+
+  private async extractPackage(packagePath: string, targetDir: string): Promise<void> {
+    const lower = packagePath.toLowerCase()
+    if (lower.endsWith('.zip')) {
+      await compressing.zip.uncompress(packagePath, targetDir)
+      return
+    }
+    if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz')) {
+      await compressing.tgz.uncompress(packagePath, targetDir)
+      return
+    }
+    if (lower.endsWith('.tar') || lower.endsWith('.tpex')) {
+      await compressing.tar.uncompress(packagePath, targetDir)
+      return
+    }
+
+    const extractors: Array<() => Promise<void>> = [
+      async () => await compressing.zip.uncompress(packagePath, targetDir),
+      async () => await compressing.tgz.uncompress(packagePath, targetDir),
+      async () => await compressing.tar.uncompress(packagePath, targetDir)
+    ]
+    for (const extractor of extractors) {
+      try {
+        await extractor()
+        return
+      } catch {
+        // try next extractor
+      }
+    }
+    throw new Error('Unsupported agent package format')
+  }
+
+  private async resolveExtractedRoot(extractDir: string): Promise<string> {
+    const rootAgentJson = path.join(extractDir, 'agent.json')
+    const rootManifest = path.join(extractDir, 'manifest.json')
+    if ((await fse.pathExists(rootAgentJson)) || (await fse.pathExists(rootManifest))) {
+      return extractDir
+    }
+
+    const entries = await fse.readdir(extractDir)
+    if (entries.length === 1) {
+      const candidate = path.join(extractDir, entries[0]!)
+      const stat = await fse.stat(candidate)
+      if (stat.isDirectory()) {
+        return candidate
+      }
+    }
+
+    throw new Error('Invalid agent package: missing agent manifest')
+  }
+
+  private async resolveInstalledVersionFromPayload(
+    payloadRoot: string,
+    fallbackVersion: string
+  ): Promise<string> {
+    const agentJsonPath = path.join(payloadRoot, 'agent.json')
+    if (!(await fse.pathExists(agentJsonPath))) {
+      return fallbackVersion
+    }
+    try {
+      const payload = (await fse.readJSON(agentJsonPath)) as { version?: unknown }
+      const version = safeString(payload.version)
+      return version || fallbackVersion
+    } catch {
+      return fallbackVersion
+    }
+  }
+
+  private async installWithRollback(
+    agentId: string,
+    targetVersion: string,
+    pkg: RemoteAgentPackage
+  ): Promise<string> {
+    const installDir = this.getAgentInstallDir(agentId)
+    const currentDir = path.join(installDir, 'current')
+    const backupDir = path.join(installDir, `rollback-${Date.now()}`)
+    const tempDir = await fse.mkdtemp(path.join(os.tmpdir(), `tuff-agent-${Date.now()}-`))
+    const packagePath = path.join(tempDir, 'agent-package.bin')
+    const extractDir = path.join(tempDir, 'extract')
+    let hasBackup = false
+
+    try {
+      await this.downloadPackage(pkg.downloadUrl, packagePath)
+      await this.verifyChecksumIfNeeded(packagePath, pkg.checksum)
+      await fse.ensureDir(extractDir)
+      await this.extractPackage(packagePath, extractDir)
+      const payloadRoot = await this.resolveExtractedRoot(extractDir)
+      const installedVersion = await this.resolveInstalledVersionFromPayload(
+        payloadRoot,
+        targetVersion
+      )
+
+      await fse.ensureDir(installDir)
+      if (await fse.pathExists(currentDir)) {
+        await fse.move(currentDir, backupDir, { overwrite: true })
+        hasBackup = true
+      }
+
+      await fse.copy(payloadRoot, currentDir, { overwrite: true })
+      await fse.writeJSON(
+        path.join(currentDir, 'install-meta.json'),
+        {
+          agentId,
+          version: installedVersion,
+          downloadedFrom: pkg.downloadUrl,
+          installedAt: Date.now()
+        },
+        { spaces: 2 }
+      )
+
+      if (hasBackup) {
+        await fse.remove(backupDir)
+      }
+
+      return installedVersion
+    } catch (error) {
+      if (hasBackup) {
+        try {
+          await fse.remove(currentDir)
+          await fse.move(backupDir, currentDir, { overwrite: true })
+        } catch (rollbackError) {
+          log.error('Agent install rollback failed', {
+            error: rollbackError,
+            meta: { agentId, backupDir, currentDir }
+          })
+        }
+      }
+      throw error
+    } finally {
+      await fse.remove(tempDir).catch(() => {})
     }
   }
 
@@ -338,39 +730,38 @@ class AgentStoreService {
     log.debug(`Searching agents: ${JSON.stringify(options)}`)
     this.ensureStorageLoaded()
 
-    // Combine all agents
-    let agents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
+    let remoteAgents: StoreAgentInfo[] = []
+    try {
+      remoteAgents = await this.listRemoteAgents()
+    } catch (error) {
+      log.warn('Agent store remote catalog unavailable for search', { error })
+    }
 
-    // Update installed status
-    agents = agents.map((a) => this.applyInstallMeta(a))
+    let agents = [...BUILTIN_AGENTS, ...remoteAgents]
+    agents = agents.map((agent) => this.applyInstallMeta(agent))
 
-    // Filter by keyword
     if (keyword) {
       const lowerKeyword = keyword.toLowerCase()
       agents = agents.filter(
-        (a) =>
-          a.name.toLowerCase().includes(lowerKeyword) ||
-          a.description.toLowerCase().includes(lowerKeyword) ||
-          a.tags.some((t) => t.toLowerCase().includes(lowerKeyword))
+        (agent) =>
+          agent.name.toLowerCase().includes(lowerKeyword) ||
+          agent.description.toLowerCase().includes(lowerKeyword) ||
+          agent.tags.some((tag) => tag.toLowerCase().includes(lowerKeyword))
       )
     }
 
-    // Filter by category
     if (category) {
-      agents = agents.filter((a) => a.category === category)
+      agents = agents.filter((agent) => agent.category === category)
     }
 
-    // Filter by source
     if (source) {
-      agents = agents.filter((a) => a.source === source)
+      agents = agents.filter((agent) => agent.source === source)
     }
 
-    // Filter by tags
     if (tags && tags.length > 0) {
-      agents = agents.filter((a) => tags.some((t) => a.tags.includes(t)))
+      agents = agents.filter((agent) => tags.some((tag) => agent.tags.includes(tag)))
     }
 
-    // Sort
     agents.sort((a, b) => {
       let comparison = 0
       switch (sortBy) {
@@ -405,14 +796,19 @@ class AgentStoreService {
    */
   async getAgentDetails(agentId: string): Promise<StoreAgentInfo | null> {
     this.ensureStorageLoaded()
-    const allAgents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
-    const agent = allAgents.find((a) => a.id === agentId)
-
-    if (agent) {
-      return this.applyInstallMeta(agent)
+    const builtin = BUILTIN_AGENTS.find((agent) => agent.id === agentId)
+    if (builtin) {
+      return this.applyInstallMeta(builtin)
     }
 
-    return null
+    try {
+      const remoteAgents = await this.listRemoteAgents()
+      const remote = remoteAgents.find((agent) => agent.id === agentId)
+      return remote ? this.applyInstallMeta(remote) : null
+    } catch (error) {
+      log.warn('Failed to get remote agent details', { error, meta: { agentId } })
+      return null
+    }
   }
 
   /**
@@ -420,7 +816,17 @@ class AgentStoreService {
    */
   async getFeaturedAgents(): Promise<StoreAgentInfo[]> {
     this.ensureStorageLoaded()
-    return FEATURED_AGENTS.map((a) => this.applyInstallMeta(a))
+    try {
+      const remoteAgents = await this.listRemoteAgents()
+      const sorted = [...remoteAgents].sort((a, b) => {
+        if (b.rating !== a.rating) return b.rating - a.rating
+        return b.downloads - a.downloads
+      })
+      return sorted.slice(0, 20).map((agent) => this.applyInstallMeta(agent))
+    } catch (error) {
+      log.warn('Failed to get remote featured agents', { error })
+      return BUILTIN_AGENTS.map((agent) => this.applyInstallMeta(agent))
+    }
   }
 
   /**
@@ -428,22 +834,27 @@ class AgentStoreService {
    */
   async getInstalledAgents(): Promise<StoreAgentInfo[]> {
     this.ensureStorageLoaded()
-    const allAgents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
-    return allAgents
-      .filter((a) => this.installedAgentIds.has(a.id))
-      .map((a) => this.applyInstallMeta(a))
+    const merged = new Map<string, StoreAgentInfo>()
+    BUILTIN_AGENTS.forEach((agent) => merged.set(agent.id, agent))
+    try {
+      const remoteAgents = await this.listRemoteAgents()
+      remoteAgents.forEach((agent) => merged.set(agent.id, agent))
+    } catch (error) {
+      log.warn('Failed to sync remote agents for installed list', { error })
+    }
+    return Array.from(merged.values())
+      .filter((agent) => this.installedAgentIds.has(agent.id))
+      .map((agent) => this.applyInstallMeta(agent))
   }
 
   /**
    * Get available categories
    */
-  getCategories(): { id: string; name: string; count: number }[] {
-    const allAgents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
+  async getCategories(): Promise<{ id: string; name: string; count: number }[]> {
+    const agents = await this.searchAgents({ limit: 1000, offset: 0 })
     const categoryMap = new Map<string, number>()
-
-    for (const agent of allAgents) {
-      const count = categoryMap.get(agent.category) || 0
-      categoryMap.set(agent.category, count + 1)
+    for (const agent of agents.agents) {
+      categoryMap.set(agent.category, (categoryMap.get(agent.category) || 0) + 1)
     }
 
     const categoryNames: Record<string, string> = {
@@ -464,47 +875,81 @@ class AgentStoreService {
   }
 
   /**
-   * Install an agent (placeholder for future implementation)
+   * Install an agent
    */
   async installAgent(options: AgentInstallOptions): Promise<AgentInstallResult> {
     const { agentId, version, force } = options
-
-    log.info(`Installing agent: ${agentId}@${version || 'latest'}`)
     this.ensureStorageLoaded()
+    log.info(`Installing agent: ${agentId}@${version || 'latest'}`)
 
-    // Check if agent exists
-    const agent = await this.getAgentDetails(agentId)
+    if (BUILTIN_AGENT_IDS.has(agentId)) {
+      const current = BUILTIN_AGENT_VERSION_MAP.get(agentId) || 'unknown'
+      return {
+        success: false,
+        agentId,
+        version: current,
+        error: 'Builtin agents are bundled with core-app and cannot be reinstalled'
+      }
+    }
+
+    const catalog = await this.loadRemoteCatalog(true)
+    const agent = catalog.agents.find((item) => item.id === agentId)
     if (!agent) {
       return {
         success: false,
         agentId,
         version: version || 'unknown',
-        error: `Agent ${agentId} not found`
+        error: `Agent ${agentId} not found in remote catalog`
       }
     }
 
-    // Check if already installed
-    if (this.installedAgentIds.has(agentId) && !force) {
+    const packageMap = catalog.packagesByAgent.get(agentId)
+    const targetVersion = version || agent.version
+    const targetPackage = packageMap?.get(targetVersion)
+    if (!targetPackage) {
       return {
         success: false,
         agentId,
-        version: agent.version,
-        error: 'Agent already installed'
+        version: targetVersion,
+        error: `Version ${targetVersion} is not available for agent ${agentId}`
       }
     }
 
-    const targetVersion = version || agent.version
+    if (this.installedAgentIds.has(agentId) && !force) {
+      const installedVersion = this.installedAgentVersions.get(agentId)
+      if (installedVersion === targetVersion) {
+        return {
+          success: false,
+          agentId,
+          version: targetVersion,
+          error: 'Agent already installed'
+        }
+      }
+    }
 
-    // For now, just mark as installed and persist state
-    this.installedAgentIds.add(agentId)
-    this.installedAgentVersions.set(agentId, targetVersion)
-    this.persistInstalledState()
-
-    return {
-      success: true,
-      agentId,
-      version: targetVersion,
-      message: `Agent ${agent.name} installed successfully`
+    try {
+      const installedVersion = await this.installWithRollback(agentId, targetVersion, targetPackage)
+      this.installedAgentIds.add(agentId)
+      this.installedAgentVersions.set(agentId, installedVersion)
+      this.persistInstalledState()
+      return {
+        success: true,
+        agentId,
+        version: installedVersion,
+        message: `Agent ${agent.name} installed successfully`
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      log.error('Agent install failed', {
+        error,
+        meta: { agentId, targetVersion, downloadUrl: targetPackage.downloadUrl }
+      })
+      return {
+        success: false,
+        agentId,
+        version: targetVersion,
+        error: message
+      }
     }
   }
 
@@ -512,15 +957,14 @@ class AgentStoreService {
    * Uninstall an agent
    */
   async uninstallAgent(agentId: string): Promise<AgentInstallResult> {
-    log.info(`Uninstalling agent: ${agentId}`)
     this.ensureStorageLoaded()
+    log.info(`Uninstalling agent: ${agentId}`)
 
-    // Check if it's a builtin agent
-    if (agentId.startsWith('builtin.')) {
+    if (BUILTIN_AGENT_IDS.has(agentId)) {
       return {
         success: false,
         agentId,
-        version: 'unknown',
+        version: BUILTIN_AGENT_VERSION_MAP.get(agentId) || 'unknown',
         error: 'Cannot uninstall builtin agents'
       }
     }
@@ -535,8 +979,19 @@ class AgentStoreService {
     }
 
     const installedVersion = this.installedAgentVersions.get(agentId) ?? 'unknown'
+    const installDir = this.getAgentInstallDir(agentId)
+    try {
+      await fse.remove(installDir)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        success: false,
+        agentId,
+        version: installedVersion,
+        error: message
+      }
+    }
 
-    // Remove and persist
     this.installedAgentIds.delete(agentId)
     this.installedAgentVersions.delete(agentId)
     this.persistInstalledState()
@@ -554,8 +1009,27 @@ class AgentStoreService {
    */
   async checkUpdates(): Promise<StoreAgentInfo[]> {
     this.ensureStorageLoaded()
-    // For now, no updates available
-    return []
+    const catalog = await this.loadRemoteCatalog(true)
+    const updates: StoreAgentInfo[] = []
+
+    for (const agentId of this.installedAgentIds) {
+      if (BUILTIN_AGENT_IDS.has(agentId)) {
+        continue
+      }
+      const installedVersion = this.installedAgentVersions.get(agentId)
+      if (!installedVersion) {
+        continue
+      }
+      const remote = catalog.agents.find((agent) => agent.id === agentId)
+      if (!remote) {
+        continue
+      }
+      if (compareVersion(remote.version, installedVersion) > 0) {
+        updates.push(this.applyInstallMeta(remote))
+      }
+    }
+
+    return updates
   }
 
   /**
@@ -577,10 +1051,10 @@ class AgentStoreService {
       version: agent.version,
       category: agent.category as AgentDescriptor['category'],
       enabled: agent.isInstalled,
-      capabilities: agent.capabilities.map((c) => ({
-        id: c,
-        type: resolveCapabilityType(c),
-        name: c,
+      capabilities: agent.capabilities.map((capability) => ({
+        id: capability,
+        type: resolveCapabilityType(capability),
+        name: capability,
         description: ''
       })),
       tools: [],

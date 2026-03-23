@@ -20,6 +20,7 @@ import { h, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
 import { useI18nText } from '~/modules/lang'
+import { detectUpdateAssetArch, detectUpdateAssetPlatform } from '../update/platform-target'
 import { devLog } from '~/utils/dev-log'
 import { blowMention } from '../mention/dialog-mention'
 import { useAppState } from './useAppStates'
@@ -82,74 +83,17 @@ const updateListenerDisposers: Array<() => void> = []
 const completedUpdateTaskIds = new Set<string>()
 let updateListenerInitialized = false
 
-function resolvePlatformFallback(): NormalizedPlatform {
-  const runtimePlatform = typeof process !== 'undefined' ? process.platform : ''
-
-  if (runtimePlatform === 'win32') return 'win32'
-  if (runtimePlatform === 'darwin') return 'darwin'
-  if (runtimePlatform === 'linux') return 'linux'
-
-  return 'darwin'
+function normalizeAssetPlatform(
+  platformValue: unknown,
+  filename: string
+): NormalizedPlatform | null {
+  const platform = detectUpdateAssetPlatform(filename, platformValue)
+  return platform === 'unsupported' ? null : platform
 }
 
-function resolveArchFallback(): NormalizedArch {
-  const runtimeArch = typeof process !== 'undefined' ? process.arch : ''
-  return runtimeArch === 'arm64' ? 'arm64' : 'x64'
-}
-
-function normalizeAssetPlatform(platformValue: unknown, filename: string): NormalizedPlatform {
-  const platform = typeof platformValue === 'string' ? platformValue.toLowerCase() : ''
-  const lowerName = filename.toLowerCase()
-
-  if (platform.includes('win') || lowerName.includes('win')) return 'win32'
-  if (
-    platform.includes('darwin') ||
-    platform.includes('mac') ||
-    lowerName.includes('darwin') ||
-    lowerName.includes('mac')
-  ) {
-    return 'darwin'
-  }
-  if (
-    platform.includes('linux') ||
-    platform.includes('ubuntu') ||
-    platform.includes('debian') ||
-    lowerName.includes('linux') ||
-    lowerName.includes('ubuntu') ||
-    lowerName.includes('debian') ||
-    lowerName.endsWith('.appimage')
-  ) {
-    return 'linux'
-  }
-
-  return resolvePlatformFallback()
-}
-
-function normalizeAssetArch(archValue: unknown, filename: string): NormalizedArch {
-  const arch = typeof archValue === 'string' ? archValue.toLowerCase() : ''
-  const lowerName = filename.toLowerCase()
-
-  if (
-    arch.includes('arm64') ||
-    arch.includes('aarch64') ||
-    lowerName.includes('arm64') ||
-    lowerName.includes('aarch64')
-  ) {
-    return 'arm64'
-  }
-
-  if (
-    arch.includes('x64') ||
-    arch.includes('amd64') ||
-    arch.includes('x86_64') ||
-    lowerName.includes('x64') ||
-    lowerName.includes('amd64') ||
-    lowerName.includes('x86_64')
-  ) {
-    return 'x64'
-  }
-
-  return resolveArchFallback()
+function normalizeAssetArch(archValue: unknown, filename: string): NormalizedArch | null {
+  const arch = detectUpdateAssetArch(filename, archValue)
+  return arch === 'unsupported' ? null : arch
 }
 
 function normalizeReleaseForDownload(release: GitHubRelease): GitHubRelease {
@@ -176,13 +120,19 @@ function normalizeReleaseForDownload(release: GitHubRelease): GitHubRelease {
           : typeof raw.sha256 === 'string'
             ? raw.sha256
             : undefined
+      const normalizedPlatform = normalizeAssetPlatform(raw.platform, name)
+      const normalizedArch = normalizeAssetArch(raw.arch, name)
+      if (!normalizedPlatform || !normalizedArch) {
+        devLog(`[AppUpdate][warn] Skip unsupported asset target: ${name}`)
+        return null
+      }
 
       const normalized: Record<string, unknown> = {
         name,
         url,
         size,
-        platform: normalizeAssetPlatform(raw.platform, name),
-        arch: normalizeAssetArch(raw.arch, name)
+        platform: normalizedPlatform,
+        arch: normalizedArch
       }
 
       if (browserDownloadUrl) normalized.browser_download_url = browserDownloadUrl

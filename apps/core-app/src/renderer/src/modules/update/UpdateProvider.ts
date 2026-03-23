@@ -19,6 +19,7 @@ import {
 } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createNetworkSdk } from '@talex-touch/utils/transport/sdk/domains/network'
+import { resolveRuntimeUpdateArch, resolveRuntimeUpdatePlatform } from './platform-target'
 
 // 更新源抽象基类
 export abstract class UpdateProvider {
@@ -144,18 +145,21 @@ export abstract class UpdateProvider {
 
   // 获取当前平台
   protected getCurrentPlatform(): string {
-    return process.platform
+    return resolveRuntimeUpdatePlatform()
   }
 
   // 获取当前架构
   protected getCurrentArch(): string {
-    return process.arch
+    return resolveRuntimeUpdateArch()
   }
 
   // 根据平台和架构过滤资源
   protected filterAssetsByPlatform(assets: DownloadAsset[]): DownloadAsset[] {
     const platform = this.getCurrentPlatform()
     const arch = this.getCurrentArch()
+    if (platform === 'unsupported' || arch === 'unsupported') {
+      return []
+    }
 
     return assets.filter((asset) => {
       // 平台匹配
