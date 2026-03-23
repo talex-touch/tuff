@@ -31,6 +31,12 @@ interface ExtendedSourceStat {
   layer?: SearchPriorityLayer
 }
 
+interface FastLayerOutcome {
+  immediateResults: TuffSearchResult[]
+  didTimeout: boolean
+  completion: Promise<void>
+}
+
 /**
  * @constant defaultTuffGatherOptions
  * @description Default configuration for the aggregator.
@@ -179,33 +185,46 @@ function createLayeredSearchController(
     })
 
     // ==================== FAST LAYER ====================
+    let fastLayerOutcome: FastLayerOutcome | null = null
     if (fastProviders.length > 0 && !isAborted) {
       searchLogger.logSearchPhase('Fast Layer', `Starting with ${fastProviders.length} providers`)
 
-      const fastResults = await runFastLayer(
+      fastLayerOutcome = await runFastLayer(
         fastProviders,
         params,
         signal,
         fastLayerTimeoutMs,
         fastLayerConcurrency,
         taskTimeoutMs,
-        sourceStats
+        sourceStats,
+        (lateResult) => {
+          if (isAborted) return
+          allResults.push(lateResult)
+          onUpdate({
+            newResults: [lateResult],
+            totalCount: countItems(allResults),
+            isDone: false,
+            sourceStats: sourceStats as TuffSearchResult['sources'],
+            layer: 'deferred'
+          })
+        }
       )
 
-      allResults.push(...fastResults)
+      allResults.push(...fastLayerOutcome.immediateResults)
 
       // Immediately push fast layer results
       if (!isAborted) {
+        const hasPendingAfterFast = deferredProviders.length > 0 || fastLayerOutcome.didTimeout
         const fastDuration = performance.now() - startTime
         searchLogger.logSearchPhase(
           'Fast Layer Complete',
-          `${countItems(fastResults)} items in ${fastDuration.toFixed(1)}ms`
+          `${countItems(fastLayerOutcome.immediateResults)} items in ${fastDuration.toFixed(1)}ms`
         )
 
         onUpdate({
-          newResults: fastResults,
+          newResults: fastLayerOutcome.immediateResults,
           totalCount: countItems(allResults),
-          isDone: deferredProviders.length === 0,
+          isDone: !hasPendingAfterFast,
           sourceStats: sourceStats as TuffSearchResult['sources'],
           layer: 'fast'
         })
@@ -217,43 +236,51 @@ function createLayeredSearchController(
       return 0
     }
 
-    // ==================== DEFERRED LAYER ====================
-    if (deferredProviders.length > 0 && !isAborted) {
-      // Delay to let UI render fast layer results
-      await delay(deferredLayerDelayMs)
+    const hasPendingSearch = deferredProviders.length > 0 || fastLayerOutcome?.didTimeout === true
 
-      if (isAborted) {
-        return countItems(allResults)
+    // ==================== DEFERRED LAYER ====================
+    if (hasPendingSearch && !isAborted) {
+      if (deferredProviders.length > 0) {
+        // Delay to let UI render fast layer results
+        await delay(deferredLayerDelayMs)
+
+        if (isAborted) {
+          return countItems(allResults)
+        }
+
+        searchLogger.logSearchPhase(
+          'Deferred Layer',
+          `Starting with ${deferredProviders.length} providers`
+        )
+
+        await runDeferredLayer(
+          deferredProviders,
+          params,
+          signal,
+          deferredLayerConcurrency,
+          taskTimeoutMs,
+          sourceStats,
+          (result) => {
+            if (isAborted) return
+
+            allResults.push(result)
+
+            onUpdate({
+              newResults: [result],
+              totalCount: countItems(allResults),
+              isDone: false,
+              sourceStats: sourceStats as TuffSearchResult['sources'],
+              layer: 'deferred'
+            })
+          }
+        )
       }
 
-      searchLogger.logSearchPhase(
-        'Deferred Layer',
-        `Starting with ${deferredProviders.length} providers`
-      )
+      if (fastLayerOutcome?.didTimeout) {
+        await fastLayerOutcome.completion
+      }
 
-      await runDeferredLayer(
-        deferredProviders,
-        params,
-        signal,
-        deferredLayerConcurrency,
-        taskTimeoutMs,
-        sourceStats,
-        (result) => {
-          if (isAborted) return
-
-          allResults.push(result)
-
-          onUpdate({
-            newResults: [result],
-            totalCount: countItems(allResults),
-            isDone: false,
-            sourceStats: sourceStats as TuffSearchResult['sources'],
-            layer: 'deferred'
-          })
-        }
-      )
-
-      // Final update after deferred layer completes
+      // Final update after deferred and late fast providers complete
       if (!isAborted) {
         const totalDuration = performance.now() - startTime
         searchLogger.logSearchPhase(
@@ -296,12 +323,14 @@ async function runFastLayer(
   timeoutMs: number,
   concurrency: number,
   taskTimeoutMs: number,
-  sourceStats: ExtendedSourceStat[]
-): Promise<TuffSearchResult[]> {
+  sourceStats: ExtendedSourceStat[],
+  onLateResult: (result: TuffSearchResult) => void
+): Promise<FastLayerOutcome> {
   const results: TuffSearchResult[] = []
   const queue = [...providers]
   let completed = 0
   const total = providers.length
+  let didTimeout = false
 
   // Create a race between provider execution and overall timeout
   const providerPromise = new Promise<void>((resolveAll) => {
@@ -320,7 +349,11 @@ async function runFastLayer(
           const result = await withTimeout(searchPromise, taskTimeoutMs)
 
           resultCount = result.items.length
-          results.push(result)
+          if (didTimeout) {
+            onLateResult(result)
+          } else {
+            results.push(result)
+          }
           searchLogger.providerResult(provider.id, resultCount)
         } catch (error) {
           if (signal.aborted) {
@@ -358,19 +391,28 @@ async function runFastLayer(
     void Promise.all(workers).then(() => resolveAll())
   })
 
-  const timeoutPromise = new Promise<void>((resolveTimeout) => {
+  const timeoutPromise = new Promise<'timeout'>((resolveTimeout) => {
     setTimeout(() => {
       if (completed < total) {
         gatherLog.debug(`Fast layer timeout after ${timeoutMs}ms`, { meta: { completed, total } })
       }
-      resolveTimeout()
+      resolveTimeout('timeout')
     }, timeoutMs)
   })
 
   // Race: either all providers complete or timeout expires
-  await Promise.race([providerPromise, timeoutPromise])
+  const fastLayerState = await Promise.race([
+    providerPromise.then(() => 'completed' as const),
+    timeoutPromise
+  ])
 
-  return results
+  didTimeout = fastLayerState === 'timeout'
+
+  return {
+    immediateResults: results,
+    didTimeout,
+    completion: providerPromise
+  }
 }
 
 /**

@@ -4694,7 +4694,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
 
       if (filesMap.size === 0) {
-        return this.buildTypeOnlySearchResult(query, typeFilters)
+        return new TuffSearchResultBuilder(query).build()
       }
     }
 
