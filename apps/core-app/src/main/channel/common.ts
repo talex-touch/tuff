@@ -15,8 +15,10 @@ import type {
   BatteryStatusPayload,
   FileIndexAddPathRequest,
   FileIndexAddPathResult,
+  GetActiveAppRequest,
   PlatformCapabilityListRequest,
   ReadFileRequest,
+  ActiveAppSnapshot,
   SecureValueGetRequest,
   SecureValueSetRequest,
   StartupRequest,
@@ -68,6 +70,7 @@ import {
   platformCapabilityRegistry,
   registerDefaultPlatformCapabilities
 } from '../modules/platform/capability-registry'
+import { activeAppService } from '../modules/system/active-app'
 import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage'
 import { getNetworkService } from '../modules/network'
 import { deviceIdleService } from '../service/device-idle-service'
@@ -161,6 +164,9 @@ const wallpaperCopyToLibraryEvent = defineRawEvent<
   { sourcePath: string; type: 'file' | 'folder' },
   { storedPath: string | null; skippedCount: number; error?: string }
 >('wallpaper:copy-to-library')
+const systemGetActiveAppLegacyEvent = defineRawEvent<GetActiveAppRequest, ActiveAppSnapshot | null>(
+  'system:get-active-app'
+)
 const batteryStatusEvent = AppEvents.power.batteryStatus
 
 function resolveTfilePath(urlOrPath: string): string {
@@ -1243,6 +1249,12 @@ export class CommonChannelModule extends BaseModule {
           log.warn(`[CommonChannel] Failed to resolve app path: ${name}`, { error })
           return null
         }
+      }),
+      transport.on(AppEvents.system.getActiveApp, async (payload) => {
+        return await activeAppService.getActiveApp(Boolean(payload?.forceRefresh))
+      }),
+      transport.on(systemGetActiveAppLegacyEvent, async (payload) => {
+        return await activeAppService.getActiveApp(Boolean(payload?.forceRefresh))
       }),
       transport.on<SecureValueGetRequest, string | null>(
         AppEvents.system.getSecureValue,

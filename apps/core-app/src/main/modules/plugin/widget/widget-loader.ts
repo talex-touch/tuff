@@ -103,7 +103,7 @@ export class WidgetLoader {
       this.cache.set(widgetId, result)
       return result
     } catch (error) {
-      plugin.logger.error(
+      plugin.logger.debug(
         `[WidgetLoader] Failed to read widget from ${widgetFile}:`,
         error as Error
       )
@@ -172,7 +172,7 @@ export class WidgetLoader {
       this.cache.set(widgetId, result)
       return result
     } catch (error) {
-      plugin.logger.error(
+      plugin.logger.debug(
         `[WidgetLoader] Failed to fetch widget from ${widgetUrl}:`,
         error as Error
       )

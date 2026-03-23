@@ -331,7 +331,7 @@ export class WidgetManager {
     try {
       compiled = await compileWidgetSource(source, context)
     } catch (error) {
-      plugin.logger.error('[WidgetManager] 编译 widget 失败：', error as Error)
+      plugin.logger.debug('[WidgetManager] 编译 widget 失败：', error as Error)
       this.pushIssue(
         plugin,
         feature,
