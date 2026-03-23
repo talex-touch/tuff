@@ -139,14 +139,29 @@ async function precompilePluginWidgets(plugin: TouchPlugin): Promise<void> {
     try {
       const result = await widgetManager.registerWidget(plugin, feature)
       if (!result) {
-        plugin.logger.warn(
-          `[Widget] Failed to compile widget for feature "${feature.id}" (${feature.interaction?.path})`
+        plugin.issues.push({
+          type: 'warning',
+          message: `Widget compile skipped for feature "${feature.id}" (${feature.interaction?.path ?? 'unknown'})`,
+          source: `feature:${feature.id}`,
+          code: 'WIDGET_COMPILE_SKIPPED',
+          suggestion: 'Check widget interaction.path and widget source file.',
+          timestamp: Date.now()
+        })
+        plugin.logger.debug(
+          `[Widget] Compile skipped for feature "${feature.id}" (${feature.interaction?.path})`
         )
       }
     } catch (error) {
-      plugin.logger.warn(
-        `[Widget] Failed to compile widget for feature "${feature.id}"`,
-        error as Error
+      plugin.issues.push({
+        type: 'warning',
+        message: `Widget compile failed for feature "${feature.id}": ${(error as Error).message}`,
+        source: `feature:${feature.id}`,
+        code: 'WIDGET_COMPILE_FAILED',
+        suggestion: 'Check widget source syntax and dependencies.',
+        timestamp: Date.now()
+      })
+      plugin.logger.debug(
+        `[Widget] Compile failed for feature "${feature.id}" (${(error as Error).message})`
       )
     }
   }
@@ -176,9 +191,24 @@ async function warnUnusedWidgets(plugin: TouchPlugin): Promise<void> {
     const displayPaths = unused.map((filePath) =>
       path.relative(widgetsDir, filePath).split(path.sep).join('/')
     )
-    plugin.logger.warn(`[Widget] Unused widget files: ${displayPaths.join(', ')}`)
+    plugin.issues.push({
+      type: 'warning',
+      message: `Unused widget files: ${displayPaths.join(', ')}`,
+      source: 'widgets',
+      code: 'WIDGET_UNUSED_FILES',
+      suggestion: 'Remove unused files or reference them in manifest feature interaction.path.',
+      timestamp: Date.now()
+    })
+    plugin.logger.debug(`[Widget] Unused widget files tracked as issue: ${displayPaths.join(', ')}`)
   } catch (error) {
-    plugin.logger.warn('[Widget] Failed to scan widgets directory', error as Error)
+    plugin.issues.push({
+      type: 'warning',
+      message: `Failed to scan widgets directory: ${(error as Error).message}`,
+      source: 'widgets',
+      code: 'WIDGET_SCAN_FAILED',
+      timestamp: Date.now()
+    })
+    plugin.logger.debug(`[Widget] Failed to scan widgets directory: ${(error as Error).message}`)
   }
 }
 

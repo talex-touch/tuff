@@ -79,6 +79,7 @@ import type {
   ExecuteCommandResponse,
   FeatureStats,
   GaugePayload,
+  GetActiveAppRequest,
   GetPathRequest,
   HistogramPayload,
   NavigateRequest,
@@ -90,6 +91,7 @@ import type {
   PerformanceSummary,
   PluginStats,
   ReadFileRequest,
+  ActiveAppSnapshot,
   RendererPerfReport,
   ReportMetricsRequest,
   ReportMetricsResponse,
@@ -713,6 +715,14 @@ export const AppEvents = {
       .module('system')
       .event('get-path')
       .define<GetPathRequest, string | null>(),
+
+    /**
+     * Get currently active foreground application snapshot.
+     */
+    getActiveApp: defineEvent('app')
+      .module('system')
+      .event('get-active-app')
+      .define<GetActiveAppRequest, ActiveAppSnapshot | null>(),
 
     /**
      * Read a secure local value.

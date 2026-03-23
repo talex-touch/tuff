@@ -110,7 +110,7 @@ export class WidgetScriptProcessor implements IWidgetProcessor {
         })
       })
 
-      plugin.logger.error(
+      plugin.logger.debug(
         `[WidgetScriptProcessor] Dependency validation failed for widget "${source.widgetId}":`,
         validation.errors
       )
@@ -153,7 +153,7 @@ module.exports = __component
         dependencies: validation.allowedImports
       }
     } catch (error) {
-      plugin.logger.error(
+      plugin.logger.debug(
         `[WidgetScriptProcessor] Compilation failed for widget "${source.widgetId}":`,
         error as Error
       )
