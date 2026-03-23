@@ -302,7 +302,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (process.env.NODE_ENV === 'development') return true
     if (process.env.BUILD_TYPE === 'development') return true
 
-    const rendererUrl = process.env.ELECTRON_RENDERER_URL ?? process.env.VITE_DEV_SERVER_URL ?? ''
+    const rendererUrl = process.env.ELECTRON_RENDERER_URL ?? ''
     return /^(https?):\/\/(127\.0\.0\.1|localhost)(:\d+)?/i.test(rendererUrl)
   }
 

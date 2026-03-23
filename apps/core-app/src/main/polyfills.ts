@@ -74,5 +74,3 @@ if (fse.existsSync(path.join(app.getPath('userData'), 'debug.talex'))) {
 // This warning only shows adopters development mode
 // Read more on https://www.electronjs.org/docs/latest/tutorial/security
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true'
-process.env['trace-warnings'] = 'true'
-process.env.unhandledrejections = 'strict'
