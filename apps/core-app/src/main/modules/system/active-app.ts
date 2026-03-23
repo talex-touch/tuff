@@ -34,8 +34,19 @@ export interface ActiveAppInfo {
   lastUpdated: number
 }
 
+interface ActiveAppQueryOptions {
+  forceRefresh?: boolean
+  includeIcon?: boolean
+}
+
+interface ActiveAppCacheEntry {
+  info: ActiveAppInfo
+  expiresAt: number
+}
+
 class ActiveAppService {
-  private cache: { info: ActiveAppInfo; expiresAt: number } | null = null
+  private cacheWithIcon: ActiveAppCacheEntry | null = null
+  private cacheWithoutIcon: ActiveAppCacheEntry | null = null
   private readonly cacheTTL = 3000
   private currentPlatform: Platform
   private macosResolveInFlight: Promise<Partial<ActiveAppInfo> | null> | null = null
@@ -176,19 +187,92 @@ end tell`
     }
   }
 
+  private toCacheKey(includeIcon: boolean): 'withIcon' | 'withoutIcon' {
+    return includeIcon ? 'withIcon' : 'withoutIcon'
+  }
+
+  private cloneWithoutIcon(info: ActiveAppInfo): ActiveAppInfo {
+    if (!info.icon) {
+      return info
+    }
+    return {
+      ...info,
+      icon: null
+    }
+  }
+
+  private getCacheEntry(includeIcon: boolean): ActiveAppCacheEntry | null {
+    const cache = includeIcon ? this.cacheWithIcon : this.cacheWithoutIcon
+    if (cache && cache.expiresAt > Date.now()) {
+      return cache
+    }
+
+    if (includeIcon) {
+      this.cacheWithIcon = null
+    } else {
+      this.cacheWithoutIcon = null
+    }
+    return null
+  }
+
+  private setCacheEntry(info: ActiveAppInfo, includeIcon: boolean): void {
+    const expiresAt = Date.now() + this.cacheTTL
+    if (includeIcon) {
+      this.cacheWithIcon = { info, expiresAt }
+      this.cacheWithoutIcon = { info: this.cloneWithoutIcon(info), expiresAt }
+      return
+    }
+
+    this.cacheWithoutIcon = { info: this.cloneWithoutIcon(info), expiresAt }
+  }
+
+  private normalizeQueryOptions(
+    forceRefreshOrOptions: boolean | ActiveAppQueryOptions
+  ): Required<ActiveAppQueryOptions> {
+    if (typeof forceRefreshOrOptions === 'boolean') {
+      return {
+        forceRefresh: forceRefreshOrOptions,
+        includeIcon: true
+      }
+    }
+
+    return {
+      forceRefresh: forceRefreshOrOptions.forceRefresh === true,
+      includeIcon: forceRefreshOrOptions.includeIcon !== false
+    }
+  }
+
   /**
    * Public API: Get active application information
    */
-  public async getActiveApp(forceRefresh = false): Promise<ActiveAppInfo | null> {
+  public async getActiveApp(
+    forceRefreshOrOptions: boolean | ActiveAppQueryOptions = false
+  ): Promise<ActiveAppInfo | null> {
+    const { forceRefresh, includeIcon } = this.normalizeQueryOptions(forceRefreshOrOptions)
+    const cacheKey = this.toCacheKey(includeIcon)
+
     // Return cached data if available and not expired
-    if (!forceRefresh && this.cache && this.cache.expiresAt > Date.now()) {
-      return this.cache.info
+    if (!forceRefresh) {
+      const cached = this.getCacheEntry(includeIcon)
+      if (cached) {
+        return cached.info
+      }
+
+      if (!includeIcon) {
+        const iconCache = this.getCacheEntry(true)
+        if (iconCache) {
+          const normalized = this.cloneWithoutIcon(iconCache.info)
+          this.setCacheEntry(normalized, false)
+          return normalized
+        }
+      }
     }
 
     // Resolve active window information
     const activeWindow = await this.resolveActiveWindow()
     if (!activeWindow) {
-      this.cache = null
+      this.cacheWithIcon = null
+      this.cacheWithoutIcon = null
       return null
     }
 
@@ -207,15 +291,17 @@ end tell`
       lastUpdated: Date.now()
     }
 
-    // Try to get application icon
-    info.icon = await this.resolveIcon(info.executablePath)
-
-    // Cache the result
-    this.cache = {
-      info,
-      expiresAt: Date.now() + this.cacheTTL
+    if (includeIcon) {
+      // Try to get application icon only when caller explicitly needs it.
+      info.icon = await this.resolveIcon(info.executablePath)
     }
 
+    // Cache the result
+    this.setCacheEntry(info, includeIcon)
+
+    if (cacheKey === 'withoutIcon') {
+      return this.cloneWithoutIcon(info)
+    }
     return info
   }
 }
