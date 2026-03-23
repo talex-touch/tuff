@@ -1,0 +1,121 @@
+# Core App 启动链路与运行时变量参考
+
+> 更新时间：2026-03-23  
+> 范围：`apps/core-app/src` 中 `process.env` / `import.meta.env` 的实际引用
+
+## 启动异常梳理（本次 1+2 变更）
+
+### 1) Assistant 模块 gate（已改）
+- 现状：`TUFF_ENABLE_ASSISTANT_EXPERIMENT` 未开启时，Assistant 不再走“optional failed”路径。
+- 行为：直接走 `shouldSkip`，日志为 `Skip Assistant module: TUFF_ENABLE_ASSISTANT_EXPERIMENT disabled`。
+- 效果：不会再出现误导性的 `Optional module failed to load: Symbol(Assistant)` 告警。
+
+### 2) dev.source 探活 + 本地降级（已改）
+- 现状：`DevPluginLoader` 先请求远端 `manifest.json` 作为探活。
+- 远端失败时：
+  - 自动回退到本地 `manifest.json` + 本地 README/资产；
+  - 运行时强制 `dev.source=false`（仅当前进程，不落盘）；
+  - 记录 `DEV_SOURCE_FALLBACK_LOCAL`（warning）。
+- 仅当“远端失败 + 本地也不可用”时，才记录 `REMOTE_MANIFEST_FAILED`（error）。
+
+## 插件 Issue Code 速查（含 `DEV_SOURCE_FALLBACK_LOCAL`）
+
+| Code | 默认级别 | 作用 |
+| --- | --- | --- |
+| `MISSING_MANIFEST` | error | 插件目录缺少 `manifest.json` |
+| `INVALID_MANIFEST_JSON` | error | 本地或远端 manifest 无法解析 |
+| `NAME_MISMATCH` | error | `manifest.name` 与目录名不一致 |
+| `MANIFEST_MISSING_NAME` | error | 缺少 `name` |
+| `MANIFEST_MISSING_VERSION` | warning | 缺少 `version`（默认 `0.0.0`） |
+| `CATEGORY_MISSING` | error | `sdkapi` 达门槛但未声明 `category` |
+| `SDKAPI_BLOCKED` | error | `sdkapi` 低于强制门槛被阻断 |
+| `SDK_VERSION_MISSING` | warning | 旧插件未声明 `sdkapi`（权限未强制） |
+| `SDK_VERSION_OUTDATED` | warning/error | `sdkapi` 过旧（视兼容性策略） |
+| `PERMISSION_MISSING` | warning | 缺少必需权限授权 |
+| `UNKNOWN_PERMISSION_IDS` | warning | 声明了未知权限 ID |
+| `INVALID_FEATURE_COMMANDS` | warning | feature.commands 结构不合法 |
+| `OMNI_TRANSFER_SDK_TOO_LOW` | warning | 声明 omniTransfer 但 sdkapi 不满足 |
+| `DUPLICATE_PLUGIN_NAME` | error | 插件名冲突 |
+| `LOADER_FATAL` | error | 加载器阶段致命异常 |
+| `DEV_MODE_ACTIVE` | warning | 插件当前运行在 dev 模式 |
+| `DEV_ADDRESS_INVALID` | error | `dev.address` 非法 |
+| `DEV_SOURCE_DISABLED_IN_PACKAGED` | warning | 打包环境自动禁用 `dev.source` |
+| `DEV_SOURCE_FALLBACK_LOCAL` | warning | 远端探活失败后回退本地资产 |
+| `REMOTE_MANIFEST_FAILED` | error | 远端 manifest 失败且本地回退也失败 |
+| `DEV_SERVER_DISCONNECTED` | warning | dev server 健康检查断连 |
+| `LIFECYCLE_SCRIPT_FAILED` | error | `index.js` 生命周期脚本执行失败 |
+| `RUNTIME_ERROR` | error | 运行期生命周期/调用异常 |
+| `AUTO_DISABLED_EXCESSIVE_ERRORS` | error | 短时错误过多触发自动停用 |
+| `INVALID_VIEW_PATH` | error | interaction path 非法 |
+| `PROTOCOL_NOT_ALLOWED` | error | 生产环境禁止远端 `http/https` view |
+| `WIDGET_UNSUPPORTED_TYPE` | error | widget 类型不支持 |
+| `WIDGET_INVALID_DEPENDENCY` | error | widget 依赖不允许 |
+| `WIDGET_COMPILE_FAILED` | error | widget 编译失败 |
+
+## 环境变量全量说明（逐项）
+
+### A. 业务开关 / 可配置项
+
+| 变量 | 作用 | 主要读取位置 |
+| --- | --- | --- |
+| `ELECTRON_RENDERER_URL` | dev 模式渲染入口 URL（主窗口/CoreBox/OmniPanel/MetaOverlay 等） | `src/main/core/touch-app.ts`、`src/main/utils/renderer-url.ts` |
+| `NODE_ENV` | dev/test/prod 行为判断（日志、分析、store API） | 多处（analytics/logger/sentry/store） |
+| `BUILD_TYPE` | 构建类型（Sentry environment/release 等） | `src/main/modules/sentry/*`、`app-provider.ts` |
+| `TUFF_ENABLE_ASSISTANT_EXPERIMENT` | Assistant 模块是否进入启动编排 | `src/main/index.ts` |
+| `TUFF_ENABLE_RENDERER_OVERRIDE` | 是否允许 renderer override 包生效 | `src/main/core/touch-app.ts`、`src/main/modules/update/update-system.ts` |
+| `TUFF_DISABLE_NATIVE_OCR` | 关闭本地 OCR provider | `src/main/modules/ai/intelligence-config.ts` |
+| `TUFF_RELEASE_API_URL` | 构建验签元数据 API 基地址覆盖 | `src/main/modules/build-verification/index.ts` |
+| `TUFF_BUILD_SIGNATURE_URL` | 构建验签签名文件 URL 强制覆盖 | `src/main/modules/build-verification/index.ts` |
+| `TUFF_BUILD_SIGNATURE_KEY_URL` | 构建验签公钥 URL 强制覆盖 | `src/main/modules/build-verification/index.ts` |
+| `TUFF_UPDATE_SIGNATURE_KEY_URL` | 更新包验签公钥 URL（优先） | `src/main/utils/release-signature.ts` |
+| `TUFF_UPDATE_SIGNATURE_PUBLIC_KEY_URL` | 更新包验签公钥 URL（兼容别名） | `src/main/utils/release-signature.ts` |
+| `TALEX_EVERYTHING_SDK_PATH` | Windows Everything SDK addon 自定义路径 | `src/main/modules/box-tool/addon/files/everything-provider.ts` |
+| `TALEX_FILE_PROVIDER_EXTRACT_ICONS` | FileProvider 图标提取开关（默认开） | `src/main/modules/box-tool/addon/files/file-provider.ts` |
+
+### B. 启动期内部注入变量（非外部配置）
+
+| 变量 | 作用 | 写入位置 |
+| --- | --- | --- |
+| `APP_VERSION` | 运行时版本号（缺省时从 package.json 注入） | `src/main/polyfills.ts` |
+| `DIST` | 主进程运行目录 | `src/main/polyfills.ts` |
+| `PUBLIC` | 公共资源目录（packaged/dev 分流） | `src/main/polyfills.ts` |
+| `DEBUG` | debug.talex 文件触发的日志调试开关 | `src/main/polyfills.ts` |
+| `ELECTRON_DISABLE_SECURITY_WARNINGS` | 关闭 Electron 安全警告输出 | `src/main/polyfills.ts` |
+| `WS_NO_UTF_8_VALIDATE` | 禁用 `ws` 可选 `utf-8-validate` addon | `src/main/index.ts` |
+| `WS_NO_BUFFER_UTIL` | 禁用 `ws` 可选 `bufferutil` addon | `src/main/index.ts` |
+
+### C. 系统环境变量（只读依赖）
+
+| 变量 | 作用 | 主要读取位置 |
+| --- | --- | --- |
+| `HOME` | macOS/Linux 扫描用户应用目录 | `src/main/modules/box-tool/addon/apps/app-scanner.ts` |
+| `LANG` | Linux 应用名称本地化解析 | `src/main/modules/box-tool/addon/apps/linux.ts` |
+| `LOCALAPPDATA` | Windows Everything/App 扫描路径 | `everything-provider.ts`、`app-scanner.ts` |
+| `PROGRAMFILES` | Windows 安装路径扫描 | `everything-provider.ts`、`network-service.ts`、`file-protocol/index.ts` |
+| `PROGRAMFILES(X86)` | Windows x86 安装路径扫描 | 同上 |
+| `SystemRoot` | Windows 系统目录探测 | `network-service.ts`、`file-protocol/index.ts` |
+| `USERPROFILE` | Windows 管理员路径特征判断 | `system/permission-checker.ts` |
+| `WINDIR` | Windows 临时写权限检测路径 | `system/permission-checker.ts` |
+| `TERM` | 托盘“在终端中打开”候选命令 | `modules/tray/tray-menu-builder.ts` |
+| `TERMINAL` | 同上（备用） | `modules/tray/tray-menu-builder.ts` |
+
+### D. 渲染层构建变量（Vite）
+
+| 变量 | 作用 | 主要读取位置 |
+| --- | --- | --- |
+| `import.meta.env.DEV` | 前端 dev 分支（日志/调试 UI） | `renderer/src/utils/dev-log.ts` 等 |
+| `import.meta.env.MODE` | 前端模式判断（如 about 页显示） | `renderer/src/views/base/settings/SettingAbout.vue` |
+
+## 可清理变量候选（先列出，不直接删除）
+
+当前暂无待清理候选（前述高/中/低优先项已全部完成收敛）。
+
+## 已完成清理项
+
+- `trace-warnings`：已从 `src/main/polyfills.ts` 移除运行时 `process.env` 写入（2026-03-23）。
+- `unhandledrejections`：已从 `src/main/polyfills.ts` 移除运行时 `process.env` 写入（2026-03-23）。
+- `VITE_DEV_SERVER_URL`（main 侧 fallback）：已移除 `AppProvider` fallback 读取，统一为 `ELECTRON_RENDERER_URL`（2026-03-23）。
+- `TALEX_WORKFLOW_DEBUG`：已移除 TPEX Provider 固定 SID 调试开关与对应写盘逻辑（2026-03-23）。
+- `TUFF_RELEASE_SIGNATURE_KEY_URL` / `TUFF_RELEASE_SIGNATURE_PUBLIC_KEY_URL`：已从签名公钥 URL 解析中移除兼容别名，统一 `TUFF_UPDATE_*`（2026-03-23）。
+- `TUFF_OMNIPANEL_SMOKE`：已移除启动期 OmniPanel 冒烟探针 env gate 与对应逻辑（2026-03-23）。
+- `USE_LOCAL_NEXUS`：已移除 PluginStoreService 的本地 Nexus env 特判，统一走 `getTpexApiBase()`（2026-03-23）。

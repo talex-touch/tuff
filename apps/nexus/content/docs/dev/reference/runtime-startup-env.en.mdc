@@ -1,0 +1,107 @@
+# Core App Startup and Runtime Env Reference
+
+> Updated: 2026-03-23  
+> Scope: actual `process.env` / `import.meta.env` usage in `apps/core-app/src`
+
+## Startup Incident Summary (Changes 1 + 2)
+
+### 1) Assistant gate (fixed)
+- When `TUFF_ENABLE_ASSISTANT_EXPERIMENT` is off, Assistant is now handled by explicit `shouldSkip`.
+- It no longer goes through optional-failure handling.
+- Result: no misleading warning like `Optional module failed to load: Symbol(Assistant)`.
+
+### 2) dev.source probe + local fallback (fixed)
+- `DevPluginLoader` probes remote `manifest.json` first.
+- If remote probe fails:
+  - fall back to local `manifest.json` + local assets for current runtime only;
+  - runtime overrides `dev.source=false` (not persisted);
+  - records `DEV_SOURCE_FALLBACK_LOCAL` as warning.
+- `REMOTE_MANIFEST_FAILED` remains fatal only when both remote and local fallback fail.
+
+## Plugin Issue Codes (quick lookup)
+
+| Code | Default severity | Meaning |
+| --- | --- | --- |
+| `MISSING_MANIFEST` | error | `manifest.json` missing |
+| `INVALID_MANIFEST_JSON` | error | manifest parse/load failed |
+| `NAME_MISMATCH` | error | manifest name mismatches directory name |
+| `MANIFEST_MISSING_NAME` | error | missing `name` |
+| `MANIFEST_MISSING_VERSION` | warning | missing `version` |
+| `CATEGORY_MISSING` | error | `category` required for current `sdkapi` |
+| `SDKAPI_BLOCKED` | error | `sdkapi` below enforcement threshold |
+| `SDK_VERSION_MISSING` | warning | legacy plugin missing `sdkapi` |
+| `SDK_VERSION_OUTDATED` | warning/error | old `sdkapi` compatibility warning |
+| `PERMISSION_MISSING` | warning | required permissions not granted |
+| `UNKNOWN_PERMISSION_IDS` | warning | unknown permission IDs declared |
+| `INVALID_FEATURE_COMMANDS` | warning | invalid feature.commands shape |
+| `OMNI_TRANSFER_SDK_TOO_LOW` | warning | omniTransfer declared with low sdkapi |
+| `DUPLICATE_PLUGIN_NAME` | error | plugin name collision |
+| `LOADER_FATAL` | error | fatal loader exception |
+| `DEV_MODE_ACTIVE` | warning | running from dev source mode |
+| `DEV_ADDRESS_INVALID` | error | invalid `dev.address` |
+| `DEV_SOURCE_DISABLED_IN_PACKAGED` | warning | `dev.source` auto-disabled in packaged runtime |
+| `DEV_SOURCE_FALLBACK_LOCAL` | warning | remote manifest failed, local fallback activated |
+| `REMOTE_MANIFEST_FAILED` | error | remote failed and local fallback also failed |
+| `DEV_SERVER_DISCONNECTED` | warning | dev server heartbeat disconnected |
+| `LIFECYCLE_SCRIPT_FAILED` | error | prelude lifecycle script failed |
+| `RUNTIME_ERROR` | error | runtime lifecycle execution error |
+| `AUTO_DISABLED_EXCESSIVE_ERRORS` | error | auto-disabled after burst runtime errors |
+| `INVALID_VIEW_PATH` | error | invalid interaction/view path |
+| `PROTOCOL_NOT_ALLOWED` | error | remote http/https view blocked in production |
+| `WIDGET_UNSUPPORTED_TYPE` | error | unsupported widget type |
+| `WIDGET_INVALID_DEPENDENCY` | error | invalid widget dependency |
+| `WIDGET_COMPILE_FAILED` | error | widget compile failed |
+
+## Runtime Env Variables (by category)
+
+### A. Behavior flags / configurable vars
+
+| Variable | Purpose |
+| --- | --- |
+| `ELECTRON_RENDERER_URL` | dev renderer entry URL for main windows and overlays |
+| `NODE_ENV` | dev/test/prod behavior branching |
+| `BUILD_TYPE` | build channel for Sentry and runtime labeling |
+| `TUFF_ENABLE_ASSISTANT_EXPERIMENT` | gates Assistant startup module |
+| `TUFF_ENABLE_RENDERER_OVERRIDE` | enables renderer override package |
+| `TUFF_DISABLE_NATIVE_OCR` | disables local OCR provider |
+| `TUFF_RELEASE_API_URL` | overrides release verification API base |
+| `TUFF_BUILD_SIGNATURE_URL` | overrides build signature URL |
+| `TUFF_BUILD_SIGNATURE_KEY_URL` | overrides build signature key URL |
+| `TUFF_UPDATE_SIGNATURE_KEY_URL` | update signature key URL (preferred) |
+| `TUFF_UPDATE_SIGNATURE_PUBLIC_KEY_URL` | compatibility alias |
+| `TALEX_EVERYTHING_SDK_PATH` | custom Everything SDK addon path |
+| `TALEX_FILE_PROVIDER_EXTRACT_ICONS` | file icon extraction switch |
+
+### B. Internal bootstrap vars
+
+| Variable | Purpose |
+| --- | --- |
+| `APP_VERSION` | runtime app version injection |
+| `DIST` | runtime dist directory |
+| `PUBLIC` | runtime public assets directory |
+| `DEBUG` | debug logger switch from `debug.talex` file |
+| `ELECTRON_DISABLE_SECURITY_WARNINGS` | suppresses Electron security warning logs |
+| `WS_NO_UTF_8_VALIDATE` | disables optional ws native addon |
+| `WS_NO_BUFFER_UTIL` | disables optional ws native addon |
+
+### C. OS-provided env vars
+
+`HOME`, `LANG`, `LOCALAPPDATA`, `PROGRAMFILES`, `PROGRAMFILES(X86)`, `SystemRoot`, `USERPROFILE`, `WINDIR`, `TERM`, `TERMINAL` are consumed as runtime OS path/shell hints.
+
+### D. Renderer build-time vars
+
+`import.meta.env.DEV` and `import.meta.env.MODE` are consumed in renderer for dev-only UI and mode checks.
+
+## Cleanup Candidates (list only, no removal yet)
+
+No pending cleanup candidates right now (all previously listed high/medium/low items have been completed).
+
+## Completed Cleanup
+
+- `trace-warnings`: removed runtime `process.env` assignment in `src/main/polyfills.ts` (2026-03-23).
+- `unhandledrejections`: removed runtime `process.env` assignment in `src/main/polyfills.ts` (2026-03-23).
+- `VITE_DEV_SERVER_URL` fallback in main: removed `AppProvider` fallback path; unified to `ELECTRON_RENDERER_URL` (2026-03-23).
+- `TALEX_WORKFLOW_DEBUG`: removed SID-bound debug toggle and file logging path in TPEX provider (2026-03-23).
+- `TUFF_RELEASE_SIGNATURE_*` aliases: removed legacy alias lookup; normalized to `TUFF_UPDATE_*` (2026-03-23).
+- `TUFF_OMNIPANEL_SMOKE`: removed startup smoke env gate and related probe logic (2026-03-23).
+- `USE_LOCAL_NEXUS`: removed PluginStoreService local Nexus env special-case; normalized to `getTpexApiBase()` (2026-03-23).
