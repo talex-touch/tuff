@@ -2617,6 +2617,7 @@ export class ClipboardModule extends BaseModule {
     } finally {
       const duration = performance.now() - startAt
       const roundedDurationMs = Math.round(duration)
+      const phaseSummaryMap = summarizePhaseDurations(phaseDurations)
       const phaseDiagnostics = buildPhaseDiagnostics(phaseDurations, roundedDurationMs)
       let cooldownMs = 0
       if (duration > CLIPBOARD_COOLDOWN_TRIGGER_MS) {
@@ -2628,6 +2629,17 @@ export class ClipboardModule extends BaseModule {
       } else {
         this.clipboardCheckCooldownUntil = 0
       }
+
+      pollingService.setTaskMeta(CLIPBOARD_POLL_TASK_ID, {
+        durationMs: roundedDurationMs,
+        cooldownMs,
+        slowestPhase: phaseDiagnostics.slowestPhase ?? 'none',
+        slowestPhaseMs: phaseDiagnostics.slowestPhaseMs,
+        phaseAlertLevel: phaseDiagnostics.phaseAlertLevel,
+        phaseAlertCode: phaseDiagnostics.phaseAlertCode,
+        phaseDurations: phaseSummaryMap
+      })
+
       if (duration > CLIPBOARD_SLOW_THRESHOLD_MS) {
         const severity = toPerfSeverity(phaseDiagnostics.phaseAlertLevel)
         if (severity) {
