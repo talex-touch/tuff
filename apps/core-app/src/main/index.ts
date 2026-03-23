@@ -228,6 +228,13 @@ const modulesToLoad = [
 ]
 const optionalModulesToLoad = new Set([trayManagerModule])
 
+function shouldLoadAssistantModule(): boolean {
+  const value = process.env.TUFF_ENABLE_ASSISTANT_EXPERIMENT
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
 function shouldLoadTrayModule(): boolean {
   try {
     const appSettings = getMainConfig(StorageList.APP_SETTING)
@@ -270,6 +277,10 @@ app.whenReady().then(async () => {
           },
           optionalModules: optionalModulesToLoad,
           shouldSkip: (moduleCtor) => {
+            if (moduleCtor === assistantModule && !shouldLoadAssistantModule()) {
+              mainLog.info('Skip Assistant module: TUFF_ENABLE_ASSISTANT_EXPERIMENT disabled')
+              return true
+            }
             if (moduleCtor === trayManagerModule && !shouldLoadTrayModule()) {
               mainLog.info('Skip TrayManager module: experimentalTray disabled')
               return true
