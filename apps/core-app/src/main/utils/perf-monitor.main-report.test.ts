@@ -111,6 +111,7 @@ describe('perf-monitor main report', () => {
     expect(
       captured.topEvents.some((entry: { key: string }) => entry.key.endsWith(':image_pipeline'))
     ).toBe(true)
+    expect(captured.topPhaseCodes.some((entry) => entry.code === 'image_pipeline')).toBe(true)
   })
 
   it('recordMainReport 在无 level 时按阈值判定 severity', () => {

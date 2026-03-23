@@ -179,6 +179,9 @@ export interface FileIndexSettings {
 
 const execFileAsync = promisify(execFile)
 const FILE_PROVIDER_PROGRESS_TASK_ID = 'file-provider.progress-cleanup'
+const FILE_PROVIDER_PROGRESS_MIN_EMIT_INTERVAL_MS = 160
+const FILE_PROVIDER_PROGRESS_MAX_SILENCE_MS = 1000
+const FILE_PROVIDER_PROGRESS_CURRENT_STEP = 25
 const FILE_INDEX_AUTO_TASK_ID = 'file-index.auto-scan'
 const pollingService = PollingService.getInstance()
 
@@ -333,6 +336,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private openersChannelRegistered = false
   private readonly progressStreamContexts = new Set<StreamContext<FileIndexProgressPayload>>()
+  private lastProgressStreamPayload: FileIndexProgressPayload | null = null
+  private lastProgressStreamEmitAt = 0
+  private pendingProgressStreamPayload: FileIndexProgressPayload | null = null
+  private progressStreamFlushTimer: NodeJS.Timeout | null = null
   private launchServicesLoadPromise: Promise<LaunchServicesHandler[]> | null = null
   private readonly openerNegativeCache = new Map<string, number>()
   private readonly openerResolveConcurrency = 2
@@ -1394,13 +1401,103 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   public registerProgressStream(context: StreamContext<FileIndexProgressPayload>): void {
     this.progressStreamContexts.add(context)
+    if (this.lastProgressStreamPayload) {
+      // Emit asynchronously to avoid adding extra sync work to stream-start handshake.
+      setImmediate(() => {
+        if (!context.isCancelled()) {
+          context.emit(this.lastProgressStreamPayload as FileIndexProgressPayload)
+        }
+      })
+    }
     this.ensureProgressCleanupTimer()
   }
 
   private emitProgressStream(payload: FileIndexProgressPayload): void {
     if (this.progressStreamContexts.size === 0) {
+      this.lastProgressStreamPayload = payload
+      this.clearProgressStreamFlushTimer()
+      this.pendingProgressStreamPayload = null
       return
     }
+
+    const now = Date.now()
+    const previous = this.lastProgressStreamEmitAt > 0 ? this.lastProgressStreamPayload : null
+
+    if (this.shouldEmitProgressImmediately(previous, payload, now)) {
+      this.flushProgressStreamPayload(payload, now)
+      return
+    }
+
+    this.pendingProgressStreamPayload = payload
+    this.scheduleProgressStreamFlush(now)
+  }
+
+  private shouldEmitProgressImmediately(
+    previous: FileIndexProgressPayload | null,
+    next: FileIndexProgressPayload,
+    now: number
+  ): boolean {
+    if (!previous) {
+      return true
+    }
+
+    if (next.stage !== previous.stage) {
+      return true
+    }
+
+    if (next.stage === 'completed' || next.stage === 'idle') {
+      return true
+    }
+
+    const elapsed = now - this.lastProgressStreamEmitAt
+    if (elapsed >= FILE_PROVIDER_PROGRESS_MAX_SILENCE_MS) {
+      return true
+    }
+
+    if (elapsed < FILE_PROVIDER_PROGRESS_MIN_EMIT_INTERVAL_MS) {
+      return false
+    }
+
+    if (next.progress !== previous.progress) {
+      return true
+    }
+    if (Math.abs(next.current - previous.current) >= FILE_PROVIDER_PROGRESS_CURRENT_STEP) {
+      return true
+    }
+    if (next.total !== previous.total) {
+      return true
+    }
+    return false
+  }
+
+  private scheduleProgressStreamFlush(now: number): void {
+    if (this.progressStreamFlushTimer) {
+      return
+    }
+
+    const elapsed = now - this.lastProgressStreamEmitAt
+    const delayMs = Math.max(0, FILE_PROVIDER_PROGRESS_MIN_EMIT_INTERVAL_MS - elapsed)
+    this.progressStreamFlushTimer = setTimeout(() => {
+      this.progressStreamFlushTimer = null
+      const pending = this.pendingProgressStreamPayload
+      this.pendingProgressStreamPayload = null
+      if (!pending) {
+        return
+      }
+      this.flushProgressStreamPayload(pending, Date.now())
+    }, delayMs)
+  }
+
+  private clearProgressStreamFlushTimer(): void {
+    if (this.progressStreamFlushTimer) {
+      clearTimeout(this.progressStreamFlushTimer)
+      this.progressStreamFlushTimer = null
+    }
+  }
+
+  private flushProgressStreamPayload(payload: FileIndexProgressPayload, emittedAt: number): void {
+    this.lastProgressStreamPayload = payload
+    this.lastProgressStreamEmitAt = emittedAt
 
     for (const stream of Array.from(this.progressStreamContexts)) {
       if (stream.isCancelled()) {
@@ -1411,6 +1508,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (this.progressStreamContexts.size === 0) {
+      this.clearProgressStreamFlushTimer()
+      this.pendingProgressStreamPayload = null
       this.clearProgressCleanupTimer()
     }
   }
@@ -1440,6 +1539,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private clearProgressCleanupTimer(): void {
     pollingService.unregister(FILE_PROVIDER_PROGRESS_TASK_ID)
+    this.clearProgressStreamFlushTimer()
+    this.pendingProgressStreamPayload = null
   }
 
   private async withOpenerResolveSlot<T>(task: () => Promise<T>): Promise<T> {
