@@ -155,6 +155,20 @@ function includesAny(formats: string[], candidates: Set<string>): boolean {
 }
 
 type ClipboardPhaseDurations = Record<string, number>
+type ClipboardPhaseAlertLevel = 'normal' | 'low' | 'medium' | 'high' | 'critical'
+
+interface ClipboardPhaseDiagnostics {
+  slowestPhase: string | null
+  slowestPhaseMs: number
+  phaseMs: string
+  phaseAlertLevel: ClipboardPhaseAlertLevel
+  phaseAlertCode: string
+  phaseAdvice: string
+  phaseTop2: string | null
+  phaseTop2Ms: number
+  phaseTop3: string | null
+  phaseTop3Ms: number
+}
 
 function trackPhase<T>(target: ClipboardPhaseDurations, phase: string, operation: () => T): T {
   const startedAt = performance.now()
@@ -200,6 +214,119 @@ function getSlowestPhase(
   }
   const [name, durationMs] = entries.sort((a, b) => b[1] - a[1])[0]
   return { name, durationMs: Math.round(durationMs) }
+}
+
+function resolvePhaseAlertCode(slowestPhase: string | null): string {
+  if (!slowestPhase) {
+    return 'none'
+  }
+  if (slowestPhase === 'gate.waitForIdle') {
+    return 'gate_wait'
+  }
+  if (
+    slowestPhase === 'clipboard.readImage' ||
+    slowestPhase.startsWith('image.') ||
+    slowestPhase === 'eventLoop.yieldBeforeImageEncode'
+  ) {
+    return 'image_pipeline'
+  }
+  if (slowestPhase.startsWith('db.')) {
+    return 'db_persist'
+  }
+  if (slowestPhase === 'activeApp.snapshot') {
+    return 'active_app'
+  }
+  if (
+    slowestPhase === 'clipboard.readText' ||
+    slowestPhase === 'clipboard.readHTML' ||
+    slowestPhase === 'clipboard.readFiles'
+  ) {
+    return 'clipboard_read'
+  }
+  if (slowestPhase.startsWith('signature.') || slowestPhase.startsWith('diff.')) {
+    return 'signature_diff'
+  }
+  if (slowestPhase.startsWith('meta.')) {
+    return 'meta_serialize'
+  }
+  return 'mixed'
+}
+
+function resolvePhaseAdvice(phaseAlertCode: string): string {
+  switch (phaseAlertCode) {
+    case 'gate_wait':
+      return 'check appTaskGate backlog and startup task overlap'
+    case 'image_pipeline':
+      return 'reduce image encode work in poll path or defer heavy image handling'
+    case 'db_persist':
+      return 'inspect dbWrite queue depth and sqlite contention'
+    case 'active_app':
+      return 'prefer includeIcon=false and increase active-app cache ttl for poll path'
+    case 'clipboard_read':
+      return 'avoid unnecessary clipboard readHTML/readImage in fast path'
+    case 'signature_diff':
+      return 'optimize signature/diff computation and avoid repeated sorting'
+    case 'meta_serialize':
+      return 'reduce metadata payload size and serialization frequency'
+    default:
+      return 'inspect phaseMs top entries and correlate with event loop lag timeline'
+  }
+}
+
+function resolvePhaseAlertLevel(
+  slowestPhase: string | null,
+  slowestPhaseMs: number,
+  levelBaseDurationMs: number
+): ClipboardPhaseAlertLevel {
+  if (!slowestPhase) {
+    return 'normal'
+  }
+
+  if (slowestPhase === 'gate.waitForIdle') {
+    if (slowestPhaseMs >= 3000) return 'critical'
+    if (slowestPhaseMs >= 1800) return 'high'
+    if (slowestPhaseMs >= 900) return 'medium'
+    if (slowestPhaseMs >= 400) return 'low'
+    return 'normal'
+  }
+
+  const compositeDuration = Math.max(slowestPhaseMs, levelBaseDurationMs)
+  if (compositeDuration >= 2200) return 'critical'
+  if (compositeDuration >= 1200) return 'high'
+  if (compositeDuration >= 500) return 'medium'
+  if (compositeDuration >= 200) return 'low'
+  return 'normal'
+}
+
+function buildPhaseDiagnostics(
+  durations: ClipboardPhaseDurations,
+  levelBaseDurationMs: number
+): ClipboardPhaseDiagnostics {
+  const sortedEntries = Object.entries(durations)
+    .filter(([, value]) => value >= 1)
+    .sort((a, b) => b[1] - a[1])
+
+  const slowest = getSlowestPhase(durations)
+  const slowestPhase = slowest?.name ?? null
+  const slowestPhaseMs = slowest?.durationMs ?? 0
+  const phaseAlertCode = resolvePhaseAlertCode(slowestPhase)
+  const phaseAlertLevel = resolvePhaseAlertLevel(slowestPhase, slowestPhaseMs, levelBaseDurationMs)
+  const phaseSummary = summarizePhaseDurations(durations)
+  const second = sortedEntries[1]
+  const third = sortedEntries[2]
+
+  return {
+    slowestPhase,
+    slowestPhaseMs,
+    phaseMs: JSON.stringify(phaseSummary),
+    phaseAlertLevel,
+    phaseAlertCode,
+    phaseAdvice: resolvePhaseAdvice(phaseAlertCode),
+    phaseTop2: second?.[0] ?? null,
+    phaseTop2Ms: second ? Math.round(second[1]) : 0,
+    phaseTop3: third?.[0] ?? null,
+    phaseTop3Ms: third ? Math.round(third[1]) : 0
+  }
 }
 
 export interface IClipboardItem {
@@ -1051,17 +1178,13 @@ export class ClipboardModule extends BaseModule {
       const duration = performance.now() - startAt
       const gateWaitMs = Math.round(phaseDurations['gate.waitForIdle'] ?? 0)
       const effectiveWorkMs = Math.max(0, Math.round(duration) - gateWaitMs)
-      const slowestPhase = getSlowestPhase(phaseDurations)
-      const phaseSummary = summarizePhaseDurations(phaseDurations)
-      const phaseSummaryText = JSON.stringify(phaseSummary)
+      const phaseDiagnostics = buildPhaseDiagnostics(phaseDurations, effectiveWorkMs)
       if (duration > 200) {
         clipboardLog.warn('Clipboard cache hydrate slow', {
           meta: {
             durationMs: Math.round(duration),
             effectiveWorkMs,
-            slowestPhase: slowestPhase?.name ?? null,
-            slowestPhaseMs: slowestPhase?.durationMs ?? 0,
-            phaseMs: phaseSummaryText
+            ...phaseDiagnostics
           }
         })
       }
@@ -2467,9 +2590,8 @@ export class ClipboardModule extends BaseModule {
       }
     } finally {
       const duration = performance.now() - startAt
-      const slowestPhase = getSlowestPhase(phaseDurations)
-      const phaseSummary = summarizePhaseDurations(phaseDurations)
-      const phaseSummaryText = JSON.stringify(phaseSummary)
+      const roundedDurationMs = Math.round(duration)
+      const phaseDiagnostics = buildPhaseDiagnostics(phaseDurations, roundedDurationMs)
       let cooldownMs = 0
       if (duration > CLIPBOARD_COOLDOWN_TRIGGER_MS) {
         cooldownMs = Math.min(
@@ -2483,11 +2605,9 @@ export class ClipboardModule extends BaseModule {
       if (duration > CLIPBOARD_SLOW_THRESHOLD_MS) {
         clipboardLog.warn('Clipboard check slow', {
           meta: {
-            durationMs: Math.round(duration),
+            durationMs: roundedDurationMs,
             cooldownMs,
-            slowestPhase: slowestPhase?.name ?? null,
-            slowestPhaseMs: slowestPhase?.durationMs ?? 0,
-            phaseMs: phaseSummaryText
+            ...phaseDiagnostics
           }
         })
       }
