@@ -139,6 +139,13 @@ interface ClipboardWatcherModule {
   startWatch?: (callback: () => void) => ClipboardWatcherHandle
 }
 
+interface ClipboardStageBJob {
+  generation: number
+  clipboardId: number
+  item: IClipboardItem
+  formats: string[]
+}
+
 function isOnBatteryPowerSafe(): boolean {
   try {
     if (typeof powerMonitor.isOnBatteryPower === 'function') {
@@ -409,6 +416,7 @@ const CLIPBOARD_IMAGE_ORPHAN_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000
 const CLIPBOARD_IMAGE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000
 const CLIPBOARD_META_QUEUE_LIMIT = 6
 const CLIPBOARD_META_LOG_THROTTLE_MS = 5_000
+const CLIPBOARD_STAGE_B_LOG_THROTTLE_MS = 5_000
 const clipboardLegacyGetLatestEvent = defineRawEvent<void, LegacyClipboardItem | null>(
   'clipboard:get-latest'
 )
@@ -835,6 +843,10 @@ export class ClipboardModule extends BaseModule {
   private clipboardCheckCooldownUntil = 0
   private clipboardCheckInFlight = false
   private clipboardCheckPending = false
+  private clipboardStageBJob: ClipboardStageBJob | null = null
+  private clipboardStageBInFlight = false
+  private clipboardStageBGeneration = 0
+  private lastStageBLogAt = 0
   private clipboardNativeWatcher: ClipboardWatcherHandle | null = null
   private clipboardNativeWatchInitTried = false
   private lastMetaQueuePressureLogAt = 0
@@ -969,7 +981,17 @@ export class ClipboardModule extends BaseModule {
           void this.runClipboardMonitor()
         })
       },
-      { interval: intervalMs, unit: 'milliseconds', initialDelayMs }
+      {
+        interval: intervalMs,
+        unit: 'milliseconds',
+        initialDelayMs,
+        lane: 'realtime',
+        backpressure: 'latest_wins',
+        dedupeKey: CLIPBOARD_POLL_TASK_ID,
+        maxInFlight: 1,
+        timeoutMs: 5000,
+        jitterMs: 50
+      }
     )
     pollingService.start()
   }
@@ -1869,7 +1891,16 @@ export class ClipboardModule extends BaseModule {
             clipboardLog.warn('Clipboard temp image cleanup failed', { error })
           })
         },
-        { interval: CLIPBOARD_IMAGE_ORPHAN_CLEANUP_INTERVAL_MS, unit: 'milliseconds' }
+        {
+          interval: CLIPBOARD_IMAGE_ORPHAN_CLEANUP_INTERVAL_MS,
+          unit: 'milliseconds',
+          lane: 'maintenance',
+          backpressure: 'coalesce',
+          dedupeKey: CLIPBOARD_IMAGE_ORPHAN_CLEANUP_TASK_ID,
+          maxInFlight: 1,
+          timeoutMs: 60_000,
+          jitterMs: 2000
+        }
       )
       pollingService.start()
     }
@@ -2052,6 +2083,134 @@ export class ClipboardModule extends BaseModule {
       meta: nextMeta,
       metadata
     }
+  }
+
+  private shouldLogStageB(now: number): boolean {
+    if (now - this.lastStageBLogAt < CLIPBOARD_STAGE_B_LOG_THROTTLE_MS) return false
+    this.lastStageBLogAt = now
+    return true
+  }
+
+  private enqueueClipboardStageB(job: Omit<ClipboardStageBJob, 'generation'>): void {
+    this.clipboardStageBGeneration += 1
+    this.clipboardStageBJob = {
+      ...job,
+      generation: this.clipboardStageBGeneration
+    }
+
+    if (this.clipboardStageBInFlight) {
+      const now = Date.now()
+      if (this.shouldLogStageB(now)) {
+        clipboardLog.debug('Clipboard stage-b coalesced by latest generation', {
+          meta: { generation: this.clipboardStageBGeneration, clipboardId: job.clipboardId }
+        })
+      }
+      return
+    }
+
+    setImmediate(() => {
+      void this.runClipboardStageBLoop()
+    })
+  }
+
+  private async runClipboardStageBLoop(): Promise<void> {
+    if (this.clipboardStageBInFlight) return
+    this.clipboardStageBInFlight = true
+    try {
+      while (this.clipboardStageBJob && !this.isDestroyed) {
+        const job = this.clipboardStageBJob
+        this.clipboardStageBJob = null
+        await this.processClipboardStageBJob(job)
+      }
+    } finally {
+      this.clipboardStageBInFlight = false
+    }
+  }
+
+  private async processClipboardStageBJob(job: ClipboardStageBJob): Promise<void> {
+    const latestGeneration = this.clipboardStageBGeneration
+    if (job.generation < latestGeneration) {
+      return
+    }
+
+    if (!job.item.id) return
+
+    try {
+      await ocrService.enqueueFromClipboard({
+        clipboardId: job.item.id,
+        item: job.item,
+        formats: job.formats
+      })
+    } catch (error) {
+      clipboardLog.warn('Failed to enqueue clipboard OCR', { error })
+    }
+
+    const activeApp = await this.getActiveAppSnapshot()
+    if (!activeApp) {
+      return
+    }
+
+    if (job.generation < this.clipboardStageBGeneration) {
+      return
+    }
+
+    const sourceApp =
+      activeApp.bundleId ||
+      activeApp.identifier ||
+      activeApp.displayName ||
+      job.item.sourceApp ||
+      null
+    const sourceMeta = {
+      bundleId: activeApp.bundleId ?? null,
+      displayName: activeApp.displayName ?? null,
+      processId: activeApp.processId ?? null,
+      executablePath: activeApp.executablePath ?? null,
+      icon: activeApp.icon ?? null
+    }
+    const patch: Record<string, unknown> = {
+      source: sourceMeta
+    }
+    for (const [key, value] of Object.entries(sourceMeta)) {
+      if (value !== null && value !== undefined) {
+        patch[`source_${key}`] = value
+      }
+    }
+
+    if (this.db) {
+      try {
+        const current = this.memoryCache.find((entry) => entry.id === job.clipboardId)
+        const nextMetadata = this.mergeMetadataString(current?.metadata, patch)
+        await this.withDbWrite(
+          'clipboard.stage-b.source',
+          () =>
+            this.db!.update(clipboardHistory)
+              .set({
+                sourceApp,
+                metadata: nextMetadata
+              })
+              .where(eq(clipboardHistory.id, job.clipboardId)),
+          { droppable: true }
+        )
+      } catch (error) {
+        clipboardLog.debug('Clipboard stage-b source update skipped', { error })
+      }
+    }
+
+    this.handleMetaPatch(job.clipboardId, patch)
+    const index = this.memoryCache.findIndex((entry) => entry.id === job.clipboardId)
+    if (index >= 0) {
+      this.memoryCache[index] = {
+        ...this.memoryCache[index],
+        sourceApp
+      }
+    }
+
+    this.persistMetaEntriesSafely(
+      job.clipboardId,
+      patch,
+      Object.entries(patch).map(([key, value]) => ({ key, value })),
+      { droppable: true }
+    )
   }
 
   private async withDbWrite<T>(
@@ -2490,29 +2649,6 @@ export class ClipboardModule extends BaseModule {
         }
       }
 
-      const activeApp = await trackPhaseAsync(phaseDurations, 'activeApp.snapshot', async () => {
-        return await this.getActiveAppSnapshot()
-      })
-      if (activeApp) {
-        item.sourceApp = activeApp.bundleId || activeApp.identifier || activeApp.displayName || null
-
-        const activeAppMeta = {
-          bundleId: activeApp.bundleId ?? null,
-          displayName: activeApp.displayName ?? null,
-          processId: activeApp.processId ?? null,
-          executablePath: activeApp.executablePath ?? null,
-          icon: activeApp.icon ?? null
-        }
-
-        for (const [key, value] of Object.entries(activeAppMeta)) {
-          if (value !== null && value !== undefined) {
-            metaEntries.push({ key: `source_${key}`, value })
-          }
-        }
-
-        metaEntries.push({ key: 'source', value: activeAppMeta })
-      }
-
       const metaObject: Record<string, unknown> = {}
       for (const { key, value } of metaEntries) {
         if (value === undefined) continue
@@ -2589,16 +2725,10 @@ export class ClipboardModule extends BaseModule {
             droppable: true
           })
         }
-        setImmediate(() => {
-          ocrService
-            .enqueueFromClipboard({
-              clipboardId: persisted.id!,
-              item: persisted,
-              formats
-            })
-            .catch((error) => {
-              clipboardLog.warn('Failed to enqueue clipboard OCR', { error })
-            })
+        this.enqueueClipboardStageB({
+          clipboardId: persisted.id!,
+          item: persisted,
+          formats
         })
       }
 
@@ -3366,6 +3496,9 @@ export class ClipboardModule extends BaseModule {
     this.appSettingSnapshot = null
     this.clipboardCheckInFlight = false
     this.clipboardCheckPending = false
+    this.clipboardStageBJob = null
+    this.clipboardStageBInFlight = false
+    this.clipboardStageBGeneration = 0
     this.clipboardCheckCooldownUntil = 0
     this.clipboardNativeWatchInitTried = false
     this.coreBoxVisible = false
