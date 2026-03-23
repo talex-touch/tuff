@@ -276,6 +276,7 @@ export class PerfMonitor {
   private severeLagWindowHits: number[] = []
   private lastSevereLagBurstAt = 0
   private severeLagBurstListeners = new Set<SevereLagBurstListener>()
+  private loopMonitorTimer: NodeJS.Timeout | null = null
 
   /** Timestamp (Date.now) of the most recent system resume, or 0 if none. */
   private systemResumedAt = 0
@@ -307,45 +308,46 @@ export class PerfMonitor {
   start(): void {
     this.registerPowerMonitorListeners()
 
-    if (!pollingService.isRegistered(PERF_LOOP_TASK_ID)) {
+    if (!this.loopMonitorTimer) {
       this.lastLoopTick = performance.now()
-      pollingService.register(
-        PERF_LOOP_TASK_ID,
-        () => {
-          const now = performance.now()
-          const expected = this.lastLoopTick + 100
-          const lag = Math.max(0, now - expected)
-          this.lastLoopTick = now
+      this.loopMonitorTimer = setInterval(() => {
+        const now = performance.now()
+        const expected = this.lastLoopTick + 100
+        const lag = Math.max(0, now - expected)
+        this.lastLoopTick = now
 
-          if (this.isLagFromSystemSleep(lag)) {
-            const durationSec = Math.round(lag / 1000)
-            const nowAt = Date.now()
-            const shouldLogSleep = this.shouldLog(
-              'event_loop.sleep_skip',
-              LOOP_SLEEP_SKIP_LOG_THROTTLE_MS,
-              nowAt
+        if (this.isLagFromSystemSleep(lag)) {
+          const durationSec = Math.round(lag / 1000)
+          const nowAt = Date.now()
+          const shouldLogSleep = this.shouldLog(
+            'event_loop.sleep_skip',
+            LOOP_SLEEP_SKIP_LOG_THROTTLE_MS,
+            nowAt
+          )
+          if (shouldLogSleep) {
+            loopPerfLog.info(
+              `System sleep/suspend detected (${durationSec}s) — skipping event loop lag report`
             )
-            if (shouldLogSleep) {
-              loopPerfLog.info(
-                `System sleep/suspend detected (${durationSec}s) — skipping event loop lag report`
-              )
-            }
-            return
           }
+          return
+        }
 
-          if (lag >= LOOP_LAG_WARN_MS) {
-            const severity = lag >= LOOP_LAG_ERROR_MS ? 'error' : 'warn'
-            this.recordEventLoopLag(lag, severity)
-          }
-        },
-        { interval: 100, unit: 'milliseconds' }
-      )
+        if (lag >= LOOP_LAG_WARN_MS) {
+          const severity = lag >= LOOP_LAG_ERROR_MS ? 'error' : 'warn'
+          this.recordEventLoopLag(lag, severity)
+        }
+      }, 100)
     }
 
     if (!pollingService.isRegistered(PERF_SUMMARY_TASK_ID)) {
       pollingService.register(PERF_SUMMARY_TASK_ID, () => this.flushSummary(), {
         interval: SUMMARY_INTERVAL_MS,
-        unit: 'milliseconds'
+        unit: 'milliseconds',
+        lane: 'maintenance',
+        backpressure: 'coalesce',
+        dedupeKey: PERF_SUMMARY_TASK_ID,
+        maxInFlight: 1,
+        timeoutMs: 5000
       })
     }
 
@@ -364,7 +366,16 @@ export class PerfMonitor {
             )
           }
         },
-        { interval: 30_000, unit: 'milliseconds', initialDelayMs: 15_000 }
+        {
+          interval: 30_000,
+          unit: 'milliseconds',
+          initialDelayMs: 15_000,
+          lane: 'maintenance',
+          backpressure: 'latest_wins',
+          dedupeKey: PERF_HEAP_TASK_ID,
+          maxInFlight: 1,
+          timeoutMs: 5000
+        }
       )
     }
 
@@ -375,6 +386,10 @@ export class PerfMonitor {
     pollingService.unregister(PERF_LOOP_TASK_ID)
     pollingService.unregister(PERF_SUMMARY_TASK_ID)
     pollingService.unregister(PERF_HEAP_TASK_ID)
+    if (this.loopMonitorTimer) {
+      clearInterval(this.loopMonitorTimer)
+      this.loopMonitorTimer = null
+    }
     for (const dispose of this.powerListeners) dispose()
     this.powerListeners = []
     this.severeLagWindowHits = []
