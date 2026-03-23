@@ -89,6 +89,7 @@ export interface IInnerItemMeta {
   name?: string
   data?: string
   value: string
+  attachmentId?: string
   extra?: any
 }
 
@@ -154,6 +155,9 @@ export interface IChatConversation extends IChatPersist {
 export interface IChatBody {
   chat_id: string
   index: number
+  fromSeq?: number
+  follow?: boolean
+  initialTitle?: string
   model: QuotaModel | string
   modelId?: string
   routeComboId?: string
@@ -161,6 +165,14 @@ export interface IChatBody {
   thinking?: boolean
   memoryEnabled?: boolean
   pilotMode?: boolean
+  attachments?: Array<{
+    id: string
+    type: 'image' | 'file'
+    ref: string
+    name?: string
+    mimeType?: string
+    previewUrl?: string
+  }>
   messages: IChatItem[]
   temperature: number
   templateId: number

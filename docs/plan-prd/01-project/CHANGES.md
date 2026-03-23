@@ -13,6 +13,22 @@
 
 ## 2026-03-23
 
+### fix(pilot): 会话 ensure 幂等化，避免运行中状态被覆盖导致刷新续流中断
+
+- 问题：
+  - `POST /api/chat/sessions` 在 `sessionId` 已存在时仍走 `createSession + completeSession('idle')`，会把运行中的会话状态误写为 `idle`。
+  - legacy 页面刷新后依赖 `run_state=executing/planning` 触发 `fromSeq+follow`，状态被覆盖后会出现“对话还在跑但无法自动续流”。
+- 变更：
+  - `apps/pilot/server/api/chat/sessions/index.post.ts`
+    - 新增已存在会话短路：若命中同 `sessionId`，不再改写 runtime status；
+    - 仅在会话不存在时才创建并初始化 `idle`；
+    - 继续保留“首句标题补写 + quota_history/pilot_quota_sessions 占位”行为。
+  - `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+    - 去掉一次重复 `ensureRemoteSessionInitialized` 调用，减少并发写状态窗口。
+  - `apps/pilot/app/pages/index.vue`
+    - 路由 `id` 同步改为先 `history.replaceState` 再 `router.replace`，减少发送后立刻刷新导致 query 未落地的概率；
+    - 自动续流前若本地无消息，先 `syncHistory` 拉一次最新快照再决定是否 follow。
+
 ### refactor(core-app): 高频异步化链路收口（Polling lanes / Sentry outbox / Clipboard Stage-B / Perf 探针解耦）
 
 - 背景：
@@ -49,6 +65,16 @@
 - 价值：
   - 降低 `Clipboard` 主模块复杂度，便于后续独立调参与扩展 phase code 规则。
   - 保持现有日志字段与告警等级输出一致，不改变运行时对外行为。
+
+### ref(core-app/file-provider): progress stream 节流策略独立模块化
+
+- 变更：
+  - 新增 `file-provider-progress-stream-service.ts`，统一维护 progress stream 发送判定与 flush delay 计算。
+  - `file-provider.ts` 改为调用策略函数，移除内联节流规则分支。
+  - 新增 `file-provider-progress-stream-service.test.ts`，覆盖阶段切换、静默兜底、最小间隔节流、步进触发与 delay 计算。
+- 价值：
+  - 减少 `FileProvider` 主类分支复杂度，便于后续单点调参和回归验证。
+  - 保证“阶段变化优先 + latest-wins 节流”行为可测试、可演进。
 
 ### fix(core-app/startup): 拆分模块加载与渲染器就绪计时口径，修正启动统计误读
 
