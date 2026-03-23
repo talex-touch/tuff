@@ -86,6 +86,16 @@
   - 将“策略参数”与“运行时采集逻辑”解耦，后续调参无需修改核心监控流程。
   - 降低 perf-monitor 文件体积与认知负担，避免阈值散落导致漂移。
 
+### ref(core-app/perf): perf summary 聚合器独立模块化
+
+- 变更：
+  - 新增 `apps/core-app/src/main/utils/perf-monitor-aggregator.ts`，承载 `kinds/topSlow/topEvents/topPhaseCodes` 的聚合计算。
+  - `apps/core-app/src/main/utils/perf-monitor.ts` 的 `flushSummary()` 改为调用聚合器，主类聚焦采集与上报编排。
+  - 新增 `apps/core-app/src/main/utils/perf-monitor-aggregator.test.ts`，覆盖 key 生成、phase code 聚合优先级与排序行为。
+- 价值：
+  - 进一步降低 `perf-monitor` 复杂度，缩小变更影响面。
+  - 让 summary 规则具备独立可测性，后续扩展指标时回归风险更低。
+
 ### fix(core-app/startup): 拆分模块加载与渲染器就绪计时口径，修正启动统计误读
 
 - 问题：
