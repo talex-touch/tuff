@@ -76,6 +76,16 @@
   - 减少 `FileProvider` 主类分支复杂度，便于后续单点调参和回归验证。
   - 保证“阶段变化优先 + latest-wins 节流”行为可测试、可演进。
 
+### ref(core-app/perf): perf-monitor 阈值与节流配置模块化
+
+- 变更：
+  - 新增 `apps/core-app/src/main/utils/perf-monitor-config.ts`，集中维护 IPC/UI/event-loop 阈值、severe lag 窗口参数、summary 与日志节流参数。
+  - `apps/core-app/src/main/utils/perf-monitor.ts` 移除内联阈值常量，改为统一从配置模块导入。
+  - 新增 `apps/core-app/src/main/utils/perf-monitor-config.test.ts`，覆盖 UI 专用阈值与默认回退阈值。
+- 价值：
+  - 将“策略参数”与“运行时采集逻辑”解耦，后续调参无需修改核心监控流程。
+  - 降低 perf-monitor 文件体积与认知负担，避免阈值散落导致漂移。
+
 ### fix(core-app/startup): 拆分模块加载与渲染器就绪计时口径，修正启动统计误读
 
 - 问题：
