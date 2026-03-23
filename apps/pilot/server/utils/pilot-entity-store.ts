@@ -180,6 +180,12 @@ function buildMigrationDetails(details: Record<string, unknown>): string {
   return safeJsonStringify(details)
 }
 
+function isSqliteMasterMissingOnPostgres(error: unknown): boolean {
+  const code = String((error as any)?.code || '').trim()
+  const message = String((error as any)?.message || '').toLowerCase()
+  return code === '42P01' && message.includes('sqlite_master')
+}
+
 async function upsertMigrationMarker(
   event: H3Event,
   status: 'done' | 'failed',
@@ -206,13 +212,28 @@ async function upsertMigrationMarker(
 
 async function hasLegacyTable(event: H3Event): Promise<boolean> {
   const db = requirePilotDatabase(event)
-  const row = await db.prepare(`
-    SELECT name
-    FROM sqlite_master
-    WHERE type = 'table' AND name = ?1
-    LIMIT 1
-  `).bind(LEGACY_ENTITY_TABLE).first<{ name: string }>()
-  return !!row?.name
+  try {
+    const row = await db.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table' AND name = ?1
+      LIMIT 1
+    `).bind(LEGACY_ENTITY_TABLE).first<{ name: string }>()
+    return !!row?.name
+  }
+  catch (error) {
+    if (!isSqliteMasterMissingOnPostgres(error)) {
+      throw error
+    }
+
+    const row = await db.prepare(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = current_schema() AND table_name = ?1
+      LIMIT 1
+    `).bind(LEGACY_ENTITY_TABLE).first<{ table_name: string }>()
+    return !!row?.table_name
+  }
 }
 
 async function getLegacyDomainCounts(event: H3Event): Promise<LegacyDomainCount[]> {
