@@ -545,6 +545,7 @@ function isLikelyLocalPath(value: string): boolean {
 class ClipboardHelper {
   private lastText: string = ''
   public lastFormats: string[] = []
+  public lastFormatsKey: string = ''
   public lastChangeHash: string = ''
   private lastImageHash: string = ''
   private lastFiles: string[] = []
@@ -565,7 +566,9 @@ class ClipboardHelper {
     } catch {
       this.lastFormats = []
     }
-    const formatsKey = this.lastFormats.slice().sort().join(',')
+    this.lastFormats = [...this.lastFormats].sort()
+    this.lastFormatsKey = this.lastFormats.join(',')
+    const formatsKey = this.lastFormatsKey
     const textSignature = this.getTextQuickSignature(this.lastText)
 
     let filesSignature = '0:0'
@@ -2439,8 +2442,11 @@ export class ClipboardModule extends BaseModule {
       }
 
       // Fast-path change detection: Skip processing if nothing changed
+      const sortedFormats = trackPhase(phaseDurations, 'signature.sortFormats', () => {
+        return [...formats].sort()
+      })
       const formatsKey = trackPhase(phaseDurations, 'signature.formatsKey', () => {
-        return formats.slice().sort().join(',')
+        return sortedFormats.join(',')
       })
       const hasFileFormats = includesAny(formats, FILE_URL_FORMATS)
       const hasImageFormats = includesAny(formats, IMAGE_FORMATS)
@@ -2496,15 +2502,14 @@ export class ClipboardModule extends BaseModule {
         return `${formatsKey}|t:${quickTextSignature}|f:${quickFilesSignature}|i:${quickImageSignature}`
       })
 
-      const lastFormatsKey = trackPhase(phaseDurations, 'signature.lastFormatsKey', () => {
-        return helper.lastFormats.slice().sort().join(',')
-      })
+      const lastFormatsKey = helper.lastFormatsKey
       const sameFormats = helper.lastFormats.length > 0 && lastFormatsKey === formatsKey
       if (sameFormats && helper.lastChangeHash === quickHash) {
         return
       }
 
-      helper.lastFormats = [...formats]
+      helper.lastFormats = sortedFormats
+      helper.lastFormatsKey = formatsKey
       helper.lastChangeHash = quickHash
 
       const metaEntries: ClipboardMetaEntry[] = [{ key: 'formats', value: formats }]
