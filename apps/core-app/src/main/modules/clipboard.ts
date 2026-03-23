@@ -2285,6 +2285,7 @@ export class ClipboardModule extends BaseModule {
       })
       const hasFileFormats = includesAny(formats, FILE_URL_FORMATS)
       const hasImageFormats = includesAny(formats, IMAGE_FORMATS)
+      const hasTextFormats = includesAny(formats, TEXT_FORMATS)
       const hasHtmlFormats = includesAny(formats, HTML_FORMATS)
       let prefetchedText: string | undefined
       let prefetchedFiles: string[] | undefined
@@ -2317,9 +2318,11 @@ export class ClipboardModule extends BaseModule {
         return prefetchedImage
       }
 
-      const quickTextSignature = trackPhase(phaseDurations, 'signature.textQuick', () =>
-        helper.getTextQuickSignature(readPrefetchedText())
-      )
+      const quickTextSignature = hasTextFormats
+        ? trackPhase(phaseDurations, 'signature.textQuick', () =>
+            helper.getTextQuickSignature(readPrefetchedText())
+          )
+        : '0:0'
       const quickFilesSignature = hasFileFormats
         ? trackPhase(phaseDurations, 'signature.filesQuick', () =>
             helper.getFilesQuickSignature(readPrefetchedFiles())
@@ -2451,7 +2454,7 @@ export class ClipboardModule extends BaseModule {
         }
       }
 
-      if (!item && includesAny(formats, TEXT_FORMATS)) {
+      if (!item && hasTextFormats) {
         const text = readPrefetchedText()
         if (trackPhase(phaseDurations, 'diff.text', () => helper.didTextChange(text))) {
           const html = hasHtmlFormats
