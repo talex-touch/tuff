@@ -6,6 +6,31 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { ipcMain, powerMonitor } from 'electron'
 import { getSentryService } from '../modules/sentry/sentry-service'
 import { createLogger, formatDuration } from './logger'
+import {
+  IPC_ERROR_MS,
+  IPC_LOG_THROTTLE_MS,
+  IPC_WARN_MS,
+  LOOP_DIAGNOSTIC_ERROR_THROTTLE_MS,
+  LOOP_DIAGNOSTIC_WARN_THROTTLE_MS,
+  LOOP_LAG_ERROR_MS,
+  LOOP_LAG_WARN_MS,
+  LOOP_LOG_THROTTLE_MS,
+  LOOP_SLEEP_SKIP_LOG_THROTTLE_MS,
+  MAIN_ERROR_MS,
+  MAIN_WARN_MS,
+  MAX_INCIDENTS,
+  PERF_SUMMARY_LOG_SLOW_MS,
+  PERF_SUMMARY_LOG_TOP_LIMIT,
+  PERF_SUMMARY_TOP_SLOW_MIN_MS,
+  RENDERER_LOG_THROTTLE_MS,
+  resolveUiThreshold,
+  SEVERE_LAG_BURST_COOLDOWN_MS,
+  SEVERE_LAG_BURST_THRESHOLD_MS,
+  SEVERE_LAG_BURST_TRIGGER_COUNT,
+  SEVERE_LAG_BURST_WINDOW_MS,
+  SUMMARY_INTERVAL_MS,
+  SYSTEM_SLEEP_THRESHOLD_MS
+} from './perf-monitor-config'
 import { getPerfContextSnapshot } from './perf-context'
 import { appendWorkflowDebugLog } from './workflow-debug'
 import { getHeapStatistics } from 'node:v8'
@@ -96,60 +121,9 @@ const loopPerfLog = perfLog.child('EventLoop')
 const powerMonitorAvailable = typeof powerMonitor?.on === 'function'
 
 const PERF_REPORT_CHANNEL = 'touch:perf-report'
-
-const IPC_WARN_MS = 200
-const IPC_ERROR_MS = 1_000
-const MAIN_WARN_MS = 200
-const MAIN_ERROR_MS = 1_000
-
-const UI_DEFAULT_WARN_MS = 250
-const UI_DEFAULT_ERROR_MS = 1_500
-
-function resolveUiThreshold(kind: RendererPerfReport['kind']): { warn: number; error: number } {
-  switch (kind) {
-    case 'ui.component.load':
-      return { warn: 150, error: 1_000 }
-    case 'ui.route.navigate':
-      return { warn: 200, error: 1_000 }
-    case 'ui.route.transition':
-      return { warn: 300, error: 1_200 }
-    case 'ui.route.render':
-      return { warn: 350, error: 1_500 }
-    case 'ui.details.fetch':
-      return { warn: 500, error: 2_000 }
-    case 'ui.details.render':
-      return { warn: 200, error: 1_200 }
-    case 'ui.details.total':
-      return { warn: 700, error: 2_000 }
-    default:
-      return { warn: UI_DEFAULT_WARN_MS, error: UI_DEFAULT_ERROR_MS }
-  }
-}
-
-const LOOP_LAG_WARN_MS = 200
-const LOOP_LAG_ERROR_MS = 2_000
-/** Lags above this threshold are almost certainly caused by system sleep/suspend, not real event loop blocking. */
-const SYSTEM_SLEEP_THRESHOLD_MS = 30_000
-const SEVERE_LAG_BURST_THRESHOLD_MS = 2_000
-const SEVERE_LAG_BURST_WINDOW_MS = 30_000
-const SEVERE_LAG_BURST_TRIGGER_COUNT = 2
-const SEVERE_LAG_BURST_COOLDOWN_MS = 120_000
-
-const SUMMARY_INTERVAL_MS = 60_000
-const MAX_INCIDENTS = 80
 const PERF_LOOP_TASK_ID = 'perf-monitor.event-loop'
 const PERF_SUMMARY_TASK_ID = 'perf-monitor.summary'
 const PERF_HEAP_TASK_ID = 'perf-monitor.heap'
-
-const IPC_LOG_THROTTLE_MS = 5_000
-const RENDERER_LOG_THROTTLE_MS = 5_000
-const LOOP_LOG_THROTTLE_MS = 3_000
-const LOOP_SLEEP_SKIP_LOG_THROTTLE_MS = 60_000
-const LOOP_DIAGNOSTIC_WARN_THROTTLE_MS = 120_000
-const LOOP_DIAGNOSTIC_ERROR_THROTTLE_MS = 30_000
-const PERF_SUMMARY_LOG_SLOW_MS = 2_000
-const PERF_SUMMARY_TOP_SLOW_MIN_MS = 500
-const PERF_SUMMARY_LOG_TOP_LIMIT = 3
 
 const pollingService = PollingService.getInstance()
 
