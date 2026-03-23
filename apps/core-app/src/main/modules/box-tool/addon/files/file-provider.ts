@@ -104,6 +104,10 @@ import {
   type PersistEntry
 } from '../../search-engine/workers/search-index-worker-client'
 import {
+  getProgressStreamFlushDelayMs,
+  shouldEmitProgressStreamImmediately
+} from './services/file-provider-progress-stream-service'
+import {
   getWatchDepthForPath as resolveWatchDepthForPath,
   normalizeWatchPath
 } from './services/file-provider-path-service'
@@ -179,9 +183,6 @@ export interface FileIndexSettings {
 
 const execFileAsync = promisify(execFile)
 const FILE_PROVIDER_PROGRESS_TASK_ID = 'file-provider.progress-cleanup'
-const FILE_PROVIDER_PROGRESS_MIN_EMIT_INTERVAL_MS = 160
-const FILE_PROVIDER_PROGRESS_MAX_SILENCE_MS = 1000
-const FILE_PROVIDER_PROGRESS_CURRENT_STEP = 25
 const FILE_INDEX_AUTO_TASK_ID = 'file-index.auto-scan'
 const pollingService = PollingService.getInstance()
 
@@ -1423,7 +1424,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const now = Date.now()
     const previous = this.lastProgressStreamEmitAt > 0 ? this.lastProgressStreamPayload : null
 
-    if (this.shouldEmitProgressImmediately(previous, payload, now)) {
+    if (
+      shouldEmitProgressStreamImmediately({
+        previous,
+        next: payload,
+        now,
+        lastEmitAt: this.lastProgressStreamEmitAt
+      })
+    ) {
       this.flushProgressStreamPayload(payload, now)
       return
     }
@@ -1432,51 +1440,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.scheduleProgressStreamFlush(now)
   }
 
-  private shouldEmitProgressImmediately(
-    previous: FileIndexProgressPayload | null,
-    next: FileIndexProgressPayload,
-    now: number
-  ): boolean {
-    if (!previous) {
-      return true
-    }
-
-    if (next.stage !== previous.stage) {
-      return true
-    }
-
-    if (next.stage === 'completed' || next.stage === 'idle') {
-      return true
-    }
-
-    const elapsed = now - this.lastProgressStreamEmitAt
-    if (elapsed >= FILE_PROVIDER_PROGRESS_MAX_SILENCE_MS) {
-      return true
-    }
-
-    if (elapsed < FILE_PROVIDER_PROGRESS_MIN_EMIT_INTERVAL_MS) {
-      return false
-    }
-
-    if (next.progress !== previous.progress) {
-      return true
-    }
-    if (Math.abs(next.current - previous.current) >= FILE_PROVIDER_PROGRESS_CURRENT_STEP) {
-      return true
-    }
-    if (next.total !== previous.total) {
-      return true
-    }
-    return false
-  }
-
   private scheduleProgressStreamFlush(now: number): void {
     if (this.progressStreamFlushTimer) {
       return
     }
 
-    const elapsed = now - this.lastProgressStreamEmitAt
-    const delayMs = Math.max(0, FILE_PROVIDER_PROGRESS_MIN_EMIT_INTERVAL_MS - elapsed)
+    const delayMs = getProgressStreamFlushDelayMs(now, this.lastProgressStreamEmitAt)
     this.progressStreamFlushTimer = setTimeout(() => {
       this.progressStreamFlushTimer = null
       const pending = this.pendingProgressStreamPayload
