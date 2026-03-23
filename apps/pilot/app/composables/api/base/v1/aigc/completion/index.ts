@@ -1,8 +1,8 @@
 import type { IInnerItemType } from './entity'
 import type { IChatBody, IChatConversation, IChatInnerItem, IChatItem, ICompletionHandler, IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
-import { serializePilotExecutorMessages } from '@talex-touch/tuff-intelligence/pilot-conversation'
 import { endHttp } from '~/composables/api/axios'
 import { IChatItemStatus, IChatRole, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
+import { resolveLegacyUiStreamInput } from './legacy-stream-input'
 
 function parseJsonSafe<T>(value: string): T | null {
   try {
@@ -291,6 +291,58 @@ function normalizeRunEventText(value: unknown): string {
   return String(value || '').trim()
 }
 
+function toConversationInitialTitle(value: unknown): string {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (!text) {
+    return ''
+  }
+  return text.slice(0, 24)
+}
+
+function extractLatestUserText(messages: IChatItem[]): string {
+  const latestUser = [...messages]
+    .reverse()
+    .find(item => String(item?.role || '').trim().toLowerCase() === IChatRole.USER)
+  if (!latestUser || !Array.isArray(latestUser.content) || latestUser.content.length <= 0) {
+    return ''
+  }
+
+  const pageIndex = Number.isFinite(Number(latestUser.page))
+    ? Math.max(0, Math.floor(Number(latestUser.page)))
+    : 0
+  const inner = latestUser.content[pageIndex] || latestUser.content[0]
+  if (!inner || !Array.isArray(inner.value)) {
+    return ''
+  }
+
+  const text = inner.value
+    .filter(block => block && typeof block === 'object')
+    .map((block) => {
+      const row = block as IInnerItemMeta
+      if (row.type !== 'text' && row.type !== 'markdown') {
+        return ''
+      }
+      return String(row.value || '')
+    })
+    .join(' ')
+
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+async function ensureRemoteSessionInitialized(sessionId: string, initialTitle: string): Promise<void> {
+  const payload: Record<string, unknown> = {
+    sessionId,
+  }
+  if (initialTitle) {
+    payload.title = initialTitle
+  }
+  await endHttp.$http({
+    url: 'chat/sessions',
+    method: 'POST',
+    data: payload,
+  })
+}
+
 function toFiniteSeq(value: unknown): number {
   const parsed = Number(value)
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0
@@ -432,91 +484,50 @@ async function handleExecutorResult(
   }
 }
 
-interface LegacyUiStreamInputPayload {
-  message: string
-}
+async function uploadLegacyDataUrlAttachment(
+  sessionId: string,
+  payload: {
+    type: 'image' | 'file'
+    name: string
+    mimeType: string
+    dataUrl: string
+  },
+): Promise<NonNullable<IChatBody['attachments']>[number]> {
+  const response = await endHttp.$http({
+    url: `chat/sessions/${encodeURIComponent(sessionId)}/uploads`,
+    method: 'POST',
+    data: {
+      name: payload.name,
+      mimeType: payload.mimeType,
+      contentBase64: payload.dataUrl,
+    },
+  }) as Record<string, unknown>
 
-function normalizeLegacyText(value: unknown): string {
-  return String(value || '').trim()
-}
-
-function resolveLegacyUiStreamInput(messages: unknown): LegacyUiStreamInputPayload {
-  if (!Array.isArray(messages)) {
-    return {
-      message: '',
-    }
+  const attachment = response.attachment && typeof response.attachment === 'object'
+    ? response.attachment as Record<string, unknown>
+    : null
+  const attachmentId = String(attachment?.id || '').trim()
+  if (!attachmentId) {
+    throw new Error('历史附件转换失败：未返回有效 attachmentId。')
   }
 
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const item = messages[index]
-    if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      continue
-    }
-    const row = item as Record<string, unknown>
-    const role = normalizeLegacyText(row.role).toLowerCase()
-    if (role !== 'user') {
-      continue
-    }
-
-    const contentBlocks = Array.isArray(row.content) ? row.content : []
-    const textParts: string[] = []
-    const attachmentLines: string[] = []
-
-    for (const block of contentBlocks) {
-      if (!block || typeof block !== 'object' || Array.isArray(block)) {
-        continue
-      }
-      const blockRow = block as Record<string, unknown>
-      const type = normalizeLegacyText(blockRow.type).toLowerCase()
-      const value = normalizeLegacyText(blockRow.value)
-      if (!value) {
-        continue
-      }
-
-      if (type === 'image' || type === 'file') {
-        const name = normalizeLegacyText(blockRow.name) || 'unnamed'
-        const mimeType = normalizeLegacyText(blockRow.data)
-        attachmentLines.push(`- [${type}] ${name}${mimeType ? ` (${mimeType})` : ''}: ${value}`)
-        continue
-      }
-
-      if (type === 'card' || type === 'tool' || type === 'error') {
-        continue
-      }
-
-      textParts.push(value)
-    }
-
-    const text = textParts.join('\n').trim()
-    if (attachmentLines.length > 0) {
-      const attachmentContext = ['[Attachment references]', ...attachmentLines].join('\n')
-      return {
-        message: text ? `${text}\n\n${attachmentContext}` : attachmentContext,
-      }
-    }
-
-    return {
-      message: text,
-    }
-  }
+  const typeRaw = String(attachment?.type || attachment?.kind || '').trim().toLowerCase()
+  const type: 'image' | 'file' = typeRaw === 'image' ? 'image' : payload.type
+  const previewUrl = String(attachment?.previewUrl || attachment?.modelUrl || attachment?.ref || '').trim()
+  const mimeType = String(attachment?.mimeType || payload.mimeType || '').trim() || payload.mimeType
+  const name = String(attachment?.name || payload.name || '').trim() || payload.name
 
   return {
-    message: '',
+    id: attachmentId,
+    type,
+    ref: previewUrl || `attachment://${attachmentId}`,
+    name,
+    mimeType,
+    previewUrl: previewUrl || undefined,
   }
 }
 
 async function useCompletionExecutor(body: IChatBody, callback: (data: any) => void) {
-  const convertedMsgList = serializePilotExecutorMessages(body.messages || [], {
-    assistantAvailableStatus: IChatItemStatus.AVAILABLE,
-    skipUnavailableAssistant: true,
-    keepNonTextWithoutValue: true,
-  })
-  if (convertedMsgList.length <= 0) {
-    throw new Error('No valid conversation messages to execute')
-  }
-
-  body.messages = convertedMsgList as any
-
   const { promise, resolve } = withResolvers()
 
   function _callback() {
@@ -594,16 +605,42 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
         throw new Error('chat_id is required')
       }
 
-      const latestTurn = resolveLegacyUiStreamInput(convertedMsgList)
-      if (!latestTurn.message) {
-        throw new Error('latest user turn is empty')
-      }
+      const requestedFromSeq = Number(body?.fromSeq)
+      const fromSeq = Number.isFinite(requestedFromSeq) && requestedFromSeq > 0
+        ? Math.max(1, Math.floor(requestedFromSeq))
+        : 0
+      const followOnly = fromSeq > 0 && body?.follow === true
+      const fallbackInitialTitle = toConversationInitialTitle(body.initialTitle || extractLatestUserText(body.messages || []))
+      await ensureRemoteSessionInitialized(sessionId, fallbackInitialTitle)
 
-      const res: ReadableStream = await endHttp.$http({
-        url: `chat/sessions/${encodeURIComponent(sessionId)}/stream`,
-        method: 'POST',
-        data: {
+      let requestPayload: Record<string, unknown>
+      if (followOnly) {
+        requestPayload = {
+          fromSeq,
+          follow: true,
+          modelId: String(body.modelId || body.model || '').trim() || undefined,
+          routeComboId: String(body.routeComboId || '').trim() || undefined,
+          internet: body.internet !== false,
+          thinking: body.thinking !== false,
+          memoryEnabled: body.memoryEnabled !== false,
+          pilotMode: body.pilotMode === true,
+          metadata: {
+            source: 'legacy-ui-completion-follow',
+            index: body.index,
+          },
+        }
+      }
+      else {
+        const latestTurn = await resolveLegacyUiStreamInput(sessionId, body.messages || [], {
+          uploadDataUrlAttachment: uploadLegacyDataUrlAttachment,
+        })
+        if (!latestTurn.message && latestTurn.attachments.length <= 0) {
+          throw new Error('latest user turn is empty')
+        }
+
+        requestPayload = {
           message: latestTurn.message,
+          attachments: latestTurn.attachments.length > 0 ? latestTurn.attachments : undefined,
           modelId: String(body.modelId || body.model || '').trim() || undefined,
           routeComboId: String(body.routeComboId || '').trim() || undefined,
           internet: body.internet !== false,
@@ -614,7 +651,13 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
             source: 'legacy-ui-completion',
             index: body.index,
           },
-        },
+        }
+      }
+
+      const res: ReadableStream = await endHttp.$http({
+        url: `chat/sessions/${encodeURIComponent(sessionId)}/stream`,
+        method: 'POST',
+        data: requestPayload,
         headers: {
           Accept: 'text/event-stream',
         },
@@ -848,7 +891,10 @@ export const $completion = {
 
         return titleOptions
       },
-      send: (options?: Partial<ChatCompletionDto>): AbortController => {
+      send: (options?: Partial<ChatCompletionDto> & {
+        fromSeq?: number
+        follow?: boolean
+      }): AbortController => {
         innerMsg.status = IChatItemStatus.WAITING
 
         const signal = new AbortController()
@@ -1438,7 +1484,7 @@ export const $completion = {
             ...options || {},
             temperature: innerMsg.meta.temperature || 0.5,
             templateId: conversation.template?.id ?? -1,
-            messages: JSON.parse(JSON.stringify(conversation.messages)),
+            messages: conversation.messages,
             index: index === -1 ? 0 : index,
             chat_id: conversation.id,
             model: innerMsg.model,
