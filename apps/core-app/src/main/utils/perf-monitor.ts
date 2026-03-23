@@ -32,6 +32,15 @@ export interface RendererPerfReport {
   meta?: Record<string, unknown>
 }
 
+export interface MainPerfReport {
+  kind: string
+  eventName?: string
+  durationMs: number
+  at?: number
+  level?: 'warn' | 'error'
+  meta?: Record<string, unknown>
+}
+
 type IpcDirection = 'renderer->main' | 'main->renderer'
 
 interface PerfIncident {
@@ -89,6 +98,8 @@ const PERF_REPORT_CHANNEL = 'touch:perf-report'
 
 const IPC_WARN_MS = 200
 const IPC_ERROR_MS = 1_000
+const MAIN_WARN_MS = 200
+const MAIN_ERROR_MS = 1_000
 
 const UI_DEFAULT_WARN_MS = 250
 const UI_DEFAULT_ERROR_MS = 1_500
@@ -589,6 +600,42 @@ export class PerfMonitor {
         }
       })
     }
+  }
+
+  recordMainReport(report: MainPerfReport): void {
+    if (!report || typeof report !== 'object') {
+      return
+    }
+
+    const at = Number.isFinite(report.at) ? Number(report.at) : Date.now()
+    const durationMs = Number.isFinite(report.durationMs) ? Number(report.durationMs) : 0
+    const explicitLevel = report.level === 'warn' || report.level === 'error' ? report.level : null
+    const severity =
+      explicitLevel ??
+      (durationMs >= MAIN_ERROR_MS ? 'error' : durationMs >= MAIN_WARN_MS ? 'warn' : null)
+
+    const kind = report.kind ? `main.${report.kind}` : 'main.unknown'
+    const eventName =
+      typeof report.eventName === 'string' && report.eventName.trim().length > 0
+        ? report.eventName.trim()
+        : undefined
+
+    const key = `main:${kind}:${eventName ?? 'none'}`
+    this.updateAggregate(key, at, durationMs, severity)
+
+    if (!severity) {
+      return
+    }
+
+    const incident: PerfIncident = {
+      kind,
+      severity,
+      at,
+      eventName,
+      durationMs,
+      meta: report.meta
+    }
+    this.pushIncident(incident)
   }
 
   private evaluateSevereLagBurst(lagMs: number, now: number): void {

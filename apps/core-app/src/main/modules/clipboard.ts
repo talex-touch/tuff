@@ -51,6 +51,7 @@ import { appTaskGate } from '../service/app-task-gate'
 import { tempFileService } from '../service/temp-file.service'
 import { createLogger } from '../utils/logger'
 import { enterPerfContext } from '../utils/perf-context'
+import { perfMonitor } from '../utils/perf-monitor'
 import { BaseModule } from './abstract-base-module'
 import { coreBoxManager } from './box-tool/core-box/manager'
 import { windowManager } from './box-tool/core-box/window'
@@ -327,6 +328,16 @@ function buildPhaseDiagnostics(
     phaseTop3: third?.[0] ?? null,
     phaseTop3Ms: third ? Math.round(third[1]) : 0
   }
+}
+
+function toPerfSeverity(level: ClipboardPhaseAlertLevel): 'warn' | 'error' | null {
+  if (level === 'high' || level === 'critical') {
+    return 'error'
+  }
+  if (level === 'low' || level === 'medium') {
+    return 'warn'
+  }
+  return null
 }
 
 export interface IClipboardItem {
@@ -1180,6 +1191,21 @@ export class ClipboardModule extends BaseModule {
       const effectiveWorkMs = Math.max(0, Math.round(duration) - gateWaitMs)
       const phaseDiagnostics = buildPhaseDiagnostics(phaseDurations, effectiveWorkMs)
       if (duration > 200) {
+        const severity = toPerfSeverity(phaseDiagnostics.phaseAlertLevel)
+        if (severity) {
+          perfMonitor.recordMainReport({
+            kind: 'clipboard.cache.hydrate.slow',
+            eventName: phaseDiagnostics.phaseAlertCode,
+            durationMs: Math.round(duration),
+            level: severity,
+            meta: {
+              effectiveWorkMs,
+              phaseAlertLevel: phaseDiagnostics.phaseAlertLevel,
+              slowestPhase: phaseDiagnostics.slowestPhase ?? 'none',
+              slowestPhaseMs: phaseDiagnostics.slowestPhaseMs
+            }
+          })
+        }
         clipboardLog.warn('Clipboard cache hydrate slow', {
           meta: {
             durationMs: Math.round(duration),
@@ -2603,6 +2629,21 @@ export class ClipboardModule extends BaseModule {
         this.clipboardCheckCooldownUntil = 0
       }
       if (duration > CLIPBOARD_SLOW_THRESHOLD_MS) {
+        const severity = toPerfSeverity(phaseDiagnostics.phaseAlertLevel)
+        if (severity) {
+          perfMonitor.recordMainReport({
+            kind: 'clipboard.check.slow',
+            eventName: phaseDiagnostics.phaseAlertCode,
+            durationMs: roundedDurationMs,
+            level: severity,
+            meta: {
+              cooldownMs,
+              phaseAlertLevel: phaseDiagnostics.phaseAlertLevel,
+              slowestPhase: phaseDiagnostics.slowestPhase ?? 'none',
+              slowestPhaseMs: phaseDiagnostics.slowestPhaseMs
+            }
+          })
+        }
         clipboardLog.warn('Clipboard check slow', {
           meta: {
             durationMs: roundedDurationMs,
