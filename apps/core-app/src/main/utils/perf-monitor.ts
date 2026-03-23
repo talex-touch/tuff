@@ -62,6 +62,7 @@ export interface PerfSummary {
   kinds: string
   topSlow: Array<{ name: string; durationMs: number }>
   topEvents: Array<{ key: string; count: number }>
+  topPhaseCodes: Array<{ code: string; count: number; maxDurationMs: number }>
 }
 
 interface PerfAggregate {
@@ -939,6 +940,44 @@ export class PerfMonitor {
       .slice(0, 6)
       .map(([key, count]) => ({ key, count }))
 
+    const phaseCodeStats = new Map<string, { count: number; maxDurationMs: number }>()
+    for (const incident of snapshot) {
+      const metaPhaseCode =
+        incident.meta && typeof incident.meta.phaseAlertCode === 'string'
+          ? incident.meta.phaseAlertCode
+          : undefined
+      const derivedPhaseCode =
+        incident.kind.startsWith('main.clipboard.') &&
+        typeof incident.eventName === 'string' &&
+        incident.eventName.trim().length > 0
+          ? incident.eventName.trim()
+          : undefined
+
+      const phaseCode = metaPhaseCode ?? derivedPhaseCode
+      if (!phaseCode) {
+        continue
+      }
+
+      const entry = phaseCodeStats.get(phaseCode) ?? { count: 0, maxDurationMs: 0 }
+      entry.count += 1
+      entry.maxDurationMs = Math.max(entry.maxDurationMs, Math.round(incident.durationMs ?? 0))
+      phaseCodeStats.set(phaseCode, entry)
+    }
+
+    const topPhaseCodes = Array.from(phaseCodeStats.entries())
+      .sort((a, b) => {
+        if (b[1].count !== a[1].count) {
+          return b[1].count - a[1].count
+        }
+        return b[1].maxDurationMs - a[1].maxDurationMs
+      })
+      .slice(0, 6)
+      .map(([code, value]) => ({
+        code,
+        count: value.count,
+        maxDurationMs: value.maxDurationMs
+      }))
+
     perfSummaryReporter?.({
       at: Date.now(),
       total: snapshot.length,
@@ -948,7 +987,8 @@ export class PerfMonitor {
         name: incident.eventName ?? incident.kind,
         durationMs: Math.round(incident.durationMs ?? 0)
       })),
-      topEvents
+      topEvents,
+      topPhaseCodes
     })
 
     // Reset snapshot window while keeping aggregates.

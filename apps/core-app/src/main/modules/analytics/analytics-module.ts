@@ -558,7 +558,8 @@ export class AnalyticsModule extends BaseModule {
         total: summary.total,
         errorCount: summary.errorCount,
         topEvents: summary.topEvents,
-        topSlow: summary.topSlow
+        topSlow: summary.topSlow,
+        topPhaseCodes: summary.topPhaseCodes
       }
     })
   }
