@@ -7,8 +7,18 @@ const { appMock } = vi.hoisted(() => ({
   appMock: { isPackaged: false }
 }))
 
+const { networkRequestMock } = vi.hoisted(() => ({
+  networkRequestMock: vi.fn()
+}))
+
 vi.mock('electron', () => ({
   app: appMock
+}))
+
+vi.mock('../network', () => ({
+  getNetworkService: () => ({
+    request: networkRequestMock
+  })
 }))
 
 vi.mock('../../core/tuff-icon', () => ({
@@ -32,7 +42,11 @@ vi.mock('./plugin', () => ({
     pluginPath: string
     issues: Array<Record<string, unknown>>
     features: unknown[]
-    logger: { error: ReturnType<typeof vi.fn>; debug: ReturnType<typeof vi.fn> }
+    logger: {
+      error: ReturnType<typeof vi.fn>
+      debug: ReturnType<typeof vi.fn>
+      warn: ReturnType<typeof vi.fn>
+    }
 
     constructor(
       name: string,
@@ -52,7 +66,7 @@ vi.mock('./plugin', () => ({
       this.pluginPath = pluginPath
       this.issues = []
       this.features = []
-      this.logger = { error: vi.fn(), debug: vi.fn() }
+      this.logger = { error: vi.fn(), debug: vi.fn(), warn: vi.fn() }
     }
 
     addFeature() {
@@ -80,6 +94,7 @@ describe('createPluginLoader', () => {
 
   beforeEach(() => {
     appMock.isPackaged = false
+    networkRequestMock.mockReset()
   })
 
   afterEach(async () => {
@@ -145,5 +160,79 @@ describe('createPluginLoader', () => {
 
     const loader = createPluginLoader('touch-translation', pluginPath)
     expect(loader.constructor.name).toBe('LocalPluginLoader')
+  })
+
+  it('keeps dev-source behavior when remote manifest fetch succeeds', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'test',
+      icon: { type: 'emoji', value: 'x' },
+      dev: { enable: true, source: true, address: 'http://127.0.0.1:3733/' }
+    })
+    createdPaths.push(pluginPath)
+    const loader = createPluginLoader('touch-translation', pluginPath)
+
+    networkRequestMock
+      .mockResolvedValueOnce({
+        data: {
+          name: 'touch-translation',
+          version: '1.0.0',
+          description: 'remote',
+          icon: { type: 'emoji', value: 'x' },
+          dev: { enable: true, source: true, address: 'http://127.0.0.1:3733/' }
+        }
+      })
+      .mockRejectedValueOnce(new Error('README missing'))
+
+    const plugin = await loader.load()
+    const issueCodes = plugin.issues.map((issue) => issue.code)
+
+    expect(issueCodes).toContain('DEV_MODE_ACTIVE')
+    expect(issueCodes).not.toContain('DEV_SOURCE_FALLBACK_LOCAL')
+    expect(issueCodes).not.toContain('REMOTE_MANIFEST_FAILED')
+    expect(plugin.dev).toMatchObject({ enable: true, source: true })
+  })
+
+  it('falls back to local assets when remote manifest fetch fails', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'local',
+      icon: { type: 'emoji', value: 'x' },
+      dev: { enable: true, source: true, address: 'http://127.0.0.1:3733/' }
+    })
+    createdPaths.push(pluginPath)
+    const loader = createPluginLoader('touch-translation', pluginPath)
+
+    networkRequestMock.mockRejectedValueOnce(new Error('connect refused'))
+
+    const plugin = await loader.load()
+    const issueCodes = plugin.issues.map((issue) => issue.code)
+
+    expect(issueCodes).toContain('DEV_SOURCE_FALLBACK_LOCAL')
+    expect(issueCodes).not.toContain('REMOTE_MANIFEST_FAILED')
+    expect(plugin.dev).toMatchObject({ enable: true, source: false })
+  })
+
+  it('keeps REMOTE_MANIFEST_FAILED when remote and local manifest both fail', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'local',
+      icon: { type: 'emoji', value: 'x' },
+      dev: { enable: true, source: true, address: 'http://127.0.0.1:3733/' }
+    })
+    createdPaths.push(pluginPath)
+    const loader = createPluginLoader('touch-translation', pluginPath)
+
+    await fs.writeFile(path.join(pluginPath, 'manifest.json'), '{ invalid-json', 'utf-8')
+    networkRequestMock.mockRejectedValueOnce(new Error('connect refused'))
+
+    const plugin = await loader.load()
+    const issueCodes = plugin.issues.map((issue) => issue.code)
+
+    expect(issueCodes).toContain('REMOTE_MANIFEST_FAILED')
+    expect(issueCodes).not.toContain('DEV_SOURCE_FALLBACK_LOCAL')
   })
 })

@@ -426,6 +426,73 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
     }
   }
 
+  private loadLocalManifest(): PluginManifest {
+    const manifestPath = path.resolve(this.pluginPath, 'manifest.json')
+    return fse.readJSONSync(manifestPath) as PluginManifest
+  }
+
+  private loadLocalReadme(): void {
+    const readmePath = path.resolve(this.pluginPath, 'README.md')
+    this.touchPlugin.readme = fse.existsSync(readmePath)
+      ? fse.readFileSync(readmePath, 'utf-8')
+      : ''
+  }
+
+  private async fallbackToLocalAssets(
+    remoteManifestUrl: string,
+    remoteError: Error
+  ): Promise<boolean> {
+    try {
+      const localPluginInfo = this.loadLocalManifest()
+      const localDevConfig: IPluginDev = {
+        enable: this.devConfig.enable,
+        source: false,
+        address: this.devConfig.address
+      }
+
+      await this.loadCommon({
+        ...localPluginInfo,
+        dev: localDevConfig
+      })
+      this.loadLocalReadme()
+
+      this.touchPlugin.issues.push({
+        type: 'warning',
+        message: `Failed to fetch remote manifest from ${remoteManifestUrl}: ${remoteError.message}. Falling back to local plugin assets for this session.`,
+        source: 'dev-mode',
+        code: 'DEV_SOURCE_FALLBACK_LOCAL',
+        suggestion:
+          'Ensure the dev server is running at the correct address if you want hot reload from dev source.',
+        meta: {
+          url: remoteManifestUrl,
+          error: remoteError.message
+        },
+        timestamp: Date.now()
+      })
+      this.touchPlugin.logger.debug(
+        `[Dev] Remote manifest unavailable, fell back to local assets: ${remoteError.message}`
+      )
+      return true
+    } catch (localError) {
+      const localManifestError =
+        localError instanceof Error ? localError.message : String(localError)
+      this.touchPlugin.issues.push({
+        type: 'error',
+        message: `Failed to fetch remote manifest from ${remoteManifestUrl}: ${remoteError.message}. In dev-source mode, this is a fatal error.`,
+        source: 'dev-mode',
+        code: 'REMOTE_MANIFEST_FAILED',
+        suggestion:
+          'Ensure the dev server is running at the correct address and the manifest.json is accessible.',
+        meta: {
+          url: remoteManifestUrl,
+          localManifestError
+        },
+        timestamp: Date.now()
+      })
+      return false
+    }
+  }
+
   async load(): Promise<TouchPlugin> {
     let pluginInfo: PluginManifest
     const remoteManifestUrl = this.resolveDevResourceUrl('manifest.json')
@@ -470,16 +537,10 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
       })
     } catch (error) {
       const err = error as Error
-      this.touchPlugin.issues.push({
-        type: 'error',
-        message: `Failed to fetch remote manifest from ${remoteManifestUrl}: ${err.message}. In dev-source mode, this is a fatal error.`,
-        source: 'dev-mode',
-        code: 'REMOTE_MANIFEST_FAILED',
-        suggestion:
-          'Ensure the dev server is running at the correct address and the manifest.json is accessible.',
-        meta: { url: remoteManifestUrl },
-        timestamp: Date.now()
-      })
+      const fallbackSucceeded = await this.fallbackToLocalAssets(remoteManifestUrl, err)
+      if (fallbackSucceeded) {
+        return this.touchPlugin
+      }
       return this.touchPlugin
     }
 

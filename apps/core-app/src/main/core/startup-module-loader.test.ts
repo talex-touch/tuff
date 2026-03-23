@@ -62,6 +62,26 @@ describe('startup-module-loader', () => {
     expect(onLoaded).toHaveBeenCalledTimes(1)
   })
 
+  it('does not report optional load failure when module is skipped', async () => {
+    const optional = { name: 'skip-optional' }
+    const required = { name: 'required' }
+    const modules = [optional, required]
+    const loadModule = vi.fn(async () => true)
+    const onOptionalModuleLoadFailed = vi.fn()
+
+    const metrics = await loadStartupModules({
+      modules,
+      loadModule,
+      optionalModules: new Set([optional]),
+      shouldSkip: (module) => module === optional,
+      onOptionalModuleLoadFailed
+    })
+
+    expect(loadModule).toHaveBeenCalledTimes(1)
+    expect(onOptionalModuleLoadFailed).not.toHaveBeenCalled()
+    expect(metrics).toEqual([{ name: 'required', loadTime: expect.any(Number), order: 1 }])
+  })
+
   it('resolves module names from symbol and fallback index', () => {
     expect(resolveStartupModuleName({ name: Symbol.for('mod') }, 0)).toContain('mod')
     expect(resolveStartupModuleName({}, 3)).toBe('Module3')

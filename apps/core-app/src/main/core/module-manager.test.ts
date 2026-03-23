@@ -124,6 +124,70 @@ describe('ModuleManager lifecycle isolation', () => {
     expect(calls).toEqual(['created', 'init', 'start', 'stop', 'destroy'])
   })
 
+  it('awaits async onInit and onDestroy from BaseModule wrappers', async () => {
+    const manager = createManager()
+    const key = Symbol.for('test-module-async-wrapper') as ModuleKey
+    const calls: string[] = []
+
+    let resolveInit: (() => void) | null = null
+    let resolveDestroy: (() => void) | null = null
+    const initReady = new Promise<void>((resolve) => {
+      resolveInit = resolve
+    })
+    const destroyReady = new Promise<void>((resolve) => {
+      resolveDestroy = resolve
+    })
+
+    class AsyncLifecycleModule extends BaseModule<TalexEvents> {
+      static readonly key = key
+      constructor(ctx: ModuleCreateContext<TalexEvents>) {
+        super(ctx.moduleKey, { create: false })
+      }
+
+      async onInit(): Promise<void> {
+        calls.push('init:start')
+        await initReady
+        calls.push('init:end')
+      }
+
+      async onDestroy(): Promise<void> {
+        calls.push('destroy:start')
+        await destroyReady
+        calls.push('destroy:end')
+      }
+    }
+
+    let loadResolved = false
+    const loadPromise = manager.loadModule(AsyncLifecycleModule).then((result) => {
+      loadResolved = true
+      return result
+    })
+
+    await Promise.resolve()
+    expect(loadResolved).toBe(false)
+    expect(calls).toEqual(['init:start'])
+
+    expect(resolveInit).not.toBeNull()
+    resolveInit!()
+    await expect(loadPromise).resolves.toBe(true)
+    expect(calls).toEqual(['init:start', 'init:end'])
+
+    let unloadResolved = false
+    const unloadPromise = Promise.resolve(manager.unloadModule(key)).then((result) => {
+      unloadResolved = true
+      return result
+    })
+
+    await Promise.resolve()
+    expect(unloadResolved).toBe(false)
+    expect(calls).toEqual(['init:start', 'init:end', 'destroy:start'])
+
+    expect(resolveDestroy).not.toBeNull()
+    resolveDestroy!()
+    await expect(unloadPromise).resolves.toBe(true)
+    expect(calls).toEqual(['init:start', 'init:end', 'destroy:start', 'destroy:end'])
+  })
+
   it('unloads even when stop fails', async () => {
     const manager = createManager()
     const calls: string[] = []
