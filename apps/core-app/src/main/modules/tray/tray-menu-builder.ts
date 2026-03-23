@@ -227,7 +227,6 @@ export class TrayMenuBuilder {
         label: t('tray.quit'),
         click: () => {
           app.quit()
-          process.exit(0)
         }
       }
     ]

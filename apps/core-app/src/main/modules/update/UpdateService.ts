@@ -27,6 +27,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import { app, Notification } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { TalexEvents, touchEventBus, UpdateAvailableEvent } from '../../core/eventbus/touch-event'
+import { resolveRuntimeChannel } from '../../core/deprecated-global-app'
 import { downloadChunks, downloadTasks } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
@@ -39,6 +40,7 @@ import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
 import { getNetworkService } from '../network'
 import { UpdateRecordStatus, UpdateRepository } from './update-repository'
+import { UpdateActionController } from './services/update-action-controller'
 import { UpdateSystem } from './update-system'
 import type { DownloadCenterModule } from '../download/download-center'
 
@@ -139,6 +141,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private macUpdateDownloadedVersion: string | null = null
   private macUpdateReadyNotifiedVersion: string | null = null
   private macAutoUpdaterConfigMissingLogged = false
+  private actionController: UpdateActionController | null = null
   private readonly messageStore = getAnalyticsMessageStore()
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
     [AppPreviewChannel.RELEASE]: 0,
@@ -225,9 +228,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       updateLog.warn('Failed to initialize UpdateRepository', { error })
     }
 
-    const channel =
-      (ctx.app as { channel?: unknown } | null | undefined)?.channel ??
-      ($app as { channel?: unknown } | null | undefined)?.channel
+    const channel = resolveRuntimeChannel(
+      ctx.runtime?.channel,
+      (ctx.app as { channel?: unknown } | null | undefined)?.channel,
+      'UpdateService.onInit'
+    )
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)
@@ -295,6 +300,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
     this.transportDisposers = []
     this.transport = null
+    this.actionController = null
     if (this.macAutoUpdaterInitialized) {
       autoUpdater.removeListener('update-downloaded', this.onMacUpdateDownloaded)
       autoUpdater.removeListener('error', this.onMacUpdaterError)
@@ -305,6 +311,49 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     if (!this.settings.cacheEnabled) {
       this.cache.clear()
     }
+  }
+
+  private getActionController(): UpdateActionController {
+    if (this.actionController) {
+      return this.actionController
+    }
+
+    this.actionController = new UpdateActionController({
+      isPackaged: () => app.isPackaged,
+      getEffectiveChannel: () => this.getEffectiveChannel(),
+      getQuickUpdateCheckResult: (channel) => this.getQuickUpdateCheckResult(channel),
+      queueBackgroundUpdateCheck: () => this.queueBackgroundUpdateCheck(),
+      checkForUpdates: (force) => this.checkForUpdates(force),
+      isMacAutoUpdaterEnabled: () => this.isMacAutoUpdaterEnabled(),
+      withDownloadCenterDownload: async (release) => {
+        if (!this.updateSystem) {
+          throw new Error('UpdateSystem not initialized')
+        }
+        const taskId = await this.updateSystem.downloadUpdate(release)
+        return { taskId }
+      },
+      withMacDownload: async (release) => {
+        if (this.updateSystem) {
+          await this.updateSystem.scheduleRendererOverride(release)
+        }
+        await this.downloadMacUpdate(release)
+      },
+      withDownloadCenterInstall: async (taskId) => {
+        if (!this.updateSystem) {
+          throw new Error('UpdateSystem not initialized')
+        }
+        await this.updateSystem.installUpdate(taskId)
+      },
+      withMacInstall: async () => this.installMacUpdate(),
+      reportUpdateMessage: (level, title, message, meta) =>
+        this.reportUpdateMessage(level, title, message, meta),
+      reportUpdateTelemetry: (action, meta) => this.reportUpdateTelemetry(action, meta),
+      reportUpdateError: (action, error, meta) => this.reportUpdateError(action, error, meta),
+      getSourceName: () => this.settings.source?.name ?? 'Unknown',
+      logError: (message, error) => updateLog.error(message, { error })
+    })
+
+    return this.actionController
   }
 
   /**
@@ -320,28 +369,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     this.transportDisposers.push(
       tx.on(UpdateEvents.check, async (payload) => {
         const force = payload?.force ?? false
-        try {
-          const channel = this.getEffectiveChannel()
-
-          if (!force) {
-            const quickResult = await this.getQuickUpdateCheckResult(channel)
-
-            if (app.isPackaged) {
-              this.queueBackgroundUpdateCheck()
-            }
-
-            return { success: true, data: quickResult }
-          }
-
-          const result = await this.checkForUpdates(true)
-          return { success: true, data: result }
-        } catch (error) {
-          updateLog.error('Update check failed', { error })
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          }
-        }
+        return this.getActionController().handleCheck(force)
       }),
 
       tx.on(UpdateEvents.getSettings, async () => {
@@ -525,111 +553,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       }),
 
       tx.on(UpdateEvents.download, async (release) => {
-        try {
-          if (this.isMacAutoUpdaterEnabled()) {
-            if (this.updateSystem) {
-              await this.updateSystem.scheduleRendererOverride(release)
-            }
-            await this.downloadMacUpdate(release)
-            this.reportUpdateMessage('info', 'Update download started', release.tag_name, {
-              channel: this.getEffectiveChannel(),
-              source: 'mac-auto-updater'
-            })
-            this.reportUpdateTelemetry('download_started', {
-              channel: this.getEffectiveChannel(),
-              source: 'mac-auto-updater',
-              tag: release.tag_name,
-              itemKind: 'manual'
-            })
-            return { success: true }
-          }
-          if (!this.updateSystem) {
-            throw new Error('UpdateSystem not initialized')
-          }
-          const taskId = await this.updateSystem.downloadUpdate(release)
-          this.reportUpdateMessage('info', 'Update download started', release.tag_name, {
-            channel: this.getEffectiveChannel(),
-            taskId
-          })
-          this.reportUpdateTelemetry('download_started', {
-            channel: this.getEffectiveChannel(),
-            source: this.settings.source?.name ?? 'Unknown',
-            tag: release.tag_name,
-            taskId,
-            itemKind: 'manual'
-          })
-          return { success: true, data: { taskId } }
-        } catch (error) {
-          updateLog.error('Failed to download update', { error })
-          this.reportUpdateError('download', error, {
-            tag: release?.tag_name,
-            channel: this.getEffectiveChannel()
-          })
-          this.reportUpdateTelemetry('download_error', {
-            channel: this.getEffectiveChannel(),
-            source: this.isMacAutoUpdaterEnabled()
-              ? 'mac-auto-updater'
-              : (this.settings.source?.name ?? 'Unknown'),
-            tag: release?.tag_name,
-            itemKind: 'manual'
-          })
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          }
-        }
+        return this.getActionController().handleDownload(release)
       }),
 
       tx.on(UpdateEvents.install, async (payload) => {
-        try {
-          if (this.isMacAutoUpdaterEnabled()) {
-            await this.installMacUpdate()
-            this.reportUpdateMessage('info', 'Update install triggered', 'mac-auto-updater', {
-              channel: this.getEffectiveChannel()
-            })
-            this.reportUpdateTelemetry('install_started', {
-              channel: this.getEffectiveChannel(),
-              source: 'mac-auto-updater',
-              itemKind: 'manual'
-            })
-            return { success: true }
-          }
-          if (!this.updateSystem) {
-            throw new Error('UpdateSystem not initialized')
-          }
-          if (!payload?.taskId) {
-            throw new Error('Missing update task id')
-          }
-          await this.updateSystem.installUpdate(payload.taskId)
-          this.reportUpdateMessage('info', 'Update install triggered', payload.taskId, {
-            channel: this.getEffectiveChannel()
-          })
-          this.reportUpdateTelemetry('install_started', {
-            channel: this.getEffectiveChannel(),
-            source: this.settings.source?.name ?? 'Unknown',
-            taskId: payload.taskId,
-            itemKind: 'manual'
-          })
-          return { success: true }
-        } catch (error) {
-          updateLog.error('Failed to install update', { error })
-          this.reportUpdateError('install', error, {
-            channel: this.getEffectiveChannel(),
-            taskId: payload?.taskId
-          })
-          this.reportUpdateTelemetry('install_error', {
-            channel: this.getEffectiveChannel(),
-            source: this.isMacAutoUpdaterEnabled()
-              ? 'mac-auto-updater'
-              : (this.settings.source?.name ?? 'Unknown'),
-            taskId: payload?.taskId,
-            itemKind: 'manual'
-          })
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          }
-        }
+        return this.getActionController().handleInstall(payload)
       }),
 
       tx.on(UpdateEvents.ignoreVersion, async (payload) => {

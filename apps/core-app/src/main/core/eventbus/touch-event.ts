@@ -82,11 +82,48 @@ export class TouchEventHandlerWrapper implements EventHandlerWrapper {
 
 export class TouchEventBus implements ITouchEventBus<TalexEvents> {
   map: Map<TalexEvents, Set<TouchEventHandlerWrapper>> = new Map()
+  private onceConsumedCount = 0
 
   emit<T extends ITouchEvent<TalexEvents>>(event: TalexEvents, data: T): void {
-    const handlers = this.map.get(event) || new Set<TouchEventHandlerWrapper>()
+    const handlers = this.map.get(event)
+    if (!handlers || handlers.size === 0) return
 
-    ;[...handlers].forEach((h) => h.handler(data))
+    for (const wrapper of [...handlers]) {
+      try {
+        wrapper.handler(data)
+      } catch (error) {
+        log.error('TouchEvent handler failed', {
+          meta: {
+            event,
+            mode: 'sync'
+          },
+          error
+        })
+      } finally {
+        this.consumeOnceHandler(event, handlers, wrapper)
+      }
+    }
+  }
+
+  async emitAsync<T extends ITouchEvent<TalexEvents>>(event: TalexEvents, data: T): Promise<void> {
+    const handlers = this.map.get(event)
+    if (!handlers || handlers.size === 0) return
+
+    for (const wrapper of [...handlers]) {
+      try {
+        await Promise.resolve(wrapper.handler(data))
+      } catch (error) {
+        log.error('TouchEvent handler failed', {
+          meta: {
+            event,
+            mode: 'async'
+          },
+          error
+        })
+      } finally {
+        this.consumeOnceHandler(event, handlers, wrapper)
+      }
+    }
   }
 
   on(event: TalexEvents, handler: EventHandler): boolean | void {
@@ -112,17 +149,60 @@ export class TouchEventBus implements ITouchEventBus<TalexEvents> {
   }
 
   off(event: TalexEvents, handler: EventHandler): boolean {
-    const handlers = this.map.get(event) || new Set<TouchEventHandlerWrapper>()
+    const handlers = this.map.get(event)
+    if (!handlers || handlers.size === 0) {
+      return false
+    }
 
     const l = [...handlers].filter((h) => h.handler === handler)
 
     l.forEach((h) => handlers.delete(h))
+
+    if (handlers.size === 0) {
+      this.map.delete(event)
+    }
 
     return !!l.length
   }
 
   offAll(event: TalexEvents): boolean {
     return this.map.delete(event)
+  }
+
+  getDiagnostics(): {
+    totalHandlers: number
+    totalEvents: number
+    onceConsumedCount: number
+    handlersByEvent: Array<{ event: string; handlers: number }>
+  } {
+    const handlersByEvent = Array.from(this.map.entries()).map(([event, handlers]) => ({
+      event: String(event),
+      handlers: handlers.size
+    }))
+
+    const totalHandlers = handlersByEvent.reduce((sum, item) => sum + item.handlers, 0)
+
+    return {
+      totalHandlers,
+      totalEvents: handlersByEvent.length,
+      onceConsumedCount: this.onceConsumedCount,
+      handlersByEvent
+    }
+  }
+
+  private consumeOnceHandler(
+    event: TalexEvents,
+    handlers: Set<TouchEventHandlerWrapper>,
+    wrapper: TouchEventHandlerWrapper
+  ): void {
+    if (wrapper.type !== EventType.CONSUME) return
+
+    if (handlers.delete(wrapper)) {
+      this.onceConsumedCount += 1
+    }
+    if (handlers.size === 0) {
+      this.map.delete(event)
+    }
   }
 }
 

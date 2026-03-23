@@ -27,7 +27,6 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { generatePermissionIssue, parseManifestPermissions } from '@talex-touch/utils/permission'
 import { PluginStatus, SdkApi } from '@talex-touch/utils/plugin'
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
   CoreBoxEvents,
@@ -72,6 +71,8 @@ import { createPluginLoader } from './plugin-loaders'
 import { LocalPluginProvider } from './providers/local-provider'
 import { usePluginInjections } from './runtime/plugin-injections'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
+import { resolvePluginModuleIoRuntime } from './services/plugin-io-service'
+import { buildPluginManagerRuntime } from './services/plugin-manager-orchestrator'
 
 const pluginLog = getLogger('plugin-system')
 const pluginModuleLog = createLogger('PluginSystem')
@@ -1711,34 +1712,24 @@ export class PluginModule extends BaseModule {
     })
   }
 
-  onInit({ file, app }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
-    const channel =
-      (app as { channel?: unknown } | null | undefined)?.channel ??
-      ($app as { channel?: unknown } | null | undefined)?.channel
-    if (!channel) {
-      throw new Error('[PluginModule] TouchChannel not available on app context')
-    }
-    const mainWindowId = (app as { window?: { window?: { id?: unknown } } } | null | undefined)
-      ?.window?.window?.id
-    if (typeof mainWindowId !== 'number') {
-      throw new TypeError('[PluginModule] Main window id is not available')
-    }
+  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
+    const { file } = ctx
+    const ioRuntime = resolvePluginModuleIoRuntime(ctx)
+    this.transport = ioRuntime.transport
+    TouchPlugin.setTransport(ioRuntime.transport)
 
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    this.transport = getTuffTransportMain(channel, keyManager)
+    const pluginRuntime = buildPluginManagerRuntime({
+      pluginRootDir: file.dirPath!,
+      transport: ioRuntime.transport,
+      channel: ioRuntime.channel,
+      mainWindowId: ioRuntime.mainWindowId,
+      createManager: createPluginModuleInternal,
+      createHealthMonitor: (manager) => new DevServerHealthMonitor(manager)
+    })
 
-    TouchPlugin.setTransport(this.transport)
-
-    this.pluginManager = createPluginModuleInternal(
-      file.dirPath!,
-      this.transport,
-      channel as PluginLifecycleChannel,
-      mainWindowId
-    )
-    this.installQueue = (this.pluginManager as IPluginManagerWithInternals).__installQueue
-    this.healthMonitor = new DevServerHealthMonitor(this.pluginManager)
-    this.pluginManager.healthMonitor = this.healthMonitor
+    this.pluginManager = pluginRuntime.pluginManager
+    this.installQueue = pluginRuntime.installQueue
+    this.healthMonitor = pluginRuntime.healthMonitor
 
     // Listen for permission granted events to retry enabling plugins
     touchEventBus.on(TalexEvents.PERMISSION_GRANTED, (event) => {

@@ -43,6 +43,7 @@
 - 强制启用 `legacy:guard`：禁止新增 `channel.send('x:y')` 与新增 `legacy` 分支命中；新增兼容债务必须进入白名单并附退场版本（当前基线 `2.5.0`）。
 - 强制启用 `compat:registry:guard`：兼容债务清册（`docs/plan-prd/docs/compatibility-debt-registry.csv`）必须完整覆盖存量命中，缺字段/缺条目/过期未清理均失败。
 - 强制启用 `size:guard`：超长文件阈值 `>=1200` 基线冻结，禁止新增和增长；仅允许通过 `growthExceptions` 临时豁免，并要求同步 `CHANGES + compatibility registry`。
+- CoreApp 硬切补充门禁：业务层 `window.$channel` 调用、legacy storage 旧协议（`storage:get/save/reload/save-sync/saveall`）与 legacy `sdkapi` 放行路径必须保持为 `0`；占位能力必须返回真实状态或显式 `unavailable + reason`，禁止固定假值“成功”。
 
 ### 3.2 可靠性约束
 - 关键路径需有显式错误处理与用户可见反馈。
@@ -238,3 +239,38 @@
 - 路由决策必须可解释：需输出 `selectionSource + selectionReason + routeComboId`。
 - 模型开关必须可控：`internet`、`thinking` 均需透传至后端执行链路。
 - 路由异常必须自动回退：LangGraph Local Server 不可用时回退 deepagent，不得阻断主对话链路。
+
+### 6.10 Core Main 生命周期止血（2026-03-23）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 启动链路 | 必需模块失败即 fail-fast，`ALL_MODULES_LOADED` 仅在全链路成功后触发 | 已收口 |
+| 退出链路 | 运行时 `process.exit(0)` 已从主退出路径移除（close/tray） | 已收口 |
+| EventBus 契约 | `once` 消费生效，`emit/emitAsync` 支持 handler 级异常隔离，新增诊断 | 已收口 |
+| IPC 稳定性 | `dialog:open-file` 重复注册收敛为单注册点 | 已收口 |
+| 回归门禁 | 定向 vitest（19 tests）+ `typecheck:node` | 已通过 |
+
+**质量约束落地**
+- 任何主进程业务退出路径不得直接 `process.exit(0)`，必须统一通过 `app.quit()` 与模块卸载流程。
+- 启动健康态必须以“模块加载 + TouchApp 初始化完成”为前置，不允许发送虚假 `ALL_MODULES_LOADED`。
+- 事件总线必须保证“单 handler 失败不影响其他 handler”与 `once` 监听器一次性语义。
+- 关停流程必须可等待（`emitAsync` + `unloadAll`），并可观测 `app-quit` 上下文下的资源清理。
+
+### 6.11 Core Main 生命周期收口与去耦首轮（2026-03-23）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 关停超时保险 | `before-quit` 新增默认 `8s` timeout guard，超时/异常后继续退出 | 已收口 |
+| 卸载观测 | `ModuleUnloadObservation` 记录 `reason/appClosing/duration/failedCount` | 已落地 |
+| 运行时上下文 | 生命周期统一注入 `ctx.runtime`（`MainRuntimeContext`） | 已落地 |
+| 全局耦合守卫 | 新增 `guard:global-app` + allowlist，阻止 `src/main/**` 新增 `$app` 直接读取 | 已落地 |
+| 结构治理首轮 | plugin/file/update 完成首轮服务拆分，外部契约保持不变 | 已落地 |
+| 回归子集 | `pnpm test:core-main` 聚合主进程关键测试 + `typecheck:node` + `guard:global-app` | 已通过 |
+
+**质量约束落地**
+- 主进程退出流程必须具备“可等待 + 可超时脱困”双保险，禁止因单个 `before-quit` handler 阻塞导致无法退出。
+- 生命周期观测必须包含可回归字段（`reason/appClosing/duration/failedCount`），用于“启停循环”稳定性对比。
+- 新模块默认通过 `ctx.runtime` 获取依赖，不得新增 `globalThis.$app` 读取点；存量兼容仅允许过渡期一次性告警。
+- 结构拆分必须保持外部 event 名称与 payload 兼容，且每次拆分补齐 direct tests，不以集成测试单点兜底。

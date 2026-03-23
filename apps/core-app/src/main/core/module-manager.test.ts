@@ -2,7 +2,13 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { TalexTouch } from '@talex-touch/utils'
-import type { ModuleCreateContext, ModuleKey } from '@talex-touch/utils/types/modules'
+import type {
+  ModuleCreateContext,
+  ModuleDestroyContext,
+  ModuleInitContext,
+  ModuleKey,
+  ModuleStopContext
+} from '@talex-touch/utils/types/modules'
 import type { TalexEvents } from './eventbus/touch-event'
 import { ModuleManager } from './module-manager'
 import { BaseModule } from '../modules/abstract-base-module'
@@ -192,5 +198,63 @@ describe('ModuleManager lifecycle isolation', () => {
     expect(calls.filter((item) => item === 'a:destroy')).toHaveLength(1)
     expect(calls.filter((item) => item === 'b:destroy')).toHaveLength(1)
     expect(manager.listModules()).toHaveLength(0)
+  })
+
+  it('marks appClosing for app-quit unload reason', async () => {
+    const manager = createManager()
+    const key = Symbol.for('test-module-app-quit') as ModuleKey
+    let stopReason: string | undefined
+    let appClosing: boolean | undefined
+
+    class AppQuitModule extends BaseModule<TalexEvents> {
+      static readonly key = key
+      constructor(ctx: ModuleCreateContext<TalexEvents>) {
+        super(ctx.moduleKey, { create: false })
+      }
+      onInit(): void {}
+      stop(ctx: ModuleStopContext<TalexEvents>): void {
+        stopReason = String(ctx.reason)
+      }
+      onDestroy(ctx: ModuleDestroyContext<TalexEvents>): void {
+        appClosing = ctx.appClosing
+      }
+    }
+
+    expect(await manager.loadModule(AppQuitModule)).toBe(true)
+    expect(await manager.unloadModule(key, 'app-quit')).toBe(true)
+    expect(stopReason).toBe('app-quit')
+    expect(appClosing).toBe(true)
+  })
+
+  it('injects runtime context and records unload observation', async () => {
+    const manager = createManager()
+    const key = Symbol.for('test-module-runtime-context') as ModuleKey
+    let runtimeChannel: unknown
+    let runtimeManager: unknown
+
+    class RuntimeAwareModule extends BaseModule<TalexEvents> {
+      static readonly key = key
+      constructor(ctx: ModuleCreateContext<TalexEvents>) {
+        super(ctx.moduleKey, { create: false })
+      }
+      onInit(ctx: ModuleInitContext<TalexEvents>): void {
+        runtimeChannel = ctx.runtime?.channel
+        runtimeManager = ctx.runtime?.moduleManager
+      }
+      onDestroy(): void {}
+    }
+
+    expect(await manager.loadModule(RuntimeAwareModule)).toBe(true)
+    expect(runtimeChannel).toEqual({})
+    expect(runtimeManager).toBeDefined()
+
+    expect(await manager.unloadAll('normal')).toBe(true)
+    expect(manager.getLastUnloadObservation()).toMatchObject({
+      reason: 'normal',
+      appClosing: false,
+      totalModules: 1,
+      unloadedModules: 1,
+      failedModules: 0
+    })
   })
 })

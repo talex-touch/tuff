@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-03-22
+> 更新时间: 2026-03-23
 
 ---
 
@@ -186,6 +186,53 @@
 - [x] 新增共享规则模块 `shared/pilot-capability-meta.ts`，统一前后端能力元数据、legacy 回填、模板与路由校验。
 - [x] 新增/更新测试：`pilot-capability-meta.shared.test.ts`、`pilot-admin-routing-config.capabilities.test.ts`。
 
+### N. Core Main 修理进展（2026-03-23）
+
+- 已完成启动链路 fail-fast：必需模块加载失败直接终止，不再发送 `ALL_MODULES_LOADED`。
+- 已完成退出链路统一：`closeApp` + tray 退出分支移除运行时 `process.exit(0)`，统一走 `app.quit()`。
+- 已完成 EventBus 契约补齐：`once` 消费生效、`emit/emitAsync` handler 级异常隔离、诊断指标可观测。
+- 已完成 IPC 重复注册收敛：`dialogOpenFileEvent` 保留单一注册实现并维持 payload 兼容。
+- 已补齐主进程回归用例与门禁命令：`vitest` 定向 19 tests + `typecheck:node` 均通过。
+- 已完成生命周期收口补完：
+  - 新增 `startup-health` 统一健康门禁（`loadStartupModules + waitUntilInitialized`）与失败阻断测试。
+  - 新增 `before-quit` 8s 超时保险，确保异步 handler 卡死时仍能继续退出。
+  - `ModuleManager` 增加 `reason/appClosing/duration/failedCount` 卸载观测，并暴露 `getLastUnloadObservation()`。
+- 已完成 `$app` 去耦首轮：
+  - 生命周期上下文新增 `ctx.runtime`（`MainRuntimeContext`）。
+  - `plugin-module`、`UpdateService` 首批改为 runtime 注入读取，保留 1 迭代过渡兼容告警。
+  - 新增静态守卫：`pnpm guard:global-app`，防止 `src/main/**` 新增 `$app` 直接读取。
+- 已完成结构治理首轮（保持外部契约不变）：
+  - `plugin-module` 抽取编排/IO 服务（orchestrator + io service）。
+  - `file-provider` 抽取路径/查询服务。
+  - `UpdateService` 抽取检查/下载/安装 action controller。
+  - direct tests 已补齐并纳入 `pnpm test:core-main` 子集门禁。
+- 下一轮待推进（P2）：
+  - 继续压缩 `$app` allowlist 存量命中；
+  - `plugin-module/file-provider/UpdateService` 进一步按编排层 + 领域层 + IO 层深拆，补齐剩余 direct tests。
+
+### O. CoreApp 兼容债务硬切（2026-03-23）
+
+- [x] 跨平台一致性修复：Linux 权限探测路径按平台分流；更新资产平台/架构识别统一并显式 `unsupported`；AppImage 小写识别修复。
+- [x] 权限系统硬切：删除 legacy `sdkapi` 放行路径，缺失/低版本统一 `SDKAPI_BLOCKED` 阻断；`allowLegacy` 配置移除。
+- [x] Storage/Channel 硬切：主进程 legacy `storage:get/save/reload/save-sync/saveall` 处理移除，统一 `StorageEvents.app.*`；`window.$channel` 业务入口清零。
+- [x] 插件 API 硬切：deprecated 旧暴露（含顶层 `box/feature` 兼容别名）下线，仅保留 `plugin.box`/`plugin.feature` 与 `boxItems` 新入口。
+- [x] 占位能力补齐：`OfficialUpdateProvider` 改为真实接口探测，后端不可用返回 `unavailable + reason`；`AgentStore` 实装远端目录/下载/校验/解包/回滚/真实更新比对；`ExtensionLoader` 补齐 unload 生命周期。
+- [x] 自动化验证：`typecheck` 通过；定向 `vitest`（权限门禁、平台识别、AgentStore、Extension unload）通过。
+- [ ] 三平台人工回归：Windows/macOS/Linux 的首次引导权限、更新包匹配、插件权限拦截、Agent 安装升级卸载、退出资源释放。
+
+### P. CoreBox 搜索性能优化（2026-03-23）
+
+- [x] P0：输入防抖下调（`BASE_DEBOUNCE=80ms`），保持去重窗口 `200ms`。
+- [x] P0：`SearchIndexService` 增加 `warmup()`，并在初始化补齐 `keyword_mappings` 复合索引（`provider+keyword`、`provider+item`）。
+- [x] P0：`SearchEngineCore` 在查询入口记录搜索活跃时间，并在 init 阶段非阻塞预热索引服务。
+- [x] P0：`file-provider` 语义检索改为预算内补召回（`query>=3 && candidate<20`）+ `120ms` 超时降级。
+- [x] P1：app/file 精确词匹配改为批量 `lookupByKeywords`，减少逐 term SQL round-trip。
+- [x] P1：`lookupBySubsequence` 增加扫描上限（默认 `2000` + SQL `LIMIT`），app 侧触发约束为 `candidate<5 && query<=8`。
+- [x] P2：后台重任务避让搜索活跃窗口（最近 `2s` 有 query 时跳过一轮，后续 idle 自动补跑）。
+- [x] 单测：新增 `search-activity.test.ts`，覆盖活跃窗口判定行为。
+- [ ] 验收：按 `search-trace` 采样 200 次真实查询，确认 `first.result/session.end` P95 与慢查询占比达标。
+- [ ] 门禁：待仓库既有 `extension-loader.test.ts` 类型错误修复后，补跑并记录 `typecheck:node` 全绿证据。
+
 ---
 
 ## 📚 文档债务池（第二轮 + 第三轮摘要）
@@ -236,12 +283,12 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 97 |
-| 未完成 (`- [ ]`) | 16 |
-| 总计 | 113 |
+| 已完成 (`- [x]`) | 103 |
+| 未完成 (`- [ ]`) | 17 |
+| 总计 | 120 |
 | 完成率 | 86% |
 
-> 统计时间: 2026-03-22（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-03-23（按本文件实时 checkbox 计数）。
 
 ---
 

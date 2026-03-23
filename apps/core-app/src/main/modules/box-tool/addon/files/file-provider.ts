@@ -25,11 +25,7 @@ import { Buffer } from 'node:buffer'
 import type { FileChangedEvent, FileUnlinkedEvent } from '../../../../core/eventbus/touch-event'
 import type { TouchApp } from '../../../../core/touch-app'
 import type * as schema from '../../../../db/schema'
-import type {
-  SearchIndexItem,
-  SearchIndexKeyword,
-  SearchIndexService
-} from '../../search-engine/search-index-service'
+import type { SearchIndexItem, SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
 import type { FileTypeTag } from './constants'
 import type { ScannedFileInfo } from './types'
@@ -68,7 +64,6 @@ import {
   fileExtensions,
   fileIndexProgress,
   files as filesSchema,
-  keywordMappings,
   scanProgress
 } from '../../../../db/schema'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
@@ -81,11 +76,11 @@ import {
 import { deviceIdleService } from '../../../../service/device-idle-service'
 import { createFailedFilesCleanupTask } from '../../../../service/failed-files-cleanup-task'
 import { FILE_TIMING_BASE_OPTIONS } from '../../../../utils/file-indexing-utils'
-import { TYPE_ALIAS_MAP } from '../../../../utils/file-types'
 import { formatDuration } from '../../../../utils/logger'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import FileSystemWatcher from '../../file-system-watcher'
+import { isSearchRecentlyActive } from '../../search-engine/search-activity'
 import { searchLogger } from '../../search-engine/search-logger'
 import {
   BLACKLISTED_EXTENSIONS,
@@ -93,7 +88,6 @@ import {
   getContentSizeLimitMB,
   getTypeTagsForExtension,
   KEYWORD_MAP,
-  TYPE_TAG_EXTENSION_MAP,
   WHITELISTED_EXTENSIONS
 } from './constants'
 import { isIndexableFile, mapFileToTuffItem, scanDirectory } from './utils'
@@ -109,10 +103,24 @@ import {
   SearchIndexWorkerClient,
   type PersistEntry
 } from '../../search-engine/workers/search-index-worker-client'
+import {
+  getWatchDepthForPath as resolveWatchDepthForPath,
+  normalizeWatchPath
+} from './services/file-provider-path-service'
+import {
+  buildFtsQuery as buildFileProviderFtsQuery,
+  buildSearchIndexItem as buildFileProviderSearchIndexItem,
+  resolveExtensionsForTypeFilters as resolveFileProviderExtensionsForTypeFilters,
+  resolveTypeTag as resolveFileProviderTypeTag
+} from './services/file-provider-search-service'
 
 const MAX_CONTENT_LENGTH = 200_000
 const ICON_META_EXTENSION_KEY = 'iconMeta'
 const fileProviderLog = getLogger('file-provider')
+const SEARCH_ACTIVE_WINDOW_MS = 2000
+const SEMANTIC_TRIGGER_MIN_QUERY_LENGTH = 3
+const SEMANTIC_TRIGGER_MAX_CANDIDATES = 20
+const SEMANTIC_SEARCH_TIMEOUT_MS = 120
 const BASE64_MARKER = 'base64,'
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
 
@@ -697,6 +705,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     if (appTaskGate.isActive()) {
       return { allowed: false, reason: 'app-busy' }
+    }
+
+    if (isSearchRecentlyActive(SEARCH_ACTIVE_WINDOW_MS)) {
+      return { allowed: false, reason: 'search-active' }
     }
 
     const eligibility = await this.getScanEligibility()
@@ -2359,18 +2371,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private getWatchDepthForPath(watchPath: string): number {
-    const lower = watchPath.toLowerCase()
-    if (process.platform === 'darwin') {
-      // macOS Spotlight-style directories usually shallow
-      if (lower.endsWith('/applications') || lower.endsWith('/downloads')) {
-        return 1
-      }
-      return 2
-    }
-    if (process.platform === 'win32') {
-      return 4
-    }
-    return 3
+    return resolveWatchDepthForPath(watchPath)
   }
 
   private subscribeToFileSystemEvents(): void {
@@ -2387,8 +2388,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private normalizePath(p: string): string {
-    const normalized = path.normalize(p)
-    return this.isCaseInsensitiveFs ? normalized.toLowerCase() : normalized
+    return normalizeWatchPath(p, this.isCaseInsensitiveFs)
   }
 
   private isWithinWatchRoots(rawPath: string): boolean {
@@ -3388,73 +3388,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private buildSearchIndexItem(file: typeof filesSchema.$inferSelect): SearchIndexItem {
-    const extension = (file.extension || path.extname(file.name) || '').toLowerCase()
-    const extensionKeywords = KEYWORD_MAP[extension] || []
-    const keywords: SearchIndexKeyword[] = extensionKeywords.map((keyword) => ({
-      value: keyword,
-      priority: 1.05
-    }))
-
-    // Split file name (without extension) into tokens for better keyword matching
-    const baseName = path.basename(file.name, extension)
-    const nameTokens = baseName
-      .split(/[-_.\s]+/)
-      .map((t) => t.trim().toLowerCase())
-      .filter((t) => t.length > 1)
-    for (const token of nameTokens) {
-      keywords.push({ value: token, priority: 1.1 })
-    }
-
-    // Add path directory names as keywords for path-based search
-    if (file.path) {
-      const dirPath = path.dirname(file.path)
-      const segments = dirPath
-        .split(/[\\/]+/)
-        .map((s) => s.trim().toLowerCase())
-        .filter((s) => s.length > 1)
-      // Take last 3 meaningful segments to avoid noise from root paths
-      const relevantSegments = segments.slice(-3)
-      for (const segment of relevantSegments) {
-        keywords.push({ value: segment, priority: 0.8 })
-      }
-    }
-
-    const tags = new Set<string>()
-    if (extension) {
-      tags.add(extension.replace(/^\./, ''))
-    }
-    for (const tag of getTypeTagsForExtension(extension)) {
-      tags.add(tag)
-    }
-
-    return {
-      itemId: file.path,
-      providerId: this.id,
-      type: this.type,
-      name: file.name,
-      displayName: file.displayName ?? undefined,
-      path: file.path,
-      extension,
-      content: file.content ?? undefined,
-      keywords,
-      tags: tags.size > 0 ? Array.from(tags) : undefined
-    }
+    return buildFileProviderSearchIndexItem(file, this.id, this.type)
   }
 
   private buildFtsQuery(terms: string[]): string {
-    const tokens: string[] = []
-    for (const term of terms) {
-      const cleaned = term.replace(/[^a-z0-9\u4E00-\u9FA5]+/gi, ' ').trim()
-      if (!cleaned) continue
-      tokens.push(...cleaned.split(/\s+/))
-    }
-
-    if (tokens.length === 0) {
-      return ''
-    }
-
-    const limitedTokens = tokens.slice(0, 5)
-    return limitedTokens.join(' ')
+    return buildFileProviderFtsQuery(terms)
   }
 
   private async processFileExtensions(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
@@ -4160,27 +4098,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private resolveTypeTag(raw: string): FileTypeTag | null {
-    if (!raw) return null
-    const normalized = raw.toLowerCase()
-    if (TYPE_ALIAS_MAP[normalized]) {
-      return TYPE_ALIAS_MAP[normalized]
-    }
-
-    if (normalized.endsWith('s')) {
-      const singular = normalized.replace(/s$/i, '')
-      if (TYPE_ALIAS_MAP[singular]) {
-        return TYPE_ALIAS_MAP[singular]
-      }
-    }
-
-    if (normalized.endsWith('es')) {
-      const singular = normalized.replace(/es$/i, '')
-      if (TYPE_ALIAS_MAP[singular]) {
-        return TYPE_ALIAS_MAP[singular]
-      }
-    }
-
-    return null
+    return resolveFileProviderTypeTag(raw)
   }
 
   private parseExtensionGlob(pattern: string): string[] {
@@ -4202,15 +4120,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private resolveExtensionsForTypeFilters(typeFilters: Set<FileTypeTag>): string[] {
-    const extensions = new Set<string>()
-    for (const tag of typeFilters) {
-      const mapped = TYPE_TAG_EXTENSION_MAP[tag]
-      if (!mapped) continue
-      for (const ext of mapped) {
-        extensions.add(ext)
-      }
-    }
-    return Array.from(extensions)
+    return resolveFileProviderExtensionsForTypeFilters(typeFilters)
   }
 
   private matchesTypeFilters(
@@ -4526,22 +4436,26 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const normalizedQuery = searchText.toLowerCase()
     const baseTerms = normalizedQuery.split(/[\s/]+/).filter(Boolean)
     const terms = baseTerms.length > 0 ? baseTerms : [normalizedQuery]
+    const shouldCheckPhrase = baseTerms.length > 1 || baseTerms.length === 0
 
     let preciseMatchPaths: Set<string> | null = null
-    if (terms.length > 0) {
+    const preciseLookupTerms = shouldCheckPhrase
+      ? Array.from(new Set([...terms, normalizedQuery]))
+      : terms
+    if (preciseLookupTerms.length > 0) {
       searchLogger.filePreciseSearch(terms)
       const preciseStart = performance.now()
-      const preciseSearchLimit = 200
-      const preciseQueries = terms.map((term) =>
-        db
-          .select({ itemId: keywordMappings.itemId })
-          .from(keywordMappings)
-          .where(and(eq(keywordMappings.keyword, term), eq(keywordMappings.providerId, this.id)))
-          .limit(preciseSearchLimit)
+      const preciseSearchLimit = Math.max(200, preciseLookupTerms.length * 200)
+      const preciseResultMap = await this.searchIndex.lookupByKeywords(
+        this.id,
+        preciseLookupTerms,
+        preciseSearchLimit
       )
-      searchLogger.filePreciseQueries(preciseQueries.length)
-      const preciseResults = await Promise.all(preciseQueries)
-      const termMatches = preciseResults.map((rows) => new Set(rows.map((entry) => entry.itemId)))
+
+      const termMatches = terms.map(
+        (term) => new Set((preciseResultMap.get(term) ?? []).map((entry) => entry.itemId))
+      )
+      searchLogger.filePreciseQueries(1)
       searchLogger.filePreciseResults(termMatches.map((s) => s.size))
 
       if (termMatches.length > 0) {
@@ -4554,29 +4468,22 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         terms: terms.join(', '),
         duration: formatDuration(performance.now() - preciseStart)
       })
-    }
 
-    const shouldCheckPhrase = baseTerms.length > 1 || baseTerms.length === 0
-    if (shouldCheckPhrase) {
-      const phraseStart = performance.now()
-      const phraseMatches = await db
-        .select({ itemId: keywordMappings.itemId })
-        .from(keywordMappings)
-        .where(
-          and(eq(keywordMappings.keyword, normalizedQuery), eq(keywordMappings.providerId, this.id))
-        )
-        .limit(200)
-      if (phraseMatches.length > 0) {
-        const phraseSet = new Set(phraseMatches.map((entry) => entry.itemId))
-        preciseMatchPaths = preciseMatchPaths
-          ? new Set([...preciseMatchPaths, ...phraseSet])
-          : phraseSet
+      if (shouldCheckPhrase) {
+        const phraseStart = performance.now()
+        const phraseMatches = preciseResultMap.get(normalizedQuery) ?? []
+        if (phraseMatches.length > 0) {
+          const phraseSet = new Set(phraseMatches.map((entry) => entry.itemId))
+          preciseMatchPaths = preciseMatchPaths
+            ? new Set([...preciseMatchPaths, ...phraseSet])
+            : phraseSet
+        }
+        this.logDebug('Phrase keyword lookup completed', {
+          query: normalizedQuery,
+          matches: preciseMatchPaths?.size ?? 0,
+          duration: formatDuration(performance.now() - phraseStart)
+        })
       }
-      this.logDebug('Phrase keyword lookup completed', {
-        query: normalizedQuery,
-        matches: preciseMatchPaths?.size ?? 0,
-        duration: formatDuration(performance.now() - phraseStart)
-      })
     }
 
     // Prefix recall for short queries (e.g. "wind" → "windsurf")
@@ -4613,16 +4520,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
     }
 
-    // Semantic search via embeddings (non-blocking, best-effort)
-    let semanticMatches: Array<{ sourceId: string; score: number }> = []
-    if (this.embeddingService && normalizedQuery.length >= 3) {
-      try {
-        semanticMatches = await this.embeddingService.semanticSearch(normalizedQuery, 30)
-      } catch {
-        // Graceful degradation: ignore embedding failures
-      }
-    }
-
     const preciseCandidates = preciseMatchPaths ? Array.from(preciseMatchPaths) : []
     const maxCandidateCount = 120
     const candidateIds = new Set<string>(preciseCandidates)
@@ -4632,12 +4529,45 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       candidateIds.add(match.itemId)
     }
 
-    // Merge semantic search results (sourceId is file path)
     const semanticScoreMap = new Map<string, number>()
-    for (const match of semanticMatches) {
-      if (candidateIds.size >= maxCandidateCount) break
-      candidateIds.add(match.sourceId)
-      semanticScoreMap.set(match.sourceId, match.score)
+    const shouldRunSemantic =
+      Boolean(this.embeddingService) &&
+      normalizedQuery.length >= SEMANTIC_TRIGGER_MIN_QUERY_LENGTH &&
+      candidateIds.size < SEMANTIC_TRIGGER_MAX_CANDIDATES
+
+    if (shouldRunSemantic && this.embeddingService) {
+      let semanticTimedOut = false
+      let timeoutId: NodeJS.Timeout | null = null
+      const semanticTask = this.embeddingService
+        .semanticSearch(normalizedQuery, 30)
+        .catch((error) => {
+          this.logWarn('Semantic search failed, fallback to lexical recall only', error)
+          return []
+        })
+      const timeoutTask = new Promise<Array<{ sourceId: string; score: number }>>((resolve) => {
+        timeoutId = setTimeout(() => {
+          semanticTimedOut = true
+          resolve([])
+        }, SEMANTIC_SEARCH_TIMEOUT_MS)
+      })
+
+      const semanticMatches = await Promise.race([semanticTask, timeoutTask])
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+
+      if (semanticTimedOut) {
+        this.logDebug('Semantic search skipped due to timeout budget', {
+          timeoutMs: SEMANTIC_SEARCH_TIMEOUT_MS,
+          queryLength: normalizedQuery.length
+        })
+      }
+
+      for (const match of semanticMatches) {
+        if (candidateIds.size >= maxCandidateCount) break
+        candidateIds.add(match.sourceId)
+        semanticScoreMap.set(match.sourceId, match.score)
+      }
     }
 
     if (candidateIds.size === 0) {
