@@ -13,6 +13,33 @@
 
 ## 2026-03-23
 
+### feat(core-app-hardcut): 兼容债务并行硬切（legacy channel/storage/插件 API/更新与 AgentStore）
+
+- 跨平台与更新识别收敛：
+  - 新增 `apps/core-app/src/renderer/src/modules/update/platform-target.ts`（统一平台/架构识别，未知显式 `unsupported`，AppImage 小写识别修复）与对应测试。
+  - 更新 Provider 全部改为复用统一识别逻辑，不再隐式默认到某 OS。
+  - Linux 首次引导权限探测修复：`permission-checker` 按 OS 选择默认探测路径，未知平台返回 `unsupported`。
+- 权限系统硬切：
+  - `permission-guard/store/channel-guard` 移除 legacy `sdkapi` 放行与 `allowLegacy` 配置。
+  - `sdkapi` 缺失或低于门槛统一阻断为 `SDKAPI_BLOCKED`（加载/安装/运行一致）。
+- Storage/Channel 直连硬切：
+  - 主进程移除 legacy storage 事件处理（`storage:get/save/reload/save-sync/saveall`）与 `StorageEvents.legacy.update` 广播路径。
+  - 渲染侧移除 `window.$channel` 业务入口，统一 `touchChannel`。
+- 插件 API 兼容层硬切：
+  - 移除 deprecated 兼容暴露（含顶层 `box/feature` 兼容别名与旧 searchManager 路径），统一迁移到 `plugin.box` / `plugin.feature` 与 `boxItems`。
+  - 失败路径统一给出明确错误码（`SDKAPI_BLOCKED`）与迁移导向。
+- 占位/伪实现补齐：
+  - `agent-store.service.ts` 实装真实目录拉取、下载、完整性校验、解包、安装元数据落盘、失败回滚与真实更新比对。
+  - `OfficialUpdateProvider` 的维护/负载/状态改为真实接口探测，后端不可用返回 `unavailable + reason`，不再固定假值。
+  - `ExtensionLoader` 补齐 unload 生命周期，销毁时逆序释放扩展资源。
+- 测试与门禁：
+  - 新增：`extension-loader.test.ts`、`agent-store.service.test.ts`、`platform-target.test.ts`。
+  - 更新：`permission-guard.test.ts`、`permission-store.test.ts`。
+  - 验证通过：
+    - `pnpm -C "apps/core-app" run typecheck`
+    - `pnpm -C "apps/core-app" run typecheck:node`
+    - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/permission/permission-guard.test.ts" "src/main/modules/permission/permission-store.test.ts" "src/renderer/src/modules/update/platform-target.test.ts" "src/main/modules/extension-loader.test.ts" "src/main/service/agent-store.service.test.ts"`
+
 ### fix(core-app): 关闭流程快捷键生命周期治理（修复 OmniPanel `uiohook` 退出竞态）
 
 - `apps/core-app/src/main/modules/global-shortcon.ts`
@@ -40,6 +67,42 @@
 - `apps/core-app/package.json`
   - 将 `vue-sonner` 从 `devDependencies` 迁回 `dependencies`，避免生产/精简安装场景出现运行时缺包。
 - 本次仅处理 P0 启动阻塞，`StartupAnalytics` 本地 telemetry、`Perf:EventLoop`、macOS IMK 系统日志保持为 P2 观察项，不在本补丁扩 scope。
+
+### perf(core-search): CoreBox 搜索性能优化（P0/P1/P2 首轮落地）
+
+- P0（体感提速）：
+  - `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+    - `BASE_DEBOUNCE` 从 `150ms` 调整为 `80ms`，保留去重窗口 `200ms`。
+  - `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+    - 新增 `warmup()` 预热入口，初始化阶段补齐复合索引：
+      - `idx_keyword_mappings_provider_keyword(provider_id, keyword)`
+      - `idx_keyword_mappings_provider_item(provider_id, item_id)`
+    - 保留历史单列索引，不做删除。
+  - `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+    - `init` 增加非阻塞 `searchIndexService.warmup()` 调用，避免首搜触发冷启动建索引；
+    - 搜索入口增加 `markSearchActivity()`，供后台任务避让判断。
+  - `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+    - 语义检索改为“先 precise + FTS 形成候选，再按预算补召回”；
+    - 触发条件：`query.length >= 3` 且 `candidateIds < 20`；
+    - 语义补召回加 `Promise.race` 超时预算 `120ms`，超时/异常降级为空结果。
+
+- P1（重路径瘦身）：
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+  - `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+    - app/file 精确词路径改为批量 `lookupByKeywords(...)`，替代逐 term 多次 SQL。
+  - `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+    - `lookupBySubsequence(...)` 增加扫描上限参数（默认 `2000`）并落地 SQL `LIMIT`。
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+    - subsequence 触发约束更新为：`candidateIds < 5 && query.length >= 2 && query.length <= 8`，并传入 `scanLimit=2000`。
+
+- P2（后台任务避让）：
+  - 新增 `apps/core-app/src/main/modules/box-tool/search-engine/search-activity.ts`。
+  - `file-provider` 自动索引与 `app-provider` 启动 backfill / full sync / mdls 扫描，在“最近 2s 有搜索活动”窗口内跳过本轮调度（下次 idle 周期继续）。
+
+- 回归验证：
+  - 新增测试：`apps/core-app/src/main/modules/box-tool/search-engine/search-activity.test.ts`（3 cases）。
+  - 通过：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/search-activity.test.ts" "src/main/modules/box-tool/search-engine/search-gather.test.ts"`。
+  - `pnpm -C "apps/core-app" run typecheck:node` 当前被仓库既有问题阻断（`src/main/modules/extension-loader.test.ts` 的 Dirent 类型错误），与本次搜索改动无直接关联。
 
 ### fix(core-search): 文件搜索结果稳定性修复（快速层超时补发 + type 过滤零命中不再回退）
 
@@ -91,6 +154,52 @@
 - 验证结果：
   - `pnpm -C "apps/core-app" exec vitest run "src/main/core/module-manager.test.ts" "src/main/channel/common.test.ts" "src/main/modules/tray/tray-manager.test.ts" "src/main/core/eventbus/touch-event.test.ts" "src/main/core/startup-module-loader.test.ts" "src/main/channel/common.registration.test.ts" "src/main/core/quit-paths.test.ts"` 通过（19 tests）。
   - `pnpm -C "apps/core-app" run typecheck:node` 通过。
+
+### refactor(core-main): 生命周期收口补完 + `$app` 去耦首轮 + 结构治理首轮
+
+- 生命周期收口补完：
+  - `apps/core-app/src/main/core/startup-health.ts`
+    - 新增 `runStartupHealthCheck`，将 `loadStartupModules + waitUntilInitialized` 合并为统一健康门禁，失败即中断启动。
+  - `apps/core-app/src/main/core/before-quit-guard.ts`
+    - 新增 `runWithBeforeQuitTimeout`（默认 `8s`），`before-quit` handler 超时/异常均记录后继续退出，防止关停卡死。
+  - `apps/core-app/src/main/core/module-manager.ts`
+    - 卸载观测增强：新增 `ModuleUnloadObservation`、`getLastUnloadObservation()`；记录 `reason/appClosing/duration/failedCount` 作为关停回归基线。
+- `$app` 去耦首轮（高风险模块）：
+  - `packages/utils/types/modules/module-lifecycle.ts`
+    - 新增 `MainRuntimeContext`，生命周期上下文注入 `ctx.runtime`。
+  - `apps/core-app/src/main/core/module-manager.ts`
+    - lifecycle context 统一注入 runtime（`app/window/channel/moduleManager/logger/config`）。
+  - `apps/core-app/src/main/core/deprecated-global-app.ts`
+    - 新增一次性 deprecate 告警兼容层（仅用于迁移过渡）。
+  - 首批迁移完成：
+    - `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+    - `apps/core-app/src/main/modules/update/UpdateService.ts`
+    - 两处优先使用 runtime 注入，不再依赖直接读取 `globalThis.$app`。
+- 主进程结构治理首轮（保持外部契约不变）：
+  - plugin 编排层抽取：
+    - `apps/core-app/src/main/modules/plugin/services/plugin-io-service.ts`
+    - `apps/core-app/src/main/modules/plugin/services/plugin-manager-orchestrator.ts`
+  - file-provider 路径/查询层抽取：
+    - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-path-service.ts`
+    - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-search-service.ts`
+  - Update 检查/下载/安装编排抽取：
+    - `apps/core-app/src/main/modules/update/services/update-action-controller.ts`
+- 质量门禁新增：
+  - `scripts/check-main-global-app-usage.mjs` + `scripts/main-global-app-allowlist.json`：阻止 `src/main/**` 新增 `$app` 直接读取。
+  - 根脚本新增：`pnpm guard:global-app`、`pnpm test:core-main`。
+- 测试补齐：
+  - 新增：
+    - `apps/core-app/src/main/core/startup-health.test.ts`
+    - `apps/core-app/src/main/core/before-quit-guard.test.ts`
+    - `apps/core-app/src/main/modules/plugin/services/plugin-manager-orchestrator.test.ts`
+    - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-path-service.test.ts`
+    - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-search-service.test.ts`
+    - `apps/core-app/src/main/modules/update/services/update-action-controller.test.ts`
+- 验证结果：
+  - `pnpm -C "apps/core-app" run test:core-main` 通过。
+  - `pnpm -C "apps/core-app" run typecheck:node` 通过。
+  - `pnpm guard:global-app` 通过。
+  - `pnpm test:core-main` 通过（root 聚合子集）。
 
 ## 2026-03-22
 

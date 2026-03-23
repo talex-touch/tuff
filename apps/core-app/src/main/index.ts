@@ -8,6 +8,8 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { app, protocol } from 'electron'
 import { commonChannelModule } from './channel/common'
 import { genTouchApp } from './core'
+import { runStartupHealthCheck } from './core/startup-health'
+import { loadStartupModules } from './core/startup-module-loader'
 import { enforceDevReleaseStartupConstraint } from './core/startup-version-guard'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import { addonOpenerModule } from './modules/addon-opener'
@@ -224,6 +226,7 @@ const modulesToLoad = [
   terminalModule,
   downloadCenterModule
 ]
+const optionalModulesToLoad = new Set([trayManagerModule])
 
 function shouldLoadTrayModule(): boolean {
   try {
@@ -253,72 +256,77 @@ app.whenReady().then(async () => {
   const startupTimer = mainLog.time('All modules loaded', 'success')
   mainLog.info('Electron ready, bootstrapping modules')
 
-  const analytics = getStartupAnalytics()
-  const touchApp = genTouchApp()
-  const moduleLoadMetrics: ModuleLoadMetric[] = []
-  const modulesStartTime = Date.now()
+  try {
+    const analytics = getStartupAnalytics()
+    const touchApp = genTouchApp()
+    const modulesStartTime = Date.now()
 
-  // Load modules and track individual load times
-  for (let i = 0; i < modulesToLoad.length; i++) {
-    const moduleCtor = modulesToLoad[i]
-    if (moduleCtor === trayManagerModule && !shouldLoadTrayModule()) {
-      mainLog.info('Skip TrayManager module: experimentalTray disabled')
-      continue
-    }
+    const moduleLoadMetrics = (await runStartupHealthCheck({
+      loadModules: async () =>
+        (await loadStartupModules({
+          modules: modulesToLoad,
+          loadModule: async (moduleCtor) => {
+            return await touchApp.moduleManager.loadModule(moduleCtor)
+          },
+          optionalModules: optionalModulesToLoad,
+          shouldSkip: (moduleCtor) => {
+            if (moduleCtor === trayManagerModule && !shouldLoadTrayModule()) {
+              mainLog.info('Skip TrayManager module: experimentalTray disabled')
+              return true
+            }
+            return false
+          },
+          onOptionalModuleLoadFailed: async (_moduleCtor, metric) => {
+            mainLog.warn('Optional module failed to load, continue startup', {
+              meta: { module: metric.name }
+            })
+          },
+          onLoaded: async (moduleCtor, metric) => {
+            analytics.trackModuleLoad(metric.name, metric.loadTime, metric.order)
 
-    const moduleStartTime = Date.now()
+            if (moduleCtor === storageModule) {
+              try {
+                const appSettings = getMainConfig(StorageList.APP_SETTING)
+                applyLoggerConfig(appSettings)
+                subscribeMainConfig(StorageList.APP_SETTING, (data) => {
+                  applyLoggerConfig(data)
+                })
+              } catch (error) {
+                mainLog.warn('Failed to load logger configuration', { error })
+              }
+            }
+          }
+        })) as ModuleLoadMetric[],
+      waitUntilInitialized: () => touchApp.waitUntilInitialized()
+    })) as ModuleLoadMetric[]
 
-    await touchApp.moduleManager.loadModule(moduleCtor)
+    const totalModulesLoadTime = Date.now() - modulesStartTime
 
-    const moduleLoadTime = Date.now() - moduleStartTime
-    // Convert module name to string (handle symbol case)
-    const moduleName =
-      typeof moduleCtor.name === 'string'
-        ? moduleCtor.name
-        : typeof moduleCtor.name === 'symbol'
-          ? moduleCtor.name.toString()
-          : `Module${i}`
-
-    moduleLoadMetrics.push({
-      name: moduleName,
-      loadTime: moduleLoadTime,
-      order: i
+    // Set main process metrics
+    analytics.setMainProcessMetrics({
+      processCreationTime: process.getCreationTime() || Date.now(),
+      electronReadyTime,
+      modulesLoadTime: totalModulesLoadTime,
+      totalModules: modulesToLoad.length,
+      moduleDetails: moduleLoadMetrics
     })
 
-    analytics.trackModuleLoad(moduleName, moduleLoadTime, i)
+    touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
 
-    if (moduleCtor === storageModule) {
-      try {
-        const appSettings = getMainConfig(StorageList.APP_SETTING)
-        applyLoggerConfig(appSettings)
-        subscribeMainConfig(StorageList.APP_SETTING, (data) => {
-          applyLoggerConfig(data)
-        })
-      } catch (error) {
-        mainLog.warn('Failed to load logger configuration', { error })
-      }
-    }
+    // Start the global polling service after all modules are loaded.
+    pollingService.start()
+
+    startupTimer.end('All modules loaded', {
+      meta: { modules: modulesToLoad.length }
+    })
+
+    void runOmniPanelSmokeProbeIfNeeded()
+  } catch (error) {
+    startupTimer.end('Bootstrap failed', {
+      level: 'warn',
+      error
+    })
+    mainLog.error('Main process bootstrap failed', { error })
+    app.quit()
   }
-
-  const totalModulesLoadTime = Date.now() - modulesStartTime
-
-  // Set main process metrics
-  analytics.setMainProcessMetrics({
-    processCreationTime: process.getCreationTime() || Date.now(),
-    electronReadyTime,
-    modulesLoadTime: totalModulesLoadTime,
-    totalModules: modulesToLoad.length,
-    moduleDetails: moduleLoadMetrics
-  })
-
-  touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
-
-  // Start the global polling service after all modules are loaded.
-  pollingService.start()
-
-  startupTimer.end('All modules loaded', {
-    meta: { modules: modulesToLoad.length }
-  })
-
-  void runOmniPanelSmokeProbeIfNeeded()
 })

@@ -12,7 +12,7 @@
     "lint": "eslint --cache . --quiet",
     "lint:fix": "eslint --cache --fix .",
     "test": "vitest run",
-    "test:core-main": "vitest run \"src/main/core/**/*.test.ts\" \"src/main/channel/**/*.test.ts\" \"src/main/modules/tray/**/*.test.ts\"",
+    "test:core-main": "vitest run \"src/main/core\" \"src/main/channel\" \"src/main/modules/tray\"",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "pnpm -F @talex-touch/tuffex run build && vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",

@@ -3,6 +3,40 @@ import type { ITouchEventBus } from '../../eventbus'
 import type { TalexTouch } from '../touch-app-core'
 import type { ModuleDirectory, ResolvedModuleFileConfig } from './base'
 
+type RuntimePrimitive = string | number | boolean | null | undefined
+
+export interface ModuleRuntimeLogger {
+  debug: (
+    message: unknown,
+    options?: { meta?: Record<string, RuntimePrimitive>; error?: unknown }
+  ) => void
+  info: (
+    message: unknown,
+    options?: { meta?: Record<string, RuntimePrimitive>; error?: unknown }
+  ) => void
+  warn: (
+    message: unknown,
+    options?: { meta?: Record<string, RuntimePrimitive>; error?: unknown }
+  ) => void
+  error: (
+    message: unknown,
+    options?: { meta?: Record<string, RuntimePrimitive>; error?: unknown }
+  ) => void
+  success?: (
+    message: unknown,
+    options?: { meta?: Record<string, RuntimePrimitive>; error?: unknown }
+  ) => void
+}
+
+export interface MainRuntimeContext<E> {
+  app: TalexTouch.TouchApp
+  window?: TalexTouch.ITouchWindow
+  channel?: unknown
+  moduleManager: TalexTouch.IModuleManager<E>
+  logger: ModuleRuntimeLogger
+  config?: <T = unknown>(key: string) => T
+}
+
 /**
  * Base context available to all lifecycle phases.
  *
@@ -45,6 +79,12 @@ export interface ModuleBaseContext<E> {
    * **Single-directory rule**: Each module can expose at most one `ModuleDirectory` instance here.
    */
   directory?: ModuleDirectory
+
+  /**
+   * Aggregated runtime context injected by the main process.
+   * Prefer using this over legacy global variables.
+   */
+  runtime?: MainRuntimeContext<E>
 }
 
 /**
