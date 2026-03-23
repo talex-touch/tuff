@@ -13,6 +13,64 @@
 
 ## 2026-03-23
 
+### refactor(core-app): 高频异步化链路收口（Polling lanes / Sentry outbox / Clipboard Stage-B / Perf 探针解耦）
+
+- 背景：
+  - 线上启动与运行期日志出现 `Event loop lag`、`sentry.nexus.flush` 和 `Clipboard.check` 互相放大，主线程存在“高频任务被 I/O 串行拖慢”的风险。
+  - 目标明确为“**不降频，且后续可提频**”，因此采用调度/执行/传输分层异步化，而非靠降低轮询频率止血。
+- 变更（调度层）：
+  - `packages/utils/common/utils/polling.ts` 完成 lane 化调度重构：`critical/realtime/io/maintenance/legacy_serial`。
+  - 新增背压语义：`strict_fifo/latest_wins/coalesce`，并保持旧调用默认落到 `legacy_serial + strict_fifo` 兼容行为。
+  - 新增诊断字段：`lastSchedulerDelayMs/maxSchedulerDelayMs`、`queueDepthByLane`、`dropped/coalesced/timeout/error` 统计。
+- 变更（Sentry/Startup Analytics）：
+  - `apps/core-app/src/main/modules/analytics/startup-analytics.ts` 改为 outbox 异步上传：上报路径仅入队，后台 `io lane` flush（退避 + 重试）。
+  - 启动与 Sentry 的 outbox flush 任务改为“仅首次注册，后续复用”，避免高频事件下反复 `register` 造成调度抖动。
+  - `apps/core-app/src/main/modules/sentry/sentry-service.ts` 将 Nexus telemetry 改为“内存 batch -> 持久 outbox -> 后台上传”，并补齐：
+    - cooldown 期间不再丢事件（仅暂停发送，不暂停入队）；
+    - outbox 有界增长（超限裁剪最老数据）；
+    - 上传透传 idempotency key（header + metadata）。
+  - `analytics_report_queue` 作为共享 outbox，使用 `metadata.kind` 做严格分流，避免 startup/sentry 互相消费。
+- 变更（Clipboard/Perf）：
+  - `apps/core-app/src/main/modules/clipboard.ts`：轮询任务迁移到 `realtime + latest_wins`；重任务拆到 Stage-B 异步链路（OCR/source 回填），主检查路径只保留轻量判定与落库。
+  - `activeApp.snapshot` 改为独立缓存刷新任务（`clipboard.active-app.refresh`）；Stage-B 优先读取短 TTL 缓存，避免在处理链路里同步等待 active app 查询。
+  - `apps/core-app/src/main/utils/perf-monitor.ts`：event-loop 探针改为独立 `setInterval` 采样，避免被业务调度器延迟污染。
+- 验证：
+  - `pnpm -C "packages/utils" run test -- "__tests__/polling-service.test.ts"` 通过。
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/analytics/startup-analytics.test.ts"` 通过。
+  - `startup-analytics.test.ts` 增加“flush 任务仅首次注册”用例并通过。
+  - `pnpm -C "apps/core-app" run typecheck:node` 通过。
+
+### refactor(core-app/clipboard): 阶段诊断逻辑抽离为独立模块（保持语义不变）
+
+- 变更：
+  - 新增 `apps/core-app/src/main/modules/clipboard/clipboard-phase-diagnostics.ts`，承载 `trackPhase/trackPhaseAsync/buildPhaseDiagnostics/toPerfSeverity` 与 phase alert 判定规则。
+  - `apps/core-app/src/main/modules/clipboard.ts` 移除内联诊断实现，改为模块化导入，主模块仅保留编排逻辑。
+  - 新增 `apps/core-app/src/main/modules/clipboard/clipboard-phase-diagnostics.test.ts`，覆盖 `gate_wait`、`image_pipeline` 及 severity 映射行为。
+- 价值：
+  - 降低 `Clipboard` 主模块复杂度，便于后续独立调参与扩展 phase code 规则。
+  - 保持现有日志字段与告警等级输出一致，不改变运行时对外行为。
+
+### fix(core-app/startup): 拆分模块加载与渲染器就绪计时口径，修正启动统计误读
+
+- 问题：
+  - `apps/core-app/src/main/index.ts` 里 `All modules loaded` 计时覆盖了 `touchApp.waitUntilInitialized()`，导致日志与 `modulesLoadTime` 统计被渲染器加载时间放大（表现为 `All modules loaded` 与 `Renderer ready` 时长接近）。
+  - `apps/core-app/src/renderer/index.html` 依赖外部 `cdn.jsdelivr` 的 Remixicon 样式，网络抖动会阻塞页面 `load`，放大 `Renderer ready` 耗时波动（多次启动样本出现 5~13s 抖动）。
+- 变更：
+  - 将启动计时拆分为两段：
+    - `All modules loaded`：仅覆盖 `loadStartupModules(...)` 阶段；
+    - `Startup health check passed`：覆盖完整启动健康检查（包含渲染器初始化等待）。
+  - `modulesLoadTime` 改为在模块加载结束后立即采样并写入 analytics，避免混入渲染器阶段耗时。
+  - 启动成功日志中的 `modules` 元信息改为实际加载数量（`loadedModuleCount`）。
+  - 移除 renderer 入口页外部 Remixicon CDN 样式依赖，改为使用本地 UnoCSS 图标类；
+  - 将两个 `ri-file-line` 兜底图标切换为 `i-ri-file-line`（`ClipboardFileTag.vue` / `UnifiedFileTag.vue`）。
+- 影响：
+  - 不改变模块加载顺序、事件触发顺序与功能行为；
+  - 启动日志和启动分析统计口径与语义保持一致，便于准确定位启动瓶颈；
+  - 降低 dev 环境下 `Renderer ready` 对外网/CDN可用性的耦合，减少冷启动长尾抖动。
+- 验证：
+  - `pnpm -C "apps/core-app" run typecheck:node` 通过。
+  - `pnpm -C "apps/core-app" exec vue-tsc --noEmit -p tsconfig.web.json --composite false` 通过。
+
 ### fix(pilot): 补齐 Milkdown 数学样式依赖（katex CSS 解析失败）
 
 - 问题：
@@ -57,6 +115,50 @@
   - 新增：`apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
   - 通过：`pnpm -C "apps/pilot" test -- "server/utils/__tests__/pilot-conversation-shared.test.ts" "server/utils/__tests__/pilot-tool-gateway.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts"`
   - `pnpm -C "apps/pilot" run typecheck` 失败，存在仓库既有大量 TS 问题（与本次改动无直接关联）。
+
+### fix(pilot): stream 后端逐事件投影同步（替代前端触发上传）
+
+- 问题：
+  - 仅依赖 `finally` 阶段回填时，流中刷新可能出现 `pilot_tool_card` / `pilot_run_event_card` / thinking 状态短暂丢失。
+  - 需要将一致性职责固定在后端 stream 链路，避免前端触发上传参与状态保障。
+- 变更：
+  - 新增 `apps/pilot/server/utils/pilot-stream-quota-projector.ts`：
+    - 在后端按 SSE 逐事件投影（含 `assistant.*`、`thinking.*`、`run.audit`、`intent.*`、`routing.*`、`memory.*`、`websearch.*`、`error/done`）；
+    - `stream.heartbeat` 仅透传，不进入快照；
+    - 使用串行队列 + `assistant.delta` 短防抖写入，`assistant.final/thinking.final/done/error/finally` 强制 flush。
+  - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`：
+    - 在 `emitEvent` 包装层接入 projector，SSE 发送后立即 `apply`；
+    - `finally` 阶段先强制 flush projector，再执行现有 `syncLegacyQuotaConversationFromRuntime(...)` 兜底校准。
+  - `apps/pilot/server/utils/quota-conversation-snapshot.ts`：
+    - 补齐 `thinking.delta` / `thinking.final` 到 `pilot_run_event_card` 的重建与内容合并；
+    - `run.audit` 卡片补齐 camel/snake 归一化（`auditType/callId/ticketId/toolName/status`）与审批状态链路映射。
+- 验证：
+  - 新增：`apps/pilot/server/utils/__tests__/pilot-stream-quota-projector.test.ts`
+  - 新增：`apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+  - 通过：`pnpm -C "apps/pilot" exec vitest run -c "./vitest.config.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/pilot-stream-quota-projector.test.ts"`
+  - 通过：`pnpm -C "apps/pilot" exec eslint "server/api/chat/sessions/[sessionId]/stream.post.ts" "server/utils/quota-conversation-snapshot.ts" "server/utils/pilot-stream-quota-projector.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/pilot-stream-quota-projector.test.ts"`
+  - `pnpm -C "apps/pilot" run typecheck` 失败，存在仓库既有大量 TS 问题（与本次改动无直接关联）。
+
+### fix(pilot/legacy-ui): 发送即建会话 + 用户首句临时标题 + 刷新续流恢复
+
+- 问题：
+  - 旧 `completion` 链路首轮发送时，会话与历史可见性依赖流式阶段，导致“AI 未结束前刷新”可能出现当前会话丢失或无法续流。
+  - 会话标题依赖后续 AI 生成，首轮缺少稳定的用户可见标题。
+- 变更：
+  - `apps/pilot/server/api/chat/sessions/index.post.ts`
+    - 支持 `title/topic/message` 输入，创建会话时优先写入“用户首句裁剪标题”；
+    - 创建阶段补写 `quota_history` 占位快照与 `pilot_quota_sessions`，确保“发送即创建且可见”。
+  - `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+    - 流式请求前显式调用 `POST /api/chat/sessions` 绑定会话（同 id），避免会话延迟创建；
+    - 新增 `fromSeq/follow` 透传能力，支持刷新后 follow 模式续流；
+    - 发送首轮使用用户消息前缀作为 `initialTitle`，后续仍可被 AI 标题覆盖。
+  - `apps/pilot/app/pages/index.vue`
+    - 首次发送即锁定 `select + route(id)`，并立即本地快照为 `pending`；
+    - 启动时主动加载历史并按 `route.id` 恢复会话；
+    - 对 `runtimeState=executing/planning` 的会话自动触发 `fromSeq+follow` 续流。
+- 验证：
+  - 通过：`pnpm -C "apps/pilot" exec eslint "app/pages/index.vue" "app/composables/api/base/v1/aigc/completion/index.ts" "app/composables/api/base/v1/aigc/completion-types.ts" "server/api/chat/sessions/index.post.ts" "server/api/chat/sessions/[sessionId]/stream.post.ts" "server/utils/quota-conversation-snapshot.ts" "server/utils/pilot-stream-quota-projector.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/pilot-stream-quota-projector.test.ts"`
+  - 通过：`pnpm -C "apps/pilot" exec vitest run -c "./vitest.config.ts" "server/utils/__tests__/legacy-stream-input.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/pilot-stream-quota-projector.test.ts"`
 
 ### feat(core-app-hardcut): 兼容债务并行硬切（legacy channel/storage/插件 API/更新与 AgentStore）
 
