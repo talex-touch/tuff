@@ -3,7 +3,8 @@ import type {
   Event as ElectronEvent,
   OpenDevToolsOptions,
   RenderProcessGoneDetails,
-  WebContents
+  WebContents,
+  WebContentsConsoleMessageEventParams
 } from 'electron'
 import process from 'node:process'
 import { app, BrowserWindow, nativeTheme } from 'electron'
@@ -56,9 +57,16 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
     const attachConsoleFilter = (contents: WebContents | null | undefined): void => {
       if (!contents) return
-      contents.on('console-message', (event, _level, message, _line, sourceId) => {
+      const consoleMessageSource = contents as unknown as {
+        on: (
+          event: 'console-message',
+          listener: (details: ElectronEvent<WebContentsConsoleMessageEventParams>) => void
+        ) => void
+      }
+      consoleMessageSource.on('console-message', (details) => {
+        const { message, sourceId } = details
         if (!shouldIgnoreDevtoolsAutofill(message, sourceId)) return
-        event.preventDefault()
+        details.preventDefault()
       })
     }
 

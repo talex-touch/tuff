@@ -1,0 +1,36 @@
+{
+  "runNo": 31,
+  "timestamp": "2026-03-24T06:00:26.738Z",
+  "timeoutMs": null,
+  "traceDeprecation": null,
+  "wallTimeMs": null,
+  "processExitCode": null,
+  "processSignal": null,
+  "timedOut": false,
+  "allModulesLoadedMs": null,
+  "startupHealthMs": null,
+  "startupAnalyticsMs": null,
+  "rendererReadyMs": null,
+  "warnCount": 2,
+  "errorCount": 1,
+  "warnLines": [
+    "[13:27:42.028] [WARN] [TouchApp] Secondary launch detected, quitting existing process",
+    "\u001b[91m[2026-03-24T13:27:42.054] [ERROR] error - \u001b[39m(node:88756) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead."
+  ],
+  "errorLines": [
+    "\u001b[91m[2026-03-24T13:27:42.054] [ERROR] error - \u001b[39m(node:88756) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead."
+  ],
+  "deprecations": [
+    "\u001b[91m[2026-03-24T13:27:42.054] [ERROR] error - \u001b[39m(node:88756) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead."
+  ],
+  "topSlowModules": [],
+  "maxEventLoopLagMs": null,
+  "maxSlowIpcMs": null,
+  "isPass": false,
+  "blockingIssues": [
+    "deprecation",
+    "startup_logs_nonzero",
+    "startup_health_missing"
+  ],
+  "analysisCutoffReached": false
+}

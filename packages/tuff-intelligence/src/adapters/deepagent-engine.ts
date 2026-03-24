@@ -1,5 +1,3 @@
-import { ChatOpenAI } from '@langchain/openai'
-import { createDeepAgent } from 'deepagents'
 import type { SubAgent } from 'deepagents'
 import { networkClient } from '@talex-touch/utils/network'
 import type { AgentEngineAdapter } from './engine'
@@ -57,6 +55,28 @@ const OPENAI_CHAT_SUFFIXES = ['/chat/completions', '/completions']
 const OPENAI_RESPONSES_SUFFIXES = ['/v1/responses', '/responses']
 const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']
 const UNSUPPORTED_CHAT_COMPLETIONS_BASE_URLS = new Set<string>()
+
+type LangChainOpenAiModule = typeof import('@langchain/openai')
+type DeepAgentsModule = typeof import('deepagents')
+
+let langChainOpenAiModulePromise: Promise<LangChainOpenAiModule> | null = null
+let deepAgentsModulePromise: Promise<DeepAgentsModule> | null = null
+
+async function getChatOpenAIConstructor(): Promise<LangChainOpenAiModule['ChatOpenAI']> {
+  if (!langChainOpenAiModulePromise) {
+    langChainOpenAiModulePromise = import('@langchain/openai')
+  }
+  const module = await langChainOpenAiModulePromise
+  return module.ChatOpenAI
+}
+
+async function getCreateDeepAgent(): Promise<DeepAgentsModule['createDeepAgent']> {
+  if (!deepAgentsModulePromise) {
+    deepAgentsModulePromise = import('deepagents')
+  }
+  const module = await deepAgentsModulePromise
+  return module.createDeepAgent
+}
 
 function normalizeTransport(value: unknown): 'auto' | 'responses' | 'chat.completions' {
   const normalized = String(value || '').trim().toLowerCase()
@@ -1502,6 +1522,7 @@ async function invokeDeepAgentWithTransport(
     ? `${trimSuffixSlash(relayBaseUrl)}/responses`
     : `${trimSuffixSlash(relayBaseUrl)}/chat/completions`
 
+  const ChatOpenAI = await getChatOpenAIConstructor()
   const llm = new ChatOpenAI({
     apiKey: effectiveApiKey,
     model,
@@ -1542,6 +1563,8 @@ async function invokeDeepAgentWithTransport(
       metadata: toRecord(options.metadata),
     },
   })
+
+  const createDeepAgent = await getCreateDeepAgent()
 
   let lastAttempt = 0
   let response: unknown
@@ -1756,6 +1779,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
       ? `${trimSuffixSlash(relayBaseUrl)}/responses`
       : `${trimSuffixSlash(relayBaseUrl)}/chat/completions`
 
+    const ChatOpenAI = await getChatOpenAIConstructor()
     const llm = new ChatOpenAI({
       apiKey: effectiveApiKey,
       model,
@@ -1928,6 +1952,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
     }
 
     try {
+      const createDeepAgent = await getCreateDeepAgent()
       const agent = createDeepAgent({
         model: llm,
         instructions,

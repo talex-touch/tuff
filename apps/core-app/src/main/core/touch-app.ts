@@ -58,6 +58,8 @@ export class TouchApp implements TalexTouch.TouchApp {
   private _startSilent = false
 
   private mainWindowBoundsSaveTimer: NodeJS.Timeout | null = null
+  private readonly initPromise: Promise<void>
+  private initError: unknown | null = null
 
   private readLegacyBooleanSettingFromDisk(
     settingFile: string
@@ -474,9 +476,28 @@ export class TouchApp implements TalexTouch.TouchApp {
 
     app.setAppUserModelId('com.tagzxia.talex-touch')
 
-    this.__init__().then(() => {
-      mainLog.success('TouchApp runtime initialized')
-    })
+    this.initPromise = this.__init__()
+      .then(() => {
+        mainLog.success('TouchApp runtime initialized')
+      })
+      .catch((error) => {
+        this.initError = error
+        mainLog.error('TouchApp runtime initialization failed', { error })
+      })
+  }
+
+  public async waitUntilInitialized(): Promise<void> {
+    await this.initPromise
+    if (this.initError) {
+      if (this.initError instanceof Error) {
+        throw this.initError
+      }
+      throw new Error(String(this.initError))
+    }
+  }
+
+  public isSilentStart(): boolean {
+    return this._startSilent
   }
 
   private registerMainWindowBoundsPersistence(): void {

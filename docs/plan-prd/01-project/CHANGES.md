@@ -1,13 +1,161 @@
 # 变更日志
 
-> 更新时间: 2026-03-23
-> 说明: 主文件仅保留近 30 天（2026-02-24 ~ 2026-03-23）详细记录；更早历史已按月归档。
+> 更新时间: 2026-03-24
+> 说明: 主文件仅保留近 30 天（2026-02-24 ~ 2026-03-24）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
 - 当前主线：`2.4.9-beta.4` 基线下，下一动作统一为 `Nexus 设备授权风控`。
 - 历史主线：`2.4.8 OmniPanel Gate`、`v2.4.7 Gate A/B/C/D/E` 均已收口（historical）。
 - 旧记录入口：见文末“历史索引导航”。
+
+---
+
+## 2026-03-24
+
+### perf(core-app): Dev 启动压测闭环脚本 + 启动阻塞链路降噪治理
+
+- 新增启动压测执行器与报告产物：
+  - `apps/core-app/scripts/startup-benchmark-dev.mjs`
+    - 支持 `--runs`、`--timeoutMs`、`--traceDeprecation`、`--continueOnFail`；
+    - 支持 `--mode analyze` 对既有日志重建报告；
+    - 自动落盘 `logs/run-XX.log`、`data/run-XX.json`、`第XX次运行报告.md` 与 `汇总报告.md`。
+  - `apps/core-app/package.json`
+    - 新增脚本：`startup:bench:dev`、`startup:bench:analyze`。
+  - 报告目录：`docs/engineering/reports/startup-dev-runs-2026-03-24/`
+    - 固化 `第01次运行报告.md` 为用户提供日志基线。
+- 启动主路径性能与告警治理：
+  - `apps/core-app/src/main/modules/system-update/index.ts`
+    - 启动期 `runRefreshUpdates('startup')` 改为延后异步触发，不再阻塞模块加载；
+    - 启动刷新失败改为信息级日志，保留轮询期慢刷新告警。
+  - `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+    - `sentry.nexus.flush` 改为启动宽限后执行（移除 `runImmediately`）；
+    - 对本地开发常见网络不可达上报失败降为信息级，保留重试与持久化统计。
+  - `apps/core-app/src/main/modules/analytics/startup-analytics.ts`
+    - `startup-analytics.outbox.flush` 改为启动宽限后执行（移除 `runImmediately`）；
+    - 队列 flush 的不可达网络场景降为信息级，避免启动窗口噪声告警。
+  - `apps/core-app/src/main/core/touch-window.ts`
+    - `console-message` 监听迁移到 Electron 新事件签名，修复 deprecation 告警。
+  - `apps/core-app/src/main/index.ts`
+    - 新增 `TUFF_STARTUP_BENCHMARK_ONCE` 启动压测一次性退出开关（仅基准模式生效）。
+  - `apps/core-app/src/main/modules/box-tool/file-system-watcher/file-system-watcher.ts`
+    - 增加 macOS `Photos Library.photoslibrary` 忽略；
+    - `EPERM/EACCES` 走可恢复信息日志，不再作为错误告警污染启动日志；
+    - 增加路径注册去重中的 in-flight 保护，减少重复 watch。
+  - `apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
+    - `vision.ocr` 无效 data URL 识别为可恢复输入异常，降级为信息日志，避免重复 warn 噪声。
+  - `apps/core-app/electron.vite.config.ts`
+    - Sentry Vite 插件改为仅生产构建按需动态加载，避免 dev 启动引入 `@sentry/cli` 旧依赖链触发 `DEP0040 punycode`。
+
+### perf(core-app): 启动窗口稳定性收尾（告警误报抑制 + 静默启动健康判定优化）
+
+- `DEP0040` 根因链路收口（SDK 侧）：
+  - `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+    - `@langchain/openai` 与 `deepagents` 改为按需动态 `import()`，避免主进程启动期被动拉起 openai/node-fetch/whatwg-url 依赖链。
+  - `packages/tuff-intelligence/src/adapters/index.ts`
+    - 移除 `deepagent-engine` 的根 adapters 重导出，降低非 Pilot 场景的启动期模块求值成本。
+- 启动路径稳定化：
+  - `apps/core-app/src/main/modules/download/download-center.ts`
+    - 去除模块 `onInit` 阶段对 `PollingService.start()` 的提前调用，统一由启动主流程在 `ALL_MODULES_LOADED` 后启动轮询。
+  - `apps/core-app/src/main/core/touch-app.ts`
+    - 新增 `waitUntilInitialized()/isSilentStart()`，将渲染器初始化等待能力显式化。
+  - `apps/core-app/src/main/index.ts`
+    - 静默启动场景改为“渲染器后台初始化，不阻塞 Startup health 判定”；前台启动仍保持阻塞等待，确保交互一致性。
+  - `apps/core-app/src/main/utils/perf-monitor.ts`
+    - 增加 `TUFF_PERF_STARTUP_LAG_GRACE_MS`（默认 `2500ms`）启动宽限，抑制冷启动窗口 `event_loop.lag` 误报。
+- 压测脚本判定修正：
+  - `apps/core-app/scripts/startup-benchmark-dev.mjs`
+    - 汇总报告 `finalPass` 改为按“最近 10 次认证窗口”判定，不再被历史无效样本永久污染。
+- 结果：
+  - `docs/engineering/reports/startup-dev-runs-2026-03-24/` 已扩展到 `第62次运行报告`。
+  - 最近 10 次（Run53~Run62）连续达标，汇总报告口径显示：
+    - `最近10次 Startup health P50: 527ms`
+    - `最近10次 Startup health P95: 932ms`
+    - `最近10次 WARN/ERROR: 0/0`
+
+### feat(core-app): 启动搜索卡顿永久治理（平衡模式 + 双库隔离）
+
+- 背景：
+  - 启动期持续出现 `SQLITE_BUSY` 风暴、`analytics.snapshots` 失败重试灌队列与 `event_loop.lag`，导致搜索首段体验抖动。
+- 核心改造：
+  - `apps/core-app/src/main/modules/database/index.ts`
+    - 新增 aux 库初始化与迁移（`database-aux.db`），高频非核心表分流到 aux；
+    - 新增 `getAuxDb()/getAuxClient()/isAuxEnabled()/isAuxReady()`，支持运行态判定与降级回退。
+  - `apps/core-app/src/main/db/runtime-flags.ts`（new） + `apps/core-app/src/main/db/startup-degrade.ts`（new）
+    - 增加 `TUFF_DB_AUX_ENABLED`、`TUFF_DB_QOS_ENABLED`、`TUFF_STARTUP_DEGRADE_ENABLED`；
+    - 启动降载窗口收口为“时间阈值 + 核心队列低水位”双条件。
+  - `apps/core-app/src/main/db/db-write-scheduler.ts`
+    - 调度选项扩展：`priority/maxQueueWaitMs/budgetKey/dropPolicy/maxBusyFailures/circuitOpenMs`；
+    - 单队列升级为优先级选择执行（`critical > interactive > background > best_effort`）；
+    - 增加 `latest_wins`、标签熔断、策略注册表与 circuit 状态导出；
+    - 新增 `SQLITE_BUSY` 比例观测字段。
+  - `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+  - `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker*.ts`
+    - `file-index.full-scan/reconcile/scan-progress` 写入下沉到 worker 单写入入口，避免主线程与 worker 交叉写争锁。
+  - `apps/core-app/src/main/db/utils.ts`
+    - recommendation cache 改 aux 落库，读取支持 aux 优先 + core 兜底；
+    - `recommendation.cache` 写入改 `latest_wins`。
+  - `apps/core-app/src/main/modules/analytics/storage/db-store.ts`
+  - `apps/core-app/src/main/modules/clipboard.ts`
+    - analytics 快照失败指数退避；
+    - clipboard 在启动高压期自动降频，并对图像持久化增加去抖。
+  - store 注入改造（显式 core/aux）：
+    - `analytics-module.ts`、`startup-analytics.ts`、`sentry-service.ts`
+    - `report-queue-store.ts`、`telemetry-upload-stats-store.ts`
+    - 兼容窗口内关键读取支持 fallback。
+- 新增测试：
+  - `apps/core-app/src/main/db/db-write-scheduler.test.ts`
+    - 覆盖 QoS 优先级、best-effort 丢弃、busy 熔断开启/恢复。
+- 验证：
+  - `pnpm -C "apps/core-app" run typecheck:node`
+  - `pnpm -C "apps/core-app" run typecheck:web`
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/db/db-write-scheduler.test.ts"`
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/analytics/startup-analytics.test.ts"`
+
+### fix(core-app/clipboard): 启动预热改为首次按需加载，减少冷启动主线程争用
+
+- 背景：
+  - 启动日志中 `Clipboard cache hydrate slow` 与 `event_loop.lag` 出现在模块加载期重叠窗口，放大了模块计时噪声。
+  - `initialCache` 预热不再要求在启动阶段立即完成。
+- 变更：
+  - `apps/core-app/src/main/modules/clipboard.ts`
+    - 移除 `onInit` 内 `loadInitialCache()` 启动即执行。
+    - 新增 `ensureInitialCacheLoaded()`：在 `clipboard.getLatest`（typed/legacy）与首个 change stream 首次快照时按需触发一次懒加载。
+    - `loadInitialCache` 支持可选 `waitForIdle`，懒加载路径默认不等待 idle gate，避免首次查询被额外串行等待。
+- 影响：
+  - 启动阶段减少一段非必要 DB hydrate 工作，降低与其他模块初始化的事件循环竞争。
+  - 历史/分页查询仍走 DB 查询链路，不受本次策略调整影响。
+
+### perf(core-app/download): ErrorLogger 初始化改为非阻塞，降低模块加载临界路径耗时
+
+- 背景：
+  - 启动日志中 `Module loaded 1.7s module=DownloadCenter` 与主线程 lag 时间窗重叠，需要先削减模块内部可避免的同步等待。
+- 变更：
+  - `apps/core-app/src/main/modules/download/download-center.ts`
+    - 将 `await this.errorLogger.initialize()` 改为后台启动 `startErrorLoggerInitialization()`，不阻塞 `onInit` 返回。
+    - `onDestroy` 增加对 `errorLoggerInitInFlight` 的等待，避免“销毁后晚到初始化”重新注册轮询任务的竞态。
+    - 慢启动日志字段从 `errorLogger` 调整为 `errorLoggerKickoff`，语义与新路径一致。
+- 影响：
+  - DownloadCenter 初始化关键路径不再受日志目录准备/轮询注册影响。
+  - 错误日志能力仍保留，且退出阶段保持清理顺序正确。
+
+### fix(core-app/apps): macOS 本地化应用名回填与索引纠偏（simple-plist 路径）
+
+- 问题：
+  - 部分 macOS 应用（如网易云音乐）`InfoPlist.strings` 为 UTF-16 文本时，`simple-plist.readFile` 可能无法直接解析，导致回退到英文 `CFBundleName`。
+  - `displayName` 在 app 索引链路中存在“已有值后仅空值可写”策略，历史英文值会长期锁定，进而缺失中文关键词。
+- 变更：
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
+    - 保留 `simple-plist` 优先读取；
+    - 新增 `.strings` 轻量回退解析（UTF-16/UTF-8 解码 + key/value 提取），仅提取 `CFBundleDisplayName`/`CFBundleName`。
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+    - `upsert` 与 full sync 更新条件调整为：新 `displayName` 非空且与旧值不同即覆盖；
+    - `_initialize` 增加 displayName 漂移检测，即使 `mtime` 不变也会进入更新；
+    - startup backfill 增加“已存在 app 的 displayName 修正 + 关键词重建”流程，并输出更新/失败统计。
+  - 新增 `display-name-sync-utils` 与 `localized-strings-parser` 两个小型工具模块，减少主流程分支复杂度。
+- 影响：
+  - 中文应用名会稳定进入 `files.display_name` 与 `keyword_mappings`，`网易云` / `网易云音乐` / 拼音检索召回一致性提升。
+  - 不改 IPC/API，对 Windows/Linux 无行为变更。
 
 ---
 

@@ -39,6 +39,12 @@ function markAppQuitting(reason: string): void {
   mainLog.debug('Marked app quitting state', { meta: { reason } })
 }
 
+function parseBooleanEnv(value: string | undefined): boolean {
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
 export const innerRootPath = getRootPath()
 
 const logs = path.join(innerRootPath, 'logs')
@@ -109,7 +115,12 @@ if (release().startsWith('6.1')) app.disableHardwareAcceleration()
 // Set application name for Windows 10+ notifications
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
-if (!app.requestSingleInstanceLock()) {
+const startupBenchmarkMode = parseBooleanEnv(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
+if (startupBenchmarkMode) {
+  mainLog.info('Startup benchmark mode enabled, skip single-instance lock')
+}
+
+if (!startupBenchmarkMode && !app.requestSingleInstanceLock()) {
   mainLog.warn('Secondary launch detected, quitting existing process')
 
   app.on('second-instance', (event, argv, workingDirectory, additionalData) => {
