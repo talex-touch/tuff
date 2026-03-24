@@ -2673,6 +2673,99 @@ export class ClipboardModule extends BaseModule {
     }
   }
 
+  private async handleSetFavoriteRequest(request: ClipboardSetFavoriteRequest): Promise<void> {
+    if (!this.db || !Number.isFinite(request?.id)) return
+    await this.db
+      .update(clipboardHistory)
+      .set({ isFavorite: request.isFavorite })
+      .where(eq(clipboardHistory.id, request.id))
+
+    const cached = this.memoryCache.find((item) => item.id === request.id)
+    if (cached) {
+      cached.isFavorite = request.isFavorite
+      this.notifyTransportChange()
+    }
+  }
+
+  private async handleDeleteRequest(
+    request: ClipboardDeleteRequest,
+    source: 'transport' | 'legacy'
+  ): Promise<void> {
+    if (!this.db || !Number.isFinite(request?.id)) return
+    try {
+      const [row] = await this.db
+        .select()
+        .from(clipboardHistory)
+        .where(eq(clipboardHistory.id, request.id))
+        .limit(1)
+      const item = row as unknown as IClipboardItem | undefined
+      if (
+        item?.type === 'image' &&
+        typeof item.content === 'string' &&
+        isLikelyLocalPath(item.content)
+      ) {
+        void tempFileService.deleteFile(item.content)
+      }
+    } catch (error) {
+      clipboardLog.warn(`Failed to delete clipboard image file for ${source} delete`, { error })
+    }
+    await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, request.id))
+    this.memoryCache = this.memoryCache.filter((item) => item.id !== request.id)
+    this.notifyTransportChange()
+  }
+
+  private async handleGetImageUrlRequest(
+    request: ClipboardGetImageUrlRequest
+  ): Promise<ClipboardGetImageUrlResponse> {
+    const id = Number(request?.id)
+    if (!Number.isFinite(id)) {
+      return { url: null }
+    }
+
+    const item = await this.getItemById(id)
+    if (!item || item.type !== 'image') {
+      return { url: null }
+    }
+
+    const normalized = this.toClientItem(item) ?? item
+    const meta = normalized.meta
+    if (meta && typeof meta === 'object') {
+      const imageUrl = (meta as Record<string, unknown>).image_original_url
+      if (typeof imageUrl === 'string' && imageUrl.trim().length > 0) {
+        return { url: imageUrl.trim() }
+      }
+    }
+
+    const content = typeof normalized.content === 'string' ? normalized.content : ''
+    if (content.startsWith('tfile://')) {
+      return { url: content }
+    }
+
+    return { url: null }
+  }
+
+  private async handleCopyAndPasteRequest(
+    request: ClipboardCopyAndPasteRequest
+  ): Promise<ClipboardActionResult> {
+    try {
+      const applyPayload: ClipboardApplyPayload = buildApplyPayloadFromCopyAndPaste(request)
+      await this.applyToActiveApp(applyPayload)
+      return { success: true }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { success: false, message }
+    }
+  }
+
+  private async handleWriteRequest(
+    request: ClipboardWriteRequest,
+    writePayload: (payload: ClipboardWritePayload) => Promise<void>
+  ): Promise<void> {
+    const payload = normalizeClipboardWritePayload(request)
+    if (!payload) return
+    await writePayload(payload)
+  }
+
   private registerTransportHandlers(): void {
     const channel = genTouchApp().channel
     const keyManager =
@@ -2768,29 +2861,7 @@ export class ClipboardModule extends BaseModule {
         ClipboardEvents.delete,
         async (request: ClipboardDeleteRequest, context: HandlerContext) => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          if (!this.db) return
-          try {
-            const [row] = await this.db
-              .select()
-              .from(clipboardHistory)
-              .where(eq(clipboardHistory.id, request.id))
-              .limit(1)
-            const item = row as unknown as IClipboardItem | undefined
-            if (
-              item?.type === 'image' &&
-              typeof item.content === 'string' &&
-              isLikelyLocalPath(item.content)
-            ) {
-              void tempFileService.deleteFile(item.content)
-            }
-          } catch (error) {
-            clipboardLog.warn('Failed to delete clipboard image file for transport delete', {
-              error
-            })
-          }
-          await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, request.id))
-          this.memoryCache = this.memoryCache.filter((item) => item.id !== request.id)
-          this.notifyTransportChange()
+          await this.handleDeleteRequest(request, 'transport')
         }
       )
     )
@@ -2800,17 +2871,7 @@ export class ClipboardModule extends BaseModule {
         ClipboardEvents.setFavorite,
         async (request: ClipboardSetFavoriteRequest, context: HandlerContext) => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          if (!this.db) return
-          await this.db
-            .update(clipboardHistory)
-            .set({ isFavorite: request.isFavorite })
-            .where(eq(clipboardHistory.id, request.id))
-
-          const cached = this.memoryCache.find((item) => item.id === request.id)
-          if (cached) {
-            cached.isFavorite = request.isFavorite
-            this.notifyTransportChange()
-          }
+          await this.handleSetFavoriteRequest(request)
         }
       )
     )
@@ -2836,31 +2897,7 @@ export class ClipboardModule extends BaseModule {
           context: HandlerContext
         ): Promise<ClipboardGetImageUrlResponse> => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', request)
-          const id = Number(request?.id)
-          if (!Number.isFinite(id)) {
-            return { url: null }
-          }
-
-          const item = await this.getItemById(id)
-          if (!item || item.type !== 'image') {
-            return { url: null }
-          }
-
-          const normalized = this.toClientItem(item) ?? item
-          const meta = normalized.meta
-          if (meta && typeof meta === 'object') {
-            const imageUrl = (meta as Record<string, unknown>).image_original_url
-            if (typeof imageUrl === 'string' && imageUrl.trim().length > 0) {
-              return { url: imageUrl.trim() }
-            }
-          }
-
-          const content = typeof normalized.content === 'string' ? normalized.content : ''
-          if (content.startsWith('tfile://')) {
-            return { url: content }
-          }
-
-          return { url: null }
+          return await this.handleGetImageUrlRequest(request)
         }
       )
     )
@@ -2889,9 +2926,7 @@ export class ClipboardModule extends BaseModule {
         ClipboardEvents.write,
         async (request: ClipboardWriteRequest, context: HandlerContext) => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          const payload = normalizeClipboardWritePayload(request)
-          if (!payload) return
-          await writePayload(payload)
+          await this.handleWriteRequest(request, writePayload)
         }
       )
     )
@@ -2944,14 +2979,7 @@ export class ClipboardModule extends BaseModule {
           context: HandlerContext
         ): Promise<ClipboardActionResult> => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          try {
-            const applyPayload: ClipboardApplyPayload = buildApplyPayloadFromCopyAndPaste(request)
-            await this.applyToActiveApp(applyPayload)
-            return { success: true }
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            return { success: false, message }
-          }
+          return await this.handleCopyAndPasteRequest(request)
         }
       )
     )
@@ -3004,44 +3032,14 @@ export class ClipboardModule extends BaseModule {
         clipboardLegacySetFavoriteEvent,
         async (request: ClipboardSetFavoriteRequest, context: HandlerContext) => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          if (!this.db || !Number.isFinite(request?.id)) return
-          await this.db
-            .update(clipboardHistory)
-            .set({ isFavorite: request.isFavorite })
-            .where(eq(clipboardHistory.id, request.id))
-
-          const cached = this.memoryCache.find((item) => item.id === request.id)
-          if (cached) {
-            cached.isFavorite = request.isFavorite
-            this.notifyTransportChange()
-          }
+          await this.handleSetFavoriteRequest(request)
         }
       ),
       this.transport.on(
         clipboardLegacyDeleteItemEvent,
         async (request: ClipboardDeleteRequest, context: HandlerContext) => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          if (!this.db || !Number.isFinite(request?.id)) return
-          try {
-            const [row] = await this.db
-              .select()
-              .from(clipboardHistory)
-              .where(eq(clipboardHistory.id, request.id))
-              .limit(1)
-            const item = row as unknown as IClipboardItem | undefined
-            if (
-              item?.type === 'image' &&
-              typeof item.content === 'string' &&
-              isLikelyLocalPath(item.content)
-            ) {
-              void tempFileService.deleteFile(item.content)
-            }
-          } catch (error) {
-            clipboardLog.warn('Failed to delete clipboard image file for legacy delete', { error })
-          }
-          await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, request.id))
-          this.memoryCache = this.memoryCache.filter((item) => item.id !== request.id)
-          this.notifyTransportChange()
+          await this.handleDeleteRequest(request, 'legacy')
         }
       ),
       this.transport.on(
@@ -3098,14 +3096,7 @@ export class ClipboardModule extends BaseModule {
           context: HandlerContext
         ): Promise<ClipboardActionResult> => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          try {
-            const applyPayload: ClipboardApplyPayload = buildApplyPayloadFromCopyAndPaste(request)
-            await this.applyToActiveApp(applyPayload)
-            return { success: true }
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            return { success: false, message }
-          }
+          return await this.handleCopyAndPasteRequest(request)
         }
       ),
       this.transport.on(
@@ -3119,9 +3110,7 @@ export class ClipboardModule extends BaseModule {
         clipboardLegacyWriteEvent,
         async (request: ClipboardWriteRequest, context: HandlerContext) => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          const payload = normalizeClipboardWritePayload(request)
-          if (!payload) return
-          await writePayload(payload)
+          await this.handleWriteRequest(request, writePayload)
         }
       ),
       this.transport.on(
@@ -3162,31 +3151,7 @@ export class ClipboardModule extends BaseModule {
           context: HandlerContext
         ): Promise<ClipboardGetImageUrlResponse> => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', request)
-          const id = Number(request?.id)
-          if (!Number.isFinite(id)) {
-            return { url: null }
-          }
-
-          const item = await this.getItemById(id)
-          if (!item || item.type !== 'image') {
-            return { url: null }
-          }
-
-          const normalized = this.toClientItem(item) ?? item
-          const meta = normalized.meta
-          if (meta && typeof meta === 'object') {
-            const imageUrl = (meta as Record<string, unknown>).image_original_url
-            if (typeof imageUrl === 'string' && imageUrl.trim().length > 0) {
-              return { url: imageUrl.trim() }
-            }
-          }
-
-          const content = typeof normalized.content === 'string' ? normalized.content : ''
-          if (content.startsWith('tfile://')) {
-            return { url: content }
-          }
-
-          return { url: null }
+          return await this.handleGetImageUrlRequest(request)
         }
       )
     )
