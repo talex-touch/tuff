@@ -55,7 +55,13 @@ export class StorageLRUManager {
 
     pollingService.register(this.cleanupTaskId, () => this.performCleanup(), {
       interval: this.CLEANUP_INTERVAL,
-      unit: 'milliseconds'
+      unit: 'milliseconds',
+      lane: 'maintenance',
+      backpressure: 'coalesce',
+      dedupeKey: this.cleanupTaskId,
+      maxInFlight: 1,
+      timeoutMs: 15_000,
+      jitterMs: 300
     })
     pollingService.start()
   }

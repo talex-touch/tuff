@@ -140,12 +140,12 @@ export async function migrateAISDKSettings(): Promise<void> {
 
 ### IPC Communication
 
-The storage system communicates with the Electron main process via IPC:
+The storage system communicates with the Electron main process via transport events:
 
-- `storage:get` - Synchronously retrieve data
-- `storage:save` - Asynchronously save data
-- `storage:reload` - Reload data from disk
-- `storage:update` - Notify of external updates
+- `StorageEvents.app.get` - Retrieve data snapshot
+- `StorageEvents.app.getVersioned` - Retrieve data with version metadata
+- `StorageEvents.app.save` - Persist data with conflict detection
+- `StorageEvents.app.updated` - Subscribe to update stream notifications
 
 ### Storage Location
 

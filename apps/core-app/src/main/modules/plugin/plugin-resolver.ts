@@ -4,7 +4,11 @@ import path from 'node:path'
 import compressing from 'compressing'
 import fse from 'fs-extra'
 import { isSafePathSegment } from '@talex-touch/utils/common/utils/safe-path'
-import { CURRENT_SDK_VERSION } from '@talex-touch/utils/plugin'
+import {
+  CURRENT_SDK_VERSION,
+  PERMISSION_ENFORCEMENT_MIN_VERSION,
+  resolveSdkApiVersion
+} from '@talex-touch/utils/plugin'
 import { checkDirWithCreate } from '../../utils/common-util'
 import { pluginModule } from './plugin-module'
 import { removeNodeModulesDirs, shouldSkipNodeModulesPath } from './plugin-install-copy-utils'
@@ -40,12 +44,13 @@ export class PluginResolver {
   }
 
   private validateManifestSdkApi(manifest: IManifest): string | null {
-    const sdkapi = (manifest as { sdkapi?: unknown }).sdkapi
-    if (typeof sdkapi === 'number') {
+    const declared = (manifest as { sdkapi?: unknown }).sdkapi
+    const resolved = resolveSdkApiVersion(declared)
+    if (typeof resolved === 'number' && resolved >= PERMISSION_ENFORCEMENT_MIN_VERSION) {
       return null
     }
     const pluginName = typeof manifest.name === 'string' ? manifest.name : 'unknown'
-    return `Plugin "${pluginName}" is outdated: missing required "sdkapi" in manifest.json. Required current sdkapi: ${CURRENT_SDK_VERSION}.`
+    return `[SDKAPI_BLOCKED] Plugin "${pluginName}" is blocked: sdkapi must be >= ${PERMISSION_ENFORCEMENT_MIN_VERSION}. Please migrate to sdkapi ${CURRENT_SDK_VERSION}.`
   }
 
   private async uncompress(source: string, target: string): Promise<void> {

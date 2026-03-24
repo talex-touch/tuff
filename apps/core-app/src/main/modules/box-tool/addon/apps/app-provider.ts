@@ -60,6 +60,7 @@ import { getMainConfig, saveMainConfig } from '../../../storage'
 import FileSystemWatcher from '../../file-system-watcher'
 import searchEngineCore from '../../search-engine/search-core'
 import { appScanner } from './app-scanner'
+import { normalizeDisplayName, shouldUpdateDisplayName } from './display-name-sync-utils'
 import { matchNoisySystemAppRule } from './app-noise-filter'
 import { formatLog, LogStyle } from './app-utils'
 import { processSearchResults } from './search-processing-service'
@@ -302,7 +303,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (process.env.NODE_ENV === 'development') return true
     if (process.env.BUILD_TYPE === 'development') return true
 
-    const rendererUrl = process.env.ELECTRON_RENDERER_URL ?? process.env.VITE_DEV_SERVER_URL ?? ''
+    const rendererUrl = process.env.ELECTRON_RENDERER_URL ?? ''
     return /^(https?):\/\/(127\.0\.0\.1|localhost)(:\d+)?/i.test(rendererUrl)
   }
 
@@ -627,6 +628,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         precision: 2
       })
 
+      const scannedAppsMap = new Map(
+        scannedApps.map((app) => [app.uniqueId || app.path, app] as const)
+      )
       const existingIds = new Set(
         dbAppsWithExtensions.map((app) => app.extensions.bundleId || app.path)
       )
@@ -634,12 +638,32 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         const uniqueId = app.uniqueId || app.path
         return !!uniqueId && !existingIds.has(uniqueId)
       })
+      const toUpdateDisplayName = dbAppsWithExtensions
+        .map((dbApp) => {
+          const uniqueId = dbApp.extensions.bundleId || dbApp.path
+          const scannedApp = scannedAppsMap.get(uniqueId)
+          if (!scannedApp) return null
+          if (!shouldUpdateDisplayName(dbApp.displayName, scannedApp.displayName)) {
+            return null
+          }
+          return { fileId: dbApp.id, app: scannedApp, existingDisplayName: dbApp.displayName }
+        })
+        .filter(Boolean) as Array<{
+        fileId: number
+        app: ScannedAppInfo
+        existingDisplayName: string | null
+      }>
 
       // 释放不再需要的大数组引用，降低 GC 峰值压力
       ;(dbApps as unknown[]).length = 0
       ;(dbAppsWithExtensions as unknown[]).length = 0
 
-      logApp(`Startup backfill found ${chalk.green(toAdd.length)} missing apps`, LogStyle.info)
+      logApp(
+        `Startup backfill found ${chalk.green(toAdd.length)} missing apps and ${chalk.yellow(
+          toUpdateDisplayName.length
+        )} displayName corrections`,
+        LogStyle.info
+      )
 
       if (toAdd.length > 0) {
         logApp(`Adding ${chalk.cyan(toAdd.length)} missing apps...`, LogStyle.process)
@@ -698,6 +722,68 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           style: 'success',
           unit: 's',
           precision: 1
+        })
+      }
+
+      if (toUpdateDisplayName.length > 0) {
+        logApp(
+          `Correcting ${chalk.cyan(toUpdateDisplayName.length)} localized app display names...`,
+          LogStyle.process
+        )
+        const updateStartTime = startTiming()
+        let updatedCount = 0
+        let failedCount = 0
+
+        await runAdaptiveTaskQueue(
+          toUpdateDisplayName,
+          async ({ fileId, app, existingDisplayName }, index) => {
+            const nextDisplayName = normalizeDisplayName(app.displayName)
+            if (!shouldUpdateDisplayName(existingDisplayName, nextDisplayName)) {
+              return
+            }
+
+            try {
+              await this.dbUtils!.getDb()
+                .update(filesSchema)
+                .set({ displayName: nextDisplayName })
+                .where(eq(filesSchema.id, fileId))
+
+              await this._syncKeywordsForApp({ ...app, displayName: nextDisplayName })
+              updatedCount += 1
+            } catch (error) {
+              failedCount += 1
+              logApp(
+                `Failed to correct displayName for ${chalk.yellow(app.path)}: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+                LogStyle.warning
+              )
+            }
+
+            if ((index + 1) % 50 === 0 || index === toUpdateDisplayName.length - 1) {
+              logApp(
+                `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toUpdateDisplayName.length)} displayName corrections`,
+                LogStyle.info
+              )
+            }
+          },
+          {
+            estimatedTaskTimeMs: 10,
+            label: 'AppProvider::backfillUpdateDisplayName'
+          }
+        )
+
+        const correctionStyle = failedCount > 0 ? LogStyle.warning : LogStyle.success
+        logApp(
+          `DisplayName correction summary: updated ${chalk.green(updatedCount)}, failed ${chalk.yellow(failedCount)}`,
+          correctionStyle
+        )
+        logAppDuration('BackfillFixDisplayName', updateStartTime, {
+          label: 'DisplayName correction complete',
+          style: failedCount > 0 ? 'warning' : 'success',
+          unit: 's',
+          precision: 1,
+          suffix: `(updated=${chalk.green(updatedCount)}, failed=${chalk.yellow(failedCount)})`
         })
       }
 
@@ -1000,7 +1086,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     )
 
     const toAdd: ScannedAppInfo[] = []
-    const toUpdate: Array<{ fileId: number; app: ScannedAppInfo }> = []
+    const toUpdate: Array<{
+      fileId: number
+      app: ScannedAppInfo
+      existingDisplayName: string | null
+    }> = []
     const missingApps: Array<{ id: number; path: string; uniqueId: string }> = []
 
     logApp(
@@ -1014,11 +1104,20 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         toAdd.push(scannedApp)
       } else {
         const shouldRefreshIcon = invalidIconApps.has(uniqueId)
+        const hasDisplayNameDrift = shouldUpdateDisplayName(
+          dbApp.displayName,
+          scannedApp.displayName
+        )
         if (
           shouldRefreshIcon ||
-          scannedApp.lastModified.getTime() > new Date(dbApp.mtime).getTime()
+          scannedApp.lastModified.getTime() > new Date(dbApp.mtime).getTime() ||
+          hasDisplayNameDrift
         ) {
-          toUpdate.push({ fileId: dbApp.id, app: scannedApp })
+          toUpdate.push({
+            fileId: dbApp.id,
+            app: scannedApp,
+            existingDisplayName: dbApp.displayName
+          })
         }
         dbAppsMap.delete(uniqueId)
       }
@@ -1108,18 +1207,18 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       await runAdaptiveTaskQueue(
         toUpdate,
-        async ({ fileId, app }, index) => {
-          await db
-            .update(filesSchema)
-            .set({
-              name: app.name,
-              path: app.path,
-              mtime: app.lastModified,
-              ...(!dbAppsMap.get(app.uniqueId)?.displayName && app.displayName
-                ? { displayName: app.displayName }
-                : {})
-            })
-            .where(eq(filesSchema.id, fileId))
+        async ({ fileId, app, existingDisplayName }, index) => {
+          const updateData: Partial<typeof filesSchema.$inferInsert> = {
+            name: app.name,
+            path: app.path,
+            mtime: app.lastModified
+          }
+          const nextDisplayName = normalizeDisplayName(app.displayName)
+          if (shouldUpdateDisplayName(existingDisplayName, nextDisplayName)) {
+            updateData.displayName = nextDisplayName
+          }
+
+          await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, fileId))
 
           const extensions: FileExtensionInsert[] = []
           if (app.bundleId) extensions.push({ fileId, key: 'bundleId', value: app.bundleId })
@@ -1230,8 +1329,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         mtime: appInfo.lastModified
       }
 
-      if (!existingFile.displayName && appInfo.displayName) {
-        updateData.displayName = appInfo.displayName
+      const normalizedDisplayName = normalizeDisplayName(appInfo.displayName)
+      if (shouldUpdateDisplayName(existingFile.displayName, normalizedDisplayName)) {
+        updateData.displayName = normalizedDisplayName
       }
 
       await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, existingFile.id))

@@ -67,6 +67,7 @@
     "hotkeys-js": "^3.13.15",
     "html2canvas": "^1.4.1",
     "js-confetti": "^0.12.0",
+    "katex": "^0.16.28",
     "lottie": "^0.0.1",
     "markmap-lib": "^0.17.2",
     "markmap-view": "^0.17.2",

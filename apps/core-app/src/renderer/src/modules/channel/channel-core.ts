@@ -48,10 +48,22 @@ interface StandardChannelData extends RawStandardChannelData {
 }
 
 interface TouchClientChannelLike {
-  regChannel: (eventName: string, callback: (data: StandardChannelData) => void) => () => void
-  unRegChannel: (eventName: string, callback: (data: StandardChannelData) => unknown) => boolean
-  send: (eventName: string, arg?: unknown) => Promise<unknown>
-  sendSync: (eventName: string, arg?: unknown) => unknown
+  regChannel: <TRequest = unknown>(
+    eventName: string,
+    callback: (data: TRequest) => Promise<unknown> | unknown
+  ) => () => void
+  unRegChannel: <TRequest = unknown>(
+    eventName: string,
+    callback: (data: TRequest) => Promise<unknown> | unknown
+  ) => boolean
+  send: <TRequest = unknown, TResponse = unknown>(
+    eventName: string,
+    arg?: TRequest
+  ) => Promise<TResponse>
+  sendSync: <TRequest = unknown, TResponse = unknown>(
+    eventName: string,
+    arg?: TRequest
+  ) => TResponse
 }
 
 class TouchChannel implements TouchClientChannelLike {
@@ -166,11 +178,15 @@ class TouchChannel implements TouchClientChannelLike {
     }
   }
 
-  regChannel(eventName: string, callback: (data: StandardChannelData) => void): () => void {
+  regChannel<TRequest = unknown>(
+    eventName: string,
+    callback: (data: TRequest) => Promise<unknown> | unknown
+  ): () => void {
+    const typedCallback = callback as (data: StandardChannelData) => unknown
     const listeners = this.channelMap.get(eventName) || []
 
-    if (!listeners.includes(callback)) {
-      listeners.push(callback)
+    if (!listeners.includes(typedCallback)) {
+      listeners.push(typedCallback)
     } else {
       return () => {}
     }
@@ -178,7 +194,7 @@ class TouchChannel implements TouchClientChannelLike {
     this.channelMap.set(eventName, listeners)
 
     return () => {
-      const index = listeners.indexOf(callback)
+      const index = listeners.indexOf(typedCallback)
 
       if (index !== -1) {
         listeners.splice(index, 1)
@@ -190,7 +206,10 @@ class TouchChannel implements TouchClientChannelLike {
     return formatPayloadPreview(payload)
   }
 
-  send(eventName: string, arg: unknown): Promise<unknown> {
+  send<TRequest = unknown, TResponse = unknown>(
+    eventName: string,
+    arg?: TRequest
+  ): Promise<TResponse> {
     const uniqueId = `${new Date().getTime()}#${eventName}@${Math.random().toString(12)}`
     const startedAt = performance.now()
     const stack = new Error().stack
@@ -210,7 +229,7 @@ class TouchChannel implements TouchClientChannelLike {
       }
     } as RawStandardChannelData
 
-    return new Promise((resolve, reject) => {
+    return new Promise<TResponse>((resolve, reject) => {
       try {
         ipcRenderer.send('@main-process-message', data)
       } catch (error) {
@@ -316,12 +335,12 @@ class TouchChannel implements TouchClientChannelLike {
           })
         }
 
-        resolve(res.data)
+        resolve(res.data as TResponse)
       })
     })
   }
 
-  sendSync(eventName: string, arg?: unknown): unknown {
+  sendSync<TRequest = unknown, TResponse = unknown>(eventName: string, arg?: TRequest): TResponse {
     const data = {
       code: DATA_CODE_SUCCESS,
       data: arg,
@@ -358,9 +377,9 @@ class TouchChannel implements TouchClientChannelLike {
 
       const res = this.__parse_raw_data(null, raw)
 
-      if (res?.header?.status === 'reply') return res.data
+      if (res?.header?.status === 'reply') return res.data as TResponse
 
-      return res
+      return res as TResponse
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       const meta: Record<string, unknown> = {
@@ -378,10 +397,14 @@ class TouchChannel implements TouchClientChannelLike {
     }
   }
 
-  unRegChannel(eventName: string, callback: (data: StandardChannelData) => unknown): boolean {
+  unRegChannel<TRequest = unknown>(
+    eventName: string,
+    callback: (data: TRequest) => Promise<unknown> | unknown
+  ): boolean {
+    const typedCallback = callback as (data: StandardChannelData) => unknown
     const callbacks = this.channelMap.get(eventName)
     if (callbacks) {
-      const index = callbacks.indexOf(callback)
+      const index = callbacks.indexOf(typedCallback)
       if (index > -1) {
         callbacks.splice(index, 1)
         return true
@@ -391,4 +414,6 @@ class TouchChannel implements TouchClientChannelLike {
   }
 }
 
-export const touchChannel: TouchClientChannelLike = (window.$channel = new TouchChannel())
+const rendererTouchChannel: TouchClientChannelLike = new TouchChannel()
+window.touchChannel = rendererTouchChannel
+export const touchChannel: TouchClientChannelLike = rendererTouchChannel

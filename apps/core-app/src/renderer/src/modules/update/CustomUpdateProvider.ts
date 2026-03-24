@@ -29,6 +29,7 @@ type CustomUpdatePayload = {
 type DownloadAssetWithSignature = DownloadAsset & { signatureUrl?: string }
 import { UpdateErrorType, UpdateProviderType } from '@talex-touch/utils'
 import { UpdateProvider } from './UpdateProvider'
+import { resolveUpdateAssetTarget } from './platform-target'
 
 export class CustomUpdateProvider extends UpdateProvider {
   readonly name: string
@@ -138,18 +139,23 @@ export class CustomUpdateProvider extends UpdateProvider {
       return []
     }
 
-    return release.assets.map((asset) => {
+    return release.assets.flatMap((asset) => {
+      const target = resolveUpdateAssetTarget(asset.name)
+      if (!target) {
+        console.warn(`[CustomUpdateProvider] Skip unsupported asset target: ${asset.name}`)
+        return []
+      }
       const assetWithSignature = asset as DownloadAssetWithSignature
       const normalized: DownloadAssetWithSignature = {
         name: asset.name,
         url: asset.url,
         size: asset.size || 0,
-        platform: this.detectPlatform(asset.name),
-        arch: this.detectArch(asset.name),
+        platform: target.platform,
+        arch: target.arch,
         checksum: asset.checksum,
         signatureUrl: assetWithSignature.signatureUrl
       }
-      return normalized
+      return [normalized]
     })
   }
 
@@ -231,57 +237,29 @@ export class CustomUpdateProvider extends UpdateProvider {
       name: payload.name || payload.version,
       published_at: payload.published_at || new Date().toISOString(),
       body: payload.description || payload.changelog || '',
-      assets: downloads.map((download) => {
+      assets: downloads.flatMap((download) => {
         const filename = download.filename || download.name || ''
         const url = download.url || ''
+        const target = resolveUpdateAssetTarget(filename)
+        if (!target) {
+          console.warn(`[CustomUpdateProvider] Skip unsupported asset target: ${filename}`)
+          return []
+        }
         const asset: DownloadAssetWithSignature = {
           name: filename,
           url,
           size: typeof download.size === 'number' ? download.size : 0,
-          platform: this.detectPlatform(filename),
-          arch: this.detectArch(filename),
+          platform: target.platform,
+          arch: target.arch,
           checksum: download.checksum || download.hash,
           signatureUrl: download.signatureUrl || download.sigUrl
         }
-        return asset
+        return [asset]
       })
     }
 
     this.validateRelease(release)
     return release
-  }
-
-  // 检测平台
-  private detectPlatform(filename: string): 'win32' | 'darwin' | 'linux' {
-    const lower = filename.toLowerCase()
-
-    if (lower.includes('win') || lower.includes('windows') || lower.includes('.exe')) {
-      return 'win32'
-    } else if (lower.includes('mac') || lower.includes('darwin') || lower.includes('.dmg')) {
-      return 'darwin'
-    } else if (
-      lower.includes('linux') ||
-      lower.includes('.deb') ||
-      lower.includes('.rpm') ||
-      lower.includes('.AppImage')
-    ) {
-      return 'linux'
-    }
-
-    return process.platform as 'win32' | 'darwin' | 'linux'
-  }
-
-  // 检测架构
-  private detectArch(filename: string): 'x64' | 'arm64' {
-    const lower = filename.toLowerCase()
-
-    if (lower.includes('arm64') || lower.includes('aarch64')) {
-      return 'arm64'
-    } else if (lower.includes('x64') || lower.includes('amd64') || lower.includes('x86_64')) {
-      return 'x64'
-    }
-
-    return process.arch as 'x64' | 'arm64'
   }
 
   // 验证自定义API格式

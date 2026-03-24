@@ -59,7 +59,6 @@ const iconItems: IconItem[] = [
           type: 'normal',
           click() {
             app.app.quit()
-            process.exit(0)
           }
         }
       ])

@@ -4,10 +4,10 @@ import type { LogLevel } from './utils/logger'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { app, protocol } from 'electron'
 import { commonChannelModule } from './channel/common'
 import { genTouchApp } from './core'
+import { loadStartupModules } from './core/startup-module-loader'
 import { enforceDevReleaseStartupConstraint } from './core/startup-version-guard'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import { addonOpenerModule } from './modules/addon-opener'
@@ -47,11 +47,6 @@ import { updateServiceModule } from './modules/update/UpdateService'
 import { pluginLogModule } from './service/plugin-log.service'
 
 import { loggerManager, mainLog } from './utils/logger'
-import {
-  omniPanelFeatureExecuteEvent,
-  omniPanelHideEvent,
-  omniPanelShowEvent
-} from '../shared/events/omni-panel'
 import './polyfills'
 import './core/precore'
 
@@ -74,13 +69,25 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let lastVerboseLogsState: boolean | null = null
-const OMNI_PANEL_SMOKE_TIMEOUT_MS = 45_000
 
-function waitMs(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms)
-  })
+function parseBooleanEnvFlag(value: string | undefined): boolean {
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
 }
+
+function parsePositiveIntegerEnv(value: string | undefined, fallback: number): number {
+  if (!value) return fallback
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback
+  return parsed
+}
+
+const startupBenchmarkEnabled = parseBooleanEnvFlag(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
+const startupBenchmarkExitDelayMs = parsePositiveIntegerEnv(
+  process.env.TUFF_STARTUP_BENCHMARK_EXIT_DELAY_MS,
+  1_200
+)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -140,51 +147,6 @@ function applyLoggerConfig(appSettings: unknown): void {
     verboseLogs
 }
 
-async function runOmniPanelSmokeProbeIfNeeded(): Promise<void> {
-  if (process.env.TUFF_OMNIPANEL_SMOKE !== '1') return
-
-  mainLog.info('[OmniPanel Smoke] Starting smoke probe in real Electron runtime')
-
-  const channel = genTouchApp().channel
-  const keyManager = (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-  const transport = getTuffTransportMain(channel, keyManager)
-
-  const timeoutHandle = setTimeout(() => {
-    mainLog.error('[OmniPanel Smoke] Timed out')
-    app.exit(1)
-  }, OMNI_PANEL_SMOKE_TIMEOUT_MS)
-
-  try {
-    await waitMs(300)
-    await transport.invoke(omniPanelShowEvent, {
-      captureSelection: false,
-      source: 'command'
-    })
-
-    await waitMs(350)
-    const executeResult = await transport.invoke(omniPanelFeatureExecuteEvent, {
-      id: 'builtin.corebox-search',
-      contextText: 'omni-panel smoke',
-      source: 'command'
-    })
-
-    if (!executeResult || executeResult.success !== true) {
-      throw new Error(`[OmniPanel Smoke] Execute failed: ${JSON.stringify(executeResult ?? null)}`)
-    }
-
-    await transport.invoke(omniPanelHideEvent, undefined)
-    await waitMs(200)
-
-    mainLog.info('[OmniPanel Smoke] Passed')
-    app.exit(0)
-  } catch (error) {
-    mainLog.error('[OmniPanel Smoke] Failed', { error })
-    app.exit(1)
-  } finally {
-    clearTimeout(timeoutHandle)
-  }
-}
-
 applyLoggerConfig({ diagnostics: { verboseLogs: false } })
 
 // Permission module instance
@@ -224,6 +186,14 @@ const modulesToLoad = [
   terminalModule,
   downloadCenterModule
 ]
+const optionalModulesToLoad = new Set([trayManagerModule])
+
+function shouldLoadAssistantModule(): boolean {
+  const value = process.env.TUFF_ENABLE_ASSISTANT_EXPERIMENT
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
 
 function shouldLoadTrayModule(): boolean {
   try {
@@ -250,75 +220,112 @@ app.whenReady().then(async () => {
   if (!canContinue) return
 
   electronReadyTime = Date.now()
-  const startupTimer = mainLog.time('All modules loaded', 'success')
+  const startupTimer = mainLog.time('Startup health check passed', 'success')
+  const moduleLoadTimer = mainLog.time('All modules loaded', 'success')
   mainLog.info('Electron ready, bootstrapping modules')
 
-  const analytics = getStartupAnalytics()
-  const touchApp = genTouchApp()
-  const moduleLoadMetrics: ModuleLoadMetric[] = []
-  const modulesStartTime = Date.now()
+  let modulesLoaded = false
+  let loadedModuleCount = 0
 
-  // Load modules and track individual load times
-  for (let i = 0; i < modulesToLoad.length; i++) {
-    const moduleCtor = modulesToLoad[i]
-    if (moduleCtor === trayManagerModule && !shouldLoadTrayModule()) {
-      mainLog.info('Skip TrayManager module: experimentalTray disabled')
-      continue
-    }
+  try {
+    const analytics = getStartupAnalytics()
+    const touchApp = genTouchApp()
+    const modulesStartTime = Date.now()
 
-    const moduleStartTime = Date.now()
+    const moduleLoadMetrics = (await loadStartupModules({
+      modules: modulesToLoad,
+      loadModule: async (moduleCtor) => {
+        return await touchApp.moduleManager.loadModule(moduleCtor)
+      },
+      optionalModules: optionalModulesToLoad,
+      shouldSkip: (moduleCtor) => {
+        if (moduleCtor === assistantModule && !shouldLoadAssistantModule()) {
+          mainLog.info('Skip Assistant module: TUFF_ENABLE_ASSISTANT_EXPERIMENT disabled')
+          return true
+        }
+        if (moduleCtor === trayManagerModule && !shouldLoadTrayModule()) {
+          mainLog.info('Skip TrayManager module: experimentalTray disabled')
+          return true
+        }
+        return false
+      },
+      onOptionalModuleLoadFailed: async (_moduleCtor, metric) => {
+        mainLog.warn('Optional module failed to load, continue startup', {
+          meta: { module: metric.name }
+        })
+      },
+      onLoaded: async (moduleCtor, metric) => {
+        analytics.trackModuleLoad(metric.name, metric.loadTime, metric.order)
 
-    await touchApp.moduleManager.loadModule(moduleCtor)
+        if (moduleCtor === storageModule) {
+          try {
+            const appSettings = getMainConfig(StorageList.APP_SETTING)
+            applyLoggerConfig(appSettings)
+            subscribeMainConfig(StorageList.APP_SETTING, (data) => {
+              applyLoggerConfig(data)
+            })
+          } catch (error) {
+            mainLog.warn('Failed to load logger configuration', { error })
+          }
+        }
+      }
+    })) as ModuleLoadMetric[]
 
-    const moduleLoadTime = Date.now() - moduleStartTime
-    // Convert module name to string (handle symbol case)
-    const moduleName =
-      typeof moduleCtor.name === 'string'
-        ? moduleCtor.name
-        : typeof moduleCtor.name === 'symbol'
-          ? moduleCtor.name.toString()
-          : `Module${i}`
-
-    moduleLoadMetrics.push({
-      name: moduleName,
-      loadTime: moduleLoadTime,
-      order: i
+    const totalModulesLoadTime = Date.now() - modulesStartTime
+    loadedModuleCount = moduleLoadMetrics.length
+    modulesLoaded = true
+    moduleLoadTimer.end('All modules loaded', {
+      meta: { modules: loadedModuleCount }
     })
 
-    analytics.trackModuleLoad(moduleName, moduleLoadTime, i)
+    // Set main process metrics
+    analytics.setMainProcessMetrics({
+      processCreationTime: process.getCreationTime() || Date.now(),
+      electronReadyTime,
+      modulesLoadTime: totalModulesLoadTime,
+      totalModules: modulesToLoad.length,
+      moduleDetails: moduleLoadMetrics
+    })
 
-    if (moduleCtor === storageModule) {
-      try {
-        const appSettings = getMainConfig(StorageList.APP_SETTING)
-        applyLoggerConfig(appSettings)
-        subscribeMainConfig(StorageList.APP_SETTING, (data) => {
-          applyLoggerConfig(data)
-        })
-      } catch (error) {
-        mainLog.warn('Failed to load logger configuration', { error })
-      }
+    const rendererInitPromise = touchApp.waitUntilInitialized()
+    if (touchApp.isSilentStart()) {
+      void rendererInitPromise.catch((error) => {
+        mainLog.error('Silent-start renderer initialization failed', { error })
+        app.quit()
+      })
+    } else {
+      await rendererInitPromise
     }
+
+    touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
+
+    // Start the global polling service after all modules are loaded.
+    pollingService.start()
+
+    startupTimer.end('Startup health check passed', {
+      meta: { modules: loadedModuleCount }
+    })
+
+    if (startupBenchmarkEnabled) {
+      mainLog.info('Startup benchmark mode: scheduling app quit after startup health check', {
+        meta: { exitDelayMs: startupBenchmarkExitDelayMs }
+      })
+      setTimeout(() => {
+        app.quit()
+      }, startupBenchmarkExitDelayMs)
+    }
+  } catch (error) {
+    if (!modulesLoaded) {
+      moduleLoadTimer.end('Module bootstrap failed', {
+        level: 'warn',
+        error
+      })
+    }
+    startupTimer.end('Bootstrap failed', {
+      level: 'warn',
+      error
+    })
+    mainLog.error('Main process bootstrap failed', { error })
+    app.quit()
   }
-
-  const totalModulesLoadTime = Date.now() - modulesStartTime
-
-  // Set main process metrics
-  analytics.setMainProcessMetrics({
-    processCreationTime: process.getCreationTime() || Date.now(),
-    electronReadyTime,
-    modulesLoadTime: totalModulesLoadTime,
-    totalModules: modulesToLoad.length,
-    moduleDetails: moduleLoadMetrics
-  })
-
-  touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
-
-  // Start the global polling service after all modules are loaded.
-  pollingService.start()
-
-  startupTimer.end('All modules loaded', {
-    meta: { modules: modulesToLoad.length }
-  })
-
-  void runOmniPanelSmokeProbeIfNeeded()
 })

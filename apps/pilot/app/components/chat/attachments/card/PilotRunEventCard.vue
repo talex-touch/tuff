@@ -24,6 +24,26 @@ function normalizeText(value: unknown): string {
   return String(value ?? '').trim()
 }
 
+function normalizeWebsearchReason(value: unknown): string {
+  const reason = normalizeText(value)
+  if (!reason) {
+    return '-'
+  }
+  if (reason === 'fallback_unsupported_channel' || reason === 'fallback_endpoint_missing') {
+    return '当前通道不支持联网检索，已继续离线回答'
+  }
+  if (reason === 'tool_failed_or_empty_result') {
+    return '未获取到可用外部来源，已继续回答'
+  }
+  if (reason === 'intent_not_required') {
+    return '意图判定无需联网'
+  }
+  if (reason === 'intent_required') {
+    return '意图判定需要联网'
+  }
+  return reason
+}
+
 const payload = computed(() => parseJsonRecord(props.block.data))
 const detail = computed(() => {
   const row = payload.value.detail
@@ -124,7 +144,7 @@ const detailRows = computed(() => {
     const sourceCount = Number(row.sourceCount)
     rows.push(
       { label: '决策', value: row.enabled === true ? 'enabled' : 'disabled' },
-      { label: '原因', value: normalizeText(row.reason) || '-' },
+      { label: '原因', value: normalizeWebsearchReason(row.reason) },
       { label: '来源', value: normalizeText(row.source) || '-' },
       { label: '命中', value: Number.isFinite(sourceCount) ? String(sourceCount) : '0' },
     )

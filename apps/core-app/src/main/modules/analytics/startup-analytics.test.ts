@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { StartupMetrics } from './types'
+import { StorageList } from '@talex-touch/utils'
 
 vi.mock('electron', () => ({
   app: {
@@ -159,24 +160,56 @@ describe('StartupAnalytics averages', () => {
       maxEntries: 10,
       lastUpdated: Date.now()
     })
-    ;(analytics as unknown as { flushQueuedReports: () => Promise<void> }).flushQueuedReports =
-      vi.fn()
-
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      text: async () => ''
-    })
-    vi.stubGlobal('fetch', fetchMock)
+    ;(
+      analytics as unknown as { ensureOutboxFlushTask: (endpoint: string) => void }
+    ).ensureOutboxFlushTask = vi.fn()
 
     await analytics.reportMetrics('http://example.test')
 
-    const request = fetchMock.mock.calls[0]
-    const body = JSON.parse(request[1].body as string)
+    const { saveMainConfig } = await import('../storage')
+    const saveMock = vi.mocked(saveMainConfig)
+    const queueCall = saveMock.mock.calls.find(
+      ([key]) => key === StorageList.STARTUP_ANALYTICS_REPORT_QUEUE
+    )
+    expect(queueCall).toBeDefined()
+    const queued = queueCall?.[1] as Array<{ payload: Record<string, any> }>
+    expect(Array.isArray(queued)).toBe(true)
+    expect(queued.length).toBeGreaterThan(0)
+    const body = queued[queued.length - 1].payload
+
     expect(body.metadata.startupSummary).toBeDefined()
     expect(body.metadata.moduleSummary).toBeDefined()
     expect(body.metadata.startupSummary.samples).toBe(2)
     expect(body.metadata.moduleSummary['module-a'].avgLoadTime).toBe(100)
+  })
+
+  it('registers startup outbox flush task only once', () => {
+    const analytics = new StartupAnalytics({ enabled: true, maxHistory: 5 }) as unknown as {
+      ensureOutboxFlushTask: (endpoint: string) => void
+      pollingService: {
+        isRegistered: (id: string) => boolean
+        register: (...args: unknown[]) => void
+        start: () => void
+      }
+      startupReportEndpoint: string | null
+    }
+
+    let registered = false
+    const registerMock = vi.fn(() => {
+      registered = true
+    })
+    const startMock = vi.fn()
+    analytics.pollingService = {
+      isRegistered: () => registered,
+      register: registerMock,
+      start: startMock
+    }
+
+    analytics.ensureOutboxFlushTask('http://example.test/a')
+    analytics.ensureOutboxFlushTask('http://example.test/b')
+
+    expect(registerMock).toHaveBeenCalledTimes(1)
+    expect(startMock).toHaveBeenCalledTimes(1)
+    expect(analytics.startupReportEndpoint).toBe('http://example.test/b')
   })
 })

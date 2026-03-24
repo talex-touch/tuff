@@ -1,7 +1,7 @@
 # 变更日志
 
-> 更新时间: 2026-03-22
-> 说明: 主文件仅保留近 30 天（2026-02-24 ~ 2026-03-22）详细记录；更早历史已按月归档。
+> 更新时间: 2026-03-24
+> 说明: 主文件仅保留近 30 天（2026-02-24 ~ 2026-03-24）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
@@ -10,6 +10,639 @@
 - 旧记录入口：见文末“历史索引导航”。
 
 ---
+
+## 2026-03-24
+
+### feat(pilot-message-first): Pilot 数据层 message-first + system 白名单入模
+
+- 数据层改为 message-first（trace 保留调试/兼容副本）：
+  - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - 新增 `apps/pilot/shared/pilot-system-message.ts`
+  - 新增统一 projector：将 `planning/intent/routing/memory/websearch/run.audit` 投影为 `role=system` 消息并实时写入 `messages`，统一 metadata（`eventType/seq/turnId/cardType/contextPolicy/summary`）。
+- 历史懒迁移（不回写）：
+  - 新增 `apps/pilot/server/utils/pilot-system-message-response.ts`
+  - `messages.get`（含 v1）在“旧会话无 system 消息”时按需从 trace 合成内存态 system 视图。
+- 上下文白名单过滤统一收敛：
+  - `packages/tuff-intelligence/src/business/pilot/conversation.ts`
+  - `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+  - `apps/pilot/server/utils/pilot-langgraph-engine.ts`
+  - `apps/pilot/server/utils/pilot-title.ts`
+  - 规则固定为：`user/assistant` 全量入模；`system` 仅 `eventType=system.policy|tool.summary` 且 `contextPolicy=allow` 入模，其余排除。
+- 前端消费链路收敛为“卡片由 system messages 派生”：
+  - `apps/pilot/app/composables/usePilotChatPage.ts`
+  - assistant 继续单气泡增量渲染，聊天区默认不逐条展开系统运行日志，工具卡优先由 system message 推导。
+- 会话计数语义修正：
+  - 仅统计 `user + assistant`，不计 `system`，避免运行日志导致计数膨胀。
+
+### fix(core-app/apps-search): macOS 中文应用名检索修复（simple-plist 路径）
+
+- 修复 `InfoPlist.strings` 本地化名称读取链路：
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
+  - 读取顺序调整为 `simple-plist.readFile` 优先，失败时回退轻量 `.strings` 解析（UTF-16/UTF-8 + key/value 抽取）。
+  - 仅提取 `CFBundleDisplayName/CFBundleName`，并保留原有 locale 优先级与 fallback。
+- 修复应用名更新策略与历史数据回填：
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+  - `display_name` 从“仅空值可写”调整为“新值非空且变化时可覆盖”，支持英文锁定数据回填为中文名。
+  - 启动 backfill 增加已存在 app 的 displayName 校正流程，并输出更新/失败统计日志。
+- 修复名称与检索关键词一致性：
+  - displayName 变更后统一触发 `_syncKeywordsForApp`，确保中文词与拼音词同步刷新进索引。
+- 新增单元测试：
+  - `localized-strings-parser.test.ts`：覆盖 `simple-plist` 失败后的 `.strings` 回退解析、异常回退安全性。
+  - `display-name-sync-utils.test.ts`：覆盖“英文旧值 -> 中文新值更新 / 相同值不重复写入 / 空值不覆盖”规则。
+
+### perf(core-app): Dev 启动压测闭环脚本 + 启动阻塞链路降噪治理
+
+- 新增启动压测执行器与报告产物：
+  - `apps/core-app/scripts/startup-benchmark-dev.mjs`
+    - 支持 `--runs`、`--timeoutMs`、`--traceDeprecation`、`--continueOnFail`；
+    - 支持 `--mode analyze` 对既有日志重建报告；
+    - 自动落盘 `logs/run-XX.log`、`data/run-XX.json`、`第XX次运行报告.md` 与 `汇总报告.md`。
+  - `apps/core-app/package.json`
+    - 新增脚本：`startup:bench:dev`、`startup:bench:analyze`。
+  - 报告目录：`docs/engineering/reports/startup-dev-runs-2026-03-24/`
+    - 固化 `第01次运行报告.md` 为用户提供日志基线。
+- 启动主路径性能与告警治理：
+  - `apps/core-app/src/main/modules/system-update/index.ts`
+    - 启动期 `runRefreshUpdates('startup')` 改为延后异步触发，不再阻塞模块加载；
+    - 启动刷新失败改为信息级日志，保留轮询期慢刷新告警。
+  - `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+    - `sentry.nexus.flush` 改为启动宽限后执行（移除 `runImmediately`）；
+    - 对本地开发常见网络不可达上报失败降为信息级，保留重试与持久化统计。
+  - `apps/core-app/src/main/modules/analytics/startup-analytics.ts`
+    - `startup-analytics.outbox.flush` 改为启动宽限后执行（移除 `runImmediately`）；
+    - 队列 flush 的不可达网络场景降为信息级，避免启动窗口噪声告警。
+  - `apps/core-app/src/main/core/touch-window.ts`
+    - `console-message` 监听迁移到 Electron 新事件签名，修复 deprecation 告警。
+  - `apps/core-app/src/main/index.ts`
+    - 新增 `TUFF_STARTUP_BENCHMARK_ONCE` 启动压测一次性退出开关（仅基准模式生效）。
+  - `apps/core-app/src/main/modules/box-tool/file-system-watcher/file-system-watcher.ts`
+    - 增加 macOS `Photos Library.photoslibrary` 忽略；
+    - `EPERM/EACCES` 走可恢复信息日志，不再作为错误告警污染启动日志；
+    - 增加路径注册去重中的 in-flight 保护，减少重复 watch。
+  - `apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
+    - `vision.ocr` 无效 data URL 识别为可恢复输入异常，降级为信息日志，避免重复 warn 噪声。
+  - `apps/core-app/electron.vite.config.ts`
+    - Sentry Vite 插件改为仅生产构建按需动态加载，避免 dev 启动引入 `@sentry/cli` 旧依赖链触发 `DEP0040 punycode`。
+
+### perf(core-app): 启动窗口稳定性收尾（告警误报抑制 + 静默启动健康判定优化）
+
+- `DEP0040` 根因链路收口（SDK 侧）：
+  - `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+    - `@langchain/openai` 与 `deepagents` 改为按需动态 `import()`，避免主进程启动期被动拉起 openai/node-fetch/whatwg-url 依赖链。
+  - `packages/tuff-intelligence/src/adapters/index.ts`
+    - 移除 `deepagent-engine` 的根 adapters 重导出，降低非 Pilot 场景的启动期模块求值成本。
+- 启动路径稳定化：
+  - `apps/core-app/src/main/modules/download/download-center.ts`
+    - 去除模块 `onInit` 阶段对 `PollingService.start()` 的提前调用，统一由启动主流程在 `ALL_MODULES_LOADED` 后启动轮询。
+  - `apps/core-app/src/main/core/touch-app.ts`
+    - 新增 `waitUntilInitialized()/isSilentStart()`，将渲染器初始化等待能力显式化。
+  - `apps/core-app/src/main/index.ts`
+    - 静默启动场景改为“渲染器后台初始化，不阻塞 Startup health 判定”；前台启动仍保持阻塞等待，确保交互一致性。
+  - `apps/core-app/src/main/utils/perf-monitor.ts`
+    - 增加 `TUFF_PERF_STARTUP_LAG_GRACE_MS`（默认 `2500ms`）启动宽限，抑制冷启动窗口 `event_loop.lag` 误报。
+- 压测脚本判定修正：
+  - `apps/core-app/scripts/startup-benchmark-dev.mjs`
+    - 汇总报告 `finalPass` 改为按“最近 10 次认证窗口”判定，不再被历史无效样本永久污染。
+- 结果：
+  - `docs/engineering/reports/startup-dev-runs-2026-03-24/` 已扩展到 `第62次运行报告`。
+  - 最近 10 次（Run53~Run62）连续达标，汇总报告口径显示：
+    - `最近10次 Startup health P50: 527ms`
+    - `最近10次 Startup health P95: 932ms`
+    - `最近10次 WARN/ERROR: 0/0`
+
+### feat(core-app): 启动搜索卡顿永久治理（平衡模式 + 双库隔离）
+
+- 背景：
+  - 启动期持续出现 `SQLITE_BUSY` 风暴、`analytics.snapshots` 失败重试灌队列与 `event_loop.lag`，导致搜索首段体验抖动。
+- 核心改造：
+  - `apps/core-app/src/main/modules/database/index.ts`
+    - 新增 aux 库初始化与迁移（`database-aux.db`），高频非核心表分流到 aux；
+    - 新增 `getAuxDb()/getAuxClient()/isAuxEnabled()/isAuxReady()`，支持运行态判定与降级回退。
+  - `apps/core-app/src/main/db/runtime-flags.ts`（new） + `apps/core-app/src/main/db/startup-degrade.ts`（new）
+    - 增加 `TUFF_DB_AUX_ENABLED`、`TUFF_DB_QOS_ENABLED`、`TUFF_STARTUP_DEGRADE_ENABLED`；
+    - 启动降载窗口收口为“时间阈值 + 核心队列低水位”双条件。
+  - `apps/core-app/src/main/db/db-write-scheduler.ts`
+    - 调度选项扩展：`priority/maxQueueWaitMs/budgetKey/dropPolicy/maxBusyFailures/circuitOpenMs`；
+    - 单队列升级为优先级选择执行（`critical > interactive > background > best_effort`）；
+    - 增加 `latest_wins`、标签熔断、策略注册表与 circuit 状态导出；
+    - 新增 `SQLITE_BUSY` 比例观测字段。
+  - `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+  - `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker*.ts`
+    - `file-index.full-scan/reconcile/scan-progress` 写入下沉到 worker 单写入入口，避免主线程与 worker 交叉写争锁。
+  - `apps/core-app/src/main/db/utils.ts`
+    - recommendation cache 改 aux 落库，读取支持 aux 优先 + core 兜底；
+    - `recommendation.cache` 写入改 `latest_wins`。
+  - `apps/core-app/src/main/modules/analytics/storage/db-store.ts`
+  - `apps/core-app/src/main/modules/clipboard.ts`
+    - analytics 快照失败指数退避；
+    - clipboard 在启动高压期自动降频，并对图像持久化增加去抖。
+  - store 注入改造（显式 core/aux）：
+    - `analytics-module.ts`、`startup-analytics.ts`、`sentry-service.ts`
+    - `report-queue-store.ts`、`telemetry-upload-stats-store.ts`
+    - 兼容窗口内关键读取支持 fallback。
+- 新增测试：
+  - `apps/core-app/src/main/db/db-write-scheduler.test.ts`
+    - 覆盖 QoS 优先级、best-effort 丢弃、busy 熔断开启/恢复。
+- 验证：
+  - `pnpm -C "apps/core-app" run typecheck:node`
+  - `pnpm -C "apps/core-app" run typecheck:web`
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/db/db-write-scheduler.test.ts"`
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/analytics/startup-analytics.test.ts"`
+
+### perf(core-app): 事件循环长停顿归因增强 + Clipboard 严重 lag 自保护
+
+- 背景：
+  - 在 `SQLITE_BUSY` 风暴收敛后，仍观察到 `contexts=[]` 且 `pollingRecent.durationMs` 很小的秒级 `event_loop.lag`，需要快速区分“应用逻辑阻塞”与“系统/原生阻塞”。
+- 变更：
+  - `apps/core-app/src/main/utils/perf-monitor.ts`
+    - 新增 `inferEventLoopLagCause()`，对严重 lag 进行归因标记：
+      - `native_or_system_stall`
+      - `polling_queue_backlog`
+      - `unattributed_main_thread_block`
+    - `event_loop.lag` 日志新增 `queueDepthByLane`、polling dropped/coalesced 计数、`suspectedCause`，并把归因写入 message hint（`suspect=...`）。
+  - `apps/core-app/src/main/modules/clipboard.ts`
+    - 在“最近窗口内发生严重 lag”时短时跳过 clipboard 轮询检查（含节流日志），防止主线程恢复阶段再次叠加高频检查负载。
+  - `apps/core-app/src/main/utils/perf-monitor.severe-lag.test.ts`
+    - 新增归因单测，覆盖“无上下文 + 无队列负载 -> native/system stall”。
+- 验证：
+  - `pnpm -C "apps/core-app" run typecheck:node`
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/db/db-write-scheduler.test.ts" "src/main/modules/analytics/startup-analytics.test.ts" "src/main/utils/perf-monitor.severe-lag.test.ts"`
+
+### fix(core-app/clipboard): 启动预热改为首次按需加载，减少冷启动主线程争用
+
+- 背景：
+  - 启动日志中 `Clipboard cache hydrate slow` 与 `event_loop.lag` 出现在模块加载期重叠窗口，放大了模块计时噪声。
+  - `initialCache` 预热不再要求在启动阶段立即完成。
+- 变更：
+  - `apps/core-app/src/main/modules/clipboard.ts`
+    - 移除 `onInit` 内 `loadInitialCache()` 启动即执行。
+    - 新增 `ensureInitialCacheLoaded()`：在 `clipboard.getLatest`（typed/legacy）与首个 change stream 首次快照时按需触发一次懒加载。
+    - `loadInitialCache` 支持可选 `waitForIdle`，懒加载路径默认不等待 idle gate，避免首次查询被额外串行等待。
+- 影响：
+  - 启动阶段减少一段非必要 DB hydrate 工作，降低与其他模块初始化的事件循环竞争。
+  - 历史/分页查询仍走 DB 查询链路，不受本次策略调整影响。
+
+### perf(core-app/download): ErrorLogger 初始化改为非阻塞，降低模块加载临界路径耗时
+
+- 背景：
+  - 启动日志中 `Module loaded 1.7s module=DownloadCenter` 与主线程 lag 时间窗重叠，需要先削减模块内部可避免的同步等待。
+- 变更：
+  - `apps/core-app/src/main/modules/download/download-center.ts`
+    - 将 `await this.errorLogger.initialize()` 改为后台启动 `startErrorLoggerInitialization()`，不阻塞 `onInit` 返回。
+    - `onDestroy` 增加对 `errorLoggerInitInFlight` 的等待，避免“销毁后晚到初始化”重新注册轮询任务的竞态。
+    - 慢启动日志字段从 `errorLogger` 调整为 `errorLoggerKickoff`，语义与新路径一致。
+- 影响：
+  - DownloadCenter 初始化关键路径不再受日志目录准备/轮询注册影响。
+  - 错误日志能力仍保留，且退出阶段保持清理顺序正确。
+
+### fix(core-app/apps): macOS 本地化应用名回填与索引纠偏（simple-plist 路径）
+
+- 问题：
+  - 部分 macOS 应用（如网易云音乐）`InfoPlist.strings` 为 UTF-16 文本时，`simple-plist.readFile` 可能无法直接解析，导致回退到英文 `CFBundleName`。
+  - `displayName` 在 app 索引链路中存在“已有值后仅空值可写”策略，历史英文值会长期锁定，进而缺失中文关键词。
+- 变更：
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
+    - 保留 `simple-plist` 优先读取；
+    - 新增 `.strings` 轻量回退解析（UTF-16/UTF-8 解码 + key/value 提取），仅提取 `CFBundleDisplayName`/`CFBundleName`。
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+    - `upsert` 与 full sync 更新条件调整为：新 `displayName` 非空且与旧值不同即覆盖；
+    - `_initialize` 增加 displayName 漂移检测，即使 `mtime` 不变也会进入更新；
+    - startup backfill 增加“已存在 app 的 displayName 修正 + 关键词重建”流程，并输出更新/失败统计。
+  - 新增 `display-name-sync-utils` 与 `localized-strings-parser` 两个小型工具模块，减少主流程分支复杂度。
+- 影响：
+  - 中文应用名会稳定进入 `files.display_name` 与 `keyword_mappings`，`网易云` / `网易云音乐` / 拼音检索召回一致性提升。
+  - 不改 IPC/API，对 Windows/Linux 无行为变更。
+
+---
+
+## 2026-03-23
+
+### fix(pilot): 会话 ensure 幂等化，避免运行中状态被覆盖导致刷新续流中断
+
+- 问题：
+  - `POST /api/chat/sessions` 在 `sessionId` 已存在时仍走 `createSession + completeSession('idle')`，会把运行中的会话状态误写为 `idle`。
+  - legacy 页面刷新后依赖 `run_state=executing/planning` 触发 `fromSeq+follow`，状态被覆盖后会出现“对话还在跑但无法自动续流”。
+- 变更：
+  - `apps/pilot/server/api/chat/sessions/index.post.ts`
+    - 新增已存在会话短路：若命中同 `sessionId`，不再改写 runtime status；
+    - 仅在会话不存在时才创建并初始化 `idle`；
+    - 继续保留“首句标题补写 + quota_history/pilot_quota_sessions 占位”行为。
+  - `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+    - 去掉一次重复 `ensureRemoteSessionInitialized` 调用，减少并发写状态窗口。
+  - `apps/pilot/app/pages/index.vue`
+    - 路由 `id` 同步改为先 `history.replaceState` 再 `router.replace`，减少发送后立刻刷新导致 query 未落地的概率；
+    - 自动续流前若本地无消息，先 `syncHistory` 拉一次最新快照再决定是否 follow。
+
+### refactor(core-app): 高频异步化链路收口（Polling lanes / Sentry outbox / Clipboard Stage-B / Perf 探针解耦）
+
+- 背景：
+  - 线上启动与运行期日志出现 `Event loop lag`、`sentry.nexus.flush` 和 `Clipboard.check` 互相放大，主线程存在“高频任务被 I/O 串行拖慢”的风险。
+  - 目标明确为“**不降频，且后续可提频**”，因此采用调度/执行/传输分层异步化，而非靠降低轮询频率止血。
+- 变更（调度层）：
+  - `packages/utils/common/utils/polling.ts` 完成 lane 化调度重构：`critical/realtime/io/maintenance/legacy_serial`。
+  - 新增背压语义：`strict_fifo/latest_wins/coalesce`，并保持旧调用默认落到 `legacy_serial + strict_fifo` 兼容行为。
+  - 新增诊断字段：`lastSchedulerDelayMs/maxSchedulerDelayMs`、`queueDepthByLane`、`dropped/coalesced/timeout/error` 统计。
+- 变更（Sentry/Startup Analytics）：
+  - `apps/core-app/src/main/modules/analytics/startup-analytics.ts` 改为 outbox 异步上传：上报路径仅入队，后台 `io lane` flush（退避 + 重试）。
+  - 启动与 Sentry 的 outbox flush 任务改为“仅首次注册，后续复用”，避免高频事件下反复 `register` 造成调度抖动。
+  - `apps/core-app/src/main/modules/sentry/sentry-service.ts` 将 Nexus telemetry 改为“内存 batch -> 持久 outbox -> 后台上传”，并补齐：
+    - cooldown 期间不再丢事件（仅暂停发送，不暂停入队）；
+    - outbox 有界增长（超限裁剪最老数据）；
+    - 上传透传 idempotency key（header + metadata）。
+  - `analytics_report_queue` 作为共享 outbox，使用 `metadata.kind` 做严格分流，避免 startup/sentry 互相消费。
+- 变更（Clipboard/Perf）：
+  - `apps/core-app/src/main/modules/clipboard.ts`：轮询任务迁移到 `realtime + latest_wins`；重任务拆到 Stage-B 异步链路（OCR/source 回填），主检查路径只保留轻量判定与落库。
+  - `activeApp.snapshot` 改为独立缓存刷新任务（`clipboard.active-app.refresh`）；Stage-B 优先读取短 TTL 缓存，避免在处理链路里同步等待 active app 查询。
+  - `apps/core-app/src/main/modules/ocr/ocr-service.ts`：OCR source 改为“文件路径优先”(`file source`)，仅 `data:` 才走 `data-url`，移除主进程 `readFile + base64` 转换热路径。
+  - `ocr-service:dispatcher` 任务改为 `maintenance + latest_wins`，并补 `maxInFlight/timeout/jitter`，避免 OCR 轮询回到 legacy 串行路径。
+  - OCR worker 执行链路接入：`ocr-service` 优先走 worker OCR，失败自动回退 provider invoke；新增 worker bundle 多候选路径解析与缓存（dev/build/packaged 路径差异兜底）。
+  - 新增高频压测脚本 `apps/core-app/scripts/clipboard-polling-stress.ts` 与命令 `pnpm -C "apps/core-app" run clipboard:stress`，输出 per-lane queue peak 与 scheduler delay 对比报告（含 `p95/max`）。
+  - `apps/core-app/src/main/utils/perf-monitor.ts`：event-loop 探针改为独立 `setInterval` 采样，避免被业务调度器延迟污染。
+- 验证：
+  - `pnpm -C "packages/utils" run test -- "__tests__/polling-service.test.ts"` 通过。
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/analytics/startup-analytics.test.ts"` 通过。
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/ocr/ocr-service.test.ts"` 通过（新增 file-source、worker path 优先与 worker 失败回退用例）。
+  - `startup-analytics.test.ts` 增加“flush 任务仅首次注册”用例并通过。
+  - `pnpm -C "apps/core-app" run clipboard:stress -- --durationMs 3000` 产出 `docs/engineering/reports/clipboard-polling-stress-*/summary.json` 压测报告。
+  - `pnpm -C "apps/core-app" run typecheck:node` 通过。
+
+### refactor(core-app/clipboard): 阶段诊断逻辑抽离为独立模块（保持语义不变）
+
+- 变更：
+  - 新增 `apps/core-app/src/main/modules/clipboard/clipboard-phase-diagnostics.ts`，承载 `trackPhase/trackPhaseAsync/buildPhaseDiagnostics/toPerfSeverity` 与 phase alert 判定规则。
+  - `apps/core-app/src/main/modules/clipboard.ts` 移除内联诊断实现，改为模块化导入，主模块仅保留编排逻辑。
+  - 新增 `apps/core-app/src/main/modules/clipboard/clipboard-phase-diagnostics.test.ts`，覆盖 `gate_wait`、`image_pipeline` 及 severity 映射行为。
+- 价值：
+  - 降低 `Clipboard` 主模块复杂度，便于后续独立调参与扩展 phase code 规则。
+  - 保持现有日志字段与告警等级输出一致，不改变运行时对外行为。
+
+### ref(core-app/file-provider): progress stream 节流策略独立模块化
+
+- 变更：
+  - 新增 `file-provider-progress-stream-service.ts`，统一维护 progress stream 发送判定与 flush delay 计算。
+  - `file-provider.ts` 改为调用策略函数，移除内联节流规则分支。
+  - 新增 `file-provider-progress-stream-service.test.ts`，覆盖阶段切换、静默兜底、最小间隔节流、步进触发与 delay 计算。
+- 价值：
+  - 减少 `FileProvider` 主类分支复杂度，便于后续单点调参和回归验证。
+  - 保证“阶段变化优先 + latest-wins 节流”行为可测试、可演进。
+
+### ref(core-app/perf): perf-monitor 阈值与节流配置模块化
+
+- 变更：
+  - 新增 `apps/core-app/src/main/utils/perf-monitor-config.ts`，集中维护 IPC/UI/event-loop 阈值、severe lag 窗口参数、summary 与日志节流参数。
+  - `apps/core-app/src/main/utils/perf-monitor.ts` 移除内联阈值常量，改为统一从配置模块导入。
+  - 新增 `apps/core-app/src/main/utils/perf-monitor-config.test.ts`，覆盖 UI 专用阈值与默认回退阈值。
+- 价值：
+  - 将“策略参数”与“运行时采集逻辑”解耦，后续调参无需修改核心监控流程。
+  - 降低 perf-monitor 文件体积与认知负担，避免阈值散落导致漂移。
+
+### ref(core-app/perf): perf summary 聚合器独立模块化
+
+- 变更：
+  - 新增 `apps/core-app/src/main/utils/perf-monitor-aggregator.ts`，承载 `kinds/topSlow/topEvents/topPhaseCodes` 的聚合计算。
+  - `apps/core-app/src/main/utils/perf-monitor.ts` 的 `flushSummary()` 改为调用聚合器，主类聚焦采集与上报编排。
+  - 新增 `apps/core-app/src/main/utils/perf-monitor-aggregator.test.ts`，覆盖 key 生成、phase code 聚合优先级与排序行为。
+- 价值：
+  - 进一步降低 `perf-monitor` 复杂度，缩小变更影响面。
+  - 让 summary 规则具备独立可测性，后续扩展指标时回归风险更低。
+
+### ref(core-app/clipboard): legacy IPC 事件与归一化适配器抽离
+
+- 变更：
+  - 新增 `apps/core-app/src/main/modules/clipboard/clipboard-legacy-bridge.ts`，集中维护 legacy raw 事件定义（`clipboard:get-history` 等）与请求归一化函数（copy-and-paste/write）。
+  - `apps/core-app/src/main/modules/clipboard.ts` 改为导入适配器，typed 与 legacy 两条写入/粘贴路径复用同一归一化逻辑，减少重复分支。
+  - `apps/core-app/src/main/modules/clipboard.ts` 新增 `registerLegacyClipboardBridge()`，将 legacy handler 注册块从 `registerTransportHandlers()` 中抽离，主流程职责更聚焦。
+  - 新增共享处理方法（`handleSetFavoriteRequest/handleDeleteRequest/handleGetImageUrlRequest/handleCopyAndPasteRequest/handleWriteRequest`），typed 与 legacy 事件统一复用，避免同构逻辑双份维护。
+  - `apps/core-app/src/main/modules/clipboard.ts` 将 typed 事件注册按职责拆分为 `registerTypedClipboardQueryHandlers/registerTypedClipboardMutationHandlers/registerTypedClipboardReadHandlers/registerTypedClipboardStreamHandlers`，提升可读性与后续维护效率。
+  - 新增 `apps/core-app/src/main/modules/clipboard/clipboard-legacy-bridge.test.ts`，覆盖 payload 归一化与 legacy item 时间戳映射。
+- 价值：
+  - 降低 `ClipboardModule` 中 legacy 兼容层的耦合度，后续协议调整只改单模块。
+  - 减少 typed 与 legacy 分支行为漂移风险，增强回归可测性。
+
+### fix(core-app/startup): 拆分模块加载与渲染器就绪计时口径，修正启动统计误读
+
+- 问题：
+  - `apps/core-app/src/main/index.ts` 里 `All modules loaded` 计时覆盖了 `touchApp.waitUntilInitialized()`，导致日志与 `modulesLoadTime` 统计被渲染器加载时间放大（表现为 `All modules loaded` 与 `Renderer ready` 时长接近）。
+  - `apps/core-app/src/renderer/index.html` 依赖外部 `cdn.jsdelivr` 的 Remixicon 样式，网络抖动会阻塞页面 `load`，放大 `Renderer ready` 耗时波动（多次启动样本出现 5~13s 抖动）。
+- 变更：
+  - 将启动计时拆分为两段：
+    - `All modules loaded`：仅覆盖 `loadStartupModules(...)` 阶段；
+    - `Startup health check passed`：覆盖完整启动健康检查（包含渲染器初始化等待）。
+  - `modulesLoadTime` 改为在模块加载结束后立即采样并写入 analytics，避免混入渲染器阶段耗时。
+  - 启动成功日志中的 `modules` 元信息改为实际加载数量（`loadedModuleCount`）。
+  - 移除 renderer 入口页外部 Remixicon CDN 样式依赖，改为使用本地 UnoCSS 图标类；
+  - 将两个 `ri-file-line` 兜底图标切换为 `i-ri-file-line`（`ClipboardFileTag.vue` / `UnifiedFileTag.vue`）。
+- 影响：
+  - 不改变模块加载顺序、事件触发顺序与功能行为；
+  - 启动日志和启动分析统计口径与语义保持一致，便于准确定位启动瓶颈；
+  - 降低 dev 环境下 `Renderer ready` 对外网/CDN可用性的耦合，减少冷启动长尾抖动。
+- 验证：
+  - `pnpm -C "apps/core-app" run typecheck:node` 通过。
+  - `pnpm -C "apps/core-app" exec vue-tsc --noEmit -p tsconfig.web.json --composite false` 通过。
+
+### fix(pilot): 补齐 Milkdown 数学样式依赖（katex CSS 解析失败）
+
+- 问题：
+  - `apps/pilot/app/components/article/MilkContent.vue` 与 `apps/pilot/app/components/article/MilkdownRender.vue` 直接导入 `katex/dist/katex.min.css`；
+  - 但 `apps/pilot/package.json` 未声明 `katex` 依赖，导致 Vite 在 dev 阶段报 `Failed to resolve import "katex/dist/katex.min.css"`。
+- 变更：
+  - `apps/pilot/package.json` 增加 `katex: ^0.16.28` 显式依赖；
+  - 同步 `pnpm-lock.yaml` 对应 importer 依赖项。
+- 验证：
+  - `pnpm -C "apps/pilot" exec node -p "require.resolve('katex/dist/katex.min.css')"` 成功返回解析路径；
+  - `apps/pilot/node_modules/katex/dist/katex.min.css` 文件存在。
+
+### fix(pilot): Websearch 门控收紧 + 可恢复跳过 + 刷新卡片持久化
+
+- Websearch 决策统一收口为意图强门控（新旧链路一致）：
+  - `packages/tuff-intelligence/src/business/pilot/conversation.ts`
+    - `intentWebsearchRequired === false` 时强制关闭并返回 `intent_not_required`；
+    - 仅在 `intentWebsearchRequired` 缺失时才允许 heuristic 兜底。
+  - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - `apps/pilot/server/api/aigc/executor.post.ts`
+    - `websearch.decision` / `websearch.skipped` 增加 `gateMode: intent_strict` 审计字段；
+    - 当 gateway 返回可恢复跳过信号时，`websearch.skipped` 透传具体 reason，避免误判为工具硬失败。
+- Fallback 失败降级为可恢复跳过（不中断主回答）：
+  - `apps/pilot/server/utils/pilot-tool-gateway.ts`
+    - `fallback_unsupported_channel` / `fallback_endpoint_missing` 归类为 recoverable skip；
+    - 审计改为 `tool.call.completed + status=skipped`（保留 `connectorReason`），不再产出 `tool.call.failed` 噪音。
+  - 继续保留 no-source guard（需要联网但无来源时明确防幻觉约束）。
+- 修复刷新后意图/工具卡丢失：
+  - `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+    - 新增 runtime trace 重建逻辑，注入 `pilot_run_event_card` 与 `pilot_tool_card` 到 assistant block；
+    - 仅按“最新 turn”回填，避免跨 turn 卡片重复污染。
+  - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - `apps/pilot/server/api/aigc/conversation/[id].get.ts`
+    - 两条快照回填链路统一传入 runtime traces，确保首轮回填与刷新后表现一致。
+- 前端兼容显示优化（聊天页保持现状）：
+  - `apps/pilot/app/composables/usePilotChatPage.ts`
+  - `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+    - `websearch.skipped` 原因映射为中性文案（如通道不支持联网时自动离线回答），减少“系统故障”误解。
+- 测试：
+  - 更新：`apps/pilot/server/utils/__tests__/pilot-conversation-shared.test.ts`
+  - 更新：`apps/pilot/server/utils/__tests__/pilot-tool-gateway.test.ts`
+  - 新增：`apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+  - 通过：`pnpm -C "apps/pilot" test -- "server/utils/__tests__/pilot-conversation-shared.test.ts" "server/utils/__tests__/pilot-tool-gateway.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts"`
+  - `pnpm -C "apps/pilot" run typecheck` 失败，存在仓库既有大量 TS 问题（与本次改动无直接关联）。
+
+### fix(pilot): stream 后端逐事件投影同步（替代前端触发上传）
+
+- 问题：
+  - 仅依赖 `finally` 阶段回填时，流中刷新可能出现 `pilot_tool_card` / `pilot_run_event_card` / thinking 状态短暂丢失。
+  - 需要将一致性职责固定在后端 stream 链路，避免前端触发上传参与状态保障。
+- 变更：
+  - 新增 `apps/pilot/server/utils/pilot-stream-quota-projector.ts`：
+    - 在后端按 SSE 逐事件投影（含 `assistant.*`、`thinking.*`、`run.audit`、`intent.*`、`routing.*`、`memory.*`、`websearch.*`、`error/done`）；
+    - `stream.heartbeat` 仅透传，不进入快照；
+    - 使用串行队列 + `assistant.delta` 短防抖写入，`assistant.final/thinking.final/done/error/finally` 强制 flush。
+  - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`：
+    - 在 `emitEvent` 包装层接入 projector，SSE 发送后立即 `apply`；
+    - `finally` 阶段先强制 flush projector，再执行现有 `syncLegacyQuotaConversationFromRuntime(...)` 兜底校准。
+  - `apps/pilot/server/utils/quota-conversation-snapshot.ts`：
+    - 补齐 `thinking.delta` / `thinking.final` 到 `pilot_run_event_card` 的重建与内容合并；
+    - `run.audit` 卡片补齐 camel/snake 归一化（`auditType/callId/ticketId/toolName/status`）与审批状态链路映射。
+- 验证：
+  - 新增：`apps/pilot/server/utils/__tests__/pilot-stream-quota-projector.test.ts`
+  - 新增：`apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+  - 通过：`pnpm -C "apps/pilot" exec vitest run -c "./vitest.config.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/pilot-stream-quota-projector.test.ts"`
+  - 通过：`pnpm -C "apps/pilot" exec eslint "server/api/chat/sessions/[sessionId]/stream.post.ts" "server/utils/quota-conversation-snapshot.ts" "server/utils/pilot-stream-quota-projector.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/pilot-stream-quota-projector.test.ts"`
+  - `pnpm -C "apps/pilot" run typecheck` 失败，存在仓库既有大量 TS 问题（与本次改动无直接关联）。
+
+### fix(pilot/legacy-ui): 发送即建会话 + 用户首句临时标题 + 刷新续流恢复
+
+- 问题：
+  - 旧 `completion` 链路首轮发送时，会话与历史可见性依赖流式阶段，导致“AI 未结束前刷新”可能出现当前会话丢失或无法续流。
+  - 会话标题依赖后续 AI 生成，首轮缺少稳定的用户可见标题。
+- 变更：
+  - `apps/pilot/server/api/chat/sessions/index.post.ts`
+    - 支持 `title/topic/message` 输入，创建会话时优先写入“用户首句裁剪标题”；
+    - 创建阶段补写 `quota_history` 占位快照与 `pilot_quota_sessions`，确保“发送即创建且可见”。
+  - `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+    - 流式请求前显式调用 `POST /api/chat/sessions` 绑定会话（同 id），避免会话延迟创建；
+    - 新增 `fromSeq/follow` 透传能力，支持刷新后 follow 模式续流；
+    - 发送首轮使用用户消息前缀作为 `initialTitle`，后续仍可被 AI 标题覆盖。
+  - `apps/pilot/app/pages/index.vue`
+    - 首次发送即锁定 `select + route(id)`，并立即本地快照为 `pending`；
+    - 启动时主动加载历史并按 `route.id` 恢复会话；
+    - 对 `runtimeState=executing/planning` 的会话自动触发 `fromSeq+follow` 续流。
+- 验证：
+  - 通过：`pnpm -C "apps/pilot" exec eslint "app/pages/index.vue" "app/composables/api/base/v1/aigc/completion/index.ts" "app/composables/api/base/v1/aigc/completion-types.ts" "server/api/chat/sessions/index.post.ts" "server/api/chat/sessions/[sessionId]/stream.post.ts" "server/utils/quota-conversation-snapshot.ts" "server/utils/pilot-stream-quota-projector.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/pilot-stream-quota-projector.test.ts"`
+  - 通过：`pnpm -C "apps/pilot" exec vitest run -c "./vitest.config.ts" "server/utils/__tests__/legacy-stream-input.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/pilot-stream-quota-projector.test.ts"`
+
+### feat(core-app-hardcut): 兼容债务并行硬切（legacy channel/storage/插件 API/更新与 AgentStore）
+
+- 跨平台与更新识别收敛：
+  - 新增 `apps/core-app/src/renderer/src/modules/update/platform-target.ts`（统一平台/架构识别，未知显式 `unsupported`，AppImage 小写识别修复）与对应测试。
+  - 更新 Provider 全部改为复用统一识别逻辑，不再隐式默认到某 OS。
+  - Linux 首次引导权限探测修复：`permission-checker` 按 OS 选择默认探测路径，未知平台返回 `unsupported`。
+- 权限系统硬切：
+  - `permission-guard/store/channel-guard` 移除 legacy `sdkapi` 放行与 `allowLegacy` 配置。
+  - `sdkapi` 缺失或低于门槛统一阻断为 `SDKAPI_BLOCKED`（加载/安装/运行一致）。
+- Storage/Channel 直连硬切：
+  - 主进程移除 legacy storage 事件处理（`storage:get/save/reload/save-sync/saveall`）与 `StorageEvents.legacy.update` 广播路径。
+  - 渲染侧移除 `window.$channel` 业务入口，统一 `touchChannel`。
+- 插件 API 兼容层硬切：
+  - 移除 deprecated 兼容暴露（含顶层 `box/feature` 兼容别名与旧 searchManager 路径），统一迁移到 `plugin.box` / `plugin.feature` 与 `boxItems`。
+  - 失败路径统一给出明确错误码（`SDKAPI_BLOCKED`）与迁移导向。
+- 占位/伪实现补齐：
+  - `agent-store.service.ts` 实装真实目录拉取、下载、完整性校验、解包、安装元数据落盘、失败回滚与真实更新比对。
+  - `OfficialUpdateProvider` 的维护/负载/状态改为真实接口探测，后端不可用返回 `unavailable + reason`，不再固定假值。
+  - `ExtensionLoader` 补齐 unload 生命周期，销毁时逆序释放扩展资源。
+- 测试与门禁：
+  - 新增：`extension-loader.test.ts`、`agent-store.service.test.ts`、`platform-target.test.ts`。
+  - 更新：`permission-guard.test.ts`、`permission-store.test.ts`。
+  - 验证通过：
+    - `pnpm -C "apps/core-app" run typecheck`
+    - `pnpm -C "apps/core-app" run typecheck:node`
+    - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/permission/permission-guard.test.ts" "src/main/modules/permission/permission-store.test.ts" "src/renderer/src/modules/update/platform-target.test.ts" "src/main/modules/extension-loader.test.ts" "src/main/service/agent-store.service.test.ts"`
+
+### chore(scripts): 门禁脚本去重 + 构建脚本拆分首轮（稳定性工程化）
+
+- guard 公共能力抽取：
+  - 新增 `scripts/lib/scan-config.mjs`、`scripts/lib/file-scan.mjs`、`scripts/lib/version-utils.mjs`；
+  - `legacy/compat/size/network` 四类脚本复用统一扫描与版本比较逻辑，减少重复维护点。
+- 网络门禁收敛为单实现：
+  - 删除 `apps/core-app/scripts/check-network-boundaries.js`（重复实现）；
+  - root `scripts/check-network-boundaries.mjs` 新增 `--scope`，支持按子目录精确扫描；
+  - `apps/core-app` 的 `network:guard` 改为复用 root 脚本（`--scope apps/core-app/src`）。
+- 构建脚本拆分首轮：
+  - 从 `apps/core-app/scripts/build-target.js` 提取 mac 后处理到 `apps/core-app/scripts/build-target/postprocess-mac.js`；
+  - 主脚本保留编排职责，降低单文件复杂度与后续改动风险。
+- 运维脚本去重：
+  - `scripts/debug-tuff.sh` 改为复用 `scripts/fix-app-permissions.sh`，避免权限/隔离属性逻辑双份维护。
+- CI 脚本去重（第二轮）：
+  - 新增 `scripts/ci/lib/github-client.mjs` 与 `scripts/ci/lib/openai-chat.mjs`；
+  - `scripts/ci/ai-review.mjs`、`scripts/ci/pr-translation.mjs` 改为复用公共 GitHub/OpenAI 客户端逻辑，避免双份 API 调用实现漂移。
+- 参数解析去重（第二轮）：
+  - 新增 `scripts/lib/argv-utils.mjs`；
+  - `scripts/check-doc-governance.mjs`、`scripts/check-release-gates.mjs`、`scripts/backfill-release-assets-from-github.mjs` 统一复用参数解析工具，减少重复实现与维护面。
+- 网络请求工具去重（第三轮）：
+  - 新增 `scripts/lib/http-utils.mjs`（`normalizeBaseUrl` + `fetchWithTimeout`）；
+  - `scripts/check-release-gates.mjs` 与 `scripts/backfill-release-assets-from-github.mjs` 统一复用，消除重复实现。
+- 发布门禁脚本拆分（第三轮）：
+  - 新增 `scripts/check-release-gates/local-checks.mjs` 与 `scripts/check-release-gates/remote-checks.mjs`；
+  - `scripts/check-release-gates.mjs` 收敛为编排入口，保留原有 JSON 输出契约与参数行为。
+
+### fix(core-app): 关闭流程快捷键生命周期治理（修复 OmniPanel `uiohook` 退出竞态）
+
+- `apps/core-app/src/main/modules/global-shortcon.ts`
+  - 新增运行时反注册 API：`unregisterMainShortcut(id)`、`unregisterMainTrigger(id)`。
+  - `registerMainShortcut/registerMainTrigger` 新增可选 `owner` 字段（向后兼容）。
+  - 新增 `teardownRuntimeRegistrations()` 并在 `BEFORE_APP_QUIT` 与 `onDestroy` 执行幂等 runtime 清理。
+  - `reregisterAllShortcuts()` 增加 MAIN/TRIGGER 运行时处理器存在性校验；缺失时标记 `runtime-missing` 并跳过注册。
+  - `onDestroy()` 不再触发 trigger `onStateChange(false)`，避免销毁期回调反入业务模块。
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+  - 新增销毁态门禁：退出阶段阻断 `setupInputHook()`，防止清理后再次启用 `uiohook`。
+  - `BEFORE_APP_QUIT` 与 `onDestroy` 复用同一清理链路（关闭开关/清计时器/清 hook/反注册 shortcut+trigger）。
+- 双保险反注册补齐：
+  - `apps/core-app/src/main/modules/box-tool/core-box/index.ts`：`core.box.toggle`、`core.box.aiQuickCall` 在 `onDestroy` 显式反注册。
+  - `apps/core-app/src/main/modules/flow-bus/module.ts`：`flow:detach-to-divisionbox`、`flow:transfer-to-plugin` 在 `onDestroy` 显式反注册。
+  - `apps/core-app/src/main/modules/division-box/shortcut-trigger.ts`：`unregister/clear` 改为同步反注册主进程快捷键。
+  - `apps/core-app/src/main/modules/division-box/module.ts`：销毁时调用 `shortcutTriggerManager.clear()`。
+- 测试补齐：
+  - `apps/core-app/src/main/modules/omni-panel/index.test.ts` 新增“destroying 状态不再重启 input hook”用例。
+- 新增 `apps/core-app/src/main/modules/global-shortcon.test.ts`，覆盖 runtime 反注册、onDestroy/before-quit teardown、副作用回归。
+  - 新增 `apps/core-app/src/main/modules/division-box/shortcut-trigger.test.ts`，覆盖 `unregister/clear` 反注册行为。
+  - `apps/core-app/package.json` 新增 `test:shortcut-lifecycle`，使用固定测试文件列表替代 shell 通配符，规避 zsh `no matches found`。
+
+### fix(core-app): 修复 `vue-sonner` 运行时缺失导致的 renderer 预编译阻塞
+
+- `apps/core-app/package.json`
+  - 将 `vue-sonner` 从 `devDependencies` 迁回 `dependencies`，避免生产/精简安装场景出现运行时缺包。
+- 本次仅处理 P0 启动阻塞，`StartupAnalytics` 本地 telemetry、`Perf:EventLoop`、macOS IMK 系统日志保持为 P2 观察项，不在本补丁扩 scope。
+
+### perf(core-search): CoreBox 搜索性能优化（P0/P1/P2 首轮落地）
+
+- P0（体感提速）：
+  - `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+    - `BASE_DEBOUNCE` 从 `150ms` 调整为 `80ms`，保留去重窗口 `200ms`。
+  - `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+    - 新增 `warmup()` 预热入口，初始化阶段补齐复合索引：
+      - `idx_keyword_mappings_provider_keyword(provider_id, keyword)`
+      - `idx_keyword_mappings_provider_item(provider_id, item_id)`
+    - 保留历史单列索引，不做删除。
+  - `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+    - `init` 增加非阻塞 `searchIndexService.warmup()` 调用，避免首搜触发冷启动建索引；
+    - 搜索入口增加 `markSearchActivity()`，供后台任务避让判断。
+  - `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+    - 语义检索改为“先 precise + FTS 形成候选，再按预算补召回”；
+    - 触发条件：`query.length >= 3` 且 `candidateIds < 20`；
+    - 语义补召回加 `Promise.race` 超时预算 `120ms`，超时/异常降级为空结果。
+
+- P1（重路径瘦身）：
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+  - `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+    - app/file 精确词路径改为批量 `lookupByKeywords(...)`，替代逐 term 多次 SQL。
+  - `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+    - `lookupBySubsequence(...)` 增加扫描上限参数（默认 `2000`）并落地 SQL `LIMIT`。
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+    - subsequence 触发约束更新为：`candidateIds < 5 && query.length >= 2 && query.length <= 8`，并传入 `scanLimit=2000`。
+
+- P2（后台任务避让）：
+  - 新增 `apps/core-app/src/main/modules/box-tool/search-engine/search-activity.ts`。
+  - `file-provider` 自动索引与 `app-provider` 启动 backfill / full sync / mdls 扫描，在“最近 2s 有搜索活动”窗口内跳过本轮调度（下次 idle 周期继续）。
+
+- 回归验证：
+  - 新增测试：`apps/core-app/src/main/modules/box-tool/search-engine/search-activity.test.ts`（3 cases）。
+  - 通过：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/search-activity.test.ts" "src/main/modules/box-tool/search-engine/search-gather.test.ts"`。
+  - `pnpm -C "apps/core-app" run typecheck:node` 当前被仓库既有问题阻断（`src/main/modules/extension-loader.test.ts` 的 Dirent 类型错误），与本次搜索改动无直接关联。
+
+### fix(core-search): 文件搜索结果稳定性修复（快速层超时补发 + type 过滤零命中不再回退）
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-gather.ts`
+  - 修复 fast layer 超时后“慢完成结果丢失”问题：超时后的 fast provider 结果改为以 deferred 增量补发，不再静默丢弃。
+  - 最终 `isDone` 触发条件收敛为“deferred 层与超时 fast provider 全部完成”，避免总数与结果批次不一致。
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+  - 修复“文本 + type 过滤”场景零命中时错误回退为 type-only 结果的问题；现改为返回空结果，避免出现与查询文本无关的文件列表。
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-gather.test.ts`
+  - 新增回归测试，覆盖 fast layer 超时后 late result 补发与最终计数一致性。
+
+### fix(core-main): 启动/关停链路止血与生命周期契约收口
+
+- 启动 fail-fast 与主流程收敛：
+  - `apps/core-app/src/main/index.ts`
+    - 启动模块加载切换到 `loadStartupModules`，必需模块加载失败立即抛错并终止启动。
+    - `ALL_MODULES_LOADED` 与 polling 启动仅在模块加载 + `touchApp.waitUntilInitialized()` 完整成功后触发。
+    - 启动失败统一记录错误并 `app.quit()`，不再出现“假健康启动”。
+  - `apps/core-app/src/main/core/startup-module-loader.ts`
+    - 新增可复用启动模块加载器，支持 required/optional 分流、skip 策略与加载指标回调。
+- 退出链路统一（移除运行时硬退出）：
+  - `apps/core-app/src/main/channel/common.ts`
+  - `apps/core-app/src/main/modules/tray-holder.ts`
+  - `apps/core-app/src/main/modules/tray/tray-menu-builder.ts`
+  - 以上路径移除 `process.exit(0)` 退出分支，统一回归 `app.quit()` + 既有关停流程。
+- IPC 稳定性修复：
+  - `apps/core-app/src/main/channel/common.ts`
+    - `dialogOpenFileEvent` 双重注册收敛为单一注册点，并保留路径记忆兼容行为。
+- EventBus 契约修复：
+  - `apps/core-app/src/main/core/eventbus/touch-event.ts`
+    - `once` 监听器触发后即消费移除；
+    - `emit` / `emitAsync` 增加 handler 级异常隔离，单点异常不再中断后续 handler；
+    - 新增轻量诊断：`getDiagnostics()`（事件/handler 总数与 once 消费计数）。
+  - `packages/utils/eventbus/index.ts`
+    - `ITouchEventBus` 增加 `emitAsync` 与诊断接口定义。
+- 关停时序增强：
+  - `apps/core-app/src/main/core/precore.ts`
+    - `before-quit` 改为异步编排，先 `emitAsync(BEFORE_APP_QUIT)` 再推进退出。
+  - `apps/core-app/src/main/core/module-manager.ts`
+    - 退出卸载 reason 统一为 `app-quit`，`destroy` 上下文显式标记 `appClosing=true`。
+- 测试补齐：
+  - 新增：
+    - `apps/core-app/src/main/core/eventbus/touch-event.test.ts`
+    - `apps/core-app/src/main/core/startup-module-loader.test.ts`
+    - `apps/core-app/src/main/channel/common.registration.test.ts`
+    - `apps/core-app/src/main/core/quit-paths.test.ts`
+  - 更新：
+    - `apps/core-app/src/main/core/module-manager.test.ts`（新增 `appClosing` 断言）
+- 验证结果：
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/core/module-manager.test.ts" "src/main/channel/common.test.ts" "src/main/modules/tray/tray-manager.test.ts" "src/main/core/eventbus/touch-event.test.ts" "src/main/core/startup-module-loader.test.ts" "src/main/channel/common.registration.test.ts" "src/main/core/quit-paths.test.ts"` 通过（19 tests）。
+  - `pnpm -C "apps/core-app" run typecheck:node` 通过。
+
+### refactor(core-main): 生命周期收口补完 + `$app` 去耦首轮 + 结构治理首轮
+
+- 生命周期收口补完：
+  - `apps/core-app/src/main/core/startup-health.ts`
+    - 新增 `runStartupHealthCheck`，将 `loadStartupModules + waitUntilInitialized` 合并为统一健康门禁，失败即中断启动。
+  - `apps/core-app/src/main/core/before-quit-guard.ts`
+    - 新增 `runWithBeforeQuitTimeout`（默认 `8s`），`before-quit` handler 超时/异常均记录后继续退出，防止关停卡死。
+  - `apps/core-app/src/main/core/module-manager.ts`
+    - 卸载观测增强：新增 `ModuleUnloadObservation`、`getLastUnloadObservation()`；记录 `reason/appClosing/duration/failedCount` 作为关停回归基线。
+- `$app` 去耦首轮（高风险模块）：
+  - `packages/utils/types/modules/module-lifecycle.ts`
+    - 新增 `MainRuntimeContext`，生命周期上下文注入 `ctx.runtime`。
+  - `apps/core-app/src/main/core/module-manager.ts`
+    - lifecycle context 统一注入 runtime（`app/window/channel/moduleManager/logger/config`）。
+  - `apps/core-app/src/main/core/deprecated-global-app.ts`
+    - 新增一次性 deprecate 告警兼容层（仅用于迁移过渡）。
+  - 首批迁移完成：
+    - `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+    - `apps/core-app/src/main/modules/update/UpdateService.ts`
+    - 两处优先使用 runtime 注入，不再依赖直接读取 `globalThis.$app`。
+- 主进程结构治理首轮（保持外部契约不变）：
+  - plugin 编排层抽取：
+    - `apps/core-app/src/main/modules/plugin/services/plugin-io-service.ts`
+    - `apps/core-app/src/main/modules/plugin/services/plugin-manager-orchestrator.ts`
+  - file-provider 路径/查询层抽取：
+    - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-path-service.ts`
+    - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-search-service.ts`
+  - Update 检查/下载/安装编排抽取：
+    - `apps/core-app/src/main/modules/update/services/update-action-controller.ts`
+- 质量门禁新增：
+  - `scripts/check-main-global-app-usage.mjs` + `scripts/main-global-app-allowlist.json`：阻止 `src/main/**` 新增 `$app` 直接读取。
+  - 根脚本新增：`pnpm guard:global-app`、`pnpm test:core-main`。
+- 测试补齐：
+  - 新增：
+    - `apps/core-app/src/main/core/startup-health.test.ts`
+    - `apps/core-app/src/main/core/before-quit-guard.test.ts`
+    - `apps/core-app/src/main/modules/plugin/services/plugin-manager-orchestrator.test.ts`
+    - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-path-service.test.ts`
+    - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-search-service.test.ts`
+    - `apps/core-app/src/main/modules/update/services/update-action-controller.test.ts`
+- 验证结果：
+  - `pnpm -C "apps/core-app" run test:core-main` 通过。
+  - `pnpm -C "apps/core-app" run typecheck:node` 通过。
+  - `pnpm guard:global-app` 通过。
+  - `pnpm test:core-main` 通过（root 聚合子集）。
 
 ## 2026-03-22
 

@@ -165,7 +165,10 @@ export class TuffDashboardModule extends BaseModule {
 
   private async buildApplicationSection(requestId: string | null) {
     const startedAt = performance.now()
-    const activeApp = await activeAppService.getActiveApp(false)
+    const activeApp = await activeAppService.getActiveApp({
+      forceRefresh: false,
+      includeIcon: false
+    })
     const rawMetrics = app.getAppMetrics()
     const metrics = rawMetrics.slice(0, 10).map((metric) => ({
       pid: metric.pid,

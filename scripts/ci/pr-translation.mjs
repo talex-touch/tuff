@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 import { readFile } from 'node:fs/promises'
 import { env, exit } from 'node:process'
+import { createGitHubClient } from './lib/github-client.mjs'
+import {
+  normalizeOpenAiBaseUrl,
+  normalizeOpenAiCompletionsPath,
+  requestChatCompletion,
+} from './lib/openai-chat.mjs'
 
 const eventPath = process.argv[2]
 if (!eventPath) {
@@ -85,9 +91,9 @@ if (!openaiKey) {
 }
 
 const baseUrlRaw = env.OPENAI_BASE_URL || env.AI_REVIEW_API_BASE || 'https://api.openai.com/v1'
-const openaiBaseUrl = baseUrlRaw.replace(/\/$/, '')
+const openaiBaseUrl = normalizeOpenAiBaseUrl(baseUrlRaw)
 const completionsPathRaw = env.OPENAI_COMPLETIONS_PATH || env.AI_REVIEW_COMPLETIONS_PATH || '/chat/completions'
-const completionsPath = completionsPathRaw.startsWith('/') ? completionsPathRaw : `/${completionsPathRaw}`
+const completionsPath = normalizeOpenAiCompletionsPath(completionsPathRaw)
 const model = env.PR_TRANSLATION_MODEL || env.AI_REVIEW_MODEL || 'gpt-4o-mini'
 const temperature = Number.parseFloat(env.PR_TRANSLATION_TEMPERATURE ?? env.AI_REVIEW_TEMPERATURE ?? '0.2')
 const maxTokens = env.PR_TRANSLATION_MAX_OUTPUT_TOKENS
@@ -96,53 +102,15 @@ const maxTokens = env.PR_TRANSLATION_MAX_OUTPUT_TOKENS
     ? Number.parseInt(env.AI_REVIEW_MAX_OUTPUT_TOKENS, 10)
     : undefined
 
-async function githubRequest(endpoint, init = {}) {
-  const url = new URL(endpoint, 'https://api.github.com')
-  const headers = {
-    'Authorization': `token ${githubToken}`,
-    'Accept': 'application/vnd.github+json',
-    'User-Agent': 'tuff-pr-translation-bot',
-    ...(init.headers ?? {}),
-  }
-
-  if (init.body && !headers['Content-Type']) {
-    headers['Content-Type'] = 'application/json'
-  }
-
-  const response = await fetch(url, {
-    ...init,
-    headers,
-  })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`GitHub API request failed (${response.status}): ${text}`)
-  }
-
-  return response
-}
-
-async function listIssueComments() {
-  const comments = []
-  let page = 1
-
-  while (true) {
-    const response = await githubRequest(`/repos/${owner}/${repo}/issues/${pr.number}/comments?per_page=100&page=${page}`)
-    const chunk = await response.json()
-    comments.push(...chunk)
-
-    if (chunk.length < 100) {
-      break
-    }
-
-    page += 1
-  }
-
-  return comments
-}
+const github = createGitHubClient({
+  token: githubToken,
+  userAgent: 'tuff-pr-translation-bot',
+})
 
 async function createOrUpdateComment(body) {
-  const existingComments = await listIssueComments()
+  const existingComments = await github.listPaginatedJson(
+    (page, perPage) => `/repos/${owner}/${repo}/issues/${pr.number}/comments?per_page=${perPage}&page=${page}`,
+  )
   const header = '### 🌐 PR 内容翻译'
   const targetComment = existingComments.find(comment => comment.body?.startsWith(header))
 
@@ -152,7 +120,7 @@ async function createOrUpdateComment(body) {
       return
     }
 
-    await githubRequest(`/repos/${owner}/${repo}/issues/comments/${targetComment.id}`, {
+    await github.request(`/repos/${owner}/${repo}/issues/comments/${targetComment.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ body }),
     })
@@ -160,7 +128,7 @@ async function createOrUpdateComment(body) {
     return
   }
 
-  await githubRequest(`/repos/${owner}/${repo}/issues/${pr.number}/comments`, {
+  await github.request(`/repos/${owner}/${repo}/issues/${pr.number}/comments`, {
     method: 'POST',
     body: JSON.stringify({ body }),
   })
@@ -179,9 +147,13 @@ function languageName(code) {
 }
 
 async function requestTranslation() {
-  const payload = {
+  return requestChatCompletion({
+    apiKey: openaiKey,
+    baseUrl: openaiBaseUrl,
+    completionsPath,
     model,
     temperature,
+    maxTokens,
     messages: [
       {
         role: 'system',
@@ -200,34 +172,8 @@ async function requestTranslation() {
         ].join('\n'),
       },
     ],
-  }
-
-  if (Number.isFinite(maxTokens)) {
-    payload.max_tokens = maxTokens
-  }
-
-  const response = await fetch(`${openaiBaseUrl}${completionsPath}`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${openaiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
+    errorPrefix: 'Translation request failed',
   })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`Translation request failed (${response.status}): ${text}`)
-  }
-
-  const data = await response.json()
-  const choice = data.choices?.[0]?.message?.content
-
-  if (!choice) {
-    throw new Error('Missing translation result from API response.')
-  }
-
-  return choice.trim()
 }
 
 const translated = await requestTranslation()

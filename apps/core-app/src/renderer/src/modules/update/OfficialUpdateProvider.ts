@@ -7,6 +7,7 @@ import {
 } from '@talex-touch/utils'
 import { appSetting } from '~/modules/channel/storage'
 import { UpdateProvider } from './UpdateProvider'
+import { resolveUpdateAssetTarget } from './platform-target'
 
 type OfficialReleaseAsset = {
   name?: string
@@ -144,6 +145,12 @@ export class OfficialUpdateProvider extends UpdateProvider {
     try {
       const apiChannel = this.mapChannelToApi(channel)
       const platform = this.getCurrentPlatform()
+      if (platform === 'unsupported') {
+        throw this.createError(
+          UpdateErrorType.API_ERROR,
+          `Unsupported runtime platform: ${typeof process !== 'undefined' ? process.platform : 'unknown'}`
+        )
+      }
 
       const response = await this.request<NexusLatestResponse>({
         method: 'GET',
@@ -236,20 +243,28 @@ export class OfficialUpdateProvider extends UpdateProvider {
       return []
     }
 
-    return release.assets.map((asset) => {
+    return release.assets.flatMap((asset) => {
       const assetData = asset as OfficialReleaseAsset
       const name = assetData.name || asset.name
       const url = assetData.browser_download_url || assetData.url || asset.url
+      const target = resolveUpdateAssetTarget(name, {
+        platform: assetData.platform,
+        arch: assetData.arch
+      })
+      if (!target) {
+        console.warn(`[OfficialUpdateProvider] Skip unsupported asset target: ${name}`)
+        return []
+      }
       const normalized: DownloadAssetWithSignature = {
         name,
         url,
         size: assetData.size ?? asset.size ?? 0,
-        platform: assetData.platform || this.detectPlatform(name),
-        arch: assetData.arch || this.detectArch(name),
+        platform: target.platform,
+        arch: target.arch,
         checksum: assetData.sha256 || undefined,
         signatureUrl: assetData.signatureUrl || (url ? `${url}.sig` : undefined)
       }
-      return normalized
+      return [normalized]
     })
   }
 
@@ -273,51 +288,56 @@ export class OfficialUpdateProvider extends UpdateProvider {
     }
   }
 
-  // 检测平台
-  private detectPlatform(filename: string): 'win32' | 'darwin' | 'linux' {
-    const lower = filename.toLowerCase()
-
-    if (lower.includes('win') || lower.includes('windows') || lower.includes('.exe')) {
-      return 'win32'
-    } else if (lower.includes('mac') || lower.includes('darwin') || lower.includes('.dmg')) {
-      return 'darwin'
-    } else if (
-      lower.includes('linux') ||
-      lower.includes('.deb') ||
-      lower.includes('.rpm') ||
-      lower.includes('.appimage')
-    ) {
-      return 'linux'
-    }
-
-    return process.platform as 'win32' | 'darwin' | 'linux'
-  }
-
-  // 检测架构
-  private detectArch(filename: string): 'x64' | 'arm64' {
-    const lower = filename.toLowerCase()
-
-    if (lower.includes('arm64') || lower.includes('aarch64')) {
-      return 'arm64'
-    } else if (lower.includes('x64') || lower.includes('amd64') || lower.includes('x86_64')) {
-      return 'x64'
-    }
-
-    return process.arch as 'x64' | 'arm64'
-  }
-
   // 获取服务器状态
   async getServerStatus(): Promise<{
     available: boolean
     message: string
     estimatedLaunchDate?: string
+    reason?: string
   }> {
-    const isHealthy = await this.healthCheck()
-    return {
-      available: isHealthy,
-      message: isHealthy
-        ? 'Official update server is available'
-        : 'Official update server is temporarily unavailable'
+    try {
+      const response = await this.request<{
+        available?: boolean
+        message?: string
+        estimatedLaunchDate?: string
+        reason?: string
+      }>({
+        method: 'GET',
+        url: `${this.apiUrl}/status`,
+        timeoutMs: 5000,
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'TalexTouch-Updater/2.0'
+        }
+      })
+
+      if (response.status !== 200) {
+        return {
+          available: false,
+          message: 'Official update server is unavailable',
+          reason: `status endpoint returned ${response.status}`
+        }
+      }
+
+      const payload = response.data ?? {}
+      const available = payload.available === true
+      return {
+        available,
+        message:
+          payload.message ||
+          (available
+            ? 'Official update server is available'
+            : 'Official update server is unavailable'),
+        estimatedLaunchDate: payload.estimatedLaunchDate,
+        reason: available ? undefined : payload.reason || 'status endpoint unavailable'
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      return {
+        available: false,
+        message: 'Official update server is unavailable',
+        reason
+      }
     }
   }
 
@@ -327,19 +347,53 @@ export class OfficialUpdateProvider extends UpdateProvider {
     version: string
     location: string
     features: string[]
+    unavailable?: boolean
+    reason?: string
   }> {
-    return {
-      name: 'TalexTouch Official Update Server',
-      version: '1.0.0',
-      location: 'Cloudflare Global CDN',
-      features: [
-        'Faster download speeds',
-        'Regional optimization',
-        'GitHub + Upload dual mode',
-        'Multi-channel releases (RELEASE/BETA/SNAPSHOT)',
-        'Platform-specific assets',
-        'SHA256 checksum verification'
-      ]
+    try {
+      const response = await this.request<{
+        name?: string
+        version?: string
+        location?: string
+        features?: string[]
+      }>({
+        method: 'GET',
+        url: `${this.apiUrl}/info`,
+        timeoutMs: 5000,
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'TalexTouch-Updater/2.0'
+        }
+      })
+
+      if (response.status !== 200) {
+        return {
+          name: 'Unavailable',
+          version: 'unavailable',
+          location: 'unavailable',
+          features: [],
+          unavailable: true,
+          reason: `info endpoint returned ${response.status}`
+        }
+      }
+
+      const payload = response.data ?? {}
+      return {
+        name: payload.name || 'TalexTouch Official Update Server',
+        version: payload.version || 'unknown',
+        location: payload.location || 'unknown',
+        features: Array.isArray(payload.features) ? payload.features : []
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      return {
+        name: 'Unavailable',
+        version: 'unavailable',
+        location: 'unavailable',
+        features: [],
+        unavailable: true,
+        reason
+      }
     }
   }
 
@@ -348,11 +402,45 @@ export class OfficialUpdateProvider extends UpdateProvider {
     inMaintenance: boolean
     maintenanceMessage?: string
     estimatedEndTime?: string
+    unavailable?: boolean
+    reason?: string
   }> {
-    return {
-      inMaintenance: false,
-      maintenanceMessage: undefined,
-      estimatedEndTime: undefined
+    try {
+      const response = await this.request<{
+        inMaintenance?: boolean
+        maintenanceMessage?: string
+        estimatedEndTime?: string
+      }>({
+        method: 'GET',
+        url: `${this.apiUrl}/maintenance`,
+        timeoutMs: 5000,
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'TalexTouch-Updater/2.0'
+        }
+      })
+
+      if (response.status !== 200) {
+        return {
+          inMaintenance: false,
+          unavailable: true,
+          reason: `maintenance endpoint returned ${response.status}`
+        }
+      }
+
+      const payload = response.data ?? {}
+      return {
+        inMaintenance: payload.inMaintenance === true,
+        maintenanceMessage: payload.maintenanceMessage,
+        estimatedEndTime: payload.estimatedEndTime
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      return {
+        inMaintenance: false,
+        unavailable: true,
+        reason
+      }
     }
   }
 
@@ -361,13 +449,51 @@ export class OfficialUpdateProvider extends UpdateProvider {
     cpu: number
     memory: number
     network: number
-    status: 'healthy' | 'warning' | 'critical'
+    status: 'healthy' | 'warning' | 'critical' | 'unavailable'
+    reason?: string
   }> {
-    return {
-      cpu: 0,
-      memory: 0,
-      network: 0,
-      status: 'healthy'
+    try {
+      const response = await this.request<{
+        cpu?: number
+        memory?: number
+        network?: number
+        status?: 'healthy' | 'warning' | 'critical'
+      }>({
+        method: 'GET',
+        url: `${this.apiUrl}/metrics/load`,
+        timeoutMs: 5000,
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'TalexTouch-Updater/2.0'
+        }
+      })
+
+      if (response.status !== 200) {
+        return {
+          cpu: -1,
+          memory: -1,
+          network: -1,
+          status: 'unavailable',
+          reason: `load endpoint returned ${response.status}`
+        }
+      }
+
+      const payload = response.data ?? {}
+      return {
+        cpu: typeof payload.cpu === 'number' ? payload.cpu : -1,
+        memory: typeof payload.memory === 'number' ? payload.memory : -1,
+        network: typeof payload.network === 'number' ? payload.network : -1,
+        status: payload.status || 'healthy'
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      return {
+        cpu: -1,
+        memory: -1,
+        network: -1,
+        status: 'unavailable',
+        reason
+      }
     }
   }
 }

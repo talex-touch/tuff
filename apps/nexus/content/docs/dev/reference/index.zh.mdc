@@ -2,5 +2,6 @@
 
 ## 参考项
 - [Manifest 参考](./manifest.zh.md)
+- [Core App 启动链路与运行时变量](./runtime-startup-env.zh.md)
 - [示例与常用代码](./examples.zh.md)
 - [代码片段](./snippets.zh.md)

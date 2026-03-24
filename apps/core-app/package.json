@@ -12,10 +12,12 @@
     "lint": "eslint --cache . --quiet",
     "lint:fix": "eslint --cache --fix .",
     "test": "vitest run",
+    "test:core-main": "vitest run \"src/main/core\" \"src/main/channel\" \"src/main/modules/tray\"",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "pnpm -F @talex-touch/tuffex run build && vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
     "test:omnipanel": "vitest run src/main/modules/omni-panel/index.test.ts src/renderer/src/views/omni-panel/filter-features.test.ts src/renderer/src/views/omni-panel/interaction.test.ts",
+    "test:shortcut-lifecycle": "vitest run src/main/modules/global-shortcon.test.ts src/main/modules/division-box/shortcut-trigger.test.ts src/main/modules/omni-panel/index.test.ts",
     "smoke:omnipanel": "cross-env TUFF_OMNIPANEL_SMOKE=1 electron-vite preview",
     "start": "electron-vite preview",
     "dev": "cross-env NODE_OPTIONS='--max-old-space-size=8192' pnpm exec electron-vite dev",
@@ -35,7 +37,10 @@
     "build:release:win": "node scripts/build-target.js --target=win --type=release",
     "build:release:mac": "node scripts/build-target.js --target=mac --type=release",
     "build:release:linux": "node scripts/build-target.js --target=linux --type=release",
-    "network:guard": "node scripts/check-network-boundaries.js"
+    "network:guard": "node \"../../scripts/check-network-boundaries.mjs\" --scope \"apps/core-app/src\"",
+    "startup:bench:dev": "node \"scripts/startup-benchmark-dev.mjs\" --mode run --runs 30 --continueOnFail",
+    "startup:bench:analyze": "node \"scripts/startup-benchmark-dev.mjs\" --mode analyze",
+    "clipboard:stress": "pnpm exec tsx \"scripts/clipboard-polling-stress.ts\""
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
@@ -81,6 +86,7 @@
     "simple-plist": "1.4.0-0",
     "talex-mica-electron": "^1.0.2",
     "tesseract.js": "^6.0.1",
+    "vue-sonner": "^2.0.9",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0",
     "yauzl": "^3.2.1"
@@ -152,7 +158,6 @@
     "vue-i18n": "^11.3.0",
     "vue-profile-avatar": "^1.2.0",
     "vue-router": "^4.6.4",
-    "vue-sonner": "^2.0.9",
     "vue-tsc": "^3.2.5"
   }
 }

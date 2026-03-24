@@ -27,6 +27,7 @@ import { nativeShareService } from './native-share'
 import { flowTargetRegistry } from './target-registry'
 
 const LOG_PREFIX = '[FlowBus]'
+const FLOW_SHORTCUT_OWNER = 'module.flow-bus'
 
 /** Shortcut IDs for Flow operations */
 export const FLOW_SHORTCUT_IDS = {
@@ -186,25 +187,32 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
    */
   private registerShortcuts(): void {
     // Command+D: Detach current item to DivisionBox
-    shortcutModule.registerMainShortcut(FLOW_SHORTCUT_IDS.DETACH, 'CommandOrControl+D', () => {
-      if (coreBoxManager.isUIMode) {
-        this.triggerDetach()
-        return
-      }
+    shortcutModule.registerMainShortcut(
+      FLOW_SHORTCUT_IDS.DETACH,
+      'CommandOrControl+D',
+      () => {
+        if (coreBoxManager.isUIMode) {
+          this.triggerDetach()
+          return
+        }
 
-      const coreBoxWindow = getCoreBoxWindow()
-      if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
-        console.warn('[FlowBusModule] CoreBox window not available for detach')
-        return
-      }
+        const coreBoxWindow = getCoreBoxWindow()
+        if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
+          console.warn('[FlowBusModule] CoreBox window not available for detach')
+          return
+        }
 
-      const channel = genTouchApp().channel
-      const keyManager =
-        (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-      const tx = getTuffTransportMain(channel, keyManager)
+        const channel = genTouchApp().channel
+        const keyManager =
+          (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+        const tx = getTuffTransportMain(channel, keyManager)
 
-      tx.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerDetach, undefined).catch(() => {})
-    })
+        tx.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerDetach, undefined).catch(
+          () => {}
+        )
+      },
+      { owner: FLOW_SHORTCUT_OWNER }
+    )
 
     // Command+Shift+D: Transfer current item to another plugin
     shortcutModule.registerMainShortcut(
@@ -212,7 +220,8 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       'CommandOrControl+Shift+D',
       () => {
         this.triggerFlowTransfer()
-      }
+      },
+      { owner: FLOW_SHORTCUT_OWNER }
     )
   }
 
@@ -349,6 +358,9 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
    * Cleans up the Flow Bus module
    */
   onDestroy(): MaybePromise<void> {
+    shortcutModule.unregisterMainShortcut(FLOW_SHORTCUT_IDS.DETACH)
+    shortcutModule.unregisterMainShortcut(FLOW_SHORTCUT_IDS.TRANSFER)
+
     if (this.ipc) {
       this.ipc.unregisterHandlers()
       this.ipc = null

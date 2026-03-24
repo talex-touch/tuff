@@ -14,6 +14,7 @@ import searchEngineCore from '../box-tool/search-engine/search-core'
 import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { createDivisionBoxCommandProvider } from './command-provider'
 import { initializeDivisionBoxIPC } from './ipc'
+import { shortcutTriggerManager } from './shortcut-trigger'
 import { windowPool } from './window-pool'
 
 const LOG_PREFIX = '[DivisionBox]'
@@ -145,6 +146,8 @@ export class DivisionBoxModule extends BaseModule {
       this.disposeAllModulesLoaded()
       this.disposeAllModulesLoaded = null
     }
+
+    shortcutTriggerManager.clear()
 
     // Destroy window pool
     windowPool.destroy()

@@ -193,16 +193,16 @@ importers:
         version: 4.6.2
       '@langchain/anthropic':
         specifier: ^0.3.34
-        version: 0.3.34(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod@3.25.76)
+        version: 0.3.34(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod@3.25.76)
       '@langchain/core':
         specifier: ^0.3.80
-        version: 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+        version: 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
       '@langchain/langgraph':
         specifier: ^0.2.74
-        version: 0.2.74(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod-to-json-schema@3.25.1(zod@3.25.76))
+        version: 0.2.74(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod-to-json-schema@3.25.1(zod@3.25.76))
       '@langchain/openai':
         specifier: ^0.3.17
-        version: 0.3.17(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
+        version: 0.3.17(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       '@libsql/client':
         specifier: ^0.15.15
         version: 0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6)
@@ -250,7 +250,7 @@ importers:
         version: 2.1.2
       drizzle-orm:
         specifier: ^0.44.7
-        version: 0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0)
+        version: 0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)
       electron-log:
         specifier: 5.0.0-beta.28
         version: 5.0.0-beta.28
@@ -311,6 +311,9 @@ importers:
       tesseract.js:
         specifier: ^6.0.1
         version: 6.0.1(encoding@0.1.13)
+      vue-sonner:
+        specifier: ^2.0.9
+        version: 2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(956b50fd31863b81445793579a42197b))
       xterm:
         specifier: ^5.3.0
         version: 5.3.0
@@ -501,9 +504,6 @@ importers:
       vue-router:
         specifier: ^4.6.4
         version: 4.6.4(vue@3.5.30(typescript@5.9.3))
-      vue-sonner:
-        specifier: ^2.0.9
-        version: 2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(11923cca04e76f992d91f94deef09679))
       vue-tsc:
         specifier: ^3.2.5
         version: 3.2.5(typescript@5.9.3)
@@ -1061,22 +1061,22 @@ importers:
         version: 1.2.3
       '@langchain/anthropic':
         specifier: ^0.3.34
-        version: 0.3.34(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod@3.25.76)
+        version: 0.3.34(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod@3.25.76)
       '@langchain/core':
         specifier: ^0.3.80
-        version: 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+        version: 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
       '@langchain/langgraph':
         specifier: ^0.2.74
-        version: 0.2.74(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod-to-json-schema@3.25.1(zod@3.25.76))
+        version: 0.2.74(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod-to-json-schema@3.25.1(zod@3.25.76))
       '@langchain/openai':
         specifier: ^0.3.17
-        version: 0.3.17(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
+        version: 0.3.17(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       '@sentry/nuxt':
         specifier: 'catalog:'
-        version: 10.43.0(@cloudflare/workers-types@4.20260313.1)(@opentelemetry/api@1.9.0)(@opentelemetry/context-async-hooks@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/core@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/instrumentation@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/resources@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.40.0)(encoding@0.1.13)(magicast@0.5.1)(nuxt@4.4.2(8e01dacd75fbdc935e27722c5c3fc51a))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3)))(rollup@4.59.0)(vue@3.5.30(typescript@5.9.3))
+        version: 10.43.0(@cloudflare/workers-types@4.20260313.1)(@opentelemetry/api@1.9.0)(@opentelemetry/context-async-hooks@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/core@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/instrumentation@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/resources@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.40.0)(encoding@0.1.13)(magicast@0.5.1)(nuxt@4.4.2(69a3089f42dc3095be59a3fb3c7bbee1))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3)))(rollup@4.59.0)(vue@3.5.30(typescript@5.9.3))
       '@sidebase/nuxt-auth':
         specifier: ^0.9.4
-        version: 0.9.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(magicast@0.5.1)(mysql2@3.19.1(@types/node@24.1.0))(next-auth@4.21.1(nodemailer@7.0.13))(xml2js@0.6.2)
+        version: 0.9.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(magicast@0.5.1)(next-auth@4.21.1(nodemailer@7.0.13))
       '@talex-touch/tuff-business':
         specifier: workspace:*
         version: link:../../packages/tuff-business
@@ -1124,7 +1124,7 @@ importers:
         version: 8.8.7
       vue-sonner:
         specifier: 'catalog:'
-        version: 2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(8e01dacd75fbdc935e27722c5c3fc51a))
+        version: 2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(69a3089f42dc3095be59a3fb3c7bbee1))
     devDependencies:
       '@antfu/eslint-config':
         specifier: catalog:dev
@@ -1140,19 +1140,19 @@ importers:
         version: 1.2.5
       '@nuxt/content':
         specifier: catalog:build
-        version: 3.12.0(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(magicast@0.5.1)(mysql2@3.19.1(@types/node@24.1.0))(utf-8-validate@6.0.6)
+        version: 3.12.0(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))(magicast@0.5.1)(utf-8-validate@6.0.6)
       '@nuxt/devtools':
         specifier: ^2.7.0
         version: 2.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.30(typescript@5.9.3))
       '@nuxt/eslint':
         specifier: catalog:build
-        version: 1.15.2(@typescript-eslint/utils@8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.30)(bufferutil@4.1.0)(eslint-import-resolver-node@0.3.9)(eslint-plugin-format@1.5.0(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(typescript@5.9.3)(utf-8-validate@6.0.6)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+        version: 1.15.2(@typescript-eslint/utils@8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.30)(bufferutil@4.1.0)(eslint-plugin-format@1.5.0(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(typescript@5.9.3)(utf-8-validate@6.0.6)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
       '@nuxtjs/color-mode':
         specifier: catalog:build
         version: 3.5.2(magicast@0.5.1)
       '@nuxtjs/i18n':
         specifier: catalog:build
-        version: 10.2.3(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0)))(eslint@9.39.4(jiti@2.6.1))(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(rollup@4.59.0)(vue@3.5.30(typescript@5.9.3))
+        version: 10.2.3(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)))(eslint@9.39.4(jiti@2.6.1))(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(rollup@4.59.0)(vue@3.5.30(typescript@5.9.3))
       '@pinia/nuxt':
         specifier: catalog:build
         version: 0.11.3(magicast@0.5.1)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3)))
@@ -1167,13 +1167,13 @@ importers:
         version: 66.6.6
       '@vite-pwa/nuxt':
         specifier: catalog:build
-        version: 1.1.1(@types/babel__core@7.20.5)(magicast@0.5.1)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+        version: 1.1.1(magicast@0.5.1)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
       '@vueuse/core':
         specifier: ^14.2.1
         version: 14.2.1(vue@3.5.30(typescript@5.9.3))
       '@vueuse/nuxt':
         specifier: catalog:build
-        version: 13.9.0(magicast@0.5.1)(nuxt@4.4.2(8e01dacd75fbdc935e27722c5c3fc51a))(vue@3.5.30(typescript@5.9.3))
+        version: 13.9.0(magicast@0.5.1)(nuxt@4.4.2(69a3089f42dc3095be59a3fb3c7bbee1))(vue@3.5.30(typescript@5.9.3))
       baseline-browser-mapping:
         specifier: catalog:dev
         version: 2.10.7
@@ -1191,7 +1191,7 @@ importers:
         version: 0.2.2
       nuxt:
         specifier: ^4.4.2
-        version: 4.4.2(8e01dacd75fbdc935e27722c5c3fc51a)
+        version: 4.4.2(69a3089f42dc3095be59a3fb3c7bbee1)
       openapi-typescript:
         specifier: 6.7.5
         version: 6.7.5
@@ -1242,13 +1242,13 @@ importers:
         version: 1.1.11(vue@3.5.30(typescript@5.9.3))
       '@langchain/core':
         specifier: ^0.3.80
-        version: 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+        version: 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
       '@langchain/langgraph':
         specifier: ^0.2.74
-        version: 0.2.74(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod-to-json-schema@3.25.1(zod@3.25.76))
+        version: 0.2.74(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod-to-json-schema@3.25.1(zod@3.25.76))
       '@langchain/openai':
         specifier: ^0.4.9
-        version: 0.4.9(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
+        version: 0.4.9(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       '@milkdown/core':
         specifier: ^7.19.0
         version: 7.19.0
@@ -1344,7 +1344,7 @@ importers:
         version: 1.11.20
       deepagents:
         specifier: 0.0.2
-        version: 0.0.2(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))(zod-to-json-schema@3.25.1(zod@3.25.76))
+        version: 0.0.2(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))(zod-to-json-schema@3.25.1(zod@3.25.76))
       element-plus:
         specifier: ^2.13.5
         version: 2.13.5(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3))
@@ -1369,6 +1369,9 @@ importers:
       js-confetti:
         specifier: ^0.12.0
         version: 0.12.0
+      katex:
+        specifier: ^0.16.28
+        version: 0.16.28
       lottie:
         specifier: ^0.0.1
         version: 0.0.1
@@ -1383,7 +1386,7 @@ importers:
         version: 11.13.0
       nuxt:
         specifier: ^4.4.2
-        version: 4.4.2(8e01dacd75fbdc935e27722c5c3fc51a)
+        version: 4.4.2(69a3089f42dc3095be59a3fb3c7bbee1)
       pg:
         specifier: ^8.20.0
         version: 8.20.0
@@ -1429,7 +1432,7 @@ importers:
         version: 2.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.30(typescript@5.9.3))
       '@nuxt/eslint':
         specifier: catalog:build
-        version: 1.15.2(@typescript-eslint/utils@8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.30)(bufferutil@4.1.0)(eslint-import-resolver-node@0.3.9)(eslint-plugin-format@1.5.0(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(typescript@5.9.3)(utf-8-validate@6.0.6)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+        version: 1.15.2(@typescript-eslint/utils@8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.30)(bufferutil@4.1.0)(eslint-plugin-format@1.5.0(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(typescript@5.9.3)(utf-8-validate@6.0.6)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
       '@nuxtjs/color-mode':
         specifier: catalog:build
         version: 3.5.2(magicast@0.5.1)
@@ -1444,16 +1447,16 @@ importers:
         version: 66.6.6(magicast@0.5.1)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(webpack@5.105.4)
       '@vite-pwa/nuxt':
         specifier: catalog:build
-        version: 1.1.1(@types/babel__core@7.20.5)(magicast@0.5.1)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+        version: 1.1.1(magicast@0.5.1)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
       '@vueuse/nuxt':
         specifier: catalog:build
-        version: 13.9.0(magicast@0.5.1)(nuxt@4.4.2(8e01dacd75fbdc935e27722c5c3fc51a))(vue@3.5.30(typescript@5.9.3))
+        version: 13.9.0(magicast@0.5.1)(nuxt@4.4.2(69a3089f42dc3095be59a3fb3c7bbee1))(vue@3.5.30(typescript@5.9.3))
       eslint:
         specifier: catalog:dev
         version: 9.39.4(jiti@2.6.1)
       nuxt-echarts:
         specifier: ^0.3.3
-        version: 0.3.3(echarts@5.6.0)(magicast@0.5.1)
+        version: 0.3.3(magicast@0.5.1)
       nuxt-lodash:
         specifier: ^2.5.3
         version: 2.5.3(magicast@0.5.1)
@@ -2099,19 +2102,19 @@ importers:
     dependencies:
       '@langchain/core':
         specifier: ^0.3.80
-        version: 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+        version: 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
       '@langchain/langgraph':
         specifier: ^0.2.74
-        version: 0.2.74(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod-to-json-schema@3.25.1(zod@3.25.76))
+        version: 0.2.74(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod-to-json-schema@3.25.1(zod@3.25.76))
       '@langchain/openai':
         specifier: ^0.4.9
-        version: 0.4.9(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
+        version: 0.4.9(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       '@talex-touch/utils':
         specifier: workspace:*
         version: link:../utils
       deepagents:
         specifier: 0.0.2
-        version: 0.0.2(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))(zod-to-json-schema@3.25.1(zod@3.25.76))
+        version: 0.0.2(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))(zod-to-json-schema@3.25.1(zod@3.25.76))
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20260313.1
@@ -24819,7 +24822,6 @@ snapshots:
       cac: 6.7.14
       citty: 0.2.1
       commander: 14.0.3
-    optional: true
 
   '@borewit/text-codec@0.2.1': {}
 
@@ -27054,6 +27056,14 @@ snapshots:
 
   '@kwsites/promise-deferred@1.1.1': {}
 
+  '@langchain/anthropic@0.3.34(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod@3.25.76)':
+    dependencies:
+      '@anthropic-ai/sdk': 0.65.0(zod@3.25.76)
+      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+      fast-xml-parser: 4.5.4
+    transitivePeerDependencies:
+      - zod
+
   '@langchain/anthropic@0.3.34(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod@3.25.76)':
     dependencies:
       '@anthropic-ai/sdk': 0.65.0(zod@3.25.76)
@@ -27061,6 +27071,7 @@ snapshots:
       fast-xml-parser: 4.5.4
     transitivePeerDependencies:
       - zod
+    optional: true
 
   '@langchain/community@0.2.33(b88341e3b4af31ccc4d7664f32a69975)':
     dependencies:
@@ -27125,6 +27136,26 @@ snapshots:
     transitivePeerDependencies:
       - openai
 
+  '@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))':
+    dependencies:
+      '@cfworker/json-schema': 4.1.1
+      ansi-styles: 5.2.0
+      camelcase: 6.3.0
+      decamelize: 1.2.0
+      js-tiktoken: 1.0.21
+      langsmith: 0.3.87(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+      mustache: 4.2.0
+      p-queue: 6.6.2
+      p-retry: 4.6.2
+      uuid: 10.0.0
+      zod: 3.25.76
+      zod-to-json-schema: 3.25.0(zod@3.25.76)
+    transitivePeerDependencies:
+      - '@opentelemetry/api'
+      - '@opentelemetry/exporter-trace-otlp-proto'
+      - '@opentelemetry/sdk-trace-base'
+      - openai
+
   '@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))':
     dependencies:
       '@cfworker/json-schema': 4.1.1
@@ -27144,25 +27175,41 @@ snapshots:
       - '@opentelemetry/exporter-trace-otlp-proto'
       - '@opentelemetry/sdk-trace-base'
       - openai
+    optional: true
 
-  '@langchain/langgraph-checkpoint@0.0.18(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))':
+  '@langchain/langgraph-checkpoint@0.0.18(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))':
     dependencies:
-      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+      uuid: 10.0.0
+
+  '@langchain/langgraph-checkpoint@0.1.1(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))':
+    dependencies:
+      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
       uuid: 10.0.0
 
   '@langchain/langgraph-checkpoint@0.1.1(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))':
     dependencies:
       '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
       uuid: 10.0.0
+    optional: true
 
-  '@langchain/langgraph-sdk@0.0.112(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))':
+  '@langchain/langgraph-sdk@0.0.112(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))':
     dependencies:
       '@types/json-schema': 7.0.15
       p-queue: 6.6.2
       p-retry: 4.6.2
       uuid: 9.0.1
     optionalDependencies:
-      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+
+  '@langchain/langgraph-sdk@0.1.10(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))':
+    dependencies:
+      '@types/json-schema': 7.0.15
+      p-queue: 6.6.2
+      p-retry: 4.6.2
+      uuid: 9.0.1
+    optionalDependencies:
+      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
 
   '@langchain/langgraph-sdk@0.1.10(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))':
     dependencies:
@@ -27172,12 +27219,26 @@ snapshots:
       uuid: 9.0.1
     optionalDependencies:
       '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+    optional: true
 
-  '@langchain/langgraph@0.2.74(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod-to-json-schema@3.25.1(zod@3.25.76))':
+  '@langchain/langgraph@0.2.74(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod-to-json-schema@3.25.1(zod@3.25.76))':
     dependencies:
-      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
-      '@langchain/langgraph-checkpoint': 0.0.18(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))
-      '@langchain/langgraph-sdk': 0.0.112(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))
+      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+      '@langchain/langgraph-checkpoint': 0.0.18(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))
+      '@langchain/langgraph-sdk': 0.0.112(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))
+      uuid: 10.0.0
+      zod: 3.25.76
+    optionalDependencies:
+      zod-to-json-schema: 3.25.1(zod@3.25.76)
+    transitivePeerDependencies:
+      - react
+      - react-dom
+
+  '@langchain/langgraph@0.4.9(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod-to-json-schema@3.25.1(zod@3.25.76))':
+    dependencies:
+      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+      '@langchain/langgraph-checkpoint': 0.1.1(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))
+      '@langchain/langgraph-sdk': 0.1.10(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))
       uuid: 10.0.0
       zod: 3.25.76
     optionalDependencies:
@@ -27198,6 +27259,7 @@ snapshots:
     transitivePeerDependencies:
       - react
       - react-dom
+    optional: true
 
   '@langchain/openai@0.2.11(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))':
     dependencies:
@@ -27210,22 +27272,22 @@ snapshots:
       - encoding
       - ws
 
-  '@langchain/openai@0.3.17(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))':
+  '@langchain/openai@0.3.17(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))':
     dependencies:
-      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
       js-tiktoken: 1.0.21
-      openai: 4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)
+      openai: 4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)
       zod: 3.25.76
       zod-to-json-schema: 3.25.0(zod@3.25.76)
     transitivePeerDependencies:
       - encoding
       - ws
 
-  '@langchain/openai@0.4.9(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))':
+  '@langchain/openai@0.4.9(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))':
     dependencies:
-      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
       js-tiktoken: 1.0.21
-      openai: 4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)
+      openai: 4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)
       zod: 3.25.76
       zod-to-json-schema: 3.25.1(zod@3.25.76)
     transitivePeerDependencies:
@@ -28287,9 +28349,8 @@ snapshots:
       - commander
       - magicast
       - supports-color
-    optional: true
 
-  '@nuxt/content@3.12.0(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(magicast@0.5.1)(mysql2@3.19.1(@types/node@24.1.0))(utf-8-validate@6.0.6)':
+  '@nuxt/content@3.12.0(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))(magicast@0.5.1)(utf-8-validate@6.0.6)':
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       '@nuxtjs/mdc': 0.20.1(magicast@0.5.1)
@@ -28300,7 +28361,7 @@ snapshots:
       c12: 3.3.3(magicast@0.5.1)
       chokidar: 5.0.0
       consola: 3.4.2
-      db0: 0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0))
+      db0: 0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))
       defu: 6.1.4
       destr: 2.0.5
       git-url-parse: 16.1.0
@@ -28451,7 +28512,7 @@ snapshots:
       - supports-color
       - typescript
 
-  '@nuxt/eslint-config@1.15.2(@typescript-eslint/utils@8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.30)(eslint-import-resolver-node@0.3.9)(eslint-plugin-format@1.5.0(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)':
+  '@nuxt/eslint-config@1.15.2(@typescript-eslint/utils@8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.30)(eslint-plugin-format@1.5.0(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)':
     dependencies:
       '@antfu/install-pkg': 1.1.0
       '@clack/prompts': 1.0.1
@@ -28465,7 +28526,7 @@ snapshots:
       eslint-flat-config-utils: 3.0.1
       eslint-merge-processors: 2.0.0(eslint@9.39.4(jiti@2.6.1))
       eslint-plugin-import-lite: 0.5.2(eslint@9.39.4(jiti@2.6.1))
-      eslint-plugin-import-x: 4.16.1(@typescript-eslint/utils@8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint@9.39.4(jiti@2.6.1))
+      eslint-plugin-import-x: 4.16.1(@typescript-eslint/utils@8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))
       eslint-plugin-jsdoc: 62.7.1(eslint@9.39.4(jiti@2.6.1))
       eslint-plugin-regexp: 3.0.0(eslint@9.39.4(jiti@2.6.1))
       eslint-plugin-unicorn: 63.0.0(eslint@9.39.4(jiti@2.6.1))
@@ -28527,11 +28588,11 @@ snapshots:
       - utf-8-validate
       - vite
 
-  '@nuxt/eslint@1.15.2(@typescript-eslint/utils@8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.30)(bufferutil@4.1.0)(eslint-import-resolver-node@0.3.9)(eslint-plugin-format@1.5.0(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(typescript@5.9.3)(utf-8-validate@6.0.6)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))':
+  '@nuxt/eslint@1.15.2(@typescript-eslint/utils@8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.30)(bufferutil@4.1.0)(eslint-plugin-format@1.5.0(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(typescript@5.9.3)(utf-8-validate@6.0.6)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
       '@eslint/config-inspector': 1.4.2(bufferutil@4.1.0)(eslint@9.39.4(jiti@2.6.1))(utf-8-validate@6.0.6)
       '@nuxt/devtools-kit': 3.2.2(magicast@0.5.1)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
-      '@nuxt/eslint-config': 1.15.2(@typescript-eslint/utils@8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.30)(eslint-import-resolver-node@0.3.9)(eslint-plugin-format@1.5.0(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
+      '@nuxt/eslint-config': 1.15.2(@typescript-eslint/utils@8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.30)(eslint-plugin-format@1.5.0(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
       '@nuxt/eslint-plugin': 1.15.2(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       chokidar: 5.0.0
@@ -28605,7 +28666,7 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  '@nuxt/nitro-server@4.4.2(@babel/core@7.29.0)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0)))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(mysql2@3.19.1(@types/node@24.1.0))(nuxt@4.4.2(8e01dacd75fbdc935e27722c5c3fc51a))(typescript@5.9.3)(xml2js@0.6.2)':
+  '@nuxt/nitro-server@4.4.2(@babel/core@7.29.0)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(nuxt@4.4.2(69a3089f42dc3095be59a3fb3c7bbee1))(typescript@5.9.3)':
     dependencies:
       '@babel/plugin-syntax-typescript': 7.28.6(@babel/core@7.29.0)
       '@nuxt/devalue': 2.0.2
@@ -28623,8 +28684,8 @@ snapshots:
       impound: 1.1.5
       klona: 2.0.6
       mocked-exports: 0.1.1
-      nitropack: 2.13.1(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(mysql2@3.19.1(@types/node@24.1.0))(xml2js@0.6.2)
-      nuxt: 4.4.2(8e01dacd75fbdc935e27722c5c3fc51a)
+      nitropack: 2.13.1(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)
+      nuxt: 4.4.2(69a3089f42dc3095be59a3fb3c7bbee1)
       nypm: 0.6.5
       ohash: 2.0.11
       pathe: 2.0.3
@@ -28633,7 +28694,7 @@ snapshots:
       std-env: 4.0.0
       ufo: 1.6.3
       unctx: 2.5.0
-      unstorage: 1.17.4(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0)))(idb-keyval@6.2.2)(ioredis@5.10.0)
+      unstorage: 1.17.4(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)))(idb-keyval@6.2.2)(ioredis@5.10.0)
       vue: 3.5.30(typescript@5.9.3)
       vue-bundle-renderer: 2.2.0
       vue-devtools-stub: 0.1.0
@@ -28672,75 +28733,6 @@ snapshots:
       - typescript
       - uploadthing
       - xml2js
-
-  '@nuxt/nitro-server@4.4.2(@babel/core@7.29.0)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0)))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(mysql2@3.19.1(@types/node@24.1.0))(nuxt@4.4.2(11923cca04e76f992d91f94deef09679))(typescript@5.9.3)(xml2js@0.6.2)':
-    dependencies:
-      '@babel/plugin-syntax-typescript': 7.28.6(@babel/core@7.29.0)
-      '@nuxt/devalue': 2.0.2
-      '@nuxt/kit': 4.4.2(magicast@0.5.1)
-      '@unhead/vue': 2.1.12(vue@3.5.30(typescript@5.9.3))
-      '@vue/shared': 3.5.30
-      consola: 3.4.2
-      defu: 6.1.4
-      destr: 2.0.5
-      devalue: 5.6.3
-      errx: 0.1.0
-      escape-string-regexp: 5.0.0
-      exsolve: 1.0.8
-      h3: 1.15.6
-      impound: 1.1.5
-      klona: 2.0.6
-      mocked-exports: 0.1.1
-      nitropack: 2.13.1(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(mysql2@3.19.1(@types/node@24.1.0))(xml2js@0.6.2)
-      nuxt: 4.4.2(11923cca04e76f992d91f94deef09679)
-      nypm: 0.6.5
-      ohash: 2.0.11
-      pathe: 2.0.3
-      pkg-types: 2.3.0
-      rou3: 0.8.1
-      std-env: 4.0.0
-      ufo: 1.6.3
-      unctx: 2.5.0
-      unstorage: 1.17.4(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0)))(idb-keyval@6.2.2)(ioredis@5.10.0)
-      vue: 3.5.30(typescript@5.9.3)
-      vue-bundle-renderer: 2.2.0
-      vue-devtools-stub: 0.1.0
-    transitivePeerDependencies:
-      - '@azure/app-configuration'
-      - '@azure/cosmos'
-      - '@azure/data-tables'
-      - '@azure/identity'
-      - '@azure/keyvault-secrets'
-      - '@azure/storage-blob'
-      - '@babel/core'
-      - '@capacitor/preferences'
-      - '@deno/kv'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@netlify/blobs'
-      - '@planetscale/database'
-      - '@upstash/redis'
-      - '@vercel/blob'
-      - '@vercel/functions'
-      - '@vercel/kv'
-      - aws4fetch
-      - bare-abort-controller
-      - better-sqlite3
-      - db0
-      - drizzle-orm
-      - encoding
-      - idb-keyval
-      - ioredis
-      - magicast
-      - mysql2
-      - react-native-b4a
-      - rolldown
-      - sqlite3
-      - supports-color
-      - typescript
-      - uploadthing
-      - xml2js
-    optional: true
 
   '@nuxt/nitro-server@4.4.2(@babel/core@7.29.0)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0)))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(mysql2@3.19.1(@types/node@24.1.0))(nuxt@4.4.2(339af80e28e28cd1465fd4889714d10a))(typescript@5.9.3)(xml2js@0.6.2)':
     dependencies:
@@ -28878,6 +28870,75 @@ snapshots:
       - uploadthing
       - xml2js
 
+  '@nuxt/nitro-server@4.4.2(@babel/core@7.29.0)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(nuxt@4.4.2(956b50fd31863b81445793579a42197b))(typescript@5.9.3)':
+    dependencies:
+      '@babel/plugin-syntax-typescript': 7.28.6(@babel/core@7.29.0)
+      '@nuxt/devalue': 2.0.2
+      '@nuxt/kit': 4.4.2(magicast@0.5.1)
+      '@unhead/vue': 2.1.12(vue@3.5.30(typescript@5.9.3))
+      '@vue/shared': 3.5.30
+      consola: 3.4.2
+      defu: 6.1.4
+      destr: 2.0.5
+      devalue: 5.6.3
+      errx: 0.1.0
+      escape-string-regexp: 5.0.0
+      exsolve: 1.0.8
+      h3: 1.15.6
+      impound: 1.1.5
+      klona: 2.0.6
+      mocked-exports: 0.1.1
+      nitropack: 2.13.1(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)
+      nuxt: 4.4.2(956b50fd31863b81445793579a42197b)
+      nypm: 0.6.5
+      ohash: 2.0.11
+      pathe: 2.0.3
+      pkg-types: 2.3.0
+      rou3: 0.8.1
+      std-env: 4.0.0
+      ufo: 1.6.3
+      unctx: 2.5.0
+      unstorage: 1.17.4(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)))(idb-keyval@6.2.2)(ioredis@5.10.0)
+      vue: 3.5.30(typescript@5.9.3)
+      vue-bundle-renderer: 2.2.0
+      vue-devtools-stub: 0.1.0
+    transitivePeerDependencies:
+      - '@azure/app-configuration'
+      - '@azure/cosmos'
+      - '@azure/data-tables'
+      - '@azure/identity'
+      - '@azure/keyvault-secrets'
+      - '@azure/storage-blob'
+      - '@babel/core'
+      - '@capacitor/preferences'
+      - '@deno/kv'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@netlify/blobs'
+      - '@planetscale/database'
+      - '@upstash/redis'
+      - '@vercel/blob'
+      - '@vercel/functions'
+      - '@vercel/kv'
+      - aws4fetch
+      - bare-abort-controller
+      - better-sqlite3
+      - db0
+      - drizzle-orm
+      - encoding
+      - idb-keyval
+      - ioredis
+      - magicast
+      - mysql2
+      - react-native-b4a
+      - rolldown
+      - sqlite3
+      - supports-color
+      - typescript
+      - uploadthing
+      - xml2js
+    optional: true
+
   '@nuxt/schema@3.21.1':
     dependencies:
       '@vue/shared': 3.5.29
@@ -28902,67 +28963,6 @@ snapshots:
       ofetch: 2.0.0-alpha.3
       rc9: 3.0.0
       std-env: 3.10.0
-
-  '@nuxt/vite-builder@4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(11923cca04e76f992d91f94deef09679))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@4.59.0))(rollup@4.59.0)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.5(typescript@5.9.3))(vue@3.5.30(typescript@5.9.3))(yaml@2.8.2)':
-    dependencies:
-      '@nuxt/kit': 4.4.2(magicast@0.5.1)
-      '@rollup/plugin-replace': 6.0.3(rollup@4.59.0)
-      '@vitejs/plugin-vue': 6.0.5(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.30(typescript@5.9.3))
-      '@vitejs/plugin-vue-jsx': 5.1.5(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.30(typescript@5.9.3))
-      autoprefixer: 10.4.27(postcss@8.5.8)
-      consola: 3.4.2
-      cssnano: 7.1.3(postcss@8.5.8)
-      defu: 6.1.4
-      escape-string-regexp: 5.0.0
-      exsolve: 1.0.8
-      get-port-please: 3.2.0
-      jiti: 2.6.1
-      knitwork: 1.3.0
-      magic-string: 0.30.21
-      mlly: 1.8.1
-      mocked-exports: 0.1.1
-      nuxt: 4.4.2(11923cca04e76f992d91f94deef09679)
-      nypm: 0.6.5
-      pathe: 2.0.3
-      pkg-types: 2.3.0
-      postcss: 8.5.8
-      seroval: 1.5.1
-      std-env: 4.0.0
-      ufo: 1.6.3
-      unenv: 2.0.0-rc.24
-      vite: 7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-      vite-node: 5.3.0(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-      vite-plugin-checker: 0.12.0(eslint@9.39.4(jiti@2.6.1))(optionator@0.9.4)(typescript@5.9.3)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.5(typescript@5.9.3))
-      vue: 3.5.30(typescript@5.9.3)
-      vue-bundle-renderer: 2.2.0
-    optionalDependencies:
-      '@babel/plugin-syntax-jsx': 7.27.1(@babel/core@7.29.0)
-      rollup-plugin-visualizer: 6.0.5(rollup@4.59.0)
-    transitivePeerDependencies:
-      - '@biomejs/biome'
-      - '@types/node'
-      - eslint
-      - less
-      - lightningcss
-      - magicast
-      - meow
-      - optionator
-      - oxlint
-      - rollup
-      - sass
-      - sass-embedded
-      - stylelint
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-      - tsx
-      - typescript
-      - vls
-      - vti
-      - vue-tsc
-      - yaml
-    optional: true
 
   '@nuxt/vite-builder@4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(339af80e28e28cd1465fd4889714d10a))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@4.59.0))(rollup@4.59.0)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@2.2.12(typescript@5.9.3))(vue@3.5.30(typescript@5.9.3))(yaml@2.8.2)':
     dependencies:
@@ -29084,7 +29084,7 @@ snapshots:
       - vue-tsc
       - yaml
 
-  '@nuxt/vite-builder@4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(8e01dacd75fbdc935e27722c5c3fc51a))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@4.59.0))(rollup@4.59.0)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.5(typescript@5.9.3))(vue@3.5.30(typescript@5.9.3))(yaml@2.8.2)':
+  '@nuxt/vite-builder@4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(69a3089f42dc3095be59a3fb3c7bbee1))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@4.59.0))(rollup@4.59.0)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.5(typescript@5.9.3))(vue@3.5.30(typescript@5.9.3))(yaml@2.8.2)':
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       '@rollup/plugin-replace': 6.0.3(rollup@4.59.0)
@@ -29102,7 +29102,7 @@ snapshots:
       magic-string: 0.30.21
       mlly: 1.8.1
       mocked-exports: 0.1.1
-      nuxt: 4.4.2(8e01dacd75fbdc935e27722c5c3fc51a)
+      nuxt: 4.4.2(69a3089f42dc3095be59a3fb3c7bbee1)
       nypm: 0.6.5
       pathe: 2.0.3
       pkg-types: 2.3.0
@@ -29144,6 +29144,67 @@ snapshots:
       - vue-tsc
       - yaml
 
+  '@nuxt/vite-builder@4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(956b50fd31863b81445793579a42197b))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@4.59.0))(rollup@4.59.0)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.5(typescript@5.9.3))(vue@3.5.30(typescript@5.9.3))(yaml@2.8.2)':
+    dependencies:
+      '@nuxt/kit': 4.4.2(magicast@0.5.1)
+      '@rollup/plugin-replace': 6.0.3(rollup@4.59.0)
+      '@vitejs/plugin-vue': 6.0.5(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.30(typescript@5.9.3))
+      '@vitejs/plugin-vue-jsx': 5.1.5(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.30(typescript@5.9.3))
+      autoprefixer: 10.4.27(postcss@8.5.8)
+      consola: 3.4.2
+      cssnano: 7.1.3(postcss@8.5.8)
+      defu: 6.1.4
+      escape-string-regexp: 5.0.0
+      exsolve: 1.0.8
+      get-port-please: 3.2.0
+      jiti: 2.6.1
+      knitwork: 1.3.0
+      magic-string: 0.30.21
+      mlly: 1.8.1
+      mocked-exports: 0.1.1
+      nuxt: 4.4.2(956b50fd31863b81445793579a42197b)
+      nypm: 0.6.5
+      pathe: 2.0.3
+      pkg-types: 2.3.0
+      postcss: 8.5.8
+      seroval: 1.5.1
+      std-env: 4.0.0
+      ufo: 1.6.3
+      unenv: 2.0.0-rc.24
+      vite: 7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+      vite-node: 5.3.0(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+      vite-plugin-checker: 0.12.0(eslint@9.39.4(jiti@2.6.1))(optionator@0.9.4)(typescript@5.9.3)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue-tsc@3.2.5(typescript@5.9.3))
+      vue: 3.5.30(typescript@5.9.3)
+      vue-bundle-renderer: 2.2.0
+    optionalDependencies:
+      '@babel/plugin-syntax-jsx': 7.27.1(@babel/core@7.29.0)
+      rollup-plugin-visualizer: 6.0.5(rollup@4.59.0)
+    transitivePeerDependencies:
+      - '@biomejs/biome'
+      - '@types/node'
+      - eslint
+      - less
+      - lightningcss
+      - magicast
+      - meow
+      - optionator
+      - oxlint
+      - rollup
+      - sass
+      - sass-embedded
+      - stylelint
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+      - tsx
+      - typescript
+      - vls
+      - vti
+      - vue-tsc
+      - yaml
+    optional: true
+
   '@nuxtjs/color-mode@3.5.2(magicast@0.5.1)':
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
@@ -29161,7 +29222,7 @@ snapshots:
     dependencies:
       defu: 6.1.4
 
-  '@nuxtjs/i18n@10.2.3(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0)))(eslint@9.39.4(jiti@2.6.1))(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(rollup@4.59.0)(vue@3.5.30(typescript@5.9.3))':
+  '@nuxtjs/i18n@10.2.3(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)))(eslint@9.39.4(jiti@2.6.1))(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(rollup@4.59.0)(vue@3.5.30(typescript@5.9.3))':
     dependencies:
       '@intlify/core': 11.2.2
       '@intlify/h3': 0.7.4
@@ -29188,7 +29249,7 @@ snapshots:
       ufo: 1.6.1
       unplugin: 2.3.11
       unplugin-vue-router: 0.16.2(@vue/compiler-sfc@3.5.30)(vue-router@4.6.4(vue@3.5.30(typescript@5.9.3)))(vue@3.5.30(typescript@5.9.3))
-      unstorage: 1.17.3(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0)))(idb-keyval@6.2.2)(ioredis@5.10.0)
+      unstorage: 1.17.3(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)))(idb-keyval@6.2.2)(ioredis@5.10.0)
       vue-i18n: 11.3.0(vue@3.5.30(typescript@5.9.3))
       vue-router: 4.6.4(vue@3.5.30(typescript@5.9.3))
     transitivePeerDependencies:
@@ -30553,6 +30614,15 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@rollup/plugin-babel@5.3.1(@babel/core@7.28.5)(rollup@2.79.2)':
+    dependencies:
+      '@babel/core': 7.28.5
+      '@babel/helper-module-imports': 7.28.6
+      '@rollup/pluginutils': 3.1.0(rollup@2.79.2)
+      rollup: 2.79.2
+    transitivePeerDependencies:
+      - supports-color
+
   '@rollup/plugin-commonjs@28.0.9(rollup@4.59.0)':
     dependencies:
       '@rollup/pluginutils': 5.3.0(rollup@4.59.0)
@@ -31407,7 +31477,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@sentry/nuxt@10.43.0(@cloudflare/workers-types@4.20260313.1)(@opentelemetry/api@1.9.0)(@opentelemetry/context-async-hooks@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/core@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/instrumentation@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/resources@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.40.0)(encoding@0.1.13)(magicast@0.5.1)(nuxt@4.4.2(8e01dacd75fbdc935e27722c5c3fc51a))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3)))(rollup@4.59.0)(vue@3.5.30(typescript@5.9.3))':
+  '@sentry/nuxt@10.43.0(@cloudflare/workers-types@4.20260313.1)(@opentelemetry/api@1.9.0)(@opentelemetry/context-async-hooks@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/core@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/instrumentation@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/resources@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.40.0)(encoding@0.1.13)(magicast@0.5.1)(nuxt@4.4.2(69a3089f42dc3095be59a3fb3c7bbee1))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3)))(rollup@4.59.0)(vue@3.5.30(typescript@5.9.3))':
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       '@sentry/browser': 10.43.0
@@ -31418,7 +31488,7 @@ snapshots:
       '@sentry/rollup-plugin': 5.1.1(encoding@0.1.13)(rollup@4.59.0)
       '@sentry/vite-plugin': 5.1.1(encoding@0.1.13)(rollup@4.59.0)
       '@sentry/vue': 10.43.0(pinia@3.0.4(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3)))(vue@3.5.30(typescript@5.9.3))
-      nuxt: 4.4.2(8e01dacd75fbdc935e27722c5c3fc51a)
+      nuxt: 4.4.2(69a3089f42dc3095be59a3fb3c7bbee1)
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
       - '@opentelemetry/api'
@@ -31740,14 +31810,14 @@ snapshots:
 
   '@shikijs/vscode-textmate@10.0.2': {}
 
-  '@sidebase/nuxt-auth@0.9.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(magicast@0.5.1)(mysql2@3.19.1(@types/node@24.1.0))(next-auth@4.21.1(nodemailer@7.0.13))(xml2js@0.6.2)':
+  '@sidebase/nuxt-auth@0.9.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(magicast@0.5.1)(next-auth@4.21.1(nodemailer@7.0.13))':
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       defu: 6.1.4
       h3: 1.15.4
       knitwork: 1.3.0
       next-auth: 4.21.1(nodemailer@7.0.13)
-      nitropack: 2.12.9(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(mysql2@3.19.1(@types/node@24.1.0))(xml2js@0.6.2)
+      nitropack: 2.12.9(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)
       requrl: 3.0.2
       scule: 1.3.0
       ufo: 1.6.1
@@ -33484,12 +33554,12 @@ snapshots:
       - supports-color
       - vite
 
-  '@vite-pwa/nuxt@1.1.1(@types/babel__core@7.20.5)(magicast@0.5.1)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))':
+  '@vite-pwa/nuxt@1.1.1(magicast@0.5.1)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       pathe: 1.1.2
       ufo: 1.6.1
-      vite-plugin-pwa: 1.2.0(@types/babel__core@7.20.5)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+      vite-plugin-pwa: 1.2.0(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
     transitivePeerDependencies:
       - '@types/babel__core'
       - magicast
@@ -34216,13 +34286,13 @@ snapshots:
       - magicast
       - vue
 
-  '@vueuse/nuxt@13.9.0(magicast@0.5.1)(nuxt@4.4.2(8e01dacd75fbdc935e27722c5c3fc51a))(vue@3.5.30(typescript@5.9.3))':
+  '@vueuse/nuxt@13.9.0(magicast@0.5.1)(nuxt@4.4.2(69a3089f42dc3095be59a3fb3c7bbee1))(vue@3.5.30(typescript@5.9.3))':
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       '@vueuse/core': 13.9.0(vue@3.5.30(typescript@5.9.3))
       '@vueuse/metadata': 13.9.0
       local-pkg: 1.1.2
-      nuxt: 4.4.2(8e01dacd75fbdc935e27722c5c3fc51a)
+      nuxt: 4.4.2(69a3089f42dc3095be59a3fb3c7bbee1)
       vue: 3.5.30(typescript@5.9.3)
     transitivePeerDependencies:
       - magicast
@@ -36378,6 +36448,11 @@ snapshots:
       drizzle-orm: 0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0)
       mysql2: 3.19.1(@types/node@24.1.0)
 
+  db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)):
+    optionalDependencies:
+      '@libsql/client': 0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      drizzle-orm: 0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)
+
   de-indent@1.0.2: {}
 
   debug@2.6.9:
@@ -36431,11 +36506,11 @@ snapshots:
 
   deep-is@0.1.4: {}
 
-  deepagents@0.0.2(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))(zod-to-json-schema@3.25.1(zod@3.25.76)):
+  deepagents@0.0.2(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))(zod-to-json-schema@3.25.1(zod@3.25.76)):
     dependencies:
-      '@langchain/anthropic': 0.3.34(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod@3.25.76)
-      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
-      '@langchain/langgraph': 0.4.9(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod-to-json-schema@3.25.1(zod@3.25.76))
+      '@langchain/anthropic': 0.3.34(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod@3.25.76)
+      '@langchain/core': 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))
+      '@langchain/langgraph': 0.4.9(@langchain/core@0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)))(zod-to-json-schema@3.25.1(zod@3.25.76))
       zod: 3.25.76
     transitivePeerDependencies:
       - '@opentelemetry/api'
@@ -36687,6 +36762,15 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       '@types/pg': 8.15.6
       mysql2: 3.19.1(@types/node@24.1.0)
+      pg: 8.20.0
+    optional: true
+
+  drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0):
+    optionalDependencies:
+      '@cloudflare/workers-types': 4.20260313.1
+      '@libsql/client': 0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      '@opentelemetry/api': 1.9.0
+      '@types/pg': 8.15.6
       pg: 8.20.0
 
   dunder-proto@1.0.1:
@@ -37455,6 +37539,23 @@ snapshots:
     optionalDependencies:
       '@typescript-eslint/utils': 8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
       eslint-import-resolver-node: 0.3.9
+    transitivePeerDependencies:
+      - supports-color
+
+  eslint-plugin-import-x@4.16.1(@typescript-eslint/utils@8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1)):
+    dependencies:
+      '@typescript-eslint/types': 8.56.1
+      comment-parser: 1.4.1
+      debug: 4.4.3
+      eslint: 9.39.4(jiti@2.6.1)
+      eslint-import-context: 0.1.9(unrs-resolver@1.11.1)
+      is-glob: 4.0.3
+      minimatch: 10.2.4
+      semver: 7.7.4
+      stable-hash-x: 0.2.0
+      unrs-resolver: 1.11.1
+    optionalDependencies:
+      '@typescript-eslint/utils': 8.56.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
     transitivePeerDependencies:
       - supports-color
 
@@ -40548,6 +40649,19 @@ snapshots:
     optionalDependencies:
       openai: 4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)
 
+  langsmith@0.3.87(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)):
+    dependencies:
+      '@types/uuid': 10.0.0
+      chalk: 4.1.2
+      console-table-printer: 2.15.0
+      p-queue: 6.6.2
+      semver: 7.7.3
+      uuid: 10.0.0
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.0
+      '@opentelemetry/sdk-trace-base': 2.5.1(@opentelemetry/api@1.9.0)
+      openai: 4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)
+
   langsmith@0.3.87(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)):
     dependencies:
       '@types/uuid': 10.0.0
@@ -40560,6 +40674,7 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/sdk-trace-base': 2.5.1(@opentelemetry/api@1.9.0)
       openai: 4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)
+    optional: true
 
   last-run@2.0.0: {}
 
@@ -42359,7 +42474,7 @@ snapshots:
       mlly: 1.8.0
       pkg-types: 2.3.0
 
-  nitropack@2.12.9(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(mysql2@3.19.1(@types/node@24.1.0))(xml2js@0.6.2):
+  nitropack@2.12.9(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.4.1
       '@rollup/plugin-alias': 5.1.1(rollup@4.59.0)
@@ -42380,7 +42495,7 @@ snapshots:
       cookie-es: 2.0.0
       croner: 9.1.0
       crossws: 0.3.5
-      db0: 0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0))
+      db0: 0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))
       defu: 6.1.4
       destr: 2.0.5
       dot-prop: 10.1.0
@@ -42426,13 +42541,11 @@ snapshots:
       unenv: 2.0.0-rc.24
       unimport: 5.7.0
       unplugin-utils: 0.3.1
-      unstorage: 1.17.3(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0)))(idb-keyval@6.2.2)(ioredis@5.10.0)
+      unstorage: 1.17.3(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)))(idb-keyval@6.2.2)(ioredis@5.10.0)
       untyped: 2.0.0
       unwasm: 0.3.11
       youch: 4.1.0-beta.13
       youch-core: 0.3.3
-    optionalDependencies:
-      xml2js: 0.6.2
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -42537,6 +42650,108 @@ snapshots:
       youch-core: 0.3.3
     optionalDependencies:
       xml2js: 0.6.2
+    transitivePeerDependencies:
+      - '@azure/app-configuration'
+      - '@azure/cosmos'
+      - '@azure/data-tables'
+      - '@azure/identity'
+      - '@azure/keyvault-secrets'
+      - '@azure/storage-blob'
+      - '@capacitor/preferences'
+      - '@deno/kv'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@netlify/blobs'
+      - '@planetscale/database'
+      - '@upstash/redis'
+      - '@vercel/blob'
+      - '@vercel/functions'
+      - '@vercel/kv'
+      - aws4fetch
+      - bare-abort-controller
+      - better-sqlite3
+      - drizzle-orm
+      - encoding
+      - idb-keyval
+      - mysql2
+      - react-native-b4a
+      - rolldown
+      - sqlite3
+      - supports-color
+      - uploadthing
+
+  nitropack@2.13.1(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2):
+    dependencies:
+      '@cloudflare/kv-asset-handler': 0.4.2
+      '@rollup/plugin-alias': 6.0.0(rollup@4.59.0)
+      '@rollup/plugin-commonjs': 29.0.2(rollup@4.59.0)
+      '@rollup/plugin-inject': 5.0.5(rollup@4.59.0)
+      '@rollup/plugin-json': 6.1.0(rollup@4.59.0)
+      '@rollup/plugin-node-resolve': 16.0.3(rollup@4.59.0)
+      '@rollup/plugin-replace': 6.0.3(rollup@4.59.0)
+      '@rollup/plugin-terser': 0.4.4(rollup@4.59.0)
+      '@vercel/nft': 1.3.2(encoding@0.1.13)(rollup@4.59.0)
+      archiver: 7.0.1
+      c12: 3.3.3(magicast@0.5.1)
+      chokidar: 5.0.0
+      citty: 0.1.6
+      compatx: 0.2.0
+      confbox: 0.2.4
+      consola: 3.4.2
+      cookie-es: 2.0.0
+      croner: 9.1.0
+      crossws: 0.3.5
+      db0: 0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))
+      defu: 6.1.4
+      destr: 2.0.5
+      dot-prop: 10.1.0
+      esbuild: 0.27.3
+      escape-string-regexp: 5.0.0
+      etag: 1.8.1
+      exsolve: 1.0.8
+      globby: 16.1.1
+      gzip-size: 7.0.0
+      h3: 1.15.6
+      hookable: 5.5.3
+      httpxy: 0.1.7
+      ioredis: 5.10.0
+      jiti: 2.6.1
+      klona: 2.0.6
+      knitwork: 1.3.0
+      listhen: 1.9.0
+      magic-string: 0.30.21
+      magicast: 0.5.1
+      mime: 4.1.0
+      mlly: 1.8.1
+      node-fetch-native: 1.6.7
+      node-mock-http: 1.0.4
+      ofetch: 1.5.1
+      ohash: 2.0.11
+      pathe: 2.0.3
+      perfect-debounce: 2.1.0
+      pkg-types: 2.3.0
+      pretty-bytes: 7.1.0
+      radix3: 1.1.2
+      rollup: 4.59.0
+      rollup-plugin-visualizer: 6.0.5(rollup@4.59.0)
+      scule: 1.3.0
+      semver: 7.7.4
+      serve-placeholder: 2.0.2
+      serve-static: 2.2.1
+      source-map: 0.7.6
+      std-env: 3.10.0
+      ufo: 1.6.3
+      ultrahtml: 1.6.0
+      uncrypto: 0.1.3
+      unctx: 2.5.0
+      unenv: 2.0.0-rc.24
+      unimport: 5.7.0
+      unplugin-utils: 0.3.1
+      unstorage: 1.17.4(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)))(idb-keyval@6.2.2)(ioredis@5.10.0)
+      untyped: 2.0.0
+      unwasm: 0.5.3
+      youch: 4.1.0-beta.13
+      youch-core: 0.3.3
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -42746,10 +42961,9 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  nuxt-echarts@0.3.3(echarts@5.6.0)(magicast@0.5.1):
+  nuxt-echarts@0.3.3(magicast@0.5.1):
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
-      echarts: 5.6.0
     transitivePeerDependencies:
       - magicast
 
@@ -42760,135 +42974,6 @@ snapshots:
       lodash-es: 4.17.23
     transitivePeerDependencies:
       - magicast
-
-  nuxt@4.4.2(11923cca04e76f992d91f94deef09679):
-    dependencies:
-      '@dxup/nuxt': 0.4.0(magicast@0.5.1)(typescript@5.9.3)
-      '@nuxt/cli': 3.34.0(@nuxt/schema@4.4.2)(cac@6.7.14)(commander@14.0.3)(magicast@0.5.1)
-      '@nuxt/devtools': 2.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.30(typescript@5.9.3))
-      '@nuxt/kit': 4.4.2(magicast@0.5.1)
-      '@nuxt/nitro-server': 4.4.2(@babel/core@7.29.0)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0)))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(mysql2@3.19.1(@types/node@24.1.0))(nuxt@4.4.2(11923cca04e76f992d91f94deef09679))(typescript@5.9.3)(xml2js@0.6.2)
-      '@nuxt/schema': 4.4.2
-      '@nuxt/telemetry': 2.7.0(@nuxt/kit@4.4.2(magicast@0.5.1))
-      '@nuxt/vite-builder': 4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(11923cca04e76f992d91f94deef09679))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@4.59.0))(rollup@4.59.0)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.5(typescript@5.9.3))(vue@3.5.30(typescript@5.9.3))(yaml@2.8.2)
-      '@unhead/vue': 2.1.12(vue@3.5.30(typescript@5.9.3))
-      '@vue/shared': 3.5.30
-      c12: 3.3.3(magicast@0.5.1)
-      chokidar: 5.0.0
-      compatx: 0.2.0
-      consola: 3.4.2
-      cookie-es: 2.0.0
-      defu: 6.1.4
-      devalue: 5.6.3
-      errx: 0.1.0
-      escape-string-regexp: 5.0.0
-      exsolve: 1.0.8
-      hookable: 6.0.1
-      ignore: 7.0.5
-      impound: 1.1.5
-      jiti: 2.6.1
-      klona: 2.0.6
-      knitwork: 1.3.0
-      magic-string: 0.30.21
-      mlly: 1.8.1
-      nanotar: 0.3.0
-      nypm: 0.6.5
-      ofetch: 1.5.1
-      ohash: 2.0.11
-      on-change: 6.0.2
-      oxc-minify: 0.117.0
-      oxc-parser: 0.117.0
-      oxc-transform: 0.117.0
-      oxc-walker: 0.7.0(oxc-parser@0.117.0)
-      pathe: 2.0.3
-      perfect-debounce: 2.1.0
-      picomatch: 4.0.3
-      pkg-types: 2.3.0
-      rou3: 0.8.1
-      scule: 1.3.0
-      semver: 7.7.4
-      std-env: 4.0.0
-      tinyglobby: 0.2.15
-      ufo: 1.6.3
-      ultrahtml: 1.6.0
-      uncrypto: 0.1.3
-      unctx: 2.5.0
-      unimport: 6.0.1
-      unplugin: 2.3.11
-      unrouting: 0.1.5
-      untyped: 2.0.0
-      vue: 3.5.30(typescript@5.9.3)
-      vue-router: 5.0.3(@vue/compiler-sfc@3.5.30)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3)))(vue@3.5.30(typescript@5.9.3))
-    optionalDependencies:
-      '@parcel/watcher': 2.5.1
-      '@types/node': 24.1.0
-    transitivePeerDependencies:
-      - '@azure/app-configuration'
-      - '@azure/cosmos'
-      - '@azure/data-tables'
-      - '@azure/identity'
-      - '@azure/keyvault-secrets'
-      - '@azure/storage-blob'
-      - '@babel/core'
-      - '@babel/plugin-proposal-decorators'
-      - '@babel/plugin-syntax-jsx'
-      - '@biomejs/biome'
-      - '@capacitor/preferences'
-      - '@deno/kv'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@netlify/blobs'
-      - '@pinia/colada'
-      - '@planetscale/database'
-      - '@rollup/plugin-babel'
-      - '@upstash/redis'
-      - '@vercel/blob'
-      - '@vercel/functions'
-      - '@vercel/kv'
-      - '@vue/compiler-sfc'
-      - aws4fetch
-      - bare-abort-controller
-      - better-sqlite3
-      - bufferutil
-      - cac
-      - commander
-      - db0
-      - drizzle-orm
-      - encoding
-      - eslint
-      - idb-keyval
-      - ioredis
-      - less
-      - lightningcss
-      - magicast
-      - meow
-      - mysql2
-      - optionator
-      - oxlint
-      - pinia
-      - react-native-b4a
-      - rolldown
-      - rollup
-      - rollup-plugin-visualizer
-      - sass
-      - sass-embedded
-      - sqlite3
-      - stylelint
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-      - tsx
-      - typescript
-      - uploadthing
-      - utf-8-validate
-      - vite
-      - vls
-      - vti
-      - vue-tsc
-      - xml2js
-      - yaml
-    optional: true
 
   nuxt@4.4.2(339af80e28e28cd1465fd4889714d10a):
     dependencies:
@@ -43146,16 +43231,16 @@ snapshots:
       - xml2js
       - yaml
 
-  nuxt@4.4.2(8e01dacd75fbdc935e27722c5c3fc51a):
+  nuxt@4.4.2(69a3089f42dc3095be59a3fb3c7bbee1):
     dependencies:
       '@dxup/nuxt': 0.4.0(magicast@0.5.1)(typescript@5.9.3)
-      '@nuxt/cli': 3.34.0(@nuxt/schema@4.4.2)(cac@6.7.14)(commander@13.1.0)(magicast@0.5.1)
+      '@nuxt/cli': 3.34.0(@nuxt/schema@4.4.2)(cac@6.7.14)(commander@14.0.3)(magicast@0.5.1)
       '@nuxt/devtools': 2.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.30(typescript@5.9.3))
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
-      '@nuxt/nitro-server': 4.4.2(@babel/core@7.29.0)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0)))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(mysql2@3.19.1(@types/node@24.1.0))(nuxt@4.4.2(8e01dacd75fbdc935e27722c5c3fc51a))(typescript@5.9.3)(xml2js@0.6.2)
+      '@nuxt/nitro-server': 4.4.2(@babel/core@7.29.0)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(nuxt@4.4.2(69a3089f42dc3095be59a3fb3c7bbee1))(typescript@5.9.3)
       '@nuxt/schema': 4.4.2
       '@nuxt/telemetry': 2.7.0(@nuxt/kit@4.4.2(magicast@0.5.1))
-      '@nuxt/vite-builder': 4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(8e01dacd75fbdc935e27722c5c3fc51a))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@4.59.0))(rollup@4.59.0)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.5(typescript@5.9.3))(vue@3.5.30(typescript@5.9.3))(yaml@2.8.2)
+      '@nuxt/vite-builder': 4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(69a3089f42dc3095be59a3fb3c7bbee1))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@4.59.0))(rollup@4.59.0)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.5(typescript@5.9.3))(vue@3.5.30(typescript@5.9.3))(yaml@2.8.2)
       '@unhead/vue': 2.1.12(vue@3.5.30(typescript@5.9.3))
       '@vue/shared': 3.5.30
       c12: 3.3.3(magicast@0.5.1)
@@ -43273,6 +43358,135 @@ snapshots:
       - vue-tsc
       - xml2js
       - yaml
+
+  nuxt@4.4.2(956b50fd31863b81445793579a42197b):
+    dependencies:
+      '@dxup/nuxt': 0.4.0(magicast@0.5.1)(typescript@5.9.3)
+      '@nuxt/cli': 3.34.0(@nuxt/schema@4.4.2)(cac@6.7.14)(commander@14.0.3)(magicast@0.5.1)
+      '@nuxt/devtools': 2.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.30(typescript@5.9.3))
+      '@nuxt/kit': 4.4.2(magicast@0.5.1)
+      '@nuxt/nitro-server': 4.4.2(@babel/core@7.29.0)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))(encoding@0.1.13)(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(nuxt@4.4.2(956b50fd31863b81445793579a42197b))(typescript@5.9.3)
+      '@nuxt/schema': 4.4.2
+      '@nuxt/telemetry': 2.7.0(@nuxt/kit@4.4.2(magicast@0.5.1))
+      '@nuxt/vite-builder': 4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(956b50fd31863b81445793579a42197b))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@4.59.0))(rollup@4.59.0)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.5(typescript@5.9.3))(vue@3.5.30(typescript@5.9.3))(yaml@2.8.2)
+      '@unhead/vue': 2.1.12(vue@3.5.30(typescript@5.9.3))
+      '@vue/shared': 3.5.30
+      c12: 3.3.3(magicast@0.5.1)
+      chokidar: 5.0.0
+      compatx: 0.2.0
+      consola: 3.4.2
+      cookie-es: 2.0.0
+      defu: 6.1.4
+      devalue: 5.6.3
+      errx: 0.1.0
+      escape-string-regexp: 5.0.0
+      exsolve: 1.0.8
+      hookable: 6.0.1
+      ignore: 7.0.5
+      impound: 1.1.5
+      jiti: 2.6.1
+      klona: 2.0.6
+      knitwork: 1.3.0
+      magic-string: 0.30.21
+      mlly: 1.8.1
+      nanotar: 0.3.0
+      nypm: 0.6.5
+      ofetch: 1.5.1
+      ohash: 2.0.11
+      on-change: 6.0.2
+      oxc-minify: 0.117.0
+      oxc-parser: 0.117.0
+      oxc-transform: 0.117.0
+      oxc-walker: 0.7.0(oxc-parser@0.117.0)
+      pathe: 2.0.3
+      perfect-debounce: 2.1.0
+      picomatch: 4.0.3
+      pkg-types: 2.3.0
+      rou3: 0.8.1
+      scule: 1.3.0
+      semver: 7.7.4
+      std-env: 4.0.0
+      tinyglobby: 0.2.15
+      ufo: 1.6.3
+      ultrahtml: 1.6.0
+      uncrypto: 0.1.3
+      unctx: 2.5.0
+      unimport: 6.0.1
+      unplugin: 2.3.11
+      unrouting: 0.1.5
+      untyped: 2.0.0
+      vue: 3.5.30(typescript@5.9.3)
+      vue-router: 5.0.3(@vue/compiler-sfc@3.5.30)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3)))(vue@3.5.30(typescript@5.9.3))
+    optionalDependencies:
+      '@parcel/watcher': 2.5.1
+      '@types/node': 24.1.0
+    transitivePeerDependencies:
+      - '@azure/app-configuration'
+      - '@azure/cosmos'
+      - '@azure/data-tables'
+      - '@azure/identity'
+      - '@azure/keyvault-secrets'
+      - '@azure/storage-blob'
+      - '@babel/core'
+      - '@babel/plugin-proposal-decorators'
+      - '@babel/plugin-syntax-jsx'
+      - '@biomejs/biome'
+      - '@capacitor/preferences'
+      - '@deno/kv'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@netlify/blobs'
+      - '@pinia/colada'
+      - '@planetscale/database'
+      - '@rollup/plugin-babel'
+      - '@upstash/redis'
+      - '@vercel/blob'
+      - '@vercel/functions'
+      - '@vercel/kv'
+      - '@vue/compiler-sfc'
+      - aws4fetch
+      - bare-abort-controller
+      - better-sqlite3
+      - bufferutil
+      - cac
+      - commander
+      - db0
+      - drizzle-orm
+      - encoding
+      - eslint
+      - idb-keyval
+      - ioredis
+      - less
+      - lightningcss
+      - magicast
+      - meow
+      - mysql2
+      - optionator
+      - oxlint
+      - pinia
+      - react-native-b4a
+      - rolldown
+      - rollup
+      - rollup-plugin-visualizer
+      - sass
+      - sass-embedded
+      - sqlite3
+      - stylelint
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+      - tsx
+      - typescript
+      - uploadthing
+      - utf-8-validate
+      - vite
+      - vls
+      - vti
+      - vue-tsc
+      - xml2js
+      - yaml
+    optional: true
 
   nwsapi@2.2.22: {}
 
@@ -43435,6 +43649,21 @@ snapshots:
       define-lazy-prop: 2.0.0
       is-docker: 2.2.1
       is-wsl: 2.2.0
+
+  openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76):
+    dependencies:
+      '@types/node': 24.1.0
+      '@types/node-fetch': 2.6.13
+      abort-controller: 3.0.0
+      agentkeepalive: 4.6.0
+      form-data-encoder: 1.7.2
+      formdata-node: 4.4.1
+      node-fetch: 2.7.0(encoding@0.1.13)
+    optionalDependencies:
+      ws: 8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - encoding
 
   openai@4.104.0(encoding@0.1.13)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76):
     dependencies:
@@ -47527,7 +47756,7 @@ snapshots:
       '@unrs/resolver-binding-win32-ia32-msvc': 1.11.1
       '@unrs/resolver-binding-win32-x64-msvc': 1.11.1
 
-  unstorage@1.17.3(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0)))(idb-keyval@6.2.2)(ioredis@5.10.0):
+  unstorage@1.17.3(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)))(idb-keyval@6.2.2)(ioredis@5.10.0):
     dependencies:
       anymatch: 3.1.3
       chokidar: 4.0.3
@@ -47539,7 +47768,7 @@ snapshots:
       ufo: 1.6.3
     optionalDependencies:
       aws4fetch: 1.0.20
-      db0: 0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0))
+      db0: 0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))
       idb-keyval: 6.2.2
       ioredis: 5.10.0
 
@@ -47556,6 +47785,22 @@ snapshots:
     optionalDependencies:
       aws4fetch: 1.0.20
       db0: 0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(mysql2@3.19.1(@types/node@24.1.0))(pg@8.20.0))(mysql2@3.19.1(@types/node@24.1.0))
+      idb-keyval: 6.2.2
+      ioredis: 5.10.0
+
+  unstorage@1.17.4(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0)))(idb-keyval@6.2.2)(ioredis@5.10.0):
+    dependencies:
+      anymatch: 3.1.3
+      chokidar: 5.0.0
+      destr: 2.0.5
+      h3: 1.15.6
+      lru-cache: 11.2.2
+      node-fetch-native: 1.6.7
+      ofetch: 1.5.1
+      ufo: 1.6.3
+    optionalDependencies:
+      aws4fetch: 1.0.20
+      db0: 0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20260313.1)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.20.0))
       idb-keyval: 6.2.2
       ioredis: 5.10.0
 
@@ -47981,13 +48226,13 @@ snapshots:
       - '@types/babel__core'
       - supports-color
 
-  vite-plugin-pwa@1.2.0(@types/babel__core@7.20.5)(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)):
+  vite-plugin-pwa@1.2.0(vite@7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)):
     dependencies:
       debug: 4.4.3
       pretty-bytes: 6.1.1
       tinyglobby: 0.2.15
       vite: 7.3.1(@types/node@24.1.0)(jiti@2.6.1)(sass@1.98.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-      workbox-build: 7.4.0(@types/babel__core@7.20.5)
+      workbox-build: 7.4.0
       workbox-window: 7.4.0
     transitivePeerDependencies:
       - '@types/babel__core'
@@ -48271,17 +48516,17 @@ snapshots:
       '@vue/compiler-sfc': 3.5.30
       pinia: 3.0.4(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3))
 
-  vue-sonner@2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(11923cca04e76f992d91f94deef09679)):
+  vue-sonner@2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(69a3089f42dc3095be59a3fb3c7bbee1)):
     optionalDependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       '@nuxt/schema': 4.4.2
-      nuxt: 4.4.2(11923cca04e76f992d91f94deef09679)
+      nuxt: 4.4.2(69a3089f42dc3095be59a3fb3c7bbee1)
 
-  vue-sonner@2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(8e01dacd75fbdc935e27722c5c3fc51a)):
+  vue-sonner@2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(956b50fd31863b81445793579a42197b)):
     optionalDependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       '@nuxt/schema': 4.4.2
-      nuxt: 4.4.2(8e01dacd75fbdc935e27722c5c3fc51a)
+      nuxt: 4.4.2(956b50fd31863b81445793579a42197b)
 
   vue-template-compiler@2.7.16:
     dependencies:
@@ -48664,6 +48909,49 @@ snapshots:
   workbox-broadcast-update@7.4.0:
     dependencies:
       workbox-core: 7.4.0
+
+  workbox-build@7.4.0:
+    dependencies:
+      '@apideck/better-ajv-errors': 0.3.6(ajv@8.17.1)
+      '@babel/core': 7.28.5
+      '@babel/preset-env': 7.28.5(@babel/core@7.28.5)
+      '@babel/runtime': 7.28.4
+      '@rollup/plugin-babel': 5.3.1(@babel/core@7.28.5)(rollup@2.79.2)
+      '@rollup/plugin-node-resolve': 15.3.1(rollup@2.79.2)
+      '@rollup/plugin-replace': 2.4.2(rollup@2.79.2)
+      '@rollup/plugin-terser': 0.4.4(rollup@2.79.2)
+      '@surma/rollup-plugin-off-main-thread': 2.2.3
+      ajv: 8.17.1
+      common-tags: 1.8.2
+      fast-json-stable-stringify: 2.1.0
+      fs-extra: 9.1.0
+      glob: 11.1.0
+      lodash: 4.17.23
+      pretty-bytes: 5.6.0
+      rollup: 2.79.2
+      source-map: 0.8.0-beta.0
+      stringify-object: 3.3.0
+      strip-comments: 2.0.1
+      tempy: 0.6.0
+      upath: 1.2.0
+      workbox-background-sync: 7.4.0
+      workbox-broadcast-update: 7.4.0
+      workbox-cacheable-response: 7.4.0
+      workbox-core: 7.4.0
+      workbox-expiration: 7.4.0
+      workbox-google-analytics: 7.4.0
+      workbox-navigation-preload: 7.4.0
+      workbox-precaching: 7.4.0
+      workbox-range-requests: 7.4.0
+      workbox-recipes: 7.4.0
+      workbox-routing: 7.4.0
+      workbox-strategies: 7.4.0
+      workbox-streams: 7.4.0
+      workbox-sw: 7.4.0
+      workbox-window: 7.4.0
+    transitivePeerDependencies:
+      - '@types/babel__core'
+      - supports-color
 
   workbox-build@7.4.0(@types/babel__core@7.20.5):
     dependencies:

@@ -97,6 +97,10 @@ export class SearchIndexService {
     this.directMode = options?.directMode ?? false
   }
 
+  async warmup(): Promise<void> {
+    await this.scheduleWrite('search-index.warmup', () => this.ensureInitialized())
+  }
+
   /**
    * Schedule a write operation: in directMode, execute immediately;
    * otherwise go through DbWriteScheduler + SQLite retry.
@@ -356,12 +360,17 @@ export class SearchIndexService {
   async lookupBySubsequence(
     providerId: string,
     query: string,
-    limit = 100
+    limit = 100,
+    scanLimit = 2000
   ): Promise<Array<{ itemId: string; keyword: string; priority: number }>> {
     if (!query || query.length < 2) return []
     await this.ensureInitialized()
 
     const lowerQuery = query.toLowerCase()
+    const effectiveScanLimit = Math.max(
+      limit,
+      Number.isFinite(scanLimit) ? Math.max(0, Math.floor(scanLimit)) : 2000
+    )
 
     // Load non-ngram keywords for this provider
     const rows = await this.db.all<{ item_id: string; keyword: string; priority: number }>(
@@ -369,7 +378,8 @@ export class SearchIndexService {
           FROM keyword_mappings
           WHERE provider_id = ${providerId}
             AND keyword NOT LIKE 'ng:%'
-            AND length(keyword) >= ${lowerQuery.length}`
+            AND length(keyword) >= ${lowerQuery.length}
+          LIMIT ${effectiveScanLimit}`
     )
 
     const matches: Array<{ itemId: string; keyword: string; priority: number; score: number }> = []
@@ -474,6 +484,7 @@ export class SearchIndexService {
     const initStart = performance.now()
     await this.createSearchIndexTable()
     await this.createFileFtsTable()
+    await this.createKeywordMappingIndexes()
 
     this.initialized = true
     console.log(
@@ -517,6 +528,15 @@ export class SearchIndexService {
       content_rowid='id',
       tokenize = 'porter unicode61'
     )`)
+  }
+
+  private async createKeywordMappingIndexes(): Promise<void> {
+    await this.db.run(
+      sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_provider_keyword ON keyword_mappings(provider_id, keyword)`
+    )
+    await this.db.run(
+      sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_provider_item ON keyword_mappings(provider_id, item_id)`
+    )
   }
 
   private async applyDocument(

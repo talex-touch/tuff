@@ -78,6 +78,22 @@ const MAX_EMBEDDING_TOTAL_CHARS = 32_000
 const EMBEDDING_CHUNK_CHARS = 2_000
 const MAX_EMBEDDING_CHUNKS = 16
 
+function toInvokeErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function isRecoverableVisionInputError(capabilityId: string, error: unknown): boolean {
+  if (capabilityId !== 'vision.ocr') {
+    return false
+  }
+  const message = toInvokeErrorMessage(error).toLowerCase()
+  return (
+    message.includes('invalid data url image source') ||
+    message.includes('invalid vision image source') ||
+    message.includes('missing data url content')
+  )
+}
+
 function normalizeEmbeddingText(input: string | string[]): string {
   if (Array.isArray(input)) {
     return input.filter(Boolean).join('\n')
@@ -459,10 +475,12 @@ export class TuffIntelligenceSDK {
         // failure and every 10th failure; intermediate failures get a concise warn.
         const failCount = (this.invokeFailureCounts.get(capabilityId) ?? 0) + 1
         this.invokeFailureCounts.set(capabilityId, failCount)
-        if (failCount === 1 || failCount % 10 === 0) {
+        if (isRecoverableVisionInputError(capabilityId, error)) {
+          logInfo(`Invoke skipped for ${capabilityId}: ${toInvokeErrorMessage(error)}`)
+        } else if (failCount === 1 || failCount % 10 === 0) {
           logWarn(
             `Invoke failed for ${capabilityId}` + (failCount > 1 ? ` (${failCount} failures)` : ''),
-            error instanceof Error ? error.message : error
+            toInvokeErrorMessage(error)
           )
         }
 

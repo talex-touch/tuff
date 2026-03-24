@@ -34,7 +34,7 @@ export async function compileWidgetSource(
       suggestion: `Supported extensions: ${widgetProcessorRegistry.getSupportedExtensions().join(', ')}`
     })
 
-    context.plugin.logger.error(
+    context.plugin.logger.debug(
       `[WidgetCompiler] Unsupported file type "${ext}" for widget "${source.widgetId}"`
     )
 

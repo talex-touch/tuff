@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { parentPort, workerData } from 'node:worker_threads'
-import chalk from 'chalk'
-import { createWorker } from 'tesseract.js'
+import { getNativeOcrSupport, recognizeImageText } from '@talex-touch/tuff-native'
 
 interface WorkerData {
   jobId: number
@@ -17,6 +16,26 @@ interface WorkerData {
     tesseditPagesegMode?: number
     config?: Record<string, string | number | boolean>
   }
+}
+
+interface WorkerSuccessMessage {
+  status: 'success'
+  jobId: number
+  result: {
+    text: string
+    confidence?: number
+    language?: string
+    blocks?: unknown[]
+    engine?: string
+    durationMs?: number
+    raw?: unknown
+  }
+}
+
+interface WorkerErrorMessage {
+  status: 'error'
+  jobId: number
+  error: string
 }
 
 function decodeDataUrl(dataUrl: string): Buffer {
@@ -45,84 +64,55 @@ async function run(): Promise<void> {
   const language = payload.options.language || 'eng'
   const buffer = await loadImageBuffer(payload.source)
 
-  console.log(
-    chalk.blueBright(
-      `[OCR Worker] Starting job ${payload.jobId} with language ${language} and source type ${payload.source.type}`
-    )
-  )
-
-  const worker = await createWorker(language, undefined, {
-    logger: (_message) => undefined,
-    cacheMethod: 'read',
-    gzip: true,
-    langPath: 'https://tessdata.projectnaptha.com/4.0.0'
-  })
+  const support = getNativeOcrSupport()
+  if (!support.supported) {
+    const message = `[OCR Worker] Native OCR unavailable on ${support.platform}: ${support.reason || 'unsupported'}`
+    const errorPayload: WorkerErrorMessage = {
+      status: 'error',
+      jobId: payload.jobId,
+      error: message
+    }
+    parentPort?.postMessage(errorPayload)
+    return
+  }
 
   try {
-    if (payload.options.config || payload.options.tesseditPagesegMode !== undefined) {
-      const parameters: Record<string, string> = {}
-      if (payload.options.config) {
-        for (const [key, value] of Object.entries(payload.options.config)) {
-          parameters[key] = String(value)
-        }
-      }
-      parameters.tessedit_pageseg_mode = String(payload.options.tesseditPagesegMode ?? 3)
-      await worker.setParameters(parameters)
-    }
+    const recognized = await recognizeImageText({
+      image: buffer,
+      languageHint: language,
+      includeLayout: true,
+      maxBlocks: 120
+    })
 
-    const { data } = await worker.recognize(buffer)
-
-    console.log(
-      chalk.greenBright(
-        `[OCR Worker] Job ${payload.jobId} completed with confidence ${data.confidence ?? 0}`
-      )
-    )
-
-    parentPort?.postMessage({
+    const successPayload: WorkerSuccessMessage = {
       status: 'success',
       jobId: payload.jobId,
-      text: data.text ?? '',
-      confidence: data.confidence ?? 0,
-      language,
-      extra: {
-        symbols: Array.isArray((data as { symbols?: unknown }).symbols)
-          ? ((data as { symbols?: unknown[] }).symbols?.length ?? 0)
-          : 0,
-        words: Array.isArray((data as { words?: unknown }).words)
-          ? ((data as { words?: unknown[] }).words?.length ?? 0)
-          : 0,
-        lines: Array.isArray((data as { lines?: unknown }).lines)
-          ? ((data as { lines?: unknown[] }).lines?.length ?? 0)
-          : 0
+      result: {
+        text: recognized.text ?? '',
+        confidence: recognized.confidence,
+        language: recognized.language || language,
+        blocks: recognized.blocks,
+        engine: recognized.engine,
+        durationMs: recognized.durationMs,
+        raw: recognized
       }
-    })
+    }
+    parentPort?.postMessage(successPayload)
   } catch (error) {
-    console.error(
-      chalk.redBright(
-        `[OCR Worker] Job ${payload.jobId} failed: ${error instanceof Error ? error.message : String(error)}`
-      )
-    )
-    parentPort?.postMessage({
+    const errorPayload: WorkerErrorMessage = {
       status: 'error',
       jobId: payload.jobId,
       error: error instanceof Error ? error.message : String(error)
-    })
-  } finally {
-    await worker.terminate()
+    }
+    parentPort?.postMessage(errorPayload)
   }
 }
 
 run().catch((error) => {
-  console.error(
-    chalk.redBright(
-      `[OCR Worker] Unhandled failure for job ${(workerData as WorkerData).jobId}: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    )
-  )
-  parentPort?.postMessage({
+  const payload: WorkerErrorMessage = {
     status: 'error',
     jobId: (workerData as WorkerData).jobId,
     error: error instanceof Error ? error.message : String(error)
-  })
+  }
+  parentPort?.postMessage(payload)
 })

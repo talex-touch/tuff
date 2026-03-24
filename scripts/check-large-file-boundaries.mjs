@@ -2,8 +2,18 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
+import { normalizeRelativePath, walk } from './lib/file-scan.mjs'
+import {
+  DEFAULT_IGNORE_DIRS,
+  TARGET_CODE_EXTENSIONS,
+  WORKSPACE_SCAN_ROOTS,
+} from './lib/scan-config.mjs'
+import { compareVersionCore, getProjectVersion, parseVersionCore } from './lib/version-utils.mjs'
 
-const workspaceRoot = process.cwd()
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const workspaceRoot = path.resolve(__dirname, '..')
 const allowlistPath = path.join(workspaceRoot, 'scripts/large-file-boundary-allowlist.json')
 const registryPath = path.join(workspaceRoot, 'docs/plan-prd/docs/compatibility-debt-registry.csv')
 const changesPath = path.join(workspaceRoot, 'docs/plan-prd/01-project/CHANGES.md')
@@ -11,94 +21,7 @@ const shouldWriteBaseline = process.argv.includes('--write-baseline')
 const threshold = 1200
 const defaultExpiresVersion = '2.5.0'
 
-const scanRoots = [
-  'apps/core-app',
-  'apps/nexus',
-  'apps/pilot',
-  'packages',
-  'plugins',
-]
-
-const ignoreDirs = new Set([
-  'node_modules',
-  '.git',
-  'dist',
-  'out',
-  '.nuxt',
-  '.wrangler',
-  '.output',
-  '.vitepress',
-  '--port',
-  'coverage',
-  'tuff',
-  '.workflow',
-  '.spec-workflow',
-  '.serena',
-  '.cursor',
-  '.cache',
-])
-
-const targetExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.vue', '.mjs', '.cjs'])
-
-function shouldIgnoreDir(dirName) {
-  return ignoreDirs.has(dirName)
-}
-
-function walk(rootDir, result = []) {
-  if (!fs.existsSync(rootDir)) {
-    return result
-  }
-  const entries = fs.readdirSync(rootDir, { withFileTypes: true })
-  for (const entry of entries) {
-    const absolutePath = path.join(rootDir, entry.name)
-    if (entry.isDirectory()) {
-      if (shouldIgnoreDir(entry.name)) {
-        continue
-      }
-      walk(absolutePath, result)
-      continue
-    }
-
-    if (!targetExtensions.has(path.extname(entry.name))) {
-      continue
-    }
-    result.push(absolutePath)
-  }
-  return result
-}
-
-function parseVersionCore(version) {
-  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(String(version).trim())
-  if (!match) {
-    return null
-  }
-  return {
-    major: Number.parseInt(match[1], 10),
-    minor: Number.parseInt(match[2], 10),
-    patch: Number.parseInt(match[3], 10),
-  }
-}
-
-function compareVersionCore(left, right) {
-  const l = parseVersionCore(left)
-  const r = parseVersionCore(right)
-  if (!l || !r) {
-    return null
-  }
-  if (l.major !== r.major) return l.major > r.major ? 1 : -1
-  if (l.minor !== r.minor) return l.minor > r.minor ? 1 : -1
-  if (l.patch !== r.patch) return l.patch > r.patch ? 1 : -1
-  return 0
-}
-
-function getProjectVersion() {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(workspaceRoot, 'package.json'), 'utf8'))
-    return typeof pkg.version === 'string' ? pkg.version : '0.0.0'
-  } catch {
-    return '0.0.0'
-  }
-}
+const scanRoots = WORKSPACE_SCAN_ROOTS
 
 function countLines(filePath) {
   const content = fs.readFileSync(filePath, 'utf8')
@@ -112,12 +35,15 @@ function collectOversizedFiles() {
   const oversized = new Map()
   for (const relativeRoot of scanRoots) {
     const absoluteRoot = path.join(workspaceRoot, relativeRoot)
-    for (const filePath of walk(absoluteRoot)) {
+    for (const filePath of walk(absoluteRoot, {
+      ignoreDirs: DEFAULT_IGNORE_DIRS,
+      targetExtensions: TARGET_CODE_EXTENSIONS,
+    })) {
       const lineCount = countLines(filePath)
       if (lineCount < threshold) {
         continue
       }
-      const relativePath = path.relative(workspaceRoot, filePath).replace(/\\/g, '/')
+      const relativePath = normalizeRelativePath(workspaceRoot, filePath)
       oversized.set(relativePath, lineCount)
     }
   }
@@ -372,7 +298,7 @@ function printSummary(oversized) {
 
 function main() {
   const oversized = collectOversizedFiles()
-  const currentVersion = getProjectVersion()
+  const currentVersion = getProjectVersion(workspaceRoot)
 
   if (shouldWriteBaseline) {
     writeBaselineFile(oversized, currentVersion)

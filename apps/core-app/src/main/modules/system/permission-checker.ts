@@ -3,6 +3,7 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import process from 'node:process'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { shell, systemPreferences } from 'electron'
@@ -34,6 +35,25 @@ const systemPermissionOpenSettingsEvent = defineRawEvent<void, boolean>(
 )
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+const permissionCheckerLog = getLogger('permission-checker')
+
+function resolveDefaultFileAccessPath(platform: NodeJS.Platform): {
+  path?: string
+  unsupportedReason?: string
+} {
+  switch (platform) {
+    case 'win32':
+      return { path: 'C:\\' }
+    case 'darwin':
+      return { path: '/Applications' }
+    case 'linux':
+      return { path: '/usr' }
+    default:
+      return {
+        unsupportedReason: `File access permission check is not supported on platform: ${platform}`
+      }
+  }
+}
 
 interface PermissionCheckResult {
   status: PermissionStatus
@@ -75,7 +95,7 @@ export class PermissionChecker {
           : 'Accessibility permission is required for app scanning features'
       }
     } catch (error) {
-      console.error('[PermissionChecker] Failed to check accessibility permission:', error)
+      permissionCheckerLog.error('Failed to check accessibility permission', { error })
       return {
         status: PermissionStatus.NOT_DETERMINED,
         canRequest: false,
@@ -164,7 +184,7 @@ export class PermissionChecker {
         message: `Microphone permission: ${status}`
       }
     } catch (error) {
-      console.error('[PermissionChecker] Failed to check microphone permission:', error)
+      permissionCheckerLog.error('Failed to check microphone permission', { error })
       return {
         status: PermissionStatus.NOT_DETERMINED,
         canRequest: false,
@@ -190,7 +210,7 @@ export class PermissionChecker {
             : 'Administrator privileges are required to access system directories (e.g., C:\\ drive)'
         }
       } catch (error) {
-        console.error('[PermissionChecker] Failed to check admin privileges:', error)
+        permissionCheckerLog.error('Failed to check admin privileges', { error })
         return {
           status: PermissionStatus.NOT_DETERMINED,
           canRequest: false,
@@ -221,7 +241,15 @@ export class PermissionChecker {
    * Tests access to a specific path
    */
   public checkFileAccess(filePath?: string): PermissionCheckResult {
-    const testPath = filePath || (process.platform === 'win32' ? 'C:\\' : '/Applications')
+    const fallback = resolveDefaultFileAccessPath(process.platform)
+    if (!filePath && !fallback.path) {
+      return {
+        status: PermissionStatus.UNSUPPORTED,
+        canRequest: false,
+        message: fallback.unsupportedReason
+      }
+    }
+    const testPath = filePath || fallback.path!
 
     try {
       // Try to read the directory
@@ -363,7 +391,7 @@ export class PermissionChecker {
       await shell.openExternal('ms-settings:privacy')
     } else {
       // Linux - show message or open relevant settings app
-      console.log(
+      permissionCheckerLog.info(
         '[PermissionChecker] Linux system settings location depends on desktop environment'
       )
     }
@@ -388,17 +416,17 @@ export class PermissionCheckerModule extends BaseModule {
 
   async onInit(): Promise<void> {
     this.setupChannels()
-    console.log('[PermissionChecker] Permission checker module initialized')
+    permissionCheckerLog.info('Permission checker module initialized')
   }
 
   async onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
     // Cleanup if needed
-    console.log('[PermissionChecker] Permission checker module destroyed')
+    permissionCheckerLog.info('Permission checker module destroyed')
   }
 
   private setupChannels(): void {
     if (!$app.channel) {
-      console.warn('[PermissionChecker] Channel not available, retrying setupChannels later')
+      permissionCheckerLog.warn('Channel not available, retrying setupChannels later')
       // Retry after a short delay
       setTimeout(() => {
         if ($app.channel) {
@@ -450,7 +478,7 @@ export class PermissionCheckerModule extends BaseModule {
         // Return result directly - channel will auto-reply if handler doesn't use reply()
         return result
       } catch (error) {
-        console.error(`[PermissionChecker] Failed to check permission ${permissionType}:`, error)
+        permissionCheckerLog.error(`Failed to check permission ${permissionType}`, { error })
         return {
           status: PermissionStatus.NOT_DETERMINED,
           canRequest: false,
@@ -464,7 +492,7 @@ export class PermissionCheckerModule extends BaseModule {
       try {
         return await this.checker.requestPermission(permissionType)
       } catch (error) {
-        console.error(`[PermissionChecker] Failed to request permission ${permissionType}:`, error)
+        permissionCheckerLog.error(`Failed to request permission ${permissionType}`, { error })
         return false
       }
     })
@@ -475,7 +503,7 @@ export class PermissionCheckerModule extends BaseModule {
         await this.checker.openSystemSettings()
         return true
       } catch (error) {
-        console.error('[PermissionChecker] Failed to open system settings:', error)
+        permissionCheckerLog.error('Failed to open system settings', { error })
         return false
       }
     })

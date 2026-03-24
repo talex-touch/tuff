@@ -79,7 +79,9 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
 vi.mock('../global-shortcon', () => ({
   shortcutModule: {
     registerMainShortcut: vi.fn(),
-    registerMainTrigger: vi.fn()
+    registerMainTrigger: vi.fn(),
+    unregisterMainShortcut: vi.fn(),
+    unregisterMainTrigger: vi.fn()
   }
 }))
 
@@ -522,5 +524,29 @@ describe('OmniPanel shortcut and input-hook guards', () => {
     expect(clearShortcutArmExpiryTimer).toHaveBeenCalledTimes(1)
     expect(resetShortcutHoldState).toHaveBeenCalledTimes(1)
     expect(cleanupInputHook).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not re-enable input hook after module enters destroying state', () => {
+    const module = new OmniPanelModule() as unknown as {
+      destroying: boolean
+      mouseLongPressEnabled: boolean
+      shortcutHoldEnabled: boolean
+      syncInputHookState: () => void
+      setupInputHook: () => void
+      cleanupInputHook: () => void
+    }
+
+    const setupInputHook = vi.fn()
+    const cleanupInputHook = vi.fn()
+    module.destroying = true
+    module.mouseLongPressEnabled = true
+    module.shortcutHoldEnabled = true
+    module.setupInputHook = setupInputHook
+    module.cleanupInputHook = cleanupInputHook
+
+    module.syncInputHookState()
+
+    expect(cleanupInputHook).toHaveBeenCalledTimes(1)
+    expect(setupInputHook).not.toHaveBeenCalled()
   })
 })

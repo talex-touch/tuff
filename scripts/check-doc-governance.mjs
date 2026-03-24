@@ -2,21 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-
-function getArgValue(flag, fallback = null) {
-  const index = process.argv.indexOf(flag)
-  if (index === -1)
-    return fallback
-  return process.argv[index + 1] ?? fallback
-}
-
-function hasFlag(flag) {
-  return process.argv.includes(flag)
-}
-
-function toBool(value) {
-  return value === true || value === 'true' || value === '1'
-}
+import { getArgValue, hasFlag, toBool } from './lib/argv-utils.mjs'
 
 function readText(filePath) {
   return fs.readFileSync(filePath, 'utf8')
@@ -51,8 +37,9 @@ function parseBranchDefaultFromDeployReadme(text) {
 }
 
 const repoRoot = process.cwd()
-const strict = toBool(getArgValue('--strict', hasFlag('--strict')))
-const jsonOutput = hasFlag('--json')
+const argv = process.argv
+const strict = toBool(getArgValue(argv, '--strict', hasFlag(argv, '--strict')))
+const jsonOutput = hasFlag(argv, '--json')
 
 const mainDocs = [
   'docs/INDEX.md',

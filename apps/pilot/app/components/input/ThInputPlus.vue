@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { IChatInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
-import { autoUpdate, flip, offset, useFloating } from '@floating-ui/vue'
+import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/vue'
 
 interface ThInputCapabilities {
   thinking: boolean
@@ -120,7 +120,7 @@ const options = computed<InputOption[]>(() => {
       disabledTip: '当前模型组未开启联网能力。',
     },
     {
-      icon: 'i-carbon:flash',
+      icon: 'i-carbon-flash',
       type: 'checkbox',
       label: '思考模式',
       info: '开启后优先使用支持 thinking 的模型能力，复杂问题通常更稳。可随时关闭。',
@@ -143,7 +143,7 @@ const options = computed<InputOption[]>(() => {
     },
     isSupported.value
       ? {
-          icon: 'i-carbon:cube-view',
+          icon: 'i-carbon-cube-view',
           type: 'checkbox',
           label: '凝视模式',
           info: '凝视模式会阻止屏幕息屏，在电量过低时会自动取消。',
@@ -166,7 +166,7 @@ const options = computed<InputOption[]>(() => {
         }
       : undefined,
     {
-      icon: 'i-carbon:temperature-celsius-alt',
+      icon: 'i-carbon-temperature-celsius-alt',
       type: 'slider',
       label: '随机性',
       info: '随机性越大，模型越容易产生不连贯的文本，但同时，它也会更难理解。',
@@ -190,8 +190,13 @@ const buttonTrigger = ref()
 const popoverFloating = ref()
 
 const { floatingStyles, update } = useFloating(buttonTrigger, popoverFloating, {
-  placement: 'top',
-  middleware: [offset(25), flip()],
+  placement: 'top-start',
+  strategy: 'fixed',
+  middleware: [
+    offset({ mainAxis: 12 }),
+    flip({ fallbackPlacements: ['bottom-start', 'top-end', 'bottom-end'] }),
+    shift({ padding: 12 }),
+  ],
   whileElementsMounted: autoUpdate,
 })
 
@@ -200,7 +205,7 @@ watch(hoverMode, update)
 
 <template>
   <div :class="{ hide }" class="ThInput-Plus fake-background" @mouseenter="hoverMode = hover = true" @mouseleave="hover = false">
-    <div ref="buttonTrigger" class="button" i-carbon-add-large />
+    <div ref="buttonTrigger" class="button i-carbon-add-large" />
   </div>
 
   <teleport to="body">
@@ -220,7 +225,7 @@ watch(hoverMode, update)
             <div>{{ option.label }}</div>
 
             <div class="checkbox-status">
-              <div i-carbon-checkmark />
+              <div class="i-carbon-checkmark" />
             </div>
           </template>
           <template v-else-if="option.type === 'slider'">
@@ -393,10 +398,10 @@ watch(hoverMode, update)
 
   .hover & {
     opacity: 1;
-    transform: translate(50%) translateX(-24px) scale(1) translateY(0);
+    transform: translateY(0) scale(1);
   }
 
-  position: absolute;
+  position: relative;
   padding: 0.5rem 0.5rem;
 
   width: 100%;
@@ -407,7 +412,7 @@ watch(hoverMode, update)
 
   opacity: 0;
   --fake-opacity: 0.5;
-  transform: translateX(50%) translateX(-24px) scale(0.9) translateY(10%);
+  transform: translateY(8px) scale(0.98);
   transition: cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.35s;
 
   backdrop-filter: blur(18px) saturate(180%);
