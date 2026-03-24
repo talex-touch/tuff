@@ -44,6 +44,7 @@ import { clipboard, nativeImage, powerMonitor } from 'electron'
 import { genTouchApp } from '../core'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { dbWriteScheduler } from '../db/db-write-scheduler'
+import { isStartupDegradeActive } from '../db/startup-degrade'
 import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
 import { withSqliteRetry } from '../db/sqlite-retry'
 import { appTaskGate } from '../service/app-task-gate'
@@ -98,10 +99,19 @@ const CLIPBOARD_ACTIVE_APP_REFRESH_TASK_ID = 'clipboard.active-app.refresh'
 const CLIPBOARD_ACTIVE_APP_REFRESH_INTERVAL_MS = 1500
 const CLIPBOARD_VISIBLE_POLL_INTERVAL_MS = 500
 const CLIPBOARD_DEFAULT_POLL_INTERVAL_MS = 3000
+const CLIPBOARD_PRESSURE_POLL_INTERVAL_MS = 10_000
+const CLIPBOARD_PRESSURE_QUEUE_HIGH_WATER = 10
+const CLIPBOARD_LAG_ADAPT_WINDOW_MS = 8000
+const CLIPBOARD_LAG_ADAPT_WARN_MS = 350
+const CLIPBOARD_LAG_ADAPT_ERROR_MS = 1000
+const CLIPBOARD_LAG_ADAPT_WARN_INTERVAL_MS = 1500
+const CLIPBOARD_LAG_ADAPT_ERROR_INTERVAL_MS = 5000
+const CLIPBOARD_LAG_SKIP_LOG_THROTTLE_MS = 5000
 const CLIPBOARD_SLOW_THRESHOLD_MS = 200
 const CLIPBOARD_COOLDOWN_TRIGGER_MS = 500
 const CLIPBOARD_COOLDOWN_BASE_MS = 800
 const CLIPBOARD_COOLDOWN_MAX_MS = 3000
+const CLIPBOARD_IMAGE_PERSIST_DEBOUNCE_MS = 2000
 const CLIPBOARD_NATIVE_WATCH_ENV = 'TUFF_CLIPBOARD_NATIVE_WATCH'
 const pollingService = PollingService.getInstance()
 
@@ -613,6 +623,8 @@ export class ClipboardModule extends BaseModule {
   private transportChangeListeners = new Set<() => void>()
 
   private memoryCache: IClipboardItem[] = []
+  private initialCacheLoaded = false
+  private initialCacheLoadingPromise: Promise<void> | null = null
   private isDestroyed = false
   private clipboardHelper?: ClipboardHelper
   private db?: LibSQLDatabase<typeof schema>
@@ -634,6 +646,8 @@ export class ClipboardModule extends BaseModule {
   private unsubscribeAppSetting: (() => void) | null = null
   private pollingSubscriptionsSetup = false
   private powerListenersSetup = false
+  private lastImagePersistAt = 0
+  private lastLagSkipLogAt = 0
   private readonly handlePowerStateChanged = (): void => {
     if (this.coreBoxVisible) return
     this.updateClipboardPolling()
@@ -731,10 +745,40 @@ export class ClipboardModule extends BaseModule {
   }
 
   private resolveTargetPollingIntervalMs(): number {
-    if (this.coreBoxVisible) {
-      return CLIPBOARD_VISIBLE_POLL_INTERVAL_MS
+    const baseIntervalMs = this.coreBoxVisible
+      ? CLIPBOARD_VISIBLE_POLL_INTERVAL_MS
+      : this.resolveNormalPollingIntervalMs()
+    if (baseIntervalMs < 0) {
+      return baseIntervalMs
     }
-    return this.resolveNormalPollingIntervalMs()
+
+    const lagSnapshot = perfMonitor.getRecentEventLoopLagSnapshot()
+    if (lagSnapshot && Date.now() - lagSnapshot.at <= CLIPBOARD_LAG_ADAPT_WINDOW_MS) {
+      if (lagSnapshot.lagMs >= CLIPBOARD_LAG_ADAPT_ERROR_MS) {
+        return Math.max(baseIntervalMs, CLIPBOARD_LAG_ADAPT_ERROR_INTERVAL_MS)
+      }
+      if (lagSnapshot.lagMs >= CLIPBOARD_LAG_ADAPT_WARN_MS) {
+        return Math.max(baseIntervalMs, CLIPBOARD_LAG_ADAPT_WARN_INTERVAL_MS)
+      }
+    }
+
+    if (this.coreBoxVisible) {
+      return baseIntervalMs
+    }
+    const normalIntervalMs = baseIntervalMs
+    if (!isStartupDegradeActive()) {
+      return normalIntervalMs
+    }
+
+    const queueStats = dbWriteScheduler.getStats()
+    const queueHigh = queueStats.queued >= CLIPBOARD_PRESSURE_QUEUE_HIGH_WATER
+    const activeLabel = queueStats.currentTaskLabel ?? ''
+    const indexPressureActive =
+      activeLabel.startsWith('file-index.') || activeLabel.startsWith('search-index.')
+    if (queueHigh && indexPressureActive) {
+      return Math.max(normalIntervalMs, CLIPBOARD_PRESSURE_POLL_INTERVAL_MS)
+    }
+    return normalIntervalMs
   }
 
   private restartClipboardPolling(intervalMs: number): void {
@@ -964,16 +1008,22 @@ export class ClipboardModule extends BaseModule {
     })
   }
 
-  private async loadInitialCache() {
+  private async loadInitialCache(options?: { waitForIdle?: boolean }) {
     if (!this.db) return
 
-    const dispose = enterPerfContext('Clipboard.loadInitialCache', { limit: CACHE_MAX_COUNT })
+    const waitForIdle = options?.waitForIdle !== false
+    const dispose = enterPerfContext('Clipboard.loadInitialCache', {
+      limit: CACHE_MAX_COUNT,
+      waitForIdle
+    })
     const startAt = performance.now()
     const phaseDurations: ClipboardPhaseDurations = {}
     try {
-      await trackPhaseAsync(phaseDurations, 'gate.waitForIdle', async () => {
-        await appTaskGate.waitForIdle()
-      })
+      if (waitForIdle) {
+        await trackPhaseAsync(phaseDurations, 'gate.waitForIdle', async () => {
+          await appTaskGate.waitForIdle()
+        })
+      }
 
       const rows = await trackPhaseAsync(phaseDurations, 'db.queryRecentRows', async () => {
         return await this.db!.select()
@@ -1016,6 +1066,30 @@ export class ClipboardModule extends BaseModule {
       }
       dispose()
     }
+  }
+
+  private async ensureInitialCacheLoaded(): Promise<void> {
+    if (this.initialCacheLoaded || !this.db) {
+      return
+    }
+    if (this.initialCacheLoadingPromise) {
+      await this.initialCacheLoadingPromise
+      return
+    }
+
+    this.initialCacheLoadingPromise = this.loadInitialCache({ waitForIdle: false })
+      .then(() => {
+        this.initialCacheLoaded = true
+      })
+      .catch((error) => {
+        this.initialCacheLoaded = false
+        clipboardLog.warn('Clipboard initial cache lazy load failed', { error })
+      })
+      .finally(() => {
+        this.initialCacheLoadingPromise = null
+      })
+
+    await this.initialCacheLoadingPromise
   }
 
   private updateMemoryCache(item: IClipboardItem) {
@@ -2206,6 +2280,23 @@ export class ClipboardModule extends BaseModule {
       return
     }
     const now = Date.now()
+    const lagSnapshot = perfMonitor.getRecentEventLoopLagSnapshot()
+    if (
+      lagSnapshot &&
+      lagSnapshot.lagMs >= CLIPBOARD_LAG_ADAPT_ERROR_MS &&
+      now - lagSnapshot.at <= CLIPBOARD_LAG_ADAPT_WINDOW_MS
+    ) {
+      if (now - this.lastLagSkipLogAt >= CLIPBOARD_LAG_SKIP_LOG_THROTTLE_MS) {
+        this.lastLagSkipLogAt = now
+        clipboardLog.warn('Clipboard check skipped due to recent severe event loop lag', {
+          meta: {
+            lagMs: lagSnapshot.lagMs,
+            lagAgeMs: now - lagSnapshot.at
+          }
+        })
+      }
+      return
+    }
     if (!options?.bypassCooldown && now < this.clipboardCheckCooldownUntil) {
       return
     }
@@ -2462,6 +2553,13 @@ export class ClipboardModule extends BaseModule {
         timestamp: new Date()
       }
 
+      if (
+        item.type === 'image' &&
+        Date.now() - this.lastImagePersistAt < CLIPBOARD_IMAGE_PERSIST_DEBOUNCE_MS
+      ) {
+        return
+      }
+
       // Yield before DB write to avoid stacking all heavy work in one tick
       await trackPhaseAsync(
         phaseDurations,
@@ -2507,6 +2605,9 @@ export class ClipboardModule extends BaseModule {
 
       const persisted = inserted[0] as IClipboardItem
       persisted.meta = metaObject
+      if (persisted.type === 'image') {
+        this.lastImagePersistAt = Date.now()
+      }
 
       if (persisted.id) {
         const queueStats = dbWriteScheduler.getStats()
@@ -2821,11 +2922,15 @@ export class ClipboardModule extends BaseModule {
     }
 
     this.transportDisposers.push(
-      this.transport.on(ClipboardEvents.getLatest, (_request: void, context: HandlerContext) => {
-        this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
-        const latest = this.getLatestItem()
-        return latest ? this.toTransportItem(latest) : null
-      })
+      this.transport.on(
+        ClipboardEvents.getLatest,
+        async (_request: void, context: HandlerContext) => {
+          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
+          await this.ensureInitialCacheLoaded()
+          const latest = this.getLatestItem()
+          return latest ? this.toTransportItem(latest) : null
+        }
+      )
     )
 
     this.transportDisposers.push(
@@ -2994,7 +3099,11 @@ export class ClipboardModule extends BaseModule {
           }
 
           this.transportChangeListeners.add(listener)
-          listener()
+          void this.ensureInitialCacheLoaded().finally(() => {
+            if (!context.isCancelled()) {
+              listener()
+            }
+          })
         }
       )
     )
@@ -3011,8 +3120,9 @@ export class ClipboardModule extends BaseModule {
     this.transportDisposers.push(
       this.transport.on(
         clipboardLegacyGetLatestEvent,
-        (_request: void, context: HandlerContext): LegacyClipboardItem | null => {
+        async (_request: void, context: HandlerContext): Promise<LegacyClipboardItem | null> => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
+          await this.ensureInitialCacheLoaded()
           return this.toLegacyClipboardItem(this.getLatestItem() ?? null)
         }
       ),
@@ -3211,12 +3321,15 @@ export class ClipboardModule extends BaseModule {
     this.activeAppRefreshInFlight = false
     this.clipboardCheckCooldownUntil = 0
     this.clipboardNativeWatchInitTried = false
+    this.initialCacheLoaded = false
+    this.initialCacheLoadingPromise = null
+    this.lastLagSkipLogAt = 0
     this.coreBoxVisible = false
     this.currentPollIntervalMs = CLIPBOARD_DEFAULT_POLL_INTERVAL_MS
   }
 
   onInit(): MaybePromise<void> {
-    this.db = databaseModule.getDb()
+    this.db = databaseModule.getAuxDb()
     this.clipboardHelper = new ClipboardHelper()
     this.setupPollingSubscriptions()
     this.setupPowerListeners()
@@ -3224,7 +3337,6 @@ export class ClipboardModule extends BaseModule {
     this.startTempCleanupTasks()
     setImmediate(() => {
       this.startClipboardMonitoring()
-      void this.loadInitialCache()
     })
     setImmediate(() => {
       appTaskGate
