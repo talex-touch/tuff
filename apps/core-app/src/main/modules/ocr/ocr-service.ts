@@ -183,7 +183,7 @@ class OcrService {
   private ensureInitialized(): void {
     if (this.initialized) return
 
-    this.db = databaseModule.getDb()
+    this.db = databaseModule.getAuxDb()
 
     this.registerChannels()
     ensureIntelligenceConfigLoaded()

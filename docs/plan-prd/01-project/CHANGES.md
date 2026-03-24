@@ -13,6 +13,27 @@
 
 ## 2026-03-24
 
+### feat(pilot-message-first): Pilot 数据层 message-first + system 白名单入模
+
+- 数据层改为 message-first（trace 保留调试/兼容副本）：
+  - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - 新增 `apps/pilot/shared/pilot-system-message.ts`
+  - 新增统一 projector：将 `planning/intent/routing/memory/websearch/run.audit` 投影为 `role=system` 消息并实时写入 `messages`，统一 metadata（`eventType/seq/turnId/cardType/contextPolicy/summary`）。
+- 历史懒迁移（不回写）：
+  - 新增 `apps/pilot/server/utils/pilot-system-message-response.ts`
+  - `messages.get`（含 v1）在“旧会话无 system 消息”时按需从 trace 合成内存态 system 视图。
+- 上下文白名单过滤统一收敛：
+  - `packages/tuff-intelligence/src/business/pilot/conversation.ts`
+  - `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+  - `apps/pilot/server/utils/pilot-langgraph-engine.ts`
+  - `apps/pilot/server/utils/pilot-title.ts`
+  - 规则固定为：`user/assistant` 全量入模；`system` 仅 `eventType=system.policy|tool.summary` 且 `contextPolicy=allow` 入模，其余排除。
+- 前端消费链路收敛为“卡片由 system messages 派生”：
+  - `apps/pilot/app/composables/usePilotChatPage.ts`
+  - assistant 继续单气泡增量渲染，聊天区默认不逐条展开系统运行日志，工具卡优先由 system message 推导。
+- 会话计数语义修正：
+  - 仅统计 `user + assistant`，不计 `system`，避免运行日志导致计数膨胀。
+
 ### fix(core-app/apps-search): macOS 中文应用名检索修复（simple-plist 路径）
 
 - 修复 `InfoPlist.strings` 本地化名称读取链路：
@@ -127,6 +148,25 @@
   - `pnpm -C "apps/core-app" run typecheck:web`
   - `pnpm -C "apps/core-app" exec vitest run "src/main/db/db-write-scheduler.test.ts"`
   - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/analytics/startup-analytics.test.ts"`
+
+### perf(core-app): 事件循环长停顿归因增强 + Clipboard 严重 lag 自保护
+
+- 背景：
+  - 在 `SQLITE_BUSY` 风暴收敛后，仍观察到 `contexts=[]` 且 `pollingRecent.durationMs` 很小的秒级 `event_loop.lag`，需要快速区分“应用逻辑阻塞”与“系统/原生阻塞”。
+- 变更：
+  - `apps/core-app/src/main/utils/perf-monitor.ts`
+    - 新增 `inferEventLoopLagCause()`，对严重 lag 进行归因标记：
+      - `native_or_system_stall`
+      - `polling_queue_backlog`
+      - `unattributed_main_thread_block`
+    - `event_loop.lag` 日志新增 `queueDepthByLane`、polling dropped/coalesced 计数、`suspectedCause`，并把归因写入 message hint（`suspect=...`）。
+  - `apps/core-app/src/main/modules/clipboard.ts`
+    - 在“最近窗口内发生严重 lag”时短时跳过 clipboard 轮询检查（含节流日志），防止主线程恢复阶段再次叠加高频检查负载。
+  - `apps/core-app/src/main/utils/perf-monitor.severe-lag.test.ts`
+    - 新增归因单测，覆盖“无上下文 + 无队列负载 -> native/system stall”。
+- 验证：
+  - `pnpm -C "apps/core-app" run typecheck:node`
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/db/db-write-scheduler.test.ts" "src/main/modules/analytics/startup-analytics.test.ts" "src/main/utils/perf-monitor.severe-lag.test.ts"`
 
 ### fix(core-app/clipboard): 启动预热改为首次按需加载，减少冷启动主线程争用
 

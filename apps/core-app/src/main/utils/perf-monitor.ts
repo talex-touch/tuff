@@ -120,6 +120,19 @@ export interface SevereLagBurstEvent {
 }
 
 type SevereLagBurstListener = (event: SevereLagBurstEvent) => void
+export type EventLoopLagCause =
+  | 'native_or_system_stall'
+  | 'polling_queue_backlog'
+  | 'unattributed_main_thread_block'
+
+interface EventLoopLagCauseInput {
+  lagMs: number
+  contextsCount: number
+  pollingActiveCount: number
+  queueDepthByLane: Record<string, { queued: number; inFlight: number }>
+  pollingRecentMaxDurationMs: number
+  pollingRecentMaxSchedulerDelayMs: number
+}
 
 const perfLog = createLogger('Perf')
 const ipcPerfLog = perfLog.child('IPC')
@@ -202,6 +215,41 @@ function shouldSendToNexus(incident: PerfIncident): boolean {
     default:
       return false
   }
+}
+
+export function inferEventLoopLagCause(input: EventLoopLagCauseInput): EventLoopLagCause | null {
+  if (input.lagMs < LOOP_LAG_ERROR_MS) {
+    return null
+  }
+
+  if (input.contextsCount > 0) {
+    return null
+  }
+
+  const laneTotals = Object.values(input.queueDepthByLane).reduce(
+    (acc, lane) => {
+      acc.queued += Math.max(0, Math.round(Number(lane?.queued ?? 0)))
+      acc.inFlight += Math.max(0, Math.round(Number(lane?.inFlight ?? 0)))
+      return acc
+    },
+    { queued: 0, inFlight: 0 }
+  )
+
+  if (
+    laneTotals.queued === 0 &&
+    laneTotals.inFlight === 0 &&
+    input.pollingActiveCount === 0 &&
+    input.pollingRecentMaxDurationMs <= 10 &&
+    input.pollingRecentMaxSchedulerDelayMs <= 25
+  ) {
+    return 'native_or_system_stall'
+  }
+
+  if (laneTotals.queued > 0 || laneTotals.inFlight > 0) {
+    return 'polling_queue_backlog'
+  }
+
+  return 'unattributed_main_thread_block'
 }
 
 function queueNexusPerformance(incident: PerfIncident): void {
@@ -728,9 +776,20 @@ export class PerfMonitor {
         this.lastHeapSnapshotAt = heapNow
       }
       const pollingDiagnostics = pollingService.getDiagnostics()
+      const queueDepthByLane = pollingDiagnostics.queueDepthByLane ?? {
+        critical: { queued: 0, inFlight: 0 },
+        realtime: { queued: 0, inFlight: 0 },
+        io: { queued: 0, inFlight: 0 },
+        maintenance: { queued: 0, inFlight: 0 },
+        legacy_serial: { queued: 0, inFlight: 0 }
+      }
       const pollingActive = pollingDiagnostics.activeTasks.slice(0, 4).map((task) => ({
         id: task.id,
+        lane: task.lane,
         ageMs: Math.round(task.ageMs),
+        queueAgeMs: typeof task.queueAgeMs === 'number' ? Math.round(task.queueAgeMs) : undefined,
+        schedulerDelayMs:
+          typeof task.schedulerDelayMs === 'number' ? Math.round(task.schedulerDelayMs) : undefined,
         intervalMs: typeof task.intervalMs === 'number' ? Math.round(task.intervalMs) : undefined,
         lastDurationMs:
           typeof task.lastDurationMs === 'number' ? Math.round(task.lastDurationMs) : undefined,
@@ -743,10 +802,23 @@ export class PerfMonitor {
         .slice(0, 3)
         .map((task) => ({
           id: task.id,
+          lane: task.lane,
           durationMs: Math.round(task.lastDurationMs),
           ageMs: Math.max(0, now - task.lastEndAt),
           intervalMs: typeof task.intervalMs === 'number' ? Math.round(task.intervalMs) : undefined,
+          schedulerDelayMs:
+            typeof task.lastSchedulerDelayMs === 'number'
+              ? Math.round(task.lastSchedulerDelayMs)
+              : undefined,
           maxDurationMs: Math.round(task.maxDurationMs),
+          maxSchedulerDelayMs:
+            typeof task.maxSchedulerDelayMs === 'number'
+              ? Math.round(task.maxSchedulerDelayMs)
+              : undefined,
+          droppedCount:
+            typeof task.droppedCount === 'number' ? Math.round(task.droppedCount) : undefined,
+          coalescedCount:
+            typeof task.coalescedCount === 'number' ? Math.round(task.coalescedCount) : undefined,
           count: task.count,
           phaseDurations:
             typeof task.lastMeta === 'object' && task.lastMeta
@@ -759,10 +831,23 @@ export class PerfMonitor {
         .slice(0, 3)
         .map((task) => ({
           id: task.id,
+          lane: task.lane,
           durationMs: Math.round(task.lastDurationMs),
           ageMs: Math.max(0, now - task.lastEndAt),
           intervalMs: typeof task.intervalMs === 'number' ? Math.round(task.intervalMs) : undefined,
+          schedulerDelayMs:
+            typeof task.lastSchedulerDelayMs === 'number'
+              ? Math.round(task.lastSchedulerDelayMs)
+              : undefined,
           maxDurationMs: Math.round(task.maxDurationMs),
+          maxSchedulerDelayMs:
+            typeof task.maxSchedulerDelayMs === 'number'
+              ? Math.round(task.maxSchedulerDelayMs)
+              : undefined,
+          droppedCount:
+            typeof task.droppedCount === 'number' ? Math.round(task.droppedCount) : undefined,
+          coalescedCount:
+            typeof task.coalescedCount === 'number' ? Math.round(task.coalescedCount) : undefined,
           count: task.count,
           phaseDurations:
             typeof task.lastMeta === 'object' && task.lastMeta
@@ -778,7 +863,23 @@ export class PerfMonitor {
       const primaryPollingRecent = pollingRecent[0]
         ? `${pollingRecent[0].id} ${formatDuration(pollingRecent[0].durationMs)}`
         : undefined
-      const diagnosticKey = `${primaryContext ?? 'none'}|${primaryPollingRecent ?? 'none'}`
+      const pollingRecentMaxDurationMs = pollingRecent.reduce(
+        (max, item) => Math.max(max, item.durationMs),
+        0
+      )
+      const pollingRecentMaxSchedulerDelayMs = pollingRecent.reduce(
+        (max, item) => Math.max(max, item.schedulerDelayMs ?? 0),
+        0
+      )
+      const suspectedCause = inferEventLoopLagCause({
+        lagMs,
+        contextsCount: contexts.length,
+        pollingActiveCount: pollingActive.length,
+        queueDepthByLane,
+        pollingRecentMaxDurationMs,
+        pollingRecentMaxSchedulerDelayMs
+      })
+      const diagnosticKey = `${primaryContext ?? 'none'}|${primaryPollingRecent ?? 'none'}|${suspectedCause ?? 'none'}`
       const diagnosticCauseChanged = diagnosticKey !== this.lastLoopDiagnosticKey
       if (diagnosticCauseChanged) {
         this.lastLoopDiagnosticKey = diagnosticKey
@@ -793,7 +894,8 @@ export class PerfMonitor {
       const messageHints = [
         primaryContext ? `context=${primaryContext}` : null,
         primaryPollingActive ? `polling=${primaryPollingActive}` : null,
-        primaryPollingRecent ? `recent=${primaryPollingRecent}` : null
+        primaryPollingRecent ? `recent=${primaryPollingRecent}` : null,
+        suspectedCause ? `suspect=${suspectedCause}` : null
       ].filter(Boolean)
       const message = messageHints.length
         ? `Event loop lag ${formatDuration(lagMs)} (${messageHints.join(' | ')})`
@@ -814,6 +916,16 @@ export class PerfMonitor {
         pollingRecent,
         primaryPollingActive,
         primaryPollingRecent,
+        queueDepthByLane,
+        pollingDroppedCount:
+          typeof pollingDiagnostics.droppedCount === 'number'
+            ? Math.round(pollingDiagnostics.droppedCount)
+            : undefined,
+        pollingCoalescedCount:
+          typeof pollingDiagnostics.coalescedCount === 'number'
+            ? Math.round(pollingDiagnostics.coalescedCount)
+            : undefined,
+        suspectedCause,
         lastSlowIpc,
         slowPollingRecent,
         heap: heapStats

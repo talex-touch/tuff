@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-03-23  
+> 更新时间：2026-03-24  
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -50,10 +50,12 @@
 - 关键路径需有显式错误处理与用户可见反馈。
 - 对异步流程必须定义超时与失败回退。
 - Pilot 路由链路必须具备可观测指标（至少含 `queue wait`、`TTFT`、`total duration`、`success/error`），并支持熔断恢复策略。
+- 启动高峰期涉及 SQLite 高频写入的链路，必须满足“单写者或物理分库隔离 + QoS 优先级 + 可降级策略（drop/backoff/latest-wins）”至少两项，禁止无上限重试灌队列。
 
 ### 3.3 性能约束
 - 为关键路径提供预算（如启动、搜索响应、任务执行耗时）。
 - 避免在主线程引入长时间同步阻塞。
+- 对启动期性能治理，必须至少输出以下指标：队列分级深度、标签等待时间、drop 数、熔断状态、`SQLITE_BUSY` 比例、event-loop lag 分布。
 
 ### 3.4 安全与数据约束
 - 遵守 Storage/Sync 规则：SQLite 本地 SoT，JSON 仅同步载荷。
@@ -230,7 +232,7 @@
 **现状指标**
 | 项目 | 结果 | 结论 |
 | --- | --- | --- |
-| 执行入口 | `/api/aigc/executor`、`/api/chat/sessions/*`（`/api/v1/chat/sessions/*` 仅保留非 stream/turns 子路由） | 已统一接入 |
+| 执行入口 | `/api/chat/sessions/*`（`/api/aigc/executor` 与 `/api/v1/chat/sessions/:sessionId/{stream,turns}` 已 hard-cut 下线） | 已统一接入 |
 | 路由策略 | `Quota Auto` 速度优先 + 探索流量 | 已落地 |
 | 评比指标 | `queueWaitMs/ttftMs/totalDurationMs/success/errorCode/finishReason` | 已落库 |
 | 熔断恢复 | 失败阈值 + 冷却 + 半开探测 | 已落地 |

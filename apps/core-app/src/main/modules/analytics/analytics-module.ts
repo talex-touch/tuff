@@ -137,7 +137,10 @@ export class AnalyticsModule extends BaseModule {
       })
     )
 
-    this.dbStore = new DbStore(databaseModule.getDb())
+    this.dbStore = new DbStore({
+      auxDb: databaseModule.getAuxDb(),
+      coreDb: databaseModule.getDb()
+    })
     this.core = new AnalyticsCore({ dbStore: this.dbStore })
     this.sampler = new SystemSampler((sample) => this.core.recordSystemSample(sample))
     this.messageStore = getAnalyticsMessageStore()

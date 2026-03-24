@@ -101,7 +101,8 @@ import { ThumbnailWorkerClient } from './workers/thumbnail-worker-client'
 import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
 import {
   SearchIndexWorkerClient,
-  type PersistEntry
+  type PersistEntry,
+  type UpsertFileRecord
 } from '../../search-engine/workers/search-index-worker-client'
 import {
   getProgressStreamFlushDelayMs,
@@ -3090,25 +3091,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               recordOffset += chunk.length
 
               await appTaskGate.waitForIdle()
-              await dbWriteScheduler.waitForCapacity(4)
               const chunkStart = performance.now()
-              const inserted = await this.withDbWrite('file-index.full-scan.upsert', async () =>
-                db
-                  .insert(filesSchema)
-                  .values(chunk)
-                  .onConflictDoUpdate({
-                    target: filesSchema.path,
-                    set: {
-                      name: sql`excluded.name`,
-                      extension: sql`excluded.extension`,
-                      size: sql`excluded.size`,
-                      mtime: sql`excluded.mtime`,
-                      ctime: sql`excluded.ctime`,
-                      lastIndexedAt: sql`excluded.last_indexed_at`
-                    }
-                  })
-                  .returning()
-              )
+              const inserted = (await this.searchIndexWorker.upsertFiles(
+                chunk as UpsertFileRecord[]
+              )) as unknown as (typeof filesSchema.$inferSelect)[]
               this.upsertBatchScheduler.recordDuration(performance.now() - chunkStart)
               this.logDebug('Full scan chunk inserted', {
                 path: newPath,
@@ -3302,25 +3288,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             chunks,
             async (chunk, chunkIndex) => {
               await appTaskGate.waitForIdle()
-              await dbWriteScheduler.waitForCapacity(4)
               const chunkStart = performance.now()
-              const inserted = await this.withDbWrite('file-index.reconcile.upsert', () =>
-                db
-                  .insert(filesSchema)
-                  .values(chunk)
-                  .onConflictDoUpdate({
-                    target: filesSchema.path,
-                    set: {
-                      name: sql`excluded.name`,
-                      extension: sql`excluded.extension`,
-                      size: sql`excluded.size`,
-                      mtime: sql`excluded.mtime`,
-                      ctime: sql`excluded.ctime`,
-                      lastIndexedAt: sql`excluded.last_indexed_at`
-                    }
-                  })
-                  .returning()
-              )
+              const inserted = (await this.searchIndexWorker.upsertFiles(
+                chunk as UpsertFileRecord[]
+              )) as unknown as (typeof filesSchema.$inferSelect)[]
               this.logDebug('Reconciliation chunk inserted', {
                 chunk: `${chunkIndex + 1}/${chunks.length}`,
                 size: chunk.length,
@@ -3342,15 +3313,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }
 
         const scanTime = new Date()
-        await this.withDbWrite('file-index.scan-progress.bulk-upsert', () =>
-          db
-            .insert(scanProgress)
-            .values(reconciliationPaths.map((path) => ({ path, lastScanned: scanTime })))
-            .onConflictDoUpdate({
-              target: scanProgress.path,
-              set: { lastScanned: scanTime }
-            })
-        )
+        await this.searchIndexWorker.upsertScanProgress(reconciliationPaths, scanTime.toISOString())
 
         this.logDebug('Reconciliation completed', {
           duration: formatDuration(performance.now() - reconciliationStart),

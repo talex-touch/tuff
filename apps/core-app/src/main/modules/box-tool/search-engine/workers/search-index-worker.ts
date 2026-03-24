@@ -18,7 +18,7 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
 import { createClient } from '@libsql/client'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import * as schema from '../../../../db/schema'
 import { SearchIndexService } from '../search-index-service'
@@ -81,6 +81,31 @@ interface PersistAndIndexMessage {
   entries: PersistAndIndexEntry[]
 }
 
+interface UpsertFileRecord {
+  path: string
+  name: string
+  extension?: string | null
+  size?: number | null
+  mtime: Date | number | string
+  ctime: Date | number | string
+  lastIndexedAt: Date | number | string
+  isDir: boolean
+  type: string
+}
+
+interface UpsertFilesMessage {
+  type: 'upsertFiles'
+  taskId: string
+  records: UpsertFileRecord[]
+}
+
+interface UpsertScanProgressMessage {
+  type: 'upsertScanProgress'
+  taskId: string
+  paths: string[]
+  lastScanned: string
+}
+
 type WorkerRequest =
   | InitMessage
   | IndexItemsMessage
@@ -88,6 +113,8 @@ type WorkerRequest =
   | RemoveByProviderMessage
   | CountByProviderMessage
   | PersistAndIndexMessage
+  | UpsertFilesMessage
+  | UpsertScanProgressMessage
   | WorkerMetricsRequest
 
 interface DoneMessage {
@@ -183,6 +210,20 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
             await new Promise<void>((resolve) => setTimeout(resolve, 30))
           }
         }
+        respond({ type: 'done', taskId })
+        break
+      }
+
+      case 'upsertFiles': {
+        if (!db) throw new Error('Worker not initialized — send init first')
+        const rows = await handleUpsertFiles(message.records)
+        respond({ type: 'done', taskId, result: rows })
+        break
+      }
+
+      case 'upsertScanProgress': {
+        if (!db) throw new Error('Worker not initialized — send init first')
+        await handleUpsertScanProgress(message.paths, message.lastScanned)
         respond({ type: 'done', taskId })
         break
       }
@@ -303,6 +344,61 @@ async function handlePersistAndIndex(entries: PersistAndIndexEntry[]): Promise<v
         })
     }
   })
+}
+
+function toDate(value: Date | number | string): Date {
+  if (value instanceof Date) return value
+  if (typeof value === 'number') return new Date(value)
+  return new Date(value)
+}
+
+async function handleUpsertFiles(
+  records: UpsertFileRecord[]
+): Promise<Array<Record<string, unknown>>> {
+  if (!db || records.length === 0) return []
+  const rows = await db
+    .insert(schema.files)
+    .values(
+      records.map((record) => ({
+        path: record.path,
+        name: record.name,
+        extension: record.extension ?? null,
+        size: typeof record.size === 'number' ? record.size : null,
+        mtime: toDate(record.mtime),
+        ctime: toDate(record.ctime),
+        lastIndexedAt: toDate(record.lastIndexedAt),
+        isDir: record.isDir,
+        type: record.type
+      }))
+    )
+    .onConflictDoUpdate({
+      target: schema.files.path,
+      set: {
+        name: sql`excluded.name`,
+        extension: sql`excluded.extension`,
+        size: sql`excluded.size`,
+        mtime: sql`excluded.mtime`,
+        ctime: sql`excluded.ctime`,
+        lastIndexedAt: sql`excluded.last_indexed_at`,
+        isDir: sql`excluded.is_dir`,
+        type: sql`excluded.type`
+      }
+    })
+    .returning()
+
+  return rows as Array<Record<string, unknown>>
+}
+
+async function handleUpsertScanProgress(paths: string[], lastScanned: string): Promise<void> {
+  if (!db || paths.length === 0) return
+  const lastScannedAt = new Date(lastScanned)
+  await db
+    .insert(schema.scanProgress)
+    .values(paths.map((entryPath) => ({ path: entryPath, lastScanned: lastScannedAt })))
+    .onConflictDoUpdate({
+      target: schema.scanProgress.path,
+      set: { lastScanned: lastScannedAt }
+    })
 }
 
 // ---------- Communication ----------

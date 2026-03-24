@@ -6,6 +6,7 @@ import type {
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { and, asc, eq, gte, lt, lte } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
+import { isStartupDegradeActive } from '../../../db/startup-degrade'
 import * as schema from '../../../db/schema'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
 import { createLogger } from '../../../utils/logger'
@@ -14,6 +15,8 @@ import { enterPerfContext } from '../../../utils/perf-context'
 const PERSIST_WINDOWS: AnalyticsWindowType[] = ['15m', '1h', '24h']
 const ANALYTICS_QUEUE_LIMIT = 8
 const QUEUE_PRESSURE_LOG_THROTTLE_MS = 60_000
+const SNAPSHOT_FAILURE_BACKOFF_BASE_MS = 1_500
+const SNAPSHOT_FAILURE_BACKOFF_MAX_MS = 30_000
 const SNAPSHOT_MIN_PERSIST_INTERVAL_MS: Record<AnalyticsWindowType, number> = {
   '1m': 0,
   '5m': 0,
@@ -44,7 +47,14 @@ interface QueuePressureStats {
   pluginFailed: number
 }
 
+interface DbStoreDeps {
+  auxDb: LibSQLDatabase<typeof schema>
+  coreDb?: LibSQLDatabase<typeof schema>
+}
+
 export class DbStore {
+  private db: LibSQLDatabase<typeof schema>
+  private fallbackDb: LibSQLDatabase<typeof schema> | null
   private lastSnapshotPersistAt = new Map<AnalyticsWindowType, number>()
   private lastQueuePressureLogAt = 0
   private queuePressureStats: QueuePressureStats = {
@@ -59,7 +69,12 @@ export class DbStore {
   }
   private lastQueuePressureQueued = 0
   private lastQueuePressureError: string | null = null
-  constructor(private db: LibSQLDatabase<typeof schema>) {}
+  private snapshotPersistSuspendUntil = 0
+  private snapshotPersistFailureStreak = 0
+  constructor({ auxDb, coreDb }: DbStoreDeps) {
+    this.db = auxDb
+    this.fallbackDb = coreDb && coreDb !== auxDb ? coreDb : null
+  }
 
   private shouldLogQueuePressure(now: number): boolean {
     if (now - this.lastQueuePressureLogAt < QUEUE_PRESSURE_LOG_THROTTLE_MS) return false
@@ -137,6 +152,9 @@ export class DbStore {
 
   async saveSnapshots(snapshots: AnalyticsSnapshot[]): Promise<void> {
     const now = Date.now()
+    if (isStartupDegradeActive() && now < this.snapshotPersistSuspendUntil) {
+      return
+    }
     const persistable: AnalyticsSnapshot[] = []
     let throttled = 0
 
@@ -204,8 +222,14 @@ export class DbStore {
           withSqliteRetry(() => this.db.insert(schema.analyticsSnapshots).values(rows), {
             label: 'analytics.snapshots'
           }),
-        { droppable: true }
+        {
+          priority: 'best_effort',
+          dropPolicy: 'drop',
+          maxQueueWaitMs: 10_000
+        }
       )
+      this.snapshotPersistFailureStreak = 0
+      this.snapshotPersistSuspendUntil = 0
       for (const snapshot of persistable) {
         this.lastSnapshotPersistAt.set(snapshot.windowType, now)
       }
@@ -215,6 +239,15 @@ export class DbStore {
         this.recordQueuePressure('snapshotsDropped')
       } else {
         this.recordQueuePressure('snapshotsFailed', { error })
+        if (isStartupDegradeActive()) {
+          this.snapshotPersistFailureStreak += 1
+          const delay = Math.min(
+            SNAPSHOT_FAILURE_BACKOFF_MAX_MS,
+            SNAPSHOT_FAILURE_BACKOFF_BASE_MS *
+              2 ** Math.min(6, Math.max(0, this.snapshotPersistFailureStreak - 1))
+          )
+          this.snapshotPersistSuspendUntil = Date.now() + delay
+        }
       }
     } finally {
       disposePersist()
@@ -222,23 +255,28 @@ export class DbStore {
   }
 
   async getRange(request: AnalyticsRangeRequest): Promise<AnalyticsSnapshot[]> {
-    const rows = await this.db
-      .select({
-        windowType: schema.analyticsSnapshots.windowType,
-        timestamp: schema.analyticsSnapshots.timestamp,
-        metrics: schema.analyticsSnapshots.metrics
-      })
-      .from(schema.analyticsSnapshots)
-      .where(
-        and(
-          eq(schema.analyticsSnapshots.windowType, request.windowType),
-          gte(schema.analyticsSnapshots.timestamp, request.from),
-          lte(schema.analyticsSnapshots.timestamp, request.to)
+    const loadRows = async (db: LibSQLDatabase<typeof schema>) =>
+      db
+        .select({
+          windowType: schema.analyticsSnapshots.windowType,
+          timestamp: schema.analyticsSnapshots.timestamp,
+          metrics: schema.analyticsSnapshots.metrics
+        })
+        .from(schema.analyticsSnapshots)
+        .where(
+          and(
+            eq(schema.analyticsSnapshots.windowType, request.windowType),
+            gte(schema.analyticsSnapshots.timestamp, request.from),
+            lte(schema.analyticsSnapshots.timestamp, request.to)
+          )
         )
-      )
-      .orderBy(asc(schema.analyticsSnapshots.timestamp))
+        .orderBy(asc(schema.analyticsSnapshots.timestamp))
 
-    return rows.map((row) => ({
+    const rows = await loadRows(this.db)
+    const effectiveRows =
+      rows.length > 0 || !this.fallbackDb ? rows : await loadRows(this.fallbackDb)
+
+    return effectiveRows.map((row) => ({
       windowType: row.windowType as AnalyticsWindowType,
       timestamp: row.timestamp,
       metrics: JSON.parse(row.metrics)
@@ -275,7 +313,11 @@ export class DbStore {
           },
           { label: 'analytics.cleanup' }
         ),
-      { droppable: true }
+      {
+        priority: 'best_effort',
+        dropPolicy: 'drop',
+        maxQueueWaitMs: 10_000
+      }
     )
   }
 
@@ -310,7 +352,11 @@ export class DbStore {
               }),
             { label: 'analytics.plugin' }
           ),
-        { droppable: true }
+        {
+          priority: 'best_effort',
+          dropPolicy: 'drop',
+          maxQueueWaitMs: 10_000
+        }
       )
     } catch (error) {
       const isDropped = error instanceof Error && error.message.includes('dropped')
