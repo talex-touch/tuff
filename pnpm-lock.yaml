@@ -1345,6 +1345,9 @@ importers:
       deepagents:
         specifier: 0.0.2
         version: 0.0.2(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.5.1(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))(zod-to-json-schema@3.25.1(zod@3.25.76))
+      echarts:
+        specifier: ^5.6.0
+        version: 5.6.0
       element-plus:
         specifier: ^2.13.5
         version: 2.13.5(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3))
@@ -1393,6 +1396,9 @@ importers:
       prism-themes:
         specifier: ^1.9.0
         version: 1.9.0
+      prosemirror-view:
+        specifier: ^1.41.3
+        version: 1.41.3
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
@@ -1456,7 +1462,7 @@ importers:
         version: 9.39.4(jiti@2.6.1)
       nuxt-echarts:
         specifier: ^0.3.3
-        version: 0.3.3(magicast@0.5.1)
+        version: 0.3.3(echarts@5.6.0)(magicast@0.5.1)
       nuxt-lodash:
         specifier: ^2.5.3
         version: 2.5.3(magicast@0.5.1)
@@ -42961,9 +42967,10 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  nuxt-echarts@0.3.3(magicast@0.5.1):
+  nuxt-echarts@0.3.3(echarts@5.6.0)(magicast@0.5.1):
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
+      echarts: 5.6.0
     transitivePeerDependencies:
       - magicast
 
