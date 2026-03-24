@@ -2808,6 +2808,18 @@ export class ClipboardModule extends BaseModule {
       this.clipboardHelper?.markText(text ?? '')
     }
 
+    this.registerTypedClipboardQueryHandlers()
+    this.registerTypedClipboardMutationHandlers(writePayload)
+    this.registerTypedClipboardReadHandlers()
+    this.registerTypedClipboardStreamHandlers()
+    this.registerLegacyClipboardBridge(writePayload)
+  }
+
+  private registerTypedClipboardQueryHandlers(): void {
+    if (!this.transport) {
+      return
+    }
+
     this.transportDisposers.push(
       this.transport.on(ClipboardEvents.getLatest, (_request: void, context: HandlerContext) => {
         this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
@@ -2833,6 +2845,34 @@ export class ClipboardModule extends BaseModule {
 
     this.transportDisposers.push(
       this.transport.on(
+        ClipboardEvents.getImageUrl,
+        async (
+          request: ClipboardGetImageUrlRequest,
+          context: HandlerContext
+        ): Promise<ClipboardGetImageUrlResponse> => {
+          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', request)
+          return await this.handleGetImageUrlRequest(request)
+        }
+      )
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(ClipboardEvents.queryMeta, async (payload, context) => {
+        this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', payload)
+        return await this.queryHistoryByMeta(payload ?? {})
+      })
+    )
+  }
+
+  private registerTypedClipboardMutationHandlers(
+    writePayload: (payload: ClipboardWritePayload) => Promise<void>
+  ): void {
+    if (!this.transport) {
+      return
+    }
+
+    this.transportDisposers.push(
+      this.transport.on(
         ClipboardEvents.apply,
         async (request: ClipboardApplyRequest, context: HandlerContext) => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
@@ -2853,30 +2893,21 @@ export class ClipboardModule extends BaseModule {
 
           await this.applyToActiveApp({ item })
         }
-      )
-    )
-
-    this.transportDisposers.push(
+      ),
       this.transport.on(
         ClipboardEvents.delete,
         async (request: ClipboardDeleteRequest, context: HandlerContext) => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
           await this.handleDeleteRequest(request, 'transport')
         }
-      )
-    )
-
-    this.transportDisposers.push(
+      ),
       this.transport.on(
         ClipboardEvents.setFavorite,
         async (request: ClipboardSetFavoriteRequest, context: HandlerContext) => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
           await this.handleSetFavoriteRequest(request)
         }
-      )
-    )
-
-    this.transportDisposers.push(
+      ),
       this.transport.on(
         ClipboardEvents.clearHistory,
         async (_request: void, context: HandlerContext) => {
@@ -2886,21 +2917,68 @@ export class ClipboardModule extends BaseModule {
           }
           await this.cleanupHistory({ type: 'all' })
         }
-      )
-    )
-
-    this.transportDisposers.push(
+      ),
       this.transport.on(
-        ClipboardEvents.getImageUrl,
+        ClipboardEvents.write,
+        async (request: ClipboardWriteRequest, context: HandlerContext) => {
+          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
+          await this.handleWriteRequest(request, writePayload)
+        }
+      ),
+      this.transport.on(ClipboardEvents.clear, async (_request: void, context: HandlerContext) => {
+        this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', undefined)
+        clipboard.clear()
+      }),
+      this.transport.on(
+        ClipboardEvents.copyAndPaste,
         async (
-          request: ClipboardGetImageUrlRequest,
+          request: ClipboardCopyAndPasteRequest,
           context: HandlerContext
-        ): Promise<ClipboardGetImageUrlResponse> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', request)
-          return await this.handleGetImageUrlRequest(request)
+        ): Promise<ClipboardActionResult> => {
+          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
+          return await this.handleCopyAndPasteRequest(request)
         }
       )
     )
+  }
+
+  private registerTypedClipboardReadHandlers(): void {
+    if (!this.transport) {
+      return
+    }
+
+    this.transportDisposers.push(
+      this.transport.on(
+        ClipboardEvents.read,
+        async (_request: void, context: HandlerContext): Promise<ClipboardReadResponse> => {
+          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
+          return this.readClipboardSnapshot()
+        }
+      ),
+      this.transport.on(
+        ClipboardEvents.readImage,
+        async (
+          request: ClipboardReadImageRequest,
+          context: HandlerContext
+        ): Promise<ClipboardReadImageResponse | null> => {
+          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', request)
+          return await this.readClipboardImage(request)
+        }
+      ),
+      this.transport.on(
+        ClipboardEvents.readFiles,
+        async (_request: void, context: HandlerContext) => {
+          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
+          return this.clipboardHelper?.readClipboardFiles() ?? []
+        }
+      )
+    )
+  }
+
+  private registerTypedClipboardStreamHandlers(): void {
+    if (!this.transport) {
+      return
+    }
 
     this.transportDisposers.push(
       this.transport.onStream(
@@ -2920,77 +2998,6 @@ export class ClipboardModule extends BaseModule {
         }
       )
     )
-
-    this.transportDisposers.push(
-      this.transport.on(
-        ClipboardEvents.write,
-        async (request: ClipboardWriteRequest, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          await this.handleWriteRequest(request, writePayload)
-        }
-      )
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(
-        ClipboardEvents.read,
-        async (_request: void, context: HandlerContext): Promise<ClipboardReadResponse> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
-          return this.readClipboardSnapshot()
-        }
-      )
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(
-        ClipboardEvents.readImage,
-        async (
-          request: ClipboardReadImageRequest,
-          context: HandlerContext
-        ): Promise<ClipboardReadImageResponse | null> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', request)
-          return await this.readClipboardImage(request)
-        }
-      )
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(
-        ClipboardEvents.readFiles,
-        async (_request: void, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
-          return this.clipboardHelper?.readClipboardFiles() ?? []
-        }
-      )
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(ClipboardEvents.clear, async (_request: void, context: HandlerContext) => {
-        this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', undefined)
-        clipboard.clear()
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(
-        ClipboardEvents.copyAndPaste,
-        async (
-          request: ClipboardCopyAndPasteRequest,
-          context: HandlerContext
-        ): Promise<ClipboardActionResult> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          return await this.handleCopyAndPasteRequest(request)
-        }
-      )
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(ClipboardEvents.queryMeta, async (payload, context) => {
-        this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', payload)
-        return await this.queryHistoryByMeta(payload ?? {})
-      })
-    )
-    this.registerLegacyClipboardBridge(writePayload)
   }
 
   private registerLegacyClipboardBridge(
