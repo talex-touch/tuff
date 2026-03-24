@@ -59,6 +59,7 @@ export function normalizeToolApprovalTicket(value: unknown): ToolApprovalTicket 
 export interface PollToolApprovalDecisionOptions {
   ticketId: string
   intervalMs: number
+  timeoutMs?: number
   fetchTicket: (ticketId: string) => Promise<ToolApprovalTicket | null>
   isAborted?: () => boolean
   now?: () => number
@@ -67,9 +68,18 @@ export interface PollToolApprovalDecisionOptions {
 
 export async function pollToolApprovalDecision(options: PollToolApprovalDecisionOptions): Promise<ToolApprovalTicket> {
   const sleep = options.sleep || (ms => new Promise<void>(resolve => setTimeout(resolve, ms)))
+  const now = options.now || (() => Date.now())
+  const timeoutMs = Number.isFinite(options.timeoutMs)
+    ? Math.max(1, Math.floor(Number(options.timeoutMs)))
+    : 65_000
+  const deadline = now() + timeoutMs
+
   while (true) {
     if (options.isAborted?.()) {
       throw new Error('APPROVAL_MONITOR_ABORTED')
+    }
+    if (now() >= deadline) {
+      throw new Error('APPROVAL_MONITOR_TIMEOUT')
     }
 
     try {
@@ -109,13 +119,26 @@ export function buildRejectedApprovalAuditPatch(input: {
 
 export function buildApprovalMonitorFailureAuditPatch(input: {
   error: unknown
+  timeoutMs?: number
 }): {
   auditType: 'tool.call.failed'
   status: 'failed'
-  errorCode: 'TOOL_APPROVAL_POLL_FAILED'
+  errorCode: 'TOOL_APPROVAL_TIMEOUT' | 'TOOL_APPROVAL_POLL_FAILED'
   errorMessage: string
 } {
-  void input.error
+  const raw = String(input.error instanceof Error ? input.error.message : input.error || '').trim()
+  if (raw === 'APPROVAL_MONITOR_TIMEOUT') {
+    const safeTimeoutMs = Number.isFinite(input.timeoutMs)
+      ? Math.max(1_000, Math.floor(Number(input.timeoutMs)))
+      : 65_000
+    const timeoutSeconds = Math.max(1, Math.ceil(safeTimeoutMs / 1_000))
+    return {
+      auditType: 'tool.call.failed',
+      status: 'failed',
+      errorCode: 'TOOL_APPROVAL_TIMEOUT',
+      errorMessage: `审批等待超时（>${timeoutSeconds}s），请审批后手动重试。`,
+    }
+  }
   return {
     auditType: 'tool.call.failed',
     status: 'failed',
