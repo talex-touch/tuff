@@ -1,0 +1,58 @@
+{
+  "runNo": 58,
+  "timestamp": "2026-03-24T06:00:26.766Z",
+  "timeoutMs": null,
+  "traceDeprecation": null,
+  "wallTimeMs": null,
+  "processExitCode": null,
+  "processSignal": null,
+  "timedOut": false,
+  "allModulesLoadedMs": 586,
+  "startupHealthMs": 587,
+  "startupAnalyticsMs": 1000,
+  "rendererReadyMs": null,
+  "warnCount": 0,
+  "errorCount": 0,
+  "warnLines": [],
+  "errorLines": [],
+  "deprecations": [],
+  "topSlowModules": [
+    {
+      "name": "DownloadCenter",
+      "durationMs": 321
+    },
+    {
+      "name": "CoreBox",
+      "durationMs": 49
+    },
+    {
+      "name": "OmniPanel",
+      "durationMs": 34
+    },
+    {
+      "name": "search-engine-core",
+      "durationMs": 19
+    },
+    {
+      "name": "PluginModule",
+      "durationMs": 16
+    },
+    {
+      "name": "Database",
+      "durationMs": 15
+    },
+    {
+      "name": "Clipboard",
+      "durationMs": 13
+    },
+    {
+      "name": "CommonChannel",
+      "durationMs": 10
+    }
+  ],
+  "maxEventLoopLagMs": null,
+  "maxSlowIpcMs": null,
+  "isPass": true,
+  "blockingIssues": [],
+  "analysisCutoffReached": true
+}

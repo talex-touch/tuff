@@ -47,14 +47,14 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
   init(ctx: ModuleInitContext<E>): MaybePromise<void> {
     this.filePath = ctx.file.dirPath
 
-    this.onInit(ctx)
+    return this.onInit(ctx)
   }
 
   abstract onInit(ctx: ModuleInitContext<E>): MaybePromise<void>
   start?(ctx: ModuleStartContext<E>): MaybePromise<void>
   stop?(ctx: ModuleStopContext<E>): MaybePromise<void>
   destroy(ctx: ModuleDestroyContext<E>): MaybePromise<void> {
-    this.onDestroy(ctx)
+    return this.onDestroy(ctx)
   }
   abstract onDestroy(ctx: ModuleDestroyContext<E>): MaybePromise<void>
 

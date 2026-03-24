@@ -51,10 +51,7 @@ export class SignatureVerifier {
     }
 
     const envUrl =
-      process.env.TUFF_UPDATE_SIGNATURE_KEY_URL ||
-      process.env.TUFF_RELEASE_SIGNATURE_KEY_URL ||
-      process.env.TUFF_UPDATE_SIGNATURE_PUBLIC_KEY_URL ||
-      process.env.TUFF_RELEASE_SIGNATURE_PUBLIC_KEY_URL
+      process.env.TUFF_UPDATE_SIGNATURE_KEY_URL || process.env.TUFF_UPDATE_SIGNATURE_PUBLIC_KEY_URL
 
     if (envUrl) {
       return envUrl

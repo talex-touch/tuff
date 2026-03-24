@@ -15,9 +15,10 @@ import type {
   BatteryStatusPayload,
   FileIndexAddPathRequest,
   FileIndexAddPathResult,
-  PackageInfo,
+  GetActiveAppRequest,
   PlatformCapabilityListRequest,
   ReadFileRequest,
+  ActiveAppSnapshot,
   SecureValueGetRequest,
   SecureValueSetRequest,
   StartupRequest,
@@ -69,6 +70,7 @@ import {
   platformCapabilityRegistry,
   registerDefaultPlatformCapabilities
 } from '../modules/platform/capability-registry'
+import { activeAppService } from '../modules/system/active-app'
 import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage'
 import { getNetworkService } from '../modules/network'
 import { deviceIdleService } from '../service/device-idle-service'
@@ -119,6 +121,15 @@ type RuntimeTrayManager = {
 const dialogApprovedPaths = new Map<string, number>()
 let tuffCliDetectionCache: { available: boolean; checkedAt: number } | null = null
 
+function normalizeSafeNamespaceSegment(value: string): string {
+  const normalized = value
+    .trim()
+    .replace(/[^\w.-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-.]+|[-.]+$/g, '')
+  return normalized || 'unknown'
+}
+
 // Preset import/export events
 const dialogOpenFileEvent = defineRawEvent<
   {
@@ -153,6 +164,9 @@ const wallpaperCopyToLibraryEvent = defineRawEvent<
   { sourcePath: string; type: 'file' | 'folder' },
   { storedPath: string | null; skippedCount: number; error?: string }
 >('wallpaper:copy-to-library')
+const systemGetActiveAppLegacyEvent = defineRawEvent<GetActiveAppRequest, ActiveAppSnapshot | null>(
+  'system:get-active-app'
+)
 const batteryStatusEvent = AppEvents.power.batteryStatus
 
 function resolveTfilePath(urlOrPath: string): string {
@@ -203,45 +217,6 @@ function resolveTfilePath(urlOrPath: string): string {
     const body = tailIndex >= 0 ? rawWithTail.slice(0, tailIndex) : rawWithTail
     return normalizeDecodedPath(decodeStable(body))
   }
-}
-
-function buildTfileUrl(filePath: string): string {
-  const raw = filePath?.trim()
-  if (!raw) {
-    return ''
-  }
-
-  let resolvedPath = raw
-  if (raw.startsWith(`${FILE_SCHEMA}:`)) {
-    resolvedPath = resolveTfilePath(raw)
-  } else if (raw.startsWith('file:')) {
-    try {
-      resolvedPath = fileURLToPath(raw)
-    } catch {
-      resolvedPath = raw
-    }
-  }
-
-  const normalized = resolvedPath.replace(/\\/g, '/')
-  let absolutePath = normalized
-  if (/^[a-z]:\//i.test(absolutePath)) {
-    // Keep Windows drive path without forcing a leading slash.
-  } else if (!absolutePath.startsWith('/')) {
-    absolutePath = `/${absolutePath}`
-  }
-
-  const encoded = absolutePath
-    .split('/')
-    .map((segment) => {
-      try {
-        return encodeURIComponent(decodeURIComponent(segment))
-      } catch {
-        return encodeURIComponent(segment)
-      }
-    })
-    .join('/')
-
-  return `${FILE_SCHEMA}://${encoded}`
 }
 
 function isImagePath(filePath: string): boolean {
@@ -399,7 +374,7 @@ async function copyWallpaperFolderToLibrary(
     return { storedPath: null, skippedCount: 0 }
   }
 
-  const folderName = safeNamespaceSegment(path.basename(sourcePath))
+  const folderName = normalizeSafeNamespaceSegment(path.basename(sourcePath))
   const folderHash = createHash('sha1').update(sourcePath).digest('hex').slice(0, 8)
   const folderDir = path.join(libraryRoot, 'folders', `${folderName}-${folderHash}`)
   await fs.mkdir(folderDir, { recursive: true })
@@ -602,8 +577,6 @@ function closeApp(app: TalexTouch.TouchApp): void {
   app.window.close()
 
   app.app.quit()
-
-  process.exit(0)
 }
 
 function getOSInformation(): OSInformation {
@@ -767,7 +740,7 @@ export class CommonChannelModule extends BaseModule {
     this.setupBatteryStatusBroadcast(transport)
     this.registerLegacyDialogWallpaperHandlers(transport, touchApp)
 
-    const onOpenUrl = this.createOpenUrlHandler(touchApp)
+    const onOpenUrl = this.createOpenUrlHandler()
     this.bindOpenUrlListeners(touchApp, onOpenUrl)
 
     this.registerBuildVerificationStatusHandlers(transport)
@@ -850,7 +823,9 @@ export class CommonChannelModule extends BaseModule {
           BrowserWindow.getFocusedWindow() ?? touchApp.window.window,
           dialogOptions
         )
-        return { filePaths: result.filePaths ?? [] }
+        const filePaths = result.canceled ? [] : (result.filePaths ?? [])
+        filePaths.forEach(recordDialogPath)
+        return { filePaths }
       }),
       transport.on(wallpaperListImagesEvent, async (payload) => {
         const folderPath = typeof payload?.folderPath === 'string' ? payload.folderPath : ''
@@ -936,7 +911,7 @@ export class CommonChannelModule extends BaseModule {
     )
   }
 
-  private createOpenUrlHandler(touchApp: TalexTouch.TouchApp): (url: string) => Promise<void> {
+  private createOpenUrlHandler(): (url: string) => Promise<void> {
     type OpenUrlDecision = 'skip' | 'open' | 'confirm'
 
     const shouldSkipPromptProtocols = new Set([APP_SCHEMA, FILE_SCHEMA])
@@ -1275,6 +1250,12 @@ export class CommonChannelModule extends BaseModule {
           return null
         }
       }),
+      transport.on(AppEvents.system.getActiveApp, async (payload) => {
+        return await activeAppService.getActiveApp(Boolean(payload?.forceRefresh))
+      }),
+      transport.on(systemGetActiveAppLegacyEvent, async (payload) => {
+        return await activeAppService.getActiveApp(Boolean(payload?.forceRefresh))
+      }),
       transport.on<SecureValueGetRequest, string | null>(
         AppEvents.system.getSecureValue,
         async (payload) => {
@@ -1421,25 +1402,6 @@ export class CommonChannelModule extends BaseModule {
     registerSafeHandler: ReturnType<CommonChannelModule['createSafeOperationHandler']>
   ): void {
     this.transportDisposers.push(
-      transport.on(dialogOpenFileEvent, async (payload) => {
-        const win = BrowserWindow.getFocusedWindow()
-        if (!win) return { filePaths: [] }
-
-        const properties: Electron.OpenDialogOptions['properties'] = ['openFile']
-        if (payload?.properties?.includes('openDirectory')) {
-          properties.push('openDirectory')
-        }
-
-        const result = await dialog.showOpenDialog(win, {
-          title: payload?.title ?? 'Open File',
-          filters: payload?.filters,
-          properties
-        })
-
-        const filePaths = result.canceled ? [] : result.filePaths
-        filePaths.forEach(recordDialogPath)
-        return { filePaths }
-      }),
       transport.on(dialogSaveFileEvent, async (payload) => {
         const win = BrowserWindow.getFocusedWindow()
         if (!win) return { filePath: undefined }

@@ -2,5 +2,6 @@
 
 ## Items
 - [Manifest reference](./manifest.en.md)
+- [Core App startup and runtime env](./runtime-startup-env.en.md)
 - [Examples](./examples.en.md)
 - [Code snippets](./snippets.en.md)

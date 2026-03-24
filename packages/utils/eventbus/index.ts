@@ -76,4 +76,23 @@ export interface ITouchEventBus<E> {
    * @param data Event data (extends from TouchEvent)
    */
   emit: <T extends ITouchEvent<E>>(event: E, data: T) => void
+
+  /**
+   * Emit touch-app events and await async handlers.
+   * Handlers are executed in registration order.
+   *
+   * @param event EventName (extends from TouchEvent)
+   * @param data Event data (extends from TouchEvent)
+   */
+  emitAsync: <T extends ITouchEvent<E>>(event: E, data: T) => Promise<void>
+
+  /**
+   * Runtime diagnostics snapshot for the event bus.
+   */
+  getDiagnostics?: () => {
+    totalHandlers: number
+    totalEvents: number
+    onceConsumedCount: number
+    handlersByEvent: Array<{ event: string, handlers: number }>
+  }
 }

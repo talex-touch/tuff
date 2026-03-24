@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 import { readFile } from 'node:fs/promises'
 import { env, exit } from 'node:process'
+import { createGitHubClient } from './lib/github-client.mjs'
+import {
+  normalizeOpenAiBaseUrl,
+  normalizeOpenAiCompletionsPath,
+  requestChatCompletion,
+} from './lib/openai-chat.mjs'
 
 const eventPath = process.argv[2]
 if (!eventPath) {
@@ -59,9 +65,9 @@ if (!openaiKey) {
 }
 
 const baseUrlRaw = env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
-const openaiBaseUrl = baseUrlRaw.replace(/\/$/, '')
+const openaiBaseUrl = normalizeOpenAiBaseUrl(baseUrlRaw)
 const completionsPathRaw = env.OPENAI_COMPLETIONS_PATH || '/chat/completions'
-const completionsPath = completionsPathRaw.startsWith('/') ? completionsPathRaw : `/${completionsPathRaw}`
+const completionsPath = normalizeOpenAiCompletionsPath(completionsPathRaw)
 const model = env.AI_REVIEW_MODEL || 'gpt-4o-mini'
 const temperature = Number.parseFloat(env.AI_REVIEW_TEMPERATURE ?? '0.2')
 const maxTokens = env.AI_REVIEW_MAX_OUTPUT_TOKENS ? Number.parseInt(env.AI_REVIEW_MAX_OUTPUT_TOKENS, 10) : undefined
@@ -79,71 +85,14 @@ function sanitize(input) {
 
 const sanitizedBody = sanitize(prBody)
 
-async function githubRequest(endpoint, init = {}) {
-  const url = new URL(endpoint, 'https://api.github.com')
-  const headers = {
-    'Authorization': `token ${githubToken}`,
-    'Accept': 'application/vnd.github+json',
-    'User-Agent': 'tuff-ai-review-bot',
-    ...(init.headers ?? {}),
-  }
+const github = createGitHubClient({
+  token: githubToken,
+  userAgent: 'tuff-ai-review-bot',
+})
 
-  if (init.body && !headers['Content-Type']) {
-    headers['Content-Type'] = 'application/json'
-  }
-
-  const response = await fetch(url, {
-    ...init,
-    headers,
-  })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`GitHub API request failed (${response.status}): ${text}`)
-  }
-
-  return response
-}
-
-async function listPullRequestFiles() {
-  const files = []
-  let page = 1
-
-  while (true) {
-    const response = await githubRequest(`/repos/${owner}/${repo}/pulls/${pr.number}/files?per_page=100&page=${page}`)
-    const chunk = await response.json()
-    files.push(...chunk)
-
-    if (chunk.length < 100) {
-      break
-    }
-
-    page += 1
-  }
-
-  return files
-}
-
-async function listIssueComments() {
-  const comments = []
-  let page = 1
-
-  while (true) {
-    const response = await githubRequest(`/repos/${owner}/${repo}/issues/${pr.number}/comments?per_page=100&page=${page}`)
-    const chunk = await response.json()
-    comments.push(...chunk)
-
-    if (chunk.length < 100) {
-      break
-    }
-
-    page += 1
-  }
-
-  return comments
-}
-
-const files = await listPullRequestFiles()
+const files = await github.listPaginatedJson(
+  (page, perPage) => `/repos/${owner}/${repo}/pulls/${pr.number}/files?per_page=${perPage}&page=${page}`,
+)
 
 const diffSummary = files.map((file) => {
   const meta = []
@@ -233,60 +182,45 @@ promptParts.push('\n请输出：\n1. 关键变更摘要\n2. 需要特别注意�
 const prompt = promptParts.join('\n')
 
 async function requestAiReview() {
-  const response = await fetch(`${openaiBaseUrl}${completionsPath}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${openaiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      temperature,
-      messages: [
-        {
-          role: 'system',
-          content: '你是一名严谨的高级软件工程师，擅长代码评审与风险分析。请在提供建议时保持专业、简洁。',
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      ...(Number.isFinite(maxTokens) ? { max_tokens: maxTokens } : {}),
-    }),
+  return requestChatCompletion({
+    apiKey: openaiKey,
+    baseUrl: openaiBaseUrl,
+    completionsPath,
+    model,
+    temperature,
+    maxTokens,
+    messages: [
+      {
+        role: 'system',
+        content: '你是一名严谨的高级软件工程师，擅长代码评审与风险分析。请在提供建议时保持专业、简洁。',
+      },
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
+    errorPrefix: 'AI provider request failed',
   })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`AI provider request failed (${response.status}): ${errorText}`)
-  }
-
-  const payload = await response.json()
-  const message = payload?.choices?.[0]?.message?.content?.trim()
-
-  if (!message) {
-    throw new Error('AI provider returned an empty response.')
-  }
-
-  return message
 }
 
 const aiResult = await requestAiReview()
 
-const comments = await listIssueComments()
+const comments = await github.listPaginatedJson(
+  (page, perPage) => `/repos/${owner}/${repo}/issues/${pr.number}/comments?per_page=${perPage}&page=${page}`,
+)
 const existing = comments.find(comment => comment.user?.login === 'github-actions[bot]' && comment.body?.includes('### 🤖 AI 评审结果'))
 
 const commentBody = `### 🤖 AI 评审结果\n\n${aiResult}\n\n---\n_模型：${model} · 由自动化脚本生成_`
 
 if (existing) {
-  await githubRequest(`/repos/${owner}/${repo}/issues/comments/${existing.id}`, {
+  await github.request(`/repos/${owner}/${repo}/issues/comments/${existing.id}`, {
     method: 'PATCH',
     body: JSON.stringify({ body: commentBody }),
   })
   console.log('Updated existing AI review comment.')
 }
 else {
-  await githubRequest(`/repos/${owner}/${repo}/issues/${pr.number}/comments`, {
+  await github.request(`/repos/${owner}/${repo}/issues/${pr.number}/comments`, {
     method: 'POST',
     body: JSON.stringify({ body: commentBody }),
   })

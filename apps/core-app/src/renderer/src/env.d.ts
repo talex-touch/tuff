@@ -14,13 +14,6 @@ declare module 'talex-touch:information' {
 }
 
 declare global {
-  interface LegacyRendererChannelLike {
-    regChannel: (eventName: string, callback: (data: unknown) => unknown) => () => void
-    unRegChannel: (eventName: string, callback: (data: unknown) => unknown) => boolean
-    send: (eventName: string, arg?: unknown) => Promise<unknown>
-    sendSync: (eventName: string, arg?: unknown) => unknown
-  }
-
   export interface StartupPaths {
     appDataPath: string
     appPath: string
@@ -55,7 +48,6 @@ declare global {
 
   export interface Window {
     $argMapper: import('@talex-touch/utils/electron').IArgMapperOptions
-    $channel: LegacyRendererChannelLike
     __VUE_ROUTER__?: import('vue-router').Router
     __devAuthToken?: (token: string) => void
     $startupInfo: IStartupInfo

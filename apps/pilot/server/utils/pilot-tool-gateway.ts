@@ -687,6 +687,22 @@ function resolveFallbackUnavailableReason(error: unknown): string {
   return 'fallback_execution_failed'
 }
 
+function shouldTreatWebsearchFailureAsRecoverableSkip(input: {
+  code: string
+  connectorReason: string
+}): boolean {
+  const normalizedCode = normalizeText(input.code).toUpperCase()
+  const normalizedReason = normalizeText(input.connectorReason).toLowerCase()
+  if (normalizedReason === 'fallback_unsupported_channel' || normalizedReason === 'fallback_endpoint_missing') {
+    return true
+  }
+  if (normalizedCode === 'WEBSEARCH_FALLBACK_UNSUPPORTED_CHANNEL' || normalizedCode === 'WEBSEARCH_FALLBACK_ENDPOINT_MISSING') {
+    return true
+  }
+  return normalizedCode === 'WEBSEARCH_DATASOURCE_UNAVAILABLE'
+    && (normalizedReason === 'fallback_unsupported_channel' || normalizedReason === 'fallback_endpoint_missing')
+}
+
 async function emitToolAudit(
   emitAudit:
     | ExecutePilotWebsearchToolInput['emitAudit']
@@ -1361,6 +1377,32 @@ export async function executePilotWebsearchTool(
     const durationMs = Math.max(0, Date.now() - startedAt)
     const message = error instanceof Error ? error.message : normalizeText(error)
     const code = normalizeText((error as Record<string, unknown>)?.code).toUpperCase() || 'WEBSEARCH_TOOL_FAILED'
+    if (shouldTreatWebsearchFailureAsRecoverableSkip({
+      code,
+      connectorReason,
+    })) {
+      await emitToolAudit(input.emitAudit, {
+        auditType: 'tool.call.completed',
+        ...toolBase,
+        riskLevel: currentRisk,
+        status: 'skipped',
+        inputPreview,
+        outputPreview: '',
+        durationMs,
+        ticketId,
+        sources: [],
+        errorCode: '',
+        errorMessage: '',
+        connectorSource,
+        connectorReason,
+        providerChain,
+        providerUsed,
+        fallbackUsed,
+        dedupeCount,
+      })
+      return null
+    }
+
     await emitToolAudit(input.emitAudit, {
       auditType: 'tool.call.failed',
       ...toolBase,

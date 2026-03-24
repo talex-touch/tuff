@@ -210,6 +210,32 @@ export interface ReadFileRequest {
   timeoutMs?: number
 }
 
+/**
+ * Request payload for querying active foreground application snapshot.
+ */
+export interface GetActiveAppRequest {
+  /**
+   * When true, bypasses runtime cache and forces a fresh system query.
+   */
+  forceRefresh?: boolean
+}
+
+/**
+ * Active foreground application snapshot.
+ */
+export interface ActiveAppSnapshot {
+  identifier: string | null
+  displayName: string | null
+  bundleId: string | null
+  processId: number | null
+  executablePath: string | null
+  platform: 'macos' | 'windows' | 'linux' | null
+  windowTitle: string | null
+  url?: string | null
+  icon?: string | null
+  lastUpdated: number
+}
+
 export type AutoStartGetResponse = boolean
 
 export type AutoStartUpdateRequest = boolean

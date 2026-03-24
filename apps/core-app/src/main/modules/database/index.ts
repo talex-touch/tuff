@@ -7,19 +7,39 @@ import { createClient } from '@libsql/client'
 import { createTiming } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import chalk from 'chalk'
+import { eq } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import { migrate } from 'drizzle-orm/libsql/migrator'
 import { app, BrowserWindow, dialog } from 'electron'
 import fse from 'fs-extra'
 import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
 import * as schema from '../../db/schema'
+import { DB_AUX_ENABLED } from '../../db/runtime-flags'
 import { BaseModule } from '../abstract-base-module'
 
 const dbLog = getLogger('database')
+const AUX_MIGRATION_MARKER_KEY = 'db.aux.migration.v1.complete'
+const AUX_COPY_TABLES = [
+  'analytics_snapshots',
+  'plugin_analytics',
+  'analytics_report_queue',
+  'telemetry_upload_stats',
+  'recommendation_cache',
+  'clipboard_history',
+  'clipboard_history_meta',
+  'ocr_jobs',
+  'ocr_results',
+  'config'
+] as const
 
 export class DatabaseModule extends BaseModule {
   private db: LibSQLDatabase<typeof schema> | null = null
   private client: Client | null = null
+  private auxDb: LibSQLDatabase<typeof schema> | null = null
+  private auxClient: Client | null = null
+  private auxInitialized = false
+  private mainDbPath = ''
+  private auxDbPath = ''
 
   static key: symbol = Symbol.for('Database')
   name: ModuleKey = DatabaseModule.key
@@ -33,6 +53,25 @@ export class DatabaseModule extends BaseModule {
 
   public getClient(): Client | null {
     return this.client
+  }
+
+  public getAuxClient(): Client | null {
+    return this.auxClient
+  }
+
+  public isAuxEnabled(): boolean {
+    return DB_AUX_ENABLED
+  }
+
+  public isAuxReady(): boolean {
+    return this.auxInitialized && !!this.auxDb
+  }
+
+  public getAuxDb(): LibSQLDatabase<typeof schema> {
+    if (this.auxDb) {
+      return this.auxDb
+    }
+    return this.getDb()
   }
 
   private async showDatabaseErrorDialog(error: Error, details?: string): Promise<void> {
@@ -126,21 +165,259 @@ export class DatabaseModule extends BaseModule {
     }
   }
 
+  private async configureSqliteClient(client: Client, label: 'primary' | 'aux'): Promise<void> {
+    await client.execute('PRAGMA journal_mode = WAL')
+    await client.execute('PRAGMA busy_timeout = 30000')
+    await client.execute('PRAGMA synchronous = NORMAL')
+    await client.execute('PRAGMA locking_mode = NORMAL')
+    await client.execute('PRAGMA mmap_size = 268435456')
+    dbLog.info(`SQLite ${label} configured: WAL mode enabled, busy_timeout=30s`)
+  }
+
+  private escapeSqlPath(filePath: string): string {
+    return filePath.replace(/'/g, "''")
+  }
+
+  private parseCount(raw: unknown): number {
+    if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+    if (typeof raw === 'bigint') return Number(raw)
+    if (typeof raw === 'string') {
+      const parsed = Number.parseInt(raw, 10)
+      if (Number.isFinite(parsed)) return parsed
+    }
+    return 0
+  }
+
+  private async getTableCount(client: Client, tableName: string): Promise<number> {
+    const rs = await client.execute(`SELECT count(*) as cnt FROM ${tableName}`)
+    const first = (rs.rows?.[0] ?? null) as Record<string, unknown> | null
+    if (!first) return 0
+    return this.parseCount(first.cnt ?? first['count(*)'])
+  }
+
+  private async hasAuxMigrationMarker(): Promise<boolean> {
+    if (!this.db) return false
+    try {
+      const row = await this.db
+        .select({ value: schema.config.value })
+        .from(schema.config)
+        .where(eq(schema.config.key, AUX_MIGRATION_MARKER_KEY))
+        .get()
+      return !!row
+    } catch {
+      return false
+    }
+  }
+
+  private async markAuxMigrationCompleted(): Promise<void> {
+    if (!this.db) return
+    await this.db
+      .insert(schema.config)
+      .values({
+        key: AUX_MIGRATION_MARKER_KEY,
+        value: JSON.stringify({
+          migratedAt: Date.now(),
+          auxDbPath: this.auxDbPath
+        })
+      })
+      .onConflictDoUpdate({
+        target: schema.config.key,
+        set: {
+          value: JSON.stringify({
+            migratedAt: Date.now(),
+            auxDbPath: this.auxDbPath
+          })
+        }
+      })
+  }
+
+  private async ensureAuxTables(): Promise<void> {
+    if (!this.auxClient) return
+
+    const statements = [
+      `CREATE TABLE IF NOT EXISTS analytics_snapshots (
+        id integer PRIMARY KEY AUTOINCREMENT,
+        window_type text NOT NULL,
+        timestamp integer NOT NULL,
+        metrics text NOT NULL,
+        created_at integer DEFAULT (unixepoch())
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_analytics_snapshots_window_time ON analytics_snapshots (window_type, timestamp)',
+      `CREATE TABLE IF NOT EXISTS plugin_analytics (
+        id integer PRIMARY KEY AUTOINCREMENT,
+        plugin_name text NOT NULL,
+        plugin_version text,
+        feature_id text,
+        event_type text NOT NULL,
+        count integer DEFAULT 1,
+        metadata text,
+        timestamp integer NOT NULL
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_plugin_analytics_plugin_time ON plugin_analytics (plugin_name, timestamp)',
+      'CREATE INDEX IF NOT EXISTS idx_plugin_analytics_plugin_version_time ON plugin_analytics (plugin_name, plugin_version, timestamp)',
+      `CREATE TABLE IF NOT EXISTS analytics_report_queue (
+        id integer PRIMARY KEY AUTOINCREMENT,
+        endpoint text NOT NULL,
+        payload text NOT NULL,
+        created_at integer NOT NULL,
+        retry_count integer NOT NULL DEFAULT 0,
+        last_attempt_at integer,
+        last_error text
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_analytics_report_queue_created_at ON analytics_report_queue (created_at)',
+      `CREATE TABLE IF NOT EXISTS telemetry_upload_stats (
+        id integer PRIMARY KEY,
+        search_count integer NOT NULL DEFAULT 0,
+        total_uploads integer NOT NULL DEFAULT 0,
+        failed_uploads integer NOT NULL DEFAULT 0,
+        last_upload_time integer,
+        last_failure_at integer,
+        last_failure_message text,
+        updated_at integer NOT NULL DEFAULT 0
+      )`,
+      `CREATE TABLE IF NOT EXISTS recommendation_cache (
+        cache_key text PRIMARY KEY NOT NULL,
+        recommended_items text NOT NULL,
+        created_at integer DEFAULT (strftime('%s', 'now')) NOT NULL,
+        expires_at integer NOT NULL
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_recommendation_cache_expires ON recommendation_cache (expires_at)',
+      `CREATE TABLE IF NOT EXISTS clipboard_history (
+        id integer PRIMARY KEY AUTOINCREMENT,
+        type text NOT NULL,
+        content text NOT NULL,
+        raw_content text,
+        thumbnail text,
+        timestamp integer NOT NULL,
+        source_app text,
+        is_favorite integer DEFAULT 0,
+        metadata text
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_clipboard_history_timestamp ON clipboard_history (timestamp)',
+      `CREATE TABLE IF NOT EXISTS clipboard_history_meta (
+        id integer PRIMARY KEY AUTOINCREMENT,
+        clipboard_id integer NOT NULL REFERENCES clipboard_history(id) ON DELETE cascade,
+        key text NOT NULL,
+        value text,
+        created_at integer DEFAULT (strftime('%s', 'now')) NOT NULL
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_clipboard_history_meta_clipboard_id ON clipboard_history_meta (clipboard_id)',
+      `CREATE TABLE IF NOT EXISTS ocr_jobs (
+        id integer PRIMARY KEY AUTOINCREMENT,
+        clipboard_id integer REFERENCES clipboard_history(id) ON DELETE cascade,
+        status text NOT NULL DEFAULT 'pending',
+        priority integer NOT NULL DEFAULT 0,
+        attempts integer NOT NULL DEFAULT 0,
+        last_error text,
+        next_retry_at integer,
+        payload_hash text,
+        meta text,
+        queued_at integer DEFAULT (strftime('%s', 'now')) NOT NULL,
+        started_at integer,
+        finished_at integer
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_ocr_jobs_status_retry ON ocr_jobs (status, next_retry_at, priority)',
+      `CREATE TABLE IF NOT EXISTS ocr_results (
+        id integer PRIMARY KEY AUTOINCREMENT,
+        job_id integer NOT NULL REFERENCES ocr_jobs(id) ON DELETE cascade,
+        text text NOT NULL,
+        confidence real,
+        language text,
+        checksum text,
+        extra text,
+        created_at integer DEFAULT (strftime('%s', 'now')) NOT NULL
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_ocr_results_job_id ON ocr_results (job_id)',
+      `CREATE TABLE IF NOT EXISTS config (
+        key text PRIMARY KEY,
+        value text
+      )`
+    ]
+
+    for (const statement of statements) {
+      await this.auxClient.execute(statement)
+    }
+  }
+
+  private async migrateHotTablesToAux(): Promise<void> {
+    if (!this.auxClient || !this.db || !this.mainDbPath) return
+
+    const marked = await this.hasAuxMigrationMarker()
+    if (marked) {
+      dbLog.info('Aux hot tables migration marker detected; skipping data copy')
+      return
+    }
+
+    const escapedMainPath = this.escapeSqlPath(this.mainDbPath)
+    await this.auxClient.execute(`ATTACH DATABASE '${escapedMainPath}' AS coredb`)
+    try {
+      for (const table of AUX_COPY_TABLES) {
+        await this.auxClient.execute(`INSERT OR IGNORE INTO ${table} SELECT * FROM coredb.${table}`)
+        const [sourceCount, targetCount] = await Promise.all([
+          this.getTableCount(this.auxClient, `coredb.${table}`),
+          this.getTableCount(this.auxClient, table)
+        ])
+        if (targetCount < sourceCount) {
+          dbLog.warn(`Aux migration verification mismatch for ${table}`, {
+            meta: { sourceCount, targetCount }
+          })
+        }
+      }
+      await this.markAuxMigrationCompleted()
+      dbLog.info('Aux hot tables migration completed', {
+        meta: { tables: AUX_COPY_TABLES.length }
+      })
+    } finally {
+      try {
+        await this.auxClient.execute('DETACH DATABASE coredb')
+      } catch (error) {
+        dbLog.warn('Failed to detach coredb after aux migration', { error })
+      }
+    }
+  }
+
+  private async initAuxDatabase(databaseDirPath: string): Promise<void> {
+    if (!DB_AUX_ENABLED) {
+      dbLog.info('Aux database disabled by TUFF_DB_AUX_ENABLED')
+      return
+    }
+
+    try {
+      this.auxDbPath = path.join(databaseDirPath, 'database-aux.db')
+      this.auxClient = createClient({ url: `file:${this.auxDbPath}` })
+      await this.configureSqliteClient(this.auxClient, 'aux')
+      this.auxDb = drizzle(this.auxClient, { schema })
+      await this.ensureAuxTables()
+      await this.migrateHotTablesToAux()
+      this.auxInitialized = true
+      dbLog.info('Aux database initialized', {
+        meta: { path: this.auxDbPath }
+      })
+    } catch (error) {
+      dbLog.warn('Aux database initialization failed; fallback to primary DB', { error })
+      this.auxInitialized = false
+      this.auxDb = null
+      try {
+        this.auxClient?.close()
+      } catch {
+        // ignore
+      }
+      this.auxClient = null
+      this.auxDbPath = ''
+    }
+  }
+
   async onInit({ file }: ModuleInitContext<TalexEvents>): Promise<void> {
     const { dirPath } = file
     const dbPath = path.join(dirPath!, 'database.db')
+    this.mainDbPath = dbPath
     this.client = createClient({ url: `file:${dbPath}` })
 
     this.db = drizzle(this.client, { schema })
 
     // Configure SQLite for better concurrency
     try {
-      await this.client.execute('PRAGMA journal_mode = WAL')
-      await this.client.execute('PRAGMA busy_timeout = 30000')
-      await this.client.execute('PRAGMA synchronous = NORMAL')
-      await this.client.execute('PRAGMA locking_mode = NORMAL')
-      await this.client.execute('PRAGMA mmap_size = 268435456')
-      dbLog.info('SQLite configured: WAL mode enabled, busy_timeout=30s')
+      await this.configureSqliteClient(this.client, 'primary')
     } catch (error) {
       dbLog.warn('Failed to configure SQLite pragmas', { error })
     }
@@ -247,21 +524,23 @@ export class DatabaseModule extends BaseModule {
       const duplicateColumn = message.includes('duplicate column name: provider_id')
 
       if (duplicateColumn) {
-        dbLog.warn('Migration skipped: column `provider_id` already exists')
-        return
+        dbLog.warn('Migration warning: column `provider_id` already exists')
+      } else {
+        dbLog.error('Migration failed', { error })
+
+        const errorMessage =
+          error instanceof Error ? error.message : String(error ?? 'Unknown error')
+        const errorInstance = error instanceof Error ? error : new Error(errorMessage)
+        await this.showDatabaseErrorDialog(
+          errorInstance,
+          `Database migration failed:\n${errorMessage}\n\nCheck log files for more information.\nLog location: ${app.getPath('userData')}/tuff/logs/`
+        )
+
+        process.exit(1)
       }
-
-      dbLog.error('Migration failed', { error })
-
-      const errorMessage = error instanceof Error ? error.message : String(error ?? 'Unknown error')
-      const errorInstance = error instanceof Error ? error : new Error(errorMessage)
-      await this.showDatabaseErrorDialog(
-        errorInstance,
-        `Database migration failed:\n${errorMessage}\n\nCheck log files for more information.\nLog location: ${app.getPath('userData')}/tuff/logs/`
-      )
-
-      process.exit(1)
     }
+
+    await this.initAuxDatabase(dirPath!)
   }
 
   private async ensureKeywordMappingsProviderColumn(): Promise<void> {
@@ -382,7 +661,10 @@ export class DatabaseModule extends BaseModule {
 
   onDestroy(): MaybePromise<void> {
     this.client?.close()
+    this.auxClient?.close()
     this.db = null
+    this.auxDb = null
+    this.auxInitialized = false
     dbLog.info('DatabaseManager destroyed')
   }
 

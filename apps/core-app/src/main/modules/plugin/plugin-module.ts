@@ -27,7 +27,6 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { generatePermissionIssue, parseManifestPermissions } from '@talex-touch/utils/permission'
 import { PluginStatus, SdkApi } from '@talex-touch/utils/plugin'
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
   CoreBoxEvents,
@@ -72,6 +71,8 @@ import { createPluginLoader } from './plugin-loaders'
 import { LocalPluginProvider } from './providers/local-provider'
 import { usePluginInjections } from './runtime/plugin-injections'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
+import { resolvePluginModuleIoRuntime } from './services/plugin-io-service'
+import { buildPluginManagerRuntime } from './services/plugin-manager-orchestrator'
 
 const pluginLog = getLogger('plugin-system')
 const pluginModuleLog = createLogger('PluginSystem')
@@ -138,14 +139,29 @@ async function precompilePluginWidgets(plugin: TouchPlugin): Promise<void> {
     try {
       const result = await widgetManager.registerWidget(plugin, feature)
       if (!result) {
-        plugin.logger.warn(
-          `[Widget] Failed to compile widget for feature "${feature.id}" (${feature.interaction?.path})`
+        plugin.issues.push({
+          type: 'warning',
+          message: `Widget compile skipped for feature "${feature.id}" (${feature.interaction?.path ?? 'unknown'})`,
+          source: `feature:${feature.id}`,
+          code: 'WIDGET_COMPILE_SKIPPED',
+          suggestion: 'Check widget interaction.path and widget source file.',
+          timestamp: Date.now()
+        })
+        plugin.logger.debug(
+          `[Widget] Compile skipped for feature "${feature.id}" (${feature.interaction?.path})`
         )
       }
     } catch (error) {
-      plugin.logger.warn(
-        `[Widget] Failed to compile widget for feature "${feature.id}"`,
-        error as Error
+      plugin.issues.push({
+        type: 'warning',
+        message: `Widget compile failed for feature "${feature.id}": ${(error as Error).message}`,
+        source: `feature:${feature.id}`,
+        code: 'WIDGET_COMPILE_FAILED',
+        suggestion: 'Check widget source syntax and dependencies.',
+        timestamp: Date.now()
+      })
+      plugin.logger.debug(
+        `[Widget] Compile failed for feature "${feature.id}" (${(error as Error).message})`
       )
     }
   }
@@ -175,9 +191,24 @@ async function warnUnusedWidgets(plugin: TouchPlugin): Promise<void> {
     const displayPaths = unused.map((filePath) =>
       path.relative(widgetsDir, filePath).split(path.sep).join('/')
     )
-    plugin.logger.warn(`[Widget] Unused widget files: ${displayPaths.join(', ')}`)
+    plugin.issues.push({
+      type: 'warning',
+      message: `Unused widget files: ${displayPaths.join(', ')}`,
+      source: 'widgets',
+      code: 'WIDGET_UNUSED_FILES',
+      suggestion: 'Remove unused files or reference them in manifest feature interaction.path.',
+      timestamp: Date.now()
+    })
+    plugin.logger.debug(`[Widget] Unused widget files tracked as issue: ${displayPaths.join(', ')}`)
   } catch (error) {
-    plugin.logger.warn('[Widget] Failed to scan widgets directory', error as Error)
+    plugin.issues.push({
+      type: 'warning',
+      message: `Failed to scan widgets directory: ${(error as Error).message}`,
+      source: 'widgets',
+      code: 'WIDGET_SCAN_FAILED',
+      timestamp: Date.now()
+    })
+    plugin.logger.debug(`[Widget] Failed to scan widgets directory: ${(error as Error).message}`)
   }
 }
 
@@ -1711,34 +1742,24 @@ export class PluginModule extends BaseModule {
     })
   }
 
-  onInit({ file, app }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
-    const channel =
-      (app as { channel?: unknown } | null | undefined)?.channel ??
-      ($app as { channel?: unknown } | null | undefined)?.channel
-    if (!channel) {
-      throw new Error('[PluginModule] TouchChannel not available on app context')
-    }
-    const mainWindowId = (app as { window?: { window?: { id?: unknown } } } | null | undefined)
-      ?.window?.window?.id
-    if (typeof mainWindowId !== 'number') {
-      throw new TypeError('[PluginModule] Main window id is not available')
-    }
+  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
+    const { file } = ctx
+    const ioRuntime = resolvePluginModuleIoRuntime(ctx)
+    this.transport = ioRuntime.transport
+    TouchPlugin.setTransport(ioRuntime.transport)
 
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    this.transport = getTuffTransportMain(channel, keyManager)
+    const pluginRuntime = buildPluginManagerRuntime({
+      pluginRootDir: file.dirPath!,
+      transport: ioRuntime.transport,
+      channel: ioRuntime.channel,
+      mainWindowId: ioRuntime.mainWindowId,
+      createManager: createPluginModuleInternal,
+      createHealthMonitor: (manager) => new DevServerHealthMonitor(manager)
+    })
 
-    TouchPlugin.setTransport(this.transport)
-
-    this.pluginManager = createPluginModuleInternal(
-      file.dirPath!,
-      this.transport,
-      channel as PluginLifecycleChannel,
-      mainWindowId
-    )
-    this.installQueue = (this.pluginManager as IPluginManagerWithInternals).__installQueue
-    this.healthMonitor = new DevServerHealthMonitor(this.pluginManager)
-    this.pluginManager.healthMonitor = this.healthMonitor
+    this.pluginManager = pluginRuntime.pluginManager
+    this.installQueue = pluginRuntime.installQueue
+    this.healthMonitor = pluginRuntime.healthMonitor
 
     // Listen for permission granted events to retry enabling plugins
     touchEventBus.on(TalexEvents.PERMISSION_GRANTED, (event) => {

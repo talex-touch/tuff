@@ -112,7 +112,7 @@ export class WidgetTsxProcessor implements IWidgetProcessor {
         })
       })
 
-      plugin.logger.error(
+      plugin.logger.debug(
         `[WidgetTsxProcessor] Dependency validation failed for widget "${source.widgetId}":`,
         validation.errors
       )
@@ -150,7 +150,7 @@ module.exports = __component
         dependencies: validation.allowedImports
       }
     } catch (error) {
-      plugin.logger.error(
+      plugin.logger.debug(
         `[WidgetTsxProcessor] Compilation failed for widget "${source.widgetId}":`,
         error as Error
       )

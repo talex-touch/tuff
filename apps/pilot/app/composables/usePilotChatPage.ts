@@ -15,6 +15,7 @@ import type {
   SessionTraceResponse,
   StreamEvent,
 } from './pilot-chat.types'
+import { buildPilotSystemMessageId, derivePilotToolCallsFromSystemMessages, projectPilotSystemMessage } from '../../shared/pilot-system-message'
 import { networkClient } from '@talex-touch/utils/network'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
@@ -241,6 +242,29 @@ export function usePilotChatPage() {
     return text === 'TOOL_APPROVAL_REQUIRED' || text.includes('TOOL_APPROVAL_REQUIRED')
   }
 
+  function normalizeWebsearchReason(value: unknown, phase: 'decision' | 'skipped' | 'executed'): string {
+    const reason = String(value || '').trim()
+    if (!reason) {
+      return ''
+    }
+    if (reason === 'intent_required') {
+      return '意图判定需要联网'
+    }
+    if (reason === 'intent_not_required') {
+      return '意图判定无需联网'
+    }
+    if (reason === 'fallback_unsupported_channel' || reason === 'fallback_endpoint_missing') {
+      return '当前通道不支持联网检索，已继续离线回答'
+    }
+    if (reason === 'tool_failed_or_empty_result') {
+      return '未获取到可用外部来源，已继续回答'
+    }
+    if (reason === 'terminal_finalize' && phase === 'skipped') {
+      return '执行结束，未触发联网检索'
+    }
+    return reason
+  }
+
   function buildStageItems(): PilotStageItem[] {
     const intentStatus: PilotStageItem['status'] = intentState.value.phase === 'running'
       ? 'running'
@@ -444,7 +468,8 @@ export function usePilotChatPage() {
   }
 
   const chatListMessages = computed<ChatMessageModel[]>(() => {
-    return messages.value.map((item) => {
+    const visibleMessages = messages.value.filter(item => item.role === 'user' || item.role === 'assistant')
+    return visibleMessages.map((item) => {
       const stamp = Date.parse(item.createdAt)
       const messageAttachments = getMessageAttachments(item)
       const baseContent = String(item.content || '')
@@ -727,6 +752,57 @@ export function usePilotChatPage() {
     lastSeq.value = Math.max(lastSeq.value, seq)
   }
 
+  function upsertSystemMessageFromStreamEvent(input: {
+    sessionId: string
+    eventType: string
+    seq: number
+    payload: Record<string, unknown>
+    detail?: Record<string, unknown>
+    message?: string
+    delta?: string
+    replay?: boolean
+  }) {
+    if (input.replay) {
+      return
+    }
+    if (!Number.isFinite(input.seq) || input.seq <= 0) {
+      return
+    }
+    const projected = projectPilotSystemMessage({
+      type: input.eventType,
+      seq: input.seq,
+      payload: input.payload,
+      detail: input.detail,
+      message: input.message,
+      delta: input.delta,
+    })
+    if (!projected) {
+      return
+    }
+
+    const messageId = buildPilotSystemMessageId(
+      input.sessionId,
+      input.seq,
+      projected.metadata.sourceEventType,
+    )
+    const existing = messages.value.find(item => item.id === messageId)
+    if (existing) {
+      existing.content = projected.content
+      existing.metadata = projected.metadata as unknown as Record<string, unknown>
+      syncToolCallList()
+      return
+    }
+
+    messages.value.push({
+      id: messageId,
+      role: 'system',
+      content: projected.content,
+      createdAt: new Date().toISOString(),
+      metadata: projected.metadata as unknown as Record<string, unknown>,
+    })
+    syncToolCallList()
+  }
+
   function normalizeToolRiskLevel(value: unknown): PilotToolCall['riskLevel'] {
     const risk = String(value || '').trim().toLowerCase()
     if (risk === 'critical') {
@@ -770,6 +846,25 @@ export function usePilotChatPage() {
   }
 
   function syncToolCallList() {
+    const latestUserCreatedAt = [...messages.value]
+      .reverse()
+      .find(item => item.role === 'user')
+      ?.createdAt
+    const latestUserStamp = Date.parse(String(latestUserCreatedAt || ''))
+    const scopedMessages = Number.isFinite(latestUserStamp)
+      ? messages.value.filter((item) => {
+          if (item.role !== 'system') {
+            return true
+          }
+          const stamp = Date.parse(String(item.createdAt || ''))
+          return Number.isFinite(stamp) && stamp >= latestUserStamp
+        })
+      : messages.value
+    const fromSystemMessages = derivePilotToolCallsFromSystemMessages(scopedMessages, 20)
+    if (fromSystemMessages.length > 0) {
+      toolCalls.value = fromSystemMessages
+      return
+    }
     toolCalls.value = Array.from(toolCallMap.values())
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
       .slice(0, 20)
@@ -1018,7 +1113,7 @@ export function usePilotChatPage() {
       websearchState.value = {
         phase: 'decided',
         enabled: typeof payload.enabled === 'boolean' ? payload.enabled : null,
-        reason: String(payload.reason || '').trim(),
+        reason: normalizeWebsearchReason(payload.reason, 'decision'),
         source: '',
         sourceCount: 0,
       }
@@ -1029,7 +1124,7 @@ export function usePilotChatPage() {
       websearchState.value = {
         phase: 'executed',
         enabled: true,
-        reason: String(payload.reason || websearchState.value.reason || '').trim(),
+        reason: normalizeWebsearchReason(payload.reason || websearchState.value.reason || '', 'executed'),
         source: String(payload.source || '').trim(),
         sourceCount: Number.isFinite(Number(payload.sourceCount)) ? Math.max(0, Number(payload.sourceCount)) : 0,
       }
@@ -1040,7 +1135,7 @@ export function usePilotChatPage() {
       websearchState.value = {
         phase: 'skipped',
         enabled: false,
-        reason: String(payload.reason || websearchState.value.reason || '').trim(),
+        reason: normalizeWebsearchReason(payload.reason || websearchState.value.reason || '', 'skipped'),
         source: '',
         sourceCount: 0,
       }
@@ -1072,7 +1167,7 @@ export function usePilotChatPage() {
         websearchState.value = {
           phase: 'skipped',
           enabled: false,
-          reason: websearchState.value.reason || 'terminal_finalize',
+          reason: normalizeWebsearchReason(websearchState.value.reason || 'terminal_finalize', 'skipped'),
           source: '',
           sourceCount: 0,
         }
@@ -1092,7 +1187,7 @@ export function usePilotChatPage() {
       pendingAttachments.value = []
       activeAssistantMessageId.value = null
       toolCallMap.clear()
-      toolCalls.value = []
+      syncToolCallList()
       assistantDeltaBuffer = ''
       clearAssistantFlushTimer()
       resetRuntimeStates()
@@ -1241,10 +1336,30 @@ export function usePilotChatPage() {
       return
     }
 
+    const payloadRecord = item.payload && typeof item.payload === 'object' && !Array.isArray(item.payload)
+      ? item.payload
+      : {}
+    const detailRecord = item.detail && typeof item.detail === 'object' && !Array.isArray(item.detail)
+      ? item.detail
+      : undefined
+
     if (typeof item.seq === 'number' && Number.isFinite(item.seq)) {
       if (isActiveSessionEvent) {
         lastSeq.value = Math.max(lastSeq.value, item.seq)
       }
+    }
+
+    if (isActiveSessionEvent) {
+      upsertSystemMessageFromStreamEvent({
+        sessionId: eventSessionId,
+        eventType,
+        seq: normalizedSeq,
+        payload: payloadRecord,
+        detail: detailRecord,
+        message: String(item.message || ''),
+        delta: String(item.delta || ''),
+        replay: Boolean(item.replay),
+      })
     }
 
     if (eventType === 'turn.accepted' || eventType === 'turn.queued' || eventType === 'turn.started') {

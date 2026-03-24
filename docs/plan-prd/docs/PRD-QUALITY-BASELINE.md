@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-03-22  
+> 更新时间：2026-03-24  
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -43,15 +43,19 @@
 - 强制启用 `legacy:guard`：禁止新增 `channel.send('x:y')` 与新增 `legacy` 分支命中；新增兼容债务必须进入白名单并附退场版本（当前基线 `2.5.0`）。
 - 强制启用 `compat:registry:guard`：兼容债务清册（`docs/plan-prd/docs/compatibility-debt-registry.csv`）必须完整覆盖存量命中，缺字段/缺条目/过期未清理均失败。
 - 强制启用 `size:guard`：超长文件阈值 `>=1200` 基线冻结，禁止新增和增长；仅允许通过 `growthExceptions` 临时豁免，并要求同步 `CHANGES + compatibility registry`。
+- 强制启用统一 guard 基础库：`legacy/compat/size/network` 脚本必须复用 `scripts/lib/*` 公共扫描/版本能力，禁止重复实现目录遍历与版本比较逻辑。
+- CoreApp 硬切补充门禁：业务层 `window.$channel` 调用、legacy storage 旧协议（`storage:get/save/reload/save-sync/saveall`）与 legacy `sdkapi` 放行路径必须保持为 `0`；占位能力必须返回真实状态或显式 `unavailable + reason`，禁止固定假值“成功”。
 
 ### 3.2 可靠性约束
 - 关键路径需有显式错误处理与用户可见反馈。
 - 对异步流程必须定义超时与失败回退。
 - Pilot 路由链路必须具备可观测指标（至少含 `queue wait`、`TTFT`、`total duration`、`success/error`），并支持熔断恢复策略。
+- 启动高峰期涉及 SQLite 高频写入的链路，必须满足“单写者或物理分库隔离 + QoS 优先级 + 可降级策略（drop/backoff/latest-wins）”至少两项，禁止无上限重试灌队列。
 
 ### 3.3 性能约束
 - 为关键路径提供预算（如启动、搜索响应、任务执行耗时）。
 - 避免在主线程引入长时间同步阻塞。
+- 对启动期性能治理，必须至少输出以下指标：队列分级深度、标签等待时间、drop 数、熔断状态、`SQLITE_BUSY` 比例、event-loop lag 分布。
 
 ### 3.4 安全与数据约束
 - 遵守 Storage/Sync 规则：SQLite 本地 SoT，JSON 仅同步载荷。
@@ -228,7 +232,7 @@
 **现状指标**
 | 项目 | 结果 | 结论 |
 | --- | --- | --- |
-| 执行入口 | `/api/aigc/executor`、`/api/chat/sessions/*`（`/api/v1/chat/sessions/*` 仅保留非 stream/turns 子路由） | 已统一接入 |
+| 执行入口 | `/api/chat/sessions/*`（`/api/aigc/executor` 与 `/api/v1/chat/sessions/:sessionId/{stream,turns}` 已 hard-cut 下线） | 已统一接入 |
 | 路由策略 | `Quota Auto` 速度优先 + 探索流量 | 已落地 |
 | 评比指标 | `queueWaitMs/ttftMs/totalDurationMs/success/errorCode/finishReason` | 已落库 |
 | 熔断恢复 | 失败阈值 + 冷却 + 半开探测 | 已落地 |
@@ -238,3 +242,53 @@
 - 路由决策必须可解释：需输出 `selectionSource + selectionReason + routeComboId`。
 - 模型开关必须可控：`internet`、`thinking` 均需透传至后端执行链路。
 - 路由异常必须自动回退：LangGraph Local Server 不可用时回退 deepagent，不得阻断主对话链路。
+
+### 6.10 Core Main 生命周期止血（2026-03-23）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 启动链路 | 必需模块失败即 fail-fast，`ALL_MODULES_LOADED` 仅在全链路成功后触发 | 已收口 |
+| 退出链路 | 运行时 `process.exit(0)` 已从主退出路径移除（close/tray） | 已收口 |
+| EventBus 契约 | `once` 消费生效，`emit/emitAsync` 支持 handler 级异常隔离，新增诊断 | 已收口 |
+| IPC 稳定性 | `dialog:open-file` 重复注册收敛为单注册点 | 已收口 |
+| 回归门禁 | 定向 vitest（19 tests）+ `typecheck:node` | 已通过 |
+
+**质量约束落地**
+- 任何主进程业务退出路径不得直接 `process.exit(0)`，必须统一通过 `app.quit()` 与模块卸载流程。
+- 启动健康态必须以“模块加载 + TouchApp 初始化完成”为前置，不允许发送虚假 `ALL_MODULES_LOADED`。
+- 事件总线必须保证“单 handler 失败不影响其他 handler”与 `once` 监听器一次性语义。
+- 关停流程必须可等待（`emitAsync` + `unloadAll`），并可观测 `app-quit` 上下文下的资源清理。
+
+### 6.11 Core Main 生命周期收口与去耦首轮（2026-03-23）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 关停超时保险 | `before-quit` 新增默认 `8s` timeout guard，超时/异常后继续退出 | 已收口 |
+| 卸载观测 | `ModuleUnloadObservation` 记录 `reason/appClosing/duration/failedCount` | 已落地 |
+| 运行时上下文 | 生命周期统一注入 `ctx.runtime`（`MainRuntimeContext`） | 已落地 |
+| 全局耦合守卫 | 新增 `guard:global-app` + allowlist，阻止 `src/main/**` 新增 `$app` 直接读取 | 已落地 |
+| 结构治理首轮 | plugin/file/update 完成首轮服务拆分，外部契约保持不变 | 已落地 |
+| 回归子集 | `pnpm test:core-main` 聚合主进程关键测试 + `typecheck:node` + `guard:global-app` | 已通过 |
+
+**质量约束落地**
+- 主进程退出流程必须具备“可等待 + 可超时脱困”双保险，禁止因单个 `before-quit` handler 阻塞导致无法退出。
+- 生命周期观测必须包含可回归字段（`reason/appClosing/duration/failedCount`），用于“启停循环”稳定性对比。
+- 新模块默认通过 `ctx.runtime` 获取依赖，不得新增 `globalThis.$app` 读取点；存量兼容仅允许过渡期一次性告警。
+- 结构拆分必须保持外部 event 名称与 payload 兼容，且每次拆分补齐 direct tests，不以集成测试单点兜底。
+
+### 6.12 脚本治理去重首轮（2026-03-23）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| guard 公共库 | `scripts/lib/scan-config.mjs`、`file-scan.mjs`、`version-utils.mjs` | 已落地 |
+| 网络门禁入口 | root `check-network-boundaries.mjs` 支持 `--scope` | 已落地 |
+| CoreApp 网络门禁 | 改为复用 root 脚本，删除重复实现 | 已收口 |
+| 构建脚本拆分 | `build-target/postprocess-mac.js` 从主脚本抽离 | 已落地 |
+
+**质量约束落地**
+- 门禁脚本必须共享同一套扫描与版本比较基础能力，避免“规则一致、实现漂移”。
+- 同类质量门禁仅允许一个实现来源；workspace 侧脚本优先复用 root 实现（通过 `--scope` 等参数化）。
+- 大体量编排脚本必须按“编排层 + 平台实现层”拆分，降低单文件风险与回归成本。

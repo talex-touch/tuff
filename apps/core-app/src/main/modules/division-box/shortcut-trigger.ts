@@ -9,6 +9,8 @@ import type { DivisionBoxConfig } from '@talex-touch/utils'
 import { shortcutModule } from '../global-shortcon'
 import { DivisionBoxManager } from './manager'
 
+const DIVISION_BOX_SHORTCUT_OWNER = 'module.division-box.shortcut-trigger'
+
 /**
  * Shortcut mapping configuration
  * Maps a shortcut ID to a DivisionBox configuration
@@ -94,7 +96,8 @@ export class ShortcutTriggerManager {
     const success = shortcutModule.registerMainShortcut(
       mapping.id,
       mapping.defaultAccelerator,
-      () => this.handleTrigger(mapping.id)
+      () => this.handleTrigger(mapping.id),
+      { owner: DIVISION_BOX_SHORTCUT_OWNER }
     )
 
     if (!success) {
@@ -118,17 +121,12 @@ export class ShortcutTriggerManager {
    * @returns Success status
    */
   unregisterShortcut(id: string): boolean {
-    if (!this.mappings.has(id)) {
+    const mappingRemoved = this.mappings.delete(id)
+    const shortcutRemoved = shortcutModule.unregisterMainShortcut(id)
+    if (!mappingRemoved && !shortcutRemoved) {
       console.warn(`[ShortcutTrigger] Shortcut mapping not found: ${id}`)
       return false
     }
-
-    // Remove mapping
-    this.mappings.delete(id)
-
-    // Note: Global shortcut module doesn't provide unregister for individual shortcuts
-    // The shortcut will remain registered but won't have a mapping
-
     console.log(`[ShortcutTrigger] Unregistered shortcut: ${id}`)
     return true
   }
@@ -240,6 +238,10 @@ export class ShortcutTriggerManager {
    * Used for cleanup during shutdown or testing.
    */
   clear(): void {
+    const ids = Array.from(this.mappings.keys())
+    for (const id of ids) {
+      shortcutModule.unregisterMainShortcut(id)
+    }
     this.mappings.clear()
     console.log('[ShortcutTrigger] All shortcut mappings cleared')
   }

@@ -20,6 +20,7 @@ import {
   touchEventBus,
   WindowAllClosedEvent
 } from './eventbus/touch-event'
+import { runWithBeforeQuitTimeout } from './before-quit-guard'
 
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
@@ -36,6 +37,12 @@ function markAppQuitting(reason: string): void {
   if (!appInstance || appInstance.isQuitting === true) return
   appInstance.isQuitting = true
   mainLog.debug('Marked app quitting state', { meta: { reason } })
+}
+
+function parseBooleanEnv(value: string | undefined): boolean {
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
 }
 
 export const innerRootPath = getRootPath()
@@ -108,7 +115,12 @@ if (release().startsWith('6.1')) app.disableHardwareAcceleration()
 // Set application name for Windows 10+ notifications
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
-if (!app.requestSingleInstanceLock()) {
+const startupBenchmarkMode = parseBooleanEnv(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
+if (startupBenchmarkMode) {
+  mainLog.info('Startup benchmark mode enabled, skip single-instance lock')
+}
+
+if (!startupBenchmarkMode && !app.requestSingleInstanceLock()) {
   mainLog.warn('Secondary launch detected, quitting existing process')
 
   app.on('second-instance', (event, argv, workingDirectory, additionalData) => {
@@ -146,24 +158,59 @@ app.addListener('ready', (event, launchInfo) =>
   touchEventBus.emit(TalexEvents.APP_READY, new AppReadyEvent(event, launchInfo))
 )
 
+let beforeQuitFlowDone = false
+let beforeQuitFlowPromise: Promise<void> | null = null
+const BEFORE_QUIT_TIMEOUT_MS = 8_000
+
 app.on('before-quit', (event) => {
   markAppQuitting('before-quit')
-  touchEventBus.emit(TalexEvents.BEFORE_APP_QUIT, new BeforeAppQuitEvent(event))
-  broadcastBeforeQuit()
-  mainLog.info('App quit requested')
+  if (beforeQuitFlowDone) {
+    touchEventBus.emit(TalexEvents.WILL_QUIT, new BeforeAppQuitEvent(event))
+    return
+  }
 
-  if (!app.isPackaged) {
-    mainLog.debug('Development mode: delegating quit to DevProcessManager')
+  event.preventDefault()
+  if (beforeQuitFlowPromise) {
+    return
+  }
 
-    // Forbidden default quit behavior, let DevProcessManager handle it
-    if (!devProcessManager.isShuttingDownProcess()) {
-      event.preventDefault()
+  beforeQuitFlowPromise = (async () => {
+    try {
+      const quitEvent = new BeforeAppQuitEvent(event)
+      const beforeQuitResult = await runWithBeforeQuitTimeout(
+        () => touchEventBus.emitAsync(TalexEvents.BEFORE_APP_QUIT, quitEvent),
+        BEFORE_QUIT_TIMEOUT_MS
+      )
+      if (beforeQuitResult.timedOut) {
+        mainLog.error('before-quit handlers timed out, continue shutdown', {
+          meta: {
+            timeoutMs: BEFORE_QUIT_TIMEOUT_MS,
+            durationMs: beforeQuitResult.durationMs
+          }
+        })
+      }
+    } catch (error) {
+      mainLog.error('before-quit handlers failed, continue shutdown', { error })
+    }
+    broadcastBeforeQuit()
+    mainLog.info('App quit requested')
+
+    // Development mode: let DevProcessManager orchestrate shutdown steps.
+    if (!app.isPackaged && !devProcessManager.isShuttingDownProcess()) {
+      mainLog.debug('Development mode: delegating quit to DevProcessManager')
       devProcessManager.triggerGracefulShutdown()
       return
     }
-  }
 
-  touchEventBus.emit(TalexEvents.WILL_QUIT, new BeforeAppQuitEvent(event))
+    beforeQuitFlowDone = true
+    app.quit()
+  })()
+    .catch((error) => {
+      mainLog.error('before-quit cleanup flow failed', { error })
+    })
+    .finally(() => {
+      beforeQuitFlowPromise = null
+    })
 })
 
 function getRootPath(): string {

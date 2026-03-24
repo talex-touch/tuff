@@ -199,7 +199,9 @@ export class ContextProvider {
   private async getForegroundAppContext(): Promise<ContextSignal['foregroundApp']> {
     try {
       const { activeAppService } = await import('../../../system/active-app')
-      const activeApp = await activeAppService.getActiveApp()
+      const activeApp = await activeAppService.getActiveApp({
+        includeIcon: false
+      })
 
       if (!activeApp || !activeApp.bundleId) {
         return undefined

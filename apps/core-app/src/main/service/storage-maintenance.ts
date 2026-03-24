@@ -81,6 +81,10 @@ async function getDb(): Promise<LibSQLDatabase<typeof import('../db/schema')> | 
   return databaseModule.getDb()
 }
 
+async function getAuxDb(): Promise<LibSQLDatabase<typeof import('../db/schema')> | null> {
+  return databaseModule.getAuxDb()
+}
+
 type DeleteTable = Parameters<LibSQLDatabase<typeof import('../db/schema')>['delete']>[0]
 
 function toCutoffDate(beforeDays?: number): Date | null {
@@ -220,7 +224,7 @@ export async function cleanupTemp(options?: CleanupTempOptions): Promise<Storage
 export async function cleanupAnalytics(
   options?: CleanupAnalyticsOptions
 ): Promise<StorageCleanupResult> {
-  const db = await getDb()
+  const db = await getAuxDb()
   if (!db) return { success: false }
   const cutoff = toCutoffDate(options?.beforeDays)
 
@@ -239,7 +243,8 @@ export async function cleanupAnalytics(
 
 export async function cleanupUsage(options?: CleanupUsageOptions): Promise<StorageCleanupResult> {
   const db = await getDb()
-  if (!db) return { success: false }
+  const auxDb = await getAuxDb()
+  if (!db || !auxDb) return { success: false }
   const cutoff = toCutoffDate(options?.beforeDays)
   if (cutoff) {
     await db.delete(usageLogs).where(lt(usageLogs.timestamp, cutoff))
@@ -251,13 +256,13 @@ export async function cleanupUsage(options?: CleanupUsageOptions): Promise<Stora
   await db.delete(itemUsageStats)
   await db.delete(usageTrendDaily)
   await db.delete(itemTimeStats)
-  await db.delete(recommendationCache)
+  await auxDb.delete(recommendationCache)
 
   return { success: true }
 }
 
 export async function cleanupOcr(options?: CleanupOcrOptions): Promise<StorageCleanupResult> {
-  const db = await getDb()
+  const db = await getAuxDb()
   if (!db) return { success: false }
   const cutoff = toCutoffDate(options?.beforeDays)
   if (cutoff) {

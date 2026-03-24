@@ -364,7 +364,7 @@ describe('pilot-tool-gateway', () => {
     expect(networkClient.request).not.toHaveBeenCalled()
   })
 
-  it('provider 与 fallback 都不可用时返回 null，并记录 fallback_unsupported_channel', async () => {
+  it('provider 与 fallback 都不可用时返回 null，并降级为 skipped(fallback_unsupported_channel)', async () => {
     vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
       providers: [
         {
@@ -398,15 +398,16 @@ describe('pilot-tool-gateway', () => {
     })
 
     expect(result).toBeNull()
-    expect(audits.map(item => item.auditType)).toEqual(['tool.call.started', 'tool.call.failed'])
-    expect(audits.at(-1)?.errorCode).toBe('WEBSEARCH_DATASOURCE_UNAVAILABLE')
+    expect(audits.map(item => item.auditType)).toEqual(['tool.call.started', 'tool.call.completed'])
+    expect(audits.at(-1)?.status).toBe('skipped')
+    expect(audits.at(-1)?.errorCode).toBe('')
     expect(audits.at(-1)?.connectorReason).toBe('fallback_unsupported_channel')
     expect(audits.at(-1)?.providerChain).toEqual(['searxng-main'])
     expect(audits.at(-1)?.providerUsed).toEqual([])
     expect(audits.at(-1)?.fallbackUsed).toBe(false)
   })
 
-  it('fallback 渠道不兼容时记录 fallback_unsupported_channel', async () => {
+  it('fallback 渠道不兼容时降级为 skipped(fallback_unsupported_channel)', async () => {
     vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
       providers: [
         {
@@ -448,11 +449,13 @@ describe('pilot-tool-gateway', () => {
     })
 
     expect(result).toBeNull()
-    expect(audits.at(-1)?.errorCode).toBe('WEBSEARCH_FALLBACK_UNSUPPORTED_CHANNEL')
+    expect(audits.at(-1)?.auditType).toBe('tool.call.completed')
+    expect(audits.at(-1)?.status).toBe('skipped')
+    expect(audits.at(-1)?.errorCode).toBe('')
     expect(audits.at(-1)?.connectorReason).toBe('fallback_unsupported_channel')
   })
 
-  it('fallback endpoint 缺失时记录 fallback_endpoint_missing', async () => {
+  it('fallback endpoint 缺失时降级为 skipped(fallback_endpoint_missing)', async () => {
     vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
       providers: [
         {
@@ -494,7 +497,9 @@ describe('pilot-tool-gateway', () => {
     })
 
     expect(result).toBeNull()
-    expect(audits.at(-1)?.errorCode).toBe('WEBSEARCH_FALLBACK_ENDPOINT_MISSING')
+    expect(audits.at(-1)?.auditType).toBe('tool.call.completed')
+    expect(audits.at(-1)?.status).toBe('skipped')
+    expect(audits.at(-1)?.errorCode).toBe('')
     expect(audits.at(-1)?.connectorReason).toBe('fallback_endpoint_missing')
   })
 

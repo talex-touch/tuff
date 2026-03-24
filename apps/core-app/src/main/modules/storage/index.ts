@@ -1,10 +1,7 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport/main'
 import type {
-  StorageGetRequest,
-  StorageGetVersionedResponse,
   StorageSaveRequest,
-  StorageSaveResult,
   StorageUpdateNotification
 } from '@talex-touch/utils/transport/events/types'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
@@ -14,10 +11,8 @@ import { performance } from 'node:perf_hooks'
 import { StorageList } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { eq } from 'drizzle-orm'
-import { BrowserWindow } from 'electron'
 import fse from 'fs-extra'
 import { config as configSchema } from '../../db/schema'
 import { appTaskGate } from '../../service/app-task-gate'
@@ -31,24 +26,6 @@ import { StorageLRUManager } from './storage-lru-manager'
 import { StoragePollingService } from './storage-polling-service'
 
 const storageLog = getLogger('storage')
-
-const storageLegacyGetEvent = defineRawEvent<StorageGetRequest, Record<string, unknown>>(
-  'storage:get'
-)
-const storageLegacyGetVersionedEvent = defineRawEvent<
-  StorageGetRequest,
-  StorageGetVersionedResponse | null
->('storage:get-versioned')
-const storageLegacySaveEvent = defineRawEvent<StorageSaveRequest, StorageSaveResult>('storage:save')
-const storageLegacyReloadEvent = defineRawEvent<
-  string | StorageGetRequest,
-  Record<string, unknown>
->('storage:reload')
-const storageLegacySaveAllEvent = defineRawEvent<void, void>('storage:saveall')
-const storageLegacySaveSyncEvent = defineRawEvent<StorageSaveRequest, StorageSaveResult>(
-  'storage:save-sync'
-)
-const storageLegacyUpdateEvent = StorageEvents.legacy.update
 
 let pluginConfigPath: string
 
@@ -77,6 +54,7 @@ function safeJsonStringify(value: unknown): string {
  * @param sourceWebContentsId - WebContents ID of the source window (to exclude from broadcast)
  */
 function broadcastUpdate(name: string, version: number, sourceWebContentsId?: number) {
+  void sourceWebContentsId
   // Cancel previous broadcast for this config
   const existing = pendingBroadcasts.get(name)
   if (existing) {
@@ -85,17 +63,6 @@ function broadcastUpdate(name: string, version: number, sourceWebContentsId?: nu
 
   // Debounce broadcasts to reduce IPC overhead
   const timer = setTimeout(() => {
-    const channel = ($app as { channel?: unknown } | null | undefined)?.channel
-    if (channel) {
-      const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
-      const windows = BrowserWindow.getAllWindows()
-      for (const win of windows) {
-        if (sourceWebContentsId && win.webContents.id === sourceWebContentsId) {
-          continue
-        }
-        transport.broadcastToWindow(win.id, storageLegacyUpdateEvent, { name, version })
-      }
-    }
     storageUpdateEmitter?.(name, version)
     pendingBroadcasts.delete(name)
   }, 50) // 50ms debounce window
@@ -380,91 +347,6 @@ export class StorageModule extends BaseModule {
     this.transportDisposers.push(
       this.transport.onStream(StorageEvents.app.updated, (_payload, context) => {
         this.updateStreams.add(context)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(storageLegacyGetEvent, (payload) => {
-        const key = typeof payload === 'string' ? payload : payload?.key
-        if (!key || typeof key !== 'string') {
-          return {}
-        }
-        return this.getConfig(key)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(storageLegacyGetVersionedEvent, (payload) => {
-        const key = typeof payload === 'string' ? payload : payload?.key
-        if (!key || typeof key !== 'string') {
-          return null
-        }
-        return this.getConfigWithVersion(key)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(storageLegacySaveEvent, (payload, context) => {
-        if (!payload || typeof payload.key !== 'string') {
-          return { success: false, version: 0 }
-        }
-        const { key, content, value, clear, force, version } = payload
-        const data = typeof content === 'string' ? content : value
-        return this.saveConfig(key, data, clear, force, context?.sender?.id, version)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(storageLegacyReloadEvent, (payload) => {
-        const key = typeof payload === 'string' ? payload : payload?.key
-        if (!key || typeof key !== 'string') {
-          return {}
-        }
-        const result = this.reloadConfig(key)
-        const version = this.cache.getVersion(key)
-        broadcastUpdate(key, version)
-        return result
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(storageLegacySaveAllEvent, async () => {
-        await this.pollingService.forceSave()
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(storageLegacySaveSyncEvent, (payload, context) => {
-        if (!payload || typeof payload.key !== 'string') {
-          return { success: false, version: 0 }
-        }
-        const { key, content, value, clear, force, version } = payload
-        const data = typeof content === 'string' ? content : value
-        const result = this.saveConfig(key, data, clear, force, context?.sender?.id, version)
-
-        if (result.success && !clear) {
-          try {
-            const stored = this.cache.getRaw(key)
-            if (stored !== undefined) {
-              const filePath = path.join(this.filePath!, key)
-              fse.ensureFileSync(filePath)
-              const cachedSerialized = this.cache.getSerialized(key)
-              const configData = cachedSerialized ?? JSON.stringify(stored)
-              if (!cachedSerialized) {
-                this.cache.setSerialized(key, configData)
-              }
-              if (this.persistedContent.get(key) !== configData) {
-                fse.writeFileSync(filePath, configData, 'utf-8')
-                this.persistedContent.set(key, configData)
-              }
-            }
-          } catch (error) {
-            storageLog.error(`Failed to persist ${key} synchronously`, { error })
-          }
-          this.cache.clearDirty(key)
-        }
-
-        return result
       })
     )
   }

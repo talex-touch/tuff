@@ -15,15 +15,47 @@ export interface ReportQueueItem {
   lastError?: string | null
 }
 
-export class ReportQueueStore {
-  constructor(private db: LibSQLDatabase<typeof schema>) {}
+interface ReportQueueStoreDeps {
+  auxDb: LibSQLDatabase<typeof schema>
+  coreDb?: LibSQLDatabase<typeof schema>
+}
 
-  private async withDbWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }))
+export class ReportQueueStore {
+  private auxDb: LibSQLDatabase<typeof schema>
+  private coreDb: LibSQLDatabase<typeof schema> | null
+
+  constructor({ auxDb, coreDb }: ReportQueueStoreDeps) {
+    this.auxDb = auxDb
+    this.coreDb = coreDb && coreDb !== auxDb ? coreDb : null
   }
 
-  async list(cutoff?: number): Promise<ReportQueueItem[]> {
-    const query = this.db
+  private async withDbWrite<T>(
+    label: string,
+    operation: (db: LibSQLDatabase<typeof schema>) => Promise<T>,
+    options?: { mirrorCore?: boolean }
+  ): Promise<T> {
+    return dbWriteScheduler.schedule(
+      label,
+      async () => {
+        const result = await withSqliteRetry(() => operation(this.auxDb), { label })
+        if (options?.mirrorCore && this.coreDb) {
+          await withSqliteRetry(() => operation(this.coreDb!), { label: `${label}.compat` }).catch(
+            () => {}
+          )
+        }
+        return result
+      },
+      {
+        priority: 'best_effort',
+        dropPolicy: 'drop',
+        maxQueueWaitMs: 10_000
+      }
+    )
+  }
+
+  private async queryRows(cutoff?: number, dbOverride?: LibSQLDatabase<typeof schema>) {
+    const targetDb = dbOverride ?? this.auxDb
+    const query = targetDb
       .select({
         id: dbSchema.analyticsReportQueue.id,
         endpoint: dbSchema.analyticsReportQueue.endpoint,
@@ -36,9 +68,17 @@ export class ReportQueueStore {
       .from(dbSchema.analyticsReportQueue)
       .orderBy(asc(dbSchema.analyticsReportQueue.createdAt))
 
-    const rows = cutoff
-      ? await query.where(gte(dbSchema.analyticsReportQueue.createdAt, cutoff))
-      : await query
+    if (cutoff) {
+      return query.where(gte(dbSchema.analyticsReportQueue.createdAt, cutoff))
+    }
+    return query
+  }
+
+  async list(cutoff?: number): Promise<ReportQueueItem[]> {
+    let rows = await this.queryRows(cutoff)
+    if (rows.length === 0 && this.coreDb) {
+      rows = await this.queryRows(cutoff, this.coreDb)
+    }
 
     return rows.map((row) => ({
       id: row.id,
@@ -56,8 +96,8 @@ export class ReportQueueStore {
     payload: Record<string, unknown>
     createdAt: number
   }): Promise<void> {
-    await this.withDbWrite('analytics.report-queue.insert', () =>
-      this.db.insert(dbSchema.analyticsReportQueue).values({
+    await this.withDbWrite('analytics.report-queue.insert', (db) =>
+      db.insert(dbSchema.analyticsReportQueue).values({
         endpoint: entry.endpoint,
         payload: JSON.stringify(entry.payload),
         createdAt: entry.createdAt,
@@ -67,29 +107,38 @@ export class ReportQueueStore {
   }
 
   async markAttempt(id: number, error?: string): Promise<void> {
-    await this.withDbWrite('analytics.report-queue.mark-attempt', () =>
-      this.db
-        .update(dbSchema.analyticsReportQueue)
-        .set({
-          retryCount: sql`${dbSchema.analyticsReportQueue.retryCount} + 1`,
-          lastAttemptAt: Date.now(),
-          lastError: error ?? null
-        })
-        .where(eq(dbSchema.analyticsReportQueue.id, id))
+    await this.withDbWrite(
+      'analytics.report-queue.mark-attempt',
+      (db) =>
+        db
+          .update(dbSchema.analyticsReportQueue)
+          .set({
+            retryCount: sql`${dbSchema.analyticsReportQueue.retryCount} + 1`,
+            lastAttemptAt: Date.now(),
+            lastError: error ?? null
+          })
+          .where(eq(dbSchema.analyticsReportQueue.id, id)),
+      { mirrorCore: true }
     )
   }
 
   async remove(id: number): Promise<void> {
-    await this.withDbWrite('analytics.report-queue.remove', () =>
-      this.db.delete(dbSchema.analyticsReportQueue).where(eq(dbSchema.analyticsReportQueue.id, id))
+    await this.withDbWrite(
+      'analytics.report-queue.remove',
+      (db) =>
+        db.delete(dbSchema.analyticsReportQueue).where(eq(dbSchema.analyticsReportQueue.id, id)),
+      { mirrorCore: true }
     )
   }
 
   async prune(cutoff: number): Promise<void> {
-    await this.withDbWrite('analytics.report-queue.prune', () =>
-      this.db
-        .delete(dbSchema.analyticsReportQueue)
-        .where(lt(dbSchema.analyticsReportQueue.createdAt, cutoff))
+    await this.withDbWrite(
+      'analytics.report-queue.prune',
+      (db) =>
+        db
+          .delete(dbSchema.analyticsReportQueue)
+          .where(lt(dbSchema.analyticsReportQueue.createdAt, cutoff)),
+      { mirrorCore: true }
     )
   }
 }

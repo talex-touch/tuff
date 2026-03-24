@@ -1,6 +1,7 @@
 import type { TalexTouch } from '@talex-touch/utils'
 import type {
   IBaseModule,
+  MainRuntimeContext,
   ModuleCreateContext,
   ModuleCtor,
   ModuleDestroyContext,
@@ -29,6 +30,15 @@ type ModuleLifecycleMeta = {
   reason?: ModuleStopContext<TalexEvents>['reason']
   rollback?: { stopAttempted?: boolean; destroyAttempted?: boolean }
   errorMessage?: string
+}
+
+export interface ModuleUnloadObservation {
+  reason: ModuleStopContext<TalexEvents>['reason']
+  appClosing: boolean
+  totalModules: number
+  unloadedModules: number
+  failedModules: number
+  durationMs: number
 }
 
 /**
@@ -193,6 +203,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    */
   private readonly beforeQuitEventName?: TalexEvents.BEFORE_APP_QUIT
   private unloadAllPromise: Promise<boolean> | null = null
+  private lastUnloadObservation: ModuleUnloadObservation | null = null
 
   /**
    * Constructs a new `ModuleManager` instance.
@@ -224,7 +235,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
 
     if (this.eventBus && this.beforeQuitEventName) {
       this.eventBus.on(this.beforeQuitEventName, async () => {
-        await this.unloadAll('normal')
+        await this.unloadAll('app-quit')
       })
     }
   }
@@ -464,11 +475,13 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
 
     const fileCfg = this.resolveFileConfig(mod)
     const directory = this.buildDirectoryFromResolved(fileCfg)
+    const appClosing = reason === 'app-quit'
 
     const stopCtx = this.makeStopContext(moduleKey, fileCfg, directory, reason)
-    const destroyCtx = this.makeDestroyContext(moduleKey, fileCfg, directory, false)
+    const destroyCtx = this.makeDestroyContext(moduleKey, fileCfg, directory, appClosing)
 
     const run = async () => {
+      const startedAt = performance.now()
       const moduleName = moduleKey.description ?? moduleKey.toString()
       const baseMeta: ModuleLifecycleMeta = { moduleKey, moduleName, reason }
       let stopOk = true
@@ -485,6 +498,17 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
       )
 
       this.modules.delete(moduleKey)
+      const durationMs = Math.round(performance.now() - startedAt)
+      const unloadOk = stopOk && destroyResult.ok
+      moduleLog.debug('Module unload completed', {
+        meta: {
+          module: moduleName,
+          reason,
+          appClosing,
+          durationMs,
+          status: unloadOk ? 'success' : 'failed'
+        }
+      })
       return stopOk && destroyResult.ok
     }
 
@@ -497,20 +521,45 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     }
 
     this.unloadAllPromise = (async () => {
+      const startedAt = performance.now()
       let allSucceeded = true
       const keys = Array.from(this.modules.keys()).reverse()
+      let failedModules = 0
       for (const key of keys) {
         try {
           const result = await this.unloadModule(key, reason)
+          if (!result) {
+            failedModules += 1
+          }
           allSucceeded = Boolean(result) && allSucceeded
         } catch (err) {
           allSucceeded = false
+          failedModules += 1
           moduleLog.warn('Failed to unload module during shutdown', {
             meta: { module: key.description ?? 'anonymous', reason },
             error: err
           })
         }
       }
+      const durationMs = Math.round(performance.now() - startedAt)
+      this.lastUnloadObservation = {
+        reason,
+        appClosing: reason === 'app-quit',
+        totalModules: keys.length,
+        unloadedModules: Math.max(keys.length - failedModules, 0),
+        failedModules,
+        durationMs
+      }
+      moduleLog.info('Module unloadAll finished', {
+        meta: {
+          reason: String(this.lastUnloadObservation.reason ?? 'normal'),
+          appClosing: this.lastUnloadObservation.appClosing,
+          totalModules: this.lastUnloadObservation.totalModules,
+          unloadedModules: this.lastUnloadObservation.unloadedModules,
+          failedModules: this.lastUnloadObservation.failedModules,
+          durationMs: this.lastUnloadObservation.durationMs
+        }
+      })
       return allSucceeded
     })()
 
@@ -563,6 +612,10 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    */
   public getAllModules(): IterableIterator<ModuleKey> {
     return this.modules.keys()
+  }
+
+  public getLastUnloadObservation(): ModuleUnloadObservation | null {
+    return this.lastUnloadObservation
   }
 
   private async rollbackLifecycle(
@@ -814,21 +867,27 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
   private makeBaseContext(moduleKey: ModuleKey, directory?: ModuleDirectory) {
     const appConfig = this.app as TalexTouch.TouchApp & {
       config?: { get?: <T = unknown>(key: string) => T }
+      channel?: unknown
+      window?: TalexTouch.ITouchWindow
+    }
+    const manager = this as unknown as TalexTouch.IModuleManager<TalexEvents>
+    const runtime: MainRuntimeContext<TalexEvents> = {
+      app: this.app,
+      window: appConfig.window,
+      channel: appConfig.channel ?? this.touchChannel,
+      moduleManager: manager,
+      logger: moduleLog,
+      config: <T = unknown>(key: string) => appConfig.config?.get?.(key) as T
     }
 
     return {
       app: this.app,
-      manager: this as unknown as TalexTouch.IModuleManager<TalexEvents>,
+      manager,
       moduleKey,
       config: <T = unknown>(key: string) => appConfig.config?.get?.(key) as T,
-      events: this.eventBus
-        ? {
-            on: this.eventBus.on.bind(this.eventBus),
-            off: this.eventBus.off.bind(this.eventBus),
-            emit: this.eventBus.emit.bind(this.eventBus)
-          }
-        : undefined,
-      directory
+      events: this.eventBus,
+      directory,
+      runtime
     }
   }
 

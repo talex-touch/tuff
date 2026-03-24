@@ -10,7 +10,6 @@ import type {
   StoreSearchOptions,
   StoreSearchResult
 } from '@talex-touch/utils/plugin/providers'
-import process from 'node:process'
 import { getTpexApiBase } from '@talex-touch/utils/env'
 import { PluginStoreClient } from '@talex-touch/utils/plugin/providers'
 import { createLogger } from '../utils/logger'
@@ -21,10 +20,6 @@ const log = createLogger('PluginStoreService')
 let storeClient: PluginStoreClient | null = null
 
 function resolveTpexApiBase(): string {
-  if (process.env.NODE_ENV === 'development' && process.env.USE_LOCAL_NEXUS === 'true') {
-    return 'http://localhost:3200'
-  }
-
   return getTpexApiBase()
 }
 

@@ -1,6 +1,7 @@
 import type { ITouchPlugin } from '..'
 import type { LogItem } from '../log/types'
-import fs from 'node:fs'
+import { existsSync } from 'node:fs'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { structuredStrictStringify } from '@talex-touch/utils'
 import { PollingService } from '../../common/utils/polling'
@@ -18,6 +19,8 @@ export class PluginLoggerManager {
   private readonly pollingService = PollingService.getInstance()
   private readonly flushTaskId: string
   private onLogAppend?: (log: LogItem) => void
+  private flushInFlight: Promise<void> | null = null
+  private pendingFlush = false
 
   /**
    * Initializes a new PluginLoggerManager instance.
@@ -37,11 +40,23 @@ export class PluginLoggerManager {
     this.pluginInfoPath = path.resolve(this.pluginLogDir, 'touch-plugin.info')
     this.flushTaskId = `plugin-logger.flush.${pluginInfo.name}.${Date.now()}`
 
-    this.ensureLogEnvironment(true)
+    void this.ensureLogEnvironment(true).catch(() => {})
     this.pollingService.register(
       this.flushTaskId,
-      () => this.flush(),
-      { interval: 5, unit: 'seconds' },
+      () =>
+        this.flush().catch(() => {
+          // swallow flush failures in polling loop
+        }),
+      {
+        interval: 5,
+        unit: 'seconds',
+        lane: 'io',
+        backpressure: 'latest_wins',
+        dedupeKey: this.flushTaskId,
+        maxInFlight: 1,
+        timeoutMs: 5000,
+        jitterMs: 250
+      }
     )
     this.pollingService.start()
   }
@@ -58,23 +73,17 @@ export class PluginLoggerManager {
   /**
    * Flushes all buffered log items to the current session log file.
    */
-  flush(): void {
-    if (this.buffer.length === 0)
-      return
-    const lines = `${this.buffer.map(item => structuredStrictStringify(item)).join('\n')}\n`
-    try {
-      this.ensureLogEnvironment()
-      fs.appendFileSync(this.sessionLogPath, lines)
-      this.buffer = []
+  async flush(): Promise<void> {
+    if (this.flushInFlight) {
+      this.pendingFlush = true
+      return this.flushInFlight
     }
-    catch (error) {
-      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT')
-        throw error
-      // Directory or file was removed; rebuild and retry once.
-      this.ensureLogEnvironment(true)
-      fs.appendFileSync(this.sessionLogPath, lines)
-      this.buffer = []
-    }
+
+    this.flushInFlight = this.flushLoop().finally(() => {
+      this.flushInFlight = null
+    })
+
+    return this.flushInFlight
   }
 
   /**
@@ -98,13 +107,13 @@ export class PluginLoggerManager {
    */
   destroy(): void {
     this.pollingService.unregister(this.flushTaskId)
-    this.flush()
+    void this.flush().catch(() => {})
   }
 
   /**
    * Creates the touch-plugin.info file with plugin information.
    */
-  private writePluginInfoFile(): void {
+  private async writePluginInfoFile(): Promise<void> {
     const pluginInfo = {
       name: this.pluginInfo.name,
       version: this.pluginInfo.version,
@@ -120,23 +129,45 @@ export class PluginLoggerManager {
       })),
     }
 
-    fs.writeFileSync(this.pluginInfoPath, JSON.stringify(pluginInfo, null, 2))
+    await fs.writeFile(this.pluginInfoPath, JSON.stringify(pluginInfo, null, 2))
   }
 
   /**
    * Ensures the log directory and related files exist.
    */
-  private ensureLogEnvironment(forceInfo = false): void {
-    if (!fs.existsSync(this.pluginLogDir)) {
-      fs.mkdirSync(this.pluginLogDir, { recursive: true })
-    }
+  private async ensureLogEnvironment(forceInfo = false): Promise<void> {
+    await fs.mkdir(this.pluginLogDir, { recursive: true })
+    await fs.appendFile(this.sessionLogPath, '')
 
-    if (!fs.existsSync(this.sessionLogPath)) {
-      fs.writeFileSync(this.sessionLogPath, '')
+    if (forceInfo || !existsSync(this.pluginInfoPath)) {
+      await this.writePluginInfoFile()
     }
+  }
 
-    if (forceInfo || !fs.existsSync(this.pluginInfoPath)) {
-      this.writePluginInfoFile()
-    }
+  private async flushLoop(): Promise<void> {
+    do {
+      this.pendingFlush = false
+      if (this.buffer.length === 0) {
+        return
+      }
+
+      const batch = this.buffer
+      this.buffer = []
+      const lines = `${batch.map(item => structuredStrictStringify(item)).join('\n')}\n`
+
+      try {
+        await this.ensureLogEnvironment()
+        await fs.appendFile(this.sessionLogPath, lines)
+      }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+          await this.ensureLogEnvironment(true)
+          await fs.appendFile(this.sessionLogPath, lines)
+        } else {
+          this.buffer = batch.concat(this.buffer)
+          throw error
+        }
+      }
+    } while (this.pendingFlush || this.buffer.length > 0)
   }
 }
