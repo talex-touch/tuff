@@ -146,6 +146,7 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
       ? (await this.deps.store.runtime.listMessages(created.sessionId)).map(message => ({
           role: message.role,
           content: message.content,
+          metadata: message.metadata,
         }))
       : []
 
@@ -268,6 +269,7 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
       messages: (await this.deps.store.runtime.listMessages(sessionId)).map(message => ({
         role: message.role,
         content: message.content,
+        metadata: message.metadata,
       })),
       lastTurnId: undefined,
       lastSeq: session.lastSeq,

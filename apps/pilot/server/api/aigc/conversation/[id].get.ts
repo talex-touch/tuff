@@ -36,6 +36,7 @@ async function resolveQuotaConversationRecord(
     messages: runtimeMessages.map(item => ({
       role: item.role,
       content: item.content,
+      metadata: item.metadata,
     })),
     runtimeTraces,
     assistantReply: '',

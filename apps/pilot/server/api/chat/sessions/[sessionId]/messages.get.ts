@@ -1,6 +1,7 @@
 import { requirePilotAuth } from '../../../../utils/auth'
 import { buildPilotAttachmentPreviewUrl } from '../../../../utils/pilot-attachment-storage'
 import { requireSessionId } from '../../../../utils/pilot-http'
+import { listMessagesWithLazySystemProjection } from '../../../../utils/pilot-system-message-response'
 import { createPilotStoreAdapter } from '../../../../utils/pilot-store'
 
 export default defineEventHandler(async (event) => {
@@ -10,7 +11,7 @@ export default defineEventHandler(async (event) => {
   const store = createPilotStoreAdapter(event, userId)
   await store.runtime.ensureSchema()
 
-  const messages = await store.runtime.listMessages(sessionId)
+  const messages = await listMessagesWithLazySystemProjection(store.runtime, sessionId)
   const attachments = (await store.runtime.listAttachments(sessionId)).map(item => ({
     ...item,
     previewUrl: buildPilotAttachmentPreviewUrl(sessionId, item.id),

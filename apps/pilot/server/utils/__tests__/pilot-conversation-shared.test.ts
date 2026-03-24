@@ -2,6 +2,7 @@ import {
   buildPilotConversationSnapshot,
   buildPilotTitleMessages,
   serializePilotExecutorMessages,
+  shouldIncludePilotMessageInModelContext,
   shouldExecutePilotWebsearch,
 } from '@talex-touch/tuff-intelligence/pilot'
 import { normalizeLooseMarkdownForRender } from '@talex-touch/tuff-intelligence/pilot-conversation'
@@ -101,6 +102,61 @@ describe('pilot conversation shared utils', () => {
     ])
   })
 
+  it('buildPilotTitleMessages 仅纳入白名单 system 消息', () => {
+    const messages = buildPilotTitleMessages([
+      {
+        role: 'user',
+        content: [{ type: 'text', value: '帮我总结今天进展' }],
+      },
+      {
+        role: 'system',
+        metadata: {
+          eventType: 'system.policy',
+          contextPolicy: 'allow',
+        },
+        content: [{ type: 'text', value: '系统策略：优先简洁回答' }],
+      },
+      {
+        role: 'system',
+        metadata: {
+          eventType: 'run.audit',
+          contextPolicy: 'deny',
+        },
+        content: [{ type: 'text', value: '工具执行中...' }],
+      },
+    ], '')
+
+    expect(messages).toEqual([
+      { role: 'user', content: '帮我总结今天进展' },
+      { role: 'system', content: '系统策略：优先简洁回答' },
+    ])
+  })
+
+  it('shouldIncludePilotMessageInModelContext 正确过滤 system 消息', () => {
+    expect(shouldIncludePilotMessageInModelContext({
+      role: 'system',
+      content: '运行日志',
+      metadata: {
+        eventType: 'run.audit',
+        contextPolicy: 'deny',
+      },
+    })).toBe(false)
+
+    expect(shouldIncludePilotMessageInModelContext({
+      role: 'system',
+      content: '策略提示',
+      metadata: {
+        eventType: 'system.policy',
+        contextPolicy: 'allow',
+      },
+    })).toBe(true)
+
+    expect(shouldIncludePilotMessageInModelContext({
+      role: 'assistant',
+      content: '正常回答',
+    })).toBe(true)
+  })
+
   it('serializePilotExecutorMessages 将 assistant 纯字符串映射为 markdown', () => {
     const messages = serializePilotExecutorMessages([
       {
@@ -131,7 +187,7 @@ describe('pilot conversation shared utils', () => {
     expect(output).toBe('```cpp\nint main() {}\n```\n中文“引号”保持')
   })
 
-  it('shouldExecutePilotWebsearch 意图 false 时仍会走启发式兜底', () => {
+  it('shouldExecutePilotWebsearch 意图 false 时必须强制关闭', () => {
     const byHeuristicWhenIntentFalse = shouldExecutePilotWebsearch({
       message: '帮我查一下今天苹果股价',
       intentType: 'chat',
@@ -139,8 +195,8 @@ describe('pilot conversation shared utils', () => {
       builtinTools: ['write_todos', 'websearch'],
       intentWebsearchRequired: false,
     })
-    expect(byHeuristicWhenIntentFalse.enabled).toBe(true)
-    expect(byHeuristicWhenIntentFalse.reason).toBe('heuristic_required')
+    expect(byHeuristicWhenIntentFalse.enabled).toBe(false)
+    expect(byHeuristicWhenIntentFalse.reason).toBe('intent_not_required')
 
     const byHeuristic = shouldExecutePilotWebsearch({
       message: '帮我查一下今天苹果股价',
@@ -151,6 +207,18 @@ describe('pilot conversation shared utils', () => {
     expect(byHeuristic.enabled).toBe(true)
     expect(byHeuristic.reason).toBe('heuristic_required')
 
+    const byIntentRequired = shouldExecutePilotWebsearch({
+      message: '帮我分析这段代码',
+      intentType: 'chat',
+      internetEnabled: true,
+      builtinTools: ['write_todos', 'websearch'],
+      intentWebsearchRequired: true,
+    })
+    expect(byIntentRequired).toEqual({
+      enabled: true,
+      reason: 'intent_required',
+    })
+
     const byUserDisable = shouldExecutePilotWebsearch({
       message: '不要联网搜索，直接根据你已有知识回答',
       intentType: 'chat',
@@ -160,7 +228,7 @@ describe('pilot conversation shared utils', () => {
     })
     expect(byUserDisable).toEqual({
       enabled: false,
-      reason: 'explicit_user_disable',
+      reason: 'intent_not_required',
     })
   })
 })
