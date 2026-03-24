@@ -253,11 +253,17 @@
 - 变更（Clipboard/Perf）：
   - `apps/core-app/src/main/modules/clipboard.ts`：轮询任务迁移到 `realtime + latest_wins`；重任务拆到 Stage-B 异步链路（OCR/source 回填），主检查路径只保留轻量判定与落库。
   - `activeApp.snapshot` 改为独立缓存刷新任务（`clipboard.active-app.refresh`）；Stage-B 优先读取短 TTL 缓存，避免在处理链路里同步等待 active app 查询。
+  - `apps/core-app/src/main/modules/ocr/ocr-service.ts`：OCR source 改为“文件路径优先”(`file source`)，仅 `data:` 才走 `data-url`，移除主进程 `readFile + base64` 转换热路径。
+  - `ocr-service:dispatcher` 任务改为 `maintenance + latest_wins`，并补 `maxInFlight/timeout/jitter`，避免 OCR 轮询回到 legacy 串行路径。
+  - OCR worker 执行链路接入：`ocr-service` 优先走 worker OCR，失败自动回退 provider invoke；新增 worker bundle 多候选路径解析与缓存（dev/build/packaged 路径差异兜底）。
+  - 新增高频压测脚本 `apps/core-app/scripts/clipboard-polling-stress.ts` 与命令 `pnpm -C "apps/core-app" run clipboard:stress`，输出 per-lane queue peak 与 scheduler delay 对比报告（含 `p95/max`）。
   - `apps/core-app/src/main/utils/perf-monitor.ts`：event-loop 探针改为独立 `setInterval` 采样，避免被业务调度器延迟污染。
 - 验证：
   - `pnpm -C "packages/utils" run test -- "__tests__/polling-service.test.ts"` 通过。
   - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/analytics/startup-analytics.test.ts"` 通过。
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/ocr/ocr-service.test.ts"` 通过（新增 file-source、worker path 优先与 worker 失败回退用例）。
   - `startup-analytics.test.ts` 增加“flush 任务仅首次注册”用例并通过。
+  - `pnpm -C "apps/core-app" run clipboard:stress -- --durationMs 3000` 产出 `docs/engineering/reports/clipboard-polling-stress-*/summary.json` 压测报告。
   - `pnpm -C "apps/core-app" run typecheck:node` 通过。
 
 ### refactor(core-app/clipboard): 阶段诊断逻辑抽离为独立模块（保持语义不变）
