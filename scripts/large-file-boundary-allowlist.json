@@ -251,12 +251,6 @@
       "note": "Reduce below 1200 lines before v2.5.0"
     },
     {
-      "file": "apps/pilot/server/api/aigc/executor.post.ts",
-      "maxLines": 1561,
-      "expiresVersion": "2.5.0",
-      "note": "Reduce below 1200 lines before v2.5.0"
-    },
-    {
       "file": "apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts",
       "maxLines": 1680,
       "expiresVersion": "2.5.0",
@@ -319,14 +313,6 @@
     "plugins"
   ],
   "growthExceptions": [
-    {
-      "file": "apps/pilot/server/api/aigc/executor.post.ts",
-      "maxLines": 2473,
-      "reason": "Current business window requires temporary retention before service split.",
-      "owner": "pilot",
-      "expiresVersion": "2.5.0",
-      "ticket": "SIZE-GROWTH-2026-03-16-AIGC-EXECUTOR"
-    },
     {
       "file": "packages/tuff-intelligence/src/adapters/deepagent-engine.ts",
       "maxLines": 2081,
