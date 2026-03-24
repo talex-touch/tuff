@@ -13,6 +13,22 @@
 
 ## 2026-03-24
 
+### fix(core-app/apps-search): macOS 中文应用名检索修复（simple-plist 路径）
+
+- 修复 `InfoPlist.strings` 本地化名称读取链路：
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
+  - 读取顺序调整为 `simple-plist.readFile` 优先，失败时回退轻量 `.strings` 解析（UTF-16/UTF-8 + key/value 抽取）。
+  - 仅提取 `CFBundleDisplayName/CFBundleName`，并保留原有 locale 优先级与 fallback。
+- 修复应用名更新策略与历史数据回填：
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+  - `display_name` 从“仅空值可写”调整为“新值非空且变化时可覆盖”，支持英文锁定数据回填为中文名。
+  - 启动 backfill 增加已存在 app 的 displayName 校正流程，并输出更新/失败统计日志。
+- 修复名称与检索关键词一致性：
+  - displayName 变更后统一触发 `_syncKeywordsForApp`，确保中文词与拼音词同步刷新进索引。
+- 新增单元测试：
+  - `localized-strings-parser.test.ts`：覆盖 `simple-plist` 失败后的 `.strings` 回退解析、异常回退安全性。
+  - `display-name-sync-utils.test.ts`：覆盖“英文旧值 -> 中文新值更新 / 相同值不重复写入 / 空值不覆盖”规则。
+
 ### perf(core-app): Dev 启动压测闭环脚本 + 启动阻塞链路降噪治理
 
 - 新增启动压测执行器与报告产物：
