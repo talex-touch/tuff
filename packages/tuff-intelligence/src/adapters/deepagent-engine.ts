@@ -3,6 +3,7 @@ import { networkClient } from '@talex-touch/utils/network'
 import type { AgentEngineAdapter } from './engine'
 import type { AgentErrorDetail } from '../protocol/error-detail'
 import type { TurnState, UserMessageAttachment } from '../protocol/session'
+import { shouldIncludePilotMessageInModelContext } from '../business/pilot/conversation'
 import { toAgentErrorDetail } from '../protocol/error-detail'
 import { LangChainEngineAdapter } from './langchain-engine'
 
@@ -358,20 +359,34 @@ interface BuildDeepAgentMessagesOptions {
   includeInputFiles?: boolean
 }
 
+function resolveLastUserMessageIndex(messages: TurnState['messages']): number {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const row = toRecord(messages[index])
+    const role = normalizeMessageRole(row.role)
+    if (role === 'user') {
+      return index
+    }
+  }
+  return -1
+}
+
 function buildDeepAgentMessages(
   state: TurnState,
   options?: BuildDeepAgentMessagesOptions,
 ): DeepAgentInvokeMessage[] {
   const messages: DeepAgentInvokeMessage[] = []
   const attachments = normalizeTurnAttachments(state)
-  const lastMessageIndex = state.messages.length - 1
+  const lastUserMessageIndex = resolveLastUserMessageIndex(state.messages)
   let currentIndex = -1
   for (const item of state.messages) {
     currentIndex += 1
     const row = toRecord(item)
+    if (!shouldIncludePilotMessageInModelContext(row)) {
+      continue
+    }
     const text = String(row.content || '').trim()
     const role = normalizeMessageRole(row.role)
-    const isTurnUserMessage = role === 'user' && currentIndex === lastMessageIndex
+    const isTurnUserMessage = role === 'user' && currentIndex === lastUserMessageIndex
     if (!text && !(isTurnUserMessage && attachments.length > 0)) {
       continue
     }
@@ -391,14 +406,17 @@ function buildDeepAgentMessages(
 export function buildResponsesInput(state: TurnState): Array<Record<string, unknown>> {
   const input: Array<Record<string, unknown>> = []
   const attachments = normalizeTurnAttachments(state)
-  const lastMessageIndex = state.messages.length - 1
+  const lastUserMessageIndex = resolveLastUserMessageIndex(state.messages)
   let currentIndex = -1
   for (const item of state.messages) {
     currentIndex += 1
     const row = toRecord(item)
+    if (!shouldIncludePilotMessageInModelContext(row)) {
+      continue
+    }
     const role = normalizeMessageRole(row.role)
     const text = String(row.content || '').trim()
-    const isTurnUserMessage = role === 'user' && currentIndex === lastMessageIndex
+    const isTurnUserMessage = role === 'user' && currentIndex === lastUserMessageIndex
     if (!text && !(isTurnUserMessage && attachments.length > 0)) {
       continue
     }

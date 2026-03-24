@@ -32,6 +32,45 @@ function extractCardsByName(
 }
 
 describe('quota-conversation-snapshot', () => {
+  it('优先使用 system messages 生成卡片（message-first）', () => {
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-message-first',
+      messages: [
+        { role: 'user', content: 'hello' },
+        { role: 'assistant', content: 'world' },
+        {
+          role: 'system',
+          content: '系统策略：route-a / gpt-5.4',
+          metadata: {
+            eventType: 'system.policy',
+            sourceEventType: 'routing.selected',
+            seq: 31,
+            cardType: 'routing',
+            cardKey: 'routing:latest',
+            status: 'completed',
+            title: '路由选择',
+            summary: 'route-a / gpt-5.4',
+            detail: {
+              channelId: 'route-a',
+              providerModel: 'gpt-5.4',
+            },
+          },
+        },
+      ],
+      runtimeTraces: [
+        { seq: 1, type: 'turn.started', payload: {} },
+        { seq: 2, type: 'intent.completed', payload: { intentType: 'legacy' } },
+      ],
+      assistantReply: '',
+      topicHint: 'message-first',
+    })
+
+    const runCards = extractCardsByName(snapshot, 'pilot_run_event_card')
+      .map((item: any) => JSON.parse(String(item.data || '{}')))
+    expect(runCards.some((item: Record<string, unknown>) => item.eventType === 'routing.selected')).toBe(true)
+    expect(runCards.some((item: Record<string, unknown>) => item.eventType === 'intent.completed')).toBe(false)
+  })
+
   it('基于 runtime traces 重建并注入 pilot_run_event_card / pilot_tool_card（仅最新 turn）', () => {
     const snapshot = buildQuotaConversationSnapshot({
       chatId: 'chat-1',

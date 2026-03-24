@@ -1,4 +1,5 @@
 import { buildPilotConversationSnapshot } from '@talex-touch/tuff-intelligence/pilot'
+import { buildPilotCardBlocksFromSystemMessages } from '../../shared/pilot-system-message'
 
 const MAX_CARD_BLOCKS_PER_TURN = 48
 
@@ -549,6 +550,27 @@ function mergeTraceCardsIntoPayloadMessages(
   payload.messages = messages
 }
 
+function buildMessageCardBlocks(messages: unknown): SnapshotCardBlock[] {
+  if (!Array.isArray(messages)) {
+    return []
+  }
+  const rows = messages
+    .filter(item => item && typeof item === 'object' && !Array.isArray(item))
+    .map((item) => {
+      const row = item as Record<string, unknown>
+      return {
+        id: String(row.id || '').trim() || undefined,
+        role: String(row.role || '').trim(),
+        content: String(row.content || ''),
+        createdAt: String(row.createdAt || row.created_at || '').trim() || undefined,
+        metadata: row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+          ? row.metadata as Record<string, unknown>
+          : undefined,
+      }
+    })
+  return buildPilotCardBlocksFromSystemMessages(rows, MAX_CARD_BLOCKS_PER_TURN)
+}
+
 export function buildQuotaConversationSnapshot(input: {
   chatId: string
   messages: unknown
@@ -569,7 +591,10 @@ export function buildQuotaConversationSnapshot(input: {
     previousValue: input.previousValue,
   })
 
-  const cardBlocks = buildTraceCardBlocks(input.chatId, input.runtimeTraces)
+  const messageCardBlocks = buildMessageCardBlocks(input.messages)
+  const cardBlocks = messageCardBlocks.length > 0
+    ? messageCardBlocks
+    : buildTraceCardBlocks(input.chatId, input.runtimeTraces)
   if (cardBlocks.length > 0) {
     mergeTraceCardsIntoPayloadMessages(snapshot.payload, cardBlocks)
     snapshot.value = JSON.stringify(snapshot.payload)

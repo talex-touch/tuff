@@ -18,6 +18,7 @@ interface RuntimeTraceLike {
 interface ProjectedRuntimeMessage {
   role: string
   content: string
+  metadata?: Record<string, unknown>
 }
 
 interface ProjectedRuntimeSession {
@@ -260,6 +261,7 @@ export function createPilotStreamQuotaProjector(options: CreatePilotStreamQuotaP
       messages: runtimeMessages.map(item => ({
         role: item.role,
         content: item.content,
+        metadata: item.metadata,
       })),
       runtimeTraces: projectedTraces,
       assistantReply,
