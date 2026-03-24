@@ -103,6 +103,7 @@
   - `apps/core-app/src/main/modules/clipboard.ts` 改为导入适配器，typed 与 legacy 两条写入/粘贴路径复用同一归一化逻辑，减少重复分支。
   - `apps/core-app/src/main/modules/clipboard.ts` 新增 `registerLegacyClipboardBridge()`，将 legacy handler 注册块从 `registerTransportHandlers()` 中抽离，主流程职责更聚焦。
   - 新增共享处理方法（`handleSetFavoriteRequest/handleDeleteRequest/handleGetImageUrlRequest/handleCopyAndPasteRequest/handleWriteRequest`），typed 与 legacy 事件统一复用，避免同构逻辑双份维护。
+  - `apps/core-app/src/main/modules/clipboard.ts` 将 typed 事件注册按职责拆分为 `registerTypedClipboardQueryHandlers/registerTypedClipboardMutationHandlers/registerTypedClipboardReadHandlers/registerTypedClipboardStreamHandlers`，提升可读性与后续维护效率。
   - 新增 `apps/core-app/src/main/modules/clipboard/clipboard-legacy-bridge.test.ts`，覆盖 payload 归一化与 legacy item 时间戳映射。
 - 价值：
   - 降低 `ClipboardModule` 中 legacy 兼容层的耦合度，后续协议调整只改单模块。
