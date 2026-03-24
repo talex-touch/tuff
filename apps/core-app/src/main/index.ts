@@ -70,6 +70,25 @@ protocol.registerSchemesAsPrivileged([
 
 let lastVerboseLogsState: boolean | null = null
 
+function parseBooleanEnvFlag(value: string | undefined): boolean {
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
+function parsePositiveIntegerEnv(value: string | undefined, fallback: number): number {
+  if (!value) return fallback
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback
+  return parsed
+}
+
+const startupBenchmarkEnabled = parseBooleanEnvFlag(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
+const startupBenchmarkExitDelayMs = parsePositiveIntegerEnv(
+  process.env.TUFF_STARTUP_BENCHMARK_EXIT_DELAY_MS,
+  1_200
+)
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -268,7 +287,15 @@ app.whenReady().then(async () => {
       moduleDetails: moduleLoadMetrics
     })
 
-    await touchApp.waitUntilInitialized()
+    const rendererInitPromise = touchApp.waitUntilInitialized()
+    if (touchApp.isSilentStart()) {
+      void rendererInitPromise.catch((error) => {
+        mainLog.error('Silent-start renderer initialization failed', { error })
+        app.quit()
+      })
+    } else {
+      await rendererInitPromise
+    }
 
     touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
 
@@ -278,6 +305,15 @@ app.whenReady().then(async () => {
     startupTimer.end('Startup health check passed', {
       meta: { modules: loadedModuleCount }
     })
+
+    if (startupBenchmarkEnabled) {
+      mainLog.info('Startup benchmark mode: scheduling app quit after startup health check', {
+        meta: { exitDelayMs: startupBenchmarkExitDelayMs }
+      })
+      setTimeout(() => {
+        app.quit()
+      }, startupBenchmarkExitDelayMs)
+    }
   } catch (error) {
     if (!modulesLoaded) {
       moduleLoadTimer.end('Module bootstrap failed', {

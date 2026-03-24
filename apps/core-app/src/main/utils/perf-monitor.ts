@@ -231,6 +231,14 @@ function queueNexusPerformance(incident: PerfIncident): void {
 }
 
 export class PerfMonitor {
+  private static readonly STARTUP_LAG_GRACE_MS = (() => {
+    const raw = Number(process.env.TUFF_PERF_STARTUP_LAG_GRACE_MS ?? 2500)
+    if (!Number.isFinite(raw) || raw < 0) {
+      return 2500
+    }
+    return Math.floor(raw)
+  })()
+
   private incidents: PerfIncident[] = []
   private ipcAggregates = new Map<string, PerfAggregate>()
   private loopLagAggregate: PerfAggregate = {
@@ -258,6 +266,7 @@ export class PerfMonitor {
   private lastSevereLagBurstAt = 0
   private severeLagBurstListeners = new Set<SevereLagBurstListener>()
   private loopMonitorTimer: NodeJS.Timeout | null = null
+  private monitorStartedAt = 0
 
   /** Timestamp (Date.now) of the most recent system resume, or 0 if none. */
   private systemResumedAt = 0
@@ -288,6 +297,7 @@ export class PerfMonitor {
 
   start(): void {
     this.registerPowerMonitorListeners()
+    this.monitorStartedAt = Date.now()
 
     if (!this.loopMonitorTimer) {
       this.lastLoopTick = performance.now()
@@ -310,6 +320,14 @@ export class PerfMonitor {
               `System sleep/suspend detected (${durationSec}s) — skipping event loop lag report`
             )
           }
+          return
+        }
+
+        const nowAt = Date.now()
+        if (
+          PerfMonitor.STARTUP_LAG_GRACE_MS > 0 &&
+          nowAt - this.monitorStartedAt < PerfMonitor.STARTUP_LAG_GRACE_MS
+        ) {
           return
         }
 

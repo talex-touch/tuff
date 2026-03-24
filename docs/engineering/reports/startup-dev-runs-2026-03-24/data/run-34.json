@@ -1,0 +1,71 @@
+{
+  "runNo": 34,
+  "timestamp": "2026-03-24T06:00:26.742Z",
+  "timeoutMs": null,
+  "traceDeprecation": null,
+  "wallTimeMs": null,
+  "processExitCode": null,
+  "processSignal": null,
+  "timedOut": false,
+  "allModulesLoadedMs": 1100,
+  "startupHealthMs": 4300,
+  "startupAnalyticsMs": 2403,
+  "rendererReadyMs": 4200,
+  "warnCount": 3,
+  "errorCount": 1,
+  "warnLines": [
+    "\u001b[91m[2026-03-24T13:34:15.864] [ERROR] error - \u001b[39m(node:35134) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.",
+    "\u001b[33m[2026-03-24T13:34:17.178] [WARN] default - \u001b[39m[13:34:17.178] [WARN] [Perf:EventLoop] Event loop lag 838ms (recent=intelligence-audit.flush 0ms) lagMs=838 contexts=[] pollingActive=[] pollingRecent=[{\"id\":\"intelligence-audit.flush\",\"durationMs\":0,\"ageMs\":1774330457178,\"intervalMs\":30000,\"maxDurationMs\":0,\"count\":0},{\"id\":\"division-box.memory-pressure\",\"durationMs\":0,\"ageMs\":1774330457178,\"intervalMs\":30000,\"maxDurationMs\":0,\"count\":0},{\"id\":\"flow-bus.cleanup\",\"durationMs\":0,\"ageMs\":17743304571… primaryPollingRecent=intelligence-audit.flush 0ms slowPollingRecent=[] heap={\"totalHeapSize\":98828288,\"usedHeapSize\":67600616,\"heapSizeLimit\":4294967296}",
+    "\u001b[33m[2026-03-24T13:34:17.178] [WARN] default - \u001b[39m[13:34:17.178] [WARN] [Perf:EventLoop] Event loop lag diagnostics 838ms lagMs=838 slowPollingRecent=[]"
+  ],
+  "errorLines": [
+    "\u001b[91m[2026-03-24T13:34:15.864] [ERROR] error - \u001b[39m(node:35134) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead."
+  ],
+  "deprecations": [
+    "\u001b[91m[2026-03-24T13:34:15.864] [ERROR] error - \u001b[39m(node:35134) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead."
+  ],
+  "topSlowModules": [
+    {
+      "name": "DownloadCenter",
+      "durationMs": 852
+    },
+    {
+      "name": "CoreBox",
+      "durationMs": 49
+    },
+    {
+      "name": "OmniPanel",
+      "durationMs": 40
+    },
+    {
+      "name": "Database",
+      "durationMs": 23
+    },
+    {
+      "name": "search-engine-core",
+      "durationMs": 19
+    },
+    {
+      "name": "AuthModule",
+      "durationMs": 17
+    },
+    {
+      "name": "Clipboard",
+      "durationMs": 15
+    },
+    {
+      "name": "PluginModule",
+      "durationMs": 9
+    }
+  ],
+  "maxEventLoopLagMs": 838,
+  "maxSlowIpcMs": null,
+  "isPass": false,
+  "blockingIssues": [
+    "deprecation",
+    "startup_logs_nonzero",
+    "startup_health_over_budget",
+    "event_loop_lag"
+  ],
+  "analysisCutoffReached": true
+}

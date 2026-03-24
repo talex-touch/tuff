@@ -14,11 +14,25 @@ import type {
   IntelligenceTranslatePayload
 } from '@talex-touch/tuff-intelligence'
 import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
-import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai'
 import { IntelligenceProvider } from '../runtime/base-provider'
 
 const OPENAI_CHAT_SUFFIXES = ['/chat/completions', '/completions']
 const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']
+
+type LangChainOpenAiModule = typeof import('@langchain/openai')
+let langChainOpenAiModulePromise: Promise<LangChainOpenAiModule> | null = null
+
+async function getLangChainOpenAiModule(): Promise<LangChainOpenAiModule> {
+  if (!langChainOpenAiModulePromise) {
+    langChainOpenAiModulePromise = import('@langchain/openai')
+  }
+  return langChainOpenAiModulePromise
+}
+
+interface OpenAiChatModelLike {
+  invoke(messages: BaseMessage[]): Promise<unknown>
+  stream(messages: BaseMessage[]): Promise<AsyncIterable<unknown>>
+}
 
 function trimBaseUrl(value: string): string {
   return value.replace(/\/+$/, '')
@@ -210,13 +224,14 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     return model
   }
 
-  private createChatModel(params: {
+  private async createChatModel(params: {
     model: string
     options: IntelligenceInvokeOptions
     temperature?: number
     maxTokens?: number
     streaming?: boolean
-  }): ChatOpenAI {
+  }): Promise<OpenAiChatModelLike> {
+    const { ChatOpenAI } = await getLangChainOpenAiModule()
     return new ChatOpenAI({
       apiKey: this.resolveApiKey(),
       model: params.model,
@@ -238,7 +253,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     const traceId = this.generateTraceId()
     const modelName = this.resolveChatModel(options)
 
-    const model = this.createChatModel({
+    const model = await this.createChatModel({
       model: modelName,
       options,
       temperature: payload.temperature,
@@ -265,7 +280,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     options: IntelligenceInvokeOptions
   ): AsyncGenerator<IntelligenceStreamChunk> {
     const modelName = this.resolveChatModel(options)
-    const model = this.createChatModel({
+    const model = await this.createChatModel({
       model: modelName,
       options,
       temperature: payload.temperature,
@@ -300,6 +315,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       endpoint: '/langchain/embedding'
     })
 
+    const { OpenAIEmbeddings } = await getLangChainOpenAiModule()
     const embeddings = new OpenAIEmbeddings({
       apiKey: this.resolveApiKey(),
       model: modelName,
@@ -379,7 +395,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       payload.prompt ||
       'Extract all text from this image and return the result as JSON with fields: text, confidence, language, keywords, blocks.'
 
-    const model = this.createChatModel({
+    const model = await this.createChatModel({
       model: modelName,
       options,
       maxTokens: options.metadata?.maxTokens as number | undefined
