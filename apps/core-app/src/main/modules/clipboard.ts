@@ -2962,6 +2962,15 @@ export class ClipboardModule extends BaseModule {
         return await this.queryHistoryByMeta(payload ?? {})
       })
     )
+    this.registerLegacyClipboardBridge(writePayload)
+  }
+
+  private registerLegacyClipboardBridge(
+    writePayload: (payload: ClipboardWritePayload) => Promise<void>
+  ): void {
+    if (!this.transport) {
+      return
+    }
 
     // Legacy raw IPC compatibility for older plugin bundles.
     this.transportDisposers.push(
