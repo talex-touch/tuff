@@ -634,6 +634,4 @@ onBeforeUnmount(() => {
   <div ref="editorDom" class="MilkContent markdown-body milkdown-theme-nord prose" />
 </template>
 
-<style lang="scss">
-@import './style.scss';
-</style>
+<style lang="scss" src="./style.scss"></style>
