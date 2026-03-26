@@ -1,5 +1,5 @@
 <script setup>
-import { defineProps, onBeforeMount, onMounted, ref } from 'vue'
+import { onBeforeMount, onMounted, ref } from 'vue'
 import { throttleRef } from './../../../plugins/Common'
 
 const props = defineProps({

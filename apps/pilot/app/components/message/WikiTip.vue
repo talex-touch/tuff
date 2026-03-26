@@ -1,5 +1,5 @@
 <script setup>
-import { defineProps, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import Loading from '../icon/LoadingIcon.vue'
 
 const props = defineProps({
