@@ -55,6 +55,26 @@ export const keywordMappings = sqliteTable('keyword_mappings', {
   priority: real('priority').notNull().default(1.0)
 })
 
+/**
+ * 关键词索引元数据，用于避免重复写 keyword_mappings 热页。
+ * 当 keyword_hash 未变化时可跳过关键词映射写入。
+ */
+export const searchIndexMeta = sqliteTable(
+  'search_index_meta',
+  {
+    providerId: text('provider_id').notNull(),
+    itemId: text('item_id').notNull(),
+    keywordHash: text('keyword_hash').notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`)
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.providerId, table.itemId] }),
+    updatedIdx: index('idx_search_index_meta_updated_at').on(table.updatedAt)
+  })
+)
+
 // =============================================================================
 // 2. 核心内容与实体存储 (Core Content & Entities)
 // =============================================================================

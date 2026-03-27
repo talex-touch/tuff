@@ -2,10 +2,12 @@ import type { Client } from '@libsql/client'
 import type { MaybePromise, ModuleInitContext, ModuleKey, TimingLogLevel } from '@talex-touch/utils'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createClient } from '@libsql/client'
 import { createTiming } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import chalk from 'chalk'
 import { eq } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
@@ -14,11 +16,21 @@ import { app, BrowserWindow, dialog } from 'electron'
 import fse from 'fs-extra'
 import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
 import * as schema from '../../db/schema'
+import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { DB_AUX_ENABLED } from '../../db/runtime-flags'
+import { getSqliteBusyRetryCount } from '../../db/sqlite-retry'
 import { BaseModule } from '../abstract-base-module'
 
 const dbLog = getLogger('database')
 const AUX_MIGRATION_MARKER_KEY = 'db.aux.migration.v1.complete'
+const DB_WAL_PASSIVE_TASK_ID = 'database_wal_checkpoint_passive'
+const DB_WAL_TRUNCATE_TASK_ID = 'database_wal_checkpoint_truncate'
+const DB_HEALTH_REPORT_TASK_ID = 'database_health_report'
+const DB_WAL_PASSIVE_INTERVAL_MS = 5 * 60 * 1000
+const DB_WAL_TRUNCATE_INTERVAL_MS = 30 * 60 * 1000
+const DB_HEALTH_REPORT_INTERVAL_MS = 10 * 60 * 1000
+const DB_WAL_TRUNCATE_MAX_QUEUED_WRITES = 2
+const WAL_WARN_THRESHOLD_BYTES = 512 * 1024 * 1024
 const AUX_COPY_TABLES = [
   'analytics_snapshots',
   'plugin_analytics',
@@ -40,6 +52,9 @@ export class DatabaseModule extends BaseModule {
   private auxInitialized = false
   private mainDbPath = ''
   private auxDbPath = ''
+  private walMaintenanceRegistered = false
+  private walPeakBytes = 0
+  private schedulerQueuePeak = 0
 
   static key: symbol = Symbol.for('Database')
   name: ModuleKey = DatabaseModule.key
@@ -186,6 +201,158 @@ export class DatabaseModule extends BaseModule {
       if (Number.isFinite(parsed)) return parsed
     }
     return 0
+  }
+
+  private async getWalSizeBytes(): Promise<number> {
+    if (!this.mainDbPath) return 0
+    try {
+      const walPath = `${this.mainDbPath}-wal`
+      const stat = await fs.stat(walPath)
+      return stat.size
+    } catch {
+      return 0
+    }
+  }
+
+  private async getOpenFdCount(): Promise<number | null> {
+    const candidates = ['/proc/self/fd', '/dev/fd']
+    for (const candidate of candidates) {
+      try {
+        const entries = await fs.readdir(candidate)
+        return entries.length
+      } catch {
+        // Try next candidate.
+      }
+    }
+    return null
+  }
+
+  private parseCheckpointRow(row: unknown): { busy: number; log: number; checkpointed: number } {
+    if (!row || typeof row !== 'object') {
+      return { busy: 0, log: 0, checkpointed: 0 }
+    }
+    const record = row as Record<string, unknown>
+    return {
+      busy: this.parseCount(record.busy ?? record[0]),
+      log: this.parseCount(record.log ?? record[1]),
+      checkpointed: this.parseCount(record.checkpointed ?? record[2])
+    }
+  }
+
+  private async runWalCheckpoint(mode: 'PASSIVE' | 'TRUNCATE'): Promise<void> {
+    if (!this.client) return
+
+    const queueDepth = dbWriteScheduler.getStats().queued
+    this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, queueDepth)
+
+    try {
+      const result = await this.client.execute(`PRAGMA wal_checkpoint(${mode})`)
+      const parsed = this.parseCheckpointRow(result.rows?.[0])
+      const walSize = await this.getWalSizeBytes()
+      this.walPeakBytes = Math.max(this.walPeakBytes, walSize)
+
+      dbLog.info(`WAL checkpoint ${mode} complete`, {
+        meta: {
+          busy: parsed.busy,
+          logFrames: parsed.log,
+          checkpointedFrames: parsed.checkpointed,
+          walSizeBytes: walSize,
+          walPeakBytes: this.walPeakBytes,
+          schedulerQueueDepth: queueDepth,
+          schedulerQueuePeak: this.schedulerQueuePeak
+        }
+      })
+    } catch (error) {
+      dbLog.warn(`WAL checkpoint ${mode} failed`, { error })
+    }
+  }
+
+  private async reportDatabaseHealth(source: 'periodic' | 'threshold'): Promise<void> {
+    const queueDepth = dbWriteScheduler.getStats().queued
+    this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, queueDepth)
+
+    const [walSizeBytes, openFdCount] = await Promise.all([
+      this.getWalSizeBytes(),
+      this.getOpenFdCount()
+    ])
+    this.walPeakBytes = Math.max(this.walPeakBytes, walSizeBytes)
+
+    const busyRetryCount = getSqliteBusyRetryCount()
+    const level = walSizeBytes >= WAL_WARN_THRESHOLD_BYTES ? 'warn' : 'info'
+    const payload = {
+      source,
+      walSizeBytes,
+      walPeakBytes: this.walPeakBytes,
+      busyRetryCount,
+      schedulerQueueDepth: queueDepth,
+      schedulerQueuePeak: this.schedulerQueuePeak,
+      openFdCount: openFdCount ?? undefined
+    }
+
+    if (level === 'warn') {
+      dbLog.warn('Database health snapshot (WAL threshold exceeded)', { meta: payload })
+      return
+    }
+
+    dbLog.info('Database health snapshot', { meta: payload })
+  }
+
+  private registerWalMaintenanceTasks(): void {
+    if (this.walMaintenanceRegistered) return
+    this.walMaintenanceRegistered = true
+
+    pollingService.register(
+      DB_WAL_PASSIVE_TASK_ID,
+      async () => {
+        await this.runWalCheckpoint('PASSIVE')
+      },
+      {
+        interval: DB_WAL_PASSIVE_INTERVAL_MS,
+        unit: 'milliseconds',
+        lane: 'maintenance',
+        backpressure: 'coalesce',
+        dedupeKey: DB_WAL_PASSIVE_TASK_ID,
+        maxInFlight: 1
+      }
+    )
+
+    pollingService.register(
+      DB_WAL_TRUNCATE_TASK_ID,
+      async () => {
+        const queueDepth = dbWriteScheduler.getStats().queued
+        this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, queueDepth)
+        if (queueDepth > DB_WAL_TRUNCATE_MAX_QUEUED_WRITES) {
+          dbLog.info('Skipping WAL TRUNCATE checkpoint due to active write backlog', {
+            meta: { schedulerQueueDepth: queueDepth }
+          })
+          return
+        }
+        await this.runWalCheckpoint('TRUNCATE')
+      },
+      {
+        interval: DB_WAL_TRUNCATE_INTERVAL_MS,
+        unit: 'milliseconds',
+        lane: 'maintenance',
+        backpressure: 'latest_wins',
+        dedupeKey: DB_WAL_TRUNCATE_TASK_ID,
+        maxInFlight: 1
+      }
+    )
+
+    pollingService.register(
+      DB_HEALTH_REPORT_TASK_ID,
+      async () => {
+        await this.reportDatabaseHealth('periodic')
+      },
+      {
+        interval: DB_HEALTH_REPORT_INTERVAL_MS,
+        unit: 'milliseconds',
+        lane: 'maintenance',
+        backpressure: 'coalesce',
+        dedupeKey: DB_HEALTH_REPORT_TASK_ID,
+        maxInFlight: 1
+      }
+    )
   }
 
   private async getTableCount(client: Client, tableName: string): Promise<number> {
@@ -541,6 +708,8 @@ export class DatabaseModule extends BaseModule {
     }
 
     await this.initAuxDatabase(dirPath!)
+    this.registerWalMaintenanceTasks()
+    await this.reportDatabaseHealth('threshold')
   }
 
   private async ensureKeywordMappingsProviderColumn(): Promise<void> {
@@ -660,6 +829,12 @@ export class DatabaseModule extends BaseModule {
   }
 
   onDestroy(): MaybePromise<void> {
+    if (this.walMaintenanceRegistered) {
+      pollingService.unregister(DB_WAL_PASSIVE_TASK_ID)
+      pollingService.unregister(DB_WAL_TRUNCATE_TASK_ID)
+      pollingService.unregister(DB_HEALTH_REPORT_TASK_ID)
+      this.walMaintenanceRegistered = false
+    }
     this.client?.close()
     this.auxClient?.close()
     this.db = null

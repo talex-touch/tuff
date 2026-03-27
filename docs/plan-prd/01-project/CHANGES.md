@@ -1,7 +1,7 @@
 # 变更日志
 
-> 更新时间: 2026-03-24
-> 说明: 主文件仅保留近 30 天（2026-02-24 ~ 2026-03-24）详细记录；更早历史已按月归档。
+> 更新时间: 2026-03-27
+> 说明: 主文件仅保留近 30 天（2026-02-27 ~ 2026-03-27）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
@@ -10,6 +10,116 @@
 - 旧记录入口：见文末“历史索引导航”。
 
 ---
+
+## 2026-03-27
+
+### perf(core-app/db): WAL 膨胀止血与关键词写放大治理
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+  - `app_provider_full_sync` 轮询注册增加 `lane=maintenance + backpressure=latest_wins + dedupeKey + maxInFlight=1`，防止 full sync 重入排队。
+  - `AppIndexSettings` 新增 `fullSyncCooldownMs`、`fullSyncPersistRetry`，默认向后兼容。
+  - `app_provider_last_full_sync` 持久化改为“重试 + 内存兜底时间戳”，DB 写失败时仍可抑制周期性 full sync 风暴。
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+  - 首次全量扫描成功后也写回 `scan_progress`，避免重启后重复全扫。
+  - `processFileExtensions` 改为“仅变更写入”：读取当前 `keywords` 扩展并比对，只有差异才执行 upsert，降低 `file-index.extensions.upsert` 锁竞争。
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+  - 新增 `search_index_meta` 关键字哈希门控：输入未变化时跳过 `keyword_mappings` 写入。
+  - `keyword_mappings` 写路径由全量 `delete+insert` 改为 delta（增/删/改关键字），减少热页改写。
+  - n-gram 生成改为“限来源 + 限数量”（优先高优先级关键词，限制每项最大 n-gram 数），收敛写放大。
+- `apps/core-app/src/main/modules/database/index.ts`
+  - 新增 WAL 维护任务：周期 `wal_checkpoint(PASSIVE)` 与空闲条件下 `wal_checkpoint(TRUNCATE)`。
+  - 新增 DB 健康遥测日志：`walSizeBytes`、`walPeakBytes`、`busyRetryCount`、`schedulerQueuePeak`、`openFdCount`。
+- `apps/core-app/src/main/db/sqlite-retry.ts`
+  - 增加全局 `SQLITE_BUSY` 重试计数器并暴露读取接口，供 DB 健康遥测使用。
+- `apps/core-app/src/main/db/schema.ts`
+  - 新增内部表 `search_index_meta(provider_id,item_id,keyword_hash,updated_at)`。
+- `apps/core-app/resources/db/migrations/0021_search_index_meta.sql`
+  - 增加对应迁移与索引 `idx_search_index_meta_updated_at`。
+
+## 2026-03-25
+
+### fix(core-app/file-index): 修复 SQLITE_BUSY 连锁与索引日志刷屏
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+  - `flushIndexWorkerResults` 引入 `inflight` 可恢复批次，`persistAndIndex` 失败时按“pending 优先”回补，避免批次丢失与旧数据覆盖新更新。
+  - 定时 flush 统一走调度入口并固定兜底 `.catch`，消除 `Unhandled rejection` 噪声。
+  - 增加 SQLite busy 退避重试调度（指数退避 + 抖动）与轻量背压等待（`dbWriteScheduler.waitForCapacity`）。
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker.ts`
+  - 为 `persistChunk / upsertFiles / upsertScanProgress` 增加 `withSqliteRetry` 写入重试封装，并统一重试 label。
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+  - 将每批 `Indexed/Removed/removeByProvider` 的 `console.debug` 改为时间窗聚合 summary 输出。
+  - 慢批次（>=1.5s）保留即时日志，兼顾诊断与降噪。
+- 新增测试：
+  - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-flush-service.test.ts`
+  - `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker.retry.test.ts`
+  - `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.logging.test.ts`
+
+### fix(pilot-websearch): 收敛 responses_builtin 回退上下文污染
+
+- `apps/pilot/server/utils/pilot-tool-gateway.ts`
+  - `normalizeResponsesBuiltinDocs` 改为优先使用结构化来源（payload citation/source）；仅在无结构化来源时启用文本 URL 兜底。
+  - 停止使用 `responses_builtin` 的 `summaryText` 回填 `source.snippet` 与 `doc.content`，避免同一段自由总结污染多条来源。
+  - `buildContextText` 在有来源时仅注入条目化引用（title/url/snippet），不再注入 `Websearch summary` 自由文本块。
+- `apps/pilot/server/utils/__tests__/pilot-tool-gateway.test.ts`
+  - 补充断言：`output_text + annotations` 场景下，context 不应包含自由总结文本。
+  - 新增用例：无结构化来源时，允许从文本 URL 生成最小来源集合（`responses_builtin_text_fallback`）。
+  - 保持既有回归：`provider_pool_empty`、`fallback_*`、`no-source guard` 路径不变。
+
+### fix(pilot-chat): 旧链路聊天稳定性止血（滚动/会话竞态/历史加载）
+
+- `apps/pilot/app/components/chat/ThChat.vue`
+  - 修正回到底部判定：统一基于 `scrollHeight - (scrollTop + clientHeight)`，移除 `window.innerWidth/document.body.clientHeight` 误用。
+  - 删除消息变更后的无条件自动回底，改为仅在流式增量且“用户仍接近底部”时跟随。
+  - 补充 `wrapRef` 空值保护，避免边界时机报错。
+- `apps/pilot/app/pages/index.vue`
+  - 会话切换改为可取消 token 流程，替换延迟 `setTimeout` 回写，修复快速切换错位。
+  - `mounter` 改为单飞初始化；事件与快捷键仅注册一次，修复 `onMounted/onActivated` 双触发重复监听。
+  - 增加 `conversationReady` 发送门禁与摘要会话 hydrate 流程，避免“历史未就绪误发到空会话”。
+  - 路由 `id` 解析失败不再自动回退新会话，改为保留当前状态并提示重试。
+- `apps/pilot/app/composables/api/base/v1/aigc/history/index.ts`
+  - `loadHistories` 增加单飞锁与状态门禁，`LOADING` 期间禁止重复翻页。
+  - 默认使用 `summary=1` 拉取轻量历史，并在空列表时正确落为 `COMPLETED`，避免无限触发加载。
+- `apps/pilot/app/components/history/index.vue`
+  - `IntersectionObserver` 增加 `LOADING/COMPLETED` 门禁；组件卸载时断开 observer 和 watch 清理。
+- `apps/pilot/server/api/aigc/history.get.ts`
+  - 新增 `summary=1` 摘要模式，返回轻量会话结构并批量回填 `run_state`。
+- `apps/pilot/server/utils/quota-history-store.ts`
+  - 新增 `listQuotaHistorySummary`，仅查询历史列表必要字段（不取全量消息载荷）。
+- `apps/pilot/server/utils/chat-turn-queue.ts`
+  - 新增批量 `getSessionRunStateMapSafe`，替代逐条 N+1 状态查询。
+
+### fix(pilot-routing/websearch): classifier_failed 联网兜底 + quota-auto 尊重禁用绑定 + Thinking 终态收口
+
+- `packages/tuff-intelligence/src/business/pilot/conversation.ts`
+  - `shouldExecutePilotWebsearch` 在 `intentWebsearchRequired=false` 且 `intentWebsearchReason=classifier_failed` 时允许启发式联网兜底，避免“今日新闻”被硬门禁拦截。
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - 透传 `intentWebsearchReason` 到联网决策，便于 classifier fallback 生效并可观测。
+- `apps/pilot/server/utils/pilot-routing-resolver.ts`
+  - 为 `quota-auto` 增加“模型绑定禁用策略”过滤：若某 `channelId+providerModel` 仅存在禁用绑定，不再进入候选池。
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+  - 旧链路运行卡片新增 `websearch.decision/websearch.skipped` 展示，明确“是否检索/为何跳过”。
+  - `Thinking` 事件对 `__end__` 哨兵去噪，并在 `assistant.final/done/error/turn.finished` 兜底收口，避免卡片长期停留“进行中”。
+- `apps/pilot/server/utils/__tests__/pilot-conversation-shared.test.ts`
+  - 新增断言：`classifier_failed` + 新闻类问题触发启发式联网。
+- `apps/pilot/server/utils/__tests__/pilot-routing-resolver.intent.test.ts`
+  - 新增断言：`quota-auto` 会跳过显式禁用的 provider 绑定。
+
+### fix(pilot-websearch-ui): 结果可见性增强与状态收口（旧链路）
+
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+  - `websearch.decision` 运行卡状态改为 `completed`（仅表达“决策已完成”），避免长期停留“进行中”。
+  - `pilot_tool_card` 增加时序防回退：支持按 `seq` 忽略旧事件；终态（`completed/failed/rejected/cancelled`）禁止被非终态覆盖。
+  - `pilot_tool_card` 合并策略增强：后续事件未携带 `sources` 时保留已有来源，避免“搜到内容”被清空。
+- `apps/pilot/app/components/chat/attachments/card/PilotToolCard.vue`
+  - 来源展示增强为 `title + domain + url + snippet`，并默认展示 Top 5，提升“具体搜到了什么”的可读性。
+- `apps/pilot/shared/pilot-system-message.ts`
+  - `websearch.decision` 的 system-policy 卡状态统一收口为 `completed`，与前端旧链路语义对齐。
+- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+  - 快照重建侧同步 `websearch.decision` 收口策略。
+  - 工具卡重建增加乱序与终态防回退保护，并在空 `sources` 更新时保留已有来源。
+- `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+  - 新增回归：`websearch.decision` 卡应为 `completed`。
+  - 新增回归：`run.audit` 乱序/空 `sources` 场景下，工具卡不回退且保留来源列表。
 
 ## 2026-03-24
 
