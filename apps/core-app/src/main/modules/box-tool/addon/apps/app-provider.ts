@@ -237,6 +237,7 @@ const MISSING_ICON_CONFIG_KEY = 'app_provider_missing_icon_apps'
 const PENDING_DELETION_CONFIG_KEY = 'app_provider_pending_deletion'
 const BACKFILL_LAST_RUN_CONFIG_KEY = 'app_provider_last_backfill'
 const FULL_SYNC_LAST_RUN_CONFIG_KEY = 'app_provider_last_full_sync'
+const FULL_SYNC_PERSIST_RETRY_BASE_DELAY_MS = 200
 const DELETION_GRACE_PERIOD_MS = 3 * 60 * 1000 // 3 minutes grace period
 const DELETION_MIN_MISS_COUNT = 2 // Must be missing for at least 2 scans
 const STARTUP_BACKFILL_INITIAL_DELAY_MS = 15_000
@@ -254,6 +255,8 @@ export interface AppIndexSettings {
   fullSyncEnabled: boolean
   fullSyncIntervalMs: number
   fullSyncCheckIntervalMs: number
+  fullSyncCooldownMs: number
+  fullSyncPersistRetry: number
 }
 
 const DEFAULT_APP_INDEX_SETTINGS: AppIndexSettings = {
@@ -264,7 +267,9 @@ const DEFAULT_APP_INDEX_SETTINGS: AppIndexSettings = {
   startupBackfillRetryMaxMs: 5 * 60 * 1000,
   fullSyncEnabled: true,
   fullSyncIntervalMs: 24 * 60 * 60 * 1000,
-  fullSyncCheckIntervalMs: 10 * 60 * 1000
+  fullSyncCheckIntervalMs: 10 * 60 * 1000,
+  fullSyncCooldownMs: 60 * 60 * 1000,
+  fullSyncPersistRetry: 3
 }
 
 interface PendingDeletionEntry {
@@ -293,6 +298,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private appIndexSettings: AppIndexSettings = { ...DEFAULT_APP_INDEX_SETTINGS }
   private startupBackfillStarted = false
   private fullSyncRegistered = false
+  private volatileLastFullSyncTime: number | null = null
 
   constructor() {
     logApp('Initializing AppProvider service', LogStyle.info)
@@ -397,6 +403,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       fullSyncCheckIntervalMs: clampMs(
         data.fullSyncCheckIntervalMs,
         DEFAULT_APP_INDEX_SETTINGS.fullSyncCheckIntervalMs
+      ),
+      fullSyncCooldownMs: clampMs(
+        data.fullSyncCooldownMs,
+        DEFAULT_APP_INDEX_SETTINGS.fullSyncCooldownMs
+      ),
+      fullSyncPersistRetry: Math.max(
+        1,
+        clampCount(data.fullSyncPersistRetry, DEFAULT_APP_INDEX_SETTINGS.fullSyncPersistRetry)
       )
     }
   }
@@ -814,7 +828,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       async () => {
         await this._runFullSyncIfDue()
       },
-      { interval: intervalMs, unit: 'milliseconds' }
+      {
+        interval: intervalMs,
+        unit: 'milliseconds',
+        lane: 'maintenance',
+        backpressure: 'latest_wins',
+        dedupeKey: 'app_provider_full_sync',
+        maxInFlight: 1
+      }
     )
   }
 
@@ -832,7 +853,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const lastSync = await this._getLastFullSyncTime()
     const now = Date.now()
-    if (lastSync && now - lastSync < this.appIndexSettings.fullSyncIntervalMs) {
+    const fullSyncCooldownMs = Math.max(
+      this.appIndexSettings.fullSyncCooldownMs,
+      this.appIndexSettings.fullSyncIntervalMs
+    )
+    if (lastSync && now - lastSync < fullSyncCooldownMs) {
       appProviderLog.debug(
         `${chalk.cyan(((now - lastSync) / (60 * 60 * 1000)).toFixed(2))} hours since last full sync, skipping`
       )
@@ -2086,19 +2111,24 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private async _getConfigTimestamp(key: string): Promise<number | null> {
     if (!this.dbUtils) return null
 
-    const db = this.dbUtils.getDb()
-    const result = await db.select().from(configSchema).where(eq(configSchema.key, key)).limit(1)
+    try {
+      const db = this.dbUtils.getDb()
+      const result = await db.select().from(configSchema).where(eq(configSchema.key, key)).limit(1)
 
-    if (result.length > 0 && result[0].value) {
-      const parsed = Number.parseInt(result[0].value, 10)
-      if (!Number.isNaN(parsed)) return parsed
+      if (result.length > 0 && result[0].value) {
+        const parsed = Number.parseInt(result[0].value, 10)
+        if (!Number.isNaN(parsed)) return parsed
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      logApp(`Failed to read config ${key}: ${message}`, LogStyle.warning)
     }
 
     return null
   }
 
-  private async _setConfigValue(key: string, value: string): Promise<void> {
-    if (!this.dbUtils) return
+  private async _setConfigValue(key: string, value: string): Promise<boolean> {
+    if (!this.dbUtils) return false
 
     const db = this.dbUtils.getDb()
     try {
@@ -2112,14 +2142,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           { label: `app-provider.config.${key}` }
         )
       )
+      return true
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       logApp(`Failed to persist config ${key}: ${message}`, LogStyle.warning)
+      return false
     }
   }
 
-  private async _setConfigTimestamp(key: string, timestamp: number): Promise<void> {
-    await this._setConfigValue(key, timestamp.toString())
+  private async _setConfigTimestamp(key: string, timestamp: number): Promise<boolean> {
+    return this._setConfigValue(key, timestamp.toString())
   }
 
   private async _setLastBackfillTime(timestamp: number): Promise<void> {
@@ -2131,11 +2163,32 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async _getLastFullSyncTime(): Promise<number | null> {
-    return this._getConfigTimestamp(FULL_SYNC_LAST_RUN_CONFIG_KEY)
+    const persisted = await this._getConfigTimestamp(FULL_SYNC_LAST_RUN_CONFIG_KEY)
+    if (persisted && this.volatileLastFullSyncTime) {
+      return Math.max(persisted, this.volatileLastFullSyncTime)
+    }
+    return persisted ?? this.volatileLastFullSyncTime
   }
 
   private async _setLastFullSyncTime(timestamp: number): Promise<void> {
-    await this._setConfigTimestamp(FULL_SYNC_LAST_RUN_CONFIG_KEY, timestamp)
+    this.volatileLastFullSyncTime = timestamp
+
+    const retryCount = Math.max(1, this.appIndexSettings.fullSyncPersistRetry)
+    for (let attempt = 0; attempt < retryCount; attempt++) {
+      const persisted = await this._setConfigTimestamp(FULL_SYNC_LAST_RUN_CONFIG_KEY, timestamp)
+      if (persisted) {
+        return
+      }
+      if (attempt < retryCount - 1) {
+        const delayMs = FULL_SYNC_PERSIST_RETRY_BASE_DELAY_MS * (attempt + 1)
+        await sleep(delayMs)
+      }
+    }
+
+    logApp(
+      `Failed to persist full sync timestamp after ${retryCount} attempts, using in-memory fallback`,
+      LogStyle.warning
+    )
   }
 
   private async _getLastScanTime(): Promise<number | null> {

@@ -2,6 +2,7 @@ import { sleep } from '@talex-touch/utils'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('DbRetry')
+let SQLITE_BUSY_RETRY_COUNT = 0
 
 export interface SqliteRetryOptions {
   retries?: number
@@ -91,6 +92,10 @@ export function isSqliteBusyError(error: unknown): boolean {
   return hasSqliteBusyError(error)
 }
 
+export function getSqliteBusyRetryCount(): number {
+  return SQLITE_BUSY_RETRY_COUNT
+}
+
 export async function withSqliteRetry<T>(
   operation: () => Promise<T>,
   options: SqliteRetryOptions = {}
@@ -117,6 +122,7 @@ export async function withSqliteRetry<T>(
       const backoff = Math.max(0, Math.round(backoffBase + (Math.random() * 2 - 1) * jitter))
 
       const logState = nextRetryLogState(label, logThrottleMs)
+      SQLITE_BUSY_RETRY_COUNT += 1
       if (logState.shouldLog) {
         log.warn(`SQLITE_BUSY during ${label}, retry ${attempt + 1}/${retries}`, {
           meta: {

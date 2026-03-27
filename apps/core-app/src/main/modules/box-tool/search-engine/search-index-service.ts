@@ -1,4 +1,5 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import { createHash } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
@@ -13,6 +14,10 @@ const WORD_SPLIT_REGEX = /[\s\-_]+/g
 const PATH_SPLIT_REGEX = /[\\/]+/
 const NGRAM_PREFIX = 'ng:'
 const NGRAM_MIN_WORD_LENGTH = 3
+const NGRAM_SOURCE_MIN_PRIORITY = 1.1
+const NGRAM_MAX_SOURCE_KEYWORDS = 96
+const NGRAM_MAX_ENTRIES_PER_ITEM = 256
+const PRIORITY_EPSILON = 0.0001
 const ZERO_RESULT_DIAGNOSTIC_THROTTLE_MS = 30_000
 
 /**
@@ -60,6 +65,23 @@ interface PreparedIndexDocument {
   path: string
   content: string
   keywordEntries: SearchIndexKeyword[]
+  keywordHash: string
+}
+
+type SearchIndexWriteTx = Pick<
+  LibSQLDatabase<typeof schema>,
+  'run' | 'delete' | 'insert' | 'select'
+>
+
+type SearchIndexLogAction = 'index' | 'remove' | 'removeByProvider'
+
+interface SearchIndexLogBucket {
+  count: number
+  items: number
+  totalDurationMs: number
+  maxDurationMs: number
+  windowStartedAt: number
+  flushTimer: ReturnType<typeof setTimeout> | null
 }
 
 export interface SearchIndexServiceOptions {
@@ -77,6 +99,11 @@ export class SearchIndexService {
   private pinyinPromise: Promise<typeof import('pinyin-pro')> | null = null
   private readonly directMode: boolean
   private readonly zeroResultDiagnosticAt = new Map<string, number>()
+  private readonly logWindowMs = 12_000
+  private readonly slowLogThresholdMs = 1_500
+  private readonly indexLogBucket = this.createLogBucket()
+  private readonly removeLogBucket = this.createLogBucket()
+  private readonly removeByProviderLogBucket = this.createLogBucket()
 
   /** AIMD adaptive batch scheduler for indexItems — persists across calls. */
   private readonly indexBatchScheduler = new AdaptiveBatchScheduler({
@@ -110,6 +137,113 @@ export class SearchIndexService {
       return withSqliteRetry(operation, { label })
     }
     return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }))
+  }
+
+  private createLogBucket(): SearchIndexLogBucket {
+    return {
+      count: 0,
+      items: 0,
+      totalDurationMs: 0,
+      maxDurationMs: 0,
+      windowStartedAt: Date.now(),
+      flushTimer: null
+    }
+  }
+
+  private getLogBucket(action: SearchIndexLogAction): SearchIndexLogBucket {
+    switch (action) {
+      case 'index':
+        return this.indexLogBucket
+      case 'remove':
+        return this.removeLogBucket
+      case 'removeByProvider':
+        return this.removeByProviderLogBucket
+    }
+  }
+
+  private getLogLabel(action: SearchIndexLogAction): string {
+    switch (action) {
+      case 'index':
+        return 'Indexed'
+      case 'remove':
+        return 'Removed'
+      case 'removeByProvider':
+        return 'removeByProvider'
+    }
+  }
+
+  private flushLogBucket(action: SearchIndexLogAction): void {
+    const bucket = this.getLogBucket(action)
+    if (bucket.count === 0) {
+      return
+    }
+    if (bucket.flushTimer) {
+      clearTimeout(bucket.flushTimer)
+      bucket.flushTimer = null
+    }
+    const windowMs = Math.max(1, Date.now() - bucket.windowStartedAt)
+    const avgMs = bucket.totalDurationMs / Math.max(1, bucket.count)
+    const avgItems = bucket.items / Math.max(1, bucket.count)
+    console.debug(
+      `[SearchIndexService] ${this.getLogLabel(action)} summary calls=${bucket.count} items=${
+        bucket.items
+      } avgItems=${avgItems.toFixed(1)} avgMs=${avgMs.toFixed(0)} maxMs=${bucket.maxDurationMs.toFixed(
+        0
+      )} windowMs=${windowMs}`
+    )
+    bucket.count = 0
+    bucket.items = 0
+    bucket.totalDurationMs = 0
+    bucket.maxDurationMs = 0
+    bucket.windowStartedAt = Date.now()
+  }
+
+  private scheduleLogFlush(action: SearchIndexLogAction): void {
+    const bucket = this.getLogBucket(action)
+    if (bucket.flushTimer) {
+      return
+    }
+    const elapsed = Date.now() - bucket.windowStartedAt
+    const delay = Math.max(0, this.logWindowMs - elapsed)
+    bucket.flushTimer = setTimeout(() => {
+      bucket.flushTimer = null
+      this.flushLogBucket(action)
+    }, delay)
+    if (typeof bucket.flushTimer.unref === 'function') {
+      bucket.flushTimer.unref()
+    }
+  }
+
+  private recordOperationLog(
+    action: SearchIndexLogAction,
+    items: number,
+    durationMs: number,
+    extra?: string
+  ): void {
+    const bucket = this.getLogBucket(action)
+    const now = Date.now()
+    if (bucket.count === 0) {
+      bucket.windowStartedAt = now
+    }
+    bucket.count += 1
+    bucket.items += items
+    bucket.totalDurationMs += durationMs
+    bucket.maxDurationMs = Math.max(bucket.maxDurationMs, durationMs)
+
+    if (durationMs >= this.slowLogThresholdMs) {
+      const suffix = extra ? ` ${extra}` : ''
+      console.debug(
+        `[SearchIndexService] ${this.getLogLabel(action)} slow batch items=${items} duration=${durationMs.toFixed(
+          0
+        )}ms${suffix}`
+      )
+    }
+
+    if (now - bucket.windowStartedAt >= this.logWindowMs) {
+      this.flushLogBucket(action)
+      return
+    }
+    this.scheduleLogFlush(action)
   }
 
   async indexItems(items: SearchIndexItem[]): Promise<void> {
@@ -167,11 +301,7 @@ export class SearchIndexService {
       }
     }
 
-    console.debug(
-      `[SearchIndexService] Indexed ${items.length} items in ${(performance.now() - start).toFixed(
-        0
-      )}ms`
-    )
+    this.recordOperationLog('index', items.length, performance.now() - start)
   }
 
   async removeItems(itemIds: string[]): Promise<void> {
@@ -189,15 +319,12 @@ export class SearchIndexService {
           for (const itemId of batch) {
             await tx.run(sql`DELETE FROM search_index WHERE item_id = ${itemId}`)
             await tx.delete(schema.keywordMappings).where(eq(schema.keywordMappings.itemId, itemId))
+            await tx.delete(schema.searchIndexMeta).where(eq(schema.searchIndexMeta.itemId, itemId))
           }
         })
       })
     }
-    console.debug(
-      `[SearchIndexService] Removed ${itemIds.length} items in ${(
-        performance.now() - start
-      ).toFixed(0)}ms`
-    )
+    this.recordOperationLog('remove', itemIds.length, performance.now() - start)
   }
 
   /**
@@ -221,10 +348,11 @@ export class SearchIndexService {
     if (itemIds.length === 0) return
     const start = performance.now()
     await this.removeItems(itemIds)
-    console.debug(
-      `[SearchIndexService] removeByProvider(${providerId}) removed ${itemIds.length} items in ${(
-        performance.now() - start
-      ).toFixed(0)}ms`
+    this.recordOperationLog(
+      'removeByProvider',
+      itemIds.length,
+      performance.now() - start,
+      `provider=${providerId}`
     )
   }
 
@@ -484,6 +612,7 @@ export class SearchIndexService {
     const initStart = performance.now()
     await this.createSearchIndexTable()
     await this.createFileFtsTable()
+    await this.createSearchIndexMetaTable()
     await this.createKeywordMappingIndexes()
 
     this.initialized = true
@@ -530,6 +659,19 @@ export class SearchIndexService {
     )`)
   }
 
+  private async createSearchIndexMetaTable(): Promise<void> {
+    await this.db.run(sql`CREATE TABLE IF NOT EXISTS search_index_meta (
+      provider_id text NOT NULL,
+      item_id text NOT NULL,
+      keyword_hash text NOT NULL,
+      updated_at integer DEFAULT (strftime('%s', 'now')) NOT NULL,
+      PRIMARY KEY(provider_id, item_id)
+    )`)
+    await this.db.run(
+      sql`CREATE INDEX IF NOT EXISTS idx_search_index_meta_updated_at ON search_index_meta (updated_at)`
+    )
+  }
+
   private async createKeywordMappingIndexes(): Promise<void> {
     await this.db.run(
       sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_provider_keyword ON keyword_mappings(provider_id, keyword)`
@@ -537,12 +679,14 @@ export class SearchIndexService {
     await this.db.run(
       sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_provider_item ON keyword_mappings(provider_id, item_id)`
     )
+    await this.db.run(
+      sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_provider_item_keyword ON keyword_mappings(provider_id, item_id, keyword)`
+    )
   }
 
-  private async applyDocument(
-    tx: Pick<LibSQLDatabase<typeof schema>, 'run' | 'delete' | 'insert'>,
-    doc: PreparedIndexDocument
-  ): Promise<void> {
+  private async applyDocument(tx: SearchIndexWriteTx, doc: PreparedIndexDocument): Promise<void> {
+    const shouldUpdateKeywords = await this.shouldUpdateKeywordMappings(tx, doc)
+
     await tx.run(sql`DELETE FROM search_index WHERE item_id = ${doc.itemId}`)
 
     await tx.run(sql`
@@ -569,11 +713,99 @@ export class SearchIndexService {
       )
     `)
 
-    await tx.delete(schema.keywordMappings).where(eq(schema.keywordMappings.itemId, doc.itemId))
+    if (shouldUpdateKeywords) {
+      await this.applyKeywordMappingsDelta(tx, doc)
+    }
 
-    if (doc.keywordEntries.length > 0) {
+    await this.upsertSearchIndexMeta(tx, doc)
+  }
+
+  private async shouldUpdateKeywordMappings(
+    tx: SearchIndexWriteTx,
+    doc: PreparedIndexDocument
+  ): Promise<boolean> {
+    const existingMeta = await tx
+      .select({ keywordHash: schema.searchIndexMeta.keywordHash })
+      .from(schema.searchIndexMeta)
+      .where(
+        and(
+          eq(schema.searchIndexMeta.providerId, doc.providerId),
+          eq(schema.searchIndexMeta.itemId, doc.itemId)
+        )
+      )
+      .limit(1)
+
+    return existingMeta[0]?.keywordHash !== doc.keywordHash
+  }
+
+  private async applyKeywordMappingsDelta(
+    tx: SearchIndexWriteTx,
+    doc: PreparedIndexDocument
+  ): Promise<void> {
+    const existingRows = await tx
+      .select({
+        keyword: schema.keywordMappings.keyword,
+        priority: schema.keywordMappings.priority
+      })
+      .from(schema.keywordMappings)
+      .where(
+        and(
+          eq(schema.keywordMappings.providerId, doc.providerId),
+          eq(schema.keywordMappings.itemId, doc.itemId)
+        )
+      )
+
+    const existingMap = new Map<string, number>()
+    for (const row of existingRows) {
+      const prev = existingMap.get(row.keyword)
+      if (prev === undefined || row.priority > prev) {
+        existingMap.set(row.keyword, row.priority)
+      }
+    }
+
+    const nextMap = this.toKeywordPriorityMap(doc.keywordEntries)
+    const deleteKeywords: string[] = []
+    const rewriteEntries: SearchIndexKeyword[] = []
+
+    for (const [keyword] of existingMap) {
+      if (!nextMap.has(keyword)) {
+        deleteKeywords.push(keyword)
+      }
+    }
+
+    for (const [keyword, priority] of nextMap) {
+      const existingPriority = existingMap.get(keyword)
+      if (existingPriority === undefined || !this.isPriorityEqual(existingPriority, priority)) {
+        rewriteEntries.push({ value: keyword, priority })
+      }
+    }
+
+    if (deleteKeywords.length > 0) {
+      await tx
+        .delete(schema.keywordMappings)
+        .where(
+          and(
+            eq(schema.keywordMappings.providerId, doc.providerId),
+            eq(schema.keywordMappings.itemId, doc.itemId),
+            inArray(schema.keywordMappings.keyword, deleteKeywords)
+          )
+        )
+    }
+
+    if (rewriteEntries.length > 0) {
+      const rewriteKeywords = rewriteEntries.map((entry) => entry.value)
+      await tx
+        .delete(schema.keywordMappings)
+        .where(
+          and(
+            eq(schema.keywordMappings.providerId, doc.providerId),
+            eq(schema.keywordMappings.itemId, doc.itemId),
+            inArray(schema.keywordMappings.keyword, rewriteKeywords)
+          )
+        )
+
       await tx.insert(schema.keywordMappings).values(
-        doc.keywordEntries.map(({ value, priority }) => ({
+        rewriteEntries.map(({ value, priority }) => ({
           keyword: value,
           itemId: doc.itemId,
           providerId: doc.providerId,
@@ -581,6 +813,55 @@ export class SearchIndexService {
         }))
       )
     }
+  }
+
+  private async upsertSearchIndexMeta(
+    tx: SearchIndexWriteTx,
+    doc: PreparedIndexDocument
+  ): Promise<void> {
+    await tx
+      .insert(schema.searchIndexMeta)
+      .values({
+        providerId: doc.providerId,
+        itemId: doc.itemId,
+        keywordHash: doc.keywordHash,
+        updatedAt: new Date()
+      })
+      .onConflictDoUpdate({
+        target: [schema.searchIndexMeta.providerId, schema.searchIndexMeta.itemId],
+        set: {
+          keywordHash: doc.keywordHash,
+          updatedAt: new Date()
+        }
+      })
+  }
+
+  private toKeywordPriorityMap(entries: SearchIndexKeyword[]): Map<string, number> {
+    const map = new Map<string, number>()
+    for (const entry of entries) {
+      const value = entry.value.trim().toLowerCase()
+      if (!value) continue
+      const priority = entry.priority ?? 1
+      const existing = map.get(value)
+      if (existing === undefined || priority > existing) {
+        map.set(value, priority)
+      }
+    }
+    return map
+  }
+
+  private isPriorityEqual(left: number, right: number): boolean {
+    return Math.abs(left - right) <= PRIORITY_EPSILON
+  }
+
+  private buildKeywordHash(entries: SearchIndexKeyword[]): string {
+    const normalized = Array.from(this.toKeywordPriorityMap(entries).entries()).sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0
+    )
+    const raw = normalized
+      .map(([keyword, priority]) => `${keyword}:${priority.toFixed(4)}`)
+      .join('\n')
+    return createHash('sha1').update(raw).digest('hex')
   }
 
   private async prepareDocument(item: SearchIndexItem): Promise<PreparedIndexDocument> {
@@ -687,16 +968,31 @@ export class SearchIndexService {
       .map(([value, priority]) => ({ value, priority }))
       .filter(({ value }) => this.isKeywordValid(value))
 
-    // Generate n-gram entries for fuzzy recall (only for non-trivial keywords).
-    // No static cap — the AIMD adaptive batch scheduler will automatically
-    // shrink the batch size when documents produce many n-grams, keeping
-    // transaction durations under the target without sacrificing search quality.
+    // Generate n-gram entries with hard limits to avoid write amplification.
+    // We prefer higher-priority keywords (title/alias-like terms) as n-gram sources.
+    const ngramSources = keywordEntries
+      .filter(
+        ({ value, priority }) =>
+          priority >= NGRAM_SOURCE_MIN_PRIORITY &&
+          value.length >= NGRAM_MIN_WORD_LENGTH &&
+          !value.startsWith(NGRAM_PREFIX)
+      )
+      .sort((left, right) => {
+        if (right.priority !== left.priority) return right.priority - left.priority
+        return left.value < right.value ? -1 : left.value > right.value ? 1 : 0
+      })
+      .slice(0, NGRAM_MAX_SOURCE_KEYWORDS)
+
     const ngramSet = new Set<string>()
-    for (const { value } of keywordEntries) {
-      if (value.length >= NGRAM_MIN_WORD_LENGTH && !value.startsWith(NGRAM_PREFIX)) {
-        for (const ngram of generateNgrams(value, 2)) {
-          ngramSet.add(ngram)
+    for (const { value } of ngramSources) {
+      for (const ngram of generateNgrams(value, 2)) {
+        ngramSet.add(ngram)
+        if (ngramSet.size >= NGRAM_MAX_ENTRIES_PER_ITEM) {
+          break
         }
+      }
+      if (ngramSet.size >= NGRAM_MAX_ENTRIES_PER_ITEM) {
+        break
       }
     }
     const ngramEntries: SearchIndexKeyword[] = Array.from(ngramSet).map((ng) => ({
@@ -709,6 +1005,7 @@ export class SearchIndexService {
 
     const tags = (item.tags || []).map((tag) => tag.toLowerCase()).join(' ')
     const keywordField = keywordEntries.map((entry) => entry.value).join(' ')
+    const keywordHash = this.buildKeywordHash(allKeywordEntries)
 
     return {
       itemId: item.itemId,
@@ -720,7 +1017,8 @@ export class SearchIndexService {
       tags,
       path: item.path?.toLowerCase() ?? '',
       content: item.content?.toLowerCase() ?? '',
-      keywordEntries: allKeywordEntries
+      keywordEntries: allKeywordEntries,
+      keywordHash
     }
   }
 

@@ -7,6 +7,8 @@ export interface AppIndexSettings {
   fullSyncEnabled: boolean
   fullSyncIntervalMs: number
   fullSyncCheckIntervalMs: number
+  fullSyncCooldownMs: number
+  fullSyncPersistRetry: number
 }
 
 export interface AppIndexAddPathRequest {
