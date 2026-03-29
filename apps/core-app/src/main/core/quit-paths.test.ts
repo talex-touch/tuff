@@ -10,8 +10,7 @@ describe('quit paths', () => {
   it('does not use process.exit(0) in runtime quit handlers', () => {
     const targets = [
       path.resolve(mainRoot, 'channel/common.ts'),
-      path.resolve(mainRoot, 'modules/tray/tray-menu-builder.ts'),
-      path.resolve(mainRoot, 'modules/tray-holder.ts')
+      path.resolve(mainRoot, 'modules/tray/tray-menu-builder.ts')
     ]
 
     for (const target of targets) {

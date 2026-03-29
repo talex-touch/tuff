@@ -70,7 +70,8 @@ import {
   platformCapabilityRegistry,
   registerDefaultPlatformCapabilities
 } from '../modules/platform/capability-registry'
-import { activeAppService } from '../modules/system/active-app'
+import { nativeShareService } from '../modules/flow-bus/native-share'
+import { activeAppService, isActiveAppCapabilityAvailable } from '../modules/system/active-app'
 import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage'
 import { getNetworkService } from '../modules/network'
 import { deviceIdleService } from '../service/device-idle-service'
@@ -103,6 +104,29 @@ const TUFF_CLI_CAPABILITY: PlatformCapability = {
   description: 'CLI 工具联动能力（Beta，开发中）',
   scope: 'plugin',
   status: 'beta'
+}
+const ACTIVE_APP_CAPABILITY: PlatformCapability = {
+  id: 'platform.active-app',
+  name: 'Active App',
+  description: '当前前台应用与窗口上下文读取能力',
+  scope: 'system',
+  status: 'beta',
+  sensitive: true
+}
+const NATIVE_SHARE_CAPABILITY: PlatformCapability = {
+  id: 'platform.native-share',
+  name: 'Native Share',
+  description: '系统原生分享目标与分发能力',
+  scope: 'system',
+  status: 'beta'
+}
+const SYSTEM_PERMISSION_CAPABILITY: PlatformCapability = {
+  id: 'platform.permission-checker',
+  name: 'Permission Checker',
+  description: '系统权限状态检查与设置跳转能力',
+  scope: 'system',
+  status: 'beta',
+  sensitive: true
 }
 const log = createLogger('CommonChannel')
 
@@ -540,14 +564,34 @@ async function listPlatformCapabilities(
   query: PlatformCapabilityListRequest
 ): Promise<PlatformCapability[]> {
   const capabilities = platformCapabilityRegistry.list(query)
-  const hasBuiltinTuffCli = capabilities.some((item) => item.id === TUFF_CLI_CAPABILITY.id)
-  if (hasBuiltinTuffCli) {
-    return capabilities
+  const appendDynamicCapability = (capability: PlatformCapability): void => {
+    if (capabilities.some((item) => item.id === capability.id)) {
+      return
+    }
+    if (matchCapabilityQuery(capability, query)) {
+      capabilities.push(capability)
+    }
+  }
+
+  if (await isActiveAppCapabilityAvailable()) {
+    appendDynamicCapability(ACTIVE_APP_CAPABILITY)
+  }
+
+  if (nativeShareService.getAvailableTargets().length > 0) {
+    appendDynamicCapability(NATIVE_SHARE_CAPABILITY)
+  }
+
+  if (
+    process.platform === 'darwin' ||
+    process.platform === 'win32' ||
+    process.platform === 'linux'
+  ) {
+    appendDynamicCapability(SYSTEM_PERMISSION_CAPABILITY)
   }
 
   const tuffCliAvailable = await detectTuffCliAvailability()
-  if (tuffCliAvailable && matchCapabilityQuery(TUFF_CLI_CAPABILITY, query)) {
-    capabilities.push(TUFF_CLI_CAPABILITY)
+  if (tuffCliAvailable) {
+    appendDynamicCapability(TUFF_CLI_CAPABILITY)
   }
   return capabilities
 }
@@ -718,6 +762,8 @@ export class CommonChannelModule extends BaseModule {
   private transportDisposers: Array<() => void> = []
   private batteryPollTimer: NodeJS.Timeout | undefined
   private touchApp: TalexTouch.TouchApp | null = null
+  private legacyUsageCounts = new Map<string, number>()
+  private warnedLegacyEvents = new Set<string>()
 
   constructor() {
     super(CommonChannelModule.key, {
@@ -1053,6 +1099,18 @@ export class CommonChannelModule extends BaseModule {
     this.registerPresetTransportHandlers(transport, registerSafeHandler)
   }
 
+  private recordLegacyTransportUsage(eventName: string, replacement: string): void {
+    const hits = (this.legacyUsageCounts.get(eventName) ?? 0) + 1
+    this.legacyUsageCounts.set(eventName, hits)
+    if (this.warnedLegacyEvents.has(eventName)) {
+      return
+    }
+    this.warnedLegacyEvents.add(eventName)
+    log.warn(`[CommonChannel] Legacy event used: ${eventName}. Use ${replacement} instead.`, {
+      meta: { eventName, replacement, hits }
+    })
+  }
+
   private createSafeOperationHandler(transport: NonNullable<CommonChannelModule['transport']>) {
     return <TReq, TExtra extends Record<string, unknown> = Record<string, never>>(
       event: TuffEvent<TReq, unknown> & { toEventName: () => string },
@@ -1254,6 +1312,10 @@ export class CommonChannelModule extends BaseModule {
         return await activeAppService.getActiveApp(Boolean(payload?.forceRefresh))
       }),
       transport.on(systemGetActiveAppLegacyEvent, async (payload) => {
+        this.recordLegacyTransportUsage(
+          systemGetActiveAppLegacyEvent.toEventName(),
+          AppEvents.system.getActiveApp.toEventName()
+        )
         return await activeAppService.getActiveApp(Boolean(payload?.forceRefresh))
       }),
       transport.on<SecureValueGetRequest, string | null>(

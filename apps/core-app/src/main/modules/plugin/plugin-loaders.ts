@@ -74,18 +74,7 @@ abstract class BasePluginLoader {
   constructor(pluginName: string, pluginPath: string) {
     this.pluginName = pluginName
     this.pluginPath = pluginPath
-
-    const placeholderIcon = new TuffIconImpl(this.pluginPath, 'emoji', '')
-    placeholderIcon.status = 'error'
-    this.touchPlugin = new TouchPlugin(
-      this.pluginName,
-      placeholderIcon,
-      '0.0.0',
-      'Loading...',
-      '',
-      { enable: false, address: '' },
-      this.pluginPath
-    )
+    this.touchPlugin = createPluginErrorPlaceholder(this.pluginName, this.pluginPath)
   }
 
   /**
@@ -373,6 +362,27 @@ abstract class BasePluginLoader {
       })
     }
   }
+}
+
+export function createPluginErrorPlaceholder(
+  pluginName: string,
+  pluginPath: string,
+  description = 'Loading...',
+  options?: { skipDataInit?: boolean }
+): TouchPlugin {
+  const placeholderIcon = new TuffIconImpl(pluginPath, 'emoji', '')
+  placeholderIcon.status = 'error'
+  return new TouchPlugin(
+    pluginName,
+    placeholderIcon,
+    '0.0.0',
+    description,
+    '',
+    { enable: false, address: '', source: false },
+    pluginPath,
+    undefined,
+    options
+  )
 }
 
 /**

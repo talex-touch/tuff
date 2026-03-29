@@ -156,7 +156,9 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
         enforce(context, 'flow:native:share', payload?._sdkapi)
         const options = nativeShareService.payloadToShareOptions(payload.payload)
         if (payload.target) {
-          options.target = payload.target as NativeShareOptions['target']
+          options.target = nativeShareService.normalizeTarget(
+            payload.target
+          ) as NativeShareOptions['target']
         }
         return await nativeShareService.share(options)
       })
