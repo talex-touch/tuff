@@ -132,9 +132,10 @@ export class MetaOverlayManager {
 
     const webPreferences: Electron.WebPreferences = {
       preload: preloadPath,
-      webSecurity: false,
-      nodeIntegration: true,
-      contextIsolation: false,
+      webSecurity: true,
+      nodeIntegration: false,
+      nodeIntegrationInSubFrames: false,
+      contextIsolation: true,
       sandbox: false,
       additionalArguments: buildWindowArgs({ touchType: 'core-box', metaOverlay: true })
     }

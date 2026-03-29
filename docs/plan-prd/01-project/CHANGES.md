@@ -13,6 +13,38 @@
 
 ## 2026-03-29
 
+### fix(core-app/security): 收紧远程内容渲染与插件 UI legacy 风险面
+
+- `apps/core-app/src/renderer/src/views/base/store/StoreDetailOverlay.vue`
+  - 插件商店 README 不再走 `v-html` 注入链，改为统一使用 `TxMarkdownView` 渲染 Markdown。
+- `apps/core-app/src/renderer/src/components/download/UpdatePromptDialog.vue`
+  - 更新说明不再手写 regex 转 HTML + `v-html`，改为走统一 Markdown 渲染组件，避免远程 release notes 直接落到 HTML sink。
+- `apps/core-app/src/renderer/src/composables/store/useStoreReadme.ts`
+  - README 拉取 URL 收紧为仅允许 `http/https` 协议，提前阻断异常协议输入。
+- `packages/tuffex/packages/components/src/markdown-view/src/TxMarkdownView.vue`
+  - DOMPurify 改为同步导入并在计算阶段完成 sanitize，避免 mounted 前首帧短暂渲染未清洗 HTML。
+- `apps/core-app/src/main/config/default.ts`
+  - 主窗口、BoxWindow、DivisionBox、Assistant、OmniPanel 默认 `webPreferences` 切到 `webSecurity=true + nodeIntegration=false + contextIsolation=true`。
+- `apps/core-app/src/preload/index.ts`
+  - 增加受限 `process` bridge，只补齐 renderer 仍依赖的只读运行时信息，避免在关闭 `nodeIntegration` 后出现兼容性白屏。
+- `apps/core-app/src/main/modules/plugin/runtime/plugin-ui-security.ts`
+  - 新增插件 UI 安全 helper，显式标记当前插件视图仍属于 legacy privileged runtime，并统一收口风险告警。
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+  - `apps/core-app/src/main/modules/division-box/session.ts`
+  - 两条插件 `WebContentsView` 链路继续保留 legacy 模式，但统一走 helper 且关闭 `nodeIntegrationInSubFrames`，不再把子 frame 一并提升为 Node 运行时。
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+  - 插件 `<webview>` 注入 attrs 改为走统一 helper，并在命中 legacy privileged runtime 时输出一次性结构化告警。
+- `package.json`
+  - 由于 core-app 的依赖解析实际走 workspace root lockfile，本轮在根级 overrides 收敛 `node-forge`、`srvx`、`yaml`、`picomatch` 的安全版本，避免 app 内部写“看似生效、实际无效”的局部 override。
+- 新增测试：
+  - `apps/core-app/src/main/config/default.test.ts`
+  - `apps/core-app/src/renderer/src/composables/store/useStoreReadme.test.ts`
+  - `apps/core-app/src/main/modules/plugin/runtime/plugin-ui-security.test.ts`
+- 验证：
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/config/default.test.ts" "src/renderer/src/composables/store/useStoreReadme.test.ts" "src/main/modules/plugin/runtime/plugin-ui-security.test.ts"`
+  - `pnpm -C "apps/core-app" run typecheck:web`
+  - `pnpm -C "apps/core-app" run typecheck:node` 仍被仓库既有缺文件问题阻塞：`src/main/modules/box-tool/addon/files/file-provider.ts` 缺失 `./services/file-provider-index-flush-service`
+
 ### refactor(core-app): 平台兼容与 legacy 收口
 
 - `apps/core-app/src/main/channel/common.ts`

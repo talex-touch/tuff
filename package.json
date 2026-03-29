@@ -117,9 +117,14 @@
       "@panva/hkdf": "1.0.2",
       "@types/node": "24.1.0",
       "fast-xml-parser": "4.5.4",
+      "node-forge@<1.4.0": "1.4.0",
       "nuxt": "catalog:build",
+      "picomatch@<2.3.2": "2.3.2",
+      "picomatch@>=4.0.0 <4.0.4": "4.0.4",
+      "srvx@<0.11.13": "0.11.13",
       "unplugin": "catalog:build",
-      "vite": "7.3.1"
+      "vite": "7.3.1",
+      "yaml@>=2.0.0 <2.8.3": "2.8.3"
     },
     "peerDependencyRules": {
       "ignoreMissing": [

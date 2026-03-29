@@ -7,8 +7,8 @@ import type { StorePluginListItem } from '~/composables/store/useStoreData'
  * - README content rendered from markdown
  * - Sidebar with plugin metadata
  */
-import { SharedPluginDetailMetaList, SharedPluginDetailReadme } from '@talex-touch/utils/renderer'
-import { TxRating } from '@talex-touch/tuffex'
+import { SharedPluginDetailMetaList } from '@talex-touch/utils/renderer'
+import { TxMarkdownView, TxRating } from '@talex-touch/tuffex'
 import { computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import StoreDetailSkeleton from '~/components/store/StoreDetailSkeleton.vue'
@@ -59,6 +59,7 @@ const pluginStatus = usePluginStatus(activePlugin)
 const { detailMeta } = useStoreDetail(activePlugin, t, pluginStatus)
 const readmeUrl = computed(() => activePlugin.value?.readmeUrl)
 const { readmeMarkdown, readmeLoading, readmeError } = useStoreReadme(readmeUrl, t)
+const readmeContent = computed(() => readmeMarkdown.value?.trim() || '')
 
 const canRate = computed(() => {
   return (
@@ -141,13 +142,10 @@ onMounted(() => {
             <i class="i-ri-error-warning-line" />
             <span>{{ readmeError }}</span>
           </div>
-          <SharedPluginDetailReadme
-            v-else
-            :readme="{ markdown: readmeMarkdown }"
-            title=""
-            empty-text="No README"
-            content-class="readme-content"
-          />
+          <div v-else-if="readmeContent" class="readme-content">
+            <TxMarkdownView :content="readmeContent" theme="auto" />
+          </div>
+          <p v-else class="readme-empty">No README</p>
         </div>
 
         <div class="sidebar">
@@ -237,6 +235,10 @@ onMounted(() => {
 .readme-content {
   line-height: 1.6;
 
+  :deep(.tx-markdown-view) {
+    font-size: inherit;
+  }
+
   :deep(h1),
   :deep(h2),
   :deep(h3),
@@ -302,6 +304,11 @@ onMounted(() => {
     border-radius: 8px;
     margin: 1rem 0;
   }
+}
+
+.readme-empty {
+  margin: 0;
+  color: var(--tx-text-color-secondary);
 }
 
 .sidebar {

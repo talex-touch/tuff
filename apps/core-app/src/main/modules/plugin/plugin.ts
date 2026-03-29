@@ -71,6 +71,10 @@ import {
   bundlePluginPreludeFromFile
 } from './runtime/plugin-prelude-compiler'
 import type { PluginInjections } from './runtime/plugin-injections'
+import {
+  createLegacyPluginWebviewAttrs,
+  warnLegacyPluginUiMode
+} from './runtime/plugin-ui-security'
 import { PluginViewLoader } from './view/plugin-view-loader'
 import { widgetManager } from './widget/widget-manager'
 
@@ -1742,6 +1746,7 @@ export class TouchPlugin implements ITouchPlugin {
     const pluginUa = `TalexTouch/${$pkg.version} (Plugins,like ${this.name})`
     const mainUserAgent = useSafeUserAgent(touchApp.window?.window) ?? app.userAgentFallback ?? ''
     const userAgent = mainUserAgent ? `${mainUserAgent} ${pluginUa}` : pluginUa
+    warnLegacyPluginUiMode(this.name, 'plugin:webview')
 
     return {
       _: {
@@ -1749,15 +1754,7 @@ export class TouchPlugin implements ITouchPlugin {
         preload,
         isWebviewInit: this.webViewInit
       },
-      attrs: {
-        enableRemoteModule: 'false',
-        nodeintegration: 'true',
-        webpreferences: 'contextIsolation=false',
-        // httpreferrer: `https://plugin.touch.talex.com/${this.name}`,
-        websecurity: 'false',
-        useragent: userAgent
-        // partition: `persist:touch/${this.name}`,
-      },
+      attrs: createLegacyPluginWebviewAttrs(userAgent),
       styles: `${getStyles()}`,
       js: `${getJs([this.name, JSON.stringify(_path), this.sdkapi, this.version])}`
     }

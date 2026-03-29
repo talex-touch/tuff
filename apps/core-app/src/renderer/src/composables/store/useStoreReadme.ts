@@ -8,6 +8,15 @@ export function useStoreReadme(readmeUrl: Ref<string | undefined>, t: (key: stri
   const readmeLoading = ref(false)
   const readmeError = ref('')
 
+  function isAllowedReadmeUrl(url: string): boolean {
+    try {
+      const parsed = new URL(url)
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+    } catch {
+      return false
+    }
+  }
+
   async function fetchReadme(url: string): Promise<void> {
     if (!url) return
 
@@ -16,6 +25,9 @@ export function useStoreReadme(readmeUrl: Ref<string | undefined>, t: (key: stri
     readmeMarkdown.value = ''
 
     try {
+      if (!isAllowedReadmeUrl(url)) {
+        throw new Error('Unsupported README URL protocol')
+      }
       const response = await networkSdk.request<string>({
         method: 'GET',
         url,

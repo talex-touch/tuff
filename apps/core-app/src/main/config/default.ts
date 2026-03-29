@@ -9,6 +9,34 @@ export const APP_SCHEMA = 'tuff'
 
 export const FILE_SCHEMA = 'tfile'
 
+interface SecureRendererPreferencesOptions {
+  preload: string
+  additionalArguments?: string[]
+  webviewTag?: boolean
+  scrollBounce?: boolean
+}
+
+function createSecureRendererPreferences({
+  preload,
+  additionalArguments,
+  webviewTag = false,
+  scrollBounce = true
+}: SecureRendererPreferencesOptions): Electron.WebPreferences {
+  return {
+    preload,
+    additionalArguments,
+    scrollBounce,
+    webSecurity: true,
+    nodeIntegration: false,
+    nodeIntegrationInSubFrames: false,
+    contextIsolation: true,
+    sandbox: false,
+    webviewTag
+  }
+}
+
+const preloadEntry = path.join(__dirname, '..', 'preload', 'index.js')
+
 export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
   title: AppName,
   minWidth: 1100,
@@ -24,17 +52,11 @@ export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
     height: 35,
     symbolColor: 'white'
   },
-  webPreferences: {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
-    scrollBounce: true,
-    webSecurity: false,
-    nodeIntegration: true,
-    nodeIntegrationInSubFrames: true,
-    contextIsolation: false,
-    sandbox: false,
+  webPreferences: createSecureRendererPreferences({
+    preload: preloadEntry,
     webviewTag: true,
     additionalArguments: buildWindowArgs({ touchType: 'main' })
-  }
+  })
 }
 
 export const BoxWindowOption: Electron.BrowserWindowConstructorOptions = {
@@ -49,17 +71,11 @@ export const BoxWindowOption: Electron.BrowserWindowConstructorOptions = {
   autoHideMenuBar: true,
   show: false,
   transparent: true,
-  webPreferences: {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
-    webSecurity: false,
-    nodeIntegration: true,
-    nodeIntegrationInSubFrames: true,
-    contextIsolation: false,
-    sandbox: false,
+  webPreferences: createSecureRendererPreferences({
+    preload: preloadEntry,
     webviewTag: true,
-    scrollBounce: true,
     additionalArguments: buildWindowArgs({ touchType: 'core-box' })
-  }
+  })
 }
 
 export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions = {
@@ -82,17 +98,11 @@ export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions =
     height: 60,
     symbolColor: 'white'
   },
-  webPreferences: {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
-    webSecurity: false,
-    nodeIntegration: true,
-    nodeIntegrationInSubFrames: true,
-    contextIsolation: false,
-    sandbox: false,
+  webPreferences: createSecureRendererPreferences({
+    preload: preloadEntry,
     webviewTag: true,
-    scrollBounce: true,
     additionalArguments: buildWindowArgs({ touchType: 'core-box', coreType: 'division-box' })
-  }
+  })
 }
 
 export const AssistantFloatingBallWindowOption: Electron.BrowserWindowConstructorOptions = {
@@ -111,20 +121,13 @@ export const AssistantFloatingBallWindowOption: Electron.BrowserWindowConstructo
   show: false,
   transparent: true,
   hasShadow: true,
-  webPreferences: {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
-    webSecurity: false,
-    nodeIntegration: true,
-    nodeIntegrationInSubFrames: true,
-    contextIsolation: false,
-    sandbox: false,
-    webviewTag: true,
-    scrollBounce: true,
+  webPreferences: createSecureRendererPreferences({
+    preload: preloadEntry,
     additionalArguments: buildWindowArgs({
       touchType: 'assistant',
       assistantType: 'floating-ball'
     })
-  }
+  })
 }
 
 export const AssistantVoicePanelWindowOption: Electron.BrowserWindowConstructorOptions = {
@@ -141,20 +144,13 @@ export const AssistantVoicePanelWindowOption: Electron.BrowserWindowConstructorO
   show: false,
   transparent: true,
   hasShadow: true,
-  webPreferences: {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
-    webSecurity: false,
-    nodeIntegration: true,
-    nodeIntegrationInSubFrames: true,
-    contextIsolation: false,
-    sandbox: false,
-    webviewTag: true,
-    scrollBounce: true,
+  webPreferences: createSecureRendererPreferences({
+    preload: preloadEntry,
     additionalArguments: buildWindowArgs({
       touchType: 'assistant',
       assistantType: 'voice-panel'
     })
-  }
+  })
 }
 export const OmniPanelWindowOption: Electron.BrowserWindowConstructorOptions = {
   title: `${AppName} OmniPanel`,
@@ -170,15 +166,9 @@ export const OmniPanelWindowOption: Electron.BrowserWindowConstructorOptions = {
   autoHideMenuBar: true,
   show: false,
   transparent: true,
-  webPreferences: {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
-    webSecurity: false,
-    nodeIntegration: true,
-    nodeIntegrationInSubFrames: true,
-    contextIsolation: false,
-    sandbox: false,
+  webPreferences: createSecureRendererPreferences({
+    preload: preloadEntry,
     webviewTag: true,
-    scrollBounce: true,
     additionalArguments: buildWindowArgs({ touchType: 'core-box', coreType: 'omni-panel' })
-  }
+  })
 }
