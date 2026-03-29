@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MarkdownViewProps } from './types'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { hasDocument } from '@talex-touch/utils/env'
 
@@ -18,23 +19,8 @@ marked.setOptions({
   breaks: true,
 })
 
-const sanitizer = ref<null | ((html: string) => string)>(null)
 const autoTheme = ref<'light' | 'dark'>('light')
 let themeObserver: MutationObserver | null = null
-
-onMounted(async () => {
-  if (!props.sanitize)
-    return
-
-  try {
-    const mod = await import('dompurify')
-    const dp = mod.default
-    sanitizer.value = (html: string) => dp.sanitize(html)
-  }
-  catch {
-    sanitizer.value = null
-  }
-})
 
 function resolveAutoTheme(): 'light' | 'dark' {
   if (!hasDocument())
@@ -109,7 +95,7 @@ const rawHtml = computed(() => {
 const safeHtml = computed(() => {
   if (!props.sanitize)
     return rawHtml.value
-  return sanitizer.value ? sanitizer.value(rawHtml.value) : rawHtml.value
+  return DOMPurify.sanitize(rawHtml.value)
 })
 
 const resolvedTheme = computed<'light' | 'dark'>(() => {

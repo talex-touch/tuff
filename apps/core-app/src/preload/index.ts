@@ -15,7 +15,21 @@ declare global {
     $startupInfo?: StartupInfo
     /** MetaOverlay mode flag - set by preload based on URL hash or command line args */
     $isMetaOverlay?: boolean
+    process?: RendererRuntimeProcess
   }
+}
+
+interface RendererRuntimeProcess {
+  platform: NodeJS.Platform
+  arch: string
+  versions: NodeJS.ProcessVersions
+  env: {
+    BUILD_TYPE?: string
+  }
+  getCPUUsage: () => {
+    percent: number
+  }
+  memoryUsage: () => NodeJS.MemoryUsage
 }
 
 interface StartupHandshakePayload {
@@ -53,6 +67,22 @@ const startupInfoPromise = requestStartupInfo().then((info) => {
 
 const isDebugMode = Boolean(process.env.DEBUG) || location.search.includes('debug-preload')
 
+const runtimeProcess: RendererRuntimeProcess = {
+  platform: process.platform,
+  arch: process.arch,
+  versions: process.versions,
+  env: {
+    BUILD_TYPE: process.env.BUILD_TYPE
+  },
+  getCPUUsage: () => {
+    if (typeof process.getCPUUsage !== 'function') {
+      return { percent: 0 }
+    }
+    return { percent: process.getCPUUsage().percentCPUUsage }
+  },
+  memoryUsage: () => process.memoryUsage()
+}
+
 const api: PreloadAPI = {
   /**
    * Update loading overlay from renderer when needed.
@@ -72,6 +102,7 @@ if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
+    contextBridge.exposeInMainWorld('process', runtimeProcess)
     void startupInfoPromise.then((info) => {
       if (info) {
         contextBridge.exposeInMainWorld('$startupInfo', info)
@@ -85,6 +116,7 @@ if (process.contextIsolated) {
   window.electron = electronAPI
   // @ts-ignore (define in dts)
   window.api = api
+  ;(window as unknown as Record<string, unknown>).process = runtimeProcess
   void startupInfoPromise.then((info) => {
     if (info) {
       window.$startupInfo = info

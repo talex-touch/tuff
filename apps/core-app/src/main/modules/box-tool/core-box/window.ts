@@ -32,6 +32,10 @@ import { createLogger } from '../../../utils/logger'
 import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelude'
 import { pluginModule } from '../../plugin/plugin-module'
 import { usePluginInjections } from '../../plugin/runtime/plugin-injections'
+import {
+  createLegacyPluginViewWebPreferences,
+  warnLegacyPluginUiMode
+} from '../../plugin/runtime/plugin-ui-security'
 import { getMainConfig } from '../../storage'
 import { getBoxItemManager } from '../item-sdk'
 import { coreBoxManager } from './manager'
@@ -1196,17 +1200,12 @@ export class WindowManager {
 
     metrics.preload = performance.now() - startTime
 
-    const webPreferences: Electron.WebPreferences = {
-      preload: preloadPath || undefined,
-      webSecurity: false,
-      nodeIntegration: true,
-      nodeIntegrationInSubFrames: true,
-      contextIsolation: false,
-      sandbox: false,
-      webviewTag: true,
-      scrollBounce: true,
-      transparent: true
+    if (plugin) {
+      warnLegacyPluginUiMode(plugin.name, 'core-box:attachUIView')
     }
+
+    const webPreferences: Electron.WebPreferences =
+      createLegacyPluginViewWebPreferences(preloadPath)
 
     const viewCreateStart = performance.now()
     const view = (this.uiView = new WebContentsView({ webPreferences }))

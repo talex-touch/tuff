@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { GitHubRelease } from '@talex-touch/utils'
 import { DownloadStatus } from '@talex-touch/utils'
-import { TxAlert, TxModal } from '@talex-touch/tuffex'
+import { TxAlert, TxMarkdownView, TxModal } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProgressBar from './DownloadProgressBar.vue'
@@ -78,51 +78,9 @@ const downloadSize = computed(() => {
   return props.release.assets[0]?.size || 0
 })
 
-// Markdown rendering
-const renderedMarkdown = computed(() => {
-  if (!props.release?.body) {
-    return `<p>${t('update.no_release_notes')}</p>`
-  }
-
-  // Simple markdown to HTML conversion
-  return convertMarkdownToHtml(props.release.body)
-})
-
-function convertMarkdownToHtml(markdown: string): string {
-  let html = markdown
-
-  // Headers
-  html = html.replace(/^### (.*$)/gm, '<h3>$1</h3>')
-  html = html.replace(/^## (.*$)/gm, '<h2>$1</h2>')
-  html = html.replace(/^# (.*$)/gm, '<h1>$1</h1>')
-
-  // Bold
-  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-  html = html.replace(/__(.*?)__/g, '<strong>$1</strong>')
-
-  // Italic
-  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>')
-  html = html.replace(/_(.*?)_/g, '<em>$1</em>')
-
-  // Links
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
-
-  // Lists
-  html = html.replace(/^\* (.*$)/gm, '<li>$1</li>')
-  html = html.replace(/^- (.*$)/gm, '<li>$1</li>')
-  html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-
-  // Line breaks
-  html = html.replace(/\n\n/g, '</p><p>')
-  html = html.replace(/\n/g, '<br>')
-
-  // Wrap in paragraph if not already wrapped
-  if (!html.startsWith('<')) {
-    html = `<p>${html}</p>`
-  }
-
-  return html
-}
+const releaseNotesContent = computed(
+  () => props.release?.body?.trim() || t('update.no_release_notes')
+)
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString)
@@ -227,8 +185,9 @@ function handleCancelDownload() {
           <i class="i-carbon-document" />
           {{ t('update.release_notes') }}
         </h3>
-        <!-- eslint-disable-next-line vue/no-v-html -->
-        <div class="release-notes-content" v-html="renderedMarkdown" />
+        <div class="release-notes-content">
+          <TxMarkdownView :content="releaseNotesContent" theme="auto" />
+        </div>
       </div>
 
       <!-- Download Progress (when downloading) -->
@@ -379,6 +338,10 @@ function handleCancelDownload() {
   font-size: 14px;
   line-height: 1.6;
   color: var(--tx-text-color-primary);
+}
+
+.release-notes-content :deep(.tx-markdown-view) {
+  font-size: inherit;
 }
 
 .release-notes-content :deep(h1) {

@@ -22,6 +22,10 @@ import { useAliveWebContents } from '../../hooks/use-electron-guard'
 import { createLogger } from '../../utils/logger'
 import { pluginModule } from '../plugin/plugin-module'
 import { usePluginInjections } from '../plugin/runtime/plugin-injections'
+import {
+  createLegacyPluginViewWebPreferences,
+  warnLegacyPluginUiMode
+} from '../plugin/runtime/plugin-ui-security'
 
 const coreBoxTriggerEvent = defineRawEvent<{ [key: string]: unknown }, void>('core-box:trigger')
 type LegacyMainChannelType = Parameters<ReturnType<typeof genTouchApp>['channel']['broadcastTo']>[1]
@@ -371,17 +375,10 @@ export class DivisionBoxSession {
 
     metrics.preload = performance.now() - startTime
 
-    const webPreferences: WebPreferences = {
-      preload: preloadPath || undefined,
-      webSecurity: false,
-      nodeIntegration: true,
-      nodeIntegrationInSubFrames: true,
-      contextIsolation: false,
-      sandbox: false,
-      webviewTag: true,
-      scrollBounce: true,
-      transparent: true
+    if (plugin) {
+      warnLegacyPluginUiMode(plugin.name, 'division-box:attachUIView')
     }
+    const webPreferences: WebPreferences = createLegacyPluginViewWebPreferences(preloadPath)
 
     const viewCreateStart = performance.now()
     this.uiView = new WebContentsView({ webPreferences })
