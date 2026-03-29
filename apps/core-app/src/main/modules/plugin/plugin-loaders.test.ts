@@ -75,7 +75,7 @@ vi.mock('./plugin', () => ({
   }
 }))
 
-import { createPluginLoader } from './plugin-loaders'
+import { createPluginErrorPlaceholder, createPluginLoader } from './plugin-loaders'
 
 async function createPluginDir(manifest: Record<string, unknown>): Promise<string> {
   const root = await fs.mkdtemp(path.join(tmpdir(), 'plugin-loaders-test-'))
@@ -234,5 +234,16 @@ describe('createPluginLoader', () => {
 
     expect(issueCodes).toContain('REMOTE_MANIFEST_FAILED')
     expect(issueCodes).not.toContain('DEV_SOURCE_FALLBACK_LOCAL')
+  })
+
+  it('creates a shared error placeholder plugin shape', () => {
+    const plugin = createPluginErrorPlaceholder('broken-plugin', '/tmp/broken', 'Fatal Error', {
+      skipDataInit: true
+    })
+
+    expect(plugin.name).toBe('broken-plugin')
+    expect(plugin.version).toBe('0.0.0')
+    expect(plugin.desc).toBe('Fatal Error')
+    expect(plugin.dev).toMatchObject({ enable: false, address: '', source: false })
   })
 })

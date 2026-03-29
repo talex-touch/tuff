@@ -1,7 +1,7 @@
 # 变更日志
 
-> 更新时间: 2026-03-27
-> 说明: 主文件仅保留近 30 天（2026-02-27 ~ 2026-03-27）详细记录；更早历史已按月归档。
+> 更新时间: 2026-03-29
+> 说明: 主文件仅保留近 30 天（2026-02-28 ~ 2026-03-29）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
@@ -10,6 +10,45 @@
 - 旧记录入口：见文末“历史索引导航”。
 
 ---
+
+## 2026-03-29
+
+### refactor(core-app): 平台兼容与 legacy 收口
+
+- `apps/core-app/src/main/channel/common.ts`
+  - 复用既有 `platformCapabilityRegistry` 动态补登记 `platform.active-app`、`platform.native-share`、`platform.permission-checker`，不再用静态清单伪装平台能力。
+  - `system:get-active-app` legacy 事件保留桥接，但加入一次性弃用告警与命中计数，内部统一回到现代 active-app 实现。
+- `apps/core-app/src/main/modules/system/active-app.ts`
+  - 补齐 Windows PowerShell / Linux `xdotool + ps` 前台应用解析，实现成功、命令缺失、异常输出三类路径的显式分流。
+  - 平台能力探测改为真实命令可用性判断，Linux 缺依赖时不再把“未实现”混同为“空结果”。
+- `apps/core-app/src/main/modules/flow-bus/native-share.ts`
+  - 原生分享目标收紧为真实可执行目标：macOS 保留 `system-share/airdrop/mail/messages`，Windows/Linux 只暴露 `mail`。
+  - image data URL 分享改为先落临时文件；Windows/Linux 对不可执行目标直接诚实失败，不再走剪贴板/文件夹伪 fallback。
+- `apps/core-app/src/main/modules/system/permission-checker.ts`
+  - Windows 管理员权限检查改为非侵入式 PowerShell 角色判断，移除向系统目录写测试文件的历史实现。
+  - Windows/Linux 通知权限状态收紧为 `unsupported`；Linux 打开系统设置改为按标准桌面入口尝试并在失败时显式返回 unsupported。
+- `apps/core-app/src/main/modules/clipboard.ts`
+  - legacy clipboard bridge 保留兼容入口，但所有旧事件统一桥接到现有 typed handler，并增加一次性弃用告警与命中计数。
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+  - `omni-panel:feature:toggle` legacy 事件保留桥接到现有 `toggleFeature` 路径，同时记录一次性弃用告警与使用次数。
+- `apps/core-app/src/main/modules/division-box/window-pool.ts`
+  - 高频 `console.*` 调试噪音改为结构化 logger，保留 dev 可观测性并降低运行时噪音。
+- `apps/core-app/src/main/modules/division-box/session.ts`
+  - DivisionBox session 生命周期、预加载、窗口销毁等高频路径改用结构化 logger，减少 ad-hoc `console.*` 输出。
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+  - 插件错误占位 icon / plugin 形态抽成单一工厂，避免 loader 与 plugin module 多处手工拼装 placeholder。
+- `apps/core-app/src/main/modules/tray-holder.ts`
+  - 删除已无运行时引用的 deprecated tray holder 遗留模块。
+- 新增测试：
+  - `apps/core-app/src/main/modules/system/active-app.test.ts`
+  - `apps/core-app/src/main/modules/flow-bus/native-share.test.ts`
+  - `apps/core-app/src/main/modules/system/permission-checker.test.ts`
+  - 扩展 `apps/core-app/src/main/channel/common.test.ts`
+  - 扩展 `apps/core-app/src/main/modules/omni-panel/index.test.ts`
+  - 扩展 `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- 验证：
+  - `pnpm -C "apps/core-app" exec vitest run ...`（本轮相关 7 个测试文件，38 tests passed）
+  - `pnpm -C "apps/core-app" run typecheck:node` 仍被仓库既有问题阻塞：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 缺失 `./services/file-provider-index-flush-service`
 
 ## 2026-03-27
 
