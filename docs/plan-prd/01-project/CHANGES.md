@@ -20,6 +20,12 @@
 - `apps/core-app/scripts/build-target.js`
   - 新增 `app.asar` 运行时依赖校验，构建成功前显式检查关键模块是否真正进入包内，避免生成“能打包但启动即崩”的坏包。
 
+### fix(core-app/runtime): 隔离开发态与打包版用户数据目录
+
+- `apps/core-app/src/main/polyfills.ts`
+  - 开发态启动时改为显式使用独立 `userData` 目录 `@talex-touch/core-app-dev`，避免与打包版共用 `@talex-touch/core-app` 导致缓存、索引和配置互相污染。
+  - 打包版继续沿用现有正式目录，避免影响已安装用户的数据与迁移路径。
+
 ### fix(core-app/storage): 清库重建时补齐 app index 自动恢复
 
 - `apps/core-app/src/main/service/storage-maintenance.ts`

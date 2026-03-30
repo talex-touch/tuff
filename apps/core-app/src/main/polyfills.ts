@@ -8,6 +8,13 @@ import packageJson from '../../../../package.json'
 
 globalThis.$pkg = packageJson
 
+if (!app.isPackaged) {
+  const devUserDataPath = path.join(app.getPath('appData'), `${packageJson.name}-dev`)
+  if (app.getPath('userData') !== devUserDataPath) {
+    app.setPath('userData', devUserDataPath)
+  }
+}
+
 // Set APP_VERSION environment variable from package.json if not already set
 // This allows runtime access to version while keeping package.json as source of truth
 if (!process.env.APP_VERSION) {
