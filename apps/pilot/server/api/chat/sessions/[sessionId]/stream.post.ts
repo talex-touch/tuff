@@ -57,9 +57,9 @@ import {
   createPilotStreamQuotaProjectorPersistence,
 } from '../../../../utils/pilot-stream-quota-projector'
 import {
+  buildWebsearchContextSystemMessage,
   executePilotImageGenerateTool,
   executePilotWebsearchTool,
-  mergeWebsearchContextIntoMessage,
   PilotToolApprovalRejectedError,
   PilotToolApprovalRequiredError,
 } from '../../../../utils/pilot-tool-gateway'
@@ -561,6 +561,7 @@ export default defineEventHandler(async (event) => {
           internetEnabled: selectedChannel.internet,
           builtinTools: selectedChannel.builtinTools,
           intentWebsearchRequired: intentDecision.websearchRequired,
+          intentWebsearchReason: intentDecision.websearchReason,
         })
         let websearchConnectorSource: 'gateway' | 'responses_builtin' | 'none' = 'none'
         let websearchConnectorReason = websearchDecision.reason
@@ -1534,14 +1535,24 @@ export default defineEventHandler(async (event) => {
 
           const requireNoSourceGuard = (intentDecision.websearchRequired === true)
             && websearchSources.length <= 0
-          const runtimeMessage = mergeWebsearchContextIntoMessage(routedMessage, websearchContextText, {
+          const runtimeSystemContext = buildWebsearchContextSystemMessage(routedMessage, websearchContextText, {
             requireNoSourceGuard,
           })
+          const runtimeSystemContextMessages = runtimeSystemContext
+            ? [{
+                content: runtimeSystemContext,
+                metadata: {
+                  source: 'websearch_context',
+                  websearchSourceCount: websearchSources.length,
+                  requireNoSourceGuard,
+                },
+              }]
+            : undefined
 
           const result = await runPilotConversationStream({
             runtime,
             sessionId,
-            message: runtimeMessage,
+            message: routedMessage,
             fromSeq,
             attachments: resolvedAttachments.attachments,
             metadata: toPilotSafeRecord({
@@ -1565,6 +1576,7 @@ export default defineEventHandler(async (event) => {
               websearchDecision: websearchDecision.reason,
               websearchConnectorSource,
               websearchConnectorReason,
+              systemContextMessages: runtimeSystemContextMessages,
               orchestratorMode: orchestratorDecision.mode,
               orchestratorReason: orchestratorDecision.reason,
               orchestratorAssistantId: orchestratorDecision.assistantId,

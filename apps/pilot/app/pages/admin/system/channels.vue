@@ -47,6 +47,7 @@ const loading = ref(false)
 const saving = ref(false)
 const channels = ref<ChannelFormItem[]>([])
 const modelSearchKeyword = ref('')
+const rowTestingMap = reactive<Record<string, boolean>>({})
 let channelSequence = 0
 let channelModelSequence = 0
 
@@ -55,6 +56,7 @@ const dialog = reactive<{
   mode: 'new' | 'edit'
   submitting: boolean
   modelSyncing: boolean
+  channelTesting: boolean
   sourceId: string
   form: ChannelFormItem
 }>({
@@ -62,6 +64,7 @@ const dialog = reactive<{
   mode: 'new',
   submitting: false,
   modelSyncing: false,
+  channelTesting: false,
   sourceId: '',
   form: createEmptyChannel(),
 })
@@ -294,6 +297,7 @@ async function saveChannels(
 function openCreateDialog() {
   dialog.mode = 'new'
   dialog.modelSyncing = false
+  dialog.channelTesting = false
   dialog.sourceId = ''
   dialog.form = createEmptyChannel()
   modelSearchKeyword.value = ''
@@ -303,6 +307,7 @@ function openCreateDialog() {
 function openEditDialog(row: ChannelFormItem) {
   dialog.mode = 'edit'
   dialog.modelSyncing = false
+  dialog.channelTesting = false
   dialog.sourceId = row.id
   dialog.form = normalizeChannelFormItem({
     ...row,
@@ -573,6 +578,143 @@ async function discoverDialogModels() {
   }
 }
 
+function resolveDialogTestModelId(): string {
+  const explicit = normalizeText(dialog.form.defaultModelId || dialog.form.model)
+  if (explicit) {
+    return explicit
+  }
+  return normalizeText(
+    dialog.form.models.find(item => item.enabled)?.id
+    || dialog.form.models[0]?.id,
+  )
+}
+
+function resolveRowTestModelId(row: ChannelFormItem): string {
+  const explicit = normalizeText(row.defaultModelId || row.model)
+  if (explicit) {
+    return explicit
+  }
+  return normalizeText(
+    row.models.find(item => item.enabled)?.id
+    || row.models[0]?.id,
+  )
+}
+
+function setRowTesting(channelId: string, testing: boolean) {
+  const id = normalizeText(channelId)
+  if (!id) {
+    return
+  }
+  if (testing) {
+    rowTestingMap[id] = true
+    return
+  }
+  delete rowTestingMap[id]
+}
+
+function isRowTesting(channelId: string): boolean {
+  return rowTestingMap[normalizeText(channelId)] === true
+}
+
+async function requestChannelTest(payload: {
+  channelId?: string
+  baseUrl?: string
+  apiKey?: string
+  model?: string
+  transport?: PilotChannelTransport
+  timeoutMs?: number
+}): Promise<any> {
+  const result: any = await endHttp.post('admin/channels/test', payload)
+  if (!result?.ok) {
+    throw new Error(normalizeText(result?.message) || '渠道测试失败')
+  }
+  return result
+}
+
+function buildChannelTestSuccessMessage(payload: any, fallbackTransport: string, fallbackModel: string): string {
+  const durationMs = Number(payload?.durationMs)
+  const normalizedDuration = Number.isFinite(durationMs) ? Math.max(0, Math.floor(durationMs)) : null
+  const preview = normalizeText(payload?.preview)
+  const summary = normalizedDuration === null
+    ? `测试成功（${payload?.transport || fallbackTransport} / ${fallbackModel}）`
+    : `测试成功（${payload?.transport || fallbackTransport} / ${fallbackModel} / ${normalizedDuration}ms）`
+  return preview ? `${summary} ${preview}` : summary
+}
+
+async function testDialogChannel() {
+  const baseUrl = normalizeText(dialog.form.baseUrl)
+  if (!baseUrl) {
+    ElMessage.warning('请先填写 Base URL')
+    return
+  }
+
+  if (dialog.mode === 'new' && !normalizeText(dialog.form.apiKey)) {
+    ElMessage.warning('新增渠道请先填写 API Key，再测试')
+    return
+  }
+
+  const model = resolveDialogTestModelId()
+  if (!model) {
+    ElMessage.warning('请先设置默认模型，再测试')
+    return
+  }
+
+  dialog.channelTesting = true
+  try {
+    const payload = await requestChannelTest({
+      channelId: dialog.mode === 'edit' ? normalizeText(dialog.sourceId || dialog.form.id) : undefined,
+      baseUrl,
+      apiKey: normalizeText(dialog.form.apiKey),
+      model,
+      transport: dialog.form.transport,
+      timeoutMs: dialog.form.timeoutMs,
+    })
+    ElMessage.success(buildChannelTestSuccessMessage(payload, dialog.form.transport, model))
+  }
+  catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '渠道测试失败')
+  }
+  finally {
+    dialog.channelTesting = false
+  }
+}
+
+async function testTableChannel(row: ChannelFormItem) {
+  const channelId = normalizeText(row.id)
+  if (!channelId) {
+    ElMessage.warning('渠道 ID 不能为空')
+    return
+  }
+  const baseUrl = normalizeText(row.baseUrl)
+  if (!baseUrl) {
+    ElMessage.warning('Base URL 不能为空')
+    return
+  }
+  const model = resolveRowTestModelId(row)
+  if (!model) {
+    ElMessage.warning('请先设置默认模型')
+    return
+  }
+
+  setRowTesting(channelId, true)
+  try {
+    const payload = await requestChannelTest({
+      channelId,
+      baseUrl,
+      model,
+      transport: row.transport,
+      timeoutMs: row.timeoutMs,
+    })
+    ElMessage.success(buildChannelTestSuccessMessage(payload, row.transport, model))
+  }
+  catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '渠道测试失败')
+  }
+  finally {
+    setRowTesting(channelId, false)
+  }
+}
+
 function resolveModelCount(row: ChannelFormItem): number {
   return Array.isArray(row.models) ? row.models.length : 0
 }
@@ -640,14 +782,25 @@ onMounted(() => {
             />
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="250">
+        <el-table-column label="操作" fixed="right" width="330">
           <template #default="{ row }">
-            <el-button text type="primary" @click="openEditDialog(row)">
-              编辑
-            </el-button>
-            <el-button text type="danger" :disabled="loading || saving" @click="deleteChannel(row)">
-              删除
-            </el-button>
+            <div class="channel-actions-group">
+              <el-button text type="primary" @click="openEditDialog(row)">
+                编辑
+              </el-button>
+              <el-button
+                text
+                type="primary"
+                :loading="isRowTesting(row.id)"
+                :disabled="loading || saving || isRowTesting(row.id)"
+                @click="testTableChannel(row)"
+              >
+                测试
+              </el-button>
+              <el-button text type="danger" :disabled="loading || saving || isRowTesting(row.id)" @click="deleteChannel(row)">
+                删除
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -734,6 +887,15 @@ onMounted(() => {
           @click="discoverDialogModels"
         >
           {{ dialog.modelSyncing ? '拉取中...' : '拉取渠道模型' }}
+        </el-button>
+        <el-button
+          plain
+          size="small"
+          :loading="dialog.channelTesting"
+          :disabled="dialog.modelSyncing || dialog.submitting || saving"
+          @click="testDialogChannel"
+        >
+          {{ dialog.channelTesting ? '测试中...' : '测试渠道' }}
         </el-button>
         <el-button plain size="small" @click="clearDialogModels">
           一键清空
@@ -825,7 +987,7 @@ onMounted(() => {
       <el-button @click="dialog.visible = false">
         取消
       </el-button>
-      <el-button type="primary" :loading="dialog.submitting || saving || dialog.modelSyncing" @click="submitDialog">
+      <el-button type="primary" :loading="dialog.submitting || saving || dialog.modelSyncing || dialog.channelTesting" @click="submitDialog">
         保存
       </el-button>
     </template>
@@ -851,6 +1013,13 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.channel-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .channel-editor-form {

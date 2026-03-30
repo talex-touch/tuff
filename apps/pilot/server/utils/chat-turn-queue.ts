@@ -21,6 +21,12 @@ export type ChatRunState
     | 'cancelled'
     | 'timeout'
 
+export interface SessionRunStateSnapshot {
+  runState: ChatRunState
+  activeTurnId: string | null
+  pendingCount: number
+}
+
 export interface ChatTurnQueueRow {
   id: number
   sessionId: string
@@ -353,11 +359,7 @@ export async function getSessionRunState(
   event: H3Event,
   userId: string,
   sessionId: string,
-): Promise<{
-  runState: ChatRunState
-  activeTurnId: string | null
-  pendingCount: number
-}> {
+): Promise<SessionRunStateSnapshot> {
   const db = requirePilotDatabase(event)
 
   const active = await db.prepare(`
@@ -429,15 +431,150 @@ export async function getSessionRunState(
   return { runState: 'idle', activeTurnId: null, pendingCount }
 }
 
+function buildSessionStateFromRows(input: {
+  activeStatus?: string | null
+  activeTurnId?: string | null
+  latestStatus?: string | null
+  pendingCount?: number
+}): SessionRunStateSnapshot {
+  const pendingCount = Number.isFinite(input.pendingCount)
+    ? Math.max(0, Math.floor(Number(input.pendingCount)))
+    : 0
+  const activeStatus = String(input.activeStatus || '').trim()
+  const activeTurnId = String(input.activeTurnId || '').trim()
+
+  if (activeTurnId) {
+    if (activeStatus === 'title') {
+      return {
+        runState: 'title',
+        activeTurnId,
+        pendingCount,
+      }
+    }
+    if (activeStatus === 'executing') {
+      return {
+        runState: 'executing',
+        activeTurnId,
+        pendingCount,
+      }
+    }
+    return {
+      runState: 'queued',
+      activeTurnId,
+      pendingCount,
+    }
+  }
+
+  const latestStatus = String(input.latestStatus || '').trim()
+  if (latestStatus === 'completed') {
+    return { runState: 'completed', activeTurnId: null, pendingCount }
+  }
+  if (latestStatus === 'failed') {
+    return { runState: 'failed', activeTurnId: null, pendingCount }
+  }
+  if (latestStatus === 'cancelled') {
+    return { runState: 'cancelled', activeTurnId: null, pendingCount }
+  }
+  if (latestStatus === 'timeout') {
+    return { runState: 'timeout', activeTurnId: null, pendingCount }
+  }
+
+  return { runState: 'idle', activeTurnId: null, pendingCount }
+}
+
+export async function getSessionRunStateMap(
+  event: H3Event,
+  userId: string,
+  sessionIds: string[],
+): Promise<Map<string, SessionRunStateSnapshot>> {
+  const uniqueSessionIds = Array.from(new Set(sessionIds.map(id => String(id || '').trim()).filter(Boolean)))
+  if (uniqueSessionIds.length <= 0) {
+    return new Map()
+  }
+
+  const db = requirePilotDatabase(event)
+  const placeholders = uniqueSessionIds.map((_, index) => `?${index + 2}`).join(',')
+  const bindings = [userId, ...uniqueSessionIds]
+
+  const activeRows = await db.prepare(`
+    SELECT session_id, turn_id, status, id
+    FROM ${CHAT_TURN_QUEUE_TABLE}
+    WHERE user_id = ?1
+      AND session_id IN (${placeholders})
+      AND status IN (${ACTIVE_STATUSES_SQL})
+    ORDER BY session_id ASC, id ASC
+  `).bind(...bindings).all<{
+    session_id: string
+    turn_id: string | null
+    status: string | null
+    id: number
+  }>()
+
+  const activeMap = new Map<string, { turnId: string | null, status: string | null }>()
+  for (const row of activeRows.results || []) {
+    if (!activeMap.has(row.session_id)) {
+      activeMap.set(row.session_id, {
+        turnId: row.turn_id,
+        status: row.status,
+      })
+    }
+  }
+
+  const pendingRows = await db.prepare(`
+    SELECT session_id, COUNT(*) AS total
+    FROM ${CHAT_TURN_QUEUE_TABLE}
+    WHERE user_id = ?1
+      AND session_id IN (${placeholders})
+      AND status IN ('pending','accepted')
+    GROUP BY session_id
+  `).bind(...bindings).all<{
+    session_id: string
+    total: number | string
+  }>()
+
+  const pendingMap = new Map<string, number>()
+  for (const row of pendingRows.results || []) {
+    pendingMap.set(row.session_id, Number(row.total || 0))
+  }
+
+  const latestRows = await db.prepare(`
+    SELECT session_id, status, id
+    FROM ${CHAT_TURN_QUEUE_TABLE}
+    WHERE user_id = ?1
+      AND session_id IN (${placeholders})
+    ORDER BY session_id ASC, id DESC
+  `).bind(...bindings).all<{
+    session_id: string
+    status: string | null
+    id: number
+  }>()
+
+  const latestMap = new Map<string, string | null>()
+  for (const row of latestRows.results || []) {
+    if (!latestMap.has(row.session_id)) {
+      latestMap.set(row.session_id, row.status)
+    }
+  }
+
+  const stateMap = new Map<string, SessionRunStateSnapshot>()
+  for (const sessionId of uniqueSessionIds) {
+    const active = activeMap.get(sessionId)
+    stateMap.set(sessionId, buildSessionStateFromRows({
+      activeStatus: active?.status,
+      activeTurnId: active?.turnId,
+      latestStatus: latestMap.get(sessionId),
+      pendingCount: pendingMap.get(sessionId) ?? 0,
+    }))
+  }
+
+  return stateMap
+}
+
 export async function getSessionRunStateSafe(
   event: H3Event,
   userId: string,
   sessionId: string,
-): Promise<{
-  runState: ChatRunState
-  activeTurnId: string | null
-  pendingCount: number
-}> {
+): Promise<SessionRunStateSnapshot> {
   try {
     await ensureChatTurnQueueSchema(event)
     return await getSessionRunState(event, userId, sessionId)
@@ -449,11 +586,32 @@ export async function getSessionRunStateSafe(
       sessionId,
       error: message,
     })
-    return {
-      runState: 'idle',
-      activeTurnId: null,
-      pendingCount: 0,
+    return buildSessionStateFromRows({})
+  }
+}
+
+export async function getSessionRunStateMapSafe(
+  event: H3Event,
+  userId: string,
+  sessionIds: string[],
+): Promise<Map<string, SessionRunStateSnapshot>> {
+  try {
+    await ensureChatTurnQueueSchema(event)
+    return await getSessionRunStateMap(event, userId, sessionIds)
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error || '')
+    console.error('[pilot][turn-queue] run_state map fallback to idle', {
+      userId,
+      count: sessionIds.length,
+      error: message,
+    })
+
+    const fallback = new Map<string, SessionRunStateSnapshot>()
+    for (const sessionId of Array.from(new Set(sessionIds.map(id => String(id || '').trim()).filter(Boolean)))) {
+      fallback.set(sessionId, buildSessionStateFromRows({}))
     }
+    return fallback
   }
 }
 

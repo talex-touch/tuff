@@ -262,6 +262,97 @@ describe('pilot-routing-resolver intent routing', () => {
     expect(result.providerModel).toBe('nano-model')
   })
 
+  it('quota-auto respects disabled binding and skips explicitly disabled providerModel', async () => {
+    vi.mocked(getPilotChannelCatalog).mockResolvedValueOnce({
+      defaultChannelId: 'ch1',
+      channels: [
+        {
+          id: 'ch1',
+          name: 'channel-1',
+          baseUrl: 'https://api.openai.com',
+          apiKey: 'key',
+          model: 'nano-model',
+          adapter: 'openai',
+          transport: 'responses',
+          timeoutMs: 30_000,
+          builtinTools: ['write_todos'],
+          enabled: true,
+          models: [
+            { id: 'disabled-fast-model', enabled: true, priority: 1 },
+            { id: 'nano-model', enabled: true, priority: 10 },
+          ],
+        },
+      ],
+    } as any)
+
+    vi.mocked(getPilotAdminRoutingConfig).mockResolvedValueOnce({
+      modelCatalog: [
+        {
+          id: 'disabled-fast-model',
+          name: 'disabled-fast-model',
+          enabled: true,
+          visible: true,
+          source: 'manual',
+          allowWebsearch: true,
+          allowImageGeneration: false,
+          bindings: [
+            { channelId: 'ch1', providerModel: 'disabled-fast-model', enabled: false, priority: 1, weight: 100 },
+          ],
+        },
+        {
+          id: 'nano-model',
+          name: 'nano-model',
+          enabled: true,
+          visible: true,
+          source: 'manual',
+          allowWebsearch: true,
+          allowImageGeneration: false,
+          bindings: [
+            { channelId: 'ch1', providerModel: 'nano-model', enabled: true, priority: 10, weight: 100 },
+          ],
+        },
+      ],
+      routeCombos: [
+        {
+          id: 'default-auto',
+          name: 'default-auto',
+          enabled: false,
+          routes: [],
+        },
+      ],
+      routingPolicy: {
+        defaultModelId: 'quota-auto',
+        defaultRouteComboId: 'default-auto',
+        quotaAutoStrategy: 'speed-first',
+        explorationRate: 0,
+        intentNanoModelId: '',
+        intentRouteComboId: '',
+        imageGenerationModelId: '',
+        imageRouteComboId: '',
+      },
+      lbPolicy: {
+        metricWindowHours: 24,
+        recentRequestWindow: 200,
+        circuitBreakerFailureThreshold: 3,
+        circuitBreakerCooldownMs: 60_000,
+        halfOpenProbeCount: 1,
+      },
+      memoryPolicy: {
+        enabledByDefault: true,
+        allowUserDisable: true,
+        allowUserClear: true,
+      },
+    } as any)
+
+    const result = await resolvePilotRoutingSelection({} as any, {
+      requestedModelId: 'quota-auto',
+      intentType: 'chat',
+    })
+
+    expect(result.selectionSource).toBe('quota-auto')
+    expect(result.providerModel).toBe('nano-model')
+  })
+
   it('skips disabled providerModel in route-combo and selects enabled route', async () => {
     vi.mocked(getPilotChannelCatalog).mockResolvedValueOnce({
       defaultChannelId: 'ch1',

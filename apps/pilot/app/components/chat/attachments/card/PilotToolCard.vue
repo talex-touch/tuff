@@ -6,6 +6,8 @@ const props = defineProps<{
   block: IInnerItemMeta
 }>()
 const TOOL_APPROVAL_DECISION_EVENT = 'pilot-tool-approval-decision'
+const TOOL_SOURCE_PREVIEW_LIMIT = 5
+const TOOL_SOURCE_SNIPPET_MAX = 180
 
 function parseJsonRecord(value: string | undefined): Record<string, any> {
   if (!value) {
@@ -160,13 +162,19 @@ const sources = computed(() => {
     .filter(item => item && typeof item === 'object' && !Array.isArray(item))
     .map((item) => {
       const row = item as Record<string, unknown>
+      const snippetRaw = String(row.snippet || '').trim().replace(/\s+/g, ' ')
+      const snippet = snippetRaw.length > TOOL_SOURCE_SNIPPET_MAX
+        ? `${snippetRaw.slice(0, TOOL_SOURCE_SNIPPET_MAX)}...`
+        : snippetRaw
       return {
         url: String(row.url || '').trim(),
         title: String(row.title || row.url || '').trim() || '未命名来源',
         domain: String(row.domain || '').trim(),
+        snippet,
       }
     })
     .filter(item => item.url)
+    .slice(0, TOOL_SOURCE_PREVIEW_LIMIT)
 })
 
 const statusText = computed(() => {
@@ -238,10 +246,16 @@ const riskLevelText = computed(() => {
 
     <ul v-if="sources.length > 0" class="sources">
       <li v-for="(item, index) in sources" :key="`${item.url}-${index}`">
-        <a :href="item.url" target="_blank" rel="noopener noreferrer">
+        <a :href="item.url" target="_blank" rel="noopener noreferrer" class="source-title">
           {{ item.title }}
         </a>
-        <small v-if="item.domain">({{ item.domain }})</small>
+        <small v-if="item.domain" class="source-domain">({{ item.domain }})</small>
+        <p class="source-url">
+          {{ item.url }}
+        </p>
+        <p v-if="item.snippet" class="source-snippet">
+          {{ item.snippet }}
+        </p>
       </li>
     </ul>
 
@@ -345,6 +359,33 @@ const riskLevelText = computed(() => {
   display: grid;
   gap: 4px;
   font-size: 12px;
+
+  li {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+
+.source-title {
+  font-weight: 600;
+}
+
+.source-domain {
+  color: var(--el-text-color-secondary);
+}
+
+.source-url {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  word-break: break-all;
+}
+
+.source-snippet {
+  margin: 0;
+  color: var(--el-text-color-primary);
+  white-space: pre-wrap;
+  line-height: 1.4;
 }
 
 .PilotToolCard-Footer {
