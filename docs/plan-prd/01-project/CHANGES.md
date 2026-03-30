@@ -13,6 +13,13 @@
 
 ## 2026-03-30
 
+### fix(core-app/build): 补齐打包产物中的 `ms` 运行时依赖
+
+- `apps/core-app/package.json`
+  - 将 `ms` 显式声明为 `core-app` 运行时依赖，避免 electron-builder 过滤掉未在应用依赖树中声明的传递模块。
+- `apps/core-app/scripts/build-target.js`
+  - 新增 `app.asar` 运行时依赖校验，构建成功前显式检查关键模块是否真正进入包内，避免生成“能打包但启动即崩”的坏包。
+
 ### fix(core-app/storage): 清库重建时补齐 app index 自动恢复
 
 - `apps/core-app/src/main/service/storage-maintenance.ts`
