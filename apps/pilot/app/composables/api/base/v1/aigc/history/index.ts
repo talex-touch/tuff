@@ -27,6 +27,20 @@ export interface IHistoryOption {
   page: number
 }
 
+function filterRenderableConversationMessages(messages: unknown): any[] {
+  if (!Array.isArray(messages)) {
+    return []
+  }
+
+  return messages.filter((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return false
+    }
+    const role = String((item as Record<string, unknown>).role || '').trim().toLowerCase()
+    return role !== 'system'
+  })
+}
+
 export class HistoryManager implements IHistoryManager {
   // TODO: performance - shallowReactive
   options: IHistoryOption = reactive({
@@ -34,6 +48,8 @@ export class HistoryManager implements IHistoryManager {
     status: IHistoryStatus.DONE,
     page: 0,
   })
+
+  private loadHistoriesPromise: Promise<void> | null = null
 
   constructor() {
     $event.on('USER_LOGOUT_SUCCESS', () => {
@@ -50,6 +66,7 @@ export class HistoryManager implements IHistoryManager {
     this.options.list.clear()
     this.options.status = IHistoryStatus.DONE
     this.options.page = 0
+    this.loadHistoriesPromise = null
   }
 
   private resolveConversationFromServer(item: any): IChatConversation | null {
@@ -61,6 +78,7 @@ export class HistoryManager implements IHistoryManager {
     if (!chatId)
       return null
 
+    const summaryOnly = row.summary_only === true || row.summaryOnly === true
     const decoded = (() => {
       const value = row.value
       if (value && typeof value === 'object' && !Array.isArray(value))
@@ -83,6 +101,14 @@ export class HistoryManager implements IHistoryManager {
           id: chatId,
           topic: row.topic,
           messages: row.messages,
+        } as Record<string, unknown>
+      }
+
+      if (summaryOnly) {
+        return {
+          id: chatId,
+          topic: row.topic,
+          messages: [],
         } as Record<string, unknown>
       }
 
@@ -123,12 +149,14 @@ export class HistoryManager implements IHistoryManager {
       ...decoded,
       id: chatId,
       topic: String((row.topic || decoded?.topic || '新的聊天') as string).trim() || '新的聊天',
-      messages: Array.isArray(decoded?.messages) ? decoded.messages : [],
+      messages: filterRenderableConversationMessages(decoded?.messages),
       lastUpdate,
       sync,
       runtimeState,
       pendingCount: Number.isFinite(pendingCount) ? pendingCount : 0,
       activeTurnId: activeTurnId || null,
+      __summaryOnly: summaryOnly,
+      __hydrated: !summaryOnly,
     } as IChatConversation
   }
 
@@ -141,37 +169,57 @@ export class HistoryManager implements IHistoryManager {
   }
 
   async loadHistories() {
+    if (this.options.status === IHistoryStatus.COMPLETED) {
+      return
+    }
+    if (this.options.status === IHistoryStatus.LOADING && this.loadHistoriesPromise) {
+      return this.loadHistoriesPromise
+    }
+
+    const nextPage = this.options.page + 1
     this.options.status = IHistoryStatus.LOADING
-    this.options.page += 1
 
-    const res: any = await $endApi.v1.aigc.listConversation({
-      pageSize: 25,
-      page: this.options.page,
-    })
+    this.loadHistoriesPromise = (async () => {
+      try {
+        const res: any = await $endApi.v1.aigc.listConversation({
+          pageSize: 25,
+          page: nextPage,
+          summary: 1,
+        })
 
-    this.options.status = IHistoryStatus.DONE
+        if (res.code !== 200) {
+          this.options.status = IHistoryStatus.ERROR
+          ElMessage({
+            message: `获取历史记录失败!所有操作不会被保存!`,
+            grouping: true,
+            type: 'error',
+            plain: true,
+          })
+          return
+        }
 
-    if (res.code !== 200) {
-      return ElMessage({
-        message: `获取历史记录失败!所有操作不会被保存!`,
-        grouping: true,
-        type: 'error',
-        plain: true,
-      })
-    }
+        const totalPages = Number(res.data?.meta?.totalPages || 0)
+        this.options.page = totalPages > 0 ? nextPage : 0
+        this.options.status = (totalPages <= 0 || totalPages <= nextPage)
+          ? IHistoryStatus.COMPLETED
+          : IHistoryStatus.DONE
 
-    const totalPages = res.data.meta.totalPages
-    if (totalPages <= this.options.page) {
-      this.options.status = IHistoryStatus.COMPLETED
-      this.options.page -= 1
-    }
+        res.data.items.forEach((item: IChatConversation & { chat_id: string, updatedAt: string }) => {
+          const mapped = this.resolveConversationFromServer(item)
+          if (!mapped)
+            return
+          this.options.list.set(mapped.id, mapped)
+        })
+      }
+      finally {
+        if (this.options.status === IHistoryStatus.ERROR) {
+          this.options.status = IHistoryStatus.DONE
+        }
+        this.loadHistoriesPromise = null
+      }
+    })()
 
-    res.data.items.forEach((item: IChatConversation & { chat_id: string, updatedAt: string }) => {
-      const mapped = this.resolveConversationFromServer(item)
-      if (!mapped)
-        return
-      this.options.list.set(mapped.id, mapped)
-    })
+    return this.loadHistoriesPromise
   }
 
   async syncHistory(history: IChatConversation) {

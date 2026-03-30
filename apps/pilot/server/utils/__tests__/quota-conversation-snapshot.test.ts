@@ -69,6 +69,14 @@ describe('quota-conversation-snapshot', () => {
       .map((item: any) => JSON.parse(String(item.data || '{}')))
     expect(runCards.some((item: Record<string, unknown>) => item.eventType === 'routing.selected')).toBe(true)
     expect(runCards.some((item: Record<string, unknown>) => item.eventType === 'intent.completed')).toBe(false)
+
+    const payloadMessages = Array.isArray(snapshot.payload.messages) ? snapshot.payload.messages : []
+    expect(payloadMessages.some((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return false
+      }
+      return String((item as Record<string, unknown>).role || '').trim().toLowerCase() === 'system'
+    })).toBe(false)
   })
 
   it('基于 runtime traces 重建并注入 pilot_run_event_card / pilot_tool_card（仅最新 turn）', () => {
@@ -167,6 +175,92 @@ describe('quota-conversation-snapshot', () => {
     expect(thinkingCard).toBeTruthy()
     expect(thinkingCard?.status).toBe('completed')
     expect(String(thinkingCard?.content || '')).toContain('最终整理')
+  })
+
+  it('websearch.decision 卡在快照重建中应收口为 completed', () => {
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-websearch-decision',
+      messages: [
+        { role: 'user', content: '今日天气如何' },
+      ],
+      runtimeTraces: [
+        { seq: 1, type: 'turn.started', payload: {} },
+        { seq: 2, type: 'websearch.decision', payload: { enabled: true, reason: 'intent_required' } },
+      ],
+      assistantReply: '',
+      topicHint: 'websearch decision',
+    })
+
+    const runCards = extractCardsByName(snapshot, 'pilot_run_event_card')
+      .map((item: any) => JSON.parse(String(item.data || '{}')))
+    const decisionCard = runCards.find((item: Record<string, unknown>) => item.eventType === 'websearch.decision')
+    expect(decisionCard).toBeTruthy()
+    expect(decisionCard?.status).toBe('completed')
+  })
+
+  it('run.audit 乱序/空来源场景下工具卡不回退且保留已有 sources', () => {
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-tool-status-guard',
+      messages: [
+        { role: 'user', content: '请联网检索并汇总' },
+      ],
+      runtimeTraces: [
+        { seq: 1, type: 'turn.started', payload: {} },
+        {
+          seq: 2,
+          type: 'run.audit',
+          payload: {
+            auditType: 'tool.call.completed',
+            callId: 'call-guard-1',
+            toolId: 'tool.websearch',
+            toolName: 'websearch',
+            status: 'completed',
+            sources: [
+              {
+                id: 'src-1',
+                title: '天气预报: 中国气象局',
+                url: 'https://weather.cma.cn/',
+              },
+            ],
+          },
+        },
+        {
+          seq: 3,
+          type: 'run.audit',
+          payload: {
+            auditType: 'tool.call.started',
+            callId: 'call-guard-1',
+            toolId: 'tool.websearch',
+            toolName: 'websearch',
+            status: 'started',
+            sources: [],
+          },
+        },
+        {
+          seq: 4,
+          type: 'run.audit',
+          payload: {
+            auditType: 'tool.call.completed',
+            callId: 'call-guard-1',
+            toolId: 'tool.websearch',
+            toolName: 'websearch',
+            status: 'completed',
+            sources: [],
+          },
+        },
+      ],
+      assistantReply: '',
+      topicHint: 'tool guard',
+    })
+
+    const toolCards = extractCardsByName(snapshot, 'pilot_tool_card')
+    expect(toolCards.length).toBe(1)
+    const payload = JSON.parse(String(toolCards[0]?.data || '{}')) as Record<string, any>
+    expect(payload.callId).toBe('call-guard-1')
+    expect(payload.status).toBe('completed')
+    expect(Array.isArray(payload.sources)).toBe(true)
+    expect(payload.sources).toHaveLength(1)
+    expect(payload.sources[0]?.url).toBe('https://weather.cma.cn/')
   })
 
   it('run.audit 工具卡兼容 camel/snake 字段并保留审批状态链路', () => {

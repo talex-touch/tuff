@@ -163,6 +163,7 @@ interface ToolAuditCardPayload {
   errorCode: string
   errorMessage: string
   auditType: string
+  seq?: number
 }
 
 interface RunEventCardPayload {
@@ -204,6 +205,9 @@ function normalizeToolAuditCardPayload(value: unknown): ToolAuditCardPayload {
     errorCode: String(row.errorCode || row.error_code || '').trim(),
     errorMessage: String(row.errorMessage || row.error_message || '').trim(),
     auditType: String(row.auditType || row.audit_type || '').trim(),
+    seq: Number.isFinite(Number(row.seq))
+      ? Math.max(0, Math.floor(Number(row.seq)))
+      : 0,
   }
 }
 
@@ -229,11 +233,20 @@ function normalizeToolStatus(value: unknown): string {
   return String(value || '').trim().toLowerCase()
 }
 
+function normalizeToolCardSeq(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 0
+  }
+  return Math.max(1, Math.floor(parsed))
+}
+
 function parseToolCardIdentity(block: IInnerItemMeta): {
   callId: string
   ticketId: string
   toolName: string
   status: string
+  seq: number
 } {
   const data = parseJsonSafe<Record<string, unknown>>(String(block.data || '')) || {}
   const extra = block.extra && typeof block.extra === 'object' && !Array.isArray(block.extra)
@@ -244,6 +257,7 @@ function parseToolCardIdentity(block: IInnerItemMeta): {
     ticketId: String(data.ticketId || data.ticket_id || extra.ticketId || extra.ticket_id || '').trim(),
     toolName: String(data.toolName || data.tool_name || '').trim().toLowerCase(),
     status: normalizeToolStatus(data.status || extra.status),
+    seq: normalizeToolCardSeq(data.seq || extra.seq),
   }
 }
 
@@ -898,6 +912,7 @@ export const $completion = {
         innerMsg.status = IChatItemStatus.WAITING
 
         const signal = new AbortController()
+        let streamBlockOrder = 0
         let pendingMarkdownBuffer = ''
         let pendingMarkdownSince = 0
         let markdownFlushTimer: ReturnType<typeof setTimeout> | null = null
@@ -942,19 +957,57 @@ export const $completion = {
           }
         }
 
-        function getOrCreateStreamingMarkdownBlock(): IInnerItemMeta {
+        function nextStreamBlockOrder(): number {
+          streamBlockOrder += 1
+          return streamBlockOrder
+        }
+
+        function resolveStreamOrder(value: unknown): number {
+          const parsed = Number(value)
+          return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0
+        }
+
+        function pushInnerBlock(block: IInnerItemMeta): IInnerItemMeta {
+          const extra = block.extra && typeof block.extra === 'object' && !Array.isArray(block.extra)
+            ? block.extra as Record<string, unknown>
+            : {}
+          const existingOrder = resolveStreamOrder(extra.streamOrder)
+          block.extra = {
+            ...extra,
+            streamOrder: existingOrder || nextStreamBlockOrder(),
+          }
+          innerMsg.value.push(block)
+          return block
+        }
+
+        function getOrCreateStreamingMarkdownBlock(seq = 0): IInnerItemMeta {
           const current = innerMsg.value.at(-1)
           if (current?.type === 'markdown' && !current.extra?.done) {
+            const currentExtra = current.extra && typeof current.extra === 'object' && !Array.isArray(current.extra)
+              ? current.extra as Record<string, unknown>
+              : {}
+            const currentSeq = toFiniteSeq(currentExtra.seq)
+            const currentOrder = resolveStreamOrder(currentExtra.streamOrder)
+            current.extra = {
+              ...currentExtra,
+              seq: currentSeq || seq || 0,
+              start: Number(currentExtra.start || Date.now()) || Date.now(),
+              streamOrder: currentOrder || nextStreamBlockOrder(),
+            }
             return current
           }
 
+          const now = Date.now()
           const created: IInnerItemMeta = {
             type: 'markdown' as IInnerItemType,
             value: '',
-            extra: {},
+            extra: {
+              seq: seq || 0,
+              start: now,
+              streamOrder: nextStreamBlockOrder(),
+            },
           }
-          innerMsg.value.push(created)
-          return created
+          return pushInnerBlock(created)
         }
 
         function appendPendingMarkdownChunk(chunk: string) {
@@ -1143,7 +1196,10 @@ export const $completion = {
                 ticketId: '',
                 toolName: '',
                 status: '',
+                seq: 0,
               }
+          const payloadSeq = normalizeToolCardSeq(payload.seq)
+          const prevSeq = normalizeToolCardSeq(prevData.seq || prevIdentity.seq || prev?.extra?.seq)
           const sessionId = String(payload.sessionId || prevData.sessionId || prevData.session_id || conversation.id).trim() || conversation.id
           const resolvedCallId = String(payload.callId || prevIdentity.callId || prevData.callId || prevData.call_id || '').trim()
           const resolvedTicketId = String(payload.ticketId || prevIdentity.ticketId || prevData.ticketId || prevData.ticket_id || '').trim()
@@ -1160,6 +1216,28 @@ export const $completion = {
           const resolvedErrorMessage = String(payload.errorMessage || prevData.errorMessage || prevData.error_message || '').trim()
           const resolvedAuditType = String(payload.auditType || prevData.auditType || prevData.audit_type || '').trim()
           const normalizedStatus = normalizeToolStatus(resolvedStatus)
+          const prevStatus = normalizeToolStatus(prevData.status || prevIdentity.status || prev?.extra?.status)
+          const prevTerminal = TOOL_CARD_TERMINAL_STATUS.has(prevStatus)
+          const nextTerminal = TOOL_CARD_TERMINAL_STATUS.has(normalizedStatus)
+
+          if (prev) {
+            if (payloadSeq > 0 && prevSeq > 0 && payloadSeq < prevSeq) {
+              return prev
+            }
+            if (prevTerminal && !nextTerminal) {
+              return prev
+            }
+          }
+
+          const payloadSources = Array.isArray(payload.sources)
+            ? payload.sources.filter(item => item && typeof item === 'object' && !Array.isArray(item))
+            : []
+          const prevSources = Array.isArray(prevData.sources)
+            ? prevData.sources.filter(item => item && typeof item === 'object' && !Array.isArray(item))
+            : []
+          const resolvedSources = payloadSources.length > 0
+            ? payloadSources
+            : prevSources
           const nextExtra = {
             ...(prev?.extra || {}),
             start: prev?.extra?.start || now,
@@ -1174,6 +1252,8 @@ export const $completion = {
             ticketId: resolvedTicketId,
             errorCode: resolvedErrorCode,
             sessionId,
+            seq: payloadSeq || prevSeq || 0,
+            streamOrder: resolveStreamOrder(prev?.extra?.streamOrder) || nextStreamBlockOrder(),
           }
           const nextData = JSON.stringify({
             sessionId,
@@ -1186,10 +1266,11 @@ export const $completion = {
             outputPreview: resolvedOutputPreview,
             durationMs: resolvedDuration,
             ticketId: resolvedTicketId,
-            sources: payload.sources,
+            sources: resolvedSources,
             errorCode: resolvedErrorCode,
             errorMessage: resolvedErrorMessage,
             auditType: resolvedAuditType,
+            seq: payloadSeq || prevSeq || 0,
           })
 
           if (prev) {
@@ -1209,7 +1290,7 @@ export const $completion = {
             data: nextData,
             extra: nextExtra,
           }
-          innerMsg.value.push(created)
+          pushInnerBlock(created)
           toolCardMap.set(createToolCardStorageKey(payload), created)
           bindToolCardIdentity(payload, created)
           return created
@@ -1325,9 +1406,12 @@ export const $completion = {
           waitingToolApproval = false
           innerMsg.status = IChatItemStatus.TOOL_ERROR
           handler?.onTriggerStatus?.(innerMsg.status)
-          innerMsg.value.push({
+          pushInnerBlock({
             type: 'error',
             value: rejectedMessage,
+            extra: {
+              seq: toFiniteSeq(detail.seq),
+            },
           })
           complete()
         }
@@ -1362,6 +1446,38 @@ export const $completion = {
         })
 
         const runEventCardMap = new Map<string, IInnerItemMeta>()
+        const RUN_EVENT_TERMINAL_STATUSES = new Set(['completed', 'skipped', 'failed'])
+
+        function normalizeThinkingTraceText(value: unknown): string {
+          const text = normalizeRunEventText(value)
+          return text === '__end__' ? '' : text
+        }
+
+        function normalizeWebsearchDecisionReason(value: unknown): string {
+          const reason = normalizeRunEventText(value)
+          if (!reason) {
+            return '未命中联网决策'
+          }
+          if (reason === 'intent_required') {
+            return '意图判定需要联网'
+          }
+          if (reason === 'intent_not_required') {
+            return '意图判定无需联网'
+          }
+          if (reason === 'heuristic_required') {
+            return '命中联网启发式规则'
+          }
+          if (reason === 'heuristic_required_classifier_fallback') {
+            return '意图分类失败，启用启发式联网兜底'
+          }
+          if (reason === 'tool_unavailable') {
+            return '当前模型未开放 websearch 工具'
+          }
+          if (reason === 'internet_disabled') {
+            return '当前请求已关闭联网'
+          }
+          return reason
+        }
 
         function resolveRunEventCardKey(payload: RunEventCardPayload): string {
           const sessionScope = payload.sessionId || conversation.id
@@ -1379,7 +1495,7 @@ export const $completion = {
           if (payload.cardType === 'intent') {
             return payload.turnId
               ? `intent:${sessionScope}:${payload.turnId}`
-              : `intent:${sessionScope}`
+              : `intent:${sessionScope}:pending`
           }
           if (payload.cardType === 'routing') {
             return payload.turnId
@@ -1398,10 +1514,32 @@ export const $completion = {
 
         function upsertRunEventCard(payload: RunEventCardPayload): IInnerItemMeta {
           const key = resolveRunEventCardKey(payload)
-          const prev = runEventCardMap.get(key)
+          const sessionScope = payload.sessionId || conversation.id
+          const pendingIntentKey = `intent:${sessionScope}:pending`
+          let prev = runEventCardMap.get(key)
+          if (!prev && payload.cardType === 'intent' && payload.turnId) {
+            prev = runEventCardMap.get(pendingIntentKey)
+          }
           const now = Date.now()
 
           const prevData = parseJsonSafe<Record<string, unknown>>(String(prev?.data || '')) || {}
+          const payloadSeq = toFiniteSeq(payload.seq)
+          const prevSeq = toFiniteSeq(prevData.seq || prev?.extra?.seq)
+          const prevStatus = normalizeRunEventText(prevData.status || prev?.extra?.status).toLowerCase()
+          const nextStatus = normalizeRunEventText(payload.status).toLowerCase()
+          if (prev) {
+            if (payloadSeq > 0 && prevSeq > 0 && payloadSeq < prevSeq) {
+              return prev
+            }
+            if (
+              RUN_EVENT_TERMINAL_STATUSES.has(prevStatus)
+              && !RUN_EVENT_TERMINAL_STATUSES.has(nextStatus)
+              && (payloadSeq <= 0 || prevSeq <= 0 || payloadSeq <= prevSeq)
+            ) {
+              return prev
+            }
+          }
+
           const prevContent = normalizeRunEventText(prevData.content)
           let mergedContent = payload.content || prevContent
           if (payload.cardType === 'thinking') {
@@ -1453,6 +1591,7 @@ export const $completion = {
             seq: payload.seq || prev?.extra?.seq || 0,
             sessionId: payload.sessionId || prev?.extra?.sessionId || conversation.id,
             turnId: payload.turnId || prev?.extra?.turnId || '',
+            streamOrder: resolveStreamOrder(prev?.extra?.streamOrder) || nextStreamBlockOrder(),
           }
 
           if (prev) {
@@ -1461,6 +1600,10 @@ export const $completion = {
             prev.value = ''
             prev.data = nextData
             prev.extra = nextExtra
+            if (payload.cardType === 'intent' && payload.turnId && key !== pendingIntentKey) {
+              runEventCardMap.delete(pendingIntentKey)
+              runEventCardMap.set(key, prev)
+            }
             return prev
           }
 
@@ -1471,9 +1614,35 @@ export const $completion = {
             data: nextData,
             extra: nextExtra,
           }
-          innerMsg.value.push(created)
+          pushInnerBlock(created)
           runEventCardMap.set(key, created)
           return created
+        }
+
+        function finalizeRunningThinkingCards(eventType: string) {
+          for (const card of runEventCardMap.values()) {
+            const raw = parseJsonSafe<Record<string, unknown>>(String(card.data || '')) || {}
+            if (normalizeRunEventText(raw.cardType) !== 'thinking') {
+              continue
+            }
+            if (normalizeRunEventText(raw.status).toLowerCase() !== 'running') {
+              continue
+            }
+            upsertRunEventCard({
+              sessionId: normalizeRunEventText(raw.sessionId) || conversation.id,
+              cardType: 'thinking',
+              eventType,
+              status: 'completed',
+              title: normalizeRunEventText(raw.title) || 'Thinking',
+              summary: '思考完成',
+              turnId: normalizeRunEventText(raw.turnId),
+              seq: Number.isFinite(Number(raw.seq)) ? Number(raw.seq) : 0,
+              content: '',
+              detail: raw.detail && typeof raw.detail === 'object' && !Array.isArray(raw.detail)
+                ? raw.detail as Record<string, unknown>
+                : {},
+            })
+          }
         }
 
         function buildExecutorBody(requestId = ''): IChatBody & { requestId?: string } {
@@ -1601,15 +1770,47 @@ export const $completion = {
             return
           }
 
+          if (eventType === 'websearch.decision') {
+            upsertRunEventCard({
+              sessionId,
+              cardType: 'websearch',
+              eventType,
+              status: 'completed',
+              title: '联网检索决策',
+              summary: normalizeWebsearchDecisionReason(detail.reason),
+              turnId,
+              seq,
+              content: '',
+              detail,
+            })
+            return
+          }
+
+          if (eventType === 'websearch.skipped') {
+            upsertRunEventCard({
+              sessionId,
+              cardType: 'websearch',
+              eventType,
+              status: 'skipped',
+              title: '联网检索执行',
+              summary: normalizeWebsearchDecisionReason(detail.reason || payload.reason),
+              turnId,
+              seq,
+              content: '',
+              detail,
+            })
+            return
+          }
+
           if (eventType === 'thinking.delta') {
-            const chunk = normalizeRunEventText(payload.delta || detail.text)
+            const chunk = normalizeThinkingTraceText(payload.delta || detail.text)
             upsertRunEventCard({
               sessionId,
               cardType: 'thinking',
               eventType,
-              status: 'running',
+              status: chunk ? 'running' : 'completed',
               title: 'Thinking',
-              summary: '思考中',
+              summary: chunk ? '思考中' : '思考完成',
               turnId,
               seq,
               content: chunk,
@@ -1619,7 +1820,7 @@ export const $completion = {
           }
 
           if (eventType === 'thinking.final') {
-            const finalText = normalizeRunEventText(payload.message || detail.text)
+            const finalText = normalizeThinkingTraceText(payload.message || detail.text)
             upsertRunEventCard({
               sessionId,
               cardType: 'thinking',
@@ -1670,12 +1871,13 @@ export const $completion = {
               innerMsg.status = IChatItemStatus.CANCELLED
 
             const extra = buildErrorBlockExtra(res)
-            innerMsg.value.push({
+            pushInnerBlock({
               type: 'error',
               value: errorMessage,
               extra,
             })
 
+            finalizeRunningThinkingCards('error')
             complete()
 
             return
@@ -1685,6 +1887,7 @@ export const $completion = {
             flushPendingMarkdownBuffer({
               markDone: true,
             })
+            finalizeRunningThinkingCards('done')
             if (waitingToolApproval) {
               innerMsg.status = IChatItemStatus.TOOL_CALLING
               handler?.onTriggerStatus?.(innerMsg.status)
@@ -1717,6 +1920,7 @@ export const $completion = {
               ? res.delta
               : normalizeRunEventText(res?.payload?.text)
             if (chunk) {
+              getOrCreateStreamingMarkdownBlock(toFiniteSeq(res.seq))
               appendPendingMarkdownChunk(chunk)
               scheduleMarkdownBufferFlush()
               handler?.onCompletionStart?.(lastCompletionName || 'assistant')
@@ -1730,7 +1934,7 @@ export const $completion = {
 
           if (eventType === 'assistant.final') {
             waitingToolApproval = false
-            const markdownBlock = getOrCreateStreamingMarkdownBlock()
+            const markdownBlock = getOrCreateStreamingMarkdownBlock(toFiniteSeq(res.seq))
             const finalText = typeof res.message === 'string'
               ? res.message
               : normalizeRunEventText(res?.payload?.text)
@@ -1752,13 +1956,20 @@ export const $completion = {
             if (finalText && finalText !== flushed) {
               handler.onCompletion?.(lastCompletionName || 'assistant', finalText)
             }
+            finalizeRunningThinkingCards('assistant.final')
             return
+          }
+
+          if (eventType === 'done' || eventType === 'turn.finished' || eventType === 'error') {
+            finalizeRunningThinkingCards(eventType)
           }
 
           if (
             eventType === 'intent.started'
             || eventType === 'intent.completed'
             || eventType === 'memory.updated'
+            || eventType === 'websearch.decision'
+            || eventType === 'websearch.skipped'
             || eventType === 'websearch.executed'
             || eventType === 'thinking.delta'
             || eventType === 'thinking.final'
@@ -1773,6 +1984,10 @@ export const $completion = {
 
           if (eventType === 'run.audit') {
             const payload = normalizeToolAuditCardPayload(res.payload)
+            const eventSeq = toFiniteSeq(res.seq)
+            if (eventSeq > 0) {
+              payload.seq = eventSeq
+            }
             if (!payload.sessionId) {
               payload.sessionId = conversation.id
             }
@@ -1797,9 +2012,12 @@ export const $completion = {
             else if (payload.auditType === 'tool.call.failed' || payload.auditType === 'tool.call.rejected') {
               waitingToolApproval = false
               if (payload.errorMessage) {
-                innerMsg.value.push({
+                pushInnerBlock({
                   type: 'error',
                   value: payload.errorMessage,
+                  extra: {
+                    seq: payload.seq || 0,
+                  },
                 })
               }
             }
@@ -1812,10 +2030,13 @@ export const $completion = {
           }
 
           if (eventType === 'suggest') {
-            innerMsg.value.push({
+            pushInnerBlock({
               data: 'suggest',
               type: res.content_type as any,
               value: res.content,
+              extra: {
+                seq: toFiniteSeq(res.seq),
+              },
             })
             return
           }
@@ -1874,7 +2095,7 @@ export const $completion = {
             const message = normalizeExecutorErrorMessage(res.message || res.error || res.detail)
             const extra = buildErrorBlockExtra(res)
 
-            innerMsg.value.push({
+            pushInnerBlock({
               type: 'error',
               value: message,
               extra,
@@ -1897,6 +2118,18 @@ export const $completion = {
           }
         }
 
+        upsertRunEventCard({
+          sessionId: conversation.id,
+          cardType: 'intent',
+          eventType: 'intent.started',
+          status: 'running',
+          title: '意图分析',
+          summary: '正在分析意图',
+          turnId: '',
+          seq: 0,
+          content: '',
+          detail: {},
+        })
         startExecutorStream()
 
         return signal

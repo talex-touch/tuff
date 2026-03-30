@@ -193,7 +193,7 @@ function buildRunEventCardData(
         seq,
         cardType: 'websearch',
         eventType: trace.type,
-        status: enabled ? 'running' : 'skipped',
+        status: 'completed',
         title: '联网判定',
         summary: enabled
           ? `判定触发联网 (${reason || '-'})`
@@ -368,6 +368,8 @@ function normalizeToolAuditStatus(auditType: string, value: unknown): string {
   return ''
 }
 
+const TOOL_TERMINAL_STATUS = new Set(['completed', 'failed', 'rejected', 'cancelled'])
+
 function normalizeToolAuditPayload(trace: RuntimeTraceLike, chatId: string): Record<string, unknown> | null {
   const payload = trace.payload
   const auditType = String(payload.auditType || payload.audit_type || '').trim()
@@ -443,9 +445,45 @@ function buildToolCardBlocks(chatId: string, traces: RuntimeTraceLike[]): Snapsh
     const toolName = String(cardPayload.toolName || cardPayload.tool_name || 'tool').trim() || 'tool'
     const toolId = String(cardPayload.toolId || cardPayload.tool_id || '').trim()
     const key = callId || ticketId || `${toolName}:${toolId || 'unknown'}`
+    const previous = toolMap.get(key)
+    if (!previous) {
+      toolMap.set(key, {
+        seq: trace.seq,
+        data: cardPayload,
+      })
+      continue
+    }
+
+    if (trace.seq < previous.seq) {
+      continue
+    }
+
+    const previousStatus = String(previous.data.status || '').trim().toLowerCase()
+    const incomingStatus = String(cardPayload.status || '').trim().toLowerCase()
+    const previousTerminal = TOOL_TERMINAL_STATUS.has(previousStatus)
+    const incomingTerminal = TOOL_TERMINAL_STATUS.has(incomingStatus)
+    if (previousTerminal && !incomingTerminal) {
+      continue
+    }
+
+    const previousSources = Array.isArray(previous.data.sources)
+      ? previous.data.sources
+          .filter(item => item && typeof item === 'object' && !Array.isArray(item))
+          .map(item => item as Record<string, unknown>)
+      : []
+    const incomingSources = Array.isArray(cardPayload.sources)
+      ? cardPayload.sources
+          .filter(item => item && typeof item === 'object' && !Array.isArray(item))
+          .map(item => item as Record<string, unknown>)
+      : []
+
     toolMap.set(key, {
       seq: trace.seq,
-      data: cardPayload,
+      data: {
+        ...previous.data,
+        ...cardPayload,
+        sources: incomingSources.length > 0 ? incomingSources : previousSources,
+      },
     })
   }
   return Array.from(toolMap.values())

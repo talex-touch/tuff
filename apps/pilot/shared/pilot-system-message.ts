@@ -335,7 +335,7 @@ function buildSystemPolicyProjection(input: PilotSystemProjectionInput): PilotPr
         turnId: turnId || undefined,
         cardType: 'websearch',
         cardKey: buildEventCardKey('websearch', sourceEventType, turnId),
-        status: enabled ? 'running' : 'skipped',
+        status: 'completed',
         title: '联网判定',
         summary,
         contextPolicy: 'allow',
@@ -618,8 +618,8 @@ export function projectPilotSystemMessage(input: PilotSystemProjectionInput): Pi
 }
 
 export function buildPilotSystemMessageId(sessionId: string, seq: number, sourceEventType: string): string {
-  const normalizedSession = normalizeText(sessionId).replace(/[^a-z0-9_-]+/gi, '_') || 'session'
-  const normalizedType = normalizeText(sourceEventType).toLowerCase().replace(/[^a-z0-9_-]+/g, '_') || 'event'
+  const normalizedSession = normalizeText(sessionId).replace(/[^\w-]+/g, '_') || 'session'
+  const normalizedType = normalizeText(sourceEventType).toLowerCase().replace(/[^\w-]+/g, '_') || 'event'
   return `msg_system_${normalizedSession}_${Math.max(1, Math.floor(seq || 1))}_${normalizedType}`
 }
 

@@ -84,6 +84,82 @@ const expand = computed({
   },
 })
 
+const historyReady = ref(false)
+const routeResolvePending = ref(false)
+const selectionLoading = ref(false)
+let selectionToken = 0
+let mountedFinished = false
+let mounterPromise: Promise<void> | null = null
+let scopedEventCleanup: (() => void) | null = null
+
+const conversationReady = computed(() => {
+  if (viewMode.value) {
+    return true
+  }
+  if (!historyReady.value || routeResolvePending.value || selectionLoading.value) {
+    return false
+  }
+  const currentConversationId = String(pageOptions.conversation?.id || '').trim()
+  if (!currentConversationId) {
+    return false
+  }
+  if (!pageOptions.select) {
+    return true
+  }
+  if ($historyManager.options.list.size <= 0) {
+    return true
+  }
+  return $historyManager.options.list.has(pageOptions.select)
+})
+
+function isSummaryConversation(conversation: IChatConversation | undefined): boolean {
+  return Boolean((conversation as any)?.__summaryOnly)
+}
+
+async function ensureConversationHydrated(conversation: IChatConversation): Promise<IChatConversation | null> {
+  if (!isSummaryConversation(conversation)) {
+    return conversation
+  }
+
+  const synced = await $historyManager.syncHistory(conversation).catch(() => false)
+  if (!synced) {
+    return null
+  }
+
+  const refreshed = $historyManager.options.list.get(conversation.id)
+  if (!refreshed) {
+    return null
+  }
+  ;(refreshed as any).__summaryOnly = false
+  ;(refreshed as any).__hydrated = true
+  return refreshed
+}
+
+function applyConversationStatus(conversation: IChatConversation) {
+  const runtimeState = String((conversation as any)?.runtimeState || '').trim().toLowerCase()
+
+  if (!conversation?.messages.length) {
+    pageOptions.status = IChatItemStatus.AVAILABLE
+    return runtimeState
+  }
+
+  const lastMsg = conversation.messages.at(-1)
+  const content = lastMsg?.content[lastMsg.page]
+
+  globalConfigModel.value = content?.model || defaultModelId.value
+  if (!findModel(globalConfigModel.value)) {
+    globalConfigModel.value = defaultModelId.value
+  }
+  if (runtimeState === 'queued')
+    pageOptions.status = IChatItemStatus.WAITING
+  else if (runtimeState === 'executing' || runtimeState === 'title')
+    pageOptions.status = IChatItemStatus.GENERATING
+  else
+    pageOptions.status = content?.status || IChatItemStatus.AVAILABLE
+
+  return runtimeState
+}
+
 async function handleDelete(id: string) {
   const res: any = await $endApi.v1.aigc.deleteConversation(id)
   if (res.code !== 200) {
@@ -108,50 +184,43 @@ function handleSelectTemplate(data: any) {
 
 watch(
   () => pageOptions.select,
-  (select) => {
+  async (select) => {
     if (!select)
       return
 
-    const historyList = $historyManager.options.list
+    const currentToken = ++selectionToken
+    selectionLoading.value = true
 
-    const conversation = historyList.get(select)
+    let conversation = $historyManager.options.list.get(select)
     if (!conversation) {
-      // pageOptions.select = ''
+      if (currentToken === selectionToken) {
+        selectionLoading.value = false
+      }
       return
     }
 
-    setTimeout(async () => {
-      router.replace({
-        query: {
-          ...route.query,
-          id: select,
-        },
-      })
+    try {
+      const hydratedConversation = await ensureConversationHydrated(conversation)
+      if (!hydratedConversation) {
+        ElMessage.warning('会话加载失败，请稍后重试。')
+        return
+      }
+      conversation = hydratedConversation
+      if (currentToken !== selectionToken) {
+        return
+      }
+
+      if (String(route.query.id || '').trim() !== select) {
+        void router.replace({
+          query: {
+            ...route.query,
+            id: select,
+          },
+        })
+      }
 
       pageOptions.conversation = conversation
-      const runtimeState = String((conversation as any)?.runtimeState || '').trim().toLowerCase()
-
-      // get last msg
-      if (conversation?.messages.length) {
-        const lastMsg = conversation.messages.at(-1)
-
-        const content = lastMsg?.content[lastMsg.page]
-
-        globalConfigModel.value = content?.model || defaultModelId.value
-        if (!findModel(globalConfigModel.value)) {
-          globalConfigModel.value = defaultModelId.value
-        }
-        if (runtimeState === 'queued')
-          pageOptions.status = IChatItemStatus.WAITING
-        else if (runtimeState === 'executing' || runtimeState === 'title')
-          pageOptions.status = IChatItemStatus.GENERATING
-        else
-          pageOptions.status = content?.status || IChatItemStatus.AVAILABLE
-      }
-      else {
-        pageOptions.status = IChatItemStatus.AVAILABLE
-      }
-
+      const runtimeState = applyConversationStatus(conversation)
       pageOptions.share.enable = false
       pageOptions.share.selected = []
       chatRef.value?.handleBackToBottom(false)
@@ -162,9 +231,13 @@ watch(
 
       if (document.body.classList.contains('mobile'))
         expand.value = false
-    }, 200)
+    }
+    finally {
+      if (currentToken === selectionToken) {
+        selectionLoading.value = false
+      }
+    }
   },
-  { deep: true },
 )
 
 async function createConversation() {
@@ -521,6 +594,11 @@ async function handleRetry(index: number, page: number, innerItem: IChatInnerIte
 }
 
 async function handleSend(query: IInnerItemMeta[], meta: IChatInnerItemMeta) {
+  if (!conversationReady.value) {
+    ElMessage.warning('会话正在加载中，请稍后再发送。')
+    return
+  }
+
   const conversation = pageOptions.conversation
   applyInitialTopicIfNeeded(conversation, resolveTopicFromQuery(query))
   const resolvedPilotMode = typeof meta.pilotMode === 'boolean'
@@ -582,7 +660,7 @@ async function handleSend(query: IInnerItemMeta[], meta: IChatInnerItemMeta) {
 }
 
 function handleSuggest(suggestion: string) {
-  handleSend([$completion.initInnerMeta('text', suggestion)], {})
+  void handleSend([$completion.initInnerMeta('text', suggestion)], {})
 }
 
 provide('pageOptions', pageOptions)
@@ -602,28 +680,8 @@ function handleCancelReq() {
 
 const mount = ref(false)
 
-async function mounter() {
-  await ensureRuntimeModelsLoaded()
-  await loadMemorySettings()
-  if ($historyManager.options.status === IHistoryStatus.DONE && $historyManager.options.list.size <= 0) {
-    await $historyManager.loadHistories().catch(() => {})
-  }
-  if (!findModel(globalConfigModel.value)) {
-    globalConfigModel.value = defaultModelId.value
-  }
-
-  setTimeout(() => {
-    mount.value = true
-  }, 200)
-
-  if (viewMode.value) {
-    const res = await $endApi.v1.aigc.getShareMessage(route.query.share as string)
-
-    const chat = pageOptions.view = res.data
-    const conversation = decodeObject(chat.value)
-
-    pageOptions.conversation = conversation
-
+function ensureScopedEventsRegistered() {
+  if (scopedEventCleanup || viewMode.value) {
     return
   }
 
@@ -641,47 +699,120 @@ async function mounter() {
   })
   eventScope.on('REQUEST_SAVE_CURRENT_CONVERSATION', handleSync)
 
-  if (userStore.value.isAdmin) {
-    window.$chat = {
-      pageOptions,
-    }
-  }
-
-  const routeConversationId = String(route.query.id || '').trim()
-  if (routeConversationId) {
-    if (!$historyManager.options.list.get(routeConversationId)) {
-      const probe = $completion.emptyHistory()
-      probe.id = routeConversationId
-      probe.topic = DEFAULT_CONVERSATION_TOPIC
-      probe.messages = []
-      await $historyManager.syncHistory(probe).catch(() => false)
-    }
-    if ($historyManager.options.list.get(routeConversationId)) {
-      pageOptions.select = routeConversationId
-    }
-  }
-
-  if (!pageOptions.select && $historyManager.options.list.size > 0) {
-    const latest = [...$historyManager.options.list.values()]
-      .sort((left, right) => Number(right.lastUpdate || 0) - Number(left.lastUpdate || 0))
-      .at(0)
-    if (latest?.id) {
-      pageOptions.select = latest.id
-    }
-  }
-
-  if (route.query.id)
-    expand.value = true
-
-  onUnmounted(() => {
-    clearStreamScrollTimer()
-    streamScrollPending = false
+  scopedEventCleanup = () => {
     eventScope.endScope()
     hotKeyScope()
+    scopedEventCleanup = null
+  }
+}
+
+async function mounter() {
+  if (mountedFinished) {
+    return
+  }
+  if (mounterPromise) {
+    await mounterPromise
+    return
+  }
+
+  mounterPromise = (async () => {
+    historyReady.value = false
+    routeResolvePending.value = false
+    await ensureRuntimeModelsLoaded()
+    await loadMemorySettings()
+    if ($historyManager.options.status === IHistoryStatus.DONE && $historyManager.options.list.size <= 0) {
+      await $historyManager.loadHistories().catch(() => {})
+    }
+    if (!findModel(globalConfigModel.value)) {
+      globalConfigModel.value = defaultModelId.value
+    }
+
+    setTimeout(() => {
+      mount.value = true
+    }, 200)
+
+    if (viewMode.value) {
+      const res = await $endApi.v1.aigc.getShareMessage(route.query.share as string)
+      const chat = pageOptions.view = res.data
+      const conversation = decodeObject(chat.value)
+      pageOptions.conversation = conversation
+      historyReady.value = true
+      mountedFinished = true
+      return
+    }
+
+    ensureScopedEventsRegistered()
+
+    if (userStore.value.isAdmin) {
+      window.$chat = {
+        pageOptions,
+      }
+    }
+
+    const routeConversationId = String(route.query.id || '').trim()
+    if (routeConversationId) {
+      routeResolvePending.value = true
+      try {
+        if (!$historyManager.options.list.get(routeConversationId)) {
+          const probe = $completion.emptyHistory()
+          probe.id = routeConversationId
+          probe.topic = DEFAULT_CONVERSATION_TOPIC
+          probe.messages = []
+          await $historyManager.syncHistory(probe).catch(() => false)
+        }
+        if ($historyManager.options.list.get(routeConversationId)) {
+          pageOptions.select = routeConversationId
+        }
+        else {
+          ElMessage.warning('目标会话不存在或加载失败，请手动选择历史会话。')
+        }
+      }
+      finally {
+        routeResolvePending.value = false
+      }
+    }
+    else {
+      routeResolvePending.value = false
+    }
+
+    if (!routeConversationId && !pageOptions.select && $historyManager.options.list.size > 0) {
+      const latest = [...$historyManager.options.list.values()]
+        .sort((left, right) => Number(right.lastUpdate || 0) - Number(left.lastUpdate || 0))
+        .at(0)
+      if (latest?.id) {
+        pageOptions.select = latest.id
+      }
+    }
+
+    if (route.query.id)
+      expand.value = true
+
+    historyReady.value = true
+    mountedFinished = true
+  })()
+    .finally(() => {
+      mounterPromise = null
+    })
+
+  await mounterPromise
+}
+
+function handleMountLifecycle() {
+  void mounter().catch((error) => {
+    const message = error instanceof Error ? error.message : '初始化失败'
+    ElMessage.error(message)
   })
 }
-onActivated(mounter)
-onMounted(mounter)
+onActivated(handleMountLifecycle)
+onMounted(handleMountLifecycle)
+
+onUnmounted(() => {
+  clearStreamScrollTimer()
+  streamScrollPending = false
+  selectionToken += 1
+  scopedEventCleanup?.()
+  scopedEventCleanup = null
+})
 
 const appOptions: any = inject('appOptions')!
 function handleLogin() {

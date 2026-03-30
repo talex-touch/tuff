@@ -500,6 +500,46 @@ function buildModelCandidates(
   return list
 }
 
+function buildRouteBindingPolicyMap(
+  modelCatalog: PilotModelCatalogItem[],
+): Map<string, { hasEnabled: boolean, hasDisabled: boolean }> {
+  const policyMap = new Map<string, { hasEnabled: boolean, hasDisabled: boolean }>()
+  for (const model of modelCatalog) {
+    for (const binding of model.bindings || []) {
+      const channelId = normalizeText(binding.channelId)
+      const providerModel = normalizeText(binding.providerModel)
+      if (!channelId || !providerModel) {
+        continue
+      }
+      const key = buildRouteKey(channelId, providerModel)
+      const current = policyMap.get(key) || { hasEnabled: false, hasDisabled: false }
+      const enabledByBinding = binding.enabled !== false && model.enabled !== false
+      if (enabledByBinding) {
+        current.hasEnabled = true
+      }
+      else {
+        current.hasDisabled = true
+      }
+      policyMap.set(key, current)
+    }
+  }
+  return policyMap
+}
+
+function isRouteAllowedByBindingPolicy(
+  candidate: RouteCandidate,
+  policyMap: Map<string, { hasEnabled: boolean, hasDisabled: boolean }>,
+): boolean {
+  const policy = policyMap.get(buildRouteKey(candidate.channelId, candidate.providerModel))
+  if (!policy) {
+    return true
+  }
+  if (policy.hasEnabled) {
+    return true
+  }
+  return !policy.hasDisabled
+}
+
 function resolveTools(
   model: PilotModelCatalogItem | undefined,
   channel: PilotChannelConfig,
@@ -627,6 +667,7 @@ export async function resolvePilotRoutingSelection(
   const routingConfig = await getPilotAdminRoutingConfig(event)
   const modelCatalog = resolveModelCatalog(routingConfig.modelCatalog, enabledChannels)
   const modelMap = new Map(modelCatalog.map(item => [item.id, item]))
+  const bindingPolicyMap = buildRouteBindingPolicyMap(routingConfig.modelCatalog || [])
   const comboMap = new Map(routingConfig.routeCombos.map(item => [item.id, item]))
 
   const intentModelId = intentType === 'intent_classification'
@@ -704,6 +745,7 @@ export async function resolvePilotRoutingSelection(
     channelMap.get(candidate.channelId),
     candidate.providerModel,
   ))
+  candidates = candidates.filter(candidate => isRouteAllowedByBindingPolicy(candidate, bindingPolicyMap))
   candidates = candidates.filter(candidate => isIntentCandidateAllowed(candidate, modelMap, intentType, requiredCapability))
   if (excludedRouteKeys.size > 0) {
     candidates = candidates.filter(candidate => !excludedRouteKeys.has(buildRouteKey(candidate.channelId, candidate.providerModel)))

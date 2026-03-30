@@ -48,6 +48,7 @@ export interface ShouldExecutePilotWebsearchInput {
   internetEnabled?: boolean
   builtinTools?: string[]
   intentWebsearchRequired?: boolean
+  intentWebsearchReason?: string
 }
 
 export interface PilotWebsearchExecutionDecision {
@@ -93,6 +94,9 @@ function normalizeMetadata(value: unknown): Record<string, unknown> | undefined 
 
 export function isPilotSystemMessageAllowedForModelContext(metadata: unknown): boolean {
   const row = normalizeMetadata(metadata) || {}
+  if (row.promptInjection === true) {
+    return true
+  }
   const eventType = String(row.eventType || '').trim()
   if (!PILOT_SYSTEM_CONTEXT_ALLOW_EVENT_TYPES.has(eventType)) {
     return false
@@ -537,13 +541,14 @@ export function buildPilotConversationSnapshot(input: BuildPilotConversationSnap
     skipUnavailableAssistant: false,
     keepNonTextWithoutValue: true,
   })
+  const snapshotMessages = normalized.filter(item => item.role === 'user' || item.role === 'assistant')
 
   const assistantReply = String(input.assistantReply || '').trim()
   if (assistantReply) {
-    const last = normalized[normalized.length - 1]
+    const last = snapshotMessages[snapshotMessages.length - 1]
     const lastText = last?.role === 'assistant' ? extractTextFromBlocks(last.content) : ''
     if (!last || last.role !== 'assistant' || lastText !== assistantReply) {
-      normalized.push({
+      snapshotMessages.push({
         role: 'assistant',
         content: [{
           type: 'markdown',
@@ -554,14 +559,14 @@ export function buildPilotConversationSnapshot(input: BuildPilotConversationSnap
   }
 
   const topicHint = String(input.topicHint || '').trim()
-  const topic = topicHint || String(previous.topic || '').trim() || guessTopic(normalized)
+  const topic = topicHint || String(previous.topic || '').trim() || guessTopic(snapshotMessages)
   const payload: Record<string, unknown> = {
     ...previous,
     id: chatId,
     topic: topic || '新的聊天',
     sync: 'success',
     lastUpdate: Date.now(),
-    messages: toSnapshotMessages(normalized),
+    messages: toSnapshotMessages(snapshotMessages),
   }
 
   return {
@@ -663,7 +668,6 @@ export function shouldExecutePilotWebsearch(
     }
   }
 
-  // Intent false is a hard gate: heuristic fallback is only for legacy/missing intent signal.
   if (input.intentWebsearchRequired === false) {
     return {
       enabled: false,

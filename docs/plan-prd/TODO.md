@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-03-24
+> 更新时间: 2026-03-25
 
 ---
 
@@ -214,7 +214,15 @@
   - 继续压缩 `$app` allowlist 存量命中；
   - `plugin-module/file-provider/UpdateService` 进一步按编排层 + 领域层 + IO 层深拆，补齐剩余 direct tests。
 
-### O. CoreApp 兼容债务硬切（2026-03-23）
+### O. CoreApp 文件索引稳态修复（2026-03-25）
+
+- [x] flush 链路改为 pending/inflight 可恢复队列，失败回补且保持“新数据优先”。
+- [x] 定时 flush 统一调度入口并固定兜底，消除 `Unhandled rejection`。
+- [x] `search-index-worker` 关键写路径补齐 `SQLITE_BUSY` 重试并统一 label。
+- [x] `SearchIndexService` 索引/删除日志改为时间窗 summary，慢批次即时输出。
+- [x] 补齐定向测试：flush 失败恢复、worker 重试、日志节流。
+
+### P. CoreApp 兼容债务硬切（2026-03-23）
 
 - [x] 跨平台一致性修复：Linux 权限探测路径按平台分流；更新资产平台/架构识别统一并显式 `unsupported`；AppImage 小写识别修复。
 - [x] 权限系统硬切：删除 legacy `sdkapi` 放行路径，缺失/低版本统一 `SDKAPI_BLOCKED` 阻断；`allowLegacy` 配置移除。
@@ -224,7 +232,7 @@
 - [x] 自动化验证：`typecheck` 通过；定向 `vitest`（权限门禁、平台识别、AgentStore、Extension unload）通过。
 - [ ] 三平台人工回归：Windows/macOS/Linux 的首次引导权限、更新包匹配、插件权限拦截、Agent 安装升级卸载、退出资源释放。
 
-### P. CoreBox 搜索性能优化（2026-03-23）
+### Q. CoreBox 搜索性能优化（2026-03-23）
 
 - [x] P0：输入防抖下调（`BASE_DEBOUNCE=80ms`），保持去重窗口 `200ms`。
 - [x] P0：`SearchIndexService` 增加 `warmup()`，并在初始化补齐 `keyword_mappings` 复合索引（`provider+keyword`、`provider+item`）。
@@ -237,7 +245,7 @@
 - [ ] 验收：按 `search-trace` 采样 200 次真实查询，确认 `first.result/session.end` P95 与慢查询占比达标。
 - [ ] 门禁：待仓库既有 `extension-loader.test.ts` 类型错误修复后，补跑并记录 `typecheck:node` 全绿证据。
 
-### Q. 启动搜索卡顿永久治理（2026-03-24）
+### R. 启动搜索卡顿永久治理（2026-03-24）
 
 - [x] 数据库分层：新增 aux 库（`database-aux.db`）并迁移高频/非核心写入表（analytics/recommendation/clipboard/ocr/report queue）。
 - [x] 双库开关：新增 `TUFF_DB_AUX_ENABLED`、`TUFF_DB_QOS_ENABLED`、`TUFF_STARTUP_DEGRADE_ENABLED`。

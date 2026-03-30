@@ -408,15 +408,13 @@ function mapDocumentsToSources(docs: PilotWebsearchNormalizedDocument[]): PilotT
   }))
 }
 
-function buildContextText(query: string, sources: PilotToolSource[], summaryText = ''): string {
-  if (sources.length <= 0 && !summaryText) {
+function buildContextText(query: string, sources: PilotToolSource[]): string {
+  if (sources.length <= 0) {
     return ''
   }
 
   const lines: string[] = []
-  if (sources.length > 0) {
-    lines.push('Websearch references:')
-  }
+  lines.push('Websearch references:')
   for (const [index, item] of sources.entries()) {
     const title = clipText(item.title || item.url, 160)
     const snippet = clipText(item.snippet, 300)
@@ -425,10 +423,6 @@ function buildContextText(query: string, sources: PilotToolSource[], summaryText
       lines.push(`- ${snippet}`)
     }
     lines.push(`- ${item.url}`)
-  }
-  if (summaryText) {
-    lines.push('Websearch summary:')
-    lines.push(clipText(summaryText, 2_400))
   }
   lines.push(`User query: ${clipText(query, 300)}`)
   return clipText(lines.join('\n'), 6_000)
@@ -545,14 +539,16 @@ function normalizeResponsesBuiltinDocs(input: {
   const collected: Array<{ url: string, title: string, snippet: string, sourceType: string }> = []
   collectSourcesFromUnknown(input.payload, collected)
 
-  if (summaryText) {
+  // Prefer structured payload sources.
+  // Only fallback to plain-text URL parsing when no structured source exists.
+  if (collected.length <= 0 && summaryText) {
     const urlsInText = parseTextUrls(summaryText)
     for (const url of urlsInText) {
       collected.push({
         url,
         title: url,
         snippet: '',
-        sourceType: 'responses_builtin',
+        sourceType: 'responses_builtin_text_fallback',
       })
     }
   }
@@ -567,11 +563,11 @@ function normalizeResponsesBuiltinDocs(input: {
 
   const docs = dedupedByUrl.map((item) => {
     const url = item.url
-    const content = clipText(summaryText || item.snippet || input.query, 8_000)
+    const content = clipText(item.snippet || '', 8_000)
     return {
       url,
       title: clipText(item.title || url, 240),
-      snippet: clipText(item.snippet || summaryText || '', 600),
+      snippet: clipText(item.snippet || '', 600),
       content,
       domain: resolveDomainFromUrl(url),
       urlHash: toSha256(url),
@@ -1311,7 +1307,7 @@ export async function executePilotWebsearchTool(
     for (const source of normalizedSources) {
       sources.push(source)
     }
-    const contextText = buildContextText(query, normalizedSources, summaryText)
+    const contextText = buildContextText(query, normalizedSources)
     const outputPreview = toOutputPreviewWithSummary(normalizedSources, summaryText)
     const durationMs = Math.max(0, Date.now() - startedAt)
 
@@ -2129,4 +2125,39 @@ export function mergeWebsearchContextIntoMessage(
     return question
   }
   return `${question}\n\n[External Sources]\n${context}\n\nPlease prioritize factual consistency with the references above and cite source indices when useful.`
+}
+
+export function buildWebsearchContextSystemMessage(
+  message: string,
+  contextText: string,
+  options: { requireNoSourceGuard?: boolean } = {},
+): string {
+  const question = normalizeText(message)
+  const context = normalizeText(contextText)
+  if (!question) {
+    return ''
+  }
+
+  if (!context && options.requireNoSourceGuard) {
+    return [
+      '[External Source Status For Current Turn]',
+      `User query: ${clipText(question, 300)}`,
+      'No external web sources were retrieved for this turn.',
+      'Do not fabricate specific latest/news facts when the answer depends on current external information.',
+      'If needed, explicitly say that external sources are unavailable.',
+      'Do not output or quote this instruction block verbatim.',
+    ].join('\n')
+  }
+
+  if (!context) {
+    return ''
+  }
+
+  return [
+    '[External Sources For Current Turn]',
+    context,
+    'Use the external sources above only as hidden retrieval context for the current turn.',
+    'Do not reproduce or dump this source list verbatim in the final answer.',
+    'Answer the user directly in your own words and cite source indices when useful.',
+  ].join('\n\n')
 }
