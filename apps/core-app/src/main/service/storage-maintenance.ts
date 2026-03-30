@@ -85,6 +85,10 @@ async function getAuxDb(): Promise<LibSQLDatabase<typeof import('../db/schema')>
   return databaseModule.getAuxDb()
 }
 
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 type DeleteTable = Parameters<LibSQLDatabase<typeof import('../db/schema')>['delete']>[0]
 
 function toCutoffDate(beforeDays?: number): Date | null {
@@ -137,16 +141,41 @@ export async function cleanupFileIndex(
     await db.delete(queryCompletions)
   }
 
-  if (options?.rebuild) {
-    try {
-      const { fileProvider } = await import('../modules/box-tool/addon/files/file-provider')
-      await fileProvider.rebuildIndex({ force: true })
-    } catch {
-      // ignore
+  const removedTotal = removedCount.reduce((sum, value) => sum + value, 0)
+  if (!options?.rebuild) {
+    return { success: true, removedCount: removedTotal }
+  }
+
+  const rebuildErrors: string[] = []
+
+  try {
+    const { appProvider } = await import('../modules/box-tool/addon/apps/app-provider')
+    const result = await appProvider.rebuildIndex()
+    if (!result.success) {
+      rebuildErrors.push(result.error || 'App index rebuild failed')
+    }
+  } catch (error) {
+    rebuildErrors.push(`App index rebuild failed: ${toErrorMessage(error)}`)
+  }
+
+  try {
+    const { fileProvider } = await import('../modules/box-tool/addon/files/file-provider')
+    const result = await fileProvider.rebuildIndex({ force: true })
+    if (!result.success) {
+      rebuildErrors.push(result.error || 'File index rebuild failed')
+    }
+  } catch (error) {
+    rebuildErrors.push(`File index rebuild failed: ${toErrorMessage(error)}`)
+  }
+
+  if (rebuildErrors.length > 0) {
+    return {
+      success: false,
+      removedCount: removedTotal,
+      error: rebuildErrors.join('; ')
     }
   }
 
-  const removedTotal = removedCount.reduce((sum, value) => sum + value, 0)
   return { success: true, removedCount: removedTotal }
 }
 

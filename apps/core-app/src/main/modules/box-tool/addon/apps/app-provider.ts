@@ -259,6 +259,12 @@ export interface AppIndexSettings {
   fullSyncPersistRetry: number
 }
 
+export interface AppIndexRebuildResult {
+  success: boolean
+  message?: string
+  error?: string
+}
+
 const DEFAULT_APP_INDEX_SETTINGS: AppIndexSettings = {
   hideNoisySystemApps: true,
   startupBackfillEnabled: true,
@@ -2086,12 +2092,31 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
-  async _forceRebuild(): Promise<void> {
+  public async rebuildIndex(): Promise<AppIndexRebuildResult> {
+    if (!this.context || !this.dbUtils) {
+      const error = 'Cannot rebuild: initialization context not available'
+      logApp(error, LogStyle.error)
+      return { success: false, error }
+    }
+
+    try {
+      await this._forceRebuild()
+      return {
+        success: true,
+        message: 'App index rebuild complete'
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      logApp('App index rebuild failed', LogStyle.error, { error: message })
+      return { success: false, error: message }
+    }
+  }
+
+  private async _forceRebuild(): Promise<void> {
     logApp('Forcing app database rebuild...', LogStyle.process)
 
     if (!this.context || !this.dbUtils) {
-      logApp('Context or DB not initialized, cannot rebuild', LogStyle.error)
-      return
+      throw new Error('Cannot rebuild: initialization context not available')
     }
 
     const db = this.dbUtils.getDb()
