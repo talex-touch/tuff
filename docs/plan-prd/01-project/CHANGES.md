@@ -1,7 +1,7 @@
 # 变更日志
 
-> 更新时间: 2026-03-29
-> 说明: 主文件仅保留近 30 天（2026-02-28 ~ 2026-03-29）详细记录；更早历史已按月归档。
+> 更新时间: 2026-03-30
+> 说明: 主文件仅保留近 30 天（2026-02-28 ~ 2026-03-30）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
@@ -10,6 +10,21 @@
 - 旧记录入口：见文末“历史索引导航”。
 
 ---
+
+## 2026-03-30
+
+### fix(core-app/storage): 清库重建时补齐 app index 自动恢复
+
+- `apps/core-app/src/main/service/storage-maintenance.ts`
+  - `storage:cleanup:file-index` 在 `rebuild=true` 时改为同时触发 app index 与 file index 重建，不再只重建 file index。
+  - 由于 `files / file_extensions / keyword_mappings` 为 app/file 共用存储，清理索引后可自动恢复 CoreBox 的应用搜索结果。
+  - 重建失败改为显式返回错误，避免后台静默吞掉异常。
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+  - 新增正式的 app index rebuild 入口，统一复用全量同步链路。
+- `apps/core-app/src/renderer/src/views/storage/Storagable.vue`
+  - 存储清理失败提示透出主进程返回的错误信息，便于快速定位索引恢复异常。
+- `apps/core-app/src/main/service/storage-maintenance.test.ts`
+  - 新增回归测试，覆盖“清理并重建”会同时触发 app/file 索引重建，以及 app rebuild 失败时的错误透传。
 
 ## 2026-03-29
 
@@ -49,6 +64,48 @@
 - 验证：
   - `pnpm -C "apps/core-app" exec vitest run ...`（本轮相关 7 个测试文件，38 tests passed）
   - `pnpm -C "apps/core-app" run typecheck:node` 仍被仓库既有问题阻塞：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 缺失 `./services/file-provider-index-flush-service`
+
+## 2026-03-28
+
+### feat(pilot-chat): 意图运行卡折叠体验优化（extra 插槽 + chevron 展开）
+
+- `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+  - 运行卡组件新增 `extra` 插槽能力，右侧交互统一为 `chevron-right` 折叠/展开。
+  - `intent` 类型卡片改为极简展示：默认仅显示 `Analyse intent`，展开后仅展示 `reason`（其余参数不再展示）。
+  - `intent` 类型隐藏 cardType/status 标签与底部 trace 元信息，减少噪声。
+  - `intent + running` 状态改为复用独立 `ShimmerText` 组件渲染，强化“分析中”反馈。
+  - event card 外观改为轻量样式：卡片容器去背景/去边框，并改为内容宽度自适应，避免整行撑满。
+  - chevron 折叠按钮改为无边框纯图标点击区，去掉外圈视觉噪声。
+  - 标题前前置图标移除；secondary 文本统一降为 normal 字重，避免视觉过重。
+  - 标题区强制单行布局（标题与 chevron 同行不换行）；展开/收起新增过渡动画，避免内容瞬时跳变。
+  - 标题与 chevron 进一步微调：降低标题/图标不透明度，缩小图标尺寸并收紧间距，整体更轻更紧凑。
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+  - 流式 block 写入补充 `seq + streamOrder` 元信息，文本/事件卡/错误块统一走顺序化插入路径，按接收序稳定渲染。
+  - `pilot_run_event_card` 增加乱序保护与终态防回退（旧 seq 或非终态事件不覆盖已终态卡片）。
+  - 发送阶段预置 `intent.started` 运行卡，确保“Analyse intent”在分析开始时立即可见，不等待完成事件。
+- `packages/tuff-intelligence/src/business/pilot/conversation.ts`
+  - 关闭 `intentWebsearchReason=classifier_failed` 时的启发式联网兜底：当意图层明确 `intentWebsearchRequired=false` 时，统一保持不联网（`intent_not_required`）。
+- `apps/pilot/server/utils/__tests__/pilot-conversation-shared.test.ts`
+  - 同步断言：`classifier_failed` 场景不再触发 `heuristic_required_classifier_fallback`，改为 `intent_not_required`。
+- `apps/pilot/app/components/chat/ChatItem.vue`
+  - 聊天块渲染增加顺序编排：优先按 `seq`，同 seq 按 `streamOrder`，确保文本与事件卡按接收顺序展示。
+- `apps/pilot/app/components/other/ShimmerText.vue`
+  - 新增通用文本 shimmer 组件（基于 `TextShaving` 的文本流光思路抽离），支持通过 `active` 开关控制动效启停。
+  - 调整为纯文本渲染：无背景、无边框，仅保留文字流光层，避免出现“文字浮层块”观感。
+
+### feat(pilot-admin/channels): 渠道配置增加一键测试
+
+- `apps/pilot/app/pages/admin/system/channels.vue`
+  - 渠道编辑抽屉新增「测试渠道」按钮，支持在保存前快速校验当前渠道是否可用。
+  - 新增测试态 loading 与按钮禁用联动，避免与「拉取渠道模型 / 保存」并发触发。
+  - 编辑态允许 API Key 留空并复用已保存密钥完成测试；新增态仍要求先填写 API Key。
+  - 渠道列表 table 的每行操作区升级为 actions group：`编辑 / 测试 / 删除`，支持直接在行内快速测试。
+- `apps/pilot/server/api/admin/channels/test.post.ts`
+  - 新增管理端测试接口 `POST /api/admin/channels/test`，按渠道 transport（`responses` / `chat.completions`）发起最小请求探活。
+  - 支持 `channelId` 兜底读取已保存配置（`baseUrl/apiKey/model/timeoutMs`），降低重复输入成本。
+  - 返回结构化测试结果（channelId/model/transport/durationMs/preview），并在上游非 2xx 时透传 HTTP 错误上下文。
+- `apps/pilot/server/api/admin/__tests__/channels-test.post.test.ts`
+  - 新增接口单测，覆盖显式参数成功、编辑态配置回退、必填参数校验、上游非 2xx 错误映射。
 
 ## 2026-03-27
 

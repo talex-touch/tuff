@@ -77,6 +77,7 @@ interface StorageCleanupResult {
   success: boolean
   removedCount?: number
   removedBytes?: number
+  error?: string
 }
 
 interface DatabaseCategoryGroup {
@@ -201,7 +202,11 @@ async function runCleanup(action: CleanupAction): Promise<void> {
         return
       }
       if (!(result as { success: boolean }).success) {
-        toast.error('清理失败，请重试')
+        const cleanupErrorMessage =
+          typeof (result as { error?: unknown }).error === 'string'
+            ? (result as { error: string }).error
+            : '清理失败，请重试'
+        toast.error(cleanupErrorMessage)
         return
       }
       const detail = formatCleanupResult(result)
