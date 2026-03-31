@@ -258,9 +258,11 @@ function verifyPackagedRuntimeModules(distDir, requiredModules) {
   }
 
   const { listPackage } = require('@electron/asar');
-  const packageEntries = listPackage(asarPath);
+  const packageEntries = new Set(
+    listPackage(asarPath).map((entry) => entry.replace(/\\/g, '/'))
+  );
   const missingModules = requiredModules.filter(
-    moduleName => !packageEntries.includes(`/node_modules/${moduleName}/package.json`)
+    moduleName => !packageEntries.has(path.posix.join('/node_modules', moduleName, 'package.json'))
   );
 
   if (missingModules.length > 0) {
