@@ -19,6 +19,12 @@ import {
   toPilotStreamErrorDetail,
 } from '@talex-touch/tuff-intelligence/pilot'
 import { createError } from 'h3'
+import {
+  buildPilotRedactedRoutingTracePayload,
+  redactPilotClientErrorDetail,
+  redactPilotClientTracePayload,
+  shouldHidePilotClientRuntimeEvent,
+} from '../../../../../shared/pilot-runtime-redaction'
 import { buildPilotSystemMessageId, projectPilotSystemMessage } from '../../../../../shared/pilot-system-message'
 import { requirePilotAuth } from '../../../../utils/auth'
 import {
@@ -167,7 +173,7 @@ function buildImageMarkdown(urls: string[]): string {
 }
 
 function mapTraceToStreamEvent(trace: TraceRecord): Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> {
-  const payload = toPilotSafeRecord(trace.payload)
+  const payload = redactPilotClientTracePayload(trace.type, toPilotSafeRecord(trace.payload))
   const text = String(payload.text || '')
 
   if (trace.type === 'assistant.delta') {
@@ -207,12 +213,19 @@ function mapTraceToStreamEvent(trace: TraceRecord): Omit<PilotStreamEvent, 'sess
   }
 
   if (trace.type === 'error') {
+    const detailRecord = toPilotSafeRecord(payload.detail)
+    const detail = redactPilotClientErrorDetail(
+      Object.keys(detailRecord).length > 0 ? detailRecord : payload,
+    )
     return {
       type: 'error',
       seq: trace.seq,
       message: String(payload.message || 'Stream error'),
-      detail: toPilotSafeRecord(payload.detail),
-      payload,
+      detail,
+      payload: {
+        ...payload,
+        detail,
+      },
     }
   }
 
@@ -413,6 +426,10 @@ async function followTraceTail(options: {
         if (options.connection.closed || options.connection.disconnected) {
           return
         }
+        if (shouldHidePilotClientRuntimeEvent(trace.type)) {
+          nextSeq = Math.max(nextSeq, Number(trace.seq || 0) + 1)
+          continue
+        }
         await options.emitEvent(mapTraceToStreamEvent(trace))
         nextSeq = Math.max(nextSeq, Number(trace.seq || 0) + 1)
       }
@@ -580,7 +597,7 @@ export default defineEventHandler(async (event) => {
         )
 
         if (pilotMode && selectedChannel.adapter !== 'coze' && orchestratorDecision.mode !== 'langgraph-local') {
-          const detail = toPilotSafeRecord({
+          const detail = redactPilotClientErrorDetail(toPilotSafeRecord({
             code: PILOT_STRICT_MODE_UNAVAILABLE_CODE,
             reason: String(orchestratorDecision.reason || '').trim() || 'pilot_strict_mode_unavailable',
             status_code: 503,
@@ -596,7 +613,7 @@ export default defineEventHandler(async (event) => {
             provider_model: selectedChannel.providerModel,
             provider_target_type: selectedChannel.providerTargetType,
             scene: selectedChannel.scene,
-          })
+          }))
           if (shouldRecordRoutingMetric) {
             metricSuccess = false
             metricFinishReason = 'strict_mode_unavailable'
@@ -680,6 +697,16 @@ export default defineEventHandler(async (event) => {
           },
         }
         const streamEmitter = createPilotStreamEmitter(createStreamEmitterOptions)
+        const appendTraceOnly = async (type: string, payload: Record<string, unknown>) => {
+          const nextSeq = Math.max(1, streamEmitter.getSeqCursor() + 1)
+          await store.runtime.appendTrace({
+            sessionId,
+            seq: nextSeq,
+            type,
+            payload: toPilotSafeRecord(payload),
+          })
+          streamEmitter.setSeqCursor(nextSeq)
+        }
         const quotaProjector = createPilotStreamQuotaProjector({
           chatId: sessionId,
           persist: persistStreamLifecycle,
@@ -970,56 +997,16 @@ export default defineEventHandler(async (event) => {
               }
             : undefined)
 
-          await emitEvent({
-            type: 'routing.selected',
-            payload: {
-              channelId: selectedChannel.channelId,
-              modelId: selectedChannel.modelId,
-              providerModel: selectedChannel.providerModel,
-              providerTargetType: selectedChannel.providerTargetType,
-              scene: selectedChannel.scene,
-              routeComboId: selectedChannel.routeComboId,
-              selectionSource: selectedChannel.selectionSource,
-              selectionReason: selectedChannel.selectionReason,
+          if (persistStreamLifecycle) {
+            await appendTraceOnly('routing.selected', buildPilotRedactedRoutingTracePayload({
               intentType: intentDecision.intentType,
               internet: selectedChannel.internet,
               thinking: selectedChannel.thinking,
               memoryEnabled,
               memoryHistoryMessageCount,
               builtinTools: selectedChannel.builtinTools,
-              transport: selectedChannel.transport,
-              adapter: selectedChannel.adapter,
-              orchestratorMode: orchestratorDecision.mode,
-              orchestratorReason: orchestratorDecision.reason,
-              orchestratorAssistantId: orchestratorDecision.assistantId,
-              orchestratorGraphProfile: orchestratorDecision.graphProfile,
-            },
-          }, persistStreamLifecycle
-            ? {
-                persist: true,
-                tracePayload: {
-                  channelId: selectedChannel.channelId,
-                  modelId: selectedChannel.modelId,
-                  providerModel: selectedChannel.providerModel,
-                  providerTargetType: selectedChannel.providerTargetType,
-                  scene: selectedChannel.scene,
-                  routeComboId: selectedChannel.routeComboId,
-                  selectionSource: selectedChannel.selectionSource,
-                  selectionReason: selectedChannel.selectionReason,
-                  intentType: intentDecision.intentType,
-                  internet: selectedChannel.internet,
-                  thinking: selectedChannel.thinking,
-                  memoryEnabled,
-                  memoryHistoryMessageCount,
-                  transport: selectedChannel.transport,
-                  adapter: selectedChannel.adapter,
-                  orchestratorMode: orchestratorDecision.mode,
-                  orchestratorReason: orchestratorDecision.reason,
-                  orchestratorAssistantId: orchestratorDecision.assistantId,
-                  orchestratorGraphProfile: orchestratorDecision.graphProfile,
-                },
-              }
-            : undefined)
+            }))
+          }
 
           await emitEvent({
             type: 'memory.context',
@@ -1682,7 +1669,7 @@ export default defineEventHandler(async (event) => {
             // ignore fallback status updates
           }
 
-          const detail = toPilotStreamErrorDetail(error, 'stream.run', { sessionId })
+          const detail = redactPilotClientErrorDetail(toPilotStreamErrorDetail(error, 'stream.run', { sessionId }))
           if (shouldRecordRoutingMetric) {
             metricSuccess = false
             metricFinishReason = 'error'
@@ -1768,7 +1755,6 @@ export default defineEventHandler(async (event) => {
                 channelId: selectedChannel.channelId,
                 providerModel: selectedChannel.providerModel,
                 providerTargetType: selectedChannel.providerTargetType,
-                scene: selectedChannel.scene,
                 queueWaitMs: 0,
                 ttftMs: resolvedTtftMs,
                 totalDurationMs,

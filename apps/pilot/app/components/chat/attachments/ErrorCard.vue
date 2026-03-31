@@ -24,12 +24,6 @@ const errorMeta = computed(() => {
     reason: String(extra.reason || detailRecord.reason || '').trim(),
     requestId: String(extra.requestId || detailRecord.request_id || detailRecord.requestId || '').trim(),
     statusCode: Number.isFinite(statusCode) ? statusCode : null,
-    routeComboId: String(detailRecord.route_combo_id || detailRecord.routeComboId || '').trim(),
-    modelId: String(detailRecord.model_id || detailRecord.modelId || '').trim(),
-    providerModel: String(detailRecord.provider_model || detailRecord.providerModel || '').trim(),
-    channelId: String(detailRecord.channel_id || detailRecord.channelId || '').trim(),
-    selectionSource: String(detailRecord.selection_source || detailRecord.selectionSource || '').trim(),
-    selectionReason: String(detailRecord.selection_reason || detailRecord.selectionReason || '').trim(),
   }
 })
 
@@ -41,19 +35,6 @@ const diagnosticSummary = computed(() => {
     list.push(errorMeta.value.code)
   if (errorMeta.value.reason)
     list.push(errorMeta.value.reason)
-  return list.join(' · ')
-})
-
-const routingSummary = computed(() => {
-  const list: string[] = []
-  if (errorMeta.value.routeComboId)
-    list.push(`route=${errorMeta.value.routeComboId}`)
-  if (errorMeta.value.modelId)
-    list.push(`model=${errorMeta.value.modelId}`)
-  if (errorMeta.value.providerModel)
-    list.push(`provider=${errorMeta.value.providerModel}`)
-  if (errorMeta.value.channelId)
-    list.push(`channel=${errorMeta.value.channelId}`)
   return list.join(' · ')
 })
 
@@ -187,8 +168,6 @@ function handleClick() {
         无法寻找到解决方案，请尝试重新登录！
       </p>
       <p v-if="diagnosticSummary" class="ErrorCard-Diagnostic" v-text="diagnosticSummary" />
-      <p v-if="routingSummary" class="ErrorCard-Diagnostic" v-text="routingSummary" />
-      <p v-if="errorMeta.selectionReason" class="ErrorCard-Diagnostic" v-text="errorMeta.selectionReason" />
       <!-- <el-tooltip content="为何发生此问题？">
 
       </el-tooltip> -->

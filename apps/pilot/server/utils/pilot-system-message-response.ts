@@ -1,3 +1,4 @@
+import { shouldHidePilotClientSystemMessage } from '../../shared/pilot-runtime-redaction'
 import { projectPilotSystemMessagesFromTraces } from '../../shared/pilot-system-message'
 
 interface MessageLike {
@@ -57,7 +58,8 @@ export async function listMessagesWithLazySystemProjection(
   store: RuntimeStoreLike,
   sessionId: string,
 ): Promise<MessageLike[]> {
-  const messages = await store.listMessages(sessionId)
+  const messages = (await store.listMessages(sessionId))
+    .filter(item => item.role !== 'system' || !shouldHidePilotClientSystemMessage(item.metadata))
   const hasSystem = messages.some(item => item.role === 'system')
   if (hasSystem) {
     return sortMessagesByTimeline(messages)

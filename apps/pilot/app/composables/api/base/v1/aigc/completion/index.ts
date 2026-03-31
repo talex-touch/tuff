@@ -13,6 +13,47 @@ function parseJsonSafe<T>(value: string): T | null {
   }
 }
 
+const PILOT_WEBSEARCH_CARD_TITLE = '联网检索'
+const HIDDEN_WEBSEARCH_CARD_REASONS = new Set(['intent_not_required'])
+
+function buildPilotWebsearchCardKey(turnId: unknown): string {
+  const turn = String(turnId || '').trim() || 'latest'
+  return `websearch:${turn}`
+}
+
+function normalizePilotWebsearchReason(value: unknown): string {
+  const reason = String(value || '').trim()
+  if (!reason) {
+    return ''
+  }
+  if (reason === 'fallback_unsupported_channel' || reason === 'fallback_endpoint_missing') {
+    return '当前通道不支持联网检索，已继续离线回答'
+  }
+  if (reason === 'tool_failed_or_empty_result') {
+    return '未获取到可用外部来源，已继续回答'
+  }
+  if (reason === 'intent_not_required') {
+    return '意图判定无需联网'
+  }
+  if (reason === 'intent_required') {
+    return '意图判定需要联网'
+  }
+  if (reason === 'internet_disabled') {
+    return '当前请求已关闭联网'
+  }
+  if (reason === 'tool_unavailable') {
+    return '当前模型未开放 websearch 工具'
+  }
+  if (reason === 'terminal_finalize') {
+    return '执行结束，未触发联网检索'
+  }
+  return reason
+}
+
+function shouldHidePilotWebsearchCard(payload: Record<string, unknown>): boolean {
+  return payload.enabled !== true && HIDDEN_WEBSEARCH_CARD_REASONS.has(String(payload.reason || '').trim())
+}
+
 const SENSITIVE_ERROR_ENDPOINT_RE = /\b(?:(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}|localhost):\d{2,5}\b/g
 const SENSITIVE_ERROR_PATH_RE = /\/(?:Users|home|var|opt|private)\/[^\s)\],]+/g
 
@@ -1454,27 +1495,15 @@ export const $completion = {
         }
 
         function normalizeWebsearchDecisionReason(value: unknown): string {
-          const reason = normalizeRunEventText(value)
+          const reason = normalizePilotWebsearchReason(value)
           if (!reason) {
             return '未命中联网决策'
-          }
-          if (reason === 'intent_required') {
-            return '意图判定需要联网'
-          }
-          if (reason === 'intent_not_required') {
-            return '意图判定无需联网'
           }
           if (reason === 'heuristic_required') {
             return '命中联网启发式规则'
           }
           if (reason === 'heuristic_required_classifier_fallback') {
             return '意图分类失败，启用启发式联网兜底'
-          }
-          if (reason === 'tool_unavailable') {
-            return '当前模型未开放 websearch 工具'
-          }
-          if (reason === 'internet_disabled') {
-            return '当前请求已关闭联网'
           }
           return reason
         }
@@ -1487,10 +1516,7 @@ export const $completion = {
               : `thinking:${sessionScope}`
           }
           if (payload.cardType === 'websearch') {
-            const segment = payload.eventType === 'websearch.decision' ? 'decision' : 'execution'
-            return payload.turnId
-              ? `websearch:${segment}:${sessionScope}:${payload.turnId}`
-              : `websearch:${segment}:${sessionScope}`
+            return buildPilotWebsearchCardKey(payload.turnId || sessionScope)
           }
           if (payload.cardType === 'intent') {
             return payload.turnId
@@ -1645,6 +1671,37 @@ export const $completion = {
           }
         }
 
+        function finalizeRunningWebsearchCards(eventType: string) {
+          for (const card of runEventCardMap.values()) {
+            const raw = parseJsonSafe<Record<string, unknown>>(String(card.data || '')) || {}
+            if (normalizeRunEventText(raw.cardType) !== 'websearch') {
+              continue
+            }
+            if (normalizeRunEventText(raw.status).toLowerCase() !== 'running') {
+              continue
+            }
+            const detail = raw.detail && typeof raw.detail === 'object' && !Array.isArray(raw.detail)
+              ? raw.detail as Record<string, unknown>
+              : {}
+            upsertRunEventCard({
+              sessionId: normalizeRunEventText(raw.sessionId) || conversation.id,
+              cardType: 'websearch',
+              eventType,
+              status: 'skipped',
+              title: normalizeRunEventText(raw.title) || PILOT_WEBSEARCH_CARD_TITLE,
+              summary: normalizeWebsearchDecisionReason('terminal_finalize'),
+              turnId: normalizeRunEventText(raw.turnId),
+              seq: Number.isFinite(Number(raw.seq)) ? Number(raw.seq) : 0,
+              content: '',
+              detail: {
+                ...detail,
+                enabled: false,
+                reason: 'terminal_finalize',
+              },
+            })
+          }
+        }
+
         function buildExecutorBody(requestId = ''): IChatBody & { requestId?: string } {
           const resolvedPilotMode = typeof innerMsg.meta.pilotMode === 'boolean'
             ? innerMsg.meta.pilotMode
@@ -1760,7 +1817,7 @@ export const $completion = {
               cardType: 'websearch',
               eventType,
               status: 'completed',
-              title: '联网检索执行',
+              title: PILOT_WEBSEARCH_CARD_TITLE,
               summary: `来源=${normalizeRunEventText(detail.source) || '-'}，命中=${Number.isFinite(sourceCount) ? sourceCount : 0}`,
               turnId,
               seq,
@@ -1771,12 +1828,18 @@ export const $completion = {
           }
 
           if (eventType === 'websearch.decision') {
+            if (shouldHidePilotWebsearchCard(detail)) {
+              return
+            }
+            if (detail.enabled !== true) {
+              return
+            }
             upsertRunEventCard({
               sessionId,
               cardType: 'websearch',
               eventType,
-              status: 'completed',
-              title: '联网检索决策',
+              status: 'running',
+              title: PILOT_WEBSEARCH_CARD_TITLE,
               summary: normalizeWebsearchDecisionReason(detail.reason),
               turnId,
               seq,
@@ -1787,12 +1850,15 @@ export const $completion = {
           }
 
           if (eventType === 'websearch.skipped') {
+            if (shouldHidePilotWebsearchCard(detail)) {
+              return
+            }
             upsertRunEventCard({
               sessionId,
               cardType: 'websearch',
               eventType,
               status: 'skipped',
-              title: '联网检索执行',
+              title: PILOT_WEBSEARCH_CARD_TITLE,
               summary: normalizeWebsearchDecisionReason(detail.reason || payload.reason),
               turnId,
               seq,
@@ -1878,6 +1944,7 @@ export const $completion = {
             })
 
             finalizeRunningThinkingCards('error')
+            finalizeRunningWebsearchCards('error')
             complete()
 
             return
@@ -1888,6 +1955,7 @@ export const $completion = {
               markDone: true,
             })
             finalizeRunningThinkingCards('done')
+            finalizeRunningWebsearchCards('done')
             if (waitingToolApproval) {
               innerMsg.status = IChatItemStatus.TOOL_CALLING
               handler?.onTriggerStatus?.(innerMsg.status)
@@ -1957,11 +2025,13 @@ export const $completion = {
               handler.onCompletion?.(lastCompletionName || 'assistant', finalText)
             }
             finalizeRunningThinkingCards('assistant.final')
+            finalizeRunningWebsearchCards('assistant.final')
             return
           }
 
           if (eventType === 'done' || eventType === 'turn.finished' || eventType === 'error') {
             finalizeRunningThinkingCards(eventType)
+            finalizeRunningWebsearchCards(eventType)
           }
 
           if (

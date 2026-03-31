@@ -55,6 +55,8 @@ const detail = computed(() => {
 })
 const cardType = computed(() => normalizeText(payload.value.cardType).toLowerCase())
 const isIntentCard = computed(() => cardType.value === 'intent')
+const isRoutingCard = computed(() => cardType.value === 'routing')
+const isWebsearchCard = computed(() => cardType.value === 'websearch')
 
 const cardTypeLabel = computed(() => {
   const type = cardType.value
@@ -92,6 +94,7 @@ const statusText = computed(() => {
   }
   return status || '未知'
 })
+const isRunning = computed(() => normalizeText(payload.value.status).toLowerCase() === 'running')
 
 const statusClass = computed(() => {
   const status = normalizeText(payload.value.status).toLowerCase()
@@ -123,9 +126,10 @@ const detailRows = computed(() => {
     rows.push(
       { label: '请求模型', value: normalizeText(row.modelId) || '-' },
       { label: '实际模型', value: normalizeText(row.providerModel) || '-' },
-      { label: 'RouteCombo', value: normalizeText(row.routeComboId) || '-' },
-      { label: 'Channel', value: normalizeText(row.channelId) || '-' },
-      { label: 'Transport', value: normalizeText(row.transport) || '-' },
+      { label: '场景', value: normalizeText(row.scene) || '-' },
+      { label: '路由组合', value: normalizeText(row.routeComboId) || '-' },
+      { label: '渠道', value: normalizeText(row.channelId) || '-' },
+      { label: '传输协议', value: normalizeText(row.transport) || '-' },
     )
     return rows
   }
@@ -156,13 +160,28 @@ const detailRows = computed(() => {
 const thinkingText = computed(() => normalizeText(payload.value.content))
 const summaryText = computed(() => normalizeText(payload.value.summary))
 const intentReasonText = computed(() => normalizeText(detail.value.reason))
+const websearchReasonText = computed(() => (
+  isWebsearchCard.value ? normalizeWebsearchReason(detail.value.reason) : ''
+))
+const shouldHideLegacyWebsearchCard = computed(() => {
+  if (!isWebsearchCard.value) {
+    return false
+  }
+  const rawReason = normalizeText(detail.value.reason).toLowerCase()
+  return rawReason === 'intent_not_required' || websearchReasonText.value === '意图判定无需联网'
+})
+const shouldHideRuntimeCard = computed(() => isRoutingCard.value || shouldHideLegacyWebsearchCard.value)
 const displayTitle = computed(() => (
   isIntentCard.value
     ? 'Analyse intent'
     : (payload.value.title || cardTypeLabel.value)
 ))
 const displaySummary = computed(() => (
-  isIntentCard.value ? '' : summaryText.value
+  isIntentCard.value
+    ? ''
+    : (isWebsearchCard.value && websearchReasonText.value && summaryText.value === websearchReasonText.value
+        ? ''
+        : summaryText.value)
 ))
 const hasExtraSlot = computed(() => Boolean(slots.extra))
 const hasIntentExtra = computed(() => (
@@ -186,7 +205,7 @@ const canToggleDetails = computed(() => {
   }
   return detailRows.value.length > 0 || (cardType.value === 'thinking' && thinkingText.value.length > 0) || hasExtraSlot.value
 })
-const showTags = computed(() => !isIntentCard.value)
+const showTags = computed(() => !isIntentCard.value && !isWebsearchCard.value)
 const showExtraContent = computed(() => {
   if (!expanded.value) {
     return false
@@ -202,6 +221,12 @@ const showFooter = computed(() => expanded.value && !isIntentCard.value)
 const showIntentShimmer = computed(() => (
   isIntentCard.value && normalizeText(payload.value.status).toLowerCase() === 'running'
 ))
+const showTitleShimmer = computed(() => (
+  showIntentShimmer.value || (isWebsearchCard.value && isRunning.value)
+))
+const showSummaryShimmer = computed(() => (
+  isWebsearchCard.value && isRunning.value && displaySummary.value.length > 0
+))
 function toggleExpanded() {
   manualExpanded.value = !expanded.value
 }
@@ -215,11 +240,11 @@ const eventTypeText = computed(() => normalizeText(payload.value.eventType))
 </script>
 
 <template>
-  <div class="PilotRunEventCard" :class="statusClass">
+  <div v-if="!shouldHideRuntimeCard" class="PilotRunEventCard" :class="statusClass">
     <header class="PilotRunEventCard-Header">
       <div class="left">
         <span class="title">
-          <ShimmerText v-if="isIntentCard" :text="displayTitle" :active="showIntentShimmer" />
+          <ShimmerText v-if="showTitleShimmer" :text="displayTitle" :active="true" />
           <template v-else>
             {{ displayTitle }}
           </template>
@@ -241,7 +266,10 @@ const eventTypeText = computed(() => normalizeText(payload.value.eventType))
     </header>
 
     <p v-if="displaySummary" class="summary">
-      {{ displaySummary }}
+      <ShimmerText v-if="showSummaryShimmer" :text="displaySummary" :active="true" />
+      <template v-else>
+        {{ displaySummary }}
+      </template>
     </p>
 
     <Transition name="pilot-expand">

@@ -13,6 +13,25 @@
 
 ## 2026-03-31
 
+### fix(pilot/chat): 收口 routing 选择前端暴露并脱敏运行记录
+
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - `routing.selected` 不再通过 SSE 直接下发到前端；仅在后端 trace 中保留脱敏摘要，错误事件中的路由字段也同步剥离。
+- `apps/pilot/server/api/chat/sessions/[sessionId]/trace.get.ts`
+  - 会话 trace API 过滤 `routing.selected`，并对错误 trace payload 做前端可见级脱敏。
+- `apps/pilot/server/utils/pilot-system-message-response.ts`
+  - 历史 system message 返回前增加 routing 卡片过滤，避免旧会话重放时再次暴露路由选择细节。
+- `apps/pilot/shared/pilot-system-message.ts`
+  - system message / 运行卡投影统一忽略 routing 事件，保证实时流、懒投影与快照回放行为一致。
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+  - 前端运行态不再消费 `routing.selected`，历史 trace / system message 也会在加载时过滤。
+- `apps/pilot/app/components/chat/attachments/ErrorCard.vue`
+  - 错误卡不再展示 route/model/channel/selection reason 等路由诊断字段。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-runtime-redaction.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-system-message.test.ts`
+  - `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+
 ### fix(pilot/chat): 收口 websearch 运行卡展示状态
 
 - `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`

@@ -108,13 +108,7 @@ function onAttachmentSelected(event: Event) {
             Intent: {{ props.runtimeStatus.intentLabel }}
           </span>
           <span class="pilot-runtime-pill">
-            Route: {{ props.runtimeStatus.routeLabel }}
-          </span>
-          <span class="pilot-runtime-pill">
             Req Model: {{ props.runtimeStatus.requestModelLabel }}
-          </span>
-          <span class="pilot-runtime-pill">
-            Actual: {{ props.runtimeStatus.actualModelLabel }}
           </span>
           <span class="pilot-runtime-pill">
             Websearch: {{ props.runtimeStatus.websearchLabel }}
