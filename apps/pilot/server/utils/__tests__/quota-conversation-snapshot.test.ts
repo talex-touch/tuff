@@ -32,7 +32,7 @@ function extractCardsByName(
 }
 
 describe('quota-conversation-snapshot', () => {
-  it('优先使用 system messages 生成卡片（message-first）', () => {
+  it('routing system message 对前端快照应保持隐藏', () => {
     const snapshot = buildQuotaConversationSnapshot({
       chatId: 'chat-message-first',
       messages: [
@@ -67,8 +67,7 @@ describe('quota-conversation-snapshot', () => {
 
     const runCards = extractCardsByName(snapshot, 'pilot_run_event_card')
       .map((item: any) => JSON.parse(String(item.data || '{}')))
-    expect(runCards.some((item: Record<string, unknown>) => item.eventType === 'routing.selected')).toBe(true)
-    expect(runCards.some((item: Record<string, unknown>) => item.eventType === 'intent.completed')).toBe(false)
+    expect(runCards.some((item: Record<string, unknown>) => item.eventType === 'routing.selected')).toBe(false)
 
     const payloadMessages = Array.isArray(snapshot.payload.messages) ? snapshot.payload.messages : []
     expect(payloadMessages.some((item) => {
@@ -77,6 +76,32 @@ describe('quota-conversation-snapshot', () => {
       }
       return String((item as Record<string, unknown>).role || '').trim().toLowerCase() === 'system'
     })).toBe(false)
+  })
+
+  it('routing trace 不应重建到前端运行卡', () => {
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-routing-hidden',
+      messages: [
+        { role: 'user', content: 'hello' },
+      ],
+      runtimeTraces: [
+        { seq: 1, type: 'turn.started', payload: {} },
+        {
+          seq: 2,
+          type: 'routing.selected',
+          payload: {
+            channelId: 'route-a',
+            providerModel: 'gpt-5.4',
+          },
+        },
+      ],
+      assistantReply: '',
+      topicHint: 'routing hidden',
+    })
+
+    const runCards = extractCardsByName(snapshot, 'pilot_run_event_card')
+      .map((item: any) => JSON.parse(String(item.data || '{}')))
+    expect(runCards.some((item: Record<string, unknown>) => item.eventType === 'routing.selected')).toBe(false)
   })
 
   it('基于 runtime traces 重建并注入 pilot_run_event_card / pilot_tool_card（仅最新 turn）', () => {
@@ -177,7 +202,7 @@ describe('quota-conversation-snapshot', () => {
     expect(String(thinkingCard?.content || '')).toContain('最终整理')
   })
 
-  it('websearch.decision 卡在快照重建中应收口为 completed', () => {
+  it('websearch.decision 在未结束时应保持 running 以驱动 shimmer', () => {
     const snapshot = buildQuotaConversationSnapshot({
       chatId: 'chat-websearch-decision',
       messages: [
@@ -195,7 +220,51 @@ describe('quota-conversation-snapshot', () => {
       .map((item: any) => JSON.parse(String(item.data || '{}')))
     const decisionCard = runCards.find((item: Record<string, unknown>) => item.eventType === 'websearch.decision')
     expect(decisionCard).toBeTruthy()
-    expect(decisionCard?.status).toBe('completed')
+    expect(decisionCard?.status).toBe('running')
+    expect(decisionCard?.title).toBe('联网检索')
+  })
+
+  it('intent_not_required 时不应重建 websearch 卡片', () => {
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-websearch-hidden',
+      messages: [
+        { role: 'user', content: '讲讲 Vue 响应式原理' },
+      ],
+      runtimeTraces: [
+        { seq: 1, type: 'turn.started', payload: {} },
+        { seq: 2, type: 'websearch.decision', payload: { enabled: false, reason: 'intent_not_required' } },
+        { seq: 3, type: 'websearch.skipped', payload: { enabled: false, reason: 'intent_not_required' } },
+      ],
+      assistantReply: '',
+      topicHint: 'websearch hidden',
+    })
+
+    const runCards = extractCardsByName(snapshot, 'pilot_run_event_card')
+      .map((item: any) => JSON.parse(String(item.data || '{}')))
+    expect(runCards.some((item: Record<string, unknown>) => item.cardType === 'websearch')).toBe(false)
+  })
+
+  it('websearch 决策与执行应收口为同一张卡', () => {
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-websearch-merged',
+      messages: [
+        { role: 'user', content: '请联网检索今日天气' },
+      ],
+      runtimeTraces: [
+        { seq: 1, type: 'turn.started', payload: {} },
+        { seq: 2, type: 'websearch.decision', payload: { enabled: true, reason: 'intent_required', turnId: 'turn-1' } },
+        { seq: 3, type: 'websearch.executed', payload: { source: 'gateway', sourceCount: 3, turnId: 'turn-1' } },
+      ],
+      assistantReply: '',
+      topicHint: 'websearch merged',
+    })
+
+    const runCards = extractCardsByName(snapshot, 'pilot_run_event_card')
+      .map((item: any) => JSON.parse(String(item.data || '{}')))
+    const websearchCards = runCards.filter((item: Record<string, unknown>) => item.cardType === 'websearch')
+    expect(websearchCards).toHaveLength(1)
+    expect(websearchCards[0]?.eventType).toBe('websearch.executed')
+    expect(websearchCards[0]?.status).toBe('completed')
   })
 
   it('run.audit 乱序/空来源场景下工具卡不回退且保留已有 sources', () => {

@@ -1,5 +1,12 @@
 import { buildPilotConversationSnapshot } from '@talex-touch/tuff-intelligence/pilot'
-import { buildPilotCardBlocksFromSystemMessages } from '../../shared/pilot-system-message'
+import { shouldHidePilotClientRuntimeEvent } from '../../shared/pilot-runtime-redaction'
+import {
+  buildPilotCardBlocksFromSystemMessages,
+  buildPilotWebsearchCardKey,
+  normalizePilotWebsearchReason,
+  PILOT_WEBSEARCH_CARD_TITLE,
+  shouldHidePilotWebsearchCard,
+} from '../../shared/pilot-system-message'
 
 const MAX_CARD_BLOCKS_PER_TURN = 48
 
@@ -24,20 +31,6 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
-function normalizeWebsearchSkippedReason(reason: unknown): string {
-  const normalized = String(reason || '').trim()
-  if (!normalized) {
-    return '已跳过联网检索'
-  }
-  if (normalized === 'fallback_unsupported_channel' || normalized === 'fallback_endpoint_missing') {
-    return '当前通道不支持联网检索，已继续离线回答'
-  }
-  if (normalized === 'tool_failed_or_empty_result') {
-    return '未获取到可用外部来源，已继续回答'
-  }
-  return normalized
-}
-
 function normalizeRunEventText(value: unknown): string {
   return String(value || '')
 }
@@ -50,7 +43,7 @@ function normalizeRuntimeTraces(input: unknown): RuntimeTraceLike[] {
     .map((item, index) => {
       const row = toRecord(item)
       const type = String(row.type || '').trim()
-      if (!type) {
+      if (!type || shouldHidePilotClientRuntimeEvent(type)) {
         return null
       }
       const seqRaw = Number(row.seq)
@@ -184,20 +177,23 @@ function buildRunEventCardData(
 
   if (trace.type === 'websearch.decision') {
     const enabled = payload.enabled === true
-    const reason = String(payload.reason || '').trim()
+    if (shouldHidePilotWebsearchCard(payload)) {
+      return null
+    }
+    const reasonText = normalizePilotWebsearchReason(payload.reason) || '-'
     return {
-      key: `websearch:decision:${turnId || 'latest'}`,
+      key: buildPilotWebsearchCardKey(turnId),
       data: {
         sessionId,
         turnId,
         seq,
         cardType: 'websearch',
         eventType: trace.type,
-        status: 'completed',
-        title: '联网判定',
+        status: enabled ? 'running' : 'skipped',
+        title: PILOT_WEBSEARCH_CARD_TITLE,
         summary: enabled
-          ? `判定触发联网 (${reason || '-'})`
-          : `判定不触发联网 (${reason || '-'})`,
+          ? `准备联网检索 (${reasonText})`
+          : reasonText,
         content: '',
         detail: payload,
       },
@@ -207,7 +203,7 @@ function buildRunEventCardData(
   if (trace.type === 'websearch.executed') {
     const sourceCount = Number(payload.sourceCount)
     return {
-      key: `websearch:execution:${turnId || 'latest'}`,
+      key: buildPilotWebsearchCardKey(turnId),
       data: {
         sessionId,
         turnId,
@@ -215,7 +211,7 @@ function buildRunEventCardData(
         cardType: 'websearch',
         eventType: trace.type,
         status: 'completed',
-        title: '联网检索执行',
+        title: PILOT_WEBSEARCH_CARD_TITLE,
         summary: `来源=${String(payload.source || '-').trim() || '-'}，命中=${Number.isFinite(sourceCount) ? Math.max(0, Math.floor(sourceCount)) : 0}`,
         content: '',
         detail: payload,
@@ -224,8 +220,11 @@ function buildRunEventCardData(
   }
 
   if (trace.type === 'websearch.skipped') {
+    if (shouldHidePilotWebsearchCard(payload)) {
+      return null
+    }
     return {
-      key: `websearch:execution:${turnId || 'latest'}`,
+      key: buildPilotWebsearchCardKey(turnId),
       data: {
         sessionId,
         turnId,
@@ -233,8 +232,8 @@ function buildRunEventCardData(
         cardType: 'websearch',
         eventType: trace.type,
         status: 'skipped',
-        title: '联网检索执行',
-        summary: normalizeWebsearchSkippedReason(payload.reason),
+        title: PILOT_WEBSEARCH_CARD_TITLE,
+        summary: normalizePilotWebsearchReason(payload.reason) || '已跳过联网检索',
         content: '',
         detail: payload,
       },

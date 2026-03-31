@@ -17,6 +17,7 @@ import type {
 } from './pilot-chat.types'
 import { networkClient } from '@talex-touch/utils/network'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { shouldHidePilotClientRuntimeEvent, shouldHidePilotClientSystemMessage } from '../../shared/pilot-runtime-redaction'
 import { buildPilotSystemMessageId, derivePilotToolCallsFromSystemMessages, projectPilotSystemMessage } from '../../shared/pilot-system-message'
 import {
   ASSISTANT_CHUNK_FLUSH_MS,
@@ -101,23 +102,6 @@ export function usePilotChatPage() {
     reason: '',
     confidence: 0,
     strategy: '',
-  })
-  const routeState = ref<{
-    channelId: string
-    scene: string
-    routeComboId: string
-    modelId: string
-    providerModel: string
-    selectionSource: string
-    selectionReason: string
-  }>({
-    channelId: '',
-    scene: '',
-    routeComboId: '',
-    modelId: '',
-    providerModel: '',
-    selectionSource: '',
-    selectionReason: '',
   })
   const websearchState = ref<{
     phase: 'idle' | 'decided' | 'executed' | 'skipped'
@@ -216,15 +200,6 @@ export function usePilotChatPage() {
       confidence: 0,
       strategy: '',
     }
-    routeState.value = {
-      channelId: '',
-      scene: '',
-      routeComboId: '',
-      modelId: '',
-      providerModel: '',
-      selectionSource: '',
-      selectionReason: '',
-    }
     websearchState.value = {
       phase: 'idle',
       enabled: null,
@@ -274,11 +249,8 @@ export function usePilotChatPage() {
       : intentState.value.phase === 'completed'
         ? 'done'
         : 'pending'
-    const routingStatus: PilotStageItem['status'] = routeState.value.channelId
-      ? 'done'
-      : (intentStatus === 'done' ? 'running' : 'pending')
     const memoryStatus: PilotStageItem['status'] = memoryState.value.enabled === null
-      ? (routingStatus === 'done' ? 'running' : 'pending')
+      ? (intentStatus === 'done' ? 'running' : 'pending')
       : 'done'
     const websearchStatus: PilotStageItem['status'] = websearchState.value.phase === 'executed'
       ? 'done'
@@ -301,14 +273,6 @@ export function usePilotChatPage() {
         detail: intentStatus === 'running'
           ? '正在分析意图'
           : (intentState.value.intentType || intentState.value.reason || ''),
-      },
-      {
-        key: 'routing',
-        label: '路由',
-        status: routingStatus,
-        detail: routeState.value.channelId
-          ? `${routeState.value.channelId} / ${routeState.value.providerModel || routeState.value.modelId || '-'}`
-          : '',
       },
       {
         key: 'memory',
@@ -346,13 +310,6 @@ export function usePilotChatPage() {
       : `${intentReason} / ${(confidence * 100).toFixed(1)}%`
 
     const requestModel = runPreferences.value.modelId || 'quota-auto'
-    const actualModel = routeState.value.providerModel || routeState.value.modelId || '-'
-    const routeBaseLabel = routeState.value.routeComboId
-      ? `${routeState.value.routeComboId} @ ${routeState.value.channelId || '-'}`
-      : (routeState.value.channelId ? routeState.value.channelId : '-')
-    const routeLabel = routeState.value.scene
-      ? `${routeBaseLabel} / ${routeState.value.scene}`
-      : routeBaseLabel
 
     let websearchLabel = '等待判定'
     if (websearchState.value.phase === 'decided') {
@@ -379,9 +336,7 @@ export function usePilotChatPage() {
     return {
       intentLabel: intentType,
       intentDetail,
-      routeLabel,
       requestModelLabel: requestModel,
-      actualModelLabel: actualModel,
       websearchLabel,
       memoryLabel,
       thinkingLabel,
@@ -788,6 +743,9 @@ export function usePilotChatPage() {
     if (String(projected.metadata.cardType || '').trim().toLowerCase() === 'websearch') {
       return
     }
+    if (shouldHidePilotClientSystemMessage(projected.metadata)) {
+      return
+    }
 
     const messageId = buildPilotSystemMessageId(
       input.sessionId,
@@ -1069,19 +1027,6 @@ export function usePilotChatPage() {
       return
     }
 
-    if (eventType === 'routing.selected') {
-      routeState.value = {
-        channelId: String(payload.channelId || '').trim(),
-        scene: String(payload.scene || '').trim(),
-        routeComboId: String(payload.routeComboId || '').trim(),
-        modelId: String(payload.modelId || '').trim(),
-        providerModel: String(payload.providerModel || '').trim(),
-        selectionSource: String(payload.selectionSource || '').trim(),
-        selectionReason: String(payload.selectionReason || '').trim(),
-      }
-      return
-    }
-
     if (eventType === 'memory.context') {
       const enabled = typeof payload.memoryEnabled === 'boolean'
         ? payload.memoryEnabled
@@ -1200,7 +1145,11 @@ export function usePilotChatPage() {
             const metadata = item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
               ? item.metadata
               : {}
-            return String(metadata.cardType || '').trim().toLowerCase() !== 'websearch'
+            const cardType = String(metadata.cardType || '').trim().toLowerCase()
+            if (cardType === 'websearch') {
+              return false
+            }
+            return !shouldHidePilotClientSystemMessage(metadata)
           })
         : []
       attachments.value = Array.isArray(data.attachments) ? data.attachments : []
@@ -1226,6 +1175,7 @@ export function usePilotChatPage() {
 
     if (!append) {
       const normalized = items
+        .filter(item => !shouldHidePilotClientRuntimeEvent(item.type))
         .map((item) => {
           const seq = normalizeTraceSeq(item.seq)
           return {
@@ -1251,6 +1201,9 @@ export function usePilotChatPage() {
     }
     else {
       for (const item of items) {
+        if (shouldHidePilotClientRuntimeEvent(item.type)) {
+          continue
+        }
         appendTrace(item)
         applyRuntimeStateByEvent(
           String(item.type || ''),
@@ -1353,6 +1306,9 @@ export function usePilotChatPage() {
       : Math.max(1, lastSeq.value)
 
     if (!eventSessionId || !eventType) {
+      return
+    }
+    if (shouldHidePilotClientRuntimeEvent(eventType)) {
       return
     }
 
@@ -1587,7 +1543,6 @@ export function usePilotChatPage() {
     if (
       eventType === 'intent.started'
       || eventType === 'intent.completed'
-      || eventType === 'routing.selected'
       || eventType === 'memory.context'
       || eventType === 'memory.updated'
       || eventType === 'websearch.decision'

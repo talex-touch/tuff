@@ -1,3 +1,5 @@
+import { shouldHidePilotClientRuntimeEvent, shouldHidePilotClientSystemMessage } from './pilot-runtime-redaction'
+
 export type PilotSystemContextPolicy = 'allow' | 'deny'
 
 export interface PilotSystemMessageMetadata {
@@ -97,6 +99,8 @@ interface SnapshotCardBlock {
 }
 
 const TOOL_TERMINAL_STATUSES = new Set(['completed', 'failed', 'rejected'])
+const HIDDEN_WEBSEARCH_CARD_REASONS = new Set(['intent_not_required'])
+export const PILOT_WEBSEARCH_CARD_TITLE = '联网检索'
 
 function toRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -107,6 +111,11 @@ function toRecord(value: unknown): Record<string, unknown> {
 
 function normalizeText(value: unknown): string {
   return String(value || '').trim()
+}
+
+export function buildPilotWebsearchCardKey(turnId: unknown): string {
+  const turn = normalizeText(turnId) || 'latest'
+  return `websearch:${turn}`
 }
 
 function normalizeSeq(value: unknown): number {
@@ -209,7 +218,7 @@ function isToolTerminalStatus(auditType: string, status: string): boolean {
     || auditType === 'tool.call.rejected'
 }
 
-function normalizeWebsearchReason(value: unknown): string {
+export function normalizePilotWebsearchReason(value: unknown): string {
   const reason = normalizeText(value)
   if (!reason) {
     return ''
@@ -226,7 +235,20 @@ function normalizeWebsearchReason(value: unknown): string {
   if (reason === 'intent_required') {
     return '意图判定需要联网'
   }
+  if (reason === 'internet_disabled') {
+    return '当前请求已关闭联网'
+  }
+  if (reason === 'tool_unavailable') {
+    return '当前模型未开放 websearch 工具'
+  }
+  if (reason === 'terminal_finalize') {
+    return '执行结束，未触发联网检索'
+  }
   return reason
+}
+
+export function shouldHidePilotWebsearchCard(payload: Record<string, unknown>): boolean {
+  return payload.enabled !== true && HIDDEN_WEBSEARCH_CARD_REASONS.has(normalizeText(payload.reason))
 }
 
 function resolveTurnId(input: PilotSystemProjectionInput): string {
@@ -248,7 +270,7 @@ function resolveCardTitle(cardType: string): string {
     return '记忆上下文'
   }
   if (cardType === 'websearch') {
-    return '联网检索'
+    return PILOT_WEBSEARCH_CARD_TITLE
   }
   if (cardType === 'planning') {
     return '执行规划'
@@ -259,10 +281,7 @@ function resolveCardTitle(cardType: string): string {
 function buildEventCardKey(cardType: string, sourceEventType: string, turnId: string): string {
   const turn = turnId || 'latest'
   if (cardType === 'websearch') {
-    if (sourceEventType === 'websearch.decision') {
-      return `websearch:decision:${turn}`
-    }
-    return `websearch:execution:${turn}`
+    return buildPilotWebsearchCardKey(turn)
   }
   if (cardType === 'planning') {
     return `planning:${turn}`
@@ -275,6 +294,10 @@ function buildSystemPolicyProjection(input: PilotSystemProjectionInput): PilotPr
   const sourceEventType = normalizeText(input.type)
   const turnId = resolveTurnId(input)
   const seq = normalizeSeq(input.seq)
+
+  if (shouldHidePilotClientRuntimeEvent(sourceEventType)) {
+    return null
+  }
 
   if (sourceEventType === 'routing.selected') {
     const channelId = normalizeText(payload.channelId)
@@ -323,11 +346,17 @@ function buildSystemPolicyProjection(input: PilotSystemProjectionInput): PilotPr
 
   if (sourceEventType === 'websearch.decision') {
     const enabled = payload.enabled === true
+    if (shouldHidePilotWebsearchCard(payload)) {
+      return null
+    }
+    const reasonText = normalizePilotWebsearchReason(payload.reason) || '-'
     const summary = enabled
-      ? `判定触发联网 (${normalizeWebsearchReason(payload.reason) || '-'})`
-      : `判定不触发联网 (${normalizeWebsearchReason(payload.reason) || '-'})`
+      ? `准备联网检索 (${reasonText})`
+      : reasonText
     return {
-      content: `系统策略：${summary}`,
+      content: enabled
+        ? `系统策略：${summary}`
+        : `系统策略：跳过联网检索 (${reasonText})`,
       metadata: {
         eventType: 'system.policy',
         sourceEventType,
@@ -335,8 +364,8 @@ function buildSystemPolicyProjection(input: PilotSystemProjectionInput): PilotPr
         turnId: turnId || undefined,
         cardType: 'websearch',
         cardKey: buildEventCardKey('websearch', sourceEventType, turnId),
-        status: 'completed',
-        title: '联网判定',
+        status: enabled ? 'running' : 'skipped',
+        title: PILOT_WEBSEARCH_CARD_TITLE,
         summary,
         contextPolicy: 'allow',
         detail: payload,
@@ -499,7 +528,7 @@ function buildProgressProjection(input: PilotSystemProjectionInput): PilotProjec
         cardType: 'websearch',
         cardKey: buildEventCardKey('websearch', sourceEventType, turnId),
         status: 'completed',
-        title: '联网检索执行',
+        title: PILOT_WEBSEARCH_CARD_TITLE,
         summary,
         contextPolicy: 'deny',
         detail: payload,
@@ -508,7 +537,10 @@ function buildProgressProjection(input: PilotSystemProjectionInput): PilotProjec
   }
 
   if (sourceEventType === 'websearch.skipped') {
-    const summary = normalizeWebsearchReason(payload.reason) || '已跳过联网检索'
+    if (shouldHidePilotWebsearchCard(payload)) {
+      return null
+    }
+    const summary = normalizePilotWebsearchReason(payload.reason) || '已跳过联网检索'
     return {
       content: `联网检索跳过：${summary}`,
       metadata: {
@@ -519,7 +551,7 @@ function buildProgressProjection(input: PilotSystemProjectionInput): PilotProjec
         cardType: 'websearch',
         cardKey: buildEventCardKey('websearch', sourceEventType, turnId),
         status: 'skipped',
-        title: '联网检索执行',
+        title: PILOT_WEBSEARCH_CARD_TITLE,
         summary,
         contextPolicy: 'deny',
         detail: payload,
@@ -749,6 +781,9 @@ export function buildPilotCardBlocksFromSystemMessages(
       continue
     }
     const metadata = toRecord(item.metadata)
+    if (shouldHidePilotClientSystemMessage(metadata)) {
+      continue
+    }
     const detail = toRecord(metadata.detail)
     const cardType = normalizeText(metadata.cardType).toLowerCase()
     const seq = normalizeSeq(metadata.seq)
