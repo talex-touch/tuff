@@ -13,6 +13,67 @@
 
 ## 2026-03-31
 
+### fix(pilot/chat): 收口 websearch 运行卡展示状态
+
+- `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+  - websearch 运行卡移除 `Websearch` 与完成态 pill，仅在执行中保留 shimmer 展示，减少噪音标签。
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+  - websearch 决策与执行事件改为复用同一张运行卡；`intent_not_required` 时不再创建卡片，执行未落定时保持 running 以驱动 shimmer。
+- `apps/pilot/shared/pilot-system-message.ts`
+  - system message 投影统一 websearch 卡片 key / 标题 / 隐藏条件，确保实时流与历史回放行为一致。
+- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+  - 会话快照重建对齐新规则：无需联网时不复活 websearch 卡片，决策与执行态合并为单卡。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-system-message.test.ts`
+  - `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+
+### fix(core-app/app-index): 修复 app 重建后偶发搜不到应用
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+  - app 重建改为只清理 `type='app'` 的共享存储记录与 `app-provider` 搜索索引，不再误删 file 侧数据。
+  - 新增 app 维护任务局部串行执行器，统一串行化 `startup backfill / full sync / mdls scan / manual rebuild`，降低交错写入导致的偶发丢失。
+  - app 主键比较统一为稳定键：扫描结果走 `bundleId || uniqueId || path`，DB 记录走 `bundleId || path`，避免补漏、全量同步与重建链路判重不一致。
+  - `startup backfill` 与 `full sync / rebuild` 改为强制 fresh scan，不再复用 `AppScanner` 的 5 分钟缓存。
+  - 手动重建前清空 pending deletion 状态，避免旧的 grace 删除状态污染新一轮重建。
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+  - 新增回归测试，覆盖 app 重建只清理 app 数据、纠偏任务强制 fresh scan，以及维护任务串行化。
+- `apps/core-app/src/renderer/src/views/storage/Storagable.vue`
+  - 存储清理页“清理并重建”文案更新为“应用与文件搜索索引”重建，避免误解为仅文件索引。
+
+### feat(pilot/coze): 接入独立 Coze 渠道适配与 Bot/Workflow 路由
+
+- `apps/pilot/server/utils/pilot-channel.ts`
+  - Pilot 渠道抽象新增 `adapter='coze'`、`transport='coze.openapi'`、`providerTargetType='coze_bot' | 'coze_workflow'` 与中国区默认 API/OAuth 地址。
+- `apps/pilot/server/utils/pilot-admin-channel-config.ts`
+  - 管理端渠道配置新增 `region/oauthClientId/oauthClientSecret/oauthTokenUrl`，Coze 新建时自动填充中国区默认地址，`oauthClientSecret` 继续加密存储并支持编辑留空保留旧值。
+  - Coze 目标列表改为手工维护，不再依赖渠道级默认 target；同一 `targetId` 可按不同 `targetType` 共存。
+- `apps/pilot/server/utils/pilot-admin-routing-config.ts`
+  - 模型绑定与 Route Combo 路由新增 `providerTargetType`，旧数据缺省按 `model` 兼容读取。
+- `apps/pilot/server/utils/pilot-coze-auth.ts`
+  - 新增 Coze OAuth token 获取与缓存层，按 `channelId` 缓存 access token，并在过期前提前刷新。
+- `apps/pilot/server/utils/pilot-coze-engine.ts`
+  - 新增独立 Coze engine adapter，分别打通 `Bot` 与 `Workflow` 流式执行、附件透传、失败态映射与运行审计。
+- `apps/pilot/server/utils/pilot-runtime.ts`
+  - `coze` 渠道不再复用 OpenAI-compatible / DeepAgent 兼容层，运行时直接走 Coze engine。
+  - 当 Coze 路由仍配置 Pilot 本地 `builtinTools/tool-gateway` 时，保存与运行改为显式拒绝，避免静默失效。
+- `apps/pilot/server/api/admin/channels/test.post.ts`
+  - 渠道测试新增 Coze 分支，改为校验 OAuth 凭证有效性与 API base URL 可达性，不再走 `/v1/responses` 探测。
+- `apps/pilot/server/utils/pilot-channel-model-sync.ts`
+  - Coze 第一版禁用自动发现/同步目标，后台仅保留手工维护 Bot / Workflow 列表。
+- `apps/pilot/app/pages/admin/system/channels.vue`
+  - 管理后台渠道页新增 Coze 适配器配置项与目标类型编辑能力；Coze 行不再展示“拉取渠道模型”，改为手工维护目标列表。
+- `apps/pilot/app/pages/admin/system/model-groups.vue`
+  - 模型组映射新增 `targetType` 维度，并在 Coze 绑定摘要中直接显示 `targetType / targetId`。
+- `apps/pilot/app/pages/admin/system/route-combos.vue`
+  - Route Combo 路由新增 `targetType` 选择与摘要展示，Coze route 必须显式指定 `coze_bot` 或 `coze_workflow`。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-coze-auth.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-coze-engine.test.ts`
+  - 扩展 `apps/pilot/server/utils/__tests__/pilot-admin-channel-config.test.ts`
+  - 扩展 `apps/pilot/server/utils/__tests__/pilot-channel-model-sync.test.ts`
+  - 扩展 `apps/pilot/server/utils/__tests__/pilot-runtime.test.ts`
+  - 扩展 `apps/pilot/server/utils/__tests__/pilot-route-health.test.ts`
+
 ### fix(core-app/build): 修复 Windows 下 `asar` 依赖校验误判
 
 - `apps/core-app/scripts/build-target.js`

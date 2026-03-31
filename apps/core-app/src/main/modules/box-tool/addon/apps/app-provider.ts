@@ -305,6 +305,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private startupBackfillStarted = false
   private fullSyncRegistered = false
   private volatileLastFullSyncTime: number | null = null
+  private maintenanceTaskQueue: Promise<void> = Promise.resolve()
+  private maintenanceTaskMap = new Map<string, Promise<unknown>>()
 
   constructor() {
     logApp('Initializing AppProvider service', LogStyle.info)
@@ -508,6 +510,52 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     logApp('All app keywords synced successfully', LogStyle.success)
   }
 
+  private resolveScannedAppKey(
+    app: Pick<ScannedAppInfo, 'bundleId' | 'uniqueId' | 'path'>
+  ): string {
+    return app.bundleId || app.uniqueId || app.path
+  }
+
+  private resolveDbAppKey(app: DbAppWithExtensions): string {
+    return app.extensions.bundleId || app.path
+  }
+
+  private buildScannedAppsMap(scannedApps: ScannedAppInfo[]): Map<string, ScannedAppInfo> {
+    return new Map(
+      scannedApps
+        .map((app) => [this.resolveScannedAppKey(app), app] as const)
+        .filter(([key]) => Boolean(key))
+    )
+  }
+
+  private async loadScannedApps(options?: { forceRefresh?: boolean }): Promise<ScannedAppInfo[]> {
+    return await appScanner.getApps({ forceRefresh: options?.forceRefresh === true })
+  }
+
+  private runMaintenanceTask<T>(taskKey: string, task: () => Promise<T>): Promise<T> {
+    const existing = this.maintenanceTaskMap.get(taskKey)
+    if (existing) {
+      return existing as Promise<T>
+    }
+
+    const label = `AppProvider.${taskKey}`
+    const startTask = () => appTaskGate.runAppTask(task, label)
+    const basePromise = this.maintenanceTaskQueue.then(startTask, startTask)
+    const trackedPromise = basePromise.finally(() => {
+      if (this.maintenanceTaskMap.get(taskKey) === trackedPromise) {
+        this.maintenanceTaskMap.delete(taskKey)
+      }
+    })
+
+    this.maintenanceTaskMap.set(taskKey, trackedPromise)
+    this.maintenanceTaskQueue = trackedPromise.then(
+      () => undefined,
+      () => undefined
+    )
+
+    return trackedPromise
+  }
+
   private _scheduleStartupBackfill(): void {
     if (!this.appIndexSettings.startupBackfillEnabled) {
       logApp('Startup backfill disabled, skipping', LogStyle.info)
@@ -617,203 +665,204 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return Math.round(rawDelay * factor)
   }
 
-  private async _runStartupBackfill(): Promise<void> {
+  private _runStartupBackfill(): Promise<void> {
+    return this.runMaintenanceTask('startup-backfill', async () => {
+      await this._performStartupBackfill()
+    })
+  }
+
+  private async _performStartupBackfill(): Promise<void> {
     if (!this.dbUtils) {
       logApp('Database not initialized, skipping startup backfill', LogStyle.error)
       return
     }
 
-    await appTaskGate.runAppTask(async () => {
-      const initStart = startTiming()
-      logApp('Starting startup backfill...', LogStyle.process)
+    const initStart = startTiming()
+    logApp('Starting startup backfill...', LogStyle.process)
 
-      const scanStart = startTiming()
-      const scannedApps = await appScanner.getApps()
-      logAppDuration('BackfillScanApps', scanStart, {
-        label: `Scanned ${chalk.cyan(scannedApps.length)} apps`,
-        style: 'info',
-        unit: 's',
-        precision: 2
+    const scanStart = startTiming()
+    const scannedApps = await this.loadScannedApps({ forceRefresh: true })
+    logAppDuration('BackfillScanApps', scanStart, {
+      label: `Scanned ${chalk.cyan(scannedApps.length)} apps`,
+      style: 'info',
+      unit: 's',
+      precision: 2
+    })
+
+    await this._recordMissingIconApps(scannedApps)
+
+    const dbLoadStart = startTiming()
+    const dbApps = await this.dbUtils!.getFilesByType('app')
+    const dbAppsWithExtensions = await this.fetchExtensionsForFiles(dbApps)
+    logAppDuration('BackfillLoadDbApps', dbLoadStart, {
+      label: `Loaded ${chalk.cyan(dbApps.length)} DB app records`,
+      style: 'info',
+      unit: 's',
+      precision: 2
+    })
+
+    const scannedAppsMap = this.buildScannedAppsMap(scannedApps)
+    const existingIds = new Set(dbAppsWithExtensions.map((app) => this.resolveDbAppKey(app)))
+    const toAdd = scannedApps.filter((app) => {
+      const uniqueId = this.resolveScannedAppKey(app)
+      return !!uniqueId && !existingIds.has(uniqueId)
+    })
+    const toUpdateDisplayName = dbAppsWithExtensions
+      .map((dbApp) => {
+        const uniqueId = this.resolveDbAppKey(dbApp)
+        const scannedApp = scannedAppsMap.get(uniqueId)
+        if (!scannedApp) return null
+        if (!shouldUpdateDisplayName(dbApp.displayName, scannedApp.displayName)) {
+          return null
+        }
+        return { fileId: dbApp.id, app: scannedApp, existingDisplayName: dbApp.displayName }
       })
+      .filter(Boolean) as Array<{
+      fileId: number
+      app: ScannedAppInfo
+      existingDisplayName: string | null
+    }>
 
-      await this._recordMissingIconApps(scannedApps)
+    ;(dbApps as unknown[]).length = 0
+    ;(dbAppsWithExtensions as unknown[]).length = 0
 
-      const dbLoadStart = startTiming()
-      const dbApps = await this.dbUtils!.getFilesByType('app')
-      const dbAppsWithExtensions = await this.fetchExtensionsForFiles(dbApps)
-      logAppDuration('BackfillLoadDbApps', dbLoadStart, {
-        label: `Loaded ${chalk.cyan(dbApps.length)} DB app records`,
-        style: 'info',
-        unit: 's',
-        precision: 2
-      })
+    logApp(
+      `Startup backfill found ${chalk.green(toAdd.length)} missing apps and ${chalk.yellow(
+        toUpdateDisplayName.length
+      )} displayName corrections`,
+      LogStyle.info
+    )
 
-      const scannedAppsMap = new Map(
-        scannedApps.map((app) => [app.uniqueId || app.path, app] as const)
-      )
-      const existingIds = new Set(
-        dbAppsWithExtensions.map((app) => app.extensions.bundleId || app.path)
-      )
-      const toAdd = scannedApps.filter((app) => {
-        const uniqueId = app.uniqueId || app.path
-        return !!uniqueId && !existingIds.has(uniqueId)
-      })
-      const toUpdateDisplayName = dbAppsWithExtensions
-        .map((dbApp) => {
-          const uniqueId = dbApp.extensions.bundleId || dbApp.path
-          const scannedApp = scannedAppsMap.get(uniqueId)
-          if (!scannedApp) return null
-          if (!shouldUpdateDisplayName(dbApp.displayName, scannedApp.displayName)) {
-            return null
+    if (toAdd.length > 0) {
+      logApp(`Adding ${chalk.cyan(toAdd.length)} missing apps...`, LogStyle.process)
+      const addStartTime = startTiming()
+
+      await runAdaptiveTaskQueue(
+        toAdd,
+        async (app, index) => {
+          const [insertedFile] = await this.dbUtils!.getDb()
+            .insert(filesSchema)
+            .values({
+              path: app.path,
+              name: app.name,
+              displayName: app.displayName,
+              type: 'app' as const,
+              mtime: app.lastModified,
+              ctime: new Date()
+            })
+            .onConflictDoUpdate({
+              target: filesSchema.path,
+              set: {
+                name: sql`excluded.name`,
+                displayName: sql`excluded.display_name`,
+                mtime: sql`excluded.mtime`
+              }
+            })
+            .returning()
+
+          if (insertedFile) {
+            const extensions: FileExtensionInsert[] = []
+            if (app.bundleId) {
+              extensions.push({ fileId: insertedFile.id, key: 'bundleId', value: app.bundleId })
+            }
+            if (app.icon) {
+              extensions.push({ fileId: insertedFile.id, key: 'icon', value: app.icon })
+            }
+
+            if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
+
+            await this._syncKeywordsForApp(app)
           }
-          return { fileId: dbApp.id, app: scannedApp, existingDisplayName: dbApp.displayName }
-        })
-        .filter(Boolean) as Array<{
-        fileId: number
-        app: ScannedAppInfo
-        existingDisplayName: string | null
-      }>
 
-      // 释放不再需要的大数组引用，降低 GC 峰值压力
-      ;(dbApps as unknown[]).length = 0
-      ;(dbAppsWithExtensions as unknown[]).length = 0
-
-      logApp(
-        `Startup backfill found ${chalk.green(toAdd.length)} missing apps and ${chalk.yellow(
-          toUpdateDisplayName.length
-        )} displayName corrections`,
-        LogStyle.info
+          if ((index + 1) % 50 === 0 || index === toAdd.length - 1) {
+            logApp(
+              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toAdd.length)} app additions`,
+              LogStyle.info
+            )
+          }
+        },
+        {
+          estimatedTaskTimeMs: 12,
+          label: 'AppProvider::backfillAddApps'
+        }
       )
 
-      if (toAdd.length > 0) {
-        logApp(`Adding ${chalk.cyan(toAdd.length)} missing apps...`, LogStyle.process)
-        const addStartTime = startTiming()
-
-        await runAdaptiveTaskQueue(
-          toAdd,
-          async (app, index) => {
-            const [insertedFile] = await this.dbUtils!.getDb()
-              .insert(filesSchema)
-              .values({
-                path: app.path,
-                name: app.name,
-                displayName: app.displayName,
-                type: 'app' as const,
-                mtime: app.lastModified,
-                ctime: new Date()
-              })
-              .onConflictDoUpdate({
-                target: filesSchema.path,
-                set: {
-                  name: sql`excluded.name`,
-                  displayName: sql`excluded.display_name`,
-                  mtime: sql`excluded.mtime`
-                }
-              })
-              .returning()
-
-            if (insertedFile) {
-              const extensions: FileExtensionInsert[] = []
-              if (app.bundleId)
-                extensions.push({ fileId: insertedFile.id, key: 'bundleId', value: app.bundleId })
-              if (app.icon)
-                extensions.push({ fileId: insertedFile.id, key: 'icon', value: app.icon })
-
-              if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
-
-              await this._syncKeywordsForApp(app)
-            }
-
-            if ((index + 1) % 50 === 0 || index === toAdd.length - 1) {
-              logApp(
-                `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toAdd.length)} app additions`,
-                LogStyle.info
-              )
-            }
-          },
-          {
-            estimatedTaskTimeMs: 12,
-            label: 'AppProvider::backfillAddApps'
-          }
-        )
-
-        logAppDuration('BackfillAddApps', addStartTime, {
-          label: 'Missing apps added',
-          style: 'success',
-          unit: 's',
-          precision: 1
-        })
-      }
-
-      if (toUpdateDisplayName.length > 0) {
-        logApp(
-          `Correcting ${chalk.cyan(toUpdateDisplayName.length)} localized app display names...`,
-          LogStyle.process
-        )
-        const updateStartTime = startTiming()
-        let updatedCount = 0
-        let failedCount = 0
-
-        await runAdaptiveTaskQueue(
-          toUpdateDisplayName,
-          async ({ fileId, app, existingDisplayName }, index) => {
-            const nextDisplayName = normalizeDisplayName(app.displayName)
-            if (!shouldUpdateDisplayName(existingDisplayName, nextDisplayName)) {
-              return
-            }
-
-            try {
-              await this.dbUtils!.getDb()
-                .update(filesSchema)
-                .set({ displayName: nextDisplayName })
-                .where(eq(filesSchema.id, fileId))
-
-              await this._syncKeywordsForApp({ ...app, displayName: nextDisplayName })
-              updatedCount += 1
-            } catch (error) {
-              failedCount += 1
-              logApp(
-                `Failed to correct displayName for ${chalk.yellow(app.path)}: ${
-                  error instanceof Error ? error.message : String(error)
-                }`,
-                LogStyle.warning
-              )
-            }
-
-            if ((index + 1) % 50 === 0 || index === toUpdateDisplayName.length - 1) {
-              logApp(
-                `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toUpdateDisplayName.length)} displayName corrections`,
-                LogStyle.info
-              )
-            }
-          },
-          {
-            estimatedTaskTimeMs: 10,
-            label: 'AppProvider::backfillUpdateDisplayName'
-          }
-        )
-
-        const correctionStyle = failedCount > 0 ? LogStyle.warning : LogStyle.success
-        logApp(
-          `DisplayName correction summary: updated ${chalk.green(updatedCount)}, failed ${chalk.yellow(failedCount)}`,
-          correctionStyle
-        )
-        logAppDuration('BackfillFixDisplayName', updateStartTime, {
-          label: 'DisplayName correction complete',
-          style: failedCount > 0 ? 'warning' : 'success',
-          unit: 's',
-          precision: 1,
-          suffix: `(updated=${chalk.green(updatedCount)}, failed=${chalk.yellow(failedCount)})`
-        })
-      }
-
-      logAppDuration('StartupBackfill', initStart, {
-        label: 'Startup backfill complete',
+      logAppDuration('BackfillAddApps', addStartTime, {
+        label: 'Missing apps added',
         style: 'success',
         unit: 's',
-        precision: 2
+        precision: 1
       })
-    }, 'AppProvider.startupBackfill')
+    }
+
+    if (toUpdateDisplayName.length > 0) {
+      logApp(
+        `Correcting ${chalk.cyan(toUpdateDisplayName.length)} localized app display names...`,
+        LogStyle.process
+      )
+      const updateStartTime = startTiming()
+      let updatedCount = 0
+      let failedCount = 0
+
+      await runAdaptiveTaskQueue(
+        toUpdateDisplayName,
+        async ({ fileId, app, existingDisplayName }, index) => {
+          const nextDisplayName = normalizeDisplayName(app.displayName)
+          if (!shouldUpdateDisplayName(existingDisplayName, nextDisplayName)) {
+            return
+          }
+
+          try {
+            await this.dbUtils!.getDb()
+              .update(filesSchema)
+              .set({ displayName: nextDisplayName })
+              .where(eq(filesSchema.id, fileId))
+
+            await this._syncKeywordsForApp({ ...app, displayName: nextDisplayName })
+            updatedCount += 1
+          } catch (error) {
+            failedCount += 1
+            logApp(
+              `Failed to correct displayName for ${chalk.yellow(app.path)}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              LogStyle.warning
+            )
+          }
+
+          if ((index + 1) % 50 === 0 || index === toUpdateDisplayName.length - 1) {
+            logApp(
+              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toUpdateDisplayName.length)} displayName corrections`,
+              LogStyle.info
+            )
+          }
+        },
+        {
+          estimatedTaskTimeMs: 10,
+          label: 'AppProvider::backfillUpdateDisplayName'
+        }
+      )
+
+      const correctionStyle = failedCount > 0 ? LogStyle.warning : LogStyle.success
+      logApp(
+        `DisplayName correction summary: updated ${chalk.green(updatedCount)}, failed ${chalk.yellow(failedCount)}`,
+        correctionStyle
+      )
+      logAppDuration('BackfillFixDisplayName', updateStartTime, {
+        label: 'DisplayName correction complete',
+        style: failedCount > 0 ? 'warning' : 'success',
+        unit: 's',
+        precision: 1,
+        suffix: `(updated=${chalk.green(updatedCount)}, failed=${chalk.yellow(failedCount)})`
+      })
+    }
+
+    logAppDuration('StartupBackfill', initStart, {
+      label: 'Startup backfill complete',
+      style: 'success',
+      unit: 's',
+      precision: 2
+    })
   }
 
   private _scheduleFullSync(): void {
@@ -884,31 +933,35 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     await this._runFullSync(decision.forced === true)
   }
 
-  private async _runFullSync(forced: boolean): Promise<void> {
+  private _runFullSync(forced: boolean): Promise<void> {
+    return this.runMaintenanceTask('full-sync', async () => {
+      await this._performFullSync(forced)
+    })
+  }
+
+  private async _performFullSync(forced: boolean): Promise<void> {
     if (!this.dbUtils) {
       logApp('Database not initialized, skipping full sync', LogStyle.error)
       return
     }
 
-    await appTaskGate.runAppTask(async () => {
-      const syncStart = startTiming()
-      logApp(forced ? 'Starting forced full sync...' : 'Starting full sync...', LogStyle.process)
+    const syncStart = startTiming()
+    logApp(forced ? 'Starting forced full sync...' : 'Starting full sync...', LogStyle.process)
 
-      try {
-        await this._initialize()
-        await this._setLastFullSyncTime(Date.now())
-        logAppDuration('FullSync', syncStart, {
-          label: forced ? 'Forced full sync complete' : 'Full sync complete',
-          style: 'success',
-          unit: 's',
-          precision: 2
-        })
-      } catch (error) {
-        logApp('Full sync failed', LogStyle.error, {
-          error: error instanceof Error ? error.message : String(error)
-        })
-      }
-    }, 'AppProvider.fullSync')
+    try {
+      await this._initialize({ forceRefresh: true })
+      await this._setLastFullSyncTime(Date.now())
+      logAppDuration('FullSync', syncStart, {
+        label: forced ? 'Forced full sync complete' : 'Full sync complete',
+        style: 'success',
+        unit: 's',
+        precision: 2
+      })
+    } catch (error) {
+      logApp('Full sync failed', LogStyle.error, {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
   }
 
   private _mapDbAppToScannedInfo(app: DbAppWithExtensions): ScannedAppInfo {
@@ -998,7 +1051,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     for (const app of scannedApps) {
       if (app.icon) continue
 
-      const uniqueId = app.uniqueId || app.path
+      const uniqueId = this.resolveScannedAppKey(app)
       if (!uniqueId || knownMissingIconApps.has(uniqueId)) continue
 
       logApp(`Icon not found for app: ${chalk.yellow(app.name)}`, LogStyle.warning)
@@ -1073,19 +1126,19 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       .toLowerCase()
   }
 
-  private async _initialize(): Promise<void> {
+  private async _initialize(options?: { forceRefresh?: boolean }): Promise<void> {
     const initStart = startTiming()
     logApp('Initializing app data...', LogStyle.process)
 
     const scanStart = startTiming()
-    const scannedApps = await appScanner.getApps()
+    const scannedApps = await this.loadScannedApps({ forceRefresh: options?.forceRefresh === true })
     logAppDuration('ScanApps', scanStart, {
       label: `Scanned ${chalk.cyan(scannedApps.length)} apps`,
       style: 'info',
       unit: 's',
       precision: 2
     })
-    const scannedAppsMap = new Map(scannedApps.map((app) => [app.uniqueId, app]))
+    const scannedAppsMap = this.buildScannedAppsMap(scannedApps)
 
     await this._recordMissingIconApps(scannedApps)
 
@@ -1102,7 +1155,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     for (const app of dbAppsWithExtensions) {
       const icon = app.extensions.icon
       if (icon && !isValidBase64DataUrl(icon)) {
-        const uniqueId = app.extensions.bundleId || app.path
+        const uniqueId = this.resolveDbAppKey(app)
         if (uniqueId) invalidIconApps.add(uniqueId)
       }
     }
@@ -1112,9 +1165,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         LogStyle.warning
       )
     }
-    const dbAppsMap = new Map(
-      dbAppsWithExtensions.map((app) => [app.extensions.bundleId || app.path, app])
-    )
+    const dbAppsMap = new Map(dbAppsWithExtensions.map((app) => [this.resolveDbAppKey(app), app]))
 
     const toAdd: ScannedAppInfo[] = []
     const toUpdate: Array<{
@@ -2112,7 +2163,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private async _forceRebuild(): Promise<void> {
+  private async _runManualRebuild(): Promise<void> {
+    await this.runMaintenanceTask('manual-rebuild', async () => {
+      await this._performRebuild()
+    })
+  }
+
+  private async _performRebuild(): Promise<void> {
     logApp('Forcing app database rebuild...', LogStyle.process)
 
     if (!this.context || !this.dbUtils) {
@@ -2120,17 +2177,32 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     const db = this.dbUtils.getDb()
+    const appRows = await db
+      .select({ id: filesSchema.id })
+      .from(filesSchema)
+      .where(eq(filesSchema.type, 'app'))
+    const appIds = appRows.map((row) => row.id)
 
-    await db.delete(filesSchema)
-    await db.delete(fileExtensions)
+    if (appIds.length > 0) {
+      await db.transaction(async (tx) => {
+        await tx.delete(fileExtensions).where(inArray(fileExtensions.fileId, appIds))
+        await tx.delete(filesSchema).where(inArray(filesSchema.id, appIds))
+      })
+    }
+
+    await this._clearPendingDeletions()
     await this.searchIndex?.removeByProvider(this.id)
 
     logApp('Database cleared, rebuilding app index...', LogStyle.info)
 
     this.isInitializing = null
-    await this._runFullSync(true)
+    await this._performFullSync(true)
 
     logApp('App database rebuild complete', LogStyle.success)
+  }
+
+  private async _forceRebuild(): Promise<void> {
+    await this._runManualRebuild()
   }
 
   private async _getConfigTimestamp(key: string): Promise<number | null> {
@@ -2279,7 +2351,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     await this._setConfigValue(MISSING_ICON_CONFIG_KEY, serializedIds)
   }
 
-  private async _runMdlsUpdateScan(): Promise<void> {
+  private _runMdlsUpdateScan(): Promise<void> {
+    return this.runMaintenanceTask('mdls-update-scan', async () => {
+      await this._performMdlsUpdateScan()
+    })
+  }
+
+  private async _performMdlsUpdateScan(): Promise<void> {
     if (process.platform !== 'darwin') {
       logApp('Not on macOS, skipping mdls scan', LogStyle.info)
       return
@@ -2292,153 +2370,142 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const dbUtils = this.dbUtils
 
-    await appTaskGate.runAppTask(async () => {
-      logApp('Starting mdls update scan...', LogStyle.process)
+    logApp('Starting mdls update scan...', LogStyle.process)
 
-      const t0 = performance.now()
-      const allDbApps = await dbUtils.getFilesByType('app')
-      const t1 = performance.now()
-      if (allDbApps.length === 0) {
-        logApp('No apps in DB, skipping mdls scan', LogStyle.info)
-        return
+    const t0 = performance.now()
+    const allDbApps = await dbUtils.getFilesByType('app')
+    const t1 = performance.now()
+    if (allDbApps.length === 0) {
+      logApp('No apps in DB, skipping mdls scan', LogStyle.info)
+      return
+    }
+
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    const dbAppsWithExtensions = await this.fetchExtensionsForFiles(allDbApps)
+    const t2 = performance.now()
+
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    const scannedApps: ScannedAppInfo[] = []
+    for (let mi = 0; mi < dbAppsWithExtensions.length; mi++) {
+      scannedApps.push(this._mapDbAppToScannedInfo(dbAppsWithExtensions[mi]))
+      if ((mi + 1) % 50 === 0) {
+        await new Promise<void>((resolve) => setImmediate(resolve))
       }
+    }
+    const dbAppsByUniqueId = new Map(
+      dbAppsWithExtensions.map((app) => [this.resolveDbAppKey(app), app])
+    )
 
-      // Yield after the heavy SELECT on files table
-      await new Promise<void>((resolve) => setImmediate(resolve))
+    // Detect system locale change — if the user switched language, mdls will
+    // return new displayNames so we must force a full re-scan.
+    // Also force full scan on first run (lastLocale is null) to ensure correct
+    // localized names override any English fallbacks from initial plist parsing.
+    const currentLocale = app.getLocale()
+    const lastLocale = await this._getLastMdlsLocale()
+    const localeChanged = lastLocale !== null && lastLocale !== currentLocale
+    const isFirstMdlsScan = lastLocale === null
 
-      const dbAppsWithExtensions = await this.fetchExtensionsForFiles(allDbApps)
-      const t2 = performance.now()
+    let appsNeedingMdls: typeof scannedApps
+    let appsWithDisplayName: typeof scannedApps
 
-      // Yield after fetching all extensions (heavy query + reduce)
-      await new Promise<void>((resolve) => setImmediate(resolve))
-
-      // Map in chunks with yields to avoid blocking the event loop
-      const scannedApps: ScannedAppInfo[] = []
-      for (let mi = 0; mi < dbAppsWithExtensions.length; mi++) {
-        scannedApps.push(this._mapDbAppToScannedInfo(dbAppsWithExtensions[mi]))
-        if ((mi + 1) % 50 === 0) {
-          await new Promise<void>((resolve) => setImmediate(resolve))
-        }
-      }
-      const dbAppsByUniqueId = new Map(
-        dbAppsWithExtensions.map((app) => [app.extensions.bundleId || app.path, app])
-      )
-
-      // Detect system locale change — if the user switched language, mdls will
-      // return new displayNames so we must force a full re-scan.
-      // Also force full scan on first run (lastLocale is null) to ensure correct
-      // localized names override any English fallbacks from initial plist parsing.
-      const currentLocale = app.getLocale()
-      const lastLocale = await this._getLastMdlsLocale()
-      const localeChanged = lastLocale !== null && lastLocale !== currentLocale
-      const isFirstMdlsScan = lastLocale === null
-
-      let appsNeedingMdls: typeof scannedApps
-      let appsWithDisplayName: typeof scannedApps
-
-      if (localeChanged || isFirstMdlsScan) {
-        // Locale changed or first scan: force full mdls scan for all apps
-        logApp(
-          isFirstMdlsScan
-            ? `First mdls scan (locale: ${chalk.green(currentLocale)}), scanning all apps`
-            : `System locale changed (${chalk.yellow(lastLocale)} → ${chalk.green(currentLocale)}), forcing full mdls rescan`,
-          LogStyle.info
-        )
-        appsNeedingMdls = scannedApps
-        appsWithDisplayName = []
-      } else {
-        // Normal: only scan apps that are missing a displayName — apps with an
-        // existing displayName are unlikely to change and can be skipped to
-        // avoid spawning expensive mdls processes (5.7s → ~0.1s).
-        appsNeedingMdls = scannedApps.filter((app) => !app.displayName)
-        appsWithDisplayName = scannedApps.filter((app) => app.displayName)
-      }
-
+    if (localeChanged || isFirstMdlsScan) {
       logApp(
-        `mdls scan: ${chalk.cyan(appsNeedingMdls.length)} apps need mdls, ${chalk.green(appsWithDisplayName.length)} skipped${localeChanged ? ' (locale changed, full rescan)' : ''}`,
+        isFirstMdlsScan
+          ? `First mdls scan (locale: ${chalk.green(currentLocale)}), scanning all apps`
+          : `System locale changed (${chalk.yellow(lastLocale)} → ${chalk.green(currentLocale)}), forcing full mdls rescan`,
         LogStyle.info
       )
+      appsNeedingMdls = scannedApps
+      appsWithDisplayName = []
+    } else {
+      appsNeedingMdls = scannedApps.filter((app) => !app.displayName)
+      appsWithDisplayName = scannedApps.filter((app) => app.displayName)
+    }
 
-      const { updatedApps, updatedCount, deletedApps } = await appScanner.runMdlsUpdateScan(
-        appsNeedingMdls,
-        appsWithDisplayName
+    logApp(
+      `mdls scan: ${chalk.cyan(appsNeedingMdls.length)} apps need mdls, ${chalk.green(appsWithDisplayName.length)} skipped${localeChanged ? ' (locale changed, full rescan)' : ''}`,
+      LogStyle.info
+    )
+
+    const { updatedApps, updatedCount, deletedApps } = await appScanner.runMdlsUpdateScan(
+      appsNeedingMdls,
+      appsWithDisplayName
+    )
+    const t3 = performance.now()
+
+    if (updatedCount > 0 && updatedApps.length > 0) {
+      const db = dbUtils.getDb()
+
+      for (const app of updatedApps) {
+        const dbApp = dbAppsByUniqueId.get(this.resolveScannedAppKey(app))
+        if (!dbApp) {
+          continue
+        }
+        await runWithSqliteBusyRetry(() =>
+          db
+            .update(filesSchema)
+            .set({ displayName: app.displayName })
+            .where(eq(filesSchema.id, dbApp.id))
+        )
+
+        const appInfo = this._mapDbAppToScannedInfo({
+          ...dbApp,
+          displayName: app.displayName ?? dbApp.displayName
+        })
+
+        const itemId = appInfo.uniqueId
+        await this.searchIndex?.removeItems([itemId])
+        await this._syncKeywordsForApp(appInfo)
+      }
+    }
+    const t4 = performance.now()
+
+    if (deletedApps.length > 0) {
+      const db = dbUtils.getDb()
+      logApp(
+        `Deleting ${chalk.yellow(deletedApps.length)} missing apps from database`,
+        LogStyle.process
       )
-      const t3 = performance.now()
 
-      // 处理更新的 app
-      if (updatedCount > 0 && updatedApps.length > 0) {
-        const db = dbUtils.getDb()
-
-        for (const app of updatedApps) {
-          const dbApp = dbAppsByUniqueId.get(app.uniqueId)
+      for (const app of deletedApps) {
+        try {
+          const dbApp = dbAppsByUniqueId.get(this.resolveScannedAppKey(app))
           if (!dbApp) {
+            logApp(`App deletion target not found: ${chalk.yellow(app.path)}`, LogStyle.warning)
             continue
           }
-          await runWithSqliteBusyRetry(() =>
-            db
-              .update(filesSchema)
-              .set({ displayName: app.displayName })
-              .where(eq(filesSchema.id, dbApp.id))
-          )
+          const extensions = await dbUtils.getFileExtensions(dbApp.id)
+          const itemId = extensions.find((e) => e.key === 'bundleId')?.value || dbApp.path
 
-          const appInfo = this._mapDbAppToScannedInfo({
-            ...dbApp,
-            displayName: app.displayName ?? dbApp.displayName
+          await db.transaction(async (tx) => {
+            await tx.delete(filesSchema).where(eq(filesSchema.id, dbApp.id))
+            await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, dbApp.id))
           })
 
-          const itemId = appInfo.uniqueId
           await this.searchIndex?.removeItems([itemId])
-          await this._syncKeywordsForApp(appInfo)
+
+          logApp(`App deleted from database: ${chalk.cyan(dbApp.path)}`, LogStyle.success)
+        } catch (error) {
+          logApp(
+            `Error deleting app ${chalk.red(app.path)}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            LogStyle.error
+          )
         }
       }
-      const t4 = performance.now()
+    }
+    const t5 = performance.now()
 
-      // 处理删除的 app（文件不存在，从数据库中删除）
-      if (deletedApps.length > 0) {
-        const db = dbUtils.getDb()
-        logApp(
-          `Deleting ${chalk.yellow(deletedApps.length)} missing apps from database`,
-          LogStyle.process
-        )
+    await this._setLastScanTime(Date.now())
+    await this._setLastMdlsLocale(currentLocale)
 
-        for (const app of deletedApps) {
-          try {
-            const dbApp = dbAppsByUniqueId.get(app.uniqueId)
-            if (!dbApp) {
-              logApp(`App deletion target not found: ${chalk.yellow(app.path)}`, LogStyle.warning)
-              continue
-            }
-            const extensions = await dbUtils.getFileExtensions(dbApp.id)
-            const itemId = extensions.find((e) => e.key === 'bundleId')?.value || dbApp.path
-
-            await db.transaction(async (tx) => {
-              await tx.delete(filesSchema).where(eq(filesSchema.id, dbApp.id))
-              await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, dbApp.id))
-            })
-
-            await this.searchIndex?.removeItems([itemId])
-
-            logApp(`App deleted from database: ${chalk.cyan(dbApp.path)}`, LogStyle.success)
-          } catch (error) {
-            logApp(
-              `Error deleting app ${chalk.red(app.path)}: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-              LogStyle.error
-            )
-          }
-        }
-      }
-      const t5 = performance.now()
-
-      await this._setLastScanTime(Date.now())
-      await this._setLastMdlsLocale(currentLocale)
-
-      logApp(
-        `mdlsUpdateScan timing: dbQuery=${Math.round(t1 - t0)}ms fetchExt=${Math.round(t2 - t1)}ms scan=${Math.round(t3 - t2)}ms(${appsNeedingMdls.length}mdls+${appsWithDisplayName.length}skip) dbUpdate=${Math.round(t4 - t3)}ms(${updatedCount}upd) dbDelete=${Math.round(t5 - t4)}ms(${deletedApps.length}del) total=${Math.round(t5 - t0)}ms`,
-        LogStyle.info
-      )
-    }, 'AppProvider.mdlsUpdateScan')
+    logApp(
+      `mdlsUpdateScan timing: dbQuery=${Math.round(t1 - t0)}ms fetchExt=${Math.round(t2 - t1)}ms scan=${Math.round(t3 - t2)}ms(${appsNeedingMdls.length}mdls+${appsWithDisplayName.length}skip) dbUpdate=${Math.round(t4 - t3)}ms(${updatedCount}upd) dbDelete=${Math.round(t5 - t4)}ms(${deletedApps.length}del) total=${Math.round(t5 - t0)}ms`,
+      LogStyle.info
+    )
   }
 
   private async _getPendingDeletions(): Promise<Map<string, PendingDeletionEntry>> {
@@ -2475,6 +2542,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const serialized = JSON.stringify(Array.from(entries.values()))
 
     await this._setConfigValue(PENDING_DELETION_CONFIG_KEY, serialized)
+  }
+
+  private async _clearPendingDeletions(): Promise<void> {
+    await this._savePendingDeletions(new Map())
   }
 
   private async _processAppsForDeletion(

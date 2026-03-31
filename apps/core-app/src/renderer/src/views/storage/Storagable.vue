@@ -373,15 +373,15 @@ const databaseGroupActions: Record<string, CleanupAction[]> = {
     },
     {
       key: 'file-index-rebuild',
-      label: '清理并重建',
+      label: '清理并重建搜索索引',
       channel: 'storage:cleanup:file-index',
       payload: { clearSearchIndex: true, rebuild: true },
       confirm: {
-        title: '重建文件索引',
-        message: '将清理索引并触发重建，过程可能较久，是否继续？',
+        title: '重建应用与文件搜索索引',
+        message: '将清理应用与文件搜索索引并触发重建，过程可能较久，是否继续？',
         type: 'warning'
       },
-      note: '重建会在后台执行'
+      note: '应用与文件索引会在后台重建'
     }
   ],
   clipboard: [
