@@ -111,6 +111,10 @@ export async function discoverPilotChannelModels(
   const apiKey = normalizeText(input.apiKey) || normalizeText(channel?.apiKey)
   const timeoutMs = normalizeTimeoutMs(input.timeoutMs, channel?.timeoutMs || 90_000)
 
+  if (channel?.adapter === 'coze') {
+    throw new Error('Coze 渠道第一版不支持自动发现目标，请在后台手工维护 Bot / Workflow 列表。')
+  }
+
   if (!baseUrl) {
     throw new Error('Base URL 不能为空')
   }
@@ -188,6 +192,20 @@ export async function syncPilotChannelModels(event: H3Event): Promise<PilotChann
       channelUpdates.push({
         id: channel.id,
         modelsSyncError: '',
+      })
+      continue
+    }
+
+    if (channel.adapter === 'coze') {
+      channels.push({
+        channelId: channel.id,
+        status: 'skipped',
+        discoveredModels: [],
+        error: 'coze_manual_targets_only',
+      })
+      channelUpdates.push({
+        id: channel.id,
+        modelsSyncError: 'COZE_MANUAL_TARGETS_ONLY',
       })
       continue
     }

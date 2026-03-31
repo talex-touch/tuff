@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createPilotRuntime,
+  PILOT_COZE_LOCAL_TOOLS_UNSUPPORTED_CODE,
   PILOT_STRICT_MODE_UNAVAILABLE_CODE,
+  PilotCozeLocalToolsUnsupportedError,
   PilotStrictModeUnavailableError,
 } from '../pilot-runtime'
 
@@ -33,6 +35,13 @@ vi.mock('@talex-touch/tuff-intelligence/pilot', () => {
 vi.mock('../pilot-langgraph-engine', () => ({
   LangGraphLocalServerEngineAdapter: class MockLangGraphEngine {
     readonly id = 'langgraph-local-engine'
+    constructor(public options: any) {}
+  },
+}))
+
+vi.mock('../pilot-coze-engine', () => ({
+  PilotCozeEngineAdapter: class MockPilotCozeEngine {
+    readonly id = 'pilot-coze-engine'
     constructor(public options: any) {}
   },
 }))
@@ -148,5 +157,120 @@ describe('pilot-runtime strict mode', () => {
     })
 
     expect((runtime as any).deps.engine.id).toBe('pilot-fallback-engine')
+  })
+
+  it('coze 渠道会创建独立 coze engine', () => {
+    const { runtime } = createPilotRuntime({
+      event: eventStub,
+      userId: 'user_coze_1',
+      strictPilotMode: true,
+      channel: {
+        channelId: 'ch_coze',
+        baseUrl: 'https://api.coze.cn',
+        apiKey: '',
+        model: 'bot_123',
+        providerTargetType: 'coze_bot',
+        adapter: 'coze',
+        transport: 'coze.openapi',
+        region: 'cn',
+        cozeAuthMode: 'oauth_client',
+        oauthClientId: 'client_id',
+        oauthClientSecret: 'client_secret',
+        oauthTokenUrl: 'https://api.coze.cn/api/permission/oauth2/token',
+        timeoutMs: 30_000,
+        builtinTools: [],
+      },
+    })
+
+    expect((runtime as any).deps.engine.id).toBe('pilot-coze-engine')
+  })
+
+  it('coze 服务身份凭证会透传给 coze engine', () => {
+    const { runtime } = createPilotRuntime({
+      event: eventStub,
+      userId: 'user_coze_jwt',
+      strictPilotMode: true,
+      channel: {
+        channelId: 'ch_coze_jwt',
+        baseUrl: 'https://api.coze.cn',
+        apiKey: '',
+        model: 'bot_jwt',
+        providerTargetType: 'coze_bot',
+        adapter: 'coze',
+        transport: 'coze.openapi',
+        region: 'cn',
+        cozeAuthMode: 'jwt_service',
+        oauthTokenUrl: 'https://api.coze.cn/api/permission/oauth2/token',
+        jwtAppId: 'app_id',
+        jwtKeyId: 'key_id',
+        jwtAudience: 'https://api.coze.cn',
+        jwtPrivateKey: '-----BEGIN PRIVATE KEY-----\nmock\n-----END PRIVATE KEY-----',
+        timeoutMs: 30_000,
+        builtinTools: [],
+      },
+    })
+
+    expect((runtime as any).deps.engine.id).toBe('pilot-coze-engine')
+    expect((runtime as any).deps.engine.options).toMatchObject({
+      cozeAuthMode: 'jwt_service',
+      jwtAppId: 'app_id',
+      jwtKeyId: 'key_id',
+      jwtAudience: 'https://api.coze.cn',
+    })
+  })
+
+  it('coze 渠道配置本地 builtinTools 时显式拒绝', () => {
+    expect(() => createPilotRuntime({
+      event: eventStub,
+      userId: 'user_coze_2',
+      strictPilotMode: false,
+      channel: {
+        channelId: 'ch_coze',
+        baseUrl: 'https://api.coze.cn',
+        apiKey: '',
+        model: 'bot_123',
+        providerTargetType: 'coze_bot',
+        adapter: 'coze',
+        transport: 'coze.openapi',
+        region: 'cn',
+        cozeAuthMode: 'oauth_client',
+        oauthClientId: 'client_id',
+        oauthClientSecret: 'client_secret',
+        oauthTokenUrl: 'https://api.coze.cn/api/permission/oauth2/token',
+        timeoutMs: 30_000,
+        builtinTools: ['write_todos'],
+      },
+    })).toThrowError(PilotCozeLocalToolsUnsupportedError)
+
+    try {
+      createPilotRuntime({
+        event: eventStub,
+        userId: 'user_coze_2',
+        strictPilotMode: false,
+        channel: {
+          channelId: 'ch_coze',
+          baseUrl: 'https://api.coze.cn',
+          apiKey: '',
+          model: 'bot_123',
+          providerTargetType: 'coze_bot',
+          adapter: 'coze',
+          transport: 'coze.openapi',
+          region: 'cn',
+          cozeAuthMode: 'oauth_client',
+          oauthClientId: 'client_id',
+          oauthClientSecret: 'client_secret',
+          oauthTokenUrl: 'https://api.coze.cn/api/permission/oauth2/token',
+          timeoutMs: 30_000,
+          builtinTools: ['write_todos'],
+        },
+      })
+    }
+    catch (error) {
+      const row = error as PilotCozeLocalToolsUnsupportedError
+      expect(row.code).toBe(PILOT_COZE_LOCAL_TOOLS_UNSUPPORTED_CODE)
+      expect(row.statusCode).toBe(422)
+      expect(row.data.channelId).toBe('ch_coze')
+      expect(row.data.builtinTools).toEqual(['write_todos'])
+    }
   })
 })

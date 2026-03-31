@@ -50,18 +50,20 @@
 - `apps/pilot/server/utils/pilot-admin-routing-config.ts`
   - 模型绑定与 Route Combo 路由新增 `providerTargetType`，旧数据缺省按 `model` 兼容读取。
 - `apps/pilot/server/utils/pilot-coze-auth.ts`
-  - 新增 Coze OAuth token 获取与缓存层，按 `channelId` 缓存 access token，并在过期前提前刷新。
+  - 新增 Coze token 获取与缓存层，兼容 `OAuth 应用凭证` 与 `服务身份凭证（JWT）` 两种鉴权模式。
+  - token 缓存 key 从单纯 `channelId` 升级为“渠道 + 凭证指纹”，管理员切换 Coze 凭证后不会继续误命中旧 token。
 - `apps/pilot/server/utils/pilot-coze-engine.ts`
   - 新增独立 Coze engine adapter，分别打通 `Bot` 与 `Workflow` 流式执行、附件透传、失败态映射与运行审计。
 - `apps/pilot/server/utils/pilot-runtime.ts`
   - `coze` 渠道不再复用 OpenAI-compatible / DeepAgent 兼容层，运行时直接走 Coze engine。
   - 当 Coze 路由仍配置 Pilot 本地 `builtinTools/tool-gateway` 时，保存与运行改为显式拒绝，避免静默失效。
 - `apps/pilot/server/api/admin/channels/test.post.ts`
-  - 渠道测试新增 Coze 分支，改为校验 OAuth 凭证有效性与 API base URL 可达性，不再走 `/v1/responses` 探测。
+  - 渠道测试新增 Coze 分支，改为校验 Coze 凭证有效性与 API base URL 可达性，不再走 `/v1/responses` 探测。
 - `apps/pilot/server/utils/pilot-channel-model-sync.ts`
   - Coze 第一版禁用自动发现/同步目标，后台仅保留手工维护 Bot / Workflow 列表。
 - `apps/pilot/app/pages/admin/system/channels.vue`
   - 管理后台渠道页新增 Coze 适配器配置项与目标类型编辑能力；Coze 行不再展示“拉取渠道模型”，改为手工维护目标列表。
+  - Coze 渠道新增“鉴权方式”切换，可在 `OAuth 应用凭证` 与 `服务身份凭证（JWT）` 间切换；JWT 模式支持配置 `App ID / Key ID / Audience / Private Key`，私钥仍按加密存储并支持编辑留空保留旧值。
 - `apps/pilot/app/pages/admin/system/model-groups.vue`
   - 模型组映射新增 `targetType` 维度，并在 Coze 绑定摘要中直接显示 `targetType / targetId`。
 - `apps/pilot/app/pages/admin/system/route-combos.vue`
@@ -73,6 +75,34 @@
   - 扩展 `apps/pilot/server/utils/__tests__/pilot-channel-model-sync.test.ts`
   - 扩展 `apps/pilot/server/utils/__tests__/pilot-runtime.test.ts`
   - 扩展 `apps/pilot/server/utils/__tests__/pilot-route-health.test.ts`
+
+### feat(pilot/routing): 新增 scene-aware 专项模型路由
+
+- `apps/pilot/shared/pilot-routing-scene.ts`
+  - 新增 Pilot 内置 scene 定义与标准化工具，第一版固定支持 `intent_classification`、`image_generate`，并保留未来自定义 scene 元数据扩展位。
+- `apps/pilot/server/utils/pilot-admin-routing-config.ts`
+  - `modelCatalog` 新增 `scenes[]`，`routingPolicy` 新增 `scenePolicies[]`。
+  - 读取兼容旧 `intentNanoModelId / intentRouteComboId / imageGenerationModelId / imageRouteComboId`，缺少 `scenePolicies` 时自动派生；新保存时同步回写 legacy 字段。
+  - 对显式 `scenePolicies` 增加校验：同一 scene 不允许重复，且内置 scene 必须命中已打对应 scene 标签的 model group。
+- `apps/pilot/server/utils/pilot-routing-resolver.ts`
+  - 意图路由新增内部 scene 解析层：`intent_classification` / `image_generate` 优先命中 `scenePolicies`，再退回 legacy 专项字段、请求模型与默认模型。
+  - 路由结果新增 `scene`，并把 scene 注入 selection reason，便于诊断专项路由命中链路。
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - `routing.selected` 事件、运行 trace、conversation metadata 与 routing metrics metadata 全部补充 `scene`，让专项路由在运行态可见。
+- `apps/pilot/app/composables/usePilotRoutingAdmin.ts`
+  - 管理端表单模型补齐 `modelGroup.scenes[]` 与 `routingPolicy.scenePolicies[]`，并在前端继续兜底兼容 legacy 专项字段。
+- `apps/pilot/app/pages/admin/system/model-groups.vue`
+  - 模型组页新增 `Scenes` 维护区与列表预览，支持内置预设 scene + `allow-create` 自定义输入。
+- `apps/pilot/app/pages/admin/system/routing-policy.vue`
+  - 专项模型入口切换为固定两条 built-in scene row：管理员可分别为 `intent_classification`、`image_generate` 选择 model group 与可选 route combo。
+  - 未知/custom scene policy 在第一版 UI 中保持透传保留，不参与直接编辑，避免覆盖未来配置。
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+  - 运行态 routeState 新增 `scene`，调试视图中的 route label 也会显示当前命中的专项 scene。
+- `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+  - Routing 运行卡明细新增 `Scene` 字段，便于直接从运行卡确认专项路由命中结果。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-admin-routing-config.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-routing-resolver.intent.test.ts`
 
 ### fix(core-app/build): 修复 Windows 下 `asar` 依赖校验误判
 

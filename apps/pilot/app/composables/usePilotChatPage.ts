@@ -3,21 +3,21 @@ import type {
   PilotAttachment,
   PilotComposerAttachment,
   PilotMessage,
+  PilotRuntimeStatusSnapshot,
   PilotSession,
   PilotSessionRow,
   PilotStageItem,
   PilotToolCall,
   PilotTrace,
-  PilotRuntimeStatusSnapshot,
   SessionMessagesResponse,
   SessionNotificationsResponse,
   SessionTitleResponse,
   SessionTraceResponse,
   StreamEvent,
 } from './pilot-chat.types'
-import { buildPilotSystemMessageId, derivePilotToolCallsFromSystemMessages, projectPilotSystemMessage } from '../../shared/pilot-system-message'
 import { networkClient } from '@talex-touch/utils/network'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { buildPilotSystemMessageId, derivePilotToolCallsFromSystemMessages, projectPilotSystemMessage } from '../../shared/pilot-system-message'
 import {
   ASSISTANT_CHUNK_FLUSH_MS,
   clampInputText,
@@ -104,6 +104,7 @@ export function usePilotChatPage() {
   })
   const routeState = ref<{
     channelId: string
+    scene: string
     routeComboId: string
     modelId: string
     providerModel: string
@@ -111,6 +112,7 @@ export function usePilotChatPage() {
     selectionReason: string
   }>({
     channelId: '',
+    scene: '',
     routeComboId: '',
     modelId: '',
     providerModel: '',
@@ -216,6 +218,7 @@ export function usePilotChatPage() {
     }
     routeState.value = {
       channelId: '',
+      scene: '',
       routeComboId: '',
       modelId: '',
       providerModel: '',
@@ -344,9 +347,12 @@ export function usePilotChatPage() {
 
     const requestModel = runPreferences.value.modelId || 'quota-auto'
     const actualModel = routeState.value.providerModel || routeState.value.modelId || '-'
-    const routeLabel = routeState.value.routeComboId
+    const routeBaseLabel = routeState.value.routeComboId
       ? `${routeState.value.routeComboId} @ ${routeState.value.channelId || '-'}`
-      : '-'
+      : (routeState.value.channelId ? routeState.value.channelId : '-')
+    const routeLabel = routeState.value.scene
+      ? `${routeBaseLabel} / ${routeState.value.scene}`
+      : routeBaseLabel
 
     let websearchLabel = '等待判定'
     if (websearchState.value.phase === 'decided') {
@@ -779,6 +785,9 @@ export function usePilotChatPage() {
     if (!projected) {
       return
     }
+    if (String(projected.metadata.cardType || '').trim().toLowerCase() === 'websearch') {
+      return
+    }
 
     const messageId = buildPilotSystemMessageId(
       input.sessionId,
@@ -1063,6 +1072,7 @@ export function usePilotChatPage() {
     if (eventType === 'routing.selected') {
       routeState.value = {
         channelId: String(payload.channelId || '').trim(),
+        scene: String(payload.scene || '').trim(),
         routeComboId: String(payload.routeComboId || '').trim(),
         modelId: String(payload.modelId || '').trim(),
         providerModel: String(payload.providerModel || '').trim(),
@@ -1182,7 +1192,17 @@ export function usePilotChatPage() {
     loadingMessages.value = true
     try {
       const data = await fetchJson<SessionMessagesResponse>(`/api/chat/sessions/${sessionId}/messages`)
-      messages.value = Array.isArray(data.messages) ? data.messages : []
+      messages.value = Array.isArray(data.messages)
+        ? data.messages.filter((item) => {
+            if (item.role !== 'system') {
+              return true
+            }
+            const metadata = item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+              ? item.metadata
+              : {}
+            return String(metadata.cardType || '').trim().toLowerCase() !== 'websearch'
+          })
+        : []
       attachments.value = Array.isArray(data.attachments) ? data.attachments : []
       pendingAttachments.value = []
       activeAssistantMessageId.value = null
