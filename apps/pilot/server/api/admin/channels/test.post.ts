@@ -1,13 +1,34 @@
-import type { PilotChannelTransport } from '../../../utils/pilot-channel'
+import type {
+  PilotChannelAdapter,
+  PilotChannelRegion,
+  PilotChannelTransport,
+  PilotCozeAuthMode,
+} from '../../../utils/pilot-channel'
 import { networkClient } from '@talex-touch/utils/network'
 import { createError, defineEventHandler, readBody } from 'h3'
 import { requirePilotAdmin } from '../../../utils/pilot-admin-auth'
 import { getPilotAdminChannelCatalog } from '../../../utils/pilot-admin-channel-config'
+import {
+  getPilotChannelDefaultBaseUrl,
+  getPilotChannelDefaultOauthTokenUrl,
+  normalizePilotCozeAuthMode,
+} from '../../../utils/pilot-channel'
+import { getPilotCozeAccessToken, probePilotCozeBaseUrl } from '../../../utils/pilot-coze-auth'
 
 interface TestChannelBody {
   channelId?: string
   baseUrl?: string
   apiKey?: string
+  adapter?: PilotChannelAdapter
+  region?: PilotChannelRegion
+  cozeAuthMode?: PilotCozeAuthMode
+  oauthClientId?: string
+  oauthClientSecret?: string
+  oauthTokenUrl?: string
+  jwtAppId?: string
+  jwtKeyId?: string
+  jwtPrivateKey?: string
+  jwtAudience?: string
   model?: string
   transport?: PilotChannelTransport
   timeoutMs?: number
@@ -24,6 +45,14 @@ function normalizeTransport(value: unknown): PilotChannelTransport {
   return normalized === 'chat.completions' || normalized === 'chat_completions' || normalized === 'completions'
     ? 'chat.completions'
     : 'responses'
+}
+
+function normalizeAdapter(value: unknown): PilotChannelAdapter {
+  return normalizeText(value).toLowerCase() === 'coze' ? 'coze' : 'openai'
+}
+
+function normalizeRegion(value: unknown): PilotChannelRegion {
+  return normalizeText(value).toLowerCase() === 'cn' ? 'cn' : 'cn'
 }
 
 function normalizeTimeoutMs(value: unknown, fallback = 90_000): number {
@@ -118,8 +147,18 @@ export default defineEventHandler(async (event) => {
     ? catalog?.channels.find(item => item.id === channelId)
     : undefined
 
-  const baseUrl = normalizeText(body?.baseUrl) || normalizeText(channel?.baseUrl)
+  const adapter = normalizeAdapter(body?.adapter || channel?.adapter)
+  const region = normalizeRegion(body?.region || channel?.region)
+  const baseUrl = normalizeText(body?.baseUrl || channel?.baseUrl || getPilotChannelDefaultBaseUrl(adapter, region))
+  const cozeAuthMode = normalizePilotCozeAuthMode(body?.cozeAuthMode || channel?.cozeAuthMode)
   const apiKey = normalizeText(body?.apiKey) || normalizeText(channel?.apiKey)
+  const oauthClientId = normalizeText(body?.oauthClientId || channel?.oauthClientId)
+  const oauthClientSecret = normalizeText(body?.oauthClientSecret) || normalizeText(channel?.oauthClientSecret)
+  const oauthTokenUrl = normalizeText(body?.oauthTokenUrl || channel?.oauthTokenUrl || getPilotChannelDefaultOauthTokenUrl(adapter, region))
+  const jwtAppId = normalizeText(body?.jwtAppId || channel?.jwtAppId)
+  const jwtKeyId = normalizeText(body?.jwtKeyId || channel?.jwtKeyId)
+  const jwtPrivateKey = String(body?.jwtPrivateKey || channel?.jwtPrivateKey || '').trim()
+  const jwtAudience = normalizeText(body?.jwtAudience || channel?.jwtAudience)
   const model = normalizeText(body?.model)
     || normalizeText(channel?.defaultModelId || channel?.model)
     || normalizeText(channel?.models?.find(item => item.enabled !== false)?.id)
@@ -134,14 +173,69 @@ export default defineEventHandler(async (event) => {
       message: 'Base URL 不能为空',
     })
   }
-  if (!apiKey) {
+  if (adapter === 'coze') {
+    if (!oauthTokenUrl) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Bad Request',
+        message: 'Coze Token 地址不能为空',
+      })
+    }
+    if (cozeAuthMode === 'jwt_service') {
+      if (!jwtAppId) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Bad Request',
+          message: '服务身份 App ID 不能为空',
+        })
+      }
+      if (!jwtKeyId) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Bad Request',
+          message: '服务身份 Key ID 不能为空',
+        })
+      }
+      if (!jwtPrivateKey) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Bad Request',
+          message: '服务身份私钥不能为空',
+        })
+      }
+      if (!jwtAudience) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Bad Request',
+          message: '服务身份 Audience 不能为空',
+        })
+      }
+    }
+    else {
+      if (!oauthClientId) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Bad Request',
+          message: 'OAuth Client ID 不能为空',
+        })
+      }
+      if (!oauthClientSecret) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Bad Request',
+          message: 'OAuth Client Secret 不能为空',
+        })
+      }
+    }
+  }
+  else if (!apiKey) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Bad Request',
       message: 'API Key 不能为空',
     })
   }
-  if (!model) {
+  if (adapter !== 'coze' && !model) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Bad Request',
@@ -149,8 +243,10 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const endpoint = resolveEndpoint(baseUrl, transport)
-  if (!endpoint) {
+  const endpoint = adapter === 'coze'
+    ? ''
+    : resolveEndpoint(baseUrl, transport)
+  if (adapter !== 'coze' && !endpoint) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Bad Request',
@@ -178,6 +274,37 @@ export default defineEventHandler(async (event) => {
 
   const startedAt = Date.now()
   try {
+    if (adapter === 'coze') {
+      const accessToken = await getPilotCozeAccessToken({
+        id: channel?.id || channelId || 'coze-test',
+        cozeAuthMode,
+        oauthClientId,
+        oauthClientSecret,
+        oauthTokenUrl,
+        jwtAppId,
+        jwtKeyId,
+        jwtPrivateKey,
+        jwtAudience,
+        timeoutMs,
+      })
+      const probe = await probePilotCozeBaseUrl({
+        baseUrl,
+        timeoutMs,
+      })
+
+      return {
+        ok: true,
+        channelId: channel?.id || channelId || '',
+        model,
+        adapter,
+        transport: 'coze.openapi' as const,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        preview: accessToken ? (cozeAuthMode === 'jwt_service' ? 'jwt_service_ok' : 'oauth_ok') : '',
+        probeStatus: probe.status,
+        cozeAuthMode,
+      }
+    }
+
     const response = await networkClient.request<Record<string, unknown> | string>({
       method: 'POST',
       url: endpoint,
@@ -210,6 +337,7 @@ export default defineEventHandler(async (event) => {
       ok: true,
       channelId: channel?.id || channelId || '',
       model,
+      adapter,
       transport,
       durationMs: Math.max(0, Date.now() - startedAt),
       preview: preview ? preview.slice(0, 120) : '',

@@ -100,4 +100,63 @@ describe('pilot-channel-model-sync', () => {
 
     expect(mergeDiscoveredModelsIntoCatalog).not.toHaveBeenCalled()
   })
+
+  it('coze 渠道在第一版会被明确跳过自动发现', async () => {
+    vi.mocked(getPilotAdminChannelCatalog).mockResolvedValue({
+      defaultChannelId: 'coze-main',
+      channels: [
+        {
+          id: 'coze-main',
+          name: 'Coze Main',
+          baseUrl: 'https://api.coze.cn',
+          apiKey: '',
+          adapter: 'coze',
+          oauthClientId: 'client_id',
+          oauthClientSecret: 'client_secret',
+          oauthTokenUrl: 'https://api.coze.cn/api/permission/oauth2/token',
+          model: '',
+          defaultModelId: '',
+          timeoutMs: 90_000,
+          transport: 'coze.openapi',
+          enabled: true,
+          models: [
+            {
+              id: 'bot_1',
+              targetType: 'coze_bot',
+              enabled: true,
+              priority: 10,
+              thinkingSupported: true,
+              thinkingDefaultEnabled: false,
+            },
+          ],
+        },
+      ],
+    } as any)
+
+    vi.mocked(updatePilotAdminChannelCatalog).mockResolvedValue(undefined as any)
+
+    const result = await syncPilotChannelModels({} as any)
+
+    expect(result.totalChannels).toBe(1)
+    expect(result.successChannels).toBe(0)
+    expect(result.failedChannels).toBe(0)
+    expect(result.discoveredModelCount).toBe(0)
+    expect(result.channels).toEqual([
+      {
+        channelId: 'coze-main',
+        status: 'skipped',
+        discoveredModels: [],
+        error: 'coze_manual_targets_only',
+      },
+    ])
+    expect(networkClient.request).not.toHaveBeenCalled()
+
+    const updatePayload = vi.mocked(updatePilotAdminChannelCatalog).mock.calls[0]?.[1] as any
+    expect(updatePayload.channels).toEqual([
+      expect.objectContaining({
+        id: 'coze-main',
+        modelsSyncError: 'COZE_MANUAL_TARGETS_ONLY',
+      }),
+    ])
+  })
 })

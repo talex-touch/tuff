@@ -579,7 +579,7 @@ export default defineEventHandler(async (event) => {
           },
         )
 
-        if (pilotMode && orchestratorDecision.mode !== 'langgraph-local') {
+        if (pilotMode && selectedChannel.adapter !== 'coze' && orchestratorDecision.mode !== 'langgraph-local') {
           const detail = toPilotSafeRecord({
             code: PILOT_STRICT_MODE_UNAVAILABLE_CODE,
             reason: String(orchestratorDecision.reason || '').trim() || 'pilot_strict_mode_unavailable',
@@ -594,6 +594,8 @@ export default defineEventHandler(async (event) => {
             channel_id: selectedChannel.channelId,
             model_id: selectedChannel.modelId,
             provider_model: selectedChannel.providerModel,
+            provider_target_type: selectedChannel.providerTargetType,
+            scene: selectedChannel.scene,
           })
           if (shouldRecordRoutingMetric) {
             metricSuccess = false
@@ -633,8 +635,18 @@ export default defineEventHandler(async (event) => {
             baseUrl: selectedChannel.channel.baseUrl,
             apiKey: selectedChannel.channel.apiKey,
             model: selectedChannel.providerModel || selectedChannel.channel.model,
+            providerTargetType: selectedChannel.providerTargetType,
             adapter: selectedChannel.adapter,
             transport: selectedChannel.transport,
+            region: selectedChannel.channel.region,
+            cozeAuthMode: selectedChannel.channel.cozeAuthMode,
+            oauthClientId: selectedChannel.channel.oauthClientId,
+            oauthClientSecret: selectedChannel.channel.oauthClientSecret,
+            oauthTokenUrl: selectedChannel.channel.oauthTokenUrl,
+            jwtAppId: selectedChannel.channel.jwtAppId,
+            jwtKeyId: selectedChannel.channel.jwtKeyId,
+            jwtPrivateKey: selectedChannel.channel.jwtPrivateKey,
+            jwtAudience: selectedChannel.channel.jwtAudience,
             timeoutMs: selectedChannel.channel.timeoutMs,
             builtinTools: selectedChannel.builtinTools,
           },
@@ -964,6 +976,8 @@ export default defineEventHandler(async (event) => {
               channelId: selectedChannel.channelId,
               modelId: selectedChannel.modelId,
               providerModel: selectedChannel.providerModel,
+              providerTargetType: selectedChannel.providerTargetType,
+              scene: selectedChannel.scene,
               routeComboId: selectedChannel.routeComboId,
               selectionSource: selectedChannel.selectionSource,
               selectionReason: selectedChannel.selectionReason,
@@ -987,6 +1001,8 @@ export default defineEventHandler(async (event) => {
                   channelId: selectedChannel.channelId,
                   modelId: selectedChannel.modelId,
                   providerModel: selectedChannel.providerModel,
+                  providerTargetType: selectedChannel.providerTargetType,
+                  scene: selectedChannel.scene,
                   routeComboId: selectedChannel.routeComboId,
                   selectionSource: selectedChannel.selectionSource,
                   selectionReason: selectedChannel.selectionReason,
@@ -1559,6 +1575,8 @@ export default defineEventHandler(async (event) => {
               ...(body?.metadata || {}),
               modelId: selectedChannel.modelId,
               providerModel: selectedChannel.providerModel,
+              providerTargetType: selectedChannel.providerTargetType,
+              scene: selectedChannel.scene,
               routeComboId: selectedChannel.routeComboId,
               selectionSource: selectedChannel.selectionSource,
               selectionReason: selectedChannel.selectionReason,
@@ -1749,6 +1767,8 @@ export default defineEventHandler(async (event) => {
                 routeComboId: selectedChannel.routeComboId,
                 channelId: selectedChannel.channelId,
                 providerModel: selectedChannel.providerModel,
+                providerTargetType: selectedChannel.providerTargetType,
+                scene: selectedChannel.scene,
                 queueWaitMs: 0,
                 ttftMs: resolvedTtftMs,
                 totalDurationMs,
@@ -1766,6 +1786,8 @@ export default defineEventHandler(async (event) => {
                   intentConfidence: intentDecision.confidence,
                   adapter: selectedChannel.adapter,
                   transport: selectedChannel.transport,
+                  providerTargetType: selectedChannel.providerTargetType,
+                  scene: selectedChannel.scene,
                   internet: selectedChannel.internet,
                   thinking: selectedChannel.thinking,
                   memoryEnabled,

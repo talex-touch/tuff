@@ -1,12 +1,18 @@
 import type { H3Event } from 'h3'
 import type { PilotCapabilityId as SharedPilotCapabilityId } from '../../shared/pilot-capability-meta'
-import type { PilotBuiltinTool } from './pilot-channel'
+import type { PilotScenePolicy } from '../../shared/pilot-routing-scene'
+import type { PilotBuiltinTool, PilotProviderTargetType } from './pilot-channel'
 import {
   createPilotDefaultCapabilities,
   normalizeThinkingFlags,
   resolvePilotCapabilities,
   sanitizeBuiltinToolsByCapabilities,
 } from '../../shared/pilot-capability-meta'
+import {
+  isPilotBuiltInScene,
+  normalizePilotScene,
+} from '../../shared/pilot-routing-scene'
+import { normalizePilotProviderTargetType } from './pilot-channel'
 import { getPilotDatabase, requirePilotDatabase } from './pilot-store'
 
 const SETTINGS_TABLE = 'pilot_admin_settings'
@@ -35,6 +41,7 @@ const DEFAULT_MODEL_CAPABILITIES = createPilotDefaultCapabilities(true)
 export interface PilotModelBinding {
   channelId: string
   providerModel: string
+  providerTargetType?: PilotProviderTargetType
   enabled: boolean
   priority: number
   weight: number
@@ -52,6 +59,7 @@ export interface PilotModelCatalogItem {
   source: 'system' | 'manual' | 'discovered'
   icon?: PilotIconConfig
   tags?: string[]
+  scenes?: string[]
   qualityScore?: number
   speedScore?: number
   costScore?: number
@@ -72,6 +80,7 @@ export interface PilotRouteComboRoute {
   channelId: string
   modelId?: string
   providerModel?: string
+  providerTargetType?: PilotProviderTargetType
   enabled: boolean
   priority: number
   weight: number
@@ -98,6 +107,7 @@ export interface PilotRoutingPolicy {
   defaultRouteComboId: string
   quotaAutoStrategy: 'speed-first'
   explorationRate: number
+  scenePolicies?: PilotScenePolicy[]
   intentNanoModelId: string
   intentRouteComboId: string
   imageGenerationModelId: string
@@ -223,6 +233,95 @@ function normalizeStringArray(value: unknown): string[] | undefined {
   return Array.from(new Set(list))
 }
 
+function normalizeSceneArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const list = value
+    .map(item => normalizePilotScene(item))
+    .filter(Boolean)
+  if (list.length <= 0) {
+    return []
+  }
+  return Array.from(new Set(list))
+}
+
+function normalizeScenePolicy(raw: unknown): PilotScenePolicy | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null
+  }
+  const row = raw as Record<string, unknown>
+  const scene = normalizePilotScene(row.scene)
+  const modelId = normalizeText(row.modelId)
+  if (!scene || !modelId) {
+    return null
+  }
+  return {
+    scene,
+    modelId,
+    routeComboId: normalizeText(row.routeComboId) || undefined,
+  }
+}
+
+function normalizeScenePolicies(value: unknown): PilotScenePolicy[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+  return value
+    .map(item => normalizeScenePolicy(item))
+    .filter((item): item is PilotScenePolicy => Boolean(item))
+}
+
+function createScenePolicy(
+  scene: string,
+  modelId: unknown,
+  routeComboId: unknown,
+): PilotScenePolicy | null {
+  const normalizedScene = normalizePilotScene(scene)
+  const normalizedModelId = normalizeText(modelId)
+  if (!normalizedScene || !normalizedModelId) {
+    return null
+  }
+  return {
+    scene: normalizedScene,
+    modelId: normalizedModelId,
+    routeComboId: normalizeText(routeComboId) || undefined,
+  }
+}
+
+function buildScenePoliciesFromLegacy(row: Record<string, unknown>): PilotScenePolicy[] {
+  const list = [
+    createScenePolicy('intent_classification', row.intentNanoModelId, row.intentRouteComboId),
+    createScenePolicy('image_generate', row.imageGenerationModelId, row.imageRouteComboId),
+  ].filter((item): item is PilotScenePolicy => Boolean(item))
+  return list
+}
+
+function findScenePolicy(
+  scenePolicies: PilotScenePolicy[] | undefined,
+  scene: string,
+): PilotScenePolicy | undefined {
+  const normalizedScene = normalizePilotScene(scene)
+  if (!normalizedScene || !Array.isArray(scenePolicies) || scenePolicies.length <= 0) {
+    return undefined
+  }
+  return scenePolicies.find(item => normalizePilotScene(item.scene) === normalizedScene)
+}
+
+function resolveLegacyRoutingFields(scenePolicies: PilotScenePolicy[]): Pick<
+  PilotRoutingPolicy,
+  'intentNanoModelId' | 'intentRouteComboId' | 'imageGenerationModelId' | 'imageRouteComboId'
+> {
+  const intentPolicy = findScenePolicy(scenePolicies, 'intent_classification')
+  const imagePolicy = findScenePolicy(scenePolicies, 'image_generate')
+  return {
+    intentNanoModelId: normalizeText(intentPolicy?.modelId),
+    intentRouteComboId: normalizeText(intentPolicy?.routeComboId),
+    imageGenerationModelId: normalizeText(imagePolicy?.modelId),
+    imageRouteComboId: normalizeText(imagePolicy?.routeComboId),
+  }
+}
+
 function normalizeIcon(value: unknown): PilotIconConfig | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined
@@ -255,6 +354,7 @@ function normalizeModelBinding(raw: unknown): PilotModelBinding | null {
   return {
     channelId,
     providerModel,
+    providerTargetType: normalizePilotProviderTargetType(row.providerTargetType, 'model'),
     enabled: normalizeBoolean(row.enabled, true),
     priority: normalizeNumber(row.priority, 100, 1, 9999),
     weight: normalizeNumber(row.weight, 100, 1, 1000),
@@ -281,6 +381,7 @@ function normalizeRouteComboRoute(raw: unknown): PilotRouteComboRoute | null {
     channelId,
     modelId: normalizeText(row.modelId) || undefined,
     providerModel: normalizeText(row.providerModel) || undefined,
+    providerTargetType: normalizePilotProviderTargetType(row.providerTargetType, 'model'),
     enabled: normalizeBoolean(row.enabled, true),
     priority: normalizeNumber(row.priority, 100, 1, 9999),
     weight: normalizeNumber(row.weight, 100, 1, 1000),
@@ -347,6 +448,7 @@ function normalizeModelCatalogItem(raw: unknown): PilotModelCatalogItem | null {
         : 'system',
     icon: normalizeIcon(row.icon),
     tags: normalizeStringArray(row.tags),
+    scenes: normalizeSceneArray(row.scenes),
     qualityScore: Number.isFinite(Number(row.qualityScore)) ? normalizeFloat(row.qualityScore, 50, 0, 100) : undefined,
     speedScore: Number.isFinite(Number(row.speedScore)) ? normalizeFloat(row.speedScore, 50, 0, 100) : undefined,
     costScore: Number.isFinite(Number(row.costScore)) ? normalizeFloat(row.costScore, 50, 0, 100) : undefined,
@@ -513,7 +615,10 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       builtinTools: sanitizeBuiltinToolsByCapabilities(['write_todos'], DEFAULT_MODEL_CAPABILITIES),
       bindings: [],
     },
-  ]
+  ].map(item => ({
+    ...item,
+    scenes: [],
+  }))
 }
 
 function getDefaultRouteCombos(): PilotRouteComboItem[] {
@@ -534,6 +639,7 @@ function getDefaultRoutingPolicy(): PilotRoutingPolicy {
     defaultRouteComboId: 'default-auto',
     quotaAutoStrategy: 'speed-first',
     explorationRate: 0.08,
+    scenePolicies: [],
     intentNanoModelId: '',
     intentRouteComboId: '',
     imageGenerationModelId: '',
@@ -633,15 +739,19 @@ function normalizeRoutingPolicy(raw: unknown): PilotRoutingPolicy {
     ? raw as Record<string, unknown>
     : {}
   const defaults = getDefaultRoutingPolicy()
+  const explicitScenePolicies = normalizeScenePolicies(row.scenePolicies)
+  const scenePolicies = explicitScenePolicies ?? buildScenePoliciesFromLegacy(row)
+  const legacyFields = resolveLegacyRoutingFields(scenePolicies)
   return {
     defaultModelId: normalizeText(row.defaultModelId) || defaults.defaultModelId,
     defaultRouteComboId: normalizeText(row.defaultRouteComboId) || defaults.defaultRouteComboId,
     quotaAutoStrategy: 'speed-first',
     explorationRate: normalizeFloat(row.explorationRate, defaults.explorationRate, 0, 0.5),
-    intentNanoModelId: normalizeText(row.intentNanoModelId) || defaults.intentNanoModelId,
-    intentRouteComboId: normalizeText(row.intentRouteComboId) || defaults.intentRouteComboId,
-    imageGenerationModelId: normalizeText(row.imageGenerationModelId) || defaults.imageGenerationModelId,
-    imageRouteComboId: normalizeText(row.imageRouteComboId) || defaults.imageRouteComboId,
+    scenePolicies,
+    intentNanoModelId: legacyFields.intentNanoModelId || defaults.intentNanoModelId,
+    intentRouteComboId: legacyFields.intentRouteComboId || defaults.intentRouteComboId,
+    imageGenerationModelId: legacyFields.imageGenerationModelId || defaults.imageGenerationModelId,
+    imageRouteComboId: legacyFields.imageRouteComboId || defaults.imageRouteComboId,
   }
 }
 
@@ -765,10 +875,49 @@ export async function updatePilotAdminRoutingConfig(
     ? normalizeRouteCombos(input.routeCombos)
     : current.routeCombos
 
-  const nextRoutingPolicy = normalizeRoutingPolicy({
+  const hasExplicitScenePolicies = Boolean(
+    input.routingPolicy && Object.prototype.hasOwnProperty.call(input.routingPolicy, 'scenePolicies'),
+  )
+  const hasLegacySceneOverride = Boolean(
+    input.routingPolicy
+    && [
+      'intentNanoModelId',
+      'intentRouteComboId',
+      'imageGenerationModelId',
+      'imageRouteComboId',
+    ].some(key => Object.prototype.hasOwnProperty.call(input.routingPolicy, key)),
+  )
+  const nextRoutingPolicySource: Record<string, unknown> = {
     ...current.routingPolicy,
     ...(input.routingPolicy || {}),
-  })
+  }
+  if (!hasExplicitScenePolicies && hasLegacySceneOverride) {
+    delete nextRoutingPolicySource.scenePolicies
+  }
+  const nextRoutingPolicy = normalizeRoutingPolicy(nextRoutingPolicySource)
+
+  if (hasExplicitScenePolicies) {
+    const modelMap = new Map(nextModelCatalog.map(item => [item.id, item]))
+    const seenScenes = new Set<string>()
+    for (const policy of nextRoutingPolicy.scenePolicies || []) {
+      const scene = normalizePilotScene(policy.scene)
+      const modelId = normalizeText(policy.modelId)
+      if (!scene || !modelId) {
+        continue
+      }
+      if (seenScenes.has(scene)) {
+        throw new Error(`Scene policy duplicated: ${scene}`)
+      }
+      seenScenes.add(scene)
+      const model = modelMap.get(modelId)
+      if (!model) {
+        throw new Error(`Scene policy model group not found: ${modelId}`)
+      }
+      if (isPilotBuiltInScene(scene) && !(model.scenes || []).includes(scene)) {
+        throw new Error(`Model group ${modelId} is missing required scene tag: ${scene}`)
+      }
+    }
+  }
 
   const nextLbPolicy = normalizeLoadBalancePolicy({
     ...current.lbPolicy,
@@ -797,6 +946,7 @@ export async function mergeDiscoveredModelsIntoCatalog(
   discovered: Array<{
     channelId: string
     providerModel: string
+    providerTargetType?: PilotProviderTargetType
     label?: string
     thinkingSupported?: boolean
     thinkingDefaultEnabled?: boolean
@@ -827,6 +977,7 @@ export async function mergeDiscoveredModelsIntoCatalog(
     const binding: PilotModelBinding = {
       channelId,
       providerModel: modelId,
+      providerTargetType: normalizePilotProviderTargetType(item.providerTargetType, 'model'),
       enabled: true,
       priority: 100,
       weight: 100,
@@ -849,6 +1000,7 @@ export async function mergeDiscoveredModelsIntoCatalog(
         enabled: true,
         visible: true,
         source: 'discovered',
+        scenes: [],
         thinkingSupported: thinking.thinkingSupported,
         thinkingDefaultEnabled: thinking.thinkingDefaultEnabled,
         capabilities,
@@ -865,7 +1017,11 @@ export async function mergeDiscoveredModelsIntoCatalog(
       continue
     }
 
-    const hasBinding = existing.bindings.some(b => b.channelId === channelId && b.providerModel === modelId)
+    const hasBinding = existing.bindings.some(b => (
+      b.channelId === channelId
+      && b.providerModel === modelId
+      && normalizePilotProviderTargetType(b.providerTargetType, 'model') === normalizePilotProviderTargetType(item.providerTargetType, 'model')
+    ))
     if (!hasBinding) {
       existing.bindings.push(binding)
     }
