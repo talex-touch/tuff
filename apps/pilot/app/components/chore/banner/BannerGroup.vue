@@ -213,7 +213,7 @@ const progress = computed(() => pendingList.value.length !== 0 ? ((pendingList.v
       </div>
       <div v-for="(image, index) in options.images" :id="`banner-item-${index}`" :key="index" class="BannerGroup-Item">
         <!-- <span>{{ image }}</span> -->
-        <img :src="decodeURIComponent(image.url)" :alt="`Banner${index + 1}`">
+        <img :src="decodeURIComponent(image.url)" :alt="`Banner${Number(index) + 1}`">
       </div>
       <!-- <div class="BannerGroup-Item first">
         <img :src="options.images[0]" alt="Banner0">

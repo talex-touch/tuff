@@ -107,7 +107,7 @@ onMounted(async () => {
       <el-scrollbar v-if="!items.loading">
         <div v-if="list.length" class="PromptRole-MainInner">
           <div
-            v-for="(item, ind) in list" :key="item.id" :style="`--d: ${ind * 0.025 + 0.125}s`" h-full w-full
+            v-for="(item, ind) in list" :key="item.id" :style="`--d: ${Number(ind) * 0.025 + 0.125}s`" h-full w-full
             class="PromptRole-CardContainer"
           >
             <CardPromptRoleCard animation :model-value="item" />

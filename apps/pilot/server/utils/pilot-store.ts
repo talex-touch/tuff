@@ -28,7 +28,10 @@ export function createPilotStoreAdapter(
   userId: string,
   emitter?: (event: AgentEnvelope) => Promise<void>,
 ): StoreAdapter {
-  const runtime = new D1RuntimeStoreAdapter(requirePilotDatabase(event), userId)
+  const runtime = new D1RuntimeStoreAdapter(
+    requirePilotDatabase(event) as ConstructorParameters<typeof D1RuntimeStoreAdapter>[0],
+    userId,
+  )
   const runtimeProxy = createRuntimeWithHistoryRetention(runtime, event, userId)
   return {
     runtime: runtimeProxy,

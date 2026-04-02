@@ -96,6 +96,7 @@ export interface CreatePilotRuntimeOptions {
     jwtAudience?: string
     timeoutMs: number
     builtinTools: PilotBuiltinTool[]
+    disableDefaultBuiltinTools?: boolean
   }
   emit?: (event: AgentEnvelope) => Promise<void>
   onAudit?: (record: DeepAgentAuditRecord) => Promise<void> | void
@@ -282,14 +283,17 @@ export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
   const apiKey = String(channel.apiKey || '').trim()
   const model = String(channel?.model || '').trim() || DEFAULT_RESPONSES_MODEL
   const timeoutMs = normalizeTimeoutMs(channel?.timeoutMs)
+  const disableDefaultBuiltinTools = channel?.disableDefaultBuiltinTools === true
   const builtinTools: PilotBuiltinTool[] = Array.isArray(channel?.builtinTools) && channel.builtinTools.length > 0
     ? channel.builtinTools
     : channel?.adapter === 'coze'
       ? []
-      : ['write_todos']
+      : disableDefaultBuiltinTools
+        ? []
+        : ['write_todos']
   const engineBuiltinTools = builtinTools
     .filter((tool): tool is Exclude<PilotBuiltinTool, 'websearch'> => tool !== 'websearch')
-  if (engineBuiltinTools.length <= 0 && channel?.adapter !== 'coze') {
+  if (engineBuiltinTools.length <= 0 && channel?.adapter !== 'coze' && !disableDefaultBuiltinTools) {
     engineBuiltinTools.push('write_todos')
   }
   const retryCount = 1

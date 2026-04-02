@@ -146,7 +146,7 @@ function resolveRouteProviderModelOptions(row: RouteComboRouteFormItem): RoutePr
   const enabledOptions = channelModelIndex.value.enabledModelOptionsByChannel[channelId] || []
   const allOptions = channelModelIndex.value.allModelOptionsByChannel[channelId] || []
   const filteredEnabledOptions = enabledOptions.filter(item => item.targetType === row.providerTargetType)
-  const options = filteredEnabledOptions.map(item => ({
+  const options: RouteProviderModelOption[] = filteredEnabledOptions.map(item => ({
     value: item.modelId,
     label: resolveProviderModelOptionLabel({
       modelId: item.modelId,

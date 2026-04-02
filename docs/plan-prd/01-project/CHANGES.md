@@ -1,7 +1,7 @@
 # 变更日志
 
-> 更新时间: 2026-03-31
-> 说明: 主文件仅保留近 30 天（2026-03-01 ~ 2026-03-31）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-02
+> 说明: 主文件仅保留近 30 天（2026-03-04 ~ 2026-04-02）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
@@ -10,6 +10,58 @@
 - 旧记录入口：见文末“历史索引导航”。
 
 ---
+
+## 2026-04-02
+
+### fix(pilot-ui): 收敛记忆运行卡标签并展示本轮新增记忆
+
+- `apps/pilot/server/utils/pilot-memory-facts.ts`
+  - `upsertPilotMemoryFacts` 返回值新增 `addedFacts`，仅回传本轮真正新增的标准化记忆项，避免把已存在 fact 误展示成“新沉淀”。
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - `memory.updated` 事件与持久化 trace payload 新增 `facts` 字段，实时流、历史回放与快照重建统一复用同一份新增记忆明细。
+- `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+  - `memory` 卡片不再显示 `Memory` / `已完成` pill，折叠态仅保留标题与摘要。
+  - 当 `detail.facts` 非空时，展开区按列表展示本轮新增记忆内容，仅显示 `fact.value`，旧历史卡无明细时保持仅摘要展示。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-memory-facts.test.ts`
+  - `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+
+### fix(pilot-ui): 规划卡直出步骤并隐藏跳过记忆卡
+
+- `apps/pilot/shared/pilot-system-message.ts`
+  - `memory.updated` 在 `stored=false` 时不再投影为前端 system message，避免“记忆未更新 / no_fact_extracted”类跳过卡进入聊天区。
+  - system card 合并阶段为 `planning` 保留上一帧非空 `detail.todos`，解决 `planning.finished` 覆盖后仅剩 `todoCount`、丢失具体步骤的问题。
+- `apps/pilot/shared/pilot-runtime-redaction.ts`
+  - 前端系统消息过滤新增 `memory.context` 与 `memory/skipped` 隐藏规则，确保 live 流、刷新和 lazy projection 下都不再展示跳过记忆卡。
+- `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+  - `执行规划` 卡直接展示 `detail.todos` 步骤列表，无需展开即可看到规划内容。
+  - 隐藏 `planning` 类型标签，仅保留右侧执行状态标签；其他卡片标签行为保持不变。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-runtime-redaction.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-system-message.test.ts`
+
+### feat(pilot-memory): 设置页展示记忆详情并将读记忆/工具判定接入运行时
+
+- `apps/pilot/server/utils/pilot-memory-facts.ts`
+  - 新增 `listPilotMemoryFactsByUser`，按添加时间倒序返回用户记忆详情。
+  - 新增 `buildPilotMemoryContextSystemMessage`，将命中的记忆事实注入当前轮隐藏 system context。
+- `apps/pilot/server/api/v1/chat/memory/facts.get.ts`
+  - 新增用户记忆详情接口，供个人设置页直接读取 `value/createdAt/updatedAt`。
+- `apps/pilot/app/composables/usePilotMemorySettings.ts`
+  - 记忆设置状态新增 `facts/factsLoading`，开关切换后同步刷新或清空记忆详情。
+- `apps/pilot/app/components/chore/personal/profile/account/AccountModuleAppearance.vue`
+  - 在个人设置页新增“记忆详情”列表，展示记忆内容与“添加时间”。
+- `apps/pilot/server/utils/pilot-intent-resolver.ts`
+  - intent 分类结果新增 `memoryReadDecision` 与 `toolDecision`，每轮显式判断是否需要读取记忆及启用工具。
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - 运行时按 `memoryReadDecision` 拉取记忆 facts 并注入隐藏 system context。
+  - builtinTools 改为按 `toolDecision` 做运行时裁剪，避免“无需工具”的轮次仍暴露默认工具。
+- `apps/pilot/server/utils/pilot-runtime.ts`
+  - 新增 `disableDefaultBuiltinTools`，支持在运行时显式关闭默认工具注入。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-memory-facts.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-intent-resolver.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-runtime.test.ts`
 
 ## 2026-03-31
 
