@@ -6,6 +6,9 @@ const MEMORY_FACTS_TABLE = 'pilot_chat_memory_facts'
 const DEFAULT_EXTRACT_TIMEOUT_MS = 8_000
 const MIN_EXTRACT_TIMEOUT_MS = 1_500
 const MAX_EXTRACT_TIMEOUT_MS = 20_000
+const DEFAULT_LIST_LIMIT = 50
+const MAX_LIST_LIMIT = 200
+const DEFAULT_CONTEXT_LIMIT = 8
 
 export interface PilotMemoryFactRecord {
   id: string
@@ -16,6 +19,11 @@ export interface PilotMemoryFactRecord {
   sourceText: string
   createdAt: string
   updatedAt: string
+}
+
+export interface PilotMemoryFact {
+  key: string
+  value: string
 }
 
 export interface ExtractPilotMemoryFactsInput {
@@ -34,15 +42,13 @@ export interface UpsertPilotMemoryFactsInput {
   sessionId: string
   userId: string
   sourceText: string
-  facts: Array<{
-    key: string
-    value: string
-  }>
+  facts: PilotMemoryFact[]
 }
 
 export interface UpsertPilotMemoryFactsResult {
   addedCount: number
   keptCount: number
+  addedFacts: PilotMemoryFact[]
 }
 
 function nowIso(): string {
@@ -68,8 +74,23 @@ function normalizeTimeoutMs(value: unknown): number {
   return Math.floor(clamp(parsed, MIN_EXTRACT_TIMEOUT_MS, MAX_EXTRACT_TIMEOUT_MS))
 }
 
+function normalizeListLimit(value: unknown, fallback = DEFAULT_LIST_LIMIT): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return fallback
+  }
+  return Math.max(1, Math.min(Math.floor(parsed), MAX_LIST_LIMIT))
+}
+
 function randomId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+function clipText(value: string, max: number): string {
+  if (value.length <= max) {
+    return value
+  }
+  return `${value.slice(0, Math.max(0, max - 1)).trimEnd()}…`
 }
 
 function buildExtractorSystemPrompt(): string {
@@ -163,7 +184,7 @@ function normalizeFactValue(value: unknown): string {
     .slice(0, 240)
 }
 
-function parseExtractedFacts(content: string): Array<{ key: string, value: string }> {
+function parseExtractedFacts(content: string): PilotMemoryFact[] {
   if (!content) {
     return []
   }
@@ -201,7 +222,7 @@ function parseExtractedFacts(content: string): Array<{ key: string, value: strin
   }
 }
 
-export async function extractPilotMemoryFacts(input: ExtractPilotMemoryFactsInput): Promise<Array<{ key: string, value: string }>> {
+export async function extractPilotMemoryFacts(input: ExtractPilotMemoryFactsInput): Promise<PilotMemoryFact[]> {
   const message = normalizeText(input.message)
   if (!message) {
     return []
@@ -255,7 +276,7 @@ export async function extractPilotMemoryFacts(input: ExtractPilotMemoryFactsInpu
     method: 'POST',
     timeoutMs: timeout,
     headers: {
-      Authorization: `Bearer ${normalizeText(input.channel.apiKey)}`,
+      'Authorization': `Bearer ${normalizeText(input.channel.apiKey)}`,
       'Content-Type': 'application/json',
     },
     body: payload,
@@ -305,7 +326,7 @@ export async function upsertPilotMemoryFacts(event: H3Event, input: UpsertPilotM
   const sessionId = normalizeText(input.sessionId)
   const userId = normalizeText(input.userId)
   if (!sessionId || !userId) {
-    return { addedCount: 0, keptCount: 0 }
+    return { addedCount: 0, keptCount: 0, addedFacts: [] }
   }
   await ensurePilotMemoryFactSchema(event)
   const db = requirePilotDatabase(event)
@@ -314,6 +335,7 @@ export async function upsertPilotMemoryFacts(event: H3Event, input: UpsertPilotM
   const normalizedFacts = parseExtractedFacts(JSON.stringify({ facts: input.facts || [] }))
 
   let addedCount = 0
+  const addedFacts: PilotMemoryFact[] = []
   for (const fact of normalizedFacts) {
     const exists = await db.prepare(`
       SELECT id
@@ -344,12 +366,85 @@ export async function upsertPilotMemoryFacts(event: H3Event, input: UpsertPilotM
       now,
     ).run()
     addedCount += 1
+    addedFacts.push(fact)
   }
 
   return {
     addedCount,
     keptCount: normalizedFacts.length,
+    addedFacts,
   }
+}
+
+export async function listPilotMemoryFactsByUser(
+  event: H3Event,
+  userId: string,
+  options: {
+    limit?: number
+  } = {},
+): Promise<PilotMemoryFactRecord[]> {
+  const normalizedUserId = normalizeText(userId)
+  if (!normalizedUserId) {
+    return []
+  }
+
+  await ensurePilotMemoryFactSchema(event)
+  const db = requirePilotDatabase(event)
+  const limit = normalizeListLimit(options.limit)
+  const { results } = await db.prepare(`
+    SELECT
+      id,
+      session_id AS "sessionId",
+      user_id AS "userId",
+      fact_key AS "key",
+      fact_value AS "value",
+      source_text AS "sourceText",
+      created_at AS "createdAt",
+      updated_at AS "updatedAt"
+    FROM ${MEMORY_FACTS_TABLE}
+    WHERE user_id = ?1
+    ORDER BY created_at DESC, updated_at DESC
+    LIMIT ?2
+  `).bind(normalizedUserId, limit).all<PilotMemoryFactRecord>()
+
+  return (results || []).map(item => ({
+    id: normalizeText(item.id),
+    sessionId: normalizeText(item.sessionId),
+    userId: normalizeText(item.userId),
+    key: normalizeFactKey(item.key),
+    value: normalizeFactValue(item.value),
+    sourceText: normalizeText(item.sourceText),
+    createdAt: normalizeText(item.createdAt),
+    updatedAt: normalizeText(item.updatedAt),
+  })).filter(item => item.id && item.value)
+}
+
+export function buildPilotMemoryContextSystemMessage(
+  message: string,
+  facts: Array<PilotMemoryFact | PilotMemoryFactRecord>,
+): string {
+  const question = normalizeText(message)
+  if (!question) {
+    return ''
+  }
+
+  const normalizedFacts = parseExtractedFacts(JSON.stringify({
+    facts: Array.isArray(facts) ? facts : [],
+  })).slice(0, DEFAULT_CONTEXT_LIMIT)
+  if (normalizedFacts.length <= 0) {
+    return ''
+  }
+
+  return [
+    '[Remembered User Facts For Current Turn]',
+    `Current user request: ${clipText(question, 300)}`,
+    'Use the remembered user facts below only when they are relevant to the current request.',
+    'If the current user message conflicts with a remembered fact, prefer the current user message.',
+    'Do not reveal or dump this hidden memory list unless the user explicitly asks what you remember.',
+    '',
+    'Remembered facts:',
+    ...normalizedFacts.map((fact, index) => `[${index + 1}] ${clipText(fact.value, 220)}`),
+  ].join('\n')
 }
 
 export async function deletePilotMemoryFactsBySession(event: H3Event, userId: string, sessionId: string): Promise<void> {

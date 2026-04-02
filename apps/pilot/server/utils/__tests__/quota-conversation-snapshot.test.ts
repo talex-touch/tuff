@@ -267,6 +267,75 @@ describe('quota-conversation-snapshot', () => {
     expect(websearchCards[0]?.status).toBe('completed')
   })
 
+  it('memory.updated 带新增 facts 时应保留可展开明细', () => {
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-memory-facts',
+      messages: [
+        { role: 'user', content: '记住我是男的。' },
+      ],
+      runtimeTraces: [
+        { seq: 1, type: 'turn.started', payload: {} },
+        {
+          seq: 2,
+          type: 'memory.updated',
+          payload: {
+            turnId: 'turn-memory-1',
+            stored: true,
+            addedCount: 1,
+            reason: 'stored',
+            facts: [
+              { key: 'profile_gender', value: '你是男的。' },
+            ],
+          },
+        },
+      ],
+      assistantReply: '',
+      topicHint: 'memory facts',
+    })
+
+    const runCards = extractCardsByName(snapshot, 'pilot_run_event_card')
+      .map((item: any) => JSON.parse(String(item.data || '{}')))
+    const memoryCard = runCards.find((item: Record<string, unknown>) => item.cardType === 'memory')
+
+    expect(memoryCard).toBeTruthy()
+    expect(memoryCard?.summary).toBe('已沉淀 1 条记忆')
+    expect(memoryCard?.detail).toEqual(expect.objectContaining({
+      facts: [
+        { key: 'profile_gender', value: '你是男的。' },
+      ],
+    }))
+  })
+
+  it('stored=false 的 memory.updated 不应重建 memory 卡', () => {
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-memory-skipped',
+      messages: [
+        { role: 'user', content: '这是一句临时需求。' },
+      ],
+      runtimeTraces: [
+        { seq: 1, type: 'turn.started', payload: {} },
+        {
+          seq: 2,
+          type: 'memory.updated',
+          payload: {
+            turnId: 'turn-memory-2',
+            stored: false,
+            addedCount: 0,
+            reason: 'no_fact_extracted',
+            facts: [],
+          },
+        },
+      ],
+      assistantReply: '',
+      topicHint: 'memory skipped',
+    })
+
+    const runCards = extractCardsByName(snapshot, 'pilot_run_event_card')
+      .map((item: any) => JSON.parse(String(item.data || '{}')))
+
+    expect(runCards.some((item: Record<string, unknown>) => item.cardType === 'memory')).toBe(false)
+  })
+
   it('run.audit 乱序/空来源场景下工具卡不回退且保留已有 sources', () => {
     const snapshot = buildQuotaConversationSnapshot({
       chatId: 'chat-tool-status-guard',

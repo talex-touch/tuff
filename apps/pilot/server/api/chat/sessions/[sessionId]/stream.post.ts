@@ -48,7 +48,9 @@ import { resolvePilotIntent } from '../../../../utils/pilot-intent-resolver'
 import { resolveLangGraphOrchestratorDecision } from '../../../../utils/pilot-langgraph-orchestrator'
 import { executePilotMediaWithFallback } from '../../../../utils/pilot-media-fallback'
 import {
+  buildPilotMemoryContextSystemMessage,
   extractPilotMemoryFacts,
+  listPilotMemoryFactsByUser,
   upsertPilotMemoryFacts,
 } from '../../../../utils/pilot-memory-facts'
 import { ensurePilotQuotaSessionSchema, upsertPilotQuotaSession } from '../../../../utils/pilot-quota-session'
@@ -96,6 +98,8 @@ interface StreamConnectionContext {
   closed: boolean
   disconnected: boolean
 }
+
+const PILOT_MEMORY_CONTEXT_FACT_LIMIT = 8
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -473,6 +477,14 @@ export default defineEventHandler(async (event) => {
           shouldStore: false,
           reason: 'intent_skip' as const,
         },
+        memoryReadDecision: {
+          shouldRead: false,
+          reason: 'not_needed' as const,
+        },
+        toolDecision: {
+          shouldUseTools: false,
+          reason: 'not_needed' as const,
+        },
       }
   const routedMessage = intentDecision.prompt || message
   const selectedChannel = await resolvePilotRoutingSelection(event, {
@@ -565,21 +577,35 @@ export default defineEventHandler(async (event) => {
         let memoryHistoryMessageCount = 0
         let memoryHistoryAfterMessageCount = 0
         let memoryAddedCount = 0
+        let memoryAddedFacts: Array<{ key: string, value: string }> = []
         let memoryExtractorFailed = false
+        let memoryContextFacts: Array<{ key: string, value: string }> = []
+        let memoryReadDecision = intentDecision.memoryReadDecision
         let websearchContextText = ''
         let websearchSources: Array<Record<string, unknown>> = []
         let websearchDecisionDispatched = false
         let websearchSettled = false
         let websearchSkipReasonFromAudit = ''
         const websearchGateMode = 'intent_strict'
-        const websearchDecision = shouldExecutePilotWebsearch({
-          message: routedMessage,
-          intentType: intentDecision.intentType,
-          internetEnabled: selectedChannel.internet,
-          builtinTools: selectedChannel.builtinTools,
-          intentWebsearchRequired: intentDecision.websearchRequired,
-          intentWebsearchReason: intentDecision.websearchReason,
-        })
+        const requestedBuiltinTools = Array.isArray(selectedChannel.builtinTools)
+          ? selectedChannel.builtinTools.filter(Boolean)
+          : []
+        const runtimeBuiltinTools = intentDecision.toolDecision.shouldUseTools
+          ? [...requestedBuiltinTools]
+          : []
+        const websearchDecision = intentDecision.toolDecision.shouldUseTools === true
+          ? shouldExecutePilotWebsearch({
+              message: routedMessage,
+              intentType: intentDecision.intentType,
+              internetEnabled: selectedChannel.internet,
+              builtinTools: runtimeBuiltinTools,
+              intentWebsearchRequired: intentDecision.websearchRequired,
+              intentWebsearchReason: intentDecision.websearchReason,
+            })
+          : {
+              enabled: false,
+              reason: 'intent_not_required',
+            }
         let websearchConnectorSource: 'gateway' | 'responses_builtin' | 'none' = 'none'
         let websearchConnectorReason = websearchDecision.reason
         const routingConfig = await getPilotAdminRoutingConfig(event).catch(() => null)
@@ -665,7 +691,8 @@ export default defineEventHandler(async (event) => {
             jwtPrivateKey: selectedChannel.channel.jwtPrivateKey,
             jwtAudience: selectedChannel.channel.jwtAudience,
             timeoutMs: selectedChannel.channel.timeoutMs,
-            builtinTools: selectedChannel.builtinTools,
+            builtinTools: runtimeBuiltinTools,
+            disableDefaultBuiltinTools: intentDecision.toolDecision.shouldUseTools !== true,
           },
           orchestrator: {
             mode: orchestratorDecision.mode,
@@ -828,6 +855,7 @@ export default defineEventHandler(async (event) => {
             : []
           memoryHistoryAfterMessageCount = countConversationMessages(messages)
           memoryAddedCount = 0
+          memoryAddedFacts = []
           memoryExtractorFailed = false
           const shouldStoreByIntent = intentDecision.memoryDecision.shouldStore === true
           if (memoryEnabled && shouldStoreByIntent && routedMessage) {
@@ -855,6 +883,7 @@ export default defineEventHandler(async (event) => {
                   facts,
                 })
                 memoryAddedCount = upserted.addedCount
+                memoryAddedFacts = upserted.addedFacts
               }
             }
             catch {
@@ -878,6 +907,7 @@ export default defineEventHandler(async (event) => {
               historyBefore: memoryHistoryMessageCount,
               historyAfter: memoryHistoryAfterMessageCount,
               addedCount: memoryAddedCount,
+              facts: memoryAddedFacts,
               stored,
               reason,
             },
@@ -889,6 +919,7 @@ export default defineEventHandler(async (event) => {
                   historyBefore: memoryHistoryMessageCount,
                   historyAfter: memoryHistoryAfterMessageCount,
                   addedCount: memoryAddedCount,
+                  facts: memoryAddedFacts,
                   stored,
                   reason,
                 },
@@ -953,6 +984,26 @@ export default defineEventHandler(async (event) => {
           else {
             memoryHistoryMessageCount = 0
           }
+          memoryReadDecision = memoryEnabled
+            ? intentDecision.memoryReadDecision
+            : {
+                shouldRead: false,
+                reason: 'disabled' as const,
+              }
+          if (memoryReadDecision.shouldRead && routedMessage) {
+            try {
+              const memoryFactRows = await listPilotMemoryFactsByUser(event, userId, {
+                limit: PILOT_MEMORY_CONTEXT_FACT_LIMIT,
+              })
+              memoryContextFacts = memoryFactRows.map(item => ({
+                key: item.key,
+                value: item.value,
+              }))
+            }
+            catch {
+              memoryContextFacts = []
+            }
+          }
 
           await emitEvent({
             type: 'intent.started',
@@ -980,6 +1031,8 @@ export default defineEventHandler(async (event) => {
               websearchRequired: intentDecision.websearchRequired === true,
               websearchReason: intentDecision.websearchReason,
               memoryDecision: intentDecision.memoryDecision,
+              memoryReadDecision: intentDecision.memoryReadDecision,
+              toolDecision: intentDecision.toolDecision,
               routedPrompt: routedMessage,
             },
           }, persistStreamLifecycle
@@ -993,6 +1046,8 @@ export default defineEventHandler(async (event) => {
                   websearchRequired: intentDecision.websearchRequired === true,
                   websearchReason: intentDecision.websearchReason,
                   memoryDecision: intentDecision.memoryDecision,
+                  memoryReadDecision: intentDecision.memoryReadDecision,
+                  toolDecision: intentDecision.toolDecision,
                 },
               }
             : undefined)
@@ -1004,7 +1059,7 @@ export default defineEventHandler(async (event) => {
               thinking: selectedChannel.thinking,
               memoryEnabled,
               memoryHistoryMessageCount,
-              builtinTools: selectedChannel.builtinTools,
+              builtinTools: runtimeBuiltinTools,
             }))
           }
 
@@ -1014,6 +1069,8 @@ export default defineEventHandler(async (event) => {
               memoryEnabled,
               memoryHistoryMessageCount,
               memoryDecision: intentDecision.memoryDecision,
+              memoryReadDecision,
+              memoryFactsCount: memoryContextFacts.length,
               memoryPolicyEnabledByDefault: memoryPolicy.enabledByDefault,
               memoryPolicyAllowUserDisable: memoryPolicy.allowUserDisable,
               memoryUserPreference,
@@ -1025,6 +1082,8 @@ export default defineEventHandler(async (event) => {
                   memoryEnabled,
                   memoryHistoryMessageCount,
                   memoryDecision: intentDecision.memoryDecision,
+                  memoryReadDecision,
+                  memoryFactsCount: memoryContextFacts.length,
                   memoryPolicyEnabledByDefault: memoryPolicy.enabledByDefault,
                   memoryPolicyAllowUserDisable: memoryPolicy.allowUserDisable,
                   memoryUserPreference,
@@ -1041,7 +1100,9 @@ export default defineEventHandler(async (event) => {
               intentWebsearchRequired: intentDecision.websearchRequired === true,
               intentWebsearchReason: intentDecision.websearchReason,
               internetEnabled: selectedChannel.internet,
-              builtinTools: selectedChannel.builtinTools,
+              builtinTools: runtimeBuiltinTools,
+              requestedBuiltinTools,
+              toolDecision: intentDecision.toolDecision,
             },
           }, persistStreamLifecycle
             ? {
@@ -1053,7 +1114,9 @@ export default defineEventHandler(async (event) => {
                   intentWebsearchRequired: intentDecision.websearchRequired === true,
                   intentWebsearchReason: intentDecision.websearchReason,
                   internetEnabled: selectedChannel.internet,
-                  builtinTools: selectedChannel.builtinTools,
+                  builtinTools: runtimeBuiltinTools,
+                  requestedBuiltinTools,
+                  toolDecision: intentDecision.toolDecision,
                 },
               }
             : undefined)
@@ -1538,19 +1601,34 @@ export default defineEventHandler(async (event) => {
 
           const requireNoSourceGuard = (intentDecision.websearchRequired === true)
             && websearchSources.length <= 0
+          const memorySystemContext = buildPilotMemoryContextSystemMessage(routedMessage, memoryContextFacts)
           const runtimeSystemContext = buildWebsearchContextSystemMessage(routedMessage, websearchContextText, {
             requireNoSourceGuard,
           })
-          const runtimeSystemContextMessages = runtimeSystemContext
-            ? [{
-                content: runtimeSystemContext,
-                metadata: {
-                  source: 'websearch_context',
-                  websearchSourceCount: websearchSources.length,
-                  requireNoSourceGuard,
-                },
-              }]
-            : undefined
+          const runtimeSystemContextMessages: Array<{
+            content: string
+            metadata: Record<string, unknown>
+          }> = []
+          if (memorySystemContext) {
+            runtimeSystemContextMessages.push({
+              content: memorySystemContext,
+              metadata: {
+                source: 'memory_context',
+                memoryFactsCount: memoryContextFacts.length,
+                memoryReadDecision,
+              },
+            })
+          }
+          if (runtimeSystemContext) {
+            runtimeSystemContextMessages.push({
+              content: runtimeSystemContext,
+              metadata: {
+                source: 'websearch_context',
+                websearchSourceCount: websearchSources.length,
+                requireNoSourceGuard,
+              },
+            })
+          }
 
           const result = await runPilotConversationStream({
             runtime,
@@ -1575,13 +1653,17 @@ export default defineEventHandler(async (event) => {
               thinking: selectedChannel.thinking,
               memoryEnabled,
               memoryHistoryMessageCount,
-              builtinTools: selectedChannel.builtinTools,
+              builtinTools: runtimeBuiltinTools,
+              requestedBuiltinTools,
+              toolDecision: intentDecision.toolDecision,
+              memoryReadDecision,
+              memoryContextFactsCount: memoryContextFacts.length,
               toolSources: websearchSources,
               websearchSourceCount: websearchSources.length,
               websearchDecision: websearchDecision.reason,
               websearchConnectorSource,
               websearchConnectorReason,
-              systemContextMessages: runtimeSystemContextMessages,
+              systemContextMessages: runtimeSystemContextMessages.length > 0 ? runtimeSystemContextMessages : undefined,
               orchestratorMode: orchestratorDecision.mode,
               orchestratorReason: orchestratorDecision.reason,
               orchestratorAssistantId: orchestratorDecision.assistantId,
@@ -1778,7 +1860,10 @@ export default defineEventHandler(async (event) => {
                   thinking: selectedChannel.thinking,
                   memoryEnabled,
                   memoryHistoryMessageCount,
-                  builtinTools: selectedChannel.builtinTools,
+                  builtinTools: runtimeBuiltinTools,
+                  requestedBuiltinTools,
+                  toolDecision: intentDecision.toolDecision,
+                  memoryReadDecision,
                   websearchSourceCount: websearchSources.length,
                   websearchDecision: websearchDecision.reason,
                   websearchConnectorSource,

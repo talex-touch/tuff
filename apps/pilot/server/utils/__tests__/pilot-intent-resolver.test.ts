@@ -29,6 +29,14 @@ describe('pilot-intent-resolver', () => {
     expect(result.prompt).toBe('画一只猫')
     expect(result.memoryDecision.shouldStore).toBe(false)
     expect(result.memoryDecision.reason).toBe('intent_skip')
+    expect(result.memoryReadDecision).toEqual({
+      shouldRead: false,
+      reason: 'intent_skip',
+    })
+    expect(result.toolDecision).toEqual({
+      shouldUseTools: false,
+      reason: 'intent_skip',
+    })
     expect(vi.mocked(resolvePilotRoutingSelection)).not.toHaveBeenCalled()
   })
 
@@ -101,6 +109,73 @@ describe('pilot-intent-resolver', () => {
     expect(vi.mocked(resolvePilotRoutingSelection)).toHaveBeenCalledTimes(1)
   })
 
+  it('nano classifier 会返回读取记忆与工具调用决策', async () => {
+    vi.mocked(resolvePilotRoutingSelection).mockResolvedValue({
+      channel: {
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'key',
+      },
+      channelId: 'default',
+      adapter: 'openai',
+      transport: 'chat.completions',
+      modelId: 'gpt-5.4-nano',
+      providerModel: 'gpt-5.4-nano',
+      routeComboId: 'intent-auto',
+      selectionReason: 'intent-classifier',
+      selectionSource: 'model-binding',
+      builtinTools: [],
+      internet: false,
+      thinking: false,
+      intentType: 'intent_classification',
+      score: 0,
+      routeKey: 'default::gpt-5.4-nano',
+    } as any)
+
+    vi.mocked(networkClient.request).mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      url: 'https://api.openai.com/v1/chat/completions',
+      ok: true,
+      data: {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                intent: 'chat',
+                confidence: 0.91,
+                reason: 'needs personalized planning',
+                prompt: '根据我的偏好帮我规划今天的工作安排',
+                needs_websearch: false,
+                should_store_memory: false,
+                memory_reason: 'no_persistent_fact',
+                should_read_memory: true,
+                memory_read_reason: 'personalized_request',
+                should_use_tools: true,
+                tool_reason: 'structured_operation',
+              }),
+            },
+          },
+        ],
+      },
+    } as any)
+
+    const result = await resolvePilotIntent({
+      event: {} as any,
+      message: '根据我的偏好帮我规划今天的工作安排',
+    })
+
+    expect(result.intentType).toBe('chat')
+    expect(result.memoryReadDecision).toEqual({
+      shouldRead: true,
+      reason: 'personalized_request',
+    })
+    expect(result.toolDecision).toEqual({
+      shouldUseTools: true,
+      reason: 'structured_operation',
+    })
+  })
+
   it('falls back to chat when classifier fails', async () => {
     vi.mocked(resolvePilotRoutingSelection).mockRejectedValue(new Error('route failed'))
 
@@ -127,5 +202,26 @@ describe('pilot-intent-resolver', () => {
     expect(result.intentType).toBe('chat')
     expect(result.memoryDecision.shouldStore).toBe(true)
     expect(result.memoryDecision.reason).toBe('eligible')
+    expect(result.memoryReadDecision.shouldRead).toBe(false)
+    expect(result.toolDecision.shouldUseTools).toBe(false)
+  })
+
+  it('fallback heuristics 会同时判断是否读取记忆和是否启用工具', async () => {
+    vi.mocked(resolvePilotRoutingSelection).mockRejectedValue(new Error('route failed'))
+
+    const result = await resolvePilotIntent({
+      event: {} as any,
+      message: '根据我的偏好帮我查一下适合我的机械键盘',
+    })
+
+    expect(result.intentType).toBe('chat')
+    expect(result.memoryReadDecision).toEqual({
+      shouldRead: true,
+      reason: 'personalized_request',
+    })
+    expect(result.toolDecision).toEqual({
+      shouldUseTools: true,
+      reason: 'explicit_tool_request',
+    })
   })
 })

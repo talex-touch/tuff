@@ -159,6 +159,25 @@ describe('pilot-runtime strict mode', () => {
     expect((runtime as any).deps.engine.id).toBe('pilot-fallback-engine')
   })
 
+  it('可显式关闭默认 builtinTools 注入', () => {
+    const { runtime } = createPilotRuntime({
+      event: eventStub,
+      userId: 'user_4',
+      strictPilotMode: false,
+      channel: {
+        ...channelStub,
+        builtinTools: [],
+        disableDefaultBuiltinTools: true,
+      },
+      orchestrator: {
+        mode: 'deepagent',
+        reason: 'tool_gate_disabled',
+      },
+    })
+
+    expect((runtime as any).deps.engine.options.builtinTools).toEqual([])
+  })
+
   it('coze 渠道会创建独立 coze engine', () => {
     const { runtime } = createPilotRuntime({
       event: eventStub,

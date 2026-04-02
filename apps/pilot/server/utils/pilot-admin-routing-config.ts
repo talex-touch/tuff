@@ -500,7 +500,7 @@ function normalizeRouteComboItem(raw: unknown): PilotRouteComboItem | null {
 }
 
 function getDefaultModelCatalog(): PilotModelCatalogItem[] {
-  return [
+  const defaults: Array<Omit<PilotModelCatalogItem, 'scenes'>> = [
     {
       id: 'quota-auto',
       name: 'Quota Auto',
@@ -615,7 +615,9 @@ function getDefaultModelCatalog(): PilotModelCatalogItem[] {
       builtinTools: sanitizeBuiltinToolsByCapabilities(['write_todos'], DEFAULT_MODEL_CAPABILITIES),
       bindings: [],
     },
-  ].map(item => ({
+  ]
+
+  return defaults.map(item => ({
     ...item,
     scenes: [],
   }))

@@ -4,3 +4,6 @@ interface Window {
 
   $chat: any
 }
+
+declare const __BuildTime__: number
+declare const __THISAI_VERSION__: string
