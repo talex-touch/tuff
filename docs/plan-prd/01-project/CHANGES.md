@@ -1,7 +1,7 @@
 # 变更日志
 
-> 更新时间: 2026-04-02
-> 说明: 主文件仅保留近 30 天（2026-03-04 ~ 2026-04-02）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-03
+> 说明: 主文件仅保留近 30 天（2026-03-05 ~ 2026-04-03）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
@@ -9,9 +9,108 @@
 - 历史主线：`2.4.8 OmniPanel Gate`、`v2.4.7 Gate A/B/C/D/E` 均已收口（historical）。
 - 旧记录入口：见文末“历史索引导航”。
 
+## 2026-04-04
+
+### Pilot / DeepAgent 单流包级复用收口
+
+- `@talex-touch/tuff-intelligence/pilot` 新增单流共享能力：trace/seq helper、replay trace mapper、system projection、legacy run-event projection、客户端可见性判定。
+- `apps/pilot` 前后端改为直接复用包内 Pilot 合同；删除本地重复实现 `pilot-stream-shared.ts`、`pilot-system-message.ts`、`pilot-legacy-run-event-card.ts`。
+- 前端不再为可恢复事件自动补 `seq`；非豁免事件缺失 `seq` 时直接丢弃并输出诊断，避免本地伪顺序污染 trace/runtime card。
+- quota snapshot 改为基于包内 trace projection 重建运行卡，并保留 thinking legacy projector 与 tool sources 合并逻辑。
+- `/api/chat/sessions/:sessionId/stream` replay 改为复用包内标准 trace -> stream mapper，服务端仅负责 redaction。
+
 ---
 
+## 2026-04-03
+
+### refactor(pilot-stream): DeepAgent / Pilot 收敛为 trace-first 单流
+
+- `packages/tuff-intelligence/src/runtime/agent-runtime.ts`
+  - runtime 发射路径改为“先持久化 trace，再产出 envelope”，`onMessage()` 向上游 yield 的统一是带 `meta.traceId/meta.seq` 的已持久化事件，不再直接透传原始 envelope。
+  - `assistant.delta` 改为按批次缓冲后持久化，flush 边界与 live SSE 对齐，保证前端看到的 delta 与 trace 中的 seq 一一对应，不再出现“已渲染 token 但 trace 无对应事件”的双轨漂移。
+- `packages/tuff-intelligence/src/business/pilot/types.ts`
+  - 新增 persisted envelope 校验，Pilot stream 在把 runtime envelope 映射成 SSE event 前会显式要求 `meta.seq/meta.traceId`，防止未持久化事件误入主流。
+- `packages/tuff-intelligence/src/business/pilot/stream.ts`
+  - 移除 DeepAgent 路径的 synthetic `planning.started / planning.updated / planning.finished` 注入；当前仅透传 runtime 真实提供的 planning 事件。
+  - replay 路径的 `assistant.delta / thinking.* / assistant.final` shape 改为与 live SSE 保持一致，补播时不再退化成仅有 `payload.text` 的旧形态。
+- `packages/tuff-intelligence/src/business/pilot/emitter.ts`
+  - emitter 新增 seq 合同保护：除 `stream.heartbeat` 等纯传输事件外，缺少 `seq` 的 stream event 会直接失败，避免再次回到双轨状态。
+- `apps/pilot/server/utils/pilot-intent-resolver.ts`
+  - classifier 失败路径不再把 `websearchRequired` 硬编码为 `false`，改为使用“最新/今天/查一下/实时”等启发式兜底。
+  - 工具启发式新增与联网相同的“不要联网 / offline only”禁用判定，确保 classifier_failed 时仍能优先尊重显式离线要求。
+- `apps/pilot/server/utils/pilot-runtime.ts`
+  - Pilot 标准路径移除 runtime 侧 `getmemory` 工具注入与 prompt 提示，记忆读取改为严格前置决策；DeepAgent 运行时不再绕过 `memoryReadDecision` 自主取记忆。
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - 流过程中停止 eager `saveMessage(role=system)`；`messages` 表继续只持久化 `user/assistant`，system/runtime 卡片统一来自 trace 投影。
+- `apps/pilot/server/utils/pilot-system-message-response.ts`
+  - `messages.get` 改为始终按 trace 投影 system message；存在历史 legacy system row 时按 message id 去重，并以 trace projection 覆盖旧内容，避免双份 system card。
+- `apps/pilot/app/composables/pilot-stream-shared.ts`
+  - 新增共享 stream helper，统一两条 Pilot chat consumer 的 seq 标准化、trace 排序/去重以及 runtime card 事件识别，减少前端双轨消费规则漂移。
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+  - 新页聊天链路改为复用共享 stream helper，trace 抽屉与运行卡只消费真实事件，不再依赖 synthetic planning 阶段。
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+  - legacy 首页聊天链路复用共享 seq normalizer / runtime card 判定，继续兼容旧 UI，但运行卡来源改为 trace-first 单流合同。
+- 文档：
+  - 新增 `docs/plan-prd/02-architecture/pilot-single-stream-runtime.md`，说明 Pilot 单流顺序合同、trace/SSE/messages 职责分工、严格前置记忆与无 synthetic planning 约束。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-runtime.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-runtime-seq.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-intent-resolver.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-stream-planning-gate.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-stream-emitter-seq.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-stream-replay.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
+
+### fix(pilot-chat): 收口 legacy intent 假卡并按工具判定触发 planning
+
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+  - legacy 首页链路不再在发送前本地预插 synthetic `intent.started` 运行卡，改为只消费服务端真实 `intent.*` 事件，避免出现重复的 `analyse intent`。
+  - 运行卡合并逻辑新增无 `turnId` 场景的 pending intent 兜底：当 shared projector 下发真实 `intent:latest` 卡时，会优先吸收旧 `intent:${session}:pending` 卡并迁移到真实 key，确保 `intent.completed` 后只剩一张 completed 卡，不再残留 shimmer。
+- `apps/pilot/shared/pilot-legacy-run-event-card.ts`
+  - 新增 legacy run-event card key 解析 helper，统一 live 合并阶段对 pending intent fallback 的判定规则。
+- `packages/tuff-intelligence/src/business/pilot/stream.ts`
+  - `planning.started / updated / finished` 改为仅在 `metadata.toolDecision.shouldUseTools === true` 时发出；普通问答、无需工具的轮次不再默认展示“执行规划”。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-legacy-run-event-card.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-stream-planning-gate.test.ts`
+
 ## 2026-04-02
+
+### fix(pilot-chat): 首包事件到达后立即解除 legacy 等待态
+
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+  - legacy 首页链路在收到 `turn.accepted / turn.queued / turn.started` 以及首批 `intent / planning / assistant / run.audit` 事件时立即标记“已受理”，不再等到 thinking/assistant delta 才解除 `WAITING`。
+  - `ChatItem` 因 `WAITING` 只渲染 loading 的问题得到修正，运行卡会在首包到达时即时显示，不再等整轮完成后一次性出现。
+  - `turn.started` 从 legacy ignored-event 噪音日志中移出，避免控制台持续误报“ignored legacy stream event turn.started”。
+- `apps/pilot/app/components/input/ThInput.vue`
+  - `ThInputPlus.hide` 改为显式布尔值，修复首页输入区的 `Invalid prop: Expected Boolean, got Undefined` 警告。
+
+### fix(pilot-chat): 修复 legacy 流式运行卡延迟出现与快照时间线错位
+
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+  - legacy 首页聊天链路的运行卡消费改为复用 shared projector，补齐 `planning.started / planning.updated / planning.finished` 实时卡片映射，减少与新页协议漂移。
+  - 运行卡 key 新增优先复用 shared `cardKey`，并在 live 更新阶段保留 planning 的 `detail.todos`，避免 finished 覆盖后丢失步骤列表。
+- `apps/pilot/shared/pilot-legacy-run-event-card.ts`
+  - 新增 legacy run-event 纯投影 helper，对 `intent / planning / memory / websearch` 统一复用 `pilot-system-message`，仅保留 `thinking` 的兼容拼装逻辑。
+- `apps/pilot/shared/pilot-chat-block-order.ts`
+  - 新增聊天 block 时间线排序工具，统一按 `seq + streamOrder` 排序，且让带 seq 的运行卡优先回到 assistant markdown 前。
+- `apps/pilot/app/components/chat/ChatItem.vue`
+  - 聊天气泡渲染改为复用共享 block 排序工具，实时流与快照回放采用同一套排序规则。
+- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+  - 快照重建不再固定 `preservedBlocks + cardBlocks` 追加，改为按共享时间线排序重新合并，修复运行卡总是落在 assistant markdown 后的问题。
+- `apps/pilot/server/utils/pilot-sse-response.ts`
+  - 新增 SSE 响应头 helper，集中定义 `X-Accel-Buffering: no`。
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - 会话流式接口补齐 anti-buffer 响应头，减少 1Panel / Nginx 代理层对 SSE 的缓冲。
+- `apps/pilot/deploy/README.zh-CN.md`
+  - 部署文档补充 1Panel / Nginx 对 `/api/chat/sessions/*/stream` 的 `proxy_buffering off` 配置说明。
+- `apps/pilot/deploy/README.md`
+  - 英文部署文档同步补充 SSE 反向代理配置说明。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-chat-block-order.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-legacy-run-event-card.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-sse-response.test.ts`
+  - `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
 
 ### fix(pilot-ui): 收敛记忆运行卡标签并展示本轮新增记忆
 
@@ -56,12 +155,19 @@
 - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
   - 运行时按 `memoryReadDecision` 拉取记忆 facts 并注入隐藏 system context。
   - builtinTools 改为按 `toolDecision` 做运行时裁剪，避免“无需工具”的轮次仍暴露默认工具。
+- `apps/pilot/server/utils/pilot-memory-tool.ts`
+  - 新增 deepagent 可调用的 `getmemory` 工具，按 query 优先返回相关记忆，未命中时回退最近记忆，并附带添加时间供模型参考。
 - `apps/pilot/server/utils/pilot-runtime.ts`
   - 新增 `disableDefaultBuiltinTools`，支持在运行时显式关闭默认工具注入。
+  - 开启记忆后会把 `getmemory` 注入 deepagent 自定义 tools，并补充 prompt 提示 agent 在个性化问题上优先查记忆而不是猜测。
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+  - `DeepAgentEngineOptions` 新增 `tools`，deepagent 调用与流式执行都会透传自定义 tools。
+  - 当存在自定义 tools 时自动关闭 direct stream 快路径，避免跳过 deepagent tool 调用链。
 - 新增/扩展测试：
   - `apps/pilot/server/utils/__tests__/pilot-memory-facts.test.ts`
   - `apps/pilot/server/utils/__tests__/pilot-intent-resolver.test.ts`
   - `apps/pilot/server/utils/__tests__/pilot-runtime.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-memory-tool.test.ts`
 
 ## 2026-03-31
 
