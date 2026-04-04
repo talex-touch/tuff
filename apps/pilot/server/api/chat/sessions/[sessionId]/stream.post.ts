@@ -1,6 +1,7 @@
 import type {
   CreatePilotStreamEmitterOptions,
   DeepAgentAuditRecord,
+  PilotStreamDraftEvent,
   PilotStreamEvent,
   TraceRecord,
   UserMessageAttachment,
@@ -9,10 +10,12 @@ import type {
 import type { H3Event } from 'h3'
 import {
   createPilotStreamEmitter,
+  mapPilotReplayTraceToStreamEvent,
   mapPilotAuditToStreamEvent,
   PILOT_DEFAULT_KEEPALIVE_MS,
   PILOT_DEFAULT_TRACE_REPLAY_LIMIT,
   runPilotConversationStream,
+  shouldHidePilotClientRuntimeEvent,
   shouldExecutePilotWebsearch,
   toPilotJsonSafe,
   toPilotSafeRecord,
@@ -23,9 +26,7 @@ import {
   buildPilotRedactedRoutingTracePayload,
   redactPilotClientErrorDetail,
   redactPilotClientTracePayload,
-  shouldHidePilotClientRuntimeEvent,
 } from '../../../../../shared/pilot-runtime-redaction'
-import { buildPilotSystemMessageId, projectPilotSystemMessage } from '../../../../../shared/pilot-system-message'
 import { requirePilotAuth } from '../../../../utils/auth'
 import {
   getPilotAdminRoutingConfig,
@@ -58,6 +59,7 @@ import { markRouteFailure, markRouteSuccess } from '../../../../utils/pilot-rout
 import { recordPilotRoutingMetric } from '../../../../utils/pilot-routing-metrics'
 import { resolvePilotRoutingSelection } from '../../../../utils/pilot-routing-resolver'
 import { createPilotRuntime, PILOT_STRICT_MODE_UNAVAILABLE_CODE } from '../../../../utils/pilot-runtime'
+import { buildPilotSseResponseHeaders } from '../../../../utils/pilot-sse-response'
 import { getPilotStoreMetricsSnapshot } from '../../../../utils/pilot-store'
 import { normalizeStreamInputAttachments } from '../../../../utils/pilot-stream-attachment-input'
 import {
@@ -89,7 +91,7 @@ interface StreamBody {
   attachments?: UserMessageInput['attachments']
 }
 
-interface StreamEventPayload extends PilotStreamEvent {
+type StreamEventPayload = PilotStreamEvent & {
   sessionId: string
   timestamp: number
 }
@@ -176,66 +178,38 @@ function buildImageMarkdown(urls: string[]): string {
     .join('\n\n')
 }
 
-function mapTraceToStreamEvent(trace: TraceRecord): Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> {
-  const payload = redactPilotClientTracePayload(trace.type, toPilotSafeRecord(trace.payload))
-  const text = String(payload.text || '')
+function redactReplayTraceEvent(trace: TraceRecord): Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> {
+  const mapped = mapPilotReplayTraceToStreamEvent(trace)
+  const payload = redactPilotClientTracePayload(mapped.type, toPilotSafeRecord(mapped.payload))
 
-  if (trace.type === 'assistant.delta') {
-    return {
-      type: 'assistant.delta',
-      seq: trace.seq,
-      delta: text,
-      payload,
-    }
-  }
-
-  if (trace.type === 'thinking.delta') {
-    return {
-      type: 'thinking.delta',
-      seq: trace.seq,
-      delta: text,
-      payload,
-    }
-  }
-
-  if (trace.type === 'thinking.final') {
-    return {
-      type: 'thinking.final',
-      seq: trace.seq,
-      message: text,
-      payload,
-    }
-  }
-
-  if (trace.type === 'assistant.final') {
-    return {
-      type: 'assistant.final',
-      seq: trace.seq,
-      message: text,
-      payload,
-    }
-  }
-
-  if (trace.type === 'error') {
-    const detailRecord = toPilotSafeRecord(payload.detail)
+  if (mapped.type === 'error') {
+    const detailRecord = toPilotSafeRecord(mapped.detail)
+    const payloadDetail = toPilotSafeRecord(payload.detail)
     const detail = redactPilotClientErrorDetail(
-      Object.keys(detailRecord).length > 0 ? detailRecord : payload,
+      Object.keys(detailRecord).length > 0
+        ? detailRecord
+        : (Object.keys(payloadDetail).length > 0 ? payloadDetail : payload),
     )
     return {
-      type: 'error',
-      seq: trace.seq,
-      message: String(payload.message || 'Stream error'),
+      ...mapped,
       detail,
       payload: {
         ...payload,
         detail,
       },
+      message: String(mapped.message || payload.message || 'Stream error'),
+    }
+  }
+
+  if (Object.keys(payload).length <= 0) {
+    return {
+      ...mapped,
+      payload,
     }
   }
 
   return {
-    type: trace.type,
-    seq: trace.seq,
+    ...mapped,
     payload,
   }
 }
@@ -408,7 +382,7 @@ async function followTraceTail(options: {
   sessionId: string
   fromSeq: number
   emitEvent: (
-    payload: Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
+    payload: Omit<PilotStreamDraftEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
     emitOptions?: {
       persist?: boolean
       tracePayload?: Record<string, unknown>
@@ -434,7 +408,7 @@ async function followTraceTail(options: {
           nextSeq = Math.max(nextSeq, Number(trace.seq || 0) + 1)
           continue
         }
-        await options.emitEvent(mapTraceToStreamEvent(trace))
+        await options.emitEvent(redactReplayTraceEvent(trace))
         nextSeq = Math.max(nextSeq, Number(trace.seq || 0) + 1)
       }
       continue
@@ -671,6 +645,7 @@ export default defineEventHandler(async (event) => {
         const { runtime, store } = createPilotRuntime({
           event,
           userId,
+          memoryEnabled,
           strictPilotMode: pilotMode,
           allowDeepAgentFallback: !pilotMode,
           channel: {
@@ -751,7 +726,7 @@ export default defineEventHandler(async (event) => {
         })
         const rawEmitEvent = streamEmitter.emit
         const emitEvent = async (
-          payload: Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
+          payload: Omit<PilotStreamDraftEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
           emitOptions?: {
             persist?: boolean
             tracePayload?: Record<string, unknown>
@@ -812,40 +787,6 @@ export default defineEventHandler(async (event) => {
             message: typeof payload.message === 'string' ? payload.message : undefined,
             payload: projectedPayload,
             detail: projectedDetail,
-          })
-
-          if (!Number.isFinite(projectedSeq) || !projectedSeq) {
-            return
-          }
-
-          const projectedSystemMessage = projectPilotSystemMessage({
-            type: eventType,
-            seq: projectedSeq,
-            turnId: typeof payload.turnId === 'string' ? payload.turnId : undefined,
-            payload: projectedPayload,
-            detail: projectedDetail,
-            message: typeof payload.message === 'string' ? payload.message : undefined,
-            delta: typeof payload.delta === 'string' ? payload.delta : undefined,
-          })
-          if (!projectedSystemMessage) {
-            return
-          }
-
-          const messageId = buildPilotSystemMessageId(
-            sessionId,
-            projectedSeq,
-            projectedSystemMessage.metadata.sourceEventType,
-          )
-          await store.runtime.saveMessage({
-            id: messageId,
-            sessionId,
-            role: 'system',
-            content: projectedSystemMessage.content,
-            createdAt: new Date().toISOString(),
-            metadata: toPilotSafeRecord({
-              ...projectedSystemMessage.metadata,
-              seq: projectedSeq,
-            }),
           })
         }
 
@@ -1896,10 +1837,6 @@ export default defineEventHandler(async (event) => {
   })
 
   return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
-    },
+    headers: buildPilotSseResponseHeaders(),
   })
 })
