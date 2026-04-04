@@ -187,6 +187,7 @@ describe('pilot-intent-resolver', () => {
     expect(result.intentType).toBe('chat')
     expect(result.strategy).toBe('fallback')
     expect(result.reason).toBe('classifier_failed')
+    expect(result.websearchRequired).toBe(false)
     expect(result.memoryDecision.shouldStore).toBe(false)
     expect(result.memoryDecision.reason).toBe('no_persistent_fact')
   })
@@ -221,7 +222,116 @@ describe('pilot-intent-resolver', () => {
     })
     expect(result.toolDecision).toEqual({
       shouldUseTools: true,
-      reason: 'explicit_tool_request',
+      reason: 'websearch_required',
+    })
+  })
+
+  it('classifier_failed 遇到今天/最新/查一下会启用联网兜底', async () => {
+    vi.mocked(resolvePilotRoutingSelection).mockRejectedValue(new Error('route failed'))
+
+    const result = await resolvePilotIntent({
+      event: {} as any,
+      message: '帮我查一下今天 OpenAI 最新发布了什么',
+    })
+
+    expect(result.intentType).toBe('chat')
+    expect(result.reason).toBe('classifier_failed')
+    expect(result.websearchRequired).toBe(true)
+    expect(result.toolDecision).toEqual({
+      shouldUseTools: true,
+      reason: 'websearch_required',
+    })
+  })
+
+  it('classifier_failed 时“不要联网”仍优先关闭联网', async () => {
+    vi.mocked(resolvePilotRoutingSelection).mockRejectedValue(new Error('route failed'))
+
+    const result = await resolvePilotIntent({
+      event: {} as any,
+      message: '不要联网，直接告诉我 TypeScript 泛型怎么理解',
+    })
+
+    expect(result.intentType).toBe('chat')
+    expect(result.websearchRequired).toBe(false)
+    expect(result.toolDecision.shouldUseTools).toBe(false)
+  })
+
+  it('classifier_failed 时会读取姓名类记忆追问', async () => {
+    vi.mocked(resolvePilotRoutingSelection).mockRejectedValue(new Error('route failed'))
+
+    const result = await resolvePilotIntent({
+      event: {} as any,
+      message: '我叫什么？',
+    })
+
+    expect(result.intentType).toBe('chat')
+    expect(result.reason).toBe('classifier_failed')
+    expect(result.memoryReadDecision).toEqual({
+      shouldRead: true,
+      reason: 'explicit_reference',
+    })
+  })
+
+  it('显式姓名追问会覆盖 classifier 的 not_needed 结果', async () => {
+    vi.mocked(resolvePilotRoutingSelection).mockResolvedValue({
+      channel: {
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'key',
+      },
+      channelId: 'default',
+      adapter: 'openai',
+      transport: 'chat.completions',
+      modelId: 'gpt-5.4-nano',
+      providerModel: 'gpt-5.4-nano',
+      routeComboId: 'intent-auto',
+      selectionReason: 'intent-classifier',
+      selectionSource: 'model-binding',
+      builtinTools: [],
+      internet: false,
+      thinking: false,
+      intentType: 'intent_classification',
+      score: 0,
+      routeKey: 'default::gpt-5.4-nano',
+    } as any)
+
+    vi.mocked(networkClient.request).mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      url: 'https://api.openai.com/v1/chat/completions',
+      ok: true,
+      data: {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                intent: 'chat',
+                confidence: 0.83,
+                reason: 'general question',
+                prompt: '我叫什么？',
+                needs_websearch: false,
+                should_store_memory: false,
+                memory_reason: 'no_persistent_fact',
+                should_read_memory: false,
+                memory_read_reason: 'not_needed',
+                should_use_tools: false,
+                tool_reason: 'not_needed',
+              }),
+            },
+          },
+        ],
+      },
+    } as any)
+
+    const result = await resolvePilotIntent({
+      event: {} as any,
+      message: '我叫什么？',
+    })
+
+    expect(result.strategy).toBe('nano')
+    expect(result.memoryReadDecision).toEqual({
+      shouldRead: true,
+      reason: 'explicit_reference',
     })
   })
 })

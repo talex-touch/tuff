@@ -8,6 +8,12 @@ const MIN_CLASSIFIER_TIMEOUT_MS = 1_500
 const MAX_CLASSIFIER_TIMEOUT_MS = 20_000
 const IMAGE_COMMAND_PREFIX = /^\/(?:image|img)\b/i
 const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
+const WEBSEARCH_DISABLE_PATTERNS = [
+  /(不要|无需|不用|别).{0,6}(联网|搜索|查(网|询)?)/i,
+  /(只用|仅用).{0,8}(离线|本地|记忆)/i,
+  /\b(no|without|don'?t)\s+(web\s*search|internet|search|browse|browsing)\b/i,
+  /\boffline\s+only\b/i,
+]
 
 export interface ResolvePilotIntentInput {
   event: H3Event
@@ -170,6 +176,41 @@ function shouldRouteToImageByRule(message: string): boolean {
   return false
 }
 
+function resolveWebsearchRequiredByHeuristic(
+  message: string,
+  intentType: Extract<PilotIntentType, 'chat' | 'image_generate'>,
+): boolean {
+  if (intentType !== 'chat') {
+    return false
+  }
+
+  const text = normalizeText(message)
+  if (!text) {
+    return false
+  }
+
+  if (WEBSEARCH_DISABLE_PATTERNS.some(pattern => pattern.test(text))) {
+    return false
+  }
+
+  const triggerPatterns = [
+    /(最新|今天|今日|近期|实时|新闻|股价|汇率|天气|赛程|比分|官网|来源|引用|链接|查一下|搜一下|检索)/i,
+    /\b(latest|today|current|recent|real[-\s]?time|news|price|weather|score|schedule|source|citation|search)\b/i,
+  ]
+  if (triggerPatterns.some(pattern => pattern.test(text))) {
+    return true
+  }
+
+  if (/https?:\/\//i.test(text)) {
+    return true
+  }
+
+  const lower = text.toLowerCase()
+  return lower.includes('what happened')
+    || lower.includes('release note')
+    || lower.includes('breaking')
+}
+
 function resolveMemoryDecisionByHeuristic(
   message: string,
   intentType: Extract<PilotIntentType, 'chat' | 'image_generate'>,
@@ -285,7 +326,9 @@ function resolveMemoryReadDecisionByHeuristic(
       reason: 'explicit_reference',
       rules: [
         /记得|还记得|你知道我|你还记得|我之前说过|我上次提过|结合我之前的信息|根据你记住的/,
+        /我叫什?么|我的名字(?:是|叫什么)?|怎么称呼我|该怎么叫我|你应该怎么称呼我|你知道我的名字吗|我是谁/,
         /what do you remember|remember about me|as i said before|you know me|based on what you remember/i,
+        /what(?:'s| is) my name|do you know my name|how should you call me|what should you call me|who am i/i,
       ],
     },
     {
@@ -327,6 +370,13 @@ function normalizeMemoryReadDecision(
   }
 
   const normalizedReason = normalizeText(rawReason).toLowerCase()
+  if (normalizedReason === 'disabled' || normalizedReason === 'intent_skip') {
+    return {
+      shouldRead: false,
+      reason: normalizedReason as PilotIntentMemoryReadDecision['reason'],
+    }
+  }
+
   if (normalizedReason === 'explicit_reference' || normalizedReason === 'personalized_request') {
     return {
       shouldRead: true,
@@ -334,14 +384,14 @@ function normalizeMemoryReadDecision(
     }
   }
 
-  if (
-    normalizedReason === 'not_needed'
-    || normalizedReason === 'intent_skip'
-    || normalizedReason === 'disabled'
-  ) {
+  if (normalizedReason === 'not_needed' && fallback.shouldRead) {
+    return fallback
+  }
+
+  if (normalizedReason === 'not_needed') {
     return {
       shouldRead: false,
-      reason: normalizedReason as PilotIntentMemoryReadDecision['reason'],
+      reason: 'not_needed',
     }
   }
 
@@ -378,6 +428,13 @@ function resolveToolDecisionByHeuristic(
 
   const normalized = normalizeText(message)
   if (!normalized) {
+    return {
+      shouldUseTools: false,
+      reason: 'not_needed',
+    }
+  }
+
+  if (WEBSEARCH_DISABLE_PATTERNS.some(rule => rule.test(normalized))) {
     return {
       shouldUseTools: false,
       reason: 'not_needed',
@@ -543,15 +600,16 @@ function parseChatCompletionsOutputText(payload: Record<string, unknown>): strin
 function parseClassifierJson(content: string, message: string): IntentClassifierResult {
   const normalizedMessage = normalizeText(message)
   if (!content) {
+    const websearchRequired = resolveWebsearchRequiredByHeuristic(normalizedMessage, 'chat')
     const memoryDecision = resolveMemoryDecisionByHeuristic(normalizedMessage, 'chat')
     const memoryReadDecision = resolveMemoryReadDecisionByHeuristic(normalizedMessage, 'chat')
-    const toolDecision = resolveToolDecisionByHeuristic(normalizedMessage, 'chat', false)
+    const toolDecision = resolveToolDecisionByHeuristic(normalizedMessage, 'chat', websearchRequired)
     return {
       intentType: 'chat',
       confidence: 0,
       reason: 'empty_response',
       prompt: normalizedMessage,
-      websearchRequired: false,
+      websearchRequired,
       memoryDecision,
       memoryReadDecision,
       toolDecision,
@@ -597,15 +655,16 @@ function parseClassifierJson(content: string, message: string): IntentClassifier
     }
   }
   catch {
+    const websearchRequired = resolveWebsearchRequiredByHeuristic(normalizedMessage, 'chat')
     const memoryDecision = resolveMemoryDecisionByHeuristic(normalizedMessage, 'chat')
     const memoryReadDecision = resolveMemoryReadDecisionByHeuristic(normalizedMessage, 'chat')
-    const toolDecision = resolveToolDecisionByHeuristic(normalizedMessage, 'chat', false)
+    const toolDecision = resolveToolDecisionByHeuristic(normalizedMessage, 'chat', websearchRequired)
     return {
       intentType: 'chat',
       confidence: 0,
       reason: 'json_parse_failed',
       prompt: normalizedMessage,
-      websearchRequired: false,
+      websearchRequired,
       memoryDecision,
       memoryReadDecision,
       toolDecision,
@@ -835,16 +894,17 @@ export async function resolvePilotIntent(input: ResolvePilotIntentInput): Promis
     }
   }
   catch {
+    const websearchRequired = resolveWebsearchRequiredByHeuristic(message, 'chat')
     const memoryDecision = resolveMemoryDecisionByHeuristic(message, 'chat')
     const memoryReadDecision = resolveMemoryReadDecisionByHeuristic(message, 'chat')
-    const toolDecision = resolveToolDecisionByHeuristic(message, 'chat', false)
+    const toolDecision = resolveToolDecisionByHeuristic(message, 'chat', websearchRequired)
     return {
       intentType: 'chat',
       prompt: message,
       strategy: 'fallback',
       confidence: 0,
       reason: 'classifier_failed',
-      websearchRequired: false,
+      websearchRequired,
       websearchReason: 'classifier_failed',
       memoryDecision,
       memoryReadDecision,

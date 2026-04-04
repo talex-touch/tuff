@@ -6,7 +6,7 @@ export {
   toDeepAgentErrorDetail,
 } from './adapters/deepagent-engine'
 export type { AgentEngineAdapter } from './adapters/engine'
-export type { AgentEnvelope, AgentEventType } from './protocol/envelope'
+export type { AgentEnvelope, AgentEventType, PersistedAgentEnvelope, PersistedAgentEnvelopeMeta } from './protocol/envelope'
 export type { TurnState, UserMessageAttachment, UserMessageInput } from './protocol/session'
 export { CapabilityRegistry } from './registry/capability-registry'
 export { AbstractAgentRuntime } from './runtime/agent-runtime'
