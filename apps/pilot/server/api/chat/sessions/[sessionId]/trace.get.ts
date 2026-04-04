@@ -1,4 +1,5 @@
-import { redactPilotClientTracePayload, shouldHidePilotClientRuntimeEvent } from '../../../../../shared/pilot-runtime-redaction'
+import { shouldHidePilotClientRuntimeEvent } from '@talex-touch/tuff-intelligence/pilot'
+import { redactPilotClientTracePayload } from '../../../../../shared/pilot-runtime-redaction'
 import { requirePilotAuth } from '../../../../utils/auth'
 import { requireSessionId } from '../../../../utils/pilot-http'
 import { createPilotStoreAdapter } from '../../../../utils/pilot-store'

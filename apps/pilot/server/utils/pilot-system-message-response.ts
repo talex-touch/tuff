@@ -1,5 +1,7 @@
-import { shouldHidePilotClientSystemMessage } from '../../shared/pilot-runtime-redaction'
-import { projectPilotSystemMessagesFromTraces } from '../../shared/pilot-system-message'
+import {
+  projectPilotSystemMessagesFromTraces,
+  shouldHidePilotClientSystemMessage,
+} from '@talex-touch/tuff-intelligence/pilot'
 
 interface MessageLike {
   id: string
@@ -58,24 +60,22 @@ export async function listMessagesWithLazySystemProjection(
   store: RuntimeStoreLike,
   sessionId: string,
 ): Promise<MessageLike[]> {
-  const messages = (await store.listMessages(sessionId))
-    .filter(item => item.role !== 'system' || !shouldHidePilotClientSystemMessage(item.metadata))
-  const hasSystem = messages.some(item => item.role === 'system')
-  if (hasSystem) {
-    return sortMessagesByTimeline(messages)
-  }
+  const persistedMessages = await store.listMessages(sessionId)
+  const messages = persistedMessages
+    .filter(item => item.role !== 'system')
+  const legacySystemMessages = persistedMessages
+    .filter(item => item.role === 'system' && !shouldHidePilotClientSystemMessage(item.metadata))
 
   const traces = await store.listTrace(sessionId, 1, 2_000).catch(() => [])
   const synthetic = projectPilotSystemMessagesFromTraces({
     sessionId,
     traces,
   })
-  if (synthetic.length <= 0) {
-    return sortMessagesByTimeline(messages)
-  }
-
   const map = new Map<string, MessageLike>()
   for (const item of messages) {
+    map.set(item.id, item)
+  }
+  for (const item of legacySystemMessages) {
     map.set(item.id, item)
   }
   for (const item of synthetic) {

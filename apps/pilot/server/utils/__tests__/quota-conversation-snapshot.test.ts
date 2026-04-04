@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { projectPilotSystemMessage } from '@talex-touch/tuff-intelligence/pilot'
 import { buildQuotaConversationSnapshot } from '../quota-conversation-snapshot'
 
 function extractAssistantBlocks(snapshot: ReturnType<typeof buildQuotaConversationSnapshot>) {
@@ -176,6 +177,69 @@ describe('quota-conversation-snapshot', () => {
 
     const blocks = extractAssistantBlocks(snapshot)
     expect(blocks.some((item: any) => item?.type === 'card' && item?.name === 'pilot_run_event_card')).toBe(true)
+  })
+
+  it('snapshot merge 后运行卡不会固定落在 assistant markdown 后面', () => {
+    const intent = projectPilotSystemMessage({
+      type: 'intent.started',
+      seq: 2,
+      payload: {
+        messageChars: 16,
+      },
+    })
+    const planningUpdated = projectPilotSystemMessage({
+      type: 'planning.updated',
+      seq: 3,
+      payload: {
+        todos: ['分析问题', '拆解步骤'],
+      },
+    })
+    const planningFinished = projectPilotSystemMessage({
+      type: 'planning.finished',
+      seq: 4,
+      payload: {
+        todoCount: 2,
+      },
+    })
+
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-snapshot-order',
+      messages: [
+        { role: 'user', content: '请帮我规划一下这个任务' },
+        {
+          role: 'system',
+          content: intent?.content || '',
+          metadata: intent?.metadata || {},
+        },
+        {
+          role: 'system',
+          content: planningUpdated?.content || '',
+          metadata: planningUpdated?.metadata || {},
+        },
+        {
+          role: 'system',
+          content: planningFinished?.content || '',
+          metadata: planningFinished?.metadata || {},
+        },
+        { role: 'assistant', content: '这是最终回答。' },
+      ],
+      runtimeTraces: [
+        { seq: 1, type: 'turn.started', payload: {} },
+      ],
+      assistantReply: '',
+      topicHint: 'snapshot order',
+    })
+
+    const blocks = extractAssistantBlocks(snapshot)
+    const labels = blocks.map((item: any) => {
+      if (item?.type !== 'card') {
+        return item?.type
+      }
+      const payload = JSON.parse(String(item.data || '{}')) as Record<string, unknown>
+      return payload.cardType
+    })
+
+    expect(labels.slice(0, 3)).toEqual(['intent', 'planning', 'markdown'])
   })
 
   it('thinking.delta / thinking.final 会重建 thinking 卡并完成状态迁移', () => {
