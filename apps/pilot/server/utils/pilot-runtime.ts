@@ -77,6 +77,7 @@ function createCapabilityRegistryV1(): CapabilityRegistry {
 export interface CreatePilotRuntimeOptions {
   event: H3Event
   userId: string
+  memoryEnabled?: boolean
   channel?: {
     channelId: string
     baseUrl: string
@@ -363,6 +364,7 @@ export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
     timeoutMs,
     systemPrompt,
     builtinTools: engineBuiltinTools,
+    tools: [],
     metadata: {
       source: 'tuff-pilot',
       channelId: channel?.channelId,
