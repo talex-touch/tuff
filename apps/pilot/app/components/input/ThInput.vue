@@ -620,7 +620,7 @@ onStartTyping(focusInput)
 
     <ThInputPlus
       v-model="inputProperty" :capabilities="inputCapabilities" :pilot-mode="inputProperty.pilotMode === true"
-      :hide="input.text.startsWith('@') || template?.title"
+      :hide="Boolean(input.text.startsWith('@') || template?.title)"
       @toggle-pilot-mode="inputProperty.pilotMode = !inputProperty.pilotMode"
       @file="handleFilePlus"
     />
