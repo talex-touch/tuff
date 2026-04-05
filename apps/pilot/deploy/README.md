@@ -128,14 +128,31 @@ curl "http://127.0.0.1:19021/health"
    - `ONEPANEL_WEBHOOK_TOKEN` (same value as `PILOT_WEBHOOK_TOKEN`)
 5. `pilot-image.yml` (triggered on `master` push) will trigger `POST /deploy` after pushing `pilot-latest`, with `X-Pilot-Token` header.
 
-## 6) Rollback behavior
+## 6) SSE / reverse proxy settings
+
+- `/api/chat/sessions/*/stream` is an SSE endpoint. 1Panel/Nginx must disable proxy buffering, otherwise `intent / planning / tool / assistant` events may be delayed until the request is almost finished.
+- Pilot now returns `X-Accel-Buffering: no`, but custom 1Panel/Nginx overrides can still re-enable buffering, so keep the proxy config explicit.
+- Recommended Nginx snippet for the chat stream route:
+
+```nginx
+location ~ ^/api/chat/sessions/.*/stream$ {
+  proxy_http_version 1.1;
+  proxy_buffering off;
+  proxy_request_buffering off;
+  proxy_cache off;
+}
+```
+
+- If you use 1Panel advanced site config, make sure it does not override `X-Accel-Buffering` back to `yes`.
+
+## 7) Rollback behavior
 
 - Script records currently running image
 - Deploys target image
 - Runs health check
 - If check fails and rollback is enabled, script rolls back to previous image automatically
 
-## 7) Notes
+## 8) Notes
 
 - This deployment flow is Node server only (no Cloudflare runtime)
 - Runtime requires PostgreSQL + Redis
