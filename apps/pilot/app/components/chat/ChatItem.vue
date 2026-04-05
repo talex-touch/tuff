@@ -6,6 +6,7 @@ import relativeTime from 'dayjs/plugin/relativeTime'
 import { api as viewerApi } from 'v-viewer'
 import { IChatItemStatus, IChatRole } from '~/composables/api/base/v1/aigc/completion-types'
 import { resolveRuntimeModelIconSource, usePilotRuntimeModels } from '~/composables/usePilotRuntimeModels'
+import { sortPilotChatBlocksByTimeline } from '../../../shared/pilot-chat-block-order'
 import ThCheckBox from '../checkbox/ThCheckBox.vue'
 import RoundLoading from '../loaders/RoundLoading.vue'
 import TextShaving from '../other/TextShaving.vue'
@@ -53,61 +54,10 @@ watch(() => props.select, (val) => {
 })
 
 const innerItem = computed(() => props.item.content.find(item => item?.page === msgItem.value.page) || null)
-function toBlockSeq(block: IInnerItemMeta): number {
-  const extra = block.extra && typeof block.extra === 'object' && !Array.isArray(block.extra)
-    ? block.extra as Record<string, unknown>
-    : {}
-  const extraSeq = Number(extra.seq)
-  if (Number.isFinite(extraSeq) && extraSeq > 0) {
-    return Math.floor(extraSeq)
-  }
-  if (block.type !== 'card') {
-    return 0
-  }
-  try {
-    const payload = JSON.parse(String(block.data || '')) as Record<string, unknown>
-    const parsedSeq = Number(payload?.seq)
-    return Number.isFinite(parsedSeq) && parsedSeq > 0 ? Math.floor(parsedSeq) : 0
-  }
-  catch {
-    return 0
-  }
-}
-
-function toBlockStreamOrder(block: IInnerItemMeta): number {
-  const extra = block.extra && typeof block.extra === 'object' && !Array.isArray(block.extra)
-    ? block.extra as Record<string, unknown>
-    : {}
-  const order = Number(extra.streamOrder)
-  return Number.isFinite(order) && order > 0 ? Math.floor(order) : 0
-}
 
 const orderedBlocks = computed<IInnerItemMeta[]>(() => {
   const blocks = innerItem.value?.value || []
-  if (blocks.length <= 1) {
-    return blocks
-  }
-  const list = blocks.map((block, index) => ({
-    block,
-    index,
-    seq: toBlockSeq(block),
-    order: toBlockStreamOrder(block),
-  }))
-  if (!list.some(item => item.seq > 0)) {
-    return blocks
-  }
-  return list
-    .slice()
-    .sort((left, right) => {
-      if (left.seq > 0 && right.seq > 0 && left.seq !== right.seq) {
-        return left.seq - right.seq
-      }
-      if (left.seq > 0 && right.seq > 0 && left.order > 0 && right.order > 0 && left.order !== right.order) {
-        return left.order - right.order
-      }
-      return left.index - right.index
-    })
-    .map(item => item.block)
+  return sortPilotChatBlocksByTimeline(blocks)
 })
 const timeAgo = computed(() => innerItem.value ? dayjs(innerItem.value.timestamp).fromNow() : '-')
 const isUser = computed(() => props.item.role === IChatRole.USER)
