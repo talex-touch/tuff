@@ -332,7 +332,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private incrementalTaskChain: Promise<void> = Promise.resolve()
   private readonly pendingIncrementalPaths: Map<string, IncrementalUpdatePayload> = new Map()
 
-  private readonly isCaseInsensitiveFs = process.platform !== 'linux'
+  private readonly isCaseInsensitiveFs =
+    process.platform === 'darwin' || process.platform === 'win32'
   private readonly timestampToleranceMs = 1_000
   private readonly handleFsAddedOrChanged = (event: ITouchEvent) => {
     const fileEvent = event as FileAddedEvent | FileChangedEvent
