@@ -15,10 +15,8 @@ import type {
   BatteryStatusPayload,
   FileIndexAddPathRequest,
   FileIndexAddPathResult,
-  GetActiveAppRequest,
   PlatformCapabilityListRequest,
   ReadFileRequest,
-  ActiveAppSnapshot,
   SecureValueGetRequest,
   SecureValueSetRequest,
   StartupRequest,
@@ -188,9 +186,6 @@ const wallpaperCopyToLibraryEvent = defineRawEvent<
   { sourcePath: string; type: 'file' | 'folder' },
   { storedPath: string | null; skippedCount: number; error?: string }
 >('wallpaper:copy-to-library')
-const systemGetActiveAppLegacyEvent = defineRawEvent<GetActiveAppRequest, ActiveAppSnapshot | null>(
-  'system:get-active-app'
-)
 const batteryStatusEvent = AppEvents.power.batteryStatus
 
 function resolveTfilePath(urlOrPath: string): string {
@@ -762,8 +757,6 @@ export class CommonChannelModule extends BaseModule {
   private transportDisposers: Array<() => void> = []
   private batteryPollTimer: NodeJS.Timeout | undefined
   private touchApp: TalexTouch.TouchApp | null = null
-  private legacyUsageCounts = new Map<string, number>()
-  private warnedLegacyEvents = new Set<string>()
 
   constructor() {
     super(CommonChannelModule.key, {
@@ -1099,18 +1092,6 @@ export class CommonChannelModule extends BaseModule {
     this.registerPresetTransportHandlers(transport, registerSafeHandler)
   }
 
-  private recordLegacyTransportUsage(eventName: string, replacement: string): void {
-    const hits = (this.legacyUsageCounts.get(eventName) ?? 0) + 1
-    this.legacyUsageCounts.set(eventName, hits)
-    if (this.warnedLegacyEvents.has(eventName)) {
-      return
-    }
-    this.warnedLegacyEvents.add(eventName)
-    log.warn(`[CommonChannel] Legacy event used: ${eventName}. Use ${replacement} instead.`, {
-      meta: { eventName, replacement, hits }
-    })
-  }
-
   private createSafeOperationHandler(transport: NonNullable<CommonChannelModule['transport']>) {
     return <TReq, TExtra extends Record<string, unknown> = Record<string, never>>(
       event: TuffEvent<TReq, unknown> & { toEventName: () => string },
@@ -1309,13 +1290,6 @@ export class CommonChannelModule extends BaseModule {
         }
       }),
       transport.on(AppEvents.system.getActiveApp, async (payload) => {
-        return await activeAppService.getActiveApp(Boolean(payload?.forceRefresh))
-      }),
-      transport.on(systemGetActiveAppLegacyEvent, async (payload) => {
-        this.recordLegacyTransportUsage(
-          systemGetActiveAppLegacyEvent.toEventName(),
-          AppEvents.system.getActiveApp.toEventName()
-        )
         return await activeAppService.getActiveApp(Boolean(payload?.forceRefresh))
       }),
       transport.on<SecureValueGetRequest, string | null>(

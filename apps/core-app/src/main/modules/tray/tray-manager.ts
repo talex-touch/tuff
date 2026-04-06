@@ -1,4 +1,4 @@
-import type { AppSetting, MaybePromise, ModuleKey } from '@talex-touch/utils'
+import type { AppSetting, MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITouchEvent } from '@talex-touch/utils/eventbus'
 import type {
   DownloadTaskChangedEvent,
@@ -21,6 +21,13 @@ import { TrayIconProvider } from './tray-icon-provider'
 import { TrayMenuBuilder } from './tray-menu-builder'
 import { TrayStateManager } from './tray-state-manager'
 
+type TrayTouchAppRuntime = {
+  window: { window: Electron.BrowserWindow }
+  config: { data?: unknown }
+  isQuitting?: boolean
+  version?: string
+}
+
 export class TrayManager extends BaseModule {
   static key: symbol = Symbol.for('TrayManager')
   name: ModuleKey = TrayManager.key
@@ -32,6 +39,7 @@ export class TrayManager extends BaseModule {
   private appDisposers: Array<() => void> = []
   private windowDisposers: Array<() => void> = []
   private eventDisposers: Array<() => void> = []
+  private touchApp: TrayTouchAppRuntime | null = null
 
   private readonly appEmitter = app as unknown as {
     on: (eventName: string, handler: (...args: any[]) => void) => void
@@ -46,7 +54,8 @@ export class TrayManager extends BaseModule {
     this.stateManager = new TrayStateManager()
   }
 
-  async onInit(): Promise<void> {
+  async onInit(ctx: ModuleInitContext<any>): Promise<void> {
+    this.touchApp = (ctx.runtime?.app ?? ctx.app) as TrayTouchAppRuntime
     this.trayExperimentalEnabled = this.isTrayExperimentalEnabled()
     if (!this.trayExperimentalEnabled) {
       console.info('[TrayManager] Tray is experimental and disabled by default.')
@@ -146,7 +155,7 @@ export class TrayManager extends BaseModule {
   }
 
   private handleTrayClick(): void {
-    const mainWindow = useAliveTarget($app.window.window)
+    const mainWindow = useAliveTarget(this.touchApp?.window.window)
     if (!mainWindow) return
 
     if (mainWindow.isVisible()) {
@@ -184,7 +193,10 @@ export class TrayManager extends BaseModule {
   }
 
   private registerWindowListener(eventName: string, handler: (...args: any[]) => void): void {
-    const mainWindow = $app.window.window
+    const mainWindow = this.touchApp?.window.window
+    if (!mainWindow) {
+      return
+    }
     const windowEmitter = mainWindow as unknown as {
       on: (eventName: string, listener: (...args: any[]) => void) => void
       removeListener: (eventName: string, listener: (...args: any[]) => void) => void
@@ -207,14 +219,19 @@ export class TrayManager extends BaseModule {
   }
 
   private registerWindowEvents(): void {
-    const mainWindow = $app.window.window
+    const mainWindow = this.touchApp?.window.window
+    if (!mainWindow) {
+      return
+    }
 
     this.registerWindowListener('close', (event: { preventDefault: () => void }) => {
       const safeWindow = useAliveTarget(mainWindow)
       if (!safeWindow) return
-      const configData = $app.config.data as { window?: { closeToTray?: boolean } } | undefined
+      const configData = this.touchApp?.config.data as
+        | { window?: { closeToTray?: boolean } }
+        | undefined
       const closeToTray = configData?.window?.closeToTray ?? true
-      const isQuitting = $app.isQuitting || false
+      const isQuitting = this.touchApp?.isQuitting || false
       const canCloseToTray =
         this.trayExperimentalEnabled && this.shouldShowTray() && this.tray !== null
 
@@ -342,8 +359,8 @@ export class TrayManager extends BaseModule {
       if (!app.dock) return
 
       app.dock.setIcon(appIconPath)
-      if ($app.version === 'dev') {
-        app.dock.setBadge($app.version)
+      if (this.touchApp?.version === 'dev') {
+        app.dock.setBadge(this.touchApp.version)
       }
     } catch (error) {
       console.error('[TrayManager] Failed to setup Dock icon:', error)
@@ -353,7 +370,7 @@ export class TrayManager extends BaseModule {
   public updateDockVisibility(): void {
     if (process.platform !== 'darwin') return
 
-    const mainWindow = useAliveTarget($app.window.window)
+    const mainWindow = useAliveTarget(this.touchApp?.window.window)
     if (!mainWindow) return
     const hideDock = this.getHideDockConfig()
     const hasDivisionBox = this.hasActiveDivisionBox()

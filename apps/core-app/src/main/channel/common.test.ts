@@ -463,7 +463,7 @@ describe('CommonChannelModule private helpers', () => {
     ).resolves.toBe('')
   })
 
-  it('legacy active-app event emits warn once and capability list includes dynamic entries', async () => {
+  it('does not register legacy active-app event and capability list still includes dynamic entries', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', {
       value: 'darwin',
@@ -503,14 +503,10 @@ describe('CommonChannelModule private helpers', () => {
       } as never)
 
       const listHandler = handlers.get(PlatformEvents.capabilities.list.toEventName())
-      const legacyHandler = handlers.get('system:get-active-app')
-
       expect(listHandler).toBeTypeOf('function')
-      expect(legacyHandler).toBeTypeOf('function')
+      expect(handlers.has('system:get-active-app')).toBe(false)
 
       const capabilities = (await listHandler?.({}, {})) as Array<{ id: string }>
-      await legacyHandler?.({ forceRefresh: true }, {})
-      await legacyHandler?.({ forceRefresh: false }, {})
 
       expect(capabilities.map((item) => item.id)).toEqual([
         'platform.storage',
@@ -518,13 +514,7 @@ describe('CommonChannelModule private helpers', () => {
         'platform.native-share',
         'platform.permission-checker'
       ])
-      expect(activeAppGetActiveAppMock).toHaveBeenCalledTimes(2)
-      expect(loggerWarnMock).toHaveBeenCalledTimes(1)
-      expect(
-        (module as unknown as { legacyUsageCounts: Map<string, number> }).legacyUsageCounts.get(
-          'system:get-active-app'
-        )
-      ).toBe(2)
+      expect(activeAppGetActiveAppMock).not.toHaveBeenCalled()
     } finally {
       Object.defineProperty(process, 'platform', {
         value: originalPlatform,

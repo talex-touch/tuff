@@ -1,4 +1,4 @@
-import type { ModuleDestroyContext, ModuleKey } from '@talex-touch/utils'
+import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { execFileSync, spawn } from 'node:child_process'
 import * as fs from 'node:fs'
@@ -487,6 +487,7 @@ export class PermissionCheckerModule extends BaseModule {
   static key: symbol = Symbol.for('PermissionChecker')
   name: ModuleKey = PermissionCheckerModule.key
   private checker: PermissionChecker
+  private transport: ReturnType<typeof getTuffTransportMain> | null = null
 
   constructor() {
     super(PermissionCheckerModule.key, {
@@ -495,7 +496,16 @@ export class PermissionCheckerModule extends BaseModule {
     this.checker = PermissionChecker.getInstance()
   }
 
-  async onInit(): Promise<void> {
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    const channel =
+      ctx.runtime?.channel ?? (ctx.app as { channel?: unknown } | null | undefined)?.channel
+    if (!channel) {
+      permissionCheckerLog.warn('Channel unavailable during permission checker init')
+      return
+    }
+
+    const keyManager = resolveKeyManager(channel)
+    this.transport = getTuffTransportMain(channel, keyManager)
     this.setupChannels()
     permissionCheckerLog.info('Permission checker module initialized')
   }
@@ -506,19 +516,10 @@ export class PermissionCheckerModule extends BaseModule {
   }
 
   private setupChannels(): void {
-    if (!$app.channel) {
-      permissionCheckerLog.warn('Channel not available, retrying setupChannels later')
-      // Retry after a short delay
-      setTimeout(() => {
-        if ($app.channel) {
-          this.setupChannels()
-        }
-      }, 100)
+    const transport = this.transport
+    if (!transport) {
       return
     }
-
-    const keyManager = resolveKeyManager($app.channel)
-    const transport = getTuffTransportMain($app.channel, keyManager)
 
     // Check permission status
     transport.on(systemPermissionCheckEvent, (permissionType) => {
