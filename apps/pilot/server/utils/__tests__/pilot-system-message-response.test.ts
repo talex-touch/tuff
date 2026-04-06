@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { buildPilotSystemMessageId } from '@talex-touch/tuff-intelligence/pilot'
-import { listMessagesWithLazySystemProjection } from '../pilot-system-message-response'
+import { listMessagesWithTraceProjection } from '../pilot-system-message-response'
 
 describe('pilot-system-message-response', () => {
   it('始终以 trace projection 覆盖 legacy system row，且不会重复返回', async () => {
     const sessionId = 'session_projection'
     const systemId = buildPilotSystemMessageId(sessionId, 2, 'websearch.executed')
-    const messages = await listMessagesWithLazySystemProjection({
+    const messages = await listMessagesWithTraceProjection({
       async listMessages() {
         return [
           {
@@ -66,7 +66,7 @@ describe('pilot-system-message-response', () => {
 
   it('无 trace 时仍保留 legacy system row 兼容历史会话', async () => {
     const sessionId = 'session_legacy_only'
-    const messages = await listMessagesWithLazySystemProjection({
+    const messages = await listMessagesWithTraceProjection({
       async listMessages() {
         return [
           {
