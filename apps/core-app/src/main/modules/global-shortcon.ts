@@ -1,4 +1,4 @@
-import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
+import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import process from 'node:process'
 import {
@@ -10,6 +10,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { BrowserWindow, globalShortcut } from 'electron'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
+import { resolveMainRuntime } from '../core/runtime-accessor'
 import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
 import { getPermissionModule } from './permission'
@@ -125,14 +126,17 @@ export class ShortcutModule extends BaseModule {
     })
   }
 
-  onInit(): MaybePromise<void> {
+  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     const storage = useMainStorage()
     this.storage = new ShortcutStorage({
       getConfig: storage.getConfig.bind(storage),
       saveConfig: storage.saveConfig.bind(storage)
     })
     this.registerBeforeQuitTeardownListener()
-    this.setupIpcListeners()
+    const runtime = resolveMainRuntime(ctx, 'ShortcutModule.onInit')
+    this.setupIpcListeners(
+      getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
+    )
     this.reregisterAllShortcuts()
   }
 
@@ -147,10 +151,7 @@ export class ShortcutModule extends BaseModule {
   /**
    * Sets up IPC listeners for renderer processes to call.
    */
-  private setupIpcListeners(): void {
-    const channel = $app.channel
-    const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
-
+  private setupIpcListeners(transport: ReturnType<typeof getTuffTransportMain>): void {
     transport.on(shortconUpdateEvent, (data) => {
       const { id, accelerator, enabled } = data
       return this.updateShortcut(id, accelerator, enabled)

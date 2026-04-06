@@ -56,6 +56,7 @@ export class TrayManager extends BaseModule {
 
   async onInit(ctx: ModuleInitContext<any>): Promise<void> {
     this.touchApp = (ctx.runtime?.app ?? ctx.app) as TrayTouchAppRuntime
+    this.menuBuilder.setTouchApp(this.touchApp as TrayTouchAppRuntime & { channel: unknown })
     this.trayExperimentalEnabled = this.isTrayExperimentalEnabled()
     if (!this.trayExperimentalEnabled) {
       console.info('[TrayManager] Tray is experimental and disabled by default.')

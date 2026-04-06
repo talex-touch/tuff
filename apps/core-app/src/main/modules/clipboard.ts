@@ -3149,6 +3149,7 @@ export class ClipboardModule extends BaseModule {
     this.db = databaseModule.getAuxDb()
     this.transportChannel =
       ctx.runtime?.channel ?? (ctx.app as { channel?: unknown } | null | undefined)?.channel
+    ocrService.setTransportChannel(this.transportChannel)
     this.clipboardHelper = new ClipboardHelper()
     this.setupPollingSubscriptions()
     this.setupPowerListeners()

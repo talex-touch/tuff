@@ -26,6 +26,25 @@ const resolveKeyManager = (channel: unknown): unknown =>
  * ```
  */
 export class TrayMenuBuilder {
+  private touchApp: {
+    window: { window: Electron.BrowserWindow }
+    channel: unknown
+  } | null = null
+
+  setTouchApp(touchApp: { window: { window: Electron.BrowserWindow }; channel: unknown }): void {
+    this.touchApp = touchApp
+  }
+
+  private requireTouchApp(): {
+    window: { window: Electron.BrowserWindow }
+    channel: unknown
+  } {
+    if (!this.touchApp) {
+      throw new Error('[TrayMenuBuilder] Touch app runtime is not initialized')
+    }
+    return this.touchApp
+  }
+
   private openSystemTerminal(): void {
     try {
       if (process.platform === 'darwin') {
@@ -81,7 +100,7 @@ export class TrayMenuBuilder {
     return {
       label: state.windowVisible ? t('tray.hideWindow') : t('tray.showWindow'),
       click: () => {
-        const mainWindow = $app.window.window
+        const mainWindow = this.requireTouchApp().window.window
         if (mainWindow.isVisible()) {
           mainWindow.hide()
         } else {
@@ -113,9 +132,10 @@ export class TrayMenuBuilder {
             ? t('tray.downloadCenterWithCount', { count: state.activeDownloads })
             : t('tray.downloadCenter'),
         click: () => {
-          const mainWindow = $app.window.window
+          const touchApp = this.requireTouchApp()
+          const mainWindow = touchApp.window.window
           mainWindow.show()
-          const channel = $app.channel
+          const channel = touchApp.channel
           const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
           tx.sendTo(mainWindow.webContents, AppEvents.window.openDownloadCenter, undefined).catch(
             () => {}
@@ -135,9 +155,10 @@ export class TrayMenuBuilder {
       {
         label: t('tray.clipboardHistory'),
         click: () => {
-          const mainWindow = $app.window.window
+          const touchApp = this.requireTouchApp()
+          const mainWindow = touchApp.window.window
           mainWindow.show()
-          const channel = $app.channel
+          const channel = touchApp.channel
           const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
           tx.sendTo(mainWindow.webContents, AppEvents.window.navigate, {
             path: '/details'
@@ -153,9 +174,10 @@ export class TrayMenuBuilder {
       {
         label: t('tray.settings'),
         click: () => {
-          const mainWindow = $app.window.window
+          const touchApp = this.requireTouchApp()
+          const mainWindow = touchApp.window.window
           mainWindow.show()
-          const channel = $app.channel
+          const channel = touchApp.channel
           const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
           tx.sendTo(mainWindow.webContents, AppEvents.window.navigate, {
             path: '/setting'

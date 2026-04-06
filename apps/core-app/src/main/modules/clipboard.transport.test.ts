@@ -196,7 +196,7 @@ vi.mock('../core/eventbus/touch-event', () => ({
 
 import { ClipboardModule } from './clipboard'
 
-type ClipboardModuleTestHandle = ClipboardModule & {
+type ClipboardModuleTestHandle = {
   transport: {
     on: ReturnType<typeof vi.fn>
     onStream: ReturnType<typeof vi.fn>
@@ -217,7 +217,7 @@ describe('ClipboardModule transport registration', () => {
   it('只注册 typed clipboard transport handlers，不再注册 legacy raw bridge', () => {
     const on = vi.fn(() => () => {})
     const onStream = vi.fn(() => () => {})
-    const module = new ClipboardModule() as ClipboardModuleTestHandle
+    const module = new ClipboardModule() as unknown as ClipboardModuleTestHandle
 
     module.transport = { on, onStream }
     module.registerTypedClipboardQueryHandlers()
@@ -225,10 +225,9 @@ describe('ClipboardModule transport registration', () => {
     module.registerTypedClipboardReadHandlers()
     module.registerTypedClipboardStreamHandlers()
 
-    const registeredEvents = [
-      ...on.mock.calls.map(([event]) => event.toString()),
-      ...onStream.mock.calls.map(([event]) => event.toString())
-    ]
+    const registeredEvents = [...on.mock.calls, ...onStream.mock.calls].map((call) =>
+      String((call as unknown[])[0])
+    )
 
     expect(registeredEvents).toEqual([
       ClipboardEvents.getLatest.toString(),

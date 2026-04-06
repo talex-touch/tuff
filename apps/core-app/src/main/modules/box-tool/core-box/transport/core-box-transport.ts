@@ -1,7 +1,7 @@
 import type { TouchApp } from '../../../../core/touch-app'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { genTouchApp } from '../../../../core'
+import { getRegisteredMainRuntime } from '../../../../core/runtime-accessor'
 
 type Handler<TPayload> = (payload: TPayload) => void | TPayload
 type TransportScope = 'main' | 'plugin'
@@ -21,7 +21,7 @@ export class CoreBoxTransport {
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
-      this._touchApp = genTouchApp()
+      this._touchApp = getRegisteredMainRuntime('core-box').app
     }
     return this._touchApp
   }

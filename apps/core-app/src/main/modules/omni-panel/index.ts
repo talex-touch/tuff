@@ -1185,10 +1185,8 @@ export class OmniPanelModule extends BaseModule {
 
   private notifyFeatureRefresh(reason: OmniPanelFeatureRefreshPayload['reason']): void {
     if (!this.transport) return
-    const wireReason: OmniPanelFeatureRefreshPayload['reason'] =
-      reason === 'legacy-toggle' ? 'toggle' : reason
     this.transport.broadcast(omniPanelFeatureRefreshEvent, {
-      reason: wireReason,
+      reason,
       updatedAt: this.registryUpdatedAt
     })
   }

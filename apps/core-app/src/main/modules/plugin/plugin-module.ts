@@ -41,6 +41,7 @@ import {
   TalexEvents,
   touchEventBus
 } from '../../core/eventbus/touch-event'
+import { registerMainRuntime, resolveMainRuntime } from '../../core/runtime-accessor'
 import { TouchWindow } from '../../core/touch-window'
 import { createDbUtils } from '../../db/utils'
 import { useAliveTarget, useAliveWebContents } from '../../hooks/use-electron-guard'
@@ -1739,6 +1740,7 @@ export class PluginModule extends BaseModule {
 
   onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     const { file } = ctx
+    registerMainRuntime('plugin-module', resolveMainRuntime(ctx, 'PluginModule.onInit'))
     const ioRuntime = resolvePluginModuleIoRuntime(ctx)
     this.transport = ioRuntime.transport
     TouchPlugin.setTransport(ioRuntime.transport)

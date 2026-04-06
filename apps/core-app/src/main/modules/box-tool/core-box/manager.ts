@@ -8,7 +8,7 @@ import { TuffSearchResultBuilder } from '@talex-touch/utils'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { genTouchApp } from '../../../core'
+import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
 import { getMainConfig } from '../../storage'
 import { SearchEngineCore } from '../search-engine/search-core'
@@ -122,7 +122,7 @@ export class CoreBoxManager {
         if (!appSetting?.beginner?.init) {
           console.warn('[CoreBoxManager] Initialization not complete, cannot open CoreBox')
           // Show main window to guide user to complete initialization
-          const mainWindow = $app.window.window
+          const mainWindow = getRegisteredMainRuntime('core-box').app.window.window
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.show()
             mainWindow.focus()
@@ -189,10 +189,14 @@ export class CoreBoxManager {
   }
 
   public exitUIMode(): void {
-    if ((globalThis.$app as { isQuitting?: boolean } | undefined)?.isQuitting === true) {
-      this._isUIMode = false
-      this.currentFeature = null
-      return
+    try {
+      if (getRegisteredMainRuntime('core-box').app.isQuitting === true) {
+        this._isUIMode = false
+        this.currentFeature = null
+        return
+      }
+    } catch {
+      // runtime may already be torn down during shutdown
     }
 
     if (this._isUIMode) {
@@ -203,7 +207,7 @@ export class CoreBoxManager {
 
       const coreBoxWindow = windowManager.current?.window
       if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
-        const channel = genTouchApp().channel
+        const channel = getRegisteredMainRuntime('core-box').channel
         const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
         const transport = getTuffTransportMain(channel, keyManager)
         void transport.sendTo(coreBoxWindow.webContents, CoreBoxEvents.ui.uiModeExited, {
