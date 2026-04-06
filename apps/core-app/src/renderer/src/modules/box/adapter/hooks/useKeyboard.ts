@@ -31,6 +31,11 @@ type TuffActionLike = TuffAction & {
   group?: string
 }
 
+const revealInFolderTitle =
+  process.platform === 'darwin' ? '在 Finder 中显示' : '在文件管理器中显示'
+const revealInFolderSubtitle =
+  process.platform === 'darwin' ? '在 Finder 中打开' : '在文件管理器中打开'
+
 /** Build section ranges from sections config */
 function buildSectionRanges(sections: TuffSection[]): SectionRange[] {
   const ranges: SectionRange[] = []
@@ -235,8 +240,8 @@ function generateBuiltinActions(item: TuffItem): MetaAction[] {
       id: 'reveal-in-finder',
       render: {
         basic: {
-          title: '在 Finder 中显示',
-          subtitle: '在文件管理器中打开',
+          title: revealInFolderTitle,
+          subtitle: revealInFolderSubtitle,
           icon: { type: 'class', value: 'i-ri-folder-open-line' }
         },
         shortcut: isMac ? '⌘⇧F' : 'Ctrl+Shift+F',
