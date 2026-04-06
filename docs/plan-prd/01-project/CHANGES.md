@@ -21,6 +21,36 @@
 
 ---
 
+### refactor(core-app): 收口 hard-cut 兼容层并显式暴露权限后端降级态
+
+- `apps/core-app/src/main/core/deprecated-global-app.ts`
+  - 移除未使用的全局 `$app` 读取入口，仅保留模块上下文里的 channel 解析函数，避免 runtime 再回退到全局 app。
+- `apps/core-app/src/main/modules/permission/permission-store.ts`
+  - 删除 `json-readonly` 式静默兜底路径，SQLite backend 不可用时统一进入 `degraded/backend-unavailable`。
+  - `grant/revoke/grantSession/clearAuditLogs` 等变更路径改为显式失败并回滚内存态，不再出现“本次成功、重启丢失”的假象。
+- `apps/core-app/src/main/modules/permission/index.ts`
+  - 权限状态、性能诊断和变更响应统一回传 `backendState`，供设置页和插件页显式展示后端降级态。
+- `apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue`
+  - 设置页新增权限后端不可写告警，后端降级时禁用授予/撤销/清空等变更操作，并直出失败原因。
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginPermissions.vue`
+  - 插件权限页补充 backend unavailable 状态说明与失败提示，禁用需要写入后端的切换和批量操作。
+- `apps/core-app/src/main/channel/common.ts`
+  - 停止注册 legacy `system:get-active-app` 运行时桥接。
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+  - 停止注册 legacy feature toggle 事件，仅保留现代 transport 事件。
+- `apps/core-app/src/main/modules/flow-bus/native-share.ts`
+  - Windows/Linux 文案改为 mail-only fallback，避免继续暗示存在完整原生分享能力。
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/context-provider.ts`
+  - 清掉固定 `isOnline=true / batteryLevel=100 / isDNDEnabled=false` 的假 system context；探测不到时返回空，并仅在真实 system signal 存在时参与 cache key。
+- `apps/core-app/src/main/modules/box-tool/addon/app-addon.ts`
+  - 标记为 internal legacy app cache shim，避免继续扩散到主执行链。
+- 新增/扩展测试：
+  - `apps/core-app/src/main/modules/permission/permission-store.test.ts`
+  - `apps/core-app/src/main/channel/common.test.ts`
+  - `apps/core-app/src/main/modules/omni-panel/index.test.ts`
+  - `apps/core-app/src/main/modules/tray/tray-manager.test.ts`
+  - `apps/core-app/src/renderer/src/modules/update/platform-target.test.ts`
+
 ## 2026-04-03
 
 ### refactor(pilot-stream): DeepAgent / Pilot 收敛为 trace-first 单流
