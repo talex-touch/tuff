@@ -2725,7 +2725,7 @@
       "pin": "固定到推荐",
       "unpin": "取消固定",
       "copyTitle": "复制名称",
-      "revealInFinder": "在 Finder 中显示",
+      "revealInFinder": "在文件管理器中显示",
       "flowTransfer": "流转到其他插件"
     },
     "systemActions": {
