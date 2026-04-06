@@ -1,13 +1,33 @@
 # 变更日志
 
-> 更新时间: 2026-04-03
-> 说明: 主文件仅保留近 30 天（2026-03-05 ~ 2026-04-03）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-06
+> 说明: 主文件仅保留近 30 天（2026-03-07 ~ 2026-04-06）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
 - 当前主线：`2.4.9-beta.4` 基线下，下一动作统一为 `Nexus 设备授权风控`。
 - 历史主线：`2.4.8 OmniPanel Gate`、`v2.4.7 Gate A/B/C/D/E` 均已收口（historical）。
 - 旧记录入口：见文末“历史索引导航”。
+
+## 2026-04-06
+
+### docs(pilot): 补充单流完整流程图与运行时审计结论
+
+- `docs/plan-prd/02-architecture/pilot-single-stream-runtime.md`
+  - 补充 Pilot / DeepAgent 单流运行时完整 Mermaid 流程图，明确 `intent gate -> strict pre-read memory -> runtime persist-first -> shared projection -> frontend strict seq consume` 的主链顺序。
+  - 修正文档中的 seq 合同表述，明确 `stream.started / stream.heartbeat / replay.* / run.metrics / done / error` 为可无 seq 的豁免事件，其余可恢复事件必须带稳定 `seq`。
+  - 增加实现审计结论与已知边界，显式标注 `pilot-memory-tool.ts` 不得重新接回标准 Pilot runtime 主路径，并补充前端本地状态不得伪造成 trace event。
+- `docs/INDEX.md`
+  - 刷新 Pilot 单流运行时文档入口说明，标记该文档已包含“完整流程图 + 审计结论”，作为后续排查的权威入口。
+
+### ref(pilot): 统一 messages.get 的 trace projection 命名
+
+- `apps/pilot/server/utils/pilot-system-message-response.ts`
+  - 将 `listMessagesWithLazySystemProjection()` 重命名为 `listMessagesWithTraceProjection()`，使函数名与当前“始终 trace projection + legacy 兼容”的真实行为一致。
+- `apps/pilot/server/api/chat/sessions/[sessionId]/messages.get.ts`
+- `apps/pilot/server/api/v1/chat/sessions/[sessionId]/messages.get.ts`
+- `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
+  - 同步更新调用点与测试命名，避免后续维护时误以为仍存在旧 lazy 补 system 的双轨语义。
 
 ## 2026-04-04
 
