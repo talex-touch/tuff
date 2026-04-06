@@ -1,6 +1,6 @@
 # Pilot 单流运行时说明
 
-> 更新时间: 2026-04-03
+> 更新时间: 2026-04-06
 > 范围: `apps/pilot` + `packages/tuff-intelligence` 的 Pilot/DeepAgent 主聊天链路
 
 ## 1. 目标
@@ -17,13 +17,70 @@ Pilot 当前主路径统一采用 trace-first 单流模型：
 2. intent / memory / websearch / planning 存在 system row、trace、前端本地卡片三轨并行，刷新后容易重复或错序。
 3. 记忆读取与联网决策存在 runtime 旁路，classifier 失败时容易和前置判定冲突。
 
+## 1.1 完整流程图
+
+```mermaid
+flowchart TD
+  A["前端发起请求<br/>message / attachments / fromSeq"] --> B["stream.post.ts<br/>resolvePilotIntent"]
+  B --> C["意图判定结果<br/>websearchRequired / memoryReadDecision / toolDecision"]
+  C --> D["选择路由与运行时<br/>resolvePilotRoutingSelection + createPilotRuntime"]
+
+  D --> E{"fromSeq 是否存在"}
+  E -->|是| F["replayTrace()<br/>trace -> mapPilotReplayTraceToStreamEvent"]
+  E -->|否| G["runTurn()"]
+
+  F --> H["createPilotStreamEmitter.emit()<br/>非豁免事件必须有 seq"]
+  G --> I["runtime.onMessage()"]
+
+  I --> J["AbstractAgentRuntime.persistEvent()"]
+  J --> K["assistant.delta 缓冲 flush<br/>或普通事件 appendTrace"]
+  K --> L["createPersistedEvent()<br/>写入 meta.seq + meta.traceId"]
+  L --> M["yield persisted envelope"]
+
+  M --> N["mapAgentEnvelopeToPilotStreamEvent()"]
+  N --> H
+
+  H --> O["SSE send"]
+  O --> P["前端 applyStreamEvent()"]
+  P --> Q{"事件是否需要 seq"}
+  Q -->|缺 seq| R["丢弃并 warning"]
+  Q -->|有 seq| S["appendTraceSorted / upsertSystemMessageFromStreamEvent"]
+
+  S --> T["system/runtime 卡片<br/>仅由 trace-derived event 投影"]
+  S --> U["assistant / thinking / tool / run card 顺序渲染"]
+
+  B --> V{"memoryReadDecision.shouldRead"}
+  V -->|true| W["turn 开始前一次性 listPilotMemoryFactsByUser"]
+  V -->|false| X["不注入 memory context<br/>不开放 getmemory 主路径"]
+
+  W --> D
+  X --> D
+
+  C --> Y{"classifier 成功?"}
+  Y -->|是| Z["needs_websearch=true/false 直接生效"]
+  Y -->|否| AA["启发式兜底<br/>最新/今天/查一下/链接/实时"]
+  Z --> D
+  AA --> D
+
+  AB["messages.get"] --> AC["listMessagesWithTraceProjection()"]
+  AC --> AD["messages 表只保留 user/assistant"]
+  AC --> AE["system message 永远由 trace projection 生成"]
+```
+
 ## 2. 单流合同
 
 ### 2.1 Trace 是唯一权威源
 
 - 所有可恢复事件必须先写入 trace，获得稳定 `seq` 后，才能进入 live SSE。
-- `stream.heartbeat` 是纯传输保活事件，不参与持久化，也允许没有 `seq`。
-- 其他可重放事件必须有 `seq`，包括：
+- 以下事件允许没有 `seq`，并且不能被当前端可恢复 trace 行使用：
+  - `stream.started`
+  - `stream.heartbeat`
+  - `replay.started`
+  - `replay.finished`
+  - `run.metrics`
+  - `done`
+  - `error`
+- 其他可重放 / 可恢复事件必须有 `seq`，包括：
   - `assistant.delta`
   - `thinking.delta`
   - `assistant.final`
@@ -33,8 +90,7 @@ Pilot 当前主路径统一采用 trace-first 单流模型：
   - `websearch.*`
   - `run.audit`
   - `turn.*`
-  - `replay.*`
-  - `stream.started`（仅在本轮会持久化生命周期时）
+  - 真实 `planning.*`
 
 ### 2.2 Runtime 发射顺序
 
@@ -63,6 +119,17 @@ Pilot 当前主路径统一采用 trace-first 单流模型：
 
 - `assistant.delta(seq=n)` 一定先于对应的 `assistant.final(seq=n+1)`。
 - 前端收到的 delta 文本，就是 trace 中同 seq 的真实文本。
+
+### 2.4 服务端与前端的共同合同
+
+- 包层权威源固定为 `@talex-touch/tuff-intelligence/pilot`。
+- replay / live / projection 共用同一套：
+  - `PilotStreamEvent`
+  - `normalizePilotStreamSeq`
+  - `shouldPilotStreamEventRequireSeq`
+  - `mapPilotReplayTraceToStreamEvent`
+  - `projectPilotSystemMessagesFromTraces`
+- `apps/pilot` 仅保留 UI 视图模型、输入组件与页面状态，不再维护第二套 Pilot 领域 contract。
 
 ## 3. Intent / Tool / Websearch
 
@@ -171,7 +238,26 @@ UI 仍然保留运行卡 / 工具卡，但只消费 trace-derived event，不再
 - `messages.get` 读取层兼容 legacy system row，但优先使用 trace-projected system message。
 - legacy 首页聊天链路继续兼容旧 UI 容器，但事件排序与运行卡映射复用共享单流 helper。
 
-## 9. 关键文件
+## 9. 审计结论与已知边界
+
+### 9.1 当前审计结论
+
+- 主路径已经满足 trace-first 单流目标，没有发现阻断级双轨回流问题。
+- runtime 已经是“先 append trace，再 yield persisted envelope”，live SSE 不再领先于 trace。
+- classifier 失败时的联网判定已经改成启发式兜底，“不要联网 / offline only”也会同时压住 tool fallback。
+- strict pre-read memory 已经成立，标准 Pilot runtime 主路径不会再自行注入 `getmemory`。
+- `messages.get` 已经是 trace projection 优先，system/runtime card 不再依赖 eager system row。
+
+### 9.2 当前仍需注意的边界
+
+1. `apps/pilot/server/utils/pilot-memory-tool.ts`
+   - 该文件当前仅为 helper 与测试覆盖，不在标准 Pilot runtime 主路径内。
+   - 后续若有人重新把它接回默认 runtime，会破坏 strict pre-read memory 约束。
+2. 前端本地状态
+   - `paused_disconnect`、`reconnectHint` 等状态仍应只留在 UI 层。
+   - 不能再把本地断流/超时伪造成 trace event 或 system card。
+
+## 10. 关键文件
 
 - `packages/tuff-intelligence/src/runtime/agent-runtime.ts`
 - `packages/tuff-intelligence/src/business/pilot/stream.ts`

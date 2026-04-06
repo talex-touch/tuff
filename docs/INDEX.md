@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-04-04  
+> 更新时间：2026-04-06  
 > 本页仅保留入口与高价值快照；历史细节以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主要入口
@@ -12,7 +12,7 @@
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` - PRD 质量基线与门禁约束
 - `docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md` - 文档盘点与下一步路线（执行锚点）
 - `docs/plan-prd/02-architecture/UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md` - Legacy/兼容/结构治理统一实施 PRD（单一蓝图）
-- `docs/plan-prd/02-architecture/pilot-single-stream-runtime.md` - Pilot / DeepAgent 单流运行时与包级复用基线
+- `docs/plan-prd/02-architecture/pilot-single-stream-runtime.md` - Pilot / DeepAgent 单流运行时权威说明（含完整流程图、seq 合同、审计结论）
 - `docs/plan-prd/02-architecture/intelligence-power-generic-api-prd.md` - Intelligence 能力路由与 Provider 抽象入口
 - `docs/plan-prd/01-project/CHANGES.md` - 全历史变更记录（唯一历史源）
 
