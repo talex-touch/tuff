@@ -56,7 +56,7 @@ function sortMessagesByTimeline(messages: MessageLike[]): MessageLike[] {
   })
 }
 
-export async function listMessagesWithLazySystemProjection(
+export async function listMessagesWithTraceProjection(
   store: RuntimeStoreLike,
   sessionId: string,
 ): Promise<MessageLike[]> {
