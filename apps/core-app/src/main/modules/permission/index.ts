@@ -51,13 +51,15 @@ export class PermissionModule extends BaseModule {
     })
   }
 
-  onInit({ file }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
+  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     // Initialize permission store
-    this.store = new PermissionStore(file.dirPath!)
-    return this.initializeModule()
+    this.store = new PermissionStore(ctx.file.dirPath!)
+    const channel =
+      ctx.runtime?.channel ?? (ctx.app as { channel?: unknown } | null | undefined)?.channel
+    return this.initializeModule(channel)
   }
 
-  private async initializeModule(): Promise<void> {
+  private async initializeModule(channel: unknown): Promise<void> {
     await this.store.initialize()
 
     // Initialize permission guard
@@ -75,9 +77,9 @@ export class PermissionModule extends BaseModule {
     }
 
     // Register IPC channels
-    if ($app.channel) {
-      const keyManager = resolveKeyManager($app.channel)
-      this.transport = getTuffTransportMain($app.channel, keyManager)
+    if (channel) {
+      const keyManager = resolveKeyManager(channel)
+      this.transport = getTuffTransportMain(channel, keyManager)
     }
     this.registerChannels()
 
@@ -85,6 +87,16 @@ export class PermissionModule extends BaseModule {
     setPermissionModule(this)
 
     permLog.success(`Permission module initialized (${this.store.getBackendMode()})`)
+  }
+
+  private buildMutationFailure(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    permLog.warn(`Permission mutation rejected: ${message}`)
+    return {
+      success: false,
+      error: message,
+      backendState: this.store.getBackendStatus()
+    }
   }
 
   private registerChannels(): void {
@@ -105,63 +117,86 @@ export class PermissionModule extends BaseModule {
         optional: payload.optional || []
       }
       this.store.setDeclaredPermissions(payload.pluginId, declared)
-      return this.store.getPluginPermissionStatus(payload.pluginId, payload.sdkapi, declared)
+      return {
+        ...this.store.getPluginPermissionStatus(payload.pluginId, payload.sdkapi, declared),
+        backendState: this.store.getBackendStatus()
+      }
     })
 
     // Grant permission
     transport.on(PermissionEvents.api.grant, async (payload) => {
       if (!payload?.pluginId || !payload?.permissionId) return { success: false }
-      await this.store.grant(payload.pluginId, payload.permissionId, payload.grantedBy || 'user')
-      this.broadcastUpdate(payload.pluginId)
-      return { success: true }
+      try {
+        await this.store.grant(payload.pluginId, payload.permissionId, payload.grantedBy || 'user')
+        this.broadcastUpdate(payload.pluginId)
+        return { success: true, backendState: this.store.getBackendStatus() }
+      } catch (error) {
+        return this.buildMutationFailure(error)
+      }
     })
 
     // Revoke permission
     transport.on(PermissionEvents.api.revoke, async (payload) => {
       if (!payload?.pluginId || !payload?.permissionId) return { success: false }
-      await this.store.revoke(payload.pluginId, payload.permissionId)
-      this.broadcastUpdate(payload.pluginId)
-      return { success: true }
+      try {
+        await this.store.revoke(payload.pluginId, payload.permissionId)
+        this.broadcastUpdate(payload.pluginId)
+        return { success: true, backendState: this.store.getBackendStatus() }
+      } catch (error) {
+        return this.buildMutationFailure(error)
+      }
     })
 
     // Grant multiple permissions at once
     transport.on(PermissionEvents.api.grantMultiple, async (payload) => {
       if (!payload?.pluginId || !payload?.permissionIds) return { success: false }
-      for (const permissionId of payload.permissionIds) {
-        await this.store.grant(payload.pluginId, permissionId, payload.grantedBy || 'user')
+      try {
+        for (const permissionId of payload.permissionIds) {
+          await this.store.grant(payload.pluginId, permissionId, payload.grantedBy || 'user')
+        }
+        this.broadcastUpdate(payload.pluginId)
+
+        // Notify plugin module to retry enabling the plugin
+        touchEventBus.emit(
+          TalexEvents.PERMISSION_GRANTED,
+          new PermissionGrantedEvent(payload.pluginId)
+        )
+
+        return { success: true, backendState: this.store.getBackendStatus() }
+      } catch (error) {
+        return this.buildMutationFailure(error)
       }
-      this.broadcastUpdate(payload.pluginId)
-
-      // Notify plugin module to retry enabling the plugin
-      touchEventBus.emit(
-        TalexEvents.PERMISSION_GRANTED,
-        new PermissionGrantedEvent(payload.pluginId)
-      )
-
-      return { success: true }
     })
 
     // Grant session-only permissions (memory only, not persisted)
     transport.on(PermissionEvents.api.grantSession, async (payload) => {
       if (!payload?.pluginId || !payload?.permissionIds) return { success: false }
-      this.store.grantSessionMultiple(payload.pluginId, payload.permissionIds)
-      this.broadcastUpdate(payload.pluginId)
+      try {
+        await this.store.grantSessionMultiple(payload.pluginId, payload.permissionIds)
+        this.broadcastUpdate(payload.pluginId)
 
-      // Notify plugin module to retry enabling the plugin
-      touchEventBus.emit(
-        TalexEvents.PERMISSION_GRANTED,
-        new PermissionGrantedEvent(payload.pluginId)
-      )
+        // Notify plugin module to retry enabling the plugin
+        touchEventBus.emit(
+          TalexEvents.PERMISSION_GRANTED,
+          new PermissionGrantedEvent(payload.pluginId)
+        )
 
-      return { success: true }
+        return { success: true, backendState: this.store.getBackendStatus() }
+      } catch (error) {
+        return this.buildMutationFailure(error)
+      }
     })
 
     // Revoke all permissions for a plugin
     transport.on(PermissionEvents.api.revokeAll, async (payload) => {
       if (!payload?.pluginId) return { success: false }
-      await this.store.revokeAll(payload.pluginId)
-      this.broadcastUpdate(payload.pluginId)
-      return { success: true }
+      try {
+        await this.store.revokeAll(payload.pluginId)
+        this.broadcastUpdate(payload.pluginId)
+        return { success: true, backendState: this.store.getBackendStatus() }
+      } catch (error) {
+        return this.buildMutationFailure(error)
+      }
     })
 
     // Check if plugin has specific permission
@@ -193,13 +228,20 @@ export class PermissionModule extends BaseModule {
 
     // Clear audit logs
     transport.on(PermissionEvents.api.clearAuditLogs, async () => {
-      this.store.clearAuditLogs()
-      return { success: true }
+      try {
+        await this.store.clearAuditLogs()
+        return { success: true, backendState: this.store.getBackendStatus() }
+      } catch (error) {
+        return this.buildMutationFailure(error)
+      }
     })
 
     // Get performance statistics (Phase 5 verification)
     transport.on(PermissionEvents.api.getPerformance, async () => {
-      return this.guard.getPerformanceStats()
+      return {
+        ...this.guard.getPerformanceStats(),
+        backendState: this.store.getBackendStatus()
+      }
     })
 
     // Reset performance statistics
@@ -213,11 +255,7 @@ export class PermissionModule extends BaseModule {
    * Broadcast permission update to all renderer windows
    */
   private broadcastUpdate(pluginId: string): void {
-    const transport =
-      this.transport ??
-      ($app.channel ? getTuffTransportMain($app.channel, resolveKeyManager($app.channel)) : null)
-
-    transport?.broadcast(PermissionEvents.push.updated, { pluginId })
+    this.transport?.broadcast(PermissionEvents.push.updated, { pluginId })
   }
 
   /**
@@ -277,8 +315,8 @@ export class PermissionModule extends BaseModule {
     this.broadcastUpdate(pluginId)
   }
 
-  grantSession(pluginId: string, permissions: string[]): void {
-    this.store.grantSessionMultiple(pluginId, permissions)
+  async grantSession(pluginId: string, permissions: string[]): Promise<void> {
+    await this.store.grantSessionMultiple(pluginId, permissions)
     this.broadcastUpdate(pluginId)
   }
 
