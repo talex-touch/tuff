@@ -17,14 +17,14 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelude'
 import { app, WebContentsView } from 'electron'
 import fse from 'fs-extra'
-import { genTouchApp } from '../../core'
+import { getRegisteredMainRuntime } from '../../core/runtime-accessor'
 import { useAliveWebContents } from '../../hooks/use-electron-guard'
 import { createLogger } from '../../utils/logger'
 import { pluginModule } from '../plugin/plugin-module'
 import { usePluginInjections } from '../plugin/runtime/plugin-injections'
 
 const coreBoxTriggerEvent = defineRawEvent<{ [key: string]: unknown }, void>('core-box:trigger')
-type LegacyMainChannelType = Parameters<ReturnType<typeof genTouchApp>['channel']['broadcastTo']>[1]
+type LegacyMainChannelType = 'main'
 const LEGACY_CHANNEL_MAIN = 'main' as LegacyMainChannelType
 const divisionBoxSessionLog = createLogger('DivisionBoxSession')
 
@@ -255,7 +255,7 @@ export class DivisionBoxSession {
       }
 
       // Notify renderer about DivisionBox trigger via unified channel
-      const channel = genTouchApp().channel
+      const channel = getRegisteredMainRuntime('division-box').channel
       channel.broadcastTo(
         this.touchWindow.window,
         LEGACY_CHANNEL_MAIN,
@@ -471,7 +471,7 @@ export class DivisionBoxSession {
 
     // Send trigger to notify renderer about DivisionBox mode
     // This populates windowState.divisionBox in the renderer
-    const channel = genTouchApp().channel
+    const channel = getRegisteredMainRuntime('division-box').channel
     channel.broadcastTo(
       this.touchWindow.window,
       LEGACY_CHANNEL_MAIN,

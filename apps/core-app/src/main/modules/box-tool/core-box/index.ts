@@ -5,9 +5,13 @@ import type { TalexEvents } from '../../../core/eventbus/touch-event'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { genTouchApp } from '../../../core'
+import {
+  clearRegisteredMainRuntime,
+  getRegisteredMainRuntime,
+  registerMainRuntime,
+  resolveMainRuntime
+} from '../../../core/runtime-accessor'
 import { createLogger } from '../../../utils/logger'
 import { devProcessManager } from '../../../utils/dev-process-manager'
 import { perfMonitor } from '../../../utils/perf-monitor'
@@ -27,13 +31,15 @@ const COREBOX_SHORTCUT_OWNER = 'module.corebox'
 
 export { getCoreBoxWindow } from './window'
 
-const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
-  channel.keyManager ?? channel
-
 let lastScreenId: number | undefined
 
-const isAppQuitting = (): boolean =>
-  (globalThis.$app as { isQuitting?: boolean } | undefined)?.isQuitting === true
+const isAppQuitting = (): boolean => {
+  try {
+    return getRegisteredMainRuntime('core-box').app.isQuitting === true
+  } catch {
+    return false
+  }
+}
 
 export class CoreBoxModule extends BaseModule {
   static key: symbol = Symbol.for('CoreBox')
@@ -52,8 +58,9 @@ export class CoreBoxModule extends BaseModule {
     })
   }
 
-  async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
-    await $app.moduleManager.loadModule(SearchEngineCore)
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    const runtime = registerMainRuntime('core-box', resolveMainRuntime(ctx, 'CoreBoxModule.onInit'))
+    await (runtime.moduleManager ?? ctx.manager).loadModule(SearchEngineCore)
     await searchLogger.init()
     this.disposeLagBurstSubscription = perfMonitor.onSevereLagBurst((event) => {
       searchLogger.enableBurst(SEARCH_DIAGNOSTICS_BURST_DURATION_MS, 'event-loop-severe-lag')
@@ -68,9 +75,7 @@ export class CoreBoxModule extends BaseModule {
       })
     })
 
-    const channel = genTouchApp().channel
-    const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
-    this.transport = getTuffTransportMain(channel, keyManager)
+    this.transport = runtime.transport
     this.registerTransportHandlers()
 
     coreBoxManager.init()
@@ -88,7 +93,7 @@ export class CoreBoxModule extends BaseModule {
           if (!beginnerState?.init) {
             coreBoxLog.warn('Initialization not complete, CoreBox is disabled')
             // Optionally show a notification or dialog to user
-            const mainWindow = $app.window.window
+            const mainWindow = getRegisteredMainRuntime('core-box').app.window.window
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.show()
               mainWindow.focus()
@@ -170,6 +175,7 @@ export class CoreBoxModule extends BaseModule {
   }
 
   async onDestroy(): Promise<void> {
+    clearRegisteredMainRuntime('core-box')
     shortcutModule.unregisterMainShortcut('core.box.toggle')
     shortcutModule.unregisterMainShortcut('core.box.aiQuickCall')
 

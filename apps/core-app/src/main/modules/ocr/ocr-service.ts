@@ -17,7 +17,6 @@ import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { and, desc, eq, inArray, isNull, lte, lt, or, sql } from 'drizzle-orm'
-import { genTouchApp } from '../../core'
 import type { ScheduleOptions } from '../../db/db-write-scheduler'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import {
@@ -185,6 +184,7 @@ class OcrService {
     | null = null
 
   private channelRegistered = false
+  private transportChannel: unknown = null
   private resolvedWorkerPath: string | null = null
 
   private isWorkerOcrEnabled(): boolean {
@@ -407,7 +407,10 @@ class OcrService {
       return
     }
 
-    const channel = genTouchApp().channel
+    const channel = this.transportChannel
+    if (!channel) {
+      return
+    }
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     const transport = getTuffTransportMain(channel, keyManager)
@@ -1560,13 +1563,19 @@ class OcrService {
   private broadcastMetaUpdate(clipboardId: number, patch: Record<string, unknown>): void {
     // Notify attached plugin UI view if any
     const activePlugin = windowManager.getAttachedPlugin()
-    if (activePlugin?._uniqueChannelKey) {
-      const channel = genTouchApp().channel
+    if (activePlugin?._uniqueChannelKey && this.transportChannel) {
+      const channel = this.transportChannel as {
+        broadcastPlugin: (pluginName: string, eventName: string, arg?: unknown) => void
+      }
       channel.broadcastPlugin(activePlugin.name, coreBoxClipboardMetaUpdatedEvent.toEventName(), {
         clipboardId,
         patch
       })
     }
+  }
+
+  setTransportChannel(channel: unknown): void {
+    this.transportChannel = channel
   }
 
   private async upsertConfig(

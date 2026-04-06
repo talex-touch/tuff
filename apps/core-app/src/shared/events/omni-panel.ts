@@ -117,7 +117,6 @@ export interface OmniPanelFeatureExecuteResponse {
 export type OmniPanelFeatureRefreshReason =
   | 'init'
   | 'toggle'
-  | 'legacy-toggle'
   | 'reorder'
   | 'plugin-install'
   | 'plugin-change'
