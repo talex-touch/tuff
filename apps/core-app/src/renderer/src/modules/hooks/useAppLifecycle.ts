@@ -16,7 +16,7 @@ import { appSetting } from '~/modules/channel/storage/index'
 import { devLog } from '~/utils/dev-log'
 import { useCoreBox } from './core-box'
 import { useStartupInfo } from './useStartupInfo'
-import { useApplicationUpgrade } from './useUpdate'
+import { useUpdateRuntime } from './useUpdateRuntime'
 import { useUrlProcessor } from './useUrlProcessor'
 
 /**
@@ -30,7 +30,7 @@ export function useAppLifecycle() {
    */
   async function executeMainTask(): Promise<void> {
     useUrlProcessor()
-    const { checkApplicationUpgrade, setupUpdateListener } = useApplicationUpgrade()
+    const { checkApplicationUpgrade, setupUpdateListener } = useUpdateRuntime()
 
     setupUpdateListener()
 

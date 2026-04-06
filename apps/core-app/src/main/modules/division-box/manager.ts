@@ -20,7 +20,7 @@ const RESOURCE_LIMITS = {
   /** Maximum number of active DivisionBox instances globally (matches window pool) */
   MAX_ACTIVE_SESSIONS: 5,
 
-  /** Maximum number of WebContentsView instances per session */
+  /** Reserved upper bound for attached views; current runtime flow still attaches at most one. */
   MAX_VIEWS_PER_SESSION: 3,
 
   /** Maximum number of cached keepAlive sessions */
@@ -251,7 +251,7 @@ export class DivisionBoxManager {
 
   /**
    * Creates a new DivisionBox session without attaching a UI view.
-   * Used when transferring an existing WebContentsView from CoreBox.
+   * Used for the current transferred-view flow from CoreBox.
    *
    * @param config - Configuration for the new DivisionBox
    * @param stateChangeCallback - Optional callback for state changes
@@ -393,9 +393,8 @@ export class DivisionBoxManager {
   /**
    * Validates that a session can register a new WebContentsView
    *
-   * Enforces the limit of MAX_VIEWS_PER_SESSION (3) per session.
-   * Note: This is a placeholder for future multi-view support.
-   * Currently, each session only has one WebContentsView.
+   * Enforces the configured upper bound for view attachments.
+   * The current runtime flow still attaches at most one transferred view.
    *
    * @param sessionId - ID of the session
    * @param currentViewCount - Current number of views in the session

@@ -22,7 +22,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { appSetting } from '~/modules/channel/storage'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
-import { useApplicationUpgrade } from '~/modules/hooks/useUpdate'
+import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
 import { getBuildInfo } from '~/utils/build-info'
 
 const { t } = useI18n()
@@ -30,7 +30,7 @@ const transport = useTuffTransport()
 const appSdk = useAppSdk()
 const { packageJson, os, processInfo } = useEnv()
 const { startupInfo } = useStartupInfo()
-const { getUpdateSettings } = useApplicationUpgrade()
+const { getUpdateSettings } = useUpdateRuntime()
 
 const appUpdate = computed(() => Boolean(startupInfo.value?.appUpdate))
 
