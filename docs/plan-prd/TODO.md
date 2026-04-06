@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-03-25
+> 更新时间: 2026-04-06
 
 ---
 
@@ -26,6 +26,18 @@
 ---
 
 ## 🔧 当前执行清单（2 周）
+
+### CoreApp 兼容治理（当前进行中）
+
+- [x] P0 Runtime Accessor / Sync IPC / Active Legacy Bridge hard-cut 主体完成。
+- [x] P1 secure-store dedupe 收口到 `src/main/utils/secure-store.ts`。
+- [x] P1 renderer update runtime 调用方迁移到 update SDK 薄运行时层，runtime 页面不再依赖 `useApplicationUpgrade`。
+- [x] P2 fake prompt / DivisionBox settings 假入口清理完成。
+- [x] P2 production `src` 下 demo/test/doc 文件物理删除，并清理 `components.d.ts` 悬空声明。
+- [x] CoreApp compatibility 验收阻塞解除：
+  - `pnpm -C "apps/core-app" run typecheck` 已通过。
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard.transport.test.ts" "src/main/modules/omni-panel/index.test.ts" "src/main/channel/common.test.ts"` 已通过（`3 files / 17 tests`）。
+  - `rg` 回归扫描确认 runtime 口径仅保留 bootstrap `genTouchApp()`，`sendSync(` / `resolveRuntimeChannel(` / `legacy-toggle` / placeholder demo 命中已清零。
 
 ### A. 文档治理（本轮）
 

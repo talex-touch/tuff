@@ -1,7 +1,7 @@
 # 变更日志
 
 > 更新时间: 2026-04-06
-> 说明: 主文件仅保留近 30 天（2026-03-07 ~ 2026-04-06）详细记录；更早历史已按月归档。
+> 说明: 主文件仅保留近 30 天（2026-03-08 ~ 2026-04-06）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
@@ -41,6 +41,39 @@
 
 ---
 
+## 2026-04-06
+
+### refactor(core-app): 兼容治理继续 hard-cut 并收口 renderer/update 与 placeholder 残留
+
+- `apps/core-app/src/main/channel/common.ts`
+  - secure-store 改为统一复用 `src/main/utils/secure-store.ts`，删除 channel 内部重复的 key/path/read/write/decrypt/encrypt 实现。
+- `apps/core-app/src/main/modules/auth/index.ts`
+  - auth token / machine seed 继续收口到统一 secure-store helper，并移除已无必要的旧 secure-store 依赖代码。
+- `apps/core-app/src/main/modules/file-protocol/index.ts`
+  - tfile 本地文件边界统一切到 `local-file-policy`，不再保留独立 allowed roots / macOS 路径大小写分支实现。
+- `apps/core-app/src/renderer/src/modules/hooks/useUpdateRuntime.ts`
+  - 新增基于 `useUpdateSdk() + useDownloadSdk()` 的非 deprecated runtime hook，负责更新检查、可用更新弹层、下载完成提示、设置读写与安装流程。
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUpdate.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`
+- `apps/core-app/src/renderer/src/modules/hooks/useAppLifecycle.ts`
+- `apps/core-app/src/renderer/src/composables/layout/useLayoutController.ts`
+  - runtime 页面/生命周期不再依赖 `useApplicationUpgrade` 兼容壳，统一切到 update SDK runtime hook。
+- `apps/core-app/src/renderer/src/modules/intelligence/builtin-prompts.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/usePromptManager.ts`
+- `apps/core-app/src/renderer/src/modules/storage/prompt-library.ts`
+  - builtin prompt 改为静态配置源；prompt library 默认不再注入 fake custom prompt 数据。
+- `apps/core-app/src/renderer/src/views/box/DivisionBoxHeader.vue`
+  - 删除 toast-only settings 假入口，避免展示未实现能力。
+- `apps/core-app/src/main/modules/division-box/manager.ts`
+  - 清理 future multi-view placeholder 表述，保持“当前只走已实现 transferred-view 流程”的语义。
+- `apps/core-app/src/renderer/src/components/download/*`
+- `apps/core-app/src/renderer/src/components/tuff/template/*`
+  - 删除 production `src` 中未引用的 `Example/Test/README/VISUAL/IMPLEMENTATION_SUMMARY` 残留文件，并同步清理 `components.d.ts` 里的悬空全局组件声明。
+- 验收：
+  - `pnpm -C "apps/core-app" run typecheck` 已通过。
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard.transport.test.ts" "src/main/modules/omni-panel/index.test.ts" "src/main/channel/common.test.ts"` 已通过（`3 files / 17 tests`）。
+  - `rg` 回归扫描确认 runtime 非测试代码中的 `sendSync(` / `resolveRuntimeChannel(` / `legacy-toggle` 已清零，`genTouchApp()` 仅保留 bootstrap 入口。
+  - `rg` 回归扫描确认 renderer production `src` 下 `UpdatePromptExample/DownloadCenterTest/TuffItemTemplateExample/README/VISUAL/IMPLEMENTATION_SUMMARY` 命中为 0。
 ### refactor(core-app): 收口 hard-cut 兼容层并显式暴露权限后端降级态
 
 - `apps/core-app/src/main/core/deprecated-global-app.ts`
