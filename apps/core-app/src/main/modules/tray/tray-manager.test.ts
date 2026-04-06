@@ -119,15 +119,20 @@ describe('TrayManager', () => {
       hide: vi.fn()
     }
 
-    ;(globalThis as typeof globalThis & { $app: any }).$app = {
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: {
+        window: { window: typeof destroyedWindow }
+        config: { data: Record<string, unknown> }
+        isQuitting: boolean
+        version: string
+      }
+      registerWindowEvents: () => void
+    }
+    trayManager.touchApp = {
       window: { window: destroyedWindow },
       config: { data: {} },
       isQuitting: false,
       version: 'dev'
-    }
-
-    const trayManager = new TrayManager() as unknown as {
-      registerWindowEvents: () => void
     }
     trayManager.registerWindowEvents()
 

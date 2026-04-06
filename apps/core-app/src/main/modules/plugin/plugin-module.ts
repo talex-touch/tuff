@@ -836,7 +836,7 @@ function createPluginModuleInternal(
       if (!pluginId || requiredPermissions.length === 0) return
 
       if (response.grantMode === 'session') {
-        permissionModule.grantSession(pluginId, requiredPermissions)
+        await permissionModule.grantSession(pluginId, requiredPermissions)
         return
       }
       await permissionModule.grantAll(pluginId, requiredPermissions, 'user')
@@ -1163,6 +1163,10 @@ function createPluginModuleInternal(
             skipDataInit: true
           }
         )
+        touchPlugin.setRuntime({
+          rootPath: path.dirname(pluginPath),
+          mainWindowId
+        })
 
         touchPlugin.issues.push({
           type: 'error',
@@ -1189,6 +1193,10 @@ function createPluginModuleInternal(
         const loadStartTime = Date.now()
         const loader = createPluginLoader(pluginName, currentPluginPath)
         const touchPlugin = await loader.load()
+        touchPlugin.setRuntime({
+          rootPath: path.dirname(pluginPath),
+          mainWindowId
+        })
         touchPlugin.markLoadStart()
         touchPlugin._performanceMetrics.loadStartTime = loadStartTime // Set actual start time
         touchPlugin.markLoadEnd()
