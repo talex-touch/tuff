@@ -20,7 +20,11 @@ import { h, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
 import { useI18nText } from '~/modules/lang'
-import { detectUpdateAssetArch, detectUpdateAssetPlatform } from '../update/platform-target'
+import {
+  detectUpdateAssetArch,
+  detectUpdateAssetPlatform,
+  resolveRuntimeUpdateArch
+} from '../update/platform-target'
 import { devLog } from '~/utils/dev-log'
 import { blowMention } from '../mention/dialog-mention'
 import { useAppState } from './useAppStates'
@@ -93,7 +97,15 @@ function normalizeAssetPlatform(
 
 function normalizeAssetArch(archValue: unknown, filename: string): NormalizedArch | null {
   const arch = detectUpdateAssetArch(filename, archValue)
-  return arch === 'unsupported' ? null : arch
+  if (arch === 'x64' || arch === 'arm64') {
+    return arch
+  }
+  if (arch === 'unsupported') {
+    return null
+  }
+
+  const runtimeArch = resolveRuntimeUpdateArch()
+  return runtimeArch === 'x64' || runtimeArch === 'arm64' ? runtimeArch : null
 }
 
 function normalizeReleaseForDownload(release: GitHubRelease): GitHubRelease {
