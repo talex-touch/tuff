@@ -10,8 +10,9 @@ import type { IClipboardItem } from '../clipboard'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import path from 'node:path'
+import { Worker } from 'node:worker_threads'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -99,6 +100,7 @@ const OCR_FAILURE_WINDOW_MS = 10 * 60 * 1000
 const OCR_QUEUE_DISABLE_BASE_MS = 30 * 60 * 1000
 const OCR_QUEUE_DISABLE_MAX_MS = 12 * 60 * 60 * 1000
 const OCR_QUEUE_DISABLE_ESCALATE_WINDOW_MS = 24 * 60 * 60 * 1000
+const OCR_WORKER_TIMEOUT_MS = 30_000
 
 // 重试延迟配置(秒)
 const RETRY_DELAYS: Record<string, number> = {
@@ -120,6 +122,10 @@ function dataUrlToHash(dataUrl: string): string {
 
 function fileHashKey(filePath: string): string {
   return createHash('sha256').update(filePath).digest('hex')
+}
+
+function isDataUrl(value: string): boolean {
+  return /^data:[^,]+,/.test(value)
 }
 
 function estimateDataUrlBytes(dataUrl: string): number {
@@ -179,11 +185,196 @@ class OcrService {
     | null = null
 
   private channelRegistered = false
+  private resolvedWorkerPath: string | null = null
+
+  private isWorkerOcrEnabled(): boolean {
+    const raw = process.env.TUFF_OCR_WORKER_ENABLED
+    if (typeof raw === 'string' && raw.trim().length > 0) {
+      const normalized = raw.trim().toLowerCase()
+      return normalized !== '0' && normalized !== 'false' && normalized !== 'off'
+    }
+    return process.env.NODE_ENV !== 'test'
+  }
+
+  private resolveWorkerPath(): string {
+    if (this.resolvedWorkerPath && existsSync(this.resolvedWorkerPath)) {
+      return this.resolvedWorkerPath
+    }
+
+    const candidateSet = new Set<string>([path.join(__dirname, 'ocr-worker.js')])
+    const resourcesPath = process.resourcesPath
+    if (typeof resourcesPath === 'string' && resourcesPath.length > 0) {
+      candidateSet.add(
+        path.join(resourcesPath, 'app.asar.unpacked', 'out', 'main', 'ocr-worker.js')
+      )
+      candidateSet.add(path.join(resourcesPath, 'app.asar', 'out', 'main', 'ocr-worker.js'))
+      candidateSet.add(path.join(resourcesPath, 'out', 'main', 'ocr-worker.js'))
+    }
+    candidateSet.add(path.resolve(process.cwd(), 'out', 'main', 'ocr-worker.js'))
+
+    const candidates = Array.from(candidateSet)
+    const found = candidates.find((candidatePath) => existsSync(candidatePath))
+    if (!found) {
+      throw new Error(`[OCR Worker] Worker bundle missing. Tried: ${candidates.join(', ')}`)
+    }
+
+    this.resolvedWorkerPath = found
+    return found
+  }
+
+  private shouldUseWorkerPath(
+    source: IntelligenceVisionOcrPayload['source'],
+    allowedProviderIds: string[]
+  ): boolean {
+    if (!this.isWorkerOcrEnabled()) return false
+    if (
+      allowedProviderIds.length > 0 &&
+      !allowedProviderIds.some((providerId) => providerId === INTERNAL_SYSTEM_OCR_PROVIDER_ID)
+    ) {
+      return false
+    }
+    return (
+      (source.type === 'file' &&
+        typeof source.filePath === 'string' &&
+        source.filePath.length > 0) ||
+      (source.type === 'data-url' &&
+        typeof source.dataUrl === 'string' &&
+        source.dataUrl.length > 0)
+    )
+  }
+
+  private async invokeWorkerOcr(
+    jobId: number,
+    job: typeof ocrJobs.$inferSelect,
+    parsed: { source: AgentJobPayload['source']; options: AgentJobPayload['options'] },
+    source: IntelligenceVisionOcrPayload['source']
+  ): Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>> {
+    const workerPath = this.resolveWorkerPath()
+
+    const workerSource: AgentJobPayload['source'] =
+      source.type === 'file' && source.filePath
+        ? { type: 'file', filePath: source.filePath }
+        : source.type === 'data-url' && source.dataUrl
+          ? { type: 'data-url', dataUrl: source.dataUrl }
+          : (() => {
+              throw new Error('[OCR Worker] Unsupported source type for worker OCR')
+            })()
+
+    const startedAt = Date.now()
+
+    const workerResult = await new Promise<IntelligenceVisionOcrResult>((resolve, reject) => {
+      let settled = false
+      const worker = new Worker(workerPath, {
+        workerData: {
+          jobId,
+          clipboardId: job.clipboardId ?? null,
+          payloadHash: job.payloadHash ?? null,
+          source: workerSource,
+          options: {
+            language: parsed.options?.language || 'eng',
+            tesseditPagesegMode: parsed.options?.tesseditPagesegMode,
+            config: parsed.options?.config
+          }
+        }
+      })
+
+      const cleanup = () => {
+        clearTimeout(timeout)
+      }
+
+      const finishResolve = (result: IntelligenceVisionOcrResult) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve(result)
+      }
+
+      const finishReject = (error: unknown) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
+
+      const timeout = setTimeout(() => {
+        void worker.terminate().catch(() => {})
+        finishReject(new Error(`[OCR Worker] Timeout after ${OCR_WORKER_TIMEOUT_MS}ms`))
+      }, OCR_WORKER_TIMEOUT_MS)
+
+      worker.once('message', (message: unknown) => {
+        const payload =
+          message && typeof message === 'object' ? (message as Record<string, unknown>) : null
+        if (!payload) {
+          void worker.terminate().catch(() => {})
+          finishReject(new Error('[OCR Worker] Invalid worker response payload'))
+          return
+        }
+
+        if (payload.status === 'success') {
+          const resultPayload =
+            payload.result && typeof payload.result === 'object'
+              ? (payload.result as Record<string, unknown>)
+              : {}
+          void worker.terminate().catch(() => {})
+          finishResolve({
+            text: typeof resultPayload.text === 'string' ? resultPayload.text : '',
+            confidence:
+              typeof resultPayload.confidence === 'number' ? resultPayload.confidence : undefined,
+            language:
+              typeof resultPayload.language === 'string' ? resultPayload.language : undefined,
+            blocks: Array.isArray(resultPayload.blocks)
+              ? (resultPayload.blocks as IntelligenceVisionOcrResult['blocks'])
+              : undefined,
+            engine:
+              resultPayload.engine === 'apple-vision' ||
+              resultPayload.engine === 'windows-ocr' ||
+              resultPayload.engine === 'cloud'
+                ? resultPayload.engine
+                : undefined,
+            durationMs:
+              typeof resultPayload.durationMs === 'number' ? resultPayload.durationMs : undefined,
+            raw: resultPayload.raw
+          })
+          return
+        }
+
+        const messageText =
+          typeof payload.error === 'string'
+            ? payload.error
+            : `[OCR Worker] Unknown worker error for job ${jobId}`
+        void worker.terminate().catch(() => {})
+        finishReject(new Error(messageText))
+      })
+
+      worker.once('error', (error) => {
+        finishReject(error)
+      })
+
+      worker.once('exit', (code) => {
+        if (code !== 0 && !settled) {
+          finishReject(new Error(`[OCR Worker] Exited with code ${code}`))
+        }
+      })
+    })
+
+    return {
+      result: workerResult,
+      usage: {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0
+      },
+      model: 'system-ocr-worker',
+      latency: Date.now() - startedAt,
+      traceId: `ocr-worker-${jobId}-${startedAt}`,
+      provider: 'local'
+    }
+  }
 
   private ensureInitialized(): void {
     if (this.initialized) return
 
-    this.db = databaseModule.getDb()
+    this.db = databaseModule.getAuxDb()
 
     this.registerChannels()
     ensureIntelligenceConfigLoaded()
@@ -191,7 +382,13 @@ class OcrService {
     pollingService.register(this.pollTaskId, () => this.processQueue().catch(() => {}), {
       interval: PROCESS_INTERVAL_SECONDS,
       unit: 'seconds',
-      initialDelayMs: 3_000
+      initialDelayMs: 3_000,
+      lane: 'maintenance',
+      backpressure: 'latest_wins',
+      dedupeKey: this.pollTaskId,
+      maxInFlight: 1,
+      timeoutMs: 8_000,
+      jitterMs: 250
     })
 
     this.initialized = true
@@ -543,21 +740,47 @@ class OcrService {
     }
 
     if (item.type === 'image') {
-      if (!item.content) return null
+      const content = typeof item.content === 'string' ? item.content.trim() : ''
+      if (!content) return null
 
-      const estimatedBytes = estimateDataUrlBytes(item.content)
-      if (estimatedBytes > MAX_OCR_IMAGE_BYTES) {
-        throw new Error(`[OCR] Image payload too large: ${estimatedBytes} > ${MAX_OCR_IMAGE_BYTES}`)
+      if (isDataUrl(content)) {
+        const estimatedBytes = estimateDataUrlBytes(content)
+        if (estimatedBytes > MAX_OCR_IMAGE_BYTES) {
+          throw new Error(
+            `[OCR] Image payload too large: ${estimatedBytes} > ${MAX_OCR_IMAGE_BYTES}`
+          )
+        }
+        return {
+          clipboardId,
+          source: {
+            type: 'data-url',
+            dataUrl: content
+          },
+          options: {
+            language: 'eng'
+          },
+          payloadHash: dataUrlToHash(content)
+        }
       }
+
+      if (!existsSync(content)) {
+        throw new Error('[OCR] Clipboard image source file does not exist')
+      }
+      const stats = await stat(content)
+      if (stats.size > MAX_OCR_IMAGE_BYTES) {
+        throw new Error(`[OCR] Image file too large: ${stats.size} > ${MAX_OCR_IMAGE_BYTES}`)
+      }
+
       return {
         clipboardId,
         source: {
-          type: 'clipboard'
+          type: 'file',
+          filePath: content
         },
         options: {
           language: 'eng'
         },
-        payloadHash: dataUrlToHash(item.content)
+        payloadHash: fileHashKey(content)
       }
     }
 
@@ -577,7 +800,8 @@ class OcrService {
         return {
           clipboardId,
           source: {
-            type: 'clipboard'
+            type: 'file',
+            filePath: imagePath
           },
           options: {
             language: 'eng'
@@ -598,27 +822,6 @@ class OcrService {
   private isImageFile(filePath: string): boolean {
     const ext = path.extname(filePath).toLowerCase()
     return ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp', '.heic'].includes(ext)
-  }
-
-  private detectMimeType(filePath: string): string {
-    const ext = path.extname(filePath).toLowerCase()
-    switch (ext) {
-      case '.jpg':
-      case '.jpeg':
-        return 'image/jpeg'
-      case '.webp':
-        return 'image/webp'
-      case '.gif':
-        return 'image/gif'
-      case '.bmp':
-        return 'image/bmp'
-      case '.tiff':
-        return 'image/tiff'
-      case '.heic':
-        return 'image/heic'
-      default:
-        return 'image/png'
-    }
   }
 
   private async normalizeSourceForAgent(
@@ -653,13 +856,27 @@ class OcrService {
 
       const record = rows[0]
       if (record.type === 'image') {
-        const estimatedBytes = estimateDataUrlBytes(record.content)
-        if (estimatedBytes > MAX_OCR_IMAGE_BYTES) {
-          throw new Error(
-            `[OCR] Image payload too large: ${estimatedBytes} > ${MAX_OCR_IMAGE_BYTES}`
-          )
+        const content = typeof record.content === 'string' ? record.content.trim() : ''
+        if (!content) {
+          throw new Error('[OCR] Clipboard image payload is empty')
         }
-        return { type: 'data-url', dataUrl: record.content }
+        if (isDataUrl(content)) {
+          const estimatedBytes = estimateDataUrlBytes(content)
+          if (estimatedBytes > MAX_OCR_IMAGE_BYTES) {
+            throw new Error(
+              `[OCR] Image payload too large: ${estimatedBytes} > ${MAX_OCR_IMAGE_BYTES}`
+            )
+          }
+          return { type: 'data-url', dataUrl: content }
+        }
+        if (!existsSync(content)) {
+          throw new Error('[OCR] Clipboard image source file does not exist')
+        }
+        const stats = await stat(content)
+        if (stats.size > MAX_OCR_IMAGE_BYTES) {
+          throw new Error(`[OCR] Image file too large: ${stats.size} > ${MAX_OCR_IMAGE_BYTES}`)
+        }
+        return { type: 'file', filePath: content }
       }
 
       if (record.type === 'files') {
@@ -677,12 +894,7 @@ class OcrService {
         if (stats.size > MAX_OCR_IMAGE_BYTES) {
           throw new Error(`[OCR] Image file too large: ${stats.size} > ${MAX_OCR_IMAGE_BYTES}`)
         }
-        const buffer = await readFile(imagePath)
-        const mime = this.detectMimeType(imagePath)
-        return {
-          type: 'data-url',
-          dataUrl: `data:${mime};base64,${buffer.toString('base64')}`
-        }
+        return { type: 'file', filePath: imagePath }
       }
 
       throw new Error('[OCR] Clipboard payload type not supported for OCR')
@@ -693,12 +905,7 @@ class OcrService {
       if (stats.size > MAX_OCR_IMAGE_BYTES) {
         throw new Error(`[OCR] Image file too large: ${stats.size} > ${MAX_OCR_IMAGE_BYTES}`)
       }
-      const buffer = await readFile(source.filePath)
-      const mime = this.detectMimeType(source.filePath)
-      return {
-        type: 'data-url',
-        dataUrl: `data:${mime};base64,${buffer.toString('base64')}`
-      }
+      return { type: 'file', filePath: source.filePath }
     }
 
     throw new Error('[OCR] Unsupported source payload for agent invocation')
@@ -825,6 +1032,16 @@ class OcrService {
     const modelPreference = ['system-ocr', ...(capabilityOptions.modelPreference ?? [])].filter(
       (model, index, all) => Boolean(model) && all.indexOf(model) === index
     )
+
+    if (this.shouldUseWorkerPath(normalizedSource, allowedProviderIds)) {
+      try {
+        const workerInvocation = await this.invokeWorkerOcr(jobId, job, parsed, normalizedSource)
+        await this.persistAgentSuccess(job, workerInvocation)
+        return
+      } catch {
+        // fall back to provider invoke path when worker OCR is unavailable
+      }
+    }
 
     try {
       const invocation = await tuffIntelligence.invoke<IntelligenceVisionOcrResult>(

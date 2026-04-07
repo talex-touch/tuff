@@ -5,12 +5,14 @@ export interface PilotConversationContentBlock {
   value: string
   name?: string
   data?: string
+  attachmentId?: string
 }
 
 export interface PilotConversationMessage {
   id?: string
   role: PilotConversationRole
   content: PilotConversationContentBlock[]
+  metadata?: Record<string, unknown>
 }
 
 export interface PilotConversationAttachment {
@@ -18,6 +20,7 @@ export interface PilotConversationAttachment {
   value: string
   name?: string
   data?: string
+  attachmentId?: string
 }
 
 export interface PilotConversationUserTurn {
@@ -45,6 +48,7 @@ export interface ShouldExecutePilotWebsearchInput {
   internetEnabled?: boolean
   builtinTools?: string[]
   intentWebsearchRequired?: boolean
+  intentWebsearchReason?: string
 }
 
 export interface PilotWebsearchExecutionDecision {
@@ -53,6 +57,7 @@ export interface PilotWebsearchExecutionDecision {
 }
 
 const DEFAULT_ASSISTANT_AVAILABLE_STATUS = 0
+const PILOT_SYSTEM_CONTEXT_ALLOW_EVENT_TYPES = new Set(['system.policy', 'tool.summary'])
 
 function toRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -70,6 +75,42 @@ function normalizeRole(value: unknown): PilotConversationRole {
     return 'system'
   }
   return 'user'
+}
+
+function normalizeContextPolicy(value: unknown): 'allow' | 'deny' {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'allow') {
+    return 'allow'
+  }
+  return 'deny'
+}
+
+function normalizeMetadata(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined
+  }
+  return value as Record<string, unknown>
+}
+
+export function isPilotSystemMessageAllowedForModelContext(metadata: unknown): boolean {
+  const row = normalizeMetadata(metadata) || {}
+  if (row.promptInjection === true) {
+    return true
+  }
+  const eventType = String(row.eventType || '').trim()
+  if (!PILOT_SYSTEM_CONTEXT_ALLOW_EVENT_TYPES.has(eventType)) {
+    return false
+  }
+  return normalizeContextPolicy(row.contextPolicy) === 'allow'
+}
+
+export function shouldIncludePilotMessageInModelContext(message: unknown): boolean {
+  const row = toRecord(message)
+  const role = normalizeRole(row.role)
+  if (role === 'user' || role === 'assistant') {
+    return true
+  }
+  return isPilotSystemMessageAllowedForModelContext(row.metadata)
 }
 
 function normalizeBlockType(value: unknown): string {
@@ -131,12 +172,17 @@ function normalizeTextBlocksFromArray(
       continue
     }
 
-    list.push({
+    const block: PilotConversationContentBlock = {
       type: blockType,
       value: blockValue,
       name: typeof row.name === 'string' ? row.name : undefined,
       data: typeof row.data === 'string' ? row.data : undefined,
-    })
+    }
+    const attachmentId = typeof row.attachmentId === 'string' ? row.attachmentId.trim() : ''
+    if (attachmentId) {
+      block.attachmentId = attachmentId
+    }
+    list.push(block)
   }
 
   return list
@@ -291,10 +337,12 @@ export function serializePilotExecutorMessages(
     }
 
     const id = String(row.id || '').trim()
+    const metadata = normalizeMetadata(row.metadata)
     result.push({
       id: id || undefined,
       role,
       content: blocks,
+      metadata,
     })
   }
 
@@ -341,12 +389,16 @@ export function extractLatestPilotUserTurn(messages: unknown): PilotConversation
       if (!value || !isAttachmentType(type)) {
         continue
       }
-      attachments.push({
+      const attachment: PilotConversationAttachment = {
         type: type as PilotConversationAttachment['type'],
         value,
         name: block.name,
         data: block.data,
-      })
+      }
+      if (block.attachmentId) {
+        attachment.attachmentId = block.attachmentId
+      }
+      attachments.push(attachment)
     }
 
     const text = extractTextFromBlocks(message.content)
@@ -375,15 +427,18 @@ export function extractLatestPilotUserMessage(messages: unknown): string {
 export function buildPilotTitleMessages(
   messages: unknown,
   assistantReply = '',
-): Array<{ role: 'user' | 'assistant', content: string }> {
+): Array<{ role: 'user' | 'assistant' | 'system', content: string }> {
   const normalized = serializePilotExecutorMessages(messages, {
     skipUnavailableAssistant: false,
     keepNonTextWithoutValue: true,
   })
-  const list: Array<{ role: 'user' | 'assistant', content: string }> = []
+  const list: Array<{ role: 'user' | 'assistant' | 'system', content: string }> = []
 
   for (const item of normalized) {
-    if (item.role !== 'user' && item.role !== 'assistant') {
+    if (item.role !== 'user' && item.role !== 'assistant' && item.role !== 'system') {
+      continue
+    }
+    if (item.role === 'system' && !isPilotSystemMessageAllowedForModelContext(item.metadata)) {
       continue
     }
     const content = extractTextFromBlocks(item.content)
@@ -486,13 +541,14 @@ export function buildPilotConversationSnapshot(input: BuildPilotConversationSnap
     skipUnavailableAssistant: false,
     keepNonTextWithoutValue: true,
   })
+  const snapshotMessages = normalized.filter(item => item.role === 'user' || item.role === 'assistant')
 
   const assistantReply = String(input.assistantReply || '').trim()
   if (assistantReply) {
-    const last = normalized[normalized.length - 1]
+    const last = snapshotMessages[snapshotMessages.length - 1]
     const lastText = last?.role === 'assistant' ? extractTextFromBlocks(last.content) : ''
     if (!last || last.role !== 'assistant' || lastText !== assistantReply) {
-      normalized.push({
+      snapshotMessages.push({
         role: 'assistant',
         content: [{
           type: 'markdown',
@@ -503,14 +559,14 @@ export function buildPilotConversationSnapshot(input: BuildPilotConversationSnap
   }
 
   const topicHint = String(input.topicHint || '').trim()
-  const topic = topicHint || String(previous.topic || '').trim() || guessTopic(normalized)
+  const topic = topicHint || String(previous.topic || '').trim() || guessTopic(snapshotMessages)
   const payload: Record<string, unknown> = {
     ...previous,
     id: chatId,
     topic: topic || '新的聊天',
     sync: 'success',
     lastUpdate: Date.now(),
-    messages: toSnapshotMessages(normalized),
+    messages: toSnapshotMessages(snapshotMessages),
   }
 
   return {
@@ -612,6 +668,13 @@ export function shouldExecutePilotWebsearch(
     }
   }
 
+  if (input.intentWebsearchRequired === false) {
+    return {
+      enabled: false,
+      reason: 'intent_not_required',
+    }
+  }
+
   if (messageExplicitlyDisablesWebsearch(message)) {
     return {
       enabled: false,
@@ -628,8 +691,6 @@ export function shouldExecutePilotWebsearch(
 
   return {
     enabled: false,
-    reason: input.intentWebsearchRequired === false
-      ? 'intent_not_required_heuristic_bypassed'
-      : 'heuristic_not_required',
+    reason: 'heuristic_not_required',
   }
 }

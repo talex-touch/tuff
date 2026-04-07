@@ -324,6 +324,8 @@ export class OmniPanelModule extends BaseModule {
   }
   private handlingInstallEventPlugins = new Set<string>()
   private destroying = false
+  private legacyUsageCounts = new Map<string, number>()
+  private warnedLegacyEvents = new Set<string>()
 
   constructor() {
     super(OmniPanelModule.key, { create: false })
@@ -727,6 +729,10 @@ export class OmniPanelModule extends BaseModule {
         return this.buildFeatureListResponse()
       }),
       this.transport.on(omniPanelFeatureToggleEvent, async (payload) => {
+        this.recordLegacyUsage(
+          omniPanelFeatureToggleEvent.toEventName(),
+          'OmniPanel internal registry APIs'
+        )
         this.toggleFeature(payload, 'legacy-toggle')
       }),
       this.transport.on(omniPanelFeatureReorderEvent, async (payload) => {
@@ -736,6 +742,18 @@ export class OmniPanelModule extends BaseModule {
         return await this.executeFeature(payload)
       })
     )
+  }
+
+  private recordLegacyUsage(eventName: string, replacement: string): void {
+    const hits = (this.legacyUsageCounts.get(eventName) ?? 0) + 1
+    this.legacyUsageCounts.set(eventName, hits)
+    if (this.warnedLegacyEvents.has(eventName)) {
+      return
+    }
+    this.warnedLegacyEvents.add(eventName)
+    omniPanelLog.warn(`Legacy OmniPanel event used: ${eventName}. Use ${replacement} instead.`, {
+      meta: { eventName, replacement, hits }
+    })
   }
 
   private async ensureWindow(): Promise<TouchWindow> {

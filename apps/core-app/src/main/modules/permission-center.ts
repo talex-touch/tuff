@@ -1,6 +1,16 @@
-import type { IPermissionCenter, Permission } from '@talex-touch/utils/permission'
 import path from 'node:path'
 import fse from 'fs-extra'
+
+type Permission = {
+  id: string | symbol
+}
+
+interface IPermissionCenter {
+  addPermission(pluginScope: string, permission: Permission): void
+  delPermission(pluginScope: string, permission: Permission): void
+  hasPermission(pluginScope: string, permission: Permission): boolean
+  getPermission(pluginScope: string, permission: symbol): Permission
+}
 
 class PermissionCenter implements IPermissionCenter {
   addPermission(pluginScope: string, permission: Permission): void {

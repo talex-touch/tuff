@@ -4,6 +4,10 @@ import type {
   PilotModelTemplatePreset,
   PilotCapabilityId as SharedPilotCapabilityId,
 } from '~~/shared/pilot-capability-meta'
+import type {
+  PilotBuiltInScene,
+  PilotScenePolicy,
+} from '~~/shared/pilot-routing-scene'
 import {
   createPilotDefaultCapabilities,
   getPilotModelTemplatePreset,
@@ -14,18 +18,24 @@ import {
   sanitizeBuiltinToolsByCapabilities,
   PILOT_MODEL_TEMPLATE_PRESETS as SHARED_MODEL_TEMPLATE_PRESETS,
 } from '~~/shared/pilot-capability-meta'
+import {
+  normalizePilotScene,
+  PILOT_BUILT_IN_SCENES,
+} from '~~/shared/pilot-routing-scene'
 import { endHttp } from '~/composables/api/axios'
 
 export type PilotIconType = 'class' | 'url' | 'emoji' | 'file'
 export type PilotModelSource = 'system' | 'manual' | 'discovered'
 export type PilotBuiltinTool = 'write_todos' | 'read_file' | 'write_file' | 'edit_file' | 'ls' | 'websearch'
 export type PilotCapabilityId = SharedPilotCapabilityId
+export type PilotProviderTargetType = 'model' | 'coze_bot' | 'coze_workflow'
 
 export type PilotModelCapabilitiesForm = Record<PilotCapabilityId, boolean>
 
 export interface ModelBindingFormItem {
   channelId: string
   providerModel: string
+  providerTargetType: PilotProviderTargetType
   enabled: boolean
   priority: number
   weight: number
@@ -41,6 +51,7 @@ export interface ModelGroupFormItem {
   iconType: PilotIconType
   iconValue: string
   tags: string
+  scenes: string[]
   qualityScore: number
   speedScore: number
   costScore: number
@@ -60,6 +71,7 @@ export interface RouteComboRouteFormItem {
   channelId: string
   modelId: string
   providerModel: string
+  providerTargetType: PilotProviderTargetType
   enabled: boolean
   priority: number
   weight: number
@@ -83,10 +95,17 @@ export interface PilotRoutingPolicyForm {
   defaultModelId: string
   defaultRouteComboId: string
   explorationRate: number
+  scenePolicies: PilotScenePolicyFormItem[]
   intentNanoModelId: string
   intentRouteComboId: string
   imageGenerationModelId: string
   imageRouteComboId: string
+}
+
+export interface PilotScenePolicyFormItem {
+  scene: string
+  modelId: string
+  routeComboId: string
 }
 
 export interface PilotLoadBalancePolicyForm {
@@ -144,6 +163,7 @@ export const PILOT_MODEL_TEMPLATE_PRESETS = [...SHARED_MODEL_TEMPLATE_PRESETS]
 export interface ChannelModelOption {
   channelId: string
   modelId: string
+  targetType: PilotProviderTargetType
   label: string
   format: string
   enabled: boolean
@@ -152,6 +172,7 @@ export interface ChannelModelOption {
 export interface ChannelOption {
   id: string
   name: string
+  adapter: 'openai' | 'coze'
   enabled: boolean
   priority: number
 }
@@ -176,8 +197,10 @@ interface PilotSettingsResponse {
           id?: unknown
           label?: unknown
           format?: unknown
+          targetType?: unknown
           enabled?: unknown
         }>
+        adapter?: unknown
       }>
     }
     routing?: {
@@ -186,12 +209,15 @@ interface PilotSettingsResponse {
           type?: string
           value?: string
         }
+        scenes?: unknown
         bindings?: Array<Partial<ModelBindingFormItem>>
       }>
       routeCombos?: Array<Partial<RouteComboFormItem> & {
         routes?: Array<Partial<RouteComboRouteFormItem>>
       }>
-      routingPolicy?: Partial<PilotRoutingPolicyForm>
+      routingPolicy?: Partial<PilotRoutingPolicyForm> & {
+        scenePolicies?: Array<Partial<PilotScenePolicy>>
+      }
       lbPolicy?: Partial<PilotLoadBalancePolicyForm>
       memoryPolicy?: Partial<PilotMemoryPolicyForm>
     }
@@ -226,6 +252,20 @@ export const BUILTIN_TOOL_OPTIONS: Array<{ value: PilotBuiltinTool, label: strin
   { value: 'ls', label: 'ls' },
   { value: 'websearch', label: 'websearch' },
 ]
+
+export const TARGET_TYPE_OPTIONS: Array<{ value: PilotProviderTargetType, label: string }> = [
+  { value: 'model', label: '普通模型（model）' },
+  { value: 'coze_bot', label: 'Coze Bot（coze_bot）' },
+  { value: 'coze_workflow', label: 'Coze Workflow（coze_workflow）' },
+]
+
+export const BUILT_IN_SCENE_OPTIONS: Array<{ value: PilotBuiltInScene, label: string }> = PILOT_BUILT_IN_SCENES
+  .map(scene => ({
+    value: scene,
+    label: scene === 'intent_classification'
+      ? '意图分类（intent_classification）'
+      : '图像生成（image_generate）',
+  }))
 
 let modelSequence = 0
 let routeComboSequence = 0
@@ -300,6 +340,64 @@ function normalizeBuiltinTools(value: unknown): PilotBuiltinTool[] {
   return Array.from(new Set(list))
 }
 
+function normalizeProviderTargetType(value: unknown): PilotProviderTargetType {
+  const normalized = normalizeText(value).toLowerCase()
+  if (normalized === 'coze_bot' || normalized === 'coze-bot' || normalized === 'bot') {
+    return 'coze_bot'
+  }
+  if (normalized === 'coze_workflow' || normalized === 'coze-workflow' || normalized === 'workflow') {
+    return 'coze_workflow'
+  }
+  return 'model'
+}
+
+function normalizeSceneList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const list = value
+    .map(item => normalizePilotScene(item))
+    .filter(Boolean)
+  if (list.length <= 0) {
+    return []
+  }
+  return Array.from(new Set(list))
+}
+
+function normalizeScenePolicyFormItem(raw: Partial<PilotScenePolicy> | undefined): PilotScenePolicyFormItem | null {
+  const scene = normalizePilotScene(raw?.scene)
+  const modelId = normalizeText(raw?.modelId)
+  if (!scene || !modelId) {
+    return null
+  }
+  return {
+    scene,
+    modelId,
+    routeComboId: normalizeText(raw?.routeComboId),
+  }
+}
+
+function buildScenePoliciesFromLegacy(raw: Partial<PilotRoutingPolicyForm> | undefined): PilotScenePolicyFormItem[] {
+  const list: PilotScenePolicyFormItem[] = []
+  const intentModelId = normalizeText(raw?.intentNanoModelId)
+  if (intentModelId) {
+    list.push({
+      scene: 'intent_classification',
+      modelId: intentModelId,
+      routeComboId: normalizeText(raw?.intentRouteComboId),
+    })
+  }
+  const imageModelId = normalizeText(raw?.imageGenerationModelId)
+  if (imageModelId) {
+    list.push({
+      scene: 'image_generate',
+      modelId: imageModelId,
+      routeComboId: normalizeText(raw?.imageRouteComboId),
+    })
+  }
+  return list
+}
+
 function createDefaultCapabilitiesForm(): PilotModelCapabilitiesForm {
   return createPilotDefaultCapabilities(true)
 }
@@ -340,6 +438,7 @@ export function createEmptyBinding(): ModelBindingFormItem {
   return {
     channelId: '',
     providerModel: '',
+    providerTargetType: 'model',
     enabled: true,
     priority: 100,
     weight: 100,
@@ -359,6 +458,7 @@ export function createEmptyModelGroup(): ModelGroupFormItem {
     iconType: 'class',
     iconValue: 'i-carbon-machine-learning-model',
     tags: '',
+    scenes: [],
     qualityScore: 50,
     speedScore: 50,
     costScore: 50,
@@ -399,6 +499,7 @@ export function createEmptyRouteComboRoute(): RouteComboRouteFormItem {
     channelId: '',
     modelId: '',
     providerModel: '',
+    providerTargetType: 'model',
     enabled: true,
     priority: 100,
     weight: 100,
@@ -458,6 +559,7 @@ export function normalizeModelGroup(raw: Partial<ModelGroupFormItem> & {
     iconType: normalizeIconType(raw.icon?.type || raw.iconType),
     iconValue: normalizeText(raw.icon?.value || raw.iconValue) || 'i-carbon-machine-learning-model',
     tags,
+    scenes: normalizeSceneList(raw.scenes),
     qualityScore: toNumber(raw.qualityScore, 50, 0, 100),
     speedScore: toNumber(raw.speedScore, 50, 0, 100),
     costScore: toNumber(raw.costScore, 50, 0, 100),
@@ -475,6 +577,7 @@ export function normalizeModelGroup(raw: Partial<ModelGroupFormItem> & {
       ? raw.bindings.map(item => ({
           channelId: normalizeText(item.channelId),
           providerModel: normalizeText(item.providerModel),
+          providerTargetType: normalizeProviderTargetType(item.providerTargetType),
           enabled: toBoolean(item.enabled, true),
           priority: toNumber(item.priority, 100, 1, 9999),
           weight: toNumber(item.weight, 100, 1, 1000),
@@ -500,6 +603,7 @@ export function normalizeRouteCombo(raw: Partial<RouteComboFormItem> & {
           channelId: normalizeText(route.channelId),
           modelId: normalizeText(route.modelId),
           providerModel: normalizeText(route.providerModel),
+          providerTargetType: normalizeProviderTargetType(route.providerTargetType),
           enabled: toBoolean(route.enabled, true),
           priority: toNumber(route.priority, 100, 1, 9999),
           weight: toNumber(route.weight, 100, 1, 1000),
@@ -519,7 +623,12 @@ function normalizeModelTagList(value: string): string[] {
 }
 
 function sortChannelModelOptions(list: ChannelModelOption[]): ChannelModelOption[] {
-  return [...list].sort((a, b) => a.modelId.localeCompare(b.modelId))
+  return [...list].sort((a, b) => {
+    if (a.targetType !== b.targetType) {
+      return a.targetType.localeCompare(b.targetType)
+    }
+    return a.modelId.localeCompare(b.modelId)
+  })
 }
 
 function parseChannelModelOptionIndex(payload: PilotSettingsResponse): ChannelModelOptionIndex {
@@ -547,6 +656,7 @@ function parseChannelModelOptionIndex(payload: PilotSettingsResponse): ChannelMo
     channels.push({
       id: channelId,
       name: channelName,
+      adapter: normalizeText(rawChannel?.adapter).toLowerCase() === 'coze' ? 'coze' : 'openai',
       enabled: channelEnabled,
       priority: channelPriority,
     })
@@ -561,9 +671,11 @@ function parseChannelModelOptionIndex(payload: PilotSettingsResponse): ChannelMo
         continue
       }
       const enabled = toBoolean(rawModel?.enabled, true)
-      allMap.set(modelId, {
+      const targetType = normalizeProviderTargetType(rawModel?.targetType)
+      allMap.set(`${targetType}::${modelId}`, {
         channelId,
         modelId,
+        targetType,
         label: normalizeText(rawModel?.label) || modelId,
         format: normalizeText(rawModel?.format),
         enabled,
@@ -573,9 +685,10 @@ function parseChannelModelOptionIndex(payload: PilotSettingsResponse): ChannelMo
     if (allMap.size <= 0) {
       const fallbackModelId = normalizeText(rawChannel?.defaultModelId || rawChannel?.model)
       if (fallbackModelId) {
-        allMap.set(fallbackModelId, {
+        allMap.set(`model::${fallbackModelId}`, {
           channelId,
           modelId: fallbackModelId,
+          targetType: 'model',
           label: fallbackModelId,
           format: '',
           enabled: true,
@@ -626,6 +739,7 @@ export function buildModelGroupPayload(list: ModelGroupFormItem[]) {
         value: normalizeText(item.iconValue),
       },
       tags: normalizeModelTagList(item.tags),
+      scenes: normalizeSceneList(item.scenes),
       qualityScore: toNumber(item.qualityScore, 50, 0, 100),
       speedScore: toNumber(item.speedScore, 50, 0, 100),
       costScore: toNumber(item.costScore, 50, 0, 100),
@@ -641,6 +755,7 @@ export function buildModelGroupPayload(list: ModelGroupFormItem[]) {
       bindings: item.bindings.map(binding => ({
         channelId: normalizeText(binding.channelId),
         providerModel: normalizeText(binding.providerModel),
+        providerTargetType: normalizeProviderTargetType(binding.providerTargetType),
         enabled: binding.enabled,
         priority: toNumber(binding.priority, 100, 1, 9999),
         weight: toNumber(binding.weight, 100, 1, 1000),
@@ -662,6 +777,7 @@ export function buildRouteComboPayload(list: RouteComboFormItem[]) {
       channelId: normalizeText(route.channelId),
       modelId: normalizeText(route.modelId) || undefined,
       providerModel: normalizeText(route.providerModel) || undefined,
+      providerTargetType: normalizeProviderTargetType(route.providerTargetType),
       enabled: route.enabled,
       priority: toNumber(route.priority, 100, 1, 9999),
       weight: toNumber(route.weight, 100, 1, 1000),
@@ -674,6 +790,12 @@ export function buildRouteComboPayload(list: RouteComboFormItem[]) {
 
 function parseRoutingSettings(payload: any) {
   const routing = payload?.settings?.routing || {}
+  const rawRoutingPolicy = routing.routingPolicy || {}
+  const scenePolicies = Array.isArray(rawRoutingPolicy.scenePolicies)
+    ? rawRoutingPolicy.scenePolicies
+        .map((item: Partial<PilotScenePolicy>) => normalizeScenePolicyFormItem(item))
+        .filter((item): item is PilotScenePolicyFormItem => Boolean(item))
+    : buildScenePoliciesFromLegacy(rawRoutingPolicy)
   return {
     modelCatalog: Array.isArray(routing.modelCatalog) && routing.modelCatalog.length > 0
       ? routing.modelCatalog.map((item: any) => normalizeModelGroup(item || {}))
@@ -682,13 +804,14 @@ function parseRoutingSettings(payload: any) {
       ? routing.routeCombos.map((item: any) => normalizeRouteCombo(item || {}))
       : [createEmptyRouteCombo()],
     routingPolicy: {
-      defaultModelId: normalizeText(routing.routingPolicy?.defaultModelId) || 'quota-auto',
-      defaultRouteComboId: normalizeText(routing.routingPolicy?.defaultRouteComboId) || 'default-auto',
-      explorationRate: Number(toNumber(routing.routingPolicy?.explorationRate, 0.08, 0, 0.5).toFixed(2)),
-      intentNanoModelId: normalizeText(routing.routingPolicy?.intentNanoModelId),
-      intentRouteComboId: normalizeText(routing.routingPolicy?.intentRouteComboId),
-      imageGenerationModelId: normalizeText(routing.routingPolicy?.imageGenerationModelId),
-      imageRouteComboId: normalizeText(routing.routingPolicy?.imageRouteComboId),
+      defaultModelId: normalizeText(rawRoutingPolicy.defaultModelId) || 'quota-auto',
+      defaultRouteComboId: normalizeText(rawRoutingPolicy.defaultRouteComboId) || 'default-auto',
+      explorationRate: Number(toNumber(rawRoutingPolicy.explorationRate, 0.08, 0, 0.5).toFixed(2)),
+      scenePolicies,
+      intentNanoModelId: normalizeText(rawRoutingPolicy.intentNanoModelId),
+      intentRouteComboId: normalizeText(rawRoutingPolicy.intentRouteComboId),
+      imageGenerationModelId: normalizeText(rawRoutingPolicy.imageGenerationModelId),
+      imageRouteComboId: normalizeText(rawRoutingPolicy.imageRouteComboId),
     } as PilotRoutingPolicyForm,
     lbPolicy: {
       metricWindowHours: toNumber(routing.lbPolicy?.metricWindowHours, 24, 1, 24 * 7),

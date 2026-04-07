@@ -52,6 +52,7 @@ export default defineEventHandler(async (event) => {
       messages: messages.map(item => ({
         role: item.role,
         content: item.content,
+        metadata: item.metadata,
       })),
     })
   }

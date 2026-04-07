@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import type { PilotProviderTargetType } from './pilot-channel'
 import { requirePilotDatabase } from './pilot-store'
 
 const ROUTING_METRICS_TABLE = 'pilot_routing_metrics'
@@ -32,6 +33,7 @@ export interface PilotRoutingMetricInput {
   routeComboId?: string
   channelId: string
   providerModel: string
+  providerTargetType?: PilotProviderTargetType
   queueWaitMs?: number
   ttftMs?: number
   totalDurationMs?: number
@@ -258,7 +260,10 @@ export async function recordPilotRoutingMetric(
     input.success ? 1 : 0,
     normalizeText(input.errorCode) || null,
     normalizeText(input.finishReason) || null,
-    safeStringify(input.metadata),
+    safeStringify({
+      ...(input.metadata || {}),
+      providerTargetType: input.providerTargetType || 'model',
+    }),
     nowIso(),
   ).run()
 }

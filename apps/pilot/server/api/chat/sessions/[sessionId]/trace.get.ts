@@ -1,3 +1,4 @@
+import { redactPilotClientTracePayload, shouldHidePilotClientRuntimeEvent } from '../../../../../shared/pilot-runtime-redaction'
 import { requirePilotAuth } from '../../../../utils/auth'
 import { requireSessionId } from '../../../../utils/pilot-http'
 import { createPilotStoreAdapter } from '../../../../utils/pilot-store'
@@ -13,11 +14,16 @@ export default defineEventHandler(async (event) => {
   const store = createPilotStoreAdapter(event, userId)
   await store.runtime.ensureSchema()
 
-  const traces = await store.runtime.listTrace(
+  const traces = (await store.runtime.listTrace(
     sessionId,
     Number.isFinite(fromSeq) ? Math.max(1, Math.floor(fromSeq)) : 1,
     Number.isFinite(limit) ? Math.min(Math.max(Math.floor(limit), 1), 1000) : 200,
-  )
+  ))
+    .filter(item => !shouldHidePilotClientRuntimeEvent(item.type))
+    .map(item => ({
+      ...item,
+      payload: redactPilotClientTracePayload(item.type, item.payload),
+    }))
 
   return {
     traces,

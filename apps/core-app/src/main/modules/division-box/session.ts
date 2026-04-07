@@ -19,12 +19,14 @@ import { app, WebContentsView } from 'electron'
 import fse from 'fs-extra'
 import { genTouchApp } from '../../core'
 import { useAliveWebContents } from '../../hooks/use-electron-guard'
+import { createLogger } from '../../utils/logger'
 import { pluginModule } from '../plugin/plugin-module'
 import { usePluginInjections } from '../plugin/runtime/plugin-injections'
 
 const coreBoxTriggerEvent = defineRawEvent<{ [key: string]: unknown }, void>('core-box:trigger')
 type LegacyMainChannelType = Parameters<ReturnType<typeof genTouchApp>['channel']['broadcastTo']>[1]
 const LEGACY_CHANNEL_MAIN = 'main' as LegacyMainChannelType
+const divisionBoxSessionLog = createLogger('DivisionBoxSession')
 
 /**
  * Type for state change listener callback
@@ -177,7 +179,7 @@ export class DivisionBoxSession {
       try {
         listener(event)
       } catch (error) {
-        console.error('[DivisionBoxSession] Error in state change listener:', error)
+        divisionBoxSessionLog.error('Error in state change listener', { error })
       }
     })
   }
@@ -205,7 +207,7 @@ export class DivisionBoxSession {
    * Uses window pool for faster acquisition
    */
   async createWindow(): Promise<void> {
-    console.log(`[DivisionBoxSession] createWindow called: ${this.sessionId}`)
+    divisionBoxSessionLog.debug(`createWindow called: ${this.sessionId}`)
 
     if (this.touchWindow) {
       throw new DivisionBoxError(
@@ -216,12 +218,12 @@ export class DivisionBoxSession {
     }
 
     try {
-      console.log(`[DivisionBoxSession] Acquiring window from pool...`)
+      divisionBoxSessionLog.debug(`Acquiring window from pool: ${this.sessionId}`)
       // Acquire window from pool (pre-warmed)
       const { windowPool } = await import('./window-pool')
-      console.log(`[DivisionBoxSession] windowPool imported, calling acquire...`)
+      divisionBoxSessionLog.debug(`windowPool imported: ${this.sessionId}`)
       this.touchWindow = await windowPool.acquire()
-      console.log(`[DivisionBoxSession] Window acquired successfully`)
+      divisionBoxSessionLog.debug(`Window acquired successfully: ${this.sessionId}`)
 
       const ensureVisible = (): void => {
         if (!this.touchWindow) return
@@ -246,9 +248,9 @@ export class DivisionBoxSession {
             relaunchCommand: '',
             relaunchDisplayName: this.config.title
           })
-          console.log(`[DivisionBoxSession] Set AppUserModelId: ${appUserModelId}`)
+          divisionBoxSessionLog.debug(`Set AppUserModelId: ${appUserModelId}`)
         } catch (error) {
-          console.warn(`[DivisionBoxSession] Failed to set AppDetails:`, error)
+          divisionBoxSessionLog.warn('Failed to set AppDetails for DivisionBox window', { error })
         }
       }
 
@@ -268,13 +270,13 @@ export class DivisionBoxSession {
 
       // Handle window close
       this.touchWindow.window.on('closed', () => {
-        console.log(`[DivisionBoxSession] Window closed: ${this.sessionId}`)
+        divisionBoxSessionLog.debug(`Window closed: ${this.sessionId}`)
         if (this.touchWindow) {
           windowPool.release(this.touchWindow.window)
         }
         this.touchWindow = null
         this.destroy().catch((err) => {
-          console.error('[DivisionBoxSession] Error in destroy after close:', err)
+          divisionBoxSessionLog.error('Error in destroy after close', { error: err })
         })
       })
 
@@ -290,7 +292,7 @@ export class DivisionBoxSession {
       ensureVisible()
 
       await this.setState(DivisionBoxState.ATTACH)
-      console.log(`[DivisionBoxSession] Window acquired from pool: ${this.sessionId}`)
+      divisionBoxSessionLog.debug(`Window acquired from pool: ${this.sessionId}`)
     } catch (error) {
       this.destroyWindow()
       throw new DivisionBoxError(
@@ -335,7 +337,7 @@ export class DivisionBoxSession {
     }
 
     if (this.uiView) {
-      console.warn('[DivisionBoxSession] UI view already attached, detaching first')
+      divisionBoxSessionLog.warn('UI view already attached, detaching first')
       this.detachUIView()
     }
 
@@ -363,7 +365,7 @@ export class DivisionBoxSession {
         fse.writeFileSync(tempPreloadPath, combinedPreload, 'utf-8')
         preloadPath = tempPreloadPath
       } catch (error) {
-        console.error('[DivisionBoxSession] Failed to create preload:', error)
+        divisionBoxSessionLog.error('Failed to create DivisionBox preload', { error })
       }
     }
 
@@ -422,8 +424,8 @@ export class DivisionBoxSession {
     await this.setState(DivisionBoxState.ACTIVE)
 
     // Log metrics for performance tracking
-    console.log(
-      `[DivisionBoxSession] UI view attached: ${this.sessionId} | preload=${metrics.preload.toFixed(1)}ms viewCreate=${metrics.viewCreate.toFixed(1)}ms loadUrl=${metrics.loadUrl.toFixed(1)}ms total=${metrics.total.toFixed(1)}ms`
+    divisionBoxSessionLog.debug(
+      `UI view attached: ${this.sessionId} | preload=${metrics.preload.toFixed(1)}ms viewCreate=${metrics.viewCreate.toFixed(1)}ms loadUrl=${metrics.loadUrl.toFixed(1)}ms total=${metrics.total.toFixed(1)}ms`
     )
   }
 
@@ -449,7 +451,7 @@ export class DivisionBoxSession {
     }
 
     if (this.uiView) {
-      console.warn('[DivisionBoxSession] UI view already attached, detaching first')
+      divisionBoxSessionLog.warn('UI view already attached, detaching first')
       this.detachUIView()
     }
 
@@ -484,7 +486,7 @@ export class DivisionBoxSession {
 
     await this.setState(DivisionBoxState.ACTIVE)
 
-    console.log(`[DivisionBoxSession] Existing UI view attached: ${this.sessionId}`)
+    divisionBoxSessionLog.debug(`Existing UI view attached: ${this.sessionId}`)
   }
 
   /**
@@ -496,7 +498,7 @@ export class DivisionBoxSession {
         this.touchWindow?.window.contentView.removeChildView(this.uiView)
         this.uiView.webContents.close()
       } catch (error) {
-        console.error('[DivisionBoxSession] Error detaching UI view:', error)
+        divisionBoxSessionLog.error('Error detaching UI view', { error })
       }
       this.uiView = null
       this.attachedPlugin = null
@@ -513,7 +515,7 @@ export class DivisionBoxSession {
       try {
         this.touchWindow.window.destroy()
       } catch (error) {
-        console.error('[DivisionBoxSession] Error destroying window:', error)
+        divisionBoxSessionLog.error('Error destroying DivisionBox window', { error })
       }
       this.touchWindow = null
     }
@@ -551,7 +553,7 @@ export class DivisionBoxSession {
     const current = this.touchWindow.window.isAlwaysOnTop()
     this.touchWindow.window.setAlwaysOnTop(!current)
 
-    console.log(`[DivisionBoxSession] Always on top: ${!current}`)
+    divisionBoxSessionLog.debug(`Always on top: ${!current}`)
     return !current
   }
 

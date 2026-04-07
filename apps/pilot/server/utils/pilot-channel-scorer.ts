@@ -1,9 +1,12 @@
 import type { H3Event } from 'h3'
+import type { PilotProviderTargetType } from './pilot-channel'
 import { listPilotRoutingMetrics } from './pilot-routing-metrics'
+import { buildRouteKey } from './pilot-route-health'
 
 export interface ChannelModelStats {
   channelId: string
   providerModel: string
+  providerTargetType: PilotProviderTargetType
   routeKey: string
   total: number
   success: number
@@ -18,6 +21,7 @@ export interface ChannelModelStats {
 export interface ChannelModelScoreInput {
   channelId: string
   providerModel: string
+  providerTargetType?: PilotProviderTargetType
 }
 
 export interface ChannelModelScoreOptions {
@@ -41,8 +45,15 @@ function normalizeNumber(value: unknown, fallback: number, min = 0, max = Number
   return Math.min(Math.max(Math.floor(parsed), min), max)
 }
 
-function buildRouteKey(channelId: string, providerModel: string): string {
-  return `${channelId}::${providerModel}`
+function resolveProviderTargetType(value: unknown): PilotProviderTargetType {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'coze_bot') {
+    return 'coze_bot'
+  }
+  if (normalized === 'coze_workflow') {
+    return 'coze_workflow'
+  }
+  return 'model'
 }
 
 function clamp01(value: number): number {
@@ -78,12 +89,14 @@ export async function computeChannelModelStats(
   for (const item of candidates) {
     const channelId = String(item.channelId || '').trim()
     const providerModel = String(item.providerModel || '').trim()
+    const providerTargetType = resolveProviderTargetType(item.providerTargetType)
     if (!channelId || !providerModel) {
       continue
     }
-    targetMap.set(buildRouteKey(channelId, providerModel), {
+    targetMap.set(buildRouteKey(channelId, providerModel, providerTargetType), {
       channelId,
       providerModel,
+      providerTargetType,
     })
   }
 
@@ -106,7 +119,11 @@ export async function computeChannelModelStats(
   }>()
 
   for (const metric of metrics) {
-    const routeKey = buildRouteKey(metric.channelId, metric.providerModel)
+    const routeKey = buildRouteKey(
+      metric.channelId,
+      metric.providerModel,
+      resolveProviderTargetType(metric.metadata?.providerTargetType),
+    )
     if (!targetMap.has(routeKey)) {
       continue
     }
@@ -160,6 +177,7 @@ export async function computeChannelModelStats(
     result.set(routeKey, {
       channelId: target.channelId,
       providerModel: target.providerModel,
+      providerTargetType: resolveProviderTargetType(target.providerTargetType),
       routeKey,
       total,
       success: bucket.success,

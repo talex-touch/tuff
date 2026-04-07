@@ -5,8 +5,6 @@
 </template>
 
 <script setup>
-import { defineProps } from 'vue'
-
 defineProps({
   loading: false, error: false, warn: false, success: false
 })

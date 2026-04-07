@@ -5,7 +5,14 @@ import type {
   DeepAgentAuditRecord,
 } from '@talex-touch/tuff-intelligence/pilot'
 import type { H3Event } from 'h3'
-import type { PilotBuiltinTool, PilotChannelAdapter, PilotChannelTransport } from './pilot-channel'
+import type {
+  PilotBuiltinTool,
+  PilotChannelAdapter,
+  PilotChannelRegion,
+  PilotChannelTransport,
+  PilotCozeAuthMode,
+  PilotProviderTargetType,
+} from './pilot-channel'
 import {
   AbstractAgentRuntime,
   CapabilityRegistry,
@@ -13,6 +20,7 @@ import {
   DeepAgentLangChainEngineAdapter,
   DefaultDecisionAdapter,
 } from '@talex-touch/tuff-intelligence/pilot'
+import { PilotCozeEngineAdapter } from './pilot-coze-engine'
 import { LangGraphLocalServerEngineAdapter } from './pilot-langgraph-engine'
 import { createPilotStoreAdapter } from './pilot-store'
 import { buildPilotSystemPrompt } from './pilot-system-prompt'
@@ -22,6 +30,7 @@ const DEFAULT_TIMEOUT_MS = 90_000
 const MIN_TIMEOUT_MS = 3_000
 const MAX_TIMEOUT_MS = 10 * 60 * 1000
 export const PILOT_STRICT_MODE_UNAVAILABLE_CODE = 'PILOT_STRICT_MODE_UNAVAILABLE'
+export const PILOT_COZE_LOCAL_TOOLS_UNSUPPORTED_CODE = 'PILOT_COZE_LOCAL_TOOLS_UNSUPPORTED'
 
 class PilotAgentRuntime extends AbstractAgentRuntime {}
 
@@ -73,8 +82,18 @@ export interface CreatePilotRuntimeOptions {
     baseUrl: string
     apiKey: string
     model: string
+    providerTargetType?: PilotProviderTargetType
     adapter: PilotChannelAdapter
     transport: PilotChannelTransport
+    region?: PilotChannelRegion
+    cozeAuthMode?: PilotCozeAuthMode
+    oauthClientId?: string
+    oauthClientSecret?: string
+    oauthTokenUrl?: string
+    jwtAppId?: string
+    jwtKeyId?: string
+    jwtPrivateKey?: string
+    jwtAudience?: string
     timeoutMs: number
     builtinTools: PilotBuiltinTool[]
   }
@@ -223,9 +242,31 @@ class PilotFallbackEngineAdapter implements AgentEngineAdapter {
   }
 }
 
+export class PilotCozeLocalToolsUnsupportedError extends Error {
+  readonly code = PILOT_COZE_LOCAL_TOOLS_UNSUPPORTED_CODE
+  readonly statusCode = 422
+  readonly data: Record<string, unknown>
+
+  constructor(data: {
+    channelId?: string
+    builtinTools?: PilotBuiltinTool[]
+  }) {
+    super('Coze 渠道当前版本不支持 Pilot 本地 builtinTools / tool-gateway。')
+    this.name = 'PilotCozeLocalToolsUnsupportedError'
+    this.data = {
+      code: PILOT_COZE_LOCAL_TOOLS_UNSUPPORTED_CODE,
+      channelId: String(data.channelId || '').trim() || undefined,
+      builtinTools: Array.isArray(data.builtinTools) ? data.builtinTools : [],
+    }
+  }
+}
+
 export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
   const { event, userId, emit, onAudit, channel, orchestrator } = options
-  if (!channel?.baseUrl || !channel.apiKey) {
+  if (!channel?.baseUrl) {
+    throw new Error('Pilot channel is not configured.')
+  }
+  if (channel.adapter !== 'coze' && !channel.apiKey) {
     throw new Error('Pilot channel is not configured.')
   }
   const strictPilotMode = options.strictPilotMode === true
@@ -243,10 +284,12 @@ export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
   const timeoutMs = normalizeTimeoutMs(channel?.timeoutMs)
   const builtinTools: PilotBuiltinTool[] = Array.isArray(channel?.builtinTools) && channel.builtinTools.length > 0
     ? channel.builtinTools
-    : ['write_todos']
+    : channel?.adapter === 'coze'
+      ? []
+      : ['write_todos']
   const engineBuiltinTools = builtinTools
     .filter((tool): tool is Exclude<PilotBuiltinTool, 'websearch'> => tool !== 'websearch')
-  if (engineBuiltinTools.length <= 0) {
+  if (engineBuiltinTools.length <= 0 && channel?.adapter !== 'coze') {
     engineBuiltinTools.push('write_todos')
   }
   const retryCount = 1
@@ -258,11 +301,60 @@ export function createPilotRuntime(options: CreatePilotRuntimeOptions) {
     ua: options.promptContext?.ua,
   })
 
+  if (channel?.adapter === 'coze') {
+    if (builtinTools.length > 0) {
+      throw new PilotCozeLocalToolsUnsupportedError({
+        channelId: channel.channelId,
+        builtinTools,
+      })
+    }
+    if (channel.providerTargetType !== 'coze_bot' && channel.providerTargetType !== 'coze_workflow') {
+      throw new Error('Coze channel requires explicit providerTargetType (coze_bot | coze_workflow).')
+    }
+
+    const engine: AgentEngineAdapter = new PilotCozeEngineAdapter({
+      channelId: channel.channelId,
+      baseUrl,
+      providerModel: model,
+      providerTargetType: channel.providerTargetType,
+      cozeAuthMode: channel.cozeAuthMode,
+      oauthClientId: String(channel.oauthClientId || '').trim(),
+      oauthClientSecret: String(channel.oauthClientSecret || '').trim(),
+      oauthTokenUrl: String(channel.oauthTokenUrl || '').trim(),
+      jwtAppId: String(channel.jwtAppId || '').trim(),
+      jwtKeyId: String(channel.jwtKeyId || '').trim(),
+      jwtPrivateKey: String(channel.jwtPrivateKey || '').trim(),
+      jwtAudience: String(channel.jwtAudience || '').trim(),
+      userId,
+      timeoutMs,
+      metadata: {
+        source: 'tuff-pilot',
+        channelId: channel.channelId,
+        channelAdapter: channel.adapter,
+        channelTransport: channel.transport,
+      },
+      onAudit,
+    })
+
+    const decision = new DefaultDecisionAdapter()
+    const runtime = new PilotAgentRuntime({
+      engine,
+      decision,
+      dispatcher,
+      store,
+    })
+
+    return {
+      runtime,
+      store,
+    }
+  }
+
   const deepAgentEngine = new DeepAgentLangChainEngineAdapter({
     baseUrl,
     apiKey,
     model,
-    transport: channel?.transport || 'responses',
+    transport: channel?.transport === 'chat.completions' ? 'chat.completions' : 'responses',
     retryCount,
     timeoutMs,
     systemPrompt,

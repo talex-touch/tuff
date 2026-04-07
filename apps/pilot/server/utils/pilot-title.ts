@@ -1,8 +1,10 @@
 import { networkClient } from '@talex-touch/utils/network'
+import { isPilotSystemMessageAllowedForModelContext } from '@talex-touch/tuff-intelligence/pilot'
 
 export interface TitleMessageLike {
   role: string
   content: string
+  metadata?: Record<string, unknown>
 }
 
 export interface GenerateTitleOptions {
@@ -51,7 +53,15 @@ function normalizeMessagePreview(content: string): string {
 
 export function buildConversationPreview(messages: TitleMessageLike[]): string {
   const rows = messages
-    .filter(item => item.role === 'user' || item.role === 'assistant')
+    .filter((item) => {
+      if (item.role === 'user' || item.role === 'assistant') {
+        return true
+      }
+      if (item.role === 'system') {
+        return isPilotSystemMessageAllowedForModelContext(item.metadata)
+      }
+      return false
+    })
     .slice(0, 6)
     .map((item, index) => `${index + 1}. ${item.role}: ${normalizeMessagePreview(item.content)}`)
 

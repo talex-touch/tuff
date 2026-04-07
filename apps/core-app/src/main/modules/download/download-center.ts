@@ -89,6 +89,7 @@ export class DownloadCenterModule extends BaseModule {
 
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private transportDisposers: Array<() => void> = []
+  private errorLoggerInitInFlight: Promise<void> | null = null
 
   // Performance optimizations
   private taskCache: Map<string, DownloadTask> = new Map() // In-memory task cache
@@ -130,8 +131,8 @@ export class DownloadCenterModule extends BaseModule {
 
     const t1 = performance.now()
 
-    // 初始化错误日志记录器
-    await this.errorLogger.initialize()
+    // 错误日志初始化改为后台启动，避免阻塞模块加载关键路径
+    this.startErrorLoggerInitialization()
 
     const t2 = performance.now()
 
@@ -171,7 +172,7 @@ export class DownloadCenterModule extends BaseModule {
     const totalMs = Math.round(t4 - t0)
     if (totalMs > 500) {
       console.warn(
-        `[DownloadCenter] Slow init ${totalMs}ms: components=${Math.round(t1 - t0)}ms errorLogger=${Math.round(t2 - t1)}ms setup=${Math.round(t3 - t2)}ms cleanup=${Math.round(t4 - t3)}ms`
+        `[DownloadCenter] Slow init ${totalMs}ms: components=${Math.round(t1 - t0)}ms errorLoggerKickoff=${Math.round(t2 - t1)}ms setup=${Math.round(t3 - t2)}ms cleanup=${Math.round(t4 - t3)}ms`
       )
     }
     console.log('DownloadCenterModule initialized')
@@ -200,6 +201,10 @@ export class DownloadCenterModule extends BaseModule {
       console.log('Stopping worker:', worker)
     }
 
+    if (this.errorLoggerInitInFlight) {
+      await this.errorLoggerInitInFlight
+    }
+
     // Destroy error logger
     await this.errorLogger.destroy()
 
@@ -209,6 +214,25 @@ export class DownloadCenterModule extends BaseModule {
   // 获取主数据库连接
   private getDb() {
     return databaseModule.getDb()
+  }
+
+  private startErrorLoggerInitialization(): void {
+    if (this.errorLoggerInitInFlight) {
+      return
+    }
+
+    const startedAt = performance.now()
+    this.errorLoggerInitInFlight = this.errorLogger
+      .initialize()
+      .then(() => {
+        const durationMs = Math.round(performance.now() - startedAt)
+        if (durationMs > 300) {
+          console.warn(`[DownloadCenter] Error logger init slow ${durationMs}ms`)
+        }
+      })
+      .finally(() => {
+        this.errorLoggerInitInFlight = null
+      })
   }
 
   // 添加下载任务
@@ -1097,7 +1121,6 @@ export class DownloadCenterModule extends BaseModule {
       },
       { interval: 30, unit: 'seconds', initialDelayMs: 1000 + Math.floor(Math.random() * 5000) }
     )
-    this.pollingService.start()
   }
 
   // 启动任务调度器
@@ -1112,7 +1135,6 @@ export class DownloadCenterModule extends BaseModule {
       interval: 1,
       unit: 'seconds'
     })
-    this.pollingService.start()
 
     // 启动任务调度循环
     this.scheduleTasks()

@@ -30,12 +30,15 @@ async function resolveQuotaConversationRecord(
   }
 
   const runtimeMessages = await store.runtime.listMessages(chatId)
+  const runtimeTraces = await store.runtime.listTrace(chatId, 1, 2_000).catch(() => [])
   const snapshot = buildQuotaConversationSnapshot({
     chatId,
     messages: runtimeMessages.map(item => ({
       role: item.role,
       content: item.content,
+      metadata: item.metadata,
     })),
+    runtimeTraces,
     assistantReply: '',
     topicHint: String(session.title || '').trim(),
   })

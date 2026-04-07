@@ -1,4 +1,6 @@
 import { execFile } from 'node:child_process'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
@@ -8,6 +10,7 @@ import { createLogger } from '../../utils/logger'
 const execFileAsync = promisify(execFile)
 const activeAppLog = createLogger('ActiveApp')
 const MACOS_RESOLVE_RETRY_DELAY_MS = 80
+const ACTIVE_APP_COMMAND_TIMEOUT_MS = 1500
 
 function isEbadfError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
@@ -15,6 +18,46 @@ function isEbadfError(error: unknown): boolean {
   return (
     node.code === 'EBADF' || (typeof node.message === 'string' && node.message.includes('EBADF'))
   )
+}
+
+function isMissingCommandError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  return (error as { code?: unknown }).code === 'ENOENT'
+}
+
+function toOptionalString(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return normalized.length > 0 ? normalized : null
+}
+
+function parseInteger(value: unknown): number | null {
+  const normalized = typeof value === 'string' ? Number.parseInt(value.trim(), 10) : Number.NaN
+  return Number.isFinite(normalized) ? normalized : null
+}
+
+export async function isActiveAppCapabilityAvailable(
+  platform = process.platform
+): Promise<boolean> {
+  if (platform === 'darwin' || platform === 'win32') {
+    return true
+  }
+
+  if (platform !== 'linux') {
+    return false
+  }
+
+  try {
+    await execFileAsync('xdotool', ['--version'], {
+      timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS
+    })
+    return true
+  } catch (error) {
+    if (!isMissingCommandError(error)) {
+      activeAppLog.debug('Linux active-app capability probe failed', { error })
+    }
+    return false
+  }
 }
 
 // Platform type for consistency
@@ -150,6 +193,150 @@ end tell`
     }
   }
 
+  private async resolveActiveWindowWindows(): Promise<Partial<ActiveAppInfo> | null> {
+    const script = `
+$ErrorActionPreference = 'Stop'
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class TuffForegroundWindow {
+  [DllImport("user32.dll")]
+  public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll", SetLastError=true)]
+  public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)]
+  public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+}
+"@
+$handle = [TuffForegroundWindow]::GetForegroundWindow()
+if ($handle -eq [IntPtr]::Zero) {
+  return ''
+}
+$processId = 0
+[TuffForegroundWindow]::GetWindowThreadProcessId($handle, [ref]$processId) | Out-Null
+$titleBuilder = New-Object System.Text.StringBuilder 2048
+[TuffForegroundWindow]::GetWindowText($handle, $titleBuilder, $titleBuilder.Capacity) | Out-Null
+$windowTitle = $titleBuilder.ToString()
+$displayName = ''
+$executablePath = ''
+try {
+  $process = Get-Process -Id $processId -ErrorAction Stop
+  $displayName = $process.ProcessName
+  try {
+    $executablePath = $process.Path
+  } catch {
+    $executablePath = ''
+  }
+} catch {}
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+@{
+  processId = [int]$processId
+  displayName = $displayName
+  executablePath = $executablePath
+  windowTitle = $windowTitle
+} | ConvertTo-Json -Compress
+`
+
+    try {
+      const { stdout } = await execFileAsync(
+        'powershell',
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+        { timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS, windowsHide: true, maxBuffer: 1024 * 1024 }
+      )
+      const normalized = stdout.trim()
+      if (!normalized) {
+        return null
+      }
+
+      const parsed = JSON.parse(normalized) as {
+        processId?: number
+        displayName?: string
+        executablePath?: string
+        windowTitle?: string
+      }
+
+      return {
+        displayName: toOptionalString(parsed.displayName),
+        windowTitle: toOptionalString(parsed.windowTitle),
+        processId: typeof parsed.processId === 'number' ? parsed.processId : null,
+        executablePath: toOptionalString(parsed.executablePath),
+        platform: 'windows'
+      }
+    } catch (error) {
+      if (!isMissingCommandError(error)) {
+        activeAppLog.warn('Windows active-app resolution failed', { error })
+      }
+      return null
+    }
+  }
+
+  private async resolveActiveWindowLinux(): Promise<Partial<ActiveAppInfo> | null> {
+    try {
+      const { stdout: windowIdOutput } = await execFileAsync('xdotool', ['getactivewindow'], {
+        timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS
+      })
+      const windowId = toOptionalString(windowIdOutput)
+      if (!windowId) {
+        return null
+      }
+
+      const { stdout: pidOutput } = await execFileAsync('xdotool', ['getwindowpid', windowId], {
+        timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS
+      })
+      const processId = parseInteger(pidOutput)
+      if (!processId) {
+        return null
+      }
+
+      let windowTitle: string | null = null
+      try {
+        const { stdout } = await execFileAsync('xdotool', ['getwindowname', windowId], {
+          timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS
+        })
+        windowTitle = toOptionalString(stdout)
+      } catch (error) {
+        if (!isMissingCommandError(error)) {
+          activeAppLog.debug('Linux active-app window title lookup failed', { error })
+        }
+      }
+
+      let displayName: string | null = null
+      try {
+        const { stdout } = await execFileAsync('ps', ['-p', String(processId), '-o', 'comm='], {
+          timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS
+        })
+        displayName = toOptionalString(stdout)
+      } catch (error) {
+        activeAppLog.debug('Linux active-app process lookup failed', { error })
+      }
+
+      let executablePath: string | null = null
+      try {
+        executablePath = toOptionalString(await fs.readlink(`/proc/${processId}/exe`))
+      } catch (error) {
+        activeAppLog.debug('Linux active-app executable lookup failed', { error })
+      }
+
+      if (!displayName && executablePath) {
+        displayName = path.basename(executablePath)
+      }
+
+      return {
+        displayName,
+        windowTitle,
+        processId,
+        executablePath,
+        platform: 'linux'
+      }
+    } catch (error) {
+      if (!isMissingCommandError(error)) {
+        activeAppLog.warn('Linux active-app resolution failed', { error })
+      }
+      return null
+    }
+  }
+
   /**
    * Main resolver: uses withOSAdapter to call platform-specific methods
    * Currently only macOS is implemented
@@ -160,12 +347,10 @@ end tell`
         return await this.resolveActiveWindowMacOS()
       },
       win32: async () => {
-        // Windows implementation not yet available
-        return null
+        return await this.resolveActiveWindowWindows()
       },
       linux: async () => {
-        // Linux implementation not yet available
-        return null
+        return await this.resolveActiveWindowLinux()
       }
     })
 

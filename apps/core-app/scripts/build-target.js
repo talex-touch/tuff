@@ -222,6 +222,58 @@ function ensureBuildNodeOptions(buildEnv) {
   }
 }
 
+function findFileRecursive(rootDir, fileName, maxDepth = 6, depth = 0) {
+  if (!rootDir || !fs.existsSync(rootDir) || depth > maxDepth) {
+    return null;
+  }
+
+  const entries = fs.readdirSync(rootDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(rootDir, entry.name);
+    if (entry.isFile() && entry.name === fileName) {
+      return fullPath;
+    }
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const nestedPath = findFileRecursive(path.join(rootDir, entry.name), fileName, maxDepth, depth + 1);
+    if (nestedPath) {
+      return nestedPath;
+    }
+  }
+
+  return null;
+}
+
+function verifyPackagedRuntimeModules(distDir, requiredModules) {
+  if (!Array.isArray(requiredModules) || requiredModules.length === 0) {
+    return;
+  }
+
+  const asarPath = findFileRecursive(distDir, 'app.asar');
+  if (!asarPath) {
+    console.warn('[build-target] app.asar not found under dist, skip runtime dependency verification');
+    return;
+  }
+
+  const { listPackage } = require('@electron/asar');
+  const packageEntries = new Set(
+    listPackage(asarPath).map((entry) => entry.replace(/\\/g, '/'))
+  );
+  const missingModules = requiredModules.filter(
+    moduleName => !packageEntries.has(path.posix.join('/node_modules', moduleName, 'package.json'))
+  );
+
+  if (missingModules.length > 0) {
+    throw new Error(
+      `Packaged runtime dependencies missing from ${asarPath}: ${missingModules.join(', ')}`
+    );
+  }
+
+  console.log(`[build-target] Verified packaged runtime dependencies: ${requiredModules.join(', ')}`);
+}
+
 function resolvePluginPreludeNodePaths() {
   const candidates = [
     path.join(projectRoot, 'node_modules'),
@@ -870,6 +922,8 @@ function build() {
   if (normalizedTarget === 'mac') {
     postProcessMacArtifacts(distDir);
   }
+
+  verifyPackagedRuntimeModules(distDir, ['ms']);
 
   console.log('\n✓ Build completed successfully.');
   } finally {

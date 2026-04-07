@@ -134,7 +134,7 @@ const thumbnail = computed(() => {
         alt="file icon"
       />
       <!-- Priority 3: Fallback icon -->
-      <i v-else class="ri-file-line file-icon-fallback" />
+      <i v-else class="i-ri-file-line file-icon-fallback" />
     </div>
     <span class="name">{{ firstFileName }}</span>
     <span v-if="fileCount > 1" class="badge">{{ fileCount }}</span>

@@ -3,12 +3,12 @@ import type {
   PilotAttachment,
   PilotComposerAttachment,
   PilotMessage,
+  PilotRuntimeStatusSnapshot,
   PilotSession,
   PilotSessionRow,
   PilotStageItem,
   PilotToolCall,
   PilotTrace,
-  PilotRuntimeStatusSnapshot,
   SessionMessagesResponse,
   SessionNotificationsResponse,
   SessionTitleResponse,
@@ -17,6 +17,8 @@ import type {
 } from './pilot-chat.types'
 import { networkClient } from '@talex-touch/utils/network'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { shouldHidePilotClientRuntimeEvent, shouldHidePilotClientSystemMessage } from '../../shared/pilot-runtime-redaction'
+import { buildPilotSystemMessageId, derivePilotToolCallsFromSystemMessages, projectPilotSystemMessage } from '../../shared/pilot-system-message'
 import {
   ASSISTANT_CHUNK_FLUSH_MS,
   clampInputText,
@@ -100,21 +102,6 @@ export function usePilotChatPage() {
     reason: '',
     confidence: 0,
     strategy: '',
-  })
-  const routeState = ref<{
-    channelId: string
-    routeComboId: string
-    modelId: string
-    providerModel: string
-    selectionSource: string
-    selectionReason: string
-  }>({
-    channelId: '',
-    routeComboId: '',
-    modelId: '',
-    providerModel: '',
-    selectionSource: '',
-    selectionReason: '',
   })
   const websearchState = ref<{
     phase: 'idle' | 'decided' | 'executed' | 'skipped'
@@ -213,14 +200,6 @@ export function usePilotChatPage() {
       confidence: 0,
       strategy: '',
     }
-    routeState.value = {
-      channelId: '',
-      routeComboId: '',
-      modelId: '',
-      providerModel: '',
-      selectionSource: '',
-      selectionReason: '',
-    }
     websearchState.value = {
       phase: 'idle',
       enabled: null,
@@ -241,17 +220,37 @@ export function usePilotChatPage() {
     return text === 'TOOL_APPROVAL_REQUIRED' || text.includes('TOOL_APPROVAL_REQUIRED')
   }
 
+  function normalizeWebsearchReason(value: unknown, phase: 'decision' | 'skipped' | 'executed'): string {
+    const reason = String(value || '').trim()
+    if (!reason) {
+      return ''
+    }
+    if (reason === 'intent_required') {
+      return '意图判定需要联网'
+    }
+    if (reason === 'intent_not_required') {
+      return '意图判定无需联网'
+    }
+    if (reason === 'fallback_unsupported_channel' || reason === 'fallback_endpoint_missing') {
+      return '当前通道不支持联网检索，已继续离线回答'
+    }
+    if (reason === 'tool_failed_or_empty_result') {
+      return '未获取到可用外部来源，已继续回答'
+    }
+    if (reason === 'terminal_finalize' && phase === 'skipped') {
+      return '执行结束，未触发联网检索'
+    }
+    return reason
+  }
+
   function buildStageItems(): PilotStageItem[] {
     const intentStatus: PilotStageItem['status'] = intentState.value.phase === 'running'
       ? 'running'
       : intentState.value.phase === 'completed'
         ? 'done'
         : 'pending'
-    const routingStatus: PilotStageItem['status'] = routeState.value.channelId
-      ? 'done'
-      : (intentStatus === 'done' ? 'running' : 'pending')
     const memoryStatus: PilotStageItem['status'] = memoryState.value.enabled === null
-      ? (routingStatus === 'done' ? 'running' : 'pending')
+      ? (intentStatus === 'done' ? 'running' : 'pending')
       : 'done'
     const websearchStatus: PilotStageItem['status'] = websearchState.value.phase === 'executed'
       ? 'done'
@@ -274,14 +273,6 @@ export function usePilotChatPage() {
         detail: intentStatus === 'running'
           ? '正在分析意图'
           : (intentState.value.intentType || intentState.value.reason || ''),
-      },
-      {
-        key: 'routing',
-        label: '路由',
-        status: routingStatus,
-        detail: routeState.value.channelId
-          ? `${routeState.value.channelId} / ${routeState.value.providerModel || routeState.value.modelId || '-'}`
-          : '',
       },
       {
         key: 'memory',
@@ -319,10 +310,6 @@ export function usePilotChatPage() {
       : `${intentReason} / ${(confidence * 100).toFixed(1)}%`
 
     const requestModel = runPreferences.value.modelId || 'quota-auto'
-    const actualModel = routeState.value.providerModel || routeState.value.modelId || '-'
-    const routeLabel = routeState.value.routeComboId
-      ? `${routeState.value.routeComboId} @ ${routeState.value.channelId || '-'}`
-      : '-'
 
     let websearchLabel = '等待判定'
     if (websearchState.value.phase === 'decided') {
@@ -349,9 +336,7 @@ export function usePilotChatPage() {
     return {
       intentLabel: intentType,
       intentDetail,
-      routeLabel,
       requestModelLabel: requestModel,
-      actualModelLabel: actualModel,
       websearchLabel,
       memoryLabel,
       thinkingLabel,
@@ -444,7 +429,8 @@ export function usePilotChatPage() {
   }
 
   const chatListMessages = computed<ChatMessageModel[]>(() => {
-    return messages.value.map((item) => {
+    const visibleMessages = messages.value.filter(item => item.role === 'user' || item.role === 'assistant')
+    return visibleMessages.map((item) => {
       const stamp = Date.parse(item.createdAt)
       const messageAttachments = getMessageAttachments(item)
       const baseContent = String(item.content || '')
@@ -727,6 +713,63 @@ export function usePilotChatPage() {
     lastSeq.value = Math.max(lastSeq.value, seq)
   }
 
+  function upsertSystemMessageFromStreamEvent(input: {
+    sessionId: string
+    eventType: string
+    seq: number
+    payload: Record<string, unknown>
+    detail?: Record<string, unknown>
+    message?: string
+    delta?: string
+    replay?: boolean
+  }) {
+    if (input.replay) {
+      return
+    }
+    if (!Number.isFinite(input.seq) || input.seq <= 0) {
+      return
+    }
+    const projected = projectPilotSystemMessage({
+      type: input.eventType,
+      seq: input.seq,
+      payload: input.payload,
+      detail: input.detail,
+      message: input.message,
+      delta: input.delta,
+    })
+    if (!projected) {
+      return
+    }
+    if (String(projected.metadata.cardType || '').trim().toLowerCase() === 'websearch') {
+      return
+    }
+    if (shouldHidePilotClientSystemMessage(projected.metadata)) {
+      return
+    }
+
+    const messageId = buildPilotSystemMessageId(
+      input.sessionId,
+      input.seq,
+      projected.metadata.sourceEventType,
+    )
+    const existing = messages.value.find(item => item.id === messageId)
+    if (existing) {
+      existing.content = projected.content
+      existing.metadata = projected.metadata as unknown as Record<string, unknown>
+      syncToolCallList()
+      return
+    }
+
+    messages.value.push({
+      id: messageId,
+      role: 'system',
+      content: projected.content,
+      createdAt: new Date().toISOString(),
+      metadata: projected.metadata as unknown as Record<string, unknown>,
+    })
+    syncToolCallList()
+  }
+
   function normalizeToolRiskLevel(value: unknown): PilotToolCall['riskLevel'] {
     const risk = String(value || '').trim().toLowerCase()
     if (risk === 'critical') {
@@ -770,6 +813,25 @@ export function usePilotChatPage() {
   }
 
   function syncToolCallList() {
+    const latestUserCreatedAt = [...messages.value]
+      .reverse()
+      .find(item => item.role === 'user')
+      ?.createdAt
+    const latestUserStamp = Date.parse(String(latestUserCreatedAt || ''))
+    const scopedMessages = Number.isFinite(latestUserStamp)
+      ? messages.value.filter((item) => {
+          if (item.role !== 'system') {
+            return true
+          }
+          const stamp = Date.parse(String(item.createdAt || ''))
+          return Number.isFinite(stamp) && stamp >= latestUserStamp
+        })
+      : messages.value
+    const fromSystemMessages = derivePilotToolCallsFromSystemMessages(scopedMessages, 20)
+    if (fromSystemMessages.length > 0) {
+      toolCalls.value = fromSystemMessages
+      return
+    }
     toolCalls.value = Array.from(toolCallMap.values())
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
       .slice(0, 20)
@@ -965,18 +1027,6 @@ export function usePilotChatPage() {
       return
     }
 
-    if (eventType === 'routing.selected') {
-      routeState.value = {
-        channelId: String(payload.channelId || '').trim(),
-        routeComboId: String(payload.routeComboId || '').trim(),
-        modelId: String(payload.modelId || '').trim(),
-        providerModel: String(payload.providerModel || '').trim(),
-        selectionSource: String(payload.selectionSource || '').trim(),
-        selectionReason: String(payload.selectionReason || '').trim(),
-      }
-      return
-    }
-
     if (eventType === 'memory.context') {
       const enabled = typeof payload.memoryEnabled === 'boolean'
         ? payload.memoryEnabled
@@ -1018,7 +1068,7 @@ export function usePilotChatPage() {
       websearchState.value = {
         phase: 'decided',
         enabled: typeof payload.enabled === 'boolean' ? payload.enabled : null,
-        reason: String(payload.reason || '').trim(),
+        reason: normalizeWebsearchReason(payload.reason, 'decision'),
         source: '',
         sourceCount: 0,
       }
@@ -1029,7 +1079,7 @@ export function usePilotChatPage() {
       websearchState.value = {
         phase: 'executed',
         enabled: true,
-        reason: String(payload.reason || websearchState.value.reason || '').trim(),
+        reason: normalizeWebsearchReason(payload.reason || websearchState.value.reason || '', 'executed'),
         source: String(payload.source || '').trim(),
         sourceCount: Number.isFinite(Number(payload.sourceCount)) ? Math.max(0, Number(payload.sourceCount)) : 0,
       }
@@ -1040,7 +1090,7 @@ export function usePilotChatPage() {
       websearchState.value = {
         phase: 'skipped',
         enabled: false,
-        reason: String(payload.reason || websearchState.value.reason || '').trim(),
+        reason: normalizeWebsearchReason(payload.reason || websearchState.value.reason || '', 'skipped'),
         source: '',
         sourceCount: 0,
       }
@@ -1072,7 +1122,7 @@ export function usePilotChatPage() {
         websearchState.value = {
           phase: 'skipped',
           enabled: false,
-          reason: websearchState.value.reason || 'terminal_finalize',
+          reason: normalizeWebsearchReason(websearchState.value.reason || 'terminal_finalize', 'skipped'),
           source: '',
           sourceCount: 0,
         }
@@ -1087,12 +1137,26 @@ export function usePilotChatPage() {
     loadingMessages.value = true
     try {
       const data = await fetchJson<SessionMessagesResponse>(`/api/chat/sessions/${sessionId}/messages`)
-      messages.value = Array.isArray(data.messages) ? data.messages : []
+      messages.value = Array.isArray(data.messages)
+        ? data.messages.filter((item) => {
+            if (item.role !== 'system') {
+              return true
+            }
+            const metadata = item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+              ? item.metadata
+              : {}
+            const cardType = String(metadata.cardType || '').trim().toLowerCase()
+            if (cardType === 'websearch') {
+              return false
+            }
+            return !shouldHidePilotClientSystemMessage(metadata)
+          })
+        : []
       attachments.value = Array.isArray(data.attachments) ? data.attachments : []
       pendingAttachments.value = []
       activeAssistantMessageId.value = null
       toolCallMap.clear()
-      toolCalls.value = []
+      syncToolCallList()
       assistantDeltaBuffer = ''
       clearAssistantFlushTimer()
       resetRuntimeStates()
@@ -1111,6 +1175,7 @@ export function usePilotChatPage() {
 
     if (!append) {
       const normalized = items
+        .filter(item => !shouldHidePilotClientRuntimeEvent(item.type))
         .map((item) => {
           const seq = normalizeTraceSeq(item.seq)
           return {
@@ -1136,6 +1201,9 @@ export function usePilotChatPage() {
     }
     else {
       for (const item of items) {
+        if (shouldHidePilotClientRuntimeEvent(item.type)) {
+          continue
+        }
         appendTrace(item)
         applyRuntimeStateByEvent(
           String(item.type || ''),
@@ -1240,11 +1308,34 @@ export function usePilotChatPage() {
     if (!eventSessionId || !eventType) {
       return
     }
+    if (shouldHidePilotClientRuntimeEvent(eventType)) {
+      return
+    }
+
+    const payloadRecord = item.payload && typeof item.payload === 'object' && !Array.isArray(item.payload)
+      ? item.payload
+      : {}
+    const detailRecord = item.detail && typeof item.detail === 'object' && !Array.isArray(item.detail)
+      ? item.detail
+      : undefined
 
     if (typeof item.seq === 'number' && Number.isFinite(item.seq)) {
       if (isActiveSessionEvent) {
         lastSeq.value = Math.max(lastSeq.value, item.seq)
       }
+    }
+
+    if (isActiveSessionEvent) {
+      upsertSystemMessageFromStreamEvent({
+        sessionId: eventSessionId,
+        eventType,
+        seq: normalizedSeq,
+        payload: payloadRecord,
+        detail: detailRecord,
+        message: String(item.message || ''),
+        delta: String(item.delta || ''),
+        replay: Boolean(item.replay),
+      })
     }
 
     if (eventType === 'turn.accepted' || eventType === 'turn.queued' || eventType === 'turn.started') {
@@ -1452,7 +1543,6 @@ export function usePilotChatPage() {
     if (
       eventType === 'intent.started'
       || eventType === 'intent.completed'
-      || eventType === 'routing.selected'
       || eventType === 'memory.context'
       || eventType === 'memory.updated'
       || eventType === 'websearch.decision'

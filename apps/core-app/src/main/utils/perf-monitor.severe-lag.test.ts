@@ -47,7 +47,7 @@ vi.mock('./workflow-debug', () => ({
   appendWorkflowDebugLog: vi.fn()
 }))
 
-import { perfMonitor } from './perf-monitor'
+import { inferEventLoopLagCause, perfMonitor } from './perf-monitor'
 
 describe('perf-monitor severe lag burst', () => {
   beforeEach(() => {
@@ -98,5 +98,24 @@ describe('perf-monitor severe lag burst', () => {
     expect(snapshot?.lagMs).toBe(512)
     expect(snapshot?.severity).toBe('warn')
     expect(typeof snapshot?.at).toBe('number')
+  })
+
+  it('在无上下文且无队列负载时将严重 lag 标记为 native/system stall', () => {
+    const cause = inferEventLoopLagCause({
+      lagMs: 2800,
+      contextsCount: 0,
+      pollingActiveCount: 0,
+      queueDepthByLane: {
+        critical: { queued: 0, inFlight: 0 },
+        realtime: { queued: 0, inFlight: 0 },
+        io: { queued: 0, inFlight: 0 },
+        maintenance: { queued: 0, inFlight: 0 },
+        legacy_serial: { queued: 0, inFlight: 0 }
+      },
+      pollingRecentMaxDurationMs: 1,
+      pollingRecentMaxSchedulerDelayMs: 0
+    })
+
+    expect(cause).toBe('native_or_system_stall')
   })
 })

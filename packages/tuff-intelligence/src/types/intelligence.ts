@@ -190,6 +190,8 @@ export interface IntelligenceMessage {
   role: 'system' | 'user' | 'assistant'
   /** Message content. */
   content: string
+  /** Optional metadata for routing/context policies. */
+  metadata?: Record<string, any>
   /** Optional sender name. */
   name?: string
 }
