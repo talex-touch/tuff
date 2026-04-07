@@ -2,6 +2,7 @@ import {
   projectPilotSystemMessagesFromTraces,
   shouldHidePilotClientSystemMessage,
 } from '@talex-touch/tuff-intelligence/pilot'
+import { listPilotTraceTail } from './pilot-trace-window'
 
 interface MessageLike {
   id: string
@@ -20,6 +21,7 @@ interface TraceLike {
 }
 
 interface RuntimeStoreLike {
+  getSession?: (sessionId: string) => Promise<{ lastSeq?: number } | null>
   listMessages: (sessionId: string) => Promise<MessageLike[]>
   listTrace: (sessionId: string, fromSeq?: number, limit?: number) => Promise<TraceLike[]>
 }
@@ -66,7 +68,14 @@ export async function listMessagesWithTraceProjection(
   const legacySystemMessages = persistedMessages
     .filter(item => item.role === 'system' && !shouldHidePilotClientSystemMessage(item.metadata))
 
-  const traces = await store.listTrace(sessionId, 1, 2_000).catch(() => [])
+  const session = typeof store.getSession === 'function'
+    ? await store.getSession(sessionId).catch(() => null)
+    : null
+  const traces = await listPilotTraceTail(store, {
+    sessionId,
+    lastSeq: session?.lastSeq,
+    limit: 2_000,
+  }).catch(() => [])
   const synthetic = projectPilotSystemMessagesFromTraces({
     sessionId,
     traces,

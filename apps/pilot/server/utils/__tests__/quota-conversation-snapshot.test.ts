@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
 import { projectPilotSystemMessage } from '@talex-touch/tuff-intelligence/pilot'
+import { describe, expect, it } from 'vitest'
 import { buildQuotaConversationSnapshot } from '../quota-conversation-snapshot'
 
 function extractAssistantBlocks(snapshot: ReturnType<typeof buildQuotaConversationSnapshot>) {
@@ -103,6 +103,85 @@ describe('quota-conversation-snapshot', () => {
     const runCards = extractCardsByName(snapshot, 'pilot_run_event_card')
       .map((item: any) => JSON.parse(String(item.data || '{}')))
     expect(runCards.some((item: Record<string, unknown>) => item.eventType === 'routing.selected')).toBe(false)
+  })
+
+  it('有 runtime traces 时应以 traces 为准并清理旧 runtime/tool 脏卡', () => {
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-trace-first',
+      messages: [
+        { role: 'user', content: 'hello' },
+        { role: 'assistant', content: 'world' },
+        {
+          role: 'system',
+          content: '工具调用：tool · 200',
+          metadata: {
+            eventType: 'run.audit',
+            sourceEventType: 'run.audit',
+            seq: 9,
+            cardType: 'runtime',
+            cardKey: 'tool:unknown',
+            status: '200',
+            title: '工具调用',
+            summary: 'tool · 200',
+            detail: {
+              auditType: 'attachment.resolve.end',
+              status: '200',
+            },
+          },
+        },
+      ],
+      runtimeTraces: [
+        { seq: 10, type: 'turn.started', payload: {} },
+        { seq: 11, type: 'intent.completed', payload: { intentType: 'code_analysis', confidence: 0.92 } },
+      ],
+      assistantReply: '',
+      topicHint: 'trace first',
+    })
+
+    const runCards = extractCardsByName(snapshot, 'pilot_run_event_card')
+      .map((item: any) => JSON.parse(String(item.data || '{}')))
+    const toolCards = extractCardsByName(snapshot, 'pilot_tool_card')
+
+    expect(toolCards).toHaveLength(0)
+    expect(runCards.some((item: Record<string, unknown>) => item.cardType === 'runtime')).toBe(false)
+    expect(runCards.some((item: Record<string, unknown>) => item.cardType === 'intent')).toBe(true)
+  })
+
+  it('trace 已存在但无可见卡时也应清掉旧脏卡而不是回退到 message cards', () => {
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-trace-clears-stale',
+      messages: [
+        { role: 'user', content: 'hello' },
+        { role: 'assistant', content: 'world' },
+        {
+          role: 'system',
+          content: '工具调用：tool · 200',
+          metadata: {
+            eventType: 'run.audit',
+            sourceEventType: 'run.audit',
+            seq: 8,
+            cardType: 'runtime',
+            cardKey: 'tool:unknown',
+            status: '200',
+            title: '工具调用',
+            summary: 'tool · 200',
+            detail: {
+              auditType: 'attachment.resolve.end',
+              status: '200',
+            },
+          },
+        },
+      ],
+      runtimeTraces: [
+        { seq: 9, type: 'turn.started', payload: {} },
+        { seq: 10, type: 'routing.selected', payload: { channelId: 'route-a' } },
+      ],
+      assistantReply: '',
+      topicHint: 'clear stale',
+    })
+
+    expect(extractCardsByName(snapshot, 'pilot_run_event_card')).toHaveLength(0)
+    expect(extractCardsByName(snapshot, 'pilot_tool_card')).toHaveLength(0)
   })
 
   it('基于 runtime traces 重建并注入 pilot_run_event_card / pilot_tool_card（仅最新 turn）', () => {

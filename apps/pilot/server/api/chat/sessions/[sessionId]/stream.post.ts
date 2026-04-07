@@ -10,13 +10,14 @@ import type {
 import type { H3Event } from 'h3'
 import {
   createPilotStreamEmitter,
-  mapPilotReplayTraceToStreamEvent,
   mapPilotAuditToStreamEvent,
+  mapPilotReplayTraceToStreamEvent,
   PILOT_DEFAULT_KEEPALIVE_MS,
   PILOT_DEFAULT_TRACE_REPLAY_LIMIT,
   runPilotConversationStream,
-  shouldHidePilotClientRuntimeEvent,
   shouldExecutePilotWebsearch,
+  shouldHidePilotClientRuntimeEvent,
+  shouldPilotPersistTraceEvent,
   toPilotJsonSafe,
   toPilotSafeRecord,
   toPilotStreamErrorDetail,
@@ -73,6 +74,7 @@ import {
   PilotToolApprovalRejectedError,
   PilotToolApprovalRequiredError,
 } from '../../../../utils/pilot-tool-gateway'
+import { listPilotTraceTail } from '../../../../utils/pilot-trace-window'
 import { buildQuotaConversationSnapshot } from '../../../../utils/quota-conversation-snapshot'
 import { ensureQuotaHistorySchema, getQuotaHistory, upsertQuotaHistory } from '../../../../utils/quota-history-store'
 
@@ -221,7 +223,7 @@ async function syncLegacyQuotaConversationFromRuntime(
     chatId: string
     channelId: string
     storeRuntime: {
-      getSession: (sessionId: string) => Promise<{ title?: string | null } | null>
+      getSession: (sessionId: string) => Promise<{ title?: string | null, lastSeq?: number } | null>
       listMessages: (sessionId: string) => Promise<Array<{
         role: string
         content: string
@@ -241,7 +243,13 @@ async function syncLegacyQuotaConversationFromRuntime(
 
   const runtimeMessages = await options.storeRuntime.listMessages(options.chatId)
   const runtimeTraces = options.storeRuntime.listTrace
-    ? await options.storeRuntime.listTrace(options.chatId, 1, 2_000).catch(() => [])
+    ? await listPilotTraceTail({
+        listTrace: options.storeRuntime.listTrace.bind(options.storeRuntime),
+      }, {
+        sessionId: options.chatId,
+        lastSeq: session.lastSeq,
+        limit: 2_000,
+      }).catch(() => [])
     : []
   const previous = await getQuotaHistory(event, options.userId, options.chatId)
   const snapshot = buildQuotaConversationSnapshot({
@@ -403,6 +411,10 @@ async function followTraceTail(options: {
       for (const trace of traces) {
         if (options.connection.closed || options.connection.disconnected) {
           return
+        }
+        if (!shouldPilotPersistTraceEvent(trace.type)) {
+          nextSeq = Math.max(nextSeq, Number(trace.seq || 0) + 1)
+          continue
         }
         if (shouldHidePilotClientRuntimeEvent(trace.type)) {
           nextSeq = Math.max(nextSeq, Number(trace.seq || 0) + 1)
@@ -772,7 +784,9 @@ export default defineEventHandler(async (event) => {
 
           const projectedSeq = Number.isFinite(payload.seq)
             ? Math.max(1, Math.floor(Number(payload.seq)))
-            : (emitOptions?.persist === true ? streamEmitter.getSeqCursor() : undefined)
+            : (emitOptions?.persist === true && shouldPilotPersistTraceEvent(eventType)
+                ? streamEmitter.getSeqCursor()
+                : undefined)
           const projectedPayload = payload.payload && typeof payload.payload === 'object' && !Array.isArray(payload.payload)
             ? payload.payload as Record<string, unknown>
             : {}

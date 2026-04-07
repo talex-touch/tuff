@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
 import {
   projectPilotSystemMessage,
 } from '@talex-touch/tuff-intelligence/pilot'
+import { describe, expect, it } from 'vitest'
 import { buildPilotCardBlocksFromSystemMessages } from '../../../shared/pilot-system-card-blocks'
 
 describe('pilot-system-message', () => {
@@ -26,6 +26,20 @@ describe('pilot-system-message', () => {
         enabled: false,
         reason: 'intent_not_required',
         turnId: 'turn-hidden',
+      },
+    })
+
+    expect(projected).toBeNull()
+  })
+
+  it('非 tool.call 的 run.audit 不应投影为前端 system message', () => {
+    const projected = projectPilotSystemMessage({
+      type: 'run.audit',
+      seq: 3,
+      payload: {
+        auditType: 'attachment.resolve.end',
+        status: 'ok',
+        attachmentCount: 2,
       },
     })
 

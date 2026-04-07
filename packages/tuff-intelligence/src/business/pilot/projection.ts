@@ -97,6 +97,7 @@ const HIDDEN_CLIENT_EVENT_TYPES = new Set([
 
 const HIDDEN_CLIENT_CARD_TYPES = new Set([
   'routing',
+  'runtime',
 ])
 
 const TOOL_TERMINAL_STATUSES = new Set(['completed', 'failed', 'rejected'])
@@ -585,7 +586,7 @@ function buildToolAuditProjection(input: PilotSystemProjectionInput): PilotProje
   const turnId = resolveTurnId(input)
   const detail = toRecord(payload)
   const auditType = normalizeText(detail.auditType || detail.audit_type)
-  if (!auditType) {
+  if (!auditType || !auditType.startsWith('tool.call.')) {
     return null
   }
 
@@ -690,6 +691,9 @@ export function projectPilotSystemMessagesFromTraces(input: {
       payload: toRecord(trace.payload),
     })
     if (!mapped) {
+      continue
+    }
+    if (shouldHidePilotClientSystemMessage(mapped.metadata)) {
       continue
     }
     const createdAt = normalizeText(trace.createdAt || trace.created_at) || new Date().toISOString()

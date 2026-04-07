@@ -146,6 +146,24 @@ function mergeRunCardDetail(
   return next
 }
 
+function shouldIgnoreLegacySystemCard(
+  metadata: Record<string, unknown>,
+  detail: Record<string, unknown>,
+  cardType: string,
+): boolean {
+  if (cardType === 'runtime') {
+    return true
+  }
+
+  const sourceEventType = normalizeText(metadata.sourceEventType || metadata.eventType).toLowerCase()
+  if (sourceEventType !== 'run.audit') {
+    return false
+  }
+
+  const auditType = normalizeText(metadata.auditType || detail.auditType || detail.audit_type)
+  return !auditType.startsWith('tool.call.')
+}
+
 export function buildPilotCardBlocksFromSystemMessages(
   messages: PilotSystemMessageLike[],
   maxCardBlocks = 48,
@@ -169,6 +187,9 @@ export function buildPilotCardBlocksFromSystemMessages(
     const cardType = normalizeText(metadata.cardType).toLowerCase()
     const seq = normalizeSeq(metadata.seq)
     if (!cardType || !seq) {
+      continue
+    }
+    if (shouldIgnoreLegacySystemCard(metadata, detail, cardType)) {
       continue
     }
 

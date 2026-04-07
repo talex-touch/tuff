@@ -3,6 +3,7 @@ import {
   projectPilotLegacyRunEventCard,
   projectPilotSystemMessagesFromTraces,
   shouldHidePilotClientRuntimeEvent,
+  shouldPilotPersistTraceEvent,
 } from '@talex-touch/tuff-intelligence/pilot'
 import { sortPilotChatBlocksByTimeline } from '../../shared/pilot-chat-block-order'
 import { buildPilotCardBlocksFromSystemMessages } from '../../shared/pilot-system-card-blocks'
@@ -40,7 +41,7 @@ function normalizeRuntimeTraces(input: unknown): RuntimeTraceLike[] {
     .map((item) => {
       const row = toRecord(item)
       const type = String(row.type || '').trim()
-      if (!type || shouldHidePilotClientRuntimeEvent(type)) {
+      if (!type || !shouldPilotPersistTraceEvent(type) || shouldHidePilotClientRuntimeEvent(type)) {
         return null
       }
       const seq = Number(row.seq)
@@ -133,23 +134,42 @@ function buildLegacyThinkingCardBlocks(chatId: string, traces: RuntimeTraceLike[
     }))
 }
 
-function buildTraceCardBlocks(chatId: string, runtimeTraces: unknown): SnapshotCardBlock[] {
+function buildTraceCardBlocks(chatId: string, runtimeTraces: unknown): {
+  hasTraceSource: boolean
+  cardBlocks: SnapshotCardBlock[]
+} {
   const normalized = normalizeRuntimeTraces(runtimeTraces)
   if (normalized.length <= 0) {
-    return []
+    return {
+      hasTraceSource: false,
+      cardBlocks: [],
+    }
   }
   const latestTurnTraces = selectLatestTurnTraces(normalized)
   if (latestTurnTraces.length <= 0) {
-    return []
+    return {
+      hasTraceSource: true,
+      cardBlocks: [],
+    }
+  }
+  const hasProjectedTraceSource = latestTurnTraces.some(item => item.type !== 'turn.started')
+  if (!hasProjectedTraceSource) {
+    return {
+      hasTraceSource: false,
+      cardBlocks: [],
+    }
   }
   const projected = projectPilotSystemMessagesFromTraces({
     sessionId: chatId,
     traces: latestTurnTraces,
   })
-  return [
-    ...buildPilotCardBlocksFromSystemMessages(projected, MAX_CARD_BLOCKS_PER_TURN),
-    ...buildLegacyThinkingCardBlocks(chatId, latestTurnTraces),
-  ]
+  return {
+    hasTraceSource: true,
+    cardBlocks: [
+      ...buildPilotCardBlocksFromSystemMessages(projected, MAX_CARD_BLOCKS_PER_TURN),
+      ...buildLegacyThinkingCardBlocks(chatId, latestTurnTraces),
+    ],
+  }
 }
 
 function ensureAssistantValueBlocks(messages: Record<string, unknown>[]): unknown[] {
@@ -204,8 +224,11 @@ function ensureAssistantValueBlocks(messages: Record<string, unknown>[]): unknow
 function mergeTraceCardsIntoPayloadMessages(
   payload: Record<string, unknown>,
   cardBlocks: SnapshotCardBlock[],
+  options?: {
+    clearExistingPilotCards?: boolean
+  },
 ): void {
-  if (cardBlocks.length <= 0) {
+  if (cardBlocks.length <= 0 && options?.clearExistingPilotCards !== true) {
     return
   }
   if (!Array.isArray(payload.messages)) {
@@ -272,12 +295,14 @@ export function buildQuotaConversationSnapshot(input: {
     previousValue: input.previousValue,
   })
 
-  const messageCardBlocks = buildMessageCardBlocks(input.messages)
-  const cardBlocks = messageCardBlocks.length > 0
-    ? messageCardBlocks
-    : buildTraceCardBlocks(input.chatId, input.runtimeTraces)
-  if (cardBlocks.length > 0) {
-    mergeTraceCardsIntoPayloadMessages(snapshot.payload, cardBlocks)
+  const traceCards = buildTraceCardBlocks(input.chatId, input.runtimeTraces)
+  const cardBlocks = traceCards.hasTraceSource
+    ? traceCards.cardBlocks
+    : buildMessageCardBlocks(input.messages)
+  if (traceCards.hasTraceSource || cardBlocks.length > 0) {
+    mergeTraceCardsIntoPayloadMessages(snapshot.payload, cardBlocks, {
+      clearExistingPilotCards: traceCards.hasTraceSource,
+    })
     snapshot.value = JSON.stringify(snapshot.payload)
   }
   return snapshot
