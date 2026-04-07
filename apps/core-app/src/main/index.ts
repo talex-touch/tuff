@@ -7,7 +7,6 @@ import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { app, protocol } from 'electron'
 import { commonChannelModule } from './channel/common'
 import { genTouchApp } from './core'
-import { runStartupHealthCheck } from './core/startup-health'
 import { loadStartupModules } from './core/startup-module-loader'
 import { enforceDevReleaseStartupConstraint } from './core/startup-version-guard'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
@@ -70,6 +69,25 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let lastVerboseLogsState: boolean | null = null
+
+function parseBooleanEnvFlag(value: string | undefined): boolean {
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
+function parsePositiveIntegerEnv(value: string | undefined, fallback: number): number {
+  if (!value) return fallback
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback
+  return parsed
+}
+
+const startupBenchmarkEnabled = parseBooleanEnvFlag(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
+const startupBenchmarkExitDelayMs = parsePositiveIntegerEnv(
+  process.env.TUFF_STARTUP_BENCHMARK_EXIT_DELAY_MS,
+  1_200
+)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -202,58 +220,63 @@ app.whenReady().then(async () => {
   if (!canContinue) return
 
   electronReadyTime = Date.now()
-  const startupTimer = mainLog.time('All modules loaded', 'success')
+  const startupTimer = mainLog.time('Startup health check passed', 'success')
+  const moduleLoadTimer = mainLog.time('All modules loaded', 'success')
   mainLog.info('Electron ready, bootstrapping modules')
+
+  let modulesLoaded = false
+  let loadedModuleCount = 0
 
   try {
     const analytics = getStartupAnalytics()
     const touchApp = genTouchApp()
     const modulesStartTime = Date.now()
 
-    const moduleLoadMetrics = (await runStartupHealthCheck({
-      loadModules: async () =>
-        (await loadStartupModules({
-          modules: modulesToLoad,
-          loadModule: async (moduleCtor) => {
-            return await touchApp.moduleManager.loadModule(moduleCtor)
-          },
-          optionalModules: optionalModulesToLoad,
-          shouldSkip: (moduleCtor) => {
-            if (moduleCtor === assistantModule && !shouldLoadAssistantModule()) {
-              mainLog.info('Skip Assistant module: TUFF_ENABLE_ASSISTANT_EXPERIMENT disabled')
-              return true
-            }
-            if (moduleCtor === trayManagerModule && !shouldLoadTrayModule()) {
-              mainLog.info('Skip TrayManager module: experimentalTray disabled')
-              return true
-            }
-            return false
-          },
-          onOptionalModuleLoadFailed: async (_moduleCtor, metric) => {
-            mainLog.warn('Optional module failed to load, continue startup', {
-              meta: { module: metric.name }
-            })
-          },
-          onLoaded: async (moduleCtor, metric) => {
-            analytics.trackModuleLoad(metric.name, metric.loadTime, metric.order)
+    const moduleLoadMetrics = (await loadStartupModules({
+      modules: modulesToLoad,
+      loadModule: async (moduleCtor) => {
+        return await touchApp.moduleManager.loadModule(moduleCtor)
+      },
+      optionalModules: optionalModulesToLoad,
+      shouldSkip: (moduleCtor) => {
+        if (moduleCtor === assistantModule && !shouldLoadAssistantModule()) {
+          mainLog.info('Skip Assistant module: TUFF_ENABLE_ASSISTANT_EXPERIMENT disabled')
+          return true
+        }
+        if (moduleCtor === trayManagerModule && !shouldLoadTrayModule()) {
+          mainLog.info('Skip TrayManager module: experimentalTray disabled')
+          return true
+        }
+        return false
+      },
+      onOptionalModuleLoadFailed: async (_moduleCtor, metric) => {
+        mainLog.warn('Optional module failed to load, continue startup', {
+          meta: { module: metric.name }
+        })
+      },
+      onLoaded: async (moduleCtor, metric) => {
+        analytics.trackModuleLoad(metric.name, metric.loadTime, metric.order)
 
-            if (moduleCtor === storageModule) {
-              try {
-                const appSettings = getMainConfig(StorageList.APP_SETTING)
-                applyLoggerConfig(appSettings)
-                subscribeMainConfig(StorageList.APP_SETTING, (data) => {
-                  applyLoggerConfig(data)
-                })
-              } catch (error) {
-                mainLog.warn('Failed to load logger configuration', { error })
-              }
-            }
+        if (moduleCtor === storageModule) {
+          try {
+            const appSettings = getMainConfig(StorageList.APP_SETTING)
+            applyLoggerConfig(appSettings)
+            subscribeMainConfig(StorageList.APP_SETTING, (data) => {
+              applyLoggerConfig(data)
+            })
+          } catch (error) {
+            mainLog.warn('Failed to load logger configuration', { error })
           }
-        })) as ModuleLoadMetric[],
-      waitUntilInitialized: () => touchApp.waitUntilInitialized()
+        }
+      }
     })) as ModuleLoadMetric[]
 
     const totalModulesLoadTime = Date.now() - modulesStartTime
+    loadedModuleCount = moduleLoadMetrics.length
+    modulesLoaded = true
+    moduleLoadTimer.end('All modules loaded', {
+      meta: { modules: loadedModuleCount }
+    })
 
     // Set main process metrics
     analytics.setMainProcessMetrics({
@@ -264,15 +287,40 @@ app.whenReady().then(async () => {
       moduleDetails: moduleLoadMetrics
     })
 
+    const rendererInitPromise = touchApp.waitUntilInitialized()
+    if (touchApp.isSilentStart()) {
+      void rendererInitPromise.catch((error) => {
+        mainLog.error('Silent-start renderer initialization failed', { error })
+        app.quit()
+      })
+    } else {
+      await rendererInitPromise
+    }
+
     touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
 
     // Start the global polling service after all modules are loaded.
     pollingService.start()
 
-    startupTimer.end('All modules loaded', {
-      meta: { modules: modulesToLoad.length }
+    startupTimer.end('Startup health check passed', {
+      meta: { modules: loadedModuleCount }
     })
+
+    if (startupBenchmarkEnabled) {
+      mainLog.info('Startup benchmark mode: scheduling app quit after startup health check', {
+        meta: { exitDelayMs: startupBenchmarkExitDelayMs }
+      })
+      setTimeout(() => {
+        app.quit()
+      }, startupBenchmarkExitDelayMs)
+    }
   } catch (error) {
+    if (!modulesLoaded) {
+      moduleLoadTimer.end('Module bootstrap failed', {
+        level: 'warn',
+        error
+      })
+    }
     startupTimer.end('Bootstrap failed', {
       level: 'warn',
       error

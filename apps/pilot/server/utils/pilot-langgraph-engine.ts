@@ -4,6 +4,7 @@ import type {
   TurnState,
   UserMessageAttachment,
 } from '@talex-touch/tuff-intelligence/pilot'
+import { shouldIncludePilotMessageInModelContext } from '@talex-touch/tuff-intelligence/pilot'
 import { networkClient, parseHttpStatusCode } from '@talex-touch/utils/network'
 
 const DEFAULT_TIMEOUT_MS = 90_000
@@ -254,17 +255,24 @@ function renderAttachmentHint(attachments: UserMessageAttachment[] | undefined):
   return `\n\n[Attachments]\n${lines.join('\n')}`
 }
 
-function buildLangGraphMessages(state: TurnState): Array<{ role: 'user' | 'assistant', content: string }> {
+function buildLangGraphMessages(state: TurnState): Array<{ role: 'user' | 'assistant' | 'system', content: string }> {
   const rows = toArray(state.messages)
-  const list: Array<{ role: 'user' | 'assistant', content: string }> = []
+  const list: Array<{ role: 'user' | 'assistant' | 'system', content: string }> = []
 
   for (const item of rows) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
       continue
     }
     const row = item as Record<string, unknown>
+    if (!shouldIncludePilotMessageInModelContext(row)) {
+      continue
+    }
     const roleValue = normalizeText(row.role).toLowerCase()
-    const role: 'user' | 'assistant' = roleValue === 'assistant' ? 'assistant' : 'user'
+    const role: 'user' | 'assistant' | 'system' = roleValue === 'assistant'
+      ? 'assistant'
+      : roleValue === 'system'
+        ? 'system'
+        : 'user'
     const content = normalizeText(row.content)
     if (!content) {
       continue
@@ -283,9 +291,13 @@ function buildLangGraphMessages(state: TurnState): Array<{ role: 'user' | 'assis
   }
 
   if (state.attachments && state.attachments.length > 0) {
-    const last = list[list.length - 1]
-    if (last && last.role === 'user') {
-      last.content = `${last.content}${renderAttachmentHint(state.attachments)}`
+    for (let index = list.length - 1; index >= 0; index -= 1) {
+      const target = list[index]
+      if (target?.role !== 'user') {
+        continue
+      }
+      target.content = `${target.content}${renderAttachmentHint(state.attachments)}`
+      break
     }
   }
 

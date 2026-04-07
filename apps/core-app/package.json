@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/core-app",
-  "version": "2.4.9-beta.4",
+  "version": "2.4.9-beta.10",
   "private": true,
   "description": "A strong adaptation more platform all-tool program.",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
@@ -37,7 +37,10 @@
     "build:release:win": "node scripts/build-target.js --target=win --type=release",
     "build:release:mac": "node scripts/build-target.js --target=mac --type=release",
     "build:release:linux": "node scripts/build-target.js --target=linux --type=release",
-    "network:guard": "node \"../../scripts/check-network-boundaries.mjs\" --scope \"apps/core-app/src\""
+    "network:guard": "node \"../../scripts/check-network-boundaries.mjs\" --scope \"apps/core-app/src\"",
+    "startup:bench:dev": "node \"scripts/startup-benchmark-dev.mjs\" --mode run --runs 30 --continueOnFail",
+    "startup:bench:analyze": "node \"scripts/startup-benchmark-dev.mjs\" --mode analyze",
+    "clipboard:stress": "pnpm exec tsx \"scripts/clipboard-polling-stress.ts\""
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
@@ -77,6 +80,7 @@
     "marked": "^17.0.4",
     "mathjs": "^13.2.3",
     "mousetrap": "^1.6.5",
+    "ms": "^2.1.3",
     "original-fs": "^1.2.0",
     "pinyin-match": "^1.2.10",
     "pinyin-pro": "^3.28.0",

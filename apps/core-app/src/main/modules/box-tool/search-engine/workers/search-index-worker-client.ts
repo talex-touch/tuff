@@ -71,6 +71,18 @@ export interface PersistEntry {
   indexItem: SearchIndexItem
 }
 
+export interface UpsertFileRecord {
+  path: string
+  name: string
+  extension?: string | null
+  size?: number | null
+  mtime: Date | number | string
+  ctime: Date | number | string
+  lastIndexedAt: Date | number | string
+  isDir: boolean
+  type: string
+}
+
 // ---------- Client ----------
 
 export class SearchIndexWorkerClient {
@@ -165,6 +177,30 @@ export class SearchIndexWorkerClient {
     await this.ensureInitialized()
     const taskId = this.generateTaskId('persistAndIndex')
     return this.sendAndWait(taskId, { type: 'persistAndIndex', taskId, entries })
+  }
+
+  async upsertFiles(records: UpsertFileRecord[]): Promise<Array<Record<string, unknown>>> {
+    if (records.length === 0) return []
+    await this.ensureInitialized()
+    const taskId = this.generateTaskId('upsertFiles')
+    const result = await this.sendAndWaitWithResult<Array<Record<string, unknown>>>(taskId, {
+      type: 'upsertFiles',
+      taskId,
+      records
+    })
+    return result ?? []
+  }
+
+  async upsertScanProgress(paths: string[], lastScanned: string): Promise<void> {
+    if (paths.length === 0) return
+    await this.ensureInitialized()
+    const taskId = this.generateTaskId('upsertScanProgress')
+    await this.sendAndWait(taskId, {
+      type: 'upsertScanProgress',
+      taskId,
+      paths,
+      lastScanned
+    })
   }
 
   async getStatus(): Promise<WorkerStatusSnapshot> {

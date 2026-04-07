@@ -42,7 +42,6 @@ import {
   touchEventBus
 } from '../../core/eventbus/touch-event'
 import { TouchWindow } from '../../core/touch-window'
-import { TuffIconImpl } from '../../core/tuff-icon'
 import { createDbUtils } from '../../db/utils'
 import { useAliveTarget, useAliveWebContents } from '../../hooks/use-electron-guard'
 import { fileWatchService } from '../../service/file-watch.service'
@@ -67,7 +66,7 @@ import { PluginInstaller } from './plugin-installer'
 import { isWidgetFeatureEnabled } from './widget/widget-issue'
 import { widgetManager } from './widget/widget-manager'
 
-import { createPluginLoader } from './plugin-loaders'
+import { createPluginErrorPlaceholder, createPluginLoader } from './plugin-loaders'
 import { LocalPluginProvider } from './providers/local-provider'
 import { usePluginInjections } from './runtime/plugin-injections'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
@@ -1156,18 +1155,13 @@ function createPluginModuleInternal(
       logDebug('Ready to load plugin from disk', pluginTag(pluginName), 'path:', currentPluginPath)
 
       if (!fse.existsSync(currentPluginPath) || !fse.existsSync(manifestPath)) {
-        const placeholderIcon = new TuffIconImpl(currentPluginPath, 'emoji', '')
-        placeholderIcon.status = 'error'
-        const touchPlugin = new TouchPlugin(
+        const touchPlugin = createPluginErrorPlaceholder(
           pluginName,
-          placeholderIcon,
-          '0.0.0',
-          'Loading...',
-          '',
-          { enable: false, address: '' },
           currentPluginPath,
-          undefined,
-          { skipDataInit: true }
+          'Loading...',
+          {
+            skipDataInit: true
+          }
         )
 
         touchPlugin.issues.push({
@@ -1271,17 +1265,10 @@ function createPluginModuleInternal(
         const message = error instanceof Error ? error.message : 'Unknown error'
         const stack = error instanceof Error ? error.stack : undefined
         // Create a dummy plugin to show the error in the UI
-        const placeholderIcon = new TuffIconImpl(currentPluginPath, 'emoji', '')
-        placeholderIcon.status = 'error'
-        const touchPlugin = new TouchPlugin(
+        const touchPlugin = createPluginErrorPlaceholder(
           pluginName,
-          placeholderIcon,
-          '0.0.0',
-          'Fatal Error',
-          '',
-          { enable: false, address: '' },
           currentPluginPath,
-          undefined,
+          'Fatal Error',
           { skipDataInit: true }
         )
         touchPlugin.issues.push({

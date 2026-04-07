@@ -10,6 +10,7 @@ import { isPilotRouteComboIdValid } from '~~/shared/pilot-capability-meta'
 import {
   applyModelGroupTemplate,
   buildModelGroupPayload,
+  BUILT_IN_SCENE_OPTIONS,
   BUILTIN_TOOL_OPTIONS,
   createEmptyBinding,
   createEmptyChannelModelOptionIndex,
@@ -24,6 +25,7 @@ import {
   PILOT_MODEL_TEMPLATE_PRESETS,
   savePilotRoutingSettings,
   syncPilotChannelModels,
+  TARGET_TYPE_OPTIONS,
 } from '~/composables/usePilotRoutingAdmin'
 
 definePageMeta({
@@ -69,6 +71,10 @@ function normalizeText(value: unknown): string {
   return String(value || '').trim()
 }
 
+function resolveTargetTypeLabel(value: string): string {
+  return TARGET_TYPE_OPTIONS.find(item => item.value === value)?.label || value
+}
+
 function summarizeCapabilities(item: ModelGroupFormItem): string {
   const labels: string[] = []
   if (item.thinkingSupported) {
@@ -80,6 +86,16 @@ function summarizeCapabilities(item: ModelGroupFormItem): string {
     }
   }
   return labels.length > 0 ? labels.join(' / ') : '无'
+}
+
+function resolveScenePreview(item: ModelGroupFormItem): string {
+  if (!Array.isArray(item.scenes) || item.scenes.length <= 0) {
+    return '无'
+  }
+  const preview = item.scenes.slice(0, 2)
+  return item.scenes.length > 2
+    ? `${preview.join(' / ')} +${item.scenes.length - 2}`
+    : preview.join(' / ')
 }
 
 function mapFromSettings(rows: ModelGroupFormItem[]): ModelGroupFormItem[] {
@@ -244,11 +260,16 @@ function resolveProviderModelOptionLabel(input: {
   modelId: string
   label?: string
   format?: string
+  targetType?: string
   legacyStatus?: 'disabled' | 'missing'
 }): string {
   const baseLabel = normalizeText(input.label) || normalizeText(input.modelId)
   const format = normalizeText(input.format)
-  const withFormat = format ? `${baseLabel} (${format})` : baseLabel
+  const targetType = normalizeText(input.targetType)
+  const withTarget = targetType && targetType !== 'model'
+    ? `${resolveTargetTypeLabel(targetType)} / ${baseLabel}`
+    : baseLabel
+  const withFormat = format ? `${withTarget} (${format})` : withTarget
   if (input.legacyStatus === 'disabled') {
     return `${withFormat}（已禁用）`
   }
@@ -270,12 +291,14 @@ function resolveBindingProviderModelOptions(row: ModelBindingFormItem): Array<{
 
   const enabledOptions = channelModelIndex.value.enabledModelOptionsByChannel[channelId] || []
   const allOptions = channelModelIndex.value.allModelOptionsByChannel[channelId] || []
-  const options: Array<{ value: string, label: string, disabled?: boolean }> = enabledOptions.map(item => ({
+  const filteredEnabledOptions = enabledOptions.filter(item => item.targetType === row.providerTargetType)
+  const options: Array<{ value: string, label: string, disabled?: boolean }> = filteredEnabledOptions.map(item => ({
     value: item.modelId,
     label: resolveProviderModelOptionLabel({
       modelId: item.modelId,
       label: item.label,
       format: item.format,
+      targetType: item.targetType,
     }),
   }))
 
@@ -284,13 +307,14 @@ function resolveBindingProviderModelOptions(row: ModelBindingFormItem): Array<{
     return options
   }
 
-  const legacy = allOptions.find(item => item.modelId === currentModelId)
+  const legacy = allOptions.find(item => item.modelId === currentModelId && item.targetType === row.providerTargetType)
   options.unshift({
     value: currentModelId,
     label: resolveProviderModelOptionLabel({
       modelId: currentModelId,
       label: legacy?.label || currentModelId,
       format: legacy?.format,
+      targetType: legacy?.targetType || row.providerTargetType,
       legacyStatus: legacy ? 'disabled' : 'missing',
     }),
     disabled: true,
@@ -298,8 +322,40 @@ function resolveBindingProviderModelOptions(row: ModelBindingFormItem): Array<{
   return options
 }
 
+function resolveBindingTargetSummary(row: Pick<ModelBindingFormItem, 'providerModel' | 'providerTargetType'>): string {
+  const providerModel = normalizeText(row.providerModel)
+  if (!providerModel) {
+    return '-'
+  }
+  return row.providerTargetType !== 'model'
+    ? `${resolveTargetTypeLabel(row.providerTargetType)} / ${providerModel}`
+    : providerModel
+}
+
+function resolveBindingPreview(row: ModelGroupFormItem): string {
+  if (!Array.isArray(row.bindings) || row.bindings.length <= 0) {
+    return '无'
+  }
+  const preview = row.bindings
+    .slice(0, 2)
+    .map(item => resolveBindingTargetSummary(item))
+    .filter(Boolean)
+  if (preview.length <= 0) {
+    return '无'
+  }
+  return row.bindings.length > 2
+    ? `${preview.join(' | ')} +${row.bindings.length - 2}`
+    : preview.join(' | ')
+}
+
 function onBindingChannelChanged(row: ModelBindingFormItem) {
   row.providerModel = ''
+  const channel = channelModelIndex.value.channels.find(item => item.id === normalizeText(row.channelId))
+  row.providerTargetType = channel?.adapter === 'coze' ? 'coze_bot' : 'model'
+}
+
+function isCozeBinding(row: ModelBindingFormItem): boolean {
+  return channelModelIndex.value.channels.find(item => item.id === normalizeText(row.channelId))?.adapter === 'coze'
 }
 
 function validateDialogForm(): ModelGroupFormItem | null {
@@ -313,17 +369,26 @@ function validateDialogForm(): ModelGroupFormItem | null {
     return null
   }
   if (!next.iconValue) {
-    ElMessage.warning('请配置模型组 icon')
+    ElMessage.warning('请配置模型组图标')
     return null
   }
   for (const binding of next.bindings) {
     if (!normalizeText(binding.channelId) || !normalizeText(binding.providerModel)) {
-      ElMessage.warning('模型映射必须填写 channelId 和 providerModel')
+      ElMessage.warning('模型映射必须填写渠道 ID 和渠道模型/目标')
+      return null
+    }
+    if (isCozeBinding(binding) && binding.providerTargetType === 'model') {
+      ElMessage.warning('Coze 模型映射必须明确选择目标类型（coze_bot / coze_workflow）')
       return null
     }
   }
+  const hasCozeBinding = next.bindings.some(binding => isCozeBinding(binding))
+  if (hasCozeBinding && next.builtinTools.length > 0) {
+    ElMessage.warning('当前模型组已映射到 Coze 渠道，Pilot 本地 builtinTools 不会生效，请先移除这些工具配置后再保存。')
+    return null
+  }
   if (!isPilotRouteComboIdValid(next.defaultRouteComboId, routeComboIdSet.value)) {
-    ElMessage.warning('默认 Route Combo 不存在，请选择有效组合')
+    ElMessage.warning('默认路由组合不存在，请选择有效组合')
     return null
   }
 
@@ -579,9 +644,17 @@ watch(() => dialog.form.capabilities.websearch, (enabled) => {
           </template>
         </el-table-column>
         <el-table-column prop="source" label="来源" width="120" />
-        <el-table-column label="模型映射" width="120">
+        <el-table-column label="场景标签" min-width="180">
           <template #default="{ row }">
-            {{ row.bindings.length }} 条
+            {{ resolveScenePreview(row) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="模型映射" min-width="280">
+          <template #default="{ row }">
+            <div class="combo-meta-row">
+              <span>{{ row.bindings.length }} 条</span>
+              <span>{{ resolveBindingPreview(row) }}</span>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="评分(Q/S/C)" width="180">
@@ -708,7 +781,31 @@ watch(() => dialog.form.capabilities.websearch, (enabled) => {
         <el-input v-model="dialog.form.tags" placeholder="auto,routing,cost" />
       </el-form-item>
 
-      <el-form-item label="默认 Route Combo">
+      <el-form-item label="场景标签">
+        <el-select
+          v-model="dialog.form.scenes"
+          multiple
+          filterable
+          allow-create
+          default-first-option
+          collapse-tags
+          collapse-tags-tooltip
+          placeholder="留空表示不参与专项 scene 路由"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="scene in BUILT_IN_SCENE_OPTIONS"
+            :key="scene.value"
+            :label="scene.label"
+            :value="scene.value"
+          />
+        </el-select>
+        <div class="form-helper">
+          内置 scene 仅供系统专项路由消费；自定义 scene 会先作为元数据持久化保留。
+        </div>
+      </el-form-item>
+
+      <el-form-item label="默认路由组合">
         <el-select
           v-model="dialog.form.defaultRouteComboId"
           filterable
@@ -725,7 +822,7 @@ watch(() => dialog.form.capabilities.websearch, (enabled) => {
           />
         </el-select>
         <div v-if="routeComboInvalid" class="form-warning">
-          当前 Route Combo 已失效，请替换为有效值后再保存。
+          当前路由组合已失效，请替换为有效值后再保存。
         </div>
       </el-form-item>
 
@@ -828,7 +925,7 @@ watch(() => dialog.form.capabilities.websearch, (enabled) => {
       </div>
 
       <el-table border table-layout="auto" :data="dialog.form.bindings" style="width: 100%">
-        <el-table-column label="channelId" min-width="180">
+        <el-table-column label="渠道 ID" min-width="180">
           <template #default="{ row }">
             <el-select
               v-model="row.channelId"
@@ -847,7 +944,7 @@ watch(() => dialog.form.capabilities.websearch, (enabled) => {
             </el-select>
           </template>
         </el-table-column>
-        <el-table-column label="providerModel" min-width="220">
+        <el-table-column label="渠道模型/目标" min-width="220">
           <template #default="{ row }">
             <el-select
               v-model="row.providerModel"
@@ -863,6 +960,24 @@ watch(() => dialog.form.capabilities.websearch, (enabled) => {
                 :label="option.label"
                 :value="option.value"
                 :disabled="option.disabled === true"
+              />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="目标类型" min-width="160">
+          <template #default="{ row }">
+            <el-select
+              v-model="row.providerTargetType"
+              style="width: 100%"
+              :disabled="!isCozeBinding(row)"
+              @change="() => { row.providerModel = '' }"
+            >
+              <el-option
+                v-for="targetType in TARGET_TYPE_OPTIONS"
+                :key="targetType.value"
+                :label="targetType.label"
+                :value="targetType.value"
+                :disabled="!isCozeBinding(row) && targetType.value !== 'model'"
               />
             </el-select>
           </template>
@@ -919,6 +1034,12 @@ watch(() => dialog.form.capabilities.websearch, (enabled) => {
 
 .binding-toolbar {
   margin-bottom: 8px;
+}
+
+.combo-meta-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .icon-value {

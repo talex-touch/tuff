@@ -3,14 +3,21 @@ import process from 'node:process'
 import { createError } from 'h3'
 import { getPilotAdminChannelCatalog } from './pilot-admin-channel-config'
 
-export type PilotChannelAdapter = 'openai'
-export type PilotChannelTransport = 'responses' | 'chat.completions'
+export type PilotChannelAdapter = 'openai' | 'coze'
+export type PilotChannelTransport = 'responses' | 'chat.completions' | 'coze.openapi'
 export type PilotBuiltinTool = 'write_todos' | 'read_file' | 'write_file' | 'edit_file' | 'ls' | 'websearch'
+export type PilotProviderTargetType = 'model' | 'coze_bot' | 'coze_workflow'
+export type PilotChannelRegion = 'cn'
+export type PilotCozeAuthMode = 'oauth_client' | 'jwt_service'
+
+export const PILOT_COZE_CN_BASE_URL = 'https://api.coze.cn'
+export const PILOT_COZE_CN_TOKEN_URL = `${PILOT_COZE_CN_BASE_URL}/api/permission/oauth2/token`
 
 export interface PilotChannelModelConfig {
   id: string
   label?: string
   format?: string
+  targetType?: PilotProviderTargetType
   priority?: number
   enabled?: boolean
   thinkingSupported?: boolean
@@ -29,6 +36,15 @@ export interface PilotChannelConfig {
   models?: PilotChannelModelConfig[]
   adapter: PilotChannelAdapter
   transport: PilotChannelTransport
+  region?: PilotChannelRegion
+  cozeAuthMode?: PilotCozeAuthMode
+  oauthClientId?: string
+  oauthClientSecret?: string
+  oauthTokenUrl?: string
+  jwtAppId?: string
+  jwtKeyId?: string
+  jwtPrivateKey?: string
+  jwtAudience?: string
   timeoutMs: number
   builtinTools: PilotBuiltinTool[]
   enabled: boolean
@@ -59,6 +75,77 @@ type PilotChannelUnavailableReason = 'no_channels_configured' | 'all_channels_di
 
 function normalizeText(value: unknown): string {
   return String(value || '').trim()
+}
+
+export function normalizePilotProviderTargetType(
+  value: unknown,
+  fallback: PilotProviderTargetType = 'model',
+): PilotProviderTargetType {
+  const normalized = normalizeText(value).toLowerCase()
+  if (normalized === 'coze_bot' || normalized === 'coze-bot' || normalized === 'bot') {
+    return 'coze_bot'
+  }
+  if (normalized === 'coze_workflow' || normalized === 'coze-workflow' || normalized === 'workflow') {
+    return 'coze_workflow'
+  }
+  return fallback
+}
+
+export function normalizePilotChannelRegion(value: unknown): PilotChannelRegion {
+  const normalized = normalizeText(value).toLowerCase()
+  return normalized === 'cn' ? 'cn' : 'cn'
+}
+
+export function normalizePilotCozeAuthMode(
+  value: unknown,
+  fallback: PilotCozeAuthMode = 'oauth_client',
+): PilotCozeAuthMode {
+  const normalized = normalizeText(value).toLowerCase()
+  if (
+    normalized === 'jwt_service'
+    || normalized === 'jwt-service'
+    || normalized === 'service_jwt'
+    || normalized === 'service-jwt'
+    || normalized === 'service_identity'
+    || normalized === 'service-identity'
+    || normalized === 'jwt'
+  ) {
+    return 'jwt_service'
+  }
+  if (
+    normalized === 'oauth_client'
+    || normalized === 'oauth-client'
+    || normalized === 'oauth'
+    || normalized === 'client_credentials'
+  ) {
+    return 'oauth_client'
+  }
+  return fallback
+}
+
+export function isPilotCozeTargetType(value: unknown): value is Extract<PilotProviderTargetType, 'coze_bot' | 'coze_workflow'> {
+  const normalized = normalizePilotProviderTargetType(value)
+  return normalized === 'coze_bot' || normalized === 'coze_workflow'
+}
+
+export function getPilotChannelDefaultBaseUrl(
+  adapter: PilotChannelAdapter,
+  region: PilotChannelRegion = 'cn',
+): string {
+  if (adapter === 'coze' && region === 'cn') {
+    return PILOT_COZE_CN_BASE_URL
+  }
+  return ''
+}
+
+export function getPilotChannelDefaultOauthTokenUrl(
+  adapter: PilotChannelAdapter,
+  region: PilotChannelRegion = 'cn',
+): string {
+  if (adapter === 'coze' && region === 'cn') {
+    return PILOT_COZE_CN_TOKEN_URL
+  }
+  return ''
 }
 
 function normalizePriority(value: unknown): number {

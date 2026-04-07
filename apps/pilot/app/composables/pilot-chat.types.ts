@@ -109,9 +109,7 @@ export interface PilotStageItem {
 export interface PilotRuntimeStatusSnapshot {
   intentLabel: string
   intentDetail: string
-  routeLabel: string
   requestModelLabel: string
-  actualModelLabel: string
   websearchLabel: string
   memoryLabel: string
   thinkingLabel: string

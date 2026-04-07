@@ -148,7 +148,7 @@ export class RecommendationEngine {
   }
 
   private recordRecommendationPerf(eventType: string, metadata: Record<string, unknown>): void {
-    const db = this.dbUtils.getDb()
+    const db = this.dbUtils.getAuxDb()
     const payload = {
       pluginName: RECOMMENDATION_PERF_PLUGIN,
       eventType,
@@ -163,7 +163,7 @@ export class RecommendationEngine {
           withSqliteRetry(() => db.insert(schema.pluginAnalytics).values(payload), {
             label: 'recommendation.perf'
           }),
-        { droppable: true }
+        { priority: 'best_effort', dropPolicy: 'latest_wins', budgetKey: 'recommendation.perf' }
       )
       .catch((error) => {
         recommendationLog.debug('Failed to record perf metrics', { meta: toErrorMeta(error) })
@@ -174,7 +174,7 @@ export class RecommendationEngine {
     const sentryService = getSentryService()
     if (!sentryService.isTelemetryEnabled()) return
 
-    const db = this.dbUtils.getDb()
+    const db = this.dbUtils.getAuxDb()
     const windowStart = Date.now() - RECOMMENDATION_PERF_WINDOW_MS
 
     const totalRows = await db
@@ -1754,7 +1754,11 @@ export class RecommendationEngine {
     const cacheKey = this.contextProvider.generateCacheKey(context)
     const expiresAt = new Date(Date.now() + this.CACHE_DURATION_MS)
 
-    await this.dbUtils.setRecommendationCache(cacheKey, items, expiresAt)
+    void this.dbUtils.setRecommendationCache(cacheKey, items, expiresAt).catch((error) => {
+      recommendationLog.debug('Failed to persist recommendation cache', {
+        meta: toErrorMeta(error)
+      })
+    })
   }
 }
 

@@ -1,0 +1,385 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const {
+  getAppsMock,
+  getAppInfoByPathMock,
+  getLoggerMock,
+  getMainConfigMock,
+  getWatchPathsMock,
+  registerPollingMock,
+  removeByProviderMock,
+  runAdaptiveTaskQueueMock,
+  runAppTaskMock,
+  runMdlsUpdateScanMock,
+  saveMainConfigMock,
+  scheduleDbWriteMock,
+  searchRecordExecuteMock,
+  unregisterPollingMock,
+  withSqliteRetryMock
+} = vi.hoisted(() => ({
+  getAppsMock: vi.fn(),
+  getAppInfoByPathMock: vi.fn(),
+  getLoggerMock: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
+  })),
+  getMainConfigMock: vi.fn(),
+  getWatchPathsMock: vi.fn(() => []),
+  registerPollingMock: vi.fn(),
+  removeByProviderMock: vi.fn(),
+  runAdaptiveTaskQueueMock: vi.fn(async (items, handler) => {
+    for (let index = 0; index < items.length; index += 1) {
+      await handler(items[index], index)
+    }
+  }),
+  runAppTaskMock: vi.fn(async (task: () => Promise<unknown>) => await task()),
+  runMdlsUpdateScanMock: vi.fn(),
+  saveMainConfigMock: vi.fn(),
+  scheduleDbWriteMock: vi.fn(async (_label: string, task: () => Promise<unknown>) => await task()),
+  searchRecordExecuteMock: vi.fn(),
+  unregisterPollingMock: vi.fn(),
+  withSqliteRetryMock: vi.fn(async (task: () => Promise<unknown>) => await task())
+}))
+
+vi.mock('@electron-toolkit/utils', () => ({
+  is: { dev: false }
+}))
+
+vi.mock('@talex-touch/utils', () => ({
+  completeTiming: vi.fn((_label: string, startedAt: number) => Date.now() - startedAt),
+  createRetrier: vi.fn(() => {
+    return <T>(task: () => Promise<T>) => {
+      return async () => await task()
+    }
+  }),
+  sleep: vi.fn(async () => undefined),
+  startTiming: vi.fn(() => Date.now()),
+  StorageList: {
+    APP_INDEX_SETTINGS: 'APP_INDEX_SETTINGS'
+  },
+  timingLogger: {
+    print: vi.fn((_label: string, durationMs: number) => durationMs)
+  }
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getLocale: vi.fn(() => 'zh-CN')
+  },
+  BrowserWindow: {
+    getAllWindows: vi.fn(() => [])
+  },
+  shell: {
+    openPath: vi.fn()
+  }
+}))
+
+vi.mock('@talex-touch/utils/common/logger', () => ({
+  getLogger: getLoggerMock
+}))
+
+vi.mock('@talex-touch/utils/common/utils', () => ({
+  runAdaptiveTaskQueue: runAdaptiveTaskQueueMock
+}))
+
+vi.mock('@talex-touch/utils/common/utils/polling', () => ({
+  pollingService: {
+    register: registerPollingMock,
+    unregister: unregisterPollingMock
+  }
+}))
+
+vi.mock('../../../../core/eventbus/touch-event', () => ({
+  TalexEvents: {},
+  touchEventBus: {
+    on: vi.fn(),
+    off: vi.fn()
+  },
+  DirectoryAddedEvent: class {},
+  DirectoryUnlinkedEvent: class {},
+  FileAddedEvent: class {},
+  FileChangedEvent: class {},
+  FileUnlinkedEvent: class {}
+}))
+
+vi.mock('../../../../db/db-write-scheduler', () => ({
+  dbWriteScheduler: {
+    schedule: scheduleDbWriteMock
+  }
+}))
+
+vi.mock('../../../../db/sqlite-retry', () => ({
+  withSqliteRetry: withSqliteRetryMock
+}))
+
+vi.mock('../../../../db/utils', () => ({
+  createDbUtils: vi.fn(() => null)
+}))
+
+vi.mock('../../../../service/app-task-gate', () => ({
+  appTaskGate: {
+    isActive: vi.fn(() => false),
+    runAppTask: runAppTaskMock,
+    waitForIdle: vi.fn(async () => true),
+    getSnapshot: vi.fn(() => ({ activeCount: 0, activeLabels: {} }))
+  }
+}))
+
+vi.mock('../../../../service/device-idle-service', () => ({
+  deviceIdleService: {
+    canRun: vi.fn(async () => ({ allowed: true })),
+    getSettings: vi.fn(() => ({ blockBatteryBelowPercent: 20 })),
+    getBatteryStatus: vi.fn(async () => null)
+  }
+}))
+
+vi.mock('../../../storage', () => ({
+  getMainConfig: getMainConfigMock,
+  saveMainConfig: saveMainConfigMock
+}))
+
+vi.mock('../../file-system-watcher', () => ({
+  default: {
+    addPath: vi.fn()
+  }
+}))
+
+vi.mock('../../search-engine/search-core', () => ({
+  default: {
+    recordExecute: searchRecordExecuteMock
+  }
+}))
+
+vi.mock('./app-scanner', () => ({
+  appScanner: {
+    getApps: getAppsMock,
+    getAppInfoByPath: getAppInfoByPathMock,
+    getWatchPaths: getWatchPathsMock,
+    runMdlsUpdateScan: runMdlsUpdateScanMock
+  }
+}))
+
+vi.mock('./display-name-sync-utils', () => ({
+  normalizeDisplayName: vi.fn((value: string | null | undefined) => value ?? null),
+  shouldUpdateDisplayName: vi.fn(
+    (current: string | null | undefined, next: string | null | undefined) => {
+      const normalizedCurrent = current ?? null
+      const normalizedNext = next ?? null
+      return normalizedCurrent !== normalizedNext
+    }
+  )
+}))
+
+vi.mock('./app-noise-filter', () => ({
+  matchNoisySystemAppRule: vi.fn(() => null)
+}))
+
+vi.mock('./app-utils', () => ({
+  formatLog: vi.fn((_scope: string, message: string) => message),
+  LogStyle: {
+    info: (message: string) => message,
+    warning: (message: string) => message,
+    error: (message: string) => message,
+    process: (message: string) => message,
+    success: (message: string) => message
+  }
+}))
+
+vi.mock('./search-processing-service', () => ({
+  processSearchResults: vi.fn(async () => [])
+}))
+
+function createDeferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T | PromiseLike<T>) => void
+  reject: (reason?: unknown) => void
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+async function flushPromises(): Promise<void> {
+  await new Promise<void>((resolve) => setImmediate(resolve))
+}
+
+async function loadSubject() {
+  return await import('./app-provider')
+}
+
+type AppProviderPrivate = {
+  context: unknown
+  dbUtils: unknown
+  searchIndex: unknown
+  fetchExtensionsForFiles: (files: unknown[]) => Promise<unknown[]>
+  _clearPendingDeletions: () => Promise<void>
+  _initialize: (options?: { forceRefresh?: boolean }) => Promise<void>
+  _performFullSync: (forced: boolean) => Promise<void>
+  _performMdlsUpdateScan: () => Promise<void>
+  _performRebuild: () => Promise<void>
+  _performStartupBackfill: () => Promise<void>
+  _recordMissingIconApps: (apps: unknown[]) => Promise<void>
+  _runFullSync: (forced: boolean) => Promise<void>
+  _runMdlsUpdateScan: () => Promise<void>
+  _runStartupBackfill: () => Promise<void>
+  _setLastFullSyncTime: (timestamp: number) => Promise<void>
+}
+
+function asPrivateProvider(provider: unknown): AppProviderPrivate {
+  return provider as AppProviderPrivate
+}
+
+describe('appProvider rebuild maintenance', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+    getWatchPathsMock.mockReturnValue([])
+    getAppsMock.mockResolvedValue([])
+    runMdlsUpdateScanMock.mockResolvedValue({
+      updatedApps: [],
+      updatedCount: 0,
+      deletedApps: []
+    })
+    getMainConfigMock.mockReturnValue(undefined)
+  })
+
+  it('rebuild only clears app records and preserves file records', async () => {
+    const { appProvider } = await loadSubject()
+    const { files, fileExtensions } = await import('../../../../db/schema')
+    const privateProvider = asPrivateProvider(appProvider)
+
+    let selectedAppIds: number[] = []
+    let fileRows = [
+      { id: 1, type: 'app' },
+      { id: 2, type: 'file' }
+    ]
+    let extensionRows = [
+      { fileId: 1, key: 'bundleId' },
+      { fileId: 2, key: 'sha1' }
+    ]
+
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(async () => {
+            selectedAppIds = fileRows.filter((row) => row.type === 'app').map((row) => row.id)
+            return selectedAppIds.map((id) => ({ id }))
+          })
+        }))
+      })),
+      transaction: vi.fn(
+        async (
+          callback: (tx: {
+            delete: (table: unknown) => { where: (predicate: unknown) => Promise<void> }
+          }) => Promise<void>
+        ) => {
+          const tx = {
+            delete: vi.fn((table: unknown) => ({
+              where: vi.fn(async (_predicate: unknown) => {
+                if (table === fileExtensions) {
+                  extensionRows = extensionRows.filter(
+                    (row) => !selectedAppIds.includes(row.fileId)
+                  )
+                }
+                if (table === files) {
+                  fileRows = fileRows.filter((row) => !selectedAppIds.includes(row.id))
+                }
+              })
+            }))
+          }
+          await callback(tx)
+        }
+      )
+    }
+
+    privateProvider.context = {}
+    privateProvider.dbUtils = { getDb: () => db }
+    privateProvider.searchIndex = { removeByProvider: removeByProviderMock }
+    privateProvider._clearPendingDeletions = vi.fn().mockResolvedValue(undefined)
+    privateProvider._performFullSync = vi.fn().mockResolvedValue(undefined)
+
+    const result = await appProvider.rebuildIndex()
+
+    expect(result.success).toBe(true)
+    expect(fileRows).toEqual([{ id: 2, type: 'file' }])
+    expect(extensionRows).toEqual([{ fileId: 2, key: 'sha1' }])
+    expect(removeByProviderMock).toHaveBeenCalledWith('app-provider')
+    expect(privateProvider._performFullSync).toHaveBeenCalledWith(true)
+  })
+
+  it('startup backfill and full sync request fresh scans', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn().mockResolvedValue([])
+    }
+    privateProvider.searchIndex = {}
+    privateProvider.fetchExtensionsForFiles = vi.fn().mockResolvedValue([])
+    privateProvider._recordMissingIconApps = vi.fn().mockResolvedValue(undefined)
+
+    await privateProvider._performStartupBackfill()
+
+    expect(getAppsMock).toHaveBeenCalledWith({ forceRefresh: true })
+
+    const initializeMock = vi.fn().mockResolvedValue(undefined)
+    privateProvider.dbUtils = {}
+    privateProvider._initialize = initializeMock
+    privateProvider._setLastFullSyncTime = vi.fn().mockResolvedValue(undefined)
+
+    await privateProvider._performFullSync(false)
+
+    expect(initializeMock).toHaveBeenCalledWith({ forceRefresh: true })
+  })
+
+  it('serializes rebuild, full sync, mdls scan and startup backfill tasks', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const executionOrder: string[] = []
+    const rebuildDeferred = createDeferred<void>()
+
+    privateProvider.context = {}
+    privateProvider.dbUtils = {}
+    privateProvider._performRebuild = vi.fn(async () => {
+      executionOrder.push('rebuild:start')
+      await rebuildDeferred.promise
+      executionOrder.push('rebuild:end')
+    })
+    privateProvider._performFullSync = vi.fn(async () => {
+      executionOrder.push('full-sync')
+    })
+    privateProvider._performMdlsUpdateScan = vi.fn(async () => {
+      executionOrder.push('mdls')
+    })
+    privateProvider._performStartupBackfill = vi.fn(async () => {
+      executionOrder.push('startup-backfill')
+    })
+
+    const rebuildPromise = appProvider.rebuildIndex()
+    await flushPromises()
+
+    const fullSyncPromise = privateProvider._runFullSync(false)
+    const mdlsPromise = privateProvider._runMdlsUpdateScan()
+    const backfillPromise = privateProvider._runStartupBackfill()
+    await flushPromises()
+
+    expect(executionOrder).toEqual(['rebuild:start'])
+
+    rebuildDeferred.resolve()
+    await Promise.all([rebuildPromise, fullSyncPromise, mdlsPromise, backfillPromise])
+
+    expect(executionOrder).toEqual([
+      'rebuild:start',
+      'rebuild:end',
+      'full-sync',
+      'mdls',
+      'startup-backfill'
+    ])
+  })
+})

@@ -18,10 +18,21 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
 import { createClient } from '@libsql/client'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import * as schema from '../../../../db/schema'
+import { withSqliteRetry } from '../../../../db/sqlite-retry'
 import { SearchIndexService } from '../search-index-service'
+
+export const WORKER_RETRY_LABELS = {
+  persistChunk: 'search-index.worker.persistChunk',
+  upsertFiles: 'search-index.worker.upsertFiles',
+  upsertScanProgress: 'search-index.worker.upsertScanProgress'
+} as const
+
+export function withWorkerWriteRetry<T>(operation: () => Promise<T>, label: string): Promise<T> {
+  return withSqliteRetry(operation, { label })
+}
 
 // ---------- Message Types ----------
 
@@ -81,6 +92,31 @@ interface PersistAndIndexMessage {
   entries: PersistAndIndexEntry[]
 }
 
+interface UpsertFileRecord {
+  path: string
+  name: string
+  extension?: string | null
+  size?: number | null
+  mtime: Date | number | string
+  ctime: Date | number | string
+  lastIndexedAt: Date | number | string
+  isDir: boolean
+  type: string
+}
+
+interface UpsertFilesMessage {
+  type: 'upsertFiles'
+  taskId: string
+  records: UpsertFileRecord[]
+}
+
+interface UpsertScanProgressMessage {
+  type: 'upsertScanProgress'
+  taskId: string
+  paths: string[]
+  lastScanned: string
+}
+
 type WorkerRequest =
   | InitMessage
   | IndexItemsMessage
@@ -88,6 +124,8 @@ type WorkerRequest =
   | RemoveByProviderMessage
   | CountByProviderMessage
   | PersistAndIndexMessage
+  | UpsertFilesMessage
+  | UpsertScanProgressMessage
   | WorkerMetricsRequest
 
 interface DoneMessage {
@@ -187,6 +225,20 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
         break
       }
 
+      case 'upsertFiles': {
+        if (!db) throw new Error('Worker not initialized — send init first')
+        const rows = await handleUpsertFiles(message.records)
+        respond({ type: 'done', taskId, result: rows })
+        break
+      }
+
+      case 'upsertScanProgress': {
+        if (!db) throw new Error('Worker not initialized — send init first')
+        await handleUpsertScanProgress(message.paths, message.lastScanned)
+        respond({ type: 'done', taskId })
+        break
+      }
+
       default:
         respond({ type: 'error', taskId, error: `Unknown message type` })
     }
@@ -230,79 +282,154 @@ async function handleInit(message: InitMessage): Promise<void> {
 async function handlePersistAndIndex(entries: PersistAndIndexEntry[]): Promise<void> {
   if (!db) throw new Error('Worker not initialized')
   if (entries.length === 0) return
+  const workerDb = db
 
-  await db.transaction(async (tx) => {
-    for (const entry of entries) {
-      const { fileId, fileUpdate, progress } = entry
+  await withWorkerWriteRetry(
+    async () =>
+      workerDb.transaction(async (tx) => {
+        for (const entry of entries) {
+          const { fileId, fileUpdate, progress } = entry
 
-      // 1. Update files table (content + embeddingStatus)
-      if (fileUpdate) {
-        await tx
-          .update(schema.files)
-          .set({
-            content: fileUpdate.content,
-            embeddingStatus: fileUpdate.embeddingStatus as 'none' | 'pending' | 'completed'
-          })
-          .where(eq(schema.files.id, fileId))
+          // 1. Update files table (content + embeddingStatus)
+          if (fileUpdate) {
+            await tx
+              .update(schema.files)
+              .set({
+                content: fileUpdate.content,
+                embeddingStatus: fileUpdate.embeddingStatus as 'none' | 'pending' | 'completed'
+              })
+              .where(eq(schema.files.id, fileId))
 
-        // 2. Persist embeddings (delete old → insert new)
-        if (fileUpdate.embeddings && fileUpdate.embeddings.length > 0) {
-          const sourceId = String(fileId)
-          await tx
-            .delete(schema.embeddings)
-            .where(
-              and(
-                eq(schema.embeddings.sourceId, sourceId),
-                eq(schema.embeddings.sourceType, 'file')
+            // 2. Persist embeddings (delete old → insert new)
+            if (fileUpdate.embeddings && fileUpdate.embeddings.length > 0) {
+              const sourceId = String(fileId)
+              await tx
+                .delete(schema.embeddings)
+                .where(
+                  and(
+                    eq(schema.embeddings.sourceId, sourceId),
+                    eq(schema.embeddings.sourceType, 'file')
+                  )
+                )
+              await tx.insert(schema.embeddings).values(
+                fileUpdate.embeddings.map((emb) => ({
+                  sourceId,
+                  sourceType: 'file',
+                  embedding: emb.vector,
+                  model: emb.model || 'unknown',
+                  contentHash: fileUpdate.contentHash
+                }))
               )
-            )
-          await tx.insert(schema.embeddings).values(
-            fileUpdate.embeddings.map((emb) => ({
-              sourceId,
-              sourceType: 'file',
-              embedding: emb.vector,
-              model: emb.model || 'unknown',
-              contentHash: fileUpdate.contentHash
-            }))
-          )
+            }
+          }
+
+          // 3. Upsert file_index_progress
+          const startedAt = progress.startedAt ? new Date(progress.startedAt) : null
+          const updatedAt = progress.updatedAt ? new Date(progress.updatedAt) : new Date()
+
+          await tx
+            .insert(schema.fileIndexProgress)
+            .values({
+              fileId,
+              status: progress.status as
+                | 'pending'
+                | 'processing'
+                | 'completed'
+                | 'skipped'
+                | 'failed',
+              progress: progress.progress,
+              processedBytes: progress.processedBytes,
+              totalBytes: progress.totalBytes,
+              lastError: progress.lastError,
+              startedAt,
+              updatedAt
+            })
+            .onConflictDoUpdate({
+              target: schema.fileIndexProgress.fileId,
+              set: {
+                status: progress.status as
+                  | 'pending'
+                  | 'processing'
+                  | 'completed'
+                  | 'skipped'
+                  | 'failed',
+                progress: progress.progress,
+                processedBytes: progress.processedBytes,
+                totalBytes: progress.totalBytes,
+                lastError: progress.lastError,
+                startedAt,
+                updatedAt
+              }
+            })
         }
-      }
+      }),
+    WORKER_RETRY_LABELS.persistChunk
+  )
+}
 
-      // 3. Upsert file_index_progress
-      const startedAt = progress.startedAt ? new Date(progress.startedAt) : null
-      const updatedAt = progress.updatedAt ? new Date(progress.updatedAt) : new Date()
+function toDate(value: Date | number | string): Date {
+  if (value instanceof Date) return value
+  if (typeof value === 'number') return new Date(value)
+  return new Date(value)
+}
 
-      await tx
-        .insert(schema.fileIndexProgress)
-        .values({
-          fileId,
-          status: progress.status as 'pending' | 'processing' | 'completed' | 'skipped' | 'failed',
-          progress: progress.progress,
-          processedBytes: progress.processedBytes,
-          totalBytes: progress.totalBytes,
-          lastError: progress.lastError,
-          startedAt,
-          updatedAt
-        })
+async function handleUpsertFiles(
+  records: UpsertFileRecord[]
+): Promise<Array<Record<string, unknown>>> {
+  if (!db || records.length === 0) return []
+  const workerDb = db
+  const rows = await withWorkerWriteRetry(
+    () =>
+      workerDb
+        .insert(schema.files)
+        .values(
+          records.map((record) => ({
+            path: record.path,
+            name: record.name,
+            extension: record.extension ?? null,
+            size: typeof record.size === 'number' ? record.size : null,
+            mtime: toDate(record.mtime),
+            ctime: toDate(record.ctime),
+            lastIndexedAt: toDate(record.lastIndexedAt),
+            isDir: record.isDir,
+            type: record.type
+          }))
+        )
         .onConflictDoUpdate({
-          target: schema.fileIndexProgress.fileId,
+          target: schema.files.path,
           set: {
-            status: progress.status as
-              | 'pending'
-              | 'processing'
-              | 'completed'
-              | 'skipped'
-              | 'failed',
-            progress: progress.progress,
-            processedBytes: progress.processedBytes,
-            totalBytes: progress.totalBytes,
-            lastError: progress.lastError,
-            startedAt,
-            updatedAt
+            name: sql`excluded.name`,
+            extension: sql`excluded.extension`,
+            size: sql`excluded.size`,
+            mtime: sql`excluded.mtime`,
+            ctime: sql`excluded.ctime`,
+            lastIndexedAt: sql`excluded.last_indexed_at`,
+            isDir: sql`excluded.is_dir`,
+            type: sql`excluded.type`
           }
         })
-    }
-  })
+        .returning(),
+    WORKER_RETRY_LABELS.upsertFiles
+  )
+
+  return rows as Array<Record<string, unknown>>
+}
+
+async function handleUpsertScanProgress(paths: string[], lastScanned: string): Promise<void> {
+  if (!db || paths.length === 0) return
+  const workerDb = db
+  const lastScannedAt = new Date(lastScanned)
+  await withWorkerWriteRetry(
+    () =>
+      workerDb
+        .insert(schema.scanProgress)
+        .values(paths.map((entryPath) => ({ path: entryPath, lastScanned: lastScannedAt })))
+        .onConflictDoUpdate({
+          target: schema.scanProgress.path,
+          set: { lastScanned: lastScannedAt }
+        }),
+    WORKER_RETRY_LABELS.upsertScanProgress
+  )
 }
 
 // ---------- Communication ----------

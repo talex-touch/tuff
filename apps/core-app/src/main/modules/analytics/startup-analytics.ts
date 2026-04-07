@@ -16,6 +16,7 @@ import { randomUUID } from 'node:crypto'
 import os from 'node:os'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import {
   getBooleanEnv,
   getEnvOrDefault,
@@ -36,6 +37,9 @@ const REPORT_QUEUE_MAX_AGE = 14 * 24 * 60 * 60 * 1000
 const REPORT_QUEUE_MAX_COUNT = 120
 const REPORT_QUEUE_BACKOFF_BASE_MS = 30_000
 const REPORT_QUEUE_BACKOFF_MAX_MS = 10 * 60_000
+const STARTUP_OUTBOX_FLUSH_TASK_ID = 'startup-analytics.outbox.flush'
+const STARTUP_OUTBOX_FLUSH_INTERVAL_MS = 30_000
+const STARTUP_OUTBOX_FLUSH_STARTUP_GRACE_MS = 45_000
 
 export interface FileReportQueueItem {
   payload: Record<string, unknown>
@@ -43,6 +47,20 @@ export interface FileReportQueueItem {
   createdAt: number
   retryCount?: number
   lastAttemptAt?: number
+}
+
+function shouldDowngradeStartupReportFailure(errorMessage: string | null | undefined): boolean {
+  if (!errorMessage) return false
+  const message = errorMessage.toLowerCase()
+  return (
+    message.includes('err_connection_refused') ||
+    message.includes('econnrefused') ||
+    message.includes('localhost:3200') ||
+    message.includes('eai_again') ||
+    message.includes('enotfound') ||
+    message.includes('etimedout') ||
+    message.includes('network guard cooldown')
+  )
 }
 
 /**
@@ -56,6 +74,8 @@ export class StartupAnalytics {
   private startTime: number
   private reportQueueStore?: ReportQueueStore
   private autoFinalizePromise: Promise<void> | null = null
+  private startupReportEndpoint: string | null = null
+  private readonly pollingService = PollingService.getInstance()
 
   constructor(config?: Partial<AnalyticsConfig>) {
     const enabled = getBooleanEnv('TUFF_STARTUP_ANALYTICS_ENABLED', true)
@@ -260,12 +280,56 @@ export class StartupAnalytics {
   private getReportQueueStore(): ReportQueueStore | null {
     if (this.reportQueueStore) return this.reportQueueStore
     try {
-      const db = databaseModule.getDb()
-      this.reportQueueStore = new ReportQueueStore(db)
+      this.reportQueueStore = new ReportQueueStore({
+        auxDb: databaseModule.getAuxDb(),
+        coreDb: databaseModule.getDb()
+      })
       return this.reportQueueStore
     } catch {
       return null
     }
+  }
+
+  private isStartupPayload(payload: Record<string, unknown>): boolean {
+    const metadata =
+      payload &&
+      typeof payload === 'object' &&
+      payload.metadata &&
+      typeof payload.metadata === 'object'
+        ? (payload.metadata as Record<string, unknown>)
+        : null
+    const kind = typeof metadata?.kind === 'string' ? metadata.kind : undefined
+    return kind === undefined || kind === 'startup'
+  }
+
+  private ensureOutboxFlushTask(endpoint: string): void {
+    this.startupReportEndpoint = endpoint
+    if (this.pollingService.isRegistered(STARTUP_OUTBOX_FLUSH_TASK_ID)) {
+      return
+    }
+
+    this.pollingService.register(
+      STARTUP_OUTBOX_FLUSH_TASK_ID,
+      () =>
+        this.flushQueuedReports(this.startupReportEndpoint || endpoint).catch((error) => {
+          analyticsLog.warn('Startup analytics outbox flush failed', {
+            meta: { error: error instanceof Error ? error.message : String(error) }
+          })
+        }),
+      {
+        interval: STARTUP_OUTBOX_FLUSH_INTERVAL_MS,
+        unit: 'milliseconds',
+        runImmediately: false,
+        initialDelayMs: STARTUP_OUTBOX_FLUSH_STARTUP_GRACE_MS + Math.floor(Math.random() * 5_000),
+        lane: 'io',
+        backpressure: 'latest_wins',
+        dedupeKey: STARTUP_OUTBOX_FLUSH_TASK_ID,
+        maxInFlight: 1,
+        timeoutMs: 12_000,
+        jitterMs: 600
+      }
+    )
+    this.pollingService.start()
   }
 
   private async flushQueuedReports(endpoint: string): Promise<void> {
@@ -290,6 +354,11 @@ export class StartupAnalytics {
     let firstError: string | null = null
 
     for (const item of freshQueue) {
+      if (!this.isStartupPayload(item.payload)) {
+        remaining.push(item)
+        continue
+      }
+
       if (!this.isReportDue(item)) {
         skipped += 1
         remaining.push(item)
@@ -329,14 +398,17 @@ export class StartupAnalytics {
       return
     }
 
-    analyticsLog.warn('Queued startup analytics flush incomplete', {
-      meta: {
-        attempted,
-        succeeded,
-        skipped,
-        error: firstError
-      }
-    })
+    const meta = {
+      attempted,
+      succeeded,
+      skipped,
+      error: firstError
+    }
+    if (shouldDowngradeStartupReportFailure(firstError)) {
+      analyticsLog.info('Queued startup analytics flush deferred (network unavailable)', { meta })
+    } else {
+      analyticsLog.warn('Queued startup analytics flush incomplete', { meta })
+    }
   }
 
   private async flushQueuedReportsFromDb(store: ReportQueueStore, endpoint: string): Promise<void> {
@@ -357,6 +429,10 @@ export class StartupAnalytics {
     let firstError: string | null = null
 
     for (const item of items) {
+      if (!this.isStartupPayload(item.payload)) {
+        continue
+      }
+
       if (!this.isReportDue(item)) {
         skipped += 1
         continue
@@ -392,14 +468,19 @@ export class StartupAnalytics {
       return
     }
 
-    analyticsLog.warn('Queued startup analytics flush incomplete (db)', {
-      meta: {
-        attempted,
-        succeeded,
-        skipped,
-        error: firstError
-      }
-    })
+    const meta = {
+      attempted,
+      succeeded,
+      skipped,
+      error: firstError
+    }
+    if (shouldDowngradeStartupReportFailure(firstError)) {
+      analyticsLog.info('Queued startup analytics flush deferred (db, network unavailable)', {
+        meta
+      })
+    } else {
+      analyticsLog.warn('Queued startup analytics flush incomplete (db)', { meta })
+    }
   }
 
   private computeStartupAverages(entries: StartupMetrics[]): {
@@ -526,116 +607,62 @@ export class StartupAnalytics {
     const limitedEntries = entries.slice(0, this.config.maxHistory)
     const { startupSummary, moduleSummary } = this.computeStartupAverages(limitedEntries)
 
-    try {
-      analyticsLog.info('Reporting metrics (anonymous)', {
-        meta: { endpoint: url }
-      })
-
-      await this.flushQueuedReports(url)
-
-      const memory = {
-        total: os.totalmem(),
-        free: os.freemem()
-      }
-
-      const cpus = os.cpus()
-      const cpu = {
-        count: cpus.length,
-        model: cpus[0]?.model
-      }
-
-      const payload = {
-        eventType: 'visit',
-        clientId: getOrCreateTelemetryClientId(),
-        platform: metrics.platform,
-        version: metrics.version,
-        isAnonymous: true,
-        metadata: {
-          kind: 'startup',
-          sessionId: metrics.sessionId,
-          timestamp: metrics.timestamp,
-          arch: metrics.arch,
-          electronVersion: metrics.electronVersion,
-          nodeVersion: metrics.nodeVersion,
-          isPackaged: metrics.isPackaged,
-          totalStartupTime: metrics.totalStartupTime,
-          mainProcess: metrics.mainProcess,
-          renderer: metrics.renderer,
-          startupSummary,
-          moduleSummary,
-          memory,
-          cpu,
-          uptime: os.uptime(),
-          release: os.release(),
-          type: os.type()
-        }
-      }
-
-      await getNetworkService().request<string>({
-        method: 'POST',
-        url,
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        responseType: 'text'
-      })
-
-      analyticsLog.success('Metrics reported (anonymous)')
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      analyticsLog.error('Failed to report metrics', { meta: { error: errorMessage } })
-      try {
-        const payload = {
-          eventType: 'visit',
-          clientId: getOrCreateTelemetryClientId(),
-          platform: metrics.platform,
-          version: metrics.version,
-          isAnonymous: true,
-          metadata: {
-            kind: 'startup',
-            sessionId: metrics.sessionId,
-            timestamp: metrics.timestamp,
-            arch: metrics.arch,
-            electronVersion: metrics.electronVersion,
-            nodeVersion: metrics.nodeVersion,
-            isPackaged: metrics.isPackaged,
-            totalStartupTime: metrics.totalStartupTime,
-            mainProcess: metrics.mainProcess,
-            renderer: metrics.renderer,
-            startupSummary,
-            moduleSummary,
-            memory: {
-              total: os.totalmem(),
-              free: os.freemem()
-            },
-            cpu: (() => {
-              const cpus = os.cpus()
-              return { count: cpus.length, model: cpus[0]?.model }
-            })(),
-            uptime: os.uptime(),
-            release: os.release(),
-            type: os.type()
-          }
-        }
-
-        const store = this.getReportQueueStore()
-        if (store) {
-          await store.insert({ payload, endpoint: url, createdAt: Date.now() })
-          analyticsLog.info('Queued startup analytics for retry (db)', {
-            meta: { endpoint: url }
-          })
-        } else {
-          const queue = this.loadReportQueue()
-          queue.push({ payload, endpoint: url, createdAt: Date.now() })
-          this.saveReportQueue(queue)
-          analyticsLog.info('Queued startup analytics for retry', {
-            meta: { queueSize: queue.length, endpoint: url }
-          })
-        }
-      } catch (queueError) {
-        const queueMessage = queueError instanceof Error ? queueError.message : String(queueError)
-        analyticsLog.warn('Failed to queue startup analytics', { meta: { error: queueMessage } })
+    const payload = {
+      eventType: 'visit',
+      clientId: getOrCreateTelemetryClientId(),
+      platform: metrics.platform,
+      version: metrics.version,
+      isAnonymous: true,
+      metadata: {
+        kind: 'startup',
+        idempotencyKey: `startup:${metrics.sessionId}`,
+        sessionId: metrics.sessionId,
+        timestamp: metrics.timestamp,
+        arch: metrics.arch,
+        electronVersion: metrics.electronVersion,
+        nodeVersion: metrics.nodeVersion,
+        isPackaged: metrics.isPackaged,
+        totalStartupTime: metrics.totalStartupTime,
+        mainProcess: metrics.mainProcess,
+        renderer: metrics.renderer,
+        startupSummary,
+        moduleSummary,
+        memory: {
+          total: os.totalmem(),
+          free: os.freemem()
+        },
+        cpu: (() => {
+          const cpus = os.cpus()
+          return { count: cpus.length, model: cpus[0]?.model }
+        })(),
+        uptime: os.uptime(),
+        release: os.release(),
+        type: os.type()
       }
     }
+
+    try {
+      const store = this.getReportQueueStore()
+      if (store) {
+        await store.insert({ payload, endpoint: url, createdAt: Date.now() })
+        analyticsLog.info('Queued startup analytics for async flush (db)', {
+          meta: { endpoint: url }
+        })
+      } else {
+        const queue = this.loadReportQueue()
+        queue.push({ payload, endpoint: url, createdAt: Date.now() })
+        this.saveReportQueue(queue)
+        analyticsLog.info('Queued startup analytics for async flush', {
+          meta: { queueSize: queue.length, endpoint: url }
+        })
+      }
+    } catch (queueError) {
+      const queueMessage = queueError instanceof Error ? queueError.message : String(queueError)
+      analyticsLog.warn('Failed to queue startup analytics', { meta: { error: queueMessage } })
+      return
+    }
+
+    this.ensureOutboxFlushTask(url)
   }
 
   private tryAutoFinalize(): void {

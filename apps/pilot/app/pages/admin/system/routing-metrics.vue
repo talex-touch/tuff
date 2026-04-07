@@ -34,7 +34,7 @@ async function fetchMetrics() {
     summary.avgTotalDurationMs = data.summary.avgTotalDurationMs
   }
   catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '加载路由评比失败')
+    ElMessage.error(error instanceof Error ? error.message : '加载路由指标失败')
   }
   finally {
     loading.value = false
@@ -51,13 +51,13 @@ onMounted(() => {
     <el-main>
       <div class="metrics-toolbar">
         <el-button :loading="loading" @click="fetchMetrics">
-          刷新评比
+          刷新指标
         </el-button>
       </div>
 
       <el-card shadow="never">
         <template #header>
-          <span>Routing Metrics Summary</span>
+          <span>路由指标概览</span>
         </template>
         <el-space wrap>
           <el-tag>
@@ -89,10 +89,10 @@ onMounted(() => {
         style="width: 100%; margin-top: 12px"
       >
         <el-table-column prop="createdAt" label="时间" min-width="180" />
-        <el-table-column prop="routeComboId" label="Combo" min-width="140" />
-        <el-table-column prop="channelId" label="Channel" min-width="120" />
-        <el-table-column prop="modelId" label="Model" min-width="150" />
-        <el-table-column prop="providerModel" label="Provider Model" min-width="170" />
+        <el-table-column prop="routeComboId" label="路由组合" min-width="140" />
+        <el-table-column prop="channelId" label="渠道" min-width="120" />
+        <el-table-column prop="modelId" label="模型组" min-width="150" />
+        <el-table-column prop="providerModel" label="上游模型/目标" min-width="170" />
         <el-table-column label="结果" width="90">
           <template #default="{ row }">
             <el-tag :type="row.success ? 'success' : 'danger'">
@@ -100,12 +100,12 @@ onMounted(() => {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="queueWaitMs" label="Queue(ms)" width="110" />
+        <el-table-column prop="queueWaitMs" label="排队(ms)" width="110" />
         <el-table-column prop="ttftMs" label="TTFT(ms)" width="110" />
-        <el-table-column prop="totalDurationMs" label="Total(ms)" width="110" />
+        <el-table-column prop="totalDurationMs" label="总耗时(ms)" width="110" />
         <el-table-column prop="outputChars" label="输出字符" width="100" />
-        <el-table-column prop="finishReason" label="finishReason" min-width="140" />
-        <el-table-column prop="errorCode" label="errorCode" min-width="140" />
+        <el-table-column prop="finishReason" label="结束原因" min-width="140" />
+        <el-table-column prop="errorCode" label="错误码" min-width="140" />
       </el-table>
     </el-main>
   </el-container>

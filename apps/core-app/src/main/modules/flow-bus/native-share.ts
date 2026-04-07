@@ -9,14 +9,34 @@ import type {
   FlowPayload,
   FlowTarget,
   NativeShareOptions,
+  NativeShareTarget,
   NativeShareResult
 } from '@talex-touch/utils'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { shell } from 'electron'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { shareNotificationService } from './share-notification'
 
 async function runAppleScript(script: string): Promise<void> {
   await execFileSafe('osascript', ['-e', script])
+}
+
+async function runAppleScriptWithOutput(script: string): Promise<string> {
+  const output = await execFileSafe('osascript', ['-e', script])
+  return output.stdout?.trim() ?? ''
+}
+
+function escapeAppleScriptString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, '\\n')
+}
+
+function buildShareBody(text?: string, url?: string): string {
+  const segments = [text, url].filter(
+    (value): value is string => typeof value === 'string' && value.length > 0
+  )
+  return segments.join('\n')
 }
 
 /**
@@ -46,6 +66,20 @@ export class NativeShareService {
     return NativeShareService.instance
   }
 
+  normalizeTarget(target?: string | null): NativeShareTarget | undefined {
+    switch (target) {
+      case 'system':
+      case 'system-share':
+        return 'system'
+      case 'airdrop':
+      case 'mail':
+      case 'messages':
+        return target
+      default:
+        return undefined
+    }
+  }
+
   /**
    * Gets available native share targets for current platform
    */
@@ -53,11 +87,10 @@ export class NativeShareService {
     const targets: FlowTarget[] = []
 
     if (process.platform === 'darwin') {
-      // macOS supports Share Sheet
       targets.push({
         id: 'system-share',
         name: 'System Share',
-        description: 'Share via macOS system share sheet',
+        description: 'Share via native macOS share target chooser',
         supportedTypes: ['text', 'files', 'image'],
         icon: 'ri:share-line'
       })
@@ -82,28 +115,18 @@ export class NativeShareService {
         id: 'messages',
         name: 'Messages',
         description: 'Send via iMessage',
-        supportedTypes: ['text', 'image'],
+        supportedTypes: ['text'],
         icon: 'ri:message-3-line'
       })
     } else if (process.platform === 'win32') {
-      // Windows Share API
-      targets.push({
-        id: 'system-share',
-        name: 'System Share',
-        description: 'Share via Windows share functionality',
-        supportedTypes: ['text', 'files', 'image'],
-        icon: 'ri:share-line'
-      })
-
       targets.push({
         id: 'mail',
         name: 'Mail',
         description: 'Send via email',
-        supportedTypes: ['text', 'files'],
+        supportedTypes: ['text'],
         icon: 'ri:mail-line'
       })
     } else {
-      // Linux - basic share via xdg-open
       targets.push({
         id: 'mail',
         name: 'Mail',
@@ -123,12 +146,14 @@ export class NativeShareService {
     let result: NativeShareResult
 
     try {
+      const normalizedOptions = await this.materializeImageDataUrl(options)
+
       if (process.platform === 'darwin') {
-        result = await this.shareMacOS(options)
+        result = await this.shareMacOS(normalizedOptions)
       } else if (process.platform === 'win32') {
-        result = await this.shareWindows(options)
+        result = await this.shareWindows(normalizedOptions)
       } else {
-        result = await this.shareLinux(options)
+        result = await this.shareLinux(normalizedOptions)
       }
     } catch (error) {
       result = {
@@ -147,42 +172,85 @@ export class NativeShareService {
    * Shares using macOS Share Sheet via AppleScript
    */
   private async shareMacOS(options: NativeShareOptions): Promise<NativeShareResult> {
-    const { target, text, url, files } = options
+    const target = this.normalizeTarget(options.target)
+    const { text, url, files } = options
+    const shareBody = buildShareBody(text, url)
 
-    // AirDrop specific handling
     if (target === 'airdrop' && files?.length) {
       return await this.shareAirDrop(files)
     }
 
-    // Mail specific handling
     if (target === 'mail') {
       return await this.shareMail(options)
     }
 
-    // Messages specific handling
-    if (target === 'messages' && text) {
-      return await this.shareMessages(text)
+    if (target === 'messages' && shareBody) {
+      return await this.shareMessages(shareBody)
     }
 
-    // General system share via Share Sheet
-    if (files?.length) {
-      // For files, open in Finder and let user share manually
-      for (const file of files) {
-        shell.showItemInFolder(file)
-      }
-      return { success: true, target: 'finder' }
-    }
-
-    if (text || url) {
-      // Use clipboard + notification for text
-      const content = text || url || ''
-      const { clipboard } = await import('electron')
-      clipboard.writeText(content)
-
-      return { success: true, target: 'clipboard' }
+    if (!target || target === 'system') {
+      return await this.shareMacSystem(options)
     }
 
     return { success: false, error: 'No content to share' }
+  }
+
+  private async shareMacSystem(options: NativeShareOptions): Promise<NativeShareResult> {
+    const availableTargets: Array<{ label: string; target: NativeShareTarget }> = []
+    if (options.files?.length) {
+      availableTargets.push({ label: 'AirDrop', target: 'airdrop' })
+      availableTargets.push({ label: 'Mail', target: 'mail' })
+    }
+    if (options.text || options.url) {
+      availableTargets.push({ label: 'Mail', target: 'mail' })
+      availableTargets.push({ label: 'Messages', target: 'messages' })
+    }
+
+    const dedupedTargets = availableTargets.filter(
+      (item, index, items) =>
+        items.findIndex((candidate) => candidate.target === item.target) === index
+    )
+
+    if (dedupedTargets.length === 0) {
+      return { success: false, error: 'No content to share' }
+    }
+
+    if (dedupedTargets.length === 1) {
+      return await this.shareMacTarget(dedupedTargets[0].target, options)
+    }
+
+    const choices = dedupedTargets.map((item) => `"${item.label}"`).join(', ')
+    const selected = await runAppleScriptWithOutput(`
+set shareChoice to choose from list {${choices}} with prompt "Choose a macOS share target" without multiple selections allowed
+if shareChoice is false then
+  return ""
+end if
+return item 1 of shareChoice
+`)
+
+    const choice = dedupedTargets.find((item) => item.label === selected)
+    if (!choice) {
+      return { success: false, error: 'Share cancelled' }
+    }
+
+    return await this.shareMacTarget(choice.target, options)
+  }
+
+  private async shareMacTarget(
+    target: NativeShareTarget,
+    options: NativeShareOptions
+  ): Promise<NativeShareResult> {
+    if (target === 'airdrop' && options.files?.length) {
+      return await this.shareAirDrop(options.files)
+    }
+    if (target === 'mail') {
+      return await this.shareMail({ ...options, target })
+    }
+    const shareBody = buildShareBody(options.text, options.url)
+    if (target === 'messages' && shareBody) {
+      return await this.shareMessages(shareBody)
+    }
+    return { success: false, error: `Target ${target} cannot handle current payload` }
   }
 
   /**
@@ -191,7 +259,7 @@ export class NativeShareService {
   private async shareAirDrop(files: string[]): Promise<NativeShareResult> {
     try {
       // Use NSSharingService via AppleScript
-      const filePaths = files.map((f) => `POSIX file "${f}"`).join(', ')
+      const filePaths = files.map((f) => `POSIX file "${escapeAppleScriptString(f)}"`).join(', ')
       const script = `
         use framework "AppKit"
         use scripting additions
@@ -216,30 +284,43 @@ export class NativeShareService {
    * Shares via Mail
    */
   private async shareMail(options: NativeShareOptions): Promise<NativeShareResult> {
-    const { title, text, files } = options
+    const { title, text, files, url } = options
+    const normalizedBody = buildShareBody(text, url)
 
     if (process.platform === 'darwin') {
-      // Use mailto: for text, or Mail.app for attachments
       if (files?.length) {
+        const escapedSubject = escapeAppleScriptString(title || '')
+        const escapedBody = escapeAppleScriptString(normalizedBody)
+        const attachmentStatements = files
+          .map(
+            (filePath) =>
+              `tell newMessage to make new attachment with properties {file name:(POSIX file "${escapeAppleScriptString(filePath)}")} at after the last paragraph`
+          )
+          .join('\n')
         const script = `
           tell application "Mail"
             activate
-            set newMessage to make new outgoing message with properties {subject:"${title || ''}", content:"${text || ''}"}
-            ${files.map((f) => `tell newMessage to make new attachment with properties {file name:"${f}"}`).join('\n')}
+            set newMessage to make new outgoing message with properties {subject:"${escapedSubject}", content:"${escapedBody}"}
+            ${attachmentStatements}
             tell newMessage to set visible to true
           end tell
         `
         await runAppleScript(script)
       } else {
         const subject = encodeURIComponent(title || '')
-        const body = encodeURIComponent(text || '')
-        shell.openExternal(`mailto:?subject=${subject}&body=${body}`)
+        const body = encodeURIComponent(normalizedBody)
+        await shell.openExternal(`mailto:?subject=${subject}&body=${body}`)
       }
     } else {
-      // Windows/Linux - use mailto:
+      if (files?.length) {
+        return {
+          success: false,
+          error: 'Mail target does not support file attachments on this platform'
+        }
+      }
       const subject = encodeURIComponent(title || '')
-      const body = encodeURIComponent(text || '')
-      shell.openExternal(`mailto:?subject=${subject}&body=${body}`)
+      const body = encodeURIComponent(normalizedBody)
+      await shell.openExternal(`mailto:?subject=${subject}&body=${body}`)
     }
 
     return { success: true, target: 'mail' }
@@ -271,54 +352,61 @@ export class NativeShareService {
    * Shares using Windows Share API
    */
   private async shareWindows(options: NativeShareOptions): Promise<NativeShareResult> {
-    const { text, url, files, target } = options
+    const target = this.normalizeTarget(options.target)
 
-    if (target === 'mail') {
+    if (!target || target === 'mail') {
       return await this.shareMail(options)
     }
 
-    // Windows doesn't have a direct Share API in Electron
-    // Use clipboard as fallback
-    if (text || url) {
-      const { clipboard } = await import('electron')
-      clipboard.writeText(text || url || '')
-      return { success: true, target: 'clipboard' }
-    }
-
-    if (files?.length) {
-      for (const file of files) {
-        shell.showItemInFolder(file)
-      }
-      return { success: true, target: 'explorer' }
-    }
-
-    return { success: false, error: 'No content to share' }
+    return { success: false, error: `Target ${target} is unavailable on Windows` }
   }
 
   /**
    * Shares on Linux
    */
   private async shareLinux(options: NativeShareOptions): Promise<NativeShareResult> {
-    const { text, url, target } = options
+    const target = this.normalizeTarget(options.target)
 
-    if (target === 'mail') {
+    if (!target || target === 'mail') {
       return await this.shareMail(options)
     }
 
-    // Use xdg-open for URLs
-    if (url) {
-      shell.openExternal(url)
-      return { success: true, target: 'browser' }
+    return { success: false, error: `Target ${target} is unavailable on Linux` }
+  }
+
+  private async materializeImageDataUrl(options: NativeShareOptions): Promise<NativeShareOptions> {
+    const rawText = typeof options.text === 'string' ? options.text.trim() : ''
+    if (options.files?.length || !rawText.startsWith('data:image/')) {
+      return {
+        ...options,
+        target: this.normalizeTarget(options.target)
+      }
     }
 
-    // Copy text to clipboard
-    if (text) {
-      const { clipboard } = await import('electron')
-      clipboard.writeText(text)
-      return { success: true, target: 'clipboard' }
+    const match = rawText.match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i)
+    if (!match) {
+      return {
+        ...options,
+        target: this.normalizeTarget(options.target)
+      }
     }
 
-    return { success: false, error: 'No content to share' }
+    const mimeType = match[1].toLowerCase()
+    const base64Payload = match[2]
+    const extension = mimeType.split('/')[1]?.replace(/[^a-z0-9]+/gi, '') || 'png'
+    const tempFilePath = path.join(
+      os.tmpdir(),
+      `tuff-native-share-${Date.now()}-${Math.random().toString(16).slice(2)}.${extension}`
+    )
+
+    await fs.writeFile(tempFilePath, Buffer.from(base64Payload, 'base64'))
+
+    return {
+      ...options,
+      text: undefined,
+      files: [tempFilePath],
+      target: this.normalizeTarget(options.target)
+    }
   }
 
   /**
@@ -350,9 +438,7 @@ export class NativeShareService {
         break
 
       case 'image':
-        // For images, we might need to save to temp file first
         if (typeof payload.data === 'string' && payload.data.startsWith('data:')) {
-          // Data URL - would need to save to temp file
           options.text = payload.data
         } else if (typeof payload.data === 'string') {
           options.files = [payload.data]

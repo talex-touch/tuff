@@ -1,10 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AppEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, PlatformEvents } from '@talex-touch/utils/transport/events'
 
-const { fsReadFileMock, loggerWarnMock, perfDisposeMock } = vi.hoisted(() => ({
+const {
+  fsReadFileMock,
+  loggerWarnMock,
+  perfDisposeMock,
+  getTuffTransportMainMock,
+  activeAppGetActiveAppMock,
+  isActiveAppCapabilityAvailableMock,
+  nativeShareGetAvailableTargetsMock,
+  platformCapabilityListMock
+} = vi.hoisted(() => ({
   fsReadFileMock: vi.fn(),
   loggerWarnMock: vi.fn(),
-  perfDisposeMock: vi.fn()
+  perfDisposeMock: vi.fn(),
+  getTuffTransportMainMock: vi.fn<(channel?: unknown, keyManager?: unknown) => unknown>(() => null),
+  activeAppGetActiveAppMock: vi.fn<(forceRefresh?: unknown) => Promise<unknown>>(),
+  isActiveAppCapabilityAvailableMock: vi.fn(async () => false),
+  nativeShareGetAvailableTargetsMock: vi.fn<() => Array<Record<string, unknown>>>(() => []),
+  platformCapabilityListMock: vi.fn<() => Array<Record<string, unknown>>>(() => [])
 }))
 
 vi.mock('@talex-touch/utils', async (importOriginal) => {
@@ -27,7 +41,7 @@ vi.mock('@talex-touch/utils/common/utils/polling', () => ({
 }))
 
 vi.mock('@talex-touch/utils/transport/main', () => ({
-  getTuffTransportMain: vi.fn(() => null)
+  getTuffTransportMain: getTuffTransportMainMock
 }))
 
 vi.mock('node:fs/promises', () => ({
@@ -219,7 +233,7 @@ vi.mock('../db/utils', () => ({
 
 vi.mock('../modules/platform/capability-registry', () => ({
   platformCapabilityRegistry: {
-    list: vi.fn(() => [])
+    list: platformCapabilityListMock
   },
   registerDefaultPlatformCapabilities: vi.fn()
 }))
@@ -275,14 +289,23 @@ vi.mock('../modules/sentry/sentry-service', () => ({
 
 vi.mock('../modules/system/active-app', () => ({
   activeAppService: {
-    getActiveApp: vi.fn()
+    getActiveApp: activeAppGetActiveAppMock
+  },
+  isActiveAppCapabilityAvailable: isActiveAppCapabilityAvailableMock
+}))
+
+vi.mock('../modules/flow-bus/native-share', () => ({
+  nativeShareService: {
+    getAvailableTargets: nativeShareGetAvailableTargetsMock
   }
 }))
 
 vi.mock('../service/device-idle-service', () => ({
   deviceIdleService: {
     getSettings: vi.fn(),
-    updateSettings: vi.fn()
+    updateSettings: vi.fn(),
+    isOnBatteryPower: vi.fn(() => false),
+    getBatteryPercent: vi.fn(async () => null)
   }
 }))
 
@@ -438,5 +461,75 @@ describe('CommonChannelModule private helpers', () => {
         allowMissing: true
       })
     ).resolves.toBe('')
+  })
+
+  it('legacy active-app event emits warn once and capability list includes dynamic entries', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      value: 'darwin',
+      configurable: true
+    })
+
+    try {
+      const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+      const transport = {
+        on: vi.fn(
+          (
+            event: { toEventName: () => string },
+            handler: (payload: unknown, context: unknown) => Promise<unknown>
+          ) => {
+            handlers.set(event.toEventName(), handler)
+            return vi.fn()
+          }
+        ),
+        onStream: vi.fn(() => vi.fn()),
+        broadcastToWindow: vi.fn()
+      }
+
+      getTuffTransportMainMock.mockReturnValue(transport as never)
+      platformCapabilityListMock.mockReturnValue([
+        { id: 'platform.storage', scope: 'system' }
+      ] as never)
+      isActiveAppCapabilityAvailableMock.mockResolvedValue(true)
+      nativeShareGetAvailableTargetsMock.mockReturnValue([{ id: 'mail' }] as never)
+      activeAppGetActiveAppMock.mockResolvedValue({ displayName: 'Finder' })
+
+      const module = new CommonChannelModule()
+      await module.onInit({
+        app: {
+          window: { window: {} },
+          app: { addListener: vi.fn() }
+        }
+      } as never)
+
+      const listHandler = handlers.get(PlatformEvents.capabilities.list.toEventName())
+      const legacyHandler = handlers.get('system:get-active-app')
+
+      expect(listHandler).toBeTypeOf('function')
+      expect(legacyHandler).toBeTypeOf('function')
+
+      const capabilities = (await listHandler?.({}, {})) as Array<{ id: string }>
+      await legacyHandler?.({ forceRefresh: true }, {})
+      await legacyHandler?.({ forceRefresh: false }, {})
+
+      expect(capabilities.map((item) => item.id)).toEqual([
+        'platform.storage',
+        'platform.active-app',
+        'platform.native-share',
+        'platform.permission-checker'
+      ])
+      expect(activeAppGetActiveAppMock).toHaveBeenCalledTimes(2)
+      expect(loggerWarnMock).toHaveBeenCalledTimes(1)
+      expect(
+        (module as unknown as { legacyUsageCounts: Map<string, number> }).legacyUsageCounts.get(
+          'system:get-active-app'
+        )
+      ).toBe(2)
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        configurable: true
+      })
+    }
   })
 })

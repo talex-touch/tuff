@@ -51,6 +51,74 @@ function toPersistableAttachments(attachments: UserMessageAttachment[]): UserMes
   }))
 }
 
+function normalizeInjectedSystemMessages(metadata: unknown): Array<{
+  role: 'system'
+  content: string
+  metadata?: Record<string, unknown>
+}> {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return []
+  }
+
+  const row = metadata as Record<string, unknown>
+  const rawMessages = Array.isArray(row.systemContextMessages)
+    ? row.systemContextMessages
+    : []
+  const list: Array<{
+    role: 'system'
+    content: string
+    metadata?: Record<string, unknown>
+  }> = []
+
+  for (const item of rawMessages) {
+    if (!item) {
+      continue
+    }
+
+    if (typeof item === 'string') {
+      const content = item.trim()
+      if (!content) {
+        continue
+      }
+      list.push({
+        role: 'system',
+        content,
+        metadata: {
+          promptInjection: true,
+        },
+      })
+      continue
+    }
+
+    if (typeof item !== 'object' || Array.isArray(item)) {
+      continue
+    }
+
+    const message = item as Record<string, unknown>
+    const content = String(message.content || '').trim()
+    if (!content) {
+      continue
+    }
+
+    const normalizedMetadata = message.metadata && typeof message.metadata === 'object' && !Array.isArray(message.metadata)
+      ? {
+          ...(message.metadata as Record<string, unknown>),
+          promptInjection: true,
+        }
+      : {
+          promptInjection: true,
+        }
+
+    list.push({
+      role: 'system',
+      content,
+      metadata: normalizedMetadata,
+    })
+  }
+
+  return list
+}
+
 function isTraceSeqConflict(error: unknown): boolean {
   const message = error instanceof Error
     ? error.message
@@ -108,13 +176,14 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
       ? Math.max(0, Math.floor(initialSeq))
       : 0
     const attachments = normalizeTurnAttachments(input.attachments)
+    const injectedSystemMessages = normalizeInjectedSystemMessages(input.metadata)
 
     return {
       sessionId,
       turnId: makeId('turn'),
       done: false,
       seq: normalizedSeq,
-      messages: [...history, { role: 'user', content: input.message }],
+      messages: [...history, ...injectedSystemMessages, { role: 'user', content: input.message }],
       events: [],
       attachments: attachments.length > 0 ? attachments : undefined,
       metadata: input.metadata,
@@ -146,6 +215,7 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
       ? (await this.deps.store.runtime.listMessages(created.sessionId)).map(message => ({
           role: message.role,
           content: message.content,
+          metadata: message.metadata,
         }))
       : []
 
@@ -268,6 +338,7 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
       messages: (await this.deps.store.runtime.listMessages(sessionId)).map(message => ({
         role: message.role,
         content: message.content,
+        metadata: message.metadata,
       })),
       lastTurnId: undefined,
       lastSeq: session.lastSeq,

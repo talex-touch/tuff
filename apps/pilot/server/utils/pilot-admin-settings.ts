@@ -11,7 +11,14 @@ import type {
   PilotRouteComboItem,
   PilotRoutingPolicy,
 } from './pilot-admin-routing-config'
-import type { PilotBuiltinTool, PilotChannelAdapter, PilotChannelTransport } from './pilot-channel'
+import type {
+  PilotBuiltinTool,
+  PilotChannelAdapter,
+  PilotChannelRegion,
+  PilotChannelTransport,
+  PilotCozeAuthMode,
+  PilotProviderTargetType,
+} from './pilot-channel'
 import {
   getPilotAdminChannelCatalog,
   updatePilotAdminChannelCatalog,
@@ -43,6 +50,7 @@ export interface PilotAdminSettingsView {
         id: string
         label?: string
         format?: string
+        targetType?: PilotProviderTargetType
         priority?: number
         enabled?: boolean
         thinkingSupported?: boolean
@@ -53,6 +61,17 @@ export interface PilotAdminSettingsView {
       apiKeyMasked: string
       adapter: PilotChannelAdapter
       transport: PilotChannelTransport
+      region?: PilotChannelRegion
+      cozeAuthMode?: PilotCozeAuthMode
+      oauthClientId?: string
+      oauthTokenUrl?: string
+      oauthClientSecretMasked: string
+      hasOauthClientSecret: boolean
+      jwtAppId?: string
+      jwtKeyId?: string
+      jwtAudience?: string
+      jwtPrivateKeyMasked: string
+      hasJwtPrivateKey: boolean
       timeoutMs: number
       builtinTools: PilotBuiltinTool[]
       enabled: boolean
@@ -108,12 +127,22 @@ export interface PilotAdminSettingsPatch {
         id: string
         label?: string
         format?: string
+        targetType?: PilotProviderTargetType
         priority?: number
         enabled?: boolean
         thinkingSupported?: boolean
         thinkingDefaultEnabled?: boolean
         metadata?: Record<string, unknown>
       }>
+      region?: PilotChannelRegion
+      cozeAuthMode?: PilotCozeAuthMode
+      oauthClientId?: string
+      oauthClientSecret?: string
+      oauthTokenUrl?: string
+      jwtAppId?: string
+      jwtKeyId?: string
+      jwtPrivateKey?: string
+      jwtAudience?: string
       modelsLastSyncedAt?: string
       modelsSyncError?: string
     }>
@@ -186,6 +215,17 @@ async function buildPilotAdminSettingsView(event: H3Event): Promise<PilotAdminSe
         apiKeyMasked: maskSecret(channel.apiKey),
         adapter: channel.adapter,
         transport: channel.transport,
+        region: channel.region,
+        cozeAuthMode: channel.cozeAuthMode,
+        oauthClientId: channel.oauthClientId,
+        oauthTokenUrl: channel.oauthTokenUrl,
+        oauthClientSecretMasked: maskSecret(channel.oauthClientSecret || ''),
+        hasOauthClientSecret: Boolean(channel.oauthClientSecret),
+        jwtAppId: channel.jwtAppId,
+        jwtKeyId: channel.jwtKeyId,
+        jwtAudience: channel.jwtAudience,
+        jwtPrivateKeyMasked: maskSecret(channel.jwtPrivateKey || ''),
+        hasJwtPrivateKey: Boolean(channel.jwtPrivateKey),
         timeoutMs: channel.timeoutMs,
         builtinTools: channel.builtinTools,
         enabled: channel.enabled,

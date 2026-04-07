@@ -148,6 +148,13 @@
       "when": 1771521053929,
       "tag": "0020_system_update_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1774581614000,
+      "tag": "0021_search_index_meta",
+      "breakpoints": true
     }
   ]
 }

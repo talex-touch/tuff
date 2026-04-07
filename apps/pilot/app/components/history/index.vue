@@ -1,12 +1,9 @@
 <script setup lang="ts">
+import type { IChatConversation } from '~/composables/api/base/v1/aigc/completion-types'
 import dayjs from 'dayjs'
-import IconButton from '../button/IconButton.vue'
-import Logo from '../chore/Logo.vue'
-import UserAvatar from '../personal/UserAvatar.vue'
+import { $historyManager, IHistoryStatus } from '~/composables/api/base/v1/aigc/history'
 import PremiumButton from '../button/PremiumButton.vue'
 import UserAccountAvatar from '../personal/UserAccountAvatar.vue'
-import { $historyManager, IHistoryStatus } from '~/composables/api/base/v1/aigc/history'
-import type { IChatConversation } from '~/composables/api/base/v1/aigc/completion-types'
 
 const props = defineProps<{
   // expand: boolean
@@ -62,6 +59,8 @@ const categories = [
 ]
 
 const loadMore = ref()
+let historyObserver: IntersectionObserver | null = null
+let stopHistoryStatusWatch: (() => void) | null = null
 const searchedList = reactive<{
   enable: boolean
   loading: boolean
@@ -108,73 +107,40 @@ onMounted(() => {
   if (!el)
     return
 
-  // observer
-  const observer = new IntersectionObserver((entries) => {
-    if (entries[0].isIntersecting)
-      $historyManager.loadHistories()
+  historyObserver = new IntersectionObserver((entries) => {
+    if (!entries[0].isIntersecting)
+      return
+    if ($historyManager.options.status === IHistoryStatus.LOADING || $historyManager.options.status === IHistoryStatus.COMPLETED)
+      return
+    void $historyManager.loadHistories()
   }, {
     threshold: 0,
   })
 
   if (el instanceof Element)
-    observer.observe(el)
+    historyObserver.observe(el)
 
-  watch(() => $historyManager.options.status, (val) => {
-    if (val === IHistoryStatus.COMPLETED)
-      observer.unobserve(el)
-  }, { immediate: true })
-
-  // setTimeout(() => {
-  //   // 判断如果是移动端，那么从左向右滑动就要打开
-  //   if (document.body.classList.contains('mobile'))
-  //     mobileSlideProcess()
-  // })
-})
-
-const dom = ref()
-
-async function mobileSlideProcess() {
-  expand.value = false
-
-  const el = dom.value
-
-  let down = false
-  let startX = 0
-
-  document.addEventListener('touchstart', (e) => {
-    const touch = e.touches[0]
-    const { clientX, clientY } = touch
-    const { left, top } = el.getBoundingClientRect()
-
-    const screenWidth = window.innerWidth
-    const percent = screenWidth * 0.3
-
-    if (clientX < left + percent && clientY > top + 20) {
-      startX = clientX
-
-      down = true
-    }
-    else if (expand.value) {
-      if (clientX > left + 20 && clientY > top + 20) {
-        startX = clientX
-
-        down = true
-      }
-    }
-  })
-
-  document.addEventListener('touchend', (e: TouchEvent) => {
-    if (!down)
+  stopHistoryStatusWatch = watch(() => $historyManager.options.status, (val) => {
+    if (!historyObserver || !(el instanceof Element))
       return
 
-    const diff = startX - e.changedTouches[0].clientX
+    if (val === IHistoryStatus.COMPLETED)
+      historyObserver.unobserve(el)
+    else
+      historyObserver.observe(el)
+  }, { immediate: true })
+})
 
-    if (Math.abs(diff) >= window.innerWidth * 0.1)
-      expand.value = diff < 0
-
-    down = false
-  })
-}
+onBeforeUnmount(() => {
+  if (stopHistoryStatusWatch) {
+    stopHistoryStatusWatch()
+    stopHistoryStatusWatch = null
+  }
+  if (historyObserver) {
+    historyObserver.disconnect()
+    historyObserver = null
+  }
+})
 
 const planProgress = computed(() => {
   if (!userStore.value.subscription)
@@ -268,7 +234,7 @@ onBeforeUnmount(() => dispose.value = true)
 </script>
 
 <template>
-  <div ref="dom" class="History" :class="{ plan: userStore.subscription, searchable: searchedList.enable }">
+  <div class="History" :class="{ plan: userStore.subscription, searchable: searchedList.enable }">
     <teleport :disabled="dispose" to="body">
       <div v-if="!dispose" :class="{ expand }" class="History-Indicator" @click="expand = !expand" />
     </teleport>

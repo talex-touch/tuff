@@ -47,6 +47,7 @@ import { windowManager } from '../core-box/window'
 import { QueryCompletionService } from './query-completion-service'
 import { RecommendationEngine } from './recommendation/recommendation-engine'
 import { gatherAggregator } from './search-gather'
+import { markSearchActivity } from './search-activity'
 import { SearchIndexService } from './search-index-service'
 import { searchLogger } from './search-logger'
 import { Sorter } from './sort/sorter'
@@ -1002,6 +1003,7 @@ export class SearchEngineCore
   }
 
   async search(query: TuffQuery): Promise<TuffSearchResult> {
+    markSearchActivity()
     const pipelineDurations: SearchPipelineStageDurations = {
       parseDuration: 0,
       providerAggregationDuration: 0,
@@ -2266,8 +2268,12 @@ export class SearchEngineCore
     instance.registerDefaults()
 
     const db = databaseModule.getDb()
-    instance.dbUtils = createDbUtils(db)
+    const auxDb = databaseModule.getAuxDb()
+    instance.dbUtils = createDbUtils(db, auxDb)
     instance.searchIndexService = new SearchIndexService(db)
+    void instance.searchIndexService.warmup().catch((error) => {
+      searchEngineLog.warn('Search index warmup failed', { error })
+    })
     instance.searchIndexService.preloadPinyin()
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
     instance.usageStatsCache = new UsageStatsCache(10000, 15 * 60 * 1000) // 15 minutes TTL

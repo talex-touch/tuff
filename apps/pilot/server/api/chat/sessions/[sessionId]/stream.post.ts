@@ -19,6 +19,13 @@ import {
   toPilotStreamErrorDetail,
 } from '@talex-touch/tuff-intelligence/pilot'
 import { createError } from 'h3'
+import {
+  buildPilotRedactedRoutingTracePayload,
+  redactPilotClientErrorDetail,
+  redactPilotClientTracePayload,
+  shouldHidePilotClientRuntimeEvent,
+} from '../../../../../shared/pilot-runtime-redaction'
+import { buildPilotSystemMessageId, projectPilotSystemMessage } from '../../../../../shared/pilot-system-message'
 import { requirePilotAuth } from '../../../../utils/auth'
 import {
   getPilotAdminRoutingConfig,
@@ -36,24 +43,29 @@ import {
   normalizePilotMemoryPolicy,
   resolvePilotMemoryEnabled,
 } from '../../../../utils/pilot-chat-memory'
+import { requireSessionId, toErrorMessage } from '../../../../utils/pilot-http'
+import { resolvePilotIntent } from '../../../../utils/pilot-intent-resolver'
+import { resolveLangGraphOrchestratorDecision } from '../../../../utils/pilot-langgraph-orchestrator'
+import { executePilotMediaWithFallback } from '../../../../utils/pilot-media-fallback'
 import {
   extractPilotMemoryFacts,
   upsertPilotMemoryFacts,
 } from '../../../../utils/pilot-memory-facts'
-import { requireSessionId, toErrorMessage } from '../../../../utils/pilot-http'
-import { resolvePilotIntent } from '../../../../utils/pilot-intent-resolver'
-import { resolveLangGraphOrchestratorDecision } from '../../../../utils/pilot-langgraph-orchestrator'
 import { ensurePilotQuotaSessionSchema, upsertPilotQuotaSession } from '../../../../utils/pilot-quota-session'
 import { markRouteFailure, markRouteSuccess } from '../../../../utils/pilot-route-health'
 import { recordPilotRoutingMetric } from '../../../../utils/pilot-routing-metrics'
 import { resolvePilotRoutingSelection } from '../../../../utils/pilot-routing-resolver'
 import { createPilotRuntime, PILOT_STRICT_MODE_UNAVAILABLE_CODE } from '../../../../utils/pilot-runtime'
 import { getPilotStoreMetricsSnapshot } from '../../../../utils/pilot-store'
-import { executePilotMediaWithFallback } from '../../../../utils/pilot-media-fallback'
+import { normalizeStreamInputAttachments } from '../../../../utils/pilot-stream-attachment-input'
 import {
+  createPilotStreamQuotaProjector,
+  createPilotStreamQuotaProjectorPersistence,
+} from '../../../../utils/pilot-stream-quota-projector'
+import {
+  buildWebsearchContextSystemMessage,
   executePilotImageGenerateTool,
   executePilotWebsearchTool,
-  mergeWebsearchContextIntoMessage,
   PilotToolApprovalRejectedError,
   PilotToolApprovalRequiredError,
 } from '../../../../utils/pilot-tool-gateway'
@@ -161,7 +173,7 @@ function buildImageMarkdown(urls: string[]): string {
 }
 
 function mapTraceToStreamEvent(trace: TraceRecord): Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> {
-  const payload = toPilotSafeRecord(trace.payload)
+  const payload = redactPilotClientTracePayload(trace.type, toPilotSafeRecord(trace.payload))
   const text = String(payload.text || '')
 
   if (trace.type === 'assistant.delta') {
@@ -201,12 +213,19 @@ function mapTraceToStreamEvent(trace: TraceRecord): Omit<PilotStreamEvent, 'sess
   }
 
   if (trace.type === 'error') {
+    const detailRecord = toPilotSafeRecord(payload.detail)
+    const detail = redactPilotClientErrorDetail(
+      Object.keys(detailRecord).length > 0 ? detailRecord : payload,
+    )
     return {
       type: 'error',
       seq: trace.seq,
       message: String(payload.message || 'Stream error'),
-      detail: toPilotSafeRecord(payload.detail),
-      payload,
+      detail,
+      payload: {
+        ...payload,
+        detail,
+      },
     }
   }
 
@@ -228,7 +247,9 @@ async function syncLegacyQuotaConversationFromRuntime(
       listMessages: (sessionId: string) => Promise<Array<{
         role: string
         content: string
+        metadata?: Record<string, unknown>
       }>>
+      listTrace?: (sessionId: string, fromSeq?: number, limit?: number) => Promise<TraceRecord[]>
     }
   },
 ): Promise<void> {
@@ -241,13 +262,18 @@ async function syncLegacyQuotaConversationFromRuntime(
   }
 
   const runtimeMessages = await options.storeRuntime.listMessages(options.chatId)
+  const runtimeTraces = options.storeRuntime.listTrace
+    ? await options.storeRuntime.listTrace(options.chatId, 1, 2_000).catch(() => [])
+    : []
   const previous = await getQuotaHistory(event, options.userId, options.chatId)
   const snapshot = buildQuotaConversationSnapshot({
     chatId: options.chatId,
     messages: runtimeMessages.map(item => ({
       role: item.role,
       content: item.content,
+      metadata: item.metadata,
     })),
+    runtimeTraces,
     assistantReply: '',
     topicHint: String(session.title || '').trim(),
     previousValue: previous?.value || '',
@@ -268,6 +294,16 @@ async function syncLegacyQuotaConversationFromRuntime(
     channelId: String(options.channelId || '').trim() || 'default',
     topic: snapshot.topic,
   })
+}
+
+function countConversationMessages(messages: Array<{ role: string }>): number {
+  return messages.reduce((acc, item) => {
+    const role = String(item.role || '').trim().toLowerCase()
+    if (role === 'user' || role === 'assistant') {
+      return acc + 1
+    }
+    return acc
+  }, 0)
 }
 
 async function resolveMessageAttachments(
@@ -390,6 +426,10 @@ async function followTraceTail(options: {
         if (options.connection.closed || options.connection.disconnected) {
           return
         }
+        if (shouldHidePilotClientRuntimeEvent(trace.type)) {
+          nextSeq = Math.max(nextSeq, Number(trace.seq || 0) + 1)
+          continue
+        }
         await options.emitEvent(mapTraceToStreamEvent(trace))
         nextSeq = Math.max(nextSeq, Number(trace.seq || 0) + 1)
       }
@@ -459,7 +499,7 @@ export default defineEventHandler(async (event) => {
   const memoryEnabled = resolvePilotMemoryEnabled(memoryPolicy, requestedMemoryEnabled, memoryUserPreference)
   const pilotMode = body?.pilotMode === true
 
-  const inputAttachments = Array.isArray(body?.attachments) ? body.attachments : undefined
+  const inputAttachments = normalizeStreamInputAttachments(body?.attachments)
   const hasInputAttachments = Boolean(inputAttachments && inputAttachments.length > 0)
   const persistStreamLifecycle = Boolean(routedMessage) || hasInputAttachments
   const fromSeq = Number.isFinite(body?.fromSeq)
@@ -530,12 +570,15 @@ export default defineEventHandler(async (event) => {
         let websearchSources: Array<Record<string, unknown>> = []
         let websearchDecisionDispatched = false
         let websearchSettled = false
+        let websearchSkipReasonFromAudit = ''
+        const websearchGateMode = 'intent_strict'
         const websearchDecision = shouldExecutePilotWebsearch({
           message: routedMessage,
           intentType: intentDecision.intentType,
           internetEnabled: selectedChannel.internet,
           builtinTools: selectedChannel.builtinTools,
           intentWebsearchRequired: intentDecision.websearchRequired,
+          intentWebsearchReason: intentDecision.websearchReason,
         })
         let websearchConnectorSource: 'gateway' | 'responses_builtin' | 'none' = 'none'
         let websearchConnectorReason = websearchDecision.reason
@@ -553,18 +596,245 @@ export default defineEventHandler(async (event) => {
           },
         )
 
+        if (pilotMode && selectedChannel.adapter !== 'coze' && orchestratorDecision.mode !== 'langgraph-local') {
+          const detail = redactPilotClientErrorDetail(toPilotSafeRecord({
+            code: PILOT_STRICT_MODE_UNAVAILABLE_CODE,
+            reason: String(orchestratorDecision.reason || '').trim() || 'pilot_strict_mode_unavailable',
+            status_code: 503,
+            pilot_mode: true,
+            orchestrator_mode: orchestratorDecision.mode,
+            orchestrator_reason: orchestratorDecision.reason,
+            orchestrator_assistant_id: orchestratorDecision.assistantId,
+            orchestrator_graph_profile: orchestratorDecision.graphProfile,
+            orchestrator_endpoint: orchestratorDecision.endpoint,
+            route_combo_id: selectedChannel.routeComboId,
+            channel_id: selectedChannel.channelId,
+            model_id: selectedChannel.modelId,
+            provider_model: selectedChannel.providerModel,
+            provider_target_type: selectedChannel.providerTargetType,
+            scene: selectedChannel.scene,
+          }))
+          if (shouldRecordRoutingMetric) {
+            metricSuccess = false
+            metricFinishReason = 'strict_mode_unavailable'
+            metricErrorCode = String(detail.code || PILOT_STRICT_MODE_UNAVAILABLE_CODE)
+          }
+          sendRaw({
+            type: 'error',
+            sessionId,
+            timestamp: Date.now(),
+            seq: 0,
+            message: 'Pilot 严格模式不可用：当前未满足 LangGraph 运行条件，请检查配置后重试。',
+            detail,
+            payload: detail,
+          })
+          if (!doneSent) {
+            sendRaw({
+              type: 'done',
+              sessionId,
+              timestamp: Date.now(),
+              seq: 0,
+              payload: {
+                status: 'error',
+              },
+            })
+          }
+          return
+        }
+
+        const { runtime, store } = createPilotRuntime({
+          event,
+          userId,
+          strictPilotMode: pilotMode,
+          allowDeepAgentFallback: !pilotMode,
+          channel: {
+            channelId: selectedChannel.channelId,
+            baseUrl: selectedChannel.channel.baseUrl,
+            apiKey: selectedChannel.channel.apiKey,
+            model: selectedChannel.providerModel || selectedChannel.channel.model,
+            providerTargetType: selectedChannel.providerTargetType,
+            adapter: selectedChannel.adapter,
+            transport: selectedChannel.transport,
+            region: selectedChannel.channel.region,
+            cozeAuthMode: selectedChannel.channel.cozeAuthMode,
+            oauthClientId: selectedChannel.channel.oauthClientId,
+            oauthClientSecret: selectedChannel.channel.oauthClientSecret,
+            oauthTokenUrl: selectedChannel.channel.oauthTokenUrl,
+            jwtAppId: selectedChannel.channel.jwtAppId,
+            jwtKeyId: selectedChannel.channel.jwtKeyId,
+            jwtPrivateKey: selectedChannel.channel.jwtPrivateKey,
+            jwtAudience: selectedChannel.channel.jwtAudience,
+            timeoutMs: selectedChannel.channel.timeoutMs,
+            builtinTools: selectedChannel.builtinTools,
+          },
+          orchestrator: {
+            mode: orchestratorDecision.mode,
+            reason: orchestratorDecision.reason,
+            endpoint: orchestratorDecision.endpoint,
+            apiKey: orchestratorDecision.apiKey,
+            assistantId: orchestratorDecision.assistantId,
+            graphProfile: orchestratorDecision.graphProfile,
+          },
+          onAudit: async (record) => {
+            if (emitAudit) {
+              await emitAudit(record)
+            }
+          },
+        })
+
+        const createStreamEmitterOptions: CreatePilotStreamEmitterOptions = {
+          sessionId,
+          appendRetry: 3,
+          getLastSeq: async (targetSessionId) => {
+            const current = await store.runtime.getSession(targetSessionId)
+            return Number(current?.lastSeq || 0)
+          },
+          appendTrace: async (record) => {
+            await store.runtime.appendTrace(record)
+          },
+          send: async (payload) => {
+            sendRaw(payload as StreamEventPayload)
+          },
+        }
+        const streamEmitter = createPilotStreamEmitter(createStreamEmitterOptions)
+        const appendTraceOnly = async (type: string, payload: Record<string, unknown>) => {
+          const nextSeq = Math.max(1, streamEmitter.getSeqCursor() + 1)
+          await store.runtime.appendTrace({
+            sessionId,
+            seq: nextSeq,
+            type,
+            payload: toPilotSafeRecord(payload),
+          })
+          streamEmitter.setSeqCursor(nextSeq)
+        }
+        const quotaProjector = createPilotStreamQuotaProjector({
+          chatId: sessionId,
+          persist: persistStreamLifecycle,
+          storeRuntime: store.runtime,
+          persistence: createPilotStreamQuotaProjectorPersistence({
+            event,
+            userId,
+            chatId: sessionId,
+            channelId: selectedChannel.channelId,
+          }),
+          assistantDeltaDebounceMs: 48,
+          warn: (message, error) => {
+            console.warn(message, error)
+          },
+        })
+        const rawEmitEvent = streamEmitter.emit
+        const emitEvent = async (
+          payload: Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
+          emitOptions?: {
+            persist?: boolean
+            tracePayload?: Record<string, unknown>
+          },
+        ) => {
+          const eventType = String(payload?.type || '').trim()
+          if (shouldRecordRoutingMetric) {
+            if (eventType === 'assistant.delta') {
+              const delta = typeof payload.delta === 'string'
+                ? payload.delta
+                : ''
+              if (!firstDeltaAt && delta) {
+                firstDeltaAt = Date.now()
+                ttftMs = Math.max(0, firstDeltaAt - runStartedAt)
+              }
+              outputChars += delta.length
+            }
+            else if (eventType === 'assistant.final') {
+              const finalMessage = typeof payload.message === 'string'
+                ? payload.message
+                : ''
+              if (!firstDeltaAt && finalMessage) {
+                firstDeltaAt = Date.now()
+                ttftMs = Math.max(0, firstDeltaAt - runStartedAt)
+              }
+              if (outputChars <= 0 && finalMessage) {
+                outputChars = finalMessage.length
+              }
+            }
+            else if (eventType === 'error') {
+              const detail = payload.detail && typeof payload.detail === 'object'
+                ? payload.detail as Record<string, unknown>
+                : {}
+              metricErrorCode = String(detail.code || payload.message || 'PILOT_STREAM_ERROR')
+              metricFinishReason = 'runtime_error'
+            }
+          }
+          await rawEmitEvent(payload, emitOptions)
+
+          if (!persistStreamLifecycle || !eventType || eventType === 'stream.heartbeat') {
+            return
+          }
+
+          const projectedSeq = Number.isFinite(payload.seq)
+            ? Math.max(1, Math.floor(Number(payload.seq)))
+            : (emitOptions?.persist === true ? streamEmitter.getSeqCursor() : undefined)
+          const projectedPayload = payload.payload && typeof payload.payload === 'object' && !Array.isArray(payload.payload)
+            ? payload.payload as Record<string, unknown>
+            : {}
+          const projectedDetail = payload.detail && typeof payload.detail === 'object' && !Array.isArray(payload.detail)
+            ? payload.detail as Record<string, unknown>
+            : undefined
+          await quotaProjector.apply({
+            type: eventType,
+            seq: projectedSeq,
+            turnId: typeof payload.turnId === 'string' ? payload.turnId : undefined,
+            delta: typeof payload.delta === 'string' ? payload.delta : undefined,
+            message: typeof payload.message === 'string' ? payload.message : undefined,
+            payload: projectedPayload,
+            detail: projectedDetail,
+          })
+
+          if (!Number.isFinite(projectedSeq) || !projectedSeq) {
+            return
+          }
+
+          const projectedSystemMessage = projectPilotSystemMessage({
+            type: eventType,
+            seq: projectedSeq,
+            turnId: typeof payload.turnId === 'string' ? payload.turnId : undefined,
+            payload: projectedPayload,
+            detail: projectedDetail,
+            message: typeof payload.message === 'string' ? payload.message : undefined,
+            delta: typeof payload.delta === 'string' ? payload.delta : undefined,
+          })
+          if (!projectedSystemMessage) {
+            return
+          }
+
+          const messageId = buildPilotSystemMessageId(
+            sessionId,
+            projectedSeq,
+            projectedSystemMessage.metadata.sourceEventType,
+          )
+          await store.runtime.saveMessage({
+            id: messageId,
+            sessionId,
+            role: 'system',
+            content: projectedSystemMessage.content,
+            createdAt: new Date().toISOString(),
+            metadata: toPilotSafeRecord({
+              ...projectedSystemMessage.metadata,
+              seq: projectedSeq,
+            }),
+          })
+        }
+
         const emitMemoryUpdatedEvent = async () => {
           const messages = memoryEnabled
             ? await store.runtime.listMessages(sessionId)
             : []
-          memoryHistoryAfterMessageCount = messages.length
+          memoryHistoryAfterMessageCount = countConversationMessages(messages)
           memoryAddedCount = 0
           memoryExtractorFailed = false
           const shouldStoreByIntent = intentDecision.memoryDecision.shouldStore === true
           if (memoryEnabled && shouldStoreByIntent && routedMessage) {
-            const latestAssistantReply = messages
+            const latestAssistantMessage = messages
               .filter(item => item.role === 'assistant')
-              .at(-1)?.content || ''
+              .at(-1)
+            const latestAssistantReply = latestAssistantMessage?.content || ''
             try {
               const facts = await extractPilotMemoryFacts({
                 message: routedMessage,
@@ -626,138 +896,6 @@ export default defineEventHandler(async (event) => {
             : undefined)
         }
 
-        if (pilotMode && orchestratorDecision.mode !== 'langgraph-local') {
-          const detail = toPilotSafeRecord({
-            code: PILOT_STRICT_MODE_UNAVAILABLE_CODE,
-            reason: String(orchestratorDecision.reason || '').trim() || 'pilot_strict_mode_unavailable',
-            status_code: 503,
-            pilot_mode: true,
-            orchestrator_mode: orchestratorDecision.mode,
-            orchestrator_reason: orchestratorDecision.reason,
-            orchestrator_assistant_id: orchestratorDecision.assistantId,
-            orchestrator_graph_profile: orchestratorDecision.graphProfile,
-            orchestrator_endpoint: orchestratorDecision.endpoint,
-            route_combo_id: selectedChannel.routeComboId,
-            channel_id: selectedChannel.channelId,
-            model_id: selectedChannel.modelId,
-            provider_model: selectedChannel.providerModel,
-          })
-          if (shouldRecordRoutingMetric) {
-            metricSuccess = false
-            metricFinishReason = 'strict_mode_unavailable'
-            metricErrorCode = String(detail.code || PILOT_STRICT_MODE_UNAVAILABLE_CODE)
-          }
-          sendRaw({
-            type: 'error',
-            sessionId,
-            timestamp: Date.now(),
-            seq: 0,
-            message: 'Pilot 严格模式不可用：当前未满足 LangGraph 运行条件，请检查配置后重试。',
-            detail,
-            payload: detail,
-          })
-          if (!doneSent) {
-            sendRaw({
-              type: 'done',
-              sessionId,
-              timestamp: Date.now(),
-              seq: 0,
-              payload: {
-                status: 'error',
-              },
-            })
-          }
-          return
-        }
-
-        const { runtime, store } = createPilotRuntime({
-          event,
-          userId,
-          strictPilotMode: pilotMode,
-          allowDeepAgentFallback: !pilotMode,
-          channel: {
-            channelId: selectedChannel.channelId,
-            baseUrl: selectedChannel.channel.baseUrl,
-            apiKey: selectedChannel.channel.apiKey,
-            model: selectedChannel.providerModel || selectedChannel.channel.model,
-            adapter: selectedChannel.adapter,
-            transport: selectedChannel.transport,
-            timeoutMs: selectedChannel.channel.timeoutMs,
-            builtinTools: selectedChannel.builtinTools,
-          },
-          orchestrator: {
-            mode: orchestratorDecision.mode,
-            reason: orchestratorDecision.reason,
-            endpoint: orchestratorDecision.endpoint,
-            apiKey: orchestratorDecision.apiKey,
-            assistantId: orchestratorDecision.assistantId,
-            graphProfile: orchestratorDecision.graphProfile,
-          },
-          onAudit: async (record) => {
-            if (emitAudit) {
-              await emitAudit(record)
-            }
-          },
-        })
-
-        const createStreamEmitterOptions: CreatePilotStreamEmitterOptions = {
-          sessionId,
-          appendRetry: 3,
-          getLastSeq: async (targetSessionId) => {
-            const current = await store.runtime.getSession(targetSessionId)
-            return Number(current?.lastSeq || 0)
-          },
-          appendTrace: async (record) => {
-            await store.runtime.appendTrace(record)
-          },
-          send: async (payload) => {
-            sendRaw(payload as StreamEventPayload)
-          },
-        }
-        const streamEmitter = createPilotStreamEmitter(createStreamEmitterOptions)
-        const rawEmitEvent = streamEmitter.emit
-        const emitEvent = async (
-          payload: Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
-          emitOptions?: {
-            persist?: boolean
-            tracePayload?: Record<string, unknown>
-          },
-        ) => {
-          if (shouldRecordRoutingMetric) {
-            const eventType = String(payload?.type || '').trim()
-            if (eventType === 'assistant.delta') {
-              const delta = typeof payload.delta === 'string'
-                ? payload.delta
-                : ''
-              if (!firstDeltaAt && delta) {
-                firstDeltaAt = Date.now()
-                ttftMs = Math.max(0, firstDeltaAt - runStartedAt)
-              }
-              outputChars += delta.length
-            }
-            else if (eventType === 'assistant.final') {
-              const finalMessage = typeof payload.message === 'string'
-                ? payload.message
-                : ''
-              if (!firstDeltaAt && finalMessage) {
-                firstDeltaAt = Date.now()
-                ttftMs = Math.max(0, firstDeltaAt - runStartedAt)
-              }
-              if (outputChars <= 0 && finalMessage) {
-                outputChars = finalMessage.length
-              }
-            }
-            else if (eventType === 'error') {
-              const detail = payload.detail && typeof payload.detail === 'object'
-                ? payload.detail as Record<string, unknown>
-                : {}
-              metricErrorCode = String(detail.code || payload.message || 'PILOT_STREAM_ERROR')
-              metricFinishReason = 'runtime_error'
-            }
-          }
-          return await rawEmitEvent(payload, emitOptions)
-        }
-
         const emitWebsearchSkipped = async (reason: string) => {
           if (websearchSettled) {
             return
@@ -771,6 +909,7 @@ export default defineEventHandler(async (event) => {
             payload: {
               enabled: false,
               reason: normalizedReason,
+              gateMode: websearchGateMode,
             },
           }, persistStreamLifecycle
             ? {
@@ -778,6 +917,7 @@ export default defineEventHandler(async (event) => {
                 tracePayload: {
                   enabled: false,
                   reason: normalizedReason,
+                  gateMode: websearchGateMode,
                 },
               }
             : undefined)
@@ -808,7 +948,7 @@ export default defineEventHandler(async (event) => {
           }
           streamEmitter.setSeqCursor(Number(session.lastSeq || 0))
           if (memoryEnabled) {
-            memoryHistoryMessageCount = (await store.runtime.listMessages(sessionId)).length
+            memoryHistoryMessageCount = countConversationMessages(await store.runtime.listMessages(sessionId))
           }
           else {
             memoryHistoryMessageCount = 0
@@ -857,52 +997,16 @@ export default defineEventHandler(async (event) => {
               }
             : undefined)
 
-          await emitEvent({
-            type: 'routing.selected',
-            payload: {
-              channelId: selectedChannel.channelId,
-              modelId: selectedChannel.modelId,
-              providerModel: selectedChannel.providerModel,
-              routeComboId: selectedChannel.routeComboId,
-              selectionSource: selectedChannel.selectionSource,
-              selectionReason: selectedChannel.selectionReason,
+          if (persistStreamLifecycle) {
+            await appendTraceOnly('routing.selected', buildPilotRedactedRoutingTracePayload({
               intentType: intentDecision.intentType,
               internet: selectedChannel.internet,
               thinking: selectedChannel.thinking,
               memoryEnabled,
               memoryHistoryMessageCount,
               builtinTools: selectedChannel.builtinTools,
-              transport: selectedChannel.transport,
-              adapter: selectedChannel.adapter,
-              orchestratorMode: orchestratorDecision.mode,
-              orchestratorReason: orchestratorDecision.reason,
-              orchestratorAssistantId: orchestratorDecision.assistantId,
-              orchestratorGraphProfile: orchestratorDecision.graphProfile,
-            },
-          }, persistStreamLifecycle
-            ? {
-                persist: true,
-                tracePayload: {
-                  channelId: selectedChannel.channelId,
-                  modelId: selectedChannel.modelId,
-                  providerModel: selectedChannel.providerModel,
-                  routeComboId: selectedChannel.routeComboId,
-                  selectionSource: selectedChannel.selectionSource,
-                  selectionReason: selectedChannel.selectionReason,
-                  intentType: intentDecision.intentType,
-                  internet: selectedChannel.internet,
-                  thinking: selectedChannel.thinking,
-                  memoryEnabled,
-                  memoryHistoryMessageCount,
-                  transport: selectedChannel.transport,
-                  adapter: selectedChannel.adapter,
-                  orchestratorMode: orchestratorDecision.mode,
-                  orchestratorReason: orchestratorDecision.reason,
-                  orchestratorAssistantId: orchestratorDecision.assistantId,
-                  orchestratorGraphProfile: orchestratorDecision.graphProfile,
-                },
-              }
-            : undefined)
+            }))
+          }
 
           await emitEvent({
             type: 'memory.context',
@@ -933,6 +1037,7 @@ export default defineEventHandler(async (event) => {
             payload: {
               enabled: websearchDecision.enabled,
               reason: websearchDecision.reason,
+              gateMode: websearchGateMode,
               intentWebsearchRequired: intentDecision.websearchRequired === true,
               intentWebsearchReason: intentDecision.websearchReason,
               internetEnabled: selectedChannel.internet,
@@ -944,6 +1049,7 @@ export default defineEventHandler(async (event) => {
                 tracePayload: {
                   enabled: websearchDecision.enabled,
                   reason: websearchDecision.reason,
+                  gateMode: websearchGateMode,
                   intentWebsearchRequired: intentDecision.websearchRequired === true,
                   intentWebsearchReason: intentDecision.websearchReason,
                   internetEnabled: selectedChannel.internet,
@@ -1257,6 +1363,16 @@ export default defineEventHandler(async (event) => {
                 },
                 emitAudit: async (payload) => {
                   const normalizedPayload = toPilotSafeRecord(payload)
+                  const normalizedAuditType = String(normalizedPayload.auditType || '').trim()
+                  const normalizedStatus = String(normalizedPayload.status || '').trim().toLowerCase()
+                  const normalizedConnectorReason = String(normalizedPayload.connectorReason || '').trim()
+                  if (
+                    normalizedAuditType === 'tool.call.completed'
+                    && normalizedStatus === 'skipped'
+                    && normalizedConnectorReason
+                  ) {
+                    websearchSkipReasonFromAudit = normalizedConnectorReason
+                  }
                   await emitEvent({
                     type: 'run.audit',
                     payload: normalizedPayload,
@@ -1309,7 +1425,7 @@ export default defineEventHandler(async (event) => {
                 markWebsearchExecuted()
               }
               else {
-                await emitWebsearchSkipped('tool_failed_or_empty_result')
+                await emitWebsearchSkipped(websearchSkipReasonFromAudit || 'tool_failed_or_empty_result')
               }
             }
             catch (error) {
@@ -1422,20 +1538,32 @@ export default defineEventHandler(async (event) => {
 
           const requireNoSourceGuard = (intentDecision.websearchRequired === true)
             && websearchSources.length <= 0
-          const runtimeMessage = mergeWebsearchContextIntoMessage(routedMessage, websearchContextText, {
+          const runtimeSystemContext = buildWebsearchContextSystemMessage(routedMessage, websearchContextText, {
             requireNoSourceGuard,
           })
+          const runtimeSystemContextMessages = runtimeSystemContext
+            ? [{
+                content: runtimeSystemContext,
+                metadata: {
+                  source: 'websearch_context',
+                  websearchSourceCount: websearchSources.length,
+                  requireNoSourceGuard,
+                },
+              }]
+            : undefined
 
           const result = await runPilotConversationStream({
             runtime,
             sessionId,
-            message: runtimeMessage,
+            message: routedMessage,
             fromSeq,
             attachments: resolvedAttachments.attachments,
             metadata: toPilotSafeRecord({
               ...(body?.metadata || {}),
               modelId: selectedChannel.modelId,
               providerModel: selectedChannel.providerModel,
+              providerTargetType: selectedChannel.providerTargetType,
+              scene: selectedChannel.scene,
               routeComboId: selectedChannel.routeComboId,
               selectionSource: selectedChannel.selectionSource,
               selectionReason: selectedChannel.selectionReason,
@@ -1453,6 +1581,7 @@ export default defineEventHandler(async (event) => {
               websearchDecision: websearchDecision.reason,
               websearchConnectorSource,
               websearchConnectorReason,
+              systemContextMessages: runtimeSystemContextMessages,
               orchestratorMode: orchestratorDecision.mode,
               orchestratorReason: orchestratorDecision.reason,
               orchestratorAssistantId: orchestratorDecision.assistantId,
@@ -1540,7 +1669,7 @@ export default defineEventHandler(async (event) => {
             // ignore fallback status updates
           }
 
-          const detail = toPilotStreamErrorDetail(error, 'stream.run', { sessionId })
+          const detail = redactPilotClientErrorDetail(toPilotStreamErrorDetail(error, 'stream.run', { sessionId }))
           if (shouldRecordRoutingMetric) {
             metricSuccess = false
             metricFinishReason = 'error'
@@ -1577,6 +1706,15 @@ export default defineEventHandler(async (event) => {
         }
         finally {
           if (persistStreamLifecycle) {
+            try {
+              await quotaProjector.flush({
+                force: true,
+              })
+            }
+            catch (error) {
+              console.warn('[pilot-stream-quota-projector] flush failed', error)
+            }
+
             try {
               await syncLegacyQuotaConversationFromRuntime(event, {
                 userId,
@@ -1616,6 +1754,7 @@ export default defineEventHandler(async (event) => {
                 routeComboId: selectedChannel.routeComboId,
                 channelId: selectedChannel.channelId,
                 providerModel: selectedChannel.providerModel,
+                providerTargetType: selectedChannel.providerTargetType,
                 queueWaitMs: 0,
                 ttftMs: resolvedTtftMs,
                 totalDurationMs,
@@ -1633,6 +1772,8 @@ export default defineEventHandler(async (event) => {
                   intentConfidence: intentDecision.confidence,
                   adapter: selectedChannel.adapter,
                   transport: selectedChannel.transport,
+                  providerTargetType: selectedChannel.providerTargetType,
+                  scene: selectedChannel.scene,
                   internet: selectedChannel.internet,
                   thinking: selectedChannel.thinking,
                   memoryEnabled,

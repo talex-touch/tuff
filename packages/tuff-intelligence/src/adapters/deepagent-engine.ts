@@ -1,10 +1,9 @@
-import { ChatOpenAI } from '@langchain/openai'
-import { createDeepAgent } from 'deepagents'
 import type { SubAgent } from 'deepagents'
 import { networkClient } from '@talex-touch/utils/network'
 import type { AgentEngineAdapter } from './engine'
 import type { AgentErrorDetail } from '../protocol/error-detail'
 import type { TurnState, UserMessageAttachment } from '../protocol/session'
+import { shouldIncludePilotMessageInModelContext } from '../business/pilot/conversation'
 import { toAgentErrorDetail } from '../protocol/error-detail'
 import { LangChainEngineAdapter } from './langchain-engine'
 
@@ -57,6 +56,28 @@ const OPENAI_CHAT_SUFFIXES = ['/chat/completions', '/completions']
 const OPENAI_RESPONSES_SUFFIXES = ['/v1/responses', '/responses']
 const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']
 const UNSUPPORTED_CHAT_COMPLETIONS_BASE_URLS = new Set<string>()
+
+type LangChainOpenAiModule = typeof import('@langchain/openai')
+type DeepAgentsModule = typeof import('deepagents')
+
+let langChainOpenAiModulePromise: Promise<LangChainOpenAiModule> | null = null
+let deepAgentsModulePromise: Promise<DeepAgentsModule> | null = null
+
+async function getChatOpenAIConstructor(): Promise<LangChainOpenAiModule['ChatOpenAI']> {
+  if (!langChainOpenAiModulePromise) {
+    langChainOpenAiModulePromise = import('@langchain/openai')
+  }
+  const module = await langChainOpenAiModulePromise
+  return module.ChatOpenAI
+}
+
+async function getCreateDeepAgent(): Promise<DeepAgentsModule['createDeepAgent']> {
+  if (!deepAgentsModulePromise) {
+    deepAgentsModulePromise = import('deepagents')
+  }
+  const module = await deepAgentsModulePromise
+  return module.createDeepAgent
+}
 
 function normalizeTransport(value: unknown): 'auto' | 'responses' | 'chat.completions' {
   const normalized = String(value || '').trim().toLowerCase()
@@ -338,20 +359,34 @@ interface BuildDeepAgentMessagesOptions {
   includeInputFiles?: boolean
 }
 
+function resolveLastUserMessageIndex(messages: TurnState['messages']): number {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const row = toRecord(messages[index])
+    const role = normalizeMessageRole(row.role)
+    if (role === 'user') {
+      return index
+    }
+  }
+  return -1
+}
+
 function buildDeepAgentMessages(
   state: TurnState,
   options?: BuildDeepAgentMessagesOptions,
 ): DeepAgentInvokeMessage[] {
   const messages: DeepAgentInvokeMessage[] = []
   const attachments = normalizeTurnAttachments(state)
-  const lastMessageIndex = state.messages.length - 1
+  const lastUserMessageIndex = resolveLastUserMessageIndex(state.messages)
   let currentIndex = -1
   for (const item of state.messages) {
     currentIndex += 1
     const row = toRecord(item)
+    if (!shouldIncludePilotMessageInModelContext(row)) {
+      continue
+    }
     const text = String(row.content || '').trim()
     const role = normalizeMessageRole(row.role)
-    const isTurnUserMessage = role === 'user' && currentIndex === lastMessageIndex
+    const isTurnUserMessage = role === 'user' && currentIndex === lastUserMessageIndex
     if (!text && !(isTurnUserMessage && attachments.length > 0)) {
       continue
     }
@@ -371,14 +406,17 @@ function buildDeepAgentMessages(
 export function buildResponsesInput(state: TurnState): Array<Record<string, unknown>> {
   const input: Array<Record<string, unknown>> = []
   const attachments = normalizeTurnAttachments(state)
-  const lastMessageIndex = state.messages.length - 1
+  const lastUserMessageIndex = resolveLastUserMessageIndex(state.messages)
   let currentIndex = -1
   for (const item of state.messages) {
     currentIndex += 1
     const row = toRecord(item)
+    if (!shouldIncludePilotMessageInModelContext(row)) {
+      continue
+    }
     const role = normalizeMessageRole(row.role)
     const text = String(row.content || '').trim()
-    const isTurnUserMessage = role === 'user' && currentIndex === lastMessageIndex
+    const isTurnUserMessage = role === 'user' && currentIndex === lastUserMessageIndex
     if (!text && !(isTurnUserMessage && attachments.length > 0)) {
       continue
     }
@@ -1502,6 +1540,7 @@ async function invokeDeepAgentWithTransport(
     ? `${trimSuffixSlash(relayBaseUrl)}/responses`
     : `${trimSuffixSlash(relayBaseUrl)}/chat/completions`
 
+  const ChatOpenAI = await getChatOpenAIConstructor()
   const llm = new ChatOpenAI({
     apiKey: effectiveApiKey,
     model,
@@ -1542,6 +1581,8 @@ async function invokeDeepAgentWithTransport(
       metadata: toRecord(options.metadata),
     },
   })
+
+  const createDeepAgent = await getCreateDeepAgent()
 
   let lastAttempt = 0
   let response: unknown
@@ -1756,6 +1797,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
       ? `${trimSuffixSlash(relayBaseUrl)}/responses`
       : `${trimSuffixSlash(relayBaseUrl)}/chat/completions`
 
+    const ChatOpenAI = await getChatOpenAIConstructor()
     const llm = new ChatOpenAI({
       apiKey: effectiveApiKey,
       model,
@@ -1928,6 +1970,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
     }
 
     try {
+      const createDeepAgent = await getCreateDeepAgent()
       const agent = createDeepAgent({
         model: llm,
         instructions,

@@ -20,6 +20,19 @@ export interface QuotaHistoryQueryResult {
   items: QuotaHistoryRecord[]
 }
 
+export interface QuotaHistorySummaryRecord {
+  chatId: string
+  userId: string
+  topic: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface QuotaHistorySummaryQueryResult {
+  totalItems: number
+  items: QuotaHistorySummaryRecord[]
+}
+
 function nowIso(): string {
   return new Date().toISOString()
 }
@@ -271,6 +284,87 @@ export async function listQuotaHistory(
       topic: item.topic,
       value: item.value,
       meta: item.meta,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+    })),
+  }
+}
+
+export async function listQuotaHistorySummary(
+  event: H3Event,
+  options: {
+    userId: string
+    page: number
+    pageSize: number
+    topic?: string
+  },
+): Promise<QuotaHistorySummaryQueryResult> {
+  const db = requirePilotDatabase(event)
+  const page = Math.max(1, Math.floor(options.page))
+  const pageSize = Math.min(Math.max(Math.floor(options.pageSize), 1), 200)
+  const offset = (page - 1) * pageSize
+  const topic = String(options.topic || '').trim()
+
+  if (topic) {
+    const like = `%${topic}%`
+    const countRow = await db.prepare(`
+      SELECT COUNT(*) AS total
+      FROM ${QUOTA_HISTORY_TABLE}
+      WHERE user_id = ?1 AND topic LIKE ?2
+    `).bind(options.userId, like).first<{ total?: number | string }>()
+
+    const rows = await db.prepare(`
+      SELECT chat_id, user_id, topic, created_at, updated_at
+      FROM ${QUOTA_HISTORY_TABLE}
+      WHERE user_id = ?1 AND topic LIKE ?2
+      ORDER BY updated_at DESC
+      LIMIT ?3 OFFSET ?4
+    `).bind(options.userId, like, pageSize, offset).all<{
+      chat_id: string
+      user_id: string
+      topic: string
+      created_at: string
+      updated_at: string
+    }>()
+
+    return {
+      totalItems: Number(countRow?.total || 0),
+      items: (rows.results || []).map(item => ({
+        chatId: item.chat_id,
+        userId: item.user_id,
+        topic: item.topic,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+      })),
+    }
+  }
+
+  const countRow = await db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM ${QUOTA_HISTORY_TABLE}
+    WHERE user_id = ?1
+  `).bind(options.userId).first<{ total?: number | string }>()
+
+  const rows = await db.prepare(`
+    SELECT chat_id, user_id, topic, created_at, updated_at
+    FROM ${QUOTA_HISTORY_TABLE}
+    WHERE user_id = ?1
+    ORDER BY updated_at DESC
+    LIMIT ?2 OFFSET ?3
+  `).bind(options.userId, pageSize, offset).all<{
+    chat_id: string
+    user_id: string
+    topic: string
+    created_at: string
+    updated_at: string
+  }>()
+
+  return {
+    totalItems: Number(countRow?.total || 0),
+    items: (rows.results || []).map(item => ({
+      chatId: item.chat_id,
+      userId: item.user_id,
+      topic: item.topic,
       createdAt: item.created_at,
       updatedAt: item.updated_at,
     })),

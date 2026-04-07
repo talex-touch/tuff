@@ -1,8 +1,8 @@
 import type { IInnerItemType } from './entity'
 import type { IChatBody, IChatConversation, IChatInnerItem, IChatItem, ICompletionHandler, IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
-import { serializePilotExecutorMessages } from '@talex-touch/tuff-intelligence/pilot-conversation'
 import { endHttp } from '~/composables/api/axios'
 import { IChatItemStatus, IChatRole, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
+import { resolveLegacyUiStreamInput } from './legacy-stream-input'
 
 function parseJsonSafe<T>(value: string): T | null {
   try {
@@ -11,6 +11,47 @@ function parseJsonSafe<T>(value: string): T | null {
   catch {
     return null
   }
+}
+
+const PILOT_WEBSEARCH_CARD_TITLE = '联网检索'
+const HIDDEN_WEBSEARCH_CARD_REASONS = new Set(['intent_not_required'])
+
+function buildPilotWebsearchCardKey(turnId: unknown): string {
+  const turn = String(turnId || '').trim() || 'latest'
+  return `websearch:${turn}`
+}
+
+function normalizePilotWebsearchReason(value: unknown): string {
+  const reason = String(value || '').trim()
+  if (!reason) {
+    return ''
+  }
+  if (reason === 'fallback_unsupported_channel' || reason === 'fallback_endpoint_missing') {
+    return '当前通道不支持联网检索，已继续离线回答'
+  }
+  if (reason === 'tool_failed_or_empty_result') {
+    return '未获取到可用外部来源，已继续回答'
+  }
+  if (reason === 'intent_not_required') {
+    return '意图判定无需联网'
+  }
+  if (reason === 'intent_required') {
+    return '意图判定需要联网'
+  }
+  if (reason === 'internet_disabled') {
+    return '当前请求已关闭联网'
+  }
+  if (reason === 'tool_unavailable') {
+    return '当前模型未开放 websearch 工具'
+  }
+  if (reason === 'terminal_finalize') {
+    return '执行结束，未触发联网检索'
+  }
+  return reason
+}
+
+function shouldHidePilotWebsearchCard(payload: Record<string, unknown>): boolean {
+  return payload.enabled !== true && HIDDEN_WEBSEARCH_CARD_REASONS.has(String(payload.reason || '').trim())
 }
 
 const SENSITIVE_ERROR_ENDPOINT_RE = /\b(?:(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}|localhost):\d{2,5}\b/g
@@ -163,6 +204,7 @@ interface ToolAuditCardPayload {
   errorCode: string
   errorMessage: string
   auditType: string
+  seq?: number
 }
 
 interface RunEventCardPayload {
@@ -204,6 +246,9 @@ function normalizeToolAuditCardPayload(value: unknown): ToolAuditCardPayload {
     errorCode: String(row.errorCode || row.error_code || '').trim(),
     errorMessage: String(row.errorMessage || row.error_message || '').trim(),
     auditType: String(row.auditType || row.audit_type || '').trim(),
+    seq: Number.isFinite(Number(row.seq))
+      ? Math.max(0, Math.floor(Number(row.seq)))
+      : 0,
   }
 }
 
@@ -229,11 +274,20 @@ function normalizeToolStatus(value: unknown): string {
   return String(value || '').trim().toLowerCase()
 }
 
+function normalizeToolCardSeq(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 0
+  }
+  return Math.max(1, Math.floor(parsed))
+}
+
 function parseToolCardIdentity(block: IInnerItemMeta): {
   callId: string
   ticketId: string
   toolName: string
   status: string
+  seq: number
 } {
   const data = parseJsonSafe<Record<string, unknown>>(String(block.data || '')) || {}
   const extra = block.extra && typeof block.extra === 'object' && !Array.isArray(block.extra)
@@ -244,6 +298,7 @@ function parseToolCardIdentity(block: IInnerItemMeta): {
     ticketId: String(data.ticketId || data.ticket_id || extra.ticketId || extra.ticket_id || '').trim(),
     toolName: String(data.toolName || data.tool_name || '').trim().toLowerCase(),
     status: normalizeToolStatus(data.status || extra.status),
+    seq: normalizeToolCardSeq(data.seq || extra.seq),
   }
 }
 
@@ -289,6 +344,58 @@ function buildErrorBlockExtra(payload: Record<string, any>): Record<string, unkn
 
 function normalizeRunEventText(value: unknown): string {
   return String(value || '').trim()
+}
+
+function toConversationInitialTitle(value: unknown): string {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (!text) {
+    return ''
+  }
+  return text.slice(0, 24)
+}
+
+function extractLatestUserText(messages: IChatItem[]): string {
+  const latestUser = [...messages]
+    .reverse()
+    .find(item => String(item?.role || '').trim().toLowerCase() === IChatRole.USER)
+  if (!latestUser || !Array.isArray(latestUser.content) || latestUser.content.length <= 0) {
+    return ''
+  }
+
+  const pageIndex = Number.isFinite(Number(latestUser.page))
+    ? Math.max(0, Math.floor(Number(latestUser.page)))
+    : 0
+  const inner = latestUser.content[pageIndex] || latestUser.content[0]
+  if (!inner || !Array.isArray(inner.value)) {
+    return ''
+  }
+
+  const text = inner.value
+    .filter(block => block && typeof block === 'object')
+    .map((block) => {
+      const row = block as IInnerItemMeta
+      if (row.type !== 'text' && row.type !== 'markdown') {
+        return ''
+      }
+      return String(row.value || '')
+    })
+    .join(' ')
+
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+async function ensureRemoteSessionInitialized(sessionId: string, initialTitle: string): Promise<void> {
+  const payload: Record<string, unknown> = {
+    sessionId,
+  }
+  if (initialTitle) {
+    payload.title = initialTitle
+  }
+  await endHttp.$http({
+    url: 'chat/sessions',
+    method: 'POST',
+    data: payload,
+  })
 }
 
 function toFiniteSeq(value: unknown): number {
@@ -432,91 +539,50 @@ async function handleExecutorResult(
   }
 }
 
-interface LegacyUiStreamInputPayload {
-  message: string
-}
+async function uploadLegacyDataUrlAttachment(
+  sessionId: string,
+  payload: {
+    type: 'image' | 'file'
+    name: string
+    mimeType: string
+    dataUrl: string
+  },
+): Promise<NonNullable<IChatBody['attachments']>[number]> {
+  const response = await endHttp.$http({
+    url: `chat/sessions/${encodeURIComponent(sessionId)}/uploads`,
+    method: 'POST',
+    data: {
+      name: payload.name,
+      mimeType: payload.mimeType,
+      contentBase64: payload.dataUrl,
+    },
+  }) as Record<string, unknown>
 
-function normalizeLegacyText(value: unknown): string {
-  return String(value || '').trim()
-}
-
-function resolveLegacyUiStreamInput(messages: unknown): LegacyUiStreamInputPayload {
-  if (!Array.isArray(messages)) {
-    return {
-      message: '',
-    }
+  const attachment = response.attachment && typeof response.attachment === 'object'
+    ? response.attachment as Record<string, unknown>
+    : null
+  const attachmentId = String(attachment?.id || '').trim()
+  if (!attachmentId) {
+    throw new Error('历史附件转换失败：未返回有效 attachmentId。')
   }
 
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const item = messages[index]
-    if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      continue
-    }
-    const row = item as Record<string, unknown>
-    const role = normalizeLegacyText(row.role).toLowerCase()
-    if (role !== 'user') {
-      continue
-    }
-
-    const contentBlocks = Array.isArray(row.content) ? row.content : []
-    const textParts: string[] = []
-    const attachmentLines: string[] = []
-
-    for (const block of contentBlocks) {
-      if (!block || typeof block !== 'object' || Array.isArray(block)) {
-        continue
-      }
-      const blockRow = block as Record<string, unknown>
-      const type = normalizeLegacyText(blockRow.type).toLowerCase()
-      const value = normalizeLegacyText(blockRow.value)
-      if (!value) {
-        continue
-      }
-
-      if (type === 'image' || type === 'file') {
-        const name = normalizeLegacyText(blockRow.name) || 'unnamed'
-        const mimeType = normalizeLegacyText(blockRow.data)
-        attachmentLines.push(`- [${type}] ${name}${mimeType ? ` (${mimeType})` : ''}: ${value}`)
-        continue
-      }
-
-      if (type === 'card' || type === 'tool' || type === 'error') {
-        continue
-      }
-
-      textParts.push(value)
-    }
-
-    const text = textParts.join('\n').trim()
-    if (attachmentLines.length > 0) {
-      const attachmentContext = ['[Attachment references]', ...attachmentLines].join('\n')
-      return {
-        message: text ? `${text}\n\n${attachmentContext}` : attachmentContext,
-      }
-    }
-
-    return {
-      message: text,
-    }
-  }
+  const typeRaw = String(attachment?.type || attachment?.kind || '').trim().toLowerCase()
+  const type: 'image' | 'file' = typeRaw === 'image' ? 'image' : payload.type
+  const previewUrl = String(attachment?.previewUrl || attachment?.modelUrl || attachment?.ref || '').trim()
+  const mimeType = String(attachment?.mimeType || payload.mimeType || '').trim() || payload.mimeType
+  const name = String(attachment?.name || payload.name || '').trim() || payload.name
 
   return {
-    message: '',
+    id: attachmentId,
+    type,
+    ref: previewUrl || `attachment://${attachmentId}`,
+    name,
+    mimeType,
+    previewUrl: previewUrl || undefined,
   }
 }
 
 async function useCompletionExecutor(body: IChatBody, callback: (data: any) => void) {
-  const convertedMsgList = serializePilotExecutorMessages(body.messages || [], {
-    assistantAvailableStatus: IChatItemStatus.AVAILABLE,
-    skipUnavailableAssistant: true,
-    keepNonTextWithoutValue: true,
-  })
-  if (convertedMsgList.length <= 0) {
-    throw new Error('No valid conversation messages to execute')
-  }
-
-  body.messages = convertedMsgList as any
-
   const { promise, resolve } = withResolvers()
 
   function _callback() {
@@ -594,16 +660,42 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
         throw new Error('chat_id is required')
       }
 
-      const latestTurn = resolveLegacyUiStreamInput(convertedMsgList)
-      if (!latestTurn.message) {
-        throw new Error('latest user turn is empty')
-      }
+      const requestedFromSeq = Number(body?.fromSeq)
+      const fromSeq = Number.isFinite(requestedFromSeq) && requestedFromSeq > 0
+        ? Math.max(1, Math.floor(requestedFromSeq))
+        : 0
+      const followOnly = fromSeq > 0 && body?.follow === true
+      const fallbackInitialTitle = toConversationInitialTitle(body.initialTitle || extractLatestUserText(body.messages || []))
+      await ensureRemoteSessionInitialized(sessionId, fallbackInitialTitle)
 
-      const res: ReadableStream = await endHttp.$http({
-        url: `chat/sessions/${encodeURIComponent(sessionId)}/stream`,
-        method: 'POST',
-        data: {
+      let requestPayload: Record<string, unknown>
+      if (followOnly) {
+        requestPayload = {
+          fromSeq,
+          follow: true,
+          modelId: String(body.modelId || body.model || '').trim() || undefined,
+          routeComboId: String(body.routeComboId || '').trim() || undefined,
+          internet: body.internet !== false,
+          thinking: body.thinking !== false,
+          memoryEnabled: body.memoryEnabled !== false,
+          pilotMode: body.pilotMode === true,
+          metadata: {
+            source: 'legacy-ui-completion-follow',
+            index: body.index,
+          },
+        }
+      }
+      else {
+        const latestTurn = await resolveLegacyUiStreamInput(sessionId, body.messages || [], {
+          uploadDataUrlAttachment: uploadLegacyDataUrlAttachment,
+        })
+        if (!latestTurn.message && latestTurn.attachments.length <= 0) {
+          throw new Error('latest user turn is empty')
+        }
+
+        requestPayload = {
           message: latestTurn.message,
+          attachments: latestTurn.attachments.length > 0 ? latestTurn.attachments : undefined,
           modelId: String(body.modelId || body.model || '').trim() || undefined,
           routeComboId: String(body.routeComboId || '').trim() || undefined,
           internet: body.internet !== false,
@@ -614,7 +706,13 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
             source: 'legacy-ui-completion',
             index: body.index,
           },
-        },
+        }
+      }
+
+      const res: ReadableStream = await endHttp.$http({
+        url: `chat/sessions/${encodeURIComponent(sessionId)}/stream`,
+        method: 'POST',
+        data: requestPayload,
         headers: {
           Accept: 'text/event-stream',
         },
@@ -848,10 +946,14 @@ export const $completion = {
 
         return titleOptions
       },
-      send: (options?: Partial<ChatCompletionDto>): AbortController => {
+      send: (options?: Partial<ChatCompletionDto> & {
+        fromSeq?: number
+        follow?: boolean
+      }): AbortController => {
         innerMsg.status = IChatItemStatus.WAITING
 
         const signal = new AbortController()
+        let streamBlockOrder = 0
         let pendingMarkdownBuffer = ''
         let pendingMarkdownSince = 0
         let markdownFlushTimer: ReturnType<typeof setTimeout> | null = null
@@ -896,19 +998,57 @@ export const $completion = {
           }
         }
 
-        function getOrCreateStreamingMarkdownBlock(): IInnerItemMeta {
+        function nextStreamBlockOrder(): number {
+          streamBlockOrder += 1
+          return streamBlockOrder
+        }
+
+        function resolveStreamOrder(value: unknown): number {
+          const parsed = Number(value)
+          return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0
+        }
+
+        function pushInnerBlock(block: IInnerItemMeta): IInnerItemMeta {
+          const extra = block.extra && typeof block.extra === 'object' && !Array.isArray(block.extra)
+            ? block.extra as Record<string, unknown>
+            : {}
+          const existingOrder = resolveStreamOrder(extra.streamOrder)
+          block.extra = {
+            ...extra,
+            streamOrder: existingOrder || nextStreamBlockOrder(),
+          }
+          innerMsg.value.push(block)
+          return block
+        }
+
+        function getOrCreateStreamingMarkdownBlock(seq = 0): IInnerItemMeta {
           const current = innerMsg.value.at(-1)
           if (current?.type === 'markdown' && !current.extra?.done) {
+            const currentExtra = current.extra && typeof current.extra === 'object' && !Array.isArray(current.extra)
+              ? current.extra as Record<string, unknown>
+              : {}
+            const currentSeq = toFiniteSeq(currentExtra.seq)
+            const currentOrder = resolveStreamOrder(currentExtra.streamOrder)
+            current.extra = {
+              ...currentExtra,
+              seq: currentSeq || seq || 0,
+              start: Number(currentExtra.start || Date.now()) || Date.now(),
+              streamOrder: currentOrder || nextStreamBlockOrder(),
+            }
             return current
           }
 
+          const now = Date.now()
           const created: IInnerItemMeta = {
             type: 'markdown' as IInnerItemType,
             value: '',
-            extra: {},
+            extra: {
+              seq: seq || 0,
+              start: now,
+              streamOrder: nextStreamBlockOrder(),
+            },
           }
-          innerMsg.value.push(created)
-          return created
+          return pushInnerBlock(created)
         }
 
         function appendPendingMarkdownChunk(chunk: string) {
@@ -1097,7 +1237,10 @@ export const $completion = {
                 ticketId: '',
                 toolName: '',
                 status: '',
+                seq: 0,
               }
+          const payloadSeq = normalizeToolCardSeq(payload.seq)
+          const prevSeq = normalizeToolCardSeq(prevData.seq || prevIdentity.seq || prev?.extra?.seq)
           const sessionId = String(payload.sessionId || prevData.sessionId || prevData.session_id || conversation.id).trim() || conversation.id
           const resolvedCallId = String(payload.callId || prevIdentity.callId || prevData.callId || prevData.call_id || '').trim()
           const resolvedTicketId = String(payload.ticketId || prevIdentity.ticketId || prevData.ticketId || prevData.ticket_id || '').trim()
@@ -1114,6 +1257,28 @@ export const $completion = {
           const resolvedErrorMessage = String(payload.errorMessage || prevData.errorMessage || prevData.error_message || '').trim()
           const resolvedAuditType = String(payload.auditType || prevData.auditType || prevData.audit_type || '').trim()
           const normalizedStatus = normalizeToolStatus(resolvedStatus)
+          const prevStatus = normalizeToolStatus(prevData.status || prevIdentity.status || prev?.extra?.status)
+          const prevTerminal = TOOL_CARD_TERMINAL_STATUS.has(prevStatus)
+          const nextTerminal = TOOL_CARD_TERMINAL_STATUS.has(normalizedStatus)
+
+          if (prev) {
+            if (payloadSeq > 0 && prevSeq > 0 && payloadSeq < prevSeq) {
+              return prev
+            }
+            if (prevTerminal && !nextTerminal) {
+              return prev
+            }
+          }
+
+          const payloadSources = Array.isArray(payload.sources)
+            ? payload.sources.filter(item => item && typeof item === 'object' && !Array.isArray(item))
+            : []
+          const prevSources = Array.isArray(prevData.sources)
+            ? prevData.sources.filter(item => item && typeof item === 'object' && !Array.isArray(item))
+            : []
+          const resolvedSources = payloadSources.length > 0
+            ? payloadSources
+            : prevSources
           const nextExtra = {
             ...(prev?.extra || {}),
             start: prev?.extra?.start || now,
@@ -1128,6 +1293,8 @@ export const $completion = {
             ticketId: resolvedTicketId,
             errorCode: resolvedErrorCode,
             sessionId,
+            seq: payloadSeq || prevSeq || 0,
+            streamOrder: resolveStreamOrder(prev?.extra?.streamOrder) || nextStreamBlockOrder(),
           }
           const nextData = JSON.stringify({
             sessionId,
@@ -1140,10 +1307,11 @@ export const $completion = {
             outputPreview: resolvedOutputPreview,
             durationMs: resolvedDuration,
             ticketId: resolvedTicketId,
-            sources: payload.sources,
+            sources: resolvedSources,
             errorCode: resolvedErrorCode,
             errorMessage: resolvedErrorMessage,
             auditType: resolvedAuditType,
+            seq: payloadSeq || prevSeq || 0,
           })
 
           if (prev) {
@@ -1163,7 +1331,7 @@ export const $completion = {
             data: nextData,
             extra: nextExtra,
           }
-          innerMsg.value.push(created)
+          pushInnerBlock(created)
           toolCardMap.set(createToolCardStorageKey(payload), created)
           bindToolCardIdentity(payload, created)
           return created
@@ -1279,9 +1447,12 @@ export const $completion = {
           waitingToolApproval = false
           innerMsg.status = IChatItemStatus.TOOL_ERROR
           handler?.onTriggerStatus?.(innerMsg.status)
-          innerMsg.value.push({
+          pushInnerBlock({
             type: 'error',
             value: rejectedMessage,
+            extra: {
+              seq: toFiniteSeq(detail.seq),
+            },
           })
           complete()
         }
@@ -1316,6 +1487,26 @@ export const $completion = {
         })
 
         const runEventCardMap = new Map<string, IInnerItemMeta>()
+        const RUN_EVENT_TERMINAL_STATUSES = new Set(['completed', 'skipped', 'failed'])
+
+        function normalizeThinkingTraceText(value: unknown): string {
+          const text = normalizeRunEventText(value)
+          return text === '__end__' ? '' : text
+        }
+
+        function normalizeWebsearchDecisionReason(value: unknown): string {
+          const reason = normalizePilotWebsearchReason(value)
+          if (!reason) {
+            return '未命中联网决策'
+          }
+          if (reason === 'heuristic_required') {
+            return '命中联网启发式规则'
+          }
+          if (reason === 'heuristic_required_classifier_fallback') {
+            return '意图分类失败，启用启发式联网兜底'
+          }
+          return reason
+        }
 
         function resolveRunEventCardKey(payload: RunEventCardPayload): string {
           const sessionScope = payload.sessionId || conversation.id
@@ -1325,15 +1516,12 @@ export const $completion = {
               : `thinking:${sessionScope}`
           }
           if (payload.cardType === 'websearch') {
-            const segment = payload.eventType === 'websearch.decision' ? 'decision' : 'execution'
-            return payload.turnId
-              ? `websearch:${segment}:${sessionScope}:${payload.turnId}`
-              : `websearch:${segment}:${sessionScope}`
+            return buildPilotWebsearchCardKey(payload.turnId || sessionScope)
           }
           if (payload.cardType === 'intent') {
             return payload.turnId
               ? `intent:${sessionScope}:${payload.turnId}`
-              : `intent:${sessionScope}`
+              : `intent:${sessionScope}:pending`
           }
           if (payload.cardType === 'routing') {
             return payload.turnId
@@ -1352,10 +1540,32 @@ export const $completion = {
 
         function upsertRunEventCard(payload: RunEventCardPayload): IInnerItemMeta {
           const key = resolveRunEventCardKey(payload)
-          const prev = runEventCardMap.get(key)
+          const sessionScope = payload.sessionId || conversation.id
+          const pendingIntentKey = `intent:${sessionScope}:pending`
+          let prev = runEventCardMap.get(key)
+          if (!prev && payload.cardType === 'intent' && payload.turnId) {
+            prev = runEventCardMap.get(pendingIntentKey)
+          }
           const now = Date.now()
 
           const prevData = parseJsonSafe<Record<string, unknown>>(String(prev?.data || '')) || {}
+          const payloadSeq = toFiniteSeq(payload.seq)
+          const prevSeq = toFiniteSeq(prevData.seq || prev?.extra?.seq)
+          const prevStatus = normalizeRunEventText(prevData.status || prev?.extra?.status).toLowerCase()
+          const nextStatus = normalizeRunEventText(payload.status).toLowerCase()
+          if (prev) {
+            if (payloadSeq > 0 && prevSeq > 0 && payloadSeq < prevSeq) {
+              return prev
+            }
+            if (
+              RUN_EVENT_TERMINAL_STATUSES.has(prevStatus)
+              && !RUN_EVENT_TERMINAL_STATUSES.has(nextStatus)
+              && (payloadSeq <= 0 || prevSeq <= 0 || payloadSeq <= prevSeq)
+            ) {
+              return prev
+            }
+          }
+
           const prevContent = normalizeRunEventText(prevData.content)
           let mergedContent = payload.content || prevContent
           if (payload.cardType === 'thinking') {
@@ -1407,6 +1617,7 @@ export const $completion = {
             seq: payload.seq || prev?.extra?.seq || 0,
             sessionId: payload.sessionId || prev?.extra?.sessionId || conversation.id,
             turnId: payload.turnId || prev?.extra?.turnId || '',
+            streamOrder: resolveStreamOrder(prev?.extra?.streamOrder) || nextStreamBlockOrder(),
           }
 
           if (prev) {
@@ -1415,6 +1626,10 @@ export const $completion = {
             prev.value = ''
             prev.data = nextData
             prev.extra = nextExtra
+            if (payload.cardType === 'intent' && payload.turnId && key !== pendingIntentKey) {
+              runEventCardMap.delete(pendingIntentKey)
+              runEventCardMap.set(key, prev)
+            }
             return prev
           }
 
@@ -1425,9 +1640,66 @@ export const $completion = {
             data: nextData,
             extra: nextExtra,
           }
-          innerMsg.value.push(created)
+          pushInnerBlock(created)
           runEventCardMap.set(key, created)
           return created
+        }
+
+        function finalizeRunningThinkingCards(eventType: string) {
+          for (const card of runEventCardMap.values()) {
+            const raw = parseJsonSafe<Record<string, unknown>>(String(card.data || '')) || {}
+            if (normalizeRunEventText(raw.cardType) !== 'thinking') {
+              continue
+            }
+            if (normalizeRunEventText(raw.status).toLowerCase() !== 'running') {
+              continue
+            }
+            upsertRunEventCard({
+              sessionId: normalizeRunEventText(raw.sessionId) || conversation.id,
+              cardType: 'thinking',
+              eventType,
+              status: 'completed',
+              title: normalizeRunEventText(raw.title) || 'Thinking',
+              summary: '思考完成',
+              turnId: normalizeRunEventText(raw.turnId),
+              seq: Number.isFinite(Number(raw.seq)) ? Number(raw.seq) : 0,
+              content: '',
+              detail: raw.detail && typeof raw.detail === 'object' && !Array.isArray(raw.detail)
+                ? raw.detail as Record<string, unknown>
+                : {},
+            })
+          }
+        }
+
+        function finalizeRunningWebsearchCards(eventType: string) {
+          for (const card of runEventCardMap.values()) {
+            const raw = parseJsonSafe<Record<string, unknown>>(String(card.data || '')) || {}
+            if (normalizeRunEventText(raw.cardType) !== 'websearch') {
+              continue
+            }
+            if (normalizeRunEventText(raw.status).toLowerCase() !== 'running') {
+              continue
+            }
+            const detail = raw.detail && typeof raw.detail === 'object' && !Array.isArray(raw.detail)
+              ? raw.detail as Record<string, unknown>
+              : {}
+            upsertRunEventCard({
+              sessionId: normalizeRunEventText(raw.sessionId) || conversation.id,
+              cardType: 'websearch',
+              eventType,
+              status: 'skipped',
+              title: normalizeRunEventText(raw.title) || PILOT_WEBSEARCH_CARD_TITLE,
+              summary: normalizeWebsearchDecisionReason('terminal_finalize'),
+              turnId: normalizeRunEventText(raw.turnId),
+              seq: Number.isFinite(Number(raw.seq)) ? Number(raw.seq) : 0,
+              content: '',
+              detail: {
+                ...detail,
+                enabled: false,
+                reason: 'terminal_finalize',
+              },
+            })
+          }
         }
 
         function buildExecutorBody(requestId = ''): IChatBody & { requestId?: string } {
@@ -1438,7 +1710,7 @@ export const $completion = {
             ...options || {},
             temperature: innerMsg.meta.temperature || 0.5,
             templateId: conversation.template?.id ?? -1,
-            messages: JSON.parse(JSON.stringify(conversation.messages)),
+            messages: conversation.messages,
             index: index === -1 ? 0 : index,
             chat_id: conversation.id,
             model: innerMsg.model,
@@ -1545,7 +1817,7 @@ export const $completion = {
               cardType: 'websearch',
               eventType,
               status: 'completed',
-              title: '联网检索执行',
+              title: PILOT_WEBSEARCH_CARD_TITLE,
               summary: `来源=${normalizeRunEventText(detail.source) || '-'}，命中=${Number.isFinite(sourceCount) ? sourceCount : 0}`,
               turnId,
               seq,
@@ -1555,15 +1827,56 @@ export const $completion = {
             return
           }
 
+          if (eventType === 'websearch.decision') {
+            if (shouldHidePilotWebsearchCard(detail)) {
+              return
+            }
+            if (detail.enabled !== true) {
+              return
+            }
+            upsertRunEventCard({
+              sessionId,
+              cardType: 'websearch',
+              eventType,
+              status: 'running',
+              title: PILOT_WEBSEARCH_CARD_TITLE,
+              summary: normalizeWebsearchDecisionReason(detail.reason),
+              turnId,
+              seq,
+              content: '',
+              detail,
+            })
+            return
+          }
+
+          if (eventType === 'websearch.skipped') {
+            if (shouldHidePilotWebsearchCard(detail)) {
+              return
+            }
+            upsertRunEventCard({
+              sessionId,
+              cardType: 'websearch',
+              eventType,
+              status: 'skipped',
+              title: PILOT_WEBSEARCH_CARD_TITLE,
+              summary: normalizeWebsearchDecisionReason(detail.reason || payload.reason),
+              turnId,
+              seq,
+              content: '',
+              detail,
+            })
+            return
+          }
+
           if (eventType === 'thinking.delta') {
-            const chunk = normalizeRunEventText(payload.delta || detail.text)
+            const chunk = normalizeThinkingTraceText(payload.delta || detail.text)
             upsertRunEventCard({
               sessionId,
               cardType: 'thinking',
               eventType,
-              status: 'running',
+              status: chunk ? 'running' : 'completed',
               title: 'Thinking',
-              summary: '思考中',
+              summary: chunk ? '思考中' : '思考完成',
               turnId,
               seq,
               content: chunk,
@@ -1573,7 +1886,7 @@ export const $completion = {
           }
 
           if (eventType === 'thinking.final') {
-            const finalText = normalizeRunEventText(payload.message || detail.text)
+            const finalText = normalizeThinkingTraceText(payload.message || detail.text)
             upsertRunEventCard({
               sessionId,
               cardType: 'thinking',
@@ -1624,12 +1937,14 @@ export const $completion = {
               innerMsg.status = IChatItemStatus.CANCELLED
 
             const extra = buildErrorBlockExtra(res)
-            innerMsg.value.push({
+            pushInnerBlock({
               type: 'error',
               value: errorMessage,
               extra,
             })
 
+            finalizeRunningThinkingCards('error')
+            finalizeRunningWebsearchCards('error')
             complete()
 
             return
@@ -1639,6 +1954,8 @@ export const $completion = {
             flushPendingMarkdownBuffer({
               markDone: true,
             })
+            finalizeRunningThinkingCards('done')
+            finalizeRunningWebsearchCards('done')
             if (waitingToolApproval) {
               innerMsg.status = IChatItemStatus.TOOL_CALLING
               handler?.onTriggerStatus?.(innerMsg.status)
@@ -1671,6 +1988,7 @@ export const $completion = {
               ? res.delta
               : normalizeRunEventText(res?.payload?.text)
             if (chunk) {
+              getOrCreateStreamingMarkdownBlock(toFiniteSeq(res.seq))
               appendPendingMarkdownChunk(chunk)
               scheduleMarkdownBufferFlush()
               handler?.onCompletionStart?.(lastCompletionName || 'assistant')
@@ -1684,7 +2002,7 @@ export const $completion = {
 
           if (eventType === 'assistant.final') {
             waitingToolApproval = false
-            const markdownBlock = getOrCreateStreamingMarkdownBlock()
+            const markdownBlock = getOrCreateStreamingMarkdownBlock(toFiniteSeq(res.seq))
             const finalText = typeof res.message === 'string'
               ? res.message
               : normalizeRunEventText(res?.payload?.text)
@@ -1706,13 +2024,22 @@ export const $completion = {
             if (finalText && finalText !== flushed) {
               handler.onCompletion?.(lastCompletionName || 'assistant', finalText)
             }
+            finalizeRunningThinkingCards('assistant.final')
+            finalizeRunningWebsearchCards('assistant.final')
             return
+          }
+
+          if (eventType === 'done' || eventType === 'turn.finished' || eventType === 'error') {
+            finalizeRunningThinkingCards(eventType)
+            finalizeRunningWebsearchCards(eventType)
           }
 
           if (
             eventType === 'intent.started'
             || eventType === 'intent.completed'
             || eventType === 'memory.updated'
+            || eventType === 'websearch.decision'
+            || eventType === 'websearch.skipped'
             || eventType === 'websearch.executed'
             || eventType === 'thinking.delta'
             || eventType === 'thinking.final'
@@ -1727,6 +2054,10 @@ export const $completion = {
 
           if (eventType === 'run.audit') {
             const payload = normalizeToolAuditCardPayload(res.payload)
+            const eventSeq = toFiniteSeq(res.seq)
+            if (eventSeq > 0) {
+              payload.seq = eventSeq
+            }
             if (!payload.sessionId) {
               payload.sessionId = conversation.id
             }
@@ -1751,9 +2082,12 @@ export const $completion = {
             else if (payload.auditType === 'tool.call.failed' || payload.auditType === 'tool.call.rejected') {
               waitingToolApproval = false
               if (payload.errorMessage) {
-                innerMsg.value.push({
+                pushInnerBlock({
                   type: 'error',
                   value: payload.errorMessage,
+                  extra: {
+                    seq: payload.seq || 0,
+                  },
                 })
               }
             }
@@ -1766,10 +2100,13 @@ export const $completion = {
           }
 
           if (eventType === 'suggest') {
-            innerMsg.value.push({
+            pushInnerBlock({
               data: 'suggest',
               type: res.content_type as any,
               value: res.content,
+              extra: {
+                seq: toFiniteSeq(res.seq),
+              },
             })
             return
           }
@@ -1828,7 +2165,7 @@ export const $completion = {
             const message = normalizeExecutorErrorMessage(res.message || res.error || res.detail)
             const extra = buildErrorBlockExtra(res)
 
-            innerMsg.value.push({
+            pushInnerBlock({
               type: 'error',
               value: message,
               extra,
@@ -1851,6 +2188,18 @@ export const $completion = {
           }
         }
 
+        upsertRunEventCard({
+          sessionId: conversation.id,
+          cardType: 'intent',
+          eventType: 'intent.started',
+          status: 'running',
+          title: '意图分析',
+          summary: '正在分析意图',
+          turnId: '',
+          seq: 0,
+          content: '',
+          detail: {},
+        })
         startExecutorStream()
 
         return signal
