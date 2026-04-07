@@ -1,13 +1,64 @@
 # 变更日志
 
-> 更新时间: 2026-04-06
-> 说明: 主文件仅保留近 30 天（2026-03-08 ~ 2026-04-06）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-07
+> 说明: 主文件仅保留近 30 天（2026-03-09 ~ 2026-04-07）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
 - 当前主线：`2.4.9-beta.4` 基线下，下一动作统一为 `Nexus 设备授权风控`。
 - 历史主线：`2.4.8 OmniPanel Gate`、`v2.4.7 Gate A/B/C/D/E` 均已收口（historical）。
 - 旧记录入口：见文末“历史索引导航”。
+
+## 2026-04-07
+
+### fix(pilot-stream): trace-first 恢复链清理旧 runtime 审计脏卡
+
+- `packages/tuff-intelligence/src/business/pilot/projection.ts`
+- `apps/pilot/shared/pilot-system-card-blocks.ts`
+- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+- `apps/pilot/server/api/aigc/conversation/[id].get.ts`
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/server/utils/pilot-system-message-response.ts`
+- `apps/pilot/server/utils/pilot-trace-window.ts`
+  - 非 `tool.call.*` 的 `run.audit` 不再投影为前端可见 system/runtime 卡，避免 `attachment.resolve.*` 这类内部审计在刷新恢复后误显示成“工具调用 / runtime / 200”。
+  - quota snapshot 只要存在 runtime traces，就统一以 trace projection 为准并清理旧 `pilot_run_event_card / pilot_tool_card` 脏块，不再回退信任历史 `messages` 里的遗留卡片。
+  - 会话详情读取改为按 runtime `messages + traces` 对齐并回写 quota history，修复已写脏老会话中 `analyse intent` 被旧卡污染的问题，确保前后端恢复语义一致。
+  - 新增长会话 trace tail 窗口 helper；会话详情、quota history 回写与 `messages.get` 不再读取“最早 2000 条 trace”，而是按 `session.lastSeq` 读取“最新 2000 条”，修复刷新后最新 turn 的 intent/websearch/planning 卡片偶发消失的问题。
+- `apps/pilot/server/utils/__tests__/pilot-system-message.test.ts`
+- `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-trace-window.test.ts`
+  - 新增回归，覆盖“非工具审计不可见”“trace-first 清理旧 runtime/tool 脏卡”“trace 存在但无可见卡时不回退旧 message cards”。
+  - 追加回归，覆盖“长会话按 `lastSeq` 读取 trace 尾部，最新 intent 不丢失”。
+
+### fix(pilot-stream): 首页默认 DeepAgent 并收口 legacy 单前端消费链
+
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/legacy-stream-contract.ts`
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/legacy-stream-sse.ts`
+  - 首页生产入口继续保留旧 UI，但流式消费收口到 legacy `$completion` 单链；SSE frame 解析、请求 payload 组装、executor body 构造全部抽成纯 helper，避免旧首页与新 Pilot Workspace 再并行漂移。
+  - 默认 DeepAgent 主链不再从 `conversation.pilotMode` 回填请求参数；仅显式实验态 `meta.pilotMode=true` 时才兼容透传 `pilotMode=true`。
+  - `fromSeq + follow` 统一复用共享 seq cursor 解析，首页恢复流固定跟随真实可恢复事件，不再受 Pilot 模式分叉影响。
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/app/components/input/ThInput.vue`
+- `apps/pilot/app/components/input/ThInputPlus.vue`
+  - 首页移除 `Pilot 模式` 默认标签与输入开关；默认发送、标题展示、恢复逻辑均不再依赖 `pilotMode`。
+- `packages/tuff-intelligence/src/business/pilot/types.ts`
+- `packages/tuff-intelligence/src/business/pilot/emitter.ts`
+- `packages/tuff-intelligence/src/business/pilot/stream.ts`
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/server/api/chat/sessions/[sessionId]/trace.get.ts`
+- `apps/pilot/server/utils/pilot-stream-quota-projector.ts`
+- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+  - 收紧 trace contract：`stream.started / stream.heartbeat / replay.* / run.metrics / done / error` 等 seq-optional 生命周期事件不再持久化到 trace，也不再参与 replay/follow/fromSeq 边界推进；历史脏 trace 在 replay、trace.get 与 quota snapshot 中统一过滤。
+- `apps/pilot/server/utils/__tests__/legacy-completion-stream-contract.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-stream-emitter-seq.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-stream-replay.test.ts`
+  - 补齐 legacy SSE 契约测试，覆盖 `assistant.delta / assistant.final / run.audit / turn.approval_required / replay / done / error` 与分块持续解析；同时验证 seq-optional 生命周期事件不会重新污染 trace。
+- 验收：
+  - `pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-stream-emitter-seq.test.ts" "server/utils/__tests__/pilot-stream-replay.test.ts" "server/utils/__tests__/legacy-completion-stream-contract.test.ts" "server/utils/__tests__/pilot-runtime-seq.test.ts" "server/utils/__tests__/pilot-sse-response.test.ts"` 已通过。
+  - `pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-runtime.test.ts" "server/utils/__tests__/pilot-completion-flow.test.ts" "server/utils/__tests__/legacy-stream-input.test.ts" "server/utils/__tests__/pilot-chat-utils-parse.test.ts"` 已通过。
+  - `pnpm -C "apps/pilot" run typecheck` 已通过。
 
 ## 2026-04-06
 

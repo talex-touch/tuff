@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
 import { buildPilotSystemMessageId } from '@talex-touch/tuff-intelligence/pilot'
+import { describe, expect, it } from 'vitest'
 import { listMessagesWithTraceProjection } from '../pilot-system-message-response'
 
 describe('pilot-system-message-response', () => {
@@ -102,5 +102,61 @@ describe('pilot-system-message-response', () => {
         },
       },
     ])
+  })
+
+  it('长会话会按 lastSeq 读取 trace 尾部，避免最新 intent 丢失', async () => {
+    const sessionId = 'session_trace_tail'
+    const calls: Array<{ fromSeq?: number, limit?: number }> = []
+    const messages = await listMessagesWithTraceProjection({
+      async getSession() {
+        return {
+          lastSeq: 2_505,
+        }
+      },
+      async listMessages() {
+        return [
+          {
+            id: 'msg_user_1',
+            sessionId,
+            role: 'user',
+            content: '请继续',
+            createdAt: '2026-04-08T00:00:00.000Z',
+          },
+        ]
+      },
+      async listTrace(_sessionId, fromSeq, limit) {
+        calls.push({ fromSeq, limit })
+        return [
+          {
+            seq: 2_504,
+            type: 'turn.started',
+            payload: {},
+            createdAt: '2026-04-08T00:00:01.000Z',
+          },
+          {
+            seq: 2_505,
+            type: 'intent.completed',
+            payload: {
+              intentType: 'code_analysis',
+              confidence: 0.92,
+            },
+            createdAt: '2026-04-08T00:00:02.000Z',
+          },
+        ]
+      },
+    }, sessionId)
+
+    expect(calls).toEqual([
+      {
+        fromSeq: 506,
+        limit: 2_000,
+      },
+    ])
+    expect(messages.some((item) => {
+      if (item.role !== 'system') {
+        return false
+      }
+      return String(item.metadata?.cardType || '').trim() === 'intent'
+    })).toBe(true)
   })
 })
