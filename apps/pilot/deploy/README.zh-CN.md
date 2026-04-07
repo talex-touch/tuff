@@ -151,6 +151,13 @@ location ~ ^/api/chat/sessions/.*/stream$ {
 ```
 
 - 若使用 1Panel 的“网站设置 -> 反向代理 / 高级配置”，请确认没有额外把 `X-Accel-Buffering` 改回 `yes`。
+- 建议在部署后执行一次烟测：
+
+```bash
+pnpm -C "apps/pilot" run smoke:chat-stream -- --base-url "https://your-pilot-domain"
+```
+
+- 脚本会自动创建匿名会话，检查 `text/event-stream`、`X-Accel-Buffering: no`、首帧时间，以及是否出现“整段在流结束前都不出首块”的 buffering 信号；命中疑似 buffering 会直接返回非 0 退出码。
 
 ## 7）回滚机制
 

@@ -5,6 +5,7 @@ import type { TraceRecord } from '../../store/store-adapter'
 import type { PilotStreamDraftEvent, PilotStreamEmitOptions } from './types'
 import {
   mapAgentEnvelopeToPilotStreamEvent,
+  shouldPilotPersistTraceEvent,
 } from './types'
 import { mapPilotReplayTraceToStreamEvent } from './trace'
 
@@ -82,7 +83,8 @@ async function replayTrace(
     : undefined)
 
   const traces = await options.listTrace(options.sessionId, fromSeq, replayLimit)
-  for (const trace of traces) {
+  const replayableTraces = traces.filter(trace => shouldPilotPersistTraceEvent(trace.type))
+  for (const trace of replayableTraces) {
     if (isCancelled(options)) {
       return
     }
@@ -96,14 +98,14 @@ async function replayTrace(
     type: 'replay.finished',
     payload: {
       fromSeq,
-      replayCount: traces.length,
+      replayCount: replayableTraces.length,
     },
   }, persistLifecycleEvents
     ? {
         persist: true,
         tracePayload: {
           fromSeq,
-          replayCount: traces.length,
+          replayCount: replayableTraces.length,
         },
       }
     : undefined)

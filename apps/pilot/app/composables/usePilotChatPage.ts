@@ -14,10 +14,12 @@ import type {
   SessionTraceResponse,
   StreamEvent,
 } from './pilot-chat.types'
+
+// Experimental workspace-only chat surface. The production homepage keeps using legacy $completion.
 import {
   appendPilotTraceSorted,
-  buildPilotTraceKey,
   buildPilotSystemMessageId,
+  buildPilotTraceKey,
   derivePilotToolCallsFromSystemMessages,
   isPilotLifecycleTraceEvent,
   isPilotRuntimeCardEventType,
@@ -406,6 +408,12 @@ export function usePilotChatPage() {
       return
     }
 
+    const resolvedReason: PilotSession['pauseReason'] = timeoutReason === 'client_disconnect'
+      || timeoutReason === 'manual_pause'
+      || timeoutReason === 'system_preempted'
+      ? timeoutReason
+      : 'heartbeat_timeout'
+
     autoPauseSessionLocks.add(sessionId)
     try {
       await fetchJson(`/api/chat/sessions/${sessionId}/pause`, {
@@ -414,11 +422,11 @@ export function usePilotChatPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          reason: 'heartbeat_timeout',
+          reason: resolvedReason,
         }),
       })
 
-      markSessionPaused(sessionId, 'heartbeat_timeout')
+      markSessionPaused(sessionId, resolvedReason)
       if (activeSessionId.value === sessionId) {
         reconnectHint.value = '会话长时间无有效响应，系统已自动终止。可点击“恢复 paused 会话”继续。'
       }

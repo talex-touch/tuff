@@ -65,6 +65,14 @@ export function isPilotSeqOptionalEventType(type: unknown): type is PilotSeqOpti
   return PILOT_SEQ_OPTIONAL_EVENT_TYPES.has(String(type || '').trim() as PilotSeqOptionalEventType)
 }
 
+export function shouldPilotPersistTraceEvent(type: unknown): boolean {
+  const normalized = String(type || '').trim()
+  if (!normalized) {
+    return false
+  }
+  return !isPilotSeqOptionalEventType(normalized)
+}
+
 function requirePersistedAgentEnvelope(envelope: AgentEnvelope): PersistedAgentEnvelope {
   const meta = toPilotSafeRecord(envelope.meta)
   const seq = Number(meta.seq)

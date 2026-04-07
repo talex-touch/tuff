@@ -1,7 +1,5 @@
 import type { IInnerItemType } from './entity'
 import type { IChatBody, IChatConversation, IChatInnerItem, IChatItem, ICompletionHandler, IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
-import { endHttp } from '~/composables/api/axios'
-import { IChatItemStatus, IChatRole, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
 import {
   isPilotRuntimeCardEventType,
   normalizePilotStreamSeq,
@@ -9,9 +7,16 @@ import {
   PILOT_WEBSEARCH_CARD_TITLE,
   projectPilotLegacyRunEventCard,
   resolvePilotLegacyRunEventCardKeys,
-  shouldPilotStreamEventRequireSeq,
 } from '@talex-touch/tuff-intelligence/pilot'
+import { endHttp } from '~/composables/api/axios'
+import { IChatItemStatus, IChatRole, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
+import {
+  buildLegacyCompletionExecutorBody,
+  buildLegacyCompletionStreamRequestPayload,
+  shouldDropLegacyCompletionStreamEvent,
+} from './legacy-stream-contract'
 import { resolveLegacyUiStreamInput } from './legacy-stream-input'
+import { handleLegacyCompletionExecutorResult } from './legacy-stream-sse'
 
 function parseJsonSafe<T>(value: string): T | null {
   try {
@@ -371,142 +376,6 @@ function toFiniteSeq(value: unknown): number {
   return normalizePilotStreamSeq(value)
 }
 
-async function handleExecutorItem(item: string, callback: (data: any) => void) {
-  if (item === '[DONE]') {
-    callback({
-      done: true,
-    })
-  }
-  else {
-    try {
-      const json = JSON.parse(item)
-
-      callback({
-        done: false,
-        ...json,
-      })
-    }
-    catch (e: any) {
-      console.error('Failed to parse executor SSE data frame', item, e)
-      console.log('item', item)
-
-      callback({
-        done: true,
-        error: true,
-      })
-    }
-  }
-}
-
-function parseSseFrame(frame: string): { event: string, data: string } | null {
-  const lines = frame.split('\n')
-  let event = 'message'
-  const dataLines: string[] = []
-
-  for (const rawLine of lines) {
-    const line = rawLine.trimEnd()
-    if (!line || line.startsWith(':'))
-      continue
-
-    if (line.startsWith('event:')) {
-      event = line.slice(6).trim() || 'message'
-      continue
-    }
-
-    if (line.startsWith('data:')) {
-      const data = line.slice(5)
-      dataLines.push(data.startsWith(' ') ? data.slice(1) : data)
-    }
-  }
-
-  if (!dataLines.length)
-    return null
-
-  return {
-    event,
-    data: dataLines.join('\n'),
-  }
-}
-
-async function handleExecutorResult(
-  reader: ReadableStreamDefaultReader<string>,
-  callback: (data: any) => void,
-  hooks?: {
-    onChunk?: () => void
-  },
-) {
-  let buffer = ''
-
-  const flushBuffer = async () => {
-    let frameEndIndex = buffer.indexOf('\n\n')
-
-    while (frameEndIndex !== -1) {
-      const frame = buffer.slice(0, frameEndIndex)
-      buffer = buffer.slice(frameEndIndex + 2)
-
-      const parsed = parseSseFrame(frame)
-      if (!parsed) {
-        frameEndIndex = buffer.indexOf('\n\n')
-        continue
-      }
-
-      if (parsed.event === 'error') {
-        const payload = parseJsonSafe<Record<string, any>>(parsed.data)
-        if (payload) {
-          callback({
-            ...payload,
-            done: false,
-            event: typeof payload.event === 'string' ? payload.event : 'error',
-            status: typeof payload.status === 'string' ? payload.status : 'failed',
-            id: payload.id || 'assistant',
-            name: payload.name,
-            data: payload.data,
-            message: normalizeExecutorErrorMessage(payload.message || payload.error || payload.data || parsed.data),
-          })
-          frameEndIndex = buffer.indexOf('\n\n')
-          continue
-        }
-
-        callback({
-          done: false,
-          error: true,
-          e: normalizeExecutorErrorMessage(parsed.data),
-        })
-        frameEndIndex = buffer.indexOf('\n\n')
-        continue
-      }
-
-      await handleExecutorItem(parsed.data, callback)
-      frameEndIndex = buffer.indexOf('\n\n')
-    }
-  }
-
-  while (true) {
-    const { value, done } = await reader.read()
-    hooks?.onChunk?.()
-
-    if (done) {
-      if (buffer.trim().length) {
-        const parsed = parseSseFrame(buffer)
-        if (parsed)
-          await handleExecutorItem(parsed.data, callback)
-      }
-
-      callback({
-        done: true,
-      })
-
-      break
-    }
-
-    if (!value.length)
-      continue
-
-    buffer += value.replace(/\r\n/g, '\n')
-    await flushBuffer()
-  }
-}
-
 async function uploadLegacyDataUrlAttachment(
   sessionId: string,
   payload: {
@@ -638,20 +507,14 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
 
       let requestPayload: Record<string, unknown>
       if (followOnly) {
-        requestPayload = {
-          fromSeq,
-          follow: true,
-          modelId: String(body.modelId || body.model || '').trim() || undefined,
-          routeComboId: String(body.routeComboId || '').trim() || undefined,
-          internet: body.internet !== false,
-          thinking: body.thinking !== false,
-          memoryEnabled: body.memoryEnabled !== false,
-          pilotMode: body.pilotMode === true,
-          metadata: {
-            source: 'legacy-ui-completion-follow',
-            index: body.index,
+        requestPayload = buildLegacyCompletionStreamRequestPayload({
+          body: {
+            ...body,
+            fromSeq,
+            follow: true,
           },
-        }
+          followOnly: true,
+        })
       }
       else {
         const latestTurn = await resolveLegacyUiStreamInput(sessionId, body.messages || [], {
@@ -661,20 +524,11 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
           throw new Error('latest user turn is empty')
         }
 
-        requestPayload = {
-          message: latestTurn.message,
-          attachments: latestTurn.attachments.length > 0 ? latestTurn.attachments : undefined,
-          modelId: String(body.modelId || body.model || '').trim() || undefined,
-          routeComboId: String(body.routeComboId || '').trim() || undefined,
-          internet: body.internet !== false,
-          thinking: body.thinking !== false,
-          memoryEnabled: body.memoryEnabled !== false,
-          pilotMode: body.pilotMode === true,
-          metadata: {
-            source: 'legacy-ui-completion',
-            index: body.index,
-          },
-        }
+        requestPayload = buildLegacyCompletionStreamRequestPayload({
+          body,
+          followOnly: false,
+          latestTurn,
+        })
       }
 
       const res: ReadableStream = await endHttp.$http({
@@ -691,9 +545,14 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
 
       const reader = res.pipeThrough(new TextDecoderStream()).getReader()
 
-      await handleExecutorResult(reader, wrappedCallback, {
-        onChunk: resetIdleTimer,
-      })
+      await handleLegacyCompletionExecutorResult(
+        reader,
+        wrappedCallback,
+        normalizeExecutorErrorMessage,
+        {
+          onChunk: resetIdleTimer,
+        },
+      )
     }
     catch (e) {
       console.error(e)
@@ -995,7 +854,7 @@ export const $completion = {
             streamOrder: existingOrder || nextStreamBlockOrder(),
           }
           innerMsg.value.push(block)
-          return block
+          return innerMsg.value.at(-1) || block
         }
 
         function getOrCreateStreamingMarkdownBlock(seq = 0): IInnerItemMeta {
@@ -1309,10 +1168,10 @@ export const $completion = {
             data: nextData,
             extra: nextExtra,
           }
-          pushInnerBlock(created)
-          toolCardMap.set(createToolCardStorageKey(payload), created)
-          bindToolCardIdentity(payload, created)
-          return created
+          const inserted = pushInnerBlock(created)
+          toolCardMap.set(createToolCardStorageKey(payload), inserted)
+          bindToolCardIdentity(payload, inserted)
+          return inserted
         }
 
         function buildApprovalRequiredToolPayload(eventPayload: Record<string, any>): ToolAuditCardPayload {
@@ -1469,11 +1328,6 @@ export const $completion = {
 
         const runEventCardMap = new Map<string, IInnerItemMeta>()
         const RUN_EVENT_TERMINAL_STATUSES = new Set(['completed', 'skipped', 'failed'])
-
-        function normalizeThinkingTraceText(value: unknown): string {
-          const text = normalizeRunEventText(value)
-          return text === '__end__' ? '' : text
-        }
 
         function normalizeWebsearchDecisionReason(value: unknown): string {
           const reason = normalizePilotWebsearchReason(value)
@@ -1636,9 +1490,9 @@ export const $completion = {
             data: nextData,
             extra: nextExtra,
           }
-          pushInnerBlock(created)
-          runEventCardMap.set(key, created)
-          return created
+          const inserted = pushInnerBlock(created)
+          runEventCardMap.set(key, inserted)
+          return inserted
         }
 
         function finalizeRunningThinkingCards(eventType: string) {
@@ -1699,28 +1553,14 @@ export const $completion = {
         }
 
         function buildExecutorBody(requestId = ''): IChatBody & { requestId?: string } {
-          const resolvedPilotMode = typeof innerMsg.meta.pilotMode === 'boolean'
-            ? innerMsg.meta.pilotMode
-            : conversation.pilotMode === true
-          const payload: IChatBody & { requestId?: string } = {
-            ...options || {},
-            temperature: innerMsg.meta.temperature || 0.5,
-            templateId: conversation.template?.id ?? -1,
-            messages: conversation.messages,
-            index: index === -1 ? 0 : index,
-            chat_id: conversation.id,
-            model: innerMsg.model,
-            modelId: String(innerMsg.model || ''),
-            internet: innerMsg.meta.internet !== false,
-            thinking: innerMsg.meta.thinking !== false,
-            memoryEnabled: innerMsg.meta.memoryEnabled !== false,
-            pilotMode: resolvedPilotMode,
+          return buildLegacyCompletionExecutorBody({
+            options: requestId ? { ...(options || {}), requestId } : options,
+            conversation,
+            index,
+            model: String(innerMsg.model || ''),
+            meta: innerMsg.meta,
             signal: signal.signal,
-          }
-          if (requestId) {
-            payload.requestId = requestId
-          }
-          return payload
+          })
         }
 
         function startExecutorStream(requestId = '') {
@@ -1828,7 +1668,7 @@ export const $completion = {
             return
           }
           const eventSeq = toFiniteSeq(res.seq)
-          if (shouldPilotStreamEventRequireSeq(eventType) && eventSeq <= 0) {
+          if (shouldDropLegacyCompletionStreamEvent(eventType, res.seq)) {
             console.warn('[pilot-completion] dropped seq-required event without valid seq', {
               eventType,
               rawSeq: res.seq,

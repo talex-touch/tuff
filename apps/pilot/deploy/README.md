@@ -144,6 +144,13 @@ location ~ ^/api/chat/sessions/.*/stream$ {
 ```
 
 - If you use 1Panel advanced site config, make sure it does not override `X-Accel-Buffering` back to `yes`.
+- Run a post-deploy smoke check:
+
+```bash
+pnpm -C "apps/pilot" run smoke:chat-stream -- --base-url "https://your-pilot-domain"
+```
+
+- The script creates an anonymous session, checks `text/event-stream`, `X-Accel-Buffering: no`, first-frame timing, and whether the response only flushes near the end. It exits non-zero when buffering is likely enabled.
 
 ## 7) Rollback behavior
 

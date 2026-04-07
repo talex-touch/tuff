@@ -16,6 +16,16 @@ describe('pilot stream replay', () => {
         expect(fromSeq).toBe(5)
         return [
           {
+            id: 'trace_4',
+            sessionId: 'session-replay',
+            seq: 4,
+            type: 'done',
+            payload: {
+              status: 'ok',
+            },
+            createdAt: '2026-04-03T00:00:04.000Z',
+          },
+          {
             id: 'trace_5',
             sessionId: 'session-replay',
             seq: 5,
@@ -34,6 +44,16 @@ describe('pilot stream replay', () => {
               text: 'Hello world',
             },
             createdAt: '2026-04-03T00:00:06.000Z',
+          },
+          {
+            id: 'trace_7',
+            sessionId: 'session-replay',
+            seq: 7,
+            type: 'error',
+            payload: {
+              message: 'legacy error',
+            },
+            createdAt: '2026-04-03T00:00:07.000Z',
           },
         ]
       },
