@@ -1,4 +1,4 @@
-import { shouldHidePilotClientRuntimeEvent } from '@talex-touch/tuff-intelligence/pilot'
+import { shouldHidePilotClientRuntimeEvent, shouldPilotPersistTraceEvent } from '@talex-touch/tuff-intelligence/pilot'
 import { redactPilotClientTracePayload } from '../../../../../shared/pilot-runtime-redaction'
 import { requirePilotAuth } from '../../../../utils/auth'
 import { requireSessionId } from '../../../../utils/pilot-http'
@@ -20,6 +20,7 @@ export default defineEventHandler(async (event) => {
     Number.isFinite(fromSeq) ? Math.max(1, Math.floor(fromSeq)) : 1,
     Number.isFinite(limit) ? Math.min(Math.max(Math.floor(limit), 1), 1000) : 200,
   ))
+    .filter(item => shouldPilotPersistTraceEvent(item.type))
     .filter(item => !shouldHidePilotClientRuntimeEvent(item.type))
     .map(item => ({
       ...item,

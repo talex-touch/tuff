@@ -65,10 +65,11 @@ describe('pilot-stream-emitter seq contract', () => {
 
   it('stream.heartbeat 允许无 seq', async () => {
     const send = vi.fn()
+    const appendTrace = vi.fn(async () => {})
     const emitter = createPilotStreamEmitter({
       sessionId: 'session-emitter',
       getLastSeq: async () => 0,
-      appendTrace: async () => {},
+      appendTrace,
       send,
       now: () => 5_678,
     })
@@ -78,8 +79,14 @@ describe('pilot-stream-emitter seq contract', () => {
       payload: {
         ts: 5_678,
       },
+    }, {
+      persist: true,
+      tracePayload: {
+        ts: 5_678,
+      },
     })
 
+    expect(appendTrace).not.toHaveBeenCalled()
     expect(send).toHaveBeenCalledWith(expect.objectContaining({
       type: 'stream.heartbeat',
       seq: undefined,

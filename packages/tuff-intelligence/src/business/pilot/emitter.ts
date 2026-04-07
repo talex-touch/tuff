@@ -1,5 +1,5 @@
 import type { PilotStreamDraftEvent, PilotStreamEmitOptions, PilotStreamEvent } from './types'
-import { isPilotSeqOptionalEventType } from './types'
+import { isPilotSeqOptionalEventType, shouldPilotPersistTraceEvent } from './types'
 import { toPilotSafeRecord } from './utils'
 
 export interface PilotTraceAppendRecord {
@@ -76,7 +76,7 @@ export function createPilotStreamEmitter(options: CreatePilotStreamEmitterOption
     if (Number.isFinite(seq)) {
       seqCursor = Math.max(seqCursor, Number(seq))
     }
-    else if (emitOptions.persist) {
+    else if (emitOptions.persist && shouldPilotPersistTraceEvent(payload.type)) {
       seq = await appendTrace(
         payload.type,
         emitOptions.tracePayload || toPilotSafeRecord(payload.payload),

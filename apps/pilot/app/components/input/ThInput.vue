@@ -18,7 +18,6 @@ const props = defineProps<{
   center: boolean
   templateEnable: boolean
   tip: ITip | null
-  pilotModeDefault?: boolean
   sessionId?: string
 }>()
 const emits = defineEmits<{
@@ -31,7 +30,6 @@ const inputProperty = ref<IChatInnerItemMeta>({
   internet: true,
   thinking: true,
   temperature: 50,
-  pilotMode: props.pilotModeDefault === true,
 })
 const {
   findModel,
@@ -61,16 +59,6 @@ const inputHistories = useLocalStorage<string[]>('inputHistories', [])
 const inputHistoryIndex = ref(inputHistories.value.length - 1)
 const showSend = computed(() => Boolean(input.value.text.trim()) || syncedFiles.value.length > 0)
 const canSend = computed(() => !hasUploadingFiles.value && showSend.value && props.sendState !== 'sending_until_accepted')
-
-watch(
-  () => props.pilotModeDefault,
-  (next) => {
-    if (typeof next === 'boolean') {
-      inputProperty.value.pilotMode = next
-    }
-  },
-  { immediate: true },
-)
 
 function getCapabilityDisabledMessage(kind: 'thinking' | 'websearch' | 'file'): string {
   if (kind === 'thinking') {
@@ -619,9 +607,8 @@ onStartTyping(focusInput)
     />
 
     <ThInputPlus
-      v-model="inputProperty" :capabilities="inputCapabilities" :pilot-mode="inputProperty.pilotMode === true"
+      v-model="inputProperty" :capabilities="inputCapabilities"
       :hide="Boolean(input.text.startsWith('@') || template?.title)"
-      @toggle-pilot-mode="inputProperty.pilotMode = !inputProperty.pilotMode"
       @file="handleFilePlus"
     />
 

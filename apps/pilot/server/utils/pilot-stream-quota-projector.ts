@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { toPilotSafeRecord } from '@talex-touch/tuff-intelligence/pilot'
+import { shouldPilotPersistTraceEvent, toPilotSafeRecord } from '@talex-touch/tuff-intelligence/pilot'
 import { ensurePilotQuotaSessionSchema, upsertPilotQuotaSession } from './pilot-quota-session'
 import { buildQuotaConversationSnapshot } from './quota-conversation-snapshot'
 import { ensureQuotaHistorySchema, getQuotaHistory, upsertQuotaHistory } from './quota-history-store'
@@ -341,7 +341,9 @@ export function createPilotStreamQuotaProjector(options: CreatePilotStreamQuotaP
       }
 
       updateAssistantReplyByEvent(event, eventType)
-      appendProjectedTrace(event, eventType)
+      if (shouldPilotPersistTraceEvent(eventType)) {
+        appendProjectedTrace(event, eventType)
+      }
       dirty = true
 
       if (FORCE_FLUSH_EVENT_TYPES.has(eventType)) {
