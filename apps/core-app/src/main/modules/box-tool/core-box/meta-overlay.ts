@@ -23,7 +23,7 @@ import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { app, WebContentsView } from 'electron'
 import { BoxWindowOption } from '../../../config/default'
-import { genTouchApp } from '../../../core'
+import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { useAliveTarget, useAliveWebContents } from '../../../hooks/use-electron-guard'
 import { createLogger } from '../../../utils/logger'
 import { getCoreBoxWindow } from './window'
@@ -295,7 +295,7 @@ export class MetaOverlayManager {
         return
       }
 
-      const channel = genTouchApp().channel
+      const channel = getRegisteredMainRuntime('core-box').channel
       const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
 
       tx.sendTo(metaWebContents, MetaOverlayEvents.ui.show, {
@@ -367,7 +367,7 @@ export class MetaOverlayManager {
     this.isVisible = false
     this.currentItem = null
 
-    const channel = genTouchApp().channel
+    const channel = getRegisteredMainRuntime('core-box').channel
     const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
 
     tx.sendTo(metaWebContents, MetaOverlayEvents.ui.hide, undefined).catch(() => {})
@@ -480,7 +480,7 @@ export class MetaOverlayManager {
       return
     }
 
-    const touchApp = genTouchApp()
+    const touchApp = getRegisteredMainRuntime('core-box').app
 
     // Handle based on action type
     if (handler === 'plugin' && pluginId) {

@@ -2,6 +2,7 @@ import type { H3Event } from 'h3'
 import { requirePilotAuth } from '../../../utils/auth'
 import { getSessionRunStateSafe } from '../../../utils/chat-turn-queue'
 import { createPilotStoreAdapter } from '../../../utils/pilot-store'
+import { listPilotTraceTail } from '../../../utils/pilot-trace-window'
 import { quotaError, quotaOk } from '../../../utils/quota-api'
 import { buildQuotaConversationSnapshot } from '../../../utils/quota-conversation-snapshot'
 import { decodeQuotaConversation } from '../../../utils/quota-history-codec'
@@ -18,19 +19,20 @@ async function resolveQuotaConversationRecord(
 ) {
   await ensureQuotaHistorySchema(event)
   const existing = await getQuotaHistory(event, userId, chatId)
-  if (existing) {
-    return existing
-  }
 
   const store = createPilotStoreAdapter(event, userId)
   await store.runtime.ensureSchema()
   const session = await store.runtime.getSession(chatId)
   if (!session) {
-    return null
+    return existing
   }
 
   const runtimeMessages = await store.runtime.listMessages(chatId)
-  const runtimeTraces = await store.runtime.listTrace(chatId, 1, 2_000).catch(() => [])
+  const runtimeTraces = await listPilotTraceTail(store.runtime, {
+    sessionId: chatId,
+    lastSeq: session.lastSeq,
+    limit: 2_000,
+  }).catch(() => [])
   const snapshot = buildQuotaConversationSnapshot({
     chatId,
     messages: runtimeMessages.map(item => ({
@@ -41,14 +43,21 @@ async function resolveQuotaConversationRecord(
     runtimeTraces,
     assistantReply: '',
     topicHint: String(session.title || '').trim(),
+    previousValue: existing?.value || '',
   })
+
+  if (existing) {
+    if (existing.topic === snapshot.topic && existing.value === snapshot.value) {
+      return existing
+    }
+  }
 
   return await upsertQuotaHistory(event, {
     chatId,
     userId,
     topic: snapshot.topic,
     value: snapshot.value,
-    meta: '',
+    meta: existing?.meta || '',
   })
 }
 

@@ -226,16 +226,9 @@ export class ContextProvider {
 
   /**
    * Retrieves system state context.
-   *
-   * @remarks
-   * Placeholder implementation - see plan.prd for future enhancement.
    */
   private async getSystemContext(): Promise<ContextSignal['systemState']> {
-    return {
-      isOnline: true,
-      batteryLevel: 100,
-      isDNDEnabled: false
-    }
+    return undefined
   }
 
   /**
@@ -250,6 +243,14 @@ export class ContextProvider {
 
     if (context.foregroundApp) {
       parts.push(`fg:${context.foregroundApp.bundleId}`)
+    }
+
+    if (context.systemState) {
+      parts.push(
+        `net:${context.systemState.isOnline ? '1' : '0'}`,
+        `bat:${context.systemState.batteryLevel}`,
+        `dnd:${context.systemState.isDNDEnabled ? '1' : '0'}`
+      )
     }
 
     return parts.join('|')

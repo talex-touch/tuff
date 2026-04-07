@@ -54,7 +54,6 @@ declare global {
     api: import('@talex-touch/utils/preload').PreloadAPI
     ipcRenderer: {
       send: (channel: string, data: unknown) => void
-      sendSync: (channel: string, data: unknown) => unknown
       on: (channel: string, func: (...args: unknown[]) => void) => void
     }
   }

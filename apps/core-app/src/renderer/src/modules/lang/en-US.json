@@ -719,6 +719,9 @@
       "legacyTitle": "SDK Version Warning",
       "legacyWarning": "This plugin uses a legacy SDK; permission checks were skipped",
       "legacyHint": "Upgrade to sdkapi >= {version} to enable permission checks",
+      "backendUnavailableTitle": "Permission backend is read-only",
+      "backendUnavailableDesc": "SQLite permission backend is unavailable; only the loaded snapshot can be read.",
+      "backendMutationFailed": "Permission mutation failed",
       "recommendationsTitle": "Recommendations",
       "risk": {
         "low": "Low",
@@ -2730,7 +2733,7 @@
       "pin": "Pin to Recommendations",
       "unpin": "Unpin",
       "copyTitle": "Copy Title",
-      "revealInFinder": "Reveal in Finder",
+      "revealInFinder": "Reveal in File Manager",
       "flowTransfer": "Transfer to Plugin"
     },
     "systemActions": {

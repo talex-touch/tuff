@@ -1,4 +1,5 @@
-import type { PilotStreamEmitOptions, PilotStreamEvent } from './types'
+import type { PilotStreamDraftEvent, PilotStreamEmitOptions, PilotStreamEvent } from './types'
+import { isPilotSeqOptionalEventType, shouldPilotPersistTraceEvent } from './types'
 import { toPilotSafeRecord } from './utils'
 
 export interface PilotTraceAppendRecord {
@@ -68,18 +69,22 @@ export function createPilotStreamEmitter(options: CreatePilotStreamEmitterOption
   }
 
   async function emit(
-    payload: Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
+    payload: Omit<PilotStreamDraftEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
     emitOptions: PilotStreamEmitOptions = {},
   ): Promise<void> {
     let seq = Number.isFinite(payload.seq) ? Number(payload.seq) : undefined
     if (Number.isFinite(seq)) {
       seqCursor = Math.max(seqCursor, Number(seq))
     }
-    else if (emitOptions.persist) {
+    else if (emitOptions.persist && shouldPilotPersistTraceEvent(payload.type)) {
       seq = await appendTrace(
         payload.type,
         emitOptions.tracePayload || toPilotSafeRecord(payload.payload),
       )
+    }
+
+    if (!Number.isFinite(seq) && !isPilotSeqOptionalEventType(payload.type)) {
+      throw new Error(`Pilot stream event "${payload.type}" missing seq.`)
     }
 
     await options.send({

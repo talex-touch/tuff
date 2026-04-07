@@ -41,6 +41,7 @@ import {
   TalexEvents,
   touchEventBus
 } from '../../core/eventbus/touch-event'
+import { registerMainRuntime, resolveMainRuntime } from '../../core/runtime-accessor'
 import { TouchWindow } from '../../core/touch-window'
 import { createDbUtils } from '../../db/utils'
 import { useAliveTarget, useAliveWebContents } from '../../hooks/use-electron-guard'
@@ -836,7 +837,7 @@ function createPluginModuleInternal(
       if (!pluginId || requiredPermissions.length === 0) return
 
       if (response.grantMode === 'session') {
-        permissionModule.grantSession(pluginId, requiredPermissions)
+        await permissionModule.grantSession(pluginId, requiredPermissions)
         return
       }
       await permissionModule.grantAll(pluginId, requiredPermissions, 'user')
@@ -1163,6 +1164,10 @@ function createPluginModuleInternal(
             skipDataInit: true
           }
         )
+        touchPlugin.setRuntime({
+          rootPath: path.dirname(pluginPath),
+          mainWindowId
+        })
 
         touchPlugin.issues.push({
           type: 'error',
@@ -1189,6 +1194,10 @@ function createPluginModuleInternal(
         const loadStartTime = Date.now()
         const loader = createPluginLoader(pluginName, currentPluginPath)
         const touchPlugin = await loader.load()
+        touchPlugin.setRuntime({
+          rootPath: path.dirname(pluginPath),
+          mainWindowId
+        })
         touchPlugin.markLoadStart()
         touchPlugin._performanceMetrics.loadStartTime = loadStartTime // Set actual start time
         touchPlugin.markLoadEnd()
@@ -1731,6 +1740,7 @@ export class PluginModule extends BaseModule {
 
   onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     const { file } = ctx
+    registerMainRuntime('plugin-module', resolveMainRuntime(ctx, 'PluginModule.onInit'))
     const ioRuntime = resolvePluginModuleIoRuntime(ctx)
     this.transport = ioRuntime.transport
     TouchPlugin.setTransport(ioRuntime.transport)

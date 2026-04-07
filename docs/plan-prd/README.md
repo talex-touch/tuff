@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档入口（压缩版）
-> 更新时间: 2026-03-24
+> 更新时间: 2026-04-07
 
 ## 快速入口
 
@@ -17,7 +17,7 @@
 
 ---
 
-## 单一口径快照（2026-03-24）
+## 单一口径快照（2026-04-07）
 
 - 当前工作区基线：`2.4.9-beta.4`。
 - CoreApp 启动搜索卡顿治理已落地“平衡模式 + 双库隔离”：`database-aux.db` 分流非核心高频写、`DbWriteScheduler` QoS/熔断、索引热路径单写者化、启动期降载（120s）。
@@ -34,6 +34,9 @@
 - Pilot 审批闭环：聊天端已支持审批票据自动轮询与自动续跑（approved 复用原 request 执行）；legacy 事件兼容分支默认关闭并提供环境开关回滚。
 - Pilot 旧 UI 已硬切会话卡片流：`intent/routing/memory/websearch/thinking` 改为消息流卡片事件，状态不再走全局运行态条。
 - Pilot 流式入口收敛：旧 UI 执行链路统一到 `POST /api/chat/sessions/:sessionId/stream`，legacy 事件仅告警忽略。
+- Pilot 首页默认 DeepAgent：生产入口继续是 `apps/pilot/app/pages/index.vue`，前端主消费链收口到 legacy `$completion` 单链，不再并行扶正新 Pilot Workspace。
+- Pilot 默认模式收敛：`pilotMode` 退回显式实验字段；首页默认不发送、不展示、不依赖它，`fromSeq + follow` 恢复链统一按真实可恢复事件推进。
+- Pilot trace contract 收紧：`stream.started / stream.heartbeat / replay.* / run.metrics / done / error` 不再持久化到 trace，replay/follow/quota snapshot 会统一过滤历史 lifecycle 噪音。
 
 ---
 

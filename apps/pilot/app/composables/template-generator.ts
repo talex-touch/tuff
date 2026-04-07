@@ -1,7 +1,7 @@
 import type { FormInstance } from 'element-plus'
 import type { IDataResponse, IPageResponse, IStandardPageModel, IStandardResponse } from './api/base/index.type'
 
-export interface TemplateDataHandler<T extends Record<string, any>, PageT extends T, O> {
+export interface TemplateDataHandler<T extends Record<string, any>, PageT extends Partial<T> & { page: number, pageSize: number }, O> {
   getEmptyModel: () => T
   onFetchSuccess?: () => Promise<void>
   /**
@@ -20,7 +20,7 @@ export interface TemplateDataHandler<T extends Record<string, any>, PageT extend
   handleCrudDialog?: (data: T, mode: CrudMode, meta?: Partial<O>) => void
 
   getDeleteBoxTitle: (id: string | number) => string
-  getDeleteBoxTitles: (ids: Array<number>) => string
+  getDeleteBoxTitles?: (ids: Array<number>) => string
 }
 
 export type CrudMode = 'NEW' | 'EDIT' | 'READ'
@@ -42,7 +42,7 @@ export enum CurdController {
  * @param queryData 查询参数，用于初始化查询条件
  * @returns 返回一个对象，包含数据列表、表单加载状态、CRUD对话框选项以及数据获取和处理函数
  */
-export function genCmsTemplateData<T extends Record<string, any> & { id?: number | string }, PageT extends T & { page: number, pageSize: number }, O extends Record<string, any> | null>(
+export function genCmsTemplateData<T extends Record<string, any> & { id?: number | string }, PageT extends Partial<T> & { page: number, pageSize: number }, O extends Record<string, any> | null>(
   dataHandler: TemplateDataHandler<T, PageT, O>,
   queryData: Partial<PageT>,
 ) {
@@ -61,9 +61,10 @@ export function genCmsTemplateData<T extends Record<string, any> & { id?: number
   /**
    * 传什么类型，生成什么类型
    */
-  type QueryDataType<T> = { [key in keyof T]: T[key] }
+  type QueryDataType<TValue> = { [key in keyof TValue]: TValue[key] }
 
-  const internalQueryData = reactive<QueryDataType<T>>(JSON.parse(JSON.stringify(queryData)))
+  const internalQueryData = reactive<QueryDataType<PageT>>(JSON.parse(JSON.stringify(queryData)))
+  const getDeleteBoxTitles = dataHandler.getDeleteBoxTitles ?? ((ids: Array<number>) => ids.map(id => dataHandler.getDeleteBoxTitle(id)).join('、'))
 
   async function fetchData() {
     if (formLoading.value)
@@ -172,7 +173,7 @@ export function genCmsTemplateData<T extends Record<string, any> & { id?: number
   }
 
   async function handleDeleteDatas(ids: Array<number>) {
-    ElMessageBox.confirm(`你确定要删除${dataHandler.getDeleteBoxTitles(ids)} 吗？删除后这个${dataHandler.getDeleteBoxTitles(ids)}永久无法找回。`, '是否确认删除', {
+    ElMessageBox.confirm(`你确定要删除${getDeleteBoxTitles(ids)} 吗？删除后这个${getDeleteBoxTitles(ids)}永久无法找回。`, '是否确认删除', {
       confirmButtonText: '取消',
       cancelButtonText: '确定删除',
       type: 'error',
@@ -180,7 +181,7 @@ export function genCmsTemplateData<T extends Record<string, any> & { id?: number
       .then(() => {
         ElMessage({
           type: 'success',
-          message: `已取消删除${dataHandler.getDeleteBoxTitles(ids)}！`,
+          message: `已取消删除${getDeleteBoxTitles(ids)}！`,
         })
       })
       .catch(async () => {
@@ -195,7 +196,7 @@ export function genCmsTemplateData<T extends Record<string, any> & { id?: number
 
         ElNotification({
           title: 'Info',
-          message: `你永久删除了${dataHandler.getDeleteBoxTitles(ids)}！`,
+          message: `你永久删除了${getDeleteBoxTitles(ids)}！`,
           type: 'info',
         })
       })

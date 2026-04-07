@@ -1,6 +1,6 @@
 import type { AgentEngineAdapter, DecisionAdapter } from '../adapters/engine'
 import type { AgentDecision } from '../protocol/decision'
-import type { AgentEnvelope } from '../protocol/envelope'
+import type { AgentEnvelope, PersistedAgentEnvelope  } from '../protocol/envelope'
 import type { ApprovalInput, SessionSnapshot, TurnState, UserMessageAttachment, UserMessageInput, ViewEventInput } from '../protocol/session'
 import type { StoreAdapter, TraceRecord } from '../store/store-adapter'
 import type { ConversationAgentPort, RuntimePersistMetricsSnapshot } from './conversation-agent-port'
@@ -152,6 +152,17 @@ interface RuntimePersistMetricsState {
   runtimeTracePersistCount: number
 }
 
+interface PersistedTraceEvent {
+  seq: number
+  trace: TraceRecord
+  event: PersistedAgentEnvelope
+}
+
+interface PersistedRuntimeEmission {
+  seq: number
+  events: PersistedTraceEvent[]
+}
+
 export interface AgentRuntimeDeps {
   engine: AgentEngineAdapter
   decision: DecisionAdapter
@@ -255,14 +266,23 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
           streamed = true
           const decision = await this.deps.decision.normalize(raw, state)
           for await (const event of this.deps.dispatcher.dispatch(decision, state)) {
-            const reduced = await this.reduceState(state, event)
-            state = reduced
-            const persistedSeq = await this.persistEvent(state, event)
-            state = {
-              ...state,
-              seq: persistedSeq,
+            const persisted = await this.persistEvent(state, event)
+            if (persisted.events.length <= 0) {
+              state = {
+                ...state,
+                seq: persisted.seq,
+              }
+              continue
             }
-            yield event
+            for (const emitted of persisted.events) {
+              const reduced = await this.reduceState(state, emitted.event)
+              state = {
+                ...reduced,
+                seq: emitted.seq,
+              }
+              await this.afterTracePersisted(state, emitted.event, emitted.trace)
+              yield emitted.event
+            }
           }
           state = await this.advanceState(state, decision)
           if (state.done) {
@@ -275,14 +295,23 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
             const raw = await this.deps.engine.run(state)
             const decision = await this.deps.decision.normalize(raw, state)
             for await (const event of this.deps.dispatcher.dispatch(decision, state)) {
-              const reduced = await this.reduceState(state, event)
-              state = reduced
-              const persistedSeq = await this.persistEvent(state, event)
-              state = {
-                ...state,
-                seq: persistedSeq,
+              const persisted = await this.persistEvent(state, event)
+              if (persisted.events.length <= 0) {
+                state = {
+                  ...state,
+                  seq: persisted.seq,
+                }
+                continue
               }
-              yield event
+              for (const emitted of persisted.events) {
+                const reduced = await this.reduceState(state, emitted.event)
+                state = {
+                  ...reduced,
+                  seq: emitted.seq,
+                }
+                await this.afterTracePersisted(state, emitted.event, emitted.trace)
+                yield emitted.event
+              }
             }
             state = await this.advanceState(state, decision)
           }
@@ -296,23 +325,37 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
           const raw = await this.deps.engine.run(state)
           const decision = await this.deps.decision.normalize(raw, state)
           for await (const event of this.deps.dispatcher.dispatch(decision, state)) {
-            const reduced = await this.reduceState(state, event)
-            state = reduced
-            const persistedSeq = await this.persistEvent(state, event)
-            state = {
-              ...state,
-              seq: persistedSeq,
+            const persisted = await this.persistEvent(state, event)
+            if (persisted.events.length <= 0) {
+              state = {
+                ...state,
+                seq: persisted.seq,
+              }
+              continue
             }
-            yield event
+            for (const emitted of persisted.events) {
+              const reduced = await this.reduceState(state, emitted.event)
+              state = {
+                ...reduced,
+                seq: emitted.seq,
+              }
+              await this.afterTracePersisted(state, emitted.event, emitted.trace)
+              yield emitted.event
+            }
           }
           state = await this.advanceState(state, decision)
         }
       }
 
-      const flushedSeq = await this.flushAssistantDeltaBuffer(state)
-      state = {
-        ...state,
-        seq: flushedSeq,
+      const flushed = await this.flushAssistantDeltaBuffer(state)
+      if (flushed) {
+        const reduced = await this.reduceState(state, flushed.event)
+        state = {
+          ...reduced,
+          seq: flushed.seq,
+        }
+        await this.afterTracePersisted(state, flushed.event, flushed.trace)
+        yield flushed.event
       }
 
       await this.deps.store.runtime.completeSession(state.sessionId, 'completed')
@@ -365,14 +408,17 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
     }
   }
 
-  protected async persistEvent(state: TurnState, event: AgentEnvelope): Promise<number> {
+  protected async persistEvent(state: TurnState, event: AgentEnvelope): Promise<PersistedRuntimeEmission> {
     const sessionId = state.sessionId
     const currentPersistedSeq = this.getSessionPersistedSeq(sessionId, Math.max(0, Math.floor(Number(state.seq || 0))))
 
     if (event.type === 'assistant.delta') {
       const text = String((event.payload as Record<string, unknown>)?.text || '')
       if (!text) {
-        return currentPersistedSeq
+        return {
+          seq: currentPersistedSeq,
+          events: [],
+        }
       }
 
       const now = Date.now()
@@ -389,22 +435,39 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
 
       const nextPending = this.assistantDeltaBufferBySession.get(sessionId)
       if (!nextPending) {
-        return currentPersistedSeq
+        return {
+          seq: currentPersistedSeq,
+          events: [],
+        }
       }
 
       const shouldFlush = nextPending.text.length >= ASSISTANT_DELTA_PERSIST_MAX_CHARS
         || (now - nextPending.startedAt) >= ASSISTANT_DELTA_PERSIST_MAX_MS
       if (!shouldFlush) {
-        return currentPersistedSeq
+        return {
+          seq: currentPersistedSeq,
+          events: [],
+        }
       }
 
-      return await this.flushAssistantDeltaBuffer(state)
+      const flushed = await this.flushAssistantDeltaBuffer(state)
+      return {
+        seq: flushed?.seq ?? currentPersistedSeq,
+        events: flushed ? [flushed] : [],
+      }
     }
 
-    await this.flushAssistantDeltaBuffer(state)
-    const trace = await this.appendTraceWithRetry(state, event)
-    await this.afterTracePersisted(state, event, trace)
-    return trace.seq
+    const emitted: PersistedTraceEvent[] = []
+    const flushed = await this.flushAssistantDeltaBuffer(state)
+    if (flushed) {
+      emitted.push(flushed)
+    }
+    const persistedEvent = await this.appendPersistedEvent(state, event)
+    emitted.push(persistedEvent)
+    return {
+      seq: persistedEvent.seq,
+      events: emitted,
+    }
   }
 
   private getSessionPersistedSeq(sessionId: string, fallback = 0): number {
@@ -462,15 +525,7 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
   private async afterTracePersisted(state: TurnState, event: AgentEnvelope, trace: TraceRecord): Promise<void> {
     this.trackRuntimeTracePersisted(state.sessionId)
 
-    await this.deps.store.emit?.({
-      ...event,
-      id: trace.id,
-      meta: {
-        ...(event.meta || {}),
-        traceId: trace.id,
-        seq: trace.seq,
-      },
-    })
+    await this.deps.store.emit?.(event)
 
     if (event.type === 'assistant.final') {
       const text = String((event.payload as Record<string, unknown>)?.text || '')
@@ -493,11 +548,32 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
     }
   }
 
-  private async flushAssistantDeltaBuffer(state: TurnState): Promise<number> {
+  private createPersistedEvent(event: AgentEnvelope, trace: TraceRecord): PersistedAgentEnvelope {
+    return {
+      ...event,
+      id: trace.id,
+      meta: {
+        ...(event.meta || {}),
+        traceId: trace.id,
+        seq: trace.seq,
+      },
+    }
+  }
+
+  private async appendPersistedEvent(state: TurnState, event: AgentEnvelope): Promise<PersistedTraceEvent> {
+    const trace = await this.appendTraceWithRetry(state, event)
+    return {
+      seq: trace.seq,
+      trace,
+      event: this.createPersistedEvent(event, trace),
+    }
+  }
+
+  private async flushAssistantDeltaBuffer(state: TurnState): Promise<PersistedTraceEvent | null> {
     const sessionId = state.sessionId
     const pending = this.assistantDeltaBufferBySession.get(sessionId)
     if (!pending || !pending.text) {
-      return this.getSessionPersistedSeq(sessionId, Math.max(0, Math.floor(Number(state.seq || 0))))
+      return null
     }
 
     this.assistantDeltaBufferBySession.delete(sessionId)
@@ -515,9 +591,7 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
       },
     }
 
-    const trace = await this.appendTraceWithRetry(state, bufferedEvent)
-    await this.afterTracePersisted(state, bufferedEvent, trace)
-    return trace.seq
+    return await this.appendPersistedEvent(state, bufferedEvent)
   }
 
   private trackDeltaBatchPersisted(sessionId: string, chars: number): void {

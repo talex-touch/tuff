@@ -1,9 +1,5 @@
 // import { regChannel } from '../../../utils/channel-util'
-// import { genTouchApp } from '../../touch-core'
 // import { ProcessorVars } from '../initializer'
-
-// const touchApp = genTouchApp()
-// const win = touchApp.window.window
 
 // export default () => {
 

@@ -675,10 +675,6 @@ class TouchChannel {
     return this.sendTo(this.app.window.window, type, eventName, arg)
   }
 
-  sendSync(type: ChannelType, eventName: string, arg: unknown): Promise<unknown> {
-    return this.send(type, eventName, arg)
-  }
-
   sendMain(eventName: string, arg?: unknown): Promise<unknown> {
     return this.sendTo(this.app.window.window, ChannelType.MAIN, eventName, arg)
   }

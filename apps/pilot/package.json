@@ -11,6 +11,7 @@
     "generate": "NODE_OPTIONS=--max-old-space-size=8192 nuxt generate",
     "analyze:size": "pnpm generate && node ./scripts/report-dist-size.mjs",
     "channels:merge:ends": "node ./scripts/merge-ends-channels.mjs",
+    "smoke:chat-stream": "node ./scripts/check-chat-stream-smoke.mjs",
     "preview": "nuxt preview",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",

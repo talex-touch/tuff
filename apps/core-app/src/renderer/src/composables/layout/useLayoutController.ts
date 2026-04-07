@@ -3,7 +3,7 @@ import type { Composer } from 'vue-i18n'
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { useApplicationUpgrade } from '~/modules/hooks/useUpdate'
+import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
 import { resolveI18nLabel } from '~/utils/i18n-helpers'
 
 /**
@@ -18,7 +18,7 @@ export function useLayoutController(): {
 } {
   const route = useRoute()
   const { t } = useI18n()
-  const { checkApplicationUpgrade } = useApplicationUpgrade()
+  const { checkApplicationUpgrade } = useUpdateRuntime()
   const routeLabel = computed(() => {
     const name = route?.name
     const source = typeof name === 'string' ? name : (route?.path ?? '')

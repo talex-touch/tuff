@@ -73,10 +73,13 @@ const options = reactive({
 
 const {
   memoryEnabled,
+  memoryFacts,
+  memoryFactsLoading,
   memoryLoading,
   memorySubmitting,
   memoryToggleDisabled,
   memoryToggleDisabledTip,
+  loadMemoryFacts,
   loadMemorySettings,
   setMemoryEnabled,
 } = usePilotMemorySettings()
@@ -98,6 +101,7 @@ async function handleMemorySwitchChange(nextValue: string | number | boolean) {
 
 onMounted(() => {
   void loadMemorySettings()
+  void loadMemoryFacts()
 })
 </script>
 
@@ -125,6 +129,41 @@ onMounted(() => {
           @change="handleMemorySwitchChange"
         />
       </TemplateLineForm>
+      <div class="MemoryFactsPanel">
+        <div class="MemoryFactsPanel-Header">
+          <div>
+            <p class="title">
+              记忆详情
+            </p>
+            <p class="subtitle">
+              展示当前账号已沉淀的用户记忆内容和添加时间
+            </p>
+          </div>
+          <span class="count">{{ memoryFacts.length }} 条</span>
+        </div>
+        <div v-if="memoryFactsLoading" class="MemoryFactsPanel-Empty">
+          正在加载记忆详情...
+        </div>
+        <div v-else-if="memoryFacts.length <= 0" class="MemoryFactsPanel-Empty">
+          暂未沉淀记忆
+        </div>
+        <el-scrollbar v-else max-height="280px">
+          <div class="MemoryFactsPanel-List">
+            <article
+              v-for="fact in memoryFacts"
+              :key="`${fact.key}-${fact.createdAt}-${fact.value}`"
+              class="MemoryFactItem"
+            >
+              <p class="value">
+                {{ fact.value }}
+              </p>
+              <p class="meta">
+                添加时间：{{ formatDate(fact.createdAt) }}
+              </p>
+            </article>
+          </div>
+        </el-scrollbar>
+      </div>
       <TemplateLineForm title="光晕动画" desc="光晕动画让界面更流畅，但是会增加耗电量">
         <el-switch v-model="figurations.animation.value" @click="figurations.animation.click" />
       </TemplateLineForm>
@@ -208,6 +247,79 @@ onMounted(() => {
     align-items: center;
 
     font-size: 16px;
+  }
+}
+
+.MemoryFactsPanel {
+  margin: 0.5rem 0 1rem;
+  padding: 0.75rem;
+
+  border: 1px solid var(--el-border-color);
+  border-radius: 12px;
+  background: var(--el-fill-color-blank);
+
+  &-Header {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    align-items: flex-start;
+
+    .title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .subtitle {
+      margin-top: 0.25rem;
+
+      color: var(--el-text-color-secondary);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .count {
+      padding: 0.25rem 0.5rem;
+
+      color: var(--el-text-color-secondary);
+      font-size: 12px;
+      border-radius: 999px;
+      background: var(--el-fill-color-light);
+      white-space: nowrap;
+    }
+  }
+
+  &-Empty {
+    padding: 1rem 0.25rem 0.25rem;
+
+    color: var(--el-text-color-secondary);
+    font-size: 13px;
+  }
+
+  &-List {
+    margin-top: 0.75rem;
+    display: flex;
+    gap: 0.75rem;
+    flex-direction: column;
+  }
+}
+
+.MemoryFactItem {
+  padding: 0.75rem;
+
+  border-radius: 10px;
+  background: var(--el-fill-color-light);
+
+  .value {
+    color: var(--el-text-color-primary);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .meta {
+    margin-top: 0.375rem;
+
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
   }
 }
 

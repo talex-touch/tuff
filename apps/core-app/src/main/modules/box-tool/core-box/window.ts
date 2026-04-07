@@ -18,7 +18,7 @@ import chalk from 'chalk'
 import { app, nativeTheme, screen, WebContentsView } from 'electron'
 import fse from 'fs-extra'
 import { BoxWindowOption } from '../../../config/default'
-import { genTouchApp } from '../../../core'
+import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import {
   CoreBoxWindowHiddenEvent,
   CoreBoxWindowShownEvent,
@@ -113,7 +113,7 @@ export class WindowManager {
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
-      this._touchApp = genTouchApp()
+      this._touchApp = getRegisteredMainRuntime<TalexEvents>('core-box').app
     }
     return this._touchApp
   }

@@ -38,9 +38,29 @@ interface PluginPermissionStatus {
   warning?: string
 }
 
+type PermissionBackendMode = 'sqlite' | 'degraded/backend-unavailable'
+
+interface PermissionBackendState {
+  mode: PermissionBackendMode
+  writable: boolean
+  reason?: string
+}
+
+interface PluginPermissionStatusResult extends PluginPermissionStatus {
+  backendState?: PermissionBackendState
+}
+
+interface PermissionMutationResult {
+  success: boolean
+  error?: string
+  backendState?: PermissionBackendState
+}
+
 // State
 const loading = ref(true)
 const status = ref<PluginPermissionStatus | null>(null)
+const backendState = ref<PermissionBackendState | null>(null)
+const mutationError = ref<string | null>(null)
 
 function getPermissionName(permissionId: string): string {
   const key = `plugin.permissions.registry.${permissionId}.name`
@@ -107,10 +127,17 @@ const hasOutdatedPermissions = computed(() => {
 
 const hasStatusWarning = computed(() => {
   if (!status.value) return false
-  return status.value.missingRequired.length > 0 || status.value.deprecatedGranted.length > 0
+  return (
+    status.value.missingRequired.length > 0 ||
+    status.value.deprecatedGranted.length > 0 ||
+    backendState.value?.mode === 'degraded/backend-unavailable'
+  )
 })
 
 const statusDescription = computed(() => {
+  if (backendState.value?.mode === 'degraded/backend-unavailable') {
+    return t('plugin.permissions.backendUnavailableDesc')
+  }
   if (!status.value) return ''
   if (status.value.missingRequired.length > 0) {
     return t('plugin.permissions.statusMissing', {
@@ -124,6 +151,18 @@ const statusDescription = computed(() => {
   }
   return t('plugin.permissions.statusGranted')
 })
+
+const backendUnavailable = computed(
+  () => backendState.value?.mode === 'degraded/backend-unavailable'
+)
+
+function handleMutationResult(result: PermissionMutationResult | null | undefined): boolean {
+  if (result?.backendState) {
+    backendState.value = result.backendState
+  }
+  mutationError.value = result?.success ? null : result?.error || null
+  return result?.success === true
+}
 
 // Category definitions
 const categoryInfo: Record<string, { nameKey: string; icon: string }> = {
@@ -235,16 +274,18 @@ function getRiskLabel(risk: 'low' | 'medium' | 'high'): string {
 async function loadStatus() {
   loading.value = true
   try {
+    mutationError.value = null
     // Create plain copies of arrays to avoid structured clone issues
     const required = [...(props.plugin.declaredPermissions?.required || [])]
     const optional = [...(props.plugin.declaredPermissions?.optional || [])]
 
-    const result = await permissionSdk.getStatus({
+    const result = (await permissionSdk.getStatus({
       pluginId: props.plugin.name,
       sdkapi: props.plugin.sdkapi,
       required,
       optional
-    })
+    })) as PluginPermissionStatusResult | null
+    backendState.value = result?.backendState || null
     status.value = result
       ? {
           ...result,
@@ -262,18 +303,23 @@ async function loadStatus() {
 
 // Toggle permission
 async function handleToggle(permissionId: string, granted: boolean) {
+  if (backendUnavailable.value) return
   try {
+    let result: PermissionMutationResult | null = null
     if (granted) {
-      await permissionSdk.grant({
+      result = (await permissionSdk.grant({
         pluginId: props.plugin.name,
         permissionId,
         grantedBy: 'user'
-      })
+      })) as PermissionMutationResult
     } else {
-      await permissionSdk.revoke({
+      result = (await permissionSdk.revoke({
         pluginId: props.plugin.name,
         permissionId
-      })
+      })) as PermissionMutationResult
+    }
+    if (!handleMutationResult(result)) {
+      return
     }
     await loadStatus()
   } catch (e) {
@@ -283,13 +329,16 @@ async function handleToggle(permissionId: string, granted: boolean) {
 
 // Grant all required
 async function handleGrantAll() {
-  if (!status.value?.missingRequired.length) return
+  if (backendUnavailable.value || !status.value?.missingRequired.length) return
   try {
-    await permissionSdk.grantMultiple({
+    const result = (await permissionSdk.grantMultiple({
       pluginId: props.plugin.name,
       permissionIds: status.value.missingRequired,
       grantedBy: 'user'
-    })
+    })) as PermissionMutationResult
+    if (!handleMutationResult(result)) {
+      return
+    }
     await loadStatus()
   } catch (e) {
     console.error('Failed to grant all permissions:', e)
@@ -298,10 +347,14 @@ async function handleGrantAll() {
 
 // Revoke all
 async function handleRevokeAll() {
+  if (backendUnavailable.value) return
   try {
-    await permissionSdk.revokeAll({
+    const result = (await permissionSdk.revokeAll({
       pluginId: props.plugin.name
-    })
+    })) as PermissionMutationResult
+    if (!handleMutationResult(result)) {
+      return
+    }
     await loadStatus()
   } catch (e) {
     console.error('Failed to revoke all permissions:', e)
@@ -342,6 +395,21 @@ onMounted(() => {
         :active-icon="hasStatusWarning ? 'i-carbon-warning-filled' : 'i-carbon-checkmark-filled'"
         memory-name="plugin-permissions-status"
       >
+        <TuffBlockLine
+          v-if="backendUnavailable"
+          :title="t('plugin.permissions.backendUnavailableTitle')"
+        >
+          <template #description>
+            <span class="text-[var(--tx-color-warning)]">
+              {{ backendState?.reason || t('plugin.permissions.backendUnavailableDesc') }}
+            </span>
+          </template>
+        </TuffBlockLine>
+        <TuffBlockLine v-if="mutationError" :title="t('plugin.permissions.backendMutationFailed')">
+          <template #description>
+            <span class="text-[var(--tx-color-danger)]">{{ mutationError }}</span>
+          </template>
+        </TuffBlockLine>
         <TuffBlockLine :title="t('plugin.permissions.required')">
           <template #description>
             <TxTag color="var(--tx-color-danger)" size="sm">
@@ -376,7 +444,12 @@ onMounted(() => {
               <i class="i-ri-refresh-line" />
               <span>{{ t('plugin.permissions.actions.refresh') }}</span>
             </TxButton>
-            <TxButton v-if="status?.missingRequired.length" variant="flat" @click="handleGrantAll">
+            <TxButton
+              v-if="status?.missingRequired.length"
+              variant="flat"
+              :disabled="backendUnavailable"
+              @click="handleGrantAll"
+            >
               <i class="i-ri-check-double-line" />
               <span>{{ t('plugin.permissions.actions.grantAll') }}</span>
             </TxButton>
@@ -384,6 +457,7 @@ onMounted(() => {
               v-if="status?.granted.length"
               variant="flat"
               class="danger"
+              :disabled="backendUnavailable"
               @click="handleRevokeAll"
             >
               <i class="i-ri-close-line" />
@@ -429,6 +503,7 @@ onMounted(() => {
           :description="perm.desc"
           :default-icon="getPermissionIcon(perm.id)"
           :active-icon="getPermissionIcon(perm.id)"
+          :disabled="backendUnavailable || !status?.enforcePermissions"
           @change="(val) => handleToggle(perm.id, val)"
         >
           <template #tags>

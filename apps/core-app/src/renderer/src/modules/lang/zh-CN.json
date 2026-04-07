@@ -719,6 +719,9 @@
       "legacyTitle": "SDK 版本警告",
       "legacyWarning": "此插件使用旧版 SDK，权限校验已跳过",
       "legacyHint": "升级到 sdkapi >= {version} 以启用权限校验",
+      "backendUnavailableTitle": "权限后端不可写",
+      "backendUnavailableDesc": "SQLite 权限后端不可用，当前仅支持读取已加载快照。",
+      "backendMutationFailed": "权限变更失败",
       "recommendationsTitle": "建议",
       "risk": {
         "low": "低",
@@ -2722,7 +2725,7 @@
       "pin": "固定到推荐",
       "unpin": "取消固定",
       "copyTitle": "复制名称",
-      "revealInFinder": "在 Finder 中显示",
+      "revealInFinder": "在文件管理器中显示",
       "flowTransfer": "流转到其他插件"
     },
     "systemActions": {

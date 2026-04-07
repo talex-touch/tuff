@@ -83,6 +83,15 @@ const rules = reactive<FormRules<TemplateType>>({
   ]
 })
 
+const storageTimeText = computed({
+  get: () => Array.isArray(listForm.time) ? listForm.time.join(',') : '',
+  set: (value: string) => {
+    listForm.time = value
+      ? value.split(',').map(item => item.trim()).filter(Boolean)
+      : []
+  },
+})
+
 
 
 
@@ -146,7 +155,7 @@ const handleSelectionChange = (val: IStorageModel[]) => {
         <el-input v-model="listForm.size" placeholder="大小" clearable />
       </el-form-item>
       <el-form-item label="上传时间">
-        <el-input v-model="listForm.time" placeholder="上传时间" clearable />
+        <el-input v-model="storageTimeText" placeholder="上传时间" clearable />
       </el-form-item>
       <el-form-item label="上传者">
         <el-input v-model="listForm.username" placeholder="上传者" clearable />
@@ -165,7 +174,7 @@ const handleSelectionChange = (val: IStorageModel[]) => {
         </el-table-column>
         <el-table-column prop="name" width="500px" label="预览图">
           <template #default="{ row }">
-            <el-image :src="ImgPath(row.path)" :fit="contain">
+            <el-image :src="ImgPath(row.path)" fit="contain">
               <template #placeholder>
                 <div class="image-slot">Loading<span class="dot">...</span></div>
               </template>

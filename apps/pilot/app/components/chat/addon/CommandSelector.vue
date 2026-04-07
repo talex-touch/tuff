@@ -11,7 +11,15 @@ const expand = ref(false)
 const hover = ref(false)
 const hoverMode = debouncedRef(hover, 200)
 
-const commands = reactive([
+interface CommandItem {
+  icon: string
+  name: string
+  value: 'translate' | 'headphones' | 'archive'
+  desc: string
+  lock?: () => boolean
+}
+
+const commands: CommandItem[] = [
   {
     icon: 'i-carbon:translate',
     name: '一键切换',
@@ -32,7 +40,7 @@ const commands = reactive([
     desc: '将内容转换为不同模型的结果并进行审查',
     lock: () => false,
   },
-])
+]
 
 const commandSelector = ref()
 const commandFloating = ref()

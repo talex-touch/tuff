@@ -11,17 +11,20 @@ import { getTuffBaseUrl, isDevEnv } from '@talex-touch/utils/env'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { randomUUID, createHash } from 'node:crypto'
-import fs from 'node:fs/promises'
 import os from 'node:os'
-import path from 'node:path'
-import { safeStorage, shell } from 'electron'
+import { shell } from 'electron'
+import { resolveMainRuntime } from '../../core/runtime-accessor'
+import {
+  getSecureStoreValue,
+  isSecureStoreAvailable,
+  setSecureStoreValue
+} from '../../utils/secure-store'
 import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from '../network'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 
 const authLog = getLogger('auth')
 
-const SECURE_STORE_FILE = 'secure-store.json'
 const AUTH_TOKEN_KEY = 'auth.token'
 const MACHINE_SEED_SECURE_KEY = 'sync.machine-seed.v1'
 const MACHINE_CODE_VERSION = 'mc_v1'
@@ -202,72 +205,28 @@ function normalizeBearerToken(token: string): string {
   return trimmed.startsWith('Bearer ') ? trimmed : `Bearer ${trimmed}`
 }
 
-function resolveSecureStorePath(): string {
+async function getSecureValue(key: string): Promise<string | null> {
   if (!appRootPath) {
     throw new Error('[AuthModule] App root path is not ready')
   }
-  return path.join(appRootPath, 'config', SECURE_STORE_FILE)
-}
-
-async function readSecureStoreFile(): Promise<Record<string, string>> {
-  const storePath = resolveSecureStorePath()
-  try {
-    const raw = await fs.readFile(storePath, 'utf-8')
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    const store: Record<string, string> = {}
-    for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value === 'string') {
-        store[key] = value
-      }
-    }
-    return store
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
-      return {}
-    }
-    authLog.warn('Failed to read secure store file', { error })
-    return {}
-  }
-}
-
-async function writeSecureStoreFile(store: Record<string, string>): Promise<void> {
-  const storePath = resolveSecureStorePath()
-  await fs.mkdir(path.dirname(storePath), { recursive: true })
-  await fs.writeFile(storePath, JSON.stringify(store), 'utf-8')
-}
-
-async function getSecureValue(key: string): Promise<string | null> {
-  if (!safeStorage.isEncryptionAvailable()) {
+  if (!isSecureStoreAvailable()) {
     return null
   }
-  const store = await readSecureStoreFile()
-  const encrypted = store[key]
-  if (!encrypted) {
-    return null
-  }
-  try {
-    const buffer = Buffer.from(encrypted, 'base64')
-    return safeStorage.decryptString(buffer)
-  } catch (error) {
-    authLog.warn('Failed to decrypt secure value', { error })
-    return null
-  }
+  return await getSecureStoreValue(appRootPath, key, (message, error) => {
+    authLog.warn(message, { error })
+  })
 }
 
 async function setSecureValue(key: string, value: string | null): Promise<boolean> {
-  if (!safeStorage.isEncryptionAvailable()) {
+  if (!appRootPath) {
+    throw new Error('[AuthModule] App root path is not ready')
+  }
+  if (!isSecureStoreAvailable()) {
     return false
   }
-  const store = await readSecureStoreFile()
-  if (!value) {
-    delete store[key]
-    await writeSecureStoreFile(store)
-    return true
-  }
-  const encrypted = safeStorage.encryptString(value).toString('base64')
-  store[key] = encrypted
-  await writeSecureStoreFile(store)
-  return true
+  return await setSecureStoreValue(appRootPath, key, value, (message, error) => {
+    authLog.warn(message, { error })
+  })
 }
 
 function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): void {
@@ -289,7 +248,7 @@ async function loadAuthToken(): Promise<void> {
   }
 
   authToken = await getSecureValue(AUTH_TOKEN_KEY)
-  if (!safeStorage.isEncryptionAvailable()) {
+  if (!isSecureStoreAvailable()) {
     authLog.warn('Secure storage unavailable; auth token will only remain in memory')
   }
 }
@@ -872,16 +831,14 @@ export class AuthModule extends BaseModule<TalexEvents> {
     super(AuthModule.key)
   }
 
-  onInit({ app }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
-    appRootPath =
-      app?.rootPath ?? ($app as { rootPath?: string } | null | undefined)?.rootPath ?? ''
+  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
+    const runtime = resolveMainRuntime(ctx, 'AuthModule.onInit')
+    appRootPath = runtime.app?.rootPath ?? ''
     if (!appRootPath) {
       throw new Error('[AuthModule] App root path unavailable')
     }
 
-    const channel =
-      (app as { channel?: unknown } | null | undefined)?.channel ??
-      ($app as { channel?: unknown } | null | undefined)?.channel
+    const channel = runtime.channel
     if (!channel) {
       throw new Error('[AuthModule] TouchChannel not available on app context')
     }
