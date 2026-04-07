@@ -209,7 +209,7 @@ function generateEChartsConfig(data: any) {
       <el-row :gutter="16">
         <el-col :span="8">
           <div class="statistic-card">
-            <el-statistic :value="`${statistics.cost.total}$`">
+            <el-statistic :value="statistics.cost.total">
               <template #title>
                 <div style="display: inline-flex; align-items: center">
                   时间均度花销
@@ -219,6 +219,9 @@ function generateEChartsConfig(data: any) {
                     </el-icon>
                   </el-tooltip>
                 </div>
+              </template>
+              <template #suffix>
+                $
               </template>
             </el-statistic>
             <div class="statistic-footer">

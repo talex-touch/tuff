@@ -6,12 +6,22 @@ interface PilotMemoryPolicy {
   allowUserClear: boolean
 }
 
+export interface PilotMemoryFactItem {
+  key: string
+  value: string
+  createdAt: string
+  updatedAt: string
+}
+
 interface PilotMemorySettingsState {
   loaded: boolean
   loading: boolean
   submitting: boolean
   enabled: boolean
   policy: PilotMemoryPolicy
+  factsLoaded: boolean
+  factsLoading: boolean
+  facts: PilotMemoryFactItem[]
 }
 
 function normalizeBoolean(value: unknown, fallback: boolean): boolean {
@@ -45,6 +55,19 @@ function parseMemoryPayload(payload: any): {
   }
 }
 
+function parseMemoryFactsPayload(payload: any): PilotMemoryFactItem[] {
+  const data = payload?.data && typeof payload.data === 'object'
+    ? payload.data
+    : payload
+  const items = Array.isArray(data?.items) ? data.items : []
+  return items.map((item: any) => ({
+    key: String(item?.key || '').trim(),
+    value: String(item?.value || '').trim(),
+    createdAt: String(item?.createdAt || '').trim(),
+    updatedAt: String(item?.updatedAt || '').trim(),
+  })).filter((item: PilotMemoryFactItem) => item.value)
+}
+
 function resolveErrorMessage(error: unknown): string {
   if (!error || typeof error !== 'object') {
     return String(error || '')
@@ -67,6 +90,9 @@ export function usePilotMemorySettings() {
       allowUserDisable: true,
       allowUserClear: true,
     },
+    factsLoaded: false,
+    factsLoading: false,
+    facts: [],
   }))
 
   function applyPayload(payload: any) {
@@ -74,6 +100,11 @@ export function usePilotMemorySettings() {
     state.value.enabled = next.enabled
     state.value.policy = next.policy
     state.value.loaded = true
+  }
+
+  function applyFactsPayload(payload: any) {
+    state.value.facts = parseMemoryFactsPayload(payload)
+    state.value.factsLoaded = true
   }
 
   async function loadMemorySettings(force = false): Promise<void> {
@@ -91,6 +122,25 @@ export function usePilotMemorySettings() {
     }
     finally {
       state.value.loading = false
+    }
+  }
+
+  async function loadMemoryFacts(force = false): Promise<void> {
+    if (state.value.factsLoading || (state.value.factsLoaded && !force)) {
+      return
+    }
+
+    state.value.factsLoading = true
+    try {
+      const res: any = await endHttp.get('v1/chat/memory/facts')
+      applyFactsPayload(res)
+    }
+    catch {
+      state.value.facts = []
+      state.value.factsLoaded = true
+    }
+    finally {
+      state.value.factsLoading = false
     }
   }
 
@@ -132,6 +182,13 @@ export function usePilotMemorySettings() {
         throw new Error(String(res?.message || '设置记忆开关失败'))
       }
       applyPayload(res)
+      if (nextEnabled) {
+        await loadMemoryFacts(true)
+      }
+      else {
+        state.value.facts = []
+        state.value.factsLoaded = true
+      }
 
       if (toast) {
         ElMessage.success(nextEnabled ? '已开启上下文记忆' : '已关闭记忆并清空已存储内容')
@@ -139,7 +196,10 @@ export function usePilotMemorySettings() {
       return true
     }
     catch (error) {
-      await loadMemorySettings(true)
+      await Promise.all([
+        loadMemorySettings(true),
+        loadMemoryFacts(true),
+      ])
       if (toast) {
         ElMessage.error(resolveErrorMessage(error) || '更新记忆设置失败')
       }
@@ -154,6 +214,8 @@ export function usePilotMemorySettings() {
   const memoryPolicy = computed(() => state.value.policy)
   const loading = computed(() => state.value.loading)
   const submitting = computed(() => state.value.submitting)
+  const facts = computed(() => state.value.facts)
+  const factsLoading = computed(() => state.value.factsLoading)
   const toggleDisabled = computed(() => (
     state.value.loading || state.value.submitting || !state.value.policy.allowUserDisable
   ))
@@ -173,9 +235,12 @@ export function usePilotMemorySettings() {
     memoryPolicy,
     memoryLoading: loading,
     memorySubmitting: submitting,
+    memoryFacts: facts,
+    memoryFactsLoading: factsLoading,
     memoryToggleDisabled: toggleDisabled,
     memoryToggleDisabledTip: toggleDisabledTip,
     loadMemorySettings,
+    loadMemoryFacts,
     setMemoryEnabled,
   }
 }

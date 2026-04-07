@@ -15,18 +15,7 @@ const PROMPT_LIBRARY_SINGLETON_KEY = `storage:${PROMPT_LIBRARY_STORAGE_KEY}`
 
 const defaultPromptLibrary: PromptLibraryData = {
   version: 1,
-  customPrompts: [
-    {
-      id: 'custom_1',
-      name: '我的自定义提示词',
-      content: '这是一个自定义的提示词示例...',
-      builtin: false,
-      category: 'custom',
-      description: '用户自定义的提示词模板',
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    }
-  ]
+  customPrompts: []
 }
 
 function clonePrompts(prompts: PromptTemplate[]): PromptTemplate[] {

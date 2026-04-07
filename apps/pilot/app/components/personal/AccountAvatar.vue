@@ -1,9 +1,19 @@
 <script setup lang="ts">
+import type { ComputedRef } from 'vue'
 import { globalOptions } from '~/constants'
 
 const router = useRouter()
 
-const menus = reactive([
+type AccountMenuItem = {
+  icon?: string
+  label: string
+  show: boolean | ComputedRef<boolean>
+  click?: () => void | Promise<void>
+  divider?: boolean
+  danger?: boolean
+}
+
+const menus = reactive<AccountMenuItem[]>([
   {
     icon: 'i-carbon-user',
     label: '个人资料',
@@ -50,6 +60,11 @@ const menus = reactive([
 ])
 
 const appOptions: any = inject('appOptions')!
+
+function isMenuVisible(show: AccountMenuItem['show']) {
+  return unref(show)
+}
+
 const avatarUrl = computed(() => {
   const avatar = `${userStore.value.avatar}`
   if (!avatar)
@@ -99,7 +114,7 @@ const avatarUrl = computed(() => {
         <div class="only-pc-display AccountAvatar-Selections" style="display: flex; gap: 16px; flex-direction: column">
           <div
             v-for="item in menus" :key="item.label" v-wave :class="{ danger: item.danger, divider: item.divider }"
-            :style="`${item.show ? '' : 'display: none'}`" class="AccountAvatar-MenuItem" @click="item?.click"
+            :style="`${isMenuVisible(item.show) ? '' : 'display: none'}`" class="AccountAvatar-MenuItem" @click="item.click?.()"
           >
             <div v-if="item.icon" :class="item.icon" />
             {{ item.label }}

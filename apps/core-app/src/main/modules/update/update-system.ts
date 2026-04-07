@@ -30,6 +30,7 @@ import { and, eq } from 'drizzle-orm'
 import { app, shell } from 'electron'
 import fse from 'fs-extra'
 import { downloadTasks } from '../../db/schema'
+import { resolveUpdateAssetTarget } from '../../../shared/update/platform-target'
 import { SignatureVerifier } from '../../utils/release-signature'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { databaseModule } from '../database'
@@ -1309,11 +1310,18 @@ export class UpdateSystem {
         continue
       }
 
-      if (!this.matchesPlatform(normalizedName, platform)) {
-        continue
-      }
-
-      if (!this.matchesArch(normalizedName, arch)) {
+      const target = resolveUpdateAssetTarget(
+        name,
+        {
+          platform: asset.platform,
+          arch: asset.arch
+        },
+        {
+          platform,
+          arch
+        }
+      )
+      if (!target || target.platform !== platform) {
         continue
       }
 
@@ -1335,8 +1343,8 @@ export class UpdateSystem {
         name: asset.name,
         url: downloadUrl,
         size: asset.size,
-        platform,
-        arch,
+        platform: target.platform,
+        arch: target.arch,
         checksum,
         signatureUrl,
         signatureKeyUrl,
@@ -1346,7 +1354,7 @@ export class UpdateSystem {
 
       candidates.push({
         asset: candidate,
-        score: this.calculateAssetScore(normalizedName, asset, platform)
+        score: target.priority * 1000 + this.calculateAssetScore(normalizedName, asset, platform)
       })
     }
 
@@ -1362,33 +1370,6 @@ export class UpdateSystem {
     })
 
     return candidates[0].asset
-  }
-
-  private matchesPlatform(filename: string, platform: string): boolean {
-    const platformTokensMap: Record<string, string[]> = {
-      darwin: ['darwin', 'macos', 'mac', 'osx'],
-      win32: ['win32', 'windows', 'win'],
-      linux: ['linux', 'ubuntu', 'debian']
-    }
-
-    const tokens = platformTokensMap[platform] || [platform]
-    return tokens.some((token) => filename.includes(token))
-  }
-
-  private matchesArch(filename: string, arch: 'x64' | 'arm64'): boolean {
-    const hasArm64Token = filename.includes('arm64') || filename.includes('aarch64')
-    const hasX64Token =
-      filename.includes('x64') || filename.includes('amd64') || filename.includes('x86_64')
-
-    if (!hasArm64Token && !hasX64Token) {
-      return true
-    }
-
-    if (arch === 'arm64') {
-      return hasArm64Token
-    }
-
-    return hasX64Token && !hasArm64Token
   }
 
   private calculateAssetScore(filename: string, asset: ReleaseAsset, platform: string): number {

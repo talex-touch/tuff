@@ -73,8 +73,8 @@ async function fetchData() {
   formLoading.value = false
 }
 
-function formatDate(date: string) {
-  return dayjs(date).format('YYYY-MM-DD HH:mm:ss')
+function formatDate(date: unknown) {
+  return dayjs(String(date || '')).format('YYYY-MM-DD HH:mm:ss')
 }
 
 const dialogOptions = reactive<{

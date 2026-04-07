@@ -1,4 +1,4 @@
-import { shouldHidePilotClientRuntimeEvent, shouldHidePilotClientSystemMessage } from './pilot-runtime-redaction'
+import { normalizePilotStreamSeq } from './trace'
 
 export type PilotSystemContextPolicy = 'allow' | 'deny'
 
@@ -43,7 +43,7 @@ export interface PilotProjectedSystemMessage {
   metadata: PilotSystemMessageMetadata
 }
 
-export interface PilotTraceLike {
+export interface PilotTraceProjectionInput {
   seq?: number
   type?: string
   payload?: Record<string, unknown>
@@ -57,7 +57,7 @@ export interface PilotSystemMessageLike {
   content?: string
   createdAt?: string
   created_at?: string
-  metadata?: Record<string, unknown>
+  metadata?: PilotSystemMessageMetadata | Record<string, unknown>
 }
 
 export interface PilotSystemMessageRecord {
@@ -91,15 +91,18 @@ export interface PilotDerivedToolCall {
   updatedAt: string
 }
 
-interface SnapshotCardBlock {
-  type: 'card'
-  name: 'pilot_run_event_card' | 'pilot_tool_card'
-  value: ''
-  data: string
-}
+const HIDDEN_CLIENT_EVENT_TYPES = new Set([
+  'routing.selected',
+])
+
+const HIDDEN_CLIENT_CARD_TYPES = new Set([
+  'routing',
+  'runtime',
+])
 
 const TOOL_TERMINAL_STATUSES = new Set(['completed', 'failed', 'rejected'])
 const HIDDEN_WEBSEARCH_CARD_REASONS = new Set(['intent_not_required'])
+
 export const PILOT_WEBSEARCH_CARD_TITLE = '联网检索'
 
 function toRecord(value: unknown): Record<string, unknown> {
@@ -113,25 +116,8 @@ function normalizeText(value: unknown): string {
   return String(value || '').trim()
 }
 
-export function buildPilotWebsearchCardKey(turnId: unknown): string {
-  const turn = normalizeText(turnId) || 'latest'
-  return `websearch:${turn}`
-}
-
 function normalizeSeq(value: unknown): number {
-  const parsed = Number(value)
-  if (Number.isFinite(parsed) && parsed > 0) {
-    return Math.max(1, Math.floor(parsed))
-  }
-  return 0
-}
-
-function normalizeCardStatus(value: unknown): string {
-  const status = normalizeText(value).toLowerCase()
-  if (!status) {
-    return 'completed'
-  }
-  return status
+  return normalizePilotStreamSeq(value)
 }
 
 function normalizeToolRiskLevel(value: unknown): PilotDerivedToolCall['riskLevel'] {
@@ -218,6 +204,29 @@ function isToolTerminalStatus(auditType: string, status: string): boolean {
     || auditType === 'tool.call.rejected'
 }
 
+export function shouldHidePilotClientRuntimeEvent(type: unknown): boolean {
+  return HIDDEN_CLIENT_EVENT_TYPES.has(normalizeText(type).toLowerCase())
+}
+
+export function shouldHidePilotClientSystemMessage(metadata: unknown): boolean {
+  const record = toRecord(metadata)
+  const cardType = normalizeText(record.cardType).toLowerCase()
+  const sourceEventType = normalizeText(record.sourceEventType || record.eventType).toLowerCase()
+  const status = normalizeText(record.status).toLowerCase()
+  if (cardType && HIDDEN_CLIENT_CARD_TYPES.has(cardType)) {
+    return true
+  }
+  if (cardType === 'memory' && (sourceEventType === 'memory.context' || status === 'skipped')) {
+    return true
+  }
+  return shouldHidePilotClientRuntimeEvent(sourceEventType)
+}
+
+export function buildPilotWebsearchCardKey(turnId: unknown): string {
+  const turn = normalizeText(turnId) || 'latest'
+  return `websearch:${turn}`
+}
+
 export function normalizePilotWebsearchReason(value: unknown): string {
   const reason = normalizeText(value)
   if (!reason) {
@@ -295,7 +304,7 @@ function buildSystemPolicyProjection(input: PilotSystemProjectionInput): PilotPr
   const turnId = resolveTurnId(input)
   const seq = normalizeSeq(input.seq)
 
-  if (shouldHidePilotClientRuntimeEvent(sourceEventType)) {
+  if (!sourceEventType || shouldHidePilotClientRuntimeEvent(sourceEventType) || seq <= 0) {
     return null
   }
 
@@ -308,7 +317,7 @@ function buildSystemPolicyProjection(input: PilotSystemProjectionInput): PilotPr
       metadata: {
         eventType: 'system.policy',
         sourceEventType,
-        seq: seq || undefined,
+        seq,
         turnId: turnId || undefined,
         cardType: 'routing',
         cardKey: buildEventCardKey('routing', sourceEventType, turnId),
@@ -331,7 +340,7 @@ function buildSystemPolicyProjection(input: PilotSystemProjectionInput): PilotPr
       metadata: {
         eventType: 'system.policy',
         sourceEventType,
-        seq: seq || undefined,
+        seq,
         turnId: turnId || undefined,
         cardType: 'memory',
         cardKey: buildEventCardKey('memory', sourceEventType, turnId),
@@ -360,7 +369,7 @@ function buildSystemPolicyProjection(input: PilotSystemProjectionInput): PilotPr
       metadata: {
         eventType: 'system.policy',
         sourceEventType,
-        seq: seq || undefined,
+        seq,
         turnId: turnId || undefined,
         cardType: 'websearch',
         cardKey: buildEventCardKey('websearch', sourceEventType, turnId),
@@ -381,6 +390,9 @@ function buildProgressProjection(input: PilotSystemProjectionInput): PilotProjec
   const sourceEventType = normalizeText(input.type)
   const turnId = resolveTurnId(input)
   const seq = normalizeSeq(input.seq)
+  if (!sourceEventType || seq <= 0) {
+    return null
+  }
 
   if (sourceEventType === 'planning.started') {
     const summary = '正在规划执行步骤'
@@ -389,7 +401,7 @@ function buildProgressProjection(input: PilotSystemProjectionInput): PilotProjec
       metadata: {
         eventType: sourceEventType,
         sourceEventType,
-        seq: seq || undefined,
+        seq,
         turnId: turnId || undefined,
         cardType: 'planning',
         cardKey: buildEventCardKey('planning', sourceEventType, turnId),
@@ -410,7 +422,7 @@ function buildProgressProjection(input: PilotSystemProjectionInput): PilotProjec
       metadata: {
         eventType: sourceEventType,
         sourceEventType,
-        seq: seq || undefined,
+        seq,
         turnId: turnId || undefined,
         cardType: 'planning',
         cardKey: buildEventCardKey('planning', sourceEventType, turnId),
@@ -433,7 +445,7 @@ function buildProgressProjection(input: PilotSystemProjectionInput): PilotProjec
       metadata: {
         eventType: sourceEventType,
         sourceEventType,
-        seq: seq || undefined,
+        seq,
         turnId: turnId || undefined,
         cardType: 'planning',
         cardKey: buildEventCardKey('planning', sourceEventType, turnId),
@@ -453,7 +465,7 @@ function buildProgressProjection(input: PilotSystemProjectionInput): PilotProjec
       metadata: {
         eventType: sourceEventType,
         sourceEventType,
-        seq: seq || undefined,
+        seq,
         turnId: turnId || undefined,
         cardType: 'intent',
         cardKey: buildEventCardKey('intent', sourceEventType, turnId),
@@ -475,7 +487,7 @@ function buildProgressProjection(input: PilotSystemProjectionInput): PilotProjec
       metadata: {
         eventType: sourceEventType,
         sourceEventType,
-        seq: seq || undefined,
+        seq,
         turnId: turnId || undefined,
         cardType: 'intent',
         cardKey: buildEventCardKey('intent', sourceEventType, turnId),
@@ -491,21 +503,22 @@ function buildProgressProjection(input: PilotSystemProjectionInput): PilotProjec
   if (sourceEventType === 'memory.updated') {
     const addedCount = Number(payload.addedCount)
     const stored = payload.stored === true
-    const summary = stored
-      ? (Number.isFinite(addedCount) && addedCount > 0
-          ? `已沉淀 ${Math.floor(addedCount)} 条记忆`
-          : '已沉淀记忆')
-      : `记忆未更新 (${normalizeText(payload.reason) || '-'})`
+    if (!stored) {
+      return null
+    }
+    const summary = Number.isFinite(addedCount) && addedCount > 0
+      ? `已沉淀 ${Math.floor(addedCount)} 条记忆`
+      : '已沉淀记忆'
     return {
       content: summary,
       metadata: {
         eventType: sourceEventType,
         sourceEventType,
-        seq: seq || undefined,
+        seq,
         turnId: turnId || undefined,
         cardType: 'memory',
         cardKey: buildEventCardKey('memory', sourceEventType, turnId),
-        status: stored ? 'completed' : 'skipped',
+        status: 'completed',
         title: resolveCardTitle('memory'),
         summary,
         contextPolicy: 'deny',
@@ -523,7 +536,7 @@ function buildProgressProjection(input: PilotSystemProjectionInput): PilotProjec
       metadata: {
         eventType: sourceEventType,
         sourceEventType,
-        seq: seq || undefined,
+        seq,
         turnId: turnId || undefined,
         cardType: 'websearch',
         cardKey: buildEventCardKey('websearch', sourceEventType, turnId),
@@ -546,7 +559,7 @@ function buildProgressProjection(input: PilotSystemProjectionInput): PilotProjec
       metadata: {
         eventType: sourceEventType,
         sourceEventType,
-        seq: seq || undefined,
+        seq,
         turnId: turnId || undefined,
         cardType: 'websearch',
         cardKey: buildEventCardKey('websearch', sourceEventType, turnId),
@@ -565,14 +578,15 @@ function buildProgressProjection(input: PilotSystemProjectionInput): PilotProjec
 function buildToolAuditProjection(input: PilotSystemProjectionInput): PilotProjectedSystemMessage | null {
   const payload = toRecord(input.payload)
   const sourceEventType = normalizeText(input.type)
-  if (sourceEventType !== 'run.audit') {
+  const seq = normalizeSeq(input.seq)
+  if (sourceEventType !== 'run.audit' || seq <= 0) {
     return null
   }
-  const seq = normalizeSeq(input.seq)
+
   const turnId = resolveTurnId(input)
   const detail = toRecord(payload)
   const auditType = normalizeText(detail.auditType || detail.audit_type)
-  if (!auditType) {
+  if (!auditType || !auditType.startsWith('tool.call.')) {
     return null
   }
 
@@ -600,7 +614,7 @@ function buildToolAuditProjection(input: PilotSystemProjectionInput): PilotProje
     metadata: {
       eventType: terminal ? 'tool.summary' : 'run.audit',
       sourceEventType,
-      seq: seq || undefined,
+      seq,
       turnId: turnId || undefined,
       cardType: auditType.startsWith('tool.call.') ? 'tool' : 'runtime',
       cardKey,
@@ -657,7 +671,7 @@ export function buildPilotSystemMessageId(sessionId: string, seq: number, source
 
 export function projectPilotSystemMessagesFromTraces(input: {
   sessionId: string
-  traces: PilotTraceLike[]
+  traces: PilotTraceProjectionInput[]
 }): PilotSystemMessageRecord[] {
   const sessionId = normalizeText(input.sessionId)
   if (!sessionId || !Array.isArray(input.traces) || input.traces.length <= 0) {
@@ -677,6 +691,9 @@ export function projectPilotSystemMessagesFromTraces(input: {
       payload: toRecord(trace.payload),
     })
     if (!mapped) {
+      continue
+    }
+    if (shouldHidePilotClientSystemMessage(mapped.metadata)) {
       continue
     }
     const createdAt = normalizeText(trace.createdAt || trace.created_at) || new Date().toISOString()
@@ -725,6 +742,9 @@ export function derivePilotToolCallsFromSystemMessages(
     const ticketId = normalizeText(metadata.ticketId || detail.ticketId || detail.ticket_id)
     const key = callId || ticketId || `${toolName}:${toolId}`
     const seq = normalizeSeq(metadata.seq)
+    if (seq <= 0) {
+      continue
+    }
     const updatedAt = normalizeText(item.createdAt || item.created_at) || new Date().toISOString()
     const next: PilotDerivedToolCall & { seq: number } = {
       callId: callId || `tool_${toolName}`,
@@ -763,121 +783,4 @@ export function derivePilotToolCallsFromSystemMessages(
       const { seq: _seq, ...rest } = item
       return rest
     })
-}
-
-export function buildPilotCardBlocksFromSystemMessages(
-  messages: PilotSystemMessageLike[],
-  maxCardBlocks = 48,
-): SnapshotCardBlock[] {
-  if (!Array.isArray(messages) || messages.length <= 0) {
-    return []
-  }
-
-  const runMap = new Map<string, { seq: number, data: Record<string, unknown> }>()
-  const toolMap = new Map<string, { seq: number, data: Record<string, unknown> }>()
-
-  for (const item of messages) {
-    if (normalizeText(item.role).toLowerCase() !== 'system') {
-      continue
-    }
-    const metadata = toRecord(item.metadata)
-    if (shouldHidePilotClientSystemMessage(metadata)) {
-      continue
-    }
-    const detail = toRecord(metadata.detail)
-    const cardType = normalizeText(metadata.cardType).toLowerCase()
-    const seq = normalizeSeq(metadata.seq)
-    if (!cardType || !seq) {
-      continue
-    }
-
-    if (cardType === 'tool') {
-      const callId = normalizeText(metadata.callId || detail.callId || detail.call_id)
-      const ticketId = normalizeText(metadata.ticketId || detail.ticketId || detail.ticket_id)
-      const toolName = normalizeText(metadata.toolName || detail.toolName || detail.tool_name) || 'tool'
-      const toolId = normalizeText(metadata.toolId || detail.toolId || detail.tool_id)
-      const key = normalizeText(metadata.cardKey) || callId || ticketId || `${toolName}:${toolId || 'unknown'}`
-      const payload = {
-        ...detail,
-        seq,
-        auditType: normalizeText(metadata.auditType || detail.auditType || detail.audit_type),
-        callId: callId || undefined,
-        call_id: callId || undefined,
-        toolId: toolId || undefined,
-        tool_id: toolId || undefined,
-        toolName,
-        tool_name: toolName,
-        ticketId: ticketId || undefined,
-        ticket_id: ticketId || undefined,
-        status: normalizeToolStatus(metadata.status || detail.status),
-        riskLevel: normalizeToolRiskLevel(metadata.riskLevel || detail.riskLevel || detail.risk_level),
-        risk_level: normalizeToolRiskLevel(metadata.riskLevel || detail.riskLevel || detail.risk_level),
-        inputPreview: normalizeText(metadata.inputPreview || detail.inputPreview || detail.input_preview),
-        input_preview: normalizeText(metadata.inputPreview || detail.inputPreview || detail.input_preview),
-        outputPreview: normalizeText(metadata.outputPreview || detail.outputPreview || detail.output_preview),
-        output_preview: normalizeText(metadata.outputPreview || detail.outputPreview || detail.output_preview),
-        durationMs: Number.isFinite(Number(metadata.durationMs ?? detail.durationMs ?? detail.duration_ms))
-          ? Math.max(0, Number(metadata.durationMs ?? detail.durationMs ?? detail.duration_ms))
-          : 0,
-        duration_ms: Number.isFinite(Number(metadata.durationMs ?? detail.durationMs ?? detail.duration_ms))
-          ? Math.max(0, Number(metadata.durationMs ?? detail.durationMs ?? detail.duration_ms))
-          : 0,
-        sources: normalizeToolSources(metadata.sources || detail.sources),
-        errorCode: normalizeText(metadata.errorCode || detail.errorCode || detail.error_code || detail.code),
-        error_code: normalizeText(metadata.errorCode || detail.errorCode || detail.error_code || detail.code),
-        errorMessage: normalizeText(metadata.errorMessage || detail.errorMessage || detail.error_message || detail.message),
-        error_message: normalizeText(metadata.errorMessage || detail.errorMessage || detail.error_message || detail.message),
-      }
-      const previous = toolMap.get(key)
-      if (!previous || seq >= previous.seq) {
-        toolMap.set(key, {
-          seq,
-          data: payload,
-        })
-      }
-      continue
-    }
-
-    const key = normalizeText(metadata.cardKey) || buildEventCardKey(cardType, normalizeText(metadata.sourceEventType), normalizeText(metadata.turnId))
-    const payload = {
-      seq,
-      turnId: normalizeText(metadata.turnId) || undefined,
-      cardType,
-      eventType: normalizeText(metadata.sourceEventType || metadata.eventType),
-      status: normalizeCardStatus(metadata.status),
-      title: normalizeText(metadata.title) || resolveCardTitle(cardType),
-      summary: normalizeText(metadata.summary || item.content),
-      content: normalizeText(detail.text || detail.content || ''),
-      detail,
-    }
-    const previous = runMap.get(key)
-    if (!previous || seq >= previous.seq) {
-      runMap.set(key, {
-        seq,
-        data: payload,
-      })
-    }
-  }
-
-  const runCards: SnapshotCardBlock[] = Array.from(runMap.values())
-    .sort((left, right) => left.seq - right.seq)
-    .slice(-Math.max(1, Math.floor(maxCardBlocks)))
-    .map(item => ({
-      type: 'card',
-      name: 'pilot_run_event_card',
-      value: '',
-      data: JSON.stringify(item.data),
-    }))
-
-  const toolCards: SnapshotCardBlock[] = Array.from(toolMap.values())
-    .sort((left, right) => left.seq - right.seq)
-    .slice(-Math.max(1, Math.floor(maxCardBlocks)))
-    .map(item => ({
-      type: 'card',
-      name: 'pilot_tool_card',
-      value: '',
-      data: JSON.stringify(item.data),
-    }))
-
-  return [...runCards, ...toolCards]
 }

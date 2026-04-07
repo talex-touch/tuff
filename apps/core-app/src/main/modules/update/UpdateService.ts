@@ -27,7 +27,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import { app, Notification } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { TalexEvents, touchEventBus, UpdateAvailableEvent } from '../../core/eventbus/touch-event'
-import { resolveRuntimeChannel } from '../../core/deprecated-global-app'
+import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { downloadChunks, downloadTasks } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
@@ -228,14 +228,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       updateLog.warn('Failed to initialize UpdateRepository', { error })
     }
 
-    const channel = resolveRuntimeChannel(
-      ctx.runtime?.channel,
-      (ctx.app as { channel?: unknown } | null | undefined)?.channel,
-      'UpdateService.onInit'
-    )
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    this.transport = getTuffTransportMain(channel, keyManager)
+    const runtime = resolveMainRuntime(ctx, 'UpdateService.onInit')
+    this.transport = runtime.transport
     this.registerTransportHandlers()
 
     // Load settings

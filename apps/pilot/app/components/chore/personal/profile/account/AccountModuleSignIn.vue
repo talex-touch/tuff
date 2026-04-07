@@ -11,6 +11,18 @@ const month = ref(new Date())
 
 // :range="[new Date(2019, 2, 4), new Date(2019, 2, 24)]"
 const signList = computed(() => (props.data?.data || '').split(''))
+
+function getSignListIndex(day: string) {
+  return Math.max(Number(day.split('-')[2]) - 1, 0)
+}
+
+function isSigned(day: string) {
+  return signList.value?.[getSignListIndex(day)] === '1'
+}
+
+function isCurrentMonth(type: string) {
+  return type === 'current-month' || type === 'today'
+}
 </script>
 
 <template>
@@ -30,7 +42,7 @@ const signList = computed(() => (props.data?.data || '').split(''))
           <span>{{ date }}</span>
         </template>
         <template #date-cell="{ data }">
-          <p :class="{ signed: signList?.[data.day.split('-')[2] - 1] === '1', active: data.isActive }">
+          <p :class="{ signed: isSigned(data.day), active: isCurrentMonth(data.type) }">
             {{ data.day.split('-').slice(1).join('-') }}
 
             <br>

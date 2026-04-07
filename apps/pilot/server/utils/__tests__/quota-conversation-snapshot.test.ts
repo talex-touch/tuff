@@ -1,3 +1,4 @@
+import { projectPilotSystemMessage } from '@talex-touch/tuff-intelligence/pilot'
 import { describe, expect, it } from 'vitest'
 import { buildQuotaConversationSnapshot } from '../quota-conversation-snapshot'
 
@@ -104,6 +105,85 @@ describe('quota-conversation-snapshot', () => {
     expect(runCards.some((item: Record<string, unknown>) => item.eventType === 'routing.selected')).toBe(false)
   })
 
+  it('有 runtime traces 时应以 traces 为准并清理旧 runtime/tool 脏卡', () => {
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-trace-first',
+      messages: [
+        { role: 'user', content: 'hello' },
+        { role: 'assistant', content: 'world' },
+        {
+          role: 'system',
+          content: '工具调用：tool · 200',
+          metadata: {
+            eventType: 'run.audit',
+            sourceEventType: 'run.audit',
+            seq: 9,
+            cardType: 'runtime',
+            cardKey: 'tool:unknown',
+            status: '200',
+            title: '工具调用',
+            summary: 'tool · 200',
+            detail: {
+              auditType: 'attachment.resolve.end',
+              status: '200',
+            },
+          },
+        },
+      ],
+      runtimeTraces: [
+        { seq: 10, type: 'turn.started', payload: {} },
+        { seq: 11, type: 'intent.completed', payload: { intentType: 'code_analysis', confidence: 0.92 } },
+      ],
+      assistantReply: '',
+      topicHint: 'trace first',
+    })
+
+    const runCards = extractCardsByName(snapshot, 'pilot_run_event_card')
+      .map((item: any) => JSON.parse(String(item.data || '{}')))
+    const toolCards = extractCardsByName(snapshot, 'pilot_tool_card')
+
+    expect(toolCards).toHaveLength(0)
+    expect(runCards.some((item: Record<string, unknown>) => item.cardType === 'runtime')).toBe(false)
+    expect(runCards.some((item: Record<string, unknown>) => item.cardType === 'intent')).toBe(true)
+  })
+
+  it('trace 已存在但无可见卡时也应清掉旧脏卡而不是回退到 message cards', () => {
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-trace-clears-stale',
+      messages: [
+        { role: 'user', content: 'hello' },
+        { role: 'assistant', content: 'world' },
+        {
+          role: 'system',
+          content: '工具调用：tool · 200',
+          metadata: {
+            eventType: 'run.audit',
+            sourceEventType: 'run.audit',
+            seq: 8,
+            cardType: 'runtime',
+            cardKey: 'tool:unknown',
+            status: '200',
+            title: '工具调用',
+            summary: 'tool · 200',
+            detail: {
+              auditType: 'attachment.resolve.end',
+              status: '200',
+            },
+          },
+        },
+      ],
+      runtimeTraces: [
+        { seq: 9, type: 'turn.started', payload: {} },
+        { seq: 10, type: 'routing.selected', payload: { channelId: 'route-a' } },
+      ],
+      assistantReply: '',
+      topicHint: 'clear stale',
+    })
+
+    expect(extractCardsByName(snapshot, 'pilot_run_event_card')).toHaveLength(0)
+    expect(extractCardsByName(snapshot, 'pilot_tool_card')).toHaveLength(0)
+  })
+
   it('基于 runtime traces 重建并注入 pilot_run_event_card / pilot_tool_card（仅最新 turn）', () => {
     const snapshot = buildQuotaConversationSnapshot({
       chatId: 'chat-1',
@@ -176,6 +256,69 @@ describe('quota-conversation-snapshot', () => {
 
     const blocks = extractAssistantBlocks(snapshot)
     expect(blocks.some((item: any) => item?.type === 'card' && item?.name === 'pilot_run_event_card')).toBe(true)
+  })
+
+  it('snapshot merge 后运行卡不会固定落在 assistant markdown 后面', () => {
+    const intent = projectPilotSystemMessage({
+      type: 'intent.started',
+      seq: 2,
+      payload: {
+        messageChars: 16,
+      },
+    })
+    const planningUpdated = projectPilotSystemMessage({
+      type: 'planning.updated',
+      seq: 3,
+      payload: {
+        todos: ['分析问题', '拆解步骤'],
+      },
+    })
+    const planningFinished = projectPilotSystemMessage({
+      type: 'planning.finished',
+      seq: 4,
+      payload: {
+        todoCount: 2,
+      },
+    })
+
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-snapshot-order',
+      messages: [
+        { role: 'user', content: '请帮我规划一下这个任务' },
+        {
+          role: 'system',
+          content: intent?.content || '',
+          metadata: intent?.metadata || {},
+        },
+        {
+          role: 'system',
+          content: planningUpdated?.content || '',
+          metadata: planningUpdated?.metadata || {},
+        },
+        {
+          role: 'system',
+          content: planningFinished?.content || '',
+          metadata: planningFinished?.metadata || {},
+        },
+        { role: 'assistant', content: '这是最终回答。' },
+      ],
+      runtimeTraces: [
+        { seq: 1, type: 'turn.started', payload: {} },
+      ],
+      assistantReply: '',
+      topicHint: 'snapshot order',
+    })
+
+    const blocks = extractAssistantBlocks(snapshot)
+    const labels = blocks.map((item: any) => {
+      if (item?.type !== 'card') {
+        return item?.type
+      }
+      const payload = JSON.parse(String(item.data || '{}')) as Record<string, unknown>
+      return payload.cardType
+    })
+
+    expect(labels.slice(0, 3)).toEqual(['intent', 'planning', 'markdown'])
   })
 
   it('thinking.delta / thinking.final 会重建 thinking 卡并完成状态迁移', () => {
@@ -265,6 +408,75 @@ describe('quota-conversation-snapshot', () => {
     expect(websearchCards).toHaveLength(1)
     expect(websearchCards[0]?.eventType).toBe('websearch.executed')
     expect(websearchCards[0]?.status).toBe('completed')
+  })
+
+  it('memory.updated 带新增 facts 时应保留可展开明细', () => {
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-memory-facts',
+      messages: [
+        { role: 'user', content: '记住我是男的。' },
+      ],
+      runtimeTraces: [
+        { seq: 1, type: 'turn.started', payload: {} },
+        {
+          seq: 2,
+          type: 'memory.updated',
+          payload: {
+            turnId: 'turn-memory-1',
+            stored: true,
+            addedCount: 1,
+            reason: 'stored',
+            facts: [
+              { key: 'profile_gender', value: '你是男的。' },
+            ],
+          },
+        },
+      ],
+      assistantReply: '',
+      topicHint: 'memory facts',
+    })
+
+    const runCards = extractCardsByName(snapshot, 'pilot_run_event_card')
+      .map((item: any) => JSON.parse(String(item.data || '{}')))
+    const memoryCard = runCards.find((item: Record<string, unknown>) => item.cardType === 'memory')
+
+    expect(memoryCard).toBeTruthy()
+    expect(memoryCard?.summary).toBe('已沉淀 1 条记忆')
+    expect(memoryCard?.detail).toEqual(expect.objectContaining({
+      facts: [
+        { key: 'profile_gender', value: '你是男的。' },
+      ],
+    }))
+  })
+
+  it('stored=false 的 memory.updated 不应重建 memory 卡', () => {
+    const snapshot = buildQuotaConversationSnapshot({
+      chatId: 'chat-memory-skipped',
+      messages: [
+        { role: 'user', content: '这是一句临时需求。' },
+      ],
+      runtimeTraces: [
+        { seq: 1, type: 'turn.started', payload: {} },
+        {
+          seq: 2,
+          type: 'memory.updated',
+          payload: {
+            turnId: 'turn-memory-2',
+            stored: false,
+            addedCount: 0,
+            reason: 'no_fact_extracted',
+            facts: [],
+          },
+        },
+      ],
+      assistantReply: '',
+      topicHint: 'memory skipped',
+    })
+
+    const runCards = extractCardsByName(snapshot, 'pilot_run_event_card')
+      .map((item: any) => JSON.parse(String(item.data || '{}')))
+
+    expect(runCards.some((item: Record<string, unknown>) => item.cardType === 'memory')).toBe(false)
   })
 
   it('run.audit 乱序/空来源场景下工具卡不回退且保留已有 sources', () => {

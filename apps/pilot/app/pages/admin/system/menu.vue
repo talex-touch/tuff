@@ -410,7 +410,7 @@ const menuWithRoot = computed(() => ([{ id: -1, name: '根目录', children: [..
           <el-form-item label="上级节点" prop="parentId">
             <el-tree-select
               v-model="dialogOptions.data.parentId" default-expand-all
-              :props="{ label: 'name', value: 'id' }" :data="menuWithRoot" check-strictly :render-after-expand="false"
+              value-key="id" :props="{ label: 'name' }" :data="menuWithRoot" check-strictly :render-after-expand="false"
               placeholder="请选择上级节点..."
             />
           </el-form-item>

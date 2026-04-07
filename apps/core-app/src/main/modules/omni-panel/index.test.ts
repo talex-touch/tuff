@@ -290,8 +290,8 @@ describe('OmniPanelModule auto-mount', () => {
   })
 })
 
-describe('OmniPanelModule legacy transport', () => {
-  it('legacy feature toggle warns once and keeps bridging to toggleFeature', async () => {
+describe('OmniPanelModule hard-cut transport', () => {
+  it('does not register legacy feature toggle handler', async () => {
     const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
     getTuffTransportMainMock.mockReturnValue({
       on: vi.fn(
@@ -307,32 +307,11 @@ describe('OmniPanelModule legacy transport', () => {
 
     const module = new OmniPanelModule() as unknown as {
       onInit: (ctx: unknown) => Promise<void>
-      toggleFeature: ReturnType<typeof vi.fn>
-      legacyUsageCounts: Map<string, number>
     }
-    module.toggleFeature = vi.fn()
 
     await module.onInit({} as never)
 
-    const handler = handlers.get(omniPanelFeatureToggleEvent.toEventName())
-    expect(handler).toBeTypeOf('function')
-
-    await handler?.({ id: 'demo', enabled: true })
-    await handler?.({ id: 'demo', enabled: false })
-
-    expect(module.toggleFeature).toHaveBeenCalledTimes(2)
-    expect(module.toggleFeature).toHaveBeenNthCalledWith(
-      1,
-      { id: 'demo', enabled: true },
-      'legacy-toggle'
-    )
-    expect(module.toggleFeature).toHaveBeenNthCalledWith(
-      2,
-      { id: 'demo', enabled: false },
-      'legacy-toggle'
-    )
-    expect(loggerWarnMock).toHaveBeenCalledTimes(1)
-    expect(module.legacyUsageCounts.get(omniPanelFeatureToggleEvent.toEventName())).toBe(2)
+    expect(handlers.has(omniPanelFeatureToggleEvent.toEventName())).toBe(false)
   })
 })
 

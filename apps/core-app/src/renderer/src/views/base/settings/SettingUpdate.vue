@@ -16,7 +16,7 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAppState } from '~/modules/hooks/useAppStates'
-import { useApplicationUpgrade } from '~/modules/hooks/useUpdate'
+import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
 import { GithubUpdateProvider } from '~/modules/update/GithubUpdateProvider'
 
 const { t } = useI18n()
@@ -32,7 +32,7 @@ const {
   updateSettings,
   getUpdateStatus,
   getCachedRelease
-} = useApplicationUpgrade()
+} = useUpdateRuntime()
 
 const settings = ref<UpdateSettings | null>(null)
 const selectedChannel = ref<AppPreviewChannel>(AppPreviewChannel.RELEASE)

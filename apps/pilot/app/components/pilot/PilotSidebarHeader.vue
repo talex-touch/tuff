@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// Experimental workspace-only UI. The production homepage keeps the legacy chat surface.
 import coreAppLogoUrl from '../../../../core-app/public/logo.svg?url'
 
 interface PilotSidebarHeaderProps {

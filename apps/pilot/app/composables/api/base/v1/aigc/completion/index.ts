@@ -1,8 +1,22 @@
 import type { IInnerItemType } from './entity'
 import type { IChatBody, IChatConversation, IChatInnerItem, IChatItem, ICompletionHandler, IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
+import {
+  isPilotRuntimeCardEventType,
+  normalizePilotStreamSeq,
+  normalizePilotWebsearchReason,
+  PILOT_WEBSEARCH_CARD_TITLE,
+  projectPilotLegacyRunEventCard,
+  resolvePilotLegacyRunEventCardKeys,
+} from '@talex-touch/tuff-intelligence/pilot'
 import { endHttp } from '~/composables/api/axios'
 import { IChatItemStatus, IChatRole, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
+import {
+  buildLegacyCompletionExecutorBody,
+  buildLegacyCompletionStreamRequestPayload,
+  shouldDropLegacyCompletionStreamEvent,
+} from './legacy-stream-contract'
 import { resolveLegacyUiStreamInput } from './legacy-stream-input'
+import { handleLegacyCompletionExecutorResult } from './legacy-stream-sse'
 
 function parseJsonSafe<T>(value: string): T | null {
   try {
@@ -11,47 +25,6 @@ function parseJsonSafe<T>(value: string): T | null {
   catch {
     return null
   }
-}
-
-const PILOT_WEBSEARCH_CARD_TITLE = '联网检索'
-const HIDDEN_WEBSEARCH_CARD_REASONS = new Set(['intent_not_required'])
-
-function buildPilotWebsearchCardKey(turnId: unknown): string {
-  const turn = String(turnId || '').trim() || 'latest'
-  return `websearch:${turn}`
-}
-
-function normalizePilotWebsearchReason(value: unknown): string {
-  const reason = String(value || '').trim()
-  if (!reason) {
-    return ''
-  }
-  if (reason === 'fallback_unsupported_channel' || reason === 'fallback_endpoint_missing') {
-    return '当前通道不支持联网检索，已继续离线回答'
-  }
-  if (reason === 'tool_failed_or_empty_result') {
-    return '未获取到可用外部来源，已继续回答'
-  }
-  if (reason === 'intent_not_required') {
-    return '意图判定无需联网'
-  }
-  if (reason === 'intent_required') {
-    return '意图判定需要联网'
-  }
-  if (reason === 'internet_disabled') {
-    return '当前请求已关闭联网'
-  }
-  if (reason === 'tool_unavailable') {
-    return '当前模型未开放 websearch 工具'
-  }
-  if (reason === 'terminal_finalize') {
-    return '执行结束，未触发联网检索'
-  }
-  return reason
-}
-
-function shouldHidePilotWebsearchCard(payload: Record<string, unknown>): boolean {
-  return payload.enabled !== true && HIDDEN_WEBSEARCH_CARD_REASONS.has(String(payload.reason || '').trim())
 }
 
 const SENSITIVE_ERROR_ENDPOINT_RE = /\b(?:(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}|localhost):\d{2,5}\b/g
@@ -209,7 +182,8 @@ interface ToolAuditCardPayload {
 
 interface RunEventCardPayload {
   sessionId: string
-  cardType: 'intent' | 'routing' | 'memory' | 'websearch' | 'thinking'
+  cardType: 'intent' | 'routing' | 'memory' | 'websearch' | 'planning' | 'thinking'
+  cardKey?: string
   eventType: string
   status: 'running' | 'completed' | 'skipped' | 'failed'
   title: string
@@ -399,144 +373,7 @@ async function ensureRemoteSessionInitialized(sessionId: string, initialTitle: s
 }
 
 function toFiniteSeq(value: unknown): number {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0
-}
-
-async function handleExecutorItem(item: string, callback: (data: any) => void) {
-  if (item === '[DONE]') {
-    callback({
-      done: true,
-    })
-  }
-  else {
-    try {
-      const json = JSON.parse(item)
-
-      callback({
-        done: false,
-        ...json,
-      })
-    }
-    catch (e: any) {
-      console.error('Failed to parse executor SSE data frame', item, e)
-      console.log('item', item)
-
-      callback({
-        done: true,
-        error: true,
-      })
-    }
-  }
-}
-
-function parseSseFrame(frame: string): { event: string, data: string } | null {
-  const lines = frame.split('\n')
-  let event = 'message'
-  const dataLines: string[] = []
-
-  for (const rawLine of lines) {
-    const line = rawLine.trimEnd()
-    if (!line || line.startsWith(':'))
-      continue
-
-    if (line.startsWith('event:')) {
-      event = line.slice(6).trim() || 'message'
-      continue
-    }
-
-    if (line.startsWith('data:')) {
-      const data = line.slice(5)
-      dataLines.push(data.startsWith(' ') ? data.slice(1) : data)
-    }
-  }
-
-  if (!dataLines.length)
-    return null
-
-  return {
-    event,
-    data: dataLines.join('\n'),
-  }
-}
-
-async function handleExecutorResult(
-  reader: ReadableStreamDefaultReader<string>,
-  callback: (data: any) => void,
-  hooks?: {
-    onChunk?: () => void
-  },
-) {
-  let buffer = ''
-
-  const flushBuffer = async () => {
-    let frameEndIndex = buffer.indexOf('\n\n')
-
-    while (frameEndIndex !== -1) {
-      const frame = buffer.slice(0, frameEndIndex)
-      buffer = buffer.slice(frameEndIndex + 2)
-
-      const parsed = parseSseFrame(frame)
-      if (!parsed) {
-        frameEndIndex = buffer.indexOf('\n\n')
-        continue
-      }
-
-      if (parsed.event === 'error') {
-        const payload = parseJsonSafe<Record<string, any>>(parsed.data)
-        if (payload) {
-          callback({
-            ...payload,
-            done: false,
-            event: typeof payload.event === 'string' ? payload.event : 'error',
-            status: typeof payload.status === 'string' ? payload.status : 'failed',
-            id: payload.id || 'assistant',
-            name: payload.name,
-            data: payload.data,
-            message: normalizeExecutorErrorMessage(payload.message || payload.error || payload.data || parsed.data),
-          })
-          frameEndIndex = buffer.indexOf('\n\n')
-          continue
-        }
-
-        callback({
-          done: false,
-          error: true,
-          e: normalizeExecutorErrorMessage(parsed.data),
-        })
-        frameEndIndex = buffer.indexOf('\n\n')
-        continue
-      }
-
-      await handleExecutorItem(parsed.data, callback)
-      frameEndIndex = buffer.indexOf('\n\n')
-    }
-  }
-
-  while (true) {
-    const { value, done } = await reader.read()
-    hooks?.onChunk?.()
-
-    if (done) {
-      if (buffer.trim().length) {
-        const parsed = parseSseFrame(buffer)
-        if (parsed)
-          await handleExecutorItem(parsed.data, callback)
-      }
-
-      callback({
-        done: true,
-      })
-
-      break
-    }
-
-    if (!value.length)
-      continue
-
-    buffer += value.replace(/\r\n/g, '\n')
-    await flushBuffer()
-  }
+  return normalizePilotStreamSeq(value)
 }
 
 async function uploadLegacyDataUrlAttachment(
@@ -670,20 +507,14 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
 
       let requestPayload: Record<string, unknown>
       if (followOnly) {
-        requestPayload = {
-          fromSeq,
-          follow: true,
-          modelId: String(body.modelId || body.model || '').trim() || undefined,
-          routeComboId: String(body.routeComboId || '').trim() || undefined,
-          internet: body.internet !== false,
-          thinking: body.thinking !== false,
-          memoryEnabled: body.memoryEnabled !== false,
-          pilotMode: body.pilotMode === true,
-          metadata: {
-            source: 'legacy-ui-completion-follow',
-            index: body.index,
+        requestPayload = buildLegacyCompletionStreamRequestPayload({
+          body: {
+            ...body,
+            fromSeq,
+            follow: true,
           },
-        }
+          followOnly: true,
+        })
       }
       else {
         const latestTurn = await resolveLegacyUiStreamInput(sessionId, body.messages || [], {
@@ -693,20 +524,11 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
           throw new Error('latest user turn is empty')
         }
 
-        requestPayload = {
-          message: latestTurn.message,
-          attachments: latestTurn.attachments.length > 0 ? latestTurn.attachments : undefined,
-          modelId: String(body.modelId || body.model || '').trim() || undefined,
-          routeComboId: String(body.routeComboId || '').trim() || undefined,
-          internet: body.internet !== false,
-          thinking: body.thinking !== false,
-          memoryEnabled: body.memoryEnabled !== false,
-          pilotMode: body.pilotMode === true,
-          metadata: {
-            source: 'legacy-ui-completion',
-            index: body.index,
-          },
-        }
+        requestPayload = buildLegacyCompletionStreamRequestPayload({
+          body,
+          followOnly: false,
+          latestTurn,
+        })
       }
 
       const res: ReadableStream = await endHttp.$http({
@@ -723,9 +545,14 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
 
       const reader = res.pipeThrough(new TextDecoderStream()).getReader()
 
-      await handleExecutorResult(reader, wrappedCallback, {
-        onChunk: resetIdleTimer,
-      })
+      await handleLegacyCompletionExecutorResult(
+        reader,
+        wrappedCallback,
+        normalizeExecutorErrorMessage,
+        {
+          onChunk: resetIdleTimer,
+        },
+      )
     }
     catch (e) {
       console.error(e)
@@ -959,11 +786,9 @@ export const $completion = {
         let markdownFlushTimer: ReturnType<typeof setTimeout> | null = null
         let lastCompletionName = 'assistant'
         let waitingToolApproval = false
+        let requestAccepted = false
         let activeExecutorStreams = 0
         const legacyIgnoredEvents = new Set([
-          'turn.accepted',
-          'turn.queued',
-          'turn.started',
           'turn.delta',
           'turn.completed',
           'turn.failed',
@@ -998,6 +823,17 @@ export const $completion = {
           }
         }
 
+        function acceptRequest(nextStatus?: IChatItemStatus) {
+          if (!requestAccepted) {
+            requestAccepted = true
+            handler.onAccepted?.()
+          }
+          if (typeof nextStatus === 'number' && innerMsg.status === IChatItemStatus.WAITING && innerMsg.status !== nextStatus) {
+            innerMsg.status = nextStatus
+            handler?.onTriggerStatus?.(innerMsg.status)
+          }
+        }
+
         function nextStreamBlockOrder(): number {
           streamBlockOrder += 1
           return streamBlockOrder
@@ -1018,7 +854,7 @@ export const $completion = {
             streamOrder: existingOrder || nextStreamBlockOrder(),
           }
           innerMsg.value.push(block)
-          return block
+          return innerMsg.value.at(-1) || block
         }
 
         function getOrCreateStreamingMarkdownBlock(seq = 0): IInnerItemMeta {
@@ -1029,9 +865,10 @@ export const $completion = {
               : {}
             const currentSeq = toFiniteSeq(currentExtra.seq)
             const currentOrder = resolveStreamOrder(currentExtra.streamOrder)
+            const resolvedSeq = currentSeq || seq
             current.extra = {
               ...currentExtra,
-              seq: currentSeq || seq || 0,
+              ...(resolvedSeq > 0 ? { seq: resolvedSeq } : {}),
               start: Number(currentExtra.start || Date.now()) || Date.now(),
               streamOrder: currentOrder || nextStreamBlockOrder(),
             }
@@ -1043,7 +880,7 @@ export const $completion = {
             type: 'markdown' as IInnerItemType,
             value: '',
             extra: {
-              seq: seq || 0,
+              ...(seq > 0 ? { seq } : {}),
               start: now,
               streamOrder: nextStreamBlockOrder(),
             },
@@ -1331,10 +1168,10 @@ export const $completion = {
             data: nextData,
             extra: nextExtra,
           }
-          pushInnerBlock(created)
-          toolCardMap.set(createToolCardStorageKey(payload), created)
-          bindToolCardIdentity(payload, created)
-          return created
+          const inserted = pushInnerBlock(created)
+          toolCardMap.set(createToolCardStorageKey(payload), inserted)
+          bindToolCardIdentity(payload, inserted)
+          return inserted
         }
 
         function buildApprovalRequiredToolPayload(eventPayload: Record<string, any>): ToolAuditCardPayload {
@@ -1376,9 +1213,12 @@ export const $completion = {
         }
 
         function applyApprovalRequiredState(payload: ToolAuditCardPayload) {
+          acceptRequest(IChatItemStatus.TOOL_CALLING)
           waitingToolApproval = true
-          innerMsg.status = IChatItemStatus.TOOL_CALLING
-          handler?.onTriggerStatus?.(innerMsg.status)
+          if (innerMsg.status !== IChatItemStatus.TOOL_CALLING) {
+            innerMsg.status = IChatItemStatus.TOOL_CALLING
+            handler?.onTriggerStatus?.(innerMsg.status)
+          }
           emitApprovalCheckpoint()
           upsertToolCard(payload)
           if (payload.ticketId) {
@@ -1489,11 +1329,6 @@ export const $completion = {
         const runEventCardMap = new Map<string, IInnerItemMeta>()
         const RUN_EVENT_TERMINAL_STATUSES = new Set(['completed', 'skipped', 'failed'])
 
-        function normalizeThinkingTraceText(value: unknown): string {
-          const text = normalizeRunEventText(value)
-          return text === '__end__' ? '' : text
-        }
-
         function normalizeWebsearchDecisionReason(value: unknown): string {
           const reason = normalizePilotWebsearchReason(value)
           if (!reason) {
@@ -1508,43 +1343,53 @@ export const $completion = {
           return reason
         }
 
-        function resolveRunEventCardKey(payload: RunEventCardPayload): string {
-          const sessionScope = payload.sessionId || conversation.id
-          if (payload.cardType === 'thinking') {
-            return payload.turnId
-              ? `thinking:${sessionScope}:${payload.turnId}`
-              : `thinking:${sessionScope}`
+        function mergeRunEventCardDetail(
+          cardType: RunEventCardPayload['cardType'],
+          detail: Record<string, unknown>,
+          previousData?: Record<string, unknown>,
+        ): Record<string, unknown> {
+          if (cardType !== 'planning') {
+            return detail
           }
-          if (payload.cardType === 'websearch') {
-            return buildPilotWebsearchCardKey(payload.turnId || sessionScope)
+
+          const next = { ...detail }
+          const currentTodos = Array.isArray(detail.todos)
+            ? detail.todos.filter(item => typeof item === 'string' && item.trim().length > 0)
+            : []
+          if (currentTodos.length > 0) {
+            next.todos = currentTodos
+            return next
           }
-          if (payload.cardType === 'intent') {
-            return payload.turnId
-              ? `intent:${sessionScope}:${payload.turnId}`
-              : `intent:${sessionScope}:pending`
+
+          const previousDetail = previousData?.detail && typeof previousData.detail === 'object' && !Array.isArray(previousData.detail)
+            ? previousData.detail as Record<string, unknown>
+            : {}
+          const previousTodos = Array.isArray(previousDetail.todos)
+            ? previousDetail.todos.filter(item => typeof item === 'string' && item.trim().length > 0)
+            : []
+          if (previousTodos.length > 0) {
+            next.todos = previousTodos
           }
-          if (payload.cardType === 'routing') {
-            return payload.turnId
-              ? `routing:${sessionScope}:${payload.turnId}`
-              : `routing:${sessionScope}`
-          }
-          if (payload.cardType === 'memory') {
-            return payload.turnId
-              ? `memory:${sessionScope}:${payload.turnId}`
-              : `memory:${sessionScope}`
-          }
-          return payload.turnId
-            ? `${payload.cardType}:${sessionScope}:${payload.turnId}:${payload.seq}`
-            : `${payload.cardType}:${sessionScope}:${payload.seq}`
+          return next
         }
 
         function upsertRunEventCard(payload: RunEventCardPayload): IInnerItemMeta {
-          const key = resolveRunEventCardKey(payload)
-          const sessionScope = payload.sessionId || conversation.id
-          const pendingIntentKey = `intent:${sessionScope}:pending`
+          const {
+            key,
+            pendingIntentKey,
+            fallbackKey,
+            shouldPromotePendingIntent,
+          } = resolvePilotLegacyRunEventCardKeys({
+            conversationId: conversation.id,
+            sessionId: payload.sessionId,
+            cardType: payload.cardType,
+            cardKey: payload.cardKey,
+            turnId: payload.turnId,
+            seq: payload.seq,
+          })
           let prev = runEventCardMap.get(key)
-          if (!prev && payload.cardType === 'intent' && payload.turnId) {
-            prev = runEventCardMap.get(pendingIntentKey)
+          if (!prev && fallbackKey) {
+            prev = runEventCardMap.get(fallbackKey)
           }
           const now = Date.now()
 
@@ -1567,6 +1412,7 @@ export const $completion = {
           }
 
           const prevContent = normalizeRunEventText(prevData.content)
+          const mergedDetail = mergeRunEventCardDetail(payload.cardType, payload.detail, prevData)
           let mergedContent = payload.content || prevContent
           if (payload.cardType === 'thinking') {
             const incoming = payload.content
@@ -1599,10 +1445,11 @@ export const $completion = {
             status: payload.status,
             title: payload.title,
             summary: payload.summary,
+            cardKey: payload.cardKey,
             turnId: payload.turnId,
             seq: payload.seq,
             content: mergedContent,
-            detail: payload.detail,
+            detail: mergedDetail,
           })
 
           const nextExtra = {
@@ -1614,8 +1461,11 @@ export const $completion = {
             status: payload.status,
             cardType: payload.cardType,
             eventType: payload.eventType,
-            seq: payload.seq || prev?.extra?.seq || 0,
+            ...(toFiniteSeq(payload.seq || prev?.extra?.seq) > 0
+              ? { seq: toFiniteSeq(payload.seq || prev?.extra?.seq) }
+              : {}),
             sessionId: payload.sessionId || prev?.extra?.sessionId || conversation.id,
+            cardKey: payload.cardKey || prev?.extra?.cardKey || '',
             turnId: payload.turnId || prev?.extra?.turnId || '',
             streamOrder: resolveStreamOrder(prev?.extra?.streamOrder) || nextStreamBlockOrder(),
           }
@@ -1626,7 +1476,7 @@ export const $completion = {
             prev.value = ''
             prev.data = nextData
             prev.extra = nextExtra
-            if (payload.cardType === 'intent' && payload.turnId && key !== pendingIntentKey) {
+            if (shouldPromotePendingIntent) {
               runEventCardMap.delete(pendingIntentKey)
               runEventCardMap.set(key, prev)
             }
@@ -1640,9 +1490,9 @@ export const $completion = {
             data: nextData,
             extra: nextExtra,
           }
-          pushInnerBlock(created)
-          runEventCardMap.set(key, created)
-          return created
+          const inserted = pushInnerBlock(created)
+          runEventCardMap.set(key, inserted)
+          return inserted
         }
 
         function finalizeRunningThinkingCards(eventType: string) {
@@ -1703,28 +1553,14 @@ export const $completion = {
         }
 
         function buildExecutorBody(requestId = ''): IChatBody & { requestId?: string } {
-          const resolvedPilotMode = typeof innerMsg.meta.pilotMode === 'boolean'
-            ? innerMsg.meta.pilotMode
-            : conversation.pilotMode === true
-          const payload: IChatBody & { requestId?: string } = {
-            ...options || {},
-            temperature: innerMsg.meta.temperature || 0.5,
-            templateId: conversation.template?.id ?? -1,
-            messages: conversation.messages,
-            index: index === -1 ? 0 : index,
-            chat_id: conversation.id,
-            model: innerMsg.model,
-            modelId: String(innerMsg.model || ''),
-            internet: innerMsg.meta.internet !== false,
-            thinking: innerMsg.meta.thinking !== false,
-            memoryEnabled: innerMsg.meta.memoryEnabled !== false,
-            pilotMode: resolvedPilotMode,
+          return buildLegacyCompletionExecutorBody({
+            options: requestId ? { ...(options || {}), requestId } : options,
+            conversation,
+            index,
+            model: String(innerMsg.model || ''),
+            meta: innerMsg.meta,
             signal: signal.signal,
-          }
-          if (requestId) {
-            payload.requestId = requestId
-          }
-          return payload
+          })
         }
 
         function startExecutorStream(requestId = '') {
@@ -1741,164 +1577,13 @@ export const $completion = {
         }
 
         function pushRunEventCardFromStream(eventType: string, payload: Record<string, any>) {
-          const seq = toFiniteSeq(payload.seq)
-          const sessionId = normalizeRunEventText(payload.session_id || payload.sessionId || conversation.id) || conversation.id
-          const turnId = normalizeRunEventText(payload.turn_id || payload.turnId)
-          const detail = payload?.payload && typeof payload.payload === 'object'
-            ? payload.payload as Record<string, unknown>
-            : (payload?.detail && typeof payload.detail === 'object'
-                ? payload.detail as Record<string, unknown>
-                : {})
-
-          if (eventType === 'intent.started') {
-            upsertRunEventCard({
-              sessionId,
-              cardType: 'intent',
-              eventType,
-              status: 'running',
-              title: '意图分析',
-              summary: '正在分析意图',
-              turnId,
-              seq,
-              content: '',
-              detail,
-            })
-            return
-          }
-
-          if (eventType === 'intent.completed') {
-            const confidence = Number(detail.confidence)
-            upsertRunEventCard({
-              sessionId,
-              cardType: 'intent',
-              eventType,
-              status: 'completed',
-              title: '意图分析',
-              summary: `意图=${normalizeRunEventText(detail.intentType) || 'chat'}，置信=${Number.isFinite(confidence) ? `${(confidence * 100).toFixed(1)}%` : '-'}`,
-              turnId,
-              seq,
-              content: '',
-              detail,
-            })
-            return
-          }
-
-          if (eventType === 'memory.updated') {
-            const addedCount = Number(detail.addedCount)
-            const stored = detail.stored === true
-            if (!stored) {
-              return
-            }
-            const addedCountText = Number.isFinite(addedCount) && addedCount > 0
-              ? `已沉淀 ${Math.floor(addedCount)} 条记忆`
-              : '已沉淀记忆'
-            upsertRunEventCard({
-              sessionId,
-              cardType: 'memory',
-              eventType,
-              status: 'completed',
-              title: '记忆上下文',
-              summary: addedCountText,
-              turnId,
-              seq,
-              content: '',
-              detail,
-            })
-            return
-          }
-
-          if (eventType === 'websearch.executed') {
-            const sourceCount = Number(detail.sourceCount)
-            if (!Number.isFinite(sourceCount) || sourceCount <= 0) {
-              return
-            }
-            upsertRunEventCard({
-              sessionId,
-              cardType: 'websearch',
-              eventType,
-              status: 'completed',
-              title: PILOT_WEBSEARCH_CARD_TITLE,
-              summary: `来源=${normalizeRunEventText(detail.source) || '-'}，命中=${Number.isFinite(sourceCount) ? sourceCount : 0}`,
-              turnId,
-              seq,
-              content: '',
-              detail,
-            })
-            return
-          }
-
-          if (eventType === 'websearch.decision') {
-            if (shouldHidePilotWebsearchCard(detail)) {
-              return
-            }
-            if (detail.enabled !== true) {
-              return
-            }
-            upsertRunEventCard({
-              sessionId,
-              cardType: 'websearch',
-              eventType,
-              status: 'running',
-              title: PILOT_WEBSEARCH_CARD_TITLE,
-              summary: normalizeWebsearchDecisionReason(detail.reason),
-              turnId,
-              seq,
-              content: '',
-              detail,
-            })
-            return
-          }
-
-          if (eventType === 'websearch.skipped') {
-            if (shouldHidePilotWebsearchCard(detail)) {
-              return
-            }
-            upsertRunEventCard({
-              sessionId,
-              cardType: 'websearch',
-              eventType,
-              status: 'skipped',
-              title: PILOT_WEBSEARCH_CARD_TITLE,
-              summary: normalizeWebsearchDecisionReason(detail.reason || payload.reason),
-              turnId,
-              seq,
-              content: '',
-              detail,
-            })
-            return
-          }
-
-          if (eventType === 'thinking.delta') {
-            const chunk = normalizeThinkingTraceText(payload.delta || detail.text)
-            upsertRunEventCard({
-              sessionId,
-              cardType: 'thinking',
-              eventType,
-              status: chunk ? 'running' : 'completed',
-              title: 'Thinking',
-              summary: chunk ? '思考中' : '思考完成',
-              turnId,
-              seq,
-              content: chunk,
-              detail,
-            })
-            return
-          }
-
-          if (eventType === 'thinking.final') {
-            const finalText = normalizeThinkingTraceText(payload.message || detail.text)
-            upsertRunEventCard({
-              sessionId,
-              cardType: 'thinking',
-              eventType,
-              status: 'completed',
-              title: 'Thinking',
-              summary: '思考完成',
-              turnId,
-              seq,
-              content: finalText,
-              detail,
-            })
+          const projected = projectPilotLegacyRunEventCard({
+            conversationId: conversation.id,
+            eventType,
+            eventPayload: payload,
+          })
+          if (projected) {
+            upsertRunEventCard(projected)
           }
         }
 
@@ -1982,13 +1667,32 @@ export const $completion = {
           if (!eventType || eventType === 'stream.heartbeat') {
             return
           }
+          const eventSeq = toFiniteSeq(res.seq)
+          if (shouldDropLegacyCompletionStreamEvent(eventType, res.seq)) {
+            console.warn('[pilot-completion] dropped seq-required event without valid seq', {
+              eventType,
+              rawSeq: res.seq,
+            })
+            return
+          }
+
+          if (eventType === 'turn.accepted' || eventType === 'turn.queued') {
+            acceptRequest()
+            return
+          }
+
+          if (eventType === 'turn.started') {
+            acceptRequest(IChatItemStatus.GENERATING)
+            return
+          }
 
           if (eventType === 'assistant.delta') {
+            acceptRequest(IChatItemStatus.GENERATING)
             const chunk = typeof res.delta === 'string'
               ? res.delta
               : normalizeRunEventText(res?.payload?.text)
             if (chunk) {
-              getOrCreateStreamingMarkdownBlock(toFiniteSeq(res.seq))
+              getOrCreateStreamingMarkdownBlock(eventSeq)
               appendPendingMarkdownChunk(chunk)
               scheduleMarkdownBufferFlush()
               handler?.onCompletionStart?.(lastCompletionName || 'assistant')
@@ -2001,8 +1705,9 @@ export const $completion = {
           }
 
           if (eventType === 'assistant.final') {
+            acceptRequest(IChatItemStatus.GENERATING)
             waitingToolApproval = false
-            const markdownBlock = getOrCreateStreamingMarkdownBlock(toFiniteSeq(res.seq))
+            const markdownBlock = getOrCreateStreamingMarkdownBlock(eventSeq)
             const finalText = typeof res.message === 'string'
               ? res.message
               : normalizeRunEventText(res?.payload?.text)
@@ -2034,16 +1739,8 @@ export const $completion = {
             finalizeRunningWebsearchCards(eventType)
           }
 
-          if (
-            eventType === 'intent.started'
-            || eventType === 'intent.completed'
-            || eventType === 'memory.updated'
-            || eventType === 'websearch.decision'
-            || eventType === 'websearch.skipped'
-            || eventType === 'websearch.executed'
-            || eventType === 'thinking.delta'
-            || eventType === 'thinking.final'
-          ) {
+          if (isPilotRuntimeCardEventType(eventType) && eventType !== 'memory.context') {
+            acceptRequest(IChatItemStatus.GENERATING)
             pushRunEventCardFromStream(eventType, res)
             if (eventType === 'thinking.delta' && innerMsg.status !== IChatItemStatus.GENERATING) {
               innerMsg.status = IChatItemStatus.GENERATING
@@ -2053,8 +1750,8 @@ export const $completion = {
           }
 
           if (eventType === 'run.audit') {
+            acceptRequest()
             const payload = normalizeToolAuditCardPayload(res.payload)
-            const eventSeq = toFiniteSeq(res.seq)
             if (eventSeq > 0) {
               payload.seq = eventSeq
             }
@@ -2085,9 +1782,9 @@ export const $completion = {
                 pushInnerBlock({
                   type: 'error',
                   value: payload.errorMessage,
-                  extra: {
-                    seq: payload.seq || 0,
-                  },
+                  extra: payload.seq && payload.seq > 0
+                    ? { seq: payload.seq }
+                    : undefined,
                 })
               }
             }
@@ -2100,6 +1797,7 @@ export const $completion = {
           }
 
           if (eventType === 'suggest') {
+            acceptRequest(IChatItemStatus.GENERATING)
             pushInnerBlock({
               data: 'suggest',
               type: res.content_type as any,
@@ -2188,18 +1886,6 @@ export const $completion = {
           }
         }
 
-        upsertRunEventCard({
-          sessionId: conversation.id,
-          cardType: 'intent',
-          eventType: 'intent.started',
-          status: 'running',
-          title: '意图分析',
-          summary: '正在分析意图',
-          turnId: '',
-          seq: 0,
-          content: '',
-          detail: {},
-        })
         startExecutorStream()
 
         return signal

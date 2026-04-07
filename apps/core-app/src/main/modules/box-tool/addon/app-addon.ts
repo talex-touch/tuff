@@ -4,8 +4,8 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import type { ScannedAppInfo } from './apps/app-types'
 
 /**
- * App DataManager
- * Implementation of app data management, 实现智能缓存和刷新策略
+ * @deprecated Internal legacy app cache shim.
+ * New runtime code must use the app scanning layer under ./apps/app-provider.ts.
  */
 class AppDataManager {
   private apps: ScannedAppInfo[] = []
