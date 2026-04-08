@@ -20,6 +20,11 @@
 - `apps/core-app/scripts/build-target.js`
   - 在 `electron-builder` 前新增 runtime 依赖同步步骤，并将 `app.asar` 运行时依赖校验从单模块检查升级为按实际解析到的 runtime 模块集合校验，提前拦截“可打包但启动即崩”的坏包。
 
+### fix(core-app/worker): 收窄 sqlite retry utils 入口
+
+- `apps/core-app/src/main/db/sqlite-retry.ts`
+  - `sleep` 改为从 `@talex-touch/utils/common/utils` 窄路径引入，避免 `search-index-worker` 因引用 `@talex-touch/utils` 根聚合入口而把 Electron 相关聚合代码一起卷入 worker chunk。
+
 ### fix(pilot/chat): 收口 routing 选择前端暴露并脱敏运行记录
 
 - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
