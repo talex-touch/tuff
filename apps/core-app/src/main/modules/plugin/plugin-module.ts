@@ -1189,6 +1189,7 @@ function createPluginModuleInternal(
         rememberIssueSnapshot(loadingShell)
         transport.broadcast(PluginEvents.push.stateChanged, {
           type: 'updated',
+          name: pluginName,
           changes: loadingShell.toJSONObject()
         })
         logWarn('Plugin failed to load: missing manifest.json', pluginTag(pluginName))
@@ -1278,6 +1279,7 @@ function createPluginModuleInternal(
 
         transport.broadcast(PluginEvents.push.stateChanged, {
           type: 'updated',
+          name: pluginName,
           changes: touchPlugin.toJSONObject()
         })
       } catch (error: unknown) {
@@ -1302,6 +1304,7 @@ function createPluginModuleInternal(
         rememberIssueSnapshot(loadingShell)
         transport.broadcast(PluginEvents.push.stateChanged, {
           type: 'updated',
+          name: pluginName,
           changes: loadingShell.toJSONObject()
         })
       }
