@@ -46,6 +46,7 @@ import {
   resolvePilotMemoryEnabled,
 } from '../../../../utils/pilot-chat-memory'
 import { requireSessionId, toErrorMessage } from '../../../../utils/pilot-http'
+import { syncPilotQuotaConversationFromRuntime } from '../../../../utils/pilot-quota-history-sync'
 import { resolvePilotIntent } from '../../../../utils/pilot-intent-resolver'
 import { resolveLangGraphOrchestratorDecision } from '../../../../utils/pilot-langgraph-orchestrator'
 import { executePilotMediaWithFallback } from '../../../../utils/pilot-media-fallback'
@@ -55,7 +56,6 @@ import {
   listPilotMemoryFactsByUser,
   upsertPilotMemoryFacts,
 } from '../../../../utils/pilot-memory-facts'
-import { ensurePilotQuotaSessionSchema, upsertPilotQuotaSession } from '../../../../utils/pilot-quota-session'
 import { markRouteFailure, markRouteSuccess } from '../../../../utils/pilot-route-health'
 import { recordPilotRoutingMetric } from '../../../../utils/pilot-routing-metrics'
 import { resolvePilotRoutingSelection } from '../../../../utils/pilot-routing-resolver'
@@ -74,9 +74,6 @@ import {
   PilotToolApprovalRejectedError,
   PilotToolApprovalRequiredError,
 } from '../../../../utils/pilot-tool-gateway'
-import { listPilotTraceTail } from '../../../../utils/pilot-trace-window'
-import { buildQuotaConversationSnapshot } from '../../../../utils/quota-conversation-snapshot'
-import { ensureQuotaHistorySchema, getQuotaHistory, upsertQuotaHistory } from '../../../../utils/quota-history-store'
 
 interface StreamBody {
   message?: string
@@ -214,72 +211,6 @@ function redactReplayTraceEvent(trace: TraceRecord): Omit<PilotStreamEvent, 'ses
     ...mapped,
     payload,
   }
-}
-
-async function syncLegacyQuotaConversationFromRuntime(
-  event: H3Event,
-  options: {
-    userId: string
-    chatId: string
-    channelId: string
-    storeRuntime: {
-      getSession: (sessionId: string) => Promise<{ title?: string | null, lastSeq?: number } | null>
-      listMessages: (sessionId: string) => Promise<Array<{
-        role: string
-        content: string
-        metadata?: Record<string, unknown>
-      }>>
-      listTrace?: (sessionId: string, fromSeq?: number, limit?: number) => Promise<TraceRecord[]>
-    }
-  },
-): Promise<void> {
-  await ensureQuotaHistorySchema(event)
-  await ensurePilotQuotaSessionSchema(event)
-
-  const session = await options.storeRuntime.getSession(options.chatId)
-  if (!session) {
-    return
-  }
-
-  const runtimeMessages = await options.storeRuntime.listMessages(options.chatId)
-  const runtimeTraces = options.storeRuntime.listTrace
-    ? await listPilotTraceTail({
-        listTrace: options.storeRuntime.listTrace.bind(options.storeRuntime),
-      }, {
-        sessionId: options.chatId,
-        lastSeq: session.lastSeq,
-        limit: 2_000,
-      }).catch(() => [])
-    : []
-  const previous = await getQuotaHistory(event, options.userId, options.chatId)
-  const snapshot = buildQuotaConversationSnapshot({
-    chatId: options.chatId,
-    messages: runtimeMessages.map(item => ({
-      role: item.role,
-      content: item.content,
-      metadata: item.metadata,
-    })),
-    runtimeTraces,
-    assistantReply: '',
-    topicHint: String(session.title || '').trim(),
-    previousValue: previous?.value || '',
-  })
-
-  await upsertQuotaHistory(event, {
-    chatId: options.chatId,
-    userId: options.userId,
-    topic: snapshot.topic,
-    value: snapshot.value,
-    meta: previous?.meta || '',
-  })
-
-  await upsertPilotQuotaSession(event, {
-    chatId: options.chatId,
-    userId: options.userId,
-    runtimeSessionId: options.chatId,
-    channelId: String(options.channelId || '').trim() || 'default',
-    topic: snapshot.topic,
-  })
 }
 
 function countConversationMessages(messages: Array<{ role: string }>): number {
@@ -1753,9 +1684,10 @@ export default defineEventHandler(async (event) => {
             }
 
             try {
-              await syncLegacyQuotaConversationFromRuntime(event, {
+              await syncPilotQuotaConversationFromRuntime(event, {
                 userId,
                 chatId: sessionId,
+                runtimeSessionId: sessionId,
                 channelId: selectedChannel.channelId,
                 storeRuntime: store.runtime,
               })

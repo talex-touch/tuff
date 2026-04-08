@@ -2,6 +2,7 @@ import { createError } from 'h3'
 import { requirePilotAuth } from '../../../../utils/auth'
 import { resolvePilotChannelSelection } from '../../../../utils/pilot-channel'
 import { requireSessionId } from '../../../../utils/pilot-http'
+import { syncPilotQuotaConversationFromRuntime } from '../../../../utils/pilot-quota-history-sync'
 import { generateTitle } from '../../../../utils/pilot-title'
 import { createPilotStoreAdapter } from '../../../../utils/pilot-store'
 
@@ -25,7 +26,23 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const syncQuotaHistory = async (channelId?: string) => {
+    try {
+      await syncPilotQuotaConversationFromRuntime(event, {
+        userId,
+        chatId: sessionId,
+        runtimeSessionId: sessionId,
+        channelId,
+        storeRuntime: store.runtime,
+      })
+    }
+    catch (error) {
+      console.warn('[pilot-title] quota sync failed', error)
+    }
+  }
+
   if (session.title && !body?.force) {
+    await syncQuotaHistory()
     return {
       title: session.title,
       source: 'stored',
@@ -66,6 +83,7 @@ export default defineEventHandler(async (event) => {
 
   if (result.title) {
     await store.runtime.setSessionTitle(sessionId, result.title)
+    await syncQuotaHistory(selectedChannel.channelId)
   }
 
   return {

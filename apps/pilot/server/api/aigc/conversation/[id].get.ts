@@ -1,63 +1,23 @@
 import type { H3Event } from 'h3'
 import { requirePilotAuth } from '../../../utils/auth'
 import { getSessionRunStateSafe } from '../../../utils/chat-turn-queue'
+import { syncPilotQuotaConversationFromRuntime } from '../../../utils/pilot-quota-history-sync'
 import { createPilotStoreAdapter } from '../../../utils/pilot-store'
-import { listPilotTraceTail } from '../../../utils/pilot-trace-window'
 import { quotaError, quotaOk } from '../../../utils/quota-api'
-import { buildQuotaConversationSnapshot } from '../../../utils/quota-conversation-snapshot'
 import { decodeQuotaConversation } from '../../../utils/quota-history-codec'
-import {
-  ensureQuotaHistorySchema,
-  getQuotaHistory,
-  upsertQuotaHistory,
-} from '../../../utils/quota-history-store'
 
 async function resolveQuotaConversationRecord(
   event: H3Event,
   userId: string,
   chatId: string,
 ) {
-  await ensureQuotaHistorySchema(event)
-  const existing = await getQuotaHistory(event, userId, chatId)
-
   const store = createPilotStoreAdapter(event, userId)
   await store.runtime.ensureSchema()
-  const session = await store.runtime.getSession(chatId)
-  if (!session) {
-    return existing
-  }
-
-  const runtimeMessages = await store.runtime.listMessages(chatId)
-  const runtimeTraces = await listPilotTraceTail(store.runtime, {
-    sessionId: chatId,
-    lastSeq: session.lastSeq,
-    limit: 2_000,
-  }).catch(() => [])
-  const snapshot = buildQuotaConversationSnapshot({
-    chatId,
-    messages: runtimeMessages.map(item => ({
-      role: item.role,
-      content: item.content,
-      metadata: item.metadata,
-    })),
-    runtimeTraces,
-    assistantReply: '',
-    topicHint: String(session.title || '').trim(),
-    previousValue: existing?.value || '',
-  })
-
-  if (existing) {
-    if (existing.topic === snapshot.topic && existing.value === snapshot.value) {
-      return existing
-    }
-  }
-
-  return await upsertQuotaHistory(event, {
-    chatId,
+  return await syncPilotQuotaConversationFromRuntime(event, {
     userId,
-    topic: snapshot.topic,
-    value: snapshot.value,
-    meta: existing?.meta || '',
+    chatId,
+    runtimeSessionId: chatId,
+    storeRuntime: store.runtime,
   })
 }
 
