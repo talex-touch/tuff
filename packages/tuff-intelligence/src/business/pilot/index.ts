@@ -1,3 +1,4 @@
+export * from './chat-block-order'
 export * from './conversation'
 export * from './emitter'
 export * from './legacy-run-event-card'

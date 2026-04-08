@@ -5,8 +5,8 @@ import {
   shouldHidePilotClientRuntimeEvent,
   shouldPilotPersistTraceEvent,
 } from '@talex-touch/tuff-intelligence/pilot'
-import { sortPilotChatBlocksByTimeline } from '../../shared/pilot-chat-block-order'
 import { buildPilotCardBlocksFromSystemMessages } from '../../shared/pilot-system-card-blocks'
+import { sortPilotChatBlocksByTimeline } from '@talex-touch/tuff-intelligence/pilot'
 
 const MAX_CARD_BLOCKS_PER_TURN = 48
 

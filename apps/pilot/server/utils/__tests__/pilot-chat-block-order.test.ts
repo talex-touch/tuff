@@ -3,7 +3,7 @@ import {
   sortPilotChatBlocksByTimeline,
   toPilotChatBlockSeq,
   toPilotChatBlockStreamOrder,
-} from '../../../shared/pilot-chat-block-order'
+} from '@talex-touch/tuff-intelligence/pilot'
 
 function createRunCard(cardType: string, seq: number, streamOrder = 0) {
   return {
