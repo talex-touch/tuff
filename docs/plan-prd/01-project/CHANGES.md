@@ -1,13 +1,32 @@
 # 变更日志
 
-> 更新时间: 2026-04-07
-> 说明: 主文件仅保留近 30 天（2026-03-09 ~ 2026-04-07）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-08
+> 说明: 主文件仅保留近 30 天（2026-03-10 ~ 2026-04-08）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
 - 当前主线：`2.4.9-beta.4` 基线下，下一动作统一为 `Nexus 设备授权风控`。
 - 历史主线：`2.4.8 OmniPanel Gate`、`v2.4.7 Gate A/B/C/D/E` 均已收口（historical）。
 - 旧记录入口：见文末“历史索引导航”。
+
+## 2026-04-08
+
+### fix(pilot-history): 标题生成后同步回写 quota 历史与会话映射
+
+- `apps/pilot/server/utils/pilot-quota-history-sync.ts`
+- `apps/pilot/server/utils/pilot-trace-window.ts`
+- `apps/pilot/server/api/chat/sessions/[sessionId]/title.post.ts`
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/server/api/aigc/conversation/[id].get.ts`
+ - `apps/pilot/server/utils/pilot-system-message-response.ts`
+  - 新增统一的 runtime -> quota 历史回写 helper，按 runtime `title + messages + trace tail` 生成快照并同步维护 `pilot_quota_history` / `pilot_quota_sessions`。
+  - `POST /api/chat/sessions/:sessionId/title` 不再只更新 runtime 标题；现在会 best-effort 回写兼容历史，修复前端标题已生成但历史列表仍停留旧标题/旧汇聚快照的问题。
+  - `GET /api/aigc/conversation/:id` 与流式收尾同步复用同一条回写链路，避免不同入口再次出现快照格式或映射字段漂移。
+  - trace 尾窗口读取改为按批次向前补到最近的 `turn.started`，修复长 turn 中 `intent.*` 已落库但在恢复/快照阶段被 2000 条尾窗口裁掉、最终只剩 tool card 的问题。
+- `apps/pilot/server/utils/__tests__/pilot-quota-history-sync.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-trace-window.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
+  - 新增回归，覆盖“标题/trace 回写成功时同步更新历史与映射”“runtime 会话缺失时不重复写入”“长 turn 回溯最近 `turn.started` 后 intent 不再被 tool card 挤掉”。
 
 ## 2026-04-07
 

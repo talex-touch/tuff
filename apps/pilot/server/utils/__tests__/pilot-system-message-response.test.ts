@@ -159,4 +159,96 @@ describe('pilot-system-message-response', () => {
       return String(item.metadata?.cardType || '').trim() === 'intent'
     })).toBe(true)
   })
+
+  it('当前 turn 超过单批窗口时会继续回溯，避免 intent 被后续 tool card 挤掉', async () => {
+    const sessionId = 'session_long_turn_backfill'
+    const calls: Array<{ fromSeq?: number, limit?: number }> = []
+    const messages = await listMessagesWithTraceProjection({
+      async getSession() {
+        return {
+          lastSeq: 2_503,
+        }
+      },
+      async listMessages() {
+        return [
+          {
+            id: 'msg_user_1',
+            sessionId,
+            role: 'user',
+            content: '继续执行',
+            createdAt: '2026-04-08T00:00:00.000Z',
+          },
+        ]
+      },
+      async listTrace(_sessionId, fromSeq, limit) {
+        calls.push({ fromSeq, limit })
+        if (fromSeq === 504) {
+          return [
+            {
+              seq: 2_501,
+              type: 'run.audit',
+              payload: {
+                auditType: 'tool.call.started',
+                toolName: 'websearch',
+              },
+              createdAt: '2026-04-08T00:00:02.000Z',
+            },
+            {
+              seq: 2_502,
+              type: 'run.audit',
+              payload: {
+                auditType: 'tool.call.completed',
+                toolName: 'websearch',
+              },
+              createdAt: '2026-04-08T00:00:03.000Z',
+            },
+            {
+              seq: 2_503,
+              type: 'assistant.final',
+              payload: {
+                text: '完成',
+              },
+              createdAt: '2026-04-08T00:00:04.000Z',
+            },
+          ]
+        }
+        return [
+          {
+            seq: 501,
+            type: 'turn.started',
+            payload: {},
+            createdAt: '2026-04-08T00:00:01.000Z',
+          },
+          {
+            seq: 502,
+            type: 'intent.completed',
+            payload: {
+              intentType: 'code_analysis',
+              confidence: 0.92,
+            },
+            createdAt: '2026-04-08T00:00:01.500Z',
+          },
+          {
+            seq: 503,
+            type: 'planning.started',
+            payload: {},
+            createdAt: '2026-04-08T00:00:01.800Z',
+          },
+        ]
+      },
+    }, sessionId)
+
+    expect(calls).toEqual([
+      {
+        fromSeq: 504,
+        limit: 2_000,
+      },
+      {
+        fromSeq: 1,
+        limit: 503,
+      },
+    ])
+    expect(messages.some((item) => String(item.metadata?.cardType || '').trim() === 'intent')).toBe(true)
+    expect(messages.some((item) => String(item.metadata?.cardType || '').trim() === 'tool')).toBe(true)
+  })
 })
