@@ -120,6 +120,11 @@ export interface ITouchPlugin extends IPluginBaseInfo {
     optional: string[]
     reasons: Record<string, string>
   }
+  loadState?: 'loading' | 'ready' | 'load_failed'
+  loadError?: {
+    code: string
+    message: string
+  }
 
   addFeature: (feature: IPluginFeature) => boolean
   delFeature: (featureId: string) => boolean
