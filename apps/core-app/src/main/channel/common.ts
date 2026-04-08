@@ -103,7 +103,8 @@ const TUFF_CLI_CAPABILITY: PlatformCapability = {
   name: 'Tuff CLI',
   description: 'CLI 工具联动能力（Beta，开发中）',
   scope: 'plugin',
-  status: 'beta'
+  status: 'beta',
+  supportLevel: 'unsupported'
 }
 const ACTIVE_APP_CAPABILITY: PlatformCapability = {
   id: 'platform.active-app',
@@ -111,6 +112,7 @@ const ACTIVE_APP_CAPABILITY: PlatformCapability = {
   description: '当前前台应用与窗口上下文读取能力',
   scope: 'system',
   status: 'beta',
+  supportLevel: 'unsupported',
   sensitive: true
 }
 const NATIVE_SHARE_CAPABILITY: PlatformCapability = {
@@ -118,7 +120,19 @@ const NATIVE_SHARE_CAPABILITY: PlatformCapability = {
   name: 'Native Share',
   description: '系统原生分享目标与分发能力',
   scope: 'system',
-  status: 'beta'
+  status: 'beta',
+  supportLevel: 'unsupported'
+}
+const TERMINAL_CAPABILITY: PlatformCapability = {
+  id: 'platform.terminal',
+  name: 'Terminal Command Runtime',
+  description: '命令进程执行能力（非 PTY 终端）',
+  scope: 'system',
+  status: 'beta',
+  supportLevel: 'best_effort',
+  limitations: [
+    'Runs child-process commands only; PTY emulation and terminal state sync are not provided.'
+  ]
 }
 const SYSTEM_PERMISSION_CAPABILITY: PlatformCapability = {
   id: 'platform.permission-checker',
@@ -126,6 +140,7 @@ const SYSTEM_PERMISSION_CAPABILITY: PlatformCapability = {
   description: '系统权限状态检查与设置跳转能力',
   scope: 'system',
   status: 'beta',
+  supportLevel: 'supported',
   sensitive: true
 }
 const log = createLogger('CommonChannel')
@@ -560,7 +575,11 @@ async function detectTuffCliAvailability(): Promise<boolean> {
 async function listPlatformCapabilities(
   query: PlatformCapabilityListRequest
 ): Promise<PlatformCapability[]> {
-  const capabilities = platformCapabilityRegistry.list(query)
+  const capabilities = platformCapabilityRegistry.list(query).map((capability) => ({
+    ...capability,
+    supportLevel: capability.supportLevel ?? 'supported',
+    limitations: capability.limitations ? [...capability.limitations] : undefined
+  }))
   const appendDynamicCapability = (capability: PlatformCapability): void => {
     if (capabilities.some((item) => item.id === capability.id)) {
       return
@@ -570,26 +589,54 @@ async function listPlatformCapabilities(
     }
   }
 
-  if (await isActiveAppCapabilityAvailable()) {
-    appendDynamicCapability(ACTIVE_APP_CAPABILITY)
+  const activeAppSupported = await isActiveAppCapabilityAvailable()
+  appendDynamicCapability({
+    ...ACTIVE_APP_CAPABILITY,
+    supportLevel: activeAppSupported ? 'supported' : 'unsupported',
+    limitations: activeAppSupported
+      ? undefined
+      : ['Foreground application inspection is unavailable in the current runtime.']
+  })
+
+  appendDynamicCapability({
+    ...NATIVE_SHARE_CAPABILITY,
+    supportLevel:
+      process.platform === 'darwin'
+        ? 'supported'
+        : process.platform === 'win32' || process.platform === 'linux'
+          ? 'best_effort'
+          : 'unsupported',
+    limitations:
+      process.platform === 'darwin'
+        ? undefined
+        : process.platform === 'win32' || process.platform === 'linux'
+          ? ['Falls back to mailto-based sharing only; no native system share sheet is exposed.']
+          : ['Native share is unavailable on the current platform.']
+  })
+
+  if (process.platform === 'linux') {
+    appendDynamicCapability({
+      ...SYSTEM_PERMISSION_CAPABILITY,
+      supportLevel: 'best_effort',
+      limitations: ['Permission status and settings deep-links depend on the desktop environment.']
+    })
+  } else if (process.platform === 'darwin' || process.platform === 'win32') {
+    appendDynamicCapability({
+      ...SYSTEM_PERMISSION_CAPABILITY,
+      supportLevel: 'supported'
+    })
   }
 
-  if (nativeShareService.getAvailableTargets().length > 0) {
-    appendDynamicCapability(NATIVE_SHARE_CAPABILITY)
-  }
-
-  if (
-    process.platform === 'darwin' ||
-    process.platform === 'win32' ||
-    process.platform === 'linux'
-  ) {
-    appendDynamicCapability(SYSTEM_PERMISSION_CAPABILITY)
-  }
+  appendDynamicCapability(TERMINAL_CAPABILITY)
 
   const tuffCliAvailable = await detectTuffCliAvailability()
-  if (tuffCliAvailable) {
-    appendDynamicCapability(TUFF_CLI_CAPABILITY)
-  }
+  appendDynamicCapability({
+    ...TUFF_CLI_CAPABILITY,
+    supportLevel: tuffCliAvailable ? 'supported' : 'unsupported',
+    limitations: tuffCliAvailable
+      ? undefined
+      : ['CLI binary was not detected in PATH or known install locations.']
+  })
   return capabilities
 }
 

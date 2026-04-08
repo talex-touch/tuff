@@ -2,6 +2,7 @@
 import type {
   PlatformCapability,
   PlatformCapabilityScope,
+  PlatformCapabilitySupportLevel,
   PlatformCapabilityStatus
 } from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex'
@@ -34,6 +35,12 @@ const statusToneMap: Record<PlatformCapabilityStatus, 'success' | 'info' | 'warn
   stable: 'success',
   beta: 'info',
   alpha: 'warning'
+}
+
+const supportToneMap: Record<PlatformCapabilitySupportLevel, 'success' | 'warning' | 'danger'> = {
+  supported: 'success',
+  best_effort: 'warning',
+  unsupported: 'danger'
 }
 
 const groupedCapabilities = computed(() =>
@@ -85,6 +92,14 @@ function statusTone(status: PlatformCapabilityStatus) {
 function statusRank(status: PlatformCapabilityStatus): number {
   const index = statusOrder.indexOf(status)
   return index === -1 ? statusOrder.length : index
+}
+
+function supportLabel(level: PlatformCapabilitySupportLevel | undefined): string {
+  return t(`settings.settingPlatformCapabilities.support.${level || 'supported'}`)
+}
+
+function supportTone(level: PlatformCapabilitySupportLevel | undefined) {
+  return supportToneMap[level || 'supported']
 }
 
 async function loadCapabilities() {
@@ -178,13 +193,32 @@ onMounted(() => {
               :status="statusTone(item.status)"
             />
             <TuffStatusBadge
+              size="sm"
+              :text="supportLabel(item.supportLevel)"
+              :status="supportTone(item.supportLevel)"
+            />
+            <TuffStatusBadge
               v-if="item.sensitive"
               size="sm"
               :text="t('settings.settingPlatformCapabilities.tags.sensitive')"
               status="warning"
             />
           </template>
-          <span class="PlatformCapabilities-IdBadge">{{ item.id }}</span>
+          <div class="PlatformCapabilities-Footer">
+            <span class="PlatformCapabilities-IdBadge">{{ item.id }}</span>
+            <div
+              v-if="item.limitations?.length"
+              class="PlatformCapabilities-Limitations"
+              :title="item.limitations.join('\n')"
+            >
+              <span class="PlatformCapabilities-LimitationsLabel">
+                {{ t('settings.settingPlatformCapabilities.limitations') }}
+              </span>
+              <span class="PlatformCapabilities-LimitationsText">
+                {{ item.limitations.join(' · ') }}
+              </span>
+            </div>
+          </div>
         </TuffBlockSlot>
       </div>
     </div>
@@ -266,6 +300,29 @@ onMounted(() => {
   max-width: 240px;
   word-break: break-all;
 }
+
+.PlatformCapabilities-Footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.PlatformCapabilities-Limitations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--tx-text-color-secondary);
+}
+
+.PlatformCapabilities-LimitationsLabel {
+  font-weight: 600;
+}
+
+.PlatformCapabilities-LimitationsText {
+  line-height: 1.5;
+}
+
 @media (max-width: 768px) {
   .PlatformCapabilities-IdBadge {
     max-width: 160px;
