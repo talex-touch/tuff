@@ -1,12 +1,14 @@
 import type {
   CreatePilotStreamEmitterOptions,
-  DeepAgentAuditRecord,
   PilotStreamDraftEvent,
   PilotStreamEvent,
+} from '@talex-touch/tuff-intelligence/pilot'
+import type {
+  DeepAgentAuditRecord,
   TraceRecord,
   UserMessageAttachment,
   UserMessageInput,
-} from '@talex-touch/tuff-intelligence/pilot'
+} from '@talex-touch/tuff-intelligence/pilot-server'
 import type { H3Event } from 'h3'
 import {
   createPilotStreamEmitter,

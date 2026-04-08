@@ -1,7 +1,7 @@
-import type { AgentEnvelope, RuntimeStoreAdapter, StoreAdapter } from '@talex-touch/tuff-intelligence/pilot'
+import type { AgentEnvelope, RuntimeStoreAdapter, StoreAdapter } from '@talex-touch/tuff-intelligence/pilot-server'
 import type { H3Event } from 'h3'
 import type { PilotDatabase } from '../types/pilot-db'
-import { D1RuntimeStoreAdapter } from '@talex-touch/tuff-intelligence/pilot'
+import { D1RuntimeStoreAdapter } from '@talex-touch/tuff-intelligence/pilot-server'
 import { pruneExpiredPilotHistoryOnce } from './pilot-history'
 import { getNodePilotPostgresDatabase } from './pilot-node-pg-d1'
 

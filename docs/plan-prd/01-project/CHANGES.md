@@ -34,6 +34,18 @@
   - Windows Everything 状态新增健康分级与原因说明；不可用/禁用时明确表现为 degraded fallback，而非静默空白。
   - `startSilent` 旧 split setting、旧 store source key、旧 agent store key 改为一次迁移后写回新结构并清理旧入口；mac `LSUIElement` 不再在打包配置中默认写死，改为显式构建开关注入。
 
+### fix(pilot-build): 收口 tuff-intelligence pilot 导出边界并恢复前端构建
+
+- `packages/tuff-intelligence/src/pilot.ts`
+- `packages/tuff-intelligence/src/pilot-server.ts`
+- `packages/tuff-intelligence/package.json`
+- `apps/pilot/server/**/*`
+  - `@talex-touch/tuff-intelligence/pilot` 收口为 browser-safe 入口，仅保留 `business/pilot` projection / trace / legacy card / stream helper 与前端共享类型。
+  - 新增 `@talex-touch/tuff-intelligence/pilot-server` 子路径，承载 runtime / store / deepagent engine / protocol 类型，`apps/pilot/server` 原子迁移到新入口，避免前端 import `/pilot` 时再把 `deepagents / @langchain/langgraph / node:async_hooks` 卷入浏览器 bundle。
+  - 不引入前端 alias、shim 或构建绕过；本次只修共享包导出边界与消费者引用。
+- `apps/pilot/server/utils/__tests__/pilot-entry-contract.test.ts`
+  - 新增导出契约回归，验证 `/pilot` 不再暴露 `AbstractAgentRuntime / DecisionDispatcher / DeepAgentLangChainEngineAdapter / D1RuntimeStoreAdapter`，同时确认 `/pilot-server` 仍承载服务端 runtime/store/engine 导出。
+
 ### fix(pilot-history): 标题生成后同步回写 quota 历史与会话映射
 
 - `apps/pilot/server/utils/pilot-quota-history-sync.ts`
