@@ -488,7 +488,7 @@ describe('CommonChannelModule private helpers', () => {
 
       getTuffTransportMainMock.mockReturnValue(transport as never)
       platformCapabilityListMock.mockReturnValue([
-        { id: 'platform.storage', scope: 'system' }
+        { id: 'platform.storage', scope: 'system', supportLevel: 'supported' }
       ] as never)
       isActiveAppCapabilityAvailableMock.mockResolvedValue(true)
       nativeShareGetAvailableTargetsMock.mockReturnValue([{ id: 'mail' }] as never)
@@ -506,14 +506,35 @@ describe('CommonChannelModule private helpers', () => {
       expect(listHandler).toBeTypeOf('function')
       expect(handlers.has('system:get-active-app')).toBe(false)
 
-      const capabilities = (await listHandler?.({}, {})) as Array<{ id: string }>
+      const capabilities = (await listHandler?.({}, {})) as Array<{
+        id: string
+        supportLevel?: string
+        limitations?: string[]
+      }>
 
       expect(capabilities.map((item) => item.id)).toEqual([
         'platform.storage',
         'platform.active-app',
         'platform.native-share',
-        'platform.permission-checker'
+        'platform.permission-checker',
+        'platform.terminal',
+        'platform.tuff-cli'
       ])
+      expect(capabilities.find((item) => item.id === 'platform.active-app')?.supportLevel).toBe(
+        'supported'
+      )
+      expect(capabilities.find((item) => item.id === 'platform.native-share')?.supportLevel).toBe(
+        'supported'
+      )
+      expect(capabilities.find((item) => item.id === 'platform.terminal')?.supportLevel).toBe(
+        'best_effort'
+      )
+      expect(capabilities.find((item) => item.id === 'platform.tuff-cli')?.supportLevel).toBe(
+        'unsupported'
+      )
+      expect(
+        capabilities.find((item) => item.id === 'platform.terminal')?.limitations?.[0]
+      ).toContain('PTY')
       expect(activeAppGetActiveAppMock).not.toHaveBeenCalled()
     } finally {
       Object.defineProperty(process, 'platform', {

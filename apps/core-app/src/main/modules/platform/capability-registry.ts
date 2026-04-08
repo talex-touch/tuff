@@ -39,6 +39,7 @@ export function registerDefaultPlatformCapabilities(): void {
     description: '插件权限申请、授权与审计',
     scope: 'system',
     status: 'stable',
+    supportLevel: 'supported',
     sensitive: true
   })
 
@@ -47,7 +48,8 @@ export function registerDefaultPlatformCapabilities(): void {
     name: 'Storage',
     description: '配置与持久化存储能力',
     scope: 'system',
-    status: 'stable'
+    status: 'stable',
+    supportLevel: 'supported'
   })
 
   registry.register({
@@ -55,7 +57,8 @@ export function registerDefaultPlatformCapabilities(): void {
     name: 'Download Center',
     description: '统一下载任务管理与通知',
     scope: 'system',
-    status: 'stable'
+    status: 'stable',
+    supportLevel: 'supported'
   })
 
   registry.register({
@@ -63,7 +66,8 @@ export function registerDefaultPlatformCapabilities(): void {
     name: 'TempFile',
     description: '临时文件创建与清理',
     scope: 'system',
-    status: 'beta'
+    status: 'beta',
+    supportLevel: 'supported'
   })
 
   registry.register({
@@ -72,6 +76,7 @@ export function registerDefaultPlatformCapabilities(): void {
     description: '插件间数据流转能力',
     scope: 'plugin',
     status: 'beta',
+    supportLevel: 'supported',
     sensitive: true
   })
 
@@ -80,7 +85,8 @@ export function registerDefaultPlatformCapabilities(): void {
     name: 'DivisionBox',
     description: '插件浮动窗口与 UI 容器',
     scope: 'plugin',
-    status: 'beta'
+    status: 'beta',
+    supportLevel: 'supported'
   })
 
   registry.register({
@@ -88,7 +94,8 @@ export function registerDefaultPlatformCapabilities(): void {
     name: 'Intelligence Agents',
     description: '智能体任务执行与工具调用',
     scope: 'ai',
-    status: 'beta'
+    status: 'beta',
+    supportLevel: 'supported'
   })
 }
 

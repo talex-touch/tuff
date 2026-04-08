@@ -176,7 +176,9 @@ function closePluginDetail(): void {
 async function refreshCliTabVisibility(): Promise<void> {
   try {
     const capabilities = await platformSdk.listCapabilities({ scope: 'plugin' })
-    showCliTab.value = capabilities.some((item) => item.id === TUFF_CLI_CAPABILITY_ID)
+    showCliTab.value = capabilities.some(
+      (item) => item.id === TUFF_CLI_CAPABILITY_ID && item.supportLevel !== 'unsupported'
+    )
   } catch (error) {
     showCliTab.value = false
     console.warn('[Store] Failed to check Tuff CLI capability:', error)
