@@ -682,6 +682,10 @@
       "devDisconnected": "Dev server disconnected, click to reconnect.",
       "devReconnecting": "Reconnecting to dev server..."
     },
+    "summary": {
+      "loading": "Loading plugin metadata...",
+      "loadFailed": "Plugin metadata failed to load."
+    },
     "tabs": {
       "overview": "Overview",
       "issues": "Issues",
@@ -1565,6 +1569,12 @@
         "beta": "Beta",
         "alpha": "Alpha"
       },
+      "support": {
+        "supported": "Supported",
+        "best_effort": "Best effort",
+        "unsupported": "Unsupported"
+      },
+      "limitations": "Limitations",
       "tags": {
         "sensitive": "Sensitive"
       },
@@ -1746,6 +1756,11 @@
       "backendSdk": "SDK (N-API)",
       "backendCli": "CLI (es.exe)",
       "backendUnavailable": "Unavailable",
+      "healthTitle": "Search Health",
+      "healthDesc": "Shows whether Windows search is using Everything or a degraded fallback",
+      "healthHealthy": "Healthy",
+      "healthDegraded": "Degraded fallback",
+      "healthUnsupported": "Unsupported",
       "fallbackChainTitle": "Fallback Chain",
       "fallbackChainDesc": "Automatic downgrade order when a backend becomes unavailable",
       "enableTitle": "Enable Everything Search",

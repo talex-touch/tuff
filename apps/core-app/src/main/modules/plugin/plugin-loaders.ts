@@ -74,7 +74,7 @@ abstract class BasePluginLoader {
   constructor(pluginName: string, pluginPath: string) {
     this.pluginName = pluginName
     this.pluginPath = pluginPath
-    this.touchPlugin = createPluginErrorPlaceholder(this.pluginName, this.pluginPath)
+    this.touchPlugin = createPluginLoadShell(this.pluginName, this.pluginPath)
   }
 
   /**
@@ -364,25 +364,25 @@ abstract class BasePluginLoader {
   }
 }
 
-export function createPluginErrorPlaceholder(
+export function createPluginLoadShell(
   pluginName: string,
   pluginPath: string,
-  description = 'Loading...',
   options?: { skipDataInit?: boolean }
 ): TouchPlugin {
-  const placeholderIcon = new TuffIconImpl(pluginPath, 'emoji', '')
-  placeholderIcon.status = 'error'
-  return new TouchPlugin(
+  const shellIcon = new TuffIconImpl(pluginPath, 'class', 'i-carbon-plug')
+  const plugin = new TouchPlugin(
     pluginName,
-    placeholderIcon,
+    shellIcon,
     '0.0.0',
-    description,
+    '',
     '',
     { enable: false, address: '', source: false },
     pluginPath,
     undefined,
     options
   )
+  plugin.setLoadState('loading')
+  return plugin
 }
 
 /**

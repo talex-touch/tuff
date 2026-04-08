@@ -126,6 +126,13 @@ export interface TouchPluginRuntimeContext {
   mainWindowId?: number
 }
 
+export type PluginLoadState = 'loading' | 'ready' | 'load_failed'
+
+export interface PluginLoadError {
+  code: string
+  message: string
+}
+
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
 }
@@ -299,6 +306,8 @@ export class TouchPlugin implements ITouchPlugin {
     optional: string[]
     reasons: Record<string, string>
   }
+  loadState: PluginLoadState = 'ready'
+  loadError?: PluginLoadError
 
   pluginPath: string
 
@@ -358,6 +367,8 @@ export class TouchPlugin implements ITouchPlugin {
       status: this.status,
       platforms: this.platforms,
       sdkapi: this.sdkapi,
+      loadState: this.loadState,
+      loadError: this.loadError,
       declaredPermissions: this.declaredPermissions
         ? {
             required: [...this.declaredPermissions.required],
@@ -408,6 +419,11 @@ export class TouchPlugin implements ITouchPlugin {
         status: this._status
       })
     }
+  }
+
+  setLoadState(nextState: PluginLoadState, loadError?: PluginLoadError): void {
+    this.loadState = nextState
+    this.loadError = loadError
   }
 
   addFeature(feature: IPluginFeature): boolean {
@@ -637,6 +653,8 @@ export class TouchPlugin implements ITouchPlugin {
     this.features = []
     this.issues = []
     this._uniqueChannelKey = ''
+    this.loadState = 'ready'
+    this.loadError = undefined
 
     this.logger = new PluginLogger(
       name,
