@@ -67,7 +67,6 @@ import {
   platformCapabilityRegistry,
   registerDefaultPlatformCapabilities
 } from '../modules/platform/capability-registry'
-import { nativeShareService } from '../modules/flow-bus/native-share'
 import { activeAppService, isActiveAppCapabilityAvailable } from '../modules/system/active-app'
 import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage'
 import { getNetworkService } from '../modules/network'
@@ -575,11 +574,13 @@ async function detectTuffCliAvailability(): Promise<boolean> {
 async function listPlatformCapabilities(
   query: PlatformCapabilityListRequest
 ): Promise<PlatformCapability[]> {
-  const capabilities = platformCapabilityRegistry.list(query).map((capability) => ({
-    ...capability,
-    supportLevel: capability.supportLevel ?? 'supported',
-    limitations: capability.limitations ? [...capability.limitations] : undefined
-  }))
+  const capabilities: PlatformCapability[] = platformCapabilityRegistry
+    .list(query)
+    .map((capability) => ({
+      ...capability,
+      supportLevel: capability.supportLevel ?? 'supported',
+      limitations: capability.limitations ? [...capability.limitations] : undefined
+    }))
   const appendDynamicCapability = (capability: PlatformCapability): void => {
     if (capabilities.some((item) => item.id === capability.id)) {
       return

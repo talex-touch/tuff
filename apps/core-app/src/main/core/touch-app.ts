@@ -106,7 +106,13 @@ export class TouchApp implements TalexTouch.TouchApp {
         }
       })
     } catch (error) {
-      mainLog.warn('Failed to archive legacy split setting file', { error, legacyPath, reason })
+      mainLog.warn('Failed to archive legacy split setting file', {
+        error,
+        meta: {
+          legacyPath,
+          reason
+        }
+      })
     }
   }
 
@@ -118,7 +124,6 @@ export class TouchApp implements TalexTouch.TouchApp {
     const configPath = path.join(this.rootPath, 'modules', 'config', 'app-setting.ini')
     let appSettings: Record<string, unknown> = {}
     let appSettingMtimeMs = 0
-    let appSettingLoaded = false
 
     try {
       if (fse.existsSync(configPath)) {
@@ -130,14 +135,12 @@ export class TouchApp implements TalexTouch.TouchApp {
           const parsed: unknown = JSON.parse(content)
           if (parsed && typeof parsed === 'object') {
             appSettings = parsed as Record<string, unknown>
-            appSettingLoaded = true
           }
         }
       }
     } catch (error) {
       mainLog.warn('Failed to read app-setting.ini from disk', { error })
       appSettings = {}
-      appSettingLoaded = false
     }
 
     const legacyStartSilent = this.readLegacyBooleanSettingFromDisk('app.window.startSilent')
