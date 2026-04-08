@@ -87,12 +87,34 @@ export function createPilotStreamEmitter(options: CreatePilotStreamEmitterOption
       throw new Error(`Pilot stream event "${payload.type}" missing seq.`)
     }
 
-    await options.send({
-      ...payload,
-      sessionId: payload.sessionId || options.sessionId,
-      seq,
-      timestamp: payload.timestamp || now(),
-    })
+    const { seq: _draftSeq, ...eventPayload } = payload
+    const sessionId = payload.sessionId || options.sessionId
+    const timestamp = payload.timestamp || now()
+
+    if (Number.isFinite(seq)) {
+      const nextSeq = Number(seq)
+      const event: PilotStreamEvent & { sessionId: string, timestamp: number } = {
+        ...eventPayload,
+        sessionId,
+        timestamp,
+        seq: nextSeq,
+      }
+      await options.send(event)
+      return
+    }
+
+    if (isPilotSeqOptionalEventType(eventPayload.type)) {
+      const event: PilotStreamEvent & { sessionId: string, timestamp: number } = {
+        ...eventPayload,
+        sessionId,
+        timestamp,
+        type: eventPayload.type,
+      }
+      await options.send(event)
+      return
+    }
+
+    throw new Error(`Pilot stream event "${eventPayload.type}" missing seq.`)
   }
 
   return {
