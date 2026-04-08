@@ -1,4 +1,4 @@
-import type { AgentEnvelope } from '@talex-touch/tuff-intelligence/pilot'
+import type { AgentEnvelope } from '@talex-touch/tuff-intelligence/pilot-server'
 import { runPilotConversationStream } from '@talex-touch/tuff-intelligence/pilot'
 import { describe, expect, it } from 'vitest'
 

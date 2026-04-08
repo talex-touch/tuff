@@ -7,7 +7,7 @@ import type {
   DeepAgentAuditRecord,
   TurnState,
   UserMessageAttachment,
-} from '@talex-touch/tuff-intelligence/pilot'
+} from '@talex-touch/tuff-intelligence/pilot-server'
 import type { PilotCozeAuthMode, PilotProviderTargetType } from './pilot-channel'
 import { Buffer } from 'node:buffer'
 import { ChatEventType, CozeAPI, RoleType } from '@coze/api'

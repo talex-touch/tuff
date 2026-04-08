@@ -1,6 +1,6 @@
-import type { AgentEnvelope, AgentEventType, RuntimeStoreAdapter, SessionRecord, TraceRecord } from '@talex-touch/tuff-intelligence/pilot'
-import type { UserMessageInput } from '@talex-touch/tuff-intelligence/pilot'
-import { AbstractAgentRuntime } from '@talex-touch/tuff-intelligence/pilot'
+import type { AgentEnvelope, AgentEventType, RuntimeStoreAdapter, SessionRecord, TraceRecord } from '@talex-touch/tuff-intelligence/pilot-server'
+import type { UserMessageInput } from '@talex-touch/tuff-intelligence/pilot-server'
+import { AbstractAgentRuntime } from '@talex-touch/tuff-intelligence/pilot-server'
 import { describe, expect, it } from 'vitest'
 
 class TestPilotRuntime extends AbstractAgentRuntime {}
