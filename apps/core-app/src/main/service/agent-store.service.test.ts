@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { StorageList } from '@talex-touch/utils'
 
 const {
   getConfigMock,
@@ -158,5 +159,45 @@ describe('agentStoreService', () => {
     )
 
     await expect(agentStoreService.checkUpdates()).rejects.toThrow(/catalog unavailable/i)
+  })
+
+  it('migrates legacy agent store key once and clears the old key', async () => {
+    const service = resetServiceState()
+    service.storageLoaded = false
+    getConfigMock.mockImplementation((key) => {
+      if (key === 'agent-market.json') {
+        return {
+          installed: {
+            'community.smart-agent': '1.0.0'
+          }
+        }
+      }
+      return undefined
+    })
+    getMainConfigMock.mockImplementation((key) => {
+      if (typeof key === 'string' && key.includes('agent')) {
+        return {
+          installed: {
+            'community.smart-agent': '1.0.0'
+          }
+        }
+      }
+      return { installed: {} }
+    })
+
+    await agentStoreService.getInstalledAgents()
+
+    expect(saveConfigMock).toHaveBeenNthCalledWith(
+      1,
+      StorageList.AGENT_STORE,
+      {
+        installed: {
+          'community.smart-agent': '1.0.0'
+        }
+      },
+      false,
+      true
+    )
+    expect(saveConfigMock).toHaveBeenNthCalledWith(2, 'agent-market.json', undefined, true, true)
   })
 })

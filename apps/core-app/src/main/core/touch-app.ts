@@ -63,7 +63,7 @@ export class TouchApp implements TalexTouch.TouchApp {
 
   private readLegacyBooleanSettingFromDisk(
     settingFile: string
-  ): { value: boolean; mtimeMs: number } | null {
+  ): { value: boolean; mtimeMs: number; path: string } | null {
     const legacyPath = path.join(this.rootPath, 'modules', 'config', settingFile)
     try {
       if (!fse.existsSync(legacyPath)) return null
@@ -84,11 +84,29 @@ export class TouchApp implements TalexTouch.TouchApp {
       const stat = fse.statSync(legacyPath)
       return {
         value: parsed,
-        mtimeMs: stat.mtimeMs
+        mtimeMs: stat.mtimeMs,
+        path: legacyPath
       }
     } catch (error) {
       mainLog.warn(`Failed to read legacy setting file: ${settingFile}`, { error })
       return null
+    }
+  }
+
+  private archiveLegacySettingFile(legacyPath: string, reason: string): void {
+    try {
+      if (!fse.existsSync(legacyPath)) return
+      const archivedPath = `${legacyPath}.migrated-${Date.now()}`
+      fse.moveSync(legacyPath, archivedPath, { overwrite: true })
+      mainLog.info('Archived legacy split setting file', {
+        meta: {
+          from: legacyPath,
+          to: archivedPath,
+          reason
+        }
+      })
+    } catch (error) {
+      mainLog.warn('Failed to archive legacy split setting file', { error, legacyPath, reason })
     }
   }
 
@@ -137,6 +155,7 @@ export class TouchApp implements TalexTouch.TouchApp {
       startSilentFromAppSetting === undefined || legacyStartSilent.mtimeMs > appSettingMtimeMs
 
     if (!shouldUseLegacy) {
+      this.archiveLegacySettingFile(legacyStartSilent.path, 'app-setting-newer')
       return appSettings
     }
 
@@ -156,12 +175,10 @@ export class TouchApp implements TalexTouch.TouchApp {
       }
     })
 
-    if (!appSettingLoaded) {
-      return appSettings
-    }
-
     try {
+      fse.ensureDirSync(path.dirname(configPath))
       fse.writeFileSync(configPath, JSON.stringify(appSettings, null, 2))
+      this.archiveLegacySettingFile(legacyStartSilent.path, 'migrated')
     } catch (error) {
       mainLog.warn('Failed to persist merged startSilent setting to app-setting.ini', { error })
     }
