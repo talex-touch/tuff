@@ -7,7 +7,7 @@ import {
   PilotStrictModeUnavailableError,
 } from '../pilot-runtime'
 
-vi.mock('@talex-touch/tuff-intelligence/pilot', () => {
+vi.mock('@talex-touch/tuff-intelligence/pilot-server', () => {
   class MockAbstractAgentRuntime {
     constructor(public deps: any) {}
   }
