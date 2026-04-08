@@ -32,8 +32,71 @@ interface ProcessedTuffItem extends TuffItem {
   score: number // 用于排序的内部评分
 }
 
+type AppSearchRow = typeof filesSchema.$inferSelect & { extensions: Record<string, string | null> }
+
+interface AppMatchState {
+  highlights: Range[]
+  score: number
+  source: string
+}
+
+function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): ProcessedTuffItem {
+  const uniqueId = app.extensions.bundleId || app.path
+  const name = app.name
+  const displayName = app.displayName || app.name
+  const rawIconValue = app.extensions.icon ?? ''
+  const iconValue = rawIconValue && !isValidBase64DataUrl(rawIconValue) ? '' : rawIconValue
+
+  const tuffItem = new TuffItemBuilder(uniqueId, 'application', 'app-provider')
+    .setKind('app')
+    .setTitle(displayName)
+    .setSubtitle(app.path)
+    .setIcon({
+      type: iconValue.startsWith('data:') ? 'url' : 'file',
+      value: iconValue
+    })
+    .setActions([
+      {
+        id: 'open-app',
+        type: 'open',
+        label: 'Open',
+        primary: true,
+        payload: {
+          path: app.path
+        }
+      }
+    ])
+    .setMeta({
+      app: {
+        path: app.path,
+        bundle_id: app.extensions.bundleId || ''
+      },
+      extension: {
+        matchResult: match.highlights,
+        source: match.source,
+        keyWords: [...new Set([name, path.basename(app.path).split('.')[0] || ''])].filter(Boolean)
+      }
+    })
+    .setScoring({
+      final: match.score
+    })
+    .build()
+
+  return { ...tuffItem, score: match.score }
+}
+
+export function mapAppsToRecommendationItems(apps: AppSearchRow[]): ProcessedTuffItem[] {
+  return apps.map((app) =>
+    buildProcessedAppItem(app, {
+      highlights: [],
+      score: 0,
+      source: 'recommendation'
+    })
+  )
+}
+
 export async function processSearchResults(
-  apps: (typeof filesSchema.$inferSelect & { extensions: Record<string, string | null> })[],
+  apps: AppSearchRow[],
   query: TuffQuery,
   isFuzzySearch: boolean,
   aliases: Record<string, string[]> // 需要传入别名数据
@@ -43,10 +106,10 @@ export async function processSearchResults(
   const processedItems: ProcessedTuffItem[] = []
 
   for (const app of apps) {
-    const uniqueId = app.extensions.bundleId || app.path
     const name = app.name
     const displayName = app.displayName || app.name
     const potentialTitles = [displayName, name].filter(Boolean) as string[]
+    const uniqueId = app.extensions.bundleId || app.path
 
     let bestSource: string = 'unknown'
     let bestHighlights: Range[] = []
@@ -203,50 +266,13 @@ export async function processSearchResults(
       continue
     }
 
-    // --- 2. 结果组装 ---
-    const rawIconValue = app.extensions.icon ?? ''
-    const iconValue = rawIconValue && !isValidBase64DataUrl(rawIconValue) ? '' : rawIconValue
-    const tuffItem = new TuffItemBuilder(uniqueId, 'application', 'app-provider')
-      .setKind('app')
-      .setTitle(displayName)
-      .setSubtitle(app.path)
-      .setIcon({
-        // 根据实际内容动态选择类型：base64 Data URI 用 'url'，文件路径用 'file'
-        type: iconValue.startsWith('data:') ? 'url' : 'file',
-        value: iconValue
+    processedItems.push(
+      buildProcessedAppItem(app, {
+        highlights: bestHighlights,
+        score,
+        source: bestSource
       })
-      .setActions([
-        {
-          id: 'open-app',
-          type: 'open',
-          label: 'Open',
-          primary: true,
-          payload: {
-            path: app.path
-          }
-        }
-      ])
-      .setMeta({
-        app: {
-          path: app.path,
-          bundle_id: app.extensions.bundleId || ''
-        },
-        extension: {
-          matchResult: bestHighlights,
-          source: bestSource, // 添加来源信息
-          keyWords: [...new Set([name, path.basename(app.path).split('.')[0] || ''])].filter(
-            Boolean
-          )
-        }
-      })
-      .setScoring({
-        final: score
-      })
-      .build()
-
-    processedItems.push({ ...tuffItem, score })
-
-    // Progress tracking removed; keep placeholder for future diagnostics if needed.
+    )
   }
 
   // 结果按分数降序排序

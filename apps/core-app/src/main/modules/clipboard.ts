@@ -71,9 +71,9 @@ import {
 } from './clipboard/clipboard-phase-diagnostics'
 import {
   buildApplyPayloadFromCopyAndPaste,
-  type LegacyClipboardQueryRequest,
+  type ClipboardHistoryQueryInput,
   normalizeClipboardWritePayload
-} from './clipboard/clipboard-legacy-bridge'
+} from './clipboard/clipboard-request-normalizer'
 
 const clipboardLog = createLogger('Clipboard')
 const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
@@ -1386,7 +1386,7 @@ export class ClipboardModule extends BaseModule {
   }
 
   private async queryClipboardHistory(
-    request: ClipboardQueryRequest | LegacyClipboardQueryRequest | null | undefined
+    request: ClipboardQueryRequest | ClipboardHistoryQueryInput | null | undefined
   ): Promise<{
     rows: IClipboardItem[]
     total: number

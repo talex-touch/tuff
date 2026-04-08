@@ -14,6 +14,10 @@ import { performStoreHttpRequest } from './store-http.service'
 const log = createLogger('StoreApiService')
 const LEGACY_STORE_SOURCES_KEY = 'market-sources.json'
 
+function clearLegacyStoreSourcesKey(): void {
+  saveConfig(LEGACY_STORE_SOURCES_KEY, undefined, true, true)
+}
+
 function isStoreSourcesPayload(value: unknown): value is StoreSourcesPayload {
   if (!value || typeof value !== 'object') {
     return false
@@ -40,6 +44,7 @@ function migrateLegacyStoreSourcesIfNeeded(): void {
   }
 
   saveConfig(STORE_SOURCES_STORAGE_KEY, nextPayload, false, true)
+  clearLegacyStoreSourcesKey()
   log.info('Migrated legacy store sources key', {
     meta: {
       from: LEGACY_STORE_SOURCES_KEY,

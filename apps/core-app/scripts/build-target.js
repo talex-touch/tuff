@@ -637,6 +637,16 @@ function build() {
     console.log(`Overriding package version for builder: ${finalVersion}`);
   }
 
+  const macLsuiElementFlag = process.env.TUFF_MAC_LSUIELEMENT || process.env.BUILD_MAC_LSUIELEMENT;
+  const enableMacLsuiElement =
+    normalizedTarget === 'mac' &&
+    typeof macLsuiElementFlag === 'string' &&
+    ['1', 'true', 'yes', 'on'].includes(macLsuiElementFlag.toLowerCase());
+  if (enableMacLsuiElement) {
+    builderArgs.push('--config.mac.extendInfo.LSUIElement=true');
+    console.log('[build-target] Enabled macOS LSUIElement via explicit build flag');
+  }
+
   const publishPolicy = publish || (buildType === 'snapshot' ? 'never' : undefined);
   if (publishPolicy) {
     builderArgs.push(`--publish=${publishPolicy}`);

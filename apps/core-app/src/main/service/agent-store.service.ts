@@ -202,6 +202,10 @@ function normalizePackage(value: unknown, fallbackVersion?: string): RemoteAgent
   }
 }
 
+function clearLegacyAgentStoreKey(): void {
+  saveConfig(LEGACY_AGENT_STORE_KEY, undefined, true, true)
+}
+
 function compareVersion(a: string, b: string): number {
   const normalize = (version: string): Array<number | string> =>
     version
@@ -470,6 +474,7 @@ class AgentStoreService {
     }
 
     saveConfig(StorageList.AGENT_STORE, legacyRaw, false, true)
+    clearLegacyAgentStoreKey()
     log.info('Migrated legacy agent store key', {
       meta: {
         from: LEGACY_AGENT_STORE_KEY,

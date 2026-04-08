@@ -1,21 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
-import {
-  clipboardLegacyApplyToActiveAppEvent,
-  clipboardLegacyClearEvent,
-  clipboardLegacyClearHistoryEvent,
-  clipboardLegacyCopyAndPasteEvent,
-  clipboardLegacyDeleteItemEvent,
-  clipboardLegacyGetHistoryEvent,
-  clipboardLegacyGetImageUrlEvent,
-  clipboardLegacyGetLatestEvent,
-  clipboardLegacyReadEvent,
-  clipboardLegacyReadFilesEvent,
-  clipboardLegacyReadImageEvent,
-  clipboardLegacySetFavoriteEvent,
-  clipboardLegacyWriteEvent,
-  clipboardLegacyWriteTextEvent
-} from './clipboard/clipboard-legacy-bridge'
+
+const LEGACY_CLIPBOARD_EVENT_NAMES = [
+  'clipboard:get-latest',
+  'clipboard:get-history',
+  'clipboard:set-favorite',
+  'clipboard:delete-item',
+  'clipboard:clear-history',
+  'clipboard:apply-to-active-app',
+  'clipboard:copy-and-paste',
+  'clipboard:write-text',
+  'clipboard:write',
+  'clipboard:read',
+  'clipboard:read-image',
+  'clipboard:read-files',
+  'clipboard:clear',
+  'clipboard:get-image-url'
+] as const
 
 vi.mock('electron', () => ({
   app: {
@@ -247,24 +248,7 @@ describe('ClipboardModule transport registration', () => {
       ClipboardEvents.change.toString()
     ])
 
-    const legacyEvents = [
-      clipboardLegacyGetLatestEvent,
-      clipboardLegacyGetHistoryEvent,
-      clipboardLegacySetFavoriteEvent,
-      clipboardLegacyDeleteItemEvent,
-      clipboardLegacyClearHistoryEvent,
-      clipboardLegacyApplyToActiveAppEvent,
-      clipboardLegacyCopyAndPasteEvent,
-      clipboardLegacyWriteTextEvent,
-      clipboardLegacyWriteEvent,
-      clipboardLegacyReadEvent,
-      clipboardLegacyReadImageEvent,
-      clipboardLegacyReadFilesEvent,
-      clipboardLegacyClearEvent,
-      clipboardLegacyGetImageUrlEvent
-    ].map((event) => event.toString())
-
-    for (const legacyEvent of legacyEvents) {
+    for (const legacyEvent of LEGACY_CLIPBOARD_EVENT_NAMES) {
       expect(registeredEvents).not.toContain(legacyEvent)
     }
   })
