@@ -287,7 +287,7 @@ function resolveCardTitle(cardType: string): string {
   return '运行事件'
 }
 
-function buildEventCardKey(cardType: string, sourceEventType: string, turnId: string): string {
+function buildEventCardKey(cardType: string, _sourceEventType: string, turnId: string): string {
   const turn = turnId || 'latest'
   if (cardType === 'websearch') {
     return buildPilotWebsearchCardKey(turn)

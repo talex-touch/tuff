@@ -1,18 +1,9 @@
 import type {
-  ClipboardActionResult,
   ClipboardCopyAndPasteRequest,
-  ClipboardDeleteRequest,
-  ClipboardGetImageUrlRequest,
-  ClipboardGetImageUrlResponse,
-  ClipboardReadImageRequest,
-  ClipboardReadImageResponse,
-  ClipboardReadResponse,
-  ClipboardSetFavoriteRequest,
   ClipboardWriteRequest
 } from '@talex-touch/utils/transport/events/types'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
-export interface LegacyClipboardItem {
+export interface ClipboardHistoryItemSnapshot {
   id?: number
   type: 'text' | 'image' | 'files'
   content: string
@@ -25,7 +16,7 @@ export interface LegacyClipboardItem {
   meta?: Record<string, unknown> | null
 }
 
-export interface LegacyClipboardQueryRequest {
+export interface ClipboardHistoryQueryInput {
   keyword?: string
   startTime?: number
   endTime?: number
@@ -38,15 +29,15 @@ export interface LegacyClipboardQueryRequest {
   sortOrder?: 'asc' | 'desc'
 }
 
-export interface LegacyClipboardQueryResponse {
-  history: LegacyClipboardItem[]
+export interface ClipboardHistoryQueryOutput {
+  history: ClipboardHistoryItemSnapshot[]
   total: number
   page: number
   pageSize: number
   limit?: number
 }
 
-export interface LegacyClipboardApplyPayload {
+export interface ClipboardApplyPayload {
   item?: {
     id?: number
     type?: 'text' | 'image' | 'files'
@@ -60,14 +51,14 @@ export interface LegacyClipboardApplyPayload {
   hideCoreBox?: boolean
 }
 
-export interface LegacyClipboardWritePayload {
+export interface ClipboardWritePayload {
   text?: string
   html?: string
   image?: string
   files?: string[]
 }
 
-export interface LegacyClipboardSourceItem {
+export interface ClipboardHistorySourceItem {
   id?: number
   type: 'text' | 'image' | 'files'
   content?: string | null
@@ -80,53 +71,9 @@ export interface LegacyClipboardSourceItem {
   meta?: Record<string, unknown> | null
 }
 
-export const clipboardLegacyGetLatestEvent = defineRawEvent<void, LegacyClipboardItem | null>(
-  'clipboard:get-latest'
-)
-export const clipboardLegacyGetHistoryEvent = defineRawEvent<
-  LegacyClipboardQueryRequest,
-  LegacyClipboardQueryResponse
->('clipboard:get-history')
-export const clipboardLegacySetFavoriteEvent = defineRawEvent<ClipboardSetFavoriteRequest, void>(
-  'clipboard:set-favorite'
-)
-export const clipboardLegacyDeleteItemEvent = defineRawEvent<ClipboardDeleteRequest, void>(
-  'clipboard:delete-item'
-)
-export const clipboardLegacyClearHistoryEvent = defineRawEvent<void, void>(
-  'clipboard:clear-history'
-)
-export const clipboardLegacyApplyToActiveAppEvent = defineRawEvent<
-  LegacyClipboardApplyPayload,
-  ClipboardActionResult
->('clipboard:apply-to-active-app')
-export const clipboardLegacyCopyAndPasteEvent = defineRawEvent<
-  ClipboardCopyAndPasteRequest,
-  ClipboardActionResult
->('clipboard:copy-and-paste')
-export const clipboardLegacyWriteTextEvent = defineRawEvent<{ text?: string }, void>(
-  'clipboard:write-text'
-)
-export const clipboardLegacyWriteEvent = defineRawEvent<ClipboardWriteRequest, void>(
-  'clipboard:write'
-)
-export const clipboardLegacyReadEvent = defineRawEvent<void, ClipboardReadResponse>(
-  'clipboard:read'
-)
-export const clipboardLegacyReadImageEvent = defineRawEvent<
-  ClipboardReadImageRequest,
-  ClipboardReadImageResponse | null
->('clipboard:read-image')
-export const clipboardLegacyReadFilesEvent = defineRawEvent<void, string[]>('clipboard:read-files')
-export const clipboardLegacyClearEvent = defineRawEvent<void, void>('clipboard:clear')
-export const clipboardLegacyGetImageUrlEvent = defineRawEvent<
-  ClipboardGetImageUrlRequest,
-  ClipboardGetImageUrlResponse
->('clipboard:get-image-url')
-
 export function buildApplyPayloadFromCopyAndPaste(
   request: ClipboardCopyAndPasteRequest | null | undefined
-): LegacyClipboardApplyPayload {
+): ClipboardApplyPayload {
   const { text, html, image, files, delayMs, hideCoreBox } = request ?? {}
   if (image) {
     return {
@@ -144,7 +91,7 @@ export function buildApplyPayloadFromCopyAndPaste(
 
 export function normalizeClipboardWritePayload(
   request: ClipboardWriteRequest | null | undefined
-): LegacyClipboardWritePayload | null {
+): ClipboardWritePayload | null {
   if (!request) {
     return null
   }
@@ -172,9 +119,9 @@ export function normalizeClipboardWritePayload(
   return { text: request.value ?? '' }
 }
 
-export function toLegacyClipboardItem(
-  item: LegacyClipboardSourceItem | null
-): LegacyClipboardItem | null {
+export function toClipboardHistoryItem(
+  item: ClipboardHistorySourceItem | null
+): ClipboardHistoryItemSnapshot | null {
   if (!item) return null
 
   const timestampValue =

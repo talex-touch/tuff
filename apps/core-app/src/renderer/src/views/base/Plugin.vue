@@ -35,6 +35,21 @@ const loadingStates = ref({
   openFolder: false
 })
 
+function matchesPluginSearch(plugin: ITouchPlugin, query: string): boolean {
+  const normalizedQuery = query.trim().toLowerCase()
+  if (!normalizedQuery) return true
+
+  const candidates = [
+    plugin.name,
+    plugin.desc,
+    plugin.loadError?.message,
+    plugin.loadState === 'loading' ? t('plugin.summary.loading') : '',
+    plugin.loadState === 'load_failed' ? t('plugin.summary.loadFailed') : ''
+  ]
+
+  return candidates.some((value) => value?.toLowerCase().includes(normalizedQuery))
+}
+
 // Running plugins (status 3 or 4)
 const runningPlugins = computed(() =>
   visiblePlugins.value.filter((plugin) => plugin.status === 3 || plugin.status === 4)
@@ -43,20 +58,12 @@ const runningPlugins = computed(() =>
 // Filtered plugins based on search query
 const filteredRunningPlugins = computed(() => {
   if (!searchQuery.value.trim()) return runningPlugins.value
-  const query = searchQuery.value.toLowerCase()
-  return runningPlugins.value.filter(
-    (plugin) =>
-      plugin.name.toLowerCase().includes(query) || plugin.desc?.toLowerCase().includes(query)
-  )
+  return runningPlugins.value.filter((plugin) => matchesPluginSearch(plugin, searchQuery.value))
 })
 
 const filteredAllPlugins = computed(() => {
   if (!searchQuery.value.trim()) return visiblePlugins.value
-  const query = searchQuery.value.toLowerCase()
-  return visiblePlugins.value.filter(
-    (plugin) =>
-      plugin.name.toLowerCase().includes(query) || plugin.desc?.toLowerCase().includes(query)
-  )
+  return visiblePlugins.value.filter((plugin) => matchesPluginSearch(plugin, searchQuery.value))
 })
 
 function handleSelectPlugin(plugin: ITouchPlugin | null) {
