@@ -1,4 +1,4 @@
-import type { UserMessageInput } from '@talex-touch/tuff-intelligence/pilot'
+import type { UserMessageInput } from '@talex-touch/tuff-intelligence/pilot-server'
 import { createError } from 'h3'
 
 function normalizeStreamAttachmentItem(

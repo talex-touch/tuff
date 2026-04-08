@@ -1,4 +1,4 @@
-import type { UserMessageAttachment } from '@talex-touch/tuff-intelligence/pilot'
+import type { UserMessageAttachment } from '@talex-touch/tuff-intelligence/pilot-server'
 import type { H3Event } from 'h3'
 import type { QuotaUserTurnAttachment } from './quota-history-codec'
 import { buildPilotTitleMessages } from '@talex-touch/tuff-intelligence/pilot'

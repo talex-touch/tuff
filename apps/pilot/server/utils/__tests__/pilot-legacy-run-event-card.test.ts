@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   projectPilotLegacyRunEventCard,
   resolvePilotLegacyRunEventCardKeys,
+  sortPilotChatBlocksByTimeline,
 } from '@talex-touch/tuff-intelligence/pilot'
-import { sortPilotChatBlocksByTimeline } from '../../../shared/pilot-chat-block-order'
 
 function mergePlanningTodos(
   current: Record<string, unknown>,
