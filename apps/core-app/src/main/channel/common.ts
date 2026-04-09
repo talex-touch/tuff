@@ -117,7 +117,7 @@ const ACTIVE_APP_CAPABILITY: PlatformCapability = {
 const NATIVE_SHARE_CAPABILITY: PlatformCapability = {
   id: 'platform.native-share',
   name: 'Native Share',
-  description: '系统原生分享目标与分发能力',
+  description: 'macOS 提供完整原生分享；Windows/Linux 仅提供 mail-only best-effort',
   scope: 'system',
   status: 'beta',
   supportLevel: 'unsupported'
@@ -827,7 +827,7 @@ export class CommonChannelModule extends BaseModule {
     }
 
     this.setupBatteryStatusBroadcast(transport)
-    this.registerLegacyDialogWallpaperHandlers(transport, touchApp)
+    this.registerDialogWallpaperHandlers(transport, touchApp)
 
     const onOpenUrl = this.createOpenUrlHandler()
     this.bindOpenUrlListeners(touchApp, onOpenUrl)
@@ -890,7 +890,7 @@ export class CommonChannelModule extends BaseModule {
     }
   }
 
-  private registerLegacyDialogWallpaperHandlers(
+  private registerDialogWallpaperHandlers(
     transport: NonNullable<CommonChannelModule['transport']>,
     touchApp: TalexTouch.TouchApp
   ): void {

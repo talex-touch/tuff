@@ -21,6 +21,10 @@ import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
 import { useI18nText } from '~/modules/lang'
 import {
+  normalizeStoredUpdateChannel,
+  normalizeSupportedUpdateChannel
+} from '../update/channel'
+import {
   detectUpdateAssetArch,
   detectUpdateAssetPlatform,
   resolveRuntimeUpdateArch
@@ -194,9 +198,6 @@ function normalizeFrequencyLabel(value?: string): UpdateSettings['frequency'] {
 }
 
 function getDefaultSettings(channel: AppPreviewChannel): UpdateSettings {
-  const defaultChannel =
-    channel === AppPreviewChannel.SNAPSHOT ? AppPreviewChannel.BETA : AppPreviewChannel.RELEASE
-
   return {
     enabled: true,
     frequency: 'everyday',
@@ -207,7 +208,7 @@ function getDefaultSettings(channel: AppPreviewChannel): UpdateSettings {
       enabled: true,
       priority: 1
     },
-    updateChannel: defaultChannel,
+    updateChannel: normalizeSupportedUpdateChannel(channel),
     ignoredVersions: [],
     customSources: [],
     autoDownload: false,
@@ -278,6 +279,8 @@ export function useUpdateRuntime() {
       if (response.success && response.data) {
         const nextSettings = { ...response.data }
         nextSettings.frequency = normalizeFrequencyLabel(nextSettings.frequency)
+        nextSettings.updateChannel =
+          normalizeStoredUpdateChannel(nextSettings.updateChannel) ?? settingsCache.updateChannel
         if (typeof nextSettings.rendererOverrideEnabled !== 'boolean') {
           nextSettings.rendererOverrideEnabled = false
         }
@@ -292,9 +295,11 @@ export function useUpdateRuntime() {
 
   async function updateSettings(settings: Partial<UpdateSettings>): Promise<void> {
     const payload: Partial<UpdateSettings> = { ...settings }
-
-    if (version.channel === AppPreviewChannel.SNAPSHOT) {
-      payload.updateChannel = AppPreviewChannel.BETA
+    const requestedChannel = normalizeStoredUpdateChannel(payload.updateChannel)
+    if ('updateChannel' in payload) {
+      payload.updateChannel = requestedChannel
+        ? normalizeSupportedUpdateChannel(requestedChannel)
+        : settingsCache.updateChannel
     }
 
     if ('lastCheckedAt' in payload) {
@@ -317,18 +322,31 @@ export function useUpdateRuntime() {
   async function getUpdateStatus(): Promise<UpdateStatusInfo> {
     const response = await sendRequest('update:get-status', () => updateSdk.getStatus())
     if (response.success && response.data) {
-      return response.data
+      return {
+        ...response.data,
+        channel:
+          normalizeStoredUpdateChannel(response.data.channel) ?? AppPreviewChannel.RELEASE
+      }
     }
     throw new Error(response.error || 'Failed to get status')
   }
 
   async function getCachedRelease(channel?: AppPreviewChannel): Promise<CachedUpdateRecord | null> {
     try {
+      const targetChannel =
+        channel === undefined ? undefined : normalizeSupportedUpdateChannel(channel)
       const response = await sendRequest('update:get-cached-release', () =>
-        updateSdk.getCachedRelease({ channel })
+        updateSdk.getCachedRelease({ channel: targetChannel })
       )
       if (response.success) {
-        return response.data || null
+        if (!response.data) {
+          return null
+        }
+        return {
+          ...response.data,
+          channel:
+            normalizeStoredUpdateChannel(response.data.channel) ?? AppPreviewChannel.RELEASE
+        }
       }
       return null
     } catch (cachedError) {

@@ -65,6 +65,22 @@ const canViewManifestJson = computed(() => hasDevSettings.value || isAppDev.valu
 const manifestJsonText = computed(() =>
   manifestData.value ? JSON.stringify(manifestData.value, null, 2) : ''
 )
+const blockedIssue = computed(() => {
+  const issues = plugin.value.issues ?? []
+  return issues.find((issue) => issue.code === 'SDKAPI_BLOCKED') ?? null
+})
+const sdkBlocked = computed(() => {
+  return (
+    plugin.value.loadState === 'load_failed' &&
+    (plugin.value.loadError?.code === 'SDKAPI_BLOCKED' || blockedIssue.value !== null)
+  )
+})
+const blockedMessage = computed(() => {
+  if (plugin.value.loadError?.code === 'SDKAPI_BLOCKED') {
+    return plugin.value.loadError.message || ''
+  }
+  return blockedIssue.value?.message || ''
+})
 const shortcutsLoading = ref(false)
 const shortcuts = ref<ShortcutWithStatus[]>([])
 const manifestDialogVisible = ref(false)
@@ -156,7 +172,9 @@ function getShortcutWarningLabel(warning: ShortcutWarning): string {
     case 'permission-missing':
       return t('plugin.permissions.shortcuts.warning.permissionMissing')
     case 'sdk-legacy':
-      return t('plugin.permissions.shortcuts.warning.legacySdk')
+      return sdkBlocked.value
+        ? t('plugin.permissions.shortcuts.warning.blockedSdk')
+        : t('plugin.permissions.shortcuts.warning.legacySdk')
     case 'missing-description':
       return t('plugin.permissions.shortcuts.warning.missingDescription')
     default:
@@ -322,6 +340,17 @@ function openManifestDialog(event: MouseEvent): void {
       </TuffBlockLine>
 
       <TuffBlockLine :title="t('plugin.details.description')" :description="pluginDescription" />
+
+      <TuffBlockLine v-if="sdkBlocked" :title="t('plugin.details.loadState')">
+        <template #description>
+          <div class="PluginDetails-BlockedState">
+            <TxTag color="var(--tx-color-danger)" size="sm">
+              {{ t('plugin.details.blockedTag') }}
+            </TxTag>
+            <span>{{ blockedMessage || t('plugin.permissions.blockedWarning') }}</span>
+          </div>
+        </template>
+      </TuffBlockLine>
 
       <TuffBlockSwitch
         v-if="hasDevSettings"
@@ -517,6 +546,14 @@ function openManifestDialog(event: MouseEvent): void {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.01em;
+}
+
+.PluginDetails-BlockedState {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--tx-text-color-primary);
 }
 
 .PluginShortcuts-Loading {

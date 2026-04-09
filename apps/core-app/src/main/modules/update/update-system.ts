@@ -30,6 +30,7 @@ import { and, eq } from 'drizzle-orm'
 import { app, shell } from 'electron'
 import fse from 'fs-extra'
 import { downloadTasks } from '../../db/schema'
+import { normalizeSupportedUpdateChannel } from '../../../shared/update/channel'
 import { resolveUpdateAssetTarget } from '../../../shared/update/platform-target'
 import { SignatureVerifier } from '../../utils/release-signature'
 import { getAppVersionSafe } from '../../utils/version-util'
@@ -151,10 +152,11 @@ export class UpdateSystem {
       autoCheck: true,
       checkFrequency: 'startup',
       ignoredVersions: [],
-      updateChannel: this.currentVersion.channel,
+      updateChannel: normalizeSupportedUpdateChannel(this.currentVersion.channel),
       rendererOverrideEnabled: false,
       ...config
     }
+    this.config.updateChannel = normalizeSupportedUpdateChannel(this.config.updateChannel)
   }
 
   /**
@@ -936,6 +938,7 @@ export class UpdateSystem {
    */
   updateConfig(config: Partial<UpdateSystemConfig>): void {
     this.config = { ...this.config, ...config }
+    this.config.updateChannel = normalizeSupportedUpdateChannel(this.config.updateChannel)
   }
 
   private isRendererOverrideEnabled(): boolean {
@@ -1247,17 +1250,10 @@ export class UpdateSystem {
    * Get effective update channel
    */
   private getEffectiveChannel(): AppPreviewChannel {
-    // Snapshot channel is currently disabled; fallback to beta.
-    if (this.currentVersion.channel === AppPreviewChannel.SNAPSHOT) {
-      return AppPreviewChannel.BETA
+    if (this.config.updateChannel) {
+      return normalizeSupportedUpdateChannel(this.config.updateChannel)
     }
-
-    if (this.config.updateChannel === AppPreviewChannel.SNAPSHOT) {
-      return AppPreviewChannel.BETA
-    }
-
-    // Otherwise use configured channel
-    return this.config.updateChannel || AppPreviewChannel.RELEASE
+    return normalizeSupportedUpdateChannel(this.currentVersion.channel)
   }
 
   /**

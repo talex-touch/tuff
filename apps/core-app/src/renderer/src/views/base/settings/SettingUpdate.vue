@@ -17,6 +17,10 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAppState } from '~/modules/hooks/useAppStates'
 import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
+import {
+  normalizeStoredUpdateChannel,
+  normalizeSupportedUpdateChannel
+} from '~/modules/update/channel'
 import { GithubUpdateProvider } from '~/modules/update/GithubUpdateProvider'
 
 const { t } = useI18n()
@@ -154,7 +158,8 @@ async function loadSettings(): Promise<void> {
   try {
     const fetched = await getUpdateSettings()
     settings.value = fetched
-    selectedChannel.value = fetched.updateChannel
+    selectedChannel.value =
+      normalizeStoredUpdateChannel(fetched.updateChannel) ?? AppPreviewChannel.RELEASE
     selectedFrequency.value = fetched.frequency
     autoDownloadEnabled.value = fetched.autoDownload ?? false
     rendererOverrideEnabled.value = fetched.rendererOverrideEnabled ?? false
@@ -213,7 +218,7 @@ async function refreshCachedRelease(
   channel: AppPreviewChannel = selectedChannel.value
 ): Promise<void> {
   try {
-    cachedRelease.value = await getCachedRelease(channel)
+    cachedRelease.value = await getCachedRelease(normalizeSupportedUpdateChannel(channel))
   } catch (error) {
     console.warn('[SettingUpdate] Failed to refresh cached release:', error)
     cachedRelease.value = null
@@ -223,14 +228,15 @@ async function refreshCachedRelease(
 async function handleChannelChange(value: AppPreviewChannel): Promise<void> {
   if (!settings.value || channelSaving.value) return
 
+  const normalizedValue = normalizeSupportedUpdateChannel(value)
   const previous = selectedChannel.value
-  selectedChannel.value = value
+  selectedChannel.value = normalizedValue
   channelSaving.value = true
   try {
-    await updateSettings({ updateChannel: value })
-    settings.value.updateChannel = value
+    await updateSettings({ updateChannel: normalizedValue })
+    settings.value.updateChannel = normalizedValue
     toast.success(t('settings.settingUpdate.messages.channelSaved'))
-    await refreshCachedRelease(value)
+    await refreshCachedRelease(normalizedValue)
   } catch (error) {
     console.error('[SettingUpdate] Failed to update channel:', error)
     selectedChannel.value = previous

@@ -51,6 +51,7 @@ import {
 } from '../../core/eventbus/touch-event'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { useSafeUserAgent } from '../../hooks/use-electron-guard'
+import { t as translate } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { getJs, getStyles } from '../../utils/plugin-injection'
 import { getCoreBoxWindow } from '../box-tool/core-box'
@@ -526,7 +527,8 @@ export class TouchPlugin implements ITouchPlugin {
                 request: {
                   channel: 'app',
                   level: 'error',
-                  message: '哇 corebox 你这里是不是有点问题捏',
+                  title: translate('plugin.notifications.widgetLoadFailedTitle'),
+                  message: translate('plugin.notifications.widgetLoadFailedMessage'),
                   app: { presentation: 'toast' }
                 }
               })

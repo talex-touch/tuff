@@ -74,6 +74,7 @@
     "v8": "V8 引擎",
     "os": "操作系统",
     "platform": "平台",
+    "updateChannel": "更新通道",
     "experience": "体验",
     "experiencePack": "Touch 功能体验包",
     "openAppFolder": "应用文件夹",
@@ -686,6 +687,10 @@
       "loading": "正在加载插件元数据...",
       "loadFailed": "插件元数据加载失败。"
     },
+    "notifications": {
+      "widgetLoadFailedTitle": "Widget 加载失败",
+      "widgetLoadFailedMessage": "插件 widget 初始化失败，请检查插件版本、路径和运行日志。"
+    },
     "tabs": {
       "overview": "概览",
       "issues": "问题",
@@ -720,6 +725,10 @@
         "grantAll": "授予全部",
         "revokeAll": "撤销全部"
       },
+      "blockedTitle": "插件已阻断",
+      "blockedWarning": "此插件因 SDK 版本过低已被阻断，权限页面仅展示状态，不提供授权操作。",
+      "blockedStatusTitle": "阻断原因",
+      "blockedHint": "升级到 sdkapi >= {version} 后重新安装插件，再执行权限授权。",
       "legacyTitle": "SDK 版本警告",
       "legacyWarning": "此插件使用旧版 SDK，权限校验已跳过",
       "legacyHint": "升级到 sdkapi >= {version} 以启用权限校验",
@@ -755,6 +764,7 @@
         },
         "warning": {
           "permissionMissing": "未授予快捷键权限",
+          "blockedSdk": "SDK 版本过低，插件已被阻断",
           "legacySdk": "SDK 版本过低，未启用权限校验",
           "missingDescription": "缺少快捷键说明"
         }
@@ -1029,9 +1039,11 @@
       "copyPluginIdSuccess": "插件 ID 已复制",
       "copyPluginIdFailed": "复制插件 ID 失败",
       "version": "版本",
+      "loadState": "加载状态",
       "mode": "模式",
       "development": "开发模式",
       "production": "生产模式",
+      "blockedTag": "已阻断",
       "description": "描述",
       "noDescription": "暂无描述",
       "manifestJson": "manifest.json",
@@ -2042,7 +2054,7 @@
       "groupDesc": "选择更新渠道并设置自动检查频率。",
       "channelTitle": "更新渠道",
       "channelDesc": "预览渠道能更早体验新版本，但可能不够稳定。",
-      "channelSnapshotLocked": "Snapshot 构建会强制锁定在 Snapshot 渠道。",
+      "channelSnapshotLocked": "Snapshot 构建会按 Beta 渠道接收更新。",
       "channels": {
         "release": "稳定版（Release）",
         "beta": "公测版（Beta）",
