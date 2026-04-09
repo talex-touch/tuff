@@ -42,6 +42,8 @@ vi.mock('./plugin', () => ({
     pluginPath: string
     issues: Array<Record<string, unknown>>
     features: unknown[]
+    loadState: string
+    loadError?: { code: string; message: string }
     logger: {
       error: ReturnType<typeof vi.fn>
       debug: ReturnType<typeof vi.fn>
@@ -66,16 +68,22 @@ vi.mock('./plugin', () => ({
       this.pluginPath = pluginPath
       this.issues = []
       this.features = []
+      this.loadState = 'ready'
       this.logger = { error: vi.fn(), debug: vi.fn(), warn: vi.fn() }
     }
 
     addFeature() {
       return true
     }
+
+    setLoadState(state: string, loadError?: { code: string; message: string }) {
+      this.loadState = state
+      this.loadError = loadError
+    }
   }
 }))
 
-import { createPluginErrorPlaceholder, createPluginLoader } from './plugin-loaders'
+import { createPluginLoadShell, createPluginLoader } from './plugin-loaders'
 
 async function createPluginDir(manifest: Record<string, unknown>): Promise<string> {
   const root = await fs.mkdtemp(path.join(tmpdir(), 'plugin-loaders-test-'))
@@ -236,14 +244,13 @@ describe('createPluginLoader', () => {
     expect(issueCodes).not.toContain('DEV_SOURCE_FALLBACK_LOCAL')
   })
 
-  it('creates a shared error placeholder plugin shape', () => {
-    const plugin = createPluginErrorPlaceholder('broken-plugin', '/tmp/broken', 'Fatal Error', {
-      skipDataInit: true
-    })
+  it('creates a shared loading shell plugin shape', () => {
+    const plugin = createPluginLoadShell('broken-plugin', '/tmp/broken', { skipDataInit: true })
 
     expect(plugin.name).toBe('broken-plugin')
     expect(plugin.version).toBe('0.0.0')
-    expect(plugin.desc).toBe('Fatal Error')
+    expect(plugin.desc).toBe('')
     expect(plugin.dev).toMatchObject({ enable: false, address: '', source: false })
+    expect(plugin.loadState).toBe('loading')
   })
 })

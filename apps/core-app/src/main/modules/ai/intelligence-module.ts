@@ -19,7 +19,7 @@ import {
 import { getTuffTransportMain, type HandlerContext } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
-import { genTouchApp } from '../../core'
+import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
 import { safeApiHandler, withPermissionSafeApi, type ApiResponse } from '../../utils/safe-handler'
 import { BaseModule } from '../abstract-base-module'
@@ -454,15 +454,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     super(IntelligenceModule.key)
   }
 
-  async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
-    // 在 onInit 阶段获取已初始化的 transport
-    const channel = genTouchApp().channel
-    if (!channel) {
-      throw new Error('[Intelligence] Touch channel not ready')
-    }
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    this.transport = getTuffTransportMain(channel, keyManager)
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    const runtime = resolveMainRuntime(ctx, 'IntelligenceModule.onInit')
+    this.transport = runtime.transport
 
     intelligenceLog.info('Initializing Intelligence module')
 
@@ -512,6 +506,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
   private async setupAgentRuntime(): Promise<void> {
     intelligenceLog.info('Initializing intelligence agent runtime')
+    const transport = this.transport
+    if (!transport) {
+      throw new Error('[Intelligence] Transport is not ready')
+    }
 
     registerBuiltinTools()
     registerBuiltinAgents()
@@ -537,7 +535,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     })
 
-    this.agentChannelsCleanup = registerAgentChannels()
+    this.agentChannelsCleanup = registerAgentChannels(transport)
     this.verifyAgentRuntimeReady()
     intelligenceLog.success('Intelligence agent runtime initialized')
   }

@@ -1,12 +1,12 @@
-import { buildPilotConversationSnapshot } from '@talex-touch/tuff-intelligence/pilot'
-import { shouldHidePilotClientRuntimeEvent } from '../../shared/pilot-runtime-redaction'
 import {
-  buildPilotCardBlocksFromSystemMessages,
-  buildPilotWebsearchCardKey,
-  normalizePilotWebsearchReason,
-  PILOT_WEBSEARCH_CARD_TITLE,
-  shouldHidePilotWebsearchCard,
-} from '../../shared/pilot-system-message'
+  buildPilotConversationSnapshot,
+  projectPilotLegacyRunEventCard,
+  projectPilotSystemMessagesFromTraces,
+  shouldHidePilotClientRuntimeEvent,
+  shouldPilotPersistTraceEvent,
+} from '@talex-touch/tuff-intelligence/pilot'
+import { buildPilotCardBlocksFromSystemMessages } from '../../shared/pilot-system-card-blocks'
+import { sortPilotChatBlocksByTimeline } from '@talex-touch/tuff-intelligence/pilot'
 
 const MAX_CARD_BLOCKS_PER_TURN = 48
 
@@ -15,6 +15,8 @@ interface RuntimeTraceLike {
   type: string
   payload: Record<string, unknown>
   sessionId: string
+  createdAt: string | undefined
+  created_at: string | undefined
 }
 
 interface SnapshotCardBlock {
@@ -31,27 +33,28 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
-function normalizeRunEventText(value: unknown): string {
-  return String(value || '')
-}
-
 function normalizeRuntimeTraces(input: unknown): RuntimeTraceLike[] {
   if (!Array.isArray(input)) {
     return []
   }
   const normalized = input
-    .map((item, index) => {
+    .map((item) => {
       const row = toRecord(item)
       const type = String(row.type || '').trim()
-      if (!type || shouldHidePilotClientRuntimeEvent(type)) {
+      if (!type || !shouldPilotPersistTraceEvent(type) || shouldHidePilotClientRuntimeEvent(type)) {
         return null
       }
-      const seqRaw = Number(row.seq)
+      const seq = Number(row.seq)
+      if (!Number.isFinite(seq) || seq <= 0) {
+        return null
+      }
       return {
-        seq: Number.isFinite(seqRaw) && seqRaw > 0 ? Math.floor(seqRaw) : index + 1,
+        seq: Math.floor(seq),
         type,
         payload: toRecord(row.payload),
         sessionId: String(row.sessionId || row.session_id || '').trim(),
+        createdAt: String(row.createdAt || '').trim() || undefined,
+        created_at: String(row.created_at || '').trim() || undefined,
       } satisfies RuntimeTraceLike
     })
     .filter((item): item is RuntimeTraceLike => Boolean(item))
@@ -80,258 +83,48 @@ function selectLatestTurnTraces(traces: RuntimeTraceLike[]): RuntimeTraceLike[] 
   return traces
 }
 
-function buildRunEventCardData(
-  trace: RuntimeTraceLike,
-  chatId: string,
-): {
-  key: string
-  data: Record<string, unknown>
-} | null {
-  const payload = trace.payload
-  const sessionId = trace.sessionId || chatId
-  const seq = trace.seq
-  const turnId = String(payload.turnId || payload.turn_id || '').trim()
-
-  if (trace.type === 'intent.started') {
-    return {
-      key: `intent:${turnId || 'latest'}`,
-      data: {
-        sessionId,
-        turnId,
-        seq,
-        cardType: 'intent',
-        eventType: trace.type,
-        status: 'running',
-        title: '意图分析',
-        summary: '正在分析意图',
-        content: '',
-        detail: payload,
-      },
-    }
-  }
-
-  if (trace.type === 'intent.completed') {
-    const confidence = Number(payload.confidence)
-    return {
-      key: `intent:${turnId || 'latest'}`,
-      data: {
-        sessionId,
-        turnId,
-        seq,
-        cardType: 'intent',
-        eventType: trace.type,
-        status: 'completed',
-        title: '意图分析',
-        summary: `意图=${String(payload.intentType || 'chat') || 'chat'}，置信=${Number.isFinite(confidence) ? `${(confidence * 100).toFixed(1)}%` : '-'}`,
-        content: '',
-        detail: payload,
-      },
-    }
-  }
-
-  if (trace.type === 'routing.selected') {
-    const channelId = String(payload.channelId || '').trim()
-    const providerModel = String(payload.providerModel || payload.modelId || '-').trim() || '-'
-    return {
-      key: `routing:${turnId || 'latest'}`,
-      data: {
-        sessionId,
-        turnId,
-        seq,
-        cardType: 'routing',
-        eventType: trace.type,
-        status: 'completed',
-        title: '路由选择',
-        summary: `${channelId || '-'} / ${providerModel}`,
-        content: '',
-        detail: payload,
-      },
-    }
-  }
-
-  if (trace.type === 'memory.updated') {
-    const stored = payload.stored === true
-    if (!stored) {
-      return null
-    }
-    const addedCount = Number(payload.addedCount)
-    const addedCountText = Number.isFinite(addedCount) && addedCount > 0
-      ? `已沉淀 ${Math.floor(addedCount)} 条记忆`
-      : '已沉淀记忆'
-    return {
-      key: `memory:${turnId || 'latest'}`,
-      data: {
-        sessionId,
-        turnId,
-        seq,
-        cardType: 'memory',
-        eventType: trace.type,
-        status: 'completed',
-        title: '记忆上下文',
-        summary: addedCountText,
-        content: '',
-        detail: payload,
-      },
-    }
-  }
-
-  if (trace.type === 'websearch.decision') {
-    const enabled = payload.enabled === true
-    if (shouldHidePilotWebsearchCard(payload)) {
-      return null
-    }
-    const reasonText = normalizePilotWebsearchReason(payload.reason) || '-'
-    return {
-      key: buildPilotWebsearchCardKey(turnId),
-      data: {
-        sessionId,
-        turnId,
-        seq,
-        cardType: 'websearch',
-        eventType: trace.type,
-        status: enabled ? 'running' : 'skipped',
-        title: PILOT_WEBSEARCH_CARD_TITLE,
-        summary: enabled
-          ? `准备联网检索 (${reasonText})`
-          : reasonText,
-        content: '',
-        detail: payload,
-      },
-    }
-  }
-
-  if (trace.type === 'websearch.executed') {
-    const sourceCount = Number(payload.sourceCount)
-    return {
-      key: buildPilotWebsearchCardKey(turnId),
-      data: {
-        sessionId,
-        turnId,
-        seq,
-        cardType: 'websearch',
-        eventType: trace.type,
-        status: 'completed',
-        title: PILOT_WEBSEARCH_CARD_TITLE,
-        summary: `来源=${String(payload.source || '-').trim() || '-'}，命中=${Number.isFinite(sourceCount) ? Math.max(0, Math.floor(sourceCount)) : 0}`,
-        content: '',
-        detail: payload,
-      },
-    }
-  }
-
-  if (trace.type === 'websearch.skipped') {
-    if (shouldHidePilotWebsearchCard(payload)) {
-      return null
-    }
-    return {
-      key: buildPilotWebsearchCardKey(turnId),
-      data: {
-        sessionId,
-        turnId,
-        seq,
-        cardType: 'websearch',
-        eventType: trace.type,
-        status: 'skipped',
-        title: PILOT_WEBSEARCH_CARD_TITLE,
-        summary: normalizePilotWebsearchReason(payload.reason) || '已跳过联网检索',
-        content: '',
-        detail: payload,
-      },
-    }
-  }
-
-  if (trace.type === 'thinking.delta') {
-    const chunk = normalizeRunEventText(payload.text)
-    return {
-      key: turnId
-        ? `thinking:${sessionId}:${turnId}`
-        : `thinking:${sessionId}`,
-      data: {
-        sessionId,
-        turnId,
-        seq,
-        cardType: 'thinking',
-        eventType: trace.type,
-        status: 'running',
-        title: 'Thinking',
-        summary: '思考中',
-        content: chunk,
-        detail: payload,
-      },
-    }
-  }
-
-  if (trace.type === 'thinking.final') {
-    const finalText = normalizeRunEventText(payload.text)
-    return {
-      key: turnId
-        ? `thinking:${sessionId}:${turnId}`
-        : `thinking:${sessionId}`,
-      data: {
-        sessionId,
-        turnId,
-        seq,
-        cardType: 'thinking',
-        eventType: trace.type,
-        status: 'completed',
-        title: 'Thinking',
-        summary: '思考完成',
-        content: finalText,
-        detail: payload,
-      },
-    }
-  }
-
-  return null
-}
-
-function mergeThinkingCardContent(previous: string, incoming: string, status: string): string {
-  if (!incoming) {
-    return previous
-  }
-  if (status === 'completed') {
-    if (!previous) {
-      return incoming
-    }
-    if (incoming.startsWith(previous)) {
-      return incoming
-    }
-    if (previous.startsWith(incoming)) {
-      return previous
-    }
-    return `${previous}${incoming}`
-  }
-  return `${previous}${incoming}`
-}
-
-function buildRunEventCardBlocks(chatId: string, traces: RuntimeTraceLike[]): SnapshotCardBlock[] {
+function buildLegacyThinkingCardBlocks(chatId: string, traces: RuntimeTraceLike[]): SnapshotCardBlock[] {
   const cardMap = new Map<string, { seq: number, data: Record<string, unknown> }>()
   for (const trace of traces) {
-    const card = buildRunEventCardData(trace, chatId)
-    if (!card) {
+    if (trace.type !== 'thinking.delta' && trace.type !== 'thinking.final') {
       continue
     }
-    const previous = cardMap.get(card.key)
-    if (previous) {
-      const previousCardType = String(previous.data.cardType || '').trim()
-      const currentCardType = String(card.data.cardType || '').trim()
-      if (previousCardType === 'thinking' && currentCardType === 'thinking') {
-        const previousContent = normalizeRunEventText(previous.data.content)
-        const currentContent = normalizeRunEventText(card.data.content)
-        const status = String(card.data.status || '').trim()
-        card.data = {
-          ...card.data,
-          content: mergeThinkingCardContent(previousContent, currentContent, status),
-        }
-      }
+    const projected = projectPilotLegacyRunEventCard({
+      conversationId: chatId,
+      eventType: trace.type,
+      eventPayload: {
+        seq: trace.seq,
+        payload: trace.payload,
+        sessionId: trace.sessionId || chatId,
+      },
+    })
+    if (!projected || projected.cardType !== 'thinking') {
+      continue
     }
-    cardMap.set(card.key, {
+
+    const key = String(projected.cardKey || `thinking:${projected.turnId || chatId}`)
+    const previous = cardMap.get(key)
+    const previousContent = previous ? String(previous.data.content || '') : ''
+    const incomingContent = String(projected.content || '')
+    const mergedContent = projected.status === 'completed'
+      ? (!previousContent
+          ? incomingContent
+          : (incomingContent.startsWith(previousContent)
+              ? incomingContent
+              : (previousContent.startsWith(incomingContent) ? previousContent : `${previousContent}${incomingContent}`)))
+      : `${previousContent}${incomingContent}`
+
+    cardMap.set(key, {
       seq: trace.seq,
-      data: card.data,
+      data: {
+        ...projected,
+        content: mergedContent,
+      },
     })
   }
+
   return Array.from(cardMap.values())
-    .sort((a, b) => a.seq - b.seq)
+    .sort((left, right) => left.seq - right.seq)
     .slice(-MAX_CARD_BLOCKS_PER_TURN)
     .map(item => ({
       type: 'card',
@@ -341,174 +134,42 @@ function buildRunEventCardBlocks(chatId: string, traces: RuntimeTraceLike[]): Sn
     }))
 }
 
-function normalizeToolAuditStatus(auditType: string, value: unknown): string {
-  const normalized = String(value || '').trim().toLowerCase()
-  if (normalized) {
-    return normalized
-  }
-  if (auditType === 'tool.call.approval_required') {
-    return 'approval_required'
-  }
-  if (auditType === 'tool.call.approved') {
-    return 'approved'
-  }
-  if (auditType === 'tool.call.rejected') {
-    return 'rejected'
-  }
-  if (auditType === 'tool.call.failed') {
-    return 'failed'
-  }
-  if (auditType === 'tool.call.completed') {
-    return 'completed'
-  }
-  if (auditType === 'tool.call.started') {
-    return 'running'
-  }
-  return ''
-}
-
-const TOOL_TERMINAL_STATUS = new Set(['completed', 'failed', 'rejected', 'cancelled'])
-
-function normalizeToolAuditPayload(trace: RuntimeTraceLike, chatId: string): Record<string, unknown> | null {
-  const payload = trace.payload
-  const auditType = String(payload.auditType || payload.audit_type || '').trim()
-  if (!auditType.startsWith('tool.call.')) {
-    return null
-  }
-
-  const sessionId = String(payload.sessionId || payload.session_id || trace.sessionId || chatId).trim() || chatId
-  const callId = String(payload.callId || payload.call_id || '').trim()
-  const toolId = String(payload.toolId || payload.tool_id || '').trim()
-  const toolName = String(payload.toolName || payload.tool_name || 'tool').trim() || 'tool'
-  const ticketId = String(payload.ticketId || payload.ticket_id || '').trim()
-  const status = normalizeToolAuditStatus(auditType, payload.status)
-  const riskLevel = String(payload.riskLevel || payload.risk_level || '').trim()
-  const errorCode = String(payload.errorCode || payload.error_code || payload.code || '').trim()
-  const errorMessage = String(payload.errorMessage || payload.error_message || payload.message || '').trim()
-  const inputPreview = String(payload.inputPreview || payload.input_preview || '').trim()
-  const outputPreview = String(payload.outputPreview || payload.output_preview || '').trim()
-  const durationMsRaw = Number(payload.durationMs ?? payload.duration_ms)
-  const durationMs = Number.isFinite(durationMsRaw) && durationMsRaw > 0
-    ? Math.max(0, Math.floor(durationMsRaw))
-    : 0
-  const sources = Array.isArray(payload.sources)
-    ? payload.sources
-        .filter(item => item && typeof item === 'object' && !Array.isArray(item))
-        .map(item => item as Record<string, unknown>)
-    : []
-
-  return {
-    ...payload,
-    sessionId,
-    session_id: sessionId,
-    seq: trace.seq,
-    auditType,
-    audit_type: auditType,
-    callId,
-    call_id: callId,
-    toolId,
-    tool_id: toolId,
-    toolName,
-    tool_name: toolName,
-    ticketId,
-    ticket_id: ticketId,
-    status,
-    riskLevel,
-    risk_level: riskLevel,
-    errorCode,
-    error_code: errorCode,
-    errorMessage,
-    error_message: errorMessage,
-    inputPreview,
-    input_preview: inputPreview,
-    outputPreview,
-    output_preview: outputPreview,
-    durationMs,
-    duration_ms: durationMs,
-    sources,
-  }
-}
-
-function buildToolCardBlocks(chatId: string, traces: RuntimeTraceLike[]): SnapshotCardBlock[] {
-  const toolMap = new Map<string, { seq: number, data: Record<string, unknown> }>()
-  for (const trace of traces) {
-    if (trace.type !== 'run.audit') {
-      continue
-    }
-    const cardPayload = normalizeToolAuditPayload(trace, chatId)
-    if (!cardPayload) {
-      continue
-    }
-    const callId = String(cardPayload.callId || cardPayload.call_id || '').trim()
-    const ticketId = String(cardPayload.ticketId || cardPayload.ticket_id || '').trim()
-    const toolName = String(cardPayload.toolName || cardPayload.tool_name || 'tool').trim() || 'tool'
-    const toolId = String(cardPayload.toolId || cardPayload.tool_id || '').trim()
-    const key = callId || ticketId || `${toolName}:${toolId || 'unknown'}`
-    const previous = toolMap.get(key)
-    if (!previous) {
-      toolMap.set(key, {
-        seq: trace.seq,
-        data: cardPayload,
-      })
-      continue
-    }
-
-    if (trace.seq < previous.seq) {
-      continue
-    }
-
-    const previousStatus = String(previous.data.status || '').trim().toLowerCase()
-    const incomingStatus = String(cardPayload.status || '').trim().toLowerCase()
-    const previousTerminal = TOOL_TERMINAL_STATUS.has(previousStatus)
-    const incomingTerminal = TOOL_TERMINAL_STATUS.has(incomingStatus)
-    if (previousTerminal && !incomingTerminal) {
-      continue
-    }
-
-    const previousSources = Array.isArray(previous.data.sources)
-      ? previous.data.sources
-          .filter(item => item && typeof item === 'object' && !Array.isArray(item))
-          .map(item => item as Record<string, unknown>)
-      : []
-    const incomingSources = Array.isArray(cardPayload.sources)
-      ? cardPayload.sources
-          .filter(item => item && typeof item === 'object' && !Array.isArray(item))
-          .map(item => item as Record<string, unknown>)
-      : []
-
-    toolMap.set(key, {
-      seq: trace.seq,
-      data: {
-        ...previous.data,
-        ...cardPayload,
-        sources: incomingSources.length > 0 ? incomingSources : previousSources,
-      },
-    })
-  }
-  return Array.from(toolMap.values())
-    .sort((a, b) => a.seq - b.seq)
-    .slice(-MAX_CARD_BLOCKS_PER_TURN)
-    .map(item => ({
-      type: 'card',
-      name: 'pilot_tool_card',
-      value: '',
-      data: JSON.stringify(item.data),
-    }))
-}
-
-function buildTraceCardBlocks(chatId: string, runtimeTraces: unknown): SnapshotCardBlock[] {
+function buildTraceCardBlocks(chatId: string, runtimeTraces: unknown): {
+  hasTraceSource: boolean
+  cardBlocks: SnapshotCardBlock[]
+} {
   const normalized = normalizeRuntimeTraces(runtimeTraces)
   if (normalized.length <= 0) {
-    return []
+    return {
+      hasTraceSource: false,
+      cardBlocks: [],
+    }
   }
   const latestTurnTraces = selectLatestTurnTraces(normalized)
   if (latestTurnTraces.length <= 0) {
-    return []
+    return {
+      hasTraceSource: true,
+      cardBlocks: [],
+    }
   }
-  return [
-    ...buildRunEventCardBlocks(chatId, latestTurnTraces),
-    ...buildToolCardBlocks(chatId, latestTurnTraces),
-  ]
+  const hasProjectedTraceSource = latestTurnTraces.some(item => item.type !== 'turn.started')
+  if (!hasProjectedTraceSource) {
+    return {
+      hasTraceSource: false,
+      cardBlocks: [],
+    }
+  }
+  const projected = projectPilotSystemMessagesFromTraces({
+    sessionId: chatId,
+    traces: latestTurnTraces,
+  })
+  return {
+    hasTraceSource: true,
+    cardBlocks: [
+      ...buildPilotCardBlocksFromSystemMessages(projected, MAX_CARD_BLOCKS_PER_TURN),
+      ...buildLegacyThinkingCardBlocks(chatId, latestTurnTraces),
+    ],
+  }
 }
 
 function ensureAssistantValueBlocks(messages: Record<string, unknown>[]): unknown[] {
@@ -563,8 +224,11 @@ function ensureAssistantValueBlocks(messages: Record<string, unknown>[]): unknow
 function mergeTraceCardsIntoPayloadMessages(
   payload: Record<string, unknown>,
   cardBlocks: SnapshotCardBlock[],
+  options?: {
+    clearExistingPilotCards?: boolean
+  },
 ): void {
-  if (cardBlocks.length <= 0) {
+  if (cardBlocks.length <= 0 && options?.clearExistingPilotCards !== true) {
     return
   }
   if (!Array.isArray(payload.messages)) {
@@ -583,7 +247,10 @@ function mergeTraceCardsIntoPayloadMessages(
     return name !== 'pilot_run_event_card' && name !== 'pilot_tool_card'
   })
   assistantValueBlocks.length = 0
-  assistantValueBlocks.push(...preservedBlocks, ...cardBlocks)
+  assistantValueBlocks.push(...sortPilotChatBlocksByTimeline([
+    ...preservedBlocks,
+    ...cardBlocks,
+  ]))
   payload.messages = messages
 }
 
@@ -628,12 +295,14 @@ export function buildQuotaConversationSnapshot(input: {
     previousValue: input.previousValue,
   })
 
-  const messageCardBlocks = buildMessageCardBlocks(input.messages)
-  const cardBlocks = messageCardBlocks.length > 0
-    ? messageCardBlocks
-    : buildTraceCardBlocks(input.chatId, input.runtimeTraces)
-  if (cardBlocks.length > 0) {
-    mergeTraceCardsIntoPayloadMessages(snapshot.payload, cardBlocks)
+  const traceCards = buildTraceCardBlocks(input.chatId, input.runtimeTraces)
+  const cardBlocks = traceCards.hasTraceSource
+    ? traceCards.cardBlocks
+    : buildMessageCardBlocks(input.messages)
+  if (traceCards.hasTraceSource || cardBlocks.length > 0) {
+    mergeTraceCardsIntoPayloadMessages(snapshot.payload, cardBlocks, {
+      clearExistingPilotCards: traceCards.hasTraceSource,
+    })
     snapshot.value = JSON.stringify(snapshot.payload)
   }
   return snapshot

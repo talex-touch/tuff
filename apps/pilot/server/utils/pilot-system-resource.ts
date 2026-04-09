@@ -122,7 +122,7 @@ function normalizeTreeRows(list: Array<Record<string, any>>): Array<Record<strin
 }
 
 export function buildTree(list: Array<Record<string, any>>): Array<Record<string, any>> {
-  const mapped = normalizeTreeRows(list).map((item) => {
+  const mapped: Array<Record<string, any>> = normalizeTreeRows(list).map((item) => {
     return {
       ...item,
       children: [],

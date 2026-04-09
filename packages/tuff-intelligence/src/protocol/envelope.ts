@@ -34,6 +34,15 @@ export interface AgentEnvelope<T = unknown> {
   meta?: Record<string, unknown>
 }
 
+export interface PersistedAgentEnvelopeMeta extends Record<string, unknown> {
+  traceId: string
+  seq: number
+}
+
+export type PersistedAgentEnvelope<T = unknown> = Omit<AgentEnvelope<T>, 'meta'> & {
+  meta: PersistedAgentEnvelopeMeta
+}
+
 export interface AgentErrorPayload {
   code: string
   message: string

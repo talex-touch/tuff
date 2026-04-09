@@ -1,8 +1,8 @@
 /**
  * Native Share Service
  *
- * Provides integration with system native share functionality.
- * Supports macOS Share Sheet, Windows Share API, etc.
+ * Provides platform-native share behavior where available.
+ * macOS exposes real native targets; Windows/Linux currently fall back to mailto only.
  */
 
 import type {
@@ -122,7 +122,7 @@ export class NativeShareService {
       targets.push({
         id: 'mail',
         name: 'Mail',
-        description: 'Send via email',
+        description: 'Mail-only fallback via mailto',
         supportedTypes: ['text'],
         icon: 'ri:mail-line'
       })
@@ -130,7 +130,7 @@ export class NativeShareService {
       targets.push({
         id: 'mail',
         name: 'Mail',
-        description: 'Send via email',
+        description: 'Mail-only fallback via mailto',
         supportedTypes: ['text'],
         icon: 'ri:mail-line'
       })
@@ -349,7 +349,7 @@ return item 1 of shareChoice
   }
 
   /**
-   * Shares using Windows Share API
+   * Shares on Windows via mail-only fallback
    */
   private async shareWindows(options: NativeShareOptions): Promise<NativeShareResult> {
     const target = this.normalizeTarget(options.target)
@@ -362,7 +362,7 @@ return item 1 of shareChoice
   }
 
   /**
-   * Shares on Linux
+   * Shares on Linux via mail-only fallback
    */
   private async shareLinux(options: NativeShareOptions): Promise<NativeShareResult> {
     const target = this.normalizeTarget(options.target)

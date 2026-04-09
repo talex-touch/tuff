@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-03-25
+> 更新时间: 2026-04-07
 
 ---
 
@@ -13,7 +13,7 @@
 | Legacy/兼容/结构治理 | 已锁定统一实施 PRD（五工作包并行） | 按统一门禁执行收口，不再按 Phase 口径拆分决策 | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | 2.4.8 Gate | OmniPanel 稳定版 MVP 已完成（historical） | 保留历史验收证据，不再作为当前开发主线 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | v2.4.7 Gate | A/B/C/D/E 全部完成（D/E historical） | 保留 run/manifest/sha256 证据链 | `TODO` / `README` / `Roadmap` / `Release Checklist` / `Quality Baseline` / `INDEX` |
-| Pilot Runtime | Node Server + Postgres/Redis + JWT Cookie 主路径 | 继续补齐稳定性与部署回归 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
+| Pilot Runtime | Node Server + Postgres/Redis + JWT Cookie 主路径；首页默认 DeepAgent，legacy `$completion` 已收口为唯一前端主消费链 | 继续补齐 SSE 反向代理部署烟测与矩阵回归 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
 
 ---
 
@@ -26,6 +26,18 @@
 ---
 
 ## 🔧 当前执行清单（2 周）
+
+### CoreApp 兼容治理（当前进行中）
+
+- [x] P0 Runtime Accessor / Sync IPC / Active Legacy Bridge hard-cut 主体完成。
+- [x] P1 secure-store dedupe 收口到 `src/main/utils/secure-store.ts`。
+- [x] P1 renderer update runtime 调用方迁移到 update SDK 薄运行时层，runtime 页面不再依赖 `useApplicationUpgrade`。
+- [x] P2 fake prompt / DivisionBox settings 假入口清理完成。
+- [x] P2 production `src` 下 demo/test/doc 文件物理删除，并清理 `components.d.ts` 悬空声明。
+- [x] CoreApp compatibility 验收阻塞解除：
+  - `pnpm -C "apps/core-app" run typecheck` 已通过。
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard.transport.test.ts" "src/main/modules/omni-panel/index.test.ts" "src/main/channel/common.test.ts"` 已通过（`3 files / 17 tests`）。
+  - `rg` 回归扫描确认 runtime 口径仅保留 bootstrap `genTouchApp()`，`sendSync(` / `resolveRuntimeChannel(` / `legacy-toggle` / placeholder demo 命中已清零。
 
 ### A. 文档治理（本轮）
 
@@ -159,6 +171,15 @@
 - [x] `thinking.delta -> thinking.final` 采用同一卡片增量拼接，完整文本可视化展示。
 - [x] legacy 事件 `turn.* / status_updated / completion / verbose / session_bound` 不再驱动 UI 状态，仅告警忽略。
 - [x] 管理端渠道 `adapter` 固定 `openai`，移除 `legacy` 可编辑入口。
+
+### J1. Pilot 流式主链合并收口（2026-04-07）
+
+- [x] 首页保留旧 UI，legacy `$completion` 成为唯一前端流式主消费链；`usePilotChatPage.ts` 与 `app/components/pilot/*` 不再作为并行主方案继续演进。
+- [x] 首页默认 DeepAgent：移除 `Pilot 模式` 默认标签与输入开关；`pilotMode` 不再进入首页默认发送、展示与恢复逻辑。
+- [x] `fromSeq + follow` 收口到共享 seq cursor helper，刷新恢复只跟随真实可恢复事件，不再受 Pilot 模式分叉影响。
+- [x] trace contract 收紧：`stream.started / stream.heartbeat / replay.* / run.metrics / done / error` 等 seq-optional 生命周期事件不再持久化到 trace；replay、trace.get、quota snapshot、follow tail 会统一过滤历史 lifecycle 噪音。
+- [x] legacy SSE 契约测试补齐：覆盖 `assistant.delta / assistant.final / run.audit / turn.approval_required / replay / done / error` 与分块持续解析。
+- [ ] 部署烟测补齐：验证 `/api/chat/sessions/:sessionId/stream` 经反向代理后仍持续分块返回；若 buffering 打开需直接失败并输出明确信号。
 
 ### K. Intelligence 多模态 Provider 统一配置与运行时打通（2026-03-20）
 
@@ -307,12 +328,12 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 123 |
-| 未完成 (`- [ ]`) | 20 |
-| 总计 | 143 |
-| 完成率 | 86% |
+| 已完成 (`- [x]`) | 139 |
+| 未完成 (`- [ ]`) | 21 |
+| 总计 | 160 |
+| 完成率 | 87% |
 
-> 统计时间: 2026-03-24（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-04-07（按本文件实时 checkbox 计数）。
 
 ---
 

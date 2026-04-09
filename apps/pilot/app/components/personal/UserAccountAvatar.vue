@@ -3,7 +3,16 @@ import { globalOptions } from '~/constants'
 
 const router = useRouter()
 
-const menus = reactive([
+type UserAccountMenuItem = {
+  icon?: string
+  label: string
+  show: boolean
+  click?: () => void | Promise<void>
+  divider?: boolean
+  danger?: boolean
+}
+
+const menus = reactive<UserAccountMenuItem[]>([
   {
     icon: 'i-carbon-user',
     label: '个人资料',
@@ -88,7 +97,7 @@ const avatarUrl = computed(() => {
         <div class="UserAccountAvatar-Selections" style="display: flex; gap: 16px; flex-direction: column">
           <div
             v-for="item in menus" :key="item.label" v-wave :class="{ danger: item.danger, divider: item.divider }"
-            :style="`${item.show ? '' : 'display: none'}`" class="UserAccountAvatar-MenuItem" @click="item?.click"
+            :style="`${item.show ? '' : 'display: none'}`" class="UserAccountAvatar-MenuItem" @click="item.click?.()"
           >
             <div v-if="item.icon" :class="item.icon" />
             {{ item.label }}

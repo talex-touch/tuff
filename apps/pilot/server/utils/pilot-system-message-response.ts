@@ -1,5 +1,8 @@
-import { shouldHidePilotClientSystemMessage } from '../../shared/pilot-runtime-redaction'
-import { projectPilotSystemMessagesFromTraces } from '../../shared/pilot-system-message'
+import {
+  projectPilotSystemMessagesFromTraces,
+  shouldHidePilotClientSystemMessage,
+} from '@talex-touch/tuff-intelligence/pilot'
+import { listPilotTraceTail } from './pilot-trace-window'
 
 interface MessageLike {
   id: string
@@ -18,6 +21,7 @@ interface TraceLike {
 }
 
 interface RuntimeStoreLike {
+  getSession?: (sessionId: string) => Promise<{ lastSeq?: number } | null>
   listMessages: (sessionId: string) => Promise<MessageLike[]>
   listTrace: (sessionId: string, fromSeq?: number, limit?: number) => Promise<TraceLike[]>
 }
@@ -54,28 +58,33 @@ function sortMessagesByTimeline(messages: MessageLike[]): MessageLike[] {
   })
 }
 
-export async function listMessagesWithLazySystemProjection(
+export async function listMessagesWithTraceProjection(
   store: RuntimeStoreLike,
   sessionId: string,
 ): Promise<MessageLike[]> {
-  const messages = (await store.listMessages(sessionId))
-    .filter(item => item.role !== 'system' || !shouldHidePilotClientSystemMessage(item.metadata))
-  const hasSystem = messages.some(item => item.role === 'system')
-  if (hasSystem) {
-    return sortMessagesByTimeline(messages)
-  }
+  const persistedMessages = await store.listMessages(sessionId)
+  const messages = persistedMessages
+    .filter(item => item.role !== 'system')
+  const legacySystemMessages = persistedMessages
+    .filter(item => item.role === 'system' && !shouldHidePilotClientSystemMessage(item.metadata))
 
-  const traces = await store.listTrace(sessionId, 1, 2_000).catch(() => [])
+  const session = typeof store.getSession === 'function'
+    ? await store.getSession(sessionId).catch(() => null)
+    : null
+  const traces = await listPilotTraceTail(store, {
+    sessionId,
+    lastSeq: session?.lastSeq,
+    limit: 2_000,
+  }).catch(() => [])
   const synthetic = projectPilotSystemMessagesFromTraces({
     sessionId,
     traces,
   })
-  if (synthetic.length <= 0) {
-    return sortMessagesByTimeline(messages)
-  }
-
   const map = new Map<string, MessageLike>()
   for (const item of messages) {
+    map.set(item.id, item)
+  }
+  for (const item of legacySystemMessages) {
     map.set(item.id, item)
   }
   for (const item of synthetic) {

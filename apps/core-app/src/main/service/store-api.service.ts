@@ -14,6 +14,10 @@ import { performStoreHttpRequest } from './store-http.service'
 const log = createLogger('StoreApiService')
 const LEGACY_STORE_SOURCES_KEY = 'market-sources.json'
 
+function clearLegacyStoreSourcesKey(): void {
+  saveConfig(LEGACY_STORE_SOURCES_KEY, undefined, true, true)
+}
+
 function isStoreSourcesPayload(value: unknown): value is StoreSourcesPayload {
   if (!value || typeof value !== 'object') {
     return false
@@ -23,7 +27,7 @@ function isStoreSourcesPayload(value: unknown): value is StoreSourcesPayload {
   return Array.isArray(payload.sources)
 }
 
-function migrateLegacyStoreSourcesIfNeeded(): void {
+function migrateCompatStoreSourcesIfNeeded(): void {
   const currentRaw = getConfig(STORE_SOURCES_STORAGE_KEY)
   if (isStoreSourcesPayload(currentRaw)) {
     return
@@ -40,7 +44,8 @@ function migrateLegacyStoreSourcesIfNeeded(): void {
   }
 
   saveConfig(STORE_SOURCES_STORAGE_KEY, nextPayload, false, true)
-  log.info('Migrated legacy store sources key', {
+  clearLegacyStoreSourcesKey()
+  log.info('Compat migration hit: store sources key upgraded', {
     meta: {
       from: LEGACY_STORE_SOURCES_KEY,
       to: STORE_SOURCES_STORAGE_KEY,
@@ -54,7 +59,7 @@ function migrateLegacyStoreSourcesIfNeeded(): void {
  */
 export function getStoreSources(): StoreProviderDefinition[] {
   try {
-    migrateLegacyStoreSourcesIfNeeded()
+    migrateCompatStoreSourcesIfNeeded()
     const payload = getMainConfig(STORE_SOURCES_STORAGE_KEY) as StoreSourcesPayload | null
     if (payload?.sources && Array.isArray(payload.sources)) {
       return payload.sources

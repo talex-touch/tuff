@@ -3,6 +3,7 @@ import {
   buildPilotRedactedRoutingTracePayload,
   redactPilotClientErrorDetail,
   shouldHidePilotClientRuntimeEvent,
+  shouldHidePilotClientSystemMessage,
 } from '../../../shared/pilot-runtime-redaction'
 
 describe('pilot-runtime-redaction', () => {
@@ -51,5 +52,25 @@ describe('pilot-runtime-redaction', () => {
   it('routing.selected 默认对前端隐藏', () => {
     expect(shouldHidePilotClientRuntimeEvent('routing.selected')).toBe(true)
     expect(shouldHidePilotClientRuntimeEvent('intent.completed')).toBe(false)
+  })
+
+  it('记忆上下文与 skipped 记忆卡默认对前端隐藏', () => {
+    expect(shouldHidePilotClientSystemMessage({
+      cardType: 'memory',
+      sourceEventType: 'memory.context',
+      status: 'completed',
+    })).toBe(true)
+
+    expect(shouldHidePilotClientSystemMessage({
+      cardType: 'memory',
+      sourceEventType: 'memory.updated',
+      status: 'skipped',
+    })).toBe(true)
+
+    expect(shouldHidePilotClientSystemMessage({
+      cardType: 'memory',
+      sourceEventType: 'memory.updated',
+      status: 'completed',
+    })).toBe(false)
   })
 })

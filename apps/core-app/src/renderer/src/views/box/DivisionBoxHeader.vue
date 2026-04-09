@@ -4,8 +4,6 @@ import type { IUseSearch } from '~/modules/box/adapter/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import { windowState } from '~/modules/hooks/core-box'
 import ActivatedProviders from './ActivatedProviders.vue'
@@ -35,8 +33,6 @@ interface Props {
 interface Emits {
   (e: 'update:searchVal', value: string): void
 }
-
-const { t } = useI18n()
 
 const transport = useTuffTransport()
 
@@ -81,10 +77,6 @@ async function handleDebug(): Promise<void> {
   if (!sessionId) return
   await transport.send(DivisionBoxEvents.toggleDevTools, { sessionId })
 }
-
-function handleSettings(): void {
-  toast.info(t('divisionBox.settingsComingSoon', '设置面板即将推出'))
-}
 </script>
 
 <template>
@@ -114,12 +106,6 @@ function handleSettings(): void {
 
     <!-- Window Controls -->
     <div class="DivisionBox-Controls">
-      <TuffIcon
-        :icon="{ type: 'class', value: 'i-carbon-settings' }"
-        alt="设置"
-        class="control-btn"
-        @click="handleSettings"
-      />
       <TuffIcon
         :icon="{ type: 'class', value: opacityIcon }"
         alt="透明度"

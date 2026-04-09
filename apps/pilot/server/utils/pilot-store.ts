@@ -1,7 +1,7 @@
-import type { AgentEnvelope, RuntimeStoreAdapter, StoreAdapter } from '@talex-touch/tuff-intelligence/pilot'
+import type { AgentEnvelope, RuntimeStoreAdapter, StoreAdapter } from '@talex-touch/tuff-intelligence/pilot-server'
 import type { H3Event } from 'h3'
 import type { PilotDatabase } from '../types/pilot-db'
-import { D1RuntimeStoreAdapter } from '@talex-touch/tuff-intelligence/pilot'
+import { D1RuntimeStoreAdapter } from '@talex-touch/tuff-intelligence/pilot-server'
 import { pruneExpiredPilotHistoryOnce } from './pilot-history'
 import { getNodePilotPostgresDatabase } from './pilot-node-pg-d1'
 
@@ -28,7 +28,10 @@ export function createPilotStoreAdapter(
   userId: string,
   emitter?: (event: AgentEnvelope) => Promise<void>,
 ): StoreAdapter {
-  const runtime = new D1RuntimeStoreAdapter(requirePilotDatabase(event), userId)
+  const runtime = new D1RuntimeStoreAdapter(
+    requirePilotDatabase(event) as ConstructorParameters<typeof D1RuntimeStoreAdapter>[0],
+    userId,
+  )
   const runtimeProxy = createRuntimeWithHistoryRetention(runtime, event, userId)
   return {
     runtime: runtimeProxy,

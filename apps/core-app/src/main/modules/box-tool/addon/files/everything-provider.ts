@@ -205,6 +205,38 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
+  private getHealthStatus(): {
+    health: 'healthy' | 'degraded' | 'unsupported'
+    reason: string | null
+  } {
+    if (process.platform !== 'win32') {
+      return {
+        health: 'unsupported',
+        reason: 'Everything backend is only available on Windows.'
+      }
+    }
+
+    if (this.isEnabled && this.isAvailable) {
+      return { health: 'healthy', reason: null }
+    }
+
+    if (!this.isEnabled) {
+      return {
+        health: 'degraded',
+        reason:
+          'Everything search is disabled. Windows search falls back to file-provider metadata paths.'
+      }
+    }
+
+    return {
+      health: 'degraded',
+      reason:
+        this.initializationError?.message ||
+        this.lastBackendError ||
+        'Everything backend unavailable. Windows search falls back to file-provider metadata paths.'
+    }
+  }
+
   private registerChannels(context: ProviderContext): void {
     const channel = context.touchApp.channel
     const keyManager =
@@ -212,10 +244,13 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     const transport = getTuffTransportMain(channel, keyManager)
 
     transport.on(everythingStatusEvent, async () => {
+      const healthStatus = this.getHealthStatus()
       return {
         enabled: this.isEnabled,
         available: this.isAvailable,
         backend: this.backend,
+        health: healthStatus.health,
+        healthReason: healthStatus.reason,
         version: this.everythingVersion,
         esPath: this.esPath,
         error: this.initializationError?.message || null,

@@ -1,10 +1,7 @@
-const HIDDEN_CLIENT_EVENT_TYPES = new Set([
-  'routing.selected',
-])
-
-const HIDDEN_CLIENT_CARD_TYPES = new Set([
-  'routing',
-])
+export {
+  shouldHidePilotClientRuntimeEvent,
+  shouldHidePilotClientSystemMessage,
+} from '@talex-touch/tuff-intelligence/pilot'
 
 const ROUTING_SENSITIVE_KEYS = new Set([
   'adapter',
@@ -53,19 +50,6 @@ function toNonNegativeInteger(value: unknown): number {
     return 0
   }
   return Math.floor(parsed)
-}
-
-export function shouldHidePilotClientRuntimeEvent(type: unknown): boolean {
-  return HIDDEN_CLIENT_EVENT_TYPES.has(normalizeText(type).toLowerCase())
-}
-
-export function shouldHidePilotClientSystemMessage(metadata: unknown): boolean {
-  const record = toRecord(metadata)
-  const cardType = normalizeText(record.cardType).toLowerCase()
-  if (cardType && HIDDEN_CLIENT_CARD_TYPES.has(cardType)) {
-    return true
-  }
-  return shouldHidePilotClientRuntimeEvent(record.sourceEventType || record.eventType)
 }
 
 export function redactPilotClientErrorDetail(input: unknown): Record<string, unknown> {

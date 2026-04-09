@@ -5,6 +5,7 @@ import { toast } from 'vue-sonner'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
+  type EverythingHealthState,
   everythingStatusEvent,
   everythingTestEvent,
   everythingToggleEvent,
@@ -25,6 +26,12 @@ function mapBackendLabel(backend: EverythingBackendType): string {
   if (backend === 'sdk-napi') return t('settings.settingEverything.backendSdk')
   if (backend === 'cli') return t('settings.settingEverything.backendCli')
   return t('settings.settingEverything.backendUnavailable')
+}
+
+function mapHealthLabel(health: EverythingHealthState): string {
+  if (health === 'healthy') return t('settings.settingEverything.healthHealthy')
+  if (health === 'degraded') return t('settings.settingEverything.healthDegraded')
+  return t('settings.settingEverything.healthUnsupported')
 }
 
 let statusCheckInterval: NodeJS.Timeout | null = null
@@ -144,6 +151,11 @@ const fallbackChainText = computed(() => {
   return everythingStatus.value.fallbackChain.map((item) => mapBackendLabel(item)).join(' → ')
 })
 
+const healthText = computed(() => {
+  if (!everythingStatus.value) return '-'
+  return mapHealthLabel(everythingStatus.value.health)
+})
+
 const lastCheckedText = computed(() => {
   if (!everythingStatus.value?.lastChecked) return t('settings.settingEverything.neverChecked')
 
@@ -218,6 +230,18 @@ onUnmounted(() => {
     >
       <div class="version-info">
         {{ backendText }}
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="everythingStatus"
+      :title="t('settings.settingEverything.healthTitle')"
+      :description="everythingStatus.healthReason || t('settings.settingEverything.healthDesc')"
+      default-icon="i-carbon-pulse"
+      active-icon="i-carbon-pulse"
+    >
+      <div class="version-info">
+        {{ healthText }}
       </div>
     </TuffBlockSlot>
 

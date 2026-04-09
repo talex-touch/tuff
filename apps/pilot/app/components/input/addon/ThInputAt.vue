@@ -144,7 +144,7 @@ const floatingRef = ref()
 const { floatingStyles } = useFloating(inputRef, floatingRef, {
   placement: 'left-start',
   middleware: [offset(({ rects }) => ({
-    alignmentAxis: -rects.floating.height,
+    alignmentAxis: -Number(rects.floating.height),
   })), flip()],
   whileElementsMounted: autoUpdate,
 })
@@ -164,7 +164,7 @@ const { floatingStyles } = useFloating(inputRef, floatingRef, {
             <div v-else class="ThInputAt-Main">
               <div
                 v-for="(item, ind) in list" :id="`at-prompt-role-${ind}`" :key="item.id" v-wave
-                :class="{ active: index === ind }" class="ThInputAt-Item" @click="handleSelect(ind)"
+                :class="{ active: index === Number(ind) }" class="ThInputAt-Item" @click="handleSelect(Number(ind))"
               >
                 <UserAvatar :avatar="item.avatar" />
                 <div class="ThInputAt-Item-Info fake-background">

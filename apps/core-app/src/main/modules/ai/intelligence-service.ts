@@ -6,7 +6,6 @@ import type {
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { genTouchApp } from '../../core'
 import { createLogger } from '../../utils/logger'
 import { capabilityTesterRegistry } from './capability-testers'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
@@ -73,17 +72,22 @@ const intelligenceReloadConfigEvent = defineRawEvent<void, { ok: boolean; error?
 )
 
 let initialized = false
+let runtimeTransport: ReturnType<typeof getTuffTransportMain> | null = null
+
+export function setIntelligenceServiceTransport(
+  transport: ReturnType<typeof getTuffTransportMain>
+): void {
+  runtimeTransport = transport
+}
 
 export function initIntelligenceSdkService(): void {
   if (initialized) {
     return
   }
-  const channel = genTouchApp().channel
-  if (!channel) {
+  const transport = runtimeTransport
+  if (!transport) {
     throw new Error('[Intelligence] Touch channel not ready')
   }
-  const keyManager = (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-  const transport = getTuffTransportMain(channel, keyManager)
   initialized = true
 
   const manager = new IntelligenceProviderManager()

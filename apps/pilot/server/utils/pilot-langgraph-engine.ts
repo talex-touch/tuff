@@ -3,7 +3,7 @@ import type {
   DeepAgentAuditRecord,
   TurnState,
   UserMessageAttachment,
-} from '@talex-touch/tuff-intelligence/pilot'
+} from '@talex-touch/tuff-intelligence/pilot-server'
 import { shouldIncludePilotMessageInModelContext } from '@talex-touch/tuff-intelligence/pilot'
 import { networkClient, parseHttpStatusCode } from '@talex-touch/utils/network'
 

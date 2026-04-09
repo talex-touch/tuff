@@ -93,6 +93,7 @@ async function _saveData() {
 
   responseMessage(res, {
     success: '保存成功！',
+    triggerOnDataNull: false,
   })
 }
 
