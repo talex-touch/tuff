@@ -16,9 +16,10 @@
 ### fix(core-app/build): 补齐 hoisted runtime 依赖
 
 - `apps/core-app/scripts/ensure-runtime-modules.js`
-  - 新增打包前 runtime 依赖同步脚本，从 `core-app` 运行时依赖树递归解析 hoisted/transitive 模块，并把缺失模块补齐到 `apps/core-app/node_modules`，避免 `app.asar` 启动时再出现 `ms`、`module-details-from-path`、`retry`、`uuid` 一类传递依赖缺失。
+  - 新增打包前 runtime 依赖同步脚本，从 `core-app` 运行时依赖树递归解析 hoisted/transitive 模块，并把缺失模块补齐到 `apps/core-app/node_modules`，为后续构建后补齐 `resources/node_modules` 提供完整 runtime 模块集合，避免启动时再出现 `ms`、`module-details-from-path`、`retry`、`uuid` 一类传递依赖缺失。
 - `apps/core-app/scripts/build-target.js`
-  - 在 `electron-builder` 前新增 runtime 依赖同步步骤，并将 `app.asar` 运行时依赖校验从单模块检查升级为按实际解析到的 runtime 模块集合校验，提前拦截“可打包但启动即崩”的坏包。
+  - 在 `electron-builder` 前新增 runtime 依赖同步步骤；构建完成后若模块未进入 `app.asar`，则自动补齐到 `resources/node_modules`，并将运行时依赖校验升级为同时检查 `app.asar` 与 `resources/node_modules`，提前拦截“可打包但启动即崩”的坏包。
+  - Windows 本地 `--dir` 验包场景下关闭 `win.signAndEditExecutable`，绕过 `winCodeSign` 额外下载，减少因外部网络 EOF 导致的本地验包失败。
 
 ### fix(core-app/worker): 收窄 sqlite retry utils 入口
 

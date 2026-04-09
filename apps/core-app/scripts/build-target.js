@@ -220,6 +220,21 @@ function ensureBuildNodeOptions(buildEnv) {
   }
 }
 
+function copyDirectoryWithoutNestedNodeModules(sourceDir, targetDir) {
+  fs.mkdirSync(path.dirname(targetDir), { recursive: true })
+  fs.cpSync(sourceDir, targetDir, {
+    recursive: true,
+    dereference: true,
+    filter: (src) => {
+      if (src === sourceDir) {
+        return true
+      }
+      const relative = path.relative(sourceDir, src)
+      return !relative.split(path.sep).includes('node_modules')
+    }
+  })
+}
+
 function findFileRecursive(rootDir, fileName, maxDepth = 6, depth = 0) {
   if (!rootDir || !fs.existsSync(rootDir) || depth > maxDepth) {
     return null
@@ -249,6 +264,61 @@ function findFileRecursive(rootDir, fileName, maxDepth = 6, depth = 0) {
   return null
 }
 
+function syncPackagedRuntimeModules(distDir, requiredModules) {
+  if (!Array.isArray(requiredModules) || requiredModules.length === 0) {
+    return
+  }
+
+  const asarPath = findFileRecursive(distDir, 'app.asar')
+  if (!asarPath) {
+    console.warn('[build-target] app.asar not found under dist, skip packaged runtime sync')
+    return
+  }
+
+  const resourcesDir = path.dirname(asarPath)
+  const packagedNodeModulesDir = path.join(resourcesDir, 'node_modules')
+  const { listPackage } = require('@electron/asar')
+  const packageEntries = new Set(listPackage(asarPath).map((entry) => entry.replace(/\\/g, '/')))
+  const modulesMissingFromAsar = requiredModules.filter(
+    (moduleName) =>
+      !packageEntries.has(path.posix.join('/node_modules', moduleName, 'package.json')) &&
+      !packageEntries.has(path.posix.join('node_modules', moduleName, 'package.json'))
+  )
+
+  if (modulesMissingFromAsar.length === 0) {
+    return
+  }
+
+  fs.mkdirSync(packagedNodeModulesDir, { recursive: true })
+  const syncedModules = []
+
+  for (const moduleName of modulesMissingFromAsar) {
+    const sourceDir = path.join(projectRoot, 'node_modules', moduleName)
+    const targetDir = path.join(packagedNodeModulesDir, moduleName)
+
+    if (!fs.existsSync(sourceDir)) {
+      throw new Error(
+        `[build-target] Cannot sync packaged runtime dependency "${moduleName}" because ${sourceDir} does not exist`
+      )
+    }
+
+    if (!fs.existsSync(targetDir)) {
+      copyDirectoryWithoutNestedNodeModules(sourceDir, targetDir)
+      syncedModules.push(moduleName)
+    }
+  }
+
+  if (syncedModules.length > 0) {
+    const preview =
+      syncedModules.length > 12
+        ? `${syncedModules.slice(0, 12).join(', ')} ... (+${syncedModules.length - 12} more)`
+        : syncedModules.join(', ')
+    console.log(
+      `[build-target] Synced packaged runtime modules to resources/node_modules: ${preview}`
+    )
+  }
+}
+
 function verifyPackagedRuntimeModules(distDir, requiredModules) {
   if (!Array.isArray(requiredModules) || requiredModules.length === 0) {
     return
@@ -264,10 +334,17 @@ function verifyPackagedRuntimeModules(distDir, requiredModules) {
 
   const { listPackage } = require('@electron/asar')
   const packageEntries = new Set(listPackage(asarPath).map((entry) => entry.replace(/\\/g, '/')))
-  const missingModules = requiredModules.filter(
-    (moduleName) =>
-      !packageEntries.has(path.posix.join('/node_modules', moduleName, 'package.json'))
-  )
+  const resourcesDir = path.dirname(asarPath)
+  const missingModules = requiredModules.filter((moduleName) => {
+    if (
+      packageEntries.has(path.posix.join('/node_modules', moduleName, 'package.json')) ||
+      packageEntries.has(path.posix.join('node_modules', moduleName, 'package.json'))
+    ) {
+      return false
+    }
+
+    return !fs.existsSync(path.join(resourcesDir, 'node_modules', moduleName, 'package.json'))
+  })
 
   if (missingModules.length > 0) {
     throw new Error(
@@ -665,6 +742,11 @@ function build() {
       builderArgs.push('--dir')
     }
 
+    if (normalizedTarget === 'win' && dir) {
+      builderArgs.push('--config.win.signAndEditExecutable=false')
+      console.log('[build-target] Disabled win.signAndEditExecutable for Windows --dir build')
+    }
+
     if (finalVersion !== packageVersion) {
       builderArgs.push(`--config.extraMetadata.version=${finalVersion}`)
       console.log(`Overriding package version for builder: ${finalVersion}`)
@@ -970,6 +1052,7 @@ function build() {
       postProcessMacArtifacts(distDir)
     }
 
+    syncPackagedRuntimeModules(distDir, runtimeModulesToVerify)
     verifyPackagedRuntimeModules(distDir, runtimeModulesToVerify)
 
     console.log('\n✓ Build completed successfully.')
