@@ -23,6 +23,7 @@ import { appSetting } from '~/modules/channel/storage'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
+import { normalizeStoredUpdateChannel } from '~/modules/update/channel'
 import { getBuildInfo } from '~/utils/build-info'
 
 const { t } = useI18n()
@@ -150,19 +151,28 @@ const currentExperiencePack = computed(() => {
 
 // Get build info from signature
 const buildInfo = computed(() => getBuildInfo())
+const effectiveUpdateChannel = computed(() => {
+  return normalizeStoredUpdateChannel(updateChannel.value) ??
+    normalizeStoredUpdateChannel(buildInfo.value?.channel) ??
+    null
+})
 const updateChannelLabel = computed(() => {
-  const channel = updateChannel.value || buildInfo.value?.channel
+  const channel = effectiveUpdateChannel.value
   if (!channel) {
     return ''
   }
 
-  return `${channel} sub`
+  if (channel === AppPreviewChannel.BETA) {
+    return t('settings.settingUpdate.channels.beta')
+  }
+
+  return t('settings.settingUpdate.channels.release')
 })
 
 async function loadUpdateSettings(): Promise<void> {
   try {
     const settings = await getUpdateSettings()
-    updateChannel.value = settings.updateChannel
+    updateChannel.value = normalizeStoredUpdateChannel(settings.updateChannel) ?? null
   } catch (error) {
     console.warn('Failed to load update settings', error)
   }
@@ -267,7 +277,7 @@ function openSoftwareLicense() {
     />
     <TuffBlockLine
       v-if="updateChannelLabel"
-      title="Update Channel"
+      :title="t('settingAbout.updateChannel')"
       :description="updateChannelLabel"
     />
     <TuffBlockLine

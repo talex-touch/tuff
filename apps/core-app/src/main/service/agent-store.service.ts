@@ -462,7 +462,7 @@ class AgentStoreService {
     return snapshot.agents
   }
 
-  private migrateLegacyAgentStoreIfNeeded(): void {
+  private migrateCompatAgentStoreIfNeeded(): void {
     const currentRaw = getConfig(StorageList.AGENT_STORE)
     if (isAgentStoreState(currentRaw)) {
       return
@@ -475,7 +475,7 @@ class AgentStoreService {
 
     saveConfig(StorageList.AGENT_STORE, legacyRaw, false, true)
     clearLegacyAgentStoreKey()
-    log.info('Migrated legacy agent store key', {
+    log.info('Compat migration hit: agent store key upgraded', {
       meta: {
         from: LEGACY_AGENT_STORE_KEY,
         to: StorageList.AGENT_STORE,
@@ -488,7 +488,7 @@ class AgentStoreService {
     if (this.storageLoaded) return
     if (!isMainStorageReady()) return
 
-    this.migrateLegacyAgentStoreIfNeeded()
+    this.migrateCompatAgentStoreIfNeeded()
 
     try {
       const state = getMainConfig(StorageList.AGENT_STORE) as AgentStoreState | undefined

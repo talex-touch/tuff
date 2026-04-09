@@ -39,6 +39,10 @@ import { getSentryService } from '../sentry'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
 import { getNetworkService } from '../network'
+import {
+  normalizeStoredUpdateChannel,
+  normalizeSupportedUpdateChannel
+} from '../../../shared/update/channel'
 import { UpdateRecordStatus, UpdateRepository } from './update-repository'
 import { UpdateActionController } from './services/update-action-controller'
 import { UpdateSystem } from './update-system'
@@ -1918,50 +1922,14 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   }
 
   private normalizeStoredChannel(channel: unknown): AppPreviewChannel | undefined {
-    if (channel === null || channel === undefined) {
-      return undefined
-    }
-
-    if (typeof channel === 'number') {
-      switch (channel) {
-        case 0:
-          return AppPreviewChannel.RELEASE
-        case 1:
-        case 2:
-          return AppPreviewChannel.BETA
-        default:
-          return undefined
-      }
-    }
-
-    if (typeof channel === 'string') {
-      const trimmed = channel.trim()
-      if (!trimmed) {
-        return undefined
-      }
-
-      if (/^\d+$/.test(trimmed)) {
-        return this.normalizeStoredChannel(Number.parseInt(trimmed, 10))
-      }
-
-      return resolveUpdateChannelLabel(trimmed)
-    }
-
-    return undefined
+    return normalizeStoredUpdateChannel(channel)
   }
 
   private enforceChannelPreference(preferred?: unknown): AppPreviewChannel {
     const normalizedPreferred = this.normalizeStoredChannel(preferred)
-
-    // Snapshot channel is currently disabled; fallback to beta.
-    if (this.currentChannel === AppPreviewChannel.SNAPSHOT) {
-      return AppPreviewChannel.BETA
-    }
+    const currentChannel = normalizeSupportedUpdateChannel(this.currentChannel)
     if (!normalizedPreferred) {
-      return this.currentChannel
-    }
-    if (normalizedPreferred === AppPreviewChannel.SNAPSHOT) {
-      return AppPreviewChannel.BETA
+      return currentChannel
     }
     return normalizedPreferred
   }

@@ -74,6 +74,7 @@
     "v8": "V8 Engine",
     "os": "OS",
     "platform": "Platform",
+    "updateChannel": "Update Channel",
     "experience": "Experience",
     "experiencePack": "Touch Feature Experience Pack",
     "openAppFolder": "Application Folder",
@@ -686,6 +687,10 @@
       "loading": "Loading plugin metadata...",
       "loadFailed": "Plugin metadata failed to load."
     },
+    "notifications": {
+      "widgetLoadFailedTitle": "Widget failed to load",
+      "widgetLoadFailedMessage": "Plugin widget initialization failed. Check the plugin version, path, and runtime logs."
+    },
     "tabs": {
       "overview": "Overview",
       "issues": "Issues",
@@ -720,6 +725,10 @@
         "grantAll": "Grant All",
         "revokeAll": "Revoke All"
       },
+      "blockedTitle": "Plugin Blocked",
+      "blockedWarning": "This plugin is blocked because its SDK version is too old. The permission page is read-only.",
+      "blockedStatusTitle": "Blocked Reason",
+      "blockedHint": "Upgrade to sdkapi >= {version}, reinstall the plugin, then grant permissions again.",
       "legacyTitle": "SDK Version Warning",
       "legacyWarning": "This plugin uses a legacy SDK; permission checks were skipped",
       "legacyHint": "Upgrade to sdkapi >= {version} to enable permission checks",
@@ -755,6 +764,7 @@
         },
         "warning": {
           "permissionMissing": "Shortcut permission not granted",
+          "blockedSdk": "SDK too old; plugin is blocked",
           "legacySdk": "SDK too old; permission checks not enforced",
           "missingDescription": "Missing shortcut description"
         }
@@ -1029,9 +1039,11 @@
       "copyPluginIdSuccess": "Plugin ID copied",
       "copyPluginIdFailed": "Failed to copy plugin ID",
       "version": "Version",
+      "loadState": "Load State",
       "mode": "Mode",
       "development": "Development",
       "production": "Production",
+      "blockedTag": "Blocked",
       "description": "Description",
       "noDescription": "No description",
       "manifestJson": "manifest.json",
@@ -2050,7 +2062,7 @@
       "groupDesc": "Choose your update channel and how often to check for new builds.",
       "channelTitle": "Update Channel",
       "channelDesc": "Preview channels receive builds earlier but may be less stable.",
-      "channelSnapshotLocked": "Snapshot builds always stay on the snapshot channel.",
+      "channelSnapshotLocked": "Snapshot builds receive updates through the Beta channel.",
       "channels": {
         "release": "Stable (Release)",
         "beta": "Beta (preview)",

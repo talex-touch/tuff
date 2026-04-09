@@ -6,6 +6,7 @@ import {
   hasNavigator
 } from '@talex-touch/utils'
 import { appSetting } from '~/modules/channel/storage'
+import { normalizeSupportedUpdateChannel } from './channel'
 import { UpdateProvider } from './UpdateProvider'
 import { compareUpdateAssetTargets, resolveUpdateAssetTarget } from './platform-target'
 
@@ -107,9 +108,9 @@ export class OfficialUpdateProvider extends UpdateProvider {
     const channelMap: Record<AppPreviewChannel, string> = {
       [AppPreviewChannel.RELEASE]: 'RELEASE',
       [AppPreviewChannel.BETA]: 'BETA',
-      [AppPreviewChannel.SNAPSHOT]: 'SNAPSHOT'
+      [AppPreviewChannel.SNAPSHOT]: 'BETA'
     }
-    return channelMap[channel] || 'RELEASE'
+    return channelMap[normalizeSupportedUpdateChannel(channel)] || 'RELEASE'
   }
 
   // 将 Nexus release 转换为 GitHubRelease 格式（兼容现有接口）

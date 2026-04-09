@@ -13,6 +13,7 @@ import { BaseModule } from '../abstract-base-module'
 
 /** Deduplicate error logs -- only log each failing path once per session. */
 const loggedErrorPaths = new Set<string>()
+const loggedCompatPaths = new Set<string>()
 
 /**
  * Extract an absolute file path from a tfile:// URL.
@@ -25,7 +26,7 @@ const loggedErrorPaths = new Set<string>()
  * renderer's `buildTfileUrl()`, Chromium may or may not re-encode it before
  * delivering it to the protocol handler. We decode until the result stabilises.
  */
-function extractAbsolutePath(rawUrl: string): string {
+function extractAbsolutePath(rawUrl: string): { path: string; usedCompatPath: boolean } {
   const normalizeDecodedPath = (value: string): string => {
     const normalized = value.replace(/\\/g, '/')
     if (/^\/[a-z]:\//i.test(normalized)) {
@@ -56,20 +57,32 @@ function extractAbsolutePath(rawUrl: string): string {
     const rawWithTail = rawUrl.slice(prefix.length)
     const tailIndex = rawWithTail.search(/[?#]/)
     const body = tailIndex >= 0 ? rawWithTail.slice(0, tailIndex) : rawWithTail
-    return normalizeDecodedPath(decodeStable(body))
+    return {
+      path: normalizeDecodedPath(decodeStable(body)),
+      usedCompatPath: !body.startsWith('/')
+    }
   }
 
   try {
     const parsed = new URL(rawUrl)
     if (parsed.hostname && /^[a-z]$/i.test(parsed.hostname) && parsed.pathname.startsWith('/')) {
-      return normalizeDecodedPath(decodeStable(`${parsed.hostname}:${parsed.pathname}`))
+      return {
+        path: normalizeDecodedPath(decodeStable(`${parsed.hostname}:${parsed.pathname}`)),
+        usedCompatPath: false
+      }
     }
     const merged = parsed.hostname ? `/${parsed.hostname}${parsed.pathname}` : parsed.pathname
-    return normalizeDecodedPath(decodeStable(merged))
+    return {
+      path: normalizeDecodedPath(decodeStable(merged)),
+      usedCompatPath: false
+    }
   } catch {
     const tailIndex = rawUrl.search(/[?#]/)
     const body = tailIndex >= 0 ? rawUrl.slice(0, tailIndex) : rawUrl
-    return normalizeDecodedPath(decodeStable(body))
+    return {
+      path: normalizeDecodedPath(decodeStable(body)),
+      usedCompatPath: false
+    }
   }
 }
 
@@ -88,8 +101,16 @@ class FileProtocolModule extends BaseModule {
     const allowedRoots = getAllowedLocalFileRoots()
 
     ses.protocol.handle(FILE_SCHEMA, async (request) => {
-      const filePath = normalizeDarwinUsersPath(extractAbsolutePath(request.url))
+      const { path: extractedPath, usedCompatPath } = extractAbsolutePath(request.url)
+      const filePath = normalizeDarwinUsersPath(extractedPath)
       const normalizedPath = normalizeAbsolutePath(filePath)
+      if (usedCompatPath && normalizedPath && !loggedCompatPaths.has(normalizedPath)) {
+        loggedCompatPaths.add(normalizedPath)
+        console.info(chalk.blue('[FileProtocolModule] Compat read hit: normalized legacy tfile URL'), {
+          requestUrl: request.url,
+          normalizedPath
+        })
+      }
       if (!normalizedPath || !isAllowedLocalFilePath(normalizedPath, allowedRoots)) {
         if (!loggedErrorPaths.has(filePath)) {
           loggedErrorPaths.add(filePath)

@@ -280,7 +280,7 @@ class SqlitePermissionBackend {
 }
 
 /**
- * PermissionStore - SQLite-primary permission storage with JSON historical migration.
+ * PermissionStore - SQLite-primary permission storage with compat JSON migration.
  */
 export class PermissionStore {
   private dirPath: string
@@ -325,7 +325,7 @@ export class PermissionStore {
         this.data = this.migrate(jsonData)
         await backend.persist(this.data)
         await this.backupLegacyJson()
-        console.info('[PermissionStore] Migrated permissions.json to SQLite backend')
+        console.info('[PermissionStore] Compat migration hit: permissions.json upgraded to SQLite')
       } else {
         this.data = createEmptyData()
       }
@@ -344,7 +344,7 @@ export class PermissionStore {
   }
 
   /**
-   * Load permissions from legacy JSON file (if exists)
+   * Load permissions from compat JSON snapshot (if present)
    */
   private loadFromJson(): PermissionData | null {
     try {
@@ -353,16 +353,18 @@ export class PermissionStore {
         return data
       }
     } catch (error) {
-      console.error('[PermissionStore] Failed to load legacy JSON:', error)
+      console.error('[PermissionStore] Failed to load compat JSON snapshot:', error)
     }
     return null
   }
 
   /**
-   * Migrate old data format
-   */
+   * Normalize compat JSON data into the current SQLite-backed format
+  */
   private migrate(data: Partial<PermissionData>): PermissionData {
-    console.info('[PermissionStore] Migrating data to version', CURRENT_VERSION)
+    console.info('[PermissionStore] Compat migration hit: normalizing permission data', {
+      targetVersion: CURRENT_VERSION
+    })
     return {
       version: CURRENT_VERSION,
       grants: data.grants || {},
@@ -374,6 +376,10 @@ export class PermissionStore {
     if (!(await fse.pathExists(this.jsonFilePath))) return
     const backupPath = `${this.jsonFilePath}.backup-${Date.now()}`
     await fse.move(this.jsonFilePath, backupPath, { overwrite: true })
+    console.info('[PermissionStore] Compat migration archived permissions.json snapshot', {
+      from: this.jsonFilePath,
+      to: backupPath
+    })
   }
 
   /**
