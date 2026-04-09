@@ -46,6 +46,23 @@ function normalizeWebsearchReason(value: unknown): string {
   return reason
 }
 
+function normalizeMemoryFacts(value: unknown): Array<{ key: string, value: string }> {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return null
+      }
+      return {
+        key: normalizeText((item as Record<string, unknown>).key),
+        value: normalizeText((item as Record<string, unknown>).value),
+      }
+    })
+    .filter((item): item is { key: string, value: string } => Boolean(item?.value))
+}
+
 const payload = computed(() => parseJsonRecord(props.block.data))
 const detail = computed(() => {
   const row = payload.value.detail
@@ -55,6 +72,8 @@ const detail = computed(() => {
 })
 const cardType = computed(() => normalizeText(payload.value.cardType).toLowerCase())
 const isIntentCard = computed(() => cardType.value === 'intent')
+const isMemoryCard = computed(() => cardType.value === 'memory')
+const isPlanningCard = computed(() => cardType.value === 'planning')
 const isRoutingCard = computed(() => cardType.value === 'routing')
 const isWebsearchCard = computed(() => cardType.value === 'websearch')
 
@@ -157,9 +176,21 @@ const detailRows = computed(() => {
   return rows
 })
 
+const planningTodos = computed(() => {
+  if (!isPlanningCard.value) {
+    return []
+  }
+  const todos = Array.isArray(detail.value.todos) ? detail.value.todos : []
+  return todos
+    .map(item => normalizeText(item))
+    .filter(Boolean)
+})
+
 const thinkingText = computed(() => normalizeText(payload.value.content))
 const summaryText = computed(() => normalizeText(payload.value.summary))
 const intentReasonText = computed(() => normalizeText(detail.value.reason))
+const memoryFacts = computed(() => normalizeMemoryFacts(detail.value.facts))
+const hasMemoryFacts = computed(() => memoryFacts.value.length > 0)
 const websearchReasonText = computed(() => (
   isWebsearchCard.value ? normalizeWebsearchReason(detail.value.reason) : ''
 ))
@@ -199,13 +230,26 @@ const defaultExpanded = computed(() => {
   return cardType.value === 'thinking'
 })
 const expanded = computed(() => manualExpanded.value ?? defaultExpanded.value)
+const showSummary = computed(() => {
+  if (!displaySummary.value) {
+    return false
+  }
+  if (isMemoryCard.value) {
+    return expanded.value
+  }
+  return true
+})
 const canToggleDetails = computed(() => {
   if (isIntentCard.value) {
     return hasIntentExtra.value
   }
+  if (isMemoryCard.value) {
+    return hasMemoryFacts.value || hasExtraSlot.value
+  }
   return detailRows.value.length > 0 || (cardType.value === 'thinking' && thinkingText.value.length > 0) || hasExtraSlot.value
 })
-const showTags = computed(() => !isIntentCard.value && !isWebsearchCard.value)
+const showCardTypeTag = computed(() => !isIntentCard.value && !isMemoryCard.value && !isWebsearchCard.value && !isPlanningCard.value)
+const showStatusTag = computed(() => !isIntentCard.value && !isMemoryCard.value && !isWebsearchCard.value)
 const showExtraContent = computed(() => {
   if (!expanded.value) {
     return false
@@ -213,11 +257,15 @@ const showExtraContent = computed(() => {
   if (isIntentCard.value) {
     return hasIntentExtra.value
   }
+  if (isMemoryCard.value) {
+    return hasMemoryFacts.value || hasExtraSlot.value
+  }
   return hasExtraSlot.value
 })
 const showDetails = computed(() => expanded.value && !isIntentCard.value && detailRows.value.length > 0)
 const showThinking = computed(() => expanded.value && cardType.value === 'thinking' && thinkingText.value.length > 0)
 const showFooter = computed(() => expanded.value && !isIntentCard.value)
+const showPlanningTodos = computed(() => planningTodos.value.length > 0)
 const showIntentShimmer = computed(() => (
   isIntentCard.value && normalizeText(payload.value.status).toLowerCase() === 'running'
 ))
@@ -230,10 +278,6 @@ const showSummaryShimmer = computed(() => (
 function toggleExpanded() {
   manualExpanded.value = !expanded.value
 }
-const seqText = computed(() => {
-  const seq = Number(payload.value.seq)
-  return Number.isFinite(seq) ? String(Math.floor(seq)) : '-'
-})
 const turnIdText = computed(() => normalizeText(payload.value.turnId))
 const sessionIdText = computed(() => normalizeText(payload.value.sessionId))
 const eventTypeText = computed(() => normalizeText(payload.value.eventType))
@@ -260,21 +304,32 @@ const eventTypeText = computed(() => normalizeText(payload.value.eventType))
         >
           <i class="i-carbon-chevron-right" :class="{ expanded }" />
         </button>
-        <span v-if="showTags" class="card-type">{{ cardTypeLabel }}</span>
-        <span v-if="showTags" class="status">{{ statusText }}</span>
+        <span v-if="showCardTypeTag" class="card-type">{{ cardTypeLabel }}</span>
+        <span v-if="showStatusTag" class="status">{{ statusText }}</span>
       </div>
     </header>
 
-    <p v-if="displaySummary" class="summary">
+    <p v-if="showSummary" class="summary">
       <ShimmerText v-if="showSummaryShimmer" :text="displaySummary" :active="true" />
       <template v-else>
         {{ displaySummary }}
       </template>
     </p>
 
+    <ol v-if="showPlanningTodos" class="planning-todos">
+      <li v-for="(todo, index) in planningTodos" :key="`${index}-${todo}`">
+        {{ todo }}
+      </li>
+    </ol>
+
     <Transition name="pilot-expand">
       <section v-if="showExtraContent" class="extra">
         <slot name="extra" :payload="payload.value" :detail="detail.value">
+          <ul v-if="isMemoryCard && hasMemoryFacts" class="memory-facts">
+            <li v-for="(fact, index) in memoryFacts" :key="`${fact.key}-${index}`">
+              {{ fact.value }}
+            </li>
+          </ul>
           <p v-if="isIntentCard && intentReasonText" class="extra-text">
             {{ intentReasonText }}
           </p>
@@ -297,7 +352,6 @@ const eventTypeText = computed(() => normalizeText(payload.value.eventType))
 
     <Transition name="pilot-expand">
       <footer v-if="showFooter" class="PilotRunEventCard-Footer">
-        <span>seq: {{ seqText }}</span>
         <span v-if="turnIdText">turn: {{ turnIdText }}</span>
         <span v-if="sessionIdText">session: {{ sessionIdText }}</span>
         <span v-if="eventTypeText">event: {{ eventTypeText }}</span>
@@ -394,6 +448,21 @@ const eventTypeText = computed(() => normalizeText(payload.value.eventType))
   font-weight: 400;
 }
 
+.planning-todos {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 400;
+
+  li {
+    margin: 0;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+}
+
 .extra {
   margin: 0;
   border: 0;
@@ -409,6 +478,20 @@ const eventTypeText = computed(() => normalizeText(payload.value.eventType))
   margin: 0;
   white-space: pre-wrap;
   font-weight: 400;
+}
+
+.memory-facts {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+
+  li {
+    margin: 0;
+    word-break: break-word;
+  }
 }
 
 .details {

@@ -1,15 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { StorageList } from '@talex-touch/utils'
 
 const {
   getConfigMock,
   getMainConfigMock,
   isMainStorageReadyMock,
+  networkRequestMock,
   saveConfigMock,
   saveMainConfigMock
 } = vi.hoisted(() => ({
   getConfigMock: vi.fn<(key: string) => unknown>(),
   getMainConfigMock: vi.fn<(key: string) => unknown>(),
   isMainStorageReadyMock: vi.fn<() => boolean>(),
+  networkRequestMock: vi.fn(),
   saveConfigMock: vi.fn<(key: string, value: unknown) => void>(),
   saveMainConfigMock: vi.fn<(key: string, value: unknown) => void>()
 }))
@@ -29,6 +32,12 @@ vi.mock('@talex-touch/utils/env', async (importOriginal) => {
     getTpexApiBase: () => 'https://agent-store.test'
   }
 })
+
+vi.mock('../modules/network', () => ({
+  getNetworkService: () => ({
+    request: networkRequestMock
+  })
+}))
 
 vi.mock('electron', () => ({
   app: {
@@ -65,15 +74,14 @@ function resetServiceState(): MutableAgentStoreService {
   return service
 }
 
-function mockFetchJson(payload: unknown): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => payload
-    }))
-  )
+function mockNetworkJson(payload: unknown): void {
+  networkRequestMock.mockResolvedValue({
+    data: payload,
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    url: 'https://agent-store.test/api/v1/agents/catalog'
+  })
 }
 
 function createCatalogPayload(version = '1.2.0') {
@@ -108,6 +116,7 @@ describe('agentStoreService', () => {
     getConfigMock.mockReset().mockReturnValue(undefined)
     getMainConfigMock.mockReset().mockReturnValue({ installed: {} })
     isMainStorageReadyMock.mockReset().mockReturnValue(true)
+    networkRequestMock.mockReset()
     saveConfigMock.mockReset()
     saveMainConfigMock.mockReset()
     resetServiceState()
@@ -121,7 +130,7 @@ describe('agentStoreService', () => {
     const service = resetServiceState()
     service.installedAgentIds.add('community.smart-agent')
     service.installedAgentVersions.set('community.smart-agent', '1.0.0')
-    mockFetchJson(createCatalogPayload('1.2.0'))
+    mockNetworkJson(createCatalogPayload('1.2.0'))
 
     const updates = await agentStoreService.checkUpdates()
 
@@ -133,7 +142,7 @@ describe('agentStoreService', () => {
   })
 
   it('returns explicit install failure when install chain throws', async () => {
-    mockFetchJson(createCatalogPayload('1.2.0'))
+    mockNetworkJson(createCatalogPayload('1.2.0'))
     const service = resetServiceState()
     const installSpy = vi
       .spyOn(service, 'installWithRollback')
@@ -150,13 +159,48 @@ describe('agentStoreService', () => {
   })
 
   it('throws explicit unavailable error when catalog backend is unreachable', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        throw new Error('ECONNREFUSED')
-      })
-    )
+    networkRequestMock.mockRejectedValue(new Error('ECONNREFUSED'))
 
     await expect(agentStoreService.checkUpdates()).rejects.toThrow(/catalog unavailable/i)
+  })
+
+  it('migrates legacy agent store key once and clears the old key', async () => {
+    const service = resetServiceState()
+    service.storageLoaded = false
+    getConfigMock.mockImplementation((key) => {
+      if (key === 'agent-market.json') {
+        return {
+          installed: {
+            'community.smart-agent': '1.0.0'
+          }
+        }
+      }
+      return undefined
+    })
+    getMainConfigMock.mockImplementation((key) => {
+      if (typeof key === 'string' && key.includes('agent')) {
+        return {
+          installed: {
+            'community.smart-agent': '1.0.0'
+          }
+        }
+      }
+      return { installed: {} }
+    })
+
+    await agentStoreService.getInstalledAgents()
+
+    expect(saveConfigMock).toHaveBeenNthCalledWith(
+      1,
+      StorageList.AGENT_STORE,
+      {
+        installed: {
+          'community.smart-agent': '1.0.0'
+        }
+      },
+      false,
+      true
+    )
+    expect(saveConfigMock).toHaveBeenNthCalledWith(2, 'agent-market.json', undefined, true, true)
   })
 })

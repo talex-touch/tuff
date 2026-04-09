@@ -12,7 +12,7 @@ const obj = computed(() => JSON.parse(props.value))
     <span
       v-for="(item, index) in obj.results"
       :key="item.href"
-      :style="`--i: ${(index + 1) * 0.125}s`"
+      :style="`--i: ${(Number(index) + 1) * 0.125}s`"
       class="ChatItem-ReferenceList"
     >
       <a target="_blank" :href="item.href">{{

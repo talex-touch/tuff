@@ -11,10 +11,9 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import {
   AgentsEvents,
-  getTuffTransportMain,
+  type ITuffTransportMain,
   type TuffEvent
 } from '@talex-touch/utils/transport/main'
-import { genTouchApp } from '../../../core'
 import { agentStoreService } from '../../../service/agent-store.service'
 import { createLogger } from '../../../utils/logger'
 import { agentManager } from './agent-manager'
@@ -26,10 +25,7 @@ const logInfo = (...args: unknown[]) => agentChannelsLog.info(formatLogArgs(args
 /**
  * Register all agent IPC channels
  */
-export function registerAgentChannels(): () => void {
-  const channel = genTouchApp().channel
-  const keyManager = (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-  const transport = getTuffTransportMain(channel, keyManager)
+export function registerAgentChannels(transport: ITuffTransportMain): () => void {
   const cleanups: Array<() => void> = []
 
   // ============================================================================

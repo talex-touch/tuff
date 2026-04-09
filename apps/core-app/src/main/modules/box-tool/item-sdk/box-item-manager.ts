@@ -17,7 +17,7 @@ import {
   type TuffEvent
 } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { genTouchApp } from '../../../core'
+import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { getCoreBoxWindow } from '../core-box'
 import { BOX_ITEM_CHANNELS } from './channels'
 
@@ -47,7 +47,7 @@ export class BoxItemManager {
       enableLogging: options.enableLogging ?? false,
       maxItems: options.maxItems ?? 10000
     }
-    const channel = genTouchApp().channel
+    const channel = getRegisteredMainRuntime('core-box').channel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)

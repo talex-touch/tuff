@@ -7,11 +7,10 @@ import { readdir, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { desc, sql } from 'drizzle-orm'
 import { app } from 'electron'
-import { genTouchApp } from '../../core'
+import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { config, scanProgress } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
 import { appendWorkflowDebugLog } from '../../utils/workflow-debug'
@@ -22,9 +21,6 @@ import { ocrService } from '../ocr/ocr-service'
 import { activeAppService } from './active-app'
 
 const dashboardLog = createLogger('TuffDashboard')
-
-const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
-  channel.keyManager ?? channel
 
 const tuffDashboardEvent = defineRawEvent<
   TuffDashboardOptions | undefined,
@@ -52,10 +48,9 @@ export class TuffDashboardModule extends BaseModule {
     })
   }
 
-  async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
-    const channel = genTouchApp().channel
-    const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
-    const transport = getTuffTransportMain(channel, keyManager)
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    const runtime = resolveMainRuntime(ctx, 'TuffDashboardModule.onInit')
+    const transport = runtime.transport
 
     transport.on(tuffDashboardEvent, async (options) => {
       const requestId = null

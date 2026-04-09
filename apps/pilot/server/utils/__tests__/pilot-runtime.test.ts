@@ -7,7 +7,7 @@ import {
   PilotStrictModeUnavailableError,
 } from '../pilot-runtime'
 
-vi.mock('@talex-touch/tuff-intelligence/pilot', () => {
+vi.mock('@talex-touch/tuff-intelligence/pilot-server', () => {
   class MockAbstractAgentRuntime {
     constructor(public deps: any) {}
   }
@@ -157,6 +157,45 @@ describe('pilot-runtime strict mode', () => {
     })
 
     expect((runtime as any).deps.engine.id).toBe('pilot-fallback-engine')
+  })
+
+  it('可显式关闭默认 builtinTools 注入', () => {
+    const { runtime } = createPilotRuntime({
+      event: eventStub,
+      userId: 'user_4',
+      strictPilotMode: false,
+      channel: {
+        ...channelStub,
+        builtinTools: [],
+        disableDefaultBuiltinTools: true,
+      },
+      orchestrator: {
+        mode: 'deepagent',
+        reason: 'tool_gate_disabled',
+      },
+    })
+
+    expect((runtime as any).deps.engine.options.builtinTools).toEqual([])
+  })
+
+  it('strict pre-read memory 下不再向 deepagent 注入 getmemory 工具', () => {
+    const { runtime } = createPilotRuntime({
+      event: eventStub,
+      userId: 'user_memory_tool',
+      memoryEnabled: true,
+      strictPilotMode: false,
+      channel: {
+        ...channelStub,
+        builtinTools: ['write_todos'],
+      },
+      orchestrator: {
+        mode: 'deepagent',
+        reason: 'memory_enabled',
+      },
+    })
+
+    expect((runtime as any).deps.engine.options.tools).toEqual([])
+    expect(String((runtime as any).deps.engine.options.systemPrompt || '').toLowerCase()).not.toContain('getmemory')
   })
 
   it('coze 渠道会创建独立 coze engine', () => {

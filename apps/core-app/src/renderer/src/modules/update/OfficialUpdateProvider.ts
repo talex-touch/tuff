@@ -6,8 +6,9 @@ import {
   hasNavigator
 } from '@talex-touch/utils'
 import { appSetting } from '~/modules/channel/storage'
+import { normalizeSupportedUpdateChannel } from './channel'
 import { UpdateProvider } from './UpdateProvider'
-import { resolveUpdateAssetTarget } from './platform-target'
+import { compareUpdateAssetTargets, resolveUpdateAssetTarget } from './platform-target'
 
 type OfficialReleaseAsset = {
   name?: string
@@ -20,7 +21,9 @@ type OfficialReleaseAsset = {
   signatureUrl?: string
 }
 
-type DownloadAssetWithSignature = DownloadAsset & { signatureUrl?: string }
+type DownloadAssetWithSignature = DownloadAsset & {
+  signatureUrl?: string
+} & import('./platform-target').UpdateAssetTarget
 
 // Nexus API 响应类型
 interface NexusReleaseAsset {
@@ -105,9 +108,9 @@ export class OfficialUpdateProvider extends UpdateProvider {
     const channelMap: Record<AppPreviewChannel, string> = {
       [AppPreviewChannel.RELEASE]: 'RELEASE',
       [AppPreviewChannel.BETA]: 'BETA',
-      [AppPreviewChannel.SNAPSHOT]: 'SNAPSHOT'
+      [AppPreviewChannel.SNAPSHOT]: 'BETA'
     }
-    return channelMap[channel] || 'RELEASE'
+    return channelMap[normalizeSupportedUpdateChannel(channel)] || 'RELEASE'
   }
 
   // 将 Nexus release 转换为 GitHubRelease 格式（兼容现有接口）
@@ -243,29 +246,33 @@ export class OfficialUpdateProvider extends UpdateProvider {
       return []
     }
 
-    return release.assets.flatMap((asset) => {
-      const assetData = asset as OfficialReleaseAsset
-      const name = assetData.name || asset.name
-      const url = assetData.browser_download_url || assetData.url || asset.url
-      const target = resolveUpdateAssetTarget(name, {
-        platform: assetData.platform,
-        arch: assetData.arch
+    return release.assets
+      .flatMap((asset) => {
+        const assetData = asset as OfficialReleaseAsset
+        const name = assetData.name || asset.name
+        const url = assetData.browser_download_url || assetData.url || asset.url
+        const target = resolveUpdateAssetTarget(name, {
+          platform: assetData.platform,
+          arch: assetData.arch
+        })
+        if (!target) {
+          console.warn(`[OfficialUpdateProvider] Skip unsupported asset target: ${name}`)
+          return []
+        }
+        const normalized: DownloadAssetWithSignature = {
+          name,
+          url,
+          size: assetData.size ?? asset.size ?? 0,
+          platform: target.platform,
+          arch: target.arch,
+          sourceArch: target.sourceArch,
+          priority: target.priority,
+          checksum: assetData.sha256 || undefined,
+          signatureUrl: assetData.signatureUrl || (url ? `${url}.sig` : undefined)
+        }
+        return [normalized]
       })
-      if (!target) {
-        console.warn(`[OfficialUpdateProvider] Skip unsupported asset target: ${name}`)
-        return []
-      }
-      const normalized: DownloadAssetWithSignature = {
-        name,
-        url,
-        size: assetData.size ?? asset.size ?? 0,
-        platform: target.platform,
-        arch: target.arch,
-        checksum: assetData.sha256 || undefined,
-        signatureUrl: assetData.signatureUrl || (url ? `${url}.sig` : undefined)
-      }
-      return [normalized]
-    })
+      .sort((left, right) => compareUpdateAssetTargets(left, right))
   }
 
   // 健康检查

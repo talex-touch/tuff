@@ -133,7 +133,7 @@ function parseAdditionalInfo(info: string) {
       <el-row :gutter="16">
         <el-col :span="12">
           <div class="statistic-card">
-            <el-statistic :value="`${statistics.price.success}/${statistics.price.submit}`">
+            <el-statistic :value="statistics.price.success">
               <template #title>
                 <div style="display: inline-flex; align-items: center">
                   总金额比例
@@ -143,6 +143,9 @@ function parseAdditionalInfo(info: string) {
                     </el-icon>
                   </el-tooltip>
                 </div>
+              </template>
+              <template #suffix>
+                /{{ statistics.price.submit }}
               </template>
             </el-statistic>
             <div class="statistic-footer">
@@ -160,7 +163,7 @@ function parseAdditionalInfo(info: string) {
         </el-col>
         <el-col :span="12">
           <div class="statistic-card">
-            <el-statistic :value="`${statistics.payStatus.success}/${statistics.payStatus.other}`">
+            <el-statistic :value="statistics.payStatus.success">
               <template #title>
                 <div style="display: inline-flex; align-items: center">
                   订单支付比例
@@ -170,6 +173,9 @@ function parseAdditionalInfo(info: string) {
                     </el-icon>
                   </el-tooltip>
                 </div>
+              </template>
+              <template #suffix>
+                /{{ statistics.payStatus.other }}
               </template>
             </el-statistic>
             <div class="statistic-footer">

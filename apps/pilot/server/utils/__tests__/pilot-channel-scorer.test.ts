@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeChannelModelStats } from '../pilot-channel-scorer'
+import { buildRouteKey } from '../pilot-route-health'
 import { listPilotRoutingMetrics } from '../pilot-routing-metrics'
 
 vi.mock('../pilot-routing-metrics', () => ({
@@ -100,8 +101,8 @@ describe('pilot-channel-scorer', () => {
       recentRequestWindow: 200,
     })
 
-    const fast = stats.get('fast::gpt-5.4')
-    const slow = stats.get('slow::gpt-5.4')
+    const fast = stats.get(buildRouteKey('fast', 'gpt-5.4'))
+    const slow = stats.get(buildRouteKey('slow', 'gpt-5.4'))
     expect(fast).toBeDefined()
     expect(slow).toBeDefined()
     expect((fast?.score || 0)).toBeGreaterThan(slow?.score || 0)

@@ -22,7 +22,7 @@ const props = defineProps<{
       <span
         v-for="(item, index) in data.results"
         :key="item.href"
-        :style="`--i: ${(index + 1) * 0.125}s`"
+        :style="`--i: ${(Number(index) + 1) * 0.125}s`"
         class="ChatItem-ReferenceList"
       >
         <a target="_blank" :href="item.href">{{

@@ -43,7 +43,6 @@ import { getHeapStatistics } from 'node:v8'
 
 export interface RendererPerfReport {
   kind:
-    | 'channel.sendSync.slow'
     | 'channel.send.slow'
     | 'channel.send.timeout'
     | 'channel.send.errorReply'

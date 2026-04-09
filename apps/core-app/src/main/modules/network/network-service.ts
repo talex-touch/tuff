@@ -9,7 +9,6 @@ import type {
 } from '@talex-touch/utils/network'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { ProxyConfig, Session } from 'electron'
-import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
@@ -28,11 +27,12 @@ import {
   resolveLocalFilePath,
   toTfileUrl
 } from '@talex-touch/utils/network'
-import { normalizeAbsolutePath, resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
-import { app, safeStorage, session } from 'electron'
+import { app, session } from 'electron'
 import { APP_FOLDER_NAME } from '../../config/default'
 import { getMainConfig, saveMainConfig } from '../storage'
+import { getAllowedLocalFileRoots, isAllowedLocalFilePath } from '../../utils/local-file-policy'
 import { createLogger } from '../../utils/logger'
+import { getSecureStoreValue } from '../../utils/secure-store'
 
 const log = createLogger('NetworkService')
 
@@ -64,9 +64,6 @@ const DEFAULT_NETWORK_CONFIG: NetworkConfigSnapshot = {
   },
   timeoutMs: 15000
 }
-
-const SECURE_STORE_FILE = 'secure-store.json'
-const SECURE_STORE_KEY_PATTERN = /^[a-z0-9._-]{1,80}$/i
 
 interface NetworkStreamResponse {
   status: number
@@ -271,76 +268,12 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return copied.buffer
 }
 
-function buildAllowedRoots(): string[] {
-  const platform = process.platform
-  const winRoots =
-    platform === 'win32'
-      ? [process.env.PROGRAMFILES, process.env['PROGRAMFILES(X86)'], process.env.SystemRoot].filter(
-          (value): value is string => Boolean(value)
-        )
-      : []
-  const linuxRoots = platform === 'linux' ? ['/usr/share', '/usr/local/share', '/opt'] : []
-
-  const candidates = [
-    process.cwd(),
-    appPathSafe('home'),
-    appPathSafe('userData'),
-    appPathSafe('temp'),
-    os.tmpdir(),
-    ...winRoots,
-    ...linuxRoots,
-    '/Applications',
-    '/System/Applications',
-    '/System/Library/CoreServices'
-  ]
-
-  const roots: string[] = []
-  for (const candidate of candidates) {
-    const normalized = normalizeAbsolutePath(candidate)
-    if (normalized && !roots.includes(normalized)) {
-      roots.push(normalized)
-    }
-  }
-  return roots
-}
-
 function appPathSafe(name: 'home' | 'userData' | 'temp'): string {
   try {
     return app.getPath(name)
   } catch {
     return name === 'temp' ? os.tmpdir() : process.cwd()
   }
-}
-
-function isAllowedPath(filePath: string, roots: string[]): boolean {
-  const normalized = normalizeAbsolutePath(filePath)
-  if (!normalized) {
-    return false
-  }
-
-  if (process.platform === 'darwin') {
-    const lower = normalized.toLowerCase()
-    return roots.some((root) => {
-      const normalizedRoot = normalizeAbsolutePath(root)
-      if (!normalizedRoot) return false
-      const lowerRoot = normalizedRoot.toLowerCase()
-      return lower === lowerRoot || lower.startsWith(`${lowerRoot}/`)
-    })
-  }
-
-  return roots.some((root) => {
-    const normalizedRoot = normalizeAbsolutePath(root)
-    if (!normalizedRoot) {
-      return false
-    }
-
-    return Boolean(
-      resolveSafePath(normalizedRoot, normalized, {
-        allowAbsolute: true,
-        allowRoot: true
-      }).resolvedPath
-    )
-  })
 }
 
 function resolveAppRootPath(): string {
@@ -355,48 +288,21 @@ function resolveAppRootPath(): string {
   }
 }
 
-async function readSecureStore(): Promise<Record<string, string>> {
-  const storePath = path.join(resolveAppRootPath(), 'config', SECURE_STORE_FILE)
-  try {
-    const raw = await fs.readFile(storePath, 'utf-8')
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    const result: Record<string, string> = {}
-    for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value === 'string') {
-        result[key] = value
-      }
-    }
-    return result
-  } catch (error) {
-    const code = isRecord(error) && typeof error.code === 'string' ? error.code : ''
-    if (code === 'ENOENT') {
-      return {}
-    }
-    log.warn('Failed to read secure store for network proxy auth', { error })
-    return {}
-  }
-}
-
 async function resolveProxyCredential(
   authRef?: string | null
 ): Promise<{ username: string; password: string } | null> {
   const key = typeof authRef === 'string' ? authRef.trim() : ''
-  if (!key || !SECURE_STORE_KEY_PATTERN.test(key)) {
-    return null
-  }
-
-  if (!safeStorage.isEncryptionAvailable()) {
-    return null
-  }
-
-  const store = await readSecureStore()
-  const encrypted = store[key]
-  if (!encrypted) {
+  if (!key) {
     return null
   }
 
   try {
-    const decrypted = safeStorage.decryptString(Buffer.from(encrypted, 'base64')).trim()
+    const decrypted =
+      (
+        await getSecureStoreValue(resolveAppRootPath(), key, (message, error) => {
+          log.warn(`${message} for network proxy auth`, { error })
+        })
+      )?.trim() ?? ''
     if (!decrypted) {
       return null
     }
@@ -460,7 +366,7 @@ export class NetworkService {
   private readonly guard = createNetworkGuard(DEFAULT_NETWORK_CONFIG.cooldown)
   private readonly sessionCache = new Map<string, Session>()
   private readonly sessionProxyCache = new Map<string, string>()
-  private readonly allowedRoots = buildAllowedRoots()
+  private readonly allowedRoots = getAllowedLocalFileRoots({ includeCwd: true })
 
   private getConfigFromSettings(): NetworkConfigSnapshot {
     const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting | undefined
@@ -526,7 +432,7 @@ export class NetworkService {
       throw new Error('NETWORK_UNSUPPORTED_FILE_SOURCE')
     }
 
-    if (!isAllowedPath(localPath, this.allowedRoots)) {
+    if (!isAllowedLocalFilePath(localPath, this.allowedRoots)) {
       throw new Error('NETWORK_FILE_FORBIDDEN')
     }
 
@@ -575,7 +481,7 @@ export class NetworkService {
       throw new Error('NETWORK_UNSUPPORTED_FILE_SOURCE')
     }
 
-    if (!isAllowedPath(localPath, this.allowedRoots)) {
+    if (!isAllowedLocalFilePath(localPath, this.allowedRoots)) {
       throw new Error('NETWORK_FILE_FORBIDDEN')
     }
 

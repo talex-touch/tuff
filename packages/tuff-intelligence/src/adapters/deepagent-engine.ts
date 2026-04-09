@@ -1,4 +1,5 @@
 import type { SubAgent } from 'deepagents'
+import type { StructuredTool } from '@langchain/core/tools'
 import { networkClient } from '@talex-touch/utils/network'
 import type { AgentEngineAdapter } from './engine'
 import type { AgentErrorDetail } from '../protocol/error-detail'
@@ -46,6 +47,7 @@ export interface DeepAgentEngineOptions {
   systemPrompt?: DeepAgentPromptResolver
   subagents?: DeepAgentSubAgentConfig[]
   builtinTools?: Array<'write_todos' | 'read_file' | 'write_file' | 'edit_file' | 'ls'>
+  tools?: StructuredTool[]
   onAudit?: (record: DeepAgentAuditRecord) => Promise<void> | void
 }
 
@@ -99,6 +101,9 @@ function toBooleanFlag(value: unknown): boolean {
 }
 
 function shouldUseDirectStream(options: DeepAgentEngineOptions): boolean {
+  if (Array.isArray(options.tools) && options.tools.length > 0) {
+    return false
+  }
   const metadata = toRecord(options.metadata)
   if (toBooleanFlag(metadata.forceDirectStream)) {
     return true
@@ -1531,6 +1536,7 @@ async function invokeDeepAgentWithTransport(
   const builtinTools = Array.isArray(options.builtinTools) && options.builtinTools.length > 0
     ? options.builtinTools
     : DEFAULT_BUILTIN_TOOLS
+  const customTools = Array.isArray(options.tools) ? options.tools : []
   const useResponsesApi = transport === 'responses'
 
   const invokeMessages = buildDeepAgentMessages(state, {
@@ -1577,6 +1583,8 @@ async function invokeDeepAgentWithTransport(
       hasInstructions: Boolean(instructions),
       subAgentCount: subagents.length,
       builtinTools,
+      customToolCount: customTools.length,
+      customToolNames: customTools.map(tool => tool.name),
       hasApiKey: true,
       metadata: toRecord(options.metadata),
     },
@@ -1605,6 +1613,7 @@ async function invokeDeepAgentWithTransport(
         instructions,
         subagents,
         builtinTools,
+        tools: customTools,
       })
 
       const invokePayload = {
@@ -1790,6 +1799,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
     const builtinTools = Array.isArray(this.options.builtinTools) && this.options.builtinTools.length > 0
       ? this.options.builtinTools
       : DEFAULT_BUILTIN_TOOLS
+    const customTools = Array.isArray(this.options.tools) ? this.options.tools : []
     const invokeMessages = buildDeepAgentMessages(state, {
       includeInputFiles: useResponsesApi,
     })
@@ -1824,6 +1834,8 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
         hasInstructions: Boolean(instructions),
         subAgentCount: subagents.length,
         builtinTools,
+        customToolCount: customTools.length,
+        customToolNames: customTools.map(tool => tool.name),
         hasApiKey: true,
         metadata: toRecord(this.options.metadata),
       },
@@ -1839,9 +1851,10 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
       await this.options.onAudit?.({
         type: 'upstream.direct_stream_skipped',
         payload: {
-          reason: 'disabled_by_metadata',
+          reason: customTools.length > 0 ? 'custom_tools_present' : 'disabled_by_metadata',
           endpoint,
           model,
+          customToolNames: customTools.map(tool => tool.name),
           metadata: toRecord(this.options.metadata),
         },
       })
@@ -1976,6 +1989,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
         instructions,
         subagents,
         builtinTools,
+        tools: customTools,
       })
       const streamPayload = {
         messages: invokeMessages as unknown,

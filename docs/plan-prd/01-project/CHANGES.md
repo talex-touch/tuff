@@ -1,7 +1,7 @@
 # 变更日志
 
-> 更新时间: 2026-03-31
-> 说明: 主文件仅保留近 30 天（2026-03-01 ~ 2026-03-31）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-08
+> 说明: 主文件仅保留近 30 天（2026-03-10 ~ 2026-04-08）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
@@ -9,7 +9,353 @@
 - 历史主线：`2.4.8 OmniPanel Gate`、`v2.4.7 Gate A/B/C/D/E` 均已收口（historical）。
 - 旧记录入口：见文末“历史索引导航”。
 
+## 2026-04-08
+
+### refactor(core-app): 兼容层继续收口到显式能力分级与一次迁移路径
+
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/modules/platform/capability-registry.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/search-processing-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/item-rebuilder.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-request-normalizer.ts`
+- `apps/core-app/src/main/core/touch-app.ts`
+- `apps/core-app/src/main/service/store-api.service.ts`
+- `apps/core-app/src/main/service/agent-store.service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/electron-builder.yml`
+- `apps/core-app/scripts/build-target.js`
+  - 删除仓内无运行时引用的 `app-addon` 与 renderer 侧 deprecated `useUpdate.ts` 兼容壳，避免继续暴露错误入口。
+  - 插件加载广播新增 `loadState/loadError`，加载中与加载失败不再依赖 `Loading...` / `Fatal Error` 文本或空 emoji 图标表达状态。
+  - recommendation app rebuild 改为直接走 app-item 映射，不再通过 `dummyQuery` 复用搜索后处理。
+  - 平台 capability 补充 `supportLevel/limitations`，显式区分 `supported / best_effort / unsupported`；`native-share`、`terminal`、`tuff-cli`、`active-app` 不再用“缺席即静默降级”的方式表达能力。
+  - Windows Everything 状态新增健康分级与原因说明；不可用/禁用时明确表现为 degraded fallback，而非静默空白。
+  - `startSilent` 旧 split setting、旧 store source key、旧 agent store key 改为一次迁移后写回新结构并清理旧入口；mac `LSUIElement` 不再在打包配置中默认写死，改为显式构建开关注入。
+
+### fix(pilot-build): 收口 tuff-intelligence pilot 导出边界并恢复前端构建
+
+- `packages/tuff-intelligence/src/pilot.ts`
+- `packages/tuff-intelligence/src/pilot-server.ts`
+- `packages/tuff-intelligence/package.json`
+- `apps/pilot/server/**/*`
+  - `@talex-touch/tuff-intelligence/pilot` 收口为 browser-safe 入口，仅保留 `business/pilot` projection / trace / legacy card / stream helper 与前端共享类型。
+  - 新增 `@talex-touch/tuff-intelligence/pilot-server` 子路径，承载 runtime / store / deepagent engine / protocol 类型，`apps/pilot/server` 原子迁移到新入口，避免前端 import `/pilot` 时再把 `deepagents / @langchain/langgraph / node:async_hooks` 卷入浏览器 bundle。
+  - 不引入前端 alias、shim 或构建绕过；本次只修共享包导出边界与消费者引用。
+- `apps/pilot/server/utils/__tests__/pilot-entry-contract.test.ts`
+  - 新增导出契约回归，验证 `/pilot` 不再暴露 `AbstractAgentRuntime / DecisionDispatcher / DeepAgentLangChainEngineAdapter / D1RuntimeStoreAdapter`，同时确认 `/pilot-server` 仍承载服务端 runtime/store/engine 导出。
+
+### fix(pilot-history): 标题生成后同步回写 quota 历史与会话映射
+
+- `apps/pilot/server/utils/pilot-quota-history-sync.ts`
+- `apps/pilot/server/utils/pilot-trace-window.ts`
+- `apps/pilot/server/api/chat/sessions/[sessionId]/title.post.ts`
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/server/api/aigc/conversation/[id].get.ts`
+ - `apps/pilot/server/utils/pilot-system-message-response.ts`
+  - 新增统一的 runtime -> quota 历史回写 helper，按 runtime `title + messages + trace tail` 生成快照并同步维护 `pilot_quota_history` / `pilot_quota_sessions`。
+  - `POST /api/chat/sessions/:sessionId/title` 不再只更新 runtime 标题；现在会 best-effort 回写兼容历史，修复前端标题已生成但历史列表仍停留旧标题/旧汇聚快照的问题。
+  - `GET /api/aigc/conversation/:id` 与流式收尾同步复用同一条回写链路，避免不同入口再次出现快照格式或映射字段漂移。
+  - trace 尾窗口读取改为按批次向前补到最近的 `turn.started`，修复长 turn 中 `intent.*` 已落库但在恢复/快照阶段被 2000 条尾窗口裁掉、最终只剩 tool card 的问题。
+- `apps/pilot/server/utils/__tests__/pilot-quota-history-sync.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-trace-window.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
+  - 新增回归，覆盖“标题/trace 回写成功时同步更新历史与映射”“runtime 会话缺失时不重复写入”“长 turn 回溯最近 `turn.started` 后 intent 不再被 tool card 挤掉”。
+
+## 2026-04-07
+
+### fix(pilot-stream): trace-first 恢复链清理旧 runtime 审计脏卡
+
+- `packages/tuff-intelligence/src/business/pilot/projection.ts`
+- `apps/pilot/shared/pilot-system-card-blocks.ts`
+- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+- `apps/pilot/server/api/aigc/conversation/[id].get.ts`
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/server/utils/pilot-system-message-response.ts`
+- `apps/pilot/server/utils/pilot-trace-window.ts`
+  - 非 `tool.call.*` 的 `run.audit` 不再投影为前端可见 system/runtime 卡，避免 `attachment.resolve.*` 这类内部审计在刷新恢复后误显示成“工具调用 / runtime / 200”。
+  - quota snapshot 只要存在 runtime traces，就统一以 trace projection 为准并清理旧 `pilot_run_event_card / pilot_tool_card` 脏块，不再回退信任历史 `messages` 里的遗留卡片。
+  - 会话详情读取改为按 runtime `messages + traces` 对齐并回写 quota history，修复已写脏老会话中 `analyse intent` 被旧卡污染的问题，确保前后端恢复语义一致。
+  - 新增长会话 trace tail 窗口 helper；会话详情、quota history 回写与 `messages.get` 不再读取“最早 2000 条 trace”，而是按 `session.lastSeq` 读取“最新 2000 条”，修复刷新后最新 turn 的 intent/websearch/planning 卡片偶发消失的问题。
+- `apps/pilot/server/utils/__tests__/pilot-system-message.test.ts`
+- `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-trace-window.test.ts`
+  - 新增回归，覆盖“非工具审计不可见”“trace-first 清理旧 runtime/tool 脏卡”“trace 存在但无可见卡时不回退旧 message cards”。
+  - 追加回归，覆盖“长会话按 `lastSeq` 读取 trace 尾部，最新 intent 不丢失”。
+
+### fix(pilot-stream): 首页默认 DeepAgent 并收口 legacy 单前端消费链
+
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/legacy-stream-contract.ts`
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/legacy-stream-sse.ts`
+  - 首页生产入口继续保留旧 UI，但流式消费收口到 legacy `$completion` 单链；SSE frame 解析、请求 payload 组装、executor body 构造全部抽成纯 helper，避免旧首页与新 Pilot Workspace 再并行漂移。
+  - 默认 DeepAgent 主链不再从 `conversation.pilotMode` 回填请求参数；仅显式实验态 `meta.pilotMode=true` 时才兼容透传 `pilotMode=true`。
+  - `fromSeq + follow` 统一复用共享 seq cursor 解析，首页恢复流固定跟随真实可恢复事件，不再受 Pilot 模式分叉影响。
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/app/components/input/ThInput.vue`
+- `apps/pilot/app/components/input/ThInputPlus.vue`
+  - 首页移除 `Pilot 模式` 默认标签与输入开关；默认发送、标题展示、恢复逻辑均不再依赖 `pilotMode`。
+- `packages/tuff-intelligence/src/business/pilot/types.ts`
+- `packages/tuff-intelligence/src/business/pilot/emitter.ts`
+- `packages/tuff-intelligence/src/business/pilot/stream.ts`
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/server/api/chat/sessions/[sessionId]/trace.get.ts`
+- `apps/pilot/server/utils/pilot-stream-quota-projector.ts`
+- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+  - 收紧 trace contract：`stream.started / stream.heartbeat / replay.* / run.metrics / done / error` 等 seq-optional 生命周期事件不再持久化到 trace，也不再参与 replay/follow/fromSeq 边界推进；历史脏 trace 在 replay、trace.get 与 quota snapshot 中统一过滤。
+- `apps/pilot/server/utils/__tests__/legacy-completion-stream-contract.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-stream-emitter-seq.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-stream-replay.test.ts`
+  - 补齐 legacy SSE 契约测试，覆盖 `assistant.delta / assistant.final / run.audit / turn.approval_required / replay / done / error` 与分块持续解析；同时验证 seq-optional 生命周期事件不会重新污染 trace。
+- 验收：
+  - `pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-stream-emitter-seq.test.ts" "server/utils/__tests__/pilot-stream-replay.test.ts" "server/utils/__tests__/legacy-completion-stream-contract.test.ts" "server/utils/__tests__/pilot-runtime-seq.test.ts" "server/utils/__tests__/pilot-sse-response.test.ts"` 已通过。
+  - `pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-runtime.test.ts" "server/utils/__tests__/pilot-completion-flow.test.ts" "server/utils/__tests__/legacy-stream-input.test.ts" "server/utils/__tests__/pilot-chat-utils-parse.test.ts"` 已通过。
+  - `pnpm -C "apps/pilot" run typecheck` 已通过。
+
+## 2026-04-06
+
+### docs(pilot): 补充单流完整流程图与运行时审计结论
+
+- `docs/plan-prd/02-architecture/pilot-single-stream-runtime.md`
+  - 补充 Pilot / DeepAgent 单流运行时完整 Mermaid 流程图，明确 `intent gate -> strict pre-read memory -> runtime persist-first -> shared projection -> frontend strict seq consume` 的主链顺序。
+  - 修正文档中的 seq 合同表述，明确 `stream.started / stream.heartbeat / replay.* / run.metrics / done / error` 为可无 seq 的豁免事件，其余可恢复事件必须带稳定 `seq`。
+  - 增加实现审计结论与已知边界，显式标注 `pilot-memory-tool.ts` 不得重新接回标准 Pilot runtime 主路径，并补充前端本地状态不得伪造成 trace event。
+- `docs/INDEX.md`
+  - 刷新 Pilot 单流运行时文档入口说明，标记该文档已包含“完整流程图 + 审计结论”，作为后续排查的权威入口。
+
+### ref(pilot): 统一 messages.get 的 trace projection 命名
+
+- `apps/pilot/server/utils/pilot-system-message-response.ts`
+  - 将 `listMessagesWithLazySystemProjection()` 重命名为 `listMessagesWithTraceProjection()`，使函数名与当前“始终 trace projection + legacy 兼容”的真实行为一致。
+- `apps/pilot/server/api/chat/sessions/[sessionId]/messages.get.ts`
+- `apps/pilot/server/api/v1/chat/sessions/[sessionId]/messages.get.ts`
+- `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
+  - 同步更新调用点与测试命名，避免后续维护时误以为仍存在旧 lazy 补 system 的双轨语义。
+
+## 2026-04-04
+
+### Pilot / DeepAgent 单流包级复用收口
+
+- `@talex-touch/tuff-intelligence/pilot` 新增单流共享能力：trace/seq helper、replay trace mapper、system projection、legacy run-event projection、客户端可见性判定。
+- `apps/pilot` 前后端改为直接复用包内 Pilot 合同；删除本地重复实现 `pilot-stream-shared.ts`、`pilot-system-message.ts`、`pilot-legacy-run-event-card.ts`。
+- 前端不再为可恢复事件自动补 `seq`；非豁免事件缺失 `seq` 时直接丢弃并输出诊断，避免本地伪顺序污染 trace/runtime card。
+- quota snapshot 改为基于包内 trace projection 重建运行卡，并保留 thinking legacy projector 与 tool sources 合并逻辑。
+- `/api/chat/sessions/:sessionId/stream` replay 改为复用包内标准 trace -> stream mapper，服务端仅负责 redaction。
+
 ---
+
+## 2026-04-06
+
+### refactor(core-app): 兼容治理继续 hard-cut 并收口 renderer/update 与 placeholder 残留
+
+- `apps/core-app/src/main/channel/common.ts`
+  - secure-store 改为统一复用 `src/main/utils/secure-store.ts`，删除 channel 内部重复的 key/path/read/write/decrypt/encrypt 实现。
+- `apps/core-app/src/main/modules/auth/index.ts`
+  - auth token / machine seed 继续收口到统一 secure-store helper，并移除已无必要的旧 secure-store 依赖代码。
+- `apps/core-app/src/main/modules/file-protocol/index.ts`
+  - tfile 本地文件边界统一切到 `local-file-policy`，不再保留独立 allowed roots / macOS 路径大小写分支实现。
+- `apps/core-app/src/renderer/src/modules/hooks/useUpdateRuntime.ts`
+  - 新增基于 `useUpdateSdk() + useDownloadSdk()` 的非 deprecated runtime hook，负责更新检查、可用更新弹层、下载完成提示、设置读写与安装流程。
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUpdate.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`
+- `apps/core-app/src/renderer/src/modules/hooks/useAppLifecycle.ts`
+- `apps/core-app/src/renderer/src/composables/layout/useLayoutController.ts`
+  - runtime 页面/生命周期不再依赖 `useApplicationUpgrade` 兼容壳，统一切到 update SDK runtime hook。
+- `apps/core-app/src/renderer/src/modules/intelligence/builtin-prompts.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/usePromptManager.ts`
+- `apps/core-app/src/renderer/src/modules/storage/prompt-library.ts`
+  - builtin prompt 改为静态配置源；prompt library 默认不再注入 fake custom prompt 数据。
+- `apps/core-app/src/renderer/src/views/box/DivisionBoxHeader.vue`
+  - 删除 toast-only settings 假入口，避免展示未实现能力。
+- `apps/core-app/src/main/modules/division-box/manager.ts`
+  - 清理 future multi-view placeholder 表述，保持“当前只走已实现 transferred-view 流程”的语义。
+- `apps/core-app/src/renderer/src/components/download/*`
+- `apps/core-app/src/renderer/src/components/tuff/template/*`
+  - 删除 production `src` 中未引用的 `Example/Test/README/VISUAL/IMPLEMENTATION_SUMMARY` 残留文件，并同步清理 `components.d.ts` 里的悬空全局组件声明。
+- 验收：
+  - `pnpm -C "apps/core-app" run typecheck` 已通过。
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard.transport.test.ts" "src/main/modules/omni-panel/index.test.ts" "src/main/channel/common.test.ts"` 已通过（`3 files / 17 tests`）。
+  - `rg` 回归扫描确认 runtime 非测试代码中的 `sendSync(` / `resolveRuntimeChannel(` / `legacy-toggle` 已清零，`genTouchApp()` 仅保留 bootstrap 入口。
+  - `rg` 回归扫描确认 renderer production `src` 下 `UpdatePromptExample/DownloadCenterTest/TuffItemTemplateExample/README/VISUAL/IMPLEMENTATION_SUMMARY` 命中为 0。
+### refactor(core-app): 收口 hard-cut 兼容层并显式暴露权限后端降级态
+
+- `apps/core-app/src/main/core/deprecated-global-app.ts`
+  - 移除未使用的全局 `$app` 读取入口，仅保留模块上下文里的 channel 解析函数，避免 runtime 再回退到全局 app。
+- `apps/core-app/src/main/modules/permission/permission-store.ts`
+  - 删除 `json-readonly` 式静默兜底路径，SQLite backend 不可用时统一进入 `degraded/backend-unavailable`。
+  - `grant/revoke/grantSession/clearAuditLogs` 等变更路径改为显式失败并回滚内存态，不再出现“本次成功、重启丢失”的假象。
+- `apps/core-app/src/main/modules/permission/index.ts`
+  - 权限状态、性能诊断和变更响应统一回传 `backendState`，供设置页和插件页显式展示后端降级态。
+- `apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue`
+  - 设置页新增权限后端不可写告警，后端降级时禁用授予/撤销/清空等变更操作，并直出失败原因。
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginPermissions.vue`
+  - 插件权限页补充 backend unavailable 状态说明与失败提示，禁用需要写入后端的切换和批量操作。
+- `apps/core-app/src/main/channel/common.ts`
+  - 停止注册 legacy `system:get-active-app` 运行时桥接。
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+  - 停止注册 legacy feature toggle 事件，仅保留现代 transport 事件。
+- `apps/core-app/src/main/modules/flow-bus/native-share.ts`
+  - Windows/Linux 文案改为 mail-only fallback，避免继续暗示存在完整原生分享能力。
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/context-provider.ts`
+  - 清掉固定 `isOnline=true / batteryLevel=100 / isDNDEnabled=false` 的假 system context；探测不到时返回空，并仅在真实 system signal 存在时参与 cache key。
+- `apps/core-app/src/main/modules/box-tool/addon/app-addon.ts`
+  - 标记为 internal legacy app cache shim，避免继续扩散到主执行链。
+- 新增/扩展测试：
+  - `apps/core-app/src/main/modules/permission/permission-store.test.ts`
+  - `apps/core-app/src/main/channel/common.test.ts`
+  - `apps/core-app/src/main/modules/omni-panel/index.test.ts`
+  - `apps/core-app/src/main/modules/tray/tray-manager.test.ts`
+  - `apps/core-app/src/renderer/src/modules/update/platform-target.test.ts`
+
+## 2026-04-03
+
+### refactor(pilot-stream): DeepAgent / Pilot 收敛为 trace-first 单流
+
+- `packages/tuff-intelligence/src/runtime/agent-runtime.ts`
+  - runtime 发射路径改为“先持久化 trace，再产出 envelope”，`onMessage()` 向上游 yield 的统一是带 `meta.traceId/meta.seq` 的已持久化事件，不再直接透传原始 envelope。
+  - `assistant.delta` 改为按批次缓冲后持久化，flush 边界与 live SSE 对齐，保证前端看到的 delta 与 trace 中的 seq 一一对应，不再出现“已渲染 token 但 trace 无对应事件”的双轨漂移。
+- `packages/tuff-intelligence/src/business/pilot/types.ts`
+  - 新增 persisted envelope 校验，Pilot stream 在把 runtime envelope 映射成 SSE event 前会显式要求 `meta.seq/meta.traceId`，防止未持久化事件误入主流。
+- `packages/tuff-intelligence/src/business/pilot/stream.ts`
+  - 移除 DeepAgent 路径的 synthetic `planning.started / planning.updated / planning.finished` 注入；当前仅透传 runtime 真实提供的 planning 事件。
+  - replay 路径的 `assistant.delta / thinking.* / assistant.final` shape 改为与 live SSE 保持一致，补播时不再退化成仅有 `payload.text` 的旧形态。
+- `packages/tuff-intelligence/src/business/pilot/emitter.ts`
+  - emitter 新增 seq 合同保护：除 `stream.heartbeat` 等纯传输事件外，缺少 `seq` 的 stream event 会直接失败，避免再次回到双轨状态。
+- `apps/pilot/server/utils/pilot-intent-resolver.ts`
+  - classifier 失败路径不再把 `websearchRequired` 硬编码为 `false`，改为使用“最新/今天/查一下/实时”等启发式兜底。
+  - 工具启发式新增与联网相同的“不要联网 / offline only”禁用判定，确保 classifier_failed 时仍能优先尊重显式离线要求。
+- `apps/pilot/server/utils/pilot-runtime.ts`
+  - Pilot 标准路径移除 runtime 侧 `getmemory` 工具注入与 prompt 提示，记忆读取改为严格前置决策；DeepAgent 运行时不再绕过 `memoryReadDecision` 自主取记忆。
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - 流过程中停止 eager `saveMessage(role=system)`；`messages` 表继续只持久化 `user/assistant`，system/runtime 卡片统一来自 trace 投影。
+- `apps/pilot/server/utils/pilot-system-message-response.ts`
+  - `messages.get` 改为始终按 trace 投影 system message；存在历史 legacy system row 时按 message id 去重，并以 trace projection 覆盖旧内容，避免双份 system card。
+- `apps/pilot/app/composables/pilot-stream-shared.ts`
+  - 新增共享 stream helper，统一两条 Pilot chat consumer 的 seq 标准化、trace 排序/去重以及 runtime card 事件识别，减少前端双轨消费规则漂移。
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+  - 新页聊天链路改为复用共享 stream helper，trace 抽屉与运行卡只消费真实事件，不再依赖 synthetic planning 阶段。
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+  - legacy 首页聊天链路复用共享 seq normalizer / runtime card 判定，继续兼容旧 UI，但运行卡来源改为 trace-first 单流合同。
+- 文档：
+  - 新增 `docs/plan-prd/02-architecture/pilot-single-stream-runtime.md`，说明 Pilot 单流顺序合同、trace/SSE/messages 职责分工、严格前置记忆与无 synthetic planning 约束。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-runtime.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-runtime-seq.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-intent-resolver.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-stream-planning-gate.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-stream-emitter-seq.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-stream-replay.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
+
+### fix(pilot-chat): 收口 legacy intent 假卡并按工具判定触发 planning
+
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+  - legacy 首页链路不再在发送前本地预插 synthetic `intent.started` 运行卡，改为只消费服务端真实 `intent.*` 事件，避免出现重复的 `analyse intent`。
+  - 运行卡合并逻辑新增无 `turnId` 场景的 pending intent 兜底：当 shared projector 下发真实 `intent:latest` 卡时，会优先吸收旧 `intent:${session}:pending` 卡并迁移到真实 key，确保 `intent.completed` 后只剩一张 completed 卡，不再残留 shimmer。
+- `apps/pilot/shared/pilot-legacy-run-event-card.ts`
+  - 新增 legacy run-event card key 解析 helper，统一 live 合并阶段对 pending intent fallback 的判定规则。
+- `packages/tuff-intelligence/src/business/pilot/stream.ts`
+  - `planning.started / updated / finished` 改为仅在 `metadata.toolDecision.shouldUseTools === true` 时发出；普通问答、无需工具的轮次不再默认展示“执行规划”。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-legacy-run-event-card.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-stream-planning-gate.test.ts`
+
+## 2026-04-02
+
+### fix(pilot-chat): 首包事件到达后立即解除 legacy 等待态
+
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+  - legacy 首页链路在收到 `turn.accepted / turn.queued / turn.started` 以及首批 `intent / planning / assistant / run.audit` 事件时立即标记“已受理”，不再等到 thinking/assistant delta 才解除 `WAITING`。
+  - `ChatItem` 因 `WAITING` 只渲染 loading 的问题得到修正，运行卡会在首包到达时即时显示，不再等整轮完成后一次性出现。
+  - `turn.started` 从 legacy ignored-event 噪音日志中移出，避免控制台持续误报“ignored legacy stream event turn.started”。
+- `apps/pilot/app/components/input/ThInput.vue`
+  - `ThInputPlus.hide` 改为显式布尔值，修复首页输入区的 `Invalid prop: Expected Boolean, got Undefined` 警告。
+
+### fix(pilot-chat): 修复 legacy 流式运行卡延迟出现与快照时间线错位
+
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+  - legacy 首页聊天链路的运行卡消费改为复用 shared projector，补齐 `planning.started / planning.updated / planning.finished` 实时卡片映射，减少与新页协议漂移。
+  - 运行卡 key 新增优先复用 shared `cardKey`，并在 live 更新阶段保留 planning 的 `detail.todos`，避免 finished 覆盖后丢失步骤列表。
+- `apps/pilot/shared/pilot-legacy-run-event-card.ts`
+  - 新增 legacy run-event 纯投影 helper，对 `intent / planning / memory / websearch` 统一复用 `pilot-system-message`，仅保留 `thinking` 的兼容拼装逻辑。
+- `apps/pilot/shared/pilot-chat-block-order.ts`
+  - 新增聊天 block 时间线排序工具，统一按 `seq + streamOrder` 排序，且让带 seq 的运行卡优先回到 assistant markdown 前。
+- `apps/pilot/app/components/chat/ChatItem.vue`
+  - 聊天气泡渲染改为复用共享 block 排序工具，实时流与快照回放采用同一套排序规则。
+- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+  - 快照重建不再固定 `preservedBlocks + cardBlocks` 追加，改为按共享时间线排序重新合并，修复运行卡总是落在 assistant markdown 后的问题。
+- `apps/pilot/server/utils/pilot-sse-response.ts`
+  - 新增 SSE 响应头 helper，集中定义 `X-Accel-Buffering: no`。
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - 会话流式接口补齐 anti-buffer 响应头，减少 1Panel / Nginx 代理层对 SSE 的缓冲。
+- `apps/pilot/deploy/README.zh-CN.md`
+  - 部署文档补充 1Panel / Nginx 对 `/api/chat/sessions/*/stream` 的 `proxy_buffering off` 配置说明。
+- `apps/pilot/deploy/README.md`
+  - 英文部署文档同步补充 SSE 反向代理配置说明。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-chat-block-order.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-legacy-run-event-card.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-sse-response.test.ts`
+  - `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+
+### fix(pilot-ui): 收敛记忆运行卡标签并展示本轮新增记忆
+
+- `apps/pilot/server/utils/pilot-memory-facts.ts`
+  - `upsertPilotMemoryFacts` 返回值新增 `addedFacts`，仅回传本轮真正新增的标准化记忆项，避免把已存在 fact 误展示成“新沉淀”。
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - `memory.updated` 事件与持久化 trace payload 新增 `facts` 字段，实时流、历史回放与快照重建统一复用同一份新增记忆明细。
+- `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+  - `memory` 卡片不再显示 `Memory` / `已完成` pill，折叠态仅保留标题与摘要。
+  - 当 `detail.facts` 非空时，展开区按列表展示本轮新增记忆内容，仅显示 `fact.value`，旧历史卡无明细时保持仅摘要展示。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-memory-facts.test.ts`
+  - `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+
+### fix(pilot-ui): 规划卡直出步骤并隐藏跳过记忆卡
+
+- `apps/pilot/shared/pilot-system-message.ts`
+  - `memory.updated` 在 `stored=false` 时不再投影为前端 system message，避免“记忆未更新 / no_fact_extracted”类跳过卡进入聊天区。
+  - system card 合并阶段为 `planning` 保留上一帧非空 `detail.todos`，解决 `planning.finished` 覆盖后仅剩 `todoCount`、丢失具体步骤的问题。
+- `apps/pilot/shared/pilot-runtime-redaction.ts`
+  - 前端系统消息过滤新增 `memory.context` 与 `memory/skipped` 隐藏规则，确保 live 流、刷新和 lazy projection 下都不再展示跳过记忆卡。
+- `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+  - `执行规划` 卡直接展示 `detail.todos` 步骤列表，无需展开即可看到规划内容。
+  - 隐藏 `planning` 类型标签，仅保留右侧执行状态标签；其他卡片标签行为保持不变。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-runtime-redaction.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-system-message.test.ts`
+
+### feat(pilot-memory): 设置页展示记忆详情并将读记忆/工具判定接入运行时
+
+- `apps/pilot/server/utils/pilot-memory-facts.ts`
+  - 新增 `listPilotMemoryFactsByUser`，按添加时间倒序返回用户记忆详情。
+  - 新增 `buildPilotMemoryContextSystemMessage`，将命中的记忆事实注入当前轮隐藏 system context。
+- `apps/pilot/server/api/v1/chat/memory/facts.get.ts`
+  - 新增用户记忆详情接口，供个人设置页直接读取 `value/createdAt/updatedAt`。
+- `apps/pilot/app/composables/usePilotMemorySettings.ts`
+  - 记忆设置状态新增 `facts/factsLoading`，开关切换后同步刷新或清空记忆详情。
+- `apps/pilot/app/components/chore/personal/profile/account/AccountModuleAppearance.vue`
+  - 在个人设置页新增“记忆详情”列表，展示记忆内容与“添加时间”。
+- `apps/pilot/server/utils/pilot-intent-resolver.ts`
+  - intent 分类结果新增 `memoryReadDecision` 与 `toolDecision`，每轮显式判断是否需要读取记忆及启用工具。
+- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - 运行时按 `memoryReadDecision` 拉取记忆 facts 并注入隐藏 system context。
+  - builtinTools 改为按 `toolDecision` 做运行时裁剪，避免“无需工具”的轮次仍暴露默认工具。
+- `apps/pilot/server/utils/pilot-memory-tool.ts`
+  - 新增 deepagent 可调用的 `getmemory` 工具，按 query 优先返回相关记忆，未命中时回退最近记忆，并附带添加时间供模型参考。
+- `apps/pilot/server/utils/pilot-runtime.ts`
+  - 新增 `disableDefaultBuiltinTools`，支持在运行时显式关闭默认工具注入。
+  - 开启记忆后会把 `getmemory` 注入 deepagent 自定义 tools，并补充 prompt 提示 agent 在个性化问题上优先查记忆而不是猜测。
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+  - `DeepAgentEngineOptions` 新增 `tools`，deepagent 调用与流式执行都会透传自定义 tools。
+  - 当存在自定义 tools 时自动关闭 direct stream 快路径，避免跳过 deepagent tool 调用链。
+- 新增/扩展测试：
+  - `apps/pilot/server/utils/__tests__/pilot-memory-facts.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-intent-resolver.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-runtime.test.ts`
+  - `apps/pilot/server/utils/__tests__/pilot-memory-tool.test.ts`
 
 ## 2026-03-31
 

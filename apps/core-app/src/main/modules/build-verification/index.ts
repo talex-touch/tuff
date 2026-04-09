@@ -5,6 +5,10 @@ import { AppEvents } from '@talex-touch/utils/transport/events'
 import { app, BrowserWindow } from 'electron'
 import fse from 'fs-extra'
 import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
+import {
+  compareUpdateAssetTargets,
+  resolveUpdateAssetTarget
+} from '../../../shared/update/platform-target'
 import { createLogger } from '../../utils/logger'
 import { SignatureVerifier } from '../../utils/release-signature'
 import { BaseModule } from '../abstract-base-module'
@@ -165,21 +169,28 @@ export class BuildVerificationModule extends BaseModule {
       return null
     }
 
-    const exact = assets.find((asset) => asset.platform === platform && asset.arch === arch)
-    if (exact) {
-      return exact
-    }
+    const runtimeArch = arch === 'universal' ? process.arch : arch
+    const candidates = assets
+      .flatMap((asset) => {
+        const target = resolveUpdateAssetTarget(
+          asset.downloadUrl || '',
+          {
+            platform: asset.platform,
+            arch: asset.arch
+          },
+          {
+            platform,
+            arch: runtimeArch
+          }
+        )
+        if (!target || target.platform !== platform) {
+          return []
+        }
+        return [{ asset, target }]
+      })
+      .sort((left, right) => compareUpdateAssetTargets(left.target, right.target))
 
-    if (arch !== 'universal') {
-      const universal = assets.find(
-        (asset) => asset.platform === platform && asset.arch === 'universal'
-      )
-      if (universal) {
-        return universal
-      }
-    }
-
-    return assets.find((asset) => asset.platform === platform) || null
+    return candidates[0]?.asset ?? null
   }
 
   private async resolveSignatureSource(): Promise<{

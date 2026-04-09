@@ -117,7 +117,6 @@ export interface OmniPanelFeatureExecuteResponse {
 export type OmniPanelFeatureRefreshReason =
   | 'init'
   | 'toggle'
-  | 'legacy-toggle'
   | 'reorder'
   | 'plugin-install'
   | 'plugin-change'
@@ -150,8 +149,8 @@ export const omniPanelFeatureListEvent = defineRawEvent<void, OmniPanelFeatureLi
 )
 
 /**
- * @deprecated Kept only for legacy compatibility. OmniPanel no longer exposes
- * explicit enable/disable interaction in renderer workflow.
+ * @deprecated Kept only for legacy bundle typing compatibility.
+ * Core-app runtime no longer registers this event.
  */
 export const omniPanelFeatureToggleEvent = defineRawEvent<OmniPanelFeatureToggleRequest, void>(
   'omni-panel:feature:toggle'

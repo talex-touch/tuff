@@ -1,4 +1,4 @@
-import type { AppSetting, MaybePromise, ModuleKey } from '@talex-touch/utils'
+import type { AppSetting, MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type {
   ClipboardActionResult,
   ClipboardApplyRequest,
@@ -41,7 +41,6 @@ import { TuffInputType } from '@talex-touch/utils/transport/events/types'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm'
 import { clipboard, nativeImage, powerMonitor } from 'electron'
-import { genTouchApp } from '../core'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { dbWriteScheduler } from '../db/db-write-scheduler'
 import { isStartupDegradeActive } from '../db/startup-degrade'
@@ -72,26 +71,9 @@ import {
 } from './clipboard/clipboard-phase-diagnostics'
 import {
   buildApplyPayloadFromCopyAndPaste,
-  clipboardLegacyApplyToActiveAppEvent,
-  clipboardLegacyClearEvent,
-  clipboardLegacyClearHistoryEvent,
-  clipboardLegacyCopyAndPasteEvent,
-  clipboardLegacyDeleteItemEvent,
-  clipboardLegacyGetHistoryEvent,
-  clipboardLegacyGetImageUrlEvent,
-  clipboardLegacyGetLatestEvent,
-  clipboardLegacyReadEvent,
-  clipboardLegacyReadFilesEvent,
-  clipboardLegacyReadImageEvent,
-  clipboardLegacySetFavoriteEvent,
-  clipboardLegacyWriteEvent,
-  clipboardLegacyWriteTextEvent,
-  normalizeClipboardWritePayload,
-  toLegacyClipboardItem as mapToLegacyClipboardItem,
-  type LegacyClipboardItem,
-  type LegacyClipboardQueryRequest,
-  type LegacyClipboardQueryResponse
-} from './clipboard/clipboard-legacy-bridge'
+  type ClipboardHistoryQueryInput,
+  normalizeClipboardWritePayload
+} from './clipboard/clipboard-request-normalizer'
 
 const clipboardLog = createLogger('Clipboard')
 const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
@@ -680,8 +662,7 @@ export class ClipboardModule extends BaseModule {
     value: Awaited<ReturnType<typeof activeAppService.getActiveApp>> | null
     fetchedAt: number
   } | null = null
-  private legacyUsageCounts = new Map<string, number>()
-  private warnedLegacyEvents = new Set<string>()
+  private transportChannel: unknown = null
 
   private readonly activeAppCacheTtlMs = 5000
 
@@ -1379,12 +1360,8 @@ export class ClipboardModule extends BaseModule {
     }
   }
 
-  private toLegacyClipboardItem(item: IClipboardItem | null): LegacyClipboardItem | null {
-    return mapToLegacyClipboardItem(this.toClientItem(item))
-  }
-
   private toClipboardQueryRequest(
-    request: ClipboardQueryRequest | LegacyClipboardQueryRequest | null | undefined
+    request: ClipboardQueryRequest | null | undefined
   ): ClipboardQueryRequest {
     return {
       page: Number.isFinite(request?.page) ? Number(request?.page) : undefined,
@@ -1409,7 +1386,7 @@ export class ClipboardModule extends BaseModule {
   }
 
   private async queryClipboardHistory(
-    request: ClipboardQueryRequest | LegacyClipboardQueryRequest | null | undefined
+    request: ClipboardQueryRequest | ClipboardHistoryQueryInput | null | undefined
   ): Promise<{
     rows: IClipboardItem[]
     total: number
@@ -2870,7 +2847,11 @@ export class ClipboardModule extends BaseModule {
   }
 
   private registerTransportHandlers(): void {
-    const channel = genTouchApp().channel
+    const channel = this.transportChannel
+    if (!channel) {
+      clipboardLog.warn('Clipboard transport channel unavailable during init')
+      return
+    }
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)
@@ -2915,7 +2896,6 @@ export class ClipboardModule extends BaseModule {
     this.registerTypedClipboardMutationHandlers(writePayload)
     this.registerTypedClipboardReadHandlers()
     this.registerTypedClipboardStreamHandlers()
-    this.registerLegacyClipboardBridge(writePayload)
   }
 
   private registerTypedClipboardQueryHandlers(): void {
@@ -3111,207 +3091,6 @@ export class ClipboardModule extends BaseModule {
     )
   }
 
-  private registerLegacyClipboardBridge(
-    writePayload: (payload: ClipboardWritePayload) => Promise<void>
-  ): void {
-    if (!this.transport) {
-      return
-    }
-
-    const registerLegacy = <TReq, TRes>(
-      legacyEvent: { toEventName: () => string },
-      replacement: string,
-      handler: (request: TReq, context: HandlerContext) => MaybePromise<TRes>
-    ) =>
-      this.transport!.on(legacyEvent as never, async (request: TReq, context: HandlerContext) => {
-        this.recordLegacyClipboardUsage(legacyEvent.toEventName(), replacement)
-        return await handler(request, context)
-      })
-
-    // Legacy raw IPC compatibility for older plugin bundles.
-    this.transportDisposers.push(
-      registerLegacy(
-        clipboardLegacyGetLatestEvent,
-        ClipboardEvents.getLatest.toEventName(),
-        async (_request: void, context: HandlerContext): Promise<LegacyClipboardItem | null> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
-          await this.ensureInitialCacheLoaded()
-          return this.toLegacyClipboardItem(this.getLatestItem() ?? null)
-        }
-      ),
-      registerLegacy(
-        clipboardLegacyGetHistoryEvent,
-        ClipboardEvents.getHistory.toEventName(),
-        async (
-          request: LegacyClipboardQueryRequest,
-          context: HandlerContext
-        ): Promise<LegacyClipboardQueryResponse> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', request)
-          const { rows, total, page, limit } = await this.queryClipboardHistory(request)
-          return {
-            history: rows
-              .map((row) => this.toLegacyClipboardItem(row))
-              .filter((item): item is LegacyClipboardItem => Boolean(item)),
-            total,
-            page,
-            pageSize: limit,
-            limit
-          }
-        }
-      ),
-      registerLegacy(
-        clipboardLegacySetFavoriteEvent,
-        ClipboardEvents.setFavorite.toEventName(),
-        async (request: ClipboardSetFavoriteRequest, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          await this.handleSetFavoriteRequest(request)
-        }
-      ),
-      registerLegacy(
-        clipboardLegacyDeleteItemEvent,
-        ClipboardEvents.delete.toEventName(),
-        async (request: ClipboardDeleteRequest, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          await this.handleDeleteRequest(request, 'legacy')
-        }
-      ),
-      registerLegacy(
-        clipboardLegacyClearHistoryEvent,
-        ClipboardEvents.clearHistory.toEventName(),
-        async (_request: void, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', undefined)
-          if (!this.db) return
-          await this.cleanupHistory({ type: 'all' })
-        }
-      ),
-      registerLegacy(
-        clipboardLegacyApplyToActiveAppEvent,
-        ClipboardEvents.apply.toEventName(),
-        async (
-          request: ClipboardApplyPayload,
-          context: HandlerContext
-        ): Promise<ClipboardActionResult> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          try {
-            const hasInlinePayload =
-              typeof request?.text === 'string' ||
-              typeof request?.html === 'string' ||
-              Array.isArray(request?.files) ||
-              request?.type === 'image' ||
-              request?.item?.type === 'image'
-
-            if (!hasInlinePayload && this.db && Number.isFinite(request?.item?.id)) {
-              const [row] = await this.db
-                .select()
-                .from(clipboardHistory)
-                .where(eq(clipboardHistory.id, Number(request.item?.id)))
-                .limit(1)
-              if (row) {
-                await this.applyToActiveApp({
-                  item: row as unknown as IClipboardItem,
-                  hideCoreBox: request.hideCoreBox,
-                  delayMs: request.delayMs
-                })
-                return { success: true }
-              }
-            }
-
-            await this.applyToActiveApp(request ?? {})
-            return { success: true }
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            return { success: false, message }
-          }
-        }
-      ),
-      registerLegacy(
-        clipboardLegacyCopyAndPasteEvent,
-        ClipboardEvents.copyAndPaste.toEventName(),
-        async (
-          request: ClipboardCopyAndPasteRequest,
-          context: HandlerContext
-        ): Promise<ClipboardActionResult> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          return await this.handleCopyAndPasteRequest(request)
-        }
-      ),
-      registerLegacy(
-        clipboardLegacyWriteTextEvent,
-        ClipboardEvents.write.toEventName(),
-        async (request: { text?: string }, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          await writePayload({ text: request?.text ?? '' })
-        }
-      ),
-      registerLegacy(
-        clipboardLegacyWriteEvent,
-        ClipboardEvents.write.toEventName(),
-        async (request: ClipboardWriteRequest, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          await this.handleWriteRequest(request, writePayload)
-        }
-      ),
-      registerLegacy(
-        clipboardLegacyReadEvent,
-        ClipboardEvents.read.toEventName(),
-        async (_request: void, context: HandlerContext): Promise<ClipboardReadResponse> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
-          return this.readClipboardSnapshot()
-        }
-      ),
-      registerLegacy(
-        clipboardLegacyReadImageEvent,
-        ClipboardEvents.readImage.toEventName(),
-        async (
-          request: ClipboardReadImageRequest,
-          context: HandlerContext
-        ): Promise<ClipboardReadImageResponse | null> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', request)
-          return await this.readClipboardImage(request)
-        }
-      ),
-      registerLegacy(
-        clipboardLegacyReadFilesEvent,
-        ClipboardEvents.readFiles.toEventName(),
-        async (_request: void, context: HandlerContext): Promise<string[]> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
-          return this.clipboardHelper?.readClipboardFiles() ?? []
-        }
-      ),
-      registerLegacy(
-        clipboardLegacyClearEvent,
-        ClipboardEvents.clear.toEventName(),
-        async (_request: void, context: HandlerContext): Promise<void> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', undefined)
-          clipboard.clear()
-        }
-      ),
-      registerLegacy(
-        clipboardLegacyGetImageUrlEvent,
-        ClipboardEvents.getImageUrl.toEventName(),
-        async (
-          request: ClipboardGetImageUrlRequest,
-          context: HandlerContext
-        ): Promise<ClipboardGetImageUrlResponse> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', request)
-          return await this.handleGetImageUrlRequest(request)
-        }
-      )
-    )
-  }
-
-  private recordLegacyClipboardUsage(eventName: string, replacement: string): void {
-    const hits = (this.legacyUsageCounts.get(eventName) ?? 0) + 1
-    this.legacyUsageCounts.set(eventName, hits)
-    if (this.warnedLegacyEvents.has(eventName)) {
-      return
-    }
-    this.warnedLegacyEvents.add(eventName)
-    clipboardLog.warn(`Legacy clipboard event used: ${eventName}. Use ${replacement} instead.`, {
-      meta: { eventName, replacement, hits }
-    })
-  }
-
   public destroy(): void {
     this.isDestroyed = true
     pollingService.unregister(CLIPBOARD_POLL_TASK_ID)
@@ -3366,8 +3145,11 @@ export class ClipboardModule extends BaseModule {
     this.currentPollIntervalMs = CLIPBOARD_DEFAULT_POLL_INTERVAL_MS
   }
 
-  onInit(): MaybePromise<void> {
+  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     this.db = databaseModule.getAuxDb()
+    this.transportChannel =
+      ctx.runtime?.channel ?? (ctx.app as { channel?: unknown } | null | undefined)?.channel
+    ocrService.setTransportChannel(this.transportChannel)
     this.clipboardHelper = new ClipboardHelper()
     this.setupPollingSubscriptions()
     this.setupPowerListeners()

@@ -11,6 +11,7 @@ import { $endApi } from '~/composables/api/base'
 import { $completion } from '~/composables/api/base/v1/aigc/completion'
 import { IChatItemStatus, PersistStatus } from '~/composables/api/base/v1/aigc/completion-types'
 import { calculateConversation } from '~/composables/api/base/v1/aigc/completion/entity'
+import { resolveLegacyConversationSeqCursor } from '~/composables/api/base/v1/aigc/completion/legacy-stream-contract'
 import { $historyManager, IHistoryStatus } from '~/composables/api/base/v1/aigc/history'
 import { $event } from '~/composables/events'
 import { usePilotMemorySettings } from '~/composables/usePilotMemorySettings'
@@ -63,8 +64,6 @@ const pageOptions = reactive<{
   status: IChatItemStatus.AVAILABLE,
   sendState: 'idle',
 })
-const pilotModeLabel = computed(() => pageOptions.conversation.pilotMode === true ? 'PILOT' : '普通模式')
-const pilotModeTagClass = computed(() => pageOptions.conversation.pilotMode === true ? 'pilot' : 'normal')
 const {
   memoryEnabled,
   loadMemorySettings,
@@ -383,42 +382,6 @@ function syncConversationRoute(conversationId: string) {
   })
 }
 
-function resolveConversationSeqCursor(conversation: IChatConversation): number {
-  let maxSeq = 0
-  for (const message of conversation.messages || []) {
-    if (!message || !Array.isArray(message.content)) {
-      continue
-    }
-    for (const inner of message.content) {
-      if (!inner || !Array.isArray(inner.value)) {
-        continue
-      }
-      for (const block of inner.value) {
-        if (!block || typeof block !== 'object') {
-          continue
-        }
-        const blockRow = block as IInnerItemMeta
-        const extra = blockRow.extra && typeof blockRow.extra === 'object'
-          ? blockRow.extra as Record<string, unknown>
-          : {}
-        const extraSeq = Number(extra.seq)
-        if (Number.isFinite(extraSeq) && extraSeq > maxSeq) {
-          maxSeq = Math.floor(extraSeq)
-        }
-        if (blockRow.type !== 'card') {
-          continue
-        }
-        const parsed = decodeObject(String(blockRow.data || ''))
-        const cardSeq = Number((parsed as Record<string, unknown>)?.seq)
-        if (Number.isFinite(cardSeq) && cardSeq > maxSeq) {
-          maxSeq = Math.floor(cardSeq)
-        }
-      }
-    }
-  }
-  return Math.max(0, maxSeq)
-}
-
 async function innerSend(conversation: IChatConversation, chatItem: IChatItem, index: number) {
   // 判断如果 conversation 是2条消息
   if (userConfig.value.pri_info.appearance.immersive && conversation.messages.length <= 2)
@@ -540,7 +503,7 @@ async function resumeConversationStreamIfNeeded(conversation: IChatConversation)
       : 0
     const completion = await innerSend(targetConversation, lastMessage, targetPage)
     pageOptions.sendState = 'sending_until_accepted'
-    const fromSeq = Math.max(1, resolveConversationSeqCursor(targetConversation) + 1)
+    const fromSeq = Math.max(1, resolveLegacyConversationSeqCursor(targetConversation.messages) + 1)
     curController = completion.send({
       fromSeq,
       follow: true,
@@ -601,15 +564,10 @@ async function handleSend(query: IInnerItemMeta[], meta: IChatInnerItemMeta) {
 
   const conversation = pageOptions.conversation
   applyInitialTopicIfNeeded(conversation, resolveTopicFromQuery(query))
-  const resolvedPilotMode = typeof meta.pilotMode === 'boolean'
-    ? meta.pilotMode
-    : conversation.pilotMode === true
   const resolvedMeta: IChatInnerItemMeta = {
     ...meta,
     memoryEnabled: memoryEnabled.value,
-    pilotMode: resolvedPilotMode,
   }
-  conversation.pilotMode = resolvedPilotMode
 
   if (!$historyManager.options.list.get(conversation.id))
     $historyManager.options.list.set(conversation.id, conversation)
@@ -852,8 +810,6 @@ function handleLogin() {
           <CheckboxSwanCheckBox v-model="expand" />
           <!-- <div i-carbon:text-short-paragraph @click="userConfig.pri_info.appearance.expand = true" /> -->
 
-          <span class="pilot-top-badge" :class="pilotModeTagClass">{{ pilotModeLabel }}</span>
-
           <ModelSelector v-if="mount" v-model="globalConfigModel" />
 
           <div v-if="userStore.isLogin" style="font-size: 16px" i-carbon:edit @click="handleCreate" />
@@ -869,7 +825,6 @@ function handleLogin() {
             :template-enable="!pageOptions.conversation.messages.length" :status="pageOptions.status"
             :send-state="pageOptions.sendState"
             :session-id="pageOptions.conversation.id"
-            :pilot-mode-default="pageOptions.conversation.pilotMode === true"
             :hide="pageOptions.share.enable" :center="pageOptions.conversation.messages?.length < 1" :tip="tip"
             @send="handleSend" @select-template="handleSelectTemplate"
           />
@@ -878,10 +833,6 @@ function handleLogin() {
 
       <AigcChatStatusBar>
         <template #start>
-          <span v-if="!viewMode" class="tag" :class="pilotModeTagClass">
-            {{ pilotModeLabel }}
-          </span>
-
           <span v-if="!viewMode && !userStore.isLogin" class="tag warning shining">
             访客模式（部分功能受限）
           </span>

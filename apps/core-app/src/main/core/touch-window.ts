@@ -10,6 +10,7 @@ import process from 'node:process'
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import { IS_WINDOWS_11, MicaBrowserWindow, useMicaElectron, WIN10 } from 'talex-mica-electron'
 import { createLogger } from '../utils/logger'
+import { shouldApplyMicaFallback } from './window-effects'
 import { OpenExternalUrlEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
 
 const touchWindowLog = createLogger('TouchWindow')
@@ -80,7 +81,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
      */
     if (process.platform === 'darwin') {
       this.window.setVibrancy('fullscreen-ui')
-    } else if (!this.isMicaWindow) {
+    } else if (shouldApplyMicaFallback(process.platform, this.isMicaWindow)) {
       // Fallback for Windows if MicaBrowserWindow is not used
       this.window.setBackgroundMaterial('mica')
       touchWindowLog.debug('Apply MicaMaterial on window (fallback)')

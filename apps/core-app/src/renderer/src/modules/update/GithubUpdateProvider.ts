@@ -15,7 +15,7 @@ import {
 import { compareVersions } from '~/composables/store/useVersionCompare'
 import { getBuildInfo } from '~/utils/build-info'
 import { UpdateProvider } from './UpdateProvider'
-import { resolveUpdateAssetTarget } from './platform-target'
+import { compareUpdateAssetTargets, resolveUpdateAssetTarget } from './platform-target'
 
 type GitHubApiAsset = {
   name?: string
@@ -28,7 +28,7 @@ type ParsedDownloadAsset = DownloadAsset & {
   signatureUrl?: string
   component?: UpdateReleaseArtifact['component']
   coreRange?: string
-}
+} & import('./platform-target').UpdateAssetTarget
 
 export class GithubUpdateProvider extends UpdateProvider {
   readonly name = 'GitHub Releases'
@@ -239,6 +239,8 @@ export class GithubUpdateProvider extends UpdateProvider {
         size: asset.size || 0,
         platform: target.platform,
         arch: target.arch,
+        sourceArch: target.sourceArch,
+        priority: target.priority,
         checksum,
         signatureUrl,
         component: (asset as { component?: UpdateReleaseArtifact['component'] }).component,
@@ -248,6 +250,7 @@ export class GithubUpdateProvider extends UpdateProvider {
 
     return parsedAssets
       .filter((asset) => !asset.coreRange || this.satisfiesCoreRange(asset.coreRange))
+      .sort((left, right) => compareUpdateAssetTargets(left, right))
       .map(
         (asset): DownloadAsset => ({
           name: asset.name,

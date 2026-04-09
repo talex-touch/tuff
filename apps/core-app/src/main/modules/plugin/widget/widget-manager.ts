@@ -9,7 +9,7 @@ import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import chokidar from 'chokidar'
 import fse from 'fs-extra'
-import { genTouchApp } from '../../../core'
+import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { getCoreBoxWindow } from '../../box-tool/core-box/window'
 import { compileWidgetSource } from './widget-compiler'
 import { pushWidgetFeatureIssue } from './widget-issue'
@@ -168,15 +168,14 @@ export class WidgetManager {
   private readonly watchers = new Map<string, FSWatcher>()
 
   private get transport() {
-    const app = genTouchApp()
-    const channel = app.channel
+    const channel = getRegisteredMainRuntime('plugin-module').channel
     const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
     return getTuffTransportMain(channel, keyManager)
   }
 
   private getWidgetWindowIds(): number[] {
     const ids = new Set<number>()
-    const mainWindow = genTouchApp().window.window
+    const mainWindow = getRegisteredMainRuntime('plugin-module').app.window.window
     if (mainWindow && !mainWindow.isDestroyed()) {
       ids.add(mainWindow.id)
     }

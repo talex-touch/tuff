@@ -1,8 +1,4 @@
 // import {sendMainChannelMsg} from "../../../utils/channel-util";
-// import { genTouchApp } from "../../touch-core";
-
-// const touchApp = genTouchApp()
-// const win = touchApp.window.window
 
 // const { desktopCapturer, screen, session } = require('electron')
 

@@ -27,6 +27,9 @@ const { t } = useI18n()
 const activeIndex = ref(0)
 
 const isMac = process.platform === 'darwin'
+const revealInFolderLabel = computed(() =>
+  t('corebox.actions.revealInFinder', isMac ? '在 Finder 中显示' : '在文件管理器中显示')
+)
 
 const actions = computed<ActionItem[]>(() => {
   if (!props.item) return []
@@ -57,7 +60,7 @@ const actions = computed<ActionItem[]>(() => {
   if (props.item.kind === 'app' || props.item.kind === 'file') {
     list.push({
       id: 'reveal-in-finder',
-      label: t('corebox.actions.revealInFinder', '在 Finder 中显示'),
+      label: revealInFolderLabel.value,
       icon: 'i-ri-folder-open-line',
       shortcut: isMac ? '⌘⇧F' : 'Ctrl+Shift+F'
     })

@@ -1,4 +1,9 @@
 import type { StatusTone } from '@talex-touch/tuffex'
+import type {
+  PilotDerivedToolCall,
+  PilotStreamEvent as PilotWireStreamEvent,
+  PilotSystemMessageMetadata,
+} from '@talex-touch/tuff-intelligence/pilot'
 
 export interface PilotSession {
   sessionId: string
@@ -30,8 +35,7 @@ export interface PilotMessage {
   createdAt: string
   metadata?: {
     attachments?: PilotMessageAttachmentMeta[]
-    [key: string]: unknown
-  }
+  } & Partial<PilotSystemMessageMetadata> & Record<string, unknown>
 }
 
 export interface PilotAttachment {
@@ -67,30 +71,7 @@ export interface PilotTrace {
   payload: Record<string, unknown>
 }
 
-export interface PilotToolSource {
-  id?: string
-  url: string
-  title?: string
-  snippet?: string
-  domain?: string
-  sourceType?: string
-}
-
-export interface PilotToolCall {
-  callId: string
-  toolId: string
-  toolName: string
-  status: 'started' | 'approval_required' | 'approved' | 'rejected' | 'completed' | 'failed' | 'running'
-  riskLevel: 'low' | 'medium' | 'high' | 'critical'
-  inputPreview?: string
-  outputPreview?: string
-  durationMs?: number
-  ticketId?: string
-  sources: PilotToolSource[]
-  errorCode?: string
-  errorMessage?: string
-  updatedAt: string
-}
+export type PilotToolCall = PilotDerivedToolCall
 
 export interface PilotComposerAttachment {
   id: string
@@ -116,17 +97,11 @@ export interface PilotRuntimeStatusSnapshot {
   stages: PilotStageItem[]
 }
 
-export interface StreamEvent {
-  type: string
+export type StreamEvent = PilotWireStreamEvent & {
   event?: string
   phase?: string
-  sessionId?: string
   session_id?: string
-  turnId?: string
   turn_id?: string
-  seq?: number
-  delta?: string
-  message?: string
   name?: string
   data?: string
   request_id?: string
@@ -134,7 +109,6 @@ export interface StreamEvent {
   code?: string
   status_code?: number
   status?: string
-  reason?: string
   confidence?: number
   providerModel?: string
   modelId?: string
@@ -148,11 +122,6 @@ export interface StreamEvent {
   enabled?: boolean
   memoryEnabled?: boolean
   memoryHistoryMessageCount?: number
-  detail?: Record<string, unknown>
-  envelope?: Record<string, unknown>
-  payload?: Record<string, unknown>
-  replay?: boolean
-  timestamp?: number
 }
 
 export interface SessionMessagesResponse {

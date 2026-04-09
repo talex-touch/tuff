@@ -202,6 +202,10 @@ function normalizePackage(value: unknown, fallbackVersion?: string): RemoteAgent
   }
 }
 
+function clearLegacyAgentStoreKey(): void {
+  saveConfig(LEGACY_AGENT_STORE_KEY, undefined, true, true)
+}
+
 function compareVersion(a: string, b: string): number {
   const normalize = (version: string): Array<number | string> =>
     version
@@ -458,7 +462,7 @@ class AgentStoreService {
     return snapshot.agents
   }
 
-  private migrateLegacyAgentStoreIfNeeded(): void {
+  private migrateCompatAgentStoreIfNeeded(): void {
     const currentRaw = getConfig(StorageList.AGENT_STORE)
     if (isAgentStoreState(currentRaw)) {
       return
@@ -470,7 +474,8 @@ class AgentStoreService {
     }
 
     saveConfig(StorageList.AGENT_STORE, legacyRaw, false, true)
-    log.info('Migrated legacy agent store key', {
+    clearLegacyAgentStoreKey()
+    log.info('Compat migration hit: agent store key upgraded', {
       meta: {
         from: LEGACY_AGENT_STORE_KEY,
         to: StorageList.AGENT_STORE,
@@ -483,7 +488,7 @@ class AgentStoreService {
     if (this.storageLoaded) return
     if (!isMainStorageReady()) return
 
-    this.migrateLegacyAgentStoreIfNeeded()
+    this.migrateCompatAgentStoreIfNeeded()
 
     try {
       const state = getMainConfig(StorageList.AGENT_STORE) as AgentStoreState | undefined

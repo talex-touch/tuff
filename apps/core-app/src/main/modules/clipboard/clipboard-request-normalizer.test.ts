@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   buildApplyPayloadFromCopyAndPaste,
   normalizeClipboardWritePayload,
-  toLegacyClipboardItem
-} from './clipboard-legacy-bridge'
+  toClipboardHistoryItem
+} from './clipboard-request-normalizer'
 
-describe('clipboard-legacy-bridge', () => {
+describe('clipboard-request-normalizer', () => {
   it('copy-and-paste: image 优先映射为 image payload', () => {
     const payload = buildApplyPayloadFromCopyAndPaste({
       image: 'data:image/png;base64,abc',
@@ -54,9 +54,9 @@ describe('clipboard-legacy-bridge', () => {
     })
   })
 
-  it('legacy item timestamp Date -> number', () => {
+  it('history item timestamp Date -> number', () => {
     const now = new Date('2026-03-24T00:00:00.000Z')
-    const item = toLegacyClipboardItem({
+    const item = toClipboardHistoryItem({
       id: 1,
       type: 'text',
       content: 'hello',

@@ -25,9 +25,9 @@ import type { NotificationAction as SystemNotificationAction } from 'electron'
 import type { TalexEvents } from '../core/eventbus/touch-event'
 import { randomUUID } from 'node:crypto'
 import { StorageList } from '@talex-touch/utils'
-import { getTuffTransportMain, NotificationEvents } from '@talex-touch/utils/transport/main'
+import { NotificationEvents } from '@talex-touch/utils/transport/main'
 import { Notification } from 'electron'
-import { genTouchApp } from '../core'
+import { resolveMainRuntime } from '../core/runtime-accessor'
 import { BaseModule } from './abstract-base-module'
 import { getPermissionModule } from './permission'
 import { getMainConfig, saveMainConfig } from './storage'
@@ -37,12 +37,6 @@ const INBOX_MAX_ENTRIES = 500
 interface NotificationInboxStats {
   total: number
   unread: number
-}
-
-function getKeyManager(value: unknown): unknown {
-  if (!value || typeof value !== 'object') return undefined
-  if (!('keyManager' in value)) return undefined
-  return (value as { keyManager?: unknown }).keyManager
 }
 
 class NotificationInboxStore {
@@ -218,10 +212,9 @@ export class NotificationModule extends BaseModule {
     super(NotificationModule.key, { create: true, dirName: 'notification' })
   }
 
-  onInit(_ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
-    const app = genTouchApp()
-    const channel = app.channel
-    this.transport = getTuffTransportMain(channel, getKeyManager(channel) ?? channel)
+  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
+    const runtime = resolveMainRuntime(ctx, 'NotificationModule.onInit')
+    this.transport = runtime.transport
     this.registerTransportHandlers()
   }
 

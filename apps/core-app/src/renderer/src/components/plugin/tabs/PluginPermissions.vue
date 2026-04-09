@@ -7,6 +7,7 @@
 
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { TxButton, TxEmpty, TxTag } from '@talex-touch/tuffex'
+import { PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { usePermissionSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -38,9 +39,55 @@ interface PluginPermissionStatus {
   warning?: string
 }
 
+type PermissionBackendMode = 'sqlite' | 'degraded/backend-unavailable'
+
+interface PermissionBackendState {
+  mode: PermissionBackendMode
+  writable: boolean
+  reason?: string
+}
+
+interface PluginPermissionStatusResult extends PluginPermissionStatus {
+  backendState?: PermissionBackendState
+}
+
+interface PermissionMutationResult {
+  success: boolean
+  error?: string
+  backendState?: PermissionBackendState
+}
+
 // State
 const loading = ref(true)
 const status = ref<PluginPermissionStatus | null>(null)
+const backendState = ref<PermissionBackendState | null>(null)
+const mutationError = ref<string | null>(null)
+
+const blockedIssue = computed(() => {
+  const issues = props.plugin.issues ?? []
+  return issues.find((issue) => issue.code === 'SDKAPI_BLOCKED') ?? null
+})
+
+const sdkBlocked = computed(() => {
+  return (
+    props.plugin.loadState === 'load_failed' &&
+    (props.plugin.loadError?.code === 'SDKAPI_BLOCKED' || blockedIssue.value !== null)
+  )
+})
+
+const blockedMessage = computed(() => {
+  if (props.plugin.loadError?.code === 'SDKAPI_BLOCKED') {
+    return props.plugin.loadError.message || ''
+  }
+  return blockedIssue.value?.message || ''
+})
+const declaredPermissionIds = computed(() => {
+  const required = props.plugin.declaredPermissions?.required || []
+  const optional = props.plugin.declaredPermissions?.optional || []
+  return [...new Set([...required, ...optional])]
+})
+const declaredRequiredCount = computed(() => props.plugin.declaredPermissions?.required?.length || 0)
+const declaredOptionalCount = computed(() => props.plugin.declaredPermissions?.optional?.length || 0)
 
 function getPermissionName(permissionId: string): string {
   const key = `plugin.permissions.registry.${permissionId}.name`
@@ -56,14 +103,16 @@ function getPermissionDesc(permissionId: string): string {
 
 // Computed
 const hasPermissions = computed(() => {
-  if (!status.value) return false
-  return status.value.required.length > 0 || status.value.optional.length > 0
+  if (status.value) {
+    return status.value.required.length > 0 || status.value.optional.length > 0
+  }
+  return declaredPermissionIds.value.length > 0 || sdkBlocked.value
 })
 
 const permissionList = computed(() => {
-  if (!status.value) return []
-
-  const all = [...status.value.required, ...status.value.optional]
+  const all = status.value
+    ? [...status.value.required, ...status.value.optional]
+    : declaredPermissionIds.value
   const unique = [...new Set(all)]
 
   return unique.map((id) => {
@@ -76,8 +125,8 @@ const permissionList = computed(() => {
       desc: getPermissionDesc(id),
       category,
       risk,
-      required: status.value!.required.includes(id),
-      granted: status.value!.granted.includes(id)
+      required: status.value?.required.includes(id) || false,
+      granted: status.value?.granted.includes(id) || false
     }
   })
 })
@@ -106,11 +155,22 @@ const hasOutdatedPermissions = computed(() => {
 })
 
 const hasStatusWarning = computed(() => {
+  if (sdkBlocked.value) return true
   if (!status.value) return false
-  return status.value.missingRequired.length > 0 || status.value.deprecatedGranted.length > 0
+  return (
+    status.value.missingRequired.length > 0 ||
+    status.value.deprecatedGranted.length > 0 ||
+    backendState.value?.mode === 'degraded/backend-unavailable'
+  )
 })
 
 const statusDescription = computed(() => {
+  if (sdkBlocked.value) {
+    return blockedMessage.value || t('plugin.permissions.blockedWarning')
+  }
+  if (backendState.value?.mode === 'degraded/backend-unavailable') {
+    return t('plugin.permissions.backendUnavailableDesc')
+  }
   if (!status.value) return ''
   if (status.value.missingRequired.length > 0) {
     return t('plugin.permissions.statusMissing', {
@@ -124,6 +184,21 @@ const statusDescription = computed(() => {
   }
   return t('plugin.permissions.statusGranted')
 })
+
+const backendUnavailable = computed(
+  () => backendState.value?.mode === 'degraded/backend-unavailable'
+)
+const permissionMutationsDisabled = computed(
+  () => backendUnavailable.value || sdkBlocked.value || !status.value?.enforcePermissions
+)
+
+function handleMutationResult(result: PermissionMutationResult | null | undefined): boolean {
+  if (result?.backendState) {
+    backendState.value = result.backendState
+  }
+  mutationError.value = result?.success ? null : result?.error || null
+  return result?.success === true
+}
 
 // Category definitions
 const categoryInfo: Record<string, { nameKey: string; icon: string }> = {
@@ -235,16 +310,18 @@ function getRiskLabel(risk: 'low' | 'medium' | 'high'): string {
 async function loadStatus() {
   loading.value = true
   try {
+    mutationError.value = null
     // Create plain copies of arrays to avoid structured clone issues
     const required = [...(props.plugin.declaredPermissions?.required || [])]
     const optional = [...(props.plugin.declaredPermissions?.optional || [])]
 
-    const result = await permissionSdk.getStatus({
+    const result = (await permissionSdk.getStatus({
       pluginId: props.plugin.name,
       sdkapi: props.plugin.sdkapi,
       required,
       optional
-    })
+    })) as PluginPermissionStatusResult | null
+    backendState.value = result?.backendState || null
     status.value = result
       ? {
           ...result,
@@ -262,18 +339,23 @@ async function loadStatus() {
 
 // Toggle permission
 async function handleToggle(permissionId: string, granted: boolean) {
+  if (permissionMutationsDisabled.value) return
   try {
+    let result: PermissionMutationResult | null = null
     if (granted) {
-      await permissionSdk.grant({
+      result = (await permissionSdk.grant({
         pluginId: props.plugin.name,
         permissionId,
         grantedBy: 'user'
-      })
+      })) as PermissionMutationResult
     } else {
-      await permissionSdk.revoke({
+      result = (await permissionSdk.revoke({
         pluginId: props.plugin.name,
         permissionId
-      })
+      })) as PermissionMutationResult
+    }
+    if (!handleMutationResult(result)) {
+      return
     }
     await loadStatus()
   } catch (e) {
@@ -283,13 +365,16 @@ async function handleToggle(permissionId: string, granted: boolean) {
 
 // Grant all required
 async function handleGrantAll() {
-  if (!status.value?.missingRequired.length) return
+  if (permissionMutationsDisabled.value || !status.value?.missingRequired.length) return
   try {
-    await permissionSdk.grantMultiple({
+    const result = (await permissionSdk.grantMultiple({
       pluginId: props.plugin.name,
       permissionIds: status.value.missingRequired,
       grantedBy: 'user'
-    })
+    })) as PermissionMutationResult
+    if (!handleMutationResult(result)) {
+      return
+    }
     await loadStatus()
   } catch (e) {
     console.error('Failed to grant all permissions:', e)
@@ -298,10 +383,14 @@ async function handleGrantAll() {
 
 // Revoke all
 async function handleRevokeAll() {
+  if (permissionMutationsDisabled.value) return
   try {
-    await permissionSdk.revokeAll({
+    const result = (await permissionSdk.revokeAll({
       pluginId: props.plugin.name
-    })
+    })) as PermissionMutationResult
+    if (!handleMutationResult(result)) {
+      return
+    }
     await loadStatus()
   } catch (e) {
     console.error('Failed to revoke all permissions:', e)
@@ -342,17 +431,32 @@ onMounted(() => {
         :active-icon="hasStatusWarning ? 'i-carbon-warning-filled' : 'i-carbon-checkmark-filled'"
         memory-name="plugin-permissions-status"
       >
+        <TuffBlockLine
+          v-if="backendUnavailable"
+          :title="t('plugin.permissions.backendUnavailableTitle')"
+        >
+          <template #description>
+            <span class="text-[var(--tx-color-warning)]">
+              {{ backendState?.reason || t('plugin.permissions.backendUnavailableDesc') }}
+            </span>
+          </template>
+        </TuffBlockLine>
+        <TuffBlockLine v-if="mutationError" :title="t('plugin.permissions.backendMutationFailed')">
+          <template #description>
+            <span class="text-[var(--tx-color-danger)]">{{ mutationError }}</span>
+          </template>
+        </TuffBlockLine>
         <TuffBlockLine :title="t('plugin.permissions.required')">
           <template #description>
             <TxTag color="var(--tx-color-danger)" size="sm">
-              {{ status?.required.length || 0 }}
+              {{ status?.required.length ?? declaredRequiredCount }}
             </TxTag>
           </template>
         </TuffBlockLine>
         <TuffBlockLine :title="t('plugin.permissions.optional')">
           <template #description>
             <TxTag color="var(--tx-color-info)" size="sm">
-              {{ status?.optional.length || 0 }}
+              {{ status?.optional.length ?? declaredOptionalCount }}
             </TxTag>
           </template>
         </TuffBlockLine>
@@ -376,7 +480,12 @@ onMounted(() => {
               <i class="i-ri-refresh-line" />
               <span>{{ t('plugin.permissions.actions.refresh') }}</span>
             </TxButton>
-            <TxButton v-if="status?.missingRequired.length" variant="flat" @click="handleGrantAll">
+            <TxButton
+              v-if="status?.missingRequired.length"
+              variant="flat"
+              :disabled="permissionMutationsDisabled"
+              @click="handleGrantAll"
+            >
               <i class="i-ri-check-double-line" />
               <span>{{ t('plugin.permissions.actions.grantAll') }}</span>
             </TxButton>
@@ -384,6 +493,7 @@ onMounted(() => {
               v-if="status?.granted.length"
               variant="flat"
               class="danger"
+              :disabled="permissionMutationsDisabled"
               @click="handleRevokeAll"
             >
               <i class="i-ri-close-line" />
@@ -393,9 +503,35 @@ onMounted(() => {
         </TuffBlockSlot>
       </TuffGroupBlock>
 
-      <!-- SDK Warning -->
       <TuffGroupBlock
-        v-if="status?.warning && !status?.enforcePermissions"
+        v-if="sdkBlocked"
+        :name="t('plugin.permissions.blockedTitle')"
+        :description="t('plugin.permissions.blockedWarning')"
+        default-icon="i-carbon-error"
+        active-icon="i-carbon-error-filled"
+        memory-name="plugin-permissions-sdk-blocked"
+      >
+        <TuffBlockLine :title="t('plugin.permissions.blockedStatusTitle')">
+          <template #description>
+            <span class="text-[var(--tx-color-danger)]">
+              {{ blockedMessage || t('plugin.permissions.blockedWarning') }}
+            </span>
+          </template>
+        </TuffBlockLine>
+        <TuffBlockLine :title="t('plugin.permissions.recommendationsTitle')">
+          <template #description>
+            <span class="text-[var(--tx-color-warning)]">{{
+              t('plugin.permissions.blockedHint', {
+                version: PERMISSION_ENFORCEMENT_MIN_VERSION
+              })
+            }}</span>
+          </template>
+        </TuffBlockLine>
+      </TuffGroupBlock>
+
+      <!-- SDK Compatibility Warning -->
+      <TuffGroupBlock
+        v-else-if="status?.warning && !status?.enforcePermissions"
         :name="t('plugin.permissions.legacyTitle')"
         :description="t('plugin.permissions.legacyWarning')"
         default-icon="i-carbon-warning"
@@ -405,7 +541,9 @@ onMounted(() => {
         <TuffBlockLine :title="t('plugin.permissions.recommendationsTitle')">
           <template #description>
             <span class="text-[var(--tx-color-warning)]">{{
-              t('plugin.permissions.legacyHint', { version: 251212 })
+              t('plugin.permissions.legacyHint', {
+                version: PERMISSION_ENFORCEMENT_MIN_VERSION
+              })
             }}</span>
           </template>
         </TuffBlockLine>
@@ -429,6 +567,7 @@ onMounted(() => {
           :description="perm.desc"
           :default-icon="getPermissionIcon(perm.id)"
           :active-icon="getPermissionIcon(perm.id)"
+          :disabled="permissionMutationsDisabled"
           @change="(val) => handleToggle(perm.id, val)"
         >
           <template #tags>

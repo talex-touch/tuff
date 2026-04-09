@@ -17,11 +17,9 @@ import type {
   OmniPanelFeatureInputType,
   OmniPanelFeatureItemPayload,
   OmniPanelFeatureListResponse,
-  OmniPanelFeatureRefreshReason,
   OmniPanelFeatureRefreshPayload,
   OmniPanelFeatureSource,
   OmniPanelFeatureUnavailableReason,
-  OmniPanelFeatureToggleRequest,
   OmniPanelFeatureExecuteRequest,
   OmniPanelFeatureExecuteResponse,
   OmniPanelFeatureReorderRequest,
@@ -39,7 +37,6 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { app, clipboard, screen, shell } from 'electron'
 import { OmniPanelWindowOption } from '../../config/default'
-import { genTouchApp } from '../../core'
 import { TalexEvents as MainEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { TouchWindow } from '../../core/touch-window'
 import { getCoreBoxWindow } from '../box-tool/core-box/window'
@@ -54,10 +51,8 @@ import {
   omniPanelFeatureListEvent,
   omniPanelFeatureRefreshEvent,
   omniPanelFeatureReorderEvent,
-  omniPanelFeatureToggleEvent,
   omniPanelHideEvent,
-  omniPanelShowEvent,
-  omniPanelToggleEvent
+  omniPanelShowEvent
 } from '../../../shared/events/omni-panel'
 import { createLogger } from '../../utils/logger'
 
@@ -324,16 +319,15 @@ export class OmniPanelModule extends BaseModule {
   }
   private handlingInstallEventPlugins = new Set<string>()
   private destroying = false
-  private legacyUsageCounts = new Map<string, number>()
-  private warnedLegacyEvents = new Set<string>()
 
   constructor() {
     super(OmniPanelModule.key, { create: false })
   }
 
-  async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     this.destroying = false
-    const channel = genTouchApp().channel
+    const channel =
+      ctx.runtime?.channel ?? (ctx.app as { channel?: unknown } | null | undefined)?.channel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)
@@ -716,9 +710,6 @@ export class OmniPanelModule extends BaseModule {
     if (!this.transport) return
 
     this.transportDisposers.push(
-      this.transport.on(omniPanelToggleEvent, async (payload) => {
-        await this.toggle(payload)
-      }),
       this.transport.on(omniPanelShowEvent, async (payload) => {
         await this.show(payload)
       }),
@@ -728,13 +719,6 @@ export class OmniPanelModule extends BaseModule {
       this.transport.on(omniPanelFeatureListEvent, async () => {
         return this.buildFeatureListResponse()
       }),
-      this.transport.on(omniPanelFeatureToggleEvent, async (payload) => {
-        this.recordLegacyUsage(
-          omniPanelFeatureToggleEvent.toEventName(),
-          'OmniPanel internal registry APIs'
-        )
-        this.toggleFeature(payload, 'legacy-toggle')
-      }),
       this.transport.on(omniPanelFeatureReorderEvent, async (payload) => {
         this.reorderFeature(payload)
       }),
@@ -742,18 +726,6 @@ export class OmniPanelModule extends BaseModule {
         return await this.executeFeature(payload)
       })
     )
-  }
-
-  private recordLegacyUsage(eventName: string, replacement: string): void {
-    const hits = (this.legacyUsageCounts.get(eventName) ?? 0) + 1
-    this.legacyUsageCounts.set(eventName, hits)
-    if (this.warnedLegacyEvents.has(eventName)) {
-      return
-    }
-    this.warnedLegacyEvents.add(eventName)
-    omniPanelLog.warn(`Legacy OmniPanel event used: ${eventName}. Use ${replacement} instead.`, {
-      meta: { eventName, replacement, hits }
-    })
   }
 
   private async ensureWindow(): Promise<TouchWindow> {
@@ -952,22 +924,6 @@ export class OmniPanelModule extends BaseModule {
       unavailable: false,
       unavailableReason: undefined
     }
-  }
-
-  private toggleFeature(
-    payload: OmniPanelFeatureToggleRequest,
-    reason: OmniPanelFeatureRefreshReason = 'toggle'
-  ): void {
-    if (!payload || typeof payload.id !== 'string') return
-    const target = this.featureRegistry.find((item) => item.id === payload.id)
-    if (!target) return
-    if (target.enabled === payload.enabled) return
-
-    target.enabled = payload.enabled
-    target.updatedAt = Date.now()
-    this.registryUpdatedAt = Date.now()
-    this.persistFeatureRegistry()
-    this.notifyFeatureRefresh(reason)
   }
 
   private reorderFeature(payload: OmniPanelFeatureReorderRequest): void {
@@ -1229,10 +1185,8 @@ export class OmniPanelModule extends BaseModule {
 
   private notifyFeatureRefresh(reason: OmniPanelFeatureRefreshPayload['reason']): void {
     if (!this.transport) return
-    const wireReason: OmniPanelFeatureRefreshPayload['reason'] =
-      reason === 'legacy-toggle' ? 'toggle' : reason
     this.transport.broadcast(omniPanelFeatureRefreshEvent, {
-      reason: wireReason,
+      reason,
       updatedAt: this.registryUpdatedAt
     })
   }

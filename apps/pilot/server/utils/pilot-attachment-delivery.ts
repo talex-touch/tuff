@@ -1,4 +1,4 @@
-import type { UserMessageAttachment } from '@talex-touch/tuff-intelligence/pilot'
+import type { UserMessageAttachment } from '@talex-touch/tuff-intelligence/pilot-server'
 import { Buffer } from 'node:buffer'
 
 export type PilotAttachmentDeliverySource = 'id' | 'url' | 'base64'
@@ -312,7 +312,7 @@ async function mapLimit<T, R>(
   }
 
   const max = Math.max(1, Math.min(limit, list.length))
-  const results = Array.from({ length: list.length })
+  const results: R[] = new Array(list.length)
   let cursor = 0
 
   const runWorker = async () => {

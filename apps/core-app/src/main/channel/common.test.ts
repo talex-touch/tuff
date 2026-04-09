@@ -463,7 +463,7 @@ describe('CommonChannelModule private helpers', () => {
     ).resolves.toBe('')
   })
 
-  it('legacy active-app event emits warn once and capability list includes dynamic entries', async () => {
+  it('does not register legacy active-app event and capability list still includes dynamic entries', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', {
       value: 'darwin',
@@ -488,7 +488,7 @@ describe('CommonChannelModule private helpers', () => {
 
       getTuffTransportMainMock.mockReturnValue(transport as never)
       platformCapabilityListMock.mockReturnValue([
-        { id: 'platform.storage', scope: 'system' }
+        { id: 'platform.storage', scope: 'system', supportLevel: 'supported' }
       ] as never)
       isActiveAppCapabilityAvailableMock.mockResolvedValue(true)
       nativeShareGetAvailableTargetsMock.mockReturnValue([{ id: 'mail' }] as never)
@@ -503,28 +503,39 @@ describe('CommonChannelModule private helpers', () => {
       } as never)
 
       const listHandler = handlers.get(PlatformEvents.capabilities.list.toEventName())
-      const legacyHandler = handlers.get('system:get-active-app')
-
       expect(listHandler).toBeTypeOf('function')
-      expect(legacyHandler).toBeTypeOf('function')
+      expect(handlers.has('system:get-active-app')).toBe(false)
 
-      const capabilities = (await listHandler?.({}, {})) as Array<{ id: string }>
-      await legacyHandler?.({ forceRefresh: true }, {})
-      await legacyHandler?.({ forceRefresh: false }, {})
+      const capabilities = (await listHandler?.({}, {})) as Array<{
+        id: string
+        supportLevel?: string
+        limitations?: string[]
+      }>
 
       expect(capabilities.map((item) => item.id)).toEqual([
         'platform.storage',
         'platform.active-app',
         'platform.native-share',
-        'platform.permission-checker'
+        'platform.permission-checker',
+        'platform.terminal',
+        'platform.tuff-cli'
       ])
-      expect(activeAppGetActiveAppMock).toHaveBeenCalledTimes(2)
-      expect(loggerWarnMock).toHaveBeenCalledTimes(1)
+      expect(capabilities.find((item) => item.id === 'platform.active-app')?.supportLevel).toBe(
+        'supported'
+      )
+      expect(capabilities.find((item) => item.id === 'platform.native-share')?.supportLevel).toBe(
+        'supported'
+      )
+      expect(capabilities.find((item) => item.id === 'platform.terminal')?.supportLevel).toBe(
+        'best_effort'
+      )
+      expect(capabilities.find((item) => item.id === 'platform.tuff-cli')?.supportLevel).toBe(
+        'unsupported'
+      )
       expect(
-        (module as unknown as { legacyUsageCounts: Map<string, number> }).legacyUsageCounts.get(
-          'system:get-active-app'
-        )
-      ).toBe(2)
+        capabilities.find((item) => item.id === 'platform.terminal')?.limitations?.[0]
+      ).toContain('PTY')
+      expect(activeAppGetActiveAppMock).not.toHaveBeenCalled()
     } finally {
       Object.defineProperty(process, 'platform', {
         value: originalPlatform,

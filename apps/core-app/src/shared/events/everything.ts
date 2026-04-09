@@ -1,11 +1,14 @@
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
 export type EverythingBackendType = 'sdk-napi' | 'cli' | 'unavailable'
+export type EverythingHealthState = 'healthy' | 'degraded' | 'unsupported'
 
 export interface EverythingStatusResponse {
   enabled: boolean
   available: boolean
   backend: EverythingBackendType
+  health: EverythingHealthState
+  healthReason: string | null
   version: string | null
   esPath: string | null
   error: string | null

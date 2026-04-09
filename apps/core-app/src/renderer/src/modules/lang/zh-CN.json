@@ -74,6 +74,7 @@
     "v8": "V8 引擎",
     "os": "操作系统",
     "platform": "平台",
+    "updateChannel": "更新通道",
     "experience": "体验",
     "experiencePack": "Touch 功能体验包",
     "openAppFolder": "应用文件夹",
@@ -682,6 +683,14 @@
       "devDisconnected": "开发服务器已断连，点击重连。",
       "devReconnecting": "正在重连开发服务器..."
     },
+    "summary": {
+      "loading": "正在加载插件元数据...",
+      "loadFailed": "插件元数据加载失败。"
+    },
+    "notifications": {
+      "widgetLoadFailedTitle": "Widget 加载失败",
+      "widgetLoadFailedMessage": "插件 widget 初始化失败，请检查插件版本、路径和运行日志。"
+    },
     "tabs": {
       "overview": "概览",
       "issues": "问题",
@@ -716,9 +725,16 @@
         "grantAll": "授予全部",
         "revokeAll": "撤销全部"
       },
+      "blockedTitle": "插件已阻断",
+      "blockedWarning": "此插件因 SDK 版本过低已被阻断，权限页面仅展示状态，不提供授权操作。",
+      "blockedStatusTitle": "阻断原因",
+      "blockedHint": "升级到 sdkapi >= {version} 后重新安装插件，再执行权限授权。",
       "legacyTitle": "SDK 版本警告",
       "legacyWarning": "此插件使用旧版 SDK，权限校验已跳过",
       "legacyHint": "升级到 sdkapi >= {version} 以启用权限校验",
+      "backendUnavailableTitle": "权限后端不可写",
+      "backendUnavailableDesc": "SQLite 权限后端不可用，当前仅支持读取已加载快照。",
+      "backendMutationFailed": "权限变更失败",
       "recommendationsTitle": "建议",
       "risk": {
         "low": "低",
@@ -748,6 +764,7 @@
         },
         "warning": {
           "permissionMissing": "未授予快捷键权限",
+          "blockedSdk": "SDK 版本过低，插件已被阻断",
           "legacySdk": "SDK 版本过低，未启用权限校验",
           "missingDescription": "缺少快捷键说明"
         }
@@ -1022,9 +1039,11 @@
       "copyPluginIdSuccess": "插件 ID 已复制",
       "copyPluginIdFailed": "复制插件 ID 失败",
       "version": "版本",
+      "loadState": "加载状态",
       "mode": "模式",
       "development": "开发模式",
       "production": "生产模式",
+      "blockedTag": "已阻断",
       "description": "描述",
       "noDescription": "暂无描述",
       "manifestJson": "manifest.json",
@@ -1562,6 +1581,12 @@
         "beta": "Beta",
         "alpha": "Alpha"
       },
+      "support": {
+        "supported": "已支持",
+        "best_effort": "尽力支持",
+        "unsupported": "不支持"
+      },
+      "limitations": "限制",
       "tags": {
         "sensitive": "敏感"
       },
@@ -1739,6 +1764,11 @@
       "backendSdk": "SDK (N-API)",
       "backendCli": "CLI (es.exe)",
       "backendUnavailable": "不可用",
+      "healthTitle": "搜索健康状态",
+      "healthDesc": "显示当前是否使用 Everything，或已降级到回退路径",
+      "healthHealthy": "正常",
+      "healthDegraded": "已降级",
+      "healthUnsupported": "不支持",
       "fallbackChainTitle": "后端降级链路",
       "fallbackChainDesc": "当上游后端不可用时，系统按此顺序自动降级",
       "enableTitle": "启用 Everything 搜索",
@@ -2024,7 +2054,7 @@
       "groupDesc": "选择更新渠道并设置自动检查频率。",
       "channelTitle": "更新渠道",
       "channelDesc": "预览渠道能更早体验新版本，但可能不够稳定。",
-      "channelSnapshotLocked": "Snapshot 构建会强制锁定在 Snapshot 渠道。",
+      "channelSnapshotLocked": "Snapshot 构建会按 Beta 渠道接收更新。",
       "channels": {
         "release": "稳定版（Release）",
         "beta": "公测版（Beta）",
@@ -2722,7 +2752,7 @@
       "pin": "固定到推荐",
       "unpin": "取消固定",
       "copyTitle": "复制名称",
-      "revealInFinder": "在 Finder 中显示",
+      "revealInFinder": "在文件管理器中显示",
       "flowTransfer": "流转到其他插件"
     },
     "systemActions": {

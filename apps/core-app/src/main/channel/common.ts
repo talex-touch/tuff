@@ -15,10 +15,8 @@ import type {
   BatteryStatusPayload,
   FileIndexAddPathRequest,
   FileIndexAddPathResult,
-  GetActiveAppRequest,
   PlatformCapabilityListRequest,
   ReadFileRequest,
-  ActiveAppSnapshot,
   SecureValueGetRequest,
   SecureValueSetRequest,
   StartupRequest,
@@ -50,7 +48,6 @@ import {
   app,
   dialog,
   powerMonitor,
-  safeStorage,
   shell,
   type OpenDevToolsOptions,
   type OpenDialogOptions
@@ -70,7 +67,6 @@ import {
   platformCapabilityRegistry,
   registerDefaultPlatformCapabilities
 } from '../modules/platform/capability-registry'
-import { nativeShareService } from '../modules/flow-bus/native-share'
 import { activeAppService, isActiveAppCapabilityAvailable } from '../modules/system/active-app'
 import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage'
 import { getNetworkService } from '../modules/network'
@@ -81,6 +77,11 @@ import { createLogger } from '../utils/logger'
 import { safeOpHandler, toErrorMessage } from '../utils/safe-handler'
 import { enterPerfContext } from '../utils/perf-context'
 import { perfMonitor } from '../utils/perf-monitor'
+import {
+  getSecureStoreValue,
+  isSecureStoreAvailable,
+  setSecureStoreValue
+} from '../utils/secure-store'
 
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
 const pollingService = PollingService.getInstance()
@@ -90,8 +91,6 @@ const READ_FILE_CACHE_TTL_MS = 60_000
 const READ_FILE_CACHE_MAX_ENTRIES = 120
 const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
 const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
-const SECURE_STORE_FILE = 'secure-store.json'
-const SECURE_STORE_KEY_PATTERN = /^[a-z0-9._-]{1,80}$/i
 const DIALOG_APPROVED_TTL_MS = 10 * 60 * 1000
 const DIALOG_APPROVED_MAX = 200
 const TUFF_CLI_DETECT_CACHE_TTL_MS = 60_000
@@ -103,7 +102,8 @@ const TUFF_CLI_CAPABILITY: PlatformCapability = {
   name: 'Tuff CLI',
   description: 'CLI 工具联动能力（Beta，开发中）',
   scope: 'plugin',
-  status: 'beta'
+  status: 'beta',
+  supportLevel: 'unsupported'
 }
 const ACTIVE_APP_CAPABILITY: PlatformCapability = {
   id: 'platform.active-app',
@@ -111,14 +111,27 @@ const ACTIVE_APP_CAPABILITY: PlatformCapability = {
   description: '当前前台应用与窗口上下文读取能力',
   scope: 'system',
   status: 'beta',
+  supportLevel: 'unsupported',
   sensitive: true
 }
 const NATIVE_SHARE_CAPABILITY: PlatformCapability = {
   id: 'platform.native-share',
   name: 'Native Share',
-  description: '系统原生分享目标与分发能力',
+  description: 'macOS 提供完整原生分享；Windows/Linux 仅提供 mail-only best-effort',
   scope: 'system',
-  status: 'beta'
+  status: 'beta',
+  supportLevel: 'unsupported'
+}
+const TERMINAL_CAPABILITY: PlatformCapability = {
+  id: 'platform.terminal',
+  name: 'Terminal Command Runtime',
+  description: '命令进程执行能力（非 PTY 终端）',
+  scope: 'system',
+  status: 'beta',
+  supportLevel: 'best_effort',
+  limitations: [
+    'Runs child-process commands only; PTY emulation and terminal state sync are not provided.'
+  ]
 }
 const SYSTEM_PERMISSION_CAPABILITY: PlatformCapability = {
   id: 'platform.permission-checker',
@@ -126,6 +139,7 @@ const SYSTEM_PERMISSION_CAPABILITY: PlatformCapability = {
   description: '系统权限状态检查与设置跳转能力',
   scope: 'system',
   status: 'beta',
+  supportLevel: 'supported',
   sensitive: true
 }
 const log = createLogger('CommonChannel')
@@ -188,9 +202,6 @@ const wallpaperCopyToLibraryEvent = defineRawEvent<
   { sourcePath: string; type: 'file' | 'folder' },
   { storedPath: string | null; skippedCount: number; error?: string }
 >('wallpaper:copy-to-library')
-const systemGetActiveAppLegacyEvent = defineRawEvent<GetActiveAppRequest, ActiveAppSnapshot | null>(
-  'system:get-active-app'
-)
 const batteryStatusEvent = AppEvents.power.batteryStatus
 
 function resolveTfilePath(urlOrPath: string): string {
@@ -563,7 +574,13 @@ async function detectTuffCliAvailability(): Promise<boolean> {
 async function listPlatformCapabilities(
   query: PlatformCapabilityListRequest
 ): Promise<PlatformCapability[]> {
-  const capabilities = platformCapabilityRegistry.list(query)
+  const capabilities: PlatformCapability[] = platformCapabilityRegistry
+    .list(query)
+    .map((capability) => ({
+      ...capability,
+      supportLevel: capability.supportLevel ?? 'supported',
+      limitations: capability.limitations ? [...capability.limitations] : undefined
+    }))
   const appendDynamicCapability = (capability: PlatformCapability): void => {
     if (capabilities.some((item) => item.id === capability.id)) {
       return
@@ -573,26 +590,54 @@ async function listPlatformCapabilities(
     }
   }
 
-  if (await isActiveAppCapabilityAvailable()) {
-    appendDynamicCapability(ACTIVE_APP_CAPABILITY)
+  const activeAppSupported = await isActiveAppCapabilityAvailable()
+  appendDynamicCapability({
+    ...ACTIVE_APP_CAPABILITY,
+    supportLevel: activeAppSupported ? 'supported' : 'unsupported',
+    limitations: activeAppSupported
+      ? undefined
+      : ['Foreground application inspection is unavailable in the current runtime.']
+  })
+
+  appendDynamicCapability({
+    ...NATIVE_SHARE_CAPABILITY,
+    supportLevel:
+      process.platform === 'darwin'
+        ? 'supported'
+        : process.platform === 'win32' || process.platform === 'linux'
+          ? 'best_effort'
+          : 'unsupported',
+    limitations:
+      process.platform === 'darwin'
+        ? undefined
+        : process.platform === 'win32' || process.platform === 'linux'
+          ? ['Falls back to mailto-based sharing only; no native system share sheet is exposed.']
+          : ['Native share is unavailable on the current platform.']
+  })
+
+  if (process.platform === 'linux') {
+    appendDynamicCapability({
+      ...SYSTEM_PERMISSION_CAPABILITY,
+      supportLevel: 'best_effort',
+      limitations: ['Permission status and settings deep-links depend on the desktop environment.']
+    })
+  } else if (process.platform === 'darwin' || process.platform === 'win32') {
+    appendDynamicCapability({
+      ...SYSTEM_PERMISSION_CAPABILITY,
+      supportLevel: 'supported'
+    })
   }
 
-  if (nativeShareService.getAvailableTargets().length > 0) {
-    appendDynamicCapability(NATIVE_SHARE_CAPABILITY)
-  }
-
-  if (
-    process.platform === 'darwin' ||
-    process.platform === 'win32' ||
-    process.platform === 'linux'
-  ) {
-    appendDynamicCapability(SYSTEM_PERMISSION_CAPABILITY)
-  }
+  appendDynamicCapability(TERMINAL_CAPABILITY)
 
   const tuffCliAvailable = await detectTuffCliAvailability()
-  if (tuffCliAvailable) {
-    appendDynamicCapability(TUFF_CLI_CAPABILITY)
-  }
+  appendDynamicCapability({
+    ...TUFF_CLI_CAPABILITY,
+    supportLevel: tuffCliAvailable ? 'supported' : 'unsupported',
+    limitations: tuffCliAvailable
+      ? undefined
+      : ['CLI binary was not detected in PATH or known install locations.']
+  })
   return capabilities
 }
 
@@ -762,8 +807,6 @@ export class CommonChannelModule extends BaseModule {
   private transportDisposers: Array<() => void> = []
   private batteryPollTimer: NodeJS.Timeout | undefined
   private touchApp: TalexTouch.TouchApp | null = null
-  private legacyUsageCounts = new Map<string, number>()
-  private warnedLegacyEvents = new Set<string>()
 
   constructor() {
     super(CommonChannelModule.key, {
@@ -784,7 +827,7 @@ export class CommonChannelModule extends BaseModule {
     }
 
     this.setupBatteryStatusBroadcast(transport)
-    this.registerLegacyDialogWallpaperHandlers(transport, touchApp)
+    this.registerDialogWallpaperHandlers(transport, touchApp)
 
     const onOpenUrl = this.createOpenUrlHandler()
     this.bindOpenUrlListeners(touchApp, onOpenUrl)
@@ -847,7 +890,7 @@ export class CommonChannelModule extends BaseModule {
     }
   }
 
-  private registerLegacyDialogWallpaperHandlers(
+  private registerDialogWallpaperHandlers(
     transport: NonNullable<CommonChannelModule['transport']>,
     touchApp: TalexTouch.TouchApp
   ): void {
@@ -1099,18 +1142,6 @@ export class CommonChannelModule extends BaseModule {
     this.registerPresetTransportHandlers(transport, registerSafeHandler)
   }
 
-  private recordLegacyTransportUsage(eventName: string, replacement: string): void {
-    const hits = (this.legacyUsageCounts.get(eventName) ?? 0) + 1
-    this.legacyUsageCounts.set(eventName, hits)
-    if (this.warnedLegacyEvents.has(eventName)) {
-      return
-    }
-    this.warnedLegacyEvents.add(eventName)
-    log.warn(`[CommonChannel] Legacy event used: ${eventName}. Use ${replacement} instead.`, {
-      meta: { eventName, replacement, hits }
-    })
-  }
-
   private createSafeOperationHandler(transport: NonNullable<CommonChannelModule['transport']>) {
     return <TReq, TExtra extends Record<string, unknown> = Record<string, never>>(
       event: TuffEvent<TReq, unknown> & { toEventName: () => string },
@@ -1309,13 +1340,6 @@ export class CommonChannelModule extends BaseModule {
         }
       }),
       transport.on(AppEvents.system.getActiveApp, async (payload) => {
-        return await activeAppService.getActiveApp(Boolean(payload?.forceRefresh))
-      }),
-      transport.on(systemGetActiveAppLegacyEvent, async (payload) => {
-        this.recordLegacyTransportUsage(
-          systemGetActiveAppLegacyEvent.toEventName(),
-          AppEvents.system.getActiveApp.toEventName()
-        )
         return await activeAppService.getActiveApp(Boolean(payload?.forceRefresh))
       }),
       transport.on<SecureValueGetRequest, string | null>(
@@ -1591,92 +1615,44 @@ export class CommonChannelModule extends BaseModule {
     return await task
   }
 
-  private normalizeSecureStoreKey(rawKey: string): string {
-    const key = rawKey.trim()
-    if (!SECURE_STORE_KEY_PATTERN.test(key)) {
-      throw new Error('Invalid secure storage key')
-    }
-    return key
-  }
-
-  private resolveSecureStorePath(): string {
+  private getSecureStoreRootPath(): string {
     const touchApp = this.touchApp
     if (!touchApp) {
       throw new Error('App context is not ready')
     }
-    return path.join(touchApp.rootPath, 'config', SECURE_STORE_FILE)
-  }
-
-  private async readSecureStoreFile(): Promise<Record<string, string>> {
-    const storePath = this.resolveSecureStorePath()
-    try {
-      const raw = await fs.readFile(storePath, 'utf-8')
-      const parsed: unknown = JSON.parse(raw)
-      if (!isRecord(parsed)) {
-        return {}
-      }
-      const store: Record<string, string> = {}
-      for (const [key, value] of Object.entries(parsed)) {
-        if (typeof value === 'string') {
-          store[key] = value
-        }
-      }
-      return store
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
-        return {}
-      }
-      log.warn('[CommonChannel] Failed to read secure store file', { error: toErrorMessage(error) })
-      return {}
-    }
-  }
-
-  private async writeSecureStoreFile(store: Record<string, string>): Promise<void> {
-    const storePath = this.resolveSecureStorePath()
-    await fs.mkdir(path.dirname(storePath), { recursive: true })
-    await fs.writeFile(storePath, JSON.stringify(store), 'utf-8')
+    return touchApp.rootPath
   }
 
   private async getSecureValue(rawKey: string): Promise<string | null> {
-    if (!safeStorage.isEncryptionAvailable()) {
+    if (!isSecureStoreAvailable()) {
       return null
     }
 
-    const key = this.normalizeSecureStoreKey(rawKey)
-    const store = await this.readSecureStoreFile()
-    const encrypted = store[key]
-    if (!encrypted) {
-      return null
-    }
-
-    try {
-      const buffer = Buffer.from(encrypted, 'base64')
-      return safeStorage.decryptString(buffer)
-    } catch (error) {
-      log.warn('[CommonChannel] Failed to decrypt secure value', {
+    return await getSecureStoreValue(this.getSecureStoreRootPath(), rawKey, (message, error) => {
+      log.warn(`[CommonChannel] ${message}`, {
         error: toErrorMessage(error)
       })
-      return null
-    }
+    })
   }
 
   private async setSecureValue(rawKey: string, value: string | null): Promise<void> {
-    if (!safeStorage.isEncryptionAvailable()) {
+    if (!isSecureStoreAvailable()) {
       throw new Error('Secure storage is unavailable')
     }
 
-    const key = this.normalizeSecureStoreKey(rawKey)
-    const store = await this.readSecureStoreFile()
-
-    if (typeof value !== 'string' || !value.length) {
-      delete store[key]
-      await this.writeSecureStoreFile(store)
-      return
+    const persisted = await setSecureStoreValue(
+      this.getSecureStoreRootPath(),
+      rawKey,
+      value,
+      (message, error) => {
+        log.warn(`[CommonChannel] ${message}`, {
+          error: toErrorMessage(error)
+        })
+      }
+    )
+    if (!persisted) {
+      throw new Error('Secure storage is unavailable')
     }
-
-    const encrypted = safeStorage.encryptString(value).toString('base64')
-    store[key] = encrypted
-    await this.writeSecureStoreFile(store)
   }
 
   onDestroy(): MaybePromise<void> {

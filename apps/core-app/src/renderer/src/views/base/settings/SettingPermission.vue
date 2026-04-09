@@ -48,6 +48,34 @@ interface PluginPermissionInfo {
   warning?: string
 }
 
+type PermissionBackendMode = 'sqlite' | 'degraded/backend-unavailable'
+
+interface PermissionBackendState {
+  mode: PermissionBackendMode
+  writable: boolean
+  reason?: string
+}
+
+interface PermissionMutationResult {
+  success: boolean
+  error?: string
+  backendState?: PermissionBackendState
+}
+
+interface PermissionPerformanceResult {
+  backendState?: PermissionBackendState
+}
+
+interface PluginPermissionStatusResult {
+  enforcePermissions?: boolean
+  required?: string[]
+  optional?: string[]
+  granted?: string[]
+  missingRequired?: string[]
+  warning?: string
+  backendState?: PermissionBackendState
+}
+
 // State
 const loading = ref(true)
 const searchQuery = ref('')
@@ -55,6 +83,8 @@ const filterStatus = ref<'all' | 'granted' | 'missing'>('all')
 const plugins = ref<PluginPermissionInfo[]>([])
 const allPermissions = ref<Record<string, PermissionGrant[]>>({})
 const expandedPlugins = ref<string[]>([])
+const backendState = ref<PermissionBackendState | null>(null)
+const mutationError = ref<string | null>(null)
 
 // Audit log state
 const showAuditLogs = ref(false)
@@ -115,10 +145,34 @@ const stats = computed(() => {
   return { total, withMissing, legacy }
 })
 
+const backendUnavailable = computed(
+  () => backendState.value?.mode === 'degraded/backend-unavailable'
+)
+
+const backendReason = computed(
+  () => backendState.value?.reason || 'SQLite 权限后端不可用，当前仅支持读取已加载快照。'
+)
+
+function updateBackendState(next?: PermissionBackendState | null) {
+  if (next) {
+    backendState.value = next
+  }
+}
+
+function handleMutationResult(result: PermissionMutationResult | null | undefined): boolean {
+  updateBackendState(result?.backendState)
+  mutationError.value = result?.success ? null : result?.error || null
+  return result?.success === true
+}
+
 // Load data
 async function loadData() {
   loading.value = true
   try {
+    mutationError.value = null
+    const performance = (await permissionSdk.getPerformance()) as PermissionPerformanceResult | null
+    updateBackendState(performance?.backendState)
+
     // Get all plugins
     const pluginList = (await transport.send(PluginEvents.api.list, {})) as ITouchPlugin[]
 
@@ -129,12 +183,13 @@ async function loadData() {
     // Build plugin permission info
     plugins.value = await Promise.all(
       pluginList.map(async (plugin: ITouchPlugin) => {
-        const status = await permissionSdk.getStatus({
+        const status = (await permissionSdk.getStatus({
           pluginId: plugin.name,
           sdkapi: plugin.sdkapi,
           required: plugin.declaredPermissions?.required || [],
           optional: plugin.declaredPermissions?.optional || []
-        })
+        })) as PluginPermissionStatusResult | null
+        updateBackendState(status?.backendState)
 
         return {
           id: plugin.name,
@@ -203,17 +258,21 @@ function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
 
 // Toggle permission
 async function handleToggle(pluginId: string, permissionId: string, granted: boolean) {
+  if (backendUnavailable.value) return
   try {
+    let result: PermissionMutationResult | null = null
     if (granted) {
-      await permissionSdk.grant({
+      result = (await permissionSdk.grant({
         pluginId,
         permissionId,
         grantedBy: 'user'
-      })
+      })) as PermissionMutationResult
     } else {
-      await permissionSdk.revoke({ pluginId, permissionId })
+      result = (await permissionSdk.revoke({ pluginId, permissionId })) as PermissionMutationResult
     }
-    // Refresh data
+    if (!handleMutationResult(result)) {
+      return
+    }
     await loadData()
   } catch (e) {
     console.error('Failed to toggle permission:', e)
@@ -222,12 +281,16 @@ async function handleToggle(pluginId: string, permissionId: string, granted: boo
 
 // Grant all required permissions
 async function handleGrantAll(plugin: PluginPermissionInfo) {
+  if (backendUnavailable.value) return
   try {
-    await permissionSdk.grantMultiple({
+    const result = (await permissionSdk.grantMultiple({
       pluginId: plugin.id,
       permissionIds: plugin.missingRequired,
       grantedBy: 'user'
-    })
+    })) as PermissionMutationResult
+    if (!handleMutationResult(result)) {
+      return
+    }
     await loadData()
   } catch (e) {
     console.error('Failed to grant all permissions:', e)
@@ -236,8 +299,12 @@ async function handleGrantAll(plugin: PluginPermissionInfo) {
 
 // Revoke all permissions
 async function handleRevokeAll(pluginId: string) {
+  if (backendUnavailable.value) return
   try {
-    await permissionSdk.revokeAll({ pluginId })
+    const result = (await permissionSdk.revokeAll({ pluginId })) as PermissionMutationResult
+    if (!handleMutationResult(result)) {
+      return
+    }
     await loadData()
   } catch (e) {
     console.error('Failed to revoke all permissions:', e)
@@ -263,8 +330,12 @@ async function loadAuditLogs() {
 
 // Clear audit logs
 async function clearAuditLogs() {
+  if (backendUnavailable.value) return
   try {
-    await permissionSdk.clearAuditLogs()
+    const result = (await permissionSdk.clearAuditLogs()) as PermissionMutationResult
+    if (!handleMutationResult(result)) {
+      return
+    }
     await loadAuditLogs()
   } catch (e) {
     console.error('Failed to clear audit logs:', e)
@@ -347,6 +418,22 @@ onMounted(() => {
 <template>
   <TuffGroupBlock name="权限中心" description="管理插件的权限授权">
     <TuffBlockSlot>
+      <div v-if="backendUnavailable" class="backend-warning">
+        <i class="i-carbon-warning-alt-filled" />
+        <div>
+          <div class="backend-warning__title">权限后端当前不可写</div>
+          <div class="backend-warning__text">{{ backendReason }}</div>
+        </div>
+      </div>
+
+      <div v-if="mutationError" class="backend-warning backend-warning--error">
+        <i class="i-carbon-error-filled" />
+        <div>
+          <div class="backend-warning__title">权限变更失败</div>
+          <div class="backend-warning__text">{{ mutationError }}</div>
+        </div>
+      </div>
+
       <!-- Stats -->
       <div class="permission-stats">
         <div class="stat-item">
@@ -437,11 +524,18 @@ onMounted(() => {
                 v-if="plugin.missingRequired.length > 0"
                 type="primary"
                 size="small"
+                :disabled="backendUnavailable"
                 @click.stop="handleGrantAll(plugin)"
               >
                 授予全部必需权限
               </TxButton>
-              <TxButton type="danger" size="small" plain @click.stop="handleRevokeAll(plugin.id)">
+              <TxButton
+                type="danger"
+                size="small"
+                plain
+                :disabled="backendUnavailable"
+                @click.stop="handleRevokeAll(plugin.id)"
+              >
                 撤销全部权限
               </TxButton>
             </div>
@@ -449,7 +543,7 @@ onMounted(() => {
             <!-- Permission List -->
             <PermissionList
               :permissions="getPermissionList(plugin)"
-              :readonly="!plugin.enforcePermissions"
+              :readonly="!plugin.enforcePermissions || backendUnavailable"
               @toggle="(id, granted) => handleToggle(plugin.id, id, granted)"
             />
           </div>
@@ -482,7 +576,7 @@ onMounted(() => {
             刷新
           </TxButton>
 
-          <TxButton type="danger" plain @click="clearAuditLogs">
+          <TxButton type="danger" plain :disabled="backendUnavailable" @click="clearAuditLogs">
             <i class="i-carbon-trash-can mr-1" />
             清空
           </TxButton>
@@ -539,6 +633,32 @@ onMounted(() => {
     &.info {
       color: var(--tx-color-info);
     }
+  }
+}
+
+.backend-warning {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--tx-color-warning-light-9);
+  color: var(--tx-color-warning-dark-2);
+  font-size: 13px;
+
+  &--error {
+    background: var(--tx-color-danger-light-9);
+    color: var(--tx-color-danger-dark-2);
+  }
+
+  &__title {
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  &__text {
+    word-break: break-word;
   }
 }
 
