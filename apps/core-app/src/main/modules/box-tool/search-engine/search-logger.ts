@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
-import { StorageList } from '@talex-touch/utils'
+import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { loggerManager } from '@talex-touch/utils/common/logger'
 import chalk from 'chalk'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'

@@ -16,15 +16,17 @@
 ### fix(core-app/build): 补齐 hoisted runtime 依赖
 
 - `apps/core-app/scripts/ensure-runtime-modules.js`
-  - 新增打包前 runtime 依赖同步脚本，从 `core-app` 运行时依赖树递归解析 hoisted/transitive 模块，并把缺失模块补齐到 `apps/core-app/node_modules`，为后续构建后补齐 `resources/node_modules` 提供完整 runtime 模块集合，避免启动时再出现 `ms`、`module-details-from-path`、`retry`、`uuid` 一类传递依赖缺失。
+  - 新增打包前 runtime 依赖同步脚本，从 `core-app` 运行时依赖树递归解析 hoisted/transitive 模块，并把缺失模块补齐到 `apps/core-app/node_modules`，为后续构建后镜像完整 runtime 模块集合到 `resources/node_modules` 提供基础，避免启动时再出现 `ms`、`module-details-from-path`、`retry`、`uuid` 一类传递依赖缺失。
 - `apps/core-app/scripts/build-target.js`
-  - 在 `electron-builder` 前新增 runtime 依赖同步步骤；构建完成后若模块未进入 `app.asar`，则自动补齐到 `resources/node_modules`，并将运行时依赖校验升级为同时检查 `app.asar` 与 `resources/node_modules`，提前拦截“可打包但启动即崩”的坏包。
+  - 在 `electron-builder` 前新增 runtime 依赖同步步骤；构建完成后自动把完整 runtime 模块集合镜像到 `resources/node_modules`，并将运行时依赖校验升级为同时检查 `app.asar` 与 `resources/node_modules`，提前拦截“可打包但启动即崩”的坏包。
   - Windows 本地 `--dir` 验包场景下关闭 `win.signAndEditExecutable`，绕过 `winCodeSign` 额外下载，减少因外部网络 EOF 导致的本地验包失败。
 
 ### fix(core-app/worker): 收窄 sqlite retry utils 入口
 
 - `apps/core-app/src/main/db/sqlite-retry.ts`
   - `sleep` 改为从 `@talex-touch/utils/common/utils` 窄路径引入，避免 `search-index-worker` 因引用 `@talex-touch/utils` 根聚合入口而把 Electron 相关聚合代码一起卷入 worker chunk。
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-logger.ts`
+  - `StorageList` 改为从 `@talex-touch/utils/common/storage/constants` 窄路径引入，避免搜索索引 worker 因 `@talex-touch/utils` / `common/index` 聚合出口把 `electron/file-parsers` 一并卷入，导致 worker 进程里 `require('electron')` 失败。
 
 ### fix(pilot/chat): 收口 routing 选择前端暴露并脱敏运行记录
 
