@@ -1,13 +1,36 @@
 # 变更日志
 
-> 更新时间: 2026-04-08
-> 说明: 主文件仅保留近 30 天（2026-03-10 ~ 2026-04-08）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-09
+> 说明: 主文件仅保留近 30 天（2026-03-11 ~ 2026-04-09）详细记录；更早历史已按月归档。
 
 ## 阅读方式
 
 - 当前主线：`2.4.9-beta.4` 基线下，下一动作统一为 `Nexus 设备授权风控`。
 - 历史主线：`2.4.8 OmniPanel Gate`、`v2.4.7 Gate A/B/C/D/E` 均已收口（historical）。
 - 旧记录入口：见文末“历史索引导航”。
+
+## 2026-04-09
+
+### fix(core-app): 修正 plugin runtime 时序与 clipboard 上下文保留
+
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.test.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useClipboard.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/types.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useVisibility.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/clipboard-query-inputs.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/clipboard-query-inputs.test.ts`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+  - `BasePluginLoader` 创建 `TouchPlugin` loading shell 时改为显式 `skipDataInit: true`，避免在 runtime 注入前访问 `getDataPath()`。
+  - `TouchPlugin.setRuntime()` 在 runtime 就绪后补齐插件数据目录初始化，保证 deferred shell 与真实 plugin 走同一条目录准备路径。
+  - 短文本 auto-paste 不再丢失真实 clipboard 上下文；执行插件时会保留并注入真实文本 clipboard 输入，而不是仅剩 query text。
+  - 平台能力页与 omni-panel 执行错误中的 stale hardcoded copy 已收口，不再展示“开发中”/`not implemented yet` 这类占位表达。
+  - 回归测试覆盖 loader 不再 eager init 数据目录、runtime 注入后的目录初始化行为，以及 clipboard 文本输入构建。
 
 ## 2026-04-08
 
