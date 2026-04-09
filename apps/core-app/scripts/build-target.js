@@ -277,22 +277,10 @@ function syncPackagedRuntimeModules(distDir, requiredModules) {
 
   const resourcesDir = path.dirname(asarPath)
   const packagedNodeModulesDir = path.join(resourcesDir, 'node_modules')
-  const { listPackage } = require('@electron/asar')
-  const packageEntries = new Set(listPackage(asarPath).map((entry) => entry.replace(/\\/g, '/')))
-  const modulesMissingFromAsar = requiredModules.filter(
-    (moduleName) =>
-      !packageEntries.has(path.posix.join('/node_modules', moduleName, 'package.json')) &&
-      !packageEntries.has(path.posix.join('node_modules', moduleName, 'package.json'))
-  )
-
-  if (modulesMissingFromAsar.length === 0) {
-    return
-  }
-
   fs.mkdirSync(packagedNodeModulesDir, { recursive: true })
   const syncedModules = []
 
-  for (const moduleName of modulesMissingFromAsar) {
+  for (const moduleName of requiredModules) {
     const sourceDir = path.join(projectRoot, 'node_modules', moduleName)
     const targetDir = path.join(packagedNodeModulesDir, moduleName)
 
