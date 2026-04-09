@@ -673,6 +673,7 @@ export class TouchPlugin implements ITouchPlugin {
 
   setRuntime(runtime: TouchPluginRuntimeContext): void {
     this.runtimeContext = runtime
+    this.ensureDataDirectories()
   }
 
   private getRuntimeContext(site: string): TouchPluginRuntimeContext {
