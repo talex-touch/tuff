@@ -9,7 +9,6 @@ import type { ActivationState } from '@talex-touch/utils/transport/events/types'
 import type { IBoxOptions } from '..'
 import type { IUseSearch } from '../types'
 import type { IClipboardOptions } from './types'
-import { TuffInputType } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { CoreBoxEvents, DivisionBoxEvents } from '@talex-touch/utils/transport/events'
@@ -21,7 +20,7 @@ import { devLog } from '~/utils/dev-log'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 import { BoxMode } from '..'
 import { createCoreBoxInputTransport } from '../transport/input-transport'
-import { isUrlLikeClipboardText } from './clipboard-text-utils'
+import { buildClipboardQueryInputs } from './clipboard-query-inputs'
 import { useResize } from './useResize'
 
 interface SearchEndData {
@@ -47,8 +46,6 @@ function ensureBoxData(boxOptions: IBoxOptions): BoxData {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object'
 }
-
-type ClipboardItem = NonNullable<IClipboardOptions['last']>
 
 interface DetachedDivisionConfig {
   itemId?: string
@@ -208,10 +205,6 @@ export function useSearch(
   let lastQueryAt = 0
 
   const DUPLICATE_QUERY_WINDOW_MS = 200
-  const MAX_TEXT_INPUT_LENGTH = 2000
-  const MAX_HTML_INPUT_LENGTH = 5000
-  const MIN_TEXT_ATTACHMENT_LENGTH = 80
-
   function toActivations(
     state: ActivationState | IProviderActivate[] | null | undefined
   ): IProviderActivate[] | null {
@@ -237,43 +230,6 @@ export function useSearch(
       }
     }
     return result.length > 0 ? result : null
-  }
-
-  function safeSerializeMetadata(
-    meta: Record<string, unknown> | null | undefined
-  ): Record<string, unknown> | undefined {
-    if (!meta) return undefined
-    try {
-      const safe: Record<string, unknown> = {}
-      for (const [key, value] of Object.entries(meta)) {
-        if (value === null || value === undefined) continue
-        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-          safe[key] = value
-        } else if (Array.isArray(value) && value.every((entry) => typeof entry === 'string')) {
-          safe[key] = [...value]
-        }
-      }
-      return Object.keys(safe).length > 0 ? safe : undefined
-    } catch {
-      return undefined
-    }
-  }
-
-  function buildClipboardMetadata(
-    item: ClipboardItem,
-    extra?: Record<string, unknown>
-  ): Record<string, unknown> | undefined {
-    const baseMeta = safeSerializeMetadata(item.meta) ?? {}
-    const merged = { ...baseMeta, ...(extra ?? {}) }
-    if (typeof item.id === 'number') {
-      merged.clipboardId = item.id
-    }
-    return Object.keys(merged).length > 0 ? merged : undefined
-  }
-
-  function truncateContent(content: string, maxLength: number): string {
-    if (content.length <= maxLength) return content
-    return content.slice(0, maxLength)
   }
 
   function buildStringSignature(value?: string | null): string {
@@ -317,60 +273,18 @@ export function useSearch(
     return `${text}::${activationKey}::${inputsKey}`
   }
 
-  function buildQueryInputs(): TuffQueryInput[] {
-    const inputs: TuffQueryInput[] = []
-
-    if (clipboardOptions?.last?.type === 'image') {
-      const content = clipboardOptions.last.thumbnail || clipboardOptions.last.content || ''
-      const metadata = buildClipboardMetadata(clipboardOptions.last, {
-        contentKind: 'preview',
-        canResolveOriginal: true
-      })
-      inputs.push({
-        type: TuffInputType.Image,
-        content,
-        thumbnail: clipboardOptions.last.thumbnail ?? undefined,
-        metadata
-      })
-    } else if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
-      inputs.push({
-        type: TuffInputType.Files,
-        content: JSON.stringify(boxOptions.file.paths),
-        metadata: undefined
-      })
-    } else if (clipboardOptions?.last?.type === 'files') {
-      const shouldInline = typeof clipboardOptions.last.id !== 'number'
-      const content = shouldInline ? clipboardOptions.last.content : ''
-      const metadata = buildClipboardMetadata(clipboardOptions.last, { contentKind: 'clipboard' })
-      inputs.push({
-        type: TuffInputType.Files,
-        content,
-        metadata
-      })
-    } else if (clipboardOptions?.last?.type === 'text' || clipboardOptions?.last?.type === 'html') {
-      const content = clipboardOptions.last.content ?? ''
-      const shouldAttachText =
-        isUrlLikeClipboardText(clipboardOptions.last) ||
-        content.length >= MIN_TEXT_ATTACHMENT_LENGTH
-      if (shouldAttachText) {
-        if (clipboardOptions.last.rawContent) {
-          inputs.push({
-            type: TuffInputType.Html,
-            content: truncateContent(content, MAX_TEXT_INPUT_LENGTH),
-            rawContent: truncateContent(clipboardOptions.last.rawContent, MAX_HTML_INPUT_LENGTH),
-            metadata: safeSerializeMetadata(clipboardOptions.last.meta)
-          })
-        } else {
-          inputs.push({
-            type: TuffInputType.Text,
-            content: truncateContent(content, MAX_TEXT_INPUT_LENGTH),
-            metadata: safeSerializeMetadata(clipboardOptions.last.meta)
-          })
-        }
-      }
-    }
-
-    return inputs
+  function buildQueryInputs(options?: {
+    queryText?: string
+    allowPendingTextClipboard?: boolean
+  }): TuffQueryInput[] {
+    return buildClipboardQueryInputs({
+      clipboardItem: clipboardOptions?.last,
+      pendingTextClipboardItem: clipboardOptions?.pendingAutoFillItem,
+      queryText: options?.queryText,
+      allowPendingTextClipboard: options?.allowPendingTextClipboard ?? false,
+      filePaths: boxOptions.file?.paths,
+      useFileMode: boxOptions.mode === BoxMode.FILE
+    })
   }
 
   const resetSearchState = (): void => {
@@ -753,16 +667,17 @@ export function useSearch(
 
     searchResults.value = []
 
-    const currentInputs = buildQueryInputs()
-    const hasAttachmentInputs = currentInputs.some(
-      (input) =>
-        input.type === TuffInputType.Files ||
-        input.type === TuffInputType.Image ||
-        input.type === TuffInputType.Html
-    )
+    const currentQueryText =
+      typeof searchResult.value?.query?.text === 'string'
+        ? searchResult.value.query.text
+        : searchVal.value
+    const currentInputs = buildQueryInputs({
+      queryText: currentQueryText,
+      allowPendingTextClipboard: isPluginFeature
+    })
     const usedFileModeAttachment =
       boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0
-    const usedClipboardAttachment = hasAttachmentInputs && !usedFileModeAttachment
+    const usedClipboardInput = currentInputs.length > 0 && !usedFileModeAttachment
 
     const serializedItem = JSON.parse(JSON.stringify(itemToExecute))
     const serializedSearchResult = searchResult.value
@@ -801,15 +716,23 @@ export function useSearch(
         boxOptions.file = { buffer: null, paths: [] }
       }
 
-      if (usedClipboardAttachment && clipboardOptions?.last) {
-        clipboardOptions.lastClearedTimestamp = clipboardOptions.last.timestamp
+      if (usedClipboardInput && clipboardOptions) {
+        if (clipboardOptions.last?.timestamp) {
+          clipboardOptions.lastClearedTimestamp = clipboardOptions.last.timestamp
+        } else if (clipboardOptions.pendingAutoFillItem?.timestamp) {
+          clipboardOptions.lastClearedTimestamp = clipboardOptions.pendingAutoFillItem.timestamp
+        }
         clipboardOptions.last = null
+        clipboardOptions.pendingAutoFillItem = null
         clipboardOptions.detectedAt = null
       } else if (isPluginFeature && clipboardOptions && appSetting.tools.autoPaste.time === 0) {
         if (clipboardOptions.last?.timestamp) {
           clipboardOptions.lastClearedTimestamp = clipboardOptions.last.timestamp
+        } else if (clipboardOptions.pendingAutoFillItem?.timestamp) {
+          clipboardOptions.lastClearedTimestamp = clipboardOptions.pendingAutoFillItem.timestamp
         }
         clipboardOptions.last = null
+        clipboardOptions.pendingAutoFillItem = null
         clipboardOptions.detectedAt = null
       }
     } catch (error) {
