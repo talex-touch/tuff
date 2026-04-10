@@ -21,6 +21,7 @@ import {
   TxTag
 } from '@talex-touch/tuffex'
 import { computed, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { PermissionList } from '~/components/permission'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -28,6 +29,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
 const transport = useTuffTransport()
 const permissionSdk = usePermissionSdk()
+const { t, locale } = useI18n()
 
 interface PermissionGrant {
   pluginId: string
@@ -93,28 +95,6 @@ const auditLogsTotal = ref(0)
 const auditLogsLoading = ref(false)
 const auditLogFilter = ref<'all' | PermissionAuditLog['action']>('all')
 
-// Permission info translations
-const permissionTranslations: Record<string, { name: string; desc: string }> = {
-  'fs.read': { name: '读取文件', desc: '读取用户文件系统中的文件' },
-  'fs.write': { name: '写入文件', desc: '创建、修改或删除用户文件' },
-  'fs.execute': { name: '执行文件', desc: '运行可执行文件或脚本' },
-  'clipboard.read': { name: '读取剪贴板', desc: '访问剪贴板中的内容' },
-  'clipboard.write': { name: '写入剪贴板', desc: '将内容复制到剪贴板' },
-  'network.local': { name: '本地网络', desc: '访问本地网络资源' },
-  'network.internet': { name: '互联网访问', desc: '发送和接收互联网请求' },
-  'network.download': { name: '下载文件', desc: '从互联网下载文件到本地' },
-  'system.shell': { name: '执行命令', desc: '运行系统命令或脚本' },
-  'system.notification': { name: '系统通知', desc: '发送系统通知' },
-  'system.tray': { name: '托盘交互', desc: '访问系统托盘功能' },
-  'intelligence.basic': { name: '基础 Intelligence', desc: '使用基础 Intelligence 能力' },
-  'intelligence.admin': { name: 'Intelligence 管理', desc: '管理高风险 Intelligence 能力' },
-  'intelligence.agents': { name: '智能体', desc: '调用智能体系统' },
-  'storage.plugin': { name: '插件存储', desc: '使用插件私有存储空间' },
-  'storage.shared': { name: '共享存储', desc: '访问跨插件共享存储' },
-  'window.create': { name: '创建窗口', desc: '创建新窗口或视图' },
-  'window.capture': { name: '屏幕截图', desc: '捕获屏幕内容' }
-}
-
 // Filtered plugins
 const filteredPlugins = computed(() => {
   let result = plugins.value
@@ -150,7 +130,7 @@ const backendUnavailable = computed(
 )
 
 const backendReason = computed(
-  () => backendState.value?.reason || 'SQLite 权限后端不可用，当前仅支持读取已加载快照。'
+  () => backendState.value?.reason || t('plugin.permissions.backendUnavailableDesc')
 )
 
 function updateBackendState(next?: PermissionBackendState | null) {
@@ -217,7 +197,7 @@ function getPermissionList(plugin: PluginPermissionInfo) {
   const unique = [...new Set(all)]
 
   return unique.map((id) => {
-    const trans = permissionTranslations[id]
+    const trans = getPermissionTranslation(id)
     const category = id.split('.')[0]
     const risk = getRisk(id)
 
@@ -231,6 +211,24 @@ function getPermissionList(plugin: PluginPermissionInfo) {
       granted: plugin.granted.includes(id)
     }
   })
+}
+
+function getPermissionTranslation(permissionId: string): { name: string; desc: string } {
+  const [category, action] = permissionId.split('.')
+  if (!category || !action) {
+    return { name: permissionId, desc: '' }
+  }
+
+  const keyBase = `plugin.permissions.registry.${category}.${action}`
+  const nameKey = `${keyBase}.name`
+  const descKey = `${keyBase}.desc`
+  const name = t(nameKey)
+  const desc = t(descKey)
+
+  return {
+    name: name === nameKey ? permissionId : name,
+    desc: desc === descKey ? '' : desc
+  }
 }
 
 function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
@@ -345,7 +343,7 @@ async function clearAuditLogs() {
 // Format timestamp
 function formatTime(timestamp: number) {
   const date = new Date(timestamp)
-  return date.toLocaleString('zh-CN', {
+  return date.toLocaleString(locale.value || 'zh-CN', {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -358,15 +356,15 @@ function formatTime(timestamp: number) {
 function getActionLabel(action: string) {
   switch (action) {
     case 'granted':
-      return '授予'
+      return t('settingPermission.audit.actions.granted')
     case 'revoked':
-      return '撤销'
+      return t('settingPermission.audit.actions.revoked')
     case 'denied':
-      return '拒绝'
+      return t('settingPermission.audit.actions.denied')
     case 'used':
-      return '使用'
+      return t('settingPermission.audit.actions.used')
     case 'blocked':
-      return '拦截'
+      return t('settingPermission.audit.actions.blocked')
     default:
       return action
   }
@@ -416,12 +414,17 @@ onMounted(() => {
 </script>
 
 <template>
-  <TuffGroupBlock name="权限中心" description="管理插件的权限授权">
+  <TuffGroupBlock
+    :name="t('settingPermission.title')"
+    :description="t('settingPermission.description')"
+  >
     <TuffBlockSlot>
       <div v-if="backendUnavailable" class="backend-warning">
         <i class="i-carbon-warning-alt-filled" />
         <div>
-          <div class="backend-warning__title">权限后端当前不可写</div>
+          <div class="backend-warning__title">
+            {{ t('plugin.permissions.backendUnavailableTitle') }}
+          </div>
           <div class="backend-warning__text">{{ backendReason }}</div>
         </div>
       </div>
@@ -429,7 +432,9 @@ onMounted(() => {
       <div v-if="mutationError" class="backend-warning backend-warning--error">
         <i class="i-carbon-error-filled" />
         <div>
-          <div class="backend-warning__title">权限变更失败</div>
+          <div class="backend-warning__title">
+            {{ t('plugin.permissions.backendMutationFailed') }}
+          </div>
           <div class="backend-warning__text">{{ mutationError }}</div>
         </div>
       </div>
@@ -438,40 +443,49 @@ onMounted(() => {
       <div class="permission-stats">
         <div class="stat-item">
           <i class="i-carbon-checkmark" />
-          <span>{{ stats.total }} 个插件</span>
+          <span>{{ t('settingPermission.stats.total', { count: stats.total }) }}</span>
         </div>
         <div v-if="stats.withMissing > 0" class="stat-item warning">
           <i class="i-carbon-warning" />
-          <span>{{ stats.withMissing }} 个缺少权限</span>
+          <span>{{ t('settingPermission.stats.withMissing', { count: stats.withMissing }) }}</span>
         </div>
         <div v-if="stats.legacy > 0" class="stat-item info">
           <i class="i-carbon-information" />
-          <span>{{ stats.legacy }} 个旧版 SDK</span>
+          <span>{{ t('settingPermission.stats.legacy', { count: stats.legacy }) }}</span>
         </div>
       </div>
 
       <!-- Filters -->
       <div class="permission-filters">
-        <TuffInput v-model="searchQuery" placeholder="搜索插件..." clearable class="search-input">
+        <TuffInput
+          v-model="searchQuery"
+          :placeholder="t('settingPermission.searchPlaceholder')"
+          clearable
+          class="search-input"
+        >
           <template #prefix>
             <i class="i-carbon-search" />
           </template>
         </TuffInput>
         <TuffSelect v-model="filterStatus" class="status-select">
-          <TuffSelectItem value="all" label="全部插件" />
-          <TuffSelectItem value="granted" label="权限完整" />
-          <TuffSelectItem value="missing" label="缺少权限" />
+          <TuffSelectItem :value="'all'" :label="t('settingPermission.filters.all')" />
+          <TuffSelectItem :value="'granted'" :label="t('settingPermission.filters.granted')" />
+          <TuffSelectItem :value="'missing'" :label="t('settingPermission.filters.missing')" />
         </TuffSelect>
         <TxButton :loading="loading" @click="loadData">
           <i class="i-carbon-renew mr-1" />
-          刷新
+          {{ t('common.refresh') }}
         </TxButton>
       </div>
 
       <!-- Plugin List -->
-      <div v-if="loading" class="loading-state">加载中...</div>
+      <div v-if="loading" class="loading-state">{{ t('common.loading') }}</div>
 
-      <TxEmpty v-else-if="filteredPlugins.length === 0" title="没有找到插件" compact />
+      <TxEmpty
+        v-else-if="filteredPlugins.length === 0"
+        :title="t('settingPermission.empty')"
+        compact
+      />
 
       <TxCollapse v-else v-model="expandedPlugins" class="plugin-list">
         <TxCollapseItem v-for="plugin in filteredPlugins" :key="plugin.id" :name="plugin.id">
@@ -493,20 +507,28 @@ onMounted(() => {
                   color="var(--tx-color-warning)"
                   size="sm"
                 >
-                  旧版 SDK
+                  {{ t('settingPermission.tags.legacy') }}
                 </TxTag>
                 <TxTag
                   v-if="plugin.missingRequired.length > 0"
                   color="var(--tx-color-danger)"
                   size="sm"
                 >
-                  缺少 {{ plugin.missingRequired.length }} 项
+                  {{
+                    t('settingPermission.tags.missing', { count: plugin.missingRequired.length })
+                  }}
                 </TxTag>
               </div>
               <div class="plugin-stats">
-                <span class="stat">必需: {{ plugin.required.length }}</span>
-                <span class="stat">可选: {{ plugin.optional.length }}</span>
-                <span class="stat">已授予: {{ plugin.granted.length }}</span>
+                <span class="stat">{{
+                  t('settingPermission.pluginStats.required', { count: plugin.required.length })
+                }}</span>
+                <span class="stat">{{
+                  t('settingPermission.pluginStats.optional', { count: plugin.optional.length })
+                }}</span>
+                <span class="stat">{{
+                  t('settingPermission.pluginStats.granted', { count: plugin.granted.length })
+                }}</span>
               </div>
             </div>
           </template>
@@ -527,7 +549,7 @@ onMounted(() => {
                 :disabled="backendUnavailable"
                 @click.stop="handleGrantAll(plugin)"
               >
-                授予全部必需权限
+                {{ t('settingPermission.actions.grantRequired') }}
               </TxButton>
               <TxButton
                 type="danger"
@@ -536,7 +558,7 @@ onMounted(() => {
                 :disabled="backendUnavailable"
                 @click.stop="handleRevokeAll(plugin.id)"
               >
-                撤销全部权限
+                {{ t('plugin.permissions.actions.revokeAll') }}
               </TxButton>
             </div>
 
@@ -553,43 +575,66 @@ onMounted(() => {
   </TuffGroupBlock>
 
   <!-- Audit Logs Section -->
-  <TuffGroupBlock name="审计日志" description="查看权限操作历史记录">
+  <TuffGroupBlock
+    :name="t('settingPermission.audit.title')"
+    :description="t('settingPermission.audit.description')"
+  >
     <TuffBlockSlot>
       <div class="audit-header">
         <TxButton @click="toggleAuditLogs">
           <i class="i-carbon-time mr-1" />
-          {{ showAuditLogs ? '收起日志' : '查看日志' }}
+          {{
+            showAuditLogs ? t('settingPermission.audit.hide') : t('settingPermission.audit.show')
+          }}
         </TxButton>
 
         <template v-if="showAuditLogs">
           <TuffSelect v-model="auditLogFilter" class="audit-filter">
-            <TuffSelectItem value="all" label="全部操作" />
-            <TuffSelectItem value="granted" label="授予" />
-            <TuffSelectItem value="revoked" label="撤销" />
-            <TuffSelectItem value="denied" label="拒绝" />
-            <TuffSelectItem value="used" label="使用" />
-            <TuffSelectItem value="blocked" label="拦截" />
+            <TuffSelectItem :value="'all'" :label="t('settingPermission.audit.filters.all')" />
+            <TuffSelectItem
+              :value="'granted'"
+              :label="t('settingPermission.audit.actions.granted')"
+            />
+            <TuffSelectItem
+              :value="'revoked'"
+              :label="t('settingPermission.audit.actions.revoked')"
+            />
+            <TuffSelectItem
+              :value="'denied'"
+              :label="t('settingPermission.audit.actions.denied')"
+            />
+            <TuffSelectItem :value="'used'" :label="t('settingPermission.audit.actions.used')" />
+            <TuffSelectItem
+              :value="'blocked'"
+              :label="t('settingPermission.audit.actions.blocked')"
+            />
           </TuffSelect>
 
           <TxButton :loading="auditLogsLoading" @click="loadAuditLogs">
             <i class="i-carbon-renew mr-1" />
-            刷新
+            {{ t('common.refresh') }}
           </TxButton>
 
           <TxButton type="danger" plain :disabled="backendUnavailable" @click="clearAuditLogs">
             <i class="i-carbon-trash-can mr-1" />
-            清空
+            {{ t('settingPermission.audit.clear') }}
           </TxButton>
         </template>
       </div>
 
       <div v-if="showAuditLogs" class="audit-content">
-        <div v-if="auditLogsLoading" class="loading-state">加载中...</div>
+        <div v-if="auditLogsLoading" class="loading-state">{{ t('common.loading') }}</div>
 
-        <TxEmpty v-else-if="auditLogs.length === 0" title="暂无操作记录" compact />
+        <TxEmpty
+          v-else-if="auditLogs.length === 0"
+          :title="t('settingPermission.audit.empty')"
+          compact
+        />
 
         <div v-else class="audit-list">
-          <div class="audit-summary">共 {{ auditLogsTotal }} 条记录</div>
+          <div class="audit-summary">
+            {{ t('settingPermission.audit.total', { count: auditLogsTotal }) }}
+          </div>
 
           <div v-for="log in auditLogs" :key="log.id" class="audit-item">
             <div class="audit-time">
@@ -601,7 +646,7 @@ onMounted(() => {
             <span class="audit-plugin">{{ log.pluginId }}</span>
             <span class="audit-arrow">→</span>
             <span class="audit-permission">{{
-              permissionTranslations[log.permissionId]?.name || log.permissionId
+              getPermissionTranslation(log.permissionId).name
             }}</span>
             <span v-if="getAuditDetails(log)" class="audit-details">
               ({{ getAuditDetails(log) }})

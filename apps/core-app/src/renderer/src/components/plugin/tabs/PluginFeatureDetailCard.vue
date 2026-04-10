@@ -143,8 +143,12 @@ function getInputTypeIcon(type: string): string {
 }
 
 function resolveInteractionFlag(value?: boolean): string {
-  if (typeof value === 'boolean') return value ? '开启' : '关闭'
-  return '默认'
+  if (typeof value === 'boolean') {
+    return value
+      ? t('plugin.features.interaction.flagEnabled')
+      : t('plugin.features.interaction.flagDisabled')
+  }
+  return t('plugin.features.interaction.flagDefault')
 }
 
 function formatJson(value: unknown): string {
@@ -156,7 +160,10 @@ function formatJson(value: unknown): string {
 }
 
 function getCommandTitle(command: IFeatureCommand, index: number): string {
-  return `命令 ${index + 1} · ${command.type}`
+  return t('plugin.features.data.commandTitle', {
+    index: index + 1,
+    type: command.type
+  })
 }
 
 function handleCopy(value?: string | null): void {
@@ -276,7 +283,7 @@ function handleClose(): void {
                     </div>
                     <div v-if="feature.acceptedInputTypes" class="flex justify-between items-start">
                       <span class="text-sm text-[var(--tx-text-color-regular)]">
-                        支持的输入类型
+                        {{ t('plugin.features.drawer.acceptedInputs') }}
                       </span>
                       <div class="flex flex-wrap gap-1 justify-end max-w-[60%]">
                         <span
@@ -291,18 +298,20 @@ function handleClose(): void {
                     </div>
                     <div v-else class="flex justify-between items-center">
                       <span class="text-sm text-[var(--tx-text-color-regular)]">
-                        支持的输入类型
+                        {{ t('plugin.features.drawer.acceptedInputs') }}
                       </span>
                       <span class="text-xs text-[var(--tx-text-color-secondary)]">
                         <i class="i-ri-text mr-1" />
-                        text (默认)
+                        {{ t('plugin.features.drawer.defaultInput') }}
                       </span>
                     </div>
                     <div
                       v-if="feature.priority !== undefined"
                       class="flex justify-between items-center"
                     >
-                      <span class="text-sm text-[var(--tx-text-color-regular)]"> 优先级 </span>
+                      <span class="text-sm text-[var(--tx-text-color-regular)]">
+                        {{ t('plugin.features.drawer.priority') }}
+                      </span>
                       <span class="text-sm font-medium">{{ feature.priority }}</span>
                     </div>
                   </div>
@@ -312,14 +321,14 @@ function handleClose(): void {
           </TxTabItem>
 
           <TxTabItem name="data">
-            <template #name>数据</template>
+            <template #name>{{ t('plugin.features.data.tab') }}</template>
             <TouchScroll class="PluginFeature-TabScroll" no-padding>
               <div class="PluginFeature-TabScrollContent">
                 <div class="space-y-4">
                   <TuffGroupBlock
                     class="PluginFeature-Data"
-                    name="功能"
-                    description="功能定义"
+                    :name="t('plugin.features.data.featureTitle')"
+                    :description="t('plugin.features.data.featureDesc')"
                     :default-expand="false"
                   >
                     <template #icon>
@@ -340,7 +349,7 @@ function handleClose(): void {
                     :key="`${command.type}-${index}`"
                     class="PluginFeature-Data"
                     :name="getCommandTitle(command, index)"
-                    description="命令定义"
+                    :description="t('plugin.features.data.commandDesc')"
                     :default-expand="false"
                   >
                     <template #icon>
@@ -360,7 +369,7 @@ function handleClose(): void {
                     v-if="!feature.commands || feature.commands.length === 0"
                     class="text-sm text-[var(--tx-text-color-secondary)] px-2"
                   >
-                    暂无命令数据
+                    {{ t('plugin.features.data.empty') }}
                   </div>
                 </div>
               </div>
@@ -368,28 +377,35 @@ function handleClose(): void {
           </TxTabItem>
 
           <TxTabItem v-if="feature?.interaction" name="interaction">
-            <template #name>Interaction</template>
+            <template #name>{{ t('plugin.features.interaction.tab') }}</template>
             <TouchScroll class="PluginFeature-TabScroll" no-padding>
               <div class="PluginFeature-TabScrollContent">
                 <div class="space-y-4">
-                  <TuffGroupBlock class="PluginFeature-Interaction" name="Interaction">
+                  <TuffGroupBlock
+                    class="PluginFeature-Interaction"
+                    :name="t('plugin.features.interaction.title')"
+                  >
                     <template #icon>
                       <i class="i-ri-exchange-line text-[var(--tx-color-primary)]" />
                     </template>
                     <div class="p-4 space-y-3">
                       <div class="flex justify-between items-center">
-                        <span class="text-sm text-[var(--tx-text-color-regular)]"> 类型 </span>
+                        <span class="text-sm text-[var(--tx-text-color-regular)]">
+                          {{ t('plugin.features.interaction.type') }}
+                        </span>
                         <span class="text-sm font-medium">{{ feature.interaction?.type }}</span>
                       </div>
                       <div class="flex justify-between items-center">
-                        <span class="text-sm text-[var(--tx-text-color-regular)]"> 路径 </span>
+                        <span class="text-sm text-[var(--tx-text-color-regular)]">
+                          {{ t('plugin.features.interaction.path') }}
+                        </span>
                         <code class="text-sm bg-[var(--tx-fill-color)] px-2 py-1 rounded">{{
                           feature.interaction?.path || '-'
                         }}</code>
                       </div>
                       <div class="flex justify-between items-center">
                         <span class="text-sm text-[var(--tx-text-color-regular)]">
-                          显示输入框
+                          {{ t('plugin.features.interaction.showInput') }}
                         </span>
                         <span class="text-sm font-medium">{{
                           resolveInteractionFlag(feature.interaction?.showInput)
@@ -397,7 +413,7 @@ function handleClose(): void {
                       </div>
                       <div class="flex justify-between items-center">
                         <span class="text-sm text-[var(--tx-text-color-regular)]">
-                          自动监听输入
+                          {{ t('plugin.features.interaction.allowInput') }}
                         </span>
                         <span class="text-sm font-medium">{{
                           resolveInteractionFlag(feature.interaction?.allowInput)
@@ -545,8 +561,8 @@ function handleClose(): void {
                   <TuffGroupBlock
                     v-if="widgetPreviewOptions.length"
                     class="PluginFeature-WidgetPreview"
-                    name="Widget 预览"
-                    description="滚动到最底部预览"
+                    :name="t('plugin.features.widget.preview.title')"
+                    :description="t('plugin.features.widget.preview.description')"
                   >
                     <template #icon>
                       <i class="i-ri-eye-line text-[var(--tx-color-primary)]" />
@@ -554,12 +570,12 @@ function handleClose(): void {
                     <div class="p-4">
                       <div class="PluginFeature-PreviewControls">
                         <span class="text-xs text-[var(--tx-text-color-secondary)]">
-                          选择预览
+                          {{ t('plugin.features.widget.preview.selectLabel') }}
                         </span>
                         <TuffSelect
                           v-model="currentPreviewWidgetId"
                           class="PluginFeature-PreviewSelect"
-                          placeholder="选择 widget"
+                          :placeholder="t('plugin.features.widget.preview.selectPlaceholder')"
                           :disabled="isOperationDisabled"
                         >
                           <TuffSelectItem
@@ -581,7 +597,8 @@ function handleClose(): void {
                               (!previewWidgetReady && previewWidgetIssues.length)
                           }"
                         >
-                          状态：{{ previewWidgetStatus }}
+                          {{ t('plugin.features.widget.preview.statusLabel') }}:
+                          {{ previewWidgetStatus }}
                         </span>
                         <div class="PluginFeature-PreviewActions">
                           <TxButton
@@ -591,7 +608,7 @@ function handleClose(): void {
                             :disabled="isOperationDisabled || !previewWidgetId"
                             @click="handleReloadWidget"
                           >
-                            重新加载当前
+                            {{ t('plugin.features.widget.preview.reloadCurrent') }}
                           </TxButton>
                           <TxButton
                             size="sm"
@@ -599,16 +616,18 @@ function handleClose(): void {
                             :disabled="isOperationDisabled || !widgetPreviewOptions.length"
                             @click="handleReloadAllWidgets"
                           >
-                            重新加载全部
+                            {{ t('plugin.features.widget.preview.reloadAll') }}
                           </TxButton>
                         </div>
                       </div>
                       <div class="PluginFeature-PreviewSize">
-                        <span class="text-xs text-[var(--tx-text-color-secondary)]">预览尺寸</span>
+                        <span class="text-xs text-[var(--tx-text-color-secondary)]">{{
+                          t('plugin.features.widget.preview.sizeLabel')
+                        }}</span>
                         <TuffSelect
                           v-model="currentPreviewSizePresetValue"
                           class="PluginFeature-PreviewSizeSelect"
-                          placeholder="选择尺寸"
+                          :placeholder="t('plugin.features.widget.preview.sizePlaceholder')"
                           :disabled="isOperationDisabled || !previewWidgetId"
                         >
                           <TuffSelectItem
@@ -627,9 +646,11 @@ function handleClose(): void {
                           :disabled="isOperationDisabled || !previewWidgetId"
                           @click="handleResetPreviewFrameSize"
                         >
-                          恢复默认
+                          {{ t('plugin.features.widget.preview.reset') }}
                         </TxButton>
-                        <span class="PluginFeature-PreviewSizeHint">拖拽右下角可自定义</span>
+                        <span class="PluginFeature-PreviewSizeHint">{{
+                          t('plugin.features.widget.preview.resizeHint')
+                        }}</span>
                       </div>
                       <div v-if="previewWidgetHint" class="PluginFeature-PreviewHint">
                         {{ previewWidgetHint }}
@@ -649,14 +670,18 @@ function handleClose(): void {
                           v-model="currentMockPayloadRaw"
                           type="textarea"
                           :rows="4"
-                          placeholder="输入 JSON payload"
+                          :placeholder="t('plugin.features.widget.preview.mockPlaceholder')"
                           :disabled="isOperationDisabled || !currentMockPayloadEnabled"
                         />
                         <div
                           v-if="currentMockPayloadEnabled && mockPayloadError"
                           class="PluginFeature-PreviewMockError"
                         >
-                          JSON 解析失败：{{ mockPayloadError }}
+                          {{
+                            t('plugin.features.widget.preview.mockError', {
+                              error: mockPayloadError
+                            })
+                          }}
                         </div>
                       </div>
                       <div
@@ -709,7 +734,7 @@ function handleClose(): void {
                             @render-error="handleRenderError"
                           />
                           <div v-else class="text-sm text-[var(--tx-text-color-secondary)]">
-                            预览需要有效的 widgetId。
+                            {{ t('plugin.features.widget.preview.missingWidgetId') }}
                           </div>
                           <TxButton
                             variant="ghost"
@@ -717,7 +742,7 @@ function handleClose(): void {
                             :disabled="isOperationDisabled || !previewWidgetId"
                             class="PluginFeature-PreviewResizeHandle"
                             :class="{ 'is-disabled': isOperationDisabled || !previewWidgetId }"
-                            aria-label="Resize preview"
+                            :aria-label="t('plugin.features.widget.preview.resizeAriaLabel')"
                             @pointerdown="handlePreviewResizeStart"
                           />
                         </div>
@@ -736,12 +761,14 @@ function handleClose(): void {
       <div class="PluginFeature-DevWarningInfo">
         <i class="i-ri-alert-fill PluginFeature-DevWarningIcon" />
         <div class="PluginFeature-DevWarningText">
-          <div class="PluginFeature-DevWarningTitle">Dev Server 已断开</div>
+          <div class="PluginFeature-DevWarningTitle">
+            {{ t('plugin.features.devDisconnectedTitle') }}
+          </div>
           <div class="PluginFeature-DevWarningDesc">
             {{ devDisconnectMessage }}
           </div>
           <div v-if="devDisconnectReason" class="PluginFeature-DevWarningReason">
-            原因：{{ devDisconnectReason }}
+            {{ t('plugin.features.devDisconnectedReason', { reason: devDisconnectReason }) }}
           </div>
           <div v-if="devDisconnectSuggestion" class="PluginFeature-DevWarningSuggestion">
             {{ devDisconnectSuggestion }}
