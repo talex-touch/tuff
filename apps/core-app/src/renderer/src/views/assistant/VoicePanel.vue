@@ -2,6 +2,7 @@
 import type { AssistantRuntimeConfig } from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import { useI18n } from 'vue-i18n'
 
 type SpeechRecognitionLike = {
   lang: string
@@ -23,6 +24,7 @@ type SpeechRecognitionLike = {
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike
 
 const transport = useTuffTransport()
+const { t } = useI18n()
 const runtimeConfig = ref<AssistantRuntimeConfig>({
   enabled: false,
   language: 'zh-CN',
@@ -104,7 +106,7 @@ function startRecognition(): void {
 
   const SpeechRecognitionCtor = resolveSpeechRecognitionCtor()
   if (!SpeechRecognitionCtor) {
-    errorMessage.value = '当前环境不支持语音识别'
+    errorMessage.value = t('assistant.voicePanel.unsupported')
     listening.value = false
     return
   }
@@ -121,12 +123,12 @@ function startRecognition(): void {
   instance.onerror = (event) => {
     const errorType = String(event?.error || 'unknown')
     if (errorType === 'not-allowed' || errorType === 'service-not-allowed') {
-      errorMessage.value = '麦克风权限未授权'
+      errorMessage.value = t('assistant.voicePanel.permissionDenied')
       keepListening = false
       stopRecognition()
       return
     }
-    errorMessage.value = `语音识别异常: ${errorType}`
+    errorMessage.value = t('assistant.voicePanel.recognitionError', { error: errorType })
   }
   instance.onresult = (event) => {
     const finals: string[] = []
@@ -177,7 +179,7 @@ async function handlePanelOpened(payload?: { source?: string }): Promise<void> {
 async function submitText(): Promise<void> {
   const content = mergedText.value.trim()
   if (!content) {
-    errorMessage.value = '请先说出要执行的内容'
+    errorMessage.value = t('assistant.voicePanel.emptyInput')
     return
   }
 
@@ -188,7 +190,7 @@ async function submitText(): Promise<void> {
       source: 'voice'
     })
     if (!response?.accepted) {
-      errorMessage.value = '发送失败，请重试'
+      errorMessage.value = t('assistant.voicePanel.submitFailed')
       return
     }
     keepListening = false
@@ -230,18 +232,22 @@ onBeforeUnmount(() => {
         <div class="title-wrap">
           <p class="title">{{ runtimeConfig.assistantName }}</p>
           <p class="subtitle">
-            {{ listening ? '正在聆听...' : '等待语音输入' }}
+            {{
+              listening ? t('assistant.voicePanel.listening') : t('assistant.voicePanel.waiting')
+            }}
             <span v-if="sourceText"> · {{ sourceText }}</span>
           </p>
         </div>
-        <button class="close-btn" type="button" @click="closePanel">关闭</button>
+        <button class="close-btn" type="button" @click="closePanel">
+          {{ t('assistant.voicePanel.close') }}
+        </button>
       </header>
 
       <main class="voice-panel-body">
         <textarea
           v-model="inputText"
           class="input-area"
-          placeholder="说出或输入你要执行的内容，例如：帮我搜索最近的会议记录"
+          :placeholder="t('assistant.voicePanel.placeholder')"
         />
         <p v-if="interimText" class="interim-text">{{ interimText }}</p>
         <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
@@ -249,10 +255,18 @@ onBeforeUnmount(() => {
 
       <footer class="voice-panel-footer">
         <button class="secondary-btn" type="button" @click="startRecognition">
-          {{ listening ? '监听中' : '开始监听' }}
+          {{
+            listening
+              ? t('assistant.voicePanel.listeningAction')
+              : t('assistant.voicePanel.startListening')
+          }}
         </button>
         <button class="primary-btn" type="button" :disabled="submitting" @click="submitText">
-          {{ submitting ? '发送中...' : '发送到 CoreBox' }}
+          {{
+            submitting
+              ? t('assistant.voicePanel.submitting')
+              : t('assistant.voicePanel.sendToCoreBox')
+          }}
         </button>
       </footer>
     </div>

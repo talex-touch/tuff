@@ -124,21 +124,30 @@ const providerOptions = computed(() =>
   Object.values(PluginProviderType).filter((type) => type !== PluginProviderType.DEV)
 )
 
-const providerLabels: Record<PluginProviderType, string> = {
-  [PluginProviderType.GITHUB]: 'GitHub',
-  [PluginProviderType.NPM]: 'NPM',
-  [PluginProviderType.TPEX]: 'TPEX',
-  [PluginProviderType.FILE]: '本地文件',
-  [PluginProviderType.DEV]: '开发'
+function getProviderLabel(type: PluginProviderType): string {
+  switch (type) {
+    case PluginProviderType.GITHUB:
+      return 'GitHub'
+    case PluginProviderType.NPM:
+      return 'NPM'
+    case PluginProviderType.TPEX:
+      return 'TPEX'
+    case PluginProviderType.FILE:
+      return t('plugin.new.provider.file')
+    case PluginProviderType.DEV:
+      return t('plugin.new.provider.dev')
+    default:
+      return type
+  }
 }
 
 const installPreview = computed(() => {
   if (!installState.manifest) return []
   const manifest = installState.manifest
   const lines: string[] = []
-  if (manifest.name) lines.push(`名称: ${manifest.name}`)
-  if (manifest.version) lines.push(`版本: ${manifest.version}`)
-  if (manifest.author) lines.push(`作者: ${manifest.author}`)
+  if (manifest.name) lines.push(t('plugin.new.preview.name', { value: manifest.name }))
+  if (manifest.version) lines.push(t('plugin.new.preview.version', { value: manifest.version }))
+  if (manifest.author) lines.push(t('plugin.new.preview.author', { value: manifest.author }))
   return lines
 })
 
@@ -232,7 +241,7 @@ async function installPluginFromSource(): Promise<void> {
 
   const trimmedSource = installState.source.trim()
   if (!trimmedSource) {
-    await forTouchTip('Install Plugin', '请先输入插件来源地址，例如 GitHub 仓库或 .tpex 链接。')
+    await forTouchTip(t('plugin.new.install.tipTitle'), t('plugin.new.install.emptySourceMessage'))
     return
   }
 
@@ -242,7 +251,7 @@ async function installPluginFromSource(): Promise<void> {
       metadata = JSON.parse(installState.metadataText)
     } catch (error) {
       installState.status = 'error'
-      installState.message = '元数据需要是合法的 JSON 字符串。'
+      installState.message = t('plugin.new.install.invalidMetadata')
       return
     }
   }
@@ -279,19 +288,20 @@ async function installPluginFromSource(): Promise<void> {
 
     if (result?.status === 'success') {
       installState.status = 'success'
-      installState.message = '插件安装成功，可在列表中查看。'
+      installState.message = t('plugin.new.install.successMessage')
       installState.manifest = result.manifest as IManifest | undefined
       installState.provider = result.provider as PluginProviderType
       installState.official = Boolean(result.official)
-      await forTouchTip('插件安装', '插件已成功安装。')
+      await forTouchTip(t('plugin.new.install.successTitle'), t('plugin.new.install.successTip'))
     } else {
       installState.status = 'error'
-      installState.message = result?.message || '插件安装失败，请检查来源是否可用。'
+      installState.message = result?.message || t('plugin.new.install.errorMessage')
     }
   } catch (error: unknown) {
     console.error('[PluginNew] Failed to install plugin:', error)
     installState.status = 'error'
-    installState.message = error instanceof Error ? error.message : '插件安装遇到异常，请稍后重试。'
+    installState.message =
+      error instanceof Error ? error.message : t('plugin.new.install.unexpectedError')
   } finally {
     installState.installing = false
   }
@@ -383,7 +393,7 @@ async function handleInstallDegit(): Promise<void> {
       <div class="PluginNew-Header">
         <div class="PluginNew-HeaderRow">
           <div i-ri-arrow-left-s-line class="PluginNew-Back" @click="emits('close')" />
-          <p class="PluginNew-Title">Plugin Workspace</p>
+          <p class="PluginNew-Title">{{ t('plugin.new.header.title') }}</p>
           <div class="PluginNew-TabGroup">
             <TxButton
               variant="flat"
@@ -392,7 +402,7 @@ async function handleInstallDegit(): Promise<void> {
               @click="activeTab = 'install'"
             >
               <i class="i-ri-download-cloud-2-line" />
-              <span>Install</span>
+              <span>{{ t('plugin.new.header.installTab') }}</span>
             </TxButton>
             <TxButton
               variant="flat"
@@ -401,62 +411,62 @@ async function handleInstallDegit(): Promise<void> {
               @click="activeTab = 'create'"
             >
               <i class="i-ri-flask-line" />
-              <span>Develop</span>
+              <span>{{ t('plugin.new.header.createTab') }}</span>
             </TxButton>
           </div>
         </div>
         <span class="PluginNew-Subtitle">
           {{
             activeTab === 'install'
-              ? '从 GitHub、NPM、TPEX 或本地文件安装 Touch 插件。'
-              : '创建新的插件模板，便于本地开发和调试。'
+              ? t('plugin.new.header.installSubtitle')
+              : t('plugin.new.header.createSubtitle')
           }}
         </span>
       </div>
     </template>
 
     <section v-if="activeTab === 'install'" class="PluginNew-Install">
-      <BlockTemplate title="来源信息">
+      <BlockTemplate :title="t('plugin.new.install.sourceBlockTitle')">
         <div class="InstallForm-Line">
-          <label>来源地址</label>
+          <label>{{ t('plugin.new.install.sourceLabel') }}</label>
           <FlatInput
             v-model="installState.source"
-            placeholder="talex-touch/example-plugin 或 https://github.com/..."
+            :placeholder="t('plugin.new.install.sourcePlaceholder')"
             w="96!"
           />
         </div>
         <div class="InstallForm-Line">
-          <label>来源类型提示</label>
+          <label>{{ t('plugin.new.install.sourceTypeLabel') }}</label>
           <TuffSelect
             v-model="installState.hintType"
             clearable
             class="InstallSelect"
-            placeholder="自动识别"
+            :placeholder="t('plugin.new.install.autoDetect')"
           >
             <TuffSelectItem
               v-for="option in providerOptions"
               :key="option"
-              :label="providerLabels[option]"
+              :label="getProviderLabel(option)"
               :value="option"
             />
           </TuffSelect>
         </div>
-        <p class="InstallHint">支持 GitHub 仓库 / release、NPM 包、.tpex 包或本地压缩包路径。</p>
+        <p class="InstallHint">{{ t('plugin.new.install.sourceHint') }}</p>
       </BlockTemplate>
 
-      <BlockTemplate title="附加元数据 (可选)">
+      <BlockTemplate :title="t('plugin.new.install.metadataBlockTitle')">
         <div class="InstallForm-Line">
           <label>JSON</label>
           <FlatInput
             v-model="installState.metadataText"
             :area="true"
-            placeholder='{ "tag": "v1.0.0" }'
+            :placeholder="t('plugin.new.install.metadataPlaceholder')"
           />
         </div>
-        <p class="InstallHint">用于指定 tag / branch 等额外信息，留空则自动处理。</p>
+        <p class="InstallHint">{{ t('plugin.new.install.metadataHint') }}</p>
       </BlockTemplate>
 
-      <BlockTemplate title="执行">
+      <BlockTemplate :title="t('plugin.new.install.actionBlockTitle')">
         <div
           v-if="installState.status !== 'idle'"
           class="InstallStatus"
@@ -472,11 +482,14 @@ async function handleInstallDegit(): Promise<void> {
           <div>
             <p>{{ installState.message }}</p>
             <p v-if="installState.provider">
-              来源类型：
+              {{ t('plugin.new.install.sourceTypeResult') }}:
               {{
-                providerLabels[installState.provider as PluginProviderType] || installState.provider
+                getProviderLabel(installState.provider as PluginProviderType) ||
+                installState.provider
               }}
-              <span v-if="installState.official" class="InstallStatus-Official">官方</span>
+              <span v-if="installState.official" class="InstallStatus-Official">{{
+                t('store.officialBadge')
+              }}</span>
             </p>
             <ul v-if="installPreview.length" class="InstallManifest">
               <li v-for="line in installPreview" :key="line">
