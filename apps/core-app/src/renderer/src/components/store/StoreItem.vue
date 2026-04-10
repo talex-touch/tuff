@@ -1,17 +1,20 @@
 <script setup name="StoreItem" lang="ts">
 import type { StorePluginListItem } from '~/composables/store/useStoreData'
+import { useI18n } from 'vue-i18n'
+
 interface StoreItemProps {
   item: StorePluginListItem
 }
 
 defineProps<StoreItemProps>()
+const { t } = useI18n()
 </script>
 
 <template>
   <li class="StoreItem-Container fake-background">
     <div v-if="typeof item === 'object'">
-      <h3>{{ item.name || 'Unnamed Item' }}</h3>
-      <p>{{ item.description || 'No description available' }}</p>
+      <h3>{{ item.name || t('store.unnamedItem') }}</h3>
+      <p>{{ item.description || t('store.noDescription') }}</p>
     </div>
     <div v-else>
       {{ item }}
