@@ -501,7 +501,9 @@
   "store": {
     "title": "Plugin Store",
     "subtitle": "Discover amazing plugins for your workflow",
-    "searchPlaceholder": "Search plugins...",
+    "searchPlaceholder": "Search plugins",
+    "unnamedItem": "Unnamed plugin",
+    "noDescription": "No description yet",
     "sources": "sources",
     "loading": "Loading official plugins...",
     "refresh": "Refresh",
@@ -515,10 +517,10 @@
     "officialBadge": "Official",
     "lastUpdated": "Last updated {time}",
     "cliGroupTitle": "Tuff CLI",
-    "cliGroupDesc": "Tuff CLI is detected on this machine. CLI store integration is under active development.",
+    "cliGroupDesc": "Tuff CLI is detected on this machine. Beta preview capabilities are available now.",
     "cliBetaTitle": "Beta Feature",
-    "cliBetaDesc": "The CLI store entry is now reserved. Installables and command integrations will arrive in upcoming releases.",
-    "cliBetaTag": "In Development",
+    "cliBetaDesc": "The CLI store entry is now in beta preview. Some capabilities are still being refined.",
+    "cliBetaTag": "Beta Preview",
     "docsGroupTitle": "Platform Capability Docs",
     "docsGroupDesc": "Browse platform capabilities and developer references",
     "docsLinkTitle": "Platform Capabilities SDK",
@@ -640,7 +642,21 @@
     "plugins": "plugins",
     "noProviderData": "No provider data available"
   },
+  "auth": {
+    "loginResumePrompt": {
+      "title": "Resume sign-in",
+      "description": "The previous sign-in flow did not finish. Retry it, or paste a login token to resume.",
+      "placeholder": "Paste login token (optional)",
+      "cancel": "Cancel",
+      "retry": "Retry",
+      "manualSubmit": "Resume with token"
+    }
+  },
   "plugin": {
+    "add": "Add Plugin",
+    "running": "Running",
+    "all": "All",
+    "searchPlaceholder": "Search plugins",
     "opening": "Opening...",
     "openFolder": "Open Folder",
     "emptyState": {
@@ -965,6 +981,9 @@
         "commandsCount": "Commands Count",
         "featureType": "Feature Type",
         "standardType": "Standard",
+        "acceptedInputs": "Accepted input types",
+        "defaultInput": "text (default)",
+        "priority": "Priority",
         "commandsTitle": "Commands ({count})",
         "dataTitle": "Data",
         "commandJsonTitle": "Command JSON",
@@ -975,6 +994,27 @@
         "rawData": "Raw Feature Data",
         "viewFullJson": "View Complete Feature JSON"
       },
+      "data": {
+        "tab": "Data",
+        "featureTitle": "Feature",
+        "featureDesc": "Feature definition",
+        "commandTitle": "Command {index} · {type}",
+        "commandDesc": "Command definition",
+        "empty": "No command data yet"
+      },
+      "interaction": {
+        "tab": "Interaction",
+        "title": "Interaction",
+        "type": "Type",
+        "path": "Path",
+        "showInput": "Show input field",
+        "allowInput": "Auto-listen for input",
+        "flagEnabled": "Enabled",
+        "flagDisabled": "Disabled",
+        "flagDefault": "Default"
+      },
+      "devDisconnectedTitle": "Dev server disconnected",
+      "devDisconnectedReason": "Reason: {reason}",
       "widget": {
         "title": "Widget",
         "widgetId": "Widget ID",
@@ -1016,7 +1056,63 @@
         "invalidExtension": "Unsupported file extension",
         "saveSuccess": "Widget saved",
         "saveFailed": "Failed to save widget",
-        "savedButManifestFailed": "Source saved, but manifest update failed"
+        "savedButManifestFailed": "Source saved, but manifest update failed",
+        "preview": {
+          "title": "Widget Preview",
+          "description": "Preview the current widget output",
+          "selectLabel": "Preview target",
+          "selectPlaceholder": "Select widget",
+          "statusLabel": "Status",
+          "reloadCurrent": "Reload current",
+          "reloadAll": "Reload all",
+          "sizeLabel": "Preview size",
+          "sizePlaceholder": "Choose a size",
+          "reset": "Reset",
+          "resizeHint": "Drag the bottom-right corner to customize",
+          "mockPlaceholder": "Enter JSON payload",
+          "mockError": "Failed to parse JSON: {error}",
+          "missingWidgetId": "A valid widgetId is required for preview.",
+          "resizeAriaLabel": "Resize preview"
+        }
+      }
+    },
+    "new": {
+      "header": {
+        "title": "Plugin Workspace",
+        "installTab": "Install",
+        "createTab": "Develop",
+        "installSubtitle": "Install Tuff plugins from GitHub, NPM, TPEX, or a local file.",
+        "createSubtitle": "Create a new plugin template for local development and debugging."
+      },
+      "provider": {
+        "file": "Local File",
+        "dev": "Development"
+      },
+      "preview": {
+        "name": "Name: {value}",
+        "version": "Version: {value}",
+        "author": "Author: {value}"
+      },
+      "install": {
+        "tipTitle": "Install Plugin",
+        "emptySourceMessage": "Enter a plugin source first, such as a GitHub repository or .tpex link.",
+        "invalidMetadata": "Metadata must be a valid JSON string.",
+        "successTitle": "Plugin Install",
+        "successTip": "The plugin was installed successfully.",
+        "successMessage": "The plugin was installed successfully and is now available in the list.",
+        "errorMessage": "Plugin installation failed. Check whether the source is reachable.",
+        "unexpectedError": "Plugin installation hit an unexpected error. Please retry later.",
+        "sourceBlockTitle": "Source",
+        "sourceLabel": "Source address",
+        "sourcePlaceholder": "talex-touch/example-plugin or https://github.com/...",
+        "sourceTypeLabel": "Source type hint",
+        "autoDetect": "Auto detect",
+        "sourceHint": "Supports GitHub repository/release, NPM package, .tpex package, or local archive paths.",
+        "metadataBlockTitle": "Extra metadata (optional)",
+        "metadataPlaceholder": "{ \"tag\": \"v1.0.0\" }",
+        "metadataHint": "Use this for tag / branch and other extra info. Leave empty for automatic handling.",
+        "actionBlockTitle": "Action",
+        "sourceTypeResult": "Source type"
       }
     },
     "logs": {
@@ -2383,6 +2479,70 @@
     "syncDeviceListMore": " and others",
     "syncDeviceUnknown": "Unknown device"
   },
+  "assistant": {
+    "voicePanel": {
+      "unsupported": "Speech recognition is not supported in this environment",
+      "permissionDenied": "Microphone permission was not granted",
+      "recognitionError": "Speech recognition error: {error}",
+      "emptyInput": "Speak or enter something to execute first",
+      "submitFailed": "Send failed. Please try again.",
+      "listening": "Listening...",
+      "waiting": "Waiting for voice input",
+      "close": "Close",
+      "placeholder": "Speak or type what you want to do, for example: search my latest meeting notes",
+      "startListening": "Start listening",
+      "listeningAction": "Listening",
+      "submitting": "Sending...",
+      "sendToCoreBox": "Send to CoreBox"
+    }
+  },
+  "settingPermission": {
+    "title": "Permission Center",
+    "description": "Manage plugin permission grants",
+    "searchPlaceholder": "Search plugins",
+    "empty": "No plugins found",
+    "stats": {
+      "total": "{count} plugin(s)",
+      "withMissing": "{count} missing permission(s)",
+      "legacy": "{count} without enforced permission checks"
+    },
+    "filters": {
+      "all": "All plugins",
+      "granted": "Fully granted",
+      "missing": "Missing permissions"
+    },
+    "tags": {
+      "legacy": "Legacy SDK",
+      "missing": "Missing {count}"
+    },
+    "pluginStats": {
+      "required": "Required: {count}",
+      "optional": "Optional: {count}",
+      "granted": "Granted: {count}"
+    },
+    "actions": {
+      "grantRequired": "Grant all required"
+    },
+    "audit": {
+      "title": "Audit Log",
+      "description": "View permission activity history",
+      "show": "Show logs",
+      "hide": "Hide logs",
+      "clear": "Clear",
+      "empty": "No activity recorded",
+      "total": "{count} record(s)",
+      "filters": {
+        "all": "All actions"
+      },
+      "actions": {
+        "granted": "Granted",
+        "revoked": "Revoked",
+        "denied": "Denied",
+        "used": "Used",
+        "blocked": "Blocked"
+      }
+    }
+  },
   "timeUnits": {
     "seconds": "s",
     "minutes": "min",
@@ -2724,7 +2884,13 @@
     "noTargets": "No targets available",
     "navigate": "Navigate",
     "confirm": "Confirm",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "consentTitle": "Confirm transfer",
+    "consentDesc": "Allow {source} to send content to {target}?",
+    "defaultTarget": "default target",
+    "consentDeny": "Deny",
+    "consentOnce": "Allow once",
+    "consentAlways": "Always allow"
   },
   "corebox": {
     "pinned": "Pinned",
@@ -2750,9 +2916,20 @@
       "empty": "No available features",
       "loadFailed": "Failed to load OmniPanel features. Please retry later.",
       "executeFailed": "Execution failed. Please retry later.",
+      "selectionCount": "{count} characters selected",
+      "selectionPreview": "Selected: {preview}",
+      "selectionRequired": "This feature requires selected text before it can run.",
+      "coreboxUnavailable": "CoreBox is unavailable right now. Please retry shortly.",
       "toggleFailed": "Failed to update feature status.",
       "reorderFailed": "Failed to reorder features.",
       "featureUnavailable": "This feature is currently unavailable. Check plugin status."
+    },
+    "meta": {
+      "defaultGroup": "Actions",
+      "searchPlaceholder": "Search actions...",
+      "select": "Select",
+      "execute": "Execute",
+      "close": "Close"
     },
     "actions": {
       "title": "Actions",

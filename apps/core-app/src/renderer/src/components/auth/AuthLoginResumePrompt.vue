@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { TModal, TuffInput, TxButton } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 type PromptAction =
   | { action: 'manual'; token: string }
@@ -13,6 +14,7 @@ const emit = defineEmits<{
 const visible = ref(true)
 const tokenInput = ref('')
 const trimmedToken = computed(() => tokenInput.value.trim())
+const { t } = useI18n()
 
 function closeWithAction(payload: PromptAction) {
   visible.value = false
@@ -30,24 +32,33 @@ function handleClose() {
 </script>
 
 <template>
-  <TModal v-model="visible" title="登录确认" width="560px" @close="handleClose">
+  <TModal
+    v-model="visible"
+    :title="t('auth.loginResumePrompt.title')"
+    width="560px"
+    @close="handleClose"
+  >
     <div class="AuthLoginResumePrompt">
       <p class="AuthLoginResumePrompt-Description">
-        检测到你已返回应用，但还未拿到登录凭据。你可以等待自动回传，或手动粘贴 token。
+        {{ t('auth.loginResumePrompt.description') }}
       </p>
       <TuffInput
         v-model="tokenInput"
         type="textarea"
         :rows="3"
-        placeholder="粘贴登录 token（可选）"
+        :placeholder="t('auth.loginResumePrompt.placeholder')"
       />
     </div>
 
     <template #footer>
-      <TxButton variant="ghost" @click="closeWithAction({ action: 'cancel' })">取消登录</TxButton>
-      <TxButton variant="flat" @click="closeWithAction({ action: 'retry' })">重新获取</TxButton>
+      <TxButton variant="ghost" @click="closeWithAction({ action: 'cancel' })">
+        {{ t('auth.loginResumePrompt.cancel') }}
+      </TxButton>
+      <TxButton variant="flat" @click="closeWithAction({ action: 'retry' })">
+        {{ t('auth.loginResumePrompt.retry') }}
+      </TxButton>
       <TxButton variant="primary" :disabled="!trimmedToken" @click="handleManualSubmit">
-        手动填入 token
+        {{ t('auth.loginResumePrompt.manualSubmit') }}
       </TxButton>
     </template>
   </TModal>

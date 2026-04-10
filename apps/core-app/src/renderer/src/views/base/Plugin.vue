@@ -102,7 +102,7 @@ async function handleOpenPluginFolder(): Promise<void> {
     v-model="searchQuery"
     class="plugin-shell flex-1"
     search-id="plugin-search"
-    :search-placeholder="t('plugin.searchPlaceholder', 'Search plugins...')"
+    :search-placeholder="t('plugin.searchPlaceholder')"
   >
     <!-- Plugin List -->
     <PluginListModule
@@ -111,9 +111,7 @@ async function handleOpenPluginFolder(): Promise<void> {
       :plugins="filteredRunningPlugins"
       @update:model-value="handleSelectPlugin"
     >
-      <template #name>
-        {{ t('plugin.running', 'Running') }}
-      </template>
+      <template #name>{{ t('plugin.running') }}</template>
     </PluginListModule>
 
     <PluginListModule
@@ -122,9 +120,7 @@ async function handleOpenPluginFolder(): Promise<void> {
       :plugins="filteredAllPlugins"
       @update:model-value="handleSelectPlugin"
     >
-      <template #name>
-        {{ t('plugin.all', 'All') }}
-      </template>
+      <template #name>{{ t('plugin.all') }}</template>
     </PluginListModule>
 
     <!-- Footer with actions -->
@@ -132,7 +128,7 @@ async function handleOpenPluginFolder(): Promise<void> {
       <div class="flex gap-2">
         <TxButton variant="flat" class="action-btn add-btn flex-1" @click="openNewPluginDrawer">
           <i class="i-ri-add-line" />
-          <span>{{ t('plugin.add', 'Add') }}</span>
+          <span>{{ t('plugin.add') }}</span>
         </TxButton>
         <TxButton
           variant="flat"
