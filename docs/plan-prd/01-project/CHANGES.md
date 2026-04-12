@@ -21,8 +21,9 @@
 - Everything status records per-backend attempt errors while keeping `sdk-napi -> cli -> unavailable` fallback.
 - Windows main titlebar reserves native caption control space, improves button contrast, and adds Simple/Flat logo left spacing.
 - Windows active-app detection now uses a typed UInt32 foreground-window process id, parses noisy PowerShell output from the final JSON line, and rate-limits compact failure diagnostics.
+- Corrupted Windows app `display_name` values from stale index data, such as `U+FFFD` replacement characters or square glyphs, now fall back to clean app `name` values and are repaired by app backfill/full sync.
 - Diagnostic report: `docs/plan-prd/report/windows-search-diagnostics-2026-05-05.md`.
-- Verification: `pnpm -C "apps/core-app" run typecheck:node` passed; Vitest/Web typecheck/database snapshot/dev launch were blocked by sandbox child-process permission or approval-service 503.
+- Verification: `pnpm -C "apps/core-app" run typecheck:node` passed; targeted app-provider/display-name/search-processing Vitest passed; Web typecheck/database snapshot/dev launch were not rerun in this commit.
 
 ## 2026-04-09
 

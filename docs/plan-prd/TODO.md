@@ -359,5 +359,6 @@
 - [x] Record Everything backend attempt errors for `sdk-napi -> cli -> unavailable` diagnosis.
 - [x] Fix Windows titlebar control visibility and add Simple/Flat left logo spacing.
 - [x] Record performance and index analysis report: `docs/plan-prd/report/windows-search-diagnostics-2026-05-05.md`.
+- [x] Repair corrupted Windows app display names from stale index data: bad `display_name` values containing replacement/square glyphs now fall back to a clean `name` and are corrected during backfill/full sync.
 - [ ] Re-run target Vitest, `typecheck:web`, dev launch, and production DB snapshot analysis once approval service / child-process permissions are available.
 - [ ] Capture post-fix measurements for `微信`, `wechat`, `codex`, `apple music`, Everything status and app DB table sizes.

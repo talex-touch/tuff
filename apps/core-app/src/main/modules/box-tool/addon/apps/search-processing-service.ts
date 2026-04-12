@@ -10,6 +10,7 @@ import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils
 import chalk from 'chalk'
 import { pinyin } from 'pinyin-pro'
 import { formatLog, generateAcronym, LogStyle } from './app-utils'
+import { resolveDisplayName } from './display-name-sync-utils'
 import { calculateHighlights } from './highlighting-service'
 
 const SLOW_PROCESS_THRESHOLD_MS = 300
@@ -43,7 +44,7 @@ interface AppMatchState {
 function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): ProcessedTuffItem {
   const uniqueId = app.extensions.bundleId || app.path
   const name = app.name
-  const displayName = app.displayName || app.name
+  const displayName = resolveDisplayName(app.displayName, app.name)
   const rawIconValue = app.extensions.icon ?? ''
   const iconValue = rawIconValue && !isValidBase64DataUrl(rawIconValue) ? '' : rawIconValue
   const appLaunchMeta = {
@@ -120,7 +121,7 @@ export async function processSearchResults(
 
   for (const app of apps) {
     const name = app.name
-    const displayName = app.displayName || app.name
+    const displayName = resolveDisplayName(app.displayName, app.name)
     const potentialTitles = [displayName, name].filter(Boolean) as string[]
     const uniqueId = app.extensions.bundleId || app.path
 

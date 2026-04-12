@@ -173,11 +173,22 @@ vi.mock('./app-scanner', () => ({
 }))
 
 vi.mock('./display-name-sync-utils', () => ({
+  isProbablyCorruptedDisplayName: vi.fn((value: string | null | undefined) => {
+    return typeof value === 'string' && (value.includes('\uFFFD') || value.includes('\u25A1'))
+  }),
   normalizeDisplayName: vi.fn((value: string | null | undefined) => value ?? null),
+  resolveDisplayName: vi.fn((displayName: string | null | undefined, fallbackName: string) => {
+    if (typeof displayName === 'string' && displayName && !displayName.includes('\uFFFD')) {
+      return displayName
+    }
+    return fallbackName
+  }),
   shouldUpdateDisplayName: vi.fn(
     (current: string | null | undefined, next: string | null | undefined) => {
       const normalizedCurrent = current ?? null
       const normalizedNext = next ?? null
+      if (typeof normalizedNext === 'string' && normalizedNext.includes('\uFFFD')) return false
+      if (typeof normalizedCurrent === 'string' && normalizedCurrent.includes('\uFFFD')) return true
       return normalizedCurrent !== normalizedNext
     }
   )
@@ -355,6 +366,58 @@ describe('appProvider rebuild maintenance', () => {
     await privateProvider._performFullSync(false)
 
     expect(initializeMock).toHaveBeenCalledWith({ forceRefresh: true })
+  })
+
+  it('repairs corrupted display names during startup backfill', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const dbRow = {
+      id: 80,
+      path: 'D:/Weixin/Weixin.exe',
+      name: 'Weixin',
+      displayName: '\u03A2\uFFFD\uFFFD',
+      type: 'app',
+      mtime: new Date('2026-05-05T08:00:00Z'),
+      ctime: new Date('2026-05-05T08:00:00Z')
+    }
+    const scannedApp = {
+      name: 'WeChat',
+      displayName: 'WeChat',
+      path: 'D:/Weixin/Weixin.exe',
+      icon: '',
+      bundleId: '',
+      uniqueId: 'D:/Weixin/Weixin.exe',
+      launchPath: 'D:/Weixin/Weixin.exe',
+      launchKind: 'path' as const,
+      lastModified: new Date('2026-05-05T09:00:00Z')
+    }
+    let updatedDisplayName: string | null = dbRow.displayName
+
+    getAppsMock.mockResolvedValue([scannedApp])
+
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn().mockResolvedValue([dbRow]),
+      getDb: () => ({
+        update: vi.fn(() => ({
+          set: vi.fn((values: { displayName?: string }) => ({
+            where: vi.fn(async () => {
+              if (values.displayName) {
+                updatedDisplayName = values.displayName
+              }
+            })
+          }))
+        }))
+      })
+    }
+    privateProvider.searchIndex = { indexItems: vi.fn() }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async (files: unknown[]) =>
+      files.map((file) => ({ ...(file as typeof dbRow), extensions: {} }))
+    )
+    privateProvider._recordMissingIconApps = vi.fn().mockResolvedValue(undefined)
+
+    await privateProvider._performStartupBackfill()
+
+    expect(updatedDisplayName).toBe('WeChat')
   })
 
   it('serializes rebuild, full sync, mdls scan and startup backfill tasks', async () => {

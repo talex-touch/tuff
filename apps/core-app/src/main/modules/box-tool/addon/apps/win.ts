@@ -31,6 +31,10 @@ const APPS_FOLDER_PREFIX = 'shell:AppsFolder\\'
 const BASE64_IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.gif', '.webp'])
 const URL_LAUNCH_PATTERN = /^[a-z][a-z\d+.-]*:\/\//i
 
+function isWindowsAbsolutePath(value: string): boolean {
+  return /^[a-z]:[\\/]/i.test(value) || value.startsWith('\\\\')
+}
+
 function normalizeShortcutValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined
 }
@@ -168,6 +172,30 @@ async function readIconFileAsDataUrl(iconPath: string | undefined): Promise<stri
   }
 }
 
+function scoreScannedApp(appInfo: AppInfo): number {
+  let score = 0
+  if (appInfo.shortcutPath) score += 40
+  if (appInfo.launchKind === 'appx') score += 30
+  if (appInfo.launchKind === 'url') score += 20
+  if (appInfo.displayName) score += 10
+  if (appInfo.icon) score += 5
+  return score
+}
+
+function dedupeApps(apps: AppInfo[]): AppInfo[] {
+  const uniqueApps = new Map<string, AppInfo>()
+
+  for (const appInfo of apps) {
+    const key = appInfo.uniqueId
+    const existing = uniqueApps.get(key)
+    if (!existing || scoreScannedApp(appInfo) > scoreScannedApp(existing)) {
+      uniqueApps.set(key, appInfo)
+    }
+  }
+
+  return Array.from(uniqueApps.values())
+}
+
 async function getAppIcon(targetPath: string, appName: string): Promise<string> {
   await fs.mkdir(ICON_CACHE_DIR, { recursive: true })
   const iconPath = path.join(ICON_CACHE_DIR, `${sanitizeCacheName(appName)}.png`)
@@ -230,6 +258,7 @@ async function fileDisplay(filePath: string): Promise<AppInfo[]> {
 
           results.push({
             name: appName,
+            displayName: appName,
             path: targetPath,
             icon,
             bundleId: '', // Windows doesn't have bundleId
@@ -321,6 +350,7 @@ async function getStoreApps(): Promise<AppInfo[]> {
       if (!name || !appUserModelId) continue
 
       const isUrlApp = isUrlLaunchId(appUserModelId)
+      const isPathApp = isWindowsAbsolutePath(appUserModelId)
       const iconPath = isUrlApp
         ? undefined
         : await resolvePackageIconPath(
@@ -328,7 +358,11 @@ async function getStoreApps(): Promise<AppInfo[]> {
             normalizeShortcutValue(entry.IconPath)
           )
       const icon = await readIconFileAsDataUrl(iconPath)
-      const launchPath = isUrlApp ? appUserModelId : makeAppsFolderPath(appUserModelId)
+      const launchPath = isUrlApp
+        ? appUserModelId
+        : isPathApp
+          ? appUserModelId
+          : makeAppsFolderPath(appUserModelId)
       apps.push({
         name,
         displayName: name,
@@ -337,7 +371,7 @@ async function getStoreApps(): Promise<AppInfo[]> {
         bundleId: appUserModelId,
         uniqueId: appUserModelId,
         appUserModelId,
-        launchKind: isUrlApp ? 'url' : 'appx',
+        launchKind: isUrlApp ? 'url' : isPathApp ? 'path' : 'appx',
         launchPath,
         description: toManifestDisplayName(entry.Description) || appUserModelId,
         lastModified: now
@@ -369,10 +403,7 @@ export async function getApps(): Promise<AppInfo[]> {
     }
   })
 
-  // Remove duplicates based on uniqueId (the path)
-  const uniqueApps = Array.from(new Map(allApps.map((app) => [app.uniqueId, app])).values())
-
-  return uniqueApps
+  return dedupeApps(allApps)
 }
 
 export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
@@ -420,6 +451,7 @@ export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
 
       return {
         name: appName,
+        displayName: appName,
         path: targetPath,
         icon,
         bundleId: '',
@@ -439,6 +471,7 @@ export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
 
     return {
       name: appName,
+      displayName: appName,
       path: filePath,
       icon,
       bundleId: '', // Windows doesn't have bundleId
