@@ -342,3 +342,10 @@
 1. 完成 `Nexus 设备授权风控` Phase 0/1 文档化与验收闭环。
 2. 在本轮文档压缩完成后，继续推进风控实现与回归。
 3. `docs:guard` 连续零告警后，再升级 strict 阻塞策略。
+### Startup Path Governance (2026-03-23)
+
+- [x] Unified root path policy in core startup and network secure-store path resolution (`dev -> userData/tuff-dev`, `release -> userData/tuff`).
+- [x] Completed startup chain hardening for directory creation (`root` before `logs`, recursive mkdir, sync semantics).
+- [x] Added one-time legacy dev data migration (`appPath/tuff -> userData/tuff-dev`) with marker-based skip strategy.
+- [x] Improved startup observability (`early unhandledRejection` log + corrected single-instance warning wording + optional deprecation trace switch).
+- [x] Added targeted tests for root-path resolution, migration decision matrix, and directory creation idempotency.
