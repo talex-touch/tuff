@@ -138,7 +138,7 @@ export class PluginResolver {
       }
     }
 
-    await checkDirWithCreate(_target, true)
+    checkDirWithCreate(_target, true)
 
     try {
       await this.uncompress(this.filePath, _target)

@@ -2467,3 +2467,25 @@
 - 主文件只承担“当前可执行事实 + 近 30 天详细记录 + 历史索引入口”。
 - 历史细节未删除，统一通过月度归档追溯。
 - 后续新增记录遵循“同日同主题合并表达”规则，避免重复堆叠。
+## 2026-03-23
+
+### fix(core-dev-startup): root path hardening + one-time dev data migration
+
+- Unified runtime root-path policy:
+  - `app.isPackaged === true` -> `userData/tuff`
+  - `app.isPackaged === false` -> `userData/tuff-dev`
+- Removed dev-mode writes to `app.getAppPath()/tuff` as active root to avoid workspace pollution and path instability.
+- Added one-time best-effort migration for dev data:
+  - Source: `app.getAppPath()/tuff`
+  - Target: `app.getPath('userData')/tuff-dev`
+  - Marker: `.dev-data-migration.json` (records migrated / skipped / failed reason to avoid repeated attempts).
+- Hardened startup directory initialization order in precore:
+  - Ensure root first, then `root/logs`, then bind `crashDumps`.
+- Hardened `checkDirWithCreate` to synchronous recursive mkdir and aligned call-sites by removing unnecessary `await`.
+- Startup observability improvements:
+  - Corrected single-instance warning semantics to “quitting new instance”.
+  - Added early `unhandledRejection` logging in precore.
+  - Added optional deprecation trace switch via `TUFF_TRACE_DEPRECATION=1`.
+- Added targeted tests:
+  - `src/main/utils/app-root-path.test.ts`
+  - `src/main/utils/common-util.test.ts`
