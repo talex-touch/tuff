@@ -27,7 +27,6 @@ const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
 
 export interface FileProviderWatchServiceDeps {
   baseWatchPaths: string[]
-  isCaseInsensitiveFs: boolean
   getDbUtils: () => DbUtils | null
   getWatchDepthForPath: (watchPath: string) => number
   normalizePath: (rawPath: string) => string
@@ -44,7 +43,6 @@ export interface FileProviderWatchServiceDeps {
 
 export class FileProviderWatchService {
   private readonly baseWatchPaths: string[]
-  private readonly isCaseInsensitiveFs: boolean
   private readonly getDbUtils: FileProviderWatchServiceDeps['getDbUtils']
   private readonly getWatchDepthForPath: FileProviderWatchServiceDeps['getWatchDepthForPath']
   private readonly normalizePath: FileProviderWatchServiceDeps['normalizePath']
@@ -77,7 +75,6 @@ export class FileProviderWatchService {
 
   constructor(deps: FileProviderWatchServiceDeps) {
     this.baseWatchPaths = [...deps.baseWatchPaths]
-    this.isCaseInsensitiveFs = deps.isCaseInsensitiveFs
     this.getDbUtils = deps.getDbUtils
     this.getWatchDepthForPath = deps.getWatchDepthForPath
     this.normalizePath = deps.normalizePath

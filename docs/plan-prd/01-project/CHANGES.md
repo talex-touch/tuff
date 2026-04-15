@@ -1,7 +1,21 @@
 # 变更日志
 
-> 更新时间: 2026-04-09
-> 说明: 主文件仅保留近 30 天（2026-03-11 ~ 2026-04-09）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-15
+> 说明: 主文件仅保留近 30 天（2026-03-16 ~ 2026-04-15）详细记录；更早历史已按月归档。
+
+## 2026-04-15
+
+### fix(core-app): 清理 file-provider 服务拆分遗留并恢复 release 编译
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.ts`
+- `package.json`
+- `apps/core-app/package.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 删除 `file-provider` 在 opener/index runtime 服务拆分后遗留的未使用 wrapper、字段与 import，避免 `noUnusedLocals` 在 release 构建阶段直接失败。
+  - 补回 `IndexWorkerFileResult -> PersistEntry` 的主线程转换函数，保证 index runtime service 仍能把 worker 结果持久化并写入搜索索引。
+  - 移除 `FileProviderWatchService` 中未消费的 `isCaseInsensitiveFs` 依赖透传，收口到当前实际使用的 watch service 接口。
+  - 根包与 `core-app` 版本提升到 `2.4.9-beta.12`，用于重新触发发布流水线。
 
 ## 阅读方式
 

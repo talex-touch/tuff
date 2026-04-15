@@ -52,12 +52,7 @@ import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import { app, shell } from 'electron'
 import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlaceholder.svg?raw'
 import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
-import {
-  FileChangedEvent,
-  FileUnlinkedEvent,
-  TalexEvents,
-  touchEventBus
-} from '../../../../core/eventbus/touch-event'
+import { TalexEvents, touchEventBus } from '../../../../core/eventbus/touch-event'
 import {
   embeddings as embeddingsSchema,
   fileExtensions,
@@ -65,7 +60,6 @@ import {
   files as filesSchema,
   scanProgress
 } from '../../../../db/schema'
-import { isSqliteBusyError } from '../../../../db/sqlite-retry'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
 import { createDbUtils } from '../../../../db/utils'
 import { appTaskGate } from '../../../../service/app-task-gate'
@@ -94,7 +88,6 @@ import { ThumbnailWorkerClient } from './workers/thumbnail-worker-client'
 import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
 import {
   SearchIndexWorkerClient,
-  type PersistEntry,
   type UpsertFileRecord
 } from '../../search-engine/workers/search-index-worker-client'
 import {
@@ -117,20 +110,12 @@ import {
   type ResolvedOpener
 } from './services/file-provider-opener-service'
 import { FileProviderIndexRuntimeService } from './services/file-provider-index-runtime-service'
-import {
-  commitIndexWorkerFlushBatch,
-  getIndexWorkerBusyRetryDelay,
-  getIndexWorkerFlushDelay,
-  rollbackIndexWorkerFlushBatch,
-  takeIndexWorkerFlushBatch
-} from './services/file-provider-index-flush-service'
-import { isSearchRecentlyActive } from '../../search-engine/search-activity'
+import { type PersistEntry } from '../../search-engine/workers/search-index-worker-client'
 import FileSystemWatcher from '../../file-system-watcher'
 
 const MAX_CONTENT_LENGTH = 200_000
 const ICON_META_EXTENSION_KEY = 'iconMeta'
 const fileProviderLog = getLogger('file-provider')
-const SEARCH_ACTIVE_WINDOW_MS = 2000
 const SEMANTIC_TRIGGER_MIN_QUERY_LENGTH = 3
 const SEMANTIC_TRIGGER_MAX_CANDIDATES = 20
 const SEMANTIC_SEARCH_TIMEOUT_MS = 120
@@ -377,7 +362,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.normalizedWatchPaths = this.watchPaths.map((p) => this.normalizePath(p))
     this.watchService = new FileProviderWatchService({
       baseWatchPaths: this.baseWatchPaths,
-      isCaseInsensitiveFs: this.isCaseInsensitiveFs,
       getDbUtils: () => this.dbUtils,
       getWatchDepthForPath: (watchPath) => this.getWatchDepthForPath(watchPath),
       normalizePath: (rawPath) => this.normalizePath(rawPath),
@@ -509,17 +493,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.fsEventsSubscribed = this.watchService.isFileSystemSubscribed()
   }
 
-  private normalizeFileIndexSettings(raw?: Partial<FileIndexSettings> | null): FileIndexSettings {
-    return this.watchService.normalizeFileIndexSettings(raw)
-  }
-
   private applyWatchPaths(extraPaths: string[]): void {
     this.watchService.applyWatchPaths(extraPaths)
-    this.syncWatchServiceState()
-  }
-
-  private loadFileIndexSettings(): void {
-    this.watchService.loadFileIndexSettings()
     this.syncWatchServiceState()
   }
 
@@ -533,45 +508,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
    */
   recordUserActivity(): void {
     this.watchService.recordUserActivity()
-  }
-
-  private async getScanEligibility(): Promise<{
-    newPaths: string[]
-    stalePaths: string[]
-    lastScannedAt: number | null
-  }> {
-    if (!this.dbUtils) {
-      return { newPaths: [], stalePaths: [], lastScannedAt: null }
-    }
-
-    const db = this.dbUtils.getDb()
-    const completedScans = await db.select().from(scanProgress)
-    const completedMap = new Map<string, number>()
-    let lastScannedAt: number | null = null
-
-    for (const scan of completedScans) {
-      const timestamp = this.toTimestamp(scan.lastScanned)
-      if (timestamp) {
-        completedMap.set(scan.path, timestamp)
-        if (!lastScannedAt || timestamp > lastScannedAt) {
-          lastScannedAt = timestamp
-        }
-      }
-    }
-
-    const newPaths = this.watchPaths.filter((path) => !completedMap.has(path))
-    const intervalMs = this.fileIndexSettings.autoScanIntervalMs
-    const now = Date.now()
-    const stalePaths =
-      intervalMs <= 0
-        ? Array.from(completedMap.keys()).filter((path) => this.watchPaths.includes(path))
-        : this.watchPaths.filter((path) => {
-            const last = completedMap.get(path)
-            if (!last) return false
-            return now - last >= intervalMs
-          })
-
-    return { newPaths, stalePaths, lastScannedAt }
   }
 
   private async shouldRunAutoIndexing(): Promise<{
@@ -1329,42 +1265,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.pendingProgressStreamPayload = null
   }
 
-  private async withOpenerResolveSlot<T>(task: () => Promise<T>): Promise<T> {
-    if (this.openerResolveInFlight >= this.openerResolveConcurrency) {
-      await new Promise<void>((resolve) => {
-        this.openerResolveWaiters.push(resolve)
-      })
-    }
-
-    this.openerResolveInFlight += 1
-    try {
-      return await task()
-    } finally {
-      this.openerResolveInFlight -= 1
-      const next = this.openerResolveWaiters.shift()
-      if (next) {
-        next()
-      }
-    }
-  }
-
-  private isOpenerNegativeCached(extension: string): boolean {
-    const expiresAt = this.openerNegativeCache.get(extension)
-    if (!expiresAt) {
-      return false
-    }
-    if (expiresAt <= Date.now()) {
-      this.openerNegativeCache.delete(extension)
-      return false
-    }
-    return true
-  }
-
-  private markOpenerNegativeCache(extension: string): void {
-    const ttlMs = 10 * 60 * 1000
-    this.openerNegativeCache.set(extension, Date.now() + ttlMs)
-  }
-
   private async scanDirectoryWithWorker(
     dirPath: string,
     excludePathsSet?: Set<string>
@@ -1459,20 +1359,31 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private handleIndexWorkerFile(payload: IndexWorkerFileResult): void {
-    this.indexRuntimeService.handleIndexWorkerFile(payload)
-  }
-
-  private scheduleIndexWorkerFlush(delayMs: number, reason: string): void {
-    this.indexRuntimeService.scheduleFlush(delayMs, reason)
-  }
-
-  private async flushIndexWorkerResults(): Promise<void> {
-    await this.indexRuntimeService.flush()
-  }
-
-  private async doFlushIndexWorkerResults(): Promise<void> {
-    await this.indexRuntimeService.doFlush()
+  private buildIndexWorkerPersistEntries(entries: IndexWorkerFileResult[]): PersistEntry[] {
+    return entries.map((entry) => ({
+      fileId: entry.fileId,
+      fileUpdate: entry.fileUpdate
+        ? {
+            content: entry.fileUpdate.content,
+            embeddingStatus: entry.fileUpdate.embeddingStatus,
+            embeddings: entry.fileUpdate.embeddings?.map((embedding) => ({
+              model: embedding.model,
+              vector: embedding.vector
+            })),
+            contentHash: entry.fileUpdate.contentHash ?? null
+          }
+        : null,
+      progress: {
+        status: entry.progress.status,
+        progress: entry.progress.progress,
+        processedBytes: entry.progress.processedBytes ?? null,
+        totalBytes: entry.progress.totalBytes ?? null,
+        lastError: entry.progress.lastError ?? null,
+        startedAt: entry.progress.startedAt ?? null,
+        updatedAt: entry.progress.updatedAt ?? null
+      },
+      indexItem: entry.indexItem
+    }))
   }
 
   private extractFileIconQueued(filePath: string): Promise<Buffer | null> {
@@ -1505,63 +1416,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private async getOpenerForExtension(rawExtension: string): Promise<ResolvedOpener | null> {
     return this.openerService.getOpenerForExtension(rawExtension)
-  }
-
-  private async resolveOpener(extension: string): Promise<ResolvedOpener | null> {
-    return this.openerService.resolveOpener(extension)
-  }
-
-  private resolveOpenerLogo(logo?: string | null): string {
-    return this.openerService.resolveOpenerLogo(logo)
-  }
-
-  private getOpenerFromStorageByExtension(extension: string): OpenerInfo | null {
-    return this.openerService.getOpenerFromStorageByExtension(extension)
-  }
-
-  private getOpenerFromStorage(extension: string, bundleId: string): OpenerInfo | null {
-    return this.openerService.getOpenerFromStorage(extension, bundleId)
-  }
-
-  private persistOpenerIcon(fileId: number, logo: string): void {
-    this.openerService.persistOpenerIcon(fileId, logo)
-  }
-
-  private persistOpenerToStorage(extension: string, opener: OpenerInfo): void {
-    this.openerService.persistOpenerToStorage(extension, opener)
-  }
-
-  private scheduleOpenerIconUpdate(
-    extension: string,
-    bundleId: string,
-    appInfo: { fileId: number; name: string; path: string; logo: string }
-  ): void {
-    this.openerService.scheduleOpenerIconUpdate(extension, bundleId, appInfo)
-  }
-
-  private async getBundleIdForExtension(extension: string): Promise<string | null> {
-    return this.openerService.getBundleIdForExtension(extension)
-  }
-
-  private async loadLaunchServicesHandlers() {
-    return this.openerService.loadLaunchServicesHandlers()
-  }
-
-  private async resolveUniformTypeIdentifier(extension: string): Promise<string | null> {
-    return this.openerService.resolveUniformTypeIdentifier(extension)
-  }
-
-  private async getAppInfoByBundleId(bundleId: string): Promise<{
-    fileId: number
-    name: string
-    path: string
-    logo: string
-  } | null> {
-    return this.openerService.getAppInfoByBundleId(bundleId)
-  }
-
-  private async generateApplicationIcon(appPath: string): Promise<string> {
-    return this.openerService.generateApplicationIcon(appPath)
   }
 
   private readonly pendingIconExtractions = new Set<number>()
@@ -4175,11 +4029,3 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 }
 
 export const fileProvider = new FileProvider()
-
-function normalizeOpenerExtension(rawExtension: string): string {
-  return rawExtension.replace(/^\./, '').trim().toLowerCase()
-}
-
-function sanitizeOpenerExtension(extension: string): string {
-  return extension.replace(/[^a-z0-9.+-]/gi, '')
-}
