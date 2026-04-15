@@ -29,6 +29,8 @@ export interface IClipboardItem {
 export interface IClipboardOptions {
   /** Current clipboard content */
   last: IClipboardItem | null
+  /** Hidden clipboard snapshot preserved after short-text auto-fill */
+  pendingAutoFillItem: IClipboardItem | null
   /** Timestamp when current clipboard was first detected */
   detectedAt: number | null
   /** Timestamp of the last clipboard item that was cleared (to prevent re-paste of same content) */

@@ -60,7 +60,9 @@ const DEFAULT_APP_INDEX_SETTINGS: AppIndexSettings = {
   startupBackfillRetryMaxMs: 5 * 60 * 1000,
   fullSyncEnabled: true,
   fullSyncIntervalMs: 24 * 60 * 60 * 1000,
-  fullSyncCheckIntervalMs: 10 * 60 * 1000
+  fullSyncCheckIntervalMs: 10 * 60 * 1000,
+  fullSyncCooldownMs: 60 * 60 * 1000,
+  fullSyncPersistRetry: 3
 }
 
 interface DeviceIdleForm {
@@ -256,7 +258,9 @@ async function saveAppIndexSettings() {
       startupBackfillRetryMaxMs: retryMaxMs,
       fullSyncEnabled: !!form.fullSyncEnabled,
       fullSyncIntervalMs: Math.round(fullSyncIntervalHours * 3600000),
-      fullSyncCheckIntervalMs: Math.round(fullSyncCheckIntervalMinutes * 60000)
+      fullSyncCheckIntervalMs: Math.round(fullSyncCheckIntervalMinutes * 60000),
+      fullSyncCooldownMs: base.fullSyncCooldownMs,
+      fullSyncPersistRetry: base.fullSyncPersistRetry
     }
 
     const updated = await settingsSdk.appIndex.updateSettings(payload)

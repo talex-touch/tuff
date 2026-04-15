@@ -63,4 +63,13 @@ describe('pilot-route-health', () => {
       state: 'closed',
     })
   })
+
+  it('不同 providerTargetType 会生成不同 routeKey', () => {
+    const botKey = buildRouteKey('channel-coze', 'target_shared', 'coze_bot')
+    const workflowKey = buildRouteKey('channel-coze', 'target_shared', 'coze_workflow')
+
+    expect(botKey).not.toBe(workflowKey)
+    expect(botKey).toContain('coze_bot')
+    expect(workflowKey).toContain('coze_workflow')
+  })
 })

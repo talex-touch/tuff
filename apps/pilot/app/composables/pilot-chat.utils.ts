@@ -211,7 +211,7 @@ export function parseSseChunks(chunk: string): StreamEvent[] {
   }
   catch {
     return [{
-      type: eventName || 'error',
+      type: 'error',
       message: raw,
     }]
   }

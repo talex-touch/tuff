@@ -150,7 +150,10 @@ export function useClipboard(
     const shouldFillInput = length <= AUTOFILL_INPUT_TEXT_LIMIT && !isUrlLikeClipboardText(data)
     if (shouldFillInput) {
       searchVal.value = content
-      markAsAutoPasted(timestamp)
+      clipboardOptions.pendingAutoFillItem = { ...data }
+      autoPastedTimestamps.add(timestamp)
+      clearClipboard({ remember: true, preservePendingAutoFill: true })
+      if (Math.random() < AUTOFILL_CLEANUP_PROBABILITY) cleanupAutoPastedRecords()
       return true
     }
 
@@ -206,6 +209,7 @@ export function useClipboard(
 
     if (attemptAutoFill && !overrideDismissed && isStartupClipboard(clipboard)) {
       clipboardOptions.last = null
+      clipboardOptions.pendingAutoFillItem = null
       clipboardOptions.detectedAt = null
       autoPasteActive.value = false
       return
@@ -223,6 +227,7 @@ export function useClipboard(
     if (!isSameClipboard || overrideDismissed) {
       autoPasteActive.value = false
       clipboardOptions.last = clipboard
+      clipboardOptions.pendingAutoFillItem = null
       clipboardOptions.detectedAt = Date.now()
       clipboardOptions.lastClearedTimestamp = null
 
@@ -275,8 +280,12 @@ export function useClipboard(
     }
   }
 
-  function clearClipboard(options?: { remember?: boolean }): void {
+  function clearClipboard(options?: {
+    remember?: boolean
+    preservePendingAutoFill?: boolean
+  }): void {
     const remember = options?.remember ?? false
+    const preservePendingAutoFill = options?.preservePendingAutoFill ?? false
 
     if (remember && clipboardOptions.last?.timestamp) {
       clipboardOptions.lastClearedTimestamp = clipboardOptions.last.timestamp
@@ -287,6 +296,9 @@ export function useClipboard(
     }
 
     clipboardOptions.last = null
+    if (!preservePendingAutoFill) {
+      clipboardOptions.pendingAutoFillItem = null
+    }
     clipboardOptions.detectedAt = null
     autoPasteActive.value = false
     onPasteCallback?.()
@@ -327,6 +339,7 @@ export function useClipboard(
             autoPasteActive.value = false
           }
           clipboardOptions.last = item
+          clipboardOptions.pendingAutoFillItem = null
           clipboardOptions.detectedAt = Date.now()
           clipboardOptions.lastClearedTimestamp = null
 

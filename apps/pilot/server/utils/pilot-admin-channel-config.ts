@@ -3,7 +3,16 @@ import type {
   PilotBuiltinTool,
   PilotChannelAdapter,
   PilotChannelModelConfig,
+  PilotChannelRegion,
   PilotChannelTransport,
+  PilotCozeAuthMode,
+} from './pilot-channel'
+import {
+  getPilotChannelDefaultBaseUrl,
+  getPilotChannelDefaultOauthTokenUrl,
+  normalizePilotChannelRegion,
+  normalizePilotCozeAuthMode,
+  normalizePilotProviderTargetType,
 } from './pilot-channel'
 import { decryptConfigValue, encryptConfigValue } from './pilot-config-crypto'
 import { getPilotDatabase, requirePilotDatabase } from './pilot-store'
@@ -43,6 +52,15 @@ export interface PilotAdminChannelItem {
   models?: PilotChannelModelConfig[]
   adapter: PilotChannelAdapter
   transport: PilotChannelTransport
+  region?: PilotChannelRegion
+  cozeAuthMode?: PilotCozeAuthMode
+  oauthClientId?: string
+  oauthClientSecret?: string
+  oauthTokenUrl?: string
+  jwtAppId?: string
+  jwtKeyId?: string
+  jwtPrivateKey?: string
+  jwtAudience?: string
   timeoutMs: number
   builtinTools: PilotBuiltinTool[]
   enabled: boolean
@@ -64,12 +82,15 @@ function normalizeText(value: unknown): string {
   return String(value ?? '').trim()
 }
 
-function normalizeAdapter(_value: unknown): PilotChannelAdapter {
-  return 'openai'
+function normalizeAdapter(value: unknown): PilotChannelAdapter {
+  return normalizeText(value).toLowerCase() === 'coze' ? 'coze' : 'openai'
 }
 
-function normalizeTransport(value: unknown, _adapter: PilotChannelAdapter): PilotChannelTransport {
+function normalizeTransport(value: unknown, adapter: PilotChannelAdapter): PilotChannelTransport {
   const normalized = normalizeText(value).toLowerCase()
+  if (adapter === 'coze') {
+    return 'coze.openapi'
+  }
   return normalized === 'chat.completions' || normalized === 'chat_completions' || normalized === 'completions'
     ? 'chat.completions'
     : 'responses'
@@ -91,15 +112,15 @@ function normalizePriority(value: unknown): number {
   return Math.min(Math.max(Math.floor(parsed), MIN_PRIORITY), MAX_PRIORITY)
 }
 
-function normalizeTools(value: unknown): PilotBuiltinTool[] {
+function normalizeTools(value: unknown, adapter: PilotChannelAdapter): PilotBuiltinTool[] {
   if (!Array.isArray(value)) {
-    return ['write_todos']
+    return adapter === 'coze' ? [] : ['write_todos']
   }
   const list = value
     .map(item => normalizeText(item))
     .filter(item => SUPPORTED_BUILTIN_TOOLS.includes(item as PilotBuiltinTool)) as PilotBuiltinTool[]
   if (list.length <= 0) {
-    return ['write_todos']
+    return adapter === 'coze' ? [] : ['write_todos']
   }
   return Array.from(new Set(list))
 }
@@ -141,6 +162,7 @@ function normalizeChannelModelRow(raw: unknown): PilotChannelModelConfig | null 
     id,
     label: normalizeText(row.label) || undefined,
     format: normalizeText(row.format) || undefined,
+    targetType: normalizePilotProviderTargetType(row.targetType, 'model'),
     priority: normalizePriority(row.priority),
     enabled: normalizeBoolean(row.enabled, true),
     thinkingSupported: normalizeBoolean(row.thinkingSupported, true),
@@ -151,7 +173,11 @@ function normalizeChannelModelRow(raw: unknown): PilotChannelModelConfig | null 
   }
 }
 
-function normalizeChannelModels(value: unknown, fallbackModel: string): PilotChannelModelConfig[] {
+function normalizeChannelModels(
+  value: unknown,
+  fallbackModel: string,
+  adapter: PilotChannelAdapter,
+): PilotChannelModelConfig[] {
   const models = Array.isArray(value)
     ? value
         .map(item => normalizeChannelModelRow(item))
@@ -159,10 +185,14 @@ function normalizeChannelModels(value: unknown, fallbackModel: string): PilotCha
     : []
 
   if (models.length <= 0) {
+    if (adapter === 'coze') {
+      return []
+    }
     const fallbackId = normalizeText(fallbackModel) || 'gpt-5.2'
     return [{
       id: fallbackId,
       label: fallbackId,
+      targetType: 'model',
       priority: DEFAULT_PRIORITY,
       enabled: true,
       thinkingSupported: true,
@@ -172,12 +202,15 @@ function normalizeChannelModels(value: unknown, fallbackModel: string): PilotCha
 
   const deduped = new Map<string, PilotChannelModelConfig>()
   for (const item of models) {
-    if (!deduped.has(item.id)) {
-      deduped.set(item.id, item)
+    const modelKey = adapter === 'coze'
+      ? `${normalizePilotProviderTargetType(item.targetType, 'model')}::${item.id}`
+      : item.id
+    if (!deduped.has(modelKey)) {
+      deduped.set(modelKey, item)
       continue
     }
-    const existing = deduped.get(item.id)!
-    deduped.set(item.id, {
+    const existing = deduped.get(modelKey)!
+    deduped.set(modelKey, {
       ...existing,
       ...item,
     })
@@ -189,7 +222,11 @@ function normalizeDefaultModelId(
   value: unknown,
   models: PilotChannelModelConfig[],
   fallbackModel: string,
+  adapter: PilotChannelAdapter,
 ): string {
+  if (adapter === 'coze') {
+    return normalizeText(value)
+  }
   const modelId = normalizeText(value)
   if (modelId && models.some(item => item.id === modelId)) {
     return modelId
@@ -255,12 +292,16 @@ function mergeChannelInputWithExisting(
   const id = normalizeText(row.id)
   const existing = existingMap.get(id)
   const nextApiKey = normalizeText(row.apiKey)
+  const nextOauthClientSecret = normalizeText(row.oauthClientSecret)
+  const nextJwtPrivateKey = normalizeText(row.jwtPrivateKey)
 
   return {
     ...existing,
     ...row,
     id,
     apiKey: nextApiKey || existing?.apiKey || '',
+    oauthClientSecret: nextOauthClientSecret || existing?.oauthClientSecret || '',
+    jwtPrivateKey: nextJwtPrivateKey || existing?.jwtPrivateKey || '',
     priority: row.priority ?? existing?.priority ?? DEFAULT_PRIORITY,
     models: Array.isArray(row.models) ? row.models : existing?.models,
     defaultModelId: normalizeText(row.defaultModelId) || existing?.defaultModelId,
@@ -277,17 +318,68 @@ function normalizeChannelRow(raw: unknown): PilotAdminChannelItem | null {
   }
   const row = raw as Record<string, unknown>
   const id = normalizeText(row.id)
-  const baseUrl = normalizeText(row.baseUrl).replace(/\/+$/, '')
-  const apiKey = normalizeText(row.apiKey)
-  if (!id || !baseUrl || !apiKey) {
-    return null
-  }
   const rawAdapter = normalizeText(row.adapter).toLowerCase()
   const adapter = normalizeAdapter(row.adapter)
   const legacyMigrated = rawAdapter === 'legacy'
+  const region = adapter === 'coze'
+    ? normalizePilotChannelRegion(row.region)
+    : undefined
+  const cozeAuthMode = adapter === 'coze'
+    ? normalizePilotCozeAuthMode(row.cozeAuthMode)
+    : undefined
+  const fallbackBaseUrl = getPilotChannelDefaultBaseUrl(adapter, region || 'cn')
+  const baseUrl = normalizeText(row.baseUrl || fallbackBaseUrl).replace(/\/+$/, '')
+  const apiKey = normalizeText(row.apiKey)
+  const oauthClientId = normalizeText(row.oauthClientId)
+  const oauthClientSecret = normalizeText(row.oauthClientSecret)
+  const oauthTokenUrl = normalizeText(row.oauthTokenUrl || getPilotChannelDefaultOauthTokenUrl(adapter, region || 'cn')).replace(/\/+$/, '')
+  const jwtAppId = normalizeText(row.jwtAppId)
+  const jwtKeyId = normalizeText(row.jwtKeyId)
+  const jwtPrivateKey = typeof row.jwtPrivateKey === 'string' ? row.jwtPrivateKey.trim() : ''
+  const jwtAudience = normalizeText(row.jwtAudience)
+  const missing: string[] = []
+  if (!id) {
+    missing.push('id')
+  }
+  if (!baseUrl) {
+    missing.push('baseUrl')
+  }
+  if (adapter === 'coze') {
+    if (!oauthTokenUrl) {
+      missing.push('oauthTokenUrl')
+    }
+    if (cozeAuthMode === 'jwt_service') {
+      if (!jwtAppId) {
+        missing.push('jwtAppId')
+      }
+      if (!jwtKeyId) {
+        missing.push('jwtKeyId')
+      }
+      if (!jwtPrivateKey) {
+        missing.push('jwtPrivateKey')
+      }
+      if (!jwtAudience) {
+        missing.push('jwtAudience')
+      }
+    }
+    else {
+      if (!oauthClientId) {
+        missing.push('oauthClientId')
+      }
+      if (!oauthClientSecret) {
+        missing.push('oauthClientSecret')
+      }
+    }
+  }
+  else if (!apiKey) {
+    missing.push('apiKey')
+  }
+  if (missing.length > 0) {
+    return null
+  }
   const fallbackModel = normalizeText(row.model) || 'gpt-5.2'
-  const models = normalizeChannelModels(row.models, fallbackModel)
-  const defaultModelId = normalizeDefaultModelId(row.defaultModelId, models, fallbackModel)
+  const models = normalizeChannelModels(row.models, fallbackModel, adapter)
+  const defaultModelId = normalizeDefaultModelId(row.defaultModelId, models, fallbackModel, adapter)
   const existingSyncError = typeof row.modelsSyncError === 'string'
     ? normalizeText(row.modelsSyncError)
     : ''
@@ -305,8 +397,17 @@ function normalizeChannelRow(raw: unknown): PilotAdminChannelItem | null {
     models,
     adapter,
     transport: normalizeTransport(row.transport, adapter),
+    region,
+    cozeAuthMode,
+    oauthClientId: oauthClientId || undefined,
+    oauthClientSecret: oauthClientSecret || undefined,
+    oauthTokenUrl: oauthTokenUrl || undefined,
+    jwtAppId: jwtAppId || undefined,
+    jwtKeyId: jwtKeyId || undefined,
+    jwtPrivateKey: jwtPrivateKey || undefined,
+    jwtAudience: jwtAudience || undefined,
     timeoutMs: normalizeTimeoutMs(row.timeoutMs ?? row.timeout),
-    builtinTools: normalizeTools(row.builtinTools),
+    builtinTools: normalizeTools(row.builtinTools, adapter),
     enabled: normalizeBoolean(row.enabled, true),
     modelsLastSyncedAt: normalizeText(row.modelsLastSyncedAt) || undefined,
     modelsSyncError: migratedSyncError || undefined,
@@ -317,6 +418,8 @@ function encodeChannels(channels: PilotAdminChannelItem[]): string {
   const encoded = channels.map(item => ({
     ...item,
     apiKey: encryptConfigValue(item.apiKey),
+    oauthClientSecret: encryptConfigValue(item.oauthClientSecret || ''),
+    jwtPrivateKey: encryptConfigValue(item.jwtPrivateKey || ''),
   }))
   return JSON.stringify(encoded)
 }
@@ -339,6 +442,8 @@ function decodeChannels(raw: string): PilotAdminChannelItem[] {
         return normalizeChannelRow({
           ...row,
           apiKey: decryptConfigValue(normalizeText(row.apiKey)),
+          oauthClientSecret: decryptConfigValue(normalizeText(row.oauthClientSecret)),
+          jwtPrivateKey: decryptConfigValue(typeof row.jwtPrivateKey === 'string' ? row.jwtPrivateKey : ''),
         })
       })
       .filter((item): item is PilotAdminChannelItem => Boolean(item))
@@ -408,7 +513,35 @@ export async function updatePilotAdminChannelCatalog(
     if (!normalizeText(merged.baseUrl)) {
       missing.push('baseUrl')
     }
-    if (!normalizeText(merged.apiKey)) {
+    const adapter = normalizeAdapter(merged.adapter)
+    if (adapter === 'coze') {
+      if (!normalizeText(merged.oauthTokenUrl)) {
+        missing.push('oauthTokenUrl')
+      }
+      if (normalizePilotCozeAuthMode(merged.cozeAuthMode) === 'jwt_service') {
+        if (!normalizeText(merged.jwtAppId)) {
+          missing.push('jwtAppId')
+        }
+        if (!normalizeText(merged.jwtKeyId)) {
+          missing.push('jwtKeyId')
+        }
+        if (!String(merged.jwtPrivateKey || '').trim()) {
+          missing.push('jwtPrivateKey')
+        }
+        if (!normalizeText(merged.jwtAudience)) {
+          missing.push('jwtAudience')
+        }
+      }
+      else {
+        if (!normalizeText(merged.oauthClientId)) {
+          missing.push('oauthClientId')
+        }
+        if (!normalizeText(merged.oauthClientSecret)) {
+          missing.push('oauthClientSecret')
+        }
+      }
+    }
+    else if (!normalizeText(merged.apiKey)) {
       missing.push('apiKey')
     }
     rejectedChannels.push({

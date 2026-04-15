@@ -12,6 +12,7 @@ import {
   updatePilotToolApprovalTicketResult,
 } from '../pilot-tool-approvals'
 import {
+  buildWebsearchContextSystemMessage,
   createPilotVideoGenerateNotImplementedError,
   executePilotAudioSttTool,
   executePilotAudioTranscribeTool,
@@ -289,6 +290,71 @@ describe('pilot-tool-gateway', () => {
     expect(result?.connectorSource).toBe('responses_builtin')
     expect(result?.fallbackUsed).toBe(true)
     expect(result?.sources.length).toBeGreaterThan(0)
+    expect(result?.sources[0]?.snippet).not.toContain('请参考')
+    expect(result?.contextText).toContain('Websearch references:')
+    expect(result?.contextText).toContain('https://platform.openai.com/docs/models')
+    expect(result?.contextText).not.toContain('Websearch summary:')
+    expect(result?.contextText).not.toContain('请参考 https://platform.openai.com/docs/models')
+  })
+
+  it('responses_builtin 无结构化来源时允许文本 URL 兜底', async () => {
+    vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
+      providers: [
+        {
+          id: 'searxng-main',
+          type: 'searxng',
+          enabled: true,
+          priority: 10,
+          baseUrl: 'https://searxng.example.com',
+          apiKeyEncrypted: '',
+          timeoutMs: 8_000,
+          maxResults: 2,
+        },
+      ],
+      aggregation: {
+        mode: 'hybrid',
+        targetResults: 1,
+        minPerProvider: 1,
+        dedupeKey: 'url',
+        stopWhenEnough: true,
+      },
+    }))
+    vi.mocked(createWebsearchProviderConnector).mockReturnValue({
+      search: vi.fn().mockResolvedValue([]),
+      fetch: vi.fn(),
+      extract: vi.fn(),
+    } as any)
+    vi.mocked(networkClient.request).mockResolvedValue({
+      status: 200,
+      data: {
+        output_text: '今日入口 https://www.example.com/news',
+      },
+    } as any)
+
+    const result = await executePilotWebsearchTool({
+      event: {} as any,
+      userId: 'u1',
+      sessionId: 's1',
+      requestId: 'r1',
+      query: 'today news',
+      channel: {
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'key',
+        model: 'gpt-5.2',
+        adapter: 'openai',
+        transport: 'responses',
+        timeoutMs: 12_000,
+      },
+    })
+
+    expect(result).toBeTruthy()
+    expect(result?.connectorSource).toBe('responses_builtin')
+    expect(result?.fallbackUsed).toBe(true)
+    expect(result?.sources.length).toBe(1)
+    expect(result?.sources[0]?.url).toBe('https://www.example.com/news')
+    expect(result?.sources[0]?.sourceType).toBe('responses_builtin_text_fallback')
+    expect(result?.sources[0]?.snippet).toBe('')
+    expect(result?.contextText).not.toContain('Websearch summary:')
   })
 
   it('provider 有结果但 channel 非 responses 时不因 fallback 失败', async () => {
@@ -364,7 +430,7 @@ describe('pilot-tool-gateway', () => {
     expect(networkClient.request).not.toHaveBeenCalled()
   })
 
-  it('provider 与 fallback 都不可用时返回 null，并记录 fallback_unsupported_channel', async () => {
+  it('provider 与 fallback 都不可用时返回 null，并降级为 skipped(fallback_unsupported_channel)', async () => {
     vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
       providers: [
         {
@@ -398,15 +464,16 @@ describe('pilot-tool-gateway', () => {
     })
 
     expect(result).toBeNull()
-    expect(audits.map(item => item.auditType)).toEqual(['tool.call.started', 'tool.call.failed'])
-    expect(audits.at(-1)?.errorCode).toBe('WEBSEARCH_DATASOURCE_UNAVAILABLE')
+    expect(audits.map(item => item.auditType)).toEqual(['tool.call.started', 'tool.call.completed'])
+    expect(audits.at(-1)?.status).toBe('skipped')
+    expect(audits.at(-1)?.errorCode).toBe('')
     expect(audits.at(-1)?.connectorReason).toBe('fallback_unsupported_channel')
     expect(audits.at(-1)?.providerChain).toEqual(['searxng-main'])
     expect(audits.at(-1)?.providerUsed).toEqual([])
     expect(audits.at(-1)?.fallbackUsed).toBe(false)
   })
 
-  it('fallback 渠道不兼容时记录 fallback_unsupported_channel', async () => {
+  it('fallback 渠道不兼容时降级为 skipped(fallback_unsupported_channel)', async () => {
     vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
       providers: [
         {
@@ -448,11 +515,13 @@ describe('pilot-tool-gateway', () => {
     })
 
     expect(result).toBeNull()
-    expect(audits.at(-1)?.errorCode).toBe('WEBSEARCH_FALLBACK_UNSUPPORTED_CHANNEL')
+    expect(audits.at(-1)?.auditType).toBe('tool.call.completed')
+    expect(audits.at(-1)?.status).toBe('skipped')
+    expect(audits.at(-1)?.errorCode).toBe('')
     expect(audits.at(-1)?.connectorReason).toBe('fallback_unsupported_channel')
   })
 
-  it('fallback endpoint 缺失时记录 fallback_endpoint_missing', async () => {
+  it('fallback endpoint 缺失时降级为 skipped(fallback_endpoint_missing)', async () => {
     vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
       providers: [
         {
@@ -494,7 +563,9 @@ describe('pilot-tool-gateway', () => {
     })
 
     expect(result).toBeNull()
-    expect(audits.at(-1)?.errorCode).toBe('WEBSEARCH_FALLBACK_ENDPOINT_MISSING')
+    expect(audits.at(-1)?.auditType).toBe('tool.call.completed')
+    expect(audits.at(-1)?.status).toBe('skipped')
+    expect(audits.at(-1)?.errorCode).toBe('')
     expect(audits.at(-1)?.connectorReason).toBe('fallback_endpoint_missing')
   })
 
@@ -611,6 +682,17 @@ describe('pilot-tool-gateway', () => {
     })
     expect(merged).toContain('[No External Sources Retrieved]')
     expect(merged).toContain('Do not fabricate specific latest/news facts')
+  })
+
+  it('将外部来源构造成隐藏 system context，而不是并入用户正文', () => {
+    const context = buildWebsearchContextSystemMessage(
+      '今天有什么最新新闻？',
+      'Websearch references:\n[1] 今日头条\n- https://www.toutiao.com/',
+    )
+
+    expect(context).toContain('[External Sources For Current Turn]')
+    expect(context).toContain('Websearch references:')
+    expect(context).toContain('Do not reproduce or dump this source list verbatim')
   })
 
   it('emits started/completed for image generation', async () => {

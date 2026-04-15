@@ -7,6 +7,7 @@ import type {
 import { NetworkEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
+import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from './network-service'
 
@@ -29,12 +30,9 @@ export class NetworkModule extends BaseModule {
     })
   }
 
-  onInit(_ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
-    if (!$app.channel) {
-      return
-    }
-
-    const transport = getTuffTransportMain($app.channel, resolveKeyManager($app.channel))
+  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
+    const runtime = resolveMainRuntime(ctx, 'NetworkModule.onInit')
+    const transport = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
     const service = getNetworkService()
 
     this.disposers.push(

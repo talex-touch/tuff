@@ -42,6 +42,9 @@ vi.mock('./plugin', () => ({
     pluginPath: string
     issues: Array<Record<string, unknown>>
     features: unknown[]
+    loadState: string
+    loadError?: { code: string; message: string }
+    creationOptions?: { skipDataInit?: boolean }
     logger: {
       error: ReturnType<typeof vi.fn>
       debug: ReturnType<typeof vi.fn>
@@ -55,7 +58,9 @@ vi.mock('./plugin', () => ({
       desc: string,
       readme: string,
       dev: Record<string, unknown>,
-      pluginPath: string
+      pluginPath: string,
+      _platforms?: unknown,
+      options?: { skipDataInit?: boolean }
     ) {
       this.name = name
       this.icon = icon
@@ -66,16 +71,23 @@ vi.mock('./plugin', () => ({
       this.pluginPath = pluginPath
       this.issues = []
       this.features = []
+      this.loadState = 'ready'
+      this.creationOptions = options
       this.logger = { error: vi.fn(), debug: vi.fn(), warn: vi.fn() }
     }
 
     addFeature() {
       return true
     }
+
+    setLoadState(state: string, loadError?: { code: string; message: string }) {
+      this.loadState = state
+      this.loadError = loadError
+    }
   }
 }))
 
-import { createPluginLoader } from './plugin-loaders'
+import { createPluginLoadShell, createPluginLoader } from './plugin-loaders'
 
 async function createPluginDir(manifest: Record<string, unknown>): Promise<string> {
   const root = await fs.mkdtemp(path.join(tmpdir(), 'plugin-loaders-test-'))
@@ -234,5 +246,32 @@ describe('createPluginLoader', () => {
 
     expect(issueCodes).toContain('REMOTE_MANIFEST_FAILED')
     expect(issueCodes).not.toContain('DEV_SOURCE_FALLBACK_LOCAL')
+  })
+
+  it('creates loader plugin shells without eager data initialization', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'local',
+      icon: { type: 'emoji', value: 'x' }
+    })
+    createdPaths.push(pluginPath)
+
+    const loader = createPluginLoader('touch-translation', pluginPath)
+    const plugin = (await loader.load()) as unknown as {
+      creationOptions?: { skipDataInit?: boolean }
+    }
+
+    expect(plugin.creationOptions).toMatchObject({ skipDataInit: true })
+  })
+
+  it('creates a shared loading shell plugin shape', () => {
+    const plugin = createPluginLoadShell('broken-plugin', '/tmp/broken', { skipDataInit: true })
+
+    expect(plugin.name).toBe('broken-plugin')
+    expect(plugin.version).toBe('0.0.0')
+    expect(plugin.desc).toBe('')
+    expect(plugin.dev).toMatchObject({ enable: false, address: '', source: false })
+    expect(plugin.loadState).toBe('loading')
   })
 })

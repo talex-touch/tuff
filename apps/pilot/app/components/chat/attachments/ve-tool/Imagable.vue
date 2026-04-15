@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { useNow } from '@vueuse/core'
 import { api as viewerApi } from 'v-viewer'
-import { UseImage } from '@vueuse/components'
-import type { IInnerItemMeta } from '~/composables/api/base/v1/aigc/completion-types'
 
 const props = defineProps<{
   data: any
@@ -134,24 +132,10 @@ watchEffect(loadImage)
           图片生成失败
         </div>
 
-        <UseImage
-          v-else-if="fallbackMode || loadProgress < 100" :src="imageSrc"
-          :alt="data.arguments?.text || 'QuotaGenImage'"
-        >
-          <template #loading>
-            <div class="Imagable-Inner-Cover">
-              图片下载中
-              <IconCircleLoader class="Loader" />
-            </div>
-          </template>
-
-          <template #error>
-            <div class="Imagable-Inner-Cover">
-              图片下载中
-              <IconCircleLoader class="Loader" />
-            </div>
-          </template>
-        </UseImage>
+        <div v-else-if="fallbackMode || loadProgress < 100" class="Imagable-Inner-Cover">
+          图片下载中
+          <IconCircleLoader class="Loader" />
+        </div>
 
         <div v-if="!fallbackMode" class="Imagable-Inner-ImgWrapper">
           <img :src="imageSrc" @load="loadProgress = 100">

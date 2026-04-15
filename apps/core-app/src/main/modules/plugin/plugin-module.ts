@@ -41,8 +41,8 @@ import {
   TalexEvents,
   touchEventBus
 } from '../../core/eventbus/touch-event'
+import { registerMainRuntime, resolveMainRuntime } from '../../core/runtime-accessor'
 import { TouchWindow } from '../../core/touch-window'
-import { TuffIconImpl } from '../../core/tuff-icon'
 import { createDbUtils } from '../../db/utils'
 import { useAliveTarget, useAliveWebContents } from '../../hooks/use-electron-guard'
 import { fileWatchService } from '../../service/file-watch.service'
@@ -67,7 +67,7 @@ import { PluginInstaller } from './plugin-installer'
 import { isWidgetFeatureEnabled } from './widget/widget-issue'
 import { widgetManager } from './widget/widget-manager'
 
-import { createPluginLoader } from './plugin-loaders'
+import { createPluginLoadShell, createPluginLoader } from './plugin-loaders'
 import { LocalPluginProvider } from './providers/local-provider'
 import { usePluginInjections } from './runtime/plugin-injections'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
@@ -837,7 +837,7 @@ function createPluginModuleInternal(
       if (!pluginId || requiredPermissions.length === 0) return
 
       if (response.grantMode === 'session') {
-        permissionModule.grantSession(pluginId, requiredPermissions)
+        await permissionModule.grantSession(pluginId, requiredPermissions)
         return
       }
       await permissionModule.grantAll(pluginId, requiredPermissions, 'user')
@@ -1152,25 +1152,26 @@ function createPluginModuleInternal(
     try {
       const currentPluginPath = path.resolve(pluginPath, pluginName)
       const manifestPath = path.resolve(currentPluginPath, 'manifest.json')
+      const loadingShell = createPluginLoadShell(pluginName, currentPluginPath, {
+        skipDataInit: true
+      })
+      loadingShell.setRuntime({
+        rootPath: path.dirname(pluginPath),
+        mainWindowId
+      })
+      loadingShell.status = PluginStatus.LOADING
+      plugins.set(pluginName, loadingShell)
+      syncPluginDeclaredPermissions(loadingShell)
+      rememberIssueSnapshot(loadingShell)
+      transport.broadcast(PluginEvents.push.stateChanged, {
+        type: 'added',
+        plugin: loadingShell.toJSONObject()
+      })
 
       logDebug('Ready to load plugin from disk', pluginTag(pluginName), 'path:', currentPluginPath)
 
       if (!fse.existsSync(currentPluginPath) || !fse.existsSync(manifestPath)) {
-        const placeholderIcon = new TuffIconImpl(currentPluginPath, 'emoji', '')
-        placeholderIcon.status = 'error'
-        const touchPlugin = new TouchPlugin(
-          pluginName,
-          placeholderIcon,
-          '0.0.0',
-          'Loading...',
-          '',
-          { enable: false, address: '' },
-          currentPluginPath,
-          undefined,
-          { skipDataInit: true }
-        )
-
-        touchPlugin.issues.push({
+        loadingShell.issues.push({
           type: 'error',
           message: 'Plugin directory or manifest.json is missing.',
           source: 'filesystem',
@@ -1178,14 +1179,18 @@ function createPluginModuleInternal(
           suggestion: 'Ensure the plugin folder and its manifest.json exist.',
           timestamp: Date.now()
         })
-        touchPlugin.status = PluginStatus.LOAD_FAILED
-        touchPlugin.logger.error('[Lifecycle] load failed: manifest.json missing')
-        plugins.set(pluginName, touchPlugin)
-        syncPluginDeclaredPermissions(touchPlugin)
-        rememberIssueSnapshot(touchPlugin)
+        loadingShell.setLoadState('load_failed', {
+          code: 'MISSING_MANIFEST',
+          message: 'Plugin directory or manifest.json is missing.'
+        })
+        loadingShell.status = PluginStatus.LOAD_FAILED
+        loadingShell.logger.error('[Lifecycle] load failed: manifest.json missing')
+        syncPluginDeclaredPermissions(loadingShell)
+        rememberIssueSnapshot(loadingShell)
         transport.broadcast(PluginEvents.push.stateChanged, {
-          type: 'added',
-          plugin: touchPlugin.toJSONObject()
+          type: 'updated',
+          name: pluginName,
+          changes: loadingShell.toJSONObject()
         })
         logWarn('Plugin failed to load: missing manifest.json', pluginTag(pluginName))
         return true
@@ -1195,6 +1200,10 @@ function createPluginModuleInternal(
         const loadStartTime = Date.now()
         const loader = createPluginLoader(pluginName, currentPluginPath)
         const touchPlugin = await loader.load()
+        touchPlugin.setRuntime({
+          rootPath: path.dirname(pluginPath),
+          mainWindowId
+        })
         touchPlugin.markLoadStart()
         touchPlugin._performanceMetrics.loadStartTime = loadStartTime // Set actual start time
         touchPlugin.markLoadEnd()
@@ -1227,8 +1236,14 @@ function createPluginModuleInternal(
 
         // After all loading attempts, set final status
         if (touchPlugin.issues.some((issue) => issue.type === 'error')) {
+          const firstError = touchPlugin.issues.find((issue) => issue.type === 'error')
+          touchPlugin.setLoadState('load_failed', {
+            code: firstError?.code || 'PLUGIN_LOAD_FAILED',
+            message: firstError?.message || 'Plugin metadata validation failed.'
+          })
           touchPlugin.status = PluginStatus.LOAD_FAILED
         } else {
+          touchPlugin.setLoadState('ready')
           touchPlugin.status = PluginStatus.DISABLED
         }
         if (touchPlugin.status === PluginStatus.LOAD_FAILED) {
@@ -1263,28 +1278,15 @@ function createPluginModuleInternal(
         )
 
         transport.broadcast(PluginEvents.push.stateChanged, {
-          type: 'added',
-          plugin: touchPlugin.toJSONObject()
+          type: 'updated',
+          name: pluginName,
+          changes: touchPlugin.toJSONObject()
         })
       } catch (error: unknown) {
         logError('Unhandled error while loading plugin', pluginTag(pluginName), error)
         const message = error instanceof Error ? error.message : 'Unknown error'
         const stack = error instanceof Error ? error.stack : undefined
-        // Create a dummy plugin to show the error in the UI
-        const placeholderIcon = new TuffIconImpl(currentPluginPath, 'emoji', '')
-        placeholderIcon.status = 'error'
-        const touchPlugin = new TouchPlugin(
-          pluginName,
-          placeholderIcon,
-          '0.0.0',
-          'Fatal Error',
-          '',
-          { enable: false, address: '' },
-          currentPluginPath,
-          undefined,
-          { skipDataInit: true }
-        )
-        touchPlugin.issues.push({
+        loadingShell.issues.push({
           type: 'error',
           message: `A fatal error occurred while creating the plugin loader: ${message}`,
           source: 'plugin-loader',
@@ -1292,14 +1294,18 @@ function createPluginModuleInternal(
           meta: { error: stack },
           timestamp: Date.now()
         })
-        touchPlugin.status = PluginStatus.LOAD_FAILED
-        touchPlugin.logger.error('[Lifecycle] load failed', error as Error)
-        plugins.set(pluginName, touchPlugin)
-        syncPluginDeclaredPermissions(touchPlugin)
-        rememberIssueSnapshot(touchPlugin)
+        loadingShell.setLoadState('load_failed', {
+          code: 'LOADER_FATAL',
+          message
+        })
+        loadingShell.status = PluginStatus.LOAD_FAILED
+        loadingShell.logger.error('[Lifecycle] load failed', error as Error)
+        syncPluginDeclaredPermissions(loadingShell)
+        rememberIssueSnapshot(loadingShell)
         transport.broadcast(PluginEvents.push.stateChanged, {
-          type: 'added',
-          plugin: touchPlugin.toJSONObject()
+          type: 'updated',
+          name: pluginName,
+          changes: loadingShell.toJSONObject()
         })
       }
 
@@ -1744,6 +1750,7 @@ export class PluginModule extends BaseModule {
 
   onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     const { file } = ctx
+    registerMainRuntime('plugin-module', resolveMainRuntime(ctx, 'PluginModule.onInit'))
     const ioRuntime = resolvePluginModuleIoRuntime(ctx)
     this.transport = ioRuntime.transport
     TouchPlugin.setTransport(ioRuntime.transport)

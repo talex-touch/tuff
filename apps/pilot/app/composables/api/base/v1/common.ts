@@ -1,6 +1,6 @@
 import { endHttp } from '../../axios'
 import type { IDataResponse } from '../index.type'
-import type { FeedbackQuery, IUploadResponse } from './common.type'
+import type { IUploadResponse } from './common.type'
 
 export default {
   status(): Promise<IDataResponse<any>> {

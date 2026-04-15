@@ -1,0 +1,125 @@
+{
+  "generatedAt": "2026-03-24T14:37:31.318Z",
+  "results": [
+    {
+      "intervalMs": 1000,
+      "durationMs": 3000,
+      "queueDepthPeak": {
+        "critical": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "realtime": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "io": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "maintenance": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "legacy_serial": {
+          "queued": 0,
+          "inFlight": 0
+        }
+      },
+      "clipboard": {
+        "count": 3,
+        "schedulerDelaySampleCount": 92,
+        "avgSchedulerDelayMs": 9.1,
+        "p95SchedulerDelayMs": 17,
+        "lastSchedulerDelayMs": 1,
+        "maxSchedulerDelayMs": 17,
+        "lastDurationMs": 21,
+        "maxDurationMs": 227,
+        "droppedCount": 0,
+        "coalescedCount": 0,
+        "timeoutCount": 0,
+        "errorCount": 0
+      }
+    },
+    {
+      "intervalMs": 500,
+      "durationMs": 3000,
+      "queueDepthPeak": {
+        "critical": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "realtime": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "io": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "maintenance": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "legacy_serial": {
+          "queued": 0,
+          "inFlight": 0
+        }
+      },
+      "clipboard": {
+        "count": 6,
+        "schedulerDelaySampleCount": 71,
+        "avgSchedulerDelayMs": 23.97,
+        "p95SchedulerDelayMs": 98,
+        "lastSchedulerDelayMs": 18,
+        "maxSchedulerDelayMs": 98,
+        "lastDurationMs": 6,
+        "maxDurationMs": 88,
+        "droppedCount": 0,
+        "coalescedCount": 0,
+        "timeoutCount": 0,
+        "errorCount": 0
+      }
+    },
+    {
+      "intervalMs": 250,
+      "durationMs": 3000,
+      "queueDepthPeak": {
+        "critical": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "realtime": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "io": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "maintenance": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "legacy_serial": {
+          "queued": 0,
+          "inFlight": 0
+        }
+      },
+      "clipboard": {
+        "count": 12,
+        "schedulerDelaySampleCount": 37,
+        "avgSchedulerDelayMs": 51.3,
+        "p95SchedulerDelayMs": 136,
+        "lastSchedulerDelayMs": 102,
+        "maxSchedulerDelayMs": 150,
+        "lastDurationMs": 79,
+        "maxDurationMs": 199,
+        "droppedCount": 0,
+        "coalescedCount": 0,
+        "timeoutCount": 0,
+        "errorCount": 0
+      }
+    }
+  ]
+}

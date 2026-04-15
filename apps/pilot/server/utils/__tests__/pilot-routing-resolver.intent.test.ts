@@ -135,6 +135,7 @@ describe('pilot-routing-resolver intent routing', () => {
         defaultRouteComboId: 'default-auto',
         quotaAutoStrategy: 'speed-first',
         explorationRate: 0,
+        scenePolicies: [],
         intentNanoModelId: 'nano-model',
         intentRouteComboId: 'intent-combo',
         imageGenerationModelId: 'image-model',
@@ -155,18 +156,107 @@ describe('pilot-routing-resolver intent routing', () => {
     } as any)
   })
 
-  it('prefers intent nano route for intent_classification', async () => {
+  it('prefers scenePolicies over legacy intent route for intent_classification', async () => {
+    vi.mocked(getPilotAdminRoutingConfig).mockResolvedValueOnce({
+      modelCatalog: [
+        {
+          id: 'chat-model',
+          name: 'chat-model',
+          enabled: true,
+          visible: true,
+          source: 'manual',
+          allowWebsearch: true,
+          allowImageGeneration: false,
+          bindings: [
+            { channelId: 'ch1', providerModel: 'chat-model', enabled: true, priority: 100, weight: 100 },
+          ],
+        },
+        {
+          id: 'nano-model',
+          name: 'nano-model',
+          enabled: true,
+          visible: true,
+          source: 'manual',
+          allowWebsearch: true,
+          allowImageGeneration: true,
+          bindings: [
+            { channelId: 'ch1', providerModel: 'nano-model', enabled: true, priority: 100, weight: 100 },
+          ],
+        },
+        {
+          id: 'image-model',
+          name: 'image-model',
+          enabled: true,
+          visible: true,
+          source: 'manual',
+          allowWebsearch: true,
+          allowImageGeneration: true,
+          bindings: [
+            { channelId: 'ch1', providerModel: 'image-model', enabled: true, priority: 100, weight: 100 },
+          ],
+        },
+      ],
+      routeCombos: [
+        {
+          id: 'intent-combo',
+          name: 'intent-combo',
+          enabled: true,
+          routes: [
+            { channelId: 'ch1', providerModel: 'nano-model', enabled: true, priority: 1, weight: 100 },
+          ],
+        },
+        {
+          id: 'image-combo',
+          name: 'image-combo',
+          enabled: true,
+          routes: [
+            { channelId: 'ch1', providerModel: 'image-model', enabled: true, priority: 1, weight: 100 },
+          ],
+        },
+      ],
+      routingPolicy: {
+        defaultModelId: 'chat-model',
+        defaultRouteComboId: 'default-auto',
+        quotaAutoStrategy: 'speed-first',
+        explorationRate: 0,
+        scenePolicies: [
+          {
+            scene: 'intent_classification',
+            modelId: 'image-model',
+            routeComboId: 'image-combo',
+          },
+        ],
+        intentNanoModelId: 'nano-model',
+        intentRouteComboId: 'intent-combo',
+        imageGenerationModelId: 'image-model',
+        imageRouteComboId: 'image-combo',
+      },
+      lbPolicy: {
+        metricWindowHours: 24,
+        recentRequestWindow: 200,
+        circuitBreakerFailureThreshold: 3,
+        circuitBreakerCooldownMs: 60_000,
+        halfOpenProbeCount: 1,
+      },
+      memoryPolicy: {
+        enabledByDefault: true,
+        allowUserDisable: true,
+        allowUserClear: true,
+      },
+    } as any)
+
     const result = await resolvePilotRoutingSelection({} as any, {
       requestedModelId: 'chat-model',
       intentType: 'intent_classification',
     })
 
-    expect(result.providerModel).toBe('nano-model')
-    expect(result.routeComboId).toBe('intent-combo')
+    expect(result.providerModel).toBe('image-model')
+    expect(result.routeComboId).toBe('image-combo')
+    expect(result.scene).toBe('intent_classification')
     expect(result.intentType).toBe('intent_classification')
   })
 
-  it('uses image route for image_generate intent', async () => {
+  it('scenePolicies 缺失时会回退到 legacy image route', async () => {
     const result = await resolvePilotRoutingSelection({} as any, {
       requestedModelId: 'chat-model',
       intentType: 'image_generate',
@@ -174,7 +264,95 @@ describe('pilot-routing-resolver intent routing', () => {
 
     expect(result.providerModel).toBe('image-model')
     expect(result.routeComboId).toBe('image-combo')
+    expect(result.scene).toBe('image_generate')
     expect(result.intentType).toBe('image_generate')
+  })
+
+  it('chat intent 不受 scenePolicies 影响', async () => {
+    vi.mocked(getPilotAdminRoutingConfig).mockResolvedValueOnce({
+      modelCatalog: [
+        {
+          id: 'chat-model',
+          name: 'chat-model',
+          enabled: true,
+          visible: true,
+          source: 'manual',
+          allowWebsearch: true,
+          allowImageGeneration: false,
+          bindings: [
+            { channelId: 'ch1', providerModel: 'chat-model', enabled: true, priority: 100, weight: 100 },
+          ],
+        },
+        {
+          id: 'nano-model',
+          name: 'nano-model',
+          enabled: true,
+          visible: true,
+          source: 'manual',
+          allowWebsearch: true,
+          allowImageGeneration: true,
+          bindings: [
+            { channelId: 'ch1', providerModel: 'nano-model', enabled: true, priority: 100, weight: 100 },
+          ],
+        },
+        {
+          id: 'image-model',
+          name: 'image-model',
+          enabled: true,
+          visible: true,
+          source: 'manual',
+          allowWebsearch: true,
+          allowImageGeneration: true,
+          bindings: [
+            { channelId: 'ch1', providerModel: 'image-model', enabled: true, priority: 100, weight: 100 },
+          ],
+        },
+      ],
+      routeCombos: [],
+      routingPolicy: {
+        defaultModelId: 'chat-model',
+        defaultRouteComboId: 'default-auto',
+        quotaAutoStrategy: 'speed-first',
+        explorationRate: 0,
+        scenePolicies: [
+          {
+            scene: 'intent_classification',
+            modelId: 'image-model',
+            routeComboId: 'image-combo',
+          },
+          {
+            scene: 'image_generate',
+            modelId: 'nano-model',
+            routeComboId: 'intent-combo',
+          },
+        ],
+        intentNanoModelId: 'nano-model',
+        intentRouteComboId: 'intent-combo',
+        imageGenerationModelId: 'image-model',
+        imageRouteComboId: 'image-combo',
+      },
+      lbPolicy: {
+        metricWindowHours: 24,
+        recentRequestWindow: 200,
+        circuitBreakerFailureThreshold: 3,
+        circuitBreakerCooldownMs: 60_000,
+        halfOpenProbeCount: 1,
+      },
+      memoryPolicy: {
+        enabledByDefault: true,
+        allowUserDisable: true,
+        allowUserClear: true,
+      },
+    } as any)
+
+    const result = await resolvePilotRoutingSelection({} as any, {
+      requestedModelId: 'chat-model',
+      intentType: 'chat',
+    })
+
+    expect(result.providerModel).toBe('chat-model')
+    expect(result.scene).toBeUndefined()
+    expect(result.intentType).toBe('chat')
   })
 
   it('prioritizes model-group builtinTools over channel config', async () => {
@@ -251,6 +429,97 @@ describe('pilot-routing-resolver intent routing', () => {
           ],
         },
       ],
+    } as any)
+
+    const result = await resolvePilotRoutingSelection({} as any, {
+      requestedModelId: 'quota-auto',
+      intentType: 'chat',
+    })
+
+    expect(result.selectionSource).toBe('quota-auto')
+    expect(result.providerModel).toBe('nano-model')
+  })
+
+  it('quota-auto respects disabled binding and skips explicitly disabled providerModel', async () => {
+    vi.mocked(getPilotChannelCatalog).mockResolvedValueOnce({
+      defaultChannelId: 'ch1',
+      channels: [
+        {
+          id: 'ch1',
+          name: 'channel-1',
+          baseUrl: 'https://api.openai.com',
+          apiKey: 'key',
+          model: 'nano-model',
+          adapter: 'openai',
+          transport: 'responses',
+          timeoutMs: 30_000,
+          builtinTools: ['write_todos'],
+          enabled: true,
+          models: [
+            { id: 'disabled-fast-model', enabled: true, priority: 1 },
+            { id: 'nano-model', enabled: true, priority: 10 },
+          ],
+        },
+      ],
+    } as any)
+
+    vi.mocked(getPilotAdminRoutingConfig).mockResolvedValueOnce({
+      modelCatalog: [
+        {
+          id: 'disabled-fast-model',
+          name: 'disabled-fast-model',
+          enabled: true,
+          visible: true,
+          source: 'manual',
+          allowWebsearch: true,
+          allowImageGeneration: false,
+          bindings: [
+            { channelId: 'ch1', providerModel: 'disabled-fast-model', enabled: false, priority: 1, weight: 100 },
+          ],
+        },
+        {
+          id: 'nano-model',
+          name: 'nano-model',
+          enabled: true,
+          visible: true,
+          source: 'manual',
+          allowWebsearch: true,
+          allowImageGeneration: false,
+          bindings: [
+            { channelId: 'ch1', providerModel: 'nano-model', enabled: true, priority: 10, weight: 100 },
+          ],
+        },
+      ],
+      routeCombos: [
+        {
+          id: 'default-auto',
+          name: 'default-auto',
+          enabled: false,
+          routes: [],
+        },
+      ],
+      routingPolicy: {
+        defaultModelId: 'quota-auto',
+        defaultRouteComboId: 'default-auto',
+        quotaAutoStrategy: 'speed-first',
+        explorationRate: 0,
+        intentNanoModelId: '',
+        intentRouteComboId: '',
+        imageGenerationModelId: '',
+        imageRouteComboId: '',
+      },
+      lbPolicy: {
+        metricWindowHours: 24,
+        recentRequestWindow: 200,
+        circuitBreakerFailureThreshold: 3,
+        circuitBreakerCooldownMs: 60_000,
+        halfOpenProbeCount: 1,
+      },
+      memoryPolicy: {
+        enabledByDefault: true,
+        allowUserDisable: true,
+        allowUserClear: true,
+      },
     } as any)
 
     const result = await resolvePilotRoutingSelection({} as any, {

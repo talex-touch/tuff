@@ -5,7 +5,7 @@
  * Handles initialization, IPC registration, and plugin integration.
  */
 
-import type { MaybePromise, NativeShareOptions } from '@talex-touch/utils'
+import type { MaybePromise, ModuleInitContext, NativeShareOptions } from '@talex-touch/utils'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { FlowBusIPC } from './ipc'
 import {
@@ -14,7 +14,7 @@ import {
   NotificationEvents,
   type HandlerContext
 } from '@talex-touch/utils/transport/main'
-import { genTouchApp } from '../../core'
+import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import { coreBoxManager } from '../box-tool/core-box/manager'
 import { getCoreBoxWindow, windowManager } from '../box-tool/core-box/window'
@@ -44,6 +44,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
   static key: symbol = Symbol.for('FlowBus')
 
   private ipc: FlowBusIPC | null = null
+  private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private transportDisposers: Array<() => void> = []
   private flowDeliveryDisposers: Map<string, () => void> = new Map()
 
@@ -56,11 +57,10 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
   /**
    * Initializes the Flow Bus module
    */
-  async onInit(): Promise<void> {
-    const channel = $app.channel
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel, keyManager)
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    const runtime = resolveMainRuntime(ctx, 'FlowBusModule.onInit')
+    const transport = runtime.transport
+    this.transport = transport
 
     // Initialize IPC handlers
     this.ipc = initializeFlowBusIPC(transport)
@@ -156,7 +156,9 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
         enforce(context, 'flow:native:share', payload?._sdkapi)
         const options = nativeShareService.payloadToShareOptions(payload.payload)
         if (payload.target) {
-          options.target = payload.target as NativeShareOptions['target']
+          options.target = nativeShareService.normalizeTarget(
+            payload.target
+          ) as NativeShareOptions['target']
         }
         return await nativeShareService.share(options)
       })
@@ -202,14 +204,9 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
           return
         }
 
-        const channel = genTouchApp().channel
-        const keyManager =
-          (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-        const tx = getTuffTransportMain(channel, keyManager)
-
-        tx.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerDetach, undefined).catch(
-          () => {}
-        )
+        this.transport
+          ?.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerDetach, undefined)
+          .catch(() => {})
       },
       { owner: FLOW_SHORTCUT_OWNER }
     )
@@ -299,12 +296,8 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       const err = error as { code?: string }
       if (err?.code === 'PERMISSION_DENIED') {
         try {
-          const channel = genTouchApp().channel
-          const keyManager =
-            (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-          const tx = getTuffTransportMain(channel, keyManager)
           const id = `corebox.permission.denied.${Date.now()}`
-          tx.broadcast(NotificationEvents.push.notify, {
+          this.transport?.broadcast(NotificationEvents.push.notify, {
             id,
             request: {
               id,
@@ -345,12 +338,9 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       return
     }
 
-    const channel = genTouchApp().channel
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const tx = getTuffTransportMain(channel, keyManager)
-
-    tx.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerTransfer, undefined).catch(() => {})
+    this.transport
+      ?.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerTransfer, undefined)
+      .catch(() => {})
     console.log('[FlowBusModule] Triggered flow transfer shortcut')
   }
 
@@ -383,6 +373,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       }
     }
     this.transportDisposers = []
+    this.transport = null
 
     // Clear all targets
     flowTargetRegistry.clear()

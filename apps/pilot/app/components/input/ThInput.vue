@@ -4,10 +4,9 @@ import type { IChatInnerItemMeta, IChatItemStatus, IInnerItemMeta, ISendState } 
 import { useFloating } from '@floating-ui/vue'
 import { encode } from 'gpt-tokenizer'
 import { PILOT_CAPABILITY_META_MAP } from '~~/shared/pilot-capability-meta'
-import { $endApi } from '~/composables/api/base'
+import { endHttp } from '~/composables/api/axios'
 import { useAttachmentCapability } from '~/composables/useAttachmentCapability'
 import { usePilotRuntimeModels } from '~/composables/usePilotRuntimeModels'
-import { globalOptions } from '~/constants'
 import { cur, tipsVisible } from '../chat/input-tips'
 import InputHeaderFiles from './addon/InputHeaderFiles.vue'
 import ThInputPlus from './ThInputPlus.vue'
@@ -19,7 +18,7 @@ const props = defineProps<{
   center: boolean
   templateEnable: boolean
   tip: ITip | null
-  pilotModeDefault?: boolean
+  sessionId?: string
 }>()
 const emits = defineEmits<{
   (event: 'selectTemplate', data: any): void
@@ -31,7 +30,6 @@ const inputProperty = ref<IChatInnerItemMeta>({
   internet: true,
   thinking: true,
   temperature: 50,
-  pilotMode: props.pilotModeDefault === true,
 })
 const {
   findModel,
@@ -61,16 +59,6 @@ const inputHistories = useLocalStorage<string[]>('inputHistories', [])
 const inputHistoryIndex = ref(inputHistories.value.length - 1)
 const showSend = computed(() => Boolean(input.value.text.trim()) || syncedFiles.value.length > 0)
 const canSend = computed(() => !hasUploadingFiles.value && showSend.value && props.sendState !== 'sending_until_accepted')
-
-watch(
-  () => props.pilotModeDefault,
-  (next) => {
-    if (typeof next === 'boolean') {
-      inputProperty.value.pilotMode = next
-    }
-  },
-  { immediate: true },
-)
 
 function getCapabilityDisabledMessage(kind: 'thinking' | 'websearch' | 'file'): string {
   if (kind === 'thinking') {
@@ -128,7 +116,7 @@ function handleSend(event: Event) {
     ...item,
     extra: undefined,
   }))
-  const normalizedText = input.value.text || (files.length > 0 ? '(无正文内容)' : '')
+  const normalizedText = input.value.text
 
   const textMeta: IInnerItemMeta = {
     type: 'text',
@@ -352,23 +340,34 @@ function handleModelSelect(model: string) {
   input.value.text = ''
 }
 
-function resolveUploadedFileUrl(payload: Record<string, any>): string {
-  const absoluteUrl = String(payload?.url || '').trim()
-  if (absoluteUrl.startsWith('http://') || absoluteUrl.startsWith('https://')) {
-    return absoluteUrl
-  }
+interface SessionAttachmentPayload {
+  id: string
+  type?: 'image' | 'file'
+  kind?: 'image' | 'file'
+  ref?: string
+  name?: string
+  mimeType?: string
+  previewUrl?: string
+  modelUrl?: string
+}
 
-  let endsUrl = globalOptions.getEndsUrl()
-  if (endsUrl.endsWith('/')) {
-    endsUrl = endsUrl.slice(0, -1)
-  }
+async function uploadAttachmentToSession(sessionId: string, file: File): Promise<SessionAttachmentPayload> {
+  const formData = new FormData()
+  formData.append('file', file, file.name)
+  formData.append('name', file.name)
+  formData.append('mimeType', file.type || 'application/octet-stream')
+  formData.append('size', String(file.size))
 
-  const filename = String(payload?.filename || '').trim()
-  if (!filename) {
-    return ''
+  const payload = await endHttp.$http({
+    method: 'POST',
+    url: `chat/sessions/${encodeURIComponent(sessionId)}/uploads`,
+    data: formData,
+  }) as Record<string, any>
+  const attachment = payload?.attachment as SessionAttachmentPayload | undefined
+  if (!attachment?.id) {
+    throw new Error('附件上传失败：无有效 attachmentId')
   }
-
-  return new URL(`${endsUrl}${filename}`).href
+  return attachment
 }
 
 async function handleAttachmentUpload(file: File) {
@@ -391,8 +390,9 @@ async function handleAttachmentUpload(file: File) {
   const meta = reactive({
     type: isImage ? 'image' : 'file',
     value: '',
-    data: isImage ? '' : (file.type || 'application/octet-stream'),
+    data: file.type || 'application/octet-stream',
     name: file.name,
+    attachmentId: '',
     extra: obj,
   }) as any
 
@@ -416,9 +416,16 @@ async function handleAttachmentUpload(file: File) {
 
   const uploadNow = async () => {
     obj.syncing = true
-    let res: any
+    const sessionId = String(props.sessionId || '').trim()
+    if (!sessionId) {
+      obj.syncing = false
+      obj.error = '会话未就绪，请稍后重试。'
+      return
+    }
+
+    let attachment: SessionAttachmentPayload
     try {
-      res = await $endApi.v1.common.upload(file)
+      attachment = await uploadAttachmentToSession(sessionId, file)
     }
     catch (error) {
       obj.syncing = false
@@ -427,20 +434,22 @@ async function handleAttachmentUpload(file: File) {
     }
     obj.syncing = false
 
-    if (res.code === 200) {
-      const uploadedUrl = resolveUploadedFileUrl(res.data || {})
-      if (uploadedUrl) {
-        obj.url = uploadedUrl
-        meta.value = uploadedUrl
-        obj.sync = true
-        return
-      }
-
+    const previewUrl = String(attachment.previewUrl || attachment.modelUrl || attachment.ref || '').trim()
+    if (!previewUrl) {
       obj.error = '附件地址解析失败'
       return
     }
 
-    obj.error = normalizeAttachmentError(res.message || '附件上传失败')
+    if (!isImage) {
+      obj.url = previewUrl
+    }
+
+    meta.attachmentId = attachment.id
+    meta.value = previewUrl
+    meta.name = String(attachment.name || file.name || '').trim() || file.name
+    meta.type = attachment.type === 'image' || attachment.kind === 'image' ? 'image' : 'file'
+    meta.data = String(attachment.mimeType || meta.data || file.type || 'application/octet-stream')
+    obj.sync = true
   }
 
   if (!isImage) {
@@ -460,7 +469,6 @@ async function handleAttachmentUpload(file: File) {
 
     obj.img = img
     obj.url = dataUrl
-    meta.data = dataUrl
 
     void uploadNow()
   }
@@ -599,9 +607,8 @@ onStartTyping(focusInput)
     />
 
     <ThInputPlus
-      v-model="inputProperty" :capabilities="inputCapabilities" :pilot-mode="inputProperty.pilotMode === true"
-      :hide="input.text.startsWith('@') || template?.title"
-      @toggle-pilot-mode="inputProperty.pilotMode = !inputProperty.pilotMode"
+      v-model="inputProperty" :capabilities="inputCapabilities"
+      :hide="Boolean(input.text.startsWith('@') || template?.title)"
       @file="handleFilePlus"
     />
 

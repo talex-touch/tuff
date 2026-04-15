@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// Experimental workspace-only UI. The production homepage keeps the legacy chat surface.
 import type { ChatMessageModel } from '@talex-touch/tuffex'
 import type { PilotComposerAttachment, PilotRuntimeStatusSnapshot, PilotToolCall, PilotTrace } from '../../composables/pilot-chat.types'
 import {
@@ -108,13 +109,7 @@ function onAttachmentSelected(event: Event) {
             Intent: {{ props.runtimeStatus.intentLabel }}
           </span>
           <span class="pilot-runtime-pill">
-            Route: {{ props.runtimeStatus.routeLabel }}
-          </span>
-          <span class="pilot-runtime-pill">
             Req Model: {{ props.runtimeStatus.requestModelLabel }}
-          </span>
-          <span class="pilot-runtime-pill">
-            Actual: {{ props.runtimeStatus.actualModelLabel }}
           </span>
           <span class="pilot-runtime-pill">
             Websearch: {{ props.runtimeStatus.websearchLabel }}

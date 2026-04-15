@@ -66,7 +66,7 @@ import {
   files as filesSchema,
   scanProgress
 } from '../../../../db/schema'
-import { withSqliteRetry } from '../../../../db/sqlite-retry'
+import { isSqliteBusyError, withSqliteRetry } from '../../../../db/sqlite-retry'
 import { createDbUtils } from '../../../../db/utils'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import {
@@ -101,8 +101,20 @@ import { ThumbnailWorkerClient } from './workers/thumbnail-worker-client'
 import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
 import {
   SearchIndexWorkerClient,
-  type PersistEntry
+  type PersistEntry,
+  type UpsertFileRecord
 } from '../../search-engine/workers/search-index-worker-client'
+import {
+  getProgressStreamFlushDelayMs,
+  shouldEmitProgressStreamImmediately
+} from './services/file-provider-progress-stream-service'
+import {
+  commitIndexWorkerFlushBatch,
+  getIndexWorkerBusyRetryDelay,
+  getIndexWorkerFlushDelay,
+  rollbackIndexWorkerFlushBatch,
+  takeIndexWorkerFlushBatch
+} from './services/file-provider-index-flush-service'
 import {
   getWatchDepthForPath as resolveWatchDepthForPath,
   normalizeWatchPath
@@ -123,6 +135,12 @@ const SEMANTIC_TRIGGER_MAX_CANDIDATES = 20
 const SEMANTIC_SEARCH_TIMEOUT_MS = 120
 const BASE64_MARKER = 'base64,'
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
+const INDEX_WORKER_FLUSH_DELAY_MS = 250
+const INDEX_WORKER_FLUSH_DELAY_BACKLOG_MS = 500
+const INDEX_WORKER_FLUSH_DEFER_MS = 300
+const INDEX_WORKER_DB_BACKPRESSURE_MAX_QUEUED = 10
+const INDEX_WORKER_FLUSH_BUSY_RETRY_BASE_MS = 250
+const INDEX_WORKER_FLUSH_BUSY_RETRY_MAX_MS = 5000
 
 function isValidBase64DataUrl(value: string): boolean {
   const markerIndex = value.indexOf(BASE64_MARKER)
@@ -314,7 +332,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private incrementalTaskChain: Promise<void> = Promise.resolve()
   private readonly pendingIncrementalPaths: Map<string, IncrementalUpdatePayload> = new Map()
 
-  private readonly isCaseInsensitiveFs = process.platform !== 'linux'
+  private readonly isCaseInsensitiveFs =
+    process.platform === 'darwin' || process.platform === 'win32'
   private readonly timestampToleranceMs = 1_000
   private readonly handleFsAddedOrChanged = (event: ITouchEvent) => {
     const fileEvent = event as FileAddedEvent | FileChangedEvent
@@ -333,6 +352,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private openersChannelRegistered = false
   private readonly progressStreamContexts = new Set<StreamContext<FileIndexProgressPayload>>()
+  private lastProgressStreamPayload: FileIndexProgressPayload | null = null
+  private lastProgressStreamEmitAt = 0
+  private pendingProgressStreamPayload: FileIndexProgressPayload | null = null
+  private progressStreamFlushTimer: NodeJS.Timeout | null = null
   private launchServicesLoadPromise: Promise<LaunchServicesHandler[]> | null = null
   private readonly openerNegativeCache = new Map<string, number>()
   private readonly openerResolveConcurrency = 2
@@ -360,9 +383,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   >()
 
   private readonly pendingIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
+  private readonly inflightIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
   private indexWorkerFlushTimer: NodeJS.Timeout | null = null
   /** Guard to prevent overlapping flushIndexWorkerResults calls */
   private indexWorkerFlushing = false
+  private indexWorkerFlushBusyRetryCount = 0
 
   private readonly pendingContentProgress = new Map<
     number,
@@ -1394,13 +1419,71 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   public registerProgressStream(context: StreamContext<FileIndexProgressPayload>): void {
     this.progressStreamContexts.add(context)
+    if (this.lastProgressStreamPayload) {
+      // Emit asynchronously to avoid adding extra sync work to stream-start handshake.
+      setImmediate(() => {
+        if (!context.isCancelled()) {
+          context.emit(this.lastProgressStreamPayload as FileIndexProgressPayload)
+        }
+      })
+    }
     this.ensureProgressCleanupTimer()
   }
 
   private emitProgressStream(payload: FileIndexProgressPayload): void {
     if (this.progressStreamContexts.size === 0) {
+      this.lastProgressStreamPayload = payload
+      this.clearProgressStreamFlushTimer()
+      this.pendingProgressStreamPayload = null
       return
     }
+
+    const now = Date.now()
+    const previous = this.lastProgressStreamEmitAt > 0 ? this.lastProgressStreamPayload : null
+
+    if (
+      shouldEmitProgressStreamImmediately({
+        previous,
+        next: payload,
+        now,
+        lastEmitAt: this.lastProgressStreamEmitAt
+      })
+    ) {
+      this.flushProgressStreamPayload(payload, now)
+      return
+    }
+
+    this.pendingProgressStreamPayload = payload
+    this.scheduleProgressStreamFlush(now)
+  }
+
+  private scheduleProgressStreamFlush(now: number): void {
+    if (this.progressStreamFlushTimer) {
+      return
+    }
+
+    const delayMs = getProgressStreamFlushDelayMs(now, this.lastProgressStreamEmitAt)
+    this.progressStreamFlushTimer = setTimeout(() => {
+      this.progressStreamFlushTimer = null
+      const pending = this.pendingProgressStreamPayload
+      this.pendingProgressStreamPayload = null
+      if (!pending) {
+        return
+      }
+      this.flushProgressStreamPayload(pending, Date.now())
+    }, delayMs)
+  }
+
+  private clearProgressStreamFlushTimer(): void {
+    if (this.progressStreamFlushTimer) {
+      clearTimeout(this.progressStreamFlushTimer)
+      this.progressStreamFlushTimer = null
+    }
+  }
+
+  private flushProgressStreamPayload(payload: FileIndexProgressPayload, emittedAt: number): void {
+    this.lastProgressStreamPayload = payload
+    this.lastProgressStreamEmitAt = emittedAt
 
     for (const stream of Array.from(this.progressStreamContexts)) {
       if (stream.isCancelled()) {
@@ -1411,6 +1494,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (this.progressStreamContexts.size === 0) {
+      this.clearProgressStreamFlushTimer()
+      this.pendingProgressStreamPayload = null
       this.clearProgressCleanupTimer()
     }
   }
@@ -1440,6 +1525,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private clearProgressCleanupTimer(): void {
     pollingService.unregister(FILE_PROVIDER_PROGRESS_TASK_ID)
+    this.clearProgressStreamFlushTimer()
+    this.pendingProgressStreamPayload = null
   }
 
   private async withOpenerResolveSlot<T>(task: () => Promise<T>): Promise<T> {
@@ -1578,16 +1665,26 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     this.pendingIndexWorkerResults.set(payload.fileId, payload)
+    this.scheduleIndexWorkerFlush(
+      getIndexWorkerFlushDelay(this.pendingIndexWorkerResults.size, {
+        baseDelayMs: INDEX_WORKER_FLUSH_DELAY_MS,
+        backlogDelayMs: INDEX_WORKER_FLUSH_DELAY_BACKLOG_MS
+      }),
+      'worker-payload'
+    )
+  }
 
-    if (!this.indexWorkerFlushTimer) {
-      // Use a longer flush interval to accumulate more results per batch,
-      // reducing the number of heavy indexItems calls on the main thread.
-      const flushDelay = this.pendingIndexWorkerResults.size > 30 ? 500 : 250
-      this.indexWorkerFlushTimer = setTimeout(() => {
-        this.indexWorkerFlushTimer = null
-        void this.flushIndexWorkerResults()
-      }, flushDelay)
+  private scheduleIndexWorkerFlush(delayMs: number, reason: string): void {
+    if (this.indexWorkerFlushTimer) {
+      return
     }
+    const safeDelay = Math.max(0, Math.round(delayMs))
+    this.indexWorkerFlushTimer = setTimeout(() => {
+      this.indexWorkerFlushTimer = null
+      void this.flushIndexWorkerResults().catch((error) => {
+        this.logWarn('flushIndexWorkerResults rejected unexpectedly', error, { reason })
+      })
+    }, safeDelay)
   }
 
   private async flushIndexWorkerResults(): Promise<void> {
@@ -1604,20 +1701,50 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // This avoids multiple competing SQLite transactions that compound
     // event loop blocking.
     if (this.indexWorkerFlushing) {
-      if (!this.indexWorkerFlushTimer) {
-        this.indexWorkerFlushTimer = setTimeout(() => {
-          this.indexWorkerFlushTimer = null
-          void this.flushIndexWorkerResults()
-        }, 300)
-      }
+      this.scheduleIndexWorkerFlush(INDEX_WORKER_FLUSH_DEFER_MS, 'flush-in-progress')
       return
     }
 
     this.indexWorkerFlushing = true
+    let flushSucceeded = false
     try {
       await this.doFlushIndexWorkerResults()
+      this.indexWorkerFlushBusyRetryCount = 0
+      flushSucceeded = true
+    } catch (error) {
+      const isBusy = isSqliteBusyError(error)
+      const delayMs = isBusy
+        ? (() => {
+            const retry = getIndexWorkerBusyRetryDelay(this.indexWorkerFlushBusyRetryCount, {
+              baseDelayMs: INDEX_WORKER_FLUSH_BUSY_RETRY_BASE_MS,
+              maxDelayMs: INDEX_WORKER_FLUSH_BUSY_RETRY_MAX_MS
+            })
+            this.indexWorkerFlushBusyRetryCount = retry.nextRetryCount
+            return retry.delayMs
+          })()
+        : getIndexWorkerFlushDelay(this.pendingIndexWorkerResults.size, {
+            baseDelayMs: INDEX_WORKER_FLUSH_DELAY_MS,
+            backlogDelayMs: INDEX_WORKER_FLUSH_DELAY_BACKLOG_MS
+          })
+      this.logWarn('Index worker flush failed, scheduling retry', error, {
+        isBusy,
+        delayMs,
+        pending: this.pendingIndexWorkerResults.size,
+        inflight: this.inflightIndexWorkerResults.size
+      })
+      this.scheduleIndexWorkerFlush(delayMs, isBusy ? 'sqlite-busy-retry' : 'flush-failed')
     } finally {
       this.indexWorkerFlushing = false
+    }
+
+    if (flushSucceeded && this.pendingIndexWorkerResults.size > 0) {
+      this.scheduleIndexWorkerFlush(
+        getIndexWorkerFlushDelay(this.pendingIndexWorkerResults.size, {
+          baseDelayMs: INDEX_WORKER_FLUSH_DELAY_MS,
+          backlogDelayMs: INDEX_WORKER_FLUSH_DELAY_BACKLOG_MS
+        }),
+        'drain-remaining'
+      )
     }
   }
 
@@ -1627,29 +1754,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     // Adaptive flush batch size — AIMD scheduler adjusts based on transaction duration.
     const FLUSH_BATCH_SIZE = this.flushBatchScheduler.currentSize
-    let entries: IndexWorkerFileResult[]
-    if (this.pendingIndexWorkerResults.size <= FLUSH_BATCH_SIZE) {
-      entries = Array.from(this.pendingIndexWorkerResults.values())
-      this.pendingIndexWorkerResults.clear()
-    } else {
-      entries = []
-      const keysToDelete: number[] = []
-      for (const [key, value] of this.pendingIndexWorkerResults) {
-        entries.push(value)
-        keysToDelete.push(key)
-        if (entries.length >= FLUSH_BATCH_SIZE) break
-      }
-      for (const key of keysToDelete) {
-        this.pendingIndexWorkerResults.delete(key)
-      }
-      // Schedule another flush for remaining items
-      if (this.pendingIndexWorkerResults.size > 0 && !this.indexWorkerFlushTimer) {
-        this.indexWorkerFlushTimer = setTimeout(() => {
-          this.indexWorkerFlushTimer = null
-          void this.flushIndexWorkerResults()
-        }, 400)
-      }
-    }
+    const { entries, keys } = takeIndexWorkerFlushBatch(
+      this.pendingIndexWorkerResults,
+      this.inflightIndexWorkerResults,
+      FLUSH_BATCH_SIZE
+    )
+    if (entries.length === 0) return
 
     const withContent = entries.filter(
       (e) => e.indexItem.content && e.indexItem.content.length > 0
@@ -1689,9 +1799,20 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     // Single worker call: persist files/embeddings/progress + index into FTS5.
     // All DB writes happen in the worker thread — no main-thread SQLite contention.
-    const flushStart = performance.now()
-    await this.searchIndexWorker.persistAndIndex(persistEntries)
-    this.flushBatchScheduler.recordDuration(performance.now() - flushStart)
+    try {
+      await dbWriteScheduler.waitForCapacity(INDEX_WORKER_DB_BACKPRESSURE_MAX_QUEUED)
+      const flushStart = performance.now()
+      await this.searchIndexWorker.persistAndIndex(persistEntries)
+      this.flushBatchScheduler.recordDuration(performance.now() - flushStart)
+      commitIndexWorkerFlushBatch(this.inflightIndexWorkerResults, keys)
+    } catch (error) {
+      rollbackIndexWorkerFlushBatch(
+        this.pendingIndexWorkerResults,
+        this.inflightIndexWorkerResults,
+        keys
+      )
+      throw error
+    }
   }
 
   private extractFileIconQueued(filePath: string): Promise<Buffer | null> {
@@ -2960,6 +3081,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       reconciliationPaths: reconciliationPaths.length,
       duration: formatDuration(performance.now() - strategyStart)
     })
+    const completedScanProgressPaths = new Set<string>()
 
     // --- 3. Full Scan for New Paths ---
     if (newPathsToScan.length > 0) {
@@ -3020,25 +3142,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               recordOffset += chunk.length
 
               await appTaskGate.waitForIdle()
-              await dbWriteScheduler.waitForCapacity(4)
               const chunkStart = performance.now()
-              const inserted = await this.withDbWrite('file-index.full-scan.upsert', async () =>
-                db
-                  .insert(filesSchema)
-                  .values(chunk)
-                  .onConflictDoUpdate({
-                    target: filesSchema.path,
-                    set: {
-                      name: sql`excluded.name`,
-                      extension: sql`excluded.extension`,
-                      size: sql`excluded.size`,
-                      mtime: sql`excluded.mtime`,
-                      ctime: sql`excluded.ctime`,
-                      lastIndexedAt: sql`excluded.last_indexed_at`
-                    }
-                  })
-                  .returning()
-              )
+              const inserted = (await this.searchIndexWorker.upsertFiles(
+                chunk as UpsertFileRecord[]
+              )) as unknown as (typeof filesSchema.$inferSelect)[]
               this.upsertBatchScheduler.recordDuration(performance.now() - chunkStart)
               this.logDebug('Full scan chunk inserted', {
                 path: newPath,
@@ -3066,6 +3173,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }
       } finally {
         fullScanContext()
+      }
+      for (const scannedPath of newPathsToScan) {
+        completedScanProgressPaths.add(scannedPath)
       }
     }
 
@@ -3232,25 +3342,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             chunks,
             async (chunk, chunkIndex) => {
               await appTaskGate.waitForIdle()
-              await dbWriteScheduler.waitForCapacity(4)
               const chunkStart = performance.now()
-              const inserted = await this.withDbWrite('file-index.reconcile.upsert', () =>
-                db
-                  .insert(filesSchema)
-                  .values(chunk)
-                  .onConflictDoUpdate({
-                    target: filesSchema.path,
-                    set: {
-                      name: sql`excluded.name`,
-                      extension: sql`excluded.extension`,
-                      size: sql`excluded.size`,
-                      mtime: sql`excluded.mtime`,
-                      ctime: sql`excluded.ctime`,
-                      lastIndexedAt: sql`excluded.last_indexed_at`
-                    }
-                  })
-                  .returning()
-              )
+              const inserted = (await this.searchIndexWorker.upsertFiles(
+                chunk as UpsertFileRecord[]
+              )) as unknown as (typeof filesSchema.$inferSelect)[]
               this.logDebug('Reconciliation chunk inserted', {
                 chunk: `${chunkIndex + 1}/${chunks.length}`,
                 size: chunk.length,
@@ -3271,17 +3366,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           )
         }
 
-        const scanTime = new Date()
-        await this.withDbWrite('file-index.scan-progress.bulk-upsert', () =>
-          db
-            .insert(scanProgress)
-            .values(reconciliationPaths.map((path) => ({ path, lastScanned: scanTime })))
-            .onConflictDoUpdate({
-              target: scanProgress.path,
-              set: { lastScanned: scanTime }
-            })
-        )
-
         this.logDebug('Reconciliation completed', {
           duration: formatDuration(performance.now() - reconciliationStart),
           added: filesToAdd.length,
@@ -3291,6 +3375,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       } finally {
         reconciliationContext()
       }
+      for (const reconciledPath of reconciliationPaths) {
+        completedScanProgressPaths.add(reconciledPath)
+      }
+    }
+
+    if (completedScanProgressPaths.size > 0) {
+      const scanTime = new Date()
+      await this.searchIndexWorker.upsertScanProgress(
+        Array.from(completedScanProgressPaths),
+        scanTime.toISOString()
+      )
     }
 
     this.emitIndexingProgress('completed', 1, 1)
@@ -3417,6 +3512,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     let status: 'success' | 'failed' = 'success'
 
     try {
+      const desiredKeywordExtensions = new Map<number, string>()
+
       await runAdaptiveTaskQueue(
         files,
         async (file) => {
@@ -3439,11 +3536,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           const keywords = KEYWORD_MAP[fileExtension]
           if (keywords) {
             if (fileId) {
-              extensionsToAdd.push({
-                fileId,
-                key: 'keywords',
-                value: JSON.stringify(keywords)
-              })
+              desiredKeywordExtensions.set(fileId, JSON.stringify(keywords))
             }
           }
         },
@@ -3452,6 +3545,26 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           label: 'FileProvider::processFileExtensions'
         }
       )
+
+      if (desiredKeywordExtensions.size > 0) {
+        const fileIds = Array.from(desiredKeywordExtensions.keys())
+        const existingKeywordRows = await this.dbUtils!.getFileExtensionsByFileIds(fileIds, [
+          'keywords'
+        ])
+        const existingKeywordMap = new Map<number, string>()
+        for (const row of existingKeywordRows) {
+          if (row.key === 'keywords' && typeof row.value === 'string') {
+            existingKeywordMap.set(row.fileId, row.value)
+          }
+        }
+
+        for (const [fileId, value] of desiredKeywordExtensions.entries()) {
+          if (existingKeywordMap.get(fileId) === value) {
+            continue
+          }
+          extensionsToAdd.push({ fileId, key: 'keywords', value })
+        }
+      }
 
       if (extensionsToAdd.length > 0) {
         await this.withDbWrite('file-index.extensions.upsert', () =>

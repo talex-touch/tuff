@@ -135,14 +135,38 @@ curl "http://127.0.0.1:19021/health"
 - 1Panel 侧 webhook 服务必须健康且可达（`/health` 正常、`X-Pilot-Token` 与 `PILOT_WEBHOOK_TOKEN` 一致、仓库/分支白名单匹配）。
 - 若自动触发未生效，可走 `ssh home` 手动兜底（见“3）手动部署”步骤）。
 
-## 6）回滚机制
+## 6）SSE / 反向代理配置
+
+- `/api/chat/sessions/*/stream` 是长连接 SSE；1Panel/Nginx 反向代理必须关闭 buffering，否则 `intent / planning / tool / assistant` 事件会被攒到请求结束后再一次性返回。
+- 应用端已返回 `X-Accel-Buffering: no`，但如果 1Panel 自定义 Nginx 模板覆盖了代理配置，仍需显式关闭 `proxy_buffering`。
+- 建议对 Pilot 站点或至少对聊天流接口追加如下配置：
+
+```nginx
+location ~ ^/api/chat/sessions/.*/stream$ {
+  proxy_http_version 1.1;
+  proxy_buffering off;
+  proxy_request_buffering off;
+  proxy_cache off;
+}
+```
+
+- 若使用 1Panel 的“网站设置 -> 反向代理 / 高级配置”，请确认没有额外把 `X-Accel-Buffering` 改回 `yes`。
+- 建议在部署后执行一次烟测：
+
+```bash
+pnpm -C "apps/pilot" run smoke:chat-stream -- --base-url "https://your-pilot-domain"
+```
+
+- 脚本会自动创建匿名会话，检查 `text/event-stream`、`X-Accel-Buffering: no`、首帧时间，以及是否出现“整段在流结束前都不出首块”的 buffering 信号；命中疑似 buffering 会直接返回非 0 退出码。
+
+## 7）回滚机制
 
 - 记录当前运行镜像
 - 部署目标镜像
 - 执行健康检查
 - 检查失败且允许回滚时，自动回滚到上一版本镜像
 
-## 7）说明
+## 8）说明
 
 - 当前部署链路仅支持 Node Server（不再使用 Cloudflare runtime）
 - 运行时强制依赖 PostgreSQL + Redis

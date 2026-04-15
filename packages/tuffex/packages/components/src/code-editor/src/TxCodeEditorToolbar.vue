@@ -41,6 +41,14 @@ const resolvedActions = computed(() => {
   return props.actions?.length ? props.actions : defaultActions
 })
 
+function resolveIconSource(action: CodeEditorToolbarAction) {
+  return action.icon && typeof action.icon !== 'string' ? action.icon : null
+}
+
+function resolveIconName(action: CodeEditorToolbarAction) {
+  return typeof action.icon === 'string' ? action.icon : ''
+}
+
 function resolveLabel(action: CodeEditorToolbarAction) {
   return action.label ?? defaultLabels[action.key] ?? action.key
 }
@@ -65,8 +73,8 @@ function handleAction(action: CodeEditorToolbarAction) {
         :disabled="action.disabled"
         @click="handleAction(action)"
       >
-        <TxIcon v-if="action.icon && typeof action.icon !== 'string'" :icon="action.icon" :size="16" />
-        <TxIcon v-else-if="action.icon" :name="action.icon" :size="16" />
+        <TxIcon v-if="resolveIconSource(action)" :icon="resolveIconSource(action)" :size="16" />
+        <TxIcon v-else-if="resolveIconName(action)" :name="resolveIconName(action)" :size="16" />
         <span class="tx-code-editor-toolbar__label">{{ resolveLabel(action) }}</span>
         <span v-if="action.shortcut" class="tx-code-editor-toolbar__shortcut">{{ action.shortcut }}</span>
       </button>

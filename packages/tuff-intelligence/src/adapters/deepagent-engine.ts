@@ -1,10 +1,10 @@
-import { ChatOpenAI } from '@langchain/openai'
-import { createDeepAgent } from 'deepagents'
 import type { SubAgent } from 'deepagents'
+import type { StructuredTool } from '@langchain/core/tools'
 import { networkClient } from '@talex-touch/utils/network'
 import type { AgentEngineAdapter } from './engine'
 import type { AgentErrorDetail } from '../protocol/error-detail'
 import type { TurnState, UserMessageAttachment } from '../protocol/session'
+import { shouldIncludePilotMessageInModelContext } from '../business/pilot/conversation'
 import { toAgentErrorDetail } from '../protocol/error-detail'
 import { LangChainEngineAdapter } from './langchain-engine'
 
@@ -47,6 +47,7 @@ export interface DeepAgentEngineOptions {
   systemPrompt?: DeepAgentPromptResolver
   subagents?: DeepAgentSubAgentConfig[]
   builtinTools?: Array<'write_todos' | 'read_file' | 'write_file' | 'edit_file' | 'ls'>
+  tools?: StructuredTool[]
   onAudit?: (record: DeepAgentAuditRecord) => Promise<void> | void
 }
 
@@ -57,6 +58,28 @@ const OPENAI_CHAT_SUFFIXES = ['/chat/completions', '/completions']
 const OPENAI_RESPONSES_SUFFIXES = ['/v1/responses', '/responses']
 const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']
 const UNSUPPORTED_CHAT_COMPLETIONS_BASE_URLS = new Set<string>()
+
+type LangChainOpenAiModule = typeof import('@langchain/openai')
+type DeepAgentsModule = typeof import('deepagents')
+
+let langChainOpenAiModulePromise: Promise<LangChainOpenAiModule> | null = null
+let deepAgentsModulePromise: Promise<DeepAgentsModule> | null = null
+
+async function getChatOpenAIConstructor(): Promise<LangChainOpenAiModule['ChatOpenAI']> {
+  if (!langChainOpenAiModulePromise) {
+    langChainOpenAiModulePromise = import('@langchain/openai')
+  }
+  const module = await langChainOpenAiModulePromise
+  return module.ChatOpenAI
+}
+
+async function getCreateDeepAgent(): Promise<DeepAgentsModule['createDeepAgent']> {
+  if (!deepAgentsModulePromise) {
+    deepAgentsModulePromise = import('deepagents')
+  }
+  const module = await deepAgentsModulePromise
+  return module.createDeepAgent
+}
 
 function normalizeTransport(value: unknown): 'auto' | 'responses' | 'chat.completions' {
   const normalized = String(value || '').trim().toLowerCase()
@@ -78,6 +101,9 @@ function toBooleanFlag(value: unknown): boolean {
 }
 
 function shouldUseDirectStream(options: DeepAgentEngineOptions): boolean {
+  if (Array.isArray(options.tools) && options.tools.length > 0) {
+    return false
+  }
   const metadata = toRecord(options.metadata)
   if (toBooleanFlag(metadata.forceDirectStream)) {
     return true
@@ -338,20 +364,34 @@ interface BuildDeepAgentMessagesOptions {
   includeInputFiles?: boolean
 }
 
+function resolveLastUserMessageIndex(messages: TurnState['messages']): number {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const row = toRecord(messages[index])
+    const role = normalizeMessageRole(row.role)
+    if (role === 'user') {
+      return index
+    }
+  }
+  return -1
+}
+
 function buildDeepAgentMessages(
   state: TurnState,
   options?: BuildDeepAgentMessagesOptions,
 ): DeepAgentInvokeMessage[] {
   const messages: DeepAgentInvokeMessage[] = []
   const attachments = normalizeTurnAttachments(state)
-  const lastMessageIndex = state.messages.length - 1
+  const lastUserMessageIndex = resolveLastUserMessageIndex(state.messages)
   let currentIndex = -1
   for (const item of state.messages) {
     currentIndex += 1
     const row = toRecord(item)
+    if (!shouldIncludePilotMessageInModelContext(row)) {
+      continue
+    }
     const text = String(row.content || '').trim()
     const role = normalizeMessageRole(row.role)
-    const isTurnUserMessage = role === 'user' && currentIndex === lastMessageIndex
+    const isTurnUserMessage = role === 'user' && currentIndex === lastUserMessageIndex
     if (!text && !(isTurnUserMessage && attachments.length > 0)) {
       continue
     }
@@ -371,14 +411,17 @@ function buildDeepAgentMessages(
 export function buildResponsesInput(state: TurnState): Array<Record<string, unknown>> {
   const input: Array<Record<string, unknown>> = []
   const attachments = normalizeTurnAttachments(state)
-  const lastMessageIndex = state.messages.length - 1
+  const lastUserMessageIndex = resolveLastUserMessageIndex(state.messages)
   let currentIndex = -1
   for (const item of state.messages) {
     currentIndex += 1
     const row = toRecord(item)
+    if (!shouldIncludePilotMessageInModelContext(row)) {
+      continue
+    }
     const role = normalizeMessageRole(row.role)
     const text = String(row.content || '').trim()
-    const isTurnUserMessage = role === 'user' && currentIndex === lastMessageIndex
+    const isTurnUserMessage = role === 'user' && currentIndex === lastUserMessageIndex
     if (!text && !(isTurnUserMessage && attachments.length > 0)) {
       continue
     }
@@ -1493,6 +1536,7 @@ async function invokeDeepAgentWithTransport(
   const builtinTools = Array.isArray(options.builtinTools) && options.builtinTools.length > 0
     ? options.builtinTools
     : DEFAULT_BUILTIN_TOOLS
+  const customTools = Array.isArray(options.tools) ? options.tools : []
   const useResponsesApi = transport === 'responses'
 
   const invokeMessages = buildDeepAgentMessages(state, {
@@ -1502,6 +1546,7 @@ async function invokeDeepAgentWithTransport(
     ? `${trimSuffixSlash(relayBaseUrl)}/responses`
     : `${trimSuffixSlash(relayBaseUrl)}/chat/completions`
 
+  const ChatOpenAI = await getChatOpenAIConstructor()
   const llm = new ChatOpenAI({
     apiKey: effectiveApiKey,
     model,
@@ -1538,10 +1583,14 @@ async function invokeDeepAgentWithTransport(
       hasInstructions: Boolean(instructions),
       subAgentCount: subagents.length,
       builtinTools,
+      customToolCount: customTools.length,
+      customToolNames: customTools.map(tool => tool.name),
       hasApiKey: true,
       metadata: toRecord(options.metadata),
     },
   })
+
+  const createDeepAgent = await getCreateDeepAgent()
 
   let lastAttempt = 0
   let response: unknown
@@ -1564,6 +1613,7 @@ async function invokeDeepAgentWithTransport(
         instructions,
         subagents,
         builtinTools,
+        tools: customTools,
       })
 
       const invokePayload = {
@@ -1749,6 +1799,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
     const builtinTools = Array.isArray(this.options.builtinTools) && this.options.builtinTools.length > 0
       ? this.options.builtinTools
       : DEFAULT_BUILTIN_TOOLS
+    const customTools = Array.isArray(this.options.tools) ? this.options.tools : []
     const invokeMessages = buildDeepAgentMessages(state, {
       includeInputFiles: useResponsesApi,
     })
@@ -1756,6 +1807,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
       ? `${trimSuffixSlash(relayBaseUrl)}/responses`
       : `${trimSuffixSlash(relayBaseUrl)}/chat/completions`
 
+    const ChatOpenAI = await getChatOpenAIConstructor()
     const llm = new ChatOpenAI({
       apiKey: effectiveApiKey,
       model,
@@ -1782,6 +1834,8 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
         hasInstructions: Boolean(instructions),
         subAgentCount: subagents.length,
         builtinTools,
+        customToolCount: customTools.length,
+        customToolNames: customTools.map(tool => tool.name),
         hasApiKey: true,
         metadata: toRecord(this.options.metadata),
       },
@@ -1797,9 +1851,10 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
       await this.options.onAudit?.({
         type: 'upstream.direct_stream_skipped',
         payload: {
-          reason: 'disabled_by_metadata',
+          reason: customTools.length > 0 ? 'custom_tools_present' : 'disabled_by_metadata',
           endpoint,
           model,
+          customToolNames: customTools.map(tool => tool.name),
           metadata: toRecord(this.options.metadata),
         },
       })
@@ -1928,11 +1983,13 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
     }
 
     try {
+      const createDeepAgent = await getCreateDeepAgent()
       const agent = createDeepAgent({
         model: llm,
         instructions,
         subagents,
         builtinTools,
+        tools: customTools,
       })
       const streamPayload = {
         messages: invokeMessages as unknown,

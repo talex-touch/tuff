@@ -58,10 +58,12 @@ export class TouchApp implements TalexTouch.TouchApp {
   private _startSilent = false
 
   private mainWindowBoundsSaveTimer: NodeJS.Timeout | null = null
+  private readonly initPromise: Promise<void>
+  private initError: unknown | null = null
 
-  private readLegacyBooleanSettingFromDisk(
+  private readCompatBooleanSettingFromDisk(
     settingFile: string
-  ): { value: boolean; mtimeMs: number } | null {
+  ): { value: boolean; mtimeMs: number; path: string } | null {
     const legacyPath = path.join(this.rootPath, 'modules', 'config', settingFile)
     try {
       if (!fse.existsSync(legacyPath)) return null
@@ -82,23 +84,46 @@ export class TouchApp implements TalexTouch.TouchApp {
       const stat = fse.statSync(legacyPath)
       return {
         value: parsed,
-        mtimeMs: stat.mtimeMs
+        mtimeMs: stat.mtimeMs,
+        path: legacyPath
       }
     } catch (error) {
-      mainLog.warn(`Failed to read legacy setting file: ${settingFile}`, { error })
+      mainLog.warn(`Failed to read compat setting file: ${settingFile}`, { error })
       return null
+    }
+  }
+
+  private archiveCompatSettingFile(legacyPath: string, reason: string): void {
+    try {
+      if (!fse.existsSync(legacyPath)) return
+      const archivedPath = `${legacyPath}.migrated-${Date.now()}`
+      fse.moveSync(legacyPath, archivedPath, { overwrite: true })
+      mainLog.info('Archived compat split setting file', {
+        meta: {
+          from: legacyPath,
+          to: archivedPath,
+          reason
+        }
+      })
+    } catch (error) {
+      mainLog.warn('Failed to archive compat split setting file', {
+        error,
+        meta: {
+          legacyPath,
+          reason
+        }
+      })
     }
   }
 
   /**
    * Read app-setting.ini directly from disk before StorageModule is initialized.
-   * Also merges legacy split setting files when they are newer than app-setting.ini.
+   * Also merges compat split setting files when they are newer than app-setting.ini.
    */
   private readAppSettingsConfigFromDisk(): Record<string, unknown> {
     const configPath = path.join(this.rootPath, 'modules', 'config', 'app-setting.ini')
     let appSettings: Record<string, unknown> = {}
     let appSettingMtimeMs = 0
-    let appSettingLoaded = false
 
     try {
       if (fse.existsSync(configPath)) {
@@ -110,17 +135,15 @@ export class TouchApp implements TalexTouch.TouchApp {
           const parsed: unknown = JSON.parse(content)
           if (parsed && typeof parsed === 'object') {
             appSettings = parsed as Record<string, unknown>
-            appSettingLoaded = true
           }
         }
       }
     } catch (error) {
       mainLog.warn('Failed to read app-setting.ini from disk', { error })
       appSettings = {}
-      appSettingLoaded = false
     }
 
-    const legacyStartSilent = this.readLegacyBooleanSettingFromDisk('app.window.startSilent')
+    const legacyStartSilent = this.readCompatBooleanSettingFromDisk('app.window.startSilent')
     if (!legacyStartSilent) {
       return appSettings
     }
@@ -135,6 +158,7 @@ export class TouchApp implements TalexTouch.TouchApp {
       startSilentFromAppSetting === undefined || legacyStartSilent.mtimeMs > appSettingMtimeMs
 
     if (!shouldUseLegacy) {
+      this.archiveCompatSettingFile(legacyStartSilent.path, 'app-setting-newer')
       return appSettings
     }
 
@@ -147,19 +171,17 @@ export class TouchApp implements TalexTouch.TouchApp {
       window: nextWindow
     }
 
-    mainLog.info('Merged legacy startSilent setting into app-setting.ini snapshot', {
+    mainLog.info('Compat migration hit: merged startSilent into app-setting.ini snapshot', {
       meta: {
         value: legacyStartSilent.value,
         source: 'app.window.startSilent'
       }
     })
 
-    if (!appSettingLoaded) {
-      return appSettings
-    }
-
     try {
+      fse.ensureDirSync(path.dirname(configPath))
       fse.writeFileSync(configPath, JSON.stringify(appSettings, null, 2))
+      this.archiveCompatSettingFile(legacyStartSilent.path, 'migrated')
     } catch (error) {
       mainLog.warn('Failed to persist merged startSilent setting to app-setting.ini', { error })
     }
@@ -474,9 +496,28 @@ export class TouchApp implements TalexTouch.TouchApp {
 
     app.setAppUserModelId('com.tagzxia.talex-touch')
 
-    this.__init__().then(() => {
-      mainLog.success('TouchApp runtime initialized')
-    })
+    this.initPromise = this.__init__()
+      .then(() => {
+        mainLog.success('TouchApp runtime initialized')
+      })
+      .catch((error) => {
+        this.initError = error
+        mainLog.error('TouchApp runtime initialization failed', { error })
+      })
+  }
+
+  public async waitUntilInitialized(): Promise<void> {
+    await this.initPromise
+    if (this.initError) {
+      if (this.initError instanceof Error) {
+        throw this.initError
+      }
+      throw new Error(String(this.initError))
+    }
+  }
+
+  public isSilentStart(): boolean {
+    return this._startSilent
   }
 
   private registerMainWindowBoundsPersistence(): void {

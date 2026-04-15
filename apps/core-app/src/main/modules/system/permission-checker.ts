@@ -1,7 +1,7 @@
-import type { ModuleDestroyContext, ModuleKey } from '@talex-touch/utils'
+import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
+import { execFileSync, spawn } from 'node:child_process'
 import * as fs from 'node:fs'
-import * as path from 'node:path'
 import process from 'node:process'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -36,6 +36,23 @@ const systemPermissionOpenSettingsEvent = defineRawEvent<void, boolean>(
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 const permissionCheckerLog = getLogger('permission-checker')
+const PERMISSION_COMMAND_TIMEOUT_MS = 1500
+const LINUX_SETTINGS_CANDIDATES: Array<{ command: string; args: string[] }> = [
+  { command: 'xdg-open', args: ['settings://'] },
+  { command: 'gio', args: ['open', 'settings://'] },
+  { command: 'gnome-control-center', args: ['privacy'] },
+  { command: 'systemsettings6', args: [] },
+  { command: 'systemsettings5', args: [] },
+  { command: 'systemsettings', args: [] },
+  { command: 'kcmshell6', args: ['kcm_notifications'] },
+  { command: 'kcmshell5', args: ['kcm_notifications'] }
+]
+
+function toErrorCode(error: unknown): string | undefined {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code)
+    : undefined
+}
 
 function resolveDefaultFileAccessPath(platform: NodeJS.Platform): {
   path?: string
@@ -140,20 +157,20 @@ export class PermissionChecker {
         canRequest: false,
         message: 'Notifications are enabled by default on this macOS version'
       }
-    } else if (process.platform === 'win32') {
-      // Windows doesn't require explicit notification permission
+    }
+
+    if (process.platform === 'win32') {
       return {
-        status: PermissionStatus.GRANTED,
+        status: PermissionStatus.UNSUPPORTED,
         canRequest: false,
-        message: 'Notifications are enabled by default on Windows'
+        message: 'Windows notification permission cannot be verified programmatically'
       }
-    } else {
-      // Linux - check if notification daemon is available
-      return {
-        status: PermissionStatus.GRANTED,
-        canRequest: false,
-        message: 'Notifications depend on desktop environment support'
-      }
+    }
+
+    return {
+      status: PermissionStatus.UNSUPPORTED,
+      canRequest: false,
+      message: 'Linux notification permission depends on desktop environment and is not verifiable'
     }
   }
 
@@ -199,15 +216,20 @@ export class PermissionChecker {
   public checkAdminPrivileges(): PermissionCheckResult {
     if (process.platform === 'win32') {
       try {
-        // Try to access C:\Windows\System32 (requires admin on some systems)
-        // Or check if process is elevated
         const isAdmin = this.isWindowsAdmin()
+        if (isAdmin === null) {
+          return {
+            status: PermissionStatus.NOT_DETERMINED,
+            canRequest: false,
+            message: 'Unable to verify administrator privileges on Windows'
+          }
+        }
         return {
           status: isAdmin ? PermissionStatus.GRANTED : PermissionStatus.DENIED,
           canRequest: true,
           message: isAdmin
             ? 'Administrator privileges are available'
-            : 'Administrator privileges are required to access system directories (e.g., C:\\ drive)'
+            : 'Administrator privileges are not active for current process'
         }
       } catch (error) {
         permissionCheckerLog.error('Failed to check admin privileges', { error })
@@ -290,34 +312,33 @@ export class PermissionChecker {
   /**
    * Check if Windows process is running with admin privileges
    */
-  private isWindowsAdmin(): boolean {
+  private isWindowsAdmin(): boolean | null {
     if (process.platform !== 'win32') {
       return false
     }
 
     try {
-      // Try to write to Windows directory (requires admin)
-      const testPath = path.join(process.env.WINDIR || 'C:\\Windows', 'System32', 'test.tmp')
-      try {
-        fs.writeFileSync(testPath, 'test')
-        fs.unlinkSync(testPath)
-        return true
-      } catch {
-        // If write fails, check using alternative method
-        // On Windows, check if we can access protected directories
-        try {
-          fs.accessSync('C:\\Windows\\System32', fs.constants.R_OK)
-          // Additional check: try to list protected directory
-          const files = fs.readdirSync('C:\\Windows\\System32')
-          return files.length > 0
-        } catch {
-          return false
+      const script = `
+$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+`
+      const stdout = execFileSync(
+        'powershell',
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+        {
+          encoding: 'utf8',
+          windowsHide: true,
+          timeout: PERMISSION_COMMAND_TIMEOUT_MS
         }
+      )
+      return stdout.trim().toLowerCase() === 'true'
+    } catch (error) {
+      const code = toErrorCode(error)
+      if (code !== 'ENOENT') {
+        permissionCheckerLog.warn('Failed to verify Windows admin privileges', error)
       }
-    } catch {
-      // Fallback: check if running as administrator using environment
-      const isAdmin = process.env.USERPROFILE?.includes('Administrator') || false
-      return isAdmin
+      return null
     }
   }
 
@@ -344,6 +365,9 @@ export class PermissionChecker {
         } else if (process.platform === 'win32') {
           // Windows notification settings
           await shell.openExternal('ms-settings:notifications')
+          return true
+        } else if (process.platform === 'linux') {
+          await this.openSystemSettings('linux')
           return true
         }
         break
@@ -386,15 +410,72 @@ export class PermissionChecker {
     if (targetPlatform === 'darwin') {
       // Open macOS System Preferences
       await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy')
-    } else if (targetPlatform === 'win32') {
+      return
+    }
+
+    if (targetPlatform === 'win32') {
       // Open Windows Settings > Privacy
       await shell.openExternal('ms-settings:privacy')
-    } else {
-      // Linux - show message or open relevant settings app
-      permissionCheckerLog.info(
-        '[PermissionChecker] Linux system settings location depends on desktop environment'
-      )
+      return
     }
+
+    if (targetPlatform !== 'linux') {
+      throw new Error(`System settings is unsupported on platform: ${targetPlatform}`)
+    }
+
+    await this.openLinuxSystemSettings()
+  }
+
+  private async openLinuxSystemSettings(): Promise<void> {
+    let lastError: unknown = null
+
+    for (const candidate of LINUX_SETTINGS_CANDIDATES) {
+      try {
+        await this.launchDetached(candidate.command, candidate.args)
+        return
+      } catch (error) {
+        lastError = error
+        const code = toErrorCode(error)
+        if (code !== 'ENOENT') {
+          permissionCheckerLog.debug(
+            `Linux settings launcher failed: ${candidate.command} ${candidate.args.join(' ')}`,
+            error
+          )
+        }
+      }
+    }
+
+    const suffix = lastError instanceof Error && lastError.message ? `: ${lastError.message}` : ''
+    throw new Error(`Linux system settings is unavailable on this desktop environment${suffix}`)
+  }
+
+  private launchDetached(command: string, args: string[]): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const child = spawn(command, args, {
+        detached: true,
+        stdio: 'ignore'
+      })
+      const timeoutId = setTimeout(() => {
+        finish(() => reject(new Error(`Timed out launching ${command}`)))
+      }, PERMISSION_COMMAND_TIMEOUT_MS)
+
+      let settled = false
+      const finish = (callback: () => void) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeoutId)
+        callback()
+      }
+
+      child.once('error', (error) => {
+        finish(() => reject(error))
+      })
+
+      child.once('spawn', () => {
+        child.unref()
+        finish(resolve)
+      })
+    })
   }
 }
 
@@ -406,6 +487,7 @@ export class PermissionCheckerModule extends BaseModule {
   static key: symbol = Symbol.for('PermissionChecker')
   name: ModuleKey = PermissionCheckerModule.key
   private checker: PermissionChecker
+  private transport: ReturnType<typeof getTuffTransportMain> | null = null
 
   constructor() {
     super(PermissionCheckerModule.key, {
@@ -414,7 +496,16 @@ export class PermissionCheckerModule extends BaseModule {
     this.checker = PermissionChecker.getInstance()
   }
 
-  async onInit(): Promise<void> {
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    const channel =
+      ctx.runtime?.channel ?? (ctx.app as { channel?: unknown } | null | undefined)?.channel
+    if (!channel) {
+      permissionCheckerLog.warn('Channel unavailable during permission checker init')
+      return
+    }
+
+    const keyManager = resolveKeyManager(channel)
+    this.transport = getTuffTransportMain(channel, keyManager)
     this.setupChannels()
     permissionCheckerLog.info('Permission checker module initialized')
   }
@@ -425,19 +516,10 @@ export class PermissionCheckerModule extends BaseModule {
   }
 
   private setupChannels(): void {
-    if (!$app.channel) {
-      permissionCheckerLog.warn('Channel not available, retrying setupChannels later')
-      // Retry after a short delay
-      setTimeout(() => {
-        if ($app.channel) {
-          this.setupChannels()
-        }
-      }, 100)
+    const transport = this.transport
+    if (!transport) {
       return
     }
-
-    const keyManager = resolveKeyManager($app.channel)
-    const transport = getTuffTransportMain($app.channel, keyManager)
 
     // Check permission status
     transport.on(systemPermissionCheckEvent, (permissionType) => {

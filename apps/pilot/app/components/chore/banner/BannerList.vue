@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { $endApi } from '~/composables/api/base'
-import type { IBannerGroup } from '~/composables/api/base/index.type'
+import type { IBannerGroup } from '~/composables/api/base/v1/marketing.type'
 
 const props = defineProps<{
   modelValue: IBannerGroup[]

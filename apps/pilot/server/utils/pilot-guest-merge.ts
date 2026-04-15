@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { D1RuntimeStoreAdapter } from '@talex-touch/tuff-intelligence/pilot'
+import { D1RuntimeStoreAdapter } from '@talex-touch/tuff-intelligence/pilot-server'
 import { toGuestUserId } from './auth'
 import { readPilotDeviceId } from './pilot-device'
 import { ensurePilotQuotaSessionSchema } from './pilot-quota-session'
@@ -85,7 +85,10 @@ export async function mergePilotGuestDataToUser(
   await ensurePilotQuotaSessionSchema(event)
   await ensureQuotaUserSchema(event)
   await ensureQuotaShareSchema(event)
-  await new D1RuntimeStoreAdapter(db, targetUserId).ensureSchema()
+  await new D1RuntimeStoreAdapter(
+    db as ConstructorParameters<typeof D1RuntimeStoreAdapter>[0],
+    targetUserId,
+  ).ensureSchema()
 
   for (const tableName of RUNTIME_TABLES) {
     const moved = toChanges(await db.prepare(`

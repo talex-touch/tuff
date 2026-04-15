@@ -22,6 +22,7 @@ import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { BaseModule } from '../abstract-base-module'
 import { getOrCreateTelemetryClientId } from '../analytics/telemetry-client'
+import { ReportQueueStore } from '../analytics/report-queue-store'
 import { databaseModule } from '../database'
 import { getNetworkService } from '../network'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
@@ -65,6 +66,12 @@ interface SearchMetrics {
 // Nexus telemetry batch upload settings
 const NEXUS_TELEMETRY_BATCH_SIZE = 20
 const NEXUS_TELEMETRY_FLUSH_INTERVAL = 60000
+const NEXUS_TELEMETRY_OUTBOX_KIND = 'sentry.nexus.batch'
+const NEXUS_TELEMETRY_OUTBOX_MAX_AGE = 14 * 24 * 60 * 60 * 1000
+const NEXUS_TELEMETRY_OUTBOX_MAX_COUNT = 2000
+const NEXUS_TELEMETRY_OUTBOX_BACKOFF_BASE_MS = 30_000
+const NEXUS_TELEMETRY_OUTBOX_BACKOFF_MAX_MS = 10 * 60_000
+const NEXUS_TELEMETRY_STARTUP_GRACE_MS = 45_000
 
 interface NexusTelemetryEvent {
   eventType: 'search' | 'visit' | 'error' | 'feature_use' | 'performance'
@@ -81,6 +88,61 @@ interface NexusTelemetryEvent {
   inputTypes?: string[]
   metadata?: Record<string, unknown>
   isAnonymous: boolean
+}
+
+type LogMetaPrimitive = string | number | boolean | null | undefined
+
+function toLogMeta(meta?: Record<string, unknown>): Record<string, LogMetaPrimitive> | undefined {
+  if (!meta) return undefined
+  const normalized: Record<string, LogMetaPrimitive> = {}
+  for (const [key, value] of Object.entries(meta)) {
+    if (
+      value === null ||
+      value === undefined ||
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      normalized[key] = value
+      continue
+    }
+
+    if (value instanceof Error) {
+      normalized[key] = value.message
+      continue
+    }
+
+    try {
+      normalized[key] = JSON.stringify(value)
+    } catch {
+      normalized[key] = String(value)
+    }
+  }
+  return normalized
+}
+
+function shouldDowngradeTelemetryFailure(message: string, meta?: Record<string, unknown>): boolean {
+  const parts = [message]
+  const error = meta?.error
+  if (typeof error === 'string') {
+    parts.push(error)
+  } else if (error instanceof Error) {
+    parts.push(error.message)
+  }
+  const url = meta?.url
+  if (typeof url === 'string') {
+    parts.push(url)
+  }
+  const combined = parts.join(' ').toLowerCase()
+  return (
+    combined.includes('err_connection_refused') ||
+    combined.includes('econnrefused') ||
+    combined.includes('network guard cooldown') ||
+    combined.includes('localhost:3200') ||
+    combined.includes('eai_again') ||
+    combined.includes('enotfound') ||
+    combined.includes('etimedout')
+  )
 }
 
 /**
@@ -146,6 +208,7 @@ export class SentryServiceModule extends BaseModule {
   private lastTelemetryFailureAt: number | null = null
   private lastTelemetryFailureMessage: string | null = null
   private telemetryStatsStore: TelemetryUploadStatsStore | null = null
+  private reportQueueStore: ReportQueueStore | null = null
   private telemetryStatsPersistTimer: NodeJS.Timeout | null = null
 
   private eventLoopDelay?: ReturnType<typeof monitorEventLoopDelay>
@@ -311,12 +374,51 @@ export class SentryServiceModule extends BaseModule {
   private getTelemetryStatsStore(): TelemetryUploadStatsStore | null {
     if (this.telemetryStatsStore) return this.telemetryStatsStore
     try {
-      const db = databaseModule.getDb()
-      this.telemetryStatsStore = new TelemetryUploadStatsStore(db)
+      this.telemetryStatsStore = new TelemetryUploadStatsStore({
+        auxDb: databaseModule.getAuxDb(),
+        coreDb: databaseModule.getDb()
+      })
       return this.telemetryStatsStore
     } catch {
       return null
     }
+  }
+
+  private getReportQueueStore(): ReportQueueStore | null {
+    if (this.reportQueueStore) return this.reportQueueStore
+    try {
+      this.reportQueueStore = new ReportQueueStore({
+        auxDb: databaseModule.getAuxDb(),
+        coreDb: databaseModule.getDb()
+      })
+      return this.reportQueueStore
+    } catch {
+      return null
+    }
+  }
+
+  private getOutboxBackoffMs(retryCount: number): number {
+    const exponent = Math.min(10, Math.max(0, retryCount))
+    return Math.min(
+      NEXUS_TELEMETRY_OUTBOX_BACKOFF_MAX_MS,
+      NEXUS_TELEMETRY_OUTBOX_BACKOFF_BASE_MS * 2 ** exponent
+    )
+  }
+
+  private isOutboxItemDue(item: { retryCount: number; lastAttemptAt?: number }): boolean {
+    if (!item.lastAttemptAt) return true
+    return Date.now() - item.lastAttemptAt >= this.getOutboxBackoffMs(item.retryCount)
+  }
+
+  private isNexusBatchPayload(payload: Record<string, unknown>): boolean {
+    if (!payload || typeof payload !== 'object') return false
+    // analytics_report_queue is shared by startup analytics and sentry telemetry.
+    // Keep strict kind filtering to avoid cross-consuming unrelated outbox records.
+    const metadata =
+      payload.metadata && typeof payload.metadata === 'object'
+        ? (payload.metadata as Record<string, unknown>)
+        : null
+    return metadata?.kind === NEXUS_TELEMETRY_OUTBOX_KIND
   }
 
   private schedulePersistTelemetryStats(): void {
@@ -428,7 +530,13 @@ export class SentryServiceModule extends BaseModule {
     const flushIntervalMs = 60_000
     this.pollingService.register(SENTRY_PERF_TASK_ID, () => this.flushPerformanceMetrics(), {
       interval: flushIntervalMs,
-      unit: 'milliseconds'
+      unit: 'milliseconds',
+      lane: 'maintenance',
+      backpressure: 'coalesce',
+      dedupeKey: SENTRY_PERF_TASK_ID,
+      maxInFlight: 1,
+      timeoutMs: 10_000,
+      jitterMs: 300
     })
     this.pollingService.start()
   }
@@ -958,10 +1066,6 @@ export class SentryServiceModule extends BaseModule {
   queueNexusTelemetry(event: Omit<NexusTelemetryEvent, 'isAnonymous'>): void {
     if (!this.config.enabled) return
 
-    if (this.telemetryCooldownUntil && Date.now() < this.telemetryCooldownUntil) {
-      return
-    }
-
     if (event.eventType === 'search') {
       this.searchCount++
       this.schedulePersistTelemetryStats()
@@ -982,98 +1086,188 @@ export class SentryServiceModule extends BaseModule {
     this.nexusTelemetryBuffer.push(telemetryEvent)
 
     if (this.nexusTelemetryBuffer.length >= NEXUS_TELEMETRY_BATCH_SIZE) {
-      this.flushNexusTelemetry()
+      void this.flushNexusTelemetry()
     }
 
-    // Set up periodic flush timer if not already running
-    if (!this.pollingService.isRegistered(SENTRY_NEXUS_TASK_ID)) {
-      this.pollingService.register(SENTRY_NEXUS_TASK_ID, () => this.flushNexusTelemetry(), {
-        interval: NEXUS_TELEMETRY_FLUSH_INTERVAL,
-        unit: 'milliseconds'
-      })
-      this.pollingService.start()
+    this.ensureNexusFlushTaskRegistered()
+  }
+
+  private ensureNexusFlushTaskRegistered(): void {
+    if (this.pollingService.isRegistered(SENTRY_NEXUS_TASK_ID)) {
+      return
     }
+
+    this.pollingService.register(
+      SENTRY_NEXUS_TASK_ID,
+      () =>
+        this.flushNexusTelemetry()
+          .then(async () => {
+            await this.flushQueuedNexusTelemetryOutbox()
+          })
+          .catch((error) => {
+            this.recordTelemetryFailure('Nexus telemetry flush task failed', {
+              error: error instanceof Error ? error.message : String(error)
+            })
+          }),
+      {
+        interval: NEXUS_TELEMETRY_FLUSH_INTERVAL,
+        unit: 'milliseconds',
+        runImmediately: false,
+        initialDelayMs: NEXUS_TELEMETRY_STARTUP_GRACE_MS + Math.floor(Math.random() * 5_000),
+        lane: 'io',
+        backpressure: 'latest_wins',
+        dedupeKey: SENTRY_NEXUS_TASK_ID,
+        maxInFlight: 1,
+        timeoutMs: 15_000,
+        jitterMs: 1000
+      }
+    )
+    this.pollingService.start()
   }
 
   /**
-   * Flush buffered telemetry events to Nexus
+   * Flush buffered telemetry events to persistent outbox.
    */
   private async flushNexusTelemetry(): Promise<void> {
     if (this.nexusTelemetryBuffer.length === 0) return
-    if (this.telemetryCooldownUntil && Date.now() < this.telemetryCooldownUntil) return
 
     const events = [...this.nexusTelemetryBuffer]
     this.nexusTelemetryBuffer = []
-    let url: string | undefined
+    const apiBase = resolveTelemetryApiBase()
+    const url = `${apiBase}/api/telemetry/batch`
+    const payload: Record<string, unknown> = {
+      eventType: 'telemetry_batch',
+      metadata: {
+        kind: NEXUS_TELEMETRY_OUTBOX_KIND,
+        idempotencyKey: `sentry:${Date.now()}:${events.length}`,
+        count: events.length
+      },
+      events
+    }
+
+    const store = this.getReportQueueStore()
+    if (!store) {
+      this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
+      this.recordTelemetryFailure('Telemetry outbox unavailable', {
+        count: events.length
+      })
+      return
+    }
 
     try {
-      const apiBase = resolveTelemetryApiBase()
-      url = `${apiBase}/api/telemetry/batch`
-
-      sentryLog.debug('Uploading telemetry batch', { meta: { count: events.length, url } })
-
-      const response = await getNetworkService().request<string>({
-        method: 'POST',
-        url,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ events }),
-        responseType: 'text',
-        validateStatus: Array.from({ length: 500 }, (_, index) => index + 100)
+      await store.insert({
+        payload,
+        endpoint: url,
+        createdAt: Date.now()
       })
+      sentryLog.debug('Telemetry batch queued to outbox', {
+        meta: { count: events.length, url }
+      })
+    } catch (error) {
+      this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
+      this.recordTelemetryFailure('Telemetry outbox enqueue failed', {
+        error: error instanceof Error ? error.message : String(error),
+        count: events.length
+      })
+      this.failedNexusUploads++
+      this.schedulePersistTelemetryStats()
+    }
+  }
 
-      if (response.status < 200 || response.status >= 300) {
-        const errorText = response.data || 'Unknown error'
-        if (response.status === 403) {
-          this.telemetryCooldownUntil = Date.now() + 60 * 60_000
-          this.recordTelemetryFailure('Telemetry blocked by server', {
+  private async flushQueuedNexusTelemetryOutbox(): Promise<void> {
+    const store = this.getReportQueueStore()
+    if (!store) return
+    if (this.telemetryCooldownUntil && Date.now() < this.telemetryCooldownUntil) {
+      return
+    }
+
+    const cutoff = Date.now() - NEXUS_TELEMETRY_OUTBOX_MAX_AGE
+    const listed = await store.list(cutoff)
+    if (listed.length > NEXUS_TELEMETRY_OUTBOX_MAX_COUNT) {
+      const dropCount = listed.length - NEXUS_TELEMETRY_OUTBOX_MAX_COUNT
+      const dropped = listed.slice(0, dropCount)
+      await Promise.allSettled(dropped.map((item) => store.remove(item.id)))
+    }
+    const items = listed.slice(-NEXUS_TELEMETRY_OUTBOX_MAX_COUNT)
+    if (!items.length) return
+
+    for (const item of items) {
+      if (!this.isNexusBatchPayload(item.payload)) {
+        continue
+      }
+      if (!this.isOutboxItemDue(item)) {
+        continue
+      }
+
+      try {
+        const payload = item.payload as {
+          events?: unknown
+          metadata?: unknown
+        }
+        const events = Array.isArray(payload.events) ? payload.events : []
+        const metadata =
+          payload.metadata && typeof payload.metadata === 'object'
+            ? (payload.metadata as Record<string, unknown>)
+            : undefined
+        const idempotencyKey =
+          metadata && typeof metadata.idempotencyKey === 'string'
+            ? metadata.idempotencyKey
+            : undefined
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (idempotencyKey) {
+          headers['X-Idempotency-Key'] = idempotencyKey
+        }
+        const response = await getNetworkService().request<string>({
+          method: 'POST',
+          url: item.endpoint,
+          headers,
+          body: JSON.stringify({
+            events,
+            metadata
+          }),
+          responseType: 'text',
+          validateStatus: Array.from({ length: 500 }, (_, index) => index + 100)
+        })
+
+        if (response.status < 200 || response.status >= 300) {
+          const errorText = response.data || 'Unknown error'
+          if (response.status === 403) {
+            this.telemetryCooldownUntil = Date.now() + 60 * 60_000
+          } else if (response.status === 429) {
+            this.telemetryCooldownUntil = Date.now() + 5 * 60_000
+          }
+          this.failedNexusUploads++
+          this.schedulePersistTelemetryStats()
+          this.recordTelemetryFailure('Telemetry upload failed', {
             status: response.status,
             statusText: response.statusText,
             error: errorText,
-            url
+            url: item.endpoint
           })
-          return
+          await store.markAttempt(item.id, `${response.status}:${errorText}`)
+          continue
         }
-        if (response.status === 429) {
-          this.telemetryCooldownUntil = Date.now() + 5 * 60_000
-        }
-        this.failedNexusUploads++
-        this.schedulePersistTelemetryStats()
-        this.recordTelemetryFailure('Telemetry upload failed', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText,
-          url,
-          count: events.length
-        })
-        this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(
-          0,
-          100
-        )
-      } else {
+
+        await store.remove(item.id)
         this.telemetryCooldownUntil = null
         this.totalNexusUploads++
         this.lastNexusUploadTime = Date.now()
         this.schedulePersistTelemetryStats()
-        sentryLog.debug('Telemetry batch uploaded', { meta: { count: events.length } })
+      } catch (error) {
+        this.failedNexusUploads++
+        this.schedulePersistTelemetryStats()
+        this.telemetryCooldownUntil = Date.now() + 5 * 60_000
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        this.recordTelemetryFailure('Telemetry upload exception', {
+          error: errorMessage,
+          url: item.endpoint
+        })
+        await store.markAttempt(item.id, errorMessage)
       }
-    } catch (error) {
-      this.failedNexusUploads++
-      this.schedulePersistTelemetryStats()
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      this.telemetryCooldownUntil = Date.now() + 5 * 60_000
-      const recorded = this.recordTelemetryFailure('Telemetry upload exception', {
-        error: errorMessage,
-        url,
-        count: events.length,
-        cooldownMs: 5 * 60_000
-      })
-      void recorded
-      this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
     }
   }
 
   private recordTelemetryFailure(message: string, meta?: Record<string, unknown>): boolean {
-    void meta
     const now = Date.now()
     const throttleWindow = 10 * 60 * 1000
     if (this.lastTelemetryFailureAt && now - this.lastTelemetryFailureAt < throttleWindow) {
@@ -1083,6 +1277,12 @@ export class SentryServiceModule extends BaseModule {
     this.lastTelemetryFailureAt = now
     this.lastTelemetryFailureMessage = message
     this.schedulePersistTelemetryStats()
+    const logMeta = toLogMeta(meta)
+    if (shouldDowngradeTelemetryFailure(message, meta)) {
+      sentryLog.info(message, logMeta ? { meta: logMeta } : undefined)
+    } else {
+      sentryLog.warn(message, logMeta ? { meta: logMeta } : undefined)
+    }
 
     return true
   }
@@ -1092,8 +1292,8 @@ export class SentryServiceModule extends BaseModule {
    */
   async stopNexusTelemetryTimer(): Promise<void> {
     this.pollingService.unregister(SENTRY_NEXUS_TASK_ID)
-    // Flush remaining events
     await this.flushNexusTelemetry()
+    await this.flushQueuedNexusTelemetryOutbox()
   }
 }
 

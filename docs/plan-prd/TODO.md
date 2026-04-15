@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-03-23
+> 更新时间: 2026-04-07
 
 ---
 
@@ -13,7 +13,7 @@
 | Legacy/兼容/结构治理 | 已锁定统一实施 PRD（五工作包并行） | 按统一门禁执行收口，不再按 Phase 口径拆分决策 | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | 2.4.8 Gate | OmniPanel 稳定版 MVP 已完成（historical） | 保留历史验收证据，不再作为当前开发主线 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | v2.4.7 Gate | A/B/C/D/E 全部完成（D/E historical） | 保留 run/manifest/sha256 证据链 | `TODO` / `README` / `Roadmap` / `Release Checklist` / `Quality Baseline` / `INDEX` |
-| Pilot Runtime | Node Server + Postgres/Redis + JWT Cookie 主路径 | 继续补齐稳定性与部署回归 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
+| Pilot Runtime | Node Server + Postgres/Redis + JWT Cookie 主路径；首页默认 DeepAgent，legacy `$completion` 已收口为唯一前端主消费链 | 继续补齐 SSE 反向代理部署烟测与矩阵回归 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
 
 ---
 
@@ -26,6 +26,18 @@
 ---
 
 ## 🔧 当前执行清单（2 周）
+
+### CoreApp 兼容治理（当前进行中）
+
+- [x] P0 Runtime Accessor / Sync IPC / Active Legacy Bridge hard-cut 主体完成。
+- [x] P1 secure-store dedupe 收口到 `src/main/utils/secure-store.ts`。
+- [x] P1 renderer update runtime 调用方迁移到 update SDK 薄运行时层，runtime 页面不再依赖 `useApplicationUpgrade`。
+- [x] P2 fake prompt / DivisionBox settings 假入口清理完成。
+- [x] P2 production `src` 下 demo/test/doc 文件物理删除，并清理 `components.d.ts` 悬空声明。
+- [x] CoreApp compatibility 验收阻塞解除：
+  - `pnpm -C "apps/core-app" run typecheck` 已通过。
+  - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard.transport.test.ts" "src/main/modules/omni-panel/index.test.ts" "src/main/channel/common.test.ts"` 已通过（`3 files / 17 tests`）。
+  - `rg` 回归扫描确认 runtime 口径仅保留 bootstrap `genTouchApp()`，`sendSync(` / `resolveRuntimeChannel(` / `legacy-toggle` / placeholder demo 命中已清零。
 
 ### A. 文档治理（本轮）
 
@@ -114,6 +126,10 @@
 ### G. Pilot 合并升级 V2（2026-03-17）
 
 - [x] 统一执行链路：`/api/aigc/executor` 与 `/api/chat/sessions/*` 接入路由解析与指标采集；`/api/v1/chat/sessions/*` 仅保留非 stream/turns 子路由。
+- [x] 执行入口硬切：`/api/aigc/executor` 已物理删除，`/api/chat/sessions/:sessionId/stream` 成为唯一执行入口。
+- [x] 旧输入框附件出站硬切：`ThInput` 改为会话级 `POST /api/chat/sessions/:sessionId/uploads`，发送改为 `message + attachments` 分离，不再拼接 `Attachment references` 文本。
+- [x] 历史 dataURL 附件发送前自动转换为 session `attachmentId`；无法转换的旧附件阻断出站并提示重传。
+- [x] `chat stream` 入参附件结构化校验收紧：拒绝 inline `data:` 与非 id-first 附件投递。
 - [x] 新增渠道评比指标：记录 `queueWaitMs/ttftMs/totalDurationMs/success/errorCode/finishReason/channel+model/routeCombo`。
 - [x] 新增渠道熔断状态机：按失败阈值摘除，冷却后半开探测恢复。
 - [x] 新增模型目录与路由组合后台接口：`models/route-combos/channel-models/sync/routing-metrics/runtime-models`。
@@ -155,6 +171,15 @@
 - [x] `thinking.delta -> thinking.final` 采用同一卡片增量拼接，完整文本可视化展示。
 - [x] legacy 事件 `turn.* / status_updated / completion / verbose / session_bound` 不再驱动 UI 状态，仅告警忽略。
 - [x] 管理端渠道 `adapter` 固定 `openai`，移除 `legacy` 可编辑入口。
+
+### J1. Pilot 流式主链合并收口（2026-04-07）
+
+- [x] 首页保留旧 UI，legacy `$completion` 成为唯一前端流式主消费链；`usePilotChatPage.ts` 与 `app/components/pilot/*` 不再作为并行主方案继续演进。
+- [x] 首页默认 DeepAgent：移除 `Pilot 模式` 默认标签与输入开关；`pilotMode` 不再进入首页默认发送、展示与恢复逻辑。
+- [x] `fromSeq + follow` 收口到共享 seq cursor helper，刷新恢复只跟随真实可恢复事件，不再受 Pilot 模式分叉影响。
+- [x] trace contract 收紧：`stream.started / stream.heartbeat / replay.* / run.metrics / done / error` 等 seq-optional 生命周期事件不再持久化到 trace；replay、trace.get、quota snapshot、follow tail 会统一过滤历史 lifecycle 噪音。
+- [x] legacy SSE 契约测试补齐：覆盖 `assistant.delta / assistant.final / run.audit / turn.approval_required / replay / done / error` 与分块持续解析。
+- [ ] 部署烟测补齐：验证 `/api/chat/sessions/:sessionId/stream` 经反向代理后仍持续分块返回；若 buffering 打开需直接失败并输出明确信号。
 
 ### K. Intelligence 多模态 Provider 统一配置与运行时打通（2026-03-20）
 
@@ -210,7 +235,15 @@
   - 继续压缩 `$app` allowlist 存量命中；
   - `plugin-module/file-provider/UpdateService` 进一步按编排层 + 领域层 + IO 层深拆，补齐剩余 direct tests。
 
-### O. CoreApp 兼容债务硬切（2026-03-23）
+### O. CoreApp 文件索引稳态修复（2026-03-25）
+
+- [x] flush 链路改为 pending/inflight 可恢复队列，失败回补且保持“新数据优先”。
+- [x] 定时 flush 统一调度入口并固定兜底，消除 `Unhandled rejection`。
+- [x] `search-index-worker` 关键写路径补齐 `SQLITE_BUSY` 重试并统一 label。
+- [x] `SearchIndexService` 索引/删除日志改为时间窗 summary，慢批次即时输出。
+- [x] 补齐定向测试：flush 失败恢复、worker 重试、日志节流。
+
+### P. CoreApp 兼容债务硬切（2026-03-23）
 
 - [x] 跨平台一致性修复：Linux 权限探测路径按平台分流；更新资产平台/架构识别统一并显式 `unsupported`；AppImage 小写识别修复。
 - [x] 权限系统硬切：删除 legacy `sdkapi` 放行路径，缺失/低版本统一 `SDKAPI_BLOCKED` 阻断；`allowLegacy` 配置移除。
@@ -220,7 +253,7 @@
 - [x] 自动化验证：`typecheck` 通过；定向 `vitest`（权限门禁、平台识别、AgentStore、Extension unload）通过。
 - [ ] 三平台人工回归：Windows/macOS/Linux 的首次引导权限、更新包匹配、插件权限拦截、Agent 安装升级卸载、退出资源释放。
 
-### P. CoreBox 搜索性能优化（2026-03-23）
+### Q. CoreBox 搜索性能优化（2026-03-23）
 
 - [x] P0：输入防抖下调（`BASE_DEBOUNCE=80ms`），保持去重窗口 `200ms`。
 - [x] P0：`SearchIndexService` 增加 `warmup()`，并在初始化补齐 `keyword_mappings` 复合索引（`provider+keyword`、`provider+item`）。
@@ -232,6 +265,18 @@
 - [x] 单测：新增 `search-activity.test.ts`，覆盖活跃窗口判定行为。
 - [ ] 验收：按 `search-trace` 采样 200 次真实查询，确认 `first.result/session.end` P95 与慢查询占比达标。
 - [ ] 门禁：待仓库既有 `extension-loader.test.ts` 类型错误修复后，补跑并记录 `typecheck:node` 全绿证据。
+
+### R. 启动搜索卡顿永久治理（2026-03-24）
+
+- [x] 数据库分层：新增 aux 库（`database-aux.db`）并迁移高频/非核心写入表（analytics/recommendation/clipboard/ocr/report queue）。
+- [x] 双库开关：新增 `TUFF_DB_AUX_ENABLED`、`TUFF_DB_QOS_ENABLED`、`TUFF_STARTUP_DEGRADE_ENABLED`。
+- [x] 调度器 QoS：`DbWriteScheduler` 支持 `priority/maxQueueWaitMs/budgetKey/dropPolicy`，并内建标签策略与 busy 熔断。
+- [x] 兼容读取窗口：关键路径支持“先查 aux，未命中回查 core”兜底（recommendation/analytics range/report queue/telemetry stats）。
+- [x] 索引热路径单写者：`file-index.full-scan/reconcile/scan-progress` 改由 `search-index-worker` 统一落库。
+- [x] 启动降载：analytics 写入失败指数退避；clipboard 在索引高压下动态降频并增加图片落库去抖。
+- [x] 观测增强：队列分级深度、标签等待统计、drop/circuit 状态与 `SQLITE_BUSY` 比例输出。
+- [x] 新增单测：`db-write-scheduler.test.ts` 覆盖优先级、丢弃策略、熔断开启/恢复。
+- [ ] 压测验收：执行“全量索引 + 高频推荐 + 剪贴板图像轮询”并产出 2 分钟窗口内 lag/P95 证据。
 
 ---
 
@@ -283,12 +328,12 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 103 |
-| 未完成 (`- [ ]`) | 17 |
-| 总计 | 120 |
-| 完成率 | 86% |
+| 已完成 (`- [x]`) | 139 |
+| 未完成 (`- [ ]`) | 21 |
+| 总计 | 160 |
+| 完成率 | 87% |
 
-> 统计时间: 2026-03-23（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-04-07（按本文件实时 checkbox 计数）。
 
 ---
 
