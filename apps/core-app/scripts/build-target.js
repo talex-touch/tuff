@@ -298,7 +298,16 @@ const PACKAGED_RUNTIME_MODULES = [
   'ms',
   '@sentry/electron',
   'require-in-the-middle',
-  'module-details-from-path'
+  'module-details-from-path',
+  '@cfworker/json-schema',
+  '@langchain/core',
+  'ansi-styles',
+  'camelcase',
+  'decamelize',
+  'mustache',
+  'p-retry',
+  'retry',
+  'langsmith'
 ];
 
 function resolvePluginPreludeNodePaths() {

@@ -292,4 +292,4 @@
 - 门禁脚本必须共享同一套扫描与版本比较基础能力，避免“规则一致、实现漂移”。
 - 同类质量门禁仅允许一个实现来源；workspace 侧脚本优先复用 root 实现（通过 `--scope` 等参数化）。
 - 大体量编排脚本必须按“编排层 + 平台实现层”拆分，降低单文件风险与回归成本。
-- 桌面打包链路必须校验关键运行时依赖真实进入 `app.asar`；至少覆盖显式直依赖与已知高风险传递依赖（当前基线含 `ms`、`@sentry/electron`、`require-in-the-middle`、`module-details-from-path`），禁止产出“可安装但主进程启动即崩”的坏包。
+- 桌面打包链路必须校验关键运行时依赖真实进入产物可解析路径（`app.asar` 或 `resources/node_modules`）；至少覆盖显式直依赖与已知高风险传递依赖（当前基线含 `ms`、`@sentry/electron`、`require-in-the-middle`、`module-details-from-path`，以及 `@langchain/core` 当前已知高风险缺包 `p-retry`、`retry`、`langsmith`、`mustache`、`camelcase`、`decamelize`、`ansi-styles`、`@cfworker/json-schema`），禁止产出“可安装但主进程启动即崩”的坏包。

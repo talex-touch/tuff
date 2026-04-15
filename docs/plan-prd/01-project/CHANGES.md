@@ -5,6 +5,22 @@
 
 ## 2026-04-15
 
+### fix(core-app/build): 补齐 LangChain 打包依赖链并恢复 beta 安装包启动
+
+- `apps/core-app/scripts/ensure-platform-modules.js`
+  - 将 `@langchain/core`、`@langchain/openai`、`@langchain/anthropic` 与 `@langchain/langgraph` 纳入应用侧运行时依赖同步名单，显式把 hoisted 依赖链同步到 `apps/core-app/node_modules`，避免 `p-retry -> retry` 这类 LangChain 传递依赖在安装包内丢失。
+- `apps/core-app/electron-builder.yml`
+  - 将 `@langchain/core` 已确认缺失的直依赖（`@cfworker/json-schema`、`ansi-styles`、`camelcase`、`decamelize`、`langsmith`、`mustache`、`retry`）显式复制到 `resources/node_modules`，保证安装包内按 Node 默认查找链仍可解析。
+- `apps/core-app/scripts/build-target.js`
+  - 将打包后运行时依赖校验进一步扩展到 `@langchain/core` 及其当前已知高风险依赖（含 `p-retry`、`retry`、`langsmith`、`mustache`、`camelcase`、`decamelize`、`ansi-styles`、`@cfworker/json-schema`），让构建阶段直接拦截“桌面包可生成但一启动就缺少 LangChain 依赖”的坏包。
+- `package.json`
+- `apps/core-app/package.json`
+  - 根包与 `core-app` 版本提升到 `2.4.9-beta.14`，用于本轮 LangChain 运行时依赖修复后的 beta 打包与验证。
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - 同步记录桌面打包链路对 LangChain 运行时依赖的新增校验要求，保证发布质量门禁与当前实现一致。
+
 ### fix(core-app/build): 补齐 Sentry 打包依赖链并阻断主进程启动即崩
 
 - `apps/core-app/scripts/ensure-platform-modules.js`

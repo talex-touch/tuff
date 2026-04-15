@@ -47,8 +47,22 @@ extraResources:
     to: resources/tray_icon_16x16.png
   - from: resources/tray_icon_22x22.png
     to: resources/tray_icon_22x22.png
+  - from: node_modules/@cfworker/json-schema
+    to: node_modules/@cfworker/json-schema
+  - from: node_modules/ansi-styles
+    to: node_modules/ansi-styles
+  - from: node_modules/camelcase
+    to: node_modules/camelcase
+  - from: node_modules/decamelize
+    to: node_modules/decamelize
+  - from: node_modules/langsmith
+    to: node_modules/langsmith
   - from: node_modules/module-details-from-path
     to: node_modules/module-details-from-path
+  - from: node_modules/mustache
+    to: node_modules/mustache
+  - from: node_modules/retry
+    to: node_modules/retry
 
 win:
   executableName: tuff
