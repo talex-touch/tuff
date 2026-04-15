@@ -87,7 +87,7 @@ const EXECUTE_ERROR_MESSAGES: Record<OmniPanelFeatureExecuteErrorCode, string> =
   SELECTION_REQUIRED: 'Selected text is required',
   COREBOX_UNAVAILABLE: 'CoreBox window is unavailable',
   COREBOX_TRANSFER_FAILED: 'Failed to transfer context to CoreBox',
-  SYSTEM_TARGET_NOT_IMPLEMENTED: 'System transfer target is not implemented yet',
+  SYSTEM_TARGET_NOT_IMPLEMENTED: 'System transfer target is unavailable for this feature',
   PLUGIN_NOT_FOUND: 'Plugin not found',
   FEATURE_EXECUTION_FAILED: 'Failed to execute feature',
   UNKNOWN_BUILTIN: 'Unknown builtin feature',

@@ -74,7 +74,9 @@ abstract class BasePluginLoader {
   constructor(pluginName: string, pluginPath: string) {
     this.pluginName = pluginName
     this.pluginPath = pluginPath
-    this.touchPlugin = createPluginLoadShell(this.pluginName, this.pluginPath)
+    this.touchPlugin = createPluginLoadShell(this.pluginName, this.pluginPath, {
+      skipDataInit: true
+    })
   }
 
   /**

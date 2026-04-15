@@ -81,6 +81,7 @@ export function useVisibility(options: UseVisibilityOptions) {
       boxOptions.file = { buffer: null, paths: [] }
       boxOptions.layout = undefined
       clipboardOptions.last = null
+      clipboardOptions.pendingAutoFillItem = null
       clipboardOptions.detectedAt = null
       clipboardOptions.lastClearedTimestamp = null
       deactivateAllProviders().catch(() => {})
