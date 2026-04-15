@@ -100,7 +100,7 @@ const TUFF_CLI_COMMAND_CANDIDATES =
 const TUFF_CLI_CAPABILITY: PlatformCapability = {
   id: 'platform.tuff-cli',
   name: 'Tuff CLI',
-  description: 'CLI 工具联动能力（Beta，开发中）',
+  description: 'CLI 工具联动能力（Beta）',
   scope: 'plugin',
   status: 'beta',
   supportLevel: 'unsupported'

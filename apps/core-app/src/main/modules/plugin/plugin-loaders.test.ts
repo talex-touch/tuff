@@ -44,6 +44,7 @@ vi.mock('./plugin', () => ({
     features: unknown[]
     loadState: string
     loadError?: { code: string; message: string }
+    creationOptions?: { skipDataInit?: boolean }
     logger: {
       error: ReturnType<typeof vi.fn>
       debug: ReturnType<typeof vi.fn>
@@ -57,7 +58,9 @@ vi.mock('./plugin', () => ({
       desc: string,
       readme: string,
       dev: Record<string, unknown>,
-      pluginPath: string
+      pluginPath: string,
+      _platforms?: unknown,
+      options?: { skipDataInit?: boolean }
     ) {
       this.name = name
       this.icon = icon
@@ -69,6 +72,7 @@ vi.mock('./plugin', () => ({
       this.issues = []
       this.features = []
       this.loadState = 'ready'
+      this.creationOptions = options
       this.logger = { error: vi.fn(), debug: vi.fn(), warn: vi.fn() }
     }
 
@@ -242,6 +246,23 @@ describe('createPluginLoader', () => {
 
     expect(issueCodes).toContain('REMOTE_MANIFEST_FAILED')
     expect(issueCodes).not.toContain('DEV_SOURCE_FALLBACK_LOCAL')
+  })
+
+  it('creates loader plugin shells without eager data initialization', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'local',
+      icon: { type: 'emoji', value: 'x' }
+    })
+    createdPaths.push(pluginPath)
+
+    const loader = createPluginLoader('touch-translation', pluginPath)
+    const plugin = (await loader.load()) as unknown as {
+      creationOptions?: { skipDataInit?: boolean }
+    }
+
+    expect(plugin.creationOptions).toMatchObject({ skipDataInit: true })
   })
 
   it('creates a shared loading shell plugin shape', () => {
