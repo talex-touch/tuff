@@ -8,6 +8,10 @@ const targetNodeModules = path.join(projectRoot, 'node_modules')
 
 const baseModules = [
   '@sentry/electron',
+  '@langchain/core',
+  '@langchain/openai',
+  '@langchain/anthropic',
+  '@langchain/langgraph',
   '@libsql/client',
   '@libsql/core',
   '@libsql/hrana-client',
