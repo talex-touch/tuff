@@ -5,6 +5,22 @@
 
 ## 2026-04-15
 
+### fix(core-app/build): 补齐 Sentry 打包依赖链并阻断主进程启动即崩
+
+- `apps/core-app/scripts/ensure-platform-modules.js`
+  - 将 `@sentry/electron` 纳入应用侧运行时依赖同步名单，递归补齐 `@sentry/node -> require-in-the-middle -> module-details-from-path` 依赖链，避免 Windows 安装包启动时因缺少传递模块直接在 main process 崩溃。
+- `apps/core-app/electron-builder.yml`
+  - 将 `module-details-from-path` 显式作为 `extraResources` 复制到 `resources/node_modules`，绕过上游包元数据导致的漏打包风险，保证主进程仍可按 Node 默认查找链正常解析。
+- `apps/core-app/scripts/build-target.js`
+  - 将打包后运行时依赖校验从 `ms` 扩展到 `@sentry/electron`、`require-in-the-middle` 与 `module-details-from-path`，并接受 `app.asar` 与 `resources/node_modules` 两个合法运行时落点，提前拦截“构建成功但启动即报错”的坏包。
+- `package.json`
+- `apps/core-app/package.json`
+  - 根包与 `core-app` 版本提升到 `2.4.9-beta.13`，用于下一次 beta 打包与发布流水线。
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - 同步记录发布链路新增的运行时依赖校验要求，确保文档口径与当前构建门禁一致。
+
 ### fix(core-app): 清理 file-provider 服务拆分遗留并恢复 release 编译
 
 - `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`

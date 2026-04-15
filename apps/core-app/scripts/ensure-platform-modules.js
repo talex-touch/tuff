@@ -7,6 +7,7 @@ const workspaceNodeModules = path.join(workspaceRoot, 'node_modules')
 const targetNodeModules = path.join(projectRoot, 'node_modules')
 
 const baseModules = [
+  '@sentry/electron',
   '@libsql/client',
   '@libsql/core',
   '@libsql/hrana-client',
