@@ -47,6 +47,8 @@ extraResources:
     to: resources/tray_icon_16x16.png
   - from: resources/tray_icon_22x22.png
     to: resources/tray_icon_22x22.png
+  - from: node_modules/module-details-from-path
+    to: node_modules/module-details-from-path
 
 win:
   executableName: tuff

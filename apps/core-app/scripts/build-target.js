@@ -261,8 +261,28 @@ function verifyPackagedRuntimeModules(distDir, requiredModules) {
   const packageEntries = new Set(
     listPackage(asarPath).map((entry) => entry.replace(/\\/g, '/'))
   );
+  const resourcesDir = path.dirname(asarPath);
+  const resolvedModules = [];
   const missingModules = requiredModules.filter(
-    moduleName => !packageEntries.has(path.posix.join('/node_modules', moduleName, 'package.json'))
+    (moduleName) => {
+      const packagedEntry = path.posix.join('/node_modules', moduleName, 'package.json');
+      if (packageEntries.has(packagedEntry)) {
+        resolvedModules.push(`${moduleName} (asar)`);
+        return false;
+      }
+
+      const resourceModuleDir = path.join(resourcesDir, 'node_modules', moduleName);
+      const fallbackEntrypoints = [
+        path.join(resourceModuleDir, 'package.json'),
+        path.join(resourceModuleDir, 'index.js')
+      ];
+      if (fallbackEntrypoints.some((entryPath) => fs.existsSync(entryPath))) {
+        resolvedModules.push(`${moduleName} (resources/node_modules)`);
+        return false;
+      }
+
+      return true;
+    }
   );
 
   if (missingModules.length > 0) {
@@ -271,8 +291,15 @@ function verifyPackagedRuntimeModules(distDir, requiredModules) {
     );
   }
 
-  console.log(`[build-target] Verified packaged runtime dependencies: ${requiredModules.join(', ')}`);
+  console.log(`[build-target] Verified packaged runtime dependencies: ${resolvedModules.join(', ')}`);
 }
+
+const PACKAGED_RUNTIME_MODULES = [
+  'ms',
+  '@sentry/electron',
+  'require-in-the-middle',
+  'module-details-from-path'
+];
 
 function resolvePluginPreludeNodePaths() {
   const candidates = [
@@ -933,7 +960,7 @@ function build() {
     postProcessMacArtifacts(distDir);
   }
 
-  verifyPackagedRuntimeModules(distDir, ['ms']);
+  verifyPackagedRuntimeModules(distDir, PACKAGED_RUNTIME_MODULES);
 
   console.log('\n✓ Build completed successfully.');
   } finally {
