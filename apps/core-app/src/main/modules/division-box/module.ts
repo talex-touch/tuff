@@ -5,10 +5,21 @@
  * Handles initialization, IPC registration, and integration with other systems.
  */
 
-import type { MaybePromise, ModuleKey, ModuleStartContext } from '@talex-touch/utils'
+import type {
+  MaybePromise,
+  ModuleInitContext,
+  ModuleKey,
+  ModuleStartContext
+} from '@talex-touch/utils'
 import type { DivisionBoxIPC } from './ipc'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { BrowserWindow } from 'electron'
+import {
+  clearRegisteredMainRuntime,
+  getRegisteredMainRuntime,
+  registerMainRuntime,
+  resolveMainRuntime
+} from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import searchEngineCore from '../box-tool/search-engine/search-core'
 import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
@@ -45,11 +56,15 @@ export class DivisionBoxModule extends BaseModule {
    * - Registers IPC handlers
    * - Registers command provider with CoreBox search engine
    */
-  async onInit(): Promise<void> {
-    const channel = $app.channel
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel, keyManager)
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    const runtime = registerMainRuntime(
+      'division-box',
+      resolveMainRuntime(ctx, 'DivisionBoxModule.onInit')
+    )
+    const transport = getTuffTransportMain(
+      runtime.channel,
+      runtime.channel.keyManager ?? runtime.channel
+    )
 
     // Initialize IPC handlers
     this.ipc = initializeDivisionBoxIPC(transport)
@@ -62,7 +77,11 @@ export class DivisionBoxModule extends BaseModule {
   }
 
   private async waitForMainRendererReady(): Promise<void> {
-    const mainWindow = ($app as { window?: { window?: BrowserWindow } }).window?.window
+    const mainWindow = (
+      getRegisteredMainRuntime('division-box').app as {
+        window?: { window?: BrowserWindow }
+      }
+    ).window?.window
     if (!mainWindow || mainWindow.isDestroyed()) {
       return
     }
@@ -142,6 +161,7 @@ export class DivisionBoxModule extends BaseModule {
    * - Unregisters command provider
    */
   onDestroy(): MaybePromise<void> {
+    clearRegisteredMainRuntime('division-box')
     if (this.disposeAllModulesLoaded) {
       this.disposeAllModulesLoaded()
       this.disposeAllModulesLoaded = null

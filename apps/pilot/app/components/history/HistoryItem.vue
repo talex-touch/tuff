@@ -36,6 +36,14 @@ const reactiveConversation = computed(() => $historyManager.options.list.get(pro
 const loading = ref(false)
 const shareLink = useTypedRef(ChatLinkShare)
 
+type HistoryMenuItem = {
+  name?: string
+  icon?: string
+  type?: 'divider'
+  danger?: boolean
+  trigger?: (id: string) => void | Promise<void>
+}
+
 watch(
   () => topic.value,
   (val) => {
@@ -45,7 +53,7 @@ watch(
     }
   },
 )
-const menus = reactive([
+const menus = reactive<HistoryMenuItem[]>([
   {
     name: '复制标题',
     icon: 'i-carbon-copy',
@@ -219,7 +227,7 @@ watch(route, () => {
     >
       <div class="History-Content-Menu fake-background">
         <div
-          v-for="menu in menus" :key="menu.name" v-wave
+          v-for="(menu, index) in menus" :key="menu.type === 'divider' ? `divider-${index}` : menu.name || `menu-${index}`" v-wave
           :class="{ divider: menu.type === 'divider', danger: menu.danger }" class="History-Content-Menu-Item"
           @click.stop="menu.trigger?.(modelValue.id)"
         >

@@ -1,8 +1,17 @@
 import { createApp } from 'vue'
+import type { App } from 'vue'
 import LoadingIcon from '~/components/icon/LoadingIcon.vue'
 
+type LoadingHostElement = HTMLElement & {
+  _t_loading?: {
+    app: App
+    wrapper: HTMLDivElement
+    timer?: ReturnType<typeof setTimeout>
+  }
+}
+
 const loadingDirective = {
-  mounted(el: HTMLElement) {
+  mounted(el: LoadingHostElement) {
     const wrapper = document.createElement('div')
 
     wrapper.className = 'LoadingWrapper transition-cubic'
@@ -11,7 +20,6 @@ const loadingDirective = {
 
     el.appendChild(wrapper)
 
-    // @ts-expect-error exist force
     el._t_loading = {
       app,
       wrapper,
@@ -21,19 +29,17 @@ const loadingDirective = {
     wrapper.style.pointerEvents = 'none'
     app.mount(wrapper)
   },
-  beforeUpdate(el: HTMLElement, binding: any) {
+  beforeUpdate(el: LoadingHostElement, binding: any) {
     if (!el._t_loading) {
       console.error('a', el)
 
       return
     }
-    // @ts-expect-error exist force
     const { wrapper, timer } = el._t_loading
 
     clearTimeout(timer)
 
     if (binding.value) {
-      // @ts-expect-error exist force
       el._t_loading.timer = setTimeout(() => {
         wrapper.style.opacity = '.55'
         wrapper.style.pointerEvents = ''

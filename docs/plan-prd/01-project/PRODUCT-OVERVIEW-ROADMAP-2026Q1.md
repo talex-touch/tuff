@@ -1,6 +1,6 @@
 # Tuff 产品总览与 8 周路线图（2026-Q1）
 
-> 更新时间：2026-03-23  
+> 更新时间：2026-04-07  
 > 适用范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`
 
 ## 1. 产品总览（是什么）
@@ -143,6 +143,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
   - ViewCache 失效日志节流与可观测补齐；
   - DB 单写入策略连通性核查；
   - suspend/resume 误报抑制。
+  - 启动搜索卡顿治理落地（双库隔离 + QoS 调度 + 启动窗口降载 + 指标门禁），并保留 feature flag 灰度回滚能力。
 - 质量闸门：
   - `SQLITE_BUSY(_SNAPSHOT)` 显著下降；
   - EventLoop 误报得到隔离。

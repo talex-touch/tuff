@@ -6,6 +6,7 @@ import { createRetrier } from '@talex-touch/utils'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { readFile as readPlist } from 'simple-plist'
 import { reportAppScanError } from './app-error-reporter'
+import { readLocalizedStringsFile } from './localized-strings-parser'
 
 const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons')
 async function convertIcnsToPng(icnsPath: string, pngPath: string): Promise<string> {
@@ -127,6 +128,20 @@ function readPlistAsync(filePath: string): Promise<Record<string, unknown>> {
   })
 }
 
+export function extractLocalizedDisplayName(data: Record<string, unknown>): string | null {
+  const displayName = data.CFBundleDisplayName
+  if (typeof displayName === 'string' && displayName.trim()) {
+    return displayName.trim()
+  }
+
+  const bundleName = data.CFBundleName
+  if (typeof bundleName === 'string' && bundleName.trim()) {
+    return bundleName.trim()
+  }
+
+  return null
+}
+
 // Helper to get localized display name from .lproj directories
 async function getLocalizedDisplayName(appPath: string): Promise<string | null> {
   const resourcesPath = path.join(appPath, 'Contents', 'Resources')
@@ -153,20 +168,19 @@ async function getLocalizedDisplayName(appPath: string): Promise<string | null> 
 
       const stringsPath = path.join(resourcesPath, lproj, 'InfoPlist.strings')
       try {
-        // Use simple-plist to handle both binary and text plist formats
+        // 优先使用 simple-plist（兼容可直接解析的格式）
         const data = await readPlistAsync(stringsPath)
-
-        const displayName = data.CFBundleDisplayName
-        if (typeof displayName === 'string' && displayName) {
-          return displayName
-        }
-
-        const bundleName = data.CFBundleName
-        if (typeof bundleName === 'string' && bundleName) {
-          return bundleName
-        }
+        const localizedName = extractLocalizedDisplayName(data)
+        if (localizedName) return localizedName
       } catch {
-        // File doesn't exist or can't be read, continue to next
+        // simple-plist 无法解析 .strings 时回退到轻量解析器
+        try {
+          const parsed = await readLocalizedStringsFile(stringsPath)
+          const localizedName = extractLocalizedDisplayName(parsed)
+          if (localizedName) return localizedName
+        } catch {
+          // File doesn't exist or can't be read, continue to next
+        }
       }
     }
   } catch {

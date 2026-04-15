@@ -10,7 +10,6 @@ import { reportPerfToMain } from '~/modules/perf/perf-report'
 // Use preload-exposed ipcRenderer via electron-toolkit
 const ipcRenderer = window.electron.ipcRenderer
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
-const CHANNEL_SENDSYNC_WARN_MS = 80
 const CHANNEL_SEND_WARN_MS = 500
 const CHANNEL_SEND_ERROR_MS = 2_000
 const LEGACY_CHANNEL_MAIN = 'main' as const
@@ -60,10 +59,6 @@ interface TouchClientChannelLike {
     eventName: string,
     arg?: TRequest
   ) => Promise<TResponse>
-  sendSync: <TRequest = unknown, TResponse = unknown>(
-    eventName: string,
-    arg?: TRequest
-  ) => TResponse
 }
 
 class TouchChannel implements TouchClientChannelLike {
@@ -338,63 +333,6 @@ class TouchChannel implements TouchClientChannelLike {
         resolve(res.data as TResponse)
       })
     })
-  }
-
-  sendSync<TRequest = unknown, TResponse = unknown>(eventName: string, arg?: TRequest): TResponse {
-    const data = {
-      code: DATA_CODE_SUCCESS,
-      data: arg,
-      name: eventName,
-      header: {
-        status: 'request',
-        type: LEGACY_CHANNEL_MAIN
-      }
-    } as RawStandardChannelData
-
-    try {
-      const startedAt = performance.now()
-      const raw = ipcRenderer.sendSync('@main-process-message', data)
-      const duration = performance.now() - startedAt
-
-      if (duration >= CHANNEL_SENDSYNC_WARN_MS) {
-        console.warn(
-          `[Channel][sendSync][slow] \"${eventName}\" blocked renderer for ${duration.toFixed(1)}ms`,
-          {
-            payloadPreview: this.formatPayloadPreview(arg),
-            stack: new Error().stack
-          }
-        )
-        reportPerfToMain({
-          kind: 'channel.sendSync.slow',
-          eventName,
-          durationMs: duration,
-          at: Date.now(),
-          level: 'warn',
-          payloadPreview: this.formatPayloadPreview(arg),
-          stack: new Error().stack
-        })
-      }
-
-      const res = this.__parse_raw_data(null, raw)
-
-      if (res?.header?.status === 'reply') return res.data as TResponse
-
-      return res as TResponse
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      const meta: Record<string, unknown> = {
-        payloadPreview: this.formatPayloadPreview(arg)
-      }
-      if (isCloneError(error)) {
-        meta.cloneIssue = findCloneIssue(arg)
-        meta.payloadSummary = summarizeClonePayload(arg)
-      }
-      console.error(`[Channel] Failed to sendSync \"${eventName}\": ${errorMessage}`, meta)
-      throw Object.assign(
-        new Error(`Failed to sendSync channel message \"${eventName}\": ${errorMessage}`),
-        { code: 'channel_send_failed' }
-      )
-    }
   }
 
   unRegChannel<TRequest = unknown>(

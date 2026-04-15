@@ -1,7 +1,9 @@
+import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import { NotificationEvents } from '@talex-touch/utils/transport/events'
+import fse from 'fs-extra'
 
 vi.mock('@talex-touch/utils/plugin/node', () => {
   class PluginLogger {
@@ -20,7 +22,7 @@ vi.mock('@talex-touch/utils/plugin/node', () => {
 
 vi.mock('electron', () => ({
   __esModule: true,
-  app: { commandLine: { appendSwitch: vi.fn() } },
+  app: { commandLine: { appendSwitch: vi.fn() }, getLocale: vi.fn(() => 'zh-CN') },
   clipboard: {},
   dialog: {},
   shell: {},
@@ -171,9 +173,59 @@ describe('TouchPlugin.triggerFeature', () => {
         request: expect.objectContaining({
           channel: 'app',
           level: 'error',
-          message: '哇 corebox 你这里是不是有点问题捏'
+          title: 'Widget 加载失败',
+          message: '插件 widget 初始化失败，请检查插件版本、路径和运行日志。'
         })
       })
+    )
+  })
+})
+
+describe('TouchPlugin.setRuntime', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('ensures plugin data directories after deferred runtime injection', () => {
+    const ensureDirSync = vi.spyOn(fse, 'ensureDirSync').mockImplementation(() => undefined)
+    const rootPath = '/tmp/plugin-runtime-root'
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: true, address: 'http://localhost' },
+      '/tmp',
+      {},
+      { skipDataInit: true }
+    )
+
+    expect(ensureDirSync).not.toHaveBeenCalled()
+
+    plugin.setRuntime({ rootPath, mainWindowId: 1 })
+
+    expect(ensureDirSync).toHaveBeenCalledTimes(5)
+    expect(ensureDirSync).toHaveBeenNthCalledWith(
+      1,
+      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data')
+    )
+    expect(ensureDirSync).toHaveBeenNthCalledWith(
+      2,
+      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data', 'config')
+    )
+    expect(ensureDirSync).toHaveBeenNthCalledWith(
+      3,
+      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data', 'logs')
+    )
+    expect(ensureDirSync).toHaveBeenNthCalledWith(
+      4,
+      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data', 'verify')
+    )
+    expect(ensureDirSync).toHaveBeenNthCalledWith(
+      5,
+      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data', 'temp')
     )
   })
 })

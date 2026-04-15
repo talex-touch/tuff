@@ -1,3 +1,5 @@
+import type { PilotProviderTargetType } from './pilot-channel'
+
 interface RouteHealthState {
   failCount: number
   openedAt: number
@@ -25,8 +27,12 @@ function normalizeNumber(value: unknown, fallback: number, min = 0, max = Number
   return Math.min(Math.max(Math.floor(parsed), min), max)
 }
 
-export function buildRouteKey(channelId: string, providerModel: string): string {
-  return `${String(channelId || '').trim()}::${String(providerModel || '').trim()}`
+export function buildRouteKey(
+  channelId: string,
+  providerModel: string,
+  providerTargetType: PilotProviderTargetType = 'model',
+): string {
+  return `${String(channelId || '').trim()}::${providerTargetType}::${String(providerModel || '').trim()}`
 }
 
 function getOrCreateState(routeKey: string): RouteHealthState {

@@ -22,7 +22,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
-import { genTouchApp } from '../../../core'
+import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { createLogger } from '../../../utils/logger'
 import { pluginModule } from '../../plugin/plugin-module'
 import { getBoxItemManager } from '../item-sdk'
@@ -65,7 +65,7 @@ export class IpcManager {
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
-      this._touchApp = genTouchApp()
+      this._touchApp = getRegisteredMainRuntime('core-box').app
     }
     return this._touchApp
   }

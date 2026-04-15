@@ -95,6 +95,8 @@ const dialogOptions = reactive<{
   loading: false,
   meta: {
     stashContent: '',
+    polish: false,
+    translation: false,
     dialog: false,
   },
 })

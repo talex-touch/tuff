@@ -16,6 +16,7 @@ import { BaseModule } from '../../abstract-base-module'
 
 const isMac = process.platform === 'darwin'
 const isWindows = process.platform === 'win32'
+const MAC_PHOTOS_LIBRARY_MARKER = 'Photos Library.photoslibrary'
 
 interface PendingPath {
   path: string
@@ -33,6 +34,7 @@ export class FileSystemWatcherModule extends BaseModule {
   private watchers: Map<number, chokidar.FSWatcher> = new Map()
   private watchedPaths: Set<string> = new Set()
   private pendingPaths: Map<string, PendingPath> = new Map()
+  private pendingAdditions: Set<string> = new Set()
 
   constructor() {
     super(FileSystemWatcherModule.key, {
@@ -80,6 +82,7 @@ export class FileSystemWatcherModule extends BaseModule {
       persistent: true,
       ignoreInitial: true,
       depth,
+      ignored: (watchPath: string) => isMac && watchPath.includes(MAC_PHOTOS_LIBRARY_MARKER),
       awaitWriteFinish: {
         stabilityThreshold: 2000,
         pollInterval: 100
@@ -113,14 +116,14 @@ export class FileSystemWatcherModule extends BaseModule {
         console.debug(`[FileSystemWatcher] Watcher with depth ${depth} is ready.`)
       })
       .on('error', (error: unknown) => {
-        console.error(`[FileSystemWatcher] Watcher error with depth ${depth}:`, error)
-        // If error is permission-related, try to handle it
         const errorCode = (error as { code?: string }).code
         if (errorCode === 'EPERM' || errorCode === 'EACCES') {
-          console.warn(
-            `[FileSystemWatcher] Permission error for watcher ${depth}, will retry pending paths`
+          console.info(
+            `[FileSystemWatcher] Permission-limited watcher ${depth}, path will be retried when available`
           )
+          return
         }
+        console.error(`[FileSystemWatcher] Watcher error with depth ${depth}:`, error)
       })
 
     this.watchers.set(depth, newWatcher)
@@ -147,7 +150,7 @@ export class FileSystemWatcherModule extends BaseModule {
           recovered.push(path)
           console.log(`[FileSystemWatcher] Successfully added pending path: ${path}`)
         } catch (error) {
-          console.warn(`[FileSystemWatcher] Failed to add pending path ${path}:`, error)
+          console.info(`[FileSystemWatcher] Pending path still unavailable: ${path}`)
           pathsToRetry.push(path)
         }
       } else {
@@ -181,15 +184,21 @@ export class FileSystemWatcherModule extends BaseModule {
   }
 
   public async addPath(p: string, depth: number = isMac ? 1 : 4): Promise<void> {
-    if (this.watchedPaths.has(p)) {
+    if (this.watchedPaths.has(p) || this.pendingAdditions.has(p)) {
       console.log(`[FileSystemWatcher] Path already being watched: ${p}`)
       return
     }
+    this.pendingAdditions.add(p)
 
     try {
+      if (isMac && p.includes(MAC_PHOTOS_LIBRARY_MARKER)) {
+        console.info(`[FileSystemWatcher] Skip restricted photos library path: ${p}`)
+        return
+      }
+
       const stats = await fs.stat(p)
       if (!stats.isDirectory()) {
-        console.warn(`[FileSystemWatcher] Path is not a directory, skipping: ${p}`)
+        console.info(`[FileSystemWatcher] Path is not a directory, skipping: ${p}`)
         return
       }
     } catch {
@@ -213,13 +222,15 @@ export class FileSystemWatcherModule extends BaseModule {
       const errorMessage = error instanceof Error ? error.message : String(error)
       if (errorCode === 'EPERM' || errorCode === 'EACCES') {
         this.pendingPaths.set(p, { path: p, depth })
-        console.warn(
+        console.info(
           `[FileSystemWatcher] Permission denied for ${p}, added to pending queue:`,
           errorMessage
         )
       } else {
         throw error
       }
+    } finally {
+      this.pendingAdditions.delete(p)
     }
   }
 

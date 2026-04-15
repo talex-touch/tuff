@@ -42,9 +42,13 @@ function sanitizeRecommendationCacheValue(value: unknown, seen: WeakSet<object>)
   return sanitized
 }
 
-function createDbUtilsInternal(db: LibSQLDatabase<typeof schema>) {
+function createDbUtilsInternal(
+  db: LibSQLDatabase<typeof schema>,
+  auxDb: LibSQLDatabase<typeof schema>
+) {
   return {
     getDb: () => db,
+    getAuxDb: () => auxDb,
 
     // Keyword Mappings
     async addKeywordMapping(keyword: string, itemId: string, providerId: string, priority = 1.0) {
@@ -403,6 +407,13 @@ function createDbUtilsInternal(db: LibSQLDatabase<typeof schema>) {
 
     // Recommendation Cache
     async getRecommendationCache(cacheKey: string) {
+      const primary = await auxDb
+        .select()
+        .from(schema.recommendationCache)
+        .where(eq(schema.recommendationCache.cacheKey, cacheKey))
+        .get()
+      if (primary) return primary
+      if (auxDb === db) return null
       return db
         .select()
         .from(schema.recommendationCache)
@@ -420,7 +431,7 @@ function createDbUtilsInternal(db: LibSQLDatabase<typeof schema>) {
         () =>
           withSqliteRetry(
             () =>
-              db
+              auxDb
                 .insert(schema.recommendationCache)
                 .values({
                   cacheKey,
@@ -438,13 +449,18 @@ function createDbUtilsInternal(db: LibSQLDatabase<typeof schema>) {
                 }),
             { label: 'recommendation.cache' }
           ),
-        { droppable: true }
+        {
+          priority: 'best_effort',
+          dropPolicy: 'latest_wins',
+          budgetKey: `recommendation.cache:${cacheKey}`,
+          maxQueueWaitMs: 8000
+        }
       )
     },
 
     async cleanExpiredRecommendationCache() {
       const now = new Date()
-      return db
+      return auxDb
         .delete(schema.recommendationCache)
         .where(sql`${schema.recommendationCache.expiresAt} < ${now.getTime()}`)
     },
@@ -534,6 +550,9 @@ function createDbUtilsInternal(db: LibSQLDatabase<typeof schema>) {
 
 export type DbUtils = ReturnType<typeof createDbUtilsInternal>
 
-export function createDbUtils(db: LibSQLDatabase<typeof schema>): DbUtils {
-  return createDbUtilsInternal(db)
+export function createDbUtils(
+  db: LibSQLDatabase<typeof schema>,
+  auxDb?: LibSQLDatabase<typeof schema>
+): DbUtils {
+  return createDbUtilsInternal(db, auxDb ?? db)
 }

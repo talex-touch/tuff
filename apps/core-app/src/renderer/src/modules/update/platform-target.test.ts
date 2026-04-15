@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  compareUpdateAssetTargets,
   detectUpdateAssetArch,
   detectUpdateAssetPlatform,
   resolveRuntimeUpdateArch,
@@ -28,8 +29,48 @@ describe('update platform target resolver', () => {
   it('resolves full supported target', () => {
     expect(resolveUpdateAssetTarget('Tuff-1.0.0-windows-x64.exe')).toEqual({
       platform: 'win32',
-      arch: 'x64'
+      arch: 'x64',
+      sourceArch: 'x64',
+      priority: 3
     })
     expect(detectUpdateAssetArch('Tuff-1.0.0-arm64.dmg')).toBe('arm64')
+  })
+
+  it('normalizes universal assets to the runtime arch', () => {
+    expect(
+      resolveUpdateAssetTarget(
+        'Tuff-1.0.0-macos-universal.dmg',
+        { platform: 'darwin' },
+        { platform: 'darwin', arch: 'arm64' }
+      )
+    ).toEqual({
+      platform: 'darwin',
+      arch: 'arm64',
+      sourceArch: 'universal',
+      priority: 2
+    })
+  })
+
+  it('sorts exact arch before universal before generic', () => {
+    const targets = [
+      resolveUpdateAssetTarget(
+        'Tuff-1.0.0-macos.dmg',
+        { platform: 'darwin' },
+        { platform: 'darwin', arch: 'x64' }
+      ),
+      resolveUpdateAssetTarget(
+        'Tuff-1.0.0-macos-universal.dmg',
+        { platform: 'darwin' },
+        { platform: 'darwin', arch: 'x64' }
+      ),
+      resolveUpdateAssetTarget(
+        'Tuff-1.0.0-macos-x64.dmg',
+        { platform: 'darwin' },
+        { platform: 'darwin', arch: 'x64' }
+      )
+    ].filter((item): item is NonNullable<typeof item> => item !== null)
+
+    const sorted = targets.sort(compareUpdateAssetTargets).map((item) => item.sourceArch)
+    expect(sorted).toEqual(['x64', 'universal', 'generic'])
   })
 })

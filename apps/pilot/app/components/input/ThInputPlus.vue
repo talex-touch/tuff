@@ -24,13 +24,11 @@ const props = defineProps<{
   hide: boolean
   modelValue: IChatInnerItemMeta
   capabilities?: Partial<ThInputCapabilities>
-  pilotMode?: boolean
 }>()
 
 const emits = defineEmits<{
   (name: 'update:modelValue', data: IChatInnerItemMeta): void
   (event: 'file'): void
-  (event: 'togglePilotMode'): void
 }>()
 
 const hover = ref(false)
@@ -130,16 +128,6 @@ const options = computed<InputOption[]>(() => {
       checked: () => normalizedCapabilities.value.thinking && property.value.thinking !== false,
       disabled: () => !normalizedCapabilities.value.thinking,
       disabledTip: '当前模型组未开启 thinking 能力。',
-    },
-    {
-      icon: 'i-carbon-machine-learning-model',
-      type: 'checkbox',
-      label: 'Pilot 模式',
-      info: '开启后优先走 Pilot 编排链路（Graph 优先），用于复杂任务协同。',
-      onclick: () => {
-        emits('togglePilotMode')
-      },
-      checked: () => props.pilotMode === true,
     },
     isSupported.value
       ? {

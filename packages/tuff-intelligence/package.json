@@ -29,6 +29,11 @@
       "types": "./src/pilot.ts",
       "import": "./src/pilot.ts",
       "default": "./src/pilot.ts"
+    },
+    "./pilot-server": {
+      "types": "./src/pilot-server.ts",
+      "import": "./src/pilot-server.ts",
+      "default": "./src/pilot-server.ts"
     }
   },
   "files": [

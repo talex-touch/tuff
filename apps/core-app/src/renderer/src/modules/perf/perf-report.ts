@@ -2,7 +2,6 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 
 export type RendererPerfReportKind =
-  | 'channel.sendSync.slow'
   | 'channel.send.slow'
   | 'channel.send.timeout'
   | 'channel.send.errorReply'

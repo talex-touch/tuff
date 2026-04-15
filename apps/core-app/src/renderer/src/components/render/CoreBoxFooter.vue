@@ -144,7 +144,7 @@ const keyHints = computed(() => {
   const quickSelectLabelKey = 'coreBox.hints.quickSelect'
   const quickSelectLabel = t(quickSelectLabelKey)
 
-  const aiHotkey = isMacPlatform ? '⌘K' : 'Meta+K'
+  const aiHotkey = isMacPlatform ? '⌘K' : 'Ctrl+K'
   const quickSelectHotkey = isMacPlatform ? '⌘1-0' : 'Alt+1-0'
 
   const hints: Array<{ key: string; label: string; visible: boolean }> = []

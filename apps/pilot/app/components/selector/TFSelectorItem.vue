@@ -17,7 +17,7 @@
 
 <script setup>
 
-import { ref, defineProps, inject, onMounted } from 'vue'
+import { ref, inject, onMounted } from 'vue'
 
 const props = defineProps({
   title: '',

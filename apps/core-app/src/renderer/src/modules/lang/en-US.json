@@ -74,6 +74,7 @@
     "v8": "V8 Engine",
     "os": "OS",
     "platform": "Platform",
+    "updateChannel": "Update Channel",
     "experience": "Experience",
     "experiencePack": "Touch Feature Experience Pack",
     "openAppFolder": "Application Folder",
@@ -682,6 +683,14 @@
       "devDisconnected": "Dev server disconnected, click to reconnect.",
       "devReconnecting": "Reconnecting to dev server..."
     },
+    "summary": {
+      "loading": "Loading plugin metadata...",
+      "loadFailed": "Plugin metadata failed to load."
+    },
+    "notifications": {
+      "widgetLoadFailedTitle": "Widget failed to load",
+      "widgetLoadFailedMessage": "Plugin widget initialization failed. Check the plugin version, path, and runtime logs."
+    },
     "tabs": {
       "overview": "Overview",
       "issues": "Issues",
@@ -716,9 +725,16 @@
         "grantAll": "Grant All",
         "revokeAll": "Revoke All"
       },
+      "blockedTitle": "Plugin Blocked",
+      "blockedWarning": "This plugin is blocked because its SDK version is too old. The permission page is read-only.",
+      "blockedStatusTitle": "Blocked Reason",
+      "blockedHint": "Upgrade to sdkapi >= {version}, reinstall the plugin, then grant permissions again.",
       "legacyTitle": "SDK Version Warning",
       "legacyWarning": "This plugin uses a legacy SDK; permission checks were skipped",
       "legacyHint": "Upgrade to sdkapi >= {version} to enable permission checks",
+      "backendUnavailableTitle": "Permission backend is read-only",
+      "backendUnavailableDesc": "SQLite permission backend is unavailable; only the loaded snapshot can be read.",
+      "backendMutationFailed": "Permission mutation failed",
       "recommendationsTitle": "Recommendations",
       "risk": {
         "low": "Low",
@@ -748,6 +764,7 @@
         },
         "warning": {
           "permissionMissing": "Shortcut permission not granted",
+          "blockedSdk": "SDK too old; plugin is blocked",
           "legacySdk": "SDK too old; permission checks not enforced",
           "missingDescription": "Missing shortcut description"
         }
@@ -1022,9 +1039,11 @@
       "copyPluginIdSuccess": "Plugin ID copied",
       "copyPluginIdFailed": "Failed to copy plugin ID",
       "version": "Version",
+      "loadState": "Load State",
       "mode": "Mode",
       "development": "Development",
       "production": "Production",
+      "blockedTag": "Blocked",
       "description": "Description",
       "noDescription": "No description",
       "manifestJson": "manifest.json",
@@ -1562,6 +1581,12 @@
         "beta": "Beta",
         "alpha": "Alpha"
       },
+      "support": {
+        "supported": "Supported",
+        "best_effort": "Best effort",
+        "unsupported": "Unsupported"
+      },
+      "limitations": "Limitations",
       "tags": {
         "sensitive": "Sensitive"
       },
@@ -1743,6 +1768,11 @@
       "backendSdk": "SDK (N-API)",
       "backendCli": "CLI (es.exe)",
       "backendUnavailable": "Unavailable",
+      "healthTitle": "Search Health",
+      "healthDesc": "Shows whether Windows search is using Everything or a degraded fallback",
+      "healthHealthy": "Healthy",
+      "healthDegraded": "Degraded fallback",
+      "healthUnsupported": "Unsupported",
       "fallbackChainTitle": "Fallback Chain",
       "fallbackChainDesc": "Automatic downgrade order when a backend becomes unavailable",
       "enableTitle": "Enable Everything Search",
@@ -2032,7 +2062,7 @@
       "groupDesc": "Choose your update channel and how often to check for new builds.",
       "channelTitle": "Update Channel",
       "channelDesc": "Preview channels receive builds earlier but may be less stable.",
-      "channelSnapshotLocked": "Snapshot builds always stay on the snapshot channel.",
+      "channelSnapshotLocked": "Snapshot builds receive updates through the Beta channel.",
       "channels": {
         "release": "Stable (Release)",
         "beta": "Beta (preview)",
@@ -2730,7 +2760,7 @@
       "pin": "Pin to Recommendations",
       "unpin": "Unpin",
       "copyTitle": "Copy Title",
-      "revealInFinder": "Reveal in Finder",
+      "revealInFinder": "Reveal in File Manager",
       "flowTransfer": "Transfer to Plugin"
     },
     "systemActions": {

@@ -327,8 +327,7 @@ export interface SetLocaleRequest {
 // =========================================================================
 
 export type RendererPerfReportKind
-  = | 'channel.sendSync.slow'
-    | 'channel.send.slow'
+  = | 'channel.send.slow'
     | 'channel.send.timeout'
     | 'channel.send.errorReply'
     | 'ui.route.navigate'

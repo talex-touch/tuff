@@ -2,6 +2,7 @@
 import type { ITouchPlugin } from '@talex-touch/utils'
 import { TxPopover } from '@talex-touch/tuffex'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
@@ -13,7 +14,19 @@ const props = defineProps<{
   isTarget?: boolean
 }>()
 
+const { t } = useI18n()
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
+const pluginSummary = computed(() => {
+  if (props.plugin.loadState === 'loading') {
+    return t('plugin.summary.loading')
+  }
+
+  if (props.plugin.loadState === 'load_failed') {
+    return props.plugin.loadError?.message || t('plugin.summary.loadFailed')
+  }
+
+  return props.plugin.desc || props.plugin.loadError?.message || ''
+})
 </script>
 
 <template>
@@ -74,7 +87,7 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
       </p>
 
       <p class="text-xs text-gray-400 mt-1 truncate">
-        {{ plugin.desc }}
+        {{ pluginSummary }}
       </p>
     </div>
 

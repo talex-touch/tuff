@@ -2,5 +2,5 @@
 </script>
 
 <template>
-  <ArticleThEditor />
+  <ArticleThEditor model-value="" :readonly="true" />
 </template>

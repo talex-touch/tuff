@@ -1,24 +1,35 @@
 import type {
   CreatePilotStreamEmitterOptions,
-  DeepAgentAuditRecord,
+  PilotStreamDraftEvent,
   PilotStreamEvent,
+} from '@talex-touch/tuff-intelligence/pilot'
+import type {
+  DeepAgentAuditRecord,
   TraceRecord,
   UserMessageAttachment,
   UserMessageInput,
-} from '@talex-touch/tuff-intelligence/pilot'
+} from '@talex-touch/tuff-intelligence/pilot-server'
 import type { H3Event } from 'h3'
 import {
   createPilotStreamEmitter,
   mapPilotAuditToStreamEvent,
+  mapPilotReplayTraceToStreamEvent,
   PILOT_DEFAULT_KEEPALIVE_MS,
   PILOT_DEFAULT_TRACE_REPLAY_LIMIT,
   runPilotConversationStream,
   shouldExecutePilotWebsearch,
+  shouldHidePilotClientRuntimeEvent,
+  shouldPilotPersistTraceEvent,
   toPilotJsonSafe,
   toPilotSafeRecord,
   toPilotStreamErrorDetail,
 } from '@talex-touch/tuff-intelligence/pilot'
 import { createError } from 'h3'
+import {
+  buildPilotRedactedRoutingTracePayload,
+  redactPilotClientErrorDetail,
+  redactPilotClientTracePayload,
+} from '../../../../../shared/pilot-runtime-redaction'
 import { requirePilotAuth } from '../../../../utils/auth'
 import {
   getPilotAdminRoutingConfig,
@@ -36,29 +47,35 @@ import {
   normalizePilotMemoryPolicy,
   resolvePilotMemoryEnabled,
 } from '../../../../utils/pilot-chat-memory'
-import {
-  extractPilotMemoryFacts,
-  upsertPilotMemoryFacts,
-} from '../../../../utils/pilot-memory-facts'
 import { requireSessionId, toErrorMessage } from '../../../../utils/pilot-http'
+import { syncPilotQuotaConversationFromRuntime } from '../../../../utils/pilot-quota-history-sync'
 import { resolvePilotIntent } from '../../../../utils/pilot-intent-resolver'
 import { resolveLangGraphOrchestratorDecision } from '../../../../utils/pilot-langgraph-orchestrator'
-import { ensurePilotQuotaSessionSchema, upsertPilotQuotaSession } from '../../../../utils/pilot-quota-session'
+import { executePilotMediaWithFallback } from '../../../../utils/pilot-media-fallback'
+import {
+  buildPilotMemoryContextSystemMessage,
+  extractPilotMemoryFacts,
+  listPilotMemoryFactsByUser,
+  upsertPilotMemoryFacts,
+} from '../../../../utils/pilot-memory-facts'
 import { markRouteFailure, markRouteSuccess } from '../../../../utils/pilot-route-health'
 import { recordPilotRoutingMetric } from '../../../../utils/pilot-routing-metrics'
 import { resolvePilotRoutingSelection } from '../../../../utils/pilot-routing-resolver'
 import { createPilotRuntime, PILOT_STRICT_MODE_UNAVAILABLE_CODE } from '../../../../utils/pilot-runtime'
+import { buildPilotSseResponseHeaders } from '../../../../utils/pilot-sse-response'
 import { getPilotStoreMetricsSnapshot } from '../../../../utils/pilot-store'
-import { executePilotMediaWithFallback } from '../../../../utils/pilot-media-fallback'
+import { normalizeStreamInputAttachments } from '../../../../utils/pilot-stream-attachment-input'
 import {
+  createPilotStreamQuotaProjector,
+  createPilotStreamQuotaProjectorPersistence,
+} from '../../../../utils/pilot-stream-quota-projector'
+import {
+  buildWebsearchContextSystemMessage,
   executePilotImageGenerateTool,
   executePilotWebsearchTool,
-  mergeWebsearchContextIntoMessage,
   PilotToolApprovalRejectedError,
   PilotToolApprovalRequiredError,
 } from '../../../../utils/pilot-tool-gateway'
-import { buildQuotaConversationSnapshot } from '../../../../utils/quota-conversation-snapshot'
-import { ensureQuotaHistorySchema, getQuotaHistory, upsertQuotaHistory } from '../../../../utils/quota-history-store'
 
 interface StreamBody {
   message?: string
@@ -75,7 +92,7 @@ interface StreamBody {
   attachments?: UserMessageInput['attachments']
 }
 
-interface StreamEventPayload extends PilotStreamEvent {
+type StreamEventPayload = PilotStreamEvent & {
   sessionId: string
   timestamp: number
 }
@@ -84,6 +101,8 @@ interface StreamConnectionContext {
   closed: boolean
   disconnected: boolean
 }
+
+const PILOT_MEMORY_CONTEXT_FACT_LIMIT = 8
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -160,114 +179,50 @@ function buildImageMarkdown(urls: string[]): string {
     .join('\n\n')
 }
 
-function mapTraceToStreamEvent(trace: TraceRecord): Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> {
-  const payload = toPilotSafeRecord(trace.payload)
-  const text = String(payload.text || '')
+function redactReplayTraceEvent(trace: TraceRecord): Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> {
+  const mapped = mapPilotReplayTraceToStreamEvent(trace)
+  const payload = redactPilotClientTracePayload(mapped.type, toPilotSafeRecord(mapped.payload))
 
-  if (trace.type === 'assistant.delta') {
+  if (mapped.type === 'error') {
+    const detailRecord = toPilotSafeRecord(mapped.detail)
+    const payloadDetail = toPilotSafeRecord(payload.detail)
+    const detail = redactPilotClientErrorDetail(
+      Object.keys(detailRecord).length > 0
+        ? detailRecord
+        : (Object.keys(payloadDetail).length > 0 ? payloadDetail : payload),
+    )
     return {
-      type: 'assistant.delta',
-      seq: trace.seq,
-      delta: text,
-      payload,
+      ...mapped,
+      detail,
+      payload: {
+        ...payload,
+        detail,
+      },
+      message: String(mapped.message || payload.message || 'Stream error'),
     }
   }
 
-  if (trace.type === 'thinking.delta') {
+  if (Object.keys(payload).length <= 0) {
     return {
-      type: 'thinking.delta',
-      seq: trace.seq,
-      delta: text,
-      payload,
-    }
-  }
-
-  if (trace.type === 'thinking.final') {
-    return {
-      type: 'thinking.final',
-      seq: trace.seq,
-      message: text,
-      payload,
-    }
-  }
-
-  if (trace.type === 'assistant.final') {
-    return {
-      type: 'assistant.final',
-      seq: trace.seq,
-      message: text,
-      payload,
-    }
-  }
-
-  if (trace.type === 'error') {
-    return {
-      type: 'error',
-      seq: trace.seq,
-      message: String(payload.message || 'Stream error'),
-      detail: toPilotSafeRecord(payload.detail),
+      ...mapped,
       payload,
     }
   }
 
   return {
-    type: trace.type,
-    seq: trace.seq,
+    ...mapped,
     payload,
   }
 }
 
-async function syncLegacyQuotaConversationFromRuntime(
-  event: H3Event,
-  options: {
-    userId: string
-    chatId: string
-    channelId: string
-    storeRuntime: {
-      getSession: (sessionId: string) => Promise<{ title?: string | null } | null>
-      listMessages: (sessionId: string) => Promise<Array<{
-        role: string
-        content: string
-      }>>
+function countConversationMessages(messages: Array<{ role: string }>): number {
+  return messages.reduce((acc, item) => {
+    const role = String(item.role || '').trim().toLowerCase()
+    if (role === 'user' || role === 'assistant') {
+      return acc + 1
     }
-  },
-): Promise<void> {
-  await ensureQuotaHistorySchema(event)
-  await ensurePilotQuotaSessionSchema(event)
-
-  const session = await options.storeRuntime.getSession(options.chatId)
-  if (!session) {
-    return
-  }
-
-  const runtimeMessages = await options.storeRuntime.listMessages(options.chatId)
-  const previous = await getQuotaHistory(event, options.userId, options.chatId)
-  const snapshot = buildQuotaConversationSnapshot({
-    chatId: options.chatId,
-    messages: runtimeMessages.map(item => ({
-      role: item.role,
-      content: item.content,
-    })),
-    assistantReply: '',
-    topicHint: String(session.title || '').trim(),
-    previousValue: previous?.value || '',
-  })
-
-  await upsertQuotaHistory(event, {
-    chatId: options.chatId,
-    userId: options.userId,
-    topic: snapshot.topic,
-    value: snapshot.value,
-    meta: previous?.meta || '',
-  })
-
-  await upsertPilotQuotaSession(event, {
-    chatId: options.chatId,
-    userId: options.userId,
-    runtimeSessionId: options.chatId,
-    channelId: String(options.channelId || '').trim() || 'default',
-    topic: snapshot.topic,
-  })
+    return acc
+  }, 0)
 }
 
 async function resolveMessageAttachments(
@@ -368,7 +323,7 @@ async function followTraceTail(options: {
   sessionId: string
   fromSeq: number
   emitEvent: (
-    payload: Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
+    payload: Omit<PilotStreamDraftEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
     emitOptions?: {
       persist?: boolean
       tracePayload?: Record<string, unknown>
@@ -390,7 +345,15 @@ async function followTraceTail(options: {
         if (options.connection.closed || options.connection.disconnected) {
           return
         }
-        await options.emitEvent(mapTraceToStreamEvent(trace))
+        if (!shouldPilotPersistTraceEvent(trace.type)) {
+          nextSeq = Math.max(nextSeq, Number(trace.seq || 0) + 1)
+          continue
+        }
+        if (shouldHidePilotClientRuntimeEvent(trace.type)) {
+          nextSeq = Math.max(nextSeq, Number(trace.seq || 0) + 1)
+          continue
+        }
+        await options.emitEvent(redactReplayTraceEvent(trace))
         nextSeq = Math.max(nextSeq, Number(trace.seq || 0) + 1)
       }
       continue
@@ -433,6 +396,14 @@ export default defineEventHandler(async (event) => {
           shouldStore: false,
           reason: 'intent_skip' as const,
         },
+        memoryReadDecision: {
+          shouldRead: false,
+          reason: 'not_needed' as const,
+        },
+        toolDecision: {
+          shouldUseTools: false,
+          reason: 'not_needed' as const,
+        },
       }
   const routedMessage = intentDecision.prompt || message
   const selectedChannel = await resolvePilotRoutingSelection(event, {
@@ -459,7 +430,7 @@ export default defineEventHandler(async (event) => {
   const memoryEnabled = resolvePilotMemoryEnabled(memoryPolicy, requestedMemoryEnabled, memoryUserPreference)
   const pilotMode = body?.pilotMode === true
 
-  const inputAttachments = Array.isArray(body?.attachments) ? body.attachments : undefined
+  const inputAttachments = normalizeStreamInputAttachments(body?.attachments)
   const hasInputAttachments = Boolean(inputAttachments && inputAttachments.length > 0)
   const persistStreamLifecycle = Boolean(routedMessage) || hasInputAttachments
   const fromSeq = Number.isFinite(body?.fromSeq)
@@ -525,18 +496,35 @@ export default defineEventHandler(async (event) => {
         let memoryHistoryMessageCount = 0
         let memoryHistoryAfterMessageCount = 0
         let memoryAddedCount = 0
+        let memoryAddedFacts: Array<{ key: string, value: string }> = []
         let memoryExtractorFailed = false
+        let memoryContextFacts: Array<{ key: string, value: string }> = []
+        let memoryReadDecision = intentDecision.memoryReadDecision
         let websearchContextText = ''
         let websearchSources: Array<Record<string, unknown>> = []
         let websearchDecisionDispatched = false
         let websearchSettled = false
-        const websearchDecision = shouldExecutePilotWebsearch({
-          message: routedMessage,
-          intentType: intentDecision.intentType,
-          internetEnabled: selectedChannel.internet,
-          builtinTools: selectedChannel.builtinTools,
-          intentWebsearchRequired: intentDecision.websearchRequired,
-        })
+        let websearchSkipReasonFromAudit = ''
+        const websearchGateMode = 'intent_strict'
+        const requestedBuiltinTools = Array.isArray(selectedChannel.builtinTools)
+          ? selectedChannel.builtinTools.filter(Boolean)
+          : []
+        const runtimeBuiltinTools = intentDecision.toolDecision.shouldUseTools
+          ? [...requestedBuiltinTools]
+          : []
+        const websearchDecision = intentDecision.toolDecision.shouldUseTools === true
+          ? shouldExecutePilotWebsearch({
+              message: routedMessage,
+              intentType: intentDecision.intentType,
+              internetEnabled: selectedChannel.internet,
+              builtinTools: runtimeBuiltinTools,
+              intentWebsearchRequired: intentDecision.websearchRequired,
+              intentWebsearchReason: intentDecision.websearchReason,
+            })
+          : {
+              enabled: false,
+              reason: 'intent_not_required',
+            }
         let websearchConnectorSource: 'gateway' | 'responses_builtin' | 'none' = 'none'
         let websearchConnectorReason = websearchDecision.reason
         const routingConfig = await getPilotAdminRoutingConfig(event).catch(() => null)
@@ -553,81 +541,8 @@ export default defineEventHandler(async (event) => {
           },
         )
 
-        const emitMemoryUpdatedEvent = async () => {
-          const messages = memoryEnabled
-            ? await store.runtime.listMessages(sessionId)
-            : []
-          memoryHistoryAfterMessageCount = messages.length
-          memoryAddedCount = 0
-          memoryExtractorFailed = false
-          const shouldStoreByIntent = intentDecision.memoryDecision.shouldStore === true
-          if (memoryEnabled && shouldStoreByIntent && routedMessage) {
-            const latestAssistantReply = messages
-              .filter(item => item.role === 'assistant')
-              .at(-1)?.content || ''
-            try {
-              const facts = await extractPilotMemoryFacts({
-                message: routedMessage,
-                assistantReply: latestAssistantReply,
-                channel: {
-                  baseUrl: selectedChannel.channel.baseUrl,
-                  apiKey: selectedChannel.channel.apiKey,
-                  model: selectedChannel.providerModel || selectedChannel.channel.model,
-                  transport: selectedChannel.transport,
-                  timeoutMs: selectedChannel.channel.timeoutMs,
-                },
-              })
-              if (facts.length > 0) {
-                const upserted = await upsertPilotMemoryFacts(event, {
-                  sessionId,
-                  userId,
-                  sourceText: routedMessage,
-                  facts,
-                })
-                memoryAddedCount = upserted.addedCount
-              }
-            }
-            catch {
-              memoryExtractorFailed = true
-            }
-          }
-          const reason = resolveMemoryUpdateReason({
-            memoryEnabled,
-            requestedMemoryEnabled,
-            memoryUserPreference,
-            shouldStoreByIntent,
-            memoryDecisionReason: String(intentDecision.memoryDecision.reason || '').trim(),
-            addedCount: memoryAddedCount,
-            extractorFailed: memoryExtractorFailed,
-          })
-          const stored = memoryAddedCount > 0
-          await emitEvent({
-            type: 'memory.updated',
-            payload: {
-              memoryEnabled,
-              historyBefore: memoryHistoryMessageCount,
-              historyAfter: memoryHistoryAfterMessageCount,
-              addedCount: memoryAddedCount,
-              stored,
-              reason,
-            },
-          }, persistStreamLifecycle
-            ? {
-                persist: true,
-                tracePayload: {
-                  memoryEnabled,
-                  historyBefore: memoryHistoryMessageCount,
-                  historyAfter: memoryHistoryAfterMessageCount,
-                  addedCount: memoryAddedCount,
-                  stored,
-                  reason,
-                },
-              }
-            : undefined)
-        }
-
-        if (pilotMode && orchestratorDecision.mode !== 'langgraph-local') {
-          const detail = toPilotSafeRecord({
+        if (pilotMode && selectedChannel.adapter !== 'coze' && orchestratorDecision.mode !== 'langgraph-local') {
+          const detail = redactPilotClientErrorDetail(toPilotSafeRecord({
             code: PILOT_STRICT_MODE_UNAVAILABLE_CODE,
             reason: String(orchestratorDecision.reason || '').trim() || 'pilot_strict_mode_unavailable',
             status_code: 503,
@@ -641,7 +556,9 @@ export default defineEventHandler(async (event) => {
             channel_id: selectedChannel.channelId,
             model_id: selectedChannel.modelId,
             provider_model: selectedChannel.providerModel,
-          })
+            provider_target_type: selectedChannel.providerTargetType,
+            scene: selectedChannel.scene,
+          }))
           if (shouldRecordRoutingMetric) {
             metricSuccess = false
             metricFinishReason = 'strict_mode_unavailable'
@@ -673,6 +590,7 @@ export default defineEventHandler(async (event) => {
         const { runtime, store } = createPilotRuntime({
           event,
           userId,
+          memoryEnabled,
           strictPilotMode: pilotMode,
           allowDeepAgentFallback: !pilotMode,
           channel: {
@@ -680,10 +598,21 @@ export default defineEventHandler(async (event) => {
             baseUrl: selectedChannel.channel.baseUrl,
             apiKey: selectedChannel.channel.apiKey,
             model: selectedChannel.providerModel || selectedChannel.channel.model,
+            providerTargetType: selectedChannel.providerTargetType,
             adapter: selectedChannel.adapter,
             transport: selectedChannel.transport,
+            region: selectedChannel.channel.region,
+            cozeAuthMode: selectedChannel.channel.cozeAuthMode,
+            oauthClientId: selectedChannel.channel.oauthClientId,
+            oauthClientSecret: selectedChannel.channel.oauthClientSecret,
+            oauthTokenUrl: selectedChannel.channel.oauthTokenUrl,
+            jwtAppId: selectedChannel.channel.jwtAppId,
+            jwtKeyId: selectedChannel.channel.jwtKeyId,
+            jwtPrivateKey: selectedChannel.channel.jwtPrivateKey,
+            jwtAudience: selectedChannel.channel.jwtAudience,
             timeoutMs: selectedChannel.channel.timeoutMs,
-            builtinTools: selectedChannel.builtinTools,
+            builtinTools: runtimeBuiltinTools,
+            disableDefaultBuiltinTools: intentDecision.toolDecision.shouldUseTools !== true,
           },
           orchestrator: {
             mode: orchestratorDecision.mode,
@@ -715,16 +644,41 @@ export default defineEventHandler(async (event) => {
           },
         }
         const streamEmitter = createPilotStreamEmitter(createStreamEmitterOptions)
+        const appendTraceOnly = async (type: string, payload: Record<string, unknown>) => {
+          const nextSeq = Math.max(1, streamEmitter.getSeqCursor() + 1)
+          await store.runtime.appendTrace({
+            sessionId,
+            seq: nextSeq,
+            type,
+            payload: toPilotSafeRecord(payload),
+          })
+          streamEmitter.setSeqCursor(nextSeq)
+        }
+        const quotaProjector = createPilotStreamQuotaProjector({
+          chatId: sessionId,
+          persist: persistStreamLifecycle,
+          storeRuntime: store.runtime,
+          persistence: createPilotStreamQuotaProjectorPersistence({
+            event,
+            userId,
+            chatId: sessionId,
+            channelId: selectedChannel.channelId,
+          }),
+          assistantDeltaDebounceMs: 48,
+          warn: (message, error) => {
+            console.warn(message, error)
+          },
+        })
         const rawEmitEvent = streamEmitter.emit
         const emitEvent = async (
-          payload: Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
+          payload: Omit<PilotStreamDraftEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
           emitOptions?: {
             persist?: boolean
             tracePayload?: Record<string, unknown>
           },
         ) => {
+          const eventType = String(payload?.type || '').trim()
           if (shouldRecordRoutingMetric) {
-            const eventType = String(payload?.type || '').trim()
             if (eventType === 'assistant.delta') {
               const delta = typeof payload.delta === 'string'
                 ? payload.delta
@@ -755,7 +709,110 @@ export default defineEventHandler(async (event) => {
               metricFinishReason = 'runtime_error'
             }
           }
-          return await rawEmitEvent(payload, emitOptions)
+          await rawEmitEvent(payload, emitOptions)
+
+          if (!persistStreamLifecycle || !eventType || eventType === 'stream.heartbeat') {
+            return
+          }
+
+          const projectedSeq = Number.isFinite(payload.seq)
+            ? Math.max(1, Math.floor(Number(payload.seq)))
+            : (emitOptions?.persist === true && shouldPilotPersistTraceEvent(eventType)
+                ? streamEmitter.getSeqCursor()
+                : undefined)
+          const projectedPayload = payload.payload && typeof payload.payload === 'object' && !Array.isArray(payload.payload)
+            ? payload.payload as Record<string, unknown>
+            : {}
+          const projectedDetail = payload.detail && typeof payload.detail === 'object' && !Array.isArray(payload.detail)
+            ? payload.detail as Record<string, unknown>
+            : undefined
+          await quotaProjector.apply({
+            type: eventType,
+            seq: projectedSeq,
+            turnId: typeof payload.turnId === 'string' ? payload.turnId : undefined,
+            delta: typeof payload.delta === 'string' ? payload.delta : undefined,
+            message: typeof payload.message === 'string' ? payload.message : undefined,
+            payload: projectedPayload,
+            detail: projectedDetail,
+          })
+        }
+
+        const emitMemoryUpdatedEvent = async () => {
+          const messages = memoryEnabled
+            ? await store.runtime.listMessages(sessionId)
+            : []
+          memoryHistoryAfterMessageCount = countConversationMessages(messages)
+          memoryAddedCount = 0
+          memoryAddedFacts = []
+          memoryExtractorFailed = false
+          const shouldStoreByIntent = intentDecision.memoryDecision.shouldStore === true
+          if (memoryEnabled && shouldStoreByIntent && routedMessage) {
+            const latestAssistantMessage = messages
+              .filter(item => item.role === 'assistant')
+              .at(-1)
+            const latestAssistantReply = latestAssistantMessage?.content || ''
+            try {
+              const facts = await extractPilotMemoryFacts({
+                message: routedMessage,
+                assistantReply: latestAssistantReply,
+                channel: {
+                  baseUrl: selectedChannel.channel.baseUrl,
+                  apiKey: selectedChannel.channel.apiKey,
+                  model: selectedChannel.providerModel || selectedChannel.channel.model,
+                  transport: selectedChannel.transport,
+                  timeoutMs: selectedChannel.channel.timeoutMs,
+                },
+              })
+              if (facts.length > 0) {
+                const upserted = await upsertPilotMemoryFacts(event, {
+                  sessionId,
+                  userId,
+                  sourceText: routedMessage,
+                  facts,
+                })
+                memoryAddedCount = upserted.addedCount
+                memoryAddedFacts = upserted.addedFacts
+              }
+            }
+            catch {
+              memoryExtractorFailed = true
+            }
+          }
+          const reason = resolveMemoryUpdateReason({
+            memoryEnabled,
+            requestedMemoryEnabled,
+            memoryUserPreference,
+            shouldStoreByIntent,
+            memoryDecisionReason: String(intentDecision.memoryDecision.reason || '').trim(),
+            addedCount: memoryAddedCount,
+            extractorFailed: memoryExtractorFailed,
+          })
+          const stored = memoryAddedCount > 0
+          await emitEvent({
+            type: 'memory.updated',
+            payload: {
+              memoryEnabled,
+              historyBefore: memoryHistoryMessageCount,
+              historyAfter: memoryHistoryAfterMessageCount,
+              addedCount: memoryAddedCount,
+              facts: memoryAddedFacts,
+              stored,
+              reason,
+            },
+          }, persistStreamLifecycle
+            ? {
+                persist: true,
+                tracePayload: {
+                  memoryEnabled,
+                  historyBefore: memoryHistoryMessageCount,
+                  historyAfter: memoryHistoryAfterMessageCount,
+                  addedCount: memoryAddedCount,
+                  facts: memoryAddedFacts,
+                  stored,
+                  reason,
+                },
+              }
+            : undefined)
         }
 
         const emitWebsearchSkipped = async (reason: string) => {
@@ -771,6 +828,7 @@ export default defineEventHandler(async (event) => {
             payload: {
               enabled: false,
               reason: normalizedReason,
+              gateMode: websearchGateMode,
             },
           }, persistStreamLifecycle
             ? {
@@ -778,6 +836,7 @@ export default defineEventHandler(async (event) => {
                 tracePayload: {
                   enabled: false,
                   reason: normalizedReason,
+                  gateMode: websearchGateMode,
                 },
               }
             : undefined)
@@ -808,10 +867,30 @@ export default defineEventHandler(async (event) => {
           }
           streamEmitter.setSeqCursor(Number(session.lastSeq || 0))
           if (memoryEnabled) {
-            memoryHistoryMessageCount = (await store.runtime.listMessages(sessionId)).length
+            memoryHistoryMessageCount = countConversationMessages(await store.runtime.listMessages(sessionId))
           }
           else {
             memoryHistoryMessageCount = 0
+          }
+          memoryReadDecision = memoryEnabled
+            ? intentDecision.memoryReadDecision
+            : {
+                shouldRead: false,
+                reason: 'disabled' as const,
+              }
+          if (memoryReadDecision.shouldRead && routedMessage) {
+            try {
+              const memoryFactRows = await listPilotMemoryFactsByUser(event, userId, {
+                limit: PILOT_MEMORY_CONTEXT_FACT_LIMIT,
+              })
+              memoryContextFacts = memoryFactRows.map(item => ({
+                key: item.key,
+                value: item.value,
+              }))
+            }
+            catch {
+              memoryContextFacts = []
+            }
           }
 
           await emitEvent({
@@ -840,6 +919,8 @@ export default defineEventHandler(async (event) => {
               websearchRequired: intentDecision.websearchRequired === true,
               websearchReason: intentDecision.websearchReason,
               memoryDecision: intentDecision.memoryDecision,
+              memoryReadDecision: intentDecision.memoryReadDecision,
+              toolDecision: intentDecision.toolDecision,
               routedPrompt: routedMessage,
             },
           }, persistStreamLifecycle
@@ -853,56 +934,22 @@ export default defineEventHandler(async (event) => {
                   websearchRequired: intentDecision.websearchRequired === true,
                   websearchReason: intentDecision.websearchReason,
                   memoryDecision: intentDecision.memoryDecision,
+                  memoryReadDecision: intentDecision.memoryReadDecision,
+                  toolDecision: intentDecision.toolDecision,
                 },
               }
             : undefined)
 
-          await emitEvent({
-            type: 'routing.selected',
-            payload: {
-              channelId: selectedChannel.channelId,
-              modelId: selectedChannel.modelId,
-              providerModel: selectedChannel.providerModel,
-              routeComboId: selectedChannel.routeComboId,
-              selectionSource: selectedChannel.selectionSource,
-              selectionReason: selectedChannel.selectionReason,
+          if (persistStreamLifecycle) {
+            await appendTraceOnly('routing.selected', buildPilotRedactedRoutingTracePayload({
               intentType: intentDecision.intentType,
               internet: selectedChannel.internet,
               thinking: selectedChannel.thinking,
               memoryEnabled,
               memoryHistoryMessageCount,
-              builtinTools: selectedChannel.builtinTools,
-              transport: selectedChannel.transport,
-              adapter: selectedChannel.adapter,
-              orchestratorMode: orchestratorDecision.mode,
-              orchestratorReason: orchestratorDecision.reason,
-              orchestratorAssistantId: orchestratorDecision.assistantId,
-              orchestratorGraphProfile: orchestratorDecision.graphProfile,
-            },
-          }, persistStreamLifecycle
-            ? {
-                persist: true,
-                tracePayload: {
-                  channelId: selectedChannel.channelId,
-                  modelId: selectedChannel.modelId,
-                  providerModel: selectedChannel.providerModel,
-                  routeComboId: selectedChannel.routeComboId,
-                  selectionSource: selectedChannel.selectionSource,
-                  selectionReason: selectedChannel.selectionReason,
-                  intentType: intentDecision.intentType,
-                  internet: selectedChannel.internet,
-                  thinking: selectedChannel.thinking,
-                  memoryEnabled,
-                  memoryHistoryMessageCount,
-                  transport: selectedChannel.transport,
-                  adapter: selectedChannel.adapter,
-                  orchestratorMode: orchestratorDecision.mode,
-                  orchestratorReason: orchestratorDecision.reason,
-                  orchestratorAssistantId: orchestratorDecision.assistantId,
-                  orchestratorGraphProfile: orchestratorDecision.graphProfile,
-                },
-              }
-            : undefined)
+              builtinTools: runtimeBuiltinTools,
+            }))
+          }
 
           await emitEvent({
             type: 'memory.context',
@@ -910,6 +957,8 @@ export default defineEventHandler(async (event) => {
               memoryEnabled,
               memoryHistoryMessageCount,
               memoryDecision: intentDecision.memoryDecision,
+              memoryReadDecision,
+              memoryFactsCount: memoryContextFacts.length,
               memoryPolicyEnabledByDefault: memoryPolicy.enabledByDefault,
               memoryPolicyAllowUserDisable: memoryPolicy.allowUserDisable,
               memoryUserPreference,
@@ -921,6 +970,8 @@ export default defineEventHandler(async (event) => {
                   memoryEnabled,
                   memoryHistoryMessageCount,
                   memoryDecision: intentDecision.memoryDecision,
+                  memoryReadDecision,
+                  memoryFactsCount: memoryContextFacts.length,
                   memoryPolicyEnabledByDefault: memoryPolicy.enabledByDefault,
                   memoryPolicyAllowUserDisable: memoryPolicy.allowUserDisable,
                   memoryUserPreference,
@@ -933,10 +984,13 @@ export default defineEventHandler(async (event) => {
             payload: {
               enabled: websearchDecision.enabled,
               reason: websearchDecision.reason,
+              gateMode: websearchGateMode,
               intentWebsearchRequired: intentDecision.websearchRequired === true,
               intentWebsearchReason: intentDecision.websearchReason,
               internetEnabled: selectedChannel.internet,
-              builtinTools: selectedChannel.builtinTools,
+              builtinTools: runtimeBuiltinTools,
+              requestedBuiltinTools,
+              toolDecision: intentDecision.toolDecision,
             },
           }, persistStreamLifecycle
             ? {
@@ -944,10 +998,13 @@ export default defineEventHandler(async (event) => {
                 tracePayload: {
                   enabled: websearchDecision.enabled,
                   reason: websearchDecision.reason,
+                  gateMode: websearchGateMode,
                   intentWebsearchRequired: intentDecision.websearchRequired === true,
                   intentWebsearchReason: intentDecision.websearchReason,
                   internetEnabled: selectedChannel.internet,
-                  builtinTools: selectedChannel.builtinTools,
+                  builtinTools: runtimeBuiltinTools,
+                  requestedBuiltinTools,
+                  toolDecision: intentDecision.toolDecision,
                 },
               }
             : undefined)
@@ -1257,6 +1314,16 @@ export default defineEventHandler(async (event) => {
                 },
                 emitAudit: async (payload) => {
                   const normalizedPayload = toPilotSafeRecord(payload)
+                  const normalizedAuditType = String(normalizedPayload.auditType || '').trim()
+                  const normalizedStatus = String(normalizedPayload.status || '').trim().toLowerCase()
+                  const normalizedConnectorReason = String(normalizedPayload.connectorReason || '').trim()
+                  if (
+                    normalizedAuditType === 'tool.call.completed'
+                    && normalizedStatus === 'skipped'
+                    && normalizedConnectorReason
+                  ) {
+                    websearchSkipReasonFromAudit = normalizedConnectorReason
+                  }
                   await emitEvent({
                     type: 'run.audit',
                     payload: normalizedPayload,
@@ -1309,7 +1376,7 @@ export default defineEventHandler(async (event) => {
                 markWebsearchExecuted()
               }
               else {
-                await emitWebsearchSkipped('tool_failed_or_empty_result')
+                await emitWebsearchSkipped(websearchSkipReasonFromAudit || 'tool_failed_or_empty_result')
               }
             }
             catch (error) {
@@ -1422,20 +1489,47 @@ export default defineEventHandler(async (event) => {
 
           const requireNoSourceGuard = (intentDecision.websearchRequired === true)
             && websearchSources.length <= 0
-          const runtimeMessage = mergeWebsearchContextIntoMessage(routedMessage, websearchContextText, {
+          const memorySystemContext = buildPilotMemoryContextSystemMessage(routedMessage, memoryContextFacts)
+          const runtimeSystemContext = buildWebsearchContextSystemMessage(routedMessage, websearchContextText, {
             requireNoSourceGuard,
           })
+          const runtimeSystemContextMessages: Array<{
+            content: string
+            metadata: Record<string, unknown>
+          }> = []
+          if (memorySystemContext) {
+            runtimeSystemContextMessages.push({
+              content: memorySystemContext,
+              metadata: {
+                source: 'memory_context',
+                memoryFactsCount: memoryContextFacts.length,
+                memoryReadDecision,
+              },
+            })
+          }
+          if (runtimeSystemContext) {
+            runtimeSystemContextMessages.push({
+              content: runtimeSystemContext,
+              metadata: {
+                source: 'websearch_context',
+                websearchSourceCount: websearchSources.length,
+                requireNoSourceGuard,
+              },
+            })
+          }
 
           const result = await runPilotConversationStream({
             runtime,
             sessionId,
-            message: runtimeMessage,
+            message: routedMessage,
             fromSeq,
             attachments: resolvedAttachments.attachments,
             metadata: toPilotSafeRecord({
               ...(body?.metadata || {}),
               modelId: selectedChannel.modelId,
               providerModel: selectedChannel.providerModel,
+              providerTargetType: selectedChannel.providerTargetType,
+              scene: selectedChannel.scene,
               routeComboId: selectedChannel.routeComboId,
               selectionSource: selectedChannel.selectionSource,
               selectionReason: selectedChannel.selectionReason,
@@ -1447,12 +1541,17 @@ export default defineEventHandler(async (event) => {
               thinking: selectedChannel.thinking,
               memoryEnabled,
               memoryHistoryMessageCount,
-              builtinTools: selectedChannel.builtinTools,
+              builtinTools: runtimeBuiltinTools,
+              requestedBuiltinTools,
+              toolDecision: intentDecision.toolDecision,
+              memoryReadDecision,
+              memoryContextFactsCount: memoryContextFacts.length,
               toolSources: websearchSources,
               websearchSourceCount: websearchSources.length,
               websearchDecision: websearchDecision.reason,
               websearchConnectorSource,
               websearchConnectorReason,
+              systemContextMessages: runtimeSystemContextMessages.length > 0 ? runtimeSystemContextMessages : undefined,
               orchestratorMode: orchestratorDecision.mode,
               orchestratorReason: orchestratorDecision.reason,
               orchestratorAssistantId: orchestratorDecision.assistantId,
@@ -1540,7 +1639,7 @@ export default defineEventHandler(async (event) => {
             // ignore fallback status updates
           }
 
-          const detail = toPilotStreamErrorDetail(error, 'stream.run', { sessionId })
+          const detail = redactPilotClientErrorDetail(toPilotStreamErrorDetail(error, 'stream.run', { sessionId }))
           if (shouldRecordRoutingMetric) {
             metricSuccess = false
             metricFinishReason = 'error'
@@ -1578,9 +1677,19 @@ export default defineEventHandler(async (event) => {
         finally {
           if (persistStreamLifecycle) {
             try {
-              await syncLegacyQuotaConversationFromRuntime(event, {
+              await quotaProjector.flush({
+                force: true,
+              })
+            }
+            catch (error) {
+              console.warn('[pilot-stream-quota-projector] flush failed', error)
+            }
+
+            try {
+              await syncPilotQuotaConversationFromRuntime(event, {
                 userId,
                 chatId: sessionId,
+                runtimeSessionId: sessionId,
                 channelId: selectedChannel.channelId,
                 storeRuntime: store.runtime,
               })
@@ -1616,6 +1725,7 @@ export default defineEventHandler(async (event) => {
                 routeComboId: selectedChannel.routeComboId,
                 channelId: selectedChannel.channelId,
                 providerModel: selectedChannel.providerModel,
+                providerTargetType: selectedChannel.providerTargetType,
                 queueWaitMs: 0,
                 ttftMs: resolvedTtftMs,
                 totalDurationMs,
@@ -1633,11 +1743,16 @@ export default defineEventHandler(async (event) => {
                   intentConfidence: intentDecision.confidence,
                   adapter: selectedChannel.adapter,
                   transport: selectedChannel.transport,
+                  providerTargetType: selectedChannel.providerTargetType,
+                  scene: selectedChannel.scene,
                   internet: selectedChannel.internet,
                   thinking: selectedChannel.thinking,
                   memoryEnabled,
                   memoryHistoryMessageCount,
-                  builtinTools: selectedChannel.builtinTools,
+                  builtinTools: runtimeBuiltinTools,
+                  requestedBuiltinTools,
+                  toolDecision: intentDecision.toolDecision,
+                  memoryReadDecision,
                   websearchSourceCount: websearchSources.length,
                   websearchDecision: websearchDecision.reason,
                   websearchConnectorSource,
@@ -1670,10 +1785,6 @@ export default defineEventHandler(async (event) => {
   })
 
   return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
-    },
+    headers: buildPilotSseResponseHeaders(),
   })
 })

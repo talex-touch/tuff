@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// Experimental workspace-only UI. The production homepage keeps the legacy chat surface.
 import type { PilotSessionRow } from '../../composables/pilot-chat.types'
 import { TxButton, TxEmptyState } from '@talex-touch/tuffex'
 import PilotSidebarHeader from './PilotSidebarHeader.vue'

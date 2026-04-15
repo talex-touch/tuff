@@ -60,6 +60,35 @@ describe('pilot-admin-routing-config', () => {
     settingsStore.clear()
   })
 
+  it('旧 routing policy 会从 legacy intent/image 字段派生 scenePolicies', async () => {
+    const { getPilotAdminRoutingConfig } = await loadTarget()
+    const event = createEvent()
+
+    settingsStore.set('routing.policy', JSON.stringify({
+      defaultModelId: 'quota-auto',
+      defaultRouteComboId: 'default-auto',
+      intentNanoModelId: 'intent-model',
+      intentRouteComboId: 'intent-combo',
+      imageGenerationModelId: 'image-model',
+      imageRouteComboId: 'image-combo',
+    }))
+
+    const config = await getPilotAdminRoutingConfig(event)
+
+    expect(config.routingPolicy.scenePolicies).toEqual([
+      {
+        scene: 'intent_classification',
+        modelId: 'intent-model',
+        routeComboId: 'intent-combo',
+      },
+      {
+        scene: 'image_generate',
+        modelId: 'image-model',
+        routeComboId: 'image-combo',
+      },
+    ])
+  })
+
   it('删除 system 模型后不会自动补回非 quota-auto 默认项', async () => {
     const { getPilotAdminRoutingConfig, updatePilotAdminRoutingConfig } = await loadTarget()
     const event = createEvent()
@@ -113,5 +142,211 @@ describe('pilot-admin-routing-config', () => {
     expect(ids).toContain('quota-auto')
     expect(ids).not.toContain('gpt-5.2')
     expect(ids).not.toContain('gemini-2.5-pro')
+  })
+
+  it('保存 scenePolicies 时会同步回写 legacy intent/image 字段', async () => {
+    const { updatePilotAdminRoutingConfig } = await loadTarget()
+    const event = createEvent()
+
+    const updated = await updatePilotAdminRoutingConfig(event, {
+      modelCatalog: [
+        {
+          id: 'quota-auto',
+          name: 'Quota Auto',
+          source: 'system',
+          enabled: true,
+          visible: true,
+          scenes: [],
+          bindings: [],
+        },
+        {
+          id: 'intent-model',
+          name: 'Intent Model',
+          source: 'manual',
+          enabled: true,
+          visible: true,
+          scenes: ['intent_classification'],
+          bindings: [],
+        },
+        {
+          id: 'image-model',
+          name: 'Image Model',
+          source: 'manual',
+          enabled: true,
+          visible: true,
+          scenes: ['image_generate'],
+          bindings: [],
+        },
+      ] as any,
+      routingPolicy: {
+        scenePolicies: [
+          {
+            scene: 'intent_classification',
+            modelId: 'intent-model',
+            routeComboId: 'intent-combo',
+          },
+          {
+            scene: 'image_generate',
+            modelId: 'image-model',
+            routeComboId: 'image-combo',
+          },
+        ],
+      },
+    })
+
+    expect(updated.routingPolicy.intentNanoModelId).toBe('intent-model')
+    expect(updated.routingPolicy.intentRouteComboId).toBe('intent-combo')
+    expect(updated.routingPolicy.imageGenerationModelId).toBe('image-model')
+    expect(updated.routingPolicy.imageRouteComboId).toBe('image-combo')
+    expect(updated.routingPolicy.scenePolicies).toEqual([
+      {
+        scene: 'intent_classification',
+        modelId: 'intent-model',
+        routeComboId: 'intent-combo',
+      },
+      {
+        scene: 'image_generate',
+        modelId: 'image-model',
+        routeComboId: 'image-combo',
+      },
+    ])
+
+    const persisted = JSON.parse(settingsStore.get('routing.policy') || '{}')
+    expect(persisted.intentNanoModelId).toBe('intent-model')
+    expect(persisted.intentRouteComboId).toBe('intent-combo')
+    expect(persisted.imageGenerationModelId).toBe('image-model')
+    expect(persisted.imageRouteComboId).toBe('image-combo')
+  })
+
+  it('显式 scenePolicies 命中未打 scene 标签的模型组时会拒绝保存', async () => {
+    const { updatePilotAdminRoutingConfig } = await loadTarget()
+    const event = createEvent()
+
+    await expect(updatePilotAdminRoutingConfig(event, {
+      modelCatalog: [
+        {
+          id: 'quota-auto',
+          name: 'Quota Auto',
+          source: 'system',
+          enabled: true,
+          visible: true,
+          scenes: [],
+          bindings: [],
+        },
+        {
+          id: 'chat-model',
+          name: 'Chat Model',
+          source: 'manual',
+          enabled: true,
+          visible: true,
+          scenes: [],
+          bindings: [],
+        },
+      ] as any,
+      routingPolicy: {
+        scenePolicies: [
+          {
+            scene: 'intent_classification',
+            modelId: 'chat-model',
+          },
+        ],
+      },
+    })).rejects.toThrow('chat-model is missing required scene tag: intent_classification')
+  })
+
+  it('显式 scenePolicies 出现重复 scene 时会拒绝保存', async () => {
+    const { updatePilotAdminRoutingConfig } = await loadTarget()
+    const event = createEvent()
+
+    await expect(updatePilotAdminRoutingConfig(event, {
+      modelCatalog: [
+        {
+          id: 'quota-auto',
+          name: 'Quota Auto',
+          source: 'system',
+          enabled: true,
+          visible: true,
+          scenes: [],
+          bindings: [],
+        },
+        {
+          id: 'intent-model',
+          name: 'Intent Model',
+          source: 'manual',
+          enabled: true,
+          visible: true,
+          scenes: ['intent_classification'],
+          bindings: [],
+        },
+      ] as any,
+      routingPolicy: {
+        scenePolicies: [
+          {
+            scene: 'intent_classification',
+            modelId: 'intent-model',
+            routeComboId: 'intent-combo-a',
+          },
+          {
+            scene: 'intent-classification',
+            modelId: 'intent-model',
+            routeComboId: 'intent-combo-b',
+          },
+        ],
+      },
+    })).rejects.toThrow('Scene policy duplicated: intent_classification')
+  })
+
+  it('legacy intent/image patch 仍可覆盖已保存的 scenePolicies', async () => {
+    const { updatePilotAdminRoutingConfig } = await loadTarget()
+    const event = createEvent()
+
+    await updatePilotAdminRoutingConfig(event, {
+      modelCatalog: [
+        {
+          id: 'quota-auto',
+          name: 'Quota Auto',
+          source: 'system',
+          enabled: true,
+          visible: true,
+          scenes: [],
+          bindings: [],
+        },
+        {
+          id: 'intent-model',
+          name: 'Intent Model',
+          source: 'manual',
+          enabled: true,
+          visible: true,
+          scenes: ['intent_classification'],
+          bindings: [],
+        },
+      ] as any,
+      routingPolicy: {
+        scenePolicies: [
+          {
+            scene: 'intent_classification',
+            modelId: 'intent-model',
+            routeComboId: 'intent-combo',
+          },
+        ],
+      },
+    })
+
+    const updated = await updatePilotAdminRoutingConfig(event, {
+      routingPolicy: {
+        intentNanoModelId: 'legacy-intent-model',
+        intentRouteComboId: 'legacy-intent-combo',
+      },
+    })
+
+    expect(updated.routingPolicy.intentNanoModelId).toBe('legacy-intent-model')
+    expect(updated.routingPolicy.intentRouteComboId).toBe('legacy-intent-combo')
+    expect(updated.routingPolicy.scenePolicies).toEqual([
+      {
+        scene: 'intent_classification',
+        modelId: 'legacy-intent-model',
+        routeComboId: 'legacy-intent-combo',
+      },
+    ])
   })
 })

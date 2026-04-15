@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档入口（压缩版）
-> 更新时间: 2026-03-23
+> 更新时间: 2026-04-07
 
 ## 快速入口
 
@@ -17,9 +17,11 @@
 
 ---
 
-## 单一口径快照（2026-03-20）
+## 单一口径快照（2026-04-07）
 
 - 当前工作区基线：`2.4.9-beta.4`。
+- CoreApp 启动搜索卡顿治理已落地“平衡模式 + 双库隔离”：`database-aux.db` 分流非核心高频写、`DbWriteScheduler` QoS/熔断、索引热路径单写者化、启动期降载（120s）。
+- 发布开关已就位：`TUFF_DB_AUX_ENABLED`、`TUFF_DB_QOS_ENABLED`、`TUFF_STARTUP_DEGRADE_ENABLED`，支持灰度与快速回滚。
 - Legacy/兼容/结构治理已切换到“统一实施 PRD + 五工作包并行”口径（不再使用 Phase 1-3 决策叙事）。
 - 治理基线：`legacy 81/184`、`raw channel 13/46`、超长文件（主线）`47`。
 - `apps/core-app` 已完成“兼容债立即硬切”首轮并行治理：`window.$channel` 业务入口清零、legacy storage 事件协议清零、权限 `sdkapi` legacy 放行移除、更新/平台识别收敛为显式 `unsupported` 策略。
@@ -32,6 +34,9 @@
 - Pilot 审批闭环：聊天端已支持审批票据自动轮询与自动续跑（approved 复用原 request 执行）；legacy 事件兼容分支默认关闭并提供环境开关回滚。
 - Pilot 旧 UI 已硬切会话卡片流：`intent/routing/memory/websearch/thinking` 改为消息流卡片事件，状态不再走全局运行态条。
 - Pilot 流式入口收敛：旧 UI 执行链路统一到 `POST /api/chat/sessions/:sessionId/stream`，legacy 事件仅告警忽略。
+- Pilot 首页默认 DeepAgent：生产入口继续是 `apps/pilot/app/pages/index.vue`，前端主消费链收口到 legacy `$completion` 单链，不再并行扶正新 Pilot Workspace。
+- Pilot 默认模式收敛：`pilotMode` 退回显式实验字段；首页默认不发送、不展示、不依赖它，`fromSeq + follow` 恢复链统一按真实可恢复事件推进。
+- Pilot trace contract 收紧：`stream.started / stream.heartbeat / replay.* / run.metrics / done / error` 不再持久化到 trace，replay/follow/quota snapshot 会统一过滤历史 lifecycle 噪音。
 
 ---
 
@@ -95,6 +100,8 @@
 
 ## 近 30 天重点变更索引
 
+- Core App 性能诊断增强：`Clipboard` 慢路径新增 phase 级别分解、告警分级与原因码，并接入 `Perf summary`/`polling diagnostics` 聚合视图。
+- Core App 性能链路降载：`file-index progress stream` 增加发送节流（latest-wins + 阶段优先），`Perf summary` 新增 `phaseAlertCode TopN` 聚合口径。
 - `2.4.9-beta.4` 基线快照固化与 CI 证据回填。
 - Pilot 合并升级 V2：`/` 统一入口、`/pilot` 兼容跳转、`Quota Auto` 自动路由与渠道评比。
 - CLI Phase1+2：`tuff-cli` 主入口、`tuff-cli-core` 核心迁移、`unplugin` shim 兼容。

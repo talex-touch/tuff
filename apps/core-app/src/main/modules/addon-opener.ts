@@ -1,4 +1,4 @@
-import type { MaybePromise } from '@talex-touch/utils'
+import type { MaybePromise, ModuleInitContext } from '@talex-touch/utils'
 import type { TalexTouch } from '../types'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -10,6 +10,8 @@ import { APP_SCHEMA } from '../config/default'
 import type { DevPluginInstallResult } from '../modules/plugin/dev-plugin-installer'
 import { installDevPluginFromPath } from '../modules/plugin/dev-plugin-installer'
 import { PluginResolver, ResolverStatus } from '../modules/plugin/plugin-resolver'
+import { TalexEvents } from '../core/eventbus/touch-event'
+import { resolveMainRuntime } from '../core/runtime-accessor'
 import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
 import { applyExternalAuthCallback, applyStepUpToken } from './auth'
@@ -186,20 +188,22 @@ export class AddonOpenerModule extends BaseModule {
     })
   }
 
-  onInit(): MaybePromise<void> {
-    const channel = $app.channel
+  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
+    const runtime = resolveMainRuntime(ctx, 'AddonOpenerModule.onInit')
+    const touchApp = runtime.app
+    const channel = runtime.channel
     const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
-    const win = $app.window.window
+    const win = touchApp.window.window
 
-    windowsAdapter($app, (disposer) => this.appDisposers.push(disposer))
-    macOSAdapter($app, (disposer) => this.appDisposers.push(disposer))
+    windowsAdapter(touchApp, (disposer) => this.appDisposers.push(disposer))
+    macOSAdapter(touchApp, (disposer) => this.appDisposers.push(disposer))
 
     // Register protocol handler
     // In dev mode, we need to register with the correct electron executable path
     const registerProtocol = () => {
-      if ($app.app.isPackaged) {
+      if (touchApp.app.isPackaged) {
         // Production: register with bundled app
-        $app.app.setAsDefaultProtocolClient(APP_SCHEMA)
+        touchApp.app.setAsDefaultProtocolClient(APP_SCHEMA)
       } else {
         // Development: need to use electron-vite's dev server path
         // On macOS, we need to pass the project path as argument
@@ -207,10 +211,10 @@ export class AddonOpenerModule extends BaseModule {
         const appPath = path.resolve(process.cwd())
 
         // Remove old registration first to ensure clean state
-        $app.app.removeAsDefaultProtocolClient(APP_SCHEMA)
+        touchApp.app.removeAsDefaultProtocolClient(APP_SCHEMA)
 
         // Register with electron binary and project path
-        $app.app.setAsDefaultProtocolClient(APP_SCHEMA, electronPath, ['--inspect', appPath])
+        touchApp.app.setAsDefaultProtocolClient(APP_SCHEMA, electronPath, ['--inspect', appPath])
 
         addonOpenerLog.debug('Dev mode protocol registration', {
           meta: {

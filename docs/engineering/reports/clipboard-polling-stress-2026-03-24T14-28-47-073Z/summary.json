@@ -1,0 +1,116 @@
+{
+  "generatedAt": "2026-03-24T14:28:47.078Z",
+  "results": [
+    {
+      "intervalMs": 1000,
+      "durationMs": 3000,
+      "queueDepthPeak": {
+        "critical": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "realtime": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "io": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "maintenance": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "legacy_serial": {
+          "queued": 0,
+          "inFlight": 0
+        }
+      },
+      "clipboard": {
+        "count": 3,
+        "lastSchedulerDelayMs": 1,
+        "maxSchedulerDelayMs": 2,
+        "lastDurationMs": 6,
+        "maxDurationMs": 10,
+        "droppedCount": 0,
+        "coalescedCount": 0,
+        "timeoutCount": 0,
+        "errorCount": 0
+      }
+    },
+    {
+      "intervalMs": 500,
+      "durationMs": 3000,
+      "queueDepthPeak": {
+        "critical": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "realtime": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "io": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "maintenance": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "legacy_serial": {
+          "queued": 0,
+          "inFlight": 0
+        }
+      },
+      "clipboard": {
+        "count": 6,
+        "lastSchedulerDelayMs": 1,
+        "maxSchedulerDelayMs": 2,
+        "lastDurationMs": 10,
+        "maxDurationMs": 36,
+        "droppedCount": 0,
+        "coalescedCount": 0,
+        "timeoutCount": 0,
+        "errorCount": 0
+      }
+    },
+    {
+      "intervalMs": 250,
+      "durationMs": 3000,
+      "queueDepthPeak": {
+        "critical": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "realtime": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "io": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "maintenance": {
+          "queued": 0,
+          "inFlight": 0
+        },
+        "legacy_serial": {
+          "queued": 0,
+          "inFlight": 0
+        }
+      },
+      "clipboard": {
+        "count": 12,
+        "lastSchedulerDelayMs": 1,
+        "maxSchedulerDelayMs": 27,
+        "lastDurationMs": 8,
+        "maxDurationMs": 40,
+        "droppedCount": 0,
+        "coalescedCount": 0,
+        "timeoutCount": 0,
+        "errorCount": 0
+      }
+    }
+  ]
+}

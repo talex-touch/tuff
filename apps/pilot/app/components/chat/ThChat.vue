@@ -25,6 +25,9 @@ const options = reactive({
   backToBottom: false,
   share,
 })
+const BACK_TO_TOP_VIEWPORT_RATIO = 0.75
+const BACK_TO_BOTTOM_GAP_PX = 48
+const AUTO_FOLLOW_GAP_PX = 64
 
 const messagesModel = useVModel(props, 'messages', emits)
 
@@ -37,10 +40,6 @@ watch(
   () => {
     nextTick(() => {
       handleScroll()
-
-      setTimeout(() => {
-        handleBackToBottom()
-      }, 10)
     })
   },
 )
@@ -54,10 +53,9 @@ function handleSelectShareItem(index: number, check: boolean) {
 
 onMounted(() => {
   handleBackToBottom(false)
-
-  setTimeout(() => {
+  nextTick(() => {
     handleScroll()
-  }, 200)
+  })
 })
 
 function handleScroll() {
@@ -67,9 +65,9 @@ function handleScroll() {
 
   const { scrollTop, scrollHeight, clientHeight } = scrollbarEl
 
-  // 如果滚动距离超过了一个3/4屏幕
+  // 如果滚动距离超过了一个 3/4 可视区域
   options.backToTop = false
-  if (scrollTop > window.innerWidth * 0.75)
+  if (scrollTop > clientHeight * BACK_TO_TOP_VIEWPORT_RATIO)
     options.backToTop = true
 
   if (Math.abs(clientHeight - scrollHeight) < 10) {
@@ -77,12 +75,15 @@ function handleScroll() {
     return
   }
 
-  const diff = scrollHeight - scrollTop - document.body.clientHeight
-  options.backToBottom = diff >= scrollHeight * 0.1
+  const hiddenBottom = Math.max(0, scrollHeight - (scrollTop + clientHeight))
+  options.backToBottom = hiddenBottom > BACK_TO_BOTTOM_GAP_PX
 }
 
 function handleBackToBottom(animation: boolean = true) {
-  const el: HTMLElement = scrollbar.value.wrapRef
+  const el = scrollbar.value?.wrapRef as HTMLElement | undefined
+  if (!el) {
+    return
+  }
 
   el.scrollTo({
     top: el.scrollHeight,
@@ -91,7 +92,10 @@ function handleBackToBottom(animation: boolean = true) {
 }
 
 function handleBackToTop() {
-  const el: HTMLElement = scrollbar.value.wrapRef
+  const el = scrollbar.value?.wrapRef as HTMLElement | undefined
+  if (!el) {
+    return
+  }
 
   el.scrollTo({
     top: 0,
@@ -106,9 +110,15 @@ const stop = computed(() =>
 defineExpose({
   handleBackToBottom,
   generateScroll: (mode: 'stream' | 'final' = 'stream') => {
+    const el = scrollbar.value?.wrapRef as HTMLElement | undefined
+    const hiddenBottom = el
+      ? Math.max(0, el.scrollHeight - (el.scrollTop + el.clientHeight))
+      : 0
+    const shouldAutoFollow = hiddenBottom <= AUTO_FOLLOW_GAP_PX
+
     handleScroll()
 
-    if (!options.backToBottom)
+    if (shouldAutoFollow)
       handleBackToBottom(mode === 'final')
   },
   // getDictMeta: () => msgMeta,

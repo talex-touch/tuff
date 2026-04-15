@@ -2,11 +2,12 @@ import type { AgentEnvelope } from '../../protocol/envelope'
 import type { UserMessageInput } from '../../protocol/session'
 import type { ConversationAgentPort } from '../../runtime/conversation-agent-port'
 import type { TraceRecord } from '../../store/store-adapter'
-import type { PilotStreamEmitOptions, PilotStreamEvent } from './types'
+import type { PilotStreamDraftEvent, PilotStreamEmitOptions } from './types'
 import {
-  buildPilotPlanningTodos,
   mapAgentEnvelopeToPilotStreamEvent,
+  shouldPilotPersistTraceEvent,
 } from './types'
+import { mapPilotReplayTraceToStreamEvent } from './trace'
 
 export const PILOT_DEFAULT_KEEPALIVE_MS = 10_000
 export const PILOT_DEFAULT_TRACE_REPLAY_LIMIT = 1_000
@@ -23,7 +24,7 @@ export interface RunPilotConversationStreamOptions {
   listTrace?: (sessionId: string, fromSeq: number, limit: number) => Promise<TraceRecord[]>
   isCancelled?: () => boolean
   emit: (
-    payload: Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
+    payload: Omit<PilotStreamDraftEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
     options?: PilotStreamEmitOptions,
   ) => Promise<void>
 }
@@ -46,7 +47,7 @@ function isCancelled(options: RunPilotConversationStreamOptions): boolean {
 
 async function emit(
   options: RunPilotConversationStreamOptions,
-  payload: Omit<PilotStreamEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
+  payload: Omit<PilotStreamDraftEvent, 'sessionId' | 'timestamp'> & { sessionId?: string, timestamp?: number },
   emitOptions?: PilotStreamEmitOptions,
 ): Promise<void> {
   await options.emit(payload, emitOptions)
@@ -82,15 +83,14 @@ async function replayTrace(
     : undefined)
 
   const traces = await options.listTrace(options.sessionId, fromSeq, replayLimit)
-  for (const trace of traces) {
+  const replayableTraces = traces.filter(trace => shouldPilotPersistTraceEvent(trace.type))
+  for (const trace of replayableTraces) {
     if (isCancelled(options)) {
       return
     }
     await emit(options, {
-      type: trace.type,
-      seq: trace.seq,
+      ...mapPilotReplayTraceToStreamEvent(trace),
       replay: true,
-      payload: trace.payload,
     })
   }
 
@@ -98,14 +98,14 @@ async function replayTrace(
     type: 'replay.finished',
     payload: {
       fromSeq,
-      replayCount: traces.length,
+      replayCount: replayableTraces.length,
     },
   }, persistLifecycleEvents
     ? {
         persist: true,
         tracePayload: {
           fromSeq,
-          replayCount: traces.length,
+          replayCount: replayableTraces.length,
         },
       }
     : undefined)
@@ -128,45 +128,7 @@ async function runTurn(options: RunPilotConversationStreamOptions): Promise<bool
     return false
   }
 
-  const planningTodos = buildPilotPlanningTodos(message, attachmentCount)
   const turnStartedAt = Date.now()
-
-  await emit(options, {
-    type: 'planning.started',
-    payload: {
-      strategy: 'deepagent-style-todo',
-    },
-  }, {
-    persist: true,
-    tracePayload: {
-      strategy: 'deepagent-style-todo',
-    },
-  })
-
-  await emit(options, {
-    type: 'planning.updated',
-    payload: {
-      todos: planningTodos,
-    },
-  }, {
-    persist: true,
-    tracePayload: {
-      todos: planningTodos,
-    },
-  })
-
-  await emit(options, {
-    type: 'planning.finished',
-    payload: {
-      todoCount: planningTodos.length,
-    },
-  }, {
-    persist: true,
-    tracePayload: {
-      todoCount: planningTodos.length,
-    },
-  })
-
   await emit(options, {
     type: 'turn.started',
     payload: {

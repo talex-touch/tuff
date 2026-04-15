@@ -258,11 +258,6 @@
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "apps/pilot/server/api/aigc/executor.post.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/pilot/server/utils/__tests__/auth.test.ts",
           "maxCount": 2,
           "expiresVersion": "2.5.0"

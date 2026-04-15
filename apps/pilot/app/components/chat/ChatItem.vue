@@ -6,6 +6,7 @@ import relativeTime from 'dayjs/plugin/relativeTime'
 import { api as viewerApi } from 'v-viewer'
 import { IChatItemStatus, IChatRole } from '~/composables/api/base/v1/aigc/completion-types'
 import { resolveRuntimeModelIconSource, usePilotRuntimeModels } from '~/composables/usePilotRuntimeModels'
+import { sortPilotChatBlocksByTimeline } from '@talex-touch/tuff-intelligence/pilot'
 import ThCheckBox from '../checkbox/ThCheckBox.vue'
 import RoundLoading from '../loaders/RoundLoading.vue'
 import TextShaving from '../other/TextShaving.vue'
@@ -53,6 +54,11 @@ watch(() => props.select, (val) => {
 })
 
 const innerItem = computed(() => props.item.content.find(item => item?.page === msgItem.value.page) || null)
+
+const orderedBlocks = computed<IInnerItemMeta[]>(() => {
+  const blocks = innerItem.value?.value || []
+  return sortPilotChatBlocksByTimeline(blocks)
+})
 const timeAgo = computed(() => innerItem.value ? dayjs(innerItem.value.timestamp).fromNow() : '-')
 const isUser = computed(() => props.item.role === IChatRole.USER)
 
@@ -199,7 +205,7 @@ onMounted(() => {
           <!-- <span v-if="innerItem.status === IChatItemStatus.ERROR">
             错误 {{ item.content }}
           </span> -->
-          <div v-for="(block, i) in innerItem.value" :key="i" class="ChatItem-Content-Inner-Block">
+          <div v-for="(block, i) in orderedBlocks" :key="i" class="ChatItem-Content-Inner-Block">
             <div v-if="block.data === 'suggest'">
               <div
                 v-if="!viewMode && index === total - 1" v-wave :style="`--fly-enter-delay: ${i * 0.125}s`"

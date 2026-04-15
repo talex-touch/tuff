@@ -3,18 +3,32 @@ import type {
   PilotAttachment,
   PilotComposerAttachment,
   PilotMessage,
+  PilotRuntimeStatusSnapshot,
   PilotSession,
   PilotSessionRow,
   PilotStageItem,
-  PilotToolCall,
   PilotTrace,
-  PilotRuntimeStatusSnapshot,
   SessionMessagesResponse,
   SessionNotificationsResponse,
   SessionTitleResponse,
   SessionTraceResponse,
   StreamEvent,
 } from './pilot-chat.types'
+
+// Experimental workspace-only chat surface. The production homepage keeps using legacy $completion.
+import {
+  appendPilotTraceSorted,
+  buildPilotSystemMessageId,
+  buildPilotTraceKey,
+  derivePilotToolCallsFromSystemMessages,
+  isPilotLifecycleTraceEvent,
+  isPilotRuntimeCardEventType,
+  normalizePilotStreamSeq,
+  projectPilotSystemMessage,
+  shouldHidePilotClientRuntimeEvent,
+  shouldHidePilotClientSystemMessage,
+  shouldPilotStreamEventRequireSeq,
+} from '@talex-touch/tuff-intelligence/pilot'
 import { networkClient } from '@talex-touch/utils/network'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
@@ -100,21 +114,6 @@ export function usePilotChatPage() {
     reason: '',
     confidence: 0,
     strategy: '',
-  })
-  const routeState = ref<{
-    channelId: string
-    routeComboId: string
-    modelId: string
-    providerModel: string
-    selectionSource: string
-    selectionReason: string
-  }>({
-    channelId: '',
-    routeComboId: '',
-    modelId: '',
-    providerModel: '',
-    selectionSource: '',
-    selectionReason: '',
   })
   const websearchState = ref<{
     phase: 'idle' | 'decided' | 'executed' | 'skipped'
@@ -213,14 +212,6 @@ export function usePilotChatPage() {
       confidence: 0,
       strategy: '',
     }
-    routeState.value = {
-      channelId: '',
-      routeComboId: '',
-      modelId: '',
-      providerModel: '',
-      selectionSource: '',
-      selectionReason: '',
-    }
     websearchState.value = {
       phase: 'idle',
       enabled: null,
@@ -241,17 +232,37 @@ export function usePilotChatPage() {
     return text === 'TOOL_APPROVAL_REQUIRED' || text.includes('TOOL_APPROVAL_REQUIRED')
   }
 
+  function normalizeWebsearchReason(value: unknown, phase: 'decision' | 'skipped' | 'executed'): string {
+    const reason = String(value || '').trim()
+    if (!reason) {
+      return ''
+    }
+    if (reason === 'intent_required') {
+      return '意图判定需要联网'
+    }
+    if (reason === 'intent_not_required') {
+      return '意图判定无需联网'
+    }
+    if (reason === 'fallback_unsupported_channel' || reason === 'fallback_endpoint_missing') {
+      return '当前通道不支持联网检索，已继续离线回答'
+    }
+    if (reason === 'tool_failed_or_empty_result') {
+      return '未获取到可用外部来源，已继续回答'
+    }
+    if (reason === 'terminal_finalize' && phase === 'skipped') {
+      return '执行结束，未触发联网检索'
+    }
+    return reason
+  }
+
   function buildStageItems(): PilotStageItem[] {
     const intentStatus: PilotStageItem['status'] = intentState.value.phase === 'running'
       ? 'running'
       : intentState.value.phase === 'completed'
         ? 'done'
         : 'pending'
-    const routingStatus: PilotStageItem['status'] = routeState.value.channelId
-      ? 'done'
-      : (intentStatus === 'done' ? 'running' : 'pending')
     const memoryStatus: PilotStageItem['status'] = memoryState.value.enabled === null
-      ? (routingStatus === 'done' ? 'running' : 'pending')
+      ? (intentStatus === 'done' ? 'running' : 'pending')
       : 'done'
     const websearchStatus: PilotStageItem['status'] = websearchState.value.phase === 'executed'
       ? 'done'
@@ -274,14 +285,6 @@ export function usePilotChatPage() {
         detail: intentStatus === 'running'
           ? '正在分析意图'
           : (intentState.value.intentType || intentState.value.reason || ''),
-      },
-      {
-        key: 'routing',
-        label: '路由',
-        status: routingStatus,
-        detail: routeState.value.channelId
-          ? `${routeState.value.channelId} / ${routeState.value.providerModel || routeState.value.modelId || '-'}`
-          : '',
       },
       {
         key: 'memory',
@@ -319,10 +322,6 @@ export function usePilotChatPage() {
       : `${intentReason} / ${(confidence * 100).toFixed(1)}%`
 
     const requestModel = runPreferences.value.modelId || 'quota-auto'
-    const actualModel = routeState.value.providerModel || routeState.value.modelId || '-'
-    const routeLabel = routeState.value.routeComboId
-      ? `${routeState.value.routeComboId} @ ${routeState.value.channelId || '-'}`
-      : '-'
 
     let websearchLabel = '等待判定'
     if (websearchState.value.phase === 'decided') {
@@ -349,9 +348,7 @@ export function usePilotChatPage() {
     return {
       intentLabel: intentType,
       intentDetail,
-      routeLabel,
       requestModelLabel: requestModel,
-      actualModelLabel: actualModel,
       websearchLabel,
       memoryLabel,
       thinkingLabel,
@@ -411,6 +408,12 @@ export function usePilotChatPage() {
       return
     }
 
+    const resolvedReason: PilotSession['pauseReason'] = timeoutReason === 'client_disconnect'
+      || timeoutReason === 'manual_pause'
+      || timeoutReason === 'system_preempted'
+      ? timeoutReason
+      : 'heartbeat_timeout'
+
     autoPauseSessionLocks.add(sessionId)
     try {
       await fetchJson(`/api/chat/sessions/${sessionId}/pause`, {
@@ -419,18 +422,13 @@ export function usePilotChatPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          reason: 'heartbeat_timeout',
+          reason: resolvedReason,
         }),
       })
 
-      markSessionPaused(sessionId, 'heartbeat_timeout')
+      markSessionPaused(sessionId, resolvedReason)
       if (activeSessionId.value === sessionId) {
         reconnectHint.value = '会话长时间无有效响应，系统已自动终止。可点击“恢复 paused 会话”继续。'
-        appendTrace(mapTrace('session.paused', Math.max(1, lastSeq.value + 1), {
-          reason: 'heartbeat_timeout',
-          autoPaused: true,
-          timeoutReason,
-        }))
       }
     }
     catch {
@@ -444,7 +442,8 @@ export function usePilotChatPage() {
   }
 
   const chatListMessages = computed<ChatMessageModel[]>(() => {
-    return messages.value.map((item) => {
+    const visibleMessages = messages.value.filter(item => item.role === 'user' || item.role === 'assistant')
+    return visibleMessages.map((item) => {
       const stamp = Date.parse(item.createdAt)
       const messageAttachments = getMessageAttachments(item)
       const baseContent = String(item.content || '')
@@ -666,65 +665,85 @@ export function usePilotChatPage() {
     }
   }
 
-  function getTraceKey(seq: number, type: string): string {
-    return `${seq}:${type}`
-  }
-
-  function normalizeTraceSeq(value: unknown): number {
-    const n = Number(value)
-    if (Number.isFinite(n) && n > 0) {
-      return Math.floor(n)
-    }
-    return Math.max(1, lastSeq.value)
-  }
-
   function rebuildTraceIndex(items: PilotTrace[]) {
     traceKeySet.clear()
     for (const item of items) {
-      traceKeySet.add(getTraceKey(item.seq, item.type))
+      traceKeySet.add(buildPilotTraceKey(item.seq, item.type))
     }
   }
 
   function appendTrace(item: PilotTrace) {
-    const seq = normalizeTraceSeq(item.seq)
-    const type = String(item.type || 'unknown')
-    const key = getTraceKey(seq, type)
-    if (traceKeySet.has(key)) {
+    const seq = appendPilotTraceSorted(traceItems.value, traceKeySet, item)
+    if (seq > 0) {
+      lastSeq.value = Math.max(lastSeq.value, seq)
+    }
+  }
+
+  function warnInvalidStreamSeq(eventType: string, item: Partial<StreamEvent>) {
+    console.warn('[pilot-chat] dropped seq-required event without valid seq', {
+      eventType,
+      sessionId: item.sessionId || item.session_id,
+      turnId: item.turnId || item.turn_id,
+      rawSeq: item.seq,
+      replay: item.replay,
+    })
+  }
+
+  function upsertSystemMessageFromStreamEvent(input: {
+    sessionId: string
+    eventType: string
+    seq: number
+    payload: Record<string, unknown>
+    detail?: Record<string, unknown>
+    message?: string
+    delta?: string
+    replay?: boolean
+  }) {
+    if (input.replay) {
+      return
+    }
+    if (!Number.isFinite(input.seq) || input.seq <= 0) {
+      return
+    }
+    const projected = projectPilotSystemMessage({
+      type: input.eventType,
+      seq: input.seq,
+      payload: input.payload,
+      detail: input.detail,
+      message: input.message,
+      delta: input.delta,
+    })
+    if (!projected) {
+      return
+    }
+    if (String(projected.metadata.cardType || '').trim().toLowerCase() === 'websearch') {
+      return
+    }
+    if (shouldHidePilotClientSystemMessage(projected.metadata)) {
       return
     }
 
-    const nextItem: PilotTrace = {
-      ...item,
-      seq,
-      type,
+    const messageId = buildPilotSystemMessageId(
+      input.sessionId,
+      input.seq,
+      projected.metadata.sourceEventType,
+    )
+    const existing = messages.value.find(item => item.id === messageId)
+    if (existing) {
+      existing.content = projected.content
+      existing.metadata = projected.metadata as unknown as Record<string, unknown>
+      syncToolCallList()
+      return
     }
 
-    traceKeySet.add(key)
-    const list = traceItems.value
-    const tail = list[list.length - 1]
-    if (!tail || tail.seq <= seq) {
-      list.push(nextItem)
-    }
-    else {
-      let index = list.length
-      while (index > 0) {
-        const prev = list[index - 1]
-        if (!prev || prev.seq <= seq) {
-          break
-        }
-        index -= 1
-      }
-      list.splice(index, 0, nextItem)
-    }
-
-    if (list.length > 800) {
-      const removed = list.splice(0, list.length - 800)
-      for (const trace of removed) {
-        traceKeySet.delete(getTraceKey(trace.seq, trace.type))
-      }
-    }
-
-    lastSeq.value = Math.max(lastSeq.value, seq)
+    messages.value.push({
+      id: messageId,
+      role: 'system',
+      content: projected.content,
+      createdAt: new Date().toISOString(),
+      metadata: projected.metadata as unknown as Record<string, unknown>,
+    })
+    syncToolCallList()
   }
 
   function normalizeToolRiskLevel(value: unknown): PilotToolCall['riskLevel'] {
@@ -770,6 +789,25 @@ export function usePilotChatPage() {
   }
 
   function syncToolCallList() {
+    const latestUserCreatedAt = [...messages.value]
+      .reverse()
+      .find(item => item.role === 'user')
+      ?.createdAt
+    const latestUserStamp = Date.parse(String(latestUserCreatedAt || ''))
+    const scopedMessages = Number.isFinite(latestUserStamp)
+      ? messages.value.filter((item) => {
+          if (item.role !== 'system') {
+            return true
+          }
+          const stamp = Date.parse(String(item.createdAt || ''))
+          return Number.isFinite(stamp) && stamp >= latestUserStamp
+        })
+      : messages.value
+    const fromSystemMessages = derivePilotToolCallsFromSystemMessages(scopedMessages, 20)
+    if (fromSystemMessages.length > 0) {
+      toolCalls.value = fromSystemMessages
+      return
+    }
     toolCalls.value = Array.from(toolCallMap.values())
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
       .slice(0, 20)
@@ -965,18 +1003,6 @@ export function usePilotChatPage() {
       return
     }
 
-    if (eventType === 'routing.selected') {
-      routeState.value = {
-        channelId: String(payload.channelId || '').trim(),
-        routeComboId: String(payload.routeComboId || '').trim(),
-        modelId: String(payload.modelId || '').trim(),
-        providerModel: String(payload.providerModel || '').trim(),
-        selectionSource: String(payload.selectionSource || '').trim(),
-        selectionReason: String(payload.selectionReason || '').trim(),
-      }
-      return
-    }
-
     if (eventType === 'memory.context') {
       const enabled = typeof payload.memoryEnabled === 'boolean'
         ? payload.memoryEnabled
@@ -1018,7 +1044,7 @@ export function usePilotChatPage() {
       websearchState.value = {
         phase: 'decided',
         enabled: typeof payload.enabled === 'boolean' ? payload.enabled : null,
-        reason: String(payload.reason || '').trim(),
+        reason: normalizeWebsearchReason(payload.reason, 'decision'),
         source: '',
         sourceCount: 0,
       }
@@ -1029,7 +1055,7 @@ export function usePilotChatPage() {
       websearchState.value = {
         phase: 'executed',
         enabled: true,
-        reason: String(payload.reason || websearchState.value.reason || '').trim(),
+        reason: normalizeWebsearchReason(payload.reason || websearchState.value.reason || '', 'executed'),
         source: String(payload.source || '').trim(),
         sourceCount: Number.isFinite(Number(payload.sourceCount)) ? Math.max(0, Number(payload.sourceCount)) : 0,
       }
@@ -1040,7 +1066,7 @@ export function usePilotChatPage() {
       websearchState.value = {
         phase: 'skipped',
         enabled: false,
-        reason: String(payload.reason || websearchState.value.reason || '').trim(),
+        reason: normalizeWebsearchReason(payload.reason || websearchState.value.reason || '', 'skipped'),
         source: '',
         sourceCount: 0,
       }
@@ -1072,7 +1098,7 @@ export function usePilotChatPage() {
         websearchState.value = {
           phase: 'skipped',
           enabled: false,
-          reason: websearchState.value.reason || 'terminal_finalize',
+          reason: normalizeWebsearchReason(websearchState.value.reason || 'terminal_finalize', 'skipped'),
           source: '',
           sourceCount: 0,
         }
@@ -1087,12 +1113,26 @@ export function usePilotChatPage() {
     loadingMessages.value = true
     try {
       const data = await fetchJson<SessionMessagesResponse>(`/api/chat/sessions/${sessionId}/messages`)
-      messages.value = Array.isArray(data.messages) ? data.messages : []
+      messages.value = Array.isArray(data.messages)
+        ? data.messages.filter((item) => {
+            if (item.role !== 'system') {
+              return true
+            }
+            const metadata = item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+              ? item.metadata
+              : {}
+            const cardType = String(metadata.cardType || '').trim().toLowerCase()
+            if (cardType === 'websearch') {
+              return false
+            }
+            return !shouldHidePilotClientSystemMessage(metadata)
+          })
+        : []
       attachments.value = Array.isArray(data.attachments) ? data.attachments : []
       pendingAttachments.value = []
       activeAssistantMessageId.value = null
       toolCallMap.clear()
-      toolCalls.value = []
+      syncToolCallList()
       assistantDeltaBuffer = ''
       clearAssistantFlushTimer()
       resetRuntimeStates()
@@ -1111,19 +1151,29 @@ export function usePilotChatPage() {
 
     if (!append) {
       const normalized = items
+        .filter(item => !shouldHidePilotClientRuntimeEvent(item.type))
         .map((item) => {
-          const seq = normalizeTraceSeq(item.seq)
+          const seq = normalizePilotStreamSeq(item.seq)
+          if (seq <= 0) {
+            console.warn('[pilot-chat] dropped trace row without valid seq', {
+              sessionId,
+              type: item.type,
+              rawSeq: item.seq,
+            })
+            return null
+          }
           return {
             ...item,
             seq,
             type: String(item.type || 'unknown'),
           }
         })
+        .filter((item): item is PilotTrace => Boolean(item))
         .sort((left, right) => left.seq - right.seq)
         .slice(-800)
       traceItems.value = normalized
       rebuildTraceIndex(normalized)
-      lastSeq.value = normalized.reduce((acc, row) => Math.max(acc, Number(row.seq || 0)), 0)
+      lastSeq.value = normalized.reduce((acc, row) => Math.max(acc, row.seq), 0)
       resetRuntimeStates()
       for (const trace of normalized) {
         applyRuntimeStateByEvent(
@@ -1136,6 +1186,17 @@ export function usePilotChatPage() {
     }
     else {
       for (const item of items) {
+        if (shouldHidePilotClientRuntimeEvent(item.type)) {
+          continue
+        }
+        if (normalizePilotStreamSeq(item.seq) <= 0) {
+          console.warn('[pilot-chat] dropped trace append row without valid seq', {
+            sessionId,
+            type: item.type,
+            rawSeq: item.seq,
+          })
+          continue
+        }
         appendTrace(item)
         applyRuntimeStateByEvent(
           String(item.type || ''),
@@ -1144,7 +1205,7 @@ export function usePilotChatPage() {
           String((item as unknown as Record<string, unknown>).message || ''),
         )
       }
-      lastSeq.value = traceItems.value.reduce((acc, row) => Math.max(acc, Number(row.seq || 0)), lastSeq.value)
+      lastSeq.value = traceItems.value.reduce((acc, row) => Math.max(acc, row.seq), lastSeq.value)
     }
   }
 
@@ -1232,19 +1293,43 @@ export function usePilotChatPage() {
     const eventType = String(item.type || item.event || '').trim()
     const eventSessionId = String(item.sessionId || activeSessionId.value || '').trim()
     const isActiveSessionEvent = eventSessionId !== '' && eventSessionId === activeSessionId.value
-    const eventSeq = Number(item.seq || lastSeq.value || 1)
-    const normalizedSeq = Number.isFinite(eventSeq) && eventSeq > 0
-      ? Math.floor(eventSeq)
-      : Math.max(1, lastSeq.value)
+    const normalizedSeq = normalizePilotStreamSeq(item.seq)
+    const eventRequiresSeq = shouldPilotStreamEventRequireSeq(eventType)
+    const hasSeq = normalizedSeq > 0
 
     if (!eventSessionId || !eventType) {
       return
     }
+    if (shouldHidePilotClientRuntimeEvent(eventType)) {
+      return
+    }
+    if (eventRequiresSeq && !hasSeq) {
+      warnInvalidStreamSeq(eventType, item)
+      return
+    }
 
-    if (typeof item.seq === 'number' && Number.isFinite(item.seq)) {
-      if (isActiveSessionEvent) {
-        lastSeq.value = Math.max(lastSeq.value, item.seq)
-      }
+    const payloadRecord = item.payload && typeof item.payload === 'object' && !Array.isArray(item.payload)
+      ? item.payload
+      : {}
+    const detailRecord = item.detail && typeof item.detail === 'object' && !Array.isArray(item.detail)
+      ? item.detail
+      : undefined
+
+    if (hasSeq && isActiveSessionEvent) {
+      lastSeq.value = Math.max(lastSeq.value, normalizedSeq)
+    }
+
+    if (isActiveSessionEvent && hasSeq) {
+      upsertSystemMessageFromStreamEvent({
+        sessionId: eventSessionId,
+        eventType,
+        seq: normalizedSeq,
+        payload: payloadRecord,
+        detail: detailRecord,
+        message: String(item.message || ''),
+        delta: String(item.delta || ''),
+        replay: Boolean(item.replay),
+      })
     }
 
     if (eventType === 'turn.accepted' || eventType === 'turn.queued' || eventType === 'turn.started') {
@@ -1268,7 +1353,7 @@ export function usePilotChatPage() {
         return
       }
       appendAssistantDelta(String(item.delta || ''))
-      if (traceDrawerOpen.value) {
+      if (traceDrawerOpen.value && hasSeq) {
         appendTrace(mapTrace('turn.delta', normalizedSeq, {
           request_id: item.request_id,
           turn_id: item.turn_id || item.turnId,
@@ -1287,13 +1372,15 @@ export function usePilotChatPage() {
       }
       appendAssistantFinal(String(item.message || ''))
       activeAssistantMessageId.value = null
-      appendTrace(mapTrace('turn.completed', normalizedSeq, {
-        request_id: item.request_id,
-        turn_id: item.turn_id || item.turnId,
-        queue_pos: item.queue_pos,
-        phase: item.phase,
-        replay: Boolean(item.replay),
-      }))
+      if (hasSeq) {
+        appendTrace(mapTrace('turn.completed', normalizedSeq, {
+          request_id: item.request_id,
+          turn_id: item.turn_id || item.turnId,
+          queue_pos: item.queue_pos,
+          phase: item.phase,
+          replay: Boolean(item.replay),
+        }))
+      }
       return
     }
 
@@ -1327,10 +1414,12 @@ export function usePilotChatPage() {
       streamError.value = toPrettyErrorMessage(message, diagnostic)
       appendAssistantFailure(message, diagnostic)
       streamHandledFailureMessageSessions.add(eventSessionId)
-      appendTrace(mapTrace('turn.failed', normalizedSeq, {
-        ...detail,
-        message,
-      }))
+      if (hasSeq) {
+        appendTrace(mapTrace('turn.failed', normalizedSeq, {
+          ...detail,
+          message,
+        }))
+      }
       return
     }
 
@@ -1361,15 +1450,17 @@ export function usePilotChatPage() {
       })
 
       reconnectHint.value = message || '检测到高风险工具调用，等待审批后可继续。'
-      appendTrace(mapTrace('turn.approval_required', normalizedSeq, {
-        request_id: item.request_id,
-        turn_id: item.turn_id || item.turnId,
-        queue_pos: item.queue_pos,
-        phase: item.phase,
-        code: item.code,
-        message,
-        detail,
-      }))
+      if (hasSeq) {
+        appendTrace(mapTrace('turn.approval_required', normalizedSeq, {
+          request_id: item.request_id,
+          turn_id: item.turn_id || item.turnId,
+          queue_pos: item.queue_pos,
+          phase: item.phase,
+          code: item.code,
+          message,
+          detail,
+        }))
+      }
       return
     }
 
@@ -1391,14 +1482,16 @@ export function usePilotChatPage() {
           }
         })
       }
-      appendTrace(mapTrace('title.generated', normalizedSeq, {
-        request_id: item.request_id,
-        turn_id: item.turn_id || item.turnId,
-        title,
-        source: titleEvent.source,
-        generated: titleEvent.generated,
-        phase: item.phase,
-      }))
+      if (hasSeq) {
+        appendTrace(mapTrace('title.generated', normalizedSeq, {
+          request_id: item.request_id,
+          turn_id: item.turn_id || item.turnId,
+          title,
+          source: titleEvent.source,
+          generated: titleEvent.generated,
+          phase: item.phase,
+        }))
+      }
       return
     }
 
@@ -1406,31 +1499,27 @@ export function usePilotChatPage() {
       if (!isActiveSessionEvent) {
         return
       }
-      appendTrace(mapTrace('title.failed', normalizedSeq, {
-        request_id: item.request_id,
-        turn_id: item.turn_id || item.turnId,
-        message: String(item.message || ''),
-        phase: item.phase,
-      }))
+      if (hasSeq) {
+        appendTrace(mapTrace('title.failed', normalizedSeq, {
+          request_id: item.request_id,
+          turn_id: item.turn_id || item.turnId,
+          message: String(item.message || ''),
+          phase: item.phase,
+        }))
+      }
       return
     }
 
-    if (
-      eventType === 'stream.started'
-      || eventType === 'planning.started'
-      || eventType === 'planning.updated'
-      || eventType === 'planning.finished'
-      || eventType === 'replay.started'
-      || eventType === 'replay.finished'
-      || eventType === 'turn.finished'
-    ) {
+    if (isPilotLifecycleTraceEvent(eventType)) {
       if (!isActiveSessionEvent) {
         return
       }
-      appendTrace(mapTrace(eventType, normalizedSeq, {
-        ...(item.payload || {}),
-        replay: Boolean(item.replay),
-      }))
+      if (hasSeq) {
+        appendTrace(mapTrace(eventType, normalizedSeq, {
+          ...(item.payload || {}),
+          replay: Boolean(item.replay),
+        }))
+      }
       return
     }
 
@@ -1442,23 +1531,16 @@ export function usePilotChatPage() {
         ? item.payload
         : {}
       handleRunAuditToolPayload(payload)
-      appendTrace(mapTrace('run.audit', normalizedSeq, {
-        ...payload,
-        replay: Boolean(item.replay),
-      }))
+      if (hasSeq) {
+        appendTrace(mapTrace('run.audit', normalizedSeq, {
+          ...payload,
+          replay: Boolean(item.replay),
+        }))
+      }
       return
     }
 
-    if (
-      eventType === 'intent.started'
-      || eventType === 'intent.completed'
-      || eventType === 'routing.selected'
-      || eventType === 'memory.context'
-      || eventType === 'memory.updated'
-      || eventType === 'websearch.decision'
-      || eventType === 'websearch.executed'
-      || eventType === 'websearch.skipped'
-    ) {
+    if (isPilotRuntimeCardEventType(eventType) && eventType !== 'thinking.delta' && eventType !== 'thinking.final') {
       if (!isActiveSessionEvent) {
         return
       }
@@ -1466,10 +1548,12 @@ export function usePilotChatPage() {
         ? item.payload
         : {}
       applyRuntimeStateByEvent(eventType, payload)
-      appendTrace(mapTrace(eventType, normalizedSeq, {
-        ...payload,
-        replay: Boolean(item.replay),
-      }))
+      if (hasSeq) {
+        appendTrace(mapTrace(eventType, normalizedSeq, {
+          ...payload,
+          replay: Boolean(item.replay),
+        }))
+      }
       return
     }
 
@@ -1481,11 +1565,13 @@ export function usePilotChatPage() {
         eventType,
         sessionId: eventSessionId,
       })
-      appendTrace(mapTrace('status_updated', normalizedSeq, {
-        status: item.status,
-        name: item.name,
-        data: item.data,
-      }))
+      if (hasSeq) {
+        appendTrace(mapTrace('status_updated', normalizedSeq, {
+          status: item.status,
+          name: item.name,
+          data: item.data,
+        }))
+      }
       return
     }
 
@@ -1494,7 +1580,7 @@ export function usePilotChatPage() {
         return
       }
       appendAssistantDelta(String(item.delta || ''))
-      if (traceDrawerOpen.value) {
+      if (traceDrawerOpen.value && hasSeq) {
         appendTrace(mapTrace('assistant.delta', normalizedSeq, {
           replay: Boolean(item.replay),
         }))
@@ -1507,7 +1593,7 @@ export function usePilotChatPage() {
         return
       }
       applyRuntimeStateByEvent('thinking.delta', item.payload || {}, String(item.delta || ''), '')
-      if (traceDrawerOpen.value) {
+      if (traceDrawerOpen.value && hasSeq) {
         appendTrace(mapTrace('thinking.delta', normalizedSeq, {
           replay: Boolean(item.replay),
         }))
@@ -1520,9 +1606,11 @@ export function usePilotChatPage() {
         return
       }
       applyRuntimeStateByEvent('thinking.final', item.payload || {}, '', String(item.message || ''))
-      appendTrace(mapTrace('thinking.final', normalizedSeq, {
-        replay: Boolean(item.replay),
-      }))
+      if (hasSeq) {
+        appendTrace(mapTrace('thinking.final', normalizedSeq, {
+          replay: Boolean(item.replay),
+        }))
+      }
       return
     }
 
@@ -1533,9 +1621,11 @@ export function usePilotChatPage() {
       applyRuntimeStateByEvent('assistant.final', item.payload || {}, '', String(item.message || ''))
       appendAssistantFinal(String(item.message || ''))
       activeAssistantMessageId.value = null
-      appendTrace(mapTrace('assistant.final', normalizedSeq, {
-        replay: Boolean(item.replay),
-      }))
+      if (hasSeq) {
+        appendTrace(mapTrace('assistant.final', normalizedSeq, {
+          replay: Boolean(item.replay),
+        }))
+      }
       return
     }
 
@@ -1546,9 +1636,11 @@ export function usePilotChatPage() {
       }
       flushAssistantDeltaBuffer()
       reconnectHint.value = `会话已暂停：${item.reason || 'unknown'}`
-      appendTrace(mapTrace('session.paused', normalizedSeq, {
-        reason: item.reason,
-      }))
+      if (hasSeq) {
+        appendTrace(mapTrace('session.paused', normalizedSeq, {
+          reason: item.reason,
+        }))
+      }
       return
     }
 
@@ -1556,7 +1648,7 @@ export function usePilotChatPage() {
       if (!isActiveSessionEvent) {
         return
       }
-      if (traceDrawerOpen.value) {
+      if (traceDrawerOpen.value && hasSeq) {
         appendTrace(mapTrace('run.metrics', normalizedSeq, {
           ...(item.payload || {}),
         }))
@@ -1590,25 +1682,29 @@ export function usePilotChatPage() {
           errorMessage: message,
         })
         reconnectHint.value = message || '检测到高风险工具调用，等待审批后可继续。'
-        appendTrace(mapTrace('turn.approval_required', normalizedSeq, {
-          request_id: item.request_id,
-          turn_id: item.turn_id || item.turnId,
-          queue_pos: item.queue_pos,
-          phase: item.phase,
-          code: item.code,
-          message,
-          detail,
-          legacy_error_compat: true,
-        }))
+        if (hasSeq) {
+          appendTrace(mapTrace('turn.approval_required', normalizedSeq, {
+            request_id: item.request_id,
+            turn_id: item.turn_id || item.turnId,
+            queue_pos: item.queue_pos,
+            phase: item.phase,
+            code: item.code,
+            message,
+            detail,
+            legacy_error_compat: true,
+          }))
+        }
         return
       }
       applyRuntimeStateByEvent('error', item.payload || {}, '', String(item.message || ''))
       flushAssistantDeltaBuffer()
       streamError.value = toPrettyErrorMessage(String(item.message || 'Stream error'), detail)
-      appendTrace(mapTrace('error', normalizedSeq, {
-        message: String(item.message || 'Stream error'),
-        detail,
-      }))
+      if (hasSeq) {
+        appendTrace(mapTrace('error', normalizedSeq, {
+          message: String(item.message || 'Stream error'),
+          detail,
+        }))
+      }
       return
     }
 
@@ -1627,10 +1723,12 @@ export function usePilotChatPage() {
       return
     }
 
-    appendTrace(mapTrace(eventType || 'unknown', normalizedSeq, {
-      ...(item.payload || {}),
-      replay: Boolean(item.replay),
-    }))
+    if (hasSeq) {
+      appendTrace(mapTrace(eventType || 'unknown', normalizedSeq, {
+        ...(item.payload || {}),
+        replay: Boolean(item.replay),
+      }))
+    }
   }
 
   async function consumeSseResponse(

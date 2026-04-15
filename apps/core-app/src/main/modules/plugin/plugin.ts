@@ -39,12 +39,10 @@ import {
 } from '@talex-touch/utils/plugin/sdk'
 
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents, NotificationEvents, PluginEvents } from '@talex-touch/utils/transport/events'
-import { app, clipboard, dialog, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
 import fse from 'fs-extra'
-import { genTouchApp } from '../../core'
 import {
   PluginLogAppendEvent,
   PluginStorageUpdatedEvent,
@@ -53,6 +51,7 @@ import {
 } from '../../core/eventbus/touch-event'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { useSafeUserAgent } from '../../hooks/use-electron-guard'
+import { t as translate } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { getJs, getStyles } from '../../utils/plugin-injection'
 import { getCoreBoxWindow } from '../box-tool/core-box'
@@ -122,6 +121,18 @@ const TRANSIENT_ISSUE_CODES = new Set([
 const LEGACY_CHANNEL_MAIN = 'main' as PluginStandardChannelData['header']['type']
 const LEGACY_CHANNEL_PLUGIN = 'plugin' as PluginStandardChannelData['header']['type']
 const LEGACY_CHANNEL_SUCCESS = 200 as PluginStandardChannelData['code']
+
+export interface TouchPluginRuntimeContext {
+  rootPath: string
+  mainWindowId?: number
+}
+
+export type PluginLoadState = 'loading' | 'ready' | 'load_failed'
+
+export interface PluginLoadError {
+  code: string
+  message: string
+}
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
@@ -263,11 +274,10 @@ export class TouchPlugin implements ITouchPlugin {
     if (this.transport) {
       return this.transport
     }
-    const channel = genTouchApp().channel
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    return getTuffTransportMain(channel, keyManager)
+    throw new Error(`[Plugin ${this.name}] Transport runtime is not initialized`)
   }
+
+  private runtimeContext: TouchPluginRuntimeContext | null = null
 
   dev: IPluginDev
   name: string
@@ -297,6 +307,8 @@ export class TouchPlugin implements ITouchPlugin {
     optional: string[]
     reasons: Record<string, string>
   }
+  loadState: PluginLoadState = 'ready'
+  loadError?: PluginLoadError
 
   pluginPath: string
 
@@ -356,6 +368,8 @@ export class TouchPlugin implements ITouchPlugin {
       status: this.status,
       platforms: this.platforms,
       sdkapi: this.sdkapi,
+      loadState: this.loadState,
+      loadError: this.loadError,
       declaredPermissions: this.declaredPermissions
         ? {
             required: [...this.declaredPermissions.required],
@@ -406,6 +420,11 @@ export class TouchPlugin implements ITouchPlugin {
         status: this._status
       })
     }
+  }
+
+  setLoadState(nextState: PluginLoadState, loadError?: PluginLoadError): void {
+    this.loadState = nextState
+    this.loadError = loadError
   }
 
   addFeature(feature: IPluginFeature): boolean {
@@ -508,7 +527,8 @@ export class TouchPlugin implements ITouchPlugin {
                 request: {
                   channel: 'app',
                   level: 'error',
-                  message: '哇 corebox 你这里是不是有点问题捏',
+                  title: translate('plugin.notifications.widgetLoadFailedTitle'),
+                  message: translate('plugin.notifications.widgetLoadFailedMessage'),
                   app: { presentation: 'toast' }
                 }
               })
@@ -621,7 +641,7 @@ export class TouchPlugin implements ITouchPlugin {
     dev: IPluginDev,
     pluginPath: string,
     platforms: IPlatform = {},
-    options?: { skipDataInit?: boolean }
+    options?: { skipDataInit?: boolean; runtime?: TouchPluginRuntimeContext }
   ) {
     this.name = name
     this.icon = icon
@@ -635,6 +655,8 @@ export class TouchPlugin implements ITouchPlugin {
     this.features = []
     this.issues = []
     this._uniqueChannelKey = ''
+    this.loadState = 'ready'
+    this.loadError = undefined
 
     this.logger = new PluginLogger(
       name,
@@ -642,14 +664,27 @@ export class TouchPlugin implements ITouchPlugin {
         touchEventBus.emit(TalexEvents.PLUGIN_LOG_APPEND, new PluginLogAppendEvent(log))
       })
     )
+    this.runtimeContext = options?.runtime ?? null
 
     if (!options?.skipDataInit) {
       this.ensureDataDirectories()
     }
   }
 
+  setRuntime(runtime: TouchPluginRuntimeContext): void {
+    this.runtimeContext = runtime
+    this.ensureDataDirectories()
+  }
+
+  private getRuntimeContext(site: string): TouchPluginRuntimeContext {
+    if (!this.runtimeContext?.rootPath) {
+      throw new Error(`[Plugin ${this.name}] Runtime context is not initialized for ${site}`)
+    }
+    return this.runtimeContext
+  }
+
   getDataPath(): string {
-    const userDataPath = $app.rootPath
+    const userDataPath = this.getRuntimeContext('getDataPath').rootPath
     return path.join(userDataPath, 'modules', 'plugins', this.name, 'data')
   }
 
@@ -1299,10 +1334,12 @@ export class TouchPlugin implements ITouchPlugin {
 
   getFeatureUtil() {
     const pluginName = this.name
-    const appInstance = genTouchApp()
-    const channel = appInstance.channel
+    const runtimeContext = this.getRuntimeContext('getFeatureUtil')
     const transport = this.resolveTransport()
-    const mainWindowId = appInstance.window.window.id
+    const mainWindowId = runtimeContext.mainWindowId
+    if (typeof mainWindowId !== 'number') {
+      throw new Error(`[Plugin ${pluginName}] Main window runtime is not initialized`)
+    }
 
     const http = createPluginHttpClient()
     const storage = this.createPluginStorageAPI(pluginName)
@@ -1352,7 +1389,7 @@ export class TouchPlugin implements ITouchPlugin {
         onTransport(eventName, (context) => !context?.plugin, handler),
       onRenderer: (eventName, handler) =>
         onTransport(eventName, (context) => context?.plugin?.name === pluginName, handler),
-      raw: channel as IPluginChannelBridge['raw']
+      raw: transport as IPluginChannelBridge['raw']
     }
 
     const touchChannel = {
@@ -1729,18 +1766,21 @@ export class TouchPlugin implements ITouchPlugin {
   __getInjections__(): PluginInjections {
     const indexPath = this.__index__()
     const preload = this.__preload__()
-
-    const touchApp = $app
+    const runtimeContext = this.getRuntimeContext('__getInjections__')
 
     const _path = {
-      relative: path.relative(touchApp.rootPath, this.pluginPath),
-      root: touchApp.rootPath,
-      app: touchApp.app?.getAppPath?.(),
+      relative: path.relative(runtimeContext.rootPath, this.pluginPath),
+      root: runtimeContext.rootPath,
+      app: app.getAppPath?.(),
       plugin: this.pluginPath
     }
 
     const pluginUa = `TalexTouch/${$pkg.version} (Plugins,like ${this.name})`
-    const mainUserAgent = useSafeUserAgent(touchApp.window?.window) ?? app.userAgentFallback ?? ''
+    const mainWindow =
+      typeof runtimeContext.mainWindowId === 'number'
+        ? (BrowserWindow.fromId(runtimeContext.mainWindowId) ?? undefined)
+        : undefined
+    const mainUserAgent = useSafeUserAgent(mainWindow) ?? app.userAgentFallback ?? ''
     const userAgent = mainUserAgent ? `${mainUserAgent} ${pluginUa}` : pluginUa
 
     return {

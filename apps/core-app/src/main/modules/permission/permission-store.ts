@@ -38,8 +38,36 @@ export interface PermissionAccessState {
   hasHistoricalGrant: boolean
 }
 
+export type PermissionBackendMode = 'sqlite' | 'degraded/backend-unavailable'
+
+export interface PermissionBackendStatus {
+  mode: PermissionBackendMode
+  writable: boolean
+  reason?: string
+}
+
+interface PermissionStoreBackend {
+  initialize(): Promise<void>
+  load(): Promise<PermissionData>
+  persist(data: PermissionData): Promise<void>
+  close(): Promise<void>
+}
+
+interface PermissionStoreOptions {
+  createBackend?: (dbPath: string) => PermissionStoreBackend
+}
+
 const CURRENT_VERSION = 1
 const MAX_AUDIT_LOGS = 500
+
+class PermissionBackendUnavailableError extends Error {
+  code = 'PERMISSION_BACKEND_UNAVAILABLE'
+
+  constructor(message: string) {
+    super(message)
+    this.name = 'PermissionBackendUnavailableError'
+  }
+}
 
 function createEmptyData(): PermissionData {
   return {
@@ -51,6 +79,14 @@ function createEmptyData(): PermissionData {
 
 function cloneData(data: PermissionData): PermissionData {
   return JSON.parse(JSON.stringify(data)) as PermissionData
+}
+
+function cloneSessionGrants(
+  sessionGrants: Record<string, Set<string>>
+): Record<string, Set<string>> {
+  return Object.fromEntries(
+    Object.entries(sessionGrants).map(([pluginId, permissions]) => [pluginId, new Set(permissions)])
+  )
 }
 
 function hasPersistedData(data: PermissionData): boolean {
@@ -244,7 +280,7 @@ class SqlitePermissionBackend {
 }
 
 /**
- * PermissionStore - SQLite-primary permission storage with JSON historical migration.
+ * PermissionStore - SQLite-primary permission storage with compat JSON migration.
  */
 export class PermissionStore {
   private dirPath: string
@@ -254,9 +290,10 @@ export class PermissionStore {
   private dirty = false
   private initialized = false
   private persistChain: Promise<void> = Promise.resolve()
-  private fallbackWarningShown = false
-  private backendMode: 'sqlite' | 'json-readonly' = 'json-readonly'
-  private sqliteBackend: SqlitePermissionBackend | null = null
+  private backendMode: PermissionBackendMode = 'degraded/backend-unavailable'
+  private backendReason = 'Permission backend is not initialized.'
+  private sqliteBackend: PermissionStoreBackend | null = null
+  private createBackend: (dbPath: string) => PermissionStoreBackend
 
   /** Session-level permissions (memory only, cleared on app restart) */
   private sessionGrants: Record<string, Set<string>> = {}
@@ -264,18 +301,20 @@ export class PermissionStore {
   /** Declared permissions from currently loaded plugin manifests (memory only) */
   private declaredPermissions: Record<string, Set<string>> = {}
 
-  constructor(dirPath: string) {
+  constructor(dirPath: string, options: PermissionStoreOptions = {}) {
     this.dirPath = dirPath
     this.jsonFilePath = path.join(dirPath, 'permissions.json')
     this.sqliteFilePath = path.join(dirPath, 'permissions.db')
+    this.createBackend = options.createBackend ?? ((dbPath) => new SqlitePermissionBackend(dbPath))
   }
 
   async initialize(): Promise<void> {
     if (this.initialized) return
     await fse.ensureDir(this.dirPath)
 
+    let backend: PermissionStoreBackend | null = null
     try {
-      const backend = new SqlitePermissionBackend(this.sqliteFilePath)
+      backend = this.createBackend(this.sqliteFilePath)
       await backend.initialize()
       const sqliteData = await backend.load()
       const jsonData = this.loadFromJson()
@@ -286,29 +325,26 @@ export class PermissionStore {
         this.data = this.migrate(jsonData)
         await backend.persist(this.data)
         await this.backupLegacyJson()
-        console.info('[PermissionStore] Migrated permissions.json to SQLite backend')
+        console.info('[PermissionStore] Compat migration hit: permissions.json upgraded to SQLite')
       } else {
         this.data = createEmptyData()
       }
 
       this.sqliteBackend = backend
       this.backendMode = 'sqlite'
+      this.backendReason = ''
     } catch (error) {
-      console.warn(
-        '[PermissionStore] SQLite backend unavailable, falling back to JSON read-only mode:',
-        error
-      )
-      this.backendMode = 'json-readonly'
-      this.sqliteBackend = null
+      await backend?.close().catch(() => {})
       const jsonData = this.loadFromJson()
       this.data = jsonData ? this.migrate(jsonData) : createEmptyData()
+      this.markBackendUnavailable(error, 'initialize')
     }
 
     this.initialized = true
   }
 
   /**
-   * Load permissions from legacy JSON file (if exists)
+   * Load permissions from compat JSON snapshot (if present)
    */
   private loadFromJson(): PermissionData | null {
     try {
@@ -317,16 +353,18 @@ export class PermissionStore {
         return data
       }
     } catch (error) {
-      console.error('[PermissionStore] Failed to load legacy JSON:', error)
+      console.error('[PermissionStore] Failed to load compat JSON snapshot:', error)
     }
     return null
   }
 
   /**
-   * Migrate old data format
-   */
+   * Normalize compat JSON data into the current SQLite-backed format
+  */
   private migrate(data: Partial<PermissionData>): PermissionData {
-    console.info('[PermissionStore] Migrating data to version', CURRENT_VERSION)
+    console.info('[PermissionStore] Compat migration hit: normalizing permission data', {
+      targetVersion: CURRENT_VERSION
+    })
     return {
       version: CURRENT_VERSION,
       grants: data.grants || {},
@@ -338,50 +376,89 @@ export class PermissionStore {
     if (!(await fse.pathExists(this.jsonFilePath))) return
     const backupPath = `${this.jsonFilePath}.backup-${Date.now()}`
     await fse.move(this.jsonFilePath, backupPath, { overwrite: true })
+    console.info('[PermissionStore] Compat migration archived permissions.json snapshot', {
+      from: this.jsonFilePath,
+      to: backupPath
+    })
   }
 
   /**
    * Save permissions to persistence backend.
    */
-  save(): void {
-    if (!this.dirty) return
-    void this.flush()
-  }
-
   async flush(): Promise<void> {
     this.persistChain = this.persistChain.then(async () => {
       if (!this.dirty) return
 
-      if (this.backendMode === 'sqlite' && this.sqliteBackend) {
-        await this.sqliteBackend.persist(cloneData(this.data))
-      } else {
-        this.warnReadOnlyFallback()
+      if (this.backendMode !== 'sqlite' || !this.sqliteBackend) {
+        throw this.createBackendUnavailableError('flush')
       }
+
+      await this.sqliteBackend.persist(cloneData(this.data))
       this.dirty = false
     })
     return this.persistChain.catch((error) => {
-      console.error('[PermissionStore] Failed to persist:', error)
-      this.warnReadOnlyFallback()
-      this.backendMode = 'json-readonly'
-      this.sqliteBackend = null
+      this.markBackendUnavailable(error, 'persist')
+      throw error
     })
   }
 
   async shutdown(): Promise<void> {
-    await this.flush()
+    try {
+      await this.flush()
+    } catch {
+      // keep degraded shutdown non-fatal
+    }
     await this.sqliteBackend?.close()
   }
 
-  getBackendMode(): 'sqlite' | 'json-readonly' {
+  getBackendMode(): PermissionBackendMode {
     return this.backendMode
   }
 
-  private warnReadOnlyFallback(): void {
-    if (this.fallbackWarningShown) return
-    this.fallbackWarningShown = true
-    console.warn(
-      '[PermissionStore] Running in JSON read-only fallback mode, permission changes are not persisted.'
+  getBackendStatus(): PermissionBackendStatus {
+    return {
+      mode: this.backendMode,
+      writable: this.backendMode === 'sqlite',
+      reason: this.backendReason || undefined
+    }
+  }
+
+  private createBackendUnavailableError(action: string): PermissionBackendUnavailableError {
+    return new PermissionBackendUnavailableError(
+      `[PermissionStore] Cannot ${action}: backend unavailable (${this.backendReason || 'unknown'}).`
     )
+  }
+
+  private markBackendUnavailable(error: unknown, phase: string): void {
+    const reason = error instanceof Error ? error.message : String(error)
+    this.backendMode = 'degraded/backend-unavailable'
+    this.backendReason = reason || 'backend unavailable'
+    this.sqliteBackend = null
+    console.warn(`[PermissionStore] SQLite backend unavailable during ${phase}:`, error)
+  }
+
+  private ensureWritable(action: string): void {
+    if (this.backendMode !== 'sqlite' || !this.sqliteBackend) {
+      throw this.createBackendUnavailableError(action)
+    }
+  }
+
+  private async commitPersistentMutation(action: string, mutate: () => void): Promise<void> {
+    this.ensureWritable(action)
+    const previous = cloneData(this.data)
+    const previousDirty = this.dirty
+    const previousSessionGrants = cloneSessionGrants(this.sessionGrants)
+
+    try {
+      mutate()
+      this.dirty = true
+      await this.flush()
+    } catch (error) {
+      this.data = previous
+      this.dirty = previousDirty
+      this.sessionGrants = previousSessionGrants
+      throw error
+    }
   }
 
   /**
@@ -393,27 +470,25 @@ export class PermissionStore {
     grantedBy: 'user' | 'auto' | 'trust' = 'user'
   ): Promise<void> {
     const normalizedPermissionId = normalizePermissionId(permissionId)
-    if (!this.data.grants[pluginId]) {
-      this.data.grants[pluginId] = {}
-    }
+    await this.commitPersistentMutation('grant', () => {
+      if (!this.data.grants[pluginId]) {
+        this.data.grants[pluginId] = {}
+      }
 
-    this.data.grants[pluginId][normalizedPermissionId] = {
-      pluginId,
-      permissionId: normalizedPermissionId,
-      grantedAt: Date.now(),
-      grantedBy
-    }
+      this.data.grants[pluginId][normalizedPermissionId] = {
+        pluginId,
+        permissionId: normalizedPermissionId,
+        grantedAt: Date.now(),
+        grantedBy
+      }
 
-    // Add audit log
-    this.addAuditLog(
-      'granted',
-      pluginId,
-      normalizedPermissionId,
-      grantedBy === 'trust' ? 'system' : grantedBy === 'auto' ? 'auto' : 'user'
-    )
-
-    this.dirty = true
-    await this.flush()
+      this.addAuditLog(
+        'granted',
+        pluginId,
+        normalizedPermissionId,
+        grantedBy === 'trust' ? 'system' : grantedBy === 'auto' ? 'auto' : 'user'
+      )
+    })
   }
 
   /**
@@ -421,17 +496,18 @@ export class PermissionStore {
    */
   async revoke(pluginId: string, permissionId: string): Promise<void> {
     const normalizedPermissionId = normalizePermissionId(permissionId)
-    if (this.data.grants[pluginId]) {
+    this.ensureWritable('revoke')
+    if (!this.data.grants[pluginId]) {
+      return
+    }
+
+    await this.commitPersistentMutation('revoke', () => {
       for (const candidate of getPermissionIdCandidates(normalizedPermissionId)) {
         delete this.data.grants[pluginId][candidate]
       }
 
-      // Add audit log
       this.addAuditLog('revoked', pluginId, normalizedPermissionId, 'user')
-
-      this.dirty = true
-      await this.flush()
-    }
+    })
   }
 
   /**
@@ -439,41 +515,43 @@ export class PermissionStore {
    */
   async revokeAll(pluginId: string): Promise<void> {
     const permissions = Object.keys(this.data.grants[pluginId] || {})
-    delete this.data.grants[pluginId]
+    await this.commitPersistentMutation('revokeAll', () => {
+      delete this.data.grants[pluginId]
 
-    // Add audit logs for each revoked permission
-    for (const permissionId of permissions) {
-      this.addAuditLog('revoked', pluginId, permissionId, 'user', 'Revoked via "revoke all"')
-    }
-
-    this.dirty = true
-    await this.flush()
+      for (const permissionId of permissions) {
+        this.addAuditLog('revoked', pluginId, permissionId, 'user', 'Revoked via "revoke all"')
+      }
+    })
   }
 
   /**
    * Grant session-level permission (memory only, not persisted)
    */
-  grantSession(pluginId: string, permissionId: string): void {
+  async grantSession(pluginId: string, permissionId: string): Promise<void> {
     const normalizedPermissionId = normalizePermissionId(permissionId)
-    if (!this.sessionGrants[pluginId]) {
-      this.sessionGrants[pluginId] = new Set()
-    }
-    this.sessionGrants[pluginId].add(normalizedPermissionId)
-    this.addAuditLog('granted', pluginId, normalizedPermissionId, 'user', 'Session-only grant')
+    await this.commitPersistentMutation('grantSession', () => {
+      if (!this.sessionGrants[pluginId]) {
+        this.sessionGrants[pluginId] = new Set()
+      }
+      this.sessionGrants[pluginId].add(normalizedPermissionId)
+      this.addAuditLog('granted', pluginId, normalizedPermissionId, 'user', 'Session-only grant')
+    })
   }
 
   /**
    * Grant multiple session-level permissions
    */
-  grantSessionMultiple(pluginId: string, permissionIds: string[]): void {
-    if (!this.sessionGrants[pluginId]) {
-      this.sessionGrants[pluginId] = new Set()
-    }
-    for (const permissionId of permissionIds) {
-      const normalizedPermissionId = normalizePermissionId(permissionId)
-      this.sessionGrants[pluginId].add(normalizedPermissionId)
-      this.addAuditLog('granted', pluginId, normalizedPermissionId, 'user', 'Session-only grant')
-    }
+  async grantSessionMultiple(pluginId: string, permissionIds: string[]): Promise<void> {
+    await this.commitPersistentMutation('grantSessionMultiple', () => {
+      if (!this.sessionGrants[pluginId]) {
+        this.sessionGrants[pluginId] = new Set()
+      }
+      for (const permissionId of permissionIds) {
+        const normalizedPermissionId = normalizePermissionId(permissionId)
+        this.sessionGrants[pluginId].add(normalizedPermissionId)
+        this.addAuditLog('granted', pluginId, normalizedPermissionId, 'user', 'Session-only grant')
+      }
+    })
   }
 
   /**
@@ -668,9 +746,6 @@ export class PermissionStore {
     if (this.data.auditLogs.length > MAX_AUDIT_LOGS) {
       this.data.auditLogs = this.data.auditLogs.slice(0, MAX_AUDIT_LOGS)
     }
-
-    this.dirty = true
-    this.save()
   }
 
   /**
@@ -703,10 +778,10 @@ export class PermissionStore {
   /**
    * Clear all audit logs
    */
-  clearAuditLogs(): void {
-    this.data.auditLogs = []
-    this.dirty = true
-    this.save()
+  async clearAuditLogs(): Promise<void> {
+    await this.commitPersistentMutation('clearAuditLogs', () => {
+      this.data.auditLogs = []
+    })
   }
 }
 

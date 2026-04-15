@@ -41,7 +41,13 @@ export class StoragePollingService {
 
     StoragePollingService.pollingService.register(this.pollingTaskId, () => this.performSave(), {
       interval: this.pollingInterval,
-      unit: 'milliseconds'
+      unit: 'milliseconds',
+      lane: 'io',
+      backpressure: 'coalesce',
+      dedupeKey: this.pollingTaskId,
+      maxInFlight: 1,
+      timeoutMs: 15_000,
+      jitterMs: 150
     })
     StoragePollingService.pollingService.start()
   }
@@ -157,7 +163,13 @@ export class StoragePollingService {
       StoragePollingService.pollingService.unregister(this.pollingTaskId)
       StoragePollingService.pollingService.register(this.pollingTaskId, () => this.performSave(), {
         interval: this.pollingInterval,
-        unit: 'milliseconds'
+        unit: 'milliseconds',
+        lane: 'io',
+        backpressure: 'coalesce',
+        dedupeKey: this.pollingTaskId,
+        maxInFlight: 1,
+        timeoutMs: 15_000,
+        jitterMs: 150
       })
       StoragePollingService.pollingService.start()
     }
@@ -201,7 +213,16 @@ export class StoragePollingService {
           this.pendingWidgetCalls.delete(widgetId)
         }
       },
-      { interval: 60_000, unit: 'milliseconds', initialDelayMs: 100 }
+      {
+        interval: 60_000,
+        unit: 'milliseconds',
+        initialDelayMs: 100,
+        lane: 'maintenance',
+        backpressure: 'latest_wins',
+        dedupeKey: taskId,
+        maxInFlight: 1,
+        timeoutMs: 5_000
+      }
     )
     StoragePollingService.pollingService.start()
 

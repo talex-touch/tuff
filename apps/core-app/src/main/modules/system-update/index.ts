@@ -32,6 +32,8 @@ const SYSTEM_UPDATE_POLL_STAGGER_JITTER_MS = 2 * 60 * 1000
 const SYSTEM_UPDATE_SLOW_THRESHOLD_MS = 800
 const SYSTEM_UPDATE_SLOW_BACKOFF_MS = 10 * 60 * 1000
 const SYSTEM_UPDATE_SLOW_BACKOFF_JITTER_MS = 2 * 60 * 1000
+const SYSTEM_UPDATE_STARTUP_REFRESH_DELAY_MS = 2_500
+const SYSTEM_UPDATE_STARTUP_REFRESH_JITTER_MS = 1_000
 const FX_RATE_DEFAULT_TTL_MS = 8 * 60 * 60 * 1000
 const FETCH_TIMEOUT_MS = 10_000
 
@@ -108,6 +110,7 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
   private db: LibSQLDatabase<typeof schema> | null = null
   private baseUrl = getTuffBaseUrl()
   private channel: AppPreviewChannel = this.resolveChannel()
+  private startupRefreshTimer: NodeJS.Timeout | null = null
 
   constructor() {
     super(SystemUpdateModule.key, { create: true, dirName: 'system-update' })
@@ -117,7 +120,7 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
     this.db = databaseModule.getDb()
     await this.ensureState()
     await this.hydrateFxRates()
-    await this.runRefreshUpdates('startup')
+    this.scheduleStartupRefresh()
     fxRateProvider.start()
 
     const initialDelayMs =
@@ -129,12 +132,29 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
   }
 
   onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): void {
+    if (this.startupRefreshTimer) {
+      clearTimeout(this.startupRefreshTimer)
+      this.startupRefreshTimer = null
+    }
     this.pollingService.unregister(SYSTEM_UPDATE_POLL_ID)
     fxRateProvider.stop()
   }
 
   private resolveJitter(maxMs: number): number {
     return Math.floor(Math.random() * Math.max(1, maxMs))
+  }
+
+  private scheduleStartupRefresh(): void {
+    if (this.startupRefreshTimer) {
+      clearTimeout(this.startupRefreshTimer)
+    }
+    const delayMs =
+      SYSTEM_UPDATE_STARTUP_REFRESH_DELAY_MS +
+      this.resolveJitter(SYSTEM_UPDATE_STARTUP_REFRESH_JITTER_MS)
+    this.startupRefreshTimer = setTimeout(() => {
+      this.startupRefreshTimer = null
+      void this.runRefreshUpdates('startup')
+    }, delayMs)
   }
 
   private async scheduleWrite<T>(
@@ -172,7 +192,11 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
     try {
       await this.refreshUpdates()
     } catch (error) {
-      log.warn('System update refresh failed', { meta: toErrorMeta(error) })
+      if (trigger === 'startup') {
+        log.info('System update startup refresh skipped', { meta: toErrorMeta(error) })
+      } else {
+        log.warn('System update refresh failed', { meta: toErrorMeta(error) })
+      }
       return
     }
     const durationMs = Date.now() - startedAt

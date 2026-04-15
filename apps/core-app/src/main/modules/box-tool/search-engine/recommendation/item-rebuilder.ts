@@ -1,4 +1,4 @@
-import type { TuffItem, TuffQuery, TuffRender } from '@talex-touch/utils'
+import type { TuffItem, TuffRender } from '@talex-touch/utils'
 import type { DbUtils } from '../../../../db/utils'
 import type { ScoredItem } from './recommendation-engine'
 
@@ -80,10 +80,10 @@ export class ItemRebuilder {
       if (apps.length === 0) return []
 
       const appsWithExtensions = await this.fetchExtensionsForApps(apps)
-      const { processSearchResults } = await import('../../addon/apps/search-processing-service')
-
-      const dummyQuery: TuffQuery = { text: '' }
-      return processSearchResults(appsWithExtensions, dummyQuery, false, {})
+      const { mapAppsToRecommendationItems } = await import(
+        '../../addon/apps/search-processing-service'
+      )
+      return mapAppsToRecommendationItems(appsWithExtensions)
     } catch (error) {
       console.error('[ItemRebuilder] Failed to rebuild app items:', error)
       return []
@@ -172,7 +172,8 @@ export class ItemRebuilder {
     if (items.length === 0) return []
 
     try {
-      const db = this.dbUtils.getDb()
+      const auxDb = this.dbUtils.getAuxDb()
+      const coreDb = this.dbUtils.getDb()
       const { clipboardHistory } = await import('../../../../db/schema')
       const { eq } = await import('drizzle-orm')
       const rebuiltItems: TuffItem[] = []
@@ -181,11 +182,18 @@ export class ItemRebuilder {
         const clipboardId = Number.parseInt(item.itemId, 10)
         if (Number.isNaN(clipboardId)) continue
 
-        const record = await db
+        let record = await auxDb
           .select()
           .from(clipboardHistory)
           .where(eq(clipboardHistory.id, clipboardId))
           .get()
+        if (!record && auxDb !== coreDb) {
+          record = await coreDb
+            .select()
+            .from(clipboardHistory)
+            .where(eq(clipboardHistory.id, clipboardId))
+            .get()
+        }
 
         if (record) {
           // 直接转换逻辑（原来在 ClipboardProvider.transformToSearchItem 中）

@@ -26,10 +26,12 @@ type CustomUpdatePayload = {
   changelog?: string
 }
 
-type DownloadAssetWithSignature = DownloadAsset & { signatureUrl?: string }
+type DownloadAssetWithSignature = DownloadAsset & {
+  signatureUrl?: string
+} & import('./platform-target').UpdateAssetTarget
 import { UpdateErrorType, UpdateProviderType } from '@talex-touch/utils'
 import { UpdateProvider } from './UpdateProvider'
-import { resolveUpdateAssetTarget } from './platform-target'
+import { compareUpdateAssetTargets, resolveUpdateAssetTarget } from './platform-target'
 
 export class CustomUpdateProvider extends UpdateProvider {
   readonly name: string
@@ -139,24 +141,28 @@ export class CustomUpdateProvider extends UpdateProvider {
       return []
     }
 
-    return release.assets.flatMap((asset) => {
-      const target = resolveUpdateAssetTarget(asset.name)
-      if (!target) {
-        console.warn(`[CustomUpdateProvider] Skip unsupported asset target: ${asset.name}`)
-        return []
-      }
-      const assetWithSignature = asset as DownloadAssetWithSignature
-      const normalized: DownloadAssetWithSignature = {
-        name: asset.name,
-        url: asset.url,
-        size: asset.size || 0,
-        platform: target.platform,
-        arch: target.arch,
-        checksum: asset.checksum,
-        signatureUrl: assetWithSignature.signatureUrl
-      }
-      return [normalized]
-    })
+    return release.assets
+      .flatMap((asset) => {
+        const target = resolveUpdateAssetTarget(asset.name)
+        if (!target) {
+          console.warn(`[CustomUpdateProvider] Skip unsupported asset target: ${asset.name}`)
+          return []
+        }
+        const assetWithSignature = asset as DownloadAssetWithSignature
+        const normalized: DownloadAssetWithSignature = {
+          name: asset.name,
+          url: asset.url,
+          size: asset.size || 0,
+          platform: target.platform,
+          arch: target.arch,
+          sourceArch: target.sourceArch,
+          priority: target.priority,
+          checksum: asset.checksum,
+          signatureUrl: assetWithSignature.signatureUrl
+        }
+        return [normalized]
+      })
+      .sort((left, right) => compareUpdateAssetTargets(left, right))
   }
 
   // 健康检查
@@ -251,6 +257,8 @@ export class CustomUpdateProvider extends UpdateProvider {
           size: typeof download.size === 'number' ? download.size : 0,
           platform: target.platform,
           arch: target.arch,
+          sourceArch: target.sourceArch,
+          priority: target.priority,
           checksum: download.checksum || download.hash,
           signatureUrl: download.signatureUrl || download.sigUrl
         }

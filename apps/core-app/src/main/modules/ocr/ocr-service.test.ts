@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 
 const {
   ensureIntelligenceConfigLoadedMock,
@@ -132,11 +135,23 @@ import { ocrService } from './ocr-service'
 interface OcrServiceTestAccess {
   runAgentJob: (jobId: number, job: Record<string, unknown>) => Promise<void>
   updateClipboardMeta: (...args: unknown[]) => Promise<void>
-  normalizeSourceForAgent: (...args: unknown[]) => Promise<{ type: string; dataUrl: string }>
+  normalizeSourceForAgent: (...args: unknown[]) => Promise<{
+    type: string
+    dataUrl?: string
+    filePath?: string
+  }>
+  buildJobPayload: (...args: unknown[]) => Promise<{
+    clipboardId: number
+    source: { type: string; dataUrl?: string; filePath?: string }
+    options: { language: string }
+    payloadHash: string | null
+  } | null>
   buildAgentPrompt: (...args: unknown[]) => string
   persistAgentSuccess: (...args: unknown[]) => Promise<void>
   deferJob: (...args: unknown[]) => Promise<void>
   failJob: (...args: unknown[]) => Promise<void>
+  invokeWorkerOcr: (...args: unknown[]) => Promise<Record<string, unknown>>
+  shouldUseWorkerPath: (...args: unknown[]) => boolean
   queueDisabledUntil: number | null
   queueDisableReason: string | null
   consecutiveFailureCount: number
@@ -252,6 +267,162 @@ describe('OcrService runAgentJob local-first options', () => {
       expect(service.queueDisableStrike).toBe(2)
     } finally {
       vi.useRealTimers()
+    }
+  })
+
+  it('uses file source for clipboard image file payload', async () => {
+    const service = ocrService as unknown as OcrServiceTestAccess
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'ocr-service-image-'))
+    const imagePath = path.join(tempDir, 'clipboard.png')
+    await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+
+    try {
+      const payload = await service.buildJobPayload({
+        clipboardId: 1001,
+        item: {
+          type: 'image',
+          content: imagePath,
+          meta: null
+        },
+        formats: ['public.png']
+      })
+
+      expect(payload).not.toBeNull()
+      expect(payload?.source.type).toBe('file')
+      expect(payload?.source.filePath).toBe(imagePath)
+      expect(typeof payload?.payloadHash).toBe('string')
+    } finally {
+      await rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('normalizes explicit file source without base64 conversion', async () => {
+    const service = ocrService as unknown as OcrServiceTestAccess
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'ocr-service-source-'))
+    const imagePath = path.join(tempDir, 'source.jpg')
+    await writeFile(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xdb]))
+
+    try {
+      const source = await service.normalizeSourceForAgent(
+        {
+          type: 'file',
+          filePath: imagePath
+        },
+        null
+      )
+
+      expect(source).toEqual({
+        type: 'file',
+        filePath: imagePath
+      })
+    } finally {
+      await rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('uses worker invocation path when enabled and source supported', async () => {
+    const service = ocrService as unknown as OcrServiceTestAccess
+    const previousWorkerEnv = process.env.TUFF_OCR_WORKER_ENABLED
+    process.env.TUFF_OCR_WORKER_ENABLED = '1'
+
+    try {
+      getCapabilityOptionsMock.mockReturnValue({
+        allowedProviderIds: ['local-system-ocr'],
+        modelPreference: ['system-ocr']
+      })
+
+      const workerInvokeSpy = vi.spyOn(service, 'invokeWorkerOcr').mockResolvedValue({
+        result: { text: 'worker-path' },
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        model: 'system-ocr-worker',
+        latency: 3,
+        traceId: 'worker-trace',
+        provider: 'local'
+      })
+      vi.spyOn(service, 'updateClipboardMeta').mockResolvedValue(undefined)
+      vi.spyOn(service, 'normalizeSourceForAgent').mockResolvedValue({
+        type: 'file',
+        filePath: '/tmp/ocr-worker-source.png'
+      })
+      vi.spyOn(service, 'buildAgentPrompt').mockReturnValue('prompt-template')
+      const persistSpy = vi.spyOn(service, 'persistAgentSuccess').mockResolvedValue(undefined)
+      vi.spyOn(service, 'deferJob').mockResolvedValue(undefined)
+      vi.spyOn(service, 'failJob').mockResolvedValue(undefined)
+
+      await service.runAgentJob(9, {
+        id: 9,
+        clipboardId: 321,
+        payloadHash: 'hash-worker',
+        meta: JSON.stringify({
+          source: { type: 'clipboard' },
+          options: { language: 'eng' }
+        })
+      })
+
+      expect(workerInvokeSpy).toHaveBeenCalledOnce()
+      expect(aiInvokeMock).not.toHaveBeenCalled()
+      expect(persistSpy).toHaveBeenCalledOnce()
+    } finally {
+      if (previousWorkerEnv === undefined) {
+        delete process.env.TUFF_OCR_WORKER_ENABLED
+      } else {
+        process.env.TUFF_OCR_WORKER_ENABLED = previousWorkerEnv
+      }
+    }
+  })
+
+  it('falls back to provider invocation when worker path fails', async () => {
+    const service = ocrService as unknown as OcrServiceTestAccess
+    const previousWorkerEnv = process.env.TUFF_OCR_WORKER_ENABLED
+    process.env.TUFF_OCR_WORKER_ENABLED = '1'
+
+    try {
+      getCapabilityOptionsMock.mockReturnValue({
+        allowedProviderIds: ['local-system-ocr'],
+        modelPreference: ['system-ocr']
+      })
+
+      aiInvokeMock.mockResolvedValue({
+        result: { text: 'provider-path' },
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        model: 'system-ocr',
+        latency: 6,
+        traceId: 'provider-trace',
+        provider: 'local'
+      })
+
+      const workerInvokeSpy = vi
+        .spyOn(service, 'invokeWorkerOcr')
+        .mockRejectedValue(new Error('worker unavailable'))
+      vi.spyOn(service, 'updateClipboardMeta').mockResolvedValue(undefined)
+      vi.spyOn(service, 'normalizeSourceForAgent').mockResolvedValue({
+        type: 'file',
+        filePath: '/tmp/ocr-worker-fallback.png'
+      })
+      vi.spyOn(service, 'buildAgentPrompt').mockReturnValue('prompt-template')
+      const persistSpy = vi.spyOn(service, 'persistAgentSuccess').mockResolvedValue(undefined)
+      vi.spyOn(service, 'deferJob').mockResolvedValue(undefined)
+      vi.spyOn(service, 'failJob').mockResolvedValue(undefined)
+
+      await service.runAgentJob(11, {
+        id: 11,
+        clipboardId: 654,
+        payloadHash: 'hash-worker-fallback',
+        meta: JSON.stringify({
+          source: { type: 'clipboard' },
+          options: { language: 'eng' }
+        })
+      })
+
+      expect(workerInvokeSpy).toHaveBeenCalledOnce()
+      expect(aiInvokeMock).toHaveBeenCalledOnce()
+      expect(persistSpy).toHaveBeenCalledOnce()
+    } finally {
+      if (previousWorkerEnv === undefined) {
+        delete process.env.TUFF_OCR_WORKER_ENABLED
+      } else {
+        process.env.TUFF_OCR_WORKER_ENABLED = previousWorkerEnv
+      }
     }
   })
 })

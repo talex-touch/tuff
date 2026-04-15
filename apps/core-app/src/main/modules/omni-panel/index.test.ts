@@ -1,4 +1,15 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { omniPanelFeatureToggleEvent } from '../../../shared/events/omni-panel'
+
+const { getTuffTransportMainMock, loggerWarnMock } = vi.hoisted(() => ({
+  getTuffTransportMainMock: vi.fn(() => ({
+    on: vi.fn(() => () => {}),
+    broadcast: vi.fn(),
+    sendTo: vi.fn(),
+    sendToWindow: vi.fn()
+  })),
+  loggerWarnMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   app: { isPackaged: false },
@@ -68,12 +79,7 @@ vi.mock('../../core/touch-window', () => ({
 }))
 
 vi.mock('@talex-touch/utils/transport/main', () => ({
-  getTuffTransportMain: vi.fn(() => ({
-    on: vi.fn(() => () => {}),
-    broadcast: vi.fn(),
-    sendTo: vi.fn(),
-    sendToWindow: vi.fn()
-  }))
+  getTuffTransportMain: getTuffTransportMainMock
 }))
 
 vi.mock('../global-shortcon', () => ({
@@ -112,8 +118,27 @@ vi.mock('../../core/eventbus/touch-event', async (importOriginal) => {
   }
 })
 
+vi.mock('../../utils/logger', () => ({
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    debug: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn(),
+    warn: loggerWarnMock,
+    child: vi.fn(),
+    time: vi.fn(() => ({
+      end: vi.fn(),
+      split: vi.fn()
+    }))
+  }))
+}))
+
 import type { IFeatureOmniTransfer, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import { OmniPanelModule } from './index'
+
+afterEach(() => {
+  vi.clearAllMocks()
+})
 
 describe('OmniPanelModule registry initialization', () => {
   it('initializes builtin feature registry when empty', () => {
@@ -262,6 +287,31 @@ describe('OmniPanelModule auto-mount', () => {
     expect(module.featureRegistry[0].id).toBe('plugin:demo-plugin:declared')
     expect(module.featureRegistry[0].declarationMode).toBe('declared')
     expect(module.featureRegistry[0].target).toBe('corebox')
+  })
+})
+
+describe('OmniPanelModule hard-cut transport', () => {
+  it('does not register legacy feature toggle handler', async () => {
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    getTuffTransportMainMock.mockReturnValue({
+      on: vi.fn(
+        (event: { toEventName: () => string }, handler: (payload: unknown) => Promise<unknown>) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      broadcast: vi.fn(),
+      sendTo: vi.fn(),
+      sendToWindow: vi.fn()
+    } as never)
+
+    const module = new OmniPanelModule() as unknown as {
+      onInit: (ctx: unknown) => Promise<void>
+    }
+
+    await module.onInit({} as never)
+
+    expect(handlers.has(omniPanelFeatureToggleEvent.toEventName())).toBe(false)
   })
 })
 

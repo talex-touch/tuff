@@ -269,8 +269,6 @@ async function handlePrimaryAction(): Promise<void> {
     loadingStates.value.toggle = false
   }
 }
-
-console.log(props)
 </script>
 
 <template>
