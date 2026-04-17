@@ -9,6 +9,7 @@ import { WindowManager } from '../modules/box-tool/core-box/window'
 import { perfMonitor, registerPerfReportListener } from '../utils/perf-monitor'
 import { enterPerfContext } from '../utils/perf-context'
 import { appendWorkflowDebugLog } from '../utils/workflow-debug'
+import { resolveMissingHandlerPolicy } from './channel-missing-handler-policy'
 
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
 const ChannelType = {
@@ -213,20 +214,25 @@ class TouchChannel {
     const handlers = map.get(rawData.name)
 
     if (!handlers || handlers.length === 0) {
-      perfMonitor.recordIpcNoHandler(rawData.name, {
-        channelType: rawData.header.type,
-        status: rawData.header.status,
-        plugin: rawData.plugin || undefined
-      })
-
-      const payload = {
-        message: `No handler registered for "${rawData.name}"`,
-        reason: 'no_handler',
+      const missingHandlerPolicy = resolveMissingHandlerPolicy({
         eventName: rawData.name,
         channelType: rawData.header.type
+      })
+
+      if (!missingHandlerPolicy.suppressWarning) {
+        perfMonitor.recordIpcNoHandler(rawData.name, {
+          channelType: rawData.header.type,
+          status: rawData.header.status,
+          plugin: rawData.plugin || undefined
+        })
       }
 
-      const rData = this.__parse_sender(DataCode.ERROR, rawData, payload, rawData.sync)
+      const rData = this.__parse_sender(
+        missingHandlerPolicy.replyAsSuccess ? DataCode.SUCCESS : DataCode.ERROR,
+        rawData,
+        missingHandlerPolicy.payload,
+        rawData.sync
+      )
       delete rData.header.event
       if (rawData.header.uniqueKey) {
         rData.header.uniqueKey = rawData.header.uniqueKey
@@ -246,9 +252,11 @@ class TouchChannel {
       if (rawData.sync) {
         try {
           if (e.sender.isDestroyed()) {
-            channelLog.warn(
-              `[Channel] Cannot send no-handler reply for ${rawData.name} to destroyed webContents.`
-            )
+            if (!missingHandlerPolicy.suppressWarning) {
+              channelLog.warn(
+                `[Channel] Cannot send no-handler reply for ${rawData.name} to destroyed webContents.`
+              )
+            }
             return
           }
           e.sender.send(
@@ -257,9 +265,11 @@ class TouchChannel {
           )
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error)
-          channelLog.warn(
-            `[Channel] Failed to send no-handler reply for ${rawData.name}: ${errorMessage}`
-          )
+          if (!missingHandlerPolicy.suppressWarning) {
+            channelLog.warn(
+              `[Channel] Failed to send no-handler reply for ${rawData.name}: ${errorMessage}`
+            )
+          }
         }
       } else {
         try {
@@ -272,7 +282,9 @@ class TouchChannel {
         }
       }
 
-      channelLog.warn(`[Channel] No handler registered for "${rawData.name}"`)
+      if (!missingHandlerPolicy.suppressWarning) {
+        channelLog.warn(`[Channel] No handler registered for "${rawData.name}"`)
+      }
       return
     }
 

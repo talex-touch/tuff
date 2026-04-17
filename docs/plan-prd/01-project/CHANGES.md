@@ -5,6 +5,22 @@
 
 ## 2026-04-17
 
+### fix(core-app): 收敛主进程预期网络失败与可选取消日志噪声
+
+- `apps/core-app/src/main/core/channel-core.ts`
+- `apps/core-app/src/main/core/channel-missing-handler-policy.ts`
+- `apps/core-app/src/main/core/channel-missing-handler-policy.test.ts`
+- `apps/core-app/src/main/modules/analytics/startup-analytics.ts`
+- `apps/core-app/src/main/modules/analytics/storage/db-store.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/manager.ts`
+- `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `apps/core-app/src/main/utils/network-log-noise.ts`
+- `apps/core-app/src/main/utils/network-log-noise.test.ts`
+  - 抽出 `network-log-noise.ts` 作为主进程统一降噪规则，集中识别 `localhost:3200` fallback、连接拒绝、DNS/timeout、`NETWORK_HTTP_STATUS_403/429`、Cloudflare challenge 等预期远端失败；`startup-analytics`、`sentry-service`、`UpdateService` 不再各自维护一份字符串匹配。
+  - `SentryService` 对远端 HTML 响应改为安全摘要（如 `cloudflare_challenge` / `html_response`），避免把整页 challenge/body 直接写入错误日志；`UpdateService` 对上游 rate-limit 与远端不可用统一落 `check_deferred`，不再把这类预期失败记成常规错误。
+  - `channel-core` 新增可测的 missing-handler policy，transport 可选 `:stream:cancel` 在未注册 handler 时直接安静返回成功且不计入 no-handler 指标；`analytics db-store` 仅在真实丢弃/失败时输出 `warn`，纯节流压力降到 `info`，`CoreBoxManager` 退出非 UI 模式时不再额外 `console.warn`。
+
 ### fix(core-app): 收口 CoreBox runtime teardown 边界
 
 - `apps/core-app/src/main/core/runtime-accessor.ts`
@@ -70,6 +86,16 @@
 - `apps/core-app/src/main/modules/plugin/plugin-resolver.ts`
 - `apps/core-app/src/main/modules/plugin/plugin-module.ts`
   - 新增插件运行时 UI 完整性校验与一次性本地自愈：`webcontent` 插件安装后会校验必需入口文件，已安装目录在缺少 `index.html` 等入口文件时会优先尝试从同目录 `.tpex` 包恢复；安装失败会清理半残插件目录，避免下一次重装被 `plugin already exists` 卡住；保存 manifest 时保留更完整的 `_files` / `_signature` 元数据，避免再次把打包元信息截断到“只剩少量文件”的坏状态。
+- `apps/core-app/src/main/core/channel-core.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/manager.ts`
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `apps/core-app/src/main/modules/analytics/startup-analytics.ts`
+- `apps/core-app/src/main/modules/analytics/storage/db-store.ts`
+- `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+- `apps/core-app/src/main/utils/network-log-noise.ts`
+  - 收口剩余主进程日志噪音：`CoreBoxManager.exitUIMode()` 在本就不处于 UI 模式时不再额外输出 warn；`app:file-index:progress:stream:cancel` 这类可选 stream cancel 请求若晚于 handler 生命周期抵达，会按“可忽略取消”回包而不再刷 `No handler registered`。
+  - 将 Update / StartupAnalytics / Sentry 的上游 403 / 429 失败统一识别为“远端限流或挑战页”场景：更新检查改为短 warn + 冷却语义，不再输出整段错误堆栈；启动分析上报改为沿用同一降级判断；Sentry 遥测失败会把 Cloudflare HTML 挑战页摘要成短标签，避免把整页 HTML 打进日志。
+  - `AnalyticsStore` 的 queue pressure 汇总改为区分硬失败与纯节流场景：仅真正丢弃/失败时保留 warn，单纯 throttle / skip 改降为 info，减少正常背压时的误报感。
 - `package.json`
 - `apps/core-app/package.json`
   - 根包与 `core-app` 版本提升到 `2.4.9-beta.15`，用于本轮 beta 发布。

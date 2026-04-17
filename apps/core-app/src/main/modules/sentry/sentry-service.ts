@@ -19,6 +19,10 @@ import { getTuffTransportMain, SentryEvents } from '@talex-touch/utils/transport
 import { app, BrowserWindow } from 'electron'
 import { innerRootPath } from '../../core/precore'
 import { createLogger } from '../../utils/logger'
+import {
+  shouldDowngradeRemoteFailure,
+  summarizeRemoteFailurePayload
+} from '../../utils/network-log-noise'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { BaseModule } from '../abstract-base-module'
 import { getOrCreateTelemetryClientId } from '../analytics/telemetry-client'
@@ -122,27 +126,12 @@ function toLogMeta(meta?: Record<string, unknown>): Record<string, LogMetaPrimit
 }
 
 function shouldDowngradeTelemetryFailure(message: string, meta?: Record<string, unknown>): boolean {
-  const parts = [message]
+  const parts: unknown[] = [message]
   const error = meta?.error
-  if (typeof error === 'string') {
-    parts.push(error)
-  } else if (error instanceof Error) {
-    parts.push(error.message)
-  }
+  parts.push(error)
   const url = meta?.url
-  if (typeof url === 'string') {
-    parts.push(url)
-  }
-  const combined = parts.join(' ').toLowerCase()
-  return (
-    combined.includes('err_connection_refused') ||
-    combined.includes('econnrefused') ||
-    combined.includes('network guard cooldown') ||
-    combined.includes('localhost:3200') ||
-    combined.includes('eai_again') ||
-    combined.includes('enotfound') ||
-    combined.includes('etimedout')
-  )
+  parts.push(url)
+  return shouldDowngradeRemoteFailure(...parts)
 }
 
 /**
@@ -1230,7 +1219,7 @@ export class SentryServiceModule extends BaseModule {
         })
 
         if (response.status < 200 || response.status >= 300) {
-          const errorText = response.data || 'Unknown error'
+          const errorText = summarizeRemoteFailurePayload(response.data) ?? 'Unknown error'
           if (response.status === 403) {
             this.telemetryCooldownUntil = Date.now() + 60 * 60_000
           } else if (response.status === 429) {

@@ -25,6 +25,7 @@ import {
 } from '@talex-touch/utils/env'
 import { app } from 'electron'
 import { createLogger } from '../../utils/logger'
+import { shouldDowngradeRemoteFailure } from '../../utils/network-log-noise'
 import { databaseModule } from '../database'
 import { getNetworkService } from '../network'
 import { getMainConfig, saveMainConfig } from '../storage'
@@ -50,17 +51,7 @@ export interface FileReportQueueItem {
 }
 
 function shouldDowngradeStartupReportFailure(errorMessage: string | null | undefined): boolean {
-  if (!errorMessage) return false
-  const message = errorMessage.toLowerCase()
-  return (
-    message.includes('err_connection_refused') ||
-    message.includes('econnrefused') ||
-    message.includes('localhost:3200') ||
-    message.includes('eai_again') ||
-    message.includes('enotfound') ||
-    message.includes('etimedout') ||
-    message.includes('network guard cooldown')
-  )
+  return shouldDowngradeRemoteFailure(errorMessage)
 }
 
 /**

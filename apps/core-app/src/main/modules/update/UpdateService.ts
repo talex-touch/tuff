@@ -30,6 +30,7 @@ import { TalexEvents, touchEventBus, UpdateAvailableEvent } from '../../core/eve
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { downloadChunks, downloadTasks } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
+import { shouldDowngradeRemoteFailure } from '../../utils/network-log-noise'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { getAnalyticsMessageStore } from '../analytics/message-store'
 import { getSentryService } from '../sentry'
@@ -902,6 +903,22 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       return noUpdateResult
     } catch (error) {
       this.recordCheckTimestamp()
+      const expectedFailure = this.describeExpectedUpdateCheckFailure(error)
+      if (expectedFailure) {
+        updateLog.warn(expectedFailure.message, { meta: expectedFailure.meta })
+        this.reportUpdateTelemetry('check_deferred', {
+          channel: targetChannel,
+          source: this.settings.source?.name ?? 'Unknown',
+          itemKind: checkKind
+        })
+
+        return {
+          hasUpdate: false,
+          error: expectedFailure.message,
+          source: this.settings.source?.name ?? 'Unknown'
+        }
+      }
+
       updateLog.error('Update check failed', { error })
       this.reportUpdateError('check', error, { channel: targetChannel })
       this.reportUpdateTelemetry('check_error', {
@@ -2240,6 +2257,38 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       return undefined
     }
     return headers as Record<string, unknown>
+  }
+
+  private describeExpectedUpdateCheckFailure(error: unknown): {
+    message: string
+    meta: Record<string, string | number | boolean | null | undefined>
+  } | null {
+    const status = this.getErrorStatus(error)
+    const headers = this.getErrorHeaders(error)
+    const rateLimit = headers ? this.extractRateLimitInfo(headers) : undefined
+    const retryAt = rateLimit?.resetAt ? new Date(rateLimit.resetAt).toISOString() : undefined
+
+    if (status === 403 || status === 429) {
+      return {
+        message: 'Update check deferred by upstream rate limit',
+        meta: {
+          status,
+          remaining: rateLimit?.remaining,
+          retryAt
+        }
+      }
+    }
+
+    if (!(error instanceof Error) || !shouldDowngradeRemoteFailure(error.message)) {
+      return null
+    }
+
+    return {
+      message: 'Update check deferred by remote service availability',
+      meta: {
+        error: error.message
+      }
+    }
   }
 
   private isRetryableError(error: unknown): boolean {
