@@ -6,7 +6,6 @@ import SettingLanguage from './SettingLanguage.vue'
 import SettingSetup from './SettingSetup.vue'
 import SettingTools from './SettingTools.vue'
 import SettingUser from './SettingUser.vue'
-import { appSetting } from '~/modules/channel/storage'
 
 const SettingAbout = defineAsyncComponent(() => import('./SettingAbout.vue'))
 const SettingDownload = defineAsyncComponent(() => import('./SettingDownload.vue'))
@@ -17,7 +16,6 @@ const SettingStorage = defineAsyncComponent(() => import('./SettingStorage.vue')
 const SettingUpdate = defineAsyncComponent(() => import('./SettingUpdate.vue'))
 
 const isWindows = computed(() => window.electron?.process?.platform === 'win32')
-const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 </script>
 <template>
   <ViewTemplate title="$I18n:router.appSettings">
@@ -36,7 +34,7 @@ const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSet
 
       <SettingEverything v-if="isWindows" />
 
-      <SettingDownload v-if="showAdvancedSettings" />
+      <SettingDownload />
 
       <SettingUpdate />
 

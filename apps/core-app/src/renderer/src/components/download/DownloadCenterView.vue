@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import type { DownloadConfig, DownloadTask } from '@talex-touch/utils'
+import type { DownloadTask } from '@talex-touch/utils'
 import { TxBottomDialog, TxTabItem, TxTabs } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
 import { debounce } from '~/utils/performance'
 import DownloadHistoryView from './DownloadHistoryView.vue'
-import DownloadSettings from './DownloadSettings.vue'
 import ErrorLogViewer from './ErrorLogViewer.vue'
 import TaskDetailsDialog from './TaskDetailsDialog.vue'
 import TaskList from './TaskList.vue'
 import VirtualTaskList from './VirtualTaskList.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const {
   downloadTasks,
@@ -28,11 +29,9 @@ const {
   deleteFile: deleteFileHook,
   removeTask: removeTaskHook,
   clearHistory: clearHistoryHook,
-  updateConfig: updateConfigHook,
   updateTaskPriority: updateTaskPriorityHook
 } = useDownloadCenter()
 
-const settingsVisible = ref(false)
 const detailsVisible = ref(false)
 const logsVisible = ref(false)
 const selectedTask = ref<DownloadTask | null>(null)
@@ -94,7 +93,7 @@ function getCurrentTabTasks() {
 }
 
 function openSettings() {
-  settingsVisible.value = true
+  void router.push('/setting')
 }
 
 function openLogs() {
@@ -271,16 +270,6 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
     toast.error(`${t('download.priority_update_failed')}: ${message}`)
   }
 }
-
-async function updateConfig(config: DownloadConfig) {
-  try {
-    await updateConfigHook(config)
-    toast.success(t('download.config_updated'))
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.config_update_failed')}: ${message}`)
-  }
-}
 </script>
 
 <template>
@@ -439,9 +428,6 @@ async function updateConfig(config: DownloadConfig) {
         <DownloadHistoryView />
       </TxTabItem>
     </TxTabs>
-
-    <!-- 设置对话框 -->
-    <DownloadSettings v-model:visible="settingsVisible" @update-config="updateConfig" />
 
     <!-- 任务详情对话框 -->
     <TaskDetailsDialog

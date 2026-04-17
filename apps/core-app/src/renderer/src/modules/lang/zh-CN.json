@@ -1639,6 +1639,10 @@
       "networkMaxRetriesDesc": "网络级别的最大重试次数",
       "tempDir": "临时目录",
       "tempDirDesc": "临时下载文件的存储位置",
+      "browse": "选择目录",
+      "resetTempDir": "恢复默认目录",
+      "selectTempDirTitle": "选择下载临时目录",
+      "selectTempDirConfirm": "使用此目录",
       "defaultPath": "默认路径",
       "noRetry": "不重试",
       "days": "天",
@@ -1656,7 +1660,8 @@
         "saveFailed": "保存下载设置失败",
         "defaultsRestored": "已恢复默认设置",
         "tempCleaned": "临时文件已清理",
-        "tempCleanFailed": "清理临时文件失败"
+        "tempCleanFailed": "清理临时文件失败",
+        "tempDirSelectFailed": "选择临时目录失败"
       }
     },
     "settingPlatformCapabilities": {
@@ -1861,12 +1866,12 @@
       "backendCli": "CLI (es.exe)",
       "backendUnavailable": "不可用",
       "healthTitle": "搜索健康状态",
-      "healthDesc": "显示当前是否使用 Everything，或已降级到回退路径",
+      "healthDesc": "显示 Everything 是否已就绪，以及文件搜索不可用时的原因",
       "healthHealthy": "正常",
-      "healthDegraded": "已降级",
+      "healthDegraded": "未就绪",
       "healthUnsupported": "不支持",
       "fallbackChainTitle": "后端降级链路",
-      "fallbackChainDesc": "当上游后端不可用时，系统按此顺序自动降级",
+      "fallbackChainDesc": "Everything 后端初始化时按此顺序尝试，不代表存在可用的搜索回退",
       "enableTitle": "启用 Everything 搜索",
       "enableDesc": "使用 Everything 进行超快速文件搜索",
       "enable": "启用",
@@ -2168,6 +2173,7 @@
       },
       "autoDownloadTitle": "自动下载更新",
       "autoDownloadDesc": "发现新版本时自动下载更新包",
+      "autoDownloadDescManual": "发现新版本时自动下载安装包，后续仍需通过系统安装器完成更新",
       "rendererOverrideTitle": "Renderer Override（实验性）",
       "rendererOverrideDesc": "手动开启实验性 Renderer Override（需设置 TUFF_ENABLE_RENDERER_OVERRIDE=1）。",
       "statusTitle": "状态",
@@ -2178,13 +2184,16 @@
         "updateAvailable": "发现新版本，请关注弹出的更新提示。",
         "upToDate": "当前已是最新版本。",
         "downloadReady": "更新包 {version} 已下载完成，可立即重启并完成更新。",
+        "downloadReadyManual": "安装包 {version} 已下载完成，请打开安装包继续更新。",
         "unknownVersion": "该版本",
         "cachedRelease": "缓存更新：{version}"
       },
       "actionsTitle": "操作",
       "actionsDesc": "更新包下载完成后，在这里立即重启完成更新。",
+      "actionsDescManual": "安装包下载完成后，在这里打开安装包并交给系统完成安装。",
       "actions": {
         "installNow": "立即重启更新",
+        "openInstaller": "打开安装包",
         "manualCheck": "立即检查",
         "clearCache": "清空缓存"
       },
@@ -2496,7 +2505,7 @@
     "stats": {
       "total": "{count} 个插件",
       "withMissing": "{count} 个缺少权限",
-      "legacy": "{count} 个未启用权限校验"
+      "blocked": "{count} 个被阻断"
     },
     "filters": {
       "all": "全部插件",
@@ -2504,7 +2513,7 @@
       "missing": "缺少权限"
     },
     "tags": {
-      "legacy": "旧版 SDK",
+      "blocked": "已阻断",
       "missing": "缺少 {count} 项"
     },
     "pluginStats": {
