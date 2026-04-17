@@ -8,7 +8,7 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import {
   clearRegisteredMainRuntime,
-  getRegisteredMainRuntime,
+  maybeGetRegisteredMainRuntime,
   registerMainRuntime,
   resolveMainRuntime
 } from '../../../core/runtime-accessor'
@@ -33,13 +33,9 @@ export { getCoreBoxWindow } from './window'
 
 let lastScreenId: number | undefined
 
-const isAppQuitting = (): boolean => {
-  try {
-    return getRegisteredMainRuntime('core-box').app.isQuitting === true
-  } catch {
-    return false
-  }
-}
+const getCoreBoxRuntimeOrNull = () => maybeGetRegisteredMainRuntime<TalexEvents>('core-box')
+
+const isAppQuitting = (): boolean => getCoreBoxRuntimeOrNull()?.app.isQuitting === true
 
 export class CoreBoxModule extends BaseModule {
   static key: symbol = Symbol.for('CoreBox')
@@ -93,7 +89,7 @@ export class CoreBoxModule extends BaseModule {
           if (!beginnerState?.init) {
             coreBoxLog.warn('Initialization not complete, CoreBox is disabled')
             // Optionally show a notification or dialog to user
-            const mainWindow = getRegisteredMainRuntime('core-box').app.window.window
+            const mainWindow = getCoreBoxRuntimeOrNull()?.app.window.window
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.show()
               mainWindow.focus()
@@ -175,7 +171,6 @@ export class CoreBoxModule extends BaseModule {
   }
 
   async onDestroy(): Promise<void> {
-    clearRegisteredMainRuntime('core-box')
     shortcutModule.unregisterMainShortcut('core.box.toggle')
     shortcutModule.unregisterMainShortcut('core.box.aiQuickCall')
 
@@ -201,6 +196,7 @@ export class CoreBoxModule extends BaseModule {
 
     searchLogger.destroy()
     coreBoxManager.destroy()
+    clearRegisteredMainRuntime('core-box')
   }
 
   private registerTransportHandlers(): void {
