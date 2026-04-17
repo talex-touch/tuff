@@ -120,21 +120,31 @@ export class DbStore {
       return
     }
 
-    log.warn('Analytics queue pressure summary', {
-      meta: {
-        total,
-        snapshotsThrottled: stats.snapshotsThrottled,
-        snapshotsSkipped: stats.snapshotsSkipped,
-        snapshotsDropped: stats.snapshotsDropped,
-        snapshotsFailed: stats.snapshotsFailed,
-        cleanupSkipped: stats.cleanupSkipped,
-        pluginSkipped: stats.pluginSkipped,
-        pluginDropped: stats.pluginDropped,
-        pluginFailed: stats.pluginFailed,
-        queued: this.lastQueuePressureQueued > 0 ? this.lastQueuePressureQueued : undefined,
-        lastError: this.lastQueuePressureError ?? undefined
-      }
-    })
+    const meta = {
+      total,
+      snapshotsThrottled: stats.snapshotsThrottled,
+      snapshotsSkipped: stats.snapshotsSkipped,
+      snapshotsDropped: stats.snapshotsDropped,
+      snapshotsFailed: stats.snapshotsFailed,
+      cleanupSkipped: stats.cleanupSkipped,
+      pluginSkipped: stats.pluginSkipped,
+      pluginDropped: stats.pluginDropped,
+      pluginFailed: stats.pluginFailed,
+      queued: this.lastQueuePressureQueued > 0 ? this.lastQueuePressureQueued : undefined,
+      lastError: this.lastQueuePressureError ?? undefined
+    }
+    const hasHardPressure =
+      stats.snapshotsDropped > 0 ||
+      stats.snapshotsFailed > 0 ||
+      stats.cleanupSkipped > 0 ||
+      stats.pluginDropped > 0 ||
+      stats.pluginFailed > 0
+
+    if (hasHardPressure) {
+      log.warn('Analytics queue pressure summary', { meta })
+    } else {
+      log.info('Analytics queue pressure summary', { meta })
+    }
 
     this.queuePressureStats = {
       snapshotsThrottled: 0,

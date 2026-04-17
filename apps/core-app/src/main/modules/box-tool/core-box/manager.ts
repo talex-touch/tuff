@@ -218,8 +218,6 @@ export class CoreBoxManager {
           }
         }, 100)
       }
-    } else {
-      console.warn('[CoreBoxManager] Not in UI mode, no need to exit.')
     }
   }
 
