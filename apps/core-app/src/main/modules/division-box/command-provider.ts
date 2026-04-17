@@ -8,6 +8,7 @@
 import type { ISearchProvider, TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
 import type { ProviderContext } from '../box-tool/search-engine/types'
 import { TuffInputType } from '@talex-touch/utils'
+import { divisionBoxCommandProviderLog } from './logger'
 import { DivisionBoxManager } from './manager'
 import { shortcutTriggerManager } from './shortcut-trigger'
 
@@ -37,7 +38,7 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
   }
 
   async onLoad(_context: ProviderContext): Promise<void> {
-    console.log('[DivisionBoxCommandProvider] Provider loaded')
+    divisionBoxCommandProviderLog.info('Provider loaded')
   }
 
   async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
@@ -179,7 +180,12 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
         // This would typically open a UI to show active sessions
         // For now, we'll just log them
         const sessions = this.manager.getActiveSessionsInfo()
-        console.log('[DivisionBoxCommandProvider] Active sessions:', sessions)
+        divisionBoxCommandProviderLog.info('Active sessions requested', {
+          meta: {
+            count: String(sessions.length),
+            sessionIds: sessions.map((session) => session.sessionId).join(',')
+          }
+        })
         return null
       }
 
@@ -187,13 +193,17 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
       const mappingId =
         item.meta && 'mappingId' in item.meta ? (item.meta.mappingId as string) : undefined
       if (!mappingId) {
-        console.error('[DivisionBoxCommandProvider] No mapping ID in item meta')
+        divisionBoxCommandProviderLog.error('Missing mapping ID in command metadata', {
+          meta: { itemId: item.id }
+        })
         return null
       }
 
       const mapping = shortcutTriggerManager.getMapping(mappingId)
       if (!mapping) {
-        console.error(`[DivisionBoxCommandProvider] Mapping not found: ${mappingId}`)
+        divisionBoxCommandProviderLog.error('Shortcut mapping not found', {
+          meta: { itemId: item.id, mappingId }
+        })
         return null
       }
 
@@ -205,7 +215,9 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
       // Create DivisionBox session
       const session = await this.manager.createSession(mapping.config)
 
-      console.log(`[DivisionBoxCommandProvider] DivisionBox opened: ${session.sessionId}`)
+      divisionBoxCommandProviderLog.info('DivisionBox opened from command provider', {
+        meta: { mappingId, sessionId: session.sessionId }
+      })
 
       // Execute afterOpen callback if provided
       if (mapping.afterOpen) {
@@ -214,7 +226,10 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
 
       return null
     } catch (error) {
-      console.error('[DivisionBoxCommandProvider] Error executing command:', error)
+      divisionBoxCommandProviderLog.error('Failed to execute command', {
+        meta: { itemId: item.id },
+        error
+      })
       return null
     }
   }

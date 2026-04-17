@@ -10,6 +10,7 @@
  */
 
 import type { DivisionBoxConfig, FlowPayload, FlowPayloadType } from '@talex-touch/utils'
+import { divisionBoxFlowTriggerLog } from './logger'
 import { DivisionBoxManager } from './manager'
 
 /**
@@ -102,20 +103,28 @@ export class FlowTriggerManager {
   registerTarget(config: FlowTargetConfig): boolean {
     // Check if target ID already exists
     if (this.targets.has(config.id)) {
-      console.warn(`[FlowTrigger] Flow target already exists: ${config.id}`)
+      divisionBoxFlowTriggerLog.warn('Flow target already exists', {
+        meta: { targetId: config.id }
+      })
       return false
     }
 
     // Validate configuration
     if (!config.id || !config.name || !config.supportedTypes.length) {
-      console.error('[FlowTrigger] Invalid flow target configuration')
+      divisionBoxFlowTriggerLog.error('Invalid flow target configuration', {
+        meta: {
+          targetId: config.id,
+          name: config.name,
+          supportedTypeCount: String(config.supportedTypes.length)
+        }
+      })
       return false
     }
 
     // Store target configuration
     this.targets.set(config.id, config)
 
-    console.log(`[FlowTrigger] Registered flow target: ${config.id}`)
+    divisionBoxFlowTriggerLog.info('Registered flow target', { meta: { targetId: config.id } })
     return true
   }
 
@@ -127,13 +136,15 @@ export class FlowTriggerManager {
    */
   unregisterTarget(targetId: string): boolean {
     if (!this.targets.has(targetId)) {
-      console.warn(`[FlowTrigger] Flow target not found: ${targetId}`)
+      divisionBoxFlowTriggerLog.warn('Flow target not found during unregister', {
+        meta: { targetId }
+      })
       return false
     }
 
     this.targets.delete(targetId)
 
-    console.log(`[FlowTrigger] Unregistered flow target: ${targetId}`)
+    divisionBoxFlowTriggerLog.info('Unregistered flow target', { meta: { targetId } })
     return true
   }
 
@@ -201,7 +212,9 @@ export class FlowTriggerManager {
       throw new Error(`Flow target ${targetId} does not support payload type: ${payload.type}`)
     }
 
-    console.log(`[FlowTrigger] Handling flow for target: ${targetId}`)
+    divisionBoxFlowTriggerLog.info('Handling flow payload', {
+      meta: { targetId, payloadType: payload.type }
+    })
 
     // Execute onReceive handler if provided
     if (target.onReceive) {
@@ -223,7 +236,9 @@ export class FlowTriggerManager {
     // Create DivisionBox session
     const session = await this.manager.createSession(config)
 
-    console.log(`[FlowTrigger] DivisionBox opened for flow: ${session.sessionId}`)
+    divisionBoxFlowTriggerLog.info('DivisionBox opened for flow', {
+      meta: { targetId, sessionId: session.sessionId }
+    })
 
     return session.sessionId
   }
@@ -284,9 +299,13 @@ export class FlowTriggerManager {
       }
     }
 
-    console.log(
-      `[FlowTrigger] Registered ${successCount}/${flowTargets.length} flow targets for plugin: ${pluginId}`
-    )
+    divisionBoxFlowTriggerLog.info('Registered plugin flow targets', {
+      meta: {
+        pluginId,
+        registeredCount: String(successCount),
+        totalCount: String(flowTargets.length)
+      }
+    })
 
     return successCount
   }
@@ -298,7 +317,7 @@ export class FlowTriggerManager {
    */
   clear(): void {
     this.targets.clear()
-    console.log('[FlowTrigger] All flow targets cleared')
+    divisionBoxFlowTriggerLog.info('Cleared all flow targets')
   }
 }
 
