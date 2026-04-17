@@ -81,6 +81,36 @@
 - `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
   - 同步记录 beta tag 必须保持 prerelease 语义的发布约束，确保文档与当前发布流水线一致。
 
+### refactor(core-app): 收口 compat 运行路径并显式化跨平台降级
+
+- `apps/core-app/src/renderer/src/components/download/DownloadCenterView.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/AppSettings.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingDownload.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginPermissions.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUpdate.vue`
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/system/linux-desktop-tools.ts`
+- `apps/core-app/src/main/modules/system/active-app.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/modules/file-protocol/index.ts`
+- `apps/core-app/src/main/polyfills.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+  - 下载中心不再挂载旧的下载设置弹窗，统一跳转到设置页；下载设置页补上真实目录选择与“恢复默认目录”，移除运行时 placeholder toast。
+  - `allowLegacyMachineSeedFallback` 不再暴露在用户设置页；主进程仅在开发/内部逃生阀下允许 legacy plaintext seed 回退，并对历史配置命中记录明确 warning。
+  - 插件权限页面语义收紧为 `enforced / blocked` 两态，旧版 SDK 不再以“兼容警告但可继续授权”的正常状态展示。
+  - Windows `@file` / file filter 搜索在 Everything 缺失或禁用时不再静默空结果，改为返回显式 unavailable notice；Everything 健康说明同步改成“文件搜索未就绪/缺依赖”。
+  - Linux `xdotool` 依赖改为共享探测与统一 unavailable reason，`active-app`、模拟复制粘贴和 capability 限制说明不再各自输出泛化错误。
+  - 更新设置页按平台显式区分安装语义：macOS 继续“重启完成更新”，Windows/Linux 明确为“打开安装包并交给系统安装”。
+  - 清理只剩 transport 调用的 legacy 参数与空壳 compat 入口；`polyfills.ts` 保留环境注入，但移除了 `console.*` monkey patch 与全局 logger 注入。
+  - 补充定向测试文件：Everything unavailable notice 与 legacy `tfile://` URL 归一化；下一轮继续删除仍在读旧配置但已稳定迁移的数据入口。
+
 ## 2026-04-15
 
 ### fix(core-app/build): 补齐 LangChain 打包依赖链并恢复 beta 安装包启动
