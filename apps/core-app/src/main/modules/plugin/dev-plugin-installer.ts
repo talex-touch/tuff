@@ -3,8 +3,11 @@ import path from 'node:path'
 import fse from 'fs-extra'
 import { isSafePathSegment } from '@talex-touch/utils/common/utils/safe-path'
 import { checkDirWithCreate } from '../../utils/common-util'
+import { createLogger } from '../../utils/logger'
 import { pluginModule } from './plugin-module'
 import { shouldSkipNodeModulesPath } from './plugin-install-copy-utils'
+
+const devPluginInstallerLog = createLogger('PluginSystem').child('DevInstaller')
 
 export type DevPluginInstallStatus = 'success' | 'error' | 'exists'
 
@@ -94,7 +97,9 @@ export async function installDevPluginFromPath(
       }
     })
     if (skippedNodeModules) {
-      console.warn('[DevPluginInstaller] Skipped node_modules during plugin copy')
+      devPluginInstallerLog.warn('Skipped node_modules during dev plugin copy', {
+        meta: { pluginName: manifest.name, sourceDir, targetDir }
+      })
     }
 
     const normalized = normalizeDevManifest(manifest)
