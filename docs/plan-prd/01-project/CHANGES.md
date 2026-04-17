@@ -1,7 +1,16 @@
 # 变更日志
 
-> 更新时间: 2026-04-17
-> 说明: 主文件仅保留近 30 天（2026-03-18 ~ 2026-04-17）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-18
+> 说明: 主文件仅保留近 30 天（2026-03-19 ~ 2026-04-18）详细记录；更早历史已按月归档。
+
+## 2026-04-18
+
+### fix(release): 为 Nexus release 同步补 Cloudflare challenge 诊断与可选 OOB 透传
+
+- `.github/workflows/build-and-release.yml`
+  - `sync-nexus-release` job 现在支持从 GitHub Actions vars / secrets 读取可选 `ADMIN_CF_ACCESS_CLIENT_ID` 与 `ADMIN_CF_ACCESS_CLIENT_SECRET`，自动透传到 Nexus release 写接口，便于后续用 Cloudflare Access service token 绕过边缘 challenge。
+  - 对 Nexus `create / patch / link-github / publish` 写请求统一补 `Accept` 与稳定 `User-Agent`，并抽成共享 shell helper，避免每个 curl 分支继续散落重复 header 组装逻辑。
+  - 当上游返回 Cloudflare challenge HTML 时，workflow 会显式给出“配置 `NEXUS_SYNC_BASE_URL` 或 OOB service token”提示，不再直接把整页 challenge 当普通失败输出，便于后续直接定位发布阻塞点。
 
 ## 2026-04-17
 
