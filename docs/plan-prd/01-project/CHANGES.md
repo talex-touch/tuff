@@ -31,6 +31,18 @@
   - 会话创建/销毁、内存压力驱逐、命令执行、Flow/Shortcut 触发等关键路径统一补 `sessionId / targetId / shortcutId / mappingId / pluginId` 等最小定位字段，减少后续主进程排障时的字符串搜索和上下文丢失。
   - `division-box` 主进程目录复核后仅剩 `session.ts` 内两处注入脚本侧 `console.error`；该部分运行在页面注入上下文，不与本轮主进程 logger 治理混做。
 
+### refactor(core-app): 收敛 FlowBus 主进程日志到统一 logger 体系
+
+- `apps/core-app/src/main/modules/flow-bus/logger.ts`
+- `apps/core-app/src/main/modules/flow-bus/module.ts`
+- `apps/core-app/src/main/modules/flow-bus/ipc.ts`
+- `apps/core-app/src/main/modules/flow-bus/flow-bus.ts`
+- `apps/core-app/src/main/modules/flow-bus/session-manager.ts`
+- `apps/core-app/src/main/modules/flow-bus/target-registry.ts`
+  - 新增 `flow-bus/logger.ts` 作为模块内统一日志入口，按 `Module / IPC / Dispatch / Session / TargetRegistry` 拆分子命名空间，避免 FlowBus 生命周期、分发与注册链继续混用裸 `console.*`。
+  - 模块初始化/销毁、快捷键触发、detach 回滚、payload fallback、session 状态推进、target 注册变更等关键路径统一补 `sessionId / senderId / targetId / pluginId / windowId` 最小上下文，便于主进程排障时直接按字段过滤。
+  - 过程性 session/target 变更日志降为 `debug`，保留真正需要线上观察的 `info / warn / error`，减少 FlowBus 热路径默认输出噪声。
+
 ### fix(release): 校正 beta tag 的 prerelease 发布语义并完成本地打包复核
 
 - `.github/workflows/build-and-release.yml`

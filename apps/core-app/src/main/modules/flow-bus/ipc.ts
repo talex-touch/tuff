@@ -13,6 +13,7 @@ import { getPermissionModule } from '../permission'
 import { pluginModule } from '../plugin/plugin-module'
 import { flowBus } from './flow-bus'
 import { flowConsentStore, requiresFlowConsent } from './flow-consent'
+import { flowBusIpcLog } from './logger'
 import { flowSessionManager } from './session-manager'
 import { flowTargetRegistry } from './target-registry'
 
@@ -42,7 +43,7 @@ export class FlowBusIPC {
     })
     this.unregisterFunctions.push(unsubscribe)
 
-    console.log('[FlowBusIPC] All transport handlers registered')
+    flowBusIpcLog.info('Transport handlers registered')
   }
 
   private registerTransportHandlers(): void {
@@ -291,7 +292,7 @@ export class FlowBusIPC {
     })
     this.transportDisposers = []
 
-    console.log('[FlowBusIPC] All IPC handlers unregistered')
+    flowBusIpcLog.info('Transport handlers unregistered')
   }
 
   /**
