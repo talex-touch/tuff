@@ -1,7 +1,37 @@
 # 变更日志
 
-> 更新时间: 2026-04-15
-> 说明: 主文件仅保留近 30 天（2026-03-16 ~ 2026-04-15）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-17
+> 说明: 主文件仅保留近 30 天（2026-03-18 ~ 2026-04-17）详细记录；更早历史已按月归档。
+
+## 2026-04-17
+
+### fix(release): 校正 beta tag 的 prerelease 发布语义并完成本地打包复核
+
+- `.github/workflows/build-and-release.yml`
+  - `Determine Release Type and Tag` 额外输出 `prerelease` 标记，按 tag / 手动触发类型区分 `beta`、`snapshot` 与正式版；`Create Release` 改为消费该显式标记，避免 `v*-beta.*` 被误标成正式 GitHub Release。
+- `apps/core-app/electron-builder.yml`
+- `apps/core-app/scripts/build-target.js`
+- `apps/core-app/scripts/build-target/after-pack.js`
+- `apps/core-app/scripts/build-target/runtime-modules.js`
+- `apps/core-app/scripts/ensure-platform-modules.js`
+  - 新增共享运行时依赖清单，并把 `resources/node_modules` 的闭包同步前移到 `afterPack`：`langsmith`、`compressing`、`@vue/compiler-sfc` 与其传递依赖在生成 installer / dmg / AppImage 之前就进入最终产物，构建校验不再通过 post-build 补包掩盖真实缺包。
+  - `electron-builder.yml` 只保留静态资源声明，`resources/node_modules` 运行时模块改由共享清单统一驱动，消除 `electron-builder.yml` / `build-target.js` / `ensure-platform-modules.js` 三处重复维护。
+  - 继续补齐 `compressing -> tar-stream -> readable-stream` 与 `langsmith` 相关依赖闭包，将 `process-nextick-args`、`core-util-is`、`inherits`、`string_decoder`、`util-deprecate`、`once`、`wrappy`、`typed-array-buffer`、`uuid`、`semver`、`p-queue` 等缺包纳入同一条同步/校验链，避免安装包启动时继续报 `Cannot find module 'process-nextick-args'`、`Cannot find module 'uuid'` 一类错误。
+  - 将主进程运行时使用的 `@vue/compiler-sfc` 运行时闭包同步到 `resources/node_modules` 作为可解析兜底路径，并把 `@vue/compiler-sfc -> @vue/compiler-core / @vue/compiler-dom / @vue/compiler-ssr / @vue/shared` 闭包纳入同一条打包校验链，阻断安装包启动时继续报 `Cannot find module '@vue/compiler-core'`。
+  - 将 `SearchIndexService` 对 `searchLogger` 的依赖改为运行时惰性加载，避免 `SearchIndexWorker` 在打包产物内因为静态卷入主进程存储链路而继续报 `Cannot find module 'electron'`，恢复搜索索引 worker 在安装包内的正常启动。
+- `apps/core-app/src/main/modules/system/active-app.ts`
+- `apps/core-app/src/main/modules/system/active-app.test.ts`
+  - macOS 未授予 `System Events` 自动化权限时，`active-app` 解析改为短时退避并降级返回 `null`，不再持续输出带完整堆栈的错误日志；补充对应测试覆盖权限拒绝场景。
+- `package.json`
+- `apps/core-app/package.json`
+  - 根包与 `core-app` 版本提升到 `2.4.9-beta.15`，用于本轮 beta 发布。
+- `notes/update_2.4.9-beta.15.zh.md`
+- `notes/update_2.4.9-beta.15.en.md`
+  - 新增本轮 beta 发布说明，记录发布语义修正与本地打包/启动复核结论。
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - 同步记录 beta tag 必须保持 prerelease 语义的发布约束，确保文档与当前发布流水线一致。
 
 ## 2026-04-15
 
