@@ -5,6 +5,18 @@
 
 ## 2026-04-17
 
+### fix(core-app): 收口 CoreBox runtime teardown 边界
+
+- `apps/core-app/src/main/core/runtime-accessor.ts`
+- `apps/core-app/src/main/core/runtime-accessor.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/manager.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+  - `runtime-accessor` 新增可空读取入口，避免 `core-box` 在窗口关闭、快捷键反注册与 overlay 延后回调阶段继续依赖 try/catch 兜住 “runtime not registered”。
+  - `CoreBoxModule.onDestroy()` 调整为先释放快捷键、transport disposer 与诊断订阅，最后再清 runtime 注册，避免 teardown 中残留回调继续命中已清理 runtime。
+  - `CoreBoxManager` 与 `MetaOverlayManager` 在 runtime 缺失时改为安静跳过窗口同步/动作派发，只保留本地 UI 收尾，不再在退出路径额外抛出主进程异常。
+
 ### refactor(core-app): 收敛 DivisionBox 主进程日志到统一 logger 体系
 
 - `apps/core-app/src/main/modules/division-box/logger.ts`
