@@ -428,8 +428,8 @@ export const addChecksumField: Migration = {
   },
 
   down: async (_db: LibSqlClient) => {
-    // SQLite doesn't support DROP COLUMN easily, so we'd need to recreate the table
-    console.log('[Migration] Checksum field removal not implemented (SQLite limitation)')
+    // One-way migration by design: SQLite would require full table recreation for DROP COLUMN.
+    console.log('[Migration] Skipping checksum field rollback (one-way migration)')
   }
 }
 

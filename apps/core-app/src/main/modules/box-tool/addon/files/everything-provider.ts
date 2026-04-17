@@ -2,6 +2,7 @@ import type {
   IExecuteArgs,
   IProviderActivate,
   ISearchProvider,
+  TuffItem,
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
@@ -13,7 +14,12 @@ import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { promisify } from 'node:util'
-import { StorageList, TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
+import {
+  StorageList,
+  TuffInputType,
+  TuffItemBuilder,
+  TuffSearchResultBuilder
+} from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { shell } from 'electron'
@@ -224,7 +230,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       return {
         health: 'degraded',
         reason:
-          'Everything search is disabled. Windows search falls back to file-provider metadata paths.'
+          'Windows file search is unavailable because Everything is disabled. Install or enable Everything to restore search results.'
       }
     }
 
@@ -233,8 +239,36 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       reason:
         this.initializationError?.message ||
         this.lastBackendError ||
-        'Everything backend unavailable. Windows search falls back to file-provider metadata paths.'
+        'Windows file search is unavailable because the Everything backend is not ready.'
     }
+  }
+
+  isSearchReady(): boolean {
+    return process.platform === 'win32' && this.isEnabled && this.isAvailable
+  }
+
+  buildUnavailableNotice(query: TuffQuery): TuffItem | null {
+    const searchText = query.text?.trim() ?? ''
+    if (!searchText || this.isSearchReady() || process.platform !== 'win32') {
+      return null
+    }
+
+    const reason =
+      this.getHealthStatus().reason ||
+      'Windows file search is unavailable because the Everything dependency is missing.'
+
+    return new TuffItemBuilder(
+      `everything-provider:unavailable:${encodeURIComponent(searchText).slice(0, 64)}`,
+      this.type,
+      this.id
+    )
+      .setKind('notification')
+      .setTitle('Windows file search is not ready')
+      .setSubtitle('Everything dependency missing or disabled')
+      .setDescription(reason)
+      .setAccessory('Everything')
+      .setFinalScore(1)
+      .build()
   }
 
   private registerChannels(context: ProviderContext): void {

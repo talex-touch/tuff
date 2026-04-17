@@ -58,6 +58,7 @@ import { detectClipboardTags } from './clipboard-tagging'
 import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
 import { getPermissionModule } from './permission'
+import { ensureXdotoolAvailable } from './system/linux-desktop-tools'
 import { pluginModule } from './plugin/plugin-module'
 import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storage'
 import { activeAppService } from './system/active-app'
@@ -1814,6 +1815,7 @@ export class ClipboardModule extends BaseModule {
       }
 
       if (process.platform === 'linux') {
+        await ensureXdotoolAvailable()
         await execFileAsync('xdotool', ['key', '--clearmodifiers', 'ctrl+v'])
         return
       }
@@ -2767,10 +2769,7 @@ export class ClipboardModule extends BaseModule {
     }
   }
 
-  private async handleDeleteRequest(
-    request: ClipboardDeleteRequest,
-    source: 'transport' | 'legacy'
-  ): Promise<void> {
+  private async handleDeleteRequest(request: ClipboardDeleteRequest): Promise<void> {
     if (!this.db || !Number.isFinite(request?.id)) return
     try {
       const [row] = await this.db
@@ -2787,7 +2786,7 @@ export class ClipboardModule extends BaseModule {
         void tempFileService.deleteFile(item.content)
       }
     } catch (error) {
-      clipboardLog.warn(`Failed to delete clipboard image file for ${source} delete`, { error })
+      clipboardLog.warn('Failed to delete clipboard image file before record removal', { error })
     }
     await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, request.id))
     this.memoryCache = this.memoryCache.filter((item) => item.id !== request.id)
@@ -2985,7 +2984,7 @@ export class ClipboardModule extends BaseModule {
         ClipboardEvents.delete,
         async (request: ClipboardDeleteRequest, context: HandlerContext) => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          await this.handleDeleteRequest(request, 'transport')
+          await this.handleDeleteRequest(request)
         }
       ),
       this.transport.on(

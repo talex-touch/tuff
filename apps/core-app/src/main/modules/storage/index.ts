@@ -773,10 +773,6 @@ export class StorageModule extends BaseModule {
       }
     })
   }
-
-  setupListeners() {
-    // Legacy channel handlers are migrated to transport.
-  }
 }
 
 const storageModule = new StorageModule()
