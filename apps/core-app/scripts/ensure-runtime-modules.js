@@ -112,7 +112,7 @@ function getRuntimeDependencyEntries(pkgJson) {
 }
 
 function getVisitKey(sourceDir, pkgJson) {
-  let resolvedPath = sourceDir
+  let resolvedPath
   try {
     resolvedPath = fs.realpathSync.native(sourceDir)
   } catch {
