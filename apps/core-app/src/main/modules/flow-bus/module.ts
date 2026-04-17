@@ -23,10 +23,10 @@ import { shortcutModule } from '../global-shortcon'
 import { getPermissionModule } from '../permission'
 import { flowBus } from './flow-bus'
 import { initializeFlowBusIPC } from './ipc'
+import { flowBusModuleLog } from './logger'
 import { nativeShareService } from './native-share'
 import { flowTargetRegistry } from './target-registry'
 
-const LOG_PREFIX = '[FlowBus]'
 const FLOW_SHORTCUT_OWNER = 'module.flow-bus'
 
 /** Shortcut IDs for Flow operations */
@@ -73,7 +73,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     // Register global shortcuts
     this.registerShortcuts()
 
-    console.log('[FlowBusModule] Module initialized')
+    flowBusModuleLog.info('Module initialized')
   }
 
   private registerTransportHandlers(tx: ReturnType<typeof getTuffTransportMain>): void {
@@ -181,7 +181,11 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       })
     }
 
-    console.log(LOG_PREFIX, `Registered ${targets.length} native share targets`)
+    flowBusModuleLog.info('Registered native share targets', {
+      meta: {
+        count: targets.length
+      }
+    })
   }
 
   /**
@@ -200,7 +204,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
 
         const coreBoxWindow = getCoreBoxWindow()
         if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
-          console.warn('[FlowBusModule] CoreBox window not available for detach')
+          flowBusModuleLog.warn('CoreBox window unavailable for detach shortcut')
           return
         }
 
@@ -231,30 +235,34 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     try {
       // Check if CoreBox is in UI mode
       if (!coreBoxManager.isUIMode) {
-        console.log(LOG_PREFIX, 'CoreBox not in UI mode, nothing to detach')
+        flowBusModuleLog.debug('Skipped detach because CoreBox is not in UI mode')
         return
       }
 
       const coreBoxWindow = getCoreBoxWindow()
       if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
-        console.warn(LOG_PREFIX, 'CoreBox window not available, cannot detach')
+        flowBusModuleLog.warn('CoreBox window unavailable for detach')
         return
       }
 
       if (!coreBoxWindow.window.isVisible()) {
-        console.warn(LOG_PREFIX, 'CoreBox window is not visible, aborting detach')
+        flowBusModuleLog.warn('Abort detach because CoreBox window is hidden')
         return
       }
 
       // Extract the UI view from CoreBox (doesn't destroy it)
       extracted = windowManager.extractUIView()
       if (!extracted) {
-        console.warn(LOG_PREFIX, 'No UI view to extract from CoreBox')
+        flowBusModuleLog.warn('No UI view available to extract from CoreBox')
         return
       }
 
       const { view, plugin } = extracted
-      console.log(LOG_PREFIX, `Detaching plugin → ${plugin.name}`)
+      flowBusModuleLog.info('Detaching plugin view into DivisionBox', {
+        meta: {
+          pluginId: plugin.name
+        }
+      })
 
       const perm = getPermissionModule()
       if (perm && plugin?.name) {
@@ -281,7 +289,12 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       // Attach the extracted UI view to DivisionBox
       await session.attachExistingUIView(view, plugin)
 
-      console.log(LOG_PREFIX, `✓ DivisionBox created (${session.sessionId})`)
+      flowBusModuleLog.info('DivisionBox session created for detached view', {
+        meta: {
+          pluginId: plugin.name,
+          sessionId: session.sessionId
+        }
+      })
 
       // Reset CoreBox to default state (shrink, exit UI mode flag)
       coreBoxManager.exitUIMode()
@@ -289,9 +302,19 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       // Hide CoreBox
       if (!coreBoxWindow.window.isDestroyed()) coreBoxWindow.window.hide()
 
-      console.log(LOG_PREFIX, '✓ Detach completed')
+      flowBusModuleLog.info('Detach completed', {
+        meta: {
+          pluginId: plugin.name,
+          sessionId: session.sessionId
+        }
+      })
     } catch (error) {
-      console.error(LOG_PREFIX, '✗ Failed to detach:', error)
+      flowBusModuleLog.error('Detach failed', {
+        meta: {
+          pluginId: extracted?.plugin?.name
+        },
+        error
+      })
 
       const err = error as { code?: string }
       if (err?.code === 'PERMISSION_DENIED') {
@@ -308,7 +331,12 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
             }
           })
         } catch (notifyError) {
-          console.warn(LOG_PREFIX, 'Failed to notify permission denied:', notifyError)
+          flowBusModuleLog.warn('Failed to notify permission denied', {
+            meta: {
+              pluginId: extracted?.plugin?.name
+            },
+            error: notifyError
+          })
         }
       }
 
@@ -317,12 +345,25 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
         try {
           const restored = windowManager.restoreExtractedUIView(extracted.view, extracted.plugin)
           if (restored) {
-            console.warn(LOG_PREFIX, 'Rollback: UI view restored to CoreBox after detach failure')
+            flowBusModuleLog.warn('Rollback restored UI view to CoreBox after detach failure', {
+              meta: {
+                pluginId: extracted.plugin.name
+              }
+            })
           } else {
-            console.warn(LOG_PREFIX, 'Rollback failed: UI view could not be restored to CoreBox')
+            flowBusModuleLog.warn('Rollback could not restore UI view to CoreBox', {
+              meta: {
+                pluginId: extracted.plugin.name
+              }
+            })
           }
         } catch (restoreError) {
-          console.error(LOG_PREFIX, 'Rollback error:', restoreError)
+          flowBusModuleLog.error('Rollback restore failed', {
+            meta: {
+              pluginId: extracted.plugin.name
+            },
+            error: restoreError
+          })
         }
       }
     }
@@ -334,14 +375,18 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
   private triggerFlowTransfer(): void {
     const coreBoxWindow = getCoreBoxWindow()
     if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
-      console.warn('[FlowBusModule] CoreBox window not available for flow transfer')
+      flowBusModuleLog.warn('CoreBox window unavailable for flow transfer shortcut')
       return
     }
 
     this.transport
       ?.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerTransfer, undefined)
       .catch(() => {})
-    console.log('[FlowBusModule] Triggered flow transfer shortcut')
+    flowBusModuleLog.info('Triggered flow transfer shortcut', {
+      meta: {
+        windowId: coreBoxWindow.window.id
+      }
+    })
   }
 
   /**
@@ -378,7 +423,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     // Clear all targets
     flowTargetRegistry.clear()
 
-    console.log('[FlowBusModule] Module destroyed')
+    flowBusModuleLog.info('Module destroyed')
   }
 }
 

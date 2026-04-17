@@ -17,6 +17,7 @@ import type {
 import { FlowErrorCode } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { flowConsentStore, requiresFlowConsent } from './flow-consent'
+import { flowBusDispatchLog } from './logger'
 import { flowSessionManager } from './session-manager'
 import { flowTargetRegistry } from './target-registry'
 
@@ -279,6 +280,15 @@ export class FlowBus {
         await this.executeFallbackCopy(payload)
       }
 
+      flowBusDispatchLog.error('Payload delivery failed', {
+        meta: {
+          sessionId: session.sessionId,
+          senderId,
+          targetId: targetInfo.fullId
+        },
+        error
+      })
+
       return {
         sessionId: session.sessionId,
         state: 'FAILED',
@@ -374,7 +384,13 @@ export class FlowBus {
       await handler(session)
     } else {
       // Default delivery via IPC (to be implemented with plugin system)
-      console.log(`[FlowBus] Delivering to ${target.fullId}:`, session.payload.type)
+      flowBusDispatchLog.debug('Delegating payload delivery to default IPC path', {
+        meta: {
+          sessionId: session.sessionId,
+          targetId: target.fullId,
+          payloadType: session.payload.type
+        }
+      })
     }
   }
 
@@ -431,9 +447,18 @@ export class FlowBus {
       } else {
         clipboard.writeText(JSON.stringify(payload.data))
       }
-      console.log('[FlowBus] Fallback: copied to clipboard')
+      flowBusDispatchLog.warn('Fallback action copied payload to clipboard', {
+        meta: {
+          payloadType: payload.type
+        }
+      })
     } catch (error) {
-      console.error('[FlowBus] Fallback copy failed:', error)
+      flowBusDispatchLog.error('Fallback clipboard copy failed', {
+        meta: {
+          payloadType: payload.type
+        },
+        error
+      })
     }
   }
 
