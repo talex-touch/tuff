@@ -4,6 +4,11 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { postProcessMacArtifacts } = require('./build-target/postprocess-mac');
+const {
+  PACKAGED_RUNTIME_MODULES,
+  collectResourceModuleClosure,
+  findPackagedResourcesDir: resolvePackagedResourcesDir
+} = require('./build-target/runtime-modules');
 
 const projectRoot = path.join(__dirname, '..');
 const workspaceRoot = path.resolve(projectRoot, '..', '..');
@@ -222,28 +227,8 @@ function ensureBuildNodeOptions(buildEnv) {
   }
 }
 
-function findFileRecursive(rootDir, fileName, maxDepth = 6, depth = 0) {
-  if (!rootDir || !fs.existsSync(rootDir) || depth > maxDepth) {
-    return null;
-  }
-
-  const entries = fs.readdirSync(rootDir, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = path.join(rootDir, entry.name);
-    if (entry.isFile() && entry.name === fileName) {
-      return fullPath;
-    }
-  }
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const nestedPath = findFileRecursive(path.join(rootDir, entry.name), fileName, maxDepth, depth + 1);
-    if (nestedPath) {
-      return nestedPath;
-    }
-  }
-
-  return null;
+function findPackagedResourcesDir(distDir) {
+  return resolvePackagedResourcesDir(distDir, '[build-target]');
 }
 
 function verifyPackagedRuntimeModules(distDir, requiredModules) {
@@ -251,64 +236,71 @@ function verifyPackagedRuntimeModules(distDir, requiredModules) {
     return;
   }
 
-  const asarPath = findFileRecursive(distDir, 'app.asar');
-  if (!asarPath) {
-    console.warn('[build-target] app.asar not found under dist, skip runtime dependency verification');
+  const resourcesDir = findPackagedResourcesDir(distDir);
+  if (!resourcesDir) {
     return;
   }
+
+  const asarPath = path.join(resourcesDir, 'app.asar');
 
   const { listPackage } = require('@electron/asar');
   const packageEntries = new Set(
     listPackage(asarPath).map((entry) => entry.replace(/\\/g, '/'))
   );
-  const resourcesDir = path.dirname(asarPath);
-  const resolvedModules = [];
-  const missingModules = requiredModules.filter(
-    (moduleName) => {
-      const packagedEntry = path.posix.join('/node_modules', moduleName, 'package.json');
-      if (packageEntries.has(packagedEntry)) {
-        resolvedModules.push(`${moduleName} (asar)`);
-        return false;
-      }
+  const resolvedModules = new Set();
+  const missingModules = [];
+  const requiredResourceModules = new Set(collectResourceModuleClosure(requiredModules));
 
-      const resourceModuleDir = path.join(resourcesDir, 'node_modules', moduleName);
-      const fallbackEntrypoints = [
-        path.join(resourceModuleDir, 'package.json'),
-        path.join(resourceModuleDir, 'index.js')
-      ];
-      if (fallbackEntrypoints.some((entryPath) => fs.existsSync(entryPath))) {
-        resolvedModules.push(`${moduleName} (resources/node_modules)`);
-        return false;
-      }
+  requiredResourceModules.forEach((moduleName) => {
+    const resourceModuleDir = path.join(resourcesDir, 'node_modules', moduleName);
+    const resourceEntrypoints = [
+      path.join(resourceModuleDir, 'package.json'),
+      path.join(resourceModuleDir, 'index.js')
+    ];
 
-      return true;
+    if (resourceEntrypoints.some((entryPath) => fs.existsSync(entryPath))) {
+      resolvedModules.add(`${moduleName} (resources/node_modules)`);
+      return;
     }
-  );
+
+    missingModules.push(moduleName);
+  });
+
+  requiredModules.forEach((moduleSpec) => {
+    const moduleName = typeof moduleSpec === 'string' ? moduleSpec : moduleSpec.name;
+    const requireResources = typeof moduleSpec === 'object' && moduleSpec.location === 'resources';
+    if (requireResources) {
+      return;
+    }
+
+    const resourceModuleDir = path.join(resourcesDir, 'node_modules', moduleName);
+    const resourceEntrypoints = [
+      path.join(resourceModuleDir, 'package.json'),
+      path.join(resourceModuleDir, 'index.js')
+    ];
+    const packagedEntry = path.posix.join('/node_modules', moduleName, 'package.json');
+
+    if (packageEntries.has(packagedEntry)) {
+      resolvedModules.add(`${moduleName} (asar)`);
+      return;
+    }
+
+    if (resourceEntrypoints.some((entryPath) => fs.existsSync(entryPath))) {
+      resolvedModules.add(`${moduleName} (resources/node_modules)`);
+      return;
+    }
+
+    missingModules.push(moduleName);
+  });
 
   if (missingModules.length > 0) {
     throw new Error(
-      `Packaged runtime dependencies missing from ${asarPath}: ${missingModules.join(', ')}`
+      `Packaged runtime dependencies missing from ${asarPath}: ${Array.from(new Set(missingModules)).join(', ')}`
     );
   }
 
-  console.log(`[build-target] Verified packaged runtime dependencies: ${resolvedModules.join(', ')}`);
+  console.log(`[build-target] Verified packaged runtime dependencies: ${Array.from(resolvedModules).join(', ')}`);
 }
-
-const PACKAGED_RUNTIME_MODULES = [
-  'ms',
-  '@sentry/electron',
-  'require-in-the-middle',
-  'module-details-from-path',
-  '@cfworker/json-schema',
-  '@langchain/core',
-  'ansi-styles',
-  'camelcase',
-  'decamelize',
-  'mustache',
-  'p-retry',
-  'retry',
-  'langsmith'
-];
 
 function resolvePluginPreludeNodePaths() {
   const candidates = [

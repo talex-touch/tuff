@@ -1,5 +1,6 @@
 const fs = require('node:fs')
 const path = require('node:path')
+const { getPackagedRuntimeRootModules } = require('./build-target/runtime-modules')
 
 const projectRoot = path.join(__dirname, '..')
 const workspaceRoot = path.join(projectRoot, '..', '..')
@@ -7,8 +8,7 @@ const workspaceNodeModules = path.join(workspaceRoot, 'node_modules')
 const targetNodeModules = path.join(projectRoot, 'node_modules')
 
 const baseModules = [
-  '@sentry/electron',
-  '@langchain/core',
+  ...getPackagedRuntimeRootModules(),
   '@langchain/openai',
   '@langchain/anthropic',
   '@langchain/langgraph',
