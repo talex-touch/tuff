@@ -5,13 +5,28 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createClient } from '@libsql/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MigrationManager, type MigrationProgress } from './migration-manager'
 import { allMigrations, MigrationRunner } from './migrations'
 
+vi.mock('electron', () => ({
+  app: {
+    getPath(name: string) {
+      switch (name) {
+        case 'userData':
+        case 'downloads':
+        case 'temp':
+        case 'exe':
+        default:
+          return __dirname
+      }
+    }
+  }
+}))
+
 const TEST_DB_PATH = path.join(__dirname, 'test-migration.db')
-const OLD_DB_PATH = path.join(__dirname, 'test-old-downloads.db')
-const OLD_CONFIG_PATH = path.join(__dirname, 'test-download-config.json')
+const OLD_DB_PATH = path.join(__dirname, 'downloads.db')
+const OLD_CONFIG_PATH = path.join(__dirname, 'download-config.json')
 
 describe('migrationManager', () => {
   let migrationManager: MigrationManager
