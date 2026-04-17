@@ -11,9 +11,6 @@ import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-se
 import type { ProxyConfig, Session } from 'electron'
 import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import process from 'node:process'
 import { Readable } from 'node:stream'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { StorageList } from '@talex-touch/utils'
@@ -28,8 +25,8 @@ import {
   toTfileUrl
 } from '@talex-touch/utils/network'
 import { app, session } from 'electron'
-import { APP_FOLDER_NAME } from '../../config/default'
 import { getMainConfig, saveMainConfig } from '../storage'
+import { resolveRuntimeRootPath } from '../../utils/app-root-path'
 import { getAllowedLocalFileRoots, isAllowedLocalFilePath } from '../../utils/local-file-policy'
 import { createLogger } from '../../utils/logger'
 import { getSecureStoreValue } from '../../utils/secure-store'
@@ -268,24 +265,8 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return copied.buffer
 }
 
-function appPathSafe(name: 'home' | 'userData' | 'temp'): string {
-  try {
-    return app.getPath(name)
-  } catch {
-    return name === 'temp' ? os.tmpdir() : process.cwd()
-  }
-}
-
 function resolveAppRootPath(): string {
-  if (app.isPackaged) {
-    return path.join(appPathSafe('userData'), APP_FOLDER_NAME)
-  }
-
-  try {
-    return path.join(app.getAppPath(), APP_FOLDER_NAME)
-  } catch {
-    return path.join(process.cwd(), APP_FOLDER_NAME)
-  }
+  return resolveRuntimeRootPath(app)
 }
 
 async function resolveProxyCredential(

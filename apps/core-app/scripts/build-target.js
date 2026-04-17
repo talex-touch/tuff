@@ -44,7 +44,10 @@ function ensureLocalPnpmLockfile() {
     cleanup();
     process.exit(1);
   });
-  process.once('SIGTERM', cleanup);
+  process.once('SIGTERM', () => {
+    cleanup();
+    process.exit(1);
+  });
 
   return cleanup;
 }
@@ -592,6 +595,7 @@ function build() {
   }
 
   const builderBin = resolveBuilderBin();
+  let runtimeModuleSyncSummary = null;
 
   // 确保关键平台依赖存在于应用 node_modules 中
   try {
@@ -645,6 +649,19 @@ function build() {
       console.error('\n❌ electron-builder install-app-deps failed!');
       throw error;
     }
+  }
+
+  try {
+    console.time('build-target:ensure-runtime-modules');
+    const ensureRuntimeModules = require(path.join(__dirname, 'ensure-runtime-modules.js'));
+    runtimeModuleSyncSummary = ensureRuntimeModules();
+    console.log(
+      `✓ Runtime modules synced to app node_modules (${runtimeModuleSyncSummary.resolvedModules.length} modules)\n`
+    );
+    console.timeEnd('build-target:ensure-runtime-modules');
+  } catch (err) {
+    console.timeEnd('build-target:ensure-runtime-modules');
+    throw err;
   }
 
   const builderArgs = [`--${normalizedTarget}`];
@@ -949,6 +966,7 @@ function build() {
       }
     } catch (err) {
       console.error(`Error listing dist files: ${err.message}`);
+      throw err;
     }
     } else {
       console.error('ERROR: Dist directory does not exist after build!');
@@ -960,6 +978,12 @@ function build() {
 
   if (normalizedTarget === 'mac') {
     postProcessMacArtifacts(distDir);
+  }
+
+  if (runtimeModuleSyncSummary) {
+    console.log(
+      `[build-target] Runtime module sync summary: resolved=${runtimeModuleSyncSummary.resolvedModules.length}, copied=${runtimeModuleSyncSummary.copiedModules.length}`
+    );
   }
 
   verifyPackagedRuntimeModules(distDir, PACKAGED_RUNTIME_MODULES);

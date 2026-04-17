@@ -620,6 +620,21 @@
 
 ## 2026-03-31
 
+### fix(core-app/build): 补齐 hoisted runtime 依赖
+
+- `apps/core-app/scripts/ensure-runtime-modules.js`
+  - 新增打包前 runtime 依赖同步脚本，从 `core-app` 运行时依赖树递归解析 hoisted/transitive 模块，并把缺失模块补齐到 `apps/core-app/node_modules`，为后续构建后镜像完整 runtime 模块集合到 `resources/node_modules` 提供基础，避免启动时再出现 `ms`、`module-details-from-path`、`retry`、`uuid` 一类传递依赖缺失。
+- `apps/core-app/scripts/build-target.js`
+  - 在 `electron-builder` 前新增 runtime 依赖同步步骤；构建完成后自动把完整 runtime 模块集合镜像到 `resources/node_modules`，并将运行时依赖校验升级为同时检查 `app.asar` 与 `resources/node_modules`，提前拦截“可打包但启动即崩”的坏包。
+  - Windows 本地 `--dir` 验包场景下关闭 `win.signAndEditExecutable`，绕过 `winCodeSign` 额外下载，减少因外部网络 EOF 导致的本地验包失败。
+
+### fix(core-app/worker): 收窄 sqlite retry utils 入口
+
+- `apps/core-app/src/main/db/sqlite-retry.ts`
+  - `sleep` 改为从 `@talex-touch/utils/common/utils` 窄路径引入，避免 `search-index-worker` 因引用 `@talex-touch/utils` 根聚合入口而把 Electron 相关聚合代码一起卷入 worker chunk。
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-logger.ts`
+  - `StorageList` 改为从 `@talex-touch/utils/common/storage/constants` 窄路径引入，避免搜索索引 worker 因 `@talex-touch/utils` / `common/index` 聚合出口把 `electron/file-parsers` 一并卷入，导致 worker 进程里 `require('electron')` 失败。
+
 ### fix(pilot/chat): 收口 routing 选择前端暴露并脱敏运行记录
 
 - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
@@ -1175,6 +1190,27 @@
   - `apps/pilot/app/pages/index.vue`
     - 路由 `id` 同步改为先 `history.replaceState` 再 `router.replace`，减少发送后立刻刷新导致 query 未落地的概率；
     - 自动续流前若本地无消息，先 `syncHistory` 拉一次最新快照再决定是否 follow。
+
+### fix(core-dev-startup): root path hardening + one-time dev data migration
+
+- Unified runtime root-path policy:
+  - `app.isPackaged === true` -> `userData/tuff`
+  - `app.isPackaged === false` -> `userData/tuff-dev`
+- Removed dev-mode writes to `app.getAppPath()/tuff` as active root to avoid workspace pollution and path instability.
+- Added one-time best-effort migration for dev data:
+  - Source: `app.getAppPath()/tuff`
+  - Target: `app.getPath('userData')/tuff-dev`
+  - Marker: `.dev-data-migration.json` (records migrated / skipped / failed reason to avoid repeated attempts).
+- Hardened startup directory initialization order in precore:
+  - Ensure root first, then `root/logs`, then bind `crashDumps`.
+- Hardened `checkDirWithCreate` to synchronous recursive mkdir and aligned call-sites by removing unnecessary `await`.
+- Startup observability improvements:
+  - Corrected single-instance warning semantics to “quitting new instance”.
+  - Added early `unhandledRejection` logging in precore.
+  - Added optional deprecation trace switch via `TUFF_TRACE_DEPRECATION=1`.
+- Added targeted tests:
+  - `src/main/utils/app-root-path.test.ts`
+  - `src/main/utils/common-util.test.ts`
 
 ### refactor(core-app): 高频异步化链路收口（Polling lanes / Sentry outbox / Clipboard Stage-B / Perf 探针解耦）
 
@@ -1976,7 +2012,7 @@
 ### fix(pilot-markdown-compat): 旧聊天页 Markdown 原样显示兼容修复
 
 - 旧聊天页 `ChatItem` 对 assistant 的 `text` block 增加兼容渲染：改走 `RenderContent`（Markdown），user 侧 `text` 仍保持 `<pre>` 文本展示，避免语义回归。
-- `@talex-touch/tuff-intelligence/pilot-conversation` 新增 `normalizeLooseMarkdownForRender`，统一做轻量渲染归一化：`CRLF -> LF`，并修复智能引号包裹 fence（如 “```cpp 与 ```” 这类分隔符写法）。
+- `@talex-touch/tuff-intelligence/pilot-conversation` 新增 `normalizeLooseMarkdownForRender`，统一做轻量渲染归一化：`CRLF -> LF`，并修复智能引号包裹 fence（如 “`cpp 与 `” 这类分隔符写法）。
 - `ThContent -> MilkContent` 接入该归一化函数，减少非标准 fence 导致的代码块降级为纯文本问题。
 - 会话快照序列化前向修复：assistant 纯字符串块默认映射为 `markdown`（user/system 保持 `text`），阻止新快照继续产出旧形态。
 
