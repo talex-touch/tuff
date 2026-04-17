@@ -429,15 +429,13 @@ function build() {
   // Auto-detect build type from version if beta
   // Beta versions always use snapshot build, regardless of explicit type
   let finalBuildType = (type || 'release').toLowerCase();
-  let finalVersion = packageVersion;
+  const runtimeVersion = packageVersion;
 
   if (isBetaVersion(packageVersion)) {
     console.log(`\n✓ Beta version detected: ${packageVersion}`);
     // Force snapshot build for beta versions
     finalBuildType = 'snapshot';
-    finalVersion = convertBetaToSnapshotVersion(packageVersion);
     console.log(`  → Auto-switching to snapshot build (beta versions always use snapshot)`);
-    console.log(`  → Converting version: ${packageVersion} → ${finalVersion}`);
     if (type && type.toLowerCase() !== 'snapshot') {
       console.log(`  → Note: Explicit --type=${type} was overridden for beta version`);
     }
@@ -456,6 +454,14 @@ function build() {
   }
 
   console.log(`Preparing ${buildType} build for ${normalizedTarget}...`);
+
+  let builderVersion = packageVersion;
+  if (isBetaVersion(packageVersion) && normalizedTarget === 'win') {
+    builderVersion = convertBetaToSnapshotVersion(packageVersion);
+    console.log(`  → Windows builder version override: ${packageVersion} → ${builderVersion}`);
+  } else if (isBetaVersion(packageVersion)) {
+    console.log(`  → Keeping runtime version for ${normalizedTarget}: ${runtimeVersion}`);
+  }
 
   const distDir = path.join(projectRoot, 'dist');
   console.time('build-target:prepare-dist');
@@ -501,11 +507,9 @@ function build() {
   process.env.ELECTRON_PLATFORM = electronPlatform;
   process.env.ELECTRON_ARCH = effectiveArch;
 
-  // Set APP_VERSION environment variable for downstream tooling
-  if (finalVersion !== packageVersion) {
-    process.env.APP_VERSION = finalVersion;
-    console.log(`Setting APP_VERSION environment variable: ${finalVersion}`);
-  }
+  // Set APP_VERSION for runtime code paths that should keep the package version.
+  process.env.APP_VERSION = runtimeVersion;
+  console.log(`Setting APP_VERSION environment variable: ${runtimeVersion}`);
 
   console.log(`Setting BUILD_TARGET=${normalizedTarget}, BUILD_ARCH=${effectiveArch}, ELECTRON_PLATFORM=${electronPlatform}`);
 
@@ -527,12 +531,9 @@ function build() {
       BUILD_TARGET: normalizedTarget,
       BUILD_ARCH: effectiveArch,
       ELECTRON_PLATFORM: electronPlatform,
-      ELECTRON_ARCH: effectiveArch
+      ELECTRON_ARCH: effectiveArch,
+      APP_VERSION: runtimeVersion
     };
-    // Only set APP_VERSION if version was converted
-    if (finalVersion !== packageVersion) {
-      buildEnv.APP_VERSION = finalVersion;
-    }
     ensureBuildNodeOptions(buildEnv);
     execSync(buildCmd, {
       stdio: 'inherit',
@@ -660,9 +661,9 @@ function build() {
     builderArgs.push('--dir');
   }
 
-  if (finalVersion !== packageVersion) {
-    builderArgs.push(`--config.extraMetadata.version=${finalVersion}`);
-    console.log(`Overriding package version for builder: ${finalVersion}`);
+  if (builderVersion !== packageVersion) {
+    builderArgs.push(`--config.extraMetadata.version=${builderVersion}`);
+    console.log(`Overriding package version for builder: ${builderVersion}`);
   }
 
   const macLsuiElementFlag = process.env.TUFF_MAC_LSUIELEMENT || process.env.BUILD_MAC_LSUIELEMENT;
