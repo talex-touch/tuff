@@ -68,6 +68,7 @@ import { isWidgetFeatureEnabled } from './widget/widget-issue'
 import { widgetManager } from './widget/widget-manager'
 
 import { createPluginLoadShell, createPluginLoader } from './plugin-loaders'
+import { mergePackagedManifestMetadata } from './plugin-runtime-integrity'
 import { LocalPluginProvider } from './providers/local-provider'
 import { usePluginInjections } from './runtime/plugin-injections'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
@@ -792,7 +793,10 @@ function createPluginModuleInternal(
       if (!manifest?.name) return null
       const permissionModule = getPermissionModule()
       if (!permissionModule) return null
-      const declared = parseManifestPermissions(manifest as any)
+      const declared = parseManifestPermissions({
+        permissions: manifest.permissions,
+        permissionReasons: manifest.permissionReasons
+      })
       if (declared.required.length === 0) return null
       if (
         !permissionModule.needsPermissionConfirmation(manifest.name, manifest.sdkapi, {
@@ -3215,7 +3219,11 @@ export class PluginModule extends BaseModule {
           }
 
           const manifestPath = path.resolve(plugin.pluginPath, 'manifest.json')
-          fse.writeJSONSync(manifestPath, manifest, { spaces: 2 })
+          const currentManifest = fse.existsSync(manifestPath)
+            ? fse.readJSONSync(manifestPath)
+            : null
+          const nextManifest = mergePackagedManifestMetadata(currentManifest, manifest)
+          fse.writeJSONSync(manifestPath, nextManifest, { spaces: 2 })
 
           if (shouldReload) {
             await manager.reloadPlugin(name)

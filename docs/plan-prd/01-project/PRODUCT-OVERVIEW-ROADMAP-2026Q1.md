@@ -1,6 +1,6 @@
 # Tuff 产品总览与 8 周路线图（2026-Q1）
 
-> 更新时间：2026-04-07  
+> 更新时间：2026-04-17  
 > 适用范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`
 
 ## 1. 产品总览（是什么）
@@ -50,7 +50,9 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 超长文件门禁：`size:guard` 必须通过，阈值 `>=1200` 的存量文件禁止继续增长，新增超长文件禁止合入。
 - 网络边界硬约束：业务层禁止新增 direct `fetch/axios`，统一走 `@talex-touch/utils/network`（network 套件内部除外），并由 root `network:guard` + ESLint 双门禁拦截。
 - 门禁脚本工程约束：`legacy/compat/size/network` 共享 `scripts/lib/*` 基础能力；workspace 侧门禁优先复用 root 实现（参数化 scope），禁止重复维护同类脚本。
-- 桌面打包质量门禁必须覆盖已知高风险运行时依赖链；当前基线除 Sentry 外，新增要求校验 LangChain 关键依赖（`@langchain/core`、`p-retry`、`retry`、`langsmith`）真实进入可解析产物路径。
+- 桌面打包质量门禁必须覆盖已知高风险运行时依赖链；当前基线除 Sentry 外，新增要求同时校验 LangChain 关键依赖（`@langchain/core`、`p-retry`、`retry`、`langsmith`）与 `compressing -> tar-stream -> readable-stream` 缺包闭包真实进入可解析产物路径。
+- 对于显式落在 `resources/node_modules` 的运行时模块，质量门禁必须递归校验其依赖闭包也位于 `resources/node_modules`，禁止“根模块存在但其二级/三级依赖仍从 asar 漏解析”。
+- 对于主进程在运行时直接加载的编译器/工具链包（当前为 `@vue/compiler-sfc`），质量门禁必须校验其传递依赖闭包已进入 `app.asar` 或其他可解析路径，禁止留下只打进根包、未带闭包的半残产物。
 - CoreApp 兼容硬切门禁：`window.$channel` 业务入口、legacy storage 协议（`storage:get/save/reload/save-sync/saveall`）、legacy `sdkapi` 放行逻辑必须保持 `0` 命中；新增插件/更新能力禁止“伪成功”返回。
 
 ### 3.2 架构约束
@@ -63,6 +65,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 官方构建验证链路（签名生成/验签）必须可追踪、可复核。
 - 版本发布必须附带最小变更说明与风险说明。
 - 桌面构建产物必须附带运行时依赖完整性校验，关键主进程依赖链缺失时应在构建阶段直接失败，而不是留到用户启动时暴露。
+- beta / snapshot 标签发布必须保持 pre-release 语义，避免预发布资产进入稳定发布通道。
 
 ### 3.4 文档约束
 - 功能行为变化需同步 `README.md` / `plan-prd` / `docs/INDEX.md` 至少一处。

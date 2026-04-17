@@ -10,6 +10,7 @@ import { createLogger } from '../../utils/logger'
 const execFileAsync = promisify(execFile)
 const activeAppLog = createLogger('ActiveApp')
 const MACOS_RESOLVE_RETRY_DELAY_MS = 80
+const MACOS_PERMISSION_BACKOFF_MS = 60_000
 const ACTIVE_APP_COMMAND_TIMEOUT_MS = 1500
 
 function isEbadfError(error: unknown): boolean {
@@ -23,6 +24,25 @@ function isEbadfError(error: unknown): boolean {
 function isMissingCommandError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
   return (error as { code?: unknown }).code === 'ENOENT'
+}
+
+function getErrorText(error: unknown): string {
+  if (!error || typeof error !== 'object') return ''
+  const candidate = error as { message?: unknown; stderr?: unknown }
+  return [candidate.message, candidate.stderr]
+    .filter((value) => typeof value === 'string')
+    .join('\n')
+}
+
+function isMacOSAutomationPermissionError(error: unknown): boolean {
+  const text = getErrorText(error)
+  if (!text) return false
+  return (
+    text.includes('(-1743)') ||
+    text.includes('errAEEventNotPermitted') ||
+    text.includes('Not authorized to send Apple events') ||
+    text.includes('未获得授权将Apple事件发送给System Events')
+  )
 }
 
 function toOptionalString(value: unknown): string | null {
@@ -93,9 +113,19 @@ class ActiveAppService {
   private readonly cacheTTL = 3000
   private currentPlatform: Platform
   private macosResolveInFlight: Promise<Partial<ActiveAppInfo> | null> | null = null
+  private macosPermissionBackoffUntil = 0
 
   constructor() {
     this.currentPlatform = this.detectPlatform()
+  }
+
+  private handleMacOSPermissionDenied(error: unknown): null {
+    activeAppLog.warn('macOS automation permission missing, active-app lookup suspended briefly', {
+      meta: { backoffMs: MACOS_PERMISSION_BACKOFF_MS },
+      error
+    })
+    this.macosPermissionBackoffUntil = Date.now() + MACOS_PERMISSION_BACKOFF_MS
+    return null
   }
 
   private detectPlatform(): Platform {
@@ -156,14 +186,24 @@ end tell`
   }
 
   private async resolveActiveWindowMacOS(): Promise<Partial<ActiveAppInfo> | null> {
+    if (Date.now() < this.macosPermissionBackoffUntil) {
+      return null
+    }
+
     if (this.macosResolveInFlight) {
       return this.macosResolveInFlight
     }
 
     const resolveTask = (async () => {
       try {
-        return await this.resolveActiveWindowMacOSOnce()
+        const result = await this.resolveActiveWindowMacOSOnce()
+        this.macosPermissionBackoffUntil = 0
+        return result
       } catch (firstError) {
+        if (isMacOSAutomationPermissionError(firstError)) {
+          return this.handleMacOSPermissionDenied(firstError)
+        }
+
         if (!isEbadfError(firstError)) {
           activeAppLog.error('macOS resolution failed', { error: firstError })
           return null
@@ -177,8 +217,14 @@ end tell`
         })
 
         try {
-          return await this.resolveActiveWindowMacOSOnce()
+          const result = await this.resolveActiveWindowMacOSOnce()
+          this.macosPermissionBackoffUntil = 0
+          return result
         } catch (retryError) {
+          if (isMacOSAutomationPermissionError(retryError)) {
+            return this.handleMacOSPermissionDenied(retryError)
+          }
+
           activeAppLog.error('macOS resolution failed after EBADF retry', { error: retryError })
           return null
         }

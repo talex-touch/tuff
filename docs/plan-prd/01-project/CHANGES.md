@@ -22,6 +22,16 @@
 - `apps/core-app/src/main/modules/system/active-app.ts`
 - `apps/core-app/src/main/modules/system/active-app.test.ts`
   - macOS 未授予 `System Events` 自动化权限时，`active-app` 解析改为短时退避并降级返回 `null`，不再持续输出带完整堆栈的错误日志；补充对应测试覆盖权限拒绝场景。
+- `apps/core-app/src/main/core/precore.ts`
+- `apps/core-app/src/main/core/single-instance-guard.ts`
+- `apps/core-app/src/main/modules/addon-opener.ts`
+- `apps/core-app/src/main/modules/addon-opener-handlers.ts`
+  - 收口单实例事件链：主进程统一在 `precore` 注册 `second-instance` 并继续通过 `APP_SECONDARY_LAUNCH` 事件总线分发，`AddonOpener` 不再在 macOS 侧额外注册 Windows 风格的 `second-instance` 监听；同时对主窗口聚焦补活体判断，避免重复启动时继续出现 `Object has been destroyed` 未捕获异常。
+- `apps/core-app/src/main/modules/plugin/plugin-runtime-integrity.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-resolver.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+  - 新增插件运行时 UI 完整性校验与一次性本地自愈：`webcontent` 插件安装后会校验必需入口文件，已安装目录在缺少 `index.html` 等入口文件时会优先尝试从同目录 `.tpex` 包恢复；安装失败会清理半残插件目录，避免下一次重装被 `plugin already exists` 卡住；保存 manifest 时保留更完整的 `_files` / `_signature` 元数据，避免再次把打包元信息截断到“只剩少量文件”的坏状态。
 - `package.json`
 - `apps/core-app/package.json`
   - 根包与 `core-app` 版本提升到 `2.4.9-beta.15`，用于本轮 beta 发布。

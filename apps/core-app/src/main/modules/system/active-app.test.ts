@@ -1,16 +1,32 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { execFilePromiseMock, readlinkMock, withOSAdapterMock, getFileIconMock } = vi.hoisted(
-  () => ({
-    execFilePromiseMock: vi.fn(),
-    readlinkMock: vi.fn(),
-    withOSAdapterMock: vi.fn(),
-    getFileIconMock: vi.fn(async () => ({
-      isEmpty: () => false,
-      toDataURL: () => 'data:image/png;base64,icon'
+const {
+  execFilePromiseMock,
+  readlinkMock,
+  withOSAdapterMock,
+  getFileIconMock,
+  activeAppLoggerMock
+} = vi.hoisted(() => ({
+  execFilePromiseMock: vi.fn(),
+  readlinkMock: vi.fn(),
+  withOSAdapterMock: vi.fn(),
+  activeAppLoggerMock: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn(),
+    child: vi.fn(),
+    time: vi.fn(() => ({
+      end: vi.fn(),
+      split: vi.fn()
     }))
-  })
-)
+  },
+  getFileIconMock: vi.fn(async () => ({
+    isEmpty: () => false,
+    toDataURL: () => 'data:image/png;base64,icon'
+  }))
+}))
 
 vi.mock('node:child_process', () => {
   const execFile = vi.fn()
@@ -35,18 +51,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../../utils/logger', () => ({
-  createLogger: vi.fn(() => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    success: vi.fn(),
-    child: vi.fn(),
-    time: vi.fn(() => ({
-      end: vi.fn(),
-      split: vi.fn()
-    }))
-  }))
+  createLogger: vi.fn(() => activeAppLoggerMock)
 }))
 
 import { activeAppService, isActiveAppCapabilityAvailable } from './active-app'
@@ -62,11 +67,37 @@ function mockExecFileFailure(code: string, message = code) {
 afterEach(() => {
   vi.clearAllMocks()
   ;(
-    activeAppService as unknown as { cacheWithIcon: unknown; cacheWithoutIcon: unknown }
+    activeAppService as unknown as {
+      cacheWithIcon: unknown
+      cacheWithoutIcon: unknown
+      macosResolveInFlight: unknown
+      macosPermissionBackoffUntil: number
+    }
   ).cacheWithIcon = null
   ;(
-    activeAppService as unknown as { cacheWithIcon: unknown; cacheWithoutIcon: unknown }
+    activeAppService as unknown as {
+      cacheWithIcon: unknown
+      cacheWithoutIcon: unknown
+      macosResolveInFlight: unknown
+      macosPermissionBackoffUntil: number
+    }
   ).cacheWithoutIcon = null
+  ;(
+    activeAppService as unknown as {
+      cacheWithIcon: unknown
+      cacheWithoutIcon: unknown
+      macosResolveInFlight: unknown
+      macosPermissionBackoffUntil: number
+    }
+  ).macosResolveInFlight = null
+  ;(
+    activeAppService as unknown as {
+      cacheWithIcon: unknown
+      cacheWithoutIcon: unknown
+      macosResolveInFlight: unknown
+      macosPermissionBackoffUntil: number
+    }
+  ).macosPermissionBackoffUntil = 0
 })
 
 describe('active-app capability', () => {
@@ -146,5 +177,40 @@ describe('active-app resolution', () => {
     await expect(
       activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
     ).resolves.toBeNull()
+  })
+
+  it('backs off when macOS automation permission is missing', async () => {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.darwin()
+      }
+    )
+    execFilePromiseMock.mockRejectedValueOnce(
+      Object.assign(new Error('Not authorized to send Apple events to System Events. (-1743)'), {
+        stderr: 'Not authorized to send Apple events to System Events. (-1743)\n'
+      })
+    )
+
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toBeNull()
+
+    expect(activeAppLoggerMock.warn).toHaveBeenCalledWith(
+      'macOS automation permission missing, active-app lookup suspended briefly',
+      expect.objectContaining({
+        meta: expect.objectContaining({ backoffMs: 60_000 })
+      })
+    )
+    expect(activeAppLoggerMock.error).not.toHaveBeenCalled()
+
+    execFilePromiseMock.mockClear()
+    activeAppLoggerMock.warn.mockClear()
+
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toBeNull()
+
+    expect(execFilePromiseMock).not.toHaveBeenCalled()
+    expect(activeAppLoggerMock.warn).not.toHaveBeenCalled()
   })
 })
