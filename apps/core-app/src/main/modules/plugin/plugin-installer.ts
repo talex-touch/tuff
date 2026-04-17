@@ -15,7 +15,10 @@ import {
   PERMISSION_ENFORCEMENT_MIN_VERSION,
   resolveSdkApiVersion
 } from '@talex-touch/utils/plugin'
+import { createLogger } from '../../utils/logger'
 import { ensureDefaultProvidersRegistered, installFromRegistry } from './providers'
+
+const pluginInstallerLog = createLogger('PluginSystem').child('Installer')
 
 function createDialogRiskPrompt(): RiskPromptHandler {
   return async (input: RiskPromptInput) => {
@@ -141,7 +144,10 @@ export class PluginInstaller {
               try {
                 options.onDownloadProgress?.(Math.max(0, Math.min(100, value)))
               } catch (error) {
-                console.warn('[PluginInstaller] download progress handler failed', error)
+                pluginInstallerLog.warn('Plugin download progress callback failed', {
+                  meta: { source: request.source },
+                  error
+                })
               }
             }
           }
@@ -161,7 +167,10 @@ export class PluginInstaller {
       try {
         options.onDownloadProgress(100)
       } catch (error) {
-        console.warn('[PluginInstaller] failed to finalize progress update', error)
+        pluginInstallerLog.warn('Failed to finalize plugin install progress update', {
+          meta: { source: request.source },
+          error
+        })
       }
     }
 
@@ -196,7 +205,10 @@ export class PluginInstaller {
     try {
       return await runResolver(filePath, false)
     } catch (error) {
-      console.warn('[PluginInstaller] Failed to preview plugin manifest:', error)
+      pluginInstallerLog.warn('Failed to preview plugin manifest', {
+        meta: { filePath },
+        error
+      })
       return {}
     }
   }
@@ -208,7 +220,10 @@ export class PluginInstaller {
       try {
         await fse.remove(normalized)
       } catch (error) {
-        console.warn(`[PluginInstaller] Failed to cleanup temp file: ${normalized}`, error)
+        pluginInstallerLog.warn('Failed to cleanup temporary plugin install file', {
+          meta: { source, filePath: normalized },
+          error
+        })
       }
     }
   }

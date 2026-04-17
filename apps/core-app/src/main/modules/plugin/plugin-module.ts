@@ -77,6 +77,7 @@ import { buildPluginManagerRuntime } from './services/plugin-manager-orchestrato
 
 const pluginLog = getLogger('plugin-system')
 const pluginModuleLog = createLogger('PluginSystem')
+const pluginIpcLog = pluginModuleLog.child('IPC')
 const devWatcherLog = pluginLog.child('DevWatcher')
 const WIDGET_ROOT_DIR = 'widgets'
 const WIDGET_ALLOWED_EXTENSIONS = new Set(['.vue', '.tsx', '.jsx', '.ts', '.js'])
@@ -84,6 +85,16 @@ const PERMISSION_MISSING_ISSUE_CODE = 'PERMISSION_MISSING'
 const ISSUE_FULL_RESYNC_INTERVAL_MS = 45 * 60 * 1000
 type PluginLifecycleChannel = {
   broadcastPlugin: (pluginName: string, eventName: string, arg?: unknown) => void
+}
+
+const toErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : 'Unknown error'
+
+const logIpcHandlerError = (handler: string, error: unknown): void => {
+  pluginIpcLog.error('Plugin IPC handler failed', {
+    meta: { handler },
+    error
+  })
 }
 
 function resolveWidgetFeaturePath(plugin: TouchPlugin, widgetPath: string): string | null {
@@ -2108,8 +2119,8 @@ export class PluginModule extends BaseModule {
             lifecycle.onMessage(key, info)
             return { status: 'message_sent' }
           } catch (error) {
-            console.error('Error in index:communicate handler:', error)
-            return { error: error instanceof Error ? error.message : 'Unknown error' }
+            logIpcHandlerError('index:communicate', error)
+            return { error: toErrorMessage(error) }
           }
         }
       )
@@ -2302,8 +2313,8 @@ export class PluginModule extends BaseModule {
           }
           return resolved.plugin.getPluginFile(fileName)
         } catch (error) {
-          console.error('Error in plugin:storage:get-file handler:', error)
-          return { error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:storage:get-file', error)
+          return { error: toErrorMessage(error) }
         }
       })
     )
@@ -2321,8 +2332,8 @@ export class PluginModule extends BaseModule {
           }
           return resolved.plugin.savePluginFile(fileName, payload?.content)
         } catch (error) {
-          console.error('Error in plugin:storage:set-file handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:storage:set-file', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       })
     )
@@ -2340,8 +2351,8 @@ export class PluginModule extends BaseModule {
           }
           return resolved.plugin.deletePluginFile(fileName)
         } catch (error) {
-          console.error('Error in plugin:storage:delete-file handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:storage:delete-file', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       })
     )
@@ -2355,7 +2366,7 @@ export class PluginModule extends BaseModule {
           }
           return resolved.plugin.listPluginFiles()
         } catch (error) {
-          console.error('Error in plugin:storage:list-files handler:', error)
+          logIpcHandlerError('plugin:storage:list-files', error)
           return []
         }
       })
@@ -2432,7 +2443,7 @@ export class PluginModule extends BaseModule {
 
           return items
         } catch (error) {
-          console.error('Error in plugin:storage:list-sync-items handler:', error)
+          logIpcHandlerError('plugin:storage:list-sync-items', error)
           return []
         }
       })
@@ -2453,8 +2464,8 @@ export class PluginModule extends BaseModule {
 
           return resolved.plugin.savePluginFile(fileName, payload?.content, { broadcast: false })
         } catch (error) {
-          console.error('Error in plugin:storage:apply-sync-item handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:storage:apply-sync-item', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       })
     )
@@ -2478,8 +2489,8 @@ export class PluginModule extends BaseModule {
           }
           return result
         } catch (error) {
-          console.error('Error in plugin:storage:delete-sync-item handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:storage:delete-sync-item', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       })
     )
@@ -2493,8 +2504,8 @@ export class PluginModule extends BaseModule {
           }
           return resolved.plugin.getStorageStats()
         } catch (error) {
-          console.error('Error in plugin:storage:get-stats handler:', error)
-          return { error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:storage:get-stats', error)
+          return { error: toErrorMessage(error) }
         }
       })
     )
@@ -2508,8 +2519,8 @@ export class PluginModule extends BaseModule {
           }
           return resolved.plugin.getPerformanceMetrics()
         } catch (error) {
-          console.error('Error in plugin:performance:get-metrics handler:', error)
-          return { error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:performance:get-metrics', error)
+          return { error: toErrorMessage(error) }
         }
       })
     )
@@ -2530,7 +2541,7 @@ export class PluginModule extends BaseModule {
             tempPath: resolved.plugin.getTempPath()
           } satisfies PluginPerformanceGetPathsResponse
         } catch (error) {
-          console.error('Error in plugin:performance:get-paths handler:', error)
+          logIpcHandlerError('plugin:performance:get-paths', error)
           throw error instanceof Error ? error : new Error('Unknown error')
         }
       })
@@ -2545,8 +2556,8 @@ export class PluginModule extends BaseModule {
           }
           return resolved.plugin.getStorageTree()
         } catch (error) {
-          console.error('Error in plugin:storage:get-tree handler:', error)
-          return { error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:storage:get-tree', error)
+          return { error: toErrorMessage(error) }
         }
       })
     )
@@ -2565,8 +2576,8 @@ export class PluginModule extends BaseModule {
           }
           return resolved.plugin.getFileDetails(fileName)
         } catch (error) {
-          console.error('Error in plugin:storage:get-file-details handler:', error)
-          return { error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:storage:get-file-details', error)
+          return { error: toErrorMessage(error) }
         }
       })
     )
@@ -2580,8 +2591,8 @@ export class PluginModule extends BaseModule {
           }
           return resolved.plugin.clearStorage()
         } catch (error) {
-          console.error('Error in plugin:storage:clear handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:storage:clear', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       })
     )
@@ -2596,7 +2607,7 @@ export class PluginModule extends BaseModule {
           const configPath = resolved.plugin.getConfigPath()
           await shell.openPath(configPath)
         } catch (error) {
-          console.error('Error in plugin:storage:open-folder handler:', error)
+          logIpcHandlerError('plugin:storage:open-folder', error)
         }
       })
     )
@@ -2624,8 +2635,8 @@ export class PluginModule extends BaseModule {
 
           return { success: true }
         } catch (error) {
-          console.error('Error in plugin:storage:open-in-editor handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:storage:open-in-editor', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       })
     )
@@ -2663,8 +2674,8 @@ export class PluginModule extends BaseModule {
             lastInsertRowId: normalizeLastInsertRowId(result.lastInsertRowid)
           }
         } catch (error) {
-          console.error('Error in plugin:sqlite:execute handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:sqlite:execute', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       })
     )
@@ -2726,10 +2737,10 @@ export class PluginModule extends BaseModule {
             columns: Array.isArray(result.columns) ? result.columns : []
           }
         } catch (error) {
-          console.error('Error in plugin:sqlite:query handler:', error)
+          logIpcHandlerError('plugin:sqlite:query', error)
           return {
             success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: toErrorMessage(error),
             rows: [] as Array<Record<string, unknown>>
           }
         }
@@ -2800,10 +2811,10 @@ export class PluginModule extends BaseModule {
 
           return { success: true, results }
         } catch (error) {
-          console.error('Error in plugin:sqlite:transaction handler:', error)
+          logIpcHandlerError('plugin:sqlite:transaction', error)
           return {
             success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: toErrorMessage(error),
             results: [] as Array<{ rowsAffected: number; lastInsertRowId: number | null }>
           }
         }
@@ -2820,8 +2831,8 @@ export class PluginModule extends BaseModule {
           const success = (await this.healthMonitor?.reconnectDevServer(pluginName)) || false
           return { success }
         } catch (error) {
-          console.error('Error in plugin:reconnect-dev-server handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:reconnect-dev-server', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       })
     )
@@ -2841,11 +2852,11 @@ export class PluginModule extends BaseModule {
             }
           )
         } catch (error) {
-          console.error('Error in plugin:dev-server-status handler:', error)
+          logIpcHandlerError('plugin:dev-server-status', error)
           return {
             monitoring: false,
             connected: false,
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: toErrorMessage(error)
           }
         }
       })
@@ -2899,7 +2910,7 @@ export class PluginModule extends BaseModule {
             plugins.map((plugin) => serializePluginWithInstallSource(plugin))
           )
         } catch (error) {
-          console.error('Error in plugin:api:list handler:', error)
+          logIpcHandlerError('plugin:api:list', error)
           return []
         }
       }),
@@ -2918,7 +2929,7 @@ export class PluginModule extends BaseModule {
 
           return await serializePluginWithInstallSource(plugin)
         } catch (error) {
-          console.error('Error in plugin:api:get handler:', error)
+          logIpcHandlerError('plugin:api:get', error)
           return null
         }
       }),
@@ -2933,7 +2944,7 @@ export class PluginModule extends BaseModule {
           const plugin = manager.plugins.get(name)
           return plugin ? plugin.status : -1
         } catch (error) {
-          console.error('Error in plugin:api:get-status handler:', error)
+          logIpcHandlerError('plugin:api:get-status', error)
           return -1
         }
       })
@@ -2960,8 +2971,8 @@ export class PluginModule extends BaseModule {
           }
           return { success }
         } catch (error) {
-          console.error('Error in plugin:api:enable handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:api:enable', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -2985,8 +2996,8 @@ export class PluginModule extends BaseModule {
           }
           return { success }
         } catch (error) {
-          console.error('Error in plugin:api:disable handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:api:disable', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -3004,8 +3015,8 @@ export class PluginModule extends BaseModule {
           await manager.reloadPlugin(name)
           return { success: true }
         } catch (error) {
-          console.error('Error in plugin:api:reload handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:api:reload', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -3039,8 +3050,8 @@ export class PluginModule extends BaseModule {
           }
           return { success: true }
         } catch (error) {
-          console.error('Error in plugin:api:uninstall handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:api:uninstall', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       })
     )
@@ -3067,8 +3078,8 @@ export class PluginModule extends BaseModule {
 
           return pluginIns.triggerFeature(feature, query)
         } catch (error) {
-          console.error('Error in plugin:api:trigger-feature handler:', error)
-          return { error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:api:trigger-feature', error)
+          return { error: toErrorMessage(error) }
         }
       }),
 
@@ -3105,8 +3116,8 @@ export class PluginModule extends BaseModule {
           }
           return { success: true }
         } catch (error) {
-          console.error('Error in plugin:api:register-widget handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:api:register-widget', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -3131,7 +3142,7 @@ export class PluginModule extends BaseModule {
 
           pluginIns.triggerInputChanged(feature, query)
         } catch (error) {
-          console.error('Error in plugin:api:feature-input-changed handler:', error)
+          logIpcHandlerError('plugin:api:feature-input-changed', error)
         }
       }),
 
@@ -3149,7 +3160,7 @@ export class PluginModule extends BaseModule {
 
           await shell.openPath(plugin.pluginPath)
         } catch (error) {
-          console.error('Error in plugin:api:open-folder handler:', error)
+          logIpcHandlerError('plugin:api:open-folder', error)
         }
       }),
 
@@ -3157,7 +3168,7 @@ export class PluginModule extends BaseModule {
         try {
           return await getOfficialPlugins({ force: Boolean(payload?.force) })
         } catch (error: unknown) {
-          console.error('Failed to fetch official plugin list:', error)
+          logIpcHandlerError('plugin:api:get-official-list', error)
           return { plugins: [] }
         }
       })
@@ -3190,7 +3201,7 @@ export class PluginModule extends BaseModule {
 
           return fse.readJSONSync(manifestPath)
         } catch (error) {
-          console.error('Error in plugin:api:get-manifest handler:', error)
+          logIpcHandlerError('plugin:api:get-manifest', error)
           return null
         }
       })
@@ -3231,8 +3242,8 @@ export class PluginModule extends BaseModule {
 
           return { success: true }
         } catch (error) {
-          console.error('Error in plugin:api:save-manifest handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:api:save-manifest', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       })
     )
@@ -3282,8 +3293,8 @@ export class PluginModule extends BaseModule {
 
           return { success: true, relativePath: resolved.relativePath }
         } catch (error) {
-          console.error('Error in plugin:api:save-widget-file handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:api:save-widget-file', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       })
     )
@@ -3312,7 +3323,7 @@ export class PluginModule extends BaseModule {
             tempPath: plugin.getTempPath()
           }
         } catch (error) {
-          console.error('Error in plugin:api:get-paths handler:', error)
+          logIpcHandlerError('plugin:api:get-paths', error)
           throw error
         }
       })
@@ -3364,8 +3375,8 @@ export class PluginModule extends BaseModule {
 
           return { success: true, path: targetPath }
         } catch (error) {
-          console.error('Error in plugin:api:open-path handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:api:open-path', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       })
     )
@@ -3414,8 +3425,8 @@ export class PluginModule extends BaseModule {
           shell.showItemInFolder(resolvedTarget)
           return { success: true, path: resolvedTarget }
         } catch (error) {
-          console.error('Error in plugin:api:reveal-path handler:', error)
-          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:api:reveal-path', error)
+          return { success: false, error: toErrorMessage(error) }
         }
       })
     )
@@ -3449,8 +3460,8 @@ export class PluginModule extends BaseModule {
             performance: performanceMetrics
           }
         } catch (error) {
-          console.error('Error in plugin:api:get-performance handler:', error)
-          return { error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:api:get-performance', error)
+          return { error: toErrorMessage(error) }
         }
       })
     )
@@ -3570,8 +3581,8 @@ export class PluginModule extends BaseModule {
             }
           }
         } catch (error) {
-          console.error('Error in plugin:api:get-runtime-stats handler:', error)
-          return { error: error instanceof Error ? error.message : 'Unknown error' }
+          logIpcHandlerError('plugin:api:get-runtime-stats', error)
+          return { error: toErrorMessage(error) }
         }
       })
     )
@@ -3595,7 +3606,7 @@ export class PluginModule extends BaseModule {
             offset: payload?.offset
           })
         } catch (error: unknown) {
-          console.error('Store search failed:', error)
+          logIpcHandlerError('plugin:store:search', error)
           return { error: error instanceof Error ? error.message : 'STORE_SEARCH_FAILED' }
         }
       })
@@ -3615,7 +3626,7 @@ export class PluginModule extends BaseModule {
           const plugin = await getPluginDetails(identifier, source)
           return plugin ?? null
         } catch (error: unknown) {
-          console.error('Get plugin details failed:', error)
+          logIpcHandlerError('plugin:store:get-plugin', error)
           return null
         }
       })
@@ -3633,7 +3644,7 @@ export class PluginModule extends BaseModule {
           const plugins = await getFeaturedPlugins(limit)
           return { plugins }
         } catch (error: unknown) {
-          console.error('Get featured plugins failed:', error)
+          logIpcHandlerError('plugin:store:featured', error)
           return { plugins: [] }
         }
       })
@@ -3649,7 +3660,7 @@ export class PluginModule extends BaseModule {
           const plugins = await listNpmPlugins()
           return { plugins }
         } catch (error: unknown) {
-          console.error('List NPM plugins failed:', error)
+          logIpcHandlerError('plugin:store:npm-list', error)
           return { plugins: [] }
         }
       })

@@ -9,8 +9,11 @@ import type { PluginInstaller, PreparedPluginInstall } from './plugin-installer'
 import type { ResolverInstallOptions } from './plugin-resolver'
 import crypto from 'node:crypto'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
+import { createLogger } from '../../utils/logger'
 import { checkPluginActiveUI } from './plugin-ui-utils'
 import { extractSignatureInfo, verifyPackageSignature } from './signature-verifier'
+
+const pluginInstallQueueLog = createLogger('PluginSystem').child('InstallQueue')
 
 type PluginInstallQueueResult =
   | {
@@ -260,7 +263,14 @@ export class PluginInstallQueue {
             providerResult: summary.providerResult
           })
         } catch (error) {
-          console.warn('[PluginInstallQueue] Failed to persist install metadata:', error)
+          pluginInstallQueueLog.warn('Failed to persist plugin install metadata', {
+            meta: {
+              taskId: task.id,
+              source: task.request.source,
+              pluginName: summary.manifest?.name
+            },
+            error
+          })
         }
       }
     } catch (error: unknown) {
@@ -272,9 +282,17 @@ export class PluginInstallQueue {
         message
       })
 
-      if (task.prepared) {
-        await this.installer.discardPrepared(task.prepared).catch((cleanupError) => {
-          console.warn('[PluginInstallQueue] Failed to cleanup after failed install:', cleanupError)
+      const prepared = task.prepared
+      if (prepared) {
+        await this.installer.discardPrepared(prepared).catch((cleanupError) => {
+          pluginInstallQueueLog.warn('Failed to cleanup prepared plugin install after failure', {
+            meta: {
+              taskId: task.id,
+              source: task.request.source,
+              pluginName: prepared.manifest?.name
+            },
+            error: cleanupError
+          })
         })
       }
     } finally {
@@ -325,9 +343,20 @@ export class PluginInstallQueue {
       this.confirmResolvers.set(task.id, {
         resolve: (response) => resolve(response),
         reject: async (reason) => {
-          if (task.prepared) {
-            await this.installer.discardPrepared(task.prepared).catch((cleanupError) => {
-              console.warn('[PluginInstallQueue] Failed to cleanup after rejection:', cleanupError)
+          const prepared = task.prepared
+          if (prepared) {
+            await this.installer.discardPrepared(prepared).catch((cleanupError) => {
+              pluginInstallQueueLog.warn(
+                'Failed to cleanup prepared plugin install after rejection',
+                {
+                  meta: {
+                    taskId: task.id,
+                    source: task.request.source,
+                    pluginName: prepared.manifest?.name
+                  },
+                  error: cleanupError
+                }
+              )
             })
             task.prepared = undefined
           }
@@ -375,7 +404,15 @@ export class PluginInstallQueue {
     void this.transport
       .sendToWindow(this.targetWindowId, PluginEvents.install.progress, payload)
       .catch((error) => {
-        console.warn('[PluginInstallQueue] Failed to emit progress event:', error)
+        pluginInstallQueueLog.warn('Failed to emit plugin install progress event', {
+          meta: {
+            taskId: task.id,
+            source: task.request.source,
+            stage,
+            targetWindowId: this.targetWindowId
+          },
+          error
+        })
       })
   }
 }

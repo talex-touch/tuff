@@ -10,11 +10,13 @@ import {
   resolveSdkApiVersion
 } from '@talex-touch/utils/plugin'
 import { checkDirWithCreate } from '../../utils/common-util'
+import { createLogger } from '../../utils/logger'
 import { pluginModule } from './plugin-module'
 import { removeNodeModulesDirs, shouldSkipNodeModulesPath } from './plugin-install-copy-utils'
 import { type PackagedManifest, ensurePluginRuntimeIntegrity } from './plugin-runtime-integrity'
 
 type ResolverEvent = { msg: unknown }
+const pluginResolverLog = createLogger('PluginSystem').child('Resolver')
 const toErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
@@ -83,7 +85,9 @@ export class PluginResolver {
         }
       })
       if (skippedNodeModules) {
-        console.warn('[PluginResolver] Skipped node_modules during source directory install copy')
+        pluginResolverLog.warn('Skipped node_modules during source directory install copy', {
+          meta: { source }
+        })
       }
       return
     }
@@ -96,7 +100,15 @@ export class PluginResolver {
     cb: (msg: string, type?: string) => void,
     options?: ResolverInstallOptions
   ): Promise<void> {
-    console.log(`[PluginResolver] Installing plugin: ${manifest.name}`)
+    const pluginName = typeof manifest.name === 'string' ? manifest.name : 'unknown'
+    pluginResolverLog.info('Installing plugin package', {
+      meta: {
+        pluginName,
+        source: this.filePath,
+        forceUpdate: options?.forceUpdate === true,
+        autoReEnable: options?.autoReEnable === true
+      }
+    })
     const sdkapiError = this.validateManifestSdkApi(manifest)
     if (sdkapiError) {
       return cb(sdkapiError, 'error')
@@ -115,7 +127,9 @@ export class PluginResolver {
       }
 
       // Stop and remove existing plugin for update
-      console.log(`[PluginResolver] Updating existing plugin: ${manifest.name}`)
+      pluginResolverLog.info('Updating existing plugin before reinstall', {
+        meta: { pluginName }
+      })
       try {
         const existingPluginInstance = pluginModule.pluginManager?.getPluginByName(manifest.name)
         if (existingPluginInstance) {
@@ -131,10 +145,15 @@ export class PluginResolver {
 
         // Remove old plugin files
         await fse.remove(_target)
-        console.log(`[PluginResolver] Removed old plugin files: ${manifest.name}`)
+        pluginResolverLog.debug('Removed previous plugin files', {
+          meta: { pluginName, targetDir: _target }
+        })
       } catch (error: unknown) {
         const message = toErrorMessage(error)
-        console.error(`[PluginResolver] Failed to remove old plugin ${manifest.name}:`, error)
+        pluginResolverLog.error('Failed to remove previous plugin before reinstall', {
+          meta: { pluginName, targetDir: _target },
+          error
+        })
         return cb(`Failed to remove old plugin: ${message}`, 'error')
       }
     }
@@ -163,7 +182,9 @@ export class PluginResolver {
 
       // Auto re-enable if requested and was previously enabled
       if (options?.forceUpdate && options?.autoReEnable && wasEnabled) {
-        console.log(`[PluginResolver] Auto re-enabling plugin: ${manifest.name}`)
+        pluginResolverLog.info('Auto re-enabling plugin after update', {
+          meta: { pluginName }
+        })
         const newPluginInstance = pluginModule.pluginManager?.getPluginByName(manifest.name)
         if (newPluginInstance) {
           await newPluginInstance.enable()
@@ -173,14 +194,21 @@ export class PluginResolver {
       cb('success', 'success')
     } catch (error: unknown) {
       const message = toErrorMessage(error)
-      console.error(`[PluginResolver] Failed to install plugin ${manifest.name}:`, error)
+      pluginResolverLog.error('Failed to install plugin package', {
+        meta: {
+          pluginName,
+          source: this.filePath,
+          targetDir: _target
+        },
+        error
+      })
       try {
         await fse.remove(_target)
       } catch (cleanupError: unknown) {
-        console.error(
-          `[PluginResolver] Failed to cleanup broken plugin directory ${manifest.name}:`,
-          cleanupError
-        )
+        pluginResolverLog.warn('Failed to cleanup broken plugin directory after install error', {
+          meta: { pluginName, targetDir: _target },
+          error: cleanupError
+        })
       }
       cb(message || 'Install failed', 'error')
     }
@@ -191,7 +219,9 @@ export class PluginResolver {
     whole = false,
     options?: ResolverOptions
   ): Promise<void> {
-    console.debug(`[PluginResolver] Resolving plugin: ${this.filePath}`)
+    pluginResolverLog.debug('Resolving plugin package', {
+      meta: { source: this.filePath, whole }
+    })
     const event: ResolverEvent = { msg: '' }
     const tempDir = path.join(os.tmpdir(), `talex-touch-resolve-${Date.now()}`)
 
@@ -241,12 +271,17 @@ export class PluginResolver {
         callback({ event, type: 'success' })
       }
     } catch (error: unknown) {
-      console.error(`[PluginResolver] Failed to resolve plugin ${this.filePath}:`, error)
+      pluginResolverLog.error('Failed to resolve plugin package', {
+        meta: { source: this.filePath, whole },
+        error
+      })
       event.msg = ResolverStatus.UNCOMPRESS_ERROR
       callback({ event, type: 'error' })
     } finally {
       await fse.remove(tempDir)
-      console.log(`[PluginResolver] Resolved plugin: ${this.filePath} | Temp dir released!`)
+      pluginResolverLog.debug('Released plugin resolve temp directory', {
+        meta: { source: this.filePath, tempDir }
+      })
     }
   }
 
@@ -262,9 +297,9 @@ export class PluginResolver {
   private async sanitizeNodeModules(rootDir: string): Promise<void> {
     const removed = await removeNodeModulesDirs(rootDir)
     if (removed.length > 0) {
-      console.warn(
-        `[PluginResolver] Removed ${removed.length} node_modules directories from install payload`
-      )
+      pluginResolverLog.warn('Removed node_modules directories from install payload', {
+        meta: { rootDir, removedCount: removed.length }
+      })
     }
   }
 
@@ -286,7 +321,10 @@ export class PluginResolver {
       }
       await fse.writeFile(manifestPath, JSON.stringify(fileManifest, null, 2))
     } catch (error) {
-      console.warn('[PluginResolver] Failed to enforce prod mode manifest:', error)
+      pluginResolverLog.warn('Failed to enforce prod mode manifest', {
+        meta: { pluginName: manifest.name, manifestPath },
+        error
+      })
     }
   }
 
