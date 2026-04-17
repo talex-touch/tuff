@@ -37,6 +37,7 @@ import { everythingProvider } from './everything-provider'
 interface MutableEverythingProvider {
   backend: string
   isAvailable: boolean
+  isEnabled: boolean
   initializationError: Error | null
   lastBackendError: string | null
   sdkAddon: unknown
@@ -46,6 +47,7 @@ interface MutableEverythingProvider {
   ensureCliFallback: () => Promise<boolean>
   searchEverythingWithCli: (query: string, maxResults: number) => Promise<unknown[]>
   tryInitializeCliBackend: () => Promise<boolean>
+  buildUnavailableNotice: (query: { text: string; inputs: unknown[] }) => unknown
 }
 
 function buildResult(path: string) {
@@ -59,10 +61,27 @@ function buildResult(path: string) {
   }
 }
 
+async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T> | T): Promise<T> {
+  const originalPlatform = process.platform
+  Object.defineProperty(process, 'platform', {
+    value: platform,
+    configurable: true
+  })
+  try {
+    return await run()
+  } finally {
+    Object.defineProperty(process, 'platform', {
+      value: originalPlatform,
+      configurable: true
+    })
+  }
+}
+
 afterEach(() => {
   const provider = everythingProvider as unknown as MutableEverythingProvider
   provider.backend = 'unavailable'
   provider.isAvailable = false
+  provider.isEnabled = true
   provider.initializationError = null
   provider.lastBackendError = null
   provider.sdkAddon = null
@@ -118,5 +137,20 @@ describe('everything-provider fallback chain', () => {
     expect(provider.isAvailable).toBe(false)
     expect(provider.initializationError).toBeInstanceOf(Error)
     expect(provider.lastBackendError).toBe('sdk exploded')
+  })
+
+  it('builds an explicit unavailable notice when Everything is disabled', () => {
+    return withPlatform('win32', () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      provider.isEnabled = false
+      provider.isAvailable = false
+
+      const item = provider.buildUnavailableNotice({ text: 'report', inputs: [] }) as {
+        render?: { basic?: { title?: string; description?: string } }
+      } | null
+
+      expect(item?.render?.basic?.title).toBe('Windows file search is not ready')
+      expect(item?.render?.basic?.description).toContain('Everything')
+    })
   })
 })

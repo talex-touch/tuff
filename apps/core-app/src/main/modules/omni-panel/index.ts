@@ -38,6 +38,7 @@ import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { app, clipboard, screen, shell } from 'electron'
 import { OmniPanelWindowOption } from '../../config/default'
 import { TalexEvents as MainEvents, touchEventBus } from '../../core/eventbus/touch-event'
+import { ensureXdotoolAvailable } from '../system/linux-desktop-tools'
 import { TouchWindow } from '../../core/touch-window'
 import { getCoreBoxWindow } from '../box-tool/core-box/window'
 import { getCoreBoxRendererPath } from '../../utils/renderer-url'
@@ -1452,6 +1453,7 @@ export class OmniPanelModule extends BaseModule {
     }
 
     if (process.platform === 'linux') {
+      await ensureXdotoolAvailable()
       await execFileAsync('xdotool', ['key', '--clearmodifiers', 'ctrl+c'])
       return
     }

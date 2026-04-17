@@ -741,9 +741,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     this.initializeBackgroundTaskService()
 
-    // 尽早注册 channel，避免前端启动期请求出现 no-handler 警告
+    // 尽早注册 transport 事件，避免前端启动期请求出现 no-handler 警告
     this.registerOpenersChannel(context)
-    this.registerIndexingChannels(context)
 
     // 索引任务由后台调度执行（空闲+电量策略）
     this.logDebug('onLoad: background index task registered, waiting for idle conditions')
@@ -1144,13 +1143,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     return { success: true, status: 'added', path: watchPath }
-  }
-
-  /**
-   * 注册索引管理相关的 IPC 通道
-   */
-  private registerIndexingChannels(_context: ProviderContext): void {
-    // Legacy channel handlers migrated to transport (AppEvents.fileIndex).* in common channel module.
   }
 
   public registerProgressStream(context: StreamContext<FileIndexProgressPayload>): void {

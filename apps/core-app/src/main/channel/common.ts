@@ -68,6 +68,7 @@ import {
   registerDefaultPlatformCapabilities
 } from '../modules/platform/capability-registry'
 import { activeAppService, isActiveAppCapabilityAvailable } from '../modules/system/active-app'
+import { getXdotoolUnavailableReason } from '../modules/system/linux-desktop-tools'
 import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage'
 import { getNetworkService } from '../modules/network'
 import { deviceIdleService } from '../service/device-idle-service'
@@ -117,7 +118,7 @@ const ACTIVE_APP_CAPABILITY: PlatformCapability = {
 const NATIVE_SHARE_CAPABILITY: PlatformCapability = {
   id: 'platform.native-share',
   name: 'Native Share',
-  description: 'macOS 提供完整原生分享；Windows/Linux 仅提供 mail-only best-effort',
+  description: 'macOS 提供完整原生分享；Windows/Linux 仅提供 mailto 邮件降级',
   scope: 'system',
   status: 'beta',
   supportLevel: 'unsupported'
@@ -596,7 +597,9 @@ async function listPlatformCapabilities(
     supportLevel: activeAppSupported ? 'supported' : 'unsupported',
     limitations: activeAppSupported
       ? undefined
-      : ['Foreground application inspection is unavailable in the current runtime.']
+      : process.platform === 'linux'
+        ? [getXdotoolUnavailableReason()]
+        : ['Foreground application inspection is unavailable in the current runtime.']
   })
 
   appendDynamicCapability({

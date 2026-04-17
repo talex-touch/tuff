@@ -32,6 +32,7 @@ const STEP_UP_TOKEN_TTL_MS = 10 * 60 * 1000
 const AUTH_PROFILE_REQUEST_TIMEOUT_MS = 4_000
 const AUTH_PROFILE_STARTUP_REFRESH_DELAY_MS = 6_000
 const LOCAL_AUTH_BASE_URL = 'http://localhost:3200'
+const LEGACY_MACHINE_SEED_FALLBACK_ENV = 'TUFF_ALLOW_LEGACY_MACHINE_SEED_FALLBACK'
 
 type AuthStateListener = (state: AuthState) => void
 
@@ -70,6 +71,7 @@ let authUseSecureStorage = false
 let stepUpToken: string | null = null
 let stepUpTokenExpiresAt = 0
 let authStartupRefreshTimer: NodeJS.Timeout | null = null
+let legacyMachineSeedFallbackWarningLogged = false
 
 const authGetStateEvent = defineRawEvent<void, AuthState>('auth:get-state')
 const authLoginEvent = defineRawEvent<{ mode?: 'sign-in' | 'sign-up' }, { initiated: boolean }>(
@@ -632,7 +634,20 @@ async function performNexusRequest(
 
 function allowLegacyMachineSeedFallback(appSettings: AppSetting): boolean {
   ensureSecuritySettings(appSettings)
-  return appSettings.security.allowLegacyMachineSeedFallback === true
+  const configured = appSettings.security.allowLegacyMachineSeedFallback === true
+  if (configured && !legacyMachineSeedFallbackWarningLogged) {
+    legacyMachineSeedFallbackWarningLogged = true
+    authLog.warn(
+      'Legacy machine seed fallback config detected. UI exposure was removed and fallback is now restricted to dev/internal runtimes.',
+      {
+        meta: {
+          envFlag: process.env[LEGACY_MACHINE_SEED_FALLBACK_ENV] === 'true',
+          isDev: isDevEnv()
+        }
+      }
+    )
+  }
+  return configured && (isDevEnv() || process.env[LEGACY_MACHINE_SEED_FALLBACK_ENV] === 'true')
 }
 
 async function getOrInitMachineSeed(appSettings: AppSetting): Promise<string> {
@@ -661,14 +676,16 @@ async function getOrInitMachineSeed(appSettings: AppSetting): Promise<string> {
       saveMainConfig(StorageList.APP_SETTING, appSettings)
     }
     return nextSeed
-  } catch {
+  } catch (error) {
     if (allowLegacyMachineSeedFallback(appSettings) && legacySeed) {
+      authLog.warn('Using legacy machine seed fallback with persisted plaintext seed', { error })
       return legacySeed
     }
     if (allowLegacyMachineSeedFallback(appSettings)) {
       const nextSeed = randomUUID().replace(/-/g, '')
       appSettings.security.machineSeed = nextSeed
       saveMainConfig(StorageList.APP_SETTING, appSettings)
+      authLog.warn('Using legacy machine seed fallback with regenerated plaintext seed', { error })
       return nextSeed
     }
     throw new Error('Secure machine seed unavailable')

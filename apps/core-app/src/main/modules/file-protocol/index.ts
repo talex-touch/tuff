@@ -86,6 +86,10 @@ function extractAbsolutePath(rawUrl: string): { path: string; usedCompatPath: bo
   }
 }
 
+export const __test__ = {
+  extractAbsolutePath
+}
+
 class FileProtocolModule extends BaseModule {
   static key: symbol = Symbol.for('FileProtocolModule')
   name: ModuleKey = FileProtocolModule.key
@@ -106,10 +110,13 @@ class FileProtocolModule extends BaseModule {
       const normalizedPath = normalizeAbsolutePath(filePath)
       if (usedCompatPath && normalizedPath && !loggedCompatPaths.has(normalizedPath)) {
         loggedCompatPaths.add(normalizedPath)
-        console.info(chalk.blue('[FileProtocolModule] Compat read hit: normalized legacy tfile URL'), {
-          requestUrl: request.url,
-          normalizedPath
-        })
+        console.info(
+          chalk.blue('[FileProtocolModule] Compat read hit: normalized legacy tfile URL'),
+          {
+            requestUrl: request.url,
+            normalizedPath
+          }
+        )
       }
       if (!normalizedPath || !isAllowedLocalFilePath(normalizedPath, allowedRoots)) {
         if (!loggedErrorPaths.has(filePath)) {

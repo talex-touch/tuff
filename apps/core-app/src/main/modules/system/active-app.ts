@@ -6,6 +6,11 @@ import { promisify } from 'node:util'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
 import { app } from 'electron'
 import { createLogger } from '../../utils/logger'
+import {
+  ensureXdotoolAvailable,
+  getXdotoolUnavailableReason,
+  isXdotoolAvailable
+} from './linux-desktop-tools'
 
 const execFileAsync = promisify(execFile)
 const activeAppLog = createLogger('ActiveApp')
@@ -67,17 +72,7 @@ export async function isActiveAppCapabilityAvailable(
     return false
   }
 
-  try {
-    await execFileAsync('xdotool', ['--version'], {
-      timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS
-    })
-    return true
-  } catch (error) {
-    if (!isMissingCommandError(error)) {
-      activeAppLog.debug('Linux active-app capability probe failed', { error })
-    }
-    return false
-  }
+  return await isXdotoolAvailable()
 }
 
 // Platform type for consistency
@@ -319,6 +314,7 @@ try {
 
   private async resolveActiveWindowLinux(): Promise<Partial<ActiveAppInfo> | null> {
     try {
+      await ensureXdotoolAvailable()
       const { stdout: windowIdOutput } = await execFileAsync('xdotool', ['getactivewindow'], {
         timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS
       })
@@ -376,6 +372,10 @@ try {
         platform: 'linux'
       }
     } catch (error) {
+      if (error instanceof Error && error.message === getXdotoolUnavailableReason()) {
+        activeAppLog.debug('Linux active-app unavailable: missing xdotool')
+        return null
+      }
       if (!isMissingCommandError(error)) {
         activeAppLog.warn('Linux active-app resolution failed', { error })
       }

@@ -4,7 +4,6 @@ import type {
   ISearchEngine,
   ISearchProvider,
   TalexTouch,
-  TuffItem,
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
@@ -16,7 +15,12 @@ import type { ProviderContext } from './types'
 import crypto from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
-import { StorageList, TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
+import {
+  StorageList,
+  TuffInputType,
+  TuffSearchResultBuilder,
+  type TuffItem
+} from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -894,6 +898,26 @@ export class SearchEngineCore
     }
   }
 
+  private appendCompatibilityNotice(
+    items: TuffItem[],
+    query: TuffQuery,
+    providerFilter?: string
+  ): TuffItem[] {
+    if (items.length > 0 || process.platform !== 'win32' || !providerFilter) {
+      return items
+    }
+
+    const isFileFilter =
+      matchesProviderFilter('everything-provider', providerFilter) ||
+      matchesProviderFilter('file-provider', providerFilter)
+    if (!isFileFilter) {
+      return items
+    }
+
+    const notice = everythingProvider.buildUnavailableNotice(query)
+    return notice ? [notice] : items
+  }
+
   private async mergeAndRankItems({
     sessionId,
     query,
@@ -1325,7 +1349,7 @@ export class SearchEngineCore
                 const initialItems = update.newResults.flatMap((res) => res.items)
 
                 const {
-                  sortedItems,
+                  sortedItems: rawSortedItems,
                   sortingDuration,
                   usageStatsDuration,
                   completionDuration,
@@ -1338,6 +1362,11 @@ export class SearchEngineCore
                   includeCompletion: true
                 })
                 pipelineDurations.mergeRankDuration = mergeRankDuration
+                const sortedItems = this.appendCompatibilityNotice(
+                  rawSortedItems,
+                  query,
+                  providerFilter
+                )
 
                 this._updateActivationState(update.newResults)
 
@@ -1454,7 +1483,7 @@ export class SearchEngineCore
             const initialItems = update.newResults.flatMap((res) => res.items)
 
             const {
-              sortedItems,
+              sortedItems: rawSortedItems,
               sortingDuration,
               usageStatsDuration,
               completionDuration,
@@ -1467,6 +1496,11 @@ export class SearchEngineCore
               includeCompletion: true
             })
             pipelineDurations.mergeRankDuration = mergeRankDuration
+            const sortedItems = this.appendCompatibilityNotice(
+              rawSortedItems,
+              query,
+              providerFilter
+            )
 
             this._updateActivationState(update.newResults)
 
