@@ -942,6 +942,8 @@ jobs:
     env:
       NEXUS_BASE_URL: ${{ vars.NEXUS_SYNC_BASE_URL || 'https://tuff.tagzxia.com' }}
       NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}
+      NEXUS_CF_ACCESS_CLIENT_ID: ${{ vars.ADMIN_CF_ACCESS_CLIENT_ID || secrets.ADMIN_CF_ACCESS_CLIENT_ID }}
+      NEXUS_CF_ACCESS_CLIENT_SECRET: ${{ vars.ADMIN_CF_ACCESS_CLIENT_SECRET || secrets.ADMIN_CF_ACCESS_CLIENT_SECRET }}
       TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sync_tag || github.ref_name }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -1063,10 +1065,62 @@ jobs:
           printf '%s' "${notes_json}" > /tmp/nexus-release-notes.json
           printf '%s' "${notes_html_json}" > /tmp/nexus-release-notes-html.json
 
+      - name: Prepare Nexus sync helpers
+        run: |
+          cat >/tmp/nexus-sync-helpers.sh <<'EOF'
+          set -euo pipefail
+
+          challenge_file_has_cloudflare_html() {
+            local file_path="$1"
+            [ -f "${file_path}" ] || return 1
+            grep -Eqi 'Just a moment|__cf_chl_|cf-browser-verification' "${file_path}"
+          }
+
+          explain_cloudflare_block() {
+            echo "Cloudflare challenge blocked Nexus release sync."
+            echo "Configure vars.NEXUS_SYNC_BASE_URL to a CI-safe origin, or provide ADMIN_CF_ACCESS_CLIENT_ID / ADMIN_CF_ACCESS_CLIENT_SECRET as GitHub Actions vars or secrets."
+          }
+
+          create_nexus_headers() {
+            local -n output_headers="$1"
+            output_headers=(
+              -H "Authorization: Bearer ${NEXUS_API_KEY}"
+              -H "Accept: application/json"
+              -H "User-Agent: tuff-release-sync/1.0"
+            )
+
+            if [ -n "${NEXUS_CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${NEXUS_CF_ACCESS_CLIENT_SECRET:-}" ]; then
+              output_headers+=(
+                -H "CF-Access-Client-Id: ${NEXUS_CF_ACCESS_CLIENT_ID}"
+                -H "CF-Access-Client-Secret: ${NEXUS_CF_ACCESS_CLIENT_SECRET}"
+              )
+            fi
+          }
+
+          assert_nexus_response_ok() {
+            local file_path="$1"
+            local http_code="$2"
+
+            if challenge_file_has_cloudflare_html "${file_path}"; then
+              cat "${file_path}"
+              explain_cloudflare_block
+              return 1
+            fi
+
+            if [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
+              cat "${file_path}"
+              return 1
+            fi
+          }
+          EOF
+
       - name: Upsert Nexus release metadata
         run: |
+          source /tmp/nexus-sync-helpers.sh
           notes_json=$(cat /tmp/nexus-release-notes.json)
           notes_html_json=$(cat /tmp/nexus-release-notes-html.json)
+          nexus_headers=()
+          create_nexus_headers nexus_headers
 
           create_payload=$(jq -n \
             --arg tag "${TAG}" \
@@ -1097,25 +1151,34 @@ jobs:
 
           http_code=$(curl -sS -o /tmp/nexus-release-create.json -w "%{http_code}" \
             -X POST "${NEXUS_BASE_URL}/api/releases" \
-            -H "Authorization: Bearer ${NEXUS_API_KEY}" \
+            "${nexus_headers[@]}" \
             -H "Content-Type: application/json" \
             -d "${create_payload}")
 
-          if [ "${http_code}" = "400" ]; then
-            curl -sS -f \
-              -X PATCH "${NEXUS_BASE_URL}/api/releases/${TAG}" \
-              -H "Authorization: Bearer ${NEXUS_API_KEY}" \
-              -H "Content-Type: application/json" \
-              -d "${update_payload}" \
-              -o /tmp/nexus-release-update.json
-          elif [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
+          if challenge_file_has_cloudflare_html /tmp/nexus-release-create.json; then
             cat /tmp/nexus-release-create.json
+            explain_cloudflare_block
+            exit 1
+          fi
+
+          if [ "${http_code}" = "400" ]; then
+            patch_code=$(curl -sS -o /tmp/nexus-release-update.json -w "%{http_code}" \
+              -X PATCH "${NEXUS_BASE_URL}/api/releases/${TAG}" \
+              "${nexus_headers[@]}" \
+              -H "Content-Type: application/json" \
+              -d "${update_payload}")
+            assert_nexus_response_ok /tmp/nexus-release-update.json "${patch_code}"
+          elif [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
+            assert_nexus_response_ok /tmp/nexus-release-create.json "${http_code}"
             exit 1
           fi
 
       - name: Link GitHub assets to Nexus release
         run: |
           set -euo pipefail
+          source /tmp/nexus-sync-helpers.sh
+          nexus_headers=()
+          create_nexus_headers nexus_headers
 
           manifest_url=$(jq -r '.assets[] | select(.name=="tuff-release-manifest.json") | .browser_download_url' /tmp/github-release.json)
           if [ -n "${manifest_url}" ] && [ "${manifest_url}" != "null" ]; then
@@ -1213,12 +1276,12 @@ jobs:
                 }')
             fi
 
-            curl -sS -f \
+            http_code=$(curl -sS -o /tmp/nexus-release-link.json -w "%{http_code}" \
               -X POST "${NEXUS_BASE_URL}/api/releases/${TAG}/link-github" \
-              -H "Authorization: Bearer ${NEXUS_API_KEY}" \
+              "${nexus_headers[@]}" \
               -H "Content-Type: application/json" \
-              -d "${payload}" \
-              -o /tmp/nexus-release-link.json
+              -d "${payload}")
+            assert_nexus_response_ok /tmp/nexus-release-link.json "${http_code}"
           done < <(jq -r '.assets[] | @base64' /tmp/github-release.json)
 
       - name: Backfill Nexus asset metadata from GitHub manifest (v2.4.7 only)
@@ -1234,7 +1297,11 @@ jobs:
 
       - name: Publish Nexus release
         run: |
-          curl -sS -f \
+          source /tmp/nexus-sync-helpers.sh
+          nexus_headers=()
+          create_nexus_headers nexus_headers
+
+          http_code=$(curl -sS -o /tmp/nexus-release-publish.json -w "%{http_code}" \
             -X POST "${NEXUS_BASE_URL}/api/releases/${TAG}/publish" \
-            -H "Authorization: Bearer ${NEXUS_API_KEY}" \
-            -o /tmp/nexus-release-publish.json
+            "${nexus_headers[@]}")
+          assert_nexus_response_ok /tmp/nexus-release-publish.json "${http_code}"
