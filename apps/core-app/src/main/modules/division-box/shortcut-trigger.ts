@@ -7,6 +7,7 @@
 
 import type { DivisionBoxConfig } from '@talex-touch/utils'
 import { shortcutModule } from '../global-shortcon'
+import { divisionBoxShortcutLog } from './logger'
 import { DivisionBoxManager } from './manager'
 
 const DIVISION_BOX_SHORTCUT_OWNER = 'module.division-box.shortcut-trigger'
@@ -88,7 +89,9 @@ export class ShortcutTriggerManager {
   registerShortcut(mapping: ShortcutMapping): boolean {
     // Check if shortcut ID already exists
     if (this.mappings.has(mapping.id)) {
-      console.warn(`[ShortcutTrigger] Shortcut mapping already exists: ${mapping.id}`)
+      divisionBoxShortcutLog.warn('Shortcut mapping already exists', {
+        meta: { shortcutId: mapping.id }
+      })
       return false
     }
 
@@ -101,16 +104,18 @@ export class ShortcutTriggerManager {
     )
 
     if (!success) {
-      console.error(`[ShortcutTrigger] Failed to register shortcut: ${mapping.id}`)
+      divisionBoxShortcutLog.error('Failed to register shortcut', {
+        meta: { shortcutId: mapping.id, accelerator: mapping.defaultAccelerator }
+      })
       return false
     }
 
     // Store mapping
     this.mappings.set(mapping.id, mapping)
 
-    console.log(
-      `[ShortcutTrigger] Registered shortcut: ${mapping.id} (${mapping.defaultAccelerator})`
-    )
+    divisionBoxShortcutLog.info('Registered shortcut', {
+      meta: { shortcutId: mapping.id, accelerator: mapping.defaultAccelerator }
+    })
     return true
   }
 
@@ -124,10 +129,12 @@ export class ShortcutTriggerManager {
     const mappingRemoved = this.mappings.delete(id)
     const shortcutRemoved = shortcutModule.unregisterMainShortcut(id)
     if (!mappingRemoved && !shortcutRemoved) {
-      console.warn(`[ShortcutTrigger] Shortcut mapping not found: ${id}`)
+      divisionBoxShortcutLog.warn('Shortcut mapping not found during unregister', {
+        meta: { shortcutId: id }
+      })
       return false
     }
-    console.log(`[ShortcutTrigger] Unregistered shortcut: ${id}`)
+    divisionBoxShortcutLog.info('Unregistered shortcut', { meta: { shortcutId: id } })
     return true
   }
 
@@ -162,18 +169,22 @@ export class ShortcutTriggerManager {
     const mapping = this.mappings.get(id)
 
     if (!mapping) {
-      console.error(`[ShortcutTrigger] No mapping found for shortcut: ${id}`)
+      divisionBoxShortcutLog.error('Shortcut mapping missing on trigger', {
+        meta: { shortcutId: id }
+      })
       return
     }
 
     try {
-      console.log(`[ShortcutTrigger] Shortcut triggered: ${id}`)
+      divisionBoxShortcutLog.info('Shortcut triggered', { meta: { shortcutId: id } })
 
       // Execute beforeOpen callback if provided
       if (mapping.beforeOpen) {
         const result = await mapping.beforeOpen()
         if (result === false) {
-          console.log(`[ShortcutTrigger] beforeOpen cancelled opening: ${id}`)
+          divisionBoxShortcutLog.info('Shortcut opening cancelled by beforeOpen', {
+            meta: { shortcutId: id }
+          })
           return
         }
       }
@@ -181,14 +192,19 @@ export class ShortcutTriggerManager {
       // Create DivisionBox session
       const session = await this.manager.createSession(mapping.config)
 
-      console.log(`[ShortcutTrigger] DivisionBox opened: ${session.sessionId}`)
+      divisionBoxShortcutLog.info('DivisionBox opened from shortcut', {
+        meta: { shortcutId: id, sessionId: session.sessionId }
+      })
 
       // Execute afterOpen callback if provided
       if (mapping.afterOpen) {
         await mapping.afterOpen(session.sessionId)
       }
     } catch (error) {
-      console.error(`[ShortcutTrigger] Error handling shortcut trigger for ${id}:`, error)
+      divisionBoxShortcutLog.error('Failed to handle shortcut trigger', {
+        meta: { shortcutId: id },
+        error
+      })
     }
   }
 
@@ -243,7 +259,7 @@ export class ShortcutTriggerManager {
       shortcutModule.unregisterMainShortcut(id)
     }
     this.mappings.clear()
-    console.log('[ShortcutTrigger] All shortcut mappings cleared')
+    divisionBoxShortcutLog.info('Cleared all shortcut mappings')
   }
 }
 

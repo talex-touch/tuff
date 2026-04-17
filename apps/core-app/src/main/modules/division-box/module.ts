@@ -25,10 +25,10 @@ import searchEngineCore from '../box-tool/search-engine/search-core'
 import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { createDivisionBoxCommandProvider } from './command-provider'
 import { initializeDivisionBoxIPC } from './ipc'
+import { divisionBoxModuleLog } from './logger'
 import { shortcutTriggerManager } from './shortcut-trigger'
 import { windowPool } from './window-pool'
 
-const LOG_PREFIX = '[DivisionBox]'
 const MAIN_RENDERER_READY_TIMEOUT_MS = 30_000
 
 /**
@@ -73,7 +73,7 @@ export class DivisionBoxModule extends BaseModule {
     const commandProvider = createDivisionBoxCommandProvider()
     searchEngineCore.registerProvider(commandProvider)
 
-    console.log(LOG_PREFIX, '✓ Module initialized')
+    divisionBoxModuleLog.info('Module initialized')
   }
 
   private async waitForMainRendererReady(): Promise<void> {
@@ -136,7 +136,7 @@ export class DivisionBoxModule extends BaseModule {
     const fallbackEvents: NonNullable<ModuleStartContext<TalexEvents>['events']> = touchEventBus
     const events = ctx.events ?? fallbackEvents
     if (!ctx.events) {
-      console.warn(LOG_PREFIX, 'Event bus missing in module context, falling back to global bus')
+      divisionBoxModuleLog.warn('Event bus missing in module context; falling back to global bus')
     }
 
     const handleAllModulesLoaded = () => {
@@ -150,7 +150,7 @@ export class DivisionBoxModule extends BaseModule {
     events.on(TalexEvents.ALL_MODULES_LOADED, handleAllModulesLoaded)
     this.disposeAllModulesLoaded = () =>
       events.off(TalexEvents.ALL_MODULES_LOADED, handleAllModulesLoaded)
-    console.log(LOG_PREFIX, '✓ Window pool deferred until all modules loaded')
+    divisionBoxModuleLog.info('Window pool initialization deferred until all modules loaded')
   }
 
   /**
@@ -181,7 +181,7 @@ export class DivisionBoxModule extends BaseModule {
     // Unregister command provider
     searchEngineCore.unregisterProvider('division-box-commands')
 
-    console.log(LOG_PREFIX, 'Module destroyed')
+    divisionBoxModuleLog.info('Module destroyed')
   }
 }
 

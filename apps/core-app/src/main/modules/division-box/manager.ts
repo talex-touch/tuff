@@ -11,6 +11,7 @@ import type { TouchPlugin } from '../plugin/plugin'
 import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxState } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { LRUCache } from './lru-cache'
+import { divisionBoxManagerLog } from './logger'
 import { DivisionBoxSession } from './session'
 
 /**
@@ -101,9 +102,9 @@ export class DivisionBoxManager {
 
         // If heap usage exceeds 500MB, trigger cache eviction
         if (heapUsedMB > 500) {
-          console.warn(
-            `[DivisionBoxManager] High memory usage detected: ${heapUsedMB.toFixed(2)}MB`
-          )
+          divisionBoxManagerLog.warn('High memory usage detected', {
+            meta: { heapUsedMB: heapUsedMB.toFixed(2) }
+          })
           this.handleMemoryPressure()
         }
       },
@@ -157,9 +158,9 @@ export class DivisionBoxManager {
     // Validate size
     const validSizes = ['compact', 'medium', 'expanded']
     if (!validSizes.includes(validatedConfig.size!)) {
-      console.warn(
-        `[DivisionBoxManager] Invalid size: ${validatedConfig.size}, using default 'medium'`
-      )
+      divisionBoxManagerLog.warn('Invalid size; using default "medium"', {
+        meta: { requestedSize: String(validatedConfig.size) }
+      })
       validatedConfig.size = 'medium'
     }
 
@@ -245,7 +246,13 @@ export class DivisionBoxManager {
       throw error
     }
 
-    console.log(`[DivisionBoxManager] Created session: ${sessionId}`)
+    divisionBoxManagerLog.info('Created session', {
+      meta: {
+        sessionId,
+        keepAlive: String(Boolean(validatedConfig.keepAlive)),
+        withUI: String(shouldAttachUIView(validatedConfig))
+      }
+    })
     return session
   }
 
@@ -307,7 +314,12 @@ export class DivisionBoxManager {
       throw error
     }
 
-    console.log(`[DivisionBoxManager] Created session without UI: ${sessionId}`)
+    divisionBoxManagerLog.info('Created session without UI', {
+      meta: {
+        sessionId,
+        keepAlive: String(Boolean(validatedConfig.keepAlive))
+      }
+    })
     return session
   }
 
@@ -355,7 +367,7 @@ export class DivisionBoxManager {
     // Destroy the session
     await session.destroy()
 
-    console.log(`[DivisionBoxManager] Destroyed session: ${sessionId}`)
+    divisionBoxManagerLog.info('Destroyed session', { meta: { sessionId } })
   }
 
   /**
@@ -442,16 +454,19 @@ export class DivisionBoxManager {
     const cacheSize = this.lruCache.size()
 
     if (cacheSize === 0) {
-      console.log('[DivisionBoxManager] No cached sessions to evict')
+      divisionBoxManagerLog.debug('Memory pressure handled with no cached sessions to evict')
       return
     }
 
     // Evict up to 50% of cached sessions
     const evictCount = Math.ceil(cacheSize * 0.5)
 
-    console.log(
-      `[DivisionBoxManager] Memory pressure detected, evicting ${evictCount} cached sessions`
-    )
+    divisionBoxManagerLog.info('Memory pressure detected; evicting cached sessions', {
+      meta: {
+        cacheSize: String(cacheSize),
+        evictCount: String(evictCount)
+      }
+    })
 
     const evictedIds = this.lruCache.evictMultiple(evictCount)
 
@@ -460,9 +475,12 @@ export class DivisionBoxManager {
       this.sessions.delete(sessionId)
     }
 
-    console.log(
-      `[DivisionBoxManager] Evicted ${evictedIds.length} sessions: ${evictedIds.join(', ')}`
-    )
+    divisionBoxManagerLog.info('Evicted cached sessions', {
+      meta: {
+        evictedCount: String(evictedIds.length),
+        sessionIds: evictedIds.join(',')
+      }
+    })
   }
 
   /**

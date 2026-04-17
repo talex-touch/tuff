@@ -6,6 +6,7 @@
  */
 
 import type { DivisionBoxSession } from './session'
+import { divisionBoxLruLog } from './logger'
 // DivisionBoxState import removed - not needed for LRU cache logic
 
 /**
@@ -131,7 +132,10 @@ export class LRUCache {
       // Destroy the session to free resources
       if (session) {
         session.destroy().catch((error) => {
-          console.error(`[LRUCache] Error destroying evicted session ${lruSessionId}:`, error)
+          divisionBoxLruLog.error('Failed to destroy evicted session', {
+            meta: { sessionId: lruSessionId },
+            error
+          })
         })
       }
 
@@ -223,7 +227,10 @@ export class LRUCache {
     await Promise.all(
       sessions.map((session) =>
         session.destroy().catch((error) => {
-          console.error(`[LRUCache] Error destroying session ${session.sessionId}:`, error)
+          divisionBoxLruLog.error('Failed to destroy cached session during clear', {
+            meta: { sessionId: session.sessionId },
+            error
+          })
         })
       )
     )

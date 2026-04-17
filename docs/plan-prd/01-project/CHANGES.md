@@ -5,6 +5,20 @@
 
 ## 2026-04-17
 
+### refactor(core-app): 收敛 DivisionBox 主进程日志到统一 logger 体系
+
+- `apps/core-app/src/main/modules/division-box/logger.ts`
+- `apps/core-app/src/main/modules/division-box/module.ts`
+- `apps/core-app/src/main/modules/division-box/manager.ts`
+- `apps/core-app/src/main/modules/division-box/lru-cache.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.ts`
+- `apps/core-app/src/main/modules/division-box/command-provider.ts`
+- `apps/core-app/src/main/modules/division-box/flow-trigger.ts`
+- `apps/core-app/src/main/modules/division-box/shortcut-trigger.ts`
+  - 新增 `division-box/logger.ts` 作为模块内统一日志入口，按 `Module / Manager / IPC / CommandProvider / FlowTrigger / ShortcutTrigger / LRU` 拆分子命名空间，避免生命周期、会话、快捷键和 Flow 触发链继续混用裸 `console.*`。
+  - 会话创建/销毁、内存压力驱逐、命令执行、Flow/Shortcut 触发等关键路径统一补 `sessionId / targetId / shortcutId / mappingId / pluginId` 等最小定位字段，减少后续主进程排障时的字符串搜索和上下文丢失。
+  - `division-box` 主进程目录复核后仅剩 `session.ts` 内两处注入脚本侧 `console.error`；该部分运行在页面注入上下文，不与本轮主进程 logger 治理混做。
+
 ### fix(release): 校正 beta tag 的 prerelease 发布语义并完成本地打包复核
 
 - `.github/workflows/build-and-release.yml`
