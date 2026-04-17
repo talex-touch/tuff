@@ -32,6 +32,7 @@ import fse from 'fs-extra'
 import { downloadTasks } from '../../db/schema'
 import { normalizeSupportedUpdateChannel } from '../../../shared/update/channel'
 import { resolveUpdateAssetTarget } from '../../../shared/update/platform-target'
+import { createLogger } from '../../utils/logger'
 import { SignatureVerifier } from '../../utils/release-signature'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { databaseModule } from '../database'
@@ -65,6 +66,7 @@ interface UpdateSystemConfig {
 const RENDERER_OVERRIDE_STATE_FILE = 'renderer-override.json'
 const RENDERER_OVERRIDE_DIR = 'renderer-override'
 const ENABLE_RENDERER_OVERRIDE = process.env.TUFF_ENABLE_RENDERER_OVERRIDE === '1'
+const updateSystemLog = createLogger('UpdateSystem')
 
 interface RendererOverrideState {
   version: string
@@ -218,7 +220,7 @@ export class UpdateSystem {
         source: 'GitHub'
       }
     } catch (error) {
-      console.error('[UpdateSystem] Failed to check for updates:', error)
+      updateSystemLog.error('Failed to check for updates', { error })
       return {
         hasUpdate: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -239,7 +241,12 @@ export class UpdateSystem {
       const reusableTaskId = await this.findReusableUpdateTaskId(resolvedRelease.tag_name)
       if (reusableTaskId) {
         this.setupDownloadCompletionListener(reusableTaskId, resolvedRelease.tag_name)
-        console.log(`[UpdateSystem] Reusing existing update task: ${reusableTaskId}`)
+        updateSystemLog.info('Reusing existing update task', {
+          meta: {
+            tag: resolvedRelease.tag_name,
+            taskId: reusableTaskId
+          }
+        })
         return reusableTaskId
       }
 
@@ -274,13 +281,25 @@ export class UpdateSystem {
       this.setupDownloadCompletionListener(taskId, resolvedRelease.tag_name)
 
       void this.maybeScheduleRendererOverrideDownload(resolvedRelease, manifest).catch((error) => {
-        console.warn('[UpdateSystem] Renderer override scheduling failed:', error)
+        updateSystemLog.warn('Renderer override background scheduling failed', {
+          error,
+          meta: { tag: resolvedRelease.tag_name }
+        })
       })
 
-      console.log(`[UpdateSystem] Update download started: ${taskId}`)
+      updateSystemLog.info('Update download started', {
+        meta: {
+          tag: resolvedRelease.tag_name,
+          taskId,
+          asset: asset.name
+        }
+      })
       return taskId
     } catch (error) {
-      console.error('[UpdateSystem] Failed to download update:', error)
+      updateSystemLog.error('Failed to download update', {
+        error,
+        meta: { tag: release.tag_name }
+      })
       throw error
     }
   }
@@ -336,7 +355,10 @@ export class UpdateSystem {
       const { release: resolvedRelease, manifest } = await this.attachReleaseManifest(release)
       await this.maybeScheduleRendererOverrideDownload(resolvedRelease, manifest)
     } catch (error) {
-      console.warn('[UpdateSystem] Failed to schedule renderer override:', error)
+      updateSystemLog.warn('Failed to schedule renderer override', {
+        error,
+        meta: { tag: release.tag_name }
+      })
       const message = error instanceof Error ? error.message : String(error)
       this.reportRendererOverrideIssue('error', 'Renderer override schedule failed', message, {
         tag: release.tag_name
@@ -395,7 +417,12 @@ export class UpdateSystem {
     }
 
     if (!artifact.coreRange) {
-      console.warn('[UpdateSystem] Renderer artifact missing coreRange, skipping.')
+      updateSystemLog.warn('Renderer artifact missing coreRange, skip scheduling', {
+        meta: {
+          tag: release.tag_name,
+          asset: artifact.name
+        }
+      })
       this.reportRendererOverrideIssue(
         'warn',
         'Renderer override skipped',
@@ -405,7 +432,12 @@ export class UpdateSystem {
       return
     }
     if (!artifact.sha256) {
-      console.warn('[UpdateSystem] Renderer artifact missing sha256, skipping.')
+      updateSystemLog.warn('Renderer artifact missing sha256, skip scheduling', {
+        meta: {
+          tag: release.tag_name,
+          asset: artifact.name
+        }
+      })
       this.reportRendererOverrideIssue(
         'warn',
         'Renderer override skipped',
@@ -416,9 +448,14 @@ export class UpdateSystem {
     }
 
     if (!this.isCoreRangeCompatible(artifact.coreRange)) {
-      console.info(
-        `[UpdateSystem] Renderer coreRange "${artifact.coreRange}" not satisfied by current core, skipping.`
-      )
+      updateSystemLog.info('Renderer coreRange not satisfied by current core, skip scheduling', {
+        meta: {
+          tag: release.tag_name,
+          asset: artifact.name,
+          coreRange: artifact.coreRange,
+          current: this.currentVersion.raw
+        }
+      })
       this.reportRendererOverrideIssue(
         'warn',
         'Renderer override skipped',
@@ -430,7 +467,12 @@ export class UpdateSystem {
 
     const asset = this.resolveAssetByName(release.assets as ReleaseAsset[], artifact.name)
     if (!asset) {
-      console.warn('[UpdateSystem] Renderer asset not found in release:', artifact.name)
+      updateSystemLog.warn('Renderer asset not found in release', {
+        meta: {
+          tag: release.tag_name,
+          asset: artifact.name
+        }
+      })
       this.reportRendererOverrideIssue(
         'warn',
         'Renderer override skipped',
@@ -442,7 +484,12 @@ export class UpdateSystem {
 
     const url = this.resolveAssetUrl(asset)
     if (!url) {
-      console.warn('[UpdateSystem] Renderer asset missing download url:', artifact.name)
+      updateSystemLog.warn('Renderer asset missing download url', {
+        meta: {
+          tag: release.tag_name,
+          asset: artifact.name
+        }
+      })
       this.reportRendererOverrideIssue(
         'warn',
         'Renderer override skipped',
@@ -459,7 +506,13 @@ export class UpdateSystem {
       currentOverride.version === versionToken &&
       currentOverride.coreRange === artifact.coreRange
     ) {
-      console.log('[UpdateSystem] Renderer override already active, skipping download.')
+      updateSystemLog.debug('Renderer override already active, skip download', {
+        meta: {
+          version: versionToken,
+          coreRange: artifact.coreRange,
+          tag: release.tag_name
+        }
+      })
       return
     }
 
@@ -540,7 +593,10 @@ export class UpdateSystem {
         if (task.status === 'completed') {
           this.pollingService.unregister(pollTaskId)
           void onCompleted(task).catch((error) => {
-            console.warn('[UpdateSystem] Auxiliary install failed:', error)
+            updateSystemLog.warn('Auxiliary install failed', {
+              error,
+              meta: { taskId }
+            })
             const message = error instanceof Error ? error.message : String(error)
             this.reportRendererOverrideIssue('error', 'Renderer override install failed', message)
           })
@@ -560,7 +616,7 @@ export class UpdateSystem {
     manifest: UpdateReleaseManifest | null
   ): Promise<void> {
     if (!this.isRendererOverrideEnabled()) {
-      console.warn('[UpdateSystem] Renderer override disabled, skipping install.')
+      updateSystemLog.debug('Renderer override disabled, skip install')
       return
     }
     const filePath = path.join(task.destination, task.filename)
@@ -588,8 +644,11 @@ export class UpdateSystem {
           : undefined
       )
       if (!verifyResult.valid) {
-        console.warn('[UpdateSystem] Renderer override signature verification failed:', {
-          reason: verifyResult.reason
+        updateSystemLog.warn('Renderer override signature verification failed', {
+          meta: {
+            tag: release.tag_name,
+            reason: verifyResult.reason
+          }
         })
         this.reportRendererOverrideIssue(
           'warn',
@@ -629,9 +688,12 @@ export class UpdateSystem {
         sha256: artifact.sha256
       })
 
-      console.log('[UpdateSystem] Renderer override installed', {
-        version: versionToken,
-        path: targetDir
+      updateSystemLog.info('Renderer override installed', {
+        meta: {
+          version: versionToken,
+          path: targetDir,
+          tag: release.tag_name
+        }
       })
     } finally {
       await fse.remove(tempDir).catch(() => null)
@@ -769,16 +831,23 @@ export class UpdateSystem {
         )
 
         if (!verifyResult.valid) {
-          console.warn('[UpdateSystem] Signature verification failed:', verifyResult.reason)
+          updateSystemLog.warn('Update package signature verification failed', {
+            meta: {
+              taskId,
+              reason: verifyResult.reason
+            }
+          })
         }
       }
 
       // Trigger installation (platform-specific)
       await this.triggerInstallation(task.destination, task.filename)
 
-      console.log(`[UpdateSystem] Update installation triggered for task: ${taskId}`)
+      updateSystemLog.info('Update installation triggered', {
+        meta: { taskId, filename: task.filename }
+      })
     } catch (error) {
-      console.error('[UpdateSystem] Failed to install update:', error)
+      updateSystemLog.error('Failed to install update', { error, meta: { taskId } })
       throw error
     }
   }
@@ -826,7 +895,10 @@ export class UpdateSystem {
         metadata: this.parseUpdateTaskMetadata(record.metadata)
       }
     } catch (error) {
-      console.warn('[UpdateSystem] Failed to query update task from database:', error)
+      updateSystemLog.warn('Failed to query update task from database', {
+        error,
+        meta: { taskId }
+      })
       return null
     }
   }
@@ -850,7 +922,7 @@ export class UpdateSystem {
         return parsed as Record<string, unknown>
       }
     } catch (error) {
-      console.warn('[UpdateSystem] Failed to parse update task metadata:', error)
+      updateSystemLog.warn('Failed to parse update task metadata', { error })
     }
 
     return undefined
@@ -969,7 +1041,7 @@ export class UpdateSystem {
 
       return response.data
     } catch (error) {
-      console.error('[UpdateSystem] Failed to fetch GitHub releases:', error)
+      updateSystemLog.error('Failed to fetch GitHub releases', { error })
       throw error
     }
   }
@@ -1057,13 +1129,18 @@ export class UpdateSystem {
       const manifest = response.data
 
       if (!this.isReleaseManifest(manifest)) {
-        console.warn('[UpdateSystem] Invalid release manifest format')
+        updateSystemLog.warn('Invalid release manifest format', {
+          meta: { asset: manifestAsset.name }
+        })
         return null
       }
 
       return manifest
     } catch (error) {
-      console.warn('[UpdateSystem] Failed to fetch release manifest:', error)
+      updateSystemLog.warn('Failed to fetch release manifest', {
+        error,
+        meta: { asset: manifestAsset.name }
+      })
       return null
     }
   }
@@ -1474,7 +1551,10 @@ export class UpdateSystem {
     try {
       await fs.mkdir(downloadPath, { recursive: true })
     } catch (error) {
-      console.error('[UpdateSystem] Failed to create download directory:', error)
+      updateSystemLog.error('Failed to create update download directory', {
+        error,
+        meta: { path: downloadPath }
+      })
     }
 
     return downloadPath
@@ -1492,7 +1572,10 @@ export class UpdateSystem {
 
       return actualChecksum.toLowerCase() === expectedChecksum.toLowerCase()
     } catch (error) {
-      console.error('[UpdateSystem] Failed to verify checksum:', error)
+      updateSystemLog.error('Failed to verify checksum', {
+        error,
+        meta: { path: filePath }
+      })
       return false
     }
   }
@@ -1506,7 +1589,7 @@ export class UpdateSystem {
       return
     }
     await shell.openPath(filePath)
-    console.log(`[UpdateSystem] Opened installer: ${filePath}`)
+    updateSystemLog.info('Opened installer', { meta: { path: filePath } })
   }
 
   private async tryInstallMacAppBundle(packagePath: string): Promise<boolean> {
@@ -1610,14 +1693,19 @@ export class UpdateSystem {
       installerProcess.unref()
 
       this.requestAppQuit('mac-app-update')
-      console.log('[UpdateSystem] Scheduled macOS app replacement install', {
-        from: packagePath,
-        to: targetAppPath
+      updateSystemLog.info('Scheduled macOS app replacement install', {
+        meta: {
+          from: packagePath,
+          to: targetAppPath
+        }
       })
       return true
     } catch (error) {
       await fse.remove(stageRoot).catch(() => null)
-      console.warn('[UpdateSystem] Failed to run macOS app replacement install:', error)
+      updateSystemLog.warn('Failed to run macOS app replacement install', {
+        error,
+        meta: { path: packagePath }
+      })
       return false
     }
   }
@@ -1643,7 +1731,9 @@ export class UpdateSystem {
     }
 
     setTimeout(() => {
-      console.warn(`[UpdateSystem] Force exiting app after quit timeout: ${reason}`)
+      updateSystemLog.warn('Force exiting app after quit timeout', {
+        meta: { reason }
+      })
       app.exit(0)
     }, 8000)
   }

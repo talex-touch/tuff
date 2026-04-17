@@ -5,6 +5,13 @@
 
 ## 2026-04-17
 
+### refactor(core-app): 收敛 UpdateSystem 主进程日志到统一 logger 体系
+
+- `apps/core-app/src/main/modules/update/update-system.ts`
+  - `UpdateSystem` 内剩余裸 `console.*` 已全部替换为统一 `createLogger('UpdateSystem')` 出口，避免更新检查、下载安装、renderer override 与 macOS 自替换流程继续混用主进程原生控制台输出。
+  - 更新下载、renderer override 调度/跳过、签名校验、安装触发、目录创建与强退兜底等路径统一补 `tag / taskId / asset / coreRange / path / reason` 最小上下文，主进程排障不再依赖字符串拼接搜索。
+  - 将“override 已激活”“override 已禁用”等纯过程态日志降为 `debug`，保留真正需要线上观察的 `info / warn / error`，继续压低更新热路径噪声。
+
 ### fix(core-app): 收敛主进程预期网络失败与可选取消日志噪声
 
 - `apps/core-app/src/main/core/channel-core.ts`
