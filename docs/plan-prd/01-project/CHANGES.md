@@ -5,12 +5,44 @@
 
 ## 2026-04-17
 
+### refactor(core-app): 收敛插件安装与日志服务主进程日志出口
+
+- `apps/core-app/src/main/modules/plugin/install-queue.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-installer.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-ui-utils.ts`
+- `apps/core-app/src/main/modules/plugin/dev-plugin-installer.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-resolver.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/service/plugin-log.service.ts`
+  - `PluginInstaller`、`PluginInstallQueue`、`DevPluginInstaller` 与 `plugin-ui-utils` 的下载进度、安装元数据持久化、拒绝/失败清理、活跃 UI 检测与关闭流程也统一切到 `PluginSystem` logger，插件安装热路径不再在不同文件里混用 `console.warn/error`。
+  - `PluginResolver` 安装/更新/解析流程的裸 `console.*` 已统一切到 `PluginSystem` logger，补齐 `pluginName / source / targetDir / whole / removedCount` 最小上下文，插件安装失败与清理失败不再只剩字符串拼接日志。
+  - `plugin-module` 内插件 storage/sqlite/api/store 等 IPC handler 的 catch 分支统一走 `PluginSystem:IPC` helper，保留原有返回值语义，同时把几十处散落的 `console.error` 收敛成同一命名空间，便于后续按 `handler` 聚合排障。
+  - `plugin-log.service` 的 session 列表、buffer 查询、订阅管理与打开日志目录/文件改为统一 logger；过程态查询降到 `debug`，`shell.openPath()` 失败会返回真实错误而不是一律回 `success`。
+
 ### refactor(core-app): 收敛 UpdateSystem 主进程日志到统一 logger 体系
 
 - `apps/core-app/src/main/modules/update/update-system.ts`
   - `UpdateSystem` 内剩余裸 `console.*` 已全部替换为统一 `createLogger('UpdateSystem')` 出口，避免更新检查、下载安装、renderer override 与 macOS 自替换流程继续混用主进程原生控制台输出。
   - 更新下载、renderer override 调度/跳过、签名校验、安装触发、目录创建与强退兜底等路径统一补 `tag / taskId / asset / coreRange / path / reason` 最小上下文，主进程排障不再依赖字符串拼接搜索。
   - 将“override 已激活”“override 已禁用”等纯过程态日志降为 `debug`，保留真正需要线上观察的 `info / warn / error`，继续压低更新热路径噪声。
+
+### fix(core-app): 收口 beta 更新版本判断与更新弹窗重复展示
+
+- `apps/core-app/src/main/utils/version-util.ts`
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `apps/core-app/src/main/modules/update/update-system.ts`
+- `apps/core-app/src/shared/update/version.ts`
+- `apps/core-app/src/shared/update/version.test.ts`
+- `apps/core-app/scripts/build-target.js`
+- `apps/core-app/src/renderer/src/modules/hooks/useUpdateRuntime.ts`
+- `apps/core-app/src/renderer/src/modules/mention/dialog-mention.ts`
+- `apps/core-app/src/renderer/src/modules/update/update-dialog-session.ts`
+- `apps/core-app/src/renderer/src/modules/update/update-dialog-session.test.ts`
+  - `version-util` 读取应用版本时补上根 `package.json` 兜底，避免主进程单例早于 `polyfills` 初始化时退回到 `app.getVersion()`，把 `2.4.9-beta.15` 误判成打包产物里的 `2.4.9-SNAPSHOT.15`。
+  - 主进程 `UpdateService` 与 `UpdateSystem` 统一复用 shared update version helper：`beta / alpha / snapshot` 现在会落到同一 preview 比较序列，缓存命中、官方源 fallback 与 GitHub 返回乱序场景都不再把 `beta.12` 误当成比 `beta.15` 更新。
+  - `build-target.js` 改为区分 runtime version 与 builder version：beta 仍按 snapshot build 产线打包，但仅 Windows builder metadata 继续做 `SNAPSHOT` 兼容转换；macOS/Linux 运行时版本保持 `package.json` 的 beta tag，不再把安装包自身版本写坏成 snapshot。
+  - renderer 侧更新弹窗收口为单入口，新增会话级 tag 去重/动作中锁/成功后抑制，`checkApplicationUpgrade()` 与 `UpdateEvents.available` 不再为同一版本连续弹两次；手动 force check 仍可绕过会话抑制重新查看。
+  - `blowMention()` 补齐显式 `z-index`，修复点“下次提醒我”后又弹出一层低层级不可操作 dialog 的问题。
 
 ### fix(core-app): 收敛 Download 迁移链日志并修复首迁移缺陷
 

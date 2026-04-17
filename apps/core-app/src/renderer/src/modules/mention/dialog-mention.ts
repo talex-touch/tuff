@@ -305,6 +305,7 @@ export async function blowMention(
           ? 'render'
           : 'component'
 
+    root.style.zIndex = `${10000 + dialogManager.getStackSize()}`
     document.body.appendChild(root)
 
     const { cleanup, id } = renderComponent(

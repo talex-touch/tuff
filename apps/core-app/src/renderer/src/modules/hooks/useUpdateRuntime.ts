@@ -20,15 +20,13 @@ import { h, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
 import { useI18nText } from '~/modules/lang'
-import {
-  normalizeStoredUpdateChannel,
-  normalizeSupportedUpdateChannel
-} from '../update/channel'
+import { normalizeStoredUpdateChannel, normalizeSupportedUpdateChannel } from '../update/channel'
 import {
   detectUpdateAssetArch,
   detectUpdateAssetPlatform,
   resolveRuntimeUpdateArch
 } from '../update/platform-target'
+import { updateDialogSession } from '../update/update-dialog-session'
 import { devLog } from '~/utils/dev-log'
 import { blowMention } from '../mention/dialog-mention'
 import { useAppState } from './useAppStates'
@@ -324,8 +322,7 @@ export function useUpdateRuntime() {
     if (response.success && response.data) {
       return {
         ...response.data,
-        channel:
-          normalizeStoredUpdateChannel(response.data.channel) ?? AppPreviewChannel.RELEASE
+        channel: normalizeStoredUpdateChannel(response.data.channel) ?? AppPreviewChannel.RELEASE
       }
     }
     throw new Error(response.error || 'Failed to get status')
@@ -344,8 +341,7 @@ export function useUpdateRuntime() {
         }
         return {
           ...response.data,
-          channel:
-            normalizeStoredUpdateChannel(response.data.channel) ?? AppPreviewChannel.RELEASE
+          channel: normalizeStoredUpdateChannel(response.data.channel) ?? AppPreviewChannel.RELEASE
         }
       }
       return null
@@ -364,19 +360,126 @@ export function useUpdateRuntime() {
     }
   }
 
-  async function shouldSuppressUpdateDialog(release: GitHubRelease): Promise<boolean> {
+  async function shouldSuppressUpdateDialog(
+    release: GitHubRelease,
+    options?: { force?: boolean }
+  ): Promise<boolean> {
     try {
       const status = await getUpdateStatus()
-      if (!status.downloadReady) {
-        return false
+      if (status.downloadReady) {
+        if (!status.downloadReadyVersion) {
+          return true
+        }
+        if (status.downloadReadyVersion === release.tag_name) {
+          return true
+        }
       }
-      if (!status.downloadReadyVersion) {
-        return true
-      }
-      return status.downloadReadyVersion === release.tag_name
     } catch {
+      // ignore
+    }
+
+    if (options?.force) {
       return false
     }
+
+    try {
+      const releaseChannel = normalizeSupportedUpdateChannel(
+        resolveVersion(release.tag_name).channel
+      )
+      const cachedRelease = await getCachedRelease(releaseChannel)
+      if (!cachedRelease || cachedRelease.tag !== release.tag_name) {
+        return false
+      }
+
+      if (cachedRelease.status === 'skipped' || cachedRelease.status === 'acknowledged') {
+        return true
+      }
+
+      if (
+        cachedRelease.status === 'snoozed' &&
+        typeof cachedRelease.snoozeUntil === 'number' &&
+        cachedRelease.snoozeUntil > Date.now()
+      ) {
+        return true
+      }
+    } catch {
+      // ignore
+    }
+
+    return false
+  }
+
+  async function finalizeDialogAction(
+    tag: string,
+    action: () => Promise<boolean>
+  ): Promise<boolean> {
+    try {
+      const success = await action()
+      updateDialogSession.finishAction(tag, success)
+      return success
+    } catch (dialogActionError) {
+      console.error('[useUpdateRuntime] Update dialog action failed:', dialogActionError)
+      updateDialogSession.failAction(tag)
+      return false
+    }
+  }
+
+  async function presentUpdateDialog(
+    release: GitHubRelease,
+    options?: { bypassSuppression?: boolean }
+  ): Promise<boolean> {
+    const tag = release.tag_name
+    if (!updateDialogSession.beginPresentation(tag, options)) {
+      return false
+    }
+
+    let actionStarted = false
+    let actionPromise: Promise<boolean> | null = null
+
+    const startAction = (action: () => Promise<boolean>): void => {
+      if (actionStarted) {
+        return
+      }
+      if (!updateDialogSession.beginAction(tag)) {
+        return
+      }
+      actionStarted = true
+      actionPromise = finalizeDialogAction(tag, action)
+    }
+
+    try {
+      await blowMention(t('update.new_version_available'), () => {
+        return h(AppUpdateView, {
+          release: release as unknown as Record<string, unknown>,
+          onUpdateNow: () => {
+            startAction(() => handleUpdateNowSelection(release))
+          },
+          onSkipVersion: () => {
+            startAction(() => handleIgnoreVersion(release))
+          },
+          onRemindLater: () => {
+            startAction(() => handleRemindLaterSelection(release))
+          }
+        })
+      })
+    } finally {
+      if (!actionStarted) {
+        if (updateDialogSession.beginAction(tag)) {
+          actionStarted = true
+          actionPromise = finalizeDialogAction(tag, () =>
+            handleRemindLaterSelection(release, { silent: true })
+          )
+        } else {
+          updateDialogSession.endPresentation(tag)
+        }
+      }
+    }
+
+    if (actionPromise) {
+      await actionPromise
+    }
+
+    return true
   }
 
   async function checkApplicationUpgrade(force = false): Promise<UpdateCheckResult | undefined> {
@@ -402,33 +505,12 @@ export function useUpdateRuntime() {
         appStates.noUpdateAvailable = false
         clearUpdateErrorMessage()
 
-        const suppressDialog = await shouldSuppressUpdateDialog(result.release)
+        const suppressDialog = await shouldSuppressUpdateDialog(result.release, { force })
         if (suppressDialog) {
           return result
         }
 
-        let userActed = false
-        await blowMention(t('update.new_version_available'), () => {
-          return h(AppUpdateView, {
-            release: result.release as unknown as Record<string, unknown>,
-            onUpdateNow: () => {
-              userActed = true
-              void handleUpdateNowSelection(result.release!)
-            },
-            onSkipVersion: () => {
-              userActed = true
-              void handleIgnoreVersion(result.release!)
-            },
-            onRemindLater: () => {
-              userActed = true
-              void handleRemindLaterSelection(result.release!)
-            }
-          })
-        })
-
-        if (!userActed) {
-          await handleRemindLaterSelection(result.release, { silent: true })
-        }
+        await presentUpdateDialog(result.release, { bypassSuppression: force })
       } else if (result.error) {
         appStates.noUpdateAvailable = false
         handleUpdateError(result.error, result.source)
@@ -503,21 +585,23 @@ export function useUpdateRuntime() {
     }
   }
 
-  async function handleUpdateAcknowledged(release: GitHubRelease): Promise<void> {
+  async function handleUpdateAcknowledged(release: GitHubRelease): Promise<boolean> {
     try {
       await recordAction(release.tag_name, 'update-now')
       appStates.hasUpdate = false
       appStates.noUpdateAvailable = false
       clearUpdateErrorMessage()
+      return true
     } catch (ackError) {
       console.warn('[useUpdateRuntime] Failed to acknowledge update:', ackError)
+      return false
     }
   }
 
   async function handleRemindLaterSelection(
     release: GitHubRelease,
     options?: { silent?: boolean }
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       await recordAction(release.tag_name, 'remind-later')
       if (!options?.silent) {
@@ -526,15 +610,17 @@ export function useUpdateRuntime() {
       appStates.hasUpdate = false
       appStates.noUpdateAvailable = true
       clearUpdateErrorMessage()
+      return true
     } catch (remindError) {
       console.error('[useUpdateRuntime] Failed to set remind later:', remindError)
       if (!options?.silent) {
         toast.error(t('update.remind_later_failed'))
       }
+      return false
     }
   }
 
-  async function handleIgnoreVersion(release: GitHubRelease): Promise<void> {
+  async function handleIgnoreVersion(release: GitHubRelease): Promise<boolean> {
     try {
       const settings = await getUpdateSettings()
       let updatedList = false
@@ -550,18 +636,21 @@ export function useUpdateRuntime() {
       appStates.hasUpdate = false
       appStates.noUpdateAvailable = true
       clearUpdateErrorMessage()
+      return true
     } catch (ignoreError) {
       console.error('[useUpdateRuntime] Failed to ignore version:', ignoreError)
       toast.error(t('update.ignore_version_failed'))
+      return false
     }
   }
 
-  async function handleUpdateNowSelection(release: GitHubRelease): Promise<void> {
+  async function handleUpdateNowSelection(release: GitHubRelease): Promise<boolean> {
     const started = await handleDownloadUpdate(release)
     if (!started) {
-      return
+      return false
     }
     await handleUpdateAcknowledged(release)
+    return true
   }
 
   async function clearUpdateCache(): Promise<void> {
@@ -598,28 +687,7 @@ export function useUpdateRuntime() {
               return
             }
 
-            let userActed = false
-            void blowMention(t('update.new_version_available'), () => {
-              return h(AppUpdateView, {
-                release: data.release as unknown as Record<string, unknown>,
-                onUpdateNow: () => {
-                  userActed = true
-                  void handleUpdateNowSelection(data.release!)
-                },
-                onSkipVersion: () => {
-                  userActed = true
-                  void handleIgnoreVersion(data.release!)
-                },
-                onRemindLater: () => {
-                  userActed = true
-                  void handleRemindLaterSelection(data.release!)
-                }
-              })
-            }).then(async () => {
-              if (!userActed) {
-                await handleRemindLaterSelection(data.release!, { silent: true })
-              }
-            })
+            void presentUpdateDialog(data.release!)
           })
         }),
         downloadSdk.onTaskCompleted((task) => {

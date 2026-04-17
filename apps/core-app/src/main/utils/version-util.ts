@@ -1,9 +1,14 @@
 import process from 'node:process'
 import { app } from 'electron'
+import packageJson from '../../../../../package.json'
 
 /**
  * Get application version
- * Priority: globalThis.$pkg (from polyfills) > process.env.APP_VERSION > app.getVersion()
+ * Priority:
+ * 1. globalThis.$pkg (from polyfills)
+ * 2. process.env.APP_VERSION
+ * 3. Bundled root package.json version
+ * 4. app.getVersion()
  *
  * @returns Application version string (e.g., "2.1.0")
  */
@@ -18,7 +23,11 @@ export function getAppVersion(): string {
     return process.env.APP_VERSION
   }
 
-  // Priority 3: Electron app.getVersion() (if available)
+  if (packageJson.version) {
+    return packageJson.version
+  }
+
+  // Priority 4: Electron app.getVersion() (if available)
   try {
     return app.getVersion()
   } catch {

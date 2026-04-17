@@ -44,6 +44,11 @@ import {
   normalizeStoredUpdateChannel,
   normalizeSupportedUpdateChannel
 } from '../../../shared/update/channel'
+import {
+  compareUpdateVersions,
+  parseComparableUpdateVersion,
+  selectLatestUpdateRelease
+} from '../../../shared/update/version'
 import { UpdateRecordStatus, UpdateRepository } from './update-repository'
 import { UpdateActionController } from './services/update-action-controller'
 import { UpdateSystem } from './update-system'
@@ -510,6 +515,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
             : null
           if (record) {
             const release = this.deserializeRelease(record.payload)
+            if (release && !this.isUpdateCandidate(release.tag_name)) {
+              return { success: true, data: null }
+            }
             return {
               success: true,
               data: release
@@ -1305,6 +1313,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       return null
     }
 
+    if (entry.data.release && !this.isUpdateCandidate(entry.data.release.tag_name)) {
+      this.cache.delete(cacheKey)
+      return null
+    }
+
     return entry.data
   }
 
@@ -1429,15 +1442,28 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     const force = options?.force ?? false
     const cacheEntry = this.getReleaseCacheEntry(channel)
     const now = Date.now()
+    const resolveCachedRelease = (): GitHubRelease | null =>
+      selectLatestUpdateRelease(cacheEntry?.releases ?? [])
 
     if (!force && this.settings.cacheEnabled && cacheEntry?.releases?.length) {
       const ttlMs = this.settings.cacheTTL * 60 * 1000
       if (now - cacheEntry.fetchedAt <= ttlMs) {
+        const cachedRelease = resolveCachedRelease()
+        if (!cachedRelease) {
+          return {
+            usedNetwork: false,
+            result: {
+              hasUpdate: false,
+              error: 'No cached release available',
+              source
+            }
+          }
+        }
         return {
           usedNetwork: false,
           result: {
             hasUpdate: true,
-            release: cacheEntry.releases[0],
+            release: cachedRelease,
             source
           }
         }
@@ -1450,11 +1476,22 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       now < cacheEntry.cooldownUntil
     ) {
       if (cacheEntry.releases?.length) {
+        const cachedRelease = resolveCachedRelease()
+        if (!cachedRelease) {
+          return {
+            usedNetwork: false,
+            result: {
+              hasUpdate: false,
+              error: 'No cached release available',
+              source
+            }
+          }
+        }
         return {
           usedNetwork: false,
           result: {
             hasUpdate: true,
-            release: cacheEntry.releases[0],
+            release: cachedRelease,
             source
           }
         }
@@ -1511,6 +1548,17 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
         if (response.status === 304) {
           if (cacheEntry?.releases?.length) {
+            const cachedRelease = resolveCachedRelease()
+            if (!cachedRelease) {
+              return {
+                usedNetwork: true,
+                result: {
+                  hasUpdate: false,
+                  error: 'No cached release available',
+                  source
+                }
+              }
+            }
             this.setReleaseCacheEntry(channel, {
               ...cacheEntry,
               fetchedAt: now,
@@ -1525,7 +1573,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
               usedNetwork: true,
               result: {
                 hasUpdate: true,
-                release: cacheEntry.releases[0],
+                release: cachedRelease,
                 source
               }
             }
@@ -1569,6 +1617,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           }
         }
 
+        channelReleases.sort((a, b) => compareUpdateVersions(b.tag_name, a.tag_name))
+        const latestRelease = channelReleases[0]
+
         const updatedEntry: ReleaseCacheEntry = {
           releases: channelReleases,
           fetchedAt: now,
@@ -1586,7 +1637,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           usedNetwork: true,
           result: {
             hasUpdate: true,
-            release: channelReleases[0],
+            release: latestRelease,
             source
           }
         }
@@ -1607,11 +1658,15 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
 
     if (cacheEntry?.releases?.length) {
+      const cachedRelease = resolveCachedRelease()
+      if (!cachedRelease) {
+        throw new Error('Failed to fetch latest release')
+      }
       return {
         usedNetwork: false,
         result: {
           hasUpdate: true,
-          release: cacheEntry.releases[0],
+          release: cachedRelease,
           source
         }
       }
@@ -1632,15 +1687,28 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     const force = options?.force ?? false
     const cacheEntry = this.getReleaseCacheEntry(channel)
     const now = Date.now()
+    const resolveCachedRelease = (): GitHubRelease | null =>
+      selectLatestUpdateRelease(cacheEntry?.releases ?? [])
 
     if (!force && this.settings.cacheEnabled && cacheEntry?.releases?.length) {
       const ttlMs = this.settings.cacheTTL * 60 * 1000
       if (now - cacheEntry.fetchedAt <= ttlMs) {
+        const cachedRelease = resolveCachedRelease()
+        if (!cachedRelease) {
+          return {
+            usedNetwork: false,
+            result: {
+              hasUpdate: false,
+              error: 'No cached release available',
+              source
+            }
+          }
+        }
         return {
           usedNetwork: false,
           result: {
             hasUpdate: true,
-            release: cacheEntry.releases[0],
+            release: cachedRelease,
             source
           }
         }
@@ -1694,11 +1762,15 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       this.recordFetchFailure(channel, error)
 
       if (cacheEntry?.releases?.length) {
+        const cachedRelease = resolveCachedRelease()
+        if (!cachedRelease) {
+          throw new Error('Failed to fetch official release')
+        }
         return {
           usedNetwork: false,
           result: {
             hasUpdate: true,
-            release: cacheEntry.releases[0],
+            release: cachedRelease,
             source
           }
         }
@@ -1858,18 +1930,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     patch: number
     raw: string
   } {
-    const { version, channelLabel } = splitUpdateTag(versionStr)
-    const versionNum = version
-
-    const versionNumArr = versionNum.split('.')
-
-    return {
-      channel: this.parseChannelLabel(channelLabel),
-      major: +versionNumArr[0],
-      minor: Number.parseInt(versionNumArr[1]),
-      patch: Number.parseInt(versionNumArr[2]),
-      raw: versionStr
-    }
+    return parseComparableUpdateVersion(versionStr)
   }
 
   /**
@@ -1952,78 +2013,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   }
 
   private compareSemverVersions(a: string | undefined, b: string | undefined): -1 | 0 | 1 {
-    if (!a && !b) return 0
-    if (!a) return -1
-    if (!b) return 1
-
-    const parsedA = this.parseSemverVersion(a)
-    const parsedB = this.parseSemverVersion(b)
-
-    if (parsedA.major !== parsedB.major) {
-      return parsedA.major < parsedB.major ? -1 : 1
-    }
-    if (parsedA.minor !== parsedB.minor) {
-      return parsedA.minor < parsedB.minor ? -1 : 1
-    }
-    if (parsedA.patch !== parsedB.patch) {
-      return parsedA.patch < parsedB.patch ? -1 : 1
-    }
-
-    return this.comparePrereleases(parsedA.prerelease, parsedB.prerelease)
-  }
-
-  private parseSemverVersion(version: string): {
-    major: number
-    minor: number
-    patch: number
-    prerelease: string[]
-  } {
-    const cleaned = version.replace(/^v/i, '').trim()
-    const [main, prerelease] = cleaned.split('-', 2)
-    const [major = 0, minor = 0, patch = 0] = (main || '')
-      .split('.')
-      .map((value) => Number.parseInt(value, 10) || 0)
-
-    return {
-      major,
-      minor,
-      patch,
-      prerelease: prerelease ? prerelease.split('.') : []
-    }
-  }
-
-  private comparePrereleases(a: string[], b: string[]): -1 | 0 | 1 {
-    if (a.length === 0 && b.length > 0) return 1
-    if (a.length > 0 && b.length === 0) return -1
-    if (a.length === 0 && b.length === 0) return 0
-
-    const maxLen = Math.max(a.length, b.length)
-    for (let index = 0; index < maxLen; index += 1) {
-      const aPart = a[index]
-      const bPart = b[index]
-
-      if (aPart === undefined) return -1
-      if (bPart === undefined) return 1
-
-      const aNum = Number.parseInt(aPart, 10)
-      const bNum = Number.parseInt(bPart, 10)
-      const aIsNum = !Number.isNaN(aNum)
-      const bIsNum = !Number.isNaN(bNum)
-
-      if (aIsNum && !bIsNum) return -1
-      if (!aIsNum && bIsNum) return 1
-
-      if (aIsNum && bIsNum) {
-        if (aNum < bNum) return -1
-        if (aNum > bNum) return 1
-        continue
-      }
-
-      if (aPart < bPart) return -1
-      if (aPart > bPart) return 1
-    }
-
-    return 0
+    return compareUpdateVersions(a, b)
   }
 
   private getEffectiveChannel(): AppPreviewChannel {
