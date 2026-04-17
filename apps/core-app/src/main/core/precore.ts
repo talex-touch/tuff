@@ -8,7 +8,8 @@ import process from 'node:process'
 import { app, crashReporter } from 'electron'
 import * as log4js from 'log4js'
 import { AppEvents, getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { APP_FOLDER_NAME } from '../config/default'
+import type { DevDataMigrationResult } from '../utils/app-root-path'
+import { migrateLegacyDevDataIfNeeded, resolveRuntimeRootPath } from '../utils/app-root-path'
 import { checkDirWithCreate } from '../utils/common-util'
 import { devProcessManager } from '../utils/dev-process-manager'
 import { mainLog } from '../utils/logger'
@@ -25,6 +26,63 @@ import { setupSingleInstanceGuard } from './single-instance-guard'
 
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+
+let hasRegisteredEarlyUnhandledRejection = false
+
+function registerEarlyUnhandledRejectionHandler(): void {
+  if (hasRegisteredEarlyUnhandledRejection) return
+  hasRegisteredEarlyUnhandledRejection = true
+
+  process.on('unhandledRejection', (reason) => {
+    const error = reason instanceof Error ? reason : undefined
+    mainLog.error('Unhandled rejection detected during bootstrap', {
+      meta: { reason: String(reason) },
+      ...(error ? { error } : {})
+    })
+  })
+}
+
+function applyDeprecationTraceSwitch(): void {
+  if (process.env.TUFF_TRACE_DEPRECATION !== '1') return
+  process.traceDeprecation = true
+  mainLog.warn('Node deprecation trace enabled via TUFF_TRACE_DEPRECATION=1')
+}
+
+function logDevDataMigrationResult(result: DevDataMigrationResult): void {
+  if (result.status === 'skipped-packaged' || result.status === 'skipped-marker-exists') {
+    return
+  }
+
+  const meta = {
+    status: result.status,
+    reason: result.reason,
+    sourcePath: result.sourcePath,
+    targetPath: result.targetPath,
+    markerPath: result.markerPath
+  }
+
+  if (result.status === 'migrated') {
+    mainLog.info('Dev data migration completed', { meta })
+  } else if (result.status === 'failed') {
+    mainLog.warn('Dev data migration failed (best effort)', {
+      meta: {
+        ...meta,
+        error: result.error
+      }
+    })
+  } else {
+    mainLog.debug('Dev data migration skipped', { meta })
+  }
+
+  if (result.markerWriteError) {
+    mainLog.warn('Failed to persist dev data migration marker', {
+      meta: {
+        markerPath: result.markerPath,
+        markerWriteError: result.markerWriteError
+      }
+    })
+  }
+}
 
 function broadcastBeforeQuit(): void {
   const channel = ($app as { channel?: unknown } | null | undefined)?.channel
@@ -46,7 +104,12 @@ function parseBooleanEnv(value: string | undefined): boolean {
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
 }
 
+registerEarlyUnhandledRejectionHandler()
+applyDeprecationTraceSwitch()
+logDevDataMigrationResult(migrateLegacyDevDataIfNeeded(app))
+
 export const innerRootPath = getRootPath()
+checkDirWithCreate(innerRootPath)
 
 const logs = path.join(innerRootPath, 'logs')
 checkDirWithCreate(logs)
@@ -207,11 +270,5 @@ app.on('before-quit', (event) => {
 })
 
 function getRootPath(): string {
-  if (app.isPackaged) {
-    return path.join(app.getPath('userData'), APP_FOLDER_NAME)
-  }
-
-  const appPath = app.getAppPath()
-
-  return path.join(appPath, APP_FOLDER_NAME)
+  return resolveRuntimeRootPath(app)
 }

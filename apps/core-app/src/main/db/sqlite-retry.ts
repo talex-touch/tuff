@@ -1,4 +1,4 @@
-import { sleep } from '@talex-touch/utils'
+import { sleep } from '@talex-touch/utils/common/utils'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('DbRetry')
