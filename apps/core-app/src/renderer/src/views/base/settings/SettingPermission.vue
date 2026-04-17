@@ -42,12 +42,13 @@ interface PluginPermissionInfo {
   id: string
   name: string
   sdkapi?: number
+  blocked: boolean
+  blockedReason?: string
   enforcePermissions: boolean
   required: string[]
   optional: string[]
   granted: string[]
   missingRequired: string[]
-  warning?: string
 }
 
 type PermissionBackendMode = 'sqlite' | 'degraded/backend-unavailable'
@@ -109,9 +110,9 @@ const filteredPlugins = computed(() => {
 
   // Status filter
   if (filterStatus.value === 'granted') {
-    result = result.filter((p) => p.missingRequired.length === 0)
+    result = result.filter((p) => !p.blocked && p.missingRequired.length === 0)
   } else if (filterStatus.value === 'missing') {
-    result = result.filter((p) => p.missingRequired.length > 0)
+    result = result.filter((p) => !p.blocked && p.missingRequired.length > 0)
   }
 
   return result
@@ -121,8 +122,8 @@ const filteredPlugins = computed(() => {
 const stats = computed(() => {
   const total = plugins.value.length
   const withMissing = plugins.value.filter((p) => p.missingRequired.length > 0).length
-  const legacy = plugins.value.filter((p) => !p.enforcePermissions).length
-  return { total, withMissing, legacy }
+  const blocked = plugins.value.filter((p) => p.blocked).length
+  return { total, withMissing, blocked }
 })
 
 const backendUnavailable = computed(
@@ -170,17 +171,29 @@ async function loadData() {
           optional: plugin.declaredPermissions?.optional || []
         })) as PluginPermissionStatusResult | null
         updateBackendState(status?.backendState)
+        const blockedIssue =
+          plugin.loadError?.code === 'SDKAPI_BLOCKED'
+            ? plugin.loadError
+            : (plugin.issues ?? []).find(
+                (issue) => issue.code === 'SDKAPI_BLOCKED' || issue.code === 'SDK_VERSION_OUTDATED'
+              )
+        const blocked = (status?.enforcePermissions ?? false) === false
+        const blockedReason =
+          plugin.loadError?.code === 'SDKAPI_BLOCKED'
+            ? plugin.loadError.message
+            : blockedIssue?.message || status?.warning
 
         return {
           id: plugin.name,
           name: plugin.name,
           sdkapi: plugin.sdkapi,
+          blocked,
+          blockedReason,
           enforcePermissions: status?.enforcePermissions ?? false,
           required: status?.required || [],
           optional: status?.optional || [],
           granted: status?.granted || [],
-          missingRequired: status?.missingRequired || [],
-          warning: status?.warning
+          missingRequired: blocked ? [] : status?.missingRequired || []
         }
       })
     )
@@ -449,9 +462,9 @@ onMounted(() => {
           <i class="i-carbon-warning" />
           <span>{{ t('settingPermission.stats.withMissing', { count: stats.withMissing }) }}</span>
         </div>
-        <div v-if="stats.legacy > 0" class="stat-item info">
-          <i class="i-carbon-information" />
-          <span>{{ t('settingPermission.stats.legacy', { count: stats.legacy }) }}</span>
+        <div v-if="stats.blocked > 0" class="stat-item danger">
+          <i class="i-carbon-error" />
+          <span>{{ t('settingPermission.stats.blocked', { count: stats.blocked }) }}</span>
         </div>
       </div>
 
@@ -492,8 +505,9 @@ onMounted(() => {
           <template #title>
             <div class="plugin-header">
               <div class="plugin-info">
+                <i v-if="plugin.blocked" class="i-carbon-error status-icon danger" />
                 <i
-                  v-if="plugin.missingRequired.length === 0 && plugin.enforcePermissions"
+                  v-else-if="plugin.missingRequired.length === 0 && plugin.enforcePermissions"
                   class="i-carbon-checkmark status-icon success"
                 />
                 <i
@@ -502,12 +516,8 @@ onMounted(() => {
                 />
                 <i v-else class="i-carbon-information status-icon warning" />
                 <span class="plugin-name">{{ plugin.name }}</span>
-                <TxTag
-                  v-if="!plugin.enforcePermissions && !plugin.warning"
-                  color="var(--tx-color-warning)"
-                  size="sm"
-                >
-                  {{ t('settingPermission.tags.legacy') }}
+                <TxTag v-if="plugin.blocked" color="var(--tx-color-danger)" size="sm">
+                  {{ t('settingPermission.tags.blocked') }}
                 </TxTag>
                 <TxTag
                   v-if="plugin.missingRequired.length > 0"
@@ -535,15 +545,15 @@ onMounted(() => {
 
           <div class="plugin-content">
             <!-- Warning -->
-            <div v-if="plugin.warning && !plugin.enforcePermissions" class="legacy-warning">
-              <i class="i-carbon-information" />
-              <span>{{ plugin.warning }}</span>
+            <div v-if="plugin.blockedReason && plugin.blocked" class="legacy-warning">
+              <i class="i-carbon-error" />
+              <span>{{ plugin.blockedReason }}</span>
             </div>
 
             <!-- Actions -->
             <div class="plugin-actions">
               <TxButton
-                v-if="plugin.missingRequired.length > 0"
+                v-if="plugin.missingRequired.length > 0 && !plugin.blocked"
                 type="primary"
                 size="small"
                 :disabled="backendUnavailable"
@@ -555,7 +565,7 @@ onMounted(() => {
                 type="danger"
                 size="small"
                 plain
-                :disabled="backendUnavailable"
+                :disabled="backendUnavailable || plugin.blocked"
                 @click.stop="handleRevokeAll(plugin.id)"
               >
                 {{ t('plugin.permissions.actions.revokeAll') }}
@@ -565,7 +575,7 @@ onMounted(() => {
             <!-- Permission List -->
             <PermissionList
               :permissions="getPermissionList(plugin)"
-              :readonly="!plugin.enforcePermissions || backendUnavailable"
+              :readonly="plugin.blocked || backendUnavailable"
               @toggle="(id, granted) => handleToggle(plugin.id, id, granted)"
             />
           </div>
@@ -678,6 +688,10 @@ onMounted(() => {
     &.info {
       color: var(--tx-color-info);
     }
+
+    &.danger {
+      color: var(--tx-color-danger);
+    }
   }
 }
 
@@ -785,11 +799,11 @@ onMounted(() => {
   align-items: flex-start;
   gap: 8px;
   padding: 12px;
-  background: var(--tx-color-warning-light-9);
+  background: var(--tx-color-danger-light-9);
   border-radius: 8px;
   margin-bottom: 16px;
   font-size: 13px;
-  color: var(--tx-color-warning-dark-2);
+  color: var(--tx-color-danger-dark-2);
 
   svg {
     flex-shrink: 0;

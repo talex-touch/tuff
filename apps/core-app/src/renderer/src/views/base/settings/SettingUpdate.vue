@@ -56,6 +56,7 @@ const frequencySaving = ref(false)
 const autoDownloadSaving = ref(false)
 const rendererOverrideSaving = ref(false)
 const installingUpdate = ref(false)
+const isMacAutoInstallPlatform = process.platform === 'darwin'
 
 const channelOptions = computed(() => {
   return [
@@ -88,9 +89,13 @@ const statusDescription = computed(() => {
 const statusMessage = computed(() => {
   if (downloadReady.value) {
     return {
-      text: t('settings.settingUpdate.status.downloadReady', {
-        version: downloadReadyVersion.value || t('settings.settingUpdate.status.unknownVersion')
-      }),
+      text: isMacAutoInstallPlatform
+        ? t('settings.settingUpdate.status.downloadReady', {
+            version: downloadReadyVersion.value || t('settings.settingUpdate.status.unknownVersion')
+          })
+        : t('settings.settingUpdate.status.downloadReadyManual', {
+            version: downloadReadyVersion.value || t('settings.settingUpdate.status.unknownVersion')
+          }),
       warning: false
     }
   }
@@ -111,6 +116,21 @@ const assetsSummary = computed(() => {
   }
   const countText = t('settings.settingUpdate.assetsCount', { count: cachedAssets.value.length })
   return `${cachedRelease.value.release.tag_name} · ${countText}`
+})
+const autoDownloadDescription = computed(() => {
+  return isMacAutoInstallPlatform
+    ? t('settings.settingUpdate.autoDownloadDesc')
+    : t('settings.settingUpdate.autoDownloadDescManual')
+})
+const installActionDescription = computed(() => {
+  return isMacAutoInstallPlatform
+    ? t('settings.settingUpdate.actionsDesc')
+    : t('settings.settingUpdate.actionsDescManual')
+})
+const installActionLabel = computed(() => {
+  return isMacAutoInstallPlatform
+    ? t('settings.settingUpdate.actions.installNow')
+    : t('settings.settingUpdate.actions.openInstaller')
 })
 const cachedAssets = computed(() => {
   if (!cachedRelease.value?.release) {
@@ -424,7 +444,7 @@ function openAssetsDialog(): void {
     <tuff-block-switch
       v-model="autoDownloadEnabled"
       :title="t('settings.settingUpdate.autoDownloadTitle')"
-      :description="t('settings.settingUpdate.autoDownloadDesc')"
+      :description="autoDownloadDescription"
       default-icon="i-carbon-download"
       active-icon="i-carbon-download"
       :disabled="fetching || autoDownloadSaving"
@@ -454,7 +474,7 @@ function openAssetsDialog(): void {
 
     <TuffBlockSlot
       :title="t('settings.settingUpdate.actionsTitle')"
-      :description="t('settings.settingUpdate.actionsDesc')"
+      :description="installActionDescription"
       default-icon="i-carbon-settings-adjust"
       active-icon="i-carbon-settings-adjust"
     >
@@ -465,7 +485,7 @@ function openAssetsDialog(): void {
         :loading="installingUpdate"
         @click="handleInstallUpdate"
       >
-        {{ t('settings.settingUpdate.actions.installNow') }}
+        {{ installActionLabel }}
       </TxButton>
     </TuffBlockSlot>
 

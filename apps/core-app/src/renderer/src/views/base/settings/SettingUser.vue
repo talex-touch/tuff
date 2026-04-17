@@ -168,11 +168,6 @@ const canTriggerManualSync = computed(
   () => isLoggedIn.value && syncEnabled.value && !syncSubmitting.value
 )
 
-const machineSeedMigratedAt = computed(() => {
-  const value = appSetting.security?.machineSeedMigratedAt
-  return typeof value === 'string' ? value.trim() : ''
-})
-
 const isDev = import.meta.env.DEV
 const useLocalServer = computed({
   get: () => appSetting?.dev?.authServer === 'local',
@@ -181,14 +176,6 @@ const useLocalServer = computed({
       return
     }
     appSetting.dev.authServer = val ? 'local' : 'production'
-  }
-})
-
-const allowLegacySeedFallback = computed({
-  get: () => Boolean(appSetting.security?.allowLegacyMachineSeedFallback),
-  set: (val: boolean) => {
-    ensureSecuritySettings()
-    appSetting.security.allowLegacyMachineSeedFallback = val
   }
 })
 
@@ -346,15 +333,6 @@ async function handleSyncNow() {
       :description="useLocalServer ? 'localhost:3200' : 'tuff.tagzxia.com'"
       default-icon="i-carbon-development"
       active-icon="i-carbon-development"
-    />
-
-    <TuffBlockSwitch
-      v-if="isDev && isLoggedIn"
-      v-model="allowLegacySeedFallback"
-      :title="t('settingUser.allowLegacySeedFallback', '允许明文 machine seed 回退（调试）')"
-      :description="machineSeedMigratedAt ? `已迁移：${machineSeedMigratedAt}` : '未检测到迁移记录'"
-      default-icon="i-carbon-security"
-      active-icon="i-carbon-security"
     />
   </TuffGroupBlock>
 

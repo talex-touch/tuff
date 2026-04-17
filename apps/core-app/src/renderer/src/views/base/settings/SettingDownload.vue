@@ -8,6 +8,8 @@
 import type { DownloadConfig } from '@talex-touch/utils'
 import { TxButton, TxSelectItem } from '@talex-touch/tuffex'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -24,6 +26,16 @@ import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
 
 const { t } = useI18n()
 const downloadSdk = useDownloadSdk()
+const transport = useTuffTransport()
+const openFileEvent = defineRawEvent<
+  {
+    title?: string
+    defaultPath?: string
+    buttonLabel?: string
+    properties?: string[]
+  },
+  { filePaths?: string[] }
+>('dialog:open-file')
 
 // Download center hook
 const { updateConfig } = useDownloadCenter()
@@ -98,6 +110,36 @@ async function updateDownloadConfig() {
 // Watch for changes and update configuration
 function onConfigChange() {
   updateDownloadConfig()
+}
+
+async function chooseTempDir(): Promise<void> {
+  try {
+    const result = await transport.send(openFileEvent, {
+      title: t('settings.settingDownload.selectTempDirTitle'),
+      buttonLabel: t('settings.settingDownload.selectTempDirConfirm'),
+      defaultPath: downloadConfig.value.storage.tempDir || undefined,
+      properties: ['openDirectory']
+    })
+    const nextPath = result?.filePaths?.[0]
+    if (!nextPath) {
+      return
+    }
+
+    downloadConfig.value.storage.tempDir = nextPath
+    await updateDownloadConfig()
+  } catch (error) {
+    console.error('[SettingDownload] Failed to select temp dir:', error)
+    toast.error(t('settings.settingDownload.messages.tempDirSelectFailed'))
+  }
+}
+
+async function resetTempDir(): Promise<void> {
+  if (!downloadConfig.value.storage.tempDir) {
+    return
+  }
+
+  downloadConfig.value.storage.tempDir = ''
+  await updateDownloadConfig()
 }
 
 // Restore default settings
@@ -400,6 +442,17 @@ function formatTimeout(ms: number): string {
       <div class="storage-path-display">
         {{ downloadConfig.storage.tempDir || t('settings.settingDownload.defaultPath') }}
       </div>
+      <TxButton variant="flat" size="sm" :disabled="loading" @click.stop="chooseTempDir">
+        {{ t('settings.settingDownload.browse') }}
+      </TxButton>
+      <TxButton
+        variant="flat"
+        size="sm"
+        :disabled="loading || !downloadConfig.storage.tempDir"
+        @click.stop="resetTempDir"
+      >
+        {{ t('settings.settingDownload.resetTempDir') }}
+      </TxButton>
     </TuffBlockSlot>
 
     <!-- Actions -->

@@ -1639,6 +1639,10 @@
       "networkMaxRetriesDesc": "Maximum number of network-level retry attempts",
       "tempDir": "Temporary Directory",
       "tempDirDesc": "Location for temporary download files",
+      "browse": "Choose Folder",
+      "resetTempDir": "Use Default Folder",
+      "selectTempDirTitle": "Select Download Temp Directory",
+      "selectTempDirConfirm": "Use This Folder",
       "defaultPath": "Default Path",
       "noRetry": "No Retry",
       "days": "days",
@@ -1656,7 +1660,8 @@
         "saveFailed": "Failed to save download settings",
         "defaultsRestored": "Default settings restored",
         "tempCleaned": "Temporary files cleaned up",
-        "tempCleanFailed": "Failed to cleanup temporary files"
+        "tempCleanFailed": "Failed to cleanup temporary files",
+        "tempDirSelectFailed": "Failed to select temporary directory"
       }
     },
     "settingPlatformCapabilities": {
@@ -1865,12 +1870,12 @@
       "backendCli": "CLI (es.exe)",
       "backendUnavailable": "Unavailable",
       "healthTitle": "Search Health",
-      "healthDesc": "Shows whether Windows search is using Everything or a degraded fallback",
+      "healthDesc": "Shows whether Everything is ready and why file search is unavailable when it is not",
       "healthHealthy": "Healthy",
-      "healthDegraded": "Degraded fallback",
+      "healthDegraded": "Not ready",
       "healthUnsupported": "Unsupported",
       "fallbackChainTitle": "Fallback Chain",
-      "fallbackChainDesc": "Automatic downgrade order when a backend becomes unavailable",
+      "fallbackChainDesc": "Initialization order for Everything backends; it does not imply a usable search fallback",
       "enableTitle": "Enable Everything Search",
       "enableDesc": "Use Everything for ultra-fast file searching",
       "enable": "Enable",
@@ -2176,6 +2181,7 @@
       },
       "autoDownloadTitle": "Auto Download Updates",
       "autoDownloadDesc": "Automatically download updates when available",
+      "autoDownloadDescManual": "Automatically download the installer when available; system installation still remains manual",
       "rendererOverrideTitle": "Renderer Override (Experimental)",
       "rendererOverrideDesc": "Manually enable the experimental renderer override (requires TUFF_ENABLE_RENDERER_OVERRIDE=1).",
       "statusTitle": "Status",
@@ -2186,13 +2192,16 @@
         "updateAvailable": "A new version is available. See the popup dialog.",
         "upToDate": "You are already on the latest version.",
         "downloadReady": "Update package {version} is ready. Restart now to finish installing.",
+        "downloadReadyManual": "Installer package {version} is ready. Open it to continue the update.",
         "unknownVersion": "this version",
         "cachedRelease": "Cached release: {version}"
       },
       "actionsTitle": "Actions",
       "actionsDesc": "Restart here after the update package is downloaded.",
+      "actionsDescManual": "Open the downloaded installer here and let the operating system finish installation.",
       "actions": {
         "installNow": "Restart to Update",
+        "openInstaller": "Open Installer",
         "manualCheck": "Check Now",
         "clearCache": "Clear Cache"
       },
@@ -2504,7 +2513,7 @@
     "stats": {
       "total": "{count} plugin(s)",
       "withMissing": "{count} missing permission(s)",
-      "legacy": "{count} without enforced permission checks"
+      "blocked": "{count} blocked"
     },
     "filters": {
       "all": "All plugins",
@@ -2512,7 +2521,7 @@
       "missing": "Missing permissions"
     },
     "tags": {
-      "legacy": "Legacy SDK",
+      "blocked": "Blocked",
       "missing": "Missing {count}"
     },
     "pluginStats": {
