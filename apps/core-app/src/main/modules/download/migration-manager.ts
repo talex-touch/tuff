@@ -9,6 +9,8 @@ import path from 'node:path'
 import { createClient } from '@libsql/client'
 import { DownloadStatus } from '@talex-touch/utils'
 import { app } from 'electron'
+import { downloadMigrationManagerLog } from './logger'
+import { allMigrations, runMigrations as runDownloadMigrations } from './migrations'
 
 export interface MigrationProgress {
   phase: 'scanning' | 'migrating' | 'validating' | 'complete' | 'error'
@@ -123,7 +125,10 @@ export class MigrationManager extends EventEmitter {
 
       return (oldDbExists || oldConfigExists) && !migrationCompleted
     } catch (error) {
-      console.error('[MigrationManager] Error checking migration status:', error)
+      downloadMigrationManagerLog.warn('Failed to check migration status', {
+        error,
+        meta: { dbPath: this.dbPath }
+      })
       return false
     }
   }
@@ -155,6 +160,8 @@ export class MigrationManager extends EventEmitter {
         message: 'Scanning for old data...',
         percentage: 0
       })
+
+      await runDownloadMigrations(this.dbPath, allMigrations)
 
       // Step 1: Migrate old download tasks
       const tasks = await this.migrateDownloadTasks()
@@ -209,7 +216,15 @@ export class MigrationManager extends EventEmitter {
         percentage: 100
       })
 
-      console.log('[MigrationManager] Migration completed:', result)
+      downloadMigrationManagerLog.success('Migration completed', {
+        meta: {
+          dbPath: this.dbPath,
+          migratedTasks: result.migratedTasks,
+          migratedHistory: result.migratedHistory,
+          migratedConfig: result.migratedConfig,
+          durationMs: result.duration
+        }
+      })
     } catch (error) {
       result.errors.push(error instanceof Error ? error.message : String(error))
       result.duration = Date.now() - startTime
@@ -222,7 +237,10 @@ export class MigrationManager extends EventEmitter {
         percentage: 0
       })
 
-      console.error('[MigrationManager] Migration failed:', error)
+      downloadMigrationManagerLog.error('Migration failed', {
+        error,
+        meta: { dbPath: this.dbPath, durationMs: result.duration }
+      })
     } finally {
       this.migrationInProgress = false
     }
@@ -237,7 +255,9 @@ export class MigrationManager extends EventEmitter {
     const oldDbPath = path.join(app.getPath('userData'), 'downloads.db')
 
     if (!(await this.fileExists(oldDbPath))) {
-      console.log('[MigrationManager] No old download database found')
+      downloadMigrationManagerLog.debug('No old download database found', {
+        meta: { oldDbPath }
+      })
       return []
     }
 
@@ -301,9 +321,21 @@ export class MigrationManager extends EventEmitter {
         migratedTasks.push(newTask)
       }
 
-      console.log(`[MigrationManager] Migrated ${migratedTasks.length} download tasks`)
+      downloadMigrationManagerLog.info('Migrated download tasks', {
+        meta: {
+          oldDbPath,
+          dbPath: this.dbPath,
+          count: migratedTasks.length
+        }
+      })
     } catch (error) {
-      console.error('[MigrationManager] Error migrating download tasks:', error)
+      downloadMigrationManagerLog.error('Failed to migrate download tasks', {
+        error,
+        meta: {
+          oldDbPath,
+          dbPath: this.dbPath
+        }
+      })
       throw error
     } finally {
       oldClient.close()
@@ -334,7 +366,9 @@ export class MigrationManager extends EventEmitter {
       )
 
       if (tableCheck.rows.length === 0) {
-        console.log('[MigrationManager] No old history table found')
+        downloadMigrationManagerLog.debug('No old history table found', {
+          meta: { oldDbPath }
+        })
         return []
       }
 
@@ -386,9 +420,21 @@ export class MigrationManager extends EventEmitter {
         migratedHistory.push(newHistory)
       }
 
-      console.log(`[MigrationManager] Migrated ${migratedHistory.length} history records`)
+      downloadMigrationManagerLog.info('Migrated history records', {
+        meta: {
+          oldDbPath,
+          dbPath: this.dbPath,
+          count: migratedHistory.length
+        }
+      })
     } catch (error) {
-      console.error('[MigrationManager] Error migrating history:', error)
+      downloadMigrationManagerLog.warn('Failed to migrate history records', {
+        error,
+        meta: {
+          oldDbPath,
+          dbPath: this.dbPath
+        }
+      })
       // Don't throw - history migration is not critical
     } finally {
       oldClient.close()
@@ -407,7 +453,9 @@ export class MigrationManager extends EventEmitter {
 
     try {
       if (!(await this.fileExists(oldConfigPath))) {
-        console.log('[MigrationManager] No old configuration found')
+        downloadMigrationManagerLog.debug('No legacy download configuration found', {
+          meta: { oldConfigPath }
+        })
         return false
       }
 
@@ -465,10 +513,18 @@ export class MigrationManager extends EventEmitter {
       // Save new config
       await fs.writeFile(newConfigPath, JSON.stringify(newConfig, null, 2), 'utf-8')
 
-      console.log('[MigrationManager] Configuration migrated successfully')
+      downloadMigrationManagerLog.info('Migration configuration updated', {
+        meta: { oldConfigPath, newConfigPath }
+      })
       return true
     } catch (error) {
-      console.error('[MigrationManager] Error migrating configuration:', error)
+      downloadMigrationManagerLog.warn('Failed to migrate configuration', {
+        error,
+        meta: {
+          oldConfigPath,
+          newConfigPath
+        }
+      })
       return false
     }
   }
@@ -494,11 +550,17 @@ export class MigrationManager extends EventEmitter {
 
       // Check if data was migrated
       const taskCount = await client.execute('SELECT COUNT(*) as count FROM download_tasks')
-      console.log(`[MigrationManager] Validation: ${taskCount.rows[0].count} tasks in database`)
-
-      console.log('[MigrationManager] Validation completed successfully')
+      downloadMigrationManagerLog.info('Migration validation completed', {
+        meta: {
+          dbPath: this.dbPath,
+          taskCount: Number(taskCount.rows[0]?.count ?? 0)
+        }
+      })
     } catch (error) {
-      console.error('[MigrationManager] Validation failed:', error)
+      downloadMigrationManagerLog.error('Migration validation failed', {
+        error,
+        meta: { dbPath: this.dbPath }
+      })
       throw error
     } finally {
       client.close()
@@ -527,9 +589,14 @@ export class MigrationManager extends EventEmitter {
         args: [1, Date.now(), '1.0.0']
       })
 
-      console.log('[MigrationManager] Migration marked as complete')
+      downloadMigrationManagerLog.info('Migration marked as complete', {
+        meta: { dbPath: this.dbPath }
+      })
     } catch (error) {
-      console.error('[MigrationManager] Error marking migration complete:', error)
+      downloadMigrationManagerLog.error('Failed to mark migration complete', {
+        error,
+        meta: { dbPath: this.dbPath }
+      })
       throw error
     } finally {
       client.close()

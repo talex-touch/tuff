@@ -4,6 +4,7 @@
 
 import { EventEmitter } from 'node:events'
 import { createClient } from '@libsql/client'
+import { downloadMigrationLog, downloadMigrationRunnerLog } from './logger'
 
 type LibSqlClient = ReturnType<typeof createClient>
 type LibSqlRow = Record<string, unknown>
@@ -33,6 +34,17 @@ export interface MigrationStatus {
   name: string
   appliedAt: number
 }
+
+type MigrationLogMeta = Record<string, string | number | boolean | null | undefined>
+
+const getMigrationMeta = (
+  migration: Pick<Migration, 'version' | 'name'>,
+  meta: MigrationLogMeta = {}
+): MigrationLogMeta => ({
+  version: migration.version,
+  migration: migration.name,
+  ...meta
+})
 
 export class MigrationRunner extends EventEmitter {
   private dbPath: string
@@ -108,11 +120,18 @@ export class MigrationRunner extends EventEmitter {
         .sort((a, b) => a.version - b.version)
 
       if (pendingMigrations.length === 0) {
-        console.log('[MigrationRunner] No pending migrations')
+        downloadMigrationRunnerLog.info('No pending migrations', {
+          meta: { dbPath: this.dbPath }
+        })
         return
       }
 
-      console.log(`[MigrationRunner] Running ${pendingMigrations.length} migrations`)
+      downloadMigrationRunnerLog.info('Running pending migrations', {
+        meta: {
+          dbPath: this.dbPath,
+          count: pendingMigrations.length
+        }
+      })
 
       // Apply pending migrations
       for (let i = 0; i < pendingMigrations.length; i++) {
@@ -125,7 +144,13 @@ export class MigrationRunner extends EventEmitter {
           version: migration.version
         })
 
-        console.log(`[MigrationRunner] Applying migration ${migration.version}: ${migration.name}`)
+        downloadMigrationRunnerLog.info('Applying migration', {
+          meta: getMigrationMeta(migration, {
+            dbPath: this.dbPath,
+            current: i + 1,
+            total: pendingMigrations.length
+          })
+        })
 
         await migration.up(client)
 
@@ -134,14 +159,24 @@ export class MigrationRunner extends EventEmitter {
           args: [migration.version, migration.name, Date.now()]
         })
 
-        console.log(`[MigrationRunner] Migration ${migration.version} applied successfully`)
+        downloadMigrationRunnerLog.success('Migration applied', {
+          meta: getMigrationMeta(migration, { dbPath: this.dbPath })
+        })
       }
 
       this.emit('complete', { count: pendingMigrations.length })
-      console.log('[MigrationRunner] All migrations completed')
+      downloadMigrationRunnerLog.success('All migrations completed', {
+        meta: {
+          dbPath: this.dbPath,
+          count: pendingMigrations.length
+        }
+      })
     } catch (error) {
       this.emit('error', error)
-      console.error('[MigrationRunner] Error running migrations:', error)
+      downloadMigrationRunnerLog.error('Failed to run migrations', {
+        error,
+        meta: { dbPath: this.dbPath }
+      })
       throw error
     } finally {
       client.close()
@@ -173,7 +208,12 @@ export class MigrationRunner extends EventEmitter {
           throw new Error(`Migration ${version} does not have a down function`)
         }
 
-        console.log(`[MigrationRunner] Rolling back migration ${version}: ${migration.name}`)
+        downloadMigrationRunnerLog.warn('Rolling back migration', {
+          meta: getMigrationMeta(migration, {
+            dbPath: this.dbPath,
+            targetVersion
+          })
+        })
 
         await migration.down(client)
 
@@ -182,10 +222,21 @@ export class MigrationRunner extends EventEmitter {
           args: [version]
         })
 
-        console.log(`[MigrationRunner] Migration ${version} rolled back successfully`)
+        downloadMigrationRunnerLog.success('Migration rolled back', {
+          meta: getMigrationMeta(migration, {
+            dbPath: this.dbPath,
+            targetVersion
+          })
+        })
       }
     } catch (error) {
-      console.error('[MigrationRunner] Error rolling back migrations:', error)
+      downloadMigrationRunnerLog.error('Failed to rollback migrations', {
+        error,
+        meta: {
+          dbPath: this.dbPath,
+          targetVersion
+        }
+      })
       throw error
     } finally {
       client.close()
@@ -255,16 +306,18 @@ export const createBaseTables: Migration = {
       )
     `)
 
-    console.log(
-      '[Migration] Created base tables: download_tasks, download_chunks, download_history'
-    )
+    downloadMigrationLog.debug('Created base tables', {
+      meta: getMigrationMeta(createBaseTables)
+    })
   },
   down: async (db: LibSqlClient) => {
     // Drop tables in reverse order due to foreign key constraints
     await db.execute('DROP TABLE IF EXISTS download_history')
     await db.execute('DROP TABLE IF EXISTS download_chunks')
     await db.execute('DROP TABLE IF EXISTS download_tasks')
-    console.log('[Migration] Dropped base tables')
+    downloadMigrationLog.debug('Dropped base tables', {
+      meta: getMigrationMeta(createBaseTables)
+    })
   }
 }
 
@@ -304,9 +357,13 @@ export const addPerformanceIndexes: Migration = {
         CREATE INDEX IF NOT EXISTS idx_tasks_status_priority
         ON download_tasks(status, priority)
       `)
-      console.log('[Migration] Added indexes for download_tasks')
+      downloadMigrationLog.debug('Added indexes for download_tasks', {
+        meta: getMigrationMeta(addPerformanceIndexes)
+      })
     } else {
-      console.log('[Migration] Skipping download_tasks indexes - table does not exist')
+      downloadMigrationLog.debug('Skip download_tasks indexes: table missing', {
+        meta: getMigrationMeta(addPerformanceIndexes)
+      })
     }
 
     // Add indexes for download_chunks table (if exists)
@@ -318,11 +375,15 @@ export const addPerformanceIndexes: Migration = {
 
       await db.execute(`
         CREATE INDEX IF NOT EXISTS idx_chunks_task_index
-        ON download_chunks(task_id, index)
+        ON download_chunks(task_id, "index")
       `)
-      console.log('[Migration] Added indexes for download_chunks')
+      downloadMigrationLog.debug('Added indexes for download_chunks', {
+        meta: getMigrationMeta(addPerformanceIndexes)
+      })
     } else {
-      console.log('[Migration] Skipping download_chunks indexes - table does not exist')
+      downloadMigrationLog.debug('Skip download_chunks indexes: table missing', {
+        meta: getMigrationMeta(addPerformanceIndexes)
+      })
     }
 
     // Add indexes for download_history table (if exists)
@@ -336,12 +397,18 @@ export const addPerformanceIndexes: Migration = {
         CREATE INDEX IF NOT EXISTS idx_history_completed
         ON download_history(completed_at)
       `)
-      console.log('[Migration] Added indexes for download_history')
+      downloadMigrationLog.debug('Added indexes for download_history', {
+        meta: getMigrationMeta(addPerformanceIndexes)
+      })
     } else {
-      console.log('[Migration] Skipping download_history indexes - table does not exist')
+      downloadMigrationLog.debug('Skip download_history indexes: table missing', {
+        meta: getMigrationMeta(addPerformanceIndexes)
+      })
     }
 
-    console.log('[Migration] Performance indexes migration completed')
+    downloadMigrationLog.info('Performance indexes migration completed', {
+      meta: getMigrationMeta(addPerformanceIndexes)
+    })
   },
   down: async (db: LibSqlClient) => {
     // Drop indexes if needed
@@ -354,7 +421,9 @@ export const addPerformanceIndexes: Migration = {
     await db.execute('DROP INDEX IF EXISTS idx_history_created')
     await db.execute('DROP INDEX IF EXISTS idx_history_completed')
 
-    console.log('[Migration] Performance indexes removed')
+    downloadMigrationLog.info('Performance indexes removed', {
+      meta: getMigrationMeta(addPerformanceIndexes)
+    })
   }
 }
 
@@ -385,7 +454,9 @@ export async function runMigrations(dbPath: string, migrations: Migration[]): Pr
     // Apply pending migrations
     for (const migration of migrations.sort((a, b) => a.version - b.version)) {
       if (!appliedVersions.has(migration.version)) {
-        console.log(`[Migration] Applying migration ${migration.version}: ${migration.name}`)
+        downloadMigrationLog.info('Applying migration', {
+          meta: getMigrationMeta(migration, { dbPath })
+        })
 
         await migration.up(client)
 
@@ -394,13 +465,20 @@ export async function runMigrations(dbPath: string, migrations: Migration[]): Pr
           args: [migration.version, migration.name, Date.now()]
         })
 
-        console.log(`[Migration] Migration ${migration.version} applied successfully`)
+        downloadMigrationLog.success('Migration applied', {
+          meta: getMigrationMeta(migration, { dbPath })
+        })
       }
     }
 
-    console.log('[Migration] All migrations completed')
+    downloadMigrationLog.success('All migrations completed', {
+      meta: { dbPath }
+    })
   } catch (error) {
-    console.error('[Migration] Error running migrations:', error)
+    downloadMigrationLog.error('Failed to run migrations', {
+      error,
+      meta: { dbPath }
+    })
     throw error
   } finally {
     client.close()
@@ -423,13 +501,17 @@ export const addChecksumField: Migration = {
 
     if (!hasChecksum) {
       await db.execute('ALTER TABLE download_tasks ADD COLUMN checksum TEXT')
-      console.log('[Migration] Added checksum field to download_tasks')
+      downloadMigrationLog.info('Added checksum field to download_tasks', {
+        meta: getMigrationMeta(addChecksumField)
+      })
     }
   },
 
   down: async (_db: LibSqlClient) => {
     // One-way migration by design: SQLite would require full table recreation for DROP COLUMN.
-    console.log('[Migration] Skipping checksum field rollback (one-way migration)')
+    downloadMigrationLog.debug('Skip checksum field rollback (one-way migration)', {
+      meta: getMigrationMeta(addChecksumField)
+    })
   }
 }
 
@@ -448,7 +530,9 @@ export const addMetadataField: Migration = {
 
     if (!hasMetadata) {
       await db.execute('ALTER TABLE download_tasks ADD COLUMN metadata TEXT')
-      console.log('[Migration] Added metadata field to download_tasks')
+      downloadMigrationLog.info('Added metadata field to download_tasks', {
+        meta: getMigrationMeta(addMetadataField)
+      })
     }
   }
 }
@@ -468,7 +552,9 @@ export const addErrorField: Migration = {
 
     if (!hasError) {
       await db.execute('ALTER TABLE download_tasks ADD COLUMN error TEXT')
-      console.log('[Migration] Added error field to download_tasks')
+      downloadMigrationLog.info('Added error field to download_tasks', {
+        meta: getMigrationMeta(addErrorField)
+      })
     }
   }
 }
@@ -477,6 +563,7 @@ export const addErrorField: Migration = {
  * All available migrations in order
  */
 export const allMigrations: Migration[] = [
+  createBaseTables,
   addPerformanceIndexes,
   addChecksumField,
   addMetadataField,
@@ -496,7 +583,9 @@ export async function rollbackMigration(dbPath: string, migration: Migration): P
   })
 
   try {
-    console.log(`[Migration] Rolling back migration ${migration.version}: ${migration.name}`)
+    downloadMigrationLog.warn('Rolling back migration', {
+      meta: getMigrationMeta(migration, { dbPath })
+    })
 
     await migration.down(client)
 
@@ -505,9 +594,14 @@ export async function rollbackMigration(dbPath: string, migration: Migration): P
       args: [migration.version]
     })
 
-    console.log(`[Migration] Migration ${migration.version} rolled back successfully`)
+    downloadMigrationLog.success('Migration rolled back', {
+      meta: getMigrationMeta(migration, { dbPath })
+    })
   } catch (error) {
-    console.error('[Migration] Error rolling back migration:', error)
+    downloadMigrationLog.error('Failed to rollback migration', {
+      error,
+      meta: getMigrationMeta(migration, { dbPath })
+    })
     throw error
   } finally {
     client.close()

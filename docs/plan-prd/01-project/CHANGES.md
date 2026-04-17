@@ -12,6 +12,16 @@
   - 更新下载、renderer override 调度/跳过、签名校验、安装触发、目录创建与强退兜底等路径统一补 `tag / taskId / asset / coreRange / path / reason` 最小上下文，主进程排障不再依赖字符串拼接搜索。
   - 将“override 已激活”“override 已禁用”等纯过程态日志降为 `debug`，保留真正需要线上观察的 `info / warn / error`，继续压低更新热路径噪声。
 
+### fix(core-app): 收敛 Download 迁移链日志并修复首迁移缺陷
+
+- `apps/core-app/src/main/modules/download/logger.ts`
+- `apps/core-app/src/main/modules/download/migrations.ts`
+- `apps/core-app/src/main/modules/download/migration-manager.ts`
+- `apps/core-app/src/main/modules/download/migration-manager.test.ts`
+  - 新增 download 迁移链专用 logger，`migrations.ts` 与 `migration-manager.ts` 内裸 `console.*` 全部切到统一日志出口，并补 `dbPath / oldDbPath / version / migration / count / durationMs` 最小上下文。
+  - `allMigrations` 补回 `create_base_tables`，`migration-manager` 在导入 legacy 下载数据前先确保新库 schema 已完成迁移初始化，避免首次迁移直接向不存在的表写入。
+  - 修正 `download_chunks.index` 建索引时的 SQL 转义问题，并补齐测试中的 Electron 路径 mock 与 legacy 文件名约定，使 `migration-manager.test.ts` 能稳定覆盖迁移管理器与迁移执行器整条链路。
+
 ### fix(core-app): 收敛主进程预期网络失败与可选取消日志噪声
 
 - `apps/core-app/src/main/core/channel-core.ts`
