@@ -21,6 +21,7 @@ import {
   WindowAllClosedEvent
 } from './eventbus/touch-event'
 import { runWithBeforeQuitTimeout } from './before-quit-guard'
+import { setupSingleInstanceGuard } from './single-instance-guard'
 
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
@@ -116,26 +117,18 @@ if (release().startsWith('6.1')) app.disableHardwareAcceleration()
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
 const startupBenchmarkMode = parseBooleanEnv(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
-if (startupBenchmarkMode) {
-  mainLog.info('Startup benchmark mode enabled, skip single-instance lock')
-}
-
-if (!startupBenchmarkMode && !app.requestSingleInstanceLock()) {
-  mainLog.warn('Secondary launch detected, quitting existing process')
-
-  app.on('second-instance', (event, argv, workingDirectory, additionalData) => {
-    const launchData =
-      typeof additionalData === 'object' && additionalData !== null
-        ? (additionalData as Record<string, unknown>)
-        : {}
-    touchEventBus.emit(
-      TalexEvents.APP_SECONDARY_LAUNCH,
-      new AppSecondaryLaunch(event, argv, workingDirectory, launchData)
-    )
-  })
-
-  app.quit()
-}
+setupSingleInstanceGuard({
+  app,
+  startupBenchmarkMode,
+  emitSecondaryLaunch: (eventName, payload) => touchEventBus.emit(eventName, payload),
+  createSecondaryLaunchEvent: (event, argv, workingDirectory, additionalData) =>
+    new AppSecondaryLaunch(event, argv, workingDirectory, additionalData),
+  secondaryLaunchEventName: TalexEvents.APP_SECONDARY_LAUNCH,
+  logger: {
+    info: (message, options) => mainLog.info(message, options as never),
+    warn: (message, options) => mainLog.warn(message, options as never)
+  }
+})
 
 app.on('window-all-closed', () => {
   mainLog.info('All windows closed, preparing shutdown')

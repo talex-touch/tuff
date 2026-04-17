@@ -24,6 +24,7 @@ import { parseManifestDivisionBoxConfig } from '../division-box/manifest-parser'
 import { getNetworkService } from '../network'
 import { TouchPlugin } from './plugin'
 import { PluginFeature } from './plugin-feature'
+import { type PackagedManifest, ensurePluginRuntimeIntegrity } from './plugin-runtime-integrity'
 
 /**
  * Plugin manifest structure from manifest.json
@@ -394,7 +395,35 @@ class LocalPluginLoader extends BasePluginLoader implements IPluginLoader {
   async load(): Promise<TouchPlugin> {
     const manifestPath = path.resolve(this.pluginPath, 'manifest.json')
     try {
-      const pluginInfo = fse.readJSONSync(manifestPath) as PluginManifest
+      let pluginInfo = fse.readJSONSync(manifestPath) as PluginManifest
+      const integrity = await ensurePluginRuntimeIntegrity({
+        pluginDir: this.pluginPath,
+        manifest: pluginInfo as unknown as PackagedManifest
+      })
+
+      if (integrity.manifestUpdated || integrity.repairedFiles.length > 0) {
+        pluginInfo = fse.readJSONSync(manifestPath) as PluginManifest
+      }
+
+      if (integrity.missingFiles.length > 0) {
+        this.touchPlugin.issues.push({
+          type: 'error',
+          message: `Missing required webcontent entry files: ${integrity.missingFiles.join(', ')}.`,
+          source: 'filesystem',
+          code: 'MISSING_WEBCONTENT_ENTRY',
+          suggestion: integrity.archivePath
+            ? 'Restore the plugin package archive or reinstall the plugin to recover bundled UI files.'
+            : 'Reinstall the plugin to recover bundled UI files.',
+          meta: {
+            archivePath: integrity.archivePath,
+            repairedFiles: integrity.repairedFiles,
+            repairError: integrity.repairError,
+            requiredFiles: integrity.requiredFiles
+          },
+          timestamp: Date.now()
+        })
+      }
+
       await this.loadCommon(pluginInfo)
 
       // Load README from local file system

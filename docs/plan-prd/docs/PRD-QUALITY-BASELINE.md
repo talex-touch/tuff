@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-04-07  
+> 更新时间：2026-04-17  
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -124,6 +124,7 @@
 
 **质量约束落地**
 - 发布 workflow 必须幂等，重复执行不得产生重复 release 资产记录。
+- beta / snapshot tag 创建的 GitHub Release 必须保持 pre-release 语义，不得误标为稳定版。
 - 预发布不得覆盖 npm 默认安装通道（`next` 与 `latest` 分离）。
 - 发布后需同步 Nexus 可观测入口（release 或 update news）。
 
@@ -292,4 +293,8 @@
 - 门禁脚本必须共享同一套扫描与版本比较基础能力，避免“规则一致、实现漂移”。
 - 同类质量门禁仅允许一个实现来源；workspace 侧脚本优先复用 root 实现（通过 `--scope` 等参数化）。
 - 大体量编排脚本必须按“编排层 + 平台实现层”拆分，降低单文件风险与回归成本。
-- 桌面打包链路必须校验关键运行时依赖真实进入产物可解析路径（`app.asar` 或 `resources/node_modules`）；至少覆盖显式直依赖与已知高风险传递依赖（当前基线含 `ms`、`@sentry/electron`、`require-in-the-middle`、`module-details-from-path`，以及 `@langchain/core` 当前已知高风险缺包 `p-retry`、`retry`、`langsmith`、`mustache`、`camelcase`、`decamelize`、`ansi-styles`、`@cfworker/json-schema`），禁止产出“可安装但主进程启动即崩”的坏包。
+- 桌面打包链路必须校验关键运行时依赖真实进入产物可解析路径（`app.asar` 或 `resources/node_modules`）；至少覆盖显式直依赖与已知高风险传递依赖（当前基线含 `ms`、`@sentry/electron`、`require-in-the-middle`、`module-details-from-path`，以及 `@langchain/core` 当前已知高风险缺包 `p-retry`、`retry`、`langsmith`、`mustache`、`camelcase`、`decamelize`、`ansi-styles`、`@cfworker/json-schema`，再加上 `compressing -> tar-stream -> readable-stream` 当前已知缺包 `process-nextick-args`、`core-util-is`、`inherits`、`string_decoder`、`util-deprecate`、`once`、`wrappy` 与 `typed-array-buffer` 相关辅助包），禁止产出“可安装但主进程启动即崩”的坏包。
+- 对于被标记为 `resources/node_modules` 的运行时根模块，构建阶段必须递归同步并校验其传递依赖闭包，不能只检查根模块是否存在。
+- 对于 `app.asar` 内保留运行时加载的第三方包，也必须校验其传递依赖闭包完整；当前基线至少覆盖 `@vue/compiler-sfc` 及其对 `@vue/compiler-core`、`@vue/compiler-dom`、`@vue/compiler-ssr`、`@vue/shared` 的运行时依赖。
+- 单实例链路只能在 bootstrap 入口注册一次 `second-instance` 监听；业务模块统一消费应用事件总线，且任何“聚焦/恢复窗口”动作都必须先做 BrowserWindow 活体校验，禁止把重复启动事件直接绑定到可能已销毁的窗口对象上。
+- `webcontent` 插件安装与加载都必须校验本地 UI 入口文件完整性：hash-route 场景至少要求 `index.html`，显式 HTML 路径要求对应文件存在；若同目录保留原始 `.tpex` 包，允许一次性自愈缺失文件，但失败时必须转为受控 issue/失败态，不能把 `ERR_FILE_NOT_FOUND` 留到运行时再暴露。

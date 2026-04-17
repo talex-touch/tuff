@@ -1,10 +1,17 @@
 import type { FSWatcher } from 'chokidar'
 import type { ITuffIcon } from '../types/icon'
+import type {
+  ManifestPermissionReasons,
+  ManifestPermissions,
+} from '../permission/types'
 import type { Arch, SupportOS } from './../base/index'
 
 import type { IPluginLogger } from './log/types'
 
-import type { PluginInstallRequest, PluginInstallSummary } from './providers/types'
+import type {
+  PluginInstallRequest,
+  PluginInstallSummary,
+} from './providers/types'
 
 export enum PluginStatus {
   DISABLED,
@@ -155,8 +162,8 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   savePluginFile: (
     fileName: string,
     content: object,
-    options?: { broadcast?: boolean }
-  ) => { success: boolean, error?: string }
+    options?: { broadcast?: boolean },
+  ) => { success: boolean; error?: string }
 
   /**
    * Delete the plugin file.
@@ -165,8 +172,8 @@ export interface ITouchPlugin extends IPluginBaseInfo {
    */
   deletePluginFile: (
     fileName: string,
-    options?: { broadcast?: boolean }
-  ) => { success: boolean, error?: string }
+    options?: { broadcast?: boolean },
+  ) => { success: boolean; error?: string }
 
   /**
    * List all files in the plugin.
@@ -185,11 +192,20 @@ export interface ITouchPlugin extends IPluginBaseInfo {
    * @param content The configuration content.
    * @returns The result of the save operation.
    */
-  savePluginConfig: (content: object) => { success: boolean, error?: string }
+  savePluginConfig: (content: object) => { success: boolean; error?: string }
 }
 
 export interface IFeatureCommand {
-  type: 'match' | 'contain' | 'regex' | 'function' | 'over' | 'image' | 'files' | 'directory' | 'window'
+  type:
+    | 'match'
+    | 'contain'
+    | 'regex'
+    | 'function'
+    | 'over'
+    | 'image'
+    | 'files'
+    | 'directory'
+    | 'window'
   value: string | string[] | RegExp | FeatureCommandMatcher
   /** Optional trigger callback - not serialized over IPC */
   onTrigger?: () => void
@@ -315,7 +331,12 @@ export interface IFeatureLifeCycle {
    * @param signal - An AbortSignal to cancel the operation
    * @returns If returns false, the feature will not enter activation state (e.g., just opens browser and exits)
    */
-  onFeatureTriggered: (id: string, data: any, feature: IPluginFeature, signal?: AbortSignal) => boolean | void
+  onFeatureTriggered: (
+    id: string,
+    data: any,
+    feature: IPluginFeature,
+    signal?: AbortSignal,
+  ) => boolean | void
 
   /**
    * Called when user input changes within this feature’s input box.
@@ -466,7 +487,9 @@ export interface IPluginManager {
   listPlugins: () => Promise<Array<string>>
   loadPlugin: (pluginName: string) => Promise<boolean>
   unloadPlugin: (pluginName: string) => Promise<boolean>
-  installFromSource: (request: PluginInstallRequest) => Promise<PluginInstallSummary>
+  installFromSource: (
+    request: PluginInstallRequest,
+  ) => Promise<PluginInstallSummary>
   uninstallPlugin: (pluginName: string) => Promise<boolean>
   /**
    * Register an internal plugin that is created in code (no manifest / scanning).
@@ -485,7 +508,7 @@ export interface IManifest {
    * Unique identifier for the plugin.
    * This is typically the package name for npm plugins or a unique string for tpex plugins.
    */
-  id: string
+  id?: string
   /**
    * Display name of the plugin.
    * This is the human-readable name shown to users.
@@ -529,6 +552,22 @@ export interface IManifest {
    */
   activationKeywords?: string[]
   /**
+   * Optional supported runtime platforms declared by the manifest.
+   */
+  platforms?: Record<string, boolean>
+  /**
+   * Optional feature declarations exposed by the plugin runtime.
+   */
+  features?: IPluginFeature[]
+  /**
+   * Optional permission declarations.
+   */
+  permissions?: ManifestPermissions | string[]
+  /**
+   * Optional display reasons for declared permissions.
+   */
+  permissionReasons?: ManifestPermissionReasons
+  /**
    * Optional runtime development configuration, typically used when running plugins from a dev server.
    */
   dev?: {
@@ -544,7 +583,7 @@ export interface IManifest {
    * Optional list of files included in the plugin package.
    * This can be used for integrity checks or resource management.
    */
-  _files?: string[]
+  _files?: string[] | Record<string, string>
   /**
    * Development-specific configuration for the plugin.
    * This section is used during plugin development and might not be present in production builds.

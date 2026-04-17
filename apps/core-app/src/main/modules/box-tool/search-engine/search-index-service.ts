@@ -6,7 +6,6 @@ import { dbWriteScheduler } from '../../../db/db-write-scheduler'
 import * as schema from '../../../db/schema'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
 import { AdaptiveBatchScheduler } from './adaptive-batch-scheduler'
-import { searchLogger } from './search-logger'
 
 const CHINESE_CHAR_REGEX = /[\u4E00-\u9FA5]/
 const INVALID_KEYWORD_REGEX = /[^a-z0-9\u4E00-\u9FA5]+/i
@@ -19,6 +18,41 @@ const NGRAM_MAX_SOURCE_KEYWORDS = 96
 const NGRAM_MAX_ENTRIES_PER_ITEM = 256
 const PRIORITY_EPSILON = 0.0001
 const ZERO_RESULT_DIAGNOSTIC_THROTTLE_MS = 30_000
+
+interface SearchIndexRuntimeLogger {
+  logSearchPhase: (phase: string, detail?: string) => void
+  indexSearchStart: (providerId: string, query: string, limit: number) => void
+  indexSearchEmpty: () => void
+  indexSearchExecuting: () => void
+  indexSearchComplete: (resultCount: number, durationMs: number) => void
+}
+
+const noopSearchLogger: SearchIndexRuntimeLogger = {
+  logSearchPhase: () => {},
+  indexSearchStart: () => {},
+  indexSearchEmpty: () => {},
+  indexSearchExecuting: () => {},
+  indexSearchComplete: () => {}
+}
+
+let cachedSearchLogger: SearchIndexRuntimeLogger | null = null
+
+function getSearchLogger(): SearchIndexRuntimeLogger {
+  if (cachedSearchLogger) {
+    return cachedSearchLogger
+  }
+
+  try {
+    const { searchLogger } = require('./search-logger') as {
+      searchLogger?: SearchIndexRuntimeLogger
+    }
+    cachedSearchLogger = searchLogger ?? noopSearchLogger
+  } catch {
+    cachedSearchLogger = noopSearchLogger
+  }
+
+  return cachedSearchLogger
+}
 
 /**
  * Generate character n-grams for a word.
@@ -361,6 +395,7 @@ export class SearchIndexService {
     ftsQuery: string,
     limit = 50
   ): Promise<Array<{ itemId: string; score: number }>> {
+    const searchLogger = getSearchLogger()
     searchLogger.logSearchPhase('FTS Search', `Provider: ${providerId}, Query: "${ftsQuery}"`)
     searchLogger.indexSearchStart(providerId, ftsQuery, limit)
     const start = performance.now()

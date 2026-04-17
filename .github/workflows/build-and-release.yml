@@ -651,9 +651,15 @@ jobs:
         run: |
           if [ "$EVENT_NAME" = "push" ]; then
             # 标签触发：使用标签信息创建 release
+            REF_NAME_LOWER=$(echo "$REF_NAME" | tr '[:upper:]' '[:lower:]')
             echo "type=release" >> $GITHUB_OUTPUT
             echo "tag=$REF_NAME" >> $GITHUB_OUTPUT
             echo "name=Release $REF_NAME" >> $GITHUB_OUTPUT
+            if [[ "$REF_NAME_LOWER" == *"beta"* || "$REF_NAME_LOWER" == *"snapshot"* ]]; then
+              echo "prerelease=true" >> $GITHUB_OUTPUT
+            else
+              echo "prerelease=false" >> $GITHUB_OUTPUT
+            fi
           else
             # 手动触发：创建 draft release，使用时间戳作为临时标签
             # 标签会被 release action 自动创建，但因为是 draft，不会正式发布
@@ -661,6 +667,11 @@ jobs:
             echo "type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
             echo "tag=manual-build-$TIMESTAMP" >> $GITHUB_OUTPUT
             echo "name=Manual Build ($RELEASE_TYPE) - $TIMESTAMP" >> $GITHUB_OUTPUT
+            if [ "$RELEASE_TYPE" = "snapshot" ]; then
+              echo "prerelease=true" >> $GITHUB_OUTPUT
+            else
+              echo "prerelease=false" >> $GITHUB_OUTPUT
+            fi
           fi
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -831,7 +842,7 @@ jobs:
           tag_name: ${{ steps.release-info.outputs.tag }}
           name: ${{ steps.release-info.outputs.name }}
           draft: ${{ github.event_name == 'workflow_dispatch' }}
-          prerelease: ${{ steps.release-info.outputs.type == 'snapshot' }}
+          prerelease: ${{ steps.release-info.outputs.prerelease == 'true' }}
           files: ${{ steps.release-files.outputs.files }}
           fail_on_unmatched_files: false
           body: |

@@ -12,6 +12,7 @@ import {
 import { checkDirWithCreate } from '../../utils/common-util'
 import { pluginModule } from './plugin-module'
 import { removeNodeModulesDirs, shouldSkipNodeModulesPath } from './plugin-install-copy-utils'
+import { type PackagedManifest, ensurePluginRuntimeIntegrity } from './plugin-runtime-integrity'
 
 type ResolverEvent = { msg: unknown }
 const toErrorMessage = (error: unknown): string =>
@@ -144,6 +145,18 @@ export class PluginResolver {
       await this.uncompress(this.filePath, _target)
       await this.sanitizeNodeModules(_target)
       await this.applyInstallOptions(manifest, _target, options)
+      const installedManifestPath = path.join(_target, 'manifest.json')
+      const installedManifest = (await fse.readJSON(installedManifestPath)) as PackagedManifest
+      const integrity = await ensurePluginRuntimeIntegrity({
+        pluginDir: _target,
+        manifest: installedManifest,
+        archivePath: this.filePath
+      })
+      if (integrity.missingFiles.length > 0) {
+        throw new Error(
+          `Missing required webcontent entry files after install: ${integrity.missingFiles.join(', ')}`
+        )
+      }
 
       // Load the new plugin
       await pluginModule.pluginManager!.loadPlugin(manifest.name)
@@ -161,6 +174,14 @@ export class PluginResolver {
     } catch (error: unknown) {
       const message = toErrorMessage(error)
       console.error(`[PluginResolver] Failed to install plugin ${manifest.name}:`, error)
+      try {
+        await fse.remove(_target)
+      } catch (cleanupError: unknown) {
+        console.error(
+          `[PluginResolver] Failed to cleanup broken plugin directory ${manifest.name}:`,
+          cleanupError
+        )
+      }
       cb(message || 'Install failed', 'error')
     }
   }
