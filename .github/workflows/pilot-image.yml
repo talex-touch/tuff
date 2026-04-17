@@ -107,9 +107,23 @@ jobs:
           EOF
           )"
 
-          curl --fail --show-error --silent \
-            --request POST \
-            --header "Content-Type: application/json" \
-            --header "X-Pilot-Token: ${WEBHOOK_TOKEN}" \
-            --data "${payload}" \
-            "${WEBHOOK_URL}/deploy"
+          deploy_url="${WEBHOOK_URL%/}/deploy"
+
+          for attempt in 1 2 3; do
+            if curl --fail --show-error --silent \
+              --request POST \
+              --header "Content-Type: application/json" \
+              --header "X-Pilot-Token: ${WEBHOOK_TOKEN}" \
+              --data "${payload}" \
+              "${deploy_url}"; then
+              echo "Triggered 1Panel deploy webhook."
+              exit 0
+            fi
+
+            if [ "${attempt}" -lt 3 ]; then
+              echo "::warning::1Panel deploy webhook attempt ${attempt} failed, retrying."
+              sleep $((attempt * 5))
+            fi
+          done
+
+          echo "::warning::1Panel deploy webhook failed after retries; image was already pushed to GHCR, skip deploy trigger."

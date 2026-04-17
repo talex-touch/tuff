@@ -17,6 +17,8 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - Generates `tuff-release-manifest.json` for updater validation
   - Syncs Release metadata/assets to Nexus APIs (tag push only)
   - Notes sync priority (tag push): `notes/update_<version>.zh.md` + `notes/update_<version>.en.md` → `notes/update_<version>.md` → GitHub release body fallback
+  - 当 Nexus 写接口被 Cloudflare challenge 拦截时，`sync-nexus-release` 会输出明确 warning 并跳过后续 Nexus 同步步骤，不阻塞已经成功的 GitHub Release 构建与产物上传
+  - 若配置 `NEXUS_SYNC_BASE_URL` 或 `ADMIN_CF_ACCESS_CLIENT_ID` / `ADMIN_CF_ACCESS_CLIENT_SECRET`，则仍会正常执行完整 Nexus 同步链路
 
 - **`pr-flags.yml`** - PR flag management
   - Adds/removes labels based on PR content
@@ -38,6 +40,7 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - 推送标签：`pilot-<short_sha>` + `pilot-latest`
   - 输出镜像 digest，供后续 1Panel 回滚与审计
   - 若配置 `ONEPANEL_WEBHOOK_URL` + `ONEPANEL_WEBHOOK_TOKEN`，镜像发布后自动 `POST /deploy`
+  - 1Panel webhook 会做有限重试；连通性异常只记 warning，不阻塞已经成功的 GHCR 镜像发布
   - webhook 鉴权使用 `X-Pilot-Token: $ONEPANEL_WEBHOOK_TOKEN`（服务端变量为 `PILOT_WEBHOOK_TOKEN`）
 
 ### Package CI Workflows
