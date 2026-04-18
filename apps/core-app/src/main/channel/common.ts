@@ -79,6 +79,11 @@ import { safeOpHandler, toErrorMessage } from '../utils/safe-handler'
 import { enterPerfContext } from '../utils/perf-context'
 import { perfMonitor } from '../utils/perf-monitor'
 import {
+  getStorageUsageReport,
+  type StorageUsageIncludeOptions,
+  type StorageUsageReport
+} from '../utils/storage-usage'
+import {
   getSecureStoreValue,
   isSecureStoreAvailable,
   setSecureStoreValue
@@ -118,7 +123,7 @@ const ACTIVE_APP_CAPABILITY: PlatformCapability = {
 const NATIVE_SHARE_CAPABILITY: PlatformCapability = {
   id: 'platform.native-share',
   name: 'Native Share',
-  description: 'macOS 提供完整原生分享；Windows/Linux 仅提供 mailto 邮件降级',
+  description: '仅 macOS 提供原生系统分享能力',
   scope: 'system',
   status: 'beta',
   supportLevel: 'unsupported'
@@ -190,6 +195,12 @@ const fsWriteFileEvent = defineRawEvent<{ path: string; data: string }, { succes
 )
 const fsReadFileEvent = defineRawEvent<{ path: string }, { data?: string; error?: string }>(
   'fs:read-file'
+)
+interface StorageUsageRequest {
+  include?: StorageUsageIncludeOptions
+}
+const systemGetStorageUsageEvent = defineRawEvent<StorageUsageRequest, StorageUsageReport>(
+  'system:get-storage-usage'
 )
 const wallpaperListImagesEvent = defineRawEvent<
   { folderPath: string; recursive?: boolean },
@@ -603,17 +614,14 @@ async function listPlatformCapabilities(
 
   appendDynamicCapability({
     ...NATIVE_SHARE_CAPABILITY,
-    supportLevel:
-      process.platform === 'darwin'
-        ? 'supported'
-        : process.platform === 'win32' || process.platform === 'linux'
-          ? 'best_effort'
-          : 'unsupported',
+    supportLevel: process.platform === 'darwin' ? 'supported' : 'unsupported',
     limitations:
       process.platform === 'darwin'
         ? undefined
         : process.platform === 'win32' || process.platform === 'linux'
-          ? ['Falls back to mailto-based sharing only; no native system share sheet is exposed.']
+          ? [
+              'Native system share is unavailable on this platform; explicit mail target remains available.'
+            ]
           : ['Native share is unavailable on the current platform.']
   })
 
@@ -1426,6 +1434,17 @@ export class CommonChannelModule extends BaseModule {
         if (isRendererPerfReport(payload)) {
           perfMonitor.recordRendererReport(payload)
         }
+      }),
+      transport.on(systemGetStorageUsageEvent, async (payload) => {
+        const storageStats = storageModule.getCacheStats()
+        return await getStorageUsageReport({
+          include: payload?.include,
+          dbClient: databaseModule.getClient(),
+          cacheStats: {
+            'storage.lru': storageStats.cachedConfigs,
+            'storage.plugins': storageStats.pluginConfigs
+          }
+        })
       }),
       transport.on<ReadFileRequest, string>(AppEvents.system.readFile, async (payload) => {
         return await this.readSystemFile(payload)

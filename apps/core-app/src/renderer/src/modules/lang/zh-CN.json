@@ -163,6 +163,35 @@
     "title": "存储",
     "description": "查看应用存储详情"
   },
+  "settingSentry": {
+    "title": "Nexus 数据分析",
+    "groupDesc": "帮助改进应用体验和产品决策",
+    "enableDataUpload": "启用数据上传",
+    "enableDesc": "上传性能与错误指标，帮助快速定位问题。",
+    "uploadTooltip": "启用后会将性能与错误指标上传到 Nexus 和 Sentry。匿名模式仅控制是否关联设备指纹或用户 ID，不影响上传开关。",
+    "anonymousMode": "匿名模式",
+    "anonymousDesc": "仅记录必要字段，不包含个人身份信息。",
+    "anonymousLoginRequired": "登录后可切换匿名模式。",
+    "refreshStats": "刷新统计数据",
+    "refreshStatsDesc": "从本地数据库获取最新状态",
+    "refresh": "刷新",
+    "refreshError": "刷新统计信息失败",
+    "saveSuccess": "设置已保存",
+    "saveError": "保存设置失败",
+    "searchCount": "已记录搜索次数",
+    "warningTitle": "提示",
+    "warning": "非匿名模式下，会包含设备指纹信息以帮助追踪问题。用户 ID 仅在登录时包含。",
+    "bufferSize": "Buffer 大小",
+    "totalUploads": "总上传次数",
+    "failedUploads": "失败次数",
+    "lastUpload": "最近上传",
+    "lastFailure": "最近失败",
+    "apiBase": "API 地址",
+    "privacyManagement": "隐私数据管理",
+    "privacyManagementDesc": "在官网管理您的隐私设置和数据",
+    "viewDashboard": "查看数据分析面板",
+    "dashboardDesc": "在 Nexus 查看详细的使用统计和趋势"
+  },
   "settingTools": {
     "groupTitle": "实用工具",
     "groupDesc": "实用工具为您提供统一的快速桌面启动器。",
@@ -2749,15 +2778,7 @@
       "failure": "失败",
       "promptTokens": "输入 Token",
       "completionTokens": "输出 Token",
-      "weekdays": [
-        "日",
-        "一",
-        "二",
-        "三",
-        "四",
-        "五",
-        "六"
-      ]
+      "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
     },
     "audit": {
       "title": "审计设置",

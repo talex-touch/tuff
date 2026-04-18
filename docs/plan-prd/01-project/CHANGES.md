@@ -5,6 +5,19 @@
 
 ## 2026-04-18
 
+### fix(core-app): 补齐存储统计通道并收敛设置页 SVG/i18n/Transition 控制台告警
+
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useSvgContent.ts`
+- `apps/core-app/src/renderer/src/components/base/TuffIcon.vue`
+- `apps/core-app/src/renderer/src/views/storage/Storagable.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+  - `system:get-storage-usage` 重新接回主进程 `CommonChannel`，存储页摘要、插件占用和数据库表统计不再因为缺少 handler 直接报错。
+  - `useSvgContent` 对同源 `/api/*` SVG 优先走 renderer 侧请求并关闭外层重复重试，避免请求首次失败后继续被主进程 network cooldown 放大成二次噪音；`TuffIcon` 同步补齐直接 `<img>` 回退，SVG 内容预取失败时不再立刻退成错误占位。
+  - `Storagable` 与 `ThemeStyle` 收敛为单一根节点，修复路由 `<Transition>` 下的 fragment 根节点告警；补齐 `settingSentry` 语言包，设置页不再持续输出缺失 key 警告。
+
 ### fix(core-app): 收敛 settings 表单组件并修正权限/快捷方式/下载入口展示
 
 - `apps/core-app/src/renderer/src/components/tuff/TuffGroupBlock.vue`
@@ -434,11 +447,11 @@
 - `apps/pilot/server/api/chat/sessions/[sessionId]/title.post.ts`
 - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
 - `apps/pilot/server/api/aigc/conversation/[id].get.ts`
- - `apps/pilot/server/utils/pilot-system-message-response.ts`
-  - 新增统一的 runtime -> quota 历史回写 helper，按 runtime `title + messages + trace tail` 生成快照并同步维护 `pilot_quota_history` / `pilot_quota_sessions`。
-  - `POST /api/chat/sessions/:sessionId/title` 不再只更新 runtime 标题；现在会 best-effort 回写兼容历史，修复前端标题已生成但历史列表仍停留旧标题/旧汇聚快照的问题。
-  - `GET /api/aigc/conversation/:id` 与流式收尾同步复用同一条回写链路，避免不同入口再次出现快照格式或映射字段漂移。
-  - trace 尾窗口读取改为按批次向前补到最近的 `turn.started`，修复长 turn 中 `intent.*` 已落库但在恢复/快照阶段被 2000 条尾窗口裁掉、最终只剩 tool card 的问题。
+- `apps/pilot/server/utils/pilot-system-message-response.ts`
+- 新增统一的 runtime -> quota 历史回写 helper，按 runtime `title + messages + trace tail` 生成快照并同步维护 `pilot_quota_history` / `pilot_quota_sessions`。
+- `POST /api/chat/sessions/:sessionId/title` 不再只更新 runtime 标题；现在会 best-effort 回写兼容历史，修复前端标题已生成但历史列表仍停留旧标题/旧汇聚快照的问题。
+- `GET /api/aigc/conversation/:id` 与流式收尾同步复用同一条回写链路，避免不同入口再次出现快照格式或映射字段漂移。
+- trace 尾窗口读取改为按批次向前补到最近的 `turn.started`，修复长 turn 中 `intent.*` 已落库但在恢复/快照阶段被 2000 条尾窗口裁掉、最终只剩 tool card 的问题。
 - `apps/pilot/server/utils/__tests__/pilot-quota-history-sync.test.ts`
 - `apps/pilot/server/utils/__tests__/pilot-trace-window.test.ts`
 - `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
@@ -560,6 +573,7 @@
   - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard.transport.test.ts" "src/main/modules/omni-panel/index.test.ts" "src/main/channel/common.test.ts"` 已通过（`3 files / 17 tests`）。
   - `rg` 回归扫描确认 runtime 非测试代码中的 `sendSync(` / `resolveRuntimeChannel(` / `legacy-toggle` 已清零，`genTouchApp()` 仅保留 bootstrap 入口。
   - `rg` 回归扫描确认 renderer production `src` 下 `UpdatePromptExample/DownloadCenterTest/TuffItemTemplateExample/README/VISUAL/IMPLEMENTATION_SUMMARY` 命中为 0。
+
 ### refactor(core-app): 收口 hard-cut 兼容层并显式暴露权限后端降级态
 
 - `apps/core-app/src/main/core/deprecated-global-app.ts`
