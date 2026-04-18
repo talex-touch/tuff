@@ -9,6 +9,7 @@ import { fuzzyMatch, indicesToRanges } from '@talex-touch/utils/search/fuzzy-mat
 import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils'
 import chalk from 'chalk'
 import { pinyin } from 'pinyin-pro'
+import type { AppLaunchKind } from './app-types'
 import { formatLog, generateAcronym, LogStyle } from './app-utils'
 import { calculateHighlights } from './highlighting-service'
 
@@ -41,16 +42,19 @@ interface AppMatchState {
 }
 
 function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): ProcessedTuffItem {
-  const uniqueId = app.extensions.bundleId || app.path
+  const uniqueId = app.extensions.bundleId || app.extensions.appIdentity || app.path
   const name = app.name
   const displayName = app.displayName || app.name
+  const subtitle = app.extensions.displayPath || app.path
   const rawIconValue = app.extensions.icon ?? ''
   const iconValue = rawIconValue && !isValidBase64DataUrl(rawIconValue) ? '' : rawIconValue
+  const keywordPath = app.extensions.displayPath || app.path
+  const launchKind = (app.extensions.launchKind as AppLaunchKind | null) || 'path'
 
   const tuffItem = new TuffItemBuilder(uniqueId, 'application', 'app-provider')
     .setKind('app')
     .setTitle(displayName)
-    .setSubtitle(app.path)
+    .setSubtitle(subtitle)
     .setIcon({
       type: iconValue.startsWith('data:') ? 'url' : 'file',
       value: iconValue
@@ -69,12 +73,19 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
     .setMeta({
       app: {
         path: app.path,
-        bundle_id: app.extensions.bundleId || ''
+        bundle_id: app.extensions.bundleId || '',
+        launchKind,
+        launchTarget: app.extensions.launchTarget || app.path,
+        launchArgs: app.extensions.launchArgs || '',
+        workingDirectory: app.extensions.workingDirectory || '',
+        displayPath: app.extensions.displayPath || ''
       },
       extension: {
         matchResult: match.highlights,
         source: match.source,
-        keyWords: [...new Set([name, path.basename(app.path).split('.')[0] || ''])].filter(Boolean)
+        keyWords: [...new Set([name, path.basename(keywordPath).split('.')[0] || ''])].filter(
+          Boolean
+        )
       }
     })
     .setScoring({
@@ -109,7 +120,7 @@ export async function processSearchResults(
     const name = app.name
     const displayName = app.displayName || app.name
     const potentialTitles = [displayName, name].filter(Boolean) as string[]
-    const uniqueId = app.extensions.bundleId || app.path
+    const uniqueId = app.extensions.bundleId || app.extensions.appIdentity || app.path
 
     let bestSource: string = 'unknown'
     let bestHighlights: Range[] = []
