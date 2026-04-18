@@ -14,6 +14,8 @@ const {
   saveMainConfigMock,
   scheduleDbWriteMock,
   searchRecordExecuteMock,
+  shellOpenPathMock,
+  spawnSafeMock,
   unregisterPollingMock,
   withSqliteRetryMock
 } = vi.hoisted(() => ({
@@ -39,6 +41,8 @@ const {
   saveMainConfigMock: vi.fn(),
   scheduleDbWriteMock: vi.fn(async (_label: string, task: () => Promise<unknown>) => await task()),
   searchRecordExecuteMock: vi.fn(),
+  shellOpenPathMock: vi.fn(),
+  spawnSafeMock: vi.fn(),
   unregisterPollingMock: vi.fn(),
   withSqliteRetryMock: vi.fn(async (task: () => Promise<unknown>) => await task())
 }))
@@ -72,7 +76,7 @@ vi.mock('electron', () => ({
     getAllWindows: vi.fn(() => [])
   },
   shell: {
-    openPath: vi.fn()
+    openPath: shellOpenPathMock
   }
 }))
 
@@ -89,6 +93,10 @@ vi.mock('@talex-touch/utils/common/utils/polling', () => ({
     register: registerPollingMock,
     unregister: unregisterPollingMock
   }
+}))
+
+vi.mock('@talex-touch/utils/common/utils/safe-shell', () => ({
+  spawnSafe: spawnSafeMock
 }))
 
 vi.mock('../../../../core/eventbus/touch-event', () => ({
@@ -241,6 +249,7 @@ describe('appProvider rebuild maintenance', () => {
     vi.clearAllMocks()
     getWatchPathsMock.mockReturnValue([])
     getAppsMock.mockResolvedValue([])
+    spawnSafeMock.mockReturnValue({ unref: vi.fn() })
     runMdlsUpdateScanMock.mockResolvedValue({
       updatedApps: [],
       updatedCount: 0,
@@ -381,5 +390,64 @@ describe('appProvider rebuild maintenance', () => {
       'mdls',
       'startup-backfill'
     ])
+  })
+
+  it('launches shortcut apps with spawn and preserved args', async () => {
+    const { appProvider } = await loadSubject()
+
+    await appProvider.onExecute({
+      item: {
+        id: 'shortcut-app',
+        meta: {
+          app: {
+            path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk',
+            launchKind: 'shortcut',
+            launchTarget: 'C:\\Program Files\\Foo\\Foo.exe',
+            launchArgs: '--profile work --flag',
+            workingDirectory: 'C:\\Program Files\\Foo'
+          }
+        }
+      }
+    } as any)
+
+    expect(spawnSafeMock).toHaveBeenCalledWith(
+      'C:\\Program Files\\Foo\\Foo.exe',
+      ['--profile', 'work', '--flag'],
+      {
+        cwd: 'C:\\Program Files\\Foo',
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      }
+    )
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('launches Windows Store apps through explorer shell target', async () => {
+    const { appProvider } = await loadSubject()
+
+    await appProvider.onExecute({
+      item: {
+        id: 'uwp-app',
+        meta: {
+          app: {
+            path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+            launchKind: 'uwp',
+            launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
+          }
+        }
+      }
+    } as any)
+
+    expect(spawnSafeMock).toHaveBeenCalledWith(
+      'explorer.exe',
+      ['shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'],
+      {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      }
+    )
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
   })
 })

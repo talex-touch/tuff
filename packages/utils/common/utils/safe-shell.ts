@@ -1,7 +1,7 @@
 import type {
   ChildProcess,
   ExecFileOptions,
-  SpawnOptionsWithoutStdio,
+  SpawnOptions,
 } from 'node:child_process'
 import { hasWindow } from '../../env'
 
@@ -97,7 +97,7 @@ export async function execFileSafe(
 export function spawnSafe(
   command: string,
   args: string[] = [],
-  options: SpawnOptionsWithoutStdio = {}
+  options: SpawnOptions = {}
 ): ChildProcess {
   const { spawn } = requireChildProcess()
   const safeCommand = assertShellValue(command, 'COMMAND')
@@ -107,7 +107,7 @@ export function spawnSafe(
 
 export function spawnShellCommand(
   command: string,
-  options: SpawnOptionsWithoutStdio = {}
+  options: SpawnOptions = {}
 ): ChildProcess {
   const { spawn } = requireChildProcess()
   const safeCommand = assertShellValue(command, 'COMMAND')

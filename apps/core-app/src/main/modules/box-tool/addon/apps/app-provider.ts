@@ -30,6 +30,7 @@ import {
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
+import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-box'
 import chalk from 'chalk'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
@@ -64,7 +65,7 @@ import { normalizeDisplayName, shouldUpdateDisplayName } from './display-name-sy
 import { matchNoisySystemAppRule } from './app-noise-filter'
 import { formatLog, LogStyle } from './app-utils'
 import { processSearchResults } from './search-processing-service'
-import type { ScannedAppInfo } from './app-types'
+import type { AppLaunchKind, ScannedAppInfo } from './app-types'
 
 const SLOW_SEARCH_THRESHOLD_MS = 400
 const appProviderLog = getLogger('app-provider')
@@ -245,6 +246,52 @@ const STARTUP_HEAVY_TASK_EXTRA_DELAY_DEV_MS = 30_000
 const STARTUP_HEAVY_TASK_WAIT_RENDERER_TIMEOUT_MS = 30_000
 const STARTUP_BACKFILL_MIN_INTERVAL_DEV_MS = 6 * 60 * 60 * 1000
 const STARTUP_MDLS_SCAN_MIN_INTERVAL_DEV_MS = 6 * 60 * 60 * 1000
+const APP_IDENTITY_EXTENSION_KEY = 'appIdentity'
+const APP_LAUNCH_KIND_EXTENSION_KEY = 'launchKind'
+const APP_LAUNCH_TARGET_EXTENSION_KEY = 'launchTarget'
+const APP_LAUNCH_ARGS_EXTENSION_KEY = 'launchArgs'
+const APP_WORKING_DIRECTORY_EXTENSION_KEY = 'workingDirectory'
+const APP_DISPLAY_PATH_EXTENSION_KEY = 'displayPath'
+const APP_IDENTIFIER_EXTENSION_KEYS = ['bundleId', APP_IDENTITY_EXTENSION_KEY] as const
+
+function resolveAppItemId(value: {
+  bundleId?: string | null
+  stableId?: string | null
+  appIdentity?: string | null
+  path: string
+}): string {
+  return value.bundleId || value.stableId || value.appIdentity || value.path
+}
+
+function splitLaunchArgs(rawArgs?: string): string[] {
+  if (!rawArgs) return []
+
+  const args: string[] = []
+  let current = ''
+  let inQuotes = false
+
+  for (let i = 0; i < rawArgs.length; i += 1) {
+    const char = rawArgs[i]
+    if (char === '"') {
+      inQuotes = !inQuotes
+      continue
+    }
+    if (!inQuotes && /\s/.test(char)) {
+      if (current) {
+        args.push(current)
+        current = ''
+      }
+      continue
+    }
+    current += char
+  }
+
+  if (current) {
+    args.push(current)
+  }
+
+  return args
+}
 
 export interface AppIndexSettings {
   hideNoisySystemApps: boolean
@@ -511,13 +558,59 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private resolveScannedAppKey(
-    app: Pick<ScannedAppInfo, 'bundleId' | 'uniqueId' | 'path'>
+    app: Pick<ScannedAppInfo, 'bundleId' | 'stableId' | 'path'>
   ): string {
-    return app.bundleId || app.uniqueId || app.path
+    return resolveAppItemId(app)
   }
 
   private resolveDbAppKey(app: DbAppWithExtensions): string {
-    return app.extensions.bundleId || app.path
+    return resolveAppItemId({
+      bundleId: app.extensions.bundleId,
+      appIdentity: app.extensions.appIdentity,
+      path: app.path
+    })
+  }
+
+  private buildAppExtensions(
+    fileId: number,
+    app: Pick<
+      ScannedAppInfo,
+      | 'bundleId'
+      | 'icon'
+      | 'stableId'
+      | 'launchKind'
+      | 'launchTarget'
+      | 'launchArgs'
+      | 'workingDirectory'
+      | 'displayPath'
+    >
+  ): FileExtensionInsert[] {
+    const extensions: FileExtensionInsert[] = []
+    if (app.bundleId) {
+      extensions.push({ fileId, key: 'bundleId', value: app.bundleId })
+    }
+    if (app.icon) {
+      extensions.push({ fileId, key: 'icon', value: app.icon })
+    }
+    if (app.stableId) {
+      extensions.push({ fileId, key: APP_IDENTITY_EXTENSION_KEY, value: app.stableId })
+    }
+    extensions.push({ fileId, key: APP_LAUNCH_KIND_EXTENSION_KEY, value: app.launchKind })
+    extensions.push({ fileId, key: APP_LAUNCH_TARGET_EXTENSION_KEY, value: app.launchTarget })
+    if (app.launchArgs) {
+      extensions.push({ fileId, key: APP_LAUNCH_ARGS_EXTENSION_KEY, value: app.launchArgs })
+    }
+    if (app.workingDirectory) {
+      extensions.push({
+        fileId,
+        key: APP_WORKING_DIRECTORY_EXTENSION_KEY,
+        value: app.workingDirectory
+      })
+    }
+    if (app.displayPath) {
+      extensions.push({ fileId, key: APP_DISPLAY_PATH_EXTENSION_KEY, value: app.displayPath })
+    }
+    return extensions
   }
 
   private buildScannedAppsMap(scannedApps: ScannedAppInfo[]): Map<string, ScannedAppInfo> {
@@ -761,14 +854,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             .returning()
 
           if (insertedFile) {
-            const extensions: FileExtensionInsert[] = []
-            if (app.bundleId) {
-              extensions.push({ fileId: insertedFile.id, key: 'bundleId', value: app.bundleId })
-            }
-            if (app.icon) {
-              extensions.push({ fileId: insertedFile.id, key: 'icon', value: app.icon })
-            }
-
+            const extensions = this.buildAppExtensions(insertedFile.id, app)
             if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
 
             await this._syncKeywordsForApp(app)
@@ -968,11 +1054,21 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return {
       name: app.name,
       displayName: app.displayName || undefined,
-      fileName: path.basename(app.path, '.app'),
+      fileName:
+        app.extensions.displayPath ||
+        (app.path.startsWith('shell:AppsFolder\\')
+          ? app.name
+          : path.basename(app.path, path.extname(app.path) || undefined)),
       path: app.path,
       icon: app.extensions.icon || '',
       bundleId: app.extensions.bundleId || '',
-      uniqueId: app.extensions.bundleId || app.path,
+      uniqueId: app.extensions.appIdentity || app.extensions.bundleId || app.path,
+      stableId: app.extensions.appIdentity || app.extensions.bundleId || app.path,
+      launchKind: (app.extensions.launchKind as AppLaunchKind | undefined) || 'path',
+      launchTarget: app.extensions.launchTarget || app.path,
+      launchArgs: app.extensions.launchArgs || undefined,
+      workingDirectory: app.extensions.workingDirectory || undefined,
+      displayPath: app.extensions.displayPath || undefined,
       lastModified: app.mtime
     }
   }
@@ -984,7 +1080,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (!this.searchIndex) return
 
     const keywordsSet = await this._generateKeywordsForApp(appInfo)
-    const itemId = appInfo.bundleId || appInfo.path
+    const itemId = resolveAppItemId(appInfo)
 
     const keywordEntries: SearchIndexKeyword[] = Array.from(keywordsSet).map((keyword) => ({
       value: keyword,
@@ -1006,7 +1102,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       displayName: appInfo.displayName || undefined,
       description: appInfo.description || undefined,
       path: appInfo.path,
-      extension: path.extname(appInfo.path).toLowerCase(),
+      extension:
+        appInfo.launchKind === 'uwp'
+          ? '.uwp'
+          : path.extname(appInfo.launchTarget || appInfo.path).toLowerCase(),
       aliases: aliasEntries,
       keywords: keywordEntries,
       tags: appInfo.bundleId ? [appInfo.bundleId] : undefined
@@ -1030,13 +1129,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private _isAliasForApp(keyword: string, appInfo: ScannedAppInfo): boolean {
-    const uniqueId = appInfo.bundleId || appInfo.path
+    const uniqueId = resolveAppItemId(appInfo)
     const aliasList = this.aliases[uniqueId] || this.aliases[appInfo.path] || []
     return aliasList.includes(keyword)
   }
 
   private _getAliasesForApp(appInfo: ScannedAppInfo): string[] {
-    const uniqueId = appInfo.bundleId || appInfo.path
+    const uniqueId = resolveAppItemId(appInfo)
     const aliasesById = this.aliases[uniqueId] || []
     const aliasesByPath = this.aliases[appInfo.path] || []
     return Array.from(new Set([...aliasesById, ...aliasesByPath])).map((alias) =>
@@ -1098,7 +1197,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
-    const uniqueId = appInfo.bundleId || appInfo.path
+    const uniqueId = resolveAppItemId(appInfo)
     const aliasList = this.aliases[uniqueId] || this.aliases[appInfo.path]
     if (aliasList) {
       aliasList.forEach((alias) => generatedKeywords.add(alias.toLowerCase()))
@@ -1252,11 +1351,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             .returning()
 
           if (insertedFile) {
-            const extensions: FileExtensionInsert[] = []
-            if (app.bundleId)
-              extensions.push({ fileId: insertedFile.id, key: 'bundleId', value: app.bundleId })
-            if (app.icon) extensions.push({ fileId: insertedFile.id, key: 'icon', value: app.icon })
-
+            const extensions = this.buildAppExtensions(insertedFile.id, app)
             if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
 
             await this._syncKeywordsForApp(app)
@@ -1302,10 +1397,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
           await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, fileId))
 
-          const extensions: FileExtensionInsert[] = []
-          if (app.bundleId) extensions.push({ fileId, key: 'bundleId', value: app.bundleId })
-          if (app.icon) extensions.push({ fileId, key: 'icon', value: app.icon })
-
+          const extensions = this.buildAppExtensions(fileId, app)
           if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
 
           await this._syncKeywordsForApp(app)
@@ -1339,14 +1431,30 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       const deletedItemIds = (
         await db
-          .select({ bundleId: fileExtensions.value, path: filesSchema.path })
+          .select({
+            extensionKey: fileExtensions.key,
+            extensionValue: fileExtensions.value,
+            path: filesSchema.path
+          })
           .from(filesSchema)
           .leftJoin(
             fileExtensions,
-            and(eq(filesSchema.id, fileExtensions.fileId), eq(fileExtensions.key, 'bundleId'))
+            and(
+              eq(filesSchema.id, fileExtensions.fileId),
+              inArray(fileExtensions.key, [...APP_IDENTIFIER_EXTENSION_KEYS])
+            )
           )
           .where(inArray(filesSchema.id, toDeleteIds))
-      ).map((row) => row.bundleId || row.path)
+      ).reduce<string[]>((items, row) => {
+        if (row.extensionValue && APP_IDENTIFIER_EXTENSION_KEYS.includes(row.extensionKey as any)) {
+          items.push(row.extensionValue)
+          return items
+        }
+        if (row.path) {
+          items.push(row.path)
+        }
+        return items
+      }, [])
 
       const deleteStart = startTiming()
       await db.transaction(async (tx) => {
@@ -1418,10 +1526,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, existingFile.id))
 
-      await this.dbUtils!.addFileExtensions([
-        { fileId: existingFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
-        { fileId: existingFile.id, key: 'icon', value: appInfo.icon }
-      ])
+      await this.dbUtils!.addFileExtensions(this.buildAppExtensions(existingFile.id, appInfo))
 
       await this._syncKeywordsForApp(appInfo)
       logApp(`App ${chalk.cyan(appInfo.name)} updated successfully`, LogStyle.success)
@@ -1443,10 +1548,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       .returning()
 
     if (insertedFile) {
-      await this.dbUtils!.addFileExtensions([
-        { fileId: insertedFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
-        { fileId: insertedFile.id, key: 'icon', value: appInfo.icon }
-      ])
+      await this.dbUtils!.addFileExtensions(this.buildAppExtensions(insertedFile.id, appInfo))
 
       await this._syncKeywordsForApp(appInfo)
       logApp(`New app ${chalk.cyan(appInfo.name)} added successfully`, LogStyle.success)
@@ -1592,21 +1694,74 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       })
     }
 
-    const appPath = item.meta?.app?.path
+    const appMeta = (item.meta?.app as
+      | {
+          path?: string
+          launchKind?: AppLaunchKind
+          launchTarget?: string
+          launchArgs?: string
+          workingDirectory?: string
+        }
+      | undefined) ?? { path: undefined }
+    const appPath = appMeta.path
     if (!appPath) {
       logApp('Execution failed: App path not found', LogStyle.error)
       return null
     }
 
-    logApp(`Opening app: ${chalk.cyan(appPath)}`, LogStyle.process)
+    const launchKind = appMeta.launchKind || 'path'
+    const launchTarget = appMeta.launchTarget || appPath
+    const launchArgs = appMeta.launchArgs
+    const workingDirectory = appMeta.workingDirectory
+
+    if (launchKind === 'shortcut') {
+      logApp(`Launching shortcut app: ${chalk.cyan(launchTarget)}`, LogStyle.process)
+      try {
+        const child = spawnSafe(launchTarget, splitLaunchArgs(launchArgs), {
+          cwd: workingDirectory,
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true
+        })
+        child.unref()
+        logApp(`App launched successfully: ${chalk.green(appPath)}`, LogStyle.success)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        logApp(`Failed to launch shortcut app: ${chalk.red(message)}`, LogStyle.error)
+      }
+      return null
+    }
+
+    if (launchKind === 'uwp') {
+      const explorerTarget = `shell:AppsFolder\\${launchTarget}`
+      logApp(`Launching Windows Store app: ${chalk.cyan(explorerTarget)}`, LogStyle.process)
+      try {
+        const child = spawnSafe('explorer.exe', [explorerTarget], {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true
+        })
+        child.unref()
+        logApp(
+          `Windows Store app launched successfully: ${chalk.green(explorerTarget)}`,
+          LogStyle.success
+        )
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        logApp(`Failed to launch Windows Store app: ${chalk.red(message)}`, LogStyle.error)
+      }
+      return null
+    }
+
+    logApp(`Opening app: ${chalk.cyan(launchTarget)}`, LogStyle.process)
     void shell
-      .openPath(appPath)
+      .openPath(launchTarget)
       .then((errorMessage) => {
         if (errorMessage) {
           logApp(`Failed to open app: ${chalk.red(errorMessage)}`, LogStyle.error)
           return
         }
-        logApp(`App opened successfully: ${chalk.green(appPath)}`, LogStyle.success)
+        logApp(`App opened successfully: ${chalk.green(launchTarget)}`, LogStyle.success)
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err)
@@ -1820,7 +1975,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const subquery = db
       .select({ fileId: fileExtensions.fileId })
       .from(fileExtensions)
-      .where(and(eq(fileExtensions.key, 'bundleId'), inArray(fileExtensions.value, candidateList)))
+      .where(
+        and(
+          inArray(fileExtensions.key, [...APP_IDENTIFIER_EXTENSION_KEYS]),
+          inArray(fileExtensions.value, candidateList)
+        )
+      )
 
     const files = await db
       .select()
