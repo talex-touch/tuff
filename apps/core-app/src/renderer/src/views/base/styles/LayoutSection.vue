@@ -28,7 +28,6 @@ const mainEditorSource = ref<HTMLElement | null>(null)
 const coreBoxEditorSource = ref<HTMLElement | null>(null)
 const remotePresetSource = ref<HTMLElement | null>(null)
 
-// Only simple and flat are enabled, others are disabled (coming soon)
 const enabledLayouts = new Set(['simple', 'flat'])
 
 interface LayoutPreviewState {
@@ -53,9 +52,7 @@ watch(
         .then((module) => {
           layoutPreviewStates[key].component = markRaw(module.default)
         })
-        .catch((error) => {
-          console.error(`[LayoutSection] Failed to load preview for layout "${key}":`, error)
-        })
+        .catch(() => {})
         .finally(() => {
           layoutPreviewStates[key].loading = false
         })
@@ -64,17 +61,14 @@ watch(
   { immediate: true }
 )
 
-// Filter out 'custom' from display list
 const displayLayouts = computed(() => {
-  return Object.entries(availableLayouts.value).filter(([key]) => key !== 'custom')
+  return Object.entries(availableLayouts.value).filter(
+    ([key]) => key !== 'custom' && enabledLayouts.has(key)
+  )
 })
 const showPresetEditors = computed(
   () => startupInfo.value?.isDev === true && Boolean(appSetting?.dev?.advancedSettings)
 )
-
-function isLayoutDisabled(key: string): boolean {
-  return !enabledLayouts.has(key)
-}
 
 function getLayoutLabel(layoutKey: string, fallbackName?: string): string {
   return t(`layoutSection.layouts.${layoutKey}`, fallbackName || layoutKey)
@@ -108,12 +102,10 @@ function handleOpenRemotePreset(event: MouseEvent): void {
 
 async function handleLayoutSelect(layoutName: string): Promise<void> {
   if (layoutName === currentLayoutName.value) return
-  if (isLayoutDisabled(layoutName)) return
 
   try {
     await switchLayout(layoutName)
-  } catch (error) {
-    console.error('[LayoutSection] Failed to switch layout:', error)
+  } catch {
     toast.error(t('layoutSection.switchError'))
   }
 }
@@ -135,13 +127,12 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
           shadow="none"
           :radius="18"
           :padding="0"
-          :clickable="!isLayoutDisabled(key)"
+          clickable
           class="LayoutSection-Item"
-          :class="{ active: currentLayoutName === key, disabled: isLayoutDisabled(key) }"
+          :class="{ active: currentLayoutName === key }"
           role="button"
-          :tabindex="isLayoutDisabled(key) ? -1 : 0"
+          tabindex="0"
           :aria-pressed="currentLayoutName === key"
-          :aria-disabled="isLayoutDisabled(key)"
           @click="handleLayoutSelect(key)"
           @keydown.enter.prevent="handleLayoutSelect(key)"
           @keydown.space.prevent="handleLayoutSelect(key)"
@@ -159,9 +150,6 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
                 <div class="LayoutSection-Skeleton-Sidebar" />
                 <div class="LayoutSection-Skeleton-Main" />
               </div>
-            </div>
-            <div v-if="isLayoutDisabled(key)" class="LayoutSection-ComingSoon">
-              {{ t('common.comingSoon', 'Coming Soon') }}
             </div>
           </div>
           <div class="LayoutSection-Info">

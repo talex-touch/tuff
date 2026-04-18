@@ -875,6 +875,7 @@ onBeforeUnmount(() => {
 }
 
 .tx-base-anchor__reference.is-full-width {
+  display: flex;
   width: 100%;
 }
 

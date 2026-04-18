@@ -97,8 +97,9 @@ function handleClick(event: MouseEvent) {
   .TBlockSlot-Content {
     display: flex;
     align-items: center;
-
-    width: 100%;
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
     height: 100%;
 
     box-sizing: border-box;
@@ -113,6 +114,7 @@ function handleClick(event: MouseEvent) {
 
     > .TBlockSlot-Label {
       flex: 1;
+      min-width: 0;
 
       > h3 {
         margin: 0;
@@ -158,8 +160,8 @@ function handleClick(event: MouseEvent) {
   position: relative;
   padding: 4px 16px;
   display: flex;
-
-  justify-content: space-between;
+  gap: 16px;
+  justify-content: flex-start;
   align-items: center;
 
   width: 100%;

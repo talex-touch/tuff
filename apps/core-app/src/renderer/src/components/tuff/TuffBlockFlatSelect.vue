@@ -49,9 +49,10 @@ function handleChange(val: TxFlatSelectValue) {
       <slot name="tags" />
     </template>
     <template #default>
-      <div class="flex items-center justify-end w-full">
+      <div class="TuffBlockFlatSelect-Control">
         <TxFlatSelect
           v-model="value"
+          class="TuffBlockFlatSelect-Select"
           :disabled="disabled"
           :class="disabled ? 'pointer-events-none opacity-70' : ''"
           @change="handleChange"
@@ -62,3 +63,17 @@ function handleChange(val: TxFlatSelectValue) {
     </template>
   </TuffBlockSlot>
 </template>
+
+<style lang="scss" scoped>
+.TuffBlockFlatSelect-Control {
+  width: 180px;
+  max-width: 100%;
+  min-width: 120px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.TuffBlockFlatSelect-Select {
+  width: 100%;
+}
+</style>

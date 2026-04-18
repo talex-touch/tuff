@@ -217,6 +217,7 @@ function formatTimeout(ms: number): string {
 <template>
   <!-- Download settings group block -->
   <TuffGroupBlock
+    class="setting-download-group"
     :name="t('settings.settingDownload.groupTitle')"
     :description="t('settings.settingDownload.groupDesc')"
     default-icon="i-carbon-cloud-download"
@@ -439,20 +440,24 @@ function formatTimeout(ms: number): string {
       active-icon="i-carbon-folder-open"
       :active="Boolean(downloadConfig.storage.tempDir)"
     >
-      <div class="storage-path-display">
-        {{ downloadConfig.storage.tempDir || t('settings.settingDownload.defaultPath') }}
+      <div class="storage-controls">
+        <div class="storage-path-display">
+          {{ downloadConfig.storage.tempDir || t('settings.settingDownload.defaultPath') }}
+        </div>
+        <div class="storage-actions">
+          <TxButton variant="flat" size="sm" :disabled="loading" @click.stop="chooseTempDir">
+            {{ t('settings.settingDownload.browse') }}
+          </TxButton>
+          <TxButton
+            variant="flat"
+            size="sm"
+            :disabled="loading || !downloadConfig.storage.tempDir"
+            @click.stop="resetTempDir"
+          >
+            {{ t('settings.settingDownload.resetTempDir') }}
+          </TxButton>
+        </div>
       </div>
-      <TxButton variant="flat" size="sm" :disabled="loading" @click.stop="chooseTempDir">
-        {{ t('settings.settingDownload.browse') }}
-      </TxButton>
-      <TxButton
-        variant="flat"
-        size="sm"
-        :disabled="loading || !downloadConfig.storage.tempDir"
-        @click.stop="resetTempDir"
-      >
-        {{ t('settings.settingDownload.resetTempDir') }}
-      </TxButton>
     </TuffBlockSlot>
 
     <!-- Actions -->
@@ -475,6 +480,43 @@ function formatTimeout(ms: number): string {
 </template>
 
 <style lang="scss" scoped>
+.setting-download-group {
+  :deep(.TBlockSlot-Container) {
+    gap: 16px;
+    align-items: flex-start;
+    min-height: 56px;
+    height: auto;
+  }
+
+  :deep(.TBlockSlot-Content) {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    padding: 8px 0;
+  }
+
+  :deep(.TBlockSlot-Label) {
+    min-width: 0;
+  }
+
+  :deep(.TBlockSlot-Slot) {
+    flex: 0 1 520px;
+    width: min(100%, 520px);
+    max-width: min(100%, 520px);
+    min-width: 0;
+    padding: 8px 0;
+  }
+}
+
+.storage-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: min(100%, 520px);
+  min-width: 0;
+}
+
 .storage-path-display {
   padding: 8px 12px;
   background: var(--tx-fill-color-light);
@@ -483,11 +525,22 @@ function formatTimeout(ms: number): string {
   font-size: 12px;
   color: var(--tx-text-color-regular);
   word-break: break-all;
+  min-width: 0;
+}
+
+.storage-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .actions-container {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  width: min(100%, 520px);
+  min-width: 0;
 }
 </style>
