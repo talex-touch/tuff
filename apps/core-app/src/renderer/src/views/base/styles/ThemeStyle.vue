@@ -506,454 +506,472 @@ const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSet
 </script>
 
 <template>
-  <ViewTemplate :name="t('themeStyle.styles')">
-    <WindowSectionVue>
-      <SectionItem v-model="windowPreference" title="pure" :label="t('themeStyle.windowPure')" />
-      <SectionItem
-        v-model="windowPreference"
-        title="refraction"
-        :label="t('themeStyle.windowRefraction')"
-      />
-      <SectionItem
-        v-model="windowPreference"
-        title="filter"
-        :label="t('themeStyle.windowFilter')"
-      />
-    </WindowSectionVue>
+  <div class="ThemeStyle-Page">
+    <ViewTemplate :name="t('themeStyle.styles')">
+      <WindowSectionVue>
+        <SectionItem v-model="windowPreference" title="pure" :label="t('themeStyle.windowPure')" />
+        <SectionItem
+          v-model="windowPreference"
+          title="refraction"
+          :label="t('themeStyle.windowRefraction')"
+        />
+        <SectionItem
+          v-model="windowPreference"
+          title="filter"
+          :label="t('themeStyle.windowFilter')"
+        />
+      </WindowSectionVue>
 
-    <LayoutSection />
+      <LayoutSection />
 
-    <TuffGroupBlock
-      :name="t('themeStyle.personalized')"
-      :description="t('themeStyle.personalizedDesc')"
-      memory-name="theme-style-personalized"
-    >
-      <template #icon="{ active }">
-        <ThemePreviewIcon variant="personalized" :active="active" />
-      </template>
-      <TuffBlockSelect
-        v-model="styleValue"
-        :title="t('themeStyle.colorStyle')"
-        :description="t('themeStyle.colorStyleDesc')"
-        @change="handleThemeChange"
+      <TuffGroupBlock
+        :name="t('themeStyle.personalized')"
+        :description="t('themeStyle.personalizedDesc')"
+        memory-name="theme-style-personalized"
       >
         <template #icon="{ active }">
-          <ThemePreviewIcon variant="palette" :active="active" />
+          <ThemePreviewIcon variant="personalized" :active="active" />
         </template>
-        <TxSelectItem :value="0">
-          {{ t('themeStyle.lightStyle') }}
-        </TxSelectItem>
-        <TxSelectItem :value="1">
-          {{ t('themeStyle.darkStyle') }}
-        </TxSelectItem>
-        <TxSelectItem :value="2">
-          {{ t('themeStyle.followSystem') }}
-        </TxSelectItem>
-      </TuffBlockSelect>
-
-      <template v-if="showAdvancedSettings">
         <TuffBlockSelect
-          v-model="bgSourceValue"
-          :title="t('themeStyle.homepageWallpaper')"
-          :description="t('themeStyle.homepageWallpaperDesc')"
+          v-model="styleValue"
+          :title="t('themeStyle.colorStyle')"
+          :description="t('themeStyle.colorStyleDesc')"
+          @change="handleThemeChange"
         >
           <template #icon="{ active }">
-            <TxSpinner v-if="bgSaving" :size="14" />
-            <ThemePreviewIcon v-else variant="wallpaper" :active="active" />
+            <ThemePreviewIcon variant="palette" :active="active" />
           </template>
           <TxSelectItem :value="0">
-            {{ t('themeStyle.noBackground') }}
+            {{ t('themeStyle.lightStyle') }}
           </TxSelectItem>
           <TxSelectItem :value="1">
-            {{ t('themeStyle.bing') }}
+            {{ t('themeStyle.darkStyle') }}
           </TxSelectItem>
           <TxSelectItem :value="2">
-            {{ t('themeStyle.customImage') }}
-          </TxSelectItem>
-          <TxSelectItem :value="3">
-            {{ t('themeStyle.folder') }}
-          </TxSelectItem>
-          <TxSelectItem :value="4">
-            {{ t('themeStyle.desktopWallpaper') }}
+            {{ t('themeStyle.followSystem') }}
           </TxSelectItem>
         </TuffBlockSelect>
 
-        <!-- Custom background image upload -->
-        <div v-if="isCustomSource" class="mt-3 rounded-xl bg-black/5 p-4 dark:bg-white/5">
-          <div class="flex items-center justify-between gap-4">
-            <div class="flex-1">
-              <p class="text-sm font-medium text-black/80 dark:text-white/80">
-                {{ t('themeStyle.customBackgroundImage', 'Custom Background Image') }}
-              </p>
-              <p v-if="customBgPath" class="mt-1 truncate text-xs text-black/50 dark:text-white/50">
-                {{ customBgPath }}
-              </p>
-              <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
-                {{ t('themeStyle.noImageSelected', 'No image selected') }}
-              </p>
-            </div>
-            <div class="flex gap-2">
-              <TxButton
-                variant="bare"
-                class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
-                @click="selectBackgroundImage"
-              >
-                {{ t('themeStyle.selectImage', 'Select') }}
-              </TxButton>
-              <TxButton
-                v-if="customBgPath"
-                variant="bare"
-                class="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
-                @click="clearBackgroundImage"
-              >
-                {{ t('themeStyle.clearImage', 'Clear') }}
-              </TxButton>
-            </div>
-          </div>
+        <template v-if="showAdvancedSettings">
+          <TuffBlockSelect
+            v-model="bgSourceValue"
+            :title="t('themeStyle.homepageWallpaper')"
+            :description="t('themeStyle.homepageWallpaperDesc')"
+          >
+            <template #icon="{ active }">
+              <TxSpinner v-if="bgSaving" :size="14" />
+              <ThemePreviewIcon v-else variant="wallpaper" :active="active" />
+            </template>
+            <TxSelectItem :value="0">
+              {{ t('themeStyle.noBackground') }}
+            </TxSelectItem>
+            <TxSelectItem :value="1">
+              {{ t('themeStyle.bing') }}
+            </TxSelectItem>
+            <TxSelectItem :value="2">
+              {{ t('themeStyle.customImage') }}
+            </TxSelectItem>
+            <TxSelectItem :value="3">
+              {{ t('themeStyle.folder') }}
+            </TxSelectItem>
+            <TxSelectItem :value="4">
+              {{ t('themeStyle.desktopWallpaper') }}
+            </TxSelectItem>
+          </TuffBlockSelect>
 
-          <!-- Preview -->
-          <div v-if="customBgPath" class="mt-3 overflow-hidden rounded-lg">
-            <img
-              :src="customBgPreviewUrl"
-              class="h-24 w-full object-cover"
-              :style="{
-                filter: `blur(${bgBlur}px) brightness(${bgBrightness}%) contrast(${bgContrast}%) saturate(${bgSaturate}%)`,
-                opacity: bgOpacity / 100
-              }"
-            />
-          </div>
-        </div>
-
-        <!-- Folder background image -->
-        <div v-if="isFolderSource" class="mt-3 rounded-xl bg-black/5 p-4 dark:bg-white/5">
-          <div class="flex items-center justify-between gap-4">
-            <div class="flex-1">
-              <p class="text-sm font-medium text-black/80 dark:text-white/80">
-                {{ t('themeStyle.folder') }}
-              </p>
-              <p v-if="folderBgPath" class="mt-1 truncate text-xs text-black/50 dark:text-white/50">
-                {{ folderBgPath }}
-              </p>
-              <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
-                {{ t('themeStyle.noImageSelected') }}
-              </p>
-            </div>
-            <div class="flex gap-2">
-              <TxButton
-                variant="bare"
-                class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
-                @click="selectBackgroundFolder"
-              >
-                {{ t('themeStyle.selectFolder') }}
-              </TxButton>
-              <TxButton
-                v-if="folderBgPath"
-                variant="bare"
-                class="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
-                @click="clearBackgroundFolder"
-              >
-                {{ t('themeStyle.clearFolder') }}
-              </TxButton>
-            </div>
-          </div>
-
-          <div v-if="folderBgPath" class="mt-4 space-y-2">
-            <div class="flex items-center justify-between text-xs">
-              <span class="text-black/60 dark:text-white/60">{{
-                t('themeStyle.rotationInterval')
-              }}</span>
-              <span class="font-medium text-black/80 dark:text-white/80">
-                {{ folderIntervalMinutes }}{{ t('themeStyle.minutes') }}
-              </span>
-            </div>
-            <input
-              v-model.number="folderIntervalMinutes"
-              type="range"
-              min="5"
-              max="240"
-              class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
-            />
-            <p class="text-xs text-black/40 dark:text-white/40">
-              {{ t('themeStyle.folderRandomHint') }}
-            </p>
-          </div>
-        </div>
-
-        <!-- Desktop wallpaper -->
-        <div v-if="isDesktopSource" class="mt-3 rounded-xl bg-black/5 p-4 dark:bg-white/5">
-          <div class="flex items-center justify-between gap-4">
-            <div class="flex-1">
-              <p class="text-sm font-medium text-black/80 dark:text-white/80">
-                {{ t('themeStyle.desktopWallpaper') }}
-              </p>
-              <p
-                v-if="desktopBgPath"
-                class="mt-1 truncate text-xs text-black/50 dark:text-white/50"
-              >
-                {{ desktopBgPath }}
-              </p>
-              <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
-                {{ t('themeStyle.noImageSelected') }}
-              </p>
-            </div>
-            <div class="flex gap-2">
-              <TxButton
-                variant="bare"
-                class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
-                @click="refreshDesktopWallpaper"
-              >
-                {{ t('themeStyle.refreshDesktopWallpaper') }}
-              </TxButton>
-            </div>
-          </div>
-        </div>
-
-        <!-- Wallpaper adjustments -->
-        <div v-if="wallpaperAdjustable" class="mt-3 rounded-xl bg-black/5 p-4 dark:bg-white/5">
-          <div class="space-y-3">
-            <div>
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.blur') }}</span>
-                <span class="font-medium text-black/80 dark:text-white/80">{{ bgBlur }}px</span>
+          <!-- Custom background image upload -->
+          <div v-if="isCustomSource" class="mt-3 rounded-xl bg-black/5 p-4 dark:bg-white/5">
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex-1">
+                <p class="text-sm font-medium text-black/80 dark:text-white/80">
+                  {{ t('themeStyle.customBackgroundImage', 'Custom Background Image') }}
+                </p>
+                <p
+                  v-if="customBgPath"
+                  class="mt-1 truncate text-xs text-black/50 dark:text-white/50"
+                >
+                  {{ customBgPath }}
+                </p>
+                <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
+                  {{ t('themeStyle.noImageSelected', 'No image selected') }}
+                </p>
               </div>
-              <input
-                v-model.number="bgBlur"
-                type="range"
-                min="0"
-                max="20"
-                class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
+              <div class="flex gap-2">
+                <TxButton
+                  variant="bare"
+                  class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
+                  @click="selectBackgroundImage"
+                >
+                  {{ t('themeStyle.selectImage', 'Select') }}
+                </TxButton>
+                <TxButton
+                  v-if="customBgPath"
+                  variant="bare"
+                  class="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
+                  @click="clearBackgroundImage"
+                >
+                  {{ t('themeStyle.clearImage', 'Clear') }}
+                </TxButton>
+              </div>
+            </div>
+
+            <!-- Preview -->
+            <div v-if="customBgPath" class="mt-3 overflow-hidden rounded-lg">
+              <img
+                :src="customBgPreviewUrl"
+                class="h-24 w-full object-cover"
+                :style="{
+                  filter: `blur(${bgBlur}px) brightness(${bgBrightness}%) contrast(${bgContrast}%) saturate(${bgSaturate}%)`,
+                  opacity: bgOpacity / 100
+                }"
               />
             </div>
-            <div>
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.opacity') }}</span>
-                <span class="font-medium text-black/80 dark:text-white/80">{{ bgOpacity }}%</span>
+          </div>
+
+          <!-- Folder background image -->
+          <div v-if="isFolderSource" class="mt-3 rounded-xl bg-black/5 p-4 dark:bg-white/5">
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex-1">
+                <p class="text-sm font-medium text-black/80 dark:text-white/80">
+                  {{ t('themeStyle.folder') }}
+                </p>
+                <p
+                  v-if="folderBgPath"
+                  class="mt-1 truncate text-xs text-black/50 dark:text-white/50"
+                >
+                  {{ folderBgPath }}
+                </p>
+                <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
+                  {{ t('themeStyle.noImageSelected') }}
+                </p>
               </div>
-              <input
-                v-model.number="bgOpacity"
-                type="range"
-                min="10"
-                max="100"
-                class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
-              />
+              <div class="flex gap-2">
+                <TxButton
+                  variant="bare"
+                  class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
+                  @click="selectBackgroundFolder"
+                >
+                  {{ t('themeStyle.selectFolder') }}
+                </TxButton>
+                <TxButton
+                  v-if="folderBgPath"
+                  variant="bare"
+                  class="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
+                  @click="clearBackgroundFolder"
+                >
+                  {{ t('themeStyle.clearFolder') }}
+                </TxButton>
+              </div>
             </div>
-            <div>
+
+            <div v-if="folderBgPath" class="mt-4 space-y-2">
               <div class="flex items-center justify-between text-xs">
                 <span class="text-black/60 dark:text-white/60">{{
-                  t('themeStyle.brightness')
+                  t('themeStyle.rotationInterval')
                 }}</span>
-                <span class="font-medium text-black/80 dark:text-white/80"
-                  >{{ bgBrightness }}%</span
-                >
+                <span class="font-medium text-black/80 dark:text-white/80">
+                  {{ folderIntervalMinutes }}{{ t('themeStyle.minutes') }}
+                </span>
               </div>
               <input
-                v-model.number="bgBrightness"
+                v-model.number="folderIntervalMinutes"
                 type="range"
-                min="50"
-                max="150"
+                min="5"
+                max="240"
                 class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
               />
-            </div>
-            <div>
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.contrast') }}</span>
-                <span class="font-medium text-black/80 dark:text-white/80">{{ bgContrast }}%</span>
-              </div>
-              <input
-                v-model.number="bgContrast"
-                type="range"
-                min="50"
-                max="150"
-                class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
-              />
-            </div>
-            <div>
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.saturate') }}</span>
-                <span class="font-medium text-black/80 dark:text-white/80">{{ bgSaturate }}%</span>
-              </div>
-              <input
-                v-model.number="bgSaturate"
-                type="range"
-                min="50"
-                max="150"
-                class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
-              />
+              <p class="text-xs text-black/40 dark:text-white/40">
+                {{ t('themeStyle.folderRandomHint') }}
+              </p>
             </div>
           </div>
-        </div>
 
+          <!-- Desktop wallpaper -->
+          <div v-if="isDesktopSource" class="mt-3 rounded-xl bg-black/5 p-4 dark:bg-white/5">
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex-1">
+                <p class="text-sm font-medium text-black/80 dark:text-white/80">
+                  {{ t('themeStyle.desktopWallpaper') }}
+                </p>
+                <p
+                  v-if="desktopBgPath"
+                  class="mt-1 truncate text-xs text-black/50 dark:text-white/50"
+                >
+                  {{ desktopBgPath }}
+                </p>
+                <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
+                  {{ t('themeStyle.noImageSelected') }}
+                </p>
+              </div>
+              <div class="flex gap-2">
+                <TxButton
+                  variant="bare"
+                  class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
+                  @click="refreshDesktopWallpaper"
+                >
+                  {{ t('themeStyle.refreshDesktopWallpaper') }}
+                </TxButton>
+              </div>
+            </div>
+          </div>
+
+          <!-- Wallpaper adjustments -->
+          <div v-if="wallpaperAdjustable" class="mt-3 rounded-xl bg-black/5 p-4 dark:bg-white/5">
+            <div class="space-y-3">
+              <div>
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.blur') }}</span>
+                  <span class="font-medium text-black/80 dark:text-white/80">{{ bgBlur }}px</span>
+                </div>
+                <input
+                  v-model.number="bgBlur"
+                  type="range"
+                  min="0"
+                  max="20"
+                  class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
+                />
+              </div>
+              <div>
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-black/60 dark:text-white/60">{{
+                    t('themeStyle.opacity')
+                  }}</span>
+                  <span class="font-medium text-black/80 dark:text-white/80">{{ bgOpacity }}%</span>
+                </div>
+                <input
+                  v-model.number="bgOpacity"
+                  type="range"
+                  min="10"
+                  max="100"
+                  class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
+                />
+              </div>
+              <div>
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-black/60 dark:text-white/60">{{
+                    t('themeStyle.brightness')
+                  }}</span>
+                  <span class="font-medium text-black/80 dark:text-white/80"
+                    >{{ bgBrightness }}%</span
+                  >
+                </div>
+                <input
+                  v-model.number="bgBrightness"
+                  type="range"
+                  min="50"
+                  max="150"
+                  class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
+                />
+              </div>
+              <div>
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-black/60 dark:text-white/60">{{
+                    t('themeStyle.contrast')
+                  }}</span>
+                  <span class="font-medium text-black/80 dark:text-white/80"
+                    >{{ bgContrast }}%</span
+                  >
+                </div>
+                <input
+                  v-model.number="bgContrast"
+                  type="range"
+                  min="50"
+                  max="150"
+                  class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
+                />
+              </div>
+              <div>
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-black/60 dark:text-white/60">{{
+                    t('themeStyle.saturate')
+                  }}</span>
+                  <span class="font-medium text-black/80 dark:text-white/80"
+                    >{{ bgSaturate }}%</span
+                  >
+                </div>
+                <input
+                  v-model.number="bgSaturate"
+                  type="range"
+                  min="50"
+                  max="150"
+                  class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
+                />
+              </div>
+            </div>
+          </div>
+
+          <TuffBlockSwitch
+            v-model="libraryEnabled"
+            :title="t('themeStyle.copyToLibrary')"
+            :description="t('themeStyle.copyToLibraryDesc')"
+          >
+            <template #tags>
+              <TxTooltip
+                :content="t('themeStyle.copyToLibraryHint')"
+                :anchor="{ placement: 'top', showArrow: true }"
+              >
+                <TxButton
+                  variant="bare"
+                  native-type="button"
+                  class="theme-style-hint-btn"
+                  @click.stop
+                >
+                  <span class="i-carbon-information text-xs" />
+                </TxButton>
+              </TxTooltip>
+              <TxTooltip
+                v-if="!libraryEnabled"
+                :content="t('themeStyle.syncRequiresLibrary')"
+                :anchor="{ placement: 'top', showArrow: true }"
+              >
+                <TxButton
+                  variant="bare"
+                  native-type="button"
+                  class="theme-style-hint-btn theme-style-hint-btn--warning"
+                  @click.stop
+                >
+                  <span class="i-carbon-warning text-xs" />
+                </TxButton>
+              </TxTooltip>
+            </template>
+          </TuffBlockSwitch>
+          <TuffBlockSwitch
+            v-model="syncEnabled"
+            :title="t('themeStyle.syncToCloud')"
+            :description="t('themeStyle.syncToCloudDesc')"
+            :disabled="!libraryEnabled"
+          />
+        </template>
+      </TuffGroupBlock>
+
+      <TuffGroupBlock
+        :name="t('themeStyle.emphasis')"
+        :description="t('themeStyle.emphasisDesc')"
+        memory-name="theme-style-emphasis"
+      >
+        <template #icon="{ active }">
+          <ThemePreviewIcon variant="emphasis" :active="active" />
+        </template>
         <TuffBlockSwitch
-          v-model="libraryEnabled"
-          :title="t('themeStyle.copyToLibrary')"
-          :description="t('themeStyle.copyToLibraryDesc')"
+          v-model="themeStyle.theme.addon.coloring"
+          :title="t('themeStyle.coloring')"
+          :description="t('themeStyle.coloringDesc')"
         >
-          <template #tags>
-            <TxTooltip
-              :content="t('themeStyle.copyToLibraryHint')"
-              :anchor="{ placement: 'top', showArrow: true }"
-            >
-              <TxButton
-                variant="bare"
-                native-type="button"
-                class="theme-style-hint-btn"
-                @click.stop
-              >
-                <span class="i-carbon-information text-xs" />
-              </TxButton>
-            </TxTooltip>
-            <TxTooltip
-              v-if="!libraryEnabled"
-              :content="t('themeStyle.syncRequiresLibrary')"
-              :anchor="{ placement: 'top', showArrow: true }"
-            >
-              <TxButton
-                variant="bare"
-                native-type="button"
-                class="theme-style-hint-btn theme-style-hint-btn--warning"
-                @click.stop
-              >
-                <span class="i-carbon-warning text-xs" />
-              </TxButton>
-            </TxTooltip>
+          <template #icon="{ active }">
+            <ThemePreviewIcon variant="coloring" :active="active" />
           </template>
         </TuffBlockSwitch>
+
         <TuffBlockSwitch
-          v-model="syncEnabled"
-          :title="t('themeStyle.syncToCloud')"
-          :description="t('themeStyle.syncToCloudDesc')"
-          :disabled="!libraryEnabled"
+          v-model="themeStyle.theme.addon.contrast"
+          :title="t('themeStyle.highContrast')"
+          :description="t('themeStyle.highContrastDesc')"
+          disabled
+        >
+          <template #icon="{ active }">
+            <ThemePreviewIcon variant="contrast" :active="active" />
+          </template>
+        </TuffBlockSwitch>
+      </TuffGroupBlock>
+
+      <!-- Animation settings group block -->
+      <TuffGroupBlock
+        :name="t('themeStyle.animationGroupTitle')"
+        :description="t('themeStyle.animationGroupDesc')"
+        memory-name="theme-style-animation"
+      >
+        <template #icon="{ active }">
+          <ThemePreviewIcon variant="animation" :active="active" />
+        </template>
+        <!-- List item stagger animation switch -->
+        <TuffBlockSwitch
+          v-model="appSetting.animation.listItemStagger"
+          :title="t('themeStyle.listItemStagger')"
+          :description="t('themeStyle.listItemStaggerDesc')"
+        >
+          <template #icon="{ active }">
+            <ThemePreviewIcon variant="stagger" :active="active" />
+          </template>
+          <template #suffix>
+            <TxStatusBadge text="Beta" status="warning" size="sm" />
+          </template>
+        </TuffBlockSwitch>
+
+        <!-- Result transition animation switch -->
+        <TuffBlockSwitch
+          v-model="appSetting.animation.resultTransition"
+          :title="t('themeStyle.resultTransition')"
+          :description="t('themeStyle.resultTransitionDesc')"
+        >
+          <template #icon="{ active }">
+            <ThemePreviewIcon variant="transition" :active="active" />
+          </template>
+          <template #suffix>
+            <TxStatusBadge text="Beta" status="warning" size="sm" />
+          </template>
+        </TuffBlockSwitch>
+
+        <TuffBlockSelect
+          v-model="routeTransitionStyle"
+          :title="t('themeStyle.routeTransition')"
+          :description="t('themeStyle.routeTransitionDesc')"
+        >
+          <template #icon="{ active }">
+            <ThemePreviewIcon variant="transition" :active="active" />
+          </template>
+          <TxSelectItem value="slide">
+            {{ t('themeStyle.routeTransitionSlide') }}
+          </TxSelectItem>
+          <TxSelectItem value="fade">
+            {{ t('themeStyle.routeTransitionFade') }}
+          </TxSelectItem>
+          <TxSelectItem value="zoom">
+            {{ t('themeStyle.routeTransitionZoom') }}
+          </TxSelectItem>
+        </TuffBlockSelect>
+
+        <!-- CoreBox window resize animation switch (Beta) -->
+        <TuffBlockSwitch
+          v-model="appSetting.animation.coreBoxResize"
+          :title="t('themeStyle.coreBoxResize')"
+          :description="t('themeStyle.coreBoxResizeDesc')"
+        >
+          <template #icon="{ active }">
+            <ThemePreviewIcon variant="transition" :active="active" />
+          </template>
+          <template #suffix>
+            <TxStatusBadge text="Beta" status="warning" size="sm" />
+          </template>
+        </TuffBlockSwitch>
+
+        <TuffBlockSwitch
+          v-model="appSetting.animation.autoDisableOnLowBattery"
+          :title="t('themeStyle.lowBatteryMode')"
+          :description="t('themeStyle.lowBatteryModeDesc')"
         />
-      </template>
-    </TuffGroupBlock>
+      </TuffGroupBlock>
 
-    <TuffGroupBlock
-      :name="t('themeStyle.emphasis')"
-      :description="t('themeStyle.emphasisDesc')"
-      memory-name="theme-style-emphasis"
-    >
-      <template #icon="{ active }">
-        <ThemePreviewIcon variant="emphasis" :active="active" />
-      </template>
       <TuffBlockSwitch
-        v-model="themeStyle.theme.addon.coloring"
-        :title="t('themeStyle.coloring')"
-        :description="t('themeStyle.coloringDesc')"
+        guidance
+        :model-value="false"
+        :title="t('themeStyle.themeHelp')"
+        :description="t('themeStyle.themeHelpDesc')"
       >
         <template #icon="{ active }">
-          <ThemePreviewIcon variant="coloring" :active="active" />
+          <ThemePreviewIcon variant="guide" :active="active" />
         </template>
       </TuffBlockSwitch>
+    </ViewTemplate>
 
-      <TuffBlockSwitch
-        v-model="themeStyle.theme.addon.contrast"
-        :title="t('themeStyle.highContrast')"
-        :description="t('themeStyle.highContrastDesc')"
-        disabled
-      >
-        <template #icon="{ active }">
-          <ThemePreviewIcon variant="contrast" :active="active" />
-        </template>
-      </TuffBlockSwitch>
-    </TuffGroupBlock>
-
-    <!-- Animation settings group block -->
-    <TuffGroupBlock
-      :name="t('themeStyle.animationGroupTitle')"
-      :description="t('themeStyle.animationGroupDesc')"
-      memory-name="theme-style-animation"
-    >
-      <template #icon="{ active }">
-        <ThemePreviewIcon variant="animation" :active="active" />
-      </template>
-      <!-- List item stagger animation switch -->
-      <TuffBlockSwitch
-        v-model="appSetting.animation.listItemStagger"
-        :title="t('themeStyle.listItemStagger')"
-        :description="t('themeStyle.listItemStaggerDesc')"
-      >
-        <template #icon="{ active }">
-          <ThemePreviewIcon variant="stagger" :active="active" />
-        </template>
-        <template #suffix>
-          <TxStatusBadge text="Beta" status="warning" size="sm" />
-        </template>
-      </TuffBlockSwitch>
-
-      <!-- Result transition animation switch -->
-      <TuffBlockSwitch
-        v-model="appSetting.animation.resultTransition"
-        :title="t('themeStyle.resultTransition')"
-        :description="t('themeStyle.resultTransitionDesc')"
-      >
-        <template #icon="{ active }">
-          <ThemePreviewIcon variant="transition" :active="active" />
-        </template>
-        <template #suffix>
-          <TxStatusBadge text="Beta" status="warning" size="sm" />
-        </template>
-      </TuffBlockSwitch>
-
-      <TuffBlockSelect
-        v-model="routeTransitionStyle"
-        :title="t('themeStyle.routeTransition')"
-        :description="t('themeStyle.routeTransitionDesc')"
-      >
-        <template #icon="{ active }">
-          <ThemePreviewIcon variant="transition" :active="active" />
-        </template>
-        <TxSelectItem value="slide">
-          {{ t('themeStyle.routeTransitionSlide') }}
-        </TxSelectItem>
-        <TxSelectItem value="fade">
-          {{ t('themeStyle.routeTransitionFade') }}
-        </TxSelectItem>
-        <TxSelectItem value="zoom">
-          {{ t('themeStyle.routeTransitionZoom') }}
-        </TxSelectItem>
-      </TuffBlockSelect>
-
-      <!-- CoreBox window resize animation switch (Beta) -->
-      <TuffBlockSwitch
-        v-model="appSetting.animation.coreBoxResize"
-        :title="t('themeStyle.coreBoxResize')"
-        :description="t('themeStyle.coreBoxResizeDesc')"
-      >
-        <template #icon="{ active }">
-          <ThemePreviewIcon variant="transition" :active="active" />
-        </template>
-        <template #suffix>
-          <TxStatusBadge text="Beta" status="warning" size="sm" />
-        </template>
-      </TuffBlockSwitch>
-
-      <TuffBlockSwitch
-        v-model="appSetting.animation.autoDisableOnLowBattery"
-        :title="t('themeStyle.lowBatteryMode')"
-        :description="t('themeStyle.lowBatteryModeDesc')"
-      />
-    </TuffGroupBlock>
-
-    <TuffBlockSwitch
-      guidance
-      :model-value="false"
-      :title="t('themeStyle.themeHelp')"
-      :description="t('themeStyle.themeHelpDesc')"
-    >
-      <template #icon="{ active }">
-        <ThemePreviewIcon variant="guide" :active="active" />
-      </template>
-    </TuffBlockSwitch>
-  </ViewTemplate>
-
-  <Teleport to="body">
-    <div v-if="windowPreferenceLoading" class="ThemeStyle-WindowLoadingMask">
-      <div class="ThemeStyle-WindowLoadingPanel">
-        <TxSpinner :size="20" />
-        <span>{{ t('themeStyle.windowSwitching') }}</span>
+    <Teleport to="body">
+      <div v-if="windowPreferenceLoading" class="ThemeStyle-WindowLoadingMask">
+        <div class="ThemeStyle-WindowLoadingPanel">
+          <TxSpinner :size="20" />
+          <span>{{ t('themeStyle.windowSwitching') }}</span>
+        </div>
       </div>
-    </div>
-  </Teleport>
+    </Teleport>
+  </div>
 </template>
 
 <!--
@@ -962,6 +980,10 @@ const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSet
   CSS styles for different window themes and effects.
 -->
 <style>
+.ThemeStyle-Page {
+  height: 100%;
+}
+
 /** Refraction theme styles */
 .refraction,
 .Mica {

@@ -163,6 +163,35 @@
     "title": "Storage",
     "description": "View app storage details"
   },
+  "settingSentry": {
+    "title": "Nexus Analytics",
+    "groupDesc": "Help improve the app experience and product decisions",
+    "enableDataUpload": "Enable Data Upload",
+    "enableDesc": "Upload performance and error metrics to help diagnose issues faster.",
+    "uploadTooltip": "When enabled, performance and error metrics are uploaded to Nexus and Sentry. Anonymous mode only controls whether a device fingerprint or user ID is attached; it does not affect whether uploads occur.",
+    "anonymousMode": "Anonymous Mode",
+    "anonymousDesc": "Only records essential fields and excludes personally identifiable information.",
+    "anonymousLoginRequired": "Sign in to change anonymous mode.",
+    "refreshStats": "Refresh Stats",
+    "refreshStatsDesc": "Fetch the latest state from the local database",
+    "refresh": "Refresh",
+    "refreshError": "Failed to refresh statistics",
+    "saveSuccess": "Settings saved",
+    "saveError": "Failed to save settings",
+    "searchCount": "Recorded Search Count",
+    "warningTitle": "Notice",
+    "warning": "When anonymous mode is off, device fingerprint information is included to help investigate issues. User ID is only included when signed in.",
+    "bufferSize": "Buffer Size",
+    "totalUploads": "Total Uploads",
+    "failedUploads": "Failed Uploads",
+    "lastUpload": "Last Upload",
+    "lastFailure": "Last Failure",
+    "apiBase": "API Base",
+    "privacyManagement": "Privacy Data Management",
+    "privacyManagementDesc": "Manage your privacy settings and data on the website",
+    "viewDashboard": "View Analytics Dashboard",
+    "dashboardDesc": "View detailed usage stats and trends in Nexus"
+  },
   "settingTools": {
     "groupTitle": "Utilities",
     "groupDesc": "Practical tools provide a unified fast desktop arbitrary promoter for you to use.",
@@ -2757,15 +2786,7 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": [
-        "Sun",
-        "Mon",
-        "Tue",
-        "Wed",
-        "Thu",
-        "Fri",
-        "Sat"
-      ]
+      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     },
     "audit": {
       "title": "Audit Settings",

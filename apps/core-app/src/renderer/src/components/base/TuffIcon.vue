@@ -67,12 +67,20 @@ const {
 
 const effectiveUrl = computed(() => svgResolvedUrl.value || url.value)
 const isSvg = computed(() => url.value?.endsWith('.svg'))
+const canFallbackToDirectSvg = computed(
+  () => addressable.value && isSvg.value && !!effectiveUrl.value
+)
+const useInlineSvgMask = computed(
+  () => isSvg.value && props.colorful === true && !!svgContent.value && !svgError.value
+)
 
 // Track runtime image load failures (e.g. tfile:// 404, broken path)
 const imgError = ref(false)
 
 // Combine icon status error with SVG fetch error and runtime img error
-const combinedError = computed(() => error.value || !!svgError.value || imgError.value)
+const combinedError = computed(
+  () => error.value || imgError.value || (!!svgError.value && !canFallbackToDirectSvg.value)
+)
 const combinedLoading = computed(() => loading.value || svgLoading.value)
 
 const dataurl = computed(() => {
@@ -128,10 +136,10 @@ watch(
     </span>
 
     <template v-else-if="addressable && effectiveUrl && !combinedError && !combinedLoading">
-      <template v-if="isSvg && colorful && svgContent">
+      <template v-if="useInlineSvgMask">
         <i class="TuffIcon-Svg colorful" :alt="alt" :style="{ '--un-icon': `url('${dataurl}')` }" />
       </template>
-      <template v-else-if="!isSvg || !colorful">
+      <template v-else>
         <img :alt="alt" :src="effectiveUrl" @error="imgError = true" />
       </template>
     </template>
