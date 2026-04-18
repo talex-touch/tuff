@@ -10,10 +10,22 @@
 - `.github/workflows/pilot-image.yml`
   - Pilot 镜像 push 成功后触发 1Panel webhook 现在改为有限重试 + warning 降级；当 `ONEPANEL_WEBHOOK_URL` 指向的 1Panel 暂时不可达时，不再把整个 `Pilot Image Publish` workflow 误判为失败。
 - `.github/workflows/build-and-release.yml`
-  - `sync-nexus-release` 在 Nexus 写接口被 Cloudflare challenge 拦截时，改为写入明确 warning 并跳过后续 `link-github / publish / backfill` 步骤，不再阻塞已经完成的多平台构建、artifact 上传与 GitHub Release 创建。
-  - 对真正的 Nexus API 非 2xx/业务错误仍保持阻塞，避免把真实 release payload 问题吞成成功。
+  - `sync-nexus-release` 保留 Cloudflare access token 透传能力，默认不做 challenge 降级跳过；challenge 产生时会保留失败行为，便于在 CI 里暴露真实问题。
 - `.github/workflows/README.md`
   - 同步补充 Pilot webhook 与 Nexus sync 的降级口径，明确“镜像已发布 / GitHub Release 已创建”与“外部部署触发 / 外站元数据同步”在 CI 中的阻塞边界。
+
+### fix(release): 回归 sync-nexus 步骤级失败语义
+
+- `.github/workflows/build-and-release.yml`
+  - 移除 `Cloudflare challenge` 的流程级/步骤级跳过逻辑，改为严格按 Nexus API HTTP 响应码判断；所有 API 失败都直接进入失败分支，避免 CI 被外部链路策略静默掩盖。
+
+### fix(release): 收紧 Nexus sync 成功与分流判定
+
+- `.github/workflows/build-and-release.yml`
+  - `POST /api/releases` 仅在返回精确的 `Release tag already exists.` 错误时才转 `PATCH`，避免把其他 400 参数错误误判成“已存在后更新”。
+  - `create / patch / get / link-github / publish` 统一补最小 JSON 结构校验，不再把任意 2xx 返回体都视为成功，降低 HTML 错页或代理页被误判为成功的风险。
+- `.github/workflows/README.md`
+  - 同步记录 Nexus sync 的重复 tag 分流与最小响应结构校验规则，便于后续维护发布流水线。
 
 ### fix(release): 为 Nexus release 同步补 Cloudflare challenge 诊断与可选 OOB 透传
 

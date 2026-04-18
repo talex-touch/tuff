@@ -17,8 +17,9 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - Generates `tuff-release-manifest.json` for updater validation
   - Syncs Release metadata/assets to Nexus APIs (tag push only)
   - Notes sync priority (tag push): `notes/update_<version>.zh.md` + `notes/update_<version>.en.md` → `notes/update_<version>.md` → GitHub release body fallback
-  - 当 Nexus 写接口被 Cloudflare challenge 拦截时，`sync-nexus-release` 会输出明确 warning 并跳过后续 Nexus 同步步骤，不阻塞已经成功的 GitHub Release 构建与产物上传
   - 若配置 `NEXUS_SYNC_BASE_URL` 或 `ADMIN_CF_ACCESS_CLIENT_ID` / `ADMIN_CF_ACCESS_CLIENT_SECRET`，则仍会正常执行完整 Nexus 同步链路
+  - `sync-nexus-release` 仅在 `POST /api/releases` 返回精确的重复 tag 错误时才转 `PATCH`；其余非 2xx 会按真实错误失败
+  - Nexus `create / patch / get / link-github / publish` 成功响应会额外校验最小 JSON 结构，避免 HTML 错页或错误代理页被误判为成功
 
 - **`pr-flags.yml`** - PR flag management
   - Adds/removes labels based on PR content
