@@ -61,75 +61,15 @@ export class TouchApp implements TalexTouch.TouchApp {
   private readonly initPromise: Promise<void>
   private initError: unknown | null = null
 
-  private readCompatBooleanSettingFromDisk(
-    settingFile: string
-  ): { value: boolean; mtimeMs: number; path: string } | null {
-    const legacyPath = path.join(this.rootPath, 'modules', 'config', settingFile)
-    try {
-      if (!fse.existsSync(legacyPath)) return null
-      const content = fse.readFileSync(legacyPath, 'utf-8').trim()
-      if (!content) return null
-
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(content)
-      } catch {
-        parsed = content
-      }
-
-      if (parsed !== true && parsed !== false) {
-        return null
-      }
-
-      const stat = fse.statSync(legacyPath)
-      return {
-        value: parsed,
-        mtimeMs: stat.mtimeMs,
-        path: legacyPath
-      }
-    } catch (error) {
-      mainLog.warn(`Failed to read compat setting file: ${settingFile}`, { error })
-      return null
-    }
-  }
-
-  private archiveCompatSettingFile(legacyPath: string, reason: string): void {
-    try {
-      if (!fse.existsSync(legacyPath)) return
-      const archivedPath = `${legacyPath}.migrated-${Date.now()}`
-      fse.moveSync(legacyPath, archivedPath, { overwrite: true })
-      mainLog.info('Archived compat split setting file', {
-        meta: {
-          from: legacyPath,
-          to: archivedPath,
-          reason
-        }
-      })
-    } catch (error) {
-      mainLog.warn('Failed to archive compat split setting file', {
-        error,
-        meta: {
-          legacyPath,
-          reason
-        }
-      })
-    }
-  }
-
   /**
    * Read app-setting.ini directly from disk before StorageModule is initialized.
-   * Also merges compat split setting files when they are newer than app-setting.ini.
    */
   private readAppSettingsConfigFromDisk(): Record<string, unknown> {
     const configPath = path.join(this.rootPath, 'modules', 'config', 'app-setting.ini')
     let appSettings: Record<string, unknown> = {}
-    let appSettingMtimeMs = 0
 
     try {
       if (fse.existsSync(configPath)) {
-        const stat = fse.statSync(configPath)
-        appSettingMtimeMs = stat.mtimeMs
-
         const content = fse.readFileSync(configPath, 'utf-8')
         if (content.length > 0) {
           const parsed: unknown = JSON.parse(content)
@@ -141,49 +81,6 @@ export class TouchApp implements TalexTouch.TouchApp {
     } catch (error) {
       mainLog.warn('Failed to read app-setting.ini from disk', { error })
       appSettings = {}
-    }
-
-    const legacyStartSilent = this.readCompatBooleanSettingFromDisk('app.window.startSilent')
-    if (!legacyStartSilent) {
-      return appSettings
-    }
-
-    const rawWindow =
-      appSettings.window && typeof appSettings.window === 'object'
-        ? (appSettings.window as Record<string, unknown>)
-        : {}
-    const startSilentFromAppSetting =
-      typeof rawWindow.startSilent === 'boolean' ? rawWindow.startSilent : undefined
-    const shouldUseLegacy =
-      startSilentFromAppSetting === undefined || legacyStartSilent.mtimeMs > appSettingMtimeMs
-
-    if (!shouldUseLegacy) {
-      this.archiveCompatSettingFile(legacyStartSilent.path, 'app-setting-newer')
-      return appSettings
-    }
-
-    const nextWindow = {
-      ...rawWindow,
-      startSilent: legacyStartSilent.value
-    }
-    appSettings = {
-      ...appSettings,
-      window: nextWindow
-    }
-
-    mainLog.info('Compat migration hit: merged startSilent into app-setting.ini snapshot', {
-      meta: {
-        value: legacyStartSilent.value,
-        source: 'app.window.startSilent'
-      }
-    })
-
-    try {
-      fse.ensureDirSync(path.dirname(configPath))
-      fse.writeFileSync(configPath, JSON.stringify(appSettings, null, 2))
-      this.archiveCompatSettingFile(legacyStartSilent.path, 'migrated')
-    } catch (error) {
-      mainLog.warn('Failed to persist merged startSilent setting to app-setting.ini', { error })
     }
 
     return appSettings

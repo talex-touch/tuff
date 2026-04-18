@@ -32,7 +32,6 @@ const STEP_UP_TOKEN_TTL_MS = 10 * 60 * 1000
 const AUTH_PROFILE_REQUEST_TIMEOUT_MS = 4_000
 const AUTH_PROFILE_STARTUP_REFRESH_DELAY_MS = 6_000
 const LOCAL_AUTH_BASE_URL = 'http://localhost:3200'
-const LEGACY_MACHINE_SEED_FALLBACK_ENV = 'TUFF_ALLOW_LEGACY_MACHINE_SEED_FALLBACK'
 
 type AuthStateListener = (state: AuthState) => void
 
@@ -71,8 +70,6 @@ let authUseSecureStorage = false
 let stepUpToken: string | null = null
 let stepUpTokenExpiresAt = 0
 let authStartupRefreshTimer: NodeJS.Timeout | null = null
-let legacyMachineSeedFallbackWarningLogged = false
-
 const authGetStateEvent = defineRawEvent<void, AuthState>('auth:get-state')
 const authLoginEvent = defineRawEvent<{ mode?: 'sign-in' | 'sign-up' }, { initiated: boolean }>(
   'auth:login'
@@ -244,14 +241,17 @@ async function loadAuthToken(): Promise<void> {
   authUseSecureStorage = isAuthTokenSecureStorageEnabled()
 
   if (!authUseSecureStorage) {
+    setSecureStorageDegradedState(false)
     authToken = null
     await setSecureValue(AUTH_TOKEN_KEY, null)
     return
   }
 
+  const secureStoreAvailable = isSecureStoreAvailable()
+  setSecureStorageDegradedState(!secureStoreAvailable)
   authToken = await getSecureValue(AUTH_TOKEN_KEY)
-  if (!isSecureStoreAvailable()) {
-    authLog.warn('Secure storage unavailable; auth token will only remain in memory')
+  if (!secureStoreAvailable) {
+    authLog.warn('Secure storage unavailable; auth entered degraded session mode')
   }
 }
 
@@ -271,11 +271,8 @@ async function clearAuthToken(): Promise<void> {
 function ensureSecuritySettings(appSettings: AppSetting): void {
   if (!appSettings.security) {
     appSettings.security = {
-      machineSeed: '',
       machineCodeHash: '',
-      machineCodeAttestedAt: '',
-      machineSeedMigratedAt: '',
-      allowLegacyMachineSeedFallback: false
+      machineCodeAttestedAt: ''
     }
   }
 }
@@ -287,7 +284,8 @@ function ensureAuthSettings(appSettings: AppSetting): void {
       deviceName: '',
       devicePlatform: '',
       useSecureStorage: true,
-      secureStorageReminderShown: false
+      secureStorageReminderShown: false,
+      secureStorageUnavailable: false
     }
     return
   }
@@ -295,6 +293,7 @@ function ensureAuthSettings(appSettings: AppSetting): void {
   const authSettings = appSettings.auth as {
     useSecureStorage?: unknown
     secureStorageReminderShown?: unknown
+    secureStorageUnavailable?: unknown
   }
 
   if (typeof authSettings.useSecureStorage !== 'boolean') {
@@ -302,6 +301,9 @@ function ensureAuthSettings(appSettings: AppSetting): void {
   }
   if (typeof authSettings.secureStorageReminderShown !== 'boolean') {
     authSettings.secureStorageReminderShown = false
+  }
+  if (typeof authSettings.secureStorageUnavailable !== 'boolean') {
+    authSettings.secureStorageUnavailable = false
   }
 }
 
@@ -315,26 +317,45 @@ function isAuthTokenSecureStorageEnabled(appSettings?: AppSetting): boolean {
 async function handleAuthStoragePreferenceChanged(nextAppSetting: AppSetting): Promise<void> {
   const nextEnabled = isAuthTokenSecureStorageEnabled(nextAppSetting)
   if (nextEnabled === authUseSecureStorage) {
+    setSecureStorageDegradedState(nextEnabled && !isSecureStoreAvailable())
     return
   }
 
   authUseSecureStorage = nextEnabled
   if (!authUseSecureStorage) {
+    setSecureStorageDegradedState(false)
     await setSecureValue(AUTH_TOKEN_KEY, null)
     authLog.info('Auth secure storage disabled by user preference; using session-only token mode')
     return
   }
 
+  const secureStoreAvailable = isSecureStoreAvailable()
+  setSecureStorageDegradedState(!secureStoreAvailable)
+
   if (!authToken) {
+    if (!secureStoreAvailable) {
+      authLog.warn('Secure storage unavailable; auth entered degraded session mode')
+    }
     return
   }
 
   const persisted = await setSecureValue(AUTH_TOKEN_KEY, authToken)
   if (!persisted) {
-    authLog.warn('Secure storage unavailable; token cannot be persisted yet')
+    authLog.warn('Secure storage unavailable; auth entered degraded session mode')
     return
   }
   authLog.info('Auth secure storage enabled by user preference')
+}
+
+function setSecureStorageDegradedState(unavailable: boolean): void {
+  const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
+  ensureAuthSettings(appSettings)
+  const authSettings = appSettings.auth as { secureStorageUnavailable?: boolean }
+  if (authSettings.secureStorageUnavailable === unavailable) {
+    return
+  }
+  authSettings.secureStorageUnavailable = unavailable
+  saveMainConfig(StorageList.APP_SETTING, appSettings)
 }
 
 function ensureSyncSettings(appSettings: AppSetting): void {
@@ -632,64 +653,19 @@ async function performNexusRequest(
   }
 }
 
-function allowLegacyMachineSeedFallback(appSettings: AppSetting): boolean {
-  ensureSecuritySettings(appSettings)
-  const configured = appSettings.security.allowLegacyMachineSeedFallback === true
-  if (configured && !legacyMachineSeedFallbackWarningLogged) {
-    legacyMachineSeedFallbackWarningLogged = true
-    authLog.warn(
-      'Legacy machine seed fallback config detected. UI exposure was removed and fallback is now restricted to dev/internal runtimes.',
-      {
-        meta: {
-          envFlag: process.env[LEGACY_MACHINE_SEED_FALLBACK_ENV] === 'true',
-          isDev: isDevEnv()
-        }
-      }
-    )
-  }
-  return configured && (isDevEnv() || process.env[LEGACY_MACHINE_SEED_FALLBACK_ENV] === 'true')
-}
-
 async function getOrInitMachineSeed(appSettings: AppSetting): Promise<string> {
   ensureSecuritySettings(appSettings)
-  const legacySeed =
-    typeof appSettings.security.machineSeed === 'string'
-      ? appSettings.security.machineSeed.trim()
-      : ''
+  const secureSeed = (await getSecureValue(MACHINE_SEED_SECURE_KEY))?.trim() ?? ''
+  if (secureSeed) {
+    return secureSeed
+  }
 
-  try {
-    const secureSeed = (await getSecureValue(MACHINE_SEED_SECURE_KEY))?.trim() ?? ''
-    if (secureSeed) {
-      if (legacySeed) {
-        appSettings.security.machineSeed = ''
-        appSettings.security.machineSeedMigratedAt = new Date().toISOString()
-        saveMainConfig(StorageList.APP_SETTING, appSettings)
-      }
-      return secureSeed
-    }
-
-    const nextSeed = legacySeed || randomUUID().replace(/-/g, '')
-    await setSecureValue(MACHINE_SEED_SECURE_KEY, nextSeed)
-    if (legacySeed) {
-      appSettings.security.machineSeed = ''
-      appSettings.security.machineSeedMigratedAt = new Date().toISOString()
-      saveMainConfig(StorageList.APP_SETTING, appSettings)
-    }
-    return nextSeed
-  } catch (error) {
-    if (allowLegacyMachineSeedFallback(appSettings) && legacySeed) {
-      authLog.warn('Using legacy machine seed fallback with persisted plaintext seed', { error })
-      return legacySeed
-    }
-    if (allowLegacyMachineSeedFallback(appSettings)) {
-      const nextSeed = randomUUID().replace(/-/g, '')
-      appSettings.security.machineSeed = nextSeed
-      saveMainConfig(StorageList.APP_SETTING, appSettings)
-      authLog.warn('Using legacy machine seed fallback with regenerated plaintext seed', { error })
-      return nextSeed
-    }
+  const nextSeed = randomUUID().replace(/-/g, '')
+  const persisted = await setSecureValue(MACHINE_SEED_SECURE_KEY, nextSeed)
+  if (!persisted) {
     throw new Error('Secure machine seed unavailable')
   }
+  return nextSeed
 }
 
 function extractFingerprint(): string {

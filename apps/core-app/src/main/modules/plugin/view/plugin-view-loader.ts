@@ -94,7 +94,7 @@ export class PluginViewLoader {
   public static async loadPluginView(
     plugin: TouchPlugin,
     feature: IPluginFeature,
-    query?: TuffQuery | string
+    query?: TuffQuery
   ): Promise<void | null> {
     const interactionPath =
       typeof feature.interaction?.path === 'string' ? feature.interaction.path.trim() : ''

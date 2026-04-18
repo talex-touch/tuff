@@ -479,7 +479,7 @@ export class TouchPlugin implements ITouchPlugin {
 
   async triggerFeature(
     feature: IPluginFeature,
-    query: string | TuffQuery | undefined
+    query: TuffQuery | undefined
   ): Promise<boolean | void> {
     this._runtimeStats.requestCount += 1
     this._runtimeStats.lastActiveAt = Date.now()
@@ -565,22 +565,19 @@ export class TouchPlugin implements ITouchPlugin {
     return result
   }
 
-  triggerInputChanged(feature: IPluginFeature, query: string | TuffQuery | undefined): void {
+  triggerInputChanged(feature: IPluginFeature, query: TuffQuery | undefined): void {
     this._runtimeStats.requestCount += 1
     this._runtimeStats.lastActiveAt = Date.now()
     this.markActive()
 
-    // Pass query (can be string for backward compatibility or TuffQuery object)
     try {
       this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
     } catch (error) {
       this.handleRuntimeError('onFeatureTriggered', error)
     }
 
-    // For backward compatibility, extract text if query is object
-    const queryText = typeof query === 'string' ? query : (query?.text ?? '')
     try {
-      this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(queryText))
+      this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(query?.text ?? ''))
     } catch (error) {
       this.handleRuntimeError('onInputChanged', error)
     }

@@ -148,7 +148,7 @@ abstract class BasePluginLoader {
         ? pluginInfo.category.trim()
         : undefined
 
-    // SDK version compatibility check (with graceful fallback)
+    // SDK version compatibility check
     const resolvedSdkapi = resolveSdkApiVersion(pluginInfo.sdkapi)
     this.touchPlugin.sdkapi = resolvedSdkapi
 
@@ -171,7 +171,7 @@ abstract class BasePluginLoader {
         timestamp: Date.now()
       })
     }
-    if (sdkCompat.warning) {
+    if (!sdkBlocked && sdkCompat.warning) {
       this.touchPlugin.issues.push({
         type: sdkCompat.compatible ? 'warning' : 'error',
         message: sdkCompat.warning,
@@ -188,7 +188,7 @@ abstract class BasePluginLoader {
       })
     }
 
-    // Require category for sdkapi >= 260114 (legacy/invalid sdkapi will fallback and bypass)
+    // Require category for sdkapi >= 260114
     if (
       resolvedSdkapi !== undefined &&
       resolvedSdkapi >= CATEGORY_REQUIRED_MIN_VERSION &&

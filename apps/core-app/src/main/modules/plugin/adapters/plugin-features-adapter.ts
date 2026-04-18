@@ -265,7 +265,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       return activation
     }
 
-    const query = searchQuery || (searchQuery as TuffQuery | undefined)?.text
+    const query: TuffQuery = searchQuery ? { ...searchQuery } : { text: '' }
 
     // For push-mode features, pre-activate BEFORE triggering to ensure
     // items pushed during onFeatureTriggered have correct activation state

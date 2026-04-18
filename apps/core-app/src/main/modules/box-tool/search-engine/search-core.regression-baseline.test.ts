@@ -1,6 +1,11 @@
 import type { TuffItem, TuffQuery } from '@talex-touch/utils'
 import { TuffInputType } from '@talex-touch/utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const { everythingReadyMock, fileHasSearchFiltersMock } = vi.hoisted(() => ({
+  everythingReadyMock: vi.fn(() => false),
+  fileHasSearchFiltersMock: vi.fn(() => false)
+}))
 
 vi.mock('../../../utils/perf-context', () => ({
   enterPerfContext: () => () => {}
@@ -75,7 +80,9 @@ vi.mock('../addon/files/everything-provider', () => ({
     id: 'everything-provider',
     type: 'file',
     supportedInputTypes: [TuffInputType.Text, TuffInputType.Files],
-    onSearch: vi.fn()
+    onSearch: vi.fn(),
+    isSearchReady: everythingReadyMock,
+    buildUnavailableNotice: vi.fn(() => null)
   }
 }))
 
@@ -84,7 +91,8 @@ vi.mock('../addon/files/file-provider', () => ({
     id: 'file-provider',
     type: 'file',
     supportedInputTypes: [TuffInputType.Text, TuffInputType.Files],
-    onSearch: vi.fn()
+    onSearch: vi.fn(),
+    hasSearchFilters: fileHasSearchFiltersMock
   }
 }))
 
@@ -247,6 +255,27 @@ function createQuery(scenario: StageSample['scenario']): TuffQuery {
   } as TuffQuery
 }
 
+async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T> | T): Promise<T> {
+  const originalPlatform = process.platform
+  Object.defineProperty(process, 'platform', {
+    value: platform,
+    configurable: true
+  })
+  try {
+    return await run()
+  } finally {
+    Object.defineProperty(process, 'platform', {
+      value: originalPlatform,
+      configurable: true
+    })
+  }
+}
+
+afterEach(() => {
+  everythingReadyMock.mockReset().mockReturnValue(false)
+  fileHasSearchFiltersMock.mockReset().mockReturnValue(false)
+})
+
 async function measureScenario(scenario: StageSample['scenario']): Promise<StageSample> {
   const core = SearchEngineCore.getInstance() as unknown as {
     orchestrateSearchQuery: (
@@ -312,5 +341,63 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
     }
 
     console.log(`ROADMAP_06C_BASELINE=${JSON.stringify(samples)}`)
+  })
+
+  it('routes Windows plain file search to Everything when ready', async () => {
+    const core = SearchEngineCore.getInstance() as unknown as {
+      aggregateProvidersForQuery: (
+        providers: typeof MOCK_PROVIDERS,
+        query: TuffQuery,
+        options: { providerFilter?: string }
+      ) => { providers: typeof MOCK_PROVIDERS; durationMs: number }
+    }
+    everythingReadyMock.mockReturnValue(true)
+
+    await withPlatform('win32', async () => {
+      const result = core.aggregateProvidersForQuery(
+        MOCK_PROVIDERS,
+        { text: 'report', inputs: [] } as TuffQuery,
+        {}
+      )
+
+      expect(result.providers.map((provider) => provider.id)).toEqual([
+        'app-provider',
+        'everything-provider',
+        'plugin-features'
+      ])
+    })
+  })
+
+  it('routes Windows structured file search and Everything fallback to file-provider', async () => {
+    const core = SearchEngineCore.getInstance() as unknown as {
+      aggregateProvidersForQuery: (
+        providers: typeof MOCK_PROVIDERS,
+        query: TuffQuery,
+        options: { providerFilter?: string }
+      ) => { providers: typeof MOCK_PROVIDERS; durationMs: number }
+    }
+
+    await withPlatform('win32', async () => {
+      fileHasSearchFiltersMock.mockReturnValue(true)
+      const filtered = core.aggregateProvidersForQuery(
+        MOCK_PROVIDERS,
+        { text: 'ext:pdf report', inputs: [] } as TuffQuery,
+        { providerFilter: 'file' }
+      )
+      expect(filtered.providers.map((provider) => provider.id)).toEqual(['file-provider'])
+
+      fileHasSearchFiltersMock.mockReturnValue(false)
+      everythingReadyMock.mockReturnValue(false)
+      const fallback = core.aggregateProvidersForQuery(
+        MOCK_PROVIDERS,
+        { text: 'report', inputs: [] } as TuffQuery,
+        {}
+      )
+      expect(fallback.providers.map((provider) => provider.id)).toEqual([
+        'app-provider',
+        'file-provider',
+        'plugin-features'
+      ])
+    })
   })
 })

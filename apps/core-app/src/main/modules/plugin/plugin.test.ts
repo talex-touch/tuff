@@ -162,7 +162,7 @@ describe('TouchPlugin.triggerFeature', () => {
       interaction: { type: 'widget', path: '/widget.vue' }
     } as IPluginFeature
 
-    const result = await plugin.triggerFeature(feature, '')
+    const result = await plugin.triggerFeature(feature, { text: '', inputs: [] })
 
     expect(result).toBe(false)
     expect(transport.sendToWindow).toHaveBeenCalledWith(

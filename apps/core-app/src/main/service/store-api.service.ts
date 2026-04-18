@@ -1,65 +1,19 @@
 import type { StoreProviderDefinition, StoreSourcesPayload } from '@talex-touch/utils/store'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTpexApiBase, NEXUS_BASE_URL } from '@talex-touch/utils/env'
-import {
-  DEFAULT_STORE_PROVIDERS,
-  STORE_SOURCES_STORAGE_KEY,
-  STORE_SOURCES_STORAGE_VERSION
-} from '@talex-touch/utils/store'
-import { getConfig, getMainConfig, saveConfig } from '../modules/storage'
+import { DEFAULT_STORE_PROVIDERS, STORE_SOURCES_STORAGE_KEY } from '@talex-touch/utils/store'
+import { getMainConfig } from '../modules/storage'
 import { createLogger } from '../utils/logger'
 import { appTaskGate } from './app-task-gate'
 import { performStoreHttpRequest } from './store-http.service'
 
 const log = createLogger('StoreApiService')
-const LEGACY_STORE_SOURCES_KEY = 'market-sources.json'
-
-function clearLegacyStoreSourcesKey(): void {
-  saveConfig(LEGACY_STORE_SOURCES_KEY, undefined, true, true)
-}
-
-function isStoreSourcesPayload(value: unknown): value is StoreSourcesPayload {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-
-  const payload = value as Partial<StoreSourcesPayload>
-  return Array.isArray(payload.sources)
-}
-
-function migrateCompatStoreSourcesIfNeeded(): void {
-  const currentRaw = getConfig(STORE_SOURCES_STORAGE_KEY)
-  if (isStoreSourcesPayload(currentRaw)) {
-    return
-  }
-
-  const legacyRaw = getConfig(LEGACY_STORE_SOURCES_KEY)
-  if (!isStoreSourcesPayload(legacyRaw)) {
-    return
-  }
-
-  const nextPayload: StoreSourcesPayload = {
-    version: STORE_SOURCES_STORAGE_VERSION,
-    sources: legacyRaw.sources
-  }
-
-  saveConfig(STORE_SOURCES_STORAGE_KEY, nextPayload, false, true)
-  clearLegacyStoreSourcesKey()
-  log.info('Compat migration hit: store sources key upgraded', {
-    meta: {
-      from: LEGACY_STORE_SOURCES_KEY,
-      to: STORE_SOURCES_STORAGE_KEY,
-      sourceCount: legacyRaw.sources.length
-    }
-  })
-}
 
 /**
  * Get all configured store sources from user storage
  */
 export function getStoreSources(): StoreProviderDefinition[] {
   try {
-    migrateCompatStoreSourcesIfNeeded()
     const payload = getMainConfig(STORE_SOURCES_STORAGE_KEY) as StoreSourcesPayload | null
     if (payload?.sources && Array.isArray(payload.sources)) {
       return payload.sources

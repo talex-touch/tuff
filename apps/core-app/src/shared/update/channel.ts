@@ -5,44 +5,21 @@ export function normalizeStoredUpdateChannel(channel: unknown): AppPreviewChanne
     return undefined
   }
 
-  if (typeof channel === 'number') {
-    switch (channel) {
-      case 0:
-        return AppPreviewChannel.RELEASE
-      case 1:
-      case 2:
-        return AppPreviewChannel.BETA
-      default:
-        return undefined
-    }
-  }
-
   if (typeof channel === 'string') {
     const trimmed = channel.trim()
     if (!trimmed) {
       return undefined
     }
 
-    if (/^\d+$/.test(trimmed)) {
-      return normalizeStoredUpdateChannel(Number.parseInt(trimmed, 10))
-    }
-
     const normalized = trimmed.toUpperCase()
-    if (
-      normalized === AppPreviewChannel.RELEASE ||
-      normalized.startsWith('RELEASE') ||
-      normalized.startsWith('MASTER')
-    ) {
+    if (normalized === AppPreviewChannel.RELEASE) {
       return AppPreviewChannel.RELEASE
     }
-    if (
-      normalized === AppPreviewChannel.BETA ||
-      normalized === AppPreviewChannel.SNAPSHOT ||
-      normalized.startsWith('BETA') ||
-      normalized.startsWith('SNAPSHOT') ||
-      normalized.startsWith('ALPHA')
-    ) {
+    if (normalized === AppPreviewChannel.BETA) {
       return AppPreviewChannel.BETA
+    }
+    if (normalized === AppPreviewChannel.SNAPSHOT) {
+      return AppPreviewChannel.SNAPSHOT
     }
     return undefined
   }

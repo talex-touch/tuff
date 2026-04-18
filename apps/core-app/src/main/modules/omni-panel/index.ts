@@ -35,7 +35,7 @@ import { ShortcutTriggerKind } from '@talex-touch/utils/common/storage/entity/sh
 import { OMNI_TRANSFER_DECLARATIVE_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { app, clipboard, screen, shell } from 'electron'
+import { app, clipboard, screen, shell, systemPreferences } from 'electron'
 import { OmniPanelWindowOption } from '../../config/default'
 import { TalexEvents as MainEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { ensureXdotoolAvailable } from '../system/linux-desktop-tools'
@@ -615,8 +615,14 @@ export class OmniPanelModule extends BaseModule {
     if (this.shouldSkipInputHookSetup()) return
     if (!this.shortcutHoldEnabled) return
 
+    if (!this.inputHook) {
+      this.syncInputHookState()
+    }
+
+    const captureSelection = this.shouldCaptureSelection()
+
     if (!this.inputHookKeys) {
-      void this.toggle({ captureSelection: true, source: 'shortcut' })
+      void this.toggle({ captureSelection, source: 'shortcut' })
       return
     }
 
@@ -652,7 +658,7 @@ export class OmniPanelModule extends BaseModule {
     if (!this.shortcutTriggerArmed) return
     this.shortcutTriggerArmed = false
     this.clearShortcutArmExpiryTimer()
-    void this.toggle({ captureSelection: true, source: 'shortcut' })
+    void this.toggle({ captureSelection: this.shouldCaptureSelection(), source: 'shortcut' })
   }
 
   private syncInputHookState(): void {
@@ -661,6 +667,14 @@ export class OmniPanelModule extends BaseModule {
       return
     }
     if (!this.mouseLongPressEnabled && !this.shortcutHoldEnabled) {
+      this.clearLongPressTimer()
+      this.clearShortcutHoldTimer()
+      this.clearShortcutArmExpiryTimer()
+      this.resetShortcutHoldState()
+      this.cleanupInputHook()
+      return
+    }
+    if (!this.canUseInputHook()) {
       this.clearLongPressTimer()
       this.clearShortcutHoldTimer()
       this.clearShortcutArmExpiryTimer()
@@ -781,7 +795,7 @@ export class OmniPanelModule extends BaseModule {
     const normalizedSource = normalizeContextSource(options?.source)
     let text = ''
 
-    if (options?.captureSelection !== false) {
+    if (options?.captureSelection !== false && this.shouldCaptureSelection()) {
       text = await this.captureSelectionText()
     }
 
@@ -1156,30 +1170,27 @@ export class OmniPanelModule extends BaseModule {
     item: OmniPanelFeatureRegistryItem,
     feature: IPluginFeature,
     source: OmniPanelContextSource
-  ): string | TuffQuery {
+  ): TuffQuery {
     const text = contextText.trim()
     const acceptsText =
       !feature.acceptedInputTypes || feature.acceptedInputTypes.includes(TuffInputType.Text)
-    if (!text) {
-      return ''
-    }
-    if (!acceptsText) {
-      return text
-    }
 
     const query: TuffQuery = {
       text,
       type: 'text',
-      inputs: [
-        {
-          type: TuffInputType.Text,
-          content: text,
-          metadata: {
-            source: `omni-panel:${source}`,
-            featureId: item.id
-          }
-        }
-      ]
+      inputs:
+        text && acceptsText
+          ? [
+              {
+                type: TuffInputType.Text,
+                content: text,
+                metadata: {
+                  source: `omni-panel:${source}`,
+                  featureId: item.id
+                }
+              }
+            ]
+          : []
     }
     return query
   }
@@ -1340,6 +1351,10 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private async captureSelectionText(): Promise<string> {
+    if (!this.shouldCaptureSelection()) {
+      return ''
+    }
+
     if (process.platform === 'darwin') {
       const directSelection = await this.captureMacSelectionTextDirectly()
       if (directSelection) {
@@ -1463,6 +1478,10 @@ export class OmniPanelModule extends BaseModule {
 
   private setupInputHook(): void {
     if (this.shouldSkipInputHookSetup()) {
+      this.cleanupInputHook()
+      return
+    }
+    if (!this.canUseInputHook()) {
       this.cleanupInputHook()
       return
     }
@@ -1716,6 +1735,31 @@ export class OmniPanelModule extends BaseModule {
       return true
     }
     return (globalThis.$app as { isQuitting?: boolean } | undefined)?.isQuitting === true
+  }
+
+  private canUseInputHook(): boolean {
+    if (process.platform !== 'darwin') {
+      return true
+    }
+    return this.hasMacOSAccessibilityPermission()
+  }
+
+  private shouldCaptureSelection(): boolean {
+    if (process.platform !== 'darwin') {
+      return true
+    }
+    return this.hasMacOSAccessibilityPermission()
+  }
+
+  private hasMacOSAccessibilityPermission(): boolean {
+    try {
+      return systemPreferences.isTrustedAccessibilityClient(false)
+    } catch (error) {
+      omniPanelLog.debug('Failed to resolve macOS accessibility permission for OmniPanel', {
+        error
+      })
+      return false
+    }
   }
 }
 

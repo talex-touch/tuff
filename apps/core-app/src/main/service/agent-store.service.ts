@@ -13,17 +13,10 @@ import compressing from 'compressing'
 import { app } from 'electron'
 import fse from 'fs-extra'
 import { getNetworkService } from '../modules/network'
-import {
-  getConfig,
-  getMainConfig,
-  isMainStorageReady,
-  saveConfig,
-  saveMainConfig
-} from '../modules/storage'
+import { getMainConfig, isMainStorageReady, saveMainConfig } from '../modules/storage'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('AgentStore')
-const LEGACY_AGENT_STORE_KEY = 'agent-market.json'
 const REMOTE_CATALOG_CACHE_TTL_MS = 2 * 60 * 1000
 const NETWORK_TIMEOUT_MS = 20_000
 
@@ -119,14 +112,6 @@ interface RemoteCatalogSnapshot {
   packagesByAgent: Map<string, Map<string, RemoteAgentPackage>>
 }
 
-function isAgentStoreState(value: unknown): value is AgentStoreState {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-  const state = value as Partial<AgentStoreState>
-  return Boolean(state.installed && typeof state.installed === 'object')
-}
-
 function safeString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value.trim() : fallback
 }
@@ -200,10 +185,6 @@ function normalizePackage(value: unknown, fallbackVersion?: string): RemoteAgent
     downloadUrl,
     checksum: checksum || undefined
   }
-}
-
-function clearLegacyAgentStoreKey(): void {
-  saveConfig(LEGACY_AGENT_STORE_KEY, undefined, true, true)
 }
 
 function compareVersion(a: string, b: string): number {
@@ -462,33 +443,9 @@ class AgentStoreService {
     return snapshot.agents
   }
 
-  private migrateCompatAgentStoreIfNeeded(): void {
-    const currentRaw = getConfig(StorageList.AGENT_STORE)
-    if (isAgentStoreState(currentRaw)) {
-      return
-    }
-
-    const legacyRaw = getConfig(LEGACY_AGENT_STORE_KEY)
-    if (!isAgentStoreState(legacyRaw)) {
-      return
-    }
-
-    saveConfig(StorageList.AGENT_STORE, legacyRaw, false, true)
-    clearLegacyAgentStoreKey()
-    log.info('Compat migration hit: agent store key upgraded', {
-      meta: {
-        from: LEGACY_AGENT_STORE_KEY,
-        to: StorageList.AGENT_STORE,
-        installedCount: Object.keys(legacyRaw.installed).length
-      }
-    })
-  }
-
   private ensureStorageLoaded(): void {
     if (this.storageLoaded) return
     if (!isMainStorageReady()) return
-
-    this.migrateCompatAgentStoreIfNeeded()
 
     try {
       const state = getMainConfig(StorageList.AGENT_STORE) as AgentStoreState | undefined

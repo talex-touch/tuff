@@ -1,27 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StorageList } from '@talex-touch/utils'
 
-const {
-  getConfigMock,
-  getMainConfigMock,
-  isMainStorageReadyMock,
-  networkRequestMock,
-  saveConfigMock,
-  saveMainConfigMock
-} = vi.hoisted(() => ({
-  getConfigMock: vi.fn<(key: string) => unknown>(),
-  getMainConfigMock: vi.fn<(key: string) => unknown>(),
-  isMainStorageReadyMock: vi.fn<() => boolean>(),
-  networkRequestMock: vi.fn(),
-  saveConfigMock: vi.fn<(key: string, value: unknown) => void>(),
-  saveMainConfigMock: vi.fn<(key: string, value: unknown) => void>()
-}))
+const { getMainConfigMock, isMainStorageReadyMock, networkRequestMock, saveMainConfigMock } =
+  vi.hoisted(() => ({
+    getMainConfigMock: vi.fn<(key: string) => unknown>(),
+    isMainStorageReadyMock: vi.fn<() => boolean>(),
+    networkRequestMock: vi.fn(),
+    saveMainConfigMock: vi.fn<(key: string, value: unknown) => void>()
+  }))
 
 vi.mock('../modules/storage', () => ({
-  getConfig: getConfigMock,
   getMainConfig: getMainConfigMock,
   isMainStorageReady: isMainStorageReadyMock,
-  saveConfig: saveConfigMock,
   saveMainConfig: saveMainConfigMock
 }))
 
@@ -113,11 +103,9 @@ function createCatalogPayload(version = '1.2.0') {
 describe('agentStoreService', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
-    getConfigMock.mockReset().mockReturnValue(undefined)
     getMainConfigMock.mockReset().mockReturnValue({ installed: {} })
     isMainStorageReadyMock.mockReset().mockReturnValue(true)
     networkRequestMock.mockReset()
-    saveConfigMock.mockReset()
     saveMainConfigMock.mockReset()
     resetServiceState()
   })
@@ -164,21 +152,11 @@ describe('agentStoreService', () => {
     await expect(agentStoreService.checkUpdates()).rejects.toThrow(/catalog unavailable/i)
   })
 
-  it('migrates legacy agent store key once and clears the old key', async () => {
+  it('reads installed agents only from the canonical storage key', async () => {
     const service = resetServiceState()
     service.storageLoaded = false
-    getConfigMock.mockImplementation((key) => {
-      if (key === 'agent-market.json') {
-        return {
-          installed: {
-            'community.smart-agent': '1.0.0'
-          }
-        }
-      }
-      return undefined
-    })
     getMainConfigMock.mockImplementation((key) => {
-      if (typeof key === 'string' && key.includes('agent')) {
+      if (key === StorageList.AGENT_STORE) {
         return {
           installed: {
             'community.smart-agent': '1.0.0'
@@ -190,17 +168,7 @@ describe('agentStoreService', () => {
 
     await agentStoreService.getInstalledAgents()
 
-    expect(saveConfigMock).toHaveBeenNthCalledWith(
-      1,
-      StorageList.AGENT_STORE,
-      {
-        installed: {
-          'community.smart-agent': '1.0.0'
-        }
-      },
-      false,
-      true
-    )
-    expect(saveConfigMock).toHaveBeenNthCalledWith(2, 'agent-market.json', undefined, true, true)
+    expect(getMainConfigMock).toHaveBeenCalledWith(StorageList.AGENT_STORE)
+    expect(saveMainConfigMock).not.toHaveBeenCalled()
   })
 })
