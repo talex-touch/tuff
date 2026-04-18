@@ -5,6 +5,22 @@
 
 ## 2026-04-18
 
+### fix(core-app): 修复 Windows 应用扫描、默认主唤起快捷键与托盘直启
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/*`
+  - Windows 应用扫描现在为 `.lnk` 保留 `target + args + cwd` 启动元数据，并新增 `stableId / launchKind / launchTarget / launchArgs / workingDirectory / displayPath` 统一应用身份与启动描述，修复一批依赖快捷方式参数的桌面应用无法正确纳入或启动的问题。
+  - 新增 `Get-StartApps` 补扫链路，Windows Store / UWP 应用现在会以 `shell:AppsFolder\\<AUMID>` 形式入库与去重，并支持通过 `explorer.exe` 执行；搜索结果副标题优先展示 `displayPath`，避免直接暴露 `shell:AppsFolder\\...` 伪路径。
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+  - 主唤起快捷键 `core.box.toggle` 默认改为启用，仅影响新安装用户；`core.box.aiQuickCall` 继续默认关闭，历史 `shortcut-setting` 不做迁移与回写。
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `packages/utils/transport/events/types/app.ts`
+  - 托盘模块不再受 `setup.experimentalTray` 运行时门控，启动时会直接进入 tray 初始化链路；设置与引导页同步移除 `experimentalTray` 语义，运行态只保留 `showTray / hideDock / startSilent / closeToTray` 等真实配置项。
+
 ### fix(release): 让外部部署与 Nexus 边缘拦截不再误伤发布流水线
 
 - `.github/workflows/pilot-image.yml`
