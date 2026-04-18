@@ -8,6 +8,17 @@ const mocks = vi.hoisted(() => {
     clearRegisteredMainRuntime: vi.fn(() => {
       callOrder.push('clear-runtime')
     }),
+    registerMainRuntime: vi.fn((_: string, runtime: unknown) => runtime),
+    resolveMainRuntime: vi.fn(() => ({
+      moduleManager: {
+        loadModule: vi.fn(async () => undefined)
+      },
+      transport: {
+        on: vi.fn(() => () => {})
+      },
+      app: {}
+    })),
+    registerMainShortcut: vi.fn(() => true),
     unregisterMainShortcut: vi.fn((id: string) => {
       callOrder.push(`unregister:${id}`)
       return true
@@ -43,8 +54,8 @@ vi.mock('../../../core/runtime-accessor', () => ({
   clearRegisteredMainRuntime: mocks.clearRegisteredMainRuntime,
   getRegisteredMainRuntime: vi.fn(),
   maybeGetRegisteredMainRuntime: vi.fn(() => null),
-  registerMainRuntime: vi.fn(),
-  resolveMainRuntime: vi.fn()
+  registerMainRuntime: mocks.registerMainRuntime,
+  resolveMainRuntime: mocks.resolveMainRuntime
 }))
 
 vi.mock('../../../utils/logger', () => ({
@@ -71,7 +82,7 @@ vi.mock('../../abstract-base-module', () => ({
 
 vi.mock('../../global-shortcon', () => ({
   shortcutModule: {
-    registerMainShortcut: vi.fn(() => true),
+    registerMainShortcut: mocks.registerMainShortcut,
     unregisterMainShortcut: mocks.unregisterMainShortcut
   }
 }))
@@ -114,10 +125,29 @@ vi.mock('./window', () => ({
 
 import { CoreBoxModule } from './index'
 
-describe('CoreBoxModule onDestroy', () => {
+describe('CoreBoxModule', () => {
   beforeEach(() => {
     mocks.callOrder.length = 0
     vi.clearAllMocks()
+  })
+
+  it('registers core.box.toggle as enabled by default and AI quick call as disabled', async () => {
+    const module = new CoreBoxModule()
+
+    await module.onInit({ app: {}, manager: { loadModule: vi.fn(async () => undefined) } } as any)
+
+    expect(mocks.registerMainShortcut).toHaveBeenCalledWith(
+      'core.box.toggle',
+      'CommandOrControl+E',
+      expect.any(Function),
+      expect.objectContaining({ enabled: true })
+    )
+    expect(mocks.registerMainShortcut).toHaveBeenCalledWith(
+      'core.box.aiQuickCall',
+      'CommandOrControl+Shift+I',
+      expect.any(Function),
+      expect.objectContaining({ enabled: false })
+    )
   })
 
   it('cleans up shortcuts and disposers before clearing runtime registration', async () => {
