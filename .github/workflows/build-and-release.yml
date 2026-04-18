@@ -1070,47 +1070,6 @@ jobs:
           cat >/tmp/nexus-sync-helpers.sh <<'EOF'
           set -euo pipefail
 
-          challenge_file_has_cloudflare_html() {
-            local file_path="$1"
-            [ -f "${file_path}" ] || return 1
-            grep -Eqi 'Just a moment|__cf_chl_|cf-browser-verification' "${file_path}"
-          }
-
-          explain_cloudflare_block() {
-            echo "Cloudflare challenge blocked Nexus release sync."
-            echo "Configure vars.NEXUS_SYNC_BASE_URL to a CI-safe origin, or provide ADMIN_CF_ACCESS_CLIENT_ID / ADMIN_CF_ACCESS_CLIENT_SECRET as GitHub Actions vars or secrets."
-          }
-
-          mark_nexus_sync_skipped() {
-            local reason="$1"
-            printf '%s\n' "${reason}" >/tmp/nexus-sync-skip-reason
-            echo "::warning::${reason}"
-          }
-
-          should_skip_nexus_sync() {
-            [ -f /tmp/nexus-sync-skip-reason ]
-          }
-
-          skip_nexus_sync_if_marked() {
-            if should_skip_nexus_sync; then
-              echo "Skip Nexus sync step: $(cat /tmp/nexus-sync-skip-reason)"
-              exit 0
-            fi
-          }
-
-          maybe_skip_nexus_sync_for_challenge() {
-            local file_path="$1"
-
-            if ! challenge_file_has_cloudflare_html "${file_path}"; then
-              return 1
-            fi
-
-            cat "${file_path}"
-            explain_cloudflare_block
-            mark_nexus_sync_skipped "Cloudflare challenge blocked Nexus release sync; skip remaining Nexus sync steps."
-            return 0
-          }
-
           create_nexus_headers() {
             local -n output_headers="$1"
             output_headers=(
@@ -1127,17 +1086,33 @@ jobs:
             fi
           }
 
+          response_is_json() {
+            local file_path="$1"
+            jq -e . "${file_path}" >/dev/null 2>&1
+          }
+
+          response_has_status_message() {
+            local file_path="$1"
+            local expected="$2"
+            jq -e --arg expected "${expected}" '.statusMessage? == $expected' "${file_path}" >/dev/null 2>&1
+          }
+
           assert_nexus_response_ok() {
             local file_path="$1"
             local http_code="$2"
+            local shape_jq="${3:-.}"
 
-            if challenge_file_has_cloudflare_html "${file_path}"; then
+            if ! response_is_json "${file_path}"; then
               cat "${file_path}"
-              explain_cloudflare_block
               return 1
             fi
 
             if [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
+              cat "${file_path}"
+              return 1
+            fi
+
+            if ! jq -e "${shape_jq}" "${file_path}" >/dev/null 2>&1; then
               cat "${file_path}"
               return 1
             fi
@@ -1147,7 +1122,6 @@ jobs:
       - name: Upsert Nexus release metadata
         run: |
           source /tmp/nexus-sync-helpers.sh
-          skip_nexus_sync_if_marked
           notes_json=$(cat /tmp/nexus-release-notes.json)
           notes_html_json=$(cat /tmp/nexus-release-notes-html.json)
           nexus_headers=()
@@ -1186,33 +1160,24 @@ jobs:
             -H "Content-Type: application/json" \
             -d "${create_payload}")
 
-          if maybe_skip_nexus_sync_for_challenge /tmp/nexus-release-create.json; then
-            exit 0
-          fi
-
-          if [ "${http_code}" = "400" ]; then
+          if [ "${http_code}" = "400" ] && response_has_status_message /tmp/nexus-release-create.json 'Release tag already exists.'; then
             patch_code=$(curl -sS -o /tmp/nexus-release-update.json -w "%{http_code}" \
               -X PATCH "${NEXUS_BASE_URL}/api/releases/${TAG}" \
               "${nexus_headers[@]}" \
               -H "Content-Type: application/json" \
               -d "${update_payload}")
-            if maybe_skip_nexus_sync_for_challenge /tmp/nexus-release-update.json; then
-              exit 0
-            fi
-            assert_nexus_response_ok /tmp/nexus-release-update.json "${patch_code}"
+            assert_nexus_response_ok /tmp/nexus-release-update.json "${patch_code}" '.release.id? and .release.tag?'
           elif [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
-            if maybe_skip_nexus_sync_for_challenge /tmp/nexus-release-create.json; then
-              exit 0
-            fi
             assert_nexus_response_ok /tmp/nexus-release-create.json "${http_code}"
             exit 1
+          else
+            assert_nexus_response_ok /tmp/nexus-release-create.json "${http_code}" '.release.id? and .release.tag?'
           fi
 
       - name: Link GitHub assets to Nexus release
         run: |
           set -euo pipefail
           source /tmp/nexus-sync-helpers.sh
-          skip_nexus_sync_if_marked
           nexus_headers=()
           create_nexus_headers nexus_headers
 
@@ -1317,10 +1282,7 @@ jobs:
               "${nexus_headers[@]}" \
               -H "Content-Type: application/json" \
               -d "${payload}")
-            if maybe_skip_nexus_sync_for_challenge /tmp/nexus-release-link.json; then
-              exit 0
-            fi
-            assert_nexus_response_ok /tmp/nexus-release-link.json "${http_code}"
+            assert_nexus_response_ok /tmp/nexus-release-link.json "${http_code}" '.asset.id? and .asset.platform? and .asset.arch?'
           done < <(jq -r '.assets[] | @base64' /tmp/github-release.json)
 
       - name: Backfill Nexus asset metadata from GitHub manifest (v2.4.7 only)
@@ -1328,7 +1290,14 @@ jobs:
         run: |
           set -euo pipefail
           source /tmp/nexus-sync-helpers.sh
-          skip_nexus_sync_if_marked
+          nexus_headers=()
+          create_nexus_headers nexus_headers
+
+          backfill_probe_code=$(curl -sS -o /tmp/nexus-release-backfill-probe.json -w "%{http_code}" \
+            -X GET "${NEXUS_BASE_URL}/api/releases/${TAG}" \
+            "${nexus_headers[@]}")
+          assert_nexus_response_ok /tmp/nexus-release-backfill-probe.json "${backfill_probe_code}" '.release.id? and .release.tag?'
+
           node scripts/backfill-release-assets-from-github.mjs \
             --tag "${TAG}" \
             --base-url "${NEXUS_BASE_URL}" \
@@ -1339,14 +1308,10 @@ jobs:
       - name: Publish Nexus release
         run: |
           source /tmp/nexus-sync-helpers.sh
-          skip_nexus_sync_if_marked
           nexus_headers=()
           create_nexus_headers nexus_headers
 
           http_code=$(curl -sS -o /tmp/nexus-release-publish.json -w "%{http_code}" \
             -X POST "${NEXUS_BASE_URL}/api/releases/${TAG}/publish" \
             "${nexus_headers[@]}")
-          if maybe_skip_nexus_sync_for_challenge /tmp/nexus-release-publish.json; then
-            exit 0
-          fi
-          assert_nexus_response_ok /tmp/nexus-release-publish.json "${http_code}"
+          assert_nexus_response_ok /tmp/nexus-release-publish.json "${http_code}" '.release.id? and .release.tag? and .message?'
