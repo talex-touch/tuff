@@ -112,6 +112,9 @@ const PROVIDER_CATEGORY_MAP: Record<string, string> = {
   'preview-provider': 'preview'
 }
 
+const EVERYTHING_PROVIDER_FILTERS = new Set(['everything', 'everything-provider'])
+const FILE_PROVIDER_FILTERS = new Set(['file-provider', 'file-index'])
+
 const PROVIDER_REFRACTORY_THRESHOLD = 2
 const PROVIDER_REFRACTORY_BASE_MS = 30_000
 const PROVIDER_REFRACTORY_MAX_MS = 5 * 60 * 1000
@@ -211,6 +214,14 @@ function matchesProviderFilter(providerId: string, filter: string): boolean {
   if (aliases?.some((alias) => normalizedId.includes(alias))) return true
 
   return false
+}
+
+function isExplicitEverythingProviderFilter(filter?: string): boolean {
+  return typeof filter === 'string' && EVERYTHING_PROVIDER_FILTERS.has(filter.toLowerCase())
+}
+
+function isExplicitFileProviderFilter(filter?: string): boolean {
+  return typeof filter === 'string' && FILE_PROVIDER_FILTERS.has(filter.toLowerCase())
 }
 
 /**
@@ -889,6 +900,12 @@ export class SearchEngineCore
         }
       }
 
+      providersToSearch = this.routeWindowsFileProviders(
+        providersToSearch,
+        query,
+        options.providerFilter
+      )
+
       return {
         providers: providersToSearch,
         durationMs: performance.now() - startedAt
@@ -898,19 +915,53 @@ export class SearchEngineCore
     }
   }
 
+  private routeWindowsFileProviders(
+    providers: ISearchProvider<ProviderContext>[],
+    query: TuffQuery,
+    providerFilter?: string
+  ): ISearchProvider<ProviderContext>[] {
+    if (process.platform !== 'win32') {
+      return providers
+    }
+
+    const everything = providers.find((provider) => provider.id === 'everything-provider')
+    const file = providers.find((provider) => provider.id === 'file-provider')
+    if (!everything && !file) {
+      return providers
+    }
+
+    let selectedFileProviderId: 'everything-provider' | 'file-provider' | null = null
+
+    if (isExplicitEverythingProviderFilter(providerFilter)) {
+      selectedFileProviderId = everything ? 'everything-provider' : null
+    } else if (isExplicitFileProviderFilter(providerFilter)) {
+      selectedFileProviderId = file ? 'file-provider' : null
+    } else if (fileProvider.hasSearchFilters(query.text || '')) {
+      selectedFileProviderId = file ? 'file-provider' : null
+    } else if (everythingProvider.isSearchReady()) {
+      selectedFileProviderId = everything ? 'everything-provider' : null
+    } else {
+      selectedFileProviderId = file ? 'file-provider' : null
+    }
+
+    return providers.filter((provider) => {
+      if (provider.id !== 'everything-provider' && provider.id !== 'file-provider') {
+        return true
+      }
+      return provider.id === selectedFileProviderId
+    })
+  }
+
   private appendCompatibilityNotice(
     items: TuffItem[],
     query: TuffQuery,
     providerFilter?: string
   ): TuffItem[] {
-    if (items.length > 0 || process.platform !== 'win32' || !providerFilter) {
-      return items
-    }
-
-    const isFileFilter =
-      matchesProviderFilter('everything-provider', providerFilter) ||
-      matchesProviderFilter('file-provider', providerFilter)
-    if (!isFileFilter) {
+    if (
+      items.length > 0 ||
+      process.platform !== 'win32' ||
+      !isExplicitEverythingProviderFilter(providerFilter)
+    ) {
       return items
     }
 

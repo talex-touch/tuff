@@ -193,7 +193,8 @@ function ensureAuthPreferenceSettings(): void {
       deviceName: '',
       devicePlatform: '',
       useSecureStorage: true,
-      secureStorageReminderShown: false
+      secureStorageReminderShown: false,
+      secureStorageUnavailable: false
     }
     return
   }
@@ -202,6 +203,9 @@ function ensureAuthPreferenceSettings(): void {
   }
   if (typeof appSetting.auth.secureStorageReminderShown !== 'boolean') {
     appSetting.auth.secureStorageReminderShown = false
+  }
+  if (typeof appSetting.auth.secureStorageUnavailable !== 'boolean') {
+    appSetting.auth.secureStorageUnavailable = false
   }
 }
 

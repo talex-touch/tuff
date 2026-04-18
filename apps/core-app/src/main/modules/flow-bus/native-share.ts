@@ -2,7 +2,7 @@
  * Native Share Service
  *
  * Provides platform-native share behavior where available.
- * macOS exposes real native targets; Windows/Linux currently fall back to mailto only.
+ * macOS exposes real native targets; Windows/Linux only expose an explicit mail target.
  */
 
 import type {
@@ -122,7 +122,7 @@ export class NativeShareService {
       targets.push({
         id: 'mail',
         name: 'Mail',
-        description: 'Mail-only fallback via mailto',
+        description: 'Share via the default mail client',
         supportedTypes: ['text'],
         icon: 'ri:mail-line'
       })
@@ -130,7 +130,7 @@ export class NativeShareService {
       targets.push({
         id: 'mail',
         name: 'Mail',
-        description: 'Mail-only fallback via mailto',
+        description: 'Share via the default mail client',
         supportedTypes: ['text'],
         icon: 'ri:mail-line'
       })

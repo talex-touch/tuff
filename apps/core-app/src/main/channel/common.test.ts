@@ -543,4 +543,61 @@ describe('CommonChannelModule private helpers', () => {
       })
     }
   })
+
+  it('marks native-share as unsupported on Windows while keeping mail-only fallback out of capability support', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      value: 'win32',
+      configurable: true
+    })
+
+    try {
+      const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+      const transport = {
+        on: vi.fn(
+          (
+            event: { toEventName: () => string },
+            handler: (payload: unknown, context: unknown) => Promise<unknown>
+          ) => {
+            handlers.set(event.toEventName(), handler)
+            return vi.fn()
+          }
+        ),
+        onStream: vi.fn(() => vi.fn()),
+        broadcastToWindow: vi.fn()
+      }
+
+      getTuffTransportMainMock.mockReturnValue(transport as never)
+      platformCapabilityListMock.mockReturnValue([
+        { id: 'platform.storage', scope: 'system', supportLevel: 'supported' }
+      ] as never)
+      isActiveAppCapabilityAvailableMock.mockResolvedValue(true)
+
+      const module = new CommonChannelModule()
+      await module.onInit({
+        app: {
+          window: { window: {} },
+          app: { addListener: vi.fn() }
+        }
+      } as never)
+
+      const listHandler = handlers.get(PlatformEvents.capabilities.list.toEventName())
+      expect(listHandler).toBeTypeOf('function')
+
+      const capabilities = (await listHandler?.({}, {})) as Array<{
+        id: string
+        supportLevel?: string
+        limitations?: string[]
+      }>
+      const nativeShare = capabilities.find((item) => item.id === 'platform.native-share')
+
+      expect(nativeShare?.supportLevel).toBe('unsupported')
+      expect(nativeShare?.limitations?.[0]).toContain('explicit mail target')
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        configurable: true
+      })
+    }
+  })
 })

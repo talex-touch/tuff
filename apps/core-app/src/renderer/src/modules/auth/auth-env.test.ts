@@ -41,7 +41,7 @@ function createStorageMock(initial: Record<string, string> = {}): Storage {
   }
 }
 
-describe('auth-env secure migration', () => {
+describe('auth-env legacy cleanup', () => {
   const secureStore = new Map<string, string>()
 
   beforeEach(() => {
@@ -76,7 +76,7 @@ describe('auth-env secure migration', () => {
     vi.unstubAllGlobals()
   })
 
-  it('migrates legacy localStorage values into secure storage', async () => {
+  it('clears legacy localStorage values without importing them into secure storage', async () => {
     vi.stubGlobal('window', {
       localStorage: createStorageMock({
         'auth.token': 'token-v1',
@@ -89,9 +89,9 @@ describe('auth-env secure migration', () => {
       await import('./auth-env')
     await migrateLegacyAuthEnvToSecureStorage()
 
-    expect(await getAuthSensitiveValue('token')).toBe('token-v1')
-    expect(await getAuthSensitiveValue('deviceId')).toBe('device-1')
-    expect(await getAuthSensitiveValue('deviceName')).toBe('MacBook')
+    expect(await getAuthSensitiveValue('token')).toBeNull()
+    expect(await getAuthSensitiveValue('deviceId')).toBeNull()
+    expect(await getAuthSensitiveValue('deviceName')).toBeNull()
     expect(window.localStorage.getItem('auth.token')).toBeNull()
     expect(window.localStorage.getItem('auth.deviceId')).toBeNull()
     expect(window.localStorage.getItem('auth.deviceName')).toBeNull()

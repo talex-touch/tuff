@@ -7,6 +7,7 @@ import type {
 import type { TrayState } from './tray-state-manager'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { app, Tray } from 'electron'
 import {
   TalexEvents,
@@ -27,6 +28,8 @@ type TrayTouchAppRuntime = {
   isQuitting?: boolean
   version?: string
 }
+
+const trayManagerLog = getLogger('tray-manager')
 
 export class TrayManager extends BaseModule {
   static key: symbol = Symbol.for('TrayManager')
@@ -83,9 +86,11 @@ export class TrayManager extends BaseModule {
 
     try {
       app.setActivationPolicy(normalized)
-      console.info('[TrayManager] Activation policy updated', { policy: normalized })
+      trayManagerLog.info('Activation policy updated', { meta: { policy: normalized } })
     } catch (error) {
-      console.warn('[TrayManager] Failed to set activation policy', { policy: normalized, error })
+      trayManagerLog.warn('Failed to set activation policy', {
+        meta: { policy: normalized, error }
+      })
     }
   }
 
@@ -95,7 +100,7 @@ export class TrayManager extends BaseModule {
     try {
       const icon = TrayIconProvider.getIcon()
       if (icon.isEmpty()) {
-        console.warn('[TrayManager] Tray icon is empty, skip tray initialization')
+        trayManagerLog.warn('Tray icon is empty, skip tray initialization')
         return
       }
 
@@ -108,7 +113,7 @@ export class TrayManager extends BaseModule {
       this.bindTrayEvents()
       this.updateMenu()
     } catch (error) {
-      console.error('[TrayManager] Failed to initialize tray:', error)
+      trayManagerLog.error('Failed to initialize tray', { error })
     }
   }
 
@@ -129,7 +134,7 @@ export class TrayManager extends BaseModule {
 
       return true
     } catch (error) {
-      console.error('[TrayManager] Failed to check shouldShowTray:', error)
+      trayManagerLog.error('Failed to check shouldShowTray', { error })
       return true
     }
   }
@@ -173,7 +178,7 @@ export class TrayManager extends BaseModule {
       const menu = this.menuBuilder.buildMenu(this.stateManager.getState())
       this.tray.setContextMenu(menu)
     } catch (error) {
-      console.error('[TrayManager] Failed to update menu:', error)
+      trayManagerLog.error('Failed to update menu', { error })
     }
   }
 
@@ -301,7 +306,7 @@ export class TrayManager extends BaseModule {
       const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
       return appConfig?.setup?.hideDock ?? false
     } catch (error) {
-      console.error('[TrayManager] Failed to read hideDock config:', error)
+      trayManagerLog.error('Failed to read hideDock config', { error })
       return false
     }
   }
@@ -311,7 +316,7 @@ export class TrayManager extends BaseModule {
       const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
       return appConfig?.window?.startSilent ?? false
     } catch (error) {
-      console.error('[TrayManager] Failed to read startSilent config:', error)
+      trayManagerLog.error('Failed to read startSilent config', { error })
       return false
     }
   }
@@ -342,7 +347,7 @@ export class TrayManager extends BaseModule {
         app.dock.setBadge(this.touchApp.version)
       }
     } catch (error) {
-      console.error('[TrayManager] Failed to setup Dock icon:', error)
+      trayManagerLog.error('Failed to setup Dock icon', { error })
     }
   }
 

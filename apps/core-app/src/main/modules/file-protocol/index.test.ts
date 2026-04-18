@@ -16,18 +16,14 @@ vi.mock('electron', () => ({
 
 import { __test__ } from './index'
 
-describe('file-protocol legacy tfile normalization', () => {
-  it('normalizes legacy two-slash tfile URLs and marks compat hits', () => {
-    expect(__test__.extractAbsolutePath('tfile://Users/demo/report.txt')).toEqual({
-      path: '/Users/demo/report.txt',
-      usedCompatPath: true
-    })
+describe('file-protocol canonical tfile parsing', () => {
+  it('rejects legacy two-slash tfile URLs', () => {
+    expect(__test__.extractAbsolutePath('tfile://Users/demo/report.txt')).toBeNull()
   })
 
   it('preserves Windows drive letters from normalized URLs', () => {
-    expect(__test__.extractAbsolutePath('tfile:///C:/Users/demo/report.txt')).toEqual({
-      path: 'C:/Users/demo/report.txt',
-      usedCompatPath: false
-    })
+    expect(__test__.extractAbsolutePath('tfile:///C:/Users/demo/report.txt')).toBe(
+      'C:/Users/demo/report.txt'
+    )
   })
 })

@@ -24,7 +24,6 @@ import { intelligenceQuotaManager } from './intelligence-quota-manager'
 const CONFIG_KEYS = {
   providers: 'intelligence/providers',
   capabilities: 'intelligence/capabilities',
-  prompts: 'intelligence/prompts',
   promptRegistry: 'intelligence/prompt-registry',
   promptBindings: 'intelligence/prompt-bindings'
 } as const
@@ -190,12 +189,6 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
   }
 
   async savePrompt(prompt: PromptTemplate): Promise<void> {
-    const list = await this.listPrompts()
-    const idx = list.findIndex((p) => p.id === prompt.id)
-    if (idx >= 0) list[idx] = prompt
-    else list.push(prompt)
-    await upsertConfig(CONFIG_KEYS.prompts, list)
-
     const version = prompt.version || '1.0.0'
     await this.savePromptRecord({
       id: prompt.id,
@@ -212,12 +205,6 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
   }
 
   async listPrompts(): Promise<PromptTemplate[]> {
-    const raw = await readConfigValue(CONFIG_KEYS.prompts)
-    const legacyPrompts = parseJson<PromptTemplate[]>(raw, [])
-    if (legacyPrompts.length > 0) {
-      return legacyPrompts
-    }
-
     const records = await this.listPromptRegistry()
     return records.map((record) => ({
       id: record.id,
@@ -232,11 +219,6 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
   }
 
   async deletePrompt(id: string): Promise<void> {
-    const list = await this.listPrompts()
-    await upsertConfig(
-      CONFIG_KEYS.prompts,
-      list.filter((p) => p.id !== id)
-    )
     await this.deletePromptRecord(id)
   }
 

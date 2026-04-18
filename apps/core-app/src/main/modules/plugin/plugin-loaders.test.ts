@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { appMock } = vi.hoisted(() => ({
@@ -246,6 +247,23 @@ describe('createPluginLoader', () => {
 
     expect(issueCodes).toContain('REMOTE_MANIFEST_FAILED')
     expect(issueCodes).not.toContain('DEV_SOURCE_FALLBACK_LOCAL')
+  })
+
+  it('marks plugins below the enforced sdkapi floor as blocked', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'legacy sdk plugin',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: PERMISSION_ENFORCEMENT_MIN_VERSION - 1
+    })
+    createdPaths.push(pluginPath)
+
+    const loader = createPluginLoader('touch-translation', pluginPath)
+    const plugin = await loader.load()
+
+    expect(plugin.issues.some((issue) => issue.code === 'SDKAPI_BLOCKED')).toBe(true)
+    expect(plugin.issues.some((issue) => issue.type === 'error')).toBe(true)
   })
 
   it('creates loader plugin shells without eager data initialization', async () => {

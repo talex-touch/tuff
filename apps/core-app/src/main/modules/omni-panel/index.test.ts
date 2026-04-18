@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { omniPanelFeatureToggleEvent } from '../../../shared/events/omni-panel'
 
-const { getTuffTransportMainMock, loggerWarnMock } = vi.hoisted(() => ({
+const { getTuffTransportMainMock, loggerWarnMock, accessibilityClientMock } = vi.hoisted(() => ({
   getTuffTransportMainMock: vi.fn(() => ({
     on: vi.fn(() => () => {}),
     broadcast: vi.fn(),
     sendTo: vi.fn(),
     sendToWindow: vi.fn()
   })),
-  loggerWarnMock: vi.fn()
+  loggerWarnMock: vi.fn(),
+  accessibilityClientMock: vi.fn(() => true)
 }))
 
 vi.mock('electron', () => ({
@@ -29,6 +29,9 @@ vi.mock('electron', () => ({
   },
   shell: {
     openExternal: vi.fn()
+  },
+  systemPreferences: {
+    isTrustedAccessibilityClient: accessibilityClientMock
   },
   ipcMain: {
     handle: vi.fn(),
@@ -292,6 +295,7 @@ describe('OmniPanelModule auto-mount', () => {
 
 describe('OmniPanelModule hard-cut transport', () => {
   it('does not register legacy feature toggle handler', async () => {
+    const legacyEventName = 'omni-panel:feature:toggle'
     const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
     getTuffTransportMainMock.mockReturnValue({
       on: vi.fn(
@@ -311,7 +315,7 @@ describe('OmniPanelModule hard-cut transport', () => {
 
     await module.onInit({} as never)
 
-    expect(handlers.has(omniPanelFeatureToggleEvent.toEventName())).toBe(false)
+    expect(handlers.has(legacyEventName)).toBe(false)
   })
 })
 
@@ -500,20 +504,53 @@ describe('OmniPanel shortcut and input-hook guards', () => {
     const module = new OmniPanelModule() as unknown as {
       shortcutHoldEnabled: boolean
       inputHookKeys: null
+      inputHook: null
       handleShortcutPressed: () => void
       toggle: (options: { captureSelection: boolean; source: string }) => void
+      syncInputHookState: () => void
+      shouldCaptureSelection: () => boolean
     }
 
     const toggleMock = vi.fn()
     module.shortcutHoldEnabled = true
     module.inputHookKeys = null
+    module.inputHook = null
     module.toggle = toggleMock as unknown as (options: {
       captureSelection: boolean
       source: string
     }) => void
+    module.syncInputHookState = vi.fn()
+    module.shouldCaptureSelection = vi.fn(() => true)
 
     module.handleShortcutPressed()
     expect(toggleMock).toHaveBeenCalledWith({ captureSelection: true, source: 'shortcut' })
+  })
+
+  it('degrades shortcut capture when accessibility capture is unavailable', () => {
+    const module = new OmniPanelModule() as unknown as {
+      shortcutHoldEnabled: boolean
+      inputHookKeys: null
+      inputHook: null
+      handleShortcutPressed: () => void
+      toggle: (options: { captureSelection: boolean; source: string }) => void
+      syncInputHookState: () => void
+      shouldCaptureSelection: () => boolean
+    }
+
+    const toggleMock = vi.fn()
+    module.shortcutHoldEnabled = true
+    module.inputHookKeys = null
+    module.inputHook = null
+    module.toggle = toggleMock as unknown as (options: {
+      captureSelection: boolean
+      source: string
+    }) => void
+    module.syncInputHookState = vi.fn()
+    module.shouldCaptureSelection = vi.fn(() => false)
+
+    module.handleShortcutPressed()
+
+    expect(toggleMock).toHaveBeenCalledWith({ captureSelection: false, source: 'shortcut' })
   })
 
   it('re-arms and triggers shortcut when combo already active long enough', () => {
@@ -596,6 +633,47 @@ describe('OmniPanel shortcut and input-hook guards', () => {
 
     module.syncInputHookState()
 
+    expect(cleanupInputHook).toHaveBeenCalledTimes(1)
+    expect(setupInputHook).not.toHaveBeenCalled()
+  })
+
+  it('skips input hook setup when accessibility gate blocks it', () => {
+    const module = new OmniPanelModule() as unknown as {
+      mouseLongPressEnabled: boolean
+      shortcutHoldEnabled: boolean
+      syncInputHookState: () => void
+      clearLongPressTimer: () => void
+      clearShortcutHoldTimer: () => void
+      clearShortcutArmExpiryTimer: () => void
+      resetShortcutHoldState: () => void
+      cleanupInputHook: () => void
+      setupInputHook: () => void
+      canUseInputHook: () => boolean
+    }
+
+    const clearLongPressTimer = vi.fn()
+    const clearShortcutHoldTimer = vi.fn()
+    const clearShortcutArmExpiryTimer = vi.fn()
+    const resetShortcutHoldState = vi.fn()
+    const cleanupInputHook = vi.fn()
+    const setupInputHook = vi.fn()
+
+    module.mouseLongPressEnabled = true
+    module.shortcutHoldEnabled = true
+    module.clearLongPressTimer = clearLongPressTimer
+    module.clearShortcutHoldTimer = clearShortcutHoldTimer
+    module.clearShortcutArmExpiryTimer = clearShortcutArmExpiryTimer
+    module.resetShortcutHoldState = resetShortcutHoldState
+    module.cleanupInputHook = cleanupInputHook
+    module.setupInputHook = setupInputHook
+    module.canUseInputHook = vi.fn(() => false)
+
+    module.syncInputHookState()
+
+    expect(clearLongPressTimer).toHaveBeenCalledTimes(1)
+    expect(clearShortcutHoldTimer).toHaveBeenCalledTimes(1)
+    expect(clearShortcutArmExpiryTimer).toHaveBeenCalledTimes(1)
+    expect(resetShortcutHoldState).toHaveBeenCalledTimes(1)
     expect(cleanupInputHook).toHaveBeenCalledTimes(1)
     expect(setupInputHook).not.toHaveBeenCalled()
   })

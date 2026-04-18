@@ -82,28 +82,6 @@ export async function migrateLegacyAuthEnvToSecureStorage(): Promise<void> {
   }
 
   for (const key of Object.keys(AUTH_SECURE_KEYS) as AuthSensitiveKey[]) {
-    const secureValue = await getAuthSensitiveValue(key)
-    if (secureValue) {
-      for (const legacyKey of AUTH_LEGACY_LOCAL_KEYS[key]) {
-        localStorage.removeItem(legacyKey)
-      }
-      continue
-    }
-
-    let migratedValue: string | null = null
-    for (const legacyKey of AUTH_LEGACY_LOCAL_KEYS[key]) {
-      const value = normalizeSecureValue(localStorage.getItem(legacyKey))
-      if (!value) {
-        continue
-      }
-      migratedValue = value
-      break
-    }
-
-    if (migratedValue) {
-      await setAuthSensitiveValue(key, migratedValue)
-    }
-
     for (const legacyKey of AUTH_LEGACY_LOCAL_KEYS[key]) {
       localStorage.removeItem(legacyKey)
     }

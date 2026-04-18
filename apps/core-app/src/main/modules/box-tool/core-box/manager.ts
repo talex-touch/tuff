@@ -181,7 +181,7 @@ export class CoreBoxManager {
     url: string,
     plugin?: TouchPlugin,
     feature?: IPluginFeature,
-    query?: TuffQueryBase | string
+    query?: TuffQueryBase
   ): void {
     this._isUIMode = true
     this.currentFeature = feature || null

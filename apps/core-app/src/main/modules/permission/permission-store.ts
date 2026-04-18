@@ -19,6 +19,7 @@ import {
   normalizePermissionId
 } from '@talex-touch/utils/permission'
 import { PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import fse from 'fs-extra'
 
 type AuditLogEntry = PermissionAuditLog
@@ -59,6 +60,7 @@ interface PermissionStoreOptions {
 
 const CURRENT_VERSION = 1
 const MAX_AUDIT_LOGS = 500
+const permissionStoreLog = getLogger('permission-store')
 
 class PermissionBackendUnavailableError extends Error {
   code = 'PERMISSION_BACKEND_UNAVAILABLE'
@@ -325,7 +327,7 @@ export class PermissionStore {
         this.data = this.migrate(jsonData)
         await backend.persist(this.data)
         await this.backupLegacyJson()
-        console.info('[PermissionStore] Compat migration hit: permissions.json upgraded to SQLite')
+        permissionStoreLog.info('Compat migration hit: permissions.json upgraded to SQLite')
       } else {
         this.data = createEmptyData()
       }
@@ -353,17 +355,17 @@ export class PermissionStore {
         return data
       }
     } catch (error) {
-      console.error('[PermissionStore] Failed to load compat JSON snapshot:', error)
+      permissionStoreLog.error('Failed to load compat JSON snapshot', { error })
     }
     return null
   }
 
   /**
    * Normalize compat JSON data into the current SQLite-backed format
-  */
+   */
   private migrate(data: Partial<PermissionData>): PermissionData {
-    console.info('[PermissionStore] Compat migration hit: normalizing permission data', {
-      targetVersion: CURRENT_VERSION
+    permissionStoreLog.info('Compat migration hit: normalizing permission data', {
+      meta: { targetVersion: CURRENT_VERSION }
     })
     return {
       version: CURRENT_VERSION,
@@ -376,9 +378,8 @@ export class PermissionStore {
     if (!(await fse.pathExists(this.jsonFilePath))) return
     const backupPath = `${this.jsonFilePath}.backup-${Date.now()}`
     await fse.move(this.jsonFilePath, backupPath, { overwrite: true })
-    console.info('[PermissionStore] Compat migration archived permissions.json snapshot', {
-      from: this.jsonFilePath,
-      to: backupPath
+    permissionStoreLog.info('Compat migration archived permissions.json snapshot', {
+      meta: { from: this.jsonFilePath, to: backupPath }
     })
   }
 
@@ -434,7 +435,9 @@ export class PermissionStore {
     this.backendMode = 'degraded/backend-unavailable'
     this.backendReason = reason || 'backend unavailable'
     this.sqliteBackend = null
-    console.warn(`[PermissionStore] SQLite backend unavailable during ${phase}:`, error)
+    permissionStoreLog.warn(`SQLite backend unavailable during ${phase}`, {
+      meta: { reason: this.backendReason, error }
+    })
   }
 
   private ensureWritable(action: string): void {

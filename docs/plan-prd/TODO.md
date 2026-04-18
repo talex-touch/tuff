@@ -235,6 +235,17 @@
   - 继续压缩 `$app` allowlist 存量命中；
   - `plugin-module/file-provider/UpdateService` 进一步按编排层 + 领域层 + IO 层深拆，补齐剩余 direct tests。
 
+### S. Core-App 兼容层激进硬切（2026-04-18）
+
+- [x] 契约层硬切：插件 feature trigger 输入统一为 `TuffQuery`；OmniPanel deprecated toggle event/type 删除；旧 SDK 插件继续按 `SDKAPI_BLOCKED` 阻断。
+- [x] 存储/协议硬切：prompt registry 成为唯一 prompt SoT；Store/Agent 忽略 legacy key；`touch-app` 仅认 `app-setting.ini`；legacy `tfile://` 与非 canonical update channel 不再兼容。
+- [x] 鉴权硬切：移除明文 machine seed 与 renderer localStorage legacy 迁移；secure storage 不可用时进入显式 degraded session 模式。
+- [x] Windows 文件搜索回补：普通查询优先 Everything，过滤/索引型查询直走 `file-provider`，Everything 不可用/禁用时自动 fallback。
+- [x] 平台能力收敛：`native-share` 仅 macOS 标记 `supported`；Win/Linux 仅保留显式 `mail` 目标，不再冒充系统分享。
+- [x] 正式 UI 去占位：布局页不再展示 disabled “Coming Soon” 卡片；`Publish to Cloud` 按钮移除。
+- [x] 热点日志收敛：`file-provider` / `file-system-watcher` / `permission-store` / `tray-manager` / `file-protocol` 改走统一 logger。
+- [ ] 验证收口：待当前 worktree 安装 `apps/core-app/node_modules` 后补跑 `typecheck:node` / `typecheck:web` / `test` 并记录证据。
+
 ### O. CoreApp 文件索引稳态修复（2026-03-25）
 
 - [x] flush 链路改为 pending/inflight 可恢复队列，失败回补且保持“新数据优先”。

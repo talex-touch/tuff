@@ -1041,7 +1041,7 @@ export class WindowManager {
   public async attachUIView(
     url: string,
     plugin?: TouchPlugin,
-    query?: TuffQuery | string,
+    query?: TuffQuery,
     feature?: IPluginFeature
   ): Promise<void> {
     const startTime = performance.now()
@@ -1090,8 +1090,7 @@ export class WindowManager {
           uiWebContents.focus()
 
           if (query) {
-            const normalizedQuery: TuffQuery =
-              typeof query === 'string' ? { text: query } : { ...query }
+            const normalizedQuery: TuffQuery = { ...query }
             void transport
               .sendToPlugin(plugin.name, CoreBoxEvents.input.change, {
                 input: normalizedQuery.text ?? '',
@@ -1298,7 +1297,7 @@ export class WindowManager {
 
     // Send initial query directly to plugin after dom-ready (bypasses inputAllowed check)
     if (query && plugin) {
-      const normalizedQuery: TuffQuery = typeof query === 'string' ? { text: query } : { ...query }
+      const normalizedQuery: TuffQuery = { ...query }
 
       // Dedupe inputs and extract text content if text is empty
       if (normalizedQuery.inputs && normalizedQuery.inputs.length > 0) {

@@ -1067,7 +1067,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     if (this.isWithinWatchRoots(watchPath)) {
       if (isFileTarget) {
-        console.log('[FileProvider] addWatchPath exists(root), enqueue incremental add', {
+        this.logDebug('addWatchPath exists(root), enqueue incremental add', {
           path: resolved,
           watchPath
         })
@@ -1083,7 +1083,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const normalized = this.normalizePath(watchPath)
     if (this.normalizedWatchPaths.includes(normalized)) {
       if (isFileTarget) {
-        console.log('[FileProvider] addWatchPath exists(normalized), enqueue incremental add', {
+        this.logDebug('addWatchPath exists(normalized), enqueue incremental add', {
           path: resolved,
           watchPath
         })
@@ -1131,7 +1131,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (isFileTarget) {
-      console.log('[FileProvider] addWatchPath added and enqueue incremental add', {
+      this.logDebug('addWatchPath added and enqueue incremental add', {
         path: resolved,
         watchPath
       })
@@ -1740,7 +1740,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     if (recordMap.size === 0) {
       if (manualEntries.length > 0) {
-        console.log('[FileProvider] incremental manual summary', {
+        this.logInfo('Incremental manual summary', {
           total: manualEntries.length,
           accepted: 0,
           inserted: 0,
@@ -1837,7 +1837,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         return count + (manualPaths.has(this.normalizePath(file.path)) ? 1 : 0)
       }, 0)
       const manualUnchanged = Math.max(0, manualAccepted - manualInserted - manualUpdated)
-      console.log('[FileProvider] incremental manual summary', {
+      this.logInfo('Incremental manual summary', {
         total: manualEntries.length,
         accepted: manualAccepted,
         inserted: manualInserted,
@@ -1863,7 +1863,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
       if (manualForce) {
         if (extension && BLACKLISTED_EXTENSIONS.has(extension)) {
-          console.log('[FileProvider] buildFileRecord filtered(manual-blacklist)', {
+          this.logDebug('buildFileRecord filtered(manual-blacklist)', {
             path: rawPath,
             extension,
             reason: 'blacklisted-extension'
@@ -1883,7 +1883,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
 
       if (manualForce && !WHITELISTED_EXTENSIONS.has(extension)) {
-        console.log('[FileProvider] buildFileRecord accepted(manual-force)', {
+        this.logDebug('buildFileRecord accepted(manual-force)', {
           path: rawPath,
           extension
         })
@@ -3301,6 +3301,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return { text: retained.join(' ').trim(), typeFilters, extensionFilters }
   }
 
+  public hasSearchFilters(rawText: string): boolean {
+    const { typeFilters, extensionFilters, text } = this.extractSearchFilters(rawText)
+    return typeFilters.size > 0 || extensionFilters.length > 0 || text !== rawText.trim()
+  }
+
   private resolveTypeTag(raw: string): FileTypeTag | null {
     return resolveFileProviderTypeTag(raw)
   }
@@ -3601,11 +3606,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
-    // Windows 平台禁用文件搜索，直接返回空结果
-    if (process.platform === 'win32') {
-      return new TuffSearchResultBuilder(query).build()
-    }
-
     searchLogger.logProviderSearch('file-provider', query.text, 'File System')
     searchLogger.fileSearchStart(query.text)
     if (!this.dbUtils || !this.searchIndex) {

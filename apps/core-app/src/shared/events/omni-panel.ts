@@ -71,14 +71,6 @@ export interface OmniPanelFeatureListResponse {
   updatedAt: number
 }
 
-/**
- * @deprecated Kept for compatibility with legacy clients.
- */
-export interface OmniPanelFeatureToggleRequest {
-  id: string
-  enabled: boolean
-}
-
 export interface OmniPanelFeatureReorderRequest {
   id: string
   direction: 'up' | 'down'
@@ -146,14 +138,6 @@ export const omniPanelContextEvent = defineRawEvent<OmniPanelContextPayload, voi
 
 export const omniPanelFeatureListEvent = defineRawEvent<void, OmniPanelFeatureListResponse>(
   'omni-panel:feature:list'
-)
-
-/**
- * @deprecated Kept only for legacy bundle typing compatibility.
- * Core-app runtime no longer registers this event.
- */
-export const omniPanelFeatureToggleEvent = defineRawEvent<OmniPanelFeatureToggleRequest, void>(
-  'omni-panel:feature:toggle'
 )
 
 export const omniPanelFeatureReorderEvent = defineRawEvent<OmniPanelFeatureReorderRequest, void>(

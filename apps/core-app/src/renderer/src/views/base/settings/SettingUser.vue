@@ -30,11 +30,8 @@ const syncSubmitting = ref(false)
 function ensureSecuritySettings() {
   if (!appSetting.security) {
     appSetting.security = {
-      machineSeed: '',
       machineCodeHash: '',
-      machineCodeAttestedAt: '',
-      machineSeedMigratedAt: '',
-      allowLegacyMachineSeedFallback: false
+      machineCodeAttestedAt: ''
     }
   }
 }
@@ -46,7 +43,8 @@ function ensureAuthSettings() {
       deviceName: '',
       devicePlatform: '',
       useSecureStorage: true,
-      secureStorageReminderShown: false
+      secureStorageReminderShown: false,
+      secureStorageUnavailable: false
     }
     return
   }
@@ -56,6 +54,9 @@ function ensureAuthSettings() {
   }
   if (typeof appSetting.auth.secureStorageReminderShown !== 'boolean') {
     appSetting.auth.secureStorageReminderShown = false
+  }
+  if (typeof appSetting.auth.secureStorageUnavailable !== 'boolean') {
+    appSetting.auth.secureStorageUnavailable = false
   }
 }
 
@@ -155,6 +156,9 @@ const secureStorageEnabled = computed({
 })
 
 const secureStorageDescription = computed(() => {
+  if (appSetting.auth?.secureStorageUnavailable === true) {
+    return '系统安全存储当前不可用，登录凭证仅在本次运行内保持。'
+  }
   if (secureStorageEnabled.value) {
     return '已启用系统安全存储（推荐）：登录凭证将安全保存，重启后可保持登录状态。'
   }
