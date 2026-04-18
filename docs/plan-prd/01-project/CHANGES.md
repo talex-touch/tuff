@@ -5,6 +5,88 @@
 
 ## 2026-04-18
 
+### fix(core-app): 收敛 settings 表单组件并修正权限/快捷方式/下载入口展示
+
+- `apps/core-app/src/renderer/src/components/tuff/TuffGroupBlock.vue`
+- `apps/core-app/src/renderer/src/components/tuff/TuffBlockInput.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/components/ShortcutDialog.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/components/ShortcutDialogRow.vue`
+- `apps/core-app/src/renderer/src/components/download/FlatDownload.vue`
+- `apps/core-app/src/main/modules/system/permission-checker.ts`
+  - settings 页残留的原生文本/数字输入统一切回 `tuffex` 输入体系，`group` 内块级子项样式也收敛为无圆角基线，避免设置页继续出现手写输入壳子和分组圆角不一致的问题。
+  - 权限设置页的通知权限状态改为“无法校验即明确标记为 unsupported”，不再把不可验证状态伪装成已授权；只有可请求的权限才继续展示“打开系统设置”动作。
+  - 快捷方式弹层头部改成标题、搜索框、关闭按钮同一行，表格区恢复单一滚动容器并保留底部固定操作区；下载中心入口按钮改成单行展示，有任务时直接用任务摘要替换“下载中心”标题。
+
+### fix(core-app): 收口下载设置展示门控并修复窄窗布局挤压
+
+- `apps/core-app/src/renderer/src/views/base/settings/AppSettings.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingDownload.vue`
+- `apps/core-app/src/renderer/src/components/tuff/TuffBlockSlot.vue`
+- `apps/core-app/src/renderer/src/components/tuff/TuffBlockSelect.vue`
+- `apps/core-app/src/renderer/src/components/tuff/TuffBlockInput.vue`
+- `apps/core-app/src/renderer/src/components/tuff/TuffBlockFlatSelect.vue`
+- `packages/tuffex/packages/components/src/select/src/TxSelect.vue`
+- `packages/tuffex/packages/components/src/popover/src/TxPopover.vue`
+- `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`
+  - 下载设置页现在仅在“关于”里的“高级设置”开启后展示，和既有“高级设置会显示下载设置”的产品语义保持一致，默认设置列表不再暴露这组偏底层的下载参数。
+  - 下载设置块内部的选择器、临时目录展示与操作区补齐宽度约束和自适应增高，长路径与窄窗口场景不再把左侧标题/描述挤成竖排。
+  - 通用块行布局同步收敛为“左侧信息自适应收缩、右侧控件按内容宽度贴右”；同时修复 Tuffex `reference-full-width` 链路里 `TxSelect` 触发器未随锚点拉满的问题，更新设置等下拉控件右侧不再残留一段空白点击区。
+  - 应用侧 `TuffBlockInput / TuffBlockSelect / TuffBlockFlatSelect` 的默认控件宽度对齐到 Tuffex block 组件基线，宽窗口下不再把普通输入框和下拉框放大成一整条长控件；需要更宽布局时仍可通过自定义 slot 覆盖。
+
+### fix(core-app): 收敛 macOS 辅助功能门控并完成 auth 存储收口
+
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.test.ts`
+  - OmniPanel 在 macOS 上新增辅助功能门控：未授予 Accessibility 权限时不再启动全局输入 hook，右键长按链路会在启动期直接短路，避免应用一启动就触发“辅助功能访问”系统弹窗。
+  - `CommandOrControl+Shift+P` 仍可继续打开 OmniPanel，但在未授权场景会自动退化为“仅打开面板、不抓取当前选中文本”；所有 `System Events` / `osascript` 选区捕获路径都增加前置检查，避免再次触发系统权限请求。
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/renderer/src/modules/auth/auth-env.ts`
+- `apps/core-app/src/renderer/src/modules/auth/auth-env.test.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `packages/utils/common/storage/entity/app-settings.ts`
+  - auth 存储链路完成硬切：登录凭证继续以系统安全存储为默认路径，系统能力不可用时进入显式 degraded session 模式，不再回退到 legacy 明文 seed / 本地配置旁路。
+  - renderer 侧 legacy `localStorage` 认证键仅做清理，不再导入 secure-store；旧 `machineSeed` / `allowLegacyMachineSeedFallback` 等配置字段移除，旧数据不再参与运行时决策。
+  - 用户设置页同步暴露安全存储不可用状态，并收敛说明文案到“系统安全存储 / degraded session”两种真实语义。
+
+### Core-App 兼容层硬切
+
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.test.ts`
+- `apps/core-app/src/shared/events/omni-panel.ts`
+  - 插件触发输入统一收敛为 `TuffQuery`；OmniPanel deprecated toggle event/type 删除，旧 SDK 插件继续由 `SDKAPI_BLOCKED` 直接阻断，不再保留运行时兼容旁路。
+- `apps/core-app/src/main/modules/ai/tuff-intelligence-storage-adapter.ts`
+- `apps/core-app/src/main/service/store-api.service.ts`
+- `apps/core-app/src/main/service/store-api.service.test.ts`
+- `apps/core-app/src/main/service/agent-store.service.ts`
+- `apps/core-app/src/main/service/agent-store.service.test.ts`
+- `apps/core-app/src/main/core/touch-app.ts`
+- `apps/core-app/src/main/modules/file-protocol/index.ts`
+- `apps/core-app/src/main/modules/file-protocol/index.test.ts`
+- `apps/core-app/src/shared/update/channel.ts`
+- `apps/core-app/src/shared/update/channel.test.ts`
+  - Intelligence prompt 存储切到 prompt registry 单一 SoT；Store/Agent 侧停止读取 legacy key；`touch-app` 启动只认统一 `app-setting.ini`；`tfile://` 仅接受 canonical `tfile:///absolute/path`；update channel 仅接受 canonical 枚举值。
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/channel/common.test.ts`
+- `apps/core-app/src/main/modules/flow-bus/native-share.ts`
+  - Windows 文件搜索改为 `Everything` 可选加速 + `file-provider` 保底：普通查询优先 Everything，过滤/索引型查询直接走 `file-provider`，Everything 不可用时自动回退，不再空结果。
+  - 平台 capability 文案收敛：`native-share` 仅 macOS 标记 `supported`，Win/Linux 不再把 `mailto` 描述成原生系统分享。
+- `apps/core-app/src/renderer/src/views/base/styles/LayoutSection.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/LayoutAtomEditor.vue`
+- `apps/core-app/src/main/modules/box-tool/file-system-watcher/file-system-watcher.ts`
+- `apps/core-app/src/main/modules/permission/permission-store.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+  - 布局设置页移除 disabled “Coming Soon/Publish to Cloud” 正式入口；`file-provider` / `file-system-watcher` / `permission-store` / `tray-manager` / `file-protocol` 移除 ad-hoc `console.*`，统一走项目 logger。
+
 ### fix(core-app): 修复 Windows 应用扫描、默认主唤起快捷键与托盘直启
 
 - `apps/core-app/src/main/modules/box-tool/addon/apps/*`

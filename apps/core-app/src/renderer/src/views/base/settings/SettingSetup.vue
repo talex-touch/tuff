@@ -46,24 +46,41 @@ interface SystemPermissionCheckResult {
   message?: string
 }
 
+interface PermissionState {
+  status: SystemPermissionStatus
+  checked: boolean
+  canRequest: boolean
+  message?: string
+}
+
 const systemPermissionCheck = defineRawEvent<string, SystemPermissionCheckResult>(
   'system:permission:check'
 )
 const systemPermissionRequest = defineRawEvent<string, boolean>('system:permission:request')
 
 // Permission states
-const permissions = ref({
+const permissions = ref<{
+  accessibility: PermissionState
+  notifications: PermissionState
+  adminPrivileges: PermissionState
+}>({
   accessibility: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
-    checked: false
+    checked: false,
+    canRequest: false,
+    message: ''
   },
   notifications: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
-    checked: false
+    checked: false,
+    canRequest: false,
+    message: ''
   },
   adminPrivileges: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
-    checked: false
+    checked: false,
+    canRequest: false,
+    message: ''
   }
 })
 
@@ -174,7 +191,9 @@ async function checkAllPermissions(): Promise<void> {
       const accResult = await transport.send(systemPermissionCheck, 'accessibility')
       permissions.value.accessibility = {
         status: accResult.status,
-        checked: true
+        checked: true,
+        canRequest: accResult.canRequest,
+        message: accResult.message ?? ''
       }
       appSetting.setup.accessibility = accResult.status === 'granted'
     }
@@ -183,7 +202,9 @@ async function checkAllPermissions(): Promise<void> {
     const notifResult = await transport.send(systemPermissionCheck, 'notifications')
     permissions.value.notifications = {
       status: notifResult.status,
-      checked: true
+      checked: true,
+      canRequest: notifResult.canRequest,
+      message: notifResult.message ?? ''
     }
     appSetting.setup.notifications = notifResult.status === 'granted'
 
@@ -192,7 +213,9 @@ async function checkAllPermissions(): Promise<void> {
       const adminResult = await transport.send(systemPermissionCheck, 'adminPrivileges')
       permissions.value.adminPrivileges = {
         status: adminResult.status,
-        checked: true
+        checked: true,
+        canRequest: adminResult.canRequest,
+        message: adminResult.message ?? ''
       }
       appSetting.setup.adminPrivileges = adminResult.status === 'granted'
     }
@@ -418,7 +441,9 @@ function getStatusIconClass(status: string): string {
       :title="t('settings.setup.accessibility')"
       :description="t('settings.setup.accessibilityDesc')"
       :active="permissions.accessibility.status === 'granted'"
-      :disabled="permissions.accessibility.status === 'unsupported'"
+      :disabled="
+        permissions.accessibility.status === 'unsupported' && !permissions.accessibility.canRequest
+      "
       default-icon="i-carbon-screen"
       active-icon="i-carbon-screen"
     >
@@ -433,7 +458,9 @@ function getStatusIconClass(status: string): string {
           :text="getStatusText(permissions.accessibility.status)"
         />
         <TxButton
-          v-if="permissions.accessibility.status !== 'granted'"
+          v-if="
+            permissions.accessibility.status !== 'granted' && permissions.accessibility.canRequest
+          "
           variant="flat"
           type="primary"
           size="sm"
@@ -479,7 +506,9 @@ function getStatusIconClass(status: string): string {
       :title="t('settings.setup.notifications')"
       :description="t('settings.setup.notificationsDesc')"
       :active="permissions.notifications.status === 'granted'"
-      :disabled="permissions.notifications.status === 'unsupported'"
+      :disabled="
+        permissions.notifications.status === 'unsupported' && !permissions.notifications.canRequest
+      "
       default-icon="i-carbon-notification"
       active-icon="i-carbon-notification"
     >
@@ -491,7 +520,9 @@ function getStatusIconClass(status: string): string {
           :text="getStatusText(permissions.notifications.status)"
         />
         <TxButton
-          v-if="permissions.notifications.status !== 'granted'"
+          v-if="
+            permissions.notifications.status !== 'granted' && permissions.notifications.canRequest
+          "
           variant="flat"
           type="primary"
           size="sm"

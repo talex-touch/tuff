@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import type { ShortcutRowBase, ShortcutRowView } from './shortcut-dialog.types'
 
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton, TxSearchInput } from '@talex-touch/tuffex'
 import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import TouchScroll from '~/components/base/TouchScroll.vue'
 import ShortcutDialogRow from './ShortcutDialogRow.vue'
 import { useShortcutCopy } from './useShortcutCopy'
 
@@ -56,59 +55,57 @@ watch(visible, (value) => {
 </script>
 
 <template>
-  <FlipDialog v-model="visible" :reference="source" size="lg">
+  <FlipDialog v-model="visible" :reference="source" size="lg" :scrollable="false">
+    <template #header-display>
+      <div class="ShortcutDialog-TitleBlock">
+        <div class="ShortcutDialog-Title">
+          {{ t('settingTools.shortcutsDialog.title') }}
+        </div>
+        <div class="ShortcutDialog-Subtitle">
+          {{ t('settingTools.shortcutsDialog.desc') }}
+        </div>
+      </div>
+    </template>
+
+    <template #header-actions>
+      <div class="ShortcutDialog-SearchWrap">
+        <TxSearchInput
+          v-model="searchModel"
+          class="ShortcutDialog-SearchInput"
+          :placeholder="t('settingTools.shortcutsDialog.searchPlaceholder')"
+        />
+      </div>
+    </template>
+
     <template #default="{ close }">
       <div class="ShortcutDialog">
-        <div class="ShortcutDialog-Header">
-          <div class="ShortcutDialog-TitleBlock">
-            <div class="ShortcutDialog-Title">
-              {{ t('settingTools.shortcutsDialog.title') }}
-            </div>
-            <div class="ShortcutDialog-Subtitle">
-              {{ t('settingTools.shortcutsDialog.desc') }}
+        <div class="ShortcutDialog-TableScroller">
+          <div class="ShortcutDialog-TableHeader">
+            <div>{{ t('settingTools.shortcutsDialog.columns.name') }}</div>
+            <div>{{ t('settingTools.shortcutsDialog.columns.id') }}</div>
+            <div>{{ t('settingTools.shortcutsDialog.columns.key') }}</div>
+            <div>{{ t('settingTools.shortcutsDialog.columns.source') }}</div>
+            <div class="ShortcutDialog-EnabledCell">
+              {{ t('settingTools.shortcutsDialog.columns.enabled') }}
             </div>
           </div>
-          <div class="ShortcutDialog-Search">
-            <i class="i-carbon-search" />
-            <input
-              v-model="searchModel"
-              type="text"
-              :placeholder="t('settingTools.shortcutsDialog.searchPlaceholder')"
+          <div v-if="loading" class="ShortcutDialog-Empty">
+            {{ t('settingTools.shortcutsDialog.loading') }}
+          </div>
+          <div v-else-if="rows.length === 0" class="ShortcutDialog-Empty">
+            {{ t('settingTools.shortcutsDialog.empty') }}
+          </div>
+          <div v-else class="ShortcutDialog-Rows">
+            <ShortcutDialogRow
+              v-for="row in displayRows"
+              :key="row.shortcut.id"
+              :row="row"
+              :status-active-label="t('settingTools.shortcutsDialog.statusActive')"
+              @copy="copyShortcutId"
+              @update-accelerator="(id, value) => emit('update-accelerator', id, value)"
+              @update-enabled="(id, value) => emit('update-enabled', id, value)"
             />
           </div>
-        </div>
-
-        <div class="ShortcutDialog-Table">
-          <TouchScroll no-padding class="ShortcutDialog-TableScroller" native>
-            <template #header>
-              <div class="ShortcutDialog-TableHeader">
-                <div>{{ t('settingTools.shortcutsDialog.columns.name') }}</div>
-                <div>{{ t('settingTools.shortcutsDialog.columns.id') }}</div>
-                <div>{{ t('settingTools.shortcutsDialog.columns.key') }}</div>
-                <div>{{ t('settingTools.shortcutsDialog.columns.source') }}</div>
-                <div class="ShortcutDialog-EnabledCell">
-                  {{ t('settingTools.shortcutsDialog.columns.enabled') }}
-                </div>
-              </div>
-            </template>
-            <div v-if="loading" class="ShortcutDialog-Empty">
-              {{ t('settingTools.shortcutsDialog.loading') }}
-            </div>
-            <div v-else-if="rows.length === 0" class="ShortcutDialog-Empty">
-              {{ t('settingTools.shortcutsDialog.empty') }}
-            </div>
-            <div v-else class="ShortcutDialog-Rows">
-              <ShortcutDialogRow
-                v-for="row in displayRows"
-                :key="row.shortcut.id"
-                :row="row"
-                :status-active-label="t('settingTools.shortcutsDialog.statusActive')"
-                @copy="copyShortcutId"
-                @update-accelerator="(id, value) => emit('update-accelerator', id, value)"
-                @update-enabled="(id, value) => emit('update-enabled', id, value)"
-              />
-            </div>
-          </TouchScroll>
         </div>
 
         <div class="ShortcutDialog-Footer">
@@ -133,18 +130,11 @@ watch(visible, (value) => {
 .ShortcutDialog {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: min(70dvh, 760px);
+  max-height: 100%;
   --shortcut-dialog-columns: minmax(180px, 1.4fr) minmax(140px, 1fr) minmax(180px, 1.1fr)
     minmax(110px, 0.8fr) minmax(140px, 0.9fr);
   --shortcut-dialog-gap: 12px;
-}
-
-.ShortcutDialog-Header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .ShortcutDialog-TitleBlock {
@@ -163,32 +153,13 @@ watch(visible, (value) => {
   color: var(--tx-text-color-secondary);
 }
 
-.ShortcutDialog-Search {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--tx-fill-color-lighter);
-  border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 12px;
+.ShortcutDialog-SearchWrap {
+  width: min(420px, calc(100vw - 180px));
   min-width: 220px;
 }
 
-.ShortcutDialog-Search input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  outline: none;
-  font-size: 13px;
-  color: var(--tx-text-color-primary);
-}
-
-.ShortcutDialog-Table {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
+.ShortcutDialog-SearchInput {
+  width: 100%;
 }
 
 .ShortcutDialog-TableScroller {
@@ -196,6 +167,8 @@ watch(visible, (value) => {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .ShortcutDialog-TableHeader {
@@ -212,15 +185,6 @@ watch(visible, (value) => {
   top: 0;
   z-index: 4;
   background: var(--tx-bg-color-overlay);
-}
-
-.ShortcutDialog-TableScroller :deep(.tx-scroll__native) {
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.ShortcutDialog-TableScroller :deep(.tx-scroll__content) {
-  padding: 0;
 }
 
 .ShortcutDialog-Empty {
@@ -250,6 +214,8 @@ watch(visible, (value) => {
   justify-content: space-between;
   padding: 16px 24px;
   border-top: 1px solid var(--tx-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  flex-shrink: 0;
 }
 
 .ShortcutDialog-FooterActions {
@@ -261,5 +227,18 @@ watch(visible, (value) => {
 .ShortcutDialog-Count {
   font-size: 12px;
   color: var(--tx-text-color-secondary);
+}
+
+@media (max-width: 960px) {
+  .ShortcutDialog {
+    height: min(76dvh, 760px);
+    --shortcut-dialog-columns: minmax(180px, 1.2fr) minmax(180px, 1fr) minmax(180px, 1fr)
+      minmax(110px, 0.8fr) minmax(140px, 0.9fr);
+  }
+
+  .ShortcutDialog-SearchWrap {
+    width: min(320px, calc(100vw - 180px));
+    min-width: 180px;
+  }
 }
 </style>

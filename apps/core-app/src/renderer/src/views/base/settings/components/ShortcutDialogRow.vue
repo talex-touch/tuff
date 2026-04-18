@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ShortcutRowView } from './shortcut-dialog.types'
 
-import { TxTooltip } from '@talex-touch/tuffex'
+import { TxButton, TxTooltip } from '@talex-touch/tuffex'
 import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 
@@ -30,7 +30,12 @@ const emit = defineEmits<{
     </div>
     <div class="ShortcutDialog-Id">
       <TxTooltip :content="row.shortcut.id" :anchor="{ placement: 'top', showArrow: true }">
-        <button class="ShortcutDialog-IdCopy" type="button" @click="emit('copy', row.shortcut.id)">
+        <TxButton
+          variant="bare"
+          native-type="button"
+          class="ShortcutDialog-IdCopy"
+          @click="emit('copy', row.shortcut.id)"
+        >
           <span class="ShortcutDialog-IdValue">{{ row.shortcut.id }}</span>
           <i
             :class="[
@@ -39,7 +44,7 @@ const emit = defineEmits<{
               row.copyState ? `is-${row.copyState}` : ''
             ]"
           />
-        </button>
+        </TxButton>
       </TxTooltip>
     </div>
     <div class="ShortcutDialog-Key">
