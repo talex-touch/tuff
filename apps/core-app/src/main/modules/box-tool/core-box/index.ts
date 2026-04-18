@@ -128,7 +128,7 @@ export class CoreBoxModule extends BaseModule {
           lastScreenId = curScreen.id
         }
       },
-      { enabled: false, owner: COREBOX_SHORTCUT_OWNER }
+      { enabled: true, owner: COREBOX_SHORTCUT_OWNER }
     )
 
     shortcutModule.registerMainShortcut(
