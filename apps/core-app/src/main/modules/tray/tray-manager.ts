@@ -33,7 +33,6 @@ export class TrayManager extends BaseModule {
   name: ModuleKey = TrayManager.key
 
   private tray: Tray | null = null
-  private trayExperimentalEnabled = false
   private menuBuilder: TrayMenuBuilder
   private stateManager: TrayStateManager
   private appDisposers: Array<() => void> = []
@@ -57,11 +56,6 @@ export class TrayManager extends BaseModule {
   async onInit(ctx: ModuleInitContext<any>): Promise<void> {
     this.touchApp = (ctx.runtime?.app ?? ctx.app) as TrayTouchAppRuntime
     this.menuBuilder.setTouchApp(this.touchApp as TrayTouchAppRuntime & { channel: unknown })
-    this.trayExperimentalEnabled = this.isTrayExperimentalEnabled()
-    if (!this.trayExperimentalEnabled) {
-      console.info('[TrayManager] Tray is experimental and disabled by default.')
-      return
-    }
 
     if (process.platform === 'darwin') {
       this.applyActivationPolicy()
@@ -84,10 +78,7 @@ export class TrayManager extends BaseModule {
     const hideDock = this.getHideDockConfig()
     const startSilent = this.getStartSilentConfig()
     const shouldUseAccessory =
-      this.trayExperimentalEnabled &&
-      this.shouldShowTray() &&
-      !this.shouldForceRegularInDev() &&
-      (hideDock || startSilent)
+      this.shouldShowTray() && !this.shouldForceRegularInDev() && (hideDock || startSilent)
     const normalized: 'regular' | 'accessory' = shouldUseAccessory ? 'accessory' : 'regular'
 
     try {
@@ -233,8 +224,7 @@ export class TrayManager extends BaseModule {
         | undefined
       const closeToTray = configData?.window?.closeToTray ?? true
       const isQuitting = this.touchApp?.isQuitting || false
-      const canCloseToTray =
-        this.trayExperimentalEnabled && this.shouldShowTray() && this.tray !== null
+      const canCloseToTray = this.shouldShowTray() && this.tray !== null
 
       if (closeToTray && !isQuitting && canCloseToTray) {
         event.preventDefault()
@@ -332,18 +322,6 @@ export class TrayManager extends BaseModule {
     return this.getHideDockConfig() || this.getStartSilentConfig()
   }
 
-  private isTrayExperimentalEnabled(): boolean {
-    try {
-      const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
-      return appConfig?.setup?.experimentalTray === true
-    } catch (error) {
-      console.warn('[TrayManager] Failed to read experimental tray switch, fallback disabled', {
-        error
-      })
-      return false
-    }
-  }
-
   /**
    * Setup Dock icon on macOS
    * 在 macOS 上设置 Dock 图标
@@ -375,8 +353,7 @@ export class TrayManager extends BaseModule {
     if (!mainWindow) return
     const hideDock = this.getHideDockConfig()
     const hasDivisionBox = this.hasActiveDivisionBox()
-    const trayAvailable =
-      this.trayExperimentalEnabled && this.shouldShowTray() && this.tray !== null
+    const trayAvailable = this.shouldShowTray() && this.tray !== null
 
     if (this.shouldForceRegularInDev() || !trayAvailable) {
       app.setActivationPolicy('regular')
@@ -399,28 +376,20 @@ export class TrayManager extends BaseModule {
   public getRuntimeSettingsSnapshot(): {
     showTray: boolean
     hideDock: boolean
-    experimentalTray: boolean
     available: boolean
   } {
     return {
       showTray: this.shouldShowTray(),
       hideDock: this.getHideDockConfig(),
-      experimentalTray: this.trayExperimentalEnabled,
-      available: this.trayExperimentalEnabled
+      available: true
     }
   }
 
   public applyRuntimeSettings(): {
     showTray: boolean
     hideDock: boolean
-    experimentalTray: boolean
     available: boolean
   } {
-    if (!this.trayExperimentalEnabled) {
-      this.destroyTray()
-      return this.getRuntimeSettingsSnapshot()
-    }
-
     const shouldShow = this.shouldShowTray()
     if (shouldShow) {
       if (!this.tray) {

@@ -195,16 +195,6 @@ function shouldLoadAssistantModule(): boolean {
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
 }
 
-function shouldLoadTrayModule(): boolean {
-  try {
-    const appSettings = getMainConfig(StorageList.APP_SETTING)
-    return appSettings?.setup?.experimentalTray === true
-  } catch (error) {
-    mainLog.warn('Failed to read tray experimental switch, skip tray module by default', { error })
-    return false
-  }
-}
-
 // Record when Electron becomes ready
 let electronReadyTime: number
 
@@ -241,10 +231,6 @@ app.whenReady().then(async () => {
       shouldSkip: (moduleCtor) => {
         if (moduleCtor === assistantModule && !shouldLoadAssistantModule()) {
           mainLog.info('Skip Assistant module: TUFF_ENABLE_ASSISTANT_EXPERIMENT disabled')
-          return true
-        }
-        if (moduleCtor === trayManagerModule && !shouldLoadTrayModule()) {
-          mainLog.info('Skip TrayManager module: experimentalTray disabled')
           return true
         }
         return false

@@ -148,7 +148,6 @@ const log = createLogger('CommonChannel')
 type RuntimeTraySettings = {
   showTray: boolean
   hideDock: boolean
-  experimentalTray: boolean
   available: boolean
 }
 
@@ -1194,9 +1193,8 @@ export class CommonChannelModule extends BaseModule {
     touchApp: TalexTouch.TouchApp
   ): TraySettingsGetResponse {
     const setup = appSettings?.setup ?? {}
-    const experimentalTray = setup.experimentalTray === true
     const trayManager = this.getRuntimeTrayManager(touchApp)
-    const available = experimentalTray && trayManager !== null
+    const available = trayManager !== null
 
     if (available && trayManager?.getRuntimeSettingsSnapshot) {
       return trayManager.getRuntimeSettingsSnapshot()
@@ -1205,7 +1203,6 @@ export class CommonChannelModule extends BaseModule {
     return {
       showTray: setup.showTray !== false,
       hideDock: setup.hideDock === true,
-      experimentalTray,
       available
     }
   }
