@@ -286,31 +286,25 @@ onMounted(() => {
 .TGroupBlock-Main {
   padding: 0;
   overflow: hidden;
+}
 
-  .TBlockSelection {
-    margin: 0;
-    border-radius: 0 !important;
-    --fake-radius: 0 !important;
-    --fake-inner-opacity: 0.5;
+.TGroupBlock-Main :deep(.TBlockSelection) {
+  margin: 0;
+  border-radius: 0 !important;
+  --fake-radius: 0 !important;
+  --fake-inner-opacity: 0.5;
 
-    .TBlockSelection-Content > * {
-      font-size: 20px;
-    }
+  .TBlockSelection-Content > * {
+    font-size: 20px;
+  }
 
-    .TBlockSelection-Func {
-      margin-right: 32px;
-    }
+  .TBlockSelection-Func {
+    margin-right: 32px;
+  }
 
-    .touch-blur & {
-      &:hover {
-        --fake-color: var(--tx-fill-color-light) !important;
-      }
-    }
-
-    &:last-child {
-      border-bottom-left-radius: 11px !important;
-      border-bottom-right-radius: 11px !important;
-      --fake-radius: 0 0 11px 11px !important;
+  .touch-blur & {
+    &:hover {
+      --fake-color: var(--tx-fill-color-light) !important;
     }
   }
 }
