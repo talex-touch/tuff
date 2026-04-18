@@ -23,7 +23,6 @@ const { appMock, touchEventBusMock, getMainConfigMock } = vi.hoisted(() => ({
   getMainConfigMock: vi.fn(() => ({
     setup: {
       showTray: true,
-      experimentalTray: true,
       hideDock: false
     },
     window: {
@@ -98,9 +97,56 @@ import { TrayManager } from './tray-manager'
 
 describe('TrayManager', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     appMock.on.mockReset()
     appMock.off.mockReset()
     appMock.removeListener.mockReset()
+  })
+
+  it('initializes tray runtime even without experimental flag', async () => {
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: {
+        window: {
+          window: { on: ReturnType<typeof vi.fn>; removeListener: ReturnType<typeof vi.fn> }
+        }
+        config: { data: Record<string, unknown> }
+        isQuitting: boolean
+        version: string
+      }
+      initializeTray: ReturnType<typeof vi.fn>
+      registerWindowEvents: ReturnType<typeof vi.fn>
+      registerEventListeners: ReturnType<typeof vi.fn>
+      applyActivationPolicy: ReturnType<typeof vi.fn>
+      setupDockIcon: ReturnType<typeof vi.fn>
+      updateDockVisibility: ReturnType<typeof vi.fn>
+    }
+
+    trayManager.initializeTray = vi.fn()
+    trayManager.registerWindowEvents = vi.fn()
+    trayManager.registerEventListeners = vi.fn()
+    trayManager.applyActivationPolicy = vi.fn()
+    trayManager.setupDockIcon = vi.fn()
+    trayManager.updateDockVisibility = vi.fn()
+    trayManager.touchApp = {
+      window: {
+        window: {
+          on: vi.fn(),
+          removeListener: vi.fn()
+        }
+      },
+      config: { data: {} },
+      isQuitting: false,
+      version: 'dev'
+    }
+
+    await (trayManager as any).onInit({
+      runtime: { app: trayManager.touchApp },
+      app: trayManager.touchApp
+    })
+
+    expect(trayManager.registerWindowEvents).toHaveBeenCalled()
+    expect(trayManager.registerEventListeners).toHaveBeenCalled()
+    expect(trayManager.initializeTray).toHaveBeenCalled()
   })
 
   it('does not throw when activate fires after main window destroyed', () => {

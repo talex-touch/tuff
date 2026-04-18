@@ -343,7 +343,6 @@ const _appSettingOriginData = {
     microphone: false,
     autoStart: false,
     showTray: true,
-    experimentalTray: false,
     adminPrivileges: false,
     hideDock: false,
     runAsAdmin: false,

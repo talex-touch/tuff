@@ -244,7 +244,6 @@ export type AutoStartUpdateResponse = boolean
 export interface TraySettings {
   showTray: boolean
   hideDock: boolean
-  experimentalTray: boolean
   available: boolean
 }
 
