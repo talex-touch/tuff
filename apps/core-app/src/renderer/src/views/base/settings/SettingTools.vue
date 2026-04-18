@@ -8,10 +8,11 @@
 import type { ShortcutWithStatus } from '~/modules/channel/main/shortcon'
 
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
-import { TxButton, TxSelectItem } from '@talex-touch/tuffex'
+import { TxButton, TxInput, TxSelectItem } from '@talex-touch/tuffex'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -452,19 +453,22 @@ watch(shortcutsDialogVisible, (visible) => {
     memory-name="setting-tools"
   >
     <!-- Custom CoreBox Placeholder -->
-    <TuffBlockSlot
+    <TuffBlockInput
+      v-model="appSetting.coreBox.customPlaceholder"
       :title="t('settingTools.customPlaceholder')"
       :description="t('settingTools.customPlaceholderDesc')"
       default-icon="i-carbon-text-short-paragraph"
       active-icon="i-carbon-text-short-paragraph"
     >
-      <input
-        v-model="appSetting.coreBox.customPlaceholder"
-        type="text"
-        class="TuffBlockInput"
-        :placeholder="t('boxInput.placeholder')"
-      />
-    </TuffBlockSlot>
+      <template #control>
+        <TxInput
+          v-model="appSetting.coreBox.customPlaceholder"
+          class="SettingTools-PlaceholderInput"
+          :placeholder="t('boxInput.placeholder')"
+          clearable
+        />
+      </template>
+    </TuffBlockInput>
 
     <!-- Beginner usage guide switch -->
     <TuffBlockSwitch
@@ -636,27 +640,8 @@ watch(shortcutsDialogVisible, (visible) => {
 </template>
 
 <style scoped>
-.TuffBlockInput {
-  width: 200px;
-  padding: 8px 12px;
-  border: 1px solid var(--tx-border-color);
-  border-radius: 8px;
-  background: var(--tx-fill-color-lighter);
-  color: var(--tx-text-color-primary);
-  font-size: 13px;
-  outline: none;
-  transition: all 0.2s ease;
-}
-
-.TuffBlockInput:focus {
-  border-color: var(--tx-color-primary);
-  background: var(--tx-bg-color);
-  box-shadow: 0 0 0 2px rgba(var(--tx-color-primary-rgb, 64, 158, 255), 0.1);
-}
-
-.TuffBlockInput::placeholder {
-  color: var(--tx-text-color-placeholder);
-  opacity: 0.7;
+.SettingTools-PlaceholderInput {
+  width: min(360px, 100%);
 }
 
 .ShortcutSummary {

@@ -6,7 +6,7 @@ import type {
   FileIndexBatteryStatus,
   FileIndexStats
 } from '@talex-touch/utils/transport/events/types'
-import { TxButton, TxPopover } from '@talex-touch/tuffex'
+import { TxButton, TxInput, TxPopover } from '@talex-touch/tuffex'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -283,6 +283,21 @@ function handleDeviceIdleBlur(blur: () => void) {
 function handleAppIndexBlur(blur: () => void) {
   blur()
   saveAppIndexSettings()
+}
+
+function coerceNumberInput(value: string | number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+
+  return 0
 }
 
 let unsubscribeProgress: (() => void) | null = null
@@ -642,13 +657,14 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleDeviceIdleBlur(blur)"
           />
@@ -667,14 +683,15 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
             max="100"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleDeviceIdleBlur(blur)"
           />
@@ -693,14 +710,15 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
             max="100"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleDeviceIdleBlur(blur)"
           />
@@ -729,13 +747,14 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleDeviceIdleBlur(blur)"
           />
@@ -773,13 +792,14 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleAppIndexBlur(blur)"
           />
@@ -798,13 +818,14 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleAppIndexBlur(blur)"
           />
@@ -823,13 +844,14 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleAppIndexBlur(blur)"
           />
@@ -858,13 +880,14 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleAppIndexBlur(blur)"
           />
@@ -883,13 +906,14 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleAppIndexBlur(blur)"
           />
@@ -1043,28 +1067,11 @@ async function triggerRebuild() {
   white-space: nowrap;
 }
 
-.tuff-input {
+.tuff-number-input {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--tx-border-color);
-  border-radius: 6px;
-  background: var(--tx-fill-color-blank);
-  color: var(--tx-text-color-primary);
-  font-size: 14px;
-  outline: none;
-  transition: all 0.2s;
 }
 
-.tuff-input:focus {
-  border-color: var(--tx-color-primary);
-}
-
-.tuff-input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.tuff-input::placeholder {
-  color: var(--tx-text-color-placeholder);
+.tuff-number-input :deep(.tx-input__inner) {
+  font-variant-numeric: tabular-nums;
 }
 </style>
