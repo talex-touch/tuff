@@ -126,12 +126,24 @@ export class PermissionChecker {
    */
   public checkNotifications(): PermissionCheckResult {
     if (process.platform === 'darwin') {
-      // macOS 10.14+
       if (systemPreferences.getMediaAccessStatus) {
         try {
           const status = systemPreferences.getMediaAccessStatus(
             'notifications' as Parameters<typeof systemPreferences.getMediaAccessStatus>[0]
           )
+          if (
+            status !== 'granted' &&
+            status !== 'denied' &&
+            status !== 'not-determined' &&
+            status !== 'unknown'
+          ) {
+            return {
+              status: PermissionStatus.UNSUPPORTED,
+              canRequest: true,
+              message:
+                'Notification permission cannot be verified programmatically on this macOS version'
+            }
+          }
           return {
             status:
               status === 'granted'
@@ -143,33 +155,32 @@ export class PermissionChecker {
             message: `Notification permission: ${status}`
           }
         } catch {
-          // Fallback for older macOS versions
           return {
-            status: PermissionStatus.GRANTED,
-            canRequest: false,
-            message: 'Notifications are enabled by default on this macOS version'
+            status: PermissionStatus.UNSUPPORTED,
+            canRequest: true,
+            message:
+              'Notification permission cannot be verified programmatically on this macOS build'
           }
         }
       }
-      // Older macOS versions don't require explicit notification permission
       return {
-        status: PermissionStatus.GRANTED,
-        canRequest: false,
-        message: 'Notifications are enabled by default on this macOS version'
+        status: PermissionStatus.UNSUPPORTED,
+        canRequest: true,
+        message: 'Notification permission status is unavailable on this macOS build'
       }
     }
 
     if (process.platform === 'win32') {
       return {
         status: PermissionStatus.UNSUPPORTED,
-        canRequest: false,
+        canRequest: true,
         message: 'Windows notification permission cannot be verified programmatically'
       }
     }
 
     return {
       status: PermissionStatus.UNSUPPORTED,
-      canRequest: false,
+      canRequest: true,
       message: 'Linux notification permission depends on desktop environment and is not verifiable'
     }
   }
