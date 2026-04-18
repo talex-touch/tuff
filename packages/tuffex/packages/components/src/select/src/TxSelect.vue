@@ -389,7 +389,10 @@ watch(
   min-width: 180px;
 
   &__trigger {
-    display: block;
+    display: flex;
+    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   &__arrow {

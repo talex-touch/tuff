@@ -46,9 +46,10 @@ function handleChange(val: string | number, evt?: Event) {
       <slot name="tags" />
     </template>
     <template #default>
-      <div class="flex items-center justify-end w-full">
+      <div class="TuffBlockSelect-Control">
         <TxSelect
           v-model="value"
+          class="TuffBlockSelect-Select"
           eager
           :class="disabled ? 'pointer-events-none opacity-70' : ''"
           @change="handleChange"
@@ -59,3 +60,20 @@ function handleChange(val: string | number, evt?: Event) {
     </template>
   </TuffBlockSlot>
 </template>
+
+<style lang="scss" scoped>
+.TuffBlockSelect-Control {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 0 180px;
+  width: 180px;
+  max-width: 100%;
+  min-width: 120px;
+  margin-left: auto;
+}
+
+.TuffBlockSelect-Select {
+  width: 100%;
+  min-width: 0;
+}
+</style>

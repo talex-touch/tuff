@@ -1,6 +1,7 @@
 <script lang="ts" name="AppSettings" setup>
 import { computed, defineAsyncComponent } from 'vue'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
+import { appSetting } from '~/modules/channel/storage'
 import SettingHeader from './SettingHeader.vue'
 import SettingLanguage from './SettingLanguage.vue'
 import SettingSetup from './SettingSetup.vue'
@@ -16,6 +17,7 @@ const SettingStorage = defineAsyncComponent(() => import('./SettingStorage.vue')
 const SettingUpdate = defineAsyncComponent(() => import('./SettingUpdate.vue'))
 
 const isWindows = computed(() => window.electron?.process?.platform === 'win32')
+const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 </script>
 <template>
   <ViewTemplate title="$I18n:router.appSettings">
@@ -34,7 +36,7 @@ const isWindows = computed(() => window.electron?.process?.platform === 'win32')
 
       <SettingEverything v-if="isWindows" />
 
-      <SettingDownload />
+      <SettingDownload v-if="showAdvancedSettings" />
 
       <SettingUpdate />
 
