@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { DownloadTask } from '@talex-touch/utils'
 import { TxBottomDialog, TxTabItem, TxTabs } from '@talex-touch/tuffex'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
+import { appSetting } from '~/modules/channel/storage'
 import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
 import { debounce } from '~/utils/performance'
 import DownloadHistoryView from './DownloadHistoryView.vue'
@@ -36,10 +37,63 @@ const detailsVisible = ref(false)
 const logsVisible = ref(false)
 const selectedTask = ref<DownloadTask | null>(null)
 const activeTab = ref('downloading')
-const viewMode = ref<'detailed' | 'compact'>('detailed')
 const searchQuery = ref('')
 const debouncedSearchQuery = ref('')
 const useVirtualScroll = ref(false) // Enable virtual scroll for large lists
+type DownloadCenterViewMode = 'detailed' | 'compact'
+type DownloadCenterSettings = {
+  viewMode: DownloadCenterViewMode
+}
+
+const DEFAULT_VIEW_MODE: DownloadCenterViewMode = 'detailed'
+const viewMode = ref<DownloadCenterViewMode>(DEFAULT_VIEW_MODE)
+
+function normalizeViewMode(value: unknown): DownloadCenterViewMode {
+  return value === 'compact' ? 'compact' : DEFAULT_VIEW_MODE
+}
+
+function ensureDownloadCenterSettings(): DownloadCenterSettings {
+  if (!appSetting.downloadCenter || typeof appSetting.downloadCenter !== 'object') {
+    appSetting.downloadCenter = {
+      viewMode: DEFAULT_VIEW_MODE
+    }
+  }
+
+  const settings = appSetting.downloadCenter as DownloadCenterSettings & { viewMode?: unknown }
+  const normalized = normalizeViewMode(settings.viewMode)
+  if (settings.viewMode !== normalized) {
+    settings.viewMode = normalized
+  }
+
+  return settings as DownloadCenterSettings
+}
+
+function setViewMode(mode: unknown) {
+  const normalized = normalizeViewMode(mode)
+  if (viewMode.value !== normalized) {
+    viewMode.value = normalized
+  }
+
+  const settings = ensureDownloadCenterSettings()
+  if (settings.viewMode !== normalized) {
+    settings.viewMode = normalized
+  }
+}
+
+watch(
+  () => appSetting.downloadCenter?.viewMode,
+  (rawMode) => {
+    const settings = ensureDownloadCenterSettings()
+    const normalized = normalizeViewMode(rawMode ?? settings.viewMode)
+    if (settings.viewMode !== normalized) {
+      settings.viewMode = normalized
+    }
+    if (viewMode.value !== normalized) {
+      viewMode.value = normalized
+    }
+  },
+  { immediate: true }
+)
 
 // Debounced search handler (300ms delay)
 const handleSearchDebounced = debounce((value: string) => {
@@ -284,10 +338,13 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
       </div>
       <div class="header-right">
         <div class="view-mode-group">
-          <TxButton :type="viewMode === 'detailed' ? 'primary' : ''" @click="viewMode = 'detailed'">
+          <TxButton
+            :type="viewMode === 'detailed' ? 'primary' : ''"
+            @click="setViewMode('detailed')"
+          >
             <i class="i-carbon-list" />
           </TxButton>
-          <TxButton :type="viewMode === 'compact' ? 'primary' : ''" @click="viewMode = 'compact'">
+          <TxButton :type="viewMode === 'compact' ? 'primary' : ''" @click="setViewMode('compact')">
             <i class="i-carbon-grid" />
           </TxButton>
         </div>

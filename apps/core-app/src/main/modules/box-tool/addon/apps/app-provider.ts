@@ -252,6 +252,7 @@ const APP_LAUNCH_TARGET_EXTENSION_KEY = 'launchTarget'
 const APP_LAUNCH_ARGS_EXTENSION_KEY = 'launchArgs'
 const APP_WORKING_DIRECTORY_EXTENSION_KEY = 'workingDirectory'
 const APP_DISPLAY_PATH_EXTENSION_KEY = 'displayPath'
+const APP_DESCRIPTION_EXTENSION_KEY = 'description'
 const APP_IDENTIFIER_EXTENSION_KEYS = ['bundleId', APP_IDENTITY_EXTENSION_KEY] as const
 
 function resolveAppItemId(value: {
@@ -583,6 +584,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       | 'launchArgs'
       | 'workingDirectory'
       | 'displayPath'
+      | 'description'
     >
   ): FileExtensionInsert[] {
     const extensions: FileExtensionInsert[] = []
@@ -609,6 +611,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
     if (app.displayPath) {
       extensions.push({ fileId, key: APP_DISPLAY_PATH_EXTENSION_KEY, value: app.displayPath })
+    }
+    if (app.description) {
+      extensions.push({ fileId, key: APP_DESCRIPTION_EXTENSION_KEY, value: app.description })
     }
     return extensions
   }
@@ -1069,6 +1074,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       launchArgs: app.extensions.launchArgs || undefined,
       workingDirectory: app.extensions.workingDirectory || undefined,
       displayPath: app.extensions.displayPath || undefined,
+      description: app.extensions.description || undefined,
       lastModified: app.mtime
     }
   }

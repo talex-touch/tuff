@@ -222,6 +222,20 @@ async function loadSubject() {
 }
 
 type AppProviderPrivate = {
+  buildAppExtensions: (
+    fileId: number,
+    app: {
+      bundleId?: string
+      icon?: string
+      stableId?: string
+      launchKind: string
+      launchTarget: string
+      launchArgs?: string
+      workingDirectory?: string
+      displayPath?: string
+      description?: string
+    }
+  ) => Array<{ fileId: number; key: string; value: string }>
   context: unknown
   dbUtils: unknown
   searchIndex: unknown
@@ -237,6 +251,17 @@ type AppProviderPrivate = {
   _runMdlsUpdateScan: () => Promise<void>
   _runStartupBackfill: () => Promise<void>
   _setLastFullSyncTime: (timestamp: number) => Promise<void>
+  _mapDbAppToScannedInfo: (app: {
+    name: string
+    displayName?: string | null
+    path: string
+    mtime: Date
+    extensions: Record<string, string>
+  }) => {
+    description?: string
+    displayName?: string
+    launchKind: string
+  }
 }
 
 function asPrivateProvider(provider: unknown): AppProviderPrivate {
@@ -449,5 +474,38 @@ describe('appProvider rebuild maintenance', () => {
       }
     )
     expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('persists and restores app description through extensions', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+
+    const extensions = privateProvider.buildAppExtensions(7, {
+      launchKind: 'uwp',
+      launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+      description: 'Built-in calculator app'
+    })
+
+    expect(extensions).toContainEqual({
+      fileId: 7,
+      key: 'description',
+      value: 'Built-in calculator app'
+    })
+
+    const mapped = privateProvider._mapDbAppToScannedInfo({
+      name: 'Windows Calculator',
+      displayName: 'Calculator',
+      path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+      mtime: new Date(0),
+      extensions: {
+        description: 'Built-in calculator app',
+        launchKind: 'uwp',
+        launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
+      }
+    })
+
+    expect(mapped.displayName).toBe('Calculator')
+    expect(mapped.description).toBe('Built-in calculator app')
+    expect(mapped.launchKind).toBe('uwp')
   })
 })

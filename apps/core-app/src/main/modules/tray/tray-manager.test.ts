@@ -107,7 +107,11 @@ describe('TrayManager', () => {
     const trayManager = new TrayManager() as unknown as {
       touchApp: {
         window: {
-          window: { on: ReturnType<typeof vi.fn>; removeListener: ReturnType<typeof vi.fn> }
+          window: {
+            on: ReturnType<typeof vi.fn>
+            removeListener: ReturnType<typeof vi.fn>
+            isVisible: ReturnType<typeof vi.fn>
+          }
         }
         config: { data: Record<string, unknown> }
         isQuitting: boolean
@@ -131,7 +135,8 @@ describe('TrayManager', () => {
       window: {
         window: {
           on: vi.fn(),
-          removeListener: vi.fn()
+          removeListener: vi.fn(),
+          isVisible: vi.fn(() => true)
         }
       },
       config: { data: {} },
@@ -147,6 +152,152 @@ describe('TrayManager', () => {
     expect(trayManager.registerWindowEvents).toHaveBeenCalled()
     expect(trayManager.registerEventListeners).toHaveBeenCalled()
     expect(trayManager.initializeTray).toHaveBeenCalled()
+  })
+
+  it('captures hidden window state during silent start initialization', async () => {
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: {
+        window: {
+          window: {
+            on: ReturnType<typeof vi.fn>
+            removeListener: ReturnType<typeof vi.fn>
+            isVisible: ReturnType<typeof vi.fn>
+          }
+        }
+        config: { data: Record<string, unknown> }
+        isQuitting: boolean
+        version: string
+      }
+      initializeTray: ReturnType<typeof vi.fn>
+      registerWindowEvents: ReturnType<typeof vi.fn>
+      registerEventListeners: ReturnType<typeof vi.fn>
+      applyActivationPolicy: ReturnType<typeof vi.fn>
+      setupDockIcon: ReturnType<typeof vi.fn>
+      updateDockVisibility: ReturnType<typeof vi.fn>
+      getRuntimeSettingsSnapshot: () => {
+        showTray: boolean
+        hideDock: boolean
+        available: boolean
+        trayReady: boolean
+        windowVisible: boolean
+      }
+    }
+
+    trayManager.initializeTray = vi.fn()
+    trayManager.registerWindowEvents = vi.fn()
+    trayManager.registerEventListeners = vi.fn()
+    trayManager.applyActivationPolicy = vi.fn()
+    trayManager.setupDockIcon = vi.fn()
+    trayManager.updateDockVisibility = vi.fn()
+    trayManager.touchApp = {
+      window: {
+        window: {
+          on: vi.fn(),
+          removeListener: vi.fn(),
+          isVisible: vi.fn(() => false)
+        }
+      },
+      config: { data: {} },
+      isQuitting: false,
+      version: 'dev'
+    }
+
+    await (trayManager as any).onInit({
+      runtime: { app: trayManager.touchApp },
+      app: trayManager.touchApp
+    })
+
+    expect(trayManager.getRuntimeSettingsSnapshot().windowVisible).toBe(false)
+  })
+
+  it('updates dock visibility after tray initialization on macOS startup', async () => {
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: {
+        window: {
+          window: {
+            on: ReturnType<typeof vi.fn>
+            removeListener: ReturnType<typeof vi.fn>
+            isVisible: ReturnType<typeof vi.fn>
+          }
+        }
+        config: { data: Record<string, unknown> }
+        isQuitting: boolean
+        version: string
+      }
+      initializeTray: ReturnType<typeof vi.fn>
+      registerWindowEvents: ReturnType<typeof vi.fn>
+      registerEventListeners: ReturnType<typeof vi.fn>
+      applyActivationPolicy: ReturnType<typeof vi.fn>
+      setupDockIcon: ReturnType<typeof vi.fn>
+      updateDockVisibility: ReturnType<typeof vi.fn>
+    }
+
+    trayManager.initializeTray = vi.fn()
+    trayManager.registerWindowEvents = vi.fn()
+    trayManager.registerEventListeners = vi.fn()
+    trayManager.applyActivationPolicy = vi.fn()
+    trayManager.setupDockIcon = vi.fn()
+    trayManager.updateDockVisibility = vi.fn()
+    trayManager.touchApp = {
+      window: {
+        window: {
+          on: vi.fn(),
+          removeListener: vi.fn(),
+          isVisible: vi.fn(() => false)
+        }
+      },
+      config: { data: {} },
+      isQuitting: false,
+      version: 'dev'
+    }
+
+    await (trayManager as any).onInit({
+      runtime: { app: trayManager.touchApp },
+      app: trayManager.touchApp
+    })
+
+    expect(trayManager.initializeTray.mock.invocationCallOrder[0]).toBeLessThan(
+      trayManager.updateDockVisibility.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('returns real runtime tray snapshot values', () => {
+    const mainWindow = {
+      isVisible: vi.fn(() => false)
+    }
+
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: {
+        window: { window: typeof mainWindow }
+        config: { data: Record<string, unknown> }
+        isQuitting: boolean
+        version: string
+      }
+      tray: object | null
+      getRuntimeSettingsSnapshot: () => {
+        showTray: boolean
+        hideDock: boolean
+        available: boolean
+        trayReady: boolean
+        windowVisible: boolean
+      }
+    }
+
+    trayManager.touchApp = {
+      window: { window: mainWindow },
+      config: { data: {} },
+      isQuitting: false,
+      version: 'dev'
+    }
+    trayManager.tray = {}
+
+    expect(trayManager.getRuntimeSettingsSnapshot()).toMatchObject({
+      showTray: true,
+      hideDock: false,
+      available: true,
+      trayReady: true,
+      windowVisible: false
+    })
   })
 
   it('does not throw when activate fires after main window destroyed', () => {

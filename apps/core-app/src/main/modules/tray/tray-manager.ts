@@ -59,6 +59,7 @@ export class TrayManager extends BaseModule {
   async onInit(ctx: ModuleInitContext<any>): Promise<void> {
     this.touchApp = (ctx.runtime?.app ?? ctx.app) as TrayTouchAppRuntime
     this.menuBuilder.setTouchApp(this.touchApp as TrayTouchAppRuntime & { channel: unknown })
+    this.syncWindowVisibilityState()
 
     if (process.platform === 'darwin') {
       this.applyActivationPolicy()
@@ -68,12 +69,12 @@ export class TrayManager extends BaseModule {
     this.registerWindowEvents()
     this.registerEventListeners()
 
-    if (process.platform === 'darwin') {
-      this.updateDockVisibility()
-    }
-
     if (this.shouldShowTray()) {
       this.initializeTray()
+    }
+
+    if (process.platform === 'darwin') {
+      this.updateDockVisibility()
     }
   }
 
@@ -180,6 +181,21 @@ export class TrayManager extends BaseModule {
     } catch (error) {
       trayManagerLog.error('Failed to update menu', { error })
     }
+  }
+
+  private getCurrentWindowVisibleState(): boolean {
+    const mainWindow = useAliveTarget(this.touchApp?.window.window)
+    if (!mainWindow) {
+      return this.stateManager.isWindowVisible()
+    }
+
+    return mainWindow.isVisible()
+  }
+
+  private syncWindowVisibilityState(): boolean {
+    const visible = this.getCurrentWindowVisibleState()
+    this.stateManager.setWindowVisible(visible)
+    return visible
   }
 
   private registerAppListener(eventName: string, handler: (...args: any[]) => void): void {
@@ -382,11 +398,16 @@ export class TrayManager extends BaseModule {
     showTray: boolean
     hideDock: boolean
     available: boolean
+    trayReady: boolean
+    windowVisible: boolean
   } {
+    const windowVisible = this.syncWindowVisibilityState()
     return {
       showTray: this.shouldShowTray(),
       hideDock: this.getHideDockConfig(),
-      available: true
+      available: true,
+      trayReady: this.tray !== null,
+      windowVisible
     }
   }
 
@@ -394,8 +415,11 @@ export class TrayManager extends BaseModule {
     showTray: boolean
     hideDock: boolean
     available: boolean
+    trayReady: boolean
+    windowVisible: boolean
   } {
     const shouldShow = this.shouldShowTray()
+    this.syncWindowVisibilityState()
     if (shouldShow) {
       if (!this.tray) {
         this.initializeTray()

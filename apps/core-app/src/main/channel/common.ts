@@ -154,6 +154,8 @@ type RuntimeTraySettings = {
   showTray: boolean
   hideDock: boolean
   available: boolean
+  trayReady: boolean
+  windowVisible: boolean
 }
 
 type RuntimeTrayManager = {
@@ -1211,7 +1213,9 @@ export class CommonChannelModule extends BaseModule {
     return {
       showTray: setup.showTray !== false,
       hideDock: setup.hideDock === true,
-      available
+      available,
+      trayReady: false,
+      windowVisible: touchApp.window.window.isVisible()
     }
   }
 
