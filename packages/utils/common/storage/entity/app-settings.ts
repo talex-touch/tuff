@@ -271,6 +271,9 @@ const _appSettingOriginData = {
     maxItems: 10,
     showReason: true,
   },
+  downloadCenter: {
+    viewMode: 'detailed' as 'detailed' | 'compact',
+  },
   animation: {
     listItemStagger: false,
     resultTransition: false,

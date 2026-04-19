@@ -50,11 +50,13 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
   const iconValue = rawIconValue && !isValidBase64DataUrl(rawIconValue) ? '' : rawIconValue
   const keywordPath = app.extensions.displayPath || app.path
   const launchKind = (app.extensions.launchKind as AppLaunchKind | null) || 'path'
+  const description = app.extensions.description || ''
 
   const tuffItem = new TuffItemBuilder(uniqueId, 'application', 'app-provider')
     .setKind('app')
     .setTitle(displayName)
     .setSubtitle(subtitle)
+    .setDescription(description)
     .setIcon({
       type: iconValue.startsWith('data:') ? 'url' : 'file',
       value: iconValue

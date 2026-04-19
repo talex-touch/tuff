@@ -11,6 +11,8 @@ describe('search-processing-service', () => {
         extensions: {
           appIdentity: 'uwp:microsoft.windowscalculator_8wekyb3d8bbwe!app',
           displayPath: 'Windows Store',
+          description: 'Fast calculations',
+          icon: 'data:image/png;base64,AA==',
           launchKind: 'uwp',
           launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
         }
@@ -18,6 +20,11 @@ describe('search-processing-service', () => {
     ] as any)
 
     expect((item.render as any)?.basic?.subtitle).toBe('Windows Store')
+    expect((item.render as any)?.basic?.description).toBe('Fast calculations')
+    expect((item.render as any)?.basic?.icon).toMatchObject({
+      type: 'url',
+      value: 'data:image/png;base64,AA=='
+    })
     expect((item.meta as any)?.app?.launchKind).toBe('uwp')
     expect((item.meta as any)?.app?.launchTarget).toBe(
       'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'

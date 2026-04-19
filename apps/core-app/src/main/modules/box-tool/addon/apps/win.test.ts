@@ -155,4 +155,71 @@ describe('win app scanner', () => {
       stableId: 'uwp:microsoft.windowscalculator_8wekyb3d8bbwe!app'
     })
   })
+
+  it('enriches Windows Store apps with manifest metadata and logo variants', async () => {
+    const installLocation = 'C:\\Program Files\\WindowsApps\\Microsoft.WindowsCalculator'
+    const manifestPath = `${installLocation}\\AppxManifest.xml`
+    const logoDirectory = `${installLocation}\\Assets`
+    const variantLogoPath = `${logoDirectory}\\Square44x44Logo.targetsize-32.png`
+
+    readdirMock.mockImplementation(async (dir: string) => {
+      if (dir === 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs') return []
+      if (dir === 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs')
+        return []
+      if (dir === logoDirectory) {
+        return ['Square44x44Logo.targetsize-32.png']
+      }
+      return []
+    })
+    accessMock.mockImplementation(async (target: string) => {
+      if (target === `${logoDirectory}\\Square44x44Logo.png`) {
+        throw new Error('ENOENT')
+      }
+      return undefined
+    })
+    readFileMock.mockImplementation(async (target: string) => {
+      if (target === manifestPath) {
+        return `<?xml version="1.0" encoding="utf-8"?>
+<Package>
+  <Applications>
+    <Application Id="App">
+      <uap:VisualElements
+        DisplayName="Calculator Deluxe"
+        Description="Fast calculations"
+        Square44x44Logo="Assets\\Square44x44Logo.png" />
+    </Application>
+  </Applications>
+</Package>`
+      }
+      if (target === variantLogoPath) {
+        return Buffer.from([0xde, 0xad, 0xbe, 0xef])
+      }
+      return Buffer.from([1, 2, 3])
+    })
+    execFileSafeMock.mockResolvedValue({
+      stdout: JSON.stringify([
+        {
+          Name: 'Calculator',
+          AppId: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+          PackageFamilyName: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe',
+          InstallLocation: installLocation
+        }
+      ]),
+      stderr: ''
+    })
+
+    const { getApps } = await import('./win')
+    const apps = await getApps()
+
+    expect(apps).toHaveLength(1)
+    expect(apps[0]).toMatchObject({
+      name: 'Calculator',
+      displayName: 'Calculator Deluxe',
+      description: 'Fast calculations',
+      bundleId: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe',
+      launchKind: 'uwp',
+      launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
+    })
+    expect(apps[0].icon).toBe('data:image/png;base64,3q2+7w==')
+  })
 })

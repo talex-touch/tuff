@@ -245,6 +245,8 @@ export interface TraySettings {
   showTray: boolean
   hideDock: boolean
   available: boolean
+  trayReady: boolean
+  windowVisible: boolean
 }
 
 export type TraySettingsGetResponse = TraySettings

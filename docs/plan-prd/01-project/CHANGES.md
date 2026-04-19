@@ -1,7 +1,27 @@
 # 变更日志
 
-> 更新时间: 2026-04-18
-> 说明: 主文件仅保留近 30 天（2026-03-19 ~ 2026-04-18）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-19
+> 说明: 主文件仅保留近 30 天（2026-03-20 ~ 2026-04-19）详细记录；更早历史已按月归档。
+
+## 2026-04-19
+
+### fix(core-app): 修正托盘运行态回显、补齐 Windows Store 元数据并持久化下载中心视图模式
+
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.test.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `packages/utils/transport/events/types/app.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/search-processing-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/search-processing-service.test.ts`
+- `apps/core-app/src/renderer/src/components/download/DownloadCenterView.vue`
+- `packages/utils/common/storage/entity/app-settings.ts`
+  - Tray 初始化阶段改为基于主窗口真实 `isVisible()` 同步运行态，`TraySettings` 新增 `trayReady / windowVisible`，静默启动与 macOS `hideDock + showTray + startSilent` 首帧不再回显错误的“窗口已显示/托盘已就绪”假状态。
+  - Windows `Get-StartApps` 扫描补齐 `PackageFamilyName / InstallLocation`，并在 TS 侧解析 `AppxManifest.xml` 的 `DisplayName / Description / VisualElements logo`；Windows Store / UWP 搜索结果现在保留 `Windows Store` 副标题，同时补上真实标题、描述与 data URL 图标，启动链路仍保持 `explorer shell:AppsFolder\\...`。
+  - 下载中心 `detailed / compact` 视图模式接入 `appSetting.downloadCenter.viewMode` 统一持久化，关闭视图、跨页面切换和重启后都能按上次选择回显；缺失值或非法旧值会自动回退并修正为 `detailed`。
 
 ## 2026-04-18
 
