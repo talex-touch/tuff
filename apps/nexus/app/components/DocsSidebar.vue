@@ -3,6 +3,16 @@ import DocSection from './docs/DocSection.vue'
 
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
 
+interface SidebarComponentDoc {
+  title: string
+  path: string
+  normalizedPath: string
+  locale: 'en' | 'zh'
+  category: string | null
+  syncStatus: SyncStatusKey
+  verified: boolean
+}
+
 const COMPONENT_SYNC_STATUS_ALIASES: Record<string, SyncStatusKey> = {
   未迁移: 'not_started',
   迁移中: 'in_progress',
@@ -14,62 +24,18 @@ const COMPONENT_SYNC_STATUS_ALIASES: Record<string, SyncStatusKey> = {
   verified: 'verified',
 }
 
-function normalizeComponentSyncStatus(raw: unknown, verified: boolean): SyncStatusKey {
-  if (verified)
-    return 'verified'
-  const value = typeof raw === 'string' ? raw.trim() : ''
-  return COMPONENT_SYNC_STATUS_ALIASES[value] ?? 'not_started'
-}
-
-function parseDocMeta(meta: unknown): Record<string, any> | null {
-  if (!meta)
-    return null
-  if (typeof meta === 'string') {
-    try {
-      return JSON.parse(meta) as Record<string, any>
-    } catch (error) {
-      console.warn('[DocsSidebar] Failed to parse content meta.', error)
-      return null
-    }
-  }
-  if (typeof meta === 'object')
-    return meta as Record<string, any>
-  return null
-}
-
-const { data: navigationTree, pending, error } = await useAsyncData(
-  'docs-navigation',
-  () => queryCollectionNavigation('docs'),
-)
-const { data: componentDocs, pending: componentDocsPending } = await useAsyncData(
-  'docs-components-meta',
-  () => (queryCollection('docs') as any)
-    .where('path', 'LIKE', '/docs/dev/components/%')
-    .select('path', 'title', 'category', 'meta', 'syncStatus', 'verified')
-    .all(),
+const { data: navigationTree, pending, error } = await useFetch<any[]>(
+  '/api/docs/navigation',
   {
+    key: 'docs-navigation',
     default: () => [],
-    transform: (rows: any) =>
-      (Array.isArray(rows) ? rows : [])
-        .map((item: any) => {
-          const meta = parseDocMeta(item.meta)
-          const verified = item.verified === true || meta?.verified === true
-          const fullPath = typeof item.path === 'string'
-            ? (item.path.startsWith('/') ? item.path : `/${item.path}`)
-            : ''
-          const normalizedPath = fullPath
-            .replace(/^\/(en|zh)(?=\/|$)/, '')
-            .replace(/\.(en|zh)$/, '') || (fullPath ? '/' : null)
-
-          return {
-            ...item,
-            _normalizedPath: normalizedPath,
-            _meta: meta,
-            _category: item.category ?? meta?.category,
-            _syncStatus: normalizeComponentSyncStatus(item.syncStatus ?? meta?.syncStatus, verified),
-          }
-        })
-        .filter((item: any) => item._normalizedPath?.startsWith('/docs/dev/components')),
+  },
+)
+const { data: componentDocs, pending: componentDocsPending } = await useFetch<SidebarComponentDoc[]>(
+  '/api/docs/sidebar-components',
+  {
+    key: 'docs-components-meta',
+    default: () => [],
   },
 )
 const route = useRoute()
@@ -445,13 +411,13 @@ const componentSections = computed(() => {
     return []
 
   const normalizedItems = sourceItems
-    .filter(item => item._normalizedPath?.startsWith('/docs/dev/components'))
+    .filter(item => item.normalizedPath?.startsWith('/docs/dev/components'))
 
   if (!normalizedItems.length)
     return []
 
-  const indexItem = normalizedItems.find(item => item._normalizedPath === '/docs/dev/components/index')
-  const entries = normalizedItems.filter(item => item._normalizedPath && item._normalizedPath !== '/docs/dev/components/index')
+  const indexItem = normalizedItems.find(item => item.normalizedPath === '/docs/dev/components/index')
+  const entries = normalizedItems.filter(item => item.normalizedPath && item.normalizedPath !== '/docs/dev/components/index')
 
   const used = new Set<string>()
   const sections: any[] = []
@@ -461,8 +427,8 @@ const componentSections = computed(() => {
     if (!children.length)
       return
     for (const child of children) {
-      if (child._normalizedPath)
-        used.add(child._normalizedPath)
+      if (child.normalizedPath)
+        used.add(child.normalizedPath)
     }
     sections.push({
       title,
@@ -481,27 +447,27 @@ const componentSections = computed(() => {
     })
   }
 
-  const entriesByPath = new Map(entries.map(item => [item._normalizedPath, item]))
+  const entriesByPath = new Map(entries.map(item => [item.normalizedPath, item]))
 
   for (const section of COMPONENT_PRIORITY_SECTIONS.value) {
     const children = section.paths
       .map(path => entriesByPath.get(path))
       .filter((item): item is any => Boolean(item))
-      .filter(item => !used.has(item._normalizedPath ?? ''))
+      .filter(item => !used.has(item.normalizedPath ?? ''))
 
     addSection(section.label, children)
   }
 
   for (const category of COMPONENT_CATEGORY_ORDER.value) {
     const children = sortByOrder(
-      entries.filter(item => item._category === category.key && !used.has(item._normalizedPath ?? '')),
+      entries.filter(item => item.category === category.key && !used.has(item.normalizedPath ?? '')),
       '/docs/dev/components',
     )
     addSection(category.label, children)
   }
 
   const remaining = sortByOrder(
-    entries.filter(item => !used.has(item._normalizedPath ?? '')),
+    entries.filter(item => !used.has(item.normalizedPath ?? '')),
     '/docs/dev/components',
   )
   addSection(t('docsSidebar.categories.misc'), remaining)
@@ -513,19 +479,15 @@ function resolveComponentItemStatus(item: any): SyncStatusKey | null {
   if (!item)
     return null
 
-  const preset = typeof item?._syncStatus === 'string' ? item._syncStatus.trim() : ''
+  const preset = typeof item?.syncStatus === 'string' ? item.syncStatus.trim() : ''
   if (preset)
     return COMPONENT_SYNC_STATUS_ALIASES[preset] ?? null
 
-  const verified = item?.verified === true || item?._meta?.verified === true
+  const verified = item?.verified === true
   if (verified)
     return 'verified'
 
-  const raw = typeof item?.syncStatus === 'string'
-    ? item.syncStatus.trim()
-    : typeof item?._meta?.syncStatus === 'string'
-      ? item._meta.syncStatus.trim()
-      : ''
+  const raw = typeof item?.syncStatus === 'string' ? item.syncStatus.trim() : ''
   if (!raw)
     return null
 
