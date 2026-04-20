@@ -114,6 +114,7 @@ export default {
     summary: '登录概览',
     remotePlugins: '云端插件列表',
     localRepos: '本地插件仓库',
+    logout: '退出登录',
     userFallback: 'Tuff 用户',
     greeting: 'Hi, {name}',
     email: '邮箱: {email}',

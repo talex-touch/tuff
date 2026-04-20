@@ -5,6 +5,19 @@
 
 ## 2026-04-20
 
+### fix(tuff-cli): 在个人信息菜单补齐退出登录入口
+
+- `packages/tuff-cli/src/bin/tuff.ts`
+- `packages/tuff-cli-core/src/repositories.ts`
+- `packages/tuff-cli-core/src/__tests__/repositories.test.ts`
+- `packages/tuff-cli/src/cli/repositories.ts`
+- `packages/tuff-cli/src/cli/i18n/locales/zh.ts`
+- `packages/tuff-cli/src/cli/i18n/locales/en.ts`
+- `packages/tuff-cli/package.json`
+  - `tuff` 交互式个人信息页新增“退出登录 / Logout”选项，复用现有 `clearAuthToken` 与退出成功提示，避免用户只能进入设置页才能登出。
+  - 本地插件仓库记录跳过系统临时目录，并在展示时过滤已残留的临时目录项，避免 `tuff-*-publish-*` 临时发布目录与真实插件工程同时显示成多个同名插件。
+  - `@talex-touch/tuff-cli` 版本提升到 `0.0.2`，用于发布已补齐账号菜单的 CLI 包。
+
 ### fix(nexus): 收敛文档路由切换时的 chunk 拉取失败白屏
 
 - `apps/nexus/nuxt.config.ts`
