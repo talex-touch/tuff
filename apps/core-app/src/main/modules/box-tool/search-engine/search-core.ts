@@ -114,6 +114,7 @@ const PROVIDER_CATEGORY_MAP: Record<string, string> = {
 
 const EVERYTHING_PROVIDER_FILTERS = new Set(['everything', 'everything-provider'])
 const FILE_PROVIDER_FILTERS = new Set(['file-provider', 'file-index'])
+const FILE_CATEGORY_FILTERS = new Set(['file', 'files', 'fs', 'document'])
 
 const PROVIDER_REFRACTORY_THRESHOLD = 2
 const PROVIDER_REFRACTORY_BASE_MS = 30_000
@@ -224,6 +225,10 @@ function isExplicitFileProviderFilter(filter?: string): boolean {
   return typeof filter === 'string' && FILE_PROVIDER_FILTERS.has(filter.toLowerCase())
 }
 
+function isExplicitFileCategoryFilter(filter?: string): boolean {
+  return typeof filter === 'string' && FILE_CATEGORY_FILTERS.has(filter.toLowerCase())
+}
+
 /**
  * Generates a unique key for an activation request.
  * For the plugin adapter, it combines the provider ID with the plugin name
@@ -238,12 +243,56 @@ function getActivationKey(activation: IProviderActivate): string {
   return activation.id
 }
 
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value)
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`
+  }
+  const record = value as Record<string, unknown>
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+    .join(',')}}`
+}
+
+function hashCachePart(value: unknown): string {
+  return crypto.createHash('sha1').update(stableStringify(value)).digest('hex').slice(0, 16)
+}
+
 function buildSearchCacheKey(
-  queryText: string | undefined,
+  query: TuffQuery,
   providerFilter: string | undefined,
   activatedProviders: Map<string, IProviderActivate> | null
 ): string {
-  return `${queryText || ''}:${providerFilter || ''}:${activatedProviders ? Array.from(activatedProviders.keys()).join(',') : ''}`
+  const rawQuery = query as unknown as Record<string, unknown>
+  const queryExtras: Record<string, unknown> = {}
+  for (const key of Object.keys(rawQuery).sort()) {
+    if (key === 'text' || key === 'inputs') {
+      continue
+    }
+    queryExtras[key] = rawQuery[key]
+  }
+
+  const inputs = (query.inputs ?? []).map((input) => {
+    const rawInput = input as unknown as Record<string, unknown>
+    return {
+      type: input.type,
+      contentHash: hashCachePart(rawInput.content ?? ''),
+      metaHash: hashCachePart(
+        Object.fromEntries(Object.entries(rawInput).filter(([key]) => key !== 'content'))
+      )
+    }
+  })
+
+  return hashCachePart({
+    text: query.text || '',
+    providerFilter: providerFilter || '',
+    activatedProviders: activatedProviders ? Array.from(activatedProviders.keys()).sort() : [],
+    inputs,
+    extras: queryExtras
+  })
 }
 
 function roundDuration(value: number | undefined): number | undefined {
@@ -323,7 +372,7 @@ export class SearchEngineCore
     providerFilter: string | undefined,
     result: TuffSearchResult
   ): void {
-    const cacheKey = buildSearchCacheKey(query.text, providerFilter, this.activatedProviders)
+    const cacheKey = buildSearchCacheKey(query, providerFilter, this.activatedProviders)
 
     // Evict oldest entries if cache is full
     if (this.searchCache.size >= SEARCH_CACHE_MAX_SIZE) {
@@ -813,7 +862,7 @@ export class SearchEngineCore
 
       return {
         providerFilter,
-        cacheKey: buildSearchCacheKey(query.text, providerFilter, this.activatedProviders),
+        cacheKey: buildSearchCacheKey(query, providerFilter, this.activatedProviders),
         durationMs: performance.now() - startedAt
       }
     } finally {
@@ -936,6 +985,14 @@ export class SearchEngineCore
       selectedFileProviderId = everything ? 'everything-provider' : null
     } else if (isExplicitFileProviderFilter(providerFilter)) {
       selectedFileProviderId = file ? 'file-provider' : null
+    } else if (isExplicitFileCategoryFilter(providerFilter)) {
+      if (fileProvider.hasSearchFilters(query.text || '')) {
+        selectedFileProviderId = file ? 'file-provider' : null
+      } else if (everythingProvider.isSearchReady()) {
+        selectedFileProviderId = everything ? 'everything-provider' : null
+      } else {
+        selectedFileProviderId = file ? 'file-provider' : null
+      }
     } else if (fileProvider.hasSearchFilters(query.text || '')) {
       selectedFileProviderId = file ? 'file-provider' : null
     } else if (everythingProvider.isSearchReady()) {
@@ -960,7 +1017,11 @@ export class SearchEngineCore
     if (
       items.length > 0 ||
       process.platform !== 'win32' ||
-      !isExplicitEverythingProviderFilter(providerFilter)
+      !(
+        isExplicitEverythingProviderFilter(providerFilter) ||
+        isExplicitFileProviderFilter(providerFilter) ||
+        isExplicitFileCategoryFilter(providerFilter)
+      )
     ) {
       return items
     }

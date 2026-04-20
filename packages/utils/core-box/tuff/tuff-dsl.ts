@@ -964,6 +964,8 @@ export interface TuffMeta {
     modified_at?: string
     /** 文件扩展名（不带点） */
     extension?: string
+    /** 是否为目录 */
+    isDir?: boolean
   }
 
   /**
