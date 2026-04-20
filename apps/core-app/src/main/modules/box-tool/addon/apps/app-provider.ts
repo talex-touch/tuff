@@ -30,12 +30,11 @@ import {
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
-import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-box'
 import chalk from 'chalk'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
 
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import {
   DirectoryAddedEvent,
   DirectoryUnlinkedEvent,
@@ -61,6 +60,7 @@ import { getMainConfig, saveMainConfig } from '../../../storage'
 import FileSystemWatcher from '../../file-system-watcher'
 import searchEngineCore from '../../search-engine/search-core'
 import { appScanner } from './app-scanner'
+import { scheduleAppLaunch } from './app-launcher'
 import { normalizeDisplayName, shouldUpdateDisplayName } from './display-name-sync-utils'
 import { matchNoisySystemAppRule } from './app-noise-filter'
 import { formatLog, LogStyle } from './app-utils'
@@ -262,36 +262,6 @@ function resolveAppItemId(value: {
   path: string
 }): string {
   return value.bundleId || value.stableId || value.appIdentity || value.path
-}
-
-function splitLaunchArgs(rawArgs?: string): string[] {
-  if (!rawArgs) return []
-
-  const args: string[] = []
-  let current = ''
-  let inQuotes = false
-
-  for (let i = 0; i < rawArgs.length; i += 1) {
-    const char = rawArgs[i]
-    if (char === '"') {
-      inQuotes = !inQuotes
-      continue
-    }
-    if (!inQuotes && /\s/.test(char)) {
-      if (current) {
-        args.push(current)
-        current = ''
-      }
-      continue
-    }
-    current += char
-  }
-
-  if (current) {
-    args.push(current)
-  }
-
-  return args
 }
 
 export interface AppIndexSettings {
@@ -1720,59 +1690,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const launchArgs = appMeta.launchArgs
     const workingDirectory = appMeta.workingDirectory
 
-    if (launchKind === 'shortcut') {
-      logApp(`Launching shortcut app: ${chalk.cyan(launchTarget)}`, LogStyle.process)
-      try {
-        const child = spawnSafe(launchTarget, splitLaunchArgs(launchArgs), {
-          cwd: workingDirectory,
-          detached: true,
-          stdio: 'ignore',
-          windowsHide: true
-        })
-        child.unref()
-        logApp(`App launched successfully: ${chalk.green(appPath)}`, LogStyle.success)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        logApp(`Failed to launch shortcut app: ${chalk.red(message)}`, LogStyle.error)
-      }
-      return null
-    }
-
-    if (launchKind === 'uwp') {
-      const explorerTarget = `shell:AppsFolder\\${launchTarget}`
-      logApp(`Launching Windows Store app: ${chalk.cyan(explorerTarget)}`, LogStyle.process)
-      try {
-        const child = spawnSafe('explorer.exe', [explorerTarget], {
-          detached: true,
-          stdio: 'ignore',
-          windowsHide: true
-        })
-        child.unref()
-        logApp(
-          `Windows Store app launched successfully: ${chalk.green(explorerTarget)}`,
-          LogStyle.success
-        )
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        logApp(`Failed to launch Windows Store app: ${chalk.red(message)}`, LogStyle.error)
-      }
-      return null
-    }
-
-    logApp(`Opening app: ${chalk.cyan(launchTarget)}`, LogStyle.process)
-    void shell
-      .openPath(launchTarget)
-      .then((errorMessage) => {
-        if (errorMessage) {
-          logApp(`Failed to open app: ${chalk.red(errorMessage)}`, LogStyle.error)
-          return
-        }
-        logApp(`App opened successfully: ${chalk.green(launchTarget)}`, LogStyle.success)
-      })
-      .catch((err) => {
-        const message = err instanceof Error ? err.message : String(err)
-        logApp(`Failed to open app: ${chalk.red(message)}`, LogStyle.error)
-      })
+    scheduleAppLaunch({
+      name: item.render?.basic?.title,
+      path: appPath,
+      launchKind,
+      launchTarget,
+      launchArgs,
+      workingDirectory,
+      sourceItemId: item.id
+    })
 
     return null
   }

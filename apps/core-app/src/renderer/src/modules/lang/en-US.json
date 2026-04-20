@@ -2493,6 +2493,8 @@
     "downloadCompleteBody": "{filename}\n{size} · Duration {duration}",
     "downloadFailed": "Download Failed",
     "downloadFailedBody": "{filename}\n{error}",
+    "appLaunchFailedTitle": "App Launch Failed",
+    "appLaunchFailedBody": "Failed to launch {name}\n{error}",
     "pluginInstallSuccessTitle": "Plugin Added",
     "pluginInstallSuccessBody": "Added {name} to your plugin list.",
     "pluginInstallExistsTitle": "Plugin Already Added",

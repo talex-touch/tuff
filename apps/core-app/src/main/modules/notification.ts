@@ -245,6 +245,18 @@ export class NotificationModule extends BaseModule {
     return this.persistInboxEntry(stored)
   }
 
+  showInternalSystemNotification(
+    request: Omit<NotificationRequest, 'channel'> & { channel?: 'system' }
+  ): { id: string } {
+    const id = request.id ?? randomUUID()
+    this.showSystemNotification({
+      ...request,
+      id,
+      channel: 'system'
+    })
+    return { id }
+  }
+
   private registerTransportHandlers(): void {
     if (!this.transport) return
 
