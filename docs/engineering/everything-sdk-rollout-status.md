@@ -5,7 +5,7 @@
 - 范围：`apps/core-app` 的 Everything 搜索后端、`packages/tuff-native` 原生能力、设置页状态展示与文档。
 - 目标：Windows 平台优先走 SDK（N-API），异常时自动回退 CLI（`es.exe`），不可用时优雅降级。
 
-## 状态快照（截至 2026-02-08）
+## 状态快照（截至 2026-04-20）
 
 ### 已完成（Done）
 
@@ -25,6 +25,8 @@
 4. **验证与测试**
    - 新增 fallback 单测：`SDK 失败 -> CLI`、`SDK 失败且 CLI 不可用 -> unavailable`。
    - 新增 Windows 自检脚本：`check:everything`，可直接验证 SDK 是否生效。
+   - Everything provider 已补齐多词查询透传、CLI CSV 解析、SDK 目录元数据、AbortSignal 取消回归。
+   - SearchCore 已固化 `@everything` / `@file` Windows 路由语义，并将 inputs/filter 纳入搜索缓存 key。
 
 ### 进行中（In Progress）
 
@@ -40,7 +42,7 @@
    - 输出固定模板（环境、命令、结果 JSON、截图/日志路径）。
 
 2. **异常分层可观测性**
-   - 在 SDK 加载失败、查询失败、CLI 回退失败三层增加更稳定的错误码归类。
+   - Settings 与 IPC 已返回基础 `errorCode`；仍需在 Windows 真机日志中沉淀 SDK DLL、SDK query、CLI detect、CLI query 四类错误码样例。
 
 3. **性能对照基线**
    - 建立 SDK / CLI 在同一查询集上的耗时对照报表。
@@ -68,7 +70,7 @@
 
 ```bash
 pnpm -C "packages/tuff-native" run build
-pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/everything-provider.test.ts"
+pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/everything-provider.test.ts" "src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts"
 ```
 
 ### Windows 真机（必须执行）

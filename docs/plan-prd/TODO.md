@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-04-17
+> 更新时间: 2026-04-20
 
 ---
 
@@ -38,6 +38,10 @@
   - `pnpm -C "apps/core-app" run typecheck` 已通过。
   - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard.transport.test.ts" "src/main/modules/omni-panel/index.test.ts" "src/main/channel/common.test.ts"` 已通过（`3 files / 17 tests`）。
   - `rg` 回归扫描确认 runtime 口径仅保留 bootstrap `genTouchApp()`，`sendSync(` / `resolveRuntimeChannel(` / `legacy-toggle` / placeholder demo 命中已清零。
+- [x] Windows Everything 搜索收口：
+  - Everything provider 支持搜索取消、CLI CSV 稳健解析、多词查询透传、SDK 目录结果元数据保留。
+  - SearchCore 明确 `@everything` / `@file` 路由语义，并修复同文本不同输入复用缓存的问题。
+  - 已补 targeted regression：Everything provider 与 SearchCore baseline。
 
 ### A. 文档治理（本轮）
 
@@ -61,6 +65,7 @@
 ### B. Nexus 风控主线（下一开发动作）
 
 - [x] Phase 0：补齐设备授权风控验收证据（含回滚演练记录）。
+- [x] Nexus 组件文档页卡死收口：组件同步表改走服务端轻量数据源，`TuffDemoWrapper` 改为按文档引用 demo 懒加载，`/docs/dev/components` 加入 prerender。
 - [ ] Phase 1：完成速率限制、冷却窗口、审计日志落地。
 - [x] Phase 1：补齐风控告警策略与责任人值守说明。
 - [x] 输出最小可复现门禁命令与发布前检查单。

@@ -96,12 +96,16 @@ Everything supports powerful search syntax:
 
 ### Provider Filter
 
-Use the `@file` or `@everything` prefix to search only with Everything:
+Use the `@file` or `@everything` prefix to narrow file search:
 
 ```
 @file presentation.pptx
 @everything *.jpg
 ```
+
+- `@everything`: strict Everything backend search. If SDK and CLI are both unavailable, CoreBox shows an actionable Windows file-search notice.
+- `@file`: file-category search. On Windows it prefers Everything for plain text queries, uses `file-provider` for structured/index filters, and shows the same degraded notice when no Windows file backend is ready.
+- Plain queries still search apps/plugins/system actions; Windows file results use Everything when ready and otherwise fall back to `file-provider`.
 
 ## Architecture
 
@@ -130,6 +134,8 @@ readonly expectedDuration = 50 // milliseconds
 - If SDK fails at runtime, provider auto-falls back to CLI in the same request lifecycle
 - If both backends are unavailable, provider gracefully skips search (no crash)
 - File provider still handles indexing and metadata as a safety net
+- Search cancellation is propagated through provider calls. CLI child processes are aborted with the search session, and aborted searches are not recorded as backend failures.
+- Multi-word queries are passed through as typed. Exact phrase search requires explicit quotes, e.g. `"project proposal"`.
 
 ## Configuration
 
@@ -147,11 +153,14 @@ set TALEX_EVERYTHING_SDK_PATH=C:\path\to\everything.node
 `everything:status` now returns backend diagnostics:
 
 - `backend`: current active backend (`sdk-napi` | `cli` | `unavailable`)
+- `health`: health state (`healthy` | `degraded` | `unsupported`)
+- `healthReason`: actionable degraded/unsupported reason
+- `errorCode`: stable low-level error code when available
 - `fallbackChain`: backend downgrade order
 - `lastBackendError`: latest backend initialization/search error
 - `version`: SDK/CLI version when available
 
-`everything:test` also returns `backend` to indicate which backend handled the probe query.
+`everything:test` also returns `backend`, `health`, and `errorCode` to indicate which backend handled the probe query and where failures occurred.
 
 ### SDK Self-check (Windows)
 
