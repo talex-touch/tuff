@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -15,6 +16,7 @@ const {
   scheduleDbWriteMock,
   searchRecordExecuteMock,
   shellOpenPathMock,
+  showInternalSystemNotificationMock,
   spawnSafeMock,
   unregisterPollingMock,
   withSqliteRetryMock
@@ -42,6 +44,7 @@ const {
   scheduleDbWriteMock: vi.fn(async (_label: string, task: () => Promise<unknown>) => await task()),
   searchRecordExecuteMock: vi.fn(),
   shellOpenPathMock: vi.fn(),
+  showInternalSystemNotificationMock: vi.fn(),
   spawnSafeMock: vi.fn(),
   unregisterPollingMock: vi.fn(),
   withSqliteRetryMock: vi.fn(async (task: () => Promise<unknown>) => await task())
@@ -146,6 +149,22 @@ vi.mock('../../../../service/device-idle-service', () => ({
 vi.mock('../../../storage', () => ({
   getMainConfig: getMainConfigMock,
   saveMainConfig: saveMainConfigMock
+}))
+
+vi.mock('../../../notification', () => ({
+  notificationModule: {
+    showInternalSystemNotification: showInternalSystemNotificationMock
+  }
+}))
+
+vi.mock('../../../../utils/i18n-helper', () => ({
+  t: vi.fn((key: string, params?: Record<string, string | number>) => {
+    if (key === 'notifications.appLaunchFailedTitle') return 'App Launch Failed'
+    if (key === 'notifications.appLaunchFailedBody') {
+      return `Failed to launch ${params?.name}\n${params?.error}`
+    }
+    return key
+  })
 }))
 
 vi.mock('../../file-system-watcher', () => ({
@@ -281,6 +300,131 @@ describe('appProvider rebuild maintenance', () => {
       deletedApps: []
     })
     getMainConfigMock.mockReturnValue(undefined)
+  })
+
+  it('returns immediately while path launch is still pending in the background', async () => {
+    const { appProvider } = await loadSubject()
+    const launchDeferred = createDeferred<string>()
+    shellOpenPathMock.mockReturnValueOnce(launchDeferred.promise)
+
+    await appProvider.onExecute({
+      item: {
+        id: 'path-app',
+        render: { mode: 'default', basic: { title: 'Slow App' } },
+        meta: {
+          app: {
+            path: '/Applications/Slow.app',
+            launchKind: 'path',
+            launchTarget: '/Applications/Slow.app'
+          }
+        }
+      }
+    } as any)
+
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+
+    await flushPromises()
+
+    expect(shellOpenPathMock).toHaveBeenCalledWith('/Applications/Slow.app')
+    expect(showInternalSystemNotificationMock).not.toHaveBeenCalled()
+
+    launchDeferred.resolve('')
+    await flushPromises()
+
+    expect(showInternalSystemNotificationMock).not.toHaveBeenCalled()
+  })
+
+  it('notifies when a background path launch fails', async () => {
+    const { appProvider } = await loadSubject()
+    shellOpenPathMock.mockResolvedValueOnce('access denied')
+
+    await appProvider.onExecute({
+      item: {
+        id: 'path-app-failed',
+        render: { mode: 'default', basic: { title: 'Blocked App' } },
+        meta: {
+          app: {
+            path: '/Applications/Blocked.app',
+            launchKind: 'path',
+            launchTarget: '/Applications/Blocked.app'
+          }
+        }
+      }
+    } as any)
+
+    await flushPromises()
+
+    expect(showInternalSystemNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'App Launch Failed',
+        message: 'Failed to launch Blocked App\naccess denied',
+        level: 'error'
+      })
+    )
+  })
+
+  it('notifies when shortcut spawn fails before handoff', async () => {
+    const { appProvider } = await loadSubject()
+    spawnSafeMock.mockImplementationOnce(() => {
+      throw new Error('spawn failed')
+    })
+
+    await appProvider.onExecute({
+      item: {
+        id: 'shortcut-app-failed',
+        render: { mode: 'default', basic: { title: 'Shortcut App' } },
+        meta: {
+          app: {
+            path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk',
+            launchKind: 'shortcut',
+            launchTarget: 'C:\\Program Files\\Foo\\Foo.exe'
+          }
+        }
+      }
+    } as any)
+
+    await flushPromises()
+
+    expect(showInternalSystemNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'App Launch Failed',
+        message: 'Failed to launch Shortcut App\nspawn failed',
+        level: 'error'
+      })
+    )
+  })
+
+  it('notifies when shortcut exits non-zero before handoff', async () => {
+    const { appProvider } = await loadSubject()
+    const child = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn> }
+    child.unref = vi.fn()
+    spawnSafeMock.mockReturnValueOnce(child)
+
+    await appProvider.onExecute({
+      item: {
+        id: 'shortcut-app-exit',
+        render: { mode: 'default', basic: { title: 'Crashing Shortcut' } },
+        meta: {
+          app: {
+            path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Crash.lnk',
+            launchKind: 'shortcut',
+            launchTarget: 'C:\\Program Files\\Crash\\Crash.exe'
+          }
+        }
+      }
+    } as any)
+
+    await flushPromises()
+    child.emit('exit', 1, null)
+    await flushPromises()
+
+    expect(showInternalSystemNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'App Launch Failed',
+        message: 'Failed to launch Crashing Shortcut\nprocess exited early with code 1',
+        level: 'error'
+      })
+    )
   })
 
   it('rebuild only clears app records and preserves file records', async () => {
@@ -435,6 +579,8 @@ describe('appProvider rebuild maintenance', () => {
       }
     } as any)
 
+    await flushPromises()
+
     expect(spawnSafeMock).toHaveBeenCalledWith(
       'C:\\Program Files\\Foo\\Foo.exe',
       ['--profile', 'work', '--flag'],
@@ -463,6 +609,8 @@ describe('appProvider rebuild maintenance', () => {
         }
       }
     } as any)
+
+    await flushPromises()
 
     expect(spawnSafeMock).toHaveBeenCalledWith(
       'explorer.exe',

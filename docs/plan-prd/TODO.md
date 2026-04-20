@@ -42,6 +42,9 @@
   - Everything provider 支持搜索取消、CLI CSV 稳健解析、多词查询透传、SDK 目录结果元数据保留。
   - SearchCore 明确 `@everything` / `@file` 路由语义，并修复同文本不同输入复用缓存的问题。
   - 已补 targeted regression：Everything provider 与 SearchCore baseline。
+- [ ] CoreBox 第三方 App 非阻塞启动 Windows 真机验证：
+  - 验证 `shortcut` 保留 `launchArgs / workingDirectory` 并在 CoreBox 立即隐藏后后台启动。
+  - 验证 `uwp` 继续通过 `explorer.exe shell:AppsFolder\\...` handoff，早期失败会触发系统通知。
 
 ### A. 文档治理（本轮）
 

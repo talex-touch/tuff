@@ -20,6 +20,7 @@ import { devLog } from '~/utils/dev-log'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 import { BoxMode } from '..'
 import { createCoreBoxInputTransport } from '../transport/input-transport'
+import { isBackgroundAppLaunchItem } from './app-launch-item'
 import { buildClipboardQueryInputs } from './clipboard-query-inputs'
 import { useResize } from './useResize'
 
@@ -630,6 +631,38 @@ export function useSearch(
       metaRecord?.keepCoreBoxOpen === true || intelligence?.keepCoreBoxOpen === true
     const shouldRestoreAfterExecute =
       isPluginFeature || !appSetting.tools.autoHide || keepCoreBoxOpen
+    const shouldLaunchAppInBackground = isBackgroundAppLaunchItem(itemToExecute)
+
+    if (shouldLaunchAppInBackground) {
+      searchVal.value = ''
+      searchResults.value = []
+      activeActivations.value = null
+      loading.value = false
+      select.value = -1
+
+      const serializedItem = JSON.parse(JSON.stringify(itemToExecute))
+      const serializedSearchResult = searchResult.value
+        ? JSON.parse(JSON.stringify(searchResult.value))
+        : null
+
+      void transport.send(CoreBoxEvents.ui.hide).catch(() => {})
+      void transport
+        .send(
+          CoreBoxEvents.item.execute,
+          serializedSearchResult
+            ? {
+                item: serializedItem,
+                searchResult: serializedSearchResult
+              }
+            : {
+                item: serializedItem
+              }
+        )
+        .catch((error) => {
+          console.error('Execute failed:', error)
+        })
+      return
+    }
 
     if (!isPluginFeature && !keepCoreBoxOpen) {
       searchVal.value = ''

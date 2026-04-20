@@ -5,6 +5,15 @@
 
 ## 2026-04-20
 
+### fix(core-app): CoreBox 第三方 App 启动改为后台 handoff
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+  - CoreBox 执行 `app-provider` 应用结果时立即隐藏窗口并 fire-and-forget 发送执行事件，不再等待第三方 App 完全启动后才恢复交互。
+  - AppProvider 将 `path / shortcut / uwp` 启动统一交给后台 launcher；`shell.openPath` 错误、`spawn` 同步错误或早期非 0 退出会通过系统通知上报启动失败。
+  - 保留 `shortcut` 的 `launchArgs / workingDirectory` 和 Windows Store `explorer.exe shell:AppsFolder\\...` handoff 行为，普通插件 feature 与系统 action 仍走原等待语义。
+
 ### fix(core-app): 修复 webcontent 插件静态路由加载
 
 - `apps/core-app/src/main/modules/plugin/view/plugin-view-loader.ts`
