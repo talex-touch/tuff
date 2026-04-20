@@ -20,10 +20,13 @@ export interface ClipboardItem {
   id: number
   type: TuffInputType
   value: string
+  thumbnail?: string | null
   html?: string
   rtf?: string
   source?: string
   tags?: string[]
+  metadata?: string | null
+  meta?: Record<string, unknown> | null
   createdAt: number
   isFavorite?: boolean
 }

@@ -1297,6 +1297,8 @@ export class ClipboardModule extends BaseModule {
   private toTransportItem(item: IClipboardItem): ClipboardItem | null {
     if (!item || typeof item.id !== 'number') return null
 
+    const clientItem = item.type === 'image' ? (this.toClientItem(item) ?? item) : item
+
     const createdAt = item.timestamp
       ? item.timestamp instanceof Date
         ? item.timestamp.getTime()
@@ -1310,23 +1312,29 @@ export class ClipboardModule extends BaseModule {
           ? TuffInputType.Files
           : TuffInputType.Text
 
-    const value =
-      item.type === 'image'
-        ? item.thumbnail && item.thumbnail.length > 0
-          ? item.thumbnail
-          : (item.content ?? '')
-        : (item.content ?? '')
+    const value = item.type === 'image' ? (clientItem.content ?? '') : (item.content ?? '')
     const tags = this.extractTags(item)
+    const meta: Record<string, unknown> = {}
+    if (clientItem.meta && typeof clientItem.meta === 'object') {
+      for (const key of ['image_original_url', 'image_content_kind', 'image_size', 'image_file_size']) {
+        const value = (clientItem.meta as Record<string, unknown>)[key]
+        if (value !== undefined && value !== null) {
+          meta[key] = value
+        }
+      }
+    }
 
     return {
       id: item.id,
       type,
       value,
+      thumbnail: item.thumbnail ?? undefined,
       html: item.type === 'text' ? (item.rawContent ?? undefined) : undefined,
       source: item.sourceApp ?? undefined,
       createdAt,
       isFavorite: item.isFavorite ?? undefined,
-      tags
+      tags,
+      meta: Object.keys(meta).length > 0 ? meta : undefined
     }
   }
 
