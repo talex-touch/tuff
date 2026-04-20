@@ -8,11 +8,19 @@
 ### fix(nexus/core-app): 收口组件文档页卡顿与 Windows Everything 搜索稳定性
 
 - `apps/nexus/app/components/docs/DocsComponentSyncTable.vue`
+- `apps/nexus/app/components/DocsSidebar.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
 - `apps/nexus/server/api/docs/component-sync.get.ts`
+- `apps/nexus/server/api/docs/navigation.get.ts`
+- `apps/nexus/server/api/docs/page.get.ts`
+- `apps/nexus/server/api/docs/sidebar-components.get.ts`
 - `apps/nexus/app/components/content/TuffDemoWrapper.vue`
 - `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
 - `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
   - Nexus 组件同步表改为读取服务端轻量数据源，不再在浏览器端触发 Nuxt Content 全量组件文档查询；组件索引页加入 prerender，降低 prod 首次点击 `/docs/dev/components` 时的 sqlite/wasm 初始化风险。
+  - `DocsSidebar` 不再把 `category/syncStatus/verified` frontmatter 当作 Nuxt Content SQL 列直接投影，组件页 SSR 阶段不再因为 `no such column: "category"` 注入错误 payload。
+  - 文档正文页与侧栏主导航改为走 `/api/docs/page`、`/api/docs/navigation`、`/api/docs/sidebar-components` 服务端接口，客户端不再为 `/docs/guide/*` 与 `/docs/dev/*` hydration / 路由切换初始化 Nuxt Content sqlite wasm，修正自定义域名受 Cloudflare challenge 时正文丢失、侧栏报错和原始 i18n key 直接落屏的问题。
+  - 文档页服务端取数补齐 locale 感知路径回退：优先命中 `${path}.${locale}`，再回退 `index` 与无 locale 文档，保证 `en/zh` 切换时标题、描述和正文都能落到同一套内容解析链路。
   - `TuffDemoWrapper` 改为基于文档实际引用 demo 的显式 registry 懒加载，不再在 wrapper 初始化阶段枚举全部 demo 组件。
   - Everything provider 补齐 AbortSignal 取消、多词查询透传、CLI CSV 解析、SDK 目录元数据保留与状态错误码字段；SearchCore 明确 `@everything` / `@file` Windows 路由，并将 inputs/filter 纳入搜索缓存 key。
   - Targeted regression 已覆盖 SDK->CLI fallback、CLI 解析、SDK abort、目录元数据、`@file/@everything` 路由与同文本不同输入缓存隔离。
