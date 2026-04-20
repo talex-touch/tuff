@@ -30,7 +30,10 @@ const requiredColumns = [
   'test_case_id',
   'owner',
 ]
-const registryOnlyDomains = new Set(['size-growth-exception'])
+const registryOnlyDomains = new Set([
+  'size-growth-exception',
+  'core-app-migration-exception',
+])
 
 const scanRoots = LEGACY_SCAN_ROOTS
 const scopeRoots = SCOPE_GUARD_ROOTS

@@ -173,6 +173,7 @@ import type {
   CoreBoxSearchUpdatePayload,
   CoreBoxTogglePinRequest,
   CoreBoxTogglePinResponse,
+  CoreBoxTriggerPayload,
   CoreBoxUIModeExitedPayload,
   CoreBoxUIViewStateResponse,
   DeactivateProviderRequest,
@@ -1558,6 +1559,14 @@ export const CoreBoxEvents = {
      * Query current UI view state.
      */
     getUIViewState: defineRawEvent<void, CoreBoxUIViewStateResponse>('core-box:get-ui-view-state'),
+
+    /**
+     * Notify renderer about CoreBox visibility or entrance mode changes.
+     */
+    trigger: defineEvent('core-box')
+      .module('ui')
+      .event('trigger')
+      .define<CoreBoxTriggerPayload, void>(),
 
     /**
      * Notify renderer that CoreBox was triggered by shortcut.

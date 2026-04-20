@@ -12,13 +12,13 @@ const ipcRenderer = window.electron.ipcRenderer
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
 const CHANNEL_SEND_WARN_MS = 500
 const CHANNEL_SEND_ERROR_MS = 2_000
-const LEGACY_CHANNEL_MAIN = 'main' as const
+const CHANNEL_ROUTE_MAIN = 'main' as const
 const DATA_CODE_SUCCESS = 200
 const DATA_CODE_NETWORK_ERROR = 500
 const DATA_CODE_ERROR = 100
 
-type LegacyDataCode = number
-type LegacyChannelType = typeof LEGACY_CHANNEL_MAIN | 'plugin'
+type ChannelDataCode = number
+type ChannelRouteType = typeof CHANNEL_ROUTE_MAIN | 'plugin'
 
 interface RawChannelSyncData {
   timeStamp: number
@@ -28,7 +28,7 @@ interface RawChannelSyncData {
 
 interface RawChannelHeaderData {
   status: 'reply' | 'request'
-  type: LegacyChannelType
+  type: ChannelRouteType
   _originData?: unknown
   event?: IpcRendererEvent
 }
@@ -37,13 +37,13 @@ interface RawStandardChannelData {
   name: string
   header: RawChannelHeaderData
   sync?: RawChannelSyncData
-  code: LegacyDataCode
+  code: ChannelDataCode
   data?: unknown
   plugin?: string
 }
 
 interface StandardChannelData extends RawStandardChannelData {
-  reply: (code: LegacyDataCode, data: unknown) => void
+  reply: (code: ChannelDataCode, data: unknown) => void
 }
 
 interface TouchClientChannelLike {
@@ -78,7 +78,7 @@ class TouchChannel implements TouchClientChannelLike {
         return {
           header: {
             status: header.status || 'request',
-            type: LEGACY_CHANNEL_MAIN,
+            type: CHANNEL_ROUTE_MAIN,
             _originData: arg,
             event: e || undefined
           },
@@ -112,7 +112,7 @@ class TouchChannel implements TouchClientChannelLike {
     this.channelMap.get(rawData.name)?.forEach((func) => {
       let replySent = false
       const handInData: StandardChannelData & { replySent?: boolean } = {
-        reply: (code: LegacyDataCode, data: unknown) => {
+        reply: (code: ChannelDataCode, data: unknown) => {
           if (replySent) return
           replySent = true
           e.sender.send(
@@ -147,7 +147,7 @@ class TouchChannel implements TouchClientChannelLike {
   }
 
   __parse_sender(
-    code: LegacyDataCode,
+    code: ChannelDataCode,
     rawData: RawStandardChannelData,
     data: unknown,
     sync?: RawChannelSyncData
@@ -220,7 +220,7 @@ class TouchChannel implements TouchClientChannelLike {
       name: eventName,
       header: {
         status: 'request',
-        type: LEGACY_CHANNEL_MAIN
+        type: CHANNEL_ROUTE_MAIN
       }
     } as RawStandardChannelData
 

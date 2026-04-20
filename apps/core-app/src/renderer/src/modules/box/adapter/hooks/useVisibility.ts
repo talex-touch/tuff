@@ -2,7 +2,6 @@ import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import type { IClipboardOptions } from './types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { useDocumentVisibility } from '@vueuse/core'
 import { nextTick, ref, watch } from 'vue'
@@ -38,8 +37,6 @@ export function useVisibility(options: UseVisibilityOptions) {
   const wasTriggeredByShortcut = ref(false)
   let lastVisibleState: boolean | null = null
 
-  const coreBoxTrigger = defineRawEvent<Record<string, unknown>, void>('core-box:trigger')
-
   const applyVisibility = (visible: boolean): void => {
     if (lastVisibleState === visible) return
     lastVisibleState = visible
@@ -53,7 +50,7 @@ export function useVisibility(options: UseVisibilityOptions) {
   const unregisterShortcutTrigger = transport.on(CoreBoxEvents.ui.shortcutTriggered, () => {
     wasTriggeredByShortcut.value = true
   })
-  const unregisterCoreBoxTrigger = transport.on(coreBoxTrigger, (payload) => {
+  const unregisterCoreBoxTrigger = transport.on(CoreBoxEvents.ui.trigger, (payload) => {
     if (!payload || typeof payload !== 'object') return
     const show = (payload as { show?: unknown }).show
     if (typeof show === 'boolean') {

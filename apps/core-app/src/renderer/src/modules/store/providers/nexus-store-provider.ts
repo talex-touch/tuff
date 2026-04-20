@@ -10,10 +10,8 @@ interface NexusManifestEntry {
   category?: string
   description?: string
   summary?: string
-  path?: string
   timestamp?: string | number
   metadata?: Record<string, unknown>
-  // Nexus API specific fields
   slug?: string
   iconUrl?: string | null
   isOfficial?: boolean
@@ -32,7 +30,6 @@ interface NexusManifestEntry {
   updatedAt?: string
 }
 
-// Nexus API response format
 interface NexusApiResponse {
   plugins: NexusManifestEntry[]
   total: number
@@ -64,9 +61,9 @@ export class NexusStoreProvider extends BaseStoreProvider {
 
     devLog('[NexusStoreProvider] Requesting:', manifestUrl)
 
-    let response: Awaited<ReturnType<typeof this.request<NexusApiResponse | NexusManifestEntry[]>>>
+    let response: Awaited<ReturnType<typeof this.request<NexusApiResponse>>>
     try {
-      response = await this.request<NexusApiResponse | NexusManifestEntry[]>({
+      response = await this.request<NexusApiResponse>({
         url: manifestUrl,
         method: 'GET',
         headers: { Accept: 'application/json' }
@@ -78,8 +75,6 @@ export class NexusStoreProvider extends BaseStoreProvider {
       throw new TypeError(`STORE_NEXUS_REQUEST_FAILED: ${message}`)
     }
 
-    // Handle both formats: Nexus API { plugins: [...] } and legacy array format
-    let entries: NexusManifestEntry[]
     let data: unknown = response.data
 
     // Auto-parse JSON string if needed (axios may not parse when Content-Type is incorrect)
@@ -94,16 +89,22 @@ export class NexusStoreProvider extends BaseStoreProvider {
     }
 
     if (Array.isArray(data)) {
-      entries = data as NexusManifestEntry[]
-    } else if (
-      data &&
-      typeof data === 'object' &&
-      'plugins' in data &&
-      Array.isArray(data.plugins)
-    ) {
-      entries = data.plugins as NexusManifestEntry[]
-    } else {
-      // Provide detailed debug info
+      console.error('[NexusStoreProvider] Unsupported manifest array format:', {
+        url: manifestUrl,
+        status: response.status
+      })
+      throw new TypeError('STORE_NEXUS_LEGACY_MANIFEST_UNSUPPORTED')
+    }
+
+    if (data && typeof data === 'object' && 'plugins' in data && Array.isArray(data.plugins)) {
+      const entries = data.plugins as NexusManifestEntry[]
+      const baseUrl = this.resolveBaseUrl(manifestUrl)
+      const plugins = entries.map((entry) => this.normalizeEntry(entry, baseUrl))
+      this.#cache = plugins
+      return plugins
+    }
+
+    {
       const dataType = data === null ? 'null' : typeof data
       const dataPreview =
         data === null || data === undefined ? String(data) : JSON.stringify(data).slice(0, 200)
@@ -115,20 +116,14 @@ export class NexusStoreProvider extends BaseStoreProvider {
       })
       throw new TypeError(`STORE_NEXUS_INVALID_MANIFEST (type: ${dataType})`)
     }
-
-    const baseUrl = this.resolveBaseUrl(manifestUrl)
-
-    const plugins = entries.map((entry) => this.normalizeEntry(entry, baseUrl))
-
-    this.#cache = plugins
-
-    return plugins
   }
 
   private resolveManifestUrl(): string | null {
     let url: string | null = null
 
-    if (typeof this.definition.config?.manifestUrl === 'string') {
+    if (typeof this.definition.config?.apiUrl === 'string') {
+      url = this.definition.config.apiUrl
+    } else if (typeof this.definition.config?.manifestUrl === 'string') {
       url = this.definition.config.manifestUrl
     } else if (typeof this.definition.url === 'string') {
       url = this.definition.url
@@ -138,10 +133,8 @@ export class NexusStoreProvider extends BaseStoreProvider {
       return null
     }
 
-    // Ensure URL has the API path (backward compatibility for old configs)
     if (!url.includes('/api/store/plugins')) {
-      const base = url.endsWith('/') ? url.slice(0, -1) : url
-      return this.appendCompactQuery(`${base}/api/store/plugins`)
+      throw new TypeError('STORE_NEXUS_API_URL_REQUIRED')
     }
 
     return this.appendCompactQuery(url)
@@ -163,30 +156,21 @@ export class NexusStoreProvider extends BaseStoreProvider {
   }
 
   private normalizeEntry(entry: NexusManifestEntry, baseUrl: string): StorePlugin {
-    // Handle Nexus API format (latestVersion.packageUrl) or legacy format (path)
     let downloadUrl: string
     let version: string = entry.version
     const metadata = entry.metadata ?? {}
 
     if (entry.latestVersion?.packageUrl) {
-      // Nexus API format
       downloadUrl = entry.latestVersion.packageUrl.startsWith('http')
         ? entry.latestVersion.packageUrl
         : new URL(entry.latestVersion.packageUrl.replace(/^\//, ''), baseUrl).toString()
       version = entry.latestVersion.version || entry.version
-    } else if (entry.path) {
-      // Legacy format
-      const normalizedPath = entry.path.replace(/^\//, '')
-      downloadUrl = new URL(normalizedPath, baseUrl).toString()
     } else {
-      // Fallback: construct download URL from slug
-      downloadUrl = `${baseUrl}/api/store/plugins/${entry.slug || entry.id}/download`
+      throw new TypeError(`STORE_NEXUS_PACKAGE_URL_REQUIRED: ${entry.slug || entry.id}`)
     }
 
-    // Handle readme URL
     let readmeUrl: string | undefined
     if (entry.readmeUrl) {
-      // Nexus API format
       readmeUrl = entry.readmeUrl.startsWith('http')
         ? entry.readmeUrl
         : new URL(entry.readmeUrl.replace(/^\//, ''), baseUrl).toString()

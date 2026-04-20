@@ -2,16 +2,20 @@
  * DivisionBox Flow Trigger System
  *
  * Integrates DivisionBox with the Flow Transfer system.
- * Allows DivisionBox instances to be opened as Flow targets.
+ * Keeps DivisionBox Flow target registration separate from runtime dispatch.
  *
- * Note: This is a forward-compatible implementation. The Flow Transfer system
- * is not yet fully implemented, but this module provides the interface for
- * future integration.
+ * Flow runtime dispatch is intentionally disabled until Flow Transfer is wired.
+ * Registration remains available so manifests can be validated without implying
+ * that runtime delivery is complete.
  */
 
 import type { DivisionBoxConfig, FlowPayload, FlowPayloadType } from '@talex-touch/utils'
 import { divisionBoxFlowTriggerLog } from './logger'
 import { DivisionBoxManager } from './manager'
+
+export const FLOW_TRIGGER_UNAVAILABLE_CODE = 'FLOW_TRIGGER_UNAVAILABLE'
+export const FLOW_TRIGGER_UNAVAILABLE_REASON =
+  'DivisionBox Flow runtime is unavailable until Flow Transfer dispatch is wired.'
 
 /**
  * Flow target configuration for DivisionBox
@@ -71,6 +75,10 @@ export class FlowTriggerManager {
       FlowTriggerManager.instance = new FlowTriggerManager()
     }
     return FlowTriggerManager.instance
+  }
+
+  private isRuntimeAvailable(): boolean {
+    return false
   }
 
   /**
@@ -182,11 +190,11 @@ export class FlowTriggerManager {
   /**
    * Handles an incoming Flow payload
    *
-   * Opens a DivisionBox instance configured for the target.
+   * Dispatches to a DivisionBox target once Flow runtime delivery is available.
    *
    * @param targetId - Flow target ID
    * @param payload - Flow payload data
-   * @returns Session ID of the opened DivisionBox
+   * @returns Session ID of the opened DivisionBox when runtime delivery is enabled.
    *
    * @example
    * ```typescript
@@ -201,6 +209,13 @@ export class FlowTriggerManager {
    * ```
    */
   async handleFlow(targetId: string, payload: FlowPayload): Promise<string> {
+    if (!this.isRuntimeAvailable()) {
+      divisionBoxFlowTriggerLog.warn('Flow trigger requested while runtime is unavailable', {
+        meta: { targetId, payloadType: payload?.type }
+      })
+      throw new Error(`${FLOW_TRIGGER_UNAVAILABLE_CODE}: ${FLOW_TRIGGER_UNAVAILABLE_REASON}`)
+    }
+
     const target = this.targets.get(targetId)
 
     if (!target) {
