@@ -12,6 +12,7 @@ export interface EverythingStatusResponse {
   version: string | null
   esPath: string | null
   error: string | null
+  errorCode?: string | null
   lastBackendError: string | null
   fallbackChain: EverythingBackendType[]
   lastChecked: number | null
@@ -29,6 +30,8 @@ export interface EverythingToggleResponse {
 export interface EverythingTestResponse {
   success: boolean
   backend?: EverythingBackendType
+  health?: EverythingHealthState
+  errorCode?: string | null
   error?: string
   resultCount?: number
   duration?: number

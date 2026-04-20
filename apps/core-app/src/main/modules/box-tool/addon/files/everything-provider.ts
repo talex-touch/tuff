@@ -49,6 +49,61 @@ const execFileAsync = promisify(execFile)
 const requireFromCurrentModule = createRequire(import.meta.url)
 const fileProviderLog = getLogger('file-provider')
 
+class EverythingSearchAbortedError extends Error {
+  readonly code = 'ABORT_ERR'
+
+  constructor() {
+    super('Everything search aborted')
+    this.name = 'AbortError'
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  if (error instanceof EverythingSearchAbortedError) {
+    return true
+  }
+  if (!isRecord(error)) {
+    return false
+  }
+  return error.name === 'AbortError' || error.code === 'ABORT_ERR' || error.code === 'ABORTED'
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new EverythingSearchAbortedError()
+  }
+}
+
+function createAbortPromise<T = never>(signal?: AbortSignal): Promise<T> | null {
+  if (!signal) {
+    return null
+  }
+  if (signal.aborted) {
+    return Promise.reject(new EverythingSearchAbortedError())
+  }
+  return new Promise<T>((_, reject) => {
+    signal.addEventListener('abort', () => reject(new EverythingSearchAbortedError()), {
+      once: true
+    })
+  })
+}
+
+function usesWindowsSeparators(filePath: string): boolean {
+  return filePath.includes('\\')
+}
+
+function basenameForResult(filePath: string): string {
+  return usesWindowsSeparators(filePath) ? path.win32.basename(filePath) : path.basename(filePath)
+}
+
+function extnameForResult(filePath: string): string {
+  return usesWindowsSeparators(filePath) ? path.win32.extname(filePath) : path.extname(filePath)
+}
+
+function joinForResult(dirPath: string, name: string): string {
+  return usesWindowsSeparators(dirPath) ? path.win32.join(dirPath, name) : path.join(dirPath, name)
+}
+
 interface EverythingSearchResult {
   path: string
   name: string
@@ -56,6 +111,7 @@ interface EverythingSearchResult {
   size: number
   mtime: Date
   ctime: Date
+  isDir: boolean
 }
 
 interface EverythingSdkAddon {
@@ -93,6 +149,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private backend: EverythingBackendType = 'unavailable'
   private readonly fallbackChain: EverythingBackendType[] = ['sdk-napi', 'cli', 'unavailable']
   private lastBackendError: string | null = null
+  private lastBackendErrorCode: string | null = null
   private everythingVersion: string | null = null
   private sdkAddon: EverythingSdkAddon | null = null
   private lastChecked: number | null = null
@@ -288,6 +345,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         version: this.everythingVersion,
         esPath: this.esPath,
         error: this.initializationError?.message || null,
+        errorCode: this.lastBackendErrorCode,
         lastBackendError: this.lastBackendError,
         fallbackChain: this.fallbackChain,
         lastChecked: this.lastChecked
@@ -323,6 +381,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         return {
           success: true,
           backend: this.backend,
+          health: this.getHealthStatus().health,
           resultCount: results.length,
           duration: Math.round(duration)
         }
@@ -330,6 +389,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         return {
           success: false,
           backend: this.backend,
+          health: this.getHealthStatus().health,
+          errorCode: getErrorCode(error) || (isAbortError(error) ? 'ABORT_ERR' : null),
           error: getErrorMessage(error)
         }
       }
@@ -340,6 +401,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     this.backend = 'unavailable'
     this.initializationError = null
     this.lastBackendError = null
+    this.lastBackendErrorCode = null
     this.esPath = null
     this.everythingVersion = null
     this.sdkAddon = null
@@ -357,10 +419,11 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
   private async tryInitializeSdkBackend(): Promise<boolean> {
     const envPath = process.env.TALEX_EVERYTHING_SDK_PATH?.trim()
+    const resourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
     const candidates = [
       envPath,
-      path.join(process.resourcesPath, 'native', 'everything.node'),
-      path.join(process.resourcesPath, 'everything', 'everything.node'),
+      resourcesPath ? path.join(resourcesPath, 'native', 'everything.node') : null,
+      resourcesPath ? path.join(resourcesPath, 'everything', 'everything.node') : null,
       path.join(process.cwd(), 'resources', 'native', 'everything.node'),
       path.join(process.cwd(), 'resources', 'everything.node'),
       '@talex-touch/tuff-native/everything',
@@ -422,6 +485,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       return null
     } catch (error) {
       this.lastBackendError = getErrorMessage(error)
+      this.lastBackendErrorCode = getErrorCode(error) ?? null
       this.logDebug('Everything SDK candidate load failed', {
         candidate,
         error: getErrorMessage(error)
@@ -439,6 +503,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       return true
     } catch (error) {
       this.lastBackendError = getErrorMessage(error)
+      this.lastBackendErrorCode = getErrorCode(error) ?? null
       this.logWarn('Everything CLI backend unavailable', error)
       return false
     }
@@ -489,13 +554,20 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
    */
   private async searchEverything(
     query: string,
-    maxResults = 50
+    maxResults = 50,
+    signal?: AbortSignal
   ): Promise<EverythingSearchResult[]> {
+    throwIfAborted(signal)
+
     if (this.backend === 'sdk-napi') {
       try {
-        return await this.searchEverythingWithSdk(query, maxResults)
+        return await this.searchEverythingWithSdk(query, maxResults, signal)
       } catch (error) {
+        if (isAbortError(error)) {
+          throw error
+        }
         this.lastBackendError = getErrorMessage(error)
+        this.lastBackendErrorCode = getErrorCode(error) ?? null
         this.logWarn('Everything SDK search failed, falling back to CLI', error)
         const cliReady = await this.ensureCliFallback()
         if (!cliReady) {
@@ -505,7 +577,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (this.backend === 'cli') {
-      return this.searchEverythingWithCli(query, maxResults)
+      return this.searchEverythingWithCli(query, maxResults, signal)
     }
 
     return []
@@ -527,11 +599,13 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
   private async searchEverythingWithSdk(
     query: string,
-    maxResults: number
+    maxResults: number,
+    signal?: AbortSignal
   ): Promise<EverythingSearchResult[]> {
     if (!this.sdkAddon) {
       throw new Error('Everything SDK not initialized')
     }
+    throwIfAborted(signal)
 
     const searchStart = performance.now()
     const searchFn = this.sdkAddon.search ?? this.sdkAddon.query
@@ -540,11 +614,17 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       throw new TypeError('Everything SDK search method is not available')
     }
 
-    const rawResults = await Promise.resolve(
+    const searchPromise = Promise.resolve(
       searchFn.call(this.sdkAddon, query, {
         maxResults
       })
     )
+    const abortPromise = createAbortPromise<unknown>(signal)
+    const rawResults = await (abortPromise
+      ? Promise.race([searchPromise, abortPromise])
+      : searchPromise)
+
+    throwIfAborted(signal)
 
     const results = this.parseEverythingSdkOutput(rawResults)
 
@@ -583,8 +663,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
             : ''
 
       const filePath = pathValue
-        ? nameValue && path.basename(pathValue).toLowerCase() !== nameValue.toLowerCase()
-          ? path.join(pathValue, nameValue)
+        ? nameValue && basenameForResult(pathValue).toLowerCase() !== nameValue.toLowerCase()
+          ? joinForResult(pathValue, nameValue)
           : pathValue
         : nameValue
 
@@ -592,15 +672,20 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         continue
       }
 
-      const name = nameValue || path.basename(filePath)
+      const name = nameValue || basenameForResult(filePath)
       const extensionValue =
-        typeof entry.extension === 'string' ? entry.extension : path.extname(name)
+        typeof entry.extension === 'string' ? entry.extension : extnameForResult(name)
       const sizeValue =
         typeof entry.size === 'number'
           ? entry.size
           : typeof entry.fileSize === 'number'
             ? entry.fileSize
             : 0
+      const isDir =
+        entry.isFolder === true ||
+        entry.isDirectory === true ||
+        entry.type === 'folder' ||
+        entry.kind === 'folder'
 
       normalized.push({
         path: filePath,
@@ -608,7 +693,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         extension: extensionValue.toLowerCase().replace(/^\./, ''),
         size: sizeValue,
         mtime: this.toResultDate(entry.mtime ?? entry.dateModified ?? entry.modifiedAt),
-        ctime: this.toResultDate(entry.ctime ?? entry.dateCreated ?? entry.createdAt)
+        ctime: this.toResultDate(entry.ctime ?? entry.dateCreated ?? entry.createdAt),
+        isDir
       })
     }
 
@@ -623,7 +709,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     if (typeof value === 'number' && Number.isFinite(value)) {
       const timestamp = value > 1_000_000_000_000 ? value : value * 1000
       const date = new Date(timestamp)
-      return Number.isNaN(date.getTime()) ? new Date() : date
+      return Number.isNaN(date.getTime()) ? new Date(0) : date
     }
 
     if (typeof value === 'string') {
@@ -642,16 +728,18 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
-    return new Date()
+    return new Date(0)
   }
 
   private async searchEverythingWithCli(
     query: string,
-    maxResults = 50
+    maxResults = 50,
+    signal?: AbortSignal
   ): Promise<EverythingSearchResult[]> {
     if (!this.esPath) {
       throw new Error('Everything CLI not initialized')
     }
+    throwIfAborted(signal)
 
     const searchStart = performance.now()
 
@@ -668,9 +756,11 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       const { stdout } = await execFileAsync(this.esPath, args, {
         timeout: 5000,
         maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+        signal,
         windowsHide: true
       })
 
+      throwIfAborted(signal)
       const results = this.parseEverythingOutput(stdout)
 
       this.logDebug('Everything CLI search completed', {
@@ -681,6 +771,9 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       return results
     } catch (error: unknown) {
+      if (isAbortError(error)) {
+        throw error
+      }
       if (getErrorCode(error) === 'ETIMEDOUT') {
         this.logWarn('Everything CLI search timed out', error, { query })
       } else {
@@ -695,13 +788,15 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
    * Format: path,size,date_modified,date_created
    */
   private parseEverythingOutput(output: string): EverythingSearchResult[] {
-    const lines = output.trim().split('\n').filter(Boolean)
+    const lines = output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
     const results: EverythingSearchResult[] = []
 
     for (const line of lines) {
       try {
-        // Everything output format: "path","size","date_modified","date_created"
-        const parts = line.split(',').map((part) => part.trim().replace(/^"|"$/g, ''))
+        const parts = this.parseCsvLine(line)
 
         if (parts.length < 4) {
           continue
@@ -713,11 +808,11 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           continue
         }
 
-        const name = path.basename(filePath)
-        const extension = path.extname(filePath).toLowerCase().replace(/^\./, '')
+        const name = basenameForResult(filePath)
+        const extension = extnameForResult(filePath).toLowerCase().replace(/^\./, '')
         const size = Number.parseInt(sizeStr, 10) || 0
-        const mtime = new Date(mtimeStr || Date.now())
-        const ctime = new Date(ctimeStr || Date.now())
+        const mtime = this.toResultDate(mtimeStr)
+        const ctime = this.toResultDate(ctimeStr)
 
         results.push({
           path: filePath,
@@ -725,7 +820,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           extension,
           size,
           mtime,
-          ctime
+          ctime,
+          isDir: false
         })
       } catch (error) {
         this.logWarn('Failed to parse Everything result line', error, { line })
@@ -733,6 +829,37 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
 
     return results
+  }
+
+  private parseCsvLine(line: string): string[] {
+    const parts: string[] = []
+    let current = ''
+    let inQuotes = false
+
+    for (let index = 0; index < line.length; index++) {
+      const char = line[index]
+      if (char === '"') {
+        const next = line[index + 1]
+        if (inQuotes && next === '"') {
+          current += '"'
+          index++
+        } else {
+          inQuotes = !inQuotes
+        }
+        continue
+      }
+
+      if (char === ',' && !inQuotes) {
+        parts.push(current.trim())
+        current = ''
+        continue
+      }
+
+      current += char
+    }
+
+    parts.push(current.trim())
+    return parts
   }
 
   /**
@@ -746,16 +873,10 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     // - Use filters: ext:, size:, dm:, dc:, etc.
 
     const trimmed = searchText.trim()
-
-    // If query contains spaces, treat as phrase search
-    if (trimmed.includes(' ') && !trimmed.includes('"')) {
-      return `"${trimmed}"`
-    }
-
     return trimmed
   }
 
-  async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
+  async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
     if (process.platform !== 'win32') {
       return new TuffSearchResultBuilder(query).build()
     }
@@ -773,6 +894,9 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       }
       return new TuffSearchResultBuilder(query).build()
     }
+    if (signal.aborted) {
+      return new TuffSearchResultBuilder(query).build()
+    }
 
     searchLogger.logProviderSearch('everything-provider', query.text, 'Everything')
 
@@ -785,7 +909,10 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     const everythingQuery = this.buildEverythingQuery(searchText)
 
     try {
-      const results = await this.searchEverything(everythingQuery, 50)
+      const results = await this.searchEverything(everythingQuery, 50, signal)
+      if (signal.aborted) {
+        return new TuffSearchResultBuilder(query).build()
+      }
 
       if (results.length === 0) {
         return new TuffSearchResultBuilder(query).build()
@@ -805,8 +932,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           mtime: result.mtime,
           ctime: result.ctime,
           lastIndexedAt: new Date(),
-          isDir: false,
-          type: 'file' as const,
+          isDir: result.isDir,
+          type: result.isDir ? ('directory' as const) : ('file' as const),
           content: null,
           embeddingStatus: 'none' as const
         }
@@ -818,6 +945,14 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           this.name,
           () => {} // No icon loading for now
         )
+        tuffItem.meta = {
+          ...tuffItem.meta,
+          file: {
+            ...tuffItem.meta?.file,
+            path: result.path,
+            isDir: result.isDir
+          }
+        }
 
         // Calculate scoring based on recency and position
         const daysSinceModified = (now - result.mtime.getTime()) / (1000 * 3600 * 24)
@@ -850,6 +985,10 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       return result
     } catch (error) {
+      if (isAbortError(error)) {
+        this.logDebug('Everything search aborted', { query: searchText })
+        return new TuffSearchResultBuilder(query).build()
+      }
       this.logError('Everything search failed', error, { query: searchText })
       return new TuffSearchResultBuilder(query).build()
     }
