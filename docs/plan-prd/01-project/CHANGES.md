@@ -5,6 +5,37 @@
 
 ## 2026-04-20
 
+### fix(nexus): 收敛文档路由切换时的 chunk 拉取失败白屏
+
+- `apps/nexus/nuxt.config.ts`
+  - Nexus 默认关闭 `NuxtLink` 可视区预取，避免文档页左侧大量链接同时触发 `_nuxt` chunk / payload 预加载，在 Cloudflare challenge / rate-limit 场景下放大成 `429` 与动态 import 失败。
+  - 开启 `emitRouteChunkError: 'automatic-immediate'`，路由切换时若 chunk 拉取失败会按目标路径即时重载，避免 docs 页面只更新 URL/侧栏 active、正文区留空。
+
+### fix(core-app): 恢复 legacy 插件 sdkapi 兼容策略
+
+- `packages/utils/plugin/sdk-version.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-resolver.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-installer.ts`
+- `apps/core-app/src/main/modules/permission/permission-store.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.ts`
+- `apps/nexus/content/docs/dev/reference/runtime-startup-env.zh.mdc`
+- `apps/nexus/content/docs/dev/reference/runtime-startup-env.en.mdc`
+  - 未声明 `sdkapi` 或低于 `251212` 的 legacy 插件恢复为 warning + 权限兼容跳过，不再在加载、安装预检或运行期权限守卫中被误标记为 `SDKAPI_BLOCKED`。
+  - `resolveSdkApiVersion` 对有效但低于首个支持标记的版本保留原始版本号，避免把旧但合法的 `YYMMDD` sdkapi 误报为 invalid。
+  - Runtime startup issue code 文档同步收口：`SDKAPI_BLOCKED` 仅作为历史/保留硬阻断码，legacy 缺失或过低走 `SDK_VERSION_MISSING` / `SDK_VERSION_OUTDATED` warning。
+
+### fix(tuff-cli): 修复插件发布误判并收口 npm 自包含包
+
+- `packages/tuff-cli-core/src/publish.ts`
+- `packages/tuff-cli/src/bin/tuff.ts`
+- `packages/tuff-cli/package.json`
+- `packages/tuff-cli/tsup.config.ts`
+  - `tuff publish` 默认改走 Nexus Dashboard 版本发布链路：根据 `manifest.id` 解析 Dashboard 插件标识，读取 `/api/dashboard/plugins` 定位插件，再上传到 `/api/dashboard/plugins/{id}/versions`。
+  - 发布响应改为强校验 JSON 结构与 `version.id/version/status`，`200 + text/html` 的 Nuxt 404 页面不再被误判为发布成功；失败信息包含 endpoint、HTTP 状态与响应摘要。
+  - `tuff login` 显式命令默认使用浏览器设备授权流程，`tuff login <token>` 保留为兼容入口；401 发布失败会提示重新授权。
+  - `@talex-touch/tuff-cli` npm 包改为自包含内部 workspace CLI 依赖，发布包不再携带 `workspace:*` 运行时依赖和 `src` 源码目录。
+
 ### fix(core-app): CoreBox 第三方 App 启动改为后台 handoff
 
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.ts`
