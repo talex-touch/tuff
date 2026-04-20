@@ -249,7 +249,7 @@ describe('createPluginLoader', () => {
     expect(issueCodes).not.toContain('DEV_SOURCE_FALLBACK_LOCAL')
   })
 
-  it('marks plugins below the enforced sdkapi floor as blocked', async () => {
+  it('marks plugins below the enforced sdkapi floor as legacy warnings', async () => {
     const pluginPath = await createPluginDir({
       name: 'touch-translation',
       version: '1.0.0',
@@ -262,8 +262,9 @@ describe('createPluginLoader', () => {
     const loader = createPluginLoader('touch-translation', pluginPath)
     const plugin = await loader.load()
 
-    expect(plugin.issues.some((issue) => issue.code === 'SDKAPI_BLOCKED')).toBe(true)
-    expect(plugin.issues.some((issue) => issue.type === 'error')).toBe(true)
+    expect(plugin.issues.some((issue) => issue.code === 'SDKAPI_BLOCKED')).toBe(false)
+    expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_OUTDATED')).toBe(true)
+    expect(plugin.issues.some((issue) => issue.type === 'error')).toBe(false)
   })
 
   it('creates loader plugin shells without eager data initialization', async () => {

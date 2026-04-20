@@ -35,7 +35,7 @@ interface PermissionData {
 
 export interface PermissionAccessState {
   allowed: boolean
-  reason: 'sdkapi-blocked' | 'default' | 'granted' | 'not-granted' | 'not-declared'
+  reason: 'legacy-sdk' | 'default' | 'granted' | 'not-granted' | 'not-declared'
   hasHistoricalGrant: boolean
 }
 
@@ -613,8 +613,8 @@ export class PermissionStore {
       sdkapi < PERMISSION_ENFORCEMENT_MIN_VERSION
     ) {
       return {
-        allowed: false,
-        reason: 'sdkapi-blocked',
+        allowed: true,
+        reason: 'legacy-sdk',
         hasHistoricalGrant: false
       }
     }

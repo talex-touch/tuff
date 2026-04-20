@@ -10,11 +10,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron'
 import fse from 'fs-extra'
-import {
-  CURRENT_SDK_VERSION,
-  PERMISSION_ENFORCEMENT_MIN_VERSION,
-  resolveSdkApiVersion
-} from '@talex-touch/utils/plugin'
 import { createLogger } from '../../utils/logger'
 import { ensureDefaultProvidersRegistered, installFromRegistry } from './providers'
 
@@ -104,19 +99,6 @@ export class PluginInstaller {
     this.riskPrompt = riskPrompt ?? createDialogRiskPrompt()
   }
 
-  private assertManifestSdkApi(manifest: IManifest | undefined): void {
-    if (!manifest) return
-    const declared = (manifest as { sdkapi?: unknown }).sdkapi
-    const resolved = resolveSdkApiVersion(declared)
-    if (typeof resolved === 'number' && resolved >= PERMISSION_ENFORCEMENT_MIN_VERSION) {
-      return
-    }
-    const pluginName = typeof manifest.name === 'string' ? manifest.name : 'unknown'
-    throw new Error(
-      `[SDKAPI_BLOCKED] Plugin "${pluginName}" is blocked: sdkapi must be >= ${PERMISSION_ENFORCEMENT_MIN_VERSION}. Please migrate to sdkapi ${CURRENT_SDK_VERSION}.`
-    )
-  }
-
   async install(
     request: PluginInstallRequest,
     options?: PluginInstallOptions
@@ -161,7 +143,6 @@ export class PluginInstaller {
     const manifest = providerResult.manifest
       ? providerResult.manifest
       : (await this.previewManifest(providerResult.filePath!))?.manifest
-    this.assertManifestSdkApi(manifest)
 
     if (options?.onDownloadProgress) {
       try {

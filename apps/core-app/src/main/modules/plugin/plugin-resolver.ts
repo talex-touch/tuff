@@ -4,11 +4,6 @@ import path from 'node:path'
 import compressing from 'compressing'
 import fse from 'fs-extra'
 import { isSafePathSegment } from '@talex-touch/utils/common/utils/safe-path'
-import {
-  CURRENT_SDK_VERSION,
-  PERMISSION_ENFORCEMENT_MIN_VERSION,
-  resolveSdkApiVersion
-} from '@talex-touch/utils/plugin'
 import { checkDirWithCreate } from '../../utils/common-util'
 import { createLogger } from '../../utils/logger'
 import { pluginModule } from './plugin-module'
@@ -44,16 +39,6 @@ export class PluginResolver {
 
   constructor(filePath: string) {
     this.filePath = filePath
-  }
-
-  private validateManifestSdkApi(manifest: IManifest): string | null {
-    const declared = (manifest as { sdkapi?: unknown }).sdkapi
-    const resolved = resolveSdkApiVersion(declared)
-    if (typeof resolved === 'number' && resolved >= PERMISSION_ENFORCEMENT_MIN_VERSION) {
-      return null
-    }
-    const pluginName = typeof manifest.name === 'string' ? manifest.name : 'unknown'
-    return `[SDKAPI_BLOCKED] Plugin "${pluginName}" is blocked: sdkapi must be >= ${PERMISSION_ENFORCEMENT_MIN_VERSION}. Please migrate to sdkapi ${CURRENT_SDK_VERSION}.`
   }
 
   private async uncompress(source: string, target: string): Promise<void> {
@@ -109,10 +94,6 @@ export class PluginResolver {
         autoReEnable: options?.autoReEnable === true
       }
     })
-    const sdkapiError = this.validateManifestSdkApi(manifest)
-    if (sdkapiError) {
-      return cb(sdkapiError, 'error')
-    }
     if (typeof manifest.name !== 'string' || !isSafePathSegment(manifest.name)) {
       return cb('invalid plugin name', 'error')
     }
@@ -248,12 +229,6 @@ export class PluginResolver {
 
       if (!manifest._files || !manifest._signature) {
         event.msg = ResolverStatus.INVALID_MANIFEST
-        return callback({ event, type: 'error' })
-      }
-
-      const sdkapiError = this.validateManifestSdkApi(manifest as IManifest)
-      if (sdkapiError) {
-        event.msg = sdkapiError
         return callback({ event, type: 'error' })
       }
 

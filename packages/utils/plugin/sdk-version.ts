@@ -185,6 +185,7 @@ export function checkSdkCompatibility(
  *
  * Rules:
  * - Invalid values => undefined (legacy)
+ * - Valid versions below the first supported marker => keep raw value as legacy
  * - Unknown future versions => fallback to the latest supported <= declared
  * - Known versions => keep as-is
  */
@@ -206,7 +207,7 @@ export function resolveSdkApiVersion(raw: unknown): SdkApiVersion | undefined {
     }
   }
 
-  return undefined
+  return num
 }
 
 /**

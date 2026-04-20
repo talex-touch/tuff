@@ -1,6 +1,6 @@
 # Core App 启动链路与运行时变量参考
 
-> 更新时间：2026-03-23  
+> 更新时间：2026-04-20
 > 范围：`apps/core-app/src` 中 `process.env` / `import.meta.env` 的实际引用
 
 ## 启动异常梳理（本次 1+2 变更）
@@ -28,9 +28,9 @@
 | `MANIFEST_MISSING_NAME` | error | 缺少 `name` |
 | `MANIFEST_MISSING_VERSION` | warning | 缺少 `version`（默认 `0.0.0`） |
 | `CATEGORY_MISSING` | error | `sdkapi` 达门槛但未声明 `category` |
-| `SDKAPI_BLOCKED` | error | `sdkapi` 低于强制门槛被阻断 |
+| `SDKAPI_BLOCKED` | error | 历史/保留硬阻断码；legacy `sdkapi` 缺失或低于门槛时不再默认使用 |
 | `SDK_VERSION_MISSING` | warning | 旧插件未声明 `sdkapi`（权限未强制） |
-| `SDK_VERSION_OUTDATED` | warning/error | `sdkapi` 过旧（视兼容性策略） |
+| `SDK_VERSION_OUTDATED` | warning | `sdkapi` 过旧或回退到 legacy 兼容模式 |
 | `PERMISSION_MISSING` | warning | 缺少必需权限授权 |
 | `UNKNOWN_PERMISSION_IDS` | warning | 声明了未知权限 ID |
 | `INVALID_FEATURE_COMMANDS` | warning | feature.commands 结构不合法 |

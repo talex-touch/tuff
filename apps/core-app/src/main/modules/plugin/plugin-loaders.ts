@@ -14,7 +14,6 @@ import {
   checkSdkCompatibility,
   CURRENT_SDK_VERSION,
   OMNI_TRANSFER_DECLARATIVE_MIN_VERSION,
-  PERMISSION_ENFORCEMENT_MIN_VERSION,
   resolveSdkApiVersion
 } from '@talex-touch/utils/plugin'
 import { app } from 'electron'
@@ -153,30 +152,12 @@ abstract class BasePluginLoader {
     this.touchPlugin.sdkapi = resolvedSdkapi
 
     const sdkCompat = checkSdkCompatibility(pluginInfo.sdkapi, this.pluginName)
-    const sdkBlocked =
-      typeof resolvedSdkapi !== 'number' || resolvedSdkapi < PERMISSION_ENFORCEMENT_MIN_VERSION
-    if (sdkBlocked) {
+    if (sdkCompat.warning) {
       this.touchPlugin.issues.push({
-        type: 'error',
-        message: `Plugin "${this.pluginName}" is blocked: sdkapi must be >= ${PERMISSION_ENFORCEMENT_MIN_VERSION}.`,
-        source: 'manifest.json',
-        code: 'SDKAPI_BLOCKED',
-        suggestion: `Upgrade plugin SDK to >= ${CURRENT_SDK_VERSION} and migrate to plugin.feature/plugin.box/boxItems APIs before reinstalling.`,
-        meta: {
-          declaredVersion: pluginInfo.sdkapi,
-          resolvedVersion: resolvedSdkapi,
-          currentVersion: CURRENT_SDK_VERSION,
-          requiredMinVersion: PERMISSION_ENFORCEMENT_MIN_VERSION
-        },
-        timestamp: Date.now()
-      })
-    }
-    if (!sdkBlocked && sdkCompat.warning) {
-      this.touchPlugin.issues.push({
-        type: sdkCompat.compatible ? 'warning' : 'error',
+        type: 'warning',
         message: sdkCompat.warning,
         source: 'manifest.json',
-        code: pluginInfo.sdkapi === undefined ? 'SDKAPI_BLOCKED' : 'SDK_VERSION_OUTDATED',
+        code: pluginInfo.sdkapi === undefined ? 'SDK_VERSION_MISSING' : 'SDK_VERSION_OUTDATED',
         suggestion: sdkCompat.suggestion,
         meta: {
           declaredVersion: pluginInfo.sdkapi,
@@ -257,7 +238,11 @@ abstract class BasePluginLoader {
 
     // Add permission-related issue if needed
     const permissionIssue = generatePermissionIssue(permissionStatus)
-    if (permissionIssue) {
+    if (
+      permissionIssue &&
+      permissionIssue.code !== 'SDK_VERSION_MISSING' &&
+      permissionIssue.code !== 'SDK_VERSION_OUTDATED'
+    ) {
       this.touchPlugin.issues.push({
         type: permissionIssue.type,
         message: permissionIssue.message,

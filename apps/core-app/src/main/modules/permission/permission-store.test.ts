@@ -71,13 +71,13 @@ describe('PermissionStore sqlite backend', () => {
     await storeB.shutdown()
   })
 
-  it('blocks permission access when sdkapi is below enforcement threshold', async () => {
+  it('bypasses permission enforcement when sdkapi is missing or below threshold', async () => {
     const store = new PermissionStore(tempDir)
     await store.initialize()
     await store.grant('touch-demo', 'fs.read', 'user')
 
-    expect(store.hasPermission('touch-demo', 'fs.read', undefined)).toBe(false)
-    expect(store.hasPermission('touch-demo', 'fs.read', 251111)).toBe(false)
+    expect(store.hasPermission('touch-demo', 'fs.read', undefined)).toBe(true)
+    expect(store.hasPermission('touch-demo', 'fs.read', 251111)).toBe(true)
     expect(store.hasPermission('touch-demo', 'fs.read', 251212)).toBe(true)
 
     await store.shutdown()
