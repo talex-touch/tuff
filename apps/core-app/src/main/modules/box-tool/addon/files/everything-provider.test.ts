@@ -42,12 +42,23 @@ interface MutableEverythingProvider {
   lastBackendError: string | null
   sdkAddon: unknown
   esPath: string | null
-  searchEverything: (query: string, maxResults: number) => Promise<unknown[]>
-  searchEverythingWithSdk: (query: string, maxResults: number) => Promise<unknown[]>
+  searchEverything: (query: string, maxResults: number, signal?: AbortSignal) => Promise<unknown[]>
+  searchEverythingWithSdk: (
+    query: string,
+    maxResults: number,
+    signal?: AbortSignal
+  ) => Promise<unknown[]>
   ensureCliFallback: () => Promise<boolean>
-  searchEverythingWithCli: (query: string, maxResults: number) => Promise<unknown[]>
+  searchEverythingWithCli: (
+    query: string,
+    maxResults: number,
+    signal?: AbortSignal
+  ) => Promise<unknown[]>
   tryInitializeCliBackend: () => Promise<boolean>
   buildUnavailableNotice: (query: { text: string; inputs: unknown[] }) => unknown
+  buildEverythingQuery: (searchText: string) => string
+  parseEverythingOutput: (output: string) => Array<{ path: string; name: string; size: number }>
+  parseEverythingSdkOutput: (output: unknown) => Array<{ path: string; isDir: boolean }>
 }
 
 function buildResult(path: string) {
@@ -57,7 +68,8 @@ function buildResult(path: string) {
     extension: 'txt',
     size: 16,
     mtime: new Date('2026-01-01T00:00:00.000Z'),
-    ctime: new Date('2026-01-01T00:00:00.000Z')
+    ctime: new Date('2026-01-01T00:00:00.000Z'),
+    isDir: false
   }
 }
 
@@ -111,9 +123,9 @@ describe('everything-provider fallback chain', () => {
 
     const results = await provider.searchEverything('demo', 10)
 
-    expect(sdkSearchSpy).toHaveBeenCalledWith('demo', 10)
+    expect(sdkSearchSpy).toHaveBeenCalledWith('demo', 10, undefined)
     expect(ensureCliSpy).toHaveBeenCalledTimes(1)
-    expect(cliSearchSpy).toHaveBeenCalledWith('demo', 10)
+    expect(cliSearchSpy).toHaveBeenCalledWith('demo', 10, undefined)
     expect(provider.lastBackendError).toBe('sdk runtime failed')
     expect(provider.backend).toBe('cli')
     expect(results).toEqual(cliResults)
@@ -152,5 +164,69 @@ describe('everything-provider fallback chain', () => {
       expect(item?.render?.basic?.title).toBe('Windows file search is not ready')
       expect(item?.render?.basic?.description).toContain('Everything')
     })
+  })
+
+  it('keeps multi-word queries unquoted unless the user provided quotes', () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+
+    expect(provider.buildEverythingQuery('quarterly report')).toBe('quarterly report')
+    expect(provider.buildEverythingQuery('"quarterly report"')).toBe('"quarterly report"')
+    expect(provider.buildEverythingQuery(' ext:pdf report ')).toBe('ext:pdf report')
+  })
+
+  it('parses CLI CSV output with commas, quotes and non-ASCII paths', () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+
+    const rows = provider.parseEverythingOutput(
+      [
+        String.raw`"C:\Reports, FY26\roadmap ""final"".txt","42","2026-01-02T03:04:05.000Z","2026-01-01T00:00:00.000Z"`,
+        String.raw`"C:\用户\计划,草案.md","","bad-date",""`
+      ].join('\n')
+    )
+
+    expect(rows).toHaveLength(2)
+    expect(rows[0].path).toBe('C:\\Reports, FY26\\roadmap "final".txt')
+    expect(rows[0].name).toBe('roadmap "final".txt')
+    expect(rows[0].size).toBe(42)
+    expect(rows[1].path).toBe('C:\\用户\\计划,草案.md')
+    expect(rows[1].size).toBe(0)
+  })
+
+  it('preserves folder metadata from SDK results', () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+
+    const rows = provider.parseEverythingSdkOutput([
+      {
+        fullPath: 'C:\\Projects\\Tuff',
+        name: 'Tuff',
+        isFolder: true,
+        size: 0,
+        dateModified: '2026-01-01T00:00:00.000Z'
+      }
+    ])
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        path: 'C:\\Projects\\Tuff',
+        isDir: true
+      })
+    ])
+  })
+
+  it('aborts SDK search without switching backend state', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    provider.backend = 'sdk-napi'
+    provider.isAvailable = true
+    provider.sdkAddon = {
+      search: () => new Promise(() => {})
+    }
+    const controller = new AbortController()
+    const searchPromise = provider.searchEverythingWithSdk('demo', 10, controller.signal)
+
+    controller.abort()
+
+    await expect(searchPromise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(provider.backend).toBe('sdk-napi')
+    expect(provider.isAvailable).toBe(true)
   })
 })

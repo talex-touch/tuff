@@ -280,7 +280,7 @@ async function measureScenario(scenario: StageSample['scenario']): Promise<Stage
   const core = SearchEngineCore.getInstance() as unknown as {
     orchestrateSearchQuery: (
       query: TuffQuery
-    ) => Promise<{ providerFilter?: string; durationMs: number }>
+    ) => Promise<{ providerFilter?: string; cacheKey: string; durationMs: number }>
     aggregateProvidersForQuery: (
       providers: typeof MOCK_PROVIDERS,
       query: TuffQuery,
@@ -386,6 +386,15 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
       )
       expect(filtered.providers.map((provider) => provider.id)).toEqual(['file-provider'])
 
+      everythingReadyMock.mockReturnValue(true)
+      fileHasSearchFiltersMock.mockReturnValue(false)
+      const fileCategory = core.aggregateProvidersForQuery(
+        MOCK_PROVIDERS,
+        { text: 'report', inputs: [] } as TuffQuery,
+        { providerFilter: 'file' }
+      )
+      expect(fileCategory.providers.map((provider) => provider.id)).toEqual(['everything-provider'])
+
       fileHasSearchFiltersMock.mockReturnValue(false)
       everythingReadyMock.mockReturnValue(false)
       const fallback = core.aggregateProvidersForQuery(
@@ -399,5 +408,28 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
         'plugin-features'
       ])
     })
+  })
+
+  it('uses distinct cache keys for same text with different inputs', async () => {
+    const core = SearchEngineCore.getInstance() as unknown as {
+      orchestrateSearchQuery: (
+        query: TuffQuery
+      ) => Promise<{ providerFilter?: string; cacheKey: string; durationMs: number }>
+    }
+
+    const textOnly = await core.orchestrateSearchQuery({
+      text: 'translate clipboard',
+      inputs: []
+    } as TuffQuery)
+    const imageInput = await core.orchestrateSearchQuery({
+      text: 'translate clipboard',
+      inputs: [{ type: TuffInputType.Image, content: 'data:image/png;base64,AA==' }]
+    } as TuffQuery)
+    const fileInput = await core.orchestrateSearchQuery({
+      text: 'translate clipboard',
+      inputs: [{ type: TuffInputType.Files, content: '[\"/tmp/demo.txt\"]' }]
+    } as TuffQuery)
+
+    expect(new Set([textOnly.cacheKey, imageInput.cacheKey, fileInput.cacheKey]).size).toBe(3)
   })
 })
