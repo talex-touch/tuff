@@ -179,6 +179,14 @@ function printValidateHelp() {
   console.log('')
 }
 
+function printLoginHelp() {
+  console.log('Usage: tuff login [token]')
+  console.log('')
+  console.log('Without a token, Tuff opens the browser authorization flow.')
+  console.log('Passing a token is kept for compatibility with existing API/app tokens.')
+  console.log('')
+}
+
 function printAsciiLogo(): void {
   console.log(ASCII_TUFF)
 }
@@ -564,57 +572,17 @@ async function ensureOnboarding(): Promise<boolean> {
   return true
 }
 
-async function ensureAuthenticated(): Promise<boolean> {
-  const baseUrl = normalizeBaseUrl(getTuffBaseUrl())
-  const authState = await readAuthState()
-  if (authState?.token && authState.baseUrl) {
-    const storedBase = normalizeBaseUrl(authState.baseUrl)
-    if (storedBase !== baseUrl) {
-      await clearAuthToken()
-      printInfo(t('notice.baseChanged', { from: storedBase, to: baseUrl }))
-    }
-  }
+async function saveTokenLogin(token: string, baseUrl = normalizeBaseUrl(getTuffBaseUrl())): Promise<void> {
+  const device = await ensureCliDeviceInfo()
+  await saveAuthToken(token.trim(), {
+    baseUrl,
+    deviceId: device.deviceId,
+    deviceName: device.deviceName,
+    devicePlatform: device.devicePlatform,
+  })
+}
 
-  const existingToken = await getAuthToken()
-  if (existingToken) {
-    return true
-  }
-
-  if (cliLocalMode) {
-    printInfo(t('notice.localMode', { url: baseUrl }))
-  }
-  else if (cliCustomBase) {
-    printInfo(t('notice.customMode', { url: baseUrl }))
-  }
-
-  printHeader(t('onboarding.loginTitle'), t('onboarding.loginSubtitle'))
-
-  const loginMethod = await askSelect(t('onboarding.loginSelect'), [
-    { label: t('onboarding.loginOptionToken'), value: 'token' },
-    { label: t('onboarding.loginOptionOauth'), value: 'oauth' },
-    { label: t('onboarding.loginOptionExit'), value: 'exit' },
-  ])
-
-  if (loginMethod === 'exit')
-    return false
-
-  if (loginMethod === 'token') {
-    const token = await askText(t('onboarding.tokenPrompt'), {
-      hint: t('onboarding.tokenHint'),
-      validate: value => (value.trim() ? true : t('onboarding.tokenInvalid')),
-    })
-    const device = await ensureCliDeviceInfo()
-    await saveAuthToken(token.trim(), {
-      baseUrl,
-      deviceId: device.deviceId,
-      deviceName: device.deviceName,
-      devicePlatform: device.devicePlatform,
-    })
-    printInfo(t('onboarding.tokenWarning'))
-    printInfo(t('onboarding.loginSuccess'))
-    return true
-  }
-
+async function runDeviceAuthLogin(): Promise<boolean> {
   while (true) {
     printInfo(t('onboarding.oauthPreparing'))
     try {
@@ -674,13 +642,7 @@ async function ensureAuthenticated(): Promise<boolean> {
           return false
         }
 
-        const device = await ensureCliDeviceInfo()
-        await saveAuthToken(result.token, {
-          baseUrl,
-          deviceId: device.deviceId,
-          deviceName: device.deviceName,
-          devicePlatform: device.devicePlatform,
-        })
+        await saveTokenLogin(result.token)
         printInfo(t('onboarding.tokenWarning'))
         if (result.grantType === 'short') {
           printWarning(t('onboarding.authModeShortHint', {
@@ -703,6 +665,54 @@ async function ensureAuthenticated(): Promise<boolean> {
       return false
     }
   }
+}
+
+async function ensureAuthenticated(): Promise<boolean> {
+  const baseUrl = normalizeBaseUrl(getTuffBaseUrl())
+  const authState = await readAuthState()
+  if (authState?.token && authState.baseUrl) {
+    const storedBase = normalizeBaseUrl(authState.baseUrl)
+    if (storedBase !== baseUrl) {
+      await clearAuthToken()
+      printInfo(t('notice.baseChanged', { from: storedBase, to: baseUrl }))
+    }
+  }
+
+  const existingToken = await getAuthToken()
+  if (existingToken) {
+    return true
+  }
+
+  if (cliLocalMode) {
+    printInfo(t('notice.localMode', { url: baseUrl }))
+  }
+  else if (cliCustomBase) {
+    printInfo(t('notice.customMode', { url: baseUrl }))
+  }
+
+  printHeader(t('onboarding.loginTitle'), t('onboarding.loginSubtitle'))
+
+  const loginMethod = await askSelect(t('onboarding.loginSelect'), [
+    { label: t('onboarding.loginOptionToken'), value: 'token' },
+    { label: t('onboarding.loginOptionOauth'), value: 'oauth' },
+    { label: t('onboarding.loginOptionExit'), value: 'exit' },
+  ])
+
+  if (loginMethod === 'exit')
+    return false
+
+  if (loginMethod === 'token') {
+    const token = await askText(t('onboarding.tokenPrompt'), {
+      hint: t('onboarding.tokenHint'),
+      validate: value => (value.trim() ? true : t('onboarding.tokenInvalid')),
+    })
+    await saveTokenLogin(token, baseUrl)
+    printInfo(t('onboarding.tokenWarning'))
+    printInfo(t('onboarding.loginSuccess'))
+    return true
+  }
+
+  return await runDeviceAuthLogin()
 }
 
 interface AccountProfile {
@@ -779,6 +789,25 @@ function formatDuration(seconds?: number): string {
   if (seconds % 60 === 0)
     return `${Math.floor(seconds / 60)}m`
   return `${seconds}s`
+}
+
+async function runLoginCommand(args: string[]): Promise<void> {
+  if (args.includes('--help') || args.includes('-h')) {
+    printLoginHelp()
+    return
+  }
+
+  const token = args.find(arg => !arg.startsWith('-'))
+  printHeader(t('onboarding.loginTitle'), t('onboarding.loginSubtitle'))
+
+  if (token) {
+    await saveTokenLogin(token)
+    printInfo(t('onboarding.tokenWarning'))
+    printInfo(t('onboarding.loginSuccess'))
+    return
+  }
+
+  await runDeviceAuthLogin()
 }
 
 async function showAccountSummary(): Promise<void> {
@@ -1205,7 +1234,7 @@ async function main() {
       }
     }
     else if (command === 'login') {
-      await (await loadPublishModule()).login()
+      await runLoginCommand(commandArgs)
     }
     else if (command === 'logout') {
       await (await loadPublishModule()).logout()

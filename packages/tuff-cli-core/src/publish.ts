@@ -1,4 +1,6 @@
 /* eslint-disable no-console */
+import type { NetworkResponse } from '@talex-touch/utils/network'
+import type { Buffer } from 'node:buffer'
 import type { PublishConfig } from './types'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
@@ -11,6 +13,8 @@ import { getAuthToken, getAuthTokenPath, saveAuthToken } from './auth'
 import { resolvePublishConfig } from './config'
 import { ensureCliDeviceInfo } from './device'
 
+const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
+
 interface PackageInfo {
   path: string
   filename: string
@@ -19,8 +23,154 @@ interface PackageInfo {
   mtimeMs: number
 }
 
-function getDefaultApiUrl(): string {
-  return `${getTuffBaseUrl()}/api/store/plugins/publish`
+interface PackageJsonInfo {
+  name: string
+  version: string
+}
+
+interface ManifestInfo {
+  id?: string
+  name: string
+  version: string
+  homepage?: string
+}
+
+interface DashboardPluginVersionSummary {
+  manifest?: {
+    id?: string
+    name?: string
+    version?: string
+  } | null
+}
+
+interface DashboardPluginSummary {
+  id?: string
+  slug?: string
+  name?: string
+  latestVersion?: DashboardPluginVersionSummary | null
+  versions?: DashboardPluginVersionSummary[]
+}
+
+interface DashboardPluginsResponse {
+  plugins?: DashboardPluginSummary[]
+  total?: number
+}
+
+interface DashboardPublishedVersion {
+  id?: string
+  version?: string
+  status?: string
+  channel?: string
+}
+
+interface DashboardPublishResponse {
+  version?: DashboardPublishedVersion
+}
+
+function getDashboardPluginsUrl(): string {
+  return `${getTuffBaseUrl()}/api/dashboard/plugins`
+}
+
+function getDashboardPluginVersionsUrl(pluginId: string): string {
+  return `${getTuffBaseUrl()}/api/dashboard/plugins/${encodeURIComponent(pluginId)}/versions`
+}
+
+function formatResponseSnippet(data: unknown): string {
+  const raw = typeof data === 'string' ? data : JSON.stringify(data)
+  return (raw || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 220)
+}
+
+function isHtmlResponse(response: NetworkResponse<string>): boolean {
+  const contentType = response.headers['content-type']?.toLowerCase() ?? ''
+  const data = typeof response.data === 'string' ? response.data.trimStart() : ''
+  return contentType.includes('text/html') || data.toLowerCase().startsWith('<!doctype html') || data.startsWith('<html')
+}
+
+function parseJsonResponse<T>(response: NetworkResponse<string>, context: string): T {
+  if (response.status < 200 || response.status >= 300) {
+    const suffix = response.status === 401
+      ? ' Run `tuff login` to authorize this CLI with Nexus.'
+      : ''
+    throw new Error(`${context} failed: HTTP ${response.status}. ${formatResponseSnippet(response.data)}${suffix}`)
+  }
+
+  if (isHtmlResponse(response)) {
+    throw new Error(`${context} returned HTML instead of JSON. ${formatResponseSnippet(response.data)}`)
+  }
+
+  try {
+    const parsed = JSON.parse(response.data) as T
+    if (!parsed || typeof parsed !== 'object')
+      throw new Error('Response is not an object')
+    return parsed
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`${context} returned invalid JSON: ${message}. ${formatResponseSnippet(response.data)}`)
+  }
+}
+
+function normalizeManifestIdToSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9.]+/g, '.')
+    .replace(/\.+/g, '.')
+    .replace(/^\.+|\.+$/g, '')
+}
+
+function resolveDashboardSlug(manifest: ManifestInfo, pkg: PackageJsonInfo): string {
+  const source = manifest.id || manifest.name || pkg.name
+  const slug = normalizeManifestIdToSlug(source)
+  if (!slug) {
+    throw new Error('Cannot resolve Dashboard plugin identifier from manifest.id or manifest.name.')
+  }
+  return slug
+}
+
+function versionManifestIds(plugin: DashboardPluginSummary): string[] {
+  const ids = new Set<string>()
+  const latestId = plugin.latestVersion?.manifest?.id
+  if (latestId)
+    ids.add(latestId)
+  for (const version of plugin.versions ?? []) {
+    const id = version.manifest?.id
+    if (id)
+      ids.add(id)
+  }
+  return [...ids]
+}
+
+function findDashboardPlugin(
+  plugins: DashboardPluginSummary[],
+  slug: string,
+  manifest: ManifestInfo,
+): DashboardPluginSummary {
+  const exact = plugins.filter(plugin => plugin.slug === slug)
+  const manifestId = manifest.id?.trim()
+  const manifestMatches = manifestId
+    ? plugins.filter(plugin => plugin.slug === manifestId || versionManifestIds(plugin).includes(manifestId))
+    : []
+  const candidates = exact.length ? exact : manifestMatches
+
+  if (candidates.length === 1 && candidates[0]?.id)
+    return candidates[0]
+
+  if (candidates.length > 1) {
+    const ids = candidates
+      .map(plugin => `${plugin.name ?? plugin.slug ?? 'unknown'} (${plugin.id ?? 'no-id'})`)
+      .join(', ')
+    throw new Error(`Multiple Dashboard plugins match "${slug}": ${ids}`)
+  }
+
+  const available = plugins
+    .map(plugin => plugin.slug || plugin.name)
+    .filter(Boolean)
+    .slice(0, 8)
+    .join(', ')
+  throw new Error(`Dashboard plugin "${slug}" was not found.${available ? ` Available: ${available}` : ''}`)
 }
 
 async function calculateSha256(filePath: string): Promise<string> {
@@ -64,7 +214,7 @@ async function scanPackages(packageDirs: string[]): Promise<PackageInfo[]> {
   return packages
 }
 
-async function readPackageJson(): Promise<{ name: string, version: string } | null> {
+async function readPackageJson(): Promise<PackageJsonInfo | null> {
   const pkgPath = path.join(process.cwd(), 'package.json')
 
   if (await fs.pathExists(pkgPath)) {
@@ -75,15 +225,93 @@ async function readPackageJson(): Promise<{ name: string, version: string } | nu
   return null
 }
 
-async function readManifest(): Promise<{ name: string, version: string } | null> {
+async function readManifest(): Promise<ManifestInfo | null> {
   const manifestPath = path.join(process.cwd(), 'manifest.json')
 
   if (await fs.pathExists(manifestPath)) {
     const manifest = await fs.readJson(manifestPath)
-    return { name: manifest.name, version: manifest.version }
+    return {
+      id: manifest.id,
+      name: manifest.name,
+      version: manifest.version,
+      homepage: manifest.homepage,
+    }
   }
 
   return null
+}
+
+async function resolveDashboardPublishUrl(token: string, slug: string, manifest: ManifestInfo): Promise<string> {
+  const pluginsUrl = getDashboardPluginsUrl()
+  const pluginsRes = await networkClient.request<string>({
+    method: 'GET',
+    url: pluginsUrl,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    responseType: 'text',
+    validateStatus: ALL_HTTP_STATUS,
+  })
+  const payload = parseJsonResponse<DashboardPluginsResponse>(pluginsRes, `Fetch Dashboard plugins (${pluginsUrl})`)
+
+  if (!Array.isArray(payload.plugins))
+    throw new Error('Dashboard plugins response is missing `plugins`.')
+
+  const plugin = findDashboardPlugin(payload.plugins, slug, manifest)
+  if (!plugin.id)
+    throw new Error(`Dashboard plugin "${slug}" is missing id.`)
+
+  return getDashboardPluginVersionsUrl(plugin.id)
+}
+
+function createPublishForm(
+  pkg: PackageJsonInfo,
+  manifest: ManifestInfo,
+  tag: string,
+  channel: NonNullable<PublishConfig['channel']>,
+  notes: string,
+  target: PackageInfo,
+  content: Buffer,
+): FormData {
+  const form = new FormData()
+  form.set('name', manifest.name)
+  form.set('version', pkg.version)
+  form.set('tag', tag)
+  form.set('channel', channel)
+  form.set('notes', notes)
+  form.set('changelog', notes)
+  if (manifest.homepage)
+    form.set('homepage', manifest.homepage)
+  const packageBody = new ArrayBuffer(content.byteLength)
+  new Uint8Array(packageBody).set(content)
+  form.set('package', new Blob([packageBody]), target.filename)
+  return form
+}
+
+async function publishPackage(
+  token: string,
+  url: string,
+  form: FormData,
+): Promise<DashboardPublishedVersion> {
+  const publishRes = await networkClient.request<string>({
+    method: 'POST',
+    url,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: form as unknown as BodyInit,
+    responseType: 'text',
+    validateStatus: ALL_HTTP_STATUS,
+  })
+
+  const payload = parseJsonResponse<DashboardPublishResponse>(publishRes, `Publish plugin package (${url})`)
+  const version = payload.version
+
+  if (!version?.id || !version.version || !version.status) {
+    throw new Error(`Publish response is missing version.id/version/status. ${formatResponseSnippet(payload)}`)
+  }
+
+  return version
 }
 
 export async function login(): Promise<void> {
@@ -97,12 +325,11 @@ export async function login(): Promise<void> {
   }
 
   if (!token) {
-    console.log('Usage: tuff login <token>')
+    console.log('Run `tuff login` from the main CLI to authorize this device in your browser.')
+    console.log('Token compatibility: `tuff login <token>`')
     console.log('')
-    console.log('Get your token from the Tuff Nexus dashboard:')
+    console.log('Get tokens from the Tuff Nexus dashboard:')
     console.log('  https://tuff.tagzxia.com/dashboard')
-    console.log('')
-    console.log('Or set the TUFF_AUTH_TOKEN environment variable.')
     return
   }
 
@@ -135,7 +362,7 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
 
   const token = await getAuthToken()
   if (!token) {
-    console.error('❌ Not authenticated. Run `tuff login <token>` first.')
+    console.error('❌ Not authenticated. Run `tuff login` first.')
     process.exitCode = 1
     return
   }
@@ -160,9 +387,7 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
     return
   }
 
-  console.log(`Plugin: ${manifest.name}`)
-  console.log(`Version: ${pkg.version}`)
-
+  const dashboardSlug = resolveDashboardSlug(manifest, pkg)
   const tag = options.tag || pkg.version
   const channel = options.channel || (
     tag.includes('snapshot') || tag.includes('alpha')
@@ -171,7 +396,11 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
         ? 'BETA'
         : 'RELEASE'
   )
+  const notes = options.notes?.trim() || `Release v${pkg.version}`
 
+  console.log(`Plugin: ${manifest.name}`)
+  console.log(`Version: ${pkg.version}`)
+  console.log(`Dashboard plugin: ${dashboardSlug}`)
   console.log(`Tag: ${tag}`)
   console.log(`Channel: ${channel}`)
   console.log('')
@@ -189,6 +418,12 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
 
   const sorted = [...packages].sort((a, b) => b.mtimeMs - a.mtimeMs)
   const target = sorted[0]
+
+  if (!target) {
+    console.error('❌ No .tpex package found in dist/build or dist/')
+    process.exitCode = 1
+    return
+  }
 
   if (packages.length > 1) {
     console.log(`\n⚠ Found ${packages.length} packages, using latest: ${target.filename}\n`)
@@ -209,41 +444,20 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
     return
   }
 
-  const apiUrl = options.apiUrl || getDefaultApiUrl()
-
   console.log('\n📤 Publishing plugin package...')
 
   try {
+    const publishUrl = options.apiUrl || await resolveDashboardPublishUrl(token, dashboardSlug, manifest)
     const content = await fs.readFile(target.path)
-    const form = new FormData()
-    form.set('name', manifest.name)
-    form.set('version', pkg.version)
-    form.set('tag', tag)
-    form.set('channel', channel)
+    const form = createPublishForm(pkg, manifest, tag, channel, notes, target, content)
+    const version = await publishPackage(token, publishUrl, form)
+    const submitted = version.status === 'approved' ? 'published' : 'submitted'
 
-    if (options.notes) {
-      form.set('notes', options.notes)
-      form.set('changelog', options.notes)
-    }
-
-    form.set('package', new Blob([content]), target.filename)
-
-    const publishRes = await networkClient.request<string>({
-      method: 'POST',
-      url: apiUrl,
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: form as unknown as BodyInit,
-      responseType: 'text',
-      validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
-    })
-
-    if (publishRes.status < 200 || publishRes.status >= 300) {
-      throw new Error(`Failed to publish package: ${publishRes.data || `HTTP ${publishRes.status}`}`)
-    }
-
-    console.log('\n✅ Plugin package published successfully!')
+    console.log(`\n✅ Plugin package ${submitted} successfully.`)
+    console.log(`   Version: ${version.version}`)
+    console.log(`   Status:  ${version.status}`)
+    if (version.channel)
+      console.log(`   Channel: ${version.channel}`)
     console.log(`   Package: ${target.filename}`)
   }
   catch (error) {
