@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-04-19  
+> 更新时间：2026-04-20
 > 本页仅保留入口与高价值快照；历史细节以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主要入口
@@ -23,15 +23,16 @@
 - `plan-prd` 子域：`03-features 32`、`docs 20`、`04-implementation 17`、`01-project 12`、`05-archive 11`、`02-architecture 8`、`06-ecosystem 4`。
 - 统计口径与下一步路线统一锚点：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`。
 
-## 状态快照（2026-04-19，统一口径）
+## 状态快照（2026-04-20，统一口径）
 
+- **2.5.0 前置口径（2026-04-20）**：当前主线切换为 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`；先关闭或显式降权 CoreApp 剩余 legacy/compat 债务，再完成 Windows/macOS release-blocking 回归。Linux 保留 `xdotool` / desktop environment 限制说明与非阻塞 smoke，不作为 `2.5.0` blocker。
 - **Tray 运行态真实回显（2026-04-19）**：托盘初始化现在会同步主窗口真实可见性，并通过 transport snapshot 暴露 `trayReady / windowVisible`；静默启动和 macOS `hideDock + showTray` 组合不再回显错误首态。
 - **Windows Store 元数据增强（2026-04-19）**：Windows `Get-StartApps` 扫描已补齐 UWP manifest `DisplayName / Description / logo` 富化，应用搜索结果继续保留 `Windows Store` 副标题，同时可展示真实标题、描述与图标。
 - **下载中心视图模式持久化（2026-04-19）**：下载中心 `detailed / compact` 模式已统一走 `appSetting.downloadCenter.viewMode` 持久化，关闭页面与重启应用后都会按上次选择正确回显。
 - **CoreBox Windows 应用扫描修复（2026-04-18）**：开始菜单 `.lnk` 扫描已保留 `target + args + cwd`，并补入 `Get-StartApps` 的 Windows Store / UWP 枚举，依赖快捷方式参数的桌面应用与 Windows Store 应用现在都可进入应用搜索与启动链路。
 - **CoreBox 默认主唤起快捷键（2026-04-18）**：`core.box.toggle` 默认改为启用，仅影响新安装用户；`core.box.aiQuickCall` 继续保持默认关闭，历史快捷键配置不自动迁移。
 - **Tray 直启（2026-04-18）**：托盘运行时不再依赖 `setup.experimentalTray` 门控，设置页与引导页已移除对应实验语义；托盘是否展示继续只由 `showTray / hideDock / startSilent / closeToTray` 控制。
-- **2.4.9 主线 Gate**：插件完善主线收口完成，当前进入 `Nexus 设备授权风控` 文档化与实施阶段。
+- **2.4.9 主线 Gate**：插件完善主线收口完成；`Nexus 设备授权风控` 保留实施文档与历史入口，当前主线转入 CoreApp `2.5.0` 前置治理。
 - **治理执行口径**：Legacy/兼容/结构治理切换为“统一实施 PRD + 五工作包并行验收”，不再按 Phase 1-3 分段决策。
 - **CoreApp 兼容硬切（2026-03-23）**：`window.$channel` 业务调用为 `0`、legacy storage 事件协议（`storage:get/save/reload/save-sync/saveall`）为 `0`；插件权限 `sdkapi` 缺失/低版本改为阻断执行（`SDKAPI_BLOCKED`）。
 - **CoreApp 启动搜索卡顿治理（2026-03-24）**：已落地双库隔离（aux DB）、写入 QoS（priority/drop/circuit）、索引热路径 worker 单写者与启动期降载；可通过 `TUFF_DB_AUX_ENABLED/TUFF_DB_QOS_ENABLED/TUFF_STARTUP_DEGRADE_ENABLED` 灰度与回滚。
@@ -64,25 +65,25 @@
 - **Pilot channels 治理**：已新增 `POST /api/admin/channels/merge-ends` 与一次性脚本，执行“Pilot 优先、Ends 补缺”。
 - **Pilot 自动部署**：仅在 `master` 的远端 `push`（非本地 `commit`）且命中 `pilot-image.yml` 路径过滤后触发；需同时满足 `ONEPANEL_WEBHOOK_URL/TOKEN` 已配置与 1Panel webhook 健康可达，否则需走 `ssh home` 手动部署兜底。
 - **Pilot 设置入口收口**：`/admin/system/channels` 与 `/admin/system/storage` 为主入口；`/cms/*` 仅保留 Legacy 跳转。
-- **执行顺序（锁定）**：`Nexus 设备授权风控`（执行入口：`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md`；前序 `CLI 分包迁移收口（core 真迁移 + 文档统一）` 与 `主文档同步验收` 已完成）。
+- **执行顺序（锁定）**：先 `CoreApp legacy 清理`，再完成 `Windows/macOS 2.5.0 阻塞级适配`；`Nexus 设备授权风控` 降为非当前主线但保留实施入口与历史证据。
 - **质量边界**：Network 套件全仓硬禁生效，业务层 direct `fetch/axios` 继续保持 0 违规。
 
 ## 当前两周重点
 
-- 工作区卫生与文档口径持续对齐（6 主文档三字段一致）。
-- 插件 + CLI 线进入稳定回归（兼容 shim + 命令行为一致性）。
-- 形成 Wave A/B/C 债务治理执行清单（每波附可复现门禁命令）。
+- CoreApp legacy/compat 清册闭环：`2.5.0` 项关闭或显式降权，禁止新增 legacy/raw channel/旧 storage/旧 SDK bypass。
+- Windows/macOS release-blocking 回归：搜索、应用扫描、托盘、更新、插件权限、安装卸载、退出释放。
+- Linux documented best-effort：记录 `xdotool` / desktop environment 限制与非阻塞 smoke。
 
 ## 强制同步矩阵（单一口径）
 
 | 文档 | 当前状态 | 下一动作 |
 | --- | --- | --- |
-| `docs/plan-prd/TODO.md` | 已同步到 2026-03-17 | 按 `NexusDeviceAuthRiskControl-260316` 推进风控实施与验收 |
-| `docs/plan-prd/README.md` | 已同步到 2026-03-17 | 推进 `Nexus 设备授权风控` 并维护“近 3 个月里程碑 + 未闭环能力”口径 |
-| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步到 2026-03-17 | 按锁定顺序推进 `Nexus 设备授权风控`（实施文档已入库） |
+| `docs/plan-prd/TODO.md` | 已同步到 2026-04-20 | 推进 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配` |
+| `docs/plan-prd/README.md` | 已同步到 2026-04-20 | 维护 CoreApp `2.5.0` 前置治理与未闭环能力口径 |
+| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步到 2026-04-20 | 按锁定顺序推进 CoreApp legacy 清理与 Windows/macOS 阻塞级回归 |
 | `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md` | Gate A/B/C/D/E 已完成（D/E historical，2026-03-16 已复核） | 保留证据链并切换到 `2.4.9` 后续主线 |
-| `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` | 已同步到 2026-03-17（新增文档盘点锚点） | 保持 `v2.4.7` 豁免仅限历史版本，`>=2.4.8` 严格门禁 |
-| `docs/plan-prd/01-project/CHANGES.md` | 已同步到 2026-03-17（含本轮盘点与执行路线） | 持续记录 `Nexus 设备授权风控` 推进证据与 CI 结果 |
+| `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` | 已同步到 2026-04-20 | Windows/macOS 为 release-blocking；Linux 保持 documented best-effort |
+| `docs/plan-prd/01-project/CHANGES.md` | 已同步到 2026-04-20 | 持续记录 CoreApp `2.5.0` 前置治理口径与证据 |
 | `docs/INDEX.md` | 本页（入口+快照）已压缩 | 仅维护导航与高价值快照 |
 
 ## 归档与降权
@@ -95,7 +96,7 @@
 - `docs/plan-prd/03-features/omni-panel/OMNIPANEL-FEATURE-HUB-PRD.md` - OmniPanel Feature Hub PRD
 - `docs/plan-prd/02-architecture/intelligence-power-generic-api-prd.md` - Intelligence 能力路由与 Provider 架构 PRD
 - `docs/plan-prd/04-implementation/LegacyChannelCleanup-2408.md` - Legacy Channel Cleanup 2.4.8
-- `docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` - Nexus 设备授权风控实施方案（2.4.9 主线入口）
+- `docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` - Nexus 设备授权风控实施方案（非当前主线，保留入口）
 - `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md` - `v2.4.9` Gate D 发布资产核对（严格签名）
 - `docs/plan-prd/docs/PLUGIN-STORE-MULTI-SOURCE-ACCEPTANCE-2026-03-15.md` - 插件市场多源验收结论
 - `apps/pilot/deploy/README.zh-CN.md` - Pilot 在 1Panel 的标准部署手册（脚本 + env + 回滚 + cron + webhook 自动部署）

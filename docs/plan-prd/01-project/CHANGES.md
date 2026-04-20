@@ -22,6 +22,45 @@
   - 修复 `clipboard-history` 这类已打包静态路由插件在 prod 中被加载到 `index.html#/clipboard-manager` 后显示 `Not here` 的问题，同时保留已有 SPA/hash 插件行为。
   - 补齐 PluginViewLoader 回归测试，覆盖同名预渲染页面优先级。
 
+### fix(core-app): 收口 2.5.0 legacy blocker 与 guard scope
+
+- `scripts/lib/scan-config.mjs`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `packages/utils/transport/events/types/core-box.ts`
+- `packages/utils/transport/events/index.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/division-box/session.ts`
+- `apps/core-app/src/main/modules/division-box/flow-trigger.ts`
+- `apps/core-app/src/main/modules/division-box/flow-trigger.test.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/core-box.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useVisibility.ts`
+- `apps/core-app/src/renderer/src/modules/channel/channel-core.ts`
+- `apps/core-app/src/renderer/src/modules/store/providers/nexus-store-provider.ts`
+- `apps/core-app/src/renderer/src/modules/store/providers/nexus-store-provider.test.ts`
+  - `apps/core-app/scripts` 与 `apps/pilot/scripts` 已纳入 legacy/compat 显式扫描范围，移除脚本级 scope leak；新增命中手工补入 allowlist 与 compatibility registry，未使用 `--write-baseline` 覆盖基线。
+  - CoreBox trigger 新增 typed `CoreBoxEvents.ui.trigger`，CoreBox/DivisionBox renderer 监听与 main push 统一走 event catalog；DivisionBox 不再直接广播旧 channel type，renderer raw channel 兼容边界同步移除 `LEGACY_CHANNEL_*` 内部命名。
+  - 插件 channel bridge 移除 legacy header type 语义，仅保留 transport source 与 plugin context；动态插件事件仍通过现有 raw event transport 承载，不新增 SDK/API。
+  - Nexus store provider 只接受 Nexus API `{ plugins: [...] }` 响应；旧数组 manifest、旧 `path` 包地址与 base URL 自动拼接改为结构化错误。
+  - FlowTrigger 保留注册表面，但触发时显式返回 `FLOW_TRIGGER_UNAVAILABLE`，避免在 Flow runtime 未接入前创建假成功 session。
+  - permission JSON->SQLite、dev data root migration、theme localStorage migration 已从 release blocker 降权为 `core-app-migration-exception`，保留定向 regression 责任。
+  - 自动门禁证据：`git diff --check`、`pnpm docs:guard`、`pnpm docs:guard:strict`、`pnpm compat:registry:guard`、`node scripts/check-legacy-boundaries.mjs`、`pnpm network:guard` 已通过；`pnpm legacy:guard` 在 legacy/compat 子门禁通过后被既有 `size:guard` 大文件基线漂移拦截；当前 worktree 未安装本地依赖，CoreApp vitest 与 typecheck 待依赖恢复后补跑。
+
+### docs(core-app): 锁定 2.5.0 前置治理口径
+
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+  - 当前主线从 `Nexus 设备授权风控` 调整为 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`；Nexus 风控保留实施入口与历史证据，但不再作为当前主线。
+  - `2.5.0` 前 CoreApp 剩余 legacy/compat 债务必须关闭或显式降权，禁止新增 legacy 分支、raw channel、旧 storage protocol、旧 SDK bypass。
+  - Windows/macOS 回归设为 release-blocking；Linux 仅记录 `xdotool` / desktop environment 限制与非阻塞 smoke，不作为 `2.5.0` blocker。
+  - 本条仅记录文档口径与清册调整，不表示运行时代码已完成清理或平台回归已通过。
+
 ### fix(nexus/core-app): 收口组件文档页卡顿与 Windows Everything 搜索稳定性
 
 - `apps/nexus/app/components/docs/DocsComponentSyncTable.vue`

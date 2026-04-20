@@ -118,9 +118,8 @@ const TRANSIENT_ISSUE_CODES = new Set([
   'AUTO_DISABLED_EXCESSIVE_ERRORS',
   'LIFECYCLE_SCRIPT_FAILED'
 ])
-const LEGACY_CHANNEL_MAIN = 'main' as PluginStandardChannelData['header']['type']
-const LEGACY_CHANNEL_PLUGIN = 'plugin' as PluginStandardChannelData['header']['type']
-const LEGACY_CHANNEL_SUCCESS = 200 as PluginStandardChannelData['code']
+const CHANNEL_SOURCE_TRANSPORT = 'transport' as PluginStandardChannelData['header']['type']
+const CHANNEL_SUCCESS_CODE = 200 as PluginStandardChannelData['code']
 
 export interface TouchPluginRuntimeContext {
   rootPath: string
@@ -1353,17 +1352,16 @@ export class TouchPlugin implements ITouchPlugin {
         }
 
         const pluginContextName = context?.plugin?.name
-        const headerType = pluginContextName ? LEGACY_CHANNEL_PLUGIN : LEGACY_CHANNEL_MAIN
         let replied = false
         let replyData: unknown
         const event: PluginStandardChannelData = {
           name: eventName,
           header: {
             status: 'request',
-            type: headerType,
+            type: CHANNEL_SOURCE_TRANSPORT,
             plugin: pluginContextName
           },
-          code: LEGACY_CHANNEL_SUCCESS,
+          code: CHANNEL_SUCCESS_CODE,
           data: payload as unknown,
           plugin: pluginContextName,
           reply: (_code, data) => {

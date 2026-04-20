@@ -13,7 +13,7 @@ import type { TouchPlugin } from '../plugin/plugin'
 import os from 'node:os'
 import path from 'node:path'
 import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxState } from '@talex-touch/utils'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelude'
 import { app, WebContentsView } from 'electron'
 import fse from 'fs-extra'
@@ -23,9 +23,6 @@ import { createLogger } from '../../utils/logger'
 import { pluginModule } from '../plugin/plugin-module'
 import { usePluginInjections } from '../plugin/runtime/plugin-injections'
 
-const coreBoxTriggerEvent = defineRawEvent<{ [key: string]: unknown }, void>('core-box:trigger')
-type LegacyMainChannelType = 'main'
-const LEGACY_CHANNEL_MAIN = 'main' as LegacyMainChannelType
 const divisionBoxSessionLog = createLogger('DivisionBoxSession')
 
 /**
@@ -254,12 +251,9 @@ export class DivisionBoxSession {
         }
       }
 
-      // Notify renderer about DivisionBox trigger via unified channel
-      const channel = getRegisteredMainRuntime('division-box').channel
-      channel.broadcastTo(
-        this.touchWindow.window,
-        LEGACY_CHANNEL_MAIN,
-        coreBoxTriggerEvent.toEventName(),
+      getRegisteredMainRuntime('division-box').transport.broadcastToWindow(
+        this.touchWindow.window.id,
+        CoreBoxEvents.ui.trigger,
         {
           type: 'division-box',
           sessionId: this.sessionId,
@@ -469,13 +463,9 @@ export class DivisionBoxSession {
       pluginModule.pluginManager.setActivePlugin(plugin.name)
     }
 
-    // Send trigger to notify renderer about DivisionBox mode
-    // This populates windowState.divisionBox in the renderer
-    const channel = getRegisteredMainRuntime('division-box').channel
-    channel.broadcastTo(
-      this.touchWindow.window,
-      LEGACY_CHANNEL_MAIN,
-      coreBoxTriggerEvent.toEventName(),
+    getRegisteredMainRuntime('division-box').transport.broadcastToWindow(
+      this.touchWindow.window.id,
+      CoreBoxEvents.ui.trigger,
       {
         type: 'division-box',
         sessionId: this.sessionId,

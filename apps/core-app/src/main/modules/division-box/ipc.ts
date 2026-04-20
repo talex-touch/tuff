@@ -309,8 +309,12 @@ export class DivisionBoxIPC {
           return createErrorResponse('Invalid or missing payload')
         }
 
-        const sessionId = await flowTriggerManager.handleFlow(targetId, flowPayload)
-        return createSuccessResponse({ sessionId })
+        try {
+          const sessionId = await flowTriggerManager.handleFlow(targetId, flowPayload)
+          return createSuccessResponse({ sessionId })
+        } catch (error) {
+          return createErrorResponse(error instanceof Error ? error : String(error))
+        }
       })
     )
 

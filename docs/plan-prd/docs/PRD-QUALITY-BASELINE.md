@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-04-17  
+> 更新时间：2026-04-20
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -12,6 +12,7 @@
 
 - 文档盘点与优先级路线统一参考：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`。
 - 主线动作必须同步六文档：`INDEX / README / TODO / CHANGES / Roadmap / Quality Baseline`。
+- 当前主线动作为 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`；`Nexus 设备授权风控` 保留实施文档与历史入口，非当前主线。
 - 文档门禁升级前置保持不变：连续 5 次 `pnpm docs:guard` 零告警 + 连续 2 周无口径漂移。
 
 ## 2. 每个活跃 PRD 必须包含的章节（MUST）
@@ -45,6 +46,7 @@
 - 强制启用 `size:guard`：超长文件阈值 `>=1200` 基线冻结，禁止新增和增长；仅允许通过 `growthExceptions` 临时豁免，并要求同步 `CHANGES + compatibility registry`。
 - 强制启用统一 guard 基础库：`legacy/compat/size/network` 脚本必须复用 `scripts/lib/*` 公共扫描/版本能力，禁止重复实现目录遍历与版本比较逻辑。
 - CoreApp 硬切补充门禁：业务层 `window.$channel` 调用、legacy storage 旧协议（`storage:get/save/reload/save-sync/saveall`）与 legacy `sdkapi` 放行路径必须保持为 `0`；占位能力必须返回真实状态或显式 `unavailable + reason`，禁止固定假值“成功”。
+- CoreApp `2.5.0` 前置门禁：清册中的 core-app `2.5.0` 兼容债务必须关闭或显式降权；Windows/macOS 回归为 release-blocking，Linux 仅作为 documented best-effort 与非阻塞 smoke。
 
 ### 3.2 可靠性约束
 - 关键路径需有显式错误处理与用户可见反馈。
@@ -211,7 +213,7 @@
 - 安装失败路径必须可见（拒绝授权、异常、超时均不得 silent failure）。
 - 事件/类型变更仅允许可选字段追加，禁止破坏既有语义与兼容性。
 - `@talex-touch/tuff-cli` 为命令主入口，旧入口仅兼容 shim + deprecation，不承载新命令逻辑。
-- 下一动作已统一为 `Nexus 设备授权风控`，不再把 CLI 分包迁移视为待办主线。
+- 下一动作已统一为 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`，不再把 CLI 分包迁移视为待办主线。
 
 ### 6.8 Nexus 设备授权风控文档化（2026-03-16）
 
@@ -220,7 +222,7 @@
 | --- | --- | --- |
 | 正式实施文档 | `docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` | 已入库 |
 | 文档结构 | 目标 / 范围与非目标 / 分期 / 验收 / 回滚 / 风险与豁免边界 | 已对齐 |
-| 六主文档口径 | 下一动作统一为 `Nexus 设备授权风控` | 已对齐 |
+| 六主文档口径 | `Nexus 设备授权风控` 保留实施入口，当前主线已切换到 CoreApp `2.5.0` 前置治理 | 已降权 |
 | CLI 兼容策略 | `2.4.x` 保留 shim，`2.5.0` 退场 | 已固化 |
 
 **质量约束落地**
@@ -228,7 +230,25 @@
 - 豁免必须具备责任人、时间窗和原因，不允许全局无限期豁免。
 - 文档门禁仍保持 `docs:guard` report-only，strict 升级需满足连续零告警前置条件。
 
-### 6.9 Pilot 路由 V2（2026-03-17）
+### 6.9 CoreApp 2.5.0 前置治理（2026-04-20）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 当前主线 | `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配` | 已锁定 |
+| Legacy 清理 | channel/fallback/placeholder blocker 已关闭；数据迁移项降权为 `core-app-migration-exception` | Guarded |
+| Windows 回归 | 搜索、应用扫描/UWP、托盘、更新、插件权限、安装卸载、退出释放 | Release-blocking |
+| macOS 回归 | 权限引导、OmniPanel Accessibility、native-share、托盘/dock、更新、插件权限、退出释放 | Release-blocking |
+| Linux 回归 | `xdotool` / desktop environment 限制说明 + smoke | Best-effort / non-blocking |
+
+**质量约束落地**
+- 新增能力不得通过 legacy 分支、raw channel、旧 storage protocol 或旧 SDK bypass 承载。
+- `apps/core-app/scripts` 与 `apps/pilot/scripts` 必须纳入 legacy/compat 显式扫描；不得用 scope exemption 掩盖脚本债务。
+- 数据迁移例外必须保持 one-shot / marker-gated / read-once，不得重新成为业务写入 SoT。
+- Windows/macOS 阻塞级回归必须在 `CHANGES + TODO` 留证；Linux 失败必须记录限制原因，但不阻塞 `2.5.0`。
+- `Nexus 设备授权风控` 保留实施文档，不得从历史记录中删除。
+
+### 6.10 Pilot 路由 V2（2026-03-17）
 
 **现状指标**
 | 项目 | 结果 | 结论 |
@@ -244,7 +264,7 @@
 - 模型开关必须可控：`internet`、`thinking` 均需透传至后端执行链路。
 - 路由异常必须自动回退：LangGraph Local Server 不可用时回退 deepagent，不得阻断主对话链路。
 
-### 6.10 Core Main 生命周期止血（2026-03-23）
+### 6.11 Core Main 生命周期止血（2026-03-23）
 
 **现状指标**
 | 项目 | 结果 | 结论 |
@@ -261,7 +281,7 @@
 - 事件总线必须保证“单 handler 失败不影响其他 handler”与 `once` 监听器一次性语义。
 - 关停流程必须可等待（`emitAsync` + `unloadAll`），并可观测 `app-quit` 上下文下的资源清理。
 
-### 6.11 Core Main 生命周期收口与去耦首轮（2026-03-23）
+### 6.12 Core Main 生命周期收口与去耦首轮（2026-03-23）
 
 **现状指标**
 | 项目 | 结果 | 结论 |
@@ -279,7 +299,7 @@
 - 新模块默认通过 `ctx.runtime` 获取依赖，不得新增 `globalThis.$app` 读取点；存量兼容仅允许过渡期一次性告警。
 - 结构拆分必须保持外部 event 名称与 payload 兼容，且每次拆分补齐 direct tests，不以集成测试单点兜底。
 
-### 6.12 脚本治理去重首轮（2026-03-23）
+### 6.13 脚本治理去重首轮（2026-03-23）
 
 **现状指标**
 | 项目 | 结果 | 结论 |

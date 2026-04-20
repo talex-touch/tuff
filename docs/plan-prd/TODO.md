@@ -9,8 +9,9 @@
 
 | 主题 | 当前事实 | 下一动作 | 强制同步文档 |
 | --- | --- | --- | --- |
-| 版本主线 | 当前工作区基线为 `2.4.9-beta.4` | 推进 `Nexus 设备授权风控` | `TODO` / `README` / `INDEX` / `CHANGES` |
-| Legacy/兼容/结构治理 | 已锁定统一实施 PRD（五工作包并行） | 按统一门禁执行收口，不再按 Phase 口径拆分决策 | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
+| 版本主线 | 当前工作区基线为 `2.4.9-beta.4` | 推进 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配` | `TODO` / `README` / `INDEX` / `CHANGES` |
+| Legacy/兼容/结构治理 | 已锁定统一实施 PRD（五工作包并行），CoreApp 剩余兼容债务进入 `2.5.0` 前置清理窗口 | 清册中的 core-app `2.5.0` 项必须关闭或显式降权，不再新增 legacy 分支/raw channel/旧 storage protocol/旧 SDK bypass | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
+| CoreApp 平台适配 | `2.5.0` 前 Windows/macOS 为 release-blocking；Linux 保留 documented best-effort | Windows/macOS 完成阻塞级人工回归；Linux 仅记录 `xdotool` / desktop environment 限制与非阻塞 smoke | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | 2.4.8 Gate | OmniPanel 稳定版 MVP 已完成（historical） | 保留历史验收证据，不再作为当前开发主线 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | v2.4.7 Gate | A/B/C/D/E 全部完成（D/E historical） | 保留 run/manifest/sha256 证据链 | `TODO` / `README` / `Roadmap` / `Release Checklist` / `Quality Baseline` / `INDEX` |
 | Pilot Runtime | Node Server + Postgres/Redis + JWT Cookie 主路径；首页默认 DeepAgent，legacy `$completion` 已收口为唯一前端主消费链 | 继续补齐 SSE 反向代理部署烟测与矩阵回归 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
@@ -45,6 +46,18 @@
 - [ ] CoreBox 第三方 App 非阻塞启动 Windows 真机验证：
   - 验证 `shortcut` 保留 `launchArgs / workingDirectory` 并在 CoreBox 立即隐藏后后台启动。
   - 验证 `uwp` 继续通过 `explorer.exe shell:AppsFolder\\...` handoff，早期失败会触发系统通知。
+
+### 2.5.0 CoreApp Release Blockers（当前优先）
+
+- [x] Legacy 清理阻塞：清册中的 core-app `2.5.0` 项已关闭或显式降权；不得新增 `legacy` 分支、raw channel、旧 storage protocol、旧 SDK bypass。
+  - 已将 `apps/core-app/scripts` 与 `apps/pilot/scripts` 纳入 `legacy/compat` 显式扫描范围，并手工补齐 allowlist / registry。
+  - 插件 channel bridge 移除 legacy header 语义；DivisionBox trigger 切到 typed `CoreBoxEvents.ui.trigger`；Nexus store 旧 manifest/path fallback 已改为结构化错误；FlowTrigger 触发默认返回 `FLOW_TRIGGER_UNAVAILABLE`。
+  - permission JSON->SQLite、dev data root migration、theme localStorage migration 降权为 `core-app-migration-exception`，保留定向 regression。
+- [ ] Windows 阻塞级回归：Everything/文件搜索、应用扫描/UWP、托盘状态、更新包匹配、插件权限拦截、安装/卸载、退出资源释放。
+- [ ] macOS 阻塞级回归：首次引导权限、OmniPanel Accessibility 门控、native-share 标记、托盘/dock 行为、更新安装、插件权限拦截、退出资源释放。
+- [ ] Linux 非阻塞观察：记录 `xdotool` / desktop environment 限制与 smoke 结果；不作为 `2.5.0` release blocker。
+- [ ] 证据闭环：每轮清理同步 `CHANGES + TODO + compatibility registry`，并附 `docs:guard` / `legacy:guard` / 定向回归结果。
+  - 2026-04-20 自动门禁：`git diff --check`、`pnpm docs:guard`、`pnpm docs:guard:strict`、`pnpm compat:registry:guard`、`node scripts/check-legacy-boundaries.mjs`、`pnpm network:guard` 已通过；`pnpm legacy:guard` 在 legacy/compat 子门禁通过后被既有 `size:guard` 大文件基线漂移拦截；CoreApp typecheck/test 待本地依赖安装后补证。
 
 ### A. 文档治理（本轮）
 
@@ -270,7 +283,8 @@
 - [x] 插件 API 硬切：deprecated 旧暴露（含顶层 `box/feature` 兼容别名）下线，仅保留 `plugin.box`/`plugin.feature` 与 `boxItems` 新入口。
 - [x] 占位能力补齐：`OfficialUpdateProvider` 改为真实接口探测，后端不可用返回 `unavailable + reason`；`AgentStore` 实装远端目录/下载/校验/解包/回滚/真实更新比对；`ExtensionLoader` 补齐 unload 生命周期。
 - [x] 自动化验证：`typecheck` 通过；定向 `vitest`（权限门禁、平台识别、AgentStore、Extension unload）通过。
-- [ ] 三平台人工回归：Windows/macOS/Linux 的首次引导权限、更新包匹配、插件权限拦截、Agent 安装升级卸载、退出资源释放。
+- [ ] Windows/macOS 阻塞级人工回归：首次引导权限、更新包匹配、插件权限拦截、Agent 安装升级卸载、退出资源释放。
+- [ ] Linux 非阻塞 smoke：记录 `xdotool` / desktop environment 限制与 smoke 结果，不阻塞 `2.5.0`。
 
 ### Q. CoreBox 搜索性能优化（2026-03-23）
 
@@ -347,20 +361,21 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 139 |
-| 未完成 (`- [ ]`) | 21 |
-| 总计 | 160 |
-| 完成率 | 87% |
+| 已完成 (`- [x]`) | 154 |
+| 未完成 (`- [ ]`) | 28 |
+| 总计 | 182 |
+| 完成率 | 85% |
 
-> 统计时间: 2026-04-07（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-04-20（按本文件实时 checkbox 计数）。
 
 ---
 
 ## 🎯 下一步（锁定）
 
-1. 完成 `Nexus 设备授权风控` Phase 0/1 文档化与验收闭环。
-2. 在本轮文档压缩完成后，继续推进风控实现与回归。
-3. `docs:guard` 连续零告警后，再升级 strict 阻塞策略。
+1. 完成 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配` 文档化与清册闭环。
+2. 按 Windows/macOS 阻塞级回归清单补齐人工证据；Linux 仅记录 best-effort smoke。
+3. `Nexus 设备授权风控` 保留实施文档与历史入口，降为非当前主线。
+4. `docs:guard` 连续零告警后，再升级 strict 阻塞策略。
 ### Startup Path Governance (2026-03-23)
 
 - [x] Unified root path policy in core startup and network secure-store path resolution (`dev -> userData/tuff-dev`, `release -> userData/tuff`).

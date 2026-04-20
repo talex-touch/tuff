@@ -1,6 +1,6 @@
 # Tuff 产品总览与 8 周路线图（2026-Q1）
 
-> 更新时间：2026-04-17  
+> 更新时间：2026-04-20
 > 适用范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`
 
 ## 1. 产品总览（是什么）
@@ -45,8 +45,9 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 不允许新增未类型约束的跨层调用（禁止新增 raw event 直连）。
 - 新增模块必须提供最小可回归验证（lint/typecheck/test 至少 1 项）。
 - 不得通过“关闭规则/降级配置”绕过质量问题（除非有明确豁免文档）。
-- 兼容债务冻结门禁：`legacy:guard` 必须通过，禁止新增 `channel.send('x:y')` 与新增 `legacy` 分支；存量债务仅允许白名单承载并附 `expiresVersion`（当前收口版本 `2.5.0`）。
+- 兼容债务冻结门禁：`legacy:guard` 必须通过，禁止新增 `channel.send('x:y')` 与新增 `legacy` 分支；存量债务仅允许白名单承载并附 `expiresVersion`（当前收口版本 `2.5.0`）。`2.5.0` 前 CoreApp 清册项必须关闭或显式降权，不得保留未说明的旧 storage protocol、旧 SDK bypass 或伪成功兼容分支。
 - 兼容债务清册门禁：`compatibility-debt-registry.csv` 必须覆盖全部存量兼容债务；新增债务无登记禁止合入。
+- CoreApp 平台适配门禁：`2.5.0` 前 Windows/macOS 为 release-blocking，必须完成搜索、应用扫描、托盘、更新、插件权限、安装卸载、退出释放回归；Linux 保留 `xdotool` / desktop environment documented best-effort，不作为 `2.5.0` blocker。
 - 超长文件门禁：`size:guard` 必须通过，阈值 `>=1200` 的存量文件禁止继续增长，新增超长文件禁止合入。
 - 网络边界硬约束：业务层禁止新增 direct `fetch/axios`，统一走 `@talex-touch/utils/network`（network 套件内部除外），并由 root `network:guard` + ESLint 双门禁拦截。
 - 门禁脚本工程约束：`legacy/compat/size/network` 共享 `scripts/lib/*` 基础能力；workspace 侧门禁优先复用 root 实现（参数化 scope），禁止重复维护同类脚本。
@@ -73,7 +74,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 ### 3.5 文档治理执行锚点（2026-03-17）
 - 文档盘点与下一步路线以 `docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md` 为统一引用。
-- 当前执行优先级保持：先 `Nexus 设备授权风控`，再推进文档 strict 化与 Wave A/B/C。
+- 当前执行优先级调整为：先 `CoreApp legacy 清理`，再完成 `Windows/macOS 2.5.0 阻塞级适配`；`Nexus 设备授权风控` 保留实施文档与历史入口，降为非当前主线。
 - 升级 strict 前置条件固定：连续 5 次 `docs:guard` 零告警 + 连续 2 周无口径漂移。
 
 ## 4. 8 周路线图（建议执行窗口：2026-02-23 ~ 2026-04-19）
@@ -186,10 +187,10 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - **签名缺口豁免（仅 v2.4.7）**：GitHub 原始 `v2.4.7` 无 `.sig` 资产，manifest 也无 signature 字段；按 `Accepted waiver` 处理，不扩展到 `>=2.4.8`。
 - **执行入口**：`docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
 
-## 4.2 v2.4.9 插件完善 Gate（当前主线）
+## 4.2 CoreApp 2.5.0 前置治理（当前主线）
 
-- **状态（2026-03-16）**：插件完善主线收口完成，进入 `Nexus 设备授权风控` 下一主线。
-- **执行入口**：`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md`
+- **状态（2026-04-20）**：插件完善主线已收口；当前主线切换为 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`。
+- **Nexus 风控状态**：`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` 保留为实施入口与历史证据，不再作为当前主线。
 - **完成项**：
   - 权限中心 Phase 5：`PermissionStore` 切换 SQLite 主存储，支持 `JSON -> SQLite` 一次性迁移与失败只读回退；
   - 安装链路权限确认：安装阶段支持 `always/session/deny` 三分支并显式失败反馈；
@@ -198,9 +199,9 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
   - CLI 收口：`tuff` 主入口接管 + `tuff validate` 校验 + 旧入口 deprecation 提示。
 - **历史完成（2.4.8）**：
   - OmniPanel 稳定版 MVP 已通过真实窗口 smoke 与关键失败路径回归，不再作为当前开发主线。
-- **后续顺序（锁定）**：`Nexus 设备授权风控`（`OmniPanel Gate`、`SDK Hard-Cut E~F`、`v2.4.7 Gate D/E`、`权限中心 Phase 5`、`View Mode Phase2~4`、`CLI 分包迁移收口`、`主文档同步验收` 已完成）。
+- **后续顺序（锁定）**：先 `CoreApp legacy 清理`，再完成 `Windows/macOS 2.5.0 阻塞级适配`；`Nexus 设备授权风控` 降为非当前主线（`OmniPanel Gate`、`SDK Hard-Cut E~F`、`v2.4.7 Gate D/E`、`权限中心 Phase 5`、`View Mode Phase2~4`、`CLI 分包迁移收口`、`主文档同步验收` 已完成）。
 - **治理口径（锁定）**：Legacy/兼容/结构治理统一采用 `UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md`，按五工作包并行推进与统一里程碑验收。
-- **硬切进展（2026-03-23）**：`apps/core-app` 已完成一轮兼容债硬切（权限/Storage/Channel/插件 API/更新占位/AgentStore/Extension unload），下一步保留三平台人工回归与发布说明收口。
+- **硬切进展（2026-04-20）**：`apps/core-app` 已完成一轮兼容债硬切（权限/Storage/Channel/插件 API/更新占位/AgentStore/Extension unload）；下一步关闭或降权清册中的 CoreApp `2.5.0` 项，并完成 Windows/macOS 阻塞级人工回归。Linux 仅记录 best-effort smoke 与限制说明。
 - **CLI 兼容策略（锁定）**：`2.4.x` 保留 `@talex-touch/unplugin-export-plugin` CLI shim，`2.5.0` 退场。
 
 ## 5. 里程碑验收标准（跨周）

@@ -8,11 +8,13 @@ export const WORKSPACE_SCAN_ROOTS = [
 
 export const LEGACY_SCAN_ROOTS = [
   'apps/core-app/src',
+  'apps/core-app/scripts',
   'apps/nexus/server',
   'apps/nexus/app',
   'apps/pilot/server',
   'apps/pilot/app',
   'apps/pilot/shared',
+  'apps/pilot/scripts',
   'packages',
   'plugins',
 ]
@@ -24,9 +26,6 @@ export const SCOPE_GUARD_EXEMPT_FILES = new Set([
   'apps/core-app/electron.vite.config.ts',
   'apps/core-app/eslint.config.mjs',
   'apps/core-app/generator-information.ts',
-  'apps/core-app/scripts/build-target.js',
-  'apps/core-app/scripts/build-target/postprocess-mac.js',
-  'apps/core-app/scripts/ensure-platform-modules.js',
   'apps/core-app/uno.config.ts',
   'apps/nexus/sentry.server.config.ts',
   'apps/nexus/content.config.ts',
@@ -46,9 +45,6 @@ export const SCOPE_GUARD_EXEMPT_FILES = new Set([
   'apps/nexus/vitest.config.ts',
   'apps/pilot/eslint.config.js',
   'apps/pilot/nuxt.config.ts',
-  'apps/pilot/scripts/dev.mjs',
-  'apps/pilot/scripts/merge-ends-channels.mjs',
-  'apps/pilot/scripts/report-dist-size.mjs',
   'apps/pilot/shared/pilot-env-loader.ts',
   'apps/pilot/shims-compat.d.ts',
   'apps/pilot/uno.config.ts',

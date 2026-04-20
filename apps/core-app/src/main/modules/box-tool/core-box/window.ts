@@ -11,8 +11,8 @@ import { sleep, StorageList } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import chalk from 'chalk'
 import { app, nativeTheme, screen, WebContentsView } from 'electron'
@@ -46,11 +46,6 @@ interface CoreBoxUiResumePayload {
 }
 
 const coreBoxUiResumeEvent = defineRawEvent<CoreBoxUiResumePayload, void>('core-box:ui-resume')
-const coreBoxTriggerEvent = defineRawEvent<
-  { id?: number; show?: boolean; [key: string]: unknown },
-  void
->('core-box:trigger')
-
 const coreBoxWindowLog = createLogger('CoreBox').child('Window')
 const COREBOX_MIN_HEIGHT = 64
 
@@ -244,7 +239,7 @@ export class WindowManager {
     }, 200)
 
     window.window.webContents.on('dom-ready', () => {
-      this.getTransport().broadcastToWindow(window.window.id, coreBoxTriggerEvent, {
+      this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.trigger, {
         id: window.window.webContents.id,
         show: window.window.isVisible()
       })
@@ -268,7 +263,7 @@ export class WindowManager {
 
     window.window.webContents.on('did-finish-load', () => {
       if (wasVisibleBeforeReload) {
-        this.getTransport().broadcastToWindow(window.window.id, coreBoxTriggerEvent, {
+        this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.trigger, {
           id: window.window.webContents.id,
           show: true
         })
@@ -608,7 +603,7 @@ export class WindowManager {
       window.window.showInactive()
     }
 
-    this.getTransport().broadcastToWindow(window.window.id, coreBoxTriggerEvent, {
+    this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.trigger, {
       id: window.window.webContents.id,
       show: true
     })
@@ -638,7 +633,7 @@ export class WindowManager {
     if (window.window.isDestroyed()) return
 
     this.stopBoundsAnimation()
-    this.getTransport().broadcastToWindow(window.window.id, coreBoxTriggerEvent, {
+    this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.trigger, {
       id: window.window.webContents.id,
       show: false
     })

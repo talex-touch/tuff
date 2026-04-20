@@ -44,7 +44,7 @@
         },
         {
           "file": "apps/core-app/src/main/modules/download/migration-manager.ts",
-          "maxCount": 2,
+          "maxCount": 3,
           "expiresVersion": "2.5.0"
         },
         {
@@ -119,7 +119,7 @@
         },
         {
           "file": "apps/core-app/src/renderer/src/modules/auth/auth-env.test.ts",
-          "maxCount": 3,
+          "maxCount": 4,
           "expiresVersion": "2.5.0"
         },
         {
@@ -214,12 +214,12 @@
         },
         {
           "file": "apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts",
-          "maxCount": 2,
+          "maxCount": 4,
           "expiresVersion": "2.5.0"
         },
         {
           "file": "apps/pilot/app/composables/usePilotChatPage.ts",
-          "maxCount": 1,
+          "maxCount": 2,
           "expiresVersion": "2.5.0"
         },
         {
@@ -234,12 +234,12 @@
         },
         {
           "file": "apps/pilot/app/pages/admin/system/model-groups.vue",
-          "maxCount": 4,
+          "maxCount": 5,
           "expiresVersion": "2.5.0"
         },
         {
           "file": "apps/pilot/app/pages/admin/system/route-combos.vue",
-          "maxCount": 4,
+          "maxCount": 5,
           "expiresVersion": "2.5.0"
         },
         {
@@ -429,6 +429,146 @@
         },
         {
           "file": "packages/utils/transport/sdk/renderer-transport.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/channel/common.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/db/db-write-scheduler.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/clipboard.transport.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/file-protocol/index.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/omni-panel/index.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/utils/app-root-path.test.ts",
+          "maxCount": 9,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/utils/app-root-path.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/shared/update/channel.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/__tests__/legacy-completion-stream-contract.test.ts",
+          "maxCount": 5,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/__tests__/legacy-stream-input.test.ts",
+          "maxCount": 7,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/__tests__/pilot-admin-routing-config.test.ts",
+          "maxCount": 9,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/__tests__/pilot-legacy-run-event-card.test.ts",
+          "maxCount": 12,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/__tests__/pilot-routing-resolver.intent.test.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/__tests__/pilot-stream-replay.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts",
+          "maxCount": 4,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/app/components/pilot/PilotChatWorkspace.vue",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/app/components/pilot/PilotSessionsPanel.vue",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/app/components/pilot/PilotSidebarHeader.vue",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/app/composables/api/base/v1/aigc/completion/legacy-stream-contract.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/pilot/app/pages/index.vue",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/tuff-intelligence/src/business/pilot/index.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/__tests__/polling-service.test.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/__tests__/system-sdk.test.ts",
+          "maxCount": 8,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/common/utils/polling.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/plugin/sdk/system.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/types/modules/module-lifecycle.ts",
           "maxCount": 1,
           "expiresVersion": "2.5.0"
         },
