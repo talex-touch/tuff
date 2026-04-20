@@ -2223,7 +2223,8 @@
       "actions": {
         "installNow": "立即重启更新",
         "openInstaller": "打开安装包",
-        "manualCheck": "立即检查",
+        "manualCheck": "检查更新",
+        "manualCheckDesc": "立即检查当前渠道是否有新版本。",
         "clearCache": "清空缓存"
       },
       "assetsTitle": "GitHub 下载包",

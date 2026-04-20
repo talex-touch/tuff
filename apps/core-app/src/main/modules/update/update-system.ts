@@ -227,7 +227,6 @@ export class UpdateSystem {
 
       return {
         hasUpdate: false,
-        error: 'No update available',
         source: 'GitHub'
       }
     } catch (error) {

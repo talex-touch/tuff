@@ -5,6 +5,26 @@
 
 ## 2026-04-20
 
+### fix(clipboard): 修复插件剪贴板 stream 与图片原图预览链路
+
+- `packages/utils/transport/sdk/plugin-transport.ts`
+- `packages/utils/plugin/sdk/clipboard.ts`
+- `packages/utils/transport/events/types/clipboard.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+  - `TuffPluginTransport.stream` 支持插件通道 fallback stream 事件，避免 clipboard SDK 订阅 `ClipboardEvents.change` 时抛出 `Stream is not supported in plugin transport`。
+  - 剪贴板历史 typed item 补充轻量 `thumbnail/meta` 字段，图片项直接携带 `meta.image_original_url`，详情预览可立即切到原始 `tfile://` 图源。
+  - 新增插件 transport stream 单元测试，覆盖数据、结束和取消事件。
+
+### fix(core-app): 修复二次启动主窗口恢复与更新页检查入口
+
+- `apps/core-app/src/main/modules/addon-opener-handlers.ts`
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `apps/core-app/src/main/modules/update/update-system.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUpdate.vue`
+  - 二次启动时主窗口恢复链路补齐 `show()`，最小化窗口先 `restore()`，隐藏到托盘的主窗口也会重新显示并聚焦。
+  - 更新检查的“无新版本”结果不再作为错误返回，前端会进入“当前已是最新版本”状态并清空错误信息。
+  - 设置页操作区在未下载完成时恢复“检查更新”主按钮；“查看下载包”仅在已有缓存 release 时作为辅助入口展示。
+
 ### fix(tuff-cli): 在个人信息菜单补齐退出登录入口
 
 - `packages/tuff-cli/src/bin/tuff.ts`
