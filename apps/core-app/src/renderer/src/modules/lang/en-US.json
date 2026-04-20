@@ -2232,6 +2232,7 @@
         "installNow": "Restart to Update",
         "openInstaller": "Open Installer",
         "manualCheck": "Check Now",
+        "manualCheckDesc": "Check the current channel for a new version.",
         "clearCache": "Clear Cache"
       },
       "assetsTitle": "GitHub Packages",

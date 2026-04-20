@@ -900,7 +900,6 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
       const noUpdateResult: UpdateCheckResult = {
         hasUpdate: false,
-        error: 'No update available',
         source: result.source
       }
 

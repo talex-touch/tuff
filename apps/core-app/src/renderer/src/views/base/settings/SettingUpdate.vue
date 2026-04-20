@@ -30,6 +30,7 @@ const downloadStatusDisposers: Array<() => void> = []
 
 const { appStates } = useAppState()
 const {
+  checkApplicationUpgrade,
   handleDownloadUpdate,
   installDownloadedUpdate,
   getUpdateSettings,
@@ -56,6 +57,7 @@ const frequencySaving = ref(false)
 const autoDownloadSaving = ref(false)
 const rendererOverrideSaving = ref(false)
 const installingUpdate = ref(false)
+const manualChecking = ref(false)
 const isMacAutoInstallPlatform = process.platform === 'darwin'
 
 const channelOptions = computed(() => {
@@ -78,7 +80,7 @@ const channelSelectDisabled = computed(() => fetching.value || channelSaving.val
 const frequencySelectDisabled = computed(() => fetching.value || frequencySaving.value)
 
 const statusDescription = computed(() => {
-  if (fetching.value) return t('settings.settingUpdate.status.loading')
+  if (fetching.value || manualChecking.value) return t('settings.settingUpdate.status.loading')
   if (!lastCheck.value) return t('settings.settingUpdate.status.never')
 
   return t('settings.settingUpdate.status.lastChecked', {
@@ -126,6 +128,12 @@ const installActionDescription = computed(() => {
   return isMacAutoInstallPlatform
     ? t('settings.settingUpdate.actionsDesc')
     : t('settings.settingUpdate.actionsDescManual')
+})
+const primaryActionDescription = computed(() => {
+  if (downloadReady.value) {
+    return installActionDescription.value
+  }
+  return t('settings.settingUpdate.actions.manualCheckDesc')
 })
 const installActionLabel = computed(() => {
   return isMacAutoInstallPlatform
@@ -355,6 +363,24 @@ async function handleInstallUpdate(): Promise<void> {
   }
 }
 
+async function handleManualCheck(): Promise<void> {
+  if (manualChecking.value || fetching.value || downloadReady.value) {
+    return
+  }
+
+  manualChecking.value = true
+  try {
+    await checkApplicationUpgrade(true)
+  } finally {
+    try {
+      await refreshStatus()
+      await refreshCachedRelease(selectedChannel.value)
+    } finally {
+      manualChecking.value = false
+    }
+  }
+}
+
 async function handleCopyAssetUrl(asset: DownloadAsset): Promise<void> {
   if (!asset.url) {
     toast.error(t('settings.settingUpdate.assets.messages.copyFailed'))
@@ -474,22 +500,34 @@ function openAssetsDialog(): void {
 
     <TuffBlockSlot
       :title="t('settings.settingUpdate.actionsTitle')"
-      :description="installActionDescription"
+      :description="primaryActionDescription"
       default-icon="i-carbon-settings-adjust"
       active-icon="i-carbon-settings-adjust"
     >
       <TxButton
+        v-if="downloadReady"
         variant="flat"
         type="primary"
-        :disabled="!downloadReady"
+        :disabled="installingUpdate"
         :loading="installingUpdate"
         @click="handleInstallUpdate"
       >
         {{ installActionLabel }}
       </TxButton>
+      <TxButton
+        v-else
+        variant="flat"
+        type="primary"
+        :disabled="fetching || manualChecking"
+        :loading="manualChecking"
+        @click="handleManualCheck"
+      >
+        {{ t('settings.settingUpdate.actions.manualCheck') }}
+      </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSlot
+      v-if="cachedRelease?.release"
       :title="t('settings.settingUpdate.assetsTitle')"
       :description="t('settings.settingUpdate.assetsDesc')"
       default-icon="i-carbon-cloud-download"
@@ -498,12 +536,7 @@ function openAssetsDialog(): void {
       <div class="assets-summary">
         {{ assetsSummary }}
       </div>
-      <TxButton
-        variant="flat"
-        type="primary"
-        :disabled="!cachedRelease?.release"
-        @click="openAssetsDialog"
-      >
+      <TxButton variant="flat" type="primary" @click="openAssetsDialog">
         {{ t('settings.settingUpdate.assetsOpen') }}
       </TxButton>
     </TuffBlockSlot>

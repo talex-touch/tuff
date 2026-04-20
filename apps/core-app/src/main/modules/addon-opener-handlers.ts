@@ -5,6 +5,7 @@ type SecondaryLaunchTargetWindow = {
   isDestroyed?: () => boolean
   isMinimized?: () => boolean
   restore?: () => void
+  show?: () => void
 }
 
 export function focusMainWindowIfAlive(
@@ -18,6 +19,7 @@ export function focusMainWindowIfAlive(
     win.restore?.()
   }
 
+  win.show?.()
   win.focus?.()
   return true
 }
