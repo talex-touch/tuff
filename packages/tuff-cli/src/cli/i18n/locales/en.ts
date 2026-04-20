@@ -114,6 +114,7 @@ export default {
     summary: 'Login summary',
     remotePlugins: 'Remote plugins',
     localRepos: 'Local repositories',
+    logout: 'Logout',
     userFallback: 'Tuff User',
     greeting: 'Hi, {name}',
     email: 'Email: {email}',

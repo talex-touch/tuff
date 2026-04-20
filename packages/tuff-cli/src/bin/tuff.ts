@@ -908,23 +908,33 @@ async function runPluginMenu(): Promise<void> {
   }
 }
 
-async function runAccountMenu(): Promise<void> {
+async function runAccountMenu(): Promise<'logout' | void> {
   while (true) {
     printHeader(t('account.menuTitle'))
     const action = await askSelect(t('account.selectAction'), [
       { label: t('account.summary'), value: 'summary' },
       { label: t('account.remotePlugins'), value: 'remote-plugins' },
       { label: t('account.localRepos'), value: 'local-repos' },
+      { label: t('account.logout'), value: 'logout' },
       { label: t('common.back'), value: 'back' },
     ])
-    if (action === 'back')
+    if (action === 'back') {
       return
-    if (action === 'summary')
+    }
+    if (action === 'summary') {
       await showAccountSummary()
-    else if (action === 'remote-plugins')
+    }
+    else if (action === 'remote-plugins') {
       await showRemotePlugins()
-    else if (action === 'local-repos')
+    }
+    else if (action === 'local-repos') {
       await showLocalRepositories()
+    }
+    else if (action === 'logout') {
+      await clearAuthToken()
+      printInfo(t('settings.logoutSuccess'))
+      return 'logout'
+    }
   }
 }
 
@@ -1058,7 +1068,9 @@ async function runInteractiveMode(): Promise<void> {
       continue
     }
     if (action === 'account') {
-      await runAccountMenu()
+      const outcome = await runAccountMenu()
+      if (outcome === 'logout')
+        return
       continue
     }
     if (action === 'settings') {
