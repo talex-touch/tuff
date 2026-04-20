@@ -1,7 +1,21 @@
 # 变更日志
 
-> 更新时间: 2026-04-19
-> 说明: 主文件仅保留近 30 天（2026-03-20 ~ 2026-04-19）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-20
+> 说明: 主文件仅保留近 30 天（2026-03-21 ~ 2026-04-20）详细记录；更早历史已按月归档。
+
+## 2026-04-20
+
+### fix(nexus/core-app): 收口组件文档页卡顿与 Windows Everything 搜索稳定性
+
+- `apps/nexus/app/components/docs/DocsComponentSyncTable.vue`
+- `apps/nexus/server/api/docs/component-sync.get.ts`
+- `apps/nexus/app/components/content/TuffDemoWrapper.vue`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+  - Nexus 组件同步表改为读取服务端轻量数据源，不再在浏览器端触发 Nuxt Content 全量组件文档查询；组件索引页加入 prerender，降低 prod 首次点击 `/docs/dev/components` 时的 sqlite/wasm 初始化风险。
+  - `TuffDemoWrapper` 改为基于文档实际引用 demo 的显式 registry 懒加载，不再在 wrapper 初始化阶段枚举全部 demo 组件。
+  - Everything provider 补齐 AbortSignal 取消、多词查询透传、CLI CSV 解析、SDK 目录元数据保留与状态错误码字段；SearchCore 明确 `@everything` / `@file` Windows 路由，并将 inputs/filter 纳入搜索缓存 key。
+  - Targeted regression 已覆盖 SDK->CLI fallback、CLI 解析、SDK abort、目录元数据、`@file/@everything` 路由与同文本不同输入缓存隔离。
 
 ## 2026-04-19
 
