@@ -85,7 +85,7 @@ function toPluginClipboardItem(item: ClipboardItem | null): PluginClipboardItem 
     return null
   }
 
-  const meta: Record<string, unknown> = {}
+  const meta: Record<string, unknown> = { ...(item.meta ?? {}) }
   if (Array.isArray(item.tags) && item.tags.length > 0) {
     meta.tags = item.tags
   }
@@ -94,11 +94,12 @@ function toPluginClipboardItem(item: ClipboardItem | null): PluginClipboardItem 
     id: item.id,
     type: mapTransportItemType(item.type),
     content: item.value ?? '',
+    thumbnail: item.thumbnail ?? null,
     rawContent: typeof item.html === 'string' ? item.html : null,
     sourceApp: typeof item.source === 'string' ? item.source : null,
     timestamp: item.createdAt,
     isFavorite: item.isFavorite ?? null,
-    metadata: null,
+    metadata: typeof item.metadata === 'string' ? item.metadata : null,
     meta: Object.keys(meta).length > 0 ? meta : null,
   })
 }
