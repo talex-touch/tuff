@@ -1,6 +1,7 @@
 import type { TuffQuery } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { TouchPlugin } from '../plugin'
+import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app } from 'electron'
@@ -48,6 +49,44 @@ function resolveLocalFileViewUrl(pluginRoot: string, interactionPath: string): s
   }
 
   return pathToFileURL(resolved).href
+}
+
+function isLocalFile(filePath: string): boolean {
+  try {
+    return fs.statSync(filePath).isFile()
+  } catch {
+    return false
+  }
+}
+
+function isPathInside(root: string, target: string): boolean {
+  const relative = path.relative(root, target)
+  return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative)
+}
+
+function resolveStaticRouteViewUrl(pluginRoot: string, interactionPath: string): string | null {
+  const trimmed = interactionPath.trim()
+  if (!trimmed || trimmed.startsWith('#')) {
+    return null
+  }
+
+  const suffixStart = trimmed.search(/[?#]/)
+  const routePath = suffixStart >= 0 ? trimmed.slice(0, suffixStart) : trimmed
+  const suffix = suffixStart >= 0 ? trimmed.slice(suffixStart) : ''
+  const normalized = routePath.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+  if (!normalized || HTML_LIKE_FILE_EXT_RE.test(normalized)) {
+    return null
+  }
+
+  const candidates = [`${normalized}.html`, path.posix.join(normalized, 'index.html')]
+  for (const candidate of candidates) {
+    const resolved = path.resolve(pluginRoot, candidate)
+    if (isPathInside(pluginRoot, resolved) && isLocalFile(resolved)) {
+      return `${pathToFileURL(resolved).href}${suffix}`
+    }
+  }
+
+  return null
 }
 
 function normalizeHashRoute(interactionPath: string): string | null {
@@ -178,19 +217,24 @@ export class PluginViewLoader {
         }
         viewUrl = resolvedFileUrl
       } else {
-        // Route path: use hash routing with index.html
-        const indexPath = path.resolve(plugin.pluginPath, 'index.html')
-        const hashPath = normalizeHashRoute(interactionPath)
-        if (!hashPath) {
-          pushViewIssue(
-            plugin,
-            feature,
-            'INVALID_VIEW_PATH',
-            `Interaction route is invalid: "${interactionPath}".`
-          )
-          return null
+        const staticRouteUrl = resolveStaticRouteViewUrl(plugin.pluginPath, interactionPath)
+        if (staticRouteUrl) {
+          viewUrl = staticRouteUrl
+        } else {
+          // Route path: use hash routing with index.html
+          const indexPath = path.resolve(plugin.pluginPath, 'index.html')
+          const hashPath = normalizeHashRoute(interactionPath)
+          if (!hashPath) {
+            pushViewIssue(
+              plugin,
+              feature,
+              'INVALID_VIEW_PATH',
+              `Interaction route is invalid: "${interactionPath}".`
+            )
+            return null
+          }
+          viewUrl = `${pathToFileURL(indexPath).href}#${hashPath}`
         }
-        viewUrl = `${pathToFileURL(indexPath).href}#${hashPath}`
       }
       viewLog.debug(`Loading view: ${viewUrl}`)
     }

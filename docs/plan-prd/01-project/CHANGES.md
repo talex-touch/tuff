@@ -5,6 +5,14 @@
 
 ## 2026-04-20
 
+### fix(core-app): 修复 webcontent 插件静态路由加载
+
+- `apps/core-app/src/main/modules/plugin/view/plugin-view-loader.ts`
+- `apps/core-app/src/main/modules/plugin/view/plugin-view-loader.test.ts`
+  - 插件生产本地加载 extensionless route 时，优先解析同名预渲染 HTML 文件（如 `/clipboard-manager` → `clipboard-manager.html`）；文件不存在才回退到原有 `index.html#...` hash 路由。
+  - 修复 `clipboard-history` 这类已打包静态路由插件在 prod 中被加载到 `index.html#/clipboard-manager` 后显示 `Not here` 的问题，同时保留已有 SPA/hash 插件行为。
+  - 补齐 PluginViewLoader 回归测试，覆盖同名预渲染页面优先级。
+
 ### fix(nexus/core-app): 收口组件文档页卡顿与 Windows Everything 搜索稳定性
 
 - `apps/nexus/app/components/docs/DocsComponentSyncTable.vue`
