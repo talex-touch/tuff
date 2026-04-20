@@ -252,7 +252,7 @@ export default defineNuxtConfig({
         }
       : {
           crawlLinks: false,
-          routes: ['/'],
+          routes: ['/', '/docs/dev/components', '/api/docs/component-sync'],
           ignore: ['/hi'],
         },
   },
