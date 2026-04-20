@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { type Component, type ComponentPublicInstance, computed, defineAsyncComponent, h, nextTick, ref } from 'vue'
+import { type Component, type ComponentPublicInstance, computed, h, nextTick, ref } from 'vue'
+import { createAsyncDemo, demoLoaders } from './demo-registry'
 
 interface DemoWrapperProps {
   demo: string
@@ -104,25 +105,22 @@ const DemoLoadingFallback: Component = () => h('div', { class: 'tuff-demo__place
 const DemoErrorFallback: Component = () =>
   h('div', { class: 'tuff-demo__placeholder', style: 'color: var(--tx-color-danger)' }, 'Failed to load demo.')
 
-const demoModules = import.meta.glob<{ default: Component }>('./demos/*.vue')
-const demoComponentMap: Record<string, Component> = {}
-for (const [path, loader] of Object.entries(demoModules)) {
-  const name = path.match(/\.\/demos\/(.+)\.vue$/)?.[1]
-  if (name) {
-    demoComponentMap[name] = defineAsyncComponent({
-      loader: loader as () => Promise<{ default: Component }>,
-      loadingComponent: DemoLoadingFallback,
-      errorComponent: DemoErrorFallback,
-      delay: 200,
-      timeout: 15000,
-    })
-  }
-}
+const demoComponentMap = new Map<string, Component>()
 
 const demoComponent = computed(() => {
   if (!props.demo)
     return null
-  return demoComponentMap[props.demo] ?? null
+  const existing = demoComponentMap.get(props.demo)
+  if (existing)
+    return existing
+
+  const loader = demoLoaders[props.demo]
+  if (!loader)
+    return null
+
+  const component = createAsyncDemo(loader, DemoLoadingFallback, DemoErrorFallback)
+  demoComponentMap.set(props.demo, component)
+  return component
 })
 </script>
 
