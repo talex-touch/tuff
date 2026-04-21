@@ -28,6 +28,13 @@ const ACTION_GRID_COLUMNS = 3
 const selectedText = ref('')
 const hasSelection = ref(false)
 const source = ref('manual')
+const selectionSupportLevel = ref<'supported' | 'best_effort' | 'unsupported' | undefined>(
+  undefined
+)
+const selectionIssueCode = ref<'disabled' | 'empty' | 'failed' | 'unsupported' | undefined>(
+  undefined
+)
+const selectionIssueMessage = ref('')
 const loading = ref(false)
 const executingId = ref<string | null>(null)
 const searchKeyword = ref('')
@@ -46,6 +53,14 @@ const executeCodeMessageMap: Record<string, string> = {
 
 const footerHint = computed(() => {
   if (!hasSelection.value) {
+    if (selectionIssueCode.value === 'unsupported') {
+      const base = t('corebox.omniPanel.selectionUnavailable')
+      return selectionIssueMessage.value ? `${base} · ${selectionIssueMessage.value}` : base
+    }
+    if (selectionIssueCode.value === 'failed' || selectionIssueCode.value === 'disabled') {
+      const base = t('corebox.omniPanel.selectionCaptureFailed')
+      return selectionIssueMessage.value ? `${base} · ${selectionIssueMessage.value}` : base
+    }
     return t('corebox.omniPanel.selectionCount', { count: 0 })
   }
 
@@ -134,6 +149,9 @@ function handleContext(payload: OmniPanelContextPayload): void {
   selectedText.value = payload.text || ''
   hasSelection.value = payload.hasSelection
   source.value = payload.source || 'manual'
+  selectionSupportLevel.value = payload.selectionSupportLevel
+  selectionIssueCode.value = payload.selectionIssueCode
+  selectionIssueMessage.value = payload.selectionIssueMessage || ''
 }
 
 function focusSearchBar(): void {

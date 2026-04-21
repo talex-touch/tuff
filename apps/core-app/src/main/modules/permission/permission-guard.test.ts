@@ -73,11 +73,13 @@ describe('permissionGuardPerformance', () => {
     expect(result.allowed).toBe(true)
   })
 
-  it('allows runtime access when sdkapi is missing for legacy plugins', () => {
+  it('blocks runtime access when sdkapi is missing for legacy plugins', () => {
     const result = guard.check(TEST_PLUGIN_ID, TEST_API, undefined)
 
-    expect(result.allowed).toBe(true)
-    expect(result.code).toBeUndefined()
+    expect(result.allowed).toBe(false)
+    expect(result.code).toBe('PERMISSION_DENIED')
+    expect(result.reason).toContain('sdkapi')
+    expect(result.showRequest).toBe(false)
   })
 
   it('requires both window.create and storage.shared for division-box flow trigger', async () => {

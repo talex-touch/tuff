@@ -2943,6 +2943,8 @@
       "executeFailed": "执行失败，请稍后重试。",
       "selectionCount": "已选中 {count} 字符",
       "selectionPreview": "已选中 {preview}",
+      "selectionUnavailable": "当前平台不支持自动抓取选中文本。",
+      "selectionCaptureFailed": "抓取选中文本失败，请检查权限或桌面自动化环境。",
       "selectionRequired": "该 Feature 需要选中文本后才能执行。",
       "coreboxUnavailable": "CoreBox 当前不可用，请稍后重试。",
       "toggleFailed": "更新 Feature 状态失败。",

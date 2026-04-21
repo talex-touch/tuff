@@ -73,6 +73,7 @@ import { LocalPluginProvider } from './providers/local-provider'
 import { usePluginInjections } from './runtime/plugin-injections'
 import { repairTouchTranslationRuntimeIfNeeded } from './runtime/plugin-runtime-repair'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
+import { getPluginSdkCompatibilityGate } from './sdk-compat'
 import { resolvePluginModuleIoRuntime } from './services/plugin-io-service'
 import { buildPluginManagerRuntime } from './services/plugin-manager-orchestrator'
 
@@ -803,6 +804,10 @@ function createPluginModuleInternal(
     },
     resolvePermissionConfirmation: async ({ request, manifest, clientMetadata }) => {
       if (!manifest?.name) return null
+      const sdkGate = getPluginSdkCompatibilityGate(manifest.name, manifest.sdkapi)
+      if (sdkGate.blocked) {
+        throw new Error(sdkGate.message)
+      }
       const permissionModule = getPermissionModule()
       if (!permissionModule) return null
       const declared = parseManifestPermissions({
@@ -1011,6 +1016,13 @@ function createPluginModuleInternal(
       }
     }
 
+    if (plugin.loadError?.code === 'SDKAPI_BLOCKED') {
+      pluginLog.warn('Plugin enable blocked by sdkapi hard-cut', {
+        meta: { plugin: pluginName, code: plugin.loadError.code }
+      })
+      return false
+    }
+
     // Check permissions on first enable (if plugin declares permissions)
     if (!skipPermissionCheck && plugin.declaredPermissions) {
       const permModule = getPermissionModule()
@@ -1178,7 +1190,7 @@ function createPluginModuleInternal(
 
         if (repairResult.status === 'repaired') {
           logModuleInfo(
-            'Repaired touch-translation runtime drift before load.',
+            'Compat patch hit: repaired touch-translation runtime drift before load.',
             'target:',
             repairResult.targetDir,
             'source:',
@@ -1188,7 +1200,7 @@ function createPluginModuleInternal(
           )
         } else if (repairResult.status === 'repair-failed') {
           logWarn(
-            'Failed to repair touch-translation runtime drift.',
+            'Compat patch hit: failed to repair touch-translation runtime drift.',
             'target:',
             repairResult.targetDir,
             'source:',
