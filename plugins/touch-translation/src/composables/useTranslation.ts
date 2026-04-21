@@ -1,12 +1,16 @@
 import type { HistoryItem, TranslationRequest, TranslationResponse, TranslationResult } from '../types/translation'
 import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
 import { computed, reactive, ref } from 'vue'
+import translationShared from '../../shared/translation-shared.cjs'
 import { useTranslationProvider } from './useTranslationProvider'
 
 const MAX_HISTORY_ITEMS = 10
-const NO_INPUT_MESSAGE = '无输入：请输入要翻译的文本'
-const PERMISSION_DENIED_MESSAGE = '权限被拒绝：请在插件设置中授予所需权限后重试'
-const CALL_FAILED_MESSAGE = '调用失败：翻译服务暂不可用，请稍后重试'
+const {
+  CALL_FAILED_MESSAGE,
+  NO_INPUT_TEXT_MESSAGE,
+  normalizeTranslationErrorMessage,
+  resolveTargetLanguage,
+} = translationShared as any
 
 // 全局状态
 const currentRequest = ref<TranslationRequest | null>(null)
@@ -21,29 +25,7 @@ const history = ref<HistoryItem[]>([])
 const globalError = ref('')
 
 function normalizeErrorMessage(rawMessage: unknown): string {
-  const message = typeof rawMessage === 'string' ? rawMessage.trim() : ''
-  if (!message) {
-    return CALL_FAILED_MESSAGE
-  }
-
-  const lowerMessage = message.toLowerCase()
-  if (
-    lowerMessage.includes('permission')
-    || lowerMessage.includes('权限')
-    || lowerMessage.includes('denied')
-    || lowerMessage.includes('forbidden')
-    || lowerMessage.includes('unauthorized')
-    || lowerMessage.includes('network.internet')
-    || lowerMessage.includes('intelligence.basic')
-  ) {
-    return PERMISSION_DENIED_MESSAGE
-  }
-
-  if (message.startsWith('无输入')) {
-    return NO_INPUT_MESSAGE
-  }
-
-  return `${CALL_FAILED_MESSAGE}（${message}）`
+  return normalizeTranslationErrorMessage(rawMessage)
 }
 
 export function useTranslation() {
@@ -130,20 +112,23 @@ export function useTranslation() {
   // 翻译文本
   const translate = async (
     text: string,
-    targetLanguage = 'zh',
+    targetLanguage = '',
     sourceLanguage = 'auto',
     providerIds?: string[],
   ): Promise<TranslationResponse> => {
     if (!text.trim()) {
-      globalError.value = NO_INPUT_MESSAGE
-      throw new Error(NO_INPUT_MESSAGE)
+      globalError.value = NO_INPUT_TEXT_MESSAGE
+      throw new Error(NO_INPUT_TEXT_MESSAGE)
     }
     globalError.value = ''
+    const resolvedTargetLanguage = typeof targetLanguage === 'string' && targetLanguage.trim()
+      ? targetLanguage
+      : resolveTargetLanguage(text)
 
     // 准备请求
     const request: TranslationRequest = {
       text: text.trim(),
-      targetLanguage,
+      targetLanguage: resolvedTargetLanguage,
       sourceLanguage,
       providers: providerIds || enabledProviders.value.map(p => p.id),
     }

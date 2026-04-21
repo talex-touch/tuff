@@ -66,6 +66,21 @@ function saveConfig() {
     config.model = configForm.model
     config.prompt = configForm.prompt
   }
+  else if (props.provider.id === 'baidu') {
+    config.appId = configForm.appId
+    config.secretKey = configForm.secretKey
+    config.apiUrl = configForm.apiUrl
+  }
+  else if (props.provider.id === 'tencent') {
+    config.secretId = configForm.secretId
+    config.secretKey = configForm.secretKey
+    config.region = configForm.region
+    config.apiUrl = configForm.apiUrl
+  }
+  else if (props.provider.id === 'mymemory') {
+    config.email = configForm.email
+    config.apiUrl = configForm.apiUrl
+  }
 
   emit('save', props.provider.id, config)
   closeModal()

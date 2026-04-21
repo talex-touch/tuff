@@ -10,17 +10,41 @@ const {
 } = globalThis
 
 const crypto = require('node:crypto')
-const { createIntelligenceClient } = require('@talex-touch/tuff-intelligence')
-const { makeWidgetId } = require('@talex-touch/utils/plugin/widget')
+const {
+  CALL_FAILED_MESSAGE,
+  DEFAULT_ENABLED_PROVIDER_IDS,
+  NO_INPUT_OCR_MESSAGE,
+  NO_INPUT_SCREENSHOT_MESSAGE,
+  NO_INPUT_TEXT_MESSAGE,
+  PERMISSION_DENIED_MESSAGE,
+  detectLanguage,
+  getEnabledProviderIds,
+  getTranslationProviderLabel,
+  normalizeCallFailureMessage,
+  normalizeTranslationErrorMessage,
+  resolveTargetLanguage,
+} = require('./shared/translation-shared.cjs')
 
 const PLUGIN_NAME = 'touch-translation'
 const SOURCE_ID = 'plugin-features'
 const SUPPORTED_TRANSLATION_FEATURES = new Set(['touch-translate', 'screenshot-translate'])
-const NO_INPUT_TEXT_MESSAGE = '无输入：请输入要翻译的文本'
-const NO_INPUT_SCREENSHOT_MESSAGE = '无输入：请先截取图片或输入文本后再翻译'
-const NO_INPUT_OCR_MESSAGE = '无输入：截图中未识别到可翻译文本，请更换区域后重试'
-const PERMISSION_DENIED_MESSAGE = '权限被拒绝：请在插件设置中授予所需权限后重试'
-const CALL_FAILED_MESSAGE = '调用失败：翻译服务暂不可用，请稍后重试'
+
+let createIntelligenceClientLoader = null
+let makeWidgetIdLoader = null
+
+function getCreateIntelligenceClient() {
+  if (!createIntelligenceClientLoader) {
+    ({ createIntelligenceClient: createIntelligenceClientLoader } = require('@talex-touch/tuff-intelligence'))
+  }
+  return createIntelligenceClientLoader
+}
+
+function getMakeWidgetId() {
+  if (!makeWidgetIdLoader) {
+    ({ makeWidgetId: makeWidgetIdLoader } = require('@talex-touch/utils/plugin/widget'))
+  }
+  return makeWidgetIdLoader
+}
 
 function normalizeText(value) {
   return String(value ?? '').trim()
@@ -55,11 +79,6 @@ const widgetStateByFeature = new Map()
 
 let networkPermissionState = null
 let aiPermissionState = null
-const fallbackProviders = [
-  { id: 'tuffintelligence', enabled: true },
-  { id: 'google', enabled: true },
-  { id: 'mymemory', enabled: true },
-]
 
 async function ensureNetworkPermission() {
   if (!permission) {
@@ -129,11 +148,6 @@ function extractImageDataUrl(query) {
   return imageInput?.content || null
 }
 
-function normalizeCallFailureMessage(rawMessage) {
-  const message = typeof rawMessage === 'string' ? rawMessage.trim() : ''
-  return message ? `${CALL_FAILED_MESSAGE}（${message}）` : CALL_FAILED_MESSAGE
-}
-
 async function resolveTextToTranslate(featureId, query) {
   const textQuery = extractQueryText(query).trim()
   if (textQuery) {
@@ -155,7 +169,7 @@ async function resolveTextToTranslate(featureId, query) {
   }
 
   try {
-    const aiClient = createIntelligenceClient()
+    const aiClient = getCreateIntelligenceClient()()
     const ocrResult = await aiClient.invoke('vision.ocr', {
       source: {
         type: 'data-url',
@@ -183,17 +197,18 @@ async function startTranslationRequest(textToTranslate, featureId, signal, nextS
   plugin.feature.clearItems()
 
   const detectedLang = detectLanguage(textToTranslate)
-  const targetLang = detectedLang === 'zh' ? 'en' : 'zh'
+  const targetLang = resolveTargetLanguage(detectedLang)
   const requestId = `translation-${Date.now()}-${nextSeq}`
 
   const providersConfig = await plugin.storage.getFile('providers_config')
-  const enabledProviders = providersConfig && typeof providersConfig === 'object'
-    ? Object.entries(providersConfig)
-        .filter(([_id, config]) => config.enabled)
-        .map(([id, config]) => ({ id, ...config }))
-    : fallbackProviders
-
-  const providersToShow = enabledProviders.length > 0 ? enabledProviders : fallbackProviders
+  const enabledProviderIds = getEnabledProviderIds(providersConfig)
+  const providersToShow = enabledProviderIds.map((providerId) => {
+    const providerConfig = providersConfig && typeof providersConfig === 'object' ? providersConfig[providerId] : null
+    return {
+      id: providerId,
+      ...(providerConfig && typeof providerConfig === 'object' ? providerConfig : {}),
+    }
+  })
   const state = createWidgetState(
     featureId,
     textToTranslate,
@@ -236,21 +251,6 @@ function upsertFeatureItem(item) {
   plugin.feature.pushItems([item])
 }
 
-function formatProviderName(providerId) {
-  const map = {
-    tuffintelligence: 'Tuff Intelligence',
-    google: 'Google',
-    deepl: 'DeepL',
-    bing: 'Bing',
-    baidu: 'Baidu',
-    tencent: 'Tencent',
-    caiyun: 'Caiyun',
-    custom: 'Custom',
-    mymemory: 'MyMemory',
-  }
-  return map[providerId] || providerId
-}
-
 function resolveWidgetStatus(state) {
   if (!state.query) {
     return 'idle'
@@ -290,7 +290,7 @@ function buildWidgetItem(featureId, state) {
     .setTitle(state.query ? `翻译：${state.query}` : '翻译')
     .setSubtitle(statusLabel)
     .setIcon({ type: 'file', value: 'assets/logo.svg' })
-    .setCustomRender('vue', makeWidgetId(PLUGIN_NAME, featureId), buildWidgetPayload(state))
+    .setCustomRender('vue', getMakeWidgetId()(PLUGIN_NAME, featureId), buildWidgetPayload(state))
     .setMeta({
       pluginName: PLUGIN_NAME,
       featureId,
@@ -333,7 +333,7 @@ function createWidgetState(featureId, textToTranslate, detectedLang, targetLang,
     targetLang,
     providers: providersToShow.map(provider => ({
       id: provider.id,
-      name: formatProviderName(provider.id),
+      name: getTranslationProviderLabel(provider.id),
       status: 'pending',
     })),
     error: null,
@@ -435,7 +435,7 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
             'auto',
             targetLang,
             provider.config?.appId,
-            provider.config?.appKey,
+            provider.config?.secretKey,
             signal,
           )
           break
@@ -506,14 +506,9 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
   }
 }
 
-function detectLanguage(text) {
-  const chineseRegex = /[\u4E00-\u9FFF]/
-  return chineseRegex.test(text) ? 'zh' : 'en'
-}
-
 async function translateWithTuffIntelligence(text, from = 'auto', to = 'zh') {
   try {
-    const client = createIntelligenceClient()
+    const client = getCreateIntelligenceClient()()
 
     const payload = {
       text,
@@ -1203,8 +1198,13 @@ const pluginLifecycle = {
 module.exports = {
   ...pluginLifecycle,
   __test: {
+    DEFAULT_ENABLED_PROVIDER_IDS,
     md5,
     detectLanguage,
-    formatProviderName,
+    getEnabledProviderIds,
+    getTranslationProviderLabel,
+    normalizeCallFailureMessage,
+    normalizeErrorMessage: normalizeTranslationErrorMessage,
+    resolveTargetLanguage,
   },
 }

@@ -1,18 +1,26 @@
 import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
-import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
+import { createIntelligenceClient } from '@talex-touch/tuff-intelligence/client'
 import { GoogleProvider, TuffIntelligenceProvider } from './providers'
-import { detectLanguage } from './utils'
+import translationShared from '../shared/translation-shared.cjs'
 
 const { plugin, clipboard, logger, permission, TuffItemBuilder } = globalThis as any
+const {
+  DEFAULT_ENABLED_PROVIDER_IDS,
+  NO_INPUT_OCR_MESSAGE,
+  NO_INPUT_SCREENSHOT_MESSAGE,
+  NO_INPUT_TEXT_MESSAGE,
+  PERMISSION_DENIED_MESSAGE,
+  applyProviderPresentation,
+  detectLanguage,
+  getEnabledProviderIds,
+  getTranslationProviderLabel,
+  normalizeCallFailureMessage,
+  resolveTargetLanguage,
+} = translationShared as any
 
 const PLUGIN_NAME = 'touch-translation'
 const WIDGET_ITEM_ID = 'translation-widget'
 const SUPPORTED_TRANSLATION_FEATURES = new Set(['touch-translate', 'screenshot-translate'])
-const NO_INPUT_TEXT_MESSAGE = '无输入：请输入要翻译的文本'
-const NO_INPUT_SCREENSHOT_MESSAGE = '无输入：请先截取图片或输入文本后再翻译'
-const NO_INPUT_OCR_MESSAGE = '无输入：截图中未识别到可翻译文本，请更换区域后重试'
-const PERMISSION_DENIED_MESSAGE = '权限被拒绝：请在插件设置中授予所需权限后重试'
-const CALL_FAILED_MESSAGE = '调用失败：翻译服务暂不可用，请稍后重试'
 
 interface ProviderState {
   id: string
@@ -47,8 +55,8 @@ let networkPermissionState: boolean | null = null
 let aiPermissionState: boolean | null = null
 
 const providers = new Map([
-  ['tuffintelligence', new TuffIntelligenceProvider()],
-  ['google', new GoogleProvider()],
+  ['tuffintelligence', applyProviderPresentation(new TuffIntelligenceProvider())],
+  ['google', applyProviderPresentation(new GoogleProvider())],
 ])
 
 async function ensureNetworkPermission(): Promise<boolean> {
@@ -119,11 +127,6 @@ function extractImageDataUrl(query: unknown): string | null {
   return imageInput?.content || null
 }
 
-function normalizeCallFailureMessage(rawMessage: unknown): string {
-  const message = typeof rawMessage === 'string' ? rawMessage.trim() : ''
-  return message ? `${CALL_FAILED_MESSAGE}（${message}）` : CALL_FAILED_MESSAGE
-}
-
 async function resolveTextToTranslate(
   featureId: string,
   query: unknown,
@@ -167,14 +170,6 @@ async function resolveTextToTranslate(
   catch (error) {
     return { text: '', error: normalizeCallFailureMessage(error instanceof Error ? error.message : '') }
   }
-}
-
-function formatProviderName(providerId: string): string {
-  const map: Record<string, string> = {
-    tuffintelligence: 'Tuff Intelligence',
-    google: 'Google',
-  }
-  return map[providerId] || providerId
 }
 
 function resolveWidgetStatus(state: WidgetState): 'idle' | 'running' | 'complete' | 'error' {
@@ -277,7 +272,7 @@ function createWidgetState(
     targetLang,
     providers: providersToShow.map(id => ({
       id,
-      name: formatProviderName(id),
+      name: getTranslationProviderLabel(id),
       status: 'pending',
     })),
     error: null,
@@ -317,17 +312,14 @@ async function startTranslationRequest(
   plugin.feature.clearItems()
 
   const detectedLang = detectLanguage(textToTranslate)
-  const targetLang = detectedLang === 'zh' ? 'en' : 'zh'
+  const targetLang = resolveTargetLanguage(detectedLang)
   const requestId = `translation-${Date.now()}-${nextSeq}`
 
   const providersConfig = await plugin.storage.getFile('providers_config')
-  const enabledProviders = providersConfig
-    ? Object.entries(providersConfig)
-        .filter(([_id, config]: [string, any]) => config.enabled)
-        .map(([id]: [string, any]) => id)
-    : ['tuffintelligence']
-
-  const providersToShow = enabledProviders.length > 0 ? enabledProviders : ['tuffintelligence']
+  const providersToShow = getEnabledProviderIds(providersConfig, {
+    supportedIds: Array.from(providers.keys()),
+    fallbackIds: DEFAULT_ENABLED_PROVIDER_IDS,
+  })
   const state = createWidgetState(
     featureId,
     textToTranslate,
@@ -348,7 +340,7 @@ async function startTranslationRequest(
   upsertWidgetItem(featureId)
 
   await Promise.allSettled(
-    providersToShow.map(async (providerId) => {
+    providersToShow.map(async (providerId: string) => {
       if (signal?.aborted) {
         return
       }

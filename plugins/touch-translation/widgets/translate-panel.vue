@@ -6,6 +6,7 @@ import {
   useClipboard,
   usePluginStorage,
 } from '@talex-touch/utils/plugin/sdk'
+import translationShared from '../shared/translation-shared.cjs'
 
 type ProviderStatus = 'pending' | 'success' | 'error'
 type WidgetStatus = 'idle' | 'running' | 'complete' | 'error'
@@ -57,6 +58,7 @@ const props = defineProps<{
 }>()
 
 const PROVIDER_ERROR_PREVIEW_LENGTH = 220
+const { getProviderOrderIndex } = translationShared as any
 
 const pluginInfo = tryUsePluginInfo() ?? { name: 'Preview' }
 const hasRuntime = ref(Boolean(tryUsePluginInfo()?.name))
@@ -268,7 +270,7 @@ const orderedProviders = computed(() => {
     if (priorityDiff !== 0) {
       return priorityDiff
     }
-    return left.name.localeCompare(right.name)
+    return getProviderOrderIndex(left.id) - getProviderOrderIndex(right.id)
   })
 })
 
