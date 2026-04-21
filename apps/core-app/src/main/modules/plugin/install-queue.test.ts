@@ -1,4 +1,4 @@
-import type { PluginInstallConfirmRequest } from '@talex-touch/utils/plugin'
+import { type PluginInstallConfirmRequest, CURRENT_SDK_VERSION } from '@talex-touch/utils/plugin'
 import { describe, expect, it, vi } from 'vitest'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { PluginInstallQueue } from './install-queue'
@@ -26,7 +26,7 @@ describe('PluginInstallQueue permission confirmation', () => {
       manifest: {
         name: 'touch-demo',
         version: '1.0.0',
-        sdkapi: 260228
+        sdkapi: CURRENT_SDK_VERSION
       }
     } as any
 

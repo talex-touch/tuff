@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
+import { CURRENT_SDK_VERSION } from '@talex-touch/utils/plugin'
 import { t } from '../i18n'
 import {
   askConfirm,
@@ -209,7 +210,7 @@ async function configureManifest(
       description: `${config.name} - A Tuff plugin`,
       author: '',
       main: 'index.js',
-      sdkapi: 260215,
+      sdkapi: CURRENT_SDK_VERSION,
       category: 'utilities',
       permissions: {
         required: [SQLITE_PERMISSION_ID],
@@ -236,8 +237,8 @@ async function configureManifest(
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
   manifest.name = config.name
   manifest.description = `${config.name} - A Tuff plugin`
-  if (typeof manifest.sdkapi !== 'number' || manifest.sdkapi < 260215) {
-    manifest.sdkapi = 260215
+  if (typeof manifest.sdkapi !== 'number' || manifest.sdkapi < CURRENT_SDK_VERSION) {
+    manifest.sdkapi = CURRENT_SDK_VERSION
   }
   ensureSqliteManifestConfig(manifest)
 

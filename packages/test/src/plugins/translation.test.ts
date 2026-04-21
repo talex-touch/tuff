@@ -179,4 +179,20 @@ describe('touch-translation shared helpers', () => {
       ),
     ).toBe(true)
   })
+
+  it('does not depend on plugin.search in canonical and bundled translation preludes', () => {
+    ensureBundledRuntimeSynced()
+
+    const preludeFiles = [
+      resolvePath('../../../../plugins/touch-translation/index.js'),
+      resolvePath('../../../../plugins/touch-translation/dist/build/index.js'),
+      resolvePath('../../../../apps/core-app/tuff/modules/plugins/touch-translation/index.js'),
+      resolvePath('../../../../apps/core-app/tuff/modules/plugins/touch-translation/dist/build/index.js'),
+    ]
+
+    for (const preludeFile of preludeFiles) {
+      const source = fs.readFileSync(preludeFile, 'utf-8')
+      expect(source).not.toContain('plugin.search.updateQuery')
+    }
+  })
 })
