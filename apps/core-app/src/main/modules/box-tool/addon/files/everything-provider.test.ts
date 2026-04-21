@@ -1,15 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { transportOn, appTaskWaitForIdle, iconWorkerExtract } = vi.hoisted(() => ({
+const { transportOn, appTaskWaitForIdle, iconWorkerExtract, execFileMock } = vi.hoisted(() => ({
   transportOn: vi.fn(),
   appTaskWaitForIdle: vi.fn(() => Promise.resolve()),
-  iconWorkerExtract: vi.fn(() => Promise.resolve<Buffer | null>(null))
+  iconWorkerExtract: vi.fn(() => Promise.resolve<Buffer | null>(null)),
+  execFileMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   shell: {
     openPath: vi.fn()
   }
+}))
+
+vi.mock('node:child_process', () => ({
+  execFile: execFileMock
 }))
 
 vi.mock('../../../storage', () => ({
@@ -62,6 +67,7 @@ interface MutableEverythingProvider {
   backend: string
   isAvailable: boolean
   isEnabled: boolean
+  isSearchReady: () => boolean
   initializationError: Error | null
   lastBackendError: string | null
   sdkAddon: unknown
@@ -149,6 +155,7 @@ afterEach(() => {
   appTaskWaitForIdle.mockResolvedValue(undefined)
   iconWorkerExtract.mockReset()
   iconWorkerExtract.mockResolvedValue(null)
+  execFileMock.mockReset()
   vi.restoreAllMocks()
 })
 
@@ -349,5 +356,26 @@ describe('everything-provider fallback chain', () => {
 
     expect(refreshSpy).toHaveBeenCalledWith('toggle-enable')
     expect(result).toEqual({ success: true, enabled: true })
+  })
+
+  it('marks CLI backend unavailable after runtime exec failure', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    provider.backend = 'cli'
+    provider.isAvailable = true
+    provider.isEnabled = true
+    provider.esPath = 'es.exe'
+
+    execFileMock.mockImplementation((_file, _args, _options, callback) => {
+      callback(Object.assign(new Error('spawn failed'), { code: 'ENOENT' }))
+    })
+
+    const results = await provider.searchEverything('demo', 10)
+
+    expect(results).toEqual([])
+    expect(provider.backend).toBe('unavailable')
+    expect(provider.isAvailable).toBe(false)
+    expect(provider.isSearchReady()).toBe(false)
+    expect(provider.initializationError?.message).toBe('spawn failed')
+    expect(provider.lastBackendError).toBe('spawn failed')
   })
 })

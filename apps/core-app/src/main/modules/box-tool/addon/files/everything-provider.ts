@@ -252,6 +252,15 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
+  private markBackendUnavailable(message: string, errorCode: string | null = null): void {
+    this.backend = 'unavailable'
+    this.isAvailable = false
+    this.initializationError = new Error(message)
+    this.lastBackendError = message
+    this.lastBackendErrorCode = errorCode
+    this.lastChecked = Date.now()
+  }
+
   private getCachedIcon(filePath: string): string | null {
     const cached = this.iconCache.get(filePath)
     if (!cached) {
@@ -687,11 +696,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private async ensureCliFallback(): Promise<boolean> {
     const ready = await this.tryInitializeCliBackend()
     if (!ready) {
-      this.backend = 'unavailable'
-      this.isAvailable = false
-      this.initializationError = new Error(
-        this.lastBackendError || 'Everything backend unavailable'
-      )
+      this.markBackendUnavailable(this.lastBackendError || 'Everything backend unavailable')
       return false
     }
     this.initializationError = null
@@ -875,9 +880,16 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       if (isAbortError(error)) {
         throw error
       }
-      if (getErrorCode(error) === 'ETIMEDOUT') {
+      const errorCode = getErrorCode(error) ?? null
+      const errorMessage = getErrorMessage(error)
+
+      this.lastBackendError = errorMessage
+      this.lastBackendErrorCode = errorCode
+
+      if (errorCode === 'ETIMEDOUT') {
         this.logWarn('Everything CLI search timed out', error, { query })
       } else {
+        this.markBackendUnavailable(errorMessage, errorCode)
         this.logError('Everything CLI search failed', error, { query })
       }
       return []
