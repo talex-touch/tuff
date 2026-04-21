@@ -22,6 +22,21 @@
   - `workflow-tools`、`intelligence-desktop-context`、`intelligence-mcp-registry`、`intelligence-workflow-service` 收口了路径、类型和局部表定义，避免未落地公共 schema 或错误相对路径继续打断主进程类型检查。
   - `intelligence-sdk` 补齐 `IntelligenceProviderType` 运行时导入，恢复 OpenAI-compatible DeepAgent runtime 配置解析分支的静态校验。
 
+### fix(core-app/intelligence): 接通 workflow transport / DeepAgent 编排闭环并补回归
+
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-deepagent-orchestration.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-workflow-service.ts`
+- `apps/core-app/src/main/modules/ai/tuff-intelligence-runtime.ts`
+- `apps/core-app/src/main/channel/common.test.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-sdk.test.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-deepagent-orchestration.test.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+  - `intelligence-module` 现在会初始化 `workflow service`、注册 `intelligence:workflow:*` handler，并把 workflow run 交给 `intelligence-deepagent-orchestration`；shared workflow SDK 不再只是事件名和类型。
+  - DeepAgent workflow 编排支持 prompt / agent / tool 三类 step，本地 builtin tool 与可选 MCP profile 都会带上 `toolSource / approvalContext / contextSources` 元数据进入 trace / approval 链；`tuff-intelligence-runtime` 相应补齐这些审计字段。
+  - 内置模板 `builtin.organize-recent-clipboard` 改成 prompt step，不再依赖不存在的 `deepagent.workflow` agent id；workflow capability 可以直接走 DeepAgent prompt 执行。
+  - 定向回归已补：`intelligence-sdk` 锁定 `resolveDeepAgentRuntimeConfig()` 的 provider 选择逻辑，`intelligence-deepagent-orchestration` 覆盖 prompt step 与 tool approval 等待态，`common.test` / `transport-domain-sdks.test` 锁定 app-index 与 workflow transport handler。
+
 ### fix(core-app/apps-search): 补齐 macOS 中文应用名首轮扫描与拼音关键词规整
 
 - `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
