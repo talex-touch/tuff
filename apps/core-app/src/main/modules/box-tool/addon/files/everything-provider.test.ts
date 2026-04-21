@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const transportOn = vi.fn()
+
 vi.mock('electron', () => ({
   shell: {
     openPath: vi.fn()
@@ -22,7 +24,7 @@ vi.mock('@talex-touch/utils/common/logger', () => ({
 
 vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: vi.fn(() => ({
-    on: vi.fn()
+    on: transportOn
   }))
 }))
 
@@ -33,6 +35,10 @@ vi.mock('../../search-engine/search-logger', () => ({
 }))
 
 import { everythingProvider } from './everything-provider'
+import {
+  everythingStatusEvent,
+  everythingToggleEvent
+} from '../../../../../shared/events/everything'
 
 interface MutableEverythingProvider {
   backend: string
@@ -59,6 +65,8 @@ interface MutableEverythingProvider {
   buildEverythingQuery: (searchText: string) => string
   parseEverythingOutput: (output: string) => Array<{ path: string; name: string; size: number }>
   parseEverythingSdkOutput: (output: unknown) => Array<{ path: string; isDir: boolean }>
+  refreshBackendState: (reason: 'startup' | 'manual-check' | 'toggle-enable') => Promise<boolean>
+  registerChannels: (context: { touchApp: { channel: unknown } }) => void
 }
 
 function buildResult(path: string) {
@@ -99,6 +107,7 @@ afterEach(() => {
   provider.sdkAddon = null
   provider.esPath = null
 
+  transportOn.mockReset()
   vi.restoreAllMocks()
 })
 
@@ -228,5 +237,43 @@ describe('everything-provider fallback chain', () => {
     await expect(searchPromise).rejects.toMatchObject({ name: 'AbortError' })
     expect(provider.backend).toBe('sdk-napi')
     expect(provider.isAvailable).toBe(true)
+  })
+
+  it('refreshes backend state when status request asks for manual recheck', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    const refreshSpy = vi.spyOn(provider, 'refreshBackendState').mockResolvedValue(true)
+
+    provider.registerChannels({ touchApp: { channel: {} } })
+
+    const statusHandler = transportOn.mock.calls.find(
+      ([event]) => event === everythingStatusEvent
+    )?.[1] as ((payload?: { refresh?: boolean }) => Promise<unknown>) | undefined
+
+    expect(statusHandler).toBeTypeOf('function')
+
+    await statusHandler?.({ refresh: true })
+
+    expect(refreshSpy).toHaveBeenCalledWith('manual-check')
+  })
+
+  it('rechecks backend when enabling Everything from settings', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    provider.isEnabled = false
+    const refreshSpy = vi.spyOn(provider, 'refreshBackendState').mockResolvedValue(true)
+
+    provider.registerChannels({ touchApp: { channel: {} } })
+
+    const toggleHandler = transportOn.mock.calls.find(
+      ([event]) => event === everythingToggleEvent
+    )?.[1] as
+      | ((payload: { enabled: boolean }) => Promise<{ success: boolean; enabled: boolean }>)
+      | undefined
+
+    expect(toggleHandler).toBeTypeOf('function')
+
+    const result = await toggleHandler?.({ enabled: true })
+
+    expect(refreshSpy).toHaveBeenCalledWith('toggle-enable')
+    expect(result).toEqual({ success: true, enabled: true })
   })
 })

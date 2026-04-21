@@ -36,12 +36,14 @@ function mapHealthLabel(health: EverythingHealthState): string {
 
 let statusCheckInterval: NodeJS.Timeout | null = null
 
-async function checkStatus() {
+async function checkStatus(refresh = false) {
   if (isChecking.value) return
 
   isChecking.value = true
   try {
-    const status = await transport.send(everythingStatusEvent)
+    const status = await transport.send(everythingStatusEvent, {
+      refresh
+    })
     everythingStatus.value = status
   } catch (error) {
     console.error('[SettingEverything] Failed to get status:', error)
@@ -57,7 +59,11 @@ async function toggleEverything() {
 
   try {
     await transport.send(everythingToggleEvent, { enabled: newEnabled })
-    everythingStatus.value.enabled = newEnabled
+    everythingStatus.value = {
+      ...everythingStatus.value,
+      enabled: newEnabled
+    }
+    await checkStatus(newEnabled)
 
     toast.success(
       newEnabled
@@ -174,7 +180,7 @@ const lastCheckedText = computed(() => {
 })
 
 onMounted(async () => {
-  await checkStatus()
+  await checkStatus(true)
 
   statusCheckInterval = setInterval(() => {
     checkStatus()
@@ -341,7 +347,7 @@ onUnmounted(() => {
       default-icon="i-carbon-time"
       active-icon="i-carbon-time"
     >
-      <TxButton variant="flat" :disabled="isChecking" @click="checkStatus">
+      <TxButton variant="flat" :disabled="isChecking" @click="checkStatus(true)">
         {{
           isChecking
             ? t('settings.settingEverything.checking')

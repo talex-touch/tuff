@@ -5,6 +5,23 @@
 
 ## 2026-04-21
 
+### fix(core-app): 让 Everything 设置页手动检查真正重探测后端
+
+- `apps/core-app/src/shared/events/everything.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `everything:status` 新增可选 `refresh` 请求参数；设置页首次进入与“立即检查”会触发真实后端重探测，不再只读取启动期缓存状态。
+  - `EverythingProvider` 抽出统一 backend refresh 流程，重新启用 Everything 时会即时重跑 `sdk-napi -> cli` 探测链，避免用户在应用运行期间安装/修复依赖后仍长时间停留在 stale unavailable。
+  - 补充 Provider 定向回归，锁定“手动刷新会重探测”和“重新启用会重探测”两条设置页关键恢复路径。
+
+### fix(core-app): 修复 Tuff CLI 探测调试日志的元数据类型
+
+- `apps/core-app/src/main/channel/common.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `detectTuffCliAvailability()` 的 debug 日志将 `args` 从 `string[]` 收口为单行字符串，避免违反 logger primitive 元数据约束并阻塞 `core-app` node typecheck。
+
 ### fix(core-app): 修复翻译 widget 回车复制与 renderer setupState 合并告警
 
 - `apps/core-app/src/renderer/src/components/render/WidgetFrame.vue`
