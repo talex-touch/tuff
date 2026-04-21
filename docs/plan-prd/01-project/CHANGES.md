@@ -5,6 +5,39 @@
 
 ## 2026-04-21
 
+### feat(plugins): 收口翻译插件主链路并新增程序员工具插件
+
+- `plugins/touch-translation/index.js`
+- `plugins/touch-translation/index/main.ts`
+- `plugins/touch-translation/shared/translation-shared.cjs`
+- `plugins/touch-translation/shared/translation-shared.test.ts`
+- `plugins/touch-translation/src/composables/useTranslation.ts`
+- `plugins/touch-translation/src/composables/useTranslationProvider.ts`
+- `plugins/touch-translation/src/components/TranslationCard.vue`
+- `plugins/touch-translation/src/components/ProviderConfigModal.vue`
+- `plugins/touch-translation/src/pages/multi-translate.vue`
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `plugins/touch-dev-utils/manifest.json`
+- `plugins/touch-dev-utils/index.js`
+- `packages/test/src/plugins/translation.test.ts`
+- `packages/test/src/plugins/dev-utils.test.ts`
+- `apps/nexus/content/docs/guide/features/plugins/dev-utils.{zh,en}.mdc`
+- `apps/nexus/content/docs/guide/features/plugins/translation.{zh,en}.mdc`
+- `apps/nexus/content/docs/guide/features/plugins/index.{zh,en}.mdc`
+- `apps/nexus/content/docs/guide/features/plugin-ecosystem.{zh,en}.mdc`
+- `apps/nexus/content/docs/guide/features/recommended-plugins.{zh,en}.mdc`
+  - `touch-translation` 新增共享 helper，统一快翻 widget 与多源页的默认翻译方向、provider 顺序、默认启用态和错误文案；`fy-multi` 不再硬编码中文目标语言。
+  - provider 展示名、排序和配置保存链路进一步收口；多源页结果卡片复用统一 provider 名称，Baidu / Tencent / MyMemory 配置保存字段补齐。
+  - 新增 `touch-dev-utils` 官方插件，保持纯本地与最小权限，支持 UUID、JWT、时间戳、命名转换、Query String 解析/组装、字符串转义/反转义。
+  - 补齐插件公共测试与包内共享 helper 测试，并同步 Nexus 插件目录、推荐组合与翻译插件说明文档。
+
+### fix(core-app): 修复插件升级完成后误报 Invalid manifest payload
+
+- `apps/core-app/src/main/modules/plugin/plugin-installer.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-installer.test.ts`
+  - `PluginInstaller.finalizeInstall()` 走完整安装链路时，`PluginResolver.resolve(..., whole=true)` 成功回调返回的是字符串状态而不是 manifest 对象；安装器现在接受该成功返回值，不再把升级成功误判为 `Invalid manifest payload`。
+  - 新增安装器回归测试，固化“完整安装成功回调返回 `success` 字符串”场景，避免后续再次把 preview 阶段和 finalize 阶段的 payload 语义混用。
+
 ### fix(core-app): 关闭登录凭证安全存储后冷启动不再触发 Keychain
 
 - `apps/core-app/src/main/modules/auth/index.ts`

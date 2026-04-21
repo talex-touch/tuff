@@ -70,6 +70,10 @@ async function runResolver(
             resolve({ code: 'success', manifest: event.msg as IManifest })
             return
           }
+          if (type === 'success') {
+            resolve({ code: typeof event.msg === 'string' ? event.msg : 'success' })
+            return
+          }
           reject(new Error('Invalid manifest payload'))
         },
         whole,
