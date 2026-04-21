@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const transportOn = vi.fn()
+const { transportOn, appTaskWaitForIdle, iconWorkerExtract } = vi.hoisted(() => ({
+  transportOn: vi.fn(),
+  appTaskWaitForIdle: vi.fn(() => Promise.resolve()),
+  iconWorkerExtract: vi.fn(() => Promise.resolve<Buffer | null>(null))
+}))
 
 vi.mock('electron', () => ({
   shell: {
@@ -34,6 +38,20 @@ vi.mock('../../search-engine/search-logger', () => ({
   }
 }))
 
+vi.mock('../../../../service/app-task-gate', () => ({
+  appTaskGate: {
+    waitForIdle: appTaskWaitForIdle
+  }
+}))
+
+vi.mock('./workers/icon-worker-client', () => ({
+  IconWorkerClient: vi.fn(() => ({
+    extract: iconWorkerExtract,
+    getStatus: vi.fn(),
+    shutdown: vi.fn()
+  }))
+}))
+
 import { everythingProvider } from './everything-provider'
 import {
   everythingStatusEvent,
@@ -48,6 +66,8 @@ interface MutableEverythingProvider {
   lastBackendError: string | null
   sdkAddon: unknown
   esPath: string | null
+  iconCache: Map<string, string>
+  iconExtractions: Map<string, Promise<string | null>>
   searchEverything: (query: string, maxResults: number, signal?: AbortSignal) => Promise<unknown[]>
   searchEverythingWithSdk: (
     query: string,
@@ -65,6 +85,21 @@ interface MutableEverythingProvider {
   buildEverythingQuery: (searchText: string) => string
   parseEverythingOutput: (output: string) => Array<{ path: string; name: string; size: number }>
   parseEverythingSdkOutput: (output: unknown) => Array<{ path: string; isDir: boolean }>
+  onSearch: (
+    query: { text: string; inputs: unknown[] },
+    signal: AbortSignal
+  ) => Promise<{
+    items?: Array<{
+      render?: {
+        basic?: {
+          icon?: {
+            type?: string
+            value?: string
+          }
+        }
+      }
+    }>
+  }>
   refreshBackendState: (reason: 'startup' | 'manual-check' | 'toggle-enable') => Promise<boolean>
   registerChannels: (context: { touchApp: { channel: unknown } }) => void
 }
@@ -106,8 +141,14 @@ afterEach(() => {
   provider.lastBackendError = null
   provider.sdkAddon = null
   provider.esPath = null
+  provider.iconCache.clear()
+  provider.iconExtractions.clear()
 
   transportOn.mockReset()
+  appTaskWaitForIdle.mockReset()
+  appTaskWaitForIdle.mockResolvedValue(undefined)
+  iconWorkerExtract.mockReset()
+  iconWorkerExtract.mockResolvedValue(null)
   vi.restoreAllMocks()
 })
 
@@ -220,6 +261,39 @@ describe('everything-provider fallback chain', () => {
         isDir: true
       })
     ])
+  })
+
+  it('warms and reuses cached icons for Everything results across searches', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    provider.backend = 'cli'
+    provider.isAvailable = true
+    provider.isEnabled = true
+
+    vi.spyOn(provider, 'searchEverything').mockResolvedValue([buildResult('C:/demo.txt')])
+    iconWorkerExtract.mockResolvedValue(Buffer.from('icon-bytes'))
+
+    const first = await withPlatform('win32', () =>
+      provider.onSearch({ text: 'demo', inputs: [] }, new AbortController().signal)
+    )
+
+    expect(first.items?.[0]?.render?.basic?.icon).toEqual({
+      type: 'class',
+      value: 'i-ri-file-line'
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const second = await withPlatform('win32', () =>
+      provider.onSearch({ text: 'demo', inputs: [] }, new AbortController().signal)
+    )
+
+    expect(second.items?.[0]?.render?.basic?.icon?.type).toBe('url')
+    expect(second.items?.[0]?.render?.basic?.icon?.value).toBe(
+      'data:image/png;base64,aWNvbi1ieXRlcw=='
+    )
+    expect(iconWorkerExtract).toHaveBeenCalledTimes(1)
+    expect(appTaskWaitForIdle).toHaveBeenCalledTimes(1)
   })
 
   it('aborts SDK search without switching backend state', async () => {

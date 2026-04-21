@@ -5,6 +5,15 @@
 
 ## 2026-04-21
 
+### feat(core-app): 补齐 Everything 搜索结果文件图标预热
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `EverythingProvider` 新增轻量结果图标缓存与懒提取：优先复用缓存图标，未命中的前排结果会通过现有 icon worker 在后台预热，避免 Windows Everything 结果长期停留在默认文件图标。
+  - 预热链路显式复用 `appTaskGate`，并限制单次搜索的后台图标任务数量，避免把快速搜索退化成图标提取风暴。
+  - 补充定向回归，覆盖“首次搜索默认图标、后台预热完成后下一次搜索命中缓存图标”的路径。
+
 ### fix(core-app): 让 Everything 设置页手动检查真正重探测后端
 
 - `apps/core-app/src/shared/events/everything.ts`

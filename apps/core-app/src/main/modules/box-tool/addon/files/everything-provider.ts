@@ -7,6 +7,7 @@ import type {
   TuffSearchResult
 } from '@talex-touch/utils'
 import type { ProviderContext } from '../../search-engine/types'
+import { Buffer } from 'node:buffer'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -29,9 +30,11 @@ import {
   everythingToggleEvent,
   type EverythingBackendType
 } from '../../../../../shared/events/everything'
+import { appTaskGate } from '../../../../service/app-task-gate'
 import { formatDuration } from '../../../../utils/logger'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
+import { IconWorkerClient } from './workers/icon-worker-client'
 import { mapFileToTuffItem } from './utils'
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -48,6 +51,8 @@ const getErrorMessage = (error: unknown): string =>
 const execFileAsync = promisify(execFile)
 const requireFromCurrentModule = createRequire(import.meta.url)
 const fileProviderLog = getLogger('file-provider')
+const EVERYTHING_ICON_CACHE_LIMIT = 256
+const EVERYTHING_ICON_WARMUP_LIMIT = 12
 
 class EverythingSearchAbortedError extends Error {
   readonly code = 'ABORT_ERR'
@@ -153,6 +158,9 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private everythingVersion: string | null = null
   private sdkAddon: EverythingSdkAddon | null = null
   private lastChecked: number | null = null
+  private readonly iconWorker = new IconWorkerClient()
+  private readonly iconCache = new Map<string, string>()
+  private readonly iconExtractions = new Map<string, Promise<string | null>>()
 
   private logInfo(message: string, meta?: Record<string, unknown>): void {
     if (meta) {
@@ -242,6 +250,74 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       })
       return false
     }
+  }
+
+  private getCachedIcon(filePath: string): string | null {
+    const cached = this.iconCache.get(filePath)
+    if (!cached) {
+      return null
+    }
+
+    this.iconCache.delete(filePath)
+    this.iconCache.set(filePath, cached)
+    return cached
+  }
+
+  private setCachedIcon(filePath: string, iconValue: string): void {
+    if (this.iconCache.has(filePath)) {
+      this.iconCache.delete(filePath)
+    }
+
+    this.iconCache.set(filePath, iconValue)
+
+    while (this.iconCache.size > EVERYTHING_ICON_CACHE_LIMIT) {
+      const oldestKey = this.iconCache.keys().next().value
+      if (!oldestKey) {
+        break
+      }
+      this.iconCache.delete(oldestKey)
+    }
+  }
+
+  private async extractResultIcon(filePath: string): Promise<string | null> {
+    await appTaskGate.waitForIdle()
+
+    const icon = await this.iconWorker.extract(filePath)
+    if (!icon || icon.length === 0) {
+      return null
+    }
+
+    return `data:image/png;base64,${Buffer.from(icon).toString('base64')}`
+  }
+
+  private async ensureResultIcon(filePath: string): Promise<string | null> {
+    const cached = this.getCachedIcon(filePath)
+    if (cached) {
+      return cached
+    }
+
+    const pending = this.iconExtractions.get(filePath)
+    if (pending) {
+      return pending
+    }
+
+    const task = this.extractResultIcon(filePath)
+      .then((iconValue) => {
+        if (iconValue) {
+          this.setCachedIcon(filePath, iconValue)
+        }
+        return iconValue
+      })
+      .catch((error) => {
+        this.logWarn('Failed to warm icon for Everything result', error, { path: filePath })
+        return null
+      })
+      .finally(() => {
+        this.iconExtractions.delete(filePath)
+      })
+
+    this.iconExtractions.set(filePath, task)
+    return task
   }
 
   async onLoad(context: ProviderContext): Promise<void> {
@@ -945,6 +1021,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       // Convert Everything results to TuffItems
       const now = Date.now()
+      let scheduledIconWarmups = 0
       const items = results.map((result, index) => {
         // Create a file object compatible with mapFileToTuffItem
         const fileObj = {
@@ -962,13 +1039,19 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           content: null,
           embeddingStatus: 'none' as const
         }
+        const cachedIcon = this.getCachedIcon(result.path)
 
         const tuffItem = mapFileToTuffItem(
           fileObj,
-          {}, // No extensions metadata for Everything results
+          cachedIcon ? { icon: cachedIcon } : {},
           this.id,
           this.name,
-          () => {} // No icon loading for now
+          cachedIcon || result.isDir || scheduledIconWarmups >= EVERYTHING_ICON_WARMUP_LIMIT
+            ? undefined
+            : (file) => {
+                scheduledIconWarmups += 1
+                void this.ensureResultIcon(file.path)
+              }
         )
         tuffItem.meta = {
           ...tuffItem.meta,
