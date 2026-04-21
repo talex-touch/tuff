@@ -101,8 +101,48 @@ const DIALOG_APPROVED_TTL_MS = 10 * 60 * 1000
 const DIALOG_APPROVED_MAX = 200
 const TUFF_CLI_DETECT_CACHE_TTL_MS = 60_000
 const TUFF_CLI_DETECT_TIMEOUT_MS = 1_500
-const TUFF_CLI_COMMAND_CANDIDATES =
-  process.platform === 'win32' ? ['tuff.cmd', 'tuff.exe', 'tuff'] : ['tuff']
+interface TuffCliProbeCommand {
+  command: string
+  args: string[]
+}
+
+function buildTuffCliProbeCommands(): TuffCliProbeCommand[] {
+  const entries: TuffCliProbeCommand[] = []
+  const seen = new Set<string>()
+
+  const push = (command: string, args: string[] = []) => {
+    const key = JSON.stringify([command, args])
+    if (seen.has(key)) return
+    seen.add(key)
+    entries.push({ command, args })
+  }
+
+  if (process.platform === 'win32') {
+    push('tuffcli.cmd')
+    push('tuffcli.exe')
+    push('tuffcli')
+  } else {
+    push('tuffcli')
+  }
+
+  if (!app.isPackaged) {
+    push(
+      path.resolve(
+        process.cwd(),
+        'node_modules',
+        '.bin',
+        process.platform === 'win32' ? 'tuffcli.cmd' : 'tuffcli'
+      )
+    )
+    push(process.execPath, [
+      path.resolve(process.cwd(), 'packages', 'tuff-cli', 'bin', 'tuffcli.js')
+    ])
+  }
+
+  return entries
+}
+
+const TUFF_CLI_COMMAND_CANDIDATES = buildTuffCliProbeCommands()
 const TUFF_CLI_CAPABILITY: PlatformCapability = {
   id: 'platform.tuff-cli',
   name: 'Tuff CLI',
@@ -556,9 +596,9 @@ async function detectTuffCliAvailability(): Promise<boolean> {
     return tuffCliDetectionCache.available
   }
 
-  for (const command of TUFF_CLI_COMMAND_CANDIDATES) {
+  for (const candidate of TUFF_CLI_COMMAND_CANDIDATES) {
     try {
-      await execFileAsync(command, ['--version'], {
+      await execFileAsync(candidate.command, [...candidate.args, '--version'], {
         timeout: TUFF_CLI_DETECT_TIMEOUT_MS,
         windowsHide: true
       })
@@ -570,7 +610,8 @@ async function detectTuffCliAvailability(): Promise<boolean> {
       if (code !== 'ENOENT' && signal !== 'SIGTERM') {
         log.debug('[CommonChannel] Tuff CLI probe failed', {
           meta: {
-            command,
+            command: candidate.command,
+            args: [...candidate.args, '--version'],
             code,
             signal,
             error: toErrorMessage(error)
@@ -648,7 +689,7 @@ async function listPlatformCapabilities(
     supportLevel: tuffCliAvailable ? 'supported' : 'unsupported',
     limitations: tuffCliAvailable
       ? undefined
-      : ['CLI binary was not detected in PATH or known install locations.']
+      : ['CLI binary `tuffcli` was not detected in PATH or known install locations.']
   })
   return capabilities
 }

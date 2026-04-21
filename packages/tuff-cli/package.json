@@ -12,7 +12,8 @@
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "tuff": "bin/tuff.js"
+    "tuff": "bin/tuff.js",
+    "tuffcli": "bin/tuffcli.js"
   },
   "files": [
     "bin",
