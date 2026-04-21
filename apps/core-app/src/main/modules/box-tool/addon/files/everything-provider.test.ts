@@ -408,6 +408,53 @@ describe('everything-provider fallback chain', () => {
     expect(provider.lastBackendError).toBe('spawn failed')
   })
 
+  it('degrades to file-provider when SDK search fails and CLI runtime also fails', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    provider.backend = 'sdk-napi'
+    provider.isAvailable = true
+    provider.isEnabled = true
+    provider.sdkAddon = {
+      search: vi.fn()
+    }
+    fileProviderOnSearch.mockResolvedValue({
+      items: [
+        {
+          render: {
+            basic: {
+              title: 'Fallback after SDK + CLI failure'
+            }
+          }
+        }
+      ]
+    })
+
+    vi.spyOn(provider, 'searchEverythingWithSdk').mockRejectedValue(new Error('sdk runtime failed'))
+    vi.spyOn(provider, 'tryInitializeCliBackend').mockImplementation(async () => {
+      provider.backend = 'cli'
+      provider.isAvailable = true
+      provider.esPath = 'es.exe'
+      return true
+    })
+
+    execFileMock.mockImplementation((_file, _args, _options, callback) => {
+      callback(Object.assign(new Error('spawn failed'), { code: 'ENOENT' }))
+    })
+
+    const signal = new AbortController().signal
+    const results = (await withPlatform('win32', () =>
+      provider.onSearch({ text: 'demo', inputs: [] }, signal)
+    )) as {
+      items?: Array<{ render?: { basic?: { title?: string } } }>
+    }
+
+    expect(fileProviderOnSearch).toHaveBeenCalledWith({ text: 'demo', inputs: [] }, signal)
+    expect(results.items?.[0]?.render?.basic?.title).toBe('Fallback after SDK + CLI failure')
+    expect(provider.backend).toBe('unavailable')
+    expect(provider.isAvailable).toBe(false)
+    expect(provider.initializationError?.message).toBe('spawn failed')
+    expect(provider.lastBackendError).toBe('spawn failed')
+  })
+
   it('returns failed everything:test status when runtime search falls back', async () => {
     const provider = everythingProvider as unknown as MutableEverythingProvider
     provider.backend = 'cli'
