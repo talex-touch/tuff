@@ -82,6 +82,7 @@ This is a reusable workflow that can be called by other workflows to standardize
   - Triggers on version changes in `packages/utils/package.json` (push to `main` / `master`)
   - Runs `packages/utils` tests before publish
   - Publishes to npm with `latest` for stable versions and `next` for prereleases
+  - If npm reports the target version was already published, the workflow re-probes the registry and treats the run as success when the version is already visible
   - Requires repository secret `NPM_TOKEN` with publish permission for `@talex-touch/utils`
 
 - **`package-tuffex-ci.yml`** - CI for `@talex-touch/tuffex`

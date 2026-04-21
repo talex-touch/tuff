@@ -5,6 +5,14 @@
 
 ## 2026-04-21
 
+### fix(ci): 让 utils npm 自动发布对重复版本保持幂等
+
+- `.github/workflows/package-utils-publish.yml`
+- `.github/workflows/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `package-utils-publish` 在 `npm view` 预检查之后，如果 `npm publish` 因“该版本已存在”失败，会再次向 registry 探测 `@talex-touch/utils@<version>`；只要版本已经可见，就把本次 run 视为成功，避免并发/延迟可见场景下把真实已发布版本误报成 CI 失败。
+  - 同步更新 GitHub Actions 工作流说明，明确 `@talex-touch/utils` 的自动发布现在具备重复版本幂等能力。
+
 ### fix(plugins): 将翻译共享 helper 下沉到 utils 并修复 widget sandbox 加载失败
 
 - `packages/utils/plugin/translation.ts`
