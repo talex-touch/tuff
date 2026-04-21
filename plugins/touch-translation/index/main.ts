@@ -219,6 +219,62 @@ function buildWidgetItem(featureId: string, state: WidgetState) {
     .build()
 }
 
+function describeRuntimeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message.trim() || error.name || 'Unknown error'
+  }
+
+  if (typeof error === 'string') {
+    return error.trim() || 'Unknown error'
+  }
+
+  if (error && typeof error === 'object') {
+    try {
+      const serialized = JSON.stringify(error)
+      if (serialized && serialized !== '{}') {
+        return serialized
+      }
+    }
+    catch {
+      // Ignore JSON serialization errors and fall through to the default message.
+    }
+  }
+
+  return 'Unknown error'
+}
+
+function upsertRequestErrorWidget(
+  featureId: string,
+  textToTranslate: string,
+  nextSeq: number,
+  error: unknown,
+) {
+  const normalizedQuery = textToTranslate.trim()
+  const detectedLang = normalizedQuery ? detectLanguage(normalizedQuery) : ''
+  const targetLang = detectedLang ? resolveTargetLanguage(detectedLang) : ''
+  const existing = widgetStateByFeature.get(featureId)
+  const state = existing ?? createWidgetState(
+    featureId,
+    normalizedQuery,
+    detectedLang,
+    targetLang,
+    [],
+    `translation-error-${Date.now()}-${nextSeq}`,
+    nextSeq,
+  )
+
+  state.requestSeq = nextSeq
+  state.requestId = state.requestId || `translation-error-${Date.now()}-${nextSeq}`
+  state.query = normalizedQuery
+  state.detectedLang = detectedLang
+  state.targetLang = targetLang
+  state.error = normalizeCallFailureMessage(describeRuntimeError(error))
+  state.updatedAt = Date.now()
+
+  widgetStateByFeature.set(featureId, state)
+  upsertWidgetItem(featureId)
+}
+
 function upsertFeatureItem(item: any) {
   try {
     plugin.feature.updateItem(item.id, item)
@@ -306,9 +362,6 @@ async function startTranslationRequest(
   signal: AbortSignal,
   nextSeq: number,
 ) {
-  plugin.search.updateQuery(textToTranslate)
-  plugin.feature.clearItems()
-
   const detectedLang = detectLanguage(textToTranslate)
   const targetLang = resolveTargetLanguage(detectedLang)
   const requestId = `translation-${Date.now()}-${nextSeq}`
@@ -459,8 +512,10 @@ const pluginLifecycle = {
           if (controller.signal.aborted) {
             return
           }
-          startTranslationRequest(textToTranslate, featureId, controller.signal, nextSeq).catch((e) => {
-            logger.error('Error starting translation request:', e)
+          startTranslationRequest(textToTranslate, featureId, controller.signal, nextSeq).catch((error) => {
+            const message = describeRuntimeError(error)
+            logger.error('Error starting translation request:', message, error)
+            upsertRequestErrorWidget(featureId, textToTranslate, nextSeq, error)
           })
         }, 200)
         debounceTimersByFeature.set(featureId, timer)

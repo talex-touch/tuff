@@ -41,7 +41,31 @@
 - `plugins/touch-translation/manifest.json`
   - 将翻译方向、provider 顺序、错误文案等共享 helper 从插件本地 `shared/` 目录下沉到 `@talex-touch/utils/plugin`，避免 widget sandbox 因相对路径模块不可用而跳过编译。
   - renderer 侧智能翻译 provider 改为复用 `@talex-touch/utils/plugin/sdk` 现有 intelligence SDK，prelude 侧共享逻辑改为从 utils 包内 runtime helper 读取，不再保留插件私有 shared 运行时代码。
-  - 修复 `touch-translate` widget 在沙箱中报 `Module "../shared/translation-shared.cjs" is not available` 的初始化失败问题，并重新生成 `1.0.4` 发布包。
+  - 修复 `touch-translate` widget 在沙箱中报 `Module "../shared/translation-shared.cjs" is not available` 的初始化失败问题，并重新生成 `1.0.5` 发布包。
+
+### feat(utils): 新增 sdkapi 260428 并收敛脚手架与插件版本口径
+
+- `packages/utils/plugin/sdk-version.ts`
+- `packages/tuff-cli/src/cli/commands/create.ts`
+- `packages/unplugin-export-plugin/src/cli/commands/create.ts`
+- `plugins/touch-dev-utils/manifest.json`
+- `packages/test/src/common/sdk-version.test.ts`
+- `apps/core-app/src/main/modules/plugin/install-queue.test.ts`
+- `apps/nexus/content/docs/dev/reference/manifest.{zh,en}.mdc`
+  - 新增受支持的 `sdkapi: 260428` marker，并将其设为当前推荐版本；现有权限/能力基线保持不变，`260228` 仍是 capability auth 的启用下限。
+  - 两个插件创建脚手架改为直接复用 `CURRENT_SDK_VERSION`，避免继续硬编码旧值 `260215` 导致新插件 manifest 与运行时定义漂移。
+  - `touch-dev-utils` manifest 从不受支持的 `260421` 收敛到 `260428`，同时补充共享回归测试与文档口径，避免再次触发“unsupported SDK marker”降级告警。
+
+### fix(plugins): 修复 touch-translation widget 空白页并发布 1.0.6
+
+- `plugins/touch-translation/index.js`
+- `plugins/touch-translation/index/main.ts`
+- `plugins/touch-translation/package.json`
+- `plugins/touch-translation/manifest.json`
+- `packages/test/src/plugins/translation.test.ts`
+  - 移除 `touch-translation` prelude 对 `plugin.search.updateQuery()` 的错误依赖；该 API 不存在于当前插件运行时注入对象中，会导致翻译请求启动阶段直接抛错并留下空白 widget。
+  - 翻译请求开始时不再先清空 feature 项，改为在失败时回填错误态 widget，确保 `touch-translate` 至少能给出可见反馈而不是白屏。
+  - 新增 prelude 回归测试，锁定 canonical / bundled 产物都不再依赖 `plugin.search.updateQuery`，并同步发布 `1.0.6` 插件包。
 
 ### fix(core-app): 自愈 touch-translation 运行时旧包漂移并对齐 bundled 副本
 
@@ -55,7 +79,7 @@
 - `packages/test/src/plugins/translation.test.ts`
 - `docs/plan-prd/01-project/CHANGES.md`
   - `PluginModule` 在加载 `touch-translation` 前会先检查运行时插件目录；只要发现 manifest/package 版本落后于 bundled 运行时种子，或 widget 仍引用 `../shared/translation-shared.cjs`，就自动用稳定 build 产物重建该插件目录，避免旧安装包继续触发 widget sandbox 初始化失败。
-  - `apps/core-app/tuff/modules/plugins/touch-translation` 顶层 runtime 文件已改为对齐 canonical `dist/build` 产物，manifest 保持 runtime 形态（`dev.source=false`），并同步补齐 `1.0.4` 发布包，避免 legacy dev data 迁移再次把旧实现带回用户运行时目录。
+  - `apps/core-app/tuff/modules/plugins/touch-translation` 顶层 runtime 文件已改为对齐 canonical `dist/build` 产物，manifest 保持 runtime 形态（`dev.source=false`），并同步补齐 `1.0.5` 发布包，避免 legacy dev data 迁移再次把旧实现带回用户运行时目录。
   - 新增 widget 依赖边界单测与 translation 插件一致性回归，锁定“relative import 继续非法、translate-panel 不再依赖 `translation-shared.cjs`、bundled/runtime 构件版本与关键入口与 canonical build 保持一致”。
 
 ### fix(core-app): 归一化 TPEX 市场插件相对资源地址
