@@ -1,7 +1,20 @@
 # 变更日志
 
-> 更新时间: 2026-04-21
-> 说明: 主文件仅保留近 30 天（2026-03-22 ~ 2026-04-21）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-22
+> 说明: 主文件仅保留近 30 天（2026-03-23 ~ 2026-04-22）详细记录；更早历史已按月归档。
+
+## 2026-04-22
+
+### fix(core-app/apps-search): 补齐 macOS 中文应用名首轮扫描与拼音关键词规整
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+  - `darwin.getAppInfo()` 首轮扫描新增 Spotlight `kMDItemDisplayName` 安全读取，显示名优先级提升为 `Spotlight > localized strings > plist > bundle`，fresh scan 不再依赖后续 `mdls` 维护任务才能拿到中文应用名。
+  - `mdls` 读取统一走参数化 `execFileSafe('mdls', ['-name', 'kMDItemDisplayName', '-raw', appPath])`，避免带空格或特殊字符路径重新落回 shell 字符串插值风险。
+  - `app-provider` 中文关键词生成改为 `displayName` 优先去重，并把拼音全拼/首字母统一规整为 lowercase，避免大小写漂移影响索引一致性。
+  - 新增定向回归，覆盖 Spotlight 中文显示名首轮生效和拼音关键词 lowercase 规整。
 
 ## 2026-04-21
 

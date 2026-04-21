@@ -17,6 +17,7 @@ const {
   searchRecordExecuteMock,
   shellOpenPathMock,
   showInternalSystemNotificationMock,
+  pinyinMock,
   spawnSafeMock,
   unregisterPollingMock,
   withSqliteRetryMock
@@ -45,6 +46,7 @@ const {
   searchRecordExecuteMock: vi.fn(),
   shellOpenPathMock: vi.fn(),
   showInternalSystemNotificationMock: vi.fn(),
+  pinyinMock: vi.fn(),
   spawnSafeMock: vi.fn(),
   unregisterPollingMock: vi.fn(),
   withSqliteRetryMock: vi.fn(async (task: () => Promise<unknown>) => await task())
@@ -100,6 +102,10 @@ vi.mock('@talex-touch/utils/common/utils/polling', () => ({
 
 vi.mock('@talex-touch/utils/common/utils/safe-shell', () => ({
   spawnSafe: spawnSafeMock
+}))
+
+vi.mock('pinyin-pro', () => ({
+  pinyin: pinyinMock
 }))
 
 vi.mock('../../../../core/eventbus/touch-event', () => ({
@@ -262,6 +268,18 @@ type AppProviderPrivate = {
   _clearPendingDeletions: () => Promise<void>
   _initialize: (options?: { forceRefresh?: boolean }) => Promise<void>
   _performFullSync: (forced: boolean) => Promise<void>
+  _generateKeywordsForApp: (app: {
+    bundleId?: string
+    displayName?: string
+    fileName?: string
+    icon?: string
+    lastModified?: Date
+    launchKind: string
+    launchTarget: string
+    name: string
+    path: string
+    stableId?: string
+  }) => Promise<Set<string>>
   _performMdlsUpdateScan: () => Promise<void>
   _performRebuild: () => Promise<void>
   _performStartupBackfill: () => Promise<void>
@@ -300,6 +318,12 @@ describe('appProvider rebuild maintenance', () => {
       deletedApps: []
     })
     getMainConfigMock.mockReturnValue(undefined)
+    pinyinMock.mockImplementation((value: string, options?: { pattern?: string }) => {
+      if (options?.pattern === 'first') {
+        return value === '微信' ? 'WX' : value
+      }
+      return value === '微信' ? 'WEI XIN' : value
+    })
   })
 
   it('returns immediately while path launch is still pending in the background', async () => {
@@ -655,5 +679,28 @@ describe('appProvider rebuild maintenance', () => {
     expect(mapped.displayName).toBe('Calculator')
     expect(mapped.description).toBe('Built-in calculator app')
     expect(mapped.launchKind).toBe('uwp')
+  })
+
+  it('normalizes displayName pinyin keywords to lowercase', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+
+    const keywords = await privateProvider._generateKeywordsForApp({
+      name: 'WeChat',
+      displayName: '微信',
+      fileName: 'WeChat',
+      path: '/Applications/WeChat.app',
+      launchKind: 'path',
+      launchTarget: '/Applications/WeChat.app',
+      stableId: '/Applications/WeChat.app',
+      icon: '',
+      lastModified: new Date(0)
+    })
+
+    expect(keywords).toContain('微信')
+    expect(keywords).toContain('weixin')
+    expect(keywords).toContain('wx')
+    expect(keywords).not.toContain('WEIXIN')
+    expect(keywords).not.toContain('WX')
   })
 })
