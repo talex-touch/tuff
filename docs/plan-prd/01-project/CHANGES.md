@@ -43,6 +43,7 @@
 - `plugins/touch-translation/src/pages/multi-translate.vue`
 - `plugins/touch-translation/widgets/translate-panel.vue`
 - `plugins/touch-dev-utils/manifest.json`
+- `plugins/touch-dev-utils/package.json`
 - `plugins/touch-dev-utils/index.js`
 - `packages/test/src/plugins/translation.test.ts`
 - `packages/test/src/plugins/dev-utils.test.ts`
