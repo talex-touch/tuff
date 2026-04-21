@@ -2,7 +2,7 @@
   "name": "@talex-touch/touch-translation-plugin",
   "private": true,
   "type": "module",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "packageManager": "pnpm@10.32.1",
   "scripts": {
     "build": "vite build && tuff builder",

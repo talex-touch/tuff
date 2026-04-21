@@ -5,6 +5,17 @@
 
 ## 2026-04-21
 
+### fix(core-app): 修复翻译 widget 回车复制与 renderer setupState 合并告警
+
+- `apps/core-app/src/renderer/src/components/render/WidgetFrame.vue`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-host-key-bridge.ts`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 为 CoreBox 内嵌 widget 增加轻量键盘桥，`touch-translation` 在非 UI View 模式下也能接收到 `ArrowUp / ArrowDown / Enter`，可直接切换 provider 并用回车复制当前选中的中文结果。
+  - `WidgetRegistry` 的 setupState 自愈合并从 Proxy 改为基于实例原型的显式上下文合并，减少开发态 `Property '$' was accessed via 'this'` 告警噪音。
+
 ### feat(plugins): 增强 touch-translation widget 信息层并发布 1.0.7
 
 - `plugins/touch-translation/index/main.ts`

@@ -8,6 +8,7 @@ import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-over
 import { onBeforeUnmount } from 'vue'
 import { BoxMode } from '..'
 import { createCoreBoxKeyTransport } from '../transport/key-transport'
+import { publishWidgetHostKeyEvent } from '~/modules/plugin/widget-host-key-bridge'
 import { devLog } from '~/utils/dev-log'
 
 interface SectionRange {
@@ -464,6 +465,28 @@ export function useKeyboard(
     keyTransport.forwardKeyEvent(serializeKeyEvent(event))
   }
 
+  function isCustomWidgetItem(item?: TuffItem): boolean {
+    const render = item?.render
+    if (!render || render.mode !== 'custom') {
+      return false
+    }
+
+    const customRender = render.custom
+    return customRender?.type === 'vue' && typeof item?.id === 'string'
+  }
+
+  function shouldForwardToCustomWidget(event: KeyboardEvent, item?: TuffItem): boolean {
+    if (!isCustomWidgetItem(item)) {
+      return false
+    }
+
+    if (event.isComposing || event.keyCode === 229) {
+      return false
+    }
+
+    return event.key === 'Enter' || event.key === 'ArrowUp' || event.key === 'ArrowDown'
+  }
+
   /**
    * Global keyboard event handler for CoreBox window
    * @param event - KeyboardEvent from user interaction
@@ -533,6 +556,13 @@ export function useKeyboard(
     // Forward keys to plugin UI view when in UI mode
     if (uiMode && shouldForwardKey(event, inputHidden)) {
       forwardToUIView(event)
+      event.preventDefault()
+      return
+    }
+
+    const focusedItem = res.value[boxOptions.focus]
+    if (!uiMode && shouldForwardToCustomWidget(event, focusedItem)) {
+      publishWidgetHostKeyEvent(focusedItem!.id, serializeKeyEvent(event))
       event.preventDefault()
       return
     }
