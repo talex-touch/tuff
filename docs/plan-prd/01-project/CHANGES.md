@@ -43,6 +43,21 @@
   - renderer 侧智能翻译 provider 改为复用 `@talex-touch/utils/plugin/sdk` 现有 intelligence SDK，prelude 侧共享逻辑改为从 utils 包内 runtime helper 读取，不再保留插件私有 shared 运行时代码。
   - 修复 `touch-translate` widget 在沙箱中报 `Module "../shared/translation-shared.cjs" is not available` 的初始化失败问题，并重新生成 `1.0.4` 发布包。
 
+### fix(core-app): 自愈 touch-translation 运行时旧包漂移并对齐 bundled 副本
+
+- `apps/core-app/scripts/build-target.js`
+- `apps/core-app/scripts/lib/touch-translation-runtime-sync.js`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/plugin/runtime/plugin-runtime-repair.ts`
+- `apps/core-app/src/main/modules/plugin/runtime/plugin-runtime-repair.test.ts`
+- `apps/core-app/src/main/modules/plugin/widget/processors/vue-processor.test.ts`
+- `apps/core-app/tuff/modules/plugins/touch-translation/*`
+- `packages/test/src/plugins/translation.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `PluginModule` 在加载 `touch-translation` 前会先检查运行时插件目录；只要发现 manifest/package 版本落后于 bundled 运行时种子，或 widget 仍引用 `../shared/translation-shared.cjs`，就自动用稳定 build 产物重建该插件目录，避免旧安装包继续触发 widget sandbox 初始化失败。
+  - `apps/core-app/tuff/modules/plugins/touch-translation` 顶层 runtime 文件已改为对齐 canonical `dist/build` 产物，manifest 保持 runtime 形态（`dev.source=false`），并同步补齐 `1.0.4` 发布包，避免 legacy dev data 迁移再次把旧实现带回用户运行时目录。
+  - 新增 widget 依赖边界单测与 translation 插件一致性回归，锁定“relative import 继续非法、translate-panel 不再依赖 `translation-shared.cjs`、bundled/runtime 构件版本与关键入口与 canonical build 保持一致”。
+
 ### fix(core-app): 归一化 TPEX 市场插件相对资源地址
 
 - `apps/core-app/src/renderer/src/modules/store/providers/tpex-api-provider.ts`
