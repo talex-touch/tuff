@@ -5,6 +5,18 @@
 
 ## 2026-04-21
 
+### refactor(core-app): 直接迁移 Tuff CLI probe 到 tuffcli 命令
+
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/channel/common.test.ts`
+- `packages/tuff-cli/src/bin/tuff.ts`
+- `packages/tuff-cli/bin/tuffcli.js`
+- `packages/tuff-cli/package.json`
+- `packages/tuff-cli-core/src/publish.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `CommonChannel` 不再调用 `tuff` 兼容 shim 探测 CLI，而是直接改为 `tuffcli --version`；开发态同时补充 workspace `.bin` 与 `packages/tuff-cli/bin/tuffcli.js` 已知入口，避免继续触发旧 shim 的 deprecated 噪音日志。
+  - `@talex-touch/tuff-cli` 新增 `tuffcli` 二进制导出，CLI 帮助、错误提示与 `publish` 子命令文案会按实际入口动态展示 `tuff` 或 `tuffcli`，不再把 `tuffcli` 用户引导回旧命令名。
+
 ### fix(ci): 让 utils npm 自动发布对重复版本保持幂等
 
 - `.github/workflows/package-utils-publish.yml`

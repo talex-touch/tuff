@@ -14,6 +14,7 @@ import { resolvePublishConfig } from './config'
 import { ensureCliDeviceInfo } from './device'
 
 const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
+const CLI_COMMAND_NAME = process.env.TUFF_CLI_COMMAND || 'tuffcli'
 
 interface PackageInfo {
   path: string
@@ -92,7 +93,7 @@ function isHtmlResponse(response: NetworkResponse<string>): boolean {
 function parseJsonResponse<T>(response: NetworkResponse<string>, context: string): T {
   if (response.status < 200 || response.status >= 300) {
     const suffix = response.status === 401
-      ? ' Run `tuff login` to authorize this CLI with Nexus.'
+      ? ` Run \`${CLI_COMMAND_NAME} login\` to authorize this CLI with Nexus.`
       : ''
     throw new Error(`${context} failed: HTTP ${response.status}. ${formatResponseSnippet(response.data)}${suffix}`)
   }
@@ -325,8 +326,8 @@ export async function login(): Promise<void> {
   }
 
   if (!token) {
-    console.log('Run `tuff login` from the main CLI to authorize this device in your browser.')
-    console.log('Token compatibility: `tuff login <token>`')
+    console.log(`Run \`${CLI_COMMAND_NAME} login\` from the main CLI to authorize this device in your browser.`)
+    console.log(`Token compatibility: \`${CLI_COMMAND_NAME} login <token>\``)
     console.log('')
     console.log('Get tokens from the Tuff Nexus dashboard:')
     console.log('  https://tuff.tagzxia.com/dashboard')
@@ -362,7 +363,7 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
 
   const token = await getAuthToken()
   if (!token) {
-    console.error('❌ Not authenticated. Run `tuff login` first.')
+    console.error(`❌ Not authenticated. Run \`${CLI_COMMAND_NAME} login\` first.`)
     process.exitCode = 1
     return
   }
@@ -411,7 +412,7 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
 
   if (packages.length === 0) {
     console.error('❌ No .tpex package found in dist/build or dist/')
-    console.log('   Build your plugin first with `tuff build`')
+    console.log(`   Build your plugin first with \`${CLI_COMMAND_NAME} build\``)
     process.exitCode = 1
     return
   }
@@ -475,7 +476,7 @@ export async function runPublish(): Promise<void> {
 }
 
 export function printPublishHelp(): void {
-  console.log('Usage: tuff publish [options]')
+  console.log(`Usage: ${CLI_COMMAND_NAME} publish [options]`)
   console.log('')
   console.log('Options:')
   console.log('  --tag <tag>        Release tag (default: {package.version})')
@@ -485,6 +486,6 @@ export function printPublishHelp(): void {
   console.log('  --api-url <url>    Custom publish API URL')
   console.log('')
   console.log('Example:')
-  console.log('  tuff publish --tag 1.2.0 --channel RELEASE')
-  console.log('  tuff publish --dry-run')
+  console.log(`  ${CLI_COMMAND_NAME} publish --tag 1.2.0 --channel RELEASE`)
+  console.log(`  ${CLI_COMMAND_NAME} publish --dry-run`)
 }

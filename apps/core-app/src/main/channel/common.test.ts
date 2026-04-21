@@ -3,6 +3,7 @@ import { AppEvents, PlatformEvents } from '@talex-touch/utils/transport/events'
 
 const {
   fsReadFileMock,
+  execFileMock,
   loggerWarnMock,
   perfDisposeMock,
   getTuffTransportMainMock,
@@ -12,6 +13,16 @@ const {
   platformCapabilityListMock
 } = vi.hoisted(() => ({
   fsReadFileMock: vi.fn(),
+  execFileMock: vi.fn(
+    (
+      _command: string,
+      _args: string[],
+      _options: Record<string, unknown>,
+      callback: (error: Error | null, stdout?: string, stderr?: string) => void
+    ) => {
+      callback(Object.assign(new Error('command not found'), { code: 'ENOENT' }))
+    }
+  ),
   loggerWarnMock: vi.fn(),
   perfDisposeMock: vi.fn(),
   getTuffTransportMainMock: vi.fn<(channel?: unknown, keyManager?: unknown) => unknown>(() => null),
@@ -65,6 +76,10 @@ vi.mock('node:fs', () => ({
   readFileSync: vi.fn(() => ''),
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn()
+}))
+
+vi.mock('node:child_process', () => ({
+  execFile: execFileMock
 }))
 
 vi.mock('electron', () => ({
@@ -594,6 +609,76 @@ describe('CommonChannelModule private helpers', () => {
       expect(nativeShare?.supportLevel).toBe('unsupported')
       expect(nativeShare?.limitations?.[0]).toContain('explicit mail target')
     } finally {
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        configurable: true
+      })
+    }
+  })
+
+  it('probes `tuffcli --version` directly for Tuff CLI availability', async () => {
+    const originalPlatform = process.platform
+    const now = Date.now()
+    const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(now + 61_000)
+
+    Object.defineProperty(process, 'platform', {
+      value: 'darwin',
+      configurable: true
+    })
+
+    execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
+      callback(null, 'Version: 0.0.2\n', '')
+    })
+
+    try {
+      const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+      const transport = {
+        on: vi.fn(
+          (
+            event: { toEventName: () => string },
+            handler: (payload: unknown, context: unknown) => Promise<unknown>
+          ) => {
+            handlers.set(event.toEventName(), handler)
+            return vi.fn()
+          }
+        ),
+        onStream: vi.fn(() => vi.fn()),
+        broadcastToWindow: vi.fn()
+      }
+
+      getTuffTransportMainMock.mockReturnValue(transport as never)
+      platformCapabilityListMock.mockReturnValue([] as never)
+      isActiveAppCapabilityAvailableMock.mockResolvedValue(false)
+      nativeShareGetAvailableTargetsMock.mockReturnValue([] as never)
+
+      const module = new CommonChannelModule()
+      await module.onInit({
+        app: {
+          window: { window: {} },
+          app: { addListener: vi.fn() }
+        }
+      } as never)
+
+      const listHandler = handlers.get(PlatformEvents.capabilities.list.toEventName())
+      expect(listHandler).toBeTypeOf('function')
+
+      const capabilities = (await listHandler?.({}, {})) as Array<{
+        id: string
+        supportLevel?: string
+      }>
+
+      expect(execFileMock).toHaveBeenNthCalledWith(
+        1,
+        'tuffcli',
+        ['--version'],
+        expect.objectContaining({ timeout: 1500, windowsHide: true }),
+        expect.any(Function)
+      )
+      expect(capabilities.find((item) => item.id === 'platform.tuff-cli')?.supportLevel).toBe(
+        'supported'
+      )
+    } finally {
+      dateNowSpy.mockRestore()
       Object.defineProperty(process, 'platform', {
         value: originalPlatform,
         configurable: true
