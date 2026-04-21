@@ -1,5 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
-import { tuffIntelligenceTranslate } from '../../shared/tuffintelligence'
+import { intelligence } from '@talex-touch/utils/plugin/sdk'
 
 export class TuffIntelligenceTranslateProvider implements TranslationProvider {
   name = 'Tuff Intelligence'
@@ -11,13 +11,13 @@ export class TuffIntelligenceTranslateProvider implements TranslationProvider {
     const { text, targetLanguage: targetLang = 'zh', sourceLanguage: sourceLang = 'auto' } = request
 
     try {
-      const response = await tuffIntelligenceTranslate({
+      const response = await intelligence.invoke<string>('text.translate', {
         text,
         targetLang,
         sourceLang: sourceLang && sourceLang !== 'auto' ? sourceLang : undefined,
       })
 
-      const translatedText = response?.text
+      const translatedText = response?.result
       if (typeof translatedText !== 'string')
         throw new Error('Invalid intelligence translate result')
 

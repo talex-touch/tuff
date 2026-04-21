@@ -1,22 +1,20 @@
 import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
 import { createIntelligenceClient } from '@talex-touch/tuff-intelligence/client'
-import { GoogleProvider, TuffIntelligenceProvider } from './providers'
-import translationShared from '../shared/translation-shared.cjs'
-
-const { plugin, clipboard, logger, permission, TuffItemBuilder } = globalThis as any
-const {
-  DEFAULT_ENABLED_PROVIDER_IDS,
-  NO_INPUT_OCR_MESSAGE,
-  NO_INPUT_SCREENSHOT_MESSAGE,
-  NO_INPUT_TEXT_MESSAGE,
-  PERMISSION_DENIED_MESSAGE,
+import {
   applyProviderPresentation,
+  DEFAULT_ENABLED_PROVIDER_IDS,
   detectLanguage,
   getEnabledProviderIds,
   getTranslationProviderLabel,
+  NO_INPUT_OCR_MESSAGE,
+  NO_INPUT_SCREENSHOT_MESSAGE,
+  NO_INPUT_TEXT_MESSAGE,
   normalizeCallFailureMessage,
+  PERMISSION_DENIED_MESSAGE,
   resolveTargetLanguage,
-} = translationShared as any
+} from '@talex-touch/utils/plugin'
+import { GoogleProvider, TuffIntelligenceProvider } from './providers'
+const { plugin, clipboard, logger, permission, TuffItemBuilder } = globalThis as any
 
 const PLUGIN_NAME = 'touch-translation'
 const WIDGET_ITEM_ID = 'translation-widget'

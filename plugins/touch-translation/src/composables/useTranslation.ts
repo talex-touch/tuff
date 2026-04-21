@@ -1,16 +1,15 @@
 import type { HistoryItem, TranslationRequest, TranslationResponse, TranslationResult } from '../types/translation'
-import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
-import { computed, reactive, ref } from 'vue'
-import translationShared from '../../shared/translation-shared.cjs'
-import { useTranslationProvider } from './useTranslationProvider'
-
-const MAX_HISTORY_ITEMS = 10
-const {
+import {
   CALL_FAILED_MESSAGE,
   NO_INPUT_TEXT_MESSAGE,
   normalizeTranslationErrorMessage,
   resolveTargetLanguage,
-} = translationShared as any
+} from '@talex-touch/utils/plugin'
+import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+import { computed, reactive, ref } from 'vue'
+import { useTranslationProvider } from './useTranslationProvider'
+
+const MAX_HISTORY_ITEMS = 10
 
 // 全局状态
 const currentRequest = ref<TranslationRequest | null>(null)
