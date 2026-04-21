@@ -1,12 +1,23 @@
 import { Buffer } from 'node:buffer'
 import { promises as fs } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
-import { safeStorage } from 'electron'
 
 export const SECURE_STORE_FILE = 'secure-store.json'
 export const SECURE_STORE_KEY_PATTERN = /^[a-z0-9._-]{1,80}$/i
 
 type WarnHandler = (message: string, error: unknown) => void
+type ElectronSafeStorage = (typeof import('electron'))['safeStorage']
+const requireFromCurrentModule = createRequire(import.meta.url)
+
+function resolveSafeStorage(): ElectronSafeStorage | null {
+  try {
+    const electron = requireFromCurrentModule('electron') as typeof import('electron')
+    return electron.safeStorage ?? null
+  } catch {
+    return null
+  }
+}
 
 function normalizeSecureStoreKey(rawKey: string): string {
   const key = rawKey.trim()
@@ -50,7 +61,8 @@ async function writeSecureStoreFile(
 }
 
 export function isSecureStoreAvailable(): boolean {
-  return safeStorage.isEncryptionAvailable()
+  const safeStorage = resolveSafeStorage()
+  return safeStorage?.isEncryptionAvailable() === true
 }
 
 export async function getSecureStoreValue(
@@ -58,7 +70,8 @@ export async function getSecureStoreValue(
   rawKey: string,
   warn?: WarnHandler
 ): Promise<string | null> {
-  if (!isSecureStoreAvailable()) {
+  const safeStorage = resolveSafeStorage()
+  if (!safeStorage || !safeStorage.isEncryptionAvailable()) {
     return null
   }
 
@@ -83,7 +96,8 @@ export async function setSecureStoreValue(
   value: string | null,
   warn?: WarnHandler
 ): Promise<boolean> {
-  if (!isSecureStoreAvailable()) {
+  const safeStorage = resolveSafeStorage()
+  if (!safeStorage || !safeStorage.isEncryptionAvailable()) {
     return false
   }
 
