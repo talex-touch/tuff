@@ -11,7 +11,12 @@ import type {
 import type {
   AppIndexAddPathRequest,
   AppIndexAddPathResult,
+  AppIndexEntryMutationResult,
+  AppIndexManagedEntry,
+  AppIndexRemoveEntryRequest,
+  AppIndexSetEntryEnabledRequest,
   AppIndexSettings,
+  AppIndexUpsertEntryRequest,
 } from '../../events/types/app-index'
 import type {
   AnalyticsToggleRequest,
@@ -63,6 +68,12 @@ export interface SettingsSdk {
     getSettings: () => Promise<AppIndexSettings>
     updateSettings: (settings: Partial<AppIndexSettings>) => Promise<AppIndexSettings>
     addPath: (payload: AppIndexAddPathRequest) => Promise<AppIndexAddPathResult>
+    listEntries: () => Promise<AppIndexManagedEntry[]>
+    upsertEntry: (payload: AppIndexUpsertEntryRequest) => Promise<AppIndexEntryMutationResult>
+    removeEntry: (payload: AppIndexRemoveEntryRequest) => Promise<AppIndexEntryMutationResult>
+    setEntryEnabled: (
+      payload: AppIndexSetEntryEnabledRequest
+    ) => Promise<AppIndexEntryMutationResult>
   }
   analytics: {
     getSnapshot: (windowType: AnalyticsWindowType) => Promise<AnalyticsSnapshot>
@@ -104,6 +115,10 @@ export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
       getSettings: () => transport.send(AppEvents.appIndex.getSettings),
       updateSettings: settings => transport.send(AppEvents.appIndex.updateSettings, settings),
       addPath: payload => transport.send(AppEvents.appIndex.addPath, payload),
+      listEntries: () => transport.send(AppEvents.appIndex.listEntries),
+      upsertEntry: payload => transport.send(AppEvents.appIndex.upsertEntry, payload),
+      removeEntry: payload => transport.send(AppEvents.appIndex.removeEntry, payload),
+      setEntryEnabled: payload => transport.send(AppEvents.appIndex.setEntryEnabled, payload),
     },
     analytics: {
       getSnapshot: windowType => transport.send(AppEvents.analytics.getSnapshot, { windowType }),

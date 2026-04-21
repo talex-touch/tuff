@@ -4,11 +4,14 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceMessage,
   IntelligenceProviderConfig,
-  TuffIntelligenceApprovalTicket,
   TuffIntelligenceAgentSession,
-  TuffIntelligenceStateSnapshot,
   TuffIntelligenceAgentTraceEvent,
+  TuffIntelligenceApprovalTicket,
+  TuffIntelligenceStateSnapshot,
   TuffIntelligenceTurn,
+  WorkflowDefinition,
+  WorkflowRunRecord,
+  WorkflowTriggerType,
 } from '../../../types/intelligence'
 import type { ITuffTransport, StreamController, StreamOptions } from '../../types'
 import { defineRawEvent } from '../../event/builder'
@@ -203,6 +206,36 @@ export interface IntelligenceAgentTraceExportPayload {
   format?: 'json' | 'jsonl'
 }
 
+export interface IntelligenceWorkflowListPayload {
+  includeDisabled?: boolean
+  includeTemplates?: boolean
+}
+
+export interface IntelligenceWorkflowGetPayload {
+  workflowId: string
+}
+
+export interface IntelligenceWorkflowDeletePayload {
+  workflowId: string
+}
+
+export interface IntelligenceWorkflowHistoryPayload {
+  workflowId?: string
+  limit?: number
+  status?: WorkflowRunRecord['status']
+}
+
+export interface IntelligenceWorkflowRunPayload {
+  workflowId?: string
+  workflow?: WorkflowDefinition
+  runId?: string
+  inputs?: Record<string, unknown>
+  sessionId?: string
+  triggerType?: WorkflowTriggerType
+  continueOnError?: boolean
+  metadata?: Record<string, unknown>
+}
+
 export type IntelligenceApiResponse<T = undefined>
   = { ok: true, result?: T }
     | { ok: false, error: string }
@@ -268,11 +301,17 @@ export interface IntelligenceSdk {
   agentSessionStream: (payload: IntelligenceAgentTraceQueryPayload) => Promise<TuffIntelligenceAgentTraceEvent[]>
   agentSessionSubscribe: (
     payload: IntelligenceAgentTraceQueryPayload,
-    options: StreamOptions<IntelligenceAgentStreamEvent>
+    options: StreamOptions<IntelligenceAgentStreamEvent>,
   ) => Promise<StreamController>
   agentSessionHistory: (payload?: IntelligenceAgentSessionHistoryPayload) => Promise<TuffIntelligenceAgentSession[]>
   agentSessionTrace: (payload: IntelligenceAgentTraceQueryPayload) => Promise<TuffIntelligenceAgentTraceEvent[]>
   agentSessionTraceExport: (payload: IntelligenceAgentTraceExportPayload) => Promise<{ format: 'json' | 'jsonl', content: string }>
+  workflowList: (payload?: IntelligenceWorkflowListPayload) => Promise<WorkflowDefinition[]>
+  workflowGet: (payload: IntelligenceWorkflowGetPayload) => Promise<WorkflowDefinition | null>
+  workflowSave: (workflow: WorkflowDefinition) => Promise<WorkflowDefinition>
+  workflowDelete: (payload: IntelligenceWorkflowDeletePayload) => Promise<{ deleted: boolean }>
+  workflowRun: (payload: IntelligenceWorkflowRunPayload) => Promise<WorkflowRunRecord>
+  workflowHistory: (payload?: IntelligenceWorkflowHistoryPayload) => Promise<WorkflowRunRecord[]>
 }
 
 export type IntelligenceSdkTransport = Pick<ITuffTransport, 'send'> & Partial<Pick<ITuffTransport, 'stream'>>
@@ -465,6 +504,36 @@ const intelligenceSessionTraceExportEvent = defineRawEvent<
   IntelligenceApiResponse<{ format: 'json' | 'jsonl', content: string }>
 >('intelligence:agent:session:trace:export')
 
+const intelligenceWorkflowListEvent = defineRawEvent<
+  IntelligenceWorkflowListPayload | undefined,
+  IntelligenceApiResponse<WorkflowDefinition[]>
+>('intelligence:workflow:list')
+
+const intelligenceWorkflowGetEvent = defineRawEvent<
+  IntelligenceWorkflowGetPayload,
+  IntelligenceApiResponse<WorkflowDefinition | null>
+>('intelligence:workflow:get')
+
+const intelligenceWorkflowSaveEvent = defineRawEvent<
+  WorkflowDefinition,
+  IntelligenceApiResponse<WorkflowDefinition>
+>('intelligence:workflow:save')
+
+const intelligenceWorkflowDeleteEvent = defineRawEvent<
+  IntelligenceWorkflowDeletePayload,
+  IntelligenceApiResponse<{ deleted: boolean }>
+>('intelligence:workflow:delete')
+
+const intelligenceWorkflowRunEvent = defineRawEvent<
+  IntelligenceWorkflowRunPayload,
+  IntelligenceApiResponse<WorkflowRunRecord>
+>('intelligence:workflow:run')
+
+const intelligenceWorkflowHistoryEvent = defineRawEvent<
+  IntelligenceWorkflowHistoryPayload | undefined,
+  IntelligenceApiResponse<WorkflowRunRecord[]>
+>('intelligence:workflow:history')
+
 function assertApiResponse<T>(response: IntelligenceApiResponse<T>, fallbackMessage: string): T {
   if (!response?.ok) {
     throw new Error(response?.error || fallbackMessage)
@@ -630,7 +699,7 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
 
     async agentSessionSubscribe(payload, options) {
       if (typeof transport.stream !== 'function') {
-        throw new Error('Failed to subscribe intelligence trace stream: transport.stream is unavailable')
+        throw new TypeError('Failed to subscribe intelligence trace stream: transport.stream is unavailable')
       }
       return transport.stream(intelligenceSessionSubscribeEvent, payload, options)
     },
@@ -648,6 +717,36 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     async agentSessionTraceExport(payload) {
       const response = await transport.send(intelligenceSessionTraceExportEvent, payload)
       return assertApiResponse(response, 'Failed to export intelligence trace')
+    },
+
+    async workflowList(payload = {}) {
+      const response = await transport.send(intelligenceWorkflowListEvent, payload)
+      return assertApiResponse(response, 'Failed to list workflows')
+    },
+
+    async workflowGet(payload) {
+      const response = await transport.send(intelligenceWorkflowGetEvent, payload)
+      return assertApiResponse(response, 'Failed to get workflow')
+    },
+
+    async workflowSave(workflow) {
+      const response = await transport.send(intelligenceWorkflowSaveEvent, workflow)
+      return assertApiResponse(response, 'Failed to save workflow')
+    },
+
+    async workflowDelete(payload) {
+      const response = await transport.send(intelligenceWorkflowDeleteEvent, payload)
+      return assertApiResponse(response, 'Failed to delete workflow')
+    },
+
+    async workflowRun(payload) {
+      const response = await transport.send(intelligenceWorkflowRunEvent, payload)
+      return assertApiResponse(response, 'Failed to run workflow')
+    },
+
+    async workflowHistory(payload = {}) {
+      const response = await transport.send(intelligenceWorkflowHistoryEvent, payload)
+      return assertApiResponse(response, 'Failed to query workflow history')
     },
   }
 }

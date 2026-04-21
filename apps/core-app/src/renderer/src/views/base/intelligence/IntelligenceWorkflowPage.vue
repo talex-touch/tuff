@@ -1,713 +1,928 @@
 <script lang="ts" name="IntelligenceWorkflowPage" setup>
-import type { PromptWorkflowExecution } from '@talex-touch/tuff-intelligence'
+import type { WorkflowStepKind } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex'
-import { computed, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { computed, onMounted, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
-import { WorkflowValidationError, useWorkflowEditor } from '~/modules/hooks/useWorkflowEditor'
-
-type WorkflowStatus =
-  | PromptWorkflowExecution['status']
-  | PromptWorkflowExecution['steps'][number]['status']
-  | 'not-run'
-
-const { t } = useI18n()
+import { useWorkflowEditor, WorkflowValidationError } from '~/modules/hooks/useWorkflowEditor'
 
 const {
-  steps,
-  continueOnError,
-  executing,
-  executionResult,
+  workflows,
+  workflowDraft,
+  selectedWorkflowId,
+  loading,
+  saving,
+  running,
+  deleting,
+  history,
+  currentRun,
   executionError,
-  validationErrors,
   agentOptions,
+  builtinToolOptions,
+  pendingApprovals,
+  canDeleteCurrent,
+  loadAgents,
+  loadWorkflows,
+  loadHistory,
+  selectWorkflow,
+  createWorkflowFromScratch,
   addStep,
   removeStep,
-  clearResult,
-  resetSteps,
-  loadAgents,
-  executeWorkflow
+  addTrigger,
+  removeTrigger,
+  updateToolSource,
+  saveWorkflow,
+  deleteWorkflow,
+  runWorkflow,
+  resumeCurrentRun,
+  inspectRun,
+  approveTicket
 } = useWorkflowEditor()
 
-const runResult = computed(() => executionResult.value?.result ?? null)
-
-const workflowStatus = computed<WorkflowStatus>(() => runResult.value?.status ?? 'pending')
-
-const workflowSummaryText = computed(() => {
-  switch (workflowStatus.value) {
+const runStatusText = computed(() => {
+  switch (currentRun.value?.status) {
     case 'completed':
-      return t('intelligence.workflow.summaryCompleted')
+      return '已完成'
     case 'failed':
-      return t('intelligence.workflow.summaryFailed')
+      return '失败'
+    case 'waiting_approval':
+      return '等待审批'
     case 'running':
-      return t('intelligence.workflow.summaryRunning')
+      return '运行中'
     case 'cancelled':
-      return t('intelligence.workflow.summaryCancelled')
+      return '已取消'
     default:
-      return t('intelligence.workflow.summaryPending')
+      return '未运行'
   }
 })
 
-const stepResultMap = computed(() => {
-  const map = new Map<string, PromptWorkflowExecution['steps'][number]>()
-  for (const step of runResult.value?.steps ?? []) {
-    map.set(step.stepId, step)
-  }
-  return map
-})
-
-function safeSerializeOutput(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error)
-    return `[unserializable output: ${reason}]`
-  }
-}
-
-const displaySteps = computed(() => {
-  const hasResult = Boolean(runResult.value)
-
-  return steps.value.map((step, index) => {
-    const stepId = step.id.trim() || `step-${index + 1}`
-    const stepResult = stepResultMap.value.get(stepId)
-    const status: WorkflowStatus = stepResult?.status ?? (hasResult ? 'not-run' : 'pending')
-
-    return {
-      uid: step.uid,
-      index,
-      stepId,
-      agentId: step.agentId.trim(),
-      status,
-      outputText: stepResult?.output === undefined ? '' : safeSerializeOutput(stepResult.output),
-      errorText: stepResult?.error || ''
-    }
-  })
-})
-
-const hasUsage = computed(() => {
-  const usage = executionResult.value?.usage
-  return Boolean(usage && usage.totalTokens > 0)
-})
-
-const successCount = computed(() => {
-  return runResult.value?.steps.filter((step) => step.status === 'completed').length ?? 0
-})
-
-const failedCount = computed(() => {
-  return runResult.value?.steps.filter((step) => step.status === 'failed').length ?? 0
-})
-
-const notRunCount = computed(() => {
-  return displaySteps.value.filter((step) => step.status === 'not-run').length
-})
-
-function statusClass(status: WorkflowStatus): string {
-  switch (status) {
+const runStatusClass = computed(() => {
+  switch (currentRun.value?.status) {
     case 'completed':
       return 'status-pill status-pill--success'
     case 'failed':
       return 'status-pill status-pill--error'
+    case 'waiting_approval':
+      return 'status-pill status-pill--warning'
     case 'running':
       return 'status-pill status-pill--running'
-    case 'cancelled':
-      return 'status-pill status-pill--warning'
-    case 'skipped':
-      return 'status-pill status-pill--warning'
-    case 'not-run':
+    default:
       return 'status-pill status-pill--muted'
-    default:
-      return 'status-pill status-pill--pending'
+  }
+})
+
+const activeStepCount = computed(() => workflowDraft.value.steps.length)
+
+function formatJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
   }
 }
 
-function statusText(status: WorkflowStatus): string {
-  switch (status) {
-    case 'completed':
-      return t('intelligence.workflow.statusCompleted')
-    case 'failed':
-      return t('intelligence.workflow.statusFailed')
-    case 'running':
-      return t('intelligence.workflow.statusRunning')
-    case 'cancelled':
-      return t('intelligence.workflow.statusCancelled')
-    case 'skipped':
-      return t('intelligence.workflow.statusSkipped')
-    case 'not-run':
-      return t('intelligence.workflow.statusNotRun')
-    default:
-      return t('intelligence.workflow.statusPending')
+function formatDate(value?: number): string {
+  if (!value) {
+    return '-'
+  }
+  return new Date(value).toLocaleString()
+}
+
+function kindLabel(kind: WorkflowStepKind): string {
+  if (kind === 'tool') return 'Tool'
+  if (kind === 'prompt') return 'Prompt'
+  return 'Agent'
+}
+
+function displayStepKind(kind?: string): string {
+  return kindLabel(kind === 'tool' || kind === 'prompt' ? kind : 'agent')
+}
+
+function resolveValidationMessage(error: unknown): string {
+  if (!(error instanceof WorkflowValidationError)) {
+    return error instanceof Error ? error.message : String(error)
+  }
+  return error.reason
+}
+
+async function handleSave(): Promise<void> {
+  try {
+    const saved = await saveWorkflow()
+    toast.success(`工作流已保存：${saved.name}`)
+  } catch (error) {
+    toast.error(resolveValidationMessage(error))
   }
 }
 
-function resolveValidationMessage(error: WorkflowValidationError): string {
-  const fieldLabelMap: Record<'steps' | 'agentId' | 'input', string> = {
-    steps: t('intelligence.workflow.fieldSteps'),
-    agentId: t('intelligence.workflow.fieldAgentId'),
-    input: t('intelligence.workflow.fieldInput')
+async function handleDelete(): Promise<void> {
+  try {
+    await deleteWorkflow()
+    toast.success('工作流已删除')
+  } catch (error) {
+    toast.error(resolveValidationMessage(error))
   }
-
-  if (error.code === 'min_steps') {
-    return t('intelligence.workflow.validationFieldReason', {
-      field: fieldLabelMap.steps,
-      reason: error.reason
-    })
-  }
-
-  switch (error.code) {
-    case 'agent_required':
-      return t('intelligence.workflow.validationFieldReasonAtStep', {
-        index: (error.stepIndex ?? 0) + 1,
-        field: fieldLabelMap.agentId,
-        reason: error.reason
-      })
-    case 'input_json':
-      return t('intelligence.workflow.validationFieldReasonAtStep', {
-        index: (error.stepIndex ?? 0) + 1,
-        field: fieldLabelMap.input,
-        reason: error.reason
-      })
-    default:
-      return t('intelligence.workflow.runFailed')
-  }
-}
-
-function formatInlineFieldError(field: 'agentId' | 'input', reason: string): string {
-  return t('intelligence.workflow.validationFieldReason', {
-    field:
-      field === 'agentId'
-        ? t('intelligence.workflow.fieldAgentId')
-        : t('intelligence.workflow.fieldInput'),
-    reason
-  })
 }
 
 async function handleRun(): Promise<void> {
   try {
-    await executeWorkflow()
-    if (runResult.value?.status === 'failed') {
-      toast.error(t('intelligence.workflow.runFailed'))
+    const result = await runWorkflow()
+    if (result.status === 'waiting_approval') {
+      toast.info('工作流已暂停，等待工具审批')
       return
     }
-    toast.success(t('intelligence.workflow.runSuccess'))
+    toast.success('工作流执行完成')
   } catch (error) {
-    if (error instanceof WorkflowValidationError) {
-      toast.error(resolveValidationMessage(error))
-      return
-    }
-
-    toast.error(error instanceof Error ? error.message : t('intelligence.workflow.runFailed'))
+    toast.error(resolveValidationMessage(error))
   }
 }
 
-function handleRemoveStep(uid: string): void {
-  removeStep(uid)
-  clearResult()
+async function handleResume(): Promise<void> {
+  try {
+    const result = await resumeCurrentRun()
+    if (!result) {
+      toast.error('当前没有可恢复的运行')
+      return
+    }
+    if (result.status === 'waiting_approval') {
+      toast.info('仍有工具等待审批')
+      return
+    }
+    toast.success('工作流已恢复')
+  } catch (error) {
+    toast.error(resolveValidationMessage(error))
+  }
 }
+
+async function handleApproval(ticketId: string, approved: boolean): Promise<void> {
+  try {
+    await approveTicket(ticketId, approved)
+    toast.success(approved ? '已批准工具调用' : '已拒绝工具调用')
+  } catch (error) {
+    toast.error(resolveValidationMessage(error))
+  }
+}
+
+function handleToolSourceToggle(source: 'builtin' | 'mcp', event: Event): void {
+  const target = event.target
+  updateToolSource(source, target instanceof HTMLInputElement ? target.checked : false)
+}
+
+watch(
+  () => selectedWorkflowId.value,
+  async (workflowId) => {
+    await loadHistory(workflowId || undefined)
+  }
+)
 
 onMounted(async () => {
   try {
-    await loadAgents()
-  } catch {
-    toast.error(t('intelligence.workflow.loadAgentsFailed'))
+    await Promise.all([loadAgents(), loadWorkflows()])
+    await loadHistory()
+  } catch (error) {
+    toast.error(resolveValidationMessage(error))
   }
 })
 </script>
 
 <template>
-  <ViewTemplate :title="t('intelligence.workflow.title')">
+  <ViewTemplate title="Tuff Intelligence Workflows">
     <div class="workflow-page">
-      <section class="workflow-editor">
-        <div class="panel-header">
-          <h2>{{ t('intelligence.workflow.title') }}</h2>
-          <p>{{ t('intelligence.workflow.description') }}</p>
+      <section class="workflow-sidebar card-panel">
+        <div class="section-head">
+          <div>
+            <h2>模板与工作流</h2>
+            <p>内置模板、已保存工作流与当前编辑对象都在这里。</p>
+          </div>
+          <TxButton variant="flat" @click="createWorkflowFromScratch">
+            <i class="i-carbon-add" />
+            <span>新建</span>
+          </TxButton>
         </div>
 
-        <div class="editor-toolbar">
-          <label class="continue-option">
-            <input v-model="continueOnError" type="checkbox" />
-            <span>{{ t('intelligence.workflow.continueOnError') }}</span>
-          </label>
-          <span class="continue-hint">{{ t('intelligence.workflow.continueOnErrorHint') }}</span>
+        <div class="workflow-list">
+          <button
+            v-for="workflow in workflows"
+            :key="workflow.id"
+            class="workflow-list-item"
+            :class="{ 'workflow-list-item--active': workflow.id === selectedWorkflowId }"
+            @click="selectWorkflow(workflow.id)"
+          >
+            <div class="workflow-list-item__title">
+              <span>{{ workflow.name }}</span>
+              <span v-if="workflow.metadata?.template" class="mini-badge">模板</span>
+              <span v-if="workflow.metadata?.builtin" class="mini-badge mini-badge--ghost"
+                >内置</span
+              >
+            </div>
+            <div class="workflow-list-item__meta">
+              <span>{{ workflow.enabled === false ? '已停用' : '可用' }}</span>
+              <span>{{ workflow.steps.length }} 步</span>
+            </div>
+          </button>
 
-          <div class="toolbar-actions">
-            <TxButton variant="flat" @click="addStep">
-              <i class="i-carbon-add" />
-              <span>{{ t('intelligence.workflow.addStep') }}</span>
-            </TxButton>
-            <TxButton variant="flat" @click="resetSteps">
-              <i class="i-carbon-reset" />
-              <span>{{ t('intelligence.workflow.reset') }}</span>
-            </TxButton>
-            <TxButton type="primary" :loading="executing" @click="handleRun">
-              <i class="i-carbon-play" />
-              <span>
-                {{
-                  executing
-                    ? t('intelligence.workflow.executing')
-                    : t('intelligence.workflow.execute')
-                }}
-              </span>
-            </TxButton>
+          <div v-if="!loading && workflows.length === 0" class="empty-state">
+            还没有可用工作流，先创建一个。
           </div>
         </div>
-
-        <div class="steps-editor">
-          <article v-for="(step, index) in steps" :key="step.uid" class="step-card">
-            <header class="step-header">
-              <div class="step-title-wrap">
-                <span class="step-title">{{
-                  t('intelligence.workflow.stepTitle', { index: index + 1 })
-                }}</span>
-                <span class="step-id-preview">{{ step.id || `step-${index + 1}` }}</span>
-              </div>
-              <TxButton
-                variant="flat"
-                type="danger"
-                :disabled="steps.length <= 1"
-                @click="handleRemoveStep(step.uid)"
-              >
-                <i class="i-carbon-trash-can" />
-                <span>{{ t('intelligence.workflow.removeStep') }}</span>
-              </TxButton>
-            </header>
-
-            <div class="step-grid">
-              <label class="field">
-                <span class="field-label">{{ t('intelligence.workflow.stepId') }}</span>
-                <input v-model="step.id" class="field-input" type="text" />
-              </label>
-              <label class="field">
-                <span class="field-label">{{ t('intelligence.workflow.agentId') }}</span>
-                <input
-                  v-model="step.agentId"
-                  class="field-input"
-                  type="text"
-                  list="workflow-agent-options"
-                  :placeholder="t('intelligence.workflow.agentIdPlaceholder')"
-                />
-                <span v-if="validationErrors[step.uid]?.agentId" class="field-error">
-                  {{ formatInlineFieldError('agentId', validationErrors[step.uid].agentId || '') }}
-                </span>
-              </label>
-              <label class="field">
-                <span class="field-label">{{ t('intelligence.workflow.stepType') }}</span>
-                <select v-model="step.type" class="field-input">
-                  <option value="execute">{{ t('intelligence.workflow.typeExecute') }}</option>
-                  <option value="plan">{{ t('intelligence.workflow.typePlan') }}</option>
-                  <option value="chat">{{ t('intelligence.workflow.typeChat') }}</option>
-                </select>
-              </label>
-            </div>
-
-            <label class="field field--full">
-              <span class="field-label">{{ t('intelligence.workflow.inputJson') }}</span>
-              <textarea
-                v-model="step.input"
-                class="field-textarea"
-                :placeholder="t('intelligence.workflow.inputPlaceholder')"
-                rows="4"
-              />
-              <span v-if="validationErrors[step.uid]?.input" class="field-error">
-                {{ formatInlineFieldError('input', validationErrors[step.uid].input || '') }}
-              </span>
-            </label>
-          </article>
-        </div>
-
-        <datalist id="workflow-agent-options">
-          <option v-for="agent in agentOptions" :key="agent.id" :value="agent.id">
-            {{ agent.name }}
-          </option>
-        </datalist>
       </section>
 
-      <section class="workflow-result">
-        <div class="panel-header">
-          <h2>{{ t('intelligence.workflow.resultTitle') }}</h2>
-          <p>{{ t('intelligence.workflow.resultDescription') }}</p>
-        </div>
-
-        <div class="result-summary">
-          <div class="summary-item">
-            <span class="summary-label">{{ t('intelligence.workflow.statusLabel') }}</span>
-            <span :class="statusClass(workflowStatus)">{{ workflowSummaryText }}</span>
+      <section class="workflow-main">
+        <div class="workflow-toolbar card-panel">
+          <div>
+            <h1>{{ workflowDraft.name || '新工作流' }}</h1>
+            <p>v1 范围固定为可保存工作流、MCP 工具桥和轻量桌面上下文。</p>
           </div>
-          <div v-if="runResult" class="summary-item">
-            <span class="summary-label">{{ t('intelligence.workflow.successCount') }}</span>
-            <span class="summary-value">{{ successCount }}</span>
-          </div>
-          <div v-if="runResult" class="summary-item">
-            <span class="summary-label">{{ t('intelligence.workflow.failedCount') }}</span>
-            <span class="summary-value">{{ failedCount }}</span>
-          </div>
-          <div v-if="runResult" class="summary-item">
-            <span class="summary-label">{{ t('intelligence.workflow.notRunCount') }}</span>
-            <span class="summary-value">{{ notRunCount }}</span>
-          </div>
-          <div v-if="executionResult?.traceId" class="summary-item">
-            <span class="summary-label">{{ t('intelligence.workflow.traceId') }}</span>
-            <span class="summary-value">{{ executionResult?.traceId }}</span>
-          </div>
-          <div v-if="executionResult?.latency !== undefined" class="summary-item">
-            <span class="summary-label">{{ t('intelligence.workflow.latency') }}</span>
-            <span class="summary-value">{{ executionResult?.latency }}ms</span>
-          </div>
-          <div v-if="executionResult?.provider" class="summary-item">
-            <span class="summary-label">{{ t('intelligence.workflow.provider') }}</span>
-            <span class="summary-value">{{ executionResult?.provider }}</span>
-          </div>
-          <div v-if="executionResult?.model" class="summary-item">
-            <span class="summary-label">{{ t('intelligence.workflow.model') }}</span>
-            <span class="summary-value">{{ executionResult?.model }}</span>
-          </div>
-          <div v-if="hasUsage" class="summary-item">
-            <span class="summary-label">{{ t('intelligence.workflow.tokens') }}</span>
-            <span class="summary-value">{{ executionResult?.usage?.totalTokens }}</span>
+          <div class="toolbar-actions">
+            <TxButton variant="flat" :loading="saving" @click="handleSave">
+              <i class="i-carbon-save" />
+              <span>{{ workflowDraft.isBuiltin ? '另存为副本' : '保存' }}</span>
+            </TxButton>
+            <TxButton
+              variant="flat"
+              :disabled="!canDeleteCurrent"
+              :loading="deleting"
+              @click="handleDelete"
+            >
+              <i class="i-carbon-trash-can" />
+              <span>删除</span>
+            </TxButton>
+            <TxButton type="primary" :loading="running" @click="handleRun">
+              <i class="i-carbon-play" />
+              <span>运行</span>
+            </TxButton>
+            <TxButton
+              variant="flat"
+              :disabled="currentRun?.status !== 'waiting_approval'"
+              @click="handleResume"
+            >
+              <i class="i-carbon-play-filled-alt" />
+              <span>恢复</span>
+            </TxButton>
           </div>
         </div>
 
-        <p v-if="executionError" class="result-error">{{ executionError }}</p>
-
-        <div class="result-steps">
-          <article v-for="step in displaySteps" :key="step.uid" class="result-step-card">
-            <header class="result-step-header">
+        <div class="workflow-grid">
+          <section class="card-panel editor-panel">
+            <div class="section-head">
               <div>
-                <div class="result-step-title">{{ step.stepId }}</div>
-                <div v-if="step.agentId" class="result-step-agent">{{ step.agentId }}</div>
+                <h2>基础信息</h2>
+                <p>工作流定义、触发器、上下文源和工具源。</p>
               </div>
-              <span :class="statusClass(step.status)">{{ statusText(step.status) }}</span>
-            </header>
-
-            <div v-if="step.errorText" class="result-block result-block--error">
-              <div class="result-block-title">{{ t('intelligence.workflow.errorLabel') }}</div>
-              <pre>{{ step.errorText }}</pre>
             </div>
 
-            <div v-if="step.outputText" class="result-block">
-              <div class="result-block-title">{{ t('intelligence.workflow.outputLabel') }}</div>
-              <pre>{{ step.outputText }}</pre>
+            <div class="form-grid">
+              <label class="field">
+                <span class="field-label">名称</span>
+                <input
+                  v-model="workflowDraft.name"
+                  type="text"
+                  placeholder="例如：整理近期剪贴板"
+                />
+              </label>
+
+              <label class="field">
+                <span class="field-label">描述</span>
+                <input
+                  v-model="workflowDraft.description"
+                  type="text"
+                  placeholder="描述这个工作流要完成什么"
+                />
+              </label>
+
+              <label class="field field--checkbox">
+                <input v-model="workflowDraft.enabled" type="checkbox" />
+                <span>启用工作流</span>
+              </label>
+
+              <label class="field">
+                <span class="field-label">审批阈值</span>
+                <select v-model="workflowDraft.approvalThreshold">
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                  <option value="critical">critical</option>
+                </select>
+              </label>
+
+              <label class="field field--checkbox">
+                <input v-model="workflowDraft.autoApproveReadOnly" type="checkbox" />
+                <span>只读工具自动批准</span>
+              </label>
+            </div>
+
+            <div class="subsection">
+              <div class="subsection-head">
+                <h3>工具源</h3>
+                <p>builtin 负责轻量桌面/剪贴板/浏览器入口，深浏览器和云服务走 MCP。</p>
+              </div>
+              <div class="toggle-row">
+                <label class="pill-toggle">
+                  <input
+                    :checked="workflowDraft.toolSources.includes('builtin')"
+                    type="checkbox"
+                    @change="handleToolSourceToggle('builtin', $event)"
+                  />
+                  <span>builtin</span>
+                </label>
+                <label class="pill-toggle">
+                  <input
+                    :checked="workflowDraft.toolSources.includes('mcp')"
+                    type="checkbox"
+                    @change="handleToolSourceToggle('mcp', $event)"
+                  />
+                  <span>mcp</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="subsection">
+              <div class="subsection-head">
+                <h3>触发器</h3>
+                <div class="subsection-actions">
+                  <TxButton variant="flat" @click="addTrigger('manual')">
+                    <span>手动触发</span>
+                  </TxButton>
+                  <TxButton variant="flat" @click="addTrigger('clipboard.batch')">
+                    <span>剪贴板批处理</span>
+                  </TxButton>
+                </div>
+              </div>
+
+              <div class="stack-list">
+                <article
+                  v-for="trigger in workflowDraft.triggers"
+                  :key="trigger.uid"
+                  class="small-card"
+                >
+                  <div class="mini-grid">
+                    <label class="field">
+                      <span class="field-label">类型</span>
+                      <select v-model="trigger.type">
+                        <option value="manual">manual</option>
+                        <option value="clipboard.batch">clipboard.batch</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span class="field-label">标签</span>
+                      <input v-model="trigger.label" type="text" placeholder="显示名称" />
+                    </label>
+                    <label class="field field--checkbox">
+                      <input v-model="trigger.enabled" type="checkbox" />
+                      <span>启用</span>
+                    </label>
+                    <TxButton variant="flat" @click="removeTrigger(trigger.uid)">
+                      <span>移除</span>
+                    </TxButton>
+                  </div>
+                  <label class="field">
+                    <span class="field-label">配置 JSON</span>
+                    <textarea v-model="trigger.config" rows="3" />
+                  </label>
+                </article>
+              </div>
+            </div>
+
+            <div class="subsection">
+              <div class="subsection-head">
+                <h3>桌面上下文源</h3>
+                <p>默认启用轻量上下文，不做静默截图或全量桌面代理。</p>
+              </div>
+              <div class="stack-list">
+                <article
+                  v-for="source in workflowDraft.contextSources"
+                  :key="source.uid"
+                  class="small-card"
+                >
+                  <div class="mini-grid">
+                    <label class="field">
+                      <span class="field-label">类型</span>
+                      <input v-model="source.type" type="text" />
+                    </label>
+                    <label class="field">
+                      <span class="field-label">标签</span>
+                      <input v-model="source.label" type="text" />
+                    </label>
+                    <label class="field field--checkbox">
+                      <input v-model="source.enabled" type="checkbox" />
+                      <span>启用</span>
+                    </label>
+                  </div>
+                  <label class="field">
+                    <span class="field-label">配置 JSON</span>
+                    <textarea v-model="source.config" rows="2" />
+                  </label>
+                </article>
+              </div>
+            </div>
+
+            <div class="subsection">
+              <div class="subsection-head">
+                <h3>Metadata JSON</h3>
+                <p>MCP profile、分类、模板标记等高级信息可以放这里。</p>
+              </div>
+              <label class="field">
+                <textarea v-model="workflowDraft.metadata" rows="6" />
+              </label>
+            </div>
+          </section>
+
+          <section class="card-panel editor-panel">
+            <div class="section-head">
+              <div>
+                <h2>步骤编辑器</h2>
+                <p>{{ activeStepCount }} 个步骤，v1 仅支持 `prompt / tool / agent`。</p>
+              </div>
+              <div class="subsection-actions">
+                <TxButton variant="flat" @click="addStep('prompt')">
+                  <span>新增 Prompt</span>
+                </TxButton>
+                <TxButton variant="flat" @click="addStep('tool')">
+                  <span>新增 Tool</span>
+                </TxButton>
+                <TxButton variant="flat" @click="addStep('agent')">
+                  <span>新增 Agent</span>
+                </TxButton>
+              </div>
+            </div>
+
+            <div class="stack-list">
+              <article
+                v-for="(step, index) in workflowDraft.steps"
+                :key="step.uid"
+                class="step-card"
+              >
+                <div class="step-card__header">
+                  <div>
+                    <div class="step-card__index">Step {{ index + 1 }}</div>
+                    <div class="step-card__title">
+                      {{ step.name || `Step ${index + 1}` }}
+                    </div>
+                  </div>
+                  <TxButton variant="flat" @click="removeStep(step.uid)">
+                    <span>移除</span>
+                  </TxButton>
+                </div>
+
+                <div class="form-grid">
+                  <label class="field">
+                    <span class="field-label">Step ID</span>
+                    <input v-model="step.id" type="text" />
+                  </label>
+
+                  <label class="field">
+                    <span class="field-label">名称</span>
+                    <input v-model="step.name" type="text" />
+                  </label>
+
+                  <label class="field">
+                    <span class="field-label">类型</span>
+                    <select v-model="step.kind">
+                      <option value="prompt">prompt</option>
+                      <option value="tool">tool</option>
+                      <option value="agent">agent</option>
+                    </select>
+                  </label>
+
+                  <label class="field field--checkbox">
+                    <input v-model="step.continueOnError" type="checkbox" />
+                    <span>本步骤失败后继续</span>
+                  </label>
+                </div>
+
+                <label class="field">
+                  <span class="field-label">说明 / Prompt</span>
+                  <textarea
+                    v-model="step.instruction"
+                    rows="4"
+                    :placeholder="
+                      step.kind === 'prompt' ? '输入该步骤的 Prompt' : '输入该步骤的执行说明'
+                    "
+                  />
+                </label>
+
+                <div v-if="step.kind === 'tool'" class="form-grid">
+                  <label class="field">
+                    <span class="field-label">Tool ID</span>
+                    <input v-model="step.toolId" type="text" list="builtin-tool-options" />
+                  </label>
+
+                  <label class="field">
+                    <span class="field-label">Tool Source</span>
+                    <select v-model="step.toolSource">
+                      <option value="builtin">builtin</option>
+                      <option value="mcp">mcp</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label v-if="step.kind === 'agent'" class="field">
+                  <span class="field-label">Agent ID</span>
+                  <input
+                    v-model="step.agentId"
+                    type="text"
+                    list="agent-options"
+                    placeholder="deepagent.workflow"
+                  />
+                </label>
+
+                <label class="field">
+                  <span class="field-label">输入 JSON</span>
+                  <textarea v-model="step.input" rows="5" />
+                </label>
+              </article>
+            </div>
+
+            <datalist id="agent-options">
+              <option v-for="agent in agentOptions" :key="agent.id" :value="agent.id">
+                {{ agent.name }}
+              </option>
+            </datalist>
+
+            <datalist id="builtin-tool-options">
+              <option v-for="tool in builtinToolOptions" :key="tool.id" :value="tool.id">
+                {{ tool.label }}
+              </option>
+            </datalist>
+          </section>
+        </div>
+      </section>
+
+      <section class="workflow-right card-panel">
+        <div class="section-head">
+          <div>
+            <h2>运行态</h2>
+            <p>展示当前运行、待审批工具和最近历史。</p>
+          </div>
+          <span :class="runStatusClass">{{ runStatusText }}</span>
+        </div>
+
+        <div class="runtime-block">
+          <div class="runtime-kv">
+            <span>当前工作流</span>
+            <strong>{{ workflowDraft.name || '-' }}</strong>
+          </div>
+          <div class="runtime-kv">
+            <span>最近运行 ID</span>
+            <strong>{{ currentRun?.id || '-' }}</strong>
+          </div>
+          <div class="runtime-kv">
+            <span>开始时间</span>
+            <strong>{{ formatDate(currentRun?.startedAt) }}</strong>
+          </div>
+          <div class="runtime-kv">
+            <span>结束时间</span>
+            <strong>{{ formatDate(currentRun?.completedAt) }}</strong>
+          </div>
+          <div v-if="executionError" class="runtime-error">
+            {{ executionError }}
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-head">
+            <h3>审批面板</h3>
+            <p>high / critical 工具调用会在这里暂停并等待恢复。</p>
+          </div>
+
+          <div v-if="pendingApprovals.length === 0" class="empty-state">当前没有待审批工具。</div>
+
+          <article v-for="ticket in pendingApprovals" :key="ticket.id" class="small-card">
+            <div class="approval-title">
+              <span>{{ ticket.toolId }}</span>
+              <span class="mini-badge mini-badge--ghost">{{ ticket.riskLevel }}</span>
+            </div>
+            <div class="approval-reason">
+              {{ ticket.reason }}
+            </div>
+            <div class="approval-actions">
+              <TxButton variant="flat" @click="handleApproval(ticket.id, false)">
+                <span>拒绝</span>
+              </TxButton>
+              <TxButton type="primary" @click="handleApproval(ticket.id, true)">
+                <span>批准并恢复</span>
+              </TxButton>
             </div>
           </article>
+        </div>
+
+        <div v-if="currentRun" class="subsection">
+          <div class="subsection-head">
+            <h3>当前运行步骤</h3>
+            <p>直接查看每个 step 的状态和输出。</p>
+          </div>
+          <div class="stack-list">
+            <article v-for="step in currentRun.steps" :key="step.id" class="small-card">
+              <div class="runtime-kv">
+                <span>{{ step.name }}</span>
+                <span class="mini-badge">{{ step.status }}</span>
+              </div>
+              <div class="small-card__meta">
+                {{ displayStepKind(step.kind) }}
+              </div>
+              <pre v-if="step.output !== undefined" class="result-pre">{{
+                formatJson(step.output)
+              }}</pre>
+              <div v-if="step.error" class="runtime-error">
+                {{ step.error }}
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-head">
+            <h3>运行历史</h3>
+            <p>点击历史记录可以重新查看它的审批状态和输出。</p>
+          </div>
+
+          <div v-if="history.length === 0" class="empty-state">还没有运行历史。</div>
+
+          <button
+            v-for="run in history"
+            :key="run.id"
+            class="history-item"
+            @click="inspectRun(run)"
+          >
+            <div class="history-item__row">
+              <span>{{ run.workflowName || run.workflowId }}</span>
+              <span class="mini-badge">{{ run.status }}</span>
+            </div>
+            <div class="history-item__meta">
+              <span>{{ formatDate(run.startedAt) }}</span>
+              <span>{{ run.steps.length }} 步</span>
+            </div>
+          </button>
         </div>
       </section>
     </div>
   </ViewTemplate>
 </template>
 
-<style lang="scss" scoped>
+<style scoped lang="scss">
 .workflow-page {
   display: grid;
-  gap: 1rem;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  align-items: start;
-
-  @media (max-width: 1280px) {
-    grid-template-columns: 1fr;
-  }
+  grid-template-columns: 320px minmax(0, 1fr) 360px;
+  gap: 16px;
+  min-height: calc(100vh - 120px);
 }
 
-.workflow-editor,
-.workflow-result {
-  background: var(--tx-bg-color);
-  border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 12px;
-  padding: 1rem;
+.card-panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(18, 24, 33, 0.96), rgba(13, 18, 27, 0.92));
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
 }
 
-.panel-header {
-  margin-bottom: 0.75rem;
-
-  h2 {
-    margin: 0;
-    font-size: 1rem;
-    color: var(--tx-text-color-primary);
-  }
-
-  p {
-    margin: 0.25rem 0 0;
-    color: var(--tx-text-color-secondary);
-    font-size: 0.8125rem;
-  }
-}
-
-.editor-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: center;
-  margin-bottom: 0.75rem;
-  padding: 0.75rem;
-  border-radius: 10px;
-  background: var(--tx-fill-color-lighter);
-  border: 1px solid var(--tx-border-color-lighter);
-}
-
-.continue-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: var(--tx-text-color-primary);
-  font-size: 0.875rem;
-
-  input {
-    margin: 0;
-  }
-}
-
-.continue-hint {
-  color: var(--tx-text-color-secondary);
-  font-size: 0.75rem;
-}
-
-.toolbar-actions {
-  margin-left: auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.steps-editor {
+.workflow-sidebar,
+.workflow-right {
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 14px;
 }
 
-.step-card {
-  border: 1px solid var(--tx-border-color-lighter);
-  background: var(--tx-fill-color-blank);
-  border-radius: 10px;
-  padding: 0.75rem;
+.workflow-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
 }
 
-.step-header {
+.workflow-toolbar {
+  padding: 18px 20px;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  gap: 16px;
+  align-items: flex-start;
 }
 
-.step-title-wrap {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-
-.step-title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--tx-text-color-primary);
-}
-
-.step-id-preview {
-  font-size: 0.75rem;
-  color: var(--tx-text-color-secondary);
-}
-
-.step-grid {
+.workflow-grid {
   display: grid;
-  gap: 0.5rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
 
-  @media (max-width: 960px) {
-    grid-template-columns: 1fr;
-  }
+.editor-panel {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.section-head,
+.subsection-head,
+.step-card__header,
+.history-item__row,
+.runtime-kv,
+.workflow-list-item__title,
+.workflow-list-item__meta,
+.approval-actions,
+.approval-title,
+.toolbar-actions,
+.subsection-actions,
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-head h1,
+.section-head h2,
+.subsection-head h3 {
+  margin: 0;
+}
+
+.section-head p,
+.subsection-head p,
+.small-card__meta,
+.workflow-list-item__meta,
+.runtime-kv span,
+.approval-reason,
+.empty-state {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 12px;
+}
+
+.workflow-list,
+.stack-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workflow-list-item,
+.history-item {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 14px;
+  padding: 12px;
+  text-align: left;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.workflow-list-item:hover,
+.history-item:hover {
+  border-color: rgba(106, 201, 255, 0.32);
+  transform: translateY(-1px);
+}
+
+.workflow-list-item--active {
+  border-color: rgba(106, 201, 255, 0.45);
+  background: rgba(106, 201, 255, 0.08);
+}
+
+.mini-badge,
+.status-pill {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mini-badge--ghost {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.status-pill--success {
+  background: rgba(42, 184, 92, 0.18);
+  color: #97f3b6;
+}
+
+.status-pill--error {
+  background: rgba(255, 87, 87, 0.18);
+  color: #ffb5b5;
+}
+
+.status-pill--warning {
+  background: rgba(255, 183, 77, 0.18);
+  color: #ffd59c;
+}
+
+.status-pill--running {
+  background: rgba(106, 201, 255, 0.18);
+  color: #9fe3ff;
+}
+
+.status-pill--muted {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.form-grid,
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 6px;
 }
 
-.field--full {
-  margin-top: 0.6rem;
+.field--checkbox {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: 24px;
 }
 
-.field-label {
-  color: var(--tx-text-color-secondary);
-  font-size: 0.75rem;
-  font-weight: 500;
+.field-label,
+.step-card__index {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
-.field-error {
-  color: var(--tx-color-error);
-  font-size: 0.75rem;
-  line-height: 1.4;
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(5, 9, 14, 0.5);
+  color: rgba(255, 255, 255, 0.92);
+  padding: 10px 12px;
 }
 
-.field-input,
-.field-textarea {
-  border-radius: 8px;
-  border: 1px solid var(--tx-border-color-lighter);
-  background: var(--tx-bg-color);
-  color: var(--tx-text-color-primary);
-  padding: 0.55rem 0.65rem;
-  font-size: 0.8125rem;
-  outline: none;
+textarea {
+  resize: vertical;
+  min-height: 92px;
+}
 
-  &:focus {
-    border-color: var(--tx-color-primary);
+.subsection,
+.runtime-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.small-card,
+.step-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.step-card__title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.runtime-error {
+  color: #ffb5b5;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.result-pre {
+  margin: 0;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.24);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+}
+
+@media (max-width: 1440px) {
+  .workflow-page {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+
+  .workflow-right {
+    grid-column: span 2;
   }
 }
 
-.field-textarea {
-  resize: vertical;
-  min-height: 88px;
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
-    monospace;
-}
-
-.result-summary {
-  display: grid;
-  gap: 0.5rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-bottom: 0.75rem;
-
-  @media (max-width: 640px) {
+@media (max-width: 980px) {
+  .workflow-page,
+  .workflow-grid,
+  .form-grid,
+  .mini-grid {
     grid-template-columns: 1fr;
   }
-}
 
-.summary-item {
-  padding: 0.6rem;
-  border-radius: 8px;
-  background: var(--tx-fill-color-lighter);
-  border: 1px solid var(--tx-border-color-lighter);
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.summary-label {
-  font-size: 0.75rem;
-  color: var(--tx-text-color-secondary);
-}
-
-.summary-value {
-  font-size: 0.8125rem;
-  color: var(--tx-text-color-primary);
-  word-break: break-all;
-}
-
-.result-error {
-  margin: 0 0 0.75rem;
-  padding: 0.65rem;
-  border-radius: 8px;
-  border: 1px solid var(--tx-color-error-light-5);
-  background: var(--tx-color-error-light-9);
-  color: var(--tx-color-error);
-  font-size: 0.8125rem;
-}
-
-.result-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.result-step-card {
-  border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 10px;
-  padding: 0.65rem;
-}
-
-.result-step-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
-}
-
-.result-step-title {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--tx-text-color-primary);
-}
-
-.result-step-agent {
-  font-size: 0.75rem;
-  color: var(--tx-text-color-secondary);
-}
-
-.result-block {
-  padding: 0.55rem;
-  border-radius: 8px;
-  border: 1px solid var(--tx-border-color-lighter);
-  background: var(--tx-fill-color-lighter);
-
-  pre {
-    margin: 0;
-    font-size: 0.75rem;
-    color: var(--tx-text-color-primary);
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 220px;
-    overflow: auto;
-    font-family:
-      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
-      monospace;
+  .workflow-toolbar,
+  .section-head,
+  .subsection-head,
+  .toolbar-actions,
+  .subsection-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
-}
-
-.result-block--error {
-  border-color: var(--tx-color-error-light-5);
-  background: var(--tx-color-error-light-9);
-
-  pre {
-    color: var(--tx-color-error);
-  }
-}
-
-.result-block-title {
-  margin-bottom: 0.35rem;
-  font-size: 0.75rem;
-  color: var(--tx-text-color-secondary);
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  padding: 0.2rem 0.55rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  border: 1px solid transparent;
-}
-
-.status-pill--success {
-  color: var(--tx-color-success);
-  background: var(--tx-color-success-light-9);
-  border-color: var(--tx-color-success-light-5);
-}
-
-.status-pill--error {
-  color: var(--tx-color-error);
-  background: var(--tx-color-error-light-9);
-  border-color: var(--tx-color-error-light-5);
-}
-
-.status-pill--running {
-  color: var(--tx-color-primary);
-  background: var(--tx-color-primary-light-9);
-  border-color: var(--tx-color-primary-light-5);
-}
-
-.status-pill--warning {
-  color: var(--tx-color-warning);
-  background: var(--tx-color-warning-light-9);
-  border-color: var(--tx-color-warning-light-5);
-}
-
-.status-pill--pending,
-.status-pill--muted {
-  color: var(--tx-text-color-secondary);
-  background: var(--tx-fill-color-lighter);
-  border-color: var(--tx-border-color-lighter);
 }
 </style>
