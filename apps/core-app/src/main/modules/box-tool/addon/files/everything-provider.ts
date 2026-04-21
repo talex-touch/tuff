@@ -35,6 +35,7 @@ import { formatDuration } from '../../../../utils/logger'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
 import { IconWorkerClient } from './workers/icon-worker-client'
+import { fileProvider } from './file-provider'
 import { mapFileToTuffItem } from './utils'
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -63,6 +64,16 @@ class EverythingSearchAbortedError extends Error {
   }
 }
 
+class EverythingSearchFallbackError extends Error {
+  readonly code: string | null
+
+  constructor(message: string, code: string | null = null) {
+    super(message)
+    this.name = 'EverythingSearchFallbackError'
+    this.code = code
+  }
+}
+
 function isAbortError(error: unknown): boolean {
   if (error instanceof EverythingSearchAbortedError) {
     return true
@@ -71,6 +82,10 @@ function isAbortError(error: unknown): boolean {
     return false
   }
   return error.name === 'AbortError' || error.code === 'ABORT_ERR' || error.code === 'ABORTED'
+}
+
+function isSearchFallbackError(error: unknown): error is EverythingSearchFallbackError {
+  return error instanceof EverythingSearchFallbackError
 }
 
 function throwIfAborted(signal?: AbortSignal): void {
@@ -673,16 +688,13 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       try {
         return await this.searchEverythingWithSdk(query, maxResults, signal)
       } catch (error) {
-        if (isAbortError(error)) {
+        if (isAbortError(error) || isSearchFallbackError(error)) {
           throw error
         }
         this.lastBackendError = getErrorMessage(error)
         this.lastBackendErrorCode = getErrorCode(error) ?? null
         this.logWarn('Everything SDK search failed, falling back to CLI', error)
-        const cliReady = await this.ensureCliFallback()
-        if (!cliReady) {
-          return []
-        }
+        await this.ensureCliFallback()
       }
     }
 
@@ -693,14 +705,14 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     return []
   }
 
-  private async ensureCliFallback(): Promise<boolean> {
+  private async ensureCliFallback(): Promise<void> {
     const ready = await this.tryInitializeCliBackend()
     if (!ready) {
-      this.markBackendUnavailable(this.lastBackendError || 'Everything backend unavailable')
-      return false
+      const message = this.lastBackendError || 'Everything backend unavailable'
+      this.markBackendUnavailable(message, this.lastBackendErrorCode)
+      throw new EverythingSearchFallbackError(message, this.lastBackendErrorCode)
     }
     this.initializationError = null
-    return true
   }
 
   private async searchEverythingWithSdk(
@@ -892,7 +904,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         this.markBackendUnavailable(errorMessage, errorCode)
         this.logError('Everything CLI search failed', error, { query })
       }
-      return []
+      throw new EverythingSearchFallbackError(errorMessage, errorCode)
     }
   }
 
@@ -1108,6 +1120,20 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       if (isAbortError(error)) {
         this.logDebug('Everything search aborted', { query: searchText })
         return new TuffSearchResultBuilder(query).build()
+      }
+      if (isSearchFallbackError(error)) {
+        this.logWarn('Everything search degraded to file-provider', error, {
+          query: searchText,
+          code: error.code
+        })
+        try {
+          return await fileProvider.onSearch(query, signal)
+        } catch (fallbackError) {
+          this.logError('Everything file-provider fallback failed', fallbackError, {
+            query: searchText
+          })
+          return new TuffSearchResultBuilder(query).build()
+        }
       }
       this.logError('Everything search failed', error, { query: searchText })
       return new TuffSearchResultBuilder(query).build()

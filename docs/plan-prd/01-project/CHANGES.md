@@ -1,7 +1,18 @@
 # 变更日志
 
-> 更新时间: 2026-04-21
-> 说明: 主文件仅保留近 30 天（2026-03-22 ~ 2026-04-21）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-22
+> 说明: 主文件仅保留近 30 天（2026-03-23 ~ 2026-04-22）详细记录；更早历史已按月归档。
+
+## 2026-04-22
+
+### fix(core-app): Everything 运行时故障同次查询直接回退文件索引
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `EverythingProvider` 新增运行时 fallback 错误语义，显式区分“后端真实故障”和“正常 0 结果”，避免把 SDK/CLI 故障伪装成空搜索。
+  - 当 Everything 在查询阶段超时、CLI 失效或 SDK 回退链失败时，当前这一次查询会直接降级到 `file-provider`，不再要求用户再敲一次搜索才能拿到 Windows 文件结果。
+  - 设置页 `everything:test` 在后端真实故障时改为明确返回失败，不再误报成“成功但找到 0 个结果”；补齐对应 Provider 回归。
 
 ## 2026-04-21
 
