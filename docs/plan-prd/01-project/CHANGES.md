@@ -5,6 +5,15 @@
 
 ## 2026-04-22
 
+### fix(core-app): 收口 Everything 设置页禁用态优先级
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/setting-everything-state.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/setting-everything-state.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Everything 设置页的主状态改为优先反映用户配置态：当用户已手动禁用 Everything 时，不再被后端 `unavailable` 探测结果覆盖成“不可用”。
+  - 启用/禁用按钮改为在状态已加载后始终可见，避免“已禁用 + 当前后端不可用”时把控制入口一起隐藏。
+  - 安装引导只在“用户已启用但后端不可用”时展示，减少禁用态下的误导信息；新增 renderer 侧纯函数回归锁定组合状态。
 ### fix(core-app): Everything 运行时故障同次查询直接回退文件索引
 
 - `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
