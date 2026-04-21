@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { transportOn, appTaskWaitForIdle, iconWorkerExtract, execFileMock } = vi.hoisted(() => ({
-  transportOn: vi.fn(),
-  appTaskWaitForIdle: vi.fn(() => Promise.resolve()),
-  iconWorkerExtract: vi.fn(() => Promise.resolve<Buffer | null>(null)),
-  execFileMock: vi.fn()
-}))
+const { transportOn, appTaskWaitForIdle, iconWorkerExtract, execFileMock, fileProviderOnSearch } =
+  vi.hoisted(() => ({
+    transportOn: vi.fn(),
+    appTaskWaitForIdle: vi.fn(() => Promise.resolve()),
+    iconWorkerExtract: vi.fn(() => Promise.resolve<Buffer | null>(null)),
+    execFileMock: vi.fn(),
+    fileProviderOnSearch: vi.fn(() => Promise.resolve({ items: [] as Array<unknown> }))
+  }))
 
 vi.mock('electron', () => ({
   shell: {
@@ -57,9 +59,16 @@ vi.mock('./workers/icon-worker-client', () => ({
   }))
 }))
 
+vi.mock('./file-provider', () => ({
+  fileProvider: {
+    onSearch: fileProviderOnSearch
+  }
+}))
+
 import { everythingProvider } from './everything-provider'
 import {
   everythingStatusEvent,
+  everythingTestEvent,
   everythingToggleEvent
 } from '../../../../../shared/events/everything'
 
@@ -80,7 +89,7 @@ interface MutableEverythingProvider {
     maxResults: number,
     signal?: AbortSignal
   ) => Promise<unknown[]>
-  ensureCliFallback: () => Promise<boolean>
+  ensureCliFallback: () => Promise<void>
   searchEverythingWithCli: (
     query: string,
     maxResults: number,
@@ -156,6 +165,8 @@ afterEach(() => {
   iconWorkerExtract.mockReset()
   iconWorkerExtract.mockResolvedValue(null)
   execFileMock.mockReset()
+  fileProviderOnSearch.mockReset()
+  fileProviderOnSearch.mockResolvedValue({ items: [] as Array<unknown> })
   vi.restoreAllMocks()
 })
 
@@ -173,7 +184,6 @@ describe('everything-provider fallback chain', () => {
     const ensureCliSpy = vi.spyOn(provider, 'ensureCliFallback').mockImplementation(async () => {
       provider.backend = 'cli'
       provider.isAvailable = true
-      return true
     })
 
     const cliSearchSpy = vi.spyOn(provider, 'searchEverythingWithCli').mockResolvedValue(cliResults)
@@ -197,11 +207,13 @@ describe('everything-provider fallback chain', () => {
     const cliSearchSpy = vi.spyOn(provider, 'searchEverythingWithCli').mockResolvedValue([])
     const tryCliSpy = vi.spyOn(provider, 'tryInitializeCliBackend').mockResolvedValue(false)
 
-    const results = await provider.searchEverything('demo', 10)
+    await expect(provider.searchEverything('demo', 10)).rejects.toMatchObject({
+      name: 'EverythingSearchFallbackError',
+      message: 'sdk exploded'
+    })
 
     expect(tryCliSpy).toHaveBeenCalledTimes(1)
     expect(cliSearchSpy).not.toHaveBeenCalled()
-    expect(results).toEqual([])
     expect(provider.backend).toBe('unavailable')
     expect(provider.isAvailable).toBe(false)
     expect(provider.initializationError).toBeInstanceOf(Error)
@@ -358,7 +370,45 @@ describe('everything-provider fallback chain', () => {
     expect(result).toEqual({ success: true, enabled: true })
   })
 
-  it('marks CLI backend unavailable after runtime exec failure', async () => {
+  it('degrades to file-provider during the same query when CLI runtime fails', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    provider.backend = 'cli'
+    provider.isAvailable = true
+    provider.isEnabled = true
+    provider.esPath = 'es.exe'
+    fileProviderOnSearch.mockResolvedValue({
+      items: [
+        {
+          render: {
+            basic: {
+              title: 'Fallback file result'
+            }
+          }
+        }
+      ]
+    })
+
+    execFileMock.mockImplementation((_file, _args, _options, callback) => {
+      callback(Object.assign(new Error('spawn failed'), { code: 'ENOENT' }))
+    })
+
+    const signal = new AbortController().signal
+    const results = (await withPlatform('win32', () =>
+      provider.onSearch({ text: 'demo', inputs: [] }, signal)
+    )) as {
+      items?: Array<{ render?: { basic?: { title?: string } } }>
+    }
+
+    expect(fileProviderOnSearch).toHaveBeenCalledWith({ text: 'demo', inputs: [] }, signal)
+    expect(results.items?.[0]?.render?.basic?.title).toBe('Fallback file result')
+    expect(provider.backend).toBe('unavailable')
+    expect(provider.isAvailable).toBe(false)
+    expect(provider.isSearchReady()).toBe(false)
+    expect(provider.initializationError?.message).toBe('spawn failed')
+    expect(provider.lastBackendError).toBe('spawn failed')
+  })
+
+  it('returns failed everything:test status when runtime search falls back', async () => {
     const provider = everythingProvider as unknown as MutableEverythingProvider
     provider.backend = 'cli'
     provider.isAvailable = true
@@ -369,13 +419,26 @@ describe('everything-provider fallback chain', () => {
       callback(Object.assign(new Error('spawn failed'), { code: 'ENOENT' }))
     })
 
-    const results = await provider.searchEverything('demo', 10)
+    provider.registerChannels({ touchApp: { channel: {} } })
 
-    expect(results).toEqual([])
-    expect(provider.backend).toBe('unavailable')
-    expect(provider.isAvailable).toBe(false)
-    expect(provider.isSearchReady()).toBe(false)
-    expect(provider.initializationError?.message).toBe('spawn failed')
-    expect(provider.lastBackendError).toBe('spawn failed')
+    const testHandler = transportOn.mock.calls.find(
+      ([event]) => event === everythingTestEvent
+    )?.[1] as
+      | (() => Promise<{
+          success: boolean
+          error?: string
+          backend?: string
+        }>)
+      | undefined
+
+    const result = await testHandler?.()
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: 'spawn failed',
+        backend: 'unavailable'
+      })
+    )
   })
 })
