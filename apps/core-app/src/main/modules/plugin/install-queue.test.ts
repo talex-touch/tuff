@@ -1,5 +1,6 @@
-import type { PluginInstallConfirmRequest, PluginInstallRequest } from '@talex-touch/utils/plugin'
+import type { PluginInstallConfirmRequest } from '@talex-touch/utils/plugin'
 import { CURRENT_SDK_VERSION } from '@talex-touch/utils/plugin'
+import type { PluginInstallRequest } from '@talex-touch/utils/plugin/providers/types'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import { describe, expect, it, vi } from 'vitest'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
