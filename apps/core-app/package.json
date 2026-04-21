@@ -51,6 +51,7 @@
     "@langchain/langgraph": "^0.2.74",
     "@langchain/openai": "^0.3.17",
     "@libsql/client": "^0.15.15",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@sentry/electron": "^7.10.0",
     "@talex-touch/tuff-business": "workspace:^",
     "@talex-touch/tuff-intelligence": "workspace:^",
