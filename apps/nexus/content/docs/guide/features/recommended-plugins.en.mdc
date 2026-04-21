@@ -11,6 +11,7 @@ This onboarding page helps new users set up a practical plugin stack in minutes.
 
 ## Engineering Bundle
 - **Code Snippets** + **Text Snippets** for repeatable input.
+- **Dev Utils** for UUID, JWT, timestamps, query strings, and naming transforms.
 - **Batch Rename** for asset/file naming work.
 - **Window Manager / Window Presets** for desktop orchestration.
 - **Dev Toolbox** for team links and docs.

@@ -5,6 +5,13 @@
 
 ## 2026-04-21
 
+### fix(core-app): 归一化 TPEX 市场插件相对资源地址
+
+- `apps/core-app/src/renderer/src/modules/store/providers/tpex-api-provider.ts`
+- `apps/core-app/src/renderer/src/modules/store/providers/tpex-api-provider.test.ts`
+  - `TpexApiProvider` 现在会把 TPEX API 返回的相对 `packageUrl / readmeUrl / iconUrl` 按 provider base URL 归一成绝对地址，避免插件详情 README 通过 `network:request` 读取时把 `/api/store/plugins/.../readme` 直接传到主进程并触发 `ERR_INVALID_URL`。
+  - 补充 renderer 侧回归测试，固化相对资源地址归一化行为；官方市场插件的 README、图标和下载地址不再依赖后端是否提前返回绝对 URL。
+
 ### feat(plugins): 收口翻译插件主链路并新增程序员工具插件
 
 - `plugins/touch-translation/index.js`

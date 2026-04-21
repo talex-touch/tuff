@@ -20,6 +20,16 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./client": {
+      "types": "./src/client.ts",
+      "import": "./src/client.ts",
+      "default": "./src/client.ts"
+    },
+    "./types/intelligence": {
+      "types": "./src/types/intelligence.ts",
+      "import": "./src/types/intelligence.ts",
+      "default": "./src/types/intelligence.ts"
+    },
     "./pilot-conversation": {
       "types": "./src/pilot-conversation.ts",
       "import": "./src/pilot-conversation.ts",

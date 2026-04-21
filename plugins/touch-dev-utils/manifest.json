@@ -1,0 +1,47 @@
+{
+  "id": "com.tuffex.dev-utils",
+  "name": "touch-dev-utils",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260421,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "程序员工具：UUID、时间戳、JWT、命名转换、Query String 与字符串转义",
+  "main": "index.js",
+  "permissions": {
+    "required": ["clipboard.write"],
+    "optional": []
+  },
+  "permissionReasons": {
+    "clipboard.write": "将开发工具结果复制到剪贴板"
+  },
+  "features": [
+    {
+      "id": "dev-utils",
+      "name": "程序员工具",
+      "desc": "纯本地开发工具集合",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["dev-utils", "uuid", "jwt", "timestamp", "time", "query", "case", "escape", "程序员", "开发者"],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["dev-utils", "uuid", "jwt", "ts", "time", "query", "case", "escape", "开发工具", "程序员工具"]
+        }
+      ]
+    }
+  ]
+}

@@ -24,7 +24,7 @@
 
 ## 推荐起步组合
 - **核心效率**：`touch-browser-open` + `touch-intelligence` + `touch-translation`。
-- **研发场景**：`touch-workspace-scripts` + `touch-code-snippets` + `touch-dev-toolbox`。
+- **研发场景**：`touch-workspace-scripts` + `touch-code-snippets` + `touch-dev-utils`（团队链接仍可搭配 `touch-dev-toolbox`）。
 - **桌面控制**：`touch-window-manager` + `touch-window-presets` + `touch-quick-actions`。
 
 ## 内置插件文档

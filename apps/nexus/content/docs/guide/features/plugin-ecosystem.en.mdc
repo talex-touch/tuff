@@ -24,7 +24,7 @@
 
 ## Starter Stack
 - **Core efficiency**: `touch-browser-open` + `touch-intelligence` + `touch-translation`.
-- **Engineering**: `touch-workspace-scripts` + `touch-code-snippets` + `touch-dev-toolbox`.
+- **Engineering**: `touch-workspace-scripts` + `touch-code-snippets` + `touch-dev-utils` (`touch-dev-toolbox` still complements team links and docs).
 - **Desktop control**: `touch-window-manager` + `touch-window-presets` + `touch-quick-actions`.
 
 ## Built-in Plugin Docs

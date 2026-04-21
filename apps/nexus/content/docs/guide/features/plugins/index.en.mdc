@@ -14,6 +14,7 @@ This catalog is used in onboarding: each built-in plugin has its own page so use
 | Batch Rename | `batch-rename` | [Read](./batch-rename.en.md) |
 | Workspace Scripts | `workspace.scripts` | [Read](./workspace-scripts.en.md) |
 | Dev Toolbox | `dev-toolbox` | [Read](./dev-toolbox.en.md) |
+| Dev Utils | `dev-utils` | [Read](./dev-utils.en.md) |
 | Window Manager | `window.app` | [Read](./window-manager.en.md) |
 | Window Presets | `window.presets` | [Read](./window-presets.en.md) |
 | System Actions | `system.actions` | [Read](./system-actions.en.md) |
