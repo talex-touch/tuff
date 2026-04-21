@@ -1,0 +1,101 @@
+name: Utils Package Publish
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'packages/utils/package.json'
+      - '.github/workflows/package-utils-publish.yml'
+
+jobs:
+  publish:
+    name: Publish - utils
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check version bump
+        id: version_check
+        run: |
+          set -euo pipefail
+
+          current_version=$(node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('packages/utils/package.json','utf8')); console.log(pkg.version)")
+          before_sha="${{ github.event.before }}"
+
+          echo "current_version=${current_version}" >> "$GITHUB_OUTPUT"
+
+          if [ "${before_sha}" = "0000000000000000000000000000000000000000" ]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          previous_version=$(git show "${before_sha}:packages/utils/package.json" | node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync(0,'utf8')); console.log(pkg.version)")
+          echo "previous_version=${previous_version}" >> "$GITHUB_OUTPUT"
+
+          if [ "${current_version}" != "${previous_version}" ]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip publish (version unchanged)
+        if: steps.version_check.outputs.should_publish != 'true'
+        run: echo "Utils version unchanged. Skipping publish."
+
+      - name: Run utils tests
+        if: steps.version_check.outputs.should_publish == 'true'
+        run: pnpm -C "packages/utils" test
+
+      - name: Verify npm token
+        if: steps.version_check.outputs.should_publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "NPM_TOKEN is required."
+            exit 1
+          fi
+
+      - name: Publish to npm
+        if: steps.version_check.outputs.should_publish == 'true'
+        working-directory: packages/utils
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          version="${{ steps.version_check.outputs.current_version }}"
+          dist_tag="latest"
+          if [[ "${version}" == *"-"* ]]; then
+            dist_tag="next"
+          fi
+
+          if npm view "@talex-touch/utils@${version}" version >/dev/null 2>&1; then
+            echo "@talex-touch/utils@${version} already published. Skipping."
+            exit 0
+          fi
+
+          npm publish --access public --tag "${dist_tag}"
