@@ -1,7 +1,47 @@
 # 变更日志
 
-> 更新时间: 2026-04-20
-> 说明: 主文件仅保留近 30 天（2026-03-21 ~ 2026-04-20）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-21
+> 说明: 主文件仅保留近 30 天（2026-03-22 ~ 2026-04-21）详细记录；更早历史已按月归档。
+
+## 2026-04-21
+
+### fix(core-app): 关闭登录凭证安全存储后冷启动不再触发 Keychain
+
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/main/modules/auth/index.test.ts`
+- `apps/core-app/src/main/utils/secure-store.ts`
+- `apps/core-app/src/main/utils/secure-store.test.ts`
+  - `AuthModule` 在 `auth.useSecureStorage=false` 的冷启动分支改为直接进入 session-only 模式，不再隐式清理 `auth.token` secure-store，避免每次启动都触发 macOS Keychain 访问。
+  - 历史凭证清理时机收紧为用户显式关闭安全存储或主动登出；重新开启时仅在存在内存 token 的前提下才回写系统安全存储。
+  - `secure-store` 改为按需解析 `electron.safeStorage`，移除启动期顶层绑定，避免 `auth/common/network` 这类预加载模块仅因导入 helper 就提前接触系统安全存储。
+  - 补齐主进程回归测试，覆盖 session-only 冷启动零触碰、显式 true/false 切换清理/持久化，以及 secure-store 懒加载行为。
+
+### refactor(transport): 统一 main/renderer/plugin stream 内部协议层
+
+- `packages/utils/transport/sdk/stream/protocol.ts`
+- `packages/utils/transport/sdk/stream/client-runtime.ts`
+- `packages/utils/transport/sdk/stream/server-runtime.ts`
+- `packages/utils/transport/sdk/main-transport.ts`
+- `packages/utils/transport/sdk/renderer-transport.ts`
+- `packages/utils/transport/sdk/plugin-transport.ts`
+- `packages/utils/__tests__/transport/stream-protocol.test.ts`
+- `packages/utils/__tests__/main-transport-stream.test.ts`
+- `packages/utils/__tests__/renderer-transport-stream.test.ts`
+- `packages/utils/__tests__/plugin-transport-stream.test.ts`
+  - 新增内部共享 stream 协议层，统一 `streamId`、`:stream:*` 事件名派生、port envelope 归一化、client/server 生命周期与 cancel 语义，对外 `ITuffTransport.stream()` / `StreamOptions` / `STREAM_SUFFIXES` 保持不变。
+  - `TuffRendererTransport.stream` 与 `TuffPluginTransport.stream` 现在共用同一套 client runtime，默认走 `MessagePort`，port 不可用、打开失败、运行中关闭或 messageerror 时自动回退到现有 `:stream:*` channel。
+  - `TuffMainTransport.onStream` 改为委托共享 server runtime，主进程只保留 sender / plugin context 解析与 port 查找；插件来源 stream 会按 plugin scope 解析 port，不再局限于 window scope。
+  - server runtime 修复 cancel 状态提前清理导致的晚到 `emit/end` 继续分发问题，取消后不会再把数据或结束事件推回客户端。
+
+### fix(clipboard): 收敛插件图片原图预览与 stream 降级
+
+- `packages/utils/plugin/sdk/clipboard.ts`
+- `packages/utils/__tests__/plugin-clipboard-sdk.test.ts`
+- `packages/utils/common/utils/safe-shell.ts`
+  - `history.onDidChange()` 对旧版插件 transport 的同步 `stream` 抛错增加防御，订阅失败不再冒泡为插件启动失败或用户可见 toast。
+  - 新增 Clipboard SDK 单元测试，固化 `Stream is not supported in plugin transport` 兼容降级行为。
+  - 保持图片历史列表轻量传输语义：`content/value` 仍为 preview，原图继续通过 `meta.image_original_url` 与 `getHistoryImageUrl(id)` 按需解析。
+  - `execFileSafe()` 显式将 Node `stdout/stderr` 归一为 string，避免依赖方类型检查被 Buffer union 拦截。
 
 ## 2026-04-20
 

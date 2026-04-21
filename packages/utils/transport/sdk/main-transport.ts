@@ -17,8 +17,8 @@ import { randomUUID } from 'node:crypto'
 import * as electron from 'electron'
 import { assertTuffEvent } from '../event/builder'
 import { TransportEvents } from '../events'
-import { STREAM_SUFFIXES } from './constants'
 import { isPortChannelEnabled } from './port-policy'
+import { createServerStreamRuntime } from './stream/server-runtime'
 
 const { ipcMain, MessageChannelMain } = electron
 const LEGACY_CHANNEL = {
@@ -151,7 +151,12 @@ interface PortLookup {
   record: PortRecord
 }
 
-function resolvePortRecord(channel: string, sender: WebContents, scope?: TransportPortScope): PortLookup | null {
+function resolvePortRecord(
+  channel: string,
+  sender: WebContents,
+  scope?: TransportPortScope,
+  plugin?: string,
+): PortLookup | null {
   const portIds = portsBySenderId.get(sender.id)
   if (!portIds)
     return null
@@ -165,6 +170,9 @@ function resolvePortRecord(channel: string, sender: WebContents, scope?: Transpo
     if (scope && record.scope !== scope)
       continue
     if (record.scope === 'window' && record.windowId !== undefined && record.windowId !== sender.id) {
+      continue
+    }
+    if (scope === 'plugin' && plugin && record.plugin && record.plugin !== plugin) {
       continue
     }
     return { portId, record }
@@ -516,38 +524,46 @@ export class TuffMainTransport implements ITuffTransportMain {
 
     const eventName = event.toEventName()
     const portEnabled = isPortChannelEnabled(eventName)
-    const startEventName = `${eventName}${STREAM_SUFFIXES.START}`
-    const cancelEventName = `${eventName}${STREAM_SUFFIXES.CANCEL}`
+    const startEventName = `${eventName}:stream:start`
+    const cancelEventName = `${eventName}:stream:cancel`
 
-    const streams = new Map<string, { cancelled: boolean }>()
+    const runtime = createServerStreamRuntime<TReq, TChunk, WebContents, StreamContext<TChunk>['plugin']>({
+      eventName,
+      portEnabled,
+      handler,
+      buildContext: (request, baseContext) => ({
+        ...baseContext,
+        sender: request.sender,
+        eventName,
+        plugin: request.plugin,
+      }),
+      resolvePort: (request) => {
+        const scope: TransportPortScope = request.plugin ? 'plugin' : 'window'
+        const portLookup = resolvePortRecord(
+          eventName,
+          request.sender,
+          scope,
+          request.plugin?.name,
+        )
 
-    const startHandler = (data: any) => {
-      const rawPayload = data?.data as { streamId?: string, [key: string]: any } | undefined
-      const streamId = rawPayload?.streamId
-      const sender = data?.header?.event?.sender as any
+        if (!portLookup) {
+          return null
+        }
 
-      if (!streamId || !sender) {
-        throw new Error(`[TuffTransport] Invalid stream start for "${eventName}"`)
-      }
-
-      streams.set(streamId, { cancelled: false })
-
-      const portLookup = portEnabled
-        ? resolvePortRecord(eventName, sender as WebContents, 'window')
-        : null
-
-      const sendPortStreamMessage = (message: TransportPortEnvelope): boolean => {
-        if (!portLookup)
-          return false
-        const record = portRegistry.get(portLookup.portId)
-        if (!record || !record.confirmed)
-          return false
-        return postPortMessage({ portId: portLookup.portId, record }, message)
-      }
-
-      const sendToSender = (name: string, payload: any) => {
+        return {
+          portId: portLookup.portId,
+          send: (message: TransportPortEnvelope) => {
+            const record = portRegistry.get(portLookup.portId)
+            if (!record || !record.confirmed) {
+              return false
+            }
+            return postPortMessage({ portId: portLookup.portId, record }, message)
+          },
+        }
+      },
+      sendFallback: (request, name, payload) => {
         try {
-          sender.send('@main-process-message', {
+          request.sender.send('@main-process-message', {
             code: LEGACY_SUCCESS_CODE,
             data: payload,
             name,
@@ -557,66 +573,29 @@ export class TuffMainTransport implements ITuffTransportMain {
         catch {
           // Ignore send failures (renderer may have been destroyed)
         }
+      },
+      onHandlerError: (error) => {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error(`[TuffTransport] Stream handler error for "${eventName}":`, errorMessage)
+      },
+    })
+
+    const startHandler = (data: any) => {
+      const rawPayload = data?.data as { streamId?: string, [key: string]: any } | undefined
+      const streamId = rawPayload?.streamId
+      const sender = data?.header?.event?.sender as WebContents | undefined
+
+      if (!streamId || !sender) {
+        throw new Error(`[TuffTransport] Invalid stream start for "${eventName}"`)
       }
 
-      const cleanup = () => {
-        streams.delete(streamId)
-      }
+      const payload = rawPayload ? { ...rawPayload } : {}
+      delete (payload as any).streamId
 
-      const streamContext: StreamContext<TChunk> = {
-        emit: (chunk: TChunk) => {
-          if (streams.get(streamId)?.cancelled)
-            return
-          const portSent = sendPortStreamMessage({
-            channel: eventName,
-            portId: portLookup?.portId,
-            streamId,
-            type: 'data',
-            payload: { chunk },
-          })
-          if (!portSent) {
-            sendToSender(`${eventName}${STREAM_SUFFIXES.DATA}:${streamId}`, { chunk })
-          }
-        },
-        error: (err: Error) => {
-          if (streams.get(streamId)?.cancelled)
-            return
-          const errorMessage = err instanceof Error ? err.message : String(err)
-          const portSent = sendPortStreamMessage({
-            channel: eventName,
-            portId: portLookup?.portId,
-            streamId,
-            type: 'error',
-            payload: { error: errorMessage },
-            error: { code: 'stream_error', message: errorMessage },
-          })
-          if (!portSent) {
-            sendToSender(`${eventName}${STREAM_SUFFIXES.ERROR}:${streamId}`, {
-              error: errorMessage,
-            })
-          }
-          cleanup()
-        },
-        end: () => {
-          if (streams.get(streamId)?.cancelled)
-            return
-          const portSent = sendPortStreamMessage({
-            channel: eventName,
-            portId: portLookup?.portId,
-            streamId,
-            type: 'close',
-          })
-          if (!portSent) {
-            sendToSender(`${eventName}${STREAM_SUFFIXES.END}:${streamId}`, {})
-          }
-          cleanup()
-        },
-        isCancelled: () => {
-          return streams.get(streamId)?.cancelled === true
-        },
+      runtime.handleStart({
         streamId,
+        payload: payload as TReq,
         sender,
-        eventName,
         plugin: data.plugin
           ? {
               name: data.plugin,
@@ -624,28 +603,12 @@ export class TuffMainTransport implements ITuffTransportMain {
               verified: Boolean(data.header?.uniqueKey),
             }
           : undefined,
-      }
-
-      const payload = rawPayload ? { ...rawPayload } : {}
-      delete (payload as any).streamId
-      const requestPayload = payload as unknown as TReq
-
-      Promise.resolve(handler(requestPayload, streamContext)).catch((error) => {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        console.error(`[TuffTransport] Stream handler error for "${eventName}":`, errorMessage)
-        streamContext.error(error as Error)
       })
     }
 
     const cancelHandler = (data: any) => {
       const rawPayload = data?.data as { streamId?: string } | undefined
-      const streamId = rawPayload?.streamId
-      if (!streamId)
-        return
-      const state = streams.get(streamId)
-      if (state)
-        state.cancelled = true
-      streams.delete(streamId)
+      runtime.handleCancel(rawPayload?.streamId)
     }
 
     const startCleanupMain = this.channel.regChannel(

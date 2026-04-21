@@ -52,6 +52,10 @@ function assertShellArg(value: string): string {
   return value
 }
 
+function normalizeShellOutput(value: string | Buffer): string {
+  return typeof value === 'string' ? value : value.toString()
+}
+
 function requireChildProcess(): {
   execFile: ExecFileFn
   spawn: SpawnFn
@@ -88,7 +92,10 @@ export async function execFileSafe(
           reject(error)
           return
         }
-        resolve({ stdout, stderr })
+        resolve({
+          stdout: normalizeShellOutput(stdout),
+          stderr: normalizeShellOutput(stderr),
+        })
       }
     )
   })
