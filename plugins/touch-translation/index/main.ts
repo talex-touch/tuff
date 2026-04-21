@@ -29,6 +29,18 @@ interface ProviderState {
   to?: string
   provider?: string
   model?: string
+  phonetic?: string
+  transliteration?: string
+  pronunciations?: Array<{
+    label?: string
+    text?: string
+    audioUrl?: string
+  }>
+  meanings?: Array<{
+    partOfSpeech?: string
+    terms?: string[]
+    definitions?: string[]
+  }>
   error?: string
 }
 
@@ -439,6 +451,10 @@ async function startTranslationRequest(
           to: result.to || targetLang,
           provider: result.provider,
           model: result.model,
+          phonetic: result.phonetic,
+          transliteration: result.transliteration,
+          pronunciations: result.pronunciations,
+          meanings: result.meanings,
         })
       }
       catch (error) {
