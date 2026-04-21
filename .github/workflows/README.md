@@ -78,6 +78,12 @@ This is a reusable workflow that can be called by other workflows to standardize
   - Triggers on changes to `packages/utils/**`
   - TypeScript source package (no build step)
 
+- **`package-utils-publish.yml`** - Publish for `@talex-touch/utils`
+  - Triggers on version changes in `packages/utils/package.json` (push to `main` / `master`)
+  - Runs `packages/utils` tests before publish
+  - Publishes to npm with `latest` for stable versions and `next` for prereleases
+  - Requires repository secret `NPM_TOKEN` with publish permission for `@talex-touch/utils`
+
 - **`package-tuffex-ci.yml`** - CI for `@talex-touch/tuffex`
   - Triggers on changes to `packages/tuffex/**`
   - Runs build process
