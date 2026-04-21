@@ -9,10 +9,6 @@ const props = defineProps({
   plugin: {
     type: Object,
     required: true
-  },
-  lists: {
-    type: Object,
-    required: true
   }
 })
 
@@ -64,20 +60,6 @@ function handleListeners(viewData, webview) {
     // console.log("Webview did-finish-load", props.plugin);
 
     webview.send('@loaded', { plugin: props.plugin.name, id: webview.id, type: 'init' })
-
-    watchEffect(async () => {
-      while (props.lists.length) {
-        const { data } = props.lists.pop()
-        // console.log("--->", props.plugin, data);
-        const res = await webview.send('@plugin-process-message', JSON.stringify(data))
-
-        // console.log("<---", props.plugin, res);
-
-        if (data.reply) {
-          data.reply(res)
-        }
-      }
-    })
 
     // console.log("Webview did-finish-load", props.plugin);
     loadDone.value = true

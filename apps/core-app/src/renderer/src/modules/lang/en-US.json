@@ -2951,6 +2951,8 @@
       "executeFailed": "Execution failed. Please retry later.",
       "selectionCount": "{count} characters selected",
       "selectionPreview": "Selected: {preview}",
+      "selectionUnavailable": "Automatic selected-text capture is unavailable on this platform.",
+      "selectionCaptureFailed": "Selected-text capture failed. Check permissions or desktop automation.",
       "selectionRequired": "This feature requires selected text before it can run.",
       "coreboxUnavailable": "CoreBox is unavailable right now. Please retry shortly.",
       "toggleFailed": "Failed to update feature status.",
