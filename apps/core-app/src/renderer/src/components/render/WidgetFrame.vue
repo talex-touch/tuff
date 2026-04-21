@@ -14,6 +14,7 @@ import {
   type VNode
 } from 'vue'
 import { getCustomRenderer, getCustomRendererVersion } from '~/modules/box/custom-render'
+import { useWidgetHostKeyEvent } from '~/modules/plugin/widget-host-key-bridge'
 import { getWidgetRuntimeSnippet } from '~/modules/plugin/widget-registry'
 import { devLog } from '~/utils/dev-log'
 
@@ -48,6 +49,7 @@ const shadowProps = reactive({
   payload: props.payload,
   preview: props.preview,
   widgetId: props.rendererId,
+  hostKeyEvent: null as unknown,
   onShowHistory: () => emits('show-history'),
   onCopyPrimary: () => emits('copy-primary')
 })
@@ -69,6 +71,9 @@ const rendererKey = computed(() => {
   if (!props.rendererId) return 'custom:empty'
   return `${props.rendererId}:${getCustomRendererVersion(props.rendererId)}`
 })
+
+const widgetItemId = computed(() => (typeof props.item?.id === 'string' ? props.item.id : null))
+const hostKeyEvent = useWidgetHostKeyEvent(widgetItemId)
 
 const useShadowHost = computed(() => props.renderMode === 'shadow')
 const canRenderShadow = computed(() => useShadowHost.value && Boolean(renderer.value))
@@ -199,6 +204,14 @@ watch(
   }
 )
 
+watch(
+  hostKeyEvent,
+  (value) => {
+    shadowProps.hostKeyEvent = value
+  },
+  { immediate: true }
+)
+
 function ensureShadowRoot(): ShadowRoot | null {
   const host = shadowHost.value
   if (!host) return null
@@ -268,6 +281,7 @@ function mountShadowApp(): void {
         payload: shadowProps.payload,
         preview: shadowProps.preview,
         'widget-id': shadowProps.widgetId,
+        'host-key-event': shadowProps.hostKeyEvent,
         onShowHistory: shadowProps.onShowHistory,
         onCopyPrimary: shadowProps.onCopyPrimary
       })
@@ -325,6 +339,7 @@ onBeforeUnmount(() => {
       :payload="payload"
       :preview="preview"
       :widget-id="rendererId"
+      :host-key-event="hostKeyEvent ?? undefined"
       :on-vnode-mounted="handleVnodeMounted"
       :on-vnode-updated="handleVnodeUpdated"
       :on-vnode-unmounted="handleVnodeUnmounted"

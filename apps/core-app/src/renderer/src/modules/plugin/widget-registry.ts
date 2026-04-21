@@ -16,6 +16,7 @@ import { devLog } from '~/utils/dev-log'
 
 const injectedStyles = new Map<string, HTMLStyleElement>()
 const widgetRuntimeSources = new Map<string, string[]>()
+const widgetSetupStatePatchLogCache = new Set<string>()
 
 function cacheWidgetRuntimeSource(widgetId: string | undefined, code: string): void {
   if (!widgetId) return
@@ -696,10 +697,11 @@ function wrapRenderWithSetupState(component: Record<string, unknown>, debugLabel
   }
 
   component.render = function renderWithSetupState(...args: unknown[]) {
-    const instance = this as unknown as ComponentPublicInstance & {
-      $?: { setupState?: Record<string, unknown> }
-    }
-    const setupState = instance?.$?.setupState
+    const instance = this as unknown as ComponentPublicInstance
+    const internalInstance = Vue.getCurrentInstance() as
+      | ({ setupState?: Record<string, unknown> } & object)
+      | null
+    const setupState = internalInstance?.setupState
     const ctx = args[0]
     const ctxObject =
       ctx && typeof ctx === 'object'
@@ -712,22 +714,36 @@ function wrapRenderWithSetupState(component: Record<string, unknown>, debugLabel
       const shouldMerge = Object.keys(setupState).some((key) => !(key in ctxObject))
       if (shouldMerge) {
         if (isDev) {
-          devLog('[WidgetRegistry] render ctx missing setupState, patching', {
-            widgetId: debugLabel,
-            missing: Object.keys(setupState).filter((key) => !(key in ctxObject))
+          const missingKeys = Object.keys(setupState).filter((key) => !(key in ctxObject))
+          const logKey = `${debugLabel || 'unknown'}:${missingKeys.join(',')}`
+          if (!widgetSetupStatePatchLogCache.has(logKey)) {
+            widgetSetupStatePatchLogCache.add(logKey)
+            devLog('[WidgetRegistry] render ctx missing setupState, patching', {
+              widgetId: debugLabel,
+              missing: missingKeys
+            })
+          }
+        }
+        const merged = Object.create(
+          instance && typeof instance === 'object' ? (instance as unknown as object) : null
+        ) as Record<string, unknown>
+
+        Object.assign(merged, ctxObject)
+
+        for (const key of Object.keys(setupState)) {
+          if (key in merged) {
+            continue
+          }
+
+          Object.defineProperty(merged, key, {
+            configurable: true,
+            enumerable: true,
+            get() {
+              return setupState[key]
+            }
           })
         }
-        const merged = new Proxy(ctxObject, {
-          get(target, key, receiver) {
-            if (key in setupState) {
-              return Reflect.get(setupState, key, receiver)
-            }
-            return Reflect.get(target, key, receiver)
-          },
-          has(target, key) {
-            return key in setupState || key in target
-          }
-        })
+
         return originalRender.call(instance, merged, ...args.slice(1))
       }
     }

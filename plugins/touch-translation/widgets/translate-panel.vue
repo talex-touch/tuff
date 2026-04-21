@@ -72,6 +72,15 @@ interface HistoryItem {
 const props = defineProps<{
   item: any
   payload?: Record<string, unknown>
+  hostKeyEvent?: {
+    seq?: number
+    event?: {
+      key?: string
+      metaKey?: boolean
+      ctrlKey?: boolean
+      repeat?: boolean
+    }
+  } | null
 }>()
 
 const PROVIDER_ERROR_PREVIEW_LENGTH = 220
@@ -763,6 +772,16 @@ function isPayloadComplete(payload: TranslationWidgetPayload): boolean {
   }
   return payload.providers.every(provider => provider.status !== 'pending')
 }
+
+watch(
+  () => props.hostKeyEvent?.seq,
+  (seq) => {
+    if (!seq) {
+      return
+    }
+    handleWidgetKeydown(props.hostKeyEvent?.event || {})
+  },
+)
 
 watch(
   () => resolvedPayload.value?.requestId,
