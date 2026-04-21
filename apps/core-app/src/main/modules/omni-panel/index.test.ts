@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { getTuffTransportMainMock, loggerWarnMock, accessibilityClientMock } = vi.hoisted(() => ({
+const {
+  getTuffTransportMainMock,
+  loggerWarnMock,
+  accessibilityClientMock,
+  ensureXdotoolAvailableMock,
+  isXdotoolAvailableMock
+} = vi.hoisted(() => ({
   getTuffTransportMainMock: vi.fn(() => ({
     on: vi.fn(() => () => {}),
     broadcast: vi.fn(),
@@ -8,7 +14,9 @@ const { getTuffTransportMainMock, loggerWarnMock, accessibilityClientMock } = vi
     sendToWindow: vi.fn()
   })),
   loggerWarnMock: vi.fn(),
-  accessibilityClientMock: vi.fn(() => true)
+  accessibilityClientMock: vi.fn(() => true),
+  ensureXdotoolAvailableMock: vi.fn(async () => undefined),
+  isXdotoolAvailableMock: vi.fn(async () => true)
 }))
 
 vi.mock('electron', () => ({
@@ -100,6 +108,13 @@ vi.mock('../plugin/plugin-module', () => ({
   }
 }))
 
+vi.mock('../system/linux-desktop-tools', () => ({
+  ensureXdotoolAvailable: ensureXdotoolAvailableMock,
+  isXdotoolAvailable: isXdotoolAvailableMock,
+  getXdotoolUnavailableReason: () =>
+    'Linux desktop automation requires xdotool to be installed and available in PATH.'
+}))
+
 vi.mock('../storage', () => ({
   getMainConfig: vi.fn(() => ({})),
   saveMainConfig: vi.fn()
@@ -142,6 +157,22 @@ import { OmniPanelModule } from './index'
 afterEach(() => {
   vi.clearAllMocks()
 })
+
+function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
+  const originalPlatform = process.platform
+  Object.defineProperty(process, 'platform', {
+    value: platform,
+    configurable: true
+  })
+  try {
+    return run()
+  } finally {
+    Object.defineProperty(process, 'platform', {
+      value: originalPlatform,
+      configurable: true
+    })
+  }
+}
 
 describe('OmniPanelModule registry initialization', () => {
   it('initializes builtin feature registry when empty', () => {
@@ -221,6 +252,31 @@ describe('OmniPanelModule execute dispatch', () => {
     expect(systemResult.success).toBe(false)
     expect(systemResult.code).toBe('SYSTEM_TARGET_NOT_IMPLEMENTED')
     expect(hideMock).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('OmniPanelModule selection capture diagnostics', () => {
+  it('reports unsupported Linux selection capture when xdotool is unavailable', async () => {
+    isXdotoolAvailableMock.mockResolvedValue(false)
+
+    const result = await withPlatform('linux', async () => {
+      const module = new OmniPanelModule() as unknown as {
+        captureSelectionText: () => Promise<{
+          text: string
+          supportLevel: string
+          issueCode?: string
+          issueMessage?: string
+        }>
+      }
+      return await module.captureSelectionText()
+    })
+
+    expect(result).toMatchObject({
+      text: '',
+      supportLevel: 'unsupported',
+      issueCode: 'unsupported'
+    })
+    expect(result.issueMessage).toContain('xdotool')
   })
 })
 

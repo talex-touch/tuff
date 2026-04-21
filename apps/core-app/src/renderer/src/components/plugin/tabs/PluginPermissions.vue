@@ -76,16 +76,14 @@ const sdkBlocked = computed(() => {
 })
 
 const permissionBlocked = computed(() => {
-  if (sdkBlocked.value) return true
-  if (!status.value) return false
-  return status.value.enforcePermissions === false
+  return sdkBlocked.value
 })
 
 const blockedMessage = computed(() => {
   if (props.plugin.loadError?.code === 'SDKAPI_BLOCKED') {
     return props.plugin.loadError.message || ''
   }
-  return blockedIssue.value?.message || status.value?.warning || ''
+  return blockedIssue.value?.message || ''
 })
 const declaredPermissionIds = computed(() => {
   const required = props.plugin.declaredPermissions?.required || []

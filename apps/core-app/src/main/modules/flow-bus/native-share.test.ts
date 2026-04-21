@@ -107,7 +107,7 @@ describe('native-share behavior', () => {
       })
 
       expect(result.success).toBe(false)
-      expect(result.error).toContain('unavailable on Windows')
+      expect(result.error).toContain('does not provide a system share sheet')
       expect(openExternalMock).not.toHaveBeenCalled()
       expect(showShareResultMock).toHaveBeenCalledWith(result)
     })

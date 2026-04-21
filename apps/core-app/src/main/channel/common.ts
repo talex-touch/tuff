@@ -611,7 +611,7 @@ async function detectTuffCliAvailability(): Promise<boolean> {
         log.debug('[CommonChannel] Tuff CLI probe failed', {
           meta: {
             command: candidate.command,
-            args: [...candidate.args, '--version'],
+            args: [...candidate.args, '--version'].join(' '),
             code,
             signal,
             error: toErrorMessage(error)

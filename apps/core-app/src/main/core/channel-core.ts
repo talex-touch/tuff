@@ -579,10 +579,6 @@ class TouchChannel {
       if (argRecord.plugin === void 0) {
         throw new Error('Invalid plugin name!')
       }
-      // return this.send(ChannelType.MAIN, 'plugin:message-transport', {
-      //   data: finalData,
-      //   plugin: arg.plugin
-      // })
       _channelCategory = '@plugin-process-message'
       if (webContents.isDestroyed()) {
         channelLog.error(

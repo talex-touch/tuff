@@ -18,11 +18,18 @@ export type OmniPanelContextSource =
   | 'command'
   | 'unknown'
 
+export type OmniPanelSelectionSupportLevel = 'supported' | 'best_effort' | 'unsupported'
+export type OmniPanelSelectionIssueCode = 'disabled' | 'empty' | 'failed' | 'unsupported'
+
 export interface OmniPanelContextPayload {
   text: string
   hasSelection: boolean
   source: OmniPanelContextSource
   sourceRaw?: string
+  selectionSupportLevel?: OmniPanelSelectionSupportLevel
+  selectionIssueCode?: OmniPanelSelectionIssueCode
+  selectionIssueMessage?: string
+  selectionLimitations?: string[]
   capturedAt: number
 }
 

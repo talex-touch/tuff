@@ -14,6 +14,7 @@ import {
   checkSdkCompatibility,
   CURRENT_SDK_VERSION,
   OMNI_TRANSFER_DECLARATIVE_MIN_VERSION,
+  PERMISSION_ENFORCEMENT_MIN_VERSION,
   resolveSdkApiVersion
 } from '@talex-touch/utils/plugin'
 import { app } from 'electron'
@@ -24,6 +25,7 @@ import { getNetworkService } from '../network'
 import { TouchPlugin } from './plugin'
 import { PluginFeature } from './plugin-feature'
 import { type PackagedManifest, ensurePluginRuntimeIntegrity } from './plugin-runtime-integrity'
+import { getPluginSdkCompatibilityGate, SDKAPI_BLOCKED_CODE } from './sdk-compat'
 
 /**
  * Plugin manifest structure from manifest.json
@@ -151,22 +153,40 @@ abstract class BasePluginLoader {
     const resolvedSdkapi = resolveSdkApiVersion(pluginInfo.sdkapi)
     this.touchPlugin.sdkapi = resolvedSdkapi
 
-    const sdkCompat = checkSdkCompatibility(pluginInfo.sdkapi, this.pluginName)
-    if (sdkCompat.warning) {
+    const sdkGate = getPluginSdkCompatibilityGate(this.pluginName, pluginInfo.sdkapi)
+    if (sdkGate.blocked) {
       this.touchPlugin.issues.push({
-        type: 'warning',
-        message: sdkCompat.warning,
+        type: 'error',
+        message: sdkGate.message || 'Plugin sdkapi is incompatible with the current runtime.',
         source: 'manifest.json',
-        code: pluginInfo.sdkapi === undefined ? 'SDK_VERSION_MISSING' : 'SDK_VERSION_OUTDATED',
-        suggestion: sdkCompat.suggestion,
+        code: SDKAPI_BLOCKED_CODE,
+        suggestion: sdkGate.suggestion,
         meta: {
           declaredVersion: pluginInfo.sdkapi,
-          resolvedVersion: resolvedSdkapi,
+          resolvedVersion: sdkGate.resolvedSdkapi,
           currentVersion: CURRENT_SDK_VERSION,
-          enforcePermissions: sdkCompat.enforcePermissions
+          requiredMinVersion: PERMISSION_ENFORCEMENT_MIN_VERSION
         },
         timestamp: Date.now()
       })
+    } else {
+      const sdkCompat = checkSdkCompatibility(pluginInfo.sdkapi, this.pluginName)
+      if (sdkCompat.warning) {
+        this.touchPlugin.issues.push({
+          type: 'warning',
+          message: sdkCompat.warning,
+          source: 'manifest.json',
+          code: pluginInfo.sdkapi === undefined ? 'SDK_VERSION_MISSING' : 'SDK_VERSION_OUTDATED',
+          suggestion: sdkCompat.suggestion,
+          meta: {
+            declaredVersion: pluginInfo.sdkapi,
+            resolvedVersion: resolvedSdkapi,
+            currentVersion: CURRENT_SDK_VERSION,
+            enforcePermissions: sdkCompat.enforcePermissions
+          },
+          timestamp: Date.now()
+        })
+      }
     }
 
     // Require category for sdkapi >= 260114
