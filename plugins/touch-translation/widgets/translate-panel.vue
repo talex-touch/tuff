@@ -21,7 +21,23 @@ interface ProviderState {
   to?: string
   provider?: string
   model?: string
+  phonetic?: string
+  transliteration?: string
+  pronunciations?: ProviderPronunciation[]
+  meanings?: ProviderMeaning[]
   error?: string
+}
+
+interface ProviderPronunciation {
+  label?: string
+  text?: string
+  audioUrl?: string
+}
+
+interface ProviderMeaning {
+  partOfSpeech?: string
+  terms?: string[]
+  definitions?: string[]
 }
 
 interface TranslationWidgetPayload {
@@ -43,6 +59,7 @@ interface HistoryResult {
   to?: string
   provider?: string
   model?: string
+  phonetic?: string
 }
 
 interface HistoryItem {
@@ -87,6 +104,9 @@ const focusedArea = ref<FocusArea>('providers')
 const selectedProviderId = ref<string | null>(null)
 const selectedHistoryId = ref<number | null>(null)
 const expandedProviderErrorIds = ref<Set<string>>(new Set())
+const playingProviderId = ref<string | null>(null)
+
+let activeAudio: HTMLAudioElement | null = null
 
 function normalizeProviderStatus(value: unknown): ProviderStatus {
   if (value === 'success' || value === 'error' || value === 'pending') {
@@ -116,6 +136,86 @@ function safeReadRecordString(record: Record<string, unknown>, key: string): str
   return typeof value === 'string' ? value : undefined
 }
 
+function safeReadStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  const normalized: string[] = []
+  for (const entry of value) {
+    if (typeof entry !== 'string') {
+      continue
+    }
+
+    const text = entry.trim()
+    if (!text || normalized.includes(text)) {
+      continue
+    }
+    normalized.push(text)
+  }
+  return normalized
+}
+
+function normalizePronunciations(input: unknown): ProviderPronunciation[] {
+  if (!Array.isArray(input)) {
+    return []
+  }
+
+  const normalized: ProviderPronunciation[] = []
+  for (const entry of input) {
+    if (!entry || typeof entry !== 'object') {
+      continue
+    }
+
+    const item = entry as Record<string, unknown>
+    const text = safeReadRecordString(item, 'text')
+    const audioUrl = safeReadRecordString(item, 'audioUrl')
+    const label = safeReadRecordString(item, 'label')
+
+    if (!text && !audioUrl) {
+      continue
+    }
+
+    normalized.push({
+      label,
+      text,
+      audioUrl,
+    })
+  }
+
+  return normalized
+}
+
+function normalizeMeanings(input: unknown): ProviderMeaning[] {
+  if (!Array.isArray(input)) {
+    return []
+  }
+
+  const normalized: ProviderMeaning[] = []
+  for (const entry of input) {
+    if (!entry || typeof entry !== 'object') {
+      continue
+    }
+
+    const item = entry as Record<string, unknown>
+    const partOfSpeech = safeReadRecordString(item, 'partOfSpeech')
+    const terms = safeReadStringArray(safeReadRecordValue(item, 'terms'))
+    const definitions = safeReadStringArray(safeReadRecordValue(item, 'definitions'))
+
+    if (!partOfSpeech && terms.length === 0 && definitions.length === 0) {
+      continue
+    }
+
+    normalized.push({
+      partOfSpeech,
+      terms,
+      definitions,
+    })
+  }
+
+  return normalized
+}
+
 function normalizeProviders(input: unknown): ProviderState[] {
   if (!Array.isArray(input)) {
     return []
@@ -140,6 +240,10 @@ function normalizeProviders(input: unknown): ProviderState[] {
       to: safeReadRecordString(provider, 'to'),
       provider: safeReadRecordString(provider, 'provider'),
       model: safeReadRecordString(provider, 'model'),
+      phonetic: safeReadRecordString(provider, 'phonetic'),
+      transliteration: safeReadRecordString(provider, 'transliteration'),
+      pronunciations: normalizePronunciations(safeReadRecordValue(provider, 'pronunciations')),
+      meanings: normalizeMeanings(safeReadRecordValue(provider, 'meanings')),
       error: safeReadRecordString(provider, 'error'),
     })
   }
@@ -163,6 +267,7 @@ function buildHistoryResults(inputProviders: unknown): HistoryResult[] {
       to: provider.to,
       provider: provider.provider,
       model: provider.model,
+      phonetic: provider.phonetic,
     })
   }
 
@@ -305,7 +410,8 @@ function ensureProviderSelection(): void {
 
   const exists = orderedProviders.value.some(provider => provider.id === selectedProviderId.value)
   if (!exists) {
-    selectedProviderId.value = orderedProviders.value[0].id
+    const firstSuccess = orderedProviders.value.find(provider => provider.status === 'success')
+    selectedProviderId.value = firstSuccess?.id || orderedProviders.value[0].id
   }
 }
 
@@ -409,6 +515,90 @@ function getProviderCopyText(provider: ProviderState | null): string {
   return ''
 }
 
+function getProviderPronunciationSummary(provider: ProviderState): string {
+  if (provider.phonetic) {
+    return provider.phonetic
+  }
+
+  for (const pronunciation of provider.pronunciations ?? []) {
+    if (pronunciation.text) {
+      return pronunciation.text
+    }
+  }
+
+  return ''
+}
+
+function getProviderAudioUrl(provider: ProviderState | null): string {
+  if (!provider) {
+    return ''
+  }
+
+  for (const pronunciation of provider.pronunciations ?? []) {
+    if (pronunciation.audioUrl) {
+      return pronunciation.audioUrl
+    }
+  }
+
+  return ''
+}
+
+function hasProviderDetails(provider: ProviderState): boolean {
+  return Boolean(
+    provider.transliteration
+    || provider.phonetic
+    || (provider.pronunciations?.length ?? 0) > 0
+    || (provider.meanings?.length ?? 0) > 0,
+  )
+}
+
+function stopAudioPlayback(): void {
+  if (activeAudio) {
+    activeAudio.pause()
+    activeAudio.src = ''
+    activeAudio = null
+  }
+  playingProviderId.value = null
+}
+
+function isProviderAudioPlaying(provider: ProviderState): boolean {
+  return playingProviderId.value === provider.id
+}
+
+async function toggleProviderAudio(provider: ProviderState): Promise<void> {
+  const audioUrl = getProviderAudioUrl(provider)
+  if (!audioUrl || typeof Audio !== 'function') {
+    return
+  }
+
+  if (isProviderAudioPlaying(provider)) {
+    stopAudioPlayback()
+    return
+  }
+
+  stopAudioPlayback()
+
+  const audio = new Audio(audioUrl)
+  const cleanup = () => {
+    if (activeAudio === audio) {
+      activeAudio = null
+      playingProviderId.value = null
+    }
+  }
+
+  audio.addEventListener('ended', cleanup, { once: true })
+  audio.addEventListener('error', cleanup, { once: true })
+
+  try {
+    activeAudio = audio
+    playingProviderId.value = provider.id
+    await audio.play()
+  }
+  catch {
+    cleanup()
+  }
+}
+
 function handleWidgetKeydown(event: {
   key?: string
   metaKey?: boolean
@@ -466,6 +656,15 @@ function handleWidgetKeydown(event: {
     const historyItem = selectedHistoryItem.value
     if (historyItem) {
       useHistoryItem(historyItem.text).catch((err) => {
+        void err
+      })
+    }
+  }
+
+  if ((key === ' ' || key === 'Spacebar') && focusedArea.value === 'providers') {
+    const provider = selectedProvider.value
+    if (provider && getProviderAudioUrl(provider)) {
+      toggleProviderAudio(provider).catch((err) => {
         void err
       })
     }
@@ -566,6 +765,18 @@ function isPayloadComplete(payload: TranslationWidgetPayload): boolean {
 }
 
 watch(
+  () => resolvedPayload.value?.requestId,
+  (requestId, previousRequestId) => {
+    if (!requestId || requestId === previousRequestId) {
+      return
+    }
+    selectedProviderId.value = null
+    ensureProviderSelection()
+    stopAudioPlayback()
+  },
+)
+
+watch(
   () => resolvedPayload.value,
   (payload) => {
     if (!payload || !payload.requestId) {
@@ -595,8 +806,13 @@ watch(
 )
 
 watch(
-  () => orderedProviders.value.length,
+  () => orderedProviders.value.map(provider => `${provider.id}:${provider.status}`).join('|'),
   () => {
+    const firstSuccess = orderedProviders.value.find(provider => provider.status === 'success')
+    if (firstSuccess && selectedProvider.value?.status !== 'success') {
+      selectedProviderId.value = firstSuccess.id
+    }
+
     ensureProviderSelection()
     if (expandedProviderErrorIds.value.size > 0) {
       const validIds = new Set<string>()
@@ -675,6 +891,7 @@ function providerStatusLabel(provider: ProviderState): string {
 onMounted(() => {
   hasRuntime.value = Boolean(tryUsePluginInfo()?.name)
   focusArea('providers')
+  ensureProviderSelection()
 
   if (channel) {
     disposeKeyChannel = channel.regChannel('core-box:key-event', (eventData: any) => {
@@ -690,6 +907,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   disposeKeyChannel?.()
   disposeKeyChannel = null
+  stopAudioPlayback()
 })
 </script>
 
@@ -781,17 +999,27 @@ onBeforeUnmount(() => {
         >
           <div class="TranslationWidget__provider-header">
             <span class="TranslationWidget__provider-name">{{ provider.name }}</span>
-            <span class="TranslationWidget__provider-status" :class="`is-${provider.status}`">
-              {{ providerStatusLabel(provider) }}
-            </span>
-            <button
-              v-if="getProviderCopyText(provider)"
-              class="TranslationWidget__copy"
-              type="button"
-              @click.stop="copyResult(getProviderCopyText(provider))"
-            >
-              {{ provider.status === 'error' ? '复制错误' : '复制' }}
-            </button>
+            <div class="TranslationWidget__provider-actions">
+              <span class="TranslationWidget__provider-status" :class="`is-${provider.status}`">
+                {{ providerStatusLabel(provider) }}
+              </span>
+              <button
+                v-if="provider.status === 'success' && getProviderAudioUrl(provider)"
+                class="TranslationWidget__audio"
+                type="button"
+                @click.stop="toggleProviderAudio(provider)"
+              >
+                {{ isProviderAudioPlaying(provider) ? '停止' : '播放' }}
+              </button>
+              <button
+                v-if="getProviderCopyText(provider)"
+                class="TranslationWidget__copy"
+                type="button"
+                @click.stop="copyResult(getProviderCopyText(provider))"
+              >
+                {{ provider.status === 'error' ? '复制错误' : '复制' }}
+              </button>
+            </div>
           </div>
           <div class="TranslationWidget__provider-body">
             <template v-if="provider.status === 'success'">
@@ -803,6 +1031,54 @@ onBeforeUnmount(() => {
             <template v-else>
               翻译中...
             </template>
+          </div>
+          <div
+            v-if="provider.status === 'success' && selectedProviderId === provider.id && hasProviderDetails(provider)"
+            class="TranslationWidget__provider-extra"
+          >
+            <div
+              v-if="provider.transliteration || getProviderPronunciationSummary(provider) || (provider.pronunciations?.length || 0) > 0"
+              class="TranslationWidget__provider-badges"
+            >
+              <span v-if="getProviderPronunciationSummary(provider)" class="TranslationWidget__badge">
+                音标 {{ getProviderPronunciationSummary(provider) }}
+              </span>
+              <span v-if="provider.transliteration" class="TranslationWidget__badge">
+                转写 {{ provider.transliteration }}
+              </span>
+              <span
+                v-for="pronunciation in provider.pronunciations"
+                :key="`${provider.id}-${pronunciation.label || 'audio'}-${pronunciation.text || ''}-${pronunciation.audioUrl || ''}`"
+                class="TranslationWidget__badge is-muted"
+              >
+                {{ pronunciation.label ? `${pronunciation.label} ` : '' }}{{ pronunciation.text || '发音' }}
+              </span>
+            </div>
+
+            <div v-if="provider.meanings?.length" class="TranslationWidget__provider-meanings">
+              <div
+                v-for="meaning in provider.meanings"
+                :key="`${provider.id}-${meaning.partOfSpeech || 'meaning'}-${(meaning.terms || []).join('/')}-${(meaning.definitions || []).join('/')}`"
+                class="TranslationWidget__meaning"
+              >
+                <div class="TranslationWidget__meaning-header">
+                  <span class="TranslationWidget__meaning-pos">
+                    {{ meaning.partOfSpeech || '释义' }}
+                  </span>
+                  <span v-if="meaning.terms?.length" class="TranslationWidget__meaning-terms">
+                    {{ meaning.terms.join(' / ') }}
+                  </span>
+                </div>
+                <ul v-if="meaning.definitions?.length" class="TranslationWidget__meaning-list">
+                  <li
+                    v-for="definition in meaning.definitions"
+                    :key="`${provider.id}-${meaning.partOfSpeech || 'definition'}-${definition}`"
+                  >
+                    {{ definition }}
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
           <div v-if="provider.status === 'error' && hasProviderErrorDetail(provider)" class="TranslationWidget__provider-error-action">
             <button class="TranslationWidget__provider-toggle" type="button" @click.stop="toggleProviderError(provider.id)">
@@ -830,20 +1106,24 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .TranslationWidget {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 220px minmax(0, 1fr);
   gap: 16px;
-  padding: 16px;
-  border-radius: 18px;
-  background: var(--tx-bg-color);
-  border: 1px solid var(--tx-border-color);
-  box-shadow: 0 18px 32px rgba(15, 23, 42, 0.08);
-  min-height: 280px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .TranslationWidget__history {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
   border-right: 1px solid var(--tx-border-color);
   padding-right: 12px;
   border-radius: 12px;
@@ -873,12 +1153,13 @@ onBeforeUnmount(() => {
 }
 
 .TranslationWidget__history-list {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
   overflow: auto;
   padding-right: 4px;
-  max-height: 420px;
 }
 
 .TranslationWidget__history-item {
@@ -950,6 +1231,8 @@ onBeforeUnmount(() => {
 .TranslationWidget__detail {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   gap: 12px;
 }
 
@@ -995,10 +1278,11 @@ onBeforeUnmount(() => {
 }
 
 .TranslationWidget__providers {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 460px;
+  min-height: 0;
   overflow: auto;
   padding: 2px 4px 2px 2px;
   border-radius: 12px;
@@ -1034,6 +1318,13 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
+}
+
+.TranslationWidget__provider-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .TranslationWidget__provider-name {
@@ -1073,10 +1364,21 @@ onBeforeUnmount(() => {
 }
 
 .TranslationWidget__copy {
-  margin-left: auto;
   border: 1px solid rgba(64, 158, 255, 0.28);
   background: rgba(64, 158, 255, 0.14);
   color: var(--tx-color-primary);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.TranslationWidget__audio {
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
   border-radius: 8px;
   font-size: 11px;
   font-weight: 600;
@@ -1092,6 +1394,77 @@ onBeforeUnmount(() => {
   min-height: 20px;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.TranslationWidget__provider-extra {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.TranslationWidget__provider-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.TranslationWidget__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--tx-text-color-primary);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.TranslationWidget__badge.is-muted {
+  color: var(--tx-text-color-secondary);
+}
+
+.TranslationWidget__provider-meanings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.TranslationWidget__meaning {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.TranslationWidget__meaning-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.TranslationWidget__meaning-pos {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tx-color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.TranslationWidget__meaning-terms {
+  font-size: 12px;
+  color: var(--tx-text-color-primary);
+  line-height: 1.5;
+}
+
+.TranslationWidget__meaning-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--tx-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .TranslationWidget__provider-error-action {

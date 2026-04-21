@@ -5,6 +5,21 @@
 
 ## 2026-04-21
 
+### feat(plugins): 增强 touch-translation widget 信息层并发布 1.0.7
+
+- `plugins/touch-translation/index/main.ts`
+- `plugins/touch-translation/index/providers/google.ts`
+- `plugins/touch-translation/index/types.ts`
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `plugins/touch-translation/package.json`
+- `plugins/touch-translation/manifest.json`
+- `apps/core-app/tuff/modules/plugins/touch-translation/package.json`
+- `apps/core-app/tuff/modules/plugins/touch-translation/manifest.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `touch-translation` widget 默认焦点继续落在右侧结果区，并在结果状态变化后优先选中首个成功 provider，支持在多结果之间稳定切换。
+  - 为 Google 结果补充音标、转写、词性、更多释义与发音音频；选中的 provider 会展开更多语言信息，并支持直接播放读音。
+  - 同步发布 `1.0.7` 插件包，承接本轮 widget 布局与交互增强。
+
 ### refactor(core-app): 直接迁移 Tuff CLI probe 到 tuffcli 命令
 
 - `apps/core-app/src/main/channel/common.ts`
