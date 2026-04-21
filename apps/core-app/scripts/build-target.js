@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { postProcessMacArtifacts } = require('./build-target/postprocess-mac');
+const { syncTouchTranslationBundledRuntime } = require('./lib/touch-translation-runtime-sync');
 const {
   PACKAGED_RUNTIME_MODULES,
   collectResourceModuleClosure,
@@ -516,12 +517,25 @@ function build() {
 
   console.log(`Setting BUILD_TARGET=${normalizedTarget}, BUILD_ARCH=${effectiveArch}, ELECTRON_PLATFORM=${electronPlatform}`);
 
-  console.time('build-target:bundle-plugin-preludes');
-  try {
-    bundleBuiltinPluginPreludes();
-  } finally {
-    console.timeEnd('build-target:bundle-plugin-preludes');
-  }
+    const runtimeSyncResult = syncTouchTranslationBundledRuntime({ projectRoot, workspaceRoot });
+    if (runtimeSyncResult.synced) {
+      console.log(
+        `[build-target] Synced touch-translation bundled runtime seed from ${runtimeSyncResult.canonicalBuildRoot}`
+      );
+    } else if (!runtimeSyncResult.skipped) {
+      console.warn('[build-target] touch-translation bundled runtime seed sync did not run');
+    } else {
+      console.warn(
+        `[build-target] Skip touch-translation bundled runtime seed sync: ${runtimeSyncResult.reason}`
+      );
+    }
+
+    console.time('build-target:bundle-plugin-preludes');
+    try {
+      bundleBuiltinPluginPreludes();
+    } finally {
+      console.timeEnd('build-target:bundle-plugin-preludes');
+    }
 
   console.log('Running application build (npm run build)...');
   const buildCmd = 'npm run build';

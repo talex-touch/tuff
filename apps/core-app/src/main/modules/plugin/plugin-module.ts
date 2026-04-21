@@ -71,6 +71,7 @@ import { createPluginLoadShell, createPluginLoader } from './plugin-loaders'
 import { mergePackagedManifestMetadata } from './plugin-runtime-integrity'
 import { LocalPluginProvider } from './providers/local-provider'
 import { usePluginInjections } from './runtime/plugin-injections'
+import { repairTouchTranslationRuntimeIfNeeded } from './runtime/plugin-runtime-repair'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
 import { resolvePluginModuleIoRuntime } from './services/plugin-io-service'
 import { buildPluginManagerRuntime } from './services/plugin-manager-orchestrator'
@@ -1167,6 +1168,39 @@ function createPluginModuleInternal(
     try {
       const currentPluginPath = path.resolve(pluginPath, pluginName)
       const manifestPath = path.resolve(currentPluginPath, 'manifest.json')
+
+      if (pluginName === 'touch-translation') {
+        const repairResult = await repairTouchTranslationRuntimeIfNeeded({
+          pluginRootDir: pluginPath,
+          appPath: app.getAppPath(),
+          isPackaged: app.isPackaged
+        })
+
+        if (repairResult.status === 'repaired') {
+          logModuleInfo(
+            'Repaired touch-translation runtime drift before load.',
+            'target:',
+            repairResult.targetDir,
+            'source:',
+            repairResult.sourceDir,
+            'reasons:',
+            repairResult.driftReasons.join(', ')
+          )
+        } else if (repairResult.status === 'repair-failed') {
+          logWarn(
+            'Failed to repair touch-translation runtime drift.',
+            'target:',
+            repairResult.targetDir,
+            'source:',
+            repairResult.sourceDir,
+            'reasons:',
+            repairResult.driftReasons.join(', '),
+            'error:',
+            repairResult.error
+          )
+        }
+      }
+
       const loadingShell = createPluginLoadShell(pluginName, currentPluginPath, {
         skipDataInit: true
       })
