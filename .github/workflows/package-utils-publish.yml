@@ -98,4 +98,25 @@ jobs:
             exit 0
           fi
 
-          npm publish --access public --tag "${dist_tag}"
+          publish_log="$(mktemp)"
+          trap 'rm -f "${publish_log}"' EXIT
+
+          set +e
+          npm publish --access public --tag "${dist_tag}" >"${publish_log}" 2>&1
+          publish_status=$?
+          set -e
+
+          cat "${publish_log}"
+
+          if [ "${publish_status}" -eq 0 ]; then
+            exit 0
+          fi
+
+          if grep -Eqi 'previously published versions|cannot publish over the previously published version' "${publish_log}"; then
+            if npm view "@talex-touch/utils@${version}" version >/dev/null 2>&1; then
+              echo "@talex-touch/utils@${version} became available during publish. Treating duplicate publish as success."
+              exit 0
+            fi
+          fi
+
+          exit "${publish_status}"

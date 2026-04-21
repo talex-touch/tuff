@@ -126,6 +126,7 @@
 
 **质量约束落地**
 - 发布 workflow 必须幂等，重复执行不得产生重复 release 资产记录。
+- npm 自动发布链路在 registry 已存在同版本时必须转为“已发布成功”语义，禁止把重复版本冲突直接上浮为 release-blocking 失败。
 - beta / snapshot tag 创建的 GitHub Release 必须保持 pre-release 语义，不得误标为稳定版。
 - 预发布不得覆盖 npm 默认安装通道（`next` 与 `latest` 分离）。
 - 发布后需同步 Nexus 可观测入口（release 或 update news）。
