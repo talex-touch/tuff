@@ -5,6 +5,15 @@
 
 ## 2026-04-21
 
+### fix(core-app): Everything CLI 运行时失效后自动退出 stale ready
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `EverythingProvider` 在 CLI 搜索执行阶段遇到非超时错误时，会立刻把后端标记为 `unavailable` 并记录最近错误，避免 Windows 文件搜索后续继续命中 stale ready 的 Everything 空结果。
+  - 这样下一次 provider 路由会自动回退到 `file-provider`，优先保住可用搜索能力，而不是把用户困在“已探测成功但实际不可用”的状态。
+  - 补充 Provider 定向回归，覆盖 `es.exe` 运行时失效后 backend 自动降级的路径。
+
 ### feat(core-app): 补齐 Everything 搜索结果文件图标预热
 
 - `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
