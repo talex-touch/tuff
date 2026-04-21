@@ -114,6 +114,13 @@ Please keep in mind that developers are under no obligation to solve your Issue 
         </a>
     </td>
     <td align="center">
+        <a href="https://github.com/liuxinrong00">
+            <img src="https://avatars.githubusercontent.com/u/266505868?v=4" width="100;" alt="liuxinrong00"/>
+            <br />
+            <sub><b>liuxinrong00</b></sub>
+        </a>
+    </td>
+    <td align="center">
         <a href="https://github.com/lorsque-sir">
             <img src="https://avatars.githubusercontent.com/u/59496171?v=4" width="100;" alt="lorsque-sir"/>
             <br />
