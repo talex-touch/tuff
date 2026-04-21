@@ -1,7 +1,12 @@
 import type { TranslationProvider } from '../types/translation'
+import {
+  applyProviderPresentation,
+  getEnabledProviderIds,
+  isDefaultEnabledProvider,
+  TRANSLATION_PROVIDER_ORDER,
+} from '@talex-touch/utils/plugin'
 import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
 import { computed, reactive, ref } from 'vue'
-import translationShared from '../../shared/translation-shared.cjs'
 import { BaiduTranslateProvider } from '../providers/baidu-translate'
 import { BingTranslateProvider } from '../providers/bing-translate'
 import { CustomTranslateProvider } from '../providers/custom-translate'
@@ -10,13 +15,6 @@ import { GoogleTranslateProvider } from '../providers/google-translate'
 import { MyMemoryTranslateProvider } from '../providers/mymemory-translate'
 import { TencentTranslateProvider } from '../providers/tencent-translate'
 import { TuffIntelligenceTranslateProvider } from '../providers/tuffintelligence-translate'
-
-const {
-  TRANSLATION_PROVIDER_ORDER,
-  applyProviderPresentation,
-  getEnabledProviderIds,
-  isDefaultEnabledProvider,
-} = translationShared as any
 
 const providers = reactive<Map<string, TranslationProvider>>(new Map())
 const isInitialized = ref(false)

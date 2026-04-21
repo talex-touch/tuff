@@ -1,3 +1,5 @@
+'use strict'
+
 const NO_INPUT_TEXT_MESSAGE = '无输入：请输入要翻译的文本'
 const NO_INPUT_SCREENSHOT_MESSAGE = '无输入：请先截取图片或输入文本后再翻译'
 const NO_INPUT_OCR_MESSAGE = '无输入：截图中未识别到可翻译文本，请更换区域后重试'
@@ -15,7 +17,10 @@ const TRANSLATION_PROVIDER_ORDER = [
   'mymemory',
 ]
 
-const DEFAULT_ENABLED_PROVIDER_IDS = ['tuffintelligence', 'google']
+const DEFAULT_ENABLED_PROVIDER_IDS = [
+  'tuffintelligence',
+  'google',
+]
 
 const TRANSLATION_PROVIDER_LABELS = {
   tuffintelligence: 'Tuff Intelligence',
@@ -32,25 +37,23 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
-function detectLanguage(text) {
-  const normalized = normalizeText(text)
-  return /[\u4E00-\u9FFF]/.test(normalized) ? 'zh' : 'en'
-}
-
-function normalizeLanguageCode(input) {
-  const value = normalizeText(input).toLowerCase()
-  if (['zh', 'zh-cn', 'zh-hans', 'zh-hant'].includes(value)) {
+function normalizeLanguage(input) {
+  const normalized = normalizeText(input).toLowerCase()
+  if (['zh', 'zh-cn', 'zh-hans', 'zh-hant'].includes(normalized)) {
     return 'zh'
   }
-  if (['en', 'en-us', 'en-gb'].includes(value)) {
+  if (['en', 'en-us', 'en-gb'].includes(normalized)) {
     return 'en'
   }
   return ''
 }
 
+function detectLanguage(input) {
+  return /[\u4E00-\u9FFF]/.test(normalizeText(input)) ? 'zh' : 'en'
+}
+
 function resolveTargetLanguage(input) {
-  const normalized = normalizeLanguageCode(input) || detectLanguage(input)
-  return normalized === 'zh' ? 'en' : 'zh'
+  return (normalizeLanguage(input) || detectLanguage(input)) === 'zh' ? 'en' : 'zh'
 }
 
 function getTranslationProviderLabel(providerId) {
@@ -66,20 +69,24 @@ function isDefaultEnabledProvider(providerId) {
   return DEFAULT_ENABLED_PROVIDER_IDS.includes(providerId)
 }
 
-function getEnabledProviderIds(rawConfig, options = {}) {
-  const config = rawConfig && typeof rawConfig === 'object' ? rawConfig : {}
-  const supportedIds = Array.isArray(options.supportedIds) && options.supportedIds.length
+function getEnabledProviderIds(providersConfig, options = {}) {
+  const safeConfig = providersConfig && typeof providersConfig === 'object' ? providersConfig : {}
+  const supportedIds = Array.isArray(options.supportedIds) && options.supportedIds.length > 0
     ? options.supportedIds
     : TRANSLATION_PROVIDER_ORDER
   const supportedSet = new Set(supportedIds)
-  const orderedIds = [...TRANSLATION_PROVIDER_ORDER, ...supportedIds.filter(id => !TRANSLATION_PROVIDER_ORDER.includes(id))]
+  const orderedIds = [
+    ...TRANSLATION_PROVIDER_ORDER,
+    ...supportedIds.filter(id => !TRANSLATION_PROVIDER_ORDER.includes(id)),
+  ]
 
   const enabledIds = []
   for (const providerId of orderedIds) {
     if (!supportedSet.has(providerId)) {
       continue
     }
-    const entry = config[providerId]
+
+    const entry = safeConfig[providerId]
     if (entry && typeof entry === 'object' && entry.enabled === true) {
       enabledIds.push(providerId)
     }
@@ -89,25 +96,25 @@ function getEnabledProviderIds(rawConfig, options = {}) {
     return enabledIds
   }
 
-  const fallbackIds = Array.isArray(options.fallbackIds) && options.fallbackIds.length
+  const fallbackIds = Array.isArray(options.fallbackIds) && options.fallbackIds.length > 0
     ? options.fallbackIds
     : DEFAULT_ENABLED_PROVIDER_IDS
 
-  return fallbackIds.filter(providerId => supportedSet.has(providerId))
+  return fallbackIds.filter(id => supportedSet.has(id))
 }
 
-function normalizeCallFailureMessage(rawMessage) {
-  const message = typeof rawMessage === 'string' ? rawMessage.trim() : ''
-  return message ? `${CALL_FAILED_MESSAGE}（${message}）` : CALL_FAILED_MESSAGE
+function normalizeCallFailureMessage(message) {
+  const normalized = typeof message === 'string' ? message.trim() : ''
+  return normalized ? `${CALL_FAILED_MESSAGE}（${normalized}）` : CALL_FAILED_MESSAGE
 }
 
-function normalizeTranslationErrorMessage(rawMessage) {
-  const message = typeof rawMessage === 'string' ? rawMessage.trim() : ''
-  if (!message) {
+function normalizeTranslationErrorMessage(message) {
+  const normalized = typeof message === 'string' ? message.trim() : ''
+  if (!normalized) {
     return CALL_FAILED_MESSAGE
   }
 
-  const lowerMessage = message.toLowerCase()
+  const lowerMessage = normalized.toLowerCase()
   if (
     lowerMessage.includes('permission')
     || lowerMessage.includes('权限')
@@ -120,11 +127,11 @@ function normalizeTranslationErrorMessage(rawMessage) {
     return PERMISSION_DENIED_MESSAGE
   }
 
-  if (message.startsWith('无输入')) {
+  if (normalized.startsWith('无输入')) {
     return NO_INPUT_TEXT_MESSAGE
   }
 
-  return normalizeCallFailureMessage(message)
+  return normalizeCallFailureMessage(normalized)
 }
 
 function applyProviderPresentation(provider) {

@@ -5,6 +5,24 @@
 
 ## 2026-04-21
 
+### fix(plugins): 将翻译共享 helper 下沉到 utils 并修复 widget sandbox 加载失败
+
+- `packages/utils/plugin/translation.ts`
+- `packages/utils/plugin/translation.cjs`
+- `packages/utils/plugin/sdk/index.ts`
+- `plugins/touch-translation/index.js`
+- `plugins/touch-translation/index/main.ts`
+- `plugins/touch-translation/index/providers/tuffintelligence.ts`
+- `plugins/touch-translation/src/composables/useTranslation.ts`
+- `plugins/touch-translation/src/composables/useTranslationProvider.ts`
+- `plugins/touch-translation/src/providers/tuffintelligence-translate.ts`
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `plugins/touch-translation/package.json`
+- `plugins/touch-translation/manifest.json`
+  - 将翻译方向、provider 顺序、错误文案等共享 helper 从插件本地 `shared/` 目录下沉到 `@talex-touch/utils/plugin`，避免 widget sandbox 因相对路径模块不可用而跳过编译。
+  - renderer 侧智能翻译 provider 改为复用 `@talex-touch/utils/plugin/sdk` 现有 intelligence SDK，prelude 侧共享逻辑改为从 utils 包内 runtime helper 读取，不再保留插件私有 shared 运行时代码。
+  - 修复 `touch-translate` widget 在沙箱中报 `Module "../shared/translation-shared.cjs" is not available` 的初始化失败问题，并重新生成 `1.0.4` 发布包。
+
 ### fix(core-app): 归一化 TPEX 市场插件相对资源地址
 
 - `apps/core-app/src/renderer/src/modules/store/providers/tpex-api-provider.ts`

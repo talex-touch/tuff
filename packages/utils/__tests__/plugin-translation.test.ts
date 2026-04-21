@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   getEnabledProviderIds,
+  getProviderOrderIndex,
   normalizeTranslationErrorMessage,
   resolveTargetLanguage,
-} from './translation-shared.cjs'
+} from '../plugin/translation'
 
-describe('translation shared helper', () => {
+describe('plugin translation helpers', () => {
   it('resolves translation direction from text content', () => {
     expect(resolveTargetLanguage('你好，Tuff')).toBe('en')
     expect(resolveTargetLanguage('hello, tuff')).toBe('zh')
@@ -19,6 +20,7 @@ describe('translation shared helper', () => {
     })
 
     expect(ids).toEqual(['tuffintelligence', 'google', 'deepl'])
+    expect(getProviderOrderIndex('google')).toBeLessThan(getProviderOrderIndex('deepl'))
   })
 
   it('normalizes permission and empty-input failures', () => {

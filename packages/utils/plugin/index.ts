@@ -1,9 +1,9 @@
 import type { FSWatcher } from 'chokidar'
-import type { ITuffIcon } from '../types/icon'
 import type {
   ManifestPermissionReasons,
   ManifestPermissions,
 } from '../permission/types'
+import type { ITuffIcon } from '../types/icon'
 import type { Arch, SupportOS } from './../base/index'
 
 import type { IPluginLogger } from './log/types'
@@ -163,7 +163,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
     fileName: string,
     content: object,
     options?: { broadcast?: boolean },
-  ) => { success: boolean; error?: string }
+  ) => { success: boolean, error?: string }
 
   /**
    * Delete the plugin file.
@@ -173,7 +173,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   deletePluginFile: (
     fileName: string,
     options?: { broadcast?: boolean },
-  ) => { success: boolean; error?: string }
+  ) => { success: boolean, error?: string }
 
   /**
    * List all files in the plugin.
@@ -192,7 +192,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
    * @param content The configuration content.
    * @returns The result of the save operation.
    */
-  savePluginConfig: (content: object) => { success: boolean; error?: string }
+  savePluginConfig: (content: object) => { success: boolean, error?: string }
 }
 
 export interface IFeatureCommand {
@@ -656,5 +656,6 @@ export * from './install'
 export type { IPluginLogger, LogDataType, LogItem } from './log/types'
 export * from './risk'
 export * from './sdk-version'
+export * from './translation'
 // Plugin runtime SDK should be imported from `@talex-touch/utils/plugin/sdk` to avoid root export collisions.
 export * from './widget'

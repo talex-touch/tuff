@@ -23,7 +23,7 @@ const {
   normalizeCallFailureMessage,
   normalizeTranslationErrorMessage,
   resolveTargetLanguage,
-} = require('./shared/translation-shared.cjs')
+} = require('../../packages/utils/plugin/translation.cjs')
 
 const PLUGIN_NAME = 'touch-translation'
 const SOURCE_ID = 'plugin-features'
@@ -34,7 +34,7 @@ let makeWidgetIdLoader = null
 
 function getCreateIntelligenceClient() {
   if (!createIntelligenceClientLoader) {
-    ({ createIntelligenceClient: createIntelligenceClientLoader } = require('@talex-touch/tuff-intelligence'))
+    ({ createIntelligenceClient: createIntelligenceClientLoader } = require('@talex-touch/tuff-intelligence/client'))
   }
   return createIntelligenceClientLoader
 }
