@@ -608,10 +608,11 @@ async function detectTuffCliAvailability(): Promise<boolean> {
       const code = getOptionalStringProp(error, 'code')
       const signal = getOptionalStringProp(error, 'signal')
       if (code !== 'ENOENT' && signal !== 'SIGTERM') {
+        const commandArgs = [...candidate.args, '--version'].join(' ')
         log.debug('[CommonChannel] Tuff CLI probe failed', {
           meta: {
             command: candidate.command,
-            args: [...candidate.args, '--version'],
+            args: commandArgs,
             code,
             signal,
             error: toErrorMessage(error)

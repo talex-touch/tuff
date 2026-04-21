@@ -202,16 +202,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     fileProviderLog.error(`[Everything] ${message}`)
   }
 
-  async onLoad(context: ProviderContext): Promise<void> {
-    if (process.platform !== 'win32') {
-      this.logInfo('Everything provider is Windows-only, skipping initialization')
-      return
-    }
-
-    const loadStart = performance.now()
-    this.logInfo('Initializing Everything provider')
-
-    await this.loadSettings(context)
+  private async refreshBackendState(reason: 'startup' | 'manual-check' | 'toggle-enable') {
+    const refreshStart = performance.now()
 
     try {
       const initialized = await this.initializeSearchBackend()
@@ -219,24 +211,49 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       this.lastChecked = Date.now()
 
       if (initialized) {
-        this.logInfo('Everything provider initialized successfully', {
-          duration: formatDuration(performance.now() - loadStart),
+        this.initializationError = null
+        this.logInfo('Everything backend ready', {
+          reason,
+          duration: formatDuration(performance.now() - refreshStart),
           backend: this.backend,
           path: this.esPath || 'unknown',
           enabled: this.isEnabled
         })
-      } else {
-        throw new Error('No available Everything backend (SDK/CLI)')
+        return true
       }
+
+      this.backend = 'unavailable'
+      this.initializationError = new Error('No available Everything backend (SDK/CLI)')
+      this.logWarn('Everything backend is unavailable after refresh', undefined, {
+        reason,
+        duration: formatDuration(performance.now() - refreshStart),
+        enabled: this.isEnabled
+      })
+      return false
     } catch (error) {
       this.initializationError = error as Error
       this.isAvailable = false
       this.backend = 'unavailable'
       this.lastChecked = Date.now()
-      this.logWarn('Everything not available', error, {
-        duration: formatDuration(performance.now() - loadStart)
+      this.logWarn('Everything backend refresh failed', error, {
+        reason,
+        duration: formatDuration(performance.now() - refreshStart),
+        enabled: this.isEnabled
       })
+      return false
     }
+  }
+
+  async onLoad(context: ProviderContext): Promise<void> {
+    if (process.platform !== 'win32') {
+      this.logInfo('Everything provider is Windows-only, skipping initialization')
+      return
+    }
+
+    this.logInfo('Initializing Everything provider')
+
+    await this.loadSettings(context)
+    await this.refreshBackendState('startup')
 
     this.registerChannels(context)
   }
@@ -334,7 +351,11 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     const transport = getTuffTransportMain(channel, keyManager)
 
-    transport.on(everythingStatusEvent, async () => {
+    transport.on(everythingStatusEvent, async (payload) => {
+      if (payload?.refresh) {
+        await this.refreshBackendState('manual-check')
+      }
+
       const healthStatus = this.getHealthStatus()
       return {
         enabled: this.isEnabled,
@@ -359,6 +380,10 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       this.isEnabled = payload.enabled
       this.saveSettings()
+
+      if (this.isEnabled) {
+        await this.refreshBackendState('toggle-enable')
+      }
 
       this.logInfo('Everything toggled', { enabled: this.isEnabled })
       return { success: true, enabled: this.isEnabled }
