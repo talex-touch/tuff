@@ -174,14 +174,12 @@ async function loadData() {
         const blockedIssue =
           plugin.loadError?.code === 'SDKAPI_BLOCKED'
             ? plugin.loadError
-            : (plugin.issues ?? []).find(
-                (issue) => issue.code === 'SDKAPI_BLOCKED' || issue.code === 'SDK_VERSION_OUTDATED'
-              )
-        const blocked = (status?.enforcePermissions ?? false) === false
+            : (plugin.issues ?? []).find((issue) => issue.code === 'SDKAPI_BLOCKED')
+        const blocked = Boolean(blockedIssue)
         const blockedReason =
           plugin.loadError?.code === 'SDKAPI_BLOCKED'
             ? plugin.loadError.message
-            : blockedIssue?.message || status?.warning
+            : blockedIssue?.message
 
         return {
           id: plugin.name,

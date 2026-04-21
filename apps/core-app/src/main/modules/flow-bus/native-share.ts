@@ -358,7 +358,11 @@ return item 1 of shareChoice
       return await this.shareMail(options)
     }
 
-    return { success: false, error: `Target ${target} is unavailable on Windows` }
+    return {
+      success: false,
+      error:
+        'Windows does not provide a system share sheet in core-app; only the explicit mail target is available.'
+    }
   }
 
   /**
@@ -371,7 +375,11 @@ return item 1 of shareChoice
       return await this.shareMail(options)
     }
 
-    return { success: false, error: `Target ${target} is unavailable on Linux` }
+    return {
+      success: false,
+      error:
+        'Linux does not provide a system share sheet in core-app; only the explicit mail target is available.'
+    }
   }
 
   private async materializeImageDataUrl(options: NativeShareOptions): Promise<NativeShareOptions> {

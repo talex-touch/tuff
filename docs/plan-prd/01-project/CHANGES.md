@@ -5,6 +5,33 @@
 
 ## 2026-04-21
 
+### refactor(core-app): 对插件 sdk/权限 legacy 路径执行硬切并清理假能力入口
+
+- `apps/core-app/src/main/modules/plugin/sdk-compat.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/permission/permission-store.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginPermissions.vue`
+- `apps/core-app/src/renderer/src/views/base/plugin/ViewPlugin.vue`
+- `apps/core-app/src/renderer/src/components/plugin/PluginView.vue`
+- `apps/core-app/src/main/core/channel-core.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.flow-trigger.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.test.ts`
+- `apps/core-app/src/main/modules/permission/permission-store.test.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `core-app` 新增统一 `sdk-compat` 门槛，缺失/无效/低于 `PERMISSION_ENFORCEMENT_MIN_VERSION` 的插件会在 loader 阶段直接打上 `SDKAPI_BLOCKED` 错误并保持可见但不可启用，运行时权限检查也不再对 legacy sdk 放行。
+  - 插件详情页与权限页的阻断态改为只认显式 `SDKAPI_BLOCKED`，不再回退展示“已跳过权限校验”这类 legacy 文案；直接调用 `enable()` 也会被硬切保护，避免通过旁路重新进 runtime。
+  - `DivisionBoxEvents.flowTrigger` 过渡期保留结构化失败响应，但不再尝试创建 session，并新增 compat 命中日志；同时删除 renderer 里未使用的 `@plugin-process-message` 直发链路与相关 dead code。
+  - 清理 `SearchEngineCore` 中残留的 `ClipboardProvider` 注释注册，`EverythingProvider` 改为直接走统一默认文件图标策略，`touch-translation` runtime repair 日志明确标记为 compat patch 命中，便于下一轮按 telemetry 决定是否删补丁。
+
 ### refactor(core-app): 直接迁移 Tuff CLI probe 到 tuffcli 命令
 
 - `apps/core-app/src/main/channel/common.ts`
@@ -370,6 +397,7 @@
 - `apps/core-app/src/main/modules/omni-panel/index.test.ts`
 - `apps/core-app/src/shared/events/omni-panel.ts`
   - 插件触发输入统一收敛为 `TuffQuery`；OmniPanel deprecated toggle event/type 删除，旧 SDK 插件继续由 `SDKAPI_BLOCKED` 直接阻断，不再保留运行时兼容旁路。
+  - 安装阶段补齐同一套 `sdkapi` Hard-Cut；OmniPanel 选中文本抓取在 Linux/macOS 失败场景补充显式 `supportLevel / issueCode / issueMessage`，不再把“空上下文”当作静默成功。
 - `apps/core-app/src/main/modules/ai/tuff-intelligence-storage-adapter.ts`
 - `apps/core-app/src/main/service/store-api.service.ts`
 - `apps/core-app/src/main/service/store-api.service.test.ts`

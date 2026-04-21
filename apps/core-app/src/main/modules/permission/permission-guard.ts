@@ -157,19 +157,22 @@ export class PermissionGuard {
       if (!accessState.allowed) {
         const duration = performance.now() - startTime
         this.recordPerformance(duration)
+        const blockedBySdk = accessState.reason === 'incompatible-sdk'
         const blockedByDeclaration = accessState.reason === 'not-declared'
-        const reason = blockedByDeclaration
-          ? accessState.hasHistoricalGrant
-            ? `Permission '${normalizedPermissionId}' was previously granted but is no longer declared`
-            : `Permission '${normalizedPermissionId}' is not declared in plugin manifest`
-          : `Permission '${normalizedPermissionId}' not granted`
+        const reason = blockedBySdk
+          ? `Plugin "${pluginId}" is blocked until its manifest sdkapi is upgraded to the enforced baseline`
+          : blockedByDeclaration
+            ? accessState.hasHistoricalGrant
+              ? `Permission '${normalizedPermissionId}' was previously granted but is no longer declared`
+              : `Permission '${normalizedPermissionId}' is not declared in plugin manifest`
+            : `Permission '${normalizedPermissionId}' not granted`
         return {
           allowed: false,
           code: 'PERMISSION_DENIED',
           permissionId: normalizedPermissionId,
           pluginId,
           reason,
-          showRequest: !blockedByDeclaration,
+          showRequest: !blockedByDeclaration && !blockedBySdk,
           durationMs: duration
         }
       }

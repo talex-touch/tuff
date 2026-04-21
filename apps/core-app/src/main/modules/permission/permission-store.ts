@@ -18,9 +18,9 @@ import {
   getPluginPermissionStatus,
   normalizePermissionId
 } from '@talex-touch/utils/permission'
-import { PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import fse from 'fs-extra'
+import { getPluginSdkCompatibilityGate } from '../plugin/sdk-compat'
 
 type AuditLogEntry = PermissionAuditLog
 
@@ -35,7 +35,7 @@ interface PermissionData {
 
 export interface PermissionAccessState {
   allowed: boolean
-  reason: 'legacy-sdk' | 'default' | 'granted' | 'not-granted' | 'not-declared'
+  reason: 'incompatible-sdk' | 'default' | 'granted' | 'not-granted' | 'not-declared'
   hasHistoricalGrant: boolean
 }
 
@@ -607,14 +607,11 @@ export class PermissionStore {
     const normalizedPermissionId = normalizePermissionId(permissionId)
     const candidates = getPermissionIdCandidates(normalizedPermissionId)
 
-    if (
-      typeof sdkapi !== 'number' ||
-      !Number.isFinite(sdkapi) ||
-      sdkapi < PERMISSION_ENFORCEMENT_MIN_VERSION
-    ) {
+    const sdkGate = getPluginSdkCompatibilityGate(pluginId, sdkapi)
+    if (sdkGate.blocked) {
       return {
-        allowed: true,
-        reason: 'legacy-sdk',
+        allowed: false,
+        reason: 'incompatible-sdk',
         hasHistoricalGrant: false
       }
     }

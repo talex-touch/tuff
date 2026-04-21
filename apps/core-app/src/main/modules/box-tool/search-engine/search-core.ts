@@ -417,8 +417,6 @@ export class SearchEngineCore
     this.registerProvider(mainWindowProvider)
     this.registerProvider(systemActionsProvider)
     this.registerProvider(appProvider)
-    //  this.registerProvider(new ClipboardProvider())
-    // NOTE: ClipboardProvider is intentionally disabled for now due to cost.
 
     // Windows: Use Everything for fast file search, fallback to file-provider for indexing
     // macOS/Linux: Use file-provider with full indexing

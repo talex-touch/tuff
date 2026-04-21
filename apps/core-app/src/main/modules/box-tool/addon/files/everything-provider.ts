@@ -942,8 +942,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           fileObj,
           {}, // No extensions metadata for Everything results
           this.id,
-          this.name,
-          () => {} // No icon loading for now
+          this.name
         )
         tuffItem.meta = {
           ...tuffItem.meta,

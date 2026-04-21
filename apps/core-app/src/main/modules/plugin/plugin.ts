@@ -810,6 +810,20 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   async enable(): Promise<boolean> {
+    const blockedSdkIssue = this.issues.find((issue) => issue.code === 'SDKAPI_BLOCKED')
+    if (this.loadError?.code === 'SDKAPI_BLOCKED' || blockedSdkIssue) {
+      this.setLoadState('load_failed', {
+        code: 'SDKAPI_BLOCKED',
+        message:
+          this.loadError?.message ||
+          blockedSdkIssue?.message ||
+          'Plugin sdkapi is incompatible with the enforced runtime baseline.'
+      })
+      this.status = PluginStatus.LOAD_FAILED
+      this.logger.warn('Attempted to enable plugin blocked by sdkapi hard-cut.')
+      return false
+    }
+
     if (this.status === PluginStatus.LOAD_FAILED) {
       this.logger.warn('Attempted to enable a plugin that failed to load.')
       return false
@@ -1094,10 +1108,7 @@ export class TouchPlugin implements ITouchPlugin {
     }
   }
 
-  private createPowerSDK(
-    pluginName: string,
-    touchChannel: { send: (eventName: string, payload?: unknown) => Promise<unknown> }
-  ) {
+  private createPowerSDK(pluginName: string, transport: ITuffTransportMain) {
     const DEFAULT_LOW_POWER_THRESHOLD = 15
     const getDefaultLowPowerThreshold = () => {
       return clampBatteryPercent(
@@ -1118,7 +1129,13 @@ export class TouchPlugin implements ITouchPlugin {
       const threshold = normalizeLowPowerThreshold(options.threshold)
 
       try {
-        const battery = await touchChannel.send(AppEvents.fileIndex.batteryLevel.toEventName())
+        const battery = await transport.invoke(AppEvents.fileIndex.batteryLevel, undefined, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        })
         const levelRaw = (battery as { level?: unknown } | null | undefined)?.level
         const chargingRaw = (battery as { charging?: unknown } | null | undefined)?.charging
 
@@ -1533,7 +1550,7 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
-    const powerSDK = this.createPowerSDK(pluginName, touchChannel)
+    const powerSDK = this.createPowerSDK(pluginName, transport)
 
     const recommendSDK = this.createRecommendSDK(pluginName)
 
