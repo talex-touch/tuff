@@ -14,7 +14,6 @@ import type {
   ITuffTransport,
   SendOptions,
   StreamController,
-  StreamMessage,
   StreamOptions,
   TransportPortHandle,
   TransportPortOpenOptions,
@@ -23,8 +22,8 @@ import { useChannel } from '../../renderer/hooks/use-channel'
 import { findCloneIssue, isCloneError, summarizeClonePayload } from '../../common/utils/clone-diagnostics'
 import { assertTuffEvent } from '../event/builder'
 import { TransportEvents } from '../events'
-import { STREAM_SUFFIXES } from './constants'
 import { isPortChannelEnabled } from './port-policy'
+import { startClientStream } from './stream/client-runtime'
 
 interface CacheEntry {
   value: unknown
@@ -583,40 +582,6 @@ export class TuffRendererTransport implements ITuffTransport {
     }
   }
 
-  private normalizePortStreamMessage<TChunk>(raw: unknown): StreamMessage<TChunk> | null {
-    if (!raw || typeof raw !== 'object') {
-      return null
-    }
-
-    const record = raw as StreamMessage<TChunk> & TransportPortEnvelope<StreamMessage<TChunk>>
-    const rawType = (record as { type?: string }).type
-    const rawStreamId = (record as { streamId?: string | number }).streamId
-    if (!rawType || rawStreamId === undefined || rawStreamId === null) {
-      return null
-    }
-
-    const streamId = String(rawStreamId)
-
-    if (rawType === 'data') {
-      const chunk = (record as { chunk?: TChunk }).chunk ?? (record as { payload?: { chunk?: TChunk } }).payload?.chunk
-      return { type: 'data', streamId, chunk }
-    }
-
-    if (rawType === 'error') {
-      const errorRecord = record as { error?: { message?: string } | string, payload?: { error?: string } }
-      const errorMessage = typeof errorRecord.error === 'string'
-        ? errorRecord.error
-        : errorRecord.error?.message ?? errorRecord.payload?.error
-      return { type: 'error', streamId, error: errorMessage }
-    }
-
-    if (rawType === 'end' || rawType === 'close') {
-      return { type: 'end', streamId }
-    }
-
-    return null
-  }
-
   private normalizePortEventMessage<TReq>(raw: unknown, channel: string): TReq | null {
     if (!raw || typeof raw !== 'object') {
       return null
@@ -865,207 +830,23 @@ export class TuffRendererTransport implements ITuffTransport {
     options: StreamOptions<TChunk>,
   ): Promise<StreamController> {
     assertTuffEvent(event, 'TuffRendererTransport.stream')
-
-    const eventName = event.toEventName()
-    const streamId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-    const streamEventName = `${eventName}${STREAM_SUFFIXES.START}`
-
-    let cancelled = false
-    let cleaned = false
-    const cleanupCallbacks: Array<() => void> = []
-    const cleanup = () => {
-      if (cleaned)
-        return
-      cleaned = true
-      cleanupCallbacks.forEach(callback => callback())
-      this.streamControllers.delete(streamId)
+    if (!this.channel.regChannel) {
+      throw new Error('[TuffTransport] Channel does not support event registration')
     }
 
-    const portOptions = options.port === false || !isPortChannelEnabled(eventName)
-      ? null
-      : {
-          channel: eventName,
-          ...options.port,
-          timeoutMs: options.port?.timeoutMs ?? STREAM_PORT_TIMEOUT_MS,
-        }
-
-    let portHandle: TransportPortHandle | null = null
-    let portActive = false
-
-    if (portOptions) {
-      try {
-        portHandle = await this.openPort(portOptions)
-        if (!portHandle) {
-          this.logPortFallback(eventName, 'port_unavailable')
-        }
-      }
-      catch (error) {
-        this.logPortFallback(eventName, 'open_failed', error)
-      }
-    }
-
-    const fallbackToChannel = (reason: string) => {
-      if (!portHandle)
-        return
-      if (portActive) {
-        portActive = false
-      }
-      this.logPortFallback(eventName, reason)
-      void portHandle.close(reason)
-    }
-
-    if (portHandle) {
-      const port = portHandle.port
-
-      const portMessageHandler = (event: MessageEvent) => {
-        if (cancelled)
-          return
-
-        const message = this.normalizePortStreamMessage<TChunk>(event?.data)
-        if (!message || message.streamId !== streamId) {
-          return
-        }
-
-        portActive = true
-
-        if (message.type === 'data' && message.chunk !== undefined) {
-          options.onData(message.chunk)
-          return
-        }
-
-        if (message.type === 'error') {
-          options.onError?.(new Error(message.error ?? 'Stream error'))
-          cleanup()
-          return
-        }
-
-        if (message.type === 'end') {
-          options.onEnd?.()
-          cleanup()
-        }
-      }
-
-      const portCloseHandler = () => {
-        if (cancelled)
-          return
-        fallbackToChannel('port_closed')
-      }
-
-      const portErrorHandler = () => {
-        if (cancelled)
-          return
-        fallbackToChannel('message_error')
-      }
-
-      if (typeof port.addEventListener === 'function') {
-        port.addEventListener('message', portMessageHandler)
-        port.addEventListener('messageerror', portErrorHandler)
-        port.addEventListener('close', portCloseHandler)
-        port.start?.()
-        cleanupCallbacks.push(() => {
-          port.removeEventListener('message', portMessageHandler)
-          port.removeEventListener('messageerror', portErrorHandler)
-          port.removeEventListener('close', portCloseHandler)
-        })
-      }
-      else {
-        port.onmessage = portMessageHandler as any
-        cleanupCallbacks.push(() => {
-          port.onmessage = null
-        })
-      }
-
-      cleanupCallbacks.push(() => {
-        if (portOptions?.force === true) {
-          void portHandle?.close('stream_cleanup')
-        }
-      })
-    }
-
-    // Register stream data handler (channel fallback)
-    if (this.channel.regChannel) {
-      const dataEventName = `${eventName}${STREAM_SUFFIXES.DATA}:${streamId}`
-      const endEventName = `${eventName}${STREAM_SUFFIXES.END}:${streamId}`
-      const errorEventName = `${eventName}${STREAM_SUFFIXES.ERROR}:${streamId}`
-
-      const dataHandler = (raw: unknown) => {
-        if (cancelled || portActive)
-          return
-
-        const data = this.unwrapChannelPayload<{ chunk?: TChunk, error?: string }>(raw)
-
-        if (data?.error) {
-          options.onError?.(new Error(data.error))
-          return
-        }
-
-        if (data?.chunk !== undefined) {
-          options.onData(data.chunk)
-        }
-      }
-
-      const endHandler = () => {
-        if (cancelled || portActive)
-          return
-        options.onEnd?.()
-        cleanup()
-      }
-
-      const errorHandler = (raw: unknown) => {
-        if (cancelled || portActive)
-          return
-        const data = this.unwrapChannelPayload<{ error: string }>(raw)
-        options.onError?.(new Error(data?.error))
-        cleanup()
-      }
-
-      const dataCleanup = this.channel.regChannel(dataEventName, dataHandler)
-      const endCleanup = this.channel.regChannel(endEventName, endHandler)
-      const errorCleanup = this.channel.regChannel(errorEventName, errorHandler)
-
-      cleanupCallbacks.push(() => {
-        dataCleanup()
-        endCleanup()
-        errorCleanup()
-      })
-    }
-
-    // Create controller
-    const controller: StreamController = {
-      cancel: () => {
-        if (cancelled)
-          return
-        cancelled = true
-        this.channel.send(`${eventName}${STREAM_SUFFIXES.CANCEL}`, { streamId }).catch(() => {
-          // Ignore cancel errors
-        })
-        cleanup()
+    return await startClientStream(
+      {
+        streamControllers: this.streamControllers,
+        send: (eventName: string, streamPayload?: unknown) => this.channel.send(eventName, streamPayload),
+        registerChannel: (eventName: string, handler: (raw: unknown) => void) => this.channel.regChannel!(eventName, handler),
+        openPort: options.port === false ? undefined : this.openPort.bind(this),
+        logPortFallback: this.logPortFallback.bind(this),
+        streamPortTimeoutMs: STREAM_PORT_TIMEOUT_MS,
       },
-      get cancelled() {
-        return cancelled
-      },
-      streamId,
-    }
-
-    this.streamControllers.set(streamId, controller)
-
-    // Start the stream
-    try {
-      // Handle void payload (undefined)
-      const streamPayload = payload !== undefined
-        ? { streamId, ...payload }
-        : { streamId }
-      await this.channel.send(streamEventName, streamPayload)
-    }
-    catch (error) {
-      controller.cancel()
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new Error(
-        `[TuffTransport] Failed to start stream "${eventName}": ${errorMessage}`,
-      )
-    }
-
-    return controller
+      event.toEventName(),
+      payload,
+      options,
+    )
   }
 
   /**

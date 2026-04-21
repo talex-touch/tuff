@@ -355,34 +355,43 @@ export function useClipboard() {
       let streamController: { cancel: () => void } | null = null
       let cancelled = false
 
-      void transport.stream(ClipboardEvents.change, undefined, {
-        onData(payload: ClipboardChangePayload) {
-          if (cancelled) {
-            return
-          }
-          const latest = toPluginClipboardItem(payload?.latest ?? null)
-          if (latest) {
-            callback(latest)
-          }
-        },
-        onError(error) {
-          if (!cancelled) {
-            console.warn('[Plugin SDK] Clipboard change stream error', error)
-          }
-        },
-      })
-        .then((controller) => {
-          if (cancelled) {
-            controller.cancel()
-            return
-          }
-          streamController = controller
+      try {
+        const streamPromise = transport.stream(ClipboardEvents.change, undefined, {
+          onData(payload: ClipboardChangePayload) {
+            if (cancelled) {
+              return
+            }
+            const latest = toPluginClipboardItem(payload?.latest ?? null)
+            if (latest) {
+              callback(latest)
+            }
+          },
+          onError(error) {
+            if (!cancelled) {
+              console.warn('[Plugin SDK] Clipboard change stream error', error)
+            }
+          },
         })
-        .catch((error) => {
-          if (!cancelled) {
-            console.warn('[Plugin SDK] Failed to subscribe clipboard changes', error)
-          }
-        })
+
+        void streamPromise
+          .then((controller) => {
+            if (cancelled) {
+              controller.cancel()
+              return
+            }
+            streamController = controller
+          })
+          .catch((error) => {
+            if (!cancelled) {
+              console.warn('[Plugin SDK] Failed to subscribe clipboard changes', error)
+            }
+          })
+      }
+      catch (error) {
+        if (!cancelled) {
+          console.warn('[Plugin SDK] Failed to subscribe clipboard changes', error)
+        }
+      }
 
       return () => {
         cancelled = true

@@ -108,7 +108,7 @@ and `defineEvent('native').module('bridge').event('invoke')` for new code.
 | `native:bridge:capabilities` | R/P -> M | `void` | `{ providers: ProviderMeta[] }` | List supported providers |
 
 Streaming:
-- If `BridgeRequest.stream === true`, use TuffTransport stream ports.
+- If `BridgeRequest.stream === true`, use TuffTransport streams with `MessagePort` preferred and `:stream:*` channel fallback when the port cannot be established or drops mid-run.
 - Stream events follow the `:stream:*` suffixes from `STREAM_SUFFIXES`.
 - Output chunks include `{ runId, streamId, type, chunk }`.
 
