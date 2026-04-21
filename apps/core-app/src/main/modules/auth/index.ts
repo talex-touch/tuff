@@ -243,7 +243,6 @@ async function loadAuthToken(): Promise<void> {
   if (!authUseSecureStorage) {
     setSecureStorageDegradedState(false)
     authToken = null
-    await setSecureValue(AUTH_TOKEN_KEY, null)
     return
   }
 
@@ -812,6 +811,50 @@ export async function applyExternalAuthCallback(
 
 export function applyStepUpToken(token: string): void {
   setStepUpToken(token)
+}
+
+type AuthModuleTestState = {
+  appRootPath?: string
+  authToken?: string | null
+  authUseSecureStorage?: boolean
+}
+
+function resetAuthModuleTestState(): void {
+  if (authStartupRefreshTimer) {
+    clearTimeout(authStartupRefreshTimer)
+    authStartupRefreshTimer = null
+  }
+  authState.isLoaded = false
+  authState.isSignedIn = false
+  authState.user = null
+  authState.sessionId = null
+  authStateListeners.clear()
+  appRootPath = ''
+  transport = null
+  requestRendererValue = null
+  authToken = null
+  authUseSecureStorage = false
+  stepUpToken = null
+  stepUpTokenExpiresAt = 0
+}
+
+function setAuthModuleTestState(nextState: AuthModuleTestState): void {
+  if (Object.prototype.hasOwnProperty.call(nextState, 'appRootPath')) {
+    appRootPath = nextState.appRootPath ?? ''
+  }
+  if (Object.prototype.hasOwnProperty.call(nextState, 'authToken')) {
+    authToken = nextState.authToken ?? null
+  }
+  if (Object.prototype.hasOwnProperty.call(nextState, 'authUseSecureStorage')) {
+    authUseSecureStorage = nextState.authUseSecureStorage === true
+  }
+}
+
+export const __test__ = {
+  loadAuthToken,
+  handleAuthStoragePreferenceChanged,
+  resetState: resetAuthModuleTestState,
+  setState: setAuthModuleTestState
 }
 
 export class AuthModule extends BaseModule<TalexEvents> {
