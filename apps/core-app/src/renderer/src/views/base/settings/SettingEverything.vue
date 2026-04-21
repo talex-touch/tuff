@@ -12,6 +12,12 @@ import {
   type EverythingBackendType,
   type EverythingStatusResponse
 } from '../../../../../shared/events/everything'
+import {
+  resolveEverythingStatusColor,
+  resolveEverythingStatusTextKey,
+  shouldShowEverythingInstallGuide,
+  shouldShowEverythingToggle
+} from './setting-everything-state'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
@@ -124,25 +130,19 @@ function openCLIDownload() {
 }
 
 const statusText = computed(() => {
-  if (!everythingStatus.value) return t('settings.settingEverything.statusChecking')
-  if (!everythingStatus.value.available) return t('settings.settingEverything.statusUnavailable')
-  if (!everythingStatus.value.enabled) return t('settings.settingEverything.statusDisabled')
-  return t('settings.settingEverything.statusEnabled')
+  return t(resolveEverythingStatusTextKey(everythingStatus.value))
 })
 
 const statusColor = computed(() => {
-  if (!everythingStatus.value) return 'text-gray-500'
-  if (!everythingStatus.value.available) return 'text-red-500'
-  if (!everythingStatus.value.enabled) return 'text-yellow-500'
-  return 'text-green-500'
+  return resolveEverythingStatusColor(everythingStatus.value)
 })
 
 const showInstallGuide = computed(() => {
-  return everythingStatus.value && !everythingStatus.value.available
+  return shouldShowEverythingInstallGuide(everythingStatus.value)
 })
 
 const showToggle = computed(() => {
-  return everythingStatus.value && everythingStatus.value.available
+  return shouldShowEverythingToggle(everythingStatus.value)
 })
 
 const backendText = computed(() => {
