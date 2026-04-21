@@ -102,7 +102,7 @@
   - `core-app` 新增统一 `sdk-compat` 门槛，缺失/无效/低于 `PERMISSION_ENFORCEMENT_MIN_VERSION` 的插件会在 loader 阶段直接打上 `SDKAPI_BLOCKED` 错误并保持可见但不可启用，运行时权限检查也不再对 legacy sdk 放行。
   - 插件详情页与权限页的阻断态改为只认显式 `SDKAPI_BLOCKED`，不再回退展示“已跳过权限校验”这类 legacy 文案；直接调用 `enable()` 也会被硬切保护，避免通过旁路重新进 runtime。
   - `DivisionBoxEvents.flowTrigger` 过渡期保留结构化失败响应，但不再尝试创建 session，并新增 compat 命中日志；同时删除 renderer 里未使用的 `@plugin-process-message` 直发链路与相关 dead code。
-  - 清理 `SearchEngineCore` 中残留的 `ClipboardProvider` 注释注册，`EverythingProvider` 改为直接走统一默认文件图标策略，`touch-translation` runtime repair 日志明确标记为 compat patch 命中，便于下一轮按 telemetry 决定是否删补丁。
+  - 清理 `SearchEngineCore` 中残留的 `ClipboardProvider` 注释注册，并保留 `EverythingProvider` 的结果图标缓存与懒预热链路；`touch-translation` runtime repair 日志明确标记为 compat patch 命中，便于下一轮按 telemetry 决定是否删补丁。
 
 ### refactor(core-app): 直接迁移 Tuff CLI probe 到 tuffcli 命令
 
