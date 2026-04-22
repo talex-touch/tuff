@@ -27,8 +27,8 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 - **`release-drafter.yml`** - Release draft automation
   - Updates the release draft on `main` pushes / merged PRs
 
-- **`readme-contributors.yml`** - Contributors list automation
-  - Updates README contributors list on `master` pushes
+- Contributors README automation was retired on `2026-04-22`
+  - The previous `readme-contributors.yml` workflow kept generating duplicate README PRs on `master` pushes, so it was disabled and removed to keep the official PR queue stable
 
 - **`pilot-ci.yml`** - Pilot 前端 CI + 静态产物
   - 触发条件：`apps/pilot/**` 相关变更

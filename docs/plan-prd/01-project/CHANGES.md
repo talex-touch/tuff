@@ -1,7 +1,18 @@
 # 变更日志
 
-> 更新时间: 2026-04-21
-> 说明: 主文件仅保留近 30 天（2026-03-23 ~ 2026-04-21）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-22
+> 说明: 主文件仅保留近 30 天（2026-03-23 ~ 2026-04-22）详细记录；更早历史已按月归档。
+
+## 2026-04-22
+
+### chore(ci): 下线 contributors README automation 以停止重复 PR 噪声
+
+- `.github/workflows/readme-contributors.yml`
+- `.github/workflows/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 官方仓库已手动禁用并同步删除 `readme-contributors.yml`，避免每次 `master` push 都继续生成新的 `contributors readme action update` PR。
+  - PR 池清淤策略改为直接保留业务 replacement PR，不再让 README contributors automation 持续占用 open PR 配额。
+  - workflow 说明文档已同步标记 contributors README automation 退役，后续如需维护 contributors 列表，改走显式人工变更而不是自动 PR。
 
 ## 2026-04-21
 
