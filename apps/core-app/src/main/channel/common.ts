@@ -9,6 +9,10 @@ import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/tran
 import type {
   AppIndexAddPathRequest,
   AppIndexAddPathResult,
+  AppIndexEntryMutationResult,
+  AppIndexRemoveEntryRequest,
+  AppIndexSetEntryEnabledRequest,
+  AppIndexUpsertEntryRequest,
   AutoStartGetResponse,
   AutoStartUpdateRequest,
   AutoStartUpdateResponse,
@@ -523,6 +527,12 @@ function getOptionalStringProp(value: unknown, key: string): string | undefined 
   if (!isRecord(value)) return undefined
   const prop = value[key]
   return typeof prop === 'string' ? prop : undefined
+}
+
+function getOptionalBooleanProp(value: unknown, key: string): boolean | undefined {
+  if (!isRecord(value)) return undefined
+  const prop = value[key]
+  return typeof prop === 'boolean' ? prop : undefined
 }
 
 function normalizeCapabilityQuery(payload: unknown): PlatformCapabilityListRequest {
@@ -1501,6 +1511,35 @@ export class CommonChannelModule extends BaseModule {
             return { success: false, status: 'invalid', reason: 'path-empty' }
           }
           return appProvider.addAppByPath(inputPath)
+        }
+      ),
+      transport.on(AppEvents.appIndex.listEntries, () => appProvider.listManagedEntries()),
+      transport.on<AppIndexUpsertEntryRequest, AppIndexEntryMutationResult>(
+        AppEvents.appIndex.upsertEntry,
+        (payload) => appProvider.upsertManagedEntry(payload ?? { path: '' })
+      ),
+      transport.on<AppIndexRemoveEntryRequest, AppIndexEntryMutationResult>(
+        AppEvents.appIndex.removeEntry,
+        (payload) => {
+          const inputPath = getOptionalStringProp(payload, 'path')
+          if (!inputPath) {
+            return { success: false, status: 'invalid', reason: 'path-empty' }
+          }
+          return appProvider.removeManagedEntry(inputPath)
+        }
+      ),
+      transport.on<AppIndexSetEntryEnabledRequest, AppIndexEntryMutationResult>(
+        AppEvents.appIndex.setEntryEnabled,
+        (payload) => {
+          const inputPath = getOptionalStringProp(payload, 'path')
+          if (!inputPath) {
+            return { success: false, status: 'invalid', reason: 'path-empty' }
+          }
+          const enabled = getOptionalBooleanProp(payload, 'enabled')
+          if (enabled === undefined) {
+            return { success: false, status: 'invalid', reason: 'enabled-invalid' }
+          }
+          return appProvider.setManagedEntryEnabled(inputPath, enabled)
         }
       )
     )
