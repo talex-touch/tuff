@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-04-22
+> 更新时间: 2026-04-21
 
 ---
 
@@ -58,7 +58,7 @@
 - [ ] CoreBox 第三方 App 非阻塞启动 Windows 真机验证：
   - 验证 `shortcut` 保留 `launchArgs / workingDirectory` 并在 CoreBox 立即隐藏后后台启动。
   - 验证 `uwp` 继续通过 `explorer.exe shell:AppsFolder\\...` handoff，早期失败会触发系统通知。
-  - 2026-04-22 本地回归已补：`app-provider.test.ts` 覆盖 `shortcut` / `uwp` `onExecute` 异步 handoff，不等待后台观察窗口即可返回；仍需 Windows 真机补“窗口已隐藏 + 实际启动体验”。
+  - 2026-04-21 本地回归已补：`app-provider.test.ts` 覆盖 `shortcut` / `uwp` `onExecute` 异步 handoff，不等待后台观察窗口即可返回；仍需 Windows 真机补“窗口已隐藏 + 实际启动体验”。
 
 ### 2.5.0 CoreApp Release Blockers（当前优先）
 
@@ -379,7 +379,7 @@
 | 总计 | 182 |
 | 完成率 | 85% |
 
-> 统计时间: 2026-04-20（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-04-21（按本文件实时 checkbox 计数）。
 
 ---
 

@@ -232,7 +232,7 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
   const spotlightName = await getSpotlightDisplayName(appPath)
 
   // Try to get localized display name (e.g., "微信" for WeChat)
-  const localizedName = await getLocalizedDisplayName(appPath)
+  const localizedName = normalizeDisplayNameCandidate(await getLocalizedDisplayName(appPath))
 
   // Priority: Spotlight > localized strings > plist display name > bundle name
   const displayName =
