@@ -48,6 +48,52 @@ describe('TuffPluginTransport.stream', () => {
     expect(handlers.has(`${eventName}:stream:data:${controller.streamId}`)).toBe(false)
   })
 
+  it('binds raw channel send when typed transport falls back to plugin channel methods', async () => {
+    const channel = {
+      pendingMap: new Map<string, unknown>(),
+      async send(this: { pendingMap: Map<string, unknown> }, eventName: string, payload?: unknown) {
+        this.pendingMap.set(eventName, payload)
+        return { ok: true }
+      },
+      regChannel: vi.fn(() => () => {}),
+    }
+
+    const transport = createPluginTuffTransport(channel)
+    const payload = { page: 1, pageSize: 20 }
+
+    await transport.send(ClipboardEvents.getHistory, payload)
+
+    expect(channel.pendingMap.get(ClipboardEvents.getHistory.toEventName())).toEqual(payload)
+  })
+
+  it('binds raw channel send for stream lifecycle events', async () => {
+    const handlers = new Map<string, (raw: unknown) => void>()
+    const channel = {
+      pendingMap: new Map<string, unknown>(),
+      async send(this: { pendingMap: Map<string, unknown> }, eventName: string, payload?: unknown) {
+        this.pendingMap.set(eventName, payload)
+        return undefined
+      },
+      regChannel: vi.fn((eventName: string, handler: (raw: unknown) => void) => {
+        handlers.set(eventName, handler)
+        return () => {
+          handlers.delete(eventName)
+        }
+      }),
+    }
+
+    const transport = createPluginTuffTransport(channel)
+    const controller = await transport.stream(ClipboardEvents.change, undefined, {
+      onData: vi.fn(),
+    })
+
+    expect(
+      channel.pendingMap.get(`${ClipboardEvents.change.toEventName()}:stream:start`),
+    ).toEqual({
+      streamId: controller.streamId,
+    })
+  })
+
   it('prefers port delivery when openPort succeeds', async () => {
     const { channel } = createChannel()
     const transport = createPluginTuffTransport(channel) as any

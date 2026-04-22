@@ -6,7 +6,6 @@
 
 import type { PluginChannelClient, PluginStandardChannelData } from './channel-client'
 import type { IPluginFeature } from '../index'
-import path from 'node:path'
 
 /**
  * Handler signature for plugin channel events.
@@ -14,6 +13,28 @@ import path from 'node:path'
 export type PluginChannelHandler = (event: PluginStandardChannelData) => any
 
 export type PluginMainChannelRaw = unknown
+
+function joinPluginPath(basePath: string, segment: string): string {
+  const trimmedBase = basePath.replace(/[\\/]+$/, '')
+  const trimmedSegment = segment.replace(/^[\\/]+/, '')
+
+  if (!trimmedBase) {
+    return trimmedSegment
+  }
+
+  if (!trimmedSegment) {
+    return trimmedBase
+  }
+
+  const separator = trimmedBase.includes('\\') && !trimmedBase.includes('/') ? '\\' : '/'
+  return `${trimmedBase}${separator}${trimmedSegment}`
+}
+
+function getJsonBasename(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/')
+  const fileName = normalized.slice(normalized.lastIndexOf('/') + 1)
+  return fileName.endsWith('.json') ? fileName.slice(0, -'.json'.length) : fileName
+}
 
 /**
  * Bridge exposed to plugin backends for channel-based communication.
@@ -97,9 +118,10 @@ export interface PluginClipboardItem {
    * Clipboard content:
    * - text: plain string
    * - files: JSON string array
-   * - image: defaults to a small preview data URL to keep IPC payload light
+   * - image: a preview/original asset URL that can be used directly for detail rendering
    *
-   * For images, the original asset URL (tfile://...) may be available at:
+   * For images, the lightweight list thumbnail remains available at `thumbnail`,
+   * and the original asset URL (tfile://...) may be available at:
    * - `meta.image_original_url`
    */
   content: string
@@ -681,7 +703,7 @@ export function createStorageManager(
   pluginPath: string,
   fse: any,
 ): IStorageManager {
-  const dataPath = path.join(pluginPath, 'data')
+  const dataPath = joinPluginPath(pluginPath, 'data')
 
   /**
    * Ensures the data directory exists
@@ -696,13 +718,13 @@ export function createStorageManager(
   return {
     async set(key: string, value: any): Promise<void> {
       await ensureDataDir()
-      const filePath = path.join(dataPath, `${key}.json`)
+      const filePath = joinPluginPath(dataPath, `${key}.json`)
       await fse.writeJSON(filePath, value, { spaces: 2 })
     },
 
     async get(key: string, defaultValue?: any): Promise<any> {
       await ensureDataDir()
-      const filePath = path.join(dataPath, `${key}.json`)
+      const filePath = joinPluginPath(dataPath, `${key}.json`)
       if (await fse.pathExists(filePath)) {
         return await fse.readJSON(filePath)
       }
@@ -711,13 +733,13 @@ export function createStorageManager(
 
     async has(key: string): Promise<boolean> {
       await ensureDataDir()
-      const filePath = path.join(dataPath, `${key}.json`)
+      const filePath = joinPluginPath(dataPath, `${key}.json`)
       return await fse.pathExists(filePath)
     },
 
     async remove(key: string): Promise<void> {
       await ensureDataDir()
-      const filePath = path.join(dataPath, `${key}.json`)
+      const filePath = joinPluginPath(dataPath, `${key}.json`)
       if (await fse.pathExists(filePath)) {
         await fse.remove(filePath)
       }
@@ -734,7 +756,7 @@ export function createStorageManager(
       const files = await fse.readdir(dataPath)
       return files
         .filter((file: string) => file.endsWith('.json'))
-        .map((file: string) => path.basename(file, '.json'))
+        .map((file: string) => getJsonBasename(file))
     },
   }
 }

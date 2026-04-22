@@ -221,6 +221,8 @@ const CLIPBOARD_IMAGE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000
 const CLIPBOARD_META_QUEUE_LIMIT = 6
 const CLIPBOARD_META_LOG_THROTTLE_MS = 5_000
 const CLIPBOARD_STAGE_B_LOG_THROTTLE_MS = 5_000
+const CLIPBOARD_HISTORY_THUMBNAIL_WIDTH = 160
+const CLIPBOARD_READ_IMAGE_PREVIEW_WIDTH = 1024
 
 function toTfileUrl(filePath: string): string {
   const raw = filePath?.trim()
@@ -307,6 +309,30 @@ function isLikelyLocalPath(value: string): boolean {
     !value.startsWith('http:') &&
     !value.startsWith('https:')
   )
+}
+
+function createClipboardThumbnailDataUrl(image: NativeImage): string {
+  return image
+    .resize({
+      width: CLIPBOARD_HISTORY_THUMBNAIL_WIDTH,
+      quality: 'best'
+    })
+    .toDataURL()
+}
+
+function createClipboardReadPreviewDataUrl(image: NativeImage): string {
+  const { width } = image.getSize()
+  const targetWidth = Math.max(
+    1,
+    Math.min(width || CLIPBOARD_READ_IMAGE_PREVIEW_WIDTH, CLIPBOARD_READ_IMAGE_PREVIEW_WIDTH)
+  )
+
+  return image
+    .resize({
+      width: targetWidth,
+      quality: 'best'
+    })
+    .toDataURL()
 }
 
 class ClipboardHelper {
@@ -1316,7 +1342,13 @@ export class ClipboardModule extends BaseModule {
     const tags = this.extractTags(item)
     const meta: Record<string, unknown> = {}
     if (clientItem.meta && typeof clientItem.meta === 'object') {
-      for (const key of ['image_original_url', 'image_content_kind', 'image_size', 'image_file_size']) {
+      for (const key of [
+        'image_original_url',
+        'image_preview_url',
+        'image_content_kind',
+        'image_size',
+        'image_file_size'
+      ]) {
         const value = (clientItem.meta as Record<string, unknown>)[key]
         if (value !== undefined && value !== null) {
           meta[key] = value
@@ -1354,13 +1386,29 @@ export class ClipboardModule extends BaseModule {
         : undefined
     const originalUrl = originalPath ? toTfileUrl(originalPath) : undefined
 
+    const previewUrl =
+      typeof meta.image_preview_url === 'string' && meta.image_preview_url.length > 0
+        ? meta.image_preview_url
+        : undefined
+
     meta.image_original_url = originalUrl ?? meta.image_original_url
-    meta.image_content_kind = 'preview'
+    meta.image_preview_url = previewUrl ?? originalUrl ?? meta.image_preview_url
 
     const content =
-      typeof item.thumbnail === 'string' && item.thumbnail.length > 0
+      previewUrl ??
+      originalUrl ??
+      (typeof item.thumbnail === 'string' && item.thumbnail.length > 0
         ? item.thumbnail
-        : (originalUrl ?? (isDataUrl(rawContent) ? rawContent : ''))
+        : undefined) ??
+      (isDataUrl(rawContent) ? rawContent : '')
+
+    meta.image_content_kind = previewUrl
+      ? 'preview'
+      : originalUrl
+        ? 'original'
+        : typeof item.thumbnail === 'string' && item.thumbnail.length > 0
+          ? 'thumbnail'
+          : 'inline'
 
     return {
       ...item,
@@ -1503,7 +1551,7 @@ export class ClipboardModule extends BaseModule {
     }
     const size = image.getSize()
     const preview = request?.preview ?? true
-    const previewDataUrl = image.resize({ width: 256 }).toDataURL()
+    const previewDataUrl = createClipboardReadPreviewDataUrl(image)
     if (preview) {
       return {
         dataUrl: previewDataUrl,
@@ -2410,7 +2458,7 @@ export class ClipboardModule extends BaseModule {
             })
             imageSize = trackPhase(phaseDurations, 'image.size', () => currentImage.getSize())
             thumbnail = trackPhase(phaseDurations, 'image.thumbnail', () => {
-              return currentImage.resize({ width: 128 }).toDataURL()
+              return createClipboardThumbnailDataUrl(currentImage)
             })
             clipboardLog.info('File with thumbnail detected', {
               meta: { width: imageSize.width, height: imageSize.height }
@@ -2447,9 +2495,9 @@ export class ClipboardModule extends BaseModule {
           const size = trackPhase(phaseDurations, 'image.size', () => currentImage.getSize())
           metaEntries.push({ key: 'image_size', value: size })
 
-          // Generate thumbnail synchronously (lightweight, ~128px)
+          // Generate thumbnail synchronously (lightweight, ~160px)
           const thumbnail = trackPhase(phaseDurations, 'image.thumbnail', () => {
-            return currentImage.resize({ width: 128 }).toDataURL()
+            return createClipboardThumbnailDataUrl(currentImage)
           })
 
           // Yield to event loop before heavy PNG encoding + file I/O
