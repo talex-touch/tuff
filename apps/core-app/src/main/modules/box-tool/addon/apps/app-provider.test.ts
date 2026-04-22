@@ -1,4 +1,7 @@
 import { EventEmitter } from 'node:events'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -221,6 +224,7 @@ vi.mock('./app-utils', () => ({
 }))
 
 vi.mock('./search-processing-service', () => ({
+  isSearchableAppRow: vi.fn(() => true),
   processSearchResults: vi.fn(async () => [])
 }))
 
@@ -244,6 +248,22 @@ async function flushPromises(): Promise<void> {
 
 async function loadSubject() {
   return await import('./app-provider')
+}
+
+function upsertExtensionRows(
+  target: Array<{ fileId: number; key: string; value: string }>,
+  rows: Array<{ fileId: number; key: string; value: string }>
+): void {
+  for (const row of rows) {
+    const existingIndex = target.findIndex(
+      (candidate) => candidate.fileId === row.fileId && candidate.key === row.key
+    )
+    if (existingIndex >= 0) {
+      target[existingIndex] = row
+    } else {
+      target.push(row)
+    }
+  }
 }
 
 type AppProviderPrivate = {
@@ -283,6 +303,7 @@ type AppProviderPrivate = {
   _performMdlsUpdateScan: () => Promise<void>
   _performRebuild: () => Promise<void>
   _performStartupBackfill: () => Promise<void>
+  reindexManagedEntries: () => Promise<void>
   _recordMissingIconApps: (apps: unknown[]) => Promise<void>
   _runFullSync: (forced: boolean) => Promise<void>
   _runMdlsUpdateScan: () => Promise<void>
@@ -456,22 +477,30 @@ describe('appProvider rebuild maintenance', () => {
     const { files, fileExtensions } = await import('../../../../db/schema')
     const privateProvider = asPrivateProvider(appProvider)
 
-    let selectedAppIds: number[] = []
+    const scannedAppIds = [1]
     let fileRows = [
-      { id: 1, type: 'app' },
-      { id: 2, type: 'file' }
+      { id: 1, path: '/Applications/Scanned.app', type: 'app' },
+      { id: 2, path: '/Users/demo/bin/custom.sh', type: 'app' },
+      { id: 3, type: 'file' }
     ]
     let extensionRows = [
-      { fileId: 1, key: 'bundleId' },
-      { fileId: 2, key: 'sha1' }
+      { fileId: 1, key: 'bundleId', value: 'com.demo.scanned' },
+      { fileId: 2, key: 'entrySource', value: 'manual' },
+      { fileId: 2, key: 'entryEnabled', value: '1' },
+      { fileId: 3, key: 'sha1', value: 'abc123' }
     ]
 
     const db = {
       select: vi.fn(() => ({
-        from: vi.fn(() => ({
+        from: vi.fn((table: unknown) => ({
           where: vi.fn(async () => {
-            selectedAppIds = fileRows.filter((row) => row.type === 'app').map((row) => row.id)
-            return selectedAppIds.map((id) => ({ id }))
+            if (table === files) {
+              return fileRows.filter((row) => row.type === 'app')
+            }
+            if (table === fileExtensions) {
+              return extensionRows.filter((row) => row.fileId === 1 || row.fileId === 2)
+            }
+            return []
           })
         }))
       })),
@@ -485,12 +514,10 @@ describe('appProvider rebuild maintenance', () => {
             delete: vi.fn((table: unknown) => ({
               where: vi.fn(async (_predicate: unknown) => {
                 if (table === fileExtensions) {
-                  extensionRows = extensionRows.filter(
-                    (row) => !selectedAppIds.includes(row.fileId)
-                  )
+                  extensionRows = extensionRows.filter((row) => !scannedAppIds.includes(row.fileId))
                 }
                 if (table === files) {
-                  fileRows = fileRows.filter((row) => !selectedAppIds.includes(row.id))
+                  fileRows = fileRows.filter((row) => !scannedAppIds.includes(row.id))
                 }
               })
             }))
@@ -505,13 +532,22 @@ describe('appProvider rebuild maintenance', () => {
     privateProvider.searchIndex = { removeByProvider: removeByProviderMock }
     privateProvider._clearPendingDeletions = vi.fn().mockResolvedValue(undefined)
     privateProvider._performFullSync = vi.fn().mockResolvedValue(undefined)
+    privateProvider.reindexManagedEntries = vi.fn().mockResolvedValue(undefined)
 
     const result = await appProvider.rebuildIndex()
 
     expect(result.success).toBe(true)
-    expect(fileRows).toEqual([{ id: 2, type: 'file' }])
-    expect(extensionRows).toEqual([{ fileId: 2, key: 'sha1' }])
+    expect(fileRows).toEqual([
+      { id: 2, path: '/Users/demo/bin/custom.sh', type: 'app' },
+      { id: 3, type: 'file' }
+    ])
+    expect(extensionRows).toEqual([
+      { fileId: 2, key: 'entrySource', value: 'manual' },
+      { fileId: 2, key: 'entryEnabled', value: '1' },
+      { fileId: 3, key: 'sha1', value: 'abc123' }
+    ])
     expect(removeByProviderMock).toHaveBeenCalledWith('app-provider')
+    expect(privateProvider.reindexManagedEntries).toHaveBeenCalledTimes(1)
     expect(privateProvider._performFullSync).toHaveBeenCalledWith(true)
   })
 
@@ -680,7 +716,6 @@ describe('appProvider rebuild maintenance', () => {
     expect(mapped.description).toBe('Built-in calculator app')
     expect(mapped.launchKind).toBe('uwp')
   })
-
   it('normalizes displayName pinyin keywords to lowercase', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
@@ -702,5 +737,193 @@ describe('appProvider rebuild maintenance', () => {
     expect(keywords).toContain('wx')
     expect(keywords).not.toContain('WEIXIN')
     expect(keywords).not.toContain('WX')
+  })
+
+  it('upserts managed launcher entries with manual extension flags', async () => {
+    const { appProvider } = await loadSubject()
+    const { files, fileExtensions } = await import('../../../../db/schema')
+    const privateProvider = asPrivateProvider(appProvider)
+
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'app-provider-managed-'))
+    const scriptPath = path.join(tempDir, 'demo-script.sh')
+    await fs.writeFile(scriptPath, '#!/bin/sh\nexit 0\n', 'utf8')
+
+    let nextId = 1
+    let fileRows: Array<Record<string, any>> = []
+    const extensionRows: Array<{ fileId: number; key: string; value: string }> = []
+    const indexItemsMock = vi.fn(async () => undefined)
+    const removeItemsMock = vi.fn(async () => undefined)
+
+    const db = {
+      insert: vi.fn((table: unknown) => {
+        expect(table).toBe(files)
+        return {
+          values: vi.fn((payload: Record<string, any>) => ({
+            returning: vi.fn(async () => {
+              const row = {
+                id: nextId++,
+                ...payload,
+                displayName: payload.displayName ?? null
+              }
+              fileRows.push(row)
+              return [row]
+            })
+          }))
+        }
+      }),
+      update: vi.fn((table: unknown) => {
+        expect(table).toBe(files)
+        return {
+          set: vi.fn((payload: Record<string, any>) => ({
+            where: vi.fn(async () => {
+              fileRows = fileRows.map((row) =>
+                row.path === scriptPath
+                  ? { ...row, ...payload, displayName: payload.displayName ?? row.displayName }
+                  : row
+              )
+            })
+          }))
+        }
+      }),
+      transaction: vi.fn(
+        async (
+          callback: (tx: {
+            delete: (table: unknown) => { where: (predicate: unknown) => Promise<void> }
+          }) => Promise<void>
+        ) => {
+          const managedFileId = fileRows.find((row) => row.path === scriptPath)?.id ?? -1
+          const tx = {
+            delete: vi.fn((table: unknown) => ({
+              where: vi.fn(async (_predicate: unknown) => {
+                if (table === fileExtensions) {
+                  for (let index = extensionRows.length - 1; index >= 0; index -= 1) {
+                    if (extensionRows[index]?.fileId === managedFileId) {
+                      extensionRows.splice(index, 1)
+                    }
+                  }
+                }
+                if (table === files) {
+                  fileRows = fileRows.filter((row) => row.id !== managedFileId)
+                }
+              })
+            }))
+          }
+          await callback(tx)
+        }
+      )
+    }
+
+    privateProvider.dbUtils = {
+      getDb: () => db,
+      getFileByPath: vi.fn(async (value: string) => fileRows.find((row) => row.path === value)),
+      getFileExtensions: vi.fn(async (fileId: number) =>
+        extensionRows
+          .filter((row) => row.fileId === fileId)
+          .map((row) => ({ ...row, value: row.value }))
+      ),
+      addFileExtensions: vi.fn(
+        async (rows: Array<{ fileId: number; key: string; value: string }>) => {
+          upsertExtensionRows(extensionRows, rows)
+        }
+      ),
+      addFileExtension: vi.fn(async (fileId: number, key: string, value: string) => {
+        upsertExtensionRows(extensionRows, [{ fileId, key, value }])
+      })
+    }
+    privateProvider.searchIndex = {
+      indexItems: indexItemsMock,
+      removeItems: removeItemsMock
+    }
+
+    const added = await appProvider.upsertManagedEntry({
+      path: scriptPath,
+      displayName: 'Demo Script',
+      launchKind: 'shortcut'
+    })
+
+    expect(added).toMatchObject({
+      success: true,
+      status: 'added',
+      entry: {
+        path: scriptPath,
+        displayName: 'Demo Script',
+        enabled: true,
+        launchKind: 'shortcut',
+        launchTarget: scriptPath
+      }
+    })
+    expect(extensionRows).toEqual(
+      expect.arrayContaining([
+        { fileId: 1, key: 'entrySource', value: 'manual' },
+        { fileId: 1, key: 'entryEnabled', value: '1' },
+        { fileId: 1, key: 'launchKind', value: 'shortcut' },
+        { fileId: 1, key: 'launchTarget', value: scriptPath }
+      ])
+    )
+    expect(indexItemsMock).toHaveBeenCalledTimes(1)
+
+    const disabled = await appProvider.setManagedEntryEnabled(scriptPath, false)
+
+    expect(disabled).toMatchObject({
+      success: true,
+      status: 'updated',
+      entry: {
+        path: scriptPath,
+        enabled: false
+      }
+    })
+    expect(removeItemsMock).toHaveBeenCalledWith([scriptPath])
+
+    const removed = await appProvider.removeManagedEntry(scriptPath)
+
+    expect(removed).toMatchObject({
+      success: true,
+      status: 'removed',
+      entry: {
+        path: scriptPath
+      }
+    })
+    expect(fileRows).toEqual([])
+  })
+
+  it('rejects managed launcher entries that collide with scanned apps', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'app-provider-managed-conflict-'))
+    const scriptPath = path.join(tempDir, 'wechat.app')
+    await fs.writeFile(scriptPath, 'not-a-real-app', 'utf8')
+
+    privateProvider.dbUtils = {
+      getDb: () => ({
+        insert: vi.fn(),
+        update: vi.fn(),
+        transaction: vi.fn()
+      }),
+      getFileByPath: vi.fn(async () => ({
+        id: 7,
+        path: scriptPath,
+        name: 'WeChat',
+        displayName: 'WeChat',
+        type: 'app',
+        mtime: new Date(0),
+        ctime: new Date(0)
+      })),
+      getFileExtensions: vi.fn(async () => [
+        { fileId: 7, key: 'bundleId', value: 'com.tencent.xinWeChat' }
+      ])
+    }
+
+    const result = await appProvider.upsertManagedEntry({
+      path: scriptPath,
+      displayName: '微信',
+      launchKind: 'path'
+    })
+
+    expect(result).toEqual({
+      success: false,
+      status: 'invalid',
+      reason: 'path-conflicts-with-scanned-app'
+    })
   })
 })

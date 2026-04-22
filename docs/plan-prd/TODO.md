@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-04-21
+> 更新时间: 2026-04-22
 
 ---
 
@@ -55,6 +55,11 @@
 - [x] Transport stream 内部协议统一：
   - `main/renderer/plugin` 共用 `packages/utils/transport/sdk/stream/*` 内部 runtime；默认 Port 优先，失败自动回退 `:stream:*`。
   - `ClipboardEvents.change` 已补 renderer/plugin/main 定向回归，覆盖 port 成功、回退、取消与 server fallback。
+- [x] User-managed launcher foundation：
+  - `settingsSdk.appIndex` 已补齐 `listEntries / upsertEntry / removeEntry / setEntryEnabled` typed contract，main `common.ts` 同步注册 handler。
+  - `app-provider` 复用现有 `files + file_extensions` 模型支持 manual entry CRUD、启用/禁用、冲突校验与启动元数据持久化，不新增 schema/table。
+  - `search-processing-service` 已对 disabled manual entry 做 recommendation/search 过滤，执行链路继续复用 `scheduleAppLaunch`。
+  - 已补 targeted regression：`transport-domain-sdks.test.ts`、`common.test.ts`、`app-provider.test.ts`、`search-processing-service.test.ts`。
 - [ ] CoreBox 第三方 App 非阻塞启动 Windows 真机验证：
   - 验证 `shortcut` 保留 `launchArgs / workingDirectory` 并在 CoreBox 立即隐藏后后台启动。
   - 验证 `uwp` 继续通过 `explorer.exe shell:AppsFolder\\...` handoff，早期失败会触发系统通知。
@@ -374,12 +379,12 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 154 |
+| 已完成 (`- [x]`) | 164 |
 | 未完成 (`- [ ]`) | 28 |
-| 总计 | 182 |
+| 总计 | 192 |
 | 完成率 | 85% |
 
-> 统计时间: 2026-04-21（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-04-22（按本文件实时 checkbox 计数）。
 
 ---
 
