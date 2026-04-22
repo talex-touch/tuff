@@ -5,6 +5,14 @@
 
 ## 2026-04-22
 
+### fix(core-app/file-protocol): 兼容 renderer 实际发出的 host-style tfile 请求
+
+- `apps/core-app/src/main/modules/file-protocol/index.ts`
+- `apps/core-app/src/main/modules/file-protocol/index.test.ts`
+  - `FileProtocolModule.extractAbsolutePath()` 现在兼容 Electron/Chromium 在标准自定义协议下回传的 host-style `tfile://users/...` / `tfile://C:/...` 请求形态，不再把这类本地图片详情请求误判成非 canonical URL 直接 `400 Bad Request`。
+  - 兼容解析后仍继续走 `normalizeDarwinUsersPath()` 与本地文件 allowlist 校验，所以只放行真实受控的本地路径，不放宽 `tfile` 的安全边界。
+  - 补充主进程回归测试，锁定 darwin host-style 路径与 Windows 盘符路径的解析行为，避免 clipboard-history 详情图再次因协议层拒绝而回退到模糊缩略图。
+
 ### fix(core-app/clipboard): 修正图片历史详情误用 thumbnail 导致的模糊预览
 
 - `apps/core-app/src/main/modules/clipboard.ts`

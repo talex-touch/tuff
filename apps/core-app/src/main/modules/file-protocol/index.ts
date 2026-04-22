@@ -16,7 +16,12 @@ const loggedErrorPaths = new Set<string>()
 const fileProtocolLog = createLogger('FileProtocolModule')
 
 /**
- * Extract an absolute file path from a canonical `tfile:///absolute/path` URL.
+ * Extract an absolute file path from a `tfile` URL.
+ *
+ * Electron may hand custom standard-scheme requests back as host-style URLs
+ * such as `tfile://users/name/file.png` even when renderer code originally
+ * assigned `tfile:///Users/name/file.png`. We normalize both shapes here and
+ * keep the actual file access guarded by the local file allowlist below.
  */
 function extractAbsolutePath(rawUrl: string): string | null {
   const normalizeDecodedPath = (value: string): string => {
@@ -49,7 +54,7 @@ function extractAbsolutePath(rawUrl: string): string | null {
     const rawWithTail = rawUrl.slice(prefix.length)
     const tailIndex = rawWithTail.search(/[?#]/)
     const body = tailIndex >= 0 ? rawWithTail.slice(0, tailIndex) : rawWithTail
-    if (!body.startsWith('/')) {
+    if (!body) {
       return null
     }
     return normalizeDecodedPath(decodeStable(body))
@@ -60,10 +65,12 @@ function extractAbsolutePath(rawUrl: string): string | null {
     if (parsed.protocol !== `${FILE_SCHEMA}:`) {
       return null
     }
-    if (parsed.hostname) {
-      return null
-    }
-    return normalizeDecodedPath(decodeStable(parsed.pathname))
+    const merged = parsed.hostname
+      ? /^[a-z]$/i.test(parsed.hostname) && parsed.pathname.startsWith('/')
+        ? `${parsed.hostname}:${parsed.pathname}`
+        : `/${parsed.hostname}${parsed.pathname}`
+      : parsed.pathname
+    return normalizeDecodedPath(decodeStable(merged))
   } catch {
     return null
   }

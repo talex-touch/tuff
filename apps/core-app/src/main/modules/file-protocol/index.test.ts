@@ -17,8 +17,16 @@ vi.mock('electron', () => ({
 import { __test__ } from './index'
 
 describe('file-protocol canonical tfile parsing', () => {
-  it('rejects legacy two-slash tfile URLs', () => {
-    expect(__test__.extractAbsolutePath('tfile://Users/demo/report.txt')).toBeNull()
+  it('accepts host-style darwin paths emitted by renderer requests', () => {
+    expect(__test__.extractAbsolutePath('tfile://users/demo/report.txt')).toBe(
+      '/users/demo/report.txt'
+    )
+  })
+
+  it('accepts host-style Windows drive URLs', () => {
+    expect(__test__.extractAbsolutePath('tfile://C:/Users/demo/report.txt')).toBe(
+      'C:/Users/demo/report.txt'
+    )
   })
 
   it('preserves Windows drive letters from normalized URLs', () => {
