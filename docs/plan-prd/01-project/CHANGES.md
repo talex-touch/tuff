@@ -19,10 +19,11 @@
 - `plugins/clipboard-history/*`
 - `apps/core-app/src/renderer/src/components/plugin/PluginIcon.vue`
 - `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
-- `packages/utils/plugin/sdk/system.ts`
-  - 新增 `plugins/clipboard-history` 正式源码工程，保留现有双栏列表/详情形态，但数据接入全部改用 `useClipboard()` 和纯 typed 的 `getTypedActiveAppSnapshot()`，不再依赖 `clipboard:get-history`、`clipboard:get-image-url`、`system:get-active-app` 等 raw channel。
+- `packages/utils/transport/sdk/plugin-transport.ts`
+  - 新增 `plugins/clipboard-history` 正式源码工程，主数据链路全部改用 `useClipboard()` typed SDK；详情图继续严格区分 `thumbnail` 与 preview/original 图源，避免再次把缩略图放大成主预览。
+  - clipboard-history 页面样式回退到原有空态/双栏/底栏布局，不再保留调试期间引入的自定义视觉改造；空历史场景恢复为整页空态，列表与详情存在时再进入双栏结构。
   - 插件侧显式区分列表缩略图与详情主图：列表只使用 `thumbnail`，详情优先 `meta.image_original_url` / `content`，最后才回退 `meta.image_preview_url`，彻底禁止把 thumbnail 放大成详情图。
-  - `packages/utils` 补了纯 typed 的 `getTypedActiveAppSnapshot()`，插件不再维护本地 transport helper；兼容层仍保留 `getActiveAppSnapshot()` 的 legacy fallback 给旧插件使用。
+  - `TuffPluginTransport` 补齐 raw plugin channel `send()` / `stream()` 的 `this` 绑定，修复插件 renderer 在没有 `window.$transport` 时调用 typed SDK 会因 `pendingMap` 丢失而直接报错、列表空白的问题。
   - 新 build 脚本会在生成 `.tpex` 后同步 `dist/build` 到 `apps/core-app/tuff/modules/plugins/clipboard-history`，避免未来再次从陈旧 built-in bundle 重打包。
   - CoreBox 激活 provider 胶囊补上缺省插件图标，`handleExecute` 在空 item 场景下直接安全返回，消掉 `icon=undefined` 与 `handleExecute called without an item` 噪声 warning。
 
