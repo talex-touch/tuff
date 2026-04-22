@@ -3,6 +3,10 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 export type EverythingBackendType = 'sdk-napi' | 'cli' | 'unavailable'
 export type EverythingHealthState = 'healthy' | 'degraded' | 'unsupported'
 
+export interface EverythingStatusRequest {
+  refresh?: boolean
+}
+
 export interface EverythingStatusResponse {
   enabled: boolean
   available: boolean
@@ -37,9 +41,10 @@ export interface EverythingTestResponse {
   duration?: number
 }
 
-export const everythingStatusEvent = defineRawEvent<void, EverythingStatusResponse>(
-  'everything:status'
-)
+export const everythingStatusEvent = defineRawEvent<
+  EverythingStatusRequest | void,
+  EverythingStatusResponse
+>('everything:status')
 
 export const everythingToggleEvent = defineRawEvent<
   EverythingToggleRequest,

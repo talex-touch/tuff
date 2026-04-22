@@ -85,9 +85,8 @@ describe('auth-env legacy cleanup', () => {
       })
     })
 
-    const { migrateLegacyAuthEnvToSecureStorage, getAuthSensitiveValue } =
-      await import('./auth-env')
-    await migrateLegacyAuthEnvToSecureStorage()
+    const { cleanupLegacyAuthEnvStorage, getAuthSensitiveValue } = await import('./auth-env')
+    await cleanupLegacyAuthEnvStorage()
 
     expect(await getAuthSensitiveValue('token')).toBeNull()
     expect(await getAuthSensitiveValue('deviceId')).toBeNull()
@@ -105,9 +104,8 @@ describe('auth-env legacy cleanup', () => {
       })
     })
 
-    const { migrateLegacyAuthEnvToSecureStorage, getAuthSensitiveValue } =
-      await import('./auth-env')
-    await migrateLegacyAuthEnvToSecureStorage()
+    const { cleanupLegacyAuthEnvStorage, getAuthSensitiveValue } = await import('./auth-env')
+    await cleanupLegacyAuthEnvStorage()
 
     expect(await getAuthSensitiveValue('token')).toBe('secure-token')
     expect(window.localStorage.getItem('auth_token')).toBeNull()

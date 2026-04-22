@@ -18,7 +18,6 @@ import { toast } from 'vue-sonner'
 import { isDevEnv } from '@talex-touch/utils/env'
 import AuthLoginResumePrompt from '~/components/auth/AuthLoginResumePrompt.vue'
 import { appSetting } from '../channel/storage/index'
-import { migrateLegacyAuthEnvToSecureStorage } from './auth-env'
 import { attestCurrentDevice } from './device-attest'
 import { applyDefaultSyncOnLogin, getSyncPreferenceState } from './sync-preferences'
 import { canShowLoginResumePrompt, resolveAuthMountAction } from './use-auth-policies'
@@ -354,7 +353,6 @@ async function initializeAuth() {
   if (isInitialized) return
 
   try {
-    await migrateLegacyAuthEnvToSecureStorage()
     const state = (await transport.send(authGetStateEvent)) as AuthState
     if (state) {
       applyAuthState(state)

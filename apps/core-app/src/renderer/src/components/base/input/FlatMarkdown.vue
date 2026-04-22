@@ -29,6 +29,12 @@ const editorDom = ref<HTMLElement>()
 const editorReady = ref(false)
 let internalUpdate = false
 
+type MilkdownBuilder = {
+  config: (configure: (ctx: any) => void) => MilkdownBuilder
+  use: (plugin: unknown) => MilkdownBuilder
+  create: () => Promise<Editor>
+}
+
 async function initEditor(): Promise<void> {
   if (!editorDom.value) return
   if (editor.value) {
@@ -36,9 +42,8 @@ async function initEditor(): Promise<void> {
     editor.value = null
   }
 
-  // @ts-ignore: Milkdown plugin type compatibility issue
-  const instance = await Editor.make()
-    // @ts-ignore
+  const builder = Editor.make() as unknown as MilkdownBuilder
+  const instance = await builder
     .config((ctx) => {
       ctx.set(rootCtx, editorDom.value)
       ctx.set(defaultValueCtx, value.value ?? '')
@@ -52,10 +57,8 @@ async function initEditor(): Promise<void> {
         value.value = markdown
       })
     })
-    // @ts-ignore
     .use(nord)
     .use(commonmark)
-    // @ts-ignore
     .use(listener)
     .create()
 

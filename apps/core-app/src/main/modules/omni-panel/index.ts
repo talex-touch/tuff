@@ -23,6 +23,8 @@ import type {
   OmniPanelFeatureExecuteRequest,
   OmniPanelFeatureExecuteResponse,
   OmniPanelFeatureReorderRequest,
+  OmniPanelSelectionIssueCode,
+  OmniPanelSelectionSupportLevel,
   OmniPanelShowRequest,
   OmniPanelTransferTarget
 } from '../../../shared/events/omni-panel'
@@ -38,7 +40,8 @@ import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { app, clipboard, screen, shell, systemPreferences } from 'electron'
 import { OmniPanelWindowOption } from '../../config/default'
 import { TalexEvents as MainEvents, touchEventBus } from '../../core/eventbus/touch-event'
-import { ensureXdotoolAvailable } from '../system/linux-desktop-tools'
+import { getSelectionCaptureCapabilityPatch } from '../platform/capability-adapter'
+import { ensureXdotoolAvailable, getXdotoolUnavailableReason } from '../system/linux-desktop-tools'
 import { TouchWindow } from '../../core/touch-window'
 import { getCoreBoxWindow } from '../box-tool/core-box/window'
 import { getCoreBoxRendererPath } from '../../utils/renderer-url'
@@ -79,6 +82,14 @@ const OMNI_SOURCE_VALUES: OmniPanelContextSource[] = [
 ]
 const COPY_COMMAND_TIMEOUT_MS = 900
 const COPY_RESULT_POLL_DELAY_MS = 120
+
+interface SelectionCaptureResult {
+  text: string
+  supportLevel: OmniPanelSelectionSupportLevel
+  issueCode?: OmniPanelSelectionIssueCode
+  issueMessage?: string
+  limitations?: string[]
+}
 
 const EXECUTE_ERROR_MESSAGES: Record<OmniPanelFeatureExecuteErrorCode, string> = {
   INVALID_PAYLOAD: 'Invalid execute payload',
@@ -794,15 +805,17 @@ export class OmniPanelModule extends BaseModule {
     const targetWindow = await this.ensureWindow()
     const normalizedSource = normalizeContextSource(options?.source)
     let text = ''
+    let captureResult: SelectionCaptureResult | undefined
 
-    if (options?.captureSelection !== false && this.shouldCaptureSelection()) {
-      text = await this.captureSelectionText()
+    if (options?.captureSelection !== false) {
+      captureResult = await this.captureSelectionText()
+      text = captureResult.text
     }
 
     this.positionWindowNearCursor(targetWindow)
     targetWindow.window.showInactive()
     this.isVisible = true
-    await this.pushContext(text, normalizedSource.source, normalizedSource.sourceRaw)
+    await this.pushContext(text, normalizedSource.source, normalizedSource.sourceRaw, captureResult)
     this.notifyFeatureRefresh('show')
   }
 
@@ -843,7 +856,8 @@ export class OmniPanelModule extends BaseModule {
   private async pushContext(
     text: string,
     source: OmniPanelContextSource,
-    sourceRaw?: string
+    sourceRaw?: string,
+    selectionCapture?: SelectionCaptureResult
   ): Promise<void> {
     if (!this.transport) return
     if (!this.panelWindow || this.panelWindow.window.isDestroyed()) return
@@ -853,6 +867,10 @@ export class OmniPanelModule extends BaseModule {
       hasSelection: text.trim().length > 0,
       source,
       sourceRaw,
+      selectionSupportLevel: selectionCapture?.supportLevel,
+      selectionIssueCode: selectionCapture?.issueCode,
+      selectionIssueMessage: selectionCapture?.issueMessage,
+      selectionLimitations: selectionCapture?.limitations,
       capturedAt: Date.now()
     }
     this.lastContext = payload
@@ -1350,15 +1368,33 @@ export class OmniPanelModule extends BaseModule {
     }
   }
 
-  private async captureSelectionText(): Promise<string> {
-    if (!this.shouldCaptureSelection()) {
-      return ''
+  private async captureSelectionText(): Promise<SelectionCaptureResult> {
+    const selectionCapability = await getSelectionCaptureCapabilityPatch({
+      enabled: this.shouldCaptureSelection()
+    })
+
+    if (selectionCapability.supportLevel === 'unsupported') {
+      return {
+        text: '',
+        supportLevel: selectionCapability.supportLevel,
+        issueCode: selectionCapability.issueCode === 'DISABLED' ? 'disabled' : 'unsupported',
+        issueMessage: selectionCapability.reason,
+        limitations: selectionCapability.limitations
+      }
+    }
+
+    const baseResult: Omit<SelectionCaptureResult, 'text'> = {
+      supportLevel: selectionCapability.supportLevel,
+      limitations: selectionCapability.limitations
     }
 
     if (process.platform === 'darwin') {
       const directSelection = await this.captureMacSelectionTextDirectly()
       if (directSelection) {
-        return directSelection.trim()
+        return {
+          text: directSelection.trim(),
+          ...baseResult
+        }
       }
     }
 
@@ -1374,16 +1410,36 @@ export class OmniPanelModule extends BaseModule {
             platform: process.platform
           }
         })
+        return {
+          text: '',
+          ...baseResult,
+          issueCode: 'empty',
+          issueMessage: 'No selected text was captured from the active application.'
+        }
       }
-      return text
+      return {
+        text,
+        ...baseResult
+      }
     } catch (error) {
-      omniPanelLog.warn('Failed to capture selected text, fallback to empty context', {
+      const issueMessage =
+        error instanceof Error ? error.message : 'Failed to capture selected text'
+      omniPanelLog.warn('Selection capture failed, reporting explicit empty-context reason', {
         error,
         meta: {
           platform: process.platform
         }
       })
-      return ''
+      return {
+        text: '',
+        ...baseResult,
+        issueCode: issueMessage === getXdotoolUnavailableReason() ? 'unsupported' : 'failed',
+        issueMessage,
+        limitations:
+          issueMessage === getXdotoolUnavailableReason()
+            ? [getXdotoolUnavailableReason()]
+            : baseResult.limitations
+      }
     } finally {
       if (!this.restoreClipboard(clipboardSnapshot)) {
         omniPanelLog.warn('Clipboard snapshot restore failed after capture')
@@ -1452,6 +1508,17 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private async simulateCopyCommand(): Promise<void> {
+    const selectionCapability = await getSelectionCaptureCapabilityPatch({
+      enabled: this.shouldCaptureSelection()
+    })
+    if (selectionCapability.supportLevel === 'unsupported') {
+      throw new Error(
+        selectionCapability.reason ||
+          getXdotoolUnavailableReason() ||
+          'Selection capture unavailable'
+      )
+    }
+
     if (process.platform === 'darwin') {
       await execFileAsync('osascript', [
         '-e',

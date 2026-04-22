@@ -6,6 +6,7 @@ import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-
 import { toast } from 'vue-sonner'
 import { onMounted, reactive, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { resolvePluginSdkBlockedState } from '../../../../../shared/plugin-sdk-blocked'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
@@ -65,22 +66,9 @@ const canViewManifestJson = computed(() => hasDevSettings.value || isAppDev.valu
 const manifestJsonText = computed(() =>
   manifestData.value ? JSON.stringify(manifestData.value, null, 2) : ''
 )
-const blockedIssue = computed(() => {
-  const issues = plugin.value.issues ?? []
-  return issues.find((issue) => issue.code === 'SDKAPI_BLOCKED') ?? null
-})
-const sdkBlocked = computed(() => {
-  return (
-    plugin.value.loadState === 'load_failed' &&
-    (plugin.value.loadError?.code === 'SDKAPI_BLOCKED' || blockedIssue.value !== null)
-  )
-})
-const blockedMessage = computed(() => {
-  if (plugin.value.loadError?.code === 'SDKAPI_BLOCKED') {
-    return plugin.value.loadError.message || ''
-  }
-  return blockedIssue.value?.message || ''
-})
+const sdkBlockedState = computed(() => resolvePluginSdkBlockedState(plugin.value))
+const sdkBlocked = computed(() => sdkBlockedState.value.blocked)
+const blockedMessage = computed(() => sdkBlockedState.value.message)
 const shortcutsLoading = ref(false)
 const shortcuts = ref<ShortcutWithStatus[]>([])
 const manifestDialogVisible = ref(false)
@@ -171,10 +159,8 @@ function getShortcutWarningLabel(warning: ShortcutWarning): string {
   switch (warning) {
     case 'permission-missing':
       return t('plugin.permissions.shortcuts.warning.permissionMissing')
-    case 'sdk-legacy':
-      return sdkBlocked.value
-        ? t('plugin.permissions.shortcuts.warning.blockedSdk')
-        : t('plugin.permissions.shortcuts.warning.legacySdk')
+    case 'sdk-blocked':
+      return t('plugin.permissions.shortcuts.warning.blockedSdk')
     case 'missing-description':
       return t('plugin.permissions.shortcuts.warning.missingDescription')
     default:

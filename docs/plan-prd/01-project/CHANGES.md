@@ -5,80 +5,157 @@
 
 ## 2026-04-22
 
-### fix(core-app/file-protocol): 兼容 renderer 实际发出的 host-style tfile 请求
+### refactor(core-app): 一次性硬收口插件 compat、平台 capability 与启动迁移
 
-- `apps/core-app/src/main/modules/file-protocol/index.ts`
-- `apps/core-app/src/main/modules/file-protocol/index.test.ts`
-  - `FileProtocolModule.extractAbsolutePath()` 现在兼容 Electron/Chromium 在标准自定义协议下回传的 host-style `tfile://users/...` / `tfile://C:/...` 请求形态，不再把这类本地图片详情请求误判成非 canonical URL 直接 `400 Bad Request`。
-  - 兼容解析后仍继续走 `normalizeDarwinUsersPath()` 与本地文件 allowlist 校验，所以只放行真实受控的本地路径，不放宽 `tfile` 的安全边界。
-  - 补充主进程回归测试，锁定 darwin host-style 路径与 Windows 盘符路径的解析行为，避免 clipboard-history 详情图再次因协议层拒绝而回退到模糊缩略图。
-
-### fix(core-app/clipboard): 修正图片历史详情误用 thumbnail 导致的模糊预览
-
-- `apps/core-app/src/main/modules/clipboard.ts`
-- `apps/core-app/src/main/modules/clipboard.transport.test.ts`
+- `apps/core-app/src/main/modules/plugin/sdk-compat.ts`
+- `apps/core-app/src/shared/plugin-sdk-blocked.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `packages/utils/plugin/sdk/channel.ts`
 - `packages/utils/plugin/sdk/types.ts`
-  - 主进程现在明确分离图片历史项的“列表缩略图”和“详情主图”语义：`thumbnail` 继续保留给列表轻量展示，`content/value` 改为优先返回 `meta.image_preview_url` 或落盘原图 `tfile://` 地址，避免 renderer 把 128px 缩略图放大到详情面板。
-  - 图片缩略图生成改为统一 helper，列表缩略图宽度提高到 `160px` 并使用 `quality: 'best'`；`readClipboardImage()` 的即时预览提升到最多 `1024px`，在保持 IPC payload 可控的前提下减少高 DPR 场景下的放大糊化。
-  - 补充 `clipboard.transport.test.ts` 定向回归，锁定“列表继续走 thumbnail、详情走 preview/original URL、非受管路径不暴露原图地址”的传输语义，避免后续回退到模糊链路。
+- `apps/core-app/src/main/modules/global-shortcon.ts`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginPermissions.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue`
+- `apps/core-app/src/main/modules/platform/capability-adapter.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/core/startup-migrations.ts`
+- `apps/core-app/src/main/modules/permission/index.ts`
+- `apps/core-app/src/main/modules/permission/permission-store.ts`
+- `apps/core-app/src/main/modules/storage/index.ts`
+- `apps/core-app/src/renderer/src/modules/startup/startup-migrations.ts`
+- `apps/core-app/src/renderer/src/modules/auth/auth-env.ts`
+- `apps/core-app/src/renderer/src/modules/storage/theme-style.ts`
+- `apps/core-app/src/renderer/src/AppEntrance.vue`
+- `apps/core-app/src/renderer/src/components/base/input/FlatMarkdown.vue`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 插件 `sdkapi` 阻断语义收成唯一真相：快捷键、插件详情页、权限页、设置页统一只展示 blocked 解释，不再保留“legacy SDK 继续运行/跳过权限校验”的双轨文案。
+  - 插件运行时桥接不再把 `channel.raw` / `channel.sendSync` 当正式能力暴露；旧插件命中后会得到明确 migration error，而不是继续 silent fallback。
+  - 新增统一 platform capability adapter，把 `active app / selection capture / auto paste / native share / permission deep-link / Everything / Tuff CLI` 的 `supported | best_effort | unsupported`、`reason`、`issueCode` 收成同一口径，并接到 `CommonChannel`、OmniPanel、Clipboard 与平台能力设置页。
+  - 历史迁移改为启动期一次性执行：main 侧新增 startup migration runner，权限 `permissions.json -> SQLite`、layout opacity 清理、dev data root 迁移不再混在 steady-state 读路径里；renderer 侧把 auth 旧 localStorage 清理和 theme-style 迁移移到统一 startup migrations。
+  - 收掉几个明确 debt 热点：`AppEntrance` 去除固定 `100ms` 初始化延时，`FlatMarkdown` 删掉 Milkdown `@ts-ignore` 热点，`CoreBox` resize 删除旧 Element Plus 滚动容器 shim。
 
-### fix(plugin/clipboard-history): 重建正式源码插件并切到 typed clipboard transport
+### fix(core-app): 收口 Everything 设置页禁用态优先级
 
-- `plugins/clipboard-history/*`
-- `apps/core-app/src/renderer/src/components/plugin/PluginIcon.vue`
-- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
-- `packages/utils/transport/sdk/plugin-transport.ts`
-  - 新增 `plugins/clipboard-history` 正式源码工程，主数据链路全部改用 `useClipboard()` typed SDK；详情图继续严格区分 `thumbnail` 与 preview/original 图源，避免再次把缩略图放大成主预览。
-  - clipboard-history 页面样式回退到原有空态/双栏/底栏布局，不再保留调试期间引入的自定义视觉改造；空历史场景恢复为整页空态，列表与详情存在时再进入双栏结构。
-  - 插件侧显式区分列表缩略图与详情主图：列表只使用 `thumbnail`，详情优先 `meta.image_original_url` / `content`，最后才回退 `meta.image_preview_url`，彻底禁止把 thumbnail 放大成详情图。
-  - `TuffPluginTransport` 补齐 raw plugin channel `send()` / `stream()` 的 `this` 绑定，修复插件 renderer 在没有 `window.$transport` 时调用 typed SDK 会因 `pendingMap` 丢失而直接报错、列表空白的问题。
-  - 新 build 脚本会在生成 `.tpex` 后同步 `dist/build` 到 `apps/core-app/tuff/modules/plugins/clipboard-history`，避免未来再次从陈旧 built-in bundle 重打包。
-  - CoreBox 激活 provider 胶囊补上缺省插件图标，`handleExecute` 在空 item 场景下直接安全返回，消掉 `icon=undefined` 与 `handleExecute called without an item` 噪声 warning。
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/setting-everything-state.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/setting-everything-state.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Everything 设置页的主状态改为优先反映用户配置态：当用户已手动禁用 Everything 时，不再被后端 `unavailable` 探测结果覆盖成“不可用”。
+  - 启用/禁用按钮改为在状态已加载后始终可见，避免“已禁用 + 当前后端不可用”时把控制入口一起隐藏。
+  - 安装引导只在“用户已启用但后端不可用”时展示，减少禁用态下的误导信息；新增 renderer 侧纯函数回归锁定组合状态。
+### fix(core-app): Everything 运行时故障同次查询直接回退文件索引
 
-### fix(core-app/intelligence): 收口 workflow/MCP 类型缺口并恢复 core-app typecheck
-
-- `apps/core-app/package.json`
-- `apps/core-app/src/main/modules/ai/agents/tools/index.ts`
-- `apps/core-app/src/main/modules/ai/agents/tools/workflow-tools.ts`
-- `apps/core-app/src/main/modules/ai/intelligence-desktop-context.ts`
-- `apps/core-app/src/main/modules/ai/intelligence-mcp-registry.ts`
-- `apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
-- `apps/core-app/src/main/modules/ai/intelligence-workflow-service.ts`
-- `packages/tuff-intelligence/src/adapters/index.ts`
-- `packages/tuff-intelligence/src/adapters/langchain-tool-adapter.ts`
-- `packages/tuff-intelligence/src/adapters/mcp-tool-adapter.ts`
-- `packages/tuff-intelligence/src/types/intelligence.ts`
-  - MCP/Workflow 相关工作树改动补齐了最小依赖和导出面：`core-app` 新增 `@modelcontextprotocol/sdk` 依赖，`tuff-intelligence` 重新导出 LangChain/MCP tool adapter，并补出 `IntelligenceToolRiskLevel` / `ToolSource` 共享类型。
-  - `workflow-tools`、`intelligence-desktop-context`、`intelligence-mcp-registry`、`intelligence-workflow-service` 收口了路径、类型和局部表定义，避免未落地公共 schema 或错误相对路径继续打断主进程类型检查。
-  - `intelligence-sdk` 补齐 `IntelligenceProviderType` 运行时导入，恢复 OpenAI-compatible DeepAgent runtime 配置解析分支的静态校验。
-
-### fix(core-app/intelligence): 接通 workflow transport / DeepAgent 编排闭环并补回归
-
-- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
-- `apps/core-app/src/main/modules/ai/intelligence-deepagent-orchestration.ts`
-- `apps/core-app/src/main/modules/ai/intelligence-workflow-service.ts`
-- `apps/core-app/src/main/modules/ai/tuff-intelligence-runtime.ts`
-- `apps/core-app/src/main/channel/common.test.ts`
-- `apps/core-app/src/main/modules/ai/intelligence-sdk.test.ts`
-- `apps/core-app/src/main/modules/ai/intelligence-deepagent-orchestration.test.ts`
-- `packages/utils/__tests__/transport-domain-sdks.test.ts`
-  - `intelligence-module` 现在会初始化 `workflow service`、注册 `intelligence:workflow:*` handler，并把 workflow run 交给 `intelligence-deepagent-orchestration`；shared workflow SDK 不再只是事件名和类型。
-  - DeepAgent workflow 编排支持 prompt / agent / tool 三类 step，本地 builtin tool 与可选 MCP profile 都会带上 `toolSource / approvalContext / contextSources` 元数据进入 trace / approval 链；`tuff-intelligence-runtime` 相应补齐这些审计字段。
-  - 内置模板 `builtin.organize-recent-clipboard` 改成 prompt step，不再依赖不存在的 `deepagent.workflow` agent id；workflow capability 可以直接走 DeepAgent prompt 执行。
-  - 定向回归已补：`intelligence-sdk` 锁定 `resolveDeepAgentRuntimeConfig()` 的 provider 选择逻辑，`intelligence-deepagent-orchestration` 覆盖 prompt step 与 tool approval 等待态，`common.test` / `transport-domain-sdks.test` 锁定 app-index 与 workflow transport handler。
-
-### fix(core-app/apps-search): 补齐 macOS 中文应用名首轮扫描与拼音关键词规整
-
-- `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
-- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
-- `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.test.ts`
-- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
-  - `darwin.getAppInfo()` 首轮扫描新增 Spotlight `kMDItemDisplayName` 安全读取，显示名优先级提升为 `Spotlight > localized strings > plist > bundle`，fresh scan 不再依赖后续 `mdls` 维护任务才能拿到中文应用名。
-  - `mdls` 读取统一走参数化 `execFileSafe('mdls', ['-name', 'kMDItemDisplayName', '-raw', appPath])`，避免带空格或特殊字符路径重新落回 shell 字符串插值风险。
-  - `app-provider` 中文关键词生成改为 `displayName` 优先去重，并把拼音全拼/首字母统一规整为 lowercase，避免大小写漂移影响索引一致性。
-  - 新增定向回归，覆盖 Spotlight 中文显示名首轮生效和拼音关键词 lowercase 规整。
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `EverythingProvider` 新增运行时 fallback 错误语义，显式区分“后端真实故障”和“正常 0 结果”，避免把 SDK/CLI 故障伪装成空搜索。
+  - 当 Everything 在查询阶段超时、CLI 失效或 SDK 回退链失败时，当前这一次查询会直接降级到 `file-provider`，不再要求用户再敲一次搜索才能拿到 Windows 文件结果。
+  - 设置页 `everything:test` 在后端真实故障时改为明确返回失败，不再误报成“成功但找到 0 个结果”；补齐对应 Provider 回归。
 
 ## 2026-04-21
+
+### fix(core-app): Everything CLI 运行时失效后自动退出 stale ready
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `EverythingProvider` 在 CLI 搜索执行阶段遇到非超时错误时，会立刻把后端标记为 `unavailable` 并记录最近错误，避免 Windows 文件搜索后续继续命中 stale ready 的 Everything 空结果。
+  - 这样下一次 provider 路由会自动回退到 `file-provider`，优先保住可用搜索能力，而不是把用户困在“已探测成功但实际不可用”的状态。
+  - 补充 Provider 定向回归，覆盖 `es.exe` 运行时失效后 backend 自动降级的路径。
+
+### feat(core-app): 补齐 Everything 搜索结果文件图标预热
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `EverythingProvider` 新增轻量结果图标缓存与懒提取：优先复用缓存图标，未命中的前排结果会通过现有 icon worker 在后台预热，避免 Windows Everything 结果长期停留在默认文件图标。
+  - 预热链路显式复用 `appTaskGate`，并限制单次搜索的后台图标任务数量，避免把快速搜索退化成图标提取风暴。
+  - 补充定向回归，覆盖“首次搜索默认图标、后台预热完成后下一次搜索命中缓存图标”的路径。
+
+### fix(core-app): 让 Everything 设置页手动检查真正重探测后端
+
+- `apps/core-app/src/shared/events/everything.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `everything:status` 新增可选 `refresh` 请求参数；设置页首次进入与“立即检查”会触发真实后端重探测，不再只读取启动期缓存状态。
+  - `EverythingProvider` 抽出统一 backend refresh 流程，重新启用 Everything 时会即时重跑 `sdk-napi -> cli` 探测链，避免用户在应用运行期间安装/修复依赖后仍长时间停留在 stale unavailable。
+  - 补充 Provider 定向回归，锁定“手动刷新会重探测”和“重新启用会重探测”两条设置页关键恢复路径。
+
+### fix(core-app): 修复 Tuff CLI 探测调试日志的元数据类型
+
+- `apps/core-app/src/main/channel/common.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `detectTuffCliAvailability()` 的 debug 日志将 `args` 从 `string[]` 收口为单行字符串，避免违反 logger primitive 元数据约束并阻塞 `core-app` node typecheck。
+
+### fix(core-app): 修复翻译 widget 回车复制与 renderer setupState 合并告警
+
+- `apps/core-app/src/renderer/src/components/render/WidgetFrame.vue`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-host-key-bridge.ts`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 为 CoreBox 内嵌 widget 增加轻量键盘桥，`touch-translation` 在非 UI View 模式下也能接收到 `ArrowUp / ArrowDown / Enter`，可直接切换 provider 并用回车复制当前选中的中文结果。
+  - `WidgetRegistry` 的 setupState 自愈合并从 Proxy 改为基于实例原型的显式上下文合并，减少开发态 `Property '$' was accessed via 'this'` 告警噪音。
+
+### feat(plugins): 增强 touch-translation widget 信息层并发布 1.0.7
+
+- `plugins/touch-translation/index/main.ts`
+- `plugins/touch-translation/index/providers/google.ts`
+- `plugins/touch-translation/index/types.ts`
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `plugins/touch-translation/package.json`
+- `plugins/touch-translation/manifest.json`
+- `apps/core-app/tuff/modules/plugins/touch-translation/package.json`
+- `apps/core-app/tuff/modules/plugins/touch-translation/manifest.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `touch-translation` widget 默认焦点继续落在右侧结果区，并在结果状态变化后优先选中首个成功 provider，支持在多结果之间稳定切换。
+  - 为 Google 结果补充音标、转写、词性、更多释义与发音音频；选中的 provider 会展开更多语言信息，并支持直接播放读音。
+  - 同步发布 `1.0.7` 插件包，承接本轮 widget 布局与交互增强。
+
+### refactor(core-app): 对插件 sdk/权限 legacy 路径执行硬切并清理假能力入口
+
+- `apps/core-app/src/main/modules/plugin/sdk-compat.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/permission/permission-store.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginPermissions.vue`
+- `apps/core-app/src/renderer/src/views/base/plugin/ViewPlugin.vue`
+- `apps/core-app/src/renderer/src/components/plugin/PluginView.vue`
+- `apps/core-app/src/main/core/channel-core.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.flow-trigger.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.test.ts`
+- `apps/core-app/src/main/modules/permission/permission-store.test.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `core-app` 新增统一 `sdk-compat` 门槛，缺失/无效/低于 `PERMISSION_ENFORCEMENT_MIN_VERSION` 的插件会在 loader 阶段直接打上 `SDKAPI_BLOCKED` 错误并保持可见但不可启用，运行时权限检查也不再对 legacy sdk 放行。
+  - 插件详情页与权限页的阻断态改为只认显式 `SDKAPI_BLOCKED`，不再回退展示“已跳过权限校验”这类 legacy 文案；直接调用 `enable()` 也会被硬切保护，避免通过旁路重新进 runtime。
+  - `DivisionBoxEvents.flowTrigger` 过渡期保留结构化失败响应，但不再尝试创建 session，并新增 compat 命中日志；同时删除 renderer 里未使用的 `@plugin-process-message` 直发链路与相关 dead code。
+  - 清理 `SearchEngineCore` 中残留的 `ClipboardProvider` 注释注册，并保留 `EverythingProvider` 的结果图标缓存与懒预热链路；`touch-translation` runtime repair 日志明确标记为 compat patch 命中，便于下一轮按 telemetry 决定是否删补丁。
+
+### refactor(core-app): 直接迁移 Tuff CLI probe 到 tuffcli 命令
+
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/channel/common.test.ts`
+- `packages/tuff-cli/src/bin/tuff.ts`
+- `packages/tuff-cli/bin/tuffcli.js`
+- `packages/tuff-cli/package.json`
+- `packages/tuff-cli-core/src/publish.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `CommonChannel` 不再调用 `tuff` 兼容 shim 探测 CLI，而是直接改为 `tuffcli --version`；开发态同时补充 workspace `.bin` 与 `packages/tuff-cli/bin/tuffcli.js` 已知入口，避免继续触发旧 shim 的 deprecated 噪音日志。
+  - `@talex-touch/tuff-cli` 新增 `tuffcli` 二进制导出，CLI 帮助、错误提示与 `publish` 子命令文案会按实际入口动态展示 `tuff` 或 `tuffcli`，不再把 `tuffcli` 用户引导回旧命令名。
 
 ### fix(ci): 让 utils npm 自动发布对重复版本保持幂等
 
@@ -104,7 +181,46 @@
 - `plugins/touch-translation/manifest.json`
   - 将翻译方向、provider 顺序、错误文案等共享 helper 从插件本地 `shared/` 目录下沉到 `@talex-touch/utils/plugin`，避免 widget sandbox 因相对路径模块不可用而跳过编译。
   - renderer 侧智能翻译 provider 改为复用 `@talex-touch/utils/plugin/sdk` 现有 intelligence SDK，prelude 侧共享逻辑改为从 utils 包内 runtime helper 读取，不再保留插件私有 shared 运行时代码。
-  - 修复 `touch-translate` widget 在沙箱中报 `Module "../shared/translation-shared.cjs" is not available` 的初始化失败问题，并重新生成 `1.0.4` 发布包。
+  - 修复 `touch-translate` widget 在沙箱中报 `Module "../shared/translation-shared.cjs" is not available` 的初始化失败问题，并重新生成 `1.0.5` 发布包。
+
+### feat(utils): 新增 sdkapi 260428 并收敛脚手架与插件版本口径
+
+- `packages/utils/plugin/sdk-version.ts`
+- `packages/tuff-cli/src/cli/commands/create.ts`
+- `packages/unplugin-export-plugin/src/cli/commands/create.ts`
+- `plugins/touch-dev-utils/manifest.json`
+- `packages/test/src/common/sdk-version.test.ts`
+- `apps/core-app/src/main/modules/plugin/install-queue.test.ts`
+- `apps/nexus/content/docs/dev/reference/manifest.{zh,en}.mdc`
+  - 新增受支持的 `sdkapi: 260428` marker，并将其设为当前推荐版本；现有权限/能力基线保持不变，`260228` 仍是 capability auth 的启用下限。
+  - 两个插件创建脚手架改为直接复用 `CURRENT_SDK_VERSION`，避免继续硬编码旧值 `260215` 导致新插件 manifest 与运行时定义漂移。
+  - `touch-dev-utils` manifest 从不受支持的 `260421` 收敛到 `260428`，同时补充共享回归测试与文档口径，避免再次触发“unsupported SDK marker”降级告警。
+
+### fix(plugins): 修复 touch-translation widget 空白页并发布 1.0.6
+
+- `plugins/touch-translation/index.js`
+- `plugins/touch-translation/index/main.ts`
+- `plugins/touch-translation/package.json`
+- `plugins/touch-translation/manifest.json`
+- `packages/test/src/plugins/translation.test.ts`
+  - 移除 `touch-translation` prelude 对 `plugin.search.updateQuery()` 的错误依赖；该 API 不存在于当前插件运行时注入对象中，会导致翻译请求启动阶段直接抛错并留下空白 widget。
+  - 翻译请求开始时不再先清空 feature 项，改为在失败时回填错误态 widget，确保 `touch-translate` 至少能给出可见反馈而不是白屏。
+  - 新增 prelude 回归测试，锁定 canonical / bundled 产物都不再依赖 `plugin.search.updateQuery`，并同步发布 `1.0.6` 插件包。
+
+### fix(core-app): 自愈 touch-translation 运行时旧包漂移并对齐 bundled 副本
+
+- `apps/core-app/scripts/build-target.js`
+- `apps/core-app/scripts/lib/touch-translation-runtime-sync.js`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/plugin/runtime/plugin-runtime-repair.ts`
+- `apps/core-app/src/main/modules/plugin/runtime/plugin-runtime-repair.test.ts`
+- `apps/core-app/src/main/modules/plugin/widget/processors/vue-processor.test.ts`
+- `apps/core-app/tuff/modules/plugins/touch-translation/*`
+- `packages/test/src/plugins/translation.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `PluginModule` 在加载 `touch-translation` 前会先检查运行时插件目录；只要发现 manifest/package 版本落后于 bundled 运行时种子，或 widget 仍引用 `../shared/translation-shared.cjs`，就自动用稳定 build 产物重建该插件目录，避免旧安装包继续触发 widget sandbox 初始化失败。
+  - `apps/core-app/tuff/modules/plugins/touch-translation` 顶层 runtime 文件已改为对齐 canonical `dist/build` 产物，manifest 保持 runtime 形态（`dev.source=false`），并同步补齐 `1.0.5` 发布包，避免 legacy dev data 迁移再次把旧实现带回用户运行时目录。
+  - 新增 widget 依赖边界单测与 translation 插件一致性回归，锁定“relative import 继续非法、translate-panel 不再依赖 `translation-shared.cjs`、bundled/runtime 构件版本与关键入口与 canonical build 保持一致”。
 
 ### fix(core-app): 归一化 TPEX 市场插件相对资源地址
 
@@ -418,6 +534,7 @@
 - `apps/core-app/src/main/modules/omni-panel/index.test.ts`
 - `apps/core-app/src/shared/events/omni-panel.ts`
   - 插件触发输入统一收敛为 `TuffQuery`；OmniPanel deprecated toggle event/type 删除，旧 SDK 插件继续由 `SDKAPI_BLOCKED` 直接阻断，不再保留运行时兼容旁路。
+  - 安装阶段补齐同一套 `sdkapi` Hard-Cut；OmniPanel 选中文本抓取在 Linux/macOS 失败场景补充显式 `supportLevel / issueCode / issueMessage`，不再把“空上下文”当作静默成功。
 - `apps/core-app/src/main/modules/ai/tuff-intelligence-storage-adapter.ts`
 - `apps/core-app/src/main/service/store-api.service.ts`
 - `apps/core-app/src/main/service/store-api.service.test.ts`

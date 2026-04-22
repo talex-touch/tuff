@@ -2,7 +2,7 @@ import type { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
-export type ShortcutWarning = 'permission-missing' | 'sdk-legacy' | 'missing-description'
+export type ShortcutWarning = 'permission-missing' | 'sdk-blocked' | 'missing-description'
 
 export interface ShortcutStatus {
   state: 'active' | 'conflict' | 'unavailable' | 'disabled'

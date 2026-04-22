@@ -7,6 +7,7 @@ import type {
   TuffSearchResult
 } from '@talex-touch/utils'
 import type { ProviderContext } from '../../search-engine/types'
+import { Buffer } from 'node:buffer'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -27,11 +28,15 @@ import {
   everythingStatusEvent,
   everythingTestEvent,
   everythingToggleEvent,
+  type EverythingStatusResponse,
   type EverythingBackendType
 } from '../../../../../shared/events/everything'
+import { appTaskGate } from '../../../../service/app-task-gate'
 import { formatDuration } from '../../../../utils/logger'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
+import { IconWorkerClient } from './workers/icon-worker-client'
+import { fileProvider } from './file-provider'
 import { mapFileToTuffItem } from './utils'
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -48,6 +53,8 @@ const getErrorMessage = (error: unknown): string =>
 const execFileAsync = promisify(execFile)
 const requireFromCurrentModule = createRequire(import.meta.url)
 const fileProviderLog = getLogger('file-provider')
+const EVERYTHING_ICON_CACHE_LIMIT = 256
+const EVERYTHING_ICON_WARMUP_LIMIT = 12
 
 class EverythingSearchAbortedError extends Error {
   readonly code = 'ABORT_ERR'
@@ -55,6 +62,16 @@ class EverythingSearchAbortedError extends Error {
   constructor() {
     super('Everything search aborted')
     this.name = 'AbortError'
+  }
+}
+
+class EverythingSearchFallbackError extends Error {
+  readonly code: string | null
+
+  constructor(message: string, code: string | null = null) {
+    super(message)
+    this.name = 'EverythingSearchFallbackError'
+    this.code = code
   }
 }
 
@@ -66,6 +83,10 @@ function isAbortError(error: unknown): boolean {
     return false
   }
   return error.name === 'AbortError' || error.code === 'ABORT_ERR' || error.code === 'ABORTED'
+}
+
+function isSearchFallbackError(error: unknown): error is EverythingSearchFallbackError {
+  return error instanceof EverythingSearchFallbackError
 }
 
 function throwIfAborted(signal?: AbortSignal): void {
@@ -153,6 +174,9 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private everythingVersion: string | null = null
   private sdkAddon: EverythingSdkAddon | null = null
   private lastChecked: number | null = null
+  private readonly iconWorker = new IconWorkerClient()
+  private readonly iconCache = new Map<string, string>()
+  private readonly iconExtractions = new Map<string, Promise<string | null>>()
 
   private logInfo(message: string, meta?: Record<string, unknown>): void {
     if (meta) {
@@ -202,16 +226,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     fileProviderLog.error(`[Everything] ${message}`)
   }
 
-  async onLoad(context: ProviderContext): Promise<void> {
-    if (process.platform !== 'win32') {
-      this.logInfo('Everything provider is Windows-only, skipping initialization')
-      return
-    }
-
-    const loadStart = performance.now()
-    this.logInfo('Initializing Everything provider')
-
-    await this.loadSettings(context)
+  private async refreshBackendState(reason: 'startup' | 'manual-check' | 'toggle-enable') {
+    const refreshStart = performance.now()
 
     try {
       const initialized = await this.initializeSearchBackend()
@@ -219,24 +235,126 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       this.lastChecked = Date.now()
 
       if (initialized) {
-        this.logInfo('Everything provider initialized successfully', {
-          duration: formatDuration(performance.now() - loadStart),
+        this.initializationError = null
+        this.logInfo('Everything backend ready', {
+          reason,
+          duration: formatDuration(performance.now() - refreshStart),
           backend: this.backend,
           path: this.esPath || 'unknown',
           enabled: this.isEnabled
         })
-      } else {
-        throw new Error('No available Everything backend (SDK/CLI)')
+        return true
       }
+
+      this.backend = 'unavailable'
+      this.initializationError = new Error('No available Everything backend (SDK/CLI)')
+      this.logWarn('Everything backend is unavailable after refresh', undefined, {
+        reason,
+        duration: formatDuration(performance.now() - refreshStart),
+        enabled: this.isEnabled
+      })
+      return false
     } catch (error) {
       this.initializationError = error as Error
       this.isAvailable = false
       this.backend = 'unavailable'
       this.lastChecked = Date.now()
-      this.logWarn('Everything not available', error, {
-        duration: formatDuration(performance.now() - loadStart)
+      this.logWarn('Everything backend refresh failed', error, {
+        reason,
+        duration: formatDuration(performance.now() - refreshStart),
+        enabled: this.isEnabled
       })
+      return false
     }
+  }
+
+  private markBackendUnavailable(message: string, errorCode: string | null = null): void {
+    this.backend = 'unavailable'
+    this.isAvailable = false
+    this.initializationError = new Error(message)
+    this.lastBackendError = message
+    this.lastBackendErrorCode = errorCode
+    this.lastChecked = Date.now()
+  }
+
+  private getCachedIcon(filePath: string): string | null {
+    const cached = this.iconCache.get(filePath)
+    if (!cached) {
+      return null
+    }
+
+    this.iconCache.delete(filePath)
+    this.iconCache.set(filePath, cached)
+    return cached
+  }
+
+  private setCachedIcon(filePath: string, iconValue: string): void {
+    if (this.iconCache.has(filePath)) {
+      this.iconCache.delete(filePath)
+    }
+
+    this.iconCache.set(filePath, iconValue)
+
+    while (this.iconCache.size > EVERYTHING_ICON_CACHE_LIMIT) {
+      const oldestKey = this.iconCache.keys().next().value
+      if (!oldestKey) {
+        break
+      }
+      this.iconCache.delete(oldestKey)
+    }
+  }
+
+  private async extractResultIcon(filePath: string): Promise<string | null> {
+    await appTaskGate.waitForIdle()
+
+    const icon = await this.iconWorker.extract(filePath)
+    if (!icon || icon.length === 0) {
+      return null
+    }
+
+    return `data:image/png;base64,${Buffer.from(icon).toString('base64')}`
+  }
+
+  private async ensureResultIcon(filePath: string): Promise<string | null> {
+    const cached = this.getCachedIcon(filePath)
+    if (cached) {
+      return cached
+    }
+
+    const pending = this.iconExtractions.get(filePath)
+    if (pending) {
+      return pending
+    }
+
+    const task = this.extractResultIcon(filePath)
+      .then((iconValue) => {
+        if (iconValue) {
+          this.setCachedIcon(filePath, iconValue)
+        }
+        return iconValue
+      })
+      .catch((error) => {
+        this.logWarn('Failed to warm icon for Everything result', error, { path: filePath })
+        return null
+      })
+      .finally(() => {
+        this.iconExtractions.delete(filePath)
+      })
+
+    this.iconExtractions.set(filePath, task)
+    return task
+  }
+
+  async onLoad(context: ProviderContext): Promise<void> {
+    if (process.platform !== 'win32') {
+      this.logInfo('Everything provider is Windows-only, skipping initialization')
+      return
+    }
+
+    this.logInfo('Initializing Everything provider')
+
+    await this.loadSettings(context)
+    await this.refreshBackendState('startup')
 
     this.registerChannels(context)
   }
@@ -300,6 +418,24 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
+  getStatusSnapshot(): EverythingStatusResponse {
+    const healthStatus = this.getHealthStatus()
+    return {
+      enabled: this.isEnabled,
+      available: this.isAvailable,
+      backend: this.backend,
+      health: healthStatus.health,
+      healthReason: healthStatus.reason,
+      version: this.everythingVersion,
+      esPath: this.esPath,
+      error: this.initializationError?.message || null,
+      errorCode: this.lastBackendErrorCode,
+      lastBackendError: this.lastBackendError,
+      fallbackChain: this.fallbackChain,
+      lastChecked: this.lastChecked
+    }
+  }
+
   isSearchReady(): boolean {
     return process.platform === 'win32' && this.isEnabled && this.isAvailable
   }
@@ -334,22 +470,12 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     const transport = getTuffTransportMain(channel, keyManager)
 
-    transport.on(everythingStatusEvent, async () => {
-      const healthStatus = this.getHealthStatus()
-      return {
-        enabled: this.isEnabled,
-        available: this.isAvailable,
-        backend: this.backend,
-        health: healthStatus.health,
-        healthReason: healthStatus.reason,
-        version: this.everythingVersion,
-        esPath: this.esPath,
-        error: this.initializationError?.message || null,
-        errorCode: this.lastBackendErrorCode,
-        lastBackendError: this.lastBackendError,
-        fallbackChain: this.fallbackChain,
-        lastChecked: this.lastChecked
+    transport.on(everythingStatusEvent, async (payload) => {
+      if (payload?.refresh) {
+        await this.refreshBackendState('manual-check')
       }
+
+      return this.getStatusSnapshot()
     })
 
     transport.on(everythingToggleEvent, async (payload) => {
@@ -359,6 +485,10 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       this.isEnabled = payload.enabled
       this.saveSettings()
+
+      if (this.isEnabled) {
+        await this.refreshBackendState('toggle-enable')
+      }
 
       this.logInfo('Everything toggled', { enabled: this.isEnabled })
       return { success: true, enabled: this.isEnabled }
@@ -563,16 +693,13 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       try {
         return await this.searchEverythingWithSdk(query, maxResults, signal)
       } catch (error) {
-        if (isAbortError(error)) {
+        if (isAbortError(error) || isSearchFallbackError(error)) {
           throw error
         }
         this.lastBackendError = getErrorMessage(error)
         this.lastBackendErrorCode = getErrorCode(error) ?? null
         this.logWarn('Everything SDK search failed, falling back to CLI', error)
-        const cliReady = await this.ensureCliFallback()
-        if (!cliReady) {
-          return []
-        }
+        await this.ensureCliFallback()
       }
     }
 
@@ -583,18 +710,14 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     return []
   }
 
-  private async ensureCliFallback(): Promise<boolean> {
+  private async ensureCliFallback(): Promise<void> {
     const ready = await this.tryInitializeCliBackend()
     if (!ready) {
-      this.backend = 'unavailable'
-      this.isAvailable = false
-      this.initializationError = new Error(
-        this.lastBackendError || 'Everything backend unavailable'
-      )
-      return false
+      const message = this.lastBackendError || 'Everything backend unavailable'
+      this.markBackendUnavailable(message, this.lastBackendErrorCode)
+      throw new EverythingSearchFallbackError(message, this.lastBackendErrorCode)
     }
     this.initializationError = null
-    return true
   }
 
   private async searchEverythingWithSdk(
@@ -774,12 +897,19 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       if (isAbortError(error)) {
         throw error
       }
-      if (getErrorCode(error) === 'ETIMEDOUT') {
+      const errorCode = getErrorCode(error) ?? null
+      const errorMessage = getErrorMessage(error)
+
+      this.lastBackendError = errorMessage
+      this.lastBackendErrorCode = errorCode
+
+      if (errorCode === 'ETIMEDOUT') {
         this.logWarn('Everything CLI search timed out', error, { query })
       } else {
+        this.markBackendUnavailable(errorMessage, errorCode)
         this.logError('Everything CLI search failed', error, { query })
       }
-      return []
+      throw new EverythingSearchFallbackError(errorMessage, errorCode)
     }
   }
 
@@ -920,6 +1050,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       // Convert Everything results to TuffItems
       const now = Date.now()
+      let scheduledIconWarmups = 0
       const items = results.map((result, index) => {
         // Create a file object compatible with mapFileToTuffItem
         const fileObj = {
@@ -937,13 +1068,19 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           content: null,
           embeddingStatus: 'none' as const
         }
+        const cachedIcon = this.getCachedIcon(result.path)
 
         const tuffItem = mapFileToTuffItem(
           fileObj,
-          {}, // No extensions metadata for Everything results
+          cachedIcon ? { icon: cachedIcon } : {},
           this.id,
           this.name,
-          () => {} // No icon loading for now
+          cachedIcon || result.isDir || scheduledIconWarmups >= EVERYTHING_ICON_WARMUP_LIMIT
+            ? undefined
+            : (file) => {
+                scheduledIconWarmups += 1
+                void this.ensureResultIcon(file.path)
+              }
         )
         tuffItem.meta = {
           ...tuffItem.meta,
@@ -988,6 +1125,20 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       if (isAbortError(error)) {
         this.logDebug('Everything search aborted', { query: searchText })
         return new TuffSearchResultBuilder(query).build()
+      }
+      if (isSearchFallbackError(error)) {
+        this.logWarn('Everything search degraded to file-provider', error, {
+          query: searchText,
+          code: error.code
+        })
+        try {
+          return await fileProvider.onSearch(query, signal)
+        } catch (fallbackError) {
+          this.logError('Everything file-provider fallback failed', fallbackError, {
+            query: searchText
+          })
+          return new TuffSearchResultBuilder(query).build()
+        }
       }
       this.logError('Everything search failed', error, { query: searchText })
       return new TuffSearchResultBuilder(query).build()
