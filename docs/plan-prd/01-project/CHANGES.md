@@ -5,6 +5,27 @@
 
 ## 2026-04-22
 
+### fix(core-app/clipboard): 修正图片历史详情误用 thumbnail 导致的模糊预览
+
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/clipboard.transport.test.ts`
+- `packages/utils/plugin/sdk/types.ts`
+  - 主进程现在明确分离图片历史项的“列表缩略图”和“详情主图”语义：`thumbnail` 继续保留给列表轻量展示，`content/value` 改为优先返回 `meta.image_preview_url` 或落盘原图 `tfile://` 地址，避免 renderer 把 128px 缩略图放大到详情面板。
+  - 图片缩略图生成改为统一 helper，列表缩略图宽度提高到 `160px` 并使用 `quality: 'best'`；`readClipboardImage()` 的即时预览提升到最多 `1024px`，在保持 IPC payload 可控的前提下减少高 DPR 场景下的放大糊化。
+  - 补充 `clipboard.transport.test.ts` 定向回归，锁定“列表继续走 thumbnail、详情走 preview/original URL、非受管路径不暴露原图地址”的传输语义，避免后续回退到模糊链路。
+
+### fix(plugin/clipboard-history): 重建正式源码插件并切到 typed clipboard transport
+
+- `plugins/clipboard-history/*`
+- `apps/core-app/src/renderer/src/components/plugin/PluginIcon.vue`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `packages/utils/plugin/sdk/system.ts`
+  - 新增 `plugins/clipboard-history` 正式源码工程，保留现有双栏列表/详情形态，但数据接入全部改用 `useClipboard()` 和纯 typed 的 `getTypedActiveAppSnapshot()`，不再依赖 `clipboard:get-history`、`clipboard:get-image-url`、`system:get-active-app` 等 raw channel。
+  - 插件侧显式区分列表缩略图与详情主图：列表只使用 `thumbnail`，详情优先 `meta.image_original_url` / `content`，最后才回退 `meta.image_preview_url`，彻底禁止把 thumbnail 放大成详情图。
+  - `packages/utils` 补了纯 typed 的 `getTypedActiveAppSnapshot()`，插件不再维护本地 transport helper；兼容层仍保留 `getActiveAppSnapshot()` 的 legacy fallback 给旧插件使用。
+  - 新 build 脚本会在生成 `.tpex` 后同步 `dist/build` 到 `apps/core-app/tuff/modules/plugins/clipboard-history`，避免未来再次从陈旧 built-in bundle 重打包。
+  - CoreBox 激活 provider 胶囊补上缺省插件图标，`handleExecute` 在空 item 场景下直接安全返回，消掉 `icon=undefined` 与 `handleExecute called without an item` 噪声 warning。
+
 ### fix(core-app/intelligence): 收口 workflow/MCP 类型缺口并恢复 core-app typecheck
 
 - `apps/core-app/package.json`

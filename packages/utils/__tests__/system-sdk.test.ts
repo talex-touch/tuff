@@ -14,7 +14,7 @@ vi.mock('../transport', () => ({
   createPluginTuffTransport: createPluginTuffTransportMock,
 }))
 
-import { getActiveAppSnapshot } from '../plugin/sdk/system'
+import { getActiveAppSnapshot, getTypedActiveAppSnapshot } from '../plugin/sdk/system'
 
 describe('plugin sdk system.getActiveAppSnapshot', () => {
   beforeEach(() => {
@@ -88,5 +88,25 @@ describe('plugin sdk system.getActiveAppSnapshot', () => {
       identifier: 'legacy.app',
       displayName: 'Legacy App',
     })
+  })
+
+  it('getTypedActiveAppSnapshot keeps pure typed transport semantics', async () => {
+    const channel = {
+      send: vi.fn(),
+    }
+    const transport = {
+      send: vi.fn(async () => {
+        throw new Error('typed unavailable')
+      }),
+    }
+
+    useChannelMock.mockReturnValue(channel)
+    createPluginTuffTransportMock.mockReturnValue(transport)
+
+    await expect(getTypedActiveAppSnapshot()).rejects.toThrow('typed unavailable')
+    expect(transport.send).toHaveBeenCalledWith(AppEvents.system.getActiveApp, {
+      forceRefresh: false,
+    })
+    expect(channel.send).not.toHaveBeenCalled()
   })
 })

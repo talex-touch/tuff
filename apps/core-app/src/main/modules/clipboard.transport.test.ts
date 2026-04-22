@@ -164,7 +164,8 @@ vi.mock('../service/temp-file.service', () => ({
   tempFileService: {
     allocateFile: vi.fn(),
     releaseFile: vi.fn(),
-    cleanupNamespace: vi.fn()
+    cleanupNamespace: vi.fn(),
+    isWithinBaseDir: vi.fn(() => true)
   }
 }))
 
@@ -196,6 +197,7 @@ vi.mock('../core/eventbus/touch-event', () => ({
 }))
 
 import { ClipboardModule } from './clipboard'
+import { tempFileService } from '../service/temp-file.service'
 
 type ClipboardModuleTestHandle = {
   transport: {
@@ -251,5 +253,84 @@ describe('ClipboardModule transport registration', () => {
     for (const legacyEvent of LEGACY_CLIPBOARD_EVENT_NAMES) {
       expect(registeredEvents).not.toContain(legacyEvent)
     }
+  })
+})
+
+describe('ClipboardModule image transport payload', () => {
+  it('列表继续走 thumbnail，详情主图改走原始 tfile URL', () => {
+    const module = new ClipboardModule() as unknown as {
+      toTransportItem: (item: Record<string, unknown>) => Record<string, unknown> | null
+    }
+
+    const item = module.toTransportItem({
+      id: 1,
+      type: 'image',
+      content: '/tmp/clipboard/images/original image.png',
+      thumbnail: 'data:image/png;base64,thumb',
+      timestamp: new Date('2026-04-22T10:00:00.000Z'),
+      meta: {
+        image_size: { width: 1920, height: 1080 },
+        image_file_size: 12345
+      }
+    })
+
+    expect(item).not.toBeNull()
+    expect(item?.value).toBe('tfile:///tmp/clipboard/images/original%20image.png')
+    expect(item?.thumbnail).toBe('data:image/png;base64,thumb')
+    expect(item?.meta).toMatchObject({
+      image_original_url: 'tfile:///tmp/clipboard/images/original%20image.png',
+      image_preview_url: 'tfile:///tmp/clipboard/images/original%20image.png',
+      image_content_kind: 'original',
+      image_size: { width: 1920, height: 1080 },
+      image_file_size: 12345
+    })
+  })
+
+  it('已有 preview url 时优先复用，避免详情回退到 thumbnail', () => {
+    const module = new ClipboardModule() as unknown as {
+      toTransportItem: (item: Record<string, unknown>) => Record<string, unknown> | null
+    }
+
+    const item = module.toTransportItem({
+      id: 2,
+      type: 'image',
+      content: '/tmp/clipboard/images/original.png',
+      thumbnail: 'data:image/png;base64,thumb',
+      timestamp: new Date('2026-04-22T10:05:00.000Z'),
+      meta: {
+        image_preview_url: 'tfile:///tmp/clipboard/images/preview.png'
+      }
+    })
+
+    expect(item).not.toBeNull()
+    expect(item?.value).toBe('tfile:///tmp/clipboard/images/preview.png')
+    expect(item?.meta).toMatchObject({
+      image_original_url: 'tfile:///tmp/clipboard/images/original.png',
+      image_preview_url: 'tfile:///tmp/clipboard/images/preview.png',
+      image_content_kind: 'preview'
+    })
+  })
+
+  it('只在路径位于 temp file base dir 内时才暴露 tfile 原图地址', () => {
+    vi.mocked(tempFileService.isWithinBaseDir).mockReturnValueOnce(false)
+
+    const module = new ClipboardModule() as unknown as {
+      toTransportItem: (item: Record<string, unknown>) => Record<string, unknown> | null
+    }
+
+    const item = module.toTransportItem({
+      id: 3,
+      type: 'image',
+      content: '/Users/demo/Desktop/not-managed.png',
+      thumbnail: 'data:image/png;base64,thumb',
+      timestamp: new Date('2026-04-22T10:10:00.000Z')
+    })
+
+    expect(item).not.toBeNull()
+    expect(item?.value).toBe('data:image/png;base64,thumb')
+    expect(item?.meta).toMatchObject({
+      image_content_kind: 'thumbnail'
+    })
+    expect(item?.meta).not.toHaveProperty('image_original_url')
   })
 })

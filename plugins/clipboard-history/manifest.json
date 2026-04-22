@@ -1,0 +1,66 @@
+{
+  "id": "com.tuffex.clipboard-history",
+  "name": "clipboard-history",
+  "version": "1.1.4",
+  "author": "TalexTouch Team",
+  "sdkapi": 260421,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "一款全平台剪贴板历史记录插件，从 Tuff 核心提取剪贴板历史。",
+  "dev": {
+    "enable": true,
+    "address": "http://127.0.0.1:3488",
+    "source": true,
+    "autoStart": true
+  },
+  "build": {
+    "index": {
+      "entry": "index/main.ts",
+      "format": "cjs",
+      "target": "node18",
+      "external": ["electron"],
+      "minify": true,
+      "sourcemap": false
+    }
+  },
+  "permissions": {
+    "required": ["clipboard.read", "clipboard.write"],
+    "optional": []
+  },
+  "permissionReasons": {
+    "clipboard.read": "读取剪贴板历史记录并展示详情",
+    "clipboard.write": "将选中的剪贴记录重新写回系统剪贴板"
+  },
+  "features": [
+    {
+      "id": "clipboard-history",
+      "name": "剪贴板历史记录",
+      "desc": "查看和管理剪贴板历史记录",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "push": true,
+      "priority": 10,
+      "acceptedInputTypes": ["text", "image", "files", "html"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["clipboard-history", "剪贴板历史记录", "剪贴板"]
+        }
+      ],
+      "interaction": {
+        "type": "webcontent",
+        "path": "/clipboard-manager"
+      }
+    }
+  ]
+}
