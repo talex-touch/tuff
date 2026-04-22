@@ -48,6 +48,37 @@ describe('transport domain sdk mappings', () => {
     )
   })
 
+  it('settings sdk maps managed app entry events through appIndex domain', async () => {
+    const transport = createTransportMock()
+    const sdk = createSettingsSdk(transport as any)
+
+    await sdk.appIndex.listEntries()
+    await sdk.appIndex.upsertEntry({
+      path: '/Applications/WeChat.app',
+      displayName: '微信',
+      enabled: true,
+    })
+    await sdk.appIndex.removeEntry({ path: '/Applications/WeChat.app' })
+    await sdk.appIndex.setEntryEnabled({
+      path: '/Applications/WeChat.app',
+      enabled: false,
+    })
+
+    expect(transport.send).toHaveBeenNthCalledWith(1, AppEvents.appIndex.listEntries)
+    expect(transport.send).toHaveBeenNthCalledWith(2, AppEvents.appIndex.upsertEntry, {
+      path: '/Applications/WeChat.app',
+      displayName: '微信',
+      enabled: true,
+    })
+    expect(transport.send).toHaveBeenNthCalledWith(3, AppEvents.appIndex.removeEntry, {
+      path: '/Applications/WeChat.app',
+    })
+    expect(transport.send).toHaveBeenNthCalledWith(4, AppEvents.appIndex.setEntryEnabled, {
+      path: '/Applications/WeChat.app',
+      enabled: false,
+    })
+  })
+
   it('app sdk maps openPromptsFolder to typed system event', async () => {
     const transport = createTransportMock()
     const sdk = createAppSdk(transport as any)

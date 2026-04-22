@@ -16,6 +16,9 @@ import { calculateHighlights } from './highlighting-service'
 const SLOW_PROCESS_THRESHOLD_MS = 300
 const BASE64_MARKER = 'base64,'
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
+const MANAGED_ENTRY_SOURCE_KEY = 'entrySource'
+const MANAGED_ENTRY_ENABLED_KEY = 'entryEnabled'
+const MANAGED_ENTRY_SOURCE_VALUE = 'manual'
 
 function isValidBase64DataUrl(value: string): boolean {
   const markerIndex = value.indexOf(BASE64_MARKER)
@@ -39,6 +42,14 @@ interface AppMatchState {
   highlights: Range[]
   score: number
   source: string
+}
+
+export function isSearchableAppRow(app: AppSearchRow): boolean {
+  if (app.extensions[MANAGED_ENTRY_SOURCE_KEY] !== MANAGED_ENTRY_SOURCE_VALUE) {
+    return true
+  }
+  const enabled = app.extensions[MANAGED_ENTRY_ENABLED_KEY]
+  return enabled !== '0' && enabled !== 'false'
 }
 
 function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): ProcessedTuffItem {
@@ -99,7 +110,7 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
 }
 
 export function mapAppsToRecommendationItems(apps: AppSearchRow[]): ProcessedTuffItem[] {
-  return apps.map((app) =>
+  return apps.filter(isSearchableAppRow).map((app) =>
     buildProcessedAppItem(app, {
       highlights: [],
       score: 0,
@@ -119,6 +130,9 @@ export async function processSearchResults(
   const processedItems: ProcessedTuffItem[] = []
 
   for (const app of apps) {
+    if (!isSearchableAppRow(app)) {
+      continue
+    }
     const name = app.name
     const displayName = app.displayName || app.name
     const potentialTitles = [displayName, name].filter(Boolean) as string[]
