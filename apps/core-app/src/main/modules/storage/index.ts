@@ -1,4 +1,4 @@
-import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { AppSetting, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport/main'
 import type {
   StorageSaveRequest,
@@ -15,11 +15,16 @@ import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { eq } from 'drizzle-orm'
 import fse from 'fs-extra'
 import { config as configSchema } from '../../db/schema'
+import { runStartupMigration } from '../../core/startup-migrations'
 import { appTaskGate } from '../../service/app-task-gate'
 import { enterPerfContext } from '../../utils/perf-context'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
-import { mainStorageRegistry, resolveMainStorageValue } from './main-storage-registry'
+import {
+  mainStorageRegistry,
+  removeLegacyLayoutOpacity,
+  resolveMainStorageValue
+} from './main-storage-registry'
 import { StorageCache } from './storage-cache'
 import { StorageFrequencyMonitor } from './storage-frequency-monitor'
 import { StorageLRUManager } from './storage-lru-manager'
@@ -133,7 +138,7 @@ export class StorageModule extends BaseModule {
     }
   }
 
-  onInit({ file, app }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
+  async onInit({ file, app }: ModuleInitContext<TalexEvents>): Promise<void> {
     pluginConfigPath = path.join(file.dirPath!, 'plugins')
     fse.ensureDirSync(pluginConfigPath)
     storageLog.info(`Config path: ${file.dirPath}, plugin path: ${pluginConfigPath}`)
@@ -151,6 +156,7 @@ export class StorageModule extends BaseModule {
       this.emitStorageUpdate(name, version)
     }
 
+    await this.runStartupMigrations(file.dirPath!)
     void this.runSqlitePilotMigration()
   }
 
@@ -198,6 +204,31 @@ export class StorageModule extends BaseModule {
       }
       stream.emit(payload)
     }
+  }
+
+  private async runStartupMigrations(markerDir: string): Promise<void> {
+    await runStartupMigration({
+      id: 'legacy-layout-opacity',
+      version: 1,
+      markerDir,
+      run: async () => {
+        const current = resolveMainStorageValue(
+          StorageList.APP_SETTING as MainStorageKey,
+          this.getConfig(StorageList.APP_SETTING)
+        ) as AppSetting
+        const fallback = resolveMainStorageValue(
+          StorageList.APP_SETTING as MainStorageKey,
+          undefined
+        ) as AppSetting
+        const cleaned = removeLegacyLayoutOpacity(current, fallback)
+        if (!cleaned.changed) {
+          return { changed: false }
+        }
+
+        this.saveConfig(StorageList.APP_SETTING, cleaned.normalized, false, true)
+        return { changed: true }
+      }
+    })
   }
 
   public getCacheStats(): { cachedConfigs: number; pluginConfigs: number } {

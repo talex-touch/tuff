@@ -72,7 +72,7 @@ function normalizeObject<T>(value: unknown, fallback: T): T {
   return isPlainObject(value) ? (value as T) : fallback
 }
 
-function removeLegacyLayoutOpacity(
+export function removeLegacyLayoutOpacity(
   value: AppSetting,
   fallback: AppSetting
 ): { normalized: AppSetting; changed: boolean } {
@@ -128,9 +128,7 @@ function removeLegacyLayoutOpacity(
 }
 
 function normalizeAppSetting(value: unknown, fallback: AppSetting): AppSetting {
-  const normalized = normalizeObject(value, fallback)
-  const cleaned = removeLegacyLayoutOpacity(normalized, fallback)
-  return cleaned.normalized
+  return normalizeObject(value, fallback)
 }
 
 function normalizeArray<T>(value: unknown, fallback: T): T {

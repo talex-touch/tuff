@@ -12,6 +12,12 @@ import {
   type EverythingBackendType,
   type EverythingStatusResponse
 } from '../../../../../shared/events/everything'
+import {
+  resolveEverythingStatusColor,
+  resolveEverythingStatusTextKey,
+  shouldShowEverythingInstallGuide,
+  shouldShowEverythingToggle
+} from './setting-everything-state'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
@@ -36,12 +42,14 @@ function mapHealthLabel(health: EverythingHealthState): string {
 
 let statusCheckInterval: NodeJS.Timeout | null = null
 
-async function checkStatus() {
+async function checkStatus(refresh = false) {
   if (isChecking.value) return
 
   isChecking.value = true
   try {
-    const status = await transport.send(everythingStatusEvent)
+    const status = await transport.send(everythingStatusEvent, {
+      refresh
+    })
     everythingStatus.value = status
   } catch (error) {
     console.error('[SettingEverything] Failed to get status:', error)
@@ -57,7 +65,11 @@ async function toggleEverything() {
 
   try {
     await transport.send(everythingToggleEvent, { enabled: newEnabled })
-    everythingStatus.value.enabled = newEnabled
+    everythingStatus.value = {
+      ...everythingStatus.value,
+      enabled: newEnabled
+    }
+    await checkStatus(newEnabled)
 
     toast.success(
       newEnabled
@@ -118,25 +130,19 @@ function openCLIDownload() {
 }
 
 const statusText = computed(() => {
-  if (!everythingStatus.value) return t('settings.settingEverything.statusChecking')
-  if (!everythingStatus.value.available) return t('settings.settingEverything.statusUnavailable')
-  if (!everythingStatus.value.enabled) return t('settings.settingEverything.statusDisabled')
-  return t('settings.settingEverything.statusEnabled')
+  return t(resolveEverythingStatusTextKey(everythingStatus.value))
 })
 
 const statusColor = computed(() => {
-  if (!everythingStatus.value) return 'text-gray-500'
-  if (!everythingStatus.value.available) return 'text-red-500'
-  if (!everythingStatus.value.enabled) return 'text-yellow-500'
-  return 'text-green-500'
+  return resolveEverythingStatusColor(everythingStatus.value)
 })
 
 const showInstallGuide = computed(() => {
-  return everythingStatus.value && !everythingStatus.value.available
+  return shouldShowEverythingInstallGuide(everythingStatus.value)
 })
 
 const showToggle = computed(() => {
-  return everythingStatus.value && everythingStatus.value.available
+  return shouldShowEverythingToggle(everythingStatus.value)
 })
 
 const backendText = computed(() => {
@@ -174,7 +180,7 @@ const lastCheckedText = computed(() => {
 })
 
 onMounted(async () => {
-  await checkStatus()
+  await checkStatus(true)
 
   statusCheckInterval = setInterval(() => {
     checkStatus()
@@ -341,7 +347,7 @@ onUnmounted(() => {
       default-icon="i-carbon-time"
       active-icon="i-carbon-time"
     >
-      <TxButton variant="flat" :disabled="isChecking" @click="checkStatus">
+      <TxButton variant="flat" :disabled="isChecking" @click="checkStatus(true)">
         {{
           isChecking
             ? t('settings.settingEverything.checking')

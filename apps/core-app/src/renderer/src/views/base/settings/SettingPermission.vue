@@ -22,6 +22,7 @@ import {
 } from '@talex-touch/tuffex'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { resolvePluginSdkBlockedState } from '../../../../../shared/plugin-sdk-blocked'
 
 import { PermissionList } from '~/components/permission'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -171,29 +172,19 @@ async function loadData() {
           optional: plugin.declaredPermissions?.optional || []
         })) as PluginPermissionStatusResult | null
         updateBackendState(status?.backendState)
-        const blockedIssue =
-          plugin.loadError?.code === 'SDKAPI_BLOCKED'
-            ? plugin.loadError
-            : (plugin.issues ?? []).find(
-                (issue) => issue.code === 'SDKAPI_BLOCKED' || issue.code === 'SDK_VERSION_OUTDATED'
-              )
-        const blocked = (status?.enforcePermissions ?? false) === false
-        const blockedReason =
-          plugin.loadError?.code === 'SDKAPI_BLOCKED'
-            ? plugin.loadError.message
-            : blockedIssue?.message || status?.warning
+        const sdkBlockedState = resolvePluginSdkBlockedState(plugin)
 
         return {
           id: plugin.name,
           name: plugin.name,
           sdkapi: plugin.sdkapi,
-          blocked,
-          blockedReason,
+          blocked: sdkBlockedState.blocked,
+          blockedReason: sdkBlockedState.message || undefined,
           enforcePermissions: status?.enforcePermissions ?? false,
           required: status?.required || [],
           optional: status?.optional || [],
           granted: status?.granted || [],
-          missingRequired: blocked ? [] : status?.missingRequired || []
+          missingRequired: sdkBlockedState.blocked ? [] : status?.missingRequired || []
         }
       })
     )

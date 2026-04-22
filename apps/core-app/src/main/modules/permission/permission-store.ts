@@ -18,9 +18,9 @@ import {
   getPluginPermissionStatus,
   normalizePermissionId
 } from '@talex-touch/utils/permission'
-import { PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import fse from 'fs-extra'
+import { getPluginSdkCompatibilityGate } from '../plugin/sdk-compat'
 
 type AuditLogEntry = PermissionAuditLog
 
@@ -35,7 +35,7 @@ interface PermissionData {
 
 export interface PermissionAccessState {
   allowed: boolean
-  reason: 'legacy-sdk' | 'default' | 'granted' | 'not-granted' | 'not-declared'
+  reason: 'incompatible-sdk' | 'default' | 'granted' | 'not-granted' | 'not-declared'
   hasHistoricalGrant: boolean
 }
 
@@ -56,6 +56,13 @@ interface PermissionStoreBackend {
 
 interface PermissionStoreOptions {
   createBackend?: (dbPath: string) => PermissionStoreBackend
+}
+
+export interface PermissionStoreMigrationResult {
+  status: 'migrated' | 'archived-legacy' | 'skipped-no-legacy' | 'skipped-invalid-legacy' | 'failed'
+  reason: string
+  backupPath?: string
+  error?: string
 }
 
 const CURRENT_VERSION = 1
@@ -93,6 +100,42 @@ function cloneSessionGrants(
 
 function hasPersistedData(data: PermissionData): boolean {
   return Object.keys(data.grants).length > 0 || (data.auditLogs?.length ?? 0) > 0
+}
+
+function loadPermissionDataFromJson(jsonFilePath: string): PermissionData | null {
+  try {
+    if (!fse.existsSync(jsonFilePath)) {
+      return null
+    }
+    return fse.readJSONSync(jsonFilePath) as PermissionData
+  } catch (error) {
+    permissionStoreLog.error('Failed to load compat JSON snapshot', { error })
+    return null
+  }
+}
+
+function normalizePermissionData(data: Partial<PermissionData>): PermissionData {
+  permissionStoreLog.info('Compat migration hit: normalizing permission data', {
+    meta: { targetVersion: CURRENT_VERSION }
+  })
+  return {
+    version: CURRENT_VERSION,
+    grants: data.grants || {},
+    auditLogs: data.auditLogs || []
+  }
+}
+
+async function backupLegacyPermissionJson(jsonFilePath: string): Promise<string | null> {
+  if (!(await fse.pathExists(jsonFilePath))) {
+    return null
+  }
+
+  const backupPath = `${jsonFilePath}.backup-${Date.now()}`
+  await fse.move(jsonFilePath, backupPath, { overwrite: true })
+  permissionStoreLog.info('Compat migration archived permissions.json snapshot', {
+    meta: { from: jsonFilePath, to: backupPath }
+  })
+  return backupPath
 }
 
 function asString(value: unknown): string {
@@ -281,12 +324,63 @@ class SqlitePermissionBackend {
   }
 }
 
+export async function migrateLegacyPermissionStoreIfNeeded(
+  dirPath: string,
+  options: PermissionStoreOptions = {}
+): Promise<PermissionStoreMigrationResult> {
+  const jsonFilePath = path.join(dirPath, 'permissions.json')
+  const sqliteFilePath = path.join(dirPath, 'permissions.db')
+  const createBackend = options.createBackend ?? ((dbPath) => new SqlitePermissionBackend(dbPath))
+
+  const legacyData = loadPermissionDataFromJson(jsonFilePath)
+  if (!legacyData) {
+    return {
+      status: (await fse.pathExists(jsonFilePath)) ? 'skipped-invalid-legacy' : 'skipped-no-legacy',
+      reason: (await fse.pathExists(jsonFilePath))
+        ? 'invalid-legacy-permissions-json'
+        : 'no-legacy-permissions-json'
+    }
+  }
+
+  let backend: PermissionStoreBackend | null = null
+  try {
+    backend = createBackend(sqliteFilePath)
+    await backend.initialize()
+
+    const sqliteData = await backend.load()
+    if (hasPersistedData(sqliteData)) {
+      const backupPath = await backupLegacyPermissionJson(jsonFilePath)
+      return {
+        status: 'archived-legacy',
+        reason: 'sqlite-already-primary',
+        ...(backupPath ? { backupPath } : {})
+      }
+    }
+
+    await backend.persist(normalizePermissionData(legacyData))
+    const backupPath = await backupLegacyPermissionJson(jsonFilePath)
+    permissionStoreLog.info('Compat migration hit: permissions.json upgraded to SQLite')
+    return {
+      status: 'migrated',
+      reason: 'legacy-json-imported',
+      ...(backupPath ? { backupPath } : {})
+    }
+  } catch (error) {
+    return {
+      status: 'failed',
+      reason: 'legacy-json-migration-failed',
+      error: error instanceof Error ? error.message : String(error)
+    }
+  } finally {
+    await backend?.close().catch(() => {})
+  }
+}
+
 /**
  * PermissionStore - SQLite-primary permission storage with compat JSON migration.
  */
 export class PermissionStore {
   private dirPath: string
-  private jsonFilePath: string
   private sqliteFilePath: string
   private data: PermissionData = createEmptyData()
   private dirty = false
@@ -305,7 +399,6 @@ export class PermissionStore {
 
   constructor(dirPath: string, options: PermissionStoreOptions = {}) {
     this.dirPath = dirPath
-    this.jsonFilePath = path.join(dirPath, 'permissions.json')
     this.sqliteFilePath = path.join(dirPath, 'permissions.db')
     this.createBackend = options.createBackend ?? ((dbPath) => new SqlitePermissionBackend(dbPath))
   }
@@ -319,15 +412,9 @@ export class PermissionStore {
       backend = this.createBackend(this.sqliteFilePath)
       await backend.initialize()
       const sqliteData = await backend.load()
-      const jsonData = this.loadFromJson()
 
       if (hasPersistedData(sqliteData)) {
         this.data = sqliteData
-      } else if (jsonData) {
-        this.data = this.migrate(jsonData)
-        await backend.persist(this.data)
-        await this.backupLegacyJson()
-        permissionStoreLog.info('Compat migration hit: permissions.json upgraded to SQLite')
       } else {
         this.data = createEmptyData()
       }
@@ -337,50 +424,11 @@ export class PermissionStore {
       this.backendReason = ''
     } catch (error) {
       await backend?.close().catch(() => {})
-      const jsonData = this.loadFromJson()
-      this.data = jsonData ? this.migrate(jsonData) : createEmptyData()
+      this.data = createEmptyData()
       this.markBackendUnavailable(error, 'initialize')
     }
 
     this.initialized = true
-  }
-
-  /**
-   * Load permissions from compat JSON snapshot (if present)
-   */
-  private loadFromJson(): PermissionData | null {
-    try {
-      if (fse.existsSync(this.jsonFilePath)) {
-        const data = fse.readJSONSync(this.jsonFilePath) as PermissionData
-        return data
-      }
-    } catch (error) {
-      permissionStoreLog.error('Failed to load compat JSON snapshot', { error })
-    }
-    return null
-  }
-
-  /**
-   * Normalize compat JSON data into the current SQLite-backed format
-   */
-  private migrate(data: Partial<PermissionData>): PermissionData {
-    permissionStoreLog.info('Compat migration hit: normalizing permission data', {
-      meta: { targetVersion: CURRENT_VERSION }
-    })
-    return {
-      version: CURRENT_VERSION,
-      grants: data.grants || {},
-      auditLogs: data.auditLogs || []
-    }
-  }
-
-  private async backupLegacyJson(): Promise<void> {
-    if (!(await fse.pathExists(this.jsonFilePath))) return
-    const backupPath = `${this.jsonFilePath}.backup-${Date.now()}`
-    await fse.move(this.jsonFilePath, backupPath, { overwrite: true })
-    permissionStoreLog.info('Compat migration archived permissions.json snapshot', {
-      meta: { from: this.jsonFilePath, to: backupPath }
-    })
   }
 
   /**
@@ -607,14 +655,11 @@ export class PermissionStore {
     const normalizedPermissionId = normalizePermissionId(permissionId)
     const candidates = getPermissionIdCandidates(normalizedPermissionId)
 
-    if (
-      typeof sdkapi !== 'number' ||
-      !Number.isFinite(sdkapi) ||
-      sdkapi < PERMISSION_ENFORCEMENT_MIN_VERSION
-    ) {
+    const sdkGate = getPluginSdkCompatibilityGate(pluginId, sdkapi)
+    if (sdkGate.blocked) {
       return {
-        allowed: true,
-        reason: 'legacy-sdk',
+        allowed: false,
+        reason: 'incompatible-sdk',
         hasHistoricalGrant: false
       }
     }

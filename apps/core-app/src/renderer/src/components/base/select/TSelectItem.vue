@@ -25,9 +25,7 @@ const isActive = ref(false)
 function handleDocumentClick(event: MouseEvent): void {
   if (!isActive.value) return
 
-  // Use composedPath (standard), fallback to legacy .path if needed
-  const fallbackPath = (event as { path?: EventTarget[] }).path
-  const path = (event.composedPath?.() || fallbackPath || []) as HTMLElement[]
+  const path = event.composedPath() as HTMLElement[]
   isActive.value = path.some((node) => node?.className?.includes('TSelectItem-Container'))
 }
 

@@ -774,9 +774,6 @@
       "blockedWarning": "This plugin is blocked because its SDK version is too old. The permission page is read-only.",
       "blockedStatusTitle": "Blocked Reason",
       "blockedHint": "Upgrade to sdkapi >= {version}, reinstall the plugin, then grant permissions again.",
-      "legacyTitle": "SDK Version Warning",
-      "legacyWarning": "This plugin uses a legacy SDK; permission checks were skipped",
-      "legacyHint": "Upgrade to sdkapi >= {version} to enable permission checks",
       "backendUnavailableTitle": "Permission backend is read-only",
       "backendUnavailableDesc": "SQLite permission backend is unavailable; only the loaded snapshot can be read.",
       "backendMutationFailed": "Permission mutation failed",
@@ -810,7 +807,6 @@
         "warning": {
           "permissionMissing": "Shortcut permission not granted",
           "blockedSdk": "SDK too old; plugin is blocked",
-          "legacySdk": "SDK too old; permission checks not enforced",
           "missingDescription": "Missing shortcut description"
         }
       },
@@ -1716,6 +1712,7 @@
         "best_effort": "Best effort",
         "unsupported": "Unsupported"
       },
+      "reason": "Reason",
       "limitations": "Limitations",
       "tags": {
         "sensitive": "Sensitive"
@@ -2951,6 +2948,8 @@
       "executeFailed": "Execution failed. Please retry later.",
       "selectionCount": "{count} characters selected",
       "selectionPreview": "Selected: {preview}",
+      "selectionUnavailable": "Automatic selected-text capture is unavailable on this platform.",
+      "selectionCaptureFailed": "Selected-text capture failed. Check permissions or desktop automation.",
       "selectionRequired": "This feature requires selected text before it can run.",
       "coreboxUnavailable": "CoreBox is unavailable right now. Please retry shortly.",
       "toggleFailed": "Failed to update feature status.",

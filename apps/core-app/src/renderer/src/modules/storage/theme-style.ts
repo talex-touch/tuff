@@ -32,7 +32,6 @@ class ThemeStyleStorage extends TouchStorage<ThemeStyleState> {
     this.setAutoSave(true)
 
     void this.whenHydrated().then(() => {
-      this.migrateLegacyThemeStyle()
       this.normalizeCurrentState()
     })
   }
@@ -45,39 +44,41 @@ class ThemeStyleStorage extends TouchStorage<ThemeStyleState> {
 
     this.set(current)
   }
-
-  private migrateLegacyThemeStyle(): void {
-    if (!hasWindow() || !window.localStorage) {
-      return
-    }
-
-    let rawLegacyValue: string | null = null
-    try {
-      rawLegacyValue = window.localStorage.getItem(LEGACY_THEME_STYLE_LOCAL_STORAGE_KEY)
-      if (rawLegacyValue === null) {
-        return
-      }
-      window.localStorage.removeItem(LEGACY_THEME_STYLE_LOCAL_STORAGE_KEY)
-    } catch {
-      return
-    }
-
-    const migrated = parseLegacyThemeStyle(rawLegacyValue)
-    if (!migrated) {
-      return
-    }
-
-    const current = normalizeThemeStyle(this.get())
-    const fallback = createDefaultThemeStyle()
-    if (areThemeStylesEqual(current, fallback)) {
-      this.set(migrated)
-    }
-  }
 }
 
 const themeStyleStorage = createStorageProxy(THEME_STYLE_STORAGE_SINGLETON_KEY, () => {
   return new ThemeStyleStorage()
 })
+
+export async function migrateLegacyThemeStyleStorage(): Promise<void> {
+  await themeStyleStorage.whenHydrated()
+
+  if (!hasWindow() || !window.localStorage) {
+    return
+  }
+
+  let rawLegacyValue: string | null = null
+  try {
+    rawLegacyValue = window.localStorage.getItem(LEGACY_THEME_STYLE_LOCAL_STORAGE_KEY)
+    if (rawLegacyValue === null) {
+      return
+    }
+    window.localStorage.removeItem(LEGACY_THEME_STYLE_LOCAL_STORAGE_KEY)
+  } catch {
+    return
+  }
+
+  const migrated = parseLegacyThemeStyle(rawLegacyValue)
+  if (!migrated) {
+    return
+  }
+
+  const current = normalizeThemeStyle(themeStyleStorage.get())
+  const fallback = createDefaultThemeStyle()
+  if (areThemeStylesEqual(current, fallback)) {
+    themeStyleStorage.set(migrated)
+  }
+}
 
 export const themeStyle: WritableComputedRef<ThemeStyleState> = computed({
   get: () => themeStyleStorage.data as ThemeStyleState,
