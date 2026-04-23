@@ -1255,6 +1255,8 @@
       "basicInfo": "Basic Information",
       "pluginId": "Plugin ID",
       "pluginName": "Plugin Name",
+      "commandDetailsTitle": "Command Details",
+      "commandDataTitle": "Command Data",
       "copyPluginId": "Copy plugin ID",
       "copyPluginIdSuccess": "Plugin ID copied",
       "copyPluginIdFailed": "Failed to copy plugin ID",

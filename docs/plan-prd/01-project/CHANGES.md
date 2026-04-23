@@ -5,6 +5,14 @@
 
 ## 2026-04-23
 
+### fix(core-app): 收口插件命令详情抽屉 raw 英文标题
+
+- `apps/core-app/src/renderer/src/components/plugin/tabs/CommandDetailDrawer.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `CommandDetailDrawer` 此前仍直接写着 `Command Details / Command Data` 两个英文标题，在中文环境里会从插件详情页抽屉直接露出来。
+  - 本轮只把这两个标题切到 `plugin.details` i18n，不改抽屉结构、命令描述内容或 JSON 数据展示。
+
 ### fix(core-app): 收口 SettingAbout 构建元数据标签 raw 英文
 
 - `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`

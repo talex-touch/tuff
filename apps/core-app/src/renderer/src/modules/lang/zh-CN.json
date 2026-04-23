@@ -1255,6 +1255,8 @@
       "basicInfo": "基础信息",
       "pluginId": "插件 ID",
       "pluginName": "插件名称",
+      "commandDetailsTitle": "命令详情",
+      "commandDataTitle": "命令数据",
       "copyPluginId": "复制插件 ID",
       "copyPluginIdSuccess": "插件 ID 已复制",
       "copyPluginIdFailed": "复制插件 ID 失败",
