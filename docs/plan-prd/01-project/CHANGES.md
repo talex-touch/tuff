@@ -5,6 +5,16 @@
 
 ## 2026-04-23
 
+### refactor(core-app): 收口 SearchLogger 对旧日志配置键的 runtime fallback
+
+- `apps/core-app/src/main/modules/storage/{index.ts,main-storage-registry.ts,search-engine-logs-setting-transfer.ts,search-engine-logs-setting-transfer.test.ts}`
+- `apps/core-app/src/main/modules/box-tool/search-engine/{search-logger.ts,search-logger.burst.test.ts}`
+- `docs/plan-prd/{TODO.md,docs/compatibility-debt-registry.csv}`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 搜索日志开关此前在 UI 和主进程里已经主要走 `app-setting.ini -> searchEngine.logsEnabled`，但 `SearchLogger` 仍保留对旧 `search-engine-logs-enabled` 单键文件的 runtime fallback，形成双轨配置读取。
+  - 本轮把这条旧路径改成一次性启动迁移：只有旧值为 `true` 且新配置尚未显式声明时，才把值写回 `app-setting.ini`；旧值为 `false` 时不回写默认值，只删除旧文件。
+  - 迁移时会先立即持久化新的 `app-setting.ini`，再删除旧文件，避免出现“旧值删掉了、新值还没落盘”的窗口；随后 `SearchLogger` 主路径只再读取 `app-setting.ini`，compatibility registry 里的对应 legacy 条目也同步移除。
+
 ### fix(core-app): 收口零散活跃 UI 标签 raw 英文
 
 - `apps/core-app/src/renderer/src/components/store/StoreItemCard.vue`
