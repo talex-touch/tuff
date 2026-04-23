@@ -486,8 +486,8 @@ function truncate(value: string, max = 32): string {
 }
 
 function formatStatus(status?: string | null): string {
-  if (!status) return 'UNKNOWN'
-  return status.toUpperCase()
+  const normalized = normalizeText(status)
+  return normalized ? normalized.toUpperCase() : t('settingAbout.dashboardUnknownStatus')
 }
 
 function getWorkerStateIcon(worker: TuffDashboardSnapshot['workers']['workers'][number]): string {
@@ -526,17 +526,17 @@ function formatEvent(entry: Record<string, unknown> | null): string {
 }
 
 function sourceLabel(job: OcrJobEntry): string {
-  if (!job.source) return 'UNKNOWN'
+  if (!job.source) return t('settingAbout.dashboardUnknownSource')
   if (job.source.type === 'file') {
     return job.source.filePath
       ? job.source.filePath.split(/\\|\//).pop() || job.source.filePath
-      : 'FILE_SOURCE'
+      : t('settingAbout.dashboardFileSource')
   }
   if (job.source.type === 'data-url') {
     const length = job.source.dataUrlLength ?? 0
-    return `DATA_URL (${length.toLocaleString()} chars)`
+    return t('settingAbout.dashboardDataUrlSource', { count: length.toLocaleString() })
   }
-  return 'UNKNOWN'
+  return t('settingAbout.dashboardUnknownSource')
 }
 
 // function _formatValue(value: unknown): string {
@@ -883,13 +883,15 @@ onUnmounted(() => {
                             {{ truncate(worker.lastError, 40) }}
                           </span>
                           <span v-else-if="worker.state === 'offline'" class="no-error">
-                            NOT_STARTED
+                            {{ t('settingAbout.dashboardNotStarted') }}
                           </span>
-                          <span v-else class="no-error">NONE</span>
+                          <span v-else class="no-error">{{ t('settingAbout.dashboardNone') }}</span>
                         </td>
                       </tr>
                       <tr v-if="!snapshot.workers.workers.length">
-                        <td colspan="11" class="empty-row">NO_WORKERS</td>
+                        <td colspan="11" class="empty-row">
+                          {{ t('settingAbout.dashboardNoWorkers') }}
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -943,7 +945,7 @@ onUnmounted(() => {
                         </td>
                         <td>
                           <span class="status-tag" :class="`status-${entry.status}`">
-                            {{ entry.status ?? 'UNKNOWN' }}
+                            {{ formatStatus(entry.status) }}
                           </span>
                         </td>
                         <td>{{ formatProgress(entry.progress) }}</td>
@@ -954,11 +956,13 @@ onUnmounted(() => {
                           <span v-if="entry.lastError" class="error-text" :title="entry.lastError">
                             {{ truncate(entry.lastError, 40) }}
                           </span>
-                          <span v-else class="no-error">NONE</span>
+                          <span v-else class="no-error">{{ t('settingAbout.dashboardNone') }}</span>
                         </td>
                       </tr>
                       <tr v-if="!snapshot.indexing.entries.length">
-                        <td colspan="7" class="empty-row">NO_INDEXING_RECORDS</td>
+                        <td colspan="7" class="empty-row">
+                          {{ t('settingAbout.dashboardNoIndexingRecords') }}
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -1047,11 +1051,15 @@ onUnmounted(() => {
                               }}%
                             </div>
                           </div>
-                          <span v-else class="no-result">NO_RESULT</span>
+                          <span v-else class="no-result">
+                            {{ t('settingAbout.dashboardNoOcrResult') }}
+                          </span>
                         </td>
                       </tr>
                       <tr v-if="!ocrJobs.length">
-                        <td colspan="7" class="empty-row">NO_OCR_TASKS</td>
+                        <td colspan="7" class="empty-row">
+                          {{ t('settingAbout.dashboardNoOcrTasks') }}
+                        </td>
                       </tr>
                     </tbody>
                   </table>
