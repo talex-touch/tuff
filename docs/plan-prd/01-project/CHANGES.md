@@ -5,6 +5,15 @@
 
 ## 2026-04-23
 
+### fix(core-app): 收口零散活跃 UI 标签 raw 英文
+
+- `apps/core-app/src/renderer/src/components/store/StoreItemCard.vue`
+- `apps/core-app/src/renderer/src/components/base/{tuff/TFormInput.vue,template/FormTemplate.vue}`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 正常 UI 里还残留几个零散英文：Store 卡片的 `Official Plugin` tooltip、密码输入框的 `Caps Lock` 提示，以及 `FormTemplate` 的 `Content` 默认占位。
+  - 本轮优先复用 `store.officialBadge`，并只补两条通用 key `common.capsLock / common.content`；`FormTemplate` 的英文默认 props 也一并改成空字符串，避免框架层再次漏出英文。
+
 ### fix(core-app): 收口插件命令详情抽屉 raw 英文标题
 
 - `apps/core-app/src/renderer/src/components/plugin/tabs/CommandDetailDrawer.vue`

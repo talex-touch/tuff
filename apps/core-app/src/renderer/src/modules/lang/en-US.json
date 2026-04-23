@@ -2504,6 +2504,8 @@
     "remove": "Remove",
     "close": "Close",
     "open": "Open",
+    "content": "Content",
+    "capsLock": "Caps Lock",
     "refresh": "Refresh",
     "loading": "Loading...",
     "error": "Error",
