@@ -82,9 +82,7 @@
     "allowOnce": "Allow Once",
     "allowAlways": "Always Allow",
     "requestTitle": "Permission Request",
-    "requestDesc": "{plugin} requests {permission} permission",
-    "enforcementDisabled": "Permission enforcement disabled",
-    "legacyPluginWarning": "This plugin uses legacy SDK, permission checks skipped"
+    "requestDesc": "{plugin} requests {permission} permission"
   },
   "widget": {
     "compileFailed": "Widget Compile Failed",

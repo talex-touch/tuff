@@ -538,9 +538,6 @@
 - permission.allowAlways
 - permission.requestTitle
 - permission.requestDesc
-- permission.enforcementDisabled
-- permission.legacyPluginWarning
-
 ### i18n-unused：未引用的 locale 文件
 - `apps/core-app/src/renderer/src/locales/zh-CN/download-migration.json`
 - `apps/core-app/src/renderer/src/locales/en/download-migration.json`
