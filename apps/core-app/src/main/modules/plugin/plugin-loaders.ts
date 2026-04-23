@@ -184,13 +184,12 @@ abstract class BasePluginLoader {
         type: 'warning',
         message: sdkCompat.warning,
         source: 'manifest.json',
-        code: pluginInfo.sdkapi === undefined ? 'SDK_VERSION_MISSING' : 'SDK_VERSION_OUTDATED',
+        code: sdkCompat.warningCode || 'SDK_VERSION_COMPAT_WARNING',
         suggestion: sdkCompat.suggestion,
         meta: {
           declaredVersion: pluginInfo.sdkapi,
           resolvedVersion: resolvedSdkapi,
-          currentVersion: CURRENT_SDK_VERSION,
-          enforcePermissions: sdkCompat.enforcePermissions
+          currentVersion: CURRENT_SDK_VERSION
         },
         timestamp: Date.now()
       })
@@ -266,11 +265,7 @@ abstract class BasePluginLoader {
 
       // Add permission-related issue if needed
       const permissionIssue = generatePermissionIssue(permissionStatus)
-      if (
-        permissionIssue &&
-        permissionIssue.code !== 'SDK_VERSION_MISSING' &&
-        permissionIssue.code !== 'SDK_VERSION_OUTDATED'
-      ) {
+      if (permissionIssue) {
         this.touchPlugin.issues.push({
           type: permissionIssue.type,
           message: permissionIssue.message,
