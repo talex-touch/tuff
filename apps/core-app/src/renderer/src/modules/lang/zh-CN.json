@@ -2548,6 +2548,7 @@
     "pluginInstallFailedBody": "未能添加插件 {name}",
     "pluginInstallFailedBodyWithReason": "未能添加插件 {name}：{error}",
     "pluginInstallUnknown": "插件",
+    "externalLinkConfirmTitle": "确认打开外部链接？",
     "updateAvailable": "新版本可用",
     "updateAvailableBody": "Tuff {version} 已发布\n点击查看详情",
     "updateReady": "更新已准备就绪",

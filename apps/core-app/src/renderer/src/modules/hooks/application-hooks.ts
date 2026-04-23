@@ -2,7 +2,8 @@ import { isLocalhostUrl } from '@talex-touch/utils'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { blowMention, forTouchTip } from '../mention/dialog-mention'
+import { blowMention } from '../mention/dialog-mention'
+import { confirmExternalLinkOpen } from './confirm-external-link'
 import { devLog } from '~/utils/dev-log'
 
 export async function urlHooker(): Promise<void> {
@@ -54,33 +55,7 @@ export async function urlHooker(): Promise<void> {
     if (typeof url !== 'string') return false
     if (isLocalhostUrl(url)) return false
 
-    return await new Promise<boolean>((resolve) => {
-      let resolved = false
-      const finish = (allowed: boolean) => {
-        if (resolved) return
-        resolved = true
-        resolve(allowed)
-      }
-
-      void forTouchTip('Allow to open external link?', url, [
-        {
-          content: 'Cancel',
-          type: 'info',
-          onClick: async () => {
-            finish(false)
-            return true
-          }
-        },
-        {
-          content: 'Sure',
-          type: 'danger',
-          onClick: async () => {
-            finish(true)
-            return true
-          }
-        }
-      ])
-    })
+    return await confirmExternalLinkOpen(url)
   })
 }
 
