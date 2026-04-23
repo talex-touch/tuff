@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n'
 import StoreDetailSkeleton from '~/components/store/StoreDetailSkeleton.vue'
 import { useStoreData } from '~/composables/store/useStoreData'
 import { useStoreDetail } from '~/composables/store/useStoreDetail'
+import { resolveStoreRatingErrorMessage } from '~/composables/store/store-rating-error-utils'
 import { useStoreRating } from '~/composables/store/useStoreRating'
 import { useStoreReadme } from '~/composables/store/useStoreReadme'
 import { usePluginVersionStatus } from '~/composables/store/usePluginVersionStatus'
@@ -80,17 +81,7 @@ const {
 } = useStoreRating(ratingSlug)
 
 const ratingErrorText = computed(() => {
-  const code = ratingError.value
-  if (!code) return null
-
-  if (code === 'NOT_AUTHENTICATED' || code === 'UNAUTHORIZED')
-    return t('store.rating.loginRequired')
-
-  if (code === 'INVALID_RATING') return t('store.rating.invalid')
-
-  if (code.startsWith('HTTP_ERROR_')) return t('store.rating.httpError')
-
-  return code
+  return resolveStoreRatingErrorMessage(ratingError.value, t)
 })
 
 async function onRatingChange(value: number): Promise<void> {

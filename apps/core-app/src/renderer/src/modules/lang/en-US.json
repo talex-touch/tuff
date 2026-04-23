@@ -638,7 +638,8 @@
       "loginRequiredTitle": "Login required",
       "loginRequired": "Sign in to rate this plugin.",
       "invalid": "Invalid rating value.",
-      "httpError": "Unable to submit the rating request.",
+      "httpError": "Unable to complete the rating request.",
+      "unavailable": "Rating is temporarily unavailable.",
       "submitFailedTitle": "Rating Failed"
     },
     "error": {
