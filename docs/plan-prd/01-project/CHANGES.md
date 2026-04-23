@@ -5,6 +5,14 @@
 
 ## 2026-04-23
 
+### fix(core-app): 收口 SettingAbout 构建元数据标签 raw 英文
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - About 设置页里 `Version / Build ID / Git Hash / Build Type / Build Time` 这几条构建元数据此前仍直接写在模板里，中文环境会在正式设置页继续露出英文标签。
+  - 本轮只把这 5 个标题切到 `settingAbout` i18n，保留构建值本身和其它诊断术语不动，避免扩大到 debug/下载等无关区域。
+
 ### fix(core-app): 收口 PluginNew 创建页 raw 英文与失效取消按钮
 
 - `apps/core-app/src/renderer/src/views/base/plugin/PluginNew.vue`

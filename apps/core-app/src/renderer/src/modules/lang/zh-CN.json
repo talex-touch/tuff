@@ -73,6 +73,11 @@
     "exportJson": "导出 JSON",
     "exportSuccess": "性能数据已导出",
     "exportFailed": "导出失败",
+    "buildMetadataVersion": "版本号",
+    "buildMetadataId": "构建 ID",
+    "buildMetadataGitHash": "Git 哈希",
+    "buildMetadataType": "构建类型",
+    "buildMetadataTime": "构建时间",
     "rating": {
       "excellent": "优秀",
       "good": "良好",

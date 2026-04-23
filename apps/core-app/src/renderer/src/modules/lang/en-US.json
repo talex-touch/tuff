@@ -73,6 +73,11 @@
     "exportJson": "Export JSON",
     "exportSuccess": "Performance data exported",
     "exportFailed": "Export failed",
+    "buildMetadataVersion": "Version",
+    "buildMetadataId": "Build ID",
+    "buildMetadataGitHash": "Git Hash",
+    "buildMetadataType": "Build Type",
+    "buildMetadataTime": "Build Time",
     "rating": {
       "excellent": "Excellent",
       "good": "Good",
