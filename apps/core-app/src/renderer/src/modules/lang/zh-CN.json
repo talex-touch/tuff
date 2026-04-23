@@ -625,10 +625,21 @@
       "download": "下载源文件",
       "viewDocs": "查看文档",
       "information": "插件信息",
+      "readmeLoading": "正在加载 README...",
+      "readmeEmpty": "暂无 README",
       "readmeError": "加载 README 失败",
       "notFound": "未找到插件",
       "notFoundDesc": "请检查插件 ID 或返回市场",
       "backToStore": "返回市场"
+    },
+    "rating": {
+      "title": "评分",
+      "loading": "正在加载...",
+      "loginRequiredTitle": "需要登录",
+      "loginRequired": "登录后才可为该插件评分。",
+      "invalid": "评分值无效。",
+      "httpError": "评分请求失败。",
+      "submitFailedTitle": "评分失败"
     },
     "error": {
       "loadFailed": "官方插件列表加载失败。"
@@ -653,7 +664,18 @@
       "confirmMessage": "插件「{name}」来自非官方来源，确定继续安装吗？",
       "confirmInstall": "继续安装",
       "confirmReject": "取消",
-      "beforeExitPrompt": "仍有插件安装正在进行，确认要退出吗？"
+      "beforeExitPrompt": "仍有插件安装正在进行，确认要退出吗？",
+      "reasons": {
+        "installFailed": "安装流程未完成，请稍后重试。",
+        "noSource": "当前插件缺少可用的安装源。",
+        "authRequired": "请先登录后再继续安装。",
+        "httpError": "安装请求失败（HTTP {status}）。",
+        "noProvider": "当前下载地址没有可用的安装处理器。",
+        "sdkapiBlocked": "该插件的 sdkapi 与当前 Tuff 版本不兼容。",
+        "sdkapiMissing": "该插件缺少必需的 sdkapi 声明，当前版本无法安装。",
+        "sdkapiInvalid": "该插件声明的 sdkapi 格式无效。",
+        "sdkapiOutdated": "该插件的 sdkapi {declared} 低于当前支持的最低版本 {minimum}。"
+      }
     },
     "upgradeDialog": {
       "confirmTitle": "确认更新",

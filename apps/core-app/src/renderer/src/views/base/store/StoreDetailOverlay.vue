@@ -84,11 +84,11 @@ const ratingErrorText = computed(() => {
   if (!code) return null
 
   if (code === 'NOT_AUTHENTICATED' || code === 'UNAUTHORIZED')
-    return t('store.rating.loginRequired', 'Login required to rate this plugin.')
+    return t('store.rating.loginRequired')
 
-  if (code === 'INVALID_RATING') return t('store.rating.invalid', 'Invalid rating value.')
+  if (code === 'INVALID_RATING') return t('store.rating.invalid')
 
-  if (code.startsWith('HTTP_ERROR_')) return t('store.rating.httpError', 'Request failed.')
+  if (code.startsWith('HTTP_ERROR_')) return t('store.rating.httpError')
 
   return code
 })
@@ -99,17 +99,14 @@ async function onRatingChange(value: number): Promise<void> {
 
   if (ratingError.value === 'NOT_AUTHENTICATED' || ratingError.value === 'UNAUTHORIZED') {
     userRating.value = previous
-    await forTouchTip(
-      t('store.rating.loginRequiredTitle', 'Login required'),
-      t('store.rating.loginRequired', 'Login required to rate this plugin.')
-    )
+    await forTouchTip(t('store.rating.loginRequiredTitle'), t('store.rating.loginRequired'))
     return
   }
 
   if (ratingError.value) {
     userRating.value = previous
     await forTouchTip(
-      t('store.rating.submitFailedTitle', 'Rating failed'),
+      t('store.rating.submitFailedTitle'),
       ratingErrorText.value ?? ratingError.value
     )
   }
@@ -135,7 +132,7 @@ onMounted(() => {
         <div class="readme-section">
           <div v-if="readmeLoading" class="readme-state">
             <i class="i-ri-loader-4-line animate-spin" />
-            <span>Loading README...</span>
+            <span>{{ t('store.detailDialog.readmeLoading') }}</span>
           </div>
           <div v-else-if="readmeError" class="readme-state error">
             <i class="i-ri-error-warning-line" />
@@ -145,14 +142,14 @@ onMounted(() => {
             v-else
             :readme="{ markdown: readmeMarkdown }"
             title=""
-            empty-text="No README"
+            :empty-text="t('store.detailDialog.readmeEmpty')"
             content-class="readme-content"
           />
         </div>
 
         <div class="sidebar">
           <div v-if="canRate" class="sidebar-card">
-            <h4>{{ t('store.rating.title', 'Rating') }}</h4>
+            <h4>{{ t('store.rating.title') }}</h4>
             <div class="rating-row">
               <TxRating
                 v-model="userRating"
@@ -163,7 +160,7 @@ onMounted(() => {
                 {{ ratingAverage.toFixed(1) }} · {{ ratingCount }}
               </span>
               <span v-else-if="ratingLoading" class="rating-meta">
-                {{ t('store.rating.loading', 'Loading...') }}
+                {{ t('store.rating.loading') }}
               </span>
             </div>
             <p v-if="ratingErrorText" class="rating-error">

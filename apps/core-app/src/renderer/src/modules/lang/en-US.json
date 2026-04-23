@@ -618,17 +618,28 @@
     },
     "detailDialog": {
       "author": "Author",
-      "version": " Version",
+      "version": "Version",
       "updateTime": "Update Time",
       "pluginId": "Plugin ID",
       "provider": "Provider",
       "download": "Download Source",
       "viewDocs": "View Documentation",
       "information": "Information",
+      "readmeLoading": "Loading README...",
+      "readmeEmpty": "No README yet",
       "readmeError": "Failed to load README",
       "notFound": "Plugin Not Found",
       "notFoundDesc": "Check the plugin ID or return to store",
       "backToStore": "Back to Store"
+    },
+    "rating": {
+      "title": "Rating",
+      "loading": "Loading...",
+      "loginRequiredTitle": "Login required",
+      "loginRequired": "Sign in to rate this plugin.",
+      "invalid": "Invalid rating value.",
+      "httpError": "Unable to submit the rating request.",
+      "submitFailedTitle": "Rating Failed"
     },
     "error": {
       "loadFailed": "Failed to load official plugin list."
@@ -653,7 +664,18 @@
       "confirmMessage": "\"{name}\" comes from an unofficial source. Proceed with installation?",
       "confirmInstall": "Install",
       "confirmReject": "Cancel",
-      "beforeExitPrompt": "Plugin installations are still running. Are you sure you want to exit?"
+      "beforeExitPrompt": "Plugin installations are still running. Are you sure you want to exit?",
+      "reasons": {
+        "installFailed": "The installation did not complete. Please try again.",
+        "noSource": "This plugin does not expose a usable install source.",
+        "authRequired": "Sign in before installing this plugin.",
+        "httpError": "The installation request failed (HTTP {status}).",
+        "noProvider": "No installer is available for this download source.",
+        "sdkapiBlocked": "This plugin's sdkapi is not compatible with the current Tuff version.",
+        "sdkapiMissing": "This plugin is missing the required sdkapi declaration.",
+        "sdkapiInvalid": "This plugin declares an invalid sdkapi format.",
+        "sdkapiOutdated": "This plugin's sdkapi {declared} is below the minimum supported version {minimum}."
+      }
     },
     "upgradeDialog": {
       "confirmTitle": "Confirm Update",
