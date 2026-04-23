@@ -5,6 +5,16 @@
 
 ## 2026-04-23
 
+### fix(core-app): 收口 Store 详情与安装流残留的 raw 英文/错误码
+
+- `apps/core-app/src/renderer/src/views/base/store/StoreDetailOverlay.vue`
+- `apps/core-app/src/renderer/src/composables/store/{useStoreInstall.ts,useStoreReadme.ts,store-install-error-utils.ts,store-install-error-utils.test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Store 详情页此前仍有 `Loading README...`、`No README`、`Rating`、`Loading...` 等英文 fallback，README 加载失败也还保留英文兜底；本轮补齐 `store.detailDialog` / `store.rating` 文案，避免在中文环境继续露出 raw 英文占位。
+  - 安装失败弹窗此前会直接拼接 `STORE_INSTALL_NO_SOURCE`、`INSTALL_FAILED`、`HTTP_ERROR_503` 甚至 `sdkapi` gate 的英文句子；本轮新增可测试的 renderer 侧失败原因解析，把常见 code / sdk gate 错误翻译成用户可读提示，未知诊断信息仍原样保留。
+  - 顺手修正 `store.detailDialog.version` 英文文案前缀空格，避免详情侧栏继续出现细小但明显的 UI 粗糙点。
+
 ### docs(nexus): 收口壁纸指南残留的假云同步口径
 
 - `apps/nexus/content/docs/guide/features/wallpaper.{zh,en}.mdc`

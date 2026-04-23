@@ -24,7 +24,7 @@ export function useStoreReadme(readmeUrl: Ref<string | undefined>, t: (key: stri
       readmeMarkdown.value = response.data
     } catch (error) {
       console.error('[StoreDetail] Failed to load README:', error)
-      readmeError.value = t('store.detailDialog.readmeError') || 'Failed to load README'
+      readmeError.value = t('store.detailDialog.readmeError')
     } finally {
       readmeLoading.value = false
     }

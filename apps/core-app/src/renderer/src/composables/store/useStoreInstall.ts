@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { useInstallManager } from '~/modules/install/install-manager'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
+import { resolveStoreInstallFailureReason } from './store-install-error-utils'
 
 export interface InstallOptions {
   /** Whether this is an upgrade (force update existing plugin) */
@@ -218,7 +219,7 @@ export function useStoreInstall() {
         failureTitle,
         t('store.installation.failureMessage', {
           name: plugin.name,
-          reason: errorMessage
+          reason: resolveStoreInstallFailureReason(errorMessage, t)
         })
       )
     }
