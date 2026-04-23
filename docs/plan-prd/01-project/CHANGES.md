@@ -5,6 +5,15 @@
 
 ## 2026-04-23
 
+### refactor(core-app): 删除权限 hard-cut 后残留的 legacy i18n key
+
+- `packages/utils/i18n/message-keys.ts`
+- `packages/utils/i18n/locales/{en,zh}.json`
+- `docs/plan-prd/ISSUES.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 权限体系当前已经没有“旧 SDK 跳过权限校验”的运行时路径，但 `packages/utils` 里仍残留 `permission.enforcementDisabled` 与 `permission.legacyPluginWarning` 两条未引用 key，会让 i18n 清单继续保留过期语义。
+  - 本轮直接删除这两条 dead key，并同步从 `ISSUES.md` 的 unused key 列表里去掉，避免后续兼容扫描和文档阅读继续误判 hard-cut 仍保留 legacy bypass 口径。
+
 ### fix(core-app): 接通 Store 搜索框的真实查询链路
 
 - `apps/core-app/src/renderer/src/components/base/input/FlatCompletion.vue`
