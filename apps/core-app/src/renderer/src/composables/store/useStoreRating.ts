@@ -3,6 +3,7 @@ import { useNetworkSdk } from '@talex-touch/utils/renderer'
 import { ref, watch } from 'vue'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
+import { normalizeStoreRatingError } from './store-rating-error-utils'
 
 export interface StorePluginRatingSummary {
   average: number
@@ -52,7 +53,7 @@ export function useStoreRating(slug: Ref<string | undefined>) {
       average.value = data.rating.average
       count.value = data.rating.count
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'UNKNOWN_ERROR'
+      error.value = normalizeStoreRatingError(err)
     } finally {
       loading.value = false
     }
@@ -105,7 +106,7 @@ export function useStoreRating(slug: Ref<string | undefined>) {
       average.value = data.rating.average
       count.value = data.rating.count
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'UNKNOWN_ERROR'
+      error.value = normalizeStoreRatingError(err)
     } finally {
       submitting.value = false
     }

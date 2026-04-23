@@ -5,6 +5,16 @@
 
 ## 2026-04-23
 
+### fix(core-app): 收口 Store 详情评分错误 raw fallback
+
+- `apps/core-app/src/renderer/src/composables/store/{useStoreRating.ts,store-rating-error-utils.ts,store-rating-error-utils.test.ts}`
+- `apps/core-app/src/renderer/src/views/base/store/StoreDetailOverlay.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Store 详情评分请求此前仍会把 `Failed to fetch`、`Network Error` 或 `UNKNOWN_ERROR` 这类运行时异常原样带到详情侧栏和失败提示里，继续暴露 raw 异常文本。
+  - 本轮补一个可测试的 renderer 侧评分错误归一化，把已知 code 保留给 UI 判定，其余运行时异常统一折叠成通用错误，再映射到 `store.rating` i18n 文案。
+  - 同步把评分 HTTP 失败英文提示收口成通用请求失败语义，避免加载评分摘要和提交评分时共用一条文案却仍写成 submit-only。
+
 ### fix(core-app): 收口 Store 详情与安装流残留的 raw 英文/错误码
 
 - `apps/core-app/src/renderer/src/views/base/store/StoreDetailOverlay.vue`

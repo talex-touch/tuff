@@ -639,6 +639,7 @@
       "loginRequired": "登录后才可为该插件评分。",
       "invalid": "评分值无效。",
       "httpError": "评分请求失败。",
+      "unavailable": "评分暂时不可用。",
       "submitFailedTitle": "评分失败"
     },
     "error": {
