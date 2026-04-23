@@ -5,6 +5,26 @@
 
 ## 2026-04-23
 
+### refactor(core-app): 收口插件 sdkapi warning code 与运行时文档口径
+
+- `packages/utils/plugin/sdk-version.ts`
+- `packages/utils/plugin/index.ts`
+- `packages/utils/permission/index.ts`
+- `packages/utils/__tests__/permission-status.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- `packages/utils/i18n/message-keys.ts`
+- `packages/utils/i18n/locales/{en,zh}.json`
+- `apps/nexus/content/docs/dev/reference/runtime-startup-env.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/reference/manifest.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/api/permission.{zh,en}.mdc`
+- `AGENTS.md`
+- `docs/plan-prd/ISSUES.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `sdkapi` 缺失 / 非法 / 低于门槛现在统一只代表 `SDKAPI_BLOCKED`，不再保留 `SDK_VERSION_MISSING` / `SDK_VERSION_OUTDATED` 这类 legacy warning 语义，避免把 hard-cut 又说回“兼容模式”。
+  - 对于“声明了更高 SDK marker”或“使用非 canonical marker 但仍可归一化”的非阻断场景，loader 改为统一发出 `SDK_VERSION_COMPAT_WARNING`，不再误用 `SDK_VERSION_OUTDATED`。
+  - `packages/utils` 里的 permission helper 不再把旧 sdk 当成权限绕过路径；同步删除未使用的 plugin i18n key，并把 AGENTS / manifest / permission / runtime-startup 文档统一到当前 `260228 + SQLite SoT` 口径。
+
 ### refactor(core-app): 删除 renderer 权限中心未使用的旧 SDK 兼容壳
 
 - `apps/core-app/src/renderer/src/components/permission/index.ts`
@@ -395,6 +415,7 @@
 - `apps/core-app/src/main/modules/permission/permission-guard.ts`
 - `apps/nexus/content/docs/dev/reference/runtime-startup-env.zh.mdc`
 - `apps/nexus/content/docs/dev/reference/runtime-startup-env.en.mdc`
+  - 注：这是 2026-04-17 的阶段性回退记录，已在 2026-04-22/2026-04-23 被后续 `sdkapi` hard-cut 收口替代。
   - 未声明 `sdkapi` 或低于 `251212` 的 legacy 插件恢复为 warning + 权限兼容跳过，不再在加载、安装预检或运行期权限守卫中被误标记为 `SDKAPI_BLOCKED`。
   - `resolveSdkApiVersion` 对有效但低于首个支持标记的版本保留原始版本号，避免把旧但合法的 `YYMMDD` sdkapi 误报为 invalid。
   - Runtime startup issue code 文档同步收口：`SDKAPI_BLOCKED` 仅作为历史/保留硬阻断码，legacy 缺失或过低走 `SDK_VERSION_MISSING` / `SDK_VERSION_OUTDATED` warning。

@@ -456,7 +456,7 @@
 - 范围：`packages/utils/i18n/message-keys.ts`
 - 证据：`DevServerKeys` 与 `FlowTransferKeys` 在运行时代码中被引用，其余分组未引用。
 - 未使用分组（代码中未发现 `*Keys.` 引用）：
-  - PluginKeys (8 keys)
+  - PluginKeys (6 keys)
   - WidgetKeys (4 keys)
   - SystemKeys (4 keys)
   - PermissionKeys (58 keys)
@@ -467,8 +467,6 @@
 - plugin.dependencyMissing
 - plugin.versionMismatch
 - plugin.permissionDenied
-- plugin.sdkVersionMissing
-- plugin.sdkVersionOutdated
 - plugin.permissionMissing
 
 #### WidgetKeys

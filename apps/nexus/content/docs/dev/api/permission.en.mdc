@@ -1,7 +1,7 @@
 # Permission System
 
 ## Overview
-The plugin permission system controls access to sensitive resources and APIs. Starting from SDK API version `251212`, all permission declarations are enforced.
+The plugin permission system controls access to sensitive resources and APIs. Starting from SDK API version `251212`, all permission declarations are enforced, and plugins that do not declare a valid `sdkapi` are blocked by runtime.
 
 ## Introduction
 Permissions follow a least-privilege model and pair `permissions` with `permissionReasons` to explain intent to users.
@@ -17,7 +17,7 @@ code: |
     "id": "com.example.plugin",
     "name": "My Plugin",
     "version": "1.0.0",
-    "sdkapi": 251212,
+    "sdkapi": 260228,
     "permissions": {
       "required": ["clipboard.read", "network.internet"],
       "optional": ["storage.shared"]
@@ -72,12 +72,12 @@ These permissions are automatically granted:
 
 **sdkapi Field**
 
-The `sdkapi` field determines whether permission checking is enabled:
+The `sdkapi` field determines whether permission checking can enter the runtime:
 
 | sdkapi Value | Permission Check | Notes |
 |--------------|------------------|-------|
-| Not declared | Skipped | Shows legacy SDK warning |
-| < 251212 | Skipped | Shows legacy SDK warning |
+| Not declared | Blocked | Runtime returns `SDKAPI_BLOCKED` |
+| < 251212 | Blocked | Runtime returns `SDKAPI_BLOCKED` |
 | >= 251212 | Enabled | Full permission enforcement |
 
 **Migration Guide**
@@ -88,7 +88,7 @@ If your plugin doesn't declare `sdkapi` or has a lower version:
 ---
 code: |
   {
-    "sdkapi": 251212,
+    "sdkapi": 260228,
     "permissions": {
       "required": ["clipboard.read"],
       "optional": []
@@ -99,7 +99,7 @@ code: |
 
 ## Technical Notes
 - Permission enforcement is managed by the centralized permission center once `sdkapi` meets the threshold.
-- Grants are persisted at `<appData>/config/permission/permissions.json` and synchronized to the renderer via IPC.
+- Grants are persisted in the SQLite-backed permission store under `<appData>/config/permission/`; legacy `permissions.json` is migration-only and no longer the writable source of truth.
 
 ## API Reference
 
@@ -151,7 +151,7 @@ When using `usePluginSqlite()`, declare `storage.sqlite` in required permissions
 ---
 code: |
   {
-    "sdkapi": 260215,
+    "sdkapi": 260228,
     "permissions": {
       "required": ["storage.sqlite"],
       "optional": []
@@ -263,14 +263,14 @@ Users can manage plugin permissions at:
 
 ## FAQ
 
-**Q: Why does my plugin show "Legacy SDK" warning?**
+**Q: Why does my plugin show `SDKAPI_BLOCKED`?**
 
-A: Your `manifest.json` doesn't declare `sdkapi` or the version is below `251212`. Add:
+A: Your `manifest.json` doesn't declare `sdkapi`, uses an invalid marker, or the version is below `251212`. Update it to the current supported marker:
 
 :::TuffCodeBlock{lang="json"}
 ---
 code: |
-  "sdkapi": 251212
+  "sdkapi": 260228
 ---
 :::
 
@@ -294,4 +294,4 @@ code: |
 
 **Q: Where is permission data stored?**
 
-A: Permission grants are stored in `<appData>/config/permission/permissions.json`.
+A: Permission grants are stored in the SQLite-backed permission store under `<appData>/config/permission/`; `permissions.json` only exists as a legacy migration source when upgrading old installs.

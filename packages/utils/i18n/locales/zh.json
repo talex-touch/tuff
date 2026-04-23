@@ -23,8 +23,6 @@
     "dependencyMissing": "缺少依赖",
     "versionMismatch": "版本不匹配",
     "permissionDenied": "权限被拒绝",
-    "sdkVersionMissing": "插件未声明 SDK 版本",
-    "sdkVersionOutdated": "插件 SDK 版本过旧",
     "permissionMissing": "缺少必需权限"
   },
   "permission": {

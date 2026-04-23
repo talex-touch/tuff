@@ -1,6 +1,6 @@
 # Core App Startup and Runtime Env Reference
 
-> Updated: 2026-04-20
+> Updated: 2026-04-23
 > Scope: actual `process.env` / `import.meta.env` usage in `apps/core-app/src`
 
 ## Startup Incident Summary (Changes 1 + 2)
@@ -28,9 +28,8 @@
 | `MANIFEST_MISSING_NAME` | error | missing `name` |
 | `MANIFEST_MISSING_VERSION` | warning | missing `version` |
 | `CATEGORY_MISSING` | error | `category` required for current `sdkapi` |
-| `SDKAPI_BLOCKED` | error | historical/reserved hard-block code; legacy plugins missing `sdkapi` or below the threshold no longer use it by default |
-| `SDK_VERSION_MISSING` | warning | legacy plugin missing `sdkapi` |
-| `SDK_VERSION_OUTDATED` | warning | old `sdkapi` or legacy compatibility fallback |
+| `SDKAPI_BLOCKED` | error | plugin is blocked because `sdkapi` is missing, invalid, or below the enforced baseline |
+| `SDK_VERSION_COMPAT_WARNING` | warning | plugin declares a newer SDK or a non-canonical marker, so runtime normalizes to the nearest supported marker and warns about possible feature drift |
 | `PERMISSION_MISSING` | warning | required permissions not granted |
 | `UNKNOWN_PERMISSION_IDS` | warning | unknown permission IDs declared |
 | `INVALID_FEATURE_COMMANDS` | warning | invalid feature.commands shape |

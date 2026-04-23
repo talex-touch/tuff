@@ -286,6 +286,26 @@ describe('createPluginLoader', () => {
     expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_MISSING')).toBe(false)
   })
 
+  it('uses neutral sdk compatibility warnings for future sdk markers', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'future sdk plugin',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: 260301,
+      category: 'utilities'
+    })
+    createdPaths.push(pluginPath)
+
+    const loader = createPluginLoader('touch-translation', pluginPath)
+    const plugin = await loader.load()
+
+    expect(plugin.loadError).toBeUndefined()
+    expect(plugin.loadState).not.toBe('load_failed')
+    expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_COMPAT_WARNING')).toBe(true)
+    expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_OUTDATED')).toBe(false)
+  })
+
   it('creates loader plugin shells without eager data initialization', async () => {
     const pluginPath = await createPluginDir({
       name: 'touch-translation',

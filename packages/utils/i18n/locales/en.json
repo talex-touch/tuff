@@ -23,8 +23,6 @@
     "dependencyMissing": "Missing Dependency",
     "versionMismatch": "Version Mismatch",
     "permissionDenied": "Permission Denied",
-    "sdkVersionMissing": "Plugin SDK version not declared",
-    "sdkVersionOutdated": "Plugin SDK version outdated",
     "permissionMissing": "Required permission missing"
   },
   "permission": {

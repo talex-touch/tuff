@@ -49,8 +49,6 @@ export const PluginKeys = {
   DEPENDENCY_MISSING: 'plugin.dependencyMissing',
   VERSION_MISMATCH: 'plugin.versionMismatch',
   PERMISSION_DENIED: 'plugin.permissionDenied',
-  SDK_VERSION_MISSING: 'plugin.sdkVersionMissing',
-  SDK_VERSION_OUTDATED: 'plugin.sdkVersionOutdated',
   PERMISSION_MISSING: 'plugin.permissionMissing',
 } as const
 
