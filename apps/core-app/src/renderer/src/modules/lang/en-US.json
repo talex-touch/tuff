@@ -1193,6 +1193,45 @@
         "metadataHint": "Use this for tag / branch and other extra info. Leave empty for automatic handling.",
         "actionBlockTitle": "Action",
         "sourceTypeResult": "Source type"
+      },
+      "create": {
+        "templatesTitle": "Templates",
+        "generalTitle": "General",
+        "readmeTitle": "README",
+        "actionsTitle": "Actions",
+        "openInVscode": "Open in VSCode",
+        "agreementPrefix": "Agree with",
+        "agreementName": "Touch Plugin Development",
+        "createAction": "Create",
+        "agreementAlertTitle": "Attention",
+        "agreementAlertMessage": "You must agree with <i style='color: #4E94B0'>Touch Plugin Development</i> protocol.",
+        "fields": {
+          "name": "Name",
+          "icon": "Icon",
+          "version": "Version",
+          "devAddress": "Dev Address",
+          "description": "Description"
+        },
+        "validation": {
+          "name": "Enter a valid plugin name.",
+          "version": "Enter a valid plugin version.",
+          "devAddress": "Enter a valid plugin dev address.",
+          "description": "Enter a valid plugin description."
+        },
+        "templates": {
+          "download": "Download",
+          "vueDescription": "Contains a default dev environment using Vue 3 and Vite.",
+          "reactDescription": "Contains a default dev environment using React 18 and Vite.",
+          "svelteDescription": "Contains a default dev environment using Svelte 3 and Vite."
+        },
+        "env": {
+          "nodeTooLow": "Node.js version is too low (v{version}). Please upgrade to 16 or higher.",
+          "nodeMissing": "Node.js is required. Install it first.",
+          "degitMissing": "degit is required. Install it first.",
+          "degitInstalled": "Installed",
+          "degitInstallingTitle": "Installing degit",
+          "installDegit": "Install degit"
+        }
       }
     },
     "logs": {

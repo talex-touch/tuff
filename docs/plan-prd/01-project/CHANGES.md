@@ -5,6 +5,15 @@
 
 ## 2026-04-23
 
+### fix(core-app): 收口 PluginNew 创建页 raw 英文与失效取消按钮
+
+- `apps/core-app/src/renderer/src/views/base/plugin/PluginNew.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `PluginNew` 的 create tab 之前仍直接写着 `Templates / General / Readme / Actions / Download / Cancel / Create`、多条英文校验提示，以及 `Attention / Installing degit` 这类弹层标题；中文环境下会像半成品开发页。
+  - 本轮只收 create tab：新增 `plugin.new.create` 文案，把模板说明、字段标题、校验提示、协议提醒、degit 环境提示与创建按钮统一切到 i18n。
+  - 顺手补上 `Cancel` 按钮关闭行为，避免这个动作按钮继续只是视觉占位。
+
 ### fix(core-app): 收口剪贴板触发提示 raw 英文与原始 payload 直出
 
 - `apps/core-app/src/renderer/src/modules/hooks/{application-hooks.ts,clipboard-trigger-mention-utils.ts,clipboard-trigger-mention-utils.test.ts}`

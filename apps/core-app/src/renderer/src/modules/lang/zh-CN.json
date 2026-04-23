@@ -1193,6 +1193,45 @@
         "metadataHint": "用于指定 tag / branch 等额外信息，留空则自动处理。",
         "actionBlockTitle": "执行",
         "sourceTypeResult": "来源类型"
+      },
+      "create": {
+        "templatesTitle": "模板",
+        "generalTitle": "基础信息",
+        "readmeTitle": "README",
+        "actionsTitle": "操作",
+        "openInVscode": "在 VSCode 中打开",
+        "agreementPrefix": "同意",
+        "agreementName": "Touch Plugin Development",
+        "createAction": "创建",
+        "agreementAlertTitle": "注意",
+        "agreementAlertMessage": "你必须同意 <i style='color: #4E94B0'>Touch Plugin Development</i> 协议。",
+        "fields": {
+          "name": "名称",
+          "icon": "图标",
+          "version": "版本",
+          "devAddress": "开发地址",
+          "description": "描述"
+        },
+        "validation": {
+          "name": "请输入有效的插件名称。",
+          "version": "请输入有效的插件版本。",
+          "devAddress": "请输入有效的插件开发地址。",
+          "description": "请输入有效的插件描述。"
+        },
+        "templates": {
+          "download": "下载",
+          "vueDescription": "包含基于 Vue 3 和 Vite 的默认开发环境。",
+          "reactDescription": "包含基于 React 18 和 Vite 的默认开发环境。",
+          "svelteDescription": "包含基于 Svelte 3 和 Vite 的默认开发环境。"
+        },
+        "env": {
+          "nodeTooLow": "Node.js 版本过低（v{version}），请升级到 16 或更高版本。",
+          "nodeMissing": "缺少 Node.js，请先安装。",
+          "degitMissing": "缺少 degit，请先安装。",
+          "degitInstalled": "已安装",
+          "degitInstallingTitle": "正在安装 degit",
+          "installDegit": "安装 degit"
+        }
       }
     },
     "logs": {
