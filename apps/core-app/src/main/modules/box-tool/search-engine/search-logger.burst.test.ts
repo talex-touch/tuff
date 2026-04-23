@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { StorageList } from '@talex-touch/utils/common/storage/constants'
 
 const { getMainConfigMock, saveMainConfigMock, subscribeMainConfigMock, isMainStorageReadyMock } =
   vi.hoisted(() => ({
@@ -44,6 +45,9 @@ describe('search-logger burst', () => {
 
     searchLogger.destroy()
     await searchLogger.setEnabled(false)
+    getMainConfigMock.mockClear()
+    saveMainConfigMock.mockClear()
+    subscribeMainConfigMock.mockClear()
   })
 
   it('默认手动关闭时不开启日志', () => {
@@ -65,5 +69,12 @@ describe('search-logger burst', () => {
     saveMainConfigMock.mockClear()
     searchLogger.enableBurst(5_000, 'ephemeral')
     expect(saveMainConfigMock).not.toHaveBeenCalled()
+  })
+
+  it('只从 app setting 读取日志开关', async () => {
+    await searchLogger.init()
+
+    expect(getMainConfigMock).toHaveBeenCalledWith(StorageList.APP_SETTING)
+    expect(getMainConfigMock).not.toHaveBeenCalledWith(StorageList.SEARCH_ENGINE_LOGS_ENABLED)
   })
 })

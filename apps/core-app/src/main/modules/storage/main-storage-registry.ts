@@ -18,8 +18,6 @@ import { openersOriginData } from '@talex-touch/utils/common/storage/entity/open
 import { shortcutSettingOriginData } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { createDefaultStoreSourcesPayload } from '@talex-touch/utils/store'
 
-export type SearchEngineLogsSetting = boolean
-
 export interface EverythingSettings {
   enabled?: boolean
 }
@@ -135,12 +133,6 @@ function normalizeArray<T>(value: unknown, fallback: T): T {
   return Array.isArray(value) ? (value as T) : fallback
 }
 
-function normalizeBoolean(value: unknown, fallback: boolean): boolean {
-  if (typeof value === 'boolean') return value
-  if (typeof value === 'string') return value === 'true'
-  return fallback
-}
-
 function normalizeNotificationCenter(
   value: unknown,
   fallback: NotificationCenterStore
@@ -226,11 +218,6 @@ export const mainStorageRegistry = {
     key: StorageList.THEME_STYLE,
     defaultValue: {},
     normalize: normalizeObject
-  }),
-  [StorageList.SEARCH_ENGINE_LOGS_ENABLED]: defineEntry<SearchEngineLogsSetting>({
-    key: StorageList.SEARCH_ENGINE_LOGS_ENABLED,
-    defaultValue: false,
-    normalize: (value, fallback) => normalizeBoolean(value, fallback)
   }),
   [StorageList.EVERYTHING_SETTINGS]: defineEntry<EverythingSettings>({
     key: StorageList.EVERYTHING_SETTINGS,

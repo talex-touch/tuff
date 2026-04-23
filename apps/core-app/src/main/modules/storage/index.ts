@@ -12,19 +12,17 @@ import { StorageList } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
-import { eq } from 'drizzle-orm'
 import fse from 'fs-extra'
-import { config as configSchema } from '../../db/schema'
 import { runStartupMigration } from '../../core/startup-migrations'
 import { appTaskGate } from '../../service/app-task-gate'
 import { enterPerfContext } from '../../utils/perf-context'
 import { BaseModule } from '../abstract-base-module'
-import { databaseModule } from '../database'
 import {
   mainStorageRegistry,
   removeLegacyLayoutOpacity,
   resolveMainStorageValue
 } from './main-storage-registry'
+import { buildSearchEngineLogsSettingMigrationPlan } from './search-engine-logs-setting-transfer'
 import { StorageCache } from './storage-cache'
 import { StorageFrequencyMonitor } from './storage-frequency-monitor'
 import { StorageLRUManager } from './storage-lru-manager'
@@ -40,7 +38,6 @@ const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 let storageUpdateEmitter: ((name: string, version: number) => void) | null = null
 
-const SQLITE_PILOT_CONFIGS = new Set<string>([StorageList.SEARCH_ENGINE_LOGS_ENABLED])
 const STORAGE_PERSIST_GATE_WAIT_MAX_MS = 250
 const STORAGE_PERSIST_GATE_WAIT_WARN_MS = 1_000
 
@@ -157,7 +154,6 @@ export class StorageModule extends BaseModule {
     }
 
     await this.runStartupMigrations(file.dirPath!)
-    void this.runSqlitePilotMigration()
   }
 
   async onDestroy(): Promise<void> {
@@ -229,6 +225,38 @@ export class StorageModule extends BaseModule {
         return { changed: true }
       }
     })
+
+    await runStartupMigration({
+      id: 'search-engine-logs-app-setting',
+      version: 1,
+      markerDir,
+      run: async () => {
+        const appSettingPath = path.join(markerDir, StorageList.APP_SETTING)
+        const historicalSettingPath = path.join(markerDir, StorageList.SEARCH_ENGINE_LOGS_ENABLED)
+        const rawAppSetting = await this.readJsonConfig(appSettingPath)
+        const rawHistoricalSetting = await this.readJsonConfig(historicalSettingPath)
+        const migration = buildSearchEngineLogsSettingMigrationPlan(
+          rawAppSetting,
+          rawHistoricalSetting
+        )
+
+        if (migration.writeAppSetting) {
+          this.saveConfig(StorageList.APP_SETTING, migration.nextAppSetting, false, true)
+          await this.persistConfig(StorageList.APP_SETTING)
+          this.cache.clearDirty(StorageList.APP_SETTING)
+        }
+
+        if (migration.removeHistoricalSetting && (await fse.pathExists(historicalSettingPath))) {
+          await fse.remove(historicalSettingPath)
+          this.cache.evict(StorageList.SEARCH_ENGINE_LOGS_ENABLED)
+          this.persistedContent.delete(StorageList.SEARCH_ENGINE_LOGS_ENABLED)
+        }
+
+        return {
+          changed: migration.writeAppSetting || migration.removeHistoricalSetting
+        }
+      }
+    })
   }
 
   public getCacheStats(): { cachedConfigs: number; pluginConfigs: number } {
@@ -238,74 +266,19 @@ export class StorageModule extends BaseModule {
     }
   }
 
-  private async runSqlitePilotMigration(): Promise<void> {
-    if (SQLITE_PILOT_CONFIGS.size === 0) {
-      return
-    }
-
-    for (const key of SQLITE_PILOT_CONFIGS) {
-      try {
-        const raw = this.getConfig(key)
-        const normalized = Object.prototype.hasOwnProperty.call(mainStorageRegistry, key)
-          ? resolveMainStorageValue(key as MainStorageKey, raw)
-          : raw
-        await this.upsertSqliteConfig(key, normalized)
-      } catch (error) {
-        storageLog.warn('SQLite pilot migration failed', { error, meta: { key } })
-      }
-    }
-  }
-
-  private async upsertSqliteConfig(
-    name: string,
-    data: unknown,
-    serialized?: string
-  ): Promise<void> {
-    if (!SQLITE_PILOT_CONFIGS.has(name)) {
-      return
-    }
-
-    let db
-    try {
-      db = databaseModule.getDb()
-    } catch (error) {
-      storageLog.warn('SQLite not ready for config migration', { error, meta: { name } })
-      return
-    }
-
-    let payload = serialized
-    if (!payload) {
-      const safeValue = data === undefined ? {} : data
-      try {
-        payload = JSON.stringify(safeValue)
-      } catch (error) {
-        storageLog.warn('Failed to serialize config for SQLite', { error, meta: { name } })
-        return
-      }
+  private async readJsonConfig(filePath: string): Promise<unknown> {
+    if (!(await fse.pathExists(filePath))) {
+      return undefined
     }
 
     try {
-      await db
-        .insert(configSchema)
-        .values({ key: name, value: payload })
-        .onConflictDoUpdate({
-          target: configSchema.key,
-          set: { value: payload }
-        })
-
-      const record = await db
-        .select({ value: configSchema.value })
-        .from(configSchema)
-        .where(eq(configSchema.key, name))
-        .get()
-
-      if (!record || record.value !== payload) {
-        storageLog.warn('SQLite config verification mismatch', { meta: { name } })
-      } else {
-        storageLog.info('SQLite config synced', { meta: { name } })
-      }
+      return await fse.readJson(filePath)
     } catch (error) {
-      storageLog.warn('Failed to upsert SQLite config', { error, meta: { name } })
+      storageLog.warn('Failed to read config during startup migration', {
+        error,
+        meta: { filePath }
+      })
+      return undefined
     }
   }
 
@@ -640,8 +613,6 @@ export class StorageModule extends BaseModule {
 
       // Set new data and get new version
       const newVersion = this.cache.set(name, parsed as object, true, serialized)
-      void this.upsertSqliteConfig(name, parsed, serialized)
-
       // Broadcast update to other windows (exclude source)
       setImmediate(() => {
         broadcastUpdate(name, newVersion, sourceWebContentsId)

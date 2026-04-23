@@ -14,7 +14,7 @@ describe('plugin-apply-install-utils', () => {
     expect(isPluginAlreadyInstalledMessage('10091')).toBe(false)
   })
 
-  it('maps legacy install result codes to translated copy', () => {
+  it('maps historical install result codes to translated copy', () => {
     expect(resolvePluginApplyInstallErrorMessage('10091', translate)).toBe(
       'plugin.dropInstall.corrupted:null'
     )
