@@ -5,6 +5,14 @@
 
 ## 2026-04-23
 
+### fix(core-app): 收口详细信息页剩余 raw placeholder 空态
+
+- `apps/core-app/src/renderer/src/views/base/LingPan.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 继续复核 `/details` 页后，发现 Worker/索引/OCR 三块表格仍直接显示 `NO_WORKERS`、`NO_INDEXING_RECORDS`、`NO_RESULT`、`NO_OCR_TASKS`，并夹带 `NONE / NOT_STARTED / UNKNOWN / FILE_SOURCE / DATA_URL` 这类未收口占位。
+  - 本轮把这些空态、缺省值和 OCR source fallback 统一切到 `settingAbout` i18n 文案，仅保留诊断表头本身的 debug 风格，避免设置入口继续出现 raw placeholder。
+
 ### fix(core-app): 收口详细信息页 Active Application 调试占位
 
 - `apps/core-app/src/renderer/src/views/base/LingPan.vue`
