@@ -24,6 +24,7 @@ import { getNetworkService } from '../network'
 import { TouchPlugin } from './plugin'
 import { PluginFeature } from './plugin-feature'
 import { type PackagedManifest, ensurePluginRuntimeIntegrity } from './plugin-runtime-integrity'
+import { getPluginSdkCompatibilityGate, SDKAPI_BLOCKED_CODE } from './sdk-compat'
 
 /**
  * Plugin manifest structure from manifest.json
@@ -150,9 +151,35 @@ abstract class BasePluginLoader {
     // SDK version compatibility check
     const resolvedSdkapi = resolveSdkApiVersion(pluginInfo.sdkapi)
     this.touchPlugin.sdkapi = resolvedSdkapi
+    const sdkCompatGate = getPluginSdkCompatibilityGate(this.pluginName, pluginInfo.sdkapi)
+    const sdkBlocked = sdkCompatGate.blocked
 
-    const sdkCompat = checkSdkCompatibility(pluginInfo.sdkapi, this.pluginName)
-    if (sdkCompat.warning) {
+    if (sdkBlocked) {
+      const blockedMessage =
+        sdkCompatGate.message ||
+        `Plugin "${this.pluginName}" is blocked by the sdkapi compatibility gate.`
+      this.touchPlugin.issues.push({
+        type: 'error',
+        message: blockedMessage,
+        source: 'manifest.json',
+        code: SDKAPI_BLOCKED_CODE,
+        suggestion: sdkCompatGate.suggestion,
+        meta: {
+          declaredVersion: pluginInfo.sdkapi,
+          resolvedVersion: sdkCompatGate.resolvedSdkapi,
+          currentVersion: CURRENT_SDK_VERSION,
+          reason: sdkCompatGate.reason
+        },
+        timestamp: Date.now()
+      })
+      this.touchPlugin.setLoadState('load_failed', {
+        code: SDKAPI_BLOCKED_CODE,
+        message: blockedMessage
+      })
+    }
+
+    const sdkCompat = sdkBlocked ? null : checkSdkCompatibility(pluginInfo.sdkapi, this.pluginName)
+    if (sdkCompat?.warning) {
       this.touchPlugin.issues.push({
         type: 'warning',
         message: sdkCompat.warning,
@@ -229,34 +256,36 @@ abstract class BasePluginLoader {
     }
 
     // Generate permission status (granted permissions will be loaded by PermissionModule)
-    const permissionStatus = getPluginPermissionStatus(
-      this.pluginName,
-      resolvedSdkapi,
-      { required: parsedPermissions.required, optional: parsedPermissions.optional },
-      [] // No grants loaded yet at this stage
-    )
+    if (!sdkBlocked) {
+      const permissionStatus = getPluginPermissionStatus(
+        this.pluginName,
+        resolvedSdkapi,
+        { required: parsedPermissions.required, optional: parsedPermissions.optional },
+        [] // No grants loaded yet at this stage
+      )
 
-    // Add permission-related issue if needed
-    const permissionIssue = generatePermissionIssue(permissionStatus)
-    if (
-      permissionIssue &&
-      permissionIssue.code !== 'SDK_VERSION_MISSING' &&
-      permissionIssue.code !== 'SDK_VERSION_OUTDATED'
-    ) {
-      this.touchPlugin.issues.push({
-        type: permissionIssue.type,
-        message: permissionIssue.message,
-        source: 'manifest.json',
-        code: permissionIssue.code,
-        suggestion: permissionIssue.suggestion,
-        meta: {
-          // Use spread to create copies and avoid circular references
-          required: [...parsedPermissions.required],
-          optional: [...parsedPermissions.optional],
-          enforcePermissions: permissionStatus.enforcePermissions
-        },
-        timestamp: Date.now()
-      })
+      // Add permission-related issue if needed
+      const permissionIssue = generatePermissionIssue(permissionStatus)
+      if (
+        permissionIssue &&
+        permissionIssue.code !== 'SDK_VERSION_MISSING' &&
+        permissionIssue.code !== 'SDK_VERSION_OUTDATED'
+      ) {
+        this.touchPlugin.issues.push({
+          type: permissionIssue.type,
+          message: permissionIssue.message,
+          source: 'manifest.json',
+          code: permissionIssue.code,
+          suggestion: permissionIssue.suggestion,
+          meta: {
+            // Use spread to create copies and avoid circular references
+            required: [...parsedPermissions.required],
+            optional: [...parsedPermissions.optional],
+            enforcePermissions: permissionStatus.enforcePermissions
+          },
+          timestamp: Date.now()
+        })
+      }
     }
 
     // Parse and store DivisionBox configuration from manifest
@@ -285,6 +314,8 @@ abstract class BasePluginLoader {
         timestamp: Date.now()
       })
     }
+
+    if (sdkBlocked) return
 
     if (pluginInfo.features) {
       const iconInitPromises: Promise<void>[] = []

@@ -1,7 +1,20 @@
 # 变更日志
 
-> 更新时间: 2026-04-22
+> 更新时间: 2026-04-23
 > 说明: 主文件仅保留近 30 天（2026-03-23 ~ 2026-04-22）详细记录；更早历史已按月归档。
+
+## 2026-04-23
+
+### fix(core-app): 让插件 sdkapi hard-cut 真正落到加载与安装预检
+
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-installer.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-installer.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `plugin-loaders` 现在会在读取 manifest 后立刻执行统一 `sdk-compat` gate；缺失、无效或低于门槛的插件会被显式打成 `SDKAPI_BLOCKED`，并以 `load_failed` 保持可见但不可启用，不再只是留下 warning。
+  - 安装预检复用同一套 gate，旧插件会在 `prepareInstall` 阶段直接失败，避免进入“已安装但只能以 blocked 留在列表里”的半状态。
+  - 补齐主进程定向回归，覆盖 loader 阻断与 installer 预检阻断两条关键路径。
 
 ## 2026-04-22
 
