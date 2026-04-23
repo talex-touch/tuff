@@ -3,6 +3,8 @@ import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { blowMention } from '../mention/dialog-mention'
+import { useI18nText } from '../lang'
+import { resolveClipboardTriggerMention } from './clipboard-trigger-mention-utils'
 import { confirmExternalLinkOpen } from './confirm-external-link'
 import { devLog } from '~/utils/dev-log'
 
@@ -105,16 +107,14 @@ export function screenCapture(): void {
 
 export function clipBoardResolver(): void {
   const transport = useTuffTransport()
+  const { t } = useI18nText()
   const clipboardTrigger = defineRawEvent<{ type: string; data: string }, void>('clipboard:trigger')
   transport.on(clipboardTrigger, (payload) => {
     if (!payload) return
 
-    if (payload.type === 'text') {
-      blowMention('Clipboard', `You may copied "${payload.data}"`)
-    } else if (payload.type === 'image') {
-      blowMention('Clipboard', payload.data)
-    } else if (payload.type === 'html') {
-      blowMention('Clipboard', payload.data)
-    }
+    const mention = resolveClipboardTriggerMention(payload, t)
+    if (!mention) return
+
+    void blowMention(mention.title, mention.message)
   })
 }
