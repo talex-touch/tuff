@@ -5,6 +5,16 @@
 
 ## 2026-04-23
 
+### fix(core-app): 收口拖拽插件解析入口 raw 英文与旧错误码
+
+- `apps/core-app/src/renderer/src/modules/hooks/dropper-resolver.ts`
+- `apps/core-app/src/renderer/src/components/plugin/action/mention/plugin-apply-install-utils.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 拖拽 `.tpex` 文件的前置解析入口此前仍直接弹 `Only .tpex plugin packages are supported. / Parsing plugin package... / Failed to read plugin file.` 等英文提示，并把 `10091 / 10092` 旧错误码继续原样透给用户。
+  - 本轮继续只在 renderer 提示层收口，复用上一轮拖拽安装工具里的错误映射，把扩展名校验、解析中状态、读取失败和 resolver 错误统一切到 `plugin.dropInstall` 文案。
+  - 这样拖拽安装流从前置解析弹层到安装提及卡都不再混出英文调试提示，同一套旧 code 也只有一份解释逻辑。
+
 ### fix(core-app): 收口拖拽插件安装提及卡 raw 英文与错误码
 
 - `apps/core-app/src/renderer/src/components/plugin/action/mention/{PluginApplyInstall.vue,plugin-apply-install-utils.ts,plugin-apply-install-utils.test.ts}`
