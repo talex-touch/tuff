@@ -5,6 +5,15 @@
 
 ## 2026-04-23
 
+### fix(core-app): 收口外部链接确认弹层 raw 英文
+
+- `apps/core-app/src/renderer/src/modules/hooks/{useUrlProcessor.ts,application-hooks.ts,confirm-external-link.ts,confirm-external-link.test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `useUrlProcessor` 与 `application-hooks` 之前各自内联了一份 `Allow to open external link? / Cancel / Sure` 英文确认框，文案、按钮语义和行为都重复维护。
+  - 本轮抽成共享 `confirmExternalLinkOpen()` helper，并切到 `notifications.externalLinkConfirmTitle + common.cancel/open` i18n，两个外链入口统一走同一套确认提示。
+  - 顺手补上关闭弹层时默认按“取消打开”收口，避免 `TouchTip` 被 `Esc` 关闭后遗留未 resolve 的 Promise。
+
 ### fix(core-app): 收口拖拽插件解析入口 raw 英文与旧错误码
 
 - `apps/core-app/src/renderer/src/modules/hooks/dropper-resolver.ts`

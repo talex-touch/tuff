@@ -2556,6 +2556,7 @@
     "pluginInstallFailedBody": "Failed to add {name}.",
     "pluginInstallFailedBodyWithReason": "Failed to add {name}: {error}.",
     "pluginInstallUnknown": "Plugin",
+    "externalLinkConfirmTitle": "Open external link?",
     "updateAvailable": "New Version Available",
     "updateAvailableBody": "Tuff {version} has been released\nClick to view details",
     "updateReady": "Update Ready",
