@@ -5,6 +5,20 @@
 
 ## 2026-04-23
 
+### refactor(core-app): 删除 renderer 权限中心未使用的旧 SDK 兼容壳
+
+- `apps/core-app/src/renderer/src/components/permission/index.ts`
+- `apps/core-app/src/renderer/src/components/permission/PermissionRequestDialog.vue`（删除）
+- `apps/core-app/src/renderer/src/components/permission/PermissionStatusCard.vue`（删除）
+- `apps/core-app/src/renderer/src/composables/usePluginPermission.ts`（删除）
+- `apps/core-app/src/renderer/components.d.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 权限中心里三处已经无调用、但仍保留旧 `sdkapi` “跳过权限校验 / 旧版 SDK”语义的 renderer 壳代码已物理删除，避免后续继续把过时状态模型当成可复用实现。
+  - `components/permission` 入口与自动组件声明同步收口，只保留仍在设置页使用的 `PermissionList`。
+  - compatibility registry 同步移除已删除的 `PermissionStatusCard` 条目，并补齐当前扫描缺失/陈旧记录，`pnpm compat:registry:guard` 恢复通过。
+
 ### fix(core-app): 让插件 sdkapi hard-cut 真正落到加载与安装预检
 
 - `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
