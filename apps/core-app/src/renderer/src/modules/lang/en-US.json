@@ -724,6 +724,22 @@
     "searchPlaceholder": "Search plugins",
     "opening": "Opening...",
     "openFolder": "Open Folder",
+    "dropInstall": {
+      "installing": "Installing...",
+      "ignore": "Ignore",
+      "install": "Install",
+      "errorTitle": "Plugin Install Failed",
+      "successTitle": "Plugin Installed",
+      "bufferMissing": "Plugin file buffer is missing. Please drop the package again.",
+      "corrupted": "This plugin package is corrupted or has an invalid manifest.",
+      "invalidPackage": "Unable to parse this plugin package.",
+      "installFailed": "Plugin installation failed. Please retry with a valid package.",
+      "alreadyInstalledTitle": "Plugin Already Installed",
+      "alreadyInstalledMessage": "Plugin \"{name}\" is already installed. Do you want to update it?",
+      "update": "Update",
+      "successMessage": "Plugin \"{name}\" installed successfully.",
+      "unexpected": "Plugin installation hit an unexpected error. Please retry later."
+    },
     "emptyState": {
       "message": "Choose a plugin to view details",
       "exploreStore": "Explore Store"

@@ -5,6 +5,15 @@
 
 ## 2026-04-23
 
+### fix(core-app): 收口拖拽插件安装提及卡 raw 英文与错误码
+
+- `apps/core-app/src/renderer/src/components/plugin/action/mention/{PluginApplyInstall.vue,plugin-apply-install-utils.ts,plugin-apply-install-utils.test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 拖入本地插件包后的安装提及卡此前仍直接显示 `Installing... / Ignore / Install / Install Error / Install Success` 等英文 UI 文案，并把 `10091 / 10092 / INTERNAL_ERROR / plugin already exists` 这类旧消息直接暴露到用户提示里。
+  - 本轮维持旧 `@install-plugin` 返回契约不动，只在 renderer 提示层新增可测试的错误映射，把损坏包、解析失败、重复安装与通用失败统一翻译成可读提示。
+  - 同步补齐提及卡按钮、安装中状态和成功/失败标题的 i18n，避免拖拽安装这条旧入口继续像半成品调试界面。
+
 ### fix(core-app): 收口 Store 详情评分错误 raw fallback
 
 - `apps/core-app/src/renderer/src/composables/store/{useStoreRating.ts,store-rating-error-utils.ts,store-rating-error-utils.test.ts}`

@@ -724,6 +724,22 @@
     "searchPlaceholder": "搜索插件...",
     "opening": "打开中...",
     "openFolder": "打开文件夹",
+    "dropInstall": {
+      "installing": "安装中...",
+      "ignore": "忽略",
+      "install": "安装",
+      "errorTitle": "插件安装失败",
+      "successTitle": "插件已安装",
+      "bufferMissing": "插件文件缓冲区缺失，请重新拖入安装包。",
+      "corrupted": "该插件包已损坏，或 manifest 无效。",
+      "invalidPackage": "无法解析这个插件包。",
+      "installFailed": "插件安装失败，请换一个有效安装包后重试。",
+      "alreadyInstalledTitle": "插件已安装",
+      "alreadyInstalledMessage": "插件“{name}”已安装，是否更新它？",
+      "update": "更新",
+      "successMessage": "插件“{name}”已安装成功。",
+      "unexpected": "插件安装遇到异常，请稍后重试。"
+    },
     "emptyState": {
       "message": "选择一个插件查看详情",
       "exploreStore": "浏览市场"
