@@ -1,4 +1,4 @@
-type InstallPromptTranslate = (key: string, params?: unknown) => string
+type InstallPromptTranslate = (key: string, params?: Record<string, unknown>) => string
 
 export function isPluginAlreadyInstalledMessage(message: unknown): boolean {
   return message === 'plugin already exists'
