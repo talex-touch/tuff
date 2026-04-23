@@ -16,6 +16,14 @@
   - 安装预检复用同一套 gate，旧插件会在 `prepareInstall` 阶段直接失败，避免进入“已安装但只能以 blocked 留在列表里”的半状态。
   - 补齐主进程定向回归，覆盖 loader 阻断与 installer 预检阻断两条关键路径。
 
+### fix(core-app): 收紧插件安装任务索引到 provider 作用域
+
+- `apps/core-app/src/renderer/src/modules/install/install-manager.ts`
+- `apps/core-app/src/renderer/src/modules/install/install-manager.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 安装状态索引不再把 `providerId::pluginId` 额外挂一份 plain `pluginId` fallback，避免多源市场里同名插件共享同一条安装状态。
+  - renderer 侧新增定向回归，锁定“同一 `pluginId` 在不同 provider 下必须命中各自任务；只有 provider-less 插件才允许 plain `pluginId` 查找”的行为。
+
 ## 2026-04-22
 
 ### refactor(core-app): 一次性硬收口插件 compat、平台 capability 与启动迁移
