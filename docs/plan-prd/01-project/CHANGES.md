@@ -5,6 +5,14 @@
 
 ## 2026-04-23
 
+### fix(core-app): 收口详细信息页 Active Application 调试占位
+
+- `apps/core-app/src/renderer/src/views/base/LingPan.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `/details` 页的 Active Application 卡片之前直接渲染 `📱 / UNKNOWN_APP / NO_WINDOW_TITLE / NO_ACTIVE_APPLICATION_DETECTED` 这类调试占位，用户在正常设置入口里也会看到明显未收口的诊断文本。
+  - 本轮把展示逻辑改成“优先显示真实应用名，其次回退 bundleId / identifier / 可执行文件名”，图标位改成首字母 fallback，并把缺失标题/未检测到活跃应用切到正常 i18n 文案，避免继续暴露 raw placeholder。
+
 ### refactor(core-app): 删除权限 hard-cut 后残留的 legacy i18n key
 
 - `packages/utils/i18n/message-keys.ts`

@@ -5,6 +5,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { appSetting } from '~/modules/channel/storage'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
 
@@ -173,6 +174,7 @@ const loading = ref<boolean>(false)
 const error = ref<string | null>(null)
 const snapshot = ref<TuffDashboardSnapshot | null>(null)
 const activeTab = ref('system')
+const { t } = useI18n()
 const transport = useTuffTransport()
 type DashboardResponse = {
   ok: boolean
@@ -415,6 +417,39 @@ function formatPercent(value: number | null): string {
 function formatProgress(value: number | null): string {
   if (value === null || value < 0) return 'N/A'
   return `${(value * 100).toFixed(1)}%`
+}
+
+function normalizeText(value: string | null | undefined): string | null {
+  const normalized = value?.trim()
+  return normalized ? normalized : null
+}
+
+function getExecutableName(executablePath: string | null | undefined): string | null {
+  const normalized = normalizeText(executablePath)
+  if (!normalized) {
+    return null
+  }
+
+  const parts = normalized.split(/[\\/]/).filter(Boolean)
+  return parts.at(-1) ?? normalized
+}
+
+function getActiveAppName(info: ActiveAppInfo): string {
+  return (
+    normalizeText(info.displayName) ??
+    normalizeText(info.bundleId) ??
+    normalizeText(info.identifier) ??
+    getExecutableName(info.executablePath) ??
+    t('settingAbout.dashboardUnknownApp')
+  )
+}
+
+function getActiveAppWindowTitle(info: ActiveAppInfo): string {
+  return normalizeText(info.windowTitle) ?? t('settingAbout.dashboardNoWindowTitle')
+}
+
+function getActiveAppInitial(info: ActiveAppInfo): string {
+  return Array.from(getActiveAppName(info))[0]?.toUpperCase() ?? '#'
 }
 
 function formatTaskSummary(
@@ -724,13 +759,23 @@ onUnmounted(() => {
               </div>
               <div v-if="snapshot.applications.activeApp" class="app-info">
                 <div class="app-header">
-                  <div class="app-icon-placeholder">📱</div>
+                  <div class="app-icon-shell">
+                    <img
+                      v-if="snapshot.applications.activeApp.icon"
+                      :src="snapshot.applications.activeApp.icon"
+                      alt=""
+                      class="app-icon-image"
+                    />
+                    <span v-else class="app-icon-fallback">
+                      {{ getActiveAppInitial(snapshot.applications.activeApp) }}
+                    </span>
+                  </div>
                   <div class="app-details">
                     <div class="app-name">
-                      {{ snapshot.applications.activeApp.displayName ?? 'UNKNOWN_APP' }}
+                      {{ getActiveAppName(snapshot.applications.activeApp) }}
                     </div>
                     <div class="app-title">
-                      {{ snapshot.applications.activeApp.windowTitle ?? 'NO_WINDOW_TITLE' }}
+                      {{ getActiveAppWindowTitle(snapshot.applications.activeApp) }}
                     </div>
                   </div>
                 </div>
@@ -762,7 +807,7 @@ onUnmounted(() => {
                 </div>
               </div>
               <div v-else class="no-data">
-                <span class="no-data-text">NO_ACTIVE_APPLICATION_DETECTED</span>
+                <span class="no-data-text">{{ t('settingAbout.dashboardNoActiveApp') }}</span>
               </div>
             </section>
 
@@ -1469,15 +1514,31 @@ onUnmounted(() => {
   border-bottom: 1px solid #222222;
 }
 
-.app-icon-placeholder {
-  width: 2rem;
-  height: 2rem;
-  background: #333333;
-  border: 1px solid #555555;
+.app-icon-shell {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #2f2f2f 0%, #1f1f1f 100%);
+  border: 1px solid #3f3f3f;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.app-icon-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.app-icon-fallback {
   font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  text-transform: uppercase;
 }
 
 .app-details {
