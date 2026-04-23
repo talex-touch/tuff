@@ -15,6 +15,14 @@
   - `FlatCompletion` 现在会复用调用方传入的 placeholder，并在每次输入变化后把标准化查询同步给上层，再按同一查询生成补全结果，避免 placeholder 与真实搜索状态继续漂移。
   - 新增纯 TS 定向回归，锁定“placeholder 透传 + 查询归一化 + 结果裁剪到 8 条”的行为；组件模板绑定由 `typecheck:web` 覆盖。
 
+### fix(core-app): 收口 ThemeStyle 的假云同步文案
+
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - ThemeStyle 里的背景同步开关当前只会保留本地 `sync.enabled` 状态，并在需要时触发本地壁纸入库，不会执行真实云上传。
+  - 设置页文案改为“记录同步状态 / Track Sync Status”，并明确说明当前只记录本地同步状态，避免继续把未闭环能力描述成可用云同步。
+
 ### refactor(core-app): 收口插件 sdkapi warning code 与运行时文档口径
 
 - `packages/utils/plugin/sdk-version.ts`
