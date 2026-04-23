@@ -5,6 +5,16 @@
 
 ## 2026-04-23
 
+### fix(core-app): 接通 Store 搜索框的真实查询链路
+
+- `apps/core-app/src/renderer/src/components/base/input/FlatCompletion.vue`
+- `apps/core-app/src/renderer/src/components/base/input/flat-completion-utils.ts`
+- `apps/core-app/src/renderer/src/components/base/input/flat-completion-utils.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `StoreHeader` 早已把 `placeholder` 和 `@search` 接到 `FlatCompletion`，但后者之前仍写死 `Search...` 且不会往上发出 `search` 事件，导致 Store 搜索框只有输入 UI、没有实际过滤行为。
+  - `FlatCompletion` 现在会复用调用方传入的 placeholder，并在每次输入变化后把标准化查询同步给上层，再按同一查询生成补全结果，避免 placeholder 与真实搜索状态继续漂移。
+  - 新增纯 TS 定向回归，锁定“placeholder 透传 + 查询归一化 + 结果裁剪到 8 条”的行为；组件模板绑定由 `typecheck:web` 覆盖。
+
 ### refactor(core-app): 收口插件 sdkapi warning code 与运行时文档口径
 
 - `packages/utils/plugin/sdk-version.ts`
