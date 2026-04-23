@@ -15,7 +15,7 @@ export interface PermissionCheckResult {
   /** Whether permission is granted */
   allowed: boolean
   /** Machine-readable error code */
-  code?: 'PERMISSION_DENIED'
+  code?: 'PERMISSION_DENIED' | 'SDKAPI_BLOCKED'
   /** Reason for denial if not allowed */
   reason?: string
   /** Whether to show permission request dialog */
@@ -29,7 +29,7 @@ export interface PermissionCheckResult {
 }
 
 type PermissionDeniedError = Error & {
-  code: 'PERMISSION_DENIED'
+  code: 'PERMISSION_DENIED' | 'SDKAPI_BLOCKED'
   permissionId: string
   pluginId: string
 }
@@ -158,18 +158,21 @@ export class PermissionGuard {
         const duration = performance.now() - startTime
         this.recordPerformance(duration)
         const blockedByDeclaration = accessState.reason === 'not-declared'
+        const blockedBySdk = accessState.reason === 'incompatible-sdk'
         const reason = blockedByDeclaration
           ? accessState.hasHistoricalGrant
             ? `Permission '${normalizedPermissionId}' was previously granted but is no longer declared`
             : `Permission '${normalizedPermissionId}' is not declared in plugin manifest`
-          : `Permission '${normalizedPermissionId}' not granted`
+          : blockedBySdk
+            ? `Plugin "${pluginId}" is blocked because sdkapi is incompatible with the enforced runtime baseline`
+            : `Permission '${normalizedPermissionId}' not granted`
         return {
           allowed: false,
-          code: 'PERMISSION_DENIED',
+          code: blockedBySdk ? 'SDKAPI_BLOCKED' : 'PERMISSION_DENIED',
           permissionId: normalizedPermissionId,
           pluginId,
           reason,
-          showRequest: !blockedByDeclaration,
+          showRequest: blockedBySdk ? false : !blockedByDeclaration,
           durationMs: duration
         }
       }

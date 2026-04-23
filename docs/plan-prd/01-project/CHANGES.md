@@ -24,6 +24,14 @@
   - 安装状态索引不再把 `providerId::pluginId` 额外挂一份 plain `pluginId` fallback，避免多源市场里同名插件共享同一条安装状态。
   - renderer 侧新增定向回归，锁定“同一 `pluginId` 在不同 provider 下必须命中各自任务；只有 provider-less 插件才允许 plain `pluginId` 查找”的行为。
 
+### fix(core-app): 运行期权限守卫对 sdkapi blocked 返回真实错误语义
+
+- `apps/core-app/src/main/modules/permission/permission-guard.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 运行期权限守卫现在会把 `sdkapi` 不兼容显式返回为 `SDKAPI_BLOCKED`，不再伪装成普通 `PERMISSION_DENIED`。
+  - 对应 denied 结果会关闭 `showRequest`，避免上层把 blocked 插件继续引导到权限授权弹窗。
+
 ## 2026-04-22
 
 ### refactor(core-app): 一次性硬收口插件 compat、平台 capability 与启动迁移
