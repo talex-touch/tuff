@@ -2496,6 +2496,8 @@
     "remove": "移除",
     "close": "关闭",
     "open": "打开",
+    "content": "内容",
+    "capsLock": "大写锁定",
     "refresh": "刷新",
     "loading": "加载中...",
     "error": "错误",
