@@ -5,6 +5,15 @@
 
 ## 2026-04-23
 
+### fix(core-app): 收口剪贴板触发提示 raw 英文与原始 payload 直出
+
+- `apps/core-app/src/renderer/src/modules/hooks/{application-hooks.ts,clipboard-trigger-mention-utils.ts,clipboard-trigger-mention-utils.test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `clipboard:trigger` 之前直接把 `Clipboard / You may copied "${payload.data}"` 和原始 `image/html` payload 丢给 `blowMention`，既有英文硬编码，也会把剪贴板原文直接走进 `v-html` 渲染链。
+  - 本轮新增可测试的 renderer 侧映射，把 `text/image/html` 分别收口成可读标题与安全正文：文本预览先做 HTML escape 和换行处理，图片与 HTML 只显示通用说明，不再把原始 payload 直接展示给用户。
+  - 这样既修掉明显的英文/病句提示，也避免剪贴板内容继续以 HTML 形式注入到提示弹层。
+
 ### fix(core-app): 收口外部链接确认弹层 raw 英文
 
 - `apps/core-app/src/renderer/src/modules/hooks/{useUrlProcessor.ts,application-hooks.ts,confirm-external-link.ts,confirm-external-link.test.ts}`
