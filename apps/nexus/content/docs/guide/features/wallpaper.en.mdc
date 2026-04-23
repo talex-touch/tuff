@@ -6,20 +6,20 @@ Wallpaper is managed in the ThemeStyle settings module, not as a standalone plug
 
 - Sources: `none / Bing / custom image / folder rotation / desktop wallpaper`
 - Adjustments: blur, opacity, brightness, contrast, saturate
-- Sync: copy to wallpaper library first, then enable cloud sync
+- Sync: copy to the local wallpaper library, then track local sync status
 
 ## Steps
 
 1. Open Settings → Style (ThemeStyle).
 2. Pick a wallpaper source (for example `desktop` or `folder`).
 3. Tune visual filters as needed.
-4. For cross-device sync, enable “copy to library” before enabling “sync to cloud”.
+4. If you want to retain sync status, enable “copy to library” before turning on “track sync status”.
 
 ## Notes
 
 - `desktop` reads the current system wallpaper path.
 - `folder` supports rotation with a minimum interval of 5 minutes.
-- Cloud sync is constrained when wallpaper library is disabled.
+- “Track sync status” stays unavailable while the wallpaper library is disabled.
 
 ## Code Reference
 

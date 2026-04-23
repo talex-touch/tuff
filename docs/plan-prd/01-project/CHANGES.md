@@ -5,6 +5,15 @@
 
 ## 2026-04-23
 
+### docs(nexus): 收口壁纸指南残留的假云同步口径
+
+- `apps/nexus/content/docs/guide/features/wallpaper.{zh,en}.mdc`
+- `apps/nexus/content/docs/guide/features/corebox-workflow.{zh,en}.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - ThemeStyle 运行时当前只会把壁纸复制到本地壁纸库，并记录本地 `sync.enabled` 状态；不存在跨设备云同步上传。
+  - Nexus 指南页原先仍写成“复制到壁纸库后开启云同步 / cloud sync”，会把刚在 renderer 收口过的真相重新写回假能力。
+  - 本轮把壁纸指南与 CoreBox 能力页统一改成“复制到本地壁纸库 + 记录本地同步状态”，避免文档继续误导用户把本地状态开关理解成已上线云同步。
+
 ### fix(core-app): 收口详细信息页剩余 raw placeholder 空态
 
 - `apps/core-app/src/renderer/src/views/base/LingPan.vue`
