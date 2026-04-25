@@ -1,7 +1,16 @@
 # 变更日志
 
-> 更新时间: 2026-04-23
-> 说明: 主文件仅保留近 30 天（2026-03-23 ~ 2026-04-22）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-25
+> 说明: 主文件仅保留近 30 天（2026-03-25 ~ 2026-04-24）详细记录；更早历史已按月归档。
+
+## 2026-04-25
+
+### fix(core-app): 防止 CoreBox 系统主题更新时访问已释放 UI view
+
+- `apps/core-app/src/main/modules/box-tool/core-box/{window.ts,web-contents-view-guard.ts,web-contents-view-guard.test.ts}`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - CoreBox 附着插件 UI 后会在跟随系统主题时监听 `nativeTheme.updated`；当 `WebContentsView` 已被释放或 Electron 侧 `webContents` 短暂不可用时，handler 仍直接调用 `view.webContents.isDestroyed()`，会触发主进程 `Cannot read properties of undefined (reading 'isDestroyed')` 崩溃。
+  - 本轮新增 `getLiveViewWebContents()` 作为极小生命周期 guard，并把 CoreBox 主题注入、暗色 class 更新、DevTools/focus 等同一 UI view 路径的直接访问统一收口，确保空 view 直接跳过而不是打崩主进程。
 
 ## 2026-04-23
 
