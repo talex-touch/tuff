@@ -38,6 +38,7 @@ import { coreBoxManager } from './manager'
 import { metaOverlayManager } from './meta-overlay'
 import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
 import { viewCacheManager } from './view-cache'
+import { getLiveViewWebContents } from './web-contents-view-guard'
 
 interface CoreBoxUiResumePayload {
   source: string
@@ -959,15 +960,16 @@ export class WindowManager {
   private applyThemeToUIView(view: WebContentsView): void {
     const themeStyle = this.loadThemeStyleConfig()
     const css = this.loadInternalThemeCss()
+    const webContents = getLiveViewWebContents(view)
 
-    if (!view.webContents.isDestroyed()) {
+    if (webContents) {
       const previousKey = this.uiViewThemeCssKey.get(view)
       if (previousKey) {
-        void view.webContents.removeInsertedCSS(previousKey).catch(() => {})
+        void webContents.removeInsertedCSS(previousKey).catch(() => {})
         this.uiViewThemeCssKey.delete(view)
       }
 
-      void view.webContents
+      void webContents
         .insertCSS(css)
         .then((key) => {
           this.uiViewThemeCssKey.set(view, key)
@@ -988,7 +990,7 @@ export class WindowManager {
 
     if (followSystem) {
       const handler = () => {
-        if (!this.uiView || this.uiView !== view || view.webContents.isDestroyed()) {
+        if (!this.uiView || this.uiView !== view || !getLiveViewWebContents(view)) {
           return
         }
         this.updateUIViewDarkClass(view, nativeTheme.shouldUseDarkColors)
@@ -1000,7 +1002,8 @@ export class WindowManager {
   }
 
   private updateUIViewDarkClass(view: WebContentsView, isDark: boolean): void {
-    if (view.webContents.isDestroyed()) {
+    const webContents = getLiveViewWebContents(view)
+    if (!webContents) {
       return
     }
 
@@ -1017,7 +1020,7 @@ export class WindowManager {
       })();
     `
 
-    void view.webContents.executeJavaScript(script).catch((error) => {
+    void webContents.executeJavaScript(script).catch((error) => {
       coreBoxWindowLog.error('Failed to update UI view theme class', { error })
     })
   }
@@ -1248,14 +1251,16 @@ export class WindowManager {
       this.applyThemeToUIView(view)
 
       if (plugin) {
+        const liveWebContents = getLiveViewWebContents(view)
+
         // Only auto-open DevTools for plugins in dev mode (not based on app.isPackaged)
-        if (plugin.dev?.enable) {
-          view.webContents.openDevTools({ mode: 'detach' })
+        if (plugin.dev?.enable && liveWebContents) {
+          liveWebContents.openDevTools({ mode: 'detach' })
           this.uiViewFocused = true
         }
 
         if (injections?.styles) {
-          this.uiView?.webContents.insertCSS(injections.styles)
+          void getLiveViewWebContents(this.uiView)?.insertCSS(injections.styles)
         }
         if (pluginModule.pluginManager) {
           pluginModule.pluginManager.setActivePlugin(plugin.name)
@@ -1263,7 +1268,7 @@ export class WindowManager {
           coreBoxWindowLog.warn('Plugin manager not available, cannot set plugin active')
         }
 
-        this.uiView?.webContents.focus()
+        getLiveViewWebContents(this.uiView)?.focus()
       }
     })
 
@@ -1382,11 +1387,10 @@ export class WindowManager {
         }
       }
 
-      const webContents = view.webContents
-      const webContentsAlive = !!webContents && !webContents.isDestroyed()
+      const webContents = getLiveViewWebContents(view)
       const currentWindow = this.current
       if (currentWindow && !currentWindow.window.isDestroyed()) {
-        if (webContentsAlive) {
+        if (webContents) {
           try {
             if (webContents.isDevToolsOpened()) {
               webContents.closeDevTools()
@@ -1415,7 +1419,7 @@ export class WindowManager {
 
       if (!cacheEnabled || !this.attachedPlugin) {
         try {
-          if (webContentsAlive) {
+          if (webContents) {
             webContents.close()
           }
         } catch (err) {
@@ -1557,9 +1561,10 @@ export class WindowManager {
       return false
     }
 
-    if (!view.webContents.isDestroyed()) {
+    const webContents = getLiveViewWebContents(view)
+    if (webContents) {
       this.applyThemeToUIView(view)
-      view.webContents.focus()
+      webContents.focus()
     }
 
     coreBoxWindowLog.info('UI view restored after failed transfer', {
