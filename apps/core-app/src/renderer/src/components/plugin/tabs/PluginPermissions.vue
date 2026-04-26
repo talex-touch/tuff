@@ -11,6 +11,7 @@ import { PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { usePermissionSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { resolvePluginSdkBlockedState } from '../../../../../shared/plugin-sdk-blocked'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -63,27 +64,15 @@ const status = ref<PluginPermissionStatus | null>(null)
 const backendState = ref<PermissionBackendState | null>(null)
 const mutationError = ref<string | null>(null)
 
-const blockedIssue = computed(() => {
-  const issues = props.plugin.issues ?? []
-  return issues.find((issue) => issue.code === 'SDKAPI_BLOCKED') ?? null
-})
-
-const sdkBlocked = computed(() => {
-  return (
-    props.plugin.loadState === 'load_failed' &&
-    (props.plugin.loadError?.code === 'SDKAPI_BLOCKED' || blockedIssue.value !== null)
-  )
-})
+const sdkBlockedState = computed(() => resolvePluginSdkBlockedState(props.plugin))
+const sdkBlocked = computed(() => sdkBlockedState.value.blocked)
 
 const permissionBlocked = computed(() => {
   return sdkBlocked.value
 })
 
 const blockedMessage = computed(() => {
-  if (props.plugin.loadError?.code === 'SDKAPI_BLOCKED') {
-    return props.plugin.loadError.message || ''
-  }
-  return blockedIssue.value?.message || ''
+  return sdkBlockedState.value.message
 })
 const declaredPermissionIds = computed(() => {
   const required = props.plugin.declaredPermissions?.required || []

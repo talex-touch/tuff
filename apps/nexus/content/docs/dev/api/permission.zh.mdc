@@ -1,7 +1,7 @@
 # Permission 权限系统
 
 ## 概述
-插件权限系统用于控制插件对敏感资源和 API 的访问。从 SDK API `251212` 版本开始，所有权限声明都会被强制校验。
+插件权限系统用于控制插件对敏感资源和 API 的访问。从 SDK API `251212` 版本开始，所有权限声明都会被强制校验；未声明合法 `sdkapi` 的插件会在运行时被直接阻断。
 
 ## 介绍
 权限声明强调最小授权，通过 `permissions` 与 `permissionReasons` 对用户解释用途，提升授权通过率。
@@ -17,7 +17,7 @@ code: |
     "id": "com.example.plugin",
     "name": "My Plugin",
     "version": "1.0.0",
-    "sdkapi": 251212,
+    "sdkapi": 260228,
     "permissions": {
       "required": ["clipboard.read", "network.internet"],
       "optional": ["storage.shared"]
@@ -72,12 +72,12 @@ code: |
 
 **sdkapi 字段**
 
-`sdkapi` 字段决定是否启用权限校验：
+`sdkapi` 字段决定插件能否进入权限校验运行时：
 
 | sdkapi 值 | 权限校验 | 说明 |
 |-----------|----------|------|
-| 未声明 | 跳过 | 显示旧版 SDK 警告 |
-| < 251212 | 跳过 | 显示旧版 SDK 警告 |
+| 未声明 | 阻断 | 运行时返回 `SDKAPI_BLOCKED` |
+| < 251212 | 阻断 | 运行时返回 `SDKAPI_BLOCKED` |
 | >= 251212 | 启用 | 完整权限校验 |
 
 **迁移指南**
@@ -88,7 +88,7 @@ code: |
 ---
 code: |
   {
-    "sdkapi": 251212,
+    "sdkapi": 260228,
     "permissions": {
       "required": ["clipboard.read"],
       "optional": []
@@ -99,7 +99,7 @@ code: |
 
 ## 技术原理
 - 权限校验由权限中心统一管理，`sdkapi` 达到门槛才启用完整校验。
-- 授权结果持久化在 `<appData>/config/permission/permissions.json`，并通过 IPC 同步到渲染进程。
+- 授权结果持久化在 `<appData>/config/permission/` 下的 SQLite 权限存储；旧 `permissions.json` 仅用于一次性迁移，不再是可写真相源。
 
 ## API 参考
 
@@ -151,7 +151,7 @@ code: |
 ---
 code: |
   {
-    "sdkapi": 260215,
+    "sdkapi": 260228,
     "permissions": {
       "required": ["storage.sqlite"],
       "optional": []
@@ -263,14 +263,14 @@ code: |
 
 ## 常见问题
 
-**Q: 为什么我的插件显示"旧版 SDK"警告？**
+**Q: 为什么我的插件会显示 `SDKAPI_BLOCKED`？**
 
-A: 您的 `manifest.json` 中未声明 `sdkapi` 字段或版本低于 `251212`。添加：
+A: 您的 `manifest.json` 未声明 `sdkapi`、使用了非法 marker，或版本低于 `251212`。请更新为当前受支持的版本：
 
 :::TuffCodeBlock{lang="json"}
 ---
 code: |
-  "sdkapi": 251212
+  "sdkapi": 260228
 ---
 :::
 
@@ -294,4 +294,4 @@ code: |
 
 **Q: 权限数据存储在哪里？**
 
-A: 权限授予数据存储在 `<appData>/config/permission/permissions.json`。
+A: 权限授予数据存储在 `<appData>/config/permission/` 下的 SQLite 权限库；`permissions.json` 仅在升级旧安装时作为历史迁移输入保留。

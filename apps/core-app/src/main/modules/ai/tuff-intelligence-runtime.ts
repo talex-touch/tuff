@@ -1056,7 +1056,15 @@ export class TuffIntelligenceRuntime {
         type: 'tool.approval_required',
         level: 'warn',
         message: `Approval required for tool ${request.toolId}`,
-        payload: { ticketId: ticket.id, riskLevel, callId }
+        payload: {
+          ticketId: ticket.id,
+          toolId: request.toolId,
+          riskLevel,
+          callId,
+          toolSource: request.metadata?.toolSource,
+          approvalContext: request.metadata?.approvalContext,
+          contextSources: request.metadata?.contextSources
+        }
       })
       return {
         success: false,
@@ -1090,7 +1098,15 @@ export class TuffIntelligenceRuntime {
       type: 'tool.called',
       level: 'info',
       message: `Calling tool ${request.toolId}`,
-      payload: { callId, input: request.input }
+      payload: {
+        callId,
+        toolId: request.toolId,
+        input: request.input,
+        riskLevel,
+        toolSource: request.metadata?.toolSource,
+        approvalContext: request.metadata?.approvalContext,
+        contextSources: request.metadata?.contextSources
+      }
     })
 
     const context: ToolExecutionContext = {
@@ -1124,8 +1140,13 @@ export class TuffIntelligenceRuntime {
         : `Tool ${request.toolId} failed`,
       payload: {
         callId,
+        toolId: request.toolId,
         output: result.output,
-        error: result.error
+        error: result.error,
+        riskLevel,
+        toolSource: request.metadata?.toolSource,
+        approvalContext: request.metadata?.approvalContext,
+        contextSources: request.metadata?.contextSources
       }
     })
 

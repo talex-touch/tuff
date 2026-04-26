@@ -16,8 +16,12 @@ import { TuffIntelligenceSDK, setIntelligenceProviderManager } from './intellige
 const { appMock } = vi.hoisted(() => ({
   appMock: {
     commandLine: { appendSwitch: vi.fn() },
+    getAppPath: vi.fn(() => '/tmp/app'),
+    getPath: vi.fn(() => '/tmp'),
     on: vi.fn(),
     once: vi.fn(),
+    setAppLogsPath: vi.fn(),
+    setPath: vi.fn(),
     whenReady: vi.fn().mockResolvedValue(undefined),
     quit: vi.fn(),
     isPackaged: false
@@ -29,6 +33,9 @@ vi.mock('electron', () => {
     __esModule: true as const,
     app: appMock,
     BrowserWindow: class BrowserWindow {},
+    crashReporter: {
+      start: vi.fn()
+    },
     Tray: class Tray {},
     MessageChannelMain: class MessageChannelMain {
       port1 = {
@@ -71,10 +78,40 @@ vi.mock('talex-mica-electron', () => ({
   useMicaElectron: vi.fn()
 }))
 
+vi.mock('@sentry/electron/main', () => ({
+  init: vi.fn(),
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
+  addBreadcrumb: vi.fn(),
+  setTag: vi.fn(),
+  setContext: vi.fn(),
+  setUser: vi.fn(),
+  withScope: vi.fn((fn: (scope: any) => void) =>
+    fn({
+      setTag: vi.fn(),
+      setContext: vi.fn(),
+      setExtra: vi.fn()
+    })
+  ),
+  getCurrentScope: vi.fn(() => ({
+    setTag: vi.fn(),
+    setContext: vi.fn(),
+    setUser: vi.fn()
+  })),
+  flush: vi.fn(async () => true)
+}))
+
 vi.mock('./agents', () => ({
   agentManager: {
     isInitialized: vi.fn(() => false),
     executeTaskImmediate: vi.fn()
+  }
+}))
+
+vi.mock('./intelligence-deepagent-orchestration', () => ({
+  intelligenceDeepAgentOrchestrationService: {
+    executeAgentCapability: vi.fn(),
+    executeWorkflowCapability: vi.fn()
   }
 }))
 
@@ -296,5 +333,61 @@ describe('TuffIntelligenceSDK invoke', () => {
       content: 'You are OCR assistant'
     })
     expect(payload.messages[1]).toEqual({ role: 'user', content: 'hello' })
+  })
+
+  it('resolves DeepAgent runtime config from non-Anthropic provider selection', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test chat capability',
+      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.ANTHROPIC]
+    })
+
+    const anthropicProvider = createProvider(
+      {
+        id: 'anthropic-primary',
+        type: IntelligenceProviderType.ANTHROPIC,
+        name: 'Anthropic Primary',
+        enabled: true,
+        priority: 1,
+        models: ['claude-3-7-sonnet'],
+        capabilities: ['text.chat'],
+        apiKey: 'anthropic-key',
+        baseUrl: 'https://api.anthropic.com/v1'
+      },
+      vi.fn()
+    )
+
+    const openaiProvider = createProvider(
+      {
+        id: 'openai-fallback',
+        type: IntelligenceProviderType.OPENAI,
+        name: 'OpenAI Fallback',
+        enabled: true,
+        priority: 2,
+        models: ['gpt-4.1-mini'],
+        defaultModel: 'gpt-4.1-mini',
+        capabilities: ['text.chat'],
+        apiKey: 'openai-key'
+      },
+      vi.fn()
+    )
+
+    setIntelligenceProviderManager(new FakeProviderManager([anthropicProvider, openaiProvider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false
+    })
+
+    const config = await sdk.resolveDeepAgentRuntimeConfig('text.chat')
+
+    expect(config.providerId).toBe('openai-fallback')
+    expect(config.providerType).toBe(IntelligenceProviderType.OPENAI)
+    expect(config.baseUrl).toBe('https://api.openai.com/v1')
+    expect(config.apiKey).toBe('openai-key')
+    expect(config.model).toBe('gpt-4.1-mini')
   })
 })

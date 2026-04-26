@@ -667,7 +667,131 @@ export const intelligenceUsageStats = sqliteTable(
 )
 
 // =============================================================================
-// 11. Analytics (Performance & Telemetry)
+// 11. Intelligence Workflow Runtime
+// =============================================================================
+
+export const intelligenceWorkflowDefinitions = sqliteTable(
+  'intelligence_workflow_definitions',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description'),
+    version: text('version'),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    triggers: text('triggers').notNull().default('[]'),
+    contextSources: text('context_sources').notNull().default('[]'),
+    toolSources: text('tool_sources').notNull().default('[]'),
+    approvalPolicy: text('approval_policy'),
+    metadata: text('metadata'),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`)
+  },
+  (table) => ({
+    enabledIdx: index('idx_intelligence_workflow_definitions_enabled').on(table.enabled),
+    updatedIdx: index('idx_intelligence_workflow_definitions_updated').on(table.updatedAt)
+  })
+)
+
+export const intelligenceWorkflowSteps = sqliteTable(
+  'intelligence_workflow_steps',
+  {
+    id: text('id').primaryKey(),
+    workflowId: text('workflow_id')
+      .notNull()
+      .references(() => intelligenceWorkflowDefinitions.id, { onDelete: 'cascade' }),
+    stepOrder: integer('step_order').notNull(),
+    name: text('name').notNull(),
+    kind: text('kind').notNull(),
+    description: text('description'),
+    prompt: text('prompt'),
+    toolId: text('tool_id'),
+    toolSource: text('tool_source'),
+    agentId: text('agent_id'),
+    input: text('input'),
+    continueOnError: integer('continue_on_error', { mode: 'boolean' }).notNull().default(false),
+    metadata: text('metadata'),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`)
+  },
+  (table) => ({
+    workflowOrderIdx: index('idx_intelligence_workflow_steps_workflow_order').on(
+      table.workflowId,
+      table.stepOrder
+    )
+  })
+)
+
+export const intelligenceWorkflowRuns = sqliteTable(
+  'intelligence_workflow_runs',
+  {
+    id: text('id').primaryKey(),
+    workflowId: text('workflow_id')
+      .notNull()
+      .references(() => intelligenceWorkflowDefinitions.id, { onDelete: 'cascade' }),
+    workflowName: text('workflow_name'),
+    triggerType: text('trigger_type'),
+    status: text('status').notNull(),
+    inputs: text('inputs'),
+    outputs: text('outputs'),
+    error: text('error'),
+    contextSnapshot: text('context_snapshot'),
+    metadata: text('metadata'),
+    startedAt: integer('started_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`),
+    completedAt: integer('completed_at', { mode: 'timestamp' })
+  },
+  (table) => ({
+    workflowStartedIdx: index('idx_intelligence_workflow_runs_workflow_started').on(
+      table.workflowId,
+      table.startedAt
+    ),
+    statusStartedIdx: index('idx_intelligence_workflow_runs_status_started').on(
+      table.status,
+      table.startedAt
+    )
+  })
+)
+
+export const intelligenceWorkflowRunSteps = sqliteTable(
+  'intelligence_workflow_run_steps',
+  {
+    id: text('id').primaryKey(),
+    runId: text('run_id')
+      .notNull()
+      .references(() => intelligenceWorkflowRuns.id, { onDelete: 'cascade' }),
+    workflowStepId: text('workflow_step_id').notNull(),
+    stepOrder: integer('step_order').notNull(),
+    name: text('name').notNull(),
+    kind: text('kind').notNull(),
+    status: text('status').notNull(),
+    toolId: text('tool_id'),
+    toolSource: text('tool_source'),
+    input: text('input'),
+    output: text('output'),
+    error: text('error'),
+    metadata: text('metadata'),
+    startedAt: integer('started_at', { mode: 'timestamp' }),
+    completedAt: integer('completed_at', { mode: 'timestamp' })
+  },
+  (table) => ({
+    runOrderIdx: index('idx_intelligence_workflow_run_steps_run_order').on(
+      table.runId,
+      table.stepOrder
+    )
+  })
+)
+
+// =============================================================================
+// 12. Analytics (Performance & Telemetry)
 // =============================================================================
 
 export const analyticsSnapshots = sqliteTable(
@@ -737,7 +861,7 @@ export const telemetryUploadStats = sqliteTable('telemetry_upload_stats', {
 })
 
 // =============================================================================
-// 12. 应用更新记录 (App Update Records)
+// 13. 应用更新记录 (App Update Records)
 // =============================================================================
 
 export const appUpdateRecords = sqliteTable(
@@ -765,7 +889,7 @@ export const appUpdateRecords = sqliteTable(
 )
 
 // =============================================================================
-// 13. System Updates & Hot Data
+// 14. System Updates & Hot Data
 // =============================================================================
 
 export const systemUpdateState = sqliteTable('system_update_state', {

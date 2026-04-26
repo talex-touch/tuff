@@ -11,16 +11,9 @@ type RendererWindowLike = Window & {
   $transport?: ITuffTransport
   $channel?: PluginChannelClient
 }
-const LEGACY_SEND_SYNC_REMOVE_VERSION = '2.5.0'
-let hasWarnedLegacySendSyncFallback = false
-
-function warnLegacySendSyncFallback(eventName: string): void {
-  if (hasWarnedLegacySendSyncFallback) {
-    return
-  }
-  hasWarnedLegacySendSyncFallback = true
-  console.warn(
-    `[Plugin SDK] sendSync fallback uses legacy channel and will be removed in v${LEGACY_SEND_SYNC_REMOVE_VERSION}. event=${eventName}`,
+function createLegacyChannelRemovedError(capability: 'channel.raw' | 'channel.sendSync'): Error {
+  return new Error(
+    `[Plugin SDK] ${capability} was removed by the core-app hard-cut. Migrate this plugin to typed transport send/on APIs.`
   )
 }
 
@@ -99,12 +92,11 @@ function createTransportClientChannel(
       return true
     },
     send: (eventName, arg) => transport.send(defineRawEvent(eventName), arg),
-    sendSync: (eventName, arg) => {
-      if (fallback?.sendSync) {
-        warnLegacySendSyncFallback(eventName)
-        return fallback.sendSync(eventName, arg)
+    sendSync: () => {
+      if (fallback) {
+        throw createLegacyChannelRemovedError('channel.sendSync')
       }
-      throw new Error(`[Plugin SDK] sendSync is not supported without legacy channel: ${eventName}`)
+      throw createLegacyChannelRemovedError('channel.sendSync')
     },
   }
 }
@@ -153,7 +145,6 @@ export function useChannel(errorMessage?: string): PluginChannelClient {
 }
 
 export function createPluginRendererChannel(): IPluginRendererChannel {
-  const client = ensureClientChannel()
   const transport = resolveRendererTransport()
 
   return {
@@ -161,17 +152,12 @@ export function createPluginRendererChannel(): IPluginRendererChannel {
       if (transport) {
         return transport.send(defineRawEvent(eventName), payload)
       }
-      return client.send(eventName, payload)
-    },
-
-    sendSync(eventName, payload) {
-      warnLegacySendSyncFallback(eventName)
-      return client.sendSync(eventName, payload)
+      return ensureClientChannel().send(eventName, payload)
     },
 
     on(eventName, handler) {
       if (!transport) {
-        return client.regChannel(eventName, handler)
+        return ensureClientChannel().regChannel(eventName, handler)
       }
 
       return transport.on(defineRawEvent(eventName), async (payload) => {
@@ -201,10 +187,6 @@ export function createPluginRendererChannel(): IPluginRendererChannel {
 
       dispose = this.on(eventName, wrapped)
       return dispose
-    },
-
-    get raw() {
-      return client
     },
   }
 }

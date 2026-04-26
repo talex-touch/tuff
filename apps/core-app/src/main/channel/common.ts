@@ -68,11 +68,20 @@ import { buildVerificationModule } from '../modules/build-verification'
 import { databaseModule } from '../modules/database'
 import { createDbUtils } from '../db/utils'
 import {
+  applyCapabilityRuntimePatch,
+  getActiveAppCapabilityPatch,
+  getAutoPasteCapabilityPatch,
+  getEverythingCapabilityPatch,
+  getNativeShareCapabilityPatch,
+  getPermissionDeepLinkCapabilityPatch,
+  getSelectionCaptureCapabilityPatch,
+  getTuffCliCapabilityPatch
+} from '../modules/platform/capability-adapter'
+import {
   platformCapabilityRegistry,
   registerDefaultPlatformCapabilities
 } from '../modules/platform/capability-registry'
-import { activeAppService, isActiveAppCapabilityAvailable } from '../modules/system/active-app'
-import { getXdotoolUnavailableReason } from '../modules/system/linux-desktop-tools'
+import { activeAppService } from '../modules/system/active-app'
 import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage'
 import { getNetworkService } from '../modules/network'
 import { deviceIdleService } from '../service/device-idle-service'
@@ -103,57 +112,12 @@ const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
 const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
 const DIALOG_APPROVED_TTL_MS = 10 * 60 * 1000
 const DIALOG_APPROVED_MAX = 200
-const TUFF_CLI_DETECT_CACHE_TTL_MS = 60_000
-const TUFF_CLI_DETECT_TIMEOUT_MS = 1_500
-interface TuffCliProbeCommand {
-  command: string
-  args: string[]
-}
-
-function buildTuffCliProbeCommands(): TuffCliProbeCommand[] {
-  const entries: TuffCliProbeCommand[] = []
-  const seen = new Set<string>()
-
-  const push = (command: string, args: string[] = []) => {
-    const key = JSON.stringify([command, args])
-    if (seen.has(key)) return
-    seen.add(key)
-    entries.push({ command, args })
-  }
-
-  if (process.platform === 'win32') {
-    push('tuffcli.cmd')
-    push('tuffcli.exe')
-    push('tuffcli')
-  } else {
-    push('tuffcli')
-  }
-
-  if (!app.isPackaged) {
-    push(
-      path.resolve(
-        process.cwd(),
-        'node_modules',
-        '.bin',
-        process.platform === 'win32' ? 'tuffcli.cmd' : 'tuffcli'
-      )
-    )
-    push(process.execPath, [
-      path.resolve(process.cwd(), 'packages', 'tuff-cli', 'bin', 'tuffcli.js')
-    ])
-  }
-
-  return entries
-}
-
-const TUFF_CLI_COMMAND_CANDIDATES = buildTuffCliProbeCommands()
 const TUFF_CLI_CAPABILITY: PlatformCapability = {
   id: 'platform.tuff-cli',
   name: 'Tuff CLI',
   description: 'CLI 工具联动能力（Beta）',
   scope: 'plugin',
-  status: 'beta',
-  supportLevel: 'unsupported'
+  status: 'beta'
 }
 const ACTIVE_APP_CAPABILITY: PlatformCapability = {
   id: 'platform.active-app',
@@ -161,7 +125,22 @@ const ACTIVE_APP_CAPABILITY: PlatformCapability = {
   description: '当前前台应用与窗口上下文读取能力',
   scope: 'system',
   status: 'beta',
-  supportLevel: 'unsupported',
+  sensitive: true
+}
+const SELECTION_CAPTURE_CAPABILITY: PlatformCapability = {
+  id: 'platform.selection-capture',
+  name: 'Selection Capture',
+  description: '活动应用选中文本抓取能力',
+  scope: 'system',
+  status: 'beta',
+  sensitive: true
+}
+const AUTO_PASTE_CAPABILITY: PlatformCapability = {
+  id: 'platform.auto-paste',
+  name: 'Auto Paste',
+  description: '向当前焦点应用回写剪贴板内容',
+  scope: 'system',
+  status: 'beta',
   sensitive: true
 }
 const NATIVE_SHARE_CAPABILITY: PlatformCapability = {
@@ -169,28 +148,29 @@ const NATIVE_SHARE_CAPABILITY: PlatformCapability = {
   name: 'Native Share',
   description: '仅 macOS 提供原生系统分享能力',
   scope: 'system',
-  status: 'beta',
-  supportLevel: 'unsupported'
+  status: 'beta'
 }
 const TERMINAL_CAPABILITY: PlatformCapability = {
   id: 'platform.terminal',
   name: 'Terminal Command Runtime',
   description: '命令进程执行能力（非 PTY 终端）',
   scope: 'system',
-  status: 'beta',
-  supportLevel: 'best_effort',
-  limitations: [
-    'Runs child-process commands only; PTY emulation and terminal state sync are not provided.'
-  ]
+  status: 'beta'
 }
-const SYSTEM_PERMISSION_CAPABILITY: PlatformCapability = {
-  id: 'platform.permission-checker',
-  name: 'Permission Checker',
-  description: '系统权限状态检查与设置跳转能力',
+const PERMISSION_DEEP_LINK_CAPABILITY: PlatformCapability = {
+  id: 'platform.permission-deep-link',
+  name: 'Permission Deep-Link',
+  description: '系统权限设置检查与跳转能力',
   scope: 'system',
   status: 'beta',
-  supportLevel: 'supported',
   sensitive: true
+}
+const EVERYTHING_SEARCH_CAPABILITY: PlatformCapability = {
+  id: 'platform.everything-search',
+  name: 'Everything Search',
+  description: 'Windows Everything 文件搜索后端能力',
+  scope: 'system',
+  status: 'beta'
 }
 const log = createLogger('CommonChannel')
 
@@ -208,7 +188,6 @@ type RuntimeTrayManager = {
 }
 
 const dialogApprovedPaths = new Map<string, number>()
-let tuffCliDetectionCache: { available: boolean; checkedAt: number } | null = null
 
 function normalizeSafeNamespaceSegment(value: string): string {
   const normalized = value
@@ -597,55 +576,12 @@ function matchCapabilityQuery(
   return true
 }
 
-async function detectTuffCliAvailability(): Promise<boolean> {
-  const now = Date.now()
-  if (
-    tuffCliDetectionCache &&
-    now - tuffCliDetectionCache.checkedAt <= TUFF_CLI_DETECT_CACHE_TTL_MS
-  ) {
-    return tuffCliDetectionCache.available
-  }
-
-  for (const candidate of TUFF_CLI_COMMAND_CANDIDATES) {
-    try {
-      await execFileAsync(candidate.command, [...candidate.args, '--version'], {
-        timeout: TUFF_CLI_DETECT_TIMEOUT_MS,
-        windowsHide: true
-      })
-      tuffCliDetectionCache = { available: true, checkedAt: now }
-      return true
-    } catch (error) {
-      const code = getOptionalStringProp(error, 'code')
-      const signal = getOptionalStringProp(error, 'signal')
-      if (code !== 'ENOENT' && signal !== 'SIGTERM') {
-        const commandArgs = [...candidate.args, '--version'].join(' ')
-        log.debug('[CommonChannel] Tuff CLI probe failed', {
-          meta: {
-            command: candidate.command,
-            args: commandArgs,
-            code,
-            signal,
-            error: toErrorMessage(error)
-          }
-        })
-      }
-    }
-  }
-
-  tuffCliDetectionCache = { available: false, checkedAt: now }
-  return false
-}
-
 async function listPlatformCapabilities(
   query: PlatformCapabilityListRequest
 ): Promise<PlatformCapability[]> {
   const capabilities: PlatformCapability[] = platformCapabilityRegistry
     .list(query)
-    .map((capability) => ({
-      ...capability,
-      supportLevel: capability.supportLevel ?? 'supported',
-      limitations: capability.limitations ? [...capability.limitations] : undefined
-    }))
+    .map((capability) => applyCapabilityRuntimePatch(capability))
   const appendDynamicCapability = (capability: PlatformCapability): void => {
     if (capabilities.some((item) => item.id === capability.id)) {
       return
@@ -655,53 +591,44 @@ async function listPlatformCapabilities(
     }
   }
 
-  const activeAppSupported = await isActiveAppCapabilityAvailable()
-  appendDynamicCapability({
-    ...ACTIVE_APP_CAPABILITY,
-    supportLevel: activeAppSupported ? 'supported' : 'unsupported',
-    limitations: activeAppSupported
-      ? undefined
-      : process.platform === 'linux'
-        ? [getXdotoolUnavailableReason()]
-        : ['Foreground application inspection is unavailable in the current runtime.']
-  })
-
-  appendDynamicCapability({
-    ...NATIVE_SHARE_CAPABILITY,
-    supportLevel: process.platform === 'darwin' ? 'supported' : 'unsupported',
-    limitations:
-      process.platform === 'darwin'
-        ? undefined
-        : process.platform === 'win32' || process.platform === 'linux'
-          ? [
-              'Native system share is unavailable on this platform; explicit mail target remains available.'
-            ]
-          : ['Native share is unavailable on the current platform.']
-  })
-
-  if (process.platform === 'linux') {
-    appendDynamicCapability({
-      ...SYSTEM_PERMISSION_CAPABILITY,
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(ACTIVE_APP_CAPABILITY, await getActiveAppCapabilityPatch())
+  )
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(
+      SELECTION_CAPTURE_CAPABILITY,
+      await getSelectionCaptureCapabilityPatch()
+    )
+  )
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(AUTO_PASTE_CAPABILITY, await getAutoPasteCapabilityPatch())
+  )
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(NATIVE_SHARE_CAPABILITY, getNativeShareCapabilityPatch())
+  )
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(
+      PERMISSION_DEEP_LINK_CAPABILITY,
+      getPermissionDeepLinkCapabilityPatch()
+    )
+  )
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(EVERYTHING_SEARCH_CAPABILITY, getEverythingCapabilityPatch())
+  )
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(TERMINAL_CAPABILITY, {
       supportLevel: 'best_effort',
-      limitations: ['Permission status and settings deep-links depend on the desktop environment.']
+      issueCode: 'NO_PTY',
+      reason:
+        'Runs child-process commands only; PTY emulation and terminal state sync are not provided.',
+      limitations: [
+        'Runs child-process commands only; PTY emulation and terminal state sync are not provided.'
+      ]
     })
-  } else if (process.platform === 'darwin' || process.platform === 'win32') {
-    appendDynamicCapability({
-      ...SYSTEM_PERMISSION_CAPABILITY,
-      supportLevel: 'supported'
-    })
-  }
-
-  appendDynamicCapability(TERMINAL_CAPABILITY)
-
-  const tuffCliAvailable = await detectTuffCliAvailability()
-  appendDynamicCapability({
-    ...TUFF_CLI_CAPABILITY,
-    supportLevel: tuffCliAvailable ? 'supported' : 'unsupported',
-    limitations: tuffCliAvailable
-      ? undefined
-      : ['CLI binary `tuffcli` was not detected in PATH or known install locations.']
-  })
+  )
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(TUFF_CLI_CAPABILITY, await getTuffCliCapabilityPatch())
+  )
   return capabilities
 }
 

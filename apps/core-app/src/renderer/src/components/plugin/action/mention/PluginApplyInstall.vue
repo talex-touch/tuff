@@ -3,10 +3,15 @@ import { TxButton } from '@talex-touch/tuffex'
 import { sleep } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { useI18n } from 'vue-i18n'
 import Loading from '~/assets/lotties/compress-loading.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 import { clearBufferedFile, getBufferedFile } from '~/modules/hooks/dropper-resolver'
 import { blowMention, forTouchTip } from '~/modules/mention/dialog-mention'
+import {
+  isPluginAlreadyInstalledMessage,
+  resolvePluginApplyInstallErrorMessage
+} from './plugin-apply-install-utils'
 
 interface Manifest {
   name: string
@@ -20,6 +25,7 @@ const props = defineProps<{
   fileName: string
 }>()
 
+const { t } = useI18n()
 const transport = useTuffTransport()
 type PluginInstallRequest = {
   name: string
@@ -41,7 +47,7 @@ async function install(forceUpdate = false): Promise<void> {
 
   const buffer = getBufferedFile(props.fileName)
   if (!buffer) {
-    await blowMention('Install Error', 'Plugin file buffer not found, please try again.')
+    await blowMention(t('plugin.dropInstall.errorTitle'), t('plugin.dropInstall.bufferMissing'))
     installing.value = false
     close()
     return
@@ -61,18 +67,17 @@ async function install(forceUpdate = false): Promise<void> {
     await sleep(400)
 
     if (data?.status === 'error') {
-      if (data.msg === '10091') {
-        close()
-        await blowMention('Install Error', 'The plugin package is corrupted!')
-      } else if (data.msg === 'plugin already exists') {
+      if (isPluginAlreadyInstalledMessage(data.msg)) {
         // Ask user if they want to update/override
         let shouldUpdate = false
         await forTouchTip(
-          'Plugin Already Exists',
-          `Plugin "${props.manifest.name}" is already installed. Do you want to update it?`,
+          t('plugin.dropInstall.alreadyInstalledTitle'),
+          t('plugin.dropInstall.alreadyInstalledMessage', {
+            name: props.manifest.name
+          }),
           [
             {
-              content: 'Update',
+              content: t('plugin.dropInstall.update'),
               type: 'success',
               onClick: async () => {
                 shouldUpdate = true
@@ -80,7 +85,7 @@ async function install(forceUpdate = false): Promise<void> {
               }
             },
             {
-              content: 'Cancel',
+              content: t('common.cancel'),
               type: 'default',
               onClick: async () => true
             }
@@ -93,26 +98,27 @@ async function install(forceUpdate = false): Promise<void> {
           return
         }
         close()
-      } else if (typeof data.msg === 'string') {
-        close()
-        await blowMention('Install Error', `Installation failed: ${data.msg}`)
       } else {
         close()
-        await blowMention('Install Error', `Installation failed: ${JSON.stringify(data.msg)}`)
+        await blowMention(
+          t('plugin.dropInstall.errorTitle'),
+          resolvePluginApplyInstallErrorMessage(data.msg, t)
+        )
       }
     } else {
       close()
       await blowMention(
-        'Install Success',
-        `Plugin "${props.manifest.name}" installed successfully!`
+        t('plugin.dropInstall.successTitle'),
+        t('plugin.dropInstall.successMessage', {
+          name: props.manifest.name
+        })
       )
     }
   } catch (error: unknown) {
     installing.value = false
     close()
     console.error('[PluginApplyInstall] Installation error:', error)
-    const message = error instanceof Error ? error.message : String(error)
-    await blowMention('Install Error', `Unexpected error: ${message || 'Unknown error'}`)
+    await blowMention(t('plugin.dropInstall.errorTitle'), t('plugin.dropInstall.unexpected'))
   } finally {
     clearBufferedFile(props.fileName)
   }
@@ -137,7 +143,7 @@ function onIgnore(): void {
         '!-mb-[50%] !opacity-100': installing
       }"
     >
-      <h4 class="text-center">Installing...</h4>
+      <h4 class="text-center">{{ t('plugin.dropInstall.installing') }}</h4>
       <LottieFrame :data="Loading" />
     </div>
     <div
@@ -154,8 +160,12 @@ function onIgnore(): void {
       </h4>
       <span my-2 class="block text-center text-xs text-gray-500">{{ manifest.version }}</span>
       <div class="flex justify-between mt-16px gap-16px h-2.5rem">
-        <TxButton variant="flat" flex-1 @click="onIgnore"> Ignore </TxButton>
-        <TxButton variant="flat" type="primary" flex-1 @click="install()"> Install </TxButton>
+        <TxButton variant="flat" flex-1 @click="onIgnore">
+          {{ t('plugin.dropInstall.ignore') }}
+        </TxButton>
+        <TxButton variant="flat" type="primary" flex-1 @click="install()">
+          {{ t('plugin.dropInstall.install') }}
+        </TxButton>
       </div>
     </div>
   </div>

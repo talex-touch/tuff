@@ -18,7 +18,12 @@ import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 const { t } = useI18n()
 const platformSdk = usePlatformSdk()
 
-const capabilities = ref<PlatformCapability[]>([])
+type PlatformCapabilityView = PlatformCapability & {
+  issueCode?: string
+  reason?: string
+}
+
+const capabilities = ref<PlatformCapabilityView[]>([])
 const loading = ref(false)
 const lastUpdated = ref<Date | null>(null)
 
@@ -106,7 +111,7 @@ async function loadCapabilities() {
   loading.value = true
   try {
     const result = await platformSdk.listCapabilities()
-    capabilities.value = Array.isArray(result) ? result : []
+    capabilities.value = Array.isArray(result) ? (result as PlatformCapabilityView[]) : []
     lastUpdated.value = new Date()
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : ''
@@ -205,7 +210,20 @@ onMounted(() => {
             />
           </template>
           <div class="PlatformCapabilities-Footer">
-            <span class="PlatformCapabilities-IdBadge">{{ item.id }}</span>
+            <div class="PlatformCapabilities-MetaRow">
+              <span class="PlatformCapabilities-IdBadge">{{ item.id }}</span>
+              <span v-if="item.issueCode" class="PlatformCapabilities-IdBadge">
+                {{ item.issueCode }}
+              </span>
+            </div>
+            <div v-if="item.reason" class="PlatformCapabilities-Limitations" :title="item.reason">
+              <span class="PlatformCapabilities-LimitationsLabel">
+                {{ t('settings.settingPlatformCapabilities.reason') }}
+              </span>
+              <span class="PlatformCapabilities-LimitationsText">
+                {{ item.reason }}
+              </span>
+            </div>
             <div
               v-if="item.limitations?.length"
               class="PlatformCapabilities-Limitations"
@@ -304,6 +322,12 @@ onMounted(() => {
 .PlatformCapabilities-Footer {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+
+.PlatformCapabilities-MetaRow {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 

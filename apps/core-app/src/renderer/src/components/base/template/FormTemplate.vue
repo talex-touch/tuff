@@ -1,6 +1,7 @@
 <script setup name="FormTemplate" lang="ts">
 import type { VNode } from 'vue'
 import { provide, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import LoadingIcon from '../../icon/LoadingIcon.vue'
 
 interface FormField {
@@ -16,12 +17,13 @@ interface FormTemplateProps {
 }
 
 withDefaults(defineProps<FormTemplateProps>(), {
-  title: 'FormTemplate',
-  description: 'This is a form template.',
+  title: '',
+  description: '',
   routerBack: false,
   contentStyle: 'height: calc(100% - 10rem)'
 })
 
+const { t } = useI18n()
 const loading = ref(false)
 const formFields: FormField[] = []
 
@@ -69,7 +71,7 @@ provide('setLoading', (val: boolean) => (loading.value = val))
     <div mr-10 absolute :style="`${contentStyle}`" w-full>
       <TxScroll>
         <slot>
-          <p>Content</p>
+          <p>{{ t('common.content') }}</p>
         </slot>
       </TxScroll>
     </div>

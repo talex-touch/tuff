@@ -35,7 +35,7 @@ const appEntranceMode = computed<AppEntranceMode>(() => {
   })
 })
 
-setTimeout(async () => {
+async function initializeEntrance(): Promise<void> {
   await entry(props.onReady)
   const mode = appEntranceMode.value
   if (mode === 'CoreBox' && argMapper.rawCoreType && import.meta.env.DEV) {
@@ -53,7 +53,11 @@ setTimeout(async () => {
     { onceKey: `appentrance:${mode}` }
   )
   init.value = true
-}, 100)
+}
+
+onMounted(() => {
+  void initializeEntrance()
+})
 </script>
 
 <template>

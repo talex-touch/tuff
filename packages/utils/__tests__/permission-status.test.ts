@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getPluginPermissionStatus } from '../permission'
+import { generatePermissionIssue, getPluginPermissionStatus, hasPermission } from '../permission'
 
 const ENFORCED_SDK = 251212
 
@@ -38,5 +38,21 @@ describe('permission status resolution', () => {
     expect(status.outdatedByPluginChange).toEqual([])
     expect(status.outdatedByAppUpdate).toEqual([])
     expect(status.missingRequired).toEqual([])
+  })
+
+  it('does not keep legacy sdkapi as a permission bypass path', () => {
+    const status = getPluginPermissionStatus(
+      'demo-plugin',
+      251111,
+      {
+        required: ['fs.read'],
+        optional: [],
+      },
+      [],
+    )
+
+    expect(status.enforcePermissions).toBe(false)
+    expect(generatePermissionIssue(status)).toBeNull()
+    expect(hasPermission(status, 'fs.read')).toBe(false)
   })
 })

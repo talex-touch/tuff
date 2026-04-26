@@ -37,8 +37,6 @@ import type {
   IntelligenceProviderAdapter,
   IntelligenceProviderConfig,
   IntelligenceProviderManagerAdapter,
-  PromptWorkflow,
-  PromptWorkflowExecution,
   IntelligenceRAGQueryPayload,
   IntelligenceRAGQueryResult,
   IntelligenceRerankPayload,
@@ -53,21 +51,24 @@ import type {
   IntelligenceSummarizePayload,
   IntelligenceTranslatePayload,
   IntelligenceVisionOcrPayload,
-  IntelligenceVisionOcrResult
+  IntelligenceVisionOcrResult,
+  PromptWorkflowExecution
 } from '@talex-touch/tuff-intelligence'
 import type { AgentTask } from '@talex-touch/utils'
 import type { IntelligenceAuditLogEntry } from './intelligence-audit-logger'
 import { stdout } from 'node:process'
 import { format } from 'node:util'
 import { PromptTemplate } from '@langchain/core/prompts'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import chalk from 'chalk'
+import { enterPerfContext } from '../../utils/perf-context'
+import { agentManager } from './agents'
 import { intelligenceAuditLogger } from './intelligence-audit-logger'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
-import { agentManager } from './agents'
+import { intelligenceDeepAgentOrchestrationService } from './intelligence-deepagent-orchestration'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
 import { strategyManager } from './intelligence-strategy-manager'
 import { IntelligenceProvider } from './runtime/base-provider'
-import { enterPerfContext } from '../../utils/perf-context'
 
 const INTELLIGENCE_TAG = chalk.hex('#1e88e5').bold('[Intelligence]')
 const logInfo = (...args: unknown[]) => stdout.write(`${format(INTELLIGENCE_TAG, ...args)}\n`)
@@ -182,23 +183,6 @@ const CAPABILITY_METHOD_MAP: Record<
   rerank: { method: 'rerank', requiresOverride: true },
   workflow: { method: 'chat' },
   agent: { method: 'chat' }
-}
-
-interface WorkflowExecutionStepInput {
-  id?: string
-  name?: string
-  description?: string
-  capabilityId?: string
-  input?: unknown
-  agentId?: string
-  type?: 'execute' | 'plan' | 'chat'
-}
-
-interface WorkflowCapabilityPayload {
-  workflow?: PromptWorkflow
-  steps?: WorkflowExecutionStepInput[]
-  inputs?: Record<string, unknown>
-  continueOnError?: boolean
 }
 
 function resolveCapabilityMethod(
@@ -479,7 +463,7 @@ export class TuffIntelligenceSDK {
           logInfo(`Invoke skipped for ${capabilityId}: ${toInvokeErrorMessage(error)}`)
         } else if (failCount === 1 || failCount % 10 === 0) {
           logWarn(
-            `Invoke failed for ${capabilityId}` + (failCount > 1 ? ` (${failCount} failures)` : ''),
+            `Invoke failed for ${capabilityId}${failCount > 1 ? ` (${failCount} failures)` : ''}`,
             toInvokeErrorMessage(error)
           )
         }
@@ -512,6 +496,87 @@ export class TuffIntelligenceSDK {
       }
     } finally {
       disposeInvoke()
+    }
+  }
+
+  async resolveDeepAgentRuntimeConfig(
+    capabilityId: string,
+    options: IntelligenceInvokeOptions = {}
+  ): Promise<{
+    providerId: string
+    providerType: IntelligenceProviderType
+    baseUrl: string
+    apiKey: string
+    model: string
+    instructions?: string
+    runtimeOptions: IntelligenceInvokeOptions
+  }> {
+    const capability = intelligenceCapabilityRegistry.get(capabilityId)
+    if (!capability) {
+      throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
+    }
+
+    const { runtimeOptions } = this.prepareRuntimeOptions(capabilityId, options)
+    const manager = ensureProviderManager()
+    const candidateProviders = this.resolveAvailableProviders(
+      manager,
+      capabilityId,
+      capability.type,
+      capability.supportedProviders,
+      runtimeOptions,
+      false
+    ).filter((provider) => provider.type !== IntelligenceProviderType.ANTHROPIC)
+
+    if (candidateProviders.length <= 0) {
+      throw new Error(`[Intelligence] No OpenAI-compatible providers available for ${capabilityId}`)
+    }
+
+    const strategyResult = await strategyManager.select({
+      capabilityId,
+      options: runtimeOptions,
+      availableProviders: candidateProviders
+    })
+    const selectedProvider = strategyResult.selectedProvider
+    this.applyModelPreference(runtimeOptions, selectedProvider, capabilityId)
+
+    const fallbackBaseUrlMap: Record<IntelligenceProviderType, string> = {
+      [IntelligenceProviderType.OPENAI]: 'https://api.openai.com/v1',
+      [IntelligenceProviderType.ANTHROPIC]: 'https://api.anthropic.com/v1',
+      [IntelligenceProviderType.DEEPSEEK]: 'https://api.deepseek.com/v1',
+      [IntelligenceProviderType.SILICONFLOW]: 'https://api.siliconflow.cn/v1',
+      [IntelligenceProviderType.LOCAL]: String(selectedProvider.baseUrl || ''),
+      [IntelligenceProviderType.CUSTOM]: String(selectedProvider.baseUrl || '')
+    }
+
+    const baseUrl = String(
+      selectedProvider.baseUrl || fallbackBaseUrlMap[selectedProvider.type] || ''
+    ).trim()
+    const apiKey = String(selectedProvider.apiKey || '').trim()
+    const model = String(
+      runtimeOptions.modelPreference?.[0] ||
+        selectedProvider.defaultModel ||
+        selectedProvider.models?.[0] ||
+        ''
+    ).trim()
+
+    if (!baseUrl) {
+      throw new Error(`[Intelligence] Provider ${selectedProvider.id} missing base URL`)
+    }
+    if (!apiKey) {
+      throw new Error(`[Intelligence] Provider ${selectedProvider.id} missing API key`)
+    }
+    if (!model) {
+      throw new Error(`[Intelligence] Provider ${selectedProvider.id} missing default model`)
+    }
+
+    return {
+      providerId: selectedProvider.id,
+      providerType: selectedProvider.type,
+      baseUrl,
+      apiKey,
+      model,
+      instructions: selectedProvider.instructions ?? undefined,
+      runtimeOptions
     }
   }
 
@@ -801,55 +866,6 @@ export class TuffIntelligenceSDK {
     }
   }
 
-  private normalizeWorkflowPayload(payload: unknown): {
-    steps: WorkflowExecutionStepInput[]
-    continueOnError: boolean
-  } {
-    const data = (payload ?? {}) as WorkflowCapabilityPayload
-    const continueOnError = Boolean(data.continueOnError)
-
-    const simpleSteps = Array.isArray(data.steps)
-      ? data.steps
-          .map((step, index) => ({
-            id: step.id || `step-${index + 1}`,
-            name: step.name,
-            description: step.description,
-            capabilityId: step.capabilityId,
-            input: step.input,
-            agentId: step.agentId,
-            type: step.type
-          }))
-          .filter((step) => Boolean(step.id))
-      : []
-
-    if (simpleSteps.length > 0) {
-      return { steps: simpleSteps, continueOnError }
-    }
-
-    const workflow = data.workflow
-    if (!workflow || !Array.isArray(workflow.steps) || workflow.steps.length === 0) {
-      throw new Error('[Intelligence] workflow.execute requires non-empty steps')
-    }
-
-    const steps = workflow.steps.map((step, index) => {
-      const promptInput =
-        step.config.template ||
-        step.config.variables ||
-        step.config.body ||
-        step.config.condition ||
-        step.config.transform
-      return {
-        id: step.id || `step-${index + 1}`,
-        name: step.name,
-        description: step.name || step.type,
-        capabilityId: step.config.capabilityId,
-        input: promptInput
-      }
-    })
-
-    return { steps, continueOnError }
-  }
-
   private toTextPayload(value: unknown): string {
     if (typeof value === 'string') return value
     if (value === undefined || value === null) return ''
@@ -860,65 +876,13 @@ export class TuffIntelligenceSDK {
     }
   }
 
-  private toAgentResult(raw: unknown, fallbackText: string): IntelligenceAgentResult {
-    const source = typeof raw === 'string' ? raw : this.toTextPayload(raw)
-    let parsed: Partial<IntelligenceAgentResult> | null = null
-
-    try {
-      const data = JSON.parse(source) as Partial<IntelligenceAgentResult>
-      if (data && typeof data === 'object') {
-        parsed = data
-      }
-    } catch {
-      parsed = null
-    }
-
-    const normalizedSteps = Array.isArray(parsed?.steps)
-      ? parsed.steps.map((step) => ({
-          thought: typeof step?.thought === 'string' ? step.thought : 'generated',
-          action: typeof step?.action === 'string' ? step.action : undefined,
-          actionInput: step?.actionInput,
-          observation: typeof step?.observation === 'string' ? step.observation : undefined
-        }))
-      : []
-
-    const normalizedToolCalls = Array.isArray(parsed?.toolCalls)
-      ? parsed.toolCalls.map((call) => ({
-          tool: typeof call?.tool === 'string' ? call.tool : 'unknown',
-          input: call?.input,
-          output: call?.output
-        }))
-      : []
-
-    const resultText =
-      typeof parsed?.result === 'string' && parsed.result.trim().length > 0
-        ? parsed.result
-        : fallbackText
-
-    return {
-      result: resultText,
-      steps:
-        normalizedSteps.length > 0
-          ? normalizedSteps
-          : [{ thought: 'processed', observation: resultText.slice(0, 500) }],
-      toolCalls: normalizedToolCalls,
-      iterations:
-        typeof parsed?.iterations === 'number' && Number.isFinite(parsed.iterations)
-          ? parsed.iterations
-          : Math.max(1, normalizedSteps.length || 1)
-    }
-  }
-
   private async invokeAgentWithRuntime(
     provider: IntelligenceProviderAdapter,
     payload: IntelligenceAgentPayload,
     runtimeOptions: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceAgentResult>> {
-    if (!payload.task || typeof payload.task !== 'string') {
-      throw new Error('[Intelligence] agent.run requires a task string')
-    }
+    void provider
 
-    const start = Date.now()
     const agentId =
       typeof runtimeOptions.metadata?.agentId === 'string'
         ? runtimeOptions.metadata.agentId
@@ -947,6 +911,7 @@ export class TuffIntelligenceSDK {
         }
       }
 
+      const start = Date.now()
       const result = await agentManager.executeTaskImmediate(task)
       if (result.success) {
         const text = this.toTextPayload(result.output)
@@ -971,37 +936,7 @@ export class TuffIntelligenceSDK {
       throw new Error(result.error || `Agent ${agentId} execution failed`)
     }
 
-    const response = await provider.chat(
-      {
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are TuffIntelligence Orchestrator. Return strict JSON: {"result":"...","steps":[{"thought":"...","action":"...","actionInput":{},"observation":"..."}],"toolCalls":[{"tool":"...","input":{},"output":{}}],"iterations":1}'
-          },
-          {
-            role: 'user',
-            content: JSON.stringify({
-              task: payload.task,
-              context: payload.context,
-              constraints: payload.constraints ?? [],
-              tools: payload.tools ?? [],
-              memory: payload.memory ?? []
-            })
-          }
-        ]
-      },
-      runtimeOptions
-    )
-
-    const normalizedResult = this.toAgentResult(
-      response.result,
-      this.toTextPayload(response.result)
-    )
-    return {
-      ...response,
-      result: normalizedResult
-    }
+    return intelligenceDeepAgentOrchestrationService.executeAgentCapability(payload, runtimeOptions)
   }
 
   private async invokeWorkflowWithRuntime(
@@ -1009,179 +944,11 @@ export class TuffIntelligenceSDK {
     payload: unknown,
     runtimeOptions: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<PromptWorkflowExecution>> {
-    const start = Date.now()
-    const traceId = intelligenceAuditLogger.generateTraceId()
-    const { steps, continueOnError } = this.normalizeWorkflowPayload(payload)
-
-    if (
-      steps.length > 0 &&
-      steps.every((step) => typeof step.agentId === 'string' && step.agentId)
-    ) {
-      if (!agentManager.isInitialized()) {
-        throw new Error('[Intelligence] Agent runtime not initialized')
-      }
-      const workflowTask: AgentTask = {
-        agentId: 'builtin.workflow-agent',
-        type: 'execute',
-        input: {
-          capability: 'workflow.run',
-          steps: steps.map((step) => ({
-            id: step.id,
-            agentId: step.agentId!,
-            type: step.type ?? 'execute',
-            input: step.input ?? {}
-          })),
-          continueOnError
-        },
-        context: {
-          sessionId:
-            typeof runtimeOptions.metadata?.sessionId === 'string'
-              ? runtimeOptions.metadata.sessionId
-              : undefined,
-          workingDirectory:
-            typeof runtimeOptions.metadata?.workingDirectory === 'string'
-              ? runtimeOptions.metadata.workingDirectory
-              : undefined,
-          metadata: runtimeOptions.metadata
-        }
-      }
-
-      const workflowResult = await agentManager.executeTaskImmediate(workflowTask)
-      if (!workflowResult.success) {
-        throw new Error(workflowResult.error || 'Workflow execution failed')
-      }
-
-      const output = (workflowResult.output ?? {}) as {
-        success?: boolean
-        results?: Array<{ stepId?: string; success?: boolean; result?: unknown }>
-      }
-
-      const execution: PromptWorkflowExecution = {
-        id: traceId,
-        workflowId: 'builtin.workflow-agent',
-        status: output.success === false ? 'failed' : 'completed',
-        startedAt: start,
-        completedAt: Date.now(),
-        inputs: { steps },
-        outputs: { result: output },
-        steps: (output.results ?? []).map((item, index) => ({
-          stepId: item.stepId || `step-${index + 1}`,
-          status: item.success === false ? 'failed' : 'completed',
-          startedAt: start,
-          completedAt: Date.now(),
-          output: item.result
-        })),
-        error: output.success === false ? 'workflow execution failed' : undefined
-      }
-
-      return {
-        result: execution,
-        usage: {
-          promptTokens: workflowResult.usage?.promptTokens ?? 0,
-          completionTokens: workflowResult.usage?.completionTokens ?? 0,
-          totalTokens: workflowResult.usage?.totalTokens ?? 0
-        },
-        model: 'tuffintelligence-workflow-runtime',
-        latency: Date.now() - start,
-        traceId,
-        provider: 'intelligence-runtime'
-      }
-    }
-
-    const execution: PromptWorkflowExecution = {
-      id: traceId,
-      workflowId: 'inline.workflow',
-      status: 'running',
-      startedAt: start,
-      inputs: {
-        steps
-      },
-      steps: []
-    }
-
-    const outputs: Record<string, unknown> = {}
-    let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
-    let model = provider.getConfig().defaultModel || 'tuffintelligence-workflow-runtime'
-
-    for (const step of steps) {
-      const startedAt = Date.now()
-      const stepState: PromptWorkflowExecution['steps'][number] = {
-        stepId: step.id || `step-${execution.steps.length + 1}`,
-        status: 'running',
-        startedAt,
-        input: step.input
-      }
-      execution.steps.push(stepState)
-
-      try {
-        let output: unknown
-        if (step.capabilityId && step.capabilityId !== 'workflow.execute') {
-          const invokeResult = await this.invoke(
-            step.capabilityId,
-            step.input ?? {},
-            runtimeOptions
-          )
-          output = invokeResult.result
-          usage = {
-            promptTokens: usage.promptTokens + (invokeResult.usage?.promptTokens ?? 0),
-            completionTokens: usage.completionTokens + (invokeResult.usage?.completionTokens ?? 0),
-            totalTokens: usage.totalTokens + (invokeResult.usage?.totalTokens ?? 0)
-          }
-          model = invokeResult.model || model
-        } else {
-          const chatResult = await provider.chat(
-            {
-              messages: [
-                {
-                  role: 'user',
-                  content:
-                    step.description ||
-                    this.toTextPayload(step.input) ||
-                    `Execute workflow step ${step.id}`
-                }
-              ]
-            },
-            runtimeOptions
-          )
-          output = chatResult.result
-          usage = {
-            promptTokens: usage.promptTokens + (chatResult.usage?.promptTokens ?? 0),
-            completionTokens: usage.completionTokens + (chatResult.usage?.completionTokens ?? 0),
-            totalTokens: usage.totalTokens + (chatResult.usage?.totalTokens ?? 0)
-          }
-          model = chatResult.model || model
-        }
-
-        outputs[stepState.stepId] = output
-        stepState.output = output
-        stepState.status = 'completed'
-        stepState.completedAt = Date.now()
-      } catch (error) {
-        stepState.status = 'failed'
-        stepState.error = error instanceof Error ? error.message : String(error)
-        stepState.completedAt = Date.now()
-        if (!continueOnError) {
-          execution.status = 'failed'
-          execution.error = stepState.error
-          break
-        }
-      }
-    }
-
-    if (execution.status !== 'failed') {
-      execution.status = 'completed'
-    }
-    execution.completedAt = Date.now()
-    execution.outputs = outputs
-
-    return {
-      result: execution,
-      usage,
-      model,
-      latency: Date.now() - start,
-      traceId,
-      provider: provider.getConfig().id
-    }
+    void provider
+    return intelligenceDeepAgentOrchestrationService.executeWorkflowCapability(
+      payload,
+      runtimeOptions
+    )
   }
 
   private async invokeByCapabilityType<T>(

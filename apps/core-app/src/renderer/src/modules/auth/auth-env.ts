@@ -18,7 +18,7 @@ const AUTH_LEGACY_LOCAL_KEYS: Record<AuthSensitiveKey, string[]> = {
   deviceName: ['auth.deviceName', 'auth.device-name', 'auth_device_name']
 }
 
-let legacyAuthMigrated = false
+let legacyAuthStorageCleaned = false
 
 export type AuthSensitiveKey = keyof typeof AUTH_SECURE_KEYS
 
@@ -70,14 +70,14 @@ export async function setAuthSensitiveValue(
   })
 }
 
-export async function migrateLegacyAuthEnvToSecureStorage(): Promise<void> {
-  if (legacyAuthMigrated) {
+export async function cleanupLegacyAuthEnvStorage(): Promise<void> {
+  if (legacyAuthStorageCleaned) {
     return
   }
 
   const localStorage = getSafeLocalStorage()
   if (!localStorage) {
-    legacyAuthMigrated = true
+    legacyAuthStorageCleaned = true
     return
   }
 
@@ -87,5 +87,5 @@ export async function migrateLegacyAuthEnvToSecureStorage(): Promise<void> {
     }
   }
 
-  legacyAuthMigrated = true
+  legacyAuthStorageCleaned = true
 }

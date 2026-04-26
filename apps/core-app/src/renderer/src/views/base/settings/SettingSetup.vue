@@ -124,8 +124,9 @@ function ensureWindowSettings(): void {
 function ensureOmniPanelSettings(): void {
   if (!appSetting.omniPanel || typeof appSetting.omniPanel !== 'object') {
     appSetting.omniPanel = {
-      enableShortcut: true,
+      enableShortcut: false,
       enableMouseLongPress: true,
+      mouseLongPressDurationMs: 600,
       autoMountFirstFeatureOnPluginInstall: false,
       featureHub: {
         items: []
@@ -135,10 +136,13 @@ function ensureOmniPanelSettings(): void {
   }
 
   if (appSetting.omniPanel.enableShortcut === undefined) {
-    appSetting.omniPanel.enableShortcut = true
+    appSetting.omniPanel.enableShortcut = false
   }
   if (appSetting.omniPanel.enableMouseLongPress === undefined) {
     appSetting.omniPanel.enableMouseLongPress = true
+  }
+  if (appSetting.omniPanel.mouseLongPressDurationMs === undefined) {
+    appSetting.omniPanel.mouseLongPressDurationMs = 600
   }
   if (appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall === undefined) {
     appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall = false

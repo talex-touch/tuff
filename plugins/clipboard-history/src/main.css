@@ -1,0 +1,69 @@
+:root {
+  color-scheme: light;
+  --clipboard-color-accent: var(--tuff-color-primary, var(--tuff-color-info, #6366f1));
+  --clipboard-color-accent-strong: var(
+    --tuff-color-primary-dark-2,
+    var(--clipboard-color-accent)
+  );
+  --clipboard-color-danger: var(--tuff-color-danger, #ef4444);
+  --clipboard-color-danger-soft-fallback: rgba(248, 113, 113, 0.12);
+  --clipboard-text-primary: var(--tuff-text-color-primary, #1f2937);
+  --clipboard-text-secondary: var(--tuff-text-color-secondary, #475569);
+  --clipboard-text-muted: var(--tuff-text-color-subtle, #94a3b8);
+  --clipboard-text-disabled: var(--tuff-text-color-disabled, #a1acc5);
+  --clipboard-surface-base: var(--tuff-bg-color, rgba(255, 255, 255, 0.92));
+  --clipboard-surface-elevated: color-mix(
+    in srgb,
+    var(--clipboard-surface-base) 92%,
+    rgba(255, 255, 255, 0.08)
+  );
+  --clipboard-surface-subtle: color-mix(
+    in srgb,
+    var(--clipboard-surface-base) 88%,
+    rgba(255, 255, 255, 0.12)
+  );
+  --clipboard-surface-ghost: color-mix(
+    in srgb,
+    var(--clipboard-surface-base) 84%,
+    rgba(148, 163, 184, 0.16)
+  );
+  --clipboard-surface-strong: color-mix(
+    in srgb,
+    var(--clipboard-surface-base) 94%,
+    rgba(15, 23, 42, 0.06)
+  );
+  --clipboard-border-color: var(--tuff-border-color, rgba(148, 163, 184, 0.24));
+  --clipboard-border-strong: var(--tuff-border-color-strong, rgba(148, 163, 184, 0.38));
+  font-family:
+    "SF Pro Text",
+    "PingFang SC",
+    "Microsoft YaHei",
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  background: #f5f7fb;
+  color: #1b2330;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  background: transparent;
+  color: var(--clipboard-text-primary);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}

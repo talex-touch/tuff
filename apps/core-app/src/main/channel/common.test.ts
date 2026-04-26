@@ -8,9 +8,14 @@ const {
   perfDisposeMock,
   getTuffTransportMainMock,
   activeAppGetActiveAppMock,
-  isActiveAppCapabilityAvailableMock,
-  nativeShareGetAvailableTargetsMock,
-  platformCapabilityListMock
+  platformCapabilityListMock,
+  getActiveAppCapabilityPatchMock,
+  getSelectionCaptureCapabilityPatchMock,
+  getAutoPasteCapabilityPatchMock,
+  getNativeShareCapabilityPatchMock,
+  getPermissionDeepLinkCapabilityPatchMock,
+  getEverythingCapabilityPatchMock,
+  getTuffCliCapabilityPatchMock
 } = vi.hoisted(() => ({
   fsReadFileMock: vi.fn(),
   execFileMock: vi.fn(
@@ -27,9 +32,14 @@ const {
   perfDisposeMock: vi.fn(),
   getTuffTransportMainMock: vi.fn<(channel?: unknown, keyManager?: unknown) => unknown>(() => null),
   activeAppGetActiveAppMock: vi.fn<(forceRefresh?: unknown) => Promise<unknown>>(),
-  isActiveAppCapabilityAvailableMock: vi.fn(async () => false),
-  nativeShareGetAvailableTargetsMock: vi.fn<() => Array<Record<string, unknown>>>(() => []),
-  platformCapabilityListMock: vi.fn<() => Array<Record<string, unknown>>>(() => [])
+  platformCapabilityListMock: vi.fn<() => Array<Record<string, unknown>>>(() => []),
+  getActiveAppCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'unsupported' })),
+  getSelectionCaptureCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'unsupported' })),
+  getAutoPasteCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'unsupported' })),
+  getNativeShareCapabilityPatchMock: vi.fn(() => ({ supportLevel: 'unsupported' })),
+  getPermissionDeepLinkCapabilityPatchMock: vi.fn(() => ({ supportLevel: 'best_effort' })),
+  getEverythingCapabilityPatchMock: vi.fn(() => ({ supportLevel: 'unsupported' })),
+  getTuffCliCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'unsupported' }))
 }))
 
 vi.mock('@talex-touch/utils', async (importOriginal) => {
@@ -310,14 +320,25 @@ vi.mock('../modules/sentry/sentry-service', () => ({
 vi.mock('../modules/system/active-app', () => ({
   activeAppService: {
     getActiveApp: activeAppGetActiveAppMock
-  },
-  isActiveAppCapabilityAvailable: isActiveAppCapabilityAvailableMock
+  }
 }))
 
-vi.mock('../modules/flow-bus/native-share', () => ({
-  nativeShareService: {
-    getAvailableTargets: nativeShareGetAvailableTargetsMock
-  }
+vi.mock('../modules/platform/capability-adapter', () => ({
+  applyCapabilityRuntimePatch: (
+    capability: Record<string, unknown>,
+    patch?: Record<string, unknown>
+  ) => ({
+    ...capability,
+    supportLevel: 'supported',
+    ...(patch ?? {})
+  }),
+  getActiveAppCapabilityPatch: getActiveAppCapabilityPatchMock,
+  getSelectionCaptureCapabilityPatch: getSelectionCaptureCapabilityPatchMock,
+  getAutoPasteCapabilityPatch: getAutoPasteCapabilityPatchMock,
+  getNativeShareCapabilityPatch: getNativeShareCapabilityPatchMock,
+  getPermissionDeepLinkCapabilityPatch: getPermissionDeepLinkCapabilityPatchMock,
+  getEverythingCapabilityPatch: getEverythingCapabilityPatchMock,
+  getTuffCliCapabilityPatch: getTuffCliCapabilityPatchMock
 }))
 
 vi.mock('../service/device-idle-service', () => ({
@@ -510,8 +531,17 @@ describe('CommonChannelModule private helpers', () => {
       platformCapabilityListMock.mockReturnValue([
         { id: 'platform.storage', scope: 'system', supportLevel: 'supported' }
       ] as never)
-      isActiveAppCapabilityAvailableMock.mockResolvedValue(true)
-      nativeShareGetAvailableTargetsMock.mockReturnValue([{ id: 'mail' }] as never)
+      getActiveAppCapabilityPatchMock.mockResolvedValue({ supportLevel: 'supported' } as never)
+      getSelectionCaptureCapabilityPatchMock.mockResolvedValue({
+        supportLevel: 'best_effort'
+      } as never)
+      getAutoPasteCapabilityPatchMock.mockResolvedValue({ supportLevel: 'best_effort' } as never)
+      getNativeShareCapabilityPatchMock.mockReturnValue({ supportLevel: 'supported' } as never)
+      getPermissionDeepLinkCapabilityPatchMock.mockReturnValue({
+        supportLevel: 'supported'
+      } as never)
+      getEverythingCapabilityPatchMock.mockReturnValue({ supportLevel: 'unsupported' } as never)
+      getTuffCliCapabilityPatchMock.mockResolvedValue({ supportLevel: 'unsupported' } as never)
       activeAppGetActiveAppMock.mockResolvedValue({ displayName: 'Finder' })
 
       const module = new CommonChannelModule()
@@ -535,8 +565,11 @@ describe('CommonChannelModule private helpers', () => {
       expect(capabilities.map((item) => item.id)).toEqual([
         'platform.storage',
         'platform.active-app',
+        'platform.selection-capture',
+        'platform.auto-paste',
         'platform.native-share',
-        'platform.permission-checker',
+        'platform.permission-deep-link',
+        'platform.everything-search',
         'platform.terminal',
         'platform.tuff-cli'
       ])
@@ -591,7 +624,22 @@ describe('CommonChannelModule private helpers', () => {
       platformCapabilityListMock.mockReturnValue([
         { id: 'platform.storage', scope: 'system', supportLevel: 'supported' }
       ] as never)
-      isActiveAppCapabilityAvailableMock.mockResolvedValue(true)
+      getActiveAppCapabilityPatchMock.mockResolvedValue({ supportLevel: 'supported' } as never)
+      getSelectionCaptureCapabilityPatchMock.mockResolvedValue({
+        supportLevel: 'best_effort'
+      } as never)
+      getAutoPasteCapabilityPatchMock.mockResolvedValue({ supportLevel: 'best_effort' } as never)
+      getNativeShareCapabilityPatchMock.mockReturnValue({
+        supportLevel: 'unsupported',
+        limitations: [
+          'Native system share is unavailable on this platform; explicit mail target remains available.'
+        ]
+      } as never)
+      getPermissionDeepLinkCapabilityPatchMock.mockReturnValue({
+        supportLevel: 'supported'
+      } as never)
+      getEverythingCapabilityPatchMock.mockReturnValue({ supportLevel: 'unsupported' } as never)
+      getTuffCliCapabilityPatchMock.mockResolvedValue({ supportLevel: 'unsupported' } as never)
 
       const module = new CommonChannelModule()
       await module.onInit({
@@ -621,18 +669,12 @@ describe('CommonChannelModule private helpers', () => {
     }
   })
 
-  it('probes `tuffcli --version` directly for Tuff CLI availability', async () => {
+  it('appends Tuff CLI capability state from the shared capability adapter', async () => {
     const originalPlatform = process.platform
-    const now = Date.now()
-    const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(now + 61_000)
 
     Object.defineProperty(process, 'platform', {
       value: 'darwin',
       configurable: true
-    })
-
-    execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
-      callback(null, 'Version: 0.0.2\n', '')
     })
 
     try {
@@ -653,8 +695,17 @@ describe('CommonChannelModule private helpers', () => {
 
       getTuffTransportMainMock.mockReturnValue(transport as never)
       platformCapabilityListMock.mockReturnValue([] as never)
-      isActiveAppCapabilityAvailableMock.mockResolvedValue(false)
-      nativeShareGetAvailableTargetsMock.mockReturnValue([] as never)
+      getActiveAppCapabilityPatchMock.mockResolvedValue({ supportLevel: 'unsupported' } as never)
+      getSelectionCaptureCapabilityPatchMock.mockResolvedValue({
+        supportLevel: 'unsupported'
+      } as never)
+      getAutoPasteCapabilityPatchMock.mockResolvedValue({ supportLevel: 'unsupported' } as never)
+      getNativeShareCapabilityPatchMock.mockReturnValue({ supportLevel: 'unsupported' } as never)
+      getPermissionDeepLinkCapabilityPatchMock.mockReturnValue({
+        supportLevel: 'best_effort'
+      } as never)
+      getEverythingCapabilityPatchMock.mockReturnValue({ supportLevel: 'unsupported' } as never)
+      getTuffCliCapabilityPatchMock.mockResolvedValue({ supportLevel: 'supported' } as never)
 
       const module = new CommonChannelModule()
       await module.onInit({
@@ -672,18 +723,11 @@ describe('CommonChannelModule private helpers', () => {
         supportLevel?: string
       }>
 
-      expect(execFileMock).toHaveBeenNthCalledWith(
-        1,
-        'tuffcli',
-        ['--version'],
-        expect.objectContaining({ timeout: 1500, windowsHide: true }),
-        expect.any(Function)
-      )
+      expect(getTuffCliCapabilityPatchMock).toHaveBeenCalledTimes(1)
       expect(capabilities.find((item) => item.id === 'platform.tuff-cli')?.supportLevel).toBe(
         'supported'
       )
     } finally {
-      dateNowSpy.mockRestore()
       Object.defineProperty(process, 'platform', {
         value: originalPlatform,
         configurable: true

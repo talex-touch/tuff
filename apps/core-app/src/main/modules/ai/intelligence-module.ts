@@ -4,27 +4,38 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceMessage,
   IntelligenceProviderConfig,
-  TuffIntelligenceApprovalTicket,
   TuffIntelligenceAgentSession,
   TuffIntelligenceAgentTraceEvent,
+  TuffIntelligenceApprovalTicket,
   TuffIntelligenceStateSnapshot,
-  TuffIntelligenceTurn
+  TuffIntelligenceTurn,
+  WorkflowDefinition,
+  WorkflowRunRecord,
+  WorkflowTriggerType
 } from '@talex-touch/tuff-intelligence'
 import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
+import type { getTuffTransportMain, HandlerContext } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
+import type { ApiResponse } from '../../utils/safe-handler'
+import type { QuotaConfig } from './intelligence-quota-manager'
 import {
   IntelligenceCapabilityType,
   IntelligenceProviderType
 } from '@talex-touch/tuff-intelligence'
-import { getTuffTransportMain, type HandlerContext } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
-import { safeApiHandler, withPermissionSafeApi, type ApiResponse } from '../../utils/safe-handler'
+import { safeApiHandler, withPermissionSafeApi } from '../../utils/safe-handler'
 import { BaseModule } from '../abstract-base-module'
 import { getAuthToken } from '../auth'
 import { withPermission } from '../permission/channel-guard'
+import {
+  agentManager,
+  registerAgentChannels,
+  registerBuiltinAgents,
+  registerBuiltinTools
+} from './agents'
 import { capabilityTesterRegistry } from './capability-testers'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import {
@@ -33,20 +44,16 @@ import {
   getCapabilityOptions,
   setupConfigUpdateListener
 } from './intelligence-config'
+import { intelligenceDeepAgentOrchestrationService } from './intelligence-deepagent-orchestration'
+import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
 import { setIntelligenceProviderManager, tuffIntelligence } from './intelligence-sdk'
-import {
-  agentManager,
-  registerAgentChannels,
-  registerBuiltinAgents,
-  registerBuiltinTools
-} from './agents'
+import { intelligenceWorkflowService } from './intelligence-workflow-service'
 import { fetchProviderModels } from './provider-models'
 import { AnthropicProvider } from './providers/anthropic-provider'
 import { DeepSeekProvider } from './providers/deepseek-provider'
 import { LocalProvider } from './providers/local-provider'
 import { OpenAIProvider } from './providers/openai-provider'
 import { SiliconflowProvider } from './providers/siliconflow-provider'
-import type { QuotaConfig } from './intelligence-quota-manager'
 import { IntelligenceProviderManager } from './runtime/provider-manager'
 import { tuffIntelligenceRuntime } from './tuff-intelligence-runtime'
 
@@ -55,13 +62,13 @@ const TUFF_NEXUS_PROVIDER_ID = 'tuff-nexus-default'
 const INTELLIGENCE_STREAM_KEEPALIVE_MS = 10_000
 const INTELLIGENCE_STREAM_REPLAY_LIMIT = 1_000
 
-type IntelligenceInvokePayload = {
+interface IntelligenceInvokePayload {
   capabilityId: string
   payload: unknown
   options?: IntelligenceInvokeOptions
 }
 
-type IntelligenceChatLangchainPayload = {
+interface IntelligenceChatLangchainPayload {
   messages: IntelligenceMessage[]
   providerId?: string
   model?: string
@@ -70,9 +77,13 @@ type IntelligenceChatLangchainPayload = {
   metadata?: Record<string, unknown>
 }
 
-type IntelligenceTestProviderPayload = { provider: IntelligenceProviderConfig }
+interface IntelligenceTestProviderPayload {
+  provider: IntelligenceProviderConfig
+}
 
-type IntelligenceGetCapabilityTestMetaPayload = { capabilityId: string }
+interface IntelligenceGetCapabilityTestMetaPayload {
+  capabilityId: string
+}
 
 type IntelligenceTestCapabilityPayload = {
   capabilityId: string
@@ -83,9 +94,11 @@ type IntelligenceTestCapabilityPayload = {
   promptVariables?: Record<string, unknown>
 } & Record<string, unknown>
 
-type IntelligenceFetchModelsPayload = { provider: IntelligenceProviderConfig }
+interface IntelligenceFetchModelsPayload {
+  provider: IntelligenceProviderConfig
+}
 
-type IntelligenceAuditLogQuery = {
+interface IntelligenceAuditLogQuery {
   caller?: string
   capabilityId?: string
   startTime?: number
@@ -93,20 +106,25 @@ type IntelligenceAuditLogQuery = {
   limit?: number
 }
 
-type IntelligenceStatsPayload = { callerId?: string }
+interface IntelligenceStatsPayload {
+  callerId?: string
+}
 
-type IntelligenceUsageStatsPayload = {
+interface IntelligenceUsageStatsPayload {
   callerId: string
   periodType: 'day' | 'month'
   startPeriod?: string
   endPeriod?: string
 }
 
-type QuotaLookupPayload = { callerId?: string; callerType?: QuotaConfig['callerType'] }
+interface QuotaLookupPayload {
+  callerId?: string
+  callerType?: QuotaConfig['callerType']
+}
 
 type QuotaCheckPayload = QuotaLookupPayload & { estimatedTokens?: number }
 
-type IntelligenceSessionStartPayload = {
+interface IntelligenceSessionStartPayload {
   sessionId?: string
   objective?: string
   context?: Record<string, unknown>
@@ -118,35 +136,42 @@ type IntelligenceSessionStartPayload = {
   reflectNotes?: string
 }
 
-type IntelligenceSessionResumePayload = { sessionId: string }
-
-type IntelligenceSessionCancelPayload = { sessionId: string; reason?: string }
-
-type IntelligenceSessionStatePayload = { sessionId: string }
-
-type IntelligenceSessionHeartbeatPayload = {
+interface IntelligenceSessionResumePayload {
   sessionId: string
 }
 
-type IntelligenceSessionPausePayload = {
+interface IntelligenceSessionCancelPayload {
+  sessionId: string
+  reason?: string
+}
+
+interface IntelligenceSessionStatePayload {
+  sessionId: string
+}
+
+interface IntelligenceSessionHeartbeatPayload {
+  sessionId: string
+}
+
+interface IntelligenceSessionPausePayload {
   sessionId: string
   reason?: 'client_disconnect' | 'heartbeat_timeout' | 'manual_pause' | 'system_preempted'
   note?: string
 }
 
-type IntelligenceSessionHistoryPayload = {
+interface IntelligenceSessionHistoryPayload {
   limit?: number
   status?: TuffIntelligenceAgentSession['status']
 }
 
-type IntelligenceOrchestratorPlanPayload = {
+interface IntelligenceOrchestratorPlanPayload {
   sessionId: string
   objective: string
   context?: Record<string, unknown>
   metadata?: Record<string, unknown>
 }
 
-type IntelligenceOrchestratorExecutePayload = {
+interface IntelligenceOrchestratorExecutePayload {
   sessionId: string
   turnId?: string
   maxSteps?: number
@@ -155,13 +180,13 @@ type IntelligenceOrchestratorExecutePayload = {
   metadata?: Record<string, unknown>
 }
 
-type IntelligenceOrchestratorReflectPayload = {
+interface IntelligenceOrchestratorReflectPayload {
   sessionId: string
   turnId: string
   notes?: string
 }
 
-type IntelligenceToolCallPayload = {
+interface IntelligenceToolCallPayload {
   sessionId: string
   turnId?: string
   actionId?: string
@@ -173,7 +198,7 @@ type IntelligenceToolCallPayload = {
   metadata?: Record<string, unknown>
 }
 
-type IntelligenceToolResultPayload = {
+interface IntelligenceToolResultPayload {
   sessionId: string
   turnId?: string
   toolId: string
@@ -183,14 +208,14 @@ type IntelligenceToolResultPayload = {
   metadata?: Record<string, unknown>
 }
 
-type IntelligenceToolApprovePayload = {
+interface IntelligenceToolApprovePayload {
   ticketId: string
   approved: boolean
   approvedBy?: string
   reason?: string
 }
 
-type IntelligenceTraceQueryPayload = {
+interface IntelligenceTraceQueryPayload {
   sessionId: string
   fromSeq?: number
   limit?: number
@@ -198,9 +223,39 @@ type IntelligenceTraceQueryPayload = {
   type?: TuffIntelligenceAgentTraceEvent['type']
 }
 
-type IntelligenceTraceExportPayload = {
+interface IntelligenceTraceExportPayload {
   sessionId: string
   format?: 'json' | 'jsonl'
+}
+
+interface IntelligenceWorkflowListPayload {
+  includeDisabled?: boolean
+  includeTemplates?: boolean
+}
+
+interface IntelligenceWorkflowGetPayload {
+  workflowId: string
+}
+
+interface IntelligenceWorkflowDeletePayload {
+  workflowId: string
+}
+
+interface IntelligenceWorkflowHistoryPayload {
+  workflowId?: string
+  limit?: number
+  status?: WorkflowRunRecord['status']
+}
+
+interface IntelligenceWorkflowRunPayload {
+  workflowId?: string
+  workflow?: WorkflowDefinition
+  runId?: string
+  inputs?: Record<string, unknown>
+  sessionId?: string
+  triggerType?: WorkflowTriggerType
+  continueOnError?: boolean
+  metadata?: Record<string, unknown>
 }
 
 function toNexusApiKey(token: string | null): string | undefined {
@@ -434,6 +489,30 @@ const intelligenceSessionTraceExportEvent = defineRawEvent<
   IntelligenceTraceExportPayload,
   ApiResponse<{ format: 'json' | 'jsonl'; content: string }>
 >('intelligence:agent:session:trace:export')
+const intelligenceWorkflowListEvent = defineRawEvent<
+  IntelligenceWorkflowListPayload | undefined,
+  ApiResponse<WorkflowDefinition[]>
+>('intelligence:workflow:list')
+const intelligenceWorkflowGetEvent = defineRawEvent<
+  IntelligenceWorkflowGetPayload,
+  ApiResponse<WorkflowDefinition | null>
+>('intelligence:workflow:get')
+const intelligenceWorkflowSaveEvent = defineRawEvent<
+  WorkflowDefinition,
+  ApiResponse<WorkflowDefinition>
+>('intelligence:workflow:save')
+const intelligenceWorkflowDeleteEvent = defineRawEvent<
+  IntelligenceWorkflowDeletePayload,
+  ApiResponse<{ deleted: boolean }>
+>('intelligence:workflow:delete')
+const intelligenceWorkflowRunEvent = defineRawEvent<
+  IntelligenceWorkflowRunPayload,
+  ApiResponse<WorkflowRunRecord>
+>('intelligence:workflow:run')
+const intelligenceWorkflowHistoryEvent = defineRawEvent<
+  IntelligenceWorkflowHistoryPayload | undefined,
+  ApiResponse<WorkflowRunRecord[]>
+>('intelligence:workflow:history')
 
 /**
  * Intelligence Module - Manages AI capabilities and providers.
@@ -499,6 +578,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       this.agentChannelsCleanup()
       this.agentChannelsCleanup = null
     }
+    await intelligenceMcpRegistry.closeAll()
     await agentManager.shutdown()
     this.manager?.clear()
     this.manager = null
@@ -513,6 +593,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     registerBuiltinTools()
     registerBuiltinAgents()
+    intelligenceWorkflowService.setExecutor((ctx) =>
+      intelligenceDeepAgentOrchestrationService.executeWorkflowRun(ctx)
+    )
 
     await agentManager.init({
       invoke: async (capability, params, options) => {
@@ -535,6 +618,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     })
 
+    await intelligenceWorkflowService.initialize()
     this.agentChannelsCleanup = registerAgentChannels(transport)
     this.verifyAgentRuntimeReady()
     intelligenceLog.success('Intelligence agent runtime initialized')
@@ -930,6 +1014,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     this.registerStatsChannels(registerSafe)
     this.registerQuotaChannels(registerSafe)
     this.registerOrchestrationChannels(registerProtectedSafe, registerSafe)
+    this.registerWorkflowChannels(registerProtectedSafe)
     this.registerOrchestrationStreamChannels()
 
     intelligenceLog.success('IPC channels registered')
@@ -1424,6 +1509,87 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           throw new Error('sessionId is required')
         }
         return tuffIntelligenceRuntime.exportTrace(data)
+      }
+    )
+  }
+
+  private registerWorkflowChannels(
+    registerProtectedSafe: <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
+      action: string,
+      permissionId: string,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
+  ): void {
+    registerProtectedSafe(
+      intelligenceWorkflowListEvent,
+      'List intelligence workflows',
+      'intelligence.basic',
+      async (data) => {
+        if (data && typeof data !== 'object') {
+          throw new Error('Invalid workflow list payload')
+        }
+        return intelligenceWorkflowService.listWorkflows(data ?? {})
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceWorkflowGetEvent,
+      'Get intelligence workflow',
+      'intelligence.basic',
+      async (data) => {
+        if (!data?.workflowId) {
+          throw new Error('workflowId is required')
+        }
+        return intelligenceWorkflowService.getWorkflow(data.workflowId)
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceWorkflowSaveEvent,
+      'Save intelligence workflow',
+      'intelligence.basic',
+      async (data) => {
+        if (!data || typeof data !== 'object') {
+          throw new Error('Invalid workflow payload')
+        }
+        return intelligenceWorkflowService.saveWorkflow(data as WorkflowDefinition)
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceWorkflowDeleteEvent,
+      'Delete intelligence workflow',
+      'intelligence.basic',
+      async (data) => {
+        if (!data?.workflowId) {
+          throw new Error('workflowId is required')
+        }
+        return intelligenceWorkflowService.deleteWorkflow(data.workflowId)
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceWorkflowRunEvent,
+      'Run intelligence workflow',
+      'intelligence.basic',
+      async (data) => {
+        if (!data || typeof data !== 'object') {
+          throw new Error('Invalid workflow run payload')
+        }
+        return intelligenceWorkflowService.runWorkflow(data)
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceWorkflowHistoryEvent,
+      'Query intelligence workflow history',
+      'intelligence.basic',
+      async (data) => {
+        if (data && typeof data !== 'object') {
+          throw new Error('Invalid workflow history payload')
+        }
+        return intelligenceWorkflowService.listHistory(data ?? {})
       }
     )
   }

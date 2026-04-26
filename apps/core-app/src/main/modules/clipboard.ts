@@ -57,11 +57,17 @@ import { windowManager } from './box-tool/core-box/window'
 import { detectClipboardTags } from './clipboard-tagging'
 import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
+import { getAutoPasteCapabilityPatch } from './platform/capability-adapter'
 import { getPermissionModule } from './permission'
 import { ensureXdotoolAvailable } from './system/linux-desktop-tools'
 import { pluginModule } from './plugin/plugin-module'
 import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storage'
 import { activeAppService } from './system/active-app'
+import {
+  ClipboardActionRuntimeError,
+  normalizeClipboardActionError,
+  summarizeClipboardApplyPayload
+} from './clipboard/clipboard-action-diagnostics'
 import {
   buildPhaseDiagnostics,
   summarizePhaseDurations,
@@ -1316,7 +1322,12 @@ export class ClipboardModule extends BaseModule {
     const tags = this.extractTags(item)
     const meta: Record<string, unknown> = {}
     if (clientItem.meta && typeof clientItem.meta === 'object') {
-      for (const key of ['image_original_url', 'image_content_kind', 'image_size', 'image_file_size']) {
+      for (const key of [
+        'image_original_url',
+        'image_content_kind',
+        'image_size',
+        'image_file_size'
+      ]) {
         const value = (clientItem.meta as Record<string, unknown>)[key]
         if (value !== undefined && value !== null) {
           meta[key] = value
@@ -1558,6 +1569,29 @@ export class ClipboardModule extends BaseModule {
       clipboardLog.debug('Failed to parse file list from clipboard item', { error })
     }
     return []
+  }
+
+  private toActionFailureResult(
+    error: unknown,
+    logMessage: string,
+    meta: Record<string, unknown> = {},
+    fallbackMessage = '自动粘贴失败'
+  ): ClipboardActionResult {
+    const failure = normalizeClipboardActionError(error, fallbackMessage)
+    clipboardLog.warn(logMessage, {
+      error: failure.originalError,
+      meta: {
+        ...meta,
+        code: failure.code,
+        message: failure.message
+      }
+    })
+
+    return {
+      success: false,
+      message: failure.message,
+      code: failure.code
+    }
   }
 
   private normalizeApplyPayload(payload: ClipboardApplyPayload): IClipboardItem {
@@ -1807,6 +1841,14 @@ export class ClipboardModule extends BaseModule {
 
   private async simulatePasteCommand(): Promise<void> {
     try {
+      const autoPasteCapability = await getAutoPasteCapabilityPatch()
+      if (autoPasteCapability.supportLevel === 'unsupported') {
+        throw new Error(
+          autoPasteCapability.reason ||
+            `Auto paste is not supported on platform: ${process.platform}`
+        )
+      }
+
       if (process.platform === 'darwin') {
         await execFileAsync('osascript', [
           '-e',
@@ -1830,8 +1872,16 @@ export class ClipboardModule extends BaseModule {
 
       throw new Error(`Auto paste is not supported on platform: ${process.platform}`)
     } catch (error) {
-      clipboardLog.error('Failed to simulate paste command', { error })
-      throw error instanceof Error ? error : new Error(String(error))
+      const failure = normalizeClipboardActionError(error)
+      clipboardLog.error('Failed to simulate paste command', {
+        error: failure.originalError,
+        meta: {
+          code: failure.code,
+          message: failure.message,
+          platform: process.platform
+        }
+      })
+      throw new ClipboardActionRuntimeError(failure.code, failure.message, failure.originalError)
     }
   }
 
@@ -2831,16 +2881,94 @@ export class ClipboardModule extends BaseModule {
     return { url: null }
   }
 
-  private async handleCopyAndPasteRequest(
-    request: ClipboardCopyAndPasteRequest
+  private async handleApplyRequest(
+    request: ClipboardApplyRequest,
+    context: HandlerContext
   ): Promise<ClipboardActionResult> {
+    if (!this.db) {
+      return this.toActionFailureResult(
+        new ClipboardActionRuntimeError(
+          'CLIPBOARD_DATABASE_UNAVAILABLE',
+          'Clipboard database is not ready.'
+        ),
+        'Clipboard apply failed',
+        {
+          platform: process.platform,
+          itemId: request?.id,
+          pluginName: context.plugin?.name ?? null,
+          autoPaste: request?.autoPaste !== false
+        },
+        'Clipboard database is not ready.'
+      )
+    }
+
+    let row: unknown
     try {
-      const applyPayload: ClipboardApplyPayload = buildApplyPayloadFromCopyAndPaste(request)
+      const [nextRow] = await this.db
+        .select()
+        .from(clipboardHistory)
+        .where(eq(clipboardHistory.id, request.id))
+        .limit(1)
+      row = nextRow
+    } catch (error) {
+      return this.toActionFailureResult(error, 'Clipboard apply lookup failed', {
+        platform: process.platform,
+        itemId: request?.id,
+        pluginName: context.plugin?.name ?? null,
+        autoPaste: request?.autoPaste !== false
+      })
+    }
+
+    if (!row) {
+      return this.toActionFailureResult(
+        new ClipboardActionRuntimeError(
+          'CLIPBOARD_ITEM_NOT_FOUND',
+          `Clipboard history item not found: ${request.id}`
+        ),
+        'Clipboard apply failed',
+        {
+          platform: process.platform,
+          itemId: request?.id,
+          pluginName: context.plugin?.name ?? null,
+          autoPaste: request?.autoPaste !== false
+        },
+        'Clipboard history item not found.'
+      )
+    }
+
+    const item = row as unknown as IClipboardItem
+    const applyPayload: ClipboardApplyPayload = { item }
+
+    try {
+      if (request.autoPaste === false) {
+        this.writeItemToClipboard(item, applyPayload)
+        return { success: true }
+      }
+
       await this.applyToActiveApp(applyPayload)
       return { success: true }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      return { success: false, message }
+      return this.toActionFailureResult(error, 'Clipboard apply failed', {
+        ...summarizeClipboardApplyPayload(applyPayload),
+        pluginName: context.plugin?.name ?? null,
+        autoPaste: request?.autoPaste !== false
+      })
+    }
+  }
+
+  private async handleCopyAndPasteRequest(
+    request: ClipboardCopyAndPasteRequest,
+    context: HandlerContext
+  ): Promise<ClipboardActionResult> {
+    const applyPayload: ClipboardApplyPayload = buildApplyPayloadFromCopyAndPaste(request)
+    try {
+      await this.applyToActiveApp(applyPayload)
+      return { success: true }
+    } catch (error) {
+      return this.toActionFailureResult(error, 'Clipboard copy-and-paste failed', {
+        ...summarizeClipboardApplyPayload(applyPayload),
+        pluginName: context.plugin?.name ?? null
+      })
     }
   }
 
@@ -2970,22 +3098,7 @@ export class ClipboardModule extends BaseModule {
         ClipboardEvents.apply,
         async (request: ClipboardApplyRequest, context: HandlerContext) => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          if (!this.db) return
-          const [row] = await this.db
-            .select()
-            .from(clipboardHistory)
-            .where(eq(clipboardHistory.id, request.id))
-            .limit(1)
-
-          if (!row) return
-
-          const item = row as unknown as IClipboardItem
-          if (request.autoPaste === false) {
-            this.writeItemToClipboard(item, { item })
-            return
-          }
-
-          await this.applyToActiveApp({ item })
+          return await this.handleApplyRequest(request, context)
         }
       ),
       this.transport.on(
@@ -3030,7 +3143,7 @@ export class ClipboardModule extends BaseModule {
           context: HandlerContext
         ): Promise<ClipboardActionResult> => {
           this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          return await this.handleCopyAndPasteRequest(request)
+          return await this.handleCopyAndPasteRequest(request, context)
         }
       )
     )

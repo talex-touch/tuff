@@ -56,6 +56,143 @@ export enum IntelligenceCapabilityType {
   AGENT = 'agent',
 }
 
+export type IntelligenceToolRiskLevel = 'low' | 'medium' | 'high' | 'critical'
+
+export type ToolSource = 'builtin' | 'mcp'
+export type WorkflowTriggerType = 'manual' | 'clipboard.batch'
+export type WorkflowStepKind = 'prompt' | 'tool' | 'agent'
+export type WorkflowRunStatus
+  = 'pending' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
+export type WorkflowStepStatus
+  = 'pending' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'skipped'
+
+export interface WorkflowTrigger {
+  id?: string
+  type?: WorkflowTriggerType | string
+  enabled?: boolean
+  label?: string
+  config?: Record<string, unknown>
+}
+
+export interface WorkflowContextSource {
+  id?: string
+  type?: string
+  enabled?: boolean
+  label?: string
+  config?: Record<string, unknown>
+}
+
+export interface ToolApprovalPolicy {
+  requireApprovalAtOrAbove?: IntelligenceToolRiskLevel
+  autoApproveReadOnly?: boolean
+}
+
+export interface WorkflowDefinitionStep {
+  id?: string
+  name?: string
+  kind?: WorkflowStepKind | string
+  description?: string
+  prompt?: string
+  toolId?: string
+  toolSource?: ToolSource | string
+  agentId?: string
+  input?: Record<string, unknown>
+  continueOnError?: boolean
+  metadata?: Record<string, unknown>
+}
+
+export interface WorkflowDefinition {
+  id: string
+  name: string
+  description?: string
+  version?: string
+  enabled?: boolean
+  triggers: WorkflowTrigger[]
+  contextSources: WorkflowContextSource[]
+  toolSources: ToolSource[]
+  approvalPolicy?: ToolApprovalPolicy
+  steps: WorkflowDefinitionStep[]
+  metadata?: Record<string, unknown>
+  createdAt?: number
+  updatedAt?: number
+}
+
+export interface DesktopContextSnapshot {
+  capturedAt: number
+  contextSources: WorkflowContextSource[]
+  clipboard?: Array<{
+    id?: string
+    type?: string
+    content: string
+    sourceApp?: string | null
+    createdAt?: number
+    metadata?: Record<string, unknown>
+  }>
+  activeApp?: {
+    identifier?: string | null
+    displayName?: string | null
+    bundleId?: string | null
+    executablePath?: string | null
+    windowTitle?: string | null
+    url?: string | null
+    lastUpdated?: number
+  } | null
+  recentFiles?: Array<{
+    id?: string
+    title: string
+    summary: string
+    path?: string
+    lastUsedAt?: number
+    metadata?: Record<string, unknown>
+  }>
+  recentUrls?: Array<{
+    id?: string
+    title: string
+    summary: string
+    url?: string
+    lastUsedAt?: number
+    metadata?: Record<string, unknown>
+  }>
+  sessionMemory?: Array<{
+    id: string
+    content: string
+    updatedAt: number
+    metadata?: Record<string, unknown>
+  }>
+}
+
+export interface WorkflowRunStepRecord {
+  id?: string
+  workflowStepId?: string
+  kind?: WorkflowStepKind | string
+  name?: string
+  status?: WorkflowStepStatus | string
+  toolId?: string
+  toolSource?: ToolSource | string
+  input?: Record<string, unknown>
+  output?: unknown
+  error?: string
+  metadata?: Record<string, unknown>
+  startedAt?: number
+  completedAt?: number
+}
+
+export interface WorkflowRunRecord {
+  id: string
+  workflowId: string
+  workflowName?: string
+  status: WorkflowRunStatus | string
+  triggerType?: WorkflowTriggerType | string
+  inputs: Record<string, unknown>
+  outputs?: Record<string, unknown>
+  error?: string
+  contextSnapshot?: DesktopContextSnapshot | Record<string, unknown>
+  steps: WorkflowRunStepRecord[]
+  startedAt: number
+  completedAt?: number
+  metadata?: Record<string, unknown>
+}
+
 /**
  * Rate limit configuration for an intelligence provider.
  */

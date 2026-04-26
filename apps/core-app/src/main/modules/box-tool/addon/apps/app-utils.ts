@@ -33,6 +33,42 @@ export function formatProgress(current: number, total: number): string {
   return `${chalk.gray('[')}${chalk.cyan(bar)}${chalk.gray(']')} ${chalk.white(`${percent}%`)} (${current}/${total})`
 }
 
+export function normalizeStringList(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+
+  for (const value of values) {
+    const normalized = value?.trim()
+    if (!normalized) continue
+
+    const lookupKey = normalized.toLowerCase()
+    if (seen.has(lookupKey)) continue
+
+    seen.add(lookupKey)
+    result.push(normalized)
+  }
+
+  return result
+}
+
+export function serializeStringList(values: string[] | undefined): string | undefined {
+  const normalized = normalizeStringList(values ?? [])
+  return normalized.length > 0 ? JSON.stringify(normalized) : undefined
+}
+
+export function parseStringList(value: string | null | undefined): string[] {
+  if (!value) return []
+
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed)
+      ? normalizeStringList(parsed.filter((item): item is string => typeof item === 'string'))
+      : []
+  } catch {
+    return []
+  }
+}
+
 /**
  * 生成首字母缩写
  */

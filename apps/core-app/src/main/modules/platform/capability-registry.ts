@@ -76,7 +76,12 @@ export function registerDefaultPlatformCapabilities(): void {
     description: '插件间数据流转能力',
     scope: 'plugin',
     status: 'beta',
-    supportLevel: 'supported',
+    supportLevel: 'best_effort',
+    issueCode: 'TARGET_HANDLER_REQUIRED',
+    reason: 'Flow Transfer requires the target plugin to register a delivery handler.',
+    limitations: [
+      'Targets without a registered Flow handler are rejected instead of treated as delivered.'
+    ],
     sensitive: true
   })
 
@@ -86,7 +91,13 @@ export function registerDefaultPlatformCapabilities(): void {
     description: '插件浮动窗口与 UI 容器',
     scope: 'plugin',
     status: 'beta',
-    supportLevel: 'supported'
+    supportLevel: 'best_effort',
+    issueCode: 'FLOW_TRIGGER_UNAVAILABLE',
+    reason:
+      'DivisionBox container runtime is available, but DivisionBox Flow trigger delivery is not wired.',
+    limitations: [
+      'Direct DivisionBox sessions work; DivisionBox Flow trigger returns FLOW_TRIGGER_UNAVAILABLE.'
+    ]
   })
 
   registry.register({

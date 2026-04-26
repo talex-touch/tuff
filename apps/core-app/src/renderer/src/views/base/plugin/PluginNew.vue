@@ -316,7 +316,7 @@ async function envCheck(): Promise<void> {
     const versionParts = nodeVersion.split('.').map(Number)
     if (versionParts[0] < 16) {
       envOptions.node = {
-        msg: `Node.js version is too low (v${nodeVersion}), please upgrade it to 16 or higher.`,
+        msg: t('plugin.new.create.env.nodeTooLow', { version: nodeVersion }),
         type: 'error'
       }
     } else {
@@ -327,7 +327,7 @@ async function envCheck(): Promise<void> {
     }
   } else {
     envOptions.node = {
-      msg: 'Cannot find node.js, please install it first.',
+      msg: t('plugin.new.create.env.nodeMissing'),
       type: 'error'
     }
   }
@@ -336,11 +336,11 @@ async function envCheck(): Promise<void> {
   if (degitExists) {
     envOptions.degit = {
       type: 'success',
-      version: 'installed'
+      version: t('plugin.new.create.env.degitInstalled')
     }
   } else {
     envOptions.degit = {
-      msg: 'Cannot find degit, please install it first.',
+      msg: t('plugin.new.create.env.degitMissing'),
       type: 'error'
     }
   }
@@ -363,8 +363,8 @@ async function createAction(ctx: ActionContext): Promise<void> {
 
   if (!plugin.agreement) {
     await forTouchTip(
-      'Attention',
-      "You must agree with <i style='color: #4E94B0'>Touch Plugin Development</i> protocol."
+      t('plugin.new.create.agreementAlertTitle'),
+      t('plugin.new.create.agreementAlertMessage')
     )
     return
   }
@@ -380,7 +380,7 @@ async function createAction(ctx: ActionContext): Promise<void> {
 async function handleInstallDegit(): Promise<void> {
   await popperMention('', () =>
     createVNode(TerminalTemplate, {
-      title: 'Installing degit',
+      title: t('plugin.new.create.env.degitInstallingTitle'),
       command: 'npm install -g degit'
     })
   )
@@ -522,7 +522,7 @@ async function handleInstallDegit(): Promise<void> {
     <section v-else class="PluginNew-Create">
       <BlockTemplate :disabled="envOptions.degit?.type !== 'success'">
         <template #title>
-          Templates
+          {{ t('plugin.new.create.templatesTitle') }}
           <span ml-2>
             <span v-if="envOptions.node?.type === 'success'" color="green-2">
               <span relative top=".5" inline-block i-ri-nodejs-fill />{{
@@ -551,7 +551,8 @@ async function handleInstallDegit(): Promise<void> {
               color="red-4"
               @click="handleInstallDegit"
             >
-              <span relative top=".5" inline-block i-ri-git-branch-fill /> Install degit
+              <span relative top=".5" inline-block i-ri-git-branch-fill />
+              {{ t('plugin.new.create.env.installDegit') }}
             </span>
           </span>
         </template>
@@ -559,7 +560,7 @@ async function handleInstallDegit(): Promise<void> {
           <div>
             <div inline-block mr-2 class="i-simple-icons-vuedotjs" />
           </div>
-          <span block text-xs>Contains default dev-env, with using Vue3 and Vite.</span>
+          <span block text-xs>{{ t('plugin.new.create.templates.vueDescription') }}</span>
           <TxButton
             variant="bare"
             text-xs
@@ -573,14 +574,14 @@ async function handleInstallDegit(): Promise<void> {
             py-1
             my-2
           >
-            Download
+            {{ t('plugin.new.create.templates.download') }}
           </TxButton>
         </BrickTemplate>
         <BrickTemplate>
           <div>
             <div inline-block mr-2 class="i-simple-icons-react" />
           </div>
-          <span block text-xs>Contains default dev-env, with using React18 and Vite.</span>
+          <span block text-xs>{{ t('plugin.new.create.templates.reactDescription') }}</span>
           <TxButton
             variant="bare"
             text-xs
@@ -594,14 +595,14 @@ async function handleInstallDegit(): Promise<void> {
             py-1
             my-2
           >
-            Download
+            {{ t('plugin.new.create.templates.download') }}
           </TxButton>
         </BrickTemplate>
         <BrickTemplate>
           <div>
             <div inline-block mr-2 class="i-simple-icons-svelte" />
           </div>
-          <span block text-xs>Contains default dev-env, with using Svelte3 and Vite.</span>
+          <span block text-xs>{{ t('plugin.new.create.templates.svelteDescription') }}</span>
           <TxButton
             variant="bare"
             text-xs
@@ -615,65 +616,69 @@ async function handleInstallDegit(): Promise<void> {
             py-1
             my-2
           >
-            Download
+            {{ t('plugin.new.create.templates.download') }}
           </TxButton>
         </BrickTemplate>
       </BlockTemplate>
 
-      <BlockTemplate title="General">
+      <BlockTemplate :title="t('plugin.new.create.generalTitle')">
         <LineTemplate
-          :msg="() => 'You must input the correct plugin name.'"
+          :msg="() => t('plugin.new.create.validation.name')"
           regex='^[^\\\\/:*?"<>|]+(\\.[^\\\\/:*?"<>|]+)*$'
-          title="name"
+          :title="t('plugin.new.create.fields.name')"
         >
           <FlatInput v-model="plugin.name" w="48!" />
         </LineTemplate>
-        <LineTemplate title="icon">
+        <LineTemplate :title="t('plugin.new.create.fields.icon')">
           <FlatInput v-model="plugin.icon.value" w="48!">
             <div h-full :class="plugin.icon.value" />
           </FlatInput>
         </LineTemplate>
         <LineTemplate
-          :msg="() => 'You must input the correct plugin version.'"
+          :msg="() => t('plugin.new.create.validation.version')"
           regex="^(\d+\.)(\d+\.)(\*|\d+)$"
-          title="version"
+          :title="t('plugin.new.create.fields.version')"
         >
           <FlatInput v-model="plugin.version" w="48!" />
         </LineTemplate>
         <LineTemplate
-          :msg="() => 'You must input the correct plugin dev address.'"
+          :msg="() => t('plugin.new.create.validation.devAddress')"
           regex="^(?:([A-Za-z]+):)?(\/{0,3})([0-9.\-A-Za-z]+)(?::(\d+))?(?:\/([^?#]*))?(?:\?([^#]*))?(?:#(.*))?$"
-          title="dev-address"
+          :title="t('plugin.new.create.fields.devAddress')"
         >
           <FlatInput v-model="plugin.dev.address" w="48!" />
         </LineTemplate>
         <LineTemplate
-          :msg="() => 'You must input the correct plugin description.'"
-          title="description"
+          :msg="() => t('plugin.new.create.validation.description')"
+          :title="t('plugin.new.create.fields.description')"
         >
           <FlatInput v-model="plugin.desc" :area="true" w="96!" />
         </LineTemplate>
       </BlockTemplate>
 
-      <BlockTemplate title="Readme">
+      <BlockTemplate :title="t('plugin.new.create.readmeTitle')">
         <FlatMarkdown v-model="plugin.readme" />
       </BlockTemplate>
 
-      <BlockTemplate title="Actions">
+      <BlockTemplate :title="t('plugin.new.create.actionsTitle')">
         <TCheckBox v-model="plugin.openInVSC" text-sm>
-          Open in
-          <i>
+          <span inline-flex items-center gap-1>
             <div inline-block style="width: 16px" class="i-simple-icons-visualstudio" />
-            VSCode
-          </i>
+            <span>{{ t('plugin.new.create.openInVscode') }}</span>
+          </span>
         </TCheckBox>
         <TCheckBox v-model="plugin.agreement" text-sm>
-          Agree with <i>Touch Plugin Development</i>
+          {{ t('plugin.new.create.agreementPrefix') }}
+          <i>{{ t('plugin.new.create.agreementName') }}</i>
         </TCheckBox>
         <div flex relative mt-8 gap-4 w-4>
-          <TxButton variant="flat" hover:bg-red> Cancel </TxButton>
+          <TxButton variant="flat" hover:bg-red @click="emits('close')">
+            {{ t('common.cancel') }}
+          </TxButton>
           <ActionTemplate :action="createAction">
-            <TxButton variant="flat" type="primary"> Create </TxButton>
+            <TxButton variant="flat" type="primary">
+              {{ t('plugin.new.create.createAction') }}
+            </TxButton>
           </ActionTemplate>
         </div>
       </BlockTemplate>

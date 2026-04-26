@@ -1,5 +1,5 @@
-import type { FlowTargetInfo } from '@talex-touch/utils'
-import { StorageList } from '@talex-touch/utils'
+import type { FlowTargetInfo } from '@talex-touch/utils/types/flow'
+import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { getMainConfig, saveMainConfig } from '../storage'
 
 const FLOW_ONCE_TOKEN_TTL_MS = 5 * 60 * 1000

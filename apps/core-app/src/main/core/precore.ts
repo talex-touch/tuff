@@ -13,6 +13,7 @@ import { migrateLegacyDevDataIfNeeded, resolveRuntimeRootPath } from '../utils/a
 import { checkDirWithCreate } from '../utils/common-util'
 import { devProcessManager } from '../utils/dev-process-manager'
 import { mainLog } from '../utils/logger'
+import { runStartupMigrationSync } from './startup-migrations'
 import {
   AppReadyEvent,
   AppSecondaryLaunch,
@@ -106,7 +107,15 @@ function parseBooleanEnv(value: string | undefined): boolean {
 
 registerEarlyUnhandledRejectionHandler()
 applyDeprecationTraceSwitch()
-logDevDataMigrationResult(migrateLegacyDevDataIfNeeded(app))
+const devDataMigrationResult = runStartupMigrationSync({
+  id: 'legacy-dev-data-root',
+  version: 1,
+  markerDir: resolveRuntimeRootPath(app),
+  run: () => migrateLegacyDevDataIfNeeded(app)
+})
+if (devDataMigrationResult) {
+  logDevDataMigrationResult(devDataMigrationResult)
+}
 
 export const innerRootPath = getRootPath()
 checkDirWithCreate(innerRootPath)

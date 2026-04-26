@@ -126,6 +126,51 @@ describe('transport domain sdk mappings', () => {
     ).rejects.toThrow('transport.stream is unavailable')
   })
 
+  it('intelligence sdk maps workflow CRUD events through typed transport events', async () => {
+    const transport = createTransportMock()
+    transport.send.mockResolvedValue({ ok: true, result: undefined })
+    const sdk = createIntelligenceSdk(transport as any)
+
+    await sdk.workflowList({ includeTemplates: true })
+    await sdk.workflowGet({ workflowId: 'wf_1' })
+    await sdk.workflowSave({
+      id: 'wf_1',
+      name: '整理剪贴板',
+      triggers: [],
+      contextSources: [],
+      toolSources: ['builtin'],
+      steps: []
+    })
+    await sdk.workflowDelete({ workflowId: 'wf_1' })
+    await sdk.workflowRun({ workflowId: 'wf_1', sessionId: 'tis_1' })
+    await sdk.workflowHistory({ workflowId: 'wf_1', limit: 10 })
+
+    expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe('intelligence:workflow:list')
+    expect(transport.send.mock.calls[0]?.[1]).toEqual({ includeTemplates: true })
+    expect(transport.send.mock.calls[1]?.[0]?.toEventName?.()).toBe('intelligence:workflow:get')
+    expect(transport.send.mock.calls[1]?.[1]).toEqual({ workflowId: 'wf_1' })
+    expect(transport.send.mock.calls[2]?.[0]?.toEventName?.()).toBe('intelligence:workflow:save')
+    expect(transport.send.mock.calls[2]?.[1]).toEqual({
+      id: 'wf_1',
+      name: '整理剪贴板',
+      triggers: [],
+      contextSources: [],
+      toolSources: ['builtin'],
+      steps: []
+    })
+    expect(transport.send.mock.calls[3]?.[0]?.toEventName?.()).toBe('intelligence:workflow:delete')
+    expect(transport.send.mock.calls[3]?.[1]).toEqual({ workflowId: 'wf_1' })
+    expect(transport.send.mock.calls[4]?.[0]?.toEventName?.()).toBe('intelligence:workflow:run')
+    expect(transport.send.mock.calls[4]?.[1]).toEqual({
+      workflowId: 'wf_1',
+      sessionId: 'tis_1'
+    })
+    expect(transport.send.mock.calls[5]?.[0]?.toEventName?.()).toBe(
+      'intelligence:workflow:history'
+    )
+    expect(transport.send.mock.calls[5]?.[1]).toEqual({ workflowId: 'wf_1', limit: 10 })
+  })
+
   it('permission sdk maps grant + push subscription', async () => {
     const transport = createTransportMock()
     const dispose = vi.fn()

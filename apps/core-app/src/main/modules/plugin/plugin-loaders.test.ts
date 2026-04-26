@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { CURRENT_SDK_VERSION, PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
+import { PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { appMock } = vi.hoisted(() => ({
@@ -124,7 +124,6 @@ describe('createPluginLoader', () => {
       version: '1.0.0',
       description: 'test',
       icon: { type: 'emoji', value: 'x' },
-      sdkapi: CURRENT_SDK_VERSION,
       dev: { enable: true, source: true, address: 'http://127.0.0.1:3733/' }
     })
     createdPaths.push(pluginPath)
@@ -140,7 +139,6 @@ describe('createPluginLoader', () => {
       version: '1.0.0',
       description: 'test',
       icon: { type: 'emoji', value: 'x' },
-      sdkapi: CURRENT_SDK_VERSION,
       dev: { enable: true, source: true, address: 'http://127.0.0.1:3733/' }
     })
     createdPaths.push(pluginPath)
@@ -155,7 +153,6 @@ describe('createPluginLoader', () => {
       version: '1.0.0',
       description: 'test',
       icon: { type: 'emoji', value: 'x' },
-      sdkapi: CURRENT_SDK_VERSION,
       dev: { enable: true, source: false, address: 'http://127.0.0.1:3733/' }
     })
     createdPaths.push(pluginPath)
@@ -170,7 +167,6 @@ describe('createPluginLoader', () => {
       version: '1.0.0',
       description: 'test',
       icon: { type: 'emoji', value: 'x' },
-      sdkapi: CURRENT_SDK_VERSION,
       dev: { enable: true, source: true, address: 'ftp://127.0.0.1:3733/' }
     })
     createdPaths.push(pluginPath)
@@ -185,7 +181,6 @@ describe('createPluginLoader', () => {
       version: '1.0.0',
       description: 'test',
       icon: { type: 'emoji', value: 'x' },
-      sdkapi: CURRENT_SDK_VERSION,
       dev: { enable: true, source: true, address: 'http://127.0.0.1:3733/' }
     })
     createdPaths.push(pluginPath)
@@ -198,7 +193,6 @@ describe('createPluginLoader', () => {
           version: '1.0.0',
           description: 'remote',
           icon: { type: 'emoji', value: 'x' },
-          sdkapi: CURRENT_SDK_VERSION,
           dev: { enable: true, source: true, address: 'http://127.0.0.1:3733/' }
         }
       })
@@ -219,7 +213,6 @@ describe('createPluginLoader', () => {
       version: '1.0.0',
       description: 'local',
       icon: { type: 'emoji', value: 'x' },
-      sdkapi: CURRENT_SDK_VERSION,
       dev: { enable: true, source: true, address: 'http://127.0.0.1:3733/' }
     })
     createdPaths.push(pluginPath)
@@ -241,7 +234,6 @@ describe('createPluginLoader', () => {
       version: '1.0.0',
       description: 'local',
       icon: { type: 'emoji', value: 'x' },
-      sdkapi: CURRENT_SDK_VERSION,
       dev: { enable: true, source: true, address: 'http://127.0.0.1:3733/' }
     })
     createdPaths.push(pluginPath)
@@ -257,7 +249,7 @@ describe('createPluginLoader', () => {
     expect(issueCodes).not.toContain('DEV_SOURCE_FALLBACK_LOCAL')
   })
 
-  it('blocks plugins below the enforced sdkapi floor', async () => {
+  it('marks plugins below the enforced sdkapi floor as blocked load failures', async () => {
     const pluginPath = await createPluginDir({
       name: 'touch-translation',
       version: '1.0.0',
@@ -270,12 +262,13 @@ describe('createPluginLoader', () => {
     const loader = createPluginLoader('touch-translation', pluginPath)
     const plugin = await loader.load()
 
+    expect(plugin.loadState).toBe('load_failed')
+    expect(plugin.loadError).toMatchObject({ code: 'SDKAPI_BLOCKED' })
     expect(plugin.issues.some((issue) => issue.code === 'SDKAPI_BLOCKED')).toBe(true)
     expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_OUTDATED')).toBe(false)
-    expect(plugin.issues.some((issue) => issue.type === 'error')).toBe(true)
   })
 
-  it('blocks plugins that omit sdkapi entirely', async () => {
+  it('marks plugins without sdkapi as blocked load failures', async () => {
     const pluginPath = await createPluginDir({
       name: 'touch-translation',
       version: '1.0.0',
@@ -287,8 +280,30 @@ describe('createPluginLoader', () => {
     const loader = createPluginLoader('touch-translation', pluginPath)
     const plugin = await loader.load()
 
+    expect(plugin.loadState).toBe('load_failed')
+    expect(plugin.loadError).toMatchObject({ code: 'SDKAPI_BLOCKED' })
     expect(plugin.issues.some((issue) => issue.code === 'SDKAPI_BLOCKED')).toBe(true)
-    expect(plugin.issues.some((issue) => issue.type === 'error')).toBe(true)
+    expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_MISSING')).toBe(false)
+  })
+
+  it('uses neutral sdk compatibility warnings for future sdk markers', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'future sdk plugin',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: 260301,
+      category: 'utilities'
+    })
+    createdPaths.push(pluginPath)
+
+    const loader = createPluginLoader('touch-translation', pluginPath)
+    const plugin = await loader.load()
+
+    expect(plugin.loadError).toBeUndefined()
+    expect(plugin.loadState).not.toBe('load_failed')
+    expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_COMPAT_WARNING')).toBe(true)
+    expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_OUTDATED')).toBe(false)
   })
 
   it('creates loader plugin shells without eager data initialization', async () => {
@@ -296,8 +311,7 @@ describe('createPluginLoader', () => {
       name: 'touch-translation',
       version: '1.0.0',
       description: 'local',
-      icon: { type: 'emoji', value: 'x' },
-      sdkapi: CURRENT_SDK_VERSION
+      icon: { type: 'emoji', value: 'x' }
     })
     createdPaths.push(pluginPath)
 

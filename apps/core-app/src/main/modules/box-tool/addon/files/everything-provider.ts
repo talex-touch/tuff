@@ -28,6 +28,7 @@ import {
   everythingStatusEvent,
   everythingTestEvent,
   everythingToggleEvent,
+  type EverythingStatusResponse,
   type EverythingBackendType
 } from '../../../../../shared/events/everything'
 import { appTaskGate } from '../../../../service/app-task-gate'
@@ -417,6 +418,24 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
+  getStatusSnapshot(): EverythingStatusResponse {
+    const healthStatus = this.getHealthStatus()
+    return {
+      enabled: this.isEnabled,
+      available: this.isAvailable,
+      backend: this.backend,
+      health: healthStatus.health,
+      healthReason: healthStatus.reason,
+      version: this.everythingVersion,
+      esPath: this.esPath,
+      error: this.initializationError?.message || null,
+      errorCode: this.lastBackendErrorCode,
+      lastBackendError: this.lastBackendError,
+      fallbackChain: this.fallbackChain,
+      lastChecked: this.lastChecked
+    }
+  }
+
   isSearchReady(): boolean {
     return process.platform === 'win32' && this.isEnabled && this.isAvailable
   }
@@ -456,21 +475,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         await this.refreshBackendState('manual-check')
       }
 
-      const healthStatus = this.getHealthStatus()
-      return {
-        enabled: this.isEnabled,
-        available: this.isAvailable,
-        backend: this.backend,
-        health: healthStatus.health,
-        healthReason: healthStatus.reason,
-        version: this.everythingVersion,
-        esPath: this.esPath,
-        error: this.initializationError?.message || null,
-        errorCode: this.lastBackendErrorCode,
-        lastBackendError: this.lastBackendError,
-        fallbackChain: this.fallbackChain,
-        lastChecked: this.lastChecked
-      }
+      return this.getStatusSnapshot()
     })
 
     transport.on(everythingToggleEvent, async (payload) => {

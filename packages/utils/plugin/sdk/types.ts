@@ -4,7 +4,7 @@
  * @version 1.0.0
  */
 
-import type { PluginChannelClient, PluginStandardChannelData } from './channel-client'
+import type { PluginStandardChannelData } from './channel-client'
 import type { IPluginFeature } from '../index'
 import path from 'node:path'
 
@@ -12,8 +12,6 @@ import path from 'node:path'
  * Handler signature for plugin channel events.
  */
 export type PluginChannelHandler = (event: PluginStandardChannelData) => any
-
-export type PluginMainChannelRaw = unknown
 
 /**
  * Bridge exposed to plugin backends for channel-based communication.
@@ -49,10 +47,6 @@ export interface IPluginChannelBridge {
    */
   onRenderer: (eventName: string, handler: PluginChannelHandler) => () => void
 
-  /**
-   * Access to the underlying channel implementation for advanced scenarios.
-   */
-  readonly raw: PluginMainChannelRaw
 }
 
 /**
@@ -63,11 +57,6 @@ export interface IPluginRendererChannel {
    * Sends a message asynchronously and resolves with the reply payload.
    */
   send: <T = any>(eventName: string, payload?: any) => Promise<T>
-
-  /**
-   * Sends a message synchronously and returns the reply payload.
-   */
-  sendSync: <T = any>(eventName: string, payload?: any) => T
 
   /**
    * Registers a handler for renderer channel events.
@@ -81,10 +70,6 @@ export interface IPluginRendererChannel {
    */
   once: (eventName: string, handler: PluginChannelHandler) => () => void
 
-  /**
-   * Provides access to the raw client channel.
-   */
-  readonly raw: PluginChannelClient
 }
 
 /**

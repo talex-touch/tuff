@@ -1,29 +1,38 @@
-<script setup name="FlatCompletion">
+<script setup lang="ts" name="FlatCompletion">
 import { computePosition } from '@floating-ui/vue'
 import { sleep } from '@talex-touch/utils/common/utils'
 import FlatInput from '~/components/base/input/FlatInput.vue'
+import {
+  createFlatCompletionUpdate,
+  resolveFlatCompletionPlaceholder
+} from './flat-completion-utils'
 
-const props = defineProps({
-  icon: {
-    type: String,
-    default: 'search'
-  },
-  fetch: {
-    type: Function,
-    require: true
+const props = withDefaults(
+  defineProps<{
+    icon?: string
+    placeholder?: string
+    fetch: (query: string) => unknown[]
+  }>(),
+  {
+    icon: 'search',
+    placeholder: ''
   }
-})
+)
+const emit = defineEmits<{
+  search: [query: string]
+}>()
 
-const _res = ref([])
-const res = ref([])
-const completionInput = ref()
-const completionWrapper = ref()
-const value = ref()
+const _res = ref<unknown[]>([])
+const res = ref<unknown[]>([])
+const completionInput = ref<HTMLElement | null>(null)
+const completionWrapper = ref<HTMLElement | null>(null)
+const value = ref('')
+const inputPlaceholder = computed(() => resolveFlatCompletionPlaceholder(props.placeholder))
 
 watch(
   () => value.value,
   () => {
-    nextTick(blur)
+    nextTick(refreshCompletion)
   },
   { deep: true, immediate: true }
 )
@@ -63,11 +72,11 @@ watch(
   }
 )
 
-function blur() {
-  if (!value.value) value.value = ''
-  res.value = props.fetch(value.value)
-
-  if (res.value.length > 8) res.value = res.value.slice(0, 8)
+function refreshCompletion() {
+  const nextState = createFlatCompletionUpdate(value.value, props.fetch)
+  value.value = nextState.query
+  emit('search', nextState.query)
+  res.value = nextState.results
 
   nextTick(async () => {
     if (!completionInput.value || !completionWrapper.value) return
@@ -84,14 +93,14 @@ function blur() {
 
 <template>
   <div ref="completionInput" class="FlatInput-Container">
-    <FlatInput v-model="value" placeholder="Search..." :icon="icon" />
+    <FlatInput v-model="value" :placeholder="inputPlaceholder" :icon="props.icon" />
   </div>
   <teleport to="body">
     <div ref="completionWrapper" class="FlatInput-Completion" @click="value = ''">
       <!--      <TxScroll> -->
       <div
         v-for="(item, index) in _res"
-        :key="item"
+        :key="index"
         v-wave
         class="FlatInput-Completion-Item fake-background"
         :style="`--d: ${index * 0.125}s`"

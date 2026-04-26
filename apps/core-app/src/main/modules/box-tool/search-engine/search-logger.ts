@@ -123,17 +123,8 @@ export class SearchLogger {
    */
   private async loadSettings(): Promise<void> {
     try {
-      // Try to get from app settings first
       const appSettingsData = getMainConfig(StorageList.APP_SETTING) as AppSetting
-      const enabledFromAppSettings = appSettingsData?.searchEngine?.logsEnabled
-      if (typeof enabledFromAppSettings === 'boolean') {
-        this.manualEnabled = enabledFromAppSettings
-        return
-      }
-
-      // Fallback to legacy setting
-      const settings = getMainConfig(StorageList.SEARCH_ENGINE_LOGS_ENABLED)
-      this.manualEnabled = settings === true
+      this.manualEnabled = appSettingsData?.searchEngine?.logsEnabled === true
     } catch {
       // Silently fail if storage is not ready yet
       this.manualEnabled = false

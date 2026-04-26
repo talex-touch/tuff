@@ -12,7 +12,6 @@ import type {
 } from './types'
 import {
   checkSdkCompatibility,
-  CURRENT_SDK_VERSION,
 } from '../plugin/sdk-version'
 import {
   DEFAULT_PERMISSIONS,
@@ -118,9 +117,9 @@ export function hasPermission(
   status: PluginPermissionStatus,
   permissionId: string,
 ): boolean {
-  // If enforcement is disabled, allow all
+  // Compatibility-bypassed access is no longer a valid runtime path.
   if (!status.enforcePermissions) {
-    return true
+    return false
   }
 
   // Check if granted
@@ -134,16 +133,6 @@ export function hasPermission(
 export function generatePermissionIssue(
   status: PluginPermissionStatus,
 ): { type: 'error' | 'warning', message: string, code: string, suggestion?: string } | null {
-  // SDK version warning
-  if (status.warning && !status.enforcePermissions) {
-    return {
-      type: 'warning',
-      message: status.warning,
-      code: status.sdkapi === undefined ? 'SDK_VERSION_MISSING' : 'SDK_VERSION_OUTDATED',
-      suggestion: `Add "sdkapi": ${CURRENT_SDK_VERSION} to manifest.json for permission enforcement.`,
-    }
-  }
-
   // Missing required permissions (warning, not error - plugin can still run)
   if (status.enforcePermissions && status.missingRequired.length > 0) {
     return {

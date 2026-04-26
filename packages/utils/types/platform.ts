@@ -10,6 +10,8 @@ export interface PlatformCapability {
   scope: PlatformCapabilityScope
   status: PlatformCapabilityStatus
   supportLevel?: PlatformCapabilitySupportLevel
+  issueCode?: string
+  reason?: string
   limitations?: string[]
   sensitive?: boolean
 }
