@@ -12,13 +12,13 @@ describe('permission status resolution', () => {
         required: ['clipboard.read'],
         optional: [],
       },
-      ['clipboard.read', 'fs.read', 'storage.plugin', 'legacy.removed.permission'],
+      ['clipboard.read', 'fs.read', 'storage.plugin', 'removed.permission'],
     )
 
     expect(status.granted).toEqual(['clipboard.read'])
-    expect(status.deprecatedGranted).toEqual(['fs.read', 'legacy.removed.permission'])
+    expect(status.deprecatedGranted).toEqual(['fs.read', 'removed.permission'])
     expect(status.outdatedByPluginChange).toEqual(['fs.read'])
-    expect(status.outdatedByAppUpdate).toEqual(['legacy.removed.permission'])
+    expect(status.outdatedByAppUpdate).toEqual(['removed.permission'])
     expect(status.missingRequired).toEqual([])
   })
 
@@ -40,7 +40,7 @@ describe('permission status resolution', () => {
     expect(status.missingRequired).toEqual([])
   })
 
-  it('does not keep legacy sdkapi as a permission bypass path', () => {
+  it('does not keep pre-baseline sdkapi as a permission bypass path', () => {
     const status = getPluginPermissionStatus(
       'demo-plugin',
       251111,

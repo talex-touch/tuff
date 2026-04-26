@@ -1,10 +1,6 @@
 import type { IntelligenceToolRiskLevel } from '../types/intelligence'
-import {
-  
-  LangChainToolAdapter
-  
-} from './langchain-tool-adapter'
-import type {AdaptedStructuredTool, LangChainToolAdapterDefinition} from './langchain-tool-adapter';
+import { LangChainToolAdapter } from './langchain-tool-adapter'
+import type { AdaptedStructuredTool, LangChainToolAdapterDefinition } from './langchain-tool-adapter'
 
 export interface McpToolAdapterDefinition<TInput = Record<string, unknown>>
   extends Omit<LangChainToolAdapterDefinition<TInput>, 'source'> {
