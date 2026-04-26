@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-04-22
+> 更新时间: 2026-04-26
 
 ---
 
@@ -46,6 +46,9 @@
 - [x] Clipboard 插件预览链路收口：
   - Clipboard SDK `history.onDidChange()` 对旧版 plugin transport stream 同步抛错做 non-fatal 降级。
   - clipboard-history 详情页优先解析 `meta.image_original_url` / `getHistoryImageUrl(id)`，原图不可用时显式展示缩略图降级状态。
+- [x] Clipboard 自动粘贴失败诊断收口：
+  - `copyAndPaste` / `applyToActiveApp` 失败结果保留 message/code，插件 UI 不再只显示泛化失败。
+  - 主进程自动粘贴失败日志只记录安全元数据；macOS System Events 权限错误映射为可读授权提示。
 - [x] Intelligence workflow / app-index 本地回归补强：
   - `workflow` shared SDK 与主进程 handler 已接通，`intelligence-module -> workflow service -> deepagent orchestration` 闭环可用；内置剪贴板整理模板改为 prompt step，避免不存在的 `deepagent.workflow` agent id 让默认模板即刻失败。
   - `tuff-intelligence-runtime` 的 tool trace / approval 现在会携带 `toolSource / approvalContext / contextSources`，方便 workflow 与 MCP 工具审批回放。
@@ -380,9 +383,9 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 154 |
+| 已完成 (`- [x]`) | 160 |
 | 未完成 (`- [ ]`) | 28 |
-| 总计 | 182 |
+| 总计 | 188 |
 | 完成率 | 85% |
 
 > 统计时间: 2026-04-20（按本文件实时 checkbox 计数）。
