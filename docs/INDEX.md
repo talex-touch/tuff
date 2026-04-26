@@ -25,6 +25,7 @@
 
 ## 状态快照（2026-04-20，统一口径）
 
+- **应用搜索单项诊断（2026-04-26）**：`settingsSdk.appIndex` 已新增 `diagnose` / `reindex`，高级设置中的应用索引区可按路径、bundleId 或名称查看单个应用的 `displayName / alternateNames / keywords` 与 precise / prefix / FTS / N-gram / subsequence 命中情况，并支持单项关键词重建或重新扫描。
 - **macOS 中文应用名首轮索引修复（2026-04-22）**：`darwin.getAppInfo()` 首轮扫描已补入 Spotlight `kMDItemDisplayName` 安全读取，并把优先级提升为 `Spotlight > localized strings > plist > bundle`；fresh scan 现在就能拿到中文显示名，`app-provider` 拼音关键词也统一规整为 lowercase。
 - **2.5.0 前置口径（2026-04-20）**：当前主线切换为 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`；先关闭或显式降权 CoreApp 剩余 legacy/compat 债务，再完成 Windows/macOS release-blocking 回归。Linux 保留 `xdotool` / desktop environment 限制说明与非阻塞 smoke，不作为 `2.5.0` blocker。
 - **Tray 运行态真实回显（2026-04-19）**：托盘初始化现在会同步主窗口真实可见性，并通过 transport snapshot 暴露 `trayReady / windowVisible`；静默启动和 macOS `hideDock + showTray` 组合不再回显错误首态。

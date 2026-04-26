@@ -15,6 +15,16 @@
   - App 设置页的后台索引策略区新增最小诊断块，支持查看当前 snapshot、手动刷新，并在保存空闲阈值、强制时长、电量策略后同步刷新诊断。
   - 诊断文案覆盖 `not-idle`、`battery-low`、`battery-critical` 与允许执行状态，避免用户只能看到“允许项异常”而无法判断被哪条策略拦住。
 
+### feat(core-app): 增加应用搜索单项诊断入口
+
+- `packages/utils/transport/events/types/app-index.ts`
+- `packages/utils/transport/sdk/domains/settings.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+  - `settingsSdk.appIndex` 新增 `diagnose` / `reindex` typed transport 能力，可按 app 路径、bundleId 或名称定位单个应用，返回当前 DB 字段、`displayName`、`alternateNames`、生成关键词与已入库关键词。
+  - 应用索引高级设置区新增最小诊断面板，可输入目标应用和测试 query，直接查看 precise / phrase / prefix / FTS / N-gram / subsequence 各阶段是否命中目标 item。
+  - 诊断入口支持单项关键词重建和单项重新扫描，遇到“某个应用搜不到”时可先在 UI 内完成定位与修复，不需要先翻主进程日志。
+
 ### refactor(core-app): 移除 DivisionBox active sessions 假命令
 
 - `apps/core-app/src/main/modules/division-box/command-provider.ts`
