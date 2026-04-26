@@ -5,6 +5,16 @@
 
 ## 2026-04-26
 
+### feat(core-app): 补齐 Device Idle renderer 配置与诊断入口
+
+- `packages/utils/transport/events/types/device-idle.ts`
+- `packages/utils/transport/sdk/domains/settings.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+  - `settingsSdk.deviceIdle` 新增实时诊断读取能力，renderer 可拿到当前空闲时长、电量状态、策略设置与允许/拦截原因。
+  - App 设置页的后台索引策略区新增最小诊断块，支持查看当前 snapshot、手动刷新，并在保存空闲阈值、强制时长、电量策略后同步刷新诊断。
+  - 诊断文案覆盖 `not-idle`、`battery-low`、`battery-critical` 与允许执行状态，避免用户只能看到“允许项异常”而无法判断被哪条策略拦住。
+
 ### refactor(core-app): 移除 DivisionBox active sessions 假命令
 
 - `apps/core-app/src/main/modules/division-box/command-provider.ts`
@@ -17,6 +27,12 @@
 - `apps/core-app/src/renderer/src/components/plugin/action/PluginStatus.vue`
   - 插件状态按钮不再通过 `innerHTML`、手动 `classList` 和 mount-time watcher 改写 DOM；状态文案、样式 class 与点击动作统一由 Vue computed 派生。
   - 重新加载失败时不再直写 `console.error`，保留开发期 `devLog` 诊断，避免 renderer 状态组件继续保留 raw console 与命令式 UI 旧实现。
+
+### refactor(core-app): 移除 DivisionBox keepAlive 空 timer API
+
+- `apps/core-app/src/main/modules/division-box/session.ts`
+  - 删除未被调用的 `keepAliveTimer`、`startKeepAliveTimer()` 与 `stopKeepAliveTimer()`；该公开方法没有真实计时逻辑，只留下 “for now” 注释，会误导后续维护者以为 session 自身有 keepAlive timer。
+  - 当前 keepAlive 生命周期继续由 `DivisionBoxManager` 的状态监听与 `LRUCache` 管理，不改变 session 创建、 inactive 缓存和 destroy 清理语义。
 
 ### refactor(core-app): 删除 screen-capture 占位链路并收口服务日志
 
