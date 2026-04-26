@@ -1,0 +1,61 @@
+---
+title: Floating
+description: Lightweight parallax container driven by pointer position
+category: Design
+syncStatus: migrated
+---
+
+# Floating
+
+`TxFloating` tracks mouse and touch position at the container level. `TxFloatingElement` applies eased movement by `depth`, which makes it useful for subtle parallax, guide cards, visual accents, and status panels. Avoid using it as the only mechanism for critical layout.
+
+## Basic Usage
+
+### Depth easing
+Multiple floating elements can share one `TxFloating` container and use `depth` to control movement strength.
+
+:::TuffDemoWrapper{demo="FloatingFloatingDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxFloating class="stage" :sensitivity="0.55" :easing-factor="0.08">
+      <TxFloatingElement class-name="orb" :depth="0.12" />
+      <TxFloatingElement class-name="panel" :depth="0.04">
+        Elements ease by depth as the pointer moves
+      </TxFloatingElement>
+    </TxFloating>
+  </template>
+---
+:::
+
+## API (Lite)
+
+::TuffPropsTable
+---
+rows:
+  - name: sensitivity
+    type: number
+    default: 1
+    description: Overall movement sensitivity
+  - name: easingFactor
+    type: number
+    default: 0.05
+    description: Ratio used to approach the target position on each frame
+  - name: disabled
+    type: boolean
+    default: false
+    description: Disable animation and reset child element positions
+  - name: className
+    type: string
+    default: "''"
+    description: Class forwarded to the container or element
+  - name: depth
+    type: number
+    default: 1
+    description: TxFloatingElement movement depth; negative values move in the opposite direction
+---
+::
+
+## Source
+
+<TuffDocSourceLink label="View source" />

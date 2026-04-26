@@ -1,0 +1,90 @@
+---
+title: Transfer 穿梭框
+description: 在两个列表之间移动并筛选条目
+category: Data
+syncStatus: migrated
+---
+
+# Transfer 穿梭框
+
+`TxTransfer` 用于在源列表和目标列表之间移动条目，适合权限分配、渠道选择、成员分组等场景。组件保持受控模型，业务侧通过 `v-model` 持有已选 key。
+
+## 基础用法
+
+### 可筛选穿梭
+开启 `filterable` 后，左右列表都会显示筛选输入框。`emptyText` 可用于本地化空态文案。
+
+:::TuffDemoWrapper{demo="TransferTransferDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const selected = ref<Array<string | number>>(['release'])
+  const data = [
+    { key: 'release', label: '正式通道' },
+    { key: 'beta', label: 'Beta 通道' },
+    { key: 'snapshot', label: '快照通道' },
+    { key: 'internal', label: '内部灰度', disabled: true },
+  ]
+  </script>
+
+  <template>
+    <TxTransfer
+      v-model="selected"
+      :data="data"
+      :titles="['可选渠道', '已选择']"
+      filterable
+      filter-placeholder="筛选渠道"
+      empty-text="暂无数据"
+    />
+  </template>
+---
+:::
+
+## API（Lite）
+
+::TuffPropsTable
+---
+rows:
+  - name: modelValue
+    type: "Array<string | number>"
+    default: "[]"
+    description: 目标列表中的条目 key
+  - name: data
+    type: TransferItem[]
+    default: "[]"
+    description: 全量条目列表，包含 key、label 和可选 disabled
+  - name: titles
+    type: "[string, string]"
+    default: "['Source', 'Target']"
+    description: 左右面板标题
+  - name: filterable
+    type: boolean
+    default: false
+    description: 是否显示筛选输入
+  - name: filterPlaceholder
+    type: string
+    default: "''"
+    description: 筛选输入占位文案
+  - name: emptyText
+    type: string
+    default: "'No data'"
+    description: 列表为空时的展示文案
+  - name: targetOrder
+    type: "'original' | 'push'"
+    default: "'original'"
+    description: 目标列表按原始 data 顺序或追加顺序排序
+---
+::
+
+## Events
+
+| 事件 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `Array<string \| number>` | 已选 key 更新 |
+| `change` | `Array<string \| number>` | 已选 key 变化 |
+
+## Source
+
+<TuffDocSourceLink />
