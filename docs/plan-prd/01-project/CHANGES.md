@@ -5,6 +5,12 @@
 
 ## 2026-04-26
 
+### fix(core-app): 清理插件 Widget 预览硬编码 mock 文案
+
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatureDetailCard.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - Widget 预览面板的 `Mock Payload` 标签接入 `plugin.features.widget.preview.mockLabel`，避免开发工具 UI 继续暴露 raw 英文占位文案。
+
 ### fix(core-app): 修复 CoreBox macOS 应用中文名检索漏召回
 
 - `apps/core-app/src/main/modules/box-tool/addon/apps/{darwin.ts,app-provider.ts,search-processing-service.ts,app-types.ts,app-utils.ts}`

@@ -1159,6 +1159,7 @@
           "sizePlaceholder": "选择预览尺寸",
           "reset": "恢复默认",
           "resizeHint": "拖拽右下角可自定义",
+          "mockLabel": "模拟载荷",
           "mockPlaceholder": "输入 JSON 载荷",
           "mockError": "JSON 解析失败：{error}",
           "missingWidgetId": "预览需要有效的 widgetId。",
