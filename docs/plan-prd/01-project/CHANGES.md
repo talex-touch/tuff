@@ -11,8 +11,11 @@
 - `apps/core-app/src/renderer/src/modules/hooks/application-hooks.ts`
 - `apps/core-app/src/main/service/{official-plugin.service.ts,file-watch.service.ts}`
 - `apps/core-app/src/main/core/tuff-icon.ts`
+- `apps/core-app/src/main/modules/{build-verification/index.ts,plugin/adapters/feature-search-tokens.ts}`
+- `apps/core-app/src/main/modules/box-tool/{core-box/manager.ts,addon/system/system-actions-provider.ts}`
   - 删除未被任何入口引用、且全文件只剩注释的主进程 screen-capture 占位文件；renderer 同步移除无人发送的 `@screen-capture` 注册函数，避免后续误以为屏幕捕获能力已接通。
   - `OfficialPluginService`、`FileWatchService`、`TuffIconImpl` 的 raw console 调试输出切到 `createLogger`，保留失败原因但减少散落日志和原始路径暴露。
+  - CoreBox Manager、SystemActions file-index、BuildVerification、FeatureSearchTokens 的小范围 raw console 也统一收口到已有 logger；SystemActions 去掉 file-index 的重复控制台输出，只保留结构化日志。
   - `application-hooks` 清掉外链拦截里的旧 safe-link 注释块，只保留当前 `url:open` / localhost 判断主路径。
 
 ### refactor(core-app): 收口预览、终端与服务中心调试残留
