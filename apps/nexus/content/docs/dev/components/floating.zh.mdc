@@ -1,0 +1,61 @@
+---
+title: Floating 浮动层
+description: 基于鼠标或触摸位置的轻量视差容器
+category: Design
+syncStatus: migrated
+---
+
+# Floating 浮动层
+
+`TxFloating` 提供容器级鼠标/触摸位置跟踪，`TxFloatingElement` 按 `depth` 参数产生不同方向和强度的缓动位移。它适合用于轻量视差、引导卡片、视觉装饰和状态面板，不适合承载关键布局。
+
+## 基础用法
+
+### 深度缓动
+多个浮动元素可以放在同一个 `TxFloating` 容器内，通过 `depth` 控制运动强度。
+
+:::TuffDemoWrapper{demo="FloatingFloatingDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxFloating class="stage" :sensitivity="0.55" :easing-factor="0.08">
+      <TxFloatingElement class-name="orb" :depth="0.12" />
+      <TxFloatingElement class-name="panel" :depth="0.04">
+        鼠标移动时按深度缓动
+      </TxFloatingElement>
+    </TxFloating>
+  </template>
+---
+:::
+
+## API（Lite）
+
+::TuffPropsTable
+---
+rows:
+  - name: sensitivity
+    type: number
+    default: 1
+    description: 整体位移敏感度
+  - name: easingFactor
+    type: number
+    default: 0.05
+    description: 每帧靠近目标位置的比例
+  - name: disabled
+    type: boolean
+    default: false
+    description: 禁用动画并重置子元素位置
+  - name: className
+    type: string
+    default: "''"
+    description: 透传到容器或元素的类名
+  - name: depth
+    type: number
+    default: 1
+    description: TxFloatingElement 的位移深度，支持负数反向移动
+---
+::
+
+## Source
+
+<TuffDocSourceLink />

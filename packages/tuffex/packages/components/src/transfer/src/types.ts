@@ -10,6 +10,7 @@ export interface TransferProps {
   titles?: [string, string]
   filterable?: boolean
   filterPlaceholder?: string
+  emptyText?: string
   targetOrder?: 'original' | 'push'
 }
 

@@ -1,0 +1,90 @@
+---
+title: Transfer
+description: Move and filter items between two lists
+category: Data
+syncStatus: migrated
+---
+
+# Transfer
+
+`TxTransfer` moves entries between a source list and a target list. It is useful for permission assignment, channel selection, and member grouping. The component is controlled, so the host keeps selected keys through `v-model`.
+
+## Basic Usage
+
+### Filterable transfer
+When `filterable` is enabled, both panels show a filter input. Use `emptyText` to localize the empty state.
+
+:::TuffDemoWrapper{demo="TransferTransferDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const selected = ref<Array<string | number>>(['release'])
+  const data = [
+    { key: 'release', label: 'Release channel' },
+    { key: 'beta', label: 'Beta channel' },
+    { key: 'snapshot', label: 'Snapshot channel' },
+    { key: 'internal', label: 'Internal rollout', disabled: true },
+  ]
+  </script>
+
+  <template>
+    <TxTransfer
+      v-model="selected"
+      :data="data"
+      :titles="['Available channels', 'Selected']"
+      filterable
+      filter-placeholder="Filter channels"
+      empty-text="No items"
+    />
+  </template>
+---
+:::
+
+## API (Lite)
+
+::TuffPropsTable
+---
+rows:
+  - name: modelValue
+    type: "Array<string | number>"
+    default: "[]"
+    description: Keys shown in the target list
+  - name: data
+    type: TransferItem[]
+    default: "[]"
+    description: Complete item list with key, label, and optional disabled
+  - name: titles
+    type: "[string, string]"
+    default: "['Source', 'Target']"
+    description: Source and target panel titles
+  - name: filterable
+    type: boolean
+    default: false
+    description: Whether to show filter inputs
+  - name: filterPlaceholder
+    type: string
+    default: "''"
+    description: Placeholder for the filter input
+  - name: emptyText
+    type: string
+    default: "'No data'"
+    description: Text shown when a panel is empty
+  - name: targetOrder
+    type: "'original' | 'push'"
+    default: "'original'"
+    description: Sort target items by original data order or append order
+---
+::
+
+## Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `update:modelValue` | `Array<string \| number>` | Selected keys update |
+| `change` | `Array<string \| number>` | Selected keys changed |
+
+## Source
+
+<TuffDocSourceLink label="View source" />

@@ -62,6 +62,7 @@ code: |
 - [TextTransformer 文本变换](./text-transformer.zh.md)
 - [Transition 动效](./transition.zh.md)
 - [Stagger 依次进入](./stagger.zh.md)
+- [Floating 浮动层](./floating.zh.md)
 - [Fusion 交融](./fusion.zh.md)
 - [Avatar Variants 头像变体](./avatar-variants.zh.md)
 
@@ -165,6 +166,7 @@ code: |
 - [Pagination 分页](./pagination.zh.md)
 - [Steps 步骤条](./steps.zh.md)
 - [Timeline 时间线](./timeline.zh.md)
+- [Transfer 穿梭框](./transfer.zh.md)
 
 ## 内容与媒体
 
