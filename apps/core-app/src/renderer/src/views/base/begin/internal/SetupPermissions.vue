@@ -4,7 +4,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
 import type { Component } from 'vue'
-import { computed, inject, onMounted, ref } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -13,6 +13,10 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 import { appSetting } from '~/modules/channel/storage/index'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
+import {
+  type SystemPermissionCheckResult,
+  waitForPermissionGrant
+} from '~/modules/system/system-permission-refresh'
 import Done from './Done.vue'
 
 type StepFunction = (
@@ -28,14 +32,6 @@ const { startupInfo } = useStartupInfo()
 const platform = computed(() => startupInfo.value?.platform || process.platform)
 const isMacOS = computed(() => platform.value === 'darwin')
 const isWindows = computed(() => platform.value === 'win32')
-
-type SystemPermissionStatus = 'granted' | 'denied' | 'notDetermined' | 'unsupported'
-
-interface SystemPermissionCheckResult {
-  status: SystemPermissionStatus
-  canRequest: boolean
-  message?: string
-}
 
 const systemPermissionCheck = defineRawEvent<string, SystemPermissionCheckResult>(
   'system:permission:check'
@@ -76,6 +72,7 @@ const traySettingsAvailable = ref(false)
 
 const isLoading = ref(false)
 const isContinuing = ref(false)
+let permissionRequestRevision = 0
 
 // Initialize appSettingtata.setup if not exists
 if (!appSetting.setup) {
@@ -98,6 +95,63 @@ onMounted(async () => {
   await loadSettings()
 })
 
+onBeforeUnmount(() => {
+  permissionRequestRevision += 1
+})
+
+function applyPermissionResult(type: string, result: SystemPermissionCheckResult): void {
+  if (type === 'fileAccess') {
+    permissions.value.fileAccess = {
+      status: result.status,
+      checked: true,
+      required: true
+    }
+    return
+  }
+
+  if (type === 'accessibility') {
+    permissions.value.accessibility = {
+      status: result.status,
+      checked: true,
+      required: false
+    }
+    appSetting.setup.accessibility = result.status === 'granted'
+    return
+  }
+
+  if (type === 'notifications') {
+    permissions.value.notifications = {
+      status: result.status,
+      checked: true,
+      required: false
+    }
+    appSetting.setup.notifications = result.status === 'granted'
+    return
+  }
+
+  if (type === 'adminPrivileges') {
+    permissions.value.adminPrivileges = {
+      status: result.status,
+      checked: true,
+      required: false
+    }
+    appSetting.setup.adminPrivileges = result.status === 'granted'
+  }
+}
+
+async function checkPermission(type: string): Promise<SystemPermissionCheckResult> {
+  const result = await Promise.race<SystemPermissionCheckResult>([
+    transport.send(systemPermissionCheck, type),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+  ])
+
+  if (result && result.status) {
+    applyPermissionResult(type, result)
+  }
+
+  return result
+}
+
 async function checkAllPermissions(): Promise<void> {
   if (isLoading.value) {
     // Already checking, avoid duplicate requests
@@ -107,35 +161,12 @@ async function checkAllPermissions(): Promise<void> {
   isLoading.value = true
   try {
     // Check file access permission (required)
-    const fileAccessResult = await Promise.race<SystemPermissionCheckResult>([
-      transport.send(systemPermissionCheck, 'fileAccess'),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-    ])
-
-    if (fileAccessResult && fileAccessResult.status) {
-      permissions.value.fileAccess = {
-        status: fileAccessResult.status,
-        checked: true,
-        required: true
-      }
-    }
+    await checkPermission('fileAccess')
 
     // Check accessibility permission (macOS, optional)
     if (isMacOS.value) {
       try {
-        const accResult = await Promise.race<SystemPermissionCheckResult>([
-          transport.send(systemPermissionCheck, 'accessibility'),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-        ])
-
-        if (accResult && accResult.status) {
-          permissions.value.accessibility = {
-            status: accResult.status,
-            checked: true,
-            required: false
-          }
-          appSetting.setup.accessibility = accResult.status === 'granted'
-        }
+        await checkPermission('accessibility')
       } catch (error) {
         console.warn('[SetupPermissions] Failed to check accessibility permission:', error)
       }
@@ -143,19 +174,7 @@ async function checkAllPermissions(): Promise<void> {
 
     // Check notification permission (optional)
     try {
-      const notifResult = await Promise.race<SystemPermissionCheckResult>([
-        transport.send(systemPermissionCheck, 'notifications'),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-      ])
-
-      if (notifResult && notifResult.status) {
-        permissions.value.notifications = {
-          status: notifResult.status,
-          checked: true,
-          required: false
-        }
-        appSetting.setup.notifications = notifResult.status === 'granted'
-      }
+      await checkPermission('notifications')
     } catch (error) {
       console.warn('[SetupPermissions] Failed to check notification permission:', error)
     }
@@ -163,19 +182,7 @@ async function checkAllPermissions(): Promise<void> {
     // Check admin privileges (Windows, optional)
     if (isWindows.value) {
       try {
-        const adminResult = await Promise.race<SystemPermissionCheckResult>([
-          transport.send(systemPermissionCheck, 'adminPrivileges'),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-        ])
-
-        if (adminResult && adminResult.status) {
-          permissions.value.adminPrivileges = {
-            status: adminResult.status,
-            checked: true,
-            required: false
-          }
-          appSetting.setup.adminPrivileges = adminResult.status === 'granted'
-        }
+        await checkPermission('adminPrivileges')
       } catch (error) {
         console.warn('[SetupPermissions] Failed to check admin privileges:', error)
       }
@@ -217,14 +224,28 @@ async function loadSettings(): Promise<void> {
 }
 
 async function requestPermission(type: string): Promise<void> {
+  const requestRevision = (permissionRequestRevision += 1)
   try {
+    const current = await checkPermission(type)
+    if (current.status === 'granted') {
+      toast.success(t('common.success'))
+      return
+    }
+
     const opened = await transport.send(systemPermissionRequest, type)
     if (opened) {
       toast.info(t('setupPermissions.openSettings'))
     }
-    // Recheck after a delay to allow user to grant permission
-    setTimeout(async () => {
-      await checkAllPermissions()
+
+    if (type === 'accessibility') {
+      await waitForPermissionGrant(() => checkPermission(type), {
+        shouldContinue: () => requestRevision === permissionRequestRevision
+      })
+      return
+    }
+
+    setTimeout(() => {
+      void checkPermission(type)
     }, 2000)
   } catch (error) {
     console.error(`[SetupPermissions] Failed to request permission ${type}:`, error)

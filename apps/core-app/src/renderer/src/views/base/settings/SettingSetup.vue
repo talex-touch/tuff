@@ -26,6 +26,11 @@ import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 // Import storage and channel
 import { appSetting } from '~/modules/channel/storage/index'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
+import {
+  type SystemPermissionCheckResult,
+  type SystemPermissionStatus,
+  waitForPermissionGrant
+} from '~/modules/system/system-permission-refresh'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
@@ -37,14 +42,6 @@ const isMacOS = computed(() => platform.value === 'darwin')
 const isWindows = computed(() => platform.value === 'win32')
 const isLinux = computed(() => platform.value === 'linux')
 const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
-
-type SystemPermissionStatus = 'granted' | 'denied' | 'notDetermined' | 'unsupported'
-
-interface SystemPermissionCheckResult {
-  status: SystemPermissionStatus
-  canRequest: boolean
-  message?: string
-}
 
 interface PermissionState {
   status: SystemPermissionStatus
@@ -99,6 +96,7 @@ const appIndexSettings = ref<AppIndexSettings | null>(null)
 const traySettingsAvailable = ref(false)
 
 const isLoading = ref(false)
+let permissionRequestRevision = 0
 
 function ensureWindowSettings(): void {
   if (!appSetting.window) {
@@ -187,41 +185,64 @@ onMounted(async () => {
   await loadSettings()
 })
 
+onBeforeUnmount(() => {
+  permissionRequestRevision += 1
+})
+
+function applyPermissionResult(type: string, result: SystemPermissionCheckResult): void {
+  if (type === 'accessibility') {
+    permissions.value.accessibility = {
+      status: result.status,
+      checked: true,
+      canRequest: result.canRequest,
+      message: result.message ?? ''
+    }
+    appSetting.setup.accessibility = result.status === 'granted'
+    return
+  }
+
+  if (type === 'notifications') {
+    permissions.value.notifications = {
+      status: result.status,
+      checked: true,
+      canRequest: result.canRequest,
+      message: result.message ?? ''
+    }
+    appSetting.setup.notifications = result.status === 'granted'
+    return
+  }
+
+  if (type === 'adminPrivileges') {
+    permissions.value.adminPrivileges = {
+      status: result.status,
+      checked: true,
+      canRequest: result.canRequest,
+      message: result.message ?? ''
+    }
+    appSetting.setup.adminPrivileges = result.status === 'granted'
+  }
+}
+
+async function checkPermission(type: string): Promise<SystemPermissionCheckResult> {
+  const result = await transport.send(systemPermissionCheck, type)
+  applyPermissionResult(type, result)
+  return result
+}
+
 async function checkAllPermissions(): Promise<void> {
   isLoading.value = true
   try {
     // Check accessibility permission (macOS)
     if (isMacOS.value) {
-      const accResult = await transport.send(systemPermissionCheck, 'accessibility')
-      permissions.value.accessibility = {
-        status: accResult.status,
-        checked: true,
-        canRequest: accResult.canRequest,
-        message: accResult.message ?? ''
-      }
-      appSetting.setup.accessibility = accResult.status === 'granted'
+      await checkPermission('accessibility')
     }
 
     // Check notification permission
-    const notifResult = await transport.send(systemPermissionCheck, 'notifications')
-    permissions.value.notifications = {
-      status: notifResult.status,
-      checked: true,
-      canRequest: notifResult.canRequest,
-      message: notifResult.message ?? ''
-    }
-    appSetting.setup.notifications = notifResult.status === 'granted'
+    await checkPermission('notifications')
 
     // Check admin privileges (Windows)
     if (isWindows.value) {
-      const adminResult = await transport.send(systemPermissionCheck, 'adminPrivileges')
-      permissions.value.adminPrivileges = {
-        status: adminResult.status,
-        checked: true,
-        canRequest: adminResult.canRequest,
-        message: adminResult.message ?? ''
-      }
-      appSetting.setup.adminPrivileges = adminResult.status === 'granted'
+      await checkPermission('adminPrivileges')
     }
   } catch (error) {
     console.error('[SettingSetup] Failed to check permissions:', error)
@@ -281,14 +302,28 @@ async function loadAppIndexSettings(): Promise<void> {
 }
 
 async function requestPermission(type: string): Promise<void> {
+  const requestRevision = (permissionRequestRevision += 1)
   try {
+    const current = await checkPermission(type)
+    if (current.status === 'granted') {
+      toast.success(t('common.success'))
+      return
+    }
+
     const opened = await transport.send(systemPermissionRequest, type)
     if (opened) {
       toast.info(t('setupPermissions.openSettings'))
     }
-    // Recheck after a delay to allow user to grant permission
-    setTimeout(async () => {
-      await checkAllPermissions()
+
+    if (type === 'accessibility') {
+      await waitForPermissionGrant(() => checkPermission(type), {
+        shouldContinue: () => requestRevision === permissionRequestRevision
+      })
+      return
+    }
+
+    setTimeout(() => {
+      void checkPermission(type)
     }, 2000)
   } catch (error) {
     console.error(`[SettingSetup] Failed to request permission ${type}:`, error)

@@ -5,6 +5,15 @@
 
 ## 2026-04-26
 
+### fix(core-app): 修复 macOS 辅助功能权限状态刷新
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `apps/core-app/src/renderer/src/modules/system/system-permission-refresh.ts`
+  - “前往系统设置”点击前先复查当前权限；若系统已授予 Accessibility，直接刷新 UI 为已授权，不再重复打开系统设置。
+  - Accessibility 请求后改为短轮询刷新，避免用户在系统设置里稍后打开开关时，应用仍停留在 2 秒前的“已拒绝”旧状态。
+  - 首次引导页与应用设置页共用等待授权工具，减少两处权限定时器逻辑漂移。
+
 ### feat(nexus): 新增 Release Evidence API 采集 2.5.0 回归证据
 
 - `apps/nexus/server/utils/releaseEvidenceStore.ts`
