@@ -53,3 +53,4 @@
 - Linux selection capture / active-app / auto-paste 仍依赖 `xdotool` 与桌面环境，属于 documented best-effort，不是待删除假实现。
 - 数据/启动迁移仍保留在升级窗口内，包括 permission JSON -> SQLite、dev data root、renderer legacy auth/theme、download old db/config；清理前需要确认历史版本升级窗口。
 - 插件 SDK hard-cut 已阻断旧插件运行；`enforcePermissions` 等字段仅作为 blocked 状态表达保留，不再代表旧 SDK bypass。
+- 剩余主进程 `console.*` 命中均为有意边界：`utils/logger.ts` 是项目 logger 输出端，`internal-plugin-logger.ts` 是内部插件日志适配器，`SearchLogger`/`search-logger-test.ts` 是显式控制台诊断器，CoreBox/DivisionBox 里的命中是注入到 WebContents 的脚本错误输出。

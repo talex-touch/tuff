@@ -24,6 +24,7 @@
 - `apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
 - `apps/core-app/src/main/utils/{i18n-helper.ts,perf-context.ts,release-signature.ts}`
 - `apps/core-app/src/main/modules/box-tool/search-engine/{search-index-service.ts,workers/search-index-worker.ts}`
+- `apps/core-app/src/main/{core/channel-core.ts,modules/storage/index.ts}`
   - 删除未被任何入口引用、且全文件只剩注释的主进程 screen-capture 占位文件；renderer 同步移除无人发送的 `@screen-capture` 注册函数，避免后续误以为屏幕捕获能力已接通。
   - `OfficialPluginService`、`FileWatchService`、`TuffIconImpl` 的 raw console 调试输出切到 `createLogger`，保留失败原因但减少散落日志和原始路径暴露。
   - CoreBox Manager、SystemActions file-index、BuildVerification、FeatureSearchTokens 的小范围 raw console 也统一收口到已有 logger；SystemActions 去掉 file-index 的重复控制台输出，只保留结构化日志。
@@ -37,6 +38,7 @@
   - Storage polling/LRU/frequency monitor 的维护日志改用 `Storage:*` logger，保留周期保存、强制保存、LRU 驱逐和高频访问告警语义，去掉 chalk 拼接式 raw console 输出。
   - Intelligence SDK、main i18n helper、PerfContext 和 SignatureVerifier 的普通 warn/error 输出切到项目 logger；AI 调用、翻译 fallback、慢上下文告警和签名拉取失败语义保持不变。
   - SearchIndexService 与 search-index worker 的索引摘要、慢批次、零结果诊断、初始化和 pinyin 预热日志切到 `SearchIndex` logger；不再直出完整 DB path 或 FTS 查询表达式。
+  - 清理 `channel-core` 里的 dead debug 注释和 storage JSDoc 里的 `console.log` 示例；兼容性扫描报告同步标记剩余 console 命中属于有意保留边界。
   - `application-hooks` 清掉外链拦截里的旧 safe-link 注释块，只保留当前 `url:open` / localhost 判断主路径。
 
 ### refactor(core-app): 收口预览、终端与服务中心调试残留
