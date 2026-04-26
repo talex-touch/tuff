@@ -1589,8 +1589,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const keywordsSet = await this._generateKeywordsForApp(appInfo)
     const itemId = resolveAppItemId(appInfo)
-    const legacyItemIds = resolveAppItemIds(appInfo).filter((candidate) => candidate !== itemId)
-    await this.removeIndexedAppItems(legacyItemIds)
 
     const keywordEntries: SearchIndexKeyword[] = Array.from(keywordsSet).map((keyword) => ({
       value: keyword,

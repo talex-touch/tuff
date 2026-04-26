@@ -1,4 +1,4 @@
-import type { AppSetting, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport/main'
 import type {
   StorageSaveRequest,
@@ -17,11 +17,7 @@ import { runStartupMigration } from '../../core/startup-migrations'
 import { appTaskGate } from '../../service/app-task-gate'
 import { enterPerfContext } from '../../utils/perf-context'
 import { BaseModule } from '../abstract-base-module'
-import {
-  mainStorageRegistry,
-  removeLegacyLayoutOpacity,
-  resolveMainStorageValue
-} from './main-storage-registry'
+import { mainStorageRegistry, resolveMainStorageValue } from './main-storage-registry'
 import { buildSearchEngineLogsSettingMigrationPlan } from './search-engine-logs-setting-transfer'
 import { StorageCache } from './storage-cache'
 import { StorageFrequencyMonitor } from './storage-frequency-monitor'
@@ -203,29 +199,6 @@ export class StorageModule extends BaseModule {
   }
 
   private async runStartupMigrations(markerDir: string): Promise<void> {
-    await runStartupMigration({
-      id: 'legacy-layout-opacity',
-      version: 1,
-      markerDir,
-      run: async () => {
-        const current = resolveMainStorageValue(
-          StorageList.APP_SETTING as MainStorageKey,
-          this.getConfig(StorageList.APP_SETTING)
-        ) as AppSetting
-        const fallback = resolveMainStorageValue(
-          StorageList.APP_SETTING as MainStorageKey,
-          undefined
-        ) as AppSetting
-        const cleaned = removeLegacyLayoutOpacity(current, fallback)
-        if (!cleaned.changed) {
-          return { changed: false }
-        }
-
-        this.saveConfig(StorageList.APP_SETTING, cleaned.normalized, false, true)
-        return { changed: true }
-      }
-    })
-
     await runStartupMigration({
       id: 'search-engine-logs-app-setting',
       version: 1,

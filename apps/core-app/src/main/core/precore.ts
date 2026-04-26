@@ -8,12 +8,10 @@ import process from 'node:process'
 import { app, crashReporter } from 'electron'
 import * as log4js from 'log4js'
 import { AppEvents, getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import type { DevDataMigrationResult } from '../utils/app-root-path'
-import { migrateLegacyDevDataIfNeeded, resolveRuntimeRootPath } from '../utils/app-root-path'
+import { resolveRuntimeRootPath } from '../utils/app-root-path'
 import { checkDirWithCreate } from '../utils/common-util'
 import { devProcessManager } from '../utils/dev-process-manager'
 import { mainLog } from '../utils/logger'
-import { runStartupMigrationSync } from './startup-migrations'
 import {
   AppReadyEvent,
   AppSecondaryLaunch,
@@ -49,42 +47,6 @@ function applyDeprecationTraceSwitch(): void {
   mainLog.warn('Node deprecation trace enabled via TUFF_TRACE_DEPRECATION=1')
 }
 
-function logDevDataMigrationResult(result: DevDataMigrationResult): void {
-  if (result.status === 'skipped-packaged' || result.status === 'skipped-marker-exists') {
-    return
-  }
-
-  const meta = {
-    status: result.status,
-    reason: result.reason,
-    sourcePath: result.sourcePath,
-    targetPath: result.targetPath,
-    markerPath: result.markerPath
-  }
-
-  if (result.status === 'migrated') {
-    mainLog.info('Dev data migration completed', { meta })
-  } else if (result.status === 'failed') {
-    mainLog.warn('Dev data migration failed (best effort)', {
-      meta: {
-        ...meta,
-        error: result.error
-      }
-    })
-  } else {
-    mainLog.debug('Dev data migration skipped', { meta })
-  }
-
-  if (result.markerWriteError) {
-    mainLog.warn('Failed to persist dev data migration marker', {
-      meta: {
-        markerPath: result.markerPath,
-        markerWriteError: result.markerWriteError
-      }
-    })
-  }
-}
-
 function broadcastBeforeQuit(): void {
   const channel = ($app as { channel?: unknown } | null | undefined)?.channel
   if (!channel) return
@@ -107,15 +69,6 @@ function parseBooleanEnv(value: string | undefined): boolean {
 
 registerEarlyUnhandledRejectionHandler()
 applyDeprecationTraceSwitch()
-const devDataMigrationResult = runStartupMigrationSync({
-  id: 'legacy-dev-data-root',
-  version: 1,
-  markerDir: resolveRuntimeRootPath(app),
-  run: () => migrateLegacyDevDataIfNeeded(app)
-})
-if (devDataMigrationResult) {
-  logDevDataMigrationResult(devDataMigrationResult)
-}
 
 export const innerRootPath = getRootPath()
 checkDirWithCreate(innerRootPath)

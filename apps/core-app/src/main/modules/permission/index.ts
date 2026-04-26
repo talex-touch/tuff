@@ -12,11 +12,10 @@ import {
 } from '@talex-touch/utils/permission'
 import { getTuffTransportMain, PermissionEvents } from '@talex-touch/utils/transport/main'
 import { PermissionGrantedEvent, TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
-import { runStartupMigration } from '../../core/startup-migrations'
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 import { PermissionGuard } from './permission-guard'
-import { migrateLegacyPermissionStoreIfNeeded, PermissionStore } from './permission-store'
+import { PermissionStore } from './permission-store'
 
 const permLog = createLogger('Permission')
 const SHORTCUT_PERMISSION_ID = 'system.shortcut'
@@ -32,7 +31,7 @@ export type { ApiPermissionMapping, PermissionCheckResult } from './permission-g
  * PermissionModule - Plugin permission management
  *
  * Features:
- * - Persistent permission storage (JSON file)
+ * - Persistent permission storage (SQLite)
  * - IPC channels for renderer queries
  * - Plugin permission status calculation
  * - Audit logging
@@ -53,19 +52,6 @@ export class PermissionModule extends BaseModule {
   }
 
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
-    await runStartupMigration({
-      id: 'legacy-permissions-json',
-      version: 1,
-      markerDir: ctx.file.dirPath!,
-      run: async () => {
-        const result = await migrateLegacyPermissionStoreIfNeeded(ctx.file.dirPath!)
-        if (result.status === 'failed') {
-          throw new Error(result.error || result.reason)
-        }
-        return result
-      }
-    })
-
     this.store = new PermissionStore(ctx.file.dirPath!)
     const channel =
       ctx.runtime?.channel ?? (ctx.app as { channel?: unknown } | null | undefined)?.channel

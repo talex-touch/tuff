@@ -102,7 +102,6 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
   { pattern: 'flow:*', permissions: ['storage.shared'] },
 
   // DivisionBox APIs
-  { pattern: 'division-box:flow:trigger', permissions: ['window.create', 'storage.shared'] },
   { pattern: 'division-box:*', permissions: ['window.create'] }
 ]
 

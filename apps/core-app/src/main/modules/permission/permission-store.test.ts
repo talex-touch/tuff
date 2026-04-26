@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { migrateLegacyPermissionStoreIfNeeded, PermissionStore } from './permission-store'
+import { PermissionStore } from './permission-store'
 
 function createUnavailableBackend(message = 'sqlite unavailable') {
   return {
@@ -27,7 +27,7 @@ describe('PermissionStore sqlite backend', () => {
     await fs.rm(tempDir, { recursive: true, force: true })
   })
 
-  it('migrates compat JSON data to sqlite and keeps a backup', async () => {
+  it('initializes sqlite storage without importing legacy JSON snapshots', async () => {
     const legacyPath = path.join(tempDir, 'permissions.json')
     await fs.writeFile(
       legacyPath,
@@ -47,19 +47,16 @@ describe('PermissionStore sqlite backend', () => {
       'utf-8'
     )
 
-    const migration = await migrateLegacyPermissionStoreIfNeeded(tempDir)
-    expect(migration.status).toBe('migrated')
-
     const store = new PermissionStore(tempDir)
     await store.initialize()
 
     expect(store.getBackendMode()).toBe('sqlite')
-    expect(store.hasPermission('touch-demo', 'fs.read', 251212)).toBe(true)
+    expect(store.hasPermission('touch-demo', 'fs.read', 251212)).toBe(false)
     await store.shutdown()
 
     const files = await fs.readdir(tempDir)
-    expect(files.some((file) => file.startsWith('permissions.json.backup-'))).toBe(true)
     expect(files.includes('permissions.db')).toBe(true)
+    expect(files.includes('permissions.json')).toBe(true)
   })
 
   it('persists grants in sqlite across store restarts', async () => {

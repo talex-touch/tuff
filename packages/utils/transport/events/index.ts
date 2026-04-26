@@ -129,8 +129,6 @@ import type {
 import type {
   DivisionBoxCloseRequest,
   DivisionBoxCloseResponse,
-  DivisionBoxFlowTriggerRequest,
-  DivisionBoxFlowTriggerResponse,
   DivisionBoxGetActiveSessionsRequest,
   DivisionBoxGetActiveSessionsResponse,
   DivisionBoxGetStateRequest,
@@ -912,11 +910,6 @@ export const DivisionBoxEvents = {
     .module("ui")
     .event("input-change")
     .define<DivisionBoxInputChangeRequest, DivisionBoxInputChangeResponse>(),
-
-  flowTrigger: defineEvent("division-box")
-    .module("flow")
-    .event("trigger")
-    .define<DivisionBoxFlowTriggerRequest, DivisionBoxFlowTriggerResponse>(),
 } as const;
 
 /**

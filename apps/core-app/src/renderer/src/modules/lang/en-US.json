@@ -676,6 +676,11 @@
       "confirmInstall": "Install",
       "confirmReject": "Cancel",
       "beforeExitPrompt": "Plugin installations are still running. Are you sure you want to exit?",
+      "permissionConfirmTitle": "Plugin Permission Request",
+      "permissionConfirmMessage": "\"{name}\" requires the following permissions:\n{permissions}\n\nChoose how to authorize this installation.",
+      "permissionAllowAlways": "Always Allow",
+      "permissionAllowSession": "Allow This Session",
+      "permissionReject": "Reject Install",
       "reasons": {
         "installFailed": "The installation did not complete. Please try again.",
         "noSource": "This plugin does not expose a usable install source.",

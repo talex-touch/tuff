@@ -75,7 +75,6 @@ Implementation: `packages/utils/transport/event/builder.ts`
 | DivisionBoxEvents.toggleDevTools | `division-box:window:toggle-devtools` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
 | DivisionBoxEvents.getWindowState | `division-box:window:get-window-state` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
 | DivisionBoxEvents.inputChange | `division-box:ui:input-change` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
-| DivisionBoxEvents.flowTrigger | `division-box:flow:trigger` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
 
 **Renderer usage (examples)**:
 - `apps/core-app/src/renderer/src/modules/division-box/store/division-box.ts`
