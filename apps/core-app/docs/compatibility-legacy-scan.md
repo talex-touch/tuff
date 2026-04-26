@@ -33,6 +33,7 @@
 - 平台 capability 清单不再把条件型能力写成完全 supported：Flow Transfer、DivisionBox Flow trigger、macOS/Windows active-app 均显式标注为 `best_effort` 并带 `issueCode/reason/limitations`；过度乐观且已无生产调用的 `isActiveAppCapabilityAvailable()` 已删除。
 - macOS notification 检查不再把 `Notification.isSupported()` 解释为系统权限已授予；当前只能确认原生通知运行时可用，因此返回 `notDetermined + canRequest`。
 - OmniPanel 键盘快捷键默认值已统一为关闭；主进程 settings snapshot、首次设置页、工具设置页与 `app-settings` 默认值保持一致，右键长按时长也有明确持久化配置。
+- 已删除无引用的 Bluetooth/USB 旧实验注释文件、renderer layout 的 `useLayout` legacy alias，以及 File Provider 中旧主线程内容解析/索引 helper 的空调用保活路径；文件内容解析与索引统一走 worker 管线。
 
 ### 仍保留的兼容边界
 

@@ -35,7 +35,6 @@
 | src/renderer/src/modules/install/install-manager.ts | B | 兼容旧索引字段与 fallback |
 | src/renderer/src/modules/box/adapter/hooks/useResize.ts | B | legacy element wrap fallback |
 | src/renderer/src/modules/mousetrap-record.ts | B | Mousetrap 兼容性注释 |
-| src/renderer/src/modules/layout/index.ts | B | Legacy export for backward compatibility |
 | src/renderer/src/modules/layout/useSecondaryNavigation.ts | B | fallback parent route |
 | src/renderer/src/modules/storage/README.md | B | 迁移与 fallback 行为文档 |
 | src/renderer/src/modules/storage/intelligence-storage.ts | B | Backward compatibility aliases |
