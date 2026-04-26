@@ -149,6 +149,28 @@ function normalizeDisplayNameCandidate(rawValue: string | null | undefined): str
   return normalizedValue
 }
 
+function collectAlternateDisplayNames(
+  displayName: string | null,
+  candidates: Array<string | null | undefined>
+): string[] {
+  const normalizedDisplayName = displayName?.toLowerCase()
+  const seen = new Set<string>()
+  const alternateNames: string[] = []
+
+  for (const candidate of candidates) {
+    const normalized = normalizeDisplayNameCandidate(candidate)
+    if (!normalized) continue
+
+    const lookupKey = normalized.toLowerCase()
+    if (lookupKey === normalizedDisplayName || seen.has(lookupKey)) continue
+
+    seen.add(lookupKey)
+    alternateNames.push(normalized)
+  }
+
+  return alternateNames
+}
+
 async function getSpotlightDisplayName(appPath: string): Promise<string | null> {
   try {
     const { stdout } = await execFileSafe('mdls', ['-name', 'kMDItemDisplayName', '-raw', appPath])
@@ -240,6 +262,12 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
     localizedName ||
     normalizeDisplayNameCandidate(plistDisplayName) ||
     normalizeDisplayNameCandidate(bundleName)
+  const alternateNames = collectAlternateDisplayNames(displayName, [
+    localizedName,
+    plistDisplayName,
+    bundleName,
+    fileName
+  ])
 
   // `name` is always the file name
   const name = fileName
@@ -253,6 +281,7 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
     name,
     displayName: displayName || undefined,
     fileName,
+    alternateNames: alternateNames.length > 0 ? alternateNames : undefined,
     path: appPath,
     icon: icon ? `data:image/png;base64,${icon}` : '',
     bundleId,

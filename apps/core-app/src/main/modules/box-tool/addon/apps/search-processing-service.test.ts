@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapAppsToRecommendationItems } from './search-processing-service'
+import { mapAppsToRecommendationItems, processSearchResults } from './search-processing-service'
 
 describe('search-processing-service', () => {
   it('prefers displayPath as subtitle for Windows Store apps', () => {
@@ -47,5 +47,31 @@ describe('search-processing-service', () => {
     ] as any)
 
     expect(items).toEqual([])
+  })
+
+  it('matches localized alternate names stored in app extensions', async () => {
+    const rows = [
+      {
+        name: 'NeteaseMusic 2',
+        displayName: 'NeteaseMusic 2',
+        path: '/Applications/NeteaseMusic 2.app',
+        extensions: {
+          alternateNames: JSON.stringify(['网易云音乐']),
+          appIdentity: '/Applications/NeteaseMusic 2.app',
+          bundleId: 'com.netease.163music',
+          launchKind: 'path',
+          launchTarget: '/Applications/NeteaseMusic 2.app'
+        }
+      }
+    ] as unknown as Parameters<typeof processSearchResults>[0]
+    const query = { text: '网易云', inputs: [] } as Parameters<typeof processSearchResults>[1]
+
+    const items = await processSearchResults(rows, query, false, {})
+    const render = items[0]?.render as { basic?: { title?: string } } | undefined
+    const meta = items[0]?.meta as { extension?: { source?: string } } | undefined
+
+    expect(items).toHaveLength(1)
+    expect(render?.basic?.title).toBe('NeteaseMusic 2')
+    expect(meta?.extension?.source).toBe('alternate-name')
   })
 })

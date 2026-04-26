@@ -10,7 +10,7 @@ import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils
 import chalk from 'chalk'
 import { pinyin } from 'pinyin-pro'
 import type { AppLaunchKind } from './app-types'
-import { formatLog, generateAcronym, LogStyle } from './app-utils'
+import { formatLog, generateAcronym, LogStyle, parseStringList } from './app-utils'
 import { calculateHighlights } from './highlighting-service'
 
 const SLOW_PROCESS_THRESHOLD_MS = 300
@@ -19,6 +19,7 @@ const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
 const MANAGED_ENTRY_SOURCE_KEY = 'entrySource'
 const MANAGED_ENTRY_ENABLED_KEY = 'entryEnabled'
 const MANAGED_ENTRY_SOURCE_VALUE = 'manual'
+const ALTERNATE_NAMES_EXTENSION_KEY = 'alternateNames'
 
 function isValidBase64DataUrl(value: string): boolean {
   const markerIndex = value.indexOf(BASE64_MARKER)
@@ -53,7 +54,7 @@ export function isSearchableAppRow(app: AppSearchRow): boolean {
 }
 
 function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): ProcessedTuffItem {
-  const uniqueId = app.extensions.bundleId || app.extensions.appIdentity || app.path
+  const uniqueId = app.extensions.appIdentity || app.path || app.extensions.bundleId || ''
   const name = app.name
   const displayName = app.displayName || app.name
   const subtitle = app.extensions.displayPath || app.path
@@ -62,6 +63,7 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
   const keywordPath = app.extensions.displayPath || app.path
   const launchKind = (app.extensions.launchKind as AppLaunchKind | null) || 'path'
   const description = app.extensions.description || ''
+  const alternateNames = parseStringList(app.extensions[ALTERNATE_NAMES_EXTENSION_KEY])
 
   const tuffItem = new TuffItemBuilder(uniqueId, 'application', 'app-provider')
     .setKind('app')
@@ -96,9 +98,9 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
       extension: {
         matchResult: match.highlights,
         source: match.source,
-        keyWords: [...new Set([name, path.basename(keywordPath).split('.')[0] || ''])].filter(
-          Boolean
-        )
+        keyWords: [
+          ...new Set([name, ...alternateNames, path.basename(keywordPath).split('.')[0] || ''])
+        ].filter(Boolean)
       }
     })
     .setScoring({
@@ -136,12 +138,14 @@ export async function processSearchResults(
     const name = app.name
     const displayName = app.displayName || app.name
     const potentialTitles = [displayName, name].filter(Boolean) as string[]
-    const uniqueId = app.extensions.bundleId || app.extensions.appIdentity || app.path
+    const alternateNames = parseStringList(app.extensions[ALTERNATE_NAMES_EXTENSION_KEY])
+    const uniqueId = app.extensions.appIdentity || app.path || app.extensions.bundleId || ''
 
     let bestSource: string = 'unknown'
     let bestHighlights: Range[] = []
     let score = 0
-    const aliasList = aliases[uniqueId] || aliases[app.path] || []
+    const aliasList =
+      aliases[uniqueId] || aliases[app.path] || aliases[app.extensions.bundleId || ''] || []
 
     const ensureHighlights = (raw: Range[] | null | undefined, fallbackTitle: string): Range[] => {
       if (raw && raw.length > 0) {
@@ -262,6 +266,57 @@ export async function processSearchResults(
           updateMatch('name', calculateHighlights(title, lowerCaseQuery), 0.65, title)
         } else if (firstPinyin.includes(lowerCaseQuery)) {
           updateMatch('initials', calculateHighlights(title, lowerCaseQuery), 0.6, title)
+        }
+      }
+    }
+
+    for (const alternateName of alternateNames) {
+      const normalizedAlternateName = alternateName.toLowerCase()
+
+      if (normalizedAlternateName.includes(lowerCaseQuery)) {
+        updateMatch('alternate-name', null, 0.86, displayName)
+      }
+
+      const queryParts = lowerCaseQuery.split(/\s+/).filter(Boolean)
+      if (queryParts.length > 1) {
+        let allPartsMatch = true
+        let searchIndex = 0
+        for (const part of queryParts) {
+          const idx = normalizedAlternateName.indexOf(part, searchIndex)
+          if (idx === -1) {
+            allPartsMatch = false
+            break
+          }
+          searchIndex = idx + part.length
+        }
+        if (allPartsMatch) {
+          updateMatch('alternate-name', null, 0.81, displayName)
+        }
+      }
+
+      const acronym = generateAcronym(alternateName)
+      if (acronym) {
+        const normalizedAcronym = acronym.toLowerCase()
+        if (
+          lowerCaseQuery.includes(normalizedAcronym) ||
+          normalizedAcronym.includes(lowerCaseQuery)
+        ) {
+          updateMatch('alternate-initials', null, 0.76, displayName)
+        }
+      }
+
+      if (/[\u4E00-\u9FA5]/.test(alternateName)) {
+        const fullPinyin = pinyin(alternateName, { toneType: 'none' })
+          .replace(/\s/g, '')
+          .toLowerCase()
+        const firstPinyin = pinyin(alternateName, { pattern: 'first', toneType: 'none' })
+          .replace(/\s/g, '')
+          .toLowerCase()
+
+        if (fullPinyin.includes(lowerCaseQuery)) {
+          updateMatch('alternate-name', null, 0.64, displayName)
+        } else if (firstPinyin.includes(lowerCaseQuery)) {
+          updateMatch('alternate-initials', null, 0.59, displayName)
         }
       }
     }
