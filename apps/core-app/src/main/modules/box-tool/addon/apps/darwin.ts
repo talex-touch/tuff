@@ -132,6 +132,32 @@ export function extractLocalizedDisplayName(data: Record<string, unknown>): stri
   return null
 }
 
+function normalizeDisplayNameCandidate(rawValue: string | null | undefined): string | null {
+  if (!rawValue) {
+    return null
+  }
+
+  const normalizedValue = rawValue.trim()
+  if (!normalizedValue || normalizedValue === '(null)') {
+    return null
+  }
+
+  if (normalizedValue.endsWith('.app')) {
+    return normalizedValue.slice(0, -4).trim() || null
+  }
+
+  return normalizedValue
+}
+
+async function getSpotlightDisplayName(appPath: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileSafe('mdls', ['-name', 'kMDItemDisplayName', '-raw', appPath])
+    return normalizeDisplayNameCandidate(stdout)
+  } catch {
+    return null
+  }
+}
+
 // Helper to get localized display name from .lproj directories
 async function getLocalizedDisplayName(appPath: string): Promise<string | null> {
   const resourcesPath = path.join(appPath, 'Contents', 'Resources')
@@ -203,11 +229,17 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
   const bundleName = getValueFromPlist(plistContent, 'CFBundleName')
   const fileName = path.basename(appPath, '.app')
 
-  // Try to get localized display name (e.g., "微信" for WeChat)
-  const localizedName = await getLocalizedDisplayName(appPath)
+  const spotlightName = await getSpotlightDisplayName(appPath)
 
-  // Priority: localized name > plist display name > bundle name
-  const displayName = localizedName || plistDisplayName || bundleName
+  // Try to get localized display name (e.g., "微信" for WeChat)
+  const localizedName = normalizeDisplayNameCandidate(await getLocalizedDisplayName(appPath))
+
+  // Priority: Spotlight > localized strings > plist display name > bundle name
+  const displayName =
+    spotlightName ||
+    localizedName ||
+    normalizeDisplayNameCandidate(plistDisplayName) ||
+    normalizeDisplayNameCandidate(bundleName)
 
   // `name` is always the file name
   const name = fileName

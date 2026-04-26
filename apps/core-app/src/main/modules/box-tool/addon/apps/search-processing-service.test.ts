@@ -30,4 +30,22 @@ describe('search-processing-service', () => {
       'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
     )
   })
+
+  it('skips disabled managed launcher entries in recommendation mapping', () => {
+    const items = mapAppsToRecommendationItems([
+      {
+        name: 'Managed Script',
+        displayName: 'Managed Script',
+        path: '/Users/demo/bin/script.sh',
+        extensions: {
+          entrySource: 'manual',
+          entryEnabled: '0',
+          launchKind: 'shortcut',
+          launchTarget: '/Users/demo/bin/script.sh'
+        }
+      }
+    ] as any)
+
+    expect(items).toEqual([])
+  })
 })
