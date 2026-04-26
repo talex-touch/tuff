@@ -7,6 +7,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { BaseModule } from '../abstract-base-module'
 import { withPermission } from '../permission/channel-guard'
+import { createLogger } from '../../utils/logger'
 
 const terminalCreateEvent = defineRawEvent<{ command: string; args?: string[] }, { id: string }>(
   'terminal:create'
@@ -19,6 +20,7 @@ const terminalExitEvent = defineRawEvent<{ id: string; exitCode: number | null }
 )
 
 type TerminalEventPayload = { id: string; data: string } | { id: string; exitCode: number | null }
+const terminalLog = createLogger('TerminalManager')
 
 class TerminalModule extends BaseModule {
   private processes: Map<string, ChildProcess> = new Map()
@@ -47,8 +49,6 @@ class TerminalModule extends BaseModule {
         (payload, context) => this.create(payload, context)
       )
     )
-    // 'write' is not applicable for non-interactive child_process, but we can keep it for API consistency
-    // or repurpose it if needed in the future. For now, it will be a no-op or log a warning.
     this.transport.on(terminalWriteEvent, (payload) => this.write(payload))
     this.transport.on(terminalKillEvent, (payload) => this.kill(payload))
   }
@@ -67,7 +67,7 @@ class TerminalModule extends BaseModule {
     const transport = this.transport
 
     if (!command) {
-      console.error('[TerminalManager] No command provided for terminal:create')
+      terminalLog.warn('No command provided for terminal:create')
       throw new Error('No command provided')
     }
 
@@ -89,7 +89,16 @@ class TerminalModule extends BaseModule {
       if (!sender || sender.isDestroyed() || !transport) {
         return
       }
-      transport.sendTo(sender, event, data).catch(() => {})
+      const eventName = event === terminalDataEvent ? 'terminal:data' : 'terminal:exit'
+      transport.sendTo(sender, event, data).catch((error) => {
+        terminalLog.debug('Failed to forward terminal event', {
+          meta: {
+            id,
+            eventName
+          },
+          error
+        })
+      })
     }
 
     // Listen for data from stdout and stderr
@@ -109,7 +118,13 @@ class TerminalModule extends BaseModule {
     })
 
     proc.on('error', (err) => {
-      console.error(`[TerminalManager] Failed to start process ${command}:`, err)
+      terminalLog.error('Failed to start terminal process', {
+        meta: {
+          id,
+          commandLength: command.length
+        },
+        error: err
+      })
       sendToSender(terminalDataEvent, { id, data: `Error: ${err.message}\n` })
       sendToSender(terminalExitEvent, { id, exitCode: -1 })
       this.processes.delete(id)
@@ -120,8 +135,6 @@ class TerminalModule extends BaseModule {
 
   /**
    * Writes data to the process stdin.
-   * For child_process, this is less common but can be used for some interactive scripts.
-   * If not needed, this can be a no-op.
    */
   private write(payload: { id: string; data: string }): void {
     const { id, data } = payload
@@ -131,9 +144,9 @@ class TerminalModule extends BaseModule {
       // Optionally, end the input stream if it's a one-off command
       // proc.stdin.end();
     } else {
-      console.warn(
-        `[TerminalManager] Attempted to write to non-existent or non-writable process ${id}`
-      )
+      terminalLog.warn('Attempted to write to non-existent or non-writable process', {
+        meta: { id }
+      })
     }
   }
 
@@ -152,7 +165,7 @@ class TerminalModule extends BaseModule {
   onDestroy(): void {
     this.processes.forEach((proc) => proc.kill())
     this.processes.clear()
-    console.log('[TerminalManager] Destroying all processes.')
+    terminalLog.info('Destroyed terminal processes')
   }
 }
 

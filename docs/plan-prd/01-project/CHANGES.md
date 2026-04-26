@@ -5,6 +5,16 @@
 
 ## 2026-04-26
 
+### refactor(core-app): 收口预览、终端与服务中心调试残留
+
+- `apps/core-app/src/main/modules/box-tool/addon/preview/{preview-provider.ts,preview-registry.ts}`
+- `apps/core-app/src/main/modules/terminal/terminal.manager.ts`
+- `apps/core-app/src/main/service/{protocol-handler.ts,service-center.ts}`
+  - Preview Provider 不再把即时预览表达式和结果值直接写入主进程日志，只保留 abilityId、长度、entryId 等结构化元数据，避免搜索/剪贴板内容进入调试输出。
+  - Preview Registry / Terminal / Protocol Handler / ServiceCenter 统一改用 `createLogger`，清理 stale no-op 文案、死协议注释和 raw console 调试输出。
+  - ServiceCenter 删除无读取方的注册快照 `save()` / `filePath` 伪持久化路径，避免把运行时插件服务注册误表达成可恢复状态。
+  - ServiceCenter 转发插件服务时不再把原始 file service payload 打到日志，只记录插件、服务名与扩展名；二次启动不支持的文件/目录提示也改成明确的 unsupported 语义。
+
 ### refactor(core-app): 清理兼容审计后的无引用 legacy/no-op 残留
 
 - `apps/core-app/src/main/addon/device/blue-tooth.ts`

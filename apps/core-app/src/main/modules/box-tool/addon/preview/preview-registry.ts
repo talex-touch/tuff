@@ -1,12 +1,19 @@
 import type { PreviewAbilityResult } from '@talex-touch/utils'
 import type { PreviewAbility, PreviewAbilityContext } from './preview-ability'
+import { createLogger } from '../../../../utils/logger'
+
+const previewRegistryLog = createLogger('PreviewProvider').child('Registry')
 
 export class PreviewAbilityRegistry {
   private abilities: PreviewAbility[] = []
 
   register(ability: PreviewAbility): void {
     if (this.abilities.some((item) => item.id === ability.id)) {
-      console.warn(`[PreviewAbilityRegistry] Ability '${ability.id}' already registered.`)
+      previewRegistryLog.warn('Ability already registered', {
+        meta: {
+          abilityId: ability.id
+        }
+      })
       return
     }
 
@@ -38,7 +45,12 @@ export class PreviewAbilityRegistry {
         if ((error as DOMException).name === 'AbortError') {
           return null
         }
-        console.error(`[PreviewAbilityRegistry] Ability '${ability.id}' failed:`, error)
+        previewRegistryLog.error('Ability failed', {
+          meta: {
+            abilityId: ability.id
+          },
+          error
+        })
       }
     }
 
