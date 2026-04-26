@@ -26,6 +26,7 @@
 ## 状态快照（2026-04-26，统一口径）
 
 - **User-managed launcher foundation（2026-04-22）**：`appIndex` typed domain 已新增 `listEntries / upsertEntry / removeEntry / setEntryEnabled`，settings SDK 与 main channel handler 全链路接通；`app-provider` 复用现有 `files + file_extensions` 支持 user-managed launcher entry，并继续走搜索与启动链路。
+- **应用搜索诊断与重建（2026-04-26）**：`settingsSdk.appIndex` 已新增 `diagnose / reindex`，高级设置中的应用索引区可按路径、bundleId 或名称查看单个应用的 `displayName / alternateNames / keywords` 与 precise / prefix / FTS / N-gram / subsequence 命中情况，并支持单项关键词重建或重新扫描。
 - **macOS 中文应用名召回修复（2026-04-26）**：应用扫描会保留本地化名称为 `alternateNames`，关键词同步与搜索后处理都会使用中文、全拼与首字母，避免 Spotlight 英文显示名优先时漏召回“网易云音乐”等应用。
 - **2.5.0 前置口径（2026-04-20）**：当前主线切换为 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`；先关闭或显式降权 CoreApp 剩余 legacy/compat 债务，再完成 Windows/macOS release-blocking 回归。Linux 保留 `xdotool` / desktop environment 限制说明与非阻塞 smoke，不作为 `2.5.0` blocker。
 - **Tray 运行态真实回显（2026-04-19）**：托盘初始化现在会同步主窗口真实可见性，并通过 transport snapshot 暴露 `trayReady / windowVisible`；静默启动和 macOS `hideDock + showTray` 组合不再回显错误首态。

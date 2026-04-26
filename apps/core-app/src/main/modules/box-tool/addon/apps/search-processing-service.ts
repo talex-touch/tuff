@@ -12,8 +12,10 @@ import { pinyin } from 'pinyin-pro'
 import type { AppLaunchKind } from './app-types'
 import { formatLog, generateAcronym, LogStyle, parseStringList } from './app-utils'
 import { calculateHighlights } from './highlighting-service'
+import { createLogger } from '../../../../utils/logger'
 
 const SLOW_PROCESS_THRESHOLD_MS = 300
+const searchProcessingLog = createLogger('AppScanner').child('SearchProcessing')
 const BASE64_MARKER = 'base64,'
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
 const MANAGED_ENTRY_SOURCE_KEY = 'entrySource'
@@ -384,7 +386,7 @@ export async function processSearchResults(
             )}s`,
             LogStyle.warning
           ),
-        logger: (message) => console.warn(message)
+        logger: (message) => searchProcessingLog.warn(message)
       }
     )
   }

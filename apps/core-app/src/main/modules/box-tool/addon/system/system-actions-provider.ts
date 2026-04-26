@@ -339,16 +339,11 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
           break
         }
         case 'file-index': {
-          console.log('[SystemActionsProvider] file-index start', { path: meta.path })
           systemActionsLog.info('System action file-index start', {
             meta: { path: meta.path }
           })
           const result = await fileProvider.addWatchPath(meta.path)
 
-          console.log('[SystemActionsProvider] file-index result', {
-            requestPath: meta.path,
-            result
-          })
           systemActionsLog.info('System action file-index result', {
             meta: {
               requestPath: meta.path,

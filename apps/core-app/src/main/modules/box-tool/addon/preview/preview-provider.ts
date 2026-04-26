@@ -13,9 +13,11 @@ import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-
 import { DEFAULT_WIDGET_RENDERERS } from '@talex-touch/utils/plugin'
 import { clipboard } from 'electron'
 import { clipboardModule } from '../../../clipboard'
+import { createLogger } from '../../../../utils/logger'
 
 const PREVIEW_COMPONENT_NAME = DEFAULT_WIDGET_RENDERERS.CORE_PREVIEW_CARD
 const SOURCE_ID = 'preview-provider'
+const previewLog = createLogger('PreviewProvider')
 
 export class PreviewProvider implements ISearchProvider<ProviderContext> {
   readonly id = SOURCE_ID
@@ -62,7 +64,7 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
   }
 
   onDeactivate(): void {
-    // no-op
+    // Preview provider does not keep activation state.
   }
 
   async onExecute({ item, searchResult }: IExecuteArgs): Promise<null> {
@@ -72,7 +74,7 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
       try {
         await this.recordHistory(payload, searchResult?.query ?? { text: '', inputs: [] })
       } catch (error) {
-        console.error('[PreviewProvider] Failed to record history:', error)
+        previewLog.error('Failed to record history', { error })
       }
     }
     return null
@@ -131,9 +133,12 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
 
   private async recordHistory(payload: PreviewCardPayload, query: TuffQuery): Promise<void> {
     if (!payload?.primaryValue) return
-    console.log('[PreviewProvider] Saving preview history:', {
-      expression: query.text,
-      value: payload.primaryValue
+    previewLog.debug('Saving preview history', {
+      meta: {
+        expressionLength: query.text?.length ?? 0,
+        valueLength: payload.primaryValue.length,
+        abilityId: payload.abilityId
+      }
     })
     const result = await clipboardModule.saveCustomEntry({
       content: payload.primaryValue,
@@ -146,11 +151,13 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
       }
     })
     if (result?.id) {
-      console.log('[PreviewProvider] Preview history saved successfully:', result.id)
+      previewLog.debug('Preview history saved', {
+        meta: {
+          entryId: result.id
+        }
+      })
     } else {
-      console.warn(
-        '[PreviewProvider] Preview history save returned null - database may not be initialized'
-      )
+      previewLog.warn('Preview history save returned null')
     }
   }
 }

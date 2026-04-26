@@ -22,7 +22,10 @@ import { and, eq, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import * as schema from '../../../../db/schema'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
+import { createLogger } from '../../../../utils/logger'
 import { SearchIndexService } from '../search-index-service'
+
+const searchIndexWorkerLog = createLogger('SearchIndex').child('Worker')
 
 export const WORKER_RETRY_LABELS = {
   persistChunk: 'search-index.worker.persistChunk',
@@ -271,7 +274,9 @@ async function handleInit(message: InitMessage): Promise<void> {
   searchIndex = new SearchIndexService(workerDb, { directMode: true })
   initialized = true
 
-  console.log('[SearchIndexWorker] Initialized with DB path:', dbPath)
+  searchIndexWorkerLog.info('Initialized', {
+    meta: { dbPathLength: dbPath.length }
+  })
 }
 
 /**

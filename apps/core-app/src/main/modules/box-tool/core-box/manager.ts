@@ -11,10 +11,13 @@ import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { maybeGetRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
 import { getMainConfig } from '../../storage'
+import { createLogger } from '../../../utils/logger'
 import { SearchEngineCore } from '../search-engine/search-core'
 import { searchLogger } from '../search-engine/search-logger'
 import { ipcManager } from './ipc'
 import { windowManager } from './window'
+
+const coreBoxManagerLog = createLogger('CoreBox').child('Manager')
 
 const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
   channel.keyManager ?? channel
@@ -122,7 +125,7 @@ export class CoreBoxManager {
       try {
         const appSetting = getMainConfig(StorageList.APP_SETTING) as AppSetting
         if (!appSetting?.beginner?.init) {
-          console.warn('[CoreBoxManager] Initialization not complete, cannot open CoreBox')
+          coreBoxManagerLog.warn('Initialization not complete, cannot open CoreBox')
           // Show main window to guide user to complete initialization
           const mainWindow = getCoreBoxRuntimeOrNull()?.app.window.window
           if (mainWindow && !mainWindow.isDestroyed()) {
@@ -132,7 +135,7 @@ export class CoreBoxManager {
           return
         }
       } catch (error) {
-        console.error('[CoreBoxManager] Failed to check initialization status:', error)
+        coreBoxManagerLog.error('Failed to check initialization status', { error })
         // If we can't check, allow CoreBox to open (fail-open approach)
       }
     }
@@ -238,7 +241,7 @@ export class CoreBoxManager {
     try {
       return await this.searchEngine.search(query)
     } catch (error) {
-      console.error('[CoreBoxManager] Search failed:', error)
+      coreBoxManagerLog.error('Search failed', { error })
       return new TuffSearchResultBuilder(query).setItems([]).setDuration(0).setSources([]).build()
     }
   }

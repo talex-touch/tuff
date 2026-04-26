@@ -13,7 +13,6 @@ import { DivisionBoxManager } from './manager'
 import { shortcutTriggerManager } from './shortcut-trigger'
 
 type DivisionBoxCommandMeta = NonNullable<TuffItem['meta']> & {
-  command?: 'show-active-sessions'
   mappingId?: string
   config?: import('./shortcut-trigger').ShortcutMapping['config']
 }
@@ -63,42 +62,6 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
     const items: TuffItem[] = filteredMappings.map((mapping) =>
       this.transformMappingToItem(mapping)
     )
-
-    // Add "Open Active Sessions" command if there are active sessions
-    const activeSessions = this.manager.getActiveSessions()
-    if (activeSessions.length > 0 && 'active'.includes(keyword)) {
-      items.unshift({
-        id: 'division-box:show-active-sessions',
-        source: {
-          id: this.id,
-          type: this.type,
-          name: this.name
-        },
-        kind: 'command',
-        render: {
-          mode: 'default',
-          basic: {
-            title: 'Show Active DivisionBox Sessions',
-            subtitle: `${activeSessions.length} active session${activeSessions.length > 1 ? 's' : ''}`,
-            icon: {
-              type: 'class',
-              value: 'ri:window-2-line'
-            }
-          }
-        },
-        actions: [
-          {
-            id: 'execute',
-            type: 'execute',
-            label: 'Show Sessions',
-            shortcut: 'Enter'
-          }
-        ],
-        meta: {
-          command: 'show-active-sessions'
-        } as DivisionBoxCommandMeta
-      })
-    }
 
     const duration = Date.now() - startTime
 
@@ -175,20 +138,6 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
   ): Promise<import('@talex-touch/utils').IProviderActivate | null> {
     const item = args.item
     try {
-      // Handle "show active sessions" command
-      if (item.meta && 'command' in item.meta && item.meta.command === 'show-active-sessions') {
-        // This would typically open a UI to show active sessions
-        // For now, we'll just log them
-        const sessions = this.manager.getActiveSessionsInfo()
-        divisionBoxCommandProviderLog.info('Active sessions requested', {
-          meta: {
-            count: String(sessions.length),
-            sessionIds: sessions.map((session) => session.sessionId).join(',')
-          }
-        })
-        return null
-      }
-
       // Handle opening a DivisionBox via shortcut mapping
       const mappingId =
         item.meta && 'mappingId' in item.meta ? (item.meta.mappingId as string) : undefined

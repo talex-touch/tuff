@@ -5,6 +5,138 @@
 
 ## 2026-04-26
 
+### feat(core-app): 补齐 Device Idle renderer 配置与诊断入口
+
+- `packages/utils/transport/events/types/device-idle.ts`
+- `packages/utils/transport/sdk/domains/settings.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+  - `settingsSdk.deviceIdle` 新增实时诊断读取能力，renderer 可拿到当前空闲时长、电量状态、策略设置与允许/拦截原因。
+  - App 设置页的后台索引策略区新增最小诊断块，支持查看当前 snapshot、手动刷新，并在保存空闲阈值、强制时长、电量策略后同步刷新诊断。
+  - 诊断文案覆盖 `not-idle`、`battery-low`、`battery-critical` 与允许执行状态，避免用户只能看到“允许项异常”而无法判断被哪条策略拦住。
+
+### feat(core-app): 增加应用搜索单项诊断入口
+
+- `packages/utils/transport/events/types/app-index.ts`
+- `packages/utils/transport/sdk/domains/settings.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+  - `settingsSdk.appIndex` 新增 `diagnose` / `reindex` typed transport 能力，可按 app 路径、bundleId 或名称定位单个应用，返回当前 DB 字段、`displayName`、`alternateNames`、生成关键词与已入库关键词。
+  - 应用索引高级设置区新增最小诊断面板，可输入目标应用和测试 query，直接查看 precise / phrase / prefix / FTS / N-gram / subsequence 各阶段是否命中目标 item。
+  - 诊断入口支持单项关键词重建和单项重新扫描，遇到“某个应用搜不到”时可先在 UI 内完成定位与修复，不需要先翻主进程日志。
+
+### feat(core-app): 补齐 device idle 设置与诊断面板
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/main/channel/common.ts`
+- `packages/utils/transport/sdk/domains/settings.ts`
+  - 文件索引设置页新增 device idle 最小配置面板，可查看和修改空闲阈值、强制执行间隔、充电豁免与低电量拦截策略。
+  - `settingsSdk.deviceIdle.getDiagnostic()` 接入主进程 `deviceIdleService.canRun()`，renderer 可直接显示当前 snapshot、允许/拦截状态和可读诊断文案。
+  - 补充 renderer 侧诊断文案 helper 与 focused tests，锁定空闲时长、电池状态和拦截原因的展示口径。
+
+### chore(governance): 补齐 size guard 临时增长例外账本
+
+- `scripts/large-file-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+  - 为当前 `size:guard` 剩余 23 个违规项补齐 `growthExceptions` 与 registry trace，所有例外仍在 `2.5.0` 前退场。
+  - 同轮拆分清退：`apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue` `1716 -> 1065`；`packages/utils/transport/events/index.ts` `3104 -> 2411`。
+  - `packages/utils/transport/events/app.ts` 承接原 `AppEvents` 兼容命名，已同步登记 legacy keyword 清册，不新增运行时分支。
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts` 抽出单项诊断/reindex 到 `app-provider-diagnostics.ts`，cap 收紧到 `3290`。
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-INTELLIGENCE-MODULE`: `apps/core-app/src/main/modules/ai/intelligence-module.ts` cap `1863`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-TUFF-INTELLIGENCE-RUNTIME`: `apps/core-app/src/main/modules/ai/tuff-intelligence-runtime.ts` cap `1551`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER-TEST`: `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts` cap `1259`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER`: `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts` cap `3290`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-RECOMMENDATION-ENGINE`: `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts` cap `1891`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-SEARCH-CORE`: `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` cap `2581`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-CLIPBOARD`: `apps/core-app/src/main/modules/clipboard.ts` cap `3299`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-DOWNLOAD-CENTER`: `apps/core-app/src/main/modules/download/download-center.ts` cap `1538`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-OCR-SERVICE`: `apps/core-app/src/main/modules/ocr/ocr-service.ts` cap `1625`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-OMNI-PANEL`: `apps/core-app/src/main/modules/omni-panel/index.ts` cap `1868`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-PLUGIN-MODULE`: `apps/core-app/src/main/modules/plugin/plugin-module.ts` cap `3674`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-SENTRY-SERVICE`: `apps/core-app/src/main/modules/sentry/sentry-service.ts` cap `1304`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-LINGPAN`: `apps/core-app/src/renderer/src/views/base/LingPan.vue` cap `2000`
+  - `SIZE-GROWTH-2026-04-26-PILOT-TH-INPUT`: `apps/pilot/app/components/input/ThInput.vue` cap `1251`
+  - `SIZE-GROWTH-2026-04-26-PILOT-AIGC-COMPLETION`: `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts` cap `1896`
+  - `SIZE-GROWTH-2026-04-26-PILOT-PILOT-CHAT-PAGE`: `apps/pilot/app/composables/usePilotChatPage.ts` cap `2122`
+  - `SIZE-GROWTH-2026-04-26-PILOT-ADMIN-CHANNELS`: `apps/pilot/app/pages/admin/system/channels.vue` cap `1428`
+  - `SIZE-GROWTH-2026-04-26-PILOT-CHAT-STREAM`: `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts` cap `1791`
+  - `SIZE-GROWTH-2026-04-26-PILOT-PILOT-TOOL-GATEWAY`: `apps/pilot/server/utils/pilot-tool-gateway.ts` cap `2164`
+  - `SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-CLI-TUFF-CLI`: `packages/tuff-cli/src/bin/tuff.ts` cap `1281`
+  - `SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-INTELLIGENCE-DEEPAGENT-ENGINE`: `packages/tuff-intelligence/src/adapters/deepagent-engine.ts` cap `2138`
+  - `SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-INTELLIGENCE-INTELLIGENCE-TYPES`: `packages/tuff-intelligence/src/types/intelligence.ts` cap `2319`
+  - `SIZE-GROWTH-2026-04-26-PACKAGES-UTILS-UTILS-INTELLIGENCE-TYPES`: `packages/utils/types/intelligence.ts` cap `2317`
+
+### chore(governance): 清理已退场 legacy 关键字债务记录
+
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+  - 移除 `compat:registry:guard` 已判定为 cleanup candidate 的 `legacy-keyword` 记录，保留仍由文件命名命中的 compat-file 账本项。
+  - 账本清理后 `pnpm compat:registry:guard` 不再输出 cleanup warning，不改变 legacy/size 门禁阈值。
+
+### refactor(core-app): 移除 DivisionBox active sessions 假命令
+
+- `apps/core-app/src/main/modules/division-box/command-provider.ts`
+- `apps/core-app/src/main/modules/division-box/command-provider.test.ts`
+  - CoreBox 的 DivisionBox provider 不再注入 `division-box:show-active-sessions` 结果；该结果此前只记录 active sessions 日志，没有打开任何用户可见界面，属于未接通 UI 的伪命令。
+  - 保留真实 shortcut mapping 的搜索和执行路径，并新增回归测试确保 active session 存在时也不会暴露无动作命令。
+
+### refactor(core-app): 收口插件状态按钮命令式 DOM 渲染
+
+- `apps/core-app/src/renderer/src/components/plugin/action/PluginStatus.vue`
+  - 插件状态按钮不再通过 `innerHTML`、手动 `classList` 和 mount-time watcher 改写 DOM；状态文案、样式 class 与点击动作统一由 Vue computed 派生。
+  - 重新加载失败时不再直写 `console.error`，保留开发期 `devLog` 诊断，避免 renderer 状态组件继续保留 raw console 与命令式 UI 旧实现。
+
+### refactor(core-app): 移除 DivisionBox keepAlive 空 timer API
+
+- `apps/core-app/src/main/modules/division-box/session.ts`
+  - 删除未被调用的 `keepAliveTimer`、`startKeepAliveTimer()` 与 `stopKeepAliveTimer()`；该公开方法没有真实计时逻辑，只留下 “for now” 注释，会误导后续维护者以为 session 自身有 keepAlive timer。
+  - 当前 keepAlive 生命周期继续由 `DivisionBoxManager` 的状态监听与 `LRUCache` 管理，不改变 session 创建、 inactive 缓存和 destroy 清理语义。
+
+### refactor(core-app): 删除 screen-capture 占位链路并收口服务日志
+
+- `apps/core-app/src/main/addon/device/screen-capture.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/application-hooks.ts`
+- `apps/core-app/src/main/service/{official-plugin.service.ts,file-watch.service.ts}`
+- `apps/core-app/src/main/core/tuff-icon.ts`
+- `apps/core-app/src/main/modules/{build-verification/index.ts,plugin/adapters/feature-search-tokens.ts}`
+- `apps/core-app/src/main/modules/box-tool/{core-box/manager.ts,addon/system/system-actions-provider.ts}`
+- `apps/core-app/src/main/utils/plugin-injection.ts`
+- `apps/core-app/src/main/modules/download/{logger.ts,database-service.ts,chunk-manager.ts,concurrency-adjuster.ts,network-monitor.ts,performance-monitor.ts,download-worker.ts,notification-service.ts,error-logger.ts}`
+- `apps/core-app/src/main/modules/download/download-center.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/{darwin.ts,win.ts,search-processing-service.ts}`
+- `apps/core-app/src/main/modules/box-tool/{item-sdk/box-item-manager.ts,search-engine/usage-stats-cache.ts,search-engine/time-stats-aggregator.ts}`
+- `apps/core-app/src/main/modules/box-tool/search-engine/{usage-stats-queue.ts,recommendation/recommendation-engine.ts,recommendation/context-provider.ts,recommendation/item-rebuilder.ts}`
+- `apps/core-app/src/main/modules/plugin/providers/{tpex-provider.ts,utils.ts}`
+- `apps/core-app/src/main/modules/storage/{storage-polling-service.ts,storage-lru-manager.ts,storage-frequency-monitor.ts}`
+- `apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
+- `apps/core-app/src/main/utils/{i18n-helper.ts,perf-context.ts,release-signature.ts}`
+- `apps/core-app/src/main/modules/box-tool/search-engine/{search-index-service.ts,workers/search-index-worker.ts}`
+- `apps/core-app/src/main/{core/channel-core.ts,modules/storage/index.ts}`
+  - 删除未被任何入口引用、且全文件只剩注释的主进程 screen-capture 占位文件；renderer 同步移除无人发送的 `@screen-capture` 注册函数，避免后续误以为屏幕捕获能力已接通。
+  - `OfficialPluginService`、`FileWatchService`、`TuffIconImpl` 的 raw console 调试输出切到 `createLogger`，保留失败原因但减少散落日志和原始路径暴露。
+  - CoreBox Manager、SystemActions file-index、BuildVerification、FeatureSearchTokens 的小范围 raw console 也统一收口到已有 logger；SystemActions 去掉 file-index 的重复控制台输出，只保留结构化日志。
+  - 旧插件注入脚本不再向插件 WebContents 输出 `Touch # Auto inject JS`，并删除同文件底部未启用的样式注释块。
+  - Download 外围模块（数据库、切片、worker、通知、网络、性能、并发和错误日志器）的 raw console 改为 `download/logger.ts` 统一导出的结构化 logger；失败日志优先记录 taskId/chunkIndex/pathLength 等元数据，避免直接输出本地路径。
+  - DownloadCenter 主模块同样切到 `DownloadCenter` logger，初始化/销毁、任务批量操作、临时文件清理、transport handler 和通知点击均不再直接写 console；日志改造后失去引用的 `formatBytes()` 已删除。
+  - macOS/Windows 应用扫描和搜索后处理慢日志切到 `AppScanner` logger，失败日志不再直接输出 app/file 完整路径。
+  - BoxItemManager、插件 provider 工具、UsageStatsCache 与 TimeStatsAggregator 的可选调试/告警日志也切到项目 logger，减少搜索与插件安装路径里的 raw console 残留。
+  - UsageStatsQueue、Recommendation ContextProvider 与 ItemRebuilder 的 flush/debug/rebuild 失败日志切到项目 logger；保留原有队列丢弃、merge back 与可选上下文降级语义，不改变推荐召回和排序。
+  - RecommendationEngine 主文件中 provider 注册、缓存命中、候选计数、推荐生成耗时和插件 provider 失败也统一使用 `RecommendationEngine` logger，避免推荐主路径继续散落 raw debug/warn。
+  - Storage polling/LRU/frequency monitor 的维护日志改用 `Storage:*` logger，保留周期保存、强制保存、LRU 驱逐和高频访问告警语义，去掉 chalk 拼接式 raw console 输出。
+  - Intelligence SDK、main i18n helper、PerfContext 和 SignatureVerifier 的普通 warn/error 输出切到项目 logger；AI 调用、翻译 fallback、慢上下文告警和签名拉取失败语义保持不变。
+  - SearchIndexService 与 search-index worker 的索引摘要、慢批次、零结果诊断、初始化和 pinyin 预热日志切到 `SearchIndex` logger；不再直出完整 DB path 或 FTS 查询表达式。
+  - 清理 `channel-core` 里的 dead debug 注释和 storage JSDoc 里的 `console.log` 示例；兼容性扫描报告同步标记剩余 console 命中属于有意保留边界。
+  - `application-hooks` 清掉外链拦截里的旧 safe-link 注释块，只保留当前 `url:open` / localhost 判断主路径。
+
+### refactor(core-app): 收口预览、终端与服务中心调试残留
+
+- `apps/core-app/src/main/modules/box-tool/addon/preview/{preview-provider.ts,preview-registry.ts}`
+- `apps/core-app/src/main/modules/terminal/terminal.manager.ts`
+- `apps/core-app/src/main/service/{protocol-handler.ts,service-center.ts}`
+  - Preview Provider 不再把即时预览表达式和结果值直接写入主进程日志，只保留 abilityId、长度、entryId 等结构化元数据，避免搜索/剪贴板内容进入调试输出。
+  - Preview Registry / Terminal / Protocol Handler / ServiceCenter 统一改用 `createLogger`，清理 stale no-op 文案、死协议注释和 raw console 调试输出。
+  - ServiceCenter 删除无读取方的注册快照 `save()` / `filePath` 伪持久化路径，避免把运行时插件服务注册误表达成可恢复状态。
+  - ServiceCenter 转发插件服务时不再把原始 file service payload 打到日志，只记录插件、服务名与扩展名；二次启动不支持的文件/目录提示也改成明确的 unsupported 语义。
+
 ### refactor(core-app): 清理兼容审计后的无引用 legacy/no-op 残留
 
 - `apps/core-app/src/main/addon/device/blue-tooth.ts`
@@ -367,6 +499,7 @@
   - Everything 设置页的主状态改为优先反映用户配置态：当用户已手动禁用 Everything 时，不再被后端 `unavailable` 探测结果覆盖成“不可用”。
   - 启用/禁用按钮改为在状态已加载后始终可见，避免“已禁用 + 当前后端不可用”时把控制入口一起隐藏。
   - 安装引导只在“用户已启用但后端不可用”时展示，减少禁用态下的误导信息；新增 renderer 侧纯函数回归锁定组合状态。
+
 ### fix(core-app): Everything 运行时故障同次查询直接回退文件索引
 
 - `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`

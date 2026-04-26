@@ -9,8 +9,12 @@ import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/tran
 import type {
   AppIndexAddPathRequest,
   AppIndexAddPathResult,
+  AppIndexDiagnoseRequest,
+  AppIndexDiagnoseResult,
   AppIndexEntryMutationResult,
   AppIndexRemoveEntryRequest,
+  AppIndexReindexRequest,
+  AppIndexReindexResult,
   AppIndexSetEntryEnabledRequest,
   AppIndexUpsertEntryRequest,
   AutoStartGetResponse,
@@ -1468,6 +1472,10 @@ export class CommonChannelModule extends BaseModule {
       transport.on(AppEvents.deviceIdle.updateSettings, (payload) =>
         deviceIdleService.updateSettings(payload ?? {})
       ),
+      transport.on(AppEvents.deviceIdle.getDiagnostic, async () => ({
+        ...(await deviceIdleService.canRun()),
+        settings: deviceIdleService.getSettings()
+      })),
       transport.on(AppEvents.appIndex.getSettings, () => appProvider.getAppIndexSettings()),
       transport.on(AppEvents.appIndex.updateSettings, (payload) =>
         appProvider.updateAppIndexSettings(payload ?? {})
@@ -1510,6 +1518,14 @@ export class CommonChannelModule extends BaseModule {
           }
           return appProvider.setManagedEntryEnabled(inputPath, enabled)
         }
+      ),
+      transport.on<AppIndexDiagnoseRequest, AppIndexDiagnoseResult>(
+        AppEvents.appIndex.diagnose,
+        (payload) => appProvider.diagnoseAppSearch(payload ?? { target: '' })
+      ),
+      transport.on<AppIndexReindexRequest, AppIndexReindexResult>(
+        AppEvents.appIndex.reindex,
+        (payload) => appProvider.reindexAppSearchTarget(payload ?? { target: '' })
       )
     )
   }

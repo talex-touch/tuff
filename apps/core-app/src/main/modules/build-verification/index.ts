@@ -70,7 +70,7 @@ export class BuildVerificationModule extends BaseModule {
   }
 
   onDestroy(): MaybePromise<void> {
-    console.debug('[BuildVerification] onDestroy')
+    this.log.debug('Destroyed')
   }
 
   private getBuildAssetPath(): string | null {

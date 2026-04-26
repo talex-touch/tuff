@@ -1,6 +1,7 @@
 <script setup lang="ts" name="SettingFileIndex">
 import type {
   AppIndexSettings,
+  DeviceIdleDiagnostic,
   DeviceIdleSettings,
   FileIndexStatus,
   FileIndexBatteryStatus,
@@ -21,6 +22,13 @@ import { useEstimatedCompletionText } from '~/modules/hooks/useEstimatedCompleti
 import { popperMention } from '~/modules/mention/dialog-mention'
 import FailedFilesListDialog from './components/FailedFilesListDialog.vue'
 import RebuildConfirmDialog from './components/RebuildConfirmDialog.vue'
+import SettingFileIndexAppDiagnostic from './SettingFileIndexAppDiagnostic.vue'
+import {
+  formatDeviceBatteryStatus,
+  formatDeviceIdleDuration,
+  getDeviceIdleDiagnosticTone,
+  getDeviceIdleReasonKey
+} from './device-idle-diagnostics'
 
 const {
   getIndexStatus,
@@ -86,6 +94,9 @@ interface AppIndexForm {
 
 const deviceIdleSettings = ref<DeviceIdleSettings | null>(null)
 const deviceIdleSaving = ref(false)
+const deviceIdleDiagnostic = ref<DeviceIdleDiagnostic | null>(null)
+const deviceIdleDiagnosticLoading = ref(false)
+const deviceIdleDiagnosticCheckedAt = ref<Date | null>(null)
 const deviceIdleForm = ref<DeviceIdleForm>({
   idleMinutes: Math.round(DEFAULT_DEVICE_IDLE_SETTINGS.idleThresholdMs / 60000),
   minBatteryPercent: DEFAULT_DEVICE_IDLE_SETTINGS.minBatteryPercent,
@@ -177,6 +188,21 @@ async function loadDeviceIdleSettings() {
   }
 }
 
+async function loadDeviceIdleDiagnostic() {
+  if (deviceIdleDiagnosticLoading.value) return
+  deviceIdleDiagnosticLoading.value = true
+  try {
+    deviceIdleDiagnostic.value = await settingsSdk.deviceIdle.getDiagnostic()
+    deviceIdleDiagnosticCheckedAt.value = new Date()
+  } catch (error) {
+    console.error('[SettingFileIndex] Failed to load device idle diagnostic:', error)
+    deviceIdleDiagnostic.value = null
+    toast.error(t('settings.settingFileIndex.deviceIdleDiagnosticLoadFailed'))
+  } finally {
+    deviceIdleDiagnosticLoading.value = false
+  }
+}
+
 async function saveDeviceIdleSettings() {
   if (deviceIdleSaving.value) return
   deviceIdleSaving.value = true
@@ -202,6 +228,7 @@ async function saveDeviceIdleSettings() {
     const updated = await settingsSdk.deviceIdle.updateSettings(payload)
     deviceIdleSettings.value = updated
     deviceIdleForm.value = toDeviceIdleForm(updated)
+    await loadDeviceIdleDiagnostic()
     toast.success(t('settings.settingFileIndex.deviceIdleSaved'))
   } catch (error) {
     console.error('[SettingFileIndex] Failed to save device idle settings:', error)
@@ -306,6 +333,7 @@ let statusCheckInterval: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   checkStatus()
   loadDeviceIdleSettings()
+  loadDeviceIdleDiagnostic()
   loadAppIndexSettings()
 
   unsubscribeProgress = onProgressUpdate((progress) => {
@@ -395,6 +423,72 @@ function openFailedFilesDialog() {
 }
 
 const failedFilesCount = computed(() => indexStats.value?.failedFiles ?? 0)
+
+const deviceIdleDuration = computed(() =>
+  formatDeviceIdleDuration(deviceIdleDiagnostic.value?.snapshot.idleMs ?? null)
+)
+
+const deviceIdleThresholdDuration = computed(() =>
+  formatDeviceIdleDuration(
+    deviceIdleDiagnostic.value?.settings.idleThresholdMs ??
+      deviceIdleSettings.value?.idleThresholdMs ??
+      DEFAULT_DEVICE_IDLE_SETTINGS.idleThresholdMs
+  )
+)
+
+const deviceIdleBattery = computed(() =>
+  formatDeviceBatteryStatus(deviceIdleDiagnostic.value?.snapshot.battery ?? null)
+)
+
+function formatDiagnosticDurationLabel(duration: { value: string; unit: string }): string {
+  if (duration.value === '-') return duration.value
+  if (duration.unit === 'hr') return `${duration.value} ${t('settings.settingFileIndex.unitHours')}`
+  return `${duration.value} ${t('settings.settingFileIndex.unitMinutes')}`
+}
+
+const deviceIdleDurationLabel = computed(() =>
+  formatDiagnosticDurationLabel(deviceIdleDuration.value)
+)
+
+const deviceIdleThresholdLabel = computed(() =>
+  formatDiagnosticDurationLabel(deviceIdleThresholdDuration.value)
+)
+
+const deviceIdleBatteryStateLabel = computed(() =>
+  t(`settings.settingFileIndex.diagnosticBatteryState.${deviceIdleBattery.value.stateKey}`)
+)
+
+const deviceIdleDiagnosticTone = computed(() =>
+  getDeviceIdleDiagnosticTone(deviceIdleDiagnostic.value)
+)
+
+const deviceIdleDiagnosticColor = computed(() => {
+  if (deviceIdleDiagnosticTone.value === 'success') return '#34c759'
+  if (deviceIdleDiagnosticTone.value === 'warning') return '#ff9500'
+  return '#8e8e93'
+})
+
+const deviceIdleDiagnosticStatus = computed(() => {
+  if (deviceIdleDiagnosticLoading.value) return t('settings.settingFileIndex.diagnosticChecking')
+  if (!deviceIdleDiagnostic.value) return t('settings.settingFileIndex.diagnosticUnknown')
+  return deviceIdleDiagnostic.value.allowed
+    ? t('settings.settingFileIndex.diagnosticAllowedStatus')
+    : t('settings.settingFileIndex.diagnosticBlockedStatus')
+})
+
+const deviceIdleDiagnosticText = computed(() => {
+  if (deviceIdleDiagnosticLoading.value)
+    return t('settings.settingFileIndex.diagnosticCheckingDesc')
+  if (!deviceIdleDiagnostic.value) return t('settings.settingFileIndex.diagnosticUnknownDesc')
+
+  return t(getDeviceIdleReasonKey(deviceIdleDiagnostic.value.reason), {
+    idle: deviceIdleDurationLabel.value,
+    threshold: deviceIdleThresholdLabel.value,
+    battery: deviceIdleBattery.value.level,
+    min: deviceIdleDiagnostic.value.settings.minBatteryPercent,
+    critical: deviceIdleDiagnostic.value.settings.blockBatteryBelowPercent
+  })
+})
 
 const errorButtonLabel = computed(() => {
   const count = failedFilesCount.value
@@ -762,6 +856,47 @@ async function triggerRebuild() {
         </div>
       </template>
     </TuffBlockInput>
+
+    <TuffBlockSlot
+      :title="t('settings.settingFileIndex.diagnosticTitle')"
+      :description="deviceIdleDiagnosticText"
+      default-icon="i-carbon-activity"
+      active-icon="i-carbon-activity"
+    >
+      <div class="diagnostic-panel">
+        <div class="diagnostic-status" :style="{ '--diagnostic-color': deviceIdleDiagnosticColor }">
+          {{ deviceIdleDiagnosticStatus }}
+        </div>
+
+        <div class="diagnostic-metrics">
+          <span>{{ t('settings.settingFileIndex.diagnosticIdleMetric') }}</span>
+          <strong>{{ deviceIdleDurationLabel }}</strong>
+          <span class="stat-divider">·</span>
+          <span>{{ t('settings.settingFileIndex.diagnosticBatteryMetric') }}</span>
+          <strong>{{ deviceIdleBattery.level }}</strong>
+          <span>{{ deviceIdleBatteryStateLabel }}</span>
+        </div>
+
+        <div class="diagnostic-actions">
+          <span v-if="deviceIdleDiagnosticCheckedAt" class="diagnostic-time">
+            {{
+              t('settings.settingFileIndex.diagnosticLastChecked', {
+                time: deviceIdleDiagnosticCheckedAt.toLocaleTimeString()
+              })
+            }}
+          </span>
+          <TxButton
+            variant="flat"
+            size="sm"
+            :disabled="deviceIdleDiagnosticLoading"
+            @click="loadDeviceIdleDiagnostic"
+          >
+            <div class="i-carbon-renew text-12px" />
+            <span>{{ t('settings.settingFileIndex.diagnosticRefresh') }}</span>
+          </TxButton>
+        </div>
+      </div>
+    </TuffBlockSlot>
   </TuffGroupBlock>
 
   <TuffGroupBlock
@@ -921,157 +1056,9 @@ async function triggerRebuild() {
         </div>
       </template>
     </TuffBlockInput>
+
+    <SettingFileIndexAppDiagnostic />
   </TuffGroupBlock>
 </template>
 
-<style scoped>
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 500;
-  background: color-mix(in srgb, var(--status-color) 15%, transparent);
-  color: var(--status-color);
-  border: 1px solid color-mix(in srgb, var(--status-color) 30%, transparent);
-}
-
-.progress-container {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.estimated-time {
-  font-size: 13px;
-  color: var(--tx-text-color-secondary);
-  font-weight: 500;
-}
-
-.stats-container {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  white-space: nowrap;
-}
-
-.stat-divider {
-  color: var(--tx-text-color-placeholder);
-  font-size: 12px;
-  margin: 0 2px;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-  font-weight: 400;
-}
-
-.stat-value {
-  font-size: 12px;
-  color: var(--tx-text-color-primary);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-value.failed {
-  color: #ff3b30;
-}
-
-.stat-value-btn {
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  padding: 1px 6px 1px 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.stat-value-btn.failed {
-  color: #ff3b30;
-}
-
-.stat-value-btn:hover {
-  background: rgba(255, 59, 48, 0.1);
-}
-
-.stat-value.skipped {
-  color: #ff9500;
-}
-
-.error-trigger {
-  width: fit-content;
-}
-
-.error-popover {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: 320px;
-}
-
-.error-popover-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--tx-text-color-primary);
-}
-
-.error-popover-desc {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-}
-
-.error-popover-content {
-  margin: 0;
-  padding: 8px 10px;
-  background: rgba(255, 59, 48, 0.08);
-  border-radius: 6px;
-  border: 1px solid rgba(255, 59, 48, 0.15);
-  font-size: 11px;
-  color: #ff3b30;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 200px;
-  overflow: auto;
-}
-
-.time-text {
-  font-size: 13px;
-  color: var(--tx-text-color-secondary);
-  font-family: monospace;
-  font-weight: 500;
-}
-
-.input-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.input-unit {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-  white-space: nowrap;
-}
-
-.tuff-number-input {
-  width: 100%;
-}
-
-.tuff-number-input :deep(.tx-input__inner) {
-  font-variant-numeric: tabular-nums;
-}
-</style>
+<style scoped src="./SettingFileIndex.css"></style>

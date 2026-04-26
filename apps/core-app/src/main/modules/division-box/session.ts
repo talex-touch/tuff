@@ -74,9 +74,6 @@ export class DivisionBoxSession {
   /** Session metadata */
   readonly meta: SessionMeta
 
-  /** KeepAlive timer for inactive state */
-  private keepAliveTimer: NodeJS.Timeout | null = null
-
   /** State change event listeners */
   private stateChangeListeners: Set<StateChangeListener> = new Set()
 
@@ -624,34 +621,9 @@ export class DivisionBoxSession {
   }
 
   /**
-   * Starts the keepAlive timer
-   *
-   * Used in INACTIVE state to maintain the view for quick recovery.
-   */
-  startKeepAliveTimer(): void {
-    // Clear existing timer if any
-    this.stopKeepAliveTimer()
-
-    // Note: The actual timer logic would depend on LRU cache management
-    // For now, we just mark that keepAlive is active
-    // The timer would be managed by the DivisionBoxManager
-  }
-
-  /**
-   * Stops the keepAlive timer
-   */
-  stopKeepAliveTimer(): void {
-    if (this.keepAliveTimer) {
-      clearTimeout(this.keepAliveTimer)
-      this.keepAliveTimer = null
-    }
-  }
-
-  /**
    * Destroys the session and cleans up all resources
    */
   async destroy(): Promise<void> {
-    this.stopKeepAliveTimer()
     this.destroyWindow()
     this.clearSessionState()
     this.stateChangeListeners.clear()
