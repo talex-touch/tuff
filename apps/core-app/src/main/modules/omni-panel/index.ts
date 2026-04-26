@@ -41,7 +41,8 @@ import { app, clipboard, screen, shell, systemPreferences } from 'electron'
 import { OmniPanelWindowOption } from '../../config/default'
 import { TalexEvents as MainEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { getSelectionCaptureCapabilityPatch } from '../platform/capability-adapter'
-import { ensureXdotoolAvailable, getXdotoolUnavailableReason } from '../system/linux-desktop-tools'
+import { sendPlatformShortcut } from '../system/desktop-shortcut'
+import { getXdotoolUnavailableReason } from '../system/linux-desktop-tools'
 import { TouchWindow } from '../../core/touch-window'
 import { getCoreBoxWindow } from '../box-tool/core-box/window'
 import { getCoreBoxRendererPath } from '../../utils/renderer-url'
@@ -1551,28 +1552,7 @@ export class OmniPanelModule extends BaseModule {
       )
     }
 
-    if (process.platform === 'darwin') {
-      await execFileAsync('osascript', [
-        '-e',
-        'tell application "System Events" to keystroke "c" using {command down}'
-      ])
-      return
-    }
-
-    if (process.platform === 'win32') {
-      const script =
-        "$wshell = New-Object -ComObject WScript.Shell; Start-Sleep -Milliseconds 30; $wshell.SendKeys('^c')"
-      await execFileAsync('powershell', ['-NoLogo', '-NonInteractive', '-Command', script])
-      return
-    }
-
-    if (process.platform === 'linux') {
-      await ensureXdotoolAvailable()
-      await execFileAsync('xdotool', ['key', '--clearmodifiers', 'ctrl+c'])
-      return
-    }
-
-    throw new Error(`Unsupported platform: ${process.platform}`)
+    await sendPlatformShortcut('copy')
   }
 
   private setupInputHook(): void {

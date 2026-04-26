@@ -8,14 +8,7 @@ export { DownloadCenterModule, downloadCenterModule } from './download-center'
 // Export other components
 export { DownloadWorker } from './download-worker'
 
-// Export migration utilities
-export { MigrationManager } from './migration-manager'
-export type {
-  MigrationProgress,
-  MigrationResult,
-  OldDownloadRecord,
-  OldUpdateConfig
-} from './migration-manager'
+// Export schema migration utilities
 export { allMigrations, MigrationRunner } from './migrations'
 export type { Migration, MigrationStatus } from './migrations'
 

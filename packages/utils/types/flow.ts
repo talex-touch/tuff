@@ -329,6 +329,9 @@ export interface NativeShareResult {
   /** Target used (if known) */
   target?: string
 
+  /** Whether the user still needs to finish the share in a native app */
+  requiresUserAction?: boolean
+
   /** Error message if failed */
   error?: string
 }

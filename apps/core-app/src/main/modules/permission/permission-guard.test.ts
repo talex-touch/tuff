@@ -82,16 +82,15 @@ describe('permissionGuardPerformance', () => {
     expect(result.reason).toContain('sdkapi')
   })
 
-  it('requires both window.create and storage.shared for division-box flow trigger', async () => {
-    const pluginId = 'flow-plugin'
-    await store.grant(pluginId, 'window.create', 'user')
+  it('maps division-box window APIs to the default window.create permission', async () => {
+    const pluginId = 'division-box-plugin'
+    store.setDeclaredPermissions(pluginId, {
+      required: ['window.create'],
+      optional: []
+    })
 
-    const denied = guard.check(pluginId, 'division-box:flow:trigger', SDK_VERSION)
-    expect(denied.allowed).toBe(false)
-    expect(denied.permissionId).toBe('storage.shared')
-
-    await store.grant(pluginId, 'storage.shared', 'user')
-    const allowed = guard.check(pluginId, 'division-box:flow:trigger', SDK_VERSION)
-    expect(allowed.allowed).toBe(true)
+    const result = guard.check(pluginId, 'division-box:window:toggle-pin', SDK_VERSION)
+    expect(result.allowed).toBe(true)
+    expect(result.permissionId).toBe('window.create')
   })
 })

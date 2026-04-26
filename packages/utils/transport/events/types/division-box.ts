@@ -5,7 +5,6 @@ import type {
   SessionInfo,
   StateChangeEvent,
 } from '../../../types/division-box'
-import type { FlowPayload } from '../../../types/flow'
 
 export type DivisionBoxOpenRequest = DivisionBoxConfig & {
   _sdkapi?: number
@@ -89,11 +88,3 @@ export interface DivisionBoxInputChangeRequest {
 }
 
 export type DivisionBoxInputChangeResponse = IPCResponse<{ received: boolean }>
-
-export interface DivisionBoxFlowTriggerRequest {
-  targetId: string
-  payload: FlowPayload
-  _sdkapi?: number
-}
-
-export type DivisionBoxFlowTriggerResponse = IPCResponse<{ sessionId: string }>

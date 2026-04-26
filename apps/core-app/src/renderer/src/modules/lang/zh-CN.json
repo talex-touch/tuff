@@ -676,6 +676,11 @@
       "confirmInstall": "继续安装",
       "confirmReject": "取消",
       "beforeExitPrompt": "仍有插件安装正在进行，确认要退出吗？",
+      "permissionConfirmTitle": "插件权限确认",
+      "permissionConfirmMessage": "插件「{name}」需要以下权限：\n{permissions}\n\n请选择授权方式。",
+      "permissionAllowAlways": "始终允许",
+      "permissionAllowSession": "仅本次会话",
+      "permissionReject": "拒绝安装",
       "reasons": {
         "installFailed": "安装流程未完成，请稍后重试。",
         "noSource": "当前插件缺少可用的安装源。",

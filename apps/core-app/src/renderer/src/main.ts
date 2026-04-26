@@ -19,7 +19,6 @@ import { registerBuildVerificationListener } from '~/modules/build-verification/
 import { registerBatteryStatusListener } from '~/modules/hooks/useBatteryOptimizer'
 import { registerNotificationHub } from '~/modules/notification/notification-hub'
 import { registerPluginInstallListener } from '~/modules/plugin/plugin-install-listener'
-import { runRendererStartupMigrations } from '~/modules/startup/startup-migrations'
 
 import { usePluginStore } from '~/stores/plugin'
 
@@ -132,7 +131,6 @@ registerDefaultCustomRenderers()
  */
 async function bootstrap() {
   initializeRendererStorage()
-  await runRendererStartupMigrations()
   const router = await ensureRouter()
   const initialLanguage = resolveInitialLanguage()
   const i18n = await runBootStep('Loading localization resources...', 0.05, () =>

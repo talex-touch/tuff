@@ -1,6 +1,6 @@
 import type { WritableComputedRef } from 'vue'
 import { StorageList } from '@talex-touch/utils'
-import { hasDocument, hasWindow } from '@talex-touch/utils/env'
+import { hasDocument } from '@talex-touch/utils/env'
 import { createStorageProxy, TouchStorage } from '@talex-touch/utils/renderer/storage/base-storage'
 import { useDark, usePreferredDark } from '@vueuse/core'
 import { computed, watchEffect } from 'vue'
@@ -8,7 +8,6 @@ import {
   areThemeStylesEqual,
   createDefaultThemeStyle,
   normalizeThemeStyle,
-  parseLegacyThemeStyle,
   resolveThemeModeState,
   type ThemeMode,
   type ThemeModeState,
@@ -24,7 +23,6 @@ export {
 } from './theme-style.utils'
 
 const THEME_STYLE_STORAGE_SINGLETON_KEY = `storage:${StorageList.THEME_STYLE}`
-const LEGACY_THEME_STYLE_LOCAL_STORAGE_KEY = 'theme-style'
 
 class ThemeStyleStorage extends TouchStorage<ThemeStyleState> {
   constructor() {
@@ -49,36 +47,6 @@ class ThemeStyleStorage extends TouchStorage<ThemeStyleState> {
 const themeStyleStorage = createStorageProxy(THEME_STYLE_STORAGE_SINGLETON_KEY, () => {
   return new ThemeStyleStorage()
 })
-
-export async function migrateLegacyThemeStyleStorage(): Promise<void> {
-  await themeStyleStorage.whenHydrated()
-
-  if (!hasWindow() || !window.localStorage) {
-    return
-  }
-
-  let rawLegacyValue: string | null = null
-  try {
-    rawLegacyValue = window.localStorage.getItem(LEGACY_THEME_STYLE_LOCAL_STORAGE_KEY)
-    if (rawLegacyValue === null) {
-      return
-    }
-    window.localStorage.removeItem(LEGACY_THEME_STYLE_LOCAL_STORAGE_KEY)
-  } catch {
-    return
-  }
-
-  const migrated = parseLegacyThemeStyle(rawLegacyValue)
-  if (!migrated) {
-    return
-  }
-
-  const current = normalizeThemeStyle(themeStyleStorage.get())
-  const fallback = createDefaultThemeStyle()
-  if (areThemeStylesEqual(current, fallback)) {
-    themeStyleStorage.set(migrated)
-  }
-}
 
 export const themeStyle: WritableComputedRef<ThemeStyleState> = computed({
   get: () => themeStyleStorage.data as ThemeStyleState,

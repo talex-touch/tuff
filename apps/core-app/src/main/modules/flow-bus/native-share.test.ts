@@ -1,13 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileSafeMock, writeFileMock, openExternalMock, showShareResultMock } = vi.hoisted(
-  () => ({
-    execFileSafeMock: vi.fn(async () => ({ stdout: '', stderr: '' })),
-    writeFileMock: vi.fn(async () => undefined),
-    openExternalMock: vi.fn(async () => undefined),
-    showShareResultMock: vi.fn()
-  })
-)
+const {
+  clipboardWriteTextMock,
+  execFileSafeMock,
+  writeFileMock,
+  openExternalMock,
+  showShareResultMock
+} = vi.hoisted(() => ({
+  clipboardWriteTextMock: vi.fn(),
+  execFileSafeMock: vi.fn(async () => ({ stdout: '', stderr: '' })),
+  writeFileMock: vi.fn(async () => undefined),
+  openExternalMock: vi.fn(async () => undefined),
+  showShareResultMock: vi.fn()
+}))
 
 vi.mock('@talex-touch/utils/common/utils/safe-shell', () => ({
   execFileSafe: execFileSafeMock
@@ -24,7 +29,7 @@ vi.mock('electron', () => ({
     openExternal: openExternalMock
   },
   clipboard: {
-    writeText: vi.fn()
+    writeText: clipboardWriteTextMock
   }
 }))
 
@@ -110,6 +115,27 @@ describe('native-share behavior', () => {
       expect(result.error).toContain('does not provide a system share sheet')
       expect(openExternalMock).not.toHaveBeenCalled()
       expect(showShareResultMock).toHaveBeenCalledWith(result)
+    })
+  })
+
+  it('marks macOS Messages share as requiring user action instead of pretending delivery completed', async () => {
+    await withPlatform('darwin', async () => {
+      const result = await nativeShareService.share({
+        target: 'messages',
+        text: 'hello from flow'
+      })
+
+      expect(result).toEqual({
+        success: true,
+        target: 'messages',
+        requiresUserAction: true
+      })
+      expect(clipboardWriteTextMock).toHaveBeenCalledWith('hello from flow')
+      expect(showShareResultMock).toHaveBeenCalledWith({
+        success: true,
+        target: 'messages',
+        requiresUserAction: true
+      })
     })
   })
 })

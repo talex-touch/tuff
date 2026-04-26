@@ -5,6 +5,18 @@
 
 ## 2026-04-26
 
+### ref(core-app): hard-cut DivisionBox flow trigger 与 legacy startup migrations
+
+- `packages/utils/transport/events/{index.ts,types/division-box.ts}`
+- `packages/utils/types/flow.ts`
+- `apps/core-app/src/main/modules/{division-box/ipc.ts,platform/capability-registry.ts,permission/{index.ts,permission-guard.ts,permission-store.ts},storage/{index.ts,main-storage-registry.ts},download/{index.ts,logger.ts,migration-manager.test.ts},flow-bus/native-share.ts,box-tool/addon/apps/app-provider.ts,system/desktop-shortcut.ts}`
+- `apps/core-app/src/main/utils/app-root-path.ts`
+- `apps/core-app/src/renderer/src/{main.ts,modules/auth/auth-env.ts,modules/storage/theme-style.ts}`
+  - 物理删除 `division-box:flow:trigger` 事件面和主进程 blocked handler；DivisionBox capability 改为仅描述真实容器能力，不再挂 `FLOW_TRIGGER_UNAVAILABLE`。
+  - 删除 dev data root、permission JSON、layout opacity、renderer auth/theme startup migration 与 download legacy migration manager；相关测试/文档/导出同步清理。
+  - macOS `messages` share 改为显式 `requiresUserAction`，不再把“打开 Messages + 写入剪贴板”当成已完成投递。
+  - `app-provider` steady-state 关键词同步不再持续清理 legacy item ids；`clipboard` 与 `omni-panel` 的 Win/Linux 模拟快捷键收口到 `desktop-shortcut` helper。
+
 ### feat(core-app): 补齐 Device Idle renderer 配置与诊断入口
 
 - `packages/utils/transport/events/types/device-idle.ts`

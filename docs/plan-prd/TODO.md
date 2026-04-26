@@ -76,8 +76,8 @@
 
 - [x] Legacy 清理阻塞：清册中的 core-app `2.5.0` 项已关闭或显式降权；不得新增 `legacy` 分支、raw channel、旧 storage protocol、旧 SDK bypass。
   - 已将 `apps/core-app/scripts` 与 `apps/pilot/scripts` 纳入 `legacy/compat` 显式扫描范围，并手工补齐 allowlist / registry。
-  - 插件 channel bridge 移除 legacy header 语义；DivisionBox trigger 切到 typed `CoreBoxEvents.ui.trigger`；Nexus store 旧 manifest/path fallback 已改为结构化错误；FlowTrigger 触发默认返回 `FLOW_TRIGGER_UNAVAILABLE`。
-  - permission JSON->SQLite、dev data root migration、theme localStorage migration 降权为 `core-app-migration-exception`，保留定向 regression。
+  - 插件 channel bridge 移除 legacy header 语义；DivisionBox dead `flow-trigger` 事件面已物理删除；Nexus store 旧 manifest/path fallback 已改为结构化错误。
+  - permission JSON->SQLite、dev data root migration、theme localStorage migration 与 download legacy migration manager 已从启动/runtime 主路径移除，不再保留 migration exception。
 - [ ] Windows 阻塞级回归：Everything/文件搜索、应用扫描/UWP、托盘状态、更新包匹配、插件权限拦截、安装/卸载、退出资源释放。
 - [ ] macOS 阻塞级回归：首次引导权限、OmniPanel Accessibility 门控、native-share 标记、托盘/dock 行为、更新安装、插件权限拦截、退出资源释放。
 - [ ] Linux 非阻塞观察：记录 `xdotool` / desktop environment 限制与 smoke 结果；不作为 `2.5.0` release blocker。

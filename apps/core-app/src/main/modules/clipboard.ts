@@ -26,13 +26,11 @@ import type { SQL } from 'drizzle-orm'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { NativeImage } from 'electron'
 import type * as schema from '../db/schema'
-import { execFile } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { promisify } from 'node:util'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { CAPABILITY_AUTH_MIN_VERSION } from '@talex-touch/utils/plugin'
@@ -59,7 +57,6 @@ import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
 import { getAutoPasteCapabilityPatch } from './platform/capability-adapter'
 import { getPermissionModule } from './permission'
-import { ensureXdotoolAvailable } from './system/linux-desktop-tools'
 import { pluginModule } from './plugin/plugin-module'
 import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storage'
 import { activeAppService } from './system/active-app'
@@ -68,6 +65,7 @@ import {
   normalizeClipboardActionError,
   summarizeClipboardApplyPayload
 } from './clipboard/clipboard-action-diagnostics'
+import { sendPlatformShortcut } from './system/desktop-shortcut'
 import {
   buildPhaseDiagnostics,
   summarizePhaseDurations,
@@ -218,7 +216,6 @@ const PAGE_SIZE = 20
 const CACHE_MAX_COUNT = 20
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour
 
-const execFileAsync = promisify(execFile)
 const CLIPBOARD_IMAGE_NAMESPACE = 'clipboard/images'
 const CLIPBOARD_LIVE_IMAGE_NAMESPACE = 'clipboard/live-images'
 const CLIPBOARD_IMAGE_ORPHAN_CLEANUP_TASK_ID = 'clipboard.temp-images.cleanup'
@@ -1849,28 +1846,7 @@ export class ClipboardModule extends BaseModule {
         )
       }
 
-      if (process.platform === 'darwin') {
-        await execFileAsync('osascript', [
-          '-e',
-          'tell application "System Events" to keystroke "v" using {command down}'
-        ])
-        return
-      }
-
-      if (process.platform === 'win32') {
-        const script =
-          "$wshell = New-Object -ComObject WScript.Shell; Start-Sleep -Milliseconds 30; $wshell.SendKeys('^v')"
-        await execFileAsync('powershell', ['-NoLogo', '-NonInteractive', '-Command', script])
-        return
-      }
-
-      if (process.platform === 'linux') {
-        await ensureXdotoolAvailable()
-        await execFileAsync('xdotool', ['key', '--clearmodifiers', 'ctrl+v'])
-        return
-      }
-
-      throw new Error(`Auto paste is not supported on platform: ${process.platform}`)
+      await sendPlatformShortcut('paste')
     } catch (error) {
       const failure = normalizeClipboardActionError(error)
       clipboardLog.error('Failed to simulate paste command', {

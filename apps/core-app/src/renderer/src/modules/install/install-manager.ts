@@ -38,40 +38,7 @@ let initialized = false
 const transportDisposers: Array<() => void> = []
 
 function getTranslator(): (key: string, params?: Record<string, unknown>) => string {
-  const { t } = useI18nText((key: string, params?: Record<string, unknown>) => {
-    if (key === 'store.installation.confirmTitle') {
-      return '是否安装插件？'
-    }
-    if (key === 'store.installation.confirmMessage') {
-      return `插件 “${params?.name ?? ''}” 来自非官方来源，确认继续安装？`
-    }
-    if (key === 'store.installation.confirmInstall') {
-      return '继续安装'
-    }
-    if (key === 'store.installation.confirmReject') {
-      return '取消'
-    }
-    if (key === 'store.installation.beforeExitPrompt') {
-      return '仍有插件安装进行中，确认要退出吗？'
-    }
-    if (key === 'store.installation.permissionConfirmTitle') {
-      return '插件权限确认'
-    }
-    if (key === 'store.installation.permissionConfirmMessage') {
-      const permissions = typeof params?.permissions === 'string' ? params.permissions : ''
-      return `插件 “${params?.name ?? ''}” 需要以下权限：\n${permissions}\n\n请选择授权方式。`
-    }
-    if (key === 'store.installation.permissionAllowAlways') {
-      return '始终允许'
-    }
-    if (key === 'store.installation.permissionAllowSession') {
-      return '仅本次会话'
-    }
-    if (key === 'store.installation.permissionReject') {
-      return '拒绝安装'
-    }
-    return key
-  })
+  const { t } = useI18nText()
   return t
 }
 

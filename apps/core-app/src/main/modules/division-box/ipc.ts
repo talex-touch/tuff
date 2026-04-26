@@ -17,7 +17,6 @@ import { DivisionBoxEvents, type HandlerContext } from '@talex-touch/utils/trans
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getPermissionModule } from '../permission'
 import { pluginModule } from '../plugin/plugin-module'
-import { FLOW_TRIGGER_UNAVAILABLE_REASON } from './flow-trigger'
 import { divisionBoxIpcLog } from './logger'
 import { DivisionBoxManager } from './manager'
 import { resolveDivisionBoxPermissionActor } from './permission-actor'
@@ -288,38 +287,6 @@ export class DivisionBoxIPC {
         enforce(context, 'division-box:session:get-active-sessions', payload)
         const sessions = this.manager.getActiveSessionsInfo()
         return createSuccessResponse(sessions)
-      })
-    )
-
-    this.transportDisposers.push(
-      transport.on(DivisionBoxEvents.flowTrigger, async (payload, context) => {
-        enforce(context, 'division-box:flow:trigger', payload)
-        const { targetId, payload: flowPayload } = payload
-
-        if (!targetId || typeof targetId !== 'string') {
-          return createErrorResponse('Invalid or missing targetId')
-        }
-
-        if (
-          !flowPayload ||
-          typeof flowPayload !== 'object' ||
-          !flowPayload.type ||
-          !flowPayload.data
-        ) {
-          return createErrorResponse('Invalid or missing payload')
-        }
-
-        divisionBoxIpcLog.info('Compat hit: blocked legacy DivisionBox flow trigger call', {
-          meta: {
-            targetId,
-            payloadType: flowPayload.type,
-            pluginId: context?.plugin?.name
-          }
-        })
-
-        return createErrorResponse(
-          new DivisionBoxError(DivisionBoxErrorCode.CONFIG_ERROR, FLOW_TRIGGER_UNAVAILABLE_REASON)
-        )
       })
     )
 

@@ -66,7 +66,7 @@ describe('platform capability runtime patch', () => {
 })
 
 describe('platform capability registry', () => {
-  it('marks Flow Transfer and DivisionBox flow-trigger support as conditional', () => {
+  it('keeps Flow Transfer conditional while exposing DivisionBox as a real container capability', () => {
     registerDefaultPlatformCapabilities()
 
     const capabilities = platformCapabilityRegistry.list()
@@ -75,7 +75,7 @@ describe('platform capability registry', () => {
 
     expect(flowTransfer?.supportLevel).toBe('best_effort')
     expect(flowTransfer?.issueCode).toBe('TARGET_HANDLER_REQUIRED')
-    expect(divisionBox?.supportLevel).toBe('best_effort')
-    expect(divisionBox?.issueCode).toBe('FLOW_TRIGGER_UNAVAILABLE')
+    expect(divisionBox?.supportLevel).toBe('supported')
+    expect(divisionBox?.issueCode).toBeUndefined()
   })
 })

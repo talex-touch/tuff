@@ -91,13 +91,7 @@ export function registerDefaultPlatformCapabilities(): void {
     description: '插件浮动窗口与 UI 容器',
     scope: 'plugin',
     status: 'beta',
-    supportLevel: 'best_effort',
-    issueCode: 'FLOW_TRIGGER_UNAVAILABLE',
-    reason:
-      'DivisionBox container runtime is available, but DivisionBox Flow trigger delivery is not wired.',
-    limitations: [
-      'Direct DivisionBox sessions work; DivisionBox Flow trigger returns FLOW_TRIGGER_UNAVAILABLE.'
-    ]
+    supportLevel: 'supported'
   })
 
   registry.register({

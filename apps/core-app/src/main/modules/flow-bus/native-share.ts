@@ -345,7 +345,7 @@ return item 1 of shareChoice
     const { clipboard } = await import('electron')
     clipboard.writeText(text)
 
-    return { success: true, target: 'messages' }
+    return { success: true, target: 'messages', requiresUserAction: true }
   }
 
   /**

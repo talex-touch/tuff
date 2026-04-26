@@ -862,6 +862,33 @@ describe('appProvider rebuild maintenance', () => {
     ])
   })
 
+  it('does not keep removing legacy app item ids during steady-state keyword sync', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const indexItemsMock = vi.fn(async () => undefined)
+    const removeItemsMock = vi.fn(async () => undefined)
+    privateProvider.searchIndex = {
+      indexItems: indexItemsMock,
+      removeItems: removeItemsMock
+    }
+
+    await privateProvider._syncKeywordsForApp({
+      name: 'NeteaseMusic 2',
+      displayName: 'NeteaseMusic 2',
+      alternateNames: ['网易云音乐'],
+      bundleId: 'com.netease.163music',
+      path: '/Applications/NeteaseMusic 2.app',
+      launchKind: 'path',
+      launchTarget: '/Applications/NeteaseMusic 2.app',
+      stableId: '/Applications/NeteaseMusic 2.app',
+      icon: '',
+      lastModified: new Date(0)
+    })
+
+    expect(removeItemsMock).not.toHaveBeenCalled()
+    expect(indexItemsMock).toHaveBeenCalledTimes(1)
+  })
+
   it('diagnoses indexed app keywords and query recall stages', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
