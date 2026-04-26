@@ -13,16 +13,13 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { dialog } from 'electron'
 import fse from 'fs-extra'
 import { TalexEvents, touchEventBus, type AppSecondaryLaunch } from '../core/eventbus/touch-event'
+import { createLogger } from '../utils/logger'
 import './protocol-handler'
 
+const serviceLog = createLogger('ServiceCenter')
+
 class ServiceCenter implements IServiceCenter {
-  rootPath: string
-
   serviceMap: Map<string, IServiceHandler> = new Map()
-
-  constructor(rootPath: string) {
-    this.rootPath = rootPath
-  }
 
   /**
    * Unsafe method, please use regService instead
@@ -32,8 +29,6 @@ class ServiceCenter implements IServiceCenter {
   }
 
   regService(service: IService, handler: IServiceHandler): boolean {
-    // if (this.hasService(service)) return false;
-
     this.serviceMap.set(service.id.description!, handler)
     return true
   }
@@ -77,28 +72,7 @@ class ServiceCenter implements IServiceCenter {
   }
 
   hasServiceBySymbolStr(symbol: string): boolean {
-    return /* this.serviceMap.has(symbol) &&  */ !!this.serviceMap.get(symbol)?.pluginScope
-  }
-
-  getPerPath(serviceID: string) {
-    return path.join(this.rootPath, `${serviceID}.json`)
-  }
-
-  async save() {
-    const promises = new Array<Function>()
-    this.serviceMap.forEach((handler, service) =>
-      promises.push(() => {
-        fse.writeJSONSync(
-          this.getPerPath(service),
-          JSON.stringify({
-            pluginScope: handler.pluginScope,
-            service
-          })
-        )
-      })
-    )
-
-    await Promise.all(promises)
+    return !!this.serviceMap.get(symbol)?.pluginScope
   }
 }
 
@@ -112,13 +86,12 @@ const serviceHandleEvent = defineRawEvent<{ data: Record<string, unknown> }, unk
 
 type ServiceCenterModuleState = {
   transport: ReturnType<typeof getTuffTransportMain> | null
-  modulePath?: string
-  listeners: Array<Function>
+  listeners: Array<() => void>
 }
 
-export function genServiceCenter(rootPath?: string): IServiceCenter {
+export function genServiceCenter(): IServiceCenter {
   if (!serviceCenter) {
-    serviceCenter = new ServiceCenter(rootPath!)
+    serviceCenter = new ServiceCenter()
   }
 
   return serviceCenter
@@ -126,17 +99,14 @@ export function genServiceCenter(rootPath?: string): IServiceCenter {
 
 export default {
   name: Symbol('ServiceCenter'),
-  filePath: 'services',
-  listeners: new Array<Function>(),
+  listeners: [] as Array<() => void>,
   transport: null as ReturnType<typeof getTuffTransportMain> | null,
-  modulePath: undefined as string | undefined,
   init(ctx: ModuleInitContext<TalexEvents>) {
     const channel = (ctx.app as { channel?: unknown } | null | undefined)?.channel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     const moduleState = this as unknown as ServiceCenterModuleState
     moduleState.transport = getTuffTransportMain(channel, keyManager)
-    moduleState.modulePath = ctx.file?.dirPath
 
     touchEventBus.on(TalexEvents.APP_SECONDARY_LAUNCH, (event) => {
       // AppSecondaryLaunch
@@ -162,13 +132,18 @@ export default {
 
           if (!service) {
             dialog.showErrorBox(
-              'Error',
-              `The type ${extName} has no plugin to handle, please install in plugin store!`
+              'Unsupported File Type',
+              `No plugin is registered to handle ".${extName}" files. Install a compatible plugin from the plugin store.`
             )
             return
           }
 
-          console.log('[service] File ext protocol', service)
+          serviceLog.info('Dispatching secondary-launch file to plugin service', {
+            meta: {
+              extName,
+              serviceName: service.name
+            }
+          })
 
           serviceCenter.useService(service, {
             path: arg,
@@ -178,15 +153,15 @@ export default {
             service
           })
         } else {
-          // Folder not support
-          dialog.showErrorBox('Error', 'Folder not support yet!')
+          dialog.showErrorBox(
+            'Unsupported Input',
+            'Folder input is not supported by plugin services.'
+          )
         }
       })
     })
 
-    const perPath = moduleState.modulePath
-
-    genServiceCenter(perPath)
+    genServiceCenter()
 
     const transport = moduleState.transport
     if (!transport) return
@@ -200,12 +175,23 @@ export default {
 
         if (serviceCenter.hasServiceBySymbolStr(service)) return false
 
-        console.log(`[Service] Plugin register service as ${service}`)
+        serviceLog.info('Plugin registered service', {
+          meta: {
+            plugin,
+            service
+          }
+        })
 
         serviceCenter.regServiceBySymbolStr(service, {
           pluginScope: plugin,
           async handle(event, _data) {
-            console.log(`[Service] Plugin ${plugin} handle service: ${service}`, event, _data)
+            serviceLog.debug('Forwarding service event to plugin', {
+              meta: {
+                plugin,
+                service,
+                serviceName: event.service.name
+              }
+            })
             const data = {
               ...(_data as Record<string, unknown>),
               service: event.service.name
@@ -238,7 +224,5 @@ export default {
   destroy() {
     const moduleState = this as unknown as ServiceCenterModuleState
     moduleState.listeners.forEach((listener) => listener())
-
-    serviceCenter.save()
   }
 } as TalexTouch.IModule<TalexEvents>

@@ -29,9 +29,9 @@ async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES):
     } catch (error) {
       lastError = error
       if (isSqliteBusyError(error) && attempt < retries) {
-        console.warn(
-          `[TimeStatsAggregator] SQLITE_BUSY, retrying attempt ${attempt + 1}/${retries}`
-        )
+        log.warn('SQLITE_BUSY, retrying aggregation query', {
+          meta: { attempt: attempt + 1, retries }
+        })
         await sleep(RETRY_DELAY_MS * (attempt + 1))
         continue
       }

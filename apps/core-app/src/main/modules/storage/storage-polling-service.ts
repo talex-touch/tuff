@@ -1,6 +1,8 @@
 import type { StorageCache } from './storage-cache'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import chalk from 'chalk'
+import { createLogger } from '../../utils/logger'
+
+const storagePollingLog = createLogger('Storage').child('Polling')
 
 /**
  * StoragePollingService - Periodic persistence service
@@ -35,9 +37,9 @@ export class StoragePollingService {
     }
 
     this.isRunning = true
-    console.info(
-      chalk.blue(`[StoragePolling] Started with ${this.pollingInterval / 1000}s interval`)
-    )
+    storagePollingLog.info('Started polling service', {
+      meta: { intervalSeconds: this.pollingInterval / 1000 }
+    })
 
     StoragePollingService.pollingService.register(this.pollingTaskId, () => this.performSave(), {
       interval: this.pollingInterval,
@@ -90,13 +92,16 @@ export class StoragePollingService {
     const failCount = results.filter((r) => r.status === 'rejected').length
 
     if (failCount > 0) {
-      console.error(
-        chalk.red(`[StoragePolling] ${failCount}/${dirtyConfigs.length} config(s) failed to save`)
-      )
+      storagePollingLog.error('Failed to save dirty configs', {
+        meta: { failCount, totalCount: dirtyConfigs.length }
+      })
 
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
-          console.error(chalk.red(`  - ${dirtyConfigs[index]}:`), result.reason)
+          storagePollingLog.error('Dirty config save failed', {
+            error: result.reason,
+            meta: { configName: dirtyConfigs[index] }
+          })
         }
       })
     }
@@ -110,11 +115,9 @@ export class StoragePollingService {
         )
         .map((r) => `${r.value.name}=${r.value.durationMs}ms`)
         .join(' ')
-      console.warn(
-        chalk.yellow(
-          `[StoragePolling] Slow save ${totalMs}ms (${dirtyConfigs.length} configs): ${details}`
-        )
-      )
+      storagePollingLog.warn('Slow dirty config save', {
+        meta: { durationMs: totalMs, configCount: dirtyConfigs.length, details }
+      })
     }
   }
 
@@ -143,13 +146,15 @@ export class StoragePollingService {
     const failCount = results.filter((r) => r.status === 'rejected').length
 
     if (successCount > 0 || failCount > 0) {
-      console.info(
-        chalk.green(`[StoragePolling] Saved ${successCount}/${dirtyConfigs.length} config(s)`)
-      )
+      storagePollingLog.info('Force saved dirty configs', {
+        meta: { successCount, failCount, totalCount: dirtyConfigs.length }
+      })
     }
 
     if (failCount > 0) {
-      console.error(chalk.red(`[StoragePolling] ${failCount} config(s) failed`))
+      storagePollingLog.error('Force save failed for dirty configs', {
+        meta: { failCount, totalCount: dirtyConfigs.length }
+      })
     }
   }
 

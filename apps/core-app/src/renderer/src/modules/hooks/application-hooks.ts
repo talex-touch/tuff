@@ -6,7 +6,6 @@ import { blowMention } from '../mention/dialog-mention'
 import { useI18nText } from '../lang'
 import { resolveClipboardTriggerMention } from './clipboard-trigger-mention-utils'
 import { confirmExternalLinkOpen } from './confirm-external-link'
-import { devLog } from '~/utils/dev-log'
 
 export async function urlHooker(): Promise<void> {
   const transport = useTuffTransport()
@@ -32,22 +31,6 @@ export async function urlHooker(): Promise<void> {
       } else {
         void appSdk.openExternal(url)
       }
-
-      // if(/^\//.test(target)) {
-      //   // Relative to this website url
-      //   return true
-      // }
-
-      // const isSafe = undefined !== whiteDomList.find(item=>{
-      //   return target.indexOf(item) !== -1
-      // })
-
-      // if(!isSafe) {
-      //   window.open(`${window.location.host}/direct?target=${target}`, '_blank')
-      // window.open(`${safeLink}${target}`, '_blank')
-      // }
-
-      // window.open(`${url}`, "_blank");
     }
   }
 
@@ -58,50 +41,6 @@ export async function urlHooker(): Promise<void> {
     if (isLocalhostUrl(url)) return false
 
     return await confirmExternalLinkOpen(url)
-  })
-}
-
-export function screenCapture(): void {
-  const widthStr = document.body.style.getPropertyValue('--winWidth')
-  const heightStr = document.body.style.getPropertyValue('--winHeight')
-
-  const winWidth = widthStr ? Number.parseInt(widthStr) : 0
-  const winHeight = heightStr ? Number.parseInt(heightStr) : 0
-
-  if (winWidth === 0 || winHeight === 0) return
-  // @ts-ignore: registerTypeProcess is attached to window object
-  window.registerTypeProcess('@screen-capture', async ({ data }) => {
-    const width = document.body.clientWidth
-    const height = document.body.clientHeight
-
-    // const video = document.getElementById("video") as HTMLVideoElement;
-
-    const media = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        // @ts-expect-error: Required for Electron screen capture
-        chromeMediaSource: 'desktop',
-        // deviceId: data.id,
-        chromeMediaSourceId: data.id,
-        minWidth: width,
-        maxWidth: winHeight,
-        minHeight: height,
-        maxHeight: winHeight,
-        height,
-        width
-      }
-    })
-
-    devLog('[screenCapture]', data, media.getTracks())
-    //
-    // const track = media.getVideoTracks()[0]
-
-    devLog('[screenCapture]', data, media)
-
-    // video.srcObject = media
-    // video.onloadedmetadata = (e) => {
-    //     video.play()
-    // }
   })
 }
 

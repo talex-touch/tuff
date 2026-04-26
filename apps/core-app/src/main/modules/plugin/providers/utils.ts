@@ -10,6 +10,9 @@ import os from 'node:os'
 import path from 'node:path'
 import fse from 'fs-extra'
 import { getNetworkService } from '../../network'
+import { createProviderLogger } from './logger'
+
+const pluginProviderUtilsLog = createProviderLogger('utils')
 
 export async function downloadToTempFile(
   url: string,
@@ -48,7 +51,7 @@ export async function downloadToTempFile(
       const normalized = Math.max(0, Math.min(100, value))
       options.onProgress(normalized)
     } catch (error) {
-      console.warn('[PluginProvider] Failed to emit download progress:', error)
+      pluginProviderUtilsLog.warn('Failed to emit download progress', { error })
     }
   }
 
@@ -96,9 +99,9 @@ export async function downloadToTempFile(
 
   // Verify file size matches expected if Content-Length was provided
   if (totalLength > 0 && stat.size !== totalLength) {
-    console.warn(
-      `[PluginProvider] Downloaded file size mismatch: expected ${totalLength}, got ${stat.size}`
-    )
+    pluginProviderUtilsLog.warn('Downloaded file size mismatch', {
+      meta: { expectedSize: totalLength, actualSize: stat.size }
+    })
     // Don't throw, just warn - some servers may not report accurate Content-Length
   }
 

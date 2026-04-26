@@ -2,6 +2,8 @@
  * Performance monitoring for download center
  */
 
+import { downloadPerformanceLog } from './logger'
+
 export interface PerformanceMetrics {
   operationName: string
   duration: number
@@ -94,10 +96,13 @@ export class PerformanceMonitor {
 
     // Log slow operations (> 100ms)
     if (metric.duration > 100) {
-      console.warn(
-        `[Performance] Slow operation detected: ${metric.operationName} took ${metric.duration.toFixed(2)}ms`,
-        metric.metadata
-      )
+      downloadPerformanceLog.warn('Slow operation detected', {
+        meta: {
+          operationName: metric.operationName,
+          durationMs: Math.round(metric.duration),
+          hasMetadata: Boolean(metric.metadata)
+        }
+      })
     }
   }
 
@@ -203,12 +208,20 @@ export class PerformanceMonitor {
   logSummary(): void {
     const summary = this.getSummary()
 
-    console.log('[Performance] Summary:')
+    downloadPerformanceLog.info('Performance summary generated', {
+      meta: { operationCount: Object.keys(summary).length }
+    })
     for (const [operation, stats] of Object.entries(summary)) {
-      console.log(
-        `  ${operation}: count=${stats.count}, avg=${stats.average.toFixed(2)}ms, ` +
-          `p50=${stats.p50.toFixed(2)}ms, p95=${stats.p95.toFixed(2)}ms, p99=${stats.p99.toFixed(2)}ms`
-      )
+      downloadPerformanceLog.info('Performance operation summary', {
+        meta: {
+          operation,
+          count: stats.count,
+          averageMs: Math.round(stats.average),
+          p50Ms: Math.round(stats.p50),
+          p95Ms: Math.round(stats.p95),
+          p99Ms: Math.round(stats.p99)
+        }
+      })
     }
   }
 }

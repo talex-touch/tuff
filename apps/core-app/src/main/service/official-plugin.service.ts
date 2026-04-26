@@ -1,5 +1,5 @@
-import chalk from 'chalk'
 import { getNetworkService } from '../modules/network'
+import { createLogger } from '../utils/logger'
 
 export interface OfficialPluginVersionEntry {
   version: string
@@ -51,7 +51,7 @@ let cachedAt = 0
 let cachedEtag = ''
 let cachedLastModified = ''
 
-const logLabel = chalk.blue('[OfficialPluginService]')
+const officialPluginLog = createLogger('OfficialPluginService')
 
 function isManifestEntryArray(value: unknown): value is OfficialPluginManifestEntry[] {
   return Array.isArray(value)
@@ -137,7 +137,9 @@ export async function getOfficialPlugins(
     cachedEtag = response.headers.etag ?? cachedEtag
     cachedLastModified = response.headers['last-modified'] ?? cachedLastModified
 
-    console.log(logLabel, `Fetched ${plugins.length} plugin(s) from official repository.`)
+    officialPluginLog.info('Fetched official plugins from repository', {
+      meta: { count: plugins.length }
+    })
 
     return {
       plugins,
@@ -147,10 +149,12 @@ export async function getOfficialPlugins(
       lastModified: cachedLastModified
     }
   } catch (error: unknown) {
-    console.error(logLabel, 'Failed to fetch official plugins:', error)
+    officialPluginLog.error('Failed to fetch official plugins', { error })
 
     if (cached) {
-      console.warn(logLabel, 'Serving official plugins from cache due to fetch failure.')
+      officialPluginLog.warn('Serving official plugins from cache due to fetch failure', {
+        meta: { count: cached.length }
+      })
       return {
         plugins: cached,
         fetchedAt: cachedAt,

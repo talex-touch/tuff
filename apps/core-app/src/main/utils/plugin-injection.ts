@@ -11,8 +11,6 @@ export function getJs(options) {
 
             if ( window.$plugin ) { return }
 
-            console.log("Touch # Auto inject JS")
-
             window.$plugin = {}
 
             Object.assign(window.$plugin, {
@@ -94,11 +92,4 @@ export function getStyles() {
                 }
 
                 `
-
-  // #app {
-  //     top: 2px;
-  //
-  //     height: calc(100% - 4px);
-  //     width: calc(100% - 2px);
-  // }
 }

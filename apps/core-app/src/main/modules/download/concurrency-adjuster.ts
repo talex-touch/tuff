@@ -1,5 +1,6 @@
 import type { DownloadConfig, NetworkStatus } from '@talex-touch/utils'
 import type { NetworkMonitor } from './network-monitor'
+import { downloadConcurrencyLog } from './logger'
 
 export class ConcurrencyAdjuster {
   private config: DownloadConfig
@@ -112,7 +113,9 @@ export class ConcurrencyAdjuster {
 
     this.addToHistory(this.currentConcurrency)
 
-    console.debug(`Concurrency adjusted from ${oldConcurrency} to ${this.currentConcurrency}`)
+    downloadConcurrencyLog.debug('Concurrency adjusted', {
+      meta: { oldConcurrency, currentConcurrency: this.currentConcurrency }
+    })
   }
 
   // 获取当前并发数

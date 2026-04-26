@@ -8,6 +8,7 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { DownloadErrorType, ErrorSeverity } from './error-types'
+import { downloadErrorLog } from './logger'
 
 const isErrorWithCode = (error: unknown): error is { code?: string } =>
   typeof error === 'object' && error !== null && 'code' in error
@@ -66,7 +67,7 @@ export class ErrorLogger {
         this.flushTaskId,
         () =>
           this.flush().catch((error) => {
-            console.error('Failed to flush log buffer:', error)
+            downloadErrorLog.error('Failed to flush log buffer', { error })
           }),
         { interval: 5, unit: 'seconds' }
       )
@@ -74,7 +75,7 @@ export class ErrorLogger {
 
       this.isInitialized = true
     } catch (error) {
-      console.error('Failed to initialize error logger:', error)
+      downloadErrorLog.error('Failed to initialize error logger', { error })
     }
   }
 
@@ -161,7 +162,10 @@ export class ErrorLogger {
       // 追加到日志文件
       await fs.appendFile(this.logFilePath, logLines, 'utf-8')
     } catch (error) {
-      console.error('Failed to write log entries:', error)
+      downloadErrorLog.error('Failed to write log entries', {
+        error,
+        meta: { entryCount: entries.length }
+      })
       // 将条目放回缓冲区
       this.logBuffer.unshift(...entries)
     }
@@ -217,7 +221,7 @@ export class ErrorLogger {
       }
     } catch (error: unknown) {
       if (!isErrorWithCode(error) || error.code !== 'ENOENT') {
-        console.error('Failed to rotate log file:', error)
+        downloadErrorLog.error('Failed to rotate log file', { error })
       }
     }
   }
@@ -248,7 +252,7 @@ export class ErrorLogger {
         }
       }
     } catch (error) {
-      console.error('Failed to cleanup old logs:', error)
+      downloadErrorLog.error('Failed to cleanup old logs', { error })
     }
   }
 

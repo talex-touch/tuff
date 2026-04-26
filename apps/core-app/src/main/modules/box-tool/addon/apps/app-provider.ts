@@ -20,8 +20,10 @@ import process from 'node:process'
 import { is } from '@electron-toolkit/utils'
 import type {
   AppIndexAddPathResult,
+  AppIndexDiagnoseRequest,
   AppIndexEntryMutationResult,
   AppIndexManagedEntry,
+  AppIndexReindexRequest,
   AppIndexUpsertEntryRequest
 } from '@talex-touch/utils/transport/events/types'
 import {
@@ -68,6 +70,7 @@ import { appScanner } from './app-scanner'
 import { scheduleAppLaunch } from './app-launcher'
 import { normalizeDisplayName, shouldUpdateDisplayName } from './display-name-sync-utils'
 import { matchNoisySystemAppRule } from './app-noise-filter'
+import { diagnoseAppSearch, reindexAppSearchTarget } from './app-provider-diagnostics'
 import {
   formatLog,
   LogStyle,
@@ -561,6 +564,31 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return { success: false, status: 'invalid', reason: 'invalid-path' }
     }
     return this.processAppPath(appPath)
+  }
+
+  public async diagnoseAppSearch(request: AppIndexDiagnoseRequest) {
+    return diagnoseAppSearch(this.createDiagnosticsContext(), request)
+  }
+
+  public async reindexAppSearchTarget(request: AppIndexReindexRequest) {
+    return reindexAppSearchTarget(this.createDiagnosticsContext(), request)
+  }
+
+  private createDiagnosticsContext() {
+    return {
+      id: this.id,
+      dbUtils: this.dbUtils,
+      searchIndex: this.searchIndex,
+      fetchExtensionsForFiles: (files: DbAppRecord[]) => this.fetchExtensionsForFiles(files),
+      mapDbAppToScannedInfo: (app: DbAppWithExtensions) => this._mapDbAppToScannedInfo(app),
+      generateKeywordsForApp: (appInfo: ScannedAppInfo) => this._generateKeywordsForApp(appInfo),
+      getAliasesForApp: (appInfo: ScannedAppInfo) => this._getAliasesForApp(appInfo),
+      syncKeywordsForApp: (appInfo: ScannedAppInfo) => this._syncKeywordsForApp(appInfo),
+      addAppByPath: (rawPath: string) => this.addAppByPath(rawPath),
+      buildFtsQuery: (terms: string[]) => this.buildFtsQuery(terms),
+      logError: (message: string, meta?: Record<string, unknown>) =>
+        logApp(message, LogStyle.error, meta)
+    }
   }
 
   public async listManagedEntries(): Promise<AppIndexManagedEntry[]> {

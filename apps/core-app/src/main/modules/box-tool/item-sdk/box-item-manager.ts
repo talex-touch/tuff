@@ -18,8 +18,11 @@ import {
 } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
+import { createLogger } from '../../../utils/logger'
 import { getCoreBoxWindow } from '../core-box'
 import { BOX_ITEM_CHANNELS } from './channels'
+
+const boxItemManagerLog = createLogger('BoxItemManager')
 
 const BOX_ITEM_EVENTS = {
   CREATE: defineRawEvent<BoxItemCreateEvent, void>(BOX_ITEM_CHANNELS.CREATE),
@@ -459,7 +462,7 @@ export class BoxItemManager {
    */
   private log(...args: unknown[]): void {
     if (this.options.enableLogging) {
-      console.log('[BoxItemManager]', ...args)
+      boxItemManagerLog.debug(args.map(String).join(' '))
     }
   }
 
@@ -468,7 +471,7 @@ export class BoxItemManager {
    */
   private logWarn(...args: unknown[]): void {
     if (this.options.enableLogging) {
-      console.warn('[BoxItemManager]', ...args)
+      boxItemManagerLog.warn(args.map(String).join(' '))
     }
   }
 }

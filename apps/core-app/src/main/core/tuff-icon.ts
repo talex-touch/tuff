@@ -2,6 +2,9 @@ import type { ITuffIcon, TuffIconType } from '@talex-touch/utils'
 import type { IPluginDev } from '@talex-touch/utils/plugin'
 import path from 'node:path'
 import fse from 'fs-extra'
+import { createLogger } from '../utils/logger'
+
+const tuffIconLog = createLogger('TuffIcon')
 
 /**
  * TuffIcon implementation class
@@ -55,8 +58,10 @@ export class TuffIconImpl implements ITuffIcon {
         this.status = 'normal'
         return
       } catch (error) {
-        console.warn(`[TuffIconImpl] Failed to construct dev icon URL: ${this.value}`, error)
-        // Fall through to local file check
+        tuffIconLog.warn('Failed to construct dev icon URL, falling back to local file', {
+          meta: { iconPathLength: this.value.length },
+          error
+        })
       }
     }
 

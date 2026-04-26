@@ -41,11 +41,11 @@ describe('PluginInstaller', () => {
 
   it('blocks prepareInstall when manifest sdkapi is below enforced baseline', async () => {
     installFromRegistryMock.mockResolvedValue({
-      filePath: '/plugins/legacy-plugin.tpex',
+      filePath: '/plugins/blocked-sdk-plugin.tpex',
       provider: PluginProviderType.TPEX,
       official: false,
       manifest: {
-        name: 'legacy-plugin',
+        name: 'blocked-sdk-plugin',
         version: '1.0.0',
         sdkapi: 251211
       }
@@ -55,7 +55,7 @@ describe('PluginInstaller', () => {
 
     await expect(
       installer.prepareInstall({
-        source: 'https://example.com/legacy-plugin.tpex'
+        source: 'https://example.com/blocked-sdk-plugin.tpex'
       })
     ).rejects.toMatchObject({
       code: 'SDKAPI_BLOCKED',

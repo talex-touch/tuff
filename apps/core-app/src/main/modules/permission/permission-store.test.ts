@@ -27,7 +27,7 @@ describe('PermissionStore sqlite backend', () => {
     await fs.rm(tempDir, { recursive: true, force: true })
   })
 
-  it('migrates legacy JSON data to sqlite and keeps a backup', async () => {
+  it('migrates compat JSON data to sqlite and keeps a backup', async () => {
     const legacyPath = path.join(tempDir, 'permissions.json')
     await fs.writeFile(
       legacyPath,
@@ -86,7 +86,7 @@ describe('PermissionStore sqlite backend', () => {
     await store.shutdown()
   })
 
-  it('enters degraded backend-unavailable mode without reviving legacy json fallback', async () => {
+  it('enters degraded backend-unavailable mode without reviving compat json fallback', async () => {
     const legacyPath = path.join(tempDir, 'permissions.json')
     await fs.writeFile(
       legacyPath,

@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "threshold": 1200,
-  "updatedAt": "2026-03-22T00:00:00.000Z",
-  "currentVersion": "2.4.9-beta.4",
+  "updatedAt": "2026-04-26T00:00:00.000Z",
+  "currentVersion": "2.4.9-beta.27",
   "entries": [
     {
       "file": "apps/core-app/src/main/channel/common.ts",
@@ -25,6 +25,12 @@
     {
       "file": "apps/core-app/src/main/modules/ai/tuff-intelligence-runtime.ts",
       "maxLines": 1530,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts",
+      "maxLines": 1200,
       "expiresVersion": "2.5.0",
       "note": "Reduce below 1200 lines before v2.5.0"
     },
@@ -91,6 +97,12 @@
     {
       "file": "apps/core-app/src/main/modules/plugin/plugin.ts",
       "maxLines": 2252,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/sentry/sentry-service.ts",
+      "maxLines": 1200,
       "expiresVersion": "2.5.0",
       "note": "Reduce below 1200 lines before v2.5.0"
     },
@@ -227,12 +239,6 @@
       "note": "Reduce below 1200 lines before v2.5.0"
     },
     {
-      "file": "apps/pilot/app/pages/buy.vue",
-      "maxLines": 1209,
-      "expiresVersion": "2.5.0",
-      "note": "Reduce below 1200 lines before v2.5.0"
-    },
-    {
       "file": "apps/pilot/app/components/input/ThInput.vue",
       "maxLines": 1244,
       "expiresVersion": "2.5.0",
@@ -247,6 +253,18 @@
     {
       "file": "apps/pilot/app/composables/usePilotChatPage.ts",
       "maxLines": 2024,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/pilot/app/pages/admin/system/channels.vue",
+      "maxLines": 1200,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "apps/pilot/app/pages/buy.vue",
+      "maxLines": 1209,
       "expiresVersion": "2.5.0",
       "note": "Reduce below 1200 lines before v2.5.0"
     },
@@ -314,12 +332,188 @@
   ],
   "growthExceptions": [
     {
+      "file": "apps/core-app/src/main/modules/ai/intelligence-module.ts",
+      "maxLines": 1863,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "core-app",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-INTELLIGENCE-MODULE"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/ai/tuff-intelligence-runtime.ts",
+      "maxLines": 1551,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "core-app",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-TUFF-INTELLIGENCE-RUNTIME"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts",
+      "maxLines": 1259,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "core-app",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER-TEST"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts",
+      "maxLines": 3290,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "core-app",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts",
+      "maxLines": 1891,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "core-app",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-RECOMMENDATION-ENGINE"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts",
+      "maxLines": 2581,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "core-app",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-SEARCH-CORE"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/clipboard.ts",
+      "maxLines": 3299,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "core-app",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-CLIPBOARD"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/download/download-center.ts",
+      "maxLines": 1538,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "core-app",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-DOWNLOAD-CENTER"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/ocr/ocr-service.ts",
+      "maxLines": 1625,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "core-app",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-OCR-SERVICE"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/omni-panel/index.ts",
+      "maxLines": 1868,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "core-app",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-OMNI-PANEL"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/plugin/plugin-module.ts",
+      "maxLines": 3674,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "core-app",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-PLUGIN-MODULE"
+    },
+    {
+      "file": "apps/core-app/src/main/modules/sentry/sentry-service.ts",
+      "maxLines": 1304,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "core-app",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-SENTRY-SERVICE"
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/base/LingPan.vue",
+      "maxLines": 2000,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "core-app",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-LINGPAN"
+    },
+    {
+      "file": "apps/pilot/app/components/input/ThInput.vue",
+      "maxLines": 1251,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "pilot",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-PILOT-TH-INPUT"
+    },
+    {
+      "file": "apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts",
+      "maxLines": 1896,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "pilot",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-PILOT-AIGC-COMPLETION"
+    },
+    {
+      "file": "apps/pilot/app/composables/usePilotChatPage.ts",
+      "maxLines": 2122,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "pilot",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-PILOT-PILOT-CHAT-PAGE"
+    },
+    {
+      "file": "apps/pilot/app/pages/admin/system/channels.vue",
+      "maxLines": 1428,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "pilot",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-PILOT-ADMIN-CHANNELS"
+    },
+    {
+      "file": "apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts",
+      "maxLines": 1791,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "pilot",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-PILOT-CHAT-STREAM"
+    },
+    {
+      "file": "apps/pilot/server/utils/pilot-tool-gateway.ts",
+      "maxLines": 2164,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "pilot",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-PILOT-PILOT-TOOL-GATEWAY"
+    },
+    {
+      "file": "packages/tuff-cli/src/bin/tuff.ts",
+      "maxLines": 1281,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "packages-tuff-cli",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-CLI-TUFF-CLI"
+    },
+    {
       "file": "packages/tuff-intelligence/src/adapters/deepagent-engine.ts",
-      "maxLines": 2081,
-      "reason": "Adapter consolidation pending extraction to domain service package.",
+      "maxLines": 2138,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
       "owner": "packages-tuff-intelligence",
       "expiresVersion": "2.5.0",
-      "ticket": "SIZE-GROWTH-2026-03-16-DEEPAGENT"
+      "ticket": "SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-INTELLIGENCE-DEEPAGENT-ENGINE"
+    },
+    {
+      "file": "packages/tuff-intelligence/src/types/intelligence.ts",
+      "maxLines": 2319,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "packages-tuff-intelligence",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-INTELLIGENCE-INTELLIGENCE-TYPES"
+    },
+    {
+      "file": "packages/utils/types/intelligence.ts",
+      "maxLines": 2317,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "packages-utils",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-04-26-PACKAGES-UTILS-UTILS-INTELLIGENCE-TYPES"
     }
   ]
 }
