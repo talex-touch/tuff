@@ -12,6 +12,12 @@
   - CoreBox 的 DivisionBox provider 不再注入 `division-box:show-active-sessions` 结果；该结果此前只记录 active sessions 日志，没有打开任何用户可见界面，属于未接通 UI 的伪命令。
   - 保留真实 shortcut mapping 的搜索和执行路径，并新增回归测试确保 active session 存在时也不会暴露无动作命令。
 
+### refactor(core-app): 收口插件状态按钮命令式 DOM 渲染
+
+- `apps/core-app/src/renderer/src/components/plugin/action/PluginStatus.vue`
+  - 插件状态按钮不再通过 `innerHTML`、手动 `classList` 和 mount-time watcher 改写 DOM；状态文案、样式 class 与点击动作统一由 Vue computed 派生。
+  - 重新加载失败时不再直写 `console.error`，保留开发期 `devLog` 诊断，避免 renderer 状态组件继续保留 raw console 与命令式 UI 旧实现。
+
 ### refactor(core-app): 删除 screen-capture 占位链路并收口服务日志
 
 - `apps/core-app/src/main/addon/device/screen-capture.ts`
