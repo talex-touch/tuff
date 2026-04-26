@@ -13,8 +13,6 @@ export * from './atoms'
 export * from './preset'
 export type { LayoutConfig, default as layoutsConfig } from './layouts-definition'
 export { clearLayoutCache, useDynamicTuffLayout } from './useDynamicTuffLayout'
-// Legacy export for backward compatibility
-export { useDynamicTuffLayout as useLayout } from './useDynamicTuffLayout'
 
 export { useSecondaryNavigation } from './useSecondaryNavigation'
 export { useWallpaper } from './useWallpaper'
