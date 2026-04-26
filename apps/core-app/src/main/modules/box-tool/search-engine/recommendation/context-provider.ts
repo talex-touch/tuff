@@ -1,6 +1,9 @@
 import type { ContextSignal, TimePattern } from '@talex-touch/utils/core-box'
 import type { IClipboardItem } from '../../../clipboard'
 import * as crypto from 'node:crypto'
+import { createLogger } from '../../../../utils/logger'
+
+const contextProviderLog = createLogger('RecommendationEngine').child('ContextProvider')
 
 /**
  * Context provider for recommendation engine.
@@ -78,7 +81,9 @@ export class ContextProvider {
         ...this.detectClipboardContentType(latest)
       }
     } catch (error) {
-      console.debug('[ContextProvider] Failed to get clipboard context:', error)
+      contextProviderLog.debug('Failed to get clipboard context', {
+        meta: { reason: error instanceof Error ? error.message : String(error) }
+      })
       return undefined
     }
   }
@@ -212,7 +217,9 @@ export class ContextProvider {
         name: activeApp.displayName || activeApp.identifier || ''
       }
     } catch (error) {
-      console.debug('[ContextProvider] Failed to get foreground app context:', error)
+      contextProviderLog.debug('Failed to get foreground app context', {
+        meta: { reason: error instanceof Error ? error.message : String(error) }
+      })
       return undefined
     }
   }

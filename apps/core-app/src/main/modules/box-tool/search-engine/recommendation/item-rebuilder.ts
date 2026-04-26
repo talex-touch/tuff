@@ -1,6 +1,9 @@
 import type { TuffItem, TuffRender } from '@talex-touch/utils'
 import type { DbUtils } from '../../../../db/utils'
 import type { ScoredItem } from './recommendation-engine'
+import { createLogger } from '../../../../utils/logger'
+
+const itemRebuilderLog = createLogger('RecommendationEngine').child('ItemRebuilder')
 
 type AppRow = Awaited<ReturnType<DbUtils['getFilesByPaths']>>[number]
 type AppWithExtensions = AppRow & { extensions: Record<string, string | null> }
@@ -80,12 +83,14 @@ export class ItemRebuilder {
       if (apps.length === 0) return []
 
       const appsWithExtensions = await this.fetchExtensionsForApps(apps)
-      const { mapAppsToRecommendationItems } = await import(
-        '../../addon/apps/search-processing-service'
-      )
+      const { mapAppsToRecommendationItems } =
+        await import('../../addon/apps/search-processing-service')
       return mapAppsToRecommendationItems(appsWithExtensions)
     } catch (error) {
-      console.error('[ItemRebuilder] Failed to rebuild app items:', error)
+      itemRebuilderLog.error('Failed to rebuild app items', {
+        error,
+        meta: { itemCount: items.length }
+      })
       return []
     }
   }
@@ -120,7 +125,10 @@ export class ItemRebuilder {
       const { mapFileToTuffItem } = await import('../../addon/files/utils')
       return files.map((file) => mapFileToTuffItem(file, {}, 'file-provider', 'File Provider'))
     } catch (error) {
-      console.error('[ItemRebuilder] Failed to rebuild file items:', error)
+      itemRebuilderLog.error('Failed to rebuild file items', {
+        error,
+        meta: { itemCount: items.length }
+      })
       return []
     }
   }
@@ -135,7 +143,9 @@ export class ItemRebuilder {
       const { pluginModule } = await import('../../../plugin/plugin-module')
       const pluginManager = pluginModule.pluginManager
       if (!pluginManager) {
-        console.warn('[ItemRebuilder] PluginManager not available')
+        itemRebuilderLog.warn('PluginManager not available', {
+          meta: { itemCount: items.length }
+        })
         return []
       }
 
@@ -163,7 +173,10 @@ export class ItemRebuilder {
 
       return rebuiltItems
     } catch (error) {
-      console.error('[ItemRebuilder] Failed to rebuild plugin feature items:', error)
+      itemRebuilderLog.error('Failed to rebuild plugin feature items', {
+        error,
+        meta: { itemCount: items.length }
+      })
       return []
     }
   }
@@ -319,7 +332,10 @@ export class ItemRebuilder {
 
       return rebuiltItems
     } catch (error) {
-      console.error('[ItemRebuilder] Failed to rebuild clipboard items:', error)
+      itemRebuilderLog.error('Failed to rebuild clipboard items', {
+        error,
+        meta: { itemCount: items.length }
+      })
       return []
     }
   }
