@@ -5,6 +5,21 @@
 
 ## 2026-04-26
 
+### feat(nexus): 新增 Release Evidence API 采集 2.5.0 回归证据
+
+- `apps/nexus/server/utils/releaseEvidenceStore.ts`
+- `apps/nexus/server/api/admin/release-evidence/*`
+- `apps/nexus/server/api/dashboard/api-keys.post.ts`
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `apps/nexus/i18n/locales/{zh,en}.ts`
+- `apps/nexus/server/utils/releaseEvidenceStore.test.ts`
+- `apps/nexus/server/api/admin/release-evidence/releaseEvidence.api.test.ts`
+  - 新增 D1-only `release_evidence_runs` / `release_evidence_items` 存储，缺少 D1 时直接返回 `500 Database not available`，不做 memory fallback。
+  - 新增管理端 API：run 创建/分页/详情、item upsert、`matrix` 聚合与 `doc-guard` 快速写入；所有路由统一使用 `requireAdminOrApiKey(event, ['release:evidence'])`。
+  - 新增 API key scope `release:evidence`，并接入创建白名单与 dashboard scope 配置；既有 `release:sync` 仍按 release 子 scope 兼容规则覆盖。
+  - `evidence` 限定为 JSON object，序列化后最大 128KB；matrix 不落独立快照，按指定 version 最新 matching items 聚合平台阻塞矩阵。
+  - 已补定向回归：`pnpm -C "apps/nexus" exec vitest run "server/utils/releaseEvidenceStore.test.ts" "server/api/admin/release-evidence/releaseEvidence.api.test.ts"`。
+
 ### feat(nexus): 复用 Tuffex 收口公共 updates 页面
 
 - `apps/nexus/app/pages/updates.vue`
