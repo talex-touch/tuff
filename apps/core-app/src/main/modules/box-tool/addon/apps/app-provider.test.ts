@@ -362,6 +362,11 @@ type AppProviderPrivate = {
     path: string
     stableId?: string
   }) => Promise<void>
+  diagnoseAppSearch: (request: { target: string; query?: string }) => Promise<unknown>
+  reindexAppSearchTarget: (request: {
+    target: string
+    mode?: 'keywords' | 'scan'
+  }) => Promise<unknown>
   _performMdlsUpdateScan: () => Promise<void>
   _performRebuild: () => Promise<void>
   _performStartupBackfill: () => Promise<void>
@@ -855,6 +860,174 @@ describe('appProvider rebuild maintenance', () => {
         keywords: expect.arrayContaining([expect.objectContaining({ value: '网易云音乐' })])
       })
     ])
+  })
+
+  it('diagnoses indexed app keywords and query recall stages', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    pinyinMock.mockImplementation((value: string, options?: { pattern?: string }) => {
+      if (value === '网易云音乐') {
+        return options?.pattern === 'first' ? 'WYYY' : 'WANG YI YUN YIN YUE'
+      }
+      return value
+    })
+
+    const appRow = {
+      id: 7,
+      path: '/Applications/NeteaseMusic 2.app',
+      name: 'NeteaseMusic 2',
+      displayName: 'NeteaseMusic 2',
+      type: 'app',
+      mtime: new Date(0),
+      ctime: new Date(0),
+      extensions: {
+        bundleId: 'com.netease.163music',
+        appIdentity: '/Applications/NeteaseMusic 2.app',
+        alternateNames: JSON.stringify(['网易云音乐']),
+        launchKind: 'path',
+        launchTarget: '/Applications/NeteaseMusic 2.app'
+      }
+    }
+    const keywordRows = [
+      { value: 'neteasemusic', priority: 1.1 },
+      { value: '网易云音乐', priority: 1.1 },
+      { value: 'wangyiyunyinyue', priority: 1.1 },
+      { value: 'wyyy', priority: 1.1 },
+      { value: 'ng:wy', priority: 1.1 }
+    ]
+    const limitMock = vi.fn(async () => keywordRows)
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: limitMock
+          }))
+        }))
+      }))
+    }
+    const lookupByKeywordsMock = vi.fn(async () => {
+      return new Map([
+        [
+          'wyyy',
+          [
+            {
+              itemId: '/Applications/NeteaseMusic 2.app',
+              priority: 1.1
+            }
+          ]
+        ]
+      ])
+    })
+
+    privateProvider.dbUtils = {
+      getDb: () => db,
+      getFilesByType: vi.fn(async () => [appRow])
+    }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async () => [appRow])
+    privateProvider.searchIndex = {
+      lookupByKeywords: lookupByKeywordsMock,
+      lookupByKeywordPrefix: vi.fn(async () => [
+        {
+          itemId: '/Applications/NeteaseMusic 2.app',
+          keyword: 'wyyy',
+          priority: 1.1
+        }
+      ]),
+      search: vi.fn(async () => [{ itemId: '/Applications/NeteaseMusic 2.app', score: -1 }]),
+      lookupByNgrams: vi.fn(async () => [
+        { itemId: '/Applications/NeteaseMusic 2.app', overlapCount: 2 }
+      ]),
+      lookupBySubsequence: vi.fn(async () => [
+        {
+          itemId: '/Applications/NeteaseMusic 2.app',
+          keyword: 'wangyiyunyinyue',
+          priority: 1.1
+        }
+      ])
+    }
+
+    const result = await appProvider.diagnoseAppSearch({
+      target: 'com.netease.163music',
+      query: 'wyyy'
+    })
+
+    expect(result).toMatchObject({
+      success: true,
+      status: 'found',
+      app: {
+        path: '/Applications/NeteaseMusic 2.app',
+        displayName: 'NeteaseMusic 2',
+        bundleId: 'com.netease.163music',
+        alternateNames: ['网易云音乐']
+      },
+      index: {
+        itemId: '/Applications/NeteaseMusic 2.app',
+        generatedKeywords: expect.arrayContaining(['网易云音乐', 'wangyiyunyinyue', 'wyyy']),
+        storedKeywords: expect.arrayContaining(['neteasemusic', '网易云音乐', 'wyyy'])
+      },
+      query: {
+        normalized: 'wyyy',
+        ftsQuery: 'wyyy',
+        stages: {
+          precise: { ran: true, targetHit: true },
+          prefix: { ran: true, targetHit: true },
+          fts: { ran: true, targetHit: true },
+          ngram: { ran: true, targetHit: true },
+          subsequence: { ran: true, targetHit: true }
+        }
+      }
+    })
+    expect(result).not.toMatchObject({
+      index: {
+        storedKeywords: expect.arrayContaining(['ng:wy'])
+      }
+    })
+  })
+
+  it('reindexes a matched diagnostic target without rebuilding all apps', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const indexItemsMock = vi.fn(async () => undefined)
+    const appRow = {
+      id: 9,
+      path: '/Applications/NeteaseMusic 2.app',
+      name: 'NeteaseMusic 2',
+      displayName: 'NeteaseMusic 2',
+      type: 'app',
+      mtime: new Date(0),
+      ctime: new Date(0),
+      extensions: {
+        bundleId: 'com.netease.163music',
+        appIdentity: '/Applications/NeteaseMusic 2.app',
+        alternateNames: JSON.stringify(['网易云音乐']),
+        launchKind: 'path',
+        launchTarget: '/Applications/NeteaseMusic 2.app'
+      }
+    }
+
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn(async () => [appRow])
+    }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async () => [appRow])
+    privateProvider.searchIndex = { indexItems: indexItemsMock }
+
+    const result = await appProvider.reindexAppSearchTarget({
+      target: '网易云音乐',
+      mode: 'keywords'
+    })
+
+    expect(result).toEqual({
+      success: true,
+      status: 'reindexed',
+      path: '/Applications/NeteaseMusic 2.app'
+    })
+    expect(indexItemsMock).toHaveBeenCalledWith([
+      expect.objectContaining({
+        itemId: '/Applications/NeteaseMusic 2.app',
+        keywords: expect.arrayContaining([expect.objectContaining({ value: '网易云音乐' })])
+      })
+    ])
+    expect(getAppInfoByPathMock).not.toHaveBeenCalled()
   })
 
   it('clears stale alternate localized names when a later scan has none', async () => {

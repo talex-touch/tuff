@@ -20,8 +20,15 @@ import process from 'node:process'
 import { is } from '@electron-toolkit/utils'
 import type {
   AppIndexAddPathResult,
+  AppIndexDiagnoseRequest,
+  AppIndexDiagnoseResult,
+  AppIndexDiagnosticApp,
+  AppIndexDiagnosticMatch,
+  AppIndexDiagnosticStage,
   AppIndexEntryMutationResult,
   AppIndexManagedEntry,
+  AppIndexReindexRequest,
+  AppIndexReindexResult,
   AppIndexUpsertEntryRequest
 } from '@talex-touch/utils/transport/events/types'
 import {
@@ -379,6 +386,11 @@ interface PendingDeletionEntry {
   missCount: number
 }
 
+interface DiagnosticAppMatch {
+  app: DbAppWithExtensions
+  score: number
+}
+
 class AppProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'app-provider'
   readonly name = 'App Provider'
@@ -563,6 +575,98 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return this.processAppPath(appPath)
   }
 
+  public async diagnoseAppSearch(
+    request: AppIndexDiagnoseRequest
+  ): Promise<AppIndexDiagnoseResult> {
+    const target = normalizeOptionalString(request?.target)
+    if (!target) {
+      return { success: false, status: 'invalid', target: '', reason: 'target-empty' }
+    }
+    if (!this.dbUtils) {
+      return { success: false, status: 'error', target, reason: 'db-not-ready' }
+    }
+
+    try {
+      const match = await this.findDiagnosticApp(target)
+      if (!match) {
+        return { success: false, status: 'not-found', target, reason: 'target-not-found' }
+      }
+
+      const appInfo = this._mapDbAppToScannedInfo(match.app)
+      const itemId = resolveAppItemId(appInfo)
+      const itemIds = resolveAppItemIds(appInfo)
+      const storedKeywordEntries = await this.loadStoredKeywordEntries(itemIds)
+      const generatedKeywords = Array.from(await this._generateKeywordsForApp(appInfo)).sort()
+      const query = await this.diagnoseAppQuery(request.query, itemIds)
+
+      return {
+        success: true,
+        status: 'found',
+        target,
+        app: this.toDiagnosticApp(match.app),
+        candidates: match.candidates.map((candidate) => this.toDiagnosticApp(candidate)),
+        index: {
+          itemId,
+          itemIds,
+          aliases: this._getAliasesForApp(appInfo),
+          generatedKeywords,
+          storedKeywords: storedKeywordEntries.map((entry) => entry.value),
+          storedKeywordEntries
+        },
+        query
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      logApp('App search diagnostic failed', LogStyle.error, { error: message })
+      return { success: false, status: 'error', target, reason: message }
+    }
+  }
+
+  public async reindexAppSearchTarget(
+    request: AppIndexReindexRequest
+  ): Promise<AppIndexReindexResult> {
+    const target = normalizeOptionalString(request?.target)
+    if (!target) {
+      return { success: false, status: 'invalid', reason: 'target-empty' }
+    }
+    if (!this.dbUtils) {
+      return { success: false, status: 'error', reason: 'db-not-ready' }
+    }
+
+    const mode = request.mode ?? 'keywords'
+    if (mode === 'scan') {
+      const match = await this.findDiagnosticApp(target)
+      const scanTarget = match?.app.path ?? target
+      const result = await this.addAppByPath(scanTarget)
+      if (!result.success) {
+        return {
+          success: false,
+          status: result.status === 'invalid' ? 'invalid' : 'error',
+          path: result.path,
+          reason: result.reason
+        }
+      }
+
+      return {
+        success: true,
+        status: result.status === 'added' ? 'added' : 'updated',
+        path: result.path ?? scanTarget
+      }
+    }
+
+    if (!this.searchIndex) {
+      return { success: false, status: 'error', reason: 'search-index-not-ready' }
+    }
+
+    const match = await this.findDiagnosticApp(target)
+    if (!match) {
+      return { success: false, status: 'not-found', reason: 'target-not-found' }
+    }
+
+    await this._syncKeywordsForApp(this._mapDbAppToScannedInfo(match.app))
+    return { success: true, status: 'reindexed', path: match.app.path }
+  }
+
   public async listManagedEntries(): Promise<AppIndexManagedEntry[]> {
     if (!this.dbUtils) return []
 
@@ -574,6 +678,257 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       .sort((left, right) =>
         (left.displayName || left.name).localeCompare(right.displayName || right.name)
       )
+  }
+
+  private async findDiagnosticApp(
+    target: string
+  ): Promise<{ app: DbAppWithExtensions; candidates: DbAppWithExtensions[] } | null> {
+    if (!this.dbUtils) return null
+
+    const allApps = await this.dbUtils.getFilesByType('app')
+    const appsWithExtensions = await this.fetchExtensionsForFiles(allApps)
+    const matches = appsWithExtensions
+      .map((app) => ({ app, score: this.scoreDiagnosticTarget(app, target) }))
+      .filter((match): match is DiagnosticAppMatch => match.score > 0)
+      .sort((left, right) => right.score - left.score)
+
+    const best = matches[0]
+    if (!best) return null
+
+    return {
+      app: best.app,
+      candidates: matches.slice(0, 8).map((match) => match.app)
+    }
+  }
+
+  private scoreDiagnosticTarget(app: DbAppWithExtensions, target: string): number {
+    const normalizedTarget = target.trim().toLowerCase()
+    if (!normalizedTarget) return 0
+
+    const appInfo = this._mapDbAppToScannedInfo(app)
+    const alternateNames = appInfo.alternateNames ?? []
+    const fileBaseName = path.basename(app.path, path.extname(app.path) || undefined)
+    const exactCandidates: Array<[string | null | undefined, number]> = [
+      [app.path, 100],
+      [app.extensions[APP_IDENTITY_EXTENSION_KEY], 98],
+      [app.extensions.bundleId, 96],
+      [app.displayName, 94],
+      [app.name, 92],
+      [appInfo.fileName, 90],
+      [fileBaseName, 88],
+      ...alternateNames.map((name): [string, number] => [name, 86])
+    ]
+
+    for (const [value, score] of exactCandidates) {
+      if (value?.trim().toLowerCase() === normalizedTarget) {
+        return score
+      }
+    }
+
+    const fuzzyCandidates: Array<[string | null | undefined, number]> = [
+      [app.displayName, 70],
+      [app.name, 68],
+      [appInfo.fileName, 66],
+      [fileBaseName, 64],
+      ...alternateNames.map((name): [string, number] => [name, 62]),
+      [app.path, 48],
+      [app.extensions.bundleId, 44],
+      [app.extensions[APP_IDENTITY_EXTENSION_KEY], 44]
+    ]
+
+    for (const [value, score] of fuzzyCandidates) {
+      if (value?.trim().toLowerCase().includes(normalizedTarget)) {
+        return score
+      }
+    }
+
+    return 0
+  }
+
+  private toDiagnosticApp(app: DbAppWithExtensions): AppIndexDiagnosticApp {
+    const appInfo = this._mapDbAppToScannedInfo(app)
+    return {
+      id: app.id,
+      path: app.path,
+      name: app.name,
+      displayName: app.displayName || undefined,
+      fileName: appInfo.fileName,
+      bundleId: app.extensions.bundleId || undefined,
+      appIdentity: app.extensions[APP_IDENTITY_EXTENSION_KEY] || undefined,
+      launchKind: appInfo.launchKind,
+      launchTarget: appInfo.launchTarget,
+      launchArgs: appInfo.launchArgs,
+      workingDirectory: appInfo.workingDirectory,
+      displayPath: appInfo.displayPath,
+      description: appInfo.description,
+      alternateNames: appInfo.alternateNames ?? [],
+      entrySource: app.extensions[APP_ENTRY_SOURCE_EXTENSION_KEY] || undefined,
+      entryEnabled: isManagedEntryEnabledExtensionMap(app.extensions)
+    }
+  }
+
+  private async loadStoredKeywordEntries(
+    itemIds: string[]
+  ): Promise<Array<{ value: string; priority: number }>> {
+    if (!this.dbUtils || itemIds.length === 0) return []
+
+    const db = this.dbUtils.getDb()
+    const rows = await db
+      .select({
+        value: keywordMappings.keyword,
+        priority: keywordMappings.priority
+      })
+      .from(keywordMappings)
+      .where(and(eq(keywordMappings.providerId, this.id), inArray(keywordMappings.itemId, itemIds)))
+      .limit(800)
+
+    const seen = new Set<string>()
+    const entries: Array<{ value: string; priority: number }> = []
+    for (const row of rows) {
+      const value = row.value
+      if (!value || value.startsWith('ng:') || seen.has(value)) continue
+      seen.add(value)
+      entries.push({ value, priority: row.priority })
+    }
+    return entries.sort((left, right) => left.value.localeCompare(right.value))
+  }
+
+  private async diagnoseAppQuery(
+    rawQuery: string | undefined,
+    itemIds: string[]
+  ): Promise<AppIndexDiagnoseResult['query'] | undefined> {
+    const raw = normalizeOptionalString(rawQuery)
+    if (!raw) return undefined
+
+    const normalized = raw.toLowerCase()
+    const baseTerms = normalized.split(/[\s/]+/).filter(Boolean)
+    const terms = baseTerms.length > 0 ? baseTerms : [normalized]
+    const stages = {
+      precise: await this.diagnosePreciseStage(terms, itemIds),
+      phrase: await this.diagnosePhraseStage(normalized, baseTerms, itemIds),
+      prefix: await this.diagnosePrefixStage(normalized, itemIds),
+      fts: await this.diagnoseFtsStage(terms, itemIds),
+      ngram: await this.diagnoseNgramStage(normalized, itemIds),
+      subsequence: await this.diagnoseSubsequenceStage(normalized, itemIds)
+    }
+    const candidateItemIds = Array.from(
+      new Set(Object.values(stages).flatMap((stage) => stage.matches.map((match) => match.itemId)))
+    )
+
+    return {
+      raw,
+      normalized,
+      terms,
+      ftsQuery: this.buildFtsQuery(terms),
+      candidateItemIds,
+      stages
+    }
+  }
+
+  private makeDiagnosticStage(
+    ran: boolean,
+    matches: AppIndexDiagnosticMatch[],
+    itemIds: string[],
+    reason?: string
+  ): AppIndexDiagnosticStage {
+    const targetIds = new Set(itemIds)
+    return {
+      ran,
+      targetHit: matches.some((match) => targetIds.has(match.itemId)),
+      matches: matches.slice(0, 25),
+      reason
+    }
+  }
+
+  private async diagnosePreciseStage(
+    terms: string[],
+    itemIds: string[]
+  ): Promise<AppIndexDiagnosticStage> {
+    if (!this.searchIndex || terms.length === 0) {
+      return this.makeDiagnosticStage(false, [], itemIds, 'empty-query')
+    }
+
+    const lookupByKeywords = (this.searchIndex as Partial<SearchIndexService>).lookupByKeywords
+    if (typeof lookupByKeywords !== 'function') {
+      return this.makeDiagnosticStage(false, [], itemIds, 'lookup-unavailable')
+    }
+
+    const lookup = await lookupByKeywords.call(this.searchIndex, this.id, terms, 200)
+    const matches = terms.flatMap((term) =>
+      (lookup.get(term) ?? []).map((entry) => ({
+        itemId: entry.itemId,
+        keyword: term,
+        priority: entry.priority
+      }))
+    )
+    return this.makeDiagnosticStage(true, matches, itemIds)
+  }
+
+  private async diagnosePhraseStage(
+    normalizedQuery: string,
+    baseTerms: string[],
+    itemIds: string[]
+  ): Promise<AppIndexDiagnosticStage> {
+    if (baseTerms.length <= 1) {
+      return this.makeDiagnosticStage(false, [], itemIds, 'single-term-query')
+    }
+    return this.diagnosePreciseStage([normalizedQuery], itemIds)
+  }
+
+  private async diagnosePrefixStage(
+    normalizedQuery: string,
+    itemIds: string[]
+  ): Promise<AppIndexDiagnosticStage> {
+    if (!this.searchIndex || !normalizedQuery) {
+      return this.makeDiagnosticStage(false, [], itemIds, 'empty-query')
+    }
+    if (normalizedQuery.length > 5) {
+      return this.makeDiagnosticStage(false, [], itemIds, 'query-too-long-for-prefix-stage')
+    }
+
+    const matches = await this.searchIndex.lookupByKeywordPrefix(this.id, normalizedQuery, 200)
+    return this.makeDiagnosticStage(true, matches, itemIds)
+  }
+
+  private async diagnoseFtsStage(
+    terms: string[],
+    itemIds: string[]
+  ): Promise<AppIndexDiagnosticStage> {
+    if (!this.searchIndex) {
+      return this.makeDiagnosticStage(false, [], itemIds, 'search-index-not-ready')
+    }
+
+    const ftsQuery = this.buildFtsQuery(terms)
+    if (!ftsQuery) {
+      return this.makeDiagnosticStage(false, [], itemIds, 'empty-fts-query')
+    }
+
+    const matches = await this.searchIndex.search(this.id, ftsQuery, 150)
+    return this.makeDiagnosticStage(true, matches, itemIds)
+  }
+
+  private async diagnoseNgramStage(
+    normalizedQuery: string,
+    itemIds: string[]
+  ): Promise<AppIndexDiagnosticStage> {
+    if (!this.searchIndex || normalizedQuery.length < 3) {
+      return this.makeDiagnosticStage(false, [], itemIds, 'query-too-short-for-ngram-stage')
+    }
+
+    const matches = await this.searchIndex.lookupByNgrams(this.id, normalizedQuery, 30)
+    return this.makeDiagnosticStage(true, matches, itemIds)
+  }
+
+  private async diagnoseSubsequenceStage(
+    normalizedQuery: string,
+    itemIds: string[]
+  ): Promise<AppIndexDiagnosticStage> {
+    if (!this.searchIndex || normalizedQuery.length < 2) {
+      return this.makeDiagnosticStage(false, [], itemIds, 'query-too-short-for-subsequence-stage')
+    }
+
+    const matches = await this.searchIndex.lookupBySubsequence(this.id, normalizedQuery, 50)
+    return this.makeDiagnosticStage(true, matches, itemIds)
   }
 
   public async upsertManagedEntry(
