@@ -5,6 +5,13 @@
 
 ## 2026-04-26
 
+### refactor(core-app): 移除 DivisionBox active sessions 假命令
+
+- `apps/core-app/src/main/modules/division-box/command-provider.ts`
+- `apps/core-app/src/main/modules/division-box/command-provider.test.ts`
+  - CoreBox 的 DivisionBox provider 不再注入 `division-box:show-active-sessions` 结果；该结果此前只记录 active sessions 日志，没有打开任何用户可见界面，属于未接通 UI 的伪命令。
+  - 保留真实 shortcut mapping 的搜索和执行路径，并新增回归测试确保 active session 存在时也不会暴露无动作命令。
+
 ### refactor(core-app): 删除 screen-capture 占位链路并收口服务日志
 
 - `apps/core-app/src/main/addon/device/screen-capture.ts`

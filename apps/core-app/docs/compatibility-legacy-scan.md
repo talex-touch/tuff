@@ -35,6 +35,7 @@
 - OmniPanel 键盘快捷键默认值已统一为关闭；主进程 settings snapshot、首次设置页、工具设置页与 `app-settings` 默认值保持一致，右键长按时长也有明确持久化配置。
 - 已删除无引用的 Bluetooth/USB 旧实验注释文件、renderer layout 的 `useLayout` legacy alias，以及 File Provider 中旧主线程内容解析/索引 helper 的空调用保活路径；文件内容解析与索引统一走 worker 管线。
 - Preview Provider / Preview Registry / Terminal / Protocol Handler / ServiceCenter 的 raw console、死协议注释、stale no-op 文案和敏感预览值日志已收口；ServiceCenter 无读取方的注册快照伪持久化路径已删除，后续日志只记录结构化元数据，不再输出搜索表达式、预览结果值或原始 service payload。
+- DivisionBox CoreBox provider 已移除 `division-box:show-active-sessions` 伪命令；该结果此前只写日志、不打开任何用户可见界面，当前仅保留真实 shortcut mapping 搜索/执行路径。
 - 已删除无引用且全文件仅剩注释的 screen-capture 主进程占位文件，并移除 renderer 中无人发送的 `@screen-capture` 注册函数；OfficialPluginService、FileWatchService、TuffIconImpl 的 raw console 调试输出也已切到结构化 logger。
 - CoreBox Manager、SystemActions file-index、BuildVerification、FeatureSearchTokens 的小范围 raw console 已收口到 logger；SystemActions 不再对同一次 file-index 同时写 console 和结构化日志。
 - 旧插件注入脚本不再输出 `Touch # Auto inject JS`，同文件未启用的 `#app` 样式注释块已删除。
