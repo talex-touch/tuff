@@ -9,6 +9,10 @@ import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/tran
 import type {
   AppIndexAddPathRequest,
   AppIndexAddPathResult,
+  AppIndexDiagnoseRequest,
+  AppIndexDiagnoseResult,
+  AppIndexReindexRequest,
+  AppIndexReindexResult,
   AutoStartGetResponse,
   AutoStartUpdateRequest,
   AutoStartUpdateResponse,
@@ -1471,6 +1475,14 @@ export class CommonChannelModule extends BaseModule {
           }
           return appProvider.addAppByPath(inputPath)
         }
+      ),
+      transport.on<AppIndexDiagnoseRequest, AppIndexDiagnoseResult>(
+        AppEvents.appIndex.diagnose,
+        (payload) => appProvider.diagnoseAppSearch(payload ?? { target: '' })
+      ),
+      transport.on<AppIndexReindexRequest, AppIndexReindexResult>(
+        AppEvents.appIndex.reindex,
+        (payload) => appProvider.reindexAppSearchTarget(payload ?? { target: '' })
       )
     )
   }

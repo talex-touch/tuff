@@ -63,6 +63,14 @@ describe('transport domain sdk mappings', () => {
       path: '/Applications/WeChat.app',
       enabled: false,
     })
+    await sdk.appIndex.diagnose({
+      target: '/Applications/WeChat.app',
+      query: 'wechat',
+    })
+    await sdk.appIndex.reindex({
+      target: '/Applications/WeChat.app',
+      mode: 'keywords',
+    })
 
     expect(transport.send).toHaveBeenNthCalledWith(1, AppEvents.appIndex.listEntries)
     expect(transport.send).toHaveBeenNthCalledWith(2, AppEvents.appIndex.upsertEntry, {
@@ -76,6 +84,14 @@ describe('transport domain sdk mappings', () => {
     expect(transport.send).toHaveBeenNthCalledWith(4, AppEvents.appIndex.setEntryEnabled, {
       path: '/Applications/WeChat.app',
       enabled: false,
+    })
+    expect(transport.send).toHaveBeenNthCalledWith(5, AppEvents.appIndex.diagnose, {
+      target: '/Applications/WeChat.app',
+      query: 'wechat',
+    })
+    expect(transport.send).toHaveBeenNthCalledWith(6, AppEvents.appIndex.reindex, {
+      target: '/Applications/WeChat.app',
+      mode: 'keywords',
     })
   })
 

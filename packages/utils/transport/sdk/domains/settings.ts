@@ -11,8 +11,12 @@ import type {
 import type {
   AppIndexAddPathRequest,
   AppIndexAddPathResult,
+  AppIndexDiagnoseRequest,
+  AppIndexDiagnoseResult,
   AppIndexEntryMutationResult,
   AppIndexManagedEntry,
+  AppIndexReindexRequest,
+  AppIndexReindexResult,
   AppIndexRemoveEntryRequest,
   AppIndexSetEntryEnabledRequest,
   AppIndexSettings,
@@ -74,6 +78,12 @@ export interface SettingsSdk {
     setEntryEnabled: (
       payload: AppIndexSetEntryEnabledRequest
     ) => Promise<AppIndexEntryMutationResult>
+    diagnose: (
+      payload: AppIndexDiagnoseRequest
+    ) => Promise<AppIndexDiagnoseResult>
+    reindex: (
+      payload: AppIndexReindexRequest
+    ) => Promise<AppIndexReindexResult>
   }
   analytics: {
     getSnapshot: (windowType: AnalyticsWindowType) => Promise<AnalyticsSnapshot>
@@ -119,6 +129,8 @@ export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
       upsertEntry: payload => transport.send(AppEvents.appIndex.upsertEntry, payload),
       removeEntry: payload => transport.send(AppEvents.appIndex.removeEntry, payload),
       setEntryEnabled: payload => transport.send(AppEvents.appIndex.setEntryEnabled, payload),
+      diagnose: payload => transport.send(AppEvents.appIndex.diagnose, payload),
+      reindex: payload => transport.send(AppEvents.appIndex.reindex, payload),
     },
     analytics: {
       getSnapshot: windowType => transport.send(AppEvents.analytics.getSnapshot, { windowType }),

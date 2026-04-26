@@ -111,8 +111,12 @@ import type {
 import type {
   AppIndexAddPathRequest,
   AppIndexAddPathResult,
+  AppIndexDiagnoseRequest,
+  AppIndexDiagnoseResult,
   AppIndexEntryMutationResult,
   AppIndexManagedEntry,
+  AppIndexReindexRequest,
+  AppIndexReindexResult,
   AppIndexRemoveEntryRequest,
   AppIndexSetEntryEnabledRequest,
   AppIndexSettings,
@@ -920,6 +924,22 @@ export const AppEvents = {
       .module('app-index')
       .event('entry.set-enabled')
       .define<AppIndexSetEntryEnabledRequest, AppIndexEntryMutationResult>(),
+
+    /**
+     * Diagnose why a single application target does or does not match app search.
+     */
+    diagnose: defineEvent('app')
+      .module('app-index')
+      .event('diagnose')
+      .define<AppIndexDiagnoseRequest, AppIndexDiagnoseResult>(),
+
+    /**
+     * Reindex or rescan one application target for search diagnostics.
+     */
+    reindex: defineEvent('app')
+      .module('app-index')
+      .event('reindex')
+      .define<AppIndexReindexRequest, AppIndexReindexResult>(),
   },
 
   /**
