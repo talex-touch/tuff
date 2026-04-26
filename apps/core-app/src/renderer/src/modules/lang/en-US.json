@@ -1159,6 +1159,7 @@
           "sizePlaceholder": "Choose a size",
           "reset": "Reset",
           "resizeHint": "Drag the bottom-right corner to customize",
+          "mockLabel": "Mock payload",
           "mockPlaceholder": "Enter JSON payload",
           "mockError": "Failed to parse JSON: {error}",
           "missingWidgetId": "A valid widgetId is required for preview.",
