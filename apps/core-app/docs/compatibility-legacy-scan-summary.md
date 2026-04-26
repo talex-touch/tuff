@@ -33,7 +33,6 @@
 - src/renderer/src/modules/install/install-manager.ts — trigger: 旧索引结构兼容; alternative: 统一 providerId::pluginId 结构; risk: medium
 - src/renderer/src/modules/box/adapter/hooks/useResize.ts — trigger: legacy element wrap fallback; alternative: 统一结构; risk: low
 - src/renderer/src/modules/mousetrap-record.ts — trigger: Mousetrap 兼容注释; alternative: 升级依赖; risk: low
-- src/renderer/src/modules/layout/index.ts — trigger: legacy export 兼容; alternative: 使用新导出; risk: low
 - src/renderer/src/modules/layout/useSecondaryNavigation.ts — trigger: parent route fallback; alternative: 保证 route record; risk: low
 - src/renderer/src/modules/storage/README.md — trigger: 迁移文档指引; alternative: 完成迁移后清理; risk: low
 - src/renderer/src/modules/storage/intelligence-storage.ts — trigger: backward compatibility aliases; alternative: 统一新结构; risk: medium
