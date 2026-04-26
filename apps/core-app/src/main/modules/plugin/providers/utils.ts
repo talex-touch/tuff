@@ -9,10 +9,18 @@ import crypto from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
 import fse from 'fs-extra'
+import { NetworkTimeoutError, isTimeoutLikeError } from '@talex-touch/utils/network'
 import { getNetworkService } from '../../network'
 import { createProviderLogger } from './logger'
 
 const pluginProviderUtilsLog = createProviderLogger('utils')
+
+function normalizeDownloadError(error: unknown, timeoutMs: number): unknown {
+  if (isTimeoutLikeError(error)) {
+    return new NetworkTimeoutError(timeoutMs)
+  }
+  return error
+}
 
 export async function downloadToTempFile(
   url: string,
@@ -33,12 +41,16 @@ export async function downloadToTempFile(
   const fileName = `talex-plugin-${Date.now()}-${crypto.randomBytes(6).toString('hex')}${resolvedExt}`
   const filePath = path.join(os.tmpdir(), fileName)
 
-  const response = await getNetworkService().requestStream({
-    method: 'GET',
-    url,
-    timeoutMs: requestTimeout,
-    responseType: 'stream'
-  })
+  const response = await getNetworkService()
+    .requestStream({
+      method: 'GET',
+      url,
+      timeoutMs: requestTimeout,
+      responseType: 'stream'
+    })
+    .catch((error) => {
+      throw normalizeDownloadError(error, requestTimeout)
+    })
 
   const totalLength = Number(response.headers['content-length'] ?? 0)
   let downloaded = 0
@@ -77,7 +89,7 @@ export async function downloadToTempFile(
         reportProgress(0)
         // Cleanup partial file on error
         await fse.remove(filePath).catch(() => {})
-        reject(error)
+        reject(normalizeDownloadError(error, requestTimeout))
       })
       .pipe(writer)
 
@@ -86,7 +98,7 @@ export async function downloadToTempFile(
       reportProgress(0)
       // Cleanup partial file on error
       await fse.remove(filePath).catch(() => {})
-      reject(error)
+      reject(normalizeDownloadError(error, requestTimeout))
     })
   })
 

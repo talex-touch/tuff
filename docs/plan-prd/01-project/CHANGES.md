@@ -1,7 +1,20 @@
 # 变更日志
 
-> 更新时间: 2026-04-26
-> 说明: 主文件仅保留近 30 天（2026-03-27 ~ 2026-04-26）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-27
+> 说明: 主文件仅保留近 30 天（2026-03-28 ~ 2026-04-27）详细记录；更早历史已按月归档。
+
+## 2026-04-27
+
+### fix(core-app): 归一化插件更新下载中断提示
+
+- `apps/core-app/src/main/modules/plugin/providers/utils.ts`
+- `apps/core-app/src/main/modules/plugin/providers/utils.test.ts`
+- `apps/core-app/src/renderer/src/composables/store/store-install-error-utils.ts`
+- `apps/core-app/src/renderer/src/composables/store/store-install-error-utils.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - 插件包下载流如果在 Electron/Node 层抛出 `The operation was aborted`，现在会统一归一为 `NETWORK_TIMEOUT`，避免市场更新弹窗直接暴露底层 AbortError。
+  - 安装失败提示新增中英文本地化文案，将下载超时或中断明确提示为插件源网络问题。
+  - 已补定向回归：`store-install-error-utils.test.ts` 覆盖历史裸 AbortError 与标准 `NETWORK_TIMEOUT`，`providers/utils.test.ts` 覆盖下载流 abort 归一化。
 
 ## 2026-04-26
 

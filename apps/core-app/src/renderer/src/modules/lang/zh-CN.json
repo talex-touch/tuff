@@ -686,6 +686,7 @@
         "noSource": "当前插件缺少可用的安装源。",
         "authRequired": "请先登录后再继续安装。",
         "httpError": "安装请求失败（HTTP {status}）。",
+        "networkTimeout": "插件包下载超时或被中断，请检查插件源网络后重试。",
         "noProvider": "当前下载地址没有可用的安装处理器。",
         "sdkapiBlocked": "该插件的 sdkapi 与当前 Tuff 版本不兼容。",
         "sdkapiMissing": "该插件缺少必需的 sdkapi 声明，当前版本无法安装。",
