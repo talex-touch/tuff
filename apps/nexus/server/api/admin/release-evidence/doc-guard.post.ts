@@ -1,7 +1,7 @@
 import type { ReleaseEvidenceItemStatus } from '../../../utils/releaseEvidenceStore'
 import { readBody } from 'h3'
 import { requireAdminOrApiKey } from '../../../utils/auth'
-import { createReleaseEvidenceRun, upsertReleaseEvidenceItem } from '../../../utils/releaseEvidenceStore'
+import { createReleaseEvidenceRun, upsertReleaseEvidenceItem, validateReleaseEvidenceItemInput } from '../../../utils/releaseEvidenceStore'
 
 function runStatusFromItemStatus(status: ReleaseEvidenceItemStatus) {
   if (status === 'passed')
@@ -15,6 +15,19 @@ export default defineEventHandler(async (event) => {
   const { userId } = await requireAdminOrApiKey(event, ['release:evidence'])
   const body = await readBody(event)
   const status = (body?.status ?? 'passed') as ReleaseEvidenceItemStatus
+  const itemInput = {
+    category: 'docs',
+    caseId: 'docs-guard',
+    status,
+    requiredForRelease: true,
+    evidence: body?.evidence ?? {
+      command: 'pnpm docs:guard',
+      summary: 'docs guard result recorded',
+    },
+    notes: body?.notes,
+  }
+
+  validateReleaseEvidenceItemInput(itemInput)
 
   const run = await createReleaseEvidenceRun(event, {
     version: body?.version ?? '2.5.0',
@@ -25,17 +38,7 @@ export default defineEventHandler(async (event) => {
     createdBy: userId,
   })
 
-  const item = await upsertReleaseEvidenceItem(event, run.id, {
-    category: 'docs',
-    caseId: 'docs-guard',
-    status,
-    requiredForRelease: true,
-    evidence: body?.evidence ?? {
-      command: 'pnpm docs:guard',
-      summary: 'docs guard result recorded',
-    },
-    notes: body?.notes,
-  })
+  const item = await upsertReleaseEvidenceItem(event, run.id, itemInput)
 
   return { run, item }
 })

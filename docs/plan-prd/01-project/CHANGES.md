@@ -27,6 +27,7 @@
   - 新增管理端 API：run 创建/分页/详情、item upsert、`matrix` 聚合与 `doc-guard` 快速写入；所有路由统一使用 `requireAdminOrApiKey(event, ['release:evidence'])`。
   - 新增 API key scope `release:evidence`，并接入创建白名单与 dashboard scope 配置；既有 `release:sync` 仍按 release 子 scope 兼容规则覆盖。
   - `evidence` 限定为 JSON object，序列化后最大 128KB；matrix 不落独立快照，按指定 version 最新 matching items 聚合平台阻塞矩阵。
+  - `doc-guard` 快速写入现在会在创建 run 前预校验 item 输入，避免非法 `status/evidence` 请求失败后留下无效 run。
   - 已补定向回归：`pnpm -C "apps/nexus" exec vitest run "server/utils/releaseEvidenceStore.test.ts" "server/api/admin/release-evidence/releaseEvidence.api.test.ts"`。
 
 ### feat(nexus): 复用 Tuffex 收口公共 updates 页面

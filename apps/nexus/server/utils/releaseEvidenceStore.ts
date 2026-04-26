@@ -88,6 +88,16 @@ export interface UpsertReleaseEvidenceItemInput {
   notes?: string | null
 }
 
+interface NormalizedReleaseEvidenceItemInput {
+  category: string
+  caseId: string
+  status: ReleaseEvidenceItemStatus
+  requiredForRelease: boolean
+  evidence: Record<string, unknown>
+  evidenceJson: string
+  notes: string | null
+}
+
 export interface ListReleaseEvidenceRunsOptions {
   version?: string
   platform?: ReleaseEvidencePlatform
@@ -254,6 +264,34 @@ function parseEvidenceJson(value: string): Record<string, unknown> {
   catch {
     return {}
   }
+}
+
+function normalizeReleaseEvidenceItemInput(input: UpsertReleaseEvidenceItemInput): NormalizedReleaseEvidenceItemInput {
+  const category = assertNonEmptyString(input.category, 'category')
+  const caseId = assertNonEmptyString(input.caseId, 'caseId')
+  const status = assertEnum(input.status, 'status', RELEASE_EVIDENCE_ITEM_STATUSES)
+  const requiredForRelease = input.requiredForRelease ?? true
+  const notes = normalizeNotes(input.notes)
+
+  if (typeof requiredForRelease !== 'boolean') {
+    throw createError({ statusCode: 400, statusMessage: 'requiredForRelease is invalid.' })
+  }
+
+  const { data: evidence, json: evidenceJson } = normalizeEvidence(input.evidence)
+
+  return {
+    category,
+    caseId,
+    status,
+    requiredForRelease,
+    evidence,
+    evidenceJson,
+    notes,
+  }
+}
+
+export function validateReleaseEvidenceItemInput(input: UpsertReleaseEvidenceItemInput) {
+  normalizeReleaseEvidenceItemInput(input)
 }
 
 function mapRun(row: ReleaseEvidenceRunRow): ReleaseEvidenceRun {
@@ -443,16 +481,7 @@ export async function upsertReleaseEvidenceItem(
 
   const id = randomUUID()
   const now = new Date().toISOString()
-  const category = assertNonEmptyString(input.category, 'category')
-  const caseId = assertNonEmptyString(input.caseId, 'caseId')
-  const status = assertEnum(input.status, 'status', RELEASE_EVIDENCE_ITEM_STATUSES)
-  const requiredForRelease = input.requiredForRelease ?? true
-  const { data: evidence, json: evidenceJson } = normalizeEvidence(input.evidence)
-  const notes = normalizeNotes(input.notes)
-
-  if (typeof requiredForRelease !== 'boolean') {
-    throw createError({ statusCode: 400, statusMessage: 'requiredForRelease is invalid.' })
-  }
+  const normalized = normalizeReleaseEvidenceItemInput(input)
 
   await db.prepare(`
     INSERT INTO ${ITEMS_TABLE} (
@@ -469,12 +498,12 @@ export async function upsertReleaseEvidenceItem(
   `).bind(
     id,
     safeRunId,
-    category,
-    caseId,
-    status,
-    requiredForRelease ? 1 : 0,
-    evidenceJson,
-    notes,
+    normalized.category,
+    normalized.caseId,
+    normalized.status,
+    normalized.requiredForRelease ? 1 : 0,
+    normalized.evidenceJson,
+    normalized.notes,
     now,
     now,
   ).run()
@@ -483,19 +512,19 @@ export async function upsertReleaseEvidenceItem(
     SELECT id, run_id, category, case_id, status, required_for_release, evidence_json, notes, created_at, updated_at
     FROM ${ITEMS_TABLE}
     WHERE run_id = ? AND case_id = ?;
-  `).bind(safeRunId, caseId).first<ReleaseEvidenceItemRow>()
+  `).bind(safeRunId, normalized.caseId).first<ReleaseEvidenceItemRow>()
 
   return row
     ? mapItem(row)
     : {
         id,
         runId: safeRunId,
-        category,
-        caseId,
-        status,
-        requiredForRelease,
-        evidence,
-        notes,
+        category: normalized.category,
+        caseId: normalized.caseId,
+        status: normalized.status,
+        requiredForRelease: normalized.requiredForRelease,
+        evidence: normalized.evidence,
+        notes: normalized.notes,
         createdAt: now,
         updatedAt: now,
       }

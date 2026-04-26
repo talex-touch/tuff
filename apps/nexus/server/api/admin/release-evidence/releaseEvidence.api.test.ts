@@ -328,4 +328,19 @@ describe('/api/admin/release-evidence', () => {
     })
     expect(matrix.docsGuard?.status).toBe('passed')
   })
+
+  it('doc-guard item 输入非法时不会留下 run', async () => {
+    readBodyMock.mockResolvedValue({
+      version: '2.5.0',
+      status: 'passed',
+      evidence: { output: 'x'.repeat(129 * 1024) },
+    })
+
+    await expect(docGuardHandler(makeEvent('/api/admin/release-evidence/doc-guard'))).rejects.toMatchObject({
+      statusCode: 400,
+    })
+
+    expect(state.db?.runs.size).toBe(0)
+    expect(state.db?.items.size).toBe(0)
+  })
 })
