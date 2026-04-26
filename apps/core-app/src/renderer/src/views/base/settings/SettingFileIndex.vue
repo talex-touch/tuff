@@ -1,5 +1,8 @@
 <script setup lang="ts" name="SettingFileIndex">
 import type {
+  AppIndexDiagnoseResult,
+  AppIndexDiagnosticStage,
+  AppIndexReindexRequest,
   AppIndexSettings,
   DeviceIdleSettings,
   FileIndexStatus,
@@ -112,6 +115,22 @@ const appIndexForm = ref<AppIndexForm>({
     DEFAULT_APP_INDEX_SETTINGS.fullSyncCheckIntervalMs / 60000
   )
 })
+
+const appDiagnosticTarget = ref('')
+const appDiagnosticQuery = ref('')
+const appDiagnosticLoading = ref(false)
+const appDiagnosticReindexMode = ref<AppIndexReindexRequest['mode'] | null>(null)
+const appDiagnosticResult = ref<AppIndexDiagnoseResult | null>(null)
+
+const APP_DIAGNOSTIC_STAGE_KEYS = [
+  'precise',
+  'phrase',
+  'prefix',
+  'fts',
+  'ngram',
+  'subsequence'
+] as const
+type AppDiagnosticStageKey = (typeof APP_DIAGNOSTIC_STAGE_KEYS)[number]
 
 async function checkStatus() {
   try {
@@ -272,6 +291,116 @@ async function saveAppIndexSettings() {
     toast.error(t('settings.settingFileIndex.appIndexSaveFailed'))
   } finally {
     appIndexSaving.value = false
+  }
+}
+
+function updateAppDiagnosticTarget(value: string | number) {
+  appDiagnosticTarget.value = String(value ?? '')
+}
+
+function updateAppDiagnosticQuery(value: string | number) {
+  appDiagnosticQuery.value = String(value ?? '')
+}
+
+function normalizeAppDiagnosticTarget() {
+  return appDiagnosticTarget.value.trim()
+}
+
+function formatAppDiagnosticList(values: string[] | undefined, limit = 18) {
+  if (!values?.length) return t('settings.settingFileIndex.appDiagnosticEmpty')
+
+  const visible = values.slice(0, limit)
+  const suffix =
+    values.length > visible.length
+      ? t('settings.settingFileIndex.appDiagnosticMore', {
+          count: values.length - visible.length
+        })
+      : ''
+
+  return suffix ? `${visible.join(', ')} ${suffix}` : visible.join(', ')
+}
+
+function getAppDiagnosticStageLabel(key: AppDiagnosticStageKey) {
+  return t(`settings.settingFileIndex.appDiagnosticStage.${key}`)
+}
+
+function getAppDiagnosticStage(result: AppIndexDiagnoseResult | null, key: AppDiagnosticStageKey) {
+  return result?.query?.stages[key]
+}
+
+function getAppDiagnosticStageTone(stage: AppIndexDiagnosticStage | undefined) {
+  if (!stage || !stage.ran) return 'skipped'
+  return stage.targetHit ? 'hit' : 'miss'
+}
+
+function getAppDiagnosticStageStatus(stage: AppIndexDiagnosticStage | undefined) {
+  if (!stage || !stage.ran) return t('settings.settingFileIndex.appDiagnosticStageSkipped')
+  return stage.targetHit
+    ? t('settings.settingFileIndex.appDiagnosticStageHit')
+    : t('settings.settingFileIndex.appDiagnosticStageMiss')
+}
+
+function getAppDiagnosticStageDetail(stage: AppIndexDiagnosticStage | undefined) {
+  if (!stage) return t('settings.settingFileIndex.appDiagnosticStageNotRun')
+  if (!stage.ran) {
+    return stage.reason || t('settings.settingFileIndex.appDiagnosticStageSkipped')
+  }
+
+  return t('settings.settingFileIndex.appDiagnosticStageMatches', {
+    count: stage.matches.length
+  })
+}
+
+async function runAppSearchDiagnostic(options: { silent?: boolean } = {}) {
+  const target = normalizeAppDiagnosticTarget()
+  if (!target) {
+    if (!options.silent) toast.error(t('settings.settingFileIndex.appDiagnosticTargetRequired'))
+    return
+  }
+
+  appDiagnosticLoading.value = true
+  try {
+    appDiagnosticResult.value = await settingsSdk.appIndex.diagnose({
+      target,
+      query: appDiagnosticQuery.value.trim() || undefined
+    })
+
+    if (!appDiagnosticResult.value.success && !options.silent) {
+      toast.error(
+        appDiagnosticResult.value.reason || t('settings.settingFileIndex.appDiagnosticFailed')
+      )
+    }
+  } catch (error) {
+    console.error('[SettingFileIndex] Failed to diagnose app search:', error)
+    appDiagnosticResult.value = null
+    if (!options.silent) toast.error(t('settings.settingFileIndex.appDiagnosticFailed'))
+  } finally {
+    appDiagnosticLoading.value = false
+  }
+}
+
+async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) {
+  const target = normalizeAppDiagnosticTarget()
+  if (!target) {
+    toast.error(t('settings.settingFileIndex.appDiagnosticTargetRequired'))
+    return
+  }
+
+  appDiagnosticReindexMode.value = mode
+  try {
+    const result = await settingsSdk.appIndex.reindex({ target, mode })
+    if (!result.success) {
+      toast.error(result.reason || t('settings.settingFileIndex.appDiagnosticReindexFailed'))
+      return
+    }
+
+    toast.success(t('settings.settingFileIndex.appDiagnosticReindexSuccess'))
+    await runAppSearchDiagnostic({ silent: true })
+  } catch (error) {
+    console.error('[SettingFileIndex] Failed to reindex app target:', error)
+    toast.error(t('settings.settingFileIndex.appDiagnosticReindexFailed'))
+  } finally {
+    appDiagnosticReindexMode.value = null
   }
 }
 
@@ -921,6 +1050,171 @@ async function triggerRebuild() {
         </div>
       </template>
     </TuffBlockInput>
+
+    <TuffBlockSlot
+      :title="t('settings.settingFileIndex.appDiagnosticTitle')"
+      :description="t('settings.settingFileIndex.appDiagnosticDesc')"
+      default-icon="i-carbon-debug"
+      active-icon="i-carbon-debug"
+    >
+      <div class="app-diagnostic">
+        <div class="app-diagnostic-form">
+          <TxInput
+            :model-value="appDiagnosticTarget"
+            :placeholder="t('settings.settingFileIndex.appDiagnosticTargetPlaceholder')"
+            class="app-diagnostic-input"
+            @update:model-value="updateAppDiagnosticTarget"
+          />
+          <TxInput
+            :model-value="appDiagnosticQuery"
+            :placeholder="t('settings.settingFileIndex.appDiagnosticQueryPlaceholder')"
+            class="app-diagnostic-input"
+            @update:model-value="updateAppDiagnosticQuery"
+          />
+        </div>
+
+        <div class="app-diagnostic-actions">
+          <TxButton
+            variant="flat"
+            size="sm"
+            :disabled="appDiagnosticLoading || !normalizeAppDiagnosticTarget()"
+            @click="runAppSearchDiagnostic()"
+          >
+            <div class="i-carbon-search text-12px" />
+            <span>{{ t('settings.settingFileIndex.appDiagnosticRun') }}</span>
+          </TxButton>
+          <TxButton
+            variant="flat"
+            size="sm"
+            :disabled="
+              appDiagnosticLoading ||
+              Boolean(appDiagnosticReindexMode) ||
+              !normalizeAppDiagnosticTarget()
+            "
+            @click="reindexAppDiagnosticTarget('keywords')"
+          >
+            <div class="i-carbon-renew text-12px" />
+            <span>{{ t('settings.settingFileIndex.appDiagnosticReindexKeywords') }}</span>
+          </TxButton>
+          <TxButton
+            variant="flat"
+            size="sm"
+            :disabled="
+              appDiagnosticLoading ||
+              Boolean(appDiagnosticReindexMode) ||
+              !normalizeAppDiagnosticTarget()
+            "
+            @click="reindexAppDiagnosticTarget('scan')"
+          >
+            <div class="i-carbon-update-now text-12px" />
+            <span>{{ t('settings.settingFileIndex.appDiagnosticRescan') }}</span>
+          </TxButton>
+        </div>
+
+        <div v-if="appDiagnosticResult" class="app-diagnostic-result">
+          <template
+            v-if="
+              appDiagnosticResult.success && appDiagnosticResult.app && appDiagnosticResult.index
+            "
+          >
+            <div class="app-diagnostic-header">
+              <div>
+                <strong>
+                  {{
+                    appDiagnosticResult.app.displayName ||
+                    appDiagnosticResult.app.name ||
+                    appDiagnosticResult.app.fileName
+                  }}
+                </strong>
+                <span>{{ appDiagnosticResult.app.path }}</span>
+              </div>
+              <span class="app-diagnostic-status">
+                {{ t('settings.settingFileIndex.appDiagnosticFound') }}
+              </span>
+            </div>
+
+            <div class="app-diagnostic-grid">
+              <div>
+                <span>{{ t('settings.settingFileIndex.appDiagnosticDisplayName') }}</span>
+                <strong>{{
+                  appDiagnosticResult.app.displayName || appDiagnosticResult.app.name
+                }}</strong>
+              </div>
+              <div>
+                <span>{{ t('settings.settingFileIndex.appDiagnosticBundleId') }}</span>
+                <strong>
+                  {{
+                    appDiagnosticResult.app.bundleId ||
+                    appDiagnosticResult.app.appIdentity ||
+                    t('settings.settingFileIndex.appDiagnosticEmpty')
+                  }}
+                </strong>
+              </div>
+              <div>
+                <span>{{ t('settings.settingFileIndex.appDiagnosticAlternateNames') }}</span>
+                <p>{{ formatAppDiagnosticList(appDiagnosticResult.app.alternateNames, 10) }}</p>
+              </div>
+              <div>
+                <span>{{ t('settings.settingFileIndex.appDiagnosticItemIds') }}</span>
+                <p>{{ formatAppDiagnosticList(appDiagnosticResult.index.itemIds, 4) }}</p>
+              </div>
+              <div>
+                <span>{{ t('settings.settingFileIndex.appDiagnosticGeneratedKeywords') }}</span>
+                <p>{{ formatAppDiagnosticList(appDiagnosticResult.index.generatedKeywords) }}</p>
+              </div>
+              <div>
+                <span>{{ t('settings.settingFileIndex.appDiagnosticStoredKeywords') }}</span>
+                <p>{{ formatAppDiagnosticList(appDiagnosticResult.index.storedKeywords) }}</p>
+              </div>
+            </div>
+
+            <div v-if="appDiagnosticResult.query" class="app-diagnostic-stages">
+              <div class="app-diagnostic-query">
+                {{
+                  t('settings.settingFileIndex.appDiagnosticQueryMeta', {
+                    query: appDiagnosticResult.query.normalized,
+                    fts: appDiagnosticResult.query.ftsQuery || '-'
+                  })
+                }}
+              </div>
+              <div class="app-diagnostic-stage-list">
+                <div
+                  v-for="stageKey in APP_DIAGNOSTIC_STAGE_KEYS"
+                  :key="stageKey"
+                  class="app-diagnostic-stage"
+                  :class="`is-${getAppDiagnosticStageTone(getAppDiagnosticStage(appDiagnosticResult, stageKey))}`"
+                >
+                  <strong>{{ getAppDiagnosticStageLabel(stageKey) }}</strong>
+                  <span>
+                    {{
+                      getAppDiagnosticStageStatus(
+                        getAppDiagnosticStage(appDiagnosticResult, stageKey)
+                      )
+                    }}
+                  </span>
+                  <small>
+                    {{
+                      getAppDiagnosticStageDetail(
+                        getAppDiagnosticStage(appDiagnosticResult, stageKey)
+                      )
+                    }}
+                  </small>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <div v-else class="app-diagnostic-error">
+            {{
+              t('settings.settingFileIndex.appDiagnosticNotFound', {
+                status: appDiagnosticResult.status,
+                reason: appDiagnosticResult.reason || '-'
+              })
+            }}
+          </div>
+        </div>
+      </div>
+    </TuffBlockSlot>
   </TuffGroupBlock>
 </template>
 
@@ -1074,4 +1368,167 @@ async function triggerRebuild() {
 .tuff-number-input :deep(.tx-input__inner) {
   font-variant-numeric: tabular-nums;
 }
+
+.app-diagnostic {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.app-diagnostic-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(140px, 0.6fr);
+  gap: 8px;
+}
+
+.app-diagnostic-input {
+  min-width: 0;
+}
+
+.app-diagnostic-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.app-diagnostic-result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--tx-border-color-light);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tx-fill-color-light) 68%, transparent);
+}
+
+.app-diagnostic-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-diagnostic-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.app-diagnostic-header strong,
+.app-diagnostic-grid strong {
+  color: var(--tx-text-color-primary);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.app-diagnostic-header span {
+  color: var(--tx-text-color-secondary);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.app-diagnostic-status {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 8px;
+  color: #34c759;
+  background: rgba(52, 199, 89, 0.12);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.app-diagnostic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.app-diagnostic-grid > div {
+  min-width: 0;
+}
+
+.app-diagnostic-grid span,
+.app-diagnostic-query {
+  display: block;
+  color: var(--tx-text-color-secondary);
+  font-size: 11px;
+}
+
+.app-diagnostic-grid p {
+  margin: 3px 0 0;
+  color: var(--tx-text-color-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.app-diagnostic-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app-diagnostic-stage-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.app-diagnostic-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--stage-color);
+  background: color-mix(in srgb, var(--stage-color) 10%, transparent);
+}
+
+.app-diagnostic-stage.is-hit {
+  --stage-color: rgba(52, 199, 89, 0.5);
+}
+
+.app-diagnostic-stage.is-miss {
+  --stage-color: rgba(255, 59, 48, 0.46);
+}
+
+.app-diagnostic-stage.is-skipped {
+  --stage-color: rgba(142, 142, 147, 0.35);
+}
+
+.app-diagnostic-stage strong {
+  color: var(--tx-text-color-primary);
+  font-size: 12px;
+}
+
+.app-diagnostic-stage span {
+  color: var(--tx-text-color-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.app-diagnostic-stage small {
+  color: var(--tx-text-color-secondary);
+  font-size: 11px;
+  word-break: break-word;
+}
+
+.app-diagnostic-error {
+  color: #ff3b30;
+  font-size: 12px;
+  word-break: break-word;
+}
+
+@media (max-width: 720px) {
+  .app-diagnostic-form,
+  .app-diagnostic-grid,
+  .app-diagnostic-stage-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 </style>
