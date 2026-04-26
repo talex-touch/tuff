@@ -20,6 +20,7 @@
 - `apps/core-app/src/main/modules/box-tool/{item-sdk/box-item-manager.ts,search-engine/usage-stats-cache.ts,search-engine/time-stats-aggregator.ts}`
 - `apps/core-app/src/main/modules/box-tool/search-engine/{usage-stats-queue.ts,recommendation/recommendation-engine.ts,recommendation/context-provider.ts,recommendation/item-rebuilder.ts}`
 - `apps/core-app/src/main/modules/plugin/providers/{tpex-provider.ts,utils.ts}`
+- `apps/core-app/src/main/modules/storage/{storage-polling-service.ts,storage-lru-manager.ts,storage-frequency-monitor.ts}`
   - 删除未被任何入口引用、且全文件只剩注释的主进程 screen-capture 占位文件；renderer 同步移除无人发送的 `@screen-capture` 注册函数，避免后续误以为屏幕捕获能力已接通。
   - `OfficialPluginService`、`FileWatchService`、`TuffIconImpl` 的 raw console 调试输出切到 `createLogger`，保留失败原因但减少散落日志和原始路径暴露。
   - CoreBox Manager、SystemActions file-index、BuildVerification、FeatureSearchTokens 的小范围 raw console 也统一收口到已有 logger；SystemActions 去掉 file-index 的重复控制台输出，只保留结构化日志。
@@ -30,6 +31,7 @@
   - BoxItemManager、插件 provider 工具、UsageStatsCache 与 TimeStatsAggregator 的可选调试/告警日志也切到项目 logger，减少搜索与插件安装路径里的 raw console 残留。
   - UsageStatsQueue、Recommendation ContextProvider 与 ItemRebuilder 的 flush/debug/rebuild 失败日志切到项目 logger；保留原有队列丢弃、merge back 与可选上下文降级语义，不改变推荐召回和排序。
   - RecommendationEngine 主文件中 provider 注册、缓存命中、候选计数、推荐生成耗时和插件 provider 失败也统一使用 `RecommendationEngine` logger，避免推荐主路径继续散落 raw debug/warn。
+  - Storage polling/LRU/frequency monitor 的维护日志改用 `Storage:*` logger，保留周期保存、强制保存、LRU 驱逐和高频访问告警语义，去掉 chalk 拼接式 raw console 输出。
   - `application-hooks` 清掉外链拦截里的旧 safe-link 注释块，只保留当前 `url:open` / localhost 判断主路径。
 
 ### refactor(core-app): 收口预览、终端与服务中心调试残留

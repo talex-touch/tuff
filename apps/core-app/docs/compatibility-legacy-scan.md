@@ -44,6 +44,7 @@
 - BoxItemManager、插件 provider 工具、UsageStatsCache 与 TimeStatsAggregator 的 raw console 已收口到项目 logger。
 - UsageStatsQueue、Recommendation ContextProvider 与 ItemRebuilder 的 raw console 已收口到项目 logger；搜索统计 flush 和推荐项 rebuild 的失败仍保持原有降级/回填语义，只改变日志出口。
 - RecommendationEngine 主文件 raw console 已收口到既有 `RecommendationEngine` logger；provider 注册/卸载、缓存命中、候选统计、生成耗时和插件 provider 失败日志不再直接写 console。
+- Storage polling/LRU/frequency monitor 的 raw console 已收口到 `Storage:Polling`、`Storage:LRU`、`Storage:Frequency` logger；周期保存、强制保存、驱逐和高频访问告警语义保持不变。
 
 ### 仍保留的兼容边界
 
