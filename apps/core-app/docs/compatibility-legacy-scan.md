@@ -37,6 +37,7 @@
 - Preview Provider / Preview Registry / Terminal / Protocol Handler / ServiceCenter 的 raw console、死协议注释、stale no-op 文案和敏感预览值日志已收口；ServiceCenter 无读取方的注册快照伪持久化路径已删除，后续日志只记录结构化元数据，不再输出搜索表达式、预览结果值或原始 service payload。
 - 已删除无引用且全文件仅剩注释的 screen-capture 主进程占位文件，并移除 renderer 中无人发送的 `@screen-capture` 注册函数；OfficialPluginService、FileWatchService、TuffIconImpl 的 raw console 调试输出也已切到结构化 logger。
 - CoreBox Manager、SystemActions file-index、BuildVerification、FeatureSearchTokens 的小范围 raw console 已收口到 logger；SystemActions 不再对同一次 file-index 同时写 console 和结构化日志。
+- 旧插件注入脚本不再输出 `Touch # Auto inject JS`，同文件未启用的 `#app` 样式注释块已删除。
 
 ### 仍保留的兼容边界
 
