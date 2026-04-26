@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { BlankSlateProps } from './types'
-import { useSlots } from 'vue'
 import { TxEmptyState } from '../../empty-state'
 
 defineOptions({
@@ -12,10 +11,21 @@ const props = withDefaults(defineProps<BlankSlateProps>(), {
   layout: 'vertical',
   surface: 'plain',
 })
-
-const slots = useSlots()
 </script>
 
 <template>
-  <TxEmptyState v-slots="slots" v-bind="props" variant="blank-slate" />
+  <TxEmptyState v-bind="props" variant="blank-slate">
+    <template v-if="$slots.icon" #icon>
+      <slot name="icon" />
+    </template>
+    <template v-if="$slots.title" #title>
+      <slot name="title" />
+    </template>
+    <template v-if="$slots.description" #description>
+      <slot name="description" />
+    </template>
+    <template v-if="$slots.actions" #actions>
+      <slot name="actions" />
+    </template>
+  </TxEmptyState>
 </template>

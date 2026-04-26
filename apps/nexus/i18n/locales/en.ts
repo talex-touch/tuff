@@ -210,6 +210,7 @@ export default {
       heading: 'Latest build',
       releaseDate: 'Released {date}',
       releaseDateFallback: 'Pending release',
+      critical: 'Critical',
     },
     loading: 'Loading releases…',
     empty: 'We have not shipped builds for this channel yet. Check back soon.',

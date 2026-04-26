@@ -5,6 +5,17 @@
 
 ## 2026-04-26
 
+### feat(nexus): 复用 Tuffex 收口公共 updates 页面
+
+- `apps/nexus/app/pages/updates.vue`
+- `apps/nexus/i18n/locales/{zh,en}.ts`
+- `packages/tuffex/packages/components/src/{blank-slate,error-state,guide-state,loading-state,no-data,no-selection,offline-state,permission-state,search-empty}/src/*.vue`
+- `packages/tuffex/packages/components/src/empty-state/__tests__/empty-state-wrappers.test.ts`
+  - 公共 updates 页的要闻列表、历史版本列表、loading 与空态改为复用 `TxCardItem`、`TxTag`、`TxSpinner`、`TxSkeleton`、`TxNoData`；最新版本详情使用 `TxCard` 承载，避免继续维护一套页面内手写卡片/标签/状态样式。
+  - `Critical` 标记补齐双语 `updates.latest.critical`，更新类型标签移除代码内中文 fallback，统一由 locale 文件兜底。
+  - 要闻区保留无外层卡片的页面区块结构，只让实际更新/版本条目使用卡片组件，避免卡片套卡片与产品域组件反向污染 Tuffex。
+  - 修复 Tuffex empty-state 系列 wrapper 使用 `v-slots` 导致 Nuxt SSR `getSSRProps` 崩溃的问题；wrapper 现在显式转发 `icon/title/description/actions` slots，并新增 SSR 回归覆盖。
+
 ### ref(core-app): hard-cut DivisionBox flow trigger 与 legacy startup migrations
 
 - `packages/utils/transport/events/{index.ts,types/division-box.ts}`
