@@ -37,6 +37,8 @@ code: |
       filterable
       filter-placeholder="筛选渠道"
       empty-text="暂无数据"
+      add-aria-label="添加选中渠道"
+      remove-aria-label="移除选中渠道"
     />
   </template>
 ---
@@ -71,6 +73,14 @@ rows:
     type: string
     default: "'No data'"
     description: 列表为空时的展示文案
+  - name: addAriaLabel
+    type: string
+    default: "'Move selected items to target'"
+    description: 添加按钮的无障碍标签
+  - name: removeAriaLabel
+    type: string
+    default: "'Move selected items to source'"
+    description: 移除按钮的无障碍标签
   - name: targetOrder
     type: "'original' | 'push'"
     default: "'original'"

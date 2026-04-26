@@ -31,6 +31,8 @@ const titles = computed<[string, string]>(() => {
 
 const filterPlaceholder = computed(() => (locale.value === 'zh' ? '筛选渠道' : 'Filter channels'))
 const emptyText = computed(() => (locale.value === 'zh' ? '暂无数据' : 'No items'))
+const addAriaLabel = computed(() => (locale.value === 'zh' ? '添加选中渠道' : 'Add selected channels'))
+const removeAriaLabel = computed(() => (locale.value === 'zh' ? '移除选中渠道' : 'Remove selected channels'))
 </script>
 
 <template>
@@ -42,6 +44,8 @@ const emptyText = computed(() => (locale.value === 'zh' ? '暂无数据' : 'No i
       filterable
       :filter-placeholder="filterPlaceholder"
       :empty-text="emptyText"
+      :add-aria-label="addAriaLabel"
+      :remove-aria-label="removeAriaLabel"
     />
   </div>
 </template>

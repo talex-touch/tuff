@@ -14,6 +14,8 @@ const props = withDefaults(defineProps<TransferProps>(), {
   filterable: false,
   filterPlaceholder: '',
   emptyText: 'No data',
+  addAriaLabel: 'Move selected items to target',
+  removeAriaLabel: 'Move selected items to source',
   targetOrder: 'original',
 })
 
@@ -145,6 +147,7 @@ function handleRemove() {
         variant="ghost"
         size="sm"
         :disabled="leftChecked.length === 0"
+        :aria-label="addAriaLabel"
         @click="handleAdd"
       >
         <span class="i-carbon-chevron-right" />
@@ -153,6 +156,7 @@ function handleRemove() {
         variant="ghost"
         size="sm"
         :disabled="rightChecked.length === 0"
+        :aria-label="removeAriaLabel"
         @click="handleRemove"
       >
         <span class="i-carbon-chevron-left" />
