@@ -61,6 +61,11 @@ function isSameQuery(
   return keysA.every(key => a[key] === b[key])
 }
 
+function buildChannelQuery(channel: ReleaseChannelId) {
+  const { channel: _channel, history: _history, ...rest } = route.query
+  return channel === 'release' ? rest : { ...rest, channel }
+}
+
 function resolveChannel(value: unknown): ReleaseChannelId {
   if (typeof value === 'string' && channelIds.includes(value as ReleaseChannelId))
     return value as ReleaseChannelId
@@ -78,16 +83,12 @@ watch(
 )
 
 watch(selectedChannel, async (channel) => {
-  historyExpanded.value = false
-  const nextQuery = channel === 'release'
-    ? (() => {
-        const { channel: _channel, ...rest } = route.query
-        return rest
-      })()
-    : { ...route.query, channel }
+  const nextQuery = buildChannelQuery(channel)
 
   if (!isSameQuery(nextQuery, route.query))
-    router.replace({ query: nextQuery })
+    await router.replace({ query: nextQuery })
+
+  historyExpanded.value = false
 
   // Fetch releases for the selected channel
   await fetchReleases({
