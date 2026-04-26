@@ -5,6 +5,16 @@
 
 ## 2026-04-26
 
+### refactor(core-app): 删除 screen-capture 占位链路并收口服务日志
+
+- `apps/core-app/src/main/addon/device/screen-capture.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/application-hooks.ts`
+- `apps/core-app/src/main/service/{official-plugin.service.ts,file-watch.service.ts}`
+- `apps/core-app/src/main/core/tuff-icon.ts`
+  - 删除未被任何入口引用、且全文件只剩注释的主进程 screen-capture 占位文件；renderer 同步移除无人发送的 `@screen-capture` 注册函数，避免后续误以为屏幕捕获能力已接通。
+  - `OfficialPluginService`、`FileWatchService`、`TuffIconImpl` 的 raw console 调试输出切到 `createLogger`，保留失败原因但减少散落日志和原始路径暴露。
+  - `application-hooks` 清掉外链拦截里的旧 safe-link 注释块，只保留当前 `url:open` / localhost 判断主路径。
+
 ### refactor(core-app): 收口预览、终端与服务中心调试残留
 
 - `apps/core-app/src/main/modules/box-tool/addon/preview/{preview-provider.ts,preview-registry.ts}`

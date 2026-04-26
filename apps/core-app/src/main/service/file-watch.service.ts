@@ -1,8 +1,11 @@
 import type { FSWatcher } from 'chokidar'
 import chokidar from 'chokidar'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
+import { createLogger } from '../utils/logger'
 
 type ChokidarWatchOptions = Parameters<typeof chokidar.watch>[1]
+
+const fileWatchLog = createLogger('FileWatchService')
 
 export class FileWatchService {
   private readonly watchers: Set<FSWatcher> = new Set()
@@ -24,9 +27,6 @@ export class FileWatchService {
     })
 
     this.watchers.add(watcher)
-    // watcher.on('close', () => {
-    //   this.watchers.delete(watcher)
-    // })
     return watcher
   }
 
@@ -34,7 +34,7 @@ export class FileWatchService {
     if (!watcher) return
     this.watchers.delete(watcher)
     await watcher.close().catch((error) => {
-      console.warn('[FileWatchService] Failed to close watcher:', error)
+      fileWatchLog.warn('Failed to close watcher', { error })
     })
   }
 
