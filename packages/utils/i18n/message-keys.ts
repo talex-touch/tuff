@@ -49,8 +49,6 @@ export const PluginKeys = {
   DEPENDENCY_MISSING: 'plugin.dependencyMissing',
   VERSION_MISMATCH: 'plugin.versionMismatch',
   PERMISSION_DENIED: 'plugin.permissionDenied',
-  SDK_VERSION_MISSING: 'plugin.sdkVersionMissing',
-  SDK_VERSION_OUTDATED: 'plugin.sdkVersionOutdated',
   PERMISSION_MISSING: 'plugin.permissionMissing',
 } as const
 
@@ -137,8 +135,6 @@ export const PermissionKeys = {
   ALLOW_ALWAYS: 'permission.allowAlways',
   REQUEST_TITLE: 'permission.requestTitle',
   REQUEST_DESC: 'permission.requestDesc',
-  ENFORCEMENT_DISABLED: 'permission.enforcementDisabled',
-  LEGACY_PLUGIN_WARNING: 'permission.legacyPluginWarning',
 } as const
 
 /**

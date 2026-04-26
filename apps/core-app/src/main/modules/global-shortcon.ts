@@ -49,7 +49,7 @@ const resolveKeyManager = (channel: unknown): unknown =>
 const SHORTCUT_PERMISSION_ID = 'system.shortcut'
 const SHORTCUT_PERMISSION_MIN_SDK = 260121
 
-type ShortcutWarning = 'permission-missing' | 'sdk-legacy' | 'missing-description'
+type ShortcutWarning = 'permission-missing' | 'sdk-blocked' | 'missing-description'
 
 interface ShortcutStatus {
   state: 'active' | 'conflict' | 'unavailable' | 'disabled'
@@ -626,7 +626,7 @@ export class ShortcutModule extends BaseModule {
     const pluginName = shortcut.meta?.author
     const sdkapi = this.getPluginSdkapi(pluginName)
     if (!sdkapi || sdkapi < SHORTCUT_PERMISSION_MIN_SDK) {
-      warnings.push('sdk-legacy')
+      warnings.push('sdk-blocked')
       return warnings
     }
 

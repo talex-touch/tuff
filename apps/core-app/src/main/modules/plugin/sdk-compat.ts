@@ -4,8 +4,9 @@ import {
   PERMISSION_ENFORCEMENT_MIN_VERSION,
   resolveSdkApiVersion
 } from '@talex-touch/utils/plugin'
+import { PLUGIN_SDK_BLOCKED_CODE } from '../../../shared/plugin-sdk-blocked'
 
-export const SDKAPI_BLOCKED_CODE = 'SDKAPI_BLOCKED'
+export const SDKAPI_BLOCKED_CODE = PLUGIN_SDK_BLOCKED_CODE
 
 export type PluginSdkBlockReason = 'missing-sdkapi' | 'invalid-sdkapi' | 'outdated-sdkapi'
 

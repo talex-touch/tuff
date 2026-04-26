@@ -4,10 +4,13 @@ import { TxLoadingOverlay } from '@talex-touch/tuffex'
 import { hasDocument } from '@talex-touch/utils/env'
 import { h, render } from 'vue'
 import PluginApplyInstall from '~/components/plugin/action/mention/PluginApplyInstall.vue'
+import { resolvePluginApplyInstallErrorMessage } from '~/components/plugin/action/mention/plugin-apply-install-utils'
+import { useI18nText } from '~/modules/lang'
 import { blowMention, popperMention } from '../mention/dialog-mention'
 
 const bufferCache = new Map<string, Buffer>()
 const transport = useTuffTransport()
+const { t } = useI18nText()
 type DropPluginManifest = { name: string; [key: string]: unknown }
 type DropPluginRequest = { name: string; buffer: Buffer; size: number }
 type DropPluginResponse =
@@ -66,12 +69,15 @@ export function clearBufferedFile(name: string): void {
 
 async function handlePluginDrop(file: File): Promise<boolean> {
   if (!file.name.endsWith('.tpex')) {
-    await blowMention('Install Error', 'Only .tpex plugin packages are supported.')
+    await blowMention(
+      t('plugin.dropInstall.errorTitle'),
+      t('plugin.dropInstall.unsupportedExtension')
+    )
     return true
   }
 
   if (file.name.endsWith('.tpex')) {
-    const loadingInstance = createLoadingOverlay('Parsing plugin package...')
+    const loadingInstance = createLoadingOverlay(t('plugin.dropInstall.parsing'))
 
     try {
       const arrayBuffer = await file.arrayBuffer()
@@ -92,13 +98,10 @@ async function handlePluginDrop(file: File): Promise<boolean> {
         console.error(`[DropperResolver] Error resolving plugin: ${data.msg}`)
         // Clear cache on error
         clearBufferedFile(file.name)
-        if (data.msg === '10091') {
-          await blowMention('Install Error', 'The plugin has been irreversibly damaged!')
-        } else if (data.msg === '10092') {
-          await blowMention('Install Error', 'Unable to identify the file!')
-        } else {
-          await blowMention('Install Error', `An unknown error occurred: ${data.msg}`)
-        }
+        await blowMention(
+          t('plugin.dropInstall.errorTitle'),
+          resolvePluginApplyInstallErrorMessage(data.msg, t)
+        )
       } else {
         const { manifest, path } = data
         await popperMention(manifest.name, () => {
@@ -109,7 +112,7 @@ async function handlePluginDrop(file: File): Promise<boolean> {
       loadingInstance.close()
       console.error('[DropperResolver] Failed to process TPEX file:', error)
       clearBufferedFile(file.name)
-      await blowMention('Install Error', 'Failed to read plugin file. Please try again.')
+      await blowMention(t('plugin.dropInstall.errorTitle'), t('plugin.dropInstall.readFailed'))
     }
     return true
   }

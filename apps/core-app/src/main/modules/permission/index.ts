@@ -4,7 +4,7 @@
  * Manages plugin permissions with persistent storage.
  */
 
-import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import {
   PermissionCategory,
   permissionRegistry,
@@ -12,10 +12,11 @@ import {
 } from '@talex-touch/utils/permission'
 import { getTuffTransportMain, PermissionEvents } from '@talex-touch/utils/transport/main'
 import { PermissionGrantedEvent, TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
+import { runStartupMigration } from '../../core/startup-migrations'
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 import { PermissionGuard } from './permission-guard'
-import { PermissionStore } from './permission-store'
+import { migrateLegacyPermissionStoreIfNeeded, PermissionStore } from './permission-store'
 
 const permLog = createLogger('Permission')
 const SHORTCUT_PERMISSION_ID = 'system.shortcut'
@@ -51,12 +52,24 @@ export class PermissionModule extends BaseModule {
     })
   }
 
-  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
-    // Initialize permission store
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    await runStartupMigration({
+      id: 'legacy-permissions-json',
+      version: 1,
+      markerDir: ctx.file.dirPath!,
+      run: async () => {
+        const result = await migrateLegacyPermissionStoreIfNeeded(ctx.file.dirPath!)
+        if (result.status === 'failed') {
+          throw new Error(result.error || result.reason)
+        }
+        return result
+      }
+    })
+
     this.store = new PermissionStore(ctx.file.dirPath!)
     const channel =
       ctx.runtime?.channel ?? (ctx.app as { channel?: unknown } | null | undefined)?.channel
-    return this.initializeModule(channel)
+    await this.initializeModule(channel)
   }
 
   private async initializeModule(channel: unknown): Promise<void> {

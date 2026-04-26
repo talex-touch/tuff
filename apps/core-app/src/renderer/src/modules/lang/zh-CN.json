@@ -46,6 +46,19 @@
     "specification": "规格",
     "dashboard": "详细信息",
     "dashboardDesc": "启用系统详细信息页面，显示索引、应用、日志和OCR状态。",
+    "dashboardUnknownApp": "未知应用",
+    "dashboardNoWindowTitle": "当前窗口未提供标题",
+    "dashboardNoActiveApp": "当前未检测到活跃应用",
+    "dashboardUnknownStatus": "未知状态",
+    "dashboardNotStarted": "未启动",
+    "dashboardNone": "无",
+    "dashboardNoWorkers": "当前没有 Worker 记录",
+    "dashboardNoIndexingRecords": "当前没有索引记录",
+    "dashboardNoOcrResult": "暂无结果",
+    "dashboardNoOcrTasks": "当前没有 OCR 任务",
+    "dashboardUnknownSource": "未知来源",
+    "dashboardFileSource": "文件来源",
+    "dashboardDataUrlSource": "Data URL（{count} 字符）",
     "searchEngineLogs": "搜索引擎日志",
     "searchEngineLogsDesc": "启用搜索引擎操作的详细日志记录，帮助调试搜索问题。",
     "startCosts": "启动耗时",
@@ -60,6 +73,11 @@
     "exportJson": "导出 JSON",
     "exportSuccess": "性能数据已导出",
     "exportFailed": "导出失败",
+    "buildMetadataVersion": "版本号",
+    "buildMetadataId": "构建 ID",
+    "buildMetadataGitHash": "Git 哈希",
+    "buildMetadataType": "构建类型",
+    "buildMetadataTime": "构建时间",
     "rating": {
       "excellent": "优秀",
       "good": "良好",
@@ -209,6 +227,8 @@
     "omniPanelShortcutDesc": "启用后可用 Command/Ctrl + Shift + P 唤起全景面板。",
     "omniPanelMouseLongPress": "OmniPanel 右键长按唤起",
     "omniPanelMouseLongPressDesc": "启用后，右键长按可直接打开全景面板并读取选中文本。",
+    "omniPanelMouseLongPressDuration": "OmniPanel 右键长按时长",
+    "omniPanelMouseLongPressDurationDesc": "设置触发 OmniPanel 的右键长按阈值。",
     "shortcutsDialog": {
       "title": "快捷方式",
       "desc": "搜索并配置系统级快捷键。",
@@ -229,6 +249,7 @@
       "sourcePlugin": "插件：{name}",
       "sourceUnknown": "未知来源",
       "triggerMouseRightLongPress": "鼠标右键长按",
+      "triggerMouseRightLongPressWithDuration": "鼠标右键长按（{duration} ms）",
       "columns": {
         "name": "名称",
         "source": "来源",
@@ -251,6 +272,8 @@
       "conflictPlugin": "与插件快捷键冲突",
       "unavailable": "快捷键注册失败，可能被系统占用",
       "invalid": "快捷键无效",
+      "omniPanelAccessibilityRequired": "需要辅助功能权限",
+      "omniPanelAccessibilityHint": "macOS 需先授予辅助功能权限，右键长按触发才会生效。",
       "spotlightHint": "可在系统设置中关闭 Spotlight 快捷键以释放该组合键"
     },
     "autoPaste": "自动粘贴",
@@ -416,8 +439,8 @@
     "wallpaperCopyFailed": "复制壁纸到壁纸库失败。",
     "selectImageFailed": "选择背景图片失败。",
     "selectFolderFailed": "选择背景文件夹失败。",
-    "syncToCloud": "同步到云端",
-    "syncToCloudDesc": "开启后记录同步状态，上传功能后续支持。",
+    "syncToCloud": "记录同步状态",
+    "syncToCloudDesc": "当前只记录本地同步状态，不会上传到云端。",
     "syncRequiresLibrary": "同步前请先复制到壁纸库。",
     "folderRandomHint": "文件夹轮播默认随机。",
     "emphasis": "强调",
@@ -612,10 +635,22 @@
       "download": "下载源文件",
       "viewDocs": "查看文档",
       "information": "插件信息",
+      "readmeLoading": "正在加载 README...",
+      "readmeEmpty": "暂无 README",
       "readmeError": "加载 README 失败",
       "notFound": "未找到插件",
       "notFoundDesc": "请检查插件 ID 或返回市场",
       "backToStore": "返回市场"
+    },
+    "rating": {
+      "title": "评分",
+      "loading": "正在加载...",
+      "loginRequiredTitle": "需要登录",
+      "loginRequired": "登录后才可为该插件评分。",
+      "invalid": "评分值无效。",
+      "httpError": "评分请求失败。",
+      "unavailable": "评分暂时不可用。",
+      "submitFailedTitle": "评分失败"
     },
     "error": {
       "loadFailed": "官方插件列表加载失败。"
@@ -640,7 +675,18 @@
       "confirmMessage": "插件「{name}」来自非官方来源，确定继续安装吗？",
       "confirmInstall": "继续安装",
       "confirmReject": "取消",
-      "beforeExitPrompt": "仍有插件安装正在进行，确认要退出吗？"
+      "beforeExitPrompt": "仍有插件安装正在进行，确认要退出吗？",
+      "reasons": {
+        "installFailed": "安装流程未完成，请稍后重试。",
+        "noSource": "当前插件缺少可用的安装源。",
+        "authRequired": "请先登录后再继续安装。",
+        "httpError": "安装请求失败（HTTP {status}）。",
+        "noProvider": "当前下载地址没有可用的安装处理器。",
+        "sdkapiBlocked": "该插件的 sdkapi 与当前 Tuff 版本不兼容。",
+        "sdkapiMissing": "该插件缺少必需的 sdkapi 声明，当前版本无法安装。",
+        "sdkapiInvalid": "该插件声明的 sdkapi 格式无效。",
+        "sdkapiOutdated": "该插件的 sdkapi {declared} 低于当前支持的最低版本 {minimum}。"
+      }
     },
     "upgradeDialog": {
       "confirmTitle": "确认更新",
@@ -688,6 +734,25 @@
     "searchPlaceholder": "搜索插件...",
     "opening": "打开中...",
     "openFolder": "打开文件夹",
+    "dropInstall": {
+      "installing": "安装中...",
+      "ignore": "忽略",
+      "install": "安装",
+      "errorTitle": "插件安装失败",
+      "successTitle": "插件已安装",
+      "bufferMissing": "插件文件缓冲区缺失，请重新拖入安装包。",
+      "unsupportedExtension": "仅支持 .tpex 插件包。",
+      "parsing": "正在解析插件包...",
+      "corrupted": "该插件包已损坏，或 manifest 无效。",
+      "invalidPackage": "无法解析这个插件包。",
+      "installFailed": "插件安装失败，请换一个有效安装包后重试。",
+      "readFailed": "读取插件文件失败，请重试。",
+      "alreadyInstalledTitle": "插件已安装",
+      "alreadyInstalledMessage": "插件“{name}”已安装，是否更新它？",
+      "update": "更新",
+      "successMessage": "插件“{name}”已安装成功。",
+      "unexpected": "插件安装遇到异常，请稍后重试。"
+    },
     "emptyState": {
       "message": "选择一个插件查看详情",
       "exploreStore": "浏览市场"
@@ -774,9 +839,6 @@
       "blockedWarning": "此插件因 SDK 版本过低已被阻断，权限页面仅展示状态，不提供授权操作。",
       "blockedStatusTitle": "阻断原因",
       "blockedHint": "升级到 sdkapi >= {version} 后重新安装插件，再执行权限授权。",
-      "legacyTitle": "SDK 版本警告",
-      "legacyWarning": "此插件使用旧版 SDK，权限校验已跳过",
-      "legacyHint": "升级到 sdkapi >= {version} 以启用权限校验",
       "backendUnavailableTitle": "权限后端不可写",
       "backendUnavailableDesc": "SQLite 权限后端不可用，当前仅支持读取已加载快照。",
       "backendMutationFailed": "权限变更失败",
@@ -810,7 +872,6 @@
         "warning": {
           "permissionMissing": "未授予快捷键权限",
           "blockedSdk": "SDK 版本过低，插件已被阻断",
-          "legacySdk": "SDK 版本过低，未启用权限校验",
           "missingDescription": "缺少快捷键说明"
         }
       },
@@ -1098,8 +1159,20 @@
           "sizePlaceholder": "选择预览尺寸",
           "reset": "恢复默认",
           "resizeHint": "拖拽右下角可自定义",
+          "mockLabel": "模拟载荷",
           "mockPlaceholder": "输入 JSON 载荷",
           "mockError": "JSON 解析失败：{error}",
+          "statusNotSelected": "未选择",
+          "statusInvalidPayload": "载荷无效",
+          "statusLoading": "加载中",
+          "statusRenderFailed": "渲染失败",
+          "statusReady": "已加载",
+          "statusError": "异常",
+          "statusPending": "暂未就绪",
+          "hintMockInvalid": "模拟载荷解析失败：{error}",
+          "hintMockEmpty": "已开启模拟载荷，但内容为空",
+          "hintMockActive": "使用模拟载荷渲染",
+          "hintReadyEmpty": "提示：Widget 已加载但内容为空时，通常需要 payload 或运行时数据。",
           "missingWidgetId": "预览需要有效的 widgetId。",
           "resizeAriaLabel": "调整预览尺寸"
         }
@@ -1142,6 +1215,45 @@
         "metadataHint": "用于指定 tag / branch 等额外信息，留空则自动处理。",
         "actionBlockTitle": "执行",
         "sourceTypeResult": "来源类型"
+      },
+      "create": {
+        "templatesTitle": "模板",
+        "generalTitle": "基础信息",
+        "readmeTitle": "README",
+        "actionsTitle": "操作",
+        "openInVscode": "在 VSCode 中打开",
+        "agreementPrefix": "同意",
+        "agreementName": "Touch Plugin Development",
+        "createAction": "创建",
+        "agreementAlertTitle": "注意",
+        "agreementAlertMessage": "你必须同意 <i style='color: #4E94B0'>Touch Plugin Development</i> 协议。",
+        "fields": {
+          "name": "名称",
+          "icon": "图标",
+          "version": "版本",
+          "devAddress": "开发地址",
+          "description": "描述"
+        },
+        "validation": {
+          "name": "请输入有效的插件名称。",
+          "version": "请输入有效的插件版本。",
+          "devAddress": "请输入有效的插件开发地址。",
+          "description": "请输入有效的插件描述。"
+        },
+        "templates": {
+          "download": "下载",
+          "vueDescription": "包含基于 Vue 3 和 Vite 的默认开发环境。",
+          "reactDescription": "包含基于 React 18 和 Vite 的默认开发环境。",
+          "svelteDescription": "包含基于 Svelte 3 和 Vite 的默认开发环境。"
+        },
+        "env": {
+          "nodeTooLow": "Node.js 版本过低（v{version}），请升级到 16 或更高版本。",
+          "nodeMissing": "缺少 Node.js，请先安装。",
+          "degitMissing": "缺少 degit，请先安装。",
+          "degitInstalled": "已安装",
+          "degitInstallingTitle": "正在安装 degit",
+          "installDegit": "安装 degit"
+        }
       }
     },
     "logs": {
@@ -1160,6 +1272,8 @@
       "basicInfo": "基础信息",
       "pluginId": "插件 ID",
       "pluginName": "插件名称",
+      "commandDetailsTitle": "命令详情",
+      "commandDataTitle": "命令数据",
       "copyPluginId": "复制插件 ID",
       "copyPluginIdSuccess": "插件 ID 已复制",
       "copyPluginIdFailed": "复制插件 ID 失败",
@@ -1716,6 +1830,7 @@
         "best_effort": "尽力支持",
         "unsupported": "不支持"
       },
+      "reason": "原因",
       "limitations": "限制",
       "tags": {
         "sensitive": "敏感"
@@ -2398,6 +2513,8 @@
     "remove": "移除",
     "close": "关闭",
     "open": "打开",
+    "content": "内容",
+    "capsLock": "大写锁定",
     "refresh": "刷新",
     "loading": "加载中...",
     "error": "错误",
@@ -2496,6 +2613,10 @@
     "pluginInstallFailedBody": "未能添加插件 {name}",
     "pluginInstallFailedBodyWithReason": "未能添加插件 {name}：{error}",
     "pluginInstallUnknown": "插件",
+    "clipboardTextEmpty": "剪贴板文本为空。",
+    "clipboardImageBody": "剪贴板中的图片内容已准备就绪。",
+    "clipboardHtmlBody": "剪贴板中的 HTML 内容已准备就绪。",
+    "externalLinkConfirmTitle": "确认打开外部链接？",
     "updateAvailable": "新版本可用",
     "updateAvailableBody": "Tuff {version} 已发布\n点击查看详情",
     "updateReady": "更新已准备就绪",

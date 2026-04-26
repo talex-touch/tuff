@@ -94,7 +94,7 @@ export type IPluginWebview<TWindow = unknown> = Map<number, TWindow>
  * Format: YYMMDD (e.g., 251212 = 2025-12-12)
  *
  * Rules:
- * - Not declared or < PERMISSION_ENFORCEMENT_MIN_VERSION: legacy mode (permissions bypassed)
+ * - Not declared / invalid / < PERMISSION_ENFORCEMENT_MIN_VERSION: blocked by runtime gate
  * - >= PERMISSION_ENFORCEMENT_MIN_VERSION: permissions enforced
  */
 export type SdkApiVersion = number
@@ -521,7 +521,7 @@ export interface IManifest {
   /**
    * SDK API version for compatibility checking.
    * Format: YYMMDD (e.g., 251212 = 2025-12-12)
-   * Plugins without this field or with version < 251212 will bypass permission enforcement.
+   * Plugins without this field, with invalid markers, or with version < 251212 are blocked by runtime.
    */
   sdkapi?: SdkApiVersion
   /**

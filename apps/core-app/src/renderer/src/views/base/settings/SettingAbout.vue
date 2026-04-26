@@ -152,9 +152,11 @@ const currentExperiencePack = computed(() => {
 // Get build info from signature
 const buildInfo = computed(() => getBuildInfo())
 const effectiveUpdateChannel = computed(() => {
-  return normalizeStoredUpdateChannel(updateChannel.value) ??
+  return (
+    normalizeStoredUpdateChannel(updateChannel.value) ??
     normalizeStoredUpdateChannel(buildInfo.value?.channel) ??
     null
+  )
 })
 const updateChannelLabel = computed(() => {
   const channel = effectiveUpdateChannel.value
@@ -264,15 +266,19 @@ function openSoftwareLicense() {
     </TuffBlockLine>
     <TuffBlockLine :title="t('settingAbout.specification')" :description="`${currentQuarter}`" />
 
-    <TuffBlockLine v-if="buildInfo.version" title="Version" :description="buildInfo.version" />
+    <TuffBlockLine
+      v-if="buildInfo.version"
+      :title="t('settingAbout.buildMetadataVersion')"
+      :description="buildInfo.version"
+    />
     <TuffBlockLine
       v-if="buildInfo.buildIdentifier"
-      title="Build ID"
+      :title="t('settingAbout.buildMetadataId')"
       :description="buildInfo.buildIdentifier"
     />
     <TuffBlockLine
       v-if="buildInfo.gitCommitHash"
-      title="Git Hash"
+      :title="t('settingAbout.buildMetadataGitHash')"
       :description="buildInfo.gitCommitHash.substring(0, 7)"
     />
     <TuffBlockLine
@@ -282,12 +288,12 @@ function openSoftwareLicense() {
     />
     <TuffBlockLine
       v-if="buildInfo.buildType"
-      title="Build Type"
+      :title="t('settingAbout.buildMetadataType')"
       :description="buildInfo.buildType"
     />
     <TuffBlockLine
       v-if="buildInfo.buildTime"
-      title="Build Time"
+      :title="t('settingAbout.buildMetadataTime')"
       :description="new Date(buildInfo.buildTime).toLocaleString()"
     />
     <TuffBlockLine :title="t('settingAbout.startCosts')">

@@ -27,11 +27,16 @@ async function loadSubject() {
   return await import('./darwin')
 }
 
-async function createTempAppBundle(name: string, plistDisplayName: string): Promise<string> {
+async function createTempAppBundle(
+  name: string,
+  plistDisplayName: string,
+  options?: { localizedDisplayName?: string }
+): Promise<string> {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'darwin-app-test-'))
   const appPath = path.join(tmpRoot, `${name}.app`)
   const contentsPath = path.join(appPath, 'Contents')
-  await fs.mkdir(contentsPath, { recursive: true })
+  const resourcesPath = path.join(contentsPath, 'Resources')
+  await fs.mkdir(resourcesPath, { recursive: true })
   await fs.writeFile(
     path.join(contentsPath, 'Info.plist'),
     `<?xml version="1.0" encoding="UTF-8"?>
@@ -47,6 +52,16 @@ async function createTempAppBundle(name: string, plistDisplayName: string): Prom
 </dict>
 </plist>`
   )
+
+  if (options?.localizedDisplayName) {
+    const localizedDir = path.join(resourcesPath, 'zh-Hans.lproj')
+    await fs.mkdir(localizedDir, { recursive: true })
+    await fs.writeFile(
+      path.join(localizedDir, 'InfoPlist.strings'),
+      `"CFBundleDisplayName" = "${options.localizedDisplayName}";\n`
+    )
+  }
+
   return tmpRoot
 }
 
@@ -97,5 +112,60 @@ describe('darwin app info', () => {
       '-raw',
       appPath
     ])
+  })
+
+  it('falls back to localized strings when Spotlight display name is unavailable', async () => {
+    const tempRoot = await createTempAppBundle('WeChat', 'WeChat', {
+      localizedDisplayName: '微信'
+    })
+    tempRoots.push(tempRoot)
+    const appPath = path.join(tempRoot, 'WeChat.app')
+
+    execFileSafeMock.mockImplementation(async (command: string) => {
+      if (command === 'mdls') {
+        return { stdout: '(null)\n', stderr: '' }
+      }
+
+      throw new Error(`unexpected command: ${command}`)
+    })
+
+    const { getAppInfo } = await loadSubject()
+    const appInfo = await getAppInfo(appPath)
+
+    expect(appInfo).toEqual(
+      expect.objectContaining({
+        name: 'WeChat',
+        displayName: '微信',
+        bundleId: 'com.example.wechat',
+        path: appPath
+      })
+    )
+  })
+
+  it('keeps localized display name as an alternate name when Spotlight wins', async () => {
+    const tempRoot = await createTempAppBundle('NeteaseMusic 2', 'NeteaseMusic', {
+      localizedDisplayName: '网易云音乐'
+    })
+    tempRoots.push(tempRoot)
+    const appPath = path.join(tempRoot, 'NeteaseMusic 2.app')
+
+    execFileSafeMock.mockImplementation(async (command: string) => {
+      if (command === 'mdls') {
+        return { stdout: 'NeteaseMusic 2.app\n', stderr: '' }
+      }
+
+      throw new Error(`unexpected command: ${command}`)
+    })
+
+    const { getAppInfo } = await loadSubject()
+    const appInfo = await getAppInfo(appPath)
+
+    expect(appInfo).toEqual(
+      expect.objectContaining({
+        name: 'NeteaseMusic 2',
+        displayName: 'NeteaseMusic 2',
+        alternateNames: expect.arrayContaining(['网易云音乐'])
+      })
+    )
   })
 })

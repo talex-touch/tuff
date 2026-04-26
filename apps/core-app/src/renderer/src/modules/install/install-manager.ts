@@ -97,13 +97,8 @@ function updateTask(event: PluginInstallProgressEvent): void {
   tasks.set(event.taskId, next)
 
   if (event.pluginId) {
-    // Index by both composite key (providerId::pluginId) and plain pluginId for backward compatibility
     const compositeKey = getPluginCompositeKey(event.pluginId, event.providerId)
     pluginIndex.set(compositeKey, event.taskId)
-    // Also index by plain pluginId as fallback
-    if (!pluginIndex.has(event.pluginId)) {
-      pluginIndex.set(event.pluginId, event.taskId)
-    }
   }
 
   if (event.source) {
@@ -255,9 +250,8 @@ const activeTaskCount = computed(() => {
 
 function getTaskByPluginId(pluginId?: string, providerId?: string) {
   if (!pluginId) return undefined
-  // Try composite key first, then fall back to plain pluginId
   const compositeKey = getPluginCompositeKey(pluginId, providerId)
-  const taskId = pluginIndex.get(compositeKey) ?? pluginIndex.get(pluginId)
+  const taskId = pluginIndex.get(compositeKey)
   return taskId ? tasks.get(taskId) : undefined
 }
 

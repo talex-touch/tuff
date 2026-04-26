@@ -343,26 +343,30 @@ const previewWidgetItem = computed<TuffItem | null>(() => {
 })
 
 const previewWidgetStatus = computed(() => {
-  if (!previewWidgetId.value) return '未选择'
-  if (previewPayloadInvalid.value) return 'Payload 无效'
-  if (previewWidgetRegistering.value) return '加载中'
-  if (previewWidgetRenderError.value) return '渲染失败'
-  if (previewWidgetReady.value) return '已加载'
-  if (previewWidgetIssues.value.some((issue) => issue.type === 'error')) return '异常'
-  return '暂未就绪'
+  if (!previewWidgetId.value) return t('plugin.features.widget.preview.statusNotSelected')
+  if (previewPayloadInvalid.value) return t('plugin.features.widget.preview.statusInvalidPayload')
+  if (previewWidgetRegistering.value) return t('plugin.features.widget.preview.statusLoading')
+  if (previewWidgetRenderError.value) return t('plugin.features.widget.preview.statusRenderFailed')
+  if (previewWidgetReady.value) return t('plugin.features.widget.preview.statusReady')
+  if (previewWidgetIssues.value.some((issue) => issue.type === 'error')) {
+    return t('plugin.features.widget.preview.statusError')
+  }
+  return t('plugin.features.widget.preview.statusPending')
 })
 
 const previewWidgetHint = computed(() => {
   if (!previewWidgetId.value) return ''
-  if (previewPayloadInvalid.value) return `Mock payload 解析失败：${mockPayloadError.value}`
-  if (mockPayloadEnabled.value && !previewPayloadActive.value) {
-    return '已开启 Mock Payload，但内容为空'
+  if (previewPayloadInvalid.value) {
+    return t('plugin.features.widget.preview.hintMockInvalid', { error: mockPayloadError.value })
   }
-  if (previewPayloadActive.value) return '使用 Mock Payload 渲染'
+  if (mockPayloadEnabled.value && !previewPayloadActive.value) {
+    return t('plugin.features.widget.preview.hintMockEmpty')
+  }
+  if (previewPayloadActive.value) return t('plugin.features.widget.preview.hintMockActive')
   if (!previewWidgetReady.value) return ''
   if (previewWidgetRenderError.value) return ''
   if (previewWidgetIssues.value.length) return ''
-  return '提示：Widget 已加载但内容为空时，通常需要 payload 或运行时数据。'
+  return t('plugin.features.widget.preview.hintReadyEmpty')
 })
 
 const widgetPathAliasNote = computed(() => {

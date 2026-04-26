@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { PermissionStore } from './permission-store'
+import { migrateLegacyPermissionStoreIfNeeded, PermissionStore } from './permission-store'
 
 function createUnavailableBackend(message = 'sqlite unavailable') {
   return {
@@ -47,6 +47,9 @@ describe('PermissionStore sqlite backend', () => {
       'utf-8'
     )
 
+    const migration = await migrateLegacyPermissionStoreIfNeeded(tempDir)
+    expect(migration.status).toBe('migrated')
+
     const store = new PermissionStore(tempDir)
     await store.initialize()
 
@@ -83,7 +86,7 @@ describe('PermissionStore sqlite backend', () => {
     await store.shutdown()
   })
 
-  it('enters degraded backend-unavailable mode and keeps loaded snapshot readable', async () => {
+  it('enters degraded backend-unavailable mode without reviving legacy json fallback', async () => {
     const legacyPath = path.join(tempDir, 'permissions.json')
     await fs.writeFile(
       legacyPath,
@@ -115,7 +118,7 @@ describe('PermissionStore sqlite backend', () => {
         reason: 'sqlite offline'
       })
     )
-    expect(store.hasPermission('touch-demo', 'fs.read', 251212)).toBe(true)
+    expect(store.hasPermission('touch-demo', 'fs.read', 251212)).toBe(false)
     await store.shutdown()
   })
 

@@ -1,11 +1,14 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileSyncMock, spawnMock, openExternalMock } = vi.hoisted(() => ({
-  execFileSyncMock: vi.fn(),
-  spawnMock: vi.fn(),
-  openExternalMock: vi.fn(async () => undefined)
-}))
+const { execFileSyncMock, spawnMock, openExternalMock, notificationIsSupportedMock } = vi.hoisted(
+  () => ({
+    execFileSyncMock: vi.fn(),
+    spawnMock: vi.fn(),
+    openExternalMock: vi.fn(async () => undefined),
+    notificationIsSupportedMock: vi.fn(() => true)
+  })
+)
 
 vi.mock('node:child_process', () => ({
   execFileSync: execFileSyncMock,
@@ -13,6 +16,9 @@ vi.mock('node:child_process', () => ({
 }))
 
 vi.mock('electron', () => ({
+  Notification: {
+    isSupported: notificationIsSupportedMock
+  },
   shell: {
     openExternal: openExternalMock
   },
@@ -21,6 +27,12 @@ vi.mock('electron', () => ({
     getMediaAccessStatus: vi.fn(() => 'granted'),
     askForMediaAccess: vi.fn(async () => true)
   }
+}))
+
+vi.mock('@talex-touch/utils/transport/main', () => ({
+  getTuffTransportMain: vi.fn(() => ({
+    on: vi.fn()
+  }))
 }))
 
 vi.mock('@talex-touch/utils/common/logger', () => ({
@@ -78,6 +90,29 @@ describe('permission-checker', () => {
 
     expect(windows.status).toBe(PermissionStatus.UNSUPPORTED)
     expect(linux.status).toBe(PermissionStatus.UNSUPPORTED)
+  })
+
+  it('keeps macOS notification permission undetermined when native notifications are supported', () => {
+    notificationIsSupportedMock.mockReturnValue(true)
+
+    const result = withPlatform('darwin', () =>
+      PermissionChecker.getInstance().checkNotifications()
+    )
+
+    expect(result.status).toBe(PermissionStatus.NOT_DETERMINED)
+    expect(result.canRequest).toBe(true)
+    expect(notificationIsSupportedMock).toHaveBeenCalled()
+  })
+
+  it('returns unsupported when macOS native notifications are unavailable', () => {
+    notificationIsSupportedMock.mockReturnValue(false)
+
+    const result = withPlatform('darwin', () =>
+      PermissionChecker.getInstance().checkNotifications()
+    )
+
+    expect(result.status).toBe(PermissionStatus.UNSUPPORTED)
+    expect(result.canRequest).toBe(false)
   })
 
   it('opens Linux settings via standard launcher candidates', async () => {

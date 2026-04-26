@@ -12,6 +12,7 @@ import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron'
 import fse from 'fs-extra'
 import { createLogger } from '../../utils/logger'
 import { ensureDefaultProvidersRegistered, installFromRegistry } from './providers'
+import { getPluginSdkCompatibilityGate, SDKAPI_BLOCKED_CODE } from './sdk-compat'
 
 const pluginInstallerLog = createLogger('PluginSystem').child('Installer')
 
@@ -83,6 +84,24 @@ async function runResolver(
   })
 }
 
+function assertManifestSdkCompatibility(manifest?: IManifest): void {
+  if (!manifest) return
+
+  const pluginName =
+    typeof manifest.name === 'string' && manifest.name.trim().length > 0
+      ? manifest.name.trim()
+      : 'unknown'
+  const gate = getPluginSdkCompatibilityGate(pluginName, manifest.sdkapi)
+  if (!gate.blocked) return
+
+  const error = new Error(
+    gate.message || `Plugin "${pluginName}" is blocked by the sdkapi compatibility gate.`
+  ) as Error & { code?: string }
+  error.name = SDKAPI_BLOCKED_CODE
+  error.code = SDKAPI_BLOCKED_CODE
+  throw error
+}
+
 export interface PreparedPluginInstall {
   request: PluginInstallRequest
   providerResult: PluginInstallResult
@@ -147,6 +166,7 @@ export class PluginInstaller {
     const manifest = providerResult.manifest
       ? providerResult.manifest
       : (await this.previewManifest(providerResult.filePath!))?.manifest
+    assertManifestSdkCompatibility(manifest)
 
     if (options?.onDownloadProgress) {
       try {

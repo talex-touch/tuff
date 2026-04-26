@@ -618,7 +618,6 @@ export function useSearch(
   async function handleExecute(item?: TuffItem): Promise<void> {
     const itemToExecute = item || activeItem.value
     if (!itemToExecute) {
-      console.warn('[useSearch] handleExecute called without an item.')
       return
     }
 

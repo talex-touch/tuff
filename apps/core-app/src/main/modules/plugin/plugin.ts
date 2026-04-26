@@ -78,6 +78,12 @@ interface FeatureEventUtil {
   offFeatureLifeCycle: (id: string, callback: ITargetFeatureLifeCycle) => void
 }
 
+function createLegacyChannelRemovedError(capability: 'channel.raw' | 'channel.sendSync'): Error {
+  return new Error(
+    `[Plugin API] ${capability} was removed by the core-app hard-cut. Migrate this plugin to typed transport send/on APIs.`
+  )
+}
+
 interface StorageTreeNode {
   name: string
   path: string
@@ -1400,9 +1406,16 @@ export class TouchPlugin implements ITouchPlugin {
       onMain: (eventName, handler) =>
         onTransport(eventName, (context) => !context?.plugin, handler),
       onRenderer: (eventName, handler) =>
-        onTransport(eventName, (context) => context?.plugin?.name === pluginName, handler),
-      raw: transport as IPluginChannelBridge['raw']
+        onTransport(eventName, (context) => context?.plugin?.name === pluginName, handler)
     }
+
+    Object.defineProperty(channelBridge as unknown as Record<string, unknown>, 'raw', {
+      configurable: true,
+      enumerable: false,
+      get() {
+        throw createLegacyChannelRemovedError('channel.raw')
+      }
+    })
 
     const touchChannel = {
       send: async (eventName: string, payload?: unknown) => {
@@ -1442,7 +1455,7 @@ export class TouchPlugin implements ITouchPlugin {
       },
       send: (eventName, arg) => channelBridge.sendToMain(eventName, arg),
       sendSync: () => {
-        throw new Error('[Plugin API] Box SDK sendSync is not supported in plugin main context.')
+        throw createLegacyChannelRemovedError('channel.sendSync')
       }
     }
 

@@ -46,6 +46,19 @@
     "specification": "Specification",
     "dashboard": "Details",
     "dashboardDesc": "Enable system details page to display indexing, applications, logs and OCR status.",
+    "dashboardUnknownApp": "Unknown app",
+    "dashboardNoWindowTitle": "No window title available",
+    "dashboardNoActiveApp": "No active application detected",
+    "dashboardUnknownStatus": "Unknown status",
+    "dashboardNotStarted": "Not started",
+    "dashboardNone": "None",
+    "dashboardNoWorkers": "No worker records",
+    "dashboardNoIndexingRecords": "No indexing records",
+    "dashboardNoOcrResult": "No result yet",
+    "dashboardNoOcrTasks": "No OCR tasks",
+    "dashboardUnknownSource": "Unknown source",
+    "dashboardFileSource": "File source",
+    "dashboardDataUrlSource": "Data URL ({count} chars)",
     "searchEngineLogs": "Search Engine Logs",
     "searchEngineLogsDesc": "Enable detailed logging for search engine operations to help debug search issues.",
     "startCosts": "Start Costs",
@@ -60,6 +73,11 @@
     "exportJson": "Export JSON",
     "exportSuccess": "Performance data exported",
     "exportFailed": "Export failed",
+    "buildMetadataVersion": "Version",
+    "buildMetadataId": "Build ID",
+    "buildMetadataGitHash": "Git Hash",
+    "buildMetadataType": "Build Type",
+    "buildMetadataTime": "Build Time",
     "rating": {
       "excellent": "Excellent",
       "good": "Good",
@@ -209,6 +227,8 @@
     "omniPanelShortcutDesc": "Enable Command/Ctrl + Shift + P to open OmniPanel.",
     "omniPanelMouseLongPress": "OmniPanel right-click hold",
     "omniPanelMouseLongPressDesc": "Enable long-press right click to open OmniPanel and capture selected text.",
+    "omniPanelMouseLongPressDuration": "OmniPanel right-click hold duration",
+    "omniPanelMouseLongPressDurationDesc": "Set the hold threshold used to trigger OmniPanel.",
     "shortcutsDialog": {
       "title": "Shortcuts",
       "desc": "Search and configure system-level shortcuts.",
@@ -229,6 +249,7 @@
       "sourcePlugin": "Plugin: {name}",
       "sourceUnknown": "Unknown",
       "triggerMouseRightLongPress": "Mouse right long press",
+      "triggerMouseRightLongPressWithDuration": "Mouse right long press ({duration} ms)",
       "columns": {
         "name": "Name",
         "source": "Source",
@@ -251,6 +272,8 @@
       "conflictPlugin": "Conflicts with plugin shortcuts",
       "unavailable": "Shortcut registration failed; possibly reserved by the system",
       "invalid": "Invalid shortcut",
+      "omniPanelAccessibilityRequired": "Accessibility permission required",
+      "omniPanelAccessibilityHint": "Grant macOS Accessibility permission before the mouse trigger can work.",
       "spotlightHint": "Disable Spotlight shortcut in macOS settings to free this combo"
     },
     "autoPaste": "Auto paste",
@@ -416,8 +439,8 @@
     "wallpaperCopyFailed": "Failed to copy wallpaper to library.",
     "selectImageFailed": "Failed to select background image.",
     "selectFolderFailed": "Failed to select background folder.",
-    "syncToCloud": "Sync to Cloud",
-    "syncToCloudDesc": "Records sync status for now; upload will be supported later.",
+    "syncToCloud": "Track Sync Status",
+    "syncToCloudDesc": "Keeps local sync status only; cloud upload is not available yet.",
     "syncRequiresLibrary": "Enable copy to library before syncing.",
     "folderRandomHint": "Folder rotation is random by default.",
     "emphasis": "Emphasis",
@@ -605,17 +628,29 @@
     },
     "detailDialog": {
       "author": "Author",
-      "version": " Version",
+      "version": "Version",
       "updateTime": "Update Time",
       "pluginId": "Plugin ID",
       "provider": "Provider",
       "download": "Download Source",
       "viewDocs": "View Documentation",
       "information": "Information",
+      "readmeLoading": "Loading README...",
+      "readmeEmpty": "No README yet",
       "readmeError": "Failed to load README",
       "notFound": "Plugin Not Found",
       "notFoundDesc": "Check the plugin ID or return to store",
       "backToStore": "Back to Store"
+    },
+    "rating": {
+      "title": "Rating",
+      "loading": "Loading...",
+      "loginRequiredTitle": "Login required",
+      "loginRequired": "Sign in to rate this plugin.",
+      "invalid": "Invalid rating value.",
+      "httpError": "Unable to complete the rating request.",
+      "unavailable": "Rating is temporarily unavailable.",
+      "submitFailedTitle": "Rating Failed"
     },
     "error": {
       "loadFailed": "Failed to load official plugin list."
@@ -640,7 +675,18 @@
       "confirmMessage": "\"{name}\" comes from an unofficial source. Proceed with installation?",
       "confirmInstall": "Install",
       "confirmReject": "Cancel",
-      "beforeExitPrompt": "Plugin installations are still running. Are you sure you want to exit?"
+      "beforeExitPrompt": "Plugin installations are still running. Are you sure you want to exit?",
+      "reasons": {
+        "installFailed": "The installation did not complete. Please try again.",
+        "noSource": "This plugin does not expose a usable install source.",
+        "authRequired": "Sign in before installing this plugin.",
+        "httpError": "The installation request failed (HTTP {status}).",
+        "noProvider": "No installer is available for this download source.",
+        "sdkapiBlocked": "This plugin's sdkapi is not compatible with the current Tuff version.",
+        "sdkapiMissing": "This plugin is missing the required sdkapi declaration.",
+        "sdkapiInvalid": "This plugin declares an invalid sdkapi format.",
+        "sdkapiOutdated": "This plugin's sdkapi {declared} is below the minimum supported version {minimum}."
+      }
     },
     "upgradeDialog": {
       "confirmTitle": "Confirm Update",
@@ -688,6 +734,25 @@
     "searchPlaceholder": "Search plugins",
     "opening": "Opening...",
     "openFolder": "Open Folder",
+    "dropInstall": {
+      "installing": "Installing...",
+      "ignore": "Ignore",
+      "install": "Install",
+      "errorTitle": "Plugin Install Failed",
+      "successTitle": "Plugin Installed",
+      "bufferMissing": "Plugin file buffer is missing. Please drop the package again.",
+      "unsupportedExtension": "Only .tpex plugin packages are supported.",
+      "parsing": "Parsing plugin package...",
+      "corrupted": "This plugin package is corrupted or has an invalid manifest.",
+      "invalidPackage": "Unable to parse this plugin package.",
+      "installFailed": "Plugin installation failed. Please retry with a valid package.",
+      "readFailed": "Failed to read plugin file. Please try again.",
+      "alreadyInstalledTitle": "Plugin Already Installed",
+      "alreadyInstalledMessage": "Plugin \"{name}\" is already installed. Do you want to update it?",
+      "update": "Update",
+      "successMessage": "Plugin \"{name}\" installed successfully.",
+      "unexpected": "Plugin installation hit an unexpected error. Please retry later."
+    },
     "emptyState": {
       "message": "Choose a plugin to view details",
       "exploreStore": "Explore Store"
@@ -774,9 +839,6 @@
       "blockedWarning": "This plugin is blocked because its SDK version is too old. The permission page is read-only.",
       "blockedStatusTitle": "Blocked Reason",
       "blockedHint": "Upgrade to sdkapi >= {version}, reinstall the plugin, then grant permissions again.",
-      "legacyTitle": "SDK Version Warning",
-      "legacyWarning": "This plugin uses a legacy SDK; permission checks were skipped",
-      "legacyHint": "Upgrade to sdkapi >= {version} to enable permission checks",
       "backendUnavailableTitle": "Permission backend is read-only",
       "backendUnavailableDesc": "SQLite permission backend is unavailable; only the loaded snapshot can be read.",
       "backendMutationFailed": "Permission mutation failed",
@@ -810,7 +872,6 @@
         "warning": {
           "permissionMissing": "Shortcut permission not granted",
           "blockedSdk": "SDK too old; plugin is blocked",
-          "legacySdk": "SDK too old; permission checks not enforced",
           "missingDescription": "Missing shortcut description"
         }
       },
@@ -1098,8 +1159,20 @@
           "sizePlaceholder": "Choose a size",
           "reset": "Reset",
           "resizeHint": "Drag the bottom-right corner to customize",
+          "mockLabel": "Mock payload",
           "mockPlaceholder": "Enter JSON payload",
           "mockError": "Failed to parse JSON: {error}",
+          "statusNotSelected": "Not selected",
+          "statusInvalidPayload": "Invalid payload",
+          "statusLoading": "Loading",
+          "statusRenderFailed": "Render failed",
+          "statusReady": "Loaded",
+          "statusError": "Error",
+          "statusPending": "Not ready",
+          "hintMockInvalid": "Failed to parse mock payload: {error}",
+          "hintMockEmpty": "Mock payload is enabled, but the content is empty",
+          "hintMockActive": "Rendering with mock payload",
+          "hintReadyEmpty": "Tip: if the widget is loaded but empty, it usually needs payload or runtime data.",
           "missingWidgetId": "A valid widgetId is required for preview.",
           "resizeAriaLabel": "Resize preview"
         }
@@ -1142,6 +1215,45 @@
         "metadataHint": "Use this for tag / branch and other extra info. Leave empty for automatic handling.",
         "actionBlockTitle": "Action",
         "sourceTypeResult": "Source type"
+      },
+      "create": {
+        "templatesTitle": "Templates",
+        "generalTitle": "General",
+        "readmeTitle": "README",
+        "actionsTitle": "Actions",
+        "openInVscode": "Open in VSCode",
+        "agreementPrefix": "Agree with",
+        "agreementName": "Touch Plugin Development",
+        "createAction": "Create",
+        "agreementAlertTitle": "Attention",
+        "agreementAlertMessage": "You must agree with <i style='color: #4E94B0'>Touch Plugin Development</i> protocol.",
+        "fields": {
+          "name": "Name",
+          "icon": "Icon",
+          "version": "Version",
+          "devAddress": "Dev Address",
+          "description": "Description"
+        },
+        "validation": {
+          "name": "Enter a valid plugin name.",
+          "version": "Enter a valid plugin version.",
+          "devAddress": "Enter a valid plugin dev address.",
+          "description": "Enter a valid plugin description."
+        },
+        "templates": {
+          "download": "Download",
+          "vueDescription": "Contains a default dev environment using Vue 3 and Vite.",
+          "reactDescription": "Contains a default dev environment using React 18 and Vite.",
+          "svelteDescription": "Contains a default dev environment using Svelte 3 and Vite."
+        },
+        "env": {
+          "nodeTooLow": "Node.js version is too low (v{version}). Please upgrade to 16 or higher.",
+          "nodeMissing": "Node.js is required. Install it first.",
+          "degitMissing": "degit is required. Install it first.",
+          "degitInstalled": "Installed",
+          "degitInstallingTitle": "Installing degit",
+          "installDegit": "Install degit"
+        }
       }
     },
     "logs": {
@@ -1160,6 +1272,8 @@
       "basicInfo": "Basic Information",
       "pluginId": "Plugin ID",
       "pluginName": "Plugin Name",
+      "commandDetailsTitle": "Command Details",
+      "commandDataTitle": "Command Data",
       "copyPluginId": "Copy plugin ID",
       "copyPluginIdSuccess": "Plugin ID copied",
       "copyPluginIdFailed": "Failed to copy plugin ID",
@@ -1716,6 +1830,7 @@
         "best_effort": "Best effort",
         "unsupported": "Unsupported"
       },
+      "reason": "Reason",
       "limitations": "Limitations",
       "tags": {
         "sensitive": "Sensitive"
@@ -2406,6 +2521,8 @@
     "remove": "Remove",
     "close": "Close",
     "open": "Open",
+    "content": "Content",
+    "capsLock": "Caps Lock",
     "refresh": "Refresh",
     "loading": "Loading...",
     "error": "Error",
@@ -2504,6 +2621,10 @@
     "pluginInstallFailedBody": "Failed to add {name}.",
     "pluginInstallFailedBodyWithReason": "Failed to add {name}: {error}.",
     "pluginInstallUnknown": "Plugin",
+    "clipboardTextEmpty": "Clipboard text is empty.",
+    "clipboardImageBody": "Image content is ready to use.",
+    "clipboardHtmlBody": "HTML content is ready to use.",
+    "externalLinkConfirmTitle": "Open external link?",
     "updateAvailable": "New Version Available",
     "updateAvailableBody": "Tuff {version} has been released\nClick to view details",
     "updateReady": "Update Ready",

@@ -658,7 +658,7 @@ function handleClose(): void {
                       <div class="PluginFeature-PreviewMock">
                         <div class="PluginFeature-PreviewMockHeader">
                           <span class="text-xs text-[var(--tx-text-color-secondary)]">
-                            Mock Payload
+                            {{ t('plugin.features.widget.preview.mockLabel') }}
                           </span>
                           <TuffSwitch
                             v-model="currentMockPayloadEnabled"

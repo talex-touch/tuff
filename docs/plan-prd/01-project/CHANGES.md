@@ -1,7 +1,290 @@
 # 变更日志
 
-> 更新时间: 2026-04-22
-> 说明: 主文件仅保留近 30 天（2026-03-23 ~ 2026-04-22）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-26
+> 说明: 主文件仅保留近 30 天（2026-03-27 ~ 2026-04-26）详细记录；更早历史已按月归档。
+
+## 2026-04-26
+
+### fix(core-app): 清理插件 Widget 预览硬编码 mock 文案
+
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatureDetailCard.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatures.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - Widget 预览面板的 `Mock Payload` 标签接入 `plugin.features.widget.preview.mockLabel`，避免开发工具 UI 继续暴露 raw 英文占位文案。
+  - Widget 预览状态与提示（未选择、载荷无效、mock payload 解析/空内容/渲染中）统一走 `plugin.features.widget.preview.*`，避免同一开发面板内中英混杂。
+
+### fix(core-app): 修复 CoreBox macOS 应用中文名检索漏召回
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/{darwin.ts,app-provider.ts,search-processing-service.ts,app-types.ts,app-utils.ts}`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/{darwin.test.ts,app-provider.test.ts,search-processing-service.test.ts}`
+  - macOS 应用扫描在 Spotlight 英文名优先时，会保留 `InfoPlist.strings` 中的本地化名称为 `alternateNames`，避免“网易云音乐”等中文显示名被扫描阶段丢弃。
+  - 应用关键词同步会把 `alternateNames` 一并生成中文、全拼和首字母关键词；搜索后处理也会用 alternate name 做候选命中，确保索引召回后不会被显示名过滤掉。
+  - 应用搜索索引 itemId 改为优先使用稳定路径/app identity，并在同步时清理旧 bundleId 索引，避免同一 bundleId 的多个 `.app` 互相覆盖。
+
+### fix(core-app): 收口 Flow Transfer 与平台 capability 假成功语义
+
+- `apps/core-app/src/main/modules/flow-bus/{flow-bus.ts,module.ts,flow-consent.ts,flow-bus.test.ts}`
+- `apps/core-app/src/main/modules/platform/{capability-adapter.ts,capability-registry.ts,capability-runtime.test.ts}`
+- `apps/core-app/src/main/modules/system/{permission-checker.ts,permission-checker.test.ts,active-app.ts,active-app.test.ts}`
+  - Flow Transfer 不再把“目标插件未注册 delivery handler”当作已投递：dispatch 会返回 `TARGET_OFFLINE`，插件 transport 投递异常也会向上变成失败结果，不再被 `.catch(() => {})` 吞掉。
+  - Platform capability 清单不再把条件型能力宣称为完全 supported：`platform.flow-transfer` 标记为 `best_effort/TARGET_HANDLER_REQUIRED`，`platform.division-box` 标记为 `best_effort/FLOW_TRIGGER_UNAVAILABLE`，active-app 在 macOS/Windows 也明确为 best-effort，并删除已无生产调用且语义过度乐观的 `isActiveAppCapabilityAvailable()`。
+  - macOS notification 检查不再把 `Notification.isSupported()` 当成权限已授予；原生通知可用时返回 `notDetermined + canRequest`，避免首次设置页把“运行时支持”误报成“系统已授权”。
+
+### fix(core-app): 补齐 OmniPanel 右键长按时长配置与权限提示
+
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/{SettingTools.vue,SettingSetup.vue}`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN.json,en-US.json}`
+- `packages/utils/common/storage/entity/app-settings.ts`
+  - OmniPanel 右键长按阈值不再写死为 `600ms`；新增持久化配置项 `omniPanel.mouseLongPressDurationMs`，主进程在触发时按当前设置实时读取。
+  - 设置页新增“OmniPanel 右键长按时长”选项，快捷方式弹窗里的鼠标触发文案会直接显示当前阈值，避免只能看到“右键长按”却不知道具体时长。
+  - macOS 未授予辅助功能权限时，OmniPanel 鼠标触发不再继续显示成普通“可用”状态，而会明确提示需要先授予权限，减少静默失效。
+
+### fix(core-app): 修正 macOS 权限状态与 OmniPanel 快捷键默认值
+
+- `apps/core-app/src/main/modules/system/permission-checker.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/{SettingSetup.vue,SettingTools.vue}`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - macOS 通知权限此前错误走 `systemPreferences.getMediaAccessStatus('notifications')`，Electron 只支持 `microphone/camera/screen`，导致已允许通知时仍显示“不支持”；本轮改为基于 `Notification.isSupported()` 判定原生通知能力，避免把可用通知误报为不支持。
+  - “唤起 OmniPanel”键盘快捷键新默认改为关闭，保留右键长按触发的既有默认；用户显式打开后的设置仍按持久化值优先。
+  - 辅助功能的请求入口会调用 `isTrustedAccessibilityClient(true)` 再打开系统设置，确保当前运行体可以被加入 macOS 辅助功能授权列表。
+
+### fix(core-app): 补齐 Clipboard 自动粘贴失败诊断链路
+
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `packages/utils/{transport/events,plugin/sdk}/`
+- `plugins/clipboard-history/`
+- `docs/plan-prd/{TODO.md,01-project/CHANGES.md}`
+  - `clipboard.copyAndPaste` 和 `history.applyToActiveApp` 不再把主进程返回的 `{ success:false, message }` 压成静默 `false`；SDK 会保留 message/code 并抛出可展示错误。
+  - 主进程 `apply` / `copy-and-paste` 失败时返回结构化 `ClipboardActionResult`，并写入只含 type、长度、file count、platform、pluginName、delayMs 等安全元数据的日志，避免记录剪贴板明文。
+  - macOS `osascript -> System Events` 自动化权限失败会映射为 `MACOS_AUTOMATION_PERMISSION_DENIED`，UI 可直接提示用户去系统设置授权；clipboard-history 插件版本同步 bump 到 `1.1.8`。
+
+## 2026-04-25
+
+### fix(core-app): 防止 CoreBox 系统主题更新时访问已释放 UI view
+
+- `apps/core-app/src/main/modules/box-tool/core-box/{window.ts,web-contents-view-guard.ts,web-contents-view-guard.test.ts}`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - CoreBox 附着插件 UI 后会在跟随系统主题时监听 `nativeTheme.updated`；当 `WebContentsView` 已被释放或 Electron 侧 `webContents` 短暂不可用时，handler 仍直接调用 `view.webContents.isDestroyed()`，会触发主进程 `Cannot read properties of undefined (reading 'isDestroyed')` 崩溃。
+  - 本轮新增 `getLiveViewWebContents()` 作为极小生命周期 guard，并把 CoreBox 主题注入、暗色 class 更新、DevTools/focus 等同一 UI view 路径的直接访问统一收口，确保空 view 直接跳过而不是打崩主进程。
+
+## 2026-04-23
+
+### refactor(core-app): 收口 SearchLogger 对旧日志配置键的 runtime fallback
+
+- `apps/core-app/src/main/modules/storage/{index.ts,main-storage-registry.ts,search-engine-logs-setting-transfer.ts,search-engine-logs-setting-transfer.test.ts}`
+- `apps/core-app/src/main/modules/box-tool/search-engine/{search-logger.ts,search-logger.burst.test.ts}`
+- `docs/plan-prd/{TODO.md,docs/compatibility-debt-registry.csv}`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 搜索日志开关此前在 UI 和主进程里已经主要走 `app-setting.ini -> searchEngine.logsEnabled`，但 `SearchLogger` 仍保留对旧 `search-engine-logs-enabled` 单键文件的 runtime fallback，形成双轨配置读取。
+  - 本轮把这条旧路径改成一次性启动迁移：只有旧值为 `true` 且新配置尚未显式声明时，才把值写回 `app-setting.ini`；旧值为 `false` 时不回写默认值，只删除旧文件。
+  - 迁移时会先立即持久化新的 `app-setting.ini`，再删除旧文件，避免出现“旧值删掉了、新值还没落盘”的窗口；随后 `SearchLogger` 主路径只再读取 `app-setting.ini`，compatibility registry 里的对应 legacy 条目也同步移除。
+
+### fix(core-app): 收口零散活跃 UI 标签 raw 英文
+
+- `apps/core-app/src/renderer/src/components/store/StoreItemCard.vue`
+- `apps/core-app/src/renderer/src/components/base/{tuff/TFormInput.vue,template/FormTemplate.vue}`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 正常 UI 里还残留几个零散英文：Store 卡片的 `Official Plugin` tooltip、密码输入框的 `Caps Lock` 提示，以及 `FormTemplate` 的 `Content` 默认占位。
+  - 本轮优先复用 `store.officialBadge`，并只补两条通用 key `common.capsLock / common.content`；`FormTemplate` 的英文默认 props 也一并改成空字符串，避免框架层再次漏出英文。
+
+### fix(core-app): 收口插件命令详情抽屉 raw 英文标题
+
+- `apps/core-app/src/renderer/src/components/plugin/tabs/CommandDetailDrawer.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `CommandDetailDrawer` 此前仍直接写着 `Command Details / Command Data` 两个英文标题，在中文环境里会从插件详情页抽屉直接露出来。
+  - 本轮只把这两个标题切到 `plugin.details` i18n，不改抽屉结构、命令描述内容或 JSON 数据展示。
+
+### fix(core-app): 收口 SettingAbout 构建元数据标签 raw 英文
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - About 设置页里 `Version / Build ID / Git Hash / Build Type / Build Time` 这几条构建元数据此前仍直接写在模板里，中文环境会在正式设置页继续露出英文标签。
+  - 本轮只把这 5 个标题切到 `settingAbout` i18n，保留构建值本身和其它诊断术语不动，避免扩大到 debug/下载等无关区域。
+
+### fix(core-app): 收口 PluginNew 创建页 raw 英文与失效取消按钮
+
+- `apps/core-app/src/renderer/src/views/base/plugin/PluginNew.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `PluginNew` 的 create tab 之前仍直接写着 `Templates / General / Readme / Actions / Download / Cancel / Create`、多条英文校验提示，以及 `Attention / Installing degit` 这类弹层标题；中文环境下会像半成品开发页。
+  - 本轮只收 create tab：新增 `plugin.new.create` 文案，把模板说明、字段标题、校验提示、协议提醒、degit 环境提示与创建按钮统一切到 i18n。
+  - 顺手补上 `Cancel` 按钮关闭行为，避免这个动作按钮继续只是视觉占位。
+
+### fix(core-app): 收口剪贴板触发提示 raw 英文与原始 payload 直出
+
+- `apps/core-app/src/renderer/src/modules/hooks/{application-hooks.ts,clipboard-trigger-mention-utils.ts,clipboard-trigger-mention-utils.test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `clipboard:trigger` 之前直接把 `Clipboard / You may copied "${payload.data}"` 和原始 `image/html` payload 丢给 `blowMention`，既有英文硬编码，也会把剪贴板原文直接走进 `v-html` 渲染链。
+  - 本轮新增可测试的 renderer 侧映射，把 `text/image/html` 分别收口成可读标题与安全正文：文本预览先做 HTML escape 和换行处理，图片与 HTML 只显示通用说明，不再把原始 payload 直接展示给用户。
+  - 这样既修掉明显的英文/病句提示，也避免剪贴板内容继续以 HTML 形式注入到提示弹层。
+
+### fix(core-app): 收口外部链接确认弹层 raw 英文
+
+- `apps/core-app/src/renderer/src/modules/hooks/{useUrlProcessor.ts,application-hooks.ts,confirm-external-link.ts,confirm-external-link.test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `useUrlProcessor` 与 `application-hooks` 之前各自内联了一份 `Allow to open external link? / Cancel / Sure` 英文确认框，文案、按钮语义和行为都重复维护。
+  - 本轮抽成共享 `confirmExternalLinkOpen()` helper，并切到 `notifications.externalLinkConfirmTitle + common.cancel/open` i18n，两个外链入口统一走同一套确认提示。
+  - 顺手补上关闭弹层时默认按“取消打开”收口，避免 `TouchTip` 被 `Esc` 关闭后遗留未 resolve 的 Promise。
+
+### fix(core-app): 收口拖拽插件解析入口 raw 英文与旧错误码
+
+- `apps/core-app/src/renderer/src/modules/hooks/dropper-resolver.ts`
+- `apps/core-app/src/renderer/src/components/plugin/action/mention/plugin-apply-install-utils.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 拖拽 `.tpex` 文件的前置解析入口此前仍直接弹 `Only .tpex plugin packages are supported. / Parsing plugin package... / Failed to read plugin file.` 等英文提示，并把 `10091 / 10092` 旧错误码继续原样透给用户。
+  - 本轮继续只在 renderer 提示层收口，复用上一轮拖拽安装工具里的错误映射，把扩展名校验、解析中状态、读取失败和 resolver 错误统一切到 `plugin.dropInstall` 文案。
+  - 这样拖拽安装流从前置解析弹层到安装提及卡都不再混出英文调试提示，同一套旧 code 也只有一份解释逻辑。
+
+### fix(core-app): 收口拖拽插件安装提及卡 raw 英文与错误码
+
+- `apps/core-app/src/renderer/src/components/plugin/action/mention/{PluginApplyInstall.vue,plugin-apply-install-utils.ts,plugin-apply-install-utils.test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 拖入本地插件包后的安装提及卡此前仍直接显示 `Installing... / Ignore / Install / Install Error / Install Success` 等英文 UI 文案，并把 `10091 / 10092 / INTERNAL_ERROR / plugin already exists` 这类旧消息直接暴露到用户提示里。
+  - 本轮维持旧 `@install-plugin` 返回契约不动，只在 renderer 提示层新增可测试的错误映射，把损坏包、解析失败、重复安装与通用失败统一翻译成可读提示。
+  - 同步补齐提及卡按钮、安装中状态和成功/失败标题的 i18n，避免拖拽安装这条旧入口继续像半成品调试界面。
+
+### fix(core-app): 收口 Store 详情评分错误 raw fallback
+
+- `apps/core-app/src/renderer/src/composables/store/{useStoreRating.ts,store-rating-error-utils.ts,store-rating-error-utils.test.ts}`
+- `apps/core-app/src/renderer/src/views/base/store/StoreDetailOverlay.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Store 详情评分请求此前仍会把 `Failed to fetch`、`Network Error` 或 `UNKNOWN_ERROR` 这类运行时异常原样带到详情侧栏和失败提示里，继续暴露 raw 异常文本。
+  - 本轮补一个可测试的 renderer 侧评分错误归一化，把已知 code 保留给 UI 判定，其余运行时异常统一折叠成通用错误，再映射到 `store.rating` i18n 文案。
+  - 同步把评分 HTTP 失败英文提示收口成通用请求失败语义，避免加载评分摘要和提交评分时共用一条文案却仍写成 submit-only。
+
+### fix(core-app): 收口 Store 详情与安装流残留的 raw 英文/错误码
+
+- `apps/core-app/src/renderer/src/views/base/store/StoreDetailOverlay.vue`
+- `apps/core-app/src/renderer/src/composables/store/{useStoreInstall.ts,useStoreReadme.ts,store-install-error-utils.ts,store-install-error-utils.test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Store 详情页此前仍有 `Loading README...`、`No README`、`Rating`、`Loading...` 等英文 fallback，README 加载失败也还保留英文兜底；本轮补齐 `store.detailDialog` / `store.rating` 文案，避免在中文环境继续露出 raw 英文占位。
+  - 安装失败弹窗此前会直接拼接 `STORE_INSTALL_NO_SOURCE`、`INSTALL_FAILED`、`HTTP_ERROR_503` 甚至 `sdkapi` gate 的英文句子；本轮新增可测试的 renderer 侧失败原因解析，把常见 code / sdk gate 错误翻译成用户可读提示，未知诊断信息仍原样保留。
+  - 顺手修正 `store.detailDialog.version` 英文文案前缀空格，避免详情侧栏继续出现细小但明显的 UI 粗糙点。
+
+### docs(nexus): 收口壁纸指南残留的假云同步口径
+
+- `apps/nexus/content/docs/guide/features/wallpaper.{zh,en}.mdc`
+- `apps/nexus/content/docs/guide/features/corebox-workflow.{zh,en}.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - ThemeStyle 运行时当前只会把壁纸复制到本地壁纸库，并记录本地 `sync.enabled` 状态；不存在跨设备云同步上传。
+  - Nexus 指南页原先仍写成“复制到壁纸库后开启云同步 / cloud sync”，会把刚在 renderer 收口过的真相重新写回假能力。
+  - 本轮把壁纸指南与 CoreBox 能力页统一改成“复制到本地壁纸库 + 记录本地同步状态”，避免文档继续误导用户把本地状态开关理解成已上线云同步。
+
+### fix(core-app): 收口详细信息页剩余 raw placeholder 空态
+
+- `apps/core-app/src/renderer/src/views/base/LingPan.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 继续复核 `/details` 页后，发现 Worker/索引/OCR 三块表格仍直接显示 `NO_WORKERS`、`NO_INDEXING_RECORDS`、`NO_RESULT`、`NO_OCR_TASKS`，并夹带 `NONE / NOT_STARTED / UNKNOWN / FILE_SOURCE / DATA_URL` 这类未收口占位。
+  - 本轮把这些空态、缺省值和 OCR source fallback 统一切到 `settingAbout` i18n 文案，仅保留诊断表头本身的 debug 风格，避免设置入口继续出现 raw placeholder。
+
+### fix(core-app): 收口详细信息页 Active Application 调试占位
+
+- `apps/core-app/src/renderer/src/views/base/LingPan.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `/details` 页的 Active Application 卡片之前直接渲染 `📱 / UNKNOWN_APP / NO_WINDOW_TITLE / NO_ACTIVE_APPLICATION_DETECTED` 这类调试占位，用户在正常设置入口里也会看到明显未收口的诊断文本。
+  - 本轮把展示逻辑改成“优先显示真实应用名，其次回退 bundleId / identifier / 可执行文件名”，图标位改成首字母 fallback，并把缺失标题/未检测到活跃应用切到正常 i18n 文案，避免继续暴露 raw placeholder。
+
+### refactor(core-app): 删除权限 hard-cut 后残留的 legacy i18n key
+
+- `packages/utils/i18n/message-keys.ts`
+- `packages/utils/i18n/locales/{en,zh}.json`
+- `docs/plan-prd/ISSUES.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 权限体系当前已经没有“旧 SDK 跳过权限校验”的运行时路径，但 `packages/utils` 里仍残留 `permission.enforcementDisabled` 与 `permission.legacyPluginWarning` 两条未引用 key，会让 i18n 清单继续保留过期语义。
+  - 本轮直接删除这两条 dead key，并同步从 `ISSUES.md` 的 unused key 列表里去掉，避免后续兼容扫描和文档阅读继续误判 hard-cut 仍保留 legacy bypass 口径。
+
+### fix(core-app): 接通 Store 搜索框的真实查询链路
+
+- `apps/core-app/src/renderer/src/components/base/input/FlatCompletion.vue`
+- `apps/core-app/src/renderer/src/components/base/input/flat-completion-utils.ts`
+- `apps/core-app/src/renderer/src/components/base/input/flat-completion-utils.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `StoreHeader` 早已把 `placeholder` 和 `@search` 接到 `FlatCompletion`，但后者之前仍写死 `Search...` 且不会往上发出 `search` 事件，导致 Store 搜索框只有输入 UI、没有实际过滤行为。
+  - `FlatCompletion` 现在会复用调用方传入的 placeholder，并在每次输入变化后把标准化查询同步给上层，再按同一查询生成补全结果，避免 placeholder 与真实搜索状态继续漂移。
+  - 新增纯 TS 定向回归，锁定“placeholder 透传 + 查询归一化 + 结果裁剪到 8 条”的行为；组件模板绑定由 `typecheck:web` 覆盖。
+
+### fix(core-app): 收口 ThemeStyle 的假云同步文案
+
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - ThemeStyle 里的背景同步开关当前只会保留本地 `sync.enabled` 状态，并在需要时触发本地壁纸入库，不会执行真实云上传。
+  - 设置页文案改为“记录同步状态 / Track Sync Status”，并明确说明当前只记录本地同步状态，避免继续把未闭环能力描述成可用云同步。
+
+### refactor(core-app): 收口插件 sdkapi warning code 与运行时文档口径
+
+- `packages/utils/plugin/sdk-version.ts`
+- `packages/utils/plugin/index.ts`
+- `packages/utils/permission/index.ts`
+- `packages/utils/__tests__/permission-status.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- `packages/utils/i18n/message-keys.ts`
+- `packages/utils/i18n/locales/{en,zh}.json`
+- `apps/nexus/content/docs/dev/reference/runtime-startup-env.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/reference/manifest.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/api/permission.{zh,en}.mdc`
+- `AGENTS.md`
+- `docs/plan-prd/ISSUES.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `sdkapi` 缺失 / 非法 / 低于门槛现在统一只代表 `SDKAPI_BLOCKED`，不再保留 `SDK_VERSION_MISSING` / `SDK_VERSION_OUTDATED` 这类 legacy warning 语义，避免把 hard-cut 又说回“兼容模式”。
+  - 对于“声明了更高 SDK marker”或“使用非 canonical marker 但仍可归一化”的非阻断场景，loader 改为统一发出 `SDK_VERSION_COMPAT_WARNING`，不再误用 `SDK_VERSION_OUTDATED`。
+  - `packages/utils` 里的 permission helper 不再把旧 sdk 当成权限绕过路径；同步删除未使用的 plugin i18n key，并把 AGENTS / manifest / permission / runtime-startup 文档统一到当前 `260228 + SQLite SoT` 口径。
+
+### refactor(core-app): 删除 renderer 权限中心未使用的旧 SDK 兼容壳
+
+- `apps/core-app/src/renderer/src/components/permission/index.ts`
+- `apps/core-app/src/renderer/src/components/permission/PermissionRequestDialog.vue`（删除）
+- `apps/core-app/src/renderer/src/components/permission/PermissionStatusCard.vue`（删除）
+- `apps/core-app/src/renderer/src/composables/usePluginPermission.ts`（删除）
+- `apps/core-app/src/renderer/components.d.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 权限中心里三处已经无调用、但仍保留旧 `sdkapi` “跳过权限校验 / 旧版 SDK”语义的 renderer 壳代码已物理删除，避免后续继续把过时状态模型当成可复用实现。
+  - `components/permission` 入口与自动组件声明同步收口，只保留仍在设置页使用的 `PermissionList`。
+  - compatibility registry 同步移除已删除的 `PermissionStatusCard` 条目，并补齐当前扫描缺失/陈旧记录，`pnpm compat:registry:guard` 恢复通过。
+
+### fix(core-app): 让插件 sdkapi hard-cut 真正落到加载与安装预检
+
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-installer.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-installer.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `plugin-loaders` 现在会在读取 manifest 后立刻执行统一 `sdk-compat` gate；缺失、无效或低于门槛的插件会被显式打成 `SDKAPI_BLOCKED`，并以 `load_failed` 保持可见但不可启用，不再只是留下 warning。
+  - 安装预检复用同一套 gate，旧插件会在 `prepareInstall` 阶段直接失败，避免进入“已安装但只能以 blocked 留在列表里”的半状态。
+  - 补齐主进程定向回归，覆盖 loader 阻断与 installer 预检阻断两条关键路径。
+
+### fix(core-app): 收紧插件安装任务索引到 provider 作用域
+
+- `apps/core-app/src/renderer/src/modules/install/install-manager.ts`
+- `apps/core-app/src/renderer/src/modules/install/install-manager.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 安装状态索引不再把 `providerId::pluginId` 额外挂一份 plain `pluginId` fallback，避免多源市场里同名插件共享同一条安装状态。
+  - renderer 侧新增定向回归，锁定“同一 `pluginId` 在不同 provider 下必须命中各自任务；只有 provider-less 插件才允许 plain `pluginId` 查找”的行为。
+
+### fix(core-app): 运行期权限守卫对 sdkapi blocked 返回真实错误语义
+
+- `apps/core-app/src/main/modules/permission/permission-guard.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 运行期权限守卫现在会把 `sdkapi` 不兼容显式返回为 `SDKAPI_BLOCKED`，不再伪装成普通 `PERMISSION_DENIED`。
+  - 对应 denied 结果会关闭 `showRequest`，避免上层把 blocked 插件继续引导到权限授权弹窗。
 
 ## 2026-04-22
 
@@ -34,6 +317,38 @@
   - 搜索与执行继续复用现有 `resolveAppItemId`、`TuffItemBuilder`、`TuffSearchResultBuilder` 与 `scheduleAppLaunch`；禁用的 manual entry 会从 recommendation/search 过滤，并可重新启用恢复。
   - 新增定向回归，覆盖 transport 映射、main handler 输入校验、managed entry 落库/冲突/enable toggle，以及 manual disabled entry 的 recommendation 过滤。
 
+### refactor(core-app): 一次性硬收口插件 compat、平台 capability 与启动迁移
+
+- `apps/core-app/src/main/modules/plugin/sdk-compat.ts`
+- `apps/core-app/src/shared/plugin-sdk-blocked.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `packages/utils/plugin/sdk/channel.ts`
+- `packages/utils/plugin/sdk/types.ts`
+- `apps/core-app/src/main/modules/global-shortcon.ts`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginPermissions.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue`
+- `apps/core-app/src/main/modules/platform/capability-adapter.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/core/startup-migrations.ts`
+- `apps/core-app/src/main/modules/permission/index.ts`
+- `apps/core-app/src/main/modules/permission/permission-store.ts`
+- `apps/core-app/src/main/modules/storage/index.ts`
+- `apps/core-app/src/renderer/src/modules/startup/startup-migrations.ts`
+- `apps/core-app/src/renderer/src/modules/auth/auth-env.ts`
+- `apps/core-app/src/renderer/src/modules/storage/theme-style.ts`
+- `apps/core-app/src/renderer/src/AppEntrance.vue`
+- `apps/core-app/src/renderer/src/components/base/input/FlatMarkdown.vue`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 插件 `sdkapi` 阻断语义收成唯一真相：快捷键、插件详情页、权限页、设置页统一只展示 blocked 解释，不再保留“legacy SDK 继续运行/跳过权限校验”的双轨文案。
+  - 插件运行时桥接不再把 `channel.raw` / `channel.sendSync` 当正式能力暴露；旧插件命中后会得到明确 migration error，而不是继续 silent fallback。
+  - 新增统一 platform capability adapter，把 `active app / selection capture / auto paste / native share / permission deep-link / Everything / Tuff CLI` 的 `supported | best_effort | unsupported`、`reason`、`issueCode` 收成同一口径，并接到 `CommonChannel`、OmniPanel、Clipboard 与平台能力设置页。
+  - 历史迁移改为启动期一次性执行：main 侧新增 startup migration runner，权限 `permissions.json -> SQLite`、layout opacity 清理、dev data root 迁移不再混在 steady-state 读路径里；renderer 侧把 auth 旧 localStorage 清理和 theme-style 迁移移到统一 startup migrations。
+  - 收掉几个明确 debt 热点：`AppEntrance` 去除固定 `100ms` 初始化延时，`FlatMarkdown` 删掉 Milkdown `@ts-ignore` 热点，`CoreBox` resize 删除旧 Element Plus 滚动容器 shim。
+
 ### fix(core-app): 收口 Everything 设置页禁用态优先级
 
 - `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
@@ -53,17 +368,6 @@
   - 设置页 `everything:test` 在后端真实故障时改为明确返回失败，不再误报成“成功但找到 0 个结果”；补齐对应 Provider 回归。
 
 ## 2026-04-21
-
-### fix(core-app/apps-search): 补齐 macOS 中文应用名首轮扫描与拼音关键词规整
-
-- `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
-- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
-- `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.test.ts`
-- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
-  - `darwin.getAppInfo()` 首轮扫描新增 Spotlight `kMDItemDisplayName` 安全读取，显示名优先级提升为 `Spotlight > localized strings > plist > bundle`，fresh scan 不再依赖后续 `mdls` 维护任务才能拿到中文应用名。
-  - `mdls` 读取统一走参数化 `execFileSafe('mdls', ['-name', 'kMDItemDisplayName', '-raw', appPath])`，避免带空格或特殊字符路径重新落回 shell 字符串插值风险。
-  - `app-provider` 中文关键词生成改为 `displayName` 优先去重，并把拼音全拼/首字母统一规整为 lowercase，避免大小写漂移影响索引一致性。
-  - 新增定向回归，覆盖 Spotlight 中文显示名首轮生效和拼音关键词 lowercase 规整。
 
 ### fix(core-app): Everything CLI 运行时失效后自动退出 stale ready
 
@@ -360,6 +664,7 @@
 - `apps/core-app/src/main/modules/permission/permission-guard.ts`
 - `apps/nexus/content/docs/dev/reference/runtime-startup-env.zh.mdc`
 - `apps/nexus/content/docs/dev/reference/runtime-startup-env.en.mdc`
+  - 注：这是 2026-04-17 的阶段性回退记录，已在 2026-04-22/2026-04-23 被后续 `sdkapi` hard-cut 收口替代。
   - 未声明 `sdkapi` 或低于 `251212` 的 legacy 插件恢复为 warning + 权限兼容跳过，不再在加载、安装预检或运行期权限守卫中被误标记为 `SDKAPI_BLOCKED`。
   - `resolveSdkApiVersion` 对有效但低于首个支持标记的版本保留原始版本号，避免把旧但合法的 `YYMMDD` sdkapi 误报为 invalid。
   - Runtime startup issue code 文档同步收口：`SDKAPI_BLOCKED` 仅作为历史/保留硬阻断码，legacy 缺失或过低走 `SDK_VERSION_MISSING` / `SDK_VERSION_OUTDATED` warning。

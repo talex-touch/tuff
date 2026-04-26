@@ -178,7 +178,9 @@ export class TuffPluginTransport implements ITuffTransport {
 
     const sender = typeof this.channel.sendToMain === 'function'
       ? this.channel.sendToMain.bind(this.channel)
-      : this.channel.send
+      : typeof this.channel.send === 'function'
+        ? this.channel.send.bind(this.channel)
+        : null
 
     if (!sender) {
       throw new Error('[TuffPluginTransport] Channel send function not available')
@@ -583,7 +585,9 @@ export class TuffPluginTransport implements ITuffTransport {
 
     const sender = typeof this.channel.sendToMain === 'function'
       ? this.channel.sendToMain.bind(this.channel)
-      : this.channel.send
+      : typeof this.channel.send === 'function'
+        ? this.channel.send.bind(this.channel)
+        : null
 
     if (!sender) {
       throw new Error('[TuffPluginTransport] Channel send function not available')

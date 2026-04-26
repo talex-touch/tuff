@@ -26,18 +26,37 @@ function normalizeActiveAppSnapshot(value: unknown): ActiveAppSnapshot | null {
   }
 }
 
+function getSystemChannel() {
+  return useChannel(
+    '[Plugin SDK] System channel requires plugin renderer context with $channel available.',
+  )
+}
+
+async function getTypedActiveAppSnapshotWithChannel(
+  channel: ReturnType<typeof getSystemChannel>,
+  forceRefresh: boolean,
+): Promise<ActiveAppSnapshot | null> {
+  const transport = createPluginTuffTransport(channel as any)
+  const typed = await transport.send(AppEvents.system.getActiveApp, { forceRefresh })
+  return normalizeActiveAppSnapshot(typed)
+}
+
+export async function getTypedActiveAppSnapshot(
+  options: { forceRefresh?: boolean } = {},
+): Promise<ActiveAppSnapshot | null> {
+  const channel = getSystemChannel()
+  const forceRefresh = options.forceRefresh === true
+  return await getTypedActiveAppSnapshotWithChannel(channel, forceRefresh)
+}
+
 export async function getActiveAppSnapshot(
   options: { forceRefresh?: boolean } = {},
 ): Promise<ActiveAppSnapshot | null> {
-  const channel = useChannel(
-    '[Plugin SDK] System channel requires plugin renderer context with $channel available.',
-  )
+  const channel = getSystemChannel()
   const forceRefresh = options.forceRefresh === true
 
   try {
-    const transport = createPluginTuffTransport(channel as any)
-    const typed = await transport.send(AppEvents.system.getActiveApp, { forceRefresh })
-    return normalizeActiveAppSnapshot(typed)
+    return await getTypedActiveAppSnapshotWithChannel(channel, forceRefresh)
   } catch {
     const legacy = await channel.send('system:get-active-app', { forceRefresh })
     return normalizeActiveAppSnapshot(legacy)
