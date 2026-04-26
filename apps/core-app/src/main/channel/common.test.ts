@@ -7,6 +7,9 @@ const {
   loggerWarnMock,
   perfDisposeMock,
   getTuffTransportMainMock,
+  deviceIdleGetSettingsMock,
+  deviceIdleUpdateSettingsMock,
+  deviceIdleCanRunMock,
   activeAppGetActiveAppMock,
   platformCapabilityListMock,
   getActiveAppCapabilityPatchMock,
@@ -31,6 +34,9 @@ const {
   loggerWarnMock: vi.fn(),
   perfDisposeMock: vi.fn(),
   getTuffTransportMainMock: vi.fn<(channel?: unknown, keyManager?: unknown) => unknown>(() => null),
+  deviceIdleGetSettingsMock: vi.fn(),
+  deviceIdleUpdateSettingsMock: vi.fn(),
+  deviceIdleCanRunMock: vi.fn(),
   activeAppGetActiveAppMock: vi.fn<(forceRefresh?: unknown) => Promise<unknown>>(),
   platformCapabilityListMock: vi.fn<() => Array<Record<string, unknown>>>(() => []),
   getActiveAppCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'unsupported' })),
@@ -338,8 +344,9 @@ vi.mock('../modules/platform/capability-adapter', () => ({
 
 vi.mock('../service/device-idle-service', () => ({
   deviceIdleService: {
-    getSettings: vi.fn(),
-    updateSettings: vi.fn(),
+    getSettings: deviceIdleGetSettingsMock,
+    updateSettings: deviceIdleUpdateSettingsMock,
+    canRun: deviceIdleCanRunMock,
     isOnBatteryPower: vi.fn(() => false),
     getBatteryPercent: vi.fn(async () => null)
   }
@@ -590,6 +597,61 @@ describe('CommonChannelModule private helpers', () => {
         configurable: true
       })
     }
+  })
+
+  it('registers device idle diagnostic transport handler', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    const settings = {
+      idleThresholdMs: 60000,
+      minBatteryPercent: 40,
+      blockBatteryBelowPercent: 10,
+      allowWhenCharging: true,
+      forceAfterHours: 24
+    }
+    const decision = {
+      allowed: false,
+      reason: 'not-idle',
+      forced: false,
+      snapshot: {
+        idleMs: 12000,
+        battery: { level: 80, charging: true, onBattery: false }
+      }
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+    deviceIdleGetSettingsMock.mockReturnValue(settings)
+    deviceIdleCanRunMock.mockResolvedValue(decision)
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const diagnosticHandler = handlers.get(AppEvents.deviceIdle.getDiagnostic.toEventName())
+    expect(diagnosticHandler).toBeTypeOf('function')
+
+    await expect(diagnosticHandler?.({}, {})).resolves.toEqual({
+      ...decision,
+      settings
+    })
+    expect(deviceIdleCanRunMock).toHaveBeenCalledWith()
   })
 
   it('marks native-share as unsupported on Windows while keeping mail-only fallback out of capability support', async () => {

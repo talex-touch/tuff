@@ -1462,6 +1462,10 @@ export class CommonChannelModule extends BaseModule {
       transport.on(AppEvents.deviceIdle.updateSettings, (payload) =>
         deviceIdleService.updateSettings(payload ?? {})
       ),
+      transport.on(AppEvents.deviceIdle.getDiagnostic, async () => ({
+        ...(await deviceIdleService.canRun()),
+        settings: deviceIdleService.getSettings()
+      })),
       transport.on(AppEvents.appIndex.getSettings, () => appProvider.getAppIndexSettings()),
       transport.on(AppEvents.appIndex.updateSettings, (payload) =>
         appProvider.updateAppIndexSettings(payload ?? {})
