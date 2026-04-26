@@ -31,6 +31,17 @@
   - 要闻区保留无外层卡片的页面区块结构，只让实际更新/版本条目使用卡片组件，避免卡片套卡片与产品域组件反向污染 Tuffex。
   - 修复 Tuffex empty-state 系列 wrapper 使用 `v-slots` 导致 Nuxt SSR `getSSRProps` 崩溃的问题；wrapper 现在显式转发 `icon/title/description/actions` slots，并新增 SSR 回归覆盖。
 
+### fix(tuffex): 补齐 Transfer 动作按钮可访问标签
+
+- `packages/tuffex/packages/components/src/transfer/src/{TxTransfer.vue,types.ts}`
+- `packages/tuffex/packages/components/src/transfer/__tests__/transfer.test.ts`
+- `packages/tuffex/packages/components/src/empty-state/__tests__/empty-state-wrappers.test.ts`
+- `apps/nexus/app/components/content/demos/{FloatingFloatingDemo.vue,TransferTransferDemo.vue}`
+- `apps/nexus/content/docs/dev/components/transfer.{zh,en}.mdc`
+  - `TxTransfer` 新增 `addAriaLabel` / `removeAriaLabel`，为左右移动的 icon-only 操作按钮提供可本地化无障碍标签，默认行为与既有 `v-model` / `change` 事件保持兼容。
+  - Transfer 文档与 Demo 同步展示本地化 aria label；Floating Demo 改成浮动信息层/状态条示例，减少纯装饰图形对组件用途的干扰。
+  - empty-state wrapper SSR 回归补上 `icon` slot 断言，覆盖与实现声明保持一致。
+
 ### ref(core-app): hard-cut DivisionBox flow trigger 与 legacy startup migrations
 
 - `packages/utils/transport/events/{index.ts,types/division-box.ts}`

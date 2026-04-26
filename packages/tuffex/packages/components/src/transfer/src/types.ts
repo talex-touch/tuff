@@ -11,6 +11,8 @@ export interface TransferProps {
   filterable?: boolean
   filterPlaceholder?: string
   emptyText?: string
+  addAriaLabel?: string
+  removeAriaLabel?: string
   targetOrder?: 'original' | 'push'
 }
 

@@ -34,4 +34,18 @@ describe('txTransfer', () => {
 
     expect(wrapper.text()).toContain('No selectable items')
   })
+
+  it('labels icon-only action buttons', () => {
+    const wrapper = mount(TxTransfer, {
+      props: {
+        data,
+        addAriaLabel: 'Add selected',
+        removeAriaLabel: 'Remove selected',
+      },
+    })
+
+    const buttons = wrapper.findAll('.tx-transfer__actions button')
+    expect(buttons[0].attributes('aria-label')).toBe('Add selected')
+    expect(buttons[1].attributes('aria-label')).toBe('Remove selected')
+  })
 })

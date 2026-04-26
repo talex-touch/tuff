@@ -5,8 +5,15 @@ const { locale } = useI18n()
 <template>
   <div class="floating-demo">
     <TxFloating class="floating-demo__stage" :sensitivity="0.55" :easing-factor="0.08">
-      <TxFloatingElement class-name="floating-demo__orb floating-demo__orb--primary" :depth="0.12" />
-      <TxFloatingElement class-name="floating-demo__orb floating-demo__orb--accent" :depth="-0.08" />
+      <TxFloatingElement class-name="floating-demo__rail" :depth="-0.06">
+        <span />
+        <span />
+        <span />
+      </TxFloatingElement>
+      <TxFloatingElement class-name="floating-demo__chip" :depth="0.14">
+        <span class="i-carbon-pointer-text" />
+        {{ locale === 'zh' ? '指针响应' : 'Pointer-aware' }}
+      </TxFloatingElement>
       <TxFloatingElement class-name="floating-demo__panel" :depth="0.04">
         <div class="floating-demo__eyebrow">
           {{ locale === 'zh' ? '交互层' : 'Interaction layer' }}
@@ -30,27 +37,53 @@ const { locale } = useI18n()
   border: 1px solid var(--tx-border-color-light);
   border-radius: 16px;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--tx-color-primary) 10%, transparent), transparent 48%),
+    linear-gradient(135deg, color-mix(in srgb, var(--tx-color-primary) 8%, transparent), transparent 54%),
     var(--tx-bg-color);
 }
 
-:deep(.floating-demo__orb) {
-  width: 130px;
-  height: 130px;
+:deep(.floating-demo__rail) {
+  right: 32px;
+  bottom: 28px;
+  width: 190px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-light) 70%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--tx-fill-color-light) 86%, transparent);
+}
+
+:deep(.floating-demo__rail span) {
+  display: block;
+  height: 8px;
   border-radius: 999px;
-  filter: blur(1px);
+  background: color-mix(in srgb, var(--tx-text-color-secondary) 18%, transparent);
 }
 
-:deep(.floating-demo__orb--primary) {
-  left: 44px;
-  top: 42px;
-  background: color-mix(in srgb, var(--tx-color-primary) 34%, transparent);
+:deep(.floating-demo__rail span + span) {
+  margin-top: 10px;
 }
 
-:deep(.floating-demo__orb--accent) {
-  right: 54px;
-  bottom: 34px;
-  background: color-mix(in srgb, var(--tx-color-success) 28%, transparent);
+:deep(.floating-demo__rail span:nth-child(2)) {
+  width: 72%;
+}
+
+:deep(.floating-demo__rail span:nth-child(3)) {
+  width: 46%;
+}
+
+:deep(.floating-demo__chip) {
+  right: 44px;
+  top: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  border: 1px solid color-mix(in srgb, var(--tx-color-primary) 24%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tx-bg-color-overlay) 92%, transparent);
+  color: var(--tx-color-primary);
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: var(--tx-box-shadow-light, 0 10px 28px rgba(15, 23, 42, 0.10));
 }
 
 :deep(.floating-demo__panel) {

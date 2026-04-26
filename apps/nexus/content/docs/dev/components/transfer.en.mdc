@@ -37,6 +37,8 @@ code: |
       filterable
       filter-placeholder="Filter channels"
       empty-text="No items"
+      add-aria-label="Add selected channels"
+      remove-aria-label="Remove selected channels"
     />
   </template>
 ---
@@ -71,6 +73,14 @@ rows:
     type: string
     default: "'No data'"
     description: Text shown when a panel is empty
+  - name: addAriaLabel
+    type: string
+    default: "'Move selected items to target'"
+    description: Accessible label for the add action button
+  - name: removeAriaLabel
+    type: string
+    default: "'Move selected items to source'"
+    description: Accessible label for the remove action button
   - name: targetOrder
     type: "'original' | 'push'"
     default: "'original'"

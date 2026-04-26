@@ -26,10 +26,12 @@ describe('empty state wrappers', () => {
 
   it.each(wrappers)('renders %s on SSR and forwards slots', async (_, component) => {
     const html = await renderToString(h(component, { title: 'SSR title' }, {
+      icon: () => h('span', 'SSR icon'),
       description: () => 'SSR description',
       actions: () => h('button', 'Retry'),
     }))
 
+    expect(html).toContain('SSR icon')
     expect(html).toContain('SSR title')
     expect(html).toContain('SSR description')
     expect(html).toContain('Retry')
