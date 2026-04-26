@@ -42,6 +42,7 @@
 - DownloadCenter 主模块 raw console 已切到 `DownloadCenter` logger；初始化、销毁、任务批量操作、临时文件清理、transport handler 和通知点击均使用结构化日志，未引用的 `formatBytes()` 已删除。
 - macOS/Windows 应用扫描和搜索后处理慢日志已切到 `AppScanner` logger；扫描失败不再直接输出完整 app/file 路径。
 - BoxItemManager、插件 provider 工具、UsageStatsCache 与 TimeStatsAggregator 的 raw console 已收口到项目 logger。
+- UsageStatsQueue、Recommendation ContextProvider 与 ItemRebuilder 的 raw console 已收口到项目 logger；搜索统计 flush 和推荐项 rebuild 的失败仍保持原有降级/回填语义，只改变日志出口。
 
 ### 仍保留的兼容边界
 
