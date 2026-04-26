@@ -5,7 +5,6 @@ import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { everythingProvider } from '../box-tool/addon/files/everything-provider'
-import { isActiveAppCapabilityAvailable } from '../system/active-app'
 import { getXdotoolUnavailableReason, isXdotoolAvailable } from '../system/linux-desktop-tools'
 
 const execFileAsync = promisify(execFile)
@@ -101,23 +100,43 @@ export function applyCapabilityRuntimePatch(
 }
 
 export async function getActiveAppCapabilityPatch(): Promise<PlatformCapabilityRuntimePatch> {
-  const available = await isActiveAppCapabilityAvailable()
-  if (available) {
-    return process.platform === 'linux'
-      ? withLimitations(
-          'best_effort',
-          'Linux foreground app inspection depends on desktop automation tooling.',
-          'XDTOOL_DEPENDENCY',
-          ['Requires xdotool and a compatible desktop session.']
-        )
-      : withLimitations('supported')
+  if (process.platform === 'darwin') {
+    return withLimitations(
+      'best_effort',
+      'Foreground application inspection depends on macOS Automation permission.',
+      'AUTOMATION_PERMISSION',
+      [
+        'Requires Automation permission for System Events and may return empty during permission backoff.'
+      ]
+    )
   }
 
-  const reason =
-    process.platform === 'linux'
-      ? getXdotoolUnavailableReason()
-      : 'Foreground application inspection is unavailable in the current runtime.'
-  return withLimitations('unsupported', reason, 'UNAVAILABLE', [reason])
+  if (process.platform === 'win32') {
+    return withLimitations(
+      'best_effort',
+      'Foreground application inspection depends on PowerShell and Win32 foreground-window APIs.',
+      'POWERSHELL_FOREGROUND_WINDOW',
+      ['Requires PowerShell availability and access to foreground process metadata.']
+    )
+  }
+
+  if (process.platform === 'linux') {
+    const available = await isXdotoolAvailable()
+    if (available) {
+      return withLimitations(
+        'best_effort',
+        'Linux foreground app inspection depends on desktop automation tooling.',
+        'XDTOOL_DEPENDENCY',
+        ['Requires xdotool and a compatible desktop session.']
+      )
+    }
+
+    const reason = getXdotoolUnavailableReason()
+    return withLimitations('unsupported', reason, 'XDTOOL_MISSING', [reason])
+  }
+
+  const reason = `Foreground application inspection is unsupported on platform: ${process.platform}`
+  return withLimitations('unsupported', reason, 'PLATFORM_UNSUPPORTED', [reason])
 }
 
 export async function getSelectionCaptureCapabilityPatch(options?: {

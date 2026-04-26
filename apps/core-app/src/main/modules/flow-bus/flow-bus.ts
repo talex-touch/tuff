@@ -13,8 +13,8 @@ import type {
   FlowPayloadType,
   FlowSession,
   FlowTargetInfo
-} from '@talex-touch/utils'
-import { FlowErrorCode } from '@talex-touch/utils'
+} from '@talex-touch/utils/types/flow'
+import { FlowErrorCode } from '@talex-touch/utils/types/flow'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { flowConsentStore, requiresFlowConsent } from './flow-consent'
 import { flowBusDispatchLog } from './logger'
@@ -196,6 +196,19 @@ export class FlowBus {
         sessionId: session.sessionId,
         state: 'FAILED',
         error: updatedSession.error
+      }
+    }
+
+    if (!targetInfo.hasFlowHandler) {
+      const flowError: FlowError = {
+        code: FlowErrorCode.TARGET_OFFLINE,
+        message: `Target has not registered a Flow delivery handler: ${targetInfo.fullId}`
+      }
+      flowSessionManager.setError(session.sessionId, flowError)
+      return {
+        sessionId: session.sessionId,
+        state: 'FAILED',
+        error: flowError
       }
     }
 
@@ -383,14 +396,14 @@ export class FlowBus {
     if (handler) {
       await handler(session)
     } else {
-      // Default delivery via IPC (to be implemented with plugin system)
-      flowBusDispatchLog.debug('Delegating payload delivery to default IPC path', {
+      flowBusDispatchLog.warn('Missing delivery handler for Flow target', {
         meta: {
           sessionId: session.sessionId,
           targetId: target.fullId,
           payloadType: session.payload.type
         }
       })
+      throw new Error(`Missing Flow delivery handler for target: ${target.fullId}`)
     }
   }
 

@@ -5,6 +5,15 @@
 
 ## 2026-04-26
 
+### fix(core-app): 收口 Flow Transfer 与平台 capability 假成功语义
+
+- `apps/core-app/src/main/modules/flow-bus/{flow-bus.ts,module.ts,flow-consent.ts,flow-bus.test.ts}`
+- `apps/core-app/src/main/modules/platform/{capability-adapter.ts,capability-registry.ts,capability-runtime.test.ts}`
+- `apps/core-app/src/main/modules/system/{permission-checker.ts,permission-checker.test.ts,active-app.ts,active-app.test.ts}`
+  - Flow Transfer 不再把“目标插件未注册 delivery handler”当作已投递：dispatch 会返回 `TARGET_OFFLINE`，插件 transport 投递异常也会向上变成失败结果，不再被 `.catch(() => {})` 吞掉。
+  - Platform capability 清单不再把条件型能力宣称为完全 supported：`platform.flow-transfer` 标记为 `best_effort/TARGET_HANDLER_REQUIRED`，`platform.division-box` 标记为 `best_effort/FLOW_TRIGGER_UNAVAILABLE`，active-app 在 macOS/Windows 也明确为 best-effort，并删除已无生产调用且语义过度乐观的 `isActiveAppCapabilityAvailable()`。
+  - macOS notification 检查不再把 `Notification.isSupported()` 当成权限已授予；原生通知可用时返回 `notDetermined + canRequest`，避免首次设置页把“运行时支持”误报成“系统已授权”。
+
 ### fix(core-app): 补齐 OmniPanel 右键长按时长配置与权限提示
 
 - `apps/core-app/src/main/modules/omni-panel/index.ts`

@@ -311,12 +311,24 @@ export class FlowBusIPC {
       const targetPluginId = session?.targetPluginId
 
       if (senderId) {
-        this.transport.sendToPlugin(senderId, FlowEvents.sessionUpdate, update).catch(() => {})
+        void this.transport
+          .sendToPlugin(senderId, FlowEvents.sessionUpdate, update)
+          .catch((error) => {
+            flowBusIpcLog.debug('Failed to send Flow session update to sender plugin', {
+              meta: { sessionId: update.sessionId, pluginId: senderId },
+              error
+            })
+          })
       }
       if (targetPluginId) {
-        this.transport
+        void this.transport
           .sendToPlugin(targetPluginId, FlowEvents.sessionUpdate, update)
-          .catch(() => {})
+          .catch((error) => {
+            flowBusIpcLog.debug('Failed to send Flow session update to target plugin', {
+              meta: { sessionId: update.sessionId, pluginId: targetPluginId },
+              error
+            })
+          })
       }
     }
   }

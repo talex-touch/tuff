@@ -54,14 +54,10 @@ vi.mock('../../utils/logger', () => ({
   createLogger: vi.fn(() => activeAppLoggerMock)
 }))
 
-import { activeAppService, isActiveAppCapabilityAvailable } from './active-app'
+import { activeAppService } from './active-app'
 
 function mockExecFileSuccess(stdout: string) {
   execFilePromiseMock.mockResolvedValueOnce({ stdout, stderr: '' })
-}
-
-function mockExecFileFailure(code: string, message = code) {
-  execFilePromiseMock.mockRejectedValueOnce(Object.assign(new Error(message), { code }))
 }
 
 afterEach(() => {
@@ -98,20 +94,6 @@ afterEach(() => {
       macosPermissionBackoffUntil: number
     }
   ).macosPermissionBackoffUntil = 0
-})
-
-describe('active-app capability', () => {
-  it('linux capability probe returns true when xdotool is available', async () => {
-    mockExecFileSuccess('xdotool version 3.20211022.1')
-
-    await expect(isActiveAppCapabilityAvailable('linux')).resolves.toBe(true)
-  })
-
-  it('linux capability probe returns false when xdotool is missing', async () => {
-    mockExecFileFailure('ENOENT', 'xdotool missing')
-
-    await expect(isActiveAppCapabilityAvailable('linux')).resolves.toBe(false)
-  })
 })
 
 describe('active-app resolution', () => {
