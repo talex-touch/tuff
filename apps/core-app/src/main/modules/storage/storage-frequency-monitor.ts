@@ -1,4 +1,6 @@
-import chalk from 'chalk'
+import { createLogger } from '../../utils/logger'
+
+const storageFrequencyLog = createLogger('Storage').child('Frequency')
 
 /**
  * StorageFrequencyMonitor - Frequency monitoring service
@@ -77,13 +79,14 @@ export class StorageFrequencyMonitor {
         return
       }
 
-      console.warn(
-        chalk.yellow(
-          `[StorageFrequencyMonitor] Frequent ${operation.toUpperCase()} detected: ` +
-            `config "${chalk.bold(name)}" accessed ${chalk.bold(count)} times in ${this.TIME_WINDOW / 1000}s. ` +
-            `Consider optimizing to reduce overhead.`
-        )
-      )
+      storageFrequencyLog.warn('Frequent storage access detected', {
+        meta: {
+          configName: name,
+          operation,
+          count,
+          windowSeconds: this.TIME_WINDOW / 1000
+        }
+      })
 
       this.setCooldown(name, operation)
       log[operation] = []
