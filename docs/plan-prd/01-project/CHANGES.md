@@ -39,6 +39,7 @@
   - 公共 updates 页的要闻列表、历史版本列表、loading 与空态改为复用 `TxCardItem`、`TxTag`、`TxSpinner`、`TxSkeleton`、`TxNoData`；最新版本详情使用 `TxCard` 承载，避免继续维护一套页面内手写卡片/标签/状态样式。
   - `Critical` 标记补齐双语 `updates.latest.critical`，更新类型标签移除代码内中文 fallback，统一由 locale 文件兜底。
   - 要闻区保留无外层卡片的页面区块结构，只让实际更新/版本条目使用卡片组件，避免卡片套卡片与产品域组件反向污染 Tuffex。
+  - 频道切换时会在同一次 router replace 中清理 `history=1`，避免历史版本展开状态跨 release/beta/snapshot 频道残留。
   - 修复 Tuffex empty-state 系列 wrapper 使用 `v-slots` 导致 Nuxt SSR `getSSRProps` 崩溃的问题；wrapper 现在显式转发 `icon/title/description/actions` slots，并新增 SSR 回归覆盖。
 
 ### fix(tuffex): 补齐 Transfer 动作按钮可访问标签
