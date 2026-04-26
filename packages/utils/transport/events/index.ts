@@ -2668,7 +2668,7 @@ export const ClipboardEvents = {
   apply: defineEvent('clipboard')
     .module('action')
     .event('apply')
-    .define<ClipboardApplyRequest, void>(),
+    .define<ClipboardApplyRequest, ClipboardActionResult>(),
 
   /**
    * Delete a clipboard history item by ID.
