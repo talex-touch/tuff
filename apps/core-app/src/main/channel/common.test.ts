@@ -212,7 +212,12 @@ vi.mock('../modules/analytics', () => ({
 vi.mock('../modules/box-tool/addon/apps/app-provider', () => ({
   appProvider: {
     getAppIndexSettings: vi.fn(),
-    updateAppIndexSettings: vi.fn()
+    updateAppIndexSettings: vi.fn(),
+    addAppByPath: vi.fn(),
+    listManagedEntries: vi.fn(),
+    upsertManagedEntry: vi.fn(),
+    removeManagedEntry: vi.fn(),
+    setManagedEntryEnabled: vi.fn()
   }
 }))
 
@@ -684,5 +689,119 @@ describe('CommonChannelModule private helpers', () => {
         configurable: true
       })
     }
+  })
+
+  it('routes managed app-index handlers and validates remove/set-enabled payloads', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+
+    const { appProvider } = await import('../modules/box-tool/addon/apps/app-provider')
+    ;(appProvider.listManagedEntries as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        path: '/Applications/WeChat.app',
+        name: 'WeChat',
+        enabled: true,
+        launchKind: 'path',
+        launchTarget: '/Applications/WeChat.app'
+      }
+    ])
+    ;(appProvider.upsertManagedEntry as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      status: 'updated'
+    })
+    ;(appProvider.removeManagedEntry as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      status: 'removed'
+    })
+    ;(appProvider.setManagedEntryEnabled as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      status: 'updated'
+    })
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const listHandler = handlers.get(AppEvents.appIndex.listEntries.toEventName())
+    const upsertHandler = handlers.get(AppEvents.appIndex.upsertEntry.toEventName())
+    const removeHandler = handlers.get(AppEvents.appIndex.removeEntry.toEventName())
+    const setEnabledHandler = handlers.get(AppEvents.appIndex.setEntryEnabled.toEventName())
+
+    await expect(listHandler?.({}, {})).resolves.toEqual([
+      {
+        path: '/Applications/WeChat.app',
+        name: 'WeChat',
+        enabled: true,
+        launchKind: 'path',
+        launchTarget: '/Applications/WeChat.app'
+      }
+    ])
+    await expect(
+      upsertHandler?.(
+        {
+          path: '/Applications/WeChat.app',
+          displayName: '微信',
+          enabled: true
+        },
+        {}
+      )
+    ).resolves.toEqual({
+      success: true,
+      status: 'updated'
+    })
+    await expect(Promise.resolve(removeHandler?.({ path: '' }, {}))).resolves.toEqual({
+      success: false,
+      status: 'invalid',
+      reason: 'path-empty'
+    })
+    await expect(
+      Promise.resolve(removeHandler?.({ path: '/Applications/WeChat.app' }, {}))
+    ).resolves.toEqual({
+      success: true,
+      status: 'removed'
+    })
+    await expect(
+      Promise.resolve(setEnabledHandler?.({ path: '/Applications/WeChat.app' }, {}))
+    ).resolves.toEqual({
+      success: false,
+      status: 'invalid',
+      reason: 'enabled-invalid'
+    })
+    await expect(
+      setEnabledHandler?.({ path: '/Applications/WeChat.app', enabled: false }, {})
+    ).resolves.toEqual({
+      success: true,
+      status: 'updated'
+    })
+
+    expect(appProvider.listManagedEntries).toHaveBeenCalledTimes(1)
+    expect(appProvider.upsertManagedEntry).toHaveBeenCalledWith({
+      path: '/Applications/WeChat.app',
+      displayName: '微信',
+      enabled: true
+    })
+    expect(appProvider.removeManagedEntry).toHaveBeenCalledWith('/Applications/WeChat.app')
+    expect(appProvider.setManagedEntryEnabled).toHaveBeenCalledWith(
+      '/Applications/WeChat.app',
+      false
+    )
   })
 })

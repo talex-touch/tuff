@@ -108,7 +108,16 @@ import type {
   TraySettingsUpdateResponse,
 } from './types/app'
 
-import type { AppIndexAddPathRequest, AppIndexAddPathResult, AppIndexSettings } from './types/app-index'
+import type {
+  AppIndexAddPathRequest,
+  AppIndexAddPathResult,
+  AppIndexEntryMutationResult,
+  AppIndexManagedEntry,
+  AppIndexRemoveEntryRequest,
+  AppIndexSetEntryEnabledRequest,
+  AppIndexSettings,
+  AppIndexUpsertEntryRequest
+} from './types/app-index'
 
 // ============================================================================
 // App Events
@@ -879,6 +888,38 @@ export const AppEvents = {
       .module('app-index')
       .event('add-path')
       .define<AppIndexAddPathRequest, AppIndexAddPathResult>(),
+
+    /**
+     * List user-managed launcher entries.
+     */
+    listEntries: defineEvent('app')
+      .module('app-index')
+      .event('entries.list')
+      .define<void, AppIndexManagedEntry[]>(),
+
+    /**
+     * Create or update a user-managed launcher entry.
+     */
+    upsertEntry: defineEvent('app')
+      .module('app-index')
+      .event('entry.upsert')
+      .define<AppIndexUpsertEntryRequest, AppIndexEntryMutationResult>(),
+
+    /**
+     * Remove a user-managed launcher entry.
+     */
+    removeEntry: defineEvent('app')
+      .module('app-index')
+      .event('entry.remove')
+      .define<AppIndexRemoveEntryRequest, AppIndexEntryMutationResult>(),
+
+    /**
+     * Enable or disable a user-managed launcher entry.
+     */
+    setEntryEnabled: defineEvent('app')
+      .module('app-index')
+      .event('entry.set-enabled')
+      .define<AppIndexSetEntryEnabledRequest, AppIndexEntryMutationResult>(),
   },
 
   /**

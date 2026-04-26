@@ -5,6 +5,35 @@
 
 ## 2026-04-22
 
+### chore(ci): 下线 contributors README automation 以停止重复 PR 噪声
+
+- `.github/workflows/readme-contributors.yml`
+- `.github/workflows/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 官方仓库已手动禁用并同步删除 `readme-contributors.yml`，避免每次 `master` push 都继续生成新的 `contributors readme action update` PR。
+  - PR 池清淤策略改为直接保留业务 replacement PR，不再让 README contributors automation 持续占用 open PR 配额。
+  - workflow 说明文档已同步标记 contributors README automation 退役，后续如需维护 contributors 列表，改走显式人工变更而不是自动 PR。
+
+### feat(core-app/app-index): 接通 user-managed launcher foundation 最小闭环
+
+- `packages/utils/transport/events/types/app-index.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/sdk/domains/settings.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/channel/common.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/search-processing-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/search-processing-service.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/TODO.md`
+  - `settingsSdk.appIndex` 现已补齐 `listEntries / upsertEntry / removeEntry / setEntryEnabled` typed contract，main `common.ts` 同步注册对应 handler，不再需要独立 `ipcMain.handle` 旁路。
+  - `app-provider` 复用现有 `files + file_extensions` 模型支持 user-managed launcher entry 的新增、更新、删除、启用/禁用与冲突校验，manual entry 的启动元数据继续落在扩展字段中，不新增 schema/table。
+  - 搜索与执行继续复用现有 `resolveAppItemId`、`TuffItemBuilder`、`TuffSearchResultBuilder` 与 `scheduleAppLaunch`；禁用的 manual entry 会从 recommendation/search 过滤，并可重新启用恢复。
+  - 新增定向回归，覆盖 transport 映射、main handler 输入校验、managed entry 落库/冲突/enable toggle，以及 manual disabled entry 的 recommendation 过滤。
+
 ### fix(core-app): 收口 Everything 设置页禁用态优先级
 
 - `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
@@ -24,6 +53,17 @@
   - 设置页 `everything:test` 在后端真实故障时改为明确返回失败，不再误报成“成功但找到 0 个结果”；补齐对应 Provider 回归。
 
 ## 2026-04-21
+
+### fix(core-app/apps-search): 补齐 macOS 中文应用名首轮扫描与拼音关键词规整
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+  - `darwin.getAppInfo()` 首轮扫描新增 Spotlight `kMDItemDisplayName` 安全读取，显示名优先级提升为 `Spotlight > localized strings > plist > bundle`，fresh scan 不再依赖后续 `mdls` 维护任务才能拿到中文应用名。
+  - `mdls` 读取统一走参数化 `execFileSafe('mdls', ['-name', 'kMDItemDisplayName', '-raw', appPath])`，避免带空格或特殊字符路径重新落回 shell 字符串插值风险。
+  - `app-provider` 中文关键词生成改为 `displayName` 优先去重，并把拼音全拼/首字母统一规整为 lowercase，避免大小写漂移影响索引一致性。
+  - 新增定向回归，覆盖 Spotlight 中文显示名首轮生效和拼音关键词 lowercase 规整。
 
 ### fix(core-app): Everything CLI 运行时失效后自动退出 stale ready
 

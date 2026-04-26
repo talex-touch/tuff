@@ -47,15 +47,24 @@
 - [x] Clipboard 插件预览链路收口：
   - Clipboard SDK `history.onDidChange()` 对旧版 plugin transport stream 同步抛错做 non-fatal 降级。
   - clipboard-history 详情页优先解析 `meta.image_original_url` / `getHistoryImageUrl(id)`，原图不可用时显式展示缩略图降级状态。
+- [x] macOS 中文应用名首轮索引修复：
+  - `darwin.getAppInfo()` 首轮扫描新增 Spotlight `kMDItemDisplayName` 安全读取，优先级提升为 `Spotlight > localized strings > plist > bundle`，fresh scan 不再依赖后续 `mdls` 维护任务才能拿到中文显示名。
+  - `app-provider` 中文关键词生成统一使用 `displayName` 优先顺序，并把拼音关键词规范化为 lowercase；补齐 `darwin.test.ts` 与 `app-provider.test.ts` 定向回归。
 - [x] 官方插件体验补强：
   - `touch-translation` 快翻 widget 与 `fy-multi` 已统一默认翻译方向、provider 顺序与错误文案，多源页不再硬编码中文目标语言。
   - 新增 `touch-dev-utils` 纯本地程序员工具插件，覆盖 UUID、JWT、时间戳、Query String、命名转换与字符串转义。
 - [x] Transport stream 内部协议统一：
   - `main/renderer/plugin` 共用 `packages/utils/transport/sdk/stream/*` 内部 runtime；默认 Port 优先，失败自动回退 `:stream:*`。
   - `ClipboardEvents.change` 已补 renderer/plugin/main 定向回归，覆盖 port 成功、回退、取消与 server fallback。
+- [x] User-managed launcher foundation：
+  - `settingsSdk.appIndex` 已补齐 `listEntries / upsertEntry / removeEntry / setEntryEnabled` typed contract，main `common.ts` 同步注册 handler。
+  - `app-provider` 复用现有 `files + file_extensions` 模型支持 manual entry CRUD、启用/禁用、冲突校验与启动元数据持久化，不新增 schema/table。
+  - `search-processing-service` 已对 disabled manual entry 做 recommendation/search 过滤，执行链路继续复用 `scheduleAppLaunch`。
+  - 已补 targeted regression：`transport-domain-sdks.test.ts`、`common.test.ts`、`app-provider.test.ts`、`search-processing-service.test.ts`。
 - [ ] CoreBox 第三方 App 非阻塞启动 Windows 真机验证：
   - 验证 `shortcut` 保留 `launchArgs / workingDirectory` 并在 CoreBox 立即隐藏后后台启动。
   - 验证 `uwp` 继续通过 `explorer.exe shell:AppsFolder\\...` handoff，早期失败会触发系统通知。
+  - 2026-04-21 本地回归已补：`app-provider.test.ts` 覆盖 `shortcut` / `uwp` `onExecute` 异步 handoff，不等待后台观察窗口即可返回；仍需 Windows 真机补“窗口已隐藏 + 实际启动体验”。
 
 ### 2.5.0 CoreApp Release Blockers（当前优先）
 
@@ -373,12 +382,12 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 154 |
+| 已完成 (`- [x]`) | 164 |
 | 未完成 (`- [ ]`) | 28 |
-| 总计 | 182 |
+| 总计 | 192 |
 | 完成率 | 85% |
 
-> 统计时间: 2026-04-20（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-04-22（按本文件实时 checkbox 计数）。
 
 ---
 
