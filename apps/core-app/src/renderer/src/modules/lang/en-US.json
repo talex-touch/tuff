@@ -1162,6 +1162,17 @@
           "mockLabel": "Mock payload",
           "mockPlaceholder": "Enter JSON payload",
           "mockError": "Failed to parse JSON: {error}",
+          "statusNotSelected": "Not selected",
+          "statusInvalidPayload": "Invalid payload",
+          "statusLoading": "Loading",
+          "statusRenderFailed": "Render failed",
+          "statusReady": "Loaded",
+          "statusError": "Error",
+          "statusPending": "Not ready",
+          "hintMockInvalid": "Failed to parse mock payload: {error}",
+          "hintMockEmpty": "Mock payload is enabled, but the content is empty",
+          "hintMockActive": "Rendering with mock payload",
+          "hintReadyEmpty": "Tip: if the widget is loaded but empty, it usually needs payload or runtime data.",
           "missingWidgetId": "A valid widgetId is required for preview.",
           "resizeAriaLabel": "Resize preview"
         }
