@@ -204,13 +204,27 @@ function toClipboardActionRequest(
   return request
 }
 
-function toClipboardActionSuccess(result: ClipboardActionResult | null | undefined): boolean {
+function createClipboardActionError(result: ClipboardActionResult): Error {
+  const message = result.message || '自动粘贴失败'
+  const error = new Error(message) as Error & {
+    code?: ClipboardActionResult['code']
+    result?: ClipboardActionResult
+  }
+  error.code = result.code
+  error.result = result
+  return error
+}
+
+function ensureClipboardActionSuccess(result: ClipboardActionResult | null | undefined): boolean {
   if (!result || typeof result !== 'object') {
     return true
   }
 
   if (typeof result.success === 'boolean') {
-    return result.success
+    if (!result.success) {
+      throw createClipboardActionError(result)
+    }
+    return true
   }
 
   return true
@@ -411,19 +425,19 @@ export function useClipboard() {
         || typeof options.type === 'string'
 
       if (!hasInlinePayload && Number.isFinite(options.item?.id)) {
-        await transport.send(ClipboardEvents.apply, {
+        const response = await transport.send(ClipboardEvents.apply, {
           id: Number(options.item?.id),
           autoPaste: true,
           _sdkapi: resolveSdkApi(),
         })
-        return true
+        return ensureClipboardActionSuccess(response)
       }
 
       const response = await transport.send(
         ClipboardEvents.copyAndPaste,
         withSdkApiPayload(toClipboardActionRequest(options)),
       )
-      return toClipboardActionSuccess(response)
+      return ensureClipboardActionSuccess(response)
     },
   }
 
@@ -495,7 +509,7 @@ export function useClipboard() {
         ClipboardEvents.copyAndPaste,
         withSdkApiPayload(toClipboardActionRequest(options)),
       )
-      return toClipboardActionSuccess(response)
+      return ensureClipboardActionSuccess(response)
     },
   }
 }
