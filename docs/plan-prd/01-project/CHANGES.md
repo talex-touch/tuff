@@ -5,6 +5,27 @@
 
 ## 2026-04-26
 
+### fix(core-app): 补齐 OmniPanel 右键长按时长配置与权限提示
+
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/{SettingTools.vue,SettingSetup.vue}`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN.json,en-US.json}`
+- `packages/utils/common/storage/entity/app-settings.ts`
+  - OmniPanel 右键长按阈值不再写死为 `600ms`；新增持久化配置项 `omniPanel.mouseLongPressDurationMs`，主进程在触发时按当前设置实时读取。
+  - 设置页新增“OmniPanel 右键长按时长”选项，快捷方式弹窗里的鼠标触发文案会直接显示当前阈值，避免只能看到“右键长按”却不知道具体时长。
+  - macOS 未授予辅助功能权限时，OmniPanel 鼠标触发不再继续显示成普通“可用”状态，而会明确提示需要先授予权限，减少静默失效。
+
+### fix(core-app): 修正 macOS 权限状态与 OmniPanel 快捷键默认值
+
+- `apps/core-app/src/main/modules/system/permission-checker.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/{SettingSetup.vue,SettingTools.vue}`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - macOS 通知权限此前错误走 `systemPreferences.getMediaAccessStatus('notifications')`，Electron 只支持 `microphone/camera/screen`，导致已允许通知时仍显示“不支持”；本轮改为基于 `Notification.isSupported()` 判定原生通知能力，避免把可用通知误报为不支持。
+  - “唤起 OmniPanel”键盘快捷键新默认改为关闭，保留右键长按触发的既有默认；用户显式打开后的设置仍按持久化值优先。
+  - 辅助功能的请求入口会调用 `isTrustedAccessibilityClient(true)` 再打开系统设置，确保当前运行体可以被加入 macOS 辅助功能授权列表。
+
 ### fix(core-app): 补齐 Clipboard 自动粘贴失败诊断链路
 
 - `apps/core-app/src/main/modules/clipboard.ts`

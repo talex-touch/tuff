@@ -227,6 +227,8 @@
     "omniPanelShortcutDesc": "Enable Command/Ctrl + Shift + P to open OmniPanel.",
     "omniPanelMouseLongPress": "OmniPanel right-click hold",
     "omniPanelMouseLongPressDesc": "Enable long-press right click to open OmniPanel and capture selected text.",
+    "omniPanelMouseLongPressDuration": "OmniPanel right-click hold duration",
+    "omniPanelMouseLongPressDurationDesc": "Set the hold threshold used to trigger OmniPanel.",
     "shortcutsDialog": {
       "title": "Shortcuts",
       "desc": "Search and configure system-level shortcuts.",
@@ -247,6 +249,7 @@
       "sourcePlugin": "Plugin: {name}",
       "sourceUnknown": "Unknown",
       "triggerMouseRightLongPress": "Mouse right long press",
+      "triggerMouseRightLongPressWithDuration": "Mouse right long press ({duration} ms)",
       "columns": {
         "name": "Name",
         "source": "Source",
@@ -269,6 +272,8 @@
       "conflictPlugin": "Conflicts with plugin shortcuts",
       "unavailable": "Shortcut registration failed; possibly reserved by the system",
       "invalid": "Invalid shortcut",
+      "omniPanelAccessibilityRequired": "Accessibility permission required",
+      "omniPanelAccessibilityHint": "Grant macOS Accessibility permission before the mouse trigger can work.",
       "spotlightHint": "Disable Spotlight shortcut in macOS settings to free this combo"
     },
     "autoPaste": "Auto paste",

@@ -175,8 +175,9 @@ const _appSettingOriginData = {
     enabled: false,
   },
   omniPanel: {
-    enableShortcut: true,
+    enableShortcut: false,
     enableMouseLongPress: true,
+    mouseLongPressDurationMs: 600,
     autoMountFirstFeatureOnPluginInstall: false,
     featureHub: {
       items: [] as Array<Record<string, unknown>>,
