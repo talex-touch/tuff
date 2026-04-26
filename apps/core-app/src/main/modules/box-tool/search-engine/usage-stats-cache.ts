@@ -1,5 +1,8 @@
 import type * as schema from '../../../db/schema'
 import { performance } from 'node:perf_hooks'
+import { createLogger } from '../../../utils/logger'
+
+const usageStatsCacheLog = createLogger('UsageStatsCache')
 
 /**
  * Usage stats cache entry
@@ -185,9 +188,9 @@ export async function getUsageStatsBatchCached(
         result.push(stat)
       }
     }
-    console.debug(
-      `[UsageStatsCache] All ${keys.length} stats retrieved from cache in ${(performance.now() - start).toFixed(2)}ms`
-    )
+    usageStatsCacheLog.debug('All stats retrieved from cache', {
+      meta: { count: keys.length, durationMs: Math.round(performance.now() - start) }
+    })
     return result
   }
 
@@ -224,9 +227,14 @@ export async function getUsageStatsBatchCached(
   const duration = performance.now() - start
   const cacheHitCount = cached.size
   const cacheMissCount = missingKeys.length
-  console.debug(
-    `[UsageStatsCache] Retrieved ${keys.length} stats (${cacheHitCount} cached, ${cacheMissCount} from DB) in ${duration.toFixed(2)}ms`
-  )
+  usageStatsCacheLog.debug('Retrieved usage stats', {
+    meta: {
+      count: keys.length,
+      cacheHitCount,
+      cacheMissCount,
+      durationMs: Math.round(duration)
+    }
+  })
 
   return result
 }

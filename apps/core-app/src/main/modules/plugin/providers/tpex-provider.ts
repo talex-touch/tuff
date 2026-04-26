@@ -18,6 +18,7 @@ import { createProviderLogger } from './logger'
 import { downloadToTempFile } from './utils'
 
 const DEFAULT_TPEX_API = NEXUS_BASE_URL
+const tpexProviderLog = createProviderLogger(PluginProviderType.TPEX)
 
 /**
  * Get the primary tpexApi base URL from user-configured sources
@@ -47,7 +48,7 @@ async function peekTpexManifest(tpexPath: string): Promise<IManifest | undefined
     const manifestContent = await fse.readJSON(manifestPath)
     return manifestContent as IManifest
   } catch (error) {
-    console.warn('[TpexProvider] Failed to peek manifest:', error)
+    tpexProviderLog.warn('Failed to peek manifest', { error })
     return undefined
   } finally {
     await fse.rm(tempDir, { recursive: true, force: true })
@@ -98,7 +99,7 @@ function parseTpexSource(source: string): { slug: string; version?: string } | n
  */
 export class TpexPluginProvider implements PluginProvider {
   readonly type = PluginProviderType.TPEX
-  private readonly log = createProviderLogger(this.type)
+  private readonly log = tpexProviderLog
 
   /** Get API base URL dynamically from user-configured sources */
   private get apiBase(): string {
