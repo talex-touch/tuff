@@ -56,12 +56,11 @@ import type {
 } from '@talex-touch/tuff-intelligence'
 import type { AgentTask } from '@talex-touch/utils'
 import type { IntelligenceAuditLogEntry } from './intelligence-audit-logger'
-import { stdout } from 'node:process'
 import { format } from 'node:util'
 import { PromptTemplate } from '@langchain/core/prompts'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
-import chalk from 'chalk'
 import { enterPerfContext } from '../../utils/perf-context'
+import { createLogger } from '../../utils/logger'
 import { agentManager } from './agents'
 import { intelligenceAuditLogger } from './intelligence-audit-logger'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
@@ -70,10 +69,13 @@ import { intelligenceQuotaManager } from './intelligence-quota-manager'
 import { strategyManager } from './intelligence-strategy-manager'
 import { IntelligenceProvider } from './runtime/base-provider'
 
-const INTELLIGENCE_TAG = chalk.hex('#1e88e5').bold('[Intelligence]')
-const logInfo = (...args: unknown[]) => stdout.write(`${format(INTELLIGENCE_TAG, ...args)}\n`)
-const logWarn = (...args: unknown[]) => console.warn(INTELLIGENCE_TAG, ...args)
-const logError = (...args: unknown[]) => console.error(INTELLIGENCE_TAG, ...args)
+const intelligenceLog = createLogger('Intelligence')
+const formatLogMessage = (...args: unknown[]) => format(...args)
+const findErrorArg = (args: unknown[]): unknown => args.find((arg) => arg instanceof Error)
+const logInfo = (...args: unknown[]) => intelligenceLog.info(formatLogMessage(...args))
+const logWarn = (...args: unknown[]) => intelligenceLog.warn(formatLogMessage(...args))
+const logError = (...args: unknown[]) =>
+  intelligenceLog.error(formatLogMessage(...args), { error: findErrorArg(args) })
 
 const MAX_EMBEDDING_TOTAL_CHARS = 32_000
 const EMBEDDING_CHUNK_CHARS = 2_000

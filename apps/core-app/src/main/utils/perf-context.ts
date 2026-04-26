@@ -1,3 +1,5 @@
+import { createLogger } from './logger'
+
 interface PerfContextEntry {
   label: string
   startedAt: number
@@ -6,9 +8,19 @@ interface PerfContextEntry {
 
 const contexts = new Map<string, PerfContextEntry>()
 const CONTEXT_WARN_MS = 200
+const perfContextLog = createLogger('Perf').child('Context')
 
 function buildContextId(label: string): string {
   return `${label}:${Date.now()}:${Math.random().toString(16).slice(2)}`
+}
+
+function summarizeMeta(meta?: Record<string, unknown>): string | undefined {
+  if (!meta) return undefined
+  try {
+    return JSON.stringify(meta)
+  } catch {
+    return '[unserializable]'
+  }
 }
 
 export function enterPerfContext(label: string, meta?: Record<string, unknown>): () => void {
@@ -19,13 +31,13 @@ export function enterPerfContext(label: string, meta?: Record<string, unknown>):
     if (entry) {
       const durationMs = Math.max(0, Date.now() - entry.startedAt)
       if (durationMs >= CONTEXT_WARN_MS) {
-        if (entry.meta) {
-          console.warn(`[Perf:Context] ${label} ${Math.round(durationMs)}ms`, {
-            meta: entry.meta
-          })
-        } else {
-          console.warn(`[Perf:Context] ${label} ${Math.round(durationMs)}ms`)
-        }
+        perfContextLog.warn('Slow perf context', {
+          meta: {
+            label,
+            durationMs: Math.round(durationMs),
+            context: summarizeMeta(entry.meta)
+          }
+        })
       }
     }
     contexts.delete(id)
