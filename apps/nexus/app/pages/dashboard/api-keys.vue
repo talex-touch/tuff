@@ -284,6 +284,12 @@ const scopeTree = computed<ApiKeyScopeGroup[]>(() => [
         description: t('dashboard.sections.apiKeys.scopes.items.releaseNews.description'),
         sensitive: true,
       },
+      {
+        id: 'release:evidence',
+        label: t('dashboard.sections.apiKeys.scopes.items.releaseEvidence.label'),
+        description: t('dashboard.sections.apiKeys.scopes.items.releaseEvidence.description'),
+        sensitive: true,
+      },
     ],
   },
 ])
