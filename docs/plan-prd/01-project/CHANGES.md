@@ -16,12 +16,14 @@
 - `apps/core-app/src/main/utils/plugin-injection.ts`
 - `apps/core-app/src/main/modules/download/{logger.ts,database-service.ts,chunk-manager.ts,concurrency-adjuster.ts,network-monitor.ts,performance-monitor.ts,download-worker.ts,notification-service.ts,error-logger.ts}`
 - `apps/core-app/src/main/modules/download/download-center.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/{darwin.ts,win.ts,search-processing-service.ts}`
   - 删除未被任何入口引用、且全文件只剩注释的主进程 screen-capture 占位文件；renderer 同步移除无人发送的 `@screen-capture` 注册函数，避免后续误以为屏幕捕获能力已接通。
   - `OfficialPluginService`、`FileWatchService`、`TuffIconImpl` 的 raw console 调试输出切到 `createLogger`，保留失败原因但减少散落日志和原始路径暴露。
   - CoreBox Manager、SystemActions file-index、BuildVerification、FeatureSearchTokens 的小范围 raw console 也统一收口到已有 logger；SystemActions 去掉 file-index 的重复控制台输出，只保留结构化日志。
   - 旧插件注入脚本不再向插件 WebContents 输出 `Touch # Auto inject JS`，并删除同文件底部未启用的样式注释块。
   - Download 外围模块（数据库、切片、worker、通知、网络、性能、并发和错误日志器）的 raw console 改为 `download/logger.ts` 统一导出的结构化 logger；失败日志优先记录 taskId/chunkIndex/pathLength 等元数据，避免直接输出本地路径。
   - DownloadCenter 主模块同样切到 `DownloadCenter` logger，初始化/销毁、任务批量操作、临时文件清理、transport handler 和通知点击均不再直接写 console；日志改造后失去引用的 `formatBytes()` 已删除。
+  - macOS/Windows 应用扫描和搜索后处理慢日志切到 `AppScanner` logger，失败日志不再直接输出 app/file 完整路径。
   - `application-hooks` 清掉外链拦截里的旧 safe-link 注释块，只保留当前 `url:open` / localhost 判断主路径。
 
 ### refactor(core-app): 收口预览、终端与服务中心调试残留

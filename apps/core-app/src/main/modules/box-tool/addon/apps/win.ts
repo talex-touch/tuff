@@ -7,6 +7,7 @@ import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { shell } from 'electron'
 import type { ScannedAppInfo } from './app-types'
 import { reportAppScanError } from './app-error-reporter'
+import { createLogger } from '../../../../utils/logger'
 
 type AppInfo = ScannedAppInfo
 type StartAppRecord = {
@@ -41,6 +42,7 @@ const UWP_LOGO_ATTRIBUTE_CANDIDATES = [
   'Square150x150Logo',
   'Logo'
 ]
+const windowsAppLog = createLogger('AppScanner').child('Windows')
 
 function normalizeIdentityPart(value: string): string {
   return value.trim().toLowerCase()
@@ -175,9 +177,12 @@ async function getWindowsStoreRecords(): Promise<StartAppRecord[]> {
     const parsed = JSON.parse(raw) as StartAppRecord | StartAppRecord[]
     return Array.isArray(parsed) ? parsed : [parsed]
   } catch (error) {
-    const code = error && typeof error === 'object' && 'code' in error ? (error as any).code : ''
+    const code =
+      error && typeof error === 'object' && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : ''
     if (code !== 'ENOENT') {
-      console.warn('[Win] Failed to enumerate Windows Store apps:', error)
+      windowsAppLog.warn('Failed to enumerate Windows Store apps', { error })
     }
     return []
   }
@@ -357,8 +362,11 @@ async function getAppIcon(targetPath: string, cacheKey: string): Promise<string>
           return `data:image/png;base64,${normalized.toString('base64')}`
         }
       }
-    } catch (e) {
-      console.warn(`[Win] Failed to extract icon for ${targetPath}:`, e)
+    } catch (error) {
+      windowsAppLog.warn('Failed to extract app icon', {
+        error,
+        meta: { pathLength: targetPath.length }
+      })
     }
   }
   return '' // Return empty string if icon extraction fails
@@ -440,8 +448,11 @@ async function fileDisplay(filePath: string): Promise<AppInfo[]> {
         // Ignore errors for individual files/directories
       }
     }
-  } catch (err) {
-    console.warn(`[Win] Could not read directory: ${filePath}`, err)
+  } catch (error) {
+    windowsAppLog.warn('Could not read app directory', {
+      error,
+      meta: { pathLength: filePath.length }
+    })
   }
   return results
 }
@@ -495,7 +506,10 @@ export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
     const appDetail = fileName.endsWith('.lnk') ? shell.readShortcutLink(filePath) : undefined
     return await buildDesktopAppInfo(filePath, fileName, stats, appDetail)
   } catch (error) {
-    console.warn(`[Win] Failed to get app info for ${filePath}:`, error)
+    windowsAppLog.warn('Failed to get app info', {
+      error,
+      meta: { pathLength: filePath.length }
+    })
     const message = error instanceof Error ? error.message : String(error)
     reportAppScanError({
       platform: process.platform,

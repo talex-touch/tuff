@@ -8,8 +8,10 @@ import { readFile as readPlist } from 'simple-plist'
 import { reportAppScanError } from './app-error-reporter'
 import type { ScannedAppInfo } from './app-types'
 import { readLocalizedStringsFile } from './localized-strings-parser'
+import { createLogger } from '../../../../utils/logger'
 
 const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons')
+const darwinAppLog = createLogger('AppScanner').child('Darwin')
 async function convertIcnsToPng(icnsPath: string, pngPath: string): Promise<string> {
   try {
     await execFileSafe('sips', [
@@ -89,7 +91,10 @@ async function getAppIcon(app: { path: string; name: string }): Promise<string |
     const buffer = await fs.readFile(cachedIconPath)
     return buffer.toString('base64')
   } catch (error) {
-    console.warn(`[Darwin] Failed to get icon for ${app.name}:`, error)
+    darwinAppLog.warn('Failed to get app icon', {
+      error,
+      meta: { appName: app.name, pathLength: app.path.length }
+    })
     await fs.writeFile(noneMarkerPath, '').catch(() => {})
     return null
   }
@@ -321,11 +326,10 @@ export async function getAppInfo(appPath: string): Promise<ScannedAppInfo | null
     const errorMessage =
       error instanceof Error ? error.message : typeof error === 'string' ? error : String(error)
     // This block will execute if all retry attempts fail
-    console.warn(
-      `[Darwin] Failed to get app info for ${appPath} after retries, likely incomplete or invalid bundle. Error: ${
-        errorMessage
-      }`
-    )
+    darwinAppLog.warn('Failed to get app info after retries', {
+      error,
+      meta: { pathLength: appPath.length, message: errorMessage }
+    })
     reportAppScanError({
       platform: process.platform,
       path: appPath,
