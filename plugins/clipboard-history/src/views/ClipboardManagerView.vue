@@ -171,8 +171,14 @@ async function handleApply(): Promise<void> {
   }
 
   applyPending.value = true
+  errorMessage.value = ''
   try {
     await clipboard.history.applyToActiveApp({ item: selectedItem.value })
+  }
+  catch (error) {
+    errorMessage.value = error instanceof Error && error.message
+      ? error.message
+      : '自动粘贴失败'
   }
   finally {
     applyPending.value = false
