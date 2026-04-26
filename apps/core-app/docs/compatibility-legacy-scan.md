@@ -39,6 +39,7 @@
 - CoreBox Manager、SystemActions file-index、BuildVerification、FeatureSearchTokens 的小范围 raw console 已收口到 logger；SystemActions 不再对同一次 file-index 同时写 console 和结构化日志。
 - 旧插件注入脚本不再输出 `Touch # Auto inject JS`，同文件未启用的 `#app` 样式注释块已删除。
 - Download 外围模块的 raw console 已切到 `download/logger.ts` 统一 logger；数据库、切片、worker、通知、网络、性能、并发和错误日志器不再直接向主进程 console 输出任务/路径细节。
+- DownloadCenter 主模块 raw console 已切到 `DownloadCenter` logger；初始化、销毁、任务批量操作、临时文件清理、transport handler 和通知点击均使用结构化日志，未引用的 `formatBytes()` 已删除。
 
 ### 仍保留的兼容边界
 
