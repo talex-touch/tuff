@@ -5,6 +5,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
 import * as schema from '../../../db/schema'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
+import { createLogger } from '../../../utils/logger'
 import { AdaptiveBatchScheduler } from './adaptive-batch-scheduler'
 
 const CHINESE_CHAR_REGEX = /[\u4E00-\u9FA5]/
@@ -18,6 +19,7 @@ const NGRAM_MAX_SOURCE_KEYWORDS = 96
 const NGRAM_MAX_ENTRIES_PER_ITEM = 256
 const PRIORITY_EPSILON = 0.0001
 const ZERO_RESULT_DIAGNOSTIC_THROTTLE_MS = 30_000
+const searchIndexLog = createLogger('SearchIndex')
 
 interface SearchIndexRuntimeLogger {
   logSearchPhase: (phase: string, detail?: string) => void
@@ -218,13 +220,17 @@ export class SearchIndexService {
     const windowMs = Math.max(1, Date.now() - bucket.windowStartedAt)
     const avgMs = bucket.totalDurationMs / Math.max(1, bucket.count)
     const avgItems = bucket.items / Math.max(1, bucket.count)
-    console.debug(
-      `[SearchIndexService] ${this.getLogLabel(action)} summary calls=${bucket.count} items=${
-        bucket.items
-      } avgItems=${avgItems.toFixed(1)} avgMs=${avgMs.toFixed(0)} maxMs=${bucket.maxDurationMs.toFixed(
-        0
-      )} windowMs=${windowMs}`
-    )
+    searchIndexLog.debug(`${this.getLogLabel(action)} summary`, {
+      meta: {
+        action: this.getLogLabel(action),
+        calls: bucket.count,
+        items: bucket.items,
+        avgItems: Number(avgItems.toFixed(1)),
+        avgMs: Math.round(avgMs),
+        maxMs: Math.round(bucket.maxDurationMs),
+        windowMs
+      }
+    })
     bucket.count = 0
     bucket.items = 0
     bucket.totalDurationMs = 0
@@ -265,12 +271,14 @@ export class SearchIndexService {
     bucket.maxDurationMs = Math.max(bucket.maxDurationMs, durationMs)
 
     if (durationMs >= this.slowLogThresholdMs) {
-      const suffix = extra ? ` ${extra}` : ''
-      console.debug(
-        `[SearchIndexService] ${this.getLogLabel(action)} slow batch items=${items} duration=${durationMs.toFixed(
-          0
-        )}ms${suffix}`
-      )
+      searchIndexLog.debug(`${this.getLogLabel(action)} slow batch`, {
+        meta: {
+          action: this.getLogLabel(action),
+          items,
+          durationMs: Math.round(durationMs),
+          extra
+        }
+      })
     }
 
     if (now - bucket.windowStartedAt >= this.logWindowMs) {
@@ -422,16 +430,23 @@ export class SearchIndexService {
       const totalRows = await this.db.all<{ cnt: number }>(
         sql`SELECT count(*) as cnt FROM search_index WHERE provider = ${providerId}`
       )
-      console.warn(
-        `[SearchIndexService] search("${ftsMatchExpr}") returned 0 results. FTS5 total rows for provider "${providerId}": ${totalRows[0]?.cnt ?? 0}`
-      )
+      searchIndexLog.warn('FTS search returned zero results', {
+        meta: {
+          providerId,
+          queryLength: ftsMatchExpr.length,
+          totalRows: totalRows[0]?.cnt ?? 0
+        }
+      })
     }
 
-    console.debug(
-      `[SearchIndexService] search(provider=${providerId}, limit=${limit}) returned ${results.length} matches in ${(
-        performance.now() - start
-      ).toFixed(0)}ms`
-    )
+    searchIndexLog.debug('Search completed', {
+      meta: {
+        providerId,
+        limit,
+        resultCount: results.length,
+        durationMs: Math.round(performance.now() - start)
+      }
+    })
     return results
   }
 
@@ -651,11 +666,9 @@ export class SearchIndexService {
     await this.createKeywordMappingIndexes()
 
     this.initialized = true
-    console.log(
-      `[SearchIndexService] Initialization completed in ${(performance.now() - initStart).toFixed(
-        0
-      )}ms`
-    )
+    searchIndexLog.info('Initialization completed', {
+      meta: { durationMs: Math.round(performance.now() - initStart) }
+    })
   }
 
   private async createSearchIndexTable(): Promise<void> {
@@ -1122,9 +1135,9 @@ export class SearchIndexService {
     this.pinyinPromise
       .then((mod) => {
         this.pinyinModule = mod
-        console.log(
-          `[SearchIndexService] pinyin-pro preloaded in ${(performance.now() - start).toFixed(0)}ms`
-        )
+        searchIndexLog.debug('pinyin-pro preloaded', {
+          meta: { durationMs: Math.round(performance.now() - start) }
+        })
       })
       .catch(() => {
         /* swallow; caller handles */
@@ -1138,11 +1151,9 @@ export class SearchIndexService {
       this.pinyinPromise = import('pinyin-pro')
       this.pinyinPromise
         .then(() => {
-          console.log(
-            `[SearchIndexService] pinyin-pro module loaded in ${(performance.now() - start).toFixed(
-              0
-            )}ms`
-          )
+          searchIndexLog.debug('pinyin-pro module loaded', {
+            meta: { durationMs: Math.round(performance.now() - start) }
+          })
         })
         .catch(() => {
           /* swallow log; caller handles */

@@ -46,6 +46,7 @@
 - RecommendationEngine 主文件 raw console 已收口到既有 `RecommendationEngine` logger；provider 注册/卸载、缓存命中、候选统计、生成耗时和插件 provider 失败日志不再直接写 console。
 - Storage polling/LRU/frequency monitor 的 raw console 已收口到 `Storage:Polling`、`Storage:LRU`、`Storage:Frequency` logger；周期保存、强制保存、驱逐和高频访问告警语义保持不变。
 - Intelligence SDK、main i18n helper、PerfContext 与 SignatureVerifier 的 raw warn/error 已收口到项目 logger；AI 调用流程、i18n fallback、性能慢上下文告警和签名获取失败返回语义保持不变。
+- SearchIndexService 与 search-index worker 的 raw console 已收口到 `SearchIndex` logger；索引摘要、慢批次、零结果诊断、初始化和 pinyin 预热不再直接输出 DB path 或 FTS 查询表达式。
 
 ### 仍保留的兼容边界
 
