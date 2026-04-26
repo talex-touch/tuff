@@ -1,7 +1,19 @@
 # 变更日志
 
-> 更新时间: 2026-04-25
-> 说明: 主文件仅保留近 30 天（2026-03-25 ~ 2026-04-24）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-26
+> 说明: 主文件仅保留近 30 天（2026-03-27 ~ 2026-04-26）详细记录；更早历史已按月归档。
+
+## 2026-04-26
+
+### fix(core-app): 补齐 Clipboard 自动粘贴失败诊断链路
+
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `packages/utils/{transport/events,plugin/sdk}/`
+- `plugins/clipboard-history/`
+- `docs/plan-prd/{TODO.md,01-project/CHANGES.md}`
+  - `clipboard.copyAndPaste` 和 `history.applyToActiveApp` 不再把主进程返回的 `{ success:false, message }` 压成静默 `false`；SDK 会保留 message/code 并抛出可展示错误。
+  - 主进程 `apply` / `copy-and-paste` 失败时返回结构化 `ClipboardActionResult`，并写入只含 type、长度、file count、platform、pluginName、delayMs 等安全元数据的日志，避免记录剪贴板明文。
+  - macOS `osascript -> System Events` 自动化权限失败会映射为 `MACOS_AUTOMATION_PERMISSION_DENIED`，UI 可直接提示用户去系统设置授权；clipboard-history 插件版本同步 bump 到 `1.1.8`。
 
 ## 2026-04-25
 
