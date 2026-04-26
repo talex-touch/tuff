@@ -6,7 +6,7 @@ import process from 'node:process'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { shell, systemPreferences } from 'electron'
+import { Notification, shell, systemPreferences } from 'electron'
 import { BaseModule } from '../abstract-base-module'
 
 export enum PermissionType {
@@ -126,47 +126,18 @@ export class PermissionChecker {
    */
   public checkNotifications(): PermissionCheckResult {
     if (process.platform === 'darwin') {
-      if (systemPreferences.getMediaAccessStatus) {
-        try {
-          const status = systemPreferences.getMediaAccessStatus(
-            'notifications' as Parameters<typeof systemPreferences.getMediaAccessStatus>[0]
-          )
-          if (
-            status !== 'granted' &&
-            status !== 'denied' &&
-            status !== 'not-determined' &&
-            status !== 'unknown'
-          ) {
-            return {
-              status: PermissionStatus.UNSUPPORTED,
-              canRequest: true,
-              message:
-                'Notification permission cannot be verified programmatically on this macOS version'
-            }
-          }
-          return {
-            status:
-              status === 'granted'
-                ? PermissionStatus.GRANTED
-                : status === 'denied'
-                  ? PermissionStatus.DENIED
-                  : PermissionStatus.NOT_DETERMINED,
-            canRequest: status !== 'denied',
-            message: `Notification permission: ${status}`
-          }
-        } catch {
-          return {
-            status: PermissionStatus.UNSUPPORTED,
-            canRequest: true,
-            message:
-              'Notification permission cannot be verified programmatically on this macOS build'
-          }
+      if (Notification.isSupported()) {
+        return {
+          status: PermissionStatus.NOT_DETERMINED,
+          canRequest: true,
+          message:
+            'Native notifications are supported, but macOS notification permission cannot be verified programmatically.'
         }
       }
       return {
         status: PermissionStatus.UNSUPPORTED,
-        canRequest: true,
-        message: 'Notification permission status is unavailable on this macOS build'
+        canRequest: false,
+        message: 'Native notifications are not supported on this macOS build'
       }
     }
 
@@ -360,6 +331,7 @@ $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
     switch (type) {
       case PermissionType.ACCESSIBILITY:
         if (process.platform === 'darwin') {
+          systemPreferences.isTrustedAccessibilityClient(true)
           // Open macOS System Preferences > Security & Privacy > Privacy > Accessibility
           await shell.openExternal(
             'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
