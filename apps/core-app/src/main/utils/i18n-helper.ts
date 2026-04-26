@@ -100,12 +100,12 @@ export function t(key: TranslationKey, params?: Record<string, string | number>)
   const value = getNestedValue(message, key)
 
   if (value === undefined) {
-    console.warn(`[I18n] Translation key not found: ${key}`)
+    i18nLog.warn('Translation key not found', { meta: { key } })
     return key
   }
 
   if (typeof value !== 'string') {
-    console.warn(`[I18n] Translation value is not a string: ${key}`)
+    i18nLog.warn('Translation value is not a string', { meta: { key } })
     return key
   }
 
