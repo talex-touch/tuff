@@ -81,7 +81,8 @@
 - [ ] Windows 阻塞级回归：Everything/文件搜索、应用扫描/UWP、托盘状态、更新包匹配、插件权限拦截、安装/卸载、退出资源释放。
 - [ ] macOS 阻塞级回归：首次引导权限、OmniPanel Accessibility 门控、native-share 标记、托盘/dock 行为、更新安装、插件权限拦截、退出资源释放。
 - [ ] Linux 非阻塞观察：记录 `xdotool` / desktop environment 限制与 smoke 结果；不作为 `2.5.0` release blocker。
-- [ ] 证据闭环：每轮清理同步 `CHANGES + TODO + compatibility registry`，并附 `docs:guard` / `legacy:guard` / 定向回归结果。
+- [ ] 证据闭环：每轮清理同步 `CHANGES + TODO + compatibility registry`，并通过 Nexus Release Evidence API 采集 `docs:guard` / `legacy:guard` / 定向回归结果。
+  - 2026-04-26 Nexus 证据入口：新增 `/api/admin/release-evidence/*`，支持 run 创建/分页/详情、item upsert、平台阻塞 matrix 与 `doc-guard` 快速写入；管理员登录态或 `release:evidence` API key 可写入，CI 默认走 API key。
   - 2026-04-20 自动门禁：`git diff --check`、`pnpm docs:guard`、`pnpm docs:guard:strict`、`pnpm compat:registry:guard`、`node scripts/check-legacy-boundaries.mjs`、`pnpm network:guard` 已通过；`pnpm legacy:guard` 在 legacy/compat 子门禁通过后被既有 `size:guard` 大文件基线漂移拦截；CoreApp typecheck/test 待本地依赖安装后补证。
   - 2026-04-22 CoreApp 补证：补齐 `EverythingProvider` 的 `SDK -> CLI -> file-provider` 双重失效同次查询回退回归；`git diff --check`、`pnpm -C "apps/core-app" run typecheck`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/everything-provider.test.ts" "src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts" "src/main/channel/common.test.ts"` 已通过。
   - 2026-04-23 renderer 权限中心死分支清理：删除未使用且仍保留旧 SDK “跳过权限校验”语义的 `PermissionStatusCard` / `PermissionRequestDialog` / `usePluginPermission`，同步移除 `PermissionStatusCard` 清册条目，并补齐当前 `compatibility-debt-registry` 漂移项；`pnpm -C "apps/core-app" run typecheck:web`、`pnpm compat:registry:guard`、`git diff --check` 已通过。
@@ -390,9 +391,9 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 167 |
-| 未完成 (`- [ ]`) | 29 |
-| 总计 | 196 |
+| 已完成 (`- [x]`) | 161 |
+| 未完成 (`- [ ]`) | 28 |
+| 总计 | 189 |
 | 完成率 | 85% |
 
 > 统计时间: 2026-04-26（按本文件实时 checkbox 计数）。

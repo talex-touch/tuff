@@ -25,7 +25,8 @@
 - Legacy/兼容/结构治理已切换到“统一实施 PRD + 五工作包并行”口径（不再使用 Phase 1-3 决策叙事）。
 - 治理基线：`legacy 81/184`、`raw channel 13/46`、超长文件（主线）`47`。
 - `apps/core-app` 已完成“兼容债立即硬切”首轮并行治理：`window.$channel` 业务入口清零、legacy storage 事件协议清零、权限 `sdkapi` legacy 放行移除、更新/平台识别收敛为显式 `unsupported` 策略。
-- 当前下一动作：`CoreApp Win/macOS 2.5.0 阻塞级回归 + Linux best-effort 口径复核`。
+- Nexus Release Evidence API 已作为 `2.5.0` 回归证据入口，覆盖 CoreApp 平台回归、文档门禁与阻塞矩阵采集；CI 写入使用 `release:evidence` API key。
+- 当前下一动作：`CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`；Linux best-effort 口径复核继续作为非阻塞记录。
 - `2.5.0` 前置口径：先关闭或降权 CoreApp 剩余 legacy/compat 债务，再完成 Windows/macOS release-blocking 回归；Linux 保留 documented best-effort，不作为 `2.5.0` blocker。
 - `2.4.8` 主线：OmniPanel Gate 已完成（historical）。
 - `v2.4.7` Gate：A/B/C/D/E 已完成（historical），不重发版。
