@@ -1,4 +1,5 @@
 const HTTP_ERROR_PREFIX = 'HTTP_ERROR_'
+const NETWORK_TIMEOUT_PREFIX = 'NETWORK_TIMEOUT'
 
 type StoreTranslate = (key: string, params?: unknown) => string
 
@@ -54,6 +55,14 @@ export function resolveStoreInstallFailureReason(
     return t('store.installation.reasons.httpError', {
       status: normalized.slice(HTTP_ERROR_PREFIX.length)
     })
+  }
+
+  if (
+    normalized.startsWith(NETWORK_TIMEOUT_PREFIX) ||
+    normalized === 'The operation was aborted' ||
+    normalized === 'AbortError: The operation was aborted'
+  ) {
+    return t('store.installation.reasons.networkTimeout')
   }
 
   if (normalized === 'No provider found to handle this source') {

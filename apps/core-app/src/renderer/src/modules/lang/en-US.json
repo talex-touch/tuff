@@ -686,6 +686,7 @@
         "noSource": "This plugin does not expose a usable install source.",
         "authRequired": "Sign in before installing this plugin.",
         "httpError": "The installation request failed (HTTP {status}).",
+        "networkTimeout": "Plugin package download timed out or was interrupted. Check the plugin source network and try again.",
         "noProvider": "No installer is available for this download source.",
         "sdkapiBlocked": "This plugin's sdkapi is not compatible with the current Tuff version.",
         "sdkapiMissing": "This plugin is missing the required sdkapi declaration.",

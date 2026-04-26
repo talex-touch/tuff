@@ -21,6 +21,15 @@ describe('resolveStoreInstallFailureReason', () => {
     )
   })
 
+  it('maps aborted download errors to network timeout reason', () => {
+    expect(resolveStoreInstallFailureReason('The operation was aborted', translate)).toBe(
+      'store.installation.reasons.networkTimeout:null'
+    )
+    expect(resolveStoreInstallFailureReason('NETWORK_TIMEOUT after 30000ms', translate)).toBe(
+      'store.installation.reasons.networkTimeout:null'
+    )
+  })
+
   it('maps sdk gate messages to readable reasons', () => {
     expect(resolveStoreInstallFailureReason('SDKAPI_BLOCKED', translate)).toBe(
       'store.installation.reasons.sdkapiBlocked:null'
