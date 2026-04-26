@@ -25,6 +25,53 @@
   - 应用索引高级设置区新增最小诊断面板，可输入目标应用和测试 query，直接查看 precise / phrase / prefix / FTS / N-gram / subsequence 各阶段是否命中目标 item。
   - 诊断入口支持单项关键词重建和单项重新扫描，遇到“某个应用搜不到”时可先在 UI 内完成定位与修复，不需要先翻主进程日志。
 
+### feat(core-app): 补齐 device idle 设置与诊断面板
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/main/channel/common.ts`
+- `packages/utils/transport/sdk/domains/settings.ts`
+  - 文件索引设置页新增 device idle 最小配置面板，可查看和修改空闲阈值、强制执行间隔、充电豁免与低电量拦截策略。
+  - `settingsSdk.deviceIdle.getDiagnostic()` 接入主进程 `deviceIdleService.canRun()`，renderer 可直接显示当前 snapshot、允许/拦截状态和可读诊断文案。
+  - 补充 renderer 侧诊断文案 helper 与 focused tests，锁定空闲时长、电池状态和拦截原因的展示口径。
+
+### chore(governance): 补齐 size guard 临时增长例外账本
+
+- `scripts/large-file-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+  - 为当前 `size:guard` 剩余 23 个违规项补齐 `growthExceptions` 与 registry trace，所有例外仍在 `2.5.0` 前退场。
+  - 同轮拆分清退：`apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue` `1716 -> 1065`；`packages/utils/transport/events/index.ts` `3104 -> 2411`。
+  - `packages/utils/transport/events/app.ts` 承接原 `AppEvents` 兼容命名，已同步登记 legacy keyword 清册，不新增运行时分支。
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts` 抽出单项诊断/reindex 到 `app-provider-diagnostics.ts`，cap 收紧到 `3290`。
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-INTELLIGENCE-MODULE`: `apps/core-app/src/main/modules/ai/intelligence-module.ts` cap `1863`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-TUFF-INTELLIGENCE-RUNTIME`: `apps/core-app/src/main/modules/ai/tuff-intelligence-runtime.ts` cap `1551`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER-TEST`: `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts` cap `1259`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER`: `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts` cap `3290`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-RECOMMENDATION-ENGINE`: `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts` cap `1891`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-SEARCH-CORE`: `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` cap `2581`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-CLIPBOARD`: `apps/core-app/src/main/modules/clipboard.ts` cap `3299`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-DOWNLOAD-CENTER`: `apps/core-app/src/main/modules/download/download-center.ts` cap `1538`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-OCR-SERVICE`: `apps/core-app/src/main/modules/ocr/ocr-service.ts` cap `1625`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-OMNI-PANEL`: `apps/core-app/src/main/modules/omni-panel/index.ts` cap `1868`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-PLUGIN-MODULE`: `apps/core-app/src/main/modules/plugin/plugin-module.ts` cap `3674`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-SENTRY-SERVICE`: `apps/core-app/src/main/modules/sentry/sentry-service.ts` cap `1304`
+  - `SIZE-GROWTH-2026-04-26-CORE-APP-LINGPAN`: `apps/core-app/src/renderer/src/views/base/LingPan.vue` cap `2000`
+  - `SIZE-GROWTH-2026-04-26-PILOT-TH-INPUT`: `apps/pilot/app/components/input/ThInput.vue` cap `1251`
+  - `SIZE-GROWTH-2026-04-26-PILOT-AIGC-COMPLETION`: `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts` cap `1896`
+  - `SIZE-GROWTH-2026-04-26-PILOT-PILOT-CHAT-PAGE`: `apps/pilot/app/composables/usePilotChatPage.ts` cap `2122`
+  - `SIZE-GROWTH-2026-04-26-PILOT-ADMIN-CHANNELS`: `apps/pilot/app/pages/admin/system/channels.vue` cap `1428`
+  - `SIZE-GROWTH-2026-04-26-PILOT-CHAT-STREAM`: `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts` cap `1791`
+  - `SIZE-GROWTH-2026-04-26-PILOT-PILOT-TOOL-GATEWAY`: `apps/pilot/server/utils/pilot-tool-gateway.ts` cap `2164`
+  - `SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-CLI-TUFF-CLI`: `packages/tuff-cli/src/bin/tuff.ts` cap `1281`
+  - `SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-INTELLIGENCE-DEEPAGENT-ENGINE`: `packages/tuff-intelligence/src/adapters/deepagent-engine.ts` cap `2138`
+  - `SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-INTELLIGENCE-INTELLIGENCE-TYPES`: `packages/tuff-intelligence/src/types/intelligence.ts` cap `2319`
+  - `SIZE-GROWTH-2026-04-26-PACKAGES-UTILS-UTILS-INTELLIGENCE-TYPES`: `packages/utils/types/intelligence.ts` cap `2317`
+
+### chore(governance): 清理已退场 legacy 关键字债务记录
+
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+  - 移除 `compat:registry:guard` 已判定为 cleanup candidate 的 `legacy-keyword` 记录，保留仍由文件命名命中的 compat-file 账本项。
+  - 账本清理后 `pnpm compat:registry:guard` 不再输出 cleanup warning，不改变 legacy/size 门禁阈值。
+
 ### refactor(core-app): 移除 DivisionBox active sessions 假命令
 
 - `apps/core-app/src/main/modules/division-box/command-provider.ts`
@@ -423,6 +470,7 @@
   - Everything 设置页的主状态改为优先反映用户配置态：当用户已手动禁用 Everything 时，不再被后端 `unavailable` 探测结果覆盖成“不可用”。
   - 启用/禁用按钮改为在状态已加载后始终可见，避免“已禁用 + 当前后端不可用”时把控制入口一起隐藏。
   - 安装引导只在“用户已启用但后端不可用”时展示，减少禁用态下的误导信息；新增 renderer 侧纯函数回归锁定组合状态。
+
 ### fix(core-app): Everything 运行时故障同次查询直接回退文件索引
 
 - `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
