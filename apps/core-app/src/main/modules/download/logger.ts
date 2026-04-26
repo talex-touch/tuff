@@ -1,5 +1,6 @@
 import { createLogger } from '../../utils/logger'
 
+export const downloadCenterLog = createLogger('DownloadCenter')
 export const downloadMigrationLog = createLogger('DownloadMigration')
 export const downloadMigrationRunnerLog = createLogger('DownloadMigrationRunner')
 export const downloadMigrationManagerLog = createLogger('DownloadMigrationManager')

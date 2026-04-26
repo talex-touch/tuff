@@ -35,6 +35,7 @@ import { PriorityCalculator } from './priority-calculator'
 import { RetryStrategy } from './retry-strategy'
 import { TaskQueue } from './task-queue'
 import { safeOpHandler, toErrorMessage } from '../../utils/safe-handler'
+import { downloadCenterLog } from './logger'
 
 /**
  * DownloadCenterModule - Unified download management system
@@ -171,11 +172,17 @@ export class DownloadCenterModule extends BaseModule {
 
     const totalMs = Math.round(t4 - t0)
     if (totalMs > 500) {
-      console.warn(
-        `[DownloadCenter] Slow init ${totalMs}ms: components=${Math.round(t1 - t0)}ms errorLoggerKickoff=${Math.round(t2 - t1)}ms setup=${Math.round(t3 - t2)}ms cleanup=${Math.round(t4 - t3)}ms`
-      )
+      downloadCenterLog.warn('Slow init', {
+        meta: {
+          totalMs,
+          componentsMs: Math.round(t1 - t0),
+          errorLoggerKickoffMs: Math.round(t2 - t1),
+          setupMs: Math.round(t3 - t2),
+          cleanupMs: Math.round(t4 - t3)
+        }
+      })
     }
-    console.log('DownloadCenterModule initialized')
+    downloadCenterLog.info('Initialized')
   }
 
   async onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
@@ -194,12 +201,9 @@ export class DownloadCenterModule extends BaseModule {
     this.transportDisposers = []
     this.transport = null
 
-    // Stop all download workers
-    // Workers will naturally stop when isRunning is false and task scheduler exits
-    for (const worker of this.downloadWorkers) {
-      // Workers are stateless and will be garbage collected
-      console.log('Stopping worker:', worker)
-    }
+    downloadCenterLog.debug('Stopping workers', {
+      meta: { workerCount: this.downloadWorkers.length }
+    })
 
     if (this.errorLoggerInitInFlight) {
       await this.errorLoggerInitInFlight
@@ -208,7 +212,7 @@ export class DownloadCenterModule extends BaseModule {
     // Destroy error logger
     await this.errorLogger.destroy()
 
-    console.log('DownloadCenterModule destroyed')
+    downloadCenterLog.info('Destroyed')
   }
 
   // 获取主数据库连接
@@ -227,7 +231,7 @@ export class DownloadCenterModule extends BaseModule {
       .then(() => {
         const durationMs = Math.round(performance.now() - startedAt)
         if (durationMs > 300) {
-          console.warn(`[DownloadCenter] Error logger init slow ${durationMs}ms`)
+          downloadCenterLog.warn('Error logger init slow', { meta: { durationMs } })
         }
       })
       .finally(() => {
@@ -363,7 +367,7 @@ export class DownloadCenterModule extends BaseModule {
       try {
         await worker.cancelTask(taskId)
       } catch (error) {
-        console.warn(`[DownloadCenter] Error cancelling task in worker ${taskId}:`, error)
+        downloadCenterLog.warn('Error cancelling task in worker', { error, meta: { taskId } })
       }
       this.taskWorkerMap.delete(taskId)
     }
@@ -383,7 +387,10 @@ export class DownloadCenterModule extends BaseModule {
       await this.chunkManager.cleanupTaskTempDir(task, this.config.storage.tempDir)
     } catch (cleanupError) {
       // Log cleanup errors but don't fail the cancellation
-      console.warn(`[DownloadCenter] Cleanup error for task ${taskId}:`, cleanupError)
+      downloadCenterLog.warn('Cleanup error during cancellation', {
+        error: cleanupError,
+        meta: { taskId }
+      })
     }
 
     // Clear from cache
@@ -425,7 +432,10 @@ export class DownloadCenterModule extends BaseModule {
       await this.chunkManager.cleanupTaskTempDir(task, this.config.storage.tempDir)
     } catch (cleanupError) {
       // Log cleanup errors but don't fail the retry
-      console.warn(`[DownloadCenter] Cleanup error during retry for task ${taskId}:`, cleanupError)
+      downloadCenterLog.warn('Cleanup error during retry', {
+        error: cleanupError,
+        meta: { taskId }
+      })
     }
     task.chunks = []
 
@@ -443,7 +453,7 @@ export class DownloadCenterModule extends BaseModule {
       try {
         await this.pauseTask(task.id)
       } catch (error) {
-        console.error(`Failed to pause task ${task.id}:`, error)
+        downloadCenterLog.error('Failed to pause task', { error, meta: { taskId: task.id } })
       }
     }
   }
@@ -456,7 +466,7 @@ export class DownloadCenterModule extends BaseModule {
       try {
         await this.resumeTask(task.id)
       } catch (error) {
-        console.error(`Failed to resume task ${task.id}:`, error)
+        downloadCenterLog.error('Failed to resume task', { error, meta: { taskId: task.id } })
       }
     }
   }
@@ -471,7 +481,7 @@ export class DownloadCenterModule extends BaseModule {
       try {
         await this.cancelTask(task.id)
       } catch (error) {
-        console.error(`Failed to cancel task ${task.id}:`, error)
+        downloadCenterLog.error('Failed to cancel task', { error, meta: { taskId: task.id } })
       }
     }
   }
@@ -646,7 +656,9 @@ export class DownloadCenterModule extends BaseModule {
 
             await fs.rm(dirPath, { recursive: true, force: true })
             cleanedCount++
-            console.log(`Cleaned up orphaned temp directory: ${dirPath}`)
+            downloadCenterLog.debug('Cleaned up orphaned temp directory', {
+              meta: { pathLength: dirPath.length }
+            })
           }
         } else if (entry.isFile()) {
           const filePath = path.join(tempDir, entry.name)
@@ -655,9 +667,14 @@ export class DownloadCenterModule extends BaseModule {
             cleanedSize += stats.size
             await fs.unlink(filePath)
             cleanedCount++
-            console.log(`Cleaned up orphaned temp file: ${filePath}`)
+            downloadCenterLog.debug('Cleaned up orphaned temp file', {
+              meta: { pathLength: filePath.length }
+            })
           } catch (error) {
-            console.error(`Failed to cleanup temp file ${filePath}:`, error)
+            downloadCenterLog.error('Failed to cleanup temp file', {
+              error,
+              meta: { pathLength: filePath.length }
+            })
           }
         }
 
@@ -668,12 +685,12 @@ export class DownloadCenterModule extends BaseModule {
       }
 
       if (cleanedCount > 0) {
-        console.log(
-          `Temp cleanup completed: ${cleanedCount} items removed, ${this.formatBytes(cleanedSize)} freed`
-        )
+        downloadCenterLog.info('Temp cleanup completed', {
+          meta: { cleanedCount, cleanedSize }
+        })
       }
     } catch (error) {
-      console.error('Failed to cleanup temp files:', error)
+      downloadCenterLog.error('Failed to cleanup temp files', { error })
     } finally {
       dispose()
     }
@@ -701,15 +718,6 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     return totalSize
-  }
-
-  // 格式化字节大小
-  private formatBytes(bytes: number): string {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return `${(bytes / k ** i).toFixed(2)} ${sizes[i]}`
   }
 
   // 获取配置
@@ -782,7 +790,7 @@ export class DownloadCenterModule extends BaseModule {
         }
       }
     } catch (error) {
-      console.error('Failed to get temp file stats:', error)
+      downloadCenterLog.error('Failed to get temp file stats', { error })
     }
 
     return {
@@ -952,10 +960,10 @@ export class DownloadCenterModule extends BaseModule {
           },
           {
             onError: (error) => {
-              console.warn(
-                `[DownloadCenter] Handler failed: ${event.toEventName()}`,
-                toErrorMessage(error)
-              )
+              downloadCenterLog.warn('Handler failed', {
+                error,
+                meta: { eventName: event.toEventName(), message: toErrorMessage(error) }
+              })
             }
           }
         )
@@ -1163,7 +1171,7 @@ export class DownloadCenterModule extends BaseModule {
         // 等待一段时间再检查
         await new Promise((resolve) => setTimeout(resolve, 1000))
       } catch (error) {
-        console.error('Task scheduler error:', error)
+        downloadCenterLog.error('Task scheduler error', { error })
         await new Promise((resolve) => setTimeout(resolve, 5000))
       }
     }
@@ -1341,7 +1349,7 @@ export class DownloadCenterModule extends BaseModule {
    * Handle notification click events
    */
   private handleNotificationClick(taskId: string, action: string): void {
-    console.log(`[DownloadCenter] Notification clicked: ${taskId}, action: ${action}`)
+    downloadCenterLog.debug('Notification clicked', { meta: { taskId, action } })
 
     // Broadcast notification click event to renderer
     this.transport?.broadcast(DownloadEvents.push.notificationClicked, {
@@ -1513,7 +1521,7 @@ export class DownloadCenterModule extends BaseModule {
           })
       )
     } catch (error) {
-      console.warn('[DownloadCenter] Failed to get recent errors:', error)
+      downloadCenterLog.warn('Failed to get recent errors', { error })
     }
 
     return {
