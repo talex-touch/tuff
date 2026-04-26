@@ -136,13 +136,11 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
 
           if (hasHandler) {
             const dispose = flowBus.registerDeliveryHandler(pluginId, async (session) => {
-              await tx
-                .sendToPlugin(pluginId, FlowEvents.deliver, {
-                  sessionId: session.sessionId,
-                  payload: session.payload,
-                  senderId: session.senderId
-                })
-                .catch(() => {})
+              await tx.sendToPlugin(pluginId, FlowEvents.deliver, {
+                sessionId: session.sessionId,
+                payload: session.payload,
+                senderId: session.senderId
+              })
             })
             this.flowDeliveryDisposers.set(pluginId, dispose)
           }
@@ -208,9 +206,14 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
           return
         }
 
-        this.transport
+        void this.transport
           ?.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerDetach, undefined)
-          .catch(() => {})
+          .catch((error) => {
+            flowBusModuleLog.warn('Failed to notify CoreBox detach shortcut', {
+              meta: { windowId: coreBoxWindow.window.id },
+              error
+            })
+          })
       },
       { owner: FLOW_SHORTCUT_OWNER }
     )
@@ -379,14 +382,21 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       return
     }
 
-    this.transport
+    void this.transport
       ?.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerTransfer, undefined)
-      .catch(() => {})
-    flowBusModuleLog.info('Triggered flow transfer shortcut', {
-      meta: {
-        windowId: coreBoxWindow.window.id
-      }
-    })
+      .then(() => {
+        flowBusModuleLog.info('Triggered flow transfer shortcut', {
+          meta: {
+            windowId: coreBoxWindow.window.id
+          }
+        })
+      })
+      .catch((error) => {
+        flowBusModuleLog.warn('Failed to notify CoreBox flow transfer shortcut', {
+          meta: { windowId: coreBoxWindow.window.id },
+          error
+        })
+      })
   }
 
   /**

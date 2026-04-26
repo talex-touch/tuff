@@ -6,11 +6,7 @@ import { promisify } from 'node:util'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
 import { app } from 'electron'
 import { createLogger } from '../../utils/logger'
-import {
-  ensureXdotoolAvailable,
-  getXdotoolUnavailableReason,
-  isXdotoolAvailable
-} from './linux-desktop-tools'
+import { ensureXdotoolAvailable, getXdotoolUnavailableReason } from './linux-desktop-tools'
 
 const execFileAsync = promisify(execFile)
 const activeAppLog = createLogger('ActiveApp')
@@ -59,20 +55,6 @@ function toOptionalString(value: unknown): string | null {
 function parseInteger(value: unknown): number | null {
   const normalized = typeof value === 'string' ? Number.parseInt(value.trim(), 10) : Number.NaN
   return Number.isFinite(normalized) ? normalized : null
-}
-
-export async function isActiveAppCapabilityAvailable(
-  platform = process.platform
-): Promise<boolean> {
-  if (platform === 'darwin' || platform === 'win32') {
-    return true
-  }
-
-  if (platform !== 'linux') {
-    return false
-  }
-
-  return await isXdotoolAvailable()
 }
 
 // Platform type for consistency

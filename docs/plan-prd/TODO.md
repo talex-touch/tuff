@@ -80,6 +80,7 @@
   - 2026-04-20 自动门禁：`git diff --check`、`pnpm docs:guard`、`pnpm docs:guard:strict`、`pnpm compat:registry:guard`、`node scripts/check-legacy-boundaries.mjs`、`pnpm network:guard` 已通过；`pnpm legacy:guard` 在 legacy/compat 子门禁通过后被既有 `size:guard` 大文件基线漂移拦截；CoreApp typecheck/test 待本地依赖安装后补证。
   - 2026-04-23 renderer 权限中心死分支清理：删除未使用且仍保留旧 SDK “跳过权限校验”语义的 `PermissionStatusCard` / `PermissionRequestDialog` / `usePluginPermission`，同步移除 `PermissionStatusCard` 清册条目，并补齐当前 `compatibility-debt-registry` 漂移项；`pnpm -C "apps/core-app" run typecheck:web`、`pnpm compat:registry:guard`、`git diff --check` 已通过。
   - 2026-04-23 SearchLogger 旧配置键清理：`search-engine-logs-enabled` runtime fallback 已改成启动迁移到 `app-setting.ini`，并同步移除 `search-logger.ts` 的 compatibility registry 条目；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/storage/search-engine-logs-setting-transfer.test.ts" "src/main/modules/box-tool/search-engine/search-logger.burst.test.ts"`、`pnpm -C "apps/core-app" run typecheck:node` 待本轮 `git diff --check` / `pnpm compat:registry:guard` 一并复核。
+  - 2026-04-26 CoreApp capability 语义收口：FlowBus 未注册 delivery handler 的 target 改为 `TARGET_OFFLINE`，插件投递异常不再被吞成 delivered；`platform.flow-transfer` / `platform.division-box` / active-app 改为条件型 best-effort，并删除过度乐观的 `isActiveAppCapabilityAvailable()`；macOS notification 支持态不再误报为 granted。定向回归：`permission-checker.test.ts`、`capability-runtime.test.ts`、`flow-bus.test.ts`、`flow-trigger.test.ts` 已通过。
 
 ### A. 文档治理（本轮）
 
