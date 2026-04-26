@@ -141,4 +141,31 @@ describe('darwin app info', () => {
       })
     )
   })
+
+  it('keeps localized display name as an alternate name when Spotlight wins', async () => {
+    const tempRoot = await createTempAppBundle('NeteaseMusic 2', 'NeteaseMusic', {
+      localizedDisplayName: '网易云音乐'
+    })
+    tempRoots.push(tempRoot)
+    const appPath = path.join(tempRoot, 'NeteaseMusic 2.app')
+
+    execFileSafeMock.mockImplementation(async (command: string) => {
+      if (command === 'mdls') {
+        return { stdout: 'NeteaseMusic 2.app\n', stderr: '' }
+      }
+
+      throw new Error(`unexpected command: ${command}`)
+    })
+
+    const { getAppInfo } = await loadSubject()
+    const appInfo = await getAppInfo(appPath)
+
+    expect(appInfo).toEqual(
+      expect.objectContaining({
+        name: 'NeteaseMusic 2',
+        displayName: 'NeteaseMusic 2',
+        alternateNames: expect.arrayContaining(['网易云音乐'])
+      })
+    )
+  })
 })

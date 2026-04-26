@@ -5,6 +5,14 @@
 
 ## 2026-04-26
 
+### fix(core-app): 修复 CoreBox macOS 应用中文名检索漏召回
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/{darwin.ts,app-provider.ts,search-processing-service.ts,app-types.ts,app-utils.ts}`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/{darwin.test.ts,app-provider.test.ts,search-processing-service.test.ts}`
+  - macOS 应用扫描在 Spotlight 英文名优先时，会保留 `InfoPlist.strings` 中的本地化名称为 `alternateNames`，避免“网易云音乐”等中文显示名被扫描阶段丢弃。
+  - 应用关键词同步会把 `alternateNames` 一并生成中文、全拼和首字母关键词；搜索后处理也会用 alternate name 做候选命中，确保索引召回后不会被显示名过滤掉。
+  - 应用搜索索引 itemId 改为优先使用稳定路径/app identity，并在同步时清理旧 bundleId 索引，避免同一 bundleId 的多个 `.app` 互相覆盖。
+
 ### fix(core-app): 收口 Flow Transfer 与平台 capability 假成功语义
 
 - `apps/core-app/src/main/modules/flow-bus/{flow-bus.ts,module.ts,flow-consent.ts,flow-bus.test.ts}`

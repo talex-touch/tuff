@@ -212,16 +212,48 @@ vi.mock('./app-noise-filter', () => ({
   matchNoisySystemAppRule: vi.fn(() => null)
 }))
 
-vi.mock('./app-utils', () => ({
-  formatLog: vi.fn((_scope: string, message: string) => message),
-  LogStyle: {
-    info: (message: string) => message,
-    warning: (message: string) => message,
-    error: (message: string) => message,
-    process: (message: string) => message,
-    success: (message: string) => message
+vi.mock('./app-utils', () => {
+  const normalizeStringList = (values: Array<string | null | undefined>): string[] => {
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const value of values) {
+      const normalized = value?.trim()
+      if (!normalized) continue
+      const lookupKey = normalized.toLowerCase()
+      if (seen.has(lookupKey)) continue
+      seen.add(lookupKey)
+      result.push(normalized)
+    }
+    return result
   }
-}))
+
+  return {
+    formatLog: vi.fn((_scope: string, message: string) => message),
+    normalizeStringList: vi.fn(normalizeStringList),
+    parseStringList: vi.fn((value: string | null | undefined) => {
+      if (!value) return []
+      try {
+        const parsed = JSON.parse(value)
+        return Array.isArray(parsed)
+          ? normalizeStringList(parsed.filter((item): item is string => typeof item === 'string'))
+          : []
+      } catch {
+        return []
+      }
+    }),
+    serializeStringList: vi.fn((values: string[] | undefined) => {
+      const normalized = normalizeStringList(values ?? [])
+      return normalized.length > 0 ? JSON.stringify(normalized) : undefined
+    }),
+    LogStyle: {
+      info: (message: string) => message,
+      warning: (message: string) => message,
+      error: (message: string) => message,
+      process: (message: string) => message,
+      success: (message: string) => message
+    }
+  }
+})
 
 vi.mock('./search-processing-service', () => ({
   isSearchableAppRow: vi.fn(() => true),
@@ -279,8 +311,24 @@ type AppProviderPrivate = {
       workingDirectory?: string
       displayPath?: string
       description?: string
+      alternateNames?: string[]
     }
   ) => Array<{ fileId: number; key: string; value: string }>
+  syncScannedAppExtensions: (
+    fileId: number,
+    app: {
+      bundleId?: string
+      icon?: string
+      stableId?: string
+      launchKind: string
+      launchTarget: string
+      launchArgs?: string
+      workingDirectory?: string
+      displayPath?: string
+      description?: string
+      alternateNames?: string[]
+    }
+  ) => Promise<void>
   context: unknown
   dbUtils: unknown
   searchIndex: unknown
@@ -289,6 +337,7 @@ type AppProviderPrivate = {
   _initialize: (options?: { forceRefresh?: boolean }) => Promise<void>
   _performFullSync: (forced: boolean) => Promise<void>
   _generateKeywordsForApp: (app: {
+    alternateNames?: string[]
     bundleId?: string
     displayName?: string
     fileName?: string
@@ -300,6 +349,19 @@ type AppProviderPrivate = {
     path: string
     stableId?: string
   }) => Promise<Set<string>>
+  _syncKeywordsForApp: (app: {
+    alternateNames?: string[]
+    bundleId?: string
+    displayName?: string
+    fileName?: string
+    icon?: string
+    lastModified?: Date
+    launchKind: string
+    launchTarget: string
+    name: string
+    path: string
+    stableId?: string
+  }) => Promise<void>
   _performMdlsUpdateScan: () => Promise<void>
   _performRebuild: () => Promise<void>
   _performStartupBackfill: () => Promise<void>
@@ -738,6 +800,99 @@ describe('appProvider rebuild maintenance', () => {
     expect(keywords).toContain('wx')
     expect(keywords).not.toContain('WEIXIN')
     expect(keywords).not.toContain('WX')
+  })
+
+  it('generates keywords from alternate localized names', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    pinyinMock.mockImplementation((value: string, options?: { pattern?: string }) => {
+      if (value === '网易云音乐') {
+        return options?.pattern === 'first' ? 'WYYY' : 'WANG YI YUN YIN YUE'
+      }
+      return value
+    })
+
+    const keywords = await privateProvider._generateKeywordsForApp({
+      name: 'NeteaseMusic 2',
+      displayName: 'NeteaseMusic 2',
+      alternateNames: ['网易云音乐'],
+      path: '/Applications/NeteaseMusic 2.app',
+      launchKind: 'path',
+      launchTarget: '/Applications/NeteaseMusic 2.app',
+      stableId: '/Applications/NeteaseMusic 2.app',
+      icon: '',
+      lastModified: new Date(0)
+    })
+
+    expect(keywords).toContain('网易云音乐')
+    expect(keywords).toContain('wangyiyunyinyue')
+    expect(keywords).toContain('wyyy')
+  })
+
+  it('indexes app keywords by stable path before bundle id to avoid duplicate bundle collisions', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const indexItemsMock = vi.fn(async () => undefined)
+    privateProvider.searchIndex = { indexItems: indexItemsMock }
+
+    await privateProvider._syncKeywordsForApp({
+      name: 'NeteaseMusic 2',
+      displayName: 'NeteaseMusic 2',
+      alternateNames: ['网易云音乐'],
+      bundleId: 'com.netease.163music',
+      path: '/Applications/NeteaseMusic 2.app',
+      launchKind: 'path',
+      launchTarget: '/Applications/NeteaseMusic 2.app',
+      stableId: '/Applications/NeteaseMusic 2.app',
+      icon: '',
+      lastModified: new Date(0)
+    })
+
+    expect(indexItemsMock).toHaveBeenCalledWith([
+      expect.objectContaining({
+        itemId: '/Applications/NeteaseMusic 2.app',
+        tags: expect.arrayContaining(['com.netease.163music']),
+        keywords: expect.arrayContaining([expect.objectContaining({ value: '网易云音乐' })])
+      })
+    ])
+  })
+
+  it('clears stale alternate localized names when a later scan has none', async () => {
+    const { appProvider } = await loadSubject()
+    const { fileExtensions } = await import('../../../../db/schema')
+    const privateProvider = asPrivateProvider(appProvider)
+    type ExtensionRow = { fileId: number; key: string; value: string }
+    const addFileExtensionsMock = vi.fn(async (_rows: ExtensionRow[]) => undefined)
+    const deleteWhereMock = vi.fn(async () => undefined)
+    const deleteMock = vi.fn((table: unknown) => {
+      expect(table).toBe(fileExtensions)
+      return { where: deleteWhereMock }
+    })
+
+    privateProvider.dbUtils = {
+      addFileExtensions: addFileExtensionsMock,
+      getDb: () => ({
+        delete: deleteMock
+      })
+    }
+
+    await privateProvider.syncScannedAppExtensions(7, {
+      bundleId: 'com.example.music',
+      stableId: '/Applications/Music.app',
+      launchKind: 'path',
+      launchTarget: '/Applications/Music.app'
+    })
+
+    expect(addFileExtensionsMock).toHaveBeenCalled()
+    const extensions = addFileExtensionsMock.mock.calls[0]?.[0] ?? []
+    expect(extensions).toEqual(
+      expect.arrayContaining([
+        { fileId: 7, key: 'bundleId', value: 'com.example.music' },
+        { fileId: 7, key: 'appIdentity', value: '/Applications/Music.app' }
+      ])
+    )
+    expect(extensions.some((extension) => extension.key === 'alternateNames')).toBe(false)
+    expect(deleteWhereMock).toHaveBeenCalledTimes(1)
   })
 
   it('upserts managed launcher entries with manual extension flags', async () => {

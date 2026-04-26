@@ -68,7 +68,13 @@ import { appScanner } from './app-scanner'
 import { scheduleAppLaunch } from './app-launcher'
 import { normalizeDisplayName, shouldUpdateDisplayName } from './display-name-sync-utils'
 import { matchNoisySystemAppRule } from './app-noise-filter'
-import { formatLog, LogStyle } from './app-utils'
+import {
+  formatLog,
+  LogStyle,
+  normalizeStringList,
+  parseStringList,
+  serializeStringList
+} from './app-utils'
 import { isSearchableAppRow, processSearchResults } from './search-processing-service'
 import type { AppLaunchKind, ScannedAppInfo } from './app-types'
 
@@ -258,10 +264,18 @@ const APP_LAUNCH_ARGS_EXTENSION_KEY = 'launchArgs'
 const APP_WORKING_DIRECTORY_EXTENSION_KEY = 'workingDirectory'
 const APP_DISPLAY_PATH_EXTENSION_KEY = 'displayPath'
 const APP_DESCRIPTION_EXTENSION_KEY = 'description'
+const APP_ALTERNATE_NAMES_EXTENSION_KEY = 'alternateNames'
 const APP_ENTRY_SOURCE_EXTENSION_KEY = 'entrySource'
 const APP_ENTRY_ENABLED_EXTENSION_KEY = 'entryEnabled'
 const APP_ENTRY_SOURCE_MANUAL = 'manual'
 const APP_IDENTIFIER_EXTENSION_KEYS = ['bundleId', APP_IDENTITY_EXTENSION_KEY] as const
+const APP_IDENTIFIER_EXTENSION_KEY_SET = new Set<string>(APP_IDENTIFIER_EXTENSION_KEYS)
+
+function isAppIdentifierExtensionKey(
+  value: string | null | undefined
+): value is (typeof APP_IDENTIFIER_EXTENSION_KEYS)[number] {
+  return typeof value === 'string' && APP_IDENTIFIER_EXTENSION_KEY_SET.has(value)
+}
 
 function resolveAppItemId(value: {
   bundleId?: string | null
@@ -269,7 +283,29 @@ function resolveAppItemId(value: {
   appIdentity?: string | null
   path: string
 }): string {
-  return value.bundleId || value.stableId || value.appIdentity || value.path
+  return value.appIdentity || value.stableId || value.path || value.bundleId || ''
+}
+
+function hasStringListDrift(
+  currentValue: string | null | undefined,
+  nextValues: string[] | undefined
+): boolean {
+  return serializeStringList(parseStringList(currentValue)) !== serializeStringList(nextValues)
+}
+
+function resolveAppItemIds(value: {
+  bundleId?: string | null
+  stableId?: string | null
+  appIdentity?: string | null
+  path: string
+}): string[] {
+  return normalizeStringList([
+    resolveAppItemId(value),
+    value.appIdentity,
+    value.stableId,
+    value.path,
+    value.bundleId
+  ])
 }
 
 function isManagedEntryExtensionMap(
@@ -583,7 +619,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       if (enabled) {
         await this._syncKeywordsForApp(appInfo)
       } else {
-        await this.searchIndex?.removeItems([resolveAppItemId(appInfo)])
+        await this.removeIndexedAppItems(resolveAppItemIds(appInfo))
       }
 
       return {
@@ -662,13 +698,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       await tx.delete(filesSchema).where(eq(filesSchema.id, existingFile.id))
     })
 
-    await this.searchIndex?.removeItems([
-      resolveAppItemId({
+    await this.removeIndexedAppItems(
+      resolveAppItemIds({
         bundleId: existingExtensions.bundleId,
         appIdentity: existingExtensions.appIdentity,
         path: existingFile.path
       })
-    ])
+    )
 
     return {
       success: true,
@@ -720,7 +756,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (enabled) {
       await this._syncKeywordsForApp(appInfo)
     } else {
-      await this.searchIndex?.removeItems([resolveAppItemId(appInfo)])
+      await this.removeIndexedAppItems(resolveAppItemIds(appInfo))
     }
 
     return {
@@ -802,6 +838,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       | 'workingDirectory'
       | 'displayPath'
       | 'description'
+      | 'alternateNames'
     >
   ): FileExtensionInsert[] {
     const extensions: FileExtensionInsert[] = []
@@ -832,6 +869,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (app.description) {
       extensions.push({ fileId, key: APP_DESCRIPTION_EXTENSION_KEY, value: app.description })
     }
+    const alternateNames = serializeStringList(app.alternateNames)
+    if (alternateNames) {
+      extensions.push({
+        fileId,
+        key: APP_ALTERNATE_NAMES_EXTENSION_KEY,
+        value: alternateNames
+      })
+    }
     return extensions
   }
 
@@ -848,6 +893,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       | 'workingDirectory'
       | 'displayPath'
       | 'description'
+      | 'alternateNames'
     >,
     enabled: boolean
   ): FileExtensionInsert[] {
@@ -863,6 +909,42 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       value: enabled ? '1' : '0'
     })
     return extensions
+  }
+
+  private async syncScannedAppExtensions(
+    fileId: number,
+    app: Pick<
+      ScannedAppInfo,
+      | 'bundleId'
+      | 'icon'
+      | 'stableId'
+      | 'launchKind'
+      | 'launchTarget'
+      | 'launchArgs'
+      | 'workingDirectory'
+      | 'displayPath'
+      | 'description'
+      | 'alternateNames'
+    >
+  ): Promise<void> {
+    const extensions = this.buildAppExtensions(fileId, app)
+    if (extensions.length > 0) {
+      await this.dbUtils!.addFileExtensions(extensions)
+    }
+
+    const hasAlternateNames = extensions.some(
+      (extension) => extension.key === APP_ALTERNATE_NAMES_EXTENSION_KEY
+    )
+    if (!hasAlternateNames) {
+      await this.dbUtils!.getDb()
+        .delete(fileExtensions)
+        .where(
+          and(
+            eq(fileExtensions.fileId, fileId),
+            eq(fileExtensions.key, APP_ALTERNATE_NAMES_EXTENSION_KEY)
+          )
+        )
+    }
   }
 
   private toExtensionMap(
@@ -1179,12 +1261,20 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       const uniqueId = this.resolveScannedAppKey(app)
       return !!uniqueId && !existingIds.has(uniqueId)
     })
-    const toUpdateDisplayName = dbScannedAppsWithExtensions
+    const toUpdateMetadata = dbScannedAppsWithExtensions
       .map((dbApp) => {
         const uniqueId = this.resolveDbAppKey(dbApp)
         const scannedApp = scannedAppsMap.get(uniqueId)
         if (!scannedApp) return null
-        if (!shouldUpdateDisplayName(dbApp.displayName, scannedApp.displayName)) {
+        const hasDisplayNameDrift = shouldUpdateDisplayName(
+          dbApp.displayName,
+          scannedApp.displayName
+        )
+        const hasAlternateNamesDrift = hasStringListDrift(
+          dbApp.extensions[APP_ALTERNATE_NAMES_EXTENSION_KEY],
+          scannedApp.alternateNames
+        )
+        if (!hasDisplayNameDrift && !hasAlternateNamesDrift) {
           return null
         }
         return { fileId: dbApp.id, app: scannedApp, existingDisplayName: dbApp.displayName }
@@ -1201,8 +1291,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     logApp(
       `Startup backfill found ${chalk.green(toAdd.length)} missing apps and ${chalk.yellow(
-        toUpdateDisplayName.length
-      )} displayName corrections`,
+        toUpdateMetadata.length
+      )} metadata corrections`,
       LogStyle.info
     )
 
@@ -1234,9 +1324,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             .returning()
 
           if (insertedFile) {
-            const extensions = this.buildAppExtensions(insertedFile.id, app)
-            if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
-
+            await this.syncScannedAppExtensions(insertedFile.id, app)
             await this._syncKeywordsForApp(app)
           }
 
@@ -1261,9 +1349,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       })
     }
 
-    if (toUpdateDisplayName.length > 0) {
+    if (toUpdateMetadata.length > 0) {
       logApp(
-        `Correcting ${chalk.cyan(toUpdateDisplayName.length)} localized app display names...`,
+        `Correcting ${chalk.cyan(toUpdateMetadata.length)} localized app metadata...`,
         LogStyle.process
       )
       const updateStartTime = startTiming()
@@ -1271,34 +1359,34 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       let failedCount = 0
 
       await runAdaptiveTaskQueue(
-        toUpdateDisplayName,
+        toUpdateMetadata,
         async ({ fileId, app, existingDisplayName }, index) => {
           const nextDisplayName = normalizeDisplayName(app.displayName)
-          if (!shouldUpdateDisplayName(existingDisplayName, nextDisplayName)) {
-            return
-          }
 
           try {
-            await this.dbUtils!.getDb()
-              .update(filesSchema)
-              .set({ displayName: nextDisplayName })
-              .where(eq(filesSchema.id, fileId))
+            if (shouldUpdateDisplayName(existingDisplayName, nextDisplayName)) {
+              await this.dbUtils!.getDb()
+                .update(filesSchema)
+                .set({ displayName: nextDisplayName })
+                .where(eq(filesSchema.id, fileId))
+            }
 
+            await this.syncScannedAppExtensions(fileId, app)
             await this._syncKeywordsForApp({ ...app, displayName: nextDisplayName })
             updatedCount += 1
           } catch (error) {
             failedCount += 1
             logApp(
-              `Failed to correct displayName for ${chalk.yellow(app.path)}: ${
+              `Failed to correct app metadata for ${chalk.yellow(app.path)}: ${
                 error instanceof Error ? error.message : String(error)
               }`,
               LogStyle.warning
             )
           }
 
-          if ((index + 1) % 50 === 0 || index === toUpdateDisplayName.length - 1) {
+          if ((index + 1) % 50 === 0 || index === toUpdateMetadata.length - 1) {
             logApp(
-              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toUpdateDisplayName.length)} displayName corrections`,
+              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toUpdateMetadata.length)} metadata corrections`,
               LogStyle.info
             )
           }
@@ -1315,7 +1403,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         correctionStyle
       )
       logAppDuration('BackfillFixDisplayName', updateStartTime, {
-        label: 'DisplayName correction complete',
+        label: 'App metadata correction complete',
         style: failedCount > 0 ? 'warning' : 'success',
         unit: 's',
         precision: 1,
@@ -1442,16 +1530,27 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       path: app.path,
       icon: app.extensions.icon || '',
       bundleId: app.extensions.bundleId || '',
-      uniqueId: app.extensions.appIdentity || app.extensions.bundleId || app.path,
-      stableId: app.extensions.appIdentity || app.extensions.bundleId || app.path,
+      uniqueId: app.extensions.appIdentity || app.path || app.extensions.bundleId || '',
+      stableId: app.extensions.appIdentity || app.path || app.extensions.bundleId || '',
       launchKind: (app.extensions.launchKind as AppLaunchKind | undefined) || 'path',
       launchTarget: app.extensions.launchTarget || app.path,
       launchArgs: app.extensions.launchArgs || undefined,
       workingDirectory: app.extensions.workingDirectory || undefined,
       displayPath: app.extensions.displayPath || undefined,
       description: app.extensions.description || undefined,
+      alternateNames: parseStringList(app.extensions[APP_ALTERNATE_NAMES_EXTENSION_KEY]),
       lastModified: app.mtime
     }
+  }
+
+  private async removeIndexedAppItems(itemIds: string[]): Promise<void> {
+    const normalizedItemIds = normalizeStringList(itemIds)
+    if (!this.searchIndex || normalizedItemIds.length === 0) return
+
+    const removeItems = (this.searchIndex as Partial<SearchIndexService>).removeItems
+    if (typeof removeItems !== 'function') return
+
+    await removeItems.call(this.searchIndex, normalizedItemIds)
   }
 
   /**
@@ -1462,6 +1561,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const keywordsSet = await this._generateKeywordsForApp(appInfo)
     const itemId = resolveAppItemId(appInfo)
+    const legacyItemIds = resolveAppItemIds(appInfo).filter((candidate) => candidate !== itemId)
+    await this.removeIndexedAppItems(legacyItemIds)
 
     const keywordEntries: SearchIndexKeyword[] = Array.from(keywordsSet).map((keyword) => ({
       value: keyword,
@@ -1489,14 +1590,19 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           : path.extname(appInfo.launchTarget || appInfo.path).toLowerCase(),
       aliases: aliasEntries,
       keywords: keywordEntries,
-      tags: appInfo.bundleId ? [appInfo.bundleId] : undefined
+      tags: normalizeStringList([appInfo.bundleId, appInfo.stableId, appInfo.path])
     }
 
     await this.searchIndex.indexItems([indexItem])
   }
 
   private _isAcronymForApp(keyword: string, appInfo: ScannedAppInfo): boolean {
-    const names = [appInfo.name, appInfo.displayName, appInfo.fileName].filter(Boolean) as string[]
+    const names = [
+      appInfo.name,
+      appInfo.displayName,
+      appInfo.fileName,
+      ...(appInfo.alternateNames ?? [])
+    ].filter(Boolean) as string[]
     return names.some((name) => {
       if (!name || !name.includes(' ')) return false
       const acronym = name
@@ -1511,7 +1617,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   private _isAliasForApp(keyword: string, appInfo: ScannedAppInfo): boolean {
     const uniqueId = resolveAppItemId(appInfo)
-    const aliasList = this.aliases[uniqueId] || this.aliases[appInfo.path] || []
+    const aliasList =
+      this.aliases[uniqueId] || this.aliases[appInfo.path] || this.aliases[appInfo.bundleId] || []
     return aliasList.includes(keyword)
   }
 
@@ -1519,8 +1626,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const uniqueId = resolveAppItemId(appInfo)
     const aliasesById = this.aliases[uniqueId] || []
     const aliasesByPath = this.aliases[appInfo.path] || []
-    return Array.from(new Set([...aliasesById, ...aliasesByPath])).map((alias) =>
-      alias.toLowerCase()
+    const aliasesByBundleId = this.aliases[appInfo.bundleId] || []
+    return Array.from(new Set([...aliasesById, ...aliasesByPath, ...aliasesByBundleId])).map(
+      (alias) => alias.toLowerCase()
     )
   }
 
@@ -1549,6 +1657,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const names = Array.from(
       new Set(
         [appInfo.displayName, appInfo.name, appInfo.fileName]
+          .concat(appInfo.alternateNames ?? [])
           .filter((value): value is string => Boolean(value?.trim()))
           .map((value) => value.trim())
       )
@@ -1584,10 +1693,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     const uniqueId = resolveAppItemId(appInfo)
-    const aliasList = this.aliases[uniqueId] || this.aliases[appInfo.path]
-    if (aliasList) {
-      aliasList.forEach((alias) => generatedKeywords.add(alias.toLowerCase()))
-    }
+    const aliasList = [
+      ...(this.aliases[uniqueId] || []),
+      ...(this.aliases[appInfo.path] || []),
+      ...(this.aliases[appInfo.bundleId] || [])
+    ]
+    aliasList.forEach((alias) => generatedKeywords.add(alias.toLowerCase()))
 
     const finalKeywords = new Set<string>()
     for (const keyword of generatedKeywords) {
@@ -1683,10 +1794,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           dbApp.displayName,
           scannedApp.displayName
         )
+        const hasAlternateNamesDrift = hasStringListDrift(
+          dbApp.extensions[APP_ALTERNATE_NAMES_EXTENSION_KEY],
+          scannedApp.alternateNames
+        )
         if (
           shouldRefreshIcon ||
           scannedApp.lastModified.getTime() > new Date(dbApp.mtime).getTime() ||
-          hasDisplayNameDrift
+          hasDisplayNameDrift ||
+          hasAlternateNamesDrift
         ) {
           toUpdate.push({
             fileId: dbApp.id,
@@ -1745,9 +1861,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             .returning()
 
           if (insertedFile) {
-            const extensions = this.buildAppExtensions(insertedFile.id, app)
-            if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
-
+            await this.syncScannedAppExtensions(insertedFile.id, app)
             await this._syncKeywordsForApp(app)
           }
 
@@ -1791,9 +1905,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
           await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, fileId))
 
-          const extensions = this.buildAppExtensions(fileId, app)
-          if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
-
+          await this.syncScannedAppExtensions(fileId, app)
           await this._syncKeywordsForApp(app)
 
           // 改为每100个输出一次，但保持10个一组的处理
@@ -1840,12 +1952,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           )
           .where(inArray(filesSchema.id, toDeleteIds))
       ).reduce<string[]>((items, row) => {
-        if (row.extensionValue && APP_IDENTIFIER_EXTENSION_KEYS.includes(row.extensionKey as any)) {
-          items.push(row.extensionValue)
-          return items
-        }
         if (row.path) {
           items.push(row.path)
+        }
+        if (row.extensionValue && isAppIdentifierExtensionKey(row.extensionKey)) {
+          items.push(row.extensionValue)
         }
         return items
       }, [])
@@ -1857,7 +1968,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       })
 
       if (deletedItemIds.length > 0) {
-        await this.searchIndex?.removeItems(deletedItemIds)
+        await this.removeIndexedAppItems(deletedItemIds)
       }
 
       logAppDuration('DeleteApps', deleteStart, {
@@ -1920,7 +2031,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, existingFile.id))
 
-      await this.dbUtils!.addFileExtensions(this.buildAppExtensions(existingFile.id, appInfo))
+      await this.syncScannedAppExtensions(existingFile.id, appInfo)
 
       await this._syncKeywordsForApp(appInfo)
       logApp(`App ${chalk.cyan(appInfo.name)} updated successfully`, LogStyle.success)
@@ -1942,8 +2053,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       .returning()
 
     if (insertedFile) {
-      await this.dbUtils!.addFileExtensions(this.buildAppExtensions(insertedFile.id, appInfo))
-
+      await this.syncScannedAppExtensions(insertedFile.id, appInfo)
       await this._syncKeywordsForApp(appInfo)
       logApp(`New app ${chalk.cyan(appInfo.name)} added successfully`, LogStyle.success)
     }
@@ -2016,14 +2126,19 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       const fileToDelete = await this.dbUtils!.getFileByPath(appPath)
       if (fileToDelete) {
         const extensions = await this.dbUtils!.getFileExtensions(fileToDelete.id)
-        const itemId = extensions.find((e) => e.key === 'bundleId')?.value || fileToDelete.path
+        const extensionMap = this.toExtensionMap(extensions)
+        const itemIds = resolveAppItemIds({
+          bundleId: extensionMap.bundleId,
+          appIdentity: extensionMap.appIdentity,
+          path: fileToDelete.path
+        })
 
         await this.dbUtils!.getDb().transaction(async (tx) => {
           await tx.delete(filesSchema).where(eq(filesSchema.id, fileToDelete.id))
           await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, fileToDelete.id))
         })
 
-        await this.searchIndex?.removeItems([itemId])
+        await this.removeIndexedAppItems(itemIds)
 
         logApp(`App deleted from database: ${chalk.cyan(appPath)}`, LogStyle.success)
       } else {
@@ -2971,8 +3086,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           displayName: app.displayName ?? dbApp.displayName
         })
 
-        const itemId = appInfo.uniqueId
-        await this.searchIndex?.removeItems([itemId])
+        await this.removeIndexedAppItems(resolveAppItemIds(appInfo))
         await this._syncKeywordsForApp(appInfo)
       }
     }
@@ -2993,14 +3107,19 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             continue
           }
           const extensions = await dbUtils.getFileExtensions(dbApp.id)
-          const itemId = extensions.find((e) => e.key === 'bundleId')?.value || dbApp.path
+          const extensionMap = this.toExtensionMap(extensions)
+          const itemIds = resolveAppItemIds({
+            bundleId: extensionMap.bundleId,
+            appIdentity: extensionMap.appIdentity,
+            path: dbApp.path
+          })
 
           await db.transaction(async (tx) => {
             await tx.delete(filesSchema).where(eq(filesSchema.id, dbApp.id))
             await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, dbApp.id))
           })
 
-          await this.searchIndex?.removeItems([itemId])
+          await this.removeIndexedAppItems(itemIds)
 
           logApp(`App deleted from database: ${chalk.cyan(dbApp.path)}`, LogStyle.success)
         } catch (error) {
