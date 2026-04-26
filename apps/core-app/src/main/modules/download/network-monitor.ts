@@ -1,6 +1,7 @@
 import type { NetworkStatus } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getNetworkService } from '../network'
+import { downloadNetworkLog } from './logger'
 
 type NetworkMonitorMode = 'full' | 'light'
 
@@ -125,7 +126,7 @@ export class NetworkMonitor {
         }
         return this.cachedStatus
       } catch (error) {
-        console.error('Network monitoring failed:', error)
+        downloadNetworkLog.error('Network monitoring failed', { error })
         this.networkAvailable = false
 
         const defaultStatus = {
