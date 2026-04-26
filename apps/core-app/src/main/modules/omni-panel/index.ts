@@ -63,7 +63,9 @@ import { createLogger } from '../../utils/logger'
 const omniPanelLog = createLogger('OmniPanel')
 const execFileAsync = promisify(execFile)
 const requireFromCurrentModule = createRequire(import.meta.url)
-const LONG_PRESS_MS = 600
+const DEFAULT_LONG_PRESS_MS = 600
+const MIN_LONG_PRESS_MS = 200
+const MAX_LONG_PRESS_MS = 3000
 const LONG_PRESS_MOVE_THRESHOLD = 6
 const SHORTCUT_HOLD_MS = 500
 const SHORTCUT_RELEASE_GRACE_MS = 220
@@ -189,6 +191,7 @@ interface OmniPanelFeatureRegistryItem {
 interface OmniPanelSettings {
   enableShortcut: boolean
   enableMouseLongPress: boolean
+  mouseLongPressDurationMs: number
   autoMountFirstFeatureOnPluginInstall: boolean
   featureHubItems: OmniPanelFeatureRegistryItem[]
 }
@@ -196,6 +199,7 @@ interface OmniPanelSettings {
 interface OmniPanelSettingRecord {
   enableShortcut?: boolean
   enableMouseLongPress?: boolean
+  mouseLongPressDurationMs?: unknown
   autoMountFirstFeatureOnPluginInstall?: boolean
   featureHub?: {
     items?: unknown[]
@@ -248,6 +252,20 @@ function normalizeIcon(value: unknown): OmniPanelFeatureIconPayload | null {
     type: iconType,
     value: iconValue
   }
+}
+
+function normalizeMouseLongPressDurationMs(value: unknown): number {
+  const raw =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim()
+        ? Number(value)
+        : NaN
+  if (!Number.isFinite(raw)) {
+    return DEFAULT_LONG_PRESS_MS
+  }
+  const rounded = Math.round(raw)
+  return Math.min(MAX_LONG_PRESS_MS, Math.max(MIN_LONG_PRESS_MS, rounded))
 }
 
 function normalizeContextSource(value: unknown): {
@@ -411,9 +429,12 @@ export class OmniPanelModule extends BaseModule {
 
     return {
       enableShortcut:
-        typeof omniPanel.enableShortcut === 'boolean' ? omniPanel.enableShortcut : true,
+        typeof omniPanel.enableShortcut === 'boolean' ? omniPanel.enableShortcut : false,
       enableMouseLongPress:
         typeof omniPanel.enableMouseLongPress === 'boolean' ? omniPanel.enableMouseLongPress : true,
+      mouseLongPressDurationMs: normalizeMouseLongPressDurationMs(
+        omniPanel.mouseLongPressDurationMs
+      ),
       autoMountFirstFeatureOnPluginInstall:
         typeof omniPanel.autoMountFirstFeatureOnPluginInstall === 'boolean'
           ? omniPanel.autoMountFirstFeatureOnPluginInstall
@@ -559,11 +580,14 @@ export class OmniPanelModule extends BaseModule {
 
       const nextOmniPanel: AppSetting['omniPanel'] = {
         enableShortcut:
-          typeof omniPanelRaw.enableShortcut === 'boolean' ? omniPanelRaw.enableShortcut : true,
+          typeof omniPanelRaw.enableShortcut === 'boolean' ? omniPanelRaw.enableShortcut : false,
         enableMouseLongPress:
           typeof omniPanelRaw.enableMouseLongPress === 'boolean'
             ? omniPanelRaw.enableMouseLongPress
             : true,
+        mouseLongPressDurationMs: normalizeMouseLongPressDurationMs(
+          omniPanelRaw.mouseLongPressDurationMs
+        ),
         autoMountFirstFeatureOnPluginInstall:
           typeof omniPanelRaw.autoMountFirstFeatureOnPluginInstall === 'boolean'
             ? omniPanelRaw.autoMountFirstFeatureOnPluginInstall
@@ -620,6 +644,14 @@ export class OmniPanelModule extends BaseModule {
       this.mouseDownPosition = null
     }
     this.syncInputHookState()
+  }
+
+  private getMouseLongPressDurationMs(setting?: AppSetting): number {
+    const appSetting = setting ?? ((getMainConfig(OMNI_PANEL_SETTING_KEY) as AppSetting) || {})
+    const omniPanel = (
+      isRecord(appSetting.omniPanel) ? appSetting.omniPanel : {}
+    ) as OmniPanelSettingRecord
+    return normalizeMouseLongPressDurationMs(omniPanel.mouseLongPressDurationMs)
   }
 
   private handleShortcutPressed(): void {
@@ -1586,13 +1618,14 @@ export class OmniPanelModule extends BaseModule {
         if (!this.isRightMouseButton(event)) return
         const x = typeof event.x === 'number' ? event.x : 0
         const y = typeof event.y === 'number' ? event.y : 0
+        const longPressDurationMs = this.getMouseLongPressDurationMs()
         this.mouseDownPosition = { x, y }
         this.clearLongPressTimer()
         this.longPressTimer = setTimeout(() => {
           void this.show({ captureSelection: true, source: 'mouse-long-press' })
           this.clearLongPressTimer()
           this.mouseDownPosition = null
-        }, LONG_PRESS_MS)
+        }, longPressDurationMs)
       }
 
       const onMouseUp = (event: InputHookEvent) => {
@@ -1641,6 +1674,7 @@ export class OmniPanelModule extends BaseModule {
       omniPanelLog.info('Global input hook enabled', {
         meta: {
           mouseLongPressEnabled: this.mouseLongPressEnabled,
+          mouseLongPressDurationMs: this.getMouseLongPressDurationMs(),
           shortcutHoldTrackingReady: Boolean(this.inputHookKeys)
         }
       })

@@ -159,9 +159,11 @@ vi.mock('../../utils/logger', () => ({
 
 import type { IFeatureOmniTransfer, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import { OmniPanelModule } from './index'
+import { getMainConfig } from '../storage'
 
 afterEach(() => {
   vi.clearAllMocks()
+  vi.mocked(getMainConfig).mockReturnValue({})
 })
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
@@ -198,6 +200,53 @@ describe('OmniPanelModule registry initialization', () => {
       'builtin.corebox-search',
       'builtin.copy'
     ])
+  })
+})
+
+describe('OmniPanel settings normalization', () => {
+  it('reads custom mouse long press duration from settings snapshot', () => {
+    vi.mocked(getMainConfig).mockReturnValue({
+      omniPanel: {
+        enableShortcut: true,
+        enableMouseLongPress: true,
+        mouseLongPressDurationMs: '1000',
+        featureHub: {
+          items: []
+        }
+      }
+    } as unknown as ReturnType<typeof getMainConfig>)
+
+    const module = new OmniPanelModule() as unknown as {
+      getSettingsSnapshot: () => {
+        mouseLongPressDurationMs: number
+      }
+    }
+
+    expect(module.getSettingsSnapshot().mouseLongPressDurationMs).toBe(1000)
+  })
+
+  it('clamps custom mouse long press duration to supported bounds', () => {
+    vi.mocked(getMainConfig).mockReturnValue({
+      omniPanel: {
+        mouseLongPressDurationMs: 10
+      }
+    } as unknown as ReturnType<typeof getMainConfig>)
+    const minDurationModule = new OmniPanelModule() as unknown as {
+      getMouseLongPressDurationMs: () => number
+    }
+
+    expect(minDurationModule.getMouseLongPressDurationMs()).toBe(200)
+
+    vi.mocked(getMainConfig).mockReturnValue({
+      omniPanel: {
+        mouseLongPressDurationMs: 5000
+      }
+    } as unknown as ReturnType<typeof getMainConfig>)
+    const maxDurationModule = new OmniPanelModule() as unknown as {
+      getMouseLongPressDurationMs: () => number
+    }
+
+    expect(maxDurationModule.getMouseLongPressDurationMs()).toBe(3000)
   })
 })
 
@@ -294,6 +343,35 @@ describe('OmniPanelModule selection capture diagnostics', () => {
 })
 
 describe('OmniPanelModule auto-mount', () => {
+  it('keeps the keyboard shortcut disabled by default', () => {
+    const module = new OmniPanelModule() as unknown as {
+      getSettingsSnapshot: (setting: Record<string, unknown>) => {
+        enableShortcut: boolean
+        enableMouseLongPress: boolean
+        autoMountFirstFeatureOnPluginInstall: boolean
+      }
+    }
+
+    expect(module.getSettingsSnapshot({})).toMatchObject({
+      enableShortcut: false,
+      enableMouseLongPress: true,
+      autoMountFirstFeatureOnPluginInstall: false
+    })
+    expect(
+      module.getSettingsSnapshot({
+        omniPanel: {
+          enableShortcut: true,
+          enableMouseLongPress: false,
+          autoMountFirstFeatureOnPluginInstall: true
+        }
+      })
+    ).toMatchObject({
+      enableShortcut: true,
+      enableMouseLongPress: false,
+      autoMountFirstFeatureOnPluginInstall: true
+    })
+  })
+
   it('prioritizes declared omniTransfer features and dedupes repeated install events', async () => {
     const module = new OmniPanelModule() as unknown as {
       featureRegistry: Array<Record<string, unknown>>

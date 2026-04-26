@@ -227,6 +227,8 @@
     "omniPanelShortcutDesc": "启用后可用 Command/Ctrl + Shift + P 唤起全景面板。",
     "omniPanelMouseLongPress": "OmniPanel 右键长按唤起",
     "omniPanelMouseLongPressDesc": "启用后，右键长按可直接打开全景面板并读取选中文本。",
+    "omniPanelMouseLongPressDuration": "OmniPanel 右键长按时长",
+    "omniPanelMouseLongPressDurationDesc": "设置触发 OmniPanel 的右键长按阈值。",
     "shortcutsDialog": {
       "title": "快捷方式",
       "desc": "搜索并配置系统级快捷键。",
@@ -247,6 +249,7 @@
       "sourcePlugin": "插件：{name}",
       "sourceUnknown": "未知来源",
       "triggerMouseRightLongPress": "鼠标右键长按",
+      "triggerMouseRightLongPressWithDuration": "鼠标右键长按（{duration} ms）",
       "columns": {
         "name": "名称",
         "source": "来源",
@@ -269,6 +272,8 @@
       "conflictPlugin": "与插件快捷键冲突",
       "unavailable": "快捷键注册失败，可能被系统占用",
       "invalid": "快捷键无效",
+      "omniPanelAccessibilityRequired": "需要辅助功能权限",
+      "omniPanelAccessibilityHint": "macOS 需先授予辅助功能权限，右键长按触发才会生效。",
       "spotlightHint": "可在系统设置中关闭 Spotlight 快捷键以释放该组合键"
     },
     "autoPaste": "自动粘贴",
