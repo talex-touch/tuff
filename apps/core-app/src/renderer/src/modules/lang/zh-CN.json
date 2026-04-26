@@ -1162,6 +1162,17 @@
           "mockLabel": "模拟载荷",
           "mockPlaceholder": "输入 JSON 载荷",
           "mockError": "JSON 解析失败：{error}",
+          "statusNotSelected": "未选择",
+          "statusInvalidPayload": "载荷无效",
+          "statusLoading": "加载中",
+          "statusRenderFailed": "渲染失败",
+          "statusReady": "已加载",
+          "statusError": "异常",
+          "statusPending": "暂未就绪",
+          "hintMockInvalid": "模拟载荷解析失败：{error}",
+          "hintMockEmpty": "已开启模拟载荷，但内容为空",
+          "hintMockActive": "使用模拟载荷渲染",
+          "hintReadyEmpty": "提示：Widget 已加载但内容为空时，通常需要 payload 或运行时数据。",
           "missingWidgetId": "预览需要有效的 widgetId。",
           "resizeAriaLabel": "调整预览尺寸"
         }
