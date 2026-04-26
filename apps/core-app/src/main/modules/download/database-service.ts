@@ -14,6 +14,7 @@ import { drizzle } from 'drizzle-orm/libsql'
 import { addPerformanceIndexes, runMigrations } from './migrations'
 import { PerformanceMonitor } from './performance-monitor'
 import { downloadChunksSchema, downloadHistorySchema, downloadTasksSchema } from './schema'
+import { downloadDatabaseLog } from './logger'
 
 export class DatabaseService {
   private db: ReturnType<typeof drizzle>
@@ -48,9 +49,9 @@ export class DatabaseService {
       // Run migrations to add performance indexes
       await runMigrations(this.dbPath, [addPerformanceIndexes])
       this.initialized = true
-      console.log('[DatabaseService] Initialized successfully')
+      downloadDatabaseLog.info('Initialized successfully')
     } catch (error) {
-      console.error('[DatabaseService] Initialization failed:', error)
+      downloadDatabaseLog.error('Initialization failed', { error })
       // Don't throw - allow the app to continue even if migrations fail
     }
   }
@@ -261,7 +262,10 @@ export class DatabaseService {
       } catch (error: unknown) {
         // 忽略文件不存在错误
         if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
-          console.error(`Failed to cleanup chunk file ${chunk.filePath}:`, error)
+          downloadDatabaseLog.error('Failed to cleanup failed chunk file', {
+            error,
+            meta: { taskId, chunkIndex: chunk.index, pathLength: chunk.filePath.length }
+          })
         }
       }
     }
