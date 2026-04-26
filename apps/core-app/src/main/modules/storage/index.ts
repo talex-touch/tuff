@@ -707,7 +707,7 @@ export class StorageModule extends BaseModule {
    * @example
    * ```typescript
    * const unsubscribe = storageModule.subscribe('app-setting.ini', (data) => {
-   *   console.log('Config updated:', data)
+   *   handleConfigUpdate(data)
    * })
    *
    * // Later, to unsubscribe:
