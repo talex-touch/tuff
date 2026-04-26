@@ -44,10 +44,10 @@ for (const target of targets) {
     const content = await readFile(file, 'utf8')
     for (const needle of forbidden) {
       if (content.includes(needle)) {
-        throw new Error(`legacy raw channel found: ${needle} in ${file}`)
+        throw new Error(`forbidden raw channel found: ${needle} in ${file}`)
       }
     }
   }
 }
 
-console.log('[clipboard-history] no legacy raw channel strings found in build outputs')
+console.log('[clipboard-history] no forbidden raw channel strings found in build outputs')
