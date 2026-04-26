@@ -7,11 +7,6 @@ import type {
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
-import type {
-  FileParserEmbedding,
-  FileParserProgress,
-  FileParserResult
-} from '@talex-touch/utils/electron/file-parsers'
 import type { StreamContext } from '@talex-touch/utils/transport/main'
 import type {
   FileIndexAddPathResult,
@@ -24,14 +19,13 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { Buffer } from 'node:buffer'
 import type { TouchApp } from '../../../../core/touch-app'
 import type * as schema from '../../../../db/schema'
-import type { SearchIndexItem, SearchIndexService } from '../../search-engine/search-index-service'
+import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
 import type { FileTypeTag } from './constants'
 import type { FileIndexSettings, ScannedFileInfo } from './types'
 import type { IndexWorkerFile, IndexWorkerFileResult } from './workers/file-index-worker-client'
 import type { ReconcileDbFile, ReconcileDiskFile } from './workers/file-reconcile-worker-client'
 import type { WorkerStatusSnapshot } from './workers/worker-status'
-import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -45,7 +39,6 @@ import {
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
@@ -71,8 +64,6 @@ import { getMainConfig, saveMainConfig } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
 import {
   BLACKLISTED_EXTENSIONS,
-  CONTENT_INDEXABLE_EXTENSIONS,
-  getContentSizeLimitMB,
   getTypeTagsForExtension,
   KEYWORD_MAP,
   WHITELISTED_EXTENSIONS
@@ -100,7 +91,6 @@ import {
 } from './services/file-provider-path-service'
 import {
   buildFtsQuery as buildFileProviderFtsQuery,
-  buildSearchIndexItem as buildFileProviderSearchIndexItem,
   resolveExtensionsForTypeFilters as resolveFileProviderExtensionsForTypeFilters,
   resolveTypeTag as resolveFileProviderTypeTag
 } from './services/file-provider-search-service'
@@ -113,7 +103,6 @@ import { FileProviderIndexRuntimeService } from './services/file-provider-index-
 import { type PersistEntry } from '../../search-engine/workers/search-index-worker-client'
 import FileSystemWatcher from '../../file-system-watcher'
 
-const MAX_CONTENT_LENGTH = 200_000
 const ICON_META_EXTENSION_KEY = 'iconMeta'
 const fileProviderLog = getLogger('file-provider')
 const SEMANTIC_TRIGGER_MIN_QUERY_LENGTH = 3
@@ -133,7 +122,6 @@ function isValidBase64DataUrl(value: string): boolean {
   return BASE64_PAYLOAD_PATTERN.test(payload)
 }
 
-type FileIndexStatus = (typeof fileIndexProgress.$inferSelect)['status']
 type IncrementalUpdateAction = 'add' | 'change' | 'delete'
 
 interface IncrementalUpdatePayload {
@@ -164,7 +152,7 @@ interface FileUpdateRecord {
   isDir: boolean
 }
 
-type EmbeddingDbExecutor = Pick<LibSQLDatabase<typeof schema>, 'delete' | 'insert'>
+type EmbeddingDbExecutor = Pick<LibSQLDatabase<typeof schema>, 'delete'>
 
 const FILE_PROVIDER_PROGRESS_TASK_ID = 'file-provider.progress-cleanup'
 const pollingService = PollingService.getInstance()
@@ -297,20 +285,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private readonly iconWorker = new IconWorkerClient()
   private readonly searchIndexWorker = new SearchIndexWorkerClient()
-  private readonly failedContentCache = new Map<
-    number,
-    { status: FileIndexStatus; updatedAt: number | null; lastError: string | null }
-  >()
-
   private readonly pendingIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
   private readonly inflightIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
-
-  private readonly pendingContentProgress = new Map<
-    number,
-    { progress: number; processedBytes: number; totalBytes: number; updatedAt: Date }
-  >()
-
-  private contentProgressFlushTimer: NodeJS.Timeout | null = null
 
   private touchApp: TouchApp | null = null
   private fileIndexSettings: FileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
@@ -408,9 +384,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.logDebug('Watching paths', {
       count: this.watchPaths.length
     })
-
-    void this.indexFilesForSearch
-    void this.extractContentForFiles
   }
 
   private logInfo(message: string, meta?: Record<string, unknown>): void {
@@ -459,30 +432,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return
     }
     fileProviderLog.error(message)
-  }
-
-  private recordContentFailure(
-    fileId: number,
-    lastError: string | null,
-    updatedAt?: number | null
-  ): void {
-    let timestamp: number | null
-    if (typeof updatedAt === 'number' && Number.isFinite(updatedAt)) {
-      timestamp = updatedAt
-    } else if (updatedAt === null) {
-      timestamp = null
-    } else {
-      timestamp = Date.now()
-    }
-    this.failedContentCache.set(fileId, {
-      status: 'failed',
-      updatedAt: timestamp,
-      lastError
-    })
-  }
-
-  private clearContentFailure(fileId: number): void {
-    this.failedContentCache.delete(fileId)
   }
 
   private syncWatchServiceState(): void {
@@ -571,59 +520,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return run
   }
 
-  private async shouldSkipContentDueToFailure(
-    file: typeof filesSchema.$inferSelect
-  ): Promise<boolean> {
-    if (!this.dbUtils || !file.id) return false
-
-    const fileId = file.id
-    const fileModifiedAt = this.toTimestamp(file.mtime)
-    const cachedFailure = this.failedContentCache.get(fileId)
-
-    if (cachedFailure) {
-      if (cachedFailure.updatedAt && fileModifiedAt && fileModifiedAt > cachedFailure.updatedAt) {
-        this.failedContentCache.delete(fileId)
-        this.logDebug('Retrying content parse after file modification', {
-          path: file.path
-        })
-      } else {
-        return true
-      }
-    }
-
-    try {
-      const [progress] = await this.dbUtils.getFileIndexProgressByFileIds([fileId])
-      if (!progress || progress.status !== 'failed') {
-        return false
-      }
-
-      const progressUpdatedAt = this.toTimestamp(progress.updatedAt)
-      if (progressUpdatedAt && fileModifiedAt && fileModifiedAt > progressUpdatedAt) {
-        this.logDebug('Retrying content parse after recorded failure', {
-          path: file.path
-        })
-        return false
-      }
-
-      this.recordContentFailure(fileId, progress.lastError ?? null, progressUpdatedAt ?? null)
-      this.logDebug('Skipping content parse for previously failed file', {
-        path: file.path,
-        lastError: progress.lastError ?? 'unknown'
-      })
-      return true
-    } catch (error) {
-      this.logWarn('Failed to load previous file index status; continuing parse', error, {
-        fileId,
-        path: file.path
-      })
-      return false
-    }
-  }
-
-  // private createProgressLogger(_label: string, _total: number): ProgressLogger {
-  //   return new ProgressLogger(_label, _total, (message) => this.logInfo(message))
-  // }
-
   public getWatchedPaths(): string[] {
     return [...this.watchPaths]
   }
@@ -704,11 +600,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.initializationContext = context
 
     const loadStart = performance.now()
-
-    // Keep a reference to internal helpers (no-op) so TS doesn't treat them as unused.
-    void this.computeReconciliationDiff([], [], [])
-    void this.indexFilesForSearch([])
-    void this.extractContentForFiles([])
 
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
@@ -2557,26 +2448,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
-  private async indexFilesForSearch(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
-    if (files.length === 0) return
-
-    const indexStart = performance.now()
-    const items: SearchIndexItem[] = files.map((file) => this.buildSearchIndexItem(file))
-    await this.searchIndexWorker.indexItems(items)
-
-    // 只在处理大量文件时输出详细日志，减少日志噪音
-    if (files.length >= 50) {
-      this.logDebug('Indexed files for search', {
-        count: files.length,
-        duration: formatDuration(performance.now() - indexStart)
-      })
-    }
-  }
-
-  private buildSearchIndexItem(file: typeof filesSchema.$inferSelect): SearchIndexItem {
-    return buildFileProviderSearchIndexItem(file, this.id, this.type)
-  }
-
   private buildFtsQuery(terms: string[]): string {
     return buildFileProviderFtsQuery(terms)
   }
@@ -2780,301 +2651,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return cachedSize !== fileSize
   }
 
-  private async extractContentForFiles(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
-    if (!this.dbUtils) return
-    if (files.length === 0) return
-
-    await runAdaptiveTaskQueue(
-      files,
-      async (file) => {
-        await appTaskGate.waitForIdle()
-        try {
-          await this.extractContentForFile(file)
-        } catch (error) {
-          this.logError('Failed to extract content for file', error, {
-            path: file.path
-          })
-        }
-      },
-      {
-        estimatedTaskTimeMs: 20,
-        label: 'FileProvider::extractContent'
-      }
-    )
-  }
-
-  private createProgressReporter(fileId: number, totalBytes: number | null) {
-    return (progress: FileParserProgress) => {
-      if (!this.dbUtils) return
-
-      const processed = progress.processedBytes ?? 0
-      const total = progress.totalBytes ?? totalBytes ?? 0
-      const percentage = progress.percentage ?? (total > 0 ? processed / total : 0)
-
-      this.pendingContentProgress.set(fileId, {
-        progress: Math.min(99, Math.round((percentage || 0) * 100)),
-        processedBytes: processed,
-        totalBytes: total,
-        updatedAt: new Date()
-      })
-
-      if (!this.contentProgressFlushTimer) {
-        this.contentProgressFlushTimer = setTimeout(() => {
-          this.contentProgressFlushTimer = null
-          void this.flushContentProgress()
-        }, 150)
-      }
-    }
-  }
-
-  private async flushContentProgress(): Promise<void> {
-    if (!this.dbUtils) {
-      return
-    }
-
-    if (this.pendingContentProgress.size === 0) {
-      return
-    }
-
-    const entries = Array.from(this.pendingContentProgress.entries())
-    this.pendingContentProgress.clear()
-
-    const db = this.dbUtils.getDb()
-
-    await this.withDbWrite('file-index.progress.flush', () =>
-      db.transaction(async (tx) => {
-        for (const [fileId, payload] of entries) {
-          await tx
-            .insert(fileIndexProgress)
-            .values({
-              fileId,
-              progress: payload.progress,
-              processedBytes: payload.processedBytes,
-              totalBytes: payload.totalBytes,
-              updatedAt: payload.updatedAt
-            })
-            .onConflictDoUpdate({
-              target: fileIndexProgress.fileId,
-              set: {
-                progress: payload.progress,
-                processedBytes: payload.processedBytes,
-                totalBytes: payload.totalBytes,
-                updatedAt: payload.updatedAt
-              }
-            })
-        }
-      })
-    )
-  }
-
-  private async extractContentForFile(file: typeof filesSchema.$inferSelect): Promise<void> {
-    if (!this.dbUtils) return
-    if (!file.id) return
-
-    const extension = (file.extension || path.extname(file.name) || '').toLowerCase()
-    if (!CONTENT_INDEXABLE_EXTENSIONS.has(extension)) {
-      await this.withDbWrite('file-index.content.disabled', () =>
-        this.dbUtils!.getDb()
-          .insert(fileIndexProgress)
-          .values({
-            fileId: file.id!,
-            status: 'skipped',
-            progress: 100,
-            processedBytes: 0,
-            totalBytes: file.size ?? null,
-            lastError: 'content-indexing-disabled',
-            updatedAt: new Date()
-          })
-          .onConflictDoUpdate({
-            target: fileIndexProgress.fileId,
-            set: {
-              status: 'skipped',
-              progress: 100,
-              processedBytes: 0,
-              totalBytes: file.size ?? null,
-              lastError: 'content-indexing-disabled',
-              updatedAt: new Date()
-            }
-          })
-      )
-      this.clearContentFailure(file.id)
-      return
-    }
-
-    const size = await this.ensureFileSize(file)
-    const maxBytes = getContentSizeLimitMB(extension) * 1024 * 1024
-
-    if (maxBytes && size !== null && size > maxBytes) {
-      await this.withDbWrite('file-index.content.too-large', () =>
-        this.dbUtils!.getDb()
-          .insert(fileIndexProgress)
-          .values({
-            fileId: file.id!,
-            status: 'skipped',
-            progress: 100,
-            processedBytes: 0,
-            totalBytes: size,
-            lastError: 'file-too-large',
-            updatedAt: new Date()
-          })
-          .onConflictDoUpdate({
-            target: fileIndexProgress.fileId,
-            set: {
-              status: 'skipped',
-              progress: 100,
-              processedBytes: 0,
-              totalBytes: size,
-              lastError: 'file-too-large',
-              updatedAt: new Date()
-            }
-          })
-      )
-      this.clearContentFailure(file.id)
-      file.content = null
-      return
-    }
-
-    if (await this.shouldSkipContentDueToFailure(file)) {
-      file.content = null
-      return
-    }
-
-    await this.withDbWrite('file-index.content.start', () =>
-      this.dbUtils!.getDb()
-        .insert(fileIndexProgress)
-        .values({
-          fileId: file.id!,
-          status: 'processing',
-          progress: 5,
-          processedBytes: 0,
-          totalBytes: size ?? null,
-          startedAt: new Date(),
-          lastError: null,
-          updatedAt: new Date()
-        })
-        .onConflictDoUpdate({
-          target: fileIndexProgress.fileId,
-          set: {
-            status: 'processing',
-            progress: 5,
-            processedBytes: 0,
-            totalBytes: size ?? null,
-            startedAt: new Date(),
-            lastError: null,
-            updatedAt: new Date()
-          }
-        })
-    )
-    this.clearContentFailure(file.id)
-
-    const progressReporter = this.createProgressReporter(file.id, size)
-    const parseStart = performance.now()
-    let result: FileParserResult | null = null
-    try {
-      result = await fileParserRegistry.parseWithBestParser(
-        {
-          filePath: file.path,
-          extension,
-          size: size ?? 0,
-          maxBytes
-        },
-        progressReporter
-      )
-    } catch (error) {
-      this.logError('Parser threw while processing file', error, {
-        path: file.path
-      })
-      await this.withDbWrite('file-index.content.parser-error', () =>
-        this.dbUtils!.getDb()
-          .insert(fileIndexProgress)
-          .values({
-            fileId: file.id!,
-            status: 'failed',
-            progress: 100,
-            processedBytes: 0,
-            totalBytes: size ?? null,
-            lastError: error instanceof Error ? error.message : 'parser-error',
-            updatedAt: new Date()
-          })
-          .onConflictDoUpdate({
-            target: fileIndexProgress.fileId,
-            set: {
-              status: 'failed',
-              progress: 100,
-              processedBytes: 0,
-              totalBytes: size ?? null,
-              lastError: error instanceof Error ? error.message : 'parser-error',
-              updatedAt: new Date()
-            }
-          })
-      )
-      this.recordContentFailure(file.id, error instanceof Error ? error.message : 'parser-error')
-      file.content = null
-      return
-    }
-
-    if (!result) {
-      await this.withDbWrite('file-index.content.parser-not-found', () =>
-        this.dbUtils!.getDb()
-          .insert(fileIndexProgress)
-          .values({
-            fileId: file.id!,
-            status: 'skipped',
-            progress: 100,
-            processedBytes: 0,
-            totalBytes: size ?? null,
-            lastError: 'parser-not-found',
-            updatedAt: new Date()
-          })
-          .onConflictDoUpdate({
-            target: fileIndexProgress.fileId,
-            set: {
-              status: 'skipped',
-              progress: 100,
-              processedBytes: 0,
-              totalBytes: size ?? null,
-              lastError: 'parser-not-found',
-              updatedAt: new Date()
-            }
-          })
-      )
-      this.clearContentFailure(file.id)
-      file.content = null
-      return
-    }
-
-    await this.handleParserResult(file, result, size, performance.now() - parseStart)
-  }
-
-  private buildContentHash(content: string): string | null {
-    if (!content) return null
-    return createHash('sha256').update(content).digest('hex')
-  }
-
-  private async persistEmbeddings(
-    executor: EmbeddingDbExecutor,
-    fileId: number,
-    contentHash: string | null,
-    embeddings: FileParserEmbedding[]
-  ): Promise<void> {
-    if (embeddings.length === 0) return
-    const sourceId = String(fileId)
-
-    await executor
-      .delete(embeddingsSchema)
-      .where(and(eq(embeddingsSchema.sourceId, sourceId), eq(embeddingsSchema.sourceType, 'file')))
-
-    await executor.insert(embeddingsSchema).values(
-      embeddings.map((embedding) => ({
-        sourceId,
-        sourceType: 'file',
-        embedding: embedding.vector,
-        model: embedding.model || 'unknown',
-        contentHash
-      }))
-    )
-  }
-
   private async deleteEmbeddingsByFileIds(
     executor: EmbeddingDbExecutor,
     fileIds: number[]
@@ -3086,167 +2662,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .where(
         and(eq(embeddingsSchema.sourceType, 'file'), inArray(embeddingsSchema.sourceId, sourceIds))
       )
-  }
-
-  private async handleParserResult(
-    file: typeof filesSchema.$inferSelect,
-    result: FileParserResult,
-    size: number | null,
-    durationMs: number
-  ): Promise<void> {
-    if (!this.dbUtils) return
-    const db = this.dbUtils.getDb()
-    const fileId = file.id
-    if (!fileId) return
-
-    const totalBytes = result.totalBytes ?? size ?? null
-    const processedBytes = result.processedBytes ?? totalBytes ?? null
-
-    if (result.status === 'success') {
-      const rawContent = result.content ?? ''
-      const trimmedContent =
-        rawContent.length > MAX_CONTENT_LENGTH
-          ? `${rawContent.slice(0, MAX_CONTENT_LENGTH)}\n...[truncated]`
-          : rawContent
-
-      const embeddingStatus =
-        result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending'
-      const contentHash = this.buildContentHash(rawContent)
-
-      await this.withDbWrite('file-index.content.success', () =>
-        db.transaction(async (tx) => {
-          await tx
-            .update(filesSchema)
-            .set({
-              content: trimmedContent,
-              embeddingStatus
-            })
-            .where(eq(filesSchema.id, fileId))
-
-          await tx
-            .insert(fileIndexProgress)
-            .values({
-              fileId,
-              status: 'completed',
-              progress: 100,
-              processedBytes,
-              totalBytes,
-              lastError: null,
-              updatedAt: new Date()
-            })
-            .onConflictDoUpdate({
-              target: fileIndexProgress.fileId,
-              set: {
-                status: 'completed',
-                progress: 100,
-                processedBytes,
-                totalBytes,
-                lastError: null,
-                updatedAt: new Date()
-              }
-            })
-
-          if (result.embeddings && result.embeddings.length > 0) {
-            await this.persistEmbeddings(tx, fileId, contentHash, result.embeddings)
-          }
-        })
-      )
-
-      file.content = trimmedContent
-
-      if (result.embeddings && result.embeddings.length > 0) {
-        this.logDebug('Persisted embeddings for file', {
-          path: file.path,
-          embeddings: result.embeddings.length
-        })
-      } else if (this.embeddingService && trimmedContent.length > 50) {
-        // No parser-provided embeddings — generate via Intelligence SDK (best-effort, non-blocking)
-        this.embeddingService.indexFile(file.path, trimmedContent).catch(() => {
-          // Graceful degradation: ignore embedding generation failures
-        })
-      }
-
-      this.clearContentFailure(fileId)
-
-      this.logDebug('Content parsed for file', {
-        path: file.path,
-        duration: formatDuration(durationMs),
-        length: trimmedContent.length
-      })
-      return
-    }
-
-    const progressPayload = {
-      progress: 100,
-      processedBytes,
-      totalBytes,
-      lastError: result.reason ?? null,
-      updatedAt: new Date()
-    }
-
-    if (result.status === 'skipped') {
-      await this.withDbWrite('file-index.content.skipped', () =>
-        db
-          .insert(fileIndexProgress)
-          .values({
-            fileId,
-            status: 'skipped',
-            ...progressPayload
-          })
-          .onConflictDoUpdate({
-            target: fileIndexProgress.fileId,
-            set: {
-              status: 'skipped',
-              ...progressPayload
-            }
-          })
-      )
-      this.clearContentFailure(fileId)
-      file.content = null
-      return
-    }
-
-    await this.withDbWrite('file-index.content.failed', () =>
-      db
-        .insert(fileIndexProgress)
-        .values({
-          fileId,
-          status: 'failed',
-          ...progressPayload
-        })
-        .onConflictDoUpdate({
-          target: fileIndexProgress.fileId,
-          set: {
-            status: 'failed',
-            ...progressPayload
-          }
-        })
-    )
-    this.recordContentFailure(fileId, result.reason ?? null)
-    file.content = null
-  }
-
-  private async ensureFileSize(file: typeof filesSchema.$inferSelect): Promise<number | null> {
-    if (typeof file.size === 'number' && file.size >= 0) {
-      return file.size
-    }
-
-    try {
-      const stats = await fs.stat(file.path)
-      file.size = stats.size
-      if (file.id && this.dbUtils) {
-        const db = this.dbUtils.getDb()
-        await this.withDbWrite('file-index.file-size.update', () =>
-          db.update(filesSchema).set({ size: stats.size }).where(eq(filesSchema.id, file.id!))
-        )
-      }
-      return stats.size
-    } catch (error) {
-      this.logError('Failed to stat file size', error, {
-        path: file.path
-      })
-      return null
-    }
   }
 
   private extractSearchFilters(rawText: string): {

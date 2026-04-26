@@ -5,6 +5,15 @@
 
 ## 2026-04-26
 
+### refactor(core-app): 清理兼容审计后的无引用 legacy/no-op 残留
+
+- `apps/core-app/src/main/addon/device/blue-tooth.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/renderer/src/modules/layout/index.ts`
+  - 删除未被任何入口引用、且全文件仅剩注释的 Bluetooth/USB 旧实验代码，避免继续作为假的设备能力入口误导后续维护。
+  - 移除 renderer layout 模块中无内部调用的 `useLayout` legacy alias，只保留当前主入口 `useDynamicTuffLayout`。
+  - File Provider 移除旧主线程内容解析/FTS 索引 helper 与空调用保活逻辑；当前文件内容解析、progress 持久化与 FTS 写入统一由 `file-index-worker -> FileProviderIndexRuntimeService -> SearchIndexWorkerClient.persistAndIndex` 管线承担。
+
 ### fix(core-app): 清理插件 Widget 预览硬编码 mock 文案
 
 - `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatureDetailCard.vue`
