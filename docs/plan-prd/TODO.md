@@ -112,6 +112,7 @@
 
 - [x] Phase 0：补齐设备授权风控验收证据（含回滚演练记录）。
 - [x] Nexus 组件文档页卡死收口：组件同步表改走服务端轻量数据源，`TuffDemoWrapper` 改为按文档引用 demo 懒加载，`/docs/dev/components` 加入 prerender。
+- [x] Nexus updates/Tuffex 回归收口：公共 updates 页首屏 `history=1` 查询状态与要闻空态继续复用 Tuffex；Release Evidence schema guard 改为按 D1 binding 实例隔离，避免新 binding 跳过建表。
 - [ ] Phase 1：完成速率限制、冷却窗口、审计日志落地。
 - [x] Phase 1：补齐风控告警策略与责任人值守说明。
 - [x] 输出最小可复现门禁命令与发布前检查单。

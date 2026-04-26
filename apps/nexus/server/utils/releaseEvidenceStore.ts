@@ -8,7 +8,7 @@ const RUNS_TABLE = 'release_evidence_runs'
 const ITEMS_TABLE = 'release_evidence_items'
 const EVIDENCE_JSON_LIMIT_BYTES = 128 * 1024
 
-let schemaInitialized = false
+const initializedSchemas = new WeakSet<D1Database>()
 
 export const RELEASE_EVIDENCE_PLATFORMS = ['windows', 'macos', 'linux', 'all'] as const
 export const RELEASE_EVIDENCE_SCOPES = ['core-app', 'pilot', 'nexus', 'docs', 'release'] as const
@@ -164,7 +164,7 @@ function getD1Database(event: H3Event): D1Database {
 }
 
 async function ensureReleaseEvidenceSchema(db: D1Database) {
-  if (schemaInitialized)
+  if (initializedSchemas.has(db))
     return
 
   await db.prepare(`
@@ -203,7 +203,7 @@ async function ensureReleaseEvidenceSchema(db: D1Database) {
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_release_evidence_items_run_id ON ${ITEMS_TABLE}(run_id);`).run()
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_release_evidence_items_case_id ON ${ITEMS_TABLE}(case_id);`).run()
 
-  schemaInitialized = true
+  initializedSchemas.add(db)
 }
 
 function assertNonEmptyString(value: unknown, field: string): string {

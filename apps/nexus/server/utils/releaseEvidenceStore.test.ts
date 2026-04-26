@@ -61,6 +61,7 @@ class MockStatement {
 class MockD1Database {
   runs = new Map<string, RunRow>()
   items = new Map<string, ItemRow>()
+  schemaStatements = 0
 
   prepare(sql: string) {
     return new MockStatement(this, sql)
@@ -68,6 +69,7 @@ class MockD1Database {
 
   run(sql: string, args: any[]) {
     if (sql.includes('CREATE TABLE') || sql.includes('CREATE INDEX')) {
+      this.schemaStatements += 1
       return { meta: { changes: 0 } }
     }
 
@@ -199,6 +201,28 @@ describe('releaseEvidenceStore', () => {
       scope: 'core-app',
       status: 'running',
     })
+  })
+
+  it('schema guard 按 D1 binding 实例隔离', async () => {
+    const firstDb = state.db!
+    await createReleaseEvidenceRun(event, {
+      version: '2.5.0',
+      platform: 'windows',
+      scope: 'core-app',
+      createdBy: 'admin',
+    })
+    expect(firstDb.schemaStatements).toBeGreaterThan(0)
+
+    const secondDb = new MockD1Database()
+    state.db = secondDb
+    await createReleaseEvidenceRun(event, {
+      version: '2.5.0',
+      platform: 'macos',
+      scope: 'core-app',
+      createdBy: 'admin',
+    })
+
+    expect(secondDb.schemaStatements).toBeGreaterThan(0)
   })
 
   it('item 按 runId + caseId upsert', async () => {

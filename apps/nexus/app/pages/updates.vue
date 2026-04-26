@@ -68,7 +68,7 @@ function resolveChannel(value: unknown): ReleaseChannelId {
 }
 
 const selectedChannel = ref<ReleaseChannelId>(resolveChannel(route.query.channel))
-const historyExpanded = ref(false)
+const historyExpanded = ref(route.query.history === '1')
 
 watch(
   () => route.query.channel,
@@ -171,7 +171,7 @@ function resolveUpdateText(text: LocalizedText) {
 function openUpdateLink(link?: string) {
   if (!link)
     return
-  if (link.startsWith('http')) {
+  if (/^https?:\/\//i.test(link)) {
     if (import.meta.client)
       window.open(link, '_blank', 'noopener')
     return
@@ -291,6 +291,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
             class="UpdateNewsItem"
             :title="resolveUpdateText(update.title)"
             :icon-class="updateTypeIcon(update.type)"
+            :role="update.link ? 'link' : 'article'"
             :clickable="Boolean(update.link)"
             @click="openUpdateLink(update.link)"
           >
@@ -315,9 +316,15 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
             </template>
           </TxCardItem>
         </div>
-        <p v-else class="mt-4 text-sm text-gray-500 dark:text-gray-400">
-          {{ t('updates.news.empty') }}
-        </p>
+        <TxNoData
+          v-else
+          class="UpdateNewsEmpty"
+          :title="t('updates.news.empty')"
+          description=""
+          icon="i-carbon-notification-off"
+          align="start"
+          size="small"
+        />
       </div>
     </section>
 
@@ -472,6 +479,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
             :id="release.tag"
             :key="release.tag"
             class="ReleaseHistoryItem release-row"
+            role="article"
             icon-class="i-carbon-version-major"
           >
             <template #title>
@@ -612,6 +620,11 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
   color: color-mix(in srgb, var(--tx-text-color-secondary, rgb(75, 85, 99)) 94%, transparent);
   font-size: 14px;
   line-height: 1.6;
+}
+
+.UpdateNewsEmpty {
+  margin-top: 16px;
+  padding: 4px 0;
 }
 
 .UpdateLoadingSkeleton {
