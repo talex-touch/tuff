@@ -210,6 +210,7 @@ export default {
       heading: '最新版本',
       releaseDate: '{date} 发布',
       releaseDateFallback: '暂未发布',
+      critical: '关键更新',
     },
     loading: '正在加载版本…',
     empty: '该通道暂未提供版本，请稍后再试。',

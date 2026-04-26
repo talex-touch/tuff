@@ -31,9 +31,6 @@ definePageMeta({
   },
 })
 
-// Color mode
-const colorMode = useColorMode()
-
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
@@ -161,6 +158,9 @@ const updateItems = computed(() => updatesPayload.value?.updates ?? [])
 const updateList = computed(() => updateItems.value.slice(0, 6))
 const hasUpdateList = computed(() => updateList.value.length > 0)
 const isZh = computed(() => locale.value.startsWith('zh'))
+const UPDATE_RELEASE_TAG_COLOR = 'var(--tx-color-primary)'
+const UPDATE_NEWS_TAG_COLOR = 'var(--tx-text-color-secondary)'
+const UPDATE_CRITICAL_TAG_COLOR = 'var(--tx-color-danger)'
 
 function resolveUpdateText(text: LocalizedText) {
   if (isZh.value)
@@ -168,16 +168,51 @@ function resolveUpdateText(text: LocalizedText) {
   return text.en || text.zh
 }
 
+function openUpdateLink(link?: string) {
+  if (!link)
+    return
+  if (link.startsWith('http')) {
+    if (import.meta.client)
+      window.open(link, '_blank', 'noopener')
+    return
+  }
+  router.push(link)
+}
+
 function updateTypeLabel(update: DashboardUpdate) {
   if (update.type === 'release')
-    return t('updates.news.typeRelease', '更新')
+    return t('updates.news.typeRelease')
   if (update.type === 'announcement')
-    return t('updates.news.typeAnnouncement', '公告')
+    return t('updates.news.typeAnnouncement')
   if (update.type === 'config')
-    return t('updates.news.typeConfig', '配置')
+    return t('updates.news.typeConfig')
   if (update.type === 'data')
-    return t('updates.news.typeData', '数据')
-  return t('updates.news.typeNews', '要闻')
+    return t('updates.news.typeData')
+  return t('updates.news.typeNews')
+}
+
+function updateTypeIcon(type: DashboardUpdate['type']) {
+  if (type === 'release')
+    return 'i-carbon-version-major'
+  if (type === 'announcement')
+    return 'i-carbon-bullhorn'
+  if (type === 'config')
+    return 'i-carbon-settings'
+  if (type === 'data')
+    return 'i-carbon-data-table'
+  return 'i-carbon-notification'
+}
+
+function updateTypeTagColor(type: DashboardUpdate['type']) {
+  if (type === 'release')
+    return 'var(--tx-color-primary)'
+  if (type === 'announcement')
+    return 'var(--tx-color-warning)'
+  if (type === 'config')
+    return 'var(--tx-color-success)'
+  if (type === 'data')
+    return 'var(--tx-color-primary)'
+  return UPDATE_NEWS_TAG_COLOR
 }
 
 watch(historyExpanded, (expanded) => {
@@ -234,7 +269,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
     </header>
 
     <section class="mx-auto max-w-4xl w-full animate-fade-in-up" style="animation-delay: 60ms;">
-      <div class="rounded-2xl border border-gray-200 bg-white/80 p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800/70">
+      <div class="UpdateNewsSection">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
@@ -249,42 +284,36 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
           </span>
         </div>
 
-        <div v-if="hasUpdateList" class="mt-4 space-y-3">
-          <div
+        <div v-if="hasUpdateList" class="UpdateNewsList mt-4">
+          <TxCardItem
             v-for="update in updateList"
             :key="update.id"
-            class="rounded-xl border border-gray-200/70 bg-gray-50/70 p-4 transition hover:bg-white dark:border-gray-700/60 dark:bg-gray-900/40 dark:hover:bg-gray-900/60"
+            class="UpdateNewsItem"
+            :title="resolveUpdateText(update.title)"
+            :icon-class="updateTypeIcon(update.type)"
+            :clickable="Boolean(update.link)"
+            @click="openUpdateLink(update.link)"
           >
-            <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <span>{{ formatReleaseDate(update.timestamp) }}</span>
-              <span
-                class="rounded-md px-2 py-0.5 text-[10px] font-medium"
-                :class="update.type === 'release'
-                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200'
-                  : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200'"
-              >
-                {{ updateTypeLabel(update) }}
-              </span>
-              <span
-                v-for="tag in update.tags.slice(0, 2)"
-                :key="tag"
-                class="rounded-md bg-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-              >
-                {{ tag }}
-              </span>
-            </div>
-            <a
-              :href="update.link"
-              :target="update.link.startsWith('http') ? '_blank' : undefined"
-              rel="noopener"
-              class="mt-2 block text-sm font-semibold text-gray-900 transition hover:text-blue-600 dark:text-white dark:hover:text-blue-300"
-            >
-              {{ resolveUpdateText(update.title) }}
-            </a>
-            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              {{ resolveUpdateText(update.summary) }}
-            </p>
-          </div>
+            <template #subtitle>
+              <div class="UpdateNewsMeta">
+                <span>{{ formatReleaseDate(update.timestamp) }}</span>
+                <TxTag size="sm" :label="updateTypeLabel(update)" :color="updateTypeTagColor(update.type)" />
+                <TxTag
+                  v-for="tag in update.tags.slice(0, 2)"
+                  :key="tag"
+                  size="sm"
+                  :label="tag"
+                  :color="UPDATE_NEWS_TAG_COLOR"
+                />
+              </div>
+            </template>
+
+            <template #description>
+              <p class="UpdateNewsSummary">
+                {{ resolveUpdateText(update.summary) }}
+              </p>
+            </template>
+          </TxCardItem>
         </div>
         <p v-else class="mt-4 text-sm text-gray-500 dark:text-gray-400">
           {{ t('updates.news.empty') }}
@@ -307,12 +336,16 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
       <div
         v-if="loading"
         key="loading"
-        class="mx-auto max-w-3xl w-full flex flex-col items-center gap-4 rounded-2xl bg-gray-50 px-8 py-16 text-center dark:bg-gray-800/50"
+        class="mx-auto max-w-3xl w-full flex flex-col items-center gap-4 rounded-2xl bg-gray-50 px-8 py-12 text-center dark:bg-gray-800/50"
       >
-        <span class="i-carbon-circle-dash animate-spin text-2xl text-gray-400" />
+        <TxSpinner :size="26" />
         <p class="text-gray-500 dark:text-gray-400">
-          {{ t('updates.loading') || 'Loading releases...' }}
+          {{ t('updates.loading') }}
         </p>
+        <div class="UpdateLoadingSkeleton">
+          <TxSkeleton :loading="true" :lines="2" />
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
       </div>
 
       <!-- Latest Release Card -->
@@ -322,24 +355,26 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
         class="mx-auto max-w-3xl w-full animate-fade-in-up"
         style="animation-delay: 200ms;"
       >
-        <div :id="latestRelease.tag" class="release-card rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:p-8 dark:border-gray-700 dark:bg-gray-800/80">
+        <TxCard
+          :id="latestRelease.tag"
+          class="release-card"
+          background="glass"
+          shadow="soft"
+          :padding="28"
+          :radius="16"
+        >
           <!-- Release Header -->
           <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
             <div class="flex flex-col gap-2">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                  {{ t('updates.latest.heading') }}
-                </span>
-                <span class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ channelLabel(mapApiChannelToLocal(latestRelease.channel)) }}
-                </span>
-                <span
+                <TxTag :label="t('updates.latest.heading')" :color="UPDATE_RELEASE_TAG_COLOR" />
+                <TxTag :label="channelLabel(mapApiChannelToLocal(latestRelease.channel))" :color="UPDATE_NEWS_TAG_COLOR" />
+                <TxTag
                   v-if="latestRelease.isCritical"
-                  class="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300"
-                >
-                  <span class="i-carbon-warning-filled text-xs" />
-                  Critical
-                </span>
+                  icon="i-carbon-warning-filled"
+                  :label="t('updates.latest.critical')"
+                  :color="UPDATE_CRITICAL_TAG_COLOR"
+                />
               </div>
               <h2 class="text-2xl font-bold text-gray-900 md:text-3xl dark:text-white">
                 {{ latestRelease.name || latestRelease.tag }}
@@ -367,14 +402,14 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
               class="download-btn inline-flex items-center gap-2 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
             >
               <span class="i-carbon-download text-base" />
-              {{ t('updates.downloads.downloadFor') || 'Download for' }} {{ getDownloadLabel(primaryDownload) }}
+              {{ t('updates.downloads.downloadFor') }} {{ getDownloadLabel(primaryDownload) }}
               <span v-if="primaryDownload.size" class="text-xs opacity-70">({{ formatFileSize(primaryDownload.size) }})</span>
             </a>
 
             <div v-if="allDownloads.length > 1" class="relative group">
               <TxButton variant="bare" native-type="button" class="inline-flex items-center gap-2 rounded-lg text-sm font-medium text-gray-700 transition-all duration-200 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700">
                 <span class="i-carbon-overflow-menu-horizontal text-base" />
-                {{ t('updates.downloads.otherPlatforms') || 'Other platforms' }}
+                {{ t('updates.downloads.otherPlatforms') }}
               </TxButton>
               <div class="absolute left-0 top-full z-10 mt-2 hidden min-w-48 flex-col rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg group-hover:flex dark:border-gray-700 dark:bg-gray-800">
                 <a
@@ -392,19 +427,22 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
               </div>
             </div>
           </div>
-        </div>
+        </TxCard>
       </div>
 
       <!-- Empty State -->
       <div
         v-else
         key="empty"
-        class="mx-auto max-w-3xl w-full flex flex-col items-center gap-4 rounded-2xl bg-gray-50 px-8 py-16 text-center dark:bg-gray-800/50"
+        class="mx-auto max-w-3xl w-full"
       >
-        <span class="i-carbon-incomplete text-3xl text-gray-400" />
-        <p class="text-gray-500 dark:text-gray-400">
-          {{ t('updates.empty') }}
-        </p>
+        <TxNoData
+          :title="t('updates.empty')"
+          description=""
+          icon="i-carbon-incomplete"
+          surface="card"
+          size="large"
+        />
       </div>
     </Transition>
 
@@ -427,33 +465,34 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
       <Transition name="slide-fade">
         <div
           v-if="historyExpanded"
-          class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800/80"
+          class="ReleaseHistoryList"
         >
-          <div class="divide-y divide-gray-100 dark:divide-gray-700">
-            <div
-              v-for="release in historyReleases"
-              :id="release.tag"
-              :key="release.tag"
-              class="release-row flex items-center justify-between gap-4 p-4 transition hover:bg-gray-50 dark:hover:bg-gray-700/50"
-            >
-              <div class="flex items-center gap-3 min-w-0">
-                <div class="flex flex-col min-w-0">
-                  <div class="flex items-center gap-2">
-                    <span class="font-medium text-gray-900 truncate dark:text-white">
-                      {{ release.name || release.tag }}
-                    </span>
-                    <span
-                      v-if="release.isCritical"
-                      class="shrink-0 inline-flex items-center rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300"
-                    >
-                      Critical
-                    </span>
-                  </div>
-                  <span class="text-xs text-gray-500 dark:text-gray-400">
-                    {{ formatReleaseDate(release.publishedAt || release.createdAt) }}
-                  </span>
-                </div>
+          <TxCardItem
+            v-for="release in historyReleases"
+            :id="release.tag"
+            :key="release.tag"
+            class="ReleaseHistoryItem release-row"
+            icon-class="i-carbon-version-major"
+          >
+            <template #title>
+              <div class="ReleaseHistoryTitle">
+                <span class="truncate">
+                  {{ release.name || release.tag }}
+                </span>
+                <TxTag
+                  v-if="release.isCritical"
+                  size="sm"
+                  :label="t('updates.latest.critical')"
+                  :color="UPDATE_CRITICAL_TAG_COLOR"
+                />
               </div>
+            </template>
+
+            <template #subtitle>
+              <span>{{ formatReleaseDate(release.publishedAt || release.createdAt) }}</span>
+            </template>
+
+            <template #right>
               <div class="flex items-center gap-2 shrink-0">
                 <a
                   v-for="asset in (release.assets || []).slice(0, 1)"
@@ -467,8 +506,8 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
                   {{ getDownloadLabel(asset) }}
                 </a>
               </div>
-            </div>
-          </div>
+            </template>
+          </TxCardItem>
         </div>
       </Transition>
     </div>
@@ -528,6 +567,57 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
 .slide-fade-leave-to {
   opacity: 0;
   transform: translateY(-10px);
+}
+
+.UpdateNewsList,
+.ReleaseHistoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.UpdateNewsSection {
+  border-top: 1px solid color-mix(in srgb, var(--tx-border-color-light, rgba(148, 163, 184, 0.36)) 72%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--tx-border-color-light, rgba(148, 163, 184, 0.36)) 72%, transparent);
+  padding: 24px 0;
+}
+
+.UpdateNewsItem,
+.ReleaseHistoryItem {
+  border-color: color-mix(in srgb, var(--tx-border-color-light, rgba(148, 163, 184, 0.36)) 62%, transparent);
+  background: color-mix(in srgb, var(--tx-fill-color-light, rgb(248, 250, 252)) 72%, transparent);
+}
+
+.UpdateNewsItem:hover,
+.ReleaseHistoryItem:hover {
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, rgb(255, 255, 255)) 86%, transparent);
+}
+
+.UpdateNewsMeta,
+.ReleaseHistoryTitle {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.UpdateNewsMeta {
+  color: var(--tx-text-color-secondary, rgb(107, 114, 128));
+  font-size: 12px;
+}
+
+.UpdateNewsSummary {
+  margin: 0;
+  color: color-mix(in srgb, var(--tx-text-color-secondary, rgb(75, 85, 99)) 94%, transparent);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.UpdateLoadingSkeleton {
+  display: grid;
+  width: min(100%, 420px);
+  gap: 12px;
 }
 
 /* Channel tab indicator animation */
