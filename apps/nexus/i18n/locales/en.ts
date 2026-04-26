@@ -793,6 +793,10 @@ export default {
               label: 'Sync Update News',
               description: 'Create dashboard updates/news records from CI',
             },
+            releaseEvidence: {
+              label: 'Write Release Evidence',
+              description: 'Record 2.5.0 regression, docs guard, and platform blocker matrix evidence',
+            },
           },
         },
         expiry: {

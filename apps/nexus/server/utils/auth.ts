@@ -118,6 +118,7 @@ const RELEASE_SCOPE_COMPAT = new Set([
   'release:assets',
   'release:publish',
   'release:news',
+  'release:evidence',
 ])
 
 function hasRequiredScope(scopes: string[], requiredScope: string): boolean {
