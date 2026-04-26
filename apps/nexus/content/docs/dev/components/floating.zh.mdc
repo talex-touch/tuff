@@ -19,9 +19,9 @@ syncStatus: migrated
 code: |
   <template>
     <TxFloating class="stage" :sensitivity="0.55" :easing-factor="0.08">
-      <TxFloatingElement class-name="orb" :depth="0.12" />
-      <TxFloatingElement class-name="panel" :depth="0.04">
-        鼠标移动时按深度缓动
+      <TxFloatingElement class-name="status-rail" :depth="-0.06" />
+      <TxFloatingElement class-name="status-panel" :depth="0.04">
+        鼠标移动时，状态层会按 depth 缓动
       </TxFloatingElement>
     </TxFloating>
   </template>

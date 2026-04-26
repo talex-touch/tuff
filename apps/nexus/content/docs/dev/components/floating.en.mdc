@@ -19,9 +19,9 @@ Multiple floating elements can share one `TxFloating` container and use `depth` 
 code: |
   <template>
     <TxFloating class="stage" :sensitivity="0.55" :easing-factor="0.08">
-      <TxFloatingElement class-name="orb" :depth="0.12" />
-      <TxFloatingElement class-name="panel" :depth="0.04">
-        Elements ease by depth as the pointer moves
+      <TxFloatingElement class-name="status-rail" :depth="-0.06" />
+      <TxFloatingElement class-name="status-panel" :depth="0.04">
+        Status layers ease by depth as the pointer moves
       </TxFloatingElement>
     </TxFloating>
   </template>
