@@ -34,6 +34,7 @@
 - macOS notification 检查不再把 `Notification.isSupported()` 解释为系统权限已授予；当前只能确认原生通知运行时可用，因此返回 `notDetermined + canRequest`。
 - OmniPanel 键盘快捷键默认值已统一为关闭；主进程 settings snapshot、首次设置页、工具设置页与 `app-settings` 默认值保持一致，右键长按时长也有明确持久化配置。
 - 已删除无引用的 Bluetooth/USB 旧实验注释文件、renderer layout 的 `useLayout` legacy alias，以及 File Provider 中旧主线程内容解析/索引 helper 的空调用保活路径；文件内容解析与索引统一走 worker 管线。
+- Preview Provider / Preview Registry / Terminal / Protocol Handler / ServiceCenter 的 raw console、死协议注释、stale no-op 文案和敏感预览值日志已收口；ServiceCenter 无读取方的注册快照伪持久化路径已删除，后续日志只记录结构化元数据，不再输出搜索表达式、预览结果值或原始 service payload。
 
 ### 仍保留的兼容边界
 
