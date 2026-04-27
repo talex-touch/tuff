@@ -22,9 +22,13 @@
   - 已验证：`pnpm docs:guard`、`pnpm docs:guard:strict`、`pnpm compat:registry:guard`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm network:guard` 均通过；compat registry 仅保留历史 cleanup candidate 警告。
   - 已验证：`pnpm -C "apps/nexus" exec vitest run "server/utils/releaseEvidenceStore.test.ts" "server/api/admin/release-evidence/releaseEvidence.api.test.ts"` 通过（`2` 个文件 / `13` 条测试），确认 run/item/matrix/doc-guard 写入契约仍有效。
   - 已验证：`pnpm -C "apps/nexus" run build` 通过；构建输出保留既有 Nuxt/Vite warning，包括 D1 binding 提示、billing 重复 auto-import、CSS lexical warning 与大 chunk warning。
-  - Nexus docs smoke 本轮未伪造结论：缺少本地 Pages smoke 所需的 D1/auth 绑定与 Release Evidence 写入凭证时，只沿用 2026-04-26 已记录的 smoke 证据，后续需在同等环境复跑后写入 matrix。
+  - 已验证：Nexus 本地 Pages smoke 使用 `wrangler pages dev dist --d1 DB --binding AUTH_ORIGIN/NUXT_AUTH_ORIGIN/AUTH_SECRET/NUXT_AUTH_SECRET` 启动；`/docs` 最终跳转到 `/docs/dev/index` 并返回 `200`，`/docs/dev/components/`、`/updates`、`/api/docs/navigation`、`/api/docs/page?path=/docs/dev/components`、`/api/docs/sidebar-components` 均返回 `200`。
+  - 已验证：Nexus `_nuxt` 样例 chunk 加载通过，`entry.BWQUpQOH.css`、`docs.CLjfLGkI.css`、`Ddx1KrEM.js`、`DVNr3VB7.js`、`updates.DfZPd2gI.css` 均返回 `200`；浏览器打开组件页无 console warning/error，sidebar 链接可见，Playwright 点击切换时目标进程崩溃，已用 HTTP 验证 `/docs/dev/components/button` 与对应 `page` API 均返回 `200`，不把该点击步骤伪造为完整通过。
   - 已验证：`pnpm -C "apps/core-app" run typecheck`、`pnpm -C "apps/core-app" run typecheck:node`、`pnpm -C "apps/core-app" run typecheck:web` 均通过。
   - 已验证：`pnpm -C "apps/core-app" exec vitest run ...` 覆盖 Everything、App/UWP、搜索 baseline、插件安装/权限、native-share、平台能力与插件更新中断提示，结果为 `11` 个文件 / `65` 条测试通过。
+  - 已验证：CoreApp macOS 自动化补证通过，`pnpm -C "apps/core-app" run test:omnipanel` 为 `3` 个文件 / `26` 条测试通过，`pnpm -C "apps/core-app" run test:shortcut-lifecycle` 为 `3` 个文件 / `25` 条测试通过；补充 `tray-manager`、`quit-paths`、`system-permission-refresh`、`active-app`、`clipboard-action-diagnostics`、`darwin` 定向 Vitest 为 `6` 个文件 / `19` 条测试通过。
+  - 已验证：`env -u SENTRY_AUTH_TOKEN NUXT_DISABLE_SENTRY=true pnpm -C "apps/core-app" run build` 通过；原始 `pnpm -C "apps/core-app" run build` 被当前 shell 的 `SENTRY_AUTH_TOKEN` 创建 release 权限不足拦截（Sentry `403`），已按本地构建验证口径排除外部上传副作用。
+  - 已验证：`env -u SENTRY_AUTH_TOKEN NUXT_DISABLE_SENTRY=true pnpm -C "apps/core-app" run build:snapshot:mac` 通过，macOS arm64 snapshot 打包成功并生成 `apps/core-app/dist/tuff.app.zip`；该证据覆盖本机打包链路，不替代签名/公证/安装更新的人工回归结论。
   - 已验证：`git diff --check` 通过。
 
 ### fix(core-app): 归一化插件更新下载中断提示
