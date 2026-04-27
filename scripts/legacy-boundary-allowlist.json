@@ -43,6 +43,11 @@
           "expiresVersion": "2.5.0"
         },
         {
+          "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
           "file": "apps/core-app/src/main/modules/box-tool/search-engine/search-logger.ts",
           "maxCount": 1,
           "expiresVersion": "2.5.0"
@@ -119,6 +124,21 @@
         },
         {
           "file": "apps/core-app/src/main/modules/plugin/plugin-loaders.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/plugin/install-queue.test.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/plugin/runtime/plugin-runtime-repair.test.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/main/modules/plugin/runtime/plugin-runtime-repair.ts",
           "maxCount": 1,
           "expiresVersion": "2.5.0"
         },

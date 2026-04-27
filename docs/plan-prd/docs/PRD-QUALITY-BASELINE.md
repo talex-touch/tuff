@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-04-26
+> 更新时间：2026-04-27
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -8,9 +8,9 @@
 统一活跃 PRD 的编写与验收标准，避免“有方案无目标、有实现无质量门禁”。  
 从本文件生效后，新增或继续推进的 PRD 均应满足下述最小结构。
 
-## 1.1 文档治理执行锚点（2026-03-17）
+## 1.1 文档治理执行锚点（2026-04-26）
 
-- 文档盘点与优先级路线统一参考：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`。
+- 文档盘点历史快照参考：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`；当前优先级路线以六主文档、`TODO` 与 `CHANGES` 为准。
 - 主线动作必须同步六文档：`INDEX / README / TODO / CHANGES / Roadmap / Quality Baseline`。
 - 当前主线动作为 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`；`Nexus 设备授权风控` 保留实施文档与历史入口，非当前主线。
 - 文档门禁升级前置保持不变：连续 5 次 `pnpm docs:guard` 零告警 + 连续 2 周无口径漂移。

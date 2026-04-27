@@ -1,6 +1,6 @@
 # Tuff 产品总览与 8 周路线图（2026-Q1）
 
-> 更新时间：2026-04-26
+> 更新时间：2026-04-27
 > 适用范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`
 
 ## 1. 产品总览（是什么）
@@ -73,7 +73,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 活跃 PRD 必须包含“最终目标、验收标准、质量约束、回滚策略”。
 
 ### 3.5 文档治理执行锚点（2026-03-17）
-- 文档盘点与下一步路线以 `docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md` 为统一引用。
+- 文档盘点历史快照保留在 `docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`；当前下一步路线以六主文档、`TODO` 与 `CHANGES` 为准。
 - 当前执行优先级调整为：先 `CoreApp legacy 清理`，再完成 `Windows/macOS 2.5.0 阻塞级适配`；`Nexus 设备授权风控` 保留实施文档与历史入口，降为非当前主线。
 - 升级 strict 前置条件固定：连续 5 次 `docs:guard` 零告警 + 连续 2 周无口径漂移。
 

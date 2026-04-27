@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档入口（压缩版）
-> 更新时间: 2026-04-26
+> 更新时间: 2026-04-27
 
 ## 快速入口
 
@@ -9,7 +9,7 @@
 - [项目待办（2 周主清单）](./TODO.md)
 - [变更日志（近 30 天 + 历史归档）](./01-project/CHANGES.md)
 - [文档质量基线](./docs/PRD-QUALITY-BASELINE.md)
-- [文档盘点与下一步路线（2026-03-17）](./docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md)
+- [文档盘点历史快照（2026-03-17）](./docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md)
 - [一次性完整修复总方案（统一实施 PRD）](./02-architecture/UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md)
 - [Nexus 设备授权风控实施方案](./04-implementation/NexusDeviceAuthRiskControl-260316.md)
 - [v2.4.7 发版收口清单（historical）](./01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md)
@@ -17,7 +17,7 @@
 
 ---
 
-## 单一口径快照（2026-04-17）
+## 单一口径快照（2026-04-26）
 
 - 当前工作区基线：`2.4.9-beta.4`。
 - CoreApp 启动搜索卡顿治理已落地“平衡模式 + 双库隔离”：`database-aux.db` 分流非核心高频写、`DbWriteScheduler` QoS/熔断、索引热路径单写者化、启动期降载（120s）。
@@ -109,7 +109,7 @@
 - Pilot 合并升级 V2：`/` 统一入口、`/pilot` 兼容跳转、`Quota Auto` 自动路由与渠道评比。
 - CLI Phase1+2：`tuff-cli` 主入口、`tuff-cli-core` 核心迁移、`unplugin` shim 兼容。
 - Pilot Chat/Turn 新协议：`turns/stream/messages` 路由与会话级串行队列。
-- 文档治理门禁：`docs:guard` / `docs:guard:strict`。
+- 文档治理门禁：`docs:guard` / `docs:guard:strict`；2026-03-17 文档盘点仅保留历史统计口径，当前路线以本页、`TODO` 与 `CHANGES` 为准。
 
 详见：[CHANGES](./01-project/CHANGES.md)
 

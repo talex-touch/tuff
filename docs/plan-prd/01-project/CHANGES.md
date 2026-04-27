@@ -5,6 +5,28 @@
 
 ## 2026-04-27
 
+### chore(docs): 补齐 2.5.0 发布阻塞证据收口状态
+
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `scripts/legacy-boundary-allowlist.json`
+  - `TODO` 主文件压缩状态改为完成，当前行数维持在 `312` 行，实时 checkbox 口径更新为 `已完成 85 / 未完成 24 / 总计 109 / 完成率 78%`。
+  - Release Evidence 写入路径继续以 `/api/admin/release-evidence/doc-guard` 与 matrix 为准；本地环境未提供 `release:evidence` API key 或管理员登录态，本轮不伪造写入，只记录阻塞状态与可复用证据载荷。
+  - Release Evidence 写入序列已固化：先 `POST /api/admin/release-evidence/doc-guard` 记录 docs guard 汇总；平台回归先 `POST /api/admin/release-evidence/runs` 创建对应 `platform/scope` run，再对 `/runs/:runId/items` upsert 稳定 `caseId`。
+  - Windows required caseId：`windows-everything-file-search`、`windows-app-scan-uwp`、`windows-third-party-app-launch`、`windows-shortcut-launch-args`、`windows-tray-update-plugin-install-exit`。
+  - macOS required caseId：`macos-first-run-permissions`、`macos-omnipanel-accessibility`、`macos-native-share-tray-dock-update`、`macos-plugin-permission-install-update`、`macos-exit-resource-release`。
+  - Linux non-blocking caseId：`linux-best-effort-smoke`，写入时使用 `status=best_effort` 且 `requiredForRelease=false`，证据中明确记录 `xdotool` / desktop environment 限制与无法保证项。
+  - 当前执行环境为 macOS arm64，只能补本机 CoreApp 基线与 macOS 可自动化验证；Windows 阻塞级回归与 Linux best-effort smoke 仍需对应真机/环境补证。
+  - `compat:registry:guard` 与 `legacy-boundary` 暴露 test/detector 级 `legacy-keyword` 漏登记项；已按 detection-only / regression-fixture 语义补入 compatibility registry 与 allowlist，不扩大运行时兼容面。
+  - 已验证：`pnpm docs:guard`、`pnpm docs:guard:strict`、`pnpm compat:registry:guard`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm network:guard` 均通过；compat registry 仅保留历史 cleanup candidate 警告。
+  - 已验证：`pnpm -C "apps/nexus" exec vitest run "server/utils/releaseEvidenceStore.test.ts" "server/api/admin/release-evidence/releaseEvidence.api.test.ts"` 通过（`2` 个文件 / `13` 条测试），确认 run/item/matrix/doc-guard 写入契约仍有效。
+  - 已验证：`pnpm -C "apps/nexus" run build` 通过；构建输出保留既有 Nuxt/Vite warning，包括 D1 binding 提示、billing 重复 auto-import、CSS lexical warning 与大 chunk warning。
+  - Nexus docs smoke 本轮未伪造结论：缺少本地 Pages smoke 所需的 D1/auth 绑定与 Release Evidence 写入凭证时，只沿用 2026-04-26 已记录的 smoke 证据，后续需在同等环境复跑后写入 matrix。
+  - 已验证：`pnpm -C "apps/core-app" run typecheck`、`pnpm -C "apps/core-app" run typecheck:node`、`pnpm -C "apps/core-app" run typecheck:web` 均通过。
+  - 已验证：`pnpm -C "apps/core-app" exec vitest run ...` 覆盖 Everything、App/UWP、搜索 baseline、插件安装/权限、native-share、平台能力与插件更新中断提示，结果为 `11` 个文件 / `65` 条测试通过。
+  - 已验证：`git diff --check` 通过。
+
 ### fix(core-app): 归一化插件更新下载中断提示
 
 - `apps/core-app/src/main/modules/plugin/providers/utils.ts`
@@ -24,6 +46,23 @@
   - 已补定向回归：重复调用 `ensureFileSystemWatchers()` 时只注册一次文件系统事件订阅。
 
 ## 2026-04-26
+
+### chore(docs): 收口文档治理门禁与历史路线锚点
+
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`
+- `docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `TODO` 主清单从 `416` 行压缩到 `310` 行，保留当前两周主线、2.5.0 阻塞级回归与文档门禁节奏；Pilot / Intelligence 长尾与历史完成索引下沉到长期债务池。
+  - 修复 `TODO` 统计漂移，当前实时 checkbox 口径为 `已完成 84 / 未完成 25 / 总计 109 / 完成率 77%`。
+  - `DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md` 明确降权为 2026-03-17 文档盘点历史快照，不再承载当前“下一步路线”权威；当前路线以六主文档、`TODO` 与 `CHANGES` 为准。
+  - 已验证：`pnpm docs:guard`、`pnpm docs:guard:strict` 均通过（`5 pass / 0 fail`）。
+  - 已验证：`pnpm -C "apps/nexus" run build` 通过；用于本地 Pages smoke 时需同时注入 `AUTH_ORIGIN` / `NUXT_AUTH_ORIGIN` / `AUTH_SECRET` / `NUXT_AUTH_SECRET` 与本地 `--d1 DB` 绑定，否则 docs content API 会因缺少 auth origin 或 D1 binding 失败。
+  - Nexus 本地 smoke：`/docs`、`/docs/dev/components`、`/updates`、`/api/docs/navigation`、`/api/docs/page`、`/api/docs/sidebar-components` 与 `_nuxt` CSS/JS chunk 均返回 `200`；浏览器抽查到静态 `_nuxt/*` 资源加载成功且无 console warning/error。
+  - Release Evidence API 写入需要管理员登录态或 `release:evidence` API key；当前本地环境未发现可用写入凭证，本轮将命令与 smoke 证据记录在 `CHANGES`，后续 CI 可用同一证据载荷写入 `/api/admin/release-evidence/doc-guard`。
 
 ### fix(core-app): 修复 macOS 辅助功能权限状态刷新
 
