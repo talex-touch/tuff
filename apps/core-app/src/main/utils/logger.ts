@@ -1,5 +1,6 @@
 import process from 'node:process'
 import chalk from 'chalk'
+import * as log4js from 'log4js'
 
 const levelStyles = {
   info: {
@@ -91,6 +92,13 @@ function formatMeta(meta?: Record<string, Primitive>): string {
     .join(' ')
 }
 
+function formatMetaPlain(meta?: Record<string, Primitive>): string {
+  if (!meta) return ''
+  const entries = Object.entries(meta).filter(([_, value]) => value !== undefined)
+  if (!entries.length) return ''
+  return entries.map(([key, value]) => `${key}=${summarize(value)}`).join(' ')
+}
+
 export function formatDuration(durationMs: number): string {
   const formatted =
     durationMs >= 1000
@@ -109,6 +117,55 @@ function ensureString(message: unknown): string {
   if (message instanceof Error) return message.message
   if (typeof message === 'object') return JSON.stringify(message)
   return String(message)
+}
+
+function serializeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.stack || `${error.name}: ${error.message}`
+  }
+  if (typeof error === 'string') return error
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
+type ConsoleWithNative = Console & {
+  _log?: Console['log']
+  _info?: Console['info']
+  _warn?: Console['warn']
+  _error?: Console['error']
+  _debug?: Console['debug']
+}
+
+function getNativeConsoleMethod(level: LogLevel): (...args: unknown[]) => void {
+  const nativeConsole = console as ConsoleWithNative
+  if (level === 'error') return nativeConsole._error ?? console.error
+  if (level === 'warn') return nativeConsole._warn ?? console.warn
+  if (level === 'debug') return nativeConsole._debug ?? console.debug
+  return nativeConsole._info ?? nativeConsole._log ?? console.log
+}
+
+function writePersistentLog(level: LogLevel, line: string, error?: unknown): void {
+  try {
+    const persistentLogger = log4js.getLogger(level === 'error' ? 'error' : 'default')
+    const method =
+      level === 'error'
+        ? persistentLogger.error.bind(persistentLogger)
+        : level === 'warn'
+          ? persistentLogger.warn.bind(persistentLogger)
+          : level === 'debug'
+            ? persistentLogger.debug.bind(persistentLogger)
+            : persistentLogger.info.bind(persistentLogger)
+
+    method(line)
+    if (error) {
+      persistentLogger.error(serializeError(error))
+    }
+  } catch {
+    // Logging must never break the app startup path.
+  }
 }
 
 type TimerLevel = Exclude<LogLevel, 'error'>
@@ -181,23 +238,21 @@ function output(level: LogLevel, namespace: string, message: unknown, options?: 
   const namespaceLabel = pickNamespaceColor(namespace)(`[${namespace}]`)
   const formattedMessage = ensureString(message)
   const meta = formatMeta(options?.meta)
+  const plainMeta = formatMetaPlain(options?.meta)
 
   const line = meta
     ? `${timestamp} ${levelLabel} ${namespaceLabel} ${formattedMessage} ${chalk.gray(meta)}`
     : `${timestamp} ${levelLabel} ${namespaceLabel} ${formattedMessage}`
+  const plainLine = plainMeta
+    ? `[${formatTimestamp()}] [${levelConfig.label}] [${namespace}] ${formattedMessage} ${plainMeta}`
+    : `[${formatTimestamp()}] [${levelConfig.label}] [${namespace}] ${formattedMessage}`
 
-  const consoleMethod =
-    level === 'error'
-      ? console.error
-      : level === 'warn'
-        ? console.warn
-        : level === 'debug'
-          ? console.debug
-          : console.log
+  const consoleMethod = getNativeConsoleMethod(level)
   consoleMethod(line)
+  writePersistentLog(level, plainLine, options?.error)
 
   if (level === 'error' && options?.error) {
-    console.error(options.error)
+    getNativeConsoleMethod('error')(options.error)
   }
 }
 

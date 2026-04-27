@@ -29,8 +29,8 @@ const DEFAULT_CONFIG: LoggingConfig = {
  */
 const MODULE_DEFAULTS: Record<string, { enabled: boolean, level: LogLevel, color: string }> = {
   'search-engine': { enabled: true, level: LogLevel.DEBUG, color: 'cyan' },
-  'file-provider': { enabled: false, level: LogLevel.DEBUG, color: 'green' },
-  'app-provider': { enabled: false, level: LogLevel.DEBUG, color: 'blue' },
+  'file-provider': { enabled: true, level: LogLevel.INFO, color: 'green' },
+  'app-provider': { enabled: true, level: LogLevel.INFO, color: 'blue' },
   'plugin-system': { enabled: true, level: LogLevel.INFO, color: 'magenta' },
   'database': { enabled: false, level: LogLevel.WARN, color: 'yellow' },
   'storage': { enabled: false, level: LogLevel.WARN, color: 'yellow' },

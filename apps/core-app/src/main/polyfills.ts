@@ -42,6 +42,12 @@ consoleRef.log = (message: unknown, ...args: unknown[]) => {
   else globalThis.logger.info(message)
 }
 
+consoleRef._info = consoleRef.info
+consoleRef.info = (message?: unknown, ...args: unknown[]) => {
+  if (args?.length) globalThis.logger.info(message, args)
+  else globalThis.logger.info(message)
+}
+
 consoleRef._error = consoleRef.error
 consoleRef.error = (...args: unknown[]) => {
   globalThis.errLogger.error(args)
