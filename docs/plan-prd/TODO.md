@@ -349,3 +349,15 @@
 - [x] Added one-time legacy dev data migration (`appPath/tuff -> userData/tuff-dev`) with marker-based skip strategy.
 - [x] Improved startup observability (`early unhandledRejection` log + corrected single-instance warning wording + optional deprecation trace switch).
 - [x] Added targeted tests for root-path resolution, migration decision matrix, and directory creation idempotency.
+
+### Windows Search/Launch Stabilization (2026-05-05)
+
+- [x] Persist main-process diagnostics logs and app launch stack context for production crash analysis.
+- [x] Preserve Windows shortcut launch metadata and launch `.lnk` before target fallback.
+- [x] Index Windows Store/UWP apps through AppsFolder AUMID so Codex / Apple Music can be searched and launched.
+- [x] Defer app startup backfill/full sync while search is recently active to reduce startup lag.
+- [x] Record Everything backend attempt errors for `sdk-napi -> cli -> unavailable` diagnosis.
+- [x] Fix Windows titlebar control visibility and add Simple/Flat left logo spacing.
+- [x] Record performance and index analysis report: `docs/plan-prd/report/windows-search-diagnostics-2026-05-05.md`.
+- [ ] Re-run target Vitest, `typecheck:web`, dev launch, and production DB snapshot analysis once approval service / child-process permissions are available.
+- [ ] Capture post-fix measurements for `微信`, `wechat`, `codex`, `apple music`, Everything status and app DB table sizes.

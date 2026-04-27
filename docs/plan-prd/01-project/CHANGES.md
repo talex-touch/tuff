@@ -9,6 +9,21 @@
 - 历史主线：`2.4.8 OmniPanel Gate`、`v2.4.7 Gate A/B/C/D/E` 均已收口（historical）。
 - 旧记录入口：见文末“历史索引导航”。
 
+## 2026-05-05
+
+### fix(core-app): Windows crash diagnostics, app launch, Store indexing and titlebar fixes
+
+- `createLogger` / module logger now persist main-process diagnostics to log4js file appenders, including error stacks and app launch context.
+- Windows app scanning preserves `.lnk` shortcut path, args and cwd, and indexes Store/UWP apps from `Get-StartApps` with AppsFolder AUMID launch metadata.
+- Store/UWP scanning now reads StartApps/Appx metadata as UTF-8, resolves package manifest icon assets, and treats URL/PWA Start menu entries as `openExternal` URLs instead of fake AppsFolder AUMIDs.
+- App execution now logs `item.id`, path, launch kind, shortcut target, `shell.openPath` result and stack traces; shortcut launch is tried before target fallback, and Store apps launch through `shell:AppsFolder\\AUMID`.
+- App startup maintenance now defers heavy backfill/full-sync work during recent search activity to reduce dev/startup lag.
+- Everything status records per-backend attempt errors while keeping `sdk-napi -> cli -> unavailable` fallback.
+- Windows main titlebar reserves native caption control space, improves button contrast, and adds Simple/Flat logo left spacing.
+- Windows active-app detection now uses a typed UInt32 foreground-window process id, parses noisy PowerShell output from the final JSON line, and rate-limits compact failure diagnostics.
+- Diagnostic report: `docs/plan-prd/report/windows-search-diagnostics-2026-05-05.md`.
+- Verification: `pnpm -C "apps/core-app" run typecheck:node` passed; Vitest/Web typecheck/database snapshot/dev launch were blocked by sandbox child-process permission or approval-service 503.
+
 ## 2026-04-09
 
 ### fix(core-app): 修正 plugin runtime 时序与 clipboard 上下文保留
