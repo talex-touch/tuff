@@ -20,6 +20,7 @@ const { atomConfig } = useLayoutAtoms()
 const isDisplayMode = computed(() => props.display)
 const isPreviewMode = computed(() => props.preview)
 const shouldRenderSlots = computed(() => !isDisplayMode.value || isPreviewMode.value)
+const isWindows = process.platform === 'win32'
 </script>
 
 <template>
@@ -28,6 +29,7 @@ const shouldRenderSlots = computed(() => !isDisplayMode.value || isPreviewMode.v
     :atom-config="atomConfig"
     :display="isDisplayMode"
     :preview="isPreviewMode"
+    :is-windows="isWindows"
   >
     <template #header>
       <FlatController>

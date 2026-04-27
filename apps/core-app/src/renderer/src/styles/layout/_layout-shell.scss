@@ -23,6 +23,7 @@
     justify-content: space-between;
     border-bottom: var(--layout-header-border, none);
     --layout-header-side-width: var(--nav-width, 64px);
+    --layout-window-controls-width: 0px;
     --layout-header-right-opacity: var(--layout-window-header-opacity, 0.95);
     --layout-header-left-opacity: var(--layout-window-aside-opacity, 0.5);
     --fake-opacity: var(--layout-window-aside-opacity, 0.5);
