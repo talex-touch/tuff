@@ -13,6 +13,7 @@ export interface EverythingStatusResponse {
   esPath: string | null
   error: string | null
   lastBackendError: string | null
+  backendAttemptErrors: Record<string, string>
   fallbackChain: EverythingBackendType[]
   lastChecked: number | null
 }

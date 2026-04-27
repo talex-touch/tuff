@@ -87,6 +87,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private backend: EverythingBackendType = 'unavailable'
   private readonly fallbackChain: EverythingBackendType[] = ['sdk-napi', 'cli', 'unavailable']
   private lastBackendError: string | null = null
+  private backendAttemptErrors: Record<string, string> = {}
   private everythingVersion: string | null = null
   private sdkAddon: EverythingSdkAddon | null = null
   private lastChecked: number | null = null
@@ -255,6 +256,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         esPath: this.esPath,
         error: this.initializationError?.message || null,
         lastBackendError: this.lastBackendError,
+        backendAttemptErrors: this.backendAttemptErrors,
         fallbackChain: this.fallbackChain,
         lastChecked: this.lastChecked
       }
@@ -306,6 +308,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     this.backend = 'unavailable'
     this.initializationError = null
     this.lastBackendError = null
+    this.backendAttemptErrors = {}
     this.esPath = null
     this.everythingVersion = null
     this.sdkAddon = null
@@ -388,6 +391,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       return null
     } catch (error) {
       this.lastBackendError = getErrorMessage(error)
+      this.backendAttemptErrors[candidate] = this.lastBackendError
       this.logDebug('Everything SDK candidate load failed', {
         candidate,
         error: getErrorMessage(error)
@@ -405,6 +409,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       return true
     } catch (error) {
       this.lastBackendError = getErrorMessage(error)
+      this.backendAttemptErrors.cli = this.lastBackendError
       this.logWarn('Everything CLI backend unavailable', error)
       return false
     }

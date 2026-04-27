@@ -39,6 +39,7 @@ interface MutableEverythingProvider {
   isAvailable: boolean
   initializationError: Error | null
   lastBackendError: string | null
+  backendAttemptErrors: Record<string, string>
   sdkAddon: unknown
   esPath: string | null
   searchEverything: (query: string, maxResults: number) => Promise<unknown[]>
@@ -65,6 +66,7 @@ afterEach(() => {
   provider.isAvailable = false
   provider.initializationError = null
   provider.lastBackendError = null
+  provider.backendAttemptErrors = {}
   provider.sdkAddon = null
   provider.esPath = null
 
