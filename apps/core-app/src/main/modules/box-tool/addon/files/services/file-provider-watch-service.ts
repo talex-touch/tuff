@@ -353,6 +353,7 @@ export class FileProviderWatchService {
     if (this.watchPathsRegistered) {
       if (!this.fsEventsSubscribed) {
         input.subscribeToFileSystemEvents()
+        this.fsEventsSubscribed = true
       }
       return
     }
@@ -385,5 +386,6 @@ export class FileProviderWatchService {
 
     this.watchPathsRegistered = true
     input.subscribeToFileSystemEvents()
+    this.fsEventsSubscribed = true
   }
 }

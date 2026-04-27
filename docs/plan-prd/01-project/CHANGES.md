@@ -16,6 +16,13 @@
   - 安装失败提示新增中英文本地化文案，将下载超时或中断明确提示为插件源网络问题。
   - 已补定向回归：`store-install-error-utils.test.ts` 覆盖历史裸 AbortError 与标准 `NETWORK_TIMEOUT`，`providers/utils.test.ts` 覆盖下载流 abort 归一化。
 
+### fix(core-app): 修复文件索引重建重复订阅
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.test.ts`
+  - 文件索引 watcher 注册完成后同步 `fsEventsSubscribed` 状态，避免手动重建索引时再次向 `TouchEventBus` 注册同一组文件系统事件并触发 `EventHandler already exists (Repeat on)`。
+  - 已补定向回归：重复调用 `ensureFileSystemWatchers()` 时只注册一次文件系统事件订阅。
+
 ## 2026-04-26
 
 ### fix(core-app): 修复 macOS 辅助功能权限状态刷新
