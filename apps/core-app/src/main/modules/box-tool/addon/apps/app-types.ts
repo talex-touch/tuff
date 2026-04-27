@@ -8,4 +8,10 @@ export interface ScannedAppInfo {
   displayName?: string
   fileName?: string
   description?: string
+  launchPath?: string
+  shortcutPath?: string
+  shortcutArgs?: string
+  shortcutCwd?: string
+  appUserModelId?: string
+  launchKind?: 'path' | 'shortcut' | 'appx' | 'url'
 }

@@ -14,6 +14,9 @@ const {
   saveMainConfigMock,
   scheduleDbWriteMock,
   searchRecordExecuteMock,
+  shellOpenExternalMock,
+  shellOpenPathMock,
+  spawnSafeMock,
   unregisterPollingMock,
   withSqliteRetryMock
 } = vi.hoisted(() => ({
@@ -39,6 +42,9 @@ const {
   saveMainConfigMock: vi.fn(),
   scheduleDbWriteMock: vi.fn(async (_label: string, task: () => Promise<unknown>) => await task()),
   searchRecordExecuteMock: vi.fn(),
+  shellOpenExternalMock: vi.fn(async () => undefined),
+  shellOpenPathMock: vi.fn(async () => ''),
+  spawnSafeMock: vi.fn(() => ({ unref: vi.fn() })),
   unregisterPollingMock: vi.fn(),
   withSqliteRetryMock: vi.fn(async (task: () => Promise<unknown>) => await task())
 }))
@@ -72,7 +78,8 @@ vi.mock('electron', () => ({
     getAllWindows: vi.fn(() => [])
   },
   shell: {
-    openPath: vi.fn()
+    openExternal: shellOpenExternalMock,
+    openPath: shellOpenPathMock
   }
 }))
 
@@ -82,6 +89,10 @@ vi.mock('@talex-touch/utils/common/logger', () => ({
 
 vi.mock('@talex-touch/utils/common/utils', () => ({
   runAdaptiveTaskQueue: runAdaptiveTaskQueueMock
+}))
+
+vi.mock('@talex-touch/utils/common/utils/safe-shell', () => ({
+  spawnSafe: spawnSafeMock
 }))
 
 vi.mock('@talex-touch/utils/common/utils/polling', () => ({
@@ -229,6 +240,11 @@ type AppProviderPrivate = {
   _runMdlsUpdateScan: () => Promise<void>
   _runStartupBackfill: () => Promise<void>
   _setLastFullSyncTime: (timestamp: number) => Promise<void>
+  launchApp: (
+    launchTarget: string,
+    launchMeta: Record<string, unknown>,
+    diagnosticMeta: Record<string, unknown>
+  ) => Promise<void>
 }
 
 function asPrivateProvider(provider: unknown): AppProviderPrivate {
@@ -241,6 +257,9 @@ describe('appProvider rebuild maintenance', () => {
     vi.clearAllMocks()
     getWatchPathsMock.mockReturnValue([])
     getAppsMock.mockResolvedValue([])
+    shellOpenExternalMock.mockResolvedValue(undefined)
+    shellOpenPathMock.mockResolvedValue('')
+    spawnSafeMock.mockReturnValue({ unref: vi.fn() })
     runMdlsUpdateScanMock.mockResolvedValue({
       updatedApps: [],
       updatedCount: 0,
@@ -381,5 +400,119 @@ describe('appProvider rebuild maintenance', () => {
       'mdls',
       'startup-backfill'
     ])
+  })
+})
+
+describe('appProvider Windows launch diagnostics', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+    getMainConfigMock.mockReturnValue(undefined)
+    shellOpenExternalMock.mockResolvedValue(undefined)
+    shellOpenPathMock.mockResolvedValue('')
+    spawnSafeMock.mockReturnValue({ unref: vi.fn() })
+  })
+
+  it('launches Windows shortcuts from original lnk path before falling back to target', async () => {
+    const { appProvider } = await loadSubject()
+
+    await appProvider.onExecute({
+      item: {
+        id: 'wechat',
+        meta: {
+          app: {
+            path: 'C:/Program Files/Tencent/WeChat/WeChat.exe',
+            launchPath: 'C:/Program Files/Tencent/WeChat/WeChat.exe',
+            shortcutPath: 'C:/ProgramData/Microsoft/Windows/Start Menu/Programs/微信/微信.lnk',
+            launchKind: 'shortcut'
+          }
+        }
+      },
+      searchResult: undefined
+    } as never)
+
+    await flushPromises()
+
+    expect(shellOpenPathMock).toHaveBeenCalledTimes(1)
+    expect(shellOpenPathMock).toHaveBeenCalledWith(
+      'C:/ProgramData/Microsoft/Windows/Start Menu/Programs/微信/微信.lnk'
+    )
+    expect(shellOpenExternalMock).not.toHaveBeenCalled()
+  })
+
+  it('launches Store apps through AppsFolder AUMID', async () => {
+    const { appProvider } = await loadSubject()
+
+    await appProvider.onExecute({
+      item: {
+        id: 'AppleMusicWin_abcd!App',
+        meta: {
+          app: {
+            path: 'shell:AppsFolder\\AppleMusicWin_abcd!App',
+            bundle_id: 'AppleMusicWin_abcd!App',
+            appUserModelId: 'AppleMusicWin_abcd!App',
+            launchKind: 'appx'
+          }
+        }
+      },
+      searchResult: undefined
+    } as never)
+
+    await flushPromises()
+
+    expect(shellOpenExternalMock).toHaveBeenCalledWith('shell:AppsFolder\\AppleMusicWin_abcd!App')
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('launches URL Start menu apps through openExternal', async () => {
+    const { appProvider } = await loadSubject()
+
+    await appProvider.onExecute({
+      item: {
+        id: 'https://app.bilibili.com/?from_start_menu',
+        meta: {
+          app: {
+            path: 'https://app.bilibili.com/?from_start_menu',
+            launchPath: 'https://app.bilibili.com/?from_start_menu',
+            appUserModelId: 'https://app.bilibili.com/?from_start_menu',
+            launchKind: 'url'
+          }
+        }
+      },
+      searchResult: undefined
+    } as never)
+
+    await flushPromises()
+
+    expect(shellOpenExternalMock).toHaveBeenCalledWith('https://app.bilibili.com/?from_start_menu')
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to target path when shortcut launch fails', async () => {
+    const { appProvider } = await loadSubject()
+    shellOpenPathMock.mockResolvedValueOnce('broken shortcut').mockResolvedValueOnce('')
+
+    await appProvider.onExecute({
+      item: {
+        id: 'wechat',
+        meta: {
+          app: {
+            path: 'C:/Program Files/Tencent/WeChat/WeChat.exe',
+            launchPath: 'C:/Program Files/Tencent/WeChat/WeChat.exe',
+            shortcutPath: 'C:/bad/微信.lnk',
+            launchKind: 'shortcut'
+          }
+        }
+      },
+      searchResult: undefined
+    } as never)
+
+    await flushPromises()
+
+    expect(shellOpenPathMock).toHaveBeenNthCalledWith(1, 'C:/bad/微信.lnk')
+    expect(shellOpenPathMock).toHaveBeenNthCalledWith(
+      2,
+      'C:/Program Files/Tencent/WeChat/WeChat.exe'
+    )
   })
 })

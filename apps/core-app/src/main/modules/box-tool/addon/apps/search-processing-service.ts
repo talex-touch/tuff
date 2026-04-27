@@ -46,6 +46,22 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
   const displayName = app.displayName || app.name
   const rawIconValue = app.extensions.icon ?? ''
   const iconValue = rawIconValue && !isValidBase64DataUrl(rawIconValue) ? '' : rawIconValue
+  const appLaunchMeta = {
+    path: app.path,
+    bundle_id: app.extensions.bundleId || '',
+    launchPath: app.extensions.launchPath || undefined,
+    shortcutPath: app.extensions.shortcutPath || undefined,
+    shortcutArgs: app.extensions.shortcutArgs || undefined,
+    shortcutCwd: app.extensions.shortcutCwd || undefined,
+    appUserModelId: app.extensions.appUserModelId || app.extensions.bundleId || undefined,
+    launchKind:
+      app.extensions.launchKind === 'path' ||
+      app.extensions.launchKind === 'shortcut' ||
+      app.extensions.launchKind === 'appx' ||
+      app.extensions.launchKind === 'url'
+        ? app.extensions.launchKind
+        : undefined
+  }
 
   const tuffItem = new TuffItemBuilder(uniqueId, 'application', 'app-provider')
     .setKind('app')
@@ -67,10 +83,7 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
       }
     ])
     .setMeta({
-      app: {
-        path: app.path,
-        bundle_id: app.extensions.bundleId || ''
-      },
+      app: appLaunchMeta,
       extension: {
         matchResult: match.highlights,
         source: match.source,
@@ -262,6 +275,19 @@ export async function processSearchResults(
     }
 
     // 如果没有任何匹配，跳过此项
+    const appUserModelId = app.extensions.appUserModelId || app.extensions.bundleId
+    if (appUserModelId) {
+      const normalizedAppUserModelId = appUserModelId.toLowerCase()
+      if (normalizedAppUserModelId.includes(lowerCaseQuery)) {
+        updateMatch(
+          'appUserModelId',
+          calculateHighlights(displayName, lowerCaseQuery),
+          0.38,
+          displayName
+        )
+      }
+    }
+
     if (score === 0 || bestHighlights.length === 0) {
       continue
     }
