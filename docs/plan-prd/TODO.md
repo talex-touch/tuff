@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-04-26
+> 更新时间: 2026-04-27
 
 ---
 
@@ -22,7 +22,7 @@
 
 - 全仓 Markdown：`396`；`docs`：`146`；`docs/plan-prd`：`110`。
 - 子域分布：`03-features 32`、`docs 20`、`04-implementation 17`、`01-project 12`、`05-archive 11`、`02-architecture 8`、`06-ecosystem 4`。
-- 统一口径文档：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`。
+- 历史盘点锚点：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`；当前执行路线以本文件与 `CHANGES` 为准。
 
 ---
 
@@ -83,6 +83,8 @@
 - [ ] Linux 非阻塞观察：记录 `xdotool` / desktop environment 限制与 smoke 结果；不作为 `2.5.0` release blocker。
 - [ ] 证据闭环：每轮清理同步 `CHANGES + TODO + compatibility registry`，并通过 Nexus Release Evidence API 采集 `docs:guard` / `legacy:guard` / 定向回归结果。
   - 2026-04-26 Nexus 证据入口：新增 `/api/admin/release-evidence/*`，支持 run 创建/分页/详情、item upsert、平台阻塞 matrix 与 `doc-guard` 快速写入；管理员登录态或 `release:evidence` API key 可写入，CI 默认走 API key。
+  - 2026-04-27 写入阻塞：当前本地环境未提供 `release:evidence` API key 或管理员登录态，只能先把 docs guard、Nexus build/smoke 与本机 CoreApp 验证结果同步到 `CHANGES`；拿到凭证后按同一证据载荷写入 `/api/admin/release-evidence/doc-guard` 与 matrix。
+  - 2026-04-27 matrix caseId 固化：Windows required 使用 `windows-everything-file-search` / `windows-app-scan-uwp` / `windows-third-party-app-launch` / `windows-shortcut-launch-args` / `windows-tray-update-plugin-install-exit`；macOS required 使用 `macos-first-run-permissions` / `macos-omnipanel-accessibility` / `macos-native-share-tray-dock-update` / `macos-plugin-permission-install-update` / `macos-exit-resource-release`；Linux 仅写 `linux-best-effort-smoke` 且 `requiredForRelease=false`。
   - 2026-04-20 自动门禁：`git diff --check`、`pnpm docs:guard`、`pnpm docs:guard:strict`、`pnpm compat:registry:guard`、`node scripts/check-legacy-boundaries.mjs`、`pnpm network:guard` 已通过；`pnpm legacy:guard` 在 legacy/compat 子门禁通过后被既有 `size:guard` 大文件基线漂移拦截；CoreApp typecheck/test 待本地依赖安装后补证。
   - 2026-04-22 CoreApp 补证：补齐 `EverythingProvider` 的 `SDK -> CLI -> file-provider` 双重失效同次查询回退回归；`git diff --check`、`pnpm -C "apps/core-app" run typecheck`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/everything-provider.test.ts" "src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts" "src/main/channel/common.test.ts"` 已通过。
   - 2026-04-23 renderer 权限中心死分支清理：删除未使用且仍保留旧 SDK “跳过权限校验”语义的 `PermissionStatusCard` / `PermissionRequestDialog` / `usePluginPermission`，同步移除 `PermissionStatusCard` 清册条目，并补齐当前 `compatibility-debt-registry` 漂移项；`pnpm -C "apps/core-app" run typecheck:web`、`pnpm compat:registry:guard`、`git diff --check` 已通过。
@@ -105,7 +107,7 @@
 - [x] Sync 兼容壳行为固化：补充 `/api/sync/pull|push` 返回 410 的自动化测试断言。
 - [x] 债务扫描口径显式化：主线改为显式白名单 + 漏扫报错 + `scanScope` 摘要输出。
 - [x] 超长文件防漂移：`--write-baseline` 禁止自动上调，新增 `growthExceptions` 显式豁免机制。
-- [ ] `TODO` 主文件压缩到 400 行以内并稳定维护。
+- [x] `TODO` 主文件压缩到 400 行以内并稳定维护。
 - [ ] 第二批历史文档统一加“历史/待重写”头标。
 
 ### B. Nexus 风控主线（下一开发动作）
@@ -157,111 +159,11 @@
   - [x] `legacy-transport-import` = `0 files / 0 hits`。
   - `pnpm quality:gate` 全绿且无新增兼容债务。
 
-### F. Pilot 附件慢链路治理 + CMS 设置合并（2026-03-16）
+### F. Pilot / Intelligence 长尾（已下沉）
 
-- [x] 新旧链路统一附件投递策略：`id > https url > base64`（并发=3，快速失败错误码透出）。
-- [x] `pilot stream` 与 `legacy executor` 接入统一解析器，并补充 `attachment.resolve.start/end` 与 `attachment.delivery.summary` 埋点。
-- [x] `/api/chat/sessions/:sessionId/uploads` 支持 `multipart/form-data`，兼容保留 `contentBase64`。
-- [x] 新增 `GET /api/chat/attachments/capability`，Pilot/legacy 输入框共用探测能力。
-- [x] 新增聚合后台设置接口：`GET/POST /api/admin/settings`。
-- [x] 新增 Admin 页面：`/admin/system/channels`、`/admin/system/storage`（列表 + 添加/编辑弹框），`/cms/*` 退化为 Legacy 跳转层。
-- [x] App 管理进一步拆页：`model-groups / route-combos / routing-policy / routing-metrics` 独立入口；`pilot-settings` 退化为总览跳转页。
-- [x] Channels 升级为多模型配置：每渠道维护模型列表、默认模型与启用模型列表。
-- [x] 左侧导航滚动修复并精简系统管理入口（默认隐藏 `角色管理 / 菜单管理 / 字典项`）。
-- [x] 管理配置 SoT 保持 `pilot_admin_settings`；密钥字段脱敏展示、写入加密、空值不覆写。
-- [x] 自动部署口径澄清并固化：`commit != deploy`，仅 `push master` 命中 workflow 且 webhook secrets + 1Panel webhook 健康时自动触发；保留 `ssh home` 手动兜底路径。
-- [x] SSE 前端兼容层补齐：`event/session_id/[DONE]` 统一映射到 `type/sessionId/done`，支持 `turn.*` 全链路事件消费。
-- [x] `turn.failed` 错误可见性修复：消息区强制追加 assistant 失败消息，底部保留诊断详情（`code/status_code/request_id`）。
-- [x] CMS 收口补丁：`/admin/*` 作为管理主入口，`/cms/*` 统一跳转到对应 `/admin/*`。
-- [x] `/cms` 防御性修复：browser-only API 增加客户端守卫，`router.back()` 增加无历史栈 fallback。
-
-### G. Pilot 合并升级 V2（2026-03-17）
-
-- [x] 统一执行链路：`/api/aigc/executor` 与 `/api/chat/sessions/*` 接入路由解析与指标采集；`/api/v1/chat/sessions/*` 仅保留非 stream/turns 子路由。
-- [x] 执行入口硬切：`/api/aigc/executor` 已物理删除，`/api/chat/sessions/:sessionId/stream` 成为唯一执行入口。
-- [x] 旧输入框附件出站硬切：`ThInput` 改为会话级 `POST /api/chat/sessions/:sessionId/uploads`，发送改为 `message + attachments` 分离，不再拼接 `Attachment references` 文本。
-- [x] 历史 dataURL 附件发送前自动转换为 session `attachmentId`；无法转换的旧附件阻断出站并提示重传。
-- [x] `chat stream` 入参附件结构化校验收紧：拒绝 inline `data:` 与非 id-first 附件投递。
-- [x] 新增渠道评比指标：记录 `queueWaitMs/ttftMs/totalDurationMs/success/errorCode/finishReason/channel+model/routeCombo`。
-- [x] 新增渠道熔断状态机：按失败阈值摘除，冷却后半开探测恢复。
-- [x] 新增模型目录与路由组合后台接口：`models/route-combos/channel-models/sync/routing-metrics/runtime-models`。
-- [x] 前端 gptview 切换为运行时模型目录驱动，支持 `internet/thinking` 开关透传。
-- [x] 兼容入口收口：`/pilot` 保留兼容跳转到 `/`。
-- [x] 接入真实 LangGraph Local Server 运行图：`createPilotRuntime` 已支持 `langgraph-local` 主引擎执行，启动失败/空流自动回退 deepagent。
-
-### H. Pilot 工具调用提示 + 数据源抓取 V1（2026-03-18）
-
-- [x] 新增 `PilotToolGateway` 与 `websearch` connector 三段接口（`search/fetch/extract`），形成统一工具执行入口。
-- [x] 新增 `datasource.websearch` 配置并并入 Admin settings 聚合接口。
-- [x] 新增 `tool-approvals` 审批票据存储与 `GET/POST` API，支持 `pending/approved/rejected` 生命周期。
-- [x] `executor` 输出标准 `run.audit` 工具事件，已移除 `status_updated(calling/result)` 工具兼容映射。
-- [x] `v1 chat stream` 透传 `run.audit/status_updated`，高风险审批命中后进入阻塞等待（`turn.approval_required`）。
-- [x] 前端统一解析 `run.audit` 工具事件（`status_updated` 仅保留通用流状态），新增 Tool 卡片视图（含来源链接与审批上下文）。
-- [x] Intent 混合识别（`/image|/img` 显式命令 + 规则 + nano 分类兜底）落地，默认 nano 未配置时跟随主模型。
-- [x] 路由策略扩展：`intentNanoModelId/intentRouteComboId/imageGenerationModelId/imageRouteComboId` 与 `allowImageGeneration` 已接入配置与运行时模型输出。
-- [x] 新增 `image.generate` 工具并接入新旧两条会话链路短路执行（命中图像意图时直接返回 Markdown 图片 + Tool 卡片审计事件）。
-- [x] 增加“审批通过后自动续跑”前端交互：命中 `turn.approval_required` 后自动轮询审批票据，`approved` 时复用原 `request_id` 自动续跑，`rejected/timeout` 明确失败收口。
-- [x] Legacy Phase 2（工具提示链路）收口：`$completion` 默认关闭 legacy `completion/verbose/status_updated(tool)` 兼容分支，统一以 `turn.* + run.audit` 为主链路；保留环境开关回滚。
-- [x] 增补回归测试：覆盖 `request_id` 复用分支与审批 `approved/rejected/timeout` 状态映射，确保自动续跑与失败收口可持续回归。
-
-### I. Pilot 严格模式 + 可感知差异 + 提示词升级（2026-03-19）
-
-- [x] `pilotMode=true` 时禁降级：`executor` 与 `chat stream` 均在 LangGraph 不可用场景返回 `PILOT_STRICT_MODE_UNAVAILABLE`。
-- [x] `createPilotRuntime` 支持 `strictPilotMode/allowDeepAgentFallback`，严格模式下禁用 fallback adapter。
-- [x] 顶部 `PILOT` 可视化落地：主聊天 header + 状态栏均可识别 Pilot 模式。
-- [x] 新增 ThisAi Prompt Builder：运行时系统提示词统一从 builder 注入 `name/ip/ua` 与安全约束。
-- [x] websearch 增强：保留“意图优先 + 启发式兜底”，并在 datasource 未配置时回退 Responses 内置检索。
-- [x] 审计可观测性增强：补齐 `memory.context` / `websearch.decision` / connector 来源，避免“命中无感”。
-- [x] websearch 终态一致性修复：`decision=false/审批中断/工具异常/terminal finalize` 统一收口到 `websearch.skipped`，并在无外部来源时注入 guard 禁止“新闻感编造”。
-- [ ] 回归补充：补齐 `executor/stream` 端到端 strict 错误码回归用例（含 HTTP status 与 SSE payload 断言）。
-- [ ] 线上观测：新增 `PILOT_STRICT_MODE_UNAVAILABLE` 告警阈值和 7 天趋势看板。
-
-### J. Pilot 旧 UI 会话卡片化硬切（2026-03-19）
-
-- [x] 旧 UI 执行器仅走 `POST /api/chat/sessions/:sessionId/stream`，不再依赖 `v1 turns/stream`。
-- [x] 运行态事件统一卡片化：`intent/routing/memory/websearch/thinking` 全部落入会话消息流并持久化回放。
-- [x] `thinking.delta -> thinking.final` 采用同一卡片增量拼接，完整文本可视化展示。
-- [x] legacy 事件 `turn.* / status_updated / completion / verbose / session_bound` 不再驱动 UI 状态，仅告警忽略。
-- [x] 管理端渠道 `adapter` 固定 `openai`，移除 `legacy` 可编辑入口。
-
-### J1. Pilot 流式主链合并收口（2026-04-07）
-
-- [x] 首页保留旧 UI，legacy `$completion` 成为唯一前端流式主消费链；`usePilotChatPage.ts` 与 `app/components/pilot/*` 不再作为并行主方案继续演进。
-- [x] 首页默认 DeepAgent：移除 `Pilot 模式` 默认标签与输入开关；`pilotMode` 不再进入首页默认发送、展示与恢复逻辑。
-- [x] `fromSeq + follow` 收口到共享 seq cursor helper，刷新恢复只跟随真实可恢复事件，不再受 Pilot 模式分叉影响。
-- [x] trace contract 收紧：`stream.started / stream.heartbeat / replay.* / run.metrics / done / error` 等 seq-optional 生命周期事件不再持久化到 trace；replay、trace.get、quota snapshot、follow tail 会统一过滤历史 lifecycle 噪音。
-- [x] legacy SSE 契约测试补齐：覆盖 `assistant.delta / assistant.final / run.audit / turn.approval_required / replay / done / error` 与分块持续解析。
-- [ ] 部署烟测补齐：验证 `/api/chat/sessions/:sessionId/stream` 经反向代理后仍持续分块返回；若 buffering 打开需直接失败并输出明确信号。
-
-### K. Intelligence 多模态 Provider 统一配置与运行时打通（2026-03-20）
-
-- [x] 能力矩阵补齐：`image.generate`、`image.edit`、`audio.stt`、`video.generate`（保留 `audio.tts`、`audio.transcribe`）。
-- [x] 历史配置回填升级为“按缺项补齐”，不覆盖用户已有能力绑定/优先级/Prompt。
-- [x] 运行时分发补齐 `image.edit/audio.tts/audio.stt/audio.transcribe/video.generate`，避免注册后不可调用。
-- [x] OpenAI-compatible Provider 完成媒体 REST 补齐（图片生成/编辑、语音合成、语音转写/翻译）。
-- [x] 缺失媒体端点 provider 显式 `unsupported`，并由策略层自动 fallback 到下一 provider。
-- [x] 媒体输出采用 URL-first（`tfile://`）并支持 `output.includeBase64=false` 默认可选扩展。
-- [x] 前端能力测试器补齐：`image.generate/image.edit/audio.tts/audio.stt/audio.transcribe`；`video.generate` 返回“配置已生效，运行时未实现”。
-- [ ] `video.generate` 真实运行时生成链路（Provider 端点接入 + 端到端成功路径）待下一迭代落地。
-
-### L. Pilot Websearch 全局 Provider 池聚合（2026-03-20）
-
-- [x] `datasource.websearch` 升级为全局池结构：`providers + aggregation + crawl`，并保留 legacy `gatewayBaseUrl/apiKeyRef` 读取兼容。
-- [x] Provider key 管理切换为“配置页入库 + 统一加密 + 脱敏回传（hasApiKey/apiKeyMasked）”，支持“留空不变/clearApiKey 清空”。
-- [x] `pilot-tool-gateway` 切换为优先级聚合执行：主 provider 先跑，结果不足按顺序补召回，去重后达标即停，不足则 fallback `responses_builtin`。
-- [x] `websearch.executed` 可观测性增强：补齐 `providerChain/providerUsed/fallbackUsed/dedupeCount` 并保持 `source/sourceReason/sourceCount`。
-- [x] 新增管理页 `/admin/system/websearch-providers`，支持全局 providers 列表维护与单页“聚合填写”（aggregation/crawl）。
-- [x] 回归测试补齐：`pilot-tool-gateway`、`pilot-websearch-connector`、`pilot-admin-datasource-config` 定向用例通过。
-
-### M. Pilot 模型组能力开关治理（2026-03-21）
-
-- [x] `model-groups` 编辑页改为分层信息架构：`运行状态 / 推理策略 / 能力矩阵 / 工具权限`。
-- [x] 能力文案升级为“中文主标签 + key 副文”，并显式标注 `video.generate` 为实验能力。
-- [x] 新增模板预设：`通用对话 / 研究检索 / 多模态创作 / 语音助手`，新建模型组默认套用通用对话模板。
-- [x] 联动规则落地：`thinkingSupported=false => thinkingDefaultEnabled=false`，关闭 `websearch` 自动移除 `builtinTools.websearch`。
-- [x] `defaultRouteComboId` 改为 Route Combo 下拉选择；历史脏值标记失效并阻止保存。
-- [x] 新增共享规则模块 `shared/pilot-capability-meta.ts`，统一前后端能力元数据、legacy 回填、模板与路由校验。
-- [x] 新增/更新测试：`pilot-capability-meta.shared.test.ts`、`pilot-admin-routing-config.capabilities.test.ts`。
+- [x] Pilot 附件、管理配置、路由 V2、工具审计、Websearch、旧 UI 卡片流、多模态与模型组能力治理的历史完成事实已下沉到 `CHANGES` 与长期债务池，主清单不再展开逐项历史。
+- [ ] Pilot strict 错误码端到端回归、SSE 反向代理部署烟测、`video.generate` 真实运行时与严格模式线上观测继续由长期债务池承载。
+- 入口：`docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`
 
 ### N. Core Main 修理进展（2026-03-23）
 
@@ -379,6 +281,7 @@
 - [x] `2.4.9-beta.4`：发布基线与 CI 证据已固化。
 - [x] CLI Phase1+2：迁移完成，`2.4.x` shim 保留、`2.5.0` 退场。
 - [x] Pilot Chat/Turn 协议硬切：`/api/chat/sessions/:sessionId/stream` 为唯一主入口，`/api/v1/chat/sessions/:sessionId/{stream,turns}` 已物理删除；历史 `pilot_quota_history.value` 已完成 base64 -> JSON 迁移并统一 JSON 读写。
+- [x] Startup Path Governance：启动 root path、目录创建、legacy dev data marker 迁移与启动观测已完成；详细实现留在 2026-03-23 历史记录。
 
 ---
 
@@ -392,12 +295,12 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 161 |
-| 未完成 (`- [ ]`) | 28 |
-| 总计 | 189 |
-| 完成率 | 85% |
+| 已完成 (`- [x]`) | 85 |
+| 未完成 (`- [ ]`) | 24 |
+| 总计 | 109 |
+| 完成率 | 78% |
 
-> 统计时间: 2026-04-26（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-04-27（按本文件实时 checkbox 计数）。
 
 ---
 
@@ -407,10 +310,3 @@
 2. 按 Windows/macOS 阻塞级回归清单补齐人工证据；Linux 仅记录 best-effort smoke。
 3. `Nexus 设备授权风控` 保留实施文档与历史入口，降为非当前主线。
 4. `docs:guard` 连续零告警后，再升级 strict 阻塞策略。
-### Startup Path Governance (2026-03-23)
-
-- [x] Unified root path policy in core startup and network secure-store path resolution (`dev -> userData/tuff-dev`, `release -> userData/tuff`).
-- [x] Completed startup chain hardening for directory creation (`root` before `logs`, recursive mkdir, sync semantics).
-- [x] Added one-time legacy dev data migration (`appPath/tuff -> userData/tuff-dev`) with marker-based skip strategy.
-- [x] Improved startup observability (`early unhandledRejection` log + corrected single-instance warning wording + optional deprecation trace switch).
-- [x] Added targeted tests for root-path resolution, migration decision matrix, and directory creation idempotency.

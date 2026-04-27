@@ -1,6 +1,6 @@
 # TODO 长期债务池（Long-term Backlog）
 
-> 更新时间: 2026-03-16
+> 更新时间: 2026-04-26
 > 说明: 本文承接 `docs/plan-prd/TODO.md` 长尾事项，避免主清单过载。
 
 ## A. 架构与质量债务
@@ -29,6 +29,17 @@
 - [ ] DivisionBox: prepare/attach/detach 生命周期语义文档深化。
 - [ ] Intelligence Agents: Workflow 编辑器与高级协作能力。
 - [ ] Intelligence Agents: 记忆系统治理与回归补齐。
+- [ ] Pilot: strict 错误码端到端回归（HTTP status + SSE payload）。
+- [ ] Pilot: `/api/chat/sessions/:sessionId/stream` 反向代理持续分块 smoke。
+- [ ] Pilot: `PILOT_STRICT_MODE_UNAVAILABLE` 告警阈值与 7 天趋势看板。
+- [ ] Intelligence: `video.generate` 真实 Provider 运行时与端到端成功路径。
+
+## C1. Pilot / Intelligence 历史完成索引（2026-04-26 下沉）
+
+- [x] Pilot 附件慢链路与 Admin 设置合并已完成：附件投递按 `id > https url > base64`，`/admin/*` 成为管理主入口。
+- [x] Pilot 路由 V2 与工具调用链路已完成：`/api/chat/sessions/:sessionId/stream` 为唯一执行入口，`run.audit`、审批票据、Websearch provider 池与图像意图闭环已落地。
+- [x] Pilot 旧 UI 会话卡片化与单流主链合并已完成：运行态卡片进入消息流，`fromSeq + follow` 按真实可恢复事件推进。
+- [x] Intelligence 多模态配置、Websearch 聚合和模型组能力治理已完成；未实现项仅保留 `video.generate` 真实运行时。
 
 ## D. 发布与生态
 
