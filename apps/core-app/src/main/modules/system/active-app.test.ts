@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { execFilePromiseMock, readlinkMock, withOSAdapterMock, getFileIconMock } = vi.hoisted(
-  () => ({
+const { execFilePromiseMock, readlinkMock, withOSAdapterMock, getFileIconMock, activeAppWarnMock } =
+  vi.hoisted(() => ({
     execFilePromiseMock: vi.fn(),
     readlinkMock: vi.fn(),
     withOSAdapterMock: vi.fn(),
+    activeAppWarnMock: vi.fn(),
     getFileIconMock: vi.fn(async () => ({
       isEmpty: () => false,
       toDataURL: () => 'data:image/png;base64,icon'
     }))
-  })
-)
+  }))
 
 vi.mock('node:child_process', () => {
   const execFile = vi.fn()
@@ -38,7 +38,7 @@ vi.mock('../../utils/logger', () => ({
   createLogger: vi.fn(() => ({
     debug: vi.fn(),
     info: vi.fn(),
-    warn: vi.fn(),
+    warn: activeAppWarnMock,
     error: vi.fn(),
     success: vi.fn(),
     child: vi.fn(),
@@ -61,12 +61,18 @@ function mockExecFileFailure(code: string, message = code) {
 
 afterEach(() => {
   vi.clearAllMocks()
-  ;(
-    activeAppService as unknown as { cacheWithIcon: unknown; cacheWithoutIcon: unknown }
-  ).cacheWithIcon = null
-  ;(
-    activeAppService as unknown as { cacheWithIcon: unknown; cacheWithoutIcon: unknown }
-  ).cacheWithoutIcon = null
+  const service = activeAppService as unknown as {
+    cacheWithIcon: unknown
+    cacheWithoutIcon: unknown
+    windowsResolveInFlight: unknown
+    windowsFailureBackoffUntil: number
+    windowsFailureLogCooldownUntil: number
+  }
+  service.cacheWithIcon = null
+  service.cacheWithoutIcon = null
+  service.windowsResolveInFlight = null
+  service.windowsFailureBackoffUntil = 0
+  service.windowsFailureLogCooldownUntil = 0
 })
 
 describe('active-app capability', () => {
@@ -101,6 +107,8 @@ describe('active-app resolution', () => {
 
     const result = await activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
 
+    const [, args] = execFilePromiseMock.mock.calls[0]
+    expect(args.join('\n')).toContain('[uint32]$processId = 0')
     expect(result).toMatchObject({
       displayName: 'Code',
       processId: 404,
@@ -108,6 +116,35 @@ describe('active-app resolution', () => {
       windowTitle: 'workspace',
       platform: 'windows',
       icon: null
+    })
+  })
+
+  it('parses Windows JSON when PowerShell prepends non-JSON output', async () => {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.win32()
+      }
+    )
+    mockExecFileSuccess(
+      [
+        'WARNING: module already loaded',
+        JSON.stringify({
+          processId: 808,
+          displayName: 'WeChat',
+          executablePath: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe',
+          windowTitle: '微信'
+        })
+      ].join('\r\n')
+    )
+
+    const result = await activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+
+    expect(result).toMatchObject({
+      displayName: 'WeChat',
+      processId: 808,
+      executablePath: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe',
+      windowTitle: '微信',
+      platform: 'windows'
     })
   })
 
@@ -146,5 +183,43 @@ describe('active-app resolution', () => {
     await expect(
       activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
     ).resolves.toBeNull()
+    expect(activeAppWarnMock).toHaveBeenCalledWith(
+      'Windows active-app output did not contain JSON',
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          stdout: '{ invalid json'
+        })
+      })
+    )
+  })
+
+  it('logs Windows command failures as compact metadata', async () => {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.win32()
+      }
+    )
+    execFilePromiseMock.mockRejectedValueOnce(
+      Object.assign(new Error('Command failed: powershell -NoProfile -Command <script>'), {
+        code: 1,
+        stderr: 'Cannot convert argument "processId"',
+        stdout: ''
+      })
+    )
+
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toBeNull()
+
+    expect(activeAppWarnMock).toHaveBeenCalledWith(
+      'Windows active-app resolution failed',
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          code: '1',
+          message: 'Command failed: powershell -NoProfile -Command <script>',
+          stderr: 'Cannot convert argument "processId"'
+        })
+      })
+    )
   })
 })

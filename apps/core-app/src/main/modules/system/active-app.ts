@@ -11,6 +11,9 @@ const execFileAsync = promisify(execFile)
 const activeAppLog = createLogger('ActiveApp')
 const MACOS_RESOLVE_RETRY_DELAY_MS = 80
 const ACTIVE_APP_COMMAND_TIMEOUT_MS = 1500
+const WINDOWS_RESOLVE_FAILURE_BACKOFF_MS = 2000
+const WINDOWS_FAILURE_LOG_COOLDOWN_MS = 10000
+const COMMAND_OUTPUT_LOG_LIMIT = 500
 
 function isEbadfError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
@@ -34,6 +37,61 @@ function toOptionalString(value: unknown): string | null {
 function parseInteger(value: unknown): number | null {
   const normalized = typeof value === 'string' ? Number.parseInt(value.trim(), 10) : Number.NaN
   return Number.isFinite(normalized) ? normalized : null
+}
+
+function outputToString(value: unknown): string {
+  if (Buffer.isBuffer(value)) return value.toString('utf8')
+  if (typeof value === 'string') return value
+  if (value === null || value === undefined) return ''
+  return String(value)
+}
+
+function compactForLog(value: unknown, limit = COMMAND_OUTPUT_LOG_LIMIT): string | null {
+  const normalized = outputToString(value).replace(/\s+/g, ' ').trim()
+  if (!normalized) return null
+  return normalized.length > limit ? `${normalized.slice(0, limit)}...` : normalized
+}
+
+function errorMessage(error: unknown): string | null {
+  if (error instanceof Error) {
+    const [firstLine] = error.message.split(/\r?\n/, 1)
+    return firstLine || error.name
+  }
+  return compactForLog(error)
+}
+
+function extractJsonLine(stdout: string): string | null {
+  const lines = stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^\uFEFF/, ''))
+    .filter(Boolean)
+
+  for (let index = lines.length - 1; index >= 0; index--) {
+    const line = lines[index]
+    if (line.startsWith('{') && line.endsWith('}')) {
+      return line
+    }
+  }
+  return null
+}
+
+function commandErrorMeta(error: unknown): Record<string, string | number | boolean | null> {
+  const nodeError = error as {
+    code?: unknown
+    signal?: unknown
+    killed?: unknown
+    stdout?: unknown
+    stderr?: unknown
+  }
+
+  return {
+    message: errorMessage(error),
+    code: compactForLog(nodeError.code),
+    signal: compactForLog(nodeError.signal),
+    killed: typeof nodeError.killed === 'boolean' ? nodeError.killed : null,
+    stderr: compactForLog(nodeError.stderr),
+    stdout: compactForLog(nodeError.stdout)
+  }
 }
 
 export async function isActiveAppCapabilityAvailable(
@@ -93,6 +151,9 @@ class ActiveAppService {
   private readonly cacheTTL = 3000
   private currentPlatform: Platform
   private macosResolveInFlight: Promise<Partial<ActiveAppInfo> | null> | null = null
+  private windowsResolveInFlight: Promise<Partial<ActiveAppInfo> | null> | null = null
+  private windowsFailureBackoffUntil = 0
+  private windowsFailureLogCooldownUntil = 0
 
   constructor() {
     this.currentPlatform = this.detectPlatform()
@@ -193,7 +254,20 @@ end tell`
     }
   }
 
-  private async resolveActiveWindowWindows(): Promise<Partial<ActiveAppInfo> | null> {
+  private shouldLogWindowsFailure(): boolean {
+    const now = Date.now()
+    if (now < this.windowsFailureLogCooldownUntil) {
+      return false
+    }
+    this.windowsFailureLogCooldownUntil = now + WINDOWS_FAILURE_LOG_COOLDOWN_MS
+    return true
+  }
+
+  private noteWindowsResolutionFailure(): void {
+    this.windowsFailureBackoffUntil = Date.now() + WINDOWS_RESOLVE_FAILURE_BACKOFF_MS
+  }
+
+  private async resolveActiveWindowWindowsOnce(): Promise<Partial<ActiveAppInfo> | null> {
     const script = `
 $ErrorActionPreference = 'Stop'
 Add-Type @"
@@ -213,7 +287,7 @@ $handle = [TuffForegroundWindow]::GetForegroundWindow()
 if ($handle -eq [IntPtr]::Zero) {
   return ''
 }
-$processId = 0
+[uint32]$processId = 0
 [TuffForegroundWindow]::GetWindowThreadProcessId($handle, [ref]$processId) | Out-Null
 $titleBuilder = New-Object System.Text.StringBuilder 2048
 [TuffForegroundWindow]::GetWindowText($handle, $titleBuilder, $titleBuilder.Capacity) | Out-Null
@@ -229,13 +303,14 @@ try {
     $executablePath = ''
   }
 } catch {}
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-@{
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+$OutputEncoding = [Console]::OutputEncoding
+[ordered]@{
   processId = [int]$processId
   displayName = $displayName
   executablePath = $executablePath
   windowTitle = $windowTitle
-} | ConvertTo-Json -Compress
+} | ConvertTo-Json -Compress -Depth 2
 `
 
     try {
@@ -249,11 +324,38 @@ try {
         return null
       }
 
-      const parsed = JSON.parse(normalized) as {
+      const jsonLine = extractJsonLine(normalized)
+      if (!jsonLine) {
+        this.noteWindowsResolutionFailure()
+        if (this.shouldLogWindowsFailure()) {
+          activeAppLog.warn('Windows active-app output did not contain JSON', {
+            meta: {
+              stdout: compactForLog(stdout)
+            }
+          })
+        }
+        return null
+      }
+
+      let parsed: {
         processId?: number
         displayName?: string
         executablePath?: string
         windowTitle?: string
+      }
+      try {
+        parsed = JSON.parse(jsonLine)
+      } catch (parseError) {
+        this.noteWindowsResolutionFailure()
+        if (this.shouldLogWindowsFailure()) {
+          activeAppLog.warn('Windows active-app JSON parse failed', {
+            meta: {
+              message: errorMessage(parseError),
+              stdout: compactForLog(stdout)
+            }
+          })
+        }
+        return null
       }
 
       return {
@@ -264,10 +366,37 @@ try {
         platform: 'windows'
       }
     } catch (error) {
+      this.noteWindowsResolutionFailure()
       if (!isMissingCommandError(error)) {
-        activeAppLog.warn('Windows active-app resolution failed', { error })
+        if (this.shouldLogWindowsFailure()) {
+          activeAppLog.warn('Windows active-app resolution failed', {
+            meta: commandErrorMeta(error)
+          })
+        }
       }
       return null
+    }
+  }
+
+  private async resolveActiveWindowWindows(): Promise<Partial<ActiveAppInfo> | null> {
+    if (Date.now() < this.windowsFailureBackoffUntil) {
+      return null
+    }
+
+    if (this.windowsResolveInFlight) {
+      return this.windowsResolveInFlight
+    }
+
+    const resolveTask = this.resolveActiveWindowWindowsOnce()
+    this.windowsResolveInFlight = resolveTask
+    try {
+      const result = await resolveTask
+      if (result) {
+        this.windowsFailureBackoffUntil = 0
+      }
+      return result
+    } finally {
+      this.windowsResolveInFlight = null
     }
   }
 
