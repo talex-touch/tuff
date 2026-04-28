@@ -5,11 +5,11 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WaveSurfer from 'wavesurfer.js'
 
-const props = defineProps(['song'])
-
-export default {
+defineOptions({
   name: 'WavingParticle',
-}
+})
+
+const props = defineProps(['song'])
 
 const audio = ref()
 const container = ref()

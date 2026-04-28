@@ -378,6 +378,9 @@ export function extractLatestPilotUserTurn(messages: unknown): PilotConversation
 
   for (let index = normalized.length - 1; index >= 0; index -= 1) {
     const message = normalized[index]
+    if (!message) {
+      continue
+    }
     if (message.role !== 'user') {
       continue
     }

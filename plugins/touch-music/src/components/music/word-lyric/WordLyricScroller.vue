@@ -7,9 +7,9 @@ import { musicManager } from '@modules/music'
 import { throttleRef } from '@modules/utils'
 import { onMounted, ref, watch } from 'vue'
 
-export default {
+defineOptions({
   name: 'WordLyricScroller',
-}
+})
 
 const ind = ref(-1)
 const scroll = ref()

@@ -2,11 +2,11 @@
 </script>
 
 <script setup>
-const props = defineProps(['song'])
-
-export default {
+defineOptions({
   name: 'BlurBackGround',
-}
+})
+
+const props = defineProps(['song'])
 </script>
 
 <template>

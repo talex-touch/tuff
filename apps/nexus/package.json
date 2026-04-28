@@ -84,7 +84,7 @@
     "sass": "catalog:",
     "typescript": "catalog:dev",
     "unocss": "catalog:build",
-    "vue": "^3.5.30",
+    "vue": "^3.5.33",
     "vue-tsc": "catalog:dev",
     "webpack": "catalog:dev",
     "wrangler": "catalog:dev"

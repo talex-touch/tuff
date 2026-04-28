@@ -8,9 +8,9 @@ const props = defineProps(['current', 'max'])
 
 const emits = defineEmits(['change'])
 
-export default {
+defineOptions({
   name: 'PlayProgressBar',
-}
+})
 
 const bar = ref()
 

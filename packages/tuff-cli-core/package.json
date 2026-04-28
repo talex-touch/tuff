@@ -2,6 +2,7 @@
   "name": "@talex-touch/tuff-cli-core",
   "type": "module",
   "version": "0.0.1",
+  "private": true,
   "description": "Core APIs for Tuff CLI",
   "license": "MIT",
   "keywords": [
@@ -32,7 +33,7 @@
     "chalk": "^5.6.0",
     "cli-progress": "^3.12.0",
     "compressing": "^1.10.3",
-    "esbuild": "^0.24.0",
+    "esbuild": "^0.28.0",
     "fs-extra": "^11.3.1",
     "glob": "^10.5.0",
     "pathe": "^1.1.2",
@@ -48,8 +49,5 @@
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }

@@ -1,16 +1,12 @@
-<script>
-import IconButton from '@comp/button/IconButton.vue'
-</script>
-
 <script setup>
+import IconButton from '@comp/button/IconButton.vue'
 import PlayList from '@comp/music/PlayList.vue'
 import { musicManager, PlayType } from '@modules/music'
 import { ref } from 'vue'
 
-export default {
+defineOptions({
   name: 'FooterFunction',
-  components: { IconButton },
-}
+})
 
 const playListModel = ref(false)
 const volumeModel = ref(false)

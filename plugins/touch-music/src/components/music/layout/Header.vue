@@ -1,6 +1,3 @@
-<script>
-</script>
-
 <script setup>
 import SearchResults from '@comp/music/layout/SearchResults.vue'
 import { axios } from '@modules/axios.js'
@@ -8,9 +5,9 @@ import { player } from '@modules/entity/play-manager'
 import { SingleSong } from '@modules/entity/song-resolver'
 import { ref } from 'vue'
 
-export default {
-  name: 'Header',
-}
+defineOptions({
+  name: 'TuffMusicHeader',
+})
 
 const searchState = ref('')
 const searchResults = ref()

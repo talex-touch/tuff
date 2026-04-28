@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-restricted-imports -- Central axios instance for this plugin.
 import _axios from 'axios'
 
 export const axios = _axios.create({

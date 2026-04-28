@@ -2,11 +2,11 @@
 </script>
 
 <script setup>
-const props = defineProps(['active', 'playing'])
-
-export default {
+defineOptions({
   name: 'MusicWaving',
-}
+})
+
+const props = defineProps(['active', 'playing'])
 </script>
 
 <template>

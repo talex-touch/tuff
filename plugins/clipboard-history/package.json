@@ -13,16 +13,16 @@
   },
   "dependencies": {
     "@talex-touch/utils": "workspace:^",
-    "vue": "^3.5.30",
+    "vue": "^3.5.33",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.5",
-    "@vue/test-utils": "^2.4.6",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "@vue/test-utils": "^2.4.9",
     "jsdom": "^26.1.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vitest": "^3.2.4",
-    "vue-tsc": "^3.2.5"
+    "vue-tsc": "^3.2.7"
   }
 }

@@ -7,6 +7,10 @@ import Singers from '@comp/music/song/Singers.vue'
 import DayJS from 'dayjs'
 import { onMounted, ref } from 'vue'
 
+defineOptions({
+  name: 'SongItem',
+})
+
 const props = defineProps({
   song: {
     type: Object,
@@ -30,10 +34,6 @@ const props = defineProps({
     type: String,
   },
 })
-
-export default {
-  name: 'SongItem',
-}
 
 const time = ref('00:00')
 
