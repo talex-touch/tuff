@@ -17,7 +17,7 @@ code: |
     "id": "com.example.plugin",
     "name": "My Plugin",
     "version": "1.0.0",
-    "sdkapi": 260228,
+    "sdkapi": 260428,
     "permissions": {
       "required": ["clipboard.read", "network.internet"],
       "optional": ["storage.shared"]
@@ -88,7 +88,7 @@ If your plugin doesn't declare `sdkapi` or has a lower version:
 ---
 code: |
   {
-    "sdkapi": 260228,
+    "sdkapi": 260428,
     "permissions": {
       "required": ["clipboard.read"],
       "optional": []
@@ -151,7 +151,7 @@ When using `usePluginSqlite()`, declare `storage.sqlite` in required permissions
 ---
 code: |
   {
-    "sdkapi": 260228,
+    "sdkapi": 260428,
     "permissions": {
       "required": ["storage.sqlite"],
       "optional": []
@@ -270,7 +270,7 @@ A: Your `manifest.json` doesn't declare `sdkapi`, uses an invalid marker, or the
 :::TuffCodeBlock{lang="json"}
 ---
 code: |
-  "sdkapi": 260228
+  "sdkapi": 260428
 ---
 :::
 

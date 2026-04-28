@@ -239,13 +239,15 @@ abstract class BaseModule {
 - 通过 CoreBox 搜索界面触发功能
 - 支持开发模式热重载（`dev.enable: true`）
 - 隔离存储（每插件 10MB 限制）
-- **SDK 版本控制**：`sdkapi` 字段（格式 YYMMDD，当前版本 260228）
+- **SDK 版本控制**：`sdkapi` 字段（格式 YYMMDD，当前版本 260428）
 
 **SDK 版本 (sdkapi)**:
 - 格式：`YYMMDD`（如 251212 = 2025-12-12）
 - 用途：权限校验版本门控
 - 未声明、非法或 < 251212：运行时直接阻断（`SDKAPI_BLOCKED`）
 - >= 251212：启用完整权限校验
+- >= 260228：启用插件 capability auth 基线
+- 260428：当前推荐 marker，不新增额外运行时门槛
 - 工具函数：`checkSdkCompatibility()`, `CURRENT_SDK_VERSION`
 - 位置：`packages/utils/plugin/sdk-version.ts`
 
