@@ -5,9 +5,9 @@
 -->
 <script setup lang="ts" name="SettingSentry">
 import { TxButton, TxTooltip } from '@talex-touch/tuffex'
-import { useAppSdk } from '@talex-touch/utils/renderer'
+import { useAppSdk, useStorageSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { SentryEvents, StorageEvents } from '@talex-touch/utils/transport/events'
+import { SentryEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -45,6 +45,7 @@ const isDev = import.meta.env.DEV
 const autoRefreshTimer = ref<number | null>(null)
 const transport = useTuffTransport()
 const appSdk = useAppSdk()
+const storageSdk = useStorageSdk()
 const authBaseUrl = getAuthBaseUrl()
 const { isLoggedIn } = useAuth()
 const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
@@ -58,12 +59,10 @@ const dataUploadTooltip = computed(() =>
 
 async function loadConfig() {
   try {
-    const config = (await transport.send(StorageEvents.app.get, {
-      key: 'sentry-config.json'
-    })) as {
+    const config = await storageSdk.app.get<{
       enabled?: boolean
       anonymous?: boolean
-    }
+    }>('sentry-config.json')
     enabled.value = config?.enabled ?? true
     anonymous.value = config?.anonymous ?? false
   } catch (error) {
@@ -110,7 +109,7 @@ function stopAutoRefresh() {
 async function saveConfig() {
   loading.value = true
   try {
-    await transport.send(StorageEvents.app.save, {
+    await storageSdk.app.save({
       key: 'sentry-config.json',
       content: JSON.stringify({
         enabled: enabled.value,

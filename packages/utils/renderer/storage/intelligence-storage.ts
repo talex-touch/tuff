@@ -173,7 +173,7 @@ class IntelligenceStorage extends TouchStorage<IntelligenceStorageData> {
 
 /**
  * Lazy-initialized Intelligence storage.
- * The actual instance is created only when first accessed AND after initStorageChannel() is called.
+ * The actual instance is created only when first accessed AND after storage bootstrap is ready.
  */
 export const intelligenceStorage = createStorageProxy<IntelligenceStorage>(
   INTELLIGENCE_STORAGE_KEY,

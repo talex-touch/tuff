@@ -1,7 +1,6 @@
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { StorageEvents } from '@talex-touch/utils/transport/events'
+import { useStorageSdk } from '@talex-touch/utils/renderer'
 
-const transport = useTuffTransport()
+const storageSdk = useStorageSdk()
 
 interface Token {
   access_token: string
@@ -71,7 +70,7 @@ export class AccountStorage {
   __save(): void {
     const { user, eller, token } = this
 
-    void transport.send(StorageEvents.app.save, {
+    void storageSdk.app.save({
       key: 'account.ini',
       content: JSON.stringify({ user, eller, token }),
       clear: false

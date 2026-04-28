@@ -1,4 +1,6 @@
 export * from './app-settings'
 export * from './base-storage'
+export * from './bootstrap'
 export * from './intelligence-storage'
 export * from './openers'
+export * from './storage-subscription'
