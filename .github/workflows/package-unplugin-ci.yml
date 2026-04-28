@@ -23,6 +23,7 @@ jobs:
       run-typecheck: false  # Add if typecheck script exists
       run-lint: true
       lint-command: pnpm lint
-      run-test: false       # Add if test script exists
+      run-test: true
+      test-command: pnpm test
       run-build: true
       build-command: pnpm build

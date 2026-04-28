@@ -1,4 +1,4 @@
-name: Tuff CLI Packages Publish
+name: Tuff CLI and Build Tool Packages Publish
 
 on:
   push:
@@ -8,7 +8,6 @@ on:
     paths:
       - 'packages/tuff-cli/package.json'
       - 'packages/tuff-cli-core/package.json'
-      - 'packages/tuffcli/package.json'
       - 'packages/unplugin-export-plugin/package.json'
       - '.github/workflows/package-tuff-cli-publish.yml'
 
@@ -30,7 +29,7 @@ jobs:
       - name: Setup PNPM
         uses: pnpm/action-setup@v3
         with:
-          version: 9
+          version: 10.32.1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -56,15 +55,11 @@ jobs:
           fi
 
           declare -a PACKAGE_NAMES=(
-            "@talex-touch/tuff-cli-core"
-            "@talex-touch/tuffcli"
             "@talex-touch/unplugin-export-plugin"
             "@talex-touch/tuff-cli"
           )
 
           declare -A PACKAGE_PATHS=(
-            ["@talex-touch/tuff-cli-core"]="packages/tuff-cli-core/package.json"
-            ["@talex-touch/tuffcli"]="packages/tuffcli/package.json"
             ["@talex-touch/unplugin-export-plugin"]="packages/unplugin-export-plugin/package.json"
             ["@talex-touch/tuff-cli"]="packages/tuff-cli/package.json"
           )
@@ -92,6 +87,10 @@ jobs:
 
           for package in "${PACKAGE_NAMES[@]}"; do
             pkg_path="${PACKAGE_PATHS[$package]}"
+            if [ ! -f "${pkg_path}" ]; then
+              echo "Skip ${package}: ${pkg_path} not found."
+              continue
+            fi
             current_version=$(get_version "${pkg_path}")
             prev_version=$(previous_version "${BEFORE_SHA}" "${pkg_path}")
 
@@ -128,12 +127,50 @@ jobs:
               continue
             fi
 
+            if [ "${package}" = "@talex-touch/unplugin-export-plugin" ]; then
+              utils_version=$(node -e "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('packages/utils/package.json','utf8'));console.log(pkg.version)")
+              for attempt in {1..12}; do
+                if npm view "@talex-touch/utils@${utils_version}" version >/dev/null 2>&1; then
+                  echo "@talex-touch/utils@${utils_version} is available."
+                  break
+                fi
+                if [ "${attempt}" -eq 12 ]; then
+                  echo "@talex-touch/utils@${utils_version} is not available on npm."
+                  exit 1
+                fi
+                echo "Waiting for @talex-touch/utils@${utils_version} to be available on npm (${attempt}/12)..."
+                sleep 10
+              done
+            fi
+
             echo "Building ${package}..."
             pnpm --filter "${package}" run build
 
             echo "Publishing ${package}@${version} with dist-tag ${dist_tag}..."
-            pnpm --filter "${package}" publish --access public --tag "${dist_tag}" --no-git-checks
+            publish_log="$(mktemp)"
 
+            set +e
+            pnpm --filter "${package}" publish --access public --tag "${dist_tag}" --no-git-checks >"${publish_log}" 2>&1
+            publish_status=$?
+            set -e
+
+            cat "${publish_log}"
+
+            if [ "${publish_status}" -ne 0 ]; then
+              if grep -Eqi 'previously published versions|cannot publish over the previously published version' "${publish_log}"; then
+                if npm view "${package}@${version}" version >/dev/null 2>&1; then
+                  echo "${package}@${version} became available during publish. Treating duplicate publish as success."
+                else
+                  rm -f "${publish_log}"
+                  exit "${publish_status}"
+                fi
+              else
+                rm -f "${publish_log}"
+                exit "${publish_status}"
+              fi
+            fi
+
+            rm -f "${publish_log}"
             published_json=$(echo "${published_json}" | jq --arg name "${package}" --arg version "${version}" --arg tag "${dist_tag}" '. + [{name:$name, version:$version, distTag:$tag}]')
           done
 

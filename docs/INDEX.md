@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-04-27
+> 更新时间：2026-04-28
 > 本页仅保留入口与高价值快照；历史细节以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主要入口
@@ -82,12 +82,12 @@
 
 | 文档 | 当前状态 | 下一动作 |
 | --- | --- | --- |
-| `docs/plan-prd/TODO.md` | 已同步到 2026-04-26 | 推进 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配` |
-| `docs/plan-prd/README.md` | 已同步到 2026-04-20 | 维护 CoreApp `2.5.0` 前置治理与未闭环能力口径 |
-| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步到 2026-04-20 | 按锁定顺序推进 CoreApp legacy 清理与 Windows/macOS 阻塞级回归 |
+| `docs/plan-prd/TODO.md` | 已同步到 2026-04-28 | 推进 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配` |
+| `docs/plan-prd/README.md` | 已同步到 2026-04-28 | 维护 CoreApp `2.5.0` 前置治理与未闭环能力口径 |
+| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步到 2026-04-28 | 按锁定顺序推进 CoreApp legacy 清理与 Windows/macOS 阻塞级回归 |
 | `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md` | Gate A/B/C/D/E 已完成（D/E historical，2026-03-16 已复核） | 保留证据链并切换到 `2.4.9` 后续主线 |
-| `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` | 已同步到 2026-04-20 | Windows/macOS 为 release-blocking；Linux 保持 documented best-effort |
-| `docs/plan-prd/01-project/CHANGES.md` | 已同步到 2026-04-26 | 持续记录 CoreApp `2.5.0` 前置治理口径与证据 |
+| `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` | 已同步到 2026-04-28 | Windows/macOS 为 release-blocking；Linux 保持 documented best-effort |
+| `docs/plan-prd/01-project/CHANGES.md` | 已同步到 2026-04-28 | 持续记录 CoreApp `2.5.0` 前置治理口径与证据 |
 | `docs/INDEX.md` | 本页（入口+快照）已压缩 | 仅维护导航与高价值快照 |
 
 ## 归档与降权

@@ -2,6 +2,8 @@
 
 `@talex-touch/unplugin-export-plugin` 是 Tuff 插件开发的构建工具插件，用于自动处理插件资源导出、manifest 生成和开发服务器集成。
 
+普通插件项目建议优先使用 `@talex-touch/tuff-cli` 执行创建、构建与发布；`unplugin-export-plugin` 是 CLI 内部复用的低层构建能力，只建议在需要自定义 Vite / Webpack / Rollup 集成时直接安装。
+
 ## 安装
 
 :::TuffCodeBlock{lang="bash"}

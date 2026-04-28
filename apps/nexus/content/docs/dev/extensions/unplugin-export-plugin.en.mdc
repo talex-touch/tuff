@@ -2,6 +2,8 @@
 
 `@talex-touch/unplugin-export-plugin` is a build tool plugin for Tuff plugin development, handling automatic resource export, manifest generation, and dev server integration.
 
+For regular plugin projects, prefer `@talex-touch/tuff-cli` for creation, build, and publish workflows. `unplugin-export-plugin` is the lower-level build layer reused by the CLI and is only recommended when you need a custom Vite / Webpack / Rollup integration.
+
 ## Installation
 
 :::TuffCodeBlock{lang="bash"}

@@ -20,7 +20,7 @@ on:
         description: 'PNPM version to use'
         required: false
         type: string
-        default: '9'
+        default: '10.32.1'
       run-lint:
         description: 'Run lint check'
         required: false

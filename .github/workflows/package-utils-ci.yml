@@ -21,6 +21,8 @@ jobs:
       package-name: utils
       package-path: packages/utils
       run-typecheck: false  # No build step for utils (TypeScript source)
-      run-lint: false       # Add if lint script exists
-      run-test: false       # Add if test script exists
+      run-lint: true
+      lint-command: pnpm lint
+      run-test: true
+      test-command: pnpm test
       run-build: false      # Utils is TypeScript source, no build needed

@@ -1,0 +1,31 @@
+name: Tuff Intelligence Package CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'packages/tuff-intelligence/**'
+      - 'packages/utils/**'
+      - '.github/workflows/package-tuff-intelligence-ci.yml'
+      - '.github/workflows/package-ci.yml'
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'packages/tuff-intelligence/**'
+      - 'packages/utils/**'
+
+jobs:
+  ci:
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: tuff-intelligence
+      package-path: packages/tuff-intelligence
+      run-lint: true
+      lint-command: pnpm lint
+      run-test: false
+      run-build: true
+      build-command: pnpm build

@@ -6,15 +6,15 @@
 
 ### 1. TuffCLI
 
-命令行工具，用于插件开发、构建和发布。当前已完成“新入口 + 兼容壳 + 分包落地”结构。
+命令行工具，用于插件开发、构建和发布。当前已完成“`@talex-touch/tuff-cli` 对外入口 + 内部 core + unplugin 兼容 shim”结构。
 
 - **文档**: [TUFFCLI-PRD.md](./TUFFCLI-PRD.md)
 - **分包提案**: [TUFFCLI-SPLIT-PLAN.md](./TUFFCLI-SPLIT-PLAN.md)
 - **现状包层（2026-03-15）**:
   - `packages/tuff-cli/`（`tuff` 主入口）
   - `packages/tuff-cli-core/`（核心编排 + validate/publish/config/auth/runtime）
-  - `packages/tuffcli/`（兼容导出层）
   - `packages/unplugin-export-plugin/`（构建插件 + CLI 兼容入口 shim）
+  - `packages/tuffcli/` 已移除；不再维护独立 `@talex-touch/tuffcli` npm 包，`tuffcli` 命令由 `@talex-touch/tuff-cli` 的 bin 继续提供。
 - **兼容生命周期（锁定）**:
   - `2.4.x` 保留 `unplugin` CLI shim（deprecation + 转发）
   - `2.5.0` 移除 shim，CLI 入口统一到 `@talex-touch/tuff-cli`

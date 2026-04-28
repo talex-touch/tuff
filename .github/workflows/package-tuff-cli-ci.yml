@@ -1,0 +1,46 @@
+name: Tuff CLI Package CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'packages/tuff-cli/**'
+      - 'packages/tuff-cli-core/**'
+      - 'packages/unplugin-export-plugin/**'
+      - '.github/workflows/package-tuff-cli-ci.yml'
+      - '.github/workflows/package-ci.yml'
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'packages/tuff-cli/**'
+      - 'packages/tuff-cli-core/**'
+      - 'packages/unplugin-export-plugin/**'
+
+jobs:
+  core:
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: tuff-cli-core
+      package-path: packages/tuff-cli-core
+      run-lint: true
+      lint-command: pnpm lint
+      run-test: true
+      test-command: pnpm test
+      run-build: true
+      build-command: pnpm build
+
+  cli:
+    needs: core
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: tuff-cli
+      package-path: packages/tuff-cli
+      run-lint: true
+      lint-command: pnpm lint
+      run-test: false
+      run-build: true
+      build-command: pnpm build
