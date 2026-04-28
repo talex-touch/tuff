@@ -75,6 +75,7 @@
 - 删除仅剩测试引用的 `parseLegacyThemeStyle()` 旧 localStorage 解析 helper；renderer theme startup migration 已从生产路径移除，不再保留无调用方的 legacy 解析入口。
 - 刷新 `compatibility-legacy-scan-summary.md` 的完成态汇总，移除已过期的 `tray-holder.ts` 与 deprecated Plugin API 风险描述，避免旧扫描清单误导当前结论。
 - 清理 `AppConfigure.vue` 中仅剩注释/空 handler 的 open explorer、uninstall、save footer 与永远不会渲染的 spec 区块，避免旧应用详情页把未实现能力呈现为可用操作。
+- 清理 `appConfigure` i18n 中对应上述假动作的无调用文案键，避免语言资源继续暗示这些入口仍存在。
 
 ### 仍保留但不判为假实现
 

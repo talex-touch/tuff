@@ -21,7 +21,7 @@
 - PluginStatus：插件状态按钮已改为 computed label/class/action，不再用命令式 DOM/`innerHTML` 回写状态。
 - Storage renderer：CoreApp renderer 入口已改为 `initializeRendererStorage(transport)` / `useStorageSdk()`，业务侧不再直接消费旧 `storage:get` / `storage:save` / `storage:update`。
 - Theme startup：仅剩测试引用的 `parseLegacyThemeStyle()` 已删除。
-- Application detail：旧应用详情页不再展示 open explorer / uninstall / save/spec 等无真实执行路径的假动作，保留 launch 与 help 两个真实动作。
+- Application detail：旧应用详情页不再展示 open explorer / uninstall / save/spec 等无真实执行路径的假动作，对应无调用 i18n 文案键也已清理，保留 launch 与 help 两个真实动作。
 - Tray：旧 `src/main/modules/tray-holder.ts` 已不存在，当前实现是 `src/main/modules/tray/tray-manager.ts`。
 
 ## 仍保留但不判为假实现
