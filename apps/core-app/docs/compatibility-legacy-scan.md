@@ -72,6 +72,7 @@
 
 - 清理 storage renderer 入口中的重复 JSDoc 和旧 `console.log` 示例/注释，避免把已迁移到 typed storage SDK 的路径继续表现成半迁移状态。
 - 删除仅剩测试引用的 `parseLegacyThemeStyle()` 旧 localStorage 解析 helper；renderer theme startup migration 已从生产路径移除，不再保留无调用方的 legacy 解析入口。
+- 刷新 `compatibility-legacy-scan-summary.md` 的完成态汇总，移除已过期的 `tray-holder.ts` 与 deprecated Plugin API 风险描述，避免旧扫描清单误导当前结论。
 
 ### 仍保留但不判为假实现
 
