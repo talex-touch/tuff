@@ -366,6 +366,7 @@ type AppProviderPrivate = {
   reindexAppSearchTarget: (request: {
     target: string
     mode?: 'keywords' | 'scan'
+    force?: boolean
   }) => Promise<unknown>
   _performMdlsUpdateScan: () => Promise<void>
   _performRebuild: () => Promise<void>
@@ -1011,7 +1012,7 @@ describe('appProvider rebuild maintenance', () => {
     })
   })
 
-  it('reindexes a matched diagnostic target without rebuilding all apps', async () => {
+  it('requires confirmation before reindexing a matched diagnostic target', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
     const indexItemsMock = vi.fn(async () => undefined)
@@ -1044,9 +1045,54 @@ describe('appProvider rebuild maintenance', () => {
     })
 
     expect(result).toEqual({
+      success: false,
+      status: 'reindexed',
+      requiresConfirm: true,
+      path: '/Applications/NeteaseMusic 2.app',
+      message: 'App index reindex requires confirmation'
+    })
+    expect(indexItemsMock).not.toHaveBeenCalled()
+    expect(getAppInfoByPathMock).not.toHaveBeenCalled()
+  })
+
+  it('reindexes a matched diagnostic target only after confirmation', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const indexItemsMock = vi.fn(async () => undefined)
+    const appRow = {
+      id: 9,
+      path: '/Applications/NeteaseMusic 2.app',
+      name: 'NeteaseMusic 2',
+      displayName: 'NeteaseMusic 2',
+      type: 'app',
+      mtime: new Date(0),
+      ctime: new Date(0),
+      extensions: {
+        bundleId: 'com.netease.163music',
+        appIdentity: '/Applications/NeteaseMusic 2.app',
+        alternateNames: JSON.stringify(['网易云音乐']),
+        launchKind: 'path',
+        launchTarget: '/Applications/NeteaseMusic 2.app'
+      }
+    }
+
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn(async () => [appRow])
+    }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async () => [appRow])
+    privateProvider.searchIndex = { indexItems: indexItemsMock }
+
+    const result = await appProvider.reindexAppSearchTarget({
+      target: '网易云音乐',
+      mode: 'keywords',
+      force: true
+    })
+
+    expect(result).toEqual({
       success: true,
       status: 'reindexed',
-      path: '/Applications/NeteaseMusic 2.app'
+      path: '/Applications/NeteaseMusic 2.app',
+      message: 'App index reindex complete'
     })
     expect(indexItemsMock).toHaveBeenCalledWith([
       expect.objectContaining({

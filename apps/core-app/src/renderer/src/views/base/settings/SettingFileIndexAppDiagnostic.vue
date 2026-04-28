@@ -6,10 +6,13 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import { TxButton, TxInput } from '@talex-touch/tuffex'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
-import { ref } from 'vue'
+import { h, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import { popperMention } from '~/modules/mention/dialog-mention'
+import RebuildConfirmDialog from './components/RebuildConfirmDialog.vue'
+import { resolveIndexRebuildOutcome } from './index-rebuild-flow'
 
 const { t } = useI18n()
 const settingsSdk = useSettingsSdk()
@@ -87,6 +90,18 @@ function getAppDiagnosticStageDetail(stage: AppIndexDiagnosticStage | undefined)
   })
 }
 
+async function openAppReindexConfirm() {
+  await new Promise<void>((resolve, reject) => {
+    popperMention(t('settings.settingFileIndex.rebuildTitle'), () =>
+      h(RebuildConfirmDialog, {
+        battery: null,
+        onConfirm: () => resolve(),
+        onCancel: () => reject(new Error('Cancelled'))
+      })
+    )
+  })
+}
+
 async function runAppSearchDiagnostic(options: { silent?: boolean } = {}) {
   const target = normalizeAppDiagnosticTarget()
   if (!target) {
@@ -124,14 +139,47 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
 
   appDiagnosticReindexMode.value = mode
   try {
-    const result = await settingsSdk.appIndex.reindex({ target, mode })
-    if (!result.success) {
-      toast.error(result.reason || t('settings.settingFileIndex.appDiagnosticReindexFailed'))
+    const preflight = await settingsSdk.appIndex.reindex({ target, mode })
+    const preflightOutcome = resolveIndexRebuildOutcome(preflight, {
+      success: t('settings.settingFileIndex.appDiagnosticReindexSuccess'),
+      failure: t('settings.settingFileIndex.appDiagnosticReindexFailed')
+    })
+
+    if (preflightOutcome.type === 'failure') {
+      toast.error(preflightOutcome.message)
       return
     }
 
-    toast.success(t('settings.settingFileIndex.appDiagnosticReindexSuccess'))
-    await runAppSearchDiagnostic({ silent: true })
+    if (preflightOutcome.type === 'success') {
+      toast.success(preflightOutcome.message)
+      await runAppSearchDiagnostic({ silent: true })
+      return
+    }
+
+    if (preflightOutcome.type === 'confirm') {
+      try {
+        await openAppReindexConfirm()
+      } catch {
+        return
+      }
+
+      const forced = await settingsSdk.appIndex.reindex({ target, mode, force: true })
+      const forcedOutcome = resolveIndexRebuildOutcome(forced, {
+        success: t('settings.settingFileIndex.appDiagnosticReindexSuccess'),
+        failure: t('settings.settingFileIndex.appDiagnosticReindexFailed')
+      })
+      if (forcedOutcome.type !== 'success') {
+        toast.error(
+          forcedOutcome.type === 'failure'
+            ? forcedOutcome.message
+            : t('settings.settingFileIndex.appDiagnosticReindexFailed')
+        )
+        return
+      }
+
+      toast.success(forcedOutcome.message)
+      await runAppSearchDiagnostic({ silent: true })
+    }
   } catch (error) {
     console.error('[SettingFileIndex] Failed to reindex app target:', error)
     toast.error(t('settings.settingFileIndex.appDiagnosticReindexFailed'))

@@ -406,39 +406,65 @@ export async function reindexAppSearchTarget(
     return { success: false, status: 'invalid', reason: 'target-empty' }
   }
   if (!context.dbUtils) {
-    return { success: false, status: 'error', reason: 'db-not-ready' }
+    return { success: false, status: 'error', reason: 'db-not-ready', error: 'db-not-ready' }
   }
 
   const mode = request.mode ?? 'keywords'
+  if (mode === 'keywords' && !context.searchIndex) {
+    return {
+      success: false,
+      status: 'error',
+      reason: 'search-index-not-ready',
+      error: 'search-index-not-ready'
+    }
+  }
+
+  const match = await findDiagnosticApp(context, target)
+  if (!match) {
+    return {
+      success: false,
+      status: 'not-found',
+      reason: 'target-not-found',
+      error: 'target-not-found'
+    }
+  }
+
+  if (request.force !== true) {
+    return {
+      success: false,
+      status: mode === 'scan' ? 'updated' : 'reindexed',
+      requiresConfirm: true,
+      path: match.app.path,
+      message: 'App index reindex requires confirmation'
+    }
+  }
+
   if (mode === 'scan') {
-    const match = await findDiagnosticApp(context, target)
-    const scanTarget = match?.app.path ?? target
+    const scanTarget = match.app.path
     const result = await context.addAppByPath(scanTarget)
     if (!result.success) {
       return {
         success: false,
         status: result.status === 'invalid' ? 'invalid' : 'error',
         path: result.path,
-        reason: result.reason
+        reason: result.reason,
+        error: result.reason
       }
     }
 
     return {
       success: true,
       status: result.status === 'added' ? 'added' : 'updated',
-      path: result.path ?? scanTarget
+      path: result.path ?? scanTarget,
+      message: 'App index rescan complete'
     }
   }
 
-  if (!context.searchIndex) {
-    return { success: false, status: 'error', reason: 'search-index-not-ready' }
-  }
-
-  const match = await findDiagnosticApp(context, target)
-  if (!match) {
-    return { success: false, status: 'not-found', reason: 'target-not-found' }
-  }
-
   await context.syncKeywordsForApp(context.mapDbAppToScannedInfo(match.app))
-  return { success: true, status: 'reindexed', path: match.app.path }
+  return {
+    success: true,
+    status: 'reindexed',
+    path: match.app.path,
+    message: 'App index reindex complete'
+  }
 }
