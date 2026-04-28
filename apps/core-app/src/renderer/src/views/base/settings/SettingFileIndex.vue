@@ -29,6 +29,7 @@ import {
   getDeviceIdleDiagnosticTone,
   getDeviceIdleReasonKey
 } from './device-idle-diagnostics'
+import { resolveIndexRebuildOutcome } from './index-rebuild-flow'
 
 const {
   getIndexStatus,
@@ -530,8 +531,12 @@ async function triggerRebuild() {
   isRebuilding.value = true
   try {
     const result = await handleRebuild()
+    let outcome = resolveIndexRebuildOutcome(result, {
+      success: t('settings.settingFileIndex.alertRebuildStarted'),
+      failure: 'Rebuild failed'
+    })
 
-    if (result?.requiresConfirm) {
+    if (outcome.type === 'confirm') {
       const level = result.battery?.level ?? battery?.level
       if (typeof level === 'number') {
         toast.warning(
@@ -562,12 +567,20 @@ async function triggerRebuild() {
       }
 
       const forced = await handleRebuild({ force: true })
-      if (!forced?.success) {
-        throw new Error(forced?.error || 'Rebuild failed')
+      outcome = resolveIndexRebuildOutcome(forced, {
+        success: t('settings.settingFileIndex.alertRebuildStarted'),
+        failure: 'Rebuild failed'
+      })
+      if (outcome.type !== 'success') {
+        throw new Error(outcome.type === 'failure' ? outcome.message : 'Rebuild failed')
       }
     }
 
-    toast.success(t('settings.settingFileIndex.alertRebuildStarted'))
+    if (outcome.type !== 'success') {
+      throw new Error(outcome.type === 'failure' ? outcome.message : 'Rebuild failed')
+    }
+
+    toast.success(outcome.message)
     setTimeout(async () => {
       await checkStatus()
       isRebuilding.value = false

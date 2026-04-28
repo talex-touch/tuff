@@ -148,6 +148,7 @@ export interface AppIndexDiagnoseResult {
 export interface AppIndexReindexRequest {
   target: string;
   mode?: "keywords" | "scan";
+  force?: boolean;
 }
 
 export interface AppIndexReindexResult {
@@ -155,5 +156,8 @@ export interface AppIndexReindexResult {
   status: "reindexed" | "added" | "updated" | "invalid" | "not-found" | "error";
   path?: string;
   reason?: string;
+  message?: string;
+  error?: string;
+  requiresConfirm?: boolean;
   diagnostic?: AppIndexDiagnoseResult;
 }
