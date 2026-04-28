@@ -5,6 +5,19 @@
 
 ## 2026-04-28
 
+### fix(tuff-cli): 对齐 manifest validate 的 sdkapi hard-cut
+
+- `packages/tuff-cli-core/src/validate.ts`
+- `packages/tuff-cli-core/src/__tests__/validate.test.ts`
+- `packages/tuff-cli/src/cli/commands/create.ts`
+- `packages/unplugin-export-plugin/src/cli/commands/create.ts`
+- `packages/utils/plugin/sdk-version.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+  - `tuff validate` 现在复用共享 `checkSdkCompatibility()` 与 `resolveSdkApiVersion()`，非 canonical marker（如 `260421`）和未来 marker（如 `260501`）会在 CLI 预检阶段失败，不再被当成普通 outdated warning 放过。
+  - 插件创建脚手架更新既有 manifest 时也会重写 unsupported / future marker，避免模板保留一个随后被运行时阻断的 `sdkapi`。
+  - 明确列入支持列表的历史 marker 仍可通过校验，但继续提示升级到当前 `260428`，保持“runtime allowlist hard-cut + developer guidance recommend current”的分层语义。
+  - loader dev-source 回归补齐当前 `sdkapi` manifest，避免测试场景把 dev-source fallback 与 SDK 阻断混在一起。
+
 ### fix(core-app): 阻断 unsupported sdkapi marker
 
 - `packages/utils/plugin/sdk-version.ts`

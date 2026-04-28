@@ -112,7 +112,7 @@ export interface SdkCompatibilityResult {
  * @returns Compatibility check result
  */
 export function checkSdkCompatibility(
-  pluginSdkVersion: SdkApiVersion | undefined,
+  pluginSdkVersion: unknown,
   pluginName: string,
 ): SdkCompatibilityResult {
   // Missing sdkapi is no longer a soft-compat path.

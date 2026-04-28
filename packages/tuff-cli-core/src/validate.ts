@@ -7,7 +7,9 @@ import {
 } from '@talex-touch/utils/permission'
 import {
   CATEGORY_REQUIRED_MIN_VERSION,
+  checkSdkCompatibility,
   CURRENT_SDK_VERSION,
+  resolveSdkApiVersion,
 } from '@talex-touch/utils/plugin'
 import fs from 'fs-extra'
 
@@ -92,15 +94,21 @@ export async function runValidate(args: string[] = []): Promise<void> {
   }
 
   const sdkapi = manifest.sdkapi
-  if (typeof sdkapi !== 'number' || !Number.isFinite(sdkapi)) {
-    errors.push(`Missing or invalid "sdkapi". Current required sdkapi: ${CURRENT_SDK_VERSION}`)
+  const sdkCompatibility = checkSdkCompatibility(sdkapi, name || 'plugin')
+  const resolvedSdkapi = resolveSdkApiVersion(sdkapi)
+  if (!sdkCompatibility.compatible) {
+    errors.push(sdkCompatibility.warning ?? `Invalid "sdkapi". Current required sdkapi: ${CURRENT_SDK_VERSION}`)
   }
-  else if (sdkapi < CURRENT_SDK_VERSION) {
-    warnings.push(`Outdated sdkapi (${sdkapi}). Recommended: ${CURRENT_SDK_VERSION}`)
+  else if (typeof resolvedSdkapi === 'number' && resolvedSdkapi < CURRENT_SDK_VERSION) {
+    warnings.push(`Outdated sdkapi (${resolvedSdkapi}). Recommended: ${CURRENT_SDK_VERSION}`)
   }
 
   const category = typeof manifest.category === 'string' ? manifest.category.trim() : ''
-  if (typeof sdkapi === 'number' && sdkapi >= CATEGORY_REQUIRED_MIN_VERSION && !category) {
+  if (
+    typeof resolvedSdkapi === 'number'
+    && resolvedSdkapi >= CATEGORY_REQUIRED_MIN_VERSION
+    && !category
+  ) {
     errors.push(
       `Missing required "category" when sdkapi >= ${CATEGORY_REQUIRED_MIN_VERSION}`,
     )

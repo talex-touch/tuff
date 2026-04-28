@@ -3,7 +3,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
-import { CURRENT_SDK_VERSION } from '@talex-touch/utils/plugin'
+import {
+  checkSdkCompatibility,
+  CURRENT_SDK_VERSION,
+  resolveSdkApiVersion,
+} from '@talex-touch/utils/plugin'
 import { t } from '../i18n'
 import {
   askConfirm,
@@ -23,6 +27,16 @@ import {
 const TEMPLATE_REPO = 'https://github.com/talex-touch/tuff-plugin-template.git'
 const SQLITE_PERMISSION_ID = 'storage.sqlite'
 const SQLITE_PERMISSION_REASON = 'Store plugin business data in the local SQLite database'
+
+function shouldRewriteSdkapi(sdkapi: unknown): boolean {
+  const resolvedSdkapi = resolveSdkApiVersion(sdkapi)
+  return (
+    typeof sdkapi !== 'number'
+    || !checkSdkCompatibility(sdkapi, 'template-plugin').compatible
+    || resolvedSdkapi === undefined
+    || resolvedSdkapi < CURRENT_SDK_VERSION
+  )
+}
 
 export interface CreateOptions {
   name?: string
@@ -237,7 +251,7 @@ async function configureManifest(
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
   manifest.name = config.name
   manifest.description = `${config.name} - A Tuff plugin`
-  if (typeof manifest.sdkapi !== 'number' || manifest.sdkapi < CURRENT_SDK_VERSION) {
+  if (shouldRewriteSdkapi(manifest.sdkapi)) {
     manifest.sdkapi = CURRENT_SDK_VERSION
   }
   ensureSqliteManifestConfig(manifest)
