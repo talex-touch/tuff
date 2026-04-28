@@ -1,8 +1,10 @@
-import path from 'node:path'
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
+import path from 'node:path'
+import { CURRENT_SDK_VERSION, PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { createPluginLoader, createPluginLoadShell } from './plugin-loaders'
 
 const { appMock } = vi.hoisted(() => ({
   appMock: { isPackaged: false }
@@ -88,8 +90,6 @@ vi.mock('./plugin', () => ({
   }
 }))
 
-import { createPluginLoadShell, createPluginLoader } from './plugin-loaders'
-
 async function createPluginDir(manifest: Record<string, unknown>): Promise<string> {
   const root = await fs.mkdtemp(path.join(tmpdir(), 'plugin-loaders-test-'))
   const pluginPath = path.join(root, 'touch-translation')
@@ -124,6 +124,8 @@ describe('createPluginLoader', () => {
       version: '1.0.0',
       description: 'test',
       icon: { type: 'emoji', value: 'x' },
+      sdkapi: CURRENT_SDK_VERSION,
+      category: 'utilities',
       dev: { enable: true, source: true, address: 'http://127.0.0.1:3733/' }
     })
     createdPaths.push(pluginPath)
@@ -193,6 +195,8 @@ describe('createPluginLoader', () => {
           version: '1.0.0',
           description: 'remote',
           icon: { type: 'emoji', value: 'x' },
+          sdkapi: CURRENT_SDK_VERSION,
+          category: 'utilities',
           dev: { enable: true, source: true, address: 'http://127.0.0.1:3733/' }
         }
       })
@@ -213,6 +217,8 @@ describe('createPluginLoader', () => {
       version: '1.0.0',
       description: 'local',
       icon: { type: 'emoji', value: 'x' },
+      sdkapi: CURRENT_SDK_VERSION,
+      category: 'utilities',
       dev: { enable: true, source: true, address: 'http://127.0.0.1:3733/' }
     })
     createdPaths.push(pluginPath)
@@ -224,6 +230,7 @@ describe('createPluginLoader', () => {
     const issueCodes = plugin.issues.map((issue) => issue.code)
 
     expect(issueCodes).toContain('DEV_SOURCE_FALLBACK_LOCAL')
+    expect(issueCodes).not.toContain('SDKAPI_BLOCKED')
     expect(issueCodes).not.toContain('REMOTE_MANIFEST_FAILED')
     expect(plugin.dev).toMatchObject({ enable: true, source: false })
   })
