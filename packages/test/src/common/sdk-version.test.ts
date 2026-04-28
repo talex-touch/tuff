@@ -34,13 +34,23 @@ describe('sdk-version', () => {
     expect(checkSdkCompatibility(SdkApi.V260428, 'touch-dev-utils').warning).toBeUndefined()
   })
 
-  it('falls back unknown markers to the nearest supported baseline', () => {
+  it('blocks unknown sdkapi markers instead of normalizing them', () => {
     const compatibility = checkSdkCompatibility(260421, 'touch-dev-utils')
 
-    expect(compatibility.compatible).toBe(true)
-    expect(compatibility.enforcePermissions).toBe(true)
+    expect(resolveSdkApiVersion(260421)).toBeUndefined()
+    expect(compatibility.compatible).toBe(false)
+    expect(compatibility.enforcePermissions).toBe(false)
     expect(compatibility.warning).toContain('260421')
-    expect(compatibility.warning).toContain(String(SdkApi.V260228))
+    expect(compatibility.warning).toContain('not a supported SDK marker')
+  })
+
+  it('blocks future sdkapi markers until the runtime explicitly supports them', () => {
+    const compatibility = checkSdkCompatibility(260501, 'future-plugin')
+
+    expect(resolveSdkApiVersion(260501)).toBeUndefined()
+    expect(compatibility.compatible).toBe(false)
+    expect(compatibility.enforcePermissions).toBe(false)
+    expect(compatibility.warning).toContain('260501')
   })
 
   it('keeps bundled plugin manifests on the current sdkapi marker', () => {

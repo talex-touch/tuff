@@ -5,6 +5,18 @@
 
 ## 2026-04-28
 
+### fix(core-app): 阻断 unsupported sdkapi marker
+
+- `packages/utils/plugin/sdk-version.ts`
+- `apps/core-app/src/main/modules/plugin/sdk-compat.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `packages/test/src/common/sdk-version.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- `apps/nexus/content/docs/dev/{api,reference}`
+  - `SUPPORTED_SDK_VERSIONS` 现在是插件声明 `sdkapi` 的 canonical allowlist；非 canonical marker 与未来 marker 不再归一化到最近支持版本，而是统一阻断为 `SDKAPI_BLOCKED`。
+  - loader 删除 `SDK_VERSION_COMPAT_WARNING` 非阻断路径，避免 hard-cut 后仍把未知 marker 包装成“可兼容运行”。
+  - Nexus manifest / permission / runtime issue code 文档同步说明 unsupported marker 会被阻断，推荐新插件直接声明当前 `260428`。
+
 ### chore(plugins): bundled plugins 使用当前 sdkapi marker
 
 - `plugins/*/manifest.json`

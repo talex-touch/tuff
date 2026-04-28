@@ -78,7 +78,8 @@ The `sdkapi` field determines whether permission checking can enter the runtime:
 |--------------|------------------|-------|
 | Not declared | Blocked | Runtime returns `SDKAPI_BLOCKED` |
 | < 251212 | Blocked | Runtime returns `SDKAPI_BLOCKED` |
-| >= 251212 | Enabled | Full permission enforcement |
+| Not in the supported list | Blocked | Non-canonical or future markers return `SDKAPI_BLOCKED` |
+| Supported and >= 251212 | Enabled | Full permission enforcement |
 
 **Migration Guide**
 
@@ -265,7 +266,7 @@ Users can manage plugin permissions at:
 
 **Q: Why does my plugin show `SDKAPI_BLOCKED`?**
 
-A: Your `manifest.json` doesn't declare `sdkapi`, uses an invalid marker, or the version is below `251212`. Update it to the current supported marker:
+A: Your `manifest.json` doesn't declare `sdkapi`, uses an invalid / unsupported marker, or the version is below `251212`. Update it to the current supported marker:
 
 :::TuffCodeBlock{lang="json"}
 ---

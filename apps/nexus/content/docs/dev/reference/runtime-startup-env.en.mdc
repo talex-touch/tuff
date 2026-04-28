@@ -28,8 +28,7 @@
 | `MANIFEST_MISSING_NAME` | error | missing `name` |
 | `MANIFEST_MISSING_VERSION` | warning | missing `version` |
 | `CATEGORY_MISSING` | error | `category` required for current `sdkapi` |
-| `SDKAPI_BLOCKED` | error | plugin is blocked because `sdkapi` is missing, invalid, or below the enforced baseline |
-| `SDK_VERSION_COMPAT_WARNING` | warning | plugin declares a newer SDK or a non-canonical marker, so runtime normalizes to the nearest supported marker and warns about possible feature drift |
+| `SDKAPI_BLOCKED` | error | plugin is blocked because `sdkapi` is missing, invalid, unsupported, or below the enforced baseline |
 | `PERMISSION_MISSING` | warning | required permissions not granted |
 | `UNKNOWN_PERMISSION_IDS` | warning | unknown permission IDs declared |
 | `INVALID_FEATURE_COMMANDS` | warning | invalid feature.commands shape |

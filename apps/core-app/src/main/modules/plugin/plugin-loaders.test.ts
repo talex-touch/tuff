@@ -286,13 +286,13 @@ describe('createPluginLoader', () => {
     expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_MISSING')).toBe(false)
   })
 
-  it('uses neutral sdk compatibility warnings for future sdk markers', async () => {
+  it('blocks plugins with unsupported sdk markers', async () => {
     const pluginPath = await createPluginDir({
       name: 'touch-translation',
       version: '1.0.0',
-      description: 'future sdk plugin',
+      description: 'unsupported sdk plugin',
       icon: { type: 'emoji', value: 'x' },
-      sdkapi: 260301,
+      sdkapi: 260501,
       category: 'utilities'
     })
     createdPaths.push(pluginPath)
@@ -300,9 +300,10 @@ describe('createPluginLoader', () => {
     const loader = createPluginLoader('touch-translation', pluginPath)
     const plugin = await loader.load()
 
-    expect(plugin.loadError).toBeUndefined()
-    expect(plugin.loadState).not.toBe('load_failed')
-    expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_COMPAT_WARNING')).toBe(true)
+    expect(plugin.loadState).toBe('load_failed')
+    expect(plugin.loadError).toMatchObject({ code: 'SDKAPI_BLOCKED' })
+    expect(plugin.issues.some((issue) => issue.code === 'SDKAPI_BLOCKED')).toBe(true)
+    expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_COMPAT_WARNING')).toBe(false)
     expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_OUTDATED')).toBe(false)
   })
 
