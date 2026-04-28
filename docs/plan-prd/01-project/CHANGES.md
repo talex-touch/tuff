@@ -5,6 +5,14 @@
 
 ## 2026-04-28
 
+### chore(plugins): bundled plugins 使用当前 sdkapi marker
+
+- `plugins/*/manifest.json`
+- `packages/test/src/common/sdk-version.test.ts`
+  - 官方 bundled plugins 的 manifest 统一声明当前 `sdkapi: 260428`，不再停留在 `260121/260215` 旧 marker 上。
+  - 这些插件已经具备 `category` 与权限声明；本轮只收敛 SDK marker，让官方插件默认进入当前 hard-cut / capability auth 语义。
+  - `sdk-version` 回归从“canonical marker”收紧为“必须等于 `CURRENT_SDK_VERSION`”，防止后续官方插件再次以旧 SDK marker 进入仓库。
+
 ### fix(utils): StorageSubscription 优先使用 typed storage transport
 
 - `packages/utils/renderer/storage/storage-subscription.ts`

@@ -3,7 +3,7 @@
   "name": "touch-text-snippets",
   "version": "1.0.0",
   "author": "TalexTouch Team",
-  "sdkapi": 260121,
+  "sdkapi": 260428,
   "category": "utilities",
   "icon": {
     "type": "file",
