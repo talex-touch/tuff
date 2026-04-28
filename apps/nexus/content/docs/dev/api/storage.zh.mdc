@@ -67,7 +67,7 @@ code: |
 ---
 code: |
   {
-    "sdkapi": 260215,
+    "sdkapi": 260428,
     "permissions": {
       "required": ["storage.sqlite"],
       "optional": []
