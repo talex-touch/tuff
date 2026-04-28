@@ -1,7 +1,20 @@
 # 变更日志
 
-> 更新时间: 2026-04-27
-> 说明: 主文件仅保留近 30 天（2026-03-28 ~ 2026-04-27）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-28
+> 说明: 主文件仅保留近 30 天（2026-03-29 ~ 2026-04-28）详细记录；更早历史已按月归档。
+
+## 2026-04-28
+
+### chore(utils): 收敛插件 sdkapi 260428 推荐口径
+
+- `plugins/clipboard-history/manifest.json`
+- `packages/test/src/common/sdk-version.test.ts`
+- `apps/nexus/content/docs/dev/reference/manifest.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/api/permission.{zh,en}.mdc`
+- `AGENTS.md`
+  - `clipboard-history` 内置插件 manifest 从非 canonical `260421` 收敛到当前推荐 `260428`，避免继续触发 unsupported SDK marker 兼容告警。
+  - Nexus manifest / permission 文档与仓库说明同步更新推荐 `sdkapi` 为 `260428`；`260228` 仍作为 capability auth 的启用下限，不新增额外运行时门槛。
+  - `sdk-version` 回归补充官方插件 manifest canonical marker 检查，防止后续再引入不在 `SUPPORTED_SDK_VERSIONS` 中的日期 marker。
 
 ## 2026-04-27
 

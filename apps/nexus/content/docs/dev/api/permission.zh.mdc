@@ -17,7 +17,7 @@ code: |
     "id": "com.example.plugin",
     "name": "My Plugin",
     "version": "1.0.0",
-    "sdkapi": 260228,
+    "sdkapi": 260428,
     "permissions": {
       "required": ["clipboard.read", "network.internet"],
       "optional": ["storage.shared"]
@@ -88,7 +88,7 @@ code: |
 ---
 code: |
   {
-    "sdkapi": 260228,
+    "sdkapi": 260428,
     "permissions": {
       "required": ["clipboard.read"],
       "optional": []
@@ -151,7 +151,7 @@ code: |
 ---
 code: |
   {
-    "sdkapi": 260228,
+    "sdkapi": 260428,
     "permissions": {
       "required": ["storage.sqlite"],
       "optional": []
@@ -270,7 +270,7 @@ A: 您的 `manifest.json` 未声明 `sdkapi`、使用了非法 marker，或版�
 :::TuffCodeBlock{lang="json"}
 ---
 code: |
-  "sdkapi": 260228
+  "sdkapi": 260428
 ---
 :::
 
