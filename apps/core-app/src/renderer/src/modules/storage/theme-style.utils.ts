@@ -139,17 +139,3 @@ export function resolveThemeModeState(mode: ThemeMode, systemDark: boolean): The
     isDark: systemDark
   }
 }
-
-export function parseLegacyThemeStyle(raw: string): ThemeStyleState | null {
-  const trimmed = raw.trim()
-  if (!trimmed) {
-    return null
-  }
-
-  try {
-    const parsed = JSON.parse(trimmed) as unknown
-    return normalizeThemeStyle(parsed)
-  } catch {
-    return null
-  }
-}

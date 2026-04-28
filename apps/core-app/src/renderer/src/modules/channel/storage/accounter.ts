@@ -56,7 +56,6 @@ export class AccountStorage {
   token?: Token
 
   constructor(data?: Partial<{ user: User; token: Token; eller: Eller }>) {
-    // console.log( data )
     this.analyzeFromObj(data)
   }
 
