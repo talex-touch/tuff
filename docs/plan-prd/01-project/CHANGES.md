@@ -5,6 +5,30 @@
 
 ## 2026-04-28
 
+### fix(core-app): 对齐 app/file 索引重建交互契约
+
+- `packages/utils/transport/events/types/app-index.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-diagnostics.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/{SettingFileIndex,SettingFileIndexAppDiagnostic,index-rebuild-flow}.ts`
+  - `settingsSdk.appIndex.reindex()` 增加 `force` 确认语义，首次调用只做目标预检并返回 `requiresConfirm`，确认后才执行单项关键词重建或重扫。
+  - renderer 侧抽出统一重建结果归一化 helper，对齐 file/app 两条链路的确认态、失败态与成功提示处理。
+  - 补充 focused contract 测试，固定 typed SDK 映射、main handler 透传、app-provider preflight 与 renderer outcome 语义，避免“点击前没检查”回归。
+
+### chore(deps): 升级全仓同主版本依赖
+
+- `package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml`
+- `apps/{core-app,nexus,pilot}/package.json`
+- `packages/*/package.json` / `plugins/*/package.json`
+  - 全仓 workspace 依赖完成同主版本 patch/minor 升级，覆盖 CoreApp、Nexus、Pilot、Utils、Tuffex、CLI packages 与官方插件包。
+  - 版本准备同步完成：root/CoreApp `2.4.10-beta.3`，`@talex-touch/utils@1.0.50`，`@talex-touch/tuffex@0.3.5`，`@talex-touch/tuff-cli@0.0.3` 与 `tuff-intelligence` patch 版本。
+  - CLI 发布边界收口：`@talex-touch/tuff-cli-core` 标记为内部 workspace 包，不进入 npm 发布清单；删除独立 `packages/tuffcli` 兼容包，避免与 `@talex-touch/tuff-cli` 发布职责重复；`@talex-touch/tuff-cli` 显式使用 workspace core / unplugin 构建，避免发布包打入旧版 `unplugin-export-plugin`。
+  - `@talex-touch/unplugin-export-plugin` 保留为 `tuff-cli` 复用的低层构建能力与高级自定义入口，文档明确普通插件开发优先使用 `@talex-touch/tuff-cli`，不推荐作为默认安装入口。
+  - GitHub Actions 发布链路同步收口：补齐 `tuff-cli` / `tuff-intelligence` package CI，新增 `tuff-intelligence` npm 发布 workflow；CLI 发布 workflow 只发布 `unplugin-export-plugin` 与 `tuff-cli`，不再引用已删除的 `tuffcli` 或内部 `tuff-cli-core`，并在发布 `unplugin-export-plugin` 前等待当前 `utils` 版本可见。
+  - `next-auth` 保持 `~4.21.1`，避免破坏 `@sidebase/nuxt-auth@0.9.4` 的 peer 约束；major 升级项继续保留为单独兼容迁移任务。
+  - Pilot 补充 `markmap-common`，根 peer 规则补充 UnoCSS wasm runtime 的 `@emnapi/*` 可选 peer，消除本轮升级新增 peer 噪声。
+  - 插件构建兼容同步收口：`touch-image` 对齐当前 Tuff SDK 初始化入口并补齐缺失图片视图，`touch-music` 将 `<script setup>` 中的组件选项迁移为 `defineOptions()`，避免新版 Vue 编译器阻断构建。
+  - `@talex-touch/utils` 补充 npm `files` 白名单，避免发布包携带本地旧 tarball、测试目录与开发配置。
+
 ### fix(utils): 补齐 regShortcut 快捷键语义参数
 
 - `packages/utils/plugin/sdk/common.ts`
@@ -56,6 +80,19 @@
   - `StorageSubscription` 在同时初始化 channel 与 transport 时，不再优先走 legacy `storage:get` raw channel 拉快照；当前 CoreApp 初始化传入 transport 后会直接使用 `StorageEvents.app.get`。
   - typed transport 可用时不再额外注册 legacy `storage:update` listener，避免把已迁移路径仍标记成 legacy channel active。
   - 补充回归测试，固定“transport + channel 同时存在时不得发送 legacy snapshot 请求”的 hard-cut 语义。
+
+### ref(renderer): 收口 storage 初始化、订阅与消费入口
+
+- `packages/utils/renderer/storage/{bootstrap,base-storage,storage-subscription}.ts`
+- `packages/utils/renderer/hooks/use-storage-sdk.ts`
+- `packages/utils/transport/sdk/domains/storage.ts`
+- `apps/core-app/src/renderer/src/{main.ts,modules/channel/storage/{base,index,accounter}.ts,modules/hooks/useAppLifecycle.ts,views/base/{begin/internal/SetupPermissions.vue,settings/{SettingMessages,SettingSentry}.vue}}`
+- `packages/utils/__tests__/{renderer-storage-transport,transport-domain-sdks}.test.ts`
+  - 新增 renderer storage bootstrap 入口，CoreApp renderer 初始化不再显式解析 `useChannel()`，统一从 `TuffTransport` 初始化 storage 读写与更新订阅。
+  - `TouchStorage` 与 `StorageSubscription` 支持从 legacy channel listener 升级到 typed storage stream，保留显式 fallback 但优先使用 `StorageEvents.app.updated`。
+  - 新增 `createStorageSdk()` / `useStorageSdk()`，设置、引导权限与账号持久化消费不再直接 `transport.send(StorageEvents.app.*)`。
+  - 设置页消息中心改用 `subscribeStorage()` 订阅 `analytics-messages.json`，避免消费端直接操作 storage update stream。
+  - 补充 contract 测试固定 storage domain SDK 映射、默认 transport 路径，以及 legacy listener 被 transport 初始化清理的升级语义。
 
 ### chore(utils): 收敛插件 sdkapi 260428 推荐口径
 

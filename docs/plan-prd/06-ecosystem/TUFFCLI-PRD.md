@@ -92,7 +92,7 @@ $ tuff
 ### `tuff.config.ts`
 
 ```typescript
-import { defineConfig } from '@talex-touch/tuffcli'
+import { defineConfig } from '@talex-touch/unplugin-export-plugin/types'
 
 export default defineConfig({
   // 插件入口
@@ -138,7 +138,7 @@ export default defineConfig({
   - `@talex-touch/tuff-cli-core` 已承接核心编排（`args/config/auth/publish/validate/runtime`）。
   - 兼容入口保留并输出 deprecation 提示（迁移指向 `@talex-touch/tuff-cli`，旧 `unplugin` 入口已 shim 转发）。
   - `tuff validate` 命令已上线（manifest/sdkapi/category/permissions 校验，支持非交互失败码）。
-  - `@talex-touch/tuffcli` 兼容导出 `defineConfig/types` 已可用。
+  - 独立 `@talex-touch/tuffcli` 兼容包已退场，避免与 `@talex-touch/tuff-cli` 职责重复；`tuffcli` 命令仍由 `@talex-touch/tuff-cli` bin 提供。
   - 文档与示例包名已统一到新包层（保留兼容说明）。
 
 ## 兼容生命周期策略（锁定）

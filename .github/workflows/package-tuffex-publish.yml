@@ -25,7 +25,7 @@ jobs:
       - name: Setup PNPM
         uses: pnpm/action-setup@v3
         with:
-          version: 9
+          version: 10.32.1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -69,9 +69,54 @@ jobs:
         working-directory: packages/tuffex
         run: pnpm build
 
+      - name: Verify npm token
+        if: steps.version_check.outputs.should_publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "NPM_TOKEN is required."
+            exit 1
+          fi
+
       - name: Publish to npm
         if: steps.version_check.outputs.should_publish == 'true'
         working-directory: packages/tuffex
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+        run: |
+          set -euo pipefail
+
+          version="${{ steps.version_check.outputs.current_version }}"
+          dist_tag="latest"
+          if [[ "${version}" == *"-"* ]]; then
+            dist_tag="next"
+          fi
+
+          if npm view "@talex-touch/tuffex@${version}" version >/dev/null 2>&1; then
+            echo "@talex-touch/tuffex@${version} already published. Skipping."
+            exit 0
+          fi
+
+          publish_log="$(mktemp)"
+          trap 'rm -f "${publish_log}"' EXIT
+
+          set +e
+          npm publish --access public --tag "${dist_tag}" >"${publish_log}" 2>&1
+          publish_status=$?
+          set -e
+
+          cat "${publish_log}"
+
+          if [ "${publish_status}" -eq 0 ]; then
+            exit 0
+          fi
+
+          if grep -Eqi 'previously published versions|cannot publish over the previously published version' "${publish_log}"; then
+            if npm view "@talex-touch/tuffex@${version}" version >/dev/null 2>&1; then
+              echo "@talex-touch/tuffex@${version} became available during publish. Treating duplicate publish as success."
+              exit 0
+            fi
+          fi
+
+          exit "${publish_status}"

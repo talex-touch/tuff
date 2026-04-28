@@ -1,4 +1,4 @@
-name: Utils Package Publish
+name: Tuff Intelligence Package Publish
 
 on:
   push:
@@ -6,12 +6,13 @@ on:
       - main
       - master
     paths:
+      - 'packages/tuff-intelligence/package.json'
       - 'packages/utils/package.json'
-      - '.github/workflows/package-utils-publish.yml'
+      - '.github/workflows/package-tuff-intelligence-publish.yml'
 
 jobs:
   publish:
-    name: Publish - utils
+    name: Publish - tuff-intelligence
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -42,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          current_version=$(node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('packages/utils/package.json','utf8')); console.log(pkg.version)")
+          current_version=$(node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('packages/tuff-intelligence/package.json','utf8')); console.log(pkg.version)")
           before_sha="${{ github.event.before }}"
 
           echo "current_version=${current_version}" >> "$GITHUB_OUTPUT"
@@ -52,7 +53,7 @@ jobs:
             exit 0
           fi
 
-          previous_version=$(git show "${before_sha}:packages/utils/package.json" | node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync(0,'utf8')); console.log(pkg.version)")
+          previous_version=$(git show "${before_sha}:packages/tuff-intelligence/package.json" | node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync(0,'utf8')); console.log(pkg.version)")
           echo "previous_version=${previous_version}" >> "$GITHUB_OUTPUT"
 
           if [ "${current_version}" != "${previous_version}" ]; then
@@ -63,11 +64,30 @@ jobs:
 
       - name: Skip publish (version unchanged)
         if: steps.version_check.outputs.should_publish != 'true'
-        run: echo "Utils version unchanged. Skipping publish."
+        run: echo "Tuff Intelligence version unchanged. Skipping publish."
 
-      - name: Run utils tests
+      - name: Build package
         if: steps.version_check.outputs.should_publish == 'true'
-        run: pnpm -C "packages/utils" test
+        working-directory: packages/tuff-intelligence
+        run: pnpm build
+
+      - name: Wait for utils dependency
+        if: steps.version_check.outputs.should_publish == 'true'
+        run: |
+          set -euo pipefail
+
+          utils_version=$(node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('packages/utils/package.json','utf8')); console.log(pkg.version)")
+          for attempt in {1..12}; do
+            if npm view "@talex-touch/utils@${utils_version}" version >/dev/null 2>&1; then
+              echo "@talex-touch/utils@${utils_version} is available."
+              exit 0
+            fi
+            echo "Waiting for @talex-touch/utils@${utils_version} to be available on npm (${attempt}/12)..."
+            sleep 10
+          done
+
+          echo "@talex-touch/utils@${utils_version} is not available on npm."
+          exit 1
 
       - name: Verify npm token
         if: steps.version_check.outputs.should_publish == 'true'
@@ -81,7 +101,7 @@ jobs:
 
       - name: Publish to npm
         if: steps.version_check.outputs.should_publish == 'true'
-        working-directory: packages/utils
+        working-directory: packages/tuff-intelligence
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -93,8 +113,8 @@ jobs:
             dist_tag="next"
           fi
 
-          if npm view "@talex-touch/utils@${version}" version >/dev/null 2>&1; then
-            echo "@talex-touch/utils@${version} already published. Skipping."
+          if npm view "@talex-touch/tuff-intelligence@${version}" version >/dev/null 2>&1; then
+            echo "@talex-touch/tuff-intelligence@${version} already published. Skipping."
             exit 0
           fi
 
@@ -102,7 +122,7 @@ jobs:
           trap 'rm -f "${publish_log}"' EXIT
 
           set +e
-          npm publish --access public --tag "${dist_tag}" >"${publish_log}" 2>&1
+          pnpm publish --access public --tag "${dist_tag}" --no-git-checks >"${publish_log}" 2>&1
           publish_status=$?
           set -e
 
@@ -113,8 +133,8 @@ jobs:
           fi
 
           if grep -Eqi 'previously published versions|cannot publish over the previously published version' "${publish_log}"; then
-            if npm view "@talex-touch/utils@${version}" version >/dev/null 2>&1; then
-              echo "@talex-touch/utils@${version} became available during publish. Treating duplicate publish as success."
+            if npm view "@talex-touch/tuff-intelligence@${version}" version >/dev/null 2>&1; then
+              echo "@talex-touch/tuff-intelligence@${version} became available during publish. Treating duplicate publish as success."
               exit 0
             fi
           fi
