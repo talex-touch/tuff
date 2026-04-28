@@ -67,6 +67,8 @@
 - 当前 `rg` 复核显示 `window.$t/window.$i18n` 在 renderer 中无命中；旧 `storage:get/storage:save/storage:update` 在 CoreApp 业务侧无新增消费，剩余命中为插件 storage IPC 名称或共享库显式 fallback 边界。
 - `show-active-sessions` 仅保留在 DivisionBox 回归测试的禁止断言中；`TARGET_OFFLINE` 仍覆盖未注册 Flow delivery handler 的失败语义。
 - 应用详情页不再暴露无真实执行路径的 open explorer / uninstall / save/spec 入口；当前保留的 launch 与 help 均有真实执行路径。
+- 下载中心目录不再保留未引用的旧 `DownloadSettings.vue` 假设置组件；该组件的选择临时目录按钮仅弹“功能待实现”，真实下载设置入口以 `views/base/settings/SettingDownload.vue` 为准。
+- 下载组件目录内模板文案已从全局 `$t(...)` 收口到 `useI18n()` 的 `t(...)`，`TaskCard` / `DownloadTask` 中硬编码的下载模块、优先级与剩余时间中文文案也已归入 i18n 资源。
 - 跨平台能力仍是显式不对称：Windows/macOS 属于 2.5.0 release-blocking 人工回归范围；Linux 继续按 `xdotool` / desktop environment 依赖记录为 documented best-effort，不应包装为同等支持。
 
 ### 已清理
@@ -76,6 +78,8 @@
 - 刷新 `compatibility-legacy-scan-summary.md` 的完成态汇总，移除已过期的 `tray-holder.ts` 与 deprecated Plugin API 风险描述，避免旧扫描清单误导当前结论。
 - 清理 `AppConfigure.vue` 中仅剩注释/空 handler 的 open explorer、uninstall、save footer 与永远不会渲染的 spec 区块，避免旧应用详情页把未实现能力呈现为可用操作。
 - 清理 `appConfigure` i18n 中对应上述假动作的无调用文案键，避免语言资源继续暗示这些入口仍存在。
+- 删除未引用且包含“选择目录功能待实现”假动作的旧 `DownloadSettings.vue`，避免死组件继续携带假设置入口。
+- 下载组件目录内旧 `$t(...)` 模板调用收口到 `useI18n()`，并补齐下载优先级/剩余时间对应的中英文资源键。
 
 ### 仍保留但不判为假实现
 

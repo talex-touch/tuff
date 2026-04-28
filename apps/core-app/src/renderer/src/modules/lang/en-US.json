@@ -1609,6 +1609,10 @@
     "priority_high": "High",
     "priority_normal": "Normal",
     "priority_low": "Low",
+    "priority_background": "Background",
+    "duration_seconds": "{count}s",
+    "duration_minutes": "{count}min",
+    "duration_hours": "{count}hr",
     "error": {
       "network": "Network connection failed",
       "timeout": "Download timeout",

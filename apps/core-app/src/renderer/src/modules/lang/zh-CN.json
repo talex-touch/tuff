@@ -1609,6 +1609,10 @@
     "priority_high": "高",
     "priority_normal": "普通",
     "priority_low": "低",
+    "priority_background": "后台",
+    "duration_seconds": "{count}秒",
+    "duration_minutes": "{count}分钟",
+    "duration_hours": "{count}小时",
     "error": {
       "network": "网络连接失败",
       "timeout": "下载超时",

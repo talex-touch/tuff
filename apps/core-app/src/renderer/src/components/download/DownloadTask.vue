@@ -3,6 +3,7 @@ import type { DownloadTask } from '@talex-touch/utils'
 import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
 import { TuffProgress, TxAlert, TxStack } from '@talex-touch/tuffex'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 // Props
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const { t } = useI18n()
 
 // Emits - defined for type safety, even if not used directly
 defineEmits<{
@@ -40,12 +42,12 @@ const showProgress = computed(() => {
 // 获取模块名称
 function getModuleName(module: DownloadModule): string {
   const moduleNames = {
-    [DownloadModule.APP_UPDATE]: '应用更新',
-    [DownloadModule.PLUGIN_INSTALL]: '插件安装',
-    [DownloadModule.RESOURCE_DOWNLOAD]: '资源下载',
-    [DownloadModule.USER_MANUAL]: '手动下载'
+    [DownloadModule.APP_UPDATE]: t('download.module_app_update'),
+    [DownloadModule.PLUGIN_INSTALL]: t('download.module_plugin_install'),
+    [DownloadModule.RESOURCE_DOWNLOAD]: t('download.module_resource_download'),
+    [DownloadModule.USER_MANUAL]: t('download.module_user_manual')
   }
-  return moduleNames[module] || '未知'
+  return moduleNames[module] || t('download.module_unknown')
 }
 
 // 获取任务状态颜色
@@ -114,15 +116,15 @@ function getPriorityColor(priority: DownloadPriority): string {
 // 获取优先级名称
 function getPriorityName(priority: DownloadPriority): string {
   if (priority >= DownloadPriority.CRITICAL) {
-    return '关键'
+    return t('download.priority_critical')
   } else if (priority >= DownloadPriority.HIGH) {
-    return '高'
+    return t('download.priority_high')
   } else if (priority >= DownloadPriority.NORMAL) {
-    return '普通'
+    return t('download.priority_normal')
   } else if (priority >= DownloadPriority.LOW) {
-    return '低'
+    return t('download.priority_low')
   } else {
-    return '后台'
+    return t('download.priority_background')
   }
 }
 
@@ -153,13 +155,13 @@ function formatSize(bytes: number): string {
 // 格式化剩余时间
 function formatRemainingTime(seconds: number): string {
   if (seconds < 60) {
-    return `${Math.round(seconds)}秒`
+    return t('download.duration_seconds', { count: Math.round(seconds) })
   } else if (seconds < 3600) {
     const minutes = Math.round(seconds / 60)
-    return `${minutes}分钟`
+    return t('download.duration_minutes', { count: minutes })
   } else {
     const hours = Math.round(seconds / 3600)
-    return `${hours}小时`
+    return t('download.duration_hours', { count: hours })
   }
 }
 </script>
@@ -196,7 +198,7 @@ function formatRemainingTime(seconds: number): string {
           @click="$emit('pause', task.id)"
         >
           <i class="i-carbon-pause" />
-          {{ $t('download.pause') }}
+          {{ t('download.pause') }}
         </TxButton>
         <TxButton
           v-else-if="task.status === 'paused'"
@@ -205,7 +207,7 @@ function formatRemainingTime(seconds: number): string {
           @click="$emit('resume', task.id)"
         >
           <i class="i-carbon-play" />
-          {{ $t('download.resume') }}
+          {{ t('download.resume') }}
         </TxButton>
         <TxButton
           v-if="task.status === 'failed'"
@@ -214,7 +216,7 @@ function formatRemainingTime(seconds: number): string {
           @click="$emit('retry', task.id)"
         >
           <i class="i-carbon-renew" />
-          {{ $t('download.retry') }}
+          {{ t('download.retry') }}
         </TxButton>
         <TxButton
           v-if="['pending', 'downloading', 'paused'].includes(task.status)"
@@ -223,7 +225,7 @@ function formatRemainingTime(seconds: number): string {
           @click="$emit('cancel', task.id)"
         >
           <i class="i-carbon-close" />
-          {{ $t('download.cancel') }}
+          {{ t('download.cancel') }}
         </TxButton>
         <TxButton
           v-if="['completed', 'failed', 'cancelled'].includes(task.status)"
@@ -232,7 +234,7 @@ function formatRemainingTime(seconds: number): string {
           @click="$emit('remove', task.id)"
         >
           <i class="i-carbon-trash-can" />
-          {{ $t('download.remove') }}
+          {{ t('download.remove') }}
         </TxButton>
       </div>
     </div>
@@ -262,19 +264,19 @@ function formatRemainingTime(seconds: number): string {
       <TxStack class="task-detail-grid" direction="horizontal" :gap="16" wrap>
         <div class="detail-column">
           <div class="detail-item">
-            <span class="detail-label">{{ $t('download.url') }}:</span>
+            <span class="detail-label">{{ t('download.url') }}:</span>
             <span class="detail-value">{{ task.url }}</span>
           </div>
         </div>
         <div class="detail-column">
           <div class="detail-item">
-            <span class="detail-label">{{ $t('download.destination') }}:</span>
+            <span class="detail-label">{{ t('download.destination') }}:</span>
             <span class="detail-value">{{ task.destination }}</span>
           </div>
         </div>
         <div class="detail-column">
           <div class="detail-item">
-            <span class="detail-label">{{ $t('download.priority') }}:</span>
+            <span class="detail-label">{{ t('download.priority') }}:</span>
             <span class="detail-value" :style="{ color: getPriorityColor(task.priority) }">
               {{ getPriorityName(task.priority) }}
             </span>

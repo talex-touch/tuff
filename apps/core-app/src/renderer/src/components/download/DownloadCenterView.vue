@@ -333,7 +333,7 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
       <div class="header-left">
         <h2 class="title">
           <i class="i-carbon-download" />
-          {{ $t('download.title') }}
+          {{ t('download.title') }}
         </h2>
       </div>
       <div class="header-right">
@@ -350,7 +350,7 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
         </div>
         <TxButton @click="openLogs">
           <i class="i-carbon-document" />
-          {{ $t('download.view_logs') }}
+          {{ t('download.view_logs') }}
         </TxButton>
         <TxButton @click="openSettings">
           <i class="i-carbon-settings" />
@@ -362,7 +362,7 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
     <div class="search-filter-bar">
       <TuffInput
         v-model="searchQuery"
-        :placeholder="$t('download.search_placeholder')"
+        :placeholder="t('download.search_placeholder')"
         clearable
         @input="handleSearch(searchQuery)"
       >
@@ -373,15 +373,15 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
       <div class="filter-actions">
         <TxButton v-if="tasksByStatus.downloading.length > 0" @click="pauseAllTasks">
           <i class="i-carbon-pause" />
-          {{ $t('download.pause_all') }}
+          {{ t('download.pause_all') }}
         </TxButton>
         <TxButton v-if="tasksByStatus.paused.length > 0" @click="resumeAllTasks">
           <i class="i-carbon-play" />
-          {{ $t('download.resume_all') }}
+          {{ t('download.resume_all') }}
         </TxButton>
         <TxButton v-if="tasksByStatus.completed.length > 0" @click="clearHistory">
           <i class="i-carbon-trash-can" />
-          {{ $t('download.clear_history') }}
+          {{ t('download.clear_history') }}
         </TxButton>
       </div>
     </div>
@@ -390,7 +390,7 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
     <TxTabs v-model="activeTab" class="download-tabs" placement="top" :content-padding="0">
       <TxTabItem name="downloading">
         <template #name>
-          {{ `${$t('download.downloading')} (${tasksByStatus.downloading.length})` }}
+          {{ `${t('download.downloading')} (${tasksByStatus.downloading.length})` }}
         </template>
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
@@ -413,7 +413,7 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
       </TxTabItem>
       <TxTabItem name="pending">
         <template #name>
-          {{ `${$t('download.waiting')} (${tasksByStatus.pending.length})` }}
+          {{ `${t('download.waiting')} (${tasksByStatus.pending.length})` }}
         </template>
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
@@ -436,7 +436,7 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
       </TxTabItem>
       <TxTabItem name="completed">
         <template #name>
-          {{ `${$t('download.completed')} (${tasksByStatus.completed.length})` }}
+          {{ `${t('download.completed')} (${tasksByStatus.completed.length})` }}
         </template>
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
@@ -461,7 +461,7 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
       </TxTabItem>
       <TxTabItem name="failed">
         <template #name>
-          {{ `${$t('download.failed')} (${tasksByStatus.failed.length})` }}
+          {{ `${t('download.failed')} (${tasksByStatus.failed.length})` }}
         </template>
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
@@ -481,7 +481,7 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
         />
       </TxTabItem>
       <TxTabItem name="history">
-        <template #name>{{ $t('download.history') }}</template>
+        <template #name>{{ t('download.history') }}</template>
         <DownloadHistoryView />
       </TxTabItem>
     </TxTabs>

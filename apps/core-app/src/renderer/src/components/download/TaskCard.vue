@@ -26,7 +26,7 @@ defineEmits<{
   'show-details': [taskId: string]
 }>()
 
-useI18n()
+const { t } = useI18n()
 
 const statusClass = computed(() => `status-${props.task.status}`)
 
@@ -78,12 +78,12 @@ const actionMenuOpen = ref(false)
 
 function getModuleName(module: DownloadModule): string {
   const moduleNames = {
-    [DownloadModule.APP_UPDATE]: '应用更新',
-    [DownloadModule.PLUGIN_INSTALL]: '插件安装',
-    [DownloadModule.RESOURCE_DOWNLOAD]: '资源下载',
-    [DownloadModule.USER_MANUAL]: '手动下载'
+    [DownloadModule.APP_UPDATE]: t('download.module_app_update'),
+    [DownloadModule.PLUGIN_INSTALL]: t('download.module_plugin_install'),
+    [DownloadModule.RESOURCE_DOWNLOAD]: t('download.module_resource_download'),
+    [DownloadModule.USER_MANUAL]: t('download.module_user_manual')
   }
-  return moduleNames[module] || '未知'
+  return moduleNames[module] || t('download.module_unknown')
 }
 
 function formatSize(bytes: number): string {
@@ -161,14 +161,14 @@ function formatSize(bytes: number): string {
           </template>
           <TxDropdownItem @select="$emit('show-details', task.id)">
             <i class="i-carbon-information" />
-            {{ $t('download.show_details') }}
+            {{ t('download.show_details') }}
           </TxDropdownItem>
           <TxDropdownItem
             v-if="task.status === 'completed'"
             @select="$emit('show-in-folder', task.id)"
           >
             <i class="i-carbon-folder" />
-            {{ $t('download.show_in_folder') }}
+            {{ t('download.show_in_folder') }}
           </TxDropdownItem>
           <TxDropdownItem
             v-if="['pending', 'downloading', 'paused'].includes(task.status)"
@@ -176,7 +176,7 @@ function formatSize(bytes: number): string {
             @select="$emit('cancel', task.id)"
           >
             <i class="i-carbon-close" />
-            {{ $t('download.cancel') }}
+            {{ t('download.cancel') }}
           </TxDropdownItem>
           <TxDropdownItem
             v-if="['completed', 'failed', 'cancelled'].includes(task.status)"
@@ -184,7 +184,7 @@ function formatSize(bytes: number): string {
             @select="$emit('remove', task.id)"
           >
             <i class="i-carbon-subtract" />
-            {{ $t('download.remove_from_list') }}
+            {{ t('download.remove_from_list') }}
           </TxDropdownItem>
           <TxDropdownItem
             v-if="task.status === 'completed'"
@@ -192,7 +192,7 @@ function formatSize(bytes: number): string {
             @select="$emit('delete', task.id)"
           >
             <i class="i-carbon-trash-can" />
-            {{ $t('download.delete_file') }}
+            {{ t('download.delete_file') }}
           </TxDropdownItem>
         </TxDropdownMenu>
       </div>
