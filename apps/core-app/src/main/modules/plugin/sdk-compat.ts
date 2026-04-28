@@ -1,6 +1,9 @@
 import type { SdkApiVersion } from '@talex-touch/utils/plugin'
 import {
   CURRENT_SDK_VERSION,
+  isSupportedSdkVersion,
+  isValidSdkVersion,
+  parseSdkVersion,
   PERMISSION_ENFORCEMENT_MIN_VERSION,
   resolveSdkApiVersion
 } from '@talex-touch/utils/plugin'
@@ -8,7 +11,11 @@ import { PLUGIN_SDK_BLOCKED_CODE } from '../../../shared/plugin-sdk-blocked'
 
 export const SDKAPI_BLOCKED_CODE = PLUGIN_SDK_BLOCKED_CODE
 
-export type PluginSdkBlockReason = 'missing-sdkapi' | 'invalid-sdkapi' | 'outdated-sdkapi'
+export type PluginSdkBlockReason =
+  | 'missing-sdkapi'
+  | 'invalid-sdkapi'
+  | 'outdated-sdkapi'
+  | 'unsupported-sdkapi'
 
 export interface PluginSdkCompatibilityGate {
   blocked: boolean
@@ -35,8 +42,9 @@ export function getPluginSdkCompatibilityGate(
     }
   }
 
+  const parsedSdkapi = parseDeclaredSdkapi(declaredSdkapi)
   const resolvedSdkapi = resolveSdkApiVersion(declaredSdkapi)
-  if (resolvedSdkapi === undefined) {
+  if (parsedSdkapi === undefined) {
     return {
       blocked: true,
       reason: 'invalid-sdkapi',
@@ -45,13 +53,22 @@ export function getPluginSdkCompatibilityGate(
     }
   }
 
-  if (resolvedSdkapi < PERMISSION_ENFORCEMENT_MIN_VERSION) {
+  if (parsedSdkapi < PERMISSION_ENFORCEMENT_MIN_VERSION) {
     return {
       blocked: true,
       reason: 'outdated-sdkapi',
-      message: `Plugin "${pluginName}" is blocked because sdkapi ${resolvedSdkapi} is below the minimum supported baseline ${PERMISSION_ENFORCEMENT_MIN_VERSION}.`,
+      message: `Plugin "${pluginName}" is blocked because sdkapi ${parsedSdkapi} is below the minimum supported baseline ${PERMISSION_ENFORCEMENT_MIN_VERSION}.`,
       suggestion: buildUpgradeSuggestion(),
-      resolvedSdkapi
+      resolvedSdkapi: parsedSdkapi
+    }
+  }
+
+  if (!isSupportedSdkVersion(parsedSdkapi)) {
+    return {
+      blocked: true,
+      reason: 'unsupported-sdkapi',
+      message: `Plugin "${pluginName}" is blocked because sdkapi ${parsedSdkapi} is not a supported SDK marker.`,
+      suggestion: buildUpgradeSuggestion()
     }
   }
 
@@ -59,4 +76,14 @@ export function getPluginSdkCompatibilityGate(
     blocked: false,
     resolvedSdkapi
   }
+}
+
+function parseDeclaredSdkapi(declaredSdkapi: unknown): SdkApiVersion | undefined {
+  if (typeof declaredSdkapi === 'number') {
+    return isValidSdkVersion(declaredSdkapi) ? declaredSdkapi : undefined
+  }
+  if (typeof declaredSdkapi === 'string') {
+    return parseSdkVersion(declaredSdkapi)
+  }
+  return undefined
 }

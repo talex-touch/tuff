@@ -78,7 +78,8 @@ code: |
 |-----------|----------|------|
 | 未声明 | 阻断 | 运行时返回 `SDKAPI_BLOCKED` |
 | < 251212 | 阻断 | 运行时返回 `SDKAPI_BLOCKED` |
-| >= 251212 | 启用 | 完整权限校验 |
+| 未列入支持列表 | 阻断 | 非 canonical 或未来 marker 返回 `SDKAPI_BLOCKED` |
+| 受支持且 >= 251212 | 启用 | 完整权限校验 |
 
 **迁移指南**
 
@@ -265,7 +266,7 @@ code: |
 
 **Q: 为什么我的插件会显示 `SDKAPI_BLOCKED`？**
 
-A: 您的 `manifest.json` 未声明 `sdkapi`、使用了非法 marker，或版本低于 `251212`。请更新为当前受支持的版本：
+A: 您的 `manifest.json` 未声明 `sdkapi`、使用了非法 / 未受支持 marker，或版本低于 `251212`。请更新为当前受支持的版本：
 
 :::TuffCodeBlock{lang="json"}
 ---

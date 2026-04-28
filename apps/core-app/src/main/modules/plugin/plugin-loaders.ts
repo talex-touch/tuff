@@ -11,7 +11,6 @@ import {
 } from '@talex-touch/utils/permission'
 import {
   CATEGORY_REQUIRED_MIN_VERSION,
-  checkSdkCompatibility,
   CURRENT_SDK_VERSION,
   OMNI_TRANSFER_DECLARATIVE_MIN_VERSION,
   resolveSdkApiVersion
@@ -175,23 +174,6 @@ abstract class BasePluginLoader {
       this.touchPlugin.setLoadState('load_failed', {
         code: SDKAPI_BLOCKED_CODE,
         message: blockedMessage
-      })
-    }
-
-    const sdkCompat = sdkBlocked ? null : checkSdkCompatibility(pluginInfo.sdkapi, this.pluginName)
-    if (sdkCompat?.warning) {
-      this.touchPlugin.issues.push({
-        type: 'warning',
-        message: sdkCompat.warning,
-        source: 'manifest.json',
-        code: sdkCompat.warningCode || 'SDK_VERSION_COMPAT_WARNING',
-        suggestion: sdkCompat.suggestion,
-        meta: {
-          declaredVersion: pluginInfo.sdkapi,
-          resolvedVersion: resolvedSdkapi,
-          currentVersion: CURRENT_SDK_VERSION
-        },
-        timestamp: Date.now()
       })
     }
 

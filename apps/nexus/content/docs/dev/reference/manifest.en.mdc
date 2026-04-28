@@ -22,7 +22,8 @@
 The `sdkapi` field declares the SDK API version the plugin is compatible with. Format is `YYMMDD` (year-month-day).
 
 - **Current version**: `260428` (2026-04-28)
-- **Not declared, invalid, or below 251212**: Blocked by runtime with `SDKAPI_BLOCKED`
+- **Supported list**: `251212`, `260114`, `260121`, `260215`, `260225`, `260228`, `260428`
+- **Not declared, invalid, unsupported, or below 251212**: Blocked by runtime with `SDKAPI_BLOCKED`
 - **251212 ~ 260113**: Full permission enforcement enabled
 - **Equal to or above 260114**: Requires `category` for UI grouping (in addition to 251212 baseline)
 - **Equal to or above 260215**: Can use plugin SQLite SDK (`usePluginSqlite`)
