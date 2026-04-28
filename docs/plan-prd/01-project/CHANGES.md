@@ -5,6 +5,14 @@
 
 ## 2026-04-28
 
+### ref(core-app): 移除应用详情页假动作入口
+
+- `apps/core-app/src/renderer/src/views/base/application/AppConfigure.vue`
+- `apps/core-app/docs/compatibility-legacy-scan{,-summary}.md`
+  - 应用详情页删除无真实执行路径的 open explorer、uninstall、save footer 与永远不渲染的 spec 区块，避免旧 UI 把注释残留/空 handler 呈现为可用能力。
+  - 保留 launch 与 help 两个真实动作；help 外链查询参数统一编码，避免应用名称包含空格或特殊字符时生成不稳定 URL。
+  - 兼容性审计报告同步记录该假动作收口，后续复核仍按“用户可点击入口必须有真实执行路径”判断。
+
 ### fix(core-app): 对齐 app/file 索引重建交互契约
 
 - `packages/utils/transport/events/types/app-index.ts`

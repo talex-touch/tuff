@@ -23,15 +23,9 @@ const emits = defineEmits<{
   (e: 'execute', val: AppConfigureData): void
 }>()
 
-// import cprocess from "child_process";
-// import fs from 'fs'
-// import path from 'path'
-// import { forTouchTip } from '~/modules/mention/dialog-mention'
-
 const { t } = useI18n()
 const appSdk = useAppSdk()
 
-const info = ref()
 const displayIcon = computed(() => {
   const icon = props.data.icon
   if (typeof icon === 'string') return icon
@@ -41,74 +35,12 @@ const displayIcon = computed(() => {
   return ''
 })
 
-watchEffect(() => {
-  // $ignore: [props.data]
-
-  info.value = null
-
-  // setTimeout(async() => {
-  //   const res = await fs.statSync(props.data.desc)
-
-  //   info.value = res
-  // })
-})
-
-function formatSize(size: number): string {
-  return `${(size / 1024 / 1024).toFixed(2)} MB`
-}
-
-function formatTime(time: number): string {
-  return new Date(time).toLocaleString()
-}
-
 function handleLaunch(): void {
-  // Avoid renderer interrupt
-
-  setTimeout(() => {
-    emits('execute', props.data)
-  }, 500)
-}
-
-function handleOpenExplorer(): void {
-  // Avoid renderer interrupt
-
-  setTimeout(() => {
-    // cprocess.execSync(`explorer.exe /select,${props.data.desc}`)
-  }, 500)
-}
-
-function handleDelete(): void {
-  // const targetPath = path.join(props.data.desc, '..')
-  // console.log('targetpath', targetPath)
-  // fs.readdir(targetPath, (err, files) => {
-  //   if (err) {
-  //     console.log(err)
-  //     return
-  //   }
-  //   let flag = false
-  //   files.forEach((file) => {
-  //     if (flag) return
-  //     if (file.toLowerCase().includes('uninstall')) {
-  //       flag = true
-  //       try {
-  //         cprocess.execSync(path.join(targetPath, file))
-  //       } catch (e) {
-  //         // open this exe
-  //         cprocess.execSync(`explorer.exe /select,${path.join(targetPath, file)}`)
-  //       }
-  //     }
-  //   })
-  //   if (!flag) {
-  //     forTouchTip("Not Found", "Cannot find uninstall program.", [
-  //       { content: "Got it", type: "error", onClick: async () => true }
-  //     ])
-  //   }
-  // })
+  emits('execute', props.data)
 }
 
 function handleHelp(): void {
-  // open google and search
-  const url = `https://www.google.com/search?q=${props.data.name}`
+  const url = `https://www.google.com/search?q=${encodeURIComponent(props.data.name ?? '')}`
 
   appSdk.openExternal(url).catch(() => {})
 }
@@ -138,22 +70,6 @@ function handleHelp(): void {
                 {{ t('appConfigure.launchBtn') }}
               </TxButton>
             </t-block-slot>
-            <t-block-slot :title="t('appConfigure.openInExplorer')" description="" icon="folder-2">
-              <TxButton variant="flat" @click="handleOpenExplorer">
-                {{ t('appConfigure.openBtn') }}
-              </TxButton>
-            </t-block-slot>
-            <t-block-slot :title="t('appConfigure.uninstall')" description="" icon="delete-bin-2">
-              <template #label>
-                <h3>
-                  {{ t('appConfigure.uninstall') }}
-                  <span color-red>{{ t('appConfigure.danger') }}</span>
-                </h3>
-              </template>
-              <TxButton variant="flat" hover:bg-red @click="handleDelete">
-                {{ t('appConfigure.uninstallBtn') }}
-              </TxButton>
-            </t-block-slot>
             <t-block-switch
               guidance
               :model-value="false"
@@ -178,41 +94,8 @@ function handleHelp(): void {
               </template>
             </t-block-line>
           </t-group-block>
-
-          <t-group-block v-if="info" :name="t('appConfigure.spec')" description="" icon="apps">
-            <t-block-line :title="t('appConfigure.version')">
-              <template #description> 1 </template>
-            </t-block-line>
-            <t-block-line :title="t('appConfigure.size')" :description="formatSize(info.size)" />
-            <t-block-line :title="t('appConfigure.dev')" :description="info.dev" />
-            <t-block-line :title="t('appConfigure.ino')" :description="info.ino" />
-            <t-block-line :title="t('appConfigure.mode')" :description="info.mode" />
-            <t-block-line :title="t('appConfigure.nlink')" :description="info.nlink" />
-            <t-block-line :title="t('appConfigure.uid')" :description="info.uid" />
-            <t-block-line :title="t('appConfigure.gid')" :description="info.gid" />
-            <t-block-line :title="t('appConfigure.rdev')" :description="info.rdev" />
-            <t-block-line :title="t('appConfigure.blksize')" :description="info.blksize" />
-            <t-block-line
-              :title="t('appConfigure.atimeMs')"
-              :description="formatTime(info.atimeMs)"
-            />
-            <t-block-line
-              :title="t('appConfigure.ctimeMs')"
-              :description="formatTime(info.ctimeMs)"
-            />
-            <t-block-line
-              :title="t('appConfigure.birthTimeMs')"
-              :description="formatTime(info.birthtimeMs)"
-            />
-          </t-group-block>
         </div>
       </TxScroll>
-    </div>
-    <div class="AppConfigure-Ends">
-      {{ t('appConfigure.confirm') }}
-      <TxButton variant="flat">
-        {{ t('appConfigure.save') }}
-      </TxButton>
     </div>
   </div>
 </template>
@@ -270,26 +153,9 @@ function handleHelp(): void {
     padding: 1rem 0;
 
     width: 100%;
-    height: calc(100% - 48px - 64px - 1rem);
+    height: calc(100% - 48px);
 
     box-sizing: border-box;
-  }
-
-  &-Ends {
-    position: sticky;
-    padding: 0 1rem;
-    display: flex;
-
-    align-items: center;
-    justify-content: space-between;
-
-    bottom: 0;
-
-    width: 100%;
-    height: 64px;
-
-    box-sizing: border-box;
-    border-top: 1px solid var(--tx-border-color);
   }
 
   position: relative;
