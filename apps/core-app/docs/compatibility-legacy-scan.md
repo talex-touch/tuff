@@ -66,6 +66,7 @@
 - Renderer storage 当前工作区已收口到 typed storage SDK：`main.ts`、`useAppLifecycle.ts`、`modules/channel/storage/base.ts` 统一调用 `initializeRendererStorage(transport)`；`StorageManager` 与 `AccountStorage` 改用 `useStorageSdk()`，不再直接 `transport.send(StorageEvents.app.*)` 或解析 legacy `useChannel()`。
 - 当前 `rg` 复核显示 `window.$t/window.$i18n` 在 renderer 中无命中；旧 `storage:get/storage:save/storage:update` 在 CoreApp 业务侧无新增消费，剩余命中为插件 storage IPC 名称或共享库显式 fallback 边界。
 - `show-active-sessions` 仅保留在 DivisionBox 回归测试的禁止断言中；`TARGET_OFFLINE` 仍覆盖未注册 Flow delivery handler 的失败语义。
+- 应用详情页不再暴露无真实执行路径的 open explorer / uninstall / save/spec 入口；当前保留的 launch 与 help 均有真实执行路径。
 - 跨平台能力仍是显式不对称：Windows/macOS 属于 2.5.0 release-blocking 人工回归范围；Linux 继续按 `xdotool` / desktop environment 依赖记录为 documented best-effort，不应包装为同等支持。
 
 ### 已清理
@@ -73,6 +74,7 @@
 - 清理 storage renderer 入口中的重复 JSDoc 和旧 `console.log` 示例/注释，避免把已迁移到 typed storage SDK 的路径继续表现成半迁移状态。
 - 删除仅剩测试引用的 `parseLegacyThemeStyle()` 旧 localStorage 解析 helper；renderer theme startup migration 已从生产路径移除，不再保留无调用方的 legacy 解析入口。
 - 刷新 `compatibility-legacy-scan-summary.md` 的完成态汇总，移除已过期的 `tray-holder.ts` 与 deprecated Plugin API 风险描述，避免旧扫描清单误导当前结论。
+- 清理 `AppConfigure.vue` 中仅剩注释/空 handler 的 open explorer、uninstall、save footer 与永远不会渲染的 spec 区块，避免旧应用详情页把未实现能力呈现为可用操作。
 
 ### 仍保留但不判为假实现
 
