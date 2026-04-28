@@ -1,7 +1,6 @@
 import type { ITuffTransport } from '../../transport'
 import type { StorageUpdateNotification } from '../../transport/events/types'
 import type { IStorageChannel } from './base-storage'
-import { defineRawEvent } from '../../transport/event/builder'
 import { StorageEvents } from '../../transport/events'
 
 let hasWarnedLegacyStorageSubscriptionChannel = false
@@ -56,19 +55,8 @@ class StorageSubscriptionManager {
           .catch((error) => {
             console.error('[StorageSubscription] Failed to subscribe to storage updates:', error)
           })
-
-        const legacyStorageUpdateEvent = defineRawEvent<{ name: string; version?: number }, void>(
-          StorageEvents.legacy.update.toEventName()
-        )
-        this.transport.on(legacyStorageUpdateEvent, (payload) => {
-          if (!payload || typeof payload !== 'object') return
-          const { name, version } = payload as { name?: string; version?: number }
-          if (!name) return
-          this.handleVersionedUpdate(name, version)
-        })
       }
-
-      if (this.channel) {
+      else if (this.channel) {
         warnLegacyStorageSubscriptionChannelPath()
         // Listen to storage:update events from main process
         this.channel.regChannel(StorageEvents.legacy.update.toEventName(), ({ data }) => {
@@ -122,10 +110,9 @@ class StorageSubscriptionManager {
         console.error(`[StorageSubscription] Callback error for "${configName}":`, error)
       }
     }
-    else if (this.channel) {
-      warnLegacyStorageSubscriptionChannelPath()
-      this.channel
-        .send('storage:get', configName)
+    else if (this.transport) {
+      this.transport
+        .send(StorageEvents.app.get, { key: configName })
         .then((data) => {
           if (data === undefined || data === null)
             return
@@ -141,9 +128,10 @@ class StorageSubscriptionManager {
           console.error(`[StorageSubscription] Failed to load "${configName}":`, error)
         })
     }
-    else if (this.transport) {
-      this.transport
-        .send(StorageEvents.app.get, { key: configName })
+    else if (this.channel) {
+      warnLegacyStorageSubscriptionChannelPath()
+      this.channel
+        .send('storage:get', configName)
         .then((data) => {
           if (data === undefined || data === null)
             return
@@ -206,12 +194,12 @@ class StorageSubscriptionManager {
       try {
         // Fetch latest data
         let data: unknown
-        if (this.channel) {
-          warnLegacyStorageSubscriptionChannelPath()
-          data = await this.channel.send('storage:get', configName)
+        if (this.transport) {
+          data = await this.transport!.send(StorageEvents.app.get, { key: configName })
         }
         else {
-          data = await this.transport!.send(StorageEvents.app.get, { key: configName })
+          warnLegacyStorageSubscriptionChannelPath()
+          data = await this.channel!.send('storage:get', configName)
         }
 
         if (data === undefined || data === null) {

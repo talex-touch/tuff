@@ -5,6 +5,14 @@
 
 ## 2026-04-28
 
+### fix(utils): StorageSubscription 优先使用 typed storage transport
+
+- `packages/utils/renderer/storage/storage-subscription.ts`
+- `packages/test/src/common/storage-subscription.test.ts`
+  - `StorageSubscription` 在同时初始化 channel 与 transport 时，不再优先走 legacy `storage:get` raw channel 拉快照；当前 CoreApp 初始化传入 transport 后会直接使用 `StorageEvents.app.get`。
+  - typed transport 可用时不再额外注册 legacy `storage:update` listener，避免把已迁移路径仍标记成 legacy channel active。
+  - 补充回归测试，固定“transport + channel 同时存在时不得发送 legacy snapshot 请求”的 hard-cut 语义。
+
 ### chore(utils): 收敛插件 sdkapi 260428 推荐口径
 
 - `plugins/clipboard-history/manifest.json`
