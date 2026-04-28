@@ -233,7 +233,9 @@ vi.mock('../modules/box-tool/addon/apps/app-provider', () => ({
     listManagedEntries: vi.fn(),
     upsertManagedEntry: vi.fn(),
     removeManagedEntry: vi.fn(),
-    setManagedEntryEnabled: vi.fn()
+    setManagedEntryEnabled: vi.fn(),
+    diagnoseAppSearch: vi.fn(),
+    reindexAppSearchTarget: vi.fn()
   }
 }))
 
@@ -909,5 +911,127 @@ describe('CommonChannelModule private helpers', () => {
       '/Applications/WeChat.app',
       false
     )
+  })
+
+  it('routes app-index diagnostic handlers and falls back empty payloads', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+
+    const { appProvider } = await import('../modules/box-tool/addon/apps/app-provider')
+    const diagnosticResult = {
+      success: true,
+      status: 'found',
+      target: 'JSON Formatter',
+      app: {
+        id: 12,
+        path: '/Applications/JSON Formatter.app',
+        name: 'JSON Formatter',
+        displayName: 'JSON Formatter',
+        launchKind: 'path',
+        launchTarget: '/Applications/JSON Formatter.app',
+        alternateNames: [],
+        entryEnabled: true
+      },
+      index: {
+        itemId: '/Applications/JSON Formatter.app',
+        itemIds: ['/Applications/JSON Formatter.app'],
+        aliases: ['JSON Formatter'],
+        generatedKeywords: ['json formatter'],
+        storedKeywords: ['json formatter'],
+        storedKeywordEntries: [{ value: 'json formatter', priority: 1 }]
+      },
+      query: {
+        raw: 'json formatter',
+        normalized: 'json formatter',
+        terms: ['json', 'formatter'],
+        ftsQuery: 'json formatter',
+        candidateItemIds: ['/Applications/JSON Formatter.app'],
+        stages: {
+          precise: { ran: true, targetHit: true, matches: [] },
+          phrase: { ran: true, targetHit: true, matches: [] },
+          prefix: {
+            ran: false,
+            targetHit: false,
+            matches: [],
+            reason: 'query-too-long-for-prefix-stage'
+          },
+          fts: { ran: true, targetHit: true, matches: [] },
+          ngram: { ran: true, targetHit: true, matches: [] },
+          subsequence: { ran: true, targetHit: true, matches: [] }
+        }
+      }
+    }
+    const emptyDiagnosticResult = {
+      success: false,
+      status: 'invalid',
+      target: '',
+      reason: 'target-empty'
+    }
+    const reindexResult = {
+      success: false,
+      status: 'reindexed',
+      requiresConfirm: true,
+      path: '/Applications/JSON Formatter.app'
+    }
+    const emptyReindexResult = {
+      success: false,
+      status: 'invalid',
+      reason: 'target-empty'
+    }
+
+    ;(appProvider.diagnoseAppSearch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(diagnosticResult)
+      .mockResolvedValueOnce(emptyDiagnosticResult)
+    ;(appProvider.reindexAppSearchTarget as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(reindexResult)
+      .mockResolvedValueOnce(emptyReindexResult)
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const diagnoseHandler = handlers.get(AppEvents.appIndex.diagnose.toEventName())
+    const reindexHandler = handlers.get(AppEvents.appIndex.reindex.toEventName())
+    expect(diagnoseHandler).toBeTypeOf('function')
+    expect(reindexHandler).toBeTypeOf('function')
+
+    await expect(
+      diagnoseHandler?.({ target: 'JSON Formatter', query: 'json formatter' }, {})
+    ).resolves.toEqual(diagnosticResult)
+    await expect(
+      reindexHandler?.({ target: 'JSON Formatter', mode: 'keywords', force: true }, {})
+    ).resolves.toEqual(reindexResult)
+    await expect(diagnoseHandler?.(undefined, {})).resolves.toEqual(emptyDiagnosticResult)
+    await expect(reindexHandler?.(undefined, {})).resolves.toEqual(emptyReindexResult)
+
+    expect(appProvider.diagnoseAppSearch).toHaveBeenNthCalledWith(1, {
+      target: 'JSON Formatter',
+      query: 'json formatter'
+    })
+    expect(appProvider.reindexAppSearchTarget).toHaveBeenNthCalledWith(1, {
+      target: 'JSON Formatter',
+      mode: 'keywords',
+      force: true
+    })
+    expect(appProvider.diagnoseAppSearch).toHaveBeenNthCalledWith(2, { target: '' })
+    expect(appProvider.reindexAppSearchTarget).toHaveBeenNthCalledWith(2, { target: '' })
   })
 })
