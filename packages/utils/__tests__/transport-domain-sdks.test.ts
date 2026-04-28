@@ -116,6 +116,37 @@ describe("transport domain sdk mappings", () => {
     );
   });
 
+  it("settings sdk maps app search diagnostic and reindex through appIndex domain", async () => {
+    const transport = createTransportMock();
+    const sdk = createSettingsSdk(transport as any);
+
+    await sdk.appIndex.diagnose({
+      target: "JSON Formatter",
+      query: "json formatter",
+    });
+    await sdk.appIndex.reindex({
+      target: "JSON Formatter",
+      mode: "keywords",
+    });
+
+    expect(transport.send).toHaveBeenNthCalledWith(
+      1,
+      AppEvents.appIndex.diagnose,
+      {
+        target: "JSON Formatter",
+        query: "json formatter",
+      },
+    );
+    expect(transport.send).toHaveBeenNthCalledWith(
+      2,
+      AppEvents.appIndex.reindex,
+      {
+        target: "JSON Formatter",
+        mode: "keywords",
+      },
+    );
+  });
+
   it("app sdk maps openPromptsFolder to typed system event", async () => {
     const transport = createTransportMock();
     const sdk = createAppSdk(transport as any);
