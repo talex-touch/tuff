@@ -10,11 +10,11 @@ import 'recorder-core/src/engine/wav'
 
 import 'recorder-core/src/extensions/waveview.js'
 
-const props = defineProps(['song'])
-
-export default {
+defineOptions({
   name: 'WavingParticle',
-}
+})
+
+const props = defineProps(['song'])
 
 const audio = ref()
 const container = ref()

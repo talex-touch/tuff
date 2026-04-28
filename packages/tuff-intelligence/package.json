@@ -1,7 +1,7 @@
 {
   "name": "@talex-touch/tuff-intelligence",
   "type": "module",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "LangGraph-powered intelligence orchestration for Tuff (providers, prompts, quotas, audit)",
   "license": "MIT",
   "keywords": [
@@ -54,8 +54,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "tsup src/index.ts --format esm --dts --splitting --clean --target node18 --platform node",
+    "dev": "tsup src/index.ts --format esm --dts --splitting --clean --target node18 --platform node --watch",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "clean": "rimraf dist"
@@ -68,7 +68,7 @@
     "deepagents": "0.0.2"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260313.1",
+    "@cloudflare/workers-types": "^4.20260426.1",
     "eslint": "^9.39.4",
     "rimraf": "^5.0.10",
     "tsup": "^8.5.1",

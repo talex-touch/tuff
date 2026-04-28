@@ -4,13 +4,13 @@
 <script setup>
 import SongItem from '@comp/music/song/SongItem.vue'
 
+defineOptions({
+  name: 'SearchResults',
+})
+
 const props = defineProps(['res'])
 
 const emits = defineEmits(['close', 'select'])
-
-export default {
-  name: 'SearchResults',
-}
 
 function close() {
   emits('close')

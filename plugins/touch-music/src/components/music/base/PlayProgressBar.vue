@@ -5,13 +5,13 @@
 import { debounceFunction, useModelWrapper } from '@modules/utils'
 import { ref, watch } from 'vue'
 
+defineOptions({
+  name: 'PlayProgressBar',
+})
+
 const props = defineProps(['modelValue'])
 
 const emits = defineEmits(['update:modelValue', 'change'])
-
-export default {
-  name: 'PlayProgressBar',
-}
 
 const hover = ref(false)
 const modelValue = useModelWrapper(props, emits)

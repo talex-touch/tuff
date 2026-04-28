@@ -7,13 +7,13 @@ import DayJS from 'dayjs'
 import gsap from 'gsap'
 import { computed, inject, onMounted, reactive, ref, watch } from 'vue'
 
+defineOptions({
+  name: 'WordLyricItem',
+})
+
 const props = defineProps(['lyric', 'index'])
 
 const emits = defineEmits(['index'])
-
-export default {
-  name: 'WordLyricItem',
-}
 
 const dom = ref()
 const isLyric = ref(false)

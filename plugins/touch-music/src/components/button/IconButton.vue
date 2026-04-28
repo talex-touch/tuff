@@ -5,6 +5,10 @@
 import RemixIcon from '@comp/icon/RemixIcon.vue'
 import { ref, watchEffect } from 'vue'
 
+defineOptions({
+  name: 'IconButton',
+})
+
 const props = defineProps({
   icon: {
     type: String,
@@ -23,10 +27,6 @@ const props = defineProps({
     required: false,
   },
 })
-
-export default {
-  name: 'IconButton',
-}
 
 const hover = ref(false)
 const select = ref(false)

@@ -12,13 +12,13 @@ import { musicManager } from '@modules/music'
 import { useModelWrapper } from '@modules/utils'
 import { watch } from 'vue'
 
+defineOptions({
+  name: 'FullScreenLyric',
+})
+
 const props = defineProps(['modelValue'])
 
 const emits = defineEmits(['update:modelValue'])
-
-export default {
-  name: 'FullScreenLyric',
-}
 
 const active = useModelWrapper(props, emits)
 

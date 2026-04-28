@@ -6,13 +6,13 @@ import { useModelWrapper } from '@modules/utils.ts'
 import { TweenLite } from 'gsap/gsap-core'
 import { nextTick, ref, watchEffect } from 'vue'
 
+defineOptions({
+  name: 'PlayPause',
+})
+
 const props = defineProps(['modelValue'])
 
 const emits = defineEmits(['update:modelValue'])
-
-export default {
-  name: 'PlayPause',
-}
 
 const modelValue = useModelWrapper(props, emits)
 

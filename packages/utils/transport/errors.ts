@@ -125,7 +125,7 @@ export class TuffTransportError extends Error {
   /**
    * Original error that caused this error (if applicable).
    */
-  readonly cause?: Error
+  override readonly cause?: Error
 
   /**
    * Timestamp when this error occurred.

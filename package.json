@@ -1,7 +1,7 @@
 {
   "name": "@talex-touch/tuff",
   "type": "module",
-  "version": "2.4.10-beta.2",
+  "version": "2.4.10-beta.3",
   "packageManager": "pnpm@10.32.1",
   "description": "A strong adaptation more platform all-tool program.",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
@@ -63,18 +63,18 @@
   "dependencies": {
     "@sentry/vite-plugin": "^4.9.1",
     "electron": "^41.0.2",
-    "vite-plugin-electron": "^0.29.0"
+    "vite-plugin-electron": "^0.29.1"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^5.4.1",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
-    "@typescript-eslint/parser": "^8.57.0",
+    "@typescript-eslint/parser": "^8.59.1",
     "bumpp": "^10.4.1",
     "chalk": "^5.6.2",
     "eslint": "^9.39.4",
     "husky": "^9.1.7",
-    "lint-staged": "^16.3.3",
+    "lint-staged": "^16.4.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vitest": "^3.2.4"
@@ -123,6 +123,8 @@
     },
     "peerDependencyRules": {
       "ignoreMissing": [
+        "@emnapi/core",
+        "@emnapi/runtime",
         "next",
         "react",
         "react-dom"

@@ -1,7 +1,7 @@
 {
   "name": "@talex-touch/tuff-cli",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Tuff CLI entrypoint",
   "license": "MIT",
   "keywords": [
@@ -34,7 +34,7 @@
     "cli-progress": "^3.12.0",
     "compressing": "^1.10.3",
     "debug": "^4.3.5",
-    "esbuild": "^0.24.0",
+    "esbuild": "^0.28.0",
     "fs-extra": "^11.3.1",
     "glob": "^10.5.0",
     "pathe": "^1.1.2",
@@ -42,6 +42,8 @@
     "vite": "^7.3.1"
   },
   "devDependencies": {
+    "@talex-touch/tuff-cli-core": "workspace:*",
+    "@talex-touch/unplugin-export-plugin": "workspace:*",
     "eslint": "^9.39.4",
     "rimraf": "^5.0.10",
     "tsup": "^8.5.1",

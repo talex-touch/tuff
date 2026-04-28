@@ -6,13 +6,13 @@ import SongItem from '@comp/music/song/SongItem.vue'
 import { musicManager } from '@modules/music'
 import { useModelWrapper } from '@modules/utils'
 
+defineOptions({
+  name: 'PlayList',
+})
+
 const props = defineProps(['modelValue'])
 
 const emit = defineEmits(['update:modelValue'])
-
-export default {
-  name: 'PlayList',
-}
 
 const playList = musicManager.playManager.playList
 const playIndex = musicManager.playManager.playIndex
