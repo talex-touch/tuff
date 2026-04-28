@@ -43,11 +43,11 @@ describe('sdk-version', () => {
     expect(compatibility.warning).toContain(String(SdkApi.V260228))
   })
 
-  it('keeps bundled plugin manifests on canonical sdkapi markers', () => {
-    const nonCanonical = readPluginManifests()
-      .filter(({ sdkapi }) => typeof sdkapi !== 'number' || resolveSdkApiVersion(sdkapi) !== sdkapi)
+  it('keeps bundled plugin manifests on the current sdkapi marker', () => {
+    const outdated = readPluginManifests()
+      .filter(({ sdkapi }) => sdkapi !== CURRENT_SDK_VERSION)
       .map(({ pluginName, sdkapi }) => `${pluginName}:${String(sdkapi)}`)
 
-    expect(nonCanonical).toEqual([])
+    expect(outdated).toEqual([])
   })
 })
