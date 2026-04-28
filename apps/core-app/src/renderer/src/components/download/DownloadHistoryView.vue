@@ -197,14 +197,14 @@ onMounted(() => {
       <div class="header-left">
         <h3 class="title">
           <i class="i-carbon-time" />
-          {{ $t('download.history_title') }}
+          {{ t('download.history_title') }}
         </h3>
-        <span class="history-count">{{ filteredHistory.length }} {{ $t('download.items') }}</span>
+        <span class="history-count">{{ filteredHistory.length }} {{ t('download.items') }}</span>
       </div>
       <div class="header-right">
         <TxButton v-if="historyList.length > 0" type="danger" @click="handleClearAllHistory">
           <i class="i-carbon-trash-can" />
-          {{ $t('download.clear_all_history') }}
+          {{ t('download.clear_all_history') }}
         </TxButton>
       </div>
     </div>
@@ -213,7 +213,7 @@ onMounted(() => {
     <div class="search-filter-bar">
       <TuffInput
         v-model="searchQuery"
-        :placeholder="$t('download.search_history_placeholder')"
+        :placeholder="t('download.search_history_placeholder')"
         clearable
         @input="handleSearch"
       >
@@ -223,35 +223,35 @@ onMounted(() => {
       </TuffInput>
       <TuffSelect
         v-model="filterModule"
-        :placeholder="$t('download.filter_by_module')"
+        :placeholder="t('download.filter_by_module')"
         clearable
         style="width: 200px"
       >
-        <TuffSelectItem :label="$t('download.all_modules')" value="" />
+        <TuffSelectItem :label="t('download.all_modules')" value="" />
         <TuffSelectItem
-          :label="$t('download.module_app_update')"
+          :label="t('download.module_app_update')"
           :value="DownloadModule.APP_UPDATE"
         />
         <TuffSelectItem
-          :label="$t('download.module_plugin_install')"
+          :label="t('download.module_plugin_install')"
           :value="DownloadModule.PLUGIN_INSTALL"
         />
         <TuffSelectItem
-          :label="$t('download.module_resource_download')"
+          :label="t('download.module_resource_download')"
           :value="DownloadModule.RESOURCE_DOWNLOAD"
         />
         <TuffSelectItem
-          :label="$t('download.module_user_manual')"
+          :label="t('download.module_user_manual')"
           :value="DownloadModule.USER_MANUAL"
         />
       </TuffSelect>
-      <TuffSelect v-model="sortBy" :placeholder="$t('download.sort_by')" style="width: 180px">
-        <TuffSelectItem :label="$t('download.sort_by_time_desc')" value="time_desc" />
-        <TuffSelectItem :label="$t('download.sort_by_time_asc')" value="time_asc" />
-        <TuffSelectItem :label="$t('download.sort_by_size_desc')" value="size_desc" />
-        <TuffSelectItem :label="$t('download.sort_by_size_asc')" value="size_asc" />
-        <TuffSelectItem :label="$t('download.sort_by_name_asc')" value="name_asc" />
-        <TuffSelectItem :label="$t('download.sort_by_name_desc')" value="name_desc" />
+      <TuffSelect v-model="sortBy" :placeholder="t('download.sort_by')" style="width: 180px">
+        <TuffSelectItem :label="t('download.sort_by_time_desc')" value="time_desc" />
+        <TuffSelectItem :label="t('download.sort_by_time_asc')" value="time_asc" />
+        <TuffSelectItem :label="t('download.sort_by_size_desc')" value="size_desc" />
+        <TuffSelectItem :label="t('download.sort_by_size_asc')" value="size_asc" />
+        <TuffSelectItem :label="t('download.sort_by_name_asc')" value="name_asc" />
+        <TuffSelectItem :label="t('download.sort_by_name_desc')" value="name_desc" />
       </TuffSelect>
     </div>
 
@@ -261,7 +261,7 @@ onMounted(() => {
         <TxSkeleton :lines="5" />
       </div>
       <div v-else-if="filteredHistory.length === 0" class="empty-state">
-        <TxEmpty :title="$t('download.no_history')" />
+        <TxEmpty :title="t('download.no_history')" />
       </div>
       <div v-else class="history-items">
         <HistoryCard

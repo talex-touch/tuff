@@ -136,34 +136,29 @@ function formatDate(date: Date | number | undefined): string {
 </script>
 
 <template>
-  <TxModal
-    v-model="visible"
-    :title="$t('download.task_details')"
-    width="600px"
-    @close="handleClose"
-  >
+  <TxModal v-model="visible" :title="t('download.task_details')" width="600px" @close="handleClose">
     <div v-if="task" class="task-details">
       <!-- 基本信息 -->
       <div class="detail-section">
         <h3 class="section-title">
-          {{ $t('download.basic_info') }}
+          {{ t('download.basic_info') }}
         </h3>
         <div class="detail-item">
-          <span class="detail-label">{{ $t('download.filename') }}:</span>
+          <span class="detail-label">{{ t('download.filename') }}:</span>
           <span class="detail-value">{{ task.filename }}</span>
         </div>
         <div class="detail-item">
-          <span class="detail-label">{{ $t('download.status') }}:</span>
+          <span class="detail-label">{{ t('download.status') }}:</span>
           <TxTag :type="getStatusType(task.status)">
             {{ getStatusText(task.status) }}
           </TxTag>
         </div>
         <div class="detail-item">
-          <span class="detail-label">{{ $t('download.module') }}:</span>
+          <span class="detail-label">{{ t('download.module') }}:</span>
           <span class="detail-value">{{ getModuleName(task.module) }}</span>
         </div>
         <div class="detail-item">
-          <span class="detail-label">{{ $t('download.priority') }}:</span>
+          <span class="detail-label">{{ t('download.priority') }}:</span>
           <TxTag :type="getPriorityType(task.priority)">
             {{ getPriorityText(task.priority) }}
           </TxTag>
@@ -173,29 +168,29 @@ function formatDate(date: Date | number | undefined): string {
       <!-- 进度信息 -->
       <div v-if="task.progress" class="detail-section">
         <h3 class="section-title">
-          {{ $t('download.progress_info') }}
+          {{ t('download.progress_info') }}
         </h3>
         <div class="detail-item">
-          <span class="detail-label">{{ $t('download.total_size') }}:</span>
+          <span class="detail-label">{{ t('download.total_size') }}:</span>
           <span class="detail-value">{{ formatSize(task.progress.totalSize || 0) }}</span>
         </div>
         <div class="detail-item">
-          <span class="detail-label">{{ $t('download.downloaded_size') }}:</span>
+          <span class="detail-label">{{ t('download.downloaded_size') }}:</span>
           <span class="detail-value">{{ formatSize(task.progress.downloadedSize || 0) }}</span>
         </div>
         <div class="detail-item">
-          <span class="detail-label">{{ $t('download.percentage') }}:</span>
+          <span class="detail-label">{{ t('download.percentage') }}:</span>
           <span class="detail-value">{{ task.progress.percentage?.toFixed(1) || 0 }}%</span>
         </div>
         <div v-if="task.status === 'downloading'" class="detail-item">
-          <span class="detail-label">{{ $t('download.speed') }}:</span>
+          <span class="detail-label">{{ t('download.speed') }}:</span>
           <span class="detail-value">{{ formatSpeed(task.progress.speed || 0) }}</span>
         </div>
         <div
           v-if="task.status === 'downloading' && task.progress.remainingTime"
           class="detail-item"
         >
-          <span class="detail-label">{{ $t('download.remaining_time') }}:</span>
+          <span class="detail-label">{{ t('download.remaining_time') }}:</span>
           <span class="detail-value">{{ formatRemainingTime(task.progress.remainingTime) }}</span>
         </div>
       </div>
@@ -203,14 +198,14 @@ function formatDate(date: Date | number | undefined): string {
       <!-- 文件信息 -->
       <div class="detail-section">
         <h3 class="section-title">
-          {{ $t('download.file_info') }}
+          {{ t('download.file_info') }}
         </h3>
         <div class="detail-item">
-          <span class="detail-label">{{ $t('download.url') }}:</span>
+          <span class="detail-label">{{ t('download.url') }}:</span>
           <span class="detail-value url-text" :title="task.url">{{ task.url }}</span>
         </div>
         <div class="detail-item">
-          <span class="detail-label">{{ $t('download.destination') }}:</span>
+          <span class="detail-label">{{ t('download.destination') }}:</span>
           <span class="detail-value path-text" :title="task.destination">{{
             task.destination
           }}</span>
@@ -220,14 +215,14 @@ function formatDate(date: Date | number | undefined): string {
       <!-- 时间信息 -->
       <div class="detail-section">
         <h3 class="section-title">
-          {{ $t('download.time_info') }}
+          {{ t('download.time_info') }}
         </h3>
         <div class="detail-item">
-          <span class="detail-label">{{ $t('download.created_at') }}:</span>
+          <span class="detail-label">{{ t('download.created_at') }}:</span>
           <span class="detail-value">{{ formatDate(task.createdAt) }}</span>
         </div>
         <div class="detail-item">
-          <span class="detail-label">{{ $t('download.updated_at') }}:</span>
+          <span class="detail-label">{{ t('download.updated_at') }}:</span>
           <span class="detail-value">{{ formatDate(task.updatedAt) }}</span>
         </div>
       </div>
@@ -235,7 +230,7 @@ function formatDate(date: Date | number | undefined): string {
       <!-- 错误信息 -->
       <div v-if="task.error" class="detail-section">
         <h3 class="section-title error-title">
-          {{ $t('download.error_info') }}
+          {{ t('download.error_info') }}
         </h3>
         <TxAlert :title="task.error" type="error" :closable="false" :show-icon="true" />
       </div>
@@ -243,7 +238,7 @@ function formatDate(date: Date | number | undefined): string {
       <!-- 元数据 -->
       <div v-if="task.metadata && Object.keys(task.metadata).length > 0" class="detail-section">
         <h3 class="section-title">
-          {{ $t('download.metadata') }}
+          {{ t('download.metadata') }}
         </h3>
         <div v-for="(value, key) in task.metadata" :key="key" class="detail-item">
           <span class="detail-label">{{ key }}:</span>
@@ -255,15 +250,15 @@ function formatDate(date: Date | number | undefined): string {
     <template #footer>
       <div class="dialog-footer">
         <TxButton @click="handleClose">
-          {{ $t('common.close') }}
+          {{ t('common.close') }}
         </TxButton>
         <TxButton v-if="task?.status === 'completed'" type="primary" @click="handleOpenFile">
           <i class="i-carbon-folder-open" />
-          {{ $t('download.open_file') }}
+          {{ t('download.open_file') }}
         </TxButton>
         <TxButton v-if="task?.status === 'completed'" @click="handleShowInFolder">
           <i class="i-carbon-folder" />
-          {{ $t('download.show_in_folder') }}
+          {{ t('download.show_in_folder') }}
         </TxButton>
       </div>
     </template>

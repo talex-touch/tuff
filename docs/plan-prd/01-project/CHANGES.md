@@ -5,6 +5,16 @@
 
 ## 2026-04-28
 
+### ref(core-app): 清理下载中心假设置组件与旧 i18n 调用
+
+- `apps/core-app/src/renderer/src/components/download/*`
+- `apps/core-app/src/renderer/components.d.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `apps/core-app/docs/compatibility-legacy-scan{,-summary}.md`
+  - 删除未被引用的 `DownloadSettings.vue`；该旧组件内的选择临时目录按钮只弹“功能待实现”，且真实下载设置页已由 `views/base/settings/SettingDownload.vue` 承担。
+  - 下载组件目录内模板文案从全局 `$t(...)` 收口到 `useI18n()` 的 `t(...)`，并清理 `TaskCard` / `DownloadTask` 中硬编码的下载模块、优先级与剩余时间中文文案。
+  - 兼容性审计报告同步记录该假设置组件与旧 i18n 风格收口，后续同类复核优先按“可点击入口必须有真实执行路径”判断。
+
 ### ref(core-app): 移除应用详情页假动作入口
 
 - `apps/core-app/src/renderer/src/views/base/application/AppConfigure.vue`

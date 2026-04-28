@@ -30,7 +30,7 @@ const emit = defineEmits<{
   'priority-change': [taskId: string, newPriority: number]
 }>()
 
-useI18n()
+const { t } = useI18n()
 
 const taskList = ref<DownloadTask[]>([...props.tasks])
 
@@ -66,7 +66,7 @@ function calculatePriority(index: number, total: number): number {
 <template>
   <div class="task-list" :class="{ 'compact-mode': viewMode === 'compact' }">
     <div v-if="tasks.length === 0" class="empty-state">
-      <TxEmpty :title="$t('download.no_tasks_in_category')" />
+      <TxEmpty :title="t('download.no_tasks_in_category')" />
     </div>
     <draggable
       v-else

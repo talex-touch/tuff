@@ -4,6 +4,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 interface MigrationProgress {
   phase: 'scanning' | 'migrating' | 'validating' | 'complete' | 'error'
@@ -24,6 +25,7 @@ interface MigrationResult {
 
 const visible = ref(false)
 const transport = useTuffTransport()
+const { t } = useI18n()
 
 const downloadMigrationProgressEvent = defineRawEvent<MigrationProgress, void>(
   'download:migration-progress'
@@ -157,9 +159,9 @@ onUnmounted(() => {
   <div v-if="visible" class="migration-overlay">
     <div class="migration-dialog">
       <div class="migration-header">
-        <h2>{{ $t('download.migration.title') }}</h2>
+        <h2>{{ t('download.migration.title') }}</h2>
         <p class="migration-subtitle">
-          {{ $t('download.migration.subtitle') }}
+          {{ t('download.migration.subtitle') }}
         </p>
       </div>
 
@@ -193,7 +195,7 @@ onUnmounted(() => {
               <i v-else :class="phase.icon" />
             </div>
             <div class="phase-label">
-              {{ $t(`download.migration.phase.${phase.key}`) }}
+              {{ t(`download.migration.phase.${phase.key}`) }}
             </div>
           </div>
         </div>
@@ -207,28 +209,28 @@ onUnmounted(() => {
         <!-- Details -->
         <div v-if="showDetails" class="migration-details">
           <div class="detail-item">
-            <span class="detail-label">{{ $t('download.migration.tasks') }}:</span>
+            <span class="detail-label">{{ t('download.migration.tasks') }}:</span>
             <span class="detail-value">{{ result?.migratedTasks || 0 }}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">{{ $t('download.migration.history') }}:</span>
+            <span class="detail-label">{{ t('download.migration.history') }}:</span>
             <span class="detail-value">{{ result?.migratedHistory || 0 }}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">{{ $t('download.migration.config') }}:</span>
+            <span class="detail-label">{{ t('download.migration.config') }}:</span>
             <span class="detail-value">
-              {{ result?.migratedConfig ? $t('common.yes') : $t('common.no') }}
+              {{ result?.migratedConfig ? t('common.yes') : t('common.no') }}
             </span>
           </div>
           <div v-if="result?.duration" class="detail-item">
-            <span class="detail-label">{{ $t('download.migration.duration') }}:</span>
+            <span class="detail-label">{{ t('download.migration.duration') }}:</span>
             <span class="detail-value">{{ formatDuration(result.duration) }}</span>
           </div>
         </div>
 
         <!-- Errors -->
         <div v-if="result?.errors && result.errors.length > 0" class="migration-errors">
-          <h3>{{ $t('download.migration.errors') }}</h3>
+          <h3>{{ t('download.migration.errors') }}</h3>
           <ul>
             <li v-for="(error, index) in result.errors" :key="index">
               {{ error }}
@@ -244,7 +246,7 @@ onUnmounted(() => {
           class="btn-primary"
           @click="handleClose"
         >
-          {{ $t('common.close') }}
+          {{ t('common.close') }}
         </TxButton>
         <TxButton
           v-else-if="progress.phase === 'error'"
@@ -252,10 +254,10 @@ onUnmounted(() => {
           class="btn-secondary"
           @click="handleRetry"
         >
-          {{ $t('common.retry') }}
+          {{ t('common.retry') }}
         </TxButton>
         <div v-else class="loading-text">
-          {{ $t('download.migration.pleaseWait') }}
+          {{ t('download.migration.pleaseWait') }}
         </div>
       </div>
     </div>
