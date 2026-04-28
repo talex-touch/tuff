@@ -93,7 +93,7 @@ export function useFileIndexMonitor() {
         return result
       }
       console.error('[FileIndexMonitor] Rebuild failed:', result?.error)
-      throw new Error(result?.error || 'Rebuild failed')
+      return result ?? { success: false, error: 'Rebuild failed' }
     } catch (error) {
       console.error('[FileIndexMonitor] Failed to trigger rebuild:', error)
       throw error

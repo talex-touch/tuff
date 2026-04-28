@@ -80,11 +80,11 @@ function resolveTouchChannel(): TouchChannel | null {
 }
 
 /**
- * Composable for using TouchChannel communication
+ * Low-level composable for using TouchChannel communication.
  *
- * Provides a reactive interface to communicate with the main process
- * through the TouchChannel IPC system. Works in both renderer and
- * corebox contexts.
+ * Prefer TuffTransport or a domain SDK for new renderer code. This helper is
+ * kept for host bootstrap and legacy compatibility paths that still need the
+ * raw TouchChannel bridge.
  *
  * @example
  * ```ts
@@ -121,8 +121,9 @@ export function useChannel(): TouchChannel {
 }
 
 /**
- * Safe version of useChannel that returns null instead of throwing
- * when TouchChannel is not available. Useful for optional features.
+ * Safe version of useChannel that returns null instead of throwing when
+ * TouchChannel is not available. Prefer TuffTransport/domain SDKs for feature
+ * code; use this only around explicit legacy fallback boundaries.
  *
  * @example
  * ```ts
@@ -139,6 +140,8 @@ export function tryUseChannel(): TouchChannel | null {
 /**
  * Helper composable that creates a typed channel wrapper
  * for specific communication patterns
+ *
+ * @deprecated Prefer TuffTransport domain SDKs for new renderer code.
  *
  * @example
  * ```ts

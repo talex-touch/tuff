@@ -1,16 +1,10 @@
-import type { IStorageChannel } from '@talex-touch/utils/renderer/storage'
 import {
   preloadDebugStep,
   preloadLog,
   preloadRemoveOverlay,
   preloadState
 } from '@talex-touch/utils/preload'
-import {
-  initStorageChannel,
-  initStorageTransport,
-  isCoreBox,
-  useChannel
-} from '@talex-touch/utils/renderer'
+import { initializeRendererStorage, isCoreBox } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { appSetting } from '~/modules/channel/storage/index'
 import { devLog } from '~/utils/dev-log'
@@ -75,13 +69,9 @@ export function useAppLifecycle() {
         preloadDebugStep('Using cached startup metadata', 0.02)
       }
 
-      preloadDebugStep('Initializing Touch SDK and storage channels', 0.05)
+      preloadDebugStep('Initializing Touch SDK and storage transport', 0.05)
       const transport = useTuffTransport()
-      const channel = resolveStorageChannel()
-      if (channel) {
-        initStorageTransport(transport)
-        initStorageChannel(channel)
-      }
+      initializeRendererStorage(transport)
 
       preloadDebugStep('Initializing Sentry...', 0.01)
       void (async () => {
@@ -124,16 +114,4 @@ export function useAppLifecycle() {
     executeMainTask,
     executeCoreboxTask
   }
-}
-
-function resolveStorageChannel(): IStorageChannel | null {
-  try {
-    const channel = useChannel()
-    if (typeof channel.send === 'function' && typeof channel.unRegChannel === 'function') {
-      return channel as IStorageChannel
-    }
-  } catch {
-    // Channel may not be ready during early lifecycle warmup.
-  }
-  return null
 }

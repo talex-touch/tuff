@@ -1,5 +1,5 @@
 import type { UnwrapNestedRefs, WatchHandle } from 'vue'
-import type { ITouchClientChannel, ITuffTransport } from '../../transport'
+import type { ITouchClientChannel, ITuffTransport, StreamController } from '../../transport'
 import type {
   StorageGetVersionedResponse,
   StorageSaveRequest,
@@ -13,7 +13,8 @@ import { StorageEvents } from '../../transport/events'
 
 /**
  * Interface representing the external communication channel.
- * Must be initialized before any `TouchStorage` instance is used.
+ * Kept for explicit legacy fallback paths. New renderer storage should be
+ * initialized through `initializeRendererStorage()` with TuffTransport.
  */
 export interface IStorageChannel extends ITouchClientChannel {
   /**
@@ -45,17 +46,14 @@ function warnLegacyStorageChannelPath(): void {
 }
 
 /**
- * Initializes the global channel for communication.
- * Must be called before creating any TouchStorage instances.
+ * Initializes the legacy global channel fallback for communication.
+ * Prefer `initializeRendererStorage()` with TuffTransport for new renderer code.
  *
  * @example
  * ```ts
- * import { initStorageChannel } from './TouchStorage';
- * import { ipcRenderer } from 'electron';
+ * import { initializeRendererStorage } from './bootstrap';
  *
- * initStorageChannel({
- *   send: ipcRenderer.invoke.bind(ipcRenderer),
- * });
+ * initializeRendererStorage(transport);
  * ```
  */
 export function initStorageChannel(c: IStorageChannel): void {
@@ -196,6 +194,10 @@ export class TouchStorage<T extends object> {
   #pendingSave = false
   #localDirty = false
   #lastSyncedSnapshot: T | null = null
+  #updateListenerMode: 'transport' | 'channel' | null = null
+  #updateListenerToken = 0
+  #updateStreamController: StreamController | null = null
+  #updateChannelCleanup: (() => void) | null = null
 
   /**
    * Reactive saving state — true while a save is in flight.
@@ -209,8 +211,8 @@ export class TouchStorage<T extends object> {
 
   /**
    * Creates a new reactive storage instance.
-   * NOTE: `initStorageChannel()` or `initStorageTransport()` can be called later;
-   * storage will sync once the channel/transport is ready.
+   * NOTE: storage bootstrap can be called later; storage will sync once
+   * transport or an explicit legacy fallback channel is ready.
    *
    * @param qName Globally unique name for the instance
    * @param initData Initial data to populate the storage
@@ -220,8 +222,8 @@ export class TouchStorage<T extends object> {
    *
    * @example
    * ```ts
-   * // First initialize the channel or transport
-   * initStorageChannel(touchChannel);
+   * // First initialize storage transport
+   * initializeRendererStorage(transport);
    *
    * // Then create storage instances
    * const settings = new TouchStorage('settings', { darkMode: false });
@@ -269,18 +271,18 @@ export class TouchStorage<T extends object> {
    * Called immediately in constructor after channel validation.
    */
   #initializeChannel(): void {
-    if (this.#channelInitialized) {
-      return
-    }
+    const firstInitialization = !this.#channelInitialized
 
     this.#channelInitialized = true
 
-    void this.#loadFromRemoteWithVersion()
+    if (firstInitialization) {
+      void this.#loadFromRemoteWithVersion()
+    }
 
     this.#registerUpdateListener()
 
     // Start auto-save watcher AFTER initial data load
-    if (this.#autoSave && !this.#autoSaveStopHandle) {
+    if (firstInitialization && this.#autoSave && !this.#autoSaveStopHandle) {
       this.#startAutoSaveWatcher()
     }
   }
@@ -335,20 +337,7 @@ export class TouchStorage<T extends object> {
 
   #registerUpdateListener(): void {
     if (transport) {
-      transport.stream(StorageEvents.app.updated, undefined, {
-        onData: (payload: StorageUpdateNotification) => {
-          const { key, version } = payload
-          if (key !== this.#qualifiedName) {
-            return
-          }
-
-          if (version === undefined || version > this.#currentVersion) {
-            void this.#loadFromRemoteWithVersion()
-          }
-        },
-      }).catch((error) => {
-        console.error('[TouchStorage] Failed to subscribe to storage updates:', error)
-      })
+      this.#registerTransportUpdateListener()
       return
     }
 
@@ -356,20 +345,76 @@ export class TouchStorage<T extends object> {
       return
     }
 
+    this.#registerChannelUpdateListener()
+  }
+
+  #registerTransportUpdateListener(): void {
+    if (!transport || this.#updateListenerMode === 'transport') {
+      return
+    }
+
+    this.#disposeUpdateListener()
+    this.#updateListenerMode = 'transport'
+    const token = ++this.#updateListenerToken
+
+    transport.stream(StorageEvents.app.updated, undefined, {
+      onData: (payload: StorageUpdateNotification) => {
+        this.#handleUpdateNotification(payload.key, payload.version)
+      },
+    }).then((stream) => {
+      if (this.#updateListenerMode !== 'transport' || token !== this.#updateListenerToken) {
+        stream.cancel()
+        return
+      }
+      this.#updateStreamController = stream
+    }).catch((error) => {
+      if (this.#updateListenerMode !== 'transport' || token !== this.#updateListenerToken) {
+        return
+      }
+
+      this.#updateListenerMode = null
+      this.#updateStreamController = null
+      console.error('[TouchStorage] Failed to subscribe to storage updates:', error)
+      if (channel) {
+        this.#registerChannelUpdateListener()
+      }
+    })
+  }
+
+  #registerChannelUpdateListener(): void {
+    if (!channel || this.#updateListenerMode) {
+      return
+    }
+
     warnLegacyStorageChannelPath()
+    this.#updateListenerMode = 'channel'
 
     // Register update listener - only triggered for OTHER windows' changes
     // (source window is excluded by main process)
-    channel.regChannel(StorageEvents.legacy.update.toEventName(), ({ data }) => {
+    this.#updateChannelCleanup = channel.regChannel(StorageEvents.legacy.update.toEventName(), ({ data }) => {
       const { name, version } = data as { name: string, version?: number }
-
-      if (name === this.#qualifiedName) {
-        // Only reload if remote version is newer
-        if (version === undefined || version > this.#currentVersion) {
-          void this.#loadFromRemoteWithVersion()
-        }
-      }
+      this.#handleUpdateNotification(name, version)
     })
+  }
+
+  #handleUpdateNotification(name: string, version?: number): void {
+    if (name !== this.#qualifiedName) {
+      return
+    }
+
+    // Only reload if remote version is newer
+    if (version === undefined || version > this.#currentVersion) {
+      void this.#loadFromRemoteWithVersion()
+    }
+  }
+
+  #disposeUpdateListener(): void {
+    this.#updateListenerToken++
+    this.#updateChannelCleanup?.()
+    this.#updateChannelCleanup = null
+    this.#updateStreamController?.cancel()
+    this.#updateStreamController = null
+    this.#updateListenerMode = null
   }
 
   /**

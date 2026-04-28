@@ -1,7 +1,5 @@
-import { storages } from '@talex-touch/utils/renderer'
+import { storages, useStorageSdk } from '@talex-touch/utils/renderer'
 import { appSettingsData, openersData } from '@talex-touch/utils/renderer/storage'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { reactive, toRaw, unref } from 'vue'
 import { AccountStorage } from '~/modules/channel/storage/accounter'
 import '~/modules/channel/storage/base'
@@ -23,7 +21,7 @@ export class StorageManager {
 
   /** Reactive user account information */
   account: AccountStorage
-  private transport = useTuffTransport()
+  private storageSdk = useStorageSdk()
 
   constructor() {
     this.account = reactive(new AccountStorage())
@@ -33,9 +31,12 @@ export class StorageManager {
   private async loadAccountFromStorage(): Promise<void> {
     const startAt = performance.now()
     try {
-      const data = await this.transport.send(StorageEvents.app.get, { key: 'account.ini' })
+      const data =
+        await this.storageSdk.app.get<Parameters<typeof this.account.analyzeFromObj>[0]>(
+          'account.ini'
+        )
       if (data && typeof data === 'object') {
-        this.account.analyzeFromObj(data as Parameters<typeof this.account.analyzeFromObj>[0])
+        this.account.analyzeFromObj(data)
       }
     } catch (error) {
       console.warn('[StorageManager] Failed to load account storage:', error)
@@ -48,7 +49,7 @@ export class StorageManager {
   }
 
   /**
-   * Persists data to the backend channel.
+   * Persists data through the renderer storage SDK.
    *
    * @param name The key name used for storage.
    * @param data The data to be serialized and saved.
@@ -61,7 +62,7 @@ export class StorageManager {
    * ```
    */
   async _save(name: string, data: object, clear: boolean = false): Promise<void> {
-    await this.transport.send(StorageEvents.app.save, {
+    await this.storageSdk.app.save({
       key: name,
       value: toRaw(unref(data) as object),
       clear
