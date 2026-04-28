@@ -5,6 +5,15 @@
 
 ## 2026-04-28
 
+### fix(utils): 补齐 regShortcut 快捷键语义参数
+
+- `packages/utils/plugin/sdk/common.ts`
+- `packages/utils/__tests__/plugin-shortcut-sdk.test.ts`
+- `packages/utils/plugin/sdk/README.md`
+  - `regShortcut()` 新增可选 `id` / `description` 参数并透传到 `shortcon:reg`，避免插件通过公共 SDK 注册的快捷键只能以 raw key 作为语义并触发 `missing-description` 告警。
+  - 自定义 `id` 注册后，`shortcon:trigger` 回调同时匹配该稳定 id 与原始快捷键，避免“注册成功但触发不到回调”的 SDK 表面缺口。
+  - 补充定向 Vitest 固定 payload 透传与自定义 id 触发语义。
+
 ### fix(tuff-cli): 对齐 manifest validate 的 sdkapi hard-cut
 
 - `packages/tuff-cli-core/src/validate.ts`

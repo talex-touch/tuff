@@ -10,16 +10,38 @@ import { useChannel } from './channel'
 
 const sdkLog = getLogger('plugin-sdk')
 
+export interface RegShortcutOptions {
+  id?: string
+  description?: string
+  desc?: string
+}
+
+function normalizeOptionalText(value?: string): string | undefined {
+  const normalized = typeof value === 'string' ? value.trim() : ''
+  return normalized || undefined
+}
+
 /**
  * Register a shortcut
  * @param key - The shortcut combination
  * @param func - The trigger function
+ * @param options - Shortcut metadata used by CoreApp settings and permission surfaces
  * @returns Whether the shortcut is registered successfully
  */
-export async function regShortcut(key: string, func: () => void): Promise<boolean> {
+export async function regShortcut(
+  key: string,
+  func: () => void,
+  options: RegShortcutOptions = {},
+): Promise<boolean> {
   const channel = useChannel('[Plugin SDK] Shortcut registration requires renderer channel.')
+  const shortcutId = normalizeOptionalText(options.id)
+  const description = normalizeOptionalText(options.description ?? options.desc)
 
-  const res = await channel.send('shortcon:reg', { key })
+  const res = await channel.send('shortcon:reg', {
+    key,
+    ...(shortcutId ? { id: shortcutId } : {}),
+    ...(description ? { description } : {}),
+  })
   if (typeof res === 'string' || Object.prototype.toString.call(res) === '[object String]')
     throw new Error(String(res))
   if (res === false)
@@ -28,7 +50,7 @@ export async function regShortcut(key: string, func: () => void): Promise<boolea
   channel.regChannel('shortcon:trigger', ({ data }) => {
     const payload = data as { key?: string, id?: string } | undefined
     const triggerKey = payload?.key ?? payload?.id
-    if (triggerKey === key)
+    if (triggerKey === key || (shortcutId && triggerKey === shortcutId))
       func()
   })
 

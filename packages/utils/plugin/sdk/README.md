@@ -195,6 +195,25 @@ onInit(context) {
 }
 ```
 
+### 4. 注册全局快捷键
+
+`regShortcut()` 会把快捷键注册到 CoreApp 全局快捷键系统；建议始终传入稳定 `id` 与面向用户的 `description`，这样设置页和插件详情页可以展示语义化来源。
+
+```typescript
+import { regShortcut } from '@talex-touch/utils/plugin/sdk/common'
+
+await regShortcut(
+  'CommandOrControl+Shift+K',
+  () => {
+    openCommandCenter()
+  },
+  {
+    id: 'open-command-center',
+    description: 'Open command center',
+  },
+)
+```
+
 ## 完整示例
 
 ```typescript
