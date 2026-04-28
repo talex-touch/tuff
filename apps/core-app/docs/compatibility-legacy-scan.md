@@ -54,6 +54,28 @@
 ### 仍保留的兼容边界
 
 - Linux selection capture / active-app / auto-paste 仍依赖 `xdotool` 与桌面环境，属于 documented best-effort，不是待删除假实现。
-- 数据/启动迁移仍保留在升级窗口内，包括 permission JSON -> SQLite、dev data root、renderer legacy auth/theme、download old db/config；清理前需要确认历史版本升级窗口。
+- 旧启动/数据迁移主路径已在后续 hard-cut 中收口；当前保留的是 schema/runtime migration 与回归 fixture，不再作为 legacy startup migration exception。
 - 插件 SDK hard-cut 已阻断旧插件运行；`enforcePermissions` 等字段仅作为 blocked 状态表达保留，不再代表旧 SDK bypass。
 - 剩余主进程 `console.*` 命中均为有意边界：`utils/logger.ts` 是项目 logger 输出端，`internal-plugin-logger.ts` 是内部插件日志适配器，`SearchLogger`/`search-logger-test.ts` 是显式控制台诊断器，CoreBox/DivisionBox 里的命中是注入到 WebContents 的脚本错误输出。
+
+## 2026-04-28 复核结论
+
+### 当前结论
+
+- CoreApp 生产路径没有发现新的 `FlowBus` silent success、DivisionBox 假命令、PluginStatus 命令式 DOM 回写、ServiceCenter 伪持久化或 macOS notification 权限误报回潮。
+- Renderer storage 当前工作区已收口到 typed storage SDK：`main.ts`、`useAppLifecycle.ts`、`modules/channel/storage/base.ts` 统一调用 `initializeRendererStorage(transport)`；`StorageManager` 与 `AccountStorage` 改用 `useStorageSdk()`，不再直接 `transport.send(StorageEvents.app.*)` 或解析 legacy `useChannel()`。
+- 当前 `rg` 复核显示 `window.$t/window.$i18n` 在 renderer 中无命中；旧 `storage:get/storage:save/storage:update` 在 CoreApp 业务侧无新增消费，剩余命中为插件 storage IPC 名称或共享库显式 fallback 边界。
+- `show-active-sessions` 仅保留在 DivisionBox 回归测试的禁止断言中；`TARGET_OFFLINE` 仍覆盖未注册 Flow delivery handler 的失败语义。
+- 跨平台能力仍是显式不对称：Windows/macOS 属于 2.5.0 release-blocking 人工回归范围；Linux 继续按 `xdotool` / desktop environment 依赖记录为 documented best-effort，不应包装为同等支持。
+
+### 已清理
+
+- 清理 storage renderer 入口中的重复 JSDoc 和旧 `console.log` 示例/注释，避免把已迁移到 typed storage SDK 的路径继续表现成半迁移状态。
+- 删除仅剩测试引用的 `parseLegacyThemeStyle()` 旧 localStorage 解析 helper；renderer theme startup migration 已从生产路径移除，不再保留无调用方的 legacy 解析入口。
+
+### 仍保留但不判为假实现
+
+- `fake-background` / `--fake-*` 是既有视觉 token，不代表 mock 功能。
+- `placeholder` 大多是输入框、骨架屏或空图标语义；当前未发现会把未完成能力伪装成已完成的正式入口。
+- Plugin widget preview 的 `mockPayload` 属于开发面板显式测试载荷，不是生产 runtime mock。
+- `SearchLogger`、logger 输出端、内部插件 logger、WebContents injected script 中的 `console.*` 是有意诊断/注入边界；普通主进程 runtime console 仍维持已收口状态。

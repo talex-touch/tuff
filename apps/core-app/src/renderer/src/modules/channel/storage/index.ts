@@ -17,17 +17,6 @@ import '~/modules/channel/storage/base'
  * const appSetting = storageManager.appSetting;
  * ```
  */
-/**
- * StorageManager handles the reactive data storages of the app,
- * such as theme settings and user accounts.
- * It also ensures data persistence through transport-based sync and save operations.
- *
- * @example
- * ```ts
- * import { storageManager } from './storage-manager';
- * const account = storageManager.account;
- * ```
- */
 export class StorageManager {
   /** Reactive theme configuration */
   themeStyle: object = {}
@@ -99,9 +88,6 @@ export const storageManager = new StorageManager()
  * @example
  * ```ts
  * import { appSetting } from './storage';
- *
- * // Read a setting
- * console.log(appSetting.autoStart);
  *
  * // Modify a setting (automatically persisted)
  * appSetting.autoStart = true;
