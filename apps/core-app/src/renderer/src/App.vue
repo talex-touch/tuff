@@ -11,6 +11,7 @@ import { useGlobalBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { useLanguage } from '~/modules/lang'
 import { captureAppContext } from '~/modules/mention/dialog-mention'
+import { createRendererLogger } from '~/utils/renderer-log'
 import Beginner from '~/views/base/begin/Beginner.vue'
 import AppLayout from '~/views/layout/AppLayout.vue'
 import AppEntrance from './AppEntrance.vue'
@@ -18,6 +19,7 @@ import AppEntrance from './AppEntrance.vue'
 const { t } = useI18n()
 const { initializeLanguage } = useLanguage()
 useStartupInfo()
+const appLog = createRendererLogger('App')
 
 const beginner = ref(false)
 
@@ -36,7 +38,7 @@ async function init(): Promise<void> {
   try {
     await initializeLanguage()
   } catch (error) {
-    console.error('[App] Failed to initialize language:', error)
+    appLog.error('Failed to initialize language', error)
   }
 
   useDropperResolver()

@@ -25,22 +25,19 @@ import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 
 // Import storage and channel
 import { appSetting } from '~/modules/channel/storage/index'
-import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import {
   type SystemPermissionCheckResult,
   type SystemPermissionStatus,
   waitForPermissionGrant
 } from '~/modules/system/system-permission-refresh'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
 const settingsSdk = useSettingsSdk()
-const { startupInfo } = useStartupInfo()
-
-const platform = computed(() => startupInfo.value?.platform || process.platform)
-const isMacOS = computed(() => platform.value === 'darwin')
-const isWindows = computed(() => platform.value === 'win32')
-const isLinux = computed(() => platform.value === 'linux')
+const { platform, isMac: isMacOS, isWindows, isLinux } = useRendererPlatform()
+const settingSetupLog = createRendererLogger('SettingSetup')
 const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 
 interface PermissionState {
@@ -245,7 +242,7 @@ async function checkAllPermissions(): Promise<void> {
       await checkPermission('adminPrivileges')
     }
   } catch (error) {
-    console.error('[SettingSetup] Failed to check permissions:', error)
+    settingSetupLog.error('Failed to check permissions', error)
     toast.error(t('setupPermissions.checkFailed'))
   } finally {
     isLoading.value = false
@@ -269,7 +266,7 @@ async function loadSettings(): Promise<void> {
     const autoStartResult = await settingsSdk.system.getAutoStart()
     settings.value.autoStart = Boolean(autoStartResult)
   } catch (error) {
-    console.error('[SettingSetup] Failed to load autoStart:', error)
+    settingSetupLog.error('Failed to load autoStart', error)
   }
 
   try {
@@ -278,7 +275,7 @@ async function loadSettings(): Promise<void> {
     settings.value.showTray = traySettings.showTray !== false
     settings.value.hideDock = traySettings.hideDock === true
   } catch (error) {
-    console.error('[SettingSetup] Failed to load tray settings:', error)
+    settingSetupLog.error('Failed to load tray settings', error)
     traySettingsAvailable.value = false
   }
 
@@ -297,7 +294,7 @@ async function loadAppIndexSettings(): Promise<void> {
     settings.value.hideNoisySystemApps = loaded.hideNoisySystemApps
   } catch (error) {
     settings.value.hideNoisySystemApps = true
-    console.error('[SettingSetup] Failed to load app index settings:', error)
+    settingSetupLog.error('Failed to load app index settings', error)
   }
 }
 
@@ -326,7 +323,7 @@ async function requestPermission(type: string): Promise<void> {
       void checkPermission(type)
     }, 2000)
   } catch (error) {
-    console.error(`[SettingSetup] Failed to request permission ${type}:`, error)
+    settingSetupLog.error(`Failed to request permission ${type}`, error)
     toast.error(t('setupPermissions.requestFailed'))
   }
 }
@@ -339,7 +336,7 @@ async function updateAutoStart(value: boolean): Promise<void> {
     settings.value.autoStart = Boolean(current)
     toast.success(t('common.success'))
   } catch (error) {
-    console.error('[SettingSetup] Failed to update autoStart:', error)
+    settingSetupLog.error('Failed to update autoStart', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -354,7 +351,7 @@ async function updateShowTray(value: boolean): Promise<void> {
     settings.value.hideDock = updated.hideDock === true
     toast.success(t('common.success'))
   } catch (error) {
-    console.error('[SettingSetup] Failed to update showTray:', error)
+    settingSetupLog.error('Failed to update showTray', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -369,7 +366,7 @@ async function updateHideDock(value: boolean): Promise<void> {
     settings.value.hideDock = updated.hideDock === true
     toast.success(t('common.success'))
   } catch (error) {
-    console.error('[SettingSetup] Failed to update hideDock:', error)
+    settingSetupLog.error('Failed to update hideDock', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -384,7 +381,7 @@ async function updateStartSilent(value: boolean): Promise<void> {
     settings.value.autoStart = Boolean(current)
     toast.success(t('common.success'))
   } catch (error) {
-    console.error('[SettingSetup] Failed to update startSilent:', error)
+    settingSetupLog.error('Failed to update startSilent', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -396,7 +393,7 @@ async function updateOmniAutoMountFeature(value: boolean): Promise<void> {
   try {
     toast.success(t('common.success'))
   } catch (error) {
-    console.error('[SettingSetup] Failed to update omni auto mount setting:', error)
+    settingSetupLog.error('Failed to update omni auto mount setting', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -407,7 +404,7 @@ async function updateRunAsAdmin(value: boolean): Promise<void> {
   try {
     toast.success(t('common.success'))
   } catch (error) {
-    console.error('[SettingSetup] Failed to update runAsAdmin:', error)
+    settingSetupLog.error('Failed to update runAsAdmin', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -418,7 +415,7 @@ async function updateCustomDesktop(value: boolean): Promise<void> {
   try {
     toast.success(t('common.success'))
   } catch (error) {
-    console.error('[SettingSetup] Failed to update customDesktop:', error)
+    settingSetupLog.error('Failed to update customDesktop', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -432,7 +429,7 @@ async function updateHideNoisySystemApps(value: boolean): Promise<void> {
     toast.success(t('common.success'))
   } catch (error) {
     settings.value.hideNoisySystemApps = appIndexSettings.value?.hideNoisySystemApps ?? true
-    console.error('[SettingSetup] Failed to update hideNoisySystemApps:', error)
+    settingSetupLog.error('Failed to update hideNoisySystemApps', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }

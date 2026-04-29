@@ -1,6 +1,8 @@
 /**
  * Rate limit information interface
  */
+import { createRendererLogger } from '~/utils/renderer-log'
+
 export interface RateLimitInfo {
   limit: number
   remaining: number
@@ -14,6 +16,7 @@ export interface RateLimitInfo {
 export class RateLimitManager {
   private rateLimits: Map<string, RateLimitInfo> = new Map()
   private readonly defaultRetryAfter = 60 * 1000 // 1 minute default retry after
+  private readonly log = createRendererLogger('RateLimitManager')
 
   /**
    * Get default retry after time
@@ -45,7 +48,7 @@ export class RateLimitManager {
         })
       }
     } catch (error) {
-      console.warn(`Failed to update rate limit for ${source}:`, error)
+      this.log.warn(`Failed to update rate limit for ${source}`, error)
     }
   }
 

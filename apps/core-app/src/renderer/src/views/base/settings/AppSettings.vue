@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent } from 'vue'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import { appSetting } from '~/modules/channel/storage'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import SettingHeader from './SettingHeader.vue'
 import SettingLanguage from './SettingLanguage.vue'
 import SettingSetup from './SettingSetup.vue'
@@ -16,7 +17,7 @@ const SettingSentry = defineAsyncComponent(() => import('./SettingSentry.vue'))
 const SettingStorage = defineAsyncComponent(() => import('./SettingStorage.vue'))
 const SettingUpdate = defineAsyncComponent(() => import('./SettingUpdate.vue'))
 
-const isWindows = computed(() => window.electron?.process?.platform === 'win32')
+const { isWindows } = useRendererPlatform()
 const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 </script>
 <template>

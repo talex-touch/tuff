@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { hasNavigator, isNodeRuntime } from '@talex-touch/utils/env'
 import { useVModel } from '@vueuse/core'
 import { shortconApi } from '~/modules/channel/main/shortcon'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import FlatInput from './FlatInput.vue'
 
 const props = defineProps<{
@@ -12,14 +12,7 @@ const emits = defineEmits<{
 }>()
 
 const model = useVModel(props, 'modelValue', emits)
-
-const platform =
-  isNodeRuntime() && process?.platform
-    ? process.platform
-    : hasNavigator()
-      ? navigator.platform.toLowerCase()
-      : ''
-const isMac = platform === 'darwin' || platform.includes('mac')
+const { isMac } = useRendererPlatform()
 const metaModifier = isMac ? 'Command' : 'Super'
 const altModifier = isMac ? 'Option' : 'Alt'
 

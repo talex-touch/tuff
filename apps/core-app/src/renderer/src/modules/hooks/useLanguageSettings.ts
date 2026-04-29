@@ -3,6 +3,9 @@ import { computed } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
 import { SUPPORTED_LANGUAGES, useLanguage } from '~/modules/lang'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
+
+const languageSettingsLog = createRendererLogger('useLanguageSettings')
 
 /**
  * 语言设置相关的 hooks
@@ -22,7 +25,7 @@ export function useLanguageSettings() {
         }
         await setFollowSystemLanguage(value)
       } catch (error) {
-        console.error('[useLanguageSettings] Failed to update followSystem:', error)
+        languageSettingsLog.error('Failed to update followSystem', error)
       }
     }
   })
@@ -37,7 +40,7 @@ export function useLanguageSettings() {
       try {
         await switchLanguage(value as SupportedLanguage)
       } catch (error) {
-        console.error('[useLanguageSettings] Failed to update selectedLanguage:', error)
+        languageSettingsLog.error('Failed to update selectedLanguage', error)
       }
     }
   })
@@ -47,7 +50,7 @@ export function useLanguageSettings() {
       await switchLanguage(lang as SupportedLanguage)
       devLog(`[useLanguageSettings] Language changed to: ${lang}`)
     } catch (error) {
-      console.error('[useLanguageSettings] Failed to change language:', error)
+      languageSettingsLog.error('Failed to change language', error)
     }
   }
 
@@ -56,7 +59,7 @@ export function useLanguageSettings() {
       await setFollowSystemLanguage(follow)
       devLog(`[useLanguageSettings] Follow system language: ${follow}`)
     } catch (error) {
-      console.error('[useLanguageSettings] Failed to change follow system setting:', error)
+      languageSettingsLog.error('Failed to change follow system setting', error)
     }
   }
 

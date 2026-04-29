@@ -20,6 +20,7 @@ import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
 import { appSetting } from '~/modules/channel/storage'
 import { useEstimatedCompletionText } from '~/modules/hooks/useEstimatedCompletion'
 import { popperMention } from '~/modules/mention/dialog-mention'
+import { createRendererLogger } from '~/utils/renderer-log'
 import FailedFilesListDialog from './components/FailedFilesListDialog.vue'
 import RebuildConfirmDialog from './components/RebuildConfirmDialog.vue'
 import SettingFileIndexAppDiagnostic from './SettingFileIndexAppDiagnostic.vue'
@@ -29,7 +30,6 @@ import {
   getDeviceIdleDiagnosticTone,
   getDeviceIdleReasonKey
 } from './device-idle-diagnostics'
-import { resolveIndexRebuildOutcome } from './index-rebuild-flow'
 
 const {
   getIndexStatus,
@@ -39,6 +39,7 @@ const {
   handleRebuild,
   onProgressUpdate
 } = useFileIndexMonitor()
+const settingFileIndexLog = createRendererLogger('SettingFileIndex')
 const { t, te } = useI18n()
 const settingsSdk = useSettingsSdk()
 
@@ -136,7 +137,7 @@ async function checkStatus() {
       indexStats.value = stats
     }
   } catch (error) {
-    console.error('[SettingFileIndex] Failed to get status:', error)
+    settingFileIndexLog.error('Failed to get status', error)
   }
 }
 
@@ -184,7 +185,7 @@ async function loadDeviceIdleSettings() {
     deviceIdleSettings.value = settings
     deviceIdleForm.value = toDeviceIdleForm(settings)
   } catch (error) {
-    console.error('[SettingFileIndex] Failed to load device idle settings:', error)
+    settingFileIndexLog.error('Failed to load device idle settings', error)
     toast.error(t('settings.settingFileIndex.deviceIdleLoadFailed'))
   }
 }
@@ -196,7 +197,7 @@ async function loadDeviceIdleDiagnostic() {
     deviceIdleDiagnostic.value = await settingsSdk.deviceIdle.getDiagnostic()
     deviceIdleDiagnosticCheckedAt.value = new Date()
   } catch (error) {
-    console.error('[SettingFileIndex] Failed to load device idle diagnostic:', error)
+    settingFileIndexLog.error('Failed to load device idle diagnostic', error)
     deviceIdleDiagnostic.value = null
     toast.error(t('settings.settingFileIndex.deviceIdleDiagnosticLoadFailed'))
   } finally {
@@ -232,7 +233,7 @@ async function saveDeviceIdleSettings() {
     await loadDeviceIdleDiagnostic()
     toast.success(t('settings.settingFileIndex.deviceIdleSaved'))
   } catch (error) {
-    console.error('[SettingFileIndex] Failed to save device idle settings:', error)
+    settingFileIndexLog.error('Failed to save device idle settings', error)
     toast.error(t('settings.settingFileIndex.deviceIdleSaveFailed'))
   } finally {
     deviceIdleSaving.value = false
@@ -245,7 +246,7 @@ async function loadAppIndexSettings() {
     appIndexSettings.value = settings
     appIndexForm.value = toAppIndexForm(settings)
   } catch (error) {
-    console.error('[SettingFileIndex] Failed to load app index settings:', error)
+    settingFileIndexLog.error('Failed to load app index settings', error)
     toast.error(t('settings.settingFileIndex.appIndexLoadFailed'))
   }
 }
@@ -296,7 +297,7 @@ async function saveAppIndexSettings() {
     appIndexForm.value = toAppIndexForm(updated)
     toast.success(t('settings.settingFileIndex.appIndexSaved'))
   } catch (error) {
-    console.error('[SettingFileIndex] Failed to save app index settings:', error)
+    settingFileIndexLog.error('Failed to save app index settings', error)
     toast.error(t('settings.settingFileIndex.appIndexSaveFailed'))
   } finally {
     appIndexSaving.value = false
@@ -531,12 +532,8 @@ async function triggerRebuild() {
   isRebuilding.value = true
   try {
     const result = await handleRebuild()
-    let outcome = resolveIndexRebuildOutcome(result, {
-      success: t('settings.settingFileIndex.alertRebuildStarted'),
-      failure: 'Rebuild failed'
-    })
 
-    if (outcome.type === 'confirm') {
+    if (result?.requiresConfirm) {
       const level = result.battery?.level ?? battery?.level
       if (typeof level === 'number') {
         toast.warning(
@@ -567,26 +564,18 @@ async function triggerRebuild() {
       }
 
       const forced = await handleRebuild({ force: true })
-      outcome = resolveIndexRebuildOutcome(forced, {
-        success: t('settings.settingFileIndex.alertRebuildStarted'),
-        failure: 'Rebuild failed'
-      })
-      if (outcome.type !== 'success') {
-        throw new Error(outcome.type === 'failure' ? outcome.message : 'Rebuild failed')
+      if (!forced?.success) {
+        throw new Error(forced?.error || 'Rebuild failed')
       }
     }
 
-    if (outcome.type !== 'success') {
-      throw new Error(outcome.type === 'failure' ? outcome.message : 'Rebuild failed')
-    }
-
-    toast.success(outcome.message)
+    toast.success(t('settings.settingFileIndex.alertRebuildStarted'))
     setTimeout(async () => {
       await checkStatus()
       isRebuilding.value = false
     }, 2000)
   } catch (error: unknown) {
-    console.error('[SettingFileIndex] Rebuild failed:', error)
+    settingFileIndexLog.error('Rebuild failed', error)
     isRebuilding.value = false
     const errorMsg = error instanceof Error ? error.message : String(error)
     toast.error(

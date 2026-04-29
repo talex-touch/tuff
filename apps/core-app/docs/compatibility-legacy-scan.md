@@ -63,12 +63,16 @@
 ### 当前结论
 
 - CoreApp 生产路径没有发现新的 `FlowBus` silent success、DivisionBox 假命令、PluginStatus 命令式 DOM 回写、ServiceCenter 伪持久化或 macOS notification 权限误报回潮。
+- Renderer 平台判断已新增统一入口 `modules/platform/renderer-platform.ts`，设置页、首次引导、快捷键输入、CoreBox 头尾部和常见布局不再混用 `startupInfo / process.platform / navigator.platform`；当前 renderer 展示层优先消费统一的 `platform/isMac/isWindows/isLinux` 结果。
+- 语言初始化链路已收口到 `useLanguage` + `language-preferences`：启动阶段先等待 `appSettings` hydration，再以 `appSetting.lang` 为权威源，`localStorage.lang` 仅作为单向迁移兜底；迁移完成后清理 legacy snapshot，避免启动期与运行期双写/分叉。
+- Renderer 日志第一轮已在 `modules/lang/*`、`modules/update/*` 和 settings 核心页面切到统一 logger；用户可感知失败仍保留 toast，静默降级和开发诊断不再散落为裸 `console.warn/error`。
 - Renderer storage 当前工作区已收口到 typed storage SDK：`main.ts`、`useAppLifecycle.ts`、`modules/channel/storage/base.ts` 统一调用 `initializeRendererStorage(transport)`；`StorageManager` 与 `AccountStorage` 改用 `useStorageSdk()`，不再直接 `transport.send(StorageEvents.app.*)` 或解析 legacy `useChannel()`。
 - 当前 `rg` 复核显示 `window.$t/window.$i18n` 在 renderer 中无命中；旧 `storage:get/storage:save/storage:update` 在 CoreApp 业务侧无新增消费，剩余命中为插件 storage IPC 名称或共享库显式 fallback 边界。
 - `show-active-sessions` 仅保留在 DivisionBox 回归测试的禁止断言中；`TARGET_OFFLINE` 仍覆盖未注册 Flow delivery handler 的失败语义。
 - 应用详情页不再暴露无真实执行路径的 open explorer / uninstall / save/spec 入口；当前保留的 launch 与 help 均有真实执行路径。
 - 下载中心目录不再保留未引用的旧 `DownloadSettings.vue` 假设置组件；该组件的选择临时目录按钮仅弹“功能待实现”，真实下载设置入口以 `views/base/settings/SettingDownload.vue` 为准。
 - 下载组件目录内模板文案已从全局 `$t(...)` 收口到 `useI18n()` 的 `t(...)`，`TaskCard` / `DownloadTask` 中硬编码的下载模块、优先级与剩余时间中文文案也已归入 i18n 资源。
+- 插件 WebView 不再保留陈旧 `console.log` 注释或硬编码加载/失败操作文案；加载提示与失败操作接入 i18n，WebView 崩溃/加载失败日志只记录插件名、状态与错误描述。
 - 跨平台能力仍是显式不对称：Windows/macOS 属于 2.5.0 release-blocking 人工回归范围；Linux 继续按 `xdotool` / desktop environment 依赖记录为 documented best-effort，不应包装为同等支持。
 
 ### 已清理
@@ -80,10 +84,12 @@
 - 清理 `appConfigure` i18n 中对应上述假动作的无调用文案键，避免语言资源继续暗示这些入口仍存在。
 - 删除未引用且包含“选择目录功能待实现”假动作的旧 `DownloadSettings.vue`，避免死组件继续携带假设置入口。
 - 下载组件目录内旧 `$t(...)` 模板调用收口到 `useI18n()`，并补齐下载优先级/剩余时间对应的中英文资源键。
+- 清理 `PluginView.vue` 中的陈旧 debug 注释与硬编码加载/失败操作文案，避免插件 WebView 运行面继续呈现半迁移状态。
+- 删除 `plugin-installer.ts` 风险确认里的未来 TODO 注释；当前安装风险确认保持真实 dialog 路径，不继续用注释暗示未接通的生物识别能力。
 
 ### 仍保留但不判为假实现
 
 - `fake-background` / `--fake-*` 是既有视觉 token，不代表 mock 功能。
 - `placeholder` 大多是输入框、骨架屏或空图标语义；当前未发现会把未完成能力伪装成已完成的正式入口。
 - Plugin widget preview 的 `mockPayload` 属于开发面板显式测试载荷，不是生产 runtime mock。
-- `SearchLogger`、logger 输出端、内部插件 logger、WebContents injected script 中的 `console.*` 是有意诊断/注入边界；普通主进程 runtime console 仍维持已收口状态。
+- `preload` 中的 `console.log` 只在 `DEBUG` 或 `debug-preload` 显式打开时输出；`SearchLogger`、logger 输出端、内部插件 logger、WebContents injected script 中的 `console.*` 也是有意诊断/注入边界；普通主进程 runtime console 仍维持已收口状态。

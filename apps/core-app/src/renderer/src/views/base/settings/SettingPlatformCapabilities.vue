@@ -11,12 +11,14 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 
 const { t } = useI18n()
 const platformSdk = usePlatformSdk()
+const settingPlatformCapabilitiesLog = createRendererLogger('SettingPlatformCapabilities')
 
 type PlatformCapabilityView = PlatformCapability & {
   issueCode?: string
@@ -119,7 +121,7 @@ async function loadCapabilities() {
       devLog('[SettingPlatformCapabilities] Load timed out, module may be initializing')
       return
     }
-    console.error('[SettingPlatformCapabilities] Failed to load capabilities:', error)
+    settingPlatformCapabilitiesLog.error('Failed to load capabilities', error)
     toast.error(t('settings.settingPlatformCapabilities.messages.loadFailed'))
   } finally {
     loading.value = false
