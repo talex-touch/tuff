@@ -2,6 +2,7 @@
 import type { TuffItem } from '@talex-touch/utils'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 
 export interface ActionItem {
   id: string
@@ -26,9 +27,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const activeIndex = ref(0)
 
-const isMac = process.platform === 'darwin'
+const { isMac } = useRendererPlatform()
 const revealInFolderLabel = computed(() =>
-  t('corebox.actions.revealInFinder', isMac ? '在 Finder 中显示' : '在文件管理器中显示')
+  t('corebox.actions.revealInFinder', isMac.value ? '在 Finder 中显示' : '在文件管理器中显示')
 )
 
 const actions = computed<ActionItem[]>(() => {
@@ -43,7 +44,7 @@ const actions = computed<ActionItem[]>(() => {
       ? t('corebox.actions.unpin', '取消固定')
       : t('corebox.actions.pin', '固定到推荐'),
     icon: props.isPinned ? 'i-ri-unpin-line' : 'i-ri-pushpin-line',
-    shortcut: isMac ? '↵' : 'Enter'
+    shortcut: isMac.value ? '↵' : 'Enter'
   })
 
   // Copy action
@@ -52,7 +53,7 @@ const actions = computed<ActionItem[]>(() => {
       id: 'copy-title',
       label: t('corebox.actions.copyTitle', '复制名称'),
       icon: 'i-ri-file-copy-line',
-      shortcut: isMac ? '⌘C' : 'Ctrl+C'
+      shortcut: isMac.value ? '⌘C' : 'Ctrl+C'
     })
   }
 
@@ -62,7 +63,7 @@ const actions = computed<ActionItem[]>(() => {
       id: 'reveal-in-finder',
       label: revealInFolderLabel.value,
       icon: 'i-ri-folder-open-line',
-      shortcut: isMac ? '⌘⇧F' : 'Ctrl+Shift+F'
+      shortcut: isMac.value ? '⌘⇧F' : 'Ctrl+Shift+F'
     })
   }
 
@@ -71,7 +72,7 @@ const actions = computed<ActionItem[]>(() => {
     id: 'flow-transfer',
     label: t('corebox.actions.flowTransfer', '流转到其他插件'),
     icon: 'i-ri-share-forward-line',
-    shortcut: isMac ? '⌘⇧D' : 'Ctrl+Shift+D'
+    shortcut: isMac.value ? '⌘⇧D' : 'Ctrl+Shift+D'
   })
 
   return list

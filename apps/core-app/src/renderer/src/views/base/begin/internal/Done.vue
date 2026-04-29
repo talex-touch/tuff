@@ -3,7 +3,6 @@ import type { AnimationItem } from 'lottie-web'
 import type { Component } from 'vue'
 import { sleep } from '@talex-touch/utils/common/utils'
 import { TxButton } from '@talex-touch/tuffex'
-import { hasNavigator } from '@talex-touch/utils/env'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -13,6 +12,7 @@ import { useI18n } from 'vue-i18n'
 import WelcomeData from '~/assets/lotties/welcome.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 import { appSetting } from '~/modules/channel/storage'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import BeginShortcutKey from './components/BeginShortcutKey.vue'
 
 type StepFunction = (
@@ -24,10 +24,9 @@ const step: StepFunction = inject('step')!
 const { t } = useI18n()
 const appSdk = useAppSdk()
 const transport = useTuffTransport()
+const { isMac } = useRendererPlatform()
 
 const beginnerShortcutTriggeredEvent = defineRawEvent<void, void>('beginner:shortcut-triggered')
-
-const isMac = computed(() => hasNavigator() && /Mac|iPhone|iPad|iPod/i.test(navigator.platform))
 const shortcutKeyLabel = computed(() =>
   isMac.value ? t('beginner.done.shortcut.command') : t('beginner.done.shortcut.ctrl')
 )

@@ -10,7 +10,10 @@ import { CustomUpdateProvider } from './CustomUpdateProvider'
 import { GithubUpdateProvider } from './GithubUpdateProvider'
 import { OfficialUpdateProvider } from './OfficialUpdateProvider'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 // Note: GitHubRelease, UpdateError, UpdateErrorType are imported in other files if needed
+
+const updateProviderManagerLog = createRendererLogger('UpdateProviderManager')
 
 export class UpdateProviderManager {
   private providers: UpdateProvider[] = []
@@ -78,7 +81,7 @@ export class UpdateProviderManager {
       return provider
     }
 
-    console.warn(`[UpdateProviderManager] No provider found for config:`, config)
+    updateProviderManagerLog.warn('No provider found for config', config)
     return null
   }
 
@@ -121,7 +124,7 @@ export class UpdateProviderManager {
         source: provider.name
       }
     } catch (error) {
-      console.error('[UpdateProviderManager] Update check failed:', error)
+      updateProviderManagerLog.error('Update check failed', error)
 
       let errorMessage = 'Unknown error occurred'
       let source = 'Unknown'
@@ -165,7 +168,7 @@ export class UpdateProviderManager {
       }
       return true
     } catch (error) {
-      console.error(`[UpdateProviderManager] Health check failed for ${provider.name}:`, error)
+      updateProviderManagerLog.error(`Health check failed for ${provider.name}`, error)
       return false
     }
   }

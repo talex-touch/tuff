@@ -15,6 +15,7 @@ import { useI18n } from 'vue-i18n'
 
 import { toast } from 'vue-sonner'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -27,6 +28,7 @@ import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
 const { t } = useI18n()
 const downloadSdk = useDownloadSdk()
 const transport = useTuffTransport()
+const settingDownloadLog = createRendererLogger('SettingDownload')
 const openFileEvent = defineRawEvent<
   {
     title?: string
@@ -89,7 +91,7 @@ async function loadConfig() {
       devLog('[SettingDownload] Config load timed out, module may be initializing')
       return
     }
-    console.error('[SettingDownload] Failed to load config:', error)
+    settingDownloadLog.error('Failed to load config', error)
     toast.warning(t('settings.settingDownload.messages.loadFailed'))
   } finally {
     loading.value = false
@@ -102,7 +104,7 @@ async function updateDownloadConfig() {
     await updateConfig(downloadConfig.value)
     toast.success(t('settings.settingDownload.messages.saved'))
   } catch (error) {
-    console.error('[SettingDownload] Failed to update config:', error)
+    settingDownloadLog.error('Failed to update config', error)
     toast.error(t('settings.settingDownload.messages.saveFailed'))
   }
 }
@@ -128,7 +130,7 @@ async function chooseTempDir(): Promise<void> {
     downloadConfig.value.storage.tempDir = nextPath
     await updateDownloadConfig()
   } catch (error) {
-    console.error('[SettingDownload] Failed to select temp dir:', error)
+    settingDownloadLog.error('Failed to select temp dir', error)
     toast.error(t('settings.settingDownload.messages.tempDirSelectFailed'))
   }
 }
@@ -183,7 +185,7 @@ async function cleanupTempFiles() {
       throw new Error(response.error || 'Failed to cleanup temp files')
     }
   } catch (error) {
-    console.error('[SettingDownload] Failed to cleanup temp files:', error)
+    settingDownloadLog.error('Failed to cleanup temp files', error)
     toast.error(t('settings.settingDownload.messages.tempCleanFailed'))
   } finally {
     cleaningTemp.value = false

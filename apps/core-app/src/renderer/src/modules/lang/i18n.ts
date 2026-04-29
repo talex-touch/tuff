@@ -1,6 +1,7 @@
 import { nextTick } from 'vue'
 import type { I18n } from 'vue-i18n'
 import { createI18n } from 'vue-i18n'
+import { createRendererLogger } from '~/utils/renderer-log'
 import enUS from './en-US.json'
 import zhCN from './zh-CN.json'
 
@@ -9,6 +10,7 @@ type LocaleKey = string
 export type I18nInstance = I18n<MessageMap, MessageMap, MessageMap, LocaleKey, false>
 
 let globalI18nInstance: I18nInstance | null = null
+const i18nLog = createRendererLogger('loadLocaleMessages')
 
 export function getGlobalI18nInstance(): I18nInstance | null {
   return globalI18nInstance
@@ -73,16 +75,16 @@ export async function loadLocaleMessages(i18n: I18nInstance, locale: string): Pr
       throw new Error(`Locale "${locale}" not found`)
     }
   } catch (error) {
-    console.error(`[loadLocaleMessages] Failed to load locale "${locale}":`, error)
+    i18nLog.error(`Failed to load locale "${locale}"`, error)
     try {
       const fallbackLocale = locale === 'zh-CN' ? 'en-US' : 'zh-CN'
       messages = localeMessages[fallbackLocale]
       if (!messages) {
         throw new Error(`Fallback locale "${fallbackLocale}" not found`)
       }
-      console.warn(`[loadLocaleMessages] Fallback to "${fallbackLocale}"`)
+      i18nLog.warn(`Fallback to "${fallbackLocale}"`)
     } catch (fallbackError) {
-      console.error(`[loadLocaleMessages] Fallback locale also failed:`, fallbackError)
+      i18nLog.error('Fallback locale also failed', fallbackError)
       throw error
     }
   }

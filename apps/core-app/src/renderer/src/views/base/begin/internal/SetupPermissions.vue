@@ -1,9 +1,8 @@
 <script setup lang="ts" name="SetupPermissions">
 import { TxButton } from '@talex-touch/tuffex'
-import { useStorageSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { AppEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
 import type { Component } from 'vue'
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -13,7 +12,7 @@ import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 import { appSetting } from '~/modules/channel/storage/index'
-import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import {
   type SystemPermissionCheckResult,
   waitForPermissionGrant
@@ -28,12 +27,7 @@ type StepFunction = (
 const { t } = useI18n()
 const step: StepFunction = inject('step')!
 const transport = useTuffTransport()
-const storageSdk = useStorageSdk()
-const { startupInfo } = useStartupInfo()
-
-const platform = computed(() => startupInfo.value?.platform || process.platform)
-const isMacOS = computed(() => platform.value === 'darwin')
-const isWindows = computed(() => platform.value === 'win32')
+const { isMac: isMacOS, isWindows } = useRendererPlatform()
 
 const systemPermissionCheck = defineRawEvent<string, SystemPermissionCheckResult>(
   'system:permission:check'
@@ -259,7 +253,7 @@ async function updateAutoStart(value: boolean): Promise<void> {
   settings.value.autoStart = value
   appSetting.setup.autoStart = value
   try {
-    await storageSdk.app.save({
+    await transport.send(StorageEvents.app.save, {
       key: 'app.autoStart',
       content: JSON.stringify(value),
       clear: false
@@ -275,7 +269,7 @@ async function updateShowTray(value: boolean): Promise<void> {
   settings.value.showTray = value
   appSetting.setup.showTray = value
   try {
-    await storageSdk.app.save({
+    await transport.send(StorageEvents.app.save, {
       key: 'app.setup.showTray',
       content: JSON.stringify(value),
       clear: false

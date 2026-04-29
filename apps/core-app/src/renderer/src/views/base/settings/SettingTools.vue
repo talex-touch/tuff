@@ -23,12 +23,14 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import ShortcutDialog from '~/views/base/settings/components/ShortcutDialog.vue'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 import { appSetting } from '~/modules/channel/storage'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import { createRendererLogger } from '~/utils/renderer-log'
 import type { SaveState, ShortcutRowBase } from './components/shortcut-dialog.types'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
-
-const isMac = process.platform === 'darwin'
+const { isMac } = useRendererPlatform()
+const settingToolsLog = createRendererLogger('SettingTools')
 
 const shortcuts = ref<ShortcutWithStatus[] | null>(null)
 const systemShortcuts = computed(() =>
@@ -210,7 +212,7 @@ function ensureOmniPanelSettings(): void {
 }
 
 async function refreshOmniPanelAccessibilityStatus(): Promise<void> {
-  if (!isMac) {
+  if (!isMac.value) {
     omniPanelAccessibilityGranted.value = true
     return
   }
@@ -218,7 +220,7 @@ async function refreshOmniPanelAccessibilityStatus(): Promise<void> {
     const result = await transport.send(systemPermissionCheck, 'accessibility')
     omniPanelAccessibilityGranted.value = result.status === 'granted'
   } catch (error) {
-    console.warn('[SettingTools] Failed to refresh accessibility permission:', error)
+    settingToolsLog.warn('Failed to refresh accessibility permission', error)
     omniPanelAccessibilityGranted.value = null
   }
 }
@@ -416,7 +418,7 @@ function getShortcutStatusText(shortcut: ShortcutWithStatus): string | null {
   if (
     shortcut.id === 'core.omniPanel.mouseLongPress' &&
     isShortcutEnabled(shortcut) &&
-    isMac &&
+    isMac.value &&
     omniPanelAccessibilityGranted.value === false
   ) {
     return t('settingTools.shortcutStatus.omniPanelAccessibilityRequired')
@@ -440,14 +442,14 @@ function getSpotlightHint(shortcut: ShortcutWithStatus): string | null {
   if (
     shortcut.id === 'core.omniPanel.mouseLongPress' &&
     isShortcutEnabled(shortcut) &&
-    isMac &&
+    isMac.value &&
     omniPanelAccessibilityGranted.value === false
   ) {
     return t('settingTools.shortcutStatus.omniPanelAccessibilityHint')
   }
   if (isTriggerShortcut(shortcut)) return null
   if (!isShortcutEnabled(shortcut)) return null
-  if (!isMac) return null
+  if (!isMac.value) return null
   const status = shortcut.status
   if (!status || status.state !== 'unavailable') return null
   if (status.reason !== 'register-failed' && status.reason !== 'register-error') return null

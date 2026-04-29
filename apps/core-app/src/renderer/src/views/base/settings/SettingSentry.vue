@@ -5,9 +5,9 @@
 -->
 <script setup lang="ts" name="SettingSentry">
 import { TxButton, TxTooltip } from '@talex-touch/tuffex'
-import { useAppSdk, useStorageSdk } from '@talex-touch/utils/renderer'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { SentryEvents } from '@talex-touch/utils/transport/events'
+import { SentryEvents, StorageEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -19,8 +19,10 @@ import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 import { useAuth } from '~/modules/auth/useAuth'
 import { appSetting } from '~/modules/channel/storage'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
+const settingSentryLog = createRendererLogger('SettingSentry')
 
 interface TelemetryStats {
   searchCount: number
@@ -45,7 +47,6 @@ const isDev = import.meta.env.DEV
 const autoRefreshTimer = ref<number | null>(null)
 const transport = useTuffTransport()
 const appSdk = useAppSdk()
-const storageSdk = useStorageSdk()
 const authBaseUrl = getAuthBaseUrl()
 const { isLoggedIn } = useAuth()
 const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
@@ -59,14 +60,16 @@ const dataUploadTooltip = computed(() =>
 
 async function loadConfig() {
   try {
-    const config = await storageSdk.app.get<{
+    const config = (await transport.send(StorageEvents.app.get, {
+      key: 'sentry-config.json'
+    })) as {
       enabled?: boolean
       anonymous?: boolean
-    }>('sentry-config.json')
+    }
     enabled.value = config?.enabled ?? true
     anonymous.value = config?.anonymous ?? false
   } catch (error) {
-    console.error('Failed to load Sentry config', error)
+    settingSentryLog.error('Failed to load Sentry config', error)
   }
 }
 
@@ -85,7 +88,7 @@ async function refreshStats(options?: { silent?: boolean }) {
     }
   } catch (error) {
     if (!options?.silent) {
-      console.error('Failed to refresh telemetry stats', error)
+      settingSentryLog.error('Failed to refresh telemetry stats', error)
       toast.error(t('settingSentry.refreshError', '刷新统计信息失败'))
     }
   } finally {
@@ -109,7 +112,7 @@ function stopAutoRefresh() {
 async function saveConfig() {
   loading.value = true
   try {
-    await storageSdk.app.save({
+    await transport.send(StorageEvents.app.save, {
       key: 'sentry-config.json',
       content: JSON.stringify({
         enabled: enabled.value,
@@ -118,7 +121,7 @@ async function saveConfig() {
     })
     toast.success(t('settingSentry.saveSuccess', '设置已保存'))
   } catch (error) {
-    console.error('Failed to save Sentry config', error)
+    settingSentryLog.error('Failed to save Sentry config', error)
     toast.error(t('settingSentry.saveError', '保存设置失败'))
   } finally {
     loading.value = false

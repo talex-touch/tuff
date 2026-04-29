@@ -25,6 +25,7 @@ import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
 import { normalizeStoredUpdateChannel } from '~/modules/update/channel'
 import { getBuildInfo } from '~/utils/build-info'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
@@ -32,6 +33,7 @@ const appSdk = useAppSdk()
 const { packageJson, os, processInfo } = useEnv()
 const { startupInfo } = useStartupInfo()
 const { getUpdateSettings } = useUpdateRuntime()
+const settingAboutLog = createRendererLogger('SettingAbout')
 
 const appUpdate = computed(() => Boolean(startupInfo.value?.appUpdate))
 
@@ -86,7 +88,7 @@ onMounted(async () => {
     )) as PerformanceSummary | null
     performanceSummary.value = summary
   } catch (error) {
-    console.warn('Failed to load performance summary', error)
+    settingAboutLog.warn('Failed to load performance summary', error)
   }
 
   await loadUpdateSettings()
@@ -125,7 +127,7 @@ async function exportPerformanceData() {
 
     toast.success(t('settingAbout.exportSuccess'))
   } catch (error) {
-    console.error('Failed to export performance data', error)
+    settingAboutLog.error('Failed to export performance data', error)
     toast.error(t('settingAbout.exportFailed'))
   }
 }
@@ -176,7 +178,7 @@ async function loadUpdateSettings(): Promise<void> {
     const settings = await getUpdateSettings()
     updateChannel.value = normalizeStoredUpdateChannel(settings.updateChannel) ?? null
   } catch (error) {
-    console.warn('Failed to load update settings', error)
+    settingAboutLog.warn('Failed to load update settings', error)
   }
 }
 
@@ -195,7 +197,7 @@ async function openAppFolder() {
       toast.error(t('settingAbout.folderOpenFailed'))
     }
   } catch (error) {
-    console.error('Failed to open app folder', error)
+    settingAboutLog.error('Failed to open app folder', error)
     toast.error(t('settingAbout.folderOpenFailed'))
   }
 }

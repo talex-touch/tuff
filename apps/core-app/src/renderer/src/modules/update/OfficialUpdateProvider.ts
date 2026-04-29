@@ -6,6 +6,7 @@ import {
   hasNavigator
 } from '@talex-touch/utils'
 import { appSetting } from '~/modules/channel/storage'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { normalizeSupportedUpdateChannel } from './channel'
 import { UpdateProvider } from './UpdateProvider'
 import { compareUpdateAssetTargets, resolveUpdateAssetTarget } from './platform-target'
@@ -92,6 +93,8 @@ interface NexusLatestResponse {
   message?: string
 }
 
+const officialUpdateLog = createRendererLogger('OfficialUpdateProvider')
+
 export class OfficialUpdateProvider extends UpdateProvider {
   readonly name = 'Official Website'
   readonly type = UpdateProviderType.OFFICIAL
@@ -149,10 +152,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
       const apiChannel = this.mapChannelToApi(channel)
       const platform = this.getCurrentPlatform()
       if (platform === 'unsupported') {
-        throw this.createError(
-          UpdateErrorType.API_ERROR,
-          `Unsupported runtime platform: ${typeof process !== 'undefined' ? process.platform : 'unknown'}`
-        )
+        throw this.createError(UpdateErrorType.API_ERROR, 'Unsupported runtime platform: unknown')
       }
 
       const response = await this.request<NexusLatestResponse>({
@@ -256,7 +256,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
           arch: assetData.arch
         })
         if (!target) {
-          console.warn(`[OfficialUpdateProvider] Skip unsupported asset target: ${name}`)
+          officialUpdateLog.warn(`Skip unsupported asset target: ${name}`)
           return []
         }
         const normalized: DownloadAssetWithSignature = {
@@ -290,7 +290,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
       })
       return response.status === 200
     } catch (error) {
-      console.warn('[OfficialUpdateProvider] Health check failed:', error)
+      officialUpdateLog.warn('Health check failed', error)
       return false
     }
   }

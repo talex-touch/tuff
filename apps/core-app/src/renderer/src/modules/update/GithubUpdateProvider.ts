@@ -14,6 +14,7 @@ import {
 } from '@talex-touch/utils'
 import { compareVersions } from '~/composables/store/useVersionCompare'
 import { getBuildInfo } from '~/utils/build-info'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { UpdateProvider } from './UpdateProvider'
 import { compareUpdateAssetTargets, resolveUpdateAssetTarget } from './platform-target'
 
@@ -29,6 +30,8 @@ type ParsedDownloadAsset = DownloadAsset & {
   component?: UpdateReleaseArtifact['component']
   coreRange?: string
 } & import('./platform-target').UpdateAssetTarget
+
+const githubUpdateLog = createRendererLogger('GithubUpdateProvider')
 
 export class GithubUpdateProvider extends UpdateProvider {
   readonly name = 'GitHub Releases'
@@ -123,8 +126,8 @@ export class GithubUpdateProvider extends UpdateProvider {
           const maxDelay = 60000 // 1 minute
           const delay = rateLimitManager.calculateBackoffDelay(attempt - 1, baseDelay, maxDelay)
 
-          console.warn(
-            `[GithubUpdateProvider] Attempt ${attempt} failed, retrying in ${delay}ms:`,
+          githubUpdateLog.warn(
+            `Attempt ${attempt} failed, retrying in ${delay}ms`,
             error instanceof Error ? error.message : String(error)
           )
 
@@ -229,7 +232,7 @@ export class GithubUpdateProvider extends UpdateProvider {
             : this.extractChecksum(asset)
       const target = resolveUpdateAssetTarget(name)
       if (!target) {
-        console.warn(`[GithubUpdateProvider] Skip unsupported asset target: ${name}`)
+        githubUpdateLog.warn(`Skip unsupported asset target: ${name}`)
         continue
       }
 
@@ -325,13 +328,13 @@ export class GithubUpdateProvider extends UpdateProvider {
       const manifest = response.data
 
       if (!this.isReleaseManifest(manifest)) {
-        console.warn('[GithubUpdateProvider] Invalid release manifest format')
+        githubUpdateLog.warn('Invalid release manifest format')
         return null
       }
 
       return manifest
     } catch (error) {
-      console.warn('[GithubUpdateProvider] Failed to fetch release manifest:', error)
+      githubUpdateLog.warn('Failed to fetch release manifest', error)
       return null
     }
   }
@@ -363,7 +366,7 @@ export class GithubUpdateProvider extends UpdateProvider {
       })
       return response.status === 200
     } catch (error) {
-      console.warn('GitHub health check failed:', error)
+      githubUpdateLog.warn('Health check failed', error)
       return false
     }
   }

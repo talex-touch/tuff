@@ -6,16 +6,15 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import { TxButton, TxInput } from '@talex-touch/tuffex'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
-import { h, ref } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import { popperMention } from '~/modules/mention/dialog-mention'
-import RebuildConfirmDialog from './components/RebuildConfirmDialog.vue'
-import { resolveIndexRebuildOutcome } from './index-rebuild-flow'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
 const settingsSdk = useSettingsSdk()
+const settingFileIndexDiagnosticLog = createRendererLogger('SettingFileIndexAppDiagnostic')
 
 const appDiagnosticTarget = ref('')
 const appDiagnosticQuery = ref('')
@@ -90,18 +89,6 @@ function getAppDiagnosticStageDetail(stage: AppIndexDiagnosticStage | undefined)
   })
 }
 
-async function openAppReindexConfirm() {
-  await new Promise<void>((resolve, reject) => {
-    popperMention(t('settings.settingFileIndex.rebuildTitle'), () =>
-      h(RebuildConfirmDialog, {
-        battery: null,
-        onConfirm: () => resolve(),
-        onCancel: () => reject(new Error('Cancelled'))
-      })
-    )
-  })
-}
-
 async function runAppSearchDiagnostic(options: { silent?: boolean } = {}) {
   const target = normalizeAppDiagnosticTarget()
   if (!target) {
@@ -122,7 +109,7 @@ async function runAppSearchDiagnostic(options: { silent?: boolean } = {}) {
       )
     }
   } catch (error) {
-    console.error('[SettingFileIndex] Failed to diagnose app search:', error)
+    settingFileIndexDiagnosticLog.error('Failed to diagnose app search', error)
     appDiagnosticResult.value = null
     if (!options.silent) toast.error(t('settings.settingFileIndex.appDiagnosticFailed'))
   } finally {
@@ -139,49 +126,16 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
 
   appDiagnosticReindexMode.value = mode
   try {
-    const preflight = await settingsSdk.appIndex.reindex({ target, mode })
-    const preflightOutcome = resolveIndexRebuildOutcome(preflight, {
-      success: t('settings.settingFileIndex.appDiagnosticReindexSuccess'),
-      failure: t('settings.settingFileIndex.appDiagnosticReindexFailed')
-    })
-
-    if (preflightOutcome.type === 'failure') {
-      toast.error(preflightOutcome.message)
+    const result = await settingsSdk.appIndex.reindex({ target, mode })
+    if (!result.success) {
+      toast.error(result.reason || t('settings.settingFileIndex.appDiagnosticReindexFailed'))
       return
     }
 
-    if (preflightOutcome.type === 'success') {
-      toast.success(preflightOutcome.message)
-      await runAppSearchDiagnostic({ silent: true })
-      return
-    }
-
-    if (preflightOutcome.type === 'confirm') {
-      try {
-        await openAppReindexConfirm()
-      } catch {
-        return
-      }
-
-      const forced = await settingsSdk.appIndex.reindex({ target, mode, force: true })
-      const forcedOutcome = resolveIndexRebuildOutcome(forced, {
-        success: t('settings.settingFileIndex.appDiagnosticReindexSuccess'),
-        failure: t('settings.settingFileIndex.appDiagnosticReindexFailed')
-      })
-      if (forcedOutcome.type !== 'success') {
-        toast.error(
-          forcedOutcome.type === 'failure'
-            ? forcedOutcome.message
-            : t('settings.settingFileIndex.appDiagnosticReindexFailed')
-        )
-        return
-      }
-
-      toast.success(forcedOutcome.message)
-      await runAppSearchDiagnostic({ silent: true })
-    }
+    toast.success(t('settings.settingFileIndex.appDiagnosticReindexSuccess'))
+    await runAppSearchDiagnostic({ silent: true })
   } catch (error) {
-    console.error('[SettingFileIndex] Failed to reindex app target:', error)
+    settingFileIndexDiagnosticLog.error('Failed to reindex app target', error)
     toast.error(t('settings.settingFileIndex.appDiagnosticReindexFailed'))
   } finally {
     appDiagnosticReindexMode.value = null

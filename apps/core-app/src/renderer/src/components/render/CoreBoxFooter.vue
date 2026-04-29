@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { resolveSourceMeta } from './sourceMeta'
 
 const props = defineProps<{
@@ -23,6 +24,7 @@ const displayValue = computed(() => props.display)
 const debouncedDisplay = useDebounce(displayValue, 100)
 
 const { t } = useI18n()
+const { isMac } = useRendererPlatform()
 
 // --- Indexing status ---
 const { onProgressUpdate, indexProgress } = useFileIndexMonitor()
@@ -70,8 +72,6 @@ const displayIcon = computed(() => {
 
 const title = computed(() => props.item?.render?.basic?.title || 'CoreBox')
 const subtitleMeta = computed(() => resolveSourceMeta(props.item || undefined, t))
-
-const isMacPlatform = process.platform === 'darwin'
 
 /** 获取当前 item 的 footerHints 配置 */
 const footerHintsConfig = computed<TuffFooterHints | undefined>(() => {
@@ -144,8 +144,8 @@ const keyHints = computed(() => {
   const quickSelectLabelKey = 'coreBox.hints.quickSelect'
   const quickSelectLabel = t(quickSelectLabelKey)
 
-  const aiHotkey = isMacPlatform ? '⌘K' : 'Ctrl+K'
-  const quickSelectHotkey = isMacPlatform ? '⌘1-0' : 'Alt+1-0'
+  const aiHotkey = isMac.value ? '⌘K' : 'Ctrl+K'
+  const quickSelectHotkey = isMac.value ? '⌘1-0' : 'Alt+1-0'
 
   const hints: Array<{ key: string; label: string; visible: boolean }> = []
 

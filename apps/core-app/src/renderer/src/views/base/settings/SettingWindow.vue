@@ -15,10 +15,12 @@ import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { appSetting } from '~/modules/channel/storage'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 // Import storage
 const { t } = useI18n()
 const transport = useTuffTransport()
+const settingWindowLog = createRendererLogger('SettingWindow')
 
 const windowSettings = ref({
   closeToTray: true,
@@ -67,7 +69,7 @@ onMounted(async () => {
 
     devLog('[SettingWindow] Window settings loaded:', windowSettings.value)
   } catch (error) {
-    console.error('[SettingWindow] Failed to load window settings:', error)
+    settingWindowLog.error('Failed to load window settings', error)
   }
 })
 
@@ -78,7 +80,7 @@ async function updateCloseToTray(value: boolean) {
     windowSettings.value.closeToTray = value
     devLog('[SettingWindow] Close to tray setting updated:', value)
   } catch (error) {
-    console.error('[SettingWindow] Failed to update close to tray setting:', error)
+    settingWindowLog.error('Failed to update close to tray setting', error)
   }
 }
 
@@ -89,7 +91,7 @@ async function updateStartMinimized(value: boolean) {
     windowSettings.value.startMinimized = value
     devLog('[SettingWindow] Start minimized setting updated:', value)
   } catch (error) {
-    console.error('[SettingWindow] Failed to update start minimized setting:', error)
+    settingWindowLog.error('Failed to update start minimized setting', error)
   }
 }
 
@@ -108,7 +110,7 @@ async function updateStartSilent(value: boolean) {
     }
     devLog('[SettingWindow] Start silent setting updated:', value)
   } catch (error) {
-    console.error('[SettingWindow] Failed to update start silent setting:', error)
+    settingWindowLog.error('Failed to update start silent setting', error)
   }
 }
 
@@ -121,7 +123,7 @@ async function updateAutoStart(value: boolean) {
     windowSettings.value.autoStart = value
     devLog('[SettingWindow] Auto start setting updated:', value)
   } catch (error) {
-    console.error('[SettingWindow] Failed to update auto start setting:', error)
+    settingWindowLog.error('Failed to update auto start setting', error)
   }
 }
 </script>

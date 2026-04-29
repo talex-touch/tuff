@@ -1,6 +1,7 @@
 <script lang="ts" name="AppLayoutMinimal" setup>
 import { computed } from 'vue'
 import { useLayoutAtoms } from '~/modules/layout/atoms'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import LayoutShell from '../shared/LayoutShell.vue'
 import FloatingNav from '../shared/FloatingNav.vue'
 import SimpleController from '../simple/SimpleController.vue'
@@ -17,10 +18,10 @@ const props = withDefaults(
 )
 
 const { atomConfig } = useLayoutAtoms()
+const { isWindows } = useRendererPlatform()
 const isDisplayMode = computed(() => props.display)
 const isPreviewMode = computed(() => props.preview)
 const shouldRenderSlots = computed(() => !isDisplayMode.value || isPreviewMode.value)
-const isWindows = process.platform === 'win32'
 </script>
 
 <template>

@@ -1,6 +1,7 @@
 <script lang="ts" name="AppLayoutClassic" setup>
 import { computed } from 'vue'
 import { useLayoutAtoms } from '~/modules/layout/atoms'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import LayoutShell from '../shared/LayoutShell.vue'
 import ClassicController from './ClassicController.vue'
 
@@ -16,9 +17,9 @@ const props = withDefaults(
 )
 
 const { atomConfig } = useLayoutAtoms()
+const { isWindows } = useRendererPlatform()
 const isDisplayMode = computed(() => props.display)
 const isPreviewMode = computed(() => props.preview)
-const isWindows = process.platform === 'win32'
 </script>
 
 <template>

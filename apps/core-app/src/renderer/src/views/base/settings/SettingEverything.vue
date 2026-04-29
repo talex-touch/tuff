@@ -20,9 +20,11 @@ import {
 } from './setting-everything-state'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
+const settingEverythingLog = createRendererLogger('SettingEverything')
 
 const everythingStatus = ref<EverythingStatusResponse | null>(null)
 const isChecking = ref(false)
@@ -52,7 +54,7 @@ async function checkStatus(refresh = false) {
     })
     everythingStatus.value = status
   } catch (error) {
-    console.error('[SettingEverything] Failed to get status:', error)
+    settingEverythingLog.error('Failed to get status', error)
   } finally {
     isChecking.value = false
   }
@@ -78,7 +80,7 @@ async function toggleEverything() {
     )
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error('[SettingEverything] Failed to toggle:', error)
+    settingEverythingLog.error('Failed to toggle', error)
     toast.error(
       t('settings.settingEverything.toggleFailed', {
         error: message
@@ -110,7 +112,7 @@ async function testSearch() {
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error('[SettingEverything] Test search failed:', error)
+    settingEverythingLog.error('Test search failed', error)
     toast.error(
       t('settings.settingEverything.testFailed', {
         error: message

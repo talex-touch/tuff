@@ -6,6 +6,7 @@ import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, ref } from 'vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import { windowState } from '~/modules/hooks/core-box'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import ActivatedProviders from './ActivatedProviders.vue'
 import BoxInput from './BoxInput.vue'
 
@@ -20,7 +21,7 @@ const emit = defineEmits<
   }
 >()
 
-const isMac = process.platform === 'darwin'
+const { isMac } = useRendererPlatform()
 
 interface Props {
   searchVal: string

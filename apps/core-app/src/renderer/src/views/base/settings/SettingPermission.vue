@@ -27,10 +27,12 @@ import { resolvePluginSdkBlockedState } from '../../../../../shared/plugin-sdk-b
 import { PermissionList } from '~/components/permission'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const transport = useTuffTransport()
 const permissionSdk = usePermissionSdk()
 const { t, locale } = useI18n()
+const settingPermissionLog = createRendererLogger('SettingPermission')
 
 interface PermissionGrant {
   pluginId: string
@@ -189,7 +191,7 @@ async function loadData() {
       })
     )
   } catch (e) {
-    console.error('Failed to load permission data:', e)
+    settingPermissionLog.error('Failed to load permission data', e)
   } finally {
     loading.value = false
   }
@@ -277,7 +279,7 @@ async function handleToggle(pluginId: string, permissionId: string, granted: boo
     }
     await loadData()
   } catch (e) {
-    console.error('Failed to toggle permission:', e)
+    settingPermissionLog.error('Failed to toggle permission', e)
   }
 }
 
@@ -295,7 +297,7 @@ async function handleGrantAll(plugin: PluginPermissionInfo) {
     }
     await loadData()
   } catch (e) {
-    console.error('Failed to grant all permissions:', e)
+    settingPermissionLog.error('Failed to grant all permissions', e)
   }
 }
 
@@ -309,7 +311,7 @@ async function handleRevokeAll(pluginId: string) {
     }
     await loadData()
   } catch (e) {
-    console.error('Failed to revoke all permissions:', e)
+    settingPermissionLog.error('Failed to revoke all permissions', e)
   }
 }
 
@@ -324,7 +326,7 @@ async function loadAuditLogs() {
     auditLogs.value = Array.isArray(result) ? result : []
     auditLogsTotal.value = auditLogs.value.length
   } catch (e) {
-    console.error('Failed to load audit logs:', e)
+    settingPermissionLog.error('Failed to load audit logs', e)
   } finally {
     auditLogsLoading.value = false
   }
@@ -340,7 +342,7 @@ async function clearAuditLogs() {
     }
     await loadAuditLogs()
   } catch (e) {
-    console.error('Failed to clear audit logs:', e)
+    settingPermissionLog.error('Failed to clear audit logs', e)
   }
 }
 
