@@ -11,7 +11,7 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { appSettings } from '@talex-touch/utils/renderer/storage'
 import {
   normalizeWindowPreference,
@@ -19,7 +19,7 @@ import {
   triggerThemeTransition,
   type ThemeMode,
   type ThemeWindowPreference
-} from '~/modules/storage/app-storage'
+} from '~/modules/storage/theme-style'
 import { buildTfileUrl } from '~/utils/tfile-url'
 import LayoutSection from './LayoutSection.vue'
 import SectionItem from './SectionItem.vue'

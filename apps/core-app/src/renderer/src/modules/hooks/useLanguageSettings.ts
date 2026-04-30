@@ -1,6 +1,6 @@
 import type { SupportedLanguage } from '~/modules/lang'
 import { computed } from 'vue'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { SUPPORTED_LANGUAGES, useLanguage } from '~/modules/lang'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'

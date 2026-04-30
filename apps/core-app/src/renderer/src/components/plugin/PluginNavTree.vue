@@ -7,7 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import StatusIcon from '~/components/base/StatusIcon.vue'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
 
 type PluginCategoryId = string

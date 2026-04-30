@@ -5,7 +5,7 @@ import {
   UpdateProviderType,
   hasNavigator
 } from '@talex-touch/utils'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { normalizeSupportedUpdateChannel } from './channel'
 import { UpdateProvider } from './UpdateProvider'

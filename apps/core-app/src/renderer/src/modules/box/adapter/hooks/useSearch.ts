@@ -15,7 +15,7 @@ import { CoreBoxEvents, DivisionBoxEvents } from '@talex-touch/utils/transport/e
 import { useDebounceFn } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { devLog } from '~/utils/dev-log'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 import { BoxMode } from '..'

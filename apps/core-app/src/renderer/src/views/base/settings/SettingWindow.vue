@@ -13,7 +13,7 @@ import { useI18n } from 'vue-i18n'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 // Import UI components
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
 

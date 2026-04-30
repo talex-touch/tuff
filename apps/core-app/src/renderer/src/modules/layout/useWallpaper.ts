@@ -5,7 +5,7 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { toast } from 'vue-sonner'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { normalizeWindowPreference, themeStyle } from '~/modules/storage/theme-style'
 import { buildTfileUrl } from '~/utils/tfile-url'
 

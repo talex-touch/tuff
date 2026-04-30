@@ -3,7 +3,7 @@ import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import PluginEmptyState from '~/components/plugin/layout/PluginEmptyState.vue'
 import PluginInfo from '~/components/plugin/PluginInfo.vue'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
 
 const route = useRoute()

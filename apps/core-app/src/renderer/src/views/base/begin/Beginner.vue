@@ -4,7 +4,7 @@ import { sleep } from '@talex-touch/utils/common/utils'
 import { TxButton } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { appSetting, storageManager } from '~/modules/channel/storage/index'
+import { appSetting, storageManager } from '~/modules/storage/app-storage'
 import LanguageSetup from './internal/LanguageSetup.vue'
 
 const main: Ref<HTMLElement | null> = ref(null)

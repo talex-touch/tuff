@@ -17,7 +17,7 @@ import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 import { useAuth } from '~/modules/auth/useAuth'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { createRendererLogger } from '~/utils/renderer-log'
 

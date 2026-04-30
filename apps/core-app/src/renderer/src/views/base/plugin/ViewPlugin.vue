@@ -1,6 +1,6 @@
 <script name="ViewPlugin" setup>
 import PluginView from '~/components/plugin/PluginView.vue'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 
 const options = computed(() => appSetting.background ?? {})
 const activePlugin = inject('activePlugin')

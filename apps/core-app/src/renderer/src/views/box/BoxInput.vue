@@ -1,6 +1,6 @@
 <script setup lang="ts" name="BoxInput">
 import { useI18n } from 'vue-i18n'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { BoxMode } from '../../modules/box/adapter'
 import type { IBoxOptions } from '../../modules/box/adapter'
 

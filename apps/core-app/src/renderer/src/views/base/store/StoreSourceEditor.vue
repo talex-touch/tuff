@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { vDraggable } from 'vue-draggable-plus'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { storeSourcesStorage } from '~/modules/storage/store-sources'
 
 const props = withDefaults(

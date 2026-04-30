@@ -6,7 +6,7 @@ import {
 } from '@talex-touch/utils/preload'
 import { initializeRendererStorage, isCoreBox } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { appSetting } from '~/modules/channel/storage/index'
+import { appSetting } from '~/modules/storage/app-storage'
 import { devLog } from '~/utils/dev-log'
 import { useCoreBox } from './core-box'
 import { useStartupInfo } from './useStartupInfo'

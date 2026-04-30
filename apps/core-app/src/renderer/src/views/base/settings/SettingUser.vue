@@ -10,7 +10,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { getSyncPreferenceState, setSyncPreferenceByUser } from '~/modules/auth/sync-preferences'
 import { useAuth } from '~/modules/auth/useAuth'
 import { triggerManualSync } from '~/modules/sync'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 
 const { t } = useI18n()
 const {

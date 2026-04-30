@@ -22,7 +22,7 @@ import {
   type RouteLocationNormalizedLoaded,
   type RouteRecordRaw
 } from 'vue-router'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
 
 const ROUTE_NAVIGATE_WARN_MS = 200

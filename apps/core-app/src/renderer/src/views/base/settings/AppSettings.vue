@@ -1,7 +1,7 @@
 <script lang="ts" name="AppSettings" setup>
 import { computed, defineAsyncComponent } from 'vue'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import SettingHeader from './SettingHeader.vue'
 import SettingLanguage from './SettingLanguage.vue'
