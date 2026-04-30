@@ -32,12 +32,12 @@
     "@talex-touch/utils": "workspace:*",
     "chalk": "^5.6.0",
     "cli-progress": "^3.12.0",
-    "compressing": "^1.10.3",
+    "compressing": "^1.10.5",
     "esbuild": "^0.28.0",
     "fs-extra": "^11.3.1",
     "glob": "^10.5.0",
     "pathe": "^1.1.2",
-    "vite": "^7.3.1"
+    "vite": "^7.3.2"
   },
   "devDependencies": {
     "@types/cli-progress": "^3.11.6",

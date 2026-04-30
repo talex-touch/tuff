@@ -39,7 +39,7 @@ catalog:
   next-auth: ~4.21.1
   nodemailer: ^7.0.13
   ogl: ^1.0.11
-  openapi-typescript: 6.7.5
+  openapi-typescript: ^7.13.0
   qrcode: ^1.5.4
   sass: ^1.99.0
   simplex-noise: ^4.0.3
@@ -65,7 +65,7 @@ catalogs:
     nuxt: ^4.4.2
     unocss: ^66.6.8
     unplugin: ^2.3.11
-    vite: ^7.3.1
+    vite: ^7.3.2
   dev:
     '@antfu/eslint-config': ^5.4.1
     '@cloudflare/workers-types': ^4.20260426.1

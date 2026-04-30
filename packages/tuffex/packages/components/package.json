@@ -10,7 +10,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
-    "vite": "^7.3.1",
-    "vite-plugin-dts": "^3.9.1"
+    "vite": "^7.3.2",
+    "vite-plugin-dts": "^4.5.4"
   }
 }
