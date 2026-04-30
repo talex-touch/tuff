@@ -7,6 +7,7 @@ const { postProcessMacArtifacts } = require('./build-target/postprocess-mac');
 const { syncTouchTranslationBundledRuntime } = require('./lib/touch-translation-runtime-sync');
 const {
   PACKAGED_RUNTIME_MODULES,
+  collectPackagedRuntimeModuleClosure,
   collectResourceModuleClosure,
   findPackagedResourcesDir: resolvePackagedResourcesDir
 } = require('./build-target/runtime-modules');
@@ -254,42 +255,40 @@ function verifyPackagedRuntimeModules(distDir, requiredModules) {
   const resolvedModules = new Set();
   const missingModules = [];
   const requiredResourceModules = new Set(collectResourceModuleClosure(requiredModules));
+  const requiredRuntimeModules = collectPackagedRuntimeModuleClosure(requiredModules);
 
-  requiredResourceModules.forEach((moduleName) => {
+  const hasResourceEntrypoint = (moduleName) => {
     const resourceModuleDir = path.join(resourcesDir, 'node_modules', moduleName);
     const resourceEntrypoints = [
       path.join(resourceModuleDir, 'package.json'),
       path.join(resourceModuleDir, 'index.js')
     ];
 
-    if (resourceEntrypoints.some((entryPath) => fs.existsSync(entryPath))) {
-      resolvedModules.add(`${moduleName} (resources/node_modules)`);
-      return;
-    }
+    return resourceEntrypoints.some((entryPath) => fs.existsSync(entryPath));
+  };
 
-    missingModules.push(moduleName);
-  });
-
-  requiredModules.forEach((moduleSpec) => {
-    const moduleName = typeof moduleSpec === 'string' ? moduleSpec : moduleSpec.name;
-    const requireResources = typeof moduleSpec === 'object' && moduleSpec.location === 'resources';
-    if (requireResources) {
-      return;
-    }
-
-    const resourceModuleDir = path.join(resourcesDir, 'node_modules', moduleName);
-    const resourceEntrypoints = [
-      path.join(resourceModuleDir, 'package.json'),
-      path.join(resourceModuleDir, 'index.js')
-    ];
+  const hasAsarPackage = (moduleName) => {
     const packagedEntry = path.posix.join('/node_modules', moduleName, 'package.json');
+    return packageEntries.has(packagedEntry);
+  };
 
-    if (packageEntries.has(packagedEntry)) {
+  requiredRuntimeModules.forEach((moduleName) => {
+    if (requiredResourceModules.has(moduleName)) {
+      if (hasResourceEntrypoint(moduleName)) {
+        resolvedModules.add(`${moduleName} (resources/node_modules)`);
+        return;
+      }
+
+      missingModules.push(moduleName);
+      return;
+    }
+
+    if (hasAsarPackage(moduleName)) {
       resolvedModules.add(`${moduleName} (asar)`);
       return;
     }
 
-    if (resourceEntrypoints.some((entryPath) => fs.existsSync(entryPath))) {
+    if (hasResourceEntrypoint(moduleName)) {
       resolvedModules.add(`${moduleName} (resources/node_modules)`);
       return;
     }
