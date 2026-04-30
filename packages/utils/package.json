@@ -53,7 +53,7 @@
     "publish": "npm publish --access public"
   },
   "peerDependencies": {
-    "electron": "^40.0.0",
+    "electron": "^40.0.0 || ^41.0.0",
     "vue": "^3.5.27"
   },
   "dependencies": {
