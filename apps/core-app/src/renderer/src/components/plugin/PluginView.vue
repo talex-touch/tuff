@@ -17,6 +17,14 @@ const status = computed(() => props.plugin?.status || 0)
 const done = computed(() => (status.value === 3 || status.value === 4) && loadDone.value)
 
 const webviewDom = ref()
+const { t } = useI18n()
+
+function pluginLogMeta() {
+  return {
+    name: props.plugin?.name,
+    status: status.value
+  }
+}
 
 onBeforeUnmount(() => {
   const webView = webviewDom.value
@@ -28,20 +36,24 @@ function handleListeners(viewData, webview) {
   const { styles, js } = viewData
 
   webview.addEventListener('crashed', () => {
-    console.error('[PluginView] Webview crashed', props.plugin)
+    console.error('[PluginView] Webview crashed', pluginLogMeta())
   })
 
   webview.addEventListener('did-fail-load', async (e) => {
-    console.warn('[PluginView] Webview did-fail-load', e, props.plugin)
+    console.warn('[PluginView] Webview did-fail-load', {
+      errorCode: e.errorCode,
+      errorDescription: e.errorDescription,
+      ...pluginLogMeta()
+    })
 
     await forDialogMention(props.plugin.name, e.errorDescription, props.plugin.icon, [
       {
-        content: 'Ignore Load',
+        content: t('plugin.view.ignoreLoad'),
         type: 'info',
         onClick: () => true
       },
       {
-        content: 'Restart plugin',
+        content: t('plugin.view.restart'),
         type: 'warning',
         onClick: () => pluginSDK.reload(props.plugin.name) && true
       }
@@ -57,11 +69,8 @@ function handleListeners(viewData, webview) {
     webview.insertCSS(`${styles}`)
     await webview.executeJavaScript(`${js}`)
 
-    // console.log("Webview did-finish-load", props.plugin);
-
     webview.send('@loaded', { plugin: props.plugin.name, id: webview.id, type: 'init' })
 
-    // console.log("Webview did-finish-load", props.plugin);
     loadDone.value = true
   })
 }
@@ -75,7 +84,6 @@ function init() {
   props.plugin.webViewInit = true
 
   const webview = webviewDom.value
-  // console.log(props.plugin, webview, viewData);
 
   viewData.el = webview.parentElement
 
@@ -95,8 +103,6 @@ watch(status, (val, oldVal) => {
   if (props.plugin?.webViewInit) return
 
   if ((val === 3 && oldVal === 4) || (oldVal === 3 && val === 4)) init()
-  // else if ( val === 4 ) webviewDom.value.openDevTools()
-  // else webviewDom.value.closeDevTools()
 })
 </script>
 
@@ -104,7 +110,7 @@ watch(status, (val, oldVal) => {
   <div class="PluginView-Container" :class="{ active: status === 4, done }">
     <div class="PluginView-Loader cubic-transition">
       <Loading />
-      <span>Plugin is loading...</span>
+      <span>{{ t('plugin.view.loading') }}</span>
     </div>
     <webview ref="webviewDom" :class="{ exist: status === 3 || status === 4 }" />
   </div>

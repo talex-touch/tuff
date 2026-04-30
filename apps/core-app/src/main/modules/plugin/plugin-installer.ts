@@ -20,7 +20,6 @@ function createDialogRiskPrompt(): RiskPromptHandler {
   return async (input: RiskPromptInput) => {
     if (input.level === 'trusted') return true
 
-    // TODO(@talex-touch): Integrate more advanced verification methods like TouchID here later
     const window = BrowserWindow.getFocusedWindow()
     const dialogOptions: MessageBoxOptions = {
       type: 'warning',

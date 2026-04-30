@@ -807,6 +807,11 @@
       "widgetLoadFailedTitle": "Widget 加载失败",
       "widgetLoadFailedMessage": "插件 widget 初始化失败，请检查插件版本、路径和运行日志。"
     },
+    "view": {
+      "loading": "插件加载中...",
+      "ignoreLoad": "忽略加载失败",
+      "restart": "重启插件"
+    },
     "tabs": {
       "overview": "概览",
       "issues": "问题",

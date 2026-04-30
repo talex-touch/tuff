@@ -23,6 +23,7 @@
 - Theme startup：仅剩测试引用的 `parseLegacyThemeStyle()` 已删除。
 - Application detail：旧应用详情页不再展示 open explorer / uninstall / save/spec 等无真实执行路径的假动作，对应无调用 i18n 文案键也已清理，保留 launch 与 help 两个真实动作。
 - Download center：未引用且含“功能待实现”按钮的旧 `DownloadSettings.vue` 已删除；下载组件目录内全局 `$t(...)` 与硬编码中文模块/优先级/时间文案已收口到 `useI18n()` 资源。
+- Plugin WebView：陈旧 debug 注释和硬编码加载/失败操作文案已清理，WebView 故障日志不再直接打印完整 plugin 对象。
 - Tray：旧 `src/main/modules/tray-holder.ts` 已不存在，当前实现是 `src/main/modules/tray/tray-manager.ts`。
 
 ## 仍保留但不判为假实现
@@ -30,7 +31,7 @@
 - `fake-background` / `--fake-*` 是视觉 token，不代表 mock 功能。
 - `placeholder` 主要是输入框、骨架屏或空图标语义；未发现把未完成能力伪装成完成入口的命中。
 - Plugin widget preview 的 `mockPayload` 是开发面板显式测试载荷，不是生产 runtime mock。
-- `SearchLogger`、logger 输出端、内部插件 logger、WebContents injected script 的 `console.*` 属于诊断/注入边界。
+- `preload` 的 debug console 仅由 `DEBUG` / `debug-preload` 显式打开；`SearchLogger`、logger 输出端、内部插件 logger、WebContents injected script 的 `console.*` 属于诊断/注入边界。
 - 数据库、下载、权限等 schema/runtime migration 是本地数据演进路径，不能按关键词直接删除。
 - 搜索、AI provider、i18n、icon 等 fallback 是真实兜底或错误恢复；后续只在出现 false-success 或隐藏降级时收口。
 
