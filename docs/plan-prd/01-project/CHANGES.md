@@ -5,6 +5,17 @@
 
 ## 2026-04-30
 
+### fix(core-app): 补强桌面包运行时依赖闭包门禁
+
+- `apps/core-app/scripts/build-target/runtime-modules.js`
+- `apps/core-app/scripts/build-target.js`
+- `apps/core-app/scripts/build-target/after-pack.js`
+- `docs/plan-prd/{01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1,docs/PRD-QUALITY-BASELINE}.md`
+  - 桌面打包校验从 root runtime module 扩展到 `PACKAGED_RUNTIME_MODULES` 的完整依赖闭包，避免 `@sentry/electron -> @opentelemetry/sdk-trace-base -> @opentelemetry/resources` 这类传递缺包留到用户启动时才崩。
+  - `afterPack` 额外扫描 `app.asar` 中缺失的普通运行时闭包模块并同步到 `Resources/node_modules`，避免 pnpm/electron-builder 对 hoisted transitive dependency 的漏包继续进入产物。
+  - `resources/node_modules` 标记模块继续强制校验整条闭包都落在 resources 兜底路径；普通运行时闭包允许存在于 `app.asar` 或 `resources/node_modules`，保持现有打包策略不变。
+  - 不调整 Sentry 初始化、不禁用 telemetry、不切换打包路径，仅把坏产物拦截前移到构建阶段。
+
 ### fix(ci): 修复 Pilot 与 Tuff CLI clean CI 回归
 
 - `apps/pilot/server/utils/__tests__/pilot-stream-emitter-seq.test.ts`
