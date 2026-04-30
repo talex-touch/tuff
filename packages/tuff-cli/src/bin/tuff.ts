@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
 import type { BuildConfig, DevConfig } from '@talex-touch/tuff-cli-core'
-import type { RollupWatcher } from 'rollup'
 import type { Locale } from '../cli/i18n'
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
@@ -70,6 +69,23 @@ const DEFAULT_LOCAL_BASE_URL = 'http://localhost:3200'
 const DEVICE_AUTH_TIMEOUT_MS = 2 * 60 * 1000
 const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
 const CLI_COMMAND_NAME = resolveCliCommandName()
+
+interface ViteBuildWatcherEvent {
+  code: string
+  error?: unknown
+}
+
+interface ViteBuildWatcher {
+  on: (event: 'event', listener: (event: ViteBuildWatcherEvent) => void) => void
+  close: () => Promise<void> | void
+}
+
+function isViteBuildWatcher(value: unknown): value is ViteBuildWatcher {
+  if (!value || typeof value !== 'object')
+    return false
+  const candidate = value as { on?: unknown, close?: unknown }
+  return typeof candidate.on === 'function' && typeof candidate.close === 'function'
+}
 
 let cliLocalMode = false
 let cliCustomBase = false
@@ -439,10 +455,10 @@ async function runBuild(args: string[] = []) {
       return
     }
 
-    if (!viteResult || typeof (viteResult as RollupWatcher).on !== 'function')
+    if (!isViteBuildWatcher(viteResult))
       throw new Error('Vite watch mode did not return a watcher')
 
-    const watcher = viteResult as RollupWatcher
+    const watcher = viteResult
     let packaging = false
     let pending = false
 
