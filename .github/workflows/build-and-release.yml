@@ -224,8 +224,22 @@ jobs:
           # 更新包列表
           sudo apt-get update -y
 
-          # 安装基础构建工具
-          sudo apt-get install -y squashfs-tools fakeroot dpkg-dev
+          # 安装基础构建工具和 uiohook/libuiohook 在 X11 环境下 rebuild 所需头文件
+          sudo apt-get install -y \
+            squashfs-tools \
+            fakeroot \
+            dpkg-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxrandr-dev \
+            libxtst-dev \
+            libxt-dev \
+            libxinerama-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libxkbfile-dev \
+            libxi-dev \
+            libxext-dev
 
           # 跳过 snapcraft 安装，只构建 AppImage 和 Debian 包
           echo "Skipping snapcraft installation to avoid snapd issues"
