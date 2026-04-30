@@ -4,10 +4,12 @@ export interface IndexRebuildResultLike {
   message?: string
   error?: string
   reason?: string
+  battery?: { level: number; charging: boolean } | null
+  threshold?: number
 }
 
 export type IndexRebuildOutcome =
-  | { type: 'confirm' }
+  | { type: 'confirm'; result: IndexRebuildResultLike }
   | { type: 'success'; message: string }
   | { type: 'failure'; message: string }
 
@@ -16,7 +18,7 @@ export function resolveIndexRebuildOutcome(
   messages: { success: string; failure: string }
 ): IndexRebuildOutcome {
   if (result?.requiresConfirm) {
-    return { type: 'confirm' }
+    return { type: 'confirm', result }
   }
 
   if (result?.success) {

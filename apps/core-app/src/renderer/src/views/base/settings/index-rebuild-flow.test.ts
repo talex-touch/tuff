@@ -15,7 +15,14 @@ describe('index rebuild flow helpers', () => {
           failure: '重建失败'
         }
       )
-    ).toEqual({ type: 'confirm' })
+    ).toEqual({
+      type: 'confirm',
+      result: {
+        success: false,
+        requiresConfirm: true,
+        message: 'App index reindex requires confirmation'
+      }
+    })
   })
 
   it('uses localized success fallback over raw sdk message for renderer toast', () => {
@@ -33,6 +40,23 @@ describe('index rebuild flow helpers', () => {
     ).toEqual({
       type: 'success',
       message: '索引重建已开始，请稍等片刻...'
+    })
+  })
+
+  it('uses renderer success fallback when sdk omits a success message', () => {
+    expect(
+      resolveIndexRebuildOutcome(
+        {
+          success: true
+        },
+        {
+          success: '单项重建已完成',
+          failure: '单项重建失败'
+        }
+      )
+    ).toEqual({
+      type: 'success',
+      message: '单项重建已完成'
     })
   })
 

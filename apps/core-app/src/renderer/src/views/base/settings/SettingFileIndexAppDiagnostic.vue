@@ -2,15 +2,25 @@
 import type {
   AppIndexDiagnoseResult,
   AppIndexDiagnosticStage,
-  AppIndexReindexRequest
+  AppIndexReindexRequest,
+  AppIndexReindexResult
 } from '@talex-touch/utils/transport/events/types'
 import { TxButton, TxInput } from '@talex-touch/tuffex'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { createRendererLogger } from '~/utils/renderer-log'
+import {
+  APP_INDEX_DIAGNOSTIC_STAGE_KEYS,
+  buildAppIndexDiagnosticEvidenceFilename,
+  buildAppIndexDiagnosticEvidencePayload,
+  formatAppIndexDiagnosticEvidenceJson,
+  type AppIndexDiagnosticStageKey
+} from './app-index-diagnostic-evidence'
+import { resolveIndexRebuildOutcome } from './index-rebuild-flow'
 
 const { t } = useI18n()
 const settingsSdk = useSettingsSdk()
@@ -21,19 +31,12 @@ const appDiagnosticQuery = ref('')
 const appDiagnosticLoading = ref(false)
 const appDiagnosticReindexMode = ref<AppIndexReindexRequest['mode'] | null>(null)
 const appDiagnosticResult = ref<AppIndexDiagnoseResult | null>(null)
-
-const APP_DIAGNOSTIC_STAGE_KEYS = [
-  'precise',
-  'phrase',
-  'prefix',
-  'fts',
-  'ngram',
-  'subsequence'
-] as const
-type AppDiagnosticStageKey = (typeof APP_DIAGNOSTIC_STAGE_KEYS)[number]
+const appDiagnosticLastReindexResult = ref<AppIndexReindexResult | null>(null)
+const appDiagnosticEvidenceReady = computed(() => Boolean(appDiagnosticResult.value))
 
 function updateAppDiagnosticTarget(value: string | number) {
   appDiagnosticTarget.value = String(value ?? '')
+  appDiagnosticLastReindexResult.value = null
 }
 
 function updateAppDiagnosticQuery(value: string | number) {
@@ -58,11 +61,14 @@ function formatAppDiagnosticList(values: string[] | undefined, limit = 18) {
   return suffix ? `${visible.join(', ')} ${suffix}` : visible.join(', ')
 }
 
-function getAppDiagnosticStageLabel(key: AppDiagnosticStageKey) {
+function getAppDiagnosticStageLabel(key: AppIndexDiagnosticStageKey) {
   return t(`settings.settingFileIndex.appDiagnosticStage.${key}`)
 }
 
-function getAppDiagnosticStage(result: AppIndexDiagnoseResult | null, key: AppDiagnosticStageKey) {
+function getAppDiagnosticStage(
+  result: AppIndexDiagnoseResult | null,
+  key: AppIndexDiagnosticStageKey
+) {
   return result?.query?.stages[key]
 }
 
@@ -87,6 +93,52 @@ function getAppDiagnosticStageDetail(stage: AppIndexDiagnosticStage | undefined)
   return t('settings.settingFileIndex.appDiagnosticStageMatches', {
     count: stage.matches.length
   })
+}
+
+function buildCurrentAppDiagnosticEvidence() {
+  if (!appDiagnosticResult.value) return null
+
+  return buildAppIndexDiagnosticEvidencePayload({
+    target: normalizeAppDiagnosticTarget(),
+    query: appDiagnosticQuery.value.trim(),
+    diagnosis: appDiagnosticResult.value,
+    reindex: appDiagnosticLastReindexResult.value
+  })
+}
+
+async function copyAppDiagnosticEvidence() {
+  const payload = buildCurrentAppDiagnosticEvidence()
+  if (!payload) {
+    toast.error(t('settings.settingFileIndex.appDiagnosticEvidenceMissing'))
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(formatAppIndexDiagnosticEvidenceJson(payload))
+    toast.success(t('settings.settingFileIndex.appDiagnosticEvidenceCopied'))
+  } catch (error) {
+    settingFileIndexDiagnosticLog.error('Failed to copy app diagnostic evidence', error)
+    toast.error(t('settings.settingFileIndex.appDiagnosticEvidenceCopyFailed'))
+  }
+}
+
+function saveAppDiagnosticEvidence() {
+  const payload = buildCurrentAppDiagnosticEvidence()
+  if (!payload) {
+    toast.error(t('settings.settingFileIndex.appDiagnosticEvidenceMissing'))
+    return
+  }
+
+  const blob = new Blob([formatAppIndexDiagnosticEvidenceJson(payload)], {
+    type: 'application/json;charset=utf-8'
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = buildAppIndexDiagnosticEvidenceFilename(payload)
+  link.click()
+  URL.revokeObjectURL(url)
+  toast.success(t('settings.settingFileIndex.appDiagnosticEvidenceSaved'))
 }
 
 async function runAppSearchDiagnostic(options: { silent?: boolean } = {}) {
@@ -117,6 +169,39 @@ async function runAppSearchDiagnostic(options: { silent?: boolean } = {}) {
   }
 }
 
+function getAppReindexOutcomeMessages() {
+  return {
+    success: t('settings.settingFileIndex.appDiagnosticReindexSuccess'),
+    failure: t('settings.settingFileIndex.appDiagnosticReindexFailed')
+  }
+}
+
+async function openAppReindexConfirm(): Promise<boolean> {
+  let confirmed = false
+
+  await forTouchTip(
+    t('settings.settingFileIndex.appDiagnosticReindexConfirmTitle'),
+    t('settings.settingFileIndex.appDiagnosticReindexConfirmMessage'),
+    [
+      {
+        content: t('common.cancel'),
+        type: 'default',
+        onClick: async () => true
+      },
+      {
+        content: t('common.confirm'),
+        type: 'warning',
+        onClick: async () => {
+          confirmed = true
+          return true
+        }
+      }
+    ]
+  )
+
+  return confirmed
+}
+
 async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) {
   const target = normalizeAppDiagnosticTarget()
   if (!target) {
@@ -127,12 +212,33 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
   appDiagnosticReindexMode.value = mode
   try {
     const result = await settingsSdk.appIndex.reindex({ target, mode })
-    if (!result.success) {
-      toast.error(result.reason || t('settings.settingFileIndex.appDiagnosticReindexFailed'))
+    appDiagnosticLastReindexResult.value = result
+    let outcome = resolveIndexRebuildOutcome(result, getAppReindexOutcomeMessages())
+
+    if (outcome.type === 'confirm') {
+      const confirmed = await openAppReindexConfirm()
+      if (!confirmed) return
+
+      const forced = await settingsSdk.appIndex.reindex({ target, mode, force: true })
+      appDiagnosticLastReindexResult.value = forced
+      outcome = resolveIndexRebuildOutcome(forced, getAppReindexOutcomeMessages())
+    }
+
+    if (outcome.type === 'confirm') {
+      toast.error(
+        outcome.result.error ||
+          outcome.result.reason ||
+          t('settings.settingFileIndex.appDiagnosticReindexFailed')
+      )
       return
     }
 
-    toast.success(t('settings.settingFileIndex.appDiagnosticReindexSuccess'))
+    if (outcome.type === 'failure') {
+      toast.error(outcome.message)
+      return
+    }
+
+    toast.success(outcome.message)
     await runAppSearchDiagnostic({ silent: true })
   } catch (error) {
     settingFileIndexDiagnosticLog.error('Failed to reindex app target', error)
@@ -202,6 +308,24 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
           <div class="i-carbon-update-now text-12px" />
           <span>{{ t('settings.settingFileIndex.appDiagnosticRescan') }}</span>
         </TxButton>
+        <TxButton
+          variant="flat"
+          size="sm"
+          :disabled="!appDiagnosticEvidenceReady"
+          @click="copyAppDiagnosticEvidence"
+        >
+          <div class="i-carbon-copy text-12px" />
+          <span>{{ t('settings.settingFileIndex.appDiagnosticCopyEvidence') }}</span>
+        </TxButton>
+        <TxButton
+          variant="flat"
+          size="sm"
+          :disabled="!appDiagnosticEvidenceReady"
+          @click="saveAppDiagnosticEvidence"
+        >
+          <div class="i-carbon-document-download text-12px" />
+          <span>{{ t('settings.settingFileIndex.appDiagnosticSaveEvidence') }}</span>
+        </TxButton>
       </div>
 
       <div v-if="appDiagnosticResult" class="app-diagnostic-result">
@@ -270,7 +394,7 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
             </div>
             <div class="app-diagnostic-stage-list">
               <div
-                v-for="stageKey in APP_DIAGNOSTIC_STAGE_KEYS"
+                v-for="stageKey in APP_INDEX_DIAGNOSTIC_STAGE_KEYS"
                 :key="stageKey"
                 class="app-diagnostic-stage"
                 :class="`is-${getAppDiagnosticStageTone(getAppDiagnosticStage(appDiagnosticResult, stageKey))}`"
