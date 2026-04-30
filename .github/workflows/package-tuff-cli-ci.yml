@@ -43,4 +43,7 @@ jobs:
       lint-command: pnpm lint
       run-test: false
       run-build: true
-      build-command: pnpm build
+      build-command: |
+        pnpm --dir ../.. --filter "@talex-touch/tuff-cli-core" run build
+        pnpm --dir ../.. --filter "@talex-touch/unplugin-export-plugin" run build
+        pnpm build
