@@ -1,7 +1,44 @@
 # 变更日志
 
-> 更新时间: 2026-04-28
-> 说明: 主文件仅保留近 30 天（2026-03-29 ~ 2026-04-28）详细记录；更早历史已按月归档。
+> 更新时间: 2026-04-30
+> 说明: 主文件仅保留近 30 天（2026-03-31 ~ 2026-04-30）详细记录；更早历史已按月归档。
+
+## 2026-04-30
+
+### ref(core-app): 收口 renderer storage 消费入口
+
+- `apps/core-app/src/renderer/src/modules/storage/{app-storage,account-storage,app-storage-boundary.test}.ts`
+- `apps/core-app/src/renderer/src/modules/channel/storage/{index,accounter}.ts`
+- `apps/core-app/src/renderer/src/{App.vue,main.ts,base/router.ts,components/{download,plugin}/*,modules/{auth,box,hooks,lang,layout,openers,update}/*,views/{base,box}/**/*}`
+  - 新增 neutral renderer storage facade：业务消费统一从 `~/modules/storage/app-storage` 获取 `appSetting` / `openers` / `storageManager`，底层继续复用 `@talex-touch/utils/renderer/storage` 与 `useStorageSdk()`。
+  - `~/modules/channel/storage` 退为 bootstrap/兼容 re-export 边界，设置页、CoreBox、插件视图、auth、下载中心与 layout/hooks 不再继续扩散旧命名入口。
+  - 补充 renderer storage boundary contract，静态约束业务源码不得重新 import `~/modules/channel/storage` 或相对 `channel/storage`。
+
+### feat(core-app): 补齐应用索引诊断证据导出
+
+- `apps/core-app/src/renderer/src/views/base/settings/{SettingFileIndexAppDiagnostic,app-index-diagnostic-evidence}.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+  - 应用搜索诊断新增复制证据与保存 JSON 入口，导出 payload 固定包含当前 target/query、命中 stage、app/index 元数据与最近一次单项 reindex 结果。
+  - 导出结构内置 `windows-app-scan-uwp` / `windows-third-party-app-launch` 人工回归复用字段，但不接入 Release Evidence 写入链，范围保持为本地诊断证据收集。
+  - 补充 focused Vitest 固定 payload schema、stage 命中归纳与回归 caseId，便于后续真机记录直接粘贴复用。
+
+### fix(core-app): 再收口索引重建 renderer outcome
+
+- `apps/core-app/src/renderer/src/views/base/settings/{SettingFileIndex,SettingFileIndexAppDiagnostic,index-rebuild-flow}.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+  - file rebuild 与 app reindex 均复用 `resolveIndexRebuildOutcome()` 处理 `requiresConfirm`、失败 reason/error 与成功 fallback toast，不改 main/sdk 契约。
+  - app reindex 在 renderer 侧补齐确认弹窗后才以 `force: true` 重试；file rebuild 继续保留电量确认细节，但确认 payload 也由统一 outcome 传递。
+  - focused renderer test 固定 confirm payload、失败 reason 和成功 fallback 三条路径，避免两个设置页再次分叉。
+
+### fix(nexus): 修复组件文档与 updates 公告详情入口
+
+- `apps/nexus/app/components/content/TuffDemoWrapper.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/server/api/docs/page.get.ts`
+- `apps/nexus/content.config.ts`
+  - 组件示例改为进入视口后再加载，避免长组件文档一次性挂载全部交互 demo 导致浏览器内存峰值过高。
+  - docs 路径规范化兼容 `.zh.md` / `.en.md` / `.mdc` 链接，组件介绍页旧格式链接可回到 canonical docs path。
+  - Nuxt Content docs collection 同时纳入 `.md` 与 `.mdc`，让 updates 公告中指向 `release/performance-persistence` 的详情页可被内容系统查询到。
 
 ## 2026-04-28
 
