@@ -7,7 +7,7 @@ import type {
 import { DownloadPriority, DownloadStatus } from '@talex-touch/utils'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { devLog } from '~/utils/dev-log'
 
 /**

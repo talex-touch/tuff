@@ -7,7 +7,7 @@ async function loadTarget(initialSync?: Record<string, unknown>) {
     sync: initialSync
   }
 
-  vi.doMock('~/modules/channel/storage', () => ({
+  vi.doMock('~/modules/storage/app-storage', () => ({
     appSetting: appSettingMock
   }))
 

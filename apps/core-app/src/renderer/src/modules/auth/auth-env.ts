@@ -1,7 +1,7 @@
 import { getTuffBaseUrl, isDevEnv } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 
 const LOCAL_AUTH_BASE_URL = 'http://localhost:3200'
 const transport = useTuffTransport()

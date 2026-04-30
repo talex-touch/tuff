@@ -1,7 +1,7 @@
 import { hasNavigator, hasWindow } from '@talex-touch/utils/env'
 import { appSettings } from '@talex-touch/utils/renderer/storage'
 import { readonly, ref, watch } from 'vue'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { devLog } from '~/utils/dev-log'
 import { getGlobalI18nInstance, loadLocaleMessages, setI18nLanguage } from './i18n'

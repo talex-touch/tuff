@@ -4,7 +4,7 @@ import { DownloadModule, DownloadStatus } from '@talex-touch/utils'
 import { TxAlert, TxButton, TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import ProgressBar from './DownloadProgressBar.vue'
 
 interface Props {

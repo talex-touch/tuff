@@ -5,7 +5,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { useDocumentVisibility } from '@vueuse/core'
 import { nextTick, ref, watch } from 'vue'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { BoxMode } from '..'
 import { getLatestClipboard } from './useClipboardChannel'
 

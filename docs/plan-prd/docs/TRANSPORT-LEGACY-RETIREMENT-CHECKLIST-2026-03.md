@@ -20,6 +20,7 @@
 1. 跨层通信统一 typed transport/domain SDK。
 2. legacy 仅允许 warn-and-forward，不承载新能力。
 3. 每清退 1 个入口必须同步更新 `compatibility-debt-registry.csv` 对应条目。
+4. CoreApp renderer 业务消费统一走 `~/modules/storage/app-storage`、`@talex-touch/utils/renderer/storage` 与 `useStorageSdk()`；`~/modules/channel/storage` 只保留 storage bootstrap/兼容 re-export 边界。
 
 ## 3. 执行顺序
 
@@ -34,3 +35,4 @@
 2. [ ] `pnpm test:targeted`、`pnpm legacy:guard`、`pnpm quality:gate` 全绿。
 3. [x] `docs/plan-prd/01-project/CHANGES.md` 记录退场结果与影响范围。
 4. [ ] `v2.5.0` 窗口移除 `transport` 中 legacy 兼容符号转出（破坏性变更）。
+5. [x] CoreApp renderer storage consumer import boundary 固化为 `src/renderer/src/modules/storage/app-storage-boundary.test.ts`。

@@ -14,7 +14,7 @@ import { createSharedElementDirective, SharedElementRouteGuard } from 'v-shared-
 import VWave from 'v-wave'
 import { createApp } from 'vue'
 import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import type { I18nInstance } from '~/modules/lang/i18n'
 import {
   readLegacyLanguagePreferenceSnapshot,

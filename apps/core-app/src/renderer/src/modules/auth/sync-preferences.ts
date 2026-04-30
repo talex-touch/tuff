@@ -1,4 +1,4 @@
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 
 export type SyncRuntimeStatus = 'idle' | 'syncing' | 'paused' | 'error'
 export type SyncBlockedReason = '' | 'quota' | 'device' | 'auth'

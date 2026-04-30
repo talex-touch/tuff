@@ -147,6 +147,7 @@
 - [x] hard-cut 完成：`packages/utils/transport/legacy.ts` 与 `packages/utils/permission/legacy.ts` 已物理删除，SDK legacy 出口下线。
 - 现状说明：
   - 对外仅保留 `@talex-touch/utils/transport` / `@talex-touch/utils/permission` 正式入口，CI/Lint 已禁止 legacy import。
+  - CoreApp renderer storage 业务消费已收口到 `~/modules/storage/app-storage`、`@talex-touch/utils/renderer/storage` 与 `useStorageSdk()`；`~/modules/channel/storage` 仅保留 bootstrap/兼容 re-export 边界。
 - 统一替换策略：
   - 对外入口优先 `@talex-touch/utils/transport` typed SDK，不新增 legacy 导出。
   - legacy 仅保留读兼容和 warn-and-forward，不再承载新能力。
@@ -157,6 +158,7 @@
   - [x] `v2.5.0` 前移除 transport 中 legacy 兼容符号对外转出（本轮已提前完成）。
 - 验收口径：
   - [x] `legacy-transport-import` = `0 files / 0 hits`。
+  - [x] CoreApp renderer storage consumer import boundary 已由 `app-storage-boundary.test.ts` 固化。
   - `pnpm quality:gate` 全绿且无新增兼容债务。
 
 ### F. Pilot / Intelligence 长尾（已下沉）
