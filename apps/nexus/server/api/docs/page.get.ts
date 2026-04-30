@@ -1,27 +1,5 @@
 import { queryCollection } from '@nuxt/content/server'
-
-const SUPPORTED_LOCALES = new Set(['en', 'zh'])
-
-function stripLocalePrefix(path: string) {
-  for (const code of SUPPORTED_LOCALES) {
-    const exact = `/${code}`
-    if (path === exact || path === `${exact}/`)
-      return '/'
-    const prefixed = `${exact}/`
-    if (path.startsWith(prefixed))
-      return path.slice(exact.length) || '/'
-  }
-  return path
-}
-
-function normalizeDocPath(path: string) {
-  if (!path)
-    return '/docs'
-  const raw = path.endsWith('/') && path.length > 1
-    ? path.slice(0, -1)
-    : path
-  return stripLocalePrefix(raw).replace(/\.(en|zh)$/, '') || '/docs'
-}
+import { normalizeDocsPagePath } from '../../utils/docsPath'
 
 function normalizeLocale(value: unknown): 'en' | 'zh' {
   if (typeof value !== 'string')
@@ -36,7 +14,7 @@ function toPlainJson<T>(value: T): T {
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
-  const docPath = normalizeDocPath(typeof query.path === 'string' ? query.path : '/docs')
+  const docPath = normalizeDocsPagePath(typeof query.path === 'string' ? query.path : '/docs')
   const locale = normalizeLocale(query.locale)
 
   const localizedPath = `${docPath}.${locale}`
