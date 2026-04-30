@@ -52,13 +52,5 @@ export async function getTypedActiveAppSnapshot(
 export async function getActiveAppSnapshot(
   options: { forceRefresh?: boolean } = {},
 ): Promise<ActiveAppSnapshot | null> {
-  const channel = getSystemChannel()
-  const forceRefresh = options.forceRefresh === true
-
-  try {
-    return await getTypedActiveAppSnapshotWithChannel(channel, forceRefresh)
-  } catch {
-    const legacy = await channel.send('system:get-active-app', { forceRefresh })
-    return normalizeActiveAppSnapshot(legacy)
-  }
+  return await getTypedActiveAppSnapshot(options)
 }

@@ -93,3 +93,16 @@
 - `placeholder` 大多是输入框、骨架屏或空图标语义；当前未发现会把未完成能力伪装成已完成的正式入口。
 - Plugin widget preview 的 `mockPayload` 属于开发面板显式测试载荷，不是生产 runtime mock。
 - `preload` 中的 `console.log` 只在 `DEBUG` 或 `debug-preload` 显式打开时输出；`SearchLogger`、logger 输出端、内部插件 logger、WebContents injected script 中的 `console.*` 也是有意诊断/注入边界；普通主进程 runtime console 仍维持已收口状态。
+
+## 2026-04-30 复核结论
+
+### 已清理
+
+- `packages/utils/plugin/sdk/system.ts` 中 `getActiveAppSnapshot()` 不再捕获 typed transport 错误后回退到 raw `system:get-active-app`；主进程已停止注册该 raw handler，SDK 继续 fallback 只会吞掉真实 transport 失败。
+- `packages/utils/__tests__/system-sdk.test.ts` 固定 active-app typed transport 失败时直接抛错，且不得调用 legacy raw channel。
+- `apps/nexus/content/docs/dev/architecture/ipc-events-sdk-map.{zh,en}.mdc` 已把 active-app 事件映射改为 typed `app:system:get-active-app`。
+
+### 仍保留但不判为假实现
+
+- renderer platform 的 `best_effort/unsupported` 状态仍属于真实跨平台能力边界；Linux `xdotool` 依赖与 macOS/Windows 自动化权限不能用删除 fallback 的方式抹平。
+- ThemeStyle 壁纸设置中的默认值归一化是状态 schema 保护；“记录同步状态”文案已与本地壁纸库行为对齐，不再暗示云同步。

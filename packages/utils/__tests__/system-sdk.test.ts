@@ -1,3 +1,4 @@
+ 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppEvents } from '../transport/events'
 
@@ -54,18 +55,9 @@ describe('plugin sdk system.getActiveAppSnapshot', () => {
     })
   })
 
-  it('falls back to legacy raw channel when typed transport fails', async () => {
+  it('propagates typed transport failures instead of calling the legacy raw channel', async () => {
     const channel = {
-      send: vi.fn(async () => ({
-        identifier: 'legacy.app',
-        displayName: 'Legacy App',
-        bundleId: 'legacy.app',
-        processId: 321,
-        executablePath: '/Applications/Legacy.app',
-        platform: 'macos',
-        windowTitle: 'Legacy Window',
-        lastUpdated: 2,
-      })),
+      send: vi.fn(),
     }
     const transport = {
       send: vi.fn(async () => {
@@ -76,18 +68,12 @@ describe('plugin sdk system.getActiveAppSnapshot', () => {
     useChannelMock.mockReturnValue(channel)
     createPluginTuffTransportMock.mockReturnValue(transport)
 
-    const result = await getActiveAppSnapshot()
+    await expect(getActiveAppSnapshot()).rejects.toThrow('typed unavailable')
 
     expect(transport.send).toHaveBeenCalledWith(AppEvents.system.getActiveApp, {
       forceRefresh: false,
     })
-    expect(channel.send).toHaveBeenCalledWith('system:get-active-app', {
-      forceRefresh: false,
-    })
-    expect(result).toMatchObject({
-      identifier: 'legacy.app',
-      displayName: 'Legacy App',
-    })
+    expect(channel.send).not.toHaveBeenCalled()
   })
 
   it('getTypedActiveAppSnapshot keeps pure typed transport semantics', async () => {

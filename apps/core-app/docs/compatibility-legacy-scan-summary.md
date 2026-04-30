@@ -1,6 +1,6 @@
 # 兼容性/老旧代码分类清单（当前汇总）
 
-更新时间：2026-04-28
+更新时间：2026-04-30
 
 本文件是 `compatibility-legacy-scan.md` 的短汇总，用于避免历史扫描清单继续把已删除或已硬切的路径标为未处理风险。详细证据和分轮记录以 `compatibility-legacy-scan.md` 为准。
 
@@ -20,6 +20,7 @@
 - ServiceCenter：无读取方的注册快照伪持久化路径已删除。
 - PluginStatus：插件状态按钮已改为 computed label/class/action，不再用命令式 DOM/`innerHTML` 回写状态。
 - Storage renderer：CoreApp renderer 入口已改为 `initializeRendererStorage(transport)` / `useStorageSdk()`，业务侧不再直接消费旧 `storage:get` / `storage:save` / `storage:update`。
+- Plugin system SDK：`getActiveAppSnapshot()` 不再在 typed transport 失败后回退到 raw `system:get-active-app`；主进程已停止注册该 raw handler，SDK 层失败会直接暴露。
 - Theme startup：仅剩测试引用的 `parseLegacyThemeStyle()` 已删除。
 - Application detail：旧应用详情页不再展示 open explorer / uninstall / save/spec 等无真实执行路径的假动作，对应无调用 i18n 文案键也已清理，保留 launch 与 help 两个真实动作。
 - Download center：未引用且含“功能待实现”按钮的旧 `DownloadSettings.vue` 已删除；下载组件目录内全局 `$t(...)` 与硬编码中文模块/优先级/时间文案已收口到 `useI18n()` 资源。
@@ -39,4 +40,5 @@
 
 - 旧汇总曾列 `src/main/modules/tray-holder.ts` 为 legacy tray holder；当前文件已不存在。
 - 旧汇总曾把 `clearItems/pushItems/getItems` 作为 deprecated Plugin API 风险；当前源码中的 `boxItems.pushItems/getItems` 是运行时 SDK 对 BoxItemManager 的正常封装，旧 raw channel `channel.raw` / `channel.sendSync` 已改为 hard-cut 抛错。
+- 旧文档曾把 active-app 映射写成 raw `system:get-active-app`；当前真实事件为 typed `app:system:get-active-app`，SDK 不再做 raw fallback。
 - 权限中心的 historical/deprecated grant 文案只表达历史授权记录被禁用，不代表旧 SDK bypass 仍可运行。

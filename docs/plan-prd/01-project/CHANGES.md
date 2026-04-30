@@ -5,6 +5,16 @@
 
 ## 2026-04-30
 
+### ref(utils): hard-cut active-app system SDK fallback
+
+- `packages/utils/plugin/sdk/system.ts`
+- `packages/utils/__tests__/system-sdk.test.ts`
+- `apps/nexus/content/docs/dev/architecture/ipc-events-sdk-map.{zh,en}.mdc`
+- `apps/core-app/docs/compatibility-legacy-scan{,-summary}.md`
+  - `getActiveAppSnapshot()` 不再在 typed transport 失败时回退到 raw `system:get-active-app`，与主进程已经停止注册 raw handler 的 hard-cut 事实对齐。
+  - 回归测试固定 typed 失败直接抛出且不得调用 raw channel，避免 SDK 层把 transport 问题吞成空快照。
+  - Nexus IPC map 改为记录 typed `app:system:get-active-app` 事件，避免开发文档继续暗示 raw bridge 仍可用。
+
 ### fix(core-app): 补强桌面包运行时依赖闭包门禁
 
 - `apps/core-app/scripts/build-target/runtime-modules.js`
