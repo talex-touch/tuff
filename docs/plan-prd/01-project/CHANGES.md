@@ -5,6 +5,17 @@
 
 ## 2026-04-28
 
+### ref(core-app): 收口插件 WebView 粗糙残留
+
+- `apps/core-app/src/renderer/src/components/plugin/PluginView.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `apps/core-app/src/main/modules/plugin/plugin-installer.ts`
+- `apps/core-app/docs/compatibility-legacy-scan{,-summary}.md`
+  - 插件 WebView 删除陈旧 debug 注释，加载提示、忽略加载失败与重启插件操作接入 i18n。
+  - WebView crash / failed-load 日志只记录插件名、状态和错误描述，不再直接打印完整 plugin 对象。
+  - 插件安装风险确认删除关于未来 TouchID 接入的 TODO 注释；当前真实路径仍保持 Electron warning dialog。
+  - 兼容性审计报告同步记录 `preload` debug console 只属于显式诊断边界，普通生产路径 console 不回潮。
+
 ### ref(core-app): 清理下载中心假设置组件与旧 i18n 调用
 
 - `apps/core-app/src/renderer/src/components/download/*`
