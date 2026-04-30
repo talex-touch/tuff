@@ -149,6 +149,28 @@ function collectResourceModuleClosure(requiredModules = PACKAGED_RUNTIME_MODULES
   return collectModuleClosure(resourceRoots)
 }
 
+function collectPackagedRuntimeModuleClosure(requiredModules = PACKAGED_RUNTIME_MODULES) {
+  return collectModuleClosure(getPackagedRuntimeRootModules(requiredModules))
+}
+
+function hasResourceEntrypoint(resourcesDir, moduleName) {
+  const resourceModuleDir = path.join(resourcesDir, 'node_modules', moduleName)
+  const resourceEntrypoints = [
+    path.join(resourceModuleDir, 'package.json'),
+    path.join(resourceModuleDir, 'index.js')
+  ]
+
+  return resourceEntrypoints.some((entryPath) => fs.existsSync(entryPath))
+}
+
+function copyModuleToResources(resourcesDir, moduleName) {
+  const sourceDir = resolveRuntimeModuleDir(moduleName)
+  const targetDir = path.join(resourcesDir, 'node_modules', moduleName)
+  fs.mkdirSync(path.dirname(targetDir), { recursive: true })
+  fs.rmSync(targetDir, { recursive: true, force: true })
+  fs.cpSync(sourceDir, targetDir, { recursive: true, dereference: true })
+}
+
 function syncPackagedResourceModules(searchRoot, options = {}) {
   const { requiredModules = PACKAGED_RUNTIME_MODULES, logPrefix = '[runtime-modules]' } = options
 
@@ -170,11 +192,7 @@ function syncPackagedResourceModules(searchRoot, options = {}) {
   fs.mkdirSync(resourceNodeModulesDir, { recursive: true })
 
   resourceModules.forEach((moduleName) => {
-    const sourceDir = resolveRuntimeModuleDir(moduleName)
-    const targetDir = path.join(resourceNodeModulesDir, moduleName)
-    fs.mkdirSync(path.dirname(targetDir), { recursive: true })
-    fs.rmSync(targetDir, { recursive: true, force: true })
-    fs.cpSync(sourceDir, targetDir, { recursive: true, dereference: true })
+    copyModuleToResources(resourcesDir, moduleName)
   })
 
   console.log(
@@ -184,12 +202,54 @@ function syncPackagedResourceModules(searchRoot, options = {}) {
   return resourceModules
 }
 
+function syncMissingPackagedRuntimeModules(searchRoot, options = {}) {
+  const { requiredModules = PACKAGED_RUNTIME_MODULES, logPrefix = '[runtime-modules]' } = options
+
+  if (!Array.isArray(requiredModules) || requiredModules.length === 0) {
+    return []
+  }
+
+  const resourcesDir = findPackagedResourcesDir(searchRoot, logPrefix)
+  if (!resourcesDir) {
+    return []
+  }
+
+  const asarPath = path.join(resourcesDir, 'app.asar')
+  if (!fs.existsSync(asarPath)) {
+    console.warn(`${logPrefix} ${asarPath} not found, skip missing runtime dependency sync`)
+    return []
+  }
+
+  const { listPackage } = require('@electron/asar')
+  const packageEntries = new Set(listPackage(asarPath).map((entry) => entry.replace(/\\/g, '/')))
+  const requiredRuntimeModules = collectPackagedRuntimeModuleClosure(requiredModules)
+  const copiedModules = []
+
+  requiredRuntimeModules.forEach((moduleName) => {
+    const packagedEntry = path.posix.join('/node_modules', moduleName, 'package.json')
+    if (packageEntries.has(packagedEntry) || hasResourceEntrypoint(resourcesDir, moduleName)) {
+      return
+    }
+
+    copyModuleToResources(resourcesDir, moduleName)
+    copiedModules.push(moduleName)
+  })
+
+  if (copiedModules.length > 0) {
+    console.log(`${logPrefix} Synced missing packaged runtime modules: ${copiedModules.join(', ')}`)
+  }
+
+  return copiedModules
+}
+
 module.exports = {
   PACKAGED_RUNTIME_MODULES,
   collectModuleClosure,
+  collectPackagedRuntimeModuleClosure,
   collectResourceModuleClosure,
   findPackagedResourcesDir,
   getPackagedRuntimeRootModules,
   resolveRuntimeModuleDir,
+  syncMissingPackagedRuntimeModules,
   syncPackagedResourceModules
 }
