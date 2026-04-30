@@ -1,5 +1,5 @@
- 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getActiveAppSnapshot, getTypedActiveAppSnapshot } from '../plugin/sdk/system'
 import { AppEvents } from '../transport/events'
 
 const { useChannelMock, createPluginTuffTransportMock } = vi.hoisted(() => ({
@@ -14,8 +14,6 @@ vi.mock('../plugin/sdk/channel', () => ({
 vi.mock('../transport', () => ({
   createPluginTuffTransport: createPluginTuffTransportMock,
 }))
-
-import { getActiveAppSnapshot, getTypedActiveAppSnapshot } from '../plugin/sdk/system'
 
 describe('plugin sdk system.getActiveAppSnapshot', () => {
   beforeEach(() => {
