@@ -310,11 +310,19 @@ function stripLocalePrefix(path: string | null | undefined) {
   return path
 }
 
+function stripContentExtension(path: string) {
+  return path.replace(/\.(md|mdc)$/i, '')
+}
+
+function stripLocaleSuffix(path: string) {
+  return path.replace(/\.(en|zh)$/i, '')
+}
+
 function normalizeContentPath(path: string | null | undefined) {
   if (!path)
     return null
   const fullPath = path.startsWith('/') ? path : `/${path}`
-  return stripLocalePrefix(fullPath).replace(/\.(en|zh)$/, '')
+  return stripLocaleSuffix(stripContentExtension(stripLocalePrefix(fullPath)))
 }
 
 function filterByLocale(items: any[]): any[] {

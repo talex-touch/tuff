@@ -43,11 +43,19 @@ function stripLocalePrefix(path: string) {
   return path
 }
 
+function stripContentExtension(path: string) {
+  return path.replace(/\.(md|mdc)$/i, '')
+}
+
+function stripLocaleSuffix(path: string) {
+  return path.replace(/\.(en|zh)$/i, '')
+}
+
 const docPath = computed(() => {
   const rawPath = route.path.endsWith('/') && route.path.length > 1
     ? route.path.slice(0, -1)
     : route.path
-  const normalized = stripLocalePrefix(rawPath).replace(/\.(en|zh)$/, '')
+  const normalized = stripLocaleSuffix(stripContentExtension(stripLocalePrefix(rawPath)))
   return normalized || '/docs'
 })
 
@@ -57,7 +65,7 @@ function normalizeContentPath(path: string | null | undefined) {
   if (!path)
     return null
   const prefixed = path.startsWith('/') ? path : `/${path}`
-  return stripLocalePrefix(prefixed).replace(/\.(en|zh)$/, '')
+  return stripLocaleSuffix(stripContentExtension(stripLocalePrefix(prefixed)))
 }
 
 function stripCjk(value: string) {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { type Component, type ComponentPublicInstance, computed, h, nextTick, ref } from 'vue'
+import { type Component, type ComponentPublicInstance, computed, h, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { createAsyncDemo, demoLoaders } from './demo-registry'
+import { DEMO_LAZY_ROOT_MARGIN, shouldActivateDemo } from './demo-lazy'
 
 interface DemoWrapperProps {
   demo: string
@@ -49,8 +50,11 @@ const resolvedCode = computed(() => {
 const hasCode = computed(() => Boolean(resolvedCode.value))
 const showCode = ref(false)
 const demoRenderKey = ref(0)
+const wrapperRef = ref<HTMLElement | null>(null)
+const isDemoActive = ref(false)
 const demoInstanceRef = ref<DemoResetController | null>(null)
 const isResetting = ref(false)
+let observer: IntersectionObserver | null = null
 
 const toggleLabel = computed(() => {
   if (showCode.value)
@@ -83,7 +87,7 @@ async function tryInvokeDemoReset() {
 }
 
 async function resetDemo() {
-  if (isResetting.value)
+  if (isResetting.value || !isDemoActive.value)
     return
 
   isResetting.value = true
@@ -100,6 +104,39 @@ async function resetDemo() {
   }
 }
 
+function activateDemo() {
+  isDemoActive.value = true
+  observer?.disconnect()
+  observer = null
+}
+
+onMounted(() => {
+  if (!props.demo)
+    return
+
+  if (!('IntersectionObserver' in window)) {
+    activateDemo()
+    return
+  }
+
+  observer = new IntersectionObserver((entries) => {
+    if (entries.some(entry => shouldActivateDemo(isDemoActive.value, entry)))
+      activateDemo()
+  }, {
+    rootMargin: DEMO_LAZY_ROOT_MARGIN,
+  })
+
+  if (wrapperRef.value)
+    observer.observe(wrapperRef.value)
+  else
+    activateDemo()
+})
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  observer = null
+})
+
 const DemoLoadingFallback: Component = () => h('div', { class: 'tuff-demo__placeholder' }, 'Loading demo...')
 
 const DemoErrorFallback: Component = () =>
@@ -108,6 +145,8 @@ const DemoErrorFallback: Component = () =>
 const demoComponentMap = new Map<string, Component>()
 
 const demoComponent = computed(() => {
+  if (!isDemoActive.value)
+    return null
   if (!props.demo)
     return null
   const existing = demoComponentMap.get(props.demo)
@@ -126,7 +165,7 @@ const demoComponent = computed(() => {
 
 <template>
   <ClientOnly>
-    <section class="tuff-demo">
+    <section ref="wrapperRef" class="tuff-demo">
       <header v-if="props.title || props.description" class="tuff-demo__header">
         <h3 v-if="props.title" class="tuff-demo__title">
           {{ props.title }}
@@ -149,7 +188,7 @@ const demoComponent = computed(() => {
               native-type="button"
               class="tuff-demo__reset-btn"
               :aria-label="resetLabel"
-              :disabled="isResetting"
+              :disabled="isResetting || !isDemoActive"
               @click="resetDemo"
             >
               <span class="tuff-demo__reset-icon i-carbon-renew" aria-hidden="true" />
@@ -160,6 +199,9 @@ const demoComponent = computed(() => {
         <div class="tuff-demo__window-body">
           <div class="tuff-demo__preview">
             <component :is="demoComponent" v-if="demoComponent" :key="demoRenderKey" ref="demoInstanceRef" />
+            <div v-else-if="!isDemoActive" class="tuff-demo__placeholder">
+              {{ locale === 'zh' ? '示例即将加载...' : 'Demo will load when visible.' }}
+            </div>
             <div v-else class="tuff-demo__placeholder">
               Demo component "{{ props.demo }}" not found.
             </div>

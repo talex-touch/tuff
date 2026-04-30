@@ -4,7 +4,7 @@ export default defineContentConfig({
   collections: {
     docs: defineCollection({
       type: 'page',
-      source: 'docs/**/*.mdc',
+      source: 'docs/**/*.{md,mdc}',
     }),
     app: defineCollection({
       type: 'page',
