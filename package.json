@@ -29,6 +29,7 @@
     "sync:core-pkg": "node scripts/sync-core-package.mjs",
     "core:dev": "pnpm -F @talex-touch/core-app run dev",
     "nexus:dev": "pnpm -F @talex-touch/tuff-nexus run dev",
+    "nexus:build": "pnpm -F @talex-touch/tuff-nexus run build",
     "pilot:dev": "pnpm -F @talex-touch/tuff-pilot run dev",
     "pilot:build": "pnpm -F @talex-touch/tuff-pilot run build",
     "pilot:typecheck": "pnpm -F @talex-touch/tuff-pilot run typecheck",
