@@ -30,6 +30,7 @@ import {
   getDeviceIdleDiagnosticTone,
   getDeviceIdleReasonKey
 } from './device-idle-diagnostics'
+import { resolveIndexRebuildOutcome } from './index-rebuild-flow'
 
 const {
   getIndexStatus,
@@ -504,6 +505,13 @@ function toggleErrorPopover(): void {
   errorPopoverVisible.value = !errorPopoverVisible.value
 }
 
+function getFileRebuildOutcomeMessages() {
+  return {
+    success: t('settings.settingFileIndex.alertRebuildStarted'),
+    failure: t('common.error')
+  }
+}
+
 async function triggerRebuild() {
   if (isRebuilding.value) {
     toast.warning(t('settings.settingFileIndex.alertRebuilding'))
@@ -532,14 +540,21 @@ async function triggerRebuild() {
   isRebuilding.value = true
   try {
     const result = await handleRebuild()
+    const outcome = resolveIndexRebuildOutcome(result, getFileRebuildOutcomeMessages())
+    let successMessage = outcome.type === 'success' ? outcome.message : ''
 
-    if (result?.requiresConfirm) {
-      const level = result.battery?.level ?? battery?.level
+    if (outcome.type === 'failure') {
+      throw new Error(outcome.message)
+    }
+
+    if (outcome.type === 'confirm') {
+      const confirmResult = outcome.result
+      const level = confirmResult.battery?.level ?? battery?.level
       if (typeof level === 'number') {
         toast.warning(
           t('settings.settingFileIndex.alertBatteryLow', {
             level,
-            critical: result.threshold ?? defaultCriticalBattery
+            critical: confirmResult.threshold ?? defaultCriticalBattery
           })
         )
       }
@@ -547,14 +562,14 @@ async function triggerRebuild() {
       const shouldConfirmAgain =
         !battery ||
         typeof battery.level !== 'number' ||
-        (result.threshold ?? defaultCriticalBattery) !== defaultCriticalBattery
+        (confirmResult.threshold ?? defaultCriticalBattery) !== defaultCriticalBattery
 
       if (shouldConfirmAgain) {
         try {
           await openRebuildConfirm({
-            battery: result.battery ?? battery ?? null,
+            battery: confirmResult.battery ?? battery ?? null,
             minBattery: defaultMinBattery,
-            criticalBattery: result.threshold ?? defaultCriticalBattery,
+            criticalBattery: confirmResult.threshold ?? defaultCriticalBattery,
             showCriticalWarning: true
           })
         } catch {
@@ -564,12 +579,21 @@ async function triggerRebuild() {
       }
 
       const forced = await handleRebuild({ force: true })
-      if (!forced?.success) {
-        throw new Error(forced?.error || 'Rebuild failed')
+      const forcedOutcome = resolveIndexRebuildOutcome(forced, getFileRebuildOutcomeMessages())
+      if (forcedOutcome.type === 'failure') {
+        throw new Error(forcedOutcome.message)
       }
+      if (forcedOutcome.type === 'confirm') {
+        throw new Error(
+          forcedOutcome.result.error ||
+            forcedOutcome.result.reason ||
+            getFileRebuildOutcomeMessages().failure
+        )
+      }
+      successMessage = forcedOutcome.message
     }
 
-    toast.success(t('settings.settingFileIndex.alertRebuildStarted'))
+    toast.success(successMessage || t('settings.settingFileIndex.alertRebuildStarted'))
     setTimeout(async () => {
       await checkStatus()
       isRebuilding.value = false
