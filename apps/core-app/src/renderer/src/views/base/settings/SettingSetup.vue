@@ -36,7 +36,7 @@ import { createRendererLogger } from '~/utils/renderer-log'
 const { t } = useI18n()
 const transport = useTuffTransport()
 const settingsSdk = useSettingsSdk()
-const { platform, isMac: isMacOS, isWindows, isLinux } = useRendererPlatform()
+const { isMac: isMacOS, isWindows, isLinux } = useRendererPlatform()
 const settingSetupLog = createRendererLogger('SettingSetup')
 const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 
