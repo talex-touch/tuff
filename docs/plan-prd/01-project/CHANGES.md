@@ -5,6 +5,17 @@
 
 ## 2026-04-30
 
+### chore(deps): 收口 Dependabot 安全告警与锁文件 SoT
+
+- `package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml`
+- `apps/{core-app,nexus}/package.json`
+- `packages/{tuff-cli,tuff-cli-core,unplugin-export-plugin,utils,tuffex}/package.json`
+- `plugins/{clipboard-history,touch-image,touch-music,touch-translation}/package.json`
+- `.github/dependabot.yml`
+  - 根 `pnpm-lock.yaml` 作为 monorepo 唯一依赖锁定源，移除 core-app / nexus / touch-music / touch-translation 的独立 lockfile，避免 GitHub Dependabot 对陈旧嵌套锁重复告警。
+  - 升级 `mathjs`、`compressing`、`electron`、`next-auth`、`vite`、`tsup` 等直接依赖到安全版本；移除 Nexus 未使用的 optional `nodemailer` 直接依赖，避免把邮件 provider peer 装入运行面；通过根 `pnpm.overrides` 收敛 `simple-git`、`fast-xml-parser`、`@xmldom/xmldom`、`node-forge`、`h3`、`tar`、`postcss`、`devalue`、`flatted`、`serialize-javascript` 等高频传递漏洞。
+  - Dependabot npm 扫描保持根目录入口，并按 security/version updates 分组，减少重复 PR 与重复告警噪声。
+
 ### ref(core-app): 收口 renderer storage 消费入口
 
 - `apps/core-app/src/renderer/src/modules/storage/{app-storage,account-storage,app-storage-boundary.test}.ts`
