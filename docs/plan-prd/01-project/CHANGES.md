@@ -5,6 +5,19 @@
 
 ## 2026-04-30
 
+### fix(ci): 修复 Pilot 与 Tuff CLI clean CI 回归
+
+- `apps/pilot/server/utils/__tests__/pilot-stream-emitter-seq.test.ts`
+- `packages/tuff-cli/src/bin/tuff.ts`
+- `.github/workflows/package-tuff-cli-ci.yml`
+- `package.json`
+- `apps/nexus/SETUP.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Pilot heartbeat 仍按 seq-optional 事件处理，测试固定“不写入 trace、不携带 `seq` 字段”的真实输出契约，避免把字段缺省误判为失败。
+  - Tuff CLI watch build 改为结构化 watcher type guard，避开 Vite/Rollup 类型版本漂移导致的 DTS 构建失败。
+  - Tuff CLI package CI 在 clean runner 的 CLI job 内显式构建 `tuff-cli-core` 与 `unplugin-export-plugin`，避免依赖上游 job 的本地 `dist` 残留。
+  - Cloudflare Pages 文档入口改为 `pnpm nexus:build`，避免 Git 集成构建误跑根目录 CoreApp `pnpm build`。
+
 ### chore(deps): 收口 Dependabot 安全告警与锁文件 SoT
 
 - `package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml`

@@ -127,7 +127,7 @@ pnpm preview:cf
 
 ## 6. 部署流水线建议
 1. 在 Cloudflare Pages 的 **Build settings** 中配置：
-   - Build command: `pnpm install && pnpm build`
+   - Build command: `pnpm install --frozen-lockfile && pnpm nexus:build`
    - Build output directory: `apps/nexus/dist`
 2. 在 Pages 项目的 **Settings → Functions** 区域开启 Functions，并填写与 `wrangler.toml` 一致的绑定。
 3. 在 **Settings → Environment variables** 中补充：
