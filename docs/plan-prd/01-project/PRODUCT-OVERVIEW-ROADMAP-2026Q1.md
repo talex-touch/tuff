@@ -1,6 +1,6 @@
 # Tuff 产品总览与 8 周路线图（2026-Q1）
 
-> 更新时间：2026-04-30
+> 更新时间：2026-05-01
 > 适用范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`
 
 ## 1. 产品总览（是什么）
@@ -46,6 +46,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 新增模块必须提供最小可回归验证（lint/typecheck/test 至少 1 项）。
 - 不得通过“关闭规则/降级配置”绕过质量问题（除非有明确豁免文档）。
 - 兼容债务冻结门禁：`legacy:guard` 必须通过，禁止新增 `channel.send('x:y')` 与新增 `legacy` 分支；存量债务仅允许白名单承载并附 `expiresVersion`（当前收口版本 `2.5.0`）。`2.5.0` 前 CoreApp 清册项必须关闭或显式降权，不得保留未说明的旧 storage protocol、旧 SDK bypass 或伪成功兼容分支。
+- runtime console 冻结门禁：`pnpm console:guard` 必须通过，CoreApp `main/preload/renderer` 新增裸 `console.*` 或扩大现有命中数视为质量回退；仅允许 logger sink、显式 debug gate、专项诊断器通过 allowlist 保留。
 - 兼容债务清册门禁：`compatibility-debt-registry.csv` 必须覆盖全部存量兼容债务；新增债务无登记禁止合入。
 - CoreApp 平台适配门禁：`2.5.0` 前 Windows/macOS 为 release-blocking，必须完成搜索、应用扫描、托盘、更新、插件权限、安装卸载、退出释放回归；Linux 保留 `xdotool` / desktop environment documented best-effort，不作为 `2.5.0` blocker。
 - 超长文件门禁：`size:guard` 必须通过，阈值 `>=1200` 的存量文件禁止继续增长，新增超长文件禁止合入。

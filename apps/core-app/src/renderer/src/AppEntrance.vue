@@ -1,5 +1,5 @@
 <script name="AppEntrance" setup lang="ts">
-import { resolveRendererWindowMode, useArgMapper, useWindowRole } from '@talex-touch/utils/renderer'
+import { useArgMapper } from '@talex-touch/utils/renderer'
 import { Toaster } from 'vue-sonner'
 import type { AppEntranceMode } from './modules/devtools/app-entrance-log'
 import { logAppEntranceMode } from './modules/devtools/app-entrance-log'
@@ -12,27 +12,17 @@ import CoreBox from './views/box/CoreBox.vue'
 import MetaOverlay from './views/meta/MetaOverlay.vue'
 import OmniPanel from './views/omni-panel/OmniPanel.vue'
 
-declare global {
-  interface Window {
-    $isMetaOverlay?: boolean
-  }
-}
-
 const props = defineProps<{
   onReady: () => Promise<void>
 }>()
 const init = ref(false)
 const { appStates } = useAppState()
 const { entry } = useAppLifecycle()
-const { startupInfo } = useStartupInfo()
+const { startupContext, startupInfo } = useStartupInfo()
 const argMapper = useArgMapper()
-const role = useWindowRole()
 
 const appEntranceMode = computed<AppEntranceMode>(() => {
-  return resolveRendererWindowMode({
-    ...role,
-    metaOverlay: window.$isMetaOverlay === true || role.metaOverlay === true
-  })
+  return startupContext.value?.windowMode ?? 'MainApp'
 })
 
 async function initializeEntrance(): Promise<void> {

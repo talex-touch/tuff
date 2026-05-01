@@ -1,5 +1,6 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../db/schema'
+import type { ScheduleOptions } from '../../../db/db-write-scheduler'
 import { sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
 import { itemUsageStats } from '../../../db/schema'
@@ -288,7 +289,7 @@ export class UsageStatsQueue {
   private async persistAggregates(
     label: string,
     records: AggregatedUsageRecord[],
-    options: { droppable: boolean }
+    options: ScheduleOptions
   ): Promise<void> {
     if (records.length === 0) return
 
@@ -344,7 +345,7 @@ export class UsageStatsQueue {
             }),
           { label }
         ),
-      { droppable: options.droppable }
+      options
     )
   }
 
@@ -362,7 +363,10 @@ export class UsageStatsQueue {
     this.pendingSearchEvents = 0
 
     try {
-      await this.persistAggregates('usage-stats.search.flush', records, { droppable: true })
+      await this.persistAggregates('usage-stats.search.flush', records, {
+        dropPolicy: 'drop',
+        maxQueueWaitMs: 10_000
+      })
       usageStatsQueueLog.debug('Search flush persisted', {
         meta: { eventCount, uniqueItems: records.length }
       })
@@ -406,7 +410,9 @@ export class UsageStatsQueue {
     this.pendingActionEvents = 0
 
     try {
-      await this.persistAggregates('usage-stats.action.flush', records, { droppable: false })
+      await this.persistAggregates('usage-stats.action.flush', records, {
+        dropPolicy: 'none'
+      })
       usageStatsQueueLog.debug('Action flush persisted', {
         meta: { eventCount, uniqueItems: records.length }
       })

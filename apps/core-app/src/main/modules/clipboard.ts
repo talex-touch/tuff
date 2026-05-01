@@ -26,6 +26,7 @@ import type { SQL } from 'drizzle-orm'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { NativeImage } from 'electron'
 import type * as schema from '../db/schema'
+import type { ScheduleOptions } from '../db/db-write-scheduler'
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -2047,7 +2048,7 @@ export class ClipboardModule extends BaseModule {
                 metadata: nextMetadata
               })
               .where(eq(clipboardHistory.id, job.clipboardId)),
-          { droppable: true }
+          { dropPolicy: 'drop', maxQueueWaitMs: 10_000 }
         )
       } catch (error) {
         clipboardLog.debug('Clipboard stage-b source update skipped', { error })
@@ -2067,14 +2068,14 @@ export class ClipboardModule extends BaseModule {
       job.clipboardId,
       patch,
       Object.entries(patch).map(([key, value]) => ({ key, value })),
-      { droppable: true }
+      { dropPolicy: 'drop', maxQueueWaitMs: 10_000 }
     )
   }
 
   private async withDbWrite<T>(
     label: string,
     operation: () => Promise<T>,
-    options?: { droppable?: boolean }
+    options?: ScheduleOptions
   ): Promise<T> {
     return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), options)
   }
@@ -2089,7 +2090,7 @@ export class ClipboardModule extends BaseModule {
     clipboardId: number,
     meta: Record<string, unknown>,
     entries?: ClipboardMetaEntry[],
-    options?: { droppable?: boolean }
+    options?: ScheduleOptions
   ): Promise<void> {
     if (!this.db) return
     const resolvedEntries =
@@ -2127,7 +2128,7 @@ export class ClipboardModule extends BaseModule {
     clipboardId: number,
     meta: Record<string, unknown>,
     entries?: ClipboardMetaEntry[],
-    options?: { droppable?: boolean }
+    options?: ScheduleOptions
   ): void {
     void this.persistMetaEntries(clipboardId, meta, entries, options).catch((error) => {
       if (this.isDestroyed) return
@@ -2215,7 +2216,10 @@ export class ClipboardModule extends BaseModule {
           })
         }
       } else {
-        this.persistMetaEntriesSafely(persisted.id, mergedMeta, undefined, { droppable: true })
+        this.persistMetaEntriesSafely(persisted.id, mergedMeta, undefined, {
+          dropPolicy: 'drop',
+          maxQueueWaitMs: 10_000
+        })
       }
     }
 
@@ -2635,7 +2639,8 @@ export class ClipboardModule extends BaseModule {
           }
         } else {
           this.persistMetaEntriesSafely(persisted.id, metaObject, metaEntries, {
-            droppable: true
+            dropPolicy: 'drop',
+            maxQueueWaitMs: 10_000
           })
         }
         this.enqueueClipboardStageB({

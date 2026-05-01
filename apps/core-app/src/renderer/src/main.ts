@@ -16,11 +16,7 @@ import { createApp } from 'vue'
 import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
 import { appSetting } from '~/modules/storage/app-storage'
 import type { I18nInstance } from '~/modules/lang/i18n'
-import {
-  readLegacyLanguagePreferenceSnapshot,
-  resolveInitialLanguagePreference,
-  setupI18n
-} from '~/modules/lang'
+import { resolveInitialLanguagePreference, setupI18n } from '~/modules/lang'
 import { registerBuildVerificationListener } from '~/modules/build-verification/register-build-verification'
 import { registerBatteryStatusListener } from '~/modules/hooks/useBatteryOptimizer'
 import { registerNotificationHub } from '~/modules/notification/notification-hub'
@@ -168,12 +164,9 @@ async function bootstrap() {
  * Resolve the initial locale using persisted settings or sensible defaults.
  */
 function resolveInitialLanguage() {
-  const legacy = readLegacyLanguagePreferenceSnapshot()
   return resolveInitialLanguagePreference({
     settingLocale: appSetting?.lang?.locale,
     settingFollowSystem: appSetting?.lang?.followSystem,
-    legacyLocale: legacy.locale,
-    legacyFollowSystem: legacy.followSystem,
     browserLanguage: navigator.language,
     intlLocale: Intl.DateTimeFormat().resolvedOptions().locale
   }).locale

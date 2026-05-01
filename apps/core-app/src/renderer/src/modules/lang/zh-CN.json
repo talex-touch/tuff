@@ -2288,11 +2288,6 @@
       "promptNewDefaultName": "提示词 {index}",
       "promptDuplicateSuffix": "（副本）",
       "docsButton": "查看 GitHub 文档",
-      "futureCenterTitle": "云端能力中心（规划中）",
-      "futureCenterDesc": "即将支持云端下载、目标共享、策略同步等功能。",
-      "futureCloudSync": "云端同步 Prompt 与能力策略",
-      "futureTargetShare": "多设备共享目标/状态",
-      "futureDownload": "云端模型/模版下载",
       "providerStat": "渠道 {count} 个",
       "capabilityStat": "能力 {count} 个",
       "landing": {
@@ -2429,6 +2424,7 @@
         "manualCheckFailedWithReason": "检测失败：{reason}",
         "manualCheckFailed": "手动检测更新失败",
         "installStarted": "正在重启并应用更新",
+        "installPendingConfirmation": "安装请求已发送，正在等待系统接管确认",
         "installFailedWithReason": "启动更新失败：{reason}",
         "cacheCleared": "更新缓存已清空",
         "cacheClearFailed": "清空更新缓存失败"

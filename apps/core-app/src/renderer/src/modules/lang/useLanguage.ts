@@ -25,12 +25,9 @@ function resolveInitialState(): void {
   }
   initialStateResolved = true
 
-  const legacy = readLegacyLanguagePreferenceSnapshot()
   const preference = resolveInitialLanguagePreference({
     settingLocale: appSetting?.lang?.locale,
     settingFollowSystem: appSetting?.lang?.followSystem,
-    legacyLocale: legacy.locale,
-    legacyFollowSystem: legacy.followSystem,
     browserLanguage: hasNavigator() ? navigator.language : null,
     intlLocale: typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().locale : null
   })
@@ -140,6 +137,7 @@ export function useLanguage() {
     })
 
     followSystemLanguage.value = preference.followSystem
+    currentLanguage.value = preference.locale
     persistLanguagePreference(preference.locale, preference.followSystem)
 
     if (preference.shouldMigrateLegacy) {

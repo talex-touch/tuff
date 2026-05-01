@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-03-22T00:00:00.000Z",
-  "currentVersion": "2.4.9-beta.4",
+  "updatedAt": "2026-05-01T00:00:00.000Z",
+  "currentVersion": "2.4.10-beta.8",
   "rules": {
     "legacy-keyword": {
       "description": "Freeze legacy-branch debt: new legacy keyword matches must be allowlisted with an expiry version.",
@@ -134,7 +134,7 @@
         },
         {
           "file": "apps/core-app/src/main/modules/plugin/runtime/plugin-runtime-repair.test.ts",
-          "maxCount": 2,
+          "maxCount": 3,
           "expiresVersion": "2.5.0"
         },
         {
@@ -198,6 +198,16 @@
           "expiresVersion": "2.5.0"
         },
         {
+          "file": "apps/core-app/src/renderer/src/modules/lang/language-preferences.test.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/modules/lang/language-preferences.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
           "file": "apps/core-app/src/renderer/src/modules/lang/i18n.ts",
           "maxCount": 1,
           "expiresVersion": "2.5.0"
@@ -210,6 +220,21 @@
         {
           "file": "apps/core-app/src/renderer/src/modules/startup/startup-migrations.ts",
           "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/modules/lang/useLanguage.ts",
+          "maxCount": 3,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/modules/storage/app-storage-boundary.test.ts",
+          "maxCount": 1,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "apps/core-app/src/renderer/src/modules/storage/app-storage.ts",
+          "maxCount": 1,
           "expiresVersion": "2.5.0"
         },
         {
@@ -563,13 +588,33 @@
           "expiresVersion": "2.5.0"
         },
         {
+          "file": "packages/test/src/common/storage-subscription.test.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/__tests__/renderer-storage-transport.test.ts",
+          "maxCount": 8,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/renderer/hooks/use-channel.ts",
+          "maxCount": 2,
+          "expiresVersion": "2.5.0"
+        },
+        {
           "file": "packages/utils/renderer/storage/base-storage.ts",
-          "maxCount": 3,
+          "maxCount": 5,
+          "expiresVersion": "2.5.0"
+        },
+        {
+          "file": "packages/utils/renderer/storage/bootstrap.ts",
+          "maxCount": 2,
           "expiresVersion": "2.5.0"
         },
         {
           "file": "packages/utils/renderer/storage/storage-subscription.ts",
-          "maxCount": 3,
+          "maxCount": 5,
           "expiresVersion": "2.5.0"
         },
         {

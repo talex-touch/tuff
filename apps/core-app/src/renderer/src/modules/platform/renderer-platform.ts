@@ -11,6 +11,8 @@ export interface RendererPlatformState {
   isLinux: boolean
 }
 
+export type RendererBrowserEngine = 'chromium' | 'firefox' | 'webkit' | 'unknown'
+
 export interface RendererPlatformInput {
   startupPlatform?: string | null
   electronPlatform?: string | null
@@ -53,6 +55,38 @@ function inferBrowserPlatform(
   return null
 }
 
+export function getCurrentRendererUserAgent(): string | null {
+  return hasNavigator() ? navigator.userAgent : null
+}
+
+export function getRendererBrowserEngine(
+  userAgent: string | null | undefined = getCurrentRendererUserAgent()
+): RendererBrowserEngine {
+  const agentText = typeof userAgent === 'string' ? userAgent.toLowerCase() : ''
+  if (!agentText) {
+    return 'unknown'
+  }
+  if (agentText.includes('firefox')) {
+    return 'firefox'
+  }
+  if (
+    agentText.includes('safari') &&
+    !agentText.includes('chrome') &&
+    !agentText.includes('chromium')
+  ) {
+    return 'webkit'
+  }
+  if (
+    agentText.includes('chrome') ||
+    agentText.includes('chromium') ||
+    agentText.includes('electron') ||
+    agentText.includes('edg/')
+  ) {
+    return 'chromium'
+  }
+  return 'unknown'
+}
+
 function toPlatformState(platform: RendererPlatform): RendererPlatformState {
   return {
     platform,
@@ -84,7 +118,7 @@ export function getCurrentRendererPlatformState(): RendererPlatformState {
           ? process.platform
           : null,
     navigatorPlatform: hasNavigator() ? navigator.platform : null,
-    userAgent: hasNavigator() ? navigator.userAgent : null
+    userAgent: getCurrentRendererUserAgent()
   })
 }
 
@@ -96,7 +130,7 @@ export function useRendererPlatform() {
       startupPlatform: startupInfo.value?.platform ?? null,
       electronPlatform: getCurrentRendererPlatformState().platform,
       navigatorPlatform: hasNavigator() ? navigator.platform : null,
-      userAgent: hasNavigator() ? navigator.userAgent : null
+      userAgent: getCurrentRendererUserAgent()
     })
   )
 

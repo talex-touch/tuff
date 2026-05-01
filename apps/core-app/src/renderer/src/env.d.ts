@@ -1,5 +1,9 @@
 /// <reference types="vite/client" />
 
+import type { IArgMapperOptions } from '@talex-touch/utils/electron'
+import type { PreloadAPI } from '@talex-touch/utils/preload'
+import type { Router } from 'vue-router'
+
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
 
@@ -14,44 +18,11 @@ declare module 'talex-touch:information' {
 }
 
 declare global {
-  export interface StartupPaths {
-    appDataPath: string
-    appPath: string
-    configPath: string
-    exePath: string
-    homePath: string
-    modulePath: string
-    pluginPath: string
-    rootPath: string
-    tempPath: string
-    userDataPath: string
-  }
-
-  export interface IStartupInfo {
-    id: number
-    version: string
-    path: StartupPaths
-    isPackaged: boolean
-    isDev: boolean
-    isRelease: boolean
-    platform: string
-    arch: string
-    t: {
-      _s: number
-      s: number
-      e: number
-      p: number
-      h: number[]
-    }
-    appUpdate?: boolean
-  }
-
   export interface Window {
-    $argMapper: import('@talex-touch/utils/electron').IArgMapperOptions
-    __VUE_ROUTER__?: import('vue-router').Router
+    $argMapper: IArgMapperOptions
+    __VUE_ROUTER__?: Router
     __devAuthToken?: (token: string) => void
-    $startupInfo: IStartupInfo
-    api: import('@talex-touch/utils/preload').PreloadAPI
+    api: PreloadAPI
     ipcRenderer: {
       send: (channel: string, data: unknown) => void
       on: (channel: string, func: (...args: unknown[]) => void) => void

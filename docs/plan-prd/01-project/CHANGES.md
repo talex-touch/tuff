@@ -1,7 +1,28 @@
 # 变更日志
 
-> 更新时间: 2026-04-30
-> 说明: 主文件仅保留近 30 天（2026-03-31 ~ 2026-04-30）详细记录；更早历史已按月归档。
+> 更新时间: 2026-05-01
+> 说明: 主文件仅保留近 30 天（2026-04-01 ~ 2026-05-01）详细记录；更早历史已按月归档。
+
+## 2026-05-01
+
+### ref(core-app): 收口 startup/runtime 兼容边界
+
+- `packages/utils/preload/{loading,renderer}.ts`
+- `apps/core-app/src/preload/index.ts`
+- `apps/core-app/src/renderer/src/{AppEntrance.vue,env.d.ts,main.ts}`
+- `apps/core-app/src/renderer/src/modules/{hooks/{useAppLifecycle,useStartupInfo,useUpdateRuntime}.ts,lang/useLanguage.ts,platform/renderer-platform.ts,sdk/plugin-sdk.ts,store/providers/nexus-store-provider.ts,sentry/sentry-renderer.ts}`
+- `apps/core-app/src/renderer/src/components/{base/{TouchScroll,effect/GlassSurface}.vue,render/WidgetFrame.vue}`
+- `apps/core-app/src/main/{db/db-write-scheduler.ts,modules/{clipboard.ts,ocr/{ocr-config-policy,ocr-service}.ts,box-tool/search-engine/{usage-stats-queue,query-completion-service}.ts,plugin/{plugin-module.ts,runtime/plugin-runtime-repair{,.test}.ts}}`
+- `apps/core-app/docs/compatibility-legacy-scan{,-summary}.md`
+  - preload 启动链路改为 typed `StartupContext` bridge，renderer 不再依赖 `window.$startupInfo` / `window.$isMetaOverlay` 或二次 startup transport fallback；入口模式、startup metadata 与 meta overlay 统一经由 preload contract 读取。
+  - 语言初始化改成 hydration 后一次性迁移 legacy localStorage 快照；稳态启动与运行期只读 typed `appSetting.lang`。
+  - renderer 平台 sniff 收口到 `renderer-platform`，`TouchScroll`、`GlassSurface`、Sentry renderer 不再直接触碰 `navigator.platform/userAgent` 或 `process.platform`。
+  - 插件 runtime 不再按插件名偷偷修目录；加载前统一执行 runtime drift 检查，发现缺失 runtime 文件、旧 import 或 package/runtime 版本漂移时直接以 `PLUGIN_RUNTIME_DRIFT` 阻断。
+  - DB write scheduler 删除 `droppable` 兼容入口，clipboard/OCR/usage-stats/query-completions 统一显式声明 `dropPolicy` / `maxQueueWaitMs`。
+  - 更新安装不再把 `update:install` 超时包装成 started；超时仅提示“等待系统接管确认”，避免 optimistic success。
+  - Widget 空态从单一“暂未就绪”细分为 loading / missing renderer / render error；同时收口 `plugin-sdk`、`nexus-store-provider`、update/widget/lifecycle/sentry 等 renderer 高频 raw console。
+  - 新增 `useStartupInfo` / `useUpdateRuntime` focused Vitest，固定 typed startup bridge 单一路径与 update install ack-timeout 语义。
+  - 新增 `pnpm console:guard` 质量门禁与 allowlist，冻结 CoreApp runtime 裸 `console.*` 边界；renderer 平台直读 `navigator.platform/userAgent/process.platform` 由 ESLint 限定只允许 `renderer-platform.ts` 保留。
 
 ## 2026-04-30
 

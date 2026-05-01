@@ -2296,11 +2296,6 @@
       "promptNewDefaultName": "Prompt {index}",
       "promptDuplicateSuffix": "(Copy)",
       "docsButton": "View GitHub Docs",
-      "futureCenterTitle": "Cloud Center (coming soon)",
-      "futureCenterDesc": "Cloud download, target sharing and policy sync are on the way.",
-      "futureCloudSync": "Cloud sync for prompts and policies",
-      "futureTargetShare": "Cross-device target sharing",
-      "futureDownload": "Cloud model/template downloads",
       "providerStat": "{count} channels",
       "capabilityStat": "{count} capabilities",
       "landing": {
@@ -2437,6 +2432,7 @@
         "manualCheckFailedWithReason": "Update check failed: {reason}",
         "manualCheckFailed": "Failed to start update check",
         "installStarted": "Restarting to apply update",
+        "installPendingConfirmation": "Install request sent. Waiting for system handoff confirmation.",
         "installFailedWithReason": "Failed to start update install: {reason}",
         "cacheCleared": "Update cache cleared",
         "cacheClearFailed": "Failed to clear cache"

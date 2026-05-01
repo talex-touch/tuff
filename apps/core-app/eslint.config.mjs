@@ -46,6 +46,27 @@ export default tseslint.config(
     }
   },
   {
+    files: ['src/renderer/**/*.{ts,mts,tsx,vue}'],
+    ignores: ['src/renderer/src/modules/platform/renderer-platform.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "MemberExpression[object.name='navigator'][property.name='platform']",
+          message: 'Use renderer-platform helpers instead of reading navigator.platform directly.'
+        },
+        {
+          selector: "MemberExpression[object.name='navigator'][property.name='userAgent']",
+          message: 'Use renderer-platform helpers instead of reading navigator.userAgent directly.'
+        },
+        {
+          selector: "MemberExpression[object.name='process'][property.name='platform']",
+          message: 'Use renderer-platform helpers instead of reading process.platform directly.'
+        }
+      ]
+    }
+  },
+  {
     files: ['**/*.{ts,mts,tsx}'],
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'off',

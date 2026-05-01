@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { TxScroll as TuffTouchScroll } from '@talex-touch/tuffex'
-import { hasNavigator } from '@talex-touch/utils/env'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 
 defineOptions({
   name: 'TouchScroll'
@@ -39,20 +39,17 @@ type ScrollInstance = InstanceType<typeof TuffTouchScroll> & {
 }
 
 const scrollRef = ref<ScrollInstance | null>(null)
+const { isMac } = useRendererPlatform()
 
 const useNative = computed(() => {
   return props.native
 })
 
-const isMacLike =
-  hasNavigator() &&
-  (String(navigator.platform).includes('Mac') || String(navigator.userAgent).includes('Mac OS X'))
-
 const resolvedBScrollOptions = computed(() => {
   const raw = (attrs as { options?: unknown }).options
   const options = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
 
-  if (!isMacLike) return options
+  if (!isMac.value) return options
 
   if (Object.prototype.hasOwnProperty.call(options, 'useTransition')) return options
 

@@ -1,6 +1,7 @@
 import type { StorePlugin, StoreProviderListOptions } from '@talex-touch/utils/store'
 import { BaseStoreProvider } from './base-provider'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 interface NexusManifestEntry {
   id: string
@@ -34,6 +35,8 @@ interface NexusApiResponse {
   plugins: NexusManifestEntry[]
   total: number
 }
+
+const nexusStoreLog = createRendererLogger('NexusStoreProvider')
 
 export class NexusStoreProvider extends BaseStoreProvider {
   #cache: StorePlugin[] | null = null
@@ -71,7 +74,7 @@ export class NexusStoreProvider extends BaseStoreProvider {
       devLog('[NexusStoreProvider] Response status:', response.status)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error'
-      console.error('[NexusStoreProvider] Request failed:', manifestUrl, message)
+      nexusStoreLog.error('Request failed', { manifestUrl, message })
       throw new TypeError(`STORE_NEXUS_REQUEST_FAILED: ${message}`)
     }
 
@@ -83,13 +86,13 @@ export class NexusStoreProvider extends BaseStoreProvider {
       try {
         data = JSON.parse(rawStr)
       } catch {
-        console.error('[NexusStoreProvider] Failed to parse JSON string:', rawStr.slice(0, 200))
+        nexusStoreLog.error('Failed to parse JSON string', rawStr.slice(0, 200))
         throw new TypeError('STORE_NEXUS_INVALID_JSON')
       }
     }
 
     if (Array.isArray(data)) {
-      console.error('[NexusStoreProvider] Unsupported manifest array format:', {
+      nexusStoreLog.error('Unsupported manifest array format', {
         url: manifestUrl,
         status: response.status
       })
@@ -108,7 +111,7 @@ export class NexusStoreProvider extends BaseStoreProvider {
       const dataType = data === null ? 'null' : typeof data
       const dataPreview =
         data === null || data === undefined ? String(data) : JSON.stringify(data).slice(0, 200)
-      console.error('[NexusStoreProvider] Invalid manifest format:', {
+      nexusStoreLog.error('Invalid manifest format', {
         url: manifestUrl,
         status: response.status,
         dataType,

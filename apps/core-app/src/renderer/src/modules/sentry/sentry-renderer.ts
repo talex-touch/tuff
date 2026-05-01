@@ -9,11 +9,17 @@ import { isDevEnv } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { SentryEvents } from '@talex-touch/utils/transport/events'
 import { getBuildInfo } from '../../utils/build-info'
+import {
+  getCurrentRendererPlatformState,
+  getCurrentRendererUserAgent
+} from '../platform/renderer-platform'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 // Initialize Sentry in renderer process
 let isInitialized = false
 const transport = useTuffTransport()
+const sentryRendererLog = createRendererLogger('SentryRenderer')
 
 /**
  * Initialize Sentry in renderer process
@@ -44,6 +50,8 @@ export async function initSentryRenderer(): Promise<void> {
     const buildInfo = getBuildInfo()
     const buildType = process.env.BUILD_TYPE || (buildInfo.isRelease ? 'release' : 'dev')
     const channel = buildInfo.isRelease ? 'release' : buildType
+    const platform = getCurrentRendererPlatformState().platform
+    const userAgent = getCurrentRendererUserAgent()
 
     Sentry.init({
       dsn: 'https://f8019096132f03a7a66c879a53462a67@o4508024637620224.ingest.us.sentry.io/4510196503871488',
@@ -58,8 +66,8 @@ export async function initSentryRenderer(): Promise<void> {
             version: buildInfo.version,
             buildType: buildInfo.buildType,
             channel,
-            platform: process.platform,
-            userAgent: navigator.userAgent
+            platform,
+            userAgent
           }
         }
         return event
@@ -71,8 +79,8 @@ export async function initSentryRenderer(): Promise<void> {
       version: buildInfo.version,
       buildType: buildInfo.buildType,
       channel,
-      platform: process.platform,
-      userAgent: navigator.userAgent
+      platform,
+      userAgent
     })
 
     // Listen for user context updates
@@ -81,7 +89,7 @@ export async function initSentryRenderer(): Promise<void> {
     isInitialized = true
     devLog('[SentryRenderer] Sentry initialized')
   } catch (error) {
-    console.warn('[SentryRenderer] Failed to initialize Sentry', error)
+    sentryRendererLog.warn('Failed to initialize Sentry', error)
   }
 }
 
@@ -163,7 +171,7 @@ export function captureException(error: Error, context?: Record<string, unknown>
     scope.setContext('environment', {
       version: buildInfo.version,
       buildType: buildInfo.buildType,
-      platform: process.platform
+      platform: getCurrentRendererPlatformState().platform
     })
     Sentry.captureException(error)
   })
@@ -190,7 +198,7 @@ export function captureMessage(
     scope.setContext('environment', {
       version: buildInfo.version,
       buildType: buildInfo.buildType,
-      platform: process.platform
+      platform: getCurrentRendererPlatformState().platform
     })
     Sentry.captureMessage(message)
   })

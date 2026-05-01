@@ -106,3 +106,24 @@
 
 - renderer platform 的 `best_effort/unsupported` 状态仍属于真实跨平台能力边界；Linux `xdotool` 依赖与 macOS/Windows 自动化权限不能用删除 fallback 的方式抹平。
 - ThemeStyle 壁纸设置中的默认值归一化是状态 schema 保护；“记录同步状态”文案已与本地壁纸库行为对齐，不再暗示云同步。
+
+## 2026-05-01 复核结论
+
+### 已清理
+
+- preload 启动桥接已统一为 typed `StartupContext`：`apps/core-app/src/preload/index.ts` 负责一次性拉取 startup handshake 并暴露 `startupInfo/windowMode/metaOverlay`；renderer 侧 `useStartupInfo()` 不再读取 `window.$startupInfo` / `window.$isMetaOverlay`，也不再走 startup transport fallback。
+- renderer 语言初始化改成 hydration 后一次性迁移 legacy `localStorage` 语言快照；`main.ts` 与 `useLanguage.ts` 的稳态分支只读取 typed `appSetting.lang`，迁移完成后清理旧 key。
+- renderer 平台 sniff 已集中到 `modules/platform/renderer-platform.ts`：`TouchScroll`、`GlassSurface`、Sentry renderer 不再直接使用 `navigator.platform` / `navigator.userAgent` / `process.platform`。
+- 插件 runtime 兼容 patch 已删除：`plugin-module.ts` 不再按 `touch-translation` 特判修目录，改为加载前统一执行 runtime drift 检查；命中缺失 runtime 文件、旧 import 或 runtime/package 版本漂移时以 `PLUGIN_RUNTIME_DRIFT` 显式阻断。
+- `DbWriteScheduler` 已删除 `droppable` 兼容入口；clipboard、OCR、usage-stats、query completions 等调用方已切到显式 `dropPolicy/maxQueueWaitMs`。
+- `useUpdateRuntime.ts` 不再把 `update:install` 请求超时包装成“已开始安装”；当前只提示等待系统接管确认，避免 optimistic success。
+- `WidgetFrame.vue` 的空态已拆分为加载中、renderer 缺失与渲染失败，不再统一显示“Widget 暂未就绪”。
+- root 新增 `pnpm console:guard`，冻结 CoreApp `main/preload/renderer` 现存 raw `console.*` 边界；新增 console 点位或扩大命中数会直接失败。
+- `apps/core-app/eslint.config.mjs` 已新增 renderer 平台直读限制，除 `modules/platform/renderer-platform.ts` 外不得继续直接访问 `navigator.platform` / `navigator.userAgent` / `process.platform`。
+- `plugin-sdk.ts`、`nexus-store-provider.ts`、`useUpdateRuntime.ts`、`useAppLifecycle.ts`、`sentry-renderer.ts` 与 `WidgetFrame.vue` 的 raw console 已收口到统一 renderer logger。
+- 删除未引用的 `futureCenter*` i18n 规划文案键，避免语言资源继续暗示假路线图入口。
+
+### 仍保留但不判为假实现
+
+- Linux `best_effort/unsupported` 仍是有意的平台能力分层；本轮不承诺把 active-app、selection capture、share、permission deep-link 对齐到 macOS/Windows。
+- `logger.ts` / injected script / SearchLogger 等剩余 `console.*` 命中仍属于显式日志输出端或诊断边界，不等同于业务 runtime 回潮。

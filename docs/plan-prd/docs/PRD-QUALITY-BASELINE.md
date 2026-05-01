@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-04-30
+> 更新时间：2026-05-01
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -45,6 +45,7 @@
 - 强制启用 `compat:registry:guard`：兼容债务清册（`docs/plan-prd/docs/compatibility-debt-registry.csv`）必须完整覆盖存量命中，缺字段/缺条目/过期未清理均失败。
 - 强制启用 `size:guard`：超长文件阈值 `>=1200` 基线冻结，禁止新增和增长；仅允许通过 `growthExceptions` 临时豁免，并要求同步 `CHANGES + compatibility registry`。
 - 强制启用统一 guard 基础库：`legacy/compat/size/network` 脚本必须复用 `scripts/lib/*` 公共扫描/版本能力，禁止重复实现目录遍历与版本比较逻辑。
+- 强制启用 CoreApp runtime console 门禁：`pnpm console:guard` 冻结 `apps/core-app` main/preload/renderer 现存 `console.*` 边界，新增 raw console 或扩散命中数量一律失败；logger sink、显式 debug gate 与专项诊断器只能通过 allowlist 承载。
 - CoreApp 硬切补充门禁：业务层 `window.$channel` 调用、legacy storage 旧协议（`storage:get/save/reload/save-sync/saveall`）与 legacy `sdkapi` 放行路径必须保持为 `0`；占位能力必须返回真实状态或显式 `unavailable + reason`，禁止固定假值“成功”。
 - CoreApp `2.5.0` 前置门禁：清册中的 core-app `2.5.0` 兼容债务必须关闭或显式降权；Windows/macOS 回归为 release-blocking，Linux 仅作为 documented best-effort 与非阻塞 smoke。
 
@@ -66,7 +67,7 @@
 ### 3.5 文档约束
 - PRD 状态变化（进行中/完成/归档）必须同步 `README.md` 与 `TODO.md`。
 - 对外行为变化必须同步 Nexus 对应开发文档。
-- 推荐统一验收入口：`pnpm quality:gate`（`legacy:guard + network:guard + test:targeted + typecheck(node/web) + docs:guard`）。
+- 推荐统一验收入口：`pnpm quality:gate`（`legacy:guard[含 console:guard] + network:guard + test:targeted + typecheck(node/web) + docs:guard`）。
 
 ## 4. 验收执行模板（建议复制到 PRD）
 

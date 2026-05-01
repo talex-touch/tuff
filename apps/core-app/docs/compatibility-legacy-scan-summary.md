@@ -1,6 +1,6 @@
 # 兼容性/老旧代码分类清单（当前汇总）
 
-更新时间：2026-04-30
+更新时间：2026-05-01
 
 本文件是 `compatibility-legacy-scan.md` 的短汇总，用于避免历史扫描清单继续把已删除或已硬切的路径标为未处理风险。详细证据和分轮记录以 `compatibility-legacy-scan.md` 为准。
 
@@ -12,6 +12,7 @@
 - medium：跨平台能力仍有真实不对称，Windows/macOS 是 2.5.0 release-blocking 人工回归范围，Linux 继续按 `xdotool` / desktop environment 记录为 documented best-effort。
 - medium：插件 SDK hard-cut 已在 loader / installer / permission guard 阻断不兼容 `sdkapi`；旧 raw channel 仅保留为明确抛错边界，不再作为可用兼容通道。
 - low：普通 fallback 多为输入默认值、展示兜底、schema/runtime migration 或诊断面，不等价于未完成能力。
+- low：启动、平台和语言兼容层已进一步收口，但 Linux `best_effort`、分享/权限等真实能力不对称仍保留为 documented boundary。
 
 ## 已收口高信号项
 
@@ -21,6 +22,13 @@
 - PluginStatus：插件状态按钮已改为 computed label/class/action，不再用命令式 DOM/`innerHTML` 回写状态。
 - Storage renderer：CoreApp renderer 入口已改为 `initializeRendererStorage(transport)` / `useStorageSdk()`，业务侧不再直接消费旧 `storage:get` / `storage:save` / `storage:update`。
 - Plugin system SDK：`getActiveAppSnapshot()` 不再在 typed transport 失败后回退到 raw `system:get-active-app`；主进程已停止注册该 raw handler，SDK 层失败会直接暴露。
+- Startup bridge：preload 以 typed `StartupContext` 暴露 `startupInfo/windowMode/metaOverlay`，renderer 不再读 `window.$startupInfo` / `window.$isMetaOverlay` 或额外请求 startup transport。
+- Language init：legacy `localStorage` 语言快照只在 hydration 后迁移一次，稳态语言解析只读 `appSetting.lang`。
+- Plugin runtime drift：移除 `touch-translation` 运行期目录修补；插件加载前统一执行 runtime drift 检查，命中后稳定返回 `PLUGIN_RUNTIME_DRIFT`。
+- DB write QoS：`DbWriteScheduler` 已删除 `droppable` 兼容选项，clipboard/OCR/usage-stats/query-completions 统一改为显式 `dropPolicy/maxQueueWaitMs`。
+- Update install：renderer 不再把 `update:install` 超时当作 started，而是提示等待系统接管确认。
+- Widget empty state：widget 容器已区分加载中、renderer 缺失和渲染失败，不再统一显示“暂未就绪”。
+- Runtime console guard：新增 `pnpm console:guard` 冻结 CoreApp runtime 的裸 `console.*` 边界；后续新增 raw console 或扩大命中数会直接失败。
 - Theme startup：仅剩测试引用的 `parseLegacyThemeStyle()` 已删除。
 - Application detail：旧应用详情页不再展示 open explorer / uninstall / save/spec 等无真实执行路径的假动作，对应无调用 i18n 文案键也已清理，保留 launch 与 help 两个真实动作。
 - Download center：未引用且含“功能待实现”按钮的旧 `DownloadSettings.vue` 已删除；下载组件目录内全局 `$t(...)` 与硬编码中文模块/优先级/时间文案已收口到 `useI18n()` 资源。

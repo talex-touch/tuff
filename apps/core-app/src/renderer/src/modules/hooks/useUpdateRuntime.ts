@@ -20,6 +20,7 @@ import { h, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
 import { useI18nText } from '~/modules/lang'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { normalizeStoredUpdateChannel, normalizeSupportedUpdateChannel } from '../update/channel'
 import {
   detectUpdateAssetArch,
@@ -67,6 +68,7 @@ const INSTALL_TIMEOUT = 10 * 60 * 1000
 const updateListenerDisposers: Array<() => void> = []
 const completedUpdateTaskIds = new Set<string>()
 let updateListenerInitialized = false
+const updateRuntimeLog = createRendererLogger('useUpdateRuntime')
 
 function normalizeAssetPlatform(
   platformValue: unknown,
@@ -267,7 +269,7 @@ export function useUpdateRuntime() {
   }
 
   function handleUpdateError(errorMessage: string, source: string): void {
-    console.warn(`[useUpdateRuntime] Update error from ${source}:`, errorMessage)
+    updateRuntimeLog.warn(`Update error from ${source}:`, errorMessage)
     appStates.updateErrorMessage = resolveUpdateErrorMessage(errorMessage)
   }
 
@@ -286,7 +288,7 @@ export function useUpdateRuntime() {
       }
       return settingsCache
     } catch (settingsError) {
-      console.error('[useUpdateRuntime] Failed to get settings:', settingsError)
+      updateRuntimeLog.error('Failed to get settings', settingsError)
       return settingsCache
     }
   }
@@ -346,7 +348,7 @@ export function useUpdateRuntime() {
       }
       return null
     } catch (cachedError) {
-      console.error('[useUpdateRuntime] Failed to get cached release:', cachedError)
+      updateRuntimeLog.error('Failed to get cached release', cachedError)
       return null
     }
   }
@@ -418,7 +420,7 @@ export function useUpdateRuntime() {
       updateDialogSession.finishAction(tag, success)
       return success
     } catch (dialogActionError) {
-      console.error('[useUpdateRuntime] Update dialog action failed:', dialogActionError)
+      updateRuntimeLog.error('Update dialog action failed', dialogActionError)
       updateDialogSession.failAction(tag)
       return false
     }
@@ -522,7 +524,7 @@ export function useUpdateRuntime() {
 
       return result
     } catch (checkError) {
-      console.error('[useUpdateRuntime] Update check failed:', checkError)
+      updateRuntimeLog.error('Update check failed', checkError)
       error.value = checkError instanceof Error ? checkError.message : 'Unknown error'
       handleUpdateError(error.value, 'Unknown')
       appStates.noUpdateAvailable = false
@@ -543,7 +545,7 @@ export function useUpdateRuntime() {
       toast.success(t('update.download_started'))
       return true
     } catch (downloadError) {
-      console.error('[useUpdateRuntime] Download failed:', downloadError)
+      updateRuntimeLog.error('Download failed', downloadError)
       toast.error(
         t('update.download_failed_with_reason', {
           reason: downloadError instanceof Error ? downloadError.message : 'Unknown error'
@@ -570,12 +572,12 @@ export function useUpdateRuntime() {
         installError instanceof Error &&
         installError.message.includes('Update request timed out for channel: update:install')
       ) {
-        console.warn('[useUpdateRuntime] Install request ack timeout, treating as started')
-        toast.success(t('settings.settingUpdate.messages.installStarted'))
-        return true
+        updateRuntimeLog.warn('Install request ack timeout, waiting for main-process handoff')
+        toast.info(t('settings.settingUpdate.messages.installPendingConfirmation'))
+        return false
       }
 
-      console.error('[useUpdateRuntime] Install update failed:', installError)
+      updateRuntimeLog.error('Install update failed', installError)
       toast.error(
         t('settings.settingUpdate.messages.installFailedWithReason', {
           reason: installError instanceof Error ? installError.message : 'Unknown error'
@@ -593,7 +595,7 @@ export function useUpdateRuntime() {
       clearUpdateErrorMessage()
       return true
     } catch (ackError) {
-      console.warn('[useUpdateRuntime] Failed to acknowledge update:', ackError)
+      updateRuntimeLog.warn('Failed to acknowledge update', ackError)
       return false
     }
   }
@@ -612,7 +614,7 @@ export function useUpdateRuntime() {
       clearUpdateErrorMessage()
       return true
     } catch (remindError) {
-      console.error('[useUpdateRuntime] Failed to set remind later:', remindError)
+      updateRuntimeLog.error('Failed to set remind later', remindError)
       if (!options?.silent) {
         toast.error(t('update.remind_later_failed'))
       }
@@ -638,7 +640,7 @@ export function useUpdateRuntime() {
       clearUpdateErrorMessage()
       return true
     } catch (ignoreError) {
-      console.error('[useUpdateRuntime] Failed to ignore version:', ignoreError)
+      updateRuntimeLog.error('Failed to ignore version', ignoreError)
       toast.error(t('update.ignore_version_failed'))
       return false
     }
@@ -661,7 +663,7 @@ export function useUpdateRuntime() {
       }
       toast.success(t('settings.settingUpdate.messages.cacheCleared'))
     } catch (cacheError) {
-      console.error('[useUpdateRuntime] Failed to clear cache:', cacheError)
+      updateRuntimeLog.error('Failed to clear cache', cacheError)
       toast.error(t('settings.settingUpdate.messages.cacheClearFailed'))
     }
   }
@@ -713,7 +715,7 @@ export function useUpdateRuntime() {
       )
       updateListenerInitialized = true
     } catch (listenerError) {
-      console.warn('[useUpdateRuntime] Failed to setup update listener:', listenerError)
+      updateRuntimeLog.warn('Failed to setup update listener', listenerError)
       for (const dispose of updateListenerDisposers) {
         try {
           dispose()

@@ -1,4 +1,9 @@
-import type { LoadingEvent, LoadingMode, PreloadAPI } from '@talex-touch/utils/preload'
+import type {
+  LoadingEvent,
+  LoadingMode,
+  PreloadAPI,
+  StartupContext
+} from '@talex-touch/utils/preload'
 import type { StartupInfo } from '../shared/types/startup-info'
 import { electronAPI } from '@electron-toolkit/preload'
 import { hasWindow } from '@talex-touch/utils/env'
@@ -10,14 +15,6 @@ import { AppEvents } from '@talex-touch/utils/transport'
 import appLogoSvgRaw from '../../public/logo.svg?raw'
 import { contextBridge, ipcRenderer } from 'electron'
 
-declare global {
-  interface Window {
-    $startupInfo?: StartupInfo
-    /** MetaOverlay mode flag - set by preload based on URL hash or command line args */
-    $isMetaOverlay?: boolean
-  }
-}
-
 interface StartupHandshakePayload {
   rendererStartTime: number
 }
@@ -25,7 +22,7 @@ interface StartupHandshakePayload {
 /**
  * Request startup information from the main process before the renderer runs.
  */
-async function requestStartupInfo(): Promise<StartupInfo | undefined> {
+async function requestStartupInfo(): Promise<StartupInfo | null> {
   try {
     const eventName = AppEvents.system.startup.toEventName()
     const response = await ipcRenderer.invoke(eventName, {
@@ -33,22 +30,43 @@ async function requestStartupInfo(): Promise<StartupInfo | undefined> {
     } satisfies StartupHandshakePayload)
 
     if (response) {
-      return response as StartupInfo
+      const startupInfo = response as StartupInfo
+      if (typeof startupInfo.appUpdate === 'undefined') {
+        startupInfo.appUpdate = false
+      }
+      return startupInfo
     }
   } catch (error) {
     console.warn('[preload] Failed to request startup info', error)
   }
 
-  return undefined
+  return null
+}
+
+function resolvePreloadStartupContext(startupInfo: StartupInfo | null): StartupContext {
+  const role = parseWindowArgs(process.argv)
+  const isMetaOverlayByHash =
+    window.location.hash === '#/meta-overlay' || window.location.hash === '#meta-overlay'
+  const isMetaOverlayByArgs = role.metaOverlay === true
+  const metaOverlay = isMetaOverlayByHash || isMetaOverlayByArgs
+
+  return {
+    startupInfo,
+    metaOverlay,
+    windowMode: resolveRendererWindowMode({
+      ...role,
+      metaOverlay
+    })
+  }
 }
 
 const appLogoMarkup = appLogoSvgRaw
 // const appIcon = resolveAssetSource(appIconAsset)
-const startupInfoPromise = requestStartupInfo().then((info) => {
-  if (info && typeof info.appUpdate === 'undefined') {
-    info.appUpdate = false
-  }
-  return info
+let startupContextSnapshot = hasWindow() ? resolvePreloadStartupContext(null) : null
+const startupContextPromise = requestStartupInfo().then((startupInfo) => {
+  const context = resolvePreloadStartupContext(startupInfo)
+  startupContextSnapshot = context
+  return context
 })
 
 const isDebugMode = Boolean(process.env.DEBUG) || location.search.includes('debug-preload')
@@ -65,6 +83,12 @@ const api: PreloadAPI = {
           ? 'file://'
           : '*'
     window.postMessage({ channel: PRELOAD_LOADING_CHANNEL, data: event }, targetOrigin)
+  },
+  async getStartupContext() {
+    return await startupContextPromise
+  },
+  getStartupContextSnapshot() {
+    return startupContextSnapshot
   }
 } satisfies PreloadAPI
 
@@ -72,11 +96,6 @@ if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
-    void startupInfoPromise.then((info) => {
-      if (info) {
-        contextBridge.exposeInMainWorld('$startupInfo', info)
-      }
-    })
   } catch (error) {
     console.error(error)
   }
@@ -85,11 +104,6 @@ if (process.contextIsolated) {
   window.electron = electronAPI
   // @ts-ignore (define in dts)
   window.api = api
-  void startupInfoPromise.then((info) => {
-    if (info) {
-      window.$startupInfo = info
-    }
-  })
 }
 
 function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']): Promise<boolean> {
@@ -632,22 +646,8 @@ const { appendLoading, removeLoading, handleEvent, updateMessage, markWindowLoad
 
 domReady().then(() => {
   const info = useInitialize()
-  const role = parseWindowArgs(process.argv)
   const argMapper = useArgMapper()
-
-  // Check if this is MetaOverlay by URL hash or command line args
-  // Priority: 1. URL hash (#/meta-overlay), 2. command line args (--meta-overlay=true)
-  const isMetaOverlayByHash =
-    window.location.hash === '#/meta-overlay' || window.location.hash === '#meta-overlay'
-  const isMetaOverlayByArgs = role.metaOverlay === true
-  const isMetaOverlay = isMetaOverlayByHash || isMetaOverlayByArgs
-  const rendererMode = resolveRendererWindowMode({
-    ...role,
-    metaOverlay: isMetaOverlay
-  })
-
-  // Set global flag for AppEntrance to check
-  window.$isMetaOverlay = isMetaOverlay
+  const startupContext = startupContextSnapshot ?? resolvePreloadStartupContext(null)
 
   if (isDebugMode) {
     console.log('[preload] process.argv:', process.argv)
@@ -656,11 +656,8 @@ domReady().then(() => {
     console.log('[preload] coreType:', argMapper.coreType ?? argMapper.rawCoreType)
     console.log('[preload] isMainWindow:', isMainWindow())
     console.log('[preload] isCoreBox:', isCoreBox())
-    console.log('[preload] rendererMode:', rendererMode)
-    console.log('[preload] isMetaOverlay:', isMetaOverlay, {
-      byHash: isMetaOverlayByHash,
-      byArgs: isMetaOverlayByArgs
-    })
+    console.log('[preload] rendererMode:', startupContext.windowMode)
+    console.log('[preload] isMetaOverlay:', startupContext.metaOverlay)
   }
 
   if (isMainWindow()) {
@@ -669,7 +666,7 @@ domReady().then(() => {
     document.body.classList.add('core-box')
   }
 
-  if (isMetaOverlay) {
+  if (startupContext.metaOverlay) {
     document.body.classList.add('meta-overlay')
   }
 

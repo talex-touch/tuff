@@ -71,7 +71,10 @@ import { createPluginLoadShell, createPluginLoader } from './plugin-loaders'
 import { mergePackagedManifestMetadata } from './plugin-runtime-integrity'
 import { LocalPluginProvider } from './providers/local-provider'
 import { usePluginInjections } from './runtime/plugin-injections'
-import { repairTouchTranslationRuntimeIfNeeded } from './runtime/plugin-runtime-repair'
+import {
+  inspectPluginRuntimeDrift,
+  PLUGIN_RUNTIME_DRIFT_CODE
+} from './runtime/plugin-runtime-repair'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
 import { getPluginSdkCompatibilityGate } from './sdk-compat'
 import { resolvePluginModuleIoRuntime } from './services/plugin-io-service'
@@ -1179,39 +1182,6 @@ function createPluginModuleInternal(
     loadingPlugins.add(pluginName)
     try {
       const currentPluginPath = path.resolve(pluginPath, pluginName)
-      const manifestPath = path.resolve(currentPluginPath, 'manifest.json')
-
-      if (pluginName === 'touch-translation') {
-        const repairResult = await repairTouchTranslationRuntimeIfNeeded({
-          pluginRootDir: pluginPath,
-          appPath: app.getAppPath(),
-          isPackaged: app.isPackaged
-        })
-
-        if (repairResult.status === 'repaired') {
-          logModuleInfo(
-            'Compat patch hit: repaired touch-translation runtime drift before load.',
-            'target:',
-            repairResult.targetDir,
-            'source:',
-            repairResult.sourceDir,
-            'reasons:',
-            repairResult.driftReasons.join(', ')
-          )
-        } else if (repairResult.status === 'repair-failed') {
-          logWarn(
-            'Compat patch hit: failed to repair touch-translation runtime drift.',
-            'target:',
-            repairResult.targetDir,
-            'source:',
-            repairResult.sourceDir,
-            'reasons:',
-            repairResult.driftReasons.join(', '),
-            'error:',
-            repairResult.error
-          )
-        }
-      }
 
       const loadingShell = createPluginLoadShell(pluginName, currentPluginPath, {
         skipDataInit: true
@@ -1231,21 +1201,29 @@ function createPluginModuleInternal(
 
       logDebug('Ready to load plugin from disk', pluginTag(pluginName), 'path:', currentPluginPath)
 
-      if (!fse.existsSync(currentPluginPath) || !fse.existsSync(manifestPath)) {
+      const runtimeDrift = await inspectPluginRuntimeDrift({ pluginDir: currentPluginPath })
+      if (runtimeDrift.status === 'drifted') {
+        const driftMessage = `Plugin runtime drift detected: ${runtimeDrift.driftReasons.join(', ')}`
         loadingShell.issues.push({
           type: 'error',
-          message: 'Plugin directory or manifest.json is missing.',
-          source: 'filesystem',
-          code: 'MISSING_MANIFEST',
-          suggestion: 'Ensure the plugin folder and its manifest.json exist.',
+          message: driftMessage,
+          source: 'runtime',
+          code: PLUGIN_RUNTIME_DRIFT_CODE,
+          suggestion:
+            'Rebuild or reinstall this plugin runtime bundle. Runtime assets must be repaired by packaging, not at load time.',
+          meta: {
+            reasons: runtimeDrift.driftReasons,
+            manifestVersion: runtimeDrift.targetManifestVersion,
+            packageVersion: runtimeDrift.targetPackageVersion
+          },
           timestamp: Date.now()
         })
         loadingShell.setLoadState('load_failed', {
-          code: 'MISSING_MANIFEST',
-          message: 'Plugin directory or manifest.json is missing.'
+          code: PLUGIN_RUNTIME_DRIFT_CODE,
+          message: driftMessage
         })
         loadingShell.status = PluginStatus.LOAD_FAILED
-        loadingShell.logger.error('[Lifecycle] load failed: manifest.json missing')
+        loadingShell.logger.error('[Lifecycle] load failed: runtime drift detected')
         syncPluginDeclaredPermissions(loadingShell)
         rememberIssueSnapshot(loadingShell)
         transport.broadcast(PluginEvents.push.stateChanged, {
@@ -1253,7 +1231,9 @@ function createPluginModuleInternal(
           name: pluginName,
           changes: loadingShell.toJSONObject()
         })
-        logWarn('Plugin failed to load: missing manifest.json', pluginTag(pluginName))
+        logWarn('Plugin failed to load: runtime drift detected', pluginTag(pluginName), {
+          reasons: runtimeDrift.driftReasons
+        })
         return true
       }
 

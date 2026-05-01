@@ -1,37 +1,32 @@
-import os from 'node:os'
 import path from 'node:path'
-import process from 'node:process'
 import fse from 'fs-extra'
 
-export const TOUCH_TRANSLATION_PLUGIN_NAME = 'touch-translation'
+export const PLUGIN_RUNTIME_DRIFT_CODE = 'PLUGIN_RUNTIME_DRIFT'
 export const LEGACY_TRANSLATION_WIDGET_IMPORT = '../shared/translation-shared.cjs'
 
 type VersionedRecord = {
   version?: unknown
 }
 
-export interface TouchTranslationRuntimeRepairOptions {
-  appPath: string
-  isPackaged: boolean
-  pluginRootDir: string
+export interface PluginRuntimeDriftOptions {
+  pluginDir: string
 }
 
-export interface TouchTranslationRuntimeRepairResult {
-  status:
-    | 'healthy'
-    | 'repair-failed'
-    | 'repaired'
-    | 'skipped-source-missing'
-    | 'skipped-target-missing'
-  repaired: boolean
+export interface PluginRuntimeDriftResult {
+  status: 'healthy' | 'drifted'
   driftReasons: string[]
-  error?: string
-  sourceDir?: string
-  sourceVersion?: string
   targetDir: string
   targetManifestVersion?: string
   targetPackageVersion?: string
 }
+
+const SCANNABLE_TEXT_EXTENSIONS = new Set(['.js', '.cjs', '.mjs', '.ts', '.tsx', '.vue'])
+const LEGACY_RUNTIME_PATTERNS = [
+  {
+    code: 'legacy-runtime-import',
+    needle: LEGACY_TRANSLATION_WIDGET_IMPORT
+  }
+] as const
 
 async function readJsonFile<T>(filePath: string): Promise<T | null> {
   try {
@@ -121,194 +116,90 @@ function compareVersions(a: string | undefined, b: string | undefined): -1 | 0 |
   return comparePrereleases(parsedA.prerelease, parsedB.prerelease)
 }
 
-async function isRuntimeReadyPluginDir(pluginDir: string): Promise<boolean> {
-  const manifestPath = path.resolve(pluginDir, 'manifest.json')
-  const indexPath = path.resolve(pluginDir, 'index.js')
-  return (await fse.pathExists(manifestPath)) && (await fse.pathExists(indexPath))
-}
+async function collectRuntimeTextFiles(rootDir: string): Promise<string[]> {
+  const files: string[] = []
+  const queue = [rootDir]
 
-function buildSourceCandidates(options: TouchTranslationRuntimeRepairOptions): string[] {
-  const candidates = new Set<string>()
+  while (queue.length > 0) {
+    const currentDir = queue.shift()
+    if (!currentDir) continue
 
-  if (!options.isPackaged) {
-    candidates.add(path.resolve(options.appPath, '../../plugins/touch-translation/dist/build'))
-    candidates.add(path.resolve(options.appPath, '../../../plugins/touch-translation/dist/build'))
-    candidates.add(path.resolve(process.cwd(), '../../plugins/touch-translation/dist/build'))
-    candidates.add(path.resolve(process.cwd(), 'plugins/touch-translation/dist/build'))
-  }
-
-  candidates.add(path.resolve(options.appPath, 'tuff/modules/plugins/touch-translation'))
-  candidates.add(path.resolve(options.appPath, 'tuff/modules/plugins/touch-translation/dist/build'))
-
-  return [...candidates]
-}
-
-async function resolveSourceDir(
-  options: TouchTranslationRuntimeRepairOptions
-): Promise<string | undefined> {
-  const candidates = buildSourceCandidates(options)
-
-  for (const candidate of candidates) {
-    if (await isRuntimeReadyPluginDir(candidate)) {
-      return candidate
+    const entries = await fse.readdir(currentDir, { withFileTypes: true }).catch(() => [])
+    for (const entry of entries) {
+      const nextPath = path.join(currentDir, entry.name)
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules' || entry.name.startsWith('.')) {
+          continue
+        }
+        queue.push(nextPath)
+        continue
+      }
+      if (SCANNABLE_TEXT_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+        files.push(nextPath)
+      }
     }
   }
 
-  return undefined
+  return files
 }
 
-async function collectDriftReasons(args: { sourceVersion?: string; targetDir: string }): Promise<{
-  reasons: string[]
-  targetManifestVersion?: string
-  targetPackageVersion?: string
-}> {
-  const manifestPath = path.resolve(args.targetDir, 'manifest.json')
-  const packagePath = path.resolve(args.targetDir, 'package.json')
-  const widgetPath = path.resolve(args.targetDir, 'widgets/translate-panel.vue')
-  const indexPath = path.resolve(args.targetDir, 'index.js')
+async function collectLegacyImportReasons(pluginDir: string): Promise<string[]> {
+  const files = await collectRuntimeTextFiles(pluginDir)
+  if (files.length === 0) {
+    return []
+  }
 
-  const reasons: string[] = []
+  const reasons = new Set<string>()
+  for (const filePath of files) {
+    const source = await fse.readFile(filePath, 'utf-8').catch(() => '')
+    if (!source) continue
+
+    for (const pattern of LEGACY_RUNTIME_PATTERNS) {
+      if (source.includes(pattern.needle)) {
+        reasons.add(pattern.code)
+      }
+    }
+  }
+
+  return [...reasons]
+}
+
+export async function inspectPluginRuntimeDrift(
+  options: PluginRuntimeDriftOptions
+): Promise<PluginRuntimeDriftResult> {
+  const targetDir = options.pluginDir
+  const manifestPath = path.resolve(targetDir, 'manifest.json')
+  const packagePath = path.resolve(targetDir, 'package.json')
+  const indexPath = path.resolve(targetDir, 'index.js')
+
+  const driftReasons: string[] = []
   const targetManifestVersion = await readVersion(manifestPath)
   const targetPackageVersion = await readVersion(packagePath)
 
+  if (!(await fse.pathExists(targetDir))) {
+    driftReasons.push('missing-plugin-dir')
+  }
   if (!(await fse.pathExists(manifestPath))) {
-    reasons.push('missing-manifest')
+    driftReasons.push('missing-manifest')
   }
-
   if (!(await fse.pathExists(indexPath))) {
-    reasons.push('missing-index')
+    driftReasons.push('missing-index')
   }
-
-  if (!(await fse.pathExists(widgetPath))) {
-    reasons.push('missing-widget')
-  } else {
-    const widgetSource = await fse.readFile(widgetPath, 'utf-8')
-    if (widgetSource.includes(LEGACY_TRANSLATION_WIDGET_IMPORT)) {
-      reasons.push('legacy-widget-shared-import')
-    }
-  }
-
-  if (args.sourceVersion && compareVersions(targetManifestVersion, args.sourceVersion) < 0) {
-    reasons.push(`manifest-version:${targetManifestVersion ?? 'missing'}<${args.sourceVersion}`)
-  }
-
   if (
+    targetManifestVersion &&
     targetPackageVersion &&
-    args.sourceVersion &&
-    compareVersions(targetPackageVersion, args.sourceVersion) < 0
+    compareVersions(targetPackageVersion, targetManifestVersion) < 0
   ) {
-    reasons.push(`package-version:${targetPackageVersion}<${args.sourceVersion}`)
+    driftReasons.push(`package-version:${targetPackageVersion}<${targetManifestVersion}`)
   }
+
+  driftReasons.push(...(await collectLegacyImportReasons(targetDir)))
 
   return {
-    reasons,
+    status: driftReasons.length > 0 ? 'drifted' : 'healthy',
+    driftReasons,
+    targetDir,
     targetManifestVersion,
     targetPackageVersion
-  }
-}
-
-async function repairRuntimePluginDirectory(sourceDir: string, targetDir: string): Promise<void> {
-  const backupDir = await fse.mkdtemp(path.join(os.tmpdir(), 'tuff-touch-translation-backup-'))
-  const stagedSourceDir = await fse.mkdtemp(
-    path.join(os.tmpdir(), 'tuff-touch-translation-source-')
-  )
-
-  await fse.copy(sourceDir, stagedSourceDir, {
-    overwrite: true
-  })
-
-  const hasTarget = await fse.pathExists(targetDir)
-
-  try {
-    if (hasTarget) {
-      await fse.copy(targetDir, backupDir, {
-        overwrite: true
-      })
-    }
-
-    await fse.remove(targetDir)
-    await fse.copy(stagedSourceDir, targetDir, {
-      overwrite: true
-    })
-  } catch (error) {
-    await fse.remove(targetDir).catch(() => {})
-    if (hasTarget) {
-      await fse.copy(backupDir, targetDir, {
-        overwrite: true
-      })
-    }
-    throw error
-  } finally {
-    await Promise.allSettled([fse.remove(backupDir), fse.remove(stagedSourceDir)])
-  }
-}
-
-export async function repairTouchTranslationRuntimeIfNeeded(
-  options: TouchTranslationRuntimeRepairOptions
-): Promise<TouchTranslationRuntimeRepairResult> {
-  const targetDir = path.resolve(options.pluginRootDir, TOUCH_TRANSLATION_PLUGIN_NAME)
-
-  if (!(await fse.pathExists(targetDir))) {
-    return {
-      status: 'skipped-target-missing',
-      repaired: false,
-      driftReasons: [],
-      targetDir
-    }
-  }
-
-  const sourceDir = await resolveSourceDir(options)
-  if (!sourceDir) {
-    return {
-      status: 'skipped-source-missing',
-      repaired: false,
-      driftReasons: [],
-      targetDir
-    }
-  }
-
-  const sourceVersion = await readVersion(path.resolve(sourceDir, 'manifest.json'))
-  const { reasons, targetManifestVersion, targetPackageVersion } = await collectDriftReasons({
-    sourceVersion,
-    targetDir
-  })
-
-  if (reasons.length === 0) {
-    return {
-      status: 'healthy',
-      repaired: false,
-      driftReasons: [],
-      sourceDir,
-      sourceVersion,
-      targetDir,
-      targetManifestVersion,
-      targetPackageVersion
-    }
-  }
-
-  try {
-    await repairRuntimePluginDirectory(sourceDir, targetDir)
-    return {
-      status: 'repaired',
-      repaired: true,
-      driftReasons: reasons,
-      sourceDir,
-      sourceVersion,
-      targetDir,
-      targetManifestVersion,
-      targetPackageVersion
-    }
-  } catch (error) {
-    return {
-      status: 'repair-failed',
-      repaired: false,
-      driftReasons: reasons,
-      error: error instanceof Error ? error.message : String(error),
-      sourceDir,
-      sourceVersion,
-      targetDir,
-      targetManifestVersion,
-      targetPackageVersion
-    }
   }
 }
