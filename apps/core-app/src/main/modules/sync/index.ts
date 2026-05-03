@@ -16,6 +16,7 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffBaseUrl, isDevEnv } from '@talex-touch/utils/env'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
+import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import { getAuthToken, getDeviceId, subscribeAuthState } from '../auth'
 import {
@@ -33,12 +34,26 @@ import {
   TalexEvents as TouchEvents,
   touchEventBus
 } from '../../core/eventbus/touch-event'
+import {
+  encryptSyncPayload,
+  getSyncPayloadKeyRegistration,
+  markSyncPayloadKeyRegistered,
+  setSyncPayloadCryptoRootPath
+} from './sync-payload-crypto'
+import {
+  buildBlobSyncItem,
+  buildDeletedSyncItem,
+  buildSyncItemFromSnapshot,
+  extractContentHash,
+  extractQualifiedName,
+  resolveEncryptedPayloadText,
+  STORAGE_ITEM_PREFIX,
+  STORAGE_ITEM_TYPE,
+  type StorageSyncSnapshot
+} from './sync-payload-wire'
 
 const syncLog = getLogger('sync')
 
-const STORAGE_ITEM_PREFIX = 'storage::'
-const STORAGE_ITEM_TYPE = 'storage.snapshot'
-const STORAGE_SCHEMA_VERSION = 1
 const PLUGIN_SYNC_QUALIFIED_PREFIX = 'plugin::'
 const PLUGIN_SYNC_ALL_SCOPE = `${PLUGIN_SYNC_QUALIFIED_PREFIX}__all__`
 
@@ -75,8 +90,6 @@ const DEFAULT_SYNC_PREFERENCE: SyncPreferenceState = JSON.parse(
 const pollingService = PollingService.getInstance()
 
 const textEncoder = new TextEncoder()
-const textDecoder = new TextDecoder()
-
 const dirtyStorages = new Set<string>()
 const pendingBlobStorages = new Set<string>()
 const knownPluginQualifiedNames = new Set<string>()
@@ -95,6 +108,7 @@ let pluginStorageListenerBound = false
 let transport: ITuffTransportMain | null = null
 let syncEnabledWatcherCleanup: (() => void) | null = null
 let authStateCleanup: (() => void) | null = null
+let syncPayloadKeyRegistrationPromise: Promise<void> | null = null
 
 const syncStartEvent = defineRawEvent<{ reason?: string }, { success: boolean }>('sync:start')
 const syncStopEvent = defineRawEvent<{ reason?: string }, { success: boolean }>('sync:stop')
@@ -105,31 +119,6 @@ const syncTriggerEvent = defineRawEvent<
 
 function isSyncStorageKey(name: string): boolean {
   return SYNC_STORAGE_KEYS.includes(name)
-}
-
-function toBase64(value: Uint8Array): string {
-  return Buffer.from(value).toString('base64')
-}
-
-function fromBase64(value: string): Uint8Array {
-  return new Uint8Array(Buffer.from(value, 'base64'))
-}
-
-function encodeSyncPayload(rawText: string): string {
-  const bytes = textEncoder.encode(rawText)
-  return `b64:${toBase64(bytes)}`
-}
-
-function decodeSyncPayload(payloadEnc: string): string {
-  const normalized = payloadEnc.trim()
-  if (!normalized) {
-    return ''
-  }
-  if (!normalized.startsWith('b64:')) {
-    return normalized
-  }
-  const base64 = normalized.slice(4)
-  return textDecoder.decode(fromBase64(base64))
 }
 
 function sha256Hex(value: string): string {
@@ -387,6 +376,36 @@ function resolveSdk(): CloudSyncSDK {
   return sdk
 }
 
+async function ensureSyncPayloadKeyRegistered(client: CloudSyncSDK): Promise<void> {
+  if (syncPayloadKeyRegistrationPromise) {
+    return syncPayloadKeyRegistrationPromise
+  }
+
+  syncPayloadKeyRegistrationPromise = (async () => {
+    try {
+      const registration = await getSyncPayloadKeyRegistration()
+      if (!registration) {
+        return
+      }
+      await client.registerKey({
+        key_type: registration.keyType,
+        encrypted_key: registration.encryptedKey
+      })
+      await markSyncPayloadKeyRegistered(registration.keyId)
+    } catch (error) {
+      syncLog.warn('Failed to register sync payload keyring', {
+        error
+      })
+    }
+  })()
+
+  try {
+    await syncPayloadKeyRegistrationPromise
+  } finally {
+    syncPayloadKeyRegistrationPromise = null
+  }
+}
+
 function logDeviceEvicted(devices: EvictedDeviceInfo[]): void {
   const count = devices.length
   if (!Number.isFinite(count) || count <= 0) {
@@ -494,142 +513,8 @@ function parsePluginStorageQualifiedName(
   }
 }
 
-function extractQualifiedName(item: SyncItemOutput): string {
-  const fromMeta =
-    item.meta_plain && typeof item.meta_plain === 'object' && 'qualified_name' in item.meta_plain
-      ? String((item.meta_plain as { qualified_name?: unknown }).qualified_name ?? '').trim()
-      : ''
-  if (fromMeta) {
-    return fromMeta
-  }
-
-  if (!item.item_id.startsWith(STORAGE_ITEM_PREFIX)) {
-    return ''
-  }
-  return item.item_id.slice(STORAGE_ITEM_PREFIX.length).trim()
-}
-
-function extractContentHash(item: SyncItemOutput): string {
-  if (!item.meta_plain || typeof item.meta_plain !== 'object') {
-    return ''
-  }
-
-  const hash = (item.meta_plain as { content_hash?: unknown }).content_hash
-  return typeof hash === 'string' ? hash.trim() : ''
-}
-
-async function resolvePayloadText(
-  item: SyncItemOutput,
-  client: CloudSyncSDK
-): Promise<string | null> {
-  if (item.payload_enc) {
-    return decodeSyncPayload(item.payload_enc)
-  }
-
-  if (!item.payload_ref || !item.payload_ref.startsWith('blob:')) {
-    return null
-  }
-
-  const blobId = item.payload_ref.slice('blob:'.length).trim()
-  if (!blobId) {
-    return null
-  }
-
-  const blob = await client.downloadBlob(blobId)
-  return decodeSyncPayload(textDecoder.decode(new Uint8Array(blob.data)))
-}
-
-function buildSyncItemFromSnapshot(
-  snapshot: StorageSyncSnapshot,
-  opSeq: number,
-  updatedAt: string
-): SyncItemInput {
-  return {
-    item_id: snapshot.itemId,
-    type: STORAGE_ITEM_TYPE,
-    schema_version: STORAGE_SCHEMA_VERSION,
-    payload_enc: snapshot.payloadEnc,
-    payload_ref: null,
-    meta_plain: {
-      qualified_name: snapshot.qualifiedName,
-      schema_version: STORAGE_SCHEMA_VERSION,
-      payload_size: snapshot.payloadSize,
-      content_hash: snapshot.contentHash
-    },
-    payload_size: snapshot.payloadSize,
-    updated_at: updatedAt,
-    deleted_at: null,
-    op_seq: opSeq,
-    op_hash: snapshot.contentHash,
-    op_type: 'upsert'
-  }
-}
-
-function buildBlobSyncItem(
-  snapshot: StorageSyncSnapshot,
-  opSeq: number,
-  updatedAt: string,
-  blobId: string
-): SyncItemInput {
-  return {
-    item_id: snapshot.itemId,
-    type: STORAGE_ITEM_TYPE,
-    schema_version: STORAGE_SCHEMA_VERSION,
-    payload_enc: null,
-    payload_ref: `blob:${blobId}`,
-    meta_plain: {
-      qualified_name: snapshot.qualifiedName,
-      schema_version: STORAGE_SCHEMA_VERSION,
-      payload_size: snapshot.payloadSize,
-      content_hash: snapshot.contentHash
-    },
-    payload_size: snapshot.payloadSize,
-    updated_at: updatedAt,
-    deleted_at: null,
-    op_seq: opSeq,
-    op_hash: snapshot.contentHash,
-    op_type: 'upsert'
-  }
-}
-
-function buildDeletedSyncItem(
-  qualifiedName: string,
-  opSeq: number,
-  updatedAt: string,
-  opHash: string
-): SyncItemInput {
-  return {
-    item_id: `${STORAGE_ITEM_PREFIX}${qualifiedName}`,
-    type: STORAGE_ITEM_TYPE,
-    schema_version: STORAGE_SCHEMA_VERSION,
-    payload_enc: null,
-    payload_ref: null,
-    meta_plain: {
-      qualified_name: qualifiedName,
-      schema_version: STORAGE_SCHEMA_VERSION,
-      payload_size: 0,
-      content_hash: opHash
-    },
-    payload_size: 0,
-    updated_at: updatedAt,
-    deleted_at: updatedAt,
-    op_seq: opSeq,
-    op_hash: opHash,
-    op_type: 'delete'
-  }
-}
-
 function buildDeleteOpHash(qualifiedName: string, updatedAt: string): string {
   return `delete:${qualifiedName}:${updatedAt}`
-}
-
-interface StorageSyncSnapshot {
-  qualifiedName: string
-  itemId: string
-  payloadEnc: string
-  payloadSize: number
-  contentHash: string
-  rawText: string
 }
 
 function getPluginManager() {
@@ -753,7 +638,8 @@ async function collectStorageSnapshots(
     }
 
     const rawText = JSON.stringify(raw)
-    const payloadEnc = encodeSyncPayload(rawText)
+    const encrypted = await encryptSyncPayload(rawText)
+    const payloadEnc = encrypted.payloadEnc
     const payloadSize = textEncoder.encode(payloadEnc).byteLength
     const contentHash = sha256Hex(rawText)
 
@@ -763,6 +649,8 @@ async function collectStorageSnapshots(
       payloadEnc,
       payloadSize,
       contentHash,
+      cryptoVersion: encrypted.cryptoVersion,
+      keyId: encrypted.keyId,
       rawText
     })
   }
@@ -776,7 +664,8 @@ async function collectStorageSnapshots(
       }
       const content = item.content && typeof item.content === 'object' ? item.content : {}
       const rawText = JSON.stringify(content)
-      const payloadEnc = encodeSyncPayload(rawText)
+      const encrypted = await encryptSyncPayload(rawText)
+      const payloadEnc = encrypted.payloadEnc
       const payloadSize = textEncoder.encode(payloadEnc).byteLength
       const contentHash = sha256Hex(rawText)
 
@@ -786,6 +675,8 @@ async function collectStorageSnapshots(
         payloadEnc,
         payloadSize,
         contentHash,
+        cryptoVersion: encrypted.cryptoVersion,
+        keyId: encrypted.keyId,
         rawText
       })
     }
@@ -1057,16 +948,21 @@ async function applyPulledStorageItems(
         continue
       }
 
-      const payloadText = await resolvePayloadText(item, client)
-      if (!payloadText) {
+      const payload = await resolveEncryptedPayloadText(item, client)
+      if (!payload) {
         continue
       }
 
       const applied = await applyPluginStorageSnapshot(
         qualifiedName,
-        payloadText,
+        payload.rawText,
         extractContentHash(item)
       )
+      if (payload.legacy) {
+        dirtyStorages.add(qualifiedName)
+        setQueueDepthByBuffers()
+        scheduleDebouncedPush()
+      }
       if (applied) {
         appliedCount += 1
       }
@@ -1077,20 +973,20 @@ async function applyPulledStorageItems(
       continue
     }
 
-    const payloadText = await resolvePayloadText(item, client)
-    if (!payloadText) {
+    const payload = await resolveEncryptedPayloadText(item, client)
+    if (!payload) {
       continue
     }
 
     try {
-      const parsed = JSON.parse(payloadText) as Record<string, unknown>
+      const parsed = JSON.parse(payload.rawText) as Record<string, unknown>
       const { merged, patched } = mergeLocalPatch(qualifiedName, parsed)
       remoteApplyInFlight.add(qualifiedName)
       const result = saveConfig(qualifiedName, merged, false, true, undefined, undefined)
       remoteApplyInFlight.delete(qualifiedName)
       if (result.success) {
         lastSyncedSnapshots.set(qualifiedName, cloneValue(merged))
-        if (patched) {
+        if (patched || payload.legacy) {
           dirtyStorages.add(qualifiedName)
           setQueueDepthByBuffers()
           scheduleDebouncedPush()
@@ -1430,6 +1326,7 @@ async function performPull(reason: AutoPullReason): Promise<boolean> {
     let page = 0
 
     try {
+      await ensureSyncPayloadKeyRegistered(client)
       while (page < 5) {
         page += 1
         const response = await withTimeout(
@@ -1500,13 +1397,13 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
     if (!scope.size) {
       setSyncStatus('idle')
       setQueueDepthByBuffers()
-      pushPromise = null
       return false
     }
 
     const scopeMarkers = Array.from(scope).filter(isPluginScopeMarker)
 
     try {
+      await ensureSyncPayloadKeyRegistered(client)
       const snapshots = await collectStorageSnapshots(scope)
       const items: SyncItemInput[] = []
       const processed = new Set<string>()
@@ -1719,10 +1616,15 @@ export class SyncModule extends BaseModule<TalexEvents> {
     super(SyncModule.key)
   }
 
-  onInit({ app }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
-    const channel =
-      (app as { channel?: unknown } | null | undefined)?.channel ??
-      ($app as { channel?: unknown } | null | undefined)?.channel
+  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
+    const runtime = resolveMainRuntime(ctx, 'SyncModule.onInit')
+    const rootPath = runtime.app?.rootPath ?? ''
+    if (!rootPath) {
+      throw new Error('[SyncModule] App root path unavailable')
+    }
+    setSyncPayloadCryptoRootPath(rootPath)
+
+    const channel = runtime.channel
     if (!channel) {
       throw new Error('[SyncModule] TouchChannel not available on app context')
     }
