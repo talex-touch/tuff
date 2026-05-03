@@ -31,6 +31,19 @@
   - renderer 平台状态解析拆出 raw runtime hints，`useRendererPlatform()` 不再先把 Electron 平台归一成 state 后再二次归一，减少平台真值来源的绕路。
   - 语言启动偏好把“采用 legacy localStorage 快照”和“清理 legacy 快照”拆成两个显式标志；无效旧 key 会在 hydration 后清理，但不会影响 typed `appSetting.lang` 判定。
 
+### fix(core-app): 同步 payload 升级为真实密文
+
+- `apps/core-app/src/main/modules/sync/{index,sync-payload-crypto,sync-payload-wire}.ts`
+- `apps/core-app/src/main/utils/secure-store.ts`
+- `apps/core-app/src/renderer/src/modules/{sync/sync-item-mapper,storage/account-storage,platform/renderer-platform}.ts`
+- `apps/core-app/src/{main/modules/sync,renderer/src/modules/{storage,platform,lang}}/*.test.ts`
+  - Sync 写入路径从旧 `b64:` Base64 payload 升级为 main 侧 AES-GCM `enc:v1:<base64-json-envelope>`；payload key 使用 secure-store 保护，不从 `deviceId` 派生。
+  - `payload_enc` 与 blob 文本只写密文，服务端 wire shape 保持 `payload_enc/payload_ref` 不变；`meta_plain` 仅保留 `qualified_name/schema_version/payload_size/content_hash/crypto_version/key_id` 等非业务字段。
+  - pull 侧仅把旧 `b64:` 作为 migration fallback 解码；命中 legacy payload 后标记 dirty，下一次 push 自动升级为 `enc:v1`。
+  - renderer `sync-item-mapper` 退为拒写兼容壳，避免第二套 Base64 编解码重新接入生产同步。
+  - `AccountStorage` 不再把 legacy token 字段写回 `account.ini`；renderer platform 测试锁定 `startup > electron > browser fallback` 优先级。
+  - 定向回归覆盖 crypto 非确定性、解密、篡改失败、空 payload、blob 明文泄露回归、legacy fallback、账号 token 不落盘与平台/语言兼容迁移。
+
 ## 2026-05-01
 
 ### ref(core-app): 收口 startup/runtime 兼容边界

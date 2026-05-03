@@ -2,11 +2,6 @@ import { useStorageSdk } from '@talex-touch/utils/renderer'
 
 const storageSdk = useStorageSdk()
 
-interface Token {
-  access_token: string
-  refresh_token: string
-}
-
 interface Eller {
   permissions: Permission[]
   roles: Role[]
@@ -49,41 +44,44 @@ interface User {
   createdAt: string
 }
 
+interface AccountStorageData {
+  user?: User
+  eller?: Eller
+  token?: unknown
+}
+
 export class AccountStorage {
   user?: User
   eller?: Eller
-  token?: Token
 
-  constructor(data?: Partial<{ user: User; token: Token; eller: Eller }>) {
+  constructor(data?: AccountStorageData) {
     this.analyzeFromObj(data)
   }
 
-  analyzeFromObj(data?: Partial<{ user: User; token: Token; eller: Eller }>): void {
+  analyzeFromObj(data?: AccountStorageData): void {
     if (!data) return
     if (data.user) this.user = data.user
-    if (data.token) this.token = data.token
     if (data.eller) this.eller = data.eller
 
     setTimeout(() => this.__save())
   }
 
   __save(): void {
-    const { user, eller, token } = this
+    const { user, eller } = this
 
     void storageSdk.app.save({
       key: 'account.ini',
-      content: JSON.stringify({ user, eller, token }),
+      content: JSON.stringify({ user, eller }),
       clear: false
     })
   }
 
   saveToStr(): string {
-    const { user, eller, token } = this
+    const { user, eller } = this
 
     return JSON.stringify({
       user,
-      eller,
-      token
+      eller
     })
   }
 }

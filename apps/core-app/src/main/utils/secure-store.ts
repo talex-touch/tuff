@@ -65,6 +65,14 @@ export function isSecureStoreAvailable(): boolean {
   return safeStorage?.isEncryptionAvailable() === true
 }
 
+export function encryptSecureStoreString(value: string): string | null {
+  const safeStorage = resolveSafeStorage()
+  if (!safeStorage || !safeStorage.isEncryptionAvailable()) {
+    return null
+  }
+  return safeStorage.encryptString(value).toString('base64')
+}
+
 export async function getSecureStoreValue(
   rootPath: string,
   rawKey: string,

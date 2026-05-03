@@ -67,6 +67,12 @@
 - [x] Transport stream 内部协议统一：
   - `main/renderer/plugin` 共用 `packages/utils/transport/sdk/stream/*` 内部 runtime；默认 Port 优先，失败自动回退 `:stream:*`。
   - `ClipboardEvents.change` 已补 renderer/plugin/main 定向回归，覆盖 port 成功、回退、取消与 server fallback。
+- [x] Sync payload 真密文化：
+  - `apps/core-app` 同步 payload 写入从旧 `b64:` Base64 载荷升级为 main 侧 AES-GCM `enc:v1` envelope，随机 key 保存在 secure-store，不再从 `deviceId` 派生。
+  - `payload_enc` 与上传 blob 文本只承载密文；`meta_plain` 仅保留 `qualified_name/schema_version/payload_size/content_hash/crypto_version/key_id` 等非业务字段。
+  - 旧 `b64:` 仅作为 pull migration fallback 读取；读取后标记 dirty，下一次 push 自动升级为 `enc:v1`。
+  - renderer `sync-item-mapper` 退为拒写兼容壳，避免第二套 Base64 实现重新接入生产同步。
+  - 已补定向回归：sync crypto/wire、AccountStorage token 不落盘、renderer platform 优先级、legacy language migration。
 - [ ] CoreBox 第三方 App 非阻塞启动 Windows 真机验证：
   - 验证 `shortcut` 保留 `launchArgs / workingDirectory` 并在 CoreBox 立即隐藏后后台启动。
   - 验证 `uwp` 继续通过 `explorer.exe shell:AppsFolder\\...` handoff，早期失败会触发系统通知。
@@ -297,12 +303,12 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 85 |
+| 已完成 (`- [x]`) | 86 |
 | 未完成 (`- [ ]`) | 24 |
-| 总计 | 109 |
+| 总计 | 110 |
 | 完成率 | 78% |
 
-> 统计时间: 2026-04-28（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-05-03（按本文件实时 checkbox 计数）。
 
 ---
 

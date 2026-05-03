@@ -1,6 +1,6 @@
 import { hasNavigator, hasWindow } from '@talex-touch/utils/env'
 import { computed } from 'vue'
-import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
+import { useStartupInfo } from '../hooks/useStartupInfo'
 
 export type RendererPlatform = 'darwin' | 'win32' | 'linux' | 'unknown'
 
