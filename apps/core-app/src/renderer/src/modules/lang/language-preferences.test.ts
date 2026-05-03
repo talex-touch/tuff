@@ -58,6 +58,22 @@ describe('resolveInitialLanguagePreference', () => {
     })
   })
 
+  it('does not migrate legacy storage once settings only partially diverge from defaults', () => {
+    expect(
+      resolvePreference({
+        settingLocale: 'zh-CN',
+        settingFollowSystem: false,
+        legacyLocale: 'en-US',
+        legacyFollowSystem: 'true'
+      })
+    ).toMatchObject({
+      locale: 'zh-CN',
+      followSystem: false,
+      source: 'settings',
+      shouldMigrateLegacy: false
+    })
+  })
+
   it('resolves follow-system locale from browser candidates', () => {
     expect(
       resolvePreference({

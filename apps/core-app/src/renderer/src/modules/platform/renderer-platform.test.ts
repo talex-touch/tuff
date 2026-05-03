@@ -50,6 +50,38 @@ describe('resolveRendererPlatformState', () => {
     })
   })
 
+  it('keeps electron platform ahead of browser-only hints', () => {
+    expect(
+      resolveRendererPlatformState({
+        startupPlatform: null,
+        electronPlatform: 'linux',
+        navigatorPlatform: 'Win32',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      })
+    ).toMatchObject({
+      platform: 'linux',
+      isLinux: true,
+      isMac: false,
+      isWindows: false
+    })
+  })
+
+  it('uses userAgent when navigator platform is unavailable in browser-only fallback', () => {
+    expect(
+      resolveRendererPlatformState({
+        startupPlatform: null,
+        electronPlatform: null,
+        navigatorPlatform: '',
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
+      })
+    ).toMatchObject({
+      platform: 'linux',
+      isLinux: true,
+      isMac: false,
+      isWindows: false
+    })
+  })
+
   it('returns unknown when no supported platform hint is available', () => {
     expect(
       resolveRendererPlatformState({
