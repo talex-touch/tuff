@@ -38,7 +38,8 @@ describe('resolveInitialLanguagePreference', () => {
       locale: 'en-US',
       followSystem: false,
       source: 'settings',
-      shouldMigrateLegacy: false
+      shouldUseLegacySnapshot: false,
+      shouldClearLegacySnapshot: true
     })
   })
 
@@ -54,7 +55,23 @@ describe('resolveInitialLanguagePreference', () => {
       locale: 'en-US',
       followSystem: false,
       source: 'legacy',
-      shouldMigrateLegacy: true
+      shouldUseLegacySnapshot: true,
+      shouldClearLegacySnapshot: true
+    })
+  })
+
+  it('clears invalid legacy storage without using it', () => {
+    expect(
+      resolvePreference({
+        legacyLocale: 'fr-FR',
+        legacyFollowSystem: 'maybe'
+      })
+    ).toMatchObject({
+      locale: 'en-US',
+      followSystem: true,
+      source: 'default',
+      shouldUseLegacySnapshot: false,
+      shouldClearLegacySnapshot: true
     })
   })
 
@@ -68,7 +85,9 @@ describe('resolveInitialLanguagePreference', () => {
       })
     ).toMatchObject({
       locale: 'en-US',
-      followSystem: true
+      followSystem: true,
+      shouldUseLegacySnapshot: false,
+      shouldClearLegacySnapshot: false
     })
   })
 })

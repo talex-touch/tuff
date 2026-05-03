@@ -20,6 +20,12 @@ export interface RendererPlatformInput {
   userAgent?: string | null
 }
 
+export interface RendererRuntimePlatformHints {
+  electronPlatform: string | null
+  navigatorPlatform: string | null
+  userAgent: string | null
+}
+
 function normalizeRuntimePlatform(value: string | null | undefined): RendererPlatform | null {
   const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
   if (!normalized) return null
@@ -108,9 +114,8 @@ export function resolveRendererPlatformState(
   return toPlatformState(platform)
 }
 
-export function getCurrentRendererPlatformState(): RendererPlatformState {
-  return resolveRendererPlatformState({
-    startupPlatform: null,
+export function getCurrentRendererPlatformHints(): RendererRuntimePlatformHints {
+  return {
     electronPlatform:
       hasWindow() && window.electron?.process?.platform
         ? window.electron.process.platform
@@ -119,7 +124,11 @@ export function getCurrentRendererPlatformState(): RendererPlatformState {
           : null,
     navigatorPlatform: hasNavigator() ? navigator.platform : null,
     userAgent: getCurrentRendererUserAgent()
-  })
+  }
+}
+
+export function getCurrentRendererPlatformState(): RendererPlatformState {
+  return resolveRendererPlatformState(getCurrentRendererPlatformHints())
 }
 
 export function useRendererPlatform() {
@@ -128,9 +137,7 @@ export function useRendererPlatform() {
   const state = computed(() =>
     resolveRendererPlatformState({
       startupPlatform: startupInfo.value?.platform ?? null,
-      electronPlatform: getCurrentRendererPlatformState().platform,
-      navigatorPlatform: hasNavigator() ? navigator.platform : null,
-      userAgent: getCurrentRendererUserAgent()
+      ...getCurrentRendererPlatformHints()
     })
   )
 

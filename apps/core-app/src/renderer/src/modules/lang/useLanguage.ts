@@ -140,7 +140,7 @@ export function useLanguage() {
     currentLanguage.value = preference.locale
     persistLanguagePreference(preference.locale, preference.followSystem)
 
-    if (preference.shouldMigrateLegacy) {
+    if (preference.shouldClearLegacySnapshot) {
       clearLegacyLanguageSnapshot()
     }
 
