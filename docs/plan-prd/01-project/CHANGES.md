@@ -1,7 +1,27 @@
 # 变更日志
 
-> 更新时间: 2026-05-01
-> 说明: 主文件仅保留近 30 天（2026-04-01 ~ 2026-05-01）详细记录；更早历史已按月归档。
+> 更新时间: 2026-05-03
+> 说明: 主文件仅保留近 30 天（2026-04-03 ~ 2026-05-03）详细记录；更早历史已按月归档。
+
+## 2026-05-03
+
+### ref(core-app): 收敛 runtime dependency 打包清单
+
+- `apps/core-app/scripts/{ensure-runtime-modules,ensure-platform-modules}.js`
+- `apps/core-app/scripts/build-target/runtime-modules.js`
+- `apps/core-app/src/main/core/runtime-modules.contract.test.ts`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `runtime-modules.js` 升级为单一 runtime module manifest / closure 来源，统一承载 packaged roots、resources roots、平台 native roots 与依赖闭包解析。
+  - `ensure-runtime-modules` 与 `ensure-platform-modules` 退为复制编排层，复用同一套模块解析、目标路径映射与 copy helper，避免 build 前同步、afterPack resources 兜底、平台补包继续各自维护发现逻辑。
+  - 新增 hoisted/transitive dependency contract，模拟 app 直依、workspace hoist、包内局部传递依赖、optional 缺失与 workspace native root 复制边界，固定 pnpm/electron-builder 漏包高风险场景。
+  - 保持现有打包行为：普通 runtime 闭包仍进入 app `node_modules`/asar 可解析路径，`resources/node_modules` 标记模块仍走 resources 兜底，平台补包仍对 peer/optional 缺失只告警。
+
+### ref(core-app): 抽薄插件加载前失败分支
+
+- `apps/core-app/src/main/modules/plugin/{plugin-module,plugin-preflight-helper{,.test}}.ts`
+  - 插件加载前 runtime drift、loader fatal 与 metadata/sdk gate 失败态收口到 preflight helper，统一组装 issue、`load_failed` 状态与 `PluginEvents.push.stateChanged` 更新广播。
+  - `plugin-module` 保留现有加载编排与日志语义，不继续做整块生命周期拆分，先把最容易膨胀的加载前失败胶水从主流程抽薄。
+  - 新增 direct tests 固定 `PLUGIN_RUNTIME_DRIFT`、`SDKAPI_BLOCKED`、`LOADER_FATAL` 的 issue/loadError/broadcast 契约，确保外部行为不变。
 
 ## 2026-05-01
 

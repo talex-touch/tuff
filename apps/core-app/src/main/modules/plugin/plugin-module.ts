@@ -68,13 +68,17 @@ import { isWidgetFeatureEnabled } from './widget/widget-issue'
 import { widgetManager } from './widget/widget-manager'
 
 import { createPluginLoadShell, createPluginLoader } from './plugin-loaders'
+import {
+  applyPluginPreflightFailure,
+  applyLoadedPluginPreflightState,
+  broadcastPluginPreflightState,
+  buildLoaderFatalPreflightFailure,
+  buildRuntimeDriftPreflightFailure
+} from './plugin-preflight-helper'
 import { mergePackagedManifestMetadata } from './plugin-runtime-integrity'
 import { LocalPluginProvider } from './providers/local-provider'
 import { usePluginInjections } from './runtime/plugin-injections'
-import {
-  inspectPluginRuntimeDrift,
-  PLUGIN_RUNTIME_DRIFT_CODE
-} from './runtime/plugin-runtime-repair'
+import { inspectPluginRuntimeDrift } from './runtime/plugin-runtime-repair'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
 import { getPluginSdkCompatibilityGate } from './sdk-compat'
 import { resolvePluginModuleIoRuntime } from './services/plugin-io-service'
@@ -1203,33 +1207,13 @@ function createPluginModuleInternal(
 
       const runtimeDrift = await inspectPluginRuntimeDrift({ pluginDir: currentPluginPath })
       if (runtimeDrift.status === 'drifted') {
-        const driftMessage = `Plugin runtime drift detected: ${runtimeDrift.driftReasons.join(', ')}`
-        loadingShell.issues.push({
-          type: 'error',
-          message: driftMessage,
-          source: 'runtime',
-          code: PLUGIN_RUNTIME_DRIFT_CODE,
-          suggestion:
-            'Rebuild or reinstall this plugin runtime bundle. Runtime assets must be repaired by packaging, not at load time.',
-          meta: {
-            reasons: runtimeDrift.driftReasons,
-            manifestVersion: runtimeDrift.targetManifestVersion,
-            packageVersion: runtimeDrift.targetPackageVersion
+        applyPluginPreflightFailure(loadingShell, buildRuntimeDriftPreflightFailure(runtimeDrift), {
+          transport,
+          sync: {
+            syncDeclaredPermissions: syncPluginDeclaredPermissions,
+            rememberIssueSnapshot
           },
-          timestamp: Date.now()
-        })
-        loadingShell.setLoadState('load_failed', {
-          code: PLUGIN_RUNTIME_DRIFT_CODE,
-          message: driftMessage
-        })
-        loadingShell.status = PluginStatus.LOAD_FAILED
-        loadingShell.logger.error('[Lifecycle] load failed: runtime drift detected')
-        syncPluginDeclaredPermissions(loadingShell)
-        rememberIssueSnapshot(loadingShell)
-        transport.broadcast(PluginEvents.push.stateChanged, {
-          type: 'updated',
-          name: pluginName,
-          changes: loadingShell.toJSONObject()
+          broadcastName: pluginName
         })
         logWarn('Plugin failed to load: runtime drift detected', pluginTag(pluginName), {
           reasons: runtimeDrift.driftReasons
@@ -1275,18 +1259,7 @@ function createPluginModuleInternal(
           pluginNameIndex.set(normalizedName, pluginName)
         }
 
-        // After all loading attempts, set final status
-        if (touchPlugin.issues.some((issue) => issue.type === 'error')) {
-          const firstError = touchPlugin.issues.find((issue) => issue.type === 'error')
-          touchPlugin.setLoadState('load_failed', {
-            code: firstError?.code || 'PLUGIN_LOAD_FAILED',
-            message: firstError?.message || 'Plugin metadata validation failed.'
-          })
-          touchPlugin.status = PluginStatus.LOAD_FAILED
-        } else {
-          touchPlugin.setLoadState('ready')
-          touchPlugin.status = PluginStatus.DISABLED
-        }
+        applyLoadedPluginPreflightState(touchPlugin)
         if (touchPlugin.status === PluginStatus.LOAD_FAILED) {
           touchPlugin.logger.error('[Lifecycle] load failed')
           touchPlugin.issues
@@ -1318,35 +1291,17 @@ function createPluginModuleInternal(
           touchPlugin.issues.length
         )
 
-        transport.broadcast(PluginEvents.push.stateChanged, {
-          type: 'updated',
-          name: pluginName,
-          changes: touchPlugin.toJSONObject()
-        })
+        broadcastPluginPreflightState(transport, touchPlugin, pluginName)
       } catch (error: unknown) {
         logError('Unhandled error while loading plugin', pluginTag(pluginName), error)
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        const stack = error instanceof Error ? error.stack : undefined
-        loadingShell.issues.push({
-          type: 'error',
-          message: `A fatal error occurred while creating the plugin loader: ${message}`,
-          source: 'plugin-loader',
-          code: 'LOADER_FATAL',
-          meta: { error: stack },
-          timestamp: Date.now()
-        })
-        loadingShell.setLoadState('load_failed', {
-          code: 'LOADER_FATAL',
-          message
-        })
-        loadingShell.status = PluginStatus.LOAD_FAILED
-        loadingShell.logger.error('[Lifecycle] load failed', error as Error)
-        syncPluginDeclaredPermissions(loadingShell)
-        rememberIssueSnapshot(loadingShell)
-        transport.broadcast(PluginEvents.push.stateChanged, {
-          type: 'updated',
-          name: pluginName,
-          changes: loadingShell.toJSONObject()
+        applyPluginPreflightFailure(loadingShell, buildLoaderFatalPreflightFailure(error), {
+          transport,
+          sync: {
+            syncDeclaredPermissions: syncPluginDeclaredPermissions,
+            rememberIssueSnapshot
+          },
+          broadcastName: pluginName,
+          loggerError: error as Error
         })
       }
 
