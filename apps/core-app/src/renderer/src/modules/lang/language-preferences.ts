@@ -21,7 +21,8 @@ export interface InitialLanguagePreference {
   locale: SupportedLanguage
   followSystem: boolean
   source: LanguagePreferenceSource
-  shouldMigrateLegacy: boolean
+  shouldUseLegacySnapshot: boolean
+  shouldClearLegacySnapshot: boolean
 }
 
 export interface LegacyLanguagePreferenceSnapshot {
@@ -77,11 +78,12 @@ export function resolveInitialLanguagePreference(
       ? input.settingFollowSystem
       : DEFAULT_FOLLOW_SYSTEM
 
+  const hasLegacySnapshot = input.legacyLocale != null || input.legacyFollowSystem != null
   const legacyLocale = resolveSupportedLocale(input.legacyLocale)
   const legacyFollowSystem = normalizeFollowSystem(input.legacyFollowSystem)
-  const hasLegacySnapshot = legacyLocale !== null || legacyFollowSystem !== null
+  const hasUsableLegacySnapshot = legacyLocale !== null || legacyFollowSystem !== null
 
-  if (hasLegacySnapshot && usesDefaultLanguageSetting(settingLocale, settingFollowSystem)) {
+  if (hasUsableLegacySnapshot && usesDefaultLanguageSetting(settingLocale, settingFollowSystem)) {
     const followSystem = legacyFollowSystem ?? DEFAULT_FOLLOW_SYSTEM
     return {
       locale: followSystem
@@ -89,7 +91,8 @@ export function resolveInitialLanguagePreference(
         : (legacyLocale ?? settingLocale),
       followSystem,
       source: 'legacy',
-      shouldMigrateLegacy: true
+      shouldUseLegacySnapshot: true,
+      shouldClearLegacySnapshot: true
     }
   }
 
@@ -100,7 +103,8 @@ export function resolveInitialLanguagePreference(
       : settingLocale,
     followSystem,
     source: usesDefaultLanguageSetting(settingLocale, settingFollowSystem) ? 'default' : 'settings',
-    shouldMigrateLegacy: false
+    shouldUseLegacySnapshot: false,
+    shouldClearLegacySnapshot: hasLegacySnapshot
   }
 }
 
