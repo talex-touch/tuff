@@ -87,7 +87,8 @@ describe('resolveInitialLanguagePreference', () => {
       locale: 'zh-CN',
       followSystem: false,
       source: 'settings',
-      shouldMigrateLegacy: false
+      shouldUseLegacySnapshot: false,
+      shouldClearLegacySnapshot: true
     })
   })
 
