@@ -3,6 +3,14 @@
 > 更新时间: 2026-05-01
 > 说明: 主文件仅保留近 30 天（2026-04-01 ~ 2026-05-01）详细记录；更早历史已按月归档。
 
+## 2026-05-03
+
+### ref(core-app): 缩窄 renderer 兼容状态残留
+
+- `apps/core-app/src/renderer/src/modules/{platform/renderer-platform,lang/{language-preferences,useLanguage}}.ts`
+  - renderer 平台状态解析拆出 raw runtime hints，`useRendererPlatform()` 不再先把 Electron 平台归一成 state 后再二次归一，减少平台真值来源的绕路。
+  - 语言启动偏好把“采用 legacy localStorage 快照”和“清理 legacy 快照”拆成两个显式标志；无效旧 key 会在 hydration 后清理，但不会影响 typed `appSetting.lang` 判定。
+
 ## 2026-05-01
 
 ### ref(core-app): 收口 startup/runtime 兼容边界
