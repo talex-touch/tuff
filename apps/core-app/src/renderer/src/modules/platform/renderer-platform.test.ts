@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveRendererPlatformState } from './renderer-platform'
+import { getCurrentRendererPlatformHints, resolveRendererPlatformState } from './renderer-platform'
 
 describe('resolveRendererPlatformState', () => {
   it('prefers startup platform over other runtime hints', () => {
@@ -64,5 +64,11 @@ describe('resolveRendererPlatformState', () => {
       isWindows: false,
       isLinux: false
     })
+  })
+
+  it('resolves current runtime hints without pre-normalizing platform state', () => {
+    expect(resolveRendererPlatformState(getCurrentRendererPlatformHints()).platform).not.toBe(
+      undefined
+    )
   })
 })
