@@ -1,7 +1,22 @@
 # 变更日志
 
-> 更新时间: 2026-05-01
-> 说明: 主文件仅保留近 30 天（2026-04-01 ~ 2026-05-01）详细记录；更早历史已按月归档。
+> 更新时间: 2026-05-03
+> 说明: 主文件仅保留近 30 天（2026-04-03 ~ 2026-05-03）详细记录；更早历史已按月归档。
+
+## 2026-05-03
+
+### fix(core-app): 同步 payload 升级为真实密文
+
+- `apps/core-app/src/main/modules/sync/{index,sync-payload-crypto,sync-payload-wire}.ts`
+- `apps/core-app/src/main/utils/secure-store.ts`
+- `apps/core-app/src/renderer/src/modules/{sync/sync-item-mapper,storage/account-storage,platform/renderer-platform}.ts`
+- `apps/core-app/src/{main/modules/sync,renderer/src/modules/{storage,platform,lang}}/*.test.ts`
+  - Sync 写入路径从旧 `b64:` Base64 payload 升级为 main 侧 AES-GCM `enc:v1:<base64-json-envelope>`；payload key 使用 secure-store 保护，不从 `deviceId` 派生。
+  - `payload_enc` 与 blob 文本只写密文，服务端 wire shape 保持 `payload_enc/payload_ref` 不变；`meta_plain` 仅保留 `qualified_name/schema_version/payload_size/content_hash/crypto_version/key_id` 等非业务字段。
+  - pull 侧仅把旧 `b64:` 作为 migration fallback 解码；命中 legacy payload 后标记 dirty，下一次 push 自动升级为 `enc:v1`。
+  - renderer `sync-item-mapper` 退为拒写兼容壳，避免第二套 Base64 编解码重新接入生产同步。
+  - `AccountStorage` 不再把 legacy token 字段写回 `account.ini`；renderer platform 测试锁定 `startup > electron > browser fallback` 优先级。
+  - 定向回归覆盖 crypto 非确定性、解密、篡改失败、空 payload、blob 明文泄露回归、legacy fallback、账号 token 不落盘与平台/语言兼容迁移。
 
 ## 2026-05-01
 
