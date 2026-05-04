@@ -119,6 +119,30 @@ export class BuildVerificationModule extends BaseModule {
     return process.env.TUFF_RELEASE_API_URL || 'https://tuff.tagzxia.com/api/releases'
   }
 
+  private resolveApiOrigin(apiBase: string): string | null {
+    try {
+      return new URL(apiBase).origin
+    } catch {
+      return null
+    }
+  }
+
+  private resolveReleaseAssetUrl(url: string | undefined, apiBase: string): string | null {
+    if (!url) return null
+    if (/^https?:\/\//i.test(url)) return url
+
+    try {
+      if (url.startsWith('/')) {
+        const apiOrigin = this.resolveApiOrigin(apiBase)
+        return apiOrigin ? new URL(url, apiOrigin).toString() : null
+      }
+
+      return new URL(url, `${apiBase.replace(/\/$/, '')}/`).toString()
+    } catch {
+      return null
+    }
+  }
+
   private async fetchReleaseByTag(apiBase: string, tag: string): Promise<BuildReleaseInfo | null> {
     try {
       const response = await getNetworkService().request<{ release?: BuildReleaseInfo }>({
@@ -233,11 +257,13 @@ export class BuildVerificationModule extends BaseModule {
     }
 
     const asset = this.pickReleaseAsset(release.assets, platform, arch)
-    if (!asset || !asset.downloadUrl) {
+    const downloadUrl = this.resolveReleaseAssetUrl(asset?.downloadUrl, apiBase)
+    if (!asset || !downloadUrl) {
       return { signatureUrl: null }
     }
 
-    const signatureUrl = asset.signatureUrl || `${asset.downloadUrl}.sig`
+    const signatureUrl =
+      this.resolveReleaseAssetUrl(asset.signatureUrl, apiBase) || `${downloadUrl}.sig`
     return { signatureUrl }
   }
 
