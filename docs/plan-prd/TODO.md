@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-05-03
+> 更新时间: 2026-05-04
 
 ---
 
@@ -73,6 +73,14 @@
   - 旧 `b64:` 仅作为 pull migration fallback 读取；读取后标记 dirty，下一次 push 自动升级为 `enc:v1`。
   - renderer `sync-item-mapper` 退为拒写兼容壳，避免第二套 Base64 实现重新接入生产同步。
   - 已补定向回归：sync crypto/wire、AccountStorage token 不落盘、renderer platform 优先级、legacy language migration。
+- [x] CoreApp 低风险兼容残留清理：
+  - 删除未接入 runtime 的旧 `permission-center.ts` 与 `main/index.ts` 中已注释 legacy import，保留现行 `platform.permission-center` 能力 ID。
+  - 删除未被构建入口或窗口 runtime 引用的裸 IPC `preload-view.js`。
+  - renderer `sync-item-mapper` 仅保留插件 storage qualified-name helper，retired sync payload API 由 main 侧真实实现承载。
+- [ ] CoreApp 后续兼容/跨平台专项：
+  - 旧 Channel 底座 hard-cut：继续压缩 `@main-process-message` / plugin-process bridge 的底层依赖，新增能力必须走 typed SDK/transport。
+  - Electron window security hardening：`webSecurity/nodeIntegration/contextIsolation/sandbox` 需要作为插件与 webview 兼容专项单独验证，不纳入本轮低风险清理。
+  - Linux documented best-effort：补齐 `xdotool` 依赖提示、desktop environment 限制说明与非阻塞 smoke 记录。
 - [ ] CoreBox 第三方 App 非阻塞启动 Windows 真机验证：
   - 验证 `shortcut` 保留 `launchArgs / workingDirectory` 并在 CoreBox 立即隐藏后后台启动。
   - 验证 `uwp` 继续通过 `explorer.exe shell:AppsFolder\\...` handoff，早期失败会触发系统通知。
@@ -303,12 +311,12 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 86 |
-| 未完成 (`- [ ]`) | 24 |
-| 总计 | 110 |
+| 已完成 (`- [x]`) | 87 |
+| 未完成 (`- [ ]`) | 25 |
+| 总计 | 112 |
 | 完成率 | 78% |
 
-> 统计时间: 2026-05-03（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-05-04（按本文件实时 checkbox 计数）。
 
 ---
 

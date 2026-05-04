@@ -5,6 +5,18 @@
 
 ## 2026-05-04
 
+### ref(core-app): 清理残留兼容运行面
+
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/main/modules/permission-center.ts`
+- `apps/core-app/src/preload/preload-view.js`
+- `apps/core-app/src/renderer/src/modules/sync/sync-item-mapper.ts`
+- `docs/plan-prd/TODO.md`
+  - 删除未接入模块启动链路的旧 `permission-center.ts` runtime 文件，并移除 `main/index.ts` 中误导性的 `PermissionCenter` / `DropManager` / `ServiceCenter` 注释入口；`platform.permission-center` 继续作为当前平台能力 ID 保留。
+  - 删除未被 Electron/Vite 构建入口或窗口 runtime 引用的裸 IPC `preload-view.js`，避免后续误用 `ipcRenderer.send/on` 暴露面。
+  - renderer `sync-item-mapper` 只保留插件 storage qualified-name helper，移除会抛错的 retired sync payload API；同步 payload 编解码/写入继续以 main 侧 `sync-payload-wire` / `sync/index` 为唯一实现。
+  - 未纳入本轮的高风险或需真机复核专项已登记到 `TODO`：旧 Channel 底座 hard-cut、Electron `webPreferences` security hardening、Linux `xdotool` 依赖提示与 smoke。
+
 ### fix(core-app): 收敛 beta 打包启动日志噪音
 
 - `apps/core-app/{electron.vite.config.ts,electron-builder.yml}`
