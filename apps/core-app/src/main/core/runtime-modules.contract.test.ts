@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -8,10 +8,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 const require = createRequire(import.meta.url)
 const {
   collectAppRuntimeModuleClosure,
+  collectResourceResolvableRuntimeModuleEntries,
   collectRuntimeModuleClosure,
   copyRuntimeModuleToNodeModules,
   resolvePlatformRuntimeModules,
-  resolveRuntimeModuleTargetDir
+  resolveRuntimeModuleTargetDir,
+  syncMissingPackagedRuntimeModules
 } = require('../../../scripts/build-target/runtime-modules.js')
 
 const tempRoots: string[] = []
@@ -150,6 +152,87 @@ describe('runtime module manifest contract', () => {
       'base-runtime',
       'native-runtime'
     ])
+  })
+
+  it('keeps promoted resource modules resolvable through resources node_modules', async () => {
+    const paths = createTempWorkspace()
+
+    await createPackage(paths.workspaceNodeModules, 'promoted-runtime', {
+      dependencies: {
+        'promoted-child': '1.0.0'
+      },
+      peerDependencies: {
+        'required-peer': '1.0.0',
+        'optional-peer': '1.0.0'
+      },
+      peerDependenciesMeta: {
+        'optional-peer': {
+          optional: true
+        }
+      }
+    })
+    await createPackage(paths.workspaceNodeModules, 'promoted-child', {
+      peerDependencies: {
+        'required-peer': '1.0.0'
+      }
+    })
+    await createPackage(paths.workspaceNodeModules, 'required-peer')
+    await createPackage(paths.workspaceNodeModules, 'optional-peer')
+
+    const closure = collectResourceResolvableRuntimeModuleEntries(['promoted-runtime'], {
+      ...paths,
+      rootSourceDir: paths.projectRoot
+    })
+    const names = closure.map((entry: { name: string }) => entry.name)
+
+    expect(names).toEqual(['promoted-runtime', 'promoted-child', 'required-peer'])
+    expect(names).not.toContain('optional-peer')
+  })
+
+  it('syncs dependencies for runtime modules that were promoted to resources node_modules', async () => {
+    const paths = createTempWorkspace()
+    const appOutDir = path.join(paths.root, 'dist/mac-arm64/tuff.app/Contents')
+    const resourcesDir = path.join(appOutDir, 'Resources')
+    const emptyAsarSource = path.join(paths.root, 'empty-asar')
+
+    await createPackage(paths.workspaceNodeModules, 'runtime-root', {
+      dependencies: {
+        'promoted-runtime': '1.0.0'
+      }
+    })
+    const promotedRuntime = await createPackage(paths.workspaceNodeModules, 'promoted-runtime', {
+      dependencies: {
+        'promoted-child': '1.0.0'
+      },
+      peerDependencies: {
+        'required-peer': '1.0.0'
+      }
+    })
+    await createPackage(paths.workspaceNodeModules, 'promoted-child')
+    await createPackage(paths.workspaceNodeModules, 'required-peer')
+    await mkdir(emptyAsarSource, { recursive: true })
+    writeJson(path.join(emptyAsarSource, 'package.json'), { name: 'empty-app' })
+    await mkdir(resourcesDir, { recursive: true })
+
+    const { createPackage: createAsarPackage } = require('@electron/asar')
+    await createAsarPackage(emptyAsarSource, path.join(resourcesDir, 'app.asar'))
+
+    const promotedResourceDir = path.join(resourcesDir, 'node_modules/promoted-runtime')
+    mkdirSync(path.dirname(promotedResourceDir), { recursive: true })
+    cpSync(promotedRuntime, promotedResourceDir, { recursive: true })
+
+    const copiedModules = syncMissingPackagedRuntimeModules(appOutDir, {
+      ...paths,
+      requiredModules: ['runtime-root']
+    })
+
+    expect(copiedModules).toEqual(['runtime-root', 'promoted-child', 'required-peer'])
+    expect(existsSync(path.join(resourcesDir, 'node_modules/promoted-child/package.json'))).toBe(
+      true
+    )
+    expect(existsSync(path.join(resourcesDir, 'node_modules/required-peer/package.json'))).toBe(
+      true
+    )
   })
 
   it('keeps explicit workspace root modules copyable while skipping workspace transitive dependencies', async () => {

@@ -7,8 +7,9 @@ const { postProcessMacArtifacts } = require('./build-target/postprocess-mac');
 const { syncTouchTranslationBundledRuntime } = require('./lib/touch-translation-runtime-sync');
 const {
   PACKAGED_RUNTIME_MODULES,
-  collectPackagedRuntimeModuleClosure,
+  collectPackagedRuntimeModuleEntries,
   collectResourceModuleClosure,
+  collectResourceResolvableRuntimeModuleEntries,
   findPackagedResourcesDir: resolvePackagedResourcesDir
 } = require('./build-target/runtime-modules');
 
@@ -254,9 +255,6 @@ function verifyPackagedRuntimeModules(distDir, requiredModules) {
   );
   const resolvedModules = new Set();
   const missingModules = [];
-  const requiredResourceModules = new Set(collectResourceModuleClosure(requiredModules));
-  const requiredRuntimeModules = collectPackagedRuntimeModuleClosure(requiredModules);
-
   const hasResourceEntrypoint = (moduleName) => {
     const resourceModuleDir = path.join(resourcesDir, 'node_modules', moduleName);
     const resourceEntrypoints = [
@@ -271,6 +269,18 @@ function verifyPackagedRuntimeModules(distDir, requiredModules) {
     const packagedEntry = path.posix.join('/node_modules', moduleName, 'package.json');
     return packageEntries.has(packagedEntry);
   };
+  const requiredResourceModules = new Set(collectResourceModuleClosure(requiredModules));
+  const requiredRuntimeModuleEntries = collectPackagedRuntimeModuleEntries(requiredModules);
+  const promotedResourceRootEntries = requiredRuntimeModuleEntries.filter(
+    (moduleEntry) =>
+      !requiredResourceModules.has(moduleEntry.name) && !hasAsarPackage(moduleEntry.name)
+  );
+
+  collectResourceResolvableRuntimeModuleEntries(promotedResourceRootEntries).forEach((entry) => {
+    requiredResourceModules.add(entry.name);
+  });
+
+  const requiredRuntimeModules = requiredRuntimeModuleEntries.map((entry) => entry.name);
 
   requiredRuntimeModules.forEach((moduleName) => {
     if (requiredResourceModules.has(moduleName)) {

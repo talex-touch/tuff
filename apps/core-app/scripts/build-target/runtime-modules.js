@@ -169,6 +169,7 @@ function getRuntimeDependencyEntries(pkgJson, options = {}) {
   const {
     includeDependencies = true,
     includeOptionalDependencies = true,
+    includeOptionalPeerDependencies = true,
     includePeerDependencies = false,
     treatPeerDependenciesAsOptional = true
   } = options
@@ -176,12 +177,17 @@ function getRuntimeDependencyEntries(pkgJson, options = {}) {
 
   const addEntries = (deps, kind, optional) => {
     Object.keys(deps || {}).forEach((name) => {
-      if (!entries.has(name)) {
-        entries.set(name, { kind, name, optional })
+      const isOptional = typeof optional === 'function' ? optional(name) : optional
+      if (kind === 'peerDependencies' && isOptional && !includeOptionalPeerDependencies) {
         return
       }
 
-      if (optional) {
+      if (!entries.has(name)) {
+        entries.set(name, { kind, name, optional: isOptional })
+        return
+      }
+
+      if (isOptional) {
         entries.set(name, {
           ...entries.get(name),
           kind,
@@ -195,7 +201,13 @@ function getRuntimeDependencyEntries(pkgJson, options = {}) {
     addEntries(pkgJson.dependencies, 'dependencies', false)
   }
   if (includePeerDependencies) {
-    addEntries(pkgJson.peerDependencies, 'peerDependencies', treatPeerDependenciesAsOptional)
+    addEntries(pkgJson.peerDependencies, 'peerDependencies', (name) => {
+      if (treatPeerDependenciesAsOptional) {
+        return true
+      }
+
+      return Boolean(pkgJson.peerDependenciesMeta?.[name]?.optional)
+    })
   }
   if (includeOptionalDependencies) {
     addEntries(pkgJson.optionalDependencies, 'optionalDependencies', true)
@@ -475,7 +487,9 @@ function collectRuntimeModuleClosure(rootModules, options = {}) {
     const dependencyEntries = getRuntimeDependencyEntries(pkgJson, {
       includeDependencies: dependencyTypes.has('dependencies'),
       includeOptionalDependencies: dependencyTypes.has('optionalDependencies'),
-      includePeerDependencies: dependencyTypes.has('peerDependencies')
+      includeOptionalPeerDependencies: options.includeOptionalPeerDependencies,
+      includePeerDependencies: dependencyTypes.has('peerDependencies'),
+      treatPeerDependenciesAsOptional: options.treatPeerDependenciesAsOptional
     })
 
     dependencyEntries.forEach((dependencyEntry) => {
@@ -529,11 +543,21 @@ function collectResourceRuntimeModuleEntries(
     .map((moduleSpec) => normalizeRuntimeModuleSpec(moduleSpec))
     .filter((moduleSpec) => moduleSpec.location === 'resources')
 
-  return collectRuntimeModuleClosure(resourceRoots, {
+  return collectResourceResolvableRuntimeModuleEntries(resourceRoots, options)
+}
+
+function collectResourceResolvableRuntimeModuleEntries(rootModules, options = {}) {
+  return collectRuntimeModuleClosure(rootModules, {
     ...options,
-    dependencyTypes: options.dependencyTypes || ['dependencies', 'optionalDependencies'],
+    dependencyTypes: options.dependencyTypes || [
+      'dependencies',
+      'optionalDependencies',
+      'peerDependencies'
+    ],
     dedupeBy: options.dedupeBy || 'name',
-    missingDependencyStrategy: options.missingDependencyStrategy || 'throw'
+    includeOptionalPeerDependencies: options.includeOptionalPeerDependencies ?? false,
+    missingDependencyStrategy: options.missingDependencyStrategy || 'skip-optional',
+    treatPeerDependenciesAsOptional: options.treatPeerDependenciesAsOptional ?? false
   }).modules
 }
 
@@ -743,14 +767,23 @@ function syncMissingPackagedRuntimeModules(searchRoot, options = {}) {
   const { listPackage } = require('@electron/asar')
   const packageEntries = new Set(listPackage(asarPath).map((entry) => entry.replace(/\\/g, '/')))
   const requiredRuntimeModuleEntries = collectPackagedRuntimeModuleEntries(requiredModules, options)
+  const missingRuntimeModuleEntries = requiredRuntimeModuleEntries.filter((moduleEntry) => {
+    const packagedEntry = path.posix.join('/node_modules', moduleEntry.name, 'package.json')
+    return !packageEntries.has(packagedEntry)
+  })
+
+  if (missingRuntimeModuleEntries.length === 0) {
+    return []
+  }
+
+  const resourceClosureEntries = collectResourceResolvableRuntimeModuleEntries(
+    missingRuntimeModuleEntries,
+    options
+  )
   const copiedModules = []
 
-  requiredRuntimeModuleEntries.forEach((moduleEntry) => {
-    const packagedEntry = path.posix.join('/node_modules', moduleEntry.name, 'package.json')
-    if (
-      packageEntries.has(packagedEntry) ||
-      hasResourceEntrypoint(resourcesDir, moduleEntry.name)
-    ) {
+  resourceClosureEntries.forEach((moduleEntry) => {
+    if (hasResourceEntrypoint(resourcesDir, moduleEntry.name)) {
       return
     }
 
@@ -775,6 +808,7 @@ module.exports = {
   collectPackagedRuntimeModuleClosure,
   collectPackagedRuntimeModuleEntries,
   collectResourceModuleClosure,
+  collectResourceResolvableRuntimeModuleEntries,
   collectResourceRuntimeModuleEntries,
   collectRuntimeModuleClosure,
   copyModuleToResources,
