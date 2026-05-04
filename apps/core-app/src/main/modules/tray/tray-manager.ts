@@ -351,14 +351,15 @@ export class TrayManager extends BaseModule {
     if (process.platform !== 'darwin') return
 
     try {
-      const appIconPath = TrayIconProvider.getAppIconPath()
-      if (!appIconPath) return
-
-      const fs = require('fs-extra')
-      if (!fs.existsSync(appIconPath)) return
       if (!app.dock) return
 
-      app.dock.setIcon(appIconPath)
+      const dockIcon = TrayIconProvider.getDockIcon()
+      if (dockIcon.isEmpty()) {
+        trayManagerLog.warn('Dock icon is empty, skip Dock icon setup')
+        return
+      }
+
+      app.dock.setIcon(dockIcon)
       if (this.touchApp?.version === 'dev') {
         app.dock.setBadge(this.touchApp.version)
       }

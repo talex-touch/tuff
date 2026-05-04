@@ -37,6 +37,8 @@ files:
   - '!patches/**'
 extraFiles: []
 extraResources:
+  - from: resources/icon.png
+    to: resources/icon.png
   - from: resources/TrayIconTemplate.png
     to: resources/TrayIconTemplate.png
   - from: resources/TrayIconTemplate@2x.png

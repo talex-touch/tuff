@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { appMock, touchEventBusMock, getMainConfigMock } = vi.hoisted(() => ({
+const { appMock, touchEventBusMock, getMainConfigMock, getDockIconMock } = vi.hoisted(() => ({
   appMock: {
     on: vi.fn(),
     off: vi.fn(),
@@ -28,6 +28,9 @@ const { appMock, touchEventBusMock, getMainConfigMock } = vi.hoisted(() => ({
     window: {
       startSilent: false
     }
+  })),
+  getDockIconMock: vi.fn(() => ({
+    isEmpty: vi.fn(() => false)
   }))
 }))
 
@@ -93,6 +96,16 @@ vi.mock('../box-tool/core-box/manager', () => ({
   }
 }))
 
+vi.mock('./tray-icon-provider', () => ({
+  TrayIconProvider: {
+    getIcon: vi.fn(() => ({
+      isEmpty: vi.fn(() => false),
+      setTemplateImage: vi.fn()
+    })),
+    getDockIcon: getDockIconMock
+  }
+}))
+
 import { TrayManager } from './tray-manager'
 
 describe('TrayManager', () => {
@@ -101,6 +114,9 @@ describe('TrayManager', () => {
     appMock.on.mockReset()
     appMock.off.mockReset()
     appMock.removeListener.mockReset()
+    getDockIconMock.mockReturnValue({
+      isEmpty: vi.fn(() => false)
+    })
   })
 
   it('initializes tray runtime even without experimental flag', async () => {
@@ -338,5 +354,32 @@ describe('TrayManager', () => {
     )?.[1]
     expect(activateHandler).toBeTypeOf('function')
     expect(() => activateHandler?.()).not.toThrow()
+  })
+
+  it('sets Dock icon with a loadable native image on macOS', () => {
+    const dockIcon = { isEmpty: vi.fn(() => false) }
+    getDockIconMock.mockReturnValue(dockIcon)
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: { version: string }
+      setupDockIcon: () => void
+    }
+    trayManager.touchApp = { version: 'release' }
+
+    trayManager.setupDockIcon()
+
+    expect(appMock.dock.setIcon).toHaveBeenCalledWith(dockIcon)
+  })
+
+  it('skips Dock icon setup when no loadable image is available', () => {
+    getDockIconMock.mockReturnValue({ isEmpty: vi.fn(() => true) })
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: { version: string }
+      setupDockIcon: () => void
+    }
+    trayManager.touchApp = { version: 'release' }
+
+    trayManager.setupDockIcon()
+
+    expect(appMock.dock.setIcon).not.toHaveBeenCalled()
   })
 })
