@@ -55,4 +55,20 @@ describe('permission status resolution', () => {
     expect(generatePermissionIssue(status)).toBeNull()
     expect(hasPermission(status, 'fs.read')).toBe(false)
   })
+
+  it('enforces permissions for the historical 260421 sdk marker', () => {
+    const status = getPluginPermissionStatus(
+      'touch-dev-utils',
+      260421,
+      {
+        required: ['fs.read'],
+        optional: [],
+      },
+      [],
+    )
+
+    expect(status.enforcePermissions).toBe(true)
+    expect(status.missingRequired).toEqual(['fs.read'])
+    expect(generatePermissionIssue(status)?.code).toBe('PERMISSION_MISSING')
+  })
 })

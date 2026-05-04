@@ -314,6 +314,25 @@ describe('createPluginLoader', () => {
     expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_OUTDATED')).toBe(false)
   })
 
+  it('keeps the historical touch-dev-utils sdk marker loadable', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-dev-utils',
+      version: '1.0.0',
+      description: 'local dev utilities',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: 260421,
+      category: 'utilities'
+    })
+    createdPaths.push(pluginPath)
+
+    const loader = createPluginLoader('touch-dev-utils', pluginPath)
+    const plugin = await loader.load()
+
+    expect(plugin.loadState).not.toBe('load_failed')
+    expect(plugin.loadError).toBeUndefined()
+    expect(plugin.issues.some((issue) => issue.code === 'SDKAPI_BLOCKED')).toBe(false)
+  })
+
   it('creates loader plugin shells without eager data initialization', async () => {
     const pluginPath = await createPluginDir({
       name: 'touch-translation',
