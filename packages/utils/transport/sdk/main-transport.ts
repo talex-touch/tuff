@@ -51,6 +51,7 @@ type InvokeHandler<TReq, TRes> = (
   event: IpcMainInvokeEvent,
 ) => TRes | Promise<TRes>
 
+const NORMAL_PORT_CLOSE_REASONS = new Set(['closed', 'port_closed', 'sender_destroyed'])
 const invokeHandlers = new Map<string, Set<InvokeHandler<any, any>>>()
 type LocalHandler = (payload: unknown, context: HandlerContext) => unknown | Promise<unknown>
 const localHandlers = new Map<string, Set<LocalHandler>>()
@@ -222,7 +223,7 @@ function registerPortHandlers(transport: TuffMainTransport): void {
       }
     }
 
-    if (reason) {
+    if (reason && !NORMAL_PORT_CLOSE_REASONS.has(reason)) {
       console.warn(`[TuffTransport] Port ${portId} closed: ${reason}`)
     }
   }

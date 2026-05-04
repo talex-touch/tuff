@@ -3,20 +3,24 @@ const DEFAULT_BEFORE_QUIT_TIMEOUT_MS = 8_000
 export interface BeforeQuitGuardResult {
   timedOut: boolean
   durationMs: number
+  timeoutHint?: unknown
 }
 
 export async function runWithBeforeQuitTimeout(
   task: () => Promise<void>,
-  timeoutMs = DEFAULT_BEFORE_QUIT_TIMEOUT_MS
+  timeoutMs = DEFAULT_BEFORE_QUIT_TIMEOUT_MS,
+  getTimeoutHint?: () => unknown
 ): Promise<BeforeQuitGuardResult> {
   const startedAt = Date.now()
   let timeoutHandle: NodeJS.Timeout | null = null
+  let timeoutHint: unknown
 
   const timedOut = await new Promise<boolean>((resolve, reject) => {
     let settled = false
     timeoutHandle = setTimeout(() => {
       if (settled) return
       settled = true
+      timeoutHint = getTimeoutHint?.()
       resolve(true)
     }, timeoutMs)
 
@@ -40,6 +44,7 @@ export async function runWithBeforeQuitTimeout(
 
   return {
     timedOut,
-    durationMs: Date.now() - startedAt
+    durationMs: Date.now() - startedAt,
+    timeoutHint
   }
 }

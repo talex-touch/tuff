@@ -18,4 +18,17 @@ describe('before-quit-guard', () => {
 
     expect(result.timedOut).toBe(true)
   })
+
+  it('captures a timeout hint when handler blocks', async () => {
+    const result = await runWithBeforeQuitTimeout(
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      },
+      10,
+      () => ({ module: 'DownloadCenter', phase: 'destroy' })
+    )
+
+    expect(result.timedOut).toBe(true)
+    expect(result.timeoutHint).toEqual({ module: 'DownloadCenter', phase: 'destroy' })
+  })
 })

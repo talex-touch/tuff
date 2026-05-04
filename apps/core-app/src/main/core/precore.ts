@@ -180,6 +180,39 @@ let beforeQuitFlowDone = false
 let beforeQuitFlowPromise: Promise<void> | null = null
 const BEFORE_QUIT_TIMEOUT_MS = 8_000
 
+type ShutdownObservationProvider = {
+  getShutdownObservation?: () => unknown
+}
+
+function isStartupBenchmarkMode(): boolean {
+  return parseBooleanEnv(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
+}
+
+function getBeforeQuitTimeoutHint(): unknown {
+  const manager = (globalThis.$app as { moduleManager?: ShutdownObservationProvider } | undefined)
+    ?.moduleManager
+  return manager?.getShutdownObservation?.()
+}
+
+function stringifyTimeoutHint(value: unknown): string | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return 'null'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+
+  try {
+    const seen = new WeakSet<object>()
+    return JSON.stringify(value, (_, current) => {
+      if (typeof current !== 'object' || current === null) return current
+      if (seen.has(current)) return '[Circular]'
+      seen.add(current)
+      return current
+    })
+  } catch {
+    return String(value)
+  }
+}
+
 app.on('before-quit', (event) => {
   markAppQuitting('before-quit')
   if (beforeQuitFlowDone) {
@@ -197,13 +230,18 @@ app.on('before-quit', (event) => {
       const quitEvent = new BeforeAppQuitEvent(event)
       const beforeQuitResult = await runWithBeforeQuitTimeout(
         () => touchEventBus.emitAsync(TalexEvents.BEFORE_APP_QUIT, quitEvent),
-        BEFORE_QUIT_TIMEOUT_MS
+        BEFORE_QUIT_TIMEOUT_MS,
+        getBeforeQuitTimeoutHint
       )
       if (beforeQuitResult.timedOut) {
-        mainLog.error('before-quit handlers timed out, continue shutdown', {
+        const logTimeout = isStartupBenchmarkMode()
+          ? mainLog.warn.bind(mainLog)
+          : mainLog.error.bind(mainLog)
+        logTimeout('before-quit handlers timed out, continue shutdown', {
           meta: {
             timeoutMs: BEFORE_QUIT_TIMEOUT_MS,
-            durationMs: beforeQuitResult.durationMs
+            durationMs: beforeQuitResult.durationMs,
+            timeoutHint: stringifyTimeoutHint(beforeQuitResult.timeoutHint)
           }
         })
       }
