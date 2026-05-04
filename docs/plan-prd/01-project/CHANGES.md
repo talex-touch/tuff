@@ -1,7 +1,19 @@
 # 变更日志
 
-> 更新时间: 2026-05-03
-> 说明: 主文件仅保留近 30 天（2026-04-03 ~ 2026-05-03）详细记录；更早历史已按月归档。
+> 更新时间: 2026-05-04
+> 说明: 主文件仅保留近 30 天（2026-04-04 ~ 2026-05-04）详细记录；更早历史已按月归档。
+
+## 2026-05-04
+
+### fix(core-app/build): 修复 promoted resources runtime 依赖漏包
+
+- `apps/core-app/scripts/build-target{,.js}/runtime-modules.js`
+- `apps/core-app/src/main/core/runtime-modules.contract.test.ts`
+- `docs/plan-prd/{01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1,docs/PRD-QUALITY-BASELINE}.md`
+  - `syncMissingPackagedRuntimeModules` 不再因为 promoted runtime 根模块已存在于 `Resources/node_modules` 就跳过其闭包同步；当 `@opentelemetry/resources` 这类模块被外置到 resources 时，会继续把 `@opentelemetry/core`、`@opentelemetry/semantic-conventions` 与必需 peer `@opentelemetry/api` 同步到同一可解析路径。
+  - resources 可解析闭包显式纳入必需 `peerDependencies`，但跳过 `peerDependenciesMeta.optional` 标记的可选 peer，避免 `langsmith` 这类可选 OpenTelemetry peer 被无意义拉入。
+  - packaged verifier 会把“不在 asar、只能从 resources 解析”的 promoted runtime 视为 resources root 校验，阻断“根模块存在但二级/peer 依赖仍只在 asar 内、运行时不可达”的坏产物。
+  - 新增 contract 覆盖 promoted resources root 的 dependencies / required peer / optional peer 规则，以及真实 afterPack 场景下根模块已在 resources 时仍同步其依赖闭包。
 
 ## 2026-05-03
 

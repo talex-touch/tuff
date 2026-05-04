@@ -53,7 +53,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 网络边界硬约束：业务层禁止新增 direct `fetch/axios`，统一走 `@talex-touch/utils/network`（network 套件内部除外），并由 root `network:guard` + ESLint 双门禁拦截。
 - 门禁脚本工程约束：`legacy/compat/size/network` 共享 `scripts/lib/*` 基础能力；workspace 侧门禁优先复用 root 实现（参数化 scope），禁止重复维护同类脚本。
 - 桌面打包质量门禁必须覆盖 `PACKAGED_RUNTIME_MODULES` 的完整运行时依赖闭包；runtime module root 清单、平台 native 清单与闭包解析统一来源于 `apps/core-app/scripts/build-target/runtime-modules.js`，`ensure-runtime-modules`、`ensure-platform-modules`、`afterPack` 与 packaged verifier 不得各自维护模块发现逻辑。当前基线至少覆盖 Sentry/OpenTelemetry、LangChain 关键依赖（`@langchain/core`、`p-retry`、`retry`、`langsmith`）与 `compressing -> tar-stream -> readable-stream` 缺包闭包真实进入可解析产物路径，并以 hoisted/transitive dependency smoke contract 固定 pnpm 漏包场景。
-- 对于显式落在 `resources/node_modules` 的运行时模块，质量门禁必须递归校验其依赖闭包也位于 `resources/node_modules`，禁止“根模块存在但其二级/三级依赖仍从 asar 漏解析”。
+- 对于显式落在 `resources/node_modules`，或因 asar 缺包被 promoted 到 `resources/node_modules` 的运行时模块，质量门禁必须递归校验其 dependencies 与必需 peer 闭包也位于 `resources/node_modules`，禁止“根模块存在但其二级/peer 依赖仍从 asar 漏解析”。
 - 对于主进程在运行时直接加载的普通第三方包，质量门禁必须校验其传递依赖闭包已进入 `app.asar` 或 `resources/node_modules`，禁止留下只打进根包、未带闭包的半残产物。
 - CoreApp 兼容硬切门禁：`window.$channel` 业务入口、legacy storage 协议（`storage:get/save/reload/save-sync/saveall`）、legacy `sdkapi` 放行逻辑必须保持 `0` 命中；新增插件/更新能力禁止“伪成功”返回。
 
