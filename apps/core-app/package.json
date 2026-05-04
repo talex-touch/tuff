@@ -25,7 +25,7 @@
     "postinstall": "echo 'Skipping electron-builder install-app-deps - will run during build'",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "build:unpack": "npm run build && electron-builder --dir",
+    "build:unpack": "pnpm run build && electron-builder --dir",
     "build:snapshot": "node scripts/build-target.js --target=${BUILD_TARGET:-mac} --type=snapshot",
     "build:release": "node scripts/build-target.js --target=${BUILD_TARGET:-mac} --type=release",
     "build:win": "node scripts/build-target.js --target=win --type=release",
