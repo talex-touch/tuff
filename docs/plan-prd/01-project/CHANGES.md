@@ -5,6 +5,25 @@
 
 ## 2026-05-04
 
+### fix(core-app): 收敛 beta 打包启动日志噪音
+
+- `apps/core-app/{electron.vite.config.ts,electron-builder.yml}`
+- `apps/core-app/src/main/modules/{tray,build-verification}/`
+- `apps/core-app/src/main/core/{before-quit-guard,module-manager,precore}.ts`
+- `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+- `apps/core-app/package.json`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- `packages/utils/{plugin/sdk-version,__tests__/permission-status.test,transport/sdk/main-transport}.ts`
+- `packages/tuffex/packages/script/build/index.ts`
+- `apps/nexus/content/docs/dev/reference/manifest.{zh,en}.mdc`
+  - Sentry Vite sourcemap 上传不再随 production/release 构建默认启用，必须显式设置 `SENTRY_UPLOAD_SOURCEMAPS=1` 且提供 `SENTRY_AUTH_TOKEN`，避免本地 beta 打包因无权限触发 `@sentry/cli` 403。
+  - Sentry 退出流程不再用远程 Nexus telemetry outbox 上传阻塞 `before-quit`；退出时只保证本地 outbox/统计落盘，远程上传交给正常运行期轮询，避免 benchmark/快速退出出现 before-quit timeout。
+  - macOS Dock 图标设置改为先解析为非空 `NativeImage` 再调用 `app.dock.setIcon()`，并把 `resources/icon.png` 作为真实 extraResources 文件带入包内，避免 `.icns` 路径存在但 Electron 无法加载时输出 error 级启动噪音。
+  - BuildVerification 会把 release asset 的相对签名路径解析成绝对 URL，避免 `/api/releases/*.sig` 这类 payload 被直接请求导致 `Failed to parse URL`。
+  - SDK allowlist 临时保留历史 `260421` marker，仅用于兼容已经安装的早期 `touch-dev-utils` 本地副本；当前推荐与新包仍保持 `260428`。
+  - before-quit 超时日志补充当前卸载模块观测，benchmark 快速退出时降为 warning；TuffTransport main 侧不再为正常 `port_closed/sender_destroyed` 端口清理输出 warning。
+  - `build:unpack` 改用 `pnpm run build`，避免 npm 误读 pnpm workspace `.npmrc` 配置刷出 unknown config warning；Tuffex 构建脚本改为 Sass namespace import，消除明确可定位的 Sass import deprecation。
+
 ### fix(core-app/build): 修复 promoted resources runtime 依赖漏包
 
 - `apps/core-app/scripts/build-target{,.js}/runtime-modules.js`
