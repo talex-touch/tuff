@@ -2,7 +2,10 @@
  * Plugin UI utilities for checking active UI views and managing upgrade flow
  */
 
+import { createLogger } from '../../utils/logger'
 import { DivisionBoxManager } from '../division-box/manager'
+
+const pluginUiUtilsLog = createLogger('PluginSystem').child('UIUtils')
 
 /**
  * Result of checking plugin active UI status
@@ -41,7 +44,10 @@ export async function checkPluginActiveUI(pluginName: string): Promise<PluginAct
       status.hasActiveUI = true
     }
   } catch (error) {
-    console.warn('[PluginUIUtils] Failed to check CoreBox:', error)
+    pluginUiUtilsLog.warn('Failed to inspect CoreBox plugin UI state', {
+      meta: { pluginName },
+      error
+    })
   }
 
   // Check DivisionBox sessions
@@ -57,7 +63,10 @@ export async function checkPluginActiveUI(pluginName: string): Promise<PluginAct
       }
     }
   } catch (error) {
-    console.warn('[PluginUIUtils] Failed to check DivisionBox:', error)
+    pluginUiUtilsLog.warn('Failed to inspect DivisionBox plugin UI state', {
+      meta: { pluginName },
+      error
+    })
   }
 
   // Generate description
@@ -96,7 +105,10 @@ export async function closePluginActiveUI(pluginName: string): Promise<boolean> 
       CoreBoxManager.getInstance().exitUIMode()
     }
   } catch (error) {
-    console.error('[PluginUIUtils] Failed to close CoreBox UI:', error)
+    pluginUiUtilsLog.error('Failed to close CoreBox plugin UI', {
+      meta: { pluginName },
+      error
+    })
     allClosed = false
   }
 
@@ -111,16 +123,19 @@ export async function closePluginActiveUI(pluginName: string): Promise<boolean> 
         try {
           await divisionBoxManager.destroySession(session.sessionId)
         } catch (error) {
-          console.error(
-            `[PluginUIUtils] Failed to destroy DivisionBox session ${session.sessionId}:`,
+          pluginUiUtilsLog.error('Failed to destroy DivisionBox plugin session', {
+            meta: { pluginName, sessionId: session.sessionId },
             error
-          )
+          })
           allClosed = false
         }
       }
     }
   } catch (error) {
-    console.error('[PluginUIUtils] Failed to close DivisionBox sessions:', error)
+    pluginUiUtilsLog.error('Failed to close DivisionBox plugin sessions', {
+      meta: { pluginName },
+      error
+    })
     allClosed = false
   }
 

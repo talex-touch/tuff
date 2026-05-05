@@ -214,10 +214,10 @@ function getPayloadPreview(): string {
           <!-- Header -->
           <div class="px-4 py-3 border-b border-[var(--tx-border-color)]">
             <h3 class="text-base font-semibold text-[var(--tx-text-color-primary)]">
-              {{ t('flow.selectTarget', '选择目标') }}
+              {{ t('flow.selectTarget') }}
             </h3>
             <p class="text-xs text-[var(--tx-text-color-secondary)] mt-1">
-              {{ t('flow.selectTargetDesc', '选择要将数据发送到的插件') }}
+              {{ t('flow.selectTargetDesc') }}
             </p>
           </div>
 
@@ -242,7 +242,7 @@ function getPayloadPreview(): string {
               ref="inputRef"
               v-model="searchQuery"
               type="text"
-              :placeholder="t('flow.searchTargets', '搜索目标...')"
+              :placeholder="t('flow.searchTargets')"
               class="w-full px-3 py-2 text-sm bg-[var(--tx-fill-color)] rounded-lg border-none outline-none focus:ring-2 focus:ring-[var(--tx-color-primary)]"
             />
           </div>
@@ -259,7 +259,7 @@ function getPayloadPreview(): string {
               <div v-else-if="filteredTargets.length === 0" class="text-center py-8">
                 <i class="ri:inbox-line text-4xl text-[var(--tx-text-color-placeholder)]" />
                 <p class="mt-2 text-sm text-[var(--tx-text-color-secondary)]">
-                  {{ t('flow.noTargets', '没有可用的目标') }}
+                  {{ t('flow.noTargets') }}
                 </p>
               </div>
 
@@ -330,18 +330,18 @@ function getPayloadPreview(): string {
           >
             <div class="text-xs text-[var(--tx-text-color-placeholder)]">
               <kbd class="px-1.5 py-0.5 rounded bg-[var(--tx-fill-color)]">↑↓</kbd>
-              {{ t('flow.navigate', '导航') }}
+              {{ t('flow.navigate') }}
               <kbd class="ml-2 px-1.5 py-0.5 rounded bg-[var(--tx-fill-color)]">Enter</kbd>
-              {{ t('flow.confirm', '确认') }}
+              {{ t('flow.confirm') }}
               <kbd class="ml-2 px-1.5 py-0.5 rounded bg-[var(--tx-fill-color)]">Esc</kbd>
-              {{ t('flow.cancel', '取消') }}
+              {{ t('flow.cancel') }}
             </div>
             <TxButton
               variant="bare"
               class="px-3 py-1.5 text-sm rounded-lg bg-[var(--tx-fill-color)] hover:bg-[var(--tx-fill-color-dark)] transition-colors"
               @click="handleClose"
             >
-              {{ t('common.cancel', '取消') }}
+              {{ t('common.cancel') }}
             </TxButton>
           </div>
         </div>
@@ -357,14 +357,14 @@ function getPayloadPreview(): string {
           class="relative w-[420px] bg-[var(--tx-bg-color)] rounded-xl shadow-2xl overflow-hidden p-5"
         >
           <h3 class="text-base font-semibold text-[var(--tx-text-color-primary)]">
-            {{ t('flow.consentTitle', '流转授权') }}
+            {{ t('flow.consentTitle') }}
           </h3>
           <p class="mt-2 text-sm text-[var(--tx-text-color-secondary)] leading-relaxed">
             {{
-              t(
-                'flow.consentDesc',
-                `允许 ${senderId} 向 ${consentTarget?.pluginName || consentTarget?.name || '目标插件'} 发送数据？`
-              )
+              t('flow.consentDesc', {
+                sender: senderId,
+                target: consentTarget?.pluginName || consentTarget?.name || t('flow.defaultTarget')
+              })
             }}
           </p>
           <div class="mt-4 flex items-center justify-end gap-2">
@@ -374,7 +374,7 @@ function getPayloadPreview(): string {
               :disabled="consentLoading"
               @click="handleConsentDeny"
             >
-              {{ t('flow.consentDeny', '拒绝') }}
+              {{ t('flow.consentDeny') }}
             </TxButton>
             <TxButton
               variant="bare"
@@ -382,7 +382,7 @@ function getPayloadPreview(): string {
               :disabled="consentLoading"
               @click="handleConsent('once')"
             >
-              {{ t('flow.consentOnce', '仅本次') }}
+              {{ t('flow.consentOnce') }}
             </TxButton>
             <TxButton
               variant="bare"
@@ -390,7 +390,7 @@ function getPayloadPreview(): string {
               :disabled="consentLoading"
               @click="handleConsent('always')"
             >
-              {{ t('flow.consentAlways', '始终允许') }}
+              {{ t('flow.consentAlways') }}
             </TxButton>
           </div>
         </div>

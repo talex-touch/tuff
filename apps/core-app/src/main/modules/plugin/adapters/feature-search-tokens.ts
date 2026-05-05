@@ -1,5 +1,8 @@
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import { pinyin } from 'pinyin-pro'
+import { createLogger } from '../../../utils/logger'
+
+const featureSearchTokensLog = createLogger('PluginSystem').child('FeatureSearchTokens')
 
 const CHINESE_CHAR_REGEX = /[\u4E00-\u9FFF]/u
 const INVALID_CHAR_REGEX = /[^a-z0-9\u4E00-\u9FFF]+/gi
@@ -46,7 +49,7 @@ function addPinyinTokens(text: string, tokens: Set<string>): void {
     if (first) tokens.add(first)
   } catch (err) {
     // 保守处理，拼音模块异常时不影响主流程
-    console.warn('[FeatureSearchTokens] Failed to generate pinyin tokens', err)
+    featureSearchTokensLog.warn('Failed to generate pinyin tokens', { error: err })
   }
 }
 

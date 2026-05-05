@@ -1,7 +1,9 @@
 export interface OcrConfigPersistOptions {
   minIntervalMs?: number
   skipWhenQueueDepthAtLeast?: number
-  droppable?: boolean
+  dropPolicy?: 'none' | 'drop' | 'latest_wins'
+  maxQueueWaitMs?: number
+  budgetKey?: string
   skipIfUnchanged?: boolean
 }
 
@@ -14,17 +16,20 @@ const OCR_CONFIG_PERSIST_OPTIONS: Record<string, OcrConfigPersistOptions> = {
   'ocr:last-queued': {
     minIntervalMs: OCR_LAST_QUEUED_MIN_PERSIST_INTERVAL_MS,
     skipWhenQueueDepthAtLeast: OCR_START_WRITE_SKIP_QUEUE_DEPTH,
-    droppable: true
+    dropPolicy: 'drop',
+    maxQueueWaitMs: 10_000
   },
   'ocr:last-dispatch': {
     minIntervalMs: OCR_LAST_DISPATCH_MIN_PERSIST_INTERVAL_MS,
     skipWhenQueueDepthAtLeast: OCR_START_WRITE_SKIP_QUEUE_DEPTH,
-    droppable: true
+    dropPolicy: 'drop',
+    maxQueueWaitMs: 10_000
   },
   'ocr:last-success': {
     minIntervalMs: OCR_LAST_SUCCESS_MIN_PERSIST_INTERVAL_MS,
     skipWhenQueueDepthAtLeast: OCR_START_WRITE_SKIP_QUEUE_DEPTH,
-    droppable: true
+    dropPolicy: 'drop',
+    maxQueueWaitMs: 10_000
   },
   'ocr:queue-disabled': {
     skipIfUnchanged: true

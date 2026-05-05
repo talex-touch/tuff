@@ -30,8 +30,11 @@ type DownloadAssetWithSignature = DownloadAsset & {
   signatureUrl?: string
 } & import('./platform-target').UpdateAssetTarget
 import { UpdateErrorType, UpdateProviderType } from '@talex-touch/utils'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { UpdateProvider } from './UpdateProvider'
 import { compareUpdateAssetTargets, resolveUpdateAssetTarget } from './platform-target'
+
+const customUpdateLog = createRendererLogger('CustomUpdateProvider')
 
 export class CustomUpdateProvider extends UpdateProvider {
   readonly name: string
@@ -145,7 +148,7 @@ export class CustomUpdateProvider extends UpdateProvider {
       .flatMap((asset) => {
         const target = resolveUpdateAssetTarget(asset.name)
         if (!target) {
-          console.warn(`[CustomUpdateProvider] Skip unsupported asset target: ${asset.name}`)
+          customUpdateLog.warn(`Skip unsupported asset target: ${asset.name}`)
           return []
         }
         const assetWithSignature = asset as DownloadAssetWithSignature
@@ -180,7 +183,7 @@ export class CustomUpdateProvider extends UpdateProvider {
       })
       return response.status === 200
     } catch (error) {
-      console.warn('Custom API health check failed:', error)
+      customUpdateLog.warn('Health check failed', error)
       return false
     }
   }
@@ -248,7 +251,7 @@ export class CustomUpdateProvider extends UpdateProvider {
         const url = download.url || ''
         const target = resolveUpdateAssetTarget(filename)
         if (!target) {
-          console.warn(`[CustomUpdateProvider] Skip unsupported asset target: ${filename}`)
+          customUpdateLog.warn(`Skip unsupported asset target: ${filename}`)
           return []
         }
         const asset: DownloadAssetWithSignature = {

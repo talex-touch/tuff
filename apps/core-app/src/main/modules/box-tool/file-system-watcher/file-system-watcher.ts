@@ -1,6 +1,7 @@
 import type { ModuleKey } from '@talex-touch/utils'
 import fs from 'node:fs/promises'
 import process from 'node:process'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import * as chokidar from 'chokidar'
 import {
@@ -17,6 +18,7 @@ import { BaseModule } from '../../abstract-base-module'
 const isMac = process.platform === 'darwin'
 const isWindows = process.platform === 'win32'
 const MAC_PHOTOS_LIBRARY_MARKER = 'Photos Library.photoslibrary'
+const fileSystemWatcherLog = getLogger('file-system-watcher')
 
 interface PendingPath {
   path: string
@@ -91,39 +93,37 @@ export class FileSystemWatcherModule extends BaseModule {
 
     newWatcher
       .on('add', (filePath: string) => {
-        console.debug(`[FileSystemWatcher] Raw 'add' event from chokidar for path: ${filePath}`)
+        fileSystemWatcherLog.debug(`Raw 'add' event from chokidar for path: ${filePath}`)
         touchEventBus.emit(TalexEvents.FILE_ADDED, new FileAddedEvent(filePath))
       })
       .on('addDir', (dirPath: string) => {
-        console.debug(`[FileSystemWatcher] Raw 'addDir' event from chokidar for path: ${dirPath}`)
+        fileSystemWatcherLog.debug(`Raw 'addDir' event from chokidar for path: ${dirPath}`)
         touchEventBus.emit(TalexEvents.DIRECTORY_ADDED, new DirectoryAddedEvent(dirPath))
       })
       .on('change', (filePath: string) => {
-        console.debug(`[FileSystemWatcher] Raw 'change' event from chokidar for path: ${filePath}`)
+        fileSystemWatcherLog.debug(`Raw 'change' event from chokidar for path: ${filePath}`)
         touchEventBus.emit(TalexEvents.FILE_CHANGED, new FileChangedEvent(filePath))
       })
       .on('unlink', (filePath: string) => {
-        console.debug(`[FileSystemWatcher] Raw 'unlink' event from chokidar for path: ${filePath}`)
+        fileSystemWatcherLog.debug(`Raw 'unlink' event from chokidar for path: ${filePath}`)
         touchEventBus.emit(TalexEvents.FILE_UNLINKED, new FileUnlinkedEvent(filePath))
       })
       .on('unlinkDir', (dirPath: string) => {
-        console.debug(
-          `[FileSystemWatcher] Raw 'unlinkDir' event from chokidar for path: ${dirPath}`
-        )
+        fileSystemWatcherLog.debug(`Raw 'unlinkDir' event from chokidar for path: ${dirPath}`)
         touchEventBus.emit(TalexEvents.DIRECTORY_UNLINKED, new DirectoryUnlinkedEvent(dirPath))
       })
       .on('ready', () => {
-        console.debug(`[FileSystemWatcher] Watcher with depth ${depth} is ready.`)
+        fileSystemWatcherLog.debug(`Watcher with depth ${depth} is ready.`)
       })
       .on('error', (error: unknown) => {
         const errorCode = (error as { code?: string }).code
         if (errorCode === 'EPERM' || errorCode === 'EACCES') {
-          console.info(
-            `[FileSystemWatcher] Permission-limited watcher ${depth}, path will be retried when available`
+          fileSystemWatcherLog.info(
+            `Permission-limited watcher ${depth}, path will be retried when available`
           )
           return
         }
-        console.error(`[FileSystemWatcher] Watcher error with depth ${depth}:`, error)
+        fileSystemWatcherLog.error(`Watcher error with depth ${depth}`, { error })
       })
 
     this.watchers.set(depth, newWatcher)
@@ -148,9 +148,9 @@ export class FileSystemWatcherModule extends BaseModule {
           await this.addPathInternal(path, pending.depth)
           this.pendingPaths.delete(path)
           recovered.push(path)
-          console.log(`[FileSystemWatcher] Successfully added pending path: ${path}`)
-        } catch (error) {
-          console.info(`[FileSystemWatcher] Pending path still unavailable: ${path}`)
+          fileSystemWatcherLog.info(`Successfully added pending path: ${path}`)
+        } catch {
+          fileSystemWatcherLog.info(`Pending path still unavailable: ${path}`)
           pathsToRetry.push(path)
         }
       } else {
@@ -180,25 +180,25 @@ export class FileSystemWatcherModule extends BaseModule {
     const watcher = this.getOrCreateWatcher(depth)
     watcher.add(p)
     this.watchedPaths.add(p)
-    console.log(`[FileSystemWatcher] Now watching path: ${p} with depth: ${depth}`)
+    fileSystemWatcherLog.info(`Now watching path: ${p} with depth: ${depth}`)
   }
 
   public async addPath(p: string, depth: number = isMac ? 1 : 4): Promise<void> {
     if (this.watchedPaths.has(p) || this.pendingAdditions.has(p)) {
-      console.log(`[FileSystemWatcher] Path already being watched: ${p}`)
+      fileSystemWatcherLog.debug(`Path already being watched: ${p}`)
       return
     }
     this.pendingAdditions.add(p)
 
     try {
       if (isMac && p.includes(MAC_PHOTOS_LIBRARY_MARKER)) {
-        console.info(`[FileSystemWatcher] Skip restricted photos library path: ${p}`)
+        fileSystemWatcherLog.info(`Skip restricted photos library path: ${p}`)
         return
       }
 
       const stats = await fs.stat(p)
       if (!stats.isDirectory()) {
-        console.info(`[FileSystemWatcher] Path is not a directory, skipping: ${p}`)
+        fileSystemWatcherLog.info(`Path is not a directory, skipping: ${p}`)
         return
       }
     } catch {
@@ -209,7 +209,7 @@ export class FileSystemWatcherModule extends BaseModule {
     // Check access permissions silently -- never show system dialogs on startup
     if (!(await this.hasAccess(p))) {
       this.pendingPaths.set(p, { path: p, depth })
-      console.log(`[FileSystemWatcher] No access to ${p}, silently queued for later`)
+      fileSystemWatcherLog.info(`No access to ${p}, silently queued for later`)
       return
     }
 
@@ -222,9 +222,8 @@ export class FileSystemWatcherModule extends BaseModule {
       const errorMessage = error instanceof Error ? error.message : String(error)
       if (errorCode === 'EPERM' || errorCode === 'EACCES') {
         this.pendingPaths.set(p, { path: p, depth })
-        console.info(
-          `[FileSystemWatcher] Permission denied for ${p}, added to pending queue:`,
-          errorMessage
+        fileSystemWatcherLog.info(
+          `Permission denied for ${p}, added to pending queue: ${errorMessage}`
         )
       } else {
         throw error
@@ -235,9 +234,7 @@ export class FileSystemWatcherModule extends BaseModule {
   }
 
   async onInit(): Promise<void> {
-    console.debug(
-      '[FileSystemWatcher] Initializing... Watch paths will be added by consumer modules.'
-    )
+    fileSystemWatcherLog.debug('Initializing... Watch paths will be added by consumer modules.')
 
     // Start periodic permission checking for pending paths
     // Check every 30 seconds for permission changes
@@ -255,7 +252,7 @@ export class FileSystemWatcherModule extends BaseModule {
   }
 
   onDestroy(): void {
-    console.log('[FileSystemWatcher] Destroying...')
+    fileSystemWatcherLog.info('Destroying...')
 
     // Unregister polling task
     pollingService.unregister('filesystem-watcher-permission-check')
@@ -266,7 +263,7 @@ export class FileSystemWatcherModule extends BaseModule {
     // Close all watchers
     this.watchers.forEach((watcher, depth) => {
       watcher.close()
-      console.log(`[FileSystemWatcher] Watcher with depth ${depth} stopped.`)
+      fileSystemWatcherLog.info(`Watcher with depth ${depth} stopped.`)
     })
     this.watchers.clear()
     this.watchedPaths.clear()

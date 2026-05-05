@@ -6,14 +6,13 @@ import { promisify } from 'node:util'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
 import { app } from 'electron'
 import { createLogger } from '../../utils/logger'
+import { ensureXdotoolAvailable, getXdotoolUnavailableReason } from './linux-desktop-tools'
 
 const execFileAsync = promisify(execFile)
 const activeAppLog = createLogger('ActiveApp')
 const MACOS_RESOLVE_RETRY_DELAY_MS = 80
+const MACOS_PERMISSION_BACKOFF_MS = 60_000
 const ACTIVE_APP_COMMAND_TIMEOUT_MS = 1500
-const WINDOWS_RESOLVE_FAILURE_BACKOFF_MS = 2000
-const WINDOWS_FAILURE_LOG_COOLDOWN_MS = 10000
-const COMMAND_OUTPUT_LOG_LIMIT = 500
 
 function isEbadfError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
@@ -28,6 +27,25 @@ function isMissingCommandError(error: unknown): boolean {
   return (error as { code?: unknown }).code === 'ENOENT'
 }
 
+function getErrorText(error: unknown): string {
+  if (!error || typeof error !== 'object') return ''
+  const candidate = error as { message?: unknown; stderr?: unknown }
+  return [candidate.message, candidate.stderr]
+    .filter((value) => typeof value === 'string')
+    .join('\n')
+}
+
+function isMacOSAutomationPermissionError(error: unknown): boolean {
+  const text = getErrorText(error)
+  if (!text) return false
+  return (
+    text.includes('(-1743)') ||
+    text.includes('errAEEventNotPermitted') ||
+    text.includes('Not authorized to send Apple events') ||
+    text.includes('未获得授权将Apple事件发送给System Events')
+  )
+}
+
 function toOptionalString(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const normalized = value.trim()
@@ -39,83 +57,23 @@ function parseInteger(value: unknown): number | null {
   return Number.isFinite(normalized) ? normalized : null
 }
 
-function outputToString(value: unknown): string {
-  if (Buffer.isBuffer(value)) return value.toString('utf8')
-  if (typeof value === 'string') return value
-  if (value === null || value === undefined) return ''
-  return String(value)
+function getCommandErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null
+  const value = (error as { code?: unknown }).code
+  return typeof value === 'string' ? value : null
 }
 
-function compactForLog(value: unknown, limit = COMMAND_OUTPUT_LOG_LIMIT): string | null {
-  const normalized = outputToString(value).replace(/\s+/g, ' ').trim()
-  if (!normalized) return null
-  return normalized.length > limit ? `${normalized.slice(0, limit)}...` : normalized
+function getCommandErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
 }
 
-function errorMessage(error: unknown): string | null {
-  if (error instanceof Error) {
-    const [firstLine] = error.message.split(/\r?\n/, 1)
-    return firstLine || error.name
-  }
-  return compactForLog(error)
-}
-
-function extractJsonLine(stdout: string): string | null {
-  const lines = stdout
+function extractJsonObjectLine(output: string): string {
+  const lines = output
     .split(/\r?\n/)
-    .map((line) => line.trim().replace(/^\uFEFF/, ''))
+    .map((line) => line.trim())
     .filter(Boolean)
-
-  for (let index = lines.length - 1; index >= 0; index--) {
-    const line = lines[index]
-    if (line.startsWith('{') && line.endsWith('}')) {
-      return line
-    }
-  }
-  return null
-}
-
-function commandErrorMeta(error: unknown): Record<string, string | number | boolean | null> {
-  const nodeError = error as {
-    code?: unknown
-    signal?: unknown
-    killed?: unknown
-    stdout?: unknown
-    stderr?: unknown
-  }
-
-  return {
-    message: errorMessage(error),
-    code: compactForLog(nodeError.code),
-    signal: compactForLog(nodeError.signal),
-    killed: typeof nodeError.killed === 'boolean' ? nodeError.killed : null,
-    stderr: compactForLog(nodeError.stderr),
-    stdout: compactForLog(nodeError.stdout)
-  }
-}
-
-export async function isActiveAppCapabilityAvailable(
-  platform = process.platform
-): Promise<boolean> {
-  if (platform === 'darwin' || platform === 'win32') {
-    return true
-  }
-
-  if (platform !== 'linux') {
-    return false
-  }
-
-  try {
-    await execFileAsync('xdotool', ['--version'], {
-      timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS
-    })
-    return true
-  } catch (error) {
-    if (!isMissingCommandError(error)) {
-      activeAppLog.debug('Linux active-app capability probe failed', { error })
-    }
-    return false
-  }
+  return lines.reverse().find((line) => line.startsWith('{') && line.endsWith('}')) || output.trim()
 }
 
 // Platform type for consistency
@@ -151,12 +109,19 @@ class ActiveAppService {
   private readonly cacheTTL = 3000
   private currentPlatform: Platform
   private macosResolveInFlight: Promise<Partial<ActiveAppInfo> | null> | null = null
-  private windowsResolveInFlight: Promise<Partial<ActiveAppInfo> | null> | null = null
-  private windowsFailureBackoffUntil = 0
-  private windowsFailureLogCooldownUntil = 0
+  private macosPermissionBackoffUntil = 0
 
   constructor() {
     this.currentPlatform = this.detectPlatform()
+  }
+
+  private handleMacOSPermissionDenied(error: unknown): null {
+    activeAppLog.warn('macOS automation permission missing, active-app lookup suspended briefly', {
+      meta: { backoffMs: MACOS_PERMISSION_BACKOFF_MS },
+      error
+    })
+    this.macosPermissionBackoffUntil = Date.now() + MACOS_PERMISSION_BACKOFF_MS
+    return null
   }
 
   private detectPlatform(): Platform {
@@ -217,14 +182,24 @@ end tell`
   }
 
   private async resolveActiveWindowMacOS(): Promise<Partial<ActiveAppInfo> | null> {
+    if (Date.now() < this.macosPermissionBackoffUntil) {
+      return null
+    }
+
     if (this.macosResolveInFlight) {
       return this.macosResolveInFlight
     }
 
     const resolveTask = (async () => {
       try {
-        return await this.resolveActiveWindowMacOSOnce()
+        const result = await this.resolveActiveWindowMacOSOnce()
+        this.macosPermissionBackoffUntil = 0
+        return result
       } catch (firstError) {
+        if (isMacOSAutomationPermissionError(firstError)) {
+          return this.handleMacOSPermissionDenied(firstError)
+        }
+
         if (!isEbadfError(firstError)) {
           activeAppLog.error('macOS resolution failed', { error: firstError })
           return null
@@ -238,8 +213,14 @@ end tell`
         })
 
         try {
-          return await this.resolveActiveWindowMacOSOnce()
+          const result = await this.resolveActiveWindowMacOSOnce()
+          this.macosPermissionBackoffUntil = 0
+          return result
         } catch (retryError) {
+          if (isMacOSAutomationPermissionError(retryError)) {
+            return this.handleMacOSPermissionDenied(retryError)
+          }
+
           activeAppLog.error('macOS resolution failed after EBADF retry', { error: retryError })
           return null
         }
@@ -254,20 +235,7 @@ end tell`
     }
   }
 
-  private shouldLogWindowsFailure(): boolean {
-    const now = Date.now()
-    if (now < this.windowsFailureLogCooldownUntil) {
-      return false
-    }
-    this.windowsFailureLogCooldownUntil = now + WINDOWS_FAILURE_LOG_COOLDOWN_MS
-    return true
-  }
-
-  private noteWindowsResolutionFailure(): void {
-    this.windowsFailureBackoffUntil = Date.now() + WINDOWS_RESOLVE_FAILURE_BACKOFF_MS
-  }
-
-  private async resolveActiveWindowWindowsOnce(): Promise<Partial<ActiveAppInfo> | null> {
+  private async resolveActiveWindowWindows(): Promise<Partial<ActiveAppInfo> | null> {
     const script = `
 $ErrorActionPreference = 'Stop'
 Add-Type @"
@@ -287,7 +255,7 @@ $handle = [TuffForegroundWindow]::GetForegroundWindow()
 if ($handle -eq [IntPtr]::Zero) {
   return ''
 }
-[uint32]$processId = 0
+$processId = [uint32]0
 [TuffForegroundWindow]::GetWindowThreadProcessId($handle, [ref]$processId) | Out-Null
 $titleBuilder = New-Object System.Text.StringBuilder 2048
 [TuffForegroundWindow]::GetWindowText($handle, $titleBuilder, $titleBuilder.Capacity) | Out-Null
@@ -303,14 +271,13 @@ try {
     $executablePath = ''
   }
 } catch {}
-[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
-$OutputEncoding = [Console]::OutputEncoding
-[ordered]@{
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+@{
   processId = [int]$processId
   displayName = $displayName
   executablePath = $executablePath
   windowTitle = $windowTitle
-} | ConvertTo-Json -Compress -Depth 2
+} | ConvertTo-Json -Compress
 `
 
     try {
@@ -319,43 +286,16 @@ $OutputEncoding = [Console]::OutputEncoding
         ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
         { timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS, windowsHide: true, maxBuffer: 1024 * 1024 }
       )
-      const normalized = stdout.trim()
+      const normalized = extractJsonObjectLine(stdout)
       if (!normalized) {
         return null
       }
 
-      const jsonLine = extractJsonLine(normalized)
-      if (!jsonLine) {
-        this.noteWindowsResolutionFailure()
-        if (this.shouldLogWindowsFailure()) {
-          activeAppLog.warn('Windows active-app output did not contain JSON', {
-            meta: {
-              stdout: compactForLog(stdout)
-            }
-          })
-        }
-        return null
-      }
-
-      let parsed: {
+      const parsed = JSON.parse(normalized) as {
         processId?: number
         displayName?: string
         executablePath?: string
         windowTitle?: string
-      }
-      try {
-        parsed = JSON.parse(jsonLine)
-      } catch (parseError) {
-        this.noteWindowsResolutionFailure()
-        if (this.shouldLogWindowsFailure()) {
-          activeAppLog.warn('Windows active-app JSON parse failed', {
-            meta: {
-              message: errorMessage(parseError),
-              stdout: compactForLog(stdout)
-            }
-          })
-        }
-        return null
       }
 
       return {
@@ -366,42 +306,21 @@ $OutputEncoding = [Console]::OutputEncoding
         platform: 'windows'
       }
     } catch (error) {
-      this.noteWindowsResolutionFailure()
       if (!isMissingCommandError(error)) {
-        if (this.shouldLogWindowsFailure()) {
-          activeAppLog.warn('Windows active-app resolution failed', {
-            meta: commandErrorMeta(error)
-          })
-        }
+        activeAppLog.warn('Windows active-app resolution failed', {
+          meta: {
+            code: getCommandErrorCode(error) ?? undefined,
+            message: getCommandErrorMessage(error)
+          }
+        })
       }
       return null
-    }
-  }
-
-  private async resolveActiveWindowWindows(): Promise<Partial<ActiveAppInfo> | null> {
-    if (Date.now() < this.windowsFailureBackoffUntil) {
-      return null
-    }
-
-    if (this.windowsResolveInFlight) {
-      return this.windowsResolveInFlight
-    }
-
-    const resolveTask = this.resolveActiveWindowWindowsOnce()
-    this.windowsResolveInFlight = resolveTask
-    try {
-      const result = await resolveTask
-      if (result) {
-        this.windowsFailureBackoffUntil = 0
-      }
-      return result
-    } finally {
-      this.windowsResolveInFlight = null
     }
   }
 
   private async resolveActiveWindowLinux(): Promise<Partial<ActiveAppInfo> | null> {
     try {
+      await ensureXdotoolAvailable()
       const { stdout: windowIdOutput } = await execFileAsync('xdotool', ['getactivewindow'], {
         timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS
       })
@@ -459,6 +378,10 @@ $OutputEncoding = [Console]::OutputEncoding
         platform: 'linux'
       }
     } catch (error) {
+      if (error instanceof Error && error.message === getXdotoolUnavailableReason()) {
+        activeAppLog.debug('Linux active-app unavailable: missing xdotool')
+        return null
+      }
       if (!isMissingCommandError(error)) {
         activeAppLog.warn('Linux active-app resolution failed', { error })
       }

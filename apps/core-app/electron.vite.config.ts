@@ -36,7 +36,14 @@ const isProduction =
   process.env.BUILD_TYPE === 'release' ||
   (!process.env.BUILD_TYPE && process.env.NODE_ENV === 'production')
 const enableSourcemap = !isProduction
-const disableSentry = process.env.SENTRY_DISABLE === '1' || process.env.SENTRY_DISABLE === 'true'
+const isTruthyEnv = (value: string | undefined): boolean => {
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+const disableSentry = isTruthyEnv(process.env.SENTRY_DISABLE)
+const uploadSentrySourcemaps =
+  isTruthyEnv(process.env.SENTRY_UPLOAD_SOURCEMAPS) && Boolean(process.env.SENTRY_AUTH_TOKEN)
 const tuffexAliases = isProduction
   ? []
   : [
@@ -91,7 +98,7 @@ const filteredVueSetupExtend: Plugin = {
 
 async function resolveSentryRendererPlugins(): Promise<PluginOption[]> {
   // Dev server阶段不加载 Sentry bundler plugin，避免拉起 @sentry/cli 旧依赖链触发 DEP0040。
-  if (disableSentry || !isProduction) {
+  if (disableSentry || !isProduction || !uploadSentrySourcemaps) {
     return []
   }
   const { sentryVitePlugin } = await import('@sentry/vite-plugin')

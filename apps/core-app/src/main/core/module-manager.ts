@@ -203,6 +203,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    */
   private readonly beforeQuitEventName?: TalexEvents.BEFORE_APP_QUIT
   private unloadAllPromise: Promise<boolean> | null = null
+  private unloadAllCurrentModule: string | null = null
   private lastUnloadObservation: ModuleUnloadObservation | null = null
 
   /**
@@ -526,6 +527,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
       const keys = Array.from(this.modules.keys()).reverse()
       let failedModules = 0
       for (const key of keys) {
+        this.unloadAllCurrentModule = key.description ?? key.toString()
         try {
           const result = await this.unloadModule(key, reason)
           if (!result) {
@@ -541,6 +543,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
           })
         }
       }
+      this.unloadAllCurrentModule = null
       const durationMs = Math.round(performance.now() - startedAt)
       this.lastUnloadObservation = {
         reason,
@@ -565,10 +568,21 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
 
     const pending = this.unloadAllPromise
     pending.finally(() => {
+      this.unloadAllCurrentModule = null
       this.unloadAllPromise = null
     })
 
     return pending
+  }
+
+  public getShutdownObservation(): {
+    currentModule: string | null
+    lastUnloadObservation: ModuleUnloadObservation | null
+  } {
+    return {
+      currentModule: this.unloadAllCurrentModule,
+      lastUnloadObservation: this.lastUnloadObservation
+    }
   }
 
   /**

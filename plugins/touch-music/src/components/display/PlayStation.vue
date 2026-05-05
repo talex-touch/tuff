@@ -8,9 +8,9 @@ import Singers from '@comp/music/song/Singers.vue'
 import { player } from '@modules/entity/play-manager'
 import { computed, ref, watch } from 'vue'
 
-export default {
+defineOptions({
   name: 'PlayStation',
-}
+})
 
 const song = computed(() => player.song)
 const playStatus = ref(false)

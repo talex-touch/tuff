@@ -11,6 +11,7 @@ import { PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { usePermissionSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { resolvePluginSdkBlockedState } from '../../../../../shared/plugin-sdk-blocked'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -63,31 +64,27 @@ const status = ref<PluginPermissionStatus | null>(null)
 const backendState = ref<PermissionBackendState | null>(null)
 const mutationError = ref<string | null>(null)
 
-const blockedIssue = computed(() => {
-  const issues = props.plugin.issues ?? []
-  return issues.find((issue) => issue.code === 'SDKAPI_BLOCKED') ?? null
-})
+const sdkBlockedState = computed(() => resolvePluginSdkBlockedState(props.plugin))
+const sdkBlocked = computed(() => sdkBlockedState.value.blocked)
 
-const sdkBlocked = computed(() => {
-  return (
-    props.plugin.loadState === 'load_failed' &&
-    (props.plugin.loadError?.code === 'SDKAPI_BLOCKED' || blockedIssue.value !== null)
-  )
+const permissionBlocked = computed(() => {
+  return sdkBlocked.value
 })
 
 const blockedMessage = computed(() => {
-  if (props.plugin.loadError?.code === 'SDKAPI_BLOCKED') {
-    return props.plugin.loadError.message || ''
-  }
-  return blockedIssue.value?.message || ''
+  return sdkBlockedState.value.message
 })
 const declaredPermissionIds = computed(() => {
   const required = props.plugin.declaredPermissions?.required || []
   const optional = props.plugin.declaredPermissions?.optional || []
   return [...new Set([...required, ...optional])]
 })
-const declaredRequiredCount = computed(() => props.plugin.declaredPermissions?.required?.length || 0)
-const declaredOptionalCount = computed(() => props.plugin.declaredPermissions?.optional?.length || 0)
+const declaredRequiredCount = computed(
+  () => props.plugin.declaredPermissions?.required?.length || 0
+)
+const declaredOptionalCount = computed(
+  () => props.plugin.declaredPermissions?.optional?.length || 0
+)
 
 function getPermissionName(permissionId: string): string {
   const key = `plugin.permissions.registry.${permissionId}.name`
@@ -106,7 +103,7 @@ const hasPermissions = computed(() => {
   if (status.value) {
     return status.value.required.length > 0 || status.value.optional.length > 0
   }
-  return declaredPermissionIds.value.length > 0 || sdkBlocked.value
+  return declaredPermissionIds.value.length > 0 || permissionBlocked.value
 })
 
 const permissionList = computed(() => {
@@ -155,7 +152,7 @@ const hasOutdatedPermissions = computed(() => {
 })
 
 const hasStatusWarning = computed(() => {
-  if (sdkBlocked.value) return true
+  if (permissionBlocked.value) return true
   if (!status.value) return false
   return (
     status.value.missingRequired.length > 0 ||
@@ -165,7 +162,7 @@ const hasStatusWarning = computed(() => {
 })
 
 const statusDescription = computed(() => {
-  if (sdkBlocked.value) {
+  if (permissionBlocked.value) {
     return blockedMessage.value || t('plugin.permissions.blockedWarning')
   }
   if (backendState.value?.mode === 'degraded/backend-unavailable') {
@@ -189,7 +186,7 @@ const backendUnavailable = computed(
   () => backendState.value?.mode === 'degraded/backend-unavailable'
 )
 const permissionMutationsDisabled = computed(
-  () => backendUnavailable.value || sdkBlocked.value || !status.value?.enforcePermissions
+  () => backendUnavailable.value || permissionBlocked.value || !status.value?.enforcePermissions
 )
 
 function handleMutationResult(result: PermissionMutationResult | null | undefined): boolean {
@@ -504,7 +501,7 @@ onMounted(() => {
       </TuffGroupBlock>
 
       <TuffGroupBlock
-        v-if="sdkBlocked"
+        v-if="permissionBlocked"
         :name="t('plugin.permissions.blockedTitle')"
         :description="t('plugin.permissions.blockedWarning')"
         default-icon="i-carbon-error"
@@ -522,26 +519,6 @@ onMounted(() => {
           <template #description>
             <span class="text-[var(--tx-color-warning)]">{{
               t('plugin.permissions.blockedHint', {
-                version: PERMISSION_ENFORCEMENT_MIN_VERSION
-              })
-            }}</span>
-          </template>
-        </TuffBlockLine>
-      </TuffGroupBlock>
-
-      <!-- SDK Compatibility Warning -->
-      <TuffGroupBlock
-        v-else-if="status?.warning && !status?.enforcePermissions"
-        :name="t('plugin.permissions.legacyTitle')"
-        :description="t('plugin.permissions.legacyWarning')"
-        default-icon="i-carbon-warning"
-        active-icon="i-carbon-warning"
-        memory-name="plugin-permissions-sdk-warning"
-      >
-        <TuffBlockLine :title="t('plugin.permissions.recommendationsTitle')">
-          <template #description>
-            <span class="text-[var(--tx-color-warning)]">{{
-              t('plugin.permissions.legacyHint', {
                 version: PERMISSION_ENFORCEMENT_MIN_VERSION
               })
             }}</span>

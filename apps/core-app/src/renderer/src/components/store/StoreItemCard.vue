@@ -125,7 +125,7 @@ function handleInstall(): void {
           <i
             v-if="item.official"
             class="i-ri-verified-badge-fill block official-badge"
-            title="Official Plugin"
+            :title="t('store.officialBadge')"
           />
         </template>
       </TxPluginMetaHeader>

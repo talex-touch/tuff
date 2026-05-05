@@ -8,11 +8,11 @@
 import type { ISearchProvider, TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
 import type { ProviderContext } from '../box-tool/search-engine/types'
 import { TuffInputType } from '@talex-touch/utils'
+import { divisionBoxCommandProviderLog } from './logger'
 import { DivisionBoxManager } from './manager'
 import { shortcutTriggerManager } from './shortcut-trigger'
 
 type DivisionBoxCommandMeta = NonNullable<TuffItem['meta']> & {
-  command?: 'show-active-sessions'
   mappingId?: string
   config?: import('./shortcut-trigger').ShortcutMapping['config']
 }
@@ -37,7 +37,7 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
   }
 
   async onLoad(_context: ProviderContext): Promise<void> {
-    console.log('[DivisionBoxCommandProvider] Provider loaded')
+    divisionBoxCommandProviderLog.info('Provider loaded')
   }
 
   async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
@@ -62,42 +62,6 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
     const items: TuffItem[] = filteredMappings.map((mapping) =>
       this.transformMappingToItem(mapping)
     )
-
-    // Add "Open Active Sessions" command if there are active sessions
-    const activeSessions = this.manager.getActiveSessions()
-    if (activeSessions.length > 0 && 'active'.includes(keyword)) {
-      items.unshift({
-        id: 'division-box:show-active-sessions',
-        source: {
-          id: this.id,
-          type: this.type,
-          name: this.name
-        },
-        kind: 'command',
-        render: {
-          mode: 'default',
-          basic: {
-            title: 'Show Active DivisionBox Sessions',
-            subtitle: `${activeSessions.length} active session${activeSessions.length > 1 ? 's' : ''}`,
-            icon: {
-              type: 'class',
-              value: 'ri:window-2-line'
-            }
-          }
-        },
-        actions: [
-          {
-            id: 'execute',
-            type: 'execute',
-            label: 'Show Sessions',
-            shortcut: 'Enter'
-          }
-        ],
-        meta: {
-          command: 'show-active-sessions'
-        } as DivisionBoxCommandMeta
-      })
-    }
 
     const duration = Date.now() - startTime
 
@@ -174,26 +138,21 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
   ): Promise<import('@talex-touch/utils').IProviderActivate | null> {
     const item = args.item
     try {
-      // Handle "show active sessions" command
-      if (item.meta && 'command' in item.meta && item.meta.command === 'show-active-sessions') {
-        // This would typically open a UI to show active sessions
-        // For now, we'll just log them
-        const sessions = this.manager.getActiveSessionsInfo()
-        console.log('[DivisionBoxCommandProvider] Active sessions:', sessions)
-        return null
-      }
-
       // Handle opening a DivisionBox via shortcut mapping
       const mappingId =
         item.meta && 'mappingId' in item.meta ? (item.meta.mappingId as string) : undefined
       if (!mappingId) {
-        console.error('[DivisionBoxCommandProvider] No mapping ID in item meta')
+        divisionBoxCommandProviderLog.error('Missing mapping ID in command metadata', {
+          meta: { itemId: item.id }
+        })
         return null
       }
 
       const mapping = shortcutTriggerManager.getMapping(mappingId)
       if (!mapping) {
-        console.error(`[DivisionBoxCommandProvider] Mapping not found: ${mappingId}`)
+        divisionBoxCommandProviderLog.error('Shortcut mapping not found', {
+          meta: { itemId: item.id, mappingId }
+        })
         return null
       }
 
@@ -205,7 +164,9 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
       // Create DivisionBox session
       const session = await this.manager.createSession(mapping.config)
 
-      console.log(`[DivisionBoxCommandProvider] DivisionBox opened: ${session.sessionId}`)
+      divisionBoxCommandProviderLog.info('DivisionBox opened from command provider', {
+        meta: { mappingId, sessionId: session.sessionId }
+      })
 
       // Execute afterOpen callback if provided
       if (mapping.afterOpen) {
@@ -214,7 +175,10 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
 
       return null
     } catch (error) {
-      console.error('[DivisionBoxCommandProvider] Error executing command:', error)
+      divisionBoxCommandProviderLog.error('Failed to execute command', {
+        meta: { itemId: item.id },
+        error
+      })
       return null
     }
   }

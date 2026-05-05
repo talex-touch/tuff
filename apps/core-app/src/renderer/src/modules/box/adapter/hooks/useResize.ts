@@ -4,7 +4,7 @@ import type { ComputedRef, Ref } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { onBeforeUnmount, onMounted, watch } from 'vue'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { devLog } from '~/utils/dev-log'
 
 interface UseResizeOptions {
@@ -95,12 +95,9 @@ function calculateDesiredHeight(resultCount: number): number {
   const nativeWrap = scrollRoot.querySelector(
     '.native-scroll-wrapper, .tx-scroll__native'
   ) as HTMLElement | null
-  const legacyElWrap = scrollRoot.querySelector(
-    '.el-scroll-wrapper .el-scrollbar__wrap'
-  ) as HTMLElement | null
   const txWrapper = scrollRoot.querySelector('.tx-scroll__wrapper') as HTMLElement | null
   const txContent = scrollRoot.querySelector('.tx-scroll__content') as HTMLElement | null
-  const wrap = nativeWrap ?? legacyElWrap ?? txWrapper ?? txContent
+  const wrap = nativeWrap ?? txWrapper ?? txContent
   if (!wrap) {
     logResizeDebug('calculateDesiredHeight:wrapMissing', { resultCount, headerHeight })
     return MIN_HEIGHT

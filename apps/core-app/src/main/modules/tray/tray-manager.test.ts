@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { appMock, touchEventBusMock, getMainConfigMock } = vi.hoisted(() => ({
+const { appMock, touchEventBusMock, getMainConfigMock, getDockIconMock } = vi.hoisted(() => ({
   appMock: {
     on: vi.fn(),
     off: vi.fn(),
@@ -23,12 +23,14 @@ const { appMock, touchEventBusMock, getMainConfigMock } = vi.hoisted(() => ({
   getMainConfigMock: vi.fn(() => ({
     setup: {
       showTray: true,
-      experimentalTray: true,
       hideDock: false
     },
     window: {
       startSilent: false
     }
+  })),
+  getDockIconMock: vi.fn(() => ({
+    isEmpty: vi.fn(() => false)
   }))
 }))
 
@@ -94,13 +96,224 @@ vi.mock('../box-tool/core-box/manager', () => ({
   }
 }))
 
+vi.mock('./tray-icon-provider', () => ({
+  TrayIconProvider: {
+    getIcon: vi.fn(() => ({
+      isEmpty: vi.fn(() => false),
+      setTemplateImage: vi.fn()
+    })),
+    getDockIcon: getDockIconMock
+  }
+}))
+
 import { TrayManager } from './tray-manager'
 
 describe('TrayManager', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     appMock.on.mockReset()
     appMock.off.mockReset()
     appMock.removeListener.mockReset()
+    getDockIconMock.mockReturnValue({
+      isEmpty: vi.fn(() => false)
+    })
+  })
+
+  it('initializes tray runtime even without experimental flag', async () => {
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: {
+        window: {
+          window: {
+            on: ReturnType<typeof vi.fn>
+            removeListener: ReturnType<typeof vi.fn>
+            isVisible: ReturnType<typeof vi.fn>
+          }
+        }
+        config: { data: Record<string, unknown> }
+        isQuitting: boolean
+        version: string
+      }
+      initializeTray: ReturnType<typeof vi.fn>
+      registerWindowEvents: ReturnType<typeof vi.fn>
+      registerEventListeners: ReturnType<typeof vi.fn>
+      applyActivationPolicy: ReturnType<typeof vi.fn>
+      setupDockIcon: ReturnType<typeof vi.fn>
+      updateDockVisibility: ReturnType<typeof vi.fn>
+    }
+
+    trayManager.initializeTray = vi.fn()
+    trayManager.registerWindowEvents = vi.fn()
+    trayManager.registerEventListeners = vi.fn()
+    trayManager.applyActivationPolicy = vi.fn()
+    trayManager.setupDockIcon = vi.fn()
+    trayManager.updateDockVisibility = vi.fn()
+    trayManager.touchApp = {
+      window: {
+        window: {
+          on: vi.fn(),
+          removeListener: vi.fn(),
+          isVisible: vi.fn(() => true)
+        }
+      },
+      config: { data: {} },
+      isQuitting: false,
+      version: 'dev'
+    }
+
+    await (trayManager as any).onInit({
+      runtime: { app: trayManager.touchApp },
+      app: trayManager.touchApp
+    })
+
+    expect(trayManager.registerWindowEvents).toHaveBeenCalled()
+    expect(trayManager.registerEventListeners).toHaveBeenCalled()
+    expect(trayManager.initializeTray).toHaveBeenCalled()
+  })
+
+  it('captures hidden window state during silent start initialization', async () => {
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: {
+        window: {
+          window: {
+            on: ReturnType<typeof vi.fn>
+            removeListener: ReturnType<typeof vi.fn>
+            isVisible: ReturnType<typeof vi.fn>
+          }
+        }
+        config: { data: Record<string, unknown> }
+        isQuitting: boolean
+        version: string
+      }
+      initializeTray: ReturnType<typeof vi.fn>
+      registerWindowEvents: ReturnType<typeof vi.fn>
+      registerEventListeners: ReturnType<typeof vi.fn>
+      applyActivationPolicy: ReturnType<typeof vi.fn>
+      setupDockIcon: ReturnType<typeof vi.fn>
+      updateDockVisibility: ReturnType<typeof vi.fn>
+      getRuntimeSettingsSnapshot: () => {
+        showTray: boolean
+        hideDock: boolean
+        available: boolean
+        trayReady: boolean
+        windowVisible: boolean
+      }
+    }
+
+    trayManager.initializeTray = vi.fn()
+    trayManager.registerWindowEvents = vi.fn()
+    trayManager.registerEventListeners = vi.fn()
+    trayManager.applyActivationPolicy = vi.fn()
+    trayManager.setupDockIcon = vi.fn()
+    trayManager.updateDockVisibility = vi.fn()
+    trayManager.touchApp = {
+      window: {
+        window: {
+          on: vi.fn(),
+          removeListener: vi.fn(),
+          isVisible: vi.fn(() => false)
+        }
+      },
+      config: { data: {} },
+      isQuitting: false,
+      version: 'dev'
+    }
+
+    await (trayManager as any).onInit({
+      runtime: { app: trayManager.touchApp },
+      app: trayManager.touchApp
+    })
+
+    expect(trayManager.getRuntimeSettingsSnapshot().windowVisible).toBe(false)
+  })
+
+  it('updates dock visibility after tray initialization on macOS startup', async () => {
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: {
+        window: {
+          window: {
+            on: ReturnType<typeof vi.fn>
+            removeListener: ReturnType<typeof vi.fn>
+            isVisible: ReturnType<typeof vi.fn>
+          }
+        }
+        config: { data: Record<string, unknown> }
+        isQuitting: boolean
+        version: string
+      }
+      initializeTray: ReturnType<typeof vi.fn>
+      registerWindowEvents: ReturnType<typeof vi.fn>
+      registerEventListeners: ReturnType<typeof vi.fn>
+      applyActivationPolicy: ReturnType<typeof vi.fn>
+      setupDockIcon: ReturnType<typeof vi.fn>
+      updateDockVisibility: ReturnType<typeof vi.fn>
+    }
+
+    trayManager.initializeTray = vi.fn()
+    trayManager.registerWindowEvents = vi.fn()
+    trayManager.registerEventListeners = vi.fn()
+    trayManager.applyActivationPolicy = vi.fn()
+    trayManager.setupDockIcon = vi.fn()
+    trayManager.updateDockVisibility = vi.fn()
+    trayManager.touchApp = {
+      window: {
+        window: {
+          on: vi.fn(),
+          removeListener: vi.fn(),
+          isVisible: vi.fn(() => false)
+        }
+      },
+      config: { data: {} },
+      isQuitting: false,
+      version: 'dev'
+    }
+
+    await (trayManager as any).onInit({
+      runtime: { app: trayManager.touchApp },
+      app: trayManager.touchApp
+    })
+
+    expect(trayManager.initializeTray.mock.invocationCallOrder[0]).toBeLessThan(
+      trayManager.updateDockVisibility.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('returns real runtime tray snapshot values', () => {
+    const mainWindow = {
+      isVisible: vi.fn(() => false)
+    }
+
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: {
+        window: { window: typeof mainWindow }
+        config: { data: Record<string, unknown> }
+        isQuitting: boolean
+        version: string
+      }
+      tray: object | null
+      getRuntimeSettingsSnapshot: () => {
+        showTray: boolean
+        hideDock: boolean
+        available: boolean
+        trayReady: boolean
+        windowVisible: boolean
+      }
+    }
+
+    trayManager.touchApp = {
+      window: { window: mainWindow },
+      config: { data: {} },
+      isQuitting: false,
+      version: 'dev'
+    }
+    trayManager.tray = {}
+
+    expect(trayManager.getRuntimeSettingsSnapshot()).toMatchObject({
+      showTray: true,
+      hideDock: false,
+      available: true,
+      trayReady: true,
+      windowVisible: false
+    })
   })
 
   it('does not throw when activate fires after main window destroyed', () => {
@@ -141,5 +354,32 @@ describe('TrayManager', () => {
     )?.[1]
     expect(activateHandler).toBeTypeOf('function')
     expect(() => activateHandler?.()).not.toThrow()
+  })
+
+  it('sets Dock icon with a loadable native image on macOS', () => {
+    const dockIcon = { isEmpty: vi.fn(() => false) }
+    getDockIconMock.mockReturnValue(dockIcon)
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: { version: string }
+      setupDockIcon: () => void
+    }
+    trayManager.touchApp = { version: 'release' }
+
+    trayManager.setupDockIcon()
+
+    expect(appMock.dock.setIcon).toHaveBeenCalledWith(dockIcon)
+  })
+
+  it('skips Dock icon setup when no loadable image is available', () => {
+    getDockIconMock.mockReturnValue({ isEmpty: vi.fn(() => true) })
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: { version: string }
+      setupDockIcon: () => void
+    }
+    trayManager.touchApp = { version: 'release' }
+
+    trayManager.setupDockIcon()
+
+    expect(appMock.dock.setIcon).not.toHaveBeenCalled()
   })
 })

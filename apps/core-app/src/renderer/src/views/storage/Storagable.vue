@@ -632,299 +632,305 @@ onMounted(() => {
 </script>
 
 <template>
-  <ViewTemplate title="$I18n:router.storagable">
-    <div class="Storagable-Container">
-      <div class="header">
-        <div class="title">存储占用</div>
-        <div class="actions">
-          <TxButton variant="bare" class="btn" :disabled="summaryLoading" @click="loadAll">
-            刷新
-          </TxButton>
-        </div>
-      </div>
-
-      <div v-if="errorMessage" class="error">
-        {{ errorMessage }}
-      </div>
-
-      <div v-if="!report && summaryLoading" class="loading">加载中…</div>
-
-      <template v-if="report">
-        <div class="summary">
-          <div class="card">
-            <div class="label">
-              {{ totalLabel }}
-            </div>
-            <div class="value">
-              {{ formatBytesShort(totalDisplayBytes) }}
-            </div>
-            <div class="sub">
-              {{ report.rootPath }}
-            </div>
-          </div>
-          <div class="card">
-            <div class="label">插件配置</div>
-            <div class="value">
-              {{ formatBytesShort(pluginTotalBytes) }}
-            </div>
-            <div class="sub">config/plugins</div>
-          </div>
-          <div class="card">
-            <div class="label">数据库内容</div>
-            <div class="value">
-              {{
-                !databaseTablesLoaded
-                  ? '计算中'
-                  : databaseSizeKnown
-                    ? formatBytesShort(databaseLogicalBytes)
-                    : '未知'
-              }}
-            </div>
-            <div class="sub">基于表级统计</div>
+  <div class="Storagable-Page">
+    <ViewTemplate title="$I18n:router.storagable">
+      <div class="Storagable-Container">
+        <div class="header">
+          <div class="title">存储占用</div>
+          <div class="actions">
+            <TxButton variant="bare" class="btn" :disabled="summaryLoading" @click="loadAll">
+              刷新
+            </TxButton>
           </div>
         </div>
 
-        <div class="section">
-          <div class="section-head">
-            <div class="section-title">模块/目录占用</div>
-          </div>
-          <div class="list">
-            <div v-for="node in modulesSorted" :key="node.key" class="row">
-              <div class="row-head">
-                <div class="row-head-main">
-                  <div class="name">
-                    {{ node.label }}
-                  </div>
-                  <div class="meta">
-                    <span>{{ formatBytesShort(node.bytes) }}</span>
-                    <span class="sep">·</span>
-                    <span>{{ node.fileCount }} files</span>
-                    <span class="sep">·</span>
-                    <span>{{ node.dirCount }} dirs</span>
-                  </div>
-                </div>
-                <div class="row-actions">
-                  <TxButton
-                    v-for="action in moduleRowActions[node.key] || []"
-                    :key="action.key"
-                    variant="bare"
-                    class="btn action"
-                    :class="{ danger: action.confirm.type === 'error' }"
-                    :disabled="isBusy"
-                    @click="runCleanup(action)"
-                  >
-                    {{ cleaningKey === action.key ? '处理中…' : action.label }}
-                  </TxButton>
-                </div>
-              </div>
-              <div class="bar">
-                <div
-                  class="fill"
-                  :style="{ width: `${percentOf(node.bytes, report.totalBytes).toFixed(2)}%` }"
-                />
-              </div>
-              <div class="path">
-                {{ node.path }}
-              </div>
-            </div>
-          </div>
+        <div v-if="errorMessage" class="error">
+          {{ errorMessage }}
         </div>
 
-        <div class="section">
-          <div class="section-head">
-            <div class="section-title">插件占用（config/plugins）</div>
-            <div v-if="pluginsLoading" class="section-meta">加载中…</div>
-          </div>
-          <div v-if="pluginsSorted.length === 0" class="muted">
-            {{ pluginsLoading ? '加载中…' : '暂无插件配置目录或无数据。' }}
-          </div>
-          <div v-else class="list">
-            <div v-for="p in pluginsSorted.slice(0, 12)" :key="p.name" class="row">
-              <div class="row-head">
-                <div class="name">
-                  {{ p.name }}
-                </div>
-                <div class="meta">
-                  <span>{{ formatBytesShort(p.bytes) }}</span>
-                  <span class="sep">·</span>
-                  <span>{{ p.fileCount }} files</span>
-                  <span class="sep">·</span>
-                  <span>{{ p.dirCount }} dirs</span>
-                </div>
-              </div>
-              <div class="bar">
-                <div
-                  class="fill"
-                  :style="{ width: `${percentOf(p.bytes, pluginTotalBytes).toFixed(2)}%` }"
-                />
-              </div>
-            </div>
-            <div v-if="pluginsSorted.length > 12" class="muted">
-              仅展示前 12 个插件；其余 {{ pluginsSorted.length - 12 }} 个已折叠。
-            </div>
-          </div>
-        </div>
+        <div v-if="!report && summaryLoading" class="loading">加载中…</div>
 
-        <div class="section">
-          <div class="section-head">
-            <div class="section-title">数据库占用</div>
-            <div v-if="dbTablesLoading" class="section-meta">表级统计中…</div>
-          </div>
-          <div class="db-grid">
+        <template v-if="report">
+          <div class="summary">
             <div class="card">
-              <div class="label">数据库文件</div>
+              <div class="label">
+                {{ totalLabel }}
+              </div>
               <div class="value">
-                {{ formatBytesShort(report.database.bytes) }}
+                {{ formatBytesShort(totalDisplayBytes) }}
               </div>
               <div class="sub">
-                {{ report.database.path }}
+                {{ report.rootPath }}
               </div>
             </div>
             <div class="card">
-              <div class="label">WAL</div>
+              <div class="label">插件配置</div>
               <div class="value">
-                {{ formatBytesShort(report.database.walBytes) }}
+                {{ formatBytesShort(pluginTotalBytes) }}
               </div>
-              <div class="sub">database.db-wal</div>
+              <div class="sub">config/plugins</div>
             </div>
             <div class="card">
-              <div class="label">SHM</div>
+              <div class="label">数据库内容</div>
               <div class="value">
-                {{ formatBytesShort(report.database.shmBytes) }}
+                {{
+                  !databaseTablesLoaded
+                    ? '计算中'
+                    : databaseSizeKnown
+                      ? formatBytesShort(databaseLogicalBytes)
+                      : '未知'
+                }}
               </div>
-              <div class="sub">database.db-shm</div>
+              <div class="sub">基于表级统计</div>
             </div>
-            <div class="card">
-              <div class="label">数据库合计</div>
-              <div class="value">
-                {{ formatBytesShort(databaseTotalBytes) }}
-              </div>
-              <div class="sub">db + wal + shm</div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <div class="section-title">模块/目录占用</div>
             </div>
-          </div>
-
-          <div v-if="databaseTablesLoaded && !databaseSizeKnown" class="muted db-note">
-            当前 SQLite 未启用 dbstat，表级占用显示为未知。
-          </div>
-
-          <div v-if="databaseLogicalOnly" class="muted db-note">
-            数据库内容为逻辑占用，未计入目录合计。
-          </div>
-
-          <div v-if="!databaseTablesLoaded" class="muted db-note">
-            {{ dbTablesLoading ? '表级占用加载中…' : '表级占用未加载' }}
-          </div>
-
-          <div v-else class="db-groups">
-            <div v-for="group in databaseGroups" :key="group.category" class="row">
-              <div class="row-head">
-                <div class="row-head-main">
-                  <div class="name">
-                    {{ group.label }}
-                  </div>
-                  <div class="meta">
-                    <span>{{ group.sizeKnown ? formatBytesShort(group.bytes) : '未知' }}</span>
-                    <span class="sep">·</span>
-                    <span>{{ formatCount(group.rows) }} rows</span>
-                  </div>
-                </div>
-                <div class="row-actions">
-                  <TxButton
-                    v-for="action in databaseGroupActions[group.category] || []"
-                    :key="action.key"
-                    variant="bare"
-                    class="btn action"
-                    :class="{ danger: action.confirm.type === 'error' }"
-                    :disabled="isBusy"
-                    @click="runCleanup(action)"
-                  >
-                    {{ cleaningKey === action.key ? '处理中…' : action.label }}
-                  </TxButton>
-                </div>
-              </div>
-              <template
-                v-for="action in databaseGroupActions[group.category] || []"
-                :key="`${action.key}-note`"
-              >
-                <div v-if="action.note" class="muted note">
-                  {{ action.note }}
-                </div>
-              </template>
-              <div class="table-list">
-                <div v-for="table in group.tables" :key="table.name" class="table-row">
-                  <div class="table-head">
-                    <div class="table-name">
-                      {{ table.label }}
+            <div class="list">
+              <div v-for="node in modulesSorted" :key="node.key" class="row">
+                <div class="row-head">
+                  <div class="row-head-main">
+                    <div class="name">
+                      {{ node.label }}
                     </div>
                     <div class="meta">
-                      <span>{{ table.sizeKnown ? formatBytesShort(table.bytes) : '未知' }}</span>
+                      <span>{{ formatBytesShort(node.bytes) }}</span>
                       <span class="sep">·</span>
-                      <span>{{ formatCount(table.rows) }} rows</span>
+                      <span>{{ node.fileCount }} files</span>
+                      <span class="sep">·</span>
+                      <span>{{ node.dirCount }} dirs</span>
                     </div>
                   </div>
-                  <div class="path">表名：{{ table.name }}</div>
+                  <div class="row-actions">
+                    <TxButton
+                      v-for="action in moduleRowActions[node.key] || []"
+                      :key="action.key"
+                      variant="bare"
+                      class="btn action"
+                      :class="{ danger: action.confirm.type === 'error' }"
+                      :disabled="isBusy"
+                      @click="runCleanup(action)"
+                    >
+                      {{ cleaningKey === action.key ? '处理中…' : action.label }}
+                    </TxButton>
+                  </div>
+                </div>
+                <div class="bar">
+                  <div
+                    class="fill"
+                    :style="{ width: `${percentOf(node.bytes, report.totalBytes).toFixed(2)}%` }"
+                  />
+                </div>
+                <div class="path">
+                  {{ node.path }}
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div class="section">
-          <div class="section-head">
-            <div class="section-title">缓存占用</div>
-          </div>
-          <div class="list">
-            <div v-for="cache in cacheList" :key="cache.key" class="row">
-              <div class="row-head">
-                <div class="name">
-                  {{ cache.label }}
+          <div class="section">
+            <div class="section-head">
+              <div class="section-title">插件占用（config/plugins）</div>
+              <div v-if="pluginsLoading" class="section-meta">加载中…</div>
+            </div>
+            <div v-if="pluginsSorted.length === 0" class="muted">
+              {{ pluginsLoading ? '加载中…' : '暂无插件配置目录或无数据。' }}
+            </div>
+            <div v-else class="list">
+              <div v-for="p in pluginsSorted.slice(0, 12)" :key="p.name" class="row">
+                <div class="row-head">
+                  <div class="name">
+                    {{ p.name }}
+                  </div>
+                  <div class="meta">
+                    <span>{{ formatBytesShort(p.bytes) }}</span>
+                    <span class="sep">·</span>
+                    <span>{{ p.fileCount }} files</span>
+                    <span class="sep">·</span>
+                    <span>{{ p.dirCount }} dirs</span>
+                  </div>
                 </div>
-                <div class="meta">
-                  <span>{{ formatBytesShort(cache.bytes) }}</span>
-                  <span class="sep">·</span>
-                  <span>{{ formatCount(cache.entries) }} entries</span>
-                  <span class="sep">·</span>
-                  <span>{{ formatCacheScope(cache.scope) }}</span>
-                  <span class="sep">·</span>
-                  <span>TTL {{ formatTtl(cache.ttlMs) }}</span>
+                <div class="bar">
+                  <div
+                    class="fill"
+                    :style="{ width: `${percentOf(p.bytes, pluginTotalBytes).toFixed(2)}%` }"
+                  />
                 </div>
               </div>
-              <div v-if="cache.note" class="path">
-                {{ cache.note }}
+              <div v-if="pluginsSorted.length > 12" class="muted">
+                仅展示前 12 个插件；其余 {{ pluginsSorted.length - 12 }} 个已折叠。
               </div>
             </div>
           </div>
-        </div>
 
-        <div v-if="Object.keys(databaseGroupActions).length > 0" class="section">
-          <div class="section-head">
-            <div class="section-title">清理说明</div>
-          </div>
-          <div class="muted">
-            部分清理会影响索引、统计与历史数据；执行后请根据提示重新扫描或等待后台重建。
-          </div>
-        </div>
-      </template>
-    </div>
-  </ViewTemplate>
+          <div class="section">
+            <div class="section-head">
+              <div class="section-title">数据库占用</div>
+              <div v-if="dbTablesLoading" class="section-meta">表级统计中…</div>
+            </div>
+            <div class="db-grid">
+              <div class="card">
+                <div class="label">数据库文件</div>
+                <div class="value">
+                  {{ formatBytesShort(report.database.bytes) }}
+                </div>
+                <div class="sub">
+                  {{ report.database.path }}
+                </div>
+              </div>
+              <div class="card">
+                <div class="label">WAL</div>
+                <div class="value">
+                  {{ formatBytesShort(report.database.walBytes) }}
+                </div>
+                <div class="sub">database.db-wal</div>
+              </div>
+              <div class="card">
+                <div class="label">SHM</div>
+                <div class="value">
+                  {{ formatBytesShort(report.database.shmBytes) }}
+                </div>
+                <div class="sub">database.db-shm</div>
+              </div>
+              <div class="card">
+                <div class="label">数据库合计</div>
+                <div class="value">
+                  {{ formatBytesShort(databaseTotalBytes) }}
+                </div>
+                <div class="sub">db + wal + shm</div>
+              </div>
+            </div>
 
-  <TxBottomDialog
-    v-if="cleanupConfirmVisible"
-    :title="cleanupConfirmTitle"
-    :message="cleanupConfirmMessage"
-    :btns="[
-      { content: '取消', type: 'info', onClick: () => true },
-      {
-        content: '继续',
-        type: cleanupConfirmType === 'error' ? 'error' : 'warning',
-        onClick: executeCleanupConfirm
-      }
-    ]"
-    :close="closeCleanupConfirm"
-  />
+            <div v-if="databaseTablesLoaded && !databaseSizeKnown" class="muted db-note">
+              当前 SQLite 未启用 dbstat，表级占用显示为未知。
+            </div>
+
+            <div v-if="databaseLogicalOnly" class="muted db-note">
+              数据库内容为逻辑占用，未计入目录合计。
+            </div>
+
+            <div v-if="!databaseTablesLoaded" class="muted db-note">
+              {{ dbTablesLoading ? '表级占用加载中…' : '表级占用未加载' }}
+            </div>
+
+            <div v-else class="db-groups">
+              <div v-for="group in databaseGroups" :key="group.category" class="row">
+                <div class="row-head">
+                  <div class="row-head-main">
+                    <div class="name">
+                      {{ group.label }}
+                    </div>
+                    <div class="meta">
+                      <span>{{ group.sizeKnown ? formatBytesShort(group.bytes) : '未知' }}</span>
+                      <span class="sep">·</span>
+                      <span>{{ formatCount(group.rows) }} rows</span>
+                    </div>
+                  </div>
+                  <div class="row-actions">
+                    <TxButton
+                      v-for="action in databaseGroupActions[group.category] || []"
+                      :key="action.key"
+                      variant="bare"
+                      class="btn action"
+                      :class="{ danger: action.confirm.type === 'error' }"
+                      :disabled="isBusy"
+                      @click="runCleanup(action)"
+                    >
+                      {{ cleaningKey === action.key ? '处理中…' : action.label }}
+                    </TxButton>
+                  </div>
+                </div>
+                <template
+                  v-for="action in databaseGroupActions[group.category] || []"
+                  :key="`${action.key}-note`"
+                >
+                  <div v-if="action.note" class="muted note">
+                    {{ action.note }}
+                  </div>
+                </template>
+                <div class="table-list">
+                  <div v-for="table in group.tables" :key="table.name" class="table-row">
+                    <div class="table-head">
+                      <div class="table-name">
+                        {{ table.label }}
+                      </div>
+                      <div class="meta">
+                        <span>{{ table.sizeKnown ? formatBytesShort(table.bytes) : '未知' }}</span>
+                        <span class="sep">·</span>
+                        <span>{{ formatCount(table.rows) }} rows</span>
+                      </div>
+                    </div>
+                    <div class="path">表名：{{ table.name }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <div class="section-title">缓存占用</div>
+            </div>
+            <div class="list">
+              <div v-for="cache in cacheList" :key="cache.key" class="row">
+                <div class="row-head">
+                  <div class="name">
+                    {{ cache.label }}
+                  </div>
+                  <div class="meta">
+                    <span>{{ formatBytesShort(cache.bytes) }}</span>
+                    <span class="sep">·</span>
+                    <span>{{ formatCount(cache.entries) }} entries</span>
+                    <span class="sep">·</span>
+                    <span>{{ formatCacheScope(cache.scope) }}</span>
+                    <span class="sep">·</span>
+                    <span>TTL {{ formatTtl(cache.ttlMs) }}</span>
+                  </div>
+                </div>
+                <div v-if="cache.note" class="path">
+                  {{ cache.note }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="Object.keys(databaseGroupActions).length > 0" class="section">
+            <div class="section-head">
+              <div class="section-title">清理说明</div>
+            </div>
+            <div class="muted">
+              部分清理会影响索引、统计与历史数据；执行后请根据提示重新扫描或等待后台重建。
+            </div>
+          </div>
+        </template>
+      </div>
+    </ViewTemplate>
+
+    <TxBottomDialog
+      v-if="cleanupConfirmVisible"
+      :title="cleanupConfirmTitle"
+      :message="cleanupConfirmMessage"
+      :btns="[
+        { content: '取消', type: 'info', onClick: () => true },
+        {
+          content: '继续',
+          type: cleanupConfirmType === 'error' ? 'error' : 'warning',
+          onClick: executeCleanupConfirm
+        }
+      ]"
+      :close="closeCleanupConfirm"
+    />
+  </div>
 </template>
 
 <style lang="scss" scoped>
+.Storagable-Page {
+  height: 100%;
+}
+
 .Storagable-Container {
   position: relative;
 

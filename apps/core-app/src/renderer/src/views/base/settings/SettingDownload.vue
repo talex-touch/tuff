@@ -8,11 +8,14 @@
 import type { DownloadConfig } from '@talex-touch/utils'
 import { TxButton, TxSelectItem } from '@talex-touch/tuffex'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { toast } from 'vue-sonner'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -24,6 +27,17 @@ import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
 
 const { t } = useI18n()
 const downloadSdk = useDownloadSdk()
+const transport = useTuffTransport()
+const settingDownloadLog = createRendererLogger('SettingDownload')
+const openFileEvent = defineRawEvent<
+  {
+    title?: string
+    defaultPath?: string
+    buttonLabel?: string
+    properties?: string[]
+  },
+  { filePaths?: string[] }
+>('dialog:open-file')
 
 // Download center hook
 const { updateConfig } = useDownloadCenter()
@@ -77,7 +91,7 @@ async function loadConfig() {
       devLog('[SettingDownload] Config load timed out, module may be initializing')
       return
     }
-    console.error('[SettingDownload] Failed to load config:', error)
+    settingDownloadLog.error('Failed to load config', error)
     toast.warning(t('settings.settingDownload.messages.loadFailed'))
   } finally {
     loading.value = false
@@ -90,7 +104,7 @@ async function updateDownloadConfig() {
     await updateConfig(downloadConfig.value)
     toast.success(t('settings.settingDownload.messages.saved'))
   } catch (error) {
-    console.error('[SettingDownload] Failed to update config:', error)
+    settingDownloadLog.error('Failed to update config', error)
     toast.error(t('settings.settingDownload.messages.saveFailed'))
   }
 }
@@ -98,6 +112,36 @@ async function updateDownloadConfig() {
 // Watch for changes and update configuration
 function onConfigChange() {
   updateDownloadConfig()
+}
+
+async function chooseTempDir(): Promise<void> {
+  try {
+    const result = await transport.send(openFileEvent, {
+      title: t('settings.settingDownload.selectTempDirTitle'),
+      buttonLabel: t('settings.settingDownload.selectTempDirConfirm'),
+      defaultPath: downloadConfig.value.storage.tempDir || undefined,
+      properties: ['openDirectory']
+    })
+    const nextPath = result?.filePaths?.[0]
+    if (!nextPath) {
+      return
+    }
+
+    downloadConfig.value.storage.tempDir = nextPath
+    await updateDownloadConfig()
+  } catch (error) {
+    settingDownloadLog.error('Failed to select temp dir', error)
+    toast.error(t('settings.settingDownload.messages.tempDirSelectFailed'))
+  }
+}
+
+async function resetTempDir(): Promise<void> {
+  if (!downloadConfig.value.storage.tempDir) {
+    return
+  }
+
+  downloadConfig.value.storage.tempDir = ''
+  await updateDownloadConfig()
 }
 
 // Restore default settings
@@ -141,7 +185,7 @@ async function cleanupTempFiles() {
       throw new Error(response.error || 'Failed to cleanup temp files')
     }
   } catch (error) {
-    console.error('[SettingDownload] Failed to cleanup temp files:', error)
+    settingDownloadLog.error('Failed to cleanup temp files', error)
     toast.error(t('settings.settingDownload.messages.tempCleanFailed'))
   } finally {
     cleaningTemp.value = false
@@ -175,6 +219,7 @@ function formatTimeout(ms: number): string {
 <template>
   <!-- Download settings group block -->
   <TuffGroupBlock
+    class="setting-download-group"
     :name="t('settings.settingDownload.groupTitle')"
     :description="t('settings.settingDownload.groupDesc')"
     default-icon="i-carbon-cloud-download"
@@ -397,8 +442,23 @@ function formatTimeout(ms: number): string {
       active-icon="i-carbon-folder-open"
       :active="Boolean(downloadConfig.storage.tempDir)"
     >
-      <div class="storage-path-display">
-        {{ downloadConfig.storage.tempDir || t('settings.settingDownload.defaultPath') }}
+      <div class="storage-controls">
+        <div class="storage-path-display">
+          {{ downloadConfig.storage.tempDir || t('settings.settingDownload.defaultPath') }}
+        </div>
+        <div class="storage-actions">
+          <TxButton variant="flat" size="sm" :disabled="loading" @click.stop="chooseTempDir">
+            {{ t('settings.settingDownload.browse') }}
+          </TxButton>
+          <TxButton
+            variant="flat"
+            size="sm"
+            :disabled="loading || !downloadConfig.storage.tempDir"
+            @click.stop="resetTempDir"
+          >
+            {{ t('settings.settingDownload.resetTempDir') }}
+          </TxButton>
+        </div>
       </div>
     </TuffBlockSlot>
 
@@ -422,6 +482,43 @@ function formatTimeout(ms: number): string {
 </template>
 
 <style lang="scss" scoped>
+.setting-download-group {
+  :deep(.TBlockSlot-Container) {
+    gap: 16px;
+    align-items: flex-start;
+    min-height: 56px;
+    height: auto;
+  }
+
+  :deep(.TBlockSlot-Content) {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    padding: 8px 0;
+  }
+
+  :deep(.TBlockSlot-Label) {
+    min-width: 0;
+  }
+
+  :deep(.TBlockSlot-Slot) {
+    flex: 0 1 520px;
+    width: min(100%, 520px);
+    max-width: min(100%, 520px);
+    min-width: 0;
+    padding: 8px 0;
+  }
+}
+
+.storage-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: min(100%, 520px);
+  min-width: 0;
+}
+
 .storage-path-display {
   padding: 8px 12px;
   background: var(--tx-fill-color-light);
@@ -430,11 +527,22 @@ function formatTimeout(ms: number): string {
   font-size: 12px;
   color: var(--tx-text-color-regular);
   word-break: break-all;
+  min-width: 0;
+}
+
+.storage-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .actions-container {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  width: min(100%, 520px);
+  min-width: 0;
 }
 </style>

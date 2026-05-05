@@ -12,6 +12,7 @@ import { shell } from 'electron'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { BaseModule } from '../modules/abstract-base-module'
 import { pluginModule } from '../modules/plugin/plugin-module'
+import { createLogger } from '../utils/logger'
 
 interface PluginLogSessionMeta {
   id: string
@@ -65,6 +66,8 @@ const pluginLogGetSessionLogEvent = defineRawEvent<
   PluginLogGetSessionLogResponse
 >('plugin-log:get-session-log')
 const pluginLogStreamEvent = defineRawEvent<LogItem, void>('plugin-log-stream')
+const pluginLogServiceLog = createLogger('PluginSystem').child('LogService')
+const toErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
 export class PluginLogModule extends BaseModule {
   private subscriptions: Map<string, Set<WebContents>> = new Map()
@@ -76,12 +79,16 @@ export class PluginLogModule extends BaseModule {
   private resolvePlugin(pluginName: string): TouchPlugin | null {
     const manager = pluginModule.pluginManager
     if (!manager) {
-      console.warn(`[PluginLogService] Plugin manager not ready when resolving ${pluginName}`)
+      pluginLogServiceLog.warn('Plugin manager not ready during log request', {
+        meta: { pluginName }
+      })
       return null
     }
     const plugin = manager.plugins.get(pluginName) as TouchPlugin | undefined
     if (!plugin) {
-      console.warn(`[PluginLogService] Plugin not found: ${pluginName}`)
+      pluginLogServiceLog.warn('Plugin not found during log request', {
+        meta: { pluginName }
+      })
       return null
     }
     return plugin
@@ -92,10 +99,10 @@ export class PluginLogModule extends BaseModule {
       const sessionLogPath = plugin.logger.getManager().getSessionLogPath()
       return path.dirname(path.dirname(sessionLogPath))
     } catch (error) {
-      console.error(
-        `[PluginLogService] Failed to resolve logs directory for ${plugin.name}:`,
+      pluginLogServiceLog.error('Failed to resolve plugin logs directory', {
+        meta: { pluginName: plugin.name },
         error
-      )
+      })
       return null
     }
   }
@@ -128,10 +135,10 @@ export class PluginLogModule extends BaseModule {
         }
       }
     } catch (error) {
-      console.warn(
-        `[PluginLogService] Failed to parse session meta for ${plugin.name}@${folderName}:`,
+      pluginLogServiceLog.warn('Failed to parse plugin session metadata', {
+        meta: { pluginName: plugin.name, sessionId: folderName },
         error
-      )
+      })
     }
 
     return meta
@@ -147,13 +154,19 @@ export class PluginLogModule extends BaseModule {
           try {
             return JSON.parse(line) as LogItem
           } catch (error) {
-            console.warn('[PluginLogService] Failed to parse log line:', error)
+            pluginLogServiceLog.warn('Failed to parse plugin log line', {
+              meta: { logPath },
+              error
+            })
             return null
           }
         })
         .filter((item): item is LogItem => item !== null)
     } catch (error) {
-      console.error('[PluginLogService] Failed to read session log:', logPath, error)
+      pluginLogServiceLog.error('Failed to read plugin session log', {
+        meta: { logPath },
+        error
+      })
       throw error
     }
   }
@@ -183,8 +196,6 @@ export class PluginLogModule extends BaseModule {
 
   public setupIpcHandlers(transport: ReturnType<typeof getTuffTransportMain>): void {
     this.transport = transport
-    const toErrorMessage = (error: unknown) =>
-      error instanceof Error ? error.message : String(error)
 
     transport.on(pluginLogSubscribeEvent, (payload, context) => {
       const pluginName = payload?.pluginName
@@ -210,9 +221,9 @@ export class PluginLogModule extends BaseModule {
       const pageSizeRaw = Number.parseInt(String(payload.pageSize ?? 12), 10)
       const pageSize = Math.min(Math.max(pageSizeRaw || 12, 5), 50)
 
-      console.info(
-        `[PluginLogService] Getting log sessions for plugin: ${pluginName} | page=${page} pageSize=${pageSize}`
-      )
+      pluginLogServiceLog.debug('Listing plugin log sessions', {
+        meta: { pluginName, page, pageSize }
+      })
 
       const plugin = this.resolvePlugin(pluginName)
       if (!plugin) return { error: 'Plugin not found' }
@@ -238,9 +249,9 @@ export class PluginLogModule extends BaseModule {
           this.buildSessionMeta(folder, logsBaseDir, plugin)
         )
 
-        console.info(
-          `[PluginLogService] Found ${total} log sessions for ${pluginName}. Returning ${sessions.length} records.`
-        )
+        pluginLogServiceLog.debug('Resolved plugin log sessions page', {
+          meta: { pluginName, total, returned: sessions.length, page, pageSize }
+        })
         return {
           sessions,
           total,
@@ -249,20 +260,19 @@ export class PluginLogModule extends BaseModule {
           latestSessionId: sessionFolders[0] ?? null
         }
       } catch (error) {
-        console.error(`[PluginLogService] Error reading log directory for ${pluginName}:`, error)
+        pluginLogServiceLog.error('Failed to enumerate plugin log directory', {
+          meta: { pluginName, logsBaseDir },
+          error
+        })
         return { error: toErrorMessage(error) }
       }
     })
 
-    transport.on(pluginLogOpenSessionFileEvent, (payload) => {
+    transport.on(pluginLogOpenSessionFileEvent, async (payload) => {
       const { pluginName, sessionFolder, session } = payload || {}
       const targetSession = sessionFolder || session
       if (!pluginName || !targetSession)
         return { error: 'pluginName and sessionFolder are required' }
-
-      console.info(
-        `[PluginLogService] Opening log file for plugin: ${pluginName}, session: ${targetSession}`
-      )
 
       const plugin = this.resolvePlugin(pluginName)
       if (!plugin) return { error: 'Plugin not found' }
@@ -273,16 +283,26 @@ export class PluginLogModule extends BaseModule {
       const logFilePath = path.join(logsBaseDir, targetSession, 'session.log')
 
       if (!fs.existsSync(logFilePath)) {
-        console.warn(`[PluginLogService] Log file not found at: ${logFilePath}`)
+        pluginLogServiceLog.warn('Plugin session log file missing', {
+          meta: { pluginName, sessionId: targetSession, logFilePath }
+        })
         return { error: 'Log file not found' }
       }
 
-      shell.openPath(logFilePath)
-      console.info(`[PluginLogService] Successfully opened ${logFilePath}`)
+      const openResult = await shell.openPath(logFilePath)
+      if (openResult) {
+        pluginLogServiceLog.warn('Failed to open plugin session log file', {
+          meta: { pluginName, sessionId: targetSession, logFilePath, reason: openResult }
+        })
+        return { error: openResult }
+      }
+      pluginLogServiceLog.info('Opened plugin session log file', {
+        meta: { pluginName, sessionId: targetSession, logFilePath }
+      })
       return { success: true } as const
     })
 
-    transport.on(pluginLogOpenDirectoryEvent, (payload) => {
+    transport.on(pluginLogOpenDirectoryEvent, async (payload) => {
       const pluginName = payload?.pluginName
       if (!pluginName) return { error: 'pluginName is required' }
 
@@ -293,12 +313,22 @@ export class PluginLogModule extends BaseModule {
       if (!logsBaseDir) return { error: 'Log directory unavailable' }
 
       if (!fs.existsSync(logsBaseDir)) {
-        console.warn(`[PluginLogService] Log directory missing: ${logsBaseDir}`)
+        pluginLogServiceLog.warn('Plugin log directory missing', {
+          meta: { pluginName, logsBaseDir }
+        })
         return { error: 'Log directory not found' }
       }
 
-      shell.openPath(logsBaseDir)
-      console.info(`[PluginLogService] Opened log directory ${logsBaseDir}`)
+      const openResult = await shell.openPath(logsBaseDir)
+      if (openResult) {
+        pluginLogServiceLog.warn('Failed to open plugin log directory', {
+          meta: { pluginName, logsBaseDir, reason: openResult }
+        })
+        return { error: openResult }
+      }
+      pluginLogServiceLog.info('Opened plugin log directory', {
+        meta: { pluginName, logsBaseDir }
+      })
       return { success: true } as const
     })
 
@@ -306,15 +336,17 @@ export class PluginLogModule extends BaseModule {
       const pluginName = payload?.pluginName
       if (!pluginName) return { error: 'pluginName is required' }
 
-      console.debug(`[PluginLogService] Getting log buffer for plugin: ${pluginName}`)
+      pluginLogServiceLog.debug('Reading plugin log buffer', {
+        meta: { pluginName }
+      })
 
       const plugin = this.resolvePlugin(pluginName)
       if (!plugin) return { error: 'Plugin not found' }
 
       const buffer = plugin.logger.getManager().getBuffer()
-      console.info(
-        `[PluginLogService] Returning ${buffer.length} logs from buffer for ${pluginName}.`
-      )
+      pluginLogServiceLog.debug('Returning plugin log buffer', {
+        meta: { pluginName, count: buffer.length }
+      })
       return buffer
     })
 
@@ -356,7 +388,9 @@ export class PluginLogModule extends BaseModule {
     webContents.once('destroyed', cleanup)
     webContents.once('did-navigate', cleanup)
 
-    console.log(`[PluginLogService] WebContents ${webContents.id} subscribed to ${pluginName}`)
+    pluginLogServiceLog.debug('Subscribed renderer to plugin log stream', {
+      meta: { pluginName, webContentsId: webContents.id }
+    })
   }
 
   private unsubscribe(pluginName: string, webContents: WebContents): void {
@@ -366,9 +400,9 @@ export class PluginLogModule extends BaseModule {
       if (subscribers.size === 0) {
         this.subscriptions.delete(pluginName)
       }
-      console.log(
-        `[PluginLogService] WebContents ${webContents.id} unsubscribed from ${pluginName}`
-      )
+      pluginLogServiceLog.debug('Unsubscribed renderer from plugin log stream', {
+        meta: { pluginName, webContentsId: webContents.id }
+      })
     }
   }
 
@@ -387,7 +421,7 @@ export class PluginLogModule extends BaseModule {
   }
 
   async onDestroy(): Promise<void> {
-    console.log(`[PluginLogService] Stop to accept log sessions.`)
+    pluginLogServiceLog.info('Stopped accepting plugin log stream subscriptions')
   }
 }
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
 import type { BuildConfig, DevConfig } from '@talex-touch/tuff-cli-core'
-import type { RollupWatcher } from 'rollup'
 import type { Locale } from '../cli/i18n'
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
@@ -69,9 +68,38 @@ const GITHUB_REPO_URL = 'https://github.com/talex-touch/tuff'
 const DEFAULT_LOCAL_BASE_URL = 'http://localhost:3200'
 const DEVICE_AUTH_TIMEOUT_MS = 2 * 60 * 1000
 const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
+const CLI_COMMAND_NAME = resolveCliCommandName()
+
+interface ViteBuildWatcherEvent {
+  code: string
+  error?: unknown
+}
+
+interface ViteBuildWatcher {
+  on: (event: 'event', listener: (event: ViteBuildWatcherEvent) => void) => void
+  close: () => Promise<void> | void
+}
+
+function isViteBuildWatcher(value: unknown): value is ViteBuildWatcher {
+  if (!value || typeof value !== 'object')
+    return false
+  const candidate = value as { on?: unknown, close?: unknown }
+  return typeof candidate.on === 'function' && typeof candidate.close === 'function'
+}
 
 let cliLocalMode = false
 let cliCustomBase = false
+
+function resolveCliCommandName(): string {
+  const fallback = 'tuffcli'
+  const entry = process.argv[1]
+  if (!entry)
+    return fallback
+
+  const base = path.basename(entry)
+  const normalized = base.replace(/\.(cmd|exe|js)$/i, '')
+  return normalized || fallback
+}
 
 function resolveLocalBaseUrl(): string {
   const envUrl = getEnvOrDefault(
@@ -107,7 +135,7 @@ function getPrivacyUrl(): string {
 initI18n()
 
 function printHelp() {
-  console.log('Usage: tuff <command> [options]')
+  console.log(`Usage: ${CLI_COMMAND_NAME} <command> [options]`)
   console.log('')
   console.log('Commands:')
   console.log('  create      Create a new Tuff plugin from template')
@@ -128,10 +156,10 @@ function printHelp() {
   console.log('  --config-dir   Override CLI config directory (default: ~/.tuff)')
   console.log('  --non-interactive  Disable interactive prompts')
   console.log('')
-  console.log('Run `tuff <command> --help` for command-specific help.')
+  console.log(`Run \`${CLI_COMMAND_NAME} <command> --help\` for command-specific help.`)
   console.log('')
   console.log('Interactive mode:')
-  console.log('  Run `tuff` without arguments to enter interactive mode.')
+  console.log(`  Run \`${CLI_COMMAND_NAME}\` without arguments to enter interactive mode.`)
 }
 
 function printAbout() {
@@ -147,8 +175,12 @@ function printAbout() {
   console.log('  - validate: Validate manifest compatibility and permissions')
 }
 
+function printVersion() {
+  console.log(pkg.version)
+}
+
 function printBuildHelp() {
-  console.log('Usage: tuff build [options]')
+  console.log(`Usage: ${CLI_COMMAND_NAME} build [options]`)
   console.log('')
   console.log('Options:')
   console.log('  --watch         Watch files and rebuild on changes')
@@ -159,7 +191,7 @@ function printBuildHelp() {
 }
 
 function printDevHelp() {
-  console.log('Usage: tuff dev [options]')
+  console.log(`Usage: ${CLI_COMMAND_NAME} dev [options]`)
   console.log('')
   console.log('Options:')
   console.log('  --port <port>   Dev server port')
@@ -170,12 +202,20 @@ function printDevHelp() {
 }
 
 function printValidateHelp() {
-  console.log('Usage: tuff validate [options]')
+  console.log(`Usage: ${CLI_COMMAND_NAME} validate [options]`)
   console.log('')
   console.log('Options:')
   console.log('  --manifest <path>  Manifest file path (default: ./manifest.json)')
   console.log('  --strict           Treat warnings as errors')
   console.log('  --help, -h         Show this help message')
+  console.log('')
+}
+
+function printLoginHelp() {
+  console.log(`Usage: ${CLI_COMMAND_NAME} login [token]`)
+  console.log('')
+  console.log('Without a token, Tuff opens the browser authorization flow.')
+  console.log('Passing a token is kept for compatibility with existing API/app tokens.')
   console.log('')
 }
 
@@ -359,7 +399,7 @@ async function runPublishWithTracking(): Promise<void> {
 }
 
 async function runBuilder() {
-  console.log('Running: tuff builder')
+  console.log(`Running: ${CLI_COMMAND_NAME} builder`)
   await build()
 }
 
@@ -415,10 +455,10 @@ async function runBuild(args: string[] = []) {
       return
     }
 
-    if (!viteResult || typeof (viteResult as RollupWatcher).on !== 'function')
+    if (!isViteBuildWatcher(viteResult))
       throw new Error('Vite watch mode did not return a watcher')
 
-    const watcher = viteResult as RollupWatcher
+    const watcher = viteResult
     let packaging = false
     let pending = false
 
@@ -433,7 +473,7 @@ async function runBuild(args: string[] = []) {
       }
       catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        console.error(`tuff build failed: ${message}`)
+        console.error(`${CLI_COMMAND_NAME} build failed: ${message}`)
         process.exitCode = 1
       }
       finally {
@@ -451,7 +491,7 @@ async function runBuild(args: string[] = []) {
       }
       else if (event.code === 'ERROR') {
         const message = event.error instanceof Error ? event.error.message : String(event.error)
-        console.error(`tuff build failed: ${message}`)
+        console.error(`${CLI_COMMAND_NAME} build failed: ${message}`)
         process.exitCode = 1
       }
     })
@@ -466,7 +506,7 @@ async function runBuild(args: string[] = []) {
   }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error(`tuff build failed: ${message}`)
+    console.error(`${CLI_COMMAND_NAME} build failed: ${message}`)
     process.exitCode = 1
   }
 }
@@ -519,7 +559,7 @@ async function runDev(args: string[] = []) {
   }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error(`tuff dev failed: ${message}`)
+    console.error(`${CLI_COMMAND_NAME} dev failed: ${message}`)
     process.exitCode = 1
   }
 }
@@ -564,57 +604,17 @@ async function ensureOnboarding(): Promise<boolean> {
   return true
 }
 
-async function ensureAuthenticated(): Promise<boolean> {
-  const baseUrl = normalizeBaseUrl(getTuffBaseUrl())
-  const authState = await readAuthState()
-  if (authState?.token && authState.baseUrl) {
-    const storedBase = normalizeBaseUrl(authState.baseUrl)
-    if (storedBase !== baseUrl) {
-      await clearAuthToken()
-      printInfo(t('notice.baseChanged', { from: storedBase, to: baseUrl }))
-    }
-  }
+async function saveTokenLogin(token: string, baseUrl = normalizeBaseUrl(getTuffBaseUrl())): Promise<void> {
+  const device = await ensureCliDeviceInfo()
+  await saveAuthToken(token.trim(), {
+    baseUrl,
+    deviceId: device.deviceId,
+    deviceName: device.deviceName,
+    devicePlatform: device.devicePlatform,
+  })
+}
 
-  const existingToken = await getAuthToken()
-  if (existingToken) {
-    return true
-  }
-
-  if (cliLocalMode) {
-    printInfo(t('notice.localMode', { url: baseUrl }))
-  }
-  else if (cliCustomBase) {
-    printInfo(t('notice.customMode', { url: baseUrl }))
-  }
-
-  printHeader(t('onboarding.loginTitle'), t('onboarding.loginSubtitle'))
-
-  const loginMethod = await askSelect(t('onboarding.loginSelect'), [
-    { label: t('onboarding.loginOptionToken'), value: 'token' },
-    { label: t('onboarding.loginOptionOauth'), value: 'oauth' },
-    { label: t('onboarding.loginOptionExit'), value: 'exit' },
-  ])
-
-  if (loginMethod === 'exit')
-    return false
-
-  if (loginMethod === 'token') {
-    const token = await askText(t('onboarding.tokenPrompt'), {
-      hint: t('onboarding.tokenHint'),
-      validate: value => (value.trim() ? true : t('onboarding.tokenInvalid')),
-    })
-    const device = await ensureCliDeviceInfo()
-    await saveAuthToken(token.trim(), {
-      baseUrl,
-      deviceId: device.deviceId,
-      deviceName: device.deviceName,
-      devicePlatform: device.devicePlatform,
-    })
-    printInfo(t('onboarding.tokenWarning'))
-    printInfo(t('onboarding.loginSuccess'))
-    return true
-  }
-
+async function runDeviceAuthLogin(): Promise<boolean> {
   while (true) {
     printInfo(t('onboarding.oauthPreparing'))
     try {
@@ -674,13 +674,7 @@ async function ensureAuthenticated(): Promise<boolean> {
           return false
         }
 
-        const device = await ensureCliDeviceInfo()
-        await saveAuthToken(result.token, {
-          baseUrl,
-          deviceId: device.deviceId,
-          deviceName: device.deviceName,
-          devicePlatform: device.devicePlatform,
-        })
+        await saveTokenLogin(result.token)
         printInfo(t('onboarding.tokenWarning'))
         if (result.grantType === 'short') {
           printWarning(t('onboarding.authModeShortHint', {
@@ -703,6 +697,54 @@ async function ensureAuthenticated(): Promise<boolean> {
       return false
     }
   }
+}
+
+async function ensureAuthenticated(): Promise<boolean> {
+  const baseUrl = normalizeBaseUrl(getTuffBaseUrl())
+  const authState = await readAuthState()
+  if (authState?.token && authState.baseUrl) {
+    const storedBase = normalizeBaseUrl(authState.baseUrl)
+    if (storedBase !== baseUrl) {
+      await clearAuthToken()
+      printInfo(t('notice.baseChanged', { from: storedBase, to: baseUrl }))
+    }
+  }
+
+  const existingToken = await getAuthToken()
+  if (existingToken) {
+    return true
+  }
+
+  if (cliLocalMode) {
+    printInfo(t('notice.localMode', { url: baseUrl }))
+  }
+  else if (cliCustomBase) {
+    printInfo(t('notice.customMode', { url: baseUrl }))
+  }
+
+  printHeader(t('onboarding.loginTitle'), t('onboarding.loginSubtitle'))
+
+  const loginMethod = await askSelect(t('onboarding.loginSelect'), [
+    { label: t('onboarding.loginOptionToken'), value: 'token' },
+    { label: t('onboarding.loginOptionOauth'), value: 'oauth' },
+    { label: t('onboarding.loginOptionExit'), value: 'exit' },
+  ])
+
+  if (loginMethod === 'exit')
+    return false
+
+  if (loginMethod === 'token') {
+    const token = await askText(t('onboarding.tokenPrompt'), {
+      hint: t('onboarding.tokenHint'),
+      validate: value => (value.trim() ? true : t('onboarding.tokenInvalid')),
+    })
+    await saveTokenLogin(token, baseUrl)
+    printInfo(t('onboarding.tokenWarning'))
+    printInfo(t('onboarding.loginSuccess'))
+    return true
+  }
+
+  return await runDeviceAuthLogin()
 }
 
 interface AccountProfile {
@@ -779,6 +821,25 @@ function formatDuration(seconds?: number): string {
   if (seconds % 60 === 0)
     return `${Math.floor(seconds / 60)}m`
   return `${seconds}s`
+}
+
+async function runLoginCommand(args: string[]): Promise<void> {
+  if (args.includes('--help') || args.includes('-h')) {
+    printLoginHelp()
+    return
+  }
+
+  const token = args.find(arg => !arg.startsWith('-'))
+  printHeader(t('onboarding.loginTitle'), t('onboarding.loginSubtitle'))
+
+  if (token) {
+    await saveTokenLogin(token)
+    printInfo(t('onboarding.tokenWarning'))
+    printInfo(t('onboarding.loginSuccess'))
+    return
+  }
+
+  await runDeviceAuthLogin()
 }
 
 async function showAccountSummary(): Promise<void> {
@@ -879,23 +940,33 @@ async function runPluginMenu(): Promise<void> {
   }
 }
 
-async function runAccountMenu(): Promise<void> {
+async function runAccountMenu(): Promise<'logout' | void> {
   while (true) {
     printHeader(t('account.menuTitle'))
     const action = await askSelect(t('account.selectAction'), [
       { label: t('account.summary'), value: 'summary' },
       { label: t('account.remotePlugins'), value: 'remote-plugins' },
       { label: t('account.localRepos'), value: 'local-repos' },
+      { label: t('account.logout'), value: 'logout' },
       { label: t('common.back'), value: 'back' },
     ])
-    if (action === 'back')
+    if (action === 'back') {
       return
-    if (action === 'summary')
+    }
+    if (action === 'summary') {
       await showAccountSummary()
-    else if (action === 'remote-plugins')
+    }
+    else if (action === 'remote-plugins') {
       await showRemotePlugins()
-    else if (action === 'local-repos')
+    }
+    else if (action === 'local-repos') {
       await showLocalRepositories()
+    }
+    else if (action === 'logout') {
+      await clearAuthToken()
+      printInfo(t('settings.logoutSuccess'))
+      return 'logout'
+    }
   }
 }
 
@@ -1029,7 +1100,9 @@ async function runInteractiveMode(): Promise<void> {
       continue
     }
     if (action === 'account') {
-      await runAccountMenu()
+      const outcome = await runAccountMenu()
+      if (outcome === 'logout')
+        return
       continue
     }
     if (action === 'settings') {
@@ -1148,6 +1221,7 @@ async function main() {
   if (nonInteractive) {
     process.env.TUFF_NON_INTERACTIVE = '1'
   }
+  process.env.TUFF_CLI_COMMAND = CLI_COMMAND_NAME
 
   const hasCustomBase = Boolean(apiBase) || local
   if (apiBase) {
@@ -1169,6 +1243,10 @@ async function main() {
   try {
     if (command === '--help' || command === '-h') {
       printHelp()
+      return
+    }
+    if (command === '--version' || command === '-v' || command === 'version') {
+      printVersion()
       return
     }
     if (command === 'create') {
@@ -1205,7 +1283,7 @@ async function main() {
       }
     }
     else if (command === 'login') {
-      await (await loadPublishModule()).login()
+      await runLoginCommand(commandArgs)
     }
     else if (command === 'logout') {
       await (await loadPublishModule()).logout()
@@ -1230,8 +1308,8 @@ async function main() {
   catch (error) {
     const message = error instanceof Error ? error.stack ?? error.message : String(error)
     console.error(message)
-    if (command !== 'help' && command !== 'about')
-      console.error('Run `tuff help` to see available commands.')
+    if (command !== 'help' && command !== 'about' && command !== '--version' && command !== '-v' && command !== 'version')
+      console.error(`Run \`${CLI_COMMAND_NAME} help\` to see available commands.`)
     process.exitCode = 1
   }
 }

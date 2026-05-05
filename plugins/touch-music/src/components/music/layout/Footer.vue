@@ -12,9 +12,9 @@ import { sleep } from '@modules/utils.ts'
 import { ref, watch } from 'vue'
 import PlayPause from '../../icon/PlayPause.vue'
 
-export default {
-  name: 'Footer',
-}
+defineOptions({
+  name: 'TuffMusicFooter',
+})
 
 const screenSongModel = ref(false)
 

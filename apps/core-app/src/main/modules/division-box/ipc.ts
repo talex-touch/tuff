@@ -17,7 +17,7 @@ import { DivisionBoxEvents, type HandlerContext } from '@talex-touch/utils/trans
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getPermissionModule } from '../permission'
 import { pluginModule } from '../plugin/plugin-module'
-import { flowTriggerManager } from './flow-trigger'
+import { divisionBoxIpcLog } from './logger'
 import { DivisionBoxManager } from './manager'
 import { resolveDivisionBoxPermissionActor } from './permission-actor'
 
@@ -151,7 +151,7 @@ export class DivisionBoxIPC {
   registerHandlers(): void {
     this.registerTransportHandlers()
 
-    console.log('[DivisionBoxIPC] All transport handlers registered')
+    divisionBoxIpcLog.info('All transport handlers registered')
   }
 
   private registerTransportHandlers(): void {
@@ -291,29 +291,6 @@ export class DivisionBoxIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(DivisionBoxEvents.flowTrigger, async (payload, context) => {
-        enforce(context, 'division-box:flow:trigger', payload)
-        const { targetId, payload: flowPayload } = payload
-
-        if (!targetId || typeof targetId !== 'string') {
-          return createErrorResponse('Invalid or missing targetId')
-        }
-
-        if (
-          !flowPayload ||
-          typeof flowPayload !== 'object' ||
-          !flowPayload.type ||
-          !flowPayload.data
-        ) {
-          return createErrorResponse('Invalid or missing payload')
-        }
-
-        const sessionId = await flowTriggerManager.handleFlow(targetId, flowPayload)
-        return createSuccessResponse({ sessionId })
-      })
-    )
-
-    this.transportDisposers.push(
       transport.on(DivisionBoxEvents.togglePin, async (payload, context) => {
         enforce(context, 'division-box:window:toggle-pin', payload)
         const { sessionId } = payload
@@ -441,7 +418,7 @@ export class DivisionBoxIPC {
     this.transportDisposers = []
     this.transport = null
 
-    console.log('[DivisionBoxIPC] All IPC handlers unregistered')
+    divisionBoxIpcLog.info('All IPC handlers unregistered')
   }
 
   /**

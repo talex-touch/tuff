@@ -1,3 +1,7 @@
+import { EventEmitter } from 'node:events'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -14,8 +18,9 @@ const {
   saveMainConfigMock,
   scheduleDbWriteMock,
   searchRecordExecuteMock,
-  shellOpenExternalMock,
   shellOpenPathMock,
+  showInternalSystemNotificationMock,
+  pinyinMock,
   spawnSafeMock,
   unregisterPollingMock,
   withSqliteRetryMock
@@ -42,9 +47,10 @@ const {
   saveMainConfigMock: vi.fn(),
   scheduleDbWriteMock: vi.fn(async (_label: string, task: () => Promise<unknown>) => await task()),
   searchRecordExecuteMock: vi.fn(),
-  shellOpenExternalMock: vi.fn(async () => undefined),
-  shellOpenPathMock: vi.fn(async () => ''),
-  spawnSafeMock: vi.fn(() => ({ unref: vi.fn() })),
+  shellOpenPathMock: vi.fn(),
+  showInternalSystemNotificationMock: vi.fn(),
+  pinyinMock: vi.fn(),
+  spawnSafeMock: vi.fn(),
   unregisterPollingMock: vi.fn(),
   withSqliteRetryMock: vi.fn(async (task: () => Promise<unknown>) => await task())
 }))
@@ -78,7 +84,6 @@ vi.mock('electron', () => ({
     getAllWindows: vi.fn(() => [])
   },
   shell: {
-    openExternal: shellOpenExternalMock,
     openPath: shellOpenPathMock
   }
 }))
@@ -91,15 +96,19 @@ vi.mock('@talex-touch/utils/common/utils', () => ({
   runAdaptiveTaskQueue: runAdaptiveTaskQueueMock
 }))
 
-vi.mock('@talex-touch/utils/common/utils/safe-shell', () => ({
-  spawnSafe: spawnSafeMock
-}))
-
 vi.mock('@talex-touch/utils/common/utils/polling', () => ({
   pollingService: {
     register: registerPollingMock,
     unregister: unregisterPollingMock
   }
+}))
+
+vi.mock('@talex-touch/utils/common/utils/safe-shell', () => ({
+  spawnSafe: spawnSafeMock
+}))
+
+vi.mock('pinyin-pro', () => ({
+  pinyin: pinyinMock
 }))
 
 vi.mock('../../../../core/eventbus/touch-event', () => ({
@@ -151,6 +160,22 @@ vi.mock('../../../storage', () => ({
   saveMainConfig: saveMainConfigMock
 }))
 
+vi.mock('../../../notification', () => ({
+  notificationModule: {
+    showInternalSystemNotification: showInternalSystemNotificationMock
+  }
+}))
+
+vi.mock('../../../../utils/i18n-helper', () => ({
+  t: vi.fn((key: string, params?: Record<string, string | number>) => {
+    if (key === 'notifications.appLaunchFailedTitle') return 'App Launch Failed'
+    if (key === 'notifications.appLaunchFailedBody') {
+      return `Failed to launch ${params?.name}\n${params?.error}`
+    }
+    return key
+  })
+}))
+
 vi.mock('../../file-system-watcher', () => ({
   default: {
     addPath: vi.fn()
@@ -198,18 +223,51 @@ vi.mock('./app-noise-filter', () => ({
   matchNoisySystemAppRule: vi.fn(() => null)
 }))
 
-vi.mock('./app-utils', () => ({
-  formatLog: vi.fn((_scope: string, message: string) => message),
-  LogStyle: {
-    info: (message: string) => message,
-    warning: (message: string) => message,
-    error: (message: string) => message,
-    process: (message: string) => message,
-    success: (message: string) => message
+vi.mock('./app-utils', () => {
+  const normalizeStringList = (values: Array<string | null | undefined>): string[] => {
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const value of values) {
+      const normalized = value?.trim()
+      if (!normalized) continue
+      const lookupKey = normalized.toLowerCase()
+      if (seen.has(lookupKey)) continue
+      seen.add(lookupKey)
+      result.push(normalized)
+    }
+    return result
   }
-}))
+
+  return {
+    formatLog: vi.fn((_scope: string, message: string) => message),
+    normalizeStringList: vi.fn(normalizeStringList),
+    parseStringList: vi.fn((value: string | null | undefined) => {
+      if (!value) return []
+      try {
+        const parsed = JSON.parse(value)
+        return Array.isArray(parsed)
+          ? normalizeStringList(parsed.filter((item): item is string => typeof item === 'string'))
+          : []
+      } catch {
+        return []
+      }
+    }),
+    serializeStringList: vi.fn((values: string[] | undefined) => {
+      const normalized = normalizeStringList(values ?? [])
+      return normalized.length > 0 ? JSON.stringify(normalized) : undefined
+    }),
+    LogStyle: {
+      info: (message: string) => message,
+      warning: (message: string) => message,
+      error: (message: string) => message,
+      process: (message: string) => message,
+      success: (message: string) => message
+    }
+  }
+})
 
 vi.mock('./search-processing-service', () => ({
+  isSearchableAppRow: vi.fn(() => true),
   processSearchResults: vi.fn(async () => [])
 }))
 
@@ -235,7 +293,53 @@ async function loadSubject() {
   return await import('./app-provider')
 }
 
+function upsertExtensionRows(
+  target: Array<{ fileId: number; key: string; value: string }>,
+  rows: Array<{ fileId: number; key: string; value: string }>
+): void {
+  for (const row of rows) {
+    const existingIndex = target.findIndex(
+      (candidate) => candidate.fileId === row.fileId && candidate.key === row.key
+    )
+    if (existingIndex >= 0) {
+      target[existingIndex] = row
+    } else {
+      target.push(row)
+    }
+  }
+}
+
 type AppProviderPrivate = {
+  buildAppExtensions: (
+    fileId: number,
+    app: {
+      bundleId?: string
+      icon?: string
+      stableId?: string
+      launchKind: string
+      launchTarget: string
+      launchArgs?: string
+      workingDirectory?: string
+      displayPath?: string
+      description?: string
+      alternateNames?: string[]
+    }
+  ) => Array<{ fileId: number; key: string; value: string }>
+  syncScannedAppExtensions: (
+    fileId: number,
+    app: {
+      bundleId?: string
+      icon?: string
+      stableId?: string
+      launchKind: string
+      launchTarget: string
+      launchArgs?: string
+      workingDirectory?: string
+      displayPath?: string
+      description?: string
+      alternateNames?: string[]
+    }
+  ) => Promise<void>
   context: unknown
   dbUtils: unknown
   searchIndex: unknown
@@ -243,19 +347,58 @@ type AppProviderPrivate = {
   _clearPendingDeletions: () => Promise<void>
   _initialize: (options?: { forceRefresh?: boolean }) => Promise<void>
   _performFullSync: (forced: boolean) => Promise<void>
+  _generateKeywordsForApp: (app: {
+    alternateNames?: string[]
+    bundleId?: string
+    displayName?: string
+    fileName?: string
+    icon?: string
+    lastModified?: Date
+    launchKind: string
+    launchTarget: string
+    name: string
+    path: string
+    stableId?: string
+  }) => Promise<Set<string>>
+  _syncKeywordsForApp: (app: {
+    alternateNames?: string[]
+    bundleId?: string
+    displayName?: string
+    fileName?: string
+    icon?: string
+    lastModified?: Date
+    launchKind: string
+    launchTarget: string
+    name: string
+    path: string
+    stableId?: string
+  }) => Promise<void>
+  diagnoseAppSearch: (request: { target: string; query?: string }) => Promise<unknown>
+  reindexAppSearchTarget: (request: {
+    target: string
+    mode?: 'keywords' | 'scan'
+    force?: boolean
+  }) => Promise<unknown>
   _performMdlsUpdateScan: () => Promise<void>
   _performRebuild: () => Promise<void>
   _performStartupBackfill: () => Promise<void>
+  reindexManagedEntries: () => Promise<void>
   _recordMissingIconApps: (apps: unknown[]) => Promise<void>
   _runFullSync: (forced: boolean) => Promise<void>
   _runMdlsUpdateScan: () => Promise<void>
   _runStartupBackfill: () => Promise<void>
   _setLastFullSyncTime: (timestamp: number) => Promise<void>
-  launchApp: (
-    launchTarget: string,
-    launchMeta: Record<string, unknown>,
-    diagnosticMeta: Record<string, unknown>
-  ) => Promise<void>
+  _mapDbAppToScannedInfo: (app: {
+    name: string
+    displayName?: string | null
+    path: string
+    mtime: Date
+    extensions: Record<string, string>
+  }) => {
+    description?: string
+    displayName?: string
+    launchKind: string
+  }
 }
 
 function asPrivateProvider(provider: unknown): AppProviderPrivate {
@@ -268,8 +411,6 @@ describe('appProvider rebuild maintenance', () => {
     vi.clearAllMocks()
     getWatchPathsMock.mockReturnValue([])
     getAppsMock.mockResolvedValue([])
-    shellOpenExternalMock.mockResolvedValue(undefined)
-    shellOpenPathMock.mockResolvedValue('')
     spawnSafeMock.mockReturnValue({ unref: vi.fn() })
     runMdlsUpdateScanMock.mockResolvedValue({
       updatedApps: [],
@@ -277,6 +418,137 @@ describe('appProvider rebuild maintenance', () => {
       deletedApps: []
     })
     getMainConfigMock.mockReturnValue(undefined)
+    pinyinMock.mockImplementation((value: string, options?: { pattern?: string }) => {
+      if (options?.pattern === 'first') {
+        return value === '微信' ? 'WX' : value
+      }
+      return value === '微信' ? 'WEI XIN' : value
+    })
+  })
+
+  it('returns immediately while path launch is still pending in the background', async () => {
+    const { appProvider } = await loadSubject()
+    const launchDeferred = createDeferred<string>()
+    shellOpenPathMock.mockReturnValueOnce(launchDeferred.promise)
+
+    await appProvider.onExecute({
+      item: {
+        id: 'path-app',
+        render: { mode: 'default', basic: { title: 'Slow App' } },
+        meta: {
+          app: {
+            path: '/Applications/Slow.app',
+            launchKind: 'path',
+            launchTarget: '/Applications/Slow.app'
+          }
+        }
+      }
+    } as any)
+
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+
+    await flushPromises()
+
+    expect(shellOpenPathMock).toHaveBeenCalledWith('/Applications/Slow.app')
+    expect(showInternalSystemNotificationMock).not.toHaveBeenCalled()
+
+    launchDeferred.resolve('')
+    await flushPromises()
+
+    expect(showInternalSystemNotificationMock).not.toHaveBeenCalled()
+  })
+
+  it('notifies when a background path launch fails', async () => {
+    const { appProvider } = await loadSubject()
+    shellOpenPathMock.mockResolvedValueOnce('access denied')
+
+    await appProvider.onExecute({
+      item: {
+        id: 'path-app-failed',
+        render: { mode: 'default', basic: { title: 'Blocked App' } },
+        meta: {
+          app: {
+            path: '/Applications/Blocked.app',
+            launchKind: 'path',
+            launchTarget: '/Applications/Blocked.app'
+          }
+        }
+      }
+    } as any)
+
+    await flushPromises()
+
+    expect(showInternalSystemNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'App Launch Failed',
+        message: 'Failed to launch Blocked App\naccess denied',
+        level: 'error'
+      })
+    )
+  })
+
+  it('notifies when shortcut spawn fails before handoff', async () => {
+    const { appProvider } = await loadSubject()
+    spawnSafeMock.mockImplementationOnce(() => {
+      throw new Error('spawn failed')
+    })
+
+    await appProvider.onExecute({
+      item: {
+        id: 'shortcut-app-failed',
+        render: { mode: 'default', basic: { title: 'Shortcut App' } },
+        meta: {
+          app: {
+            path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk',
+            launchKind: 'shortcut',
+            launchTarget: 'C:\\Program Files\\Foo\\Foo.exe'
+          }
+        }
+      }
+    } as any)
+
+    await flushPromises()
+
+    expect(showInternalSystemNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'App Launch Failed',
+        message: 'Failed to launch Shortcut App\nspawn failed',
+        level: 'error'
+      })
+    )
+  })
+
+  it('notifies when shortcut exits non-zero before handoff', async () => {
+    const { appProvider } = await loadSubject()
+    const child = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn> }
+    child.unref = vi.fn()
+    spawnSafeMock.mockReturnValueOnce(child)
+
+    await appProvider.onExecute({
+      item: {
+        id: 'shortcut-app-exit',
+        render: { mode: 'default', basic: { title: 'Crashing Shortcut' } },
+        meta: {
+          app: {
+            path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Crash.lnk',
+            launchKind: 'shortcut',
+            launchTarget: 'C:\\Program Files\\Crash\\Crash.exe'
+          }
+        }
+      }
+    } as any)
+
+    await flushPromises()
+    child.emit('exit', 1, null)
+    await flushPromises()
+
+    expect(showInternalSystemNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'App Launch Failed',
+        message: 'Failed to launch Crashing Shortcut\nprocess exited early with code 1',
+        level: 'error'
+      })
+    )
   })
 
   it('rebuild only clears app records and preserves file records', async () => {
@@ -284,22 +556,30 @@ describe('appProvider rebuild maintenance', () => {
     const { files, fileExtensions } = await import('../../../../db/schema')
     const privateProvider = asPrivateProvider(appProvider)
 
-    let selectedAppIds: number[] = []
+    const scannedAppIds = [1]
     let fileRows = [
-      { id: 1, type: 'app' },
-      { id: 2, type: 'file' }
+      { id: 1, path: '/Applications/Scanned.app', type: 'app' },
+      { id: 2, path: '/Users/demo/bin/custom.sh', type: 'app' },
+      { id: 3, type: 'file' }
     ]
     let extensionRows = [
-      { fileId: 1, key: 'bundleId' },
-      { fileId: 2, key: 'sha1' }
+      { fileId: 1, key: 'bundleId', value: 'com.demo.scanned' },
+      { fileId: 2, key: 'entrySource', value: 'manual' },
+      { fileId: 2, key: 'entryEnabled', value: '1' },
+      { fileId: 3, key: 'sha1', value: 'abc123' }
     ]
 
     const db = {
       select: vi.fn(() => ({
-        from: vi.fn(() => ({
+        from: vi.fn((table: unknown) => ({
           where: vi.fn(async () => {
-            selectedAppIds = fileRows.filter((row) => row.type === 'app').map((row) => row.id)
-            return selectedAppIds.map((id) => ({ id }))
+            if (table === files) {
+              return fileRows.filter((row) => row.type === 'app')
+            }
+            if (table === fileExtensions) {
+              return extensionRows.filter((row) => row.fileId === 1 || row.fileId === 2)
+            }
+            return []
           })
         }))
       })),
@@ -313,12 +593,10 @@ describe('appProvider rebuild maintenance', () => {
             delete: vi.fn((table: unknown) => ({
               where: vi.fn(async (_predicate: unknown) => {
                 if (table === fileExtensions) {
-                  extensionRows = extensionRows.filter(
-                    (row) => !selectedAppIds.includes(row.fileId)
-                  )
+                  extensionRows = extensionRows.filter((row) => !scannedAppIds.includes(row.fileId))
                 }
                 if (table === files) {
-                  fileRows = fileRows.filter((row) => !selectedAppIds.includes(row.id))
+                  fileRows = fileRows.filter((row) => !scannedAppIds.includes(row.id))
                 }
               })
             }))
@@ -333,13 +611,22 @@ describe('appProvider rebuild maintenance', () => {
     privateProvider.searchIndex = { removeByProvider: removeByProviderMock }
     privateProvider._clearPendingDeletions = vi.fn().mockResolvedValue(undefined)
     privateProvider._performFullSync = vi.fn().mockResolvedValue(undefined)
+    privateProvider.reindexManagedEntries = vi.fn().mockResolvedValue(undefined)
 
     const result = await appProvider.rebuildIndex()
 
     expect(result.success).toBe(true)
-    expect(fileRows).toEqual([{ id: 2, type: 'file' }])
-    expect(extensionRows).toEqual([{ fileId: 2, key: 'sha1' }])
+    expect(fileRows).toEqual([
+      { id: 2, path: '/Users/demo/bin/custom.sh', type: 'app' },
+      { id: 3, type: 'file' }
+    ])
+    expect(extensionRows).toEqual([
+      { fileId: 2, key: 'entrySource', value: 'manual' },
+      { fileId: 2, key: 'entryEnabled', value: '1' },
+      { fileId: 3, key: 'sha1', value: 'abc123' }
+    ])
     expect(removeByProviderMock).toHaveBeenCalledWith('app-provider')
+    expect(privateProvider.reindexManagedEntries).toHaveBeenCalledTimes(1)
     expect(privateProvider._performFullSync).toHaveBeenCalledWith(true)
   })
 
@@ -373,7 +660,7 @@ describe('appProvider rebuild maintenance', () => {
     const privateProvider = asPrivateProvider(appProvider)
     const dbRow = {
       id: 80,
-      path: 'D:/Weixin/Weixin.exe',
+      path: 'D:\\Weixin\\Weixin.exe',
       name: 'Weixin',
       displayName: '\u03A2\uFFFD\uFFFD',
       type: 'app',
@@ -383,12 +670,13 @@ describe('appProvider rebuild maintenance', () => {
     const scannedApp = {
       name: 'WeChat',
       displayName: 'WeChat',
-      path: 'D:/Weixin/Weixin.exe',
+      path: 'D:\\Weixin\\Weixin.exe',
       icon: '',
       bundleId: '',
-      uniqueId: 'D:/Weixin/Weixin.exe',
-      launchPath: 'D:/Weixin/Weixin.exe',
+      uniqueId: 'path:d:\\weixin\\weixin.exe',
+      stableId: 'path:d:\\weixin\\weixin.exe',
       launchKind: 'path' as const,
+      launchTarget: 'D:\\Weixin\\Weixin.exe',
       lastModified: new Date('2026-05-05T09:00:00Z')
     }
     let updatedDisplayName: string | null = dbRow.displayName
@@ -398,6 +686,13 @@ describe('appProvider rebuild maintenance', () => {
     privateProvider.dbUtils = {
       getFilesByType: vi.fn().mockResolvedValue([dbRow]),
       getDb: () => ({
+        insert: vi.fn(() => ({
+          values: vi.fn(() => ({
+            onConflictDoUpdate: vi.fn(() => ({
+              returning: vi.fn(async () => [])
+            }))
+          }))
+        })),
         update: vi.fn(() => ({
           set: vi.fn((values: { displayName?: string }) => ({
             where: vi.fn(async () => {
@@ -407,11 +702,15 @@ describe('appProvider rebuild maintenance', () => {
             })
           }))
         }))
-      })
+      }),
+      addFileExtensions: vi.fn(async () => undefined)
     }
-    privateProvider.searchIndex = { indexItems: vi.fn() }
+    privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
     privateProvider.fetchExtensionsForFiles = vi.fn(async (files: unknown[]) =>
-      files.map((file) => ({ ...(file as typeof dbRow), extensions: {} }))
+      files.map((file) => ({
+        ...(file as typeof dbRow),
+        extensions: { appIdentity: 'path:d:\\weixin\\weixin.exe' }
+      }))
     )
     privateProvider._recordMissingIconApps = vi.fn().mockResolvedValue(undefined)
 
@@ -464,118 +763,644 @@ describe('appProvider rebuild maintenance', () => {
       'startup-backfill'
     ])
   })
-})
 
-describe('appProvider Windows launch diagnostics', () => {
-  beforeEach(() => {
-    vi.resetModules()
-    vi.clearAllMocks()
-    getMainConfigMock.mockReturnValue(undefined)
-    shellOpenExternalMock.mockResolvedValue(undefined)
-    shellOpenPathMock.mockResolvedValue('')
-    spawnSafeMock.mockReturnValue({ unref: vi.fn() })
-  })
-
-  it('launches Windows shortcuts from original lnk path before falling back to target', async () => {
+  it('launches shortcut apps with spawn and preserved args', async () => {
     const { appProvider } = await loadSubject()
 
     await appProvider.onExecute({
       item: {
-        id: 'wechat',
+        id: 'shortcut-app',
         meta: {
           app: {
-            path: 'C:/Program Files/Tencent/WeChat/WeChat.exe',
-            launchPath: 'C:/Program Files/Tencent/WeChat/WeChat.exe',
-            shortcutPath: 'C:/ProgramData/Microsoft/Windows/Start Menu/Programs/微信/微信.lnk',
-            launchKind: 'shortcut'
+            path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk',
+            launchKind: 'shortcut',
+            launchTarget: 'C:\\Program Files\\Foo\\Foo.exe',
+            launchArgs: '--profile work --flag',
+            workingDirectory: 'C:\\Program Files\\Foo'
           }
         }
-      },
-      searchResult: undefined
-    } as never)
+      }
+    } as any)
 
     await flushPromises()
 
-    expect(shellOpenPathMock).toHaveBeenCalledTimes(1)
-    expect(shellOpenPathMock).toHaveBeenCalledWith(
-      'C:/ProgramData/Microsoft/Windows/Start Menu/Programs/微信/微信.lnk'
+    expect(spawnSafeMock).toHaveBeenCalledWith(
+      'C:\\Program Files\\Foo\\Foo.exe',
+      ['--profile', 'work', '--flag'],
+      {
+        cwd: 'C:\\Program Files\\Foo',
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      }
     )
-    expect(shellOpenExternalMock).not.toHaveBeenCalled()
-  })
-
-  it('launches Store apps through AppsFolder AUMID', async () => {
-    const { appProvider } = await loadSubject()
-
-    await appProvider.onExecute({
-      item: {
-        id: 'AppleMusicWin_abcd!App',
-        meta: {
-          app: {
-            path: 'shell:AppsFolder\\AppleMusicWin_abcd!App',
-            bundle_id: 'AppleMusicWin_abcd!App',
-            appUserModelId: 'AppleMusicWin_abcd!App',
-            launchKind: 'appx'
-          }
-        }
-      },
-      searchResult: undefined
-    } as never)
-
-    await flushPromises()
-
-    expect(shellOpenExternalMock).toHaveBeenCalledWith('shell:AppsFolder\\AppleMusicWin_abcd!App')
     expect(shellOpenPathMock).not.toHaveBeenCalled()
   })
 
-  it('launches URL Start menu apps through openExternal', async () => {
+  it('launches Windows Store apps through explorer shell target', async () => {
     const { appProvider } = await loadSubject()
 
     await appProvider.onExecute({
       item: {
-        id: 'https://app.bilibili.com/?from_start_menu',
+        id: 'uwp-app',
         meta: {
           app: {
-            path: 'https://app.bilibili.com/?from_start_menu',
-            launchPath: 'https://app.bilibili.com/?from_start_menu',
-            appUserModelId: 'https://app.bilibili.com/?from_start_menu',
-            launchKind: 'url'
+            path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+            launchKind: 'uwp',
+            launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
           }
         }
-      },
-      searchResult: undefined
-    } as never)
+      }
+    } as any)
 
     await flushPromises()
 
-    expect(shellOpenExternalMock).toHaveBeenCalledWith('https://app.bilibili.com/?from_start_menu')
+    expect(spawnSafeMock).toHaveBeenCalledWith(
+      'explorer.exe',
+      ['shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'],
+      {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      }
+    )
     expect(shellOpenPathMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to target path when shortcut launch fails', async () => {
+  it('persists and restores app description through extensions', async () => {
     const { appProvider } = await loadSubject()
-    shellOpenPathMock.mockResolvedValueOnce('broken shortcut').mockResolvedValueOnce('')
+    const privateProvider = asPrivateProvider(appProvider)
 
-    await appProvider.onExecute({
-      item: {
-        id: 'wechat',
-        meta: {
-          app: {
-            path: 'C:/Program Files/Tencent/WeChat/WeChat.exe',
-            launchPath: 'C:/Program Files/Tencent/WeChat/WeChat.exe',
-            shortcutPath: 'C:/bad/微信.lnk',
-            launchKind: 'shortcut'
-          }
+    const extensions = privateProvider.buildAppExtensions(7, {
+      launchKind: 'uwp',
+      launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+      description: 'Built-in calculator app'
+    })
+
+    expect(extensions).toContainEqual({
+      fileId: 7,
+      key: 'description',
+      value: 'Built-in calculator app'
+    })
+
+    const mapped = privateProvider._mapDbAppToScannedInfo({
+      name: 'Windows Calculator',
+      displayName: 'Calculator',
+      path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+      mtime: new Date(0),
+      extensions: {
+        description: 'Built-in calculator app',
+        launchKind: 'uwp',
+        launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
+      }
+    })
+
+    expect(mapped.displayName).toBe('Calculator')
+    expect(mapped.description).toBe('Built-in calculator app')
+    expect(mapped.launchKind).toBe('uwp')
+  })
+
+  it('normalizes displayName pinyin keywords to lowercase', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+
+    const keywords = await privateProvider._generateKeywordsForApp({
+      name: 'WeChat',
+      displayName: '微信',
+      fileName: 'WeChat',
+      path: '/Applications/WeChat.app',
+      launchKind: 'path',
+      launchTarget: '/Applications/WeChat.app',
+      stableId: '/Applications/WeChat.app',
+      icon: '',
+      lastModified: new Date(0)
+    })
+
+    expect(keywords).toContain('微信')
+    expect(keywords).toContain('weixin')
+    expect(keywords).toContain('wx')
+    expect(keywords).not.toContain('WEIXIN')
+    expect(keywords).not.toContain('WX')
+  })
+
+  it('generates keywords from alternate localized names', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    pinyinMock.mockImplementation((value: string, options?: { pattern?: string }) => {
+      if (value === '网易云音乐') {
+        return options?.pattern === 'first' ? 'WYYY' : 'WANG YI YUN YIN YUE'
+      }
+      return value
+    })
+
+    const keywords = await privateProvider._generateKeywordsForApp({
+      name: 'NeteaseMusic 2',
+      displayName: 'NeteaseMusic 2',
+      alternateNames: ['网易云音乐'],
+      path: '/Applications/NeteaseMusic 2.app',
+      launchKind: 'path',
+      launchTarget: '/Applications/NeteaseMusic 2.app',
+      stableId: '/Applications/NeteaseMusic 2.app',
+      icon: '',
+      lastModified: new Date(0)
+    })
+
+    expect(keywords).toContain('网易云音乐')
+    expect(keywords).toContain('wangyiyunyinyue')
+    expect(keywords).toContain('wyyy')
+  })
+
+  it('indexes app keywords by stable path before bundle id to avoid duplicate bundle collisions', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const indexItemsMock = vi.fn(async () => undefined)
+    privateProvider.searchIndex = { indexItems: indexItemsMock }
+
+    await privateProvider._syncKeywordsForApp({
+      name: 'NeteaseMusic 2',
+      displayName: 'NeteaseMusic 2',
+      alternateNames: ['网易云音乐'],
+      bundleId: 'com.netease.163music',
+      path: '/Applications/NeteaseMusic 2.app',
+      launchKind: 'path',
+      launchTarget: '/Applications/NeteaseMusic 2.app',
+      stableId: '/Applications/NeteaseMusic 2.app',
+      icon: '',
+      lastModified: new Date(0)
+    })
+
+    expect(indexItemsMock).toHaveBeenCalledWith([
+      expect.objectContaining({
+        itemId: '/Applications/NeteaseMusic 2.app',
+        tags: expect.arrayContaining(['com.netease.163music']),
+        keywords: expect.arrayContaining([expect.objectContaining({ value: '网易云音乐' })])
+      })
+    ])
+  })
+
+  it('does not keep removing legacy app item ids during steady-state keyword sync', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const indexItemsMock = vi.fn(async () => undefined)
+    const removeItemsMock = vi.fn(async () => undefined)
+    privateProvider.searchIndex = {
+      indexItems: indexItemsMock,
+      removeItems: removeItemsMock
+    }
+
+    await privateProvider._syncKeywordsForApp({
+      name: 'NeteaseMusic 2',
+      displayName: 'NeteaseMusic 2',
+      alternateNames: ['网易云音乐'],
+      bundleId: 'com.netease.163music',
+      path: '/Applications/NeteaseMusic 2.app',
+      launchKind: 'path',
+      launchTarget: '/Applications/NeteaseMusic 2.app',
+      stableId: '/Applications/NeteaseMusic 2.app',
+      icon: '',
+      lastModified: new Date(0)
+    })
+
+    expect(removeItemsMock).not.toHaveBeenCalled()
+    expect(indexItemsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('diagnoses indexed app keywords and query recall stages', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    pinyinMock.mockImplementation((value: string, options?: { pattern?: string }) => {
+      if (value === '网易云音乐') {
+        return options?.pattern === 'first' ? 'WYYY' : 'WANG YI YUN YIN YUE'
+      }
+      return value
+    })
+
+    const appRow = {
+      id: 7,
+      path: '/Applications/NeteaseMusic 2.app',
+      name: 'NeteaseMusic 2',
+      displayName: 'NeteaseMusic 2',
+      type: 'app',
+      mtime: new Date(0),
+      ctime: new Date(0),
+      extensions: {
+        bundleId: 'com.netease.163music',
+        appIdentity: '/Applications/NeteaseMusic 2.app',
+        alternateNames: JSON.stringify(['网易云音乐']),
+        launchKind: 'path',
+        launchTarget: '/Applications/NeteaseMusic 2.app'
+      }
+    }
+    const keywordRows = [
+      { value: 'neteasemusic', priority: 1.1 },
+      { value: '网易云音乐', priority: 1.1 },
+      { value: 'wangyiyunyinyue', priority: 1.1 },
+      { value: 'wyyy', priority: 1.1 },
+      { value: 'ng:wy', priority: 1.1 }
+    ]
+    const limitMock = vi.fn(async () => keywordRows)
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: limitMock
+          }))
+        }))
+      }))
+    }
+    const lookupByKeywordsMock = vi.fn(async () => {
+      return new Map([
+        [
+          'wyyy',
+          [
+            {
+              itemId: '/Applications/NeteaseMusic 2.app',
+              priority: 1.1
+            }
+          ]
+        ]
+      ])
+    })
+
+    privateProvider.dbUtils = {
+      getDb: () => db,
+      getFilesByType: vi.fn(async () => [appRow])
+    }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async () => [appRow])
+    privateProvider.searchIndex = {
+      lookupByKeywords: lookupByKeywordsMock,
+      lookupByKeywordPrefix: vi.fn(async () => [
+        {
+          itemId: '/Applications/NeteaseMusic 2.app',
+          keyword: 'wyyy',
+          priority: 1.1
         }
+      ]),
+      search: vi.fn(async () => [{ itemId: '/Applications/NeteaseMusic 2.app', score: -1 }]),
+      lookupByNgrams: vi.fn(async () => [
+        { itemId: '/Applications/NeteaseMusic 2.app', overlapCount: 2 }
+      ]),
+      lookupBySubsequence: vi.fn(async () => [
+        {
+          itemId: '/Applications/NeteaseMusic 2.app',
+          keyword: 'wangyiyunyinyue',
+          priority: 1.1
+        }
+      ])
+    }
+
+    const result = await appProvider.diagnoseAppSearch({
+      target: 'com.netease.163music',
+      query: 'wyyy'
+    })
+
+    expect(result).toMatchObject({
+      success: true,
+      status: 'found',
+      app: {
+        path: '/Applications/NeteaseMusic 2.app',
+        displayName: 'NeteaseMusic 2',
+        bundleId: 'com.netease.163music',
+        alternateNames: ['网易云音乐']
       },
-      searchResult: undefined
-    } as never)
+      index: {
+        itemId: '/Applications/NeteaseMusic 2.app',
+        generatedKeywords: expect.arrayContaining(['网易云音乐', 'wangyiyunyinyue', 'wyyy']),
+        storedKeywords: expect.arrayContaining(['neteasemusic', '网易云音乐', 'wyyy'])
+      },
+      query: {
+        normalized: 'wyyy',
+        ftsQuery: 'wyyy',
+        stages: {
+          precise: { ran: true, targetHit: true },
+          prefix: { ran: true, targetHit: true },
+          fts: { ran: true, targetHit: true },
+          ngram: { ran: true, targetHit: true },
+          subsequence: { ran: true, targetHit: true }
+        }
+      }
+    })
+    expect(result).not.toMatchObject({
+      index: {
+        storedKeywords: expect.arrayContaining(['ng:wy'])
+      }
+    })
+  })
 
-    await flushPromises()
+  it('requires confirmation before reindexing a matched diagnostic target', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const indexItemsMock = vi.fn(async () => undefined)
+    const appRow = {
+      id: 9,
+      path: '/Applications/NeteaseMusic 2.app',
+      name: 'NeteaseMusic 2',
+      displayName: 'NeteaseMusic 2',
+      type: 'app',
+      mtime: new Date(0),
+      ctime: new Date(0),
+      extensions: {
+        bundleId: 'com.netease.163music',
+        appIdentity: '/Applications/NeteaseMusic 2.app',
+        alternateNames: JSON.stringify(['网易云音乐']),
+        launchKind: 'path',
+        launchTarget: '/Applications/NeteaseMusic 2.app'
+      }
+    }
 
-    expect(shellOpenPathMock).toHaveBeenNthCalledWith(1, 'C:/bad/微信.lnk')
-    expect(shellOpenPathMock).toHaveBeenNthCalledWith(
-      2,
-      'C:/Program Files/Tencent/WeChat/WeChat.exe'
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn(async () => [appRow])
+    }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async () => [appRow])
+    privateProvider.searchIndex = { indexItems: indexItemsMock }
+
+    const result = await appProvider.reindexAppSearchTarget({
+      target: '网易云音乐',
+      mode: 'keywords'
+    })
+
+    expect(result).toEqual({
+      success: false,
+      status: 'reindexed',
+      requiresConfirm: true,
+      path: '/Applications/NeteaseMusic 2.app',
+      message: 'App index reindex requires confirmation'
+    })
+    expect(indexItemsMock).not.toHaveBeenCalled()
+    expect(getAppInfoByPathMock).not.toHaveBeenCalled()
+  })
+
+  it('reindexes a matched diagnostic target only after confirmation', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const indexItemsMock = vi.fn(async () => undefined)
+    const appRow = {
+      id: 9,
+      path: '/Applications/NeteaseMusic 2.app',
+      name: 'NeteaseMusic 2',
+      displayName: 'NeteaseMusic 2',
+      type: 'app',
+      mtime: new Date(0),
+      ctime: new Date(0),
+      extensions: {
+        bundleId: 'com.netease.163music',
+        appIdentity: '/Applications/NeteaseMusic 2.app',
+        alternateNames: JSON.stringify(['网易云音乐']),
+        launchKind: 'path',
+        launchTarget: '/Applications/NeteaseMusic 2.app'
+      }
+    }
+
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn(async () => [appRow])
+    }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async () => [appRow])
+    privateProvider.searchIndex = { indexItems: indexItemsMock }
+
+    const result = await appProvider.reindexAppSearchTarget({
+      target: '网易云音乐',
+      mode: 'keywords',
+      force: true
+    })
+
+    expect(result).toEqual({
+      success: true,
+      status: 'reindexed',
+      path: '/Applications/NeteaseMusic 2.app',
+      message: 'App index reindex complete'
+    })
+    expect(indexItemsMock).toHaveBeenCalledWith([
+      expect.objectContaining({
+        itemId: '/Applications/NeteaseMusic 2.app',
+        keywords: expect.arrayContaining([expect.objectContaining({ value: '网易云音乐' })])
+      })
+    ])
+    expect(getAppInfoByPathMock).not.toHaveBeenCalled()
+  })
+
+  it('clears stale alternate localized names when a later scan has none', async () => {
+    const { appProvider } = await loadSubject()
+    const { fileExtensions } = await import('../../../../db/schema')
+    const privateProvider = asPrivateProvider(appProvider)
+    type ExtensionRow = { fileId: number; key: string; value: string }
+    const addFileExtensionsMock = vi.fn(async (_rows: ExtensionRow[]) => undefined)
+    const deleteWhereMock = vi.fn(async () => undefined)
+    const deleteMock = vi.fn((table: unknown) => {
+      expect(table).toBe(fileExtensions)
+      return { where: deleteWhereMock }
+    })
+
+    privateProvider.dbUtils = {
+      addFileExtensions: addFileExtensionsMock,
+      getDb: () => ({
+        delete: deleteMock
+      })
+    }
+
+    await privateProvider.syncScannedAppExtensions(7, {
+      bundleId: 'com.example.music',
+      stableId: '/Applications/Music.app',
+      launchKind: 'path',
+      launchTarget: '/Applications/Music.app'
+    })
+
+    expect(addFileExtensionsMock).toHaveBeenCalled()
+    const extensions = addFileExtensionsMock.mock.calls[0]?.[0] ?? []
+    expect(extensions).toEqual(
+      expect.arrayContaining([
+        { fileId: 7, key: 'bundleId', value: 'com.example.music' },
+        { fileId: 7, key: 'appIdentity', value: '/Applications/Music.app' }
+      ])
     )
+    expect(extensions.some((extension) => extension.key === 'alternateNames')).toBe(false)
+    expect(deleteWhereMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('upserts managed launcher entries with manual extension flags', async () => {
+    const { appProvider } = await loadSubject()
+    const { files, fileExtensions } = await import('../../../../db/schema')
+    const privateProvider = asPrivateProvider(appProvider)
+
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'app-provider-managed-'))
+    const scriptPath = path.join(tempDir, 'demo-script.sh')
+    await fs.writeFile(scriptPath, '#!/bin/sh\nexit 0\n', 'utf8')
+
+    let nextId = 1
+    let fileRows: Array<Record<string, any>> = []
+    const extensionRows: Array<{ fileId: number; key: string; value: string }> = []
+    const indexItemsMock = vi.fn(async () => undefined)
+    const removeItemsMock = vi.fn(async () => undefined)
+
+    const db = {
+      insert: vi.fn((table: unknown) => {
+        expect(table).toBe(files)
+        return {
+          values: vi.fn((payload: Record<string, any>) => ({
+            returning: vi.fn(async () => {
+              const row = {
+                id: nextId++,
+                ...payload,
+                displayName: payload.displayName ?? null
+              }
+              fileRows.push(row)
+              return [row]
+            })
+          }))
+        }
+      }),
+      update: vi.fn((table: unknown) => {
+        expect(table).toBe(files)
+        return {
+          set: vi.fn((payload: Record<string, any>) => ({
+            where: vi.fn(async () => {
+              fileRows = fileRows.map((row) =>
+                row.path === scriptPath
+                  ? { ...row, ...payload, displayName: payload.displayName ?? row.displayName }
+                  : row
+              )
+            })
+          }))
+        }
+      }),
+      transaction: vi.fn(
+        async (
+          callback: (tx: {
+            delete: (table: unknown) => { where: (predicate: unknown) => Promise<void> }
+          }) => Promise<void>
+        ) => {
+          const managedFileId = fileRows.find((row) => row.path === scriptPath)?.id ?? -1
+          const tx = {
+            delete: vi.fn((table: unknown) => ({
+              where: vi.fn(async (_predicate: unknown) => {
+                if (table === fileExtensions) {
+                  for (let index = extensionRows.length - 1; index >= 0; index -= 1) {
+                    if (extensionRows[index]?.fileId === managedFileId) {
+                      extensionRows.splice(index, 1)
+                    }
+                  }
+                }
+                if (table === files) {
+                  fileRows = fileRows.filter((row) => row.id !== managedFileId)
+                }
+              })
+            }))
+          }
+          await callback(tx)
+        }
+      )
+    }
+
+    privateProvider.dbUtils = {
+      getDb: () => db,
+      getFileByPath: vi.fn(async (value: string) => fileRows.find((row) => row.path === value)),
+      getFileExtensions: vi.fn(async (fileId: number) =>
+        extensionRows
+          .filter((row) => row.fileId === fileId)
+          .map((row) => ({ ...row, value: row.value }))
+      ),
+      addFileExtensions: vi.fn(
+        async (rows: Array<{ fileId: number; key: string; value: string }>) => {
+          upsertExtensionRows(extensionRows, rows)
+        }
+      ),
+      addFileExtension: vi.fn(async (fileId: number, key: string, value: string) => {
+        upsertExtensionRows(extensionRows, [{ fileId, key, value }])
+      })
+    }
+    privateProvider.searchIndex = {
+      indexItems: indexItemsMock,
+      removeItems: removeItemsMock
+    }
+
+    const added = await appProvider.upsertManagedEntry({
+      path: scriptPath,
+      displayName: 'Demo Script',
+      launchKind: 'shortcut'
+    })
+
+    expect(added).toMatchObject({
+      success: true,
+      status: 'added',
+      entry: {
+        path: scriptPath,
+        displayName: 'Demo Script',
+        enabled: true,
+        launchKind: 'shortcut',
+        launchTarget: scriptPath
+      }
+    })
+    expect(extensionRows).toEqual(
+      expect.arrayContaining([
+        { fileId: 1, key: 'entrySource', value: 'manual' },
+        { fileId: 1, key: 'entryEnabled', value: '1' },
+        { fileId: 1, key: 'launchKind', value: 'shortcut' },
+        { fileId: 1, key: 'launchTarget', value: scriptPath }
+      ])
+    )
+    expect(indexItemsMock).toHaveBeenCalledTimes(1)
+
+    const disabled = await appProvider.setManagedEntryEnabled(scriptPath, false)
+
+    expect(disabled).toMatchObject({
+      success: true,
+      status: 'updated',
+      entry: {
+        path: scriptPath,
+        enabled: false
+      }
+    })
+    expect(removeItemsMock).toHaveBeenCalledWith([scriptPath])
+
+    const removed = await appProvider.removeManagedEntry(scriptPath)
+
+    expect(removed).toMatchObject({
+      success: true,
+      status: 'removed',
+      entry: {
+        path: scriptPath
+      }
+    })
+    expect(fileRows).toEqual([])
+  })
+
+  it('rejects managed launcher entries that collide with scanned apps', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'app-provider-managed-conflict-'))
+    const scriptPath = path.join(tempDir, 'wechat.app')
+    await fs.writeFile(scriptPath, 'not-a-real-app', 'utf8')
+
+    privateProvider.dbUtils = {
+      getDb: () => ({
+        insert: vi.fn(),
+        update: vi.fn(),
+        transaction: vi.fn()
+      }),
+      getFileByPath: vi.fn(async () => ({
+        id: 7,
+        path: scriptPath,
+        name: 'WeChat',
+        displayName: 'WeChat',
+        type: 'app',
+        mtime: new Date(0),
+        ctime: new Date(0)
+      })),
+      getFileExtensions: vi.fn(async () => [
+        { fileId: 7, key: 'bundleId', value: 'com.tencent.xinWeChat' }
+      ])
+    }
+
+    const result = await appProvider.upsertManagedEntry({
+      path: scriptPath,
+      displayName: '微信',
+      launchKind: 'path'
+    })
+
+    expect(result).toEqual({
+      success: false,
+      status: 'invalid',
+      reason: 'path-conflicts-with-scanned-app'
+    })
   })
 })

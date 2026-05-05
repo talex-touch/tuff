@@ -1,4 +1,4 @@
-import type { LoadingEvent, LoadingMode, LoadingState, PreloadAPI } from './loading'
+import type { LoadingEvent, LoadingMode, LoadingState, PreloadAPI, StartupContext } from './loading'
 import { hasWindow } from '../env'
 
 function getPreloadApi(): PreloadAPI | null {
@@ -10,6 +10,19 @@ function getPreloadApi(): PreloadAPI | null {
 export function sendPreloadEvent(event: LoadingEvent): void {
   const api = getPreloadApi()
   api?.sendPreloadEvent(event)
+}
+
+export async function getStartupContext(): Promise<StartupContext | null> {
+  const api = getPreloadApi()
+  if (!api?.getStartupContext) {
+    return null
+  }
+  return await api.getStartupContext()
+}
+
+export function getStartupContextSnapshot(): StartupContext | null {
+  const api = getPreloadApi()
+  return api?.getStartupContextSnapshot?.() ?? null
 }
 
 export function preloadLog(message: string): void {

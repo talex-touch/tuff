@@ -228,7 +228,7 @@ export class QueryCompletionService {
                 .where(sql`${schema.queryCompletions.lastCompleted} < ${expirationDate}`),
             { label: 'query-completions.cleanup' }
           ),
-        { droppable: true }
+        { dropPolicy: 'drop', maxQueueWaitMs: 10_000 }
       )
 
       timer.end('info')

@@ -1,0 +1,9 @@
+{
+  "name": "@talex-touch/touch-dev-utils-plugin",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "build": "node ../../packages/tuff-cli/bin/tuff.js builder"
+  }
+}

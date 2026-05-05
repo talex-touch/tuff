@@ -17,6 +17,8 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAppState } from '~/modules/hooks/useAppStates'
 import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import { createRendererLogger } from '~/utils/renderer-log'
 import {
   normalizeStoredUpdateChannel,
   normalizeSupportedUpdateChannel
@@ -27,9 +29,12 @@ const { t } = useI18n()
 const githubProvider = new GithubUpdateProvider()
 const downloadSdk = useDownloadSdk()
 const downloadStatusDisposers: Array<() => void> = []
+const { platform, isMac } = useRendererPlatform()
+const settingUpdateLog = createRendererLogger('SettingUpdate')
 
 const { appStates } = useAppState()
 const {
+  checkApplicationUpgrade,
   handleDownloadUpdate,
   installDownloadedUpdate,
   getUpdateSettings,
@@ -56,6 +61,8 @@ const frequencySaving = ref(false)
 const autoDownloadSaving = ref(false)
 const rendererOverrideSaving = ref(false)
 const installingUpdate = ref(false)
+const manualChecking = ref(false)
+const isMacAutoInstallPlatform = computed(() => isMac.value)
 
 const channelOptions = computed(() => {
   return [
@@ -77,7 +84,7 @@ const channelSelectDisabled = computed(() => fetching.value || channelSaving.val
 const frequencySelectDisabled = computed(() => fetching.value || frequencySaving.value)
 
 const statusDescription = computed(() => {
-  if (fetching.value) return t('settings.settingUpdate.status.loading')
+  if (fetching.value || manualChecking.value) return t('settings.settingUpdate.status.loading')
   if (!lastCheck.value) return t('settings.settingUpdate.status.never')
 
   return t('settings.settingUpdate.status.lastChecked', {
@@ -88,9 +95,13 @@ const statusDescription = computed(() => {
 const statusMessage = computed(() => {
   if (downloadReady.value) {
     return {
-      text: t('settings.settingUpdate.status.downloadReady', {
-        version: downloadReadyVersion.value || t('settings.settingUpdate.status.unknownVersion')
-      }),
+      text: isMacAutoInstallPlatform.value
+        ? t('settings.settingUpdate.status.downloadReady', {
+            version: downloadReadyVersion.value || t('settings.settingUpdate.status.unknownVersion')
+          })
+        : t('settings.settingUpdate.status.downloadReadyManual', {
+            version: downloadReadyVersion.value || t('settings.settingUpdate.status.unknownVersion')
+          }),
       warning: false
     }
   }
@@ -112,14 +123,34 @@ const assetsSummary = computed(() => {
   const countText = t('settings.settingUpdate.assetsCount', { count: cachedAssets.value.length })
   return `${cachedRelease.value.release.tag_name} · ${countText}`
 })
+const autoDownloadDescription = computed(() => {
+  return isMacAutoInstallPlatform.value
+    ? t('settings.settingUpdate.autoDownloadDesc')
+    : t('settings.settingUpdate.autoDownloadDescManual')
+})
+const installActionDescription = computed(() => {
+  return isMacAutoInstallPlatform.value
+    ? t('settings.settingUpdate.actionsDesc')
+    : t('settings.settingUpdate.actionsDescManual')
+})
+const primaryActionDescription = computed(() => {
+  if (downloadReady.value) {
+    return installActionDescription.value
+  }
+  return t('settings.settingUpdate.actions.manualCheckDesc')
+})
+const installActionLabel = computed(() => {
+  return isMacAutoInstallPlatform.value
+    ? t('settings.settingUpdate.actions.installNow')
+    : t('settings.settingUpdate.actions.openInstaller')
+})
 const cachedAssets = computed(() => {
   if (!cachedRelease.value?.release) {
     return [] as DownloadAsset[]
   }
   const assets = githubProvider.getDownloadAssets(cachedRelease.value.release)
-  const platform = process.platform
   const arch = process.arch
-  return assets.filter((asset) => asset.platform === platform && asset.arch === arch)
+  return assets.filter((asset) => asset.platform === platform.value && asset.arch === arch)
 })
 
 onMounted(async () => {
@@ -167,7 +198,7 @@ async function loadSettings(): Promise<void> {
     await refreshStatus()
     await refreshCachedRelease(selectedChannel.value)
   } catch (error) {
-    console.error('[SettingUpdate] Failed to load settings:', error)
+    settingUpdateLog.error('Failed to load settings', error)
     toast.error(t('settings.settingUpdate.messages.loadFailed'))
   } finally {
     fetching.value = false
@@ -207,7 +238,7 @@ async function refreshStatus(): Promise<void> {
       downloadTaskId.value = null
     }
   } catch (error) {
-    console.warn('[SettingUpdate] Failed to refresh status:', error)
+    settingUpdateLog.warn('Failed to refresh status', error)
     downloadReady.value = false
     downloadReadyVersion.value = null
     downloadTaskId.value = null
@@ -220,7 +251,7 @@ async function refreshCachedRelease(
   try {
     cachedRelease.value = await getCachedRelease(normalizeSupportedUpdateChannel(channel))
   } catch (error) {
-    console.warn('[SettingUpdate] Failed to refresh cached release:', error)
+    settingUpdateLog.warn('Failed to refresh cached release', error)
     cachedRelease.value = null
   }
 }
@@ -238,7 +269,7 @@ async function handleChannelChange(value: AppPreviewChannel): Promise<void> {
     toast.success(t('settings.settingUpdate.messages.channelSaved'))
     await refreshCachedRelease(normalizedValue)
   } catch (error) {
-    console.error('[SettingUpdate] Failed to update channel:', error)
+    settingUpdateLog.error('Failed to update channel', error)
     selectedChannel.value = previous
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
@@ -257,7 +288,7 @@ async function handleFrequencyChange(value: UpdateSettings['frequency']): Promis
     settings.value.frequency = value
     toast.success(t('settings.settingUpdate.messages.frequencySaved'))
   } catch (error) {
-    console.error('[SettingUpdate] Failed to update frequency:', error)
+    settingUpdateLog.error('Failed to update frequency', error)
     selectedFrequency.value = previous
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
@@ -276,7 +307,7 @@ async function handleAutoDownloadChange(value: boolean): Promise<void> {
     settings.value.autoDownload = value
     toast.success(t('settings.settingUpdate.messages.autoDownloadSaved'))
   } catch (error) {
-    console.error('[SettingUpdate] Failed to update auto download:', error)
+    settingUpdateLog.error('Failed to update auto download', error)
     autoDownloadEnabled.value = previous
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
@@ -295,7 +326,7 @@ async function handleRendererOverrideChange(value: boolean): Promise<void> {
     settings.value.rendererOverrideEnabled = value
     toast.success(t('settings.settingUpdate.messages.rendererOverrideSaved'))
   } catch (error) {
-    console.error('[SettingUpdate] Failed to update renderer override:', error)
+    settingUpdateLog.error('Failed to update renderer override', error)
     rendererOverrideEnabled.value = previous
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
@@ -315,7 +346,7 @@ async function handleDownloadAsset(asset: DownloadAsset): Promise<void> {
   try {
     await handleDownloadUpdate(cachedRelease.value.release)
   } catch (error) {
-    console.error('[SettingUpdate] Failed to download update:', error)
+    settingUpdateLog.error('Failed to download update', error)
   }
 }
 
@@ -335,6 +366,24 @@ async function handleInstallUpdate(): Promise<void> {
   }
 }
 
+async function handleManualCheck(): Promise<void> {
+  if (manualChecking.value || fetching.value || downloadReady.value) {
+    return
+  }
+
+  manualChecking.value = true
+  try {
+    await checkApplicationUpgrade(true)
+  } finally {
+    try {
+      await refreshStatus()
+      await refreshCachedRelease(selectedChannel.value)
+    } finally {
+      manualChecking.value = false
+    }
+  }
+}
+
 async function handleCopyAssetUrl(asset: DownloadAsset): Promise<void> {
   if (!asset.url) {
     toast.error(t('settings.settingUpdate.assets.messages.copyFailed'))
@@ -344,7 +393,7 @@ async function handleCopyAssetUrl(asset: DownloadAsset): Promise<void> {
     await navigator.clipboard.writeText(asset.url)
     toast.success(t('settings.settingUpdate.assets.messages.copySuccess'))
   } catch (error) {
-    console.error('[SettingUpdate] Failed to copy asset URL:', error)
+    settingUpdateLog.error('Failed to copy asset URL', error)
     toast.error(t('settings.settingUpdate.assets.messages.copyFailed'))
   }
 }
@@ -424,7 +473,7 @@ function openAssetsDialog(): void {
     <tuff-block-switch
       v-model="autoDownloadEnabled"
       :title="t('settings.settingUpdate.autoDownloadTitle')"
-      :description="t('settings.settingUpdate.autoDownloadDesc')"
+      :description="autoDownloadDescription"
       default-icon="i-carbon-download"
       active-icon="i-carbon-download"
       :disabled="fetching || autoDownloadSaving"
@@ -454,22 +503,34 @@ function openAssetsDialog(): void {
 
     <TuffBlockSlot
       :title="t('settings.settingUpdate.actionsTitle')"
-      :description="t('settings.settingUpdate.actionsDesc')"
+      :description="primaryActionDescription"
       default-icon="i-carbon-settings-adjust"
       active-icon="i-carbon-settings-adjust"
     >
       <TxButton
+        v-if="downloadReady"
         variant="flat"
         type="primary"
-        :disabled="!downloadReady"
+        :disabled="installingUpdate"
         :loading="installingUpdate"
         @click="handleInstallUpdate"
       >
-        {{ t('settings.settingUpdate.actions.installNow') }}
+        {{ installActionLabel }}
+      </TxButton>
+      <TxButton
+        v-else
+        variant="flat"
+        type="primary"
+        :disabled="fetching || manualChecking"
+        :loading="manualChecking"
+        @click="handleManualCheck"
+      >
+        {{ t('settings.settingUpdate.actions.manualCheck') }}
       </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSlot
+      v-if="cachedRelease?.release"
       :title="t('settings.settingUpdate.assetsTitle')"
       :description="t('settings.settingUpdate.assetsDesc')"
       default-icon="i-carbon-cloud-download"
@@ -478,12 +539,7 @@ function openAssetsDialog(): void {
       <div class="assets-summary">
         {{ assetsSummary }}
       </div>
-      <TxButton
-        variant="flat"
-        type="primary"
-        :disabled="!cachedRelease?.release"
-        @click="openAssetsDialog"
-      >
+      <TxButton variant="flat" type="primary" @click="openAssetsDialog">
         {{ t('settings.settingUpdate.assetsOpen') }}
       </TxButton>
     </TuffBlockSlot>

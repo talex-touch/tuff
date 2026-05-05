@@ -11,10 +11,8 @@ import {
 } from '@talex-touch/utils/permission'
 import {
   CATEGORY_REQUIRED_MIN_VERSION,
-  checkSdkCompatibility,
   CURRENT_SDK_VERSION,
   OMNI_TRANSFER_DECLARATIVE_MIN_VERSION,
-  PERMISSION_ENFORCEMENT_MIN_VERSION,
   resolveSdkApiVersion
 } from '@talex-touch/utils/plugin'
 import { app } from 'electron'
@@ -24,6 +22,8 @@ import { parseManifestDivisionBoxConfig } from '../division-box/manifest-parser'
 import { getNetworkService } from '../network'
 import { TouchPlugin } from './plugin'
 import { PluginFeature } from './plugin-feature'
+import { type PackagedManifest, ensurePluginRuntimeIntegrity } from './plugin-runtime-integrity'
+import { getPluginSdkCompatibilityGate, SDKAPI_BLOCKED_CODE } from './sdk-compat'
 
 /**
  * Plugin manifest structure from manifest.json
@@ -147,47 +147,37 @@ abstract class BasePluginLoader {
         ? pluginInfo.category.trim()
         : undefined
 
-    // SDK version compatibility check (with graceful fallback)
+    // SDK version compatibility check
     const resolvedSdkapi = resolveSdkApiVersion(pluginInfo.sdkapi)
     this.touchPlugin.sdkapi = resolvedSdkapi
+    const sdkCompatGate = getPluginSdkCompatibilityGate(this.pluginName, pluginInfo.sdkapi)
+    const sdkBlocked = sdkCompatGate.blocked
 
-    const sdkCompat = checkSdkCompatibility(pluginInfo.sdkapi, this.pluginName)
-    const sdkBlocked =
-      typeof resolvedSdkapi !== 'number' || resolvedSdkapi < PERMISSION_ENFORCEMENT_MIN_VERSION
     if (sdkBlocked) {
+      const blockedMessage =
+        sdkCompatGate.message ||
+        `Plugin "${this.pluginName}" is blocked by the sdkapi compatibility gate.`
       this.touchPlugin.issues.push({
         type: 'error',
-        message: `Plugin "${this.pluginName}" is blocked: sdkapi must be >= ${PERMISSION_ENFORCEMENT_MIN_VERSION}.`,
+        message: blockedMessage,
         source: 'manifest.json',
-        code: 'SDKAPI_BLOCKED',
-        suggestion: `Upgrade plugin SDK to >= ${CURRENT_SDK_VERSION} and migrate to plugin.feature/plugin.box/boxItems APIs before reinstalling.`,
+        code: SDKAPI_BLOCKED_CODE,
+        suggestion: sdkCompatGate.suggestion,
         meta: {
           declaredVersion: pluginInfo.sdkapi,
-          resolvedVersion: resolvedSdkapi,
+          resolvedVersion: sdkCompatGate.resolvedSdkapi,
           currentVersion: CURRENT_SDK_VERSION,
-          requiredMinVersion: PERMISSION_ENFORCEMENT_MIN_VERSION
+          reason: sdkCompatGate.reason
         },
         timestamp: Date.now()
       })
-    }
-    if (sdkCompat.warning) {
-      this.touchPlugin.issues.push({
-        type: sdkCompat.compatible ? 'warning' : 'error',
-        message: sdkCompat.warning,
-        source: 'manifest.json',
-        code: pluginInfo.sdkapi === undefined ? 'SDKAPI_BLOCKED' : 'SDK_VERSION_OUTDATED',
-        suggestion: sdkCompat.suggestion,
-        meta: {
-          declaredVersion: pluginInfo.sdkapi,
-          resolvedVersion: resolvedSdkapi,
-          currentVersion: CURRENT_SDK_VERSION,
-          enforcePermissions: sdkCompat.enforcePermissions
-        },
-        timestamp: Date.now()
+      this.touchPlugin.setLoadState('load_failed', {
+        code: SDKAPI_BLOCKED_CODE,
+        message: blockedMessage
       })
     }
 
-    // Require category for sdkapi >= 260114 (legacy/invalid sdkapi will fallback and bypass)
+    // Require category for sdkapi >= 260114
     if (
       resolvedSdkapi !== undefined &&
       resolvedSdkapi >= CATEGORY_REQUIRED_MIN_VERSION &&
@@ -247,30 +237,32 @@ abstract class BasePluginLoader {
     }
 
     // Generate permission status (granted permissions will be loaded by PermissionModule)
-    const permissionStatus = getPluginPermissionStatus(
-      this.pluginName,
-      resolvedSdkapi,
-      { required: parsedPermissions.required, optional: parsedPermissions.optional },
-      [] // No grants loaded yet at this stage
-    )
+    if (!sdkBlocked) {
+      const permissionStatus = getPluginPermissionStatus(
+        this.pluginName,
+        resolvedSdkapi,
+        { required: parsedPermissions.required, optional: parsedPermissions.optional },
+        [] // No grants loaded yet at this stage
+      )
 
-    // Add permission-related issue if needed
-    const permissionIssue = generatePermissionIssue(permissionStatus)
-    if (permissionIssue) {
-      this.touchPlugin.issues.push({
-        type: permissionIssue.type,
-        message: permissionIssue.message,
-        source: 'manifest.json',
-        code: permissionIssue.code,
-        suggestion: permissionIssue.suggestion,
-        meta: {
-          // Use spread to create copies and avoid circular references
-          required: [...parsedPermissions.required],
-          optional: [...parsedPermissions.optional],
-          enforcePermissions: permissionStatus.enforcePermissions
-        },
-        timestamp: Date.now()
-      })
+      // Add permission-related issue if needed
+      const permissionIssue = generatePermissionIssue(permissionStatus)
+      if (permissionIssue) {
+        this.touchPlugin.issues.push({
+          type: permissionIssue.type,
+          message: permissionIssue.message,
+          source: 'manifest.json',
+          code: permissionIssue.code,
+          suggestion: permissionIssue.suggestion,
+          meta: {
+            // Use spread to create copies and avoid circular references
+            required: [...parsedPermissions.required],
+            optional: [...parsedPermissions.optional],
+            enforcePermissions: permissionStatus.enforcePermissions
+          },
+          timestamp: Date.now()
+        })
+      }
     }
 
     // Parse and store DivisionBox configuration from manifest
@@ -299,6 +291,8 @@ abstract class BasePluginLoader {
         timestamp: Date.now()
       })
     }
+
+    if (sdkBlocked) return
 
     if (pluginInfo.features) {
       const iconInitPromises: Promise<void>[] = []
@@ -394,7 +388,35 @@ class LocalPluginLoader extends BasePluginLoader implements IPluginLoader {
   async load(): Promise<TouchPlugin> {
     const manifestPath = path.resolve(this.pluginPath, 'manifest.json')
     try {
-      const pluginInfo = fse.readJSONSync(manifestPath) as PluginManifest
+      let pluginInfo = fse.readJSONSync(manifestPath) as PluginManifest
+      const integrity = await ensurePluginRuntimeIntegrity({
+        pluginDir: this.pluginPath,
+        manifest: pluginInfo as unknown as PackagedManifest
+      })
+
+      if (integrity.manifestUpdated || integrity.repairedFiles.length > 0) {
+        pluginInfo = fse.readJSONSync(manifestPath) as PluginManifest
+      }
+
+      if (integrity.missingFiles.length > 0) {
+        this.touchPlugin.issues.push({
+          type: 'error',
+          message: `Missing required webcontent entry files: ${integrity.missingFiles.join(', ')}.`,
+          source: 'filesystem',
+          code: 'MISSING_WEBCONTENT_ENTRY',
+          suggestion: integrity.archivePath
+            ? 'Restore the plugin package archive or reinstall the plugin to recover bundled UI files.'
+            : 'Reinstall the plugin to recover bundled UI files.',
+          meta: {
+            archivePath: integrity.archivePath,
+            repairedFiles: integrity.repairedFiles,
+            repairError: integrity.repairError,
+            requiredFiles: integrity.requiredFiles
+          },
+          timestamp: Date.now()
+        })
+      }
+
       await this.loadCommon(pluginInfo)
 
       // Load README from local file system

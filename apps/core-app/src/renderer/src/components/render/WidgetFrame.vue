@@ -14,8 +14,10 @@ import {
   type VNode
 } from 'vue'
 import { getCustomRenderer, getCustomRendererVersion } from '~/modules/box/custom-render'
+import { useWidgetHostKeyEvent } from '~/modules/plugin/widget-host-key-bridge'
 import { getWidgetRuntimeSnippet } from '~/modules/plugin/widget-registry'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = withDefaults(
   defineProps<{
@@ -38,6 +40,9 @@ const emits = defineEmits<{
 }>()
 
 const renderError = ref<Error | null>(null)
+const widgetFrameLog = createRendererLogger('WidgetFrame')
+const rendererState = ref<'loading' | 'ready' | 'missing'>('loading')
+let missingRendererTimer: ReturnType<typeof setTimeout> | null = null
 const shadowHost = ref<HTMLDivElement | null>(null)
 const shadowRoot = ref<ShadowRoot | null>(null)
 const shadowStyle = ref<HTMLStyleElement | null>(null)
@@ -48,6 +53,7 @@ const shadowProps = reactive({
   payload: props.payload,
   preview: props.preview,
   widgetId: props.rendererId,
+  hostKeyEvent: null as unknown,
   onShowHistory: () => emits('show-history'),
   onCopyPrimary: () => emits('copy-primary')
 })
@@ -70,9 +76,45 @@ const rendererKey = computed(() => {
   return `${props.rendererId}:${getCustomRendererVersion(props.rendererId)}`
 })
 
+const widgetItemId = computed(() => (typeof props.item?.id === 'string' ? props.item.id : null))
+const hostKeyEvent = useWidgetHostKeyEvent(widgetItemId)
+
 const useShadowHost = computed(() => props.renderMode === 'shadow')
 const canRenderShadow = computed(() => useShadowHost.value && Boolean(renderer.value))
 const renderModeLabel = computed(() => (useShadowHost.value ? 'shadow' : 'light'))
+const emptyStateLabel = computed(() => {
+  if (!props.rendererId) return 'Widget renderer missing'
+  if (rendererState.value === 'loading') return 'Widget renderer loading'
+  return 'Widget renderer unavailable'
+})
+const emptyStateText = computed(() => {
+  if (rendererState.value === 'loading') return 'Widget 加载中'
+  if (!props.rendererId) return 'Widget renderer 缺失'
+  return 'Widget renderer 未注册'
+})
+
+function clearMissingRendererTimer(): void {
+  if (!missingRendererTimer) return
+  clearTimeout(missingRendererTimer)
+  missingRendererTimer = null
+}
+
+function scheduleMissingRendererState(): void {
+  clearMissingRendererTimer()
+  rendererState.value = 'loading'
+
+  if (!props.rendererId || renderer.value) {
+    rendererState.value = renderer.value ? 'ready' : 'missing'
+    return
+  }
+
+  missingRendererTimer = setTimeout(() => {
+    if (!renderer.value) {
+      rendererState.value = 'missing'
+    }
+    missingRendererTimer = null
+  }, 250)
+}
 
 function logLightLifecycle(phase: string): void {
   if (!isDev || useShadowHost.value || !props.rendererId) return
@@ -108,12 +150,19 @@ watch(
   () => props.rendererId,
   () => {
     renderError.value = null
+    scheduleMissingRendererState()
   }
 )
 
 watch(
   () => [props.rendererId, renderer.value],
   ([rendererId, resolved]) => {
+    if (resolved) {
+      rendererState.value = 'ready'
+    } else {
+      scheduleMissingRendererState()
+    }
+
     if (!isDev || !rendererId) return
     if (resolved) {
       const componentName = resolveRendererName(resolved)
@@ -127,7 +176,7 @@ watch(
         payload: props.payload
       })
     } else {
-      console.warn(`[WidgetFrame] renderer missing: ${rendererId}`)
+      widgetFrameLog.warn('Renderer missing', { rendererId })
     }
   },
   { immediate: true }
@@ -157,7 +206,7 @@ onErrorCaptured((error) => {
     if (evalPosition && props.rendererId) {
       const snippet = getWidgetRuntimeSnippet(props.rendererId, evalPosition.line, 2)
       if (snippet.length > 0) {
-        console.error('[WidgetFrame] eval snippet:', {
+        widgetFrameLog.error('Eval snippet', {
           rendererId: props.rendererId,
           line: evalPosition.line,
           column: evalPosition.column,
@@ -165,7 +214,7 @@ onErrorCaptured((error) => {
         })
       }
     }
-    console.error('[WidgetFrame] render error:', resolved)
+    widgetFrameLog.error('Render error', resolved)
   }
   emits('render-error', resolved)
   return false
@@ -197,6 +246,14 @@ watch(
   (value) => {
     shadowProps.widgetId = value
   }
+)
+
+watch(
+  hostKeyEvent,
+  (value) => {
+    shadowProps.hostKeyEvent = value
+  },
+  { immediate: true }
 )
 
 function ensureShadowRoot(): ShadowRoot | null {
@@ -268,6 +325,7 @@ function mountShadowApp(): void {
         payload: shadowProps.payload,
         preview: shadowProps.preview,
         'widget-id': shadowProps.widgetId,
+        'host-key-event': shadowProps.hostKeyEvent,
         onShowHistory: shadowProps.onShowHistory,
         onCopyPrimary: shadowProps.onCopyPrimary
       })
@@ -277,7 +335,7 @@ function mountShadowApp(): void {
     renderError.value = resolved
     emits('render-error', resolved)
     if (isDev) {
-      console.error('[WidgetFrame] shadow render error:', resolved)
+      widgetFrameLog.error('Shadow render error', resolved)
     }
   }
   app.mount(shadowContainer.value)
@@ -303,6 +361,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  clearMissingRendererTimer()
   unmountShadowApp()
 })
 </script>
@@ -325,14 +384,20 @@ onBeforeUnmount(() => {
       :payload="payload"
       :preview="preview"
       :widget-id="rendererId"
+      :host-key-event="hostKeyEvent ?? undefined"
       :on-vnode-mounted="handleVnodeMounted"
       :on-vnode-updated="handleVnodeUpdated"
       :on-vnode-unmounted="handleVnodeUnmounted"
       @show-history="emits('show-history')"
       @copy-primary="emits('copy-primary')"
     />
-    <div v-else class="WidgetFrame-Empty text-xs text-[var(--tx-text-color-secondary)]">
-      Widget 暂未就绪
+    <div
+      v-else
+      class="WidgetFrame-Empty text-xs text-[var(--tx-text-color-secondary)]"
+      :data-state="rendererState"
+      :aria-label="emptyStateLabel"
+    >
+      {{ emptyStateText }}
     </div>
   </div>
 </template>

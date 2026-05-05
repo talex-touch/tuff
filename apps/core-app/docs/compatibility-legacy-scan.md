@@ -24,3 +24,106 @@
 - 范围：`src/`、`resources/`、`scripts/`、`public/`、`docs/` 及相关配置文件。
 - 形式：注释、JSDoc/TS 注解（含 `@deprecated`）、配置与脚本说明。
 - 规则：关键词大小写不敏感；命中后需结合上下文判断归类。
+
+## 2026-04-26 复核结论
+
+### 已收口
+
+- Flow Transfer 不再存在“未适配 target 假投递成功”：`flow-bus.ts` 会在目标插件未注册 delivery handler 时返回 `TARGET_OFFLINE`，真实投递异常也会保留为失败结果。
+- 平台 capability 清单不再把条件型能力写成完全 supported：Flow Transfer、DivisionBox Flow trigger、macOS/Windows active-app 均显式标注为 `best_effort` 并带 `issueCode/reason/limitations`；过度乐观且已无生产调用的 `isActiveAppCapabilityAvailable()` 已删除。
+- DivisionBox Session 已移除未调用且没有真实计时逻辑的 keepAlive timer 空 API；keepAlive 生命周期继续由 Manager 状态监听和 LRU cache 管理。
+- macOS notification 检查不再把 `Notification.isSupported()` 解释为系统权限已授予；当前只能确认原生通知运行时可用，因此返回 `notDetermined + canRequest`。
+- OmniPanel 键盘快捷键默认值已统一为关闭；主进程 settings snapshot、首次设置页、工具设置页与 `app-settings` 默认值保持一致，右键长按时长也有明确持久化配置。
+- 已删除无引用的 Bluetooth/USB 旧实验注释文件、renderer layout 的 `useLayout` legacy alias，以及 File Provider 中旧主线程内容解析/索引 helper 的空调用保活路径；文件内容解析与索引统一走 worker 管线。
+- Preview Provider / Preview Registry / Terminal / Protocol Handler / ServiceCenter 的 raw console、死协议注释、stale no-op 文案和敏感预览值日志已收口；ServiceCenter 无读取方的注册快照伪持久化路径已删除，后续日志只记录结构化元数据，不再输出搜索表达式、预览结果值或原始 service payload。
+- DivisionBox CoreBox provider 已移除 `division-box:show-active-sessions` 伪命令；该结果此前只写日志、不打开任何用户可见界面，当前仅保留真实 shortcut mapping 搜索/执行路径。
+- 已删除无引用且全文件仅剩注释的 screen-capture 主进程占位文件，并移除 renderer 中无人发送的 `@screen-capture` 注册函数；OfficialPluginService、FileWatchService、TuffIconImpl 的 raw console 调试输出也已切到结构化 logger。
+- Renderer 插件状态按钮已从 `innerHTML`/手动 `classList`/mount-time watcher 改为 computed label/class/action；reload 失败不再直写 `console.error`。
+- CoreBox Manager、SystemActions file-index、BuildVerification、FeatureSearchTokens 的小范围 raw console 已收口到 logger；SystemActions 不再对同一次 file-index 同时写 console 和结构化日志。
+- 旧插件注入脚本不再输出 `Touch # Auto inject JS`，同文件未启用的 `#app` 样式注释块已删除。
+- Download 外围模块的 raw console 已切到 `download/logger.ts` 统一 logger；数据库、切片、worker、通知、网络、性能、并发和错误日志器不再直接向主进程 console 输出任务/路径细节。
+- DownloadCenter 主模块 raw console 已切到 `DownloadCenter` logger；初始化、销毁、任务批量操作、临时文件清理、transport handler 和通知点击均使用结构化日志，未引用的 `formatBytes()` 已删除。
+- macOS/Windows 应用扫描和搜索后处理慢日志已切到 `AppScanner` logger；扫描失败不再直接输出完整 app/file 路径。
+- BoxItemManager、插件 provider 工具、UsageStatsCache 与 TimeStatsAggregator 的 raw console 已收口到项目 logger。
+- UsageStatsQueue、Recommendation ContextProvider 与 ItemRebuilder 的 raw console 已收口到项目 logger；搜索统计 flush 和推荐项 rebuild 的失败仍保持原有降级/回填语义，只改变日志出口。
+- RecommendationEngine 主文件 raw console 已收口到既有 `RecommendationEngine` logger；provider 注册/卸载、缓存命中、候选统计、生成耗时和插件 provider 失败日志不再直接写 console。
+- Storage polling/LRU/frequency monitor 的 raw console 已收口到 `Storage:Polling`、`Storage:LRU`、`Storage:Frequency` logger；周期保存、强制保存、驱逐和高频访问告警语义保持不变。
+- Intelligence SDK、main i18n helper、PerfContext 与 SignatureVerifier 的 raw warn/error 已收口到项目 logger；AI 调用流程、i18n fallback、性能慢上下文告警和签名获取失败返回语义保持不变。
+- SearchIndexService 与 search-index worker 的 raw console 已收口到 `SearchIndex` logger；索引摘要、慢批次、零结果诊断、初始化和 pinyin 预热不再直接输出 DB path 或 FTS 查询表达式。
+
+### 仍保留的兼容边界
+
+- Linux selection capture / active-app / auto-paste 仍依赖 `xdotool` 与桌面环境，属于 documented best-effort，不是待删除假实现。
+- 旧启动/数据迁移主路径已在后续 hard-cut 中收口；当前保留的是 schema/runtime migration 与回归 fixture，不再作为 legacy startup migration exception。
+- 插件 SDK hard-cut 已阻断旧插件运行；`enforcePermissions` 等字段仅作为 blocked 状态表达保留，不再代表旧 SDK bypass。
+- 剩余主进程 `console.*` 命中均为有意边界：`utils/logger.ts` 是项目 logger 输出端，`internal-plugin-logger.ts` 是内部插件日志适配器，`SearchLogger`/`search-logger-test.ts` 是显式控制台诊断器，CoreBox/DivisionBox 里的命中是注入到 WebContents 的脚本错误输出。
+
+## 2026-04-28 复核结论
+
+### 当前结论
+
+- CoreApp 生产路径没有发现新的 `FlowBus` silent success、DivisionBox 假命令、PluginStatus 命令式 DOM 回写、ServiceCenter 伪持久化或 macOS notification 权限误报回潮。
+- Renderer 平台判断已新增统一入口 `modules/platform/renderer-platform.ts`，设置页、首次引导、快捷键输入、CoreBox 头尾部和常见布局不再混用 `startupInfo / process.platform / navigator.platform`；当前 renderer 展示层优先消费统一的 `platform/isMac/isWindows/isLinux` 结果。
+- 语言初始化链路已收口到 `useLanguage` + `language-preferences`：启动阶段先等待 `appSettings` hydration，再以 `appSetting.lang` 为权威源，`localStorage.lang` 仅作为单向迁移兜底；迁移完成后清理 legacy snapshot，避免启动期与运行期双写/分叉。
+- Renderer 日志第一轮已在 `modules/lang/*`、`modules/update/*` 和 settings 核心页面切到统一 logger；用户可感知失败仍保留 toast，静默降级和开发诊断不再散落为裸 `console.warn/error`。
+- Renderer storage 当前工作区已收口到 typed storage SDK：`main.ts`、`useAppLifecycle.ts`、`modules/channel/storage/base.ts` 统一调用 `initializeRendererStorage(transport)`；`StorageManager` 与 `AccountStorage` 改用 `useStorageSdk()`，不再直接 `transport.send(StorageEvents.app.*)` 或解析 legacy `useChannel()`。
+- 当前 `rg` 复核显示 `window.$t/window.$i18n` 在 renderer 中无命中；旧 `storage:get/storage:save/storage:update` 在 CoreApp 业务侧无新增消费，剩余命中为插件 storage IPC 名称或共享库显式 fallback 边界。
+- `show-active-sessions` 仅保留在 DivisionBox 回归测试的禁止断言中；`TARGET_OFFLINE` 仍覆盖未注册 Flow delivery handler 的失败语义。
+- 应用详情页不再暴露无真实执行路径的 open explorer / uninstall / save/spec 入口；当前保留的 launch 与 help 均有真实执行路径。
+- 下载中心目录不再保留未引用的旧 `DownloadSettings.vue` 假设置组件；该组件的选择临时目录按钮仅弹“功能待实现”，真实下载设置入口以 `views/base/settings/SettingDownload.vue` 为准。
+- 下载组件目录内模板文案已从全局 `$t(...)` 收口到 `useI18n()` 的 `t(...)`，`TaskCard` / `DownloadTask` 中硬编码的下载模块、优先级与剩余时间中文文案也已归入 i18n 资源。
+- 插件 WebView 不再保留陈旧 `console.log` 注释或硬编码加载/失败操作文案；加载提示与失败操作接入 i18n，WebView 崩溃/加载失败日志只记录插件名、状态与错误描述。
+- 跨平台能力仍是显式不对称：Windows/macOS 属于 2.5.0 release-blocking 人工回归范围；Linux 继续按 `xdotool` / desktop environment 依赖记录为 documented best-effort，不应包装为同等支持。
+
+### 已清理
+
+- 清理 storage renderer 入口中的重复 JSDoc 和旧 `console.log` 示例/注释，避免把已迁移到 typed storage SDK 的路径继续表现成半迁移状态。
+- 删除仅剩测试引用的 `parseLegacyThemeStyle()` 旧 localStorage 解析 helper；renderer theme startup migration 已从生产路径移除，不再保留无调用方的 legacy 解析入口。
+- 刷新 `compatibility-legacy-scan-summary.md` 的完成态汇总，移除已过期的 `tray-holder.ts` 与 deprecated Plugin API 风险描述，避免旧扫描清单误导当前结论。
+- 清理 `AppConfigure.vue` 中仅剩注释/空 handler 的 open explorer、uninstall、save footer 与永远不会渲染的 spec 区块，避免旧应用详情页把未实现能力呈现为可用操作。
+- 清理 `appConfigure` i18n 中对应上述假动作的无调用文案键，避免语言资源继续暗示这些入口仍存在。
+- 删除未引用且包含“选择目录功能待实现”假动作的旧 `DownloadSettings.vue`，避免死组件继续携带假设置入口。
+- 下载组件目录内旧 `$t(...)` 模板调用收口到 `useI18n()`，并补齐下载优先级/剩余时间对应的中英文资源键。
+- 清理 `PluginView.vue` 中的陈旧 debug 注释与硬编码加载/失败操作文案，避免插件 WebView 运行面继续呈现半迁移状态。
+- 删除 `plugin-installer.ts` 风险确认里的未来 TODO 注释；当前安装风险确认保持真实 dialog 路径，不继续用注释暗示未接通的生物识别能力。
+
+### 仍保留但不判为假实现
+
+- `fake-background` / `--fake-*` 是既有视觉 token，不代表 mock 功能。
+- `placeholder` 大多是输入框、骨架屏或空图标语义；当前未发现会把未完成能力伪装成已完成的正式入口。
+- Plugin widget preview 的 `mockPayload` 属于开发面板显式测试载荷，不是生产 runtime mock。
+- `preload` 中的 `console.log` 只在 `DEBUG` 或 `debug-preload` 显式打开时输出；`SearchLogger`、logger 输出端、内部插件 logger、WebContents injected script 中的 `console.*` 也是有意诊断/注入边界；普通主进程 runtime console 仍维持已收口状态。
+
+## 2026-04-30 复核结论
+
+### 已清理
+
+- `packages/utils/plugin/sdk/system.ts` 中 `getActiveAppSnapshot()` 不再捕获 typed transport 错误后回退到 raw `system:get-active-app`；主进程已停止注册该 raw handler，SDK 继续 fallback 只会吞掉真实 transport 失败。
+- `packages/utils/__tests__/system-sdk.test.ts` 固定 active-app typed transport 失败时直接抛错，且不得调用 legacy raw channel。
+- `apps/nexus/content/docs/dev/architecture/ipc-events-sdk-map.{zh,en}.mdc` 已把 active-app 事件映射改为 typed `app:system:get-active-app`。
+
+### 仍保留但不判为假实现
+
+- renderer platform 的 `best_effort/unsupported` 状态仍属于真实跨平台能力边界；Linux `xdotool` 依赖与 macOS/Windows 自动化权限不能用删除 fallback 的方式抹平。
+- ThemeStyle 壁纸设置中的默认值归一化是状态 schema 保护；“记录同步状态”文案已与本地壁纸库行为对齐，不再暗示云同步。
+
+## 2026-05-01 复核结论
+
+### 已清理
+
+- preload 启动桥接已统一为 typed `StartupContext`：`apps/core-app/src/preload/index.ts` 负责一次性拉取 startup handshake 并暴露 `startupInfo/windowMode/metaOverlay`；renderer 侧 `useStartupInfo()` 不再读取 `window.$startupInfo` / `window.$isMetaOverlay`，也不再走 startup transport fallback。
+- renderer 语言初始化改成 hydration 后一次性迁移 legacy `localStorage` 语言快照；`main.ts` 与 `useLanguage.ts` 的稳态分支只读取 typed `appSetting.lang`，迁移完成后清理旧 key。
+- renderer 平台 sniff 已集中到 `modules/platform/renderer-platform.ts`：`TouchScroll`、`GlassSurface`、Sentry renderer 不再直接使用 `navigator.platform` / `navigator.userAgent` / `process.platform`。
+- 插件 runtime 兼容 patch 已删除：`plugin-module.ts` 不再按 `touch-translation` 特判修目录，改为加载前统一执行 runtime drift 检查；命中缺失 runtime 文件、旧 import 或 runtime/package 版本漂移时以 `PLUGIN_RUNTIME_DRIFT` 显式阻断。
+- `DbWriteScheduler` 已删除 `droppable` 兼容入口；clipboard、OCR、usage-stats、query completions 等调用方已切到显式 `dropPolicy/maxQueueWaitMs`。
+- `useUpdateRuntime.ts` 不再把 `update:install` 请求超时包装成“已开始安装”；当前只提示等待系统接管确认，避免 optimistic success。
+- `WidgetFrame.vue` 的空态已拆分为加载中、renderer 缺失与渲染失败，不再统一显示“Widget 暂未就绪”。
+- root 新增 `pnpm console:guard`，冻结 CoreApp `main/preload/renderer` 现存 raw `console.*` 边界；新增 console 点位或扩大命中数会直接失败。
+- `apps/core-app/eslint.config.mjs` 已新增 renderer 平台直读限制，除 `modules/platform/renderer-platform.ts` 外不得继续直接访问 `navigator.platform` / `navigator.userAgent` / `process.platform`。
+- `plugin-sdk.ts`、`nexus-store-provider.ts`、`useUpdateRuntime.ts`、`useAppLifecycle.ts`、`sentry-renderer.ts` 与 `WidgetFrame.vue` 的 raw console 已收口到统一 renderer logger。
+- 删除未引用的 `futureCenter*` i18n 规划文案键，避免语言资源继续暗示假路线图入口。
+
+### 仍保留但不判为假实现
+
+- Linux `best_effort/unsupported` 仍是有意的平台能力分层；本轮不承诺把 active-app、selection capture、share、permission deep-link 对齐到 macOS/Windows。
+- `logger.ts` / injected script / SearchLogger 等剩余 `console.*` 命中仍属于显式日志输出端或诊断边界，不等同于业务 runtime 回潮。

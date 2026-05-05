@@ -107,6 +107,23 @@ export class TrayIconProvider {
     return this.resolveResourcePath('icon.png')
   }
 
+  static getDockIcon(): Electron.NativeImage {
+    const iconNames =
+      process.platform === 'darwin' ? ['icon.png', 'tray_icon.png', 'icon.icns'] : ['icon.png']
+
+    for (const iconName of iconNames) {
+      const iconPath = this.resolveResourcePath(iconName)
+      if (!iconPath) continue
+
+      const image = nativeImage.createFromPath(iconPath)
+      if (!image.isEmpty()) {
+        return image
+      }
+    }
+
+    return nativeImage.createEmpty()
+  }
+
   private static getPreferredTrayIconNames(): string[] {
     if (process.platform === 'darwin') {
       return ['TrayIconTemplate.png', 'tray_icon_22x22.png', 'tray_icon.png']

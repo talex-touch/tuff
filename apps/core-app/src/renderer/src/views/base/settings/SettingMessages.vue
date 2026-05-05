@@ -8,10 +8,12 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
 const settingsSdk = useSettingsSdk()
+const settingMessagesLog = createRendererLogger('SettingMessages')
 
 const messages = ref<AnalyticsMessage[]>([])
 const loading = ref(false)
@@ -79,7 +81,7 @@ onMounted(() => {
         }
       },
       onError: (err) => {
-        console.error('[SettingMessages] storage update stream error:', err)
+        settingMessagesLog.error('storage update stream error', err)
       }
     })
     .then((stream) => {
@@ -90,7 +92,7 @@ onMounted(() => {
       controller = stream
     })
     .catch((error) => {
-      console.error('[SettingMessages] Failed to start storage update stream:', error)
+      settingMessagesLog.error('Failed to start storage update stream', error)
     })
 
   onBeforeUnmount(() => {

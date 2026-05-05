@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/utils",
-  "version": "1.0.47",
+  "version": "1.0.50",
   "private": false,
   "description": "Tuff series utils",
   "author": "TalexDreamSoul",
@@ -17,6 +17,33 @@
   ],
   "main": "index.ts",
   "module": "./index.ts",
+  "files": [
+    "account",
+    "analytics",
+    "animation",
+    "auth",
+    "base",
+    "cloud-sync",
+    "common",
+    "core-box",
+    "electron",
+    "env",
+    "eventbus",
+    "i18n",
+    "icons",
+    "index.ts",
+    "intelligence",
+    "network",
+    "permission",
+    "plugin",
+    "preload",
+    "renderer",
+    "search",
+    "service",
+    "store",
+    "transport",
+    "types"
+  ],
   "scripts": {
     "lint": "pnpm exec eslint --cache .",
     "lint:fix": "pnpm exec eslint --cache --fix .",
@@ -26,14 +53,14 @@
     "publish": "npm publish --access public"
   },
   "peerDependencies": {
-    "electron": "^40.0.0",
+    "electron": "^40.0.0 || ^41.0.0",
     "vue": "^3.5.27"
   },
   "dependencies": {
     "@vueuse/core": "^14.2.1",
     "marked": "^17.0.4",
     "path-browserify": "^1.0.1",
-    "vue": "^3.5.30"
+    "vue": "^3.5.33"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^3.2.4",

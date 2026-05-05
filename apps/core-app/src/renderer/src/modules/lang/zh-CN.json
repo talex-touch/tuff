@@ -46,6 +46,19 @@
     "specification": "规格",
     "dashboard": "详细信息",
     "dashboardDesc": "启用系统详细信息页面，显示索引、应用、日志和OCR状态。",
+    "dashboardUnknownApp": "未知应用",
+    "dashboardNoWindowTitle": "当前窗口未提供标题",
+    "dashboardNoActiveApp": "当前未检测到活跃应用",
+    "dashboardUnknownStatus": "未知状态",
+    "dashboardNotStarted": "未启动",
+    "dashboardNone": "无",
+    "dashboardNoWorkers": "当前没有 Worker 记录",
+    "dashboardNoIndexingRecords": "当前没有索引记录",
+    "dashboardNoOcrResult": "暂无结果",
+    "dashboardNoOcrTasks": "当前没有 OCR 任务",
+    "dashboardUnknownSource": "未知来源",
+    "dashboardFileSource": "文件来源",
+    "dashboardDataUrlSource": "Data URL（{count} 字符）",
     "searchEngineLogs": "搜索引擎日志",
     "searchEngineLogsDesc": "启用搜索引擎操作的详细日志记录，帮助调试搜索问题。",
     "startCosts": "启动耗时",
@@ -60,6 +73,11 @@
     "exportJson": "导出 JSON",
     "exportSuccess": "性能数据已导出",
     "exportFailed": "导出失败",
+    "buildMetadataVersion": "版本号",
+    "buildMetadataId": "构建 ID",
+    "buildMetadataGitHash": "Git 哈希",
+    "buildMetadataType": "构建类型",
+    "buildMetadataTime": "构建时间",
     "rating": {
       "excellent": "优秀",
       "good": "良好",
@@ -163,6 +181,35 @@
     "title": "存储",
     "description": "查看应用存储详情"
   },
+  "settingSentry": {
+    "title": "Nexus 数据分析",
+    "groupDesc": "帮助改进应用体验和产品决策",
+    "enableDataUpload": "启用数据上传",
+    "enableDesc": "上传性能与错误指标，帮助快速定位问题。",
+    "uploadTooltip": "启用后会将性能与错误指标上传到 Nexus 和 Sentry。匿名模式仅控制是否关联设备指纹或用户 ID，不影响上传开关。",
+    "anonymousMode": "匿名模式",
+    "anonymousDesc": "仅记录必要字段，不包含个人身份信息。",
+    "anonymousLoginRequired": "登录后可切换匿名模式。",
+    "refreshStats": "刷新统计数据",
+    "refreshStatsDesc": "从本地数据库获取最新状态",
+    "refresh": "刷新",
+    "refreshError": "刷新统计信息失败",
+    "saveSuccess": "设置已保存",
+    "saveError": "保存设置失败",
+    "searchCount": "已记录搜索次数",
+    "warningTitle": "提示",
+    "warning": "非匿名模式下，会包含设备指纹信息以帮助追踪问题。用户 ID 仅在登录时包含。",
+    "bufferSize": "Buffer 大小",
+    "totalUploads": "总上传次数",
+    "failedUploads": "失败次数",
+    "lastUpload": "最近上传",
+    "lastFailure": "最近失败",
+    "apiBase": "API 地址",
+    "privacyManagement": "隐私数据管理",
+    "privacyManagementDesc": "在官网管理您的隐私设置和数据",
+    "viewDashboard": "查看数据分析面板",
+    "dashboardDesc": "在 Nexus 查看详细的使用统计和趋势"
+  },
   "settingTools": {
     "groupTitle": "实用工具",
     "groupDesc": "实用工具为您提供统一的快速桌面启动器。",
@@ -180,6 +227,8 @@
     "omniPanelShortcutDesc": "启用后可用 Command/Ctrl + Shift + P 唤起全景面板。",
     "omniPanelMouseLongPress": "OmniPanel 右键长按唤起",
     "omniPanelMouseLongPressDesc": "启用后，右键长按可直接打开全景面板并读取选中文本。",
+    "omniPanelMouseLongPressDuration": "OmniPanel 右键长按时长",
+    "omniPanelMouseLongPressDurationDesc": "设置触发 OmniPanel 的右键长按阈值。",
     "shortcutsDialog": {
       "title": "快捷方式",
       "desc": "搜索并配置系统级快捷键。",
@@ -200,6 +249,7 @@
       "sourcePlugin": "插件：{name}",
       "sourceUnknown": "未知来源",
       "triggerMouseRightLongPress": "鼠标右键长按",
+      "triggerMouseRightLongPressWithDuration": "鼠标右键长按（{duration} ms）",
       "columns": {
         "name": "名称",
         "source": "来源",
@@ -222,6 +272,8 @@
       "conflictPlugin": "与插件快捷键冲突",
       "unavailable": "快捷键注册失败，可能被系统占用",
       "invalid": "快捷键无效",
+      "omniPanelAccessibilityRequired": "需要辅助功能权限",
+      "omniPanelAccessibilityHint": "macOS 需先授予辅助功能权限，右键长按触发才会生效。",
       "spotlightHint": "可在系统设置中关闭 Spotlight 快捷键以释放该组合键"
     },
     "autoPaste": "自动粘贴",
@@ -387,8 +439,8 @@
     "wallpaperCopyFailed": "复制壁纸到壁纸库失败。",
     "selectImageFailed": "选择背景图片失败。",
     "selectFolderFailed": "选择背景文件夹失败。",
-    "syncToCloud": "同步到云端",
-    "syncToCloudDesc": "开启后记录同步状态，上传功能后续支持。",
+    "syncToCloud": "记录同步状态",
+    "syncToCloudDesc": "当前只记录本地同步状态，不会上传到云端。",
     "syncRequiresLibrary": "同步前请先复制到壁纸库。",
     "folderRandomHint": "文件夹轮播默认随机。",
     "emphasis": "强调",
@@ -502,6 +554,8 @@
     "title": "插件市场",
     "subtitle": "发现适合您工作流程的优秀插件",
     "searchPlaceholder": "搜索插件...",
+    "unnamedItem": "未命名插件",
+    "noDescription": "暂无描述",
     "sources": "来源",
     "loading": "正在加载官方插件...",
     "refresh": "刷新",
@@ -515,10 +569,10 @@
     "officialBadge": "官方",
     "lastUpdated": "上次更新 {time}",
     "cliGroupTitle": "Tuff CLI",
-    "cliGroupDesc": "检测到本机已安装 Tuff CLI，CLI 市场联动能力正在开发中。",
+    "cliGroupDesc": "检测到本机已安装 Tuff CLI，当前可体验 Beta 预览能力。",
     "cliBetaTitle": "Beta Feature",
-    "cliBetaDesc": "已预留 CLI 市场入口，后续版本将开放可安装项与命令联动。",
-    "cliBetaTag": "开发中",
+    "cliBetaDesc": "CLI 市场入口已开放 Beta 预览，部分能力仍在持续完善。",
+    "cliBetaTag": "Beta 预览",
     "docsGroupTitle": "平台能力文档",
     "docsGroupDesc": "查看平台能力清单与相关开发说明",
     "docsLinkTitle": "Platform Capabilities SDK",
@@ -581,10 +635,22 @@
       "download": "下载源文件",
       "viewDocs": "查看文档",
       "information": "插件信息",
+      "readmeLoading": "正在加载 README...",
+      "readmeEmpty": "暂无 README",
       "readmeError": "加载 README 失败",
       "notFound": "未找到插件",
       "notFoundDesc": "请检查插件 ID 或返回市场",
       "backToStore": "返回市场"
+    },
+    "rating": {
+      "title": "评分",
+      "loading": "正在加载...",
+      "loginRequiredTitle": "需要登录",
+      "loginRequired": "登录后才可为该插件评分。",
+      "invalid": "评分值无效。",
+      "httpError": "评分请求失败。",
+      "unavailable": "评分暂时不可用。",
+      "submitFailedTitle": "评分失败"
     },
     "error": {
       "loadFailed": "官方插件列表加载失败。"
@@ -609,7 +675,24 @@
       "confirmMessage": "插件「{name}」来自非官方来源，确定继续安装吗？",
       "confirmInstall": "继续安装",
       "confirmReject": "取消",
-      "beforeExitPrompt": "仍有插件安装正在进行，确认要退出吗？"
+      "beforeExitPrompt": "仍有插件安装正在进行，确认要退出吗？",
+      "permissionConfirmTitle": "插件权限确认",
+      "permissionConfirmMessage": "插件「{name}」需要以下权限：\n{permissions}\n\n请选择授权方式。",
+      "permissionAllowAlways": "始终允许",
+      "permissionAllowSession": "仅本次会话",
+      "permissionReject": "拒绝安装",
+      "reasons": {
+        "installFailed": "安装流程未完成，请稍后重试。",
+        "noSource": "当前插件缺少可用的安装源。",
+        "authRequired": "请先登录后再继续安装。",
+        "httpError": "安装请求失败（HTTP {status}）。",
+        "networkTimeout": "插件包下载超时或被中断，请检查插件源网络后重试。",
+        "noProvider": "当前下载地址没有可用的安装处理器。",
+        "sdkapiBlocked": "该插件的 sdkapi 与当前 Tuff 版本不兼容。",
+        "sdkapiMissing": "该插件缺少必需的 sdkapi 声明，当前版本无法安装。",
+        "sdkapiInvalid": "该插件声明的 sdkapi 格式无效。",
+        "sdkapiOutdated": "该插件的 sdkapi {declared} 低于当前支持的最低版本 {minimum}。"
+      }
     },
     "upgradeDialog": {
       "confirmTitle": "确认更新",
@@ -640,9 +723,42 @@
     "plugins": "个插件",
     "noProviderData": "暂无数据源信息"
   },
+  "auth": {
+    "loginResumePrompt": {
+      "title": "恢复登录",
+      "description": "检测到上次登录流程未完成。你可以重试，或粘贴登录 token 继续恢复。",
+      "placeholder": "可选：粘贴登录 token",
+      "cancel": "取消",
+      "retry": "重试",
+      "manualSubmit": "继续恢复"
+    }
+  },
   "plugin": {
+    "add": "添加插件",
+    "running": "运行中",
+    "all": "全部",
+    "searchPlaceholder": "搜索插件...",
     "opening": "打开中...",
     "openFolder": "打开文件夹",
+    "dropInstall": {
+      "installing": "安装中...",
+      "ignore": "忽略",
+      "install": "安装",
+      "errorTitle": "插件安装失败",
+      "successTitle": "插件已安装",
+      "bufferMissing": "插件文件缓冲区缺失，请重新拖入安装包。",
+      "unsupportedExtension": "仅支持 .tpex 插件包。",
+      "parsing": "正在解析插件包...",
+      "corrupted": "该插件包已损坏，或 manifest 无效。",
+      "invalidPackage": "无法解析这个插件包。",
+      "installFailed": "插件安装失败，请换一个有效安装包后重试。",
+      "readFailed": "读取插件文件失败，请重试。",
+      "alreadyInstalledTitle": "插件已安装",
+      "alreadyInstalledMessage": "插件“{name}”已安装，是否更新它？",
+      "update": "更新",
+      "successMessage": "插件“{name}”已安装成功。",
+      "unexpected": "插件安装遇到异常，请稍后重试。"
+    },
     "emptyState": {
       "message": "选择一个插件查看详情",
       "exploreStore": "浏览市场"
@@ -691,6 +807,11 @@
       "widgetLoadFailedTitle": "Widget 加载失败",
       "widgetLoadFailedMessage": "插件 widget 初始化失败，请检查插件版本、路径和运行日志。"
     },
+    "view": {
+      "loading": "插件加载中...",
+      "ignoreLoad": "忽略加载失败",
+      "restart": "重启插件"
+    },
     "tabs": {
       "overview": "概览",
       "issues": "问题",
@@ -729,9 +850,6 @@
       "blockedWarning": "此插件因 SDK 版本过低已被阻断，权限页面仅展示状态，不提供授权操作。",
       "blockedStatusTitle": "阻断原因",
       "blockedHint": "升级到 sdkapi >= {version} 后重新安装插件，再执行权限授权。",
-      "legacyTitle": "SDK 版本警告",
-      "legacyWarning": "此插件使用旧版 SDK，权限校验已跳过",
-      "legacyHint": "升级到 sdkapi >= {version} 以启用权限校验",
       "backendUnavailableTitle": "权限后端不可写",
       "backendUnavailableDesc": "SQLite 权限后端不可用，当前仅支持读取已加载快照。",
       "backendMutationFailed": "权限变更失败",
@@ -765,7 +883,6 @@
         "warning": {
           "permissionMissing": "未授予快捷键权限",
           "blockedSdk": "SDK 版本过低，插件已被阻断",
-          "legacySdk": "SDK 版本过低，未启用权限校验",
           "missingDescription": "缺少快捷键说明"
         }
       },
@@ -965,6 +1082,9 @@
         "commandsCount": "命令数量",
         "featureType": "功能类型",
         "standardType": "标准",
+        "acceptedInputs": "支持的输入类型",
+        "defaultInput": "text（默认）",
+        "priority": "优先级",
         "commandsTitle": "命令（{count}）",
         "dataTitle": "数据",
         "commandJsonTitle": "命令 JSON",
@@ -975,6 +1095,27 @@
         "rawData": "功能原始数据",
         "viewFullJson": "查看完整功能 JSON"
       },
+      "data": {
+        "tab": "数据",
+        "featureTitle": "功能",
+        "featureDesc": "功能定义",
+        "commandTitle": "命令 {index} · {type}",
+        "commandDesc": "命令定义",
+        "empty": "暂无命令数据"
+      },
+      "interaction": {
+        "tab": "交互",
+        "title": "交互",
+        "type": "类型",
+        "path": "路径",
+        "showInput": "显示输入框",
+        "allowInput": "自动监听输入",
+        "flagEnabled": "开启",
+        "flagDisabled": "关闭",
+        "flagDefault": "默认"
+      },
+      "devDisconnectedTitle": "开发服务器已断开",
+      "devDisconnectedReason": "原因：{reason}",
       "widget": {
         "title": "Widget",
         "widgetId": "Widget ID",
@@ -1016,7 +1157,114 @@
         "invalidExtension": "不支持的文件扩展名",
         "saveSuccess": "Widget 已保存",
         "saveFailed": "保存 widget 失败",
-        "savedButManifestFailed": "源码已保存，但 manifest 更新失败"
+        "savedButManifestFailed": "源码已保存，但 manifest 更新失败",
+        "preview": {
+          "title": "Widget 预览",
+          "description": "预览当前 widget 输出",
+          "selectLabel": "选择预览",
+          "selectPlaceholder": "选择 widget",
+          "statusLabel": "状态",
+          "reloadCurrent": "重新加载当前",
+          "reloadAll": "重新加载全部",
+          "sizeLabel": "预览尺寸",
+          "sizePlaceholder": "选择预览尺寸",
+          "reset": "恢复默认",
+          "resizeHint": "拖拽右下角可自定义",
+          "mockLabel": "模拟载荷",
+          "mockPlaceholder": "输入 JSON 载荷",
+          "mockError": "JSON 解析失败：{error}",
+          "statusNotSelected": "未选择",
+          "statusInvalidPayload": "载荷无效",
+          "statusLoading": "加载中",
+          "statusRenderFailed": "渲染失败",
+          "statusReady": "已加载",
+          "statusError": "异常",
+          "statusPending": "暂未就绪",
+          "hintMockInvalid": "模拟载荷解析失败：{error}",
+          "hintMockEmpty": "已开启模拟载荷，但内容为空",
+          "hintMockActive": "使用模拟载荷渲染",
+          "hintReadyEmpty": "提示：Widget 已加载但内容为空时，通常需要 payload 或运行时数据。",
+          "missingWidgetId": "预览需要有效的 widgetId。",
+          "resizeAriaLabel": "调整预览尺寸"
+        }
+      }
+    },
+    "new": {
+      "header": {
+        "title": "插件工作区",
+        "installTab": "安装",
+        "createTab": "开发",
+        "installSubtitle": "从 GitHub、NPM、TPEX 或本地文件安装 Tuff 插件。",
+        "createSubtitle": "创建新的插件模板，便于本地开发和调试。"
+      },
+      "provider": {
+        "file": "本地文件",
+        "dev": "开发"
+      },
+      "preview": {
+        "name": "名称：{value}",
+        "version": "版本：{value}",
+        "author": "作者：{value}"
+      },
+      "install": {
+        "tipTitle": "安装插件",
+        "emptySourceMessage": "请先输入插件来源地址，例如 GitHub 仓库或 .tpex 链接。",
+        "invalidMetadata": "元数据需要是合法的 JSON 字符串。",
+        "successTitle": "插件安装",
+        "successTip": "插件已成功安装。",
+        "successMessage": "插件安装成功，可在列表中查看。",
+        "errorMessage": "插件安装失败，请检查来源是否可用。",
+        "unexpectedError": "插件安装遇到异常，请稍后重试。",
+        "sourceBlockTitle": "来源信息",
+        "sourceLabel": "来源地址",
+        "sourcePlaceholder": "talex-touch/example-plugin 或 https://github.com/...",
+        "sourceTypeLabel": "来源类型提示",
+        "autoDetect": "自动识别",
+        "sourceHint": "支持 GitHub 仓库 / release、NPM 包、.tpex 包或本地压缩包路径。",
+        "metadataBlockTitle": "附加元数据（可选）",
+        "metadataPlaceholder": "{ \"tag\": \"v1.0.0\" }",
+        "metadataHint": "用于指定 tag / branch 等额外信息，留空则自动处理。",
+        "actionBlockTitle": "执行",
+        "sourceTypeResult": "来源类型"
+      },
+      "create": {
+        "templatesTitle": "模板",
+        "generalTitle": "基础信息",
+        "readmeTitle": "README",
+        "actionsTitle": "操作",
+        "openInVscode": "在 VSCode 中打开",
+        "agreementPrefix": "同意",
+        "agreementName": "Touch Plugin Development",
+        "createAction": "创建",
+        "agreementAlertTitle": "注意",
+        "agreementAlertMessage": "你必须同意 <i style='color: #4E94B0'>Touch Plugin Development</i> 协议。",
+        "fields": {
+          "name": "名称",
+          "icon": "图标",
+          "version": "版本",
+          "devAddress": "开发地址",
+          "description": "描述"
+        },
+        "validation": {
+          "name": "请输入有效的插件名称。",
+          "version": "请输入有效的插件版本。",
+          "devAddress": "请输入有效的插件开发地址。",
+          "description": "请输入有效的插件描述。"
+        },
+        "templates": {
+          "download": "下载",
+          "vueDescription": "包含基于 Vue 3 和 Vite 的默认开发环境。",
+          "reactDescription": "包含基于 React 18 和 Vite 的默认开发环境。",
+          "svelteDescription": "包含基于 Svelte 3 和 Vite 的默认开发环境。"
+        },
+        "env": {
+          "nodeTooLow": "Node.js 版本过低（v{version}），请升级到 16 或更高版本。",
+          "nodeMissing": "缺少 Node.js，请先安装。",
+          "degitMissing": "缺少 degit，请先安装。",
+          "degitInstalled": "已安装",
+          "degitInstallingTitle": "正在安装 degit",
+          "installDegit": "安装 degit"
+        }
       }
     },
     "logs": {
@@ -1035,6 +1283,8 @@
       "basicInfo": "基础信息",
       "pluginId": "插件 ID",
       "pluginName": "插件名称",
+      "commandDetailsTitle": "命令详情",
+      "commandDataTitle": "命令数据",
       "copyPluginId": "复制插件 ID",
       "copyPluginIdSuccess": "插件 ID 已复制",
       "copyPluginIdFailed": "复制插件 ID 失败",
@@ -1154,34 +1404,13 @@
     "action": "应用操作",
     "launch": "启动应用",
     "launchBtn": "启动",
-    "openInExplorer": "在文件浏览器中打开",
-    "openBtn": "打开",
-    "uninstall": "卸载应用",
-    "danger": "(危险)",
-    "uninstallBtn": "卸载",
     "help": "应用帮助",
     "helpDesc": "通过搜索引擎查找帮助。",
     "stats": "应用统计",
     "name": "名称",
     "type": "类型",
     "value": "值",
-    "keywords": "关键词",
-    "spec": "应用规格 (外部)",
-    "version": "版本",
-    "size": "大小",
-    "dev": "Dev",
-    "ino": "Ino",
-    "mode": "模式",
-    "nlink": "NLink",
-    "uid": "Uid",
-    "gid": "Gid",
-    "rdev": "RDev",
-    "blksize": "BlkSize",
-    "atimeMs": "AtimeMs",
-    "ctimeMs": "CtimeMs",
-    "birthTimeMs": "BirthTimeMs",
-    "confirm": "确定要配置并在设备间同步吗？",
-    "save": "保存"
+    "keywords": "关键词"
   },
   "applicationEmpty": {
     "title": "选择一个应用进行配置。",
@@ -1385,6 +1614,10 @@
     "priority_high": "高",
     "priority_normal": "普通",
     "priority_low": "低",
+    "priority_background": "后台",
+    "duration_seconds": "{count}秒",
+    "duration_minutes": "{count}分钟",
+    "duration_hours": "{count}小时",
     "error": {
       "network": "网络连接失败",
       "timeout": "下载超时",
@@ -1543,6 +1776,10 @@
       "networkMaxRetriesDesc": "网络级别的最大重试次数",
       "tempDir": "临时目录",
       "tempDirDesc": "临时下载文件的存储位置",
+      "browse": "选择目录",
+      "resetTempDir": "恢复默认目录",
+      "selectTempDirTitle": "选择下载临时目录",
+      "selectTempDirConfirm": "使用此目录",
       "defaultPath": "默认路径",
       "noRetry": "不重试",
       "days": "天",
@@ -1560,7 +1797,8 @@
         "saveFailed": "保存下载设置失败",
         "defaultsRestored": "已恢复默认设置",
         "tempCleaned": "临时文件已清理",
-        "tempCleanFailed": "清理临时文件失败"
+        "tempCleanFailed": "清理临时文件失败",
+        "tempDirSelectFailed": "选择临时目录失败"
       }
     },
     "settingPlatformCapabilities": {
@@ -1586,6 +1824,7 @@
         "best_effort": "尽力支持",
         "unsupported": "不支持"
       },
+      "reason": "原因",
       "limitations": "限制",
       "tags": {
         "sensitive": "敏感"
@@ -1719,6 +1958,27 @@
       "allowChargingDesc": "连接电源时允许忽略最低电量限制",
       "forceAfterTitle": "强制执行间隔",
       "forceAfterDesc": "超过该时长未执行时允许跳过空闲判断",
+      "diagnosticTitle": "空闲策略诊断",
+      "diagnosticChecking": "检查中",
+      "diagnosticUnknown": "未读取",
+      "diagnosticAllowedStatus": "允许执行",
+      "diagnosticBlockedStatus": "已拦截",
+      "diagnosticCheckingDesc": "正在读取当前空闲、电量与策略判断。",
+      "diagnosticUnknownDesc": "暂时无法读取当前诊断，请刷新后重试。",
+      "diagnosticAllowed": "当前空闲与电量条件满足策略，后台任务可执行。",
+      "diagnosticNotIdle": "当前空闲 {idle}，低于阈值 {threshold}，后台任务会继续等待。",
+      "diagnosticBatteryLow": "当前电量 {battery}，低于最低电量 {min}%，且未满足充电豁免。",
+      "diagnosticBatteryCritical": "当前电量 {battery}，低于电量禁区 {critical}%，已强制拦截。",
+      "diagnosticIdleMetric": "空闲",
+      "diagnosticBatteryMetric": "电量",
+      "diagnosticBatteryState": {
+        "charging": "充电中",
+        "onBattery": "电池供电",
+        "unknown": "状态未知"
+      },
+      "diagnosticLastChecked": "上次 {time}",
+      "diagnosticRefresh": "刷新",
+      "deviceIdleDiagnosticLoadFailed": "读取空闲策略诊断失败",
       "appIndexGroupTitle": "应用索引调度",
       "appIndexGroupDesc": "控制启动补漏与周期性全量同步",
       "hideNoisySystemAppsTitle": "过滤系统噪音应用",
@@ -1737,6 +1997,49 @@
       "fullSyncIntervalDesc": "两次全量同步之间的最小间隔",
       "fullSyncCheckIntervalTitle": "全量检查频率",
       "fullSyncCheckIntervalDesc": "检查是否需要全量同步的频率",
+      "appDiagnosticTitle": "应用搜索诊断",
+      "appDiagnosticDesc": "按路径、bundleId 或名称检查单个应用的索引内容与查询命中阶段",
+      "appDiagnosticTargetPlaceholder": "应用路径 / bundleId / 显示名",
+      "appDiagnosticQueryPlaceholder": "可选：搜索词，例如 网易云",
+      "appDiagnosticRun": "诊断",
+      "appDiagnosticReindexKeywords": "重建关键词",
+      "appDiagnosticRescan": "重新扫描",
+      "appDiagnosticCopyEvidence": "复制证据",
+      "appDiagnosticSaveEvidence": "保存 JSON",
+      "appDiagnosticFound": "已索引",
+      "appDiagnosticDisplayName": "displayName",
+      "appDiagnosticBundleId": "bundle / identity",
+      "appDiagnosticAlternateNames": "alternateNames",
+      "appDiagnosticItemIds": "itemIds",
+      "appDiagnosticGeneratedKeywords": "生成关键词",
+      "appDiagnosticStoredKeywords": "已入库关键词",
+      "appDiagnosticEmpty": "无",
+      "appDiagnosticMore": "等 {count} 项",
+      "appDiagnosticQueryMeta": "query: {query} · FTS: {fts}",
+      "appDiagnosticStage": {
+        "precise": "precise",
+        "phrase": "phrase",
+        "prefix": "prefix",
+        "fts": "FTS",
+        "ngram": "N-gram",
+        "subsequence": "subsequence"
+      },
+      "appDiagnosticStageSkipped": "跳过",
+      "appDiagnosticStageHit": "命中目标",
+      "appDiagnosticStageMiss": "未命中目标",
+      "appDiagnosticStageNotRun": "未执行",
+      "appDiagnosticStageMatches": "{count} 个候选",
+      "appDiagnosticNotFound": "未找到目标（{status}）：{reason}",
+      "appDiagnosticTargetRequired": "请先输入应用路径、bundleId 或名称",
+      "appDiagnosticFailed": "应用搜索诊断失败",
+      "appDiagnosticReindexFailed": "单项重建失败",
+      "appDiagnosticReindexSuccess": "单项重建已完成",
+      "appDiagnosticReindexConfirmTitle": "确认重建应用索引",
+      "appDiagnosticReindexConfirmMessage": "将对当前目标执行单项索引重建，确认后继续。",
+      "appDiagnosticEvidenceMissing": "请先完成一次应用搜索诊断",
+      "appDiagnosticEvidenceCopied": "诊断证据已复制",
+      "appDiagnosticEvidenceCopyFailed": "复制诊断证据失败",
+      "appDiagnosticEvidenceSaved": "诊断证据已保存",
       "unitMinutes": "分钟",
       "unitHours": "小时",
       "unitSeconds": "秒",
@@ -1765,12 +2068,12 @@
       "backendCli": "CLI (es.exe)",
       "backendUnavailable": "不可用",
       "healthTitle": "搜索健康状态",
-      "healthDesc": "显示当前是否使用 Everything，或已降级到回退路径",
+      "healthDesc": "显示 Everything 是否已就绪，以及文件搜索不可用时的原因",
       "healthHealthy": "正常",
-      "healthDegraded": "已降级",
+      "healthDegraded": "未就绪",
       "healthUnsupported": "不支持",
       "fallbackChainTitle": "后端降级链路",
-      "fallbackChainDesc": "当上游后端不可用时，系统按此顺序自动降级",
+      "fallbackChainDesc": "Everything 后端初始化时按此顺序尝试，不代表存在可用的搜索回退",
       "enableTitle": "启用 Everything 搜索",
       "enableDesc": "使用 Everything 进行超快速文件搜索",
       "enable": "启用",
@@ -1985,11 +2288,6 @@
       "promptNewDefaultName": "提示词 {index}",
       "promptDuplicateSuffix": "（副本）",
       "docsButton": "查看 GitHub 文档",
-      "futureCenterTitle": "云端能力中心（规划中）",
-      "futureCenterDesc": "即将支持云端下载、目标共享、策略同步等功能。",
-      "futureCloudSync": "云端同步 Prompt 与能力策略",
-      "futureTargetShare": "多设备共享目标/状态",
-      "futureDownload": "云端模型/模版下载",
       "providerStat": "渠道 {count} 个",
       "capabilityStat": "能力 {count} 个",
       "landing": {
@@ -2036,7 +2334,7 @@
           "newPromptButton": "新建提示词",
           "folderOpenSuccess": "已打开提示词文件夹",
           "folderOpenFailed": "打开提示词文件夹失败",
-          "createPromptHint": "提示词创建功能开发中"
+          "createPromptHint": "提示词创建功能即将推出"
         },
         "future": {
           "title": "云下载与共享",
@@ -2072,6 +2370,7 @@
       },
       "autoDownloadTitle": "自动下载更新",
       "autoDownloadDesc": "发现新版本时自动下载更新包",
+      "autoDownloadDescManual": "发现新版本时自动下载安装包，后续仍需通过系统安装器完成更新",
       "rendererOverrideTitle": "Renderer Override（实验性）",
       "rendererOverrideDesc": "手动开启实验性 Renderer Override（需设置 TUFF_ENABLE_RENDERER_OVERRIDE=1）。",
       "statusTitle": "状态",
@@ -2082,14 +2381,18 @@
         "updateAvailable": "发现新版本，请关注弹出的更新提示。",
         "upToDate": "当前已是最新版本。",
         "downloadReady": "更新包 {version} 已下载完成，可立即重启并完成更新。",
+        "downloadReadyManual": "安装包 {version} 已下载完成，请打开安装包继续更新。",
         "unknownVersion": "该版本",
         "cachedRelease": "缓存更新：{version}"
       },
       "actionsTitle": "操作",
       "actionsDesc": "更新包下载完成后，在这里立即重启完成更新。",
+      "actionsDescManual": "安装包下载完成后，在这里打开安装包并交给系统完成安装。",
       "actions": {
         "installNow": "立即重启更新",
-        "manualCheck": "立即检查",
+        "openInstaller": "打开安装包",
+        "manualCheck": "检查更新",
+        "manualCheckDesc": "立即检查当前渠道是否有新版本。",
         "clearCache": "清空缓存"
       },
       "assetsTitle": "GitHub 下载包",
@@ -2121,6 +2424,7 @@
         "manualCheckFailedWithReason": "检测失败：{reason}",
         "manualCheckFailed": "手动检测更新失败",
         "installStarted": "正在重启并应用更新",
+        "installPendingConfirmation": "安装请求已发送，正在等待系统接管确认",
         "installFailedWithReason": "启动更新失败：{reason}",
         "cacheCleared": "更新缓存已清空",
         "cacheClearFailed": "清空更新缓存失败"
@@ -2263,6 +2567,8 @@
     "remove": "移除",
     "close": "关闭",
     "open": "打开",
+    "content": "内容",
+    "capsLock": "大写锁定",
     "refresh": "刷新",
     "loading": "加载中...",
     "error": "错误",
@@ -2351,6 +2657,8 @@
     "downloadCompleteBody": "{filename}\n{size} · 用时 {duration}",
     "downloadFailed": "下载失败",
     "downloadFailedBody": "{filename}\n{error}",
+    "appLaunchFailedTitle": "应用启动失败",
+    "appLaunchFailedBody": "未能启动 {name}\n{error}",
     "pluginInstallSuccessTitle": "插件已添加",
     "pluginInstallSuccessBody": "已添加插件 {name}，已为你打开详情",
     "pluginInstallExistsTitle": "插件已存在",
@@ -2359,6 +2667,10 @@
     "pluginInstallFailedBody": "未能添加插件 {name}",
     "pluginInstallFailedBodyWithReason": "未能添加插件 {name}：{error}",
     "pluginInstallUnknown": "插件",
+    "clipboardTextEmpty": "剪贴板文本为空。",
+    "clipboardImageBody": "剪贴板中的图片内容已准备就绪。",
+    "clipboardHtmlBody": "剪贴板中的 HTML 内容已准备就绪。",
+    "externalLinkConfirmTitle": "确认打开外部链接？",
     "updateAvailable": "新版本可用",
     "updateAvailableBody": "Tuff {version} 已发布\n点击查看详情",
     "updateReady": "更新已准备就绪",
@@ -2374,6 +2686,70 @@
     "syncDeviceListSeparator": "、",
     "syncDeviceListMore": "等",
     "syncDeviceUnknown": "未知设备"
+  },
+  "assistant": {
+    "voicePanel": {
+      "unsupported": "当前环境不支持语音识别",
+      "permissionDenied": "麦克风权限未授权",
+      "recognitionError": "语音识别异常：{error}",
+      "emptyInput": "请先说出要执行的内容",
+      "submitFailed": "发送失败，请重试",
+      "listening": "正在聆听...",
+      "waiting": "等待语音输入",
+      "close": "关闭",
+      "placeholder": "说出或输入要执行的内容，例如：帮我搜索最近的会议记录",
+      "startListening": "开始监听",
+      "listeningAction": "监听中",
+      "submitting": "发送中...",
+      "sendToCoreBox": "发送到 CoreBox"
+    }
+  },
+  "settingPermission": {
+    "title": "权限中心",
+    "description": "管理插件的权限授权",
+    "searchPlaceholder": "搜索插件...",
+    "empty": "没有找到插件",
+    "stats": {
+      "total": "{count} 个插件",
+      "withMissing": "{count} 个缺少权限",
+      "blocked": "{count} 个被阻断"
+    },
+    "filters": {
+      "all": "全部插件",
+      "granted": "权限完整",
+      "missing": "缺少权限"
+    },
+    "tags": {
+      "blocked": "已阻断",
+      "missing": "缺少 {count} 项"
+    },
+    "pluginStats": {
+      "required": "必需：{count}",
+      "optional": "可选：{count}",
+      "granted": "已授予：{count}"
+    },
+    "actions": {
+      "grantRequired": "授予全部必需权限"
+    },
+    "audit": {
+      "title": "审计日志",
+      "description": "查看权限操作历史记录",
+      "show": "查看日志",
+      "hide": "收起日志",
+      "clear": "清空",
+      "empty": "暂无操作记录",
+      "total": "共 {count} 条记录",
+      "filters": {
+        "all": "全部操作"
+      },
+      "actions": {
+        "granted": "授予",
+        "revoked": "撤销",
+        "denied": "拒绝",
+        "used": "使用",
+        "blocked": "拦截"
+      }
+    }
   },
   "timeUnits": {
     "seconds": "秒",
@@ -2580,15 +2956,7 @@
       "failure": "失败",
       "promptTokens": "输入 Token",
       "completionTokens": "输出 Token",
-      "weekdays": [
-        "日",
-        "一",
-        "二",
-        "三",
-        "四",
-        "五",
-        "六"
-      ]
+      "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
     },
     "audit": {
       "title": "审计设置",
@@ -2716,7 +3084,13 @@
     "noTargets": "没有可用的目标",
     "navigate": "导航",
     "confirm": "确认",
-    "cancel": "取消"
+    "cancel": "取消",
+    "consentTitle": "确认流转",
+    "consentDesc": "允许 {source} 将内容发送到 {target}？",
+    "defaultTarget": "默认目标",
+    "consentDeny": "拒绝",
+    "consentOnce": "仅本次允许",
+    "consentAlways": "始终允许"
   },
   "corebox": {
     "pinned": "已固定",
@@ -2742,9 +3116,22 @@
       "empty": "当前没有可用 Feature",
       "loadFailed": "加载 OmniPanel Feature 失败，请稍后重试。",
       "executeFailed": "执行失败，请稍后重试。",
+      "selectionCount": "已选中 {count} 字符",
+      "selectionPreview": "已选中 {preview}",
+      "selectionUnavailable": "当前平台不支持自动抓取选中文本。",
+      "selectionCaptureFailed": "抓取选中文本失败，请检查权限或桌面自动化环境。",
+      "selectionRequired": "该 Feature 需要选中文本后才能执行。",
+      "coreboxUnavailable": "CoreBox 当前不可用，请稍后重试。",
       "toggleFailed": "更新 Feature 状态失败。",
       "reorderFailed": "Feature 排序更新失败。",
       "featureUnavailable": "该 Feature 当前不可用，请检查插件状态。"
+    },
+    "meta": {
+      "defaultGroup": "操作",
+      "searchPlaceholder": "搜索操作...",
+      "select": "选择",
+      "execute": "执行",
+      "close": "关闭"
     },
     "actions": {
       "title": "操作",

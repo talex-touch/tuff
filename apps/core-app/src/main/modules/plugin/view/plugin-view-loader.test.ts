@@ -1,4 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { appMock, enterUIModeMock } = vi.hoisted(() => ({
   appMock: { isPackaged: false },
@@ -24,6 +28,8 @@ vi.mock('../../../utils/logger', () => ({
 
 import { PluginViewLoader } from './plugin-view-loader'
 
+const tempDirs: string[] = []
+
 function createPlugin(overrides?: Record<string, unknown>) {
   return {
     name: 'touch-translation',
@@ -45,10 +51,29 @@ function createFeature(path: string) {
   } as unknown as Parameters<typeof PluginViewLoader.loadPluginView>[1]
 }
 
+async function createTempPluginDir(files: Record<string, string>): Promise<string> {
+  const pluginDir = await fs.mkdtemp(path.join(os.tmpdir(), 'plugin-view-loader-'))
+  tempDirs.push(pluginDir)
+
+  await Promise.all(
+    Object.entries(files).map(async ([fileName, content]) => {
+      const filePath = path.join(pluginDir, fileName)
+      await fs.mkdir(path.dirname(filePath), { recursive: true })
+      await fs.writeFile(filePath, content, 'utf-8')
+    })
+  )
+
+  return pluginDir
+}
+
 describe('PluginViewLoader', () => {
   beforeEach(() => {
     appMock.isPackaged = false
     enterUIModeMock.mockClear()
+  })
+
+  afterEach(async () => {
+    await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
   })
 
   it('loads local route path with hash routing', async () => {
@@ -60,6 +85,21 @@ describe('PluginViewLoader', () => {
     expect(enterUIModeMock).toHaveBeenCalledTimes(1)
     const viewUrl = enterUIModeMock.mock.calls[0]?.[0] as string
     expect(viewUrl).toBe('file:///tmp/touch-translation/index.html#/multi-translate')
+  })
+
+  it('prefers prerendered html files for extensionless local routes', async () => {
+    const pluginDir = await createTempPluginDir({
+      'index.html': '<html>fallback</html>',
+      'clipboard-manager.html': '<html>route</html>'
+    })
+    const plugin = createPlugin({ name: 'clipboard-history', pluginPath: pluginDir })
+    const feature = createFeature('/clipboard-manager')
+
+    await PluginViewLoader.loadPluginView(plugin, feature)
+
+    expect(enterUIModeMock).toHaveBeenCalledTimes(1)
+    const viewUrl = enterUIModeMock.mock.calls[0]?.[0] as string
+    expect(viewUrl).toBe(pathToFileURL(path.join(pluginDir, 'clipboard-manager.html')).href)
   })
 
   it('normalizes hash route in local mode', async () => {

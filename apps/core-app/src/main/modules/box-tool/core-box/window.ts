@@ -11,8 +11,8 @@ import { sleep, StorageList } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import chalk from 'chalk'
 import { app, nativeTheme, screen, WebContentsView } from 'electron'
@@ -38,6 +38,7 @@ import { coreBoxManager } from './manager'
 import { metaOverlayManager } from './meta-overlay'
 import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
 import { viewCacheManager } from './view-cache'
+import { getLiveViewWebContents } from './web-contents-view-guard'
 
 interface CoreBoxUiResumePayload {
   source: string
@@ -46,11 +47,6 @@ interface CoreBoxUiResumePayload {
 }
 
 const coreBoxUiResumeEvent = defineRawEvent<CoreBoxUiResumePayload, void>('core-box:ui-resume')
-const coreBoxTriggerEvent = defineRawEvent<
-  { id?: number; show?: boolean; [key: string]: unknown },
-  void
->('core-box:trigger')
-
 const coreBoxWindowLog = createLogger('CoreBox').child('Window')
 const COREBOX_MIN_HEIGHT = 64
 
@@ -244,7 +240,7 @@ export class WindowManager {
     }, 200)
 
     window.window.webContents.on('dom-ready', () => {
-      this.getTransport().broadcastToWindow(window.window.id, coreBoxTriggerEvent, {
+      this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.trigger, {
         id: window.window.webContents.id,
         show: window.window.isVisible()
       })
@@ -268,7 +264,7 @@ export class WindowManager {
 
     window.window.webContents.on('did-finish-load', () => {
       if (wasVisibleBeforeReload) {
-        this.getTransport().broadcastToWindow(window.window.id, coreBoxTriggerEvent, {
+        this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.trigger, {
           id: window.window.webContents.id,
           show: true
         })
@@ -608,7 +604,7 @@ export class WindowManager {
       window.window.showInactive()
     }
 
-    this.getTransport().broadcastToWindow(window.window.id, coreBoxTriggerEvent, {
+    this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.trigger, {
       id: window.window.webContents.id,
       show: true
     })
@@ -638,7 +634,7 @@ export class WindowManager {
     if (window.window.isDestroyed()) return
 
     this.stopBoundsAnimation()
-    this.getTransport().broadcastToWindow(window.window.id, coreBoxTriggerEvent, {
+    this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.trigger, {
       id: window.window.webContents.id,
       show: false
     })
@@ -964,15 +960,16 @@ export class WindowManager {
   private applyThemeToUIView(view: WebContentsView): void {
     const themeStyle = this.loadThemeStyleConfig()
     const css = this.loadInternalThemeCss()
+    const webContents = getLiveViewWebContents(view)
 
-    if (!view.webContents.isDestroyed()) {
+    if (webContents) {
       const previousKey = this.uiViewThemeCssKey.get(view)
       if (previousKey) {
-        void view.webContents.removeInsertedCSS(previousKey).catch(() => {})
+        void webContents.removeInsertedCSS(previousKey).catch(() => {})
         this.uiViewThemeCssKey.delete(view)
       }
 
-      void view.webContents
+      void webContents
         .insertCSS(css)
         .then((key) => {
           this.uiViewThemeCssKey.set(view, key)
@@ -993,7 +990,7 @@ export class WindowManager {
 
     if (followSystem) {
       const handler = () => {
-        if (!this.uiView || this.uiView !== view || view.webContents.isDestroyed()) {
+        if (!this.uiView || this.uiView !== view || !getLiveViewWebContents(view)) {
           return
         }
         this.updateUIViewDarkClass(view, nativeTheme.shouldUseDarkColors)
@@ -1005,7 +1002,8 @@ export class WindowManager {
   }
 
   private updateUIViewDarkClass(view: WebContentsView, isDark: boolean): void {
-    if (view.webContents.isDestroyed()) {
+    const webContents = getLiveViewWebContents(view)
+    if (!webContents) {
       return
     }
 
@@ -1022,7 +1020,7 @@ export class WindowManager {
       })();
     `
 
-    void view.webContents.executeJavaScript(script).catch((error) => {
+    void webContents.executeJavaScript(script).catch((error) => {
       coreBoxWindowLog.error('Failed to update UI view theme class', { error })
     })
   }
@@ -1041,7 +1039,7 @@ export class WindowManager {
   public async attachUIView(
     url: string,
     plugin?: TouchPlugin,
-    query?: TuffQuery | string,
+    query?: TuffQuery,
     feature?: IPluginFeature
   ): Promise<void> {
     const startTime = performance.now()
@@ -1090,8 +1088,7 @@ export class WindowManager {
           uiWebContents.focus()
 
           if (query) {
-            const normalizedQuery: TuffQuery =
-              typeof query === 'string' ? { text: query } : { ...query }
+            const normalizedQuery: TuffQuery = { ...query }
             void transport
               .sendToPlugin(plugin.name, CoreBoxEvents.input.change, {
                 input: normalizedQuery.text ?? '',
@@ -1254,14 +1251,16 @@ export class WindowManager {
       this.applyThemeToUIView(view)
 
       if (plugin) {
+        const liveWebContents = getLiveViewWebContents(view)
+
         // Only auto-open DevTools for plugins in dev mode (not based on app.isPackaged)
-        if (plugin.dev?.enable) {
-          view.webContents.openDevTools({ mode: 'detach' })
+        if (plugin.dev?.enable && liveWebContents) {
+          liveWebContents.openDevTools({ mode: 'detach' })
           this.uiViewFocused = true
         }
 
         if (injections?.styles) {
-          this.uiView?.webContents.insertCSS(injections.styles)
+          void getLiveViewWebContents(this.uiView)?.insertCSS(injections.styles)
         }
         if (pluginModule.pluginManager) {
           pluginModule.pluginManager.setActivePlugin(plugin.name)
@@ -1269,7 +1268,7 @@ export class WindowManager {
           coreBoxWindowLog.warn('Plugin manager not available, cannot set plugin active')
         }
 
-        this.uiView?.webContents.focus()
+        getLiveViewWebContents(this.uiView)?.focus()
       }
     })
 
@@ -1298,7 +1297,7 @@ export class WindowManager {
 
     // Send initial query directly to plugin after dom-ready (bypasses inputAllowed check)
     if (query && plugin) {
-      const normalizedQuery: TuffQuery = typeof query === 'string' ? { text: query } : { ...query }
+      const normalizedQuery: TuffQuery = { ...query }
 
       // Dedupe inputs and extract text content if text is empty
       if (normalizedQuery.inputs && normalizedQuery.inputs.length > 0) {
@@ -1388,11 +1387,10 @@ export class WindowManager {
         }
       }
 
-      const webContents = view.webContents
-      const webContentsAlive = !!webContents && !webContents.isDestroyed()
+      const webContents = getLiveViewWebContents(view)
       const currentWindow = this.current
       if (currentWindow && !currentWindow.window.isDestroyed()) {
-        if (webContentsAlive) {
+        if (webContents) {
           try {
             if (webContents.isDevToolsOpened()) {
               webContents.closeDevTools()
@@ -1421,7 +1419,7 @@ export class WindowManager {
 
       if (!cacheEnabled || !this.attachedPlugin) {
         try {
-          if (webContentsAlive) {
+          if (webContents) {
             webContents.close()
           }
         } catch (err) {
@@ -1563,9 +1561,10 @@ export class WindowManager {
       return false
     }
 
-    if (!view.webContents.isDestroyed()) {
+    const webContents = getLiveViewWebContents(view)
+    if (webContents) {
       this.applyThemeToUIView(view)
-      view.webContents.focus()
+      webContents.focus()
     }
 
     coreBoxWindowLog.info('UI view restored after failed transfer', {

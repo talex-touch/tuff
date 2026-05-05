@@ -14,6 +14,7 @@
 | 批量重命名 | `batch-rename` | [查看文档](./batch-rename.zh.md) |
 | 工作区脚本 | `workspace.scripts` | [查看文档](./workspace-scripts.zh.md) |
 | 开发工具箱 | `dev-toolbox` | [查看文档](./dev-toolbox.zh.md) |
+| 程序员工具 | `dev-utils` | [查看文档](./dev-utils.zh.md) |
 | 窗口管理 | `window.app` | [查看文档](./window-manager.zh.md) |
 | 窗口预设 | `window.presets` | [查看文档](./window-presets.zh.md) |
 | 系统操作 | `system.actions` | [查看文档](./system-actions.zh.md) |

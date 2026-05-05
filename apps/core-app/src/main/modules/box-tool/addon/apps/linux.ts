@@ -2,15 +2,9 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
+import type { ScannedAppInfo } from './app-types'
 
-interface AppInfo {
-  name: string
-  path: string
-  icon: string
-  bundleId: string
-  uniqueId: string
-  lastModified: Date
-}
+type AppInfo = ScannedAppInfo
 
 const APP_PATHS = [
   '/usr/share/applications',
@@ -90,6 +84,10 @@ async function parseDesktopFile(desktopFilePath: string): Promise<AppInfo | null
       icon: iconPath ? `file://${iconPath}` : '',
       bundleId: '',
       uniqueId: desktopFilePath, // Use .desktop file path as uniqueId
+      stableId: execPath,
+      launchKind: 'path',
+      launchTarget: execPath,
+      displayPath: desktopFilePath,
       lastModified: stats.mtime
     }
   } catch {

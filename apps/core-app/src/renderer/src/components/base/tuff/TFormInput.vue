@@ -2,6 +2,7 @@
 import type { StyleValue, WritableComputedRef } from 'vue'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import { computed, ref, useAttrs } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({
   inheritAttrs: false
@@ -34,6 +35,8 @@ const emits = defineEmits<{
   (e: 'blur', event: FocusEvent): void
   (e: 'focus', event: FocusEvent): void
 }>()
+
+const { t } = useI18n()
 
 const value = useModelWrapper(props, emits) as unknown as WritableComputedRef<
   string | number | null | undefined
@@ -97,7 +100,7 @@ const inputType = computed(() => (props.type === 'password' ? 'password' : props
     <span v-if="suffixIcon" class="icon suffix">
       <i :class="suffixIcon" />
     </span>
-    <span v-if="showCapsLock" class="caps-lock">Caps Lock</span>
+    <span v-if="showCapsLock" class="caps-lock">{{ t('common.capsLock') }}</span>
   </label>
 </template>
 

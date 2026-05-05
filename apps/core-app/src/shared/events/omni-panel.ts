@@ -18,11 +18,18 @@ export type OmniPanelContextSource =
   | 'command'
   | 'unknown'
 
+export type OmniPanelSelectionSupportLevel = 'supported' | 'best_effort' | 'unsupported'
+export type OmniPanelSelectionIssueCode = 'disabled' | 'empty' | 'failed' | 'unsupported'
+
 export interface OmniPanelContextPayload {
   text: string
   hasSelection: boolean
   source: OmniPanelContextSource
   sourceRaw?: string
+  selectionSupportLevel?: OmniPanelSelectionSupportLevel
+  selectionIssueCode?: OmniPanelSelectionIssueCode
+  selectionIssueMessage?: string
+  selectionLimitations?: string[]
   capturedAt: number
 }
 
@@ -69,14 +76,6 @@ export interface OmniPanelFeatureItemPayload {
 export interface OmniPanelFeatureListResponse {
   features: OmniPanelFeatureItemPayload[]
   updatedAt: number
-}
-
-/**
- * @deprecated Kept for compatibility with legacy clients.
- */
-export interface OmniPanelFeatureToggleRequest {
-  id: string
-  enabled: boolean
 }
 
 export interface OmniPanelFeatureReorderRequest {
@@ -146,14 +145,6 @@ export const omniPanelContextEvent = defineRawEvent<OmniPanelContextPayload, voi
 
 export const omniPanelFeatureListEvent = defineRawEvent<void, OmniPanelFeatureListResponse>(
   'omni-panel:feature:list'
-)
-
-/**
- * @deprecated Kept only for legacy bundle typing compatibility.
- * Core-app runtime no longer registers this event.
- */
-export const omniPanelFeatureToggleEvent = defineRawEvent<OmniPanelFeatureToggleRequest, void>(
-  'omni-panel:feature:toggle'
 )
 
 export const omniPanelFeatureReorderEvent = defineRawEvent<OmniPanelFeatureReorderRequest, void>(

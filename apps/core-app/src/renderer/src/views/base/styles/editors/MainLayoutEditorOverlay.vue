@@ -5,7 +5,7 @@ import { appSettingOriginData } from '@talex-touch/utils'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import CanvasGridEditor from './CanvasGridEditor.vue'
 
 defineProps<{

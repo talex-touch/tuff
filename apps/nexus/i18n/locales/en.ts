@@ -210,6 +210,7 @@ export default {
       heading: 'Latest build',
       releaseDate: 'Released {date}',
       releaseDateFallback: 'Pending release',
+      critical: 'Critical',
     },
     loading: 'Loading releases…',
     empty: 'We have not shipped builds for this channel yet. Check back soon.',
@@ -791,6 +792,10 @@ export default {
             releaseNews: {
               label: 'Sync Update News',
               description: 'Create dashboard updates/news records from CI',
+            },
+            releaseEvidence: {
+              label: 'Write Release Evidence',
+              description: 'Record 2.5.0 regression, docs guard, and platform blocker matrix evidence',
             },
           },
         },

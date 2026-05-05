@@ -9,123 +9,98 @@ const props = defineProps<{
   plugin: ITouchPlugin
   shrink: boolean
 }>()
-const dom = ref()
 const { t } = useI18n()
 
-const mapper = [
-  'DISABLED',
-  'DISABLING',
-  'CRASHED',
-  'ENABLED',
-  'ACTIVE',
-  'LOADING',
-  'LOADED',
-  'LOAD_FAILED',
-  'DEV_DISCONNECTED',
-  'DEV_RECONNECTING'
-]
-
-const func = ref(() => {})
 const status = computed(() => props.plugin.status)
 
-function refresh(): void {
-  const el = dom.value
-  if (!el) return
-
-  el.classList.remove(
-    'DISABLED',
-    'DISABLING',
-    'CRASHED',
-
-    'ENABLED',
-    'ACTIVE',
-
-    'LOADING',
-    'LOADED',
-    'LOAD_FAILED',
-
-    'DEV_DISCONNECTED',
-    'DEV_RECONNECTING'
-  )
-  el.classList.add(mapper[status.value])
-
-  devLog('[PluginStatus]', props.plugin.name, status.value)
-
-  if (status.value === PluginStatus.DISABLED) {
-    el.innerHTML = t('plugin.status.disabled')
-
-    func.value = async () => {
-      await pluginSDK.enable(props.plugin.name)
-    }
-  } else if (status.value === PluginStatus.DISABLING) {
-    el.innerHTML = ``
-  } else if (status.value === PluginStatus.CRASHED) {
-    el.innerHTML = t('plugin.status.crashed')
-
-    func.value = async () => {
-      await pluginSDK.enable(props.plugin.name)
-    }
-  } else if (status.value === PluginStatus.ENABLED) {
-    el.innerHTML = t('plugin.status.enabled')
-
-    func.value = async () => {
-      await pluginSDK.disable(props.plugin.name)
-    }
-  } else if (status.value === PluginStatus.ACTIVE) {
-    el.innerHTML = ``
-  } else if (status.value === PluginStatus.LOADING) {
-    el.innerHTML = ``
-  } else if (status.value === PluginStatus.LOADED) {
-    el.innerHTML = t('plugin.status.loaded')
-
-    func.value = async () => {
-      await pluginSDK.enable(props.plugin.name)
-    }
-  } else if (status.value === PluginStatus.LOAD_FAILED) {
-    el.innerHTML = t('plugin.status.loadFailed')
-
-    func.value = async () => {
-      try {
-        devLog(`[PluginStatus] Attempting to reload failed plugin: ${props.plugin.name}`)
-        await pluginSDK.reload(props.plugin.name)
-        devLog(`[PluginStatus] Plugin reload initiated for: ${props.plugin.name}`)
-      } catch (error) {
-        console.error(`[PluginStatus] Failed to reload plugin ${props.plugin.name}:`, error)
-        el.innerHTML = `${t('plugin.status.loadFailed')}`
+const statusView = computed(() => {
+  switch (status.value) {
+    case PluginStatus.DISABLED:
+      return {
+        className: 'DISABLED',
+        label: t('plugin.status.disabled'),
+        action: async () => {
+          await pluginSDK.enable(props.plugin.name)
+        }
       }
-    }
-  } else if (status.value === PluginStatus.DEV_DISCONNECTED) {
-    el.innerHTML = t('plugin.status.devDisconnected')
-
-    func.value = async () => {
-      await pluginSDK.reconnectDevServer(props.plugin.name)
-    }
-  } else if (status.value === PluginStatus.DEV_RECONNECTING) {
-    el.innerHTML = t('plugin.status.devReconnecting')
-    func.value = () => {}
+    case PluginStatus.DISABLING:
+      return { className: 'DISABLING', label: '', action: null }
+    case PluginStatus.CRASHED:
+      return {
+        className: 'CRASHED',
+        label: t('plugin.status.crashed'),
+        action: async () => {
+          await pluginSDK.enable(props.plugin.name)
+        }
+      }
+    case PluginStatus.ENABLED:
+      return {
+        className: 'ENABLED',
+        label: t('plugin.status.enabled'),
+        action: async () => {
+          await pluginSDK.disable(props.plugin.name)
+        }
+      }
+    case PluginStatus.ACTIVE:
+      return { className: 'ACTIVE', label: '', action: null }
+    case PluginStatus.LOADING:
+      return { className: 'LOADING', label: '', action: null }
+    case PluginStatus.LOADED:
+      return {
+        className: 'LOADED',
+        label: t('plugin.status.loaded'),
+        action: async () => {
+          await pluginSDK.enable(props.plugin.name)
+        }
+      }
+    case PluginStatus.LOAD_FAILED:
+      return {
+        className: 'LOAD_FAILED',
+        label: t('plugin.status.loadFailed'),
+        action: async () => {
+          try {
+            devLog(`[PluginStatus] Attempting to reload failed plugin: ${props.plugin.name}`)
+            await pluginSDK.reload(props.plugin.name)
+            devLog(`[PluginStatus] Plugin reload initiated for: ${props.plugin.name}`)
+          } catch (error) {
+            devLog(`[PluginStatus] Failed to reload plugin ${props.plugin.name}:`, error)
+          }
+        }
+      }
+    case PluginStatus.DEV_DISCONNECTED:
+      return {
+        className: 'DEV_DISCONNECTED',
+        label: t('plugin.status.devDisconnected'),
+        action: async () => {
+          await pluginSDK.reconnectDevServer(props.plugin.name)
+        }
+      }
+    case PluginStatus.DEV_RECONNECTING:
+      return {
+        className: 'DEV_RECONNECTING',
+        label: t('plugin.status.devReconnecting'),
+        action: null
+      }
+    default:
+      return { className: '', label: '', action: null }
   }
-}
-
-onMounted(() => {
-  watchEffect(() => {
-    const ctx = {
-      status: status.value,
-      pluginName: props.plugin.name,
-      ...props,
-      get $el() {
-        return dom.value
-      }
-    }
-
-    const func = refresh.bind(ctx)
-
-    func()
-  })
 })
+
+async function handleClick(): Promise<void> {
+  devLog('[PluginStatus]', props.plugin.name, status.value)
+  await statusView.value.action?.()
+}
 </script>
 
 <template>
-  <div ref="dom" v-wave class="PluginStatus-Container" :class="{ shrink }" @click="func" />
+  <div
+    v-wave
+    class="PluginStatus-Container"
+    :class="[statusView.className, { shrink }]"
+    @click="handleClick"
+  >
+    {{ statusView.label }}
+  </div>
 </template>
 
 <style lang="scss" scoped>

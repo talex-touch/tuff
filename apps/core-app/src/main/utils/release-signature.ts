@@ -1,6 +1,9 @@
 import crypto from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { getNetworkService } from '../modules/network'
+import { createLogger } from './logger'
+
+const signatureVerifierLog = createLogger('SignatureVerifier')
 
 export interface SignatureVerificationResult {
   valid: boolean
@@ -125,7 +128,9 @@ export class SignatureVerifier {
 
       return normalizedKey
     } catch (error) {
-      console.warn('[SignatureVerifier] Failed to fetch signature public key:', error)
+      signatureVerifierLog.warn('Failed to fetch signature public key', {
+        meta: { reason: error instanceof Error ? error.message : String(error) }
+      })
       return null
     }
   }
@@ -149,7 +154,9 @@ export class SignatureVerifier {
 
       return Buffer.from(response.data)
     } catch (error) {
-      console.warn('[SignatureVerifier] Failed to fetch signature payload:', error)
+      signatureVerifierLog.warn('Failed to fetch signature payload', {
+        meta: { reason: error instanceof Error ? error.message : String(error) }
+      })
       return null
     }
   }

@@ -16,6 +16,7 @@ import type {
 import { assertTuffEvent } from '../event/builder'
 import { TransportEvents } from '../events'
 import { isPortChannelEnabled } from './port-policy'
+import { startClientStream } from './stream/client-runtime'
 
 interface IpcRendererLike {
   on?: (channel: string, listener: (event: any, ...args: any[]) => void) => void
@@ -137,6 +138,7 @@ function unwrapPayload<T>(raw: unknown): T {
 export class TuffPluginTransport implements ITuffTransport {
   private cache = new Map<string, CacheEntry>()
   private handlers = new Map<string, Set<(payload: any) => any>>()
+  private streamControllers = new Map<string, StreamController>()
   private portCache = new Map<string, TransportPortHandle>()
   private portHandlesById = new Map<string, TransportPortHandle>()
   private pendingPortConfirms = new Map<
@@ -176,7 +178,9 @@ export class TuffPluginTransport implements ITuffTransport {
 
     const sender = typeof this.channel.sendToMain === 'function'
       ? this.channel.sendToMain.bind(this.channel)
-      : this.channel.send
+      : typeof this.channel.send === 'function'
+        ? this.channel.send.bind(this.channel)
+        : null
 
     if (!sender) {
       throw new Error('[TuffPluginTransport] Channel send function not available')
@@ -572,12 +576,45 @@ export class TuffPluginTransport implements ITuffTransport {
     }
   }
 
-  stream<TReq, TChunk>(
-    _event: TuffEvent<TReq, AsyncIterable<TChunk>>,
-    _payload: TReq,
-    _options: StreamOptions<TChunk>,
+  async stream<TReq, TChunk>(
+    event: TuffEvent<TReq, AsyncIterable<TChunk>>,
+    payload: TReq,
+    options: StreamOptions<TChunk>,
   ): Promise<StreamController> {
-    throw new Error('[TuffPluginTransport] Stream is not supported in plugin transport')
+    assertTuffEvent(event, 'TuffPluginTransport.stream')
+
+    const sender = typeof this.channel.sendToMain === 'function'
+      ? this.channel.sendToMain.bind(this.channel)
+      : typeof this.channel.send === 'function'
+        ? this.channel.send.bind(this.channel)
+        : null
+
+    if (!sender) {
+      throw new Error('[TuffPluginTransport] Channel send function not available')
+    }
+
+    const registerChannel = (channelName: string, handler: (raw: unknown) => void): (() => void) => {
+      if (typeof this.channel.onMain === 'function') {
+        return this.channel.onMain(channelName, handler)
+      }
+      if (typeof this.channel.regChannel === 'function') {
+        return this.channel.regChannel(channelName, handler)
+      }
+      throw new TypeError('[TuffPluginTransport] Channel on function not available')
+    }
+
+    return await startClientStream(
+      {
+        streamControllers: this.streamControllers,
+        send: (eventName: string, streamPayload?: unknown) => sender(eventName, streamPayload),
+        registerChannel,
+        openPort: options.port === false ? undefined : this.openPort.bind(this),
+        logPortFallback: this.logPortIssue.bind(this),
+      },
+      event.toEventName(),
+      payload,
+      options,
+    )
   }
 
   on<TReq, TRes>(
@@ -621,6 +658,10 @@ export class TuffPluginTransport implements ITuffTransport {
   }
 
   destroy(): void {
+    for (const controller of Array.from(this.streamControllers.values())) {
+      controller.cancel()
+    }
+    this.streamControllers.clear()
     this.handlers.clear()
 
     if (this.portListenerCleanup) {

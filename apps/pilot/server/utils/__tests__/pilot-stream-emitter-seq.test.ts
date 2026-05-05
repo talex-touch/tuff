@@ -87,10 +87,11 @@ describe('pilot-stream-emitter seq contract', () => {
     })
 
     expect(appendTrace).not.toHaveBeenCalled()
-    expect(send).toHaveBeenCalledWith(expect.objectContaining({
+    const emitted = send.mock.calls[0]?.[0]
+    expect(emitted).toEqual(expect.objectContaining({
       type: 'stream.heartbeat',
-      seq: undefined,
       timestamp: 5_678,
     }))
+    expect(emitted).not.toHaveProperty('seq')
   })
 })

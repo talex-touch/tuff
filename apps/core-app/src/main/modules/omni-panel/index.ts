@@ -23,6 +23,8 @@ import type {
   OmniPanelFeatureExecuteRequest,
   OmniPanelFeatureExecuteResponse,
   OmniPanelFeatureReorderRequest,
+  OmniPanelSelectionIssueCode,
+  OmniPanelSelectionSupportLevel,
   OmniPanelShowRequest,
   OmniPanelTransferTarget
 } from '../../../shared/events/omni-panel'
@@ -35,9 +37,12 @@ import { ShortcutTriggerKind } from '@talex-touch/utils/common/storage/entity/sh
 import { OMNI_TRANSFER_DECLARATIVE_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { app, clipboard, screen, shell } from 'electron'
+import { app, clipboard, screen, shell, systemPreferences } from 'electron'
 import { OmniPanelWindowOption } from '../../config/default'
 import { TalexEvents as MainEvents, touchEventBus } from '../../core/eventbus/touch-event'
+import { getSelectionCaptureCapabilityPatch } from '../platform/capability-adapter'
+import { sendPlatformShortcut } from '../system/desktop-shortcut'
+import { getXdotoolUnavailableReason } from '../system/linux-desktop-tools'
 import { TouchWindow } from '../../core/touch-window'
 import { getCoreBoxWindow } from '../box-tool/core-box/window'
 import { getCoreBoxRendererPath } from '../../utils/renderer-url'
@@ -59,7 +64,9 @@ import { createLogger } from '../../utils/logger'
 const omniPanelLog = createLogger('OmniPanel')
 const execFileAsync = promisify(execFile)
 const requireFromCurrentModule = createRequire(import.meta.url)
-const LONG_PRESS_MS = 600
+const DEFAULT_LONG_PRESS_MS = 600
+const MIN_LONG_PRESS_MS = 200
+const MAX_LONG_PRESS_MS = 3000
 const LONG_PRESS_MOVE_THRESHOLD = 6
 const SHORTCUT_HOLD_MS = 500
 const SHORTCUT_RELEASE_GRACE_MS = 220
@@ -78,6 +85,14 @@ const OMNI_SOURCE_VALUES: OmniPanelContextSource[] = [
 ]
 const COPY_COMMAND_TIMEOUT_MS = 900
 const COPY_RESULT_POLL_DELAY_MS = 120
+
+interface SelectionCaptureResult {
+  text: string
+  supportLevel: OmniPanelSelectionSupportLevel
+  issueCode?: OmniPanelSelectionIssueCode
+  issueMessage?: string
+  limitations?: string[]
+}
 
 const EXECUTE_ERROR_MESSAGES: Record<OmniPanelFeatureExecuteErrorCode, string> = {
   INVALID_PAYLOAD: 'Invalid execute payload',
@@ -177,6 +192,7 @@ interface OmniPanelFeatureRegistryItem {
 interface OmniPanelSettings {
   enableShortcut: boolean
   enableMouseLongPress: boolean
+  mouseLongPressDurationMs: number
   autoMountFirstFeatureOnPluginInstall: boolean
   featureHubItems: OmniPanelFeatureRegistryItem[]
 }
@@ -184,6 +200,7 @@ interface OmniPanelSettings {
 interface OmniPanelSettingRecord {
   enableShortcut?: boolean
   enableMouseLongPress?: boolean
+  mouseLongPressDurationMs?: unknown
   autoMountFirstFeatureOnPluginInstall?: boolean
   featureHub?: {
     items?: unknown[]
@@ -236,6 +253,20 @@ function normalizeIcon(value: unknown): OmniPanelFeatureIconPayload | null {
     type: iconType,
     value: iconValue
   }
+}
+
+function normalizeMouseLongPressDurationMs(value: unknown): number {
+  const raw =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim()
+        ? Number(value)
+        : NaN
+  if (!Number.isFinite(raw)) {
+    return DEFAULT_LONG_PRESS_MS
+  }
+  const rounded = Math.round(raw)
+  return Math.min(MAX_LONG_PRESS_MS, Math.max(MIN_LONG_PRESS_MS, rounded))
 }
 
 function normalizeContextSource(value: unknown): {
@@ -399,9 +430,12 @@ export class OmniPanelModule extends BaseModule {
 
     return {
       enableShortcut:
-        typeof omniPanel.enableShortcut === 'boolean' ? omniPanel.enableShortcut : true,
+        typeof omniPanel.enableShortcut === 'boolean' ? omniPanel.enableShortcut : false,
       enableMouseLongPress:
         typeof omniPanel.enableMouseLongPress === 'boolean' ? omniPanel.enableMouseLongPress : true,
+      mouseLongPressDurationMs: normalizeMouseLongPressDurationMs(
+        omniPanel.mouseLongPressDurationMs
+      ),
       autoMountFirstFeatureOnPluginInstall:
         typeof omniPanel.autoMountFirstFeatureOnPluginInstall === 'boolean'
           ? omniPanel.autoMountFirstFeatureOnPluginInstall
@@ -547,11 +581,14 @@ export class OmniPanelModule extends BaseModule {
 
       const nextOmniPanel: AppSetting['omniPanel'] = {
         enableShortcut:
-          typeof omniPanelRaw.enableShortcut === 'boolean' ? omniPanelRaw.enableShortcut : true,
+          typeof omniPanelRaw.enableShortcut === 'boolean' ? omniPanelRaw.enableShortcut : false,
         enableMouseLongPress:
           typeof omniPanelRaw.enableMouseLongPress === 'boolean'
             ? omniPanelRaw.enableMouseLongPress
             : true,
+        mouseLongPressDurationMs: normalizeMouseLongPressDurationMs(
+          omniPanelRaw.mouseLongPressDurationMs
+        ),
         autoMountFirstFeatureOnPluginInstall:
           typeof omniPanelRaw.autoMountFirstFeatureOnPluginInstall === 'boolean'
             ? omniPanelRaw.autoMountFirstFeatureOnPluginInstall
@@ -610,12 +647,26 @@ export class OmniPanelModule extends BaseModule {
     this.syncInputHookState()
   }
 
+  private getMouseLongPressDurationMs(setting?: AppSetting): number {
+    const appSetting = setting ?? ((getMainConfig(OMNI_PANEL_SETTING_KEY) as AppSetting) || {})
+    const omniPanel = (
+      isRecord(appSetting.omniPanel) ? appSetting.omniPanel : {}
+    ) as OmniPanelSettingRecord
+    return normalizeMouseLongPressDurationMs(omniPanel.mouseLongPressDurationMs)
+  }
+
   private handleShortcutPressed(): void {
     if (this.shouldSkipInputHookSetup()) return
     if (!this.shortcutHoldEnabled) return
 
+    if (!this.inputHook) {
+      this.syncInputHookState()
+    }
+
+    const captureSelection = this.shouldCaptureSelection()
+
     if (!this.inputHookKeys) {
-      void this.toggle({ captureSelection: true, source: 'shortcut' })
+      void this.toggle({ captureSelection, source: 'shortcut' })
       return
     }
 
@@ -651,7 +702,7 @@ export class OmniPanelModule extends BaseModule {
     if (!this.shortcutTriggerArmed) return
     this.shortcutTriggerArmed = false
     this.clearShortcutArmExpiryTimer()
-    void this.toggle({ captureSelection: true, source: 'shortcut' })
+    void this.toggle({ captureSelection: this.shouldCaptureSelection(), source: 'shortcut' })
   }
 
   private syncInputHookState(): void {
@@ -660,6 +711,14 @@ export class OmniPanelModule extends BaseModule {
       return
     }
     if (!this.mouseLongPressEnabled && !this.shortcutHoldEnabled) {
+      this.clearLongPressTimer()
+      this.clearShortcutHoldTimer()
+      this.clearShortcutArmExpiryTimer()
+      this.resetShortcutHoldState()
+      this.cleanupInputHook()
+      return
+    }
+    if (!this.canUseInputHook()) {
       this.clearLongPressTimer()
       this.clearShortcutHoldTimer()
       this.clearShortcutArmExpiryTimer()
@@ -779,15 +838,17 @@ export class OmniPanelModule extends BaseModule {
     const targetWindow = await this.ensureWindow()
     const normalizedSource = normalizeContextSource(options?.source)
     let text = ''
+    let captureResult: SelectionCaptureResult | undefined
 
     if (options?.captureSelection !== false) {
-      text = await this.captureSelectionText()
+      captureResult = await this.captureSelectionText()
+      text = captureResult.text
     }
 
     this.positionWindowNearCursor(targetWindow)
     targetWindow.window.showInactive()
     this.isVisible = true
-    await this.pushContext(text, normalizedSource.source, normalizedSource.sourceRaw)
+    await this.pushContext(text, normalizedSource.source, normalizedSource.sourceRaw, captureResult)
     this.notifyFeatureRefresh('show')
   }
 
@@ -828,7 +889,8 @@ export class OmniPanelModule extends BaseModule {
   private async pushContext(
     text: string,
     source: OmniPanelContextSource,
-    sourceRaw?: string
+    sourceRaw?: string,
+    selectionCapture?: SelectionCaptureResult
   ): Promise<void> {
     if (!this.transport) return
     if (!this.panelWindow || this.panelWindow.window.isDestroyed()) return
@@ -838,6 +900,10 @@ export class OmniPanelModule extends BaseModule {
       hasSelection: text.trim().length > 0,
       source,
       sourceRaw,
+      selectionSupportLevel: selectionCapture?.supportLevel,
+      selectionIssueCode: selectionCapture?.issueCode,
+      selectionIssueMessage: selectionCapture?.issueMessage,
+      selectionLimitations: selectionCapture?.limitations,
       capturedAt: Date.now()
     }
     this.lastContext = payload
@@ -1155,30 +1221,27 @@ export class OmniPanelModule extends BaseModule {
     item: OmniPanelFeatureRegistryItem,
     feature: IPluginFeature,
     source: OmniPanelContextSource
-  ): string | TuffQuery {
+  ): TuffQuery {
     const text = contextText.trim()
     const acceptsText =
       !feature.acceptedInputTypes || feature.acceptedInputTypes.includes(TuffInputType.Text)
-    if (!text) {
-      return ''
-    }
-    if (!acceptsText) {
-      return text
-    }
 
     const query: TuffQuery = {
       text,
       type: 'text',
-      inputs: [
-        {
-          type: TuffInputType.Text,
-          content: text,
-          metadata: {
-            source: `omni-panel:${source}`,
-            featureId: item.id
-          }
-        }
-      ]
+      inputs:
+        text && acceptsText
+          ? [
+              {
+                type: TuffInputType.Text,
+                content: text,
+                metadata: {
+                  source: `omni-panel:${source}`,
+                  featureId: item.id
+                }
+              }
+            ]
+          : []
     }
     return query
   }
@@ -1338,11 +1401,33 @@ export class OmniPanelModule extends BaseModule {
     }
   }
 
-  private async captureSelectionText(): Promise<string> {
+  private async captureSelectionText(): Promise<SelectionCaptureResult> {
+    const selectionCapability = await getSelectionCaptureCapabilityPatch({
+      enabled: this.shouldCaptureSelection()
+    })
+
+    if (selectionCapability.supportLevel === 'unsupported') {
+      return {
+        text: '',
+        supportLevel: selectionCapability.supportLevel,
+        issueCode: selectionCapability.issueCode === 'DISABLED' ? 'disabled' : 'unsupported',
+        issueMessage: selectionCapability.reason,
+        limitations: selectionCapability.limitations
+      }
+    }
+
+    const baseResult: Omit<SelectionCaptureResult, 'text'> = {
+      supportLevel: selectionCapability.supportLevel,
+      limitations: selectionCapability.limitations
+    }
+
     if (process.platform === 'darwin') {
       const directSelection = await this.captureMacSelectionTextDirectly()
       if (directSelection) {
-        return directSelection.trim()
+        return {
+          text: directSelection.trim(),
+          ...baseResult
+        }
       }
     }
 
@@ -1358,16 +1443,36 @@ export class OmniPanelModule extends BaseModule {
             platform: process.platform
           }
         })
+        return {
+          text: '',
+          ...baseResult,
+          issueCode: 'empty',
+          issueMessage: 'No selected text was captured from the active application.'
+        }
       }
-      return text
+      return {
+        text,
+        ...baseResult
+      }
     } catch (error) {
-      omniPanelLog.warn('Failed to capture selected text, fallback to empty context', {
+      const issueMessage =
+        error instanceof Error ? error.message : 'Failed to capture selected text'
+      omniPanelLog.warn('Selection capture failed, reporting explicit empty-context reason', {
         error,
         meta: {
           platform: process.platform
         }
       })
-      return ''
+      return {
+        text: '',
+        ...baseResult,
+        issueCode: issueMessage === getXdotoolUnavailableReason() ? 'unsupported' : 'failed',
+        issueMessage,
+        limitations:
+          issueMessage === getXdotoolUnavailableReason()
+            ? [getXdotoolUnavailableReason()]
+            : baseResult.limitations
+      }
     } finally {
       if (!this.restoreClipboard(clipboardSnapshot)) {
         omniPanelLog.warn('Clipboard snapshot restore failed after capture')
@@ -1436,31 +1541,26 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private async simulateCopyCommand(): Promise<void> {
-    if (process.platform === 'darwin') {
-      await execFileAsync('osascript', [
-        '-e',
-        'tell application "System Events" to keystroke "c" using {command down}'
-      ])
-      return
+    const selectionCapability = await getSelectionCaptureCapabilityPatch({
+      enabled: this.shouldCaptureSelection()
+    })
+    if (selectionCapability.supportLevel === 'unsupported') {
+      throw new Error(
+        selectionCapability.reason ||
+          getXdotoolUnavailableReason() ||
+          'Selection capture unavailable'
+      )
     }
 
-    if (process.platform === 'win32') {
-      const script =
-        "$wshell = New-Object -ComObject WScript.Shell; Start-Sleep -Milliseconds 30; $wshell.SendKeys('^c')"
-      await execFileAsync('powershell', ['-NoLogo', '-NonInteractive', '-Command', script])
-      return
-    }
-
-    if (process.platform === 'linux') {
-      await execFileAsync('xdotool', ['key', '--clearmodifiers', 'ctrl+c'])
-      return
-    }
-
-    throw new Error(`Unsupported platform: ${process.platform}`)
+    await sendPlatformShortcut('copy')
   }
 
   private setupInputHook(): void {
     if (this.shouldSkipInputHookSetup()) {
+      this.cleanupInputHook()
+      return
+    }
+    if (!this.canUseInputHook()) {
       this.cleanupInputHook()
       return
     }
@@ -1498,13 +1598,14 @@ export class OmniPanelModule extends BaseModule {
         if (!this.isRightMouseButton(event)) return
         const x = typeof event.x === 'number' ? event.x : 0
         const y = typeof event.y === 'number' ? event.y : 0
+        const longPressDurationMs = this.getMouseLongPressDurationMs()
         this.mouseDownPosition = { x, y }
         this.clearLongPressTimer()
         this.longPressTimer = setTimeout(() => {
           void this.show({ captureSelection: true, source: 'mouse-long-press' })
           this.clearLongPressTimer()
           this.mouseDownPosition = null
-        }, LONG_PRESS_MS)
+        }, longPressDurationMs)
       }
 
       const onMouseUp = (event: InputHookEvent) => {
@@ -1553,6 +1654,7 @@ export class OmniPanelModule extends BaseModule {
       omniPanelLog.info('Global input hook enabled', {
         meta: {
           mouseLongPressEnabled: this.mouseLongPressEnabled,
+          mouseLongPressDurationMs: this.getMouseLongPressDurationMs(),
           shortcutHoldTrackingReady: Boolean(this.inputHookKeys)
         }
       })
@@ -1714,6 +1816,31 @@ export class OmniPanelModule extends BaseModule {
       return true
     }
     return (globalThis.$app as { isQuitting?: boolean } | undefined)?.isQuitting === true
+  }
+
+  private canUseInputHook(): boolean {
+    if (process.platform !== 'darwin') {
+      return true
+    }
+    return this.hasMacOSAccessibilityPermission()
+  }
+
+  private shouldCaptureSelection(): boolean {
+    if (process.platform !== 'darwin') {
+      return true
+    }
+    return this.hasMacOSAccessibilityPermission()
+  }
+
+  private hasMacOSAccessibilityPermission(): boolean {
+    try {
+      return systemPreferences.isTrustedAccessibilityClient(false)
+    } catch (error) {
+      omniPanelLog.debug('Failed to resolve macOS accessibility permission for OmniPanel', {
+        error
+      })
+      return false
+    }
   }
 }
 

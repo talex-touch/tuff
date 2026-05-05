@@ -21,6 +21,7 @@ export default defineEventHandler(async (event) => {
     'release:publish',
     'release:assets',
     'release:news',
+    'release:evidence',
   ]
   const keyScopes = Array.isArray(scopes)
     ? scopes.filter(s => validScopes.includes(s))

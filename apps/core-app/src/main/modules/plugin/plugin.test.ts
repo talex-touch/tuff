@@ -135,6 +135,7 @@ describe('TouchPlugin.triggerFeature', () => {
 
     const transport = {
       sendToWindow: vi.fn().mockResolvedValue(undefined),
+      invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),
       keyManager: {
         requestKey: vi.fn(),
         revokeKey: vi.fn()
@@ -162,7 +163,7 @@ describe('TouchPlugin.triggerFeature', () => {
       interaction: { type: 'widget', path: '/widget.vue' }
     } as IPluginFeature
 
-    const result = await plugin.triggerFeature(feature, '')
+    const result = await plugin.triggerFeature(feature, { text: '', inputs: [] })
 
     expect(result).toBe(false)
     expect(transport.sendToWindow).toHaveBeenCalledWith(
@@ -227,5 +228,51 @@ describe('TouchPlugin.setRuntime', () => {
       5,
       path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data', 'temp')
     )
+  })
+})
+
+describe('TouchPlugin.enable', () => {
+  afterEach(() => {
+    TouchPlugin.setTransport(null)
+    vi.restoreAllMocks()
+  })
+
+  it('refuses to enable plugins blocked by sdkapi hard-cut', async () => {
+    const transport = {
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp',
+      {},
+      { skipDataInit: true }
+    )
+
+    plugin.issues.push({
+      type: 'error',
+      code: 'SDKAPI_BLOCKED',
+      message: 'sdk blocked'
+    })
+
+    await expect(plugin.enable()).resolves.toBe(false)
+    expect(plugin.loadState).toBe('load_failed')
+    expect(plugin.loadError).toEqual({
+      code: 'SDKAPI_BLOCKED',
+      message: 'sdk blocked'
+    })
   })
 })

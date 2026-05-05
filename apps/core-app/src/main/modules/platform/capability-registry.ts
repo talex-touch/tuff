@@ -76,7 +76,12 @@ export function registerDefaultPlatformCapabilities(): void {
     description: '插件间数据流转能力',
     scope: 'plugin',
     status: 'beta',
-    supportLevel: 'supported',
+    supportLevel: 'best_effort',
+    issueCode: 'TARGET_HANDLER_REQUIRED',
+    reason: 'Flow Transfer requires the target plugin to register a delivery handler.',
+    limitations: [
+      'Targets without a registered Flow handler are rejected instead of treated as delivered.'
+    ],
     sensitive: true
   })
 

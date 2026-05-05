@@ -1,0 +1,142 @@
+name: Tuff Intelligence Package Publish
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'packages/tuff-intelligence/package.json'
+      - 'packages/utils/package.json'
+      - '.github/workflows/package-tuff-intelligence-publish.yml'
+
+jobs:
+  publish:
+    name: Publish - tuff-intelligence
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10.32.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check version bump
+        id: version_check
+        run: |
+          set -euo pipefail
+
+          current_version=$(node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('packages/tuff-intelligence/package.json','utf8')); console.log(pkg.version)")
+          before_sha="${{ github.event.before }}"
+
+          echo "current_version=${current_version}" >> "$GITHUB_OUTPUT"
+
+          if [ "${before_sha}" = "0000000000000000000000000000000000000000" ]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          previous_version=$(git show "${before_sha}:packages/tuff-intelligence/package.json" | node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync(0,'utf8')); console.log(pkg.version)")
+          echo "previous_version=${previous_version}" >> "$GITHUB_OUTPUT"
+
+          if [ "${current_version}" != "${previous_version}" ]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip publish (version unchanged)
+        if: steps.version_check.outputs.should_publish != 'true'
+        run: echo "Tuff Intelligence version unchanged. Skipping publish."
+
+      - name: Build package
+        if: steps.version_check.outputs.should_publish == 'true'
+        working-directory: packages/tuff-intelligence
+        run: pnpm build
+
+      - name: Wait for utils dependency
+        if: steps.version_check.outputs.should_publish == 'true'
+        run: |
+          set -euo pipefail
+
+          utils_version=$(node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('packages/utils/package.json','utf8')); console.log(pkg.version)")
+          for attempt in {1..12}; do
+            if npm view "@talex-touch/utils@${utils_version}" version >/dev/null 2>&1; then
+              echo "@talex-touch/utils@${utils_version} is available."
+              exit 0
+            fi
+            echo "Waiting for @talex-touch/utils@${utils_version} to be available on npm (${attempt}/12)..."
+            sleep 10
+          done
+
+          echo "@talex-touch/utils@${utils_version} is not available on npm."
+          exit 1
+
+      - name: Verify npm token
+        if: steps.version_check.outputs.should_publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "NPM_TOKEN is required."
+            exit 1
+          fi
+
+      - name: Publish to npm
+        if: steps.version_check.outputs.should_publish == 'true'
+        working-directory: packages/tuff-intelligence
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          version="${{ steps.version_check.outputs.current_version }}"
+          dist_tag="latest"
+          if [[ "${version}" == *"-"* ]]; then
+            dist_tag="next"
+          fi
+
+          if npm view "@talex-touch/tuff-intelligence@${version}" version >/dev/null 2>&1; then
+            echo "@talex-touch/tuff-intelligence@${version} already published. Skipping."
+            exit 0
+          fi
+
+          publish_log="$(mktemp)"
+          trap 'rm -f "${publish_log}"' EXIT
+
+          set +e
+          pnpm publish --access public --tag "${dist_tag}" --no-git-checks >"${publish_log}" 2>&1
+          publish_status=$?
+          set -e
+
+          cat "${publish_log}"
+
+          if [ "${publish_status}" -eq 0 ]; then
+            exit 0
+          fi
+
+          if grep -Eqi 'previously published versions|cannot publish over the previously published version' "${publish_log}"; then
+            if npm view "@talex-touch/tuff-intelligence@${version}" version >/dev/null 2>&1; then
+              echo "@talex-touch/tuff-intelligence@${version} became available during publish. Treating duplicate publish as success."
+              exit 0
+            fi
+          fi
+
+          exit "${publish_status}"

@@ -18,8 +18,9 @@ import {
   getPluginPermissionStatus,
   normalizePermissionId
 } from '@talex-touch/utils/permission'
-import { PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import fse from 'fs-extra'
+import { getPluginSdkCompatibilityGate } from '../plugin/sdk-compat'
 
 type AuditLogEntry = PermissionAuditLog
 
@@ -34,7 +35,7 @@ interface PermissionData {
 
 export interface PermissionAccessState {
   allowed: boolean
-  reason: 'sdkapi-blocked' | 'default' | 'granted' | 'not-granted' | 'not-declared'
+  reason: 'incompatible-sdk' | 'default' | 'granted' | 'not-granted' | 'not-declared'
   hasHistoricalGrant: boolean
 }
 
@@ -59,6 +60,7 @@ interface PermissionStoreOptions {
 
 const CURRENT_VERSION = 1
 const MAX_AUDIT_LOGS = 500
+const permissionStoreLog = getLogger('permission-store')
 
 class PermissionBackendUnavailableError extends Error {
   code = 'PERMISSION_BACKEND_UNAVAILABLE'
@@ -280,11 +282,10 @@ class SqlitePermissionBackend {
 }
 
 /**
- * PermissionStore - SQLite-primary permission storage with compat JSON migration.
+ * PermissionStore - SQLite-primary permission storage.
  */
 export class PermissionStore {
   private dirPath: string
-  private jsonFilePath: string
   private sqliteFilePath: string
   private data: PermissionData = createEmptyData()
   private dirty = false
@@ -303,7 +304,6 @@ export class PermissionStore {
 
   constructor(dirPath: string, options: PermissionStoreOptions = {}) {
     this.dirPath = dirPath
-    this.jsonFilePath = path.join(dirPath, 'permissions.json')
     this.sqliteFilePath = path.join(dirPath, 'permissions.db')
     this.createBackend = options.createBackend ?? ((dbPath) => new SqlitePermissionBackend(dbPath))
   }
@@ -317,15 +317,9 @@ export class PermissionStore {
       backend = this.createBackend(this.sqliteFilePath)
       await backend.initialize()
       const sqliteData = await backend.load()
-      const jsonData = this.loadFromJson()
 
       if (hasPersistedData(sqliteData)) {
         this.data = sqliteData
-      } else if (jsonData) {
-        this.data = this.migrate(jsonData)
-        await backend.persist(this.data)
-        await this.backupLegacyJson()
-        console.info('[PermissionStore] Compat migration hit: permissions.json upgraded to SQLite')
       } else {
         this.data = createEmptyData()
       }
@@ -335,51 +329,11 @@ export class PermissionStore {
       this.backendReason = ''
     } catch (error) {
       await backend?.close().catch(() => {})
-      const jsonData = this.loadFromJson()
-      this.data = jsonData ? this.migrate(jsonData) : createEmptyData()
+      this.data = createEmptyData()
       this.markBackendUnavailable(error, 'initialize')
     }
 
     this.initialized = true
-  }
-
-  /**
-   * Load permissions from compat JSON snapshot (if present)
-   */
-  private loadFromJson(): PermissionData | null {
-    try {
-      if (fse.existsSync(this.jsonFilePath)) {
-        const data = fse.readJSONSync(this.jsonFilePath) as PermissionData
-        return data
-      }
-    } catch (error) {
-      console.error('[PermissionStore] Failed to load compat JSON snapshot:', error)
-    }
-    return null
-  }
-
-  /**
-   * Normalize compat JSON data into the current SQLite-backed format
-  */
-  private migrate(data: Partial<PermissionData>): PermissionData {
-    console.info('[PermissionStore] Compat migration hit: normalizing permission data', {
-      targetVersion: CURRENT_VERSION
-    })
-    return {
-      version: CURRENT_VERSION,
-      grants: data.grants || {},
-      auditLogs: data.auditLogs || []
-    }
-  }
-
-  private async backupLegacyJson(): Promise<void> {
-    if (!(await fse.pathExists(this.jsonFilePath))) return
-    const backupPath = `${this.jsonFilePath}.backup-${Date.now()}`
-    await fse.move(this.jsonFilePath, backupPath, { overwrite: true })
-    console.info('[PermissionStore] Compat migration archived permissions.json snapshot', {
-      from: this.jsonFilePath,
-      to: backupPath
-    })
   }
 
   /**
@@ -434,7 +388,9 @@ export class PermissionStore {
     this.backendMode = 'degraded/backend-unavailable'
     this.backendReason = reason || 'backend unavailable'
     this.sqliteBackend = null
-    console.warn(`[PermissionStore] SQLite backend unavailable during ${phase}:`, error)
+    permissionStoreLog.warn(`SQLite backend unavailable during ${phase}`, {
+      meta: { reason: this.backendReason, error }
+    })
   }
 
   private ensureWritable(action: string): void {
@@ -604,14 +560,11 @@ export class PermissionStore {
     const normalizedPermissionId = normalizePermissionId(permissionId)
     const candidates = getPermissionIdCandidates(normalizedPermissionId)
 
-    if (
-      typeof sdkapi !== 'number' ||
-      !Number.isFinite(sdkapi) ||
-      sdkapi < PERMISSION_ENFORCEMENT_MIN_VERSION
-    ) {
+    const sdkGate = getPluginSdkCompatibilityGate(pluginId, sdkapi)
+    if (sdkGate.blocked) {
       return {
         allowed: false,
-        reason: 'sdkapi-blocked',
+        reason: 'incompatible-sdk',
         hasHistoricalGrant: false
       }
     }

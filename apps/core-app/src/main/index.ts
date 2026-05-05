@@ -25,7 +25,6 @@ import { downloadCenterModule } from './modules/download/download-center'
 import { extensionLoaderModule } from './modules/extension-loader'
 import { fileProtocolModule } from './modules/file-protocol'
 import { flowBusModule } from './modules/flow-bus'
-// import DropManager from './modules/drop-manager'
 import { shortcutModule } from './modules/global-shortcon'
 import { notificationModule } from './modules/notification'
 import { omniPanelModule } from './modules/omni-panel'
@@ -42,8 +41,6 @@ import { systemUpdateModule } from './modules/system-update'
 import { terminalModule } from './modules/terminal/terminal.manager'
 import { trayManagerModule } from './modules/tray/tray-manager'
 import { updateServiceModule } from './modules/update/UpdateService'
-// import PermissionCenter from './modules/permission-center'
-// import ServiceCenter from './service/service-center'
 import { pluginLogModule } from './service/plugin-log.service'
 
 import { loggerManager, mainLog } from './utils/logger'
@@ -195,16 +192,6 @@ function shouldLoadAssistantModule(): boolean {
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
 }
 
-function shouldLoadTrayModule(): boolean {
-  try {
-    const appSettings = getMainConfig(StorageList.APP_SETTING)
-    return appSettings?.setup?.experimentalTray === true
-  } catch (error) {
-    mainLog.warn('Failed to read tray experimental switch, skip tray module by default', { error })
-    return false
-  }
-}
-
 // Record when Electron becomes ready
 let electronReadyTime: number
 
@@ -241,10 +228,6 @@ app.whenReady().then(async () => {
       shouldSkip: (moduleCtor) => {
         if (moduleCtor === assistantModule && !shouldLoadAssistantModule()) {
           mainLog.info('Skip Assistant module: TUFF_ENABLE_ASSISTANT_EXPERIMENT disabled')
-          return true
-        }
-        if (moduleCtor === trayManagerModule && !shouldLoadTrayModule()) {
-          mainLog.info('Skip TrayManager module: experimentalTray disabled')
           return true
         }
         return false

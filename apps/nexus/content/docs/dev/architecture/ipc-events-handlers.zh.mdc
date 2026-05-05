@@ -56,7 +56,6 @@
 | `division-box:window:toggle-devtools` | `DivisionBoxIPC.registerTransportHandlers -> session.openDevTools/closeDevTools` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
 | `division-box:window:get-window-state` | `DivisionBoxIPC.registerTransportHandlers -> session.isAlwaysOnTop/getOpacity/isDevToolsOpen` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
 | `division-box:ui:input-change` | `DivisionBoxIPC.registerTransportHandlers -> transport.sendToPlugin(CoreBoxEvents.input.change)` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
-| `division-box:flow:trigger` | `DivisionBoxIPC.registerTransportHandlers -> flowTriggerManager.handleFlow` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
 
 ## A3. Storage
 

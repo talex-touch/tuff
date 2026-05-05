@@ -1,10 +1,17 @@
 import type { FSWatcher } from 'chokidar'
+import type {
+  ManifestPermissionReasons,
+  ManifestPermissions,
+} from '../permission/types'
 import type { ITuffIcon } from '../types/icon'
 import type { Arch, SupportOS } from './../base/index'
 
 import type { IPluginLogger } from './log/types'
 
-import type { PluginInstallRequest, PluginInstallSummary } from './providers/types'
+import type {
+  PluginInstallRequest,
+  PluginInstallSummary,
+} from './providers/types'
 
 export enum PluginStatus {
   DISABLED,
@@ -87,7 +94,7 @@ export type IPluginWebview<TWindow = unknown> = Map<number, TWindow>
  * Format: YYMMDD (e.g., 251212 = 2025-12-12)
  *
  * Rules:
- * - Not declared or < PERMISSION_ENFORCEMENT_MIN_VERSION: legacy mode (permissions bypassed)
+ * - Not declared / invalid / < PERMISSION_ENFORCEMENT_MIN_VERSION: blocked by runtime gate
  * - >= PERMISSION_ENFORCEMENT_MIN_VERSION: permissions enforced
  */
 export type SdkApiVersion = number
@@ -155,7 +162,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   savePluginFile: (
     fileName: string,
     content: object,
-    options?: { broadcast?: boolean }
+    options?: { broadcast?: boolean },
   ) => { success: boolean, error?: string }
 
   /**
@@ -165,7 +172,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
    */
   deletePluginFile: (
     fileName: string,
-    options?: { broadcast?: boolean }
+    options?: { broadcast?: boolean },
   ) => { success: boolean, error?: string }
 
   /**
@@ -189,7 +196,16 @@ export interface ITouchPlugin extends IPluginBaseInfo {
 }
 
 export interface IFeatureCommand {
-  type: 'match' | 'contain' | 'regex' | 'function' | 'over' | 'image' | 'files' | 'directory' | 'window'
+  type:
+    | 'match'
+    | 'contain'
+    | 'regex'
+    | 'function'
+    | 'over'
+    | 'image'
+    | 'files'
+    | 'directory'
+    | 'window'
   value: string | string[] | RegExp | FeatureCommandMatcher
   /** Optional trigger callback - not serialized over IPC */
   onTrigger?: () => void
@@ -315,7 +331,12 @@ export interface IFeatureLifeCycle {
    * @param signal - An AbortSignal to cancel the operation
    * @returns If returns false, the feature will not enter activation state (e.g., just opens browser and exits)
    */
-  onFeatureTriggered: (id: string, data: any, feature: IPluginFeature, signal?: AbortSignal) => boolean | void
+  onFeatureTriggered: (
+    id: string,
+    data: any,
+    feature: IPluginFeature,
+    signal?: AbortSignal,
+  ) => boolean | void
 
   /**
    * Called when user input changes within this feature’s input box.
@@ -466,7 +487,9 @@ export interface IPluginManager {
   listPlugins: () => Promise<Array<string>>
   loadPlugin: (pluginName: string) => Promise<boolean>
   unloadPlugin: (pluginName: string) => Promise<boolean>
-  installFromSource: (request: PluginInstallRequest) => Promise<PluginInstallSummary>
+  installFromSource: (
+    request: PluginInstallRequest,
+  ) => Promise<PluginInstallSummary>
   uninstallPlugin: (pluginName: string) => Promise<boolean>
   /**
    * Register an internal plugin that is created in code (no manifest / scanning).
@@ -485,7 +508,7 @@ export interface IManifest {
    * Unique identifier for the plugin.
    * This is typically the package name for npm plugins or a unique string for tpex plugins.
    */
-  id: string
+  id?: string
   /**
    * Display name of the plugin.
    * This is the human-readable name shown to users.
@@ -498,7 +521,7 @@ export interface IManifest {
   /**
    * SDK API version for compatibility checking.
    * Format: YYMMDD (e.g., 251212 = 2025-12-12)
-   * Plugins without this field or with version < 251212 will bypass permission enforcement.
+   * Plugins without this field, with invalid markers, or with version < 251212 are blocked by runtime.
    */
   sdkapi?: SdkApiVersion
   /**
@@ -529,6 +552,22 @@ export interface IManifest {
    */
   activationKeywords?: string[]
   /**
+   * Optional supported runtime platforms declared by the manifest.
+   */
+  platforms?: Record<string, boolean>
+  /**
+   * Optional feature declarations exposed by the plugin runtime.
+   */
+  features?: IPluginFeature[]
+  /**
+   * Optional permission declarations.
+   */
+  permissions?: ManifestPermissions | string[]
+  /**
+   * Optional display reasons for declared permissions.
+   */
+  permissionReasons?: ManifestPermissionReasons
+  /**
    * Optional runtime development configuration, typically used when running plugins from a dev server.
    */
   dev?: {
@@ -544,7 +583,7 @@ export interface IManifest {
    * Optional list of files included in the plugin package.
    * This can be used for integrity checks or resource management.
    */
-  _files?: string[]
+  _files?: string[] | Record<string, string>
   /**
    * Development-specific configuration for the plugin.
    * This section is used during plugin development and might not be present in production builds.
@@ -617,5 +656,6 @@ export * from './install'
 export type { IPluginLogger, LogDataType, LogItem } from './log/types'
 export * from './risk'
 export * from './sdk-version'
+export * from './translation'
 // Plugin runtime SDK should be imported from `@talex-touch/utils/plugin/sdk` to avoid root export collisions.
 export * from './widget'

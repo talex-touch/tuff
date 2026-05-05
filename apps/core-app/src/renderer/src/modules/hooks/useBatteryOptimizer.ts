@@ -2,7 +2,7 @@ import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 
 const batteryStatus = reactive<{ onBattery: boolean; percent: number | null }>({
   onBattery: false,

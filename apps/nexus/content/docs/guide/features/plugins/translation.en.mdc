@@ -5,6 +5,8 @@
 - Fast text translation directly from CoreBox.
 - Supports single-provider and multi-provider translation.
 - Includes screenshot translation (experimental).
+- The quick widget and multi-provider page now share the same default direction: Chinese inputs go to English, non-Chinese inputs go to Chinese.
+- Provider order, enabled-state handling, and error messaging are aligned across both entry points.
 
 ## Entries & Commands
 
@@ -19,7 +21,7 @@
 ## Typical Flow
 
 1. Type `fy` in CoreBox and paste text to translate.
-2. Type `fy-multi` to compare multiple providers.
+2. Type `fy-multi` to compare multiple providers in the same order used by the quick widget.
 3. Use `s-fy` for screenshot translation (experimental and platform-sensitive).
 
 ## Code Reference

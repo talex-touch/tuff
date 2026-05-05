@@ -1,4 +1,10 @@
 import type { TranslationProvider } from '../types/translation'
+import {
+  applyProviderPresentation,
+  getEnabledProviderIds,
+  isDefaultEnabledProvider,
+  TRANSLATION_PROVIDER_ORDER,
+} from '@talex-touch/utils/plugin'
 import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
 import { computed, reactive, ref } from 'vue'
 import { BaiduTranslateProvider } from '../providers/baidu-translate'
@@ -10,7 +16,6 @@ import { MyMemoryTranslateProvider } from '../providers/mymemory-translate'
 import { TencentTranslateProvider } from '../providers/tencent-translate'
 import { TuffIntelligenceTranslateProvider } from '../providers/tuffintelligence-translate'
 
-// 全局状态
 const providers = reactive<Map<string, TranslationProvider>>(new Map())
 const isInitialized = ref(false)
 
@@ -22,27 +27,27 @@ export function useTranslationProvider() {
     if (isInitialized.value)
       return
 
-    // 创建提供者实例
-    const tuffIntelligenceProvider = new TuffIntelligenceTranslateProvider()
-    const googleProvider = new GoogleTranslateProvider()
-    const deeplProvider = new DeepLTranslateProvider()
-    const bingProvider = new BingTranslateProvider()
-    const customProvider = new CustomTranslateProvider()
-    const baiduProvider = new BaiduTranslateProvider()
-    const tencentProvider = new TencentTranslateProvider()
-    const mymemoryProvider = new MyMemoryTranslateProvider()
+    const providerMap: Record<string, TranslationProvider> = {
+      tuffintelligence: new TuffIntelligenceTranslateProvider(),
+      google: new GoogleTranslateProvider(),
+      deepl: new DeepLTranslateProvider(),
+      bing: new BingTranslateProvider(),
+      custom: new CustomTranslateProvider(),
+      baidu: new BaiduTranslateProvider(),
+      tencent: new TencentTranslateProvider(),
+      mymemory: new MyMemoryTranslateProvider(),
+    }
 
-    // 注册提供者 (TuffIntelligence first as default)
-    providers.set(tuffIntelligenceProvider.id, tuffIntelligenceProvider)
-    providers.set(googleProvider.id, googleProvider)
-    providers.set(deeplProvider.id, deeplProvider)
-    providers.set(bingProvider.id, bingProvider)
-    providers.set(customProvider.id, customProvider)
-    providers.set(baiduProvider.id, baiduProvider)
-    providers.set(tencentProvider.id, tencentProvider)
-    providers.set(mymemoryProvider.id, mymemoryProvider)
+    for (const providerId of TRANSLATION_PROVIDER_ORDER as string[]) {
+      const provider = providerMap[providerId]
+      if (!provider)
+        continue
 
-    // 从 localStorage 恢复配置
+      applyProviderPresentation(provider)
+      provider.enabled = isDefaultEnabledProvider(providerId)
+      providers.set(provider.id, provider)
+    }
+
     await loadProvidersConfig()
 
     isInitialized.value = true
@@ -67,13 +72,12 @@ export function useTranslationProvider() {
       // 兼容新版本：使用 getFile 代替 getItem
       const saved = await storage.getFile('providers_config')
       if (saved && typeof saved === 'object' && saved !== null) {
-        const config = saved
+        const config = saved as Record<string, { enabled?: boolean, config?: Record<string, any> }>
+        const enabledIds = getEnabledProviderIds(config) as string[]
         providers.forEach((provider, id) => {
-          if (config[id]) {
-            provider.enabled = config[id].enabled ?? provider.enabled
-            if (config[id].config && provider.config) {
-              provider.config = { ...provider.config, ...config[id].config }
-            }
+          provider.enabled = enabledIds.includes(id)
+          if (config[id]?.config && provider.config) {
+            provider.config = { ...provider.config, ...config[id].config }
           }
         })
       }
@@ -143,10 +147,8 @@ export function useTranslationProvider() {
   // 重置所有提供者配置
   const resetProvidersConfig = () => {
     providers.forEach((provider) => {
-      // 默认只启用 TuffIntelligence 翻译
-      provider.enabled = provider.id === 'tuffintelligence'
+      provider.enabled = isDefaultEnabledProvider(provider.id)
       if (provider.config) {
-        // 重置为默认配置
         if (provider.id === 'deepl') {
           (provider as DeepLTranslateProvider).config = {
             apiKey: '',
@@ -165,7 +167,7 @@ export function useTranslationProvider() {
             apiUrl: '',
             apiKey: '',
             model: 'gpt-3.5-turbo',
-            prompt: '请将以下文本翻译成中文，只返回翻译结果：',
+            prompt: '请将以下文本翻译成目标语言，只返回译文。',
           }
         }
         else if (provider.id === 'baidu') {

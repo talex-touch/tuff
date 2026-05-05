@@ -65,7 +65,7 @@ async function translate() {
   showSettings.value = false
 
   try {
-    await performTranslation(query.value, 'zh', 'auto')
+    await performTranslation(query.value)
   }
   catch (error) {
     void error
@@ -221,6 +221,7 @@ function isProviderConfigured(provider: TranslationProvider): boolean {
               v-for="provider in enabledProviders"
               :key="provider.id"
               :provider-id="provider.id"
+              :provider-name="provider.name"
               :result="translationResults.results.get(provider.id)"
               :error="translationResults.errors.get(provider.id)"
               :is-loading="isTranslating && !translationResults.results.has(provider.id) && !translationResults.errors.has(provider.id)"

@@ -4,7 +4,7 @@
  * Manages plugin permissions with persistent storage.
  */
 
-import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import {
   PermissionCategory,
   permissionRegistry,
@@ -31,7 +31,7 @@ export type { ApiPermissionMapping, PermissionCheckResult } from './permission-g
  * PermissionModule - Plugin permission management
  *
  * Features:
- * - Persistent permission storage (JSON file)
+ * - Persistent permission storage (SQLite)
  * - IPC channels for renderer queries
  * - Plugin permission status calculation
  * - Audit logging
@@ -51,12 +51,11 @@ export class PermissionModule extends BaseModule {
     })
   }
 
-  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
-    // Initialize permission store
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     this.store = new PermissionStore(ctx.file.dirPath!)
     const channel =
       ctx.runtime?.channel ?? (ctx.app as { channel?: unknown } | null | undefined)?.channel
-    return this.initializeModule(channel)
+    await this.initializeModule(channel)
   }
 
   private async initializeModule(channel: unknown): Promise<void> {

@@ -1,0 +1,35 @@
+# Dev Utils (`touch-dev-utils`)
+
+## Best For
+
+- Developer-oriented text utilities directly inside CoreBox.
+- Local-only workflows such as UUID generation, JWT parsing, timestamp conversion, naming transforms, and query-string inspection.
+
+## Entry Points
+
+- Feature ID: `dev-utils`
+- Commands: `dev-utils / uuid / jwt / ts / time / query / case / escape`
+
+## Core Capabilities
+
+- Local generators: UUID, current Unix timestamps, current ISO time.
+- Parsers: JWT header/payload, Unix timestamps, query strings.
+- Naming transforms: `camelCase / PascalCase / snake_case / kebab-case`.
+- String helpers: escape and unescape code-style string literals.
+
+## Config & Data
+
+- No extra config file.
+- Plugin directory: `plugins/touch-dev-utils`
+
+## Permissions
+
+- Required: `clipboard.write`
+- Does not request `network.internet`, `system.shell`, or `fs.read`
+
+## Quick Start
+
+1. Type `uuid` in CoreBox to copy a fresh UUID.
+2. Paste a JWT to inspect formatted header and payload.
+3. Input a Unix timestamp to convert it into ISO and local time.
+4. Paste identifiers or query strings to get naming or parsing results instantly.

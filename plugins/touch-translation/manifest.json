@@ -1,9 +1,9 @@
 {
   "id": "com.tuffex.translation",
   "name": "touch-translation",
-  "version": "1.0.2",
+  "version": "1.0.8",
   "author": "TalexTouch Team",
-  "sdkapi": 260215,
+  "sdkapi": 260428,
   "category": "utilities",
   "icon": {
     "type": "file",

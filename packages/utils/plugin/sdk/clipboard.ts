@@ -85,7 +85,7 @@ function toPluginClipboardItem(item: ClipboardItem | null): PluginClipboardItem 
     return null
   }
 
-  const meta: Record<string, unknown> = {}
+  const meta: Record<string, unknown> = { ...(item.meta ?? {}) }
   if (Array.isArray(item.tags) && item.tags.length > 0) {
     meta.tags = item.tags
   }
@@ -94,11 +94,12 @@ function toPluginClipboardItem(item: ClipboardItem | null): PluginClipboardItem 
     id: item.id,
     type: mapTransportItemType(item.type),
     content: item.value ?? '',
+    thumbnail: item.thumbnail ?? null,
     rawContent: typeof item.html === 'string' ? item.html : null,
     sourceApp: typeof item.source === 'string' ? item.source : null,
     timestamp: item.createdAt,
     isFavorite: item.isFavorite ?? null,
-    metadata: null,
+    metadata: typeof item.metadata === 'string' ? item.metadata : null,
     meta: Object.keys(meta).length > 0 ? meta : null,
   })
 }
@@ -203,13 +204,27 @@ function toClipboardActionRequest(
   return request
 }
 
-function toClipboardActionSuccess(result: ClipboardActionResult | null | undefined): boolean {
+function createClipboardActionError(result: ClipboardActionResult): Error {
+  const message = result.message || '自动粘贴失败'
+  const error = new Error(message) as Error & {
+    code?: ClipboardActionResult['code']
+    result?: ClipboardActionResult
+  }
+  error.code = result.code
+  error.result = result
+  return error
+}
+
+function ensureClipboardActionSuccess(result: ClipboardActionResult | null | undefined): boolean {
   if (!result || typeof result !== 'object') {
     return true
   }
 
   if (typeof result.success === 'boolean') {
-    return result.success
+    if (!result.success) {
+      throw createClipboardActionError(result)
+    }
+    return true
   }
 
   return true
@@ -354,34 +369,43 @@ export function useClipboard() {
       let streamController: { cancel: () => void } | null = null
       let cancelled = false
 
-      void transport.stream(ClipboardEvents.change, undefined, {
-        onData(payload: ClipboardChangePayload) {
-          if (cancelled) {
-            return
-          }
-          const latest = toPluginClipboardItem(payload?.latest ?? null)
-          if (latest) {
-            callback(latest)
-          }
-        },
-        onError(error) {
-          if (!cancelled) {
-            console.warn('[Plugin SDK] Clipboard change stream error', error)
-          }
-        },
-      })
-        .then((controller) => {
-          if (cancelled) {
-            controller.cancel()
-            return
-          }
-          streamController = controller
+      try {
+        const streamPromise = transport.stream(ClipboardEvents.change, undefined, {
+          onData(payload: ClipboardChangePayload) {
+            if (cancelled) {
+              return
+            }
+            const latest = toPluginClipboardItem(payload?.latest ?? null)
+            if (latest) {
+              callback(latest)
+            }
+          },
+          onError(error) {
+            if (!cancelled) {
+              console.warn('[Plugin SDK] Clipboard change stream error', error)
+            }
+          },
         })
-        .catch((error) => {
-          if (!cancelled) {
-            console.warn('[Plugin SDK] Failed to subscribe clipboard changes', error)
-          }
-        })
+
+        void streamPromise
+          .then((controller) => {
+            if (cancelled) {
+              controller.cancel()
+              return
+            }
+            streamController = controller
+          })
+          .catch((error) => {
+            if (!cancelled) {
+              console.warn('[Plugin SDK] Failed to subscribe clipboard changes', error)
+            }
+          })
+      }
+      catch (error) {
+        if (!cancelled) {
+          console.warn('[Plugin SDK] Failed to subscribe clipboard changes', error)
+        }
+      }
 
       return () => {
         cancelled = true
@@ -401,19 +425,19 @@ export function useClipboard() {
         || typeof options.type === 'string'
 
       if (!hasInlinePayload && Number.isFinite(options.item?.id)) {
-        await transport.send(ClipboardEvents.apply, {
+        const response = await transport.send(ClipboardEvents.apply, {
           id: Number(options.item?.id),
           autoPaste: true,
           _sdkapi: resolveSdkApi(),
         })
-        return true
+        return ensureClipboardActionSuccess(response)
       }
 
       const response = await transport.send(
         ClipboardEvents.copyAndPaste,
         withSdkApiPayload(toClipboardActionRequest(options)),
       )
-      return toClipboardActionSuccess(response)
+      return ensureClipboardActionSuccess(response)
     },
   }
 
@@ -485,7 +509,7 @@ export function useClipboard() {
         ClipboardEvents.copyAndPaste,
         withSdkApiPayload(toClipboardActionRequest(options)),
       )
-      return toClipboardActionSuccess(response)
+      return ensureClipboardActionSuccess(response)
     },
   }
 }

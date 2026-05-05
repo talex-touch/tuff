@@ -12,7 +12,7 @@ import { createStorageDataProxy, createStorageProxy, TouchStorage } from './base
  * ```ts
  * import { appSettings } from './app-settings-storage';
  *
- * // Access after initStorageChannel()
+ * // Access after initializeRendererStorage()
  * const isAutoStart = appSettings.data.autoStart;
  *
  * // Modify a setting (auto-saved)
@@ -36,7 +36,7 @@ const APP_SETTINGS_SINGLETON_KEY = `storage:${StorageList.APP_SETTING}`
 
 /**
  * Lazy-initialized application settings.
- * The actual instance is created only when first accessed AND after initStorageChannel() is called.
+ * The actual instance is created only when first accessed AND after storage bootstrap is ready.
  */
 export const appSettings = createStorageProxy<AppSettingsStorage>(
   APP_SETTINGS_SINGLETON_KEY,

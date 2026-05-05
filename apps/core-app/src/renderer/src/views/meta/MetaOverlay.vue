@@ -26,7 +26,7 @@ const searchInput = ref<HTMLInputElement>()
 // Group actions by group property
 const groupedActions = computed(() => {
   const groups = new Map<string, MetaAction[]>()
-  const defaultGroup = '操作'
+  const defaultGroup = t('corebox.meta.defaultGroup')
 
   for (const action of filteredActions.value) {
     const group = action.render.group || defaultGroup
@@ -242,7 +242,7 @@ onBeforeUnmount(() => {
               v-model="searchQuery"
               type="text"
               class="SearchInput"
-              :placeholder="t('corebox.meta.searchPlaceholder', '搜索操作...')"
+              :placeholder="t('corebox.meta.searchPlaceholder')"
               @keydown="handleKeyDown"
             />
             <span class="ShortcutHint">⌘K</span>
@@ -268,9 +268,9 @@ onBeforeUnmount(() => {
 
         <!-- Footer -->
         <div class="MetaFooter">
-          <span>↑↓ {{ t('corebox.meta.select', '选择') }}</span>
-          <span>Enter {{ t('corebox.meta.execute', '执行') }}</span>
-          <span>Esc {{ t('corebox.meta.close', '关闭') }}</span>
+          <span>↑↓ {{ t('corebox.meta.select') }}</span>
+          <span>Enter {{ t('corebox.meta.execute') }}</span>
+          <span>Esc {{ t('corebox.meta.close') }}</span>
         </div>
       </div>
     </div>

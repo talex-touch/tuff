@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-04-07  
+> 更新时间：2026-05-04
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -8,10 +8,11 @@
 统一活跃 PRD 的编写与验收标准，避免“有方案无目标、有实现无质量门禁”。  
 从本文件生效后，新增或继续推进的 PRD 均应满足下述最小结构。
 
-## 1.1 文档治理执行锚点（2026-03-17）
+## 1.1 文档治理执行锚点（2026-04-26）
 
-- 文档盘点与优先级路线统一参考：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`。
+- 文档盘点历史快照参考：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`；当前优先级路线以六主文档、`TODO` 与 `CHANGES` 为准。
 - 主线动作必须同步六文档：`INDEX / README / TODO / CHANGES / Roadmap / Quality Baseline`。
+- 当前主线动作为 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`；`Nexus 设备授权风控` 保留实施文档与历史入口，非当前主线。
 - 文档门禁升级前置保持不变：连续 5 次 `pnpm docs:guard` 零告警 + 连续 2 周无口径漂移。
 
 ## 2. 每个活跃 PRD 必须包含的章节（MUST）
@@ -44,7 +45,9 @@
 - 强制启用 `compat:registry:guard`：兼容债务清册（`docs/plan-prd/docs/compatibility-debt-registry.csv`）必须完整覆盖存量命中，缺字段/缺条目/过期未清理均失败。
 - 强制启用 `size:guard`：超长文件阈值 `>=1200` 基线冻结，禁止新增和增长；仅允许通过 `growthExceptions` 临时豁免，并要求同步 `CHANGES + compatibility registry`。
 - 强制启用统一 guard 基础库：`legacy/compat/size/network` 脚本必须复用 `scripts/lib/*` 公共扫描/版本能力，禁止重复实现目录遍历与版本比较逻辑。
+- 强制启用 CoreApp runtime console 门禁：`pnpm console:guard` 冻结 `apps/core-app` main/preload/renderer 现存 `console.*` 边界，新增 raw console 或扩散命中数量一律失败；logger sink、显式 debug gate 与专项诊断器只能通过 allowlist 承载。
 - CoreApp 硬切补充门禁：业务层 `window.$channel` 调用、legacy storage 旧协议（`storage:get/save/reload/save-sync/saveall`）与 legacy `sdkapi` 放行路径必须保持为 `0`；占位能力必须返回真实状态或显式 `unavailable + reason`，禁止固定假值“成功”。
+- CoreApp `2.5.0` 前置门禁：清册中的 core-app `2.5.0` 兼容债务必须关闭或显式降权；Windows/macOS 回归为 release-blocking，Linux 仅作为 documented best-effort 与非阻塞 smoke。
 
 ### 3.2 可靠性约束
 - 关键路径需有显式错误处理与用户可见反馈。
@@ -64,7 +67,7 @@
 ### 3.5 文档约束
 - PRD 状态变化（进行中/完成/归档）必须同步 `README.md` 与 `TODO.md`。
 - 对外行为变化必须同步 Nexus 对应开发文档。
-- 推荐统一验收入口：`pnpm quality:gate`（`legacy:guard + network:guard + test:targeted + typecheck(node/web) + docs:guard`）。
+- 推荐统一验收入口：`pnpm quality:gate`（`legacy:guard[含 console:guard] + network:guard + test:targeted + typecheck(node/web) + docs:guard`）。
 
 ## 4. 验收执行模板（建议复制到 PRD）
 
@@ -124,6 +127,9 @@
 
 **质量约束落地**
 - 发布 workflow 必须幂等，重复执行不得产生重复 release 资产记录。
+- npm 自动发布链路在 registry 已存在同版本时必须转为“已发布成功”语义，禁止把重复版本冲突直接上浮为 release-blocking 失败。
+- Package CI 必须能在 clean runner 内自洽构建内部 workspace-only 依赖；跨 job 的 `needs` 只表达顺序，不得依赖上游 job 产出的本地 `dist` 残留。
+- beta / snapshot tag 创建的 GitHub Release 必须保持 pre-release 语义，不得误标为稳定版。
 - 预发布不得覆盖 npm 默认安装通道（`next` 与 `latest` 分离）。
 - 发布后需同步 Nexus 可观测入口（release 或 update news）。
 
@@ -210,7 +216,7 @@
 - 安装失败路径必须可见（拒绝授权、异常、超时均不得 silent failure）。
 - 事件/类型变更仅允许可选字段追加，禁止破坏既有语义与兼容性。
 - `@talex-touch/tuff-cli` 为命令主入口，旧入口仅兼容 shim + deprecation，不承载新命令逻辑。
-- 下一动作已统一为 `Nexus 设备授权风控`，不再把 CLI 分包迁移视为待办主线。
+- 下一动作已统一为 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`，不再把 CLI 分包迁移视为待办主线。
 
 ### 6.8 Nexus 设备授权风控文档化（2026-03-16）
 
@@ -219,7 +225,7 @@
 | --- | --- | --- |
 | 正式实施文档 | `docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` | 已入库 |
 | 文档结构 | 目标 / 范围与非目标 / 分期 / 验收 / 回滚 / 风险与豁免边界 | 已对齐 |
-| 六主文档口径 | 下一动作统一为 `Nexus 设备授权风控` | 已对齐 |
+| 六主文档口径 | `Nexus 设备授权风控` 保留实施入口，当前主线已切换到 CoreApp `2.5.0` 前置治理 | 已降权 |
 | CLI 兼容策略 | `2.4.x` 保留 shim，`2.5.0` 退场 | 已固化 |
 
 **质量约束落地**
@@ -227,7 +233,25 @@
 - 豁免必须具备责任人、时间窗和原因，不允许全局无限期豁免。
 - 文档门禁仍保持 `docs:guard` report-only，strict 升级需满足连续零告警前置条件。
 
-### 6.9 Pilot 路由 V2（2026-03-17）
+### 6.9 CoreApp 2.5.0 前置治理（2026-04-20）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 当前主线 | `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配` | 已锁定 |
+| Legacy 清理 | channel/fallback/placeholder blocker 已关闭；数据迁移项降权为 `core-app-migration-exception` | Guarded |
+| Windows 回归 | 搜索、应用扫描/UWP、托盘、更新、插件权限、安装卸载、退出释放 | Release-blocking |
+| macOS 回归 | 权限引导、OmniPanel Accessibility、native-share、托盘/dock、更新、插件权限、退出释放 | Release-blocking |
+| Linux 回归 | `xdotool` / desktop environment 限制说明 + smoke | Best-effort / non-blocking |
+
+**质量约束落地**
+- 新增能力不得通过 legacy 分支、raw channel、旧 storage protocol 或旧 SDK bypass 承载。
+- `apps/core-app/scripts` 与 `apps/pilot/scripts` 必须纳入 legacy/compat 显式扫描；不得用 scope exemption 掩盖脚本债务。
+- 数据迁移例外必须保持 one-shot / marker-gated / read-once，不得重新成为业务写入 SoT。
+- Windows/macOS 阻塞级回归必须在 `CHANGES + TODO` 留证；Linux 失败必须记录限制原因，但不阻塞 `2.5.0`。
+- `Nexus 设备授权风控` 保留实施文档，不得从历史记录中删除。
+
+### 6.10 Pilot 路由 V2（2026-03-17）
 
 **现状指标**
 | 项目 | 结果 | 结论 |
@@ -243,7 +267,7 @@
 - 模型开关必须可控：`internet`、`thinking` 均需透传至后端执行链路。
 - 路由异常必须自动回退：LangGraph Local Server 不可用时回退 deepagent，不得阻断主对话链路。
 
-### 6.10 Core Main 生命周期止血（2026-03-23）
+### 6.11 Core Main 生命周期止血（2026-03-23）
 
 **现状指标**
 | 项目 | 结果 | 结论 |
@@ -260,7 +284,7 @@
 - 事件总线必须保证“单 handler 失败不影响其他 handler”与 `once` 监听器一次性语义。
 - 关停流程必须可等待（`emitAsync` + `unloadAll`），并可观测 `app-quit` 上下文下的资源清理。
 
-### 6.11 Core Main 生命周期收口与去耦首轮（2026-03-23）
+### 6.12 Core Main 生命周期收口与去耦首轮（2026-03-23）
 
 **现状指标**
 | 项目 | 结果 | 结论 |
@@ -278,7 +302,7 @@
 - 新模块默认通过 `ctx.runtime` 获取依赖，不得新增 `globalThis.$app` 读取点；存量兼容仅允许过渡期一次性告警。
 - 结构拆分必须保持外部 event 名称与 payload 兼容，且每次拆分补齐 direct tests，不以集成测试单点兜底。
 
-### 6.12 脚本治理去重首轮（2026-03-23）
+### 6.13 脚本治理去重首轮（2026-03-23）
 
 **现状指标**
 | 项目 | 结果 | 结论 |
@@ -292,3 +316,10 @@
 - 门禁脚本必须共享同一套扫描与版本比较基础能力，避免“规则一致、实现漂移”。
 - 同类质量门禁仅允许一个实现来源；workspace 侧脚本优先复用 root 实现（通过 `--scope` 等参数化）。
 - 大体量编排脚本必须按“编排层 + 平台实现层”拆分，降低单文件风险与回归成本。
+- 桌面打包链路必须校验 `PACKAGED_RUNTIME_MODULES` 完整运行时依赖闭包真实进入产物可解析路径（`app.asar` 或 `resources/node_modules`）；当前基线含 `ms`、`@sentry/electron` 及其 Sentry/OpenTelemetry 闭包、`require-in-the-middle`、`module-details-from-path`，以及 `@langchain/core` 当前已知高风险缺包 `p-retry`、`retry`、`langsmith`、`mustache`、`camelcase`、`decamelize`、`ansi-styles`、`@cfworker/json-schema`，再加上 `compressing -> tar-stream -> readable-stream` 当前已知缺包 `process-nextick-args`、`core-util-is`、`inherits`、`string_decoder`、`util-deprecate`、`once`、`wrappy` 与 `typed-array-buffer` 相关辅助包，禁止产出“可安装但主进程启动即崩”的坏包。
+- CoreApp runtime dependency 打包链路只能从 `apps/core-app/scripts/build-target/runtime-modules.js` 的 runtime module manifest / closure helper 获取 root 清单、平台 native 清单与传递依赖闭包；`ensure-runtime-modules`、`ensure-platform-modules`、`afterPack` 与 packaged verifier 禁止再各自实现模块发现/闭包递归。
+- Runtime dependency 回归必须覆盖 pnpm hoisted dependency、包内局部 transitive dependency、optional 缺失跳过、workspace native root 复制与 workspace transitive 跳过边界；当前 smoke contract 为 `apps/core-app/src/main/core/runtime-modules.contract.test.ts`。
+- 对于被标记为 `resources/node_modules` 或因 asar 缺包被 promoted 到 `resources/node_modules` 的运行时根模块，构建阶段必须递归同步并校验其传递依赖闭包位于同一 resources 可解析路径；闭包包含必需 `peerDependencies`，但跳过 `peerDependenciesMeta.optional` 标记的可选 peer，不能只检查根模块是否存在。
+- 对于 `app.asar` 内保留运行时加载的第三方包，也必须校验其传递依赖闭包完整；当前基线至少覆盖 `@vue/compiler-sfc` 及其 Vue compiler 闭包，以及 `@sentry/electron -> @opentelemetry/sdk-trace-base -> @opentelemetry/resources` 这类主进程启动期依赖链。
+- 单实例链路只能在 bootstrap 入口注册一次 `second-instance` 监听；业务模块统一消费应用事件总线，且任何“聚焦/恢复窗口”动作都必须先做 BrowserWindow 活体校验，禁止把重复启动事件直接绑定到可能已销毁的窗口对象上。
+- `webcontent` 插件安装与加载都必须校验本地 UI 入口文件完整性：hash-route 场景至少要求 `index.html`，显式 HTML 路径要求对应文件存在；若同目录保留原始 `.tpex` 包，允许一次性自愈缺失文件，但失败时必须转为受控 issue/失败态，不能把 `ERR_FILE_NOT_FOUND` 留到运行时再暴露。

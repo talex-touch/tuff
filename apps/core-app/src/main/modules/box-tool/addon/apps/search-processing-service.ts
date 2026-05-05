@@ -9,13 +9,20 @@ import { fuzzyMatch, indicesToRanges } from '@talex-touch/utils/search/fuzzy-mat
 import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils'
 import chalk from 'chalk'
 import { pinyin } from 'pinyin-pro'
-import { formatLog, generateAcronym, LogStyle } from './app-utils'
+import type { AppLaunchKind } from './app-types'
+import { formatLog, generateAcronym, LogStyle, parseStringList } from './app-utils'
 import { resolveDisplayName } from './display-name-sync-utils'
 import { calculateHighlights } from './highlighting-service'
+import { createLogger } from '../../../../utils/logger'
 
 const SLOW_PROCESS_THRESHOLD_MS = 300
+const searchProcessingLog = createLogger('AppScanner').child('SearchProcessing')
 const BASE64_MARKER = 'base64,'
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
+const MANAGED_ENTRY_SOURCE_KEY = 'entrySource'
+const MANAGED_ENTRY_ENABLED_KEY = 'entryEnabled'
+const MANAGED_ENTRY_SOURCE_VALUE = 'manual'
+const ALTERNATE_NAMES_EXTENSION_KEY = 'alternateNames'
 
 function isValidBase64DataUrl(value: string): boolean {
   const markerIndex = value.indexOf(BASE64_MARKER)
@@ -41,33 +48,31 @@ interface AppMatchState {
   source: string
 }
 
+export function isSearchableAppRow(app: AppSearchRow): boolean {
+  if (app.extensions[MANAGED_ENTRY_SOURCE_KEY] !== MANAGED_ENTRY_SOURCE_VALUE) {
+    return true
+  }
+  const enabled = app.extensions[MANAGED_ENTRY_ENABLED_KEY]
+  return enabled !== '0' && enabled !== 'false'
+}
+
 function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): ProcessedTuffItem {
-  const uniqueId = app.extensions.bundleId || app.path
+  const uniqueId = app.extensions.appIdentity || app.path || app.extensions.bundleId || ''
   const name = app.name
   const displayName = resolveDisplayName(app.displayName, app.name)
+  const subtitle = app.extensions.displayPath || app.path
   const rawIconValue = app.extensions.icon ?? ''
   const iconValue = rawIconValue && !isValidBase64DataUrl(rawIconValue) ? '' : rawIconValue
-  const appLaunchMeta = {
-    path: app.path,
-    bundle_id: app.extensions.bundleId || '',
-    launchPath: app.extensions.launchPath || undefined,
-    shortcutPath: app.extensions.shortcutPath || undefined,
-    shortcutArgs: app.extensions.shortcutArgs || undefined,
-    shortcutCwd: app.extensions.shortcutCwd || undefined,
-    appUserModelId: app.extensions.appUserModelId || app.extensions.bundleId || undefined,
-    launchKind:
-      app.extensions.launchKind === 'path' ||
-      app.extensions.launchKind === 'shortcut' ||
-      app.extensions.launchKind === 'appx' ||
-      app.extensions.launchKind === 'url'
-        ? app.extensions.launchKind
-        : undefined
-  }
+  const keywordPath = app.extensions.displayPath || app.path
+  const launchKind = (app.extensions.launchKind as AppLaunchKind | null) || 'path'
+  const description = app.extensions.description || ''
+  const alternateNames = parseStringList(app.extensions[ALTERNATE_NAMES_EXTENSION_KEY])
 
   const tuffItem = new TuffItemBuilder(uniqueId, 'application', 'app-provider')
     .setKind('app')
     .setTitle(displayName)
-    .setSubtitle(app.path)
+    .setSubtitle(subtitle)
+    .setDescription(description)
     .setIcon({
       type: iconValue.startsWith('data:') ? 'url' : 'file',
       value: iconValue
@@ -84,11 +89,26 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
       }
     ])
     .setMeta({
-      app: appLaunchMeta,
+      app: {
+        path: app.path,
+        bundle_id: app.extensions.bundleId || '',
+        launchKind,
+        launchTarget: app.extensions.launchTarget || app.path,
+        launchArgs: app.extensions.launchArgs || '',
+        workingDirectory: app.extensions.workingDirectory || '',
+        displayPath: app.extensions.displayPath || ''
+      },
       extension: {
         matchResult: match.highlights,
         source: match.source,
-        keyWords: [...new Set([name, path.basename(app.path).split('.')[0] || ''])].filter(Boolean)
+        keyWords: [
+          ...new Set([
+            displayName,
+            name,
+            ...alternateNames,
+            path.basename(keywordPath).split('.')[0] || ''
+          ])
+        ].filter(Boolean)
       }
     })
     .setScoring({
@@ -100,7 +120,7 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
 }
 
 export function mapAppsToRecommendationItems(apps: AppSearchRow[]): ProcessedTuffItem[] {
-  return apps.map((app) =>
+  return apps.filter(isSearchableAppRow).map((app) =>
     buildProcessedAppItem(app, {
       highlights: [],
       score: 0,
@@ -120,15 +140,20 @@ export async function processSearchResults(
   const processedItems: ProcessedTuffItem[] = []
 
   for (const app of apps) {
+    if (!isSearchableAppRow(app)) {
+      continue
+    }
     const name = app.name
     const displayName = resolveDisplayName(app.displayName, app.name)
-    const potentialTitles = [displayName, name].filter(Boolean) as string[]
-    const uniqueId = app.extensions.bundleId || app.path
+    const potentialTitles = Array.from(new Set([displayName, name].filter(Boolean))) as string[]
+    const alternateNames = parseStringList(app.extensions[ALTERNATE_NAMES_EXTENSION_KEY])
+    const uniqueId = app.extensions.appIdentity || app.path || app.extensions.bundleId || ''
 
     let bestSource: string = 'unknown'
     let bestHighlights: Range[] = []
     let score = 0
-    const aliasList = aliases[uniqueId] || aliases[app.path] || []
+    const aliasList =
+      aliases[uniqueId] || aliases[app.path] || aliases[app.extensions.bundleId || ''] || []
 
     const ensureHighlights = (raw: Range[] | null | undefined, fallbackTitle: string): Range[] => {
       if (raw && raw.length > 0) {
@@ -253,6 +278,57 @@ export async function processSearchResults(
       }
     }
 
+    for (const alternateName of alternateNames) {
+      const normalizedAlternateName = alternateName.toLowerCase()
+
+      if (normalizedAlternateName.includes(lowerCaseQuery)) {
+        updateMatch('alternate-name', null, 0.86, displayName)
+      }
+
+      const queryParts = lowerCaseQuery.split(/\s+/).filter(Boolean)
+      if (queryParts.length > 1) {
+        let allPartsMatch = true
+        let searchIndex = 0
+        for (const part of queryParts) {
+          const idx = normalizedAlternateName.indexOf(part, searchIndex)
+          if (idx === -1) {
+            allPartsMatch = false
+            break
+          }
+          searchIndex = idx + part.length
+        }
+        if (allPartsMatch) {
+          updateMatch('alternate-name', null, 0.81, displayName)
+        }
+      }
+
+      const acronym = generateAcronym(alternateName)
+      if (acronym) {
+        const normalizedAcronym = acronym.toLowerCase()
+        if (
+          lowerCaseQuery.includes(normalizedAcronym) ||
+          normalizedAcronym.includes(lowerCaseQuery)
+        ) {
+          updateMatch('alternate-initials', null, 0.76, displayName)
+        }
+      }
+
+      if (/[\u4E00-\u9FA5]/.test(alternateName)) {
+        const fullPinyin = pinyin(alternateName, { toneType: 'none' })
+          .replace(/\s/g, '')
+          .toLowerCase()
+        const firstPinyin = pinyin(alternateName, { pattern: 'first', toneType: 'none' })
+          .replace(/\s/g, '')
+          .toLowerCase()
+
+        if (fullPinyin.includes(lowerCaseQuery)) {
+          updateMatch('alternate-name', null, 0.64, displayName)
+        } else if (firstPinyin.includes(lowerCaseQuery)) {
+          updateMatch('alternate-initials', null, 0.59, displayName)
+        }
+      }
+    }
+
     // Path match: check if query appears in the app path
     if (app.path) {
       const normalizedPath = app.path.toLowerCase()
@@ -276,19 +352,6 @@ export async function processSearchResults(
     }
 
     // 如果没有任何匹配，跳过此项
-    const appUserModelId = app.extensions.appUserModelId || app.extensions.bundleId
-    if (appUserModelId) {
-      const normalizedAppUserModelId = appUserModelId.toLowerCase()
-      if (normalizedAppUserModelId.includes(lowerCaseQuery)) {
-        updateMatch(
-          'appUserModelId',
-          calculateHighlights(displayName, lowerCaseQuery),
-          0.38,
-          displayName
-        )
-      }
-    }
-
     if (score === 0 || bestHighlights.length === 0) {
       continue
     }
@@ -329,7 +392,7 @@ export async function processSearchResults(
             )}s`,
             LogStyle.warning
           ),
-        logger: (message) => console.warn(message)
+        logger: (message) => searchProcessingLog.warn(message)
       }
     )
   }

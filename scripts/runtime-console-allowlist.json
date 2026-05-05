@@ -1,0 +1,366 @@
+{
+  "schemaVersion": 1,
+  "scanRoots": [
+    "apps/core-app/src/main",
+    "apps/core-app/src/preload",
+    "apps/core-app/src/renderer/src"
+  ],
+  "entries": [
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/core-box/window.ts",
+      "maxCount": 3
+    },
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/search-engine/search-logger-test.ts",
+      "maxCount": 3
+    },
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/search-engine/search-logger.ts",
+      "maxCount": 56
+    },
+    {
+      "file": "apps/core-app/src/main/modules/division-box/session.ts",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/main/plugins/internal/internal-plugin-logger.ts",
+      "maxCount": 4
+    },
+    {
+      "file": "apps/core-app/src/main/utils/logger.ts",
+      "maxCount": 5
+    },
+    {
+      "file": "apps/core-app/src/preload/index.ts",
+      "maxCount": 10
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/AppEntrance.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/base/axios.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/base/BuildSecurityBanner.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/base/button/IconButton.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/download/ErrorLogViewer.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/download/MigrationProgress.vue",
+      "maxCount": 3
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/flow/FlowSelector.vue",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/intelligence/agents/AgentDetail.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/intelligence/audit/IntelligenceAuditLogs.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/intelligence/capabilities/AISDKCapabilityDetails.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/plugin/action/mention/PluginApplyInstall.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue",
+      "maxCount": 4
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/plugin/PluginView.vue",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue",
+      "maxCount": 3
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/plugin/tabs/PluginDevSettingsOverlay.vue",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatures.vue",
+      "maxCount": 3
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/plugin/tabs/PluginPermissions.vue",
+      "maxCount": 4
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue",
+      "maxCount": 3
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/render/addon/preview/AudioPreview.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/render/addon/preview/CodePreview.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/render/addon/preview/MarkdownPreview.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/render/addon/preview/TextPreview.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/render/custom/CoreIntelligenceAnswer.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/components/tuff/TuffGroupBlock.vue",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/composables/store/usePluginUpdates.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/composables/store/useStoreData.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/composables/store/useStoreInstall.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/composables/store/useStoreReadme.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/composables/store/useUserPlugins.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/composables/useFileIndexMonitor.ts",
+      "maxCount": 8
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/box/adapter/hooks/useActionPanel.ts",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/box/adapter/hooks/useClipboard.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/box/adapter/hooks/useClipboardChannel.ts",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts",
+      "maxCount": 4
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/box/adapter/hooks/usePreviewHistory.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts",
+      "maxCount": 4
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/box/adapter/transport/core-box-transport.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/channel/channel-core.ts",
+      "maxCount": 7
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/division-box/components/DivisionBoxShell.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/division-box/composables/useDrag.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/division-box/composables/useResize.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/division-box/store/division-box.ts",
+      "maxCount": 5
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/hooks/dropper-resolver.ts",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/hooks/env-hooks.ts",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/hooks/useBatteryOptimizer.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/hooks/usePluginLogSessions.ts",
+      "maxCount": 3
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/hooks/usePluginSelection.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/hooks/usePromptManager.ts",
+      "maxCount": 3
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/hooks/useSvgContent.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/install/install-manager.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/layout/preset/remote/useRemotePresets.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/layout/preset/usePresetExport.ts",
+      "maxCount": 4
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/layout/useDynamicTuffLayout.ts",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/layout/useWallpaper.ts",
+      "maxCount": 5
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/mention/dialog-manager.ts",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/openers/index.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts",
+      "maxCount": 12
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/storage/app-storage.ts",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/store/provider-factory.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/store/providers/npm-package-provider.ts",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/store/providers/repository-provider.ts",
+      "maxCount": 4
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/store/providers/tpex-api-provider.ts",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/sync/auto-sync-manager.ts",
+      "maxCount": 3
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/sync/sync-item-mapper.ts",
+      "maxCount": 6
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/modules/tuffex/index.ts",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/stores/plugin.ts",
+      "maxCount": 5
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/utils/dev-log.ts",
+      "maxCount": 3
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/utils/renderer-log.ts",
+      "maxCount": 4
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/base/begin/internal/AccountDo.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue",
+      "maxCount": 9
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/base/intelligence/IntelligencePromptsPage.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/base/Plugin.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/base/plugin/PluginNew.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/base/Store.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/base/styles/editors/RemotePresetOverlay.vue",
+      "maxCount": 3
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue",
+      "maxCount": 6
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/box/CoreBox.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/box/tag/IndexingHintTag.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/box/tag/UnifiedFileTag.vue",
+      "maxCount": 1
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/meta/MetaOverlay.vue",
+      "maxCount": 2
+    },
+    {
+      "file": "apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue",
+      "maxCount": 2
+    }
+  ]
+}

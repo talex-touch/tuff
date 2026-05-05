@@ -9,6 +9,14 @@ import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/tran
 import type {
   AppIndexAddPathRequest,
   AppIndexAddPathResult,
+  AppIndexDiagnoseRequest,
+  AppIndexDiagnoseResult,
+  AppIndexEntryMutationResult,
+  AppIndexRemoveEntryRequest,
+  AppIndexReindexRequest,
+  AppIndexReindexResult,
+  AppIndexSetEntryEnabledRequest,
+  AppIndexUpsertEntryRequest,
   AutoStartGetResponse,
   AutoStartUpdateRequest,
   AutoStartUpdateResponse,
@@ -64,10 +72,20 @@ import { buildVerificationModule } from '../modules/build-verification'
 import { databaseModule } from '../modules/database'
 import { createDbUtils } from '../db/utils'
 import {
+  applyCapabilityRuntimePatch,
+  getActiveAppCapabilityPatch,
+  getAutoPasteCapabilityPatch,
+  getEverythingCapabilityPatch,
+  getNativeShareCapabilityPatch,
+  getPermissionDeepLinkCapabilityPatch,
+  getSelectionCaptureCapabilityPatch,
+  getTuffCliCapabilityPatch
+} from '../modules/platform/capability-adapter'
+import {
   platformCapabilityRegistry,
   registerDefaultPlatformCapabilities
 } from '../modules/platform/capability-registry'
-import { activeAppService, isActiveAppCapabilityAvailable } from '../modules/system/active-app'
+import { activeAppService } from '../modules/system/active-app'
 import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage'
 import { getNetworkService } from '../modules/network'
 import { deviceIdleService } from '../service/device-idle-service'
@@ -77,6 +95,11 @@ import { createLogger } from '../utils/logger'
 import { safeOpHandler, toErrorMessage } from '../utils/safe-handler'
 import { enterPerfContext } from '../utils/perf-context'
 import { perfMonitor } from '../utils/perf-monitor'
+import {
+  getStorageUsageReport,
+  type StorageUsageIncludeOptions,
+  type StorageUsageReport
+} from '../utils/storage-usage'
 import {
   getSecureStoreValue,
   isSecureStoreAvailable,
@@ -93,17 +116,12 @@ const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
 const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
 const DIALOG_APPROVED_TTL_MS = 10 * 60 * 1000
 const DIALOG_APPROVED_MAX = 200
-const TUFF_CLI_DETECT_CACHE_TTL_MS = 60_000
-const TUFF_CLI_DETECT_TIMEOUT_MS = 1_500
-const TUFF_CLI_COMMAND_CANDIDATES =
-  process.platform === 'win32' ? ['tuff.cmd', 'tuff.exe', 'tuff'] : ['tuff']
 const TUFF_CLI_CAPABILITY: PlatformCapability = {
   id: 'platform.tuff-cli',
   name: 'Tuff CLI',
   description: 'CLI 工具联动能力（Beta）',
   scope: 'plugin',
-  status: 'beta',
-  supportLevel: 'unsupported'
+  status: 'beta'
 }
 const ACTIVE_APP_CAPABILITY: PlatformCapability = {
   id: 'platform.active-app',
@@ -111,44 +129,61 @@ const ACTIVE_APP_CAPABILITY: PlatformCapability = {
   description: '当前前台应用与窗口上下文读取能力',
   scope: 'system',
   status: 'beta',
-  supportLevel: 'unsupported',
+  sensitive: true
+}
+const SELECTION_CAPTURE_CAPABILITY: PlatformCapability = {
+  id: 'platform.selection-capture',
+  name: 'Selection Capture',
+  description: '活动应用选中文本抓取能力',
+  scope: 'system',
+  status: 'beta',
+  sensitive: true
+}
+const AUTO_PASTE_CAPABILITY: PlatformCapability = {
+  id: 'platform.auto-paste',
+  name: 'Auto Paste',
+  description: '向当前焦点应用回写剪贴板内容',
+  scope: 'system',
+  status: 'beta',
   sensitive: true
 }
 const NATIVE_SHARE_CAPABILITY: PlatformCapability = {
   id: 'platform.native-share',
   name: 'Native Share',
-  description: 'macOS 提供完整原生分享；Windows/Linux 仅提供 mail-only best-effort',
+  description: '仅 macOS 提供原生系统分享能力',
   scope: 'system',
-  status: 'beta',
-  supportLevel: 'unsupported'
+  status: 'beta'
 }
 const TERMINAL_CAPABILITY: PlatformCapability = {
   id: 'platform.terminal',
   name: 'Terminal Command Runtime',
   description: '命令进程执行能力（非 PTY 终端）',
   scope: 'system',
-  status: 'beta',
-  supportLevel: 'best_effort',
-  limitations: [
-    'Runs child-process commands only; PTY emulation and terminal state sync are not provided.'
-  ]
+  status: 'beta'
 }
-const SYSTEM_PERMISSION_CAPABILITY: PlatformCapability = {
-  id: 'platform.permission-checker',
-  name: 'Permission Checker',
-  description: '系统权限状态检查与设置跳转能力',
+const PERMISSION_DEEP_LINK_CAPABILITY: PlatformCapability = {
+  id: 'platform.permission-deep-link',
+  name: 'Permission Deep-Link',
+  description: '系统权限设置检查与跳转能力',
   scope: 'system',
   status: 'beta',
-  supportLevel: 'supported',
   sensitive: true
+}
+const EVERYTHING_SEARCH_CAPABILITY: PlatformCapability = {
+  id: 'platform.everything-search',
+  name: 'Everything Search',
+  description: 'Windows Everything 文件搜索后端能力',
+  scope: 'system',
+  status: 'beta'
 }
 const log = createLogger('CommonChannel')
 
 type RuntimeTraySettings = {
   showTray: boolean
   hideDock: boolean
-  experimentalTray: boolean
   available: boolean
+  trayReady: boolean
+  windowVisible: boolean
 }
 
 type RuntimeTrayManager = {
@@ -157,7 +192,6 @@ type RuntimeTrayManager = {
 }
 
 const dialogApprovedPaths = new Map<string, number>()
-let tuffCliDetectionCache: { available: boolean; checkedAt: number } | null = null
 
 function normalizeSafeNamespaceSegment(value: string): string {
   const normalized = value
@@ -190,6 +224,12 @@ const fsWriteFileEvent = defineRawEvent<{ path: string; data: string }, { succes
 )
 const fsReadFileEvent = defineRawEvent<{ path: string }, { data?: string; error?: string }>(
   'fs:read-file'
+)
+interface StorageUsageRequest {
+  include?: StorageUsageIncludeOptions
+}
+const systemGetStorageUsageEvent = defineRawEvent<StorageUsageRequest, StorageUsageReport>(
+  'system:get-storage-usage'
 )
 const wallpaperListImagesEvent = defineRawEvent<
   { folderPath: string; recursive?: boolean },
@@ -512,6 +552,12 @@ function getOptionalStringProp(value: unknown, key: string): string | undefined 
   return typeof prop === 'string' ? prop : undefined
 }
 
+function getOptionalBooleanProp(value: unknown, key: string): boolean | undefined {
+  if (!isRecord(value)) return undefined
+  const prop = value[key]
+  return typeof prop === 'boolean' ? prop : undefined
+}
+
 function normalizeCapabilityQuery(payload: unknown): PlatformCapabilityListRequest {
   const query: PlatformCapabilityListRequest = {}
   const scope = getOptionalStringProp(payload, 'scope')
@@ -534,53 +580,12 @@ function matchCapabilityQuery(
   return true
 }
 
-async function detectTuffCliAvailability(): Promise<boolean> {
-  const now = Date.now()
-  if (
-    tuffCliDetectionCache &&
-    now - tuffCliDetectionCache.checkedAt <= TUFF_CLI_DETECT_CACHE_TTL_MS
-  ) {
-    return tuffCliDetectionCache.available
-  }
-
-  for (const command of TUFF_CLI_COMMAND_CANDIDATES) {
-    try {
-      await execFileAsync(command, ['--version'], {
-        timeout: TUFF_CLI_DETECT_TIMEOUT_MS,
-        windowsHide: true
-      })
-      tuffCliDetectionCache = { available: true, checkedAt: now }
-      return true
-    } catch (error) {
-      const code = getOptionalStringProp(error, 'code')
-      const signal = getOptionalStringProp(error, 'signal')
-      if (code !== 'ENOENT' && signal !== 'SIGTERM') {
-        log.debug('[CommonChannel] Tuff CLI probe failed', {
-          meta: {
-            command,
-            code,
-            signal,
-            error: toErrorMessage(error)
-          }
-        })
-      }
-    }
-  }
-
-  tuffCliDetectionCache = { available: false, checkedAt: now }
-  return false
-}
-
 async function listPlatformCapabilities(
   query: PlatformCapabilityListRequest
 ): Promise<PlatformCapability[]> {
   const capabilities: PlatformCapability[] = platformCapabilityRegistry
     .list(query)
-    .map((capability) => ({
-      ...capability,
-      supportLevel: capability.supportLevel ?? 'supported',
-      limitations: capability.limitations ? [...capability.limitations] : undefined
-    }))
+    .map((capability) => applyCapabilityRuntimePatch(capability))
   const appendDynamicCapability = (capability: PlatformCapability): void => {
     if (capabilities.some((item) => item.id === capability.id)) {
       return
@@ -590,54 +595,44 @@ async function listPlatformCapabilities(
     }
   }
 
-  const activeAppSupported = await isActiveAppCapabilityAvailable()
-  appendDynamicCapability({
-    ...ACTIVE_APP_CAPABILITY,
-    supportLevel: activeAppSupported ? 'supported' : 'unsupported',
-    limitations: activeAppSupported
-      ? undefined
-      : ['Foreground application inspection is unavailable in the current runtime.']
-  })
-
-  appendDynamicCapability({
-    ...NATIVE_SHARE_CAPABILITY,
-    supportLevel:
-      process.platform === 'darwin'
-        ? 'supported'
-        : process.platform === 'win32' || process.platform === 'linux'
-          ? 'best_effort'
-          : 'unsupported',
-    limitations:
-      process.platform === 'darwin'
-        ? undefined
-        : process.platform === 'win32' || process.platform === 'linux'
-          ? ['Falls back to mailto-based sharing only; no native system share sheet is exposed.']
-          : ['Native share is unavailable on the current platform.']
-  })
-
-  if (process.platform === 'linux') {
-    appendDynamicCapability({
-      ...SYSTEM_PERMISSION_CAPABILITY,
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(ACTIVE_APP_CAPABILITY, await getActiveAppCapabilityPatch())
+  )
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(
+      SELECTION_CAPTURE_CAPABILITY,
+      await getSelectionCaptureCapabilityPatch()
+    )
+  )
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(AUTO_PASTE_CAPABILITY, await getAutoPasteCapabilityPatch())
+  )
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(NATIVE_SHARE_CAPABILITY, getNativeShareCapabilityPatch())
+  )
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(
+      PERMISSION_DEEP_LINK_CAPABILITY,
+      getPermissionDeepLinkCapabilityPatch()
+    )
+  )
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(EVERYTHING_SEARCH_CAPABILITY, getEverythingCapabilityPatch())
+  )
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(TERMINAL_CAPABILITY, {
       supportLevel: 'best_effort',
-      limitations: ['Permission status and settings deep-links depend on the desktop environment.']
+      issueCode: 'NO_PTY',
+      reason:
+        'Runs child-process commands only; PTY emulation and terminal state sync are not provided.',
+      limitations: [
+        'Runs child-process commands only; PTY emulation and terminal state sync are not provided.'
+      ]
     })
-  } else if (process.platform === 'darwin' || process.platform === 'win32') {
-    appendDynamicCapability({
-      ...SYSTEM_PERMISSION_CAPABILITY,
-      supportLevel: 'supported'
-    })
-  }
-
-  appendDynamicCapability(TERMINAL_CAPABILITY)
-
-  const tuffCliAvailable = await detectTuffCliAvailability()
-  appendDynamicCapability({
-    ...TUFF_CLI_CAPABILITY,
-    supportLevel: tuffCliAvailable ? 'supported' : 'unsupported',
-    limitations: tuffCliAvailable
-      ? undefined
-      : ['CLI binary was not detected in PATH or known install locations.']
-  })
+  )
+  appendDynamicCapability(
+    applyCapabilityRuntimePatch(TUFF_CLI_CAPABILITY, await getTuffCliCapabilityPatch())
+  )
   return capabilities
 }
 
@@ -1191,9 +1186,8 @@ export class CommonChannelModule extends BaseModule {
     touchApp: TalexTouch.TouchApp
   ): TraySettingsGetResponse {
     const setup = appSettings?.setup ?? {}
-    const experimentalTray = setup.experimentalTray === true
     const trayManager = this.getRuntimeTrayManager(touchApp)
-    const available = experimentalTray && trayManager !== null
+    const available = trayManager !== null
 
     if (available && trayManager?.getRuntimeSettingsSnapshot) {
       return trayManager.getRuntimeSettingsSnapshot()
@@ -1202,8 +1196,9 @@ export class CommonChannelModule extends BaseModule {
     return {
       showTray: setup.showTray !== false,
       hideDock: setup.hideDock === true,
-      experimentalTray,
-      available
+      available,
+      trayReady: false,
+      windowVisible: touchApp.window.window.isVisible()
     }
   }
 
@@ -1427,6 +1422,17 @@ export class CommonChannelModule extends BaseModule {
           perfMonitor.recordRendererReport(payload)
         }
       }),
+      transport.on(systemGetStorageUsageEvent, async (payload) => {
+        const storageStats = storageModule.getCacheStats()
+        return await getStorageUsageReport({
+          include: payload?.include,
+          dbClient: databaseModule.getClient(),
+          cacheStats: {
+            'storage.lru': storageStats.cachedConfigs,
+            'storage.plugins': storageStats.pluginConfigs
+          }
+        })
+      }),
       transport.on<ReadFileRequest, string>(AppEvents.system.readFile, async (payload) => {
         return await this.readSystemFile(payload)
       }),
@@ -1466,6 +1472,10 @@ export class CommonChannelModule extends BaseModule {
       transport.on(AppEvents.deviceIdle.updateSettings, (payload) =>
         deviceIdleService.updateSettings(payload ?? {})
       ),
+      transport.on(AppEvents.deviceIdle.getDiagnostic, async () => ({
+        ...(await deviceIdleService.canRun()),
+        settings: deviceIdleService.getSettings()
+      })),
       transport.on(AppEvents.appIndex.getSettings, () => appProvider.getAppIndexSettings()),
       transport.on(AppEvents.appIndex.updateSettings, (payload) =>
         appProvider.updateAppIndexSettings(payload ?? {})
@@ -1479,6 +1489,43 @@ export class CommonChannelModule extends BaseModule {
           }
           return appProvider.addAppByPath(inputPath)
         }
+      ),
+      transport.on(AppEvents.appIndex.listEntries, () => appProvider.listManagedEntries()),
+      transport.on<AppIndexUpsertEntryRequest, AppIndexEntryMutationResult>(
+        AppEvents.appIndex.upsertEntry,
+        (payload) => appProvider.upsertManagedEntry(payload ?? { path: '' })
+      ),
+      transport.on<AppIndexRemoveEntryRequest, AppIndexEntryMutationResult>(
+        AppEvents.appIndex.removeEntry,
+        (payload) => {
+          const inputPath = getOptionalStringProp(payload, 'path')
+          if (!inputPath) {
+            return { success: false, status: 'invalid', reason: 'path-empty' }
+          }
+          return appProvider.removeManagedEntry(inputPath)
+        }
+      ),
+      transport.on<AppIndexSetEntryEnabledRequest, AppIndexEntryMutationResult>(
+        AppEvents.appIndex.setEntryEnabled,
+        (payload) => {
+          const inputPath = getOptionalStringProp(payload, 'path')
+          if (!inputPath) {
+            return { success: false, status: 'invalid', reason: 'path-empty' }
+          }
+          const enabled = getOptionalBooleanProp(payload, 'enabled')
+          if (enabled === undefined) {
+            return { success: false, status: 'invalid', reason: 'enabled-invalid' }
+          }
+          return appProvider.setManagedEntryEnabled(inputPath, enabled)
+        }
+      ),
+      transport.on<AppIndexDiagnoseRequest, AppIndexDiagnoseResult>(
+        AppEvents.appIndex.diagnose,
+        (payload) => appProvider.diagnoseAppSearch(payload ?? { target: '' })
+      ),
+      transport.on<AppIndexReindexRequest, AppIndexReindexResult>(
+        AppEvents.appIndex.reindex,
+        (payload) => appProvider.reindexAppSearchTarget(payload ?? { target: '' })
       )
     )
   }

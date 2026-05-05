@@ -79,6 +79,10 @@ const summaryLabel = computed(() => {
   return `${speedLabel.value} · ${progressPercent.value}% · ${activeTaskCount.value}${t('download.items')}`
 })
 
+const buttonLabel = computed(() =>
+  activeTaskCount.value > 0 ? summaryLabel.value : t('download.title')
+)
+
 function handleClick(event: MouseEvent): void {
   downloadDialogSource.value =
     event.currentTarget instanceof HTMLElement ? event.currentTarget : null
@@ -101,9 +105,8 @@ function handleClick(event: MouseEvent): void {
     <div class="download-content">
       <div class="download-main">
         <i class="i-carbon-download text-base" />
-        <span class="download-text">{{ t('download.title') }}</span>
+        <span class="download-text">{{ buttonLabel }}</span>
       </div>
-      <span class="download-meta">{{ summaryLabel }}</span>
     </div>
 
     <div v-if="activeTaskCount > 0 || failedCount > 0" class="download-badges">
@@ -172,28 +175,25 @@ function handleClick(event: MouseEvent): void {
   z-index: 1;
   width: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
   padding-right: 56px;
+  min-width: 0;
 }
 
 .download-main {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .download-text {
   font-size: 12px;
   font-weight: 600;
   color: var(--tx-text-color-primary);
-}
-
-.download-meta {
-  font-size: 11px;
-  line-height: 1.2;
-  color: var(--tx-text-color-secondary);
-  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .download-badges {

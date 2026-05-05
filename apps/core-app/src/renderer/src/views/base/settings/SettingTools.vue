@@ -8,10 +8,13 @@
 import type { ShortcutWithStatus } from '~/modules/channel/main/shortcon'
 
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
-import { TxButton, TxSelectItem } from '@talex-touch/tuffex'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { TxButton, TxInput, TxSelectItem } from '@talex-touch/tuffex'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -19,12 +22,15 @@ import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import ShortcutDialog from '~/views/base/settings/components/ShortcutDialog.vue'
 import { shortconApi } from '~/modules/channel/main/shortcon'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import { createRendererLogger } from '~/utils/renderer-log'
 import type { SaveState, ShortcutRowBase } from './components/shortcut-dialog.types'
 
 const { t } = useI18n()
-
-const isMac = process.platform === 'darwin'
+const transport = useTuffTransport()
+const { isMac } = useRendererPlatform()
+const settingToolsLog = createRendererLogger('SettingTools')
 
 const shortcuts = ref<ShortcutWithStatus[] | null>(null)
 const systemShortcuts = computed(() =>
@@ -43,6 +49,21 @@ const AUTO_PASTE_TIME_OPTIONS = [-1, 0, 1, 3, 5, 10, 15, 30, 60, 120, 180, 300] 
 const AUTO_CLEAR_TIME_OPTIONS = [-1, 0, 1, 3, 5, 10, 15, 30, 60, 120, 180, 300] as const
 const CLIPBOARD_POLLING_INTERVAL_OPTIONS = [1, 3, 5, 10, 15, -1] as const
 const LOW_BATTERY_POLLING_INTERVAL_OPTIONS = [10, 15] as const
+const OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_OPTIONS = [300, 450, 600, 800, 1000, 1200, 1500] as const
+const DEFAULT_OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_MS = 600
+
+type SystemPermissionStatus = 'granted' | 'denied' | 'notDetermined' | 'unsupported'
+
+interface SystemPermissionCheckResult {
+  status: SystemPermissionStatus
+  canRequest: boolean
+  message?: string
+}
+
+const systemPermissionCheck = defineRawEvent<string, SystemPermissionCheckResult>(
+  'system:permission:check'
+)
+const omniPanelAccessibilityGranted = ref<boolean | null>(null)
 
 function parseSelectNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -152,9 +173,69 @@ function ensureClipboardPollingSettings(): void {
   )
 }
 
+function ensureOmniPanelSettings(): void {
+  if (!appSetting.omniPanel || typeof appSetting.omniPanel !== 'object') {
+    appSetting.omniPanel = {
+      enableShortcut: false,
+      enableMouseLongPress: true,
+      mouseLongPressDurationMs: DEFAULT_OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_MS,
+      autoMountFirstFeatureOnPluginInstall: false,
+      featureHub: {
+        items: []
+      }
+    }
+    return
+  }
+
+  if (appSetting.omniPanel.enableShortcut === undefined) {
+    appSetting.omniPanel.enableShortcut = false
+  }
+  if (appSetting.omniPanel.enableMouseLongPress === undefined) {
+    appSetting.omniPanel.enableMouseLongPress = true
+  }
+  appSetting.omniPanel.mouseLongPressDurationMs = normalizeSelectNumber(
+    appSetting.omniPanel.mouseLongPressDurationMs,
+    OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_OPTIONS,
+    DEFAULT_OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_MS
+  )
+  if (appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall === undefined) {
+    appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall = false
+  }
+  if (!appSetting.omniPanel.featureHub || typeof appSetting.omniPanel.featureHub !== 'object') {
+    appSetting.omniPanel.featureHub = {
+      items: []
+    }
+  }
+  if (!Array.isArray(appSetting.omniPanel.featureHub.items)) {
+    appSetting.omniPanel.featureHub.items = []
+  }
+}
+
+async function refreshOmniPanelAccessibilityStatus(): Promise<void> {
+  if (!isMac.value) {
+    omniPanelAccessibilityGranted.value = true
+    return
+  }
+  try {
+    const result = await transport.send(systemPermissionCheck, 'accessibility')
+    omniPanelAccessibilityGranted.value = result.status === 'granted'
+  } catch (error) {
+    settingToolsLog.warn('Failed to refresh accessibility permission', error)
+    omniPanelAccessibilityGranted.value = null
+  }
+}
+
 const clipboardPollingLowBatteryDisabled = computed(
   () => appSetting.tools.clipboardPolling?.lowBatteryPolicy?.enable === false
 )
+
+const omniPanelMouseTriggerEnabled = computed(() => {
+  const target = shortcuts.value?.find(
+    (shortcut) => shortcut.id === 'core.omniPanel.mouseLongPress'
+  )
+  if (!target) return true
+  return isShortcutEnabled(target)
+})
 
 async function refreshShortcuts(): Promise<void> {
   shortcuts.value = await shortconApi.getAll()
@@ -162,13 +243,22 @@ async function refreshShortcuts(): Promise<void> {
 
 onMounted(async () => {
   ensureClipboardPollingSettings()
-  await refreshShortcuts()
+  ensureOmniPanelSettings()
+  await Promise.all([refreshShortcuts(), refreshOmniPanelAccessibilityStatus()])
 })
 
 watch(
   () => appSetting.tools,
   () => {
     ensureClipboardPollingSettings()
+  },
+  { deep: false, immediate: true }
+)
+
+watch(
+  () => appSetting.omniPanel,
+  () => {
+    ensureOmniPanelSettings()
   },
   { deep: false, immediate: true }
 )
@@ -203,12 +293,24 @@ async function updateShortcutEnabled(id: string, enabled: boolean): Promise<void
   const shortcutList = shortcuts.value
   const target = shortcutList?.find((item) => item.id === id)
   const previousEnabled = target?.meta?.enabled ?? true
+  const previousOmniPanelShortcutEnabled = appSetting.omniPanel?.enableShortcut
+  const previousOmniPanelMouseLongPressEnabled = appSetting.omniPanel?.enableMouseLongPress
   if (target) {
     target.meta.enabled = enabled
+  }
+  if (id === 'core.omniPanel.toggle' && appSetting.omniPanel) {
+    appSetting.omniPanel.enableShortcut = enabled
+  }
+  if (id === 'core.omniPanel.mouseLongPress' && appSetting.omniPanel) {
+    appSetting.omniPanel.enableMouseLongPress = enabled
   }
   const success = await saveShortcut(id, { enabled })
   if (!success && target) {
     target.meta.enabled = previousEnabled
+  }
+  if (!success && appSetting.omniPanel) {
+    appSetting.omniPanel.enableShortcut = previousOmniPanelShortcutEnabled
+    appSetting.omniPanel.enableMouseLongPress = previousOmniPanelMouseLongPressEnabled
   }
   await refreshShortcuts()
 }
@@ -313,6 +415,14 @@ function getShortcutStatusText(shortcut: ShortcutWithStatus): string | null {
   if (shortcut.meta?.enabled === false || shortcut.status?.state === 'disabled') {
     return t('settingTools.shortcutsDialog.statusDisabled')
   }
+  if (
+    shortcut.id === 'core.omniPanel.mouseLongPress' &&
+    isShortcutEnabled(shortcut) &&
+    isMac.value &&
+    omniPanelAccessibilityGranted.value === false
+  ) {
+    return t('settingTools.shortcutStatus.omniPanelAccessibilityRequired')
+  }
   const status = shortcut.status
   if (!status || status.state === 'active') {
     return null
@@ -329,9 +439,17 @@ function getShortcutStatusText(shortcut: ShortcutWithStatus): string | null {
 }
 
 function getSpotlightHint(shortcut: ShortcutWithStatus): string | null {
+  if (
+    shortcut.id === 'core.omniPanel.mouseLongPress' &&
+    isShortcutEnabled(shortcut) &&
+    isMac.value &&
+    omniPanelAccessibilityGranted.value === false
+  ) {
+    return t('settingTools.shortcutStatus.omniPanelAccessibilityHint')
+  }
   if (isTriggerShortcut(shortcut)) return null
   if (!isShortcutEnabled(shortcut)) return null
-  if (!isMac) return null
+  if (!isMac.value) return null
   const status = shortcut.status
   if (!status || status.state !== 'unavailable') return null
   if (status.reason !== 'register-failed' && status.reason !== 'register-error') return null
@@ -343,7 +461,14 @@ function getSpotlightHint(shortcut: ShortcutWithStatus): string | null {
 
 function getShortcutTriggerLabel(shortcut: ShortcutWithStatus): string {
   if (shortcut.id === 'core.omniPanel.mouseLongPress') {
-    return t('settingTools.shortcutsDialog.triggerMouseRightLongPress')
+    const durationMs = normalizeSelectNumber(
+      appSetting.omniPanel?.mouseLongPressDurationMs,
+      OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_OPTIONS,
+      DEFAULT_OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_MS
+    )
+    return t('settingTools.shortcutsDialog.triggerMouseRightLongPressWithDuration', {
+      duration: durationMs
+    })
   }
   return shortcut.accelerator
 }
@@ -391,6 +516,7 @@ const shortcutRows = computed<ShortcutRowBase[]>(() =>
 function openShortcutsDialog(event: MouseEvent): void {
   shortcutsDialogSource.value =
     event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  void refreshOmniPanelAccessibilityStatus()
   shortcutsDialogVisible.value = true
 }
 
@@ -452,19 +578,22 @@ watch(shortcutsDialogVisible, (visible) => {
     memory-name="setting-tools"
   >
     <!-- Custom CoreBox Placeholder -->
-    <TuffBlockSlot
+    <TuffBlockInput
+      v-model="appSetting.coreBox.customPlaceholder"
       :title="t('settingTools.customPlaceholder')"
       :description="t('settingTools.customPlaceholderDesc')"
       default-icon="i-carbon-text-short-paragraph"
       active-icon="i-carbon-text-short-paragraph"
     >
-      <input
-        v-model="appSetting.coreBox.customPlaceholder"
-        type="text"
-        class="TuffBlockInput"
-        :placeholder="t('boxInput.placeholder')"
-      />
-    </TuffBlockSlot>
+      <template #control>
+        <TxInput
+          v-model="appSetting.coreBox.customPlaceholder"
+          class="SettingTools-PlaceholderInput"
+          :placeholder="t('boxInput.placeholder')"
+          clearable
+        />
+      </template>
+    </TuffBlockInput>
 
     <!-- Beginner usage guide switch -->
     <TuffBlockSwitch
@@ -491,6 +620,23 @@ watch(shortcutsDialogVisible, (visible) => {
         {{ t('settingTools.shortcutsAction') }}
       </TxButton>
     </TuffBlockSlot>
+
+    <TuffBlockSelect
+      v-model="appSetting.omniPanel.mouseLongPressDurationMs"
+      :title="t('settingTools.omniPanelMouseLongPressDuration')"
+      :description="t('settingTools.omniPanelMouseLongPressDurationDesc')"
+      default-icon="i-carbon-timer"
+      active-icon="i-carbon-timer"
+      :disabled="!omniPanelMouseTriggerEnabled"
+    >
+      <TxSelectItem
+        v-for="duration in OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_OPTIONS"
+        :key="duration"
+        :value="duration"
+      >
+        {{ duration }} ms
+      </TxSelectItem>
+    </TuffBlockSelect>
 
     <!-- Auto paste time selection -->
     <TuffBlockSelect
@@ -636,27 +782,8 @@ watch(shortcutsDialogVisible, (visible) => {
 </template>
 
 <style scoped>
-.TuffBlockInput {
-  width: 200px;
-  padding: 8px 12px;
-  border: 1px solid var(--tx-border-color);
-  border-radius: 8px;
-  background: var(--tx-fill-color-lighter);
-  color: var(--tx-text-color-primary);
-  font-size: 13px;
-  outline: none;
-  transition: all 0.2s ease;
-}
-
-.TuffBlockInput:focus {
-  border-color: var(--tx-color-primary);
-  background: var(--tx-bg-color);
-  box-shadow: 0 0 0 2px rgba(var(--tx-color-primary-rgb, 64, 158, 255), 0.1);
-}
-
-.TuffBlockInput::placeholder {
-  color: var(--tx-text-color-placeholder);
-  opacity: 0.7;
+.SettingTools-PlaceholderInput {
+  width: min(360px, 100%);
 }
 
 .ShortcutSummary {

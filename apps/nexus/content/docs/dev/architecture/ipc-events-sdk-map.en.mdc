@@ -188,7 +188,7 @@ This page maps `packages/utils/transport/sdk/domains/*` to main-process handlers
 | `app:open` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> shell.openPath` (`apps/core-app/src/main/channel/common.ts`) |
 | `url:open` | Renderer (`apps/core-app/src/renderer/src/modules/hooks/application-hooks.ts`) | `CommonChannel.registerTransportHandlers -> onOpenUrl` (`apps/core-app/src/main/channel/common.ts`) |
 | `files:index-progress` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> fileProvider.getIndexingProgress` (`apps/core-app/src/main/channel/common.ts`) |
-| `system:get-active-app` | Caller: renderer/plugin (raw event) | `CommonChannel.registerTransportHandlers -> activeAppService.getActiveApp` (`apps/core-app/src/main/channel/common.ts`) |
+| `app:system:get-active-app` | Caller: plugin SDK typed transport (`packages/utils/plugin/sdk/system.ts`) | `CommonChannel.registerTransportHandlers -> activeAppService.getActiveApp` (`apps/core-app/src/main/channel/common.ts`) |
 | `system:get-storage-usage` | Renderer (`apps/core-app/src/renderer/src/views/storage/Storagable.vue`) | `CommonChannel.registerTransportHandlers -> getStorageUsageReport` (`apps/core-app/src/main/channel/common.ts`) |
 | `build:get-verification-status` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> resolveBuildVerificationStatus` (`apps/core-app/src/main/channel/common.ts`) |
 

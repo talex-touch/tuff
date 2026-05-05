@@ -7,6 +7,7 @@ import type {
 import type { TrayState } from './tray-state-manager'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { app, Tray } from 'electron'
 import {
   TalexEvents,
@@ -28,12 +29,13 @@ type TrayTouchAppRuntime = {
   version?: string
 }
 
+const trayManagerLog = getLogger('tray-manager')
+
 export class TrayManager extends BaseModule {
   static key: symbol = Symbol.for('TrayManager')
   name: ModuleKey = TrayManager.key
 
   private tray: Tray | null = null
-  private trayExperimentalEnabled = false
   private menuBuilder: TrayMenuBuilder
   private stateManager: TrayStateManager
   private appDisposers: Array<() => void> = []
@@ -57,11 +59,7 @@ export class TrayManager extends BaseModule {
   async onInit(ctx: ModuleInitContext<any>): Promise<void> {
     this.touchApp = (ctx.runtime?.app ?? ctx.app) as TrayTouchAppRuntime
     this.menuBuilder.setTouchApp(this.touchApp as TrayTouchAppRuntime & { channel: unknown })
-    this.trayExperimentalEnabled = this.isTrayExperimentalEnabled()
-    if (!this.trayExperimentalEnabled) {
-      console.info('[TrayManager] Tray is experimental and disabled by default.')
-      return
-    }
+    this.syncWindowVisibilityState()
 
     if (process.platform === 'darwin') {
       this.applyActivationPolicy()
@@ -71,12 +69,12 @@ export class TrayManager extends BaseModule {
     this.registerWindowEvents()
     this.registerEventListeners()
 
-    if (process.platform === 'darwin') {
-      this.updateDockVisibility()
-    }
-
     if (this.shouldShowTray()) {
       this.initializeTray()
+    }
+
+    if (process.platform === 'darwin') {
+      this.updateDockVisibility()
     }
   }
 
@@ -84,17 +82,16 @@ export class TrayManager extends BaseModule {
     const hideDock = this.getHideDockConfig()
     const startSilent = this.getStartSilentConfig()
     const shouldUseAccessory =
-      this.trayExperimentalEnabled &&
-      this.shouldShowTray() &&
-      !this.shouldForceRegularInDev() &&
-      (hideDock || startSilent)
+      this.shouldShowTray() && !this.shouldForceRegularInDev() && (hideDock || startSilent)
     const normalized: 'regular' | 'accessory' = shouldUseAccessory ? 'accessory' : 'regular'
 
     try {
       app.setActivationPolicy(normalized)
-      console.info('[TrayManager] Activation policy updated', { policy: normalized })
+      trayManagerLog.info('Activation policy updated', { meta: { policy: normalized } })
     } catch (error) {
-      console.warn('[TrayManager] Failed to set activation policy', { policy: normalized, error })
+      trayManagerLog.warn('Failed to set activation policy', {
+        meta: { policy: normalized, error }
+      })
     }
   }
 
@@ -104,7 +101,7 @@ export class TrayManager extends BaseModule {
     try {
       const icon = TrayIconProvider.getIcon()
       if (icon.isEmpty()) {
-        console.warn('[TrayManager] Tray icon is empty, skip tray initialization')
+        trayManagerLog.warn('Tray icon is empty, skip tray initialization')
         return
       }
 
@@ -117,7 +114,7 @@ export class TrayManager extends BaseModule {
       this.bindTrayEvents()
       this.updateMenu()
     } catch (error) {
-      console.error('[TrayManager] Failed to initialize tray:', error)
+      trayManagerLog.error('Failed to initialize tray', { error })
     }
   }
 
@@ -138,7 +135,7 @@ export class TrayManager extends BaseModule {
 
       return true
     } catch (error) {
-      console.error('[TrayManager] Failed to check shouldShowTray:', error)
+      trayManagerLog.error('Failed to check shouldShowTray', { error })
       return true
     }
   }
@@ -182,8 +179,23 @@ export class TrayManager extends BaseModule {
       const menu = this.menuBuilder.buildMenu(this.stateManager.getState())
       this.tray.setContextMenu(menu)
     } catch (error) {
-      console.error('[TrayManager] Failed to update menu:', error)
+      trayManagerLog.error('Failed to update menu', { error })
     }
+  }
+
+  private getCurrentWindowVisibleState(): boolean {
+    const mainWindow = useAliveTarget(this.touchApp?.window.window)
+    if (!mainWindow) {
+      return this.stateManager.isWindowVisible()
+    }
+
+    return mainWindow.isVisible()
+  }
+
+  private syncWindowVisibilityState(): boolean {
+    const visible = this.getCurrentWindowVisibleState()
+    this.stateManager.setWindowVisible(visible)
+    return visible
   }
 
   private registerAppListener(eventName: string, handler: (...args: any[]) => void): void {
@@ -233,8 +245,7 @@ export class TrayManager extends BaseModule {
         | undefined
       const closeToTray = configData?.window?.closeToTray ?? true
       const isQuitting = this.touchApp?.isQuitting || false
-      const canCloseToTray =
-        this.trayExperimentalEnabled && this.shouldShowTray() && this.tray !== null
+      const canCloseToTray = this.shouldShowTray() && this.tray !== null
 
       if (closeToTray && !isQuitting && canCloseToTray) {
         event.preventDefault()
@@ -311,7 +322,7 @@ export class TrayManager extends BaseModule {
       const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
       return appConfig?.setup?.hideDock ?? false
     } catch (error) {
-      console.error('[TrayManager] Failed to read hideDock config:', error)
+      trayManagerLog.error('Failed to read hideDock config', { error })
       return false
     }
   }
@@ -321,7 +332,7 @@ export class TrayManager extends BaseModule {
       const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
       return appConfig?.window?.startSilent ?? false
     } catch (error) {
-      console.error('[TrayManager] Failed to read startSilent config:', error)
+      trayManagerLog.error('Failed to read startSilent config', { error })
       return false
     }
   }
@@ -332,18 +343,6 @@ export class TrayManager extends BaseModule {
     return this.getHideDockConfig() || this.getStartSilentConfig()
   }
 
-  private isTrayExperimentalEnabled(): boolean {
-    try {
-      const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
-      return appConfig?.setup?.experimentalTray === true
-    } catch (error) {
-      console.warn('[TrayManager] Failed to read experimental tray switch, fallback disabled', {
-        error
-      })
-      return false
-    }
-  }
-
   /**
    * Setup Dock icon on macOS
    * 在 macOS 上设置 Dock 图标
@@ -352,19 +351,20 @@ export class TrayManager extends BaseModule {
     if (process.platform !== 'darwin') return
 
     try {
-      const appIconPath = TrayIconProvider.getAppIconPath()
-      if (!appIconPath) return
-
-      const fs = require('fs-extra')
-      if (!fs.existsSync(appIconPath)) return
       if (!app.dock) return
 
-      app.dock.setIcon(appIconPath)
+      const dockIcon = TrayIconProvider.getDockIcon()
+      if (dockIcon.isEmpty()) {
+        trayManagerLog.warn('Dock icon is empty, skip Dock icon setup')
+        return
+      }
+
+      app.dock.setIcon(dockIcon)
       if (this.touchApp?.version === 'dev') {
         app.dock.setBadge(this.touchApp.version)
       }
     } catch (error) {
-      console.error('[TrayManager] Failed to setup Dock icon:', error)
+      trayManagerLog.error('Failed to setup Dock icon', { error })
     }
   }
 
@@ -375,8 +375,7 @@ export class TrayManager extends BaseModule {
     if (!mainWindow) return
     const hideDock = this.getHideDockConfig()
     const hasDivisionBox = this.hasActiveDivisionBox()
-    const trayAvailable =
-      this.trayExperimentalEnabled && this.shouldShowTray() && this.tray !== null
+    const trayAvailable = this.shouldShowTray() && this.tray !== null
 
     if (this.shouldForceRegularInDev() || !trayAvailable) {
       app.setActivationPolicy('regular')
@@ -399,29 +398,29 @@ export class TrayManager extends BaseModule {
   public getRuntimeSettingsSnapshot(): {
     showTray: boolean
     hideDock: boolean
-    experimentalTray: boolean
     available: boolean
+    trayReady: boolean
+    windowVisible: boolean
   } {
+    const windowVisible = this.syncWindowVisibilityState()
     return {
       showTray: this.shouldShowTray(),
       hideDock: this.getHideDockConfig(),
-      experimentalTray: this.trayExperimentalEnabled,
-      available: this.trayExperimentalEnabled
+      available: true,
+      trayReady: this.tray !== null,
+      windowVisible
     }
   }
 
   public applyRuntimeSettings(): {
     showTray: boolean
     hideDock: boolean
-    experimentalTray: boolean
     available: boolean
+    trayReady: boolean
+    windowVisible: boolean
   } {
-    if (!this.trayExperimentalEnabled) {
-      this.destroyTray()
-      return this.getRuntimeSettingsSnapshot()
-    }
-
     const shouldShow = this.shouldShowTray()
+    this.syncWindowVisibilityState()
     if (shouldShow) {
       if (!this.tray) {
         this.initializeTray()

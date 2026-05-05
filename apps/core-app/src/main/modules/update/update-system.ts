@@ -21,7 +21,6 @@ import {
   UPDATE_RELEASE_MANIFEST_NAME,
   type UpdateReleaseArtifact,
   type UpdateReleaseManifest,
-  resolveUpdateChannelLabel,
   splitUpdateTag
 } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -32,6 +31,12 @@ import fse from 'fs-extra'
 import { downloadTasks } from '../../db/schema'
 import { normalizeSupportedUpdateChannel } from '../../../shared/update/channel'
 import { resolveUpdateAssetTarget } from '../../../shared/update/platform-target'
+import {
+  compareUpdateVersions,
+  parseComparableUpdateVersion,
+  selectLatestUpdateRelease
+} from '../../../shared/update/version'
+import { createLogger } from '../../utils/logger'
 import { SignatureVerifier } from '../../utils/release-signature'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { databaseModule } from '../database'
@@ -65,6 +70,7 @@ interface UpdateSystemConfig {
 const RENDERER_OVERRIDE_STATE_FILE = 'renderer-override.json'
 const RENDERER_OVERRIDE_DIR = 'renderer-override'
 const ENABLE_RENDERER_OVERRIDE = process.env.TUFF_ENABLE_RENDERER_OVERRIDE === '1'
+const updateSystemLog = createLogger('UpdateSystem')
 
 interface RendererOverrideState {
   version: string
@@ -182,8 +188,15 @@ export class UpdateSystem {
         }
       }
 
-      // Get latest release
-      const latestRelease = channelReleases[0]
+      // Pick the newest compatible release instead of trusting provider order.
+      const latestRelease = selectLatestUpdateRelease(channelReleases)
+      if (!latestRelease) {
+        return {
+          hasUpdate: false,
+          error: `No releases found for channel: ${targetChannel}`,
+          source: 'GitHub'
+        }
+      }
       const latestVersion = this.parseVersion(latestRelease.tag_name)
 
       // Check if update is needed
@@ -214,11 +227,10 @@ export class UpdateSystem {
 
       return {
         hasUpdate: false,
-        error: 'No update available',
         source: 'GitHub'
       }
     } catch (error) {
-      console.error('[UpdateSystem] Failed to check for updates:', error)
+      updateSystemLog.error('Failed to check for updates', { error })
       return {
         hasUpdate: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -239,7 +251,12 @@ export class UpdateSystem {
       const reusableTaskId = await this.findReusableUpdateTaskId(resolvedRelease.tag_name)
       if (reusableTaskId) {
         this.setupDownloadCompletionListener(reusableTaskId, resolvedRelease.tag_name)
-        console.log(`[UpdateSystem] Reusing existing update task: ${reusableTaskId}`)
+        updateSystemLog.info('Reusing existing update task', {
+          meta: {
+            tag: resolvedRelease.tag_name,
+            taskId: reusableTaskId
+          }
+        })
         return reusableTaskId
       }
 
@@ -274,13 +291,25 @@ export class UpdateSystem {
       this.setupDownloadCompletionListener(taskId, resolvedRelease.tag_name)
 
       void this.maybeScheduleRendererOverrideDownload(resolvedRelease, manifest).catch((error) => {
-        console.warn('[UpdateSystem] Renderer override scheduling failed:', error)
+        updateSystemLog.warn('Renderer override background scheduling failed', {
+          error,
+          meta: { tag: resolvedRelease.tag_name }
+        })
       })
 
-      console.log(`[UpdateSystem] Update download started: ${taskId}`)
+      updateSystemLog.info('Update download started', {
+        meta: {
+          tag: resolvedRelease.tag_name,
+          taskId,
+          asset: asset.name
+        }
+      })
       return taskId
     } catch (error) {
-      console.error('[UpdateSystem] Failed to download update:', error)
+      updateSystemLog.error('Failed to download update', {
+        error,
+        meta: { tag: release.tag_name }
+      })
       throw error
     }
   }
@@ -336,7 +365,10 @@ export class UpdateSystem {
       const { release: resolvedRelease, manifest } = await this.attachReleaseManifest(release)
       await this.maybeScheduleRendererOverrideDownload(resolvedRelease, manifest)
     } catch (error) {
-      console.warn('[UpdateSystem] Failed to schedule renderer override:', error)
+      updateSystemLog.warn('Failed to schedule renderer override', {
+        error,
+        meta: { tag: release.tag_name }
+      })
       const message = error instanceof Error ? error.message : String(error)
       this.reportRendererOverrideIssue('error', 'Renderer override schedule failed', message, {
         tag: release.tag_name
@@ -395,7 +427,12 @@ export class UpdateSystem {
     }
 
     if (!artifact.coreRange) {
-      console.warn('[UpdateSystem] Renderer artifact missing coreRange, skipping.')
+      updateSystemLog.warn('Renderer artifact missing coreRange, skip scheduling', {
+        meta: {
+          tag: release.tag_name,
+          asset: artifact.name
+        }
+      })
       this.reportRendererOverrideIssue(
         'warn',
         'Renderer override skipped',
@@ -405,7 +442,12 @@ export class UpdateSystem {
       return
     }
     if (!artifact.sha256) {
-      console.warn('[UpdateSystem] Renderer artifact missing sha256, skipping.')
+      updateSystemLog.warn('Renderer artifact missing sha256, skip scheduling', {
+        meta: {
+          tag: release.tag_name,
+          asset: artifact.name
+        }
+      })
       this.reportRendererOverrideIssue(
         'warn',
         'Renderer override skipped',
@@ -416,9 +458,14 @@ export class UpdateSystem {
     }
 
     if (!this.isCoreRangeCompatible(artifact.coreRange)) {
-      console.info(
-        `[UpdateSystem] Renderer coreRange "${artifact.coreRange}" not satisfied by current core, skipping.`
-      )
+      updateSystemLog.info('Renderer coreRange not satisfied by current core, skip scheduling', {
+        meta: {
+          tag: release.tag_name,
+          asset: artifact.name,
+          coreRange: artifact.coreRange,
+          current: this.currentVersion.raw
+        }
+      })
       this.reportRendererOverrideIssue(
         'warn',
         'Renderer override skipped',
@@ -430,7 +477,12 @@ export class UpdateSystem {
 
     const asset = this.resolveAssetByName(release.assets as ReleaseAsset[], artifact.name)
     if (!asset) {
-      console.warn('[UpdateSystem] Renderer asset not found in release:', artifact.name)
+      updateSystemLog.warn('Renderer asset not found in release', {
+        meta: {
+          tag: release.tag_name,
+          asset: artifact.name
+        }
+      })
       this.reportRendererOverrideIssue(
         'warn',
         'Renderer override skipped',
@@ -442,7 +494,12 @@ export class UpdateSystem {
 
     const url = this.resolveAssetUrl(asset)
     if (!url) {
-      console.warn('[UpdateSystem] Renderer asset missing download url:', artifact.name)
+      updateSystemLog.warn('Renderer asset missing download url', {
+        meta: {
+          tag: release.tag_name,
+          asset: artifact.name
+        }
+      })
       this.reportRendererOverrideIssue(
         'warn',
         'Renderer override skipped',
@@ -459,7 +516,13 @@ export class UpdateSystem {
       currentOverride.version === versionToken &&
       currentOverride.coreRange === artifact.coreRange
     ) {
-      console.log('[UpdateSystem] Renderer override already active, skipping download.')
+      updateSystemLog.debug('Renderer override already active, skip download', {
+        meta: {
+          version: versionToken,
+          coreRange: artifact.coreRange,
+          tag: release.tag_name
+        }
+      })
       return
     }
 
@@ -540,7 +603,10 @@ export class UpdateSystem {
         if (task.status === 'completed') {
           this.pollingService.unregister(pollTaskId)
           void onCompleted(task).catch((error) => {
-            console.warn('[UpdateSystem] Auxiliary install failed:', error)
+            updateSystemLog.warn('Auxiliary install failed', {
+              error,
+              meta: { taskId }
+            })
             const message = error instanceof Error ? error.message : String(error)
             this.reportRendererOverrideIssue('error', 'Renderer override install failed', message)
           })
@@ -560,7 +626,7 @@ export class UpdateSystem {
     manifest: UpdateReleaseManifest | null
   ): Promise<void> {
     if (!this.isRendererOverrideEnabled()) {
-      console.warn('[UpdateSystem] Renderer override disabled, skipping install.')
+      updateSystemLog.debug('Renderer override disabled, skip install')
       return
     }
     const filePath = path.join(task.destination, task.filename)
@@ -588,8 +654,11 @@ export class UpdateSystem {
           : undefined
       )
       if (!verifyResult.valid) {
-        console.warn('[UpdateSystem] Renderer override signature verification failed:', {
-          reason: verifyResult.reason
+        updateSystemLog.warn('Renderer override signature verification failed', {
+          meta: {
+            tag: release.tag_name,
+            reason: verifyResult.reason
+          }
         })
         this.reportRendererOverrideIssue(
           'warn',
@@ -629,9 +698,12 @@ export class UpdateSystem {
         sha256: artifact.sha256
       })
 
-      console.log('[UpdateSystem] Renderer override installed', {
-        version: versionToken,
-        path: targetDir
+      updateSystemLog.info('Renderer override installed', {
+        meta: {
+          version: versionToken,
+          path: targetDir,
+          tag: release.tag_name
+        }
       })
     } finally {
       await fse.remove(tempDir).catch(() => null)
@@ -769,16 +841,23 @@ export class UpdateSystem {
         )
 
         if (!verifyResult.valid) {
-          console.warn('[UpdateSystem] Signature verification failed:', verifyResult.reason)
+          updateSystemLog.warn('Update package signature verification failed', {
+            meta: {
+              taskId,
+              reason: verifyResult.reason
+            }
+          })
         }
       }
 
       // Trigger installation (platform-specific)
       await this.triggerInstallation(task.destination, task.filename)
 
-      console.log(`[UpdateSystem] Update installation triggered for task: ${taskId}`)
+      updateSystemLog.info('Update installation triggered', {
+        meta: { taskId, filename: task.filename }
+      })
     } catch (error) {
-      console.error('[UpdateSystem] Failed to install update:', error)
+      updateSystemLog.error('Failed to install update', { error, meta: { taskId } })
       throw error
     }
   }
@@ -826,7 +905,10 @@ export class UpdateSystem {
         metadata: this.parseUpdateTaskMetadata(record.metadata)
       }
     } catch (error) {
-      console.warn('[UpdateSystem] Failed to query update task from database:', error)
+      updateSystemLog.warn('Failed to query update task from database', {
+        error,
+        meta: { taskId }
+      })
       return null
     }
   }
@@ -850,7 +932,7 @@ export class UpdateSystem {
         return parsed as Record<string, unknown>
       }
     } catch (error) {
-      console.warn('[UpdateSystem] Failed to parse update task metadata:', error)
+      updateSystemLog.warn('Failed to parse update task metadata', { error })
     }
 
     return undefined
@@ -889,32 +971,7 @@ export class UpdateSystem {
    * @returns -1 if v1 < v2, 0 if equal, 1 if v1 > v2
    */
   compareVersions(v1: string, v2: string): number {
-    const version1 = this.parseVersion(v1)
-    const version2 = this.parseVersion(v2)
-
-    // Compare channel priority first
-    const channelDiff =
-      this.channelPriority[version1.channel] - this.channelPriority[version2.channel]
-    if (channelDiff !== 0) {
-      return channelDiff > 0 ? 1 : -1
-    }
-
-    // Compare major version
-    if (version1.major !== version2.major) {
-      return version1.major > version2.major ? 1 : -1
-    }
-
-    // Compare minor version
-    if (version1.minor !== version2.minor) {
-      return version1.minor > version2.minor ? 1 : -1
-    }
-
-    // Compare patch version
-    if (version1.patch !== version2.patch) {
-      return version1.patch > version2.patch ? 1 : -1
-    }
-
-    return 0
+    return compareUpdateVersions(v1, v2)
   }
 
   /**
@@ -969,7 +1026,7 @@ export class UpdateSystem {
 
       return response.data
     } catch (error) {
-      console.error('[UpdateSystem] Failed to fetch GitHub releases:', error)
+      updateSystemLog.error('Failed to fetch GitHub releases', { error })
       throw error
     }
   }
@@ -1057,13 +1114,18 @@ export class UpdateSystem {
       const manifest = response.data
 
       if (!this.isReleaseManifest(manifest)) {
-        console.warn('[UpdateSystem] Invalid release manifest format')
+        updateSystemLog.warn('Invalid release manifest format', {
+          meta: { asset: manifestAsset.name }
+        })
         return null
       }
 
       return manifest
     } catch (error) {
-      console.warn('[UpdateSystem] Failed to fetch release manifest:', error)
+      updateSystemLog.warn('Failed to fetch release manifest', {
+        error,
+        meta: { asset: manifestAsset.name }
+      })
       return null
     }
   }
@@ -1085,25 +1147,7 @@ export class UpdateSystem {
    * Parse version string to version object
    */
   private parseVersion(versionStr: string): VersionInfo {
-    const { version, channelLabel } = splitUpdateTag(versionStr)
-    const versionNum = version
-
-    const [major, minor, patch] = versionNum.split('.').map((n) => Number.parseInt(n, 10))
-
-    return {
-      channel: this.parseChannelLabel(channelLabel),
-      major: major || 0,
-      minor: minor || 0,
-      patch: patch || 0,
-      raw: versionStr
-    }
-  }
-
-  /**
-   * Parse channel label to enum
-   */
-  private parseChannelLabel(label?: string): AppPreviewChannel {
-    return resolveUpdateChannelLabel(label)
+    return parseComparableUpdateVersion(versionStr)
   }
 
   private isCoreRangeCompatible(coreRange?: string): boolean {
@@ -1157,78 +1201,7 @@ export class UpdateSystem {
   }
 
   private compareSemverVersions(a: string | undefined, b: string | undefined): -1 | 0 | 1 {
-    if (!a && !b) return 0
-    if (!a) return -1
-    if (!b) return 1
-
-    const parsedA = this.parseSemverVersion(a)
-    const parsedB = this.parseSemverVersion(b)
-
-    if (parsedA.major !== parsedB.major) {
-      return parsedA.major < parsedB.major ? -1 : 1
-    }
-    if (parsedA.minor !== parsedB.minor) {
-      return parsedA.minor < parsedB.minor ? -1 : 1
-    }
-    if (parsedA.patch !== parsedB.patch) {
-      return parsedA.patch < parsedB.patch ? -1 : 1
-    }
-
-    return this.comparePrereleases(parsedA.prerelease, parsedB.prerelease)
-  }
-
-  private parseSemverVersion(version: string): {
-    major: number
-    minor: number
-    patch: number
-    prerelease: string[]
-  } {
-    const cleaned = version.replace(/^v/i, '').trim()
-    const [main, prerelease] = cleaned.split('-', 2)
-    const [major = 0, minor = 0, patch = 0] = (main || '')
-      .split('.')
-      .map((value) => Number.parseInt(value, 10) || 0)
-
-    return {
-      major,
-      minor,
-      patch,
-      prerelease: prerelease ? prerelease.split('.') : []
-    }
-  }
-
-  private comparePrereleases(a: string[], b: string[]): -1 | 0 | 1 {
-    if (a.length === 0 && b.length > 0) return 1
-    if (a.length > 0 && b.length === 0) return -1
-    if (a.length === 0 && b.length === 0) return 0
-
-    const maxLen = Math.max(a.length, b.length)
-    for (let index = 0; index < maxLen; index += 1) {
-      const aPart = a[index]
-      const bPart = b[index]
-
-      if (aPart === undefined) return -1
-      if (bPart === undefined) return 1
-
-      const aNum = Number.parseInt(aPart, 10)
-      const bNum = Number.parseInt(bPart, 10)
-      const aIsNum = !Number.isNaN(aNum)
-      const bIsNum = !Number.isNaN(bNum)
-
-      if (aIsNum && !bIsNum) return -1
-      if (!aIsNum && bIsNum) return 1
-
-      if (aIsNum && bIsNum) {
-        if (aNum < bNum) return -1
-        if (aNum > bNum) return 1
-        continue
-      }
-
-      if (aPart < bPart) return -1
-      if (aPart > bPart) return 1
-    }
-
-    return 0
+    return compareUpdateVersions(a, b)
   }
 
   /**
@@ -1474,7 +1447,10 @@ export class UpdateSystem {
     try {
       await fs.mkdir(downloadPath, { recursive: true })
     } catch (error) {
-      console.error('[UpdateSystem] Failed to create download directory:', error)
+      updateSystemLog.error('Failed to create update download directory', {
+        error,
+        meta: { path: downloadPath }
+      })
     }
 
     return downloadPath
@@ -1492,7 +1468,10 @@ export class UpdateSystem {
 
       return actualChecksum.toLowerCase() === expectedChecksum.toLowerCase()
     } catch (error) {
-      console.error('[UpdateSystem] Failed to verify checksum:', error)
+      updateSystemLog.error('Failed to verify checksum', {
+        error,
+        meta: { path: filePath }
+      })
       return false
     }
   }
@@ -1506,7 +1485,7 @@ export class UpdateSystem {
       return
     }
     await shell.openPath(filePath)
-    console.log(`[UpdateSystem] Opened installer: ${filePath}`)
+    updateSystemLog.info('Opened installer', { meta: { path: filePath } })
   }
 
   private async tryInstallMacAppBundle(packagePath: string): Promise<boolean> {
@@ -1610,14 +1589,19 @@ export class UpdateSystem {
       installerProcess.unref()
 
       this.requestAppQuit('mac-app-update')
-      console.log('[UpdateSystem] Scheduled macOS app replacement install', {
-        from: packagePath,
-        to: targetAppPath
+      updateSystemLog.info('Scheduled macOS app replacement install', {
+        meta: {
+          from: packagePath,
+          to: targetAppPath
+        }
       })
       return true
     } catch (error) {
       await fse.remove(stageRoot).catch(() => null)
-      console.warn('[UpdateSystem] Failed to run macOS app replacement install:', error)
+      updateSystemLog.warn('Failed to run macOS app replacement install', {
+        error,
+        meta: { path: packagePath }
+      })
       return false
     }
   }
@@ -1643,7 +1627,9 @@ export class UpdateSystem {
     }
 
     setTimeout(() => {
-      console.warn(`[UpdateSystem] Force exiting app after quit timeout: ${reason}`)
+      updateSystemLog.warn('Force exiting app after quit timeout', {
+        meta: { reason }
+      })
       app.exit(0)
     }, 8000)
   }

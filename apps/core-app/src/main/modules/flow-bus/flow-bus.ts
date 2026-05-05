@@ -13,10 +13,11 @@ import type {
   FlowPayloadType,
   FlowSession,
   FlowTargetInfo
-} from '@talex-touch/utils'
-import { FlowErrorCode } from '@talex-touch/utils'
+} from '@talex-touch/utils/types/flow'
+import { FlowErrorCode } from '@talex-touch/utils/types/flow'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { flowConsentStore, requiresFlowConsent } from './flow-consent'
+import { flowBusDispatchLog } from './logger'
 import { flowSessionManager } from './session-manager'
 import { flowTargetRegistry } from './target-registry'
 
@@ -198,6 +199,19 @@ export class FlowBus {
       }
     }
 
+    if (!targetInfo.hasFlowHandler) {
+      const flowError: FlowError = {
+        code: FlowErrorCode.TARGET_OFFLINE,
+        message: `Target has not registered a Flow delivery handler: ${targetInfo.fullId}`
+      }
+      flowSessionManager.setError(session.sessionId, flowError)
+      return {
+        sessionId: session.sessionId,
+        state: 'FAILED',
+        error: flowError
+      }
+    }
+
     // Check sender whitelist
     if (targetInfo.capabilities?.allowedSenders?.length) {
       if (!targetInfo.capabilities.allowedSenders.includes(senderId)) {
@@ -278,6 +292,15 @@ export class FlowBus {
       if (options.fallbackAction === 'copy') {
         await this.executeFallbackCopy(payload)
       }
+
+      flowBusDispatchLog.error('Payload delivery failed', {
+        meta: {
+          sessionId: session.sessionId,
+          senderId,
+          targetId: targetInfo.fullId
+        },
+        error
+      })
 
       return {
         sessionId: session.sessionId,
@@ -373,8 +396,14 @@ export class FlowBus {
     if (handler) {
       await handler(session)
     } else {
-      // Default delivery via IPC (to be implemented with plugin system)
-      console.log(`[FlowBus] Delivering to ${target.fullId}:`, session.payload.type)
+      flowBusDispatchLog.warn('Missing delivery handler for Flow target', {
+        meta: {
+          sessionId: session.sessionId,
+          targetId: target.fullId,
+          payloadType: session.payload.type
+        }
+      })
+      throw new Error(`Missing Flow delivery handler for target: ${target.fullId}`)
     }
   }
 
@@ -431,9 +460,18 @@ export class FlowBus {
       } else {
         clipboard.writeText(JSON.stringify(payload.data))
       }
-      console.log('[FlowBus] Fallback: copied to clipboard')
+      flowBusDispatchLog.warn('Fallback action copied payload to clipboard', {
+        meta: {
+          payloadType: payload.type
+        }
+      })
     } catch (error) {
-      console.error('[FlowBus] Fallback copy failed:', error)
+      flowBusDispatchLog.error('Fallback clipboard copy failed', {
+        meta: {
+          payloadType: payload.type
+        },
+        error
+      })
     }
   }
 

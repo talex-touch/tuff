@@ -6,9 +6,12 @@ import { createRetrier } from '@talex-touch/utils'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { readFile as readPlist } from 'simple-plist'
 import { reportAppScanError } from './app-error-reporter'
+import type { ScannedAppInfo } from './app-types'
 import { readLocalizedStringsFile } from './localized-strings-parser'
+import { createLogger } from '../../../../utils/logger'
 
 const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons')
+const darwinAppLog = createLogger('AppScanner').child('Darwin')
 async function convertIcnsToPng(icnsPath: string, pngPath: string): Promise<string> {
   try {
     await execFileSafe('sips', [
@@ -88,24 +91,16 @@ async function getAppIcon(app: { path: string; name: string }): Promise<string |
     const buffer = await fs.readFile(cachedIconPath)
     return buffer.toString('base64')
   } catch (error) {
-    console.warn(`[Darwin] Failed to get icon for ${app.name}:`, error)
+    darwinAppLog.warn('Failed to get app icon', {
+      error,
+      meta: { appName: app.name, pathLength: app.path.length }
+    })
     await fs.writeFile(noneMarkerPath, '').catch(() => {})
     return null
   }
 }
 
-export async function getApps(): Promise<
-  {
-    name: string
-    displayName: string | undefined
-    fileName: string
-    path: string
-    icon: string
-    bundleId: string
-    uniqueId: string
-    lastModified: Date
-  }[]
-> {
+export async function getApps(): Promise<ScannedAppInfo[]> {
   await fs.mkdir(ICON_CACHE_DIR, { recursive: true })
   // Switch to mdfind as the primary method for discovering applications for better coverage.
   return getAppsViaMdfind()
@@ -140,6 +135,54 @@ export function extractLocalizedDisplayName(data: Record<string, unknown>): stri
   }
 
   return null
+}
+
+function normalizeDisplayNameCandidate(rawValue: string | null | undefined): string | null {
+  if (!rawValue) {
+    return null
+  }
+
+  const normalizedValue = rawValue.trim()
+  if (!normalizedValue || normalizedValue === '(null)') {
+    return null
+  }
+
+  if (normalizedValue.endsWith('.app')) {
+    return normalizedValue.slice(0, -4).trim() || null
+  }
+
+  return normalizedValue
+}
+
+function collectAlternateDisplayNames(
+  displayName: string | null,
+  candidates: Array<string | null | undefined>
+): string[] {
+  const normalizedDisplayName = displayName?.toLowerCase()
+  const seen = new Set<string>()
+  const alternateNames: string[] = []
+
+  for (const candidate of candidates) {
+    const normalized = normalizeDisplayNameCandidate(candidate)
+    if (!normalized) continue
+
+    const lookupKey = normalized.toLowerCase()
+    if (lookupKey === normalizedDisplayName || seen.has(lookupKey)) continue
+
+    seen.add(lookupKey)
+    alternateNames.push(normalized)
+  }
+
+  return alternateNames
+}
+
+async function getSpotlightDisplayName(appPath: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileSafe('mdls', ['-name', 'kMDItemDisplayName', '-raw', appPath])
+    return normalizeDisplayNameCandidate(stdout)
+  } catch {
+    return null
+  }
 }
 
 // Helper to get localized display name from .lproj directories
@@ -191,16 +234,7 @@ async function getLocalizedDisplayName(appPath: string): Promise<string | null> 
 }
 
 // The core logic for fetching app info, designed to throw errors on failure.
-async function getAppInfoUnstable(appPath: string): Promise<{
-  name: string
-  displayName: string | undefined
-  fileName: string
-  path: string
-  icon: string
-  bundleId: string
-  uniqueId: string
-  lastModified: Date
-}> {
+async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
   const plistPath = path.join(appPath, 'Contents', 'Info.plist')
 
   // Pre-check if Info.plist exists before proceeding
@@ -222,11 +256,23 @@ async function getAppInfoUnstable(appPath: string): Promise<{
   const bundleName = getValueFromPlist(plistContent, 'CFBundleName')
   const fileName = path.basename(appPath, '.app')
 
+  const spotlightName = await getSpotlightDisplayName(appPath)
+
   // Try to get localized display name (e.g., "微信" for WeChat)
   const localizedName = await getLocalizedDisplayName(appPath)
 
-  // Priority: localized name > plist display name > bundle name
-  const displayName = localizedName || plistDisplayName || bundleName
+  // Priority: Spotlight > localized strings > plist display name > bundle name
+  const displayName =
+    spotlightName ||
+    localizedName ||
+    normalizeDisplayNameCandidate(plistDisplayName) ||
+    normalizeDisplayNameCandidate(bundleName)
+  const alternateNames = collectAlternateDisplayNames(displayName, [
+    localizedName,
+    plistDisplayName,
+    bundleName,
+    fileName
+  ])
 
   // `name` is always the file name
   const name = fileName
@@ -240,10 +286,15 @@ async function getAppInfoUnstable(appPath: string): Promise<{
     name,
     displayName: displayName || undefined,
     fileName,
+    alternateNames: alternateNames.length > 0 ? alternateNames : undefined,
     path: appPath,
     icon: icon ? `data:image/png;base64,${icon}` : '',
     bundleId,
     uniqueId: bundleId || appPath,
+    stableId: appPath,
+    launchKind: 'path',
+    launchTarget: appPath,
+    displayPath: appPath,
     lastModified: stats.mtime
   }
 }
@@ -262,16 +313,7 @@ const getAppInfoRetrier = createRetrier({
 // Wrap the unstable function with the retry logic
 const reliableGetAppInfo: typeof getAppInfoUnstable = getAppInfoRetrier(getAppInfoUnstable)
 
-export async function getAppInfo(appPath: string): Promise<{
-  name: string
-  displayName: string | undefined
-  fileName: string
-  path: string
-  icon: string
-  bundleId: string
-  uniqueId: string
-  lastModified: Date
-} | null> {
+export async function getAppInfo(appPath: string): Promise<ScannedAppInfo | null> {
   // Pre-condition check, no need to retry this
   if (!appPath || !appPath.endsWith('.app')) {
     return null
@@ -284,11 +326,10 @@ export async function getAppInfo(appPath: string): Promise<{
     const errorMessage =
       error instanceof Error ? error.message : typeof error === 'string' ? error : String(error)
     // This block will execute if all retry attempts fail
-    console.warn(
-      `[Darwin] Failed to get app info for ${appPath} after retries, likely incomplete or invalid bundle. Error: ${
-        errorMessage
-      }`
-    )
+    darwinAppLog.warn('Failed to get app info after retries', {
+      error,
+      meta: { pathLength: appPath.length, message: errorMessage }
+    })
     reportAppScanError({
       platform: process.platform,
       path: appPath,
@@ -299,18 +340,7 @@ export async function getAppInfo(appPath: string): Promise<{
   }
 }
 
-export async function getAppsViaMdfind(): Promise<
-  {
-    name: string
-    displayName: string | undefined
-    fileName: string
-    path: string
-    icon: string
-    bundleId: string
-    uniqueId: string
-    lastModified: Date
-  }[]
-> {
+export async function getAppsViaMdfind(): Promise<ScannedAppInfo[]> {
   const query = 'kMDItemContentType == "com.apple.application-bundle"'
   const searchRoots = [
     '/Applications',
@@ -350,20 +380,7 @@ export async function getAppsViaMdfind(): Promise<
     }
   })
 
-  return appInfos.filter(
-    (
-      app
-    ): app is {
-      name: string
-      displayName: string | undefined
-      fileName: string
-      path: string
-      icon: string
-      bundleId: string
-      uniqueId: string
-      lastModified: Date
-    } => !!app
-  )
+  return appInfos.filter((app): app is ScannedAppInfo => !!app)
 }
 
 const yieldToEventLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))

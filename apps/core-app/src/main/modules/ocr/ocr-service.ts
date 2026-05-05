@@ -1612,9 +1612,13 @@ class OcrService {
             target: config.key,
             set: { value: serialized }
           }),
-      effectiveOptions?.droppable === undefined
-        ? undefined
-        : { droppable: effectiveOptions.droppable }
+      effectiveOptions
+        ? {
+            dropPolicy: effectiveOptions.dropPolicy,
+            maxQueueWaitMs: effectiveOptions.maxQueueWaitMs,
+            budgetKey: effectiveOptions.budgetKey
+          }
+        : undefined
     )
     this.configLastPersistAt.set(key, Date.now())
     this.configLastPersistSignature.set(key, persistSignature)

@@ -82,6 +82,19 @@ export interface FocusWindowResponse {
 }
 
 /**
+ * Push payload sent when CoreBox visibility or entrance mode changes.
+ */
+export interface CoreBoxTriggerPayload {
+  id?: number
+  show?: boolean
+  type?: string
+  sessionId?: string
+  config?: unknown
+  meta?: unknown
+  [key: string]: unknown
+}
+
+/**
  * Request to set input visibility.
  */
 export interface SetInputVisibilityRequest {

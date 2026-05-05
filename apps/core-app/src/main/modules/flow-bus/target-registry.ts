@@ -5,6 +5,7 @@
  */
 
 import type { FlowPayloadType, FlowTarget, FlowTargetInfo } from '@talex-touch/utils'
+import { flowBusTargetLog } from './logger'
 
 /**
  * Internal target entry with plugin metadata
@@ -69,13 +70,25 @@ export class FlowTargetRegistry {
     const fullId = this.getFullTargetId(pluginId, target.id)
 
     if (this.targets.has(fullId)) {
-      console.warn(`[FlowTargetRegistry] Target already registered: ${fullId}`)
+      flowBusTargetLog.warn('Target already registered', {
+        meta: {
+          fullId,
+          pluginId,
+          targetId: target.id
+        }
+      })
       return false
     }
 
     // Validate target
     if (!target.id || !target.name || !target.supportedTypes?.length) {
-      console.error(`[FlowTargetRegistry] Invalid target configuration: ${fullId}`)
+      flowBusTargetLog.error('Invalid target configuration', {
+        meta: {
+          fullId,
+          pluginId,
+          targetId: target.id
+        }
+      })
       return false
     }
 
@@ -98,7 +111,13 @@ export class FlowTargetRegistry {
     }
     this.pluginTargets.get(pluginId)!.add(fullId)
 
-    console.log(`[FlowTargetRegistry] Registered target: ${fullId}`)
+    flowBusTargetLog.debug('Registered target', {
+      meta: {
+        fullId,
+        pluginId,
+        targetId: target.id
+      }
+    })
     return true
   }
 
@@ -121,9 +140,13 @@ export class FlowTargetRegistry {
         count++
       }
     }
-    console.log(
-      `[FlowTargetRegistry] Registered ${count}/${targets.length} targets for plugin: ${pluginId}`
-    )
+    flowBusTargetLog.info('Registered plugin targets', {
+      meta: {
+        pluginId,
+        count,
+        total: targets.length
+      }
+    })
     return count
   }
 
@@ -147,7 +170,12 @@ export class FlowTargetRegistry {
       }
     }
 
-    console.log(`[FlowTargetRegistry] Unregistered target: ${fullTargetId}`)
+    flowBusTargetLog.debug('Unregistered target', {
+      meta: {
+        fullId: fullTargetId,
+        pluginId: entry.pluginId
+      }
+    })
     return true
   }
 
@@ -168,7 +196,12 @@ export class FlowTargetRegistry {
     }
 
     this.pluginTargets.delete(pluginId)
-    console.log(`[FlowTargetRegistry] Unregistered ${count} targets for plugin: ${pluginId}`)
+    flowBusTargetLog.info('Unregistered plugin targets', {
+      meta: {
+        pluginId,
+        count
+      }
+    })
     return count
   }
 
@@ -277,7 +310,12 @@ export class FlowTargetRegistry {
         entry.hasFlowHandler = hasHandler
       }
     }
-    console.log(`[FlowTargetRegistry] Plugin ${pluginId} flow handler: ${hasHandler}`)
+    flowBusTargetLog.info('Updated plugin flow handler state', {
+      meta: {
+        pluginId,
+        hasHandler
+      }
+    })
   }
 
   /**
@@ -308,7 +346,7 @@ export class FlowTargetRegistry {
   clear(): void {
     this.targets.clear()
     this.pluginTargets.clear()
-    console.log('[FlowTargetRegistry] All targets cleared')
+    flowBusTargetLog.info('Cleared all targets')
   }
 }
 

@@ -1,3 +1,4 @@
+import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import fs from 'fs-extra'
@@ -33,6 +34,47 @@ async function writeRepositoryFile(entries: RepositoryEntry[]): Promise<void> {
   const repoPath = getRepositoriesPath()
   await fs.ensureDir(path.dirname(repoPath))
   await fs.writeJson(repoPath, entries, { spaces: 2 })
+}
+
+function isPathInsideRoot(filePath: string, rootPath: string): boolean {
+  const relative = path.relative(rootPath, filePath)
+  return relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative))
+}
+
+async function resolvePathVariants(filePath: string): Promise<string[]> {
+  const variants = new Set<string>([path.resolve(filePath)])
+  try {
+    variants.add(await fs.realpath(filePath))
+  }
+  catch {
+    // Ignore paths that no longer exist.
+  }
+  return [...variants]
+}
+
+async function getTemporaryRoots(): Promise<string[]> {
+  const rawTmp = path.resolve(os.tmpdir())
+  const roots = new Set<string>([rawTmp])
+  if (rawTmp.startsWith('/var/'))
+    roots.add(path.join('/private', rawTmp.replace(/^\/+/, '')))
+  try {
+    const realTmp = await fs.realpath(rawTmp)
+    roots.add(realTmp)
+    if (realTmp.startsWith('/var/'))
+      roots.add(path.join('/private', realTmp.replace(/^\/+/, '')))
+  }
+  catch {
+    // Ignore
+  }
+  return [...roots]
+}
+
+async function isTemporaryRepositoryPath(repoPath: string): Promise<boolean> {
+  const [variants, roots] = await Promise.all([
+    resolvePathVariants(repoPath),
+    getTemporaryRoots(),
+  ])
+  return variants.some(variant => roots.some(root => isPathInsideRoot(variant, root)))
 }
 
 function resolveRepoName(manifest: any, pkg: any, cwd: string): string {
@@ -72,6 +114,9 @@ async function readPackageJson(cwd: string): Promise<any | null> {
 }
 
 export async function trackRepository(action: string, cwd = process.cwd()): Promise<void> {
+  if (await isTemporaryRepositoryPath(cwd))
+    return
+
   const manifest = await readManifest(cwd)
   if (!manifest)
     return
@@ -105,5 +150,11 @@ export async function trackRepository(action: string, cwd = process.cwd()): Prom
 
 export async function listRepositories(): Promise<RepositoryEntry[]> {
   const entries = await readRepositoryFile()
-  return [...entries].sort((a, b) => b.lastOpenedAt.localeCompare(a.lastOpenedAt))
+  const visibleEntries = []
+  for (const entry of entries) {
+    if (await isTemporaryRepositoryPath(entry.path))
+      continue
+    visibleEntries.push(entry)
+  }
+  return visibleEntries.sort((a, b) => b.lastOpenedAt.localeCompare(a.lastOpenedAt))
 }

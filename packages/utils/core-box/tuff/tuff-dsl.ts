@@ -964,6 +964,8 @@ export interface TuffMeta {
     modified_at?: string
     /** 文件扩展名（不带点） */
     extension?: string
+    /** 是否为目录 */
+    isDir?: boolean
   }
 
   /**
@@ -1000,6 +1002,16 @@ export interface TuffMeta {
     icon?: string
     /** 应用类别 */
     category?: string
+    /** 启动类型 */
+    launchKind?: 'path' | 'shortcut' | 'uwp'
+    /** 启动目标 */
+    launchTarget?: string
+    /** 启动参数 */
+    launchArgs?: string
+    /** 工作目录 */
+    workingDirectory?: string
+    /** 展示路径 */
+    displayPath?: string
   }
 
   /**

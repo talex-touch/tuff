@@ -4,6 +4,7 @@ import { TxButton } from '@talex-touch/tuffex'
 import { inject, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = defineProps<{
   loadFiles: () => Promise<FileIndexFailedFile[]>
@@ -14,12 +15,13 @@ const { t } = useI18n()
 const files = ref<FileIndexFailedFile[]>([])
 const loading = ref(true)
 const copiedId = ref<number | null>(null)
+const failedFilesDialogLog = createRendererLogger('FailedFilesListDialog')
 
 onMounted(async () => {
   try {
     files.value = await props.loadFiles()
   } catch (error) {
-    console.error('[FailedFilesListDialog] Failed to load files:', error)
+    failedFilesDialogLog.error('Failed to load files', error)
   } finally {
     loading.value = false
   }

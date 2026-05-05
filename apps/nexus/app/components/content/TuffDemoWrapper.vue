@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { type Component, type ComponentPublicInstance, computed, defineAsyncComponent, h, nextTick, ref } from 'vue'
+import { type Component, type ComponentPublicInstance, computed, h, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { createAsyncDemo, demoLoaders } from './demo-registry'
+import { DEMO_LAZY_ROOT_MARGIN, shouldActivateDemo } from './demo-lazy'
 
 interface DemoWrapperProps {
   demo: string
@@ -48,8 +50,11 @@ const resolvedCode = computed(() => {
 const hasCode = computed(() => Boolean(resolvedCode.value))
 const showCode = ref(false)
 const demoRenderKey = ref(0)
+const wrapperRef = ref<HTMLElement | null>(null)
+const isDemoActive = ref(false)
 const demoInstanceRef = ref<DemoResetController | null>(null)
 const isResetting = ref(false)
+let observer: IntersectionObserver | null = null
 
 const toggleLabel = computed(() => {
   if (showCode.value)
@@ -82,7 +87,7 @@ async function tryInvokeDemoReset() {
 }
 
 async function resetDemo() {
-  if (isResetting.value)
+  if (isResetting.value || !isDemoActive.value)
     return
 
   isResetting.value = true
@@ -99,36 +104,68 @@ async function resetDemo() {
   }
 }
 
+function activateDemo() {
+  isDemoActive.value = true
+  observer?.disconnect()
+  observer = null
+}
+
+onMounted(() => {
+  if (!props.demo)
+    return
+
+  if (!('IntersectionObserver' in window)) {
+    activateDemo()
+    return
+  }
+
+  observer = new IntersectionObserver((entries) => {
+    if (entries.some(entry => shouldActivateDemo(isDemoActive.value, entry)))
+      activateDemo()
+  }, {
+    rootMargin: DEMO_LAZY_ROOT_MARGIN,
+  })
+
+  if (wrapperRef.value)
+    observer.observe(wrapperRef.value)
+  else
+    activateDemo()
+})
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  observer = null
+})
+
 const DemoLoadingFallback: Component = () => h('div', { class: 'tuff-demo__placeholder' }, 'Loading demo...')
 
 const DemoErrorFallback: Component = () =>
   h('div', { class: 'tuff-demo__placeholder', style: 'color: var(--tx-color-danger)' }, 'Failed to load demo.')
 
-const demoModules = import.meta.glob<{ default: Component }>('./demos/*.vue')
-const demoComponentMap: Record<string, Component> = {}
-for (const [path, loader] of Object.entries(demoModules)) {
-  const name = path.match(/\.\/demos\/(.+)\.vue$/)?.[1]
-  if (name) {
-    demoComponentMap[name] = defineAsyncComponent({
-      loader: loader as () => Promise<{ default: Component }>,
-      loadingComponent: DemoLoadingFallback,
-      errorComponent: DemoErrorFallback,
-      delay: 200,
-      timeout: 15000,
-    })
-  }
-}
+const demoComponentMap = new Map<string, Component>()
 
 const demoComponent = computed(() => {
+  if (!isDemoActive.value)
+    return null
   if (!props.demo)
     return null
-  return demoComponentMap[props.demo] ?? null
+  const existing = demoComponentMap.get(props.demo)
+  if (existing)
+    return existing
+
+  const loader = demoLoaders[props.demo]
+  if (!loader)
+    return null
+
+  const component = createAsyncDemo(loader, DemoLoadingFallback, DemoErrorFallback)
+  demoComponentMap.set(props.demo, component)
+  return component
 })
 </script>
 
 <template>
   <ClientOnly>
-    <section class="tuff-demo">
+    <section ref="wrapperRef" class="tuff-demo">
       <header v-if="props.title || props.description" class="tuff-demo__header">
         <h3 v-if="props.title" class="tuff-demo__title">
           {{ props.title }}
@@ -151,7 +188,7 @@ const demoComponent = computed(() => {
               native-type="button"
               class="tuff-demo__reset-btn"
               :aria-label="resetLabel"
-              :disabled="isResetting"
+              :disabled="isResetting || !isDemoActive"
               @click="resetDemo"
             >
               <span class="tuff-demo__reset-icon i-carbon-renew" aria-hidden="true" />
@@ -162,6 +199,9 @@ const demoComponent = computed(() => {
         <div class="tuff-demo__window-body">
           <div class="tuff-demo__preview">
             <component :is="demoComponent" v-if="demoComponent" :key="demoRenderKey" ref="demoInstanceRef" />
+            <div v-else-if="!isDemoActive" class="tuff-demo__placeholder">
+              {{ locale === 'zh' ? '示例即将加载...' : 'Demo will load when visible.' }}
+            </div>
             <div v-else class="tuff-demo__placeholder">
               Demo component "{{ props.demo }}" not found.
             </div>

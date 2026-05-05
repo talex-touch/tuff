@@ -3,22 +3,49 @@ import { AppEvents, PlatformEvents } from '@talex-touch/utils/transport/events'
 
 const {
   fsReadFileMock,
+  execFileMock,
   loggerWarnMock,
   perfDisposeMock,
   getTuffTransportMainMock,
+  deviceIdleGetSettingsMock,
+  deviceIdleUpdateSettingsMock,
+  deviceIdleCanRunMock,
   activeAppGetActiveAppMock,
-  isActiveAppCapabilityAvailableMock,
-  nativeShareGetAvailableTargetsMock,
-  platformCapabilityListMock
+  platformCapabilityListMock,
+  getActiveAppCapabilityPatchMock,
+  getSelectionCaptureCapabilityPatchMock,
+  getAutoPasteCapabilityPatchMock,
+  getNativeShareCapabilityPatchMock,
+  getPermissionDeepLinkCapabilityPatchMock,
+  getEverythingCapabilityPatchMock,
+  getTuffCliCapabilityPatchMock
 } = vi.hoisted(() => ({
   fsReadFileMock: vi.fn(),
+  execFileMock: vi.fn(
+    (
+      _command: string,
+      _args: string[],
+      _options: Record<string, unknown>,
+      callback: (error: Error | null, stdout?: string, stderr?: string) => void
+    ) => {
+      callback(Object.assign(new Error('command not found'), { code: 'ENOENT' }))
+    }
+  ),
   loggerWarnMock: vi.fn(),
   perfDisposeMock: vi.fn(),
   getTuffTransportMainMock: vi.fn<(channel?: unknown, keyManager?: unknown) => unknown>(() => null),
+  deviceIdleGetSettingsMock: vi.fn(),
+  deviceIdleUpdateSettingsMock: vi.fn(),
+  deviceIdleCanRunMock: vi.fn(),
   activeAppGetActiveAppMock: vi.fn<(forceRefresh?: unknown) => Promise<unknown>>(),
-  isActiveAppCapabilityAvailableMock: vi.fn(async () => false),
-  nativeShareGetAvailableTargetsMock: vi.fn<() => Array<Record<string, unknown>>>(() => []),
-  platformCapabilityListMock: vi.fn<() => Array<Record<string, unknown>>>(() => [])
+  platformCapabilityListMock: vi.fn<() => Array<Record<string, unknown>>>(() => []),
+  getActiveAppCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'unsupported' })),
+  getSelectionCaptureCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'unsupported' })),
+  getAutoPasteCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'unsupported' })),
+  getNativeShareCapabilityPatchMock: vi.fn(() => ({ supportLevel: 'unsupported' })),
+  getPermissionDeepLinkCapabilityPatchMock: vi.fn(() => ({ supportLevel: 'best_effort' })),
+  getEverythingCapabilityPatchMock: vi.fn(() => ({ supportLevel: 'unsupported' })),
+  getTuffCliCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'unsupported' }))
 }))
 
 vi.mock('@talex-touch/utils', async (importOriginal) => {
@@ -65,6 +92,10 @@ vi.mock('node:fs', () => ({
   readFileSync: vi.fn(() => ''),
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn()
+}))
+
+vi.mock('node:child_process', () => ({
+  execFile: execFileMock
 }))
 
 vi.mock('electron', () => ({
@@ -197,7 +228,14 @@ vi.mock('../modules/analytics', () => ({
 vi.mock('../modules/box-tool/addon/apps/app-provider', () => ({
   appProvider: {
     getAppIndexSettings: vi.fn(),
-    updateAppIndexSettings: vi.fn()
+    updateAppIndexSettings: vi.fn(),
+    addAppByPath: vi.fn(),
+    listManagedEntries: vi.fn(),
+    upsertManagedEntry: vi.fn(),
+    removeManagedEntry: vi.fn(),
+    setManagedEntryEnabled: vi.fn(),
+    diagnoseAppSearch: vi.fn(),
+    reindexAppSearchTarget: vi.fn()
   }
 }))
 
@@ -290,20 +328,32 @@ vi.mock('../modules/sentry/sentry-service', () => ({
 vi.mock('../modules/system/active-app', () => ({
   activeAppService: {
     getActiveApp: activeAppGetActiveAppMock
-  },
-  isActiveAppCapabilityAvailable: isActiveAppCapabilityAvailableMock
+  }
 }))
 
-vi.mock('../modules/flow-bus/native-share', () => ({
-  nativeShareService: {
-    getAvailableTargets: nativeShareGetAvailableTargetsMock
-  }
+vi.mock('../modules/platform/capability-adapter', () => ({
+  applyCapabilityRuntimePatch: (
+    capability: Record<string, unknown>,
+    patch?: Record<string, unknown>
+  ) => ({
+    ...capability,
+    supportLevel: 'supported',
+    ...(patch ?? {})
+  }),
+  getActiveAppCapabilityPatch: getActiveAppCapabilityPatchMock,
+  getSelectionCaptureCapabilityPatch: getSelectionCaptureCapabilityPatchMock,
+  getAutoPasteCapabilityPatch: getAutoPasteCapabilityPatchMock,
+  getNativeShareCapabilityPatch: getNativeShareCapabilityPatchMock,
+  getPermissionDeepLinkCapabilityPatch: getPermissionDeepLinkCapabilityPatchMock,
+  getEverythingCapabilityPatch: getEverythingCapabilityPatchMock,
+  getTuffCliCapabilityPatch: getTuffCliCapabilityPatchMock
 }))
 
 vi.mock('../service/device-idle-service', () => ({
   deviceIdleService: {
-    getSettings: vi.fn(),
-    updateSettings: vi.fn(),
+    getSettings: deviceIdleGetSettingsMock,
+    updateSettings: deviceIdleUpdateSettingsMock,
+    canRun: deviceIdleCanRunMock,
     isOnBatteryPower: vi.fn(() => false),
     getBatteryPercent: vi.fn(async () => null)
   }
@@ -490,8 +540,17 @@ describe('CommonChannelModule private helpers', () => {
       platformCapabilityListMock.mockReturnValue([
         { id: 'platform.storage', scope: 'system', supportLevel: 'supported' }
       ] as never)
-      isActiveAppCapabilityAvailableMock.mockResolvedValue(true)
-      nativeShareGetAvailableTargetsMock.mockReturnValue([{ id: 'mail' }] as never)
+      getActiveAppCapabilityPatchMock.mockResolvedValue({ supportLevel: 'supported' } as never)
+      getSelectionCaptureCapabilityPatchMock.mockResolvedValue({
+        supportLevel: 'best_effort'
+      } as never)
+      getAutoPasteCapabilityPatchMock.mockResolvedValue({ supportLevel: 'best_effort' } as never)
+      getNativeShareCapabilityPatchMock.mockReturnValue({ supportLevel: 'supported' } as never)
+      getPermissionDeepLinkCapabilityPatchMock.mockReturnValue({
+        supportLevel: 'supported'
+      } as never)
+      getEverythingCapabilityPatchMock.mockReturnValue({ supportLevel: 'unsupported' } as never)
+      getTuffCliCapabilityPatchMock.mockResolvedValue({ supportLevel: 'unsupported' } as never)
       activeAppGetActiveAppMock.mockResolvedValue({ displayName: 'Finder' })
 
       const module = new CommonChannelModule()
@@ -515,8 +574,11 @@ describe('CommonChannelModule private helpers', () => {
       expect(capabilities.map((item) => item.id)).toEqual([
         'platform.storage',
         'platform.active-app',
+        'platform.selection-capture',
+        'platform.auto-paste',
         'platform.native-share',
-        'platform.permission-checker',
+        'platform.permission-deep-link',
+        'platform.everything-search',
         'platform.terminal',
         'platform.tuff-cli'
       ])
@@ -542,5 +604,434 @@ describe('CommonChannelModule private helpers', () => {
         configurable: true
       })
     }
+  })
+
+  it('registers device idle diagnostic transport handler', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    const settings = {
+      idleThresholdMs: 60000,
+      minBatteryPercent: 40,
+      blockBatteryBelowPercent: 10,
+      allowWhenCharging: true,
+      forceAfterHours: 24
+    }
+    const decision = {
+      allowed: false,
+      reason: 'not-idle',
+      forced: false,
+      snapshot: {
+        idleMs: 12000,
+        battery: { level: 80, charging: true, onBattery: false }
+      }
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+    deviceIdleGetSettingsMock.mockReturnValue(settings)
+    deviceIdleCanRunMock.mockResolvedValue(decision)
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const diagnosticHandler = handlers.get(AppEvents.deviceIdle.getDiagnostic.toEventName())
+    expect(diagnosticHandler).toBeTypeOf('function')
+
+    await expect(diagnosticHandler?.({}, {})).resolves.toEqual({
+      ...decision,
+      settings
+    })
+    expect(deviceIdleCanRunMock).toHaveBeenCalledWith()
+  })
+
+  it('marks native-share as unsupported on Windows while keeping mail-only fallback out of capability support', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      value: 'win32',
+      configurable: true
+    })
+
+    try {
+      const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+      const transport = {
+        on: vi.fn(
+          (
+            event: { toEventName: () => string },
+            handler: (payload: unknown, context: unknown) => Promise<unknown>
+          ) => {
+            handlers.set(event.toEventName(), handler)
+            return vi.fn()
+          }
+        ),
+        onStream: vi.fn(() => vi.fn()),
+        broadcastToWindow: vi.fn()
+      }
+
+      getTuffTransportMainMock.mockReturnValue(transport as never)
+      platformCapabilityListMock.mockReturnValue([
+        { id: 'platform.storage', scope: 'system', supportLevel: 'supported' }
+      ] as never)
+      getActiveAppCapabilityPatchMock.mockResolvedValue({ supportLevel: 'supported' } as never)
+      getSelectionCaptureCapabilityPatchMock.mockResolvedValue({
+        supportLevel: 'best_effort'
+      } as never)
+      getAutoPasteCapabilityPatchMock.mockResolvedValue({ supportLevel: 'best_effort' } as never)
+      getNativeShareCapabilityPatchMock.mockReturnValue({
+        supportLevel: 'unsupported',
+        limitations: [
+          'Native system share is unavailable on this platform; explicit mail target remains available.'
+        ]
+      } as never)
+      getPermissionDeepLinkCapabilityPatchMock.mockReturnValue({
+        supportLevel: 'supported'
+      } as never)
+      getEverythingCapabilityPatchMock.mockReturnValue({ supportLevel: 'unsupported' } as never)
+      getTuffCliCapabilityPatchMock.mockResolvedValue({ supportLevel: 'unsupported' } as never)
+
+      const module = new CommonChannelModule()
+      await module.onInit({
+        app: {
+          window: { window: {} },
+          app: { addListener: vi.fn() }
+        }
+      } as never)
+
+      const listHandler = handlers.get(PlatformEvents.capabilities.list.toEventName())
+      expect(listHandler).toBeTypeOf('function')
+
+      const capabilities = (await listHandler?.({}, {})) as Array<{
+        id: string
+        supportLevel?: string
+        limitations?: string[]
+      }>
+      const nativeShare = capabilities.find((item) => item.id === 'platform.native-share')
+
+      expect(nativeShare?.supportLevel).toBe('unsupported')
+      expect(nativeShare?.limitations?.[0]).toContain('explicit mail target')
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        configurable: true
+      })
+    }
+  })
+
+  it('appends Tuff CLI capability state from the shared capability adapter', async () => {
+    const originalPlatform = process.platform
+
+    Object.defineProperty(process, 'platform', {
+      value: 'darwin',
+      configurable: true
+    })
+
+    try {
+      const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+      const transport = {
+        on: vi.fn(
+          (
+            event: { toEventName: () => string },
+            handler: (payload: unknown, context: unknown) => Promise<unknown>
+          ) => {
+            handlers.set(event.toEventName(), handler)
+            return vi.fn()
+          }
+        ),
+        onStream: vi.fn(() => vi.fn()),
+        broadcastToWindow: vi.fn()
+      }
+
+      getTuffTransportMainMock.mockReturnValue(transport as never)
+      platformCapabilityListMock.mockReturnValue([] as never)
+      getActiveAppCapabilityPatchMock.mockResolvedValue({ supportLevel: 'unsupported' } as never)
+      getSelectionCaptureCapabilityPatchMock.mockResolvedValue({
+        supportLevel: 'unsupported'
+      } as never)
+      getAutoPasteCapabilityPatchMock.mockResolvedValue({ supportLevel: 'unsupported' } as never)
+      getNativeShareCapabilityPatchMock.mockReturnValue({ supportLevel: 'unsupported' } as never)
+      getPermissionDeepLinkCapabilityPatchMock.mockReturnValue({
+        supportLevel: 'best_effort'
+      } as never)
+      getEverythingCapabilityPatchMock.mockReturnValue({ supportLevel: 'unsupported' } as never)
+      getTuffCliCapabilityPatchMock.mockResolvedValue({ supportLevel: 'supported' } as never)
+
+      const module = new CommonChannelModule()
+      await module.onInit({
+        app: {
+          window: { window: {} },
+          app: { addListener: vi.fn() }
+        }
+      } as never)
+
+      const listHandler = handlers.get(PlatformEvents.capabilities.list.toEventName())
+      expect(listHandler).toBeTypeOf('function')
+
+      const capabilities = (await listHandler?.({}, {})) as Array<{
+        id: string
+        supportLevel?: string
+      }>
+
+      expect(getTuffCliCapabilityPatchMock).toHaveBeenCalledTimes(1)
+      expect(capabilities.find((item) => item.id === 'platform.tuff-cli')?.supportLevel).toBe(
+        'supported'
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        configurable: true
+      })
+    }
+  })
+
+  it('routes managed app-index handlers and validates remove/set-enabled payloads', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+
+    const { appProvider } = await import('../modules/box-tool/addon/apps/app-provider')
+    ;(appProvider.listManagedEntries as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        path: '/Applications/WeChat.app',
+        name: 'WeChat',
+        enabled: true,
+        launchKind: 'path',
+        launchTarget: '/Applications/WeChat.app'
+      }
+    ])
+    ;(appProvider.upsertManagedEntry as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      status: 'updated'
+    })
+    ;(appProvider.removeManagedEntry as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      status: 'removed'
+    })
+    ;(appProvider.setManagedEntryEnabled as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      status: 'updated'
+    })
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const listHandler = handlers.get(AppEvents.appIndex.listEntries.toEventName())
+    const upsertHandler = handlers.get(AppEvents.appIndex.upsertEntry.toEventName())
+    const removeHandler = handlers.get(AppEvents.appIndex.removeEntry.toEventName())
+    const setEnabledHandler = handlers.get(AppEvents.appIndex.setEntryEnabled.toEventName())
+
+    await expect(listHandler?.({}, {})).resolves.toEqual([
+      {
+        path: '/Applications/WeChat.app',
+        name: 'WeChat',
+        enabled: true,
+        launchKind: 'path',
+        launchTarget: '/Applications/WeChat.app'
+      }
+    ])
+    await expect(
+      upsertHandler?.(
+        {
+          path: '/Applications/WeChat.app',
+          displayName: '微信',
+          enabled: true
+        },
+        {}
+      )
+    ).resolves.toEqual({
+      success: true,
+      status: 'updated'
+    })
+    await expect(Promise.resolve(removeHandler?.({ path: '' }, {}))).resolves.toEqual({
+      success: false,
+      status: 'invalid',
+      reason: 'path-empty'
+    })
+    await expect(
+      Promise.resolve(removeHandler?.({ path: '/Applications/WeChat.app' }, {}))
+    ).resolves.toEqual({
+      success: true,
+      status: 'removed'
+    })
+    await expect(
+      Promise.resolve(setEnabledHandler?.({ path: '/Applications/WeChat.app' }, {}))
+    ).resolves.toEqual({
+      success: false,
+      status: 'invalid',
+      reason: 'enabled-invalid'
+    })
+    await expect(
+      setEnabledHandler?.({ path: '/Applications/WeChat.app', enabled: false }, {})
+    ).resolves.toEqual({
+      success: true,
+      status: 'updated'
+    })
+
+    expect(appProvider.listManagedEntries).toHaveBeenCalledTimes(1)
+    expect(appProvider.upsertManagedEntry).toHaveBeenCalledWith({
+      path: '/Applications/WeChat.app',
+      displayName: '微信',
+      enabled: true
+    })
+    expect(appProvider.removeManagedEntry).toHaveBeenCalledWith('/Applications/WeChat.app')
+    expect(appProvider.setManagedEntryEnabled).toHaveBeenCalledWith(
+      '/Applications/WeChat.app',
+      false
+    )
+  })
+
+  it('routes app-index diagnostic handlers and falls back empty payloads', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+
+    const { appProvider } = await import('../modules/box-tool/addon/apps/app-provider')
+    const diagnosticResult = {
+      success: true,
+      status: 'found',
+      target: 'JSON Formatter',
+      app: {
+        id: 12,
+        path: '/Applications/JSON Formatter.app',
+        name: 'JSON Formatter',
+        displayName: 'JSON Formatter',
+        launchKind: 'path',
+        launchTarget: '/Applications/JSON Formatter.app',
+        alternateNames: [],
+        entryEnabled: true
+      },
+      index: {
+        itemId: '/Applications/JSON Formatter.app',
+        itemIds: ['/Applications/JSON Formatter.app'],
+        aliases: ['JSON Formatter'],
+        generatedKeywords: ['json formatter'],
+        storedKeywords: ['json formatter'],
+        storedKeywordEntries: [{ value: 'json formatter', priority: 1 }]
+      },
+      query: {
+        raw: 'json formatter',
+        normalized: 'json formatter',
+        terms: ['json', 'formatter'],
+        ftsQuery: 'json formatter',
+        candidateItemIds: ['/Applications/JSON Formatter.app'],
+        stages: {
+          precise: { ran: true, targetHit: true, matches: [] },
+          phrase: { ran: true, targetHit: true, matches: [] },
+          prefix: {
+            ran: false,
+            targetHit: false,
+            matches: [],
+            reason: 'query-too-long-for-prefix-stage'
+          },
+          fts: { ran: true, targetHit: true, matches: [] },
+          ngram: { ran: true, targetHit: true, matches: [] },
+          subsequence: { ran: true, targetHit: true, matches: [] }
+        }
+      }
+    }
+    const emptyDiagnosticResult = {
+      success: false,
+      status: 'invalid',
+      target: '',
+      reason: 'target-empty'
+    }
+    const reindexResult = {
+      success: false,
+      status: 'reindexed',
+      requiresConfirm: true,
+      path: '/Applications/JSON Formatter.app'
+    }
+    const emptyReindexResult = {
+      success: false,
+      status: 'invalid',
+      reason: 'target-empty'
+    }
+
+    ;(appProvider.diagnoseAppSearch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(diagnosticResult)
+      .mockResolvedValueOnce(emptyDiagnosticResult)
+    ;(appProvider.reindexAppSearchTarget as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(reindexResult)
+      .mockResolvedValueOnce(emptyReindexResult)
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const diagnoseHandler = handlers.get(AppEvents.appIndex.diagnose.toEventName())
+    const reindexHandler = handlers.get(AppEvents.appIndex.reindex.toEventName())
+    expect(diagnoseHandler).toBeTypeOf('function')
+    expect(reindexHandler).toBeTypeOf('function')
+
+    await expect(
+      diagnoseHandler?.({ target: 'JSON Formatter', query: 'json formatter' }, {})
+    ).resolves.toEqual(diagnosticResult)
+    await expect(
+      reindexHandler?.({ target: 'JSON Formatter', mode: 'keywords', force: true }, {})
+    ).resolves.toEqual(reindexResult)
+    await expect(diagnoseHandler?.(undefined, {})).resolves.toEqual(emptyDiagnosticResult)
+    await expect(reindexHandler?.(undefined, {})).resolves.toEqual(emptyReindexResult)
+
+    expect(appProvider.diagnoseAppSearch).toHaveBeenNthCalledWith(1, {
+      target: 'JSON Formatter',
+      query: 'json formatter'
+    })
+    expect(appProvider.reindexAppSearchTarget).toHaveBeenNthCalledWith(1, {
+      target: 'JSON Formatter',
+      mode: 'keywords',
+      force: true
+    })
+    expect(appProvider.diagnoseAppSearch).toHaveBeenNthCalledWith(2, { target: '' })
+    expect(appProvider.reindexAppSearchTarget).toHaveBeenNthCalledWith(2, { target: '' })
   })
 })

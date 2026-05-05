@@ -8,8 +8,7 @@ import process from 'node:process'
 import { app, crashReporter } from 'electron'
 import * as log4js from 'log4js'
 import { AppEvents, getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import type { DevDataMigrationResult } from '../utils/app-root-path'
-import { migrateLegacyDevDataIfNeeded, resolveRuntimeRootPath } from '../utils/app-root-path'
+import { resolveRuntimeRootPath } from '../utils/app-root-path'
 import { checkDirWithCreate } from '../utils/common-util'
 import { devProcessManager } from '../utils/dev-process-manager'
 import { mainLog } from '../utils/logger'
@@ -22,6 +21,7 @@ import {
   WindowAllClosedEvent
 } from './eventbus/touch-event'
 import { runWithBeforeQuitTimeout } from './before-quit-guard'
+import { setupSingleInstanceGuard } from './single-instance-guard'
 
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
@@ -47,42 +47,6 @@ function applyDeprecationTraceSwitch(): void {
   mainLog.warn('Node deprecation trace enabled via TUFF_TRACE_DEPRECATION=1')
 }
 
-function logDevDataMigrationResult(result: DevDataMigrationResult): void {
-  if (result.status === 'skipped-packaged' || result.status === 'skipped-marker-exists') {
-    return
-  }
-
-  const meta = {
-    status: result.status,
-    reason: result.reason,
-    sourcePath: result.sourcePath,
-    targetPath: result.targetPath,
-    markerPath: result.markerPath
-  }
-
-  if (result.status === 'migrated') {
-    mainLog.info('Dev data migration completed', { meta })
-  } else if (result.status === 'failed') {
-    mainLog.warn('Dev data migration failed (best effort)', {
-      meta: {
-        ...meta,
-        error: result.error
-      }
-    })
-  } else {
-    mainLog.debug('Dev data migration skipped', { meta })
-  }
-
-  if (result.markerWriteError) {
-    mainLog.warn('Failed to persist dev data migration marker', {
-      meta: {
-        markerPath: result.markerPath,
-        markerWriteError: result.markerWriteError
-      }
-    })
-  }
-}
-
 function broadcastBeforeQuit(): void {
   const channel = ($app as { channel?: unknown } | null | undefined)?.channel
   if (!channel) return
@@ -105,7 +69,6 @@ function parseBooleanEnv(value: string | undefined): boolean {
 
 registerEarlyUnhandledRejectionHandler()
 applyDeprecationTraceSwitch()
-logDevDataMigrationResult(migrateLegacyDevDataIfNeeded(app))
 
 export const innerRootPath = getRootPath()
 checkDirWithCreate(innerRootPath)
@@ -179,26 +142,18 @@ if (release().startsWith('6.1')) app.disableHardwareAcceleration()
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
 const startupBenchmarkMode = parseBooleanEnv(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
-if (startupBenchmarkMode) {
-  mainLog.info('Startup benchmark mode enabled, skip single-instance lock')
-}
-
-if (!startupBenchmarkMode && !app.requestSingleInstanceLock()) {
-  mainLog.warn('Secondary launch detected, quitting new instance')
-
-  app.on('second-instance', (event, argv, workingDirectory, additionalData) => {
-    const launchData =
-      typeof additionalData === 'object' && additionalData !== null
-        ? (additionalData as Record<string, unknown>)
-        : {}
-    touchEventBus.emit(
-      TalexEvents.APP_SECONDARY_LAUNCH,
-      new AppSecondaryLaunch(event, argv, workingDirectory, launchData)
-    )
-  })
-
-  app.quit()
-}
+setupSingleInstanceGuard({
+  app,
+  startupBenchmarkMode,
+  emitSecondaryLaunch: (eventName, payload) => touchEventBus.emit(eventName, payload),
+  createSecondaryLaunchEvent: (event, argv, workingDirectory, additionalData) =>
+    new AppSecondaryLaunch(event, argv, workingDirectory, additionalData),
+  secondaryLaunchEventName: TalexEvents.APP_SECONDARY_LAUNCH,
+  logger: {
+    info: (message, options) => mainLog.info(message, options as never),
+    warn: (message, options) => mainLog.warn(message, options as never)
+  }
+})
 
 app.on('window-all-closed', () => {
   mainLog.info('All windows closed, preparing shutdown')
@@ -225,6 +180,39 @@ let beforeQuitFlowDone = false
 let beforeQuitFlowPromise: Promise<void> | null = null
 const BEFORE_QUIT_TIMEOUT_MS = 8_000
 
+type ShutdownObservationProvider = {
+  getShutdownObservation?: () => unknown
+}
+
+function isStartupBenchmarkMode(): boolean {
+  return parseBooleanEnv(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
+}
+
+function getBeforeQuitTimeoutHint(): unknown {
+  const manager = (globalThis.$app as { moduleManager?: ShutdownObservationProvider } | undefined)
+    ?.moduleManager
+  return manager?.getShutdownObservation?.()
+}
+
+function stringifyTimeoutHint(value: unknown): string | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return 'null'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+
+  try {
+    const seen = new WeakSet<object>()
+    return JSON.stringify(value, (_, current) => {
+      if (typeof current !== 'object' || current === null) return current
+      if (seen.has(current)) return '[Circular]'
+      seen.add(current)
+      return current
+    })
+  } catch {
+    return String(value)
+  }
+}
+
 app.on('before-quit', (event) => {
   markAppQuitting('before-quit')
   if (beforeQuitFlowDone) {
@@ -242,13 +230,18 @@ app.on('before-quit', (event) => {
       const quitEvent = new BeforeAppQuitEvent(event)
       const beforeQuitResult = await runWithBeforeQuitTimeout(
         () => touchEventBus.emitAsync(TalexEvents.BEFORE_APP_QUIT, quitEvent),
-        BEFORE_QUIT_TIMEOUT_MS
+        BEFORE_QUIT_TIMEOUT_MS,
+        getBeforeQuitTimeoutHint
       )
       if (beforeQuitResult.timedOut) {
-        mainLog.error('before-quit handlers timed out, continue shutdown', {
+        const logTimeout = isStartupBenchmarkMode()
+          ? mainLog.warn.bind(mainLog)
+          : mainLog.error.bind(mainLog)
+        logTimeout('before-quit handlers timed out, continue shutdown', {
           meta: {
             timeoutMs: BEFORE_QUIT_TIMEOUT_MS,
-            durationMs: beforeQuitResult.durationMs
+            durationMs: beforeQuitResult.durationMs,
+            timeoutHint: stringifyTimeoutHint(beforeQuitResult.timeoutHint)
           }
         })
       }

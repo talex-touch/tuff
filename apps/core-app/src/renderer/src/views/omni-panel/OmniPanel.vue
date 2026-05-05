@@ -28,6 +28,13 @@ const ACTION_GRID_COLUMNS = 3
 const selectedText = ref('')
 const hasSelection = ref(false)
 const source = ref('manual')
+const selectionSupportLevel = ref<'supported' | 'best_effort' | 'unsupported' | undefined>(
+  undefined
+)
+const selectionIssueCode = ref<'disabled' | 'empty' | 'failed' | 'unsupported' | undefined>(
+  undefined
+)
+const selectionIssueMessage = ref('')
 const loading = ref(false)
 const executingId = ref<string | null>(null)
 const searchKeyword = ref('')
@@ -46,16 +53,24 @@ const executeCodeMessageMap: Record<string, string> = {
 
 const footerHint = computed(() => {
   if (!hasSelection.value) {
-    return '已选中 0 字符'
+    if (selectionIssueCode.value === 'unsupported') {
+      const base = t('corebox.omniPanel.selectionUnavailable')
+      return selectionIssueMessage.value ? `${base} · ${selectionIssueMessage.value}` : base
+    }
+    if (selectionIssueCode.value === 'failed' || selectionIssueCode.value === 'disabled') {
+      const base = t('corebox.omniPanel.selectionCaptureFailed')
+      return selectionIssueMessage.value ? `${base} · ${selectionIssueMessage.value}` : base
+    }
+    return t('corebox.omniPanel.selectionCount', { count: 0 })
   }
 
   const trimmed = selectedText.value.replace(/\s+/g, ' ').trim()
   if (!trimmed) {
-    return '已选中 0 字符'
+    return t('corebox.omniPanel.selectionCount', { count: 0 })
   }
 
   const preview = trimmed.length > 24 ? `${trimmed.slice(0, 24)}...` : trimmed
-  return `已选中 ${preview}`
+  return t('corebox.omniPanel.selectionPreview', { preview })
 })
 
 const filteredFeatures = computed(() => {
@@ -84,18 +99,18 @@ async function loadFeatures(): Promise<void> {
     focusedIndex.value = ensureValidFocusIndex(focusedIndex.value, features.value.length)
   } catch (error) {
     console.error('[OmniPanel] Failed to load features:', error)
-    toast.error(t('corebox.omniPanel.loadFailed', '加载 OmniPanel Feature 失败，请稍后重试。'))
+    toast.error(t('corebox.omniPanel.loadFailed'))
   } finally {
     loading.value = false
   }
 }
 
 function resolveExecuteErrorMessage(response?: OmniPanelFeatureExecuteResponse): string {
-  const fallback = t('corebox.omniPanel.executeFailed', '执行失败，请稍后重试。')
+  const fallback = t('corebox.omniPanel.executeFailed')
   if (!response) return fallback
   if (response.error) return response.error
   if (response.code && executeCodeMessageMap[response.code]) {
-    return t(executeCodeMessageMap[response.code], fallback)
+    return t(executeCodeMessageMap[response.code])
   }
   return fallback
 }
@@ -103,10 +118,7 @@ function resolveExecuteErrorMessage(response?: OmniPanelFeatureExecuteResponse):
 async function executeFeature(item: OmniPanelFeatureItemPayload): Promise<void> {
   if (executingId.value) return
   if (item.unavailable) {
-    toast.error(
-      item.unavailableReason?.message ||
-        t('corebox.omniPanel.featureUnavailable', '该 Feature 当前不可用，请检查插件状态。')
-    )
+    toast.error(item.unavailableReason?.message || t('corebox.omniPanel.featureUnavailable'))
     return
   }
 
@@ -127,7 +139,7 @@ async function executeFeature(item: OmniPanelFeatureItemPayload): Promise<void> 
     }
   } catch (error) {
     console.error('[OmniPanel] Failed to execute feature:', error)
-    toast.error(t('corebox.omniPanel.executeFailed', '执行失败，请稍后重试。'))
+    toast.error(t('corebox.omniPanel.executeFailed'))
   } finally {
     executingId.value = null
   }
@@ -137,6 +149,9 @@ function handleContext(payload: OmniPanelContextPayload): void {
   selectedText.value = payload.text || ''
   hasSelection.value = payload.hasSelection
   source.value = payload.source || 'manual'
+  selectionSupportLevel.value = payload.selectionSupportLevel
+  selectionIssueCode.value = payload.selectionIssueCode
+  selectionIssueMessage.value = payload.selectionIssueMessage || ''
 }
 
 function focusSearchBar(): void {
@@ -231,16 +246,16 @@ onBeforeUnmount(() => {
     <OmniPanelSearchBar
       ref="searchBarRef"
       v-model="searchKeyword"
-      :placeholder="t('corebox.omniPanel.searchPlaceholder', '搜索 OmniPanel Feature')"
+      :placeholder="t('corebox.omniPanel.searchPlaceholder')"
     />
 
     <div class="OmniPanel__divider" />
 
     <div v-if="loading" class="OmniPanel__state">
-      {{ t('corebox.omniPanel.loading', '正在加载 Feature...') }}
+      {{ t('corebox.omniPanel.loading') }}
     </div>
     <div v-else-if="filteredFeatures.length === 0" class="OmniPanel__state">
-      {{ t('corebox.omniPanel.empty', '当前没有可用 Feature') }}
+      {{ t('corebox.omniPanel.empty') }}
     </div>
     <OmniPanelActionList
       v-else

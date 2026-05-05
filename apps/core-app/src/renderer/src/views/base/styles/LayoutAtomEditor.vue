@@ -91,15 +91,6 @@ const viewShadowOptions: Array<{ value: ViewShadow; label: string }> = [
         <span class="i-ri-upload-2-line mr-1" />
         {{ t('preset.export', 'Export') }}
       </TxButton>
-      <TxButton
-        variant="bare"
-        class="LayoutAtomEditor-ActionBtn LayoutAtomEditor-ActionBtn--cloud"
-        disabled
-        :title="t('preset.cloudPublishDesc', 'Share your preset with the community (coming soon)')"
-      >
-        <span class="i-ri-cloud-line mr-1" />
-        {{ t('preset.cloudPublish', 'Publish to Cloud') }}
-      </TxButton>
     </div>
     <TxCollapse>
       <TxCollapseItem :title="t('layoutSection.atomHeader', 'Header')" name="header">

@@ -8,6 +8,7 @@ import { ChunkStatus, DownloadModule } from '@talex-touch/utils'
 import { DownloadErrorClass } from './error-types'
 import { getNetworkService } from '../network'
 import { ProgressTracker } from './progress-tracker'
+import { downloadWorkerLog } from './logger'
 
 function getNetworkStatusCode(error: unknown): number | null {
   if (!(error instanceof Error)) {
@@ -235,7 +236,10 @@ export class DownloadWorker {
           ? error
           : DownloadErrorClass.fromError(normalizedError, errorContext)
 
-      console.error(`Download failed for task ${task.id}:`, downloadError.userMessage)
+      downloadWorkerLog.error('Download failed for task', {
+        error: downloadError,
+        meta: { taskId: task.id, errorType: downloadError.type }
+      })
 
       throw downloadError
     }
@@ -373,7 +377,10 @@ export class DownloadWorker {
             ? (cleanupError as { code?: string }).code
             : undefined
         if (code !== 'ENOENT') {
-          console.warn('Failed to cleanup partial download file:', cleanupError)
+          downloadWorkerLog.warn('Failed to cleanup partial download file', {
+            error: cleanupError,
+            meta: { taskId: task.id }
+          })
         }
       }
       throw error
@@ -438,7 +445,10 @@ export class DownloadWorker {
         if (abortSignal?.aborted) {
           return
         }
-        console.error(`Chunk ${chunk.index} download failed:`, error)
+        downloadWorkerLog.error('Chunk download failed', {
+          error,
+          meta: { taskId: task.id, chunkIndex: chunk.index }
+        })
         throw error
       }
     })
@@ -553,10 +563,10 @@ export class DownloadWorker {
             ? error
             : DownloadErrorClass.fromError(error as Error, errorContext)
 
-        console.warn(
-          `Chunk ${chunk.index} download failed (attempt ${retryCount}):`,
-          downloadError.userMessage
-        )
+        downloadWorkerLog.warn('Chunk download retry failed', {
+          error: downloadError,
+          meta: { taskId: task.id, chunkIndex: chunk.index, retryCount }
+        })
 
         if (retryCount > maxRetries) {
           chunk.status = ChunkStatus.FAILED
@@ -592,7 +602,10 @@ export class DownloadWorker {
       const downloadError =
         error instanceof DownloadErrorClass ? error : DownloadErrorClass.fromError(error as Error)
 
-      console.warn('Failed to get file size:', downloadError.userMessage)
+      downloadWorkerLog.warn('Failed to get file size', {
+        error: downloadError,
+        meta: { urlLength: url.length }
+      })
       return null
     }
   }

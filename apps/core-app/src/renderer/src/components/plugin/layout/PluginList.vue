@@ -1,6 +1,7 @@
 <script lang="ts" name="PluginList" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import PluginListModule from '~/components/plugin/layout/PluginListModule.vue'
 
 const props = defineProps<{
@@ -9,6 +10,7 @@ const props = defineProps<{
 const emits = defineEmits(['select', 'add-plugin'])
 const target = ref<ITouchPlugin | null>(null)
 const searchQuery = ref('')
+const { t } = useI18n()
 
 const runningPlugins = computed(() =>
   props.plugins.filter((plugin) => plugin.status === 3 || plugin.status === 4)
@@ -53,7 +55,7 @@ watch(
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search plugins..."
+          :placeholder="t('plugin.searchPlaceholder')"
           class="search-input"
         />
         <i v-if="searchQuery" class="i-ri-close-line clear-icon" @click="searchQuery = ''" />
@@ -66,7 +68,7 @@ watch(
       :plugins="filteredRunningPlugins"
       @update:model-value="(val) => (target = val)"
     >
-      <template #name> Running </template>
+      <template #name>{{ t('plugin.running') }}</template>
     </PluginListModule>
     <PluginListModule
       :model-value="target"
@@ -74,7 +76,7 @@ watch(
       :plugins="filteredAllPlugins"
       @update:model-value="(val) => (target = val)"
     >
-      <template #name> All </template>
+      <template #name>{{ t('plugin.all') }}</template>
     </PluginListModule>
 
     <div class="PluginList-Add transition-cubic fake-background">

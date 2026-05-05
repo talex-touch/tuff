@@ -1,9 +1,9 @@
 <script lang="ts" name="TuffBlockInput" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
+import { TxInput } from '@talex-touch/tuffex'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import type { WritableComputedRef } from 'vue'
 import { computed, ref } from 'vue'
-import FlatInput from '~/components/base/input/FlatInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 
 const props = withDefaults(
@@ -86,14 +86,25 @@ function updateValue(val: string | number) {
         :blur="handleBlur"
         :disabled="disabled"
       >
-        <FlatInput
-          v-model="inputValue"
-          :placeholder="placeholder"
-          :non-win="true"
-          @focusin="handleFocus"
-          @focusout="handleBlur"
-        />
+        <div class="TuffBlockInput-Control">
+          <TxInput
+            v-model="inputValue"
+            :placeholder="placeholder"
+            @focus="handleFocus"
+            @blur="handleBlur"
+          />
+        </div>
       </slot>
     </template>
   </TuffBlockSlot>
 </template>
+
+<style lang="scss" scoped>
+.TuffBlockInput-Control {
+  width: 180px;
+  max-width: 100%;
+  min-width: 120px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+</style>

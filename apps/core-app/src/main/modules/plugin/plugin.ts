@@ -78,6 +78,12 @@ interface FeatureEventUtil {
   offFeatureLifeCycle: (id: string, callback: ITargetFeatureLifeCycle) => void
 }
 
+function createLegacyChannelRemovedError(capability: 'channel.raw' | 'channel.sendSync'): Error {
+  return new Error(
+    `[Plugin API] ${capability} was removed by the core-app hard-cut. Migrate this plugin to typed transport send/on APIs.`
+  )
+}
+
 interface StorageTreeNode {
   name: string
   path: string
@@ -118,9 +124,8 @@ const TRANSIENT_ISSUE_CODES = new Set([
   'AUTO_DISABLED_EXCESSIVE_ERRORS',
   'LIFECYCLE_SCRIPT_FAILED'
 ])
-const LEGACY_CHANNEL_MAIN = 'main' as PluginStandardChannelData['header']['type']
-const LEGACY_CHANNEL_PLUGIN = 'plugin' as PluginStandardChannelData['header']['type']
-const LEGACY_CHANNEL_SUCCESS = 200 as PluginStandardChannelData['code']
+const CHANNEL_SOURCE_TRANSPORT = 'transport' as PluginStandardChannelData['header']['type']
+const CHANNEL_SUCCESS_CODE = 200 as PluginStandardChannelData['code']
 
 export interface TouchPluginRuntimeContext {
   rootPath: string
@@ -479,7 +484,7 @@ export class TouchPlugin implements ITouchPlugin {
 
   async triggerFeature(
     feature: IPluginFeature,
-    query: string | TuffQuery | undefined
+    query: TuffQuery | undefined
   ): Promise<boolean | void> {
     this._runtimeStats.requestCount += 1
     this._runtimeStats.lastActiveAt = Date.now()
@@ -565,22 +570,19 @@ export class TouchPlugin implements ITouchPlugin {
     return result
   }
 
-  triggerInputChanged(feature: IPluginFeature, query: string | TuffQuery | undefined): void {
+  triggerInputChanged(feature: IPluginFeature, query: TuffQuery | undefined): void {
     this._runtimeStats.requestCount += 1
     this._runtimeStats.lastActiveAt = Date.now()
     this.markActive()
 
-    // Pass query (can be string for backward compatibility or TuffQuery object)
     try {
       this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
     } catch (error) {
       this.handleRuntimeError('onFeatureTriggered', error)
     }
 
-    // For backward compatibility, extract text if query is object
-    const queryText = typeof query === 'string' ? query : (query?.text ?? '')
     try {
-      this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(queryText))
+      this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(query?.text ?? ''))
     } catch (error) {
       this.handleRuntimeError('onInputChanged', error)
     }
@@ -814,6 +816,20 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   async enable(): Promise<boolean> {
+    const blockedSdkIssue = this.issues.find((issue) => issue.code === 'SDKAPI_BLOCKED')
+    if (this.loadError?.code === 'SDKAPI_BLOCKED' || blockedSdkIssue) {
+      this.setLoadState('load_failed', {
+        code: 'SDKAPI_BLOCKED',
+        message:
+          this.loadError?.message ||
+          blockedSdkIssue?.message ||
+          'Plugin sdkapi is incompatible with the enforced runtime baseline.'
+      })
+      this.status = PluginStatus.LOAD_FAILED
+      this.logger.warn('Attempted to enable plugin blocked by sdkapi hard-cut.')
+      return false
+    }
+
     if (this.status === PluginStatus.LOAD_FAILED) {
       this.logger.warn('Attempted to enable a plugin that failed to load.')
       return false
@@ -1098,10 +1114,7 @@ export class TouchPlugin implements ITouchPlugin {
     }
   }
 
-  private createPowerSDK(
-    pluginName: string,
-    touchChannel: { send: (eventName: string, payload?: unknown) => Promise<unknown> }
-  ) {
+  private createPowerSDK(pluginName: string, transport: ITuffTransportMain) {
     const DEFAULT_LOW_POWER_THRESHOLD = 15
     const getDefaultLowPowerThreshold = () => {
       return clampBatteryPercent(
@@ -1122,7 +1135,13 @@ export class TouchPlugin implements ITouchPlugin {
       const threshold = normalizeLowPowerThreshold(options.threshold)
 
       try {
-        const battery = await touchChannel.send(AppEvents.fileIndex.batteryLevel.toEventName())
+        const battery = await transport.invoke(AppEvents.fileIndex.batteryLevel, undefined, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        })
         const levelRaw = (battery as { level?: unknown } | null | undefined)?.level
         const chargingRaw = (battery as { charging?: unknown } | null | undefined)?.charging
 
@@ -1356,17 +1375,16 @@ export class TouchPlugin implements ITouchPlugin {
         }
 
         const pluginContextName = context?.plugin?.name
-        const headerType = pluginContextName ? LEGACY_CHANNEL_PLUGIN : LEGACY_CHANNEL_MAIN
         let replied = false
         let replyData: unknown
         const event: PluginStandardChannelData = {
           name: eventName,
           header: {
             status: 'request',
-            type: headerType,
+            type: CHANNEL_SOURCE_TRANSPORT,
             plugin: pluginContextName
           },
-          code: LEGACY_CHANNEL_SUCCESS,
+          code: CHANNEL_SUCCESS_CODE,
           data: payload as unknown,
           plugin: pluginContextName,
           reply: (_code, data) => {
@@ -1388,9 +1406,16 @@ export class TouchPlugin implements ITouchPlugin {
       onMain: (eventName, handler) =>
         onTransport(eventName, (context) => !context?.plugin, handler),
       onRenderer: (eventName, handler) =>
-        onTransport(eventName, (context) => context?.plugin?.name === pluginName, handler),
-      raw: transport as IPluginChannelBridge['raw']
+        onTransport(eventName, (context) => context?.plugin?.name === pluginName, handler)
     }
+
+    Object.defineProperty(channelBridge as unknown as Record<string, unknown>, 'raw', {
+      configurable: true,
+      enumerable: false,
+      get() {
+        throw createLegacyChannelRemovedError('channel.raw')
+      }
+    })
 
     const touchChannel = {
       send: async (eventName: string, payload?: unknown) => {
@@ -1430,7 +1455,7 @@ export class TouchPlugin implements ITouchPlugin {
       },
       send: (eventName, arg) => channelBridge.sendToMain(eventName, arg),
       sendSync: () => {
-        throw new Error('[Plugin API] Box SDK sendSync is not supported in plugin main context.')
+        throw createLegacyChannelRemovedError('channel.sendSync')
       }
     }
 
@@ -1538,7 +1563,7 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
-    const powerSDK = this.createPowerSDK(pluginName, touchChannel)
+    const powerSDK = this.createPowerSDK(pluginName, transport)
 
     const recommendSDK = this.createRecommendSDK(pluginName)
 

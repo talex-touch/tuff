@@ -124,21 +124,30 @@ const providerOptions = computed(() =>
   Object.values(PluginProviderType).filter((type) => type !== PluginProviderType.DEV)
 )
 
-const providerLabels: Record<PluginProviderType, string> = {
-  [PluginProviderType.GITHUB]: 'GitHub',
-  [PluginProviderType.NPM]: 'NPM',
-  [PluginProviderType.TPEX]: 'TPEX',
-  [PluginProviderType.FILE]: '本地文件',
-  [PluginProviderType.DEV]: '开发'
+function getProviderLabel(type: PluginProviderType): string {
+  switch (type) {
+    case PluginProviderType.GITHUB:
+      return 'GitHub'
+    case PluginProviderType.NPM:
+      return 'NPM'
+    case PluginProviderType.TPEX:
+      return 'TPEX'
+    case PluginProviderType.FILE:
+      return t('plugin.new.provider.file')
+    case PluginProviderType.DEV:
+      return t('plugin.new.provider.dev')
+    default:
+      return type
+  }
 }
 
 const installPreview = computed(() => {
   if (!installState.manifest) return []
   const manifest = installState.manifest
   const lines: string[] = []
-  if (manifest.name) lines.push(`名称: ${manifest.name}`)
-  if (manifest.version) lines.push(`版本: ${manifest.version}`)
-  if (manifest.author) lines.push(`作者: ${manifest.author}`)
+  if (manifest.name) lines.push(t('plugin.new.preview.name', { value: manifest.name }))
+  if (manifest.version) lines.push(t('plugin.new.preview.version', { value: manifest.version }))
+  if (manifest.author) lines.push(t('plugin.new.preview.author', { value: manifest.author }))
   return lines
 })
 
@@ -232,7 +241,7 @@ async function installPluginFromSource(): Promise<void> {
 
   const trimmedSource = installState.source.trim()
   if (!trimmedSource) {
-    await forTouchTip('Install Plugin', '请先输入插件来源地址，例如 GitHub 仓库或 .tpex 链接。')
+    await forTouchTip(t('plugin.new.install.tipTitle'), t('plugin.new.install.emptySourceMessage'))
     return
   }
 
@@ -242,7 +251,7 @@ async function installPluginFromSource(): Promise<void> {
       metadata = JSON.parse(installState.metadataText)
     } catch (error) {
       installState.status = 'error'
-      installState.message = '元数据需要是合法的 JSON 字符串。'
+      installState.message = t('plugin.new.install.invalidMetadata')
       return
     }
   }
@@ -279,19 +288,20 @@ async function installPluginFromSource(): Promise<void> {
 
     if (result?.status === 'success') {
       installState.status = 'success'
-      installState.message = '插件安装成功，可在列表中查看。'
+      installState.message = t('plugin.new.install.successMessage')
       installState.manifest = result.manifest as IManifest | undefined
       installState.provider = result.provider as PluginProviderType
       installState.official = Boolean(result.official)
-      await forTouchTip('插件安装', '插件已成功安装。')
+      await forTouchTip(t('plugin.new.install.successTitle'), t('plugin.new.install.successTip'))
     } else {
       installState.status = 'error'
-      installState.message = result?.message || '插件安装失败，请检查来源是否可用。'
+      installState.message = result?.message || t('plugin.new.install.errorMessage')
     }
   } catch (error: unknown) {
     console.error('[PluginNew] Failed to install plugin:', error)
     installState.status = 'error'
-    installState.message = error instanceof Error ? error.message : '插件安装遇到异常，请稍后重试。'
+    installState.message =
+      error instanceof Error ? error.message : t('plugin.new.install.unexpectedError')
   } finally {
     installState.installing = false
   }
@@ -306,7 +316,7 @@ async function envCheck(): Promise<void> {
     const versionParts = nodeVersion.split('.').map(Number)
     if (versionParts[0] < 16) {
       envOptions.node = {
-        msg: `Node.js version is too low (v${nodeVersion}), please upgrade it to 16 or higher.`,
+        msg: t('plugin.new.create.env.nodeTooLow', { version: nodeVersion }),
         type: 'error'
       }
     } else {
@@ -317,7 +327,7 @@ async function envCheck(): Promise<void> {
     }
   } else {
     envOptions.node = {
-      msg: 'Cannot find node.js, please install it first.',
+      msg: t('plugin.new.create.env.nodeMissing'),
       type: 'error'
     }
   }
@@ -326,11 +336,11 @@ async function envCheck(): Promise<void> {
   if (degitExists) {
     envOptions.degit = {
       type: 'success',
-      version: 'installed'
+      version: t('plugin.new.create.env.degitInstalled')
     }
   } else {
     envOptions.degit = {
-      msg: 'Cannot find degit, please install it first.',
+      msg: t('plugin.new.create.env.degitMissing'),
       type: 'error'
     }
   }
@@ -353,8 +363,8 @@ async function createAction(ctx: ActionContext): Promise<void> {
 
   if (!plugin.agreement) {
     await forTouchTip(
-      'Attention',
-      "You must agree with <i style='color: #4E94B0'>Touch Plugin Development</i> protocol."
+      t('plugin.new.create.agreementAlertTitle'),
+      t('plugin.new.create.agreementAlertMessage')
     )
     return
   }
@@ -370,7 +380,7 @@ async function createAction(ctx: ActionContext): Promise<void> {
 async function handleInstallDegit(): Promise<void> {
   await popperMention('', () =>
     createVNode(TerminalTemplate, {
-      title: 'Installing degit',
+      title: t('plugin.new.create.env.degitInstallingTitle'),
       command: 'npm install -g degit'
     })
   )
@@ -383,7 +393,7 @@ async function handleInstallDegit(): Promise<void> {
       <div class="PluginNew-Header">
         <div class="PluginNew-HeaderRow">
           <div i-ri-arrow-left-s-line class="PluginNew-Back" @click="emits('close')" />
-          <p class="PluginNew-Title">Plugin Workspace</p>
+          <p class="PluginNew-Title">{{ t('plugin.new.header.title') }}</p>
           <div class="PluginNew-TabGroup">
             <TxButton
               variant="flat"
@@ -392,7 +402,7 @@ async function handleInstallDegit(): Promise<void> {
               @click="activeTab = 'install'"
             >
               <i class="i-ri-download-cloud-2-line" />
-              <span>Install</span>
+              <span>{{ t('plugin.new.header.installTab') }}</span>
             </TxButton>
             <TxButton
               variant="flat"
@@ -401,62 +411,62 @@ async function handleInstallDegit(): Promise<void> {
               @click="activeTab = 'create'"
             >
               <i class="i-ri-flask-line" />
-              <span>Develop</span>
+              <span>{{ t('plugin.new.header.createTab') }}</span>
             </TxButton>
           </div>
         </div>
         <span class="PluginNew-Subtitle">
           {{
             activeTab === 'install'
-              ? '从 GitHub、NPM、TPEX 或本地文件安装 Touch 插件。'
-              : '创建新的插件模板，便于本地开发和调试。'
+              ? t('plugin.new.header.installSubtitle')
+              : t('plugin.new.header.createSubtitle')
           }}
         </span>
       </div>
     </template>
 
     <section v-if="activeTab === 'install'" class="PluginNew-Install">
-      <BlockTemplate title="来源信息">
+      <BlockTemplate :title="t('plugin.new.install.sourceBlockTitle')">
         <div class="InstallForm-Line">
-          <label>来源地址</label>
+          <label>{{ t('plugin.new.install.sourceLabel') }}</label>
           <FlatInput
             v-model="installState.source"
-            placeholder="talex-touch/example-plugin 或 https://github.com/..."
+            :placeholder="t('plugin.new.install.sourcePlaceholder')"
             w="96!"
           />
         </div>
         <div class="InstallForm-Line">
-          <label>来源类型提示</label>
+          <label>{{ t('plugin.new.install.sourceTypeLabel') }}</label>
           <TuffSelect
             v-model="installState.hintType"
             clearable
             class="InstallSelect"
-            placeholder="自动识别"
+            :placeholder="t('plugin.new.install.autoDetect')"
           >
             <TuffSelectItem
               v-for="option in providerOptions"
               :key="option"
-              :label="providerLabels[option]"
+              :label="getProviderLabel(option)"
               :value="option"
             />
           </TuffSelect>
         </div>
-        <p class="InstallHint">支持 GitHub 仓库 / release、NPM 包、.tpex 包或本地压缩包路径。</p>
+        <p class="InstallHint">{{ t('plugin.new.install.sourceHint') }}</p>
       </BlockTemplate>
 
-      <BlockTemplate title="附加元数据 (可选)">
+      <BlockTemplate :title="t('plugin.new.install.metadataBlockTitle')">
         <div class="InstallForm-Line">
           <label>JSON</label>
           <FlatInput
             v-model="installState.metadataText"
             :area="true"
-            placeholder='{ "tag": "v1.0.0" }'
+            :placeholder="t('plugin.new.install.metadataPlaceholder')"
           />
         </div>
-        <p class="InstallHint">用于指定 tag / branch 等额外信息，留空则自动处理。</p>
+        <p class="InstallHint">{{ t('plugin.new.install.metadataHint') }}</p>
       </BlockTemplate>
 
-      <BlockTemplate title="执行">
+      <BlockTemplate :title="t('plugin.new.install.actionBlockTitle')">
         <div
           v-if="installState.status !== 'idle'"
           class="InstallStatus"
@@ -472,11 +482,14 @@ async function handleInstallDegit(): Promise<void> {
           <div>
             <p>{{ installState.message }}</p>
             <p v-if="installState.provider">
-              来源类型：
+              {{ t('plugin.new.install.sourceTypeResult') }}:
               {{
-                providerLabels[installState.provider as PluginProviderType] || installState.provider
+                getProviderLabel(installState.provider as PluginProviderType) ||
+                installState.provider
               }}
-              <span v-if="installState.official" class="InstallStatus-Official">官方</span>
+              <span v-if="installState.official" class="InstallStatus-Official">{{
+                t('store.officialBadge')
+              }}</span>
             </p>
             <ul v-if="installPreview.length" class="InstallManifest">
               <li v-for="line in installPreview" :key="line">
@@ -509,7 +522,7 @@ async function handleInstallDegit(): Promise<void> {
     <section v-else class="PluginNew-Create">
       <BlockTemplate :disabled="envOptions.degit?.type !== 'success'">
         <template #title>
-          Templates
+          {{ t('plugin.new.create.templatesTitle') }}
           <span ml-2>
             <span v-if="envOptions.node?.type === 'success'" color="green-2">
               <span relative top=".5" inline-block i-ri-nodejs-fill />{{
@@ -538,7 +551,8 @@ async function handleInstallDegit(): Promise<void> {
               color="red-4"
               @click="handleInstallDegit"
             >
-              <span relative top=".5" inline-block i-ri-git-branch-fill /> Install degit
+              <span relative top=".5" inline-block i-ri-git-branch-fill />
+              {{ t('plugin.new.create.env.installDegit') }}
             </span>
           </span>
         </template>
@@ -546,7 +560,7 @@ async function handleInstallDegit(): Promise<void> {
           <div>
             <div inline-block mr-2 class="i-simple-icons-vuedotjs" />
           </div>
-          <span block text-xs>Contains default dev-env, with using Vue3 and Vite.</span>
+          <span block text-xs>{{ t('plugin.new.create.templates.vueDescription') }}</span>
           <TxButton
             variant="bare"
             text-xs
@@ -560,14 +574,14 @@ async function handleInstallDegit(): Promise<void> {
             py-1
             my-2
           >
-            Download
+            {{ t('plugin.new.create.templates.download') }}
           </TxButton>
         </BrickTemplate>
         <BrickTemplate>
           <div>
             <div inline-block mr-2 class="i-simple-icons-react" />
           </div>
-          <span block text-xs>Contains default dev-env, with using React18 and Vite.</span>
+          <span block text-xs>{{ t('plugin.new.create.templates.reactDescription') }}</span>
           <TxButton
             variant="bare"
             text-xs
@@ -581,14 +595,14 @@ async function handleInstallDegit(): Promise<void> {
             py-1
             my-2
           >
-            Download
+            {{ t('plugin.new.create.templates.download') }}
           </TxButton>
         </BrickTemplate>
         <BrickTemplate>
           <div>
             <div inline-block mr-2 class="i-simple-icons-svelte" />
           </div>
-          <span block text-xs>Contains default dev-env, with using Svelte3 and Vite.</span>
+          <span block text-xs>{{ t('plugin.new.create.templates.svelteDescription') }}</span>
           <TxButton
             variant="bare"
             text-xs
@@ -602,65 +616,69 @@ async function handleInstallDegit(): Promise<void> {
             py-1
             my-2
           >
-            Download
+            {{ t('plugin.new.create.templates.download') }}
           </TxButton>
         </BrickTemplate>
       </BlockTemplate>
 
-      <BlockTemplate title="General">
+      <BlockTemplate :title="t('plugin.new.create.generalTitle')">
         <LineTemplate
-          :msg="() => 'You must input the correct plugin name.'"
+          :msg="() => t('plugin.new.create.validation.name')"
           regex='^[^\\\\/:*?"<>|]+(\\.[^\\\\/:*?"<>|]+)*$'
-          title="name"
+          :title="t('plugin.new.create.fields.name')"
         >
           <FlatInput v-model="plugin.name" w="48!" />
         </LineTemplate>
-        <LineTemplate title="icon">
+        <LineTemplate :title="t('plugin.new.create.fields.icon')">
           <FlatInput v-model="plugin.icon.value" w="48!">
             <div h-full :class="plugin.icon.value" />
           </FlatInput>
         </LineTemplate>
         <LineTemplate
-          :msg="() => 'You must input the correct plugin version.'"
+          :msg="() => t('plugin.new.create.validation.version')"
           regex="^(\d+\.)(\d+\.)(\*|\d+)$"
-          title="version"
+          :title="t('plugin.new.create.fields.version')"
         >
           <FlatInput v-model="plugin.version" w="48!" />
         </LineTemplate>
         <LineTemplate
-          :msg="() => 'You must input the correct plugin dev address.'"
+          :msg="() => t('plugin.new.create.validation.devAddress')"
           regex="^(?:([A-Za-z]+):)?(\/{0,3})([0-9.\-A-Za-z]+)(?::(\d+))?(?:\/([^?#]*))?(?:\?([^#]*))?(?:#(.*))?$"
-          title="dev-address"
+          :title="t('plugin.new.create.fields.devAddress')"
         >
           <FlatInput v-model="plugin.dev.address" w="48!" />
         </LineTemplate>
         <LineTemplate
-          :msg="() => 'You must input the correct plugin description.'"
-          title="description"
+          :msg="() => t('plugin.new.create.validation.description')"
+          :title="t('plugin.new.create.fields.description')"
         >
           <FlatInput v-model="plugin.desc" :area="true" w="96!" />
         </LineTemplate>
       </BlockTemplate>
 
-      <BlockTemplate title="Readme">
+      <BlockTemplate :title="t('plugin.new.create.readmeTitle')">
         <FlatMarkdown v-model="plugin.readme" />
       </BlockTemplate>
 
-      <BlockTemplate title="Actions">
+      <BlockTemplate :title="t('plugin.new.create.actionsTitle')">
         <TCheckBox v-model="plugin.openInVSC" text-sm>
-          Open in
-          <i>
+          <span inline-flex items-center gap-1>
             <div inline-block style="width: 16px" class="i-simple-icons-visualstudio" />
-            VSCode
-          </i>
+            <span>{{ t('plugin.new.create.openInVscode') }}</span>
+          </span>
         </TCheckBox>
         <TCheckBox v-model="plugin.agreement" text-sm>
-          Agree with <i>Touch Plugin Development</i>
+          {{ t('plugin.new.create.agreementPrefix') }}
+          <i>{{ t('plugin.new.create.agreementName') }}</i>
         </TCheckBox>
         <div flex relative mt-8 gap-4 w-4>
-          <TxButton variant="flat" hover:bg-red> Cancel </TxButton>
+          <TxButton variant="flat" hover:bg-red @click="emits('close')">
+            {{ t('common.cancel') }}
+          </TxButton>
           <ActionTemplate :action="createAction">
-            <TxButton variant="flat" type="primary"> Create </TxButton>
+            <TxButton variant="flat" type="primary">
+              {{ t('plugin.new.create.createAction') }}
+            </TxButton>
           </ActionTemplate>
         </div>
       </BlockTemplate>

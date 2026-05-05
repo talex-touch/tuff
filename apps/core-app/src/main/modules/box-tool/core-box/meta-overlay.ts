@@ -23,7 +23,7 @@ import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { app, WebContentsView } from 'electron'
 import { BoxWindowOption } from '../../../config/default'
-import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
+import { maybeGetRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { useAliveTarget, useAliveWebContents } from '../../../hooks/use-electron-guard'
 import { createLogger } from '../../../utils/logger'
 import { getCoreBoxWindow } from './window'
@@ -31,6 +31,7 @@ import { getCoreBoxWindow } from './window'
 const metaOverlayLog = createLogger('CoreBox').child('MetaOverlay')
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+const getCoreBoxRuntimeOrNull = () => maybeGetRegisteredMainRuntime('core-box')
 const metaOverlayActionExecutedEvent = defineRawEvent<
   {
     actionId: string
@@ -295,8 +296,13 @@ export class MetaOverlayManager {
         return
       }
 
-      const channel = getRegisteredMainRuntime('core-box').channel
-      const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
+      const runtime = getCoreBoxRuntimeOrNull()
+      if (!runtime) {
+        metaOverlayLog.debug('Skip MetaOverlay show sync: CoreBox runtime unavailable')
+        return
+      }
+
+      const tx = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
 
       tx.sendTo(metaWebContents, MetaOverlayEvents.ui.show, {
         item: request.item,
@@ -367,8 +373,14 @@ export class MetaOverlayManager {
     this.isVisible = false
     this.currentItem = null
 
-    const channel = getRegisteredMainRuntime('core-box').channel
-    const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
+    const runtime = getCoreBoxRuntimeOrNull()
+    if (!runtime) {
+      useAliveWebContents(this.getAliveParentWindow())?.focus()
+      metaOverlayLog.debug('MetaOverlay hidden after CoreBox runtime teardown')
+      return
+    }
+
+    const tx = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
 
     tx.sendTo(metaWebContents, MetaOverlayEvents.ui.hide, undefined).catch(() => {})
 
@@ -480,7 +492,14 @@ export class MetaOverlayManager {
       return
     }
 
-    const touchApp = getRegisteredMainRuntime('core-box').app
+    const runtime = getCoreBoxRuntimeOrNull()
+    if (!runtime) {
+      metaOverlayLog.debug(`Skip executing action ${actionId}: CoreBox runtime unavailable`)
+      this.hide()
+      return
+    }
+
+    const touchApp = runtime.app
 
     // Handle based on action type
     if (handler === 'plugin' && pluginId) {

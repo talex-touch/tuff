@@ -1,6 +1,5 @@
 import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
 import url from 'node:url'
-import chalk from 'chalk'
 import { net, session } from 'electron'
 import { normalizeAbsolutePath } from '@talex-touch/utils/common/utils/safe-path'
 import { FILE_SCHEMA } from '../../config/default'
@@ -9,24 +8,22 @@ import {
   isAllowedLocalFilePath,
   normalizeDarwinUsersPath
 } from '../../utils/local-file-policy'
+import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 
 /** Deduplicate error logs -- only log each failing path once per session. */
 const loggedErrorPaths = new Set<string>()
-const loggedCompatPaths = new Set<string>()
+const fileProtocolLog = createLogger('FileProtocolModule')
 
 /**
- * Extract an absolute file path from a tfile:// URL.
+ * Extract an absolute file path from a `tfile` URL.
  *
- * Handles both `tfile:///absolute/path` (3 slashes, correct) and the legacy
- * `tfile://relative/path` (2 slashes, path accidentally used as hostname)
- * by always ensuring the result starts with `/`.
- *
- * Robust against double-encoding: if the URL was percent-encoded by the
- * renderer's `buildTfileUrl()`, Chromium may or may not re-encode it before
- * delivering it to the protocol handler. We decode until the result stabilises.
+ * Electron may hand custom standard-scheme requests back as host-style URLs
+ * such as `tfile://users/name/file.png` even when renderer code originally
+ * assigned `tfile:///Users/name/file.png`. We normalize both shapes here and
+ * keep the actual file access guarded by the local file allowlist below.
  */
-function extractAbsolutePath(rawUrl: string): { path: string; usedCompatPath: boolean } {
+function extractAbsolutePath(rawUrl: string): string | null {
   const normalizeDecodedPath = (value: string): string => {
     const normalized = value.replace(/\\/g, '/')
     if (/^\/[a-z]:\//i.test(normalized)) {
@@ -57,33 +54,30 @@ function extractAbsolutePath(rawUrl: string): { path: string; usedCompatPath: bo
     const rawWithTail = rawUrl.slice(prefix.length)
     const tailIndex = rawWithTail.search(/[?#]/)
     const body = tailIndex >= 0 ? rawWithTail.slice(0, tailIndex) : rawWithTail
-    return {
-      path: normalizeDecodedPath(decodeStable(body)),
-      usedCompatPath: !body.startsWith('/')
+    if (!body) {
+      return null
     }
+    return normalizeDecodedPath(decodeStable(body))
   }
 
   try {
     const parsed = new URL(rawUrl)
-    if (parsed.hostname && /^[a-z]$/i.test(parsed.hostname) && parsed.pathname.startsWith('/')) {
-      return {
-        path: normalizeDecodedPath(decodeStable(`${parsed.hostname}:${parsed.pathname}`)),
-        usedCompatPath: false
-      }
+    if (parsed.protocol !== `${FILE_SCHEMA}:`) {
+      return null
     }
-    const merged = parsed.hostname ? `/${parsed.hostname}${parsed.pathname}` : parsed.pathname
-    return {
-      path: normalizeDecodedPath(decodeStable(merged)),
-      usedCompatPath: false
-    }
+    const merged = parsed.hostname
+      ? /^[a-z]$/i.test(parsed.hostname) && parsed.pathname.startsWith('/')
+        ? `${parsed.hostname}:${parsed.pathname}`
+        : `/${parsed.hostname}${parsed.pathname}`
+      : parsed.pathname
+    return normalizeDecodedPath(decodeStable(merged))
   } catch {
-    const tailIndex = rawUrl.search(/[?#]/)
-    const body = tailIndex >= 0 ? rawUrl.slice(0, tailIndex) : rawUrl
-    return {
-      path: normalizeDecodedPath(decodeStable(body)),
-      usedCompatPath: false
-    }
+    return null
   }
+}
+
+export const __test__ = {
+  extractAbsolutePath
 }
 
 class FileProtocolModule extends BaseModule {
@@ -101,20 +95,21 @@ class FileProtocolModule extends BaseModule {
     const allowedRoots = getAllowedLocalFileRoots()
 
     ses.protocol.handle(FILE_SCHEMA, async (request) => {
-      const { path: extractedPath, usedCompatPath } = extractAbsolutePath(request.url)
+      const extractedPath = extractAbsolutePath(request.url)
+      if (!extractedPath) {
+        fileProtocolLog.warn('Rejected non-canonical tfile URL', {
+          meta: {
+            requestUrl: request.url
+          }
+        })
+        return new Response('Bad Request', { status: 400 })
+      }
       const filePath = normalizeDarwinUsersPath(extractedPath)
       const normalizedPath = normalizeAbsolutePath(filePath)
-      if (usedCompatPath && normalizedPath && !loggedCompatPaths.has(normalizedPath)) {
-        loggedCompatPaths.add(normalizedPath)
-        console.info(chalk.blue('[FileProtocolModule] Compat read hit: normalized legacy tfile URL'), {
-          requestUrl: request.url,
-          normalizedPath
-        })
-      }
       if (!normalizedPath || !isAllowedLocalFilePath(normalizedPath, allowedRoots)) {
         if (!loggedErrorPaths.has(filePath)) {
           loggedErrorPaths.add(filePath)
-          console.warn(chalk.yellow(`[FileProtocolModule] Blocked path: ${filePath}`))
+          fileProtocolLog.warn(`Blocked path: ${filePath}`)
         }
         return new Response('Forbidden', { status: 403 })
       }
@@ -126,10 +121,12 @@ class FileProtocolModule extends BaseModule {
       } catch (error) {
         if (!loggedErrorPaths.has(normalizedPath)) {
           loggedErrorPaths.add(normalizedPath)
-          console.error(chalk.red('[FileProtocolModule] tfile request error:'), {
-            filePath: normalizedPath,
-            fileUrl,
-            url: request.url,
+          fileProtocolLog.error('tfile request error', {
+            meta: {
+              filePath: normalizedPath,
+              fileUrl,
+              url: request.url
+            },
             error: error instanceof Error ? error.message : String(error)
           })
         }
@@ -137,7 +134,7 @@ class FileProtocolModule extends BaseModule {
       }
     })
 
-    console.log(chalk.green('[FileProtocolModule] tfile protocol registered'))
+    fileProtocolLog.info('tfile protocol registered')
   }
 
   onDestroy(): MaybePromise<void> {

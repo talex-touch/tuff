@@ -159,7 +159,7 @@ function requestClose() {
 <template>
   <TxModal
     v-model="modalVisible"
-    :title="$t('download.error_logs')"
+    :title="t('download.error_logs')"
     width="80%"
     class="error-log-viewer"
   >
@@ -168,19 +168,19 @@ function requestClose() {
       <div class="toolbar-left">
         <TxButton :loading="loading" @click="refreshLogs">
           <i class="i-carbon-renew" />
-          {{ $t('common.refresh') }}
+          {{ t('common.refresh') }}
         </TxButton>
         <TxButton type="danger" @click="clearLogs">
           <i class="i-carbon-trash-can" />
-          {{ $t('download.clear_logs') }}
+          {{ t('download.clear_logs') }}
         </TxButton>
       </div>
       <div class="toolbar-right">
         <TuffSelect v-model="logLimit" style="width: 150px" @change="refreshLogs">
-          <TuffSelectItem :label="$t('download.last_50_lines')" :value="50" />
-          <TuffSelectItem :label="$t('download.last_100_lines')" :value="100" />
-          <TuffSelectItem :label="$t('download.last_500_lines')" :value="500" />
-          <TuffSelectItem :label="$t('download.all_logs')" :value="0" />
+          <TuffSelectItem :label="t('download.last_50_lines')" :value="50" />
+          <TuffSelectItem :label="t('download.last_100_lines')" :value="100" />
+          <TuffSelectItem :label="t('download.last_500_lines')" :value="500" />
+          <TuffSelectItem :label="t('download.all_logs')" :value="0" />
         </TuffSelect>
       </div>
     </div>
@@ -191,7 +191,7 @@ function requestClose() {
         <div class="stats-grid">
           <div class="stat-item">
             <div class="stat-label">
-              {{ $t('download.total_errors') }}
+              {{ t('download.total_errors') }}
             </div>
             <div class="stat-value">
               {{ errorStats.total }}
@@ -199,7 +199,7 @@ function requestClose() {
           </div>
           <div class="stat-item">
             <div class="stat-label">
-              {{ $t('download.network_errors') }}
+              {{ t('download.network_errors') }}
             </div>
             <div class="stat-value error-network">
               {{ errorStats.byType?.network_error || 0 }}
@@ -207,7 +207,7 @@ function requestClose() {
           </div>
           <div class="stat-item">
             <div class="stat-label">
-              {{ $t('download.timeout_errors') }}
+              {{ t('download.timeout_errors') }}
             </div>
             <div class="stat-value error-timeout">
               {{ errorStats.byType?.timeout_error || 0 }}
@@ -215,7 +215,7 @@ function requestClose() {
           </div>
           <div class="stat-item">
             <div class="stat-label">
-              {{ $t('download.disk_errors') }}
+              {{ t('download.disk_errors') }}
             </div>
             <div class="stat-value error-disk">
               {{ errorStats.byType?.disk_space_error || 0 }}
@@ -229,17 +229,17 @@ function requestClose() {
     <div class="log-content">
       <TxScroll height="500px">
         <pre v-if="logs" class="log-text">{{ logs }}</pre>
-        <TxEmpty v-else :title="$t('download.no_logs')" />
+        <TxEmpty v-else :title="t('download.no_logs')" />
       </TxScroll>
     </div>
 
     <template #footer>
       <TxButton @click="requestClose">
-        {{ $t('common.close') }}
+        {{ t('common.close') }}
       </TxButton>
       <TxButton type="primary" @click="downloadLogs">
         <i class="i-carbon-download" />
-        {{ $t('download.download_logs') }}
+        {{ t('download.download_logs') }}
       </TxButton>
     </template>
   </TxModal>

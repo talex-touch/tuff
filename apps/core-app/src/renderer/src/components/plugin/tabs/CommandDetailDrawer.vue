@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { IFeatureCommand } from '@talex-touch/utils/plugin'
 import { TxButton } from '@talex-touch/tuffex'
+import { useI18n } from 'vue-i18n'
 
 interface CommandData {
   name?: string
@@ -14,6 +15,8 @@ defineProps<{
   command: IFeatureCommand | null
   commandData?: CommandData
 }>()
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -29,7 +32,7 @@ function closeDrawer(): void {
     <div v-if="visible" class="command-drawer-overlay" @click.self="closeDrawer">
       <div class="command-drawer">
         <div class="drawer-header">
-          <h3>Command Details</h3>
+          <h3>{{ t('plugin.details.commandDetailsTitle') }}</h3>
           <TxButton variant="bare" class="close-button" @click="closeDrawer">
             <i class="i-ri-close-line" />
           </TxButton>
@@ -51,7 +54,7 @@ function closeDrawer(): void {
           <div class="command-json glass-card">
             <div class="card-header">
               <i class="i-ri-code-s-slash-line" />
-              <h4>Command Data</h4>
+              <h4>{{ t('plugin.details.commandDataTitle') }}</h4>
             </div>
             <pre class="json-content">{{ JSON.stringify(command, null, 2) }}</pre>
           </div>

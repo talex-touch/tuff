@@ -1,11 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AgentsEvents, AppEvents, PermissionEvents, UpdateEvents } from '../transport/events'
+import {
+  AgentsEvents,
+  AppEvents,
+  PermissionEvents,
+  StorageEvents,
+  UpdateEvents,
+} from '../transport/events'
+import { createAgentsSdk } from '../transport/sdk/domains/agents'
 import { createAgentStoreSdk } from '../transport/sdk/domains/agents-store'
 import { createAppSdk } from '../transport/sdk/domains/app'
-import { createAgentsSdk } from '../transport/sdk/domains/agents'
 import { createIntelligenceSdk } from '../transport/sdk/domains/intelligence'
 import { createPermissionSdk } from '../transport/sdk/domains/permission'
 import { createSettingsSdk } from '../transport/sdk/domains/settings'
+import { createStorageSdk } from '../transport/sdk/domains/storage'
 import { createUpdateSdk } from '../transport/sdk/domains/update'
 
 function createTransportMock() {
@@ -28,10 +35,16 @@ describe('transport domain sdk mappings', () => {
     await sdk.check({ force: true })
     await sdk.updateSettings({ autoDownload: true })
 
-    expect(transport.send).toHaveBeenNthCalledWith(1, UpdateEvents.check, { force: true })
-    expect(transport.send).toHaveBeenNthCalledWith(2, UpdateEvents.updateSettings, {
-      settings: { autoDownload: true },
+    expect(transport.send).toHaveBeenNthCalledWith(1, UpdateEvents.check, {
+      force: true,
     })
+    expect(transport.send).toHaveBeenNthCalledWith(
+      2,
+      UpdateEvents.updateSettings,
+      {
+        settings: { autoDownload: true },
+      },
+    )
   })
 
   it('settings sdk maps file index stream to typed transport stream', async () => {
@@ -48,22 +61,170 @@ describe('transport domain sdk mappings', () => {
     )
   })
 
+  it('settings sdk maps index rebuild requests through typed transport events', async () => {
+    const transport = createTransportMock()
+    const sdk = createSettingsSdk(transport as any)
+
+    await sdk.fileIndex.rebuild({ force: true })
+    await sdk.appIndex.reindex({
+      target: 'JSON Formatter',
+      mode: 'keywords',
+      force: true,
+    })
+
+    expect(transport.send).toHaveBeenNthCalledWith(
+      1,
+      AppEvents.fileIndex.rebuild,
+      { force: true },
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      2,
+      AppEvents.appIndex.reindex,
+      {
+        target: 'JSON Formatter',
+        mode: 'keywords',
+        force: true,
+      },
+    )
+  })
+
+  it('storage sdk maps app storage operations to typed storage events', async () => {
+    const transport = createTransportMock()
+    transport.send.mockResolvedValueOnce({ theme: 'dark' })
+    const sdk = createStorageSdk(transport as any)
+    const onData = vi.fn()
+
+    await expect(sdk.app.get('app-setting.ini')).resolves.toEqual({
+      theme: 'dark',
+    })
+    await sdk.app.save({ key: 'app-setting.ini', value: { theme: 'light' } })
+    await sdk.app.streamUpdated({ onData })
+
+    expect(transport.send).toHaveBeenNthCalledWith(1, StorageEvents.app.get, {
+      key: 'app-setting.ini',
+    })
+    expect(transport.send).toHaveBeenNthCalledWith(2, StorageEvents.app.save, {
+      key: 'app-setting.ini',
+      value: { theme: 'light' },
+    })
+    expect(transport.stream).toHaveBeenCalledWith(
+      StorageEvents.app.updated,
+      undefined,
+      { onData },
+    )
+  })
+
+  it('settings sdk maps device idle diagnostic event', async () => {
+    const transport = createTransportMock()
+    const sdk = createSettingsSdk(transport as any)
+
+    await sdk.deviceIdle.getDiagnostic()
+
+    expect(transport.send).toHaveBeenCalledWith(
+      AppEvents.deviceIdle.getDiagnostic,
+    )
+  })
+
+  it('settings sdk maps managed app entry events through appIndex domain', async () => {
+    const transport = createTransportMock()
+    const sdk = createSettingsSdk(transport as any)
+
+    await sdk.appIndex.listEntries()
+    await sdk.appIndex.upsertEntry({
+      path: '/Applications/WeChat.app',
+      displayName: '微信',
+      enabled: true,
+    })
+    await sdk.appIndex.removeEntry({ path: '/Applications/WeChat.app' })
+    await sdk.appIndex.setEntryEnabled({
+      path: '/Applications/WeChat.app',
+      enabled: false,
+    })
+
+    expect(transport.send).toHaveBeenNthCalledWith(
+      1,
+      AppEvents.appIndex.listEntries,
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      2,
+      AppEvents.appIndex.upsertEntry,
+      {
+        path: '/Applications/WeChat.app',
+        displayName: '微信',
+        enabled: true,
+      },
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      3,
+      AppEvents.appIndex.removeEntry,
+      {
+        path: '/Applications/WeChat.app',
+      },
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      4,
+      AppEvents.appIndex.setEntryEnabled,
+      {
+        path: '/Applications/WeChat.app',
+        enabled: false,
+      },
+    )
+  })
+
+  it('settings sdk maps app search diagnostic and reindex through appIndex domain', async () => {
+    const transport = createTransportMock()
+    const sdk = createSettingsSdk(transport as any)
+
+    await sdk.appIndex.diagnose({
+      target: 'JSON Formatter',
+      query: 'json formatter',
+    })
+    await sdk.appIndex.reindex({
+      target: 'JSON Formatter',
+      mode: 'keywords',
+    })
+
+    expect(transport.send).toHaveBeenNthCalledWith(
+      1,
+      AppEvents.appIndex.diagnose,
+      {
+        target: 'JSON Formatter',
+        query: 'json formatter',
+      },
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      2,
+      AppEvents.appIndex.reindex,
+      {
+        target: 'JSON Formatter',
+        mode: 'keywords',
+      },
+    )
+  })
+
   it('app sdk maps openPromptsFolder to typed system event', async () => {
     const transport = createTransportMock()
     const sdk = createAppSdk(transport as any)
 
     await sdk.openPromptsFolder()
 
-    expect(transport.send).toHaveBeenCalledWith(AppEvents.system.openPromptsFolder)
+    expect(transport.send).toHaveBeenCalledWith(
+      AppEvents.system.openPromptsFolder,
+    )
   })
 
   it('intelligence sdk throws typed error when main returns failed ApiResponse', async () => {
     const transport = createTransportMock()
-    transport.send.mockResolvedValueOnce({ ok: false, error: 'quota exceeded' })
+    transport.send.mockResolvedValueOnce({
+      ok: false,
+      error: 'quota exceeded',
+    })
 
     const sdk = createIntelligenceSdk(transport as any)
 
-    await expect(sdk.invoke('text.chat', { messages: [] })).rejects.toThrow('quota exceeded')
+    await expect(sdk.invoke('text.chat', { messages: [] })).rejects.toThrow(
+      'quota exceeded',
+    )
   })
 
   it('intelligence sdk maps session subscribe to typed transport stream', async () => {
@@ -73,7 +234,7 @@ describe('transport domain sdk mappings', () => {
 
     await sdk.agentSessionSubscribe(
       { sessionId: 'tis_1', fromSeq: 3 },
-      { onData }
+      { onData },
     )
 
     expect(transport.stream).toHaveBeenCalledTimes(1)
@@ -88,11 +249,68 @@ describe('transport domain sdk mappings', () => {
     const sdk = createIntelligenceSdk(transport as any)
 
     await expect(
-      sdk.agentSessionSubscribe(
-        { sessionId: 'tis_1' },
-        { onData: vi.fn() }
-      )
+      sdk.agentSessionSubscribe({ sessionId: 'tis_1' }, { onData: vi.fn() }),
     ).rejects.toThrow('transport.stream is unavailable')
+  })
+
+  it('intelligence sdk maps workflow CRUD events through typed transport events', async () => {
+    const transport = createTransportMock()
+    transport.send.mockResolvedValue({ ok: true, result: undefined })
+    const sdk = createIntelligenceSdk(transport as any)
+
+    await sdk.workflowList({ includeTemplates: true })
+    await sdk.workflowGet({ workflowId: 'wf_1' })
+    await sdk.workflowSave({
+      id: 'wf_1',
+      name: '整理剪贴板',
+      triggers: [],
+      contextSources: [],
+      toolSources: ['builtin'],
+      steps: [],
+    })
+    await sdk.workflowDelete({ workflowId: 'wf_1' })
+    await sdk.workflowRun({ workflowId: 'wf_1', sessionId: 'tis_1' })
+    await sdk.workflowHistory({ workflowId: 'wf_1', limit: 10 })
+
+    expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe(
+      'intelligence:workflow:list',
+    )
+    expect(transport.send.mock.calls[0]?.[1]).toEqual({
+      includeTemplates: true,
+    })
+    expect(transport.send.mock.calls[1]?.[0]?.toEventName?.()).toBe(
+      'intelligence:workflow:get',
+    )
+    expect(transport.send.mock.calls[1]?.[1]).toEqual({ workflowId: 'wf_1' })
+    expect(transport.send.mock.calls[2]?.[0]?.toEventName?.()).toBe(
+      'intelligence:workflow:save',
+    )
+    expect(transport.send.mock.calls[2]?.[1]).toEqual({
+      id: 'wf_1',
+      name: '整理剪贴板',
+      triggers: [],
+      contextSources: [],
+      toolSources: ['builtin'],
+      steps: [],
+    })
+    expect(transport.send.mock.calls[3]?.[0]?.toEventName?.()).toBe(
+      'intelligence:workflow:delete',
+    )
+    expect(transport.send.mock.calls[3]?.[1]).toEqual({ workflowId: 'wf_1' })
+    expect(transport.send.mock.calls[4]?.[0]?.toEventName?.()).toBe(
+      'intelligence:workflow:run',
+    )
+    expect(transport.send.mock.calls[4]?.[1]).toEqual({
+      workflowId: 'wf_1',
+      sessionId: 'tis_1',
+    })
+    expect(transport.send.mock.calls[5]?.[0]?.toEventName?.()).toBe(
+      'intelligence:workflow:history',
+    )
+    expect(transport.send.mock.calls[5]?.[1]).toEqual({
+      workflowId: 'wf_1',
+      limit: 10,
+    })
   })
 
   it('permission sdk maps grant + push subscription', async () => {
@@ -102,7 +320,11 @@ describe('transport domain sdk mappings', () => {
 
     const sdk = createPermissionSdk(transport as any)
 
-    await sdk.grant({ pluginId: 'demo', permissionId: 'intelligence.basic', grantedBy: 'user' })
+    await sdk.grant({
+      pluginId: 'demo',
+      permissionId: 'intelligence.basic',
+      grantedBy: 'user',
+    })
     const unsubscribe = sdk.onUpdated(() => {})
     unsubscribe()
 
@@ -136,7 +358,10 @@ describe('transport domain sdk mappings', () => {
       AgentsEvents.store.install,
       { agentId: 'community.workflow-agent', version: '1.0.0' },
     )
-    expect(transport.send).toHaveBeenNthCalledWith(3, AgentsEvents.store.checkUpdates)
+    expect(transport.send).toHaveBeenNthCalledWith(
+      3,
+      AgentsEvents.store.checkUpdates,
+    )
   })
 
   it('agents sdk maps api list/execute-immediate/update-priority events', async () => {
@@ -152,15 +377,23 @@ describe('transport domain sdk mappings', () => {
     await sdk.updatePriority('task-1', 9)
 
     expect(transport.send).toHaveBeenNthCalledWith(1, AgentsEvents.api.listAll)
-    expect(transport.send).toHaveBeenNthCalledWith(2, AgentsEvents.api.executeImmediate, {
-      agentId: 'builtin.search-agent',
-      type: 'execute',
-      input: { query: 'hello' },
-    })
-    expect(transport.send).toHaveBeenNthCalledWith(3, AgentsEvents.api.updatePriority, {
-      taskId: 'task-1',
-      priority: 9,
-    })
+    expect(transport.send).toHaveBeenNthCalledWith(
+      2,
+      AgentsEvents.api.executeImmediate,
+      {
+        agentId: 'builtin.search-agent',
+        type: 'execute',
+        input: { query: 'hello' },
+      },
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      3,
+      AgentsEvents.api.updatePriority,
+      {
+        taskId: 'task-1',
+        priority: 9,
+      },
+    )
   })
 
   it('agents sdk maps task push subscriptions', async () => {

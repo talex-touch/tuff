@@ -4,6 +4,7 @@ import { appSettingOriginData } from '@talex-touch/utils'
 import { appSettingsData } from '@talex-touch/utils/renderer/storage'
 import { computed } from 'vue'
 import { resolveLayoutAtomsToCSSVars, useLayoutAtoms } from '~/modules/layout/atoms'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { sanitizeUserCss } from '~/modules/style/sanitizeUserCss'
 import LayoutShell from '../shared/LayoutShell.vue'
 import LayoutFooter from '../shared/LayoutFooter.vue'
@@ -22,10 +23,10 @@ const props = withDefaults(
 )
 
 const { atomConfig } = useLayoutAtoms()
+const { isWindows } = useRendererPlatform()
 const isDisplayMode = computed(() => props.display)
 const isPreviewMode = computed(() => props.preview)
 const shouldRenderSlots = computed(() => !isDisplayMode.value || isPreviewMode.value)
-const isWindows = process.platform === 'win32'
 
 function normalizeCanvasConfig(value: unknown): LayoutCanvasConfig {
   const fallback = appSettingOriginData.layoutCanvasConfig

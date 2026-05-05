@@ -7,11 +7,6 @@ import type {
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
-import type {
-  FileParserEmbedding,
-  FileParserProgress,
-  FileParserResult
-} from '@talex-touch/utils/electron/file-parsers'
 import type { StreamContext } from '@talex-touch/utils/transport/main'
 import type {
   FileIndexAddPathResult,
@@ -22,24 +17,19 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { Buffer } from 'node:buffer'
-import type { FileChangedEvent, FileUnlinkedEvent } from '../../../../core/eventbus/touch-event'
 import type { TouchApp } from '../../../../core/touch-app'
 import type * as schema from '../../../../db/schema'
-import type { SearchIndexItem, SearchIndexService } from '../../search-engine/search-index-service'
+import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
 import type { FileTypeTag } from './constants'
-import type { ScannedFileInfo } from './types'
+import type { FileIndexSettings, ScannedFileInfo } from './types'
 import type { IndexWorkerFile, IndexWorkerFileResult } from './workers/file-index-worker-client'
 import type { ReconcileDbFile, ReconcileDiskFile } from './workers/file-reconcile-worker-client'
 import type { WorkerStatusSnapshot } from './workers/worker-status'
-import { createHash } from 'node:crypto'
-import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
-import os from 'node:os'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
-import { promisify } from 'node:util'
 import {
   StorageList,
   timingLogger,
@@ -49,16 +39,13 @@ import {
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import { app, shell } from 'electron'
-// extract-file-icon removed — sync native call blocks event loop; icon extraction is done via IconWorkerClient only
-import plist from 'plist'
 import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlaceholder.svg?raw'
-import { FileAddedEvent, TalexEvents, touchEventBus } from '../../../../core/eventbus/touch-event'
 import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
+import { TalexEvents, touchEventBus } from '../../../../core/eventbus/touch-event'
 import {
   embeddings as embeddingsSchema,
   fileExtensions,
@@ -66,26 +53,17 @@ import {
   files as filesSchema,
   scanProgress
 } from '../../../../db/schema'
-import { isSqliteBusyError, withSqliteRetry } from '../../../../db/sqlite-retry'
+import { withSqliteRetry } from '../../../../db/sqlite-retry'
 import { createDbUtils } from '../../../../db/utils'
 import { appTaskGate } from '../../../../service/app-task-gate'
-import {
-  AppUsageActivityTracker,
-  BackgroundTaskService
-} from '../../../../service/background-task-service'
 import { deviceIdleService } from '../../../../service/device-idle-service'
-import { createFailedFilesCleanupTask } from '../../../../service/failed-files-cleanup-task'
 import { FILE_TIMING_BASE_OPTIONS } from '../../../../utils/file-indexing-utils'
 import { formatDuration } from '../../../../utils/logger'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { getMainConfig, saveMainConfig } from '../../../storage'
-import FileSystemWatcher from '../../file-system-watcher'
-import { isSearchRecentlyActive } from '../../search-engine/search-activity'
 import { searchLogger } from '../../search-engine/search-logger'
 import {
   BLACKLISTED_EXTENSIONS,
-  CONTENT_INDEXABLE_EXTENSIONS,
-  getContentSizeLimitMB,
   getTypeTagsForExtension,
   KEYWORD_MAP,
   WHITELISTED_EXTENSIONS
@@ -101,7 +79,6 @@ import { ThumbnailWorkerClient } from './workers/thumbnail-worker-client'
 import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
 import {
   SearchIndexWorkerClient,
-  type PersistEntry,
   type UpsertFileRecord
 } from '../../search-engine/workers/search-index-worker-client'
 import {
@@ -109,39 +86,30 @@ import {
   shouldEmitProgressStreamImmediately
 } from './services/file-provider-progress-stream-service'
 import {
-  commitIndexWorkerFlushBatch,
-  getIndexWorkerBusyRetryDelay,
-  getIndexWorkerFlushDelay,
-  rollbackIndexWorkerFlushBatch,
-  takeIndexWorkerFlushBatch
-} from './services/file-provider-index-flush-service'
-import {
   getWatchDepthForPath as resolveWatchDepthForPath,
   normalizeWatchPath
 } from './services/file-provider-path-service'
 import {
   buildFtsQuery as buildFileProviderFtsQuery,
-  buildSearchIndexItem as buildFileProviderSearchIndexItem,
   resolveExtensionsForTypeFilters as resolveFileProviderExtensionsForTypeFilters,
   resolveTypeTag as resolveFileProviderTypeTag
 } from './services/file-provider-search-service'
+import { FileProviderWatchService } from './services/file-provider-watch-service'
+import {
+  FileProviderOpenerService,
+  type ResolvedOpener
+} from './services/file-provider-opener-service'
+import { FileProviderIndexRuntimeService } from './services/file-provider-index-runtime-service'
+import { type PersistEntry } from '../../search-engine/workers/search-index-worker-client'
+import FileSystemWatcher from '../../file-system-watcher'
 
-const MAX_CONTENT_LENGTH = 200_000
 const ICON_META_EXTENSION_KEY = 'iconMeta'
 const fileProviderLog = getLogger('file-provider')
-const SEARCH_ACTIVE_WINDOW_MS = 2000
 const SEMANTIC_TRIGGER_MIN_QUERY_LENGTH = 3
 const SEMANTIC_TRIGGER_MAX_CANDIDATES = 20
 const SEMANTIC_SEARCH_TIMEOUT_MS = 120
 const BASE64_MARKER = 'base64,'
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
-const INDEX_WORKER_FLUSH_DELAY_MS = 250
-const INDEX_WORKER_FLUSH_DELAY_BACKLOG_MS = 500
-const INDEX_WORKER_FLUSH_DEFER_MS = 300
-const INDEX_WORKER_DB_BACKPRESSURE_MAX_QUEUED = 10
-const INDEX_WORKER_FLUSH_BUSY_RETRY_BASE_MS = 250
-const INDEX_WORKER_FLUSH_BUSY_RETRY_MAX_MS = 5000
-
 function isValidBase64DataUrl(value: string): boolean {
   const markerIndex = value.indexOf(BASE64_MARKER)
   if (markerIndex === -1) {
@@ -154,7 +122,6 @@ function isValidBase64DataUrl(value: string): boolean {
   return BASE64_PAYLOAD_PATTERN.test(payload)
 }
 
-type FileIndexStatus = (typeof fileIndexProgress.$inferSelect)['status']
 type IncrementalUpdateAction = 'add' | 'change' | 'delete'
 
 interface IncrementalUpdatePayload {
@@ -185,19 +152,9 @@ interface FileUpdateRecord {
   isDir: boolean
 }
 
-type EmbeddingDbExecutor = Pick<LibSQLDatabase<typeof schema>, 'delete' | 'insert'>
+type EmbeddingDbExecutor = Pick<LibSQLDatabase<typeof schema>, 'delete'>
 
-export interface FileIndexSettings {
-  autoScanEnabled: boolean
-  autoScanIntervalMs: number
-  autoScanIdleThresholdMs: number
-  autoScanCheckIntervalMs: number
-  extraPaths: string[]
-}
-
-const execFileAsync = promisify(execFile)
 const FILE_PROVIDER_PROGRESS_TASK_ID = 'file-provider.progress-cleanup'
-const FILE_INDEX_AUTO_TASK_ID = 'file-index.auto-scan'
 const pollingService = PollingService.getInstance()
 
 const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
@@ -206,34 +163,6 @@ const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
   autoScanIdleThresholdMs: 60 * 60 * 1000,
   autoScanCheckIntervalMs: 5 * 60 * 1000,
   extraPaths: []
-}
-
-const LAUNCH_SERVICES_PLIST_PATH = path.join(
-  os.homedir(),
-  'Library',
-  'Preferences',
-  'com.apple.LaunchServices',
-  'com.apple.launchservices.secure.plist'
-)
-
-interface ResolvedOpener {
-  bundleId: string
-  name: string
-  logo: string
-  path?: string
-  lastResolvedAt: string
-}
-
-type LaunchServicesRoleKey = 'LSHandlerRoleAll' | 'LSHandlerRoleViewer' | 'LSHandlerRoleEditor'
-
-type LaunchServicesHandler = {
-  LSHandlerContentTag?: string
-  LSHandlerContentTagClass?: string
-  LSHandlerContentType?: string
-  LSHandlerRoleAll?: string
-  LSHandlerRoleViewer?: string
-  LSHandlerRoleEditor?: string
-  LSHandlerPreferredVersions?: Partial<Record<LaunchServicesRoleKey, string>>
 }
 
 const openerResolveEvent = defineRawEvent<{ extension: string }, ResolvedOpener | null>(
@@ -336,18 +265,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     process.platform === 'darwin' || process.platform === 'win32'
   private readonly timestampToleranceMs = 1_000
   private readonly handleFsAddedOrChanged = (event: ITouchEvent) => {
-    const fileEvent = event as FileAddedEvent | FileChangedEvent
-    if (!fileEvent?.filePath) return
-    this.enqueueIncrementalUpdate(
-      fileEvent.filePath,
-      fileEvent instanceof FileAddedEvent ? 'add' : 'change'
-    )
+    this.watchService.handleFsAddedOrChanged(event)
   }
 
   private readonly handleFsUnlinked = (event: ITouchEvent) => {
-    const fileEvent = event as FileUnlinkedEvent
-    if (!fileEvent?.filePath) return
-    this.enqueueIncrementalUpdate(fileEvent.filePath, 'delete')
+    this.watchService.handleFsUnlinked(event)
   }
 
   private openersChannelRegistered = false
@@ -356,51 +278,18 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private lastProgressStreamEmitAt = 0
   private pendingProgressStreamPayload: FileIndexProgressPayload | null = null
   private progressStreamFlushTimer: NodeJS.Timeout | null = null
-  private launchServicesLoadPromise: Promise<LaunchServicesHandler[]> | null = null
-  private readonly openerNegativeCache = new Map<string, number>()
-  private readonly openerResolveConcurrency = 2
-  private openerResolveInFlight = 0
-  private openerResolveWaiters: Array<() => void> = []
-  private readonly utiCache = new Map<string, string | null>()
-  private readonly bundleIdCache = new Map<string, string | null>()
   private readonly iconExtractionPending = new Map<string, Promise<Buffer | null>>()
   private readonly fileScanWorker = new FileScanWorkerClient()
   private readonly reconcileWorker = new FileReconcileWorkerClient()
-  private readonly fileIndexWorker = new FileIndexWorkerClient((payload) =>
-    this.handleIndexWorkerFile(payload)
-  )
+  private readonly fileIndexWorker: FileIndexWorkerClient
 
   private readonly iconWorker = new IconWorkerClient()
   private readonly searchIndexWorker = new SearchIndexWorkerClient()
-  private readonly openerCache = new Map<string, ResolvedOpener>()
-  private readonly openerPromises = new Map<string, Promise<ResolvedOpener | null>>()
-  private readonly openerIconJobs = new Map<string, Promise<void>>()
-  private launchServicesHandlers: LaunchServicesHandler[] | null = null
-  private launchServicesMTime?: number
-  private readonly failedContentCache = new Map<
-    number,
-    { status: FileIndexStatus; updatedAt: number | null; lastError: string | null }
-  >()
-
   private readonly pendingIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
   private readonly inflightIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
-  private indexWorkerFlushTimer: NodeJS.Timeout | null = null
-  /** Guard to prevent overlapping flushIndexWorkerResults calls */
-  private indexWorkerFlushing = false
-  private indexWorkerFlushBusyRetryCount = 0
 
-  private readonly pendingContentProgress = new Map<
-    number,
-    { progress: number; processedBytes: number; totalBytes: number; updatedAt: Date }
-  >()
-
-  private contentProgressFlushTimer: NodeJS.Timeout | null = null
-
-  private backgroundTaskService: BackgroundTaskService | null = null
-  private activityTracker: AppUsageActivityTracker | null = null
   private touchApp: TouchApp | null = null
   private fileIndexSettings: FileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
-  private autoIndexTaskRegistered = false
   private indexingProgress = {
     current: 0,
     total: 0,
@@ -421,6 +310,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private readonly enableFileIconExtraction =
     (process.env.TALEX_FILE_PROVIDER_EXTRACT_ICONS ?? 'true').toLowerCase() !== 'false'
+  private readonly watchService: FileProviderWatchService
+  private readonly openerService: FileProviderOpenerService
+  private readonly indexRuntimeService: FileProviderIndexRuntimeService
 
   constructor() {
     const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
@@ -444,12 +336,54 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.baseWatchPaths = [...new Set(paths.filter((p): p is string => !!p))]
     this.watchPaths = [...this.baseWatchPaths]
     this.normalizedWatchPaths = this.watchPaths.map((p) => this.normalizePath(p))
+    this.watchService = new FileProviderWatchService({
+      baseWatchPaths: this.baseWatchPaths,
+      getDbUtils: () => this.dbUtils,
+      getWatchDepthForPath: (watchPath) => this.getWatchDepthForPath(watchPath),
+      normalizePath: (rawPath) => this.normalizePath(rawPath),
+      enqueueIncrementalUpdate: (rawPath, action, manual) =>
+        this.enqueueIncrementalUpdate(rawPath, action, { manual }),
+      runAutoIndexing: () => this.runAutoIndexing(),
+      logDebug: (message, meta) => this.logDebug(message, meta),
+      logWarn: (message, error, meta) => this.logWarn(message, error, meta),
+      logError: (message, error, meta) => this.logError(message, error, meta)
+    })
+    this.openerService = new FileProviderOpenerService({
+      emptyLogo: EMPTY_OPENER_LOGO,
+      enableFileIconExtraction: this.enableFileIconExtraction,
+      getDbUtils: () => this.dbUtils,
+      withDbWrite: (label, operation) => this.withDbWrite(label, operation),
+      getStoredOpeners: () => {
+        const raw = getMainConfig(StorageList.OPENERS) as unknown
+        return raw && typeof raw === 'object' && !Array.isArray(raw)
+          ? (raw as Record<string, OpenerInfo>)
+          : {}
+      },
+      saveStoredOpeners: (next) => saveMainConfig(StorageList.OPENERS, next),
+      extractFileIconQueued: (filePath) => this.extractFileIconQueued(filePath),
+      isValidBase64DataUrl,
+      logWarn: (message, error, meta) => this.logWarn(message, error, meta),
+      logError: (message, error, meta) => this.logError(message, error, meta)
+    })
+    this.indexRuntimeService = new FileProviderIndexRuntimeService({
+      flushBatchScheduler: this.flushBatchScheduler,
+      getDbUtils: () => this.dbUtils,
+      getSearchIndex: () => this.searchIndex,
+      getPendingResults: () => this.pendingIndexWorkerResults,
+      getInflightResults: () => this.inflightIndexWorkerResults,
+      getDatabaseFilePath: () => this.databaseFilePath,
+      getSearchIndexWorker: () => this.searchIndexWorker,
+      buildPersistEntries: (entries) => this.buildIndexWorkerPersistEntries(entries),
+      logDebug: (message, meta) => this.logDebug(message, meta),
+      logWarn: (message, error, meta) => this.logWarn(message, error, meta),
+      logError: (message, error, meta) => this.logError(message, error, meta)
+    })
+    this.fileIndexWorker = new FileIndexWorkerClient((payload) =>
+      this.indexRuntimeService.handleIndexWorkerFile(payload)
+    )
     this.logDebug('Watching paths', {
       count: this.watchPaths.length
     })
-
-    void this.indexFilesForSearch
-    void this.extractContentForFiles
   }
 
   private logInfo(message: string, meta?: Record<string, unknown>): void {
@@ -500,211 +434,29 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     fileProviderLog.error(message)
   }
 
-  private recordContentFailure(
-    fileId: number,
-    lastError: string | null,
-    updatedAt?: number | null
-  ): void {
-    let timestamp: number | null
-    if (typeof updatedAt === 'number' && Number.isFinite(updatedAt)) {
-      timestamp = updatedAt
-    } else if (updatedAt === null) {
-      timestamp = null
-    } else {
-      timestamp = Date.now()
-    }
-    this.failedContentCache.set(fileId, {
-      status: 'failed',
-      updatedAt: timestamp,
-      lastError
-    })
-  }
-
-  private clearContentFailure(fileId: number): void {
-    this.failedContentCache.delete(fileId)
-  }
-
-  private normalizeFileIndexSettings(raw?: Partial<FileIndexSettings> | null): FileIndexSettings {
-    const data = raw && typeof raw === 'object' ? raw : {}
-    const clampMs = (value: unknown, fallback: number) => {
-      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-        return fallback
-      }
-      return value
-    }
-
-    const rawExtraPaths = Array.isArray(data.extraPaths)
-      ? data.extraPaths.filter((value): value is string => typeof value === 'string')
-      : []
-    const normalizedExtraPaths: string[] = []
-    const extraPathSet = new Set<string>()
-
-    for (const rawPath of rawExtraPaths) {
-      const trimmed = rawPath.trim()
-      if (!trimmed) continue
-      const resolved = path.resolve(trimmed)
-      const normalized = this.normalizePath(resolved)
-      if (extraPathSet.has(normalized)) {
-        continue
-      }
-      extraPathSet.add(normalized)
-      normalizedExtraPaths.push(resolved)
-    }
-
-    return {
-      autoScanEnabled:
-        typeof data.autoScanEnabled === 'boolean'
-          ? data.autoScanEnabled
-          : DEFAULT_FILE_INDEX_SETTINGS.autoScanEnabled,
-      autoScanIntervalMs: clampMs(
-        data.autoScanIntervalMs,
-        DEFAULT_FILE_INDEX_SETTINGS.autoScanIntervalMs
-      ),
-      autoScanIdleThresholdMs: clampMs(
-        data.autoScanIdleThresholdMs,
-        DEFAULT_FILE_INDEX_SETTINGS.autoScanIdleThresholdMs
-      ),
-      autoScanCheckIntervalMs: clampMs(
-        data.autoScanCheckIntervalMs,
-        DEFAULT_FILE_INDEX_SETTINGS.autoScanCheckIntervalMs
-      ),
-      extraPaths: normalizedExtraPaths
-    }
+  private syncWatchServiceState(): void {
+    this.fileIndexSettings = this.watchService.getCurrentSettings()
+    this.watchPaths = this.watchService.getWatchPaths()
+    this.normalizedWatchPaths = this.watchService.getNormalizedWatchPaths()
+    this.watchPathsRegistered = this.watchService.isWatchPathRegistered()
+    this.fsEventsSubscribed = this.watchService.isFileSystemSubscribed()
   }
 
   private applyWatchPaths(extraPaths: string[]): void {
-    const next: string[] = []
-    const seen = new Set<string>()
-
-    for (const candidate of [...this.baseWatchPaths, ...extraPaths]) {
-      if (!candidate) continue
-      const normalized = this.normalizePath(candidate)
-      if (seen.has(normalized)) continue
-      seen.add(normalized)
-      next.push(candidate)
-    }
-
-    this.watchPaths = next
-    this.normalizedWatchPaths = next.map((p) => this.normalizePath(p))
-  }
-
-  private loadFileIndexSettings(): void {
-    try {
-      const raw = getMainConfig(StorageList.FILE_INDEX_SETTINGS) as
-        | Partial<FileIndexSettings>
-        | undefined
-      this.fileIndexSettings = this.normalizeFileIndexSettings(raw)
-      this.applyWatchPaths(this.fileIndexSettings.extraPaths)
-
-      if (!raw || Object.keys(raw).length === 0) {
-        saveMainConfig(StorageList.FILE_INDEX_SETTINGS, this.fileIndexSettings)
-      }
-    } catch (error) {
-      this.fileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
-      this.applyWatchPaths(this.fileIndexSettings.extraPaths)
-      this.logWarn('Failed to load file index settings, using defaults', error)
-    }
+    this.watchService.applyWatchPaths(extraPaths)
+    this.syncWatchServiceState()
   }
 
   private initializeBackgroundTaskService(): void {
-    if (!this.dbUtils) {
-      this.logWarn('Database utils not available, skipping background task service initialization')
-      return
-    }
-
-    this.loadFileIndexSettings()
-    this.activityTracker = AppUsageActivityTracker.getInstance()
-
-    this.backgroundTaskService = BackgroundTaskService.getInstance(this.activityTracker, {
-      idleThresholdMs: this.fileIndexSettings.autoScanIdleThresholdMs,
-      checkIntervalMs: this.fileIndexSettings.autoScanCheckIntervalMs,
-      maxConcurrentTasks: 1,
-      taskTimeoutMs: 30 * 60 * 1000
-    })
-
-    const cleanupTask = createFailedFilesCleanupTask(this.dbUtils.getDb(), {
-      maxRetryAge: 24 * 60 * 60 * 1000,
-      batchSize: 100,
-      maxRetries: 3
-    })
-
-    this.backgroundTaskService.registerTask(cleanupTask)
-
-    if (!this.autoIndexTaskRegistered) {
-      this.backgroundTaskService.registerTask({
-        id: FILE_INDEX_AUTO_TASK_ID,
-        name: 'File Index Auto Scan',
-        priority: 'low',
-        canInterrupt: true,
-        estimatedDuration: 15 * 60 * 1000,
-        execute: async () => {
-          await this.runAutoIndexing()
-        }
-      })
-      this.autoIndexTaskRegistered = true
-    }
-
-    this.backgroundTaskService.on('taskCompleted', (data) => {
-      this.logDebug(`Background task completed: ${data.task.name}`, {
-        duration: formatDuration(data.duration)
-      })
-    })
-
-    this.backgroundTaskService.on('taskFailed', (data) => {
-      this.logError(`Background task failed: ${data.task.name}`, data.error)
-    })
-
-    this.backgroundTaskService.start()
-
-    this.logDebug('Background task service initialized')
+    this.watchService.initializeBackgroundTaskService()
+    this.syncWatchServiceState()
   }
 
   /**
    * Record user activity for background task scheduling
    */
   recordUserActivity(): void {
-    if (this.backgroundTaskService) {
-      this.backgroundTaskService.recordActivity()
-    }
-  }
-
-  private async getScanEligibility(): Promise<{
-    newPaths: string[]
-    stalePaths: string[]
-    lastScannedAt: number | null
-  }> {
-    if (!this.dbUtils) {
-      return { newPaths: [], stalePaths: [], lastScannedAt: null }
-    }
-
-    const db = this.dbUtils.getDb()
-    const completedScans = await db.select().from(scanProgress)
-    const completedMap = new Map<string, number>()
-    let lastScannedAt: number | null = null
-
-    for (const scan of completedScans) {
-      const timestamp = this.toTimestamp(scan.lastScanned)
-      if (timestamp) {
-        completedMap.set(scan.path, timestamp)
-        if (!lastScannedAt || timestamp > lastScannedAt) {
-          lastScannedAt = timestamp
-        }
-      }
-    }
-
-    const newPaths = this.watchPaths.filter((path) => !completedMap.has(path))
-    const intervalMs = this.fileIndexSettings.autoScanIntervalMs
-    const now = Date.now()
-    const stalePaths =
-      intervalMs <= 0
-        ? Array.from(completedMap.keys()).filter((path) => this.watchPaths.includes(path))
-        : this.watchPaths.filter((path) => {
-            const last = completedMap.get(path)
-            if (!last) return false
-            return now - last >= intervalMs
-          })
-
-    return { newPaths, stalePaths, lastScannedAt }
+    this.watchService.recordUserActivity()
   }
 
   private async shouldRunAutoIndexing(): Promise<{
@@ -712,48 +464,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     reason?: string
     battery?: FileIndexBatteryStatus | null
   }> {
-    if (!this.fileIndexSettings.autoScanEnabled) {
-      return { allowed: false, reason: 'disabled' }
-    }
-
-    if (this.isInitializing) {
-      return { allowed: false, reason: 'initializing' }
-    }
-
-    if (!this.dbUtils || !this.initializationContext) {
-      return { allowed: false, reason: 'missing-context' }
-    }
-
-    if (this.watchPaths.length === 0) {
-      return { allowed: false, reason: 'no-paths' }
-    }
-
-    if (appTaskGate.isActive()) {
-      return { allowed: false, reason: 'app-busy' }
-    }
-
-    if (isSearchRecentlyActive(SEARCH_ACTIVE_WINDOW_MS)) {
-      return { allowed: false, reason: 'search-active' }
-    }
-
-    const eligibility = await this.getScanEligibility()
-    if (eligibility.newPaths.length === 0 && eligibility.stalePaths.length === 0) {
-      return { allowed: false, reason: 'interval' }
-    }
-
-    const decision = await deviceIdleService.canRun({
-      idleThresholdMs: this.fileIndexSettings.autoScanIdleThresholdMs
+    this.syncWatchServiceState()
+    return this.watchService.shouldRunAutoIndexing({
+      isInitializing: this.isInitializing !== null,
+      hasInitializationContext: this.initializationContext !== null
     })
-
-    const battery = decision.snapshot.battery
-      ? { level: decision.snapshot.battery.level, charging: decision.snapshot.battery.charging }
-      : null
-
-    if (!decision.allowed) {
-      return { allowed: false, reason: decision.reason, battery }
-    }
-
-    return { allowed: true, battery }
   }
 
   private async runAutoIndexing(): Promise<void> {
@@ -804,59 +519,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.isInitializing = run
     return run
   }
-
-  private async shouldSkipContentDueToFailure(
-    file: typeof filesSchema.$inferSelect
-  ): Promise<boolean> {
-    if (!this.dbUtils || !file.id) return false
-
-    const fileId = file.id
-    const fileModifiedAt = this.toTimestamp(file.mtime)
-    const cachedFailure = this.failedContentCache.get(fileId)
-
-    if (cachedFailure) {
-      if (cachedFailure.updatedAt && fileModifiedAt && fileModifiedAt > cachedFailure.updatedAt) {
-        this.failedContentCache.delete(fileId)
-        this.logDebug('Retrying content parse after file modification', {
-          path: file.path
-        })
-      } else {
-        return true
-      }
-    }
-
-    try {
-      const [progress] = await this.dbUtils.getFileIndexProgressByFileIds([fileId])
-      if (!progress || progress.status !== 'failed') {
-        return false
-      }
-
-      const progressUpdatedAt = this.toTimestamp(progress.updatedAt)
-      if (progressUpdatedAt && fileModifiedAt && fileModifiedAt > progressUpdatedAt) {
-        this.logDebug('Retrying content parse after recorded failure', {
-          path: file.path
-        })
-        return false
-      }
-
-      this.recordContentFailure(fileId, progress.lastError ?? null, progressUpdatedAt ?? null)
-      this.logDebug('Skipping content parse for previously failed file', {
-        path: file.path,
-        lastError: progress.lastError ?? 'unknown'
-      })
-      return true
-    } catch (error) {
-      this.logWarn('Failed to load previous file index status; continuing parse', error, {
-        fileId,
-        path: file.path
-      })
-      return false
-    }
-  }
-
-  // private createProgressLogger(_label: string, _total: number): ProgressLogger {
-  //   return new ProgressLogger(_label, _total, (message) => this.logInfo(message))
-  // }
 
   public getWatchedPaths(): string[] {
     return [...this.watchPaths]
@@ -939,11 +601,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const loadStart = performance.now()
 
-    // Keep a reference to internal helpers (no-op) so TS doesn't treat them as unused.
-    void this.computeReconciliationDiff([], [], [])
-    void this.indexFilesForSearch([])
-    void this.extractContentForFiles([])
-
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
     this.touchApp = context.touchApp
@@ -975,9 +632,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     this.initializeBackgroundTaskService()
 
-    // 尽早注册 channel，避免前端启动期请求出现 no-handler 警告
+    // 尽早注册 transport 事件，避免前端启动期请求出现 no-handler 警告
     this.registerOpenersChannel(context)
-    this.registerIndexingChannels(context)
 
     // 索引任务由后台调度执行（空闲+电量策略）
     this.logDebug('onLoad: background index task registered, waiting for idle conditions')
@@ -991,41 +647,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async ensureFileSystemWatchers(): Promise<void> {
-    if (this.watchPathsRegistered) {
-      if (!this.fsEventsSubscribed) {
-        this.subscribeToFileSystemEvents()
-      }
-      return
-    }
-
-    if (this.watchPaths.length === 0) {
-      this.logWarn('No watch paths resolved; skipping watcher registration.')
-      return
-    }
-
-    this.logDebug('Registering watch paths', {
-      count: this.watchPaths.length,
-      sample: this.watchPaths.slice(0, 3).join(', ')
+    await this.watchService.ensureFileSystemWatchers({
+      subscribeToFileSystemEvents: () => this.subscribeToFileSystemEvents()
     })
-
-    try {
-      await Promise.all(
-        this.watchPaths.map((watchPath) =>
-          FileSystemWatcher.addPath(watchPath, this.getWatchDepthForPath(watchPath)).catch(
-            (error) => {
-              this.logError('Failed to watch path', error, {
-                path: watchPath
-              })
-            }
-          )
-        )
-      )
-    } catch (error) {
-      this.logError('Error while registering watch paths.', error)
-    }
-
-    this.watchPathsRegistered = true
-    this.subscribeToFileSystemEvents()
+    this.syncWatchServiceState()
   }
 
   private registerOpenersChannel(context: ProviderContext): void {
@@ -1333,7 +958,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     if (this.isWithinWatchRoots(watchPath)) {
       if (isFileTarget) {
-        console.log('[FileProvider] addWatchPath exists(root), enqueue incremental add', {
+        this.logDebug('addWatchPath exists(root), enqueue incremental add', {
           path: resolved,
           watchPath
         })
@@ -1349,7 +974,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const normalized = this.normalizePath(watchPath)
     if (this.normalizedWatchPaths.includes(normalized)) {
       if (isFileTarget) {
-        console.log('[FileProvider] addWatchPath exists(normalized), enqueue incremental add', {
+        this.logDebug('addWatchPath exists(normalized), enqueue incremental add', {
           path: resolved,
           watchPath
         })
@@ -1375,6 +1000,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     this.applyWatchPaths(this.fileIndexSettings.extraPaths)
+    this.syncWatchServiceState()
 
     if (this.watchPathsRegistered) {
       try {
@@ -1396,7 +1022,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (isFileTarget) {
-      console.log('[FileProvider] addWatchPath added and enqueue incremental add', {
+      this.logDebug('addWatchPath added and enqueue incremental add', {
         path: resolved,
         watchPath
       })
@@ -1408,13 +1034,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     return { success: true, status: 'added', path: watchPath }
-  }
-
-  /**
-   * 注册索引管理相关的 IPC 通道
-   */
-  private registerIndexingChannels(_context: ProviderContext): void {
-    // Legacy channel handlers migrated to transport (AppEvents.fileIndex).* in common channel module.
   }
 
   public registerProgressStream(context: StreamContext<FileIndexProgressPayload>): void {
@@ -1529,42 +1148,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.pendingProgressStreamPayload = null
   }
 
-  private async withOpenerResolveSlot<T>(task: () => Promise<T>): Promise<T> {
-    if (this.openerResolveInFlight >= this.openerResolveConcurrency) {
-      await new Promise<void>((resolve) => {
-        this.openerResolveWaiters.push(resolve)
-      })
-    }
-
-    this.openerResolveInFlight += 1
-    try {
-      return await task()
-    } finally {
-      this.openerResolveInFlight -= 1
-      const next = this.openerResolveWaiters.shift()
-      if (next) {
-        next()
-      }
-    }
-  }
-
-  private isOpenerNegativeCached(extension: string): boolean {
-    const expiresAt = this.openerNegativeCache.get(extension)
-    if (!expiresAt) {
-      return false
-    }
-    if (expiresAt <= Date.now()) {
-      this.openerNegativeCache.delete(extension)
-      return false
-    }
-    return true
-  }
-
-  private markOpenerNegativeCache(extension: string): void {
-    const ttlMs = 10 * 60 * 1000
-    this.openerNegativeCache.set(extension, Date.now() + ttlMs)
-  }
-
   private async scanDirectoryWithWorker(
     dirPath: string,
     excludePathsSet?: Set<string>
@@ -1659,160 +1242,31 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private handleIndexWorkerFile(payload: IndexWorkerFileResult): void {
-    if (!payload || typeof payload.fileId !== 'number') {
-      return
-    }
-
-    this.pendingIndexWorkerResults.set(payload.fileId, payload)
-    this.scheduleIndexWorkerFlush(
-      getIndexWorkerFlushDelay(this.pendingIndexWorkerResults.size, {
-        baseDelayMs: INDEX_WORKER_FLUSH_DELAY_MS,
-        backlogDelayMs: INDEX_WORKER_FLUSH_DELAY_BACKLOG_MS
-      }),
-      'worker-payload'
-    )
-  }
-
-  private scheduleIndexWorkerFlush(delayMs: number, reason: string): void {
-    if (this.indexWorkerFlushTimer) {
-      return
-    }
-    const safeDelay = Math.max(0, Math.round(delayMs))
-    this.indexWorkerFlushTimer = setTimeout(() => {
-      this.indexWorkerFlushTimer = null
-      void this.flushIndexWorkerResults().catch((error) => {
-        this.logWarn('flushIndexWorkerResults rejected unexpectedly', error, { reason })
-      })
-    }, safeDelay)
-  }
-
-  private async flushIndexWorkerResults(): Promise<void> {
-    if (!this.dbUtils || !this.searchIndex) {
-      return
-    }
-
-    if (this.pendingIndexWorkerResults.size === 0) {
-      return
-    }
-
-    // Prevent overlapping flushes: if a previous flush (including its
-    // indexItems call with heavy FTS5 writes) is still running, defer.
-    // This avoids multiple competing SQLite transactions that compound
-    // event loop blocking.
-    if (this.indexWorkerFlushing) {
-      this.scheduleIndexWorkerFlush(INDEX_WORKER_FLUSH_DEFER_MS, 'flush-in-progress')
-      return
-    }
-
-    this.indexWorkerFlushing = true
-    let flushSucceeded = false
-    try {
-      await this.doFlushIndexWorkerResults()
-      this.indexWorkerFlushBusyRetryCount = 0
-      flushSucceeded = true
-    } catch (error) {
-      const isBusy = isSqliteBusyError(error)
-      const delayMs = isBusy
-        ? (() => {
-            const retry = getIndexWorkerBusyRetryDelay(this.indexWorkerFlushBusyRetryCount, {
-              baseDelayMs: INDEX_WORKER_FLUSH_BUSY_RETRY_BASE_MS,
-              maxDelayMs: INDEX_WORKER_FLUSH_BUSY_RETRY_MAX_MS
-            })
-            this.indexWorkerFlushBusyRetryCount = retry.nextRetryCount
-            return retry.delayMs
-          })()
-        : getIndexWorkerFlushDelay(this.pendingIndexWorkerResults.size, {
-            baseDelayMs: INDEX_WORKER_FLUSH_DELAY_MS,
-            backlogDelayMs: INDEX_WORKER_FLUSH_DELAY_BACKLOG_MS
-          })
-      this.logWarn('Index worker flush failed, scheduling retry', error, {
-        isBusy,
-        delayMs,
-        pending: this.pendingIndexWorkerResults.size,
-        inflight: this.inflightIndexWorkerResults.size
-      })
-      this.scheduleIndexWorkerFlush(delayMs, isBusy ? 'sqlite-busy-retry' : 'flush-failed')
-    } finally {
-      this.indexWorkerFlushing = false
-    }
-
-    if (flushSucceeded && this.pendingIndexWorkerResults.size > 0) {
-      this.scheduleIndexWorkerFlush(
-        getIndexWorkerFlushDelay(this.pendingIndexWorkerResults.size, {
-          baseDelayMs: INDEX_WORKER_FLUSH_DELAY_MS,
-          backlogDelayMs: INDEX_WORKER_FLUSH_DELAY_BACKLOG_MS
-        }),
-        'drain-remaining'
-      )
-    }
-  }
-
-  private async doFlushIndexWorkerResults(): Promise<void> {
-    if (!this.dbUtils || !this.searchIndex) return
-    if (this.pendingIndexWorkerResults.size === 0) return
-
-    // Adaptive flush batch size — AIMD scheduler adjusts based on transaction duration.
-    const FLUSH_BATCH_SIZE = this.flushBatchScheduler.currentSize
-    const { entries, keys } = takeIndexWorkerFlushBatch(
-      this.pendingIndexWorkerResults,
-      this.inflightIndexWorkerResults,
-      FLUSH_BATCH_SIZE
-    )
-    if (entries.length === 0) return
-
-    const withContent = entries.filter(
-      (e) => e.indexItem.content && e.indexItem.content.length > 0
-    ).length
-    if (withContent > 0) {
-      this.logDebug(`Flushing ${entries.length} worker results (${withContent} with content)`)
-    }
-
-    // Build PersistEntry[] — all data needed for persist + FTS5 index in one
-    // worker call.  This eliminates SQLITE_BUSY_SNAPSHOT errors by making the
-    // worker the single DB writer for this hot path.
-    const persistEntries: PersistEntry[] = entries.map((entry) => ({
+  private buildIndexWorkerPersistEntries(entries: IndexWorkerFileResult[]): PersistEntry[] {
+    return entries.map((entry) => ({
       fileId: entry.fileId,
       fileUpdate: entry.fileUpdate
         ? {
             content: entry.fileUpdate.content,
             embeddingStatus: entry.fileUpdate.embeddingStatus,
-            embeddings: entry.fileUpdate.embeddings?.map((emb) => ({
-              vector: emb.vector,
-              model: emb.model
+            embeddings: entry.fileUpdate.embeddings?.map((embedding) => ({
+              model: embedding.model,
+              vector: embedding.vector
             })),
-            contentHash:
-              entry.fileUpdate.contentHash ?? this.buildContentHash(entry.fileUpdate.content ?? '')
+            contentHash: entry.fileUpdate.contentHash ?? null
           }
         : null,
       progress: {
         status: entry.progress.status,
         progress: entry.progress.progress,
-        processedBytes: entry.progress.processedBytes,
-        totalBytes: entry.progress.totalBytes,
-        lastError: entry.progress.lastError,
+        processedBytes: entry.progress.processedBytes ?? null,
+        totalBytes: entry.progress.totalBytes ?? null,
+        lastError: entry.progress.lastError ?? null,
         startedAt: entry.progress.startedAt ?? null,
-        updatedAt: entry.progress.updatedAt ?? new Date().toISOString()
+        updatedAt: entry.progress.updatedAt ?? null
       },
       indexItem: entry.indexItem
     }))
-
-    // Single worker call: persist files/embeddings/progress + index into FTS5.
-    // All DB writes happen in the worker thread — no main-thread SQLite contention.
-    try {
-      await dbWriteScheduler.waitForCapacity(INDEX_WORKER_DB_BACKPRESSURE_MAX_QUEUED)
-      const flushStart = performance.now()
-      await this.searchIndexWorker.persistAndIndex(persistEntries)
-      this.flushBatchScheduler.recordDuration(performance.now() - flushStart)
-      commitIndexWorkerFlushBatch(this.inflightIndexWorkerResults, keys)
-    } catch (error) {
-      rollbackIndexWorkerFlushBatch(
-        this.pendingIndexWorkerResults,
-        this.inflightIndexWorkerResults,
-        keys
-      )
-      throw error
-    }
   }
 
   private extractFileIconQueued(filePath: string): Promise<Buffer | null> {
@@ -1844,479 +1298,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async getOpenerForExtension(rawExtension: string): Promise<ResolvedOpener | null> {
-    const normalized = normalizeOpenerExtension(rawExtension)
-    if (!normalized) {
-      return null
-    }
-
-    if (this.openerCache.has(normalized)) {
-      return this.openerCache.get(normalized)!
-    }
-
-    const stored = this.getOpenerFromStorageByExtension(normalized)
-    if (stored) {
-      const opener: ResolvedOpener = {
-        bundleId: stored.bundleId,
-        name: stored.name,
-        logo: this.resolveOpenerLogo(stored.logo),
-        path: stored.path,
-        lastResolvedAt: stored.lastResolvedAt ?? new Date().toISOString()
-      }
-      this.openerCache.set(normalized, opener)
-      return opener
-    }
-
-    if (this.isOpenerNegativeCached(normalized)) {
-      return null
-    }
-
-    let pending = this.openerPromises.get(normalized)
-    if (!pending) {
-      pending = this.withOpenerResolveSlot(async () => {
-        try {
-          const result = await this.resolveOpener(normalized)
-          if (!result) {
-            this.markOpenerNegativeCache(normalized)
-          }
-          return result
-        } catch (error) {
-          this.markOpenerNegativeCache(normalized)
-          throw error
-        }
-      })
-      this.openerPromises.set(normalized, pending)
-    }
-
-    let result: ResolvedOpener | null = null
-    try {
-      result = await pending
-    } finally {
-      this.openerPromises.delete(normalized)
-    }
-
-    if (result) {
-      this.openerCache.set(normalized, result)
-    }
-
-    return result
-  }
-
-  private async resolveOpener(extension: string): Promise<ResolvedOpener | null> {
-    if (process.platform !== 'darwin') {
-      return null
-    }
-
-    const sanitized = sanitizeOpenerExtension(extension)
-    if (!sanitized) {
-      return null
-    }
-
-    const bundleId = await this.getBundleIdForExtension(sanitized)
-    if (!bundleId) {
-      return null
-    }
-
-    const appInfo = await this.getAppInfoByBundleId(bundleId)
-    if (!appInfo) {
-      return null
-    }
-
-    let logo = appInfo.logo
-    if (!logo) {
-      const cached = this.getOpenerFromStorage(sanitized, bundleId)
-      if (cached?.logo) {
-        logo = cached.logo
-        if (appInfo.fileId) {
-          this.persistOpenerIcon(appInfo.fileId, cached.logo)
-        }
-      }
-    }
-
-    if (!logo && appInfo.path && this.enableFileIconExtraction) {
-      this.scheduleOpenerIconUpdate(sanitized, bundleId, appInfo)
-    }
-
-    const resolvedLogo = this.resolveOpenerLogo(logo)
-    const opener: ResolvedOpener = {
-      bundleId,
-      name: appInfo.name,
-      logo: resolvedLogo,
-      path: appInfo.path,
-      lastResolvedAt: new Date().toISOString()
-    }
-
-    this.persistOpenerToStorage(sanitized, opener)
-
-    return opener
-  }
-
-  private resolveOpenerLogo(logo?: string | null): string {
-    if (logo && logo.trim().length > 0) {
-      return logo
-    }
-    return EMPTY_OPENER_LOGO
-  }
-
-  private getOpenerFromStorageByExtension(extension: string): OpenerInfo | null {
-    try {
-      const raw = getMainConfig(StorageList.OPENERS) as unknown
-      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-        return null
-      }
-      const entry = (raw as Record<string, OpenerInfo>)[extension]
-      return entry ?? null
-    } catch (error) {
-      this.logWarn('Failed to read openers cache', error, { extension })
-      return null
-    }
-  }
-
-  private getOpenerFromStorage(extension: string, bundleId: string): OpenerInfo | null {
-    try {
-      const raw = getMainConfig(StorageList.OPENERS) as unknown
-      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-        return null
-      }
-      const entry = (raw as Record<string, OpenerInfo>)[extension]
-      if (!entry || entry.bundleId !== bundleId) {
-        return null
-      }
-      return entry
-    } catch (error) {
-      this.logWarn('Failed to read openers cache', error, { extension })
-      return null
-    }
-  }
-
-  private persistOpenerIcon(fileId: number, logo: string): void {
-    if (!this.dbUtils || !logo) {
-      return
-    }
-
-    const db = this.dbUtils.getDb()
-    void this.withDbWrite('file-opener.icon.persist', () =>
-      db
-        .insert(fileExtensions)
-        .values({
-          fileId,
-          key: 'icon',
-          value: logo
-        })
-        .onConflictDoUpdate({
-          target: [fileExtensions.fileId, fileExtensions.key],
-          set: { value: logo }
-        })
-    ).catch((error) => {
-      this.logWarn('Failed to persist opener icon', error, { fileId })
-    })
-  }
-
-  private persistOpenerToStorage(extension: string, opener: OpenerInfo): void {
-    try {
-      const raw = getMainConfig(StorageList.OPENERS) as unknown
-      const current =
-        raw && typeof raw === 'object' && !Array.isArray(raw)
-          ? (raw as Record<string, OpenerInfo>)
-          : {}
-      const existing = current[extension]
-      const next = { ...existing, ...opener }
-
-      if (
-        existing &&
-        existing.logo === next.logo &&
-        existing.bundleId === next.bundleId &&
-        existing.name === next.name &&
-        existing.path === next.path &&
-        existing.lastResolvedAt === next.lastResolvedAt
-      ) {
-        return
-      }
-
-      const updated = { ...current, [extension]: next }
-      saveMainConfig(StorageList.OPENERS, updated)
-    } catch (error) {
-      this.logWarn('Failed to persist opener cache', error, { extension })
-    }
-  }
-
-  private scheduleOpenerIconUpdate(
-    extension: string,
-    bundleId: string,
-    appInfo: { fileId: number; name: string; path: string; logo: string }
-  ): void {
-    if (!this.enableFileIconExtraction || !appInfo.path) {
-      return
-    }
-
-    if (this.openerIconJobs.has(extension)) {
-      return
-    }
-
-    const task = (async () => {
-      const logo = await this.generateApplicationIcon(appInfo.path)
-      if (!logo) {
-        return
-      }
-
-      if (appInfo.fileId) {
-        this.persistOpenerIcon(appInfo.fileId, logo)
-      }
-
-      const opener: ResolvedOpener = {
-        bundleId,
-        name: appInfo.name,
-        logo,
-        path: appInfo.path,
-        lastResolvedAt: new Date().toISOString()
-      }
-
-      this.openerCache.set(extension, opener)
-      this.persistOpenerToStorage(extension, opener)
-    })()
-      .catch((error) => {
-        this.logWarn('Failed to refresh opener icon', error, { extension })
-      })
-      .finally(() => {
-        this.openerIconJobs.delete(extension)
-      })
-
-    this.openerIconJobs.set(extension, task)
-  }
-
-  private async getBundleIdForExtension(extension: string): Promise<string | null> {
-    if (this.bundleIdCache.has(extension)) {
-      return this.bundleIdCache.get(extension) ?? null
-    }
-
-    const handlers = await this.loadLaunchServicesHandlers()
-    if (handlers.length === 0) {
-      this.bundleIdCache.set(extension, null)
-      return null
-    }
-
-    const lower = extension.toLowerCase()
-
-    const directMatch = handlers.find(
-      (handler) =>
-        typeof handler?.LSHandlerContentTag === 'string' &&
-        handler.LSHandlerContentTag.toLowerCase() === lower &&
-        handler.LSHandlerContentTagClass === 'public.filename-extension'
-    )
-
-    const directBundle = this.pickBundleIdFromHandler(directMatch)
-    if (directBundle) {
-      this.bundleIdCache.set(extension, directBundle)
-      return directBundle
-    }
-
-    const uti = await this.resolveUniformTypeIdentifier(lower)
-    if (!uti) {
-      this.bundleIdCache.set(extension, null)
-      return null
-    }
-
-    const utiMatch = handlers.find(
-      (handler) =>
-        typeof handler?.LSHandlerContentType === 'string' &&
-        handler.LSHandlerContentType.toLowerCase() === uti.toLowerCase()
-    )
-
-    const bundleId = this.pickBundleIdFromHandler(utiMatch)
-    this.bundleIdCache.set(extension, bundleId)
-    return bundleId
-  }
-
-  private pickBundleIdFromHandler(
-    handler: LaunchServicesHandler | null | undefined
-  ): string | null {
-    if (!handler) {
-      return null
-    }
-
-    const roleKeys: LaunchServicesRoleKey[] = [
-      'LSHandlerRoleAll',
-      'LSHandlerRoleViewer',
-      'LSHandlerRoleEditor'
-    ]
-
-    for (const key of roleKeys) {
-      const value = handler[key]
-      if (typeof value === 'string' && value.length > 0) {
-        return value
-      }
-    }
-
-    const preferred = handler.LSHandlerPreferredVersions
-    if (preferred) {
-      for (const key of roleKeys) {
-        const value = preferred[key]
-        if (typeof value === 'string' && value.length > 0) {
-          return value
-        }
-      }
-    }
-
-    return null
-  }
-
-  private async loadLaunchServicesHandlers(): Promise<LaunchServicesHandler[]> {
-    if (process.platform !== 'darwin') {
-      return []
-    }
-
-    if (this.launchServicesLoadPromise) {
-      return this.launchServicesLoadPromise
-    }
-
-    this.launchServicesLoadPromise = (async () => {
-      try {
-        const stats = await fs.stat(LAUNCH_SERVICES_PLIST_PATH)
-        if (this.launchServicesHandlers && this.launchServicesMTime === stats.mtimeMs) {
-          return this.launchServicesHandlers
-        }
-
-        const { stdout } = await execFileAsync('plutil', [
-          '-convert',
-          'xml1',
-          '-o',
-          '-',
-          LAUNCH_SERVICES_PLIST_PATH
-        ])
-
-        const parsed = plist.parse(stdout.toString()) as {
-          LSHandlers?: LaunchServicesHandler[]
-        }
-        const handlers = Array.isArray(parsed?.LSHandlers) ? parsed.LSHandlers : []
-
-        this.launchServicesHandlers = handlers
-        this.launchServicesMTime = stats.mtimeMs
-
-        return handlers
-      } catch (error) {
-        this.logError('Failed to load LaunchServices configuration for opener resolution.', error)
-        this.launchServicesHandlers = []
-        this.launchServicesMTime = undefined
-        return []
-      } finally {
-        this.launchServicesLoadPromise = null
-      }
-    })()
-
-    return this.launchServicesLoadPromise
-  }
-
-  private async resolveUniformTypeIdentifier(extension: string): Promise<string | null> {
-    if (process.platform !== 'darwin') {
-      return null
-    }
-
-    const safeExt = extension.replace(/[^a-z0-9.+-]/gi, '')
-    if (!safeExt) {
-      return null
-    }
-
-    if (this.utiCache.has(safeExt)) {
-      return this.utiCache.get(safeExt) ?? null
-    }
-
-    const tempPath = path.join(
-      os.tmpdir(),
-      `talex-touch-${Date.now()}-${Math.random().toString(16).slice(2)}.${safeExt}`
-    )
-
-    try {
-      await fs.writeFile(tempPath, '')
-      const { stdout } = await execFileAsync('mdls', ['-name', 'kMDItemContentType', tempPath])
-      const match = /"([^"\n]+)"/.exec(stdout.toString())
-      const uti = match ? match[1] : null
-      this.utiCache.set(safeExt, uti)
-      return uti
-    } catch (error) {
-      this.logWarn(`Failed to resolve UTI for extension .${extension}`, error)
-      this.utiCache.set(safeExt, null)
-      return null
-    } finally {
-      try {
-        await fs.unlink(tempPath)
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  private async getAppInfoByBundleId(bundleId: string): Promise<{
-    fileId: number
-    name: string
-    path: string
-    logo: string
-  } | null> {
-    if (!this.dbUtils) {
-      return null
-    }
-
-    try {
-      const db = this.dbUtils.getDb()
-
-      const mapping = await db
-        .select({ fileId: fileExtensions.fileId })
-        .from(fileExtensions)
-        .where(and(eq(fileExtensions.key, 'bundleId'), eq(fileExtensions.value, bundleId)))
-        .limit(1)
-
-      const fileId = mapping[0]?.fileId
-      if (!fileId) {
-        return null
-      }
-
-      const [fileRow] = await db
-        .select({
-          id: filesSchema.id,
-          name: filesSchema.name,
-          displayName: filesSchema.displayName,
-          path: filesSchema.path
-        })
-        .from(filesSchema)
-        .where(eq(filesSchema.id, fileId))
-        .limit(1)
-
-      if (!fileRow) {
-        return null
-      }
-
-      const [iconRow] = await db
-        .select({ value: fileExtensions.value })
-        .from(fileExtensions)
-        .where(and(eq(fileExtensions.fileId, fileId), eq(fileExtensions.key, 'icon')))
-        .limit(1)
-
-      return {
-        fileId,
-        name: fileRow.displayName || fileRow.name,
-        path: fileRow.path,
-        logo: iconRow?.value ?? ''
-      }
-    } catch (error) {
-      this.logError('Failed to read app info for bundle', error, {
-        bundleId
-      })
-      return null
-    }
-  }
-
-  private async generateApplicationIcon(appPath: string): Promise<string> {
-    try {
-      const buffer = await this.extractFileIconQueued(appPath)
-      if (buffer && buffer.length > 0) {
-        const normalized = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer)
-        const iconValue = `data:image/png;base64,${normalized.toString('base64')}`
-        return isValidBase64DataUrl(iconValue) ? iconValue : ''
-      }
-    } catch (error) {
-      this.logWarn('Failed to extract icon', error, {
-        path: appPath
-      })
-    }
-    return ''
+    return this.openerService.getOpenerForExtension(rawExtension)
   }
 
   private readonly pendingIconExtractions = new Set<number>()
@@ -2649,7 +1631,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     if (recordMap.size === 0) {
       if (manualEntries.length > 0) {
-        console.log('[FileProvider] incremental manual summary', {
+        this.logInfo('Incremental manual summary', {
           total: manualEntries.length,
           accepted: 0,
           inserted: 0,
@@ -2746,7 +1728,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         return count + (manualPaths.has(this.normalizePath(file.path)) ? 1 : 0)
       }, 0)
       const manualUnchanged = Math.max(0, manualAccepted - manualInserted - manualUpdated)
-      console.log('[FileProvider] incremental manual summary', {
+      this.logInfo('Incremental manual summary', {
         total: manualEntries.length,
         accepted: manualAccepted,
         inserted: manualInserted,
@@ -2772,7 +1754,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
       if (manualForce) {
         if (extension && BLACKLISTED_EXTENSIONS.has(extension)) {
-          console.log('[FileProvider] buildFileRecord filtered(manual-blacklist)', {
+          this.logDebug('buildFileRecord filtered(manual-blacklist)', {
             path: rawPath,
             extension,
             reason: 'blacklisted-extension'
@@ -2792,7 +1774,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
 
       if (manualForce && !WHITELISTED_EXTENSIONS.has(extension)) {
-        console.log('[FileProvider] buildFileRecord accepted(manual-force)', {
+        this.logDebug('buildFileRecord accepted(manual-force)', {
           path: rawPath,
           extension
         })
@@ -3466,26 +2448,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
-  private async indexFilesForSearch(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
-    if (files.length === 0) return
-
-    const indexStart = performance.now()
-    const items: SearchIndexItem[] = files.map((file) => this.buildSearchIndexItem(file))
-    await this.searchIndexWorker.indexItems(items)
-
-    // 只在处理大量文件时输出详细日志，减少日志噪音
-    if (files.length >= 50) {
-      this.logDebug('Indexed files for search', {
-        count: files.length,
-        duration: formatDuration(performance.now() - indexStart)
-      })
-    }
-  }
-
-  private buildSearchIndexItem(file: typeof filesSchema.$inferSelect): SearchIndexItem {
-    return buildFileProviderSearchIndexItem(file, this.id, this.type)
-  }
-
   private buildFtsQuery(terms: string[]): string {
     return buildFileProviderFtsQuery(terms)
   }
@@ -3689,301 +2651,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return cachedSize !== fileSize
   }
 
-  private async extractContentForFiles(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
-    if (!this.dbUtils) return
-    if (files.length === 0) return
-
-    await runAdaptiveTaskQueue(
-      files,
-      async (file) => {
-        await appTaskGate.waitForIdle()
-        try {
-          await this.extractContentForFile(file)
-        } catch (error) {
-          this.logError('Failed to extract content for file', error, {
-            path: file.path
-          })
-        }
-      },
-      {
-        estimatedTaskTimeMs: 20,
-        label: 'FileProvider::extractContent'
-      }
-    )
-  }
-
-  private createProgressReporter(fileId: number, totalBytes: number | null) {
-    return (progress: FileParserProgress) => {
-      if (!this.dbUtils) return
-
-      const processed = progress.processedBytes ?? 0
-      const total = progress.totalBytes ?? totalBytes ?? 0
-      const percentage = progress.percentage ?? (total > 0 ? processed / total : 0)
-
-      this.pendingContentProgress.set(fileId, {
-        progress: Math.min(99, Math.round((percentage || 0) * 100)),
-        processedBytes: processed,
-        totalBytes: total,
-        updatedAt: new Date()
-      })
-
-      if (!this.contentProgressFlushTimer) {
-        this.contentProgressFlushTimer = setTimeout(() => {
-          this.contentProgressFlushTimer = null
-          void this.flushContentProgress()
-        }, 150)
-      }
-    }
-  }
-
-  private async flushContentProgress(): Promise<void> {
-    if (!this.dbUtils) {
-      return
-    }
-
-    if (this.pendingContentProgress.size === 0) {
-      return
-    }
-
-    const entries = Array.from(this.pendingContentProgress.entries())
-    this.pendingContentProgress.clear()
-
-    const db = this.dbUtils.getDb()
-
-    await this.withDbWrite('file-index.progress.flush', () =>
-      db.transaction(async (tx) => {
-        for (const [fileId, payload] of entries) {
-          await tx
-            .insert(fileIndexProgress)
-            .values({
-              fileId,
-              progress: payload.progress,
-              processedBytes: payload.processedBytes,
-              totalBytes: payload.totalBytes,
-              updatedAt: payload.updatedAt
-            })
-            .onConflictDoUpdate({
-              target: fileIndexProgress.fileId,
-              set: {
-                progress: payload.progress,
-                processedBytes: payload.processedBytes,
-                totalBytes: payload.totalBytes,
-                updatedAt: payload.updatedAt
-              }
-            })
-        }
-      })
-    )
-  }
-
-  private async extractContentForFile(file: typeof filesSchema.$inferSelect): Promise<void> {
-    if (!this.dbUtils) return
-    if (!file.id) return
-
-    const extension = (file.extension || path.extname(file.name) || '').toLowerCase()
-    if (!CONTENT_INDEXABLE_EXTENSIONS.has(extension)) {
-      await this.withDbWrite('file-index.content.disabled', () =>
-        this.dbUtils!.getDb()
-          .insert(fileIndexProgress)
-          .values({
-            fileId: file.id!,
-            status: 'skipped',
-            progress: 100,
-            processedBytes: 0,
-            totalBytes: file.size ?? null,
-            lastError: 'content-indexing-disabled',
-            updatedAt: new Date()
-          })
-          .onConflictDoUpdate({
-            target: fileIndexProgress.fileId,
-            set: {
-              status: 'skipped',
-              progress: 100,
-              processedBytes: 0,
-              totalBytes: file.size ?? null,
-              lastError: 'content-indexing-disabled',
-              updatedAt: new Date()
-            }
-          })
-      )
-      this.clearContentFailure(file.id)
-      return
-    }
-
-    const size = await this.ensureFileSize(file)
-    const maxBytes = getContentSizeLimitMB(extension) * 1024 * 1024
-
-    if (maxBytes && size !== null && size > maxBytes) {
-      await this.withDbWrite('file-index.content.too-large', () =>
-        this.dbUtils!.getDb()
-          .insert(fileIndexProgress)
-          .values({
-            fileId: file.id!,
-            status: 'skipped',
-            progress: 100,
-            processedBytes: 0,
-            totalBytes: size,
-            lastError: 'file-too-large',
-            updatedAt: new Date()
-          })
-          .onConflictDoUpdate({
-            target: fileIndexProgress.fileId,
-            set: {
-              status: 'skipped',
-              progress: 100,
-              processedBytes: 0,
-              totalBytes: size,
-              lastError: 'file-too-large',
-              updatedAt: new Date()
-            }
-          })
-      )
-      this.clearContentFailure(file.id)
-      file.content = null
-      return
-    }
-
-    if (await this.shouldSkipContentDueToFailure(file)) {
-      file.content = null
-      return
-    }
-
-    await this.withDbWrite('file-index.content.start', () =>
-      this.dbUtils!.getDb()
-        .insert(fileIndexProgress)
-        .values({
-          fileId: file.id!,
-          status: 'processing',
-          progress: 5,
-          processedBytes: 0,
-          totalBytes: size ?? null,
-          startedAt: new Date(),
-          lastError: null,
-          updatedAt: new Date()
-        })
-        .onConflictDoUpdate({
-          target: fileIndexProgress.fileId,
-          set: {
-            status: 'processing',
-            progress: 5,
-            processedBytes: 0,
-            totalBytes: size ?? null,
-            startedAt: new Date(),
-            lastError: null,
-            updatedAt: new Date()
-          }
-        })
-    )
-    this.clearContentFailure(file.id)
-
-    const progressReporter = this.createProgressReporter(file.id, size)
-    const parseStart = performance.now()
-    let result: FileParserResult | null = null
-    try {
-      result = await fileParserRegistry.parseWithBestParser(
-        {
-          filePath: file.path,
-          extension,
-          size: size ?? 0,
-          maxBytes
-        },
-        progressReporter
-      )
-    } catch (error) {
-      this.logError('Parser threw while processing file', error, {
-        path: file.path
-      })
-      await this.withDbWrite('file-index.content.parser-error', () =>
-        this.dbUtils!.getDb()
-          .insert(fileIndexProgress)
-          .values({
-            fileId: file.id!,
-            status: 'failed',
-            progress: 100,
-            processedBytes: 0,
-            totalBytes: size ?? null,
-            lastError: error instanceof Error ? error.message : 'parser-error',
-            updatedAt: new Date()
-          })
-          .onConflictDoUpdate({
-            target: fileIndexProgress.fileId,
-            set: {
-              status: 'failed',
-              progress: 100,
-              processedBytes: 0,
-              totalBytes: size ?? null,
-              lastError: error instanceof Error ? error.message : 'parser-error',
-              updatedAt: new Date()
-            }
-          })
-      )
-      this.recordContentFailure(file.id, error instanceof Error ? error.message : 'parser-error')
-      file.content = null
-      return
-    }
-
-    if (!result) {
-      await this.withDbWrite('file-index.content.parser-not-found', () =>
-        this.dbUtils!.getDb()
-          .insert(fileIndexProgress)
-          .values({
-            fileId: file.id!,
-            status: 'skipped',
-            progress: 100,
-            processedBytes: 0,
-            totalBytes: size ?? null,
-            lastError: 'parser-not-found',
-            updatedAt: new Date()
-          })
-          .onConflictDoUpdate({
-            target: fileIndexProgress.fileId,
-            set: {
-              status: 'skipped',
-              progress: 100,
-              processedBytes: 0,
-              totalBytes: size ?? null,
-              lastError: 'parser-not-found',
-              updatedAt: new Date()
-            }
-          })
-      )
-      this.clearContentFailure(file.id)
-      file.content = null
-      return
-    }
-
-    await this.handleParserResult(file, result, size, performance.now() - parseStart)
-  }
-
-  private buildContentHash(content: string): string | null {
-    if (!content) return null
-    return createHash('sha256').update(content).digest('hex')
-  }
-
-  private async persistEmbeddings(
-    executor: EmbeddingDbExecutor,
-    fileId: number,
-    contentHash: string | null,
-    embeddings: FileParserEmbedding[]
-  ): Promise<void> {
-    if (embeddings.length === 0) return
-    const sourceId = String(fileId)
-
-    await executor
-      .delete(embeddingsSchema)
-      .where(and(eq(embeddingsSchema.sourceId, sourceId), eq(embeddingsSchema.sourceType, 'file')))
-
-    await executor.insert(embeddingsSchema).values(
-      embeddings.map((embedding) => ({
-        sourceId,
-        sourceType: 'file',
-        embedding: embedding.vector,
-        model: embedding.model || 'unknown',
-        contentHash
-      }))
-    )
-  }
-
   private async deleteEmbeddingsByFileIds(
     executor: EmbeddingDbExecutor,
     fileIds: number[]
@@ -3995,167 +2662,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .where(
         and(eq(embeddingsSchema.sourceType, 'file'), inArray(embeddingsSchema.sourceId, sourceIds))
       )
-  }
-
-  private async handleParserResult(
-    file: typeof filesSchema.$inferSelect,
-    result: FileParserResult,
-    size: number | null,
-    durationMs: number
-  ): Promise<void> {
-    if (!this.dbUtils) return
-    const db = this.dbUtils.getDb()
-    const fileId = file.id
-    if (!fileId) return
-
-    const totalBytes = result.totalBytes ?? size ?? null
-    const processedBytes = result.processedBytes ?? totalBytes ?? null
-
-    if (result.status === 'success') {
-      const rawContent = result.content ?? ''
-      const trimmedContent =
-        rawContent.length > MAX_CONTENT_LENGTH
-          ? `${rawContent.slice(0, MAX_CONTENT_LENGTH)}\n...[truncated]`
-          : rawContent
-
-      const embeddingStatus =
-        result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending'
-      const contentHash = this.buildContentHash(rawContent)
-
-      await this.withDbWrite('file-index.content.success', () =>
-        db.transaction(async (tx) => {
-          await tx
-            .update(filesSchema)
-            .set({
-              content: trimmedContent,
-              embeddingStatus
-            })
-            .where(eq(filesSchema.id, fileId))
-
-          await tx
-            .insert(fileIndexProgress)
-            .values({
-              fileId,
-              status: 'completed',
-              progress: 100,
-              processedBytes,
-              totalBytes,
-              lastError: null,
-              updatedAt: new Date()
-            })
-            .onConflictDoUpdate({
-              target: fileIndexProgress.fileId,
-              set: {
-                status: 'completed',
-                progress: 100,
-                processedBytes,
-                totalBytes,
-                lastError: null,
-                updatedAt: new Date()
-              }
-            })
-
-          if (result.embeddings && result.embeddings.length > 0) {
-            await this.persistEmbeddings(tx, fileId, contentHash, result.embeddings)
-          }
-        })
-      )
-
-      file.content = trimmedContent
-
-      if (result.embeddings && result.embeddings.length > 0) {
-        this.logDebug('Persisted embeddings for file', {
-          path: file.path,
-          embeddings: result.embeddings.length
-        })
-      } else if (this.embeddingService && trimmedContent.length > 50) {
-        // No parser-provided embeddings — generate via Intelligence SDK (best-effort, non-blocking)
-        this.embeddingService.indexFile(file.path, trimmedContent).catch(() => {
-          // Graceful degradation: ignore embedding generation failures
-        })
-      }
-
-      this.clearContentFailure(fileId)
-
-      this.logDebug('Content parsed for file', {
-        path: file.path,
-        duration: formatDuration(durationMs),
-        length: trimmedContent.length
-      })
-      return
-    }
-
-    const progressPayload = {
-      progress: 100,
-      processedBytes,
-      totalBytes,
-      lastError: result.reason ?? null,
-      updatedAt: new Date()
-    }
-
-    if (result.status === 'skipped') {
-      await this.withDbWrite('file-index.content.skipped', () =>
-        db
-          .insert(fileIndexProgress)
-          .values({
-            fileId,
-            status: 'skipped',
-            ...progressPayload
-          })
-          .onConflictDoUpdate({
-            target: fileIndexProgress.fileId,
-            set: {
-              status: 'skipped',
-              ...progressPayload
-            }
-          })
-      )
-      this.clearContentFailure(fileId)
-      file.content = null
-      return
-    }
-
-    await this.withDbWrite('file-index.content.failed', () =>
-      db
-        .insert(fileIndexProgress)
-        .values({
-          fileId,
-          status: 'failed',
-          ...progressPayload
-        })
-        .onConflictDoUpdate({
-          target: fileIndexProgress.fileId,
-          set: {
-            status: 'failed',
-            ...progressPayload
-          }
-        })
-    )
-    this.recordContentFailure(fileId, result.reason ?? null)
-    file.content = null
-  }
-
-  private async ensureFileSize(file: typeof filesSchema.$inferSelect): Promise<number | null> {
-    if (typeof file.size === 'number' && file.size >= 0) {
-      return file.size
-    }
-
-    try {
-      const stats = await fs.stat(file.path)
-      file.size = stats.size
-      if (file.id && this.dbUtils) {
-        const db = this.dbUtils.getDb()
-        await this.withDbWrite('file-index.file-size.update', () =>
-          db.update(filesSchema).set({ size: stats.size }).where(eq(filesSchema.id, file.id!))
-        )
-      }
-      return stats.size
-    } catch (error) {
-      this.logError('Failed to stat file size', error, {
-        path: file.path
-      })
-      return null
-    }
   }
 
   private extractSearchFilters(rawText: string): {
@@ -4208,6 +2714,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     return { text: retained.join(' ').trim(), typeFilters, extensionFilters }
+  }
+
+  public hasSearchFilters(rawText: string): boolean {
+    const { typeFilters, extensionFilters, text } = this.extractSearchFilters(rawText)
+    return typeFilters.size > 0 || extensionFilters.length > 0 || text !== rawText.trim()
   }
 
   private resolveTypeTag(raw: string): FileTypeTag | null {
@@ -4510,11 +3021,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
-    // Windows 平台禁用文件搜索，直接返回空结果
-    if (process.platform === 'win32') {
-      return new TuffSearchResultBuilder(query).build()
-    }
-
     searchLogger.logProviderSearch('file-provider', query.text, 'File System')
     searchLogger.fileSearchStart(query.text)
     if (!this.dbUtils || !this.searchIndex) {
@@ -4930,11 +3436,3 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 }
 
 export const fileProvider = new FileProvider()
-
-function normalizeOpenerExtension(rawExtension: string): string {
-  return rawExtension.replace(/^\./, '').trim().toLowerCase()
-}
-
-function sanitizeOpenerExtension(extension: string): string {
-  return extension.replace(/[^a-z0-9.+-]/gi, '')
-}

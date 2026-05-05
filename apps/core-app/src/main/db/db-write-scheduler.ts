@@ -32,16 +32,9 @@ export interface DbWriteTask<T> {
   dropPolicy: DbWriteDropPolicy
   maxBusyFailures: number
   circuitOpenMs: number
-  /** Legacy compatibility: if true, task can be dropped when queue wait time exceeds the threshold. */
-  droppable?: boolean
 }
 
 export interface ScheduleOptions {
-  /**
-   * Legacy compatibility:
-   * Mark this task as droppable under queue pressure.
-   */
-  droppable?: boolean
   priority?: DbWritePriority
   maxQueueWaitMs?: number
   budgetKey?: string
@@ -72,7 +65,6 @@ const PRIORITY_WEIGHT: Record<DbWritePriority, number> = {
   best_effort: 1
 }
 
-/** Tasks marked as droppable are rejected after waiting this long in the queue. */
 const DROPPABLE_TIMEOUT_MS = 10_000
 const LABEL_STATS_LOG_THROTTLE_MS = 60_000
 const LABEL_STATS_TOP_N = 6
@@ -265,10 +257,6 @@ export class DbWriteScheduler {
     if (typeof options?.maxBusyFailures === 'number')
       merged.maxBusyFailures = options.maxBusyFailures
     if (typeof options?.circuitOpenMs === 'number') merged.circuitOpenMs = options.circuitOpenMs
-
-    if (options?.droppable && (!merged.dropPolicy || merged.dropPolicy === 'none')) {
-      merged.dropPolicy = 'drop'
-    }
     if (
       (!merged.maxQueueWaitMs || merged.maxQueueWaitMs <= 0) &&
       (merged.dropPolicy === 'drop' || merged.dropPolicy === 'latest_wins')
@@ -366,8 +354,7 @@ export class DbWriteScheduler {
       budgetKey: policy.budgetKey,
       dropPolicy: policy.dropPolicy,
       maxBusyFailures: policy.maxBusyFailures,
-      circuitOpenMs: policy.circuitOpenMs,
-      droppable: options?.droppable
+      circuitOpenMs: policy.circuitOpenMs
     }
 
     if (this.shouldRejectByCircuit(task)) {
@@ -542,7 +529,7 @@ export class DbWriteScheduler {
         : undefined
     if (maxWaitMs && waitedMs > maxWaitMs) return true
     if (
-      (task.droppable || task.dropPolicy === 'drop' || task.dropPolicy === 'latest_wins') &&
+      (task.dropPolicy === 'drop' || task.dropPolicy === 'latest_wins') &&
       waitedMs > DROPPABLE_TIMEOUT_MS
     ) {
       return true

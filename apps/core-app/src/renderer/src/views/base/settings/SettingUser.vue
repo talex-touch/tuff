@@ -10,7 +10,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { getSyncPreferenceState, setSyncPreferenceByUser } from '~/modules/auth/sync-preferences'
 import { useAuth } from '~/modules/auth/useAuth'
 import { triggerManualSync } from '~/modules/sync'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 
 const { t } = useI18n()
 const {
@@ -30,11 +30,8 @@ const syncSubmitting = ref(false)
 function ensureSecuritySettings() {
   if (!appSetting.security) {
     appSetting.security = {
-      machineSeed: '',
       machineCodeHash: '',
-      machineCodeAttestedAt: '',
-      machineSeedMigratedAt: '',
-      allowLegacyMachineSeedFallback: false
+      machineCodeAttestedAt: ''
     }
   }
 }
@@ -46,7 +43,8 @@ function ensureAuthSettings() {
       deviceName: '',
       devicePlatform: '',
       useSecureStorage: true,
-      secureStorageReminderShown: false
+      secureStorageReminderShown: false,
+      secureStorageUnavailable: false
     }
     return
   }
@@ -56,6 +54,9 @@ function ensureAuthSettings() {
   }
   if (typeof appSetting.auth.secureStorageReminderShown !== 'boolean') {
     appSetting.auth.secureStorageReminderShown = false
+  }
+  if (typeof appSetting.auth.secureStorageUnavailable !== 'boolean') {
+    appSetting.auth.secureStorageUnavailable = false
   }
 }
 
@@ -155,6 +156,9 @@ const secureStorageEnabled = computed({
 })
 
 const secureStorageDescription = computed(() => {
+  if (appSetting.auth?.secureStorageUnavailable === true) {
+    return '系统安全存储当前不可用，登录凭证仅在本次运行内保持。'
+  }
   if (secureStorageEnabled.value) {
     return '已启用系统安全存储（推荐）：登录凭证将安全保存，重启后可保持登录状态。'
   }
@@ -168,11 +172,6 @@ const canTriggerManualSync = computed(
   () => isLoggedIn.value && syncEnabled.value && !syncSubmitting.value
 )
 
-const machineSeedMigratedAt = computed(() => {
-  const value = appSetting.security?.machineSeedMigratedAt
-  return typeof value === 'string' ? value.trim() : ''
-})
-
 const isDev = import.meta.env.DEV
 const useLocalServer = computed({
   get: () => appSetting?.dev?.authServer === 'local',
@@ -181,14 +180,6 @@ const useLocalServer = computed({
       return
     }
     appSetting.dev.authServer = val ? 'local' : 'production'
-  }
-})
-
-const allowLegacySeedFallback = computed({
-  get: () => Boolean(appSetting.security?.allowLegacyMachineSeedFallback),
-  set: (val: boolean) => {
-    ensureSecuritySettings()
-    appSetting.security.allowLegacyMachineSeedFallback = val
   }
 })
 
@@ -346,15 +337,6 @@ async function handleSyncNow() {
       :description="useLocalServer ? 'localhost:3200' : 'tuff.tagzxia.com'"
       default-icon="i-carbon-development"
       active-icon="i-carbon-development"
-    />
-
-    <TuffBlockSwitch
-      v-if="isDev && isLoggedIn"
-      v-model="allowLegacySeedFallback"
-      :title="t('settingUser.allowLegacySeedFallback', '允许明文 machine seed 回退（调试）')"
-      :description="machineSeedMigratedAt ? `已迁移：${machineSeedMigratedAt}` : '未检测到迁移记录'"
-      default-icon="i-carbon-security"
-      active-icon="i-carbon-security"
     />
   </TuffGroupBlock>
 

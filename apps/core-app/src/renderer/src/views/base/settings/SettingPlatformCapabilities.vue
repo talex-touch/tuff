@@ -11,14 +11,21 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 
 const { t } = useI18n()
 const platformSdk = usePlatformSdk()
+const settingPlatformCapabilitiesLog = createRendererLogger('SettingPlatformCapabilities')
 
-const capabilities = ref<PlatformCapability[]>([])
+type PlatformCapabilityView = PlatformCapability & {
+  issueCode?: string
+  reason?: string
+}
+
+const capabilities = ref<PlatformCapabilityView[]>([])
 const loading = ref(false)
 const lastUpdated = ref<Date | null>(null)
 
@@ -106,7 +113,7 @@ async function loadCapabilities() {
   loading.value = true
   try {
     const result = await platformSdk.listCapabilities()
-    capabilities.value = Array.isArray(result) ? result : []
+    capabilities.value = Array.isArray(result) ? (result as PlatformCapabilityView[]) : []
     lastUpdated.value = new Date()
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : ''
@@ -114,7 +121,7 @@ async function loadCapabilities() {
       devLog('[SettingPlatformCapabilities] Load timed out, module may be initializing')
       return
     }
-    console.error('[SettingPlatformCapabilities] Failed to load capabilities:', error)
+    settingPlatformCapabilitiesLog.error('Failed to load capabilities', error)
     toast.error(t('settings.settingPlatformCapabilities.messages.loadFailed'))
   } finally {
     loading.value = false
@@ -205,7 +212,20 @@ onMounted(() => {
             />
           </template>
           <div class="PlatformCapabilities-Footer">
-            <span class="PlatformCapabilities-IdBadge">{{ item.id }}</span>
+            <div class="PlatformCapabilities-MetaRow">
+              <span class="PlatformCapabilities-IdBadge">{{ item.id }}</span>
+              <span v-if="item.issueCode" class="PlatformCapabilities-IdBadge">
+                {{ item.issueCode }}
+              </span>
+            </div>
+            <div v-if="item.reason" class="PlatformCapabilities-Limitations" :title="item.reason">
+              <span class="PlatformCapabilities-LimitationsLabel">
+                {{ t('settings.settingPlatformCapabilities.reason') }}
+              </span>
+              <span class="PlatformCapabilities-LimitationsText">
+                {{ item.reason }}
+              </span>
+            </div>
             <div
               v-if="item.limitations?.length"
               class="PlatformCapabilities-Limitations"
@@ -304,6 +324,12 @@ onMounted(() => {
 .PlatformCapabilities-Footer {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+
+.PlatformCapabilities-MetaRow {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 

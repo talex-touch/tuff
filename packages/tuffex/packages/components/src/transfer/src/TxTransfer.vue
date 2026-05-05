@@ -13,6 +13,9 @@ const props = withDefaults(defineProps<TransferProps>(), {
   titles: () => ['Source', 'Target'],
   filterable: false,
   filterPlaceholder: '',
+  emptyText: 'No data',
+  addAriaLabel: 'Move selected items to target',
+  removeAriaLabel: 'Move selected items to source',
   targetOrder: 'original',
 })
 
@@ -121,7 +124,7 @@ function handleRemove() {
       </div>
       <div class="tx-transfer__list">
         <div v-if="filteredSource.length === 0" class="tx-transfer__empty">
-          No data
+          {{ emptyText }}
         </div>
         <label
           v-for="item in filteredSource"
@@ -144,6 +147,7 @@ function handleRemove() {
         variant="ghost"
         size="sm"
         :disabled="leftChecked.length === 0"
+        :aria-label="addAriaLabel"
         @click="handleAdd"
       >
         <span class="i-carbon-chevron-right" />
@@ -152,6 +156,7 @@ function handleRemove() {
         variant="ghost"
         size="sm"
         :disabled="rightChecked.length === 0"
+        :aria-label="removeAriaLabel"
         @click="handleRemove"
       >
         <span class="i-carbon-chevron-left" />
@@ -168,7 +173,7 @@ function handleRemove() {
       </div>
       <div class="tx-transfer__list">
         <div v-if="filteredTarget.length === 0" class="tx-transfer__empty">
-          No data
+          {{ emptyText }}
         </div>
         <label
           v-for="item in filteredTarget"

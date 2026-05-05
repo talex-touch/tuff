@@ -6,7 +6,7 @@ import process from 'node:process'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { shell, systemPreferences } from 'electron'
+import { Notification, shell, systemPreferences } from 'electron'
 import { BaseModule } from '../abstract-base-module'
 
 export enum PermissionType {
@@ -126,50 +126,32 @@ export class PermissionChecker {
    */
   public checkNotifications(): PermissionCheckResult {
     if (process.platform === 'darwin') {
-      // macOS 10.14+
-      if (systemPreferences.getMediaAccessStatus) {
-        try {
-          const status = systemPreferences.getMediaAccessStatus(
-            'notifications' as Parameters<typeof systemPreferences.getMediaAccessStatus>[0]
-          )
-          return {
-            status:
-              status === 'granted'
-                ? PermissionStatus.GRANTED
-                : status === 'denied'
-                  ? PermissionStatus.DENIED
-                  : PermissionStatus.NOT_DETERMINED,
-            canRequest: status !== 'denied',
-            message: `Notification permission: ${status}`
-          }
-        } catch {
-          // Fallback for older macOS versions
-          return {
-            status: PermissionStatus.GRANTED,
-            canRequest: false,
-            message: 'Notifications are enabled by default on this macOS version'
-          }
+      if (Notification.isSupported()) {
+        return {
+          status: PermissionStatus.NOT_DETERMINED,
+          canRequest: true,
+          message:
+            'Native notifications are supported, but macOS notification permission cannot be verified programmatically.'
         }
       }
-      // Older macOS versions don't require explicit notification permission
       return {
-        status: PermissionStatus.GRANTED,
+        status: PermissionStatus.UNSUPPORTED,
         canRequest: false,
-        message: 'Notifications are enabled by default on this macOS version'
+        message: 'Native notifications are not supported on this macOS build'
       }
     }
 
     if (process.platform === 'win32') {
       return {
         status: PermissionStatus.UNSUPPORTED,
-        canRequest: false,
+        canRequest: true,
         message: 'Windows notification permission cannot be verified programmatically'
       }
     }
 
     return {
       status: PermissionStatus.UNSUPPORTED,
-      canRequest: false,
+      canRequest: true,
       message: 'Linux notification permission depends on desktop environment and is not verifiable'
     }
   }
@@ -349,6 +331,7 @@ $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
     switch (type) {
       case PermissionType.ACCESSIBILITY:
         if (process.platform === 'darwin') {
+          systemPreferences.isTrustedAccessibilityClient(true)
           // Open macOS System Preferences > Security & Privacy > Privacy > Accessibility
           await shell.openExternal(
             'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'

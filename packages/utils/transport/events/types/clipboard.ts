@@ -20,10 +20,13 @@ export interface ClipboardItem {
   id: number
   type: TuffInputType
   value: string
+  thumbnail?: string | null
   html?: string
   rtf?: string
   source?: string
   tags?: string[]
+  metadata?: string | null
+  meta?: Record<string, unknown> | null
   createdAt: number
   isFavorite?: boolean
 }
@@ -167,9 +170,16 @@ export interface ClipboardCopyAndPasteRequest extends ClipboardSdkApiPayload {
 /**
  * Common result shape for clipboard action operations.
  */
+export type ClipboardActionErrorCode =
+  | 'AUTO_PASTE_FAILED'
+  | 'CLIPBOARD_DATABASE_UNAVAILABLE'
+  | 'CLIPBOARD_ITEM_NOT_FOUND'
+  | 'MACOS_AUTOMATION_PERMISSION_DENIED'
+
 export interface ClipboardActionResult {
   success: boolean
   message?: string
+  code?: ClipboardActionErrorCode
 }
 
 /**

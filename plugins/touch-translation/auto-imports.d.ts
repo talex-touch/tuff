@@ -39,7 +39,6 @@ declare global {
   const debouncedWatch: typeof import('@vueuse/core').debouncedWatch
   const defineAsyncComponent: typeof import('vue').defineAsyncComponent
   const defineComponent: typeof import('vue').defineComponent
-  const definePage: typeof import('unplugin-vue-router/runtime')['definePage']
   const eagerComputed: typeof import('@vueuse/core').eagerComputed
   const effectScope: typeof import('vue').effectScope
   const extendRef: typeof import('@vueuse/core').extendRef
@@ -100,7 +99,6 @@ declare global {
   const refWithControl: typeof import('@vueuse/core').refWithControl
   const resolveComponent: typeof import('vue').resolveComponent
   const resolveRef: typeof import('@vueuse/core').resolveRef
-  const resolveUnref: typeof import('@vueuse/core').resolveUnref
   const shallowReactive: typeof import('vue').shallowReactive
   const shallowReadonly: typeof import('vue').shallowReadonly
   const shallowRef: typeof import('vue').shallowRef
@@ -156,6 +154,7 @@ declare global {
   const useCountdown: typeof import('@vueuse/core').useCountdown
   const useCounter: typeof import('@vueuse/core').useCounter
   const useCssModule: typeof import('vue').useCssModule
+  const useCssSupports: typeof import('@vueuse/core').useCssSupports
   const useCssVar: typeof import('@vueuse/core').useCssVar
   const useCssVars: typeof import('vue').useCssVars
   const useCurrentElement: typeof import('@vueuse/core').useCurrentElement
@@ -435,11 +434,11 @@ declare module 'vue' {
     readonly refAutoReset: UnwrapRef<typeof import('@vueuse/core')['refAutoReset']>
     readonly refDebounced: UnwrapRef<typeof import('@vueuse/core')['refDebounced']>
     readonly refDefault: UnwrapRef<typeof import('@vueuse/core')['refDefault']>
+    readonly refManualReset: UnwrapRef<typeof import('@vueuse/core')['refManualReset']>
     readonly refThrottled: UnwrapRef<typeof import('@vueuse/core')['refThrottled']>
     readonly refWithControl: UnwrapRef<typeof import('@vueuse/core')['refWithControl']>
     readonly resolveComponent: UnwrapRef<typeof import('vue')['resolveComponent']>
     readonly resolveRef: UnwrapRef<typeof import('@vueuse/core')['resolveRef']>
-    readonly resolveUnref: UnwrapRef<typeof import('@vueuse/core')['resolveUnref']>
     readonly shallowReactive: UnwrapRef<typeof import('vue')['shallowReactive']>
     readonly shallowReadonly: UnwrapRef<typeof import('vue')['shallowReadonly']>
     readonly shallowRef: UnwrapRef<typeof import('vue')['shallowRef']>
@@ -495,6 +494,7 @@ declare module 'vue' {
     readonly useCountdown: UnwrapRef<typeof import('@vueuse/core')['useCountdown']>
     readonly useCounter: UnwrapRef<typeof import('@vueuse/core')['useCounter']>
     readonly useCssModule: UnwrapRef<typeof import('vue')['useCssModule']>
+    readonly useCssSupports: UnwrapRef<typeof import('@vueuse/core')['useCssSupports']>
     readonly useCssVar: UnwrapRef<typeof import('@vueuse/core')['useCssVar']>
     readonly useCssVars: UnwrapRef<typeof import('vue')['useCssVars']>
     readonly useCurrentElement: UnwrapRef<typeof import('@vueuse/core')['useCurrentElement']>
@@ -607,6 +607,7 @@ declare module 'vue' {
     readonly useThrottleFn: UnwrapRef<typeof import('@vueuse/core')['useThrottleFn']>
     readonly useThrottledRefHistory: UnwrapRef<typeof import('@vueuse/core')['useThrottledRefHistory']>
     readonly useTimeAgo: UnwrapRef<typeof import('@vueuse/core')['useTimeAgo']>
+    readonly useTimeAgoIntl: UnwrapRef<typeof import('@vueuse/core')['useTimeAgoIntl']>
     readonly useTimeout: UnwrapRef<typeof import('@vueuse/core')['useTimeout']>
     readonly useTimeoutFn: UnwrapRef<typeof import('@vueuse/core')['useTimeoutFn']>
     readonly useTimeoutPoll: UnwrapRef<typeof import('@vueuse/core')['useTimeoutPoll']>

@@ -1,6 +1,8 @@
 import type { StorageCache } from './storage-cache'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import chalk from 'chalk'
+import { createLogger } from '../../utils/logger'
+
+const storageLruLog = createLogger('Storage').child('LRU')
 
 /**
  * StorageLRUManager - LRU management service
@@ -49,9 +51,9 @@ export class StorageLRUManager {
       return
     }
 
-    console.info(
-      chalk.blue(`[StorageLRU] Started cleanup with ${this.CLEANUP_INTERVAL / 1000}s interval`)
-    )
+    storageLruLog.info('Started cleanup', {
+      meta: { intervalSeconds: this.CLEANUP_INTERVAL / 1000 }
+    })
 
     pollingService.register(this.cleanupTaskId, () => this.performCleanup(), {
       interval: this.CLEANUP_INTERVAL,
@@ -92,15 +94,18 @@ export class StorageLRUManager {
           this.cache.evict(name)
           evicted.push(name)
         } catch (error) {
-          console.error(chalk.red(`[StorageLRU] Failed to evict "${name}"`), error)
+          storageLruLog.error('Failed to evict config', {
+            error,
+            meta: { configName: name }
+          })
         }
       }
     }
 
     if (evicted.length > 0) {
-      console.info(
-        chalk.cyan(`[StorageLRU] Evicted ${evicted.length} config(s): ${evicted.join(', ')}`)
-      )
+      storageLruLog.info('Evicted configs', {
+        meta: { evictedCount: evicted.length, configNames: evicted.join(',') }
+      })
     }
   }
 
@@ -122,7 +127,10 @@ export class StorageLRUManager {
           this.cache.evict(name)
           evicted.push(name)
         } catch (error) {
-          console.error(chalk.red(`[StorageLRU] Manual evict failed for "${name}"`), error)
+          storageLruLog.error('Manual evict failed', {
+            error,
+            meta: { configName: name }
+          })
         }
       }
     }
@@ -142,7 +150,10 @@ export class StorageLRUManager {
       await this.onEvict(name)
       this.cache.evict(name)
     } catch (error) {
-      console.error(chalk.red(`[StorageLRU] Force evict failed for "${name}"`), error)
+      storageLruLog.error('Force evict failed', {
+        error,
+        meta: { configName: name }
+      })
     }
   }
 

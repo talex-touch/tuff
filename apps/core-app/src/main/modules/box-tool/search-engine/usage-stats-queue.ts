@@ -1,9 +1,13 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../db/schema'
+import type { ScheduleOptions } from '../../../db/db-write-scheduler'
 import { sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
 import { itemUsageStats } from '../../../db/schema'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
+import { createLogger } from '../../../utils/logger'
+
+const usageStatsQueueLog = createLogger('UsageStatsQueue')
 
 interface IncrementOperation {
   sourceId: string
@@ -194,7 +198,7 @@ export class UsageStatsQueue {
     this.searchFlushTimer = setTimeout(() => {
       this.searchFlushTimer = null
       this.flushSearchQueue().catch((error) => {
-        console.error('[UsageStatsQueue] Search flush failed:', error)
+        usageStatsQueueLog.error('Search flush failed', { error })
       })
     }, this.options.searchFlushIntervalMs)
   }
@@ -207,7 +211,7 @@ export class UsageStatsQueue {
     this.actionFlushTimer = setTimeout(() => {
       this.actionFlushTimer = null
       this.flushActionQueue().catch((error) => {
-        console.error('[UsageStatsQueue] Action flush failed:', error)
+        usageStatsQueueLog.error('Action flush failed', { error })
       })
     }, this.options.actionFlushIntervalMs)
   }
@@ -285,7 +289,7 @@ export class UsageStatsQueue {
   private async persistAggregates(
     label: string,
     records: AggregatedUsageRecord[],
-    options: { droppable: boolean }
+    options: ScheduleOptions
   ): Promise<void> {
     if (records.length === 0) return
 
@@ -341,7 +345,7 @@ export class UsageStatsQueue {
             }),
           { label }
         ),
-      { droppable: options.droppable }
+      options
     )
   }
 
@@ -359,18 +363,30 @@ export class UsageStatsQueue {
     this.pendingSearchEvents = 0
 
     try {
-      await this.persistAggregates('usage-stats.search.flush', records, { droppable: true })
-      console.debug(
-        `[UsageStatsQueue] Search flush persisted ${eventCount} events (${records.length} unique items)`
-      )
+      await this.persistAggregates('usage-stats.search.flush', records, {
+        dropPolicy: 'drop',
+        maxQueueWaitMs: 10_000
+      })
+      usageStatsQueueLog.debug('Search flush persisted', {
+        meta: { eventCount, uniqueItems: records.length }
+      })
     } catch (error) {
       const isDropped = error instanceof Error && error.message.includes('dropped')
       if (isDropped) {
-        console.debug('[UsageStatsQueue] Search flush dropped (queue pressure)')
+        usageStatsQueueLog.debug('Search flush dropped under queue pressure', {
+          meta: {
+            eventCount,
+            uniqueItems: records.length,
+            queuedWrites: dbWriteScheduler.getStats().queued
+          }
+        })
       } else {
         this.mergeBack(records, true)
         this.pendingSearchEvents += this.sumEventCount(records)
-        console.error('[UsageStatsQueue] Failed to flush search queue:', error)
+        usageStatsQueueLog.error('Failed to flush search queue', {
+          error,
+          meta: { eventCount, uniqueItems: records.length }
+        })
       }
     } finally {
       this.searchFlushing = false
@@ -394,14 +410,19 @@ export class UsageStatsQueue {
     this.pendingActionEvents = 0
 
     try {
-      await this.persistAggregates('usage-stats.action.flush', records, { droppable: false })
-      console.debug(
-        `[UsageStatsQueue] Action flush persisted ${eventCount} events (${records.length} unique items)`
-      )
+      await this.persistAggregates('usage-stats.action.flush', records, {
+        dropPolicy: 'none'
+      })
+      usageStatsQueueLog.debug('Action flush persisted', {
+        meta: { eventCount, uniqueItems: records.length }
+      })
     } catch (error) {
       this.mergeBack(records, false)
       this.pendingActionEvents += this.sumEventCount(records)
-      console.error('[UsageStatsQueue] Failed to flush action queue:', error)
+      usageStatsQueueLog.error('Failed to flush action queue', {
+        error,
+        meta: { eventCount, uniqueItems: records.length }
+      })
     } finally {
       this.actionFlushing = false
       if (this.actionQueue.size > 0) {

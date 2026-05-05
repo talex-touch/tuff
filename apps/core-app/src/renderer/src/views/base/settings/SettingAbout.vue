@@ -19,12 +19,13 @@ import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
 import { normalizeStoredUpdateChannel } from '~/modules/update/channel'
 import { getBuildInfo } from '~/utils/build-info'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
@@ -32,6 +33,7 @@ const appSdk = useAppSdk()
 const { packageJson, os, processInfo } = useEnv()
 const { startupInfo } = useStartupInfo()
 const { getUpdateSettings } = useUpdateRuntime()
+const settingAboutLog = createRendererLogger('SettingAbout')
 
 const appUpdate = computed(() => Boolean(startupInfo.value?.appUpdate))
 
@@ -86,7 +88,7 @@ onMounted(async () => {
     )) as PerformanceSummary | null
     performanceSummary.value = summary
   } catch (error) {
-    console.warn('Failed to load performance summary', error)
+    settingAboutLog.warn('Failed to load performance summary', error)
   }
 
   await loadUpdateSettings()
@@ -125,7 +127,7 @@ async function exportPerformanceData() {
 
     toast.success(t('settingAbout.exportSuccess'))
   } catch (error) {
-    console.error('Failed to export performance data', error)
+    settingAboutLog.error('Failed to export performance data', error)
     toast.error(t('settingAbout.exportFailed'))
   }
 }
@@ -152,9 +154,11 @@ const currentExperiencePack = computed(() => {
 // Get build info from signature
 const buildInfo = computed(() => getBuildInfo())
 const effectiveUpdateChannel = computed(() => {
-  return normalizeStoredUpdateChannel(updateChannel.value) ??
+  return (
+    normalizeStoredUpdateChannel(updateChannel.value) ??
     normalizeStoredUpdateChannel(buildInfo.value?.channel) ??
     null
+  )
 })
 const updateChannelLabel = computed(() => {
   const channel = effectiveUpdateChannel.value
@@ -174,7 +178,7 @@ async function loadUpdateSettings(): Promise<void> {
     const settings = await getUpdateSettings()
     updateChannel.value = normalizeStoredUpdateChannel(settings.updateChannel) ?? null
   } catch (error) {
-    console.warn('Failed to load update settings', error)
+    settingAboutLog.warn('Failed to load update settings', error)
   }
 }
 
@@ -193,7 +197,7 @@ async function openAppFolder() {
       toast.error(t('settingAbout.folderOpenFailed'))
     }
   } catch (error) {
-    console.error('Failed to open app folder', error)
+    settingAboutLog.error('Failed to open app folder', error)
     toast.error(t('settingAbout.folderOpenFailed'))
   }
 }
@@ -264,15 +268,19 @@ function openSoftwareLicense() {
     </TuffBlockLine>
     <TuffBlockLine :title="t('settingAbout.specification')" :description="`${currentQuarter}`" />
 
-    <TuffBlockLine v-if="buildInfo.version" title="Version" :description="buildInfo.version" />
+    <TuffBlockLine
+      v-if="buildInfo.version"
+      :title="t('settingAbout.buildMetadataVersion')"
+      :description="buildInfo.version"
+    />
     <TuffBlockLine
       v-if="buildInfo.buildIdentifier"
-      title="Build ID"
+      :title="t('settingAbout.buildMetadataId')"
       :description="buildInfo.buildIdentifier"
     />
     <TuffBlockLine
       v-if="buildInfo.gitCommitHash"
-      title="Git Hash"
+      :title="t('settingAbout.buildMetadataGitHash')"
       :description="buildInfo.gitCommitHash.substring(0, 7)"
     />
     <TuffBlockLine
@@ -282,12 +290,12 @@ function openSoftwareLicense() {
     />
     <TuffBlockLine
       v-if="buildInfo.buildType"
-      title="Build Type"
+      :title="t('settingAbout.buildMetadataType')"
       :description="buildInfo.buildType"
     />
     <TuffBlockLine
       v-if="buildInfo.buildTime"
-      title="Build Time"
+      :title="t('settingAbout.buildMetadataTime')"
       :description="new Date(buildInfo.buildTime).toLocaleString()"
     />
     <TuffBlockLine :title="t('settingAbout.startCosts')">

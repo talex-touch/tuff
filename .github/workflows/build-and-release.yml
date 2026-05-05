@@ -224,8 +224,22 @@ jobs:
           # 更新包列表
           sudo apt-get update -y
 
-          # 安装基础构建工具
-          sudo apt-get install -y squashfs-tools fakeroot dpkg-dev
+          # 安装基础构建工具和 uiohook/libuiohook 在 X11 环境下 rebuild 所需头文件
+          sudo apt-get install -y \
+            squashfs-tools \
+            fakeroot \
+            dpkg-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxrandr-dev \
+            libxtst-dev \
+            libxt-dev \
+            libxinerama-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libxkbfile-dev \
+            libxi-dev \
+            libxext-dev
 
           # 跳过 snapcraft 安装，只构建 AppImage 和 Debian 包
           echo "Skipping snapcraft installation to avoid snapd issues"
@@ -651,9 +665,15 @@ jobs:
         run: |
           if [ "$EVENT_NAME" = "push" ]; then
             # 标签触发：使用标签信息创建 release
+            REF_NAME_LOWER=$(echo "$REF_NAME" | tr '[:upper:]' '[:lower:]')
             echo "type=release" >> $GITHUB_OUTPUT
             echo "tag=$REF_NAME" >> $GITHUB_OUTPUT
             echo "name=Release $REF_NAME" >> $GITHUB_OUTPUT
+            if [[ "$REF_NAME_LOWER" == *"beta"* || "$REF_NAME_LOWER" == *"snapshot"* ]]; then
+              echo "prerelease=true" >> $GITHUB_OUTPUT
+            else
+              echo "prerelease=false" >> $GITHUB_OUTPUT
+            fi
           else
             # 手动触发：创建 draft release，使用时间戳作为临时标签
             # 标签会被 release action 自动创建，但因为是 draft，不会正式发布
@@ -661,6 +681,11 @@ jobs:
             echo "type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
             echo "tag=manual-build-$TIMESTAMP" >> $GITHUB_OUTPUT
             echo "name=Manual Build ($RELEASE_TYPE) - $TIMESTAMP" >> $GITHUB_OUTPUT
+            if [ "$RELEASE_TYPE" = "snapshot" ]; then
+              echo "prerelease=true" >> $GITHUB_OUTPUT
+            else
+              echo "prerelease=false" >> $GITHUB_OUTPUT
+            fi
           fi
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -831,7 +856,7 @@ jobs:
           tag_name: ${{ steps.release-info.outputs.tag }}
           name: ${{ steps.release-info.outputs.name }}
           draft: ${{ github.event_name == 'workflow_dispatch' }}
-          prerelease: ${{ steps.release-info.outputs.type == 'snapshot' }}
+          prerelease: ${{ steps.release-info.outputs.prerelease == 'true' }}
           files: ${{ steps.release-files.outputs.files }}
           fail_on_unmatched_files: false
           body: |
@@ -931,6 +956,8 @@ jobs:
     env:
       NEXUS_BASE_URL: ${{ vars.NEXUS_SYNC_BASE_URL || 'https://tuff.tagzxia.com' }}
       NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}
+      NEXUS_CF_ACCESS_CLIENT_ID: ${{ vars.ADMIN_CF_ACCESS_CLIENT_ID || secrets.ADMIN_CF_ACCESS_CLIENT_ID }}
+      NEXUS_CF_ACCESS_CLIENT_SECRET: ${{ vars.ADMIN_CF_ACCESS_CLIENT_SECRET || secrets.ADMIN_CF_ACCESS_CLIENT_SECRET }}
       TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sync_tag || github.ref_name }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -1052,10 +1079,67 @@ jobs:
           printf '%s' "${notes_json}" > /tmp/nexus-release-notes.json
           printf '%s' "${notes_html_json}" > /tmp/nexus-release-notes-html.json
 
+      - name: Prepare Nexus sync helpers
+        run: |
+          cat >/tmp/nexus-sync-helpers.sh <<'EOF'
+          set -euo pipefail
+
+          create_nexus_headers() {
+            local -n output_headers="$1"
+            output_headers=(
+              -H "Authorization: Bearer ${NEXUS_API_KEY}"
+              -H "Accept: application/json"
+              -H "User-Agent: tuff-release-sync/1.0"
+            )
+
+            if [ -n "${NEXUS_CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${NEXUS_CF_ACCESS_CLIENT_SECRET:-}" ]; then
+              output_headers+=(
+                -H "CF-Access-Client-Id: ${NEXUS_CF_ACCESS_CLIENT_ID}"
+                -H "CF-Access-Client-Secret: ${NEXUS_CF_ACCESS_CLIENT_SECRET}"
+              )
+            fi
+          }
+
+          response_is_json() {
+            local file_path="$1"
+            jq -e . "${file_path}" >/dev/null 2>&1
+          }
+
+          response_has_status_message() {
+            local file_path="$1"
+            local expected="$2"
+            jq -e --arg expected "${expected}" '.statusMessage? == $expected' "${file_path}" >/dev/null 2>&1
+          }
+
+          assert_nexus_response_ok() {
+            local file_path="$1"
+            local http_code="$2"
+            local shape_jq="${3:-.}"
+
+            if ! response_is_json "${file_path}"; then
+              cat "${file_path}"
+              return 1
+            fi
+
+            if [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
+              cat "${file_path}"
+              return 1
+            fi
+
+            if ! jq -e "${shape_jq}" "${file_path}" >/dev/null 2>&1; then
+              cat "${file_path}"
+              return 1
+            fi
+          }
+          EOF
+
       - name: Upsert Nexus release metadata
         run: |
+          source /tmp/nexus-sync-helpers.sh
           notes_json=$(cat /tmp/nexus-release-notes.json)
           notes_html_json=$(cat /tmp/nexus-release-notes-html.json)
+          nexus_headers=()
+          create_nexus_headers nexus_headers
 
           create_payload=$(jq -n \
             --arg tag "${TAG}" \
@@ -1086,25 +1170,30 @@ jobs:
 
           http_code=$(curl -sS -o /tmp/nexus-release-create.json -w "%{http_code}" \
             -X POST "${NEXUS_BASE_URL}/api/releases" \
-            -H "Authorization: Bearer ${NEXUS_API_KEY}" \
+            "${nexus_headers[@]}" \
             -H "Content-Type: application/json" \
             -d "${create_payload}")
 
-          if [ "${http_code}" = "400" ]; then
-            curl -sS -f \
+          if [ "${http_code}" = "400" ] && response_has_status_message /tmp/nexus-release-create.json 'Release tag already exists.'; then
+            patch_code=$(curl -sS -o /tmp/nexus-release-update.json -w "%{http_code}" \
               -X PATCH "${NEXUS_BASE_URL}/api/releases/${TAG}" \
-              -H "Authorization: Bearer ${NEXUS_API_KEY}" \
+              "${nexus_headers[@]}" \
               -H "Content-Type: application/json" \
-              -d "${update_payload}" \
-              -o /tmp/nexus-release-update.json
+              -d "${update_payload}")
+            assert_nexus_response_ok /tmp/nexus-release-update.json "${patch_code}" '.release.id? and .release.tag?'
           elif [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
-            cat /tmp/nexus-release-create.json
+            assert_nexus_response_ok /tmp/nexus-release-create.json "${http_code}"
             exit 1
+          else
+            assert_nexus_response_ok /tmp/nexus-release-create.json "${http_code}" '.release.id? and .release.tag?'
           fi
 
       - name: Link GitHub assets to Nexus release
         run: |
           set -euo pipefail
+          source /tmp/nexus-sync-helpers.sh
+          nexus_headers=()
+          create_nexus_headers nexus_headers
 
           manifest_url=$(jq -r '.assets[] | select(.name=="tuff-release-manifest.json") | .browser_download_url' /tmp/github-release.json)
           if [ -n "${manifest_url}" ] && [ "${manifest_url}" != "null" ]; then
@@ -1202,18 +1291,27 @@ jobs:
                 }')
             fi
 
-            curl -sS -f \
+            http_code=$(curl -sS -o /tmp/nexus-release-link.json -w "%{http_code}" \
               -X POST "${NEXUS_BASE_URL}/api/releases/${TAG}/link-github" \
-              -H "Authorization: Bearer ${NEXUS_API_KEY}" \
+              "${nexus_headers[@]}" \
               -H "Content-Type: application/json" \
-              -d "${payload}" \
-              -o /tmp/nexus-release-link.json
+              -d "${payload}")
+            assert_nexus_response_ok /tmp/nexus-release-link.json "${http_code}" '.asset.id? and .asset.platform? and .asset.arch?'
           done < <(jq -r '.assets[] | @base64' /tmp/github-release.json)
 
       - name: Backfill Nexus asset metadata from GitHub manifest (v2.4.7 only)
         if: env.TAG == 'v2.4.7'
         run: |
           set -euo pipefail
+          source /tmp/nexus-sync-helpers.sh
+          nexus_headers=()
+          create_nexus_headers nexus_headers
+
+          backfill_probe_code=$(curl -sS -o /tmp/nexus-release-backfill-probe.json -w "%{http_code}" \
+            -X GET "${NEXUS_BASE_URL}/api/releases/${TAG}" \
+            "${nexus_headers[@]}")
+          assert_nexus_response_ok /tmp/nexus-release-backfill-probe.json "${backfill_probe_code}" '.release.id? and .release.tag?'
+
           node scripts/backfill-release-assets-from-github.mjs \
             --tag "${TAG}" \
             --base-url "${NEXUS_BASE_URL}" \
@@ -1223,7 +1321,11 @@ jobs:
 
       - name: Publish Nexus release
         run: |
-          curl -sS -f \
+          source /tmp/nexus-sync-helpers.sh
+          nexus_headers=()
+          create_nexus_headers nexus_headers
+
+          http_code=$(curl -sS -o /tmp/nexus-release-publish.json -w "%{http_code}" \
             -X POST "${NEXUS_BASE_URL}/api/releases/${TAG}/publish" \
-            -H "Authorization: Bearer ${NEXUS_API_KEY}" \
-            -o /tmp/nexus-release-publish.json
+            "${nexus_headers[@]}")
+          assert_nexus_response_ok /tmp/nexus-release-publish.json "${http_code}" '.release.id? and .release.tag? and .message?'

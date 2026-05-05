@@ -10,18 +10,16 @@ import os from 'node:os'
 import path from 'node:path'
 import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron'
 import fse from 'fs-extra'
-import {
-  CURRENT_SDK_VERSION,
-  PERMISSION_ENFORCEMENT_MIN_VERSION,
-  resolveSdkApiVersion
-} from '@talex-touch/utils/plugin'
+import { createLogger } from '../../utils/logger'
 import { ensureDefaultProvidersRegistered, installFromRegistry } from './providers'
+import { getPluginSdkCompatibilityGate, SDKAPI_BLOCKED_CODE } from './sdk-compat'
+
+const pluginInstallerLog = createLogger('PluginSystem').child('Installer')
 
 function createDialogRiskPrompt(): RiskPromptHandler {
   return async (input: RiskPromptInput) => {
     if (input.level === 'trusted') return true
 
-    // TODO(@talex-touch): Integrate more advanced verification methods like TouchID here later
     const window = BrowserWindow.getFocusedWindow()
     const dialogOptions: MessageBoxOptions = {
       type: 'warning',
@@ -72,6 +70,10 @@ async function runResolver(
             resolve({ code: 'success', manifest: event.msg as IManifest })
             return
           }
+          if (type === 'success') {
+            resolve({ code: typeof event.msg === 'string' ? event.msg : 'success' })
+            return
+          }
           reject(new Error('Invalid manifest payload'))
         },
         whole,
@@ -79,6 +81,24 @@ async function runResolver(
       )
       .catch(reject)
   })
+}
+
+function assertManifestSdkCompatibility(manifest?: IManifest): void {
+  if (!manifest) return
+
+  const pluginName =
+    typeof manifest.name === 'string' && manifest.name.trim().length > 0
+      ? manifest.name.trim()
+      : 'unknown'
+  const gate = getPluginSdkCompatibilityGate(pluginName, manifest.sdkapi)
+  if (!gate.blocked) return
+
+  const error = new Error(
+    gate.message || `Plugin "${pluginName}" is blocked by the sdkapi compatibility gate.`
+  ) as Error & { code?: string }
+  error.name = SDKAPI_BLOCKED_CODE
+  error.code = SDKAPI_BLOCKED_CODE
+  throw error
 }
 
 export interface PreparedPluginInstall {
@@ -99,19 +119,6 @@ export class PluginInstaller {
   constructor(riskPrompt?: RiskPromptHandler) {
     ensureDefaultProvidersRegistered()
     this.riskPrompt = riskPrompt ?? createDialogRiskPrompt()
-  }
-
-  private assertManifestSdkApi(manifest: IManifest | undefined): void {
-    if (!manifest) return
-    const declared = (manifest as { sdkapi?: unknown }).sdkapi
-    const resolved = resolveSdkApiVersion(declared)
-    if (typeof resolved === 'number' && resolved >= PERMISSION_ENFORCEMENT_MIN_VERSION) {
-      return
-    }
-    const pluginName = typeof manifest.name === 'string' ? manifest.name : 'unknown'
-    throw new Error(
-      `[SDKAPI_BLOCKED] Plugin "${pluginName}" is blocked: sdkapi must be >= ${PERMISSION_ENFORCEMENT_MIN_VERSION}. Please migrate to sdkapi ${CURRENT_SDK_VERSION}.`
-    )
   }
 
   async install(
@@ -141,7 +148,10 @@ export class PluginInstaller {
               try {
                 options.onDownloadProgress?.(Math.max(0, Math.min(100, value)))
               } catch (error) {
-                console.warn('[PluginInstaller] download progress handler failed', error)
+                pluginInstallerLog.warn('Plugin download progress callback failed', {
+                  meta: { source: request.source },
+                  error
+                })
               }
             }
           }
@@ -155,13 +165,16 @@ export class PluginInstaller {
     const manifest = providerResult.manifest
       ? providerResult.manifest
       : (await this.previewManifest(providerResult.filePath!))?.manifest
-    this.assertManifestSdkApi(manifest)
+    assertManifestSdkCompatibility(manifest)
 
     if (options?.onDownloadProgress) {
       try {
         options.onDownloadProgress(100)
       } catch (error) {
-        console.warn('[PluginInstaller] failed to finalize progress update', error)
+        pluginInstallerLog.warn('Failed to finalize plugin install progress update', {
+          meta: { source: request.source },
+          error
+        })
       }
     }
 
@@ -196,7 +209,10 @@ export class PluginInstaller {
     try {
       return await runResolver(filePath, false)
     } catch (error) {
-      console.warn('[PluginInstaller] Failed to preview plugin manifest:', error)
+      pluginInstallerLog.warn('Failed to preview plugin manifest', {
+        meta: { filePath },
+        error
+      })
       return {}
     }
   }
@@ -208,7 +224,10 @@ export class PluginInstaller {
       try {
         await fse.remove(normalized)
       } catch (error) {
-        console.warn(`[PluginInstaller] Failed to cleanup temp file: ${normalized}`, error)
+        pluginInstallerLog.warn('Failed to cleanup temporary plugin install file', {
+          meta: { source, filePath: normalized },
+          error
+        })
       }
     }
   }

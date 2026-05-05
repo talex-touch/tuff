@@ -210,6 +210,7 @@ export default {
       heading: '最新版本',
       releaseDate: '{date} 发布',
       releaseDateFallback: '暂未发布',
+      critical: '关键更新',
     },
     loading: '正在加载版本…',
     empty: '该通道暂未提供版本，请稍后再试。',
@@ -790,6 +791,10 @@ export default {
             releaseNews: {
               label: '同步更新要闻',
               description: '从 CI 写入 dashboard 更新/要闻记录',
+            },
+            releaseEvidence: {
+              label: '写入发布证据',
+              description: '记录 2.5.0 回归、文档门禁与平台阻塞矩阵证据',
             },
           },
         },

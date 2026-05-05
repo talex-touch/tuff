@@ -1,7 +1,7 @@
 import type { DivisionBoxConfig, SessionMeta } from '@talex-touch/utils'
 import { isDivisionBox as checkIsDivisionBox } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { reactive } from 'vue'
 import { logAppEntranceMode } from '~/modules/devtools/app-entrance-log'
 import { devLog } from '~/utils/dev-log'
@@ -47,8 +47,7 @@ if (initialType === 'division-box') {
 }
 
 try {
-  const coreBoxTrigger = defineRawEvent<Record<string, unknown>, void>('core-box:trigger')
-  transport.on(coreBoxTrigger, (payload) => {
+  transport.on(CoreBoxEvents.ui.trigger, (payload) => {
     if (!payload || typeof payload !== 'object') return
 
     const message = payload as Record<string, unknown>
@@ -59,7 +58,7 @@ try {
     const show = message.show
     const id = message.id
 
-    devLog('[core-box.ts] Received core-box:trigger', {
+    devLog('[core-box.ts] Received CoreBox UI trigger', {
       show,
       id,
       type,

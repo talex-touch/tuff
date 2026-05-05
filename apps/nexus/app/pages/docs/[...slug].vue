@@ -43,21 +43,21 @@ function stripLocalePrefix(path: string) {
   return path
 }
 
+function stripContentExtension(path: string) {
+  return path.replace(/\.(md|mdc)$/i, '')
+}
+
+function stripLocaleSuffix(path: string) {
+  return path.replace(/\.(en|zh)$/i, '')
+}
+
 const docPath = computed(() => {
   const rawPath = route.path.endsWith('/') && route.path.length > 1
     ? route.path.slice(0, -1)
     : route.path
-  const normalized = stripLocalePrefix(rawPath).replace(/\.(en|zh)$/, '')
+  const normalized = stripLocaleSuffix(stripContentExtension(stripLocalePrefix(rawPath)))
   return normalized || '/docs'
 })
-
-const localizedPath = computed(() => {
-  return `${docPath.value}.${locale.value}`
-})
-const baseDocPath = computed(() => docPath.value.replace(/\/index$/, ''))
-const localizedIndexPath = computed(() => `${baseDocPath.value}/index.${locale.value}`)
-const indexPath = computed(() => `${baseDocPath.value}/index`)
-const shouldTryIndex = computed(() => !docPath.value.endsWith('/index'))
 
 const requestKey = computed(() => `doc:${docPath.value}:${locale.value}`)
 
@@ -65,7 +65,7 @@ function normalizeContentPath(path: string | null | undefined) {
   if (!path)
     return null
   const prefixed = path.startsWith('/') ? path : `/${path}`
-  return stripLocalePrefix(prefixed).replace(/\.(en|zh)$/, '')
+  return stripLocaleSuffix(stripContentExtension(stripLocalePrefix(prefixed)))
 }
 
 function stripCjk(value: string) {
@@ -138,29 +138,16 @@ function resolveDocMeta(record: Record<string, any> | null | undefined) {
   }
 }
 
-const { data: doc, status } = await useAsyncData(
-  () => requestKey.value,
-  async () => {
-    const localizedDoc = await queryCollection('docs').path(localizedPath.value).first()
-    if (localizedDoc)
-      return localizedDoc
-
-    if (shouldTryIndex.value) {
-      const localizedIndexDoc = await queryCollection('docs').path(localizedIndexPath.value).first()
-      if (localizedIndexDoc)
-        return localizedIndexDoc
-    }
-
-    const baseDoc = await queryCollection('docs').path(docPath.value).first()
-    if (baseDoc)
-      return baseDoc
-
-    if (shouldTryIndex.value)
-      return await queryCollection('docs').path(indexPath.value).first()
-
-    return null
+const { data: doc, status } = await useFetch<Record<string, any> | null>(
+  '/api/docs/page',
+  {
+    key: requestKey,
+    query: computed(() => ({
+      path: docPath.value,
+      locale: locale.value,
+    })),
+    default: () => null,
   },
-  { watch: [docPath, locale] },
 )
 
 const docMeta = computed(() => resolveDocMeta((doc.value ?? null) as Record<string, any> | null))
@@ -197,9 +184,12 @@ const viewState = computed(() => {
   return 'not-found'
 })
 
-const { data: navigationTree } = await useAsyncData(
-  'docs:navigation',
-  () => queryCollectionNavigation('docs'),
+const { data: navigationTree } = await useFetch<any[]>(
+  '/api/docs/navigation',
+  {
+    key: 'docs:navigation',
+    default: () => [],
+  },
 )
 
 const outlineState = useState<any[]>('docs-toc', () => [])

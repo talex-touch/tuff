@@ -2,6 +2,7 @@
 import type { CSSProperties } from 'vue'
 import { hasDocument, hasNavigator, hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
+import { getRendererBrowserEngine } from '~/modules/platform/renderer-platform'
 
 interface GlassSurfaceProps {
   width?: string | number
@@ -138,10 +139,9 @@ function updateDisplacementMap() {
 function supportsSVGFilters() {
   if (!hasWindow() || !hasNavigator() || !hasDocument()) return false
 
-  const isWebkit = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)
-  const isFirefox = /Firefox/.test(navigator.userAgent)
+  const browserEngine = getRendererBrowserEngine()
 
-  if (isWebkit || isFirefox) {
+  if (browserEngine === 'webkit' || browserEngine === 'firefox') {
     return false
   }
 

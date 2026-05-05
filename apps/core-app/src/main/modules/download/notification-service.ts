@@ -3,6 +3,7 @@ import path from 'node:path'
 import { DownloadModule } from '@talex-touch/utils'
 import { Notification, shell } from 'electron'
 import { formatDuration, formatFileSize, t } from '../../utils/i18n-helper'
+import { downloadNotificationLog } from './logger'
 
 /**
  * Notification configuration interface
@@ -80,7 +81,9 @@ export class NotificationService {
     // Handle notification click
     // Requirement 11.3: Open download center and highlight task when notification is clicked
     notification.on('click', () => {
-      console.log(`[NotificationService] Download complete notification clicked: ${task.id}`)
+      downloadNotificationLog.debug('Download complete notification clicked', {
+        meta: { taskId: task.id, action: 'show-task' }
+      })
       this.onNotificationClickCallback?.(task.id, 'show-task')
     })
 
@@ -120,7 +123,9 @@ export class NotificationService {
     // Handle notification click
     // Requirement 11.3: Navigate to update dialog when clicked
     notification.on('click', () => {
-      console.log(`[NotificationService] Update available notification clicked: ${version}`)
+      downloadNotificationLog.debug('Update available notification clicked', {
+        meta: { version, action: 'show-update-dialog' }
+      })
       this.onNotificationClickCallback?.('update-available', 'show-update-dialog')
     })
 
@@ -149,7 +154,9 @@ export class NotificationService {
     // Handle notification click
     // Requirement 11.3: Navigate to install update when clicked
     notification.on('click', () => {
-      console.log(`[NotificationService] Update download complete notification clicked: ${taskId}`)
+      downloadNotificationLog.debug('Update download complete notification clicked', {
+        meta: { taskId, action: 'install-update' }
+      })
       this.onNotificationClickCallback?.(taskId, 'install-update')
     })
 
@@ -178,7 +185,9 @@ export class NotificationService {
 
     // Handle notification click
     notification.on('click', () => {
-      console.log(`[NotificationService] Download failed notification clicked: ${task.id}`)
+      downloadNotificationLog.debug('Download failed notification clicked', {
+        meta: { taskId: task.id, action: 'show-task' }
+      })
       this.onNotificationClickCallback?.(task.id, 'show-task')
     })
 
@@ -230,7 +239,10 @@ export class NotificationService {
       const filePath = path.join(task.destination, task.filename)
       await shell.openPath(filePath)
     } catch (error) {
-      console.error('[NotificationService] Failed to open file:', error)
+      downloadNotificationLog.error('Failed to open downloaded file', {
+        error,
+        meta: { taskId: task.id }
+      })
     }
   }
 
@@ -242,7 +254,10 @@ export class NotificationService {
       const filePath = path.join(task.destination, task.filename)
       shell.showItemInFolder(filePath)
     } catch (error) {
-      console.error('[NotificationService] Failed to show in folder:', error)
+      downloadNotificationLog.error('Failed to show downloaded file in folder', {
+        error,
+        meta: { taskId: task.id }
+      })
     }
   }
 

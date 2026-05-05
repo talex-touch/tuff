@@ -1,19 +1,21 @@
 <script setup lang="ts">
-import type { DownloadConfig, DownloadTask } from '@talex-touch/utils'
+import type { DownloadTask } from '@talex-touch/utils'
 import { TxBottomDialog, TxTabItem, TxTabs } from '@talex-touch/tuffex'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
+import { appSetting } from '~/modules/storage/app-storage'
 import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
 import { debounce } from '~/utils/performance'
 import DownloadHistoryView from './DownloadHistoryView.vue'
-import DownloadSettings from './DownloadSettings.vue'
 import ErrorLogViewer from './ErrorLogViewer.vue'
 import TaskDetailsDialog from './TaskDetailsDialog.vue'
 import TaskList from './TaskList.vue'
 import VirtualTaskList from './VirtualTaskList.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const {
   downloadTasks,
@@ -28,19 +30,70 @@ const {
   deleteFile: deleteFileHook,
   removeTask: removeTaskHook,
   clearHistory: clearHistoryHook,
-  updateConfig: updateConfigHook,
   updateTaskPriority: updateTaskPriorityHook
 } = useDownloadCenter()
 
-const settingsVisible = ref(false)
 const detailsVisible = ref(false)
 const logsVisible = ref(false)
 const selectedTask = ref<DownloadTask | null>(null)
 const activeTab = ref('downloading')
-const viewMode = ref<'detailed' | 'compact'>('detailed')
 const searchQuery = ref('')
 const debouncedSearchQuery = ref('')
 const useVirtualScroll = ref(false) // Enable virtual scroll for large lists
+type DownloadCenterViewMode = 'detailed' | 'compact'
+type DownloadCenterSettings = {
+  viewMode: DownloadCenterViewMode
+}
+
+const DEFAULT_VIEW_MODE: DownloadCenterViewMode = 'detailed'
+const viewMode = ref<DownloadCenterViewMode>(DEFAULT_VIEW_MODE)
+
+function normalizeViewMode(value: unknown): DownloadCenterViewMode {
+  return value === 'compact' ? 'compact' : DEFAULT_VIEW_MODE
+}
+
+function ensureDownloadCenterSettings(): DownloadCenterSettings {
+  if (!appSetting.downloadCenter || typeof appSetting.downloadCenter !== 'object') {
+    appSetting.downloadCenter = {
+      viewMode: DEFAULT_VIEW_MODE
+    }
+  }
+
+  const settings = appSetting.downloadCenter as DownloadCenterSettings & { viewMode?: unknown }
+  const normalized = normalizeViewMode(settings.viewMode)
+  if (settings.viewMode !== normalized) {
+    settings.viewMode = normalized
+  }
+
+  return settings as DownloadCenterSettings
+}
+
+function setViewMode(mode: unknown) {
+  const normalized = normalizeViewMode(mode)
+  if (viewMode.value !== normalized) {
+    viewMode.value = normalized
+  }
+
+  const settings = ensureDownloadCenterSettings()
+  if (settings.viewMode !== normalized) {
+    settings.viewMode = normalized
+  }
+}
+
+watch(
+  () => appSetting.downloadCenter?.viewMode,
+  (rawMode) => {
+    const settings = ensureDownloadCenterSettings()
+    const normalized = normalizeViewMode(rawMode ?? settings.viewMode)
+    if (settings.viewMode !== normalized) {
+      settings.viewMode = normalized
+    }
+    if (viewMode.value !== normalized) {
+      viewMode.value = normalized
+    }
+  },
+  { immediate: true }
+)
 
 // Debounced search handler (300ms delay)
 const handleSearchDebounced = debounce((value: string) => {
@@ -94,7 +147,7 @@ function getCurrentTabTasks() {
 }
 
 function openSettings() {
-  settingsVisible.value = true
+  void router.push('/setting')
 }
 
 function openLogs() {
@@ -271,16 +324,6 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
     toast.error(`${t('download.priority_update_failed')}: ${message}`)
   }
 }
-
-async function updateConfig(config: DownloadConfig) {
-  try {
-    await updateConfigHook(config)
-    toast.success(t('download.config_updated'))
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.config_update_failed')}: ${message}`)
-  }
-}
 </script>
 
 <template>
@@ -290,21 +333,24 @@ async function updateConfig(config: DownloadConfig) {
       <div class="header-left">
         <h2 class="title">
           <i class="i-carbon-download" />
-          {{ $t('download.title') }}
+          {{ t('download.title') }}
         </h2>
       </div>
       <div class="header-right">
         <div class="view-mode-group">
-          <TxButton :type="viewMode === 'detailed' ? 'primary' : ''" @click="viewMode = 'detailed'">
+          <TxButton
+            :type="viewMode === 'detailed' ? 'primary' : ''"
+            @click="setViewMode('detailed')"
+          >
             <i class="i-carbon-list" />
           </TxButton>
-          <TxButton :type="viewMode === 'compact' ? 'primary' : ''" @click="viewMode = 'compact'">
+          <TxButton :type="viewMode === 'compact' ? 'primary' : ''" @click="setViewMode('compact')">
             <i class="i-carbon-grid" />
           </TxButton>
         </div>
         <TxButton @click="openLogs">
           <i class="i-carbon-document" />
-          {{ $t('download.view_logs') }}
+          {{ t('download.view_logs') }}
         </TxButton>
         <TxButton @click="openSettings">
           <i class="i-carbon-settings" />
@@ -316,7 +362,7 @@ async function updateConfig(config: DownloadConfig) {
     <div class="search-filter-bar">
       <TuffInput
         v-model="searchQuery"
-        :placeholder="$t('download.search_placeholder')"
+        :placeholder="t('download.search_placeholder')"
         clearable
         @input="handleSearch(searchQuery)"
       >
@@ -327,15 +373,15 @@ async function updateConfig(config: DownloadConfig) {
       <div class="filter-actions">
         <TxButton v-if="tasksByStatus.downloading.length > 0" @click="pauseAllTasks">
           <i class="i-carbon-pause" />
-          {{ $t('download.pause_all') }}
+          {{ t('download.pause_all') }}
         </TxButton>
         <TxButton v-if="tasksByStatus.paused.length > 0" @click="resumeAllTasks">
           <i class="i-carbon-play" />
-          {{ $t('download.resume_all') }}
+          {{ t('download.resume_all') }}
         </TxButton>
         <TxButton v-if="tasksByStatus.completed.length > 0" @click="clearHistory">
           <i class="i-carbon-trash-can" />
-          {{ $t('download.clear_history') }}
+          {{ t('download.clear_history') }}
         </TxButton>
       </div>
     </div>
@@ -344,7 +390,7 @@ async function updateConfig(config: DownloadConfig) {
     <TxTabs v-model="activeTab" class="download-tabs" placement="top" :content-padding="0">
       <TxTabItem name="downloading">
         <template #name>
-          {{ `${$t('download.downloading')} (${tasksByStatus.downloading.length})` }}
+          {{ `${t('download.downloading')} (${tasksByStatus.downloading.length})` }}
         </template>
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
@@ -367,7 +413,7 @@ async function updateConfig(config: DownloadConfig) {
       </TxTabItem>
       <TxTabItem name="pending">
         <template #name>
-          {{ `${$t('download.waiting')} (${tasksByStatus.pending.length})` }}
+          {{ `${t('download.waiting')} (${tasksByStatus.pending.length})` }}
         </template>
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
@@ -390,7 +436,7 @@ async function updateConfig(config: DownloadConfig) {
       </TxTabItem>
       <TxTabItem name="completed">
         <template #name>
-          {{ `${$t('download.completed')} (${tasksByStatus.completed.length})` }}
+          {{ `${t('download.completed')} (${tasksByStatus.completed.length})` }}
         </template>
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
@@ -415,7 +461,7 @@ async function updateConfig(config: DownloadConfig) {
       </TxTabItem>
       <TxTabItem name="failed">
         <template #name>
-          {{ `${$t('download.failed')} (${tasksByStatus.failed.length})` }}
+          {{ `${t('download.failed')} (${tasksByStatus.failed.length})` }}
         </template>
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
@@ -435,13 +481,10 @@ async function updateConfig(config: DownloadConfig) {
         />
       </TxTabItem>
       <TxTabItem name="history">
-        <template #name>{{ $t('download.history') }}</template>
+        <template #name>{{ t('download.history') }}</template>
         <DownloadHistoryView />
       </TxTabItem>
     </TxTabs>
-
-    <!-- 设置对话框 -->
-    <DownloadSettings v-model:visible="settingsVisible" @update-config="updateConfig" />
 
     <!-- 任务详情对话框 -->
     <TaskDetailsDialog

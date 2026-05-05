@@ -21,7 +21,7 @@
 
 - Sources: `none / bing / custom / folder / desktop`.
 - Adjustments: blur, opacity, brightness, contrast, saturate.
-- Sync-related toggles: copy to wallpaper library + cloud sync.
+- Sync-related toggles: copy to the local wallpaper library + track local sync status.
 
 ## Scope Notes
 

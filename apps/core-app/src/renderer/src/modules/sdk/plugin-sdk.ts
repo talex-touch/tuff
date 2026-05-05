@@ -17,6 +17,7 @@ import type {
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 type PluginStateCallback = (event: PluginStateEvent) => void
 type PluginCallback = (plugin: ITouchPlugin) => void
@@ -24,6 +25,7 @@ type PluginCallback = (plugin: ITouchPlugin) => void
 const transport = useTuffTransport()
 const pluginTransportSdk = createPluginSdk(transport)
 const pollingService = PollingService.getInstance()
+const pluginSdkLog = createRendererLogger('PluginSDK')
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -39,7 +41,7 @@ function cloneManifestForTransport(
   try {
     return JSON.parse(JSON.stringify(manifest)) as Record<string, unknown>
   } catch (error) {
-    console.error('[PluginSDK] Manifest payload is not JSON serializable:', error)
+    pluginSdkLog.error('Manifest payload is not JSON serializable', error)
     return null
   }
 }
@@ -70,7 +72,7 @@ class PluginSDK {
             try {
               callback(event)
             } catch (error) {
-              console.error('[PluginSDK] Error in state change subscriber:', error)
+              pluginSdkLog.error('Error in state change subscriber', error)
             }
           })
 
@@ -95,13 +97,13 @@ class PluginSDK {
                       try {
                         callback(plugin)
                       } catch (error) {
-                        console.error('[PluginSDK] Error in plugin-specific subscriber:', error)
+                        pluginSdkLog.error('Error in plugin-specific subscriber', error)
                       }
                     })
                   }
                 })
                 .catch((error) => {
-                  console.error('[PluginSDK] Failed to fetch plugin data for subscribers:', error)
+                  pluginSdkLog.error('Failed to fetch plugin data for subscribers', error)
                 })
             }
           }
@@ -120,7 +122,7 @@ class PluginSDK {
             try {
               callback(event)
             } catch (error) {
-              console.error('[PluginSDK] Error in status update subscriber:', error)
+              pluginSdkLog.error('Error in status update subscriber', error)
             }
           })
 
@@ -133,19 +135,13 @@ class PluginSDK {
                     try {
                       callback(plugin)
                     } catch (error) {
-                      console.error(
-                        '[PluginSDK] Error in plugin-specific status subscriber:',
-                        error
-                      )
+                      pluginSdkLog.error('Error in plugin-specific status subscriber', error)
                     }
                   })
                 }
               })
               .catch((error) => {
-                console.error(
-                  '[PluginSDK] Failed to fetch plugin data for status subscribers:',
-                  error
-                )
+                pluginSdkLog.error('Failed to fetch plugin data for status subscribers', error)
               })
           }
         })
@@ -161,7 +157,7 @@ class PluginSDK {
           // ignore listener cleanup errors during retry init
         }
       })
-      console.warn('[PluginSDK] Transport not ready, scheduling listener init retry', error)
+      pluginSdkLog.warn('Transport not ready, scheduling listener init retry', error)
       this.scheduleEventListenerInit()
     }
   }
@@ -210,7 +206,7 @@ class PluginSDK {
     try {
       return await pluginTransportSdk.list({ filters })
     } catch (error) {
-      console.error('[PluginSDK] Failed to list plugins:', error)
+      pluginSdkLog.error('Failed to list plugins', error)
       return []
     }
   }
@@ -222,7 +218,7 @@ class PluginSDK {
     try {
       return await pluginTransportSdk.get({ name })
     } catch (error) {
-      console.error('[PluginSDK] Failed to get plugin:', error)
+      pluginSdkLog.error('Failed to get plugin', error)
       return null
     }
   }
@@ -234,7 +230,7 @@ class PluginSDK {
     try {
       return await pluginTransportSdk.getStatus({ name })
     } catch (error) {
-      console.error('[PluginSDK] Failed to get plugin status:', error)
+      pluginSdkLog.error('Failed to get plugin status', error)
       throw error
     }
   }
@@ -251,7 +247,7 @@ class PluginSDK {
       const response = await pluginTransportSdk.enable({ name })
       return response?.success || false
     } catch (error) {
-      console.error('[PluginSDK] Failed to enable plugin:', error)
+      pluginSdkLog.error('Failed to enable plugin', error)
       return false
     }
   }
@@ -264,7 +260,7 @@ class PluginSDK {
       const response = await pluginTransportSdk.disable({ name })
       return response?.success || false
     } catch (error) {
-      console.error('[PluginSDK] Failed to disable plugin:', error)
+      pluginSdkLog.error('Failed to disable plugin', error)
       return false
     }
   }
@@ -277,7 +273,7 @@ class PluginSDK {
       const response = await pluginTransportSdk.reload({ name })
       return response?.success || false
     } catch (error) {
-      console.error('[PluginSDK] Failed to reload plugin:', error)
+      pluginSdkLog.error('Failed to reload plugin', error)
       return false
     }
   }
@@ -290,7 +286,7 @@ class PluginSDK {
       const response = await pluginTransportSdk.reconnectDevServer({ pluginName: name })
       return response?.success || false
     } catch (error) {
-      console.error('[PluginSDK] Failed to reconnect dev server:', error)
+      pluginSdkLog.error('Failed to reconnect dev server', error)
       return false
     }
   }
@@ -332,7 +328,7 @@ class PluginSDK {
       })
       return response?.success || false
     } catch (error) {
-      console.error('[PluginSDK] Failed to install plugin:', error)
+      pluginSdkLog.error('Failed to install plugin', error)
       return false
     }
   }
@@ -345,7 +341,7 @@ class PluginSDK {
       const response = await pluginTransportSdk.uninstall({ name })
       return response?.success || false
     } catch (error) {
-      console.error('[PluginSDK] Failed to uninstall plugin:', error)
+      pluginSdkLog.error('Failed to uninstall plugin', error)
       return false
     }
   }
@@ -363,7 +359,7 @@ class PluginSDK {
     try {
       return await pluginTransportSdk.triggerFeature(request)
     } catch (error) {
-      console.error('[PluginSDK] Failed to trigger feature:', error)
+      pluginSdkLog.error('Failed to trigger feature', error)
       throw error
     }
   }
@@ -376,7 +372,7 @@ class PluginSDK {
       const response = await pluginTransportSdk.registerWidget(request)
       return response?.success || false
     } catch (error) {
-      console.error('[PluginSDK] Failed to register widget:', error)
+      pluginSdkLog.error('Failed to register widget', error)
       return false
     }
   }
@@ -388,7 +384,7 @@ class PluginSDK {
     try {
       await pluginTransportSdk.featureInputChanged(request)
     } catch (error) {
-      console.error('[PluginSDK] Failed to handle input changed:', error)
+      pluginSdkLog.error('Failed to handle input changed', error)
     }
   }
 
@@ -403,7 +399,7 @@ class PluginSDK {
     try {
       await pluginTransportSdk.openFolder({ name })
     } catch (error) {
-      console.error('[PluginSDK] Failed to open plugin folder:', error)
+      pluginSdkLog.error('Failed to open plugin folder', error)
       throw error
     }
   }
@@ -418,7 +414,7 @@ class PluginSDK {
       const response = await pluginTransportSdk.getOfficialList({ force })
       return response?.plugins || []
     } catch (error) {
-      console.error('[PluginSDK] Failed to get official plugin list:', error)
+      pluginSdkLog.error('Failed to get official plugin list', error)
       return []
     }
   }
@@ -436,7 +432,7 @@ class PluginSDK {
     try {
       return await pluginTransportSdk.getManifest({ name })
     } catch (error) {
-      console.error('[PluginSDK] Failed to get plugin manifest:', error)
+      pluginSdkLog.error('Failed to get plugin manifest', error)
       return null
     }
   }
@@ -466,7 +462,7 @@ class PluginSDK {
       })
       return response?.success || false
     } catch (error) {
-      console.error('[PluginSDK] Failed to save plugin manifest:', error)
+      pluginSdkLog.error('Failed to save plugin manifest', error)
       return false
     }
   }
@@ -485,7 +481,7 @@ class PluginSDK {
         overwrite: options?.overwrite
       })
     } catch (error) {
-      console.error('[PluginSDK] Failed to save widget file:', error)
+      pluginSdkLog.error('Failed to save widget file', error)
       return { success: false, error: 'SAVE_WIDGET_FILE_FAILED' }
     }
   }
@@ -505,7 +501,7 @@ class PluginSDK {
     try {
       return await pluginTransportSdk.getPaths({ name })
     } catch (error) {
-      console.error('[PluginSDK] Failed to get plugin paths:', error)
+      pluginSdkLog.error('Failed to get plugin paths', error)
       return null
     }
   }
@@ -524,7 +520,7 @@ class PluginSDK {
       const response = await pluginTransportSdk.openPath({ name, pathType })
       return response || { success: false }
     } catch (error) {
-      console.error('[PluginSDK] Failed to open plugin path:', error)
+      pluginSdkLog.error('Failed to open plugin path', error)
       return { success: false }
     }
   }
@@ -534,7 +530,7 @@ class PluginSDK {
       const response = await pluginTransportSdk.revealPath({ name, path })
       return { success: response?.success ?? false, path: response?.path }
     } catch (error) {
-      console.error('[PluginSDK] Failed to reveal plugin path:', error)
+      pluginSdkLog.error('Failed to reveal plugin path', error)
       return { success: false }
     }
   }
@@ -607,7 +603,7 @@ class PluginSDK {
         }
       }
     } catch (error) {
-      console.error('[PluginSDK] Failed to get plugin performance:', error)
+      pluginSdkLog.error('Failed to get plugin performance', error)
       return null
     }
   }
@@ -687,7 +683,7 @@ class PluginSDK {
         }
       }
     } catch (error) {
-      console.error('[PluginSDK] Failed to get plugin runtime stats:', error)
+      pluginSdkLog.error('Failed to get plugin runtime stats', error)
       return null
     }
   }

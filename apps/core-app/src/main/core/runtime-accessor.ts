@@ -5,6 +5,7 @@ import type { TouchApp } from './touch-app'
 
 type RuntimeChannel = {
   keyManager?: unknown
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime channel methods are transport-defined at runtime
   [key: string]: any
 }
 
@@ -64,6 +65,12 @@ export function getRegisteredMainRuntime<E = unknown>(key: string): MainRuntimeA
     throw new Error(`[RuntimeAccessor] Runtime "${key}" not registered`)
   }
   return runtime as MainRuntimeAccessor<E>
+}
+
+export function maybeGetRegisteredMainRuntime<E = unknown>(
+  key: string
+): MainRuntimeAccessor<E> | null {
+  return (runtimeRegistry.get(key) as MainRuntimeAccessor<E> | undefined) ?? null
 }
 
 export function clearRegisteredMainRuntime(key: string): void {

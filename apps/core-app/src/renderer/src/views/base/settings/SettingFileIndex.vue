@@ -1,12 +1,13 @@
 <script setup lang="ts" name="SettingFileIndex">
 import type {
   AppIndexSettings,
+  DeviceIdleDiagnostic,
   DeviceIdleSettings,
   FileIndexStatus,
   FileIndexBatteryStatus,
   FileIndexStats
 } from '@talex-touch/utils/transport/events/types'
-import { TxButton, TxPopover } from '@talex-touch/tuffex'
+import { TxButton, TxInput, TxPopover } from '@talex-touch/tuffex'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -16,11 +17,20 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { useEstimatedCompletionText } from '~/modules/hooks/useEstimatedCompletion'
 import { popperMention } from '~/modules/mention/dialog-mention'
+import { createRendererLogger } from '~/utils/renderer-log'
 import FailedFilesListDialog from './components/FailedFilesListDialog.vue'
 import RebuildConfirmDialog from './components/RebuildConfirmDialog.vue'
+import SettingFileIndexAppDiagnostic from './SettingFileIndexAppDiagnostic.vue'
+import {
+  formatDeviceBatteryStatus,
+  formatDeviceIdleDuration,
+  getDeviceIdleDiagnosticTone,
+  getDeviceIdleReasonKey
+} from './device-idle-diagnostics'
+import { resolveIndexRebuildOutcome } from './index-rebuild-flow'
 
 const {
   getIndexStatus,
@@ -30,6 +40,7 @@ const {
   handleRebuild,
   onProgressUpdate
 } = useFileIndexMonitor()
+const settingFileIndexLog = createRendererLogger('SettingFileIndex')
 const { t, te } = useI18n()
 const settingsSdk = useSettingsSdk()
 
@@ -86,6 +97,9 @@ interface AppIndexForm {
 
 const deviceIdleSettings = ref<DeviceIdleSettings | null>(null)
 const deviceIdleSaving = ref(false)
+const deviceIdleDiagnostic = ref<DeviceIdleDiagnostic | null>(null)
+const deviceIdleDiagnosticLoading = ref(false)
+const deviceIdleDiagnosticCheckedAt = ref<Date | null>(null)
 const deviceIdleForm = ref<DeviceIdleForm>({
   idleMinutes: Math.round(DEFAULT_DEVICE_IDLE_SETTINGS.idleThresholdMs / 60000),
   minBatteryPercent: DEFAULT_DEVICE_IDLE_SETTINGS.minBatteryPercent,
@@ -124,7 +138,7 @@ async function checkStatus() {
       indexStats.value = stats
     }
   } catch (error) {
-    console.error('[SettingFileIndex] Failed to get status:', error)
+    settingFileIndexLog.error('Failed to get status', error)
   }
 }
 
@@ -172,8 +186,23 @@ async function loadDeviceIdleSettings() {
     deviceIdleSettings.value = settings
     deviceIdleForm.value = toDeviceIdleForm(settings)
   } catch (error) {
-    console.error('[SettingFileIndex] Failed to load device idle settings:', error)
+    settingFileIndexLog.error('Failed to load device idle settings', error)
     toast.error(t('settings.settingFileIndex.deviceIdleLoadFailed'))
+  }
+}
+
+async function loadDeviceIdleDiagnostic() {
+  if (deviceIdleDiagnosticLoading.value) return
+  deviceIdleDiagnosticLoading.value = true
+  try {
+    deviceIdleDiagnostic.value = await settingsSdk.deviceIdle.getDiagnostic()
+    deviceIdleDiagnosticCheckedAt.value = new Date()
+  } catch (error) {
+    settingFileIndexLog.error('Failed to load device idle diagnostic', error)
+    deviceIdleDiagnostic.value = null
+    toast.error(t('settings.settingFileIndex.deviceIdleDiagnosticLoadFailed'))
+  } finally {
+    deviceIdleDiagnosticLoading.value = false
   }
 }
 
@@ -202,9 +231,10 @@ async function saveDeviceIdleSettings() {
     const updated = await settingsSdk.deviceIdle.updateSettings(payload)
     deviceIdleSettings.value = updated
     deviceIdleForm.value = toDeviceIdleForm(updated)
+    await loadDeviceIdleDiagnostic()
     toast.success(t('settings.settingFileIndex.deviceIdleSaved'))
   } catch (error) {
-    console.error('[SettingFileIndex] Failed to save device idle settings:', error)
+    settingFileIndexLog.error('Failed to save device idle settings', error)
     toast.error(t('settings.settingFileIndex.deviceIdleSaveFailed'))
   } finally {
     deviceIdleSaving.value = false
@@ -217,7 +247,7 @@ async function loadAppIndexSettings() {
     appIndexSettings.value = settings
     appIndexForm.value = toAppIndexForm(settings)
   } catch (error) {
-    console.error('[SettingFileIndex] Failed to load app index settings:', error)
+    settingFileIndexLog.error('Failed to load app index settings', error)
     toast.error(t('settings.settingFileIndex.appIndexLoadFailed'))
   }
 }
@@ -268,7 +298,7 @@ async function saveAppIndexSettings() {
     appIndexForm.value = toAppIndexForm(updated)
     toast.success(t('settings.settingFileIndex.appIndexSaved'))
   } catch (error) {
-    console.error('[SettingFileIndex] Failed to save app index settings:', error)
+    settingFileIndexLog.error('Failed to save app index settings', error)
     toast.error(t('settings.settingFileIndex.appIndexSaveFailed'))
   } finally {
     appIndexSaving.value = false
@@ -285,12 +315,28 @@ function handleAppIndexBlur(blur: () => void) {
   saveAppIndexSettings()
 }
 
+function coerceNumberInput(value: string | number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+
+  return 0
+}
+
 let unsubscribeProgress: (() => void) | null = null
 let statusCheckInterval: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   checkStatus()
   loadDeviceIdleSettings()
+  loadDeviceIdleDiagnostic()
   loadAppIndexSettings()
 
   unsubscribeProgress = onProgressUpdate((progress) => {
@@ -381,6 +427,72 @@ function openFailedFilesDialog() {
 
 const failedFilesCount = computed(() => indexStats.value?.failedFiles ?? 0)
 
+const deviceIdleDuration = computed(() =>
+  formatDeviceIdleDuration(deviceIdleDiagnostic.value?.snapshot.idleMs ?? null)
+)
+
+const deviceIdleThresholdDuration = computed(() =>
+  formatDeviceIdleDuration(
+    deviceIdleDiagnostic.value?.settings.idleThresholdMs ??
+      deviceIdleSettings.value?.idleThresholdMs ??
+      DEFAULT_DEVICE_IDLE_SETTINGS.idleThresholdMs
+  )
+)
+
+const deviceIdleBattery = computed(() =>
+  formatDeviceBatteryStatus(deviceIdleDiagnostic.value?.snapshot.battery ?? null)
+)
+
+function formatDiagnosticDurationLabel(duration: { value: string; unit: string }): string {
+  if (duration.value === '-') return duration.value
+  if (duration.unit === 'hr') return `${duration.value} ${t('settings.settingFileIndex.unitHours')}`
+  return `${duration.value} ${t('settings.settingFileIndex.unitMinutes')}`
+}
+
+const deviceIdleDurationLabel = computed(() =>
+  formatDiagnosticDurationLabel(deviceIdleDuration.value)
+)
+
+const deviceIdleThresholdLabel = computed(() =>
+  formatDiagnosticDurationLabel(deviceIdleThresholdDuration.value)
+)
+
+const deviceIdleBatteryStateLabel = computed(() =>
+  t(`settings.settingFileIndex.diagnosticBatteryState.${deviceIdleBattery.value.stateKey}`)
+)
+
+const deviceIdleDiagnosticTone = computed(() =>
+  getDeviceIdleDiagnosticTone(deviceIdleDiagnostic.value)
+)
+
+const deviceIdleDiagnosticColor = computed(() => {
+  if (deviceIdleDiagnosticTone.value === 'success') return '#34c759'
+  if (deviceIdleDiagnosticTone.value === 'warning') return '#ff9500'
+  return '#8e8e93'
+})
+
+const deviceIdleDiagnosticStatus = computed(() => {
+  if (deviceIdleDiagnosticLoading.value) return t('settings.settingFileIndex.diagnosticChecking')
+  if (!deviceIdleDiagnostic.value) return t('settings.settingFileIndex.diagnosticUnknown')
+  return deviceIdleDiagnostic.value.allowed
+    ? t('settings.settingFileIndex.diagnosticAllowedStatus')
+    : t('settings.settingFileIndex.diagnosticBlockedStatus')
+})
+
+const deviceIdleDiagnosticText = computed(() => {
+  if (deviceIdleDiagnosticLoading.value)
+    return t('settings.settingFileIndex.diagnosticCheckingDesc')
+  if (!deviceIdleDiagnostic.value) return t('settings.settingFileIndex.diagnosticUnknownDesc')
+
+  return t(getDeviceIdleReasonKey(deviceIdleDiagnostic.value.reason), {
+    idle: deviceIdleDurationLabel.value,
+    threshold: deviceIdleThresholdLabel.value,
+    battery: deviceIdleBattery.value.level,
+    min: deviceIdleDiagnostic.value.settings.minBatteryPercent,
+    critical: deviceIdleDiagnostic.value.settings.blockBatteryBelowPercent
+  })
+})
+
 const errorButtonLabel = computed(() => {
   const count = failedFilesCount.value
   if (count > 0) {
@@ -391,6 +503,13 @@ const errorButtonLabel = computed(() => {
 
 function toggleErrorPopover(): void {
   errorPopoverVisible.value = !errorPopoverVisible.value
+}
+
+function getFileRebuildOutcomeMessages() {
+  return {
+    success: t('settings.settingFileIndex.alertRebuildStarted'),
+    failure: t('common.error')
+  }
 }
 
 async function triggerRebuild() {
@@ -421,14 +540,21 @@ async function triggerRebuild() {
   isRebuilding.value = true
   try {
     const result = await handleRebuild()
+    const outcome = resolveIndexRebuildOutcome(result, getFileRebuildOutcomeMessages())
+    let successMessage = outcome.type === 'success' ? outcome.message : ''
 
-    if (result?.requiresConfirm) {
-      const level = result.battery?.level ?? battery?.level
+    if (outcome.type === 'failure') {
+      throw new Error(outcome.message)
+    }
+
+    if (outcome.type === 'confirm') {
+      const confirmResult = outcome.result
+      const level = confirmResult.battery?.level ?? battery?.level
       if (typeof level === 'number') {
         toast.warning(
           t('settings.settingFileIndex.alertBatteryLow', {
             level,
-            critical: result.threshold ?? defaultCriticalBattery
+            critical: confirmResult.threshold ?? defaultCriticalBattery
           })
         )
       }
@@ -436,14 +562,14 @@ async function triggerRebuild() {
       const shouldConfirmAgain =
         !battery ||
         typeof battery.level !== 'number' ||
-        (result.threshold ?? defaultCriticalBattery) !== defaultCriticalBattery
+        (confirmResult.threshold ?? defaultCriticalBattery) !== defaultCriticalBattery
 
       if (shouldConfirmAgain) {
         try {
           await openRebuildConfirm({
-            battery: result.battery ?? battery ?? null,
+            battery: confirmResult.battery ?? battery ?? null,
             minBattery: defaultMinBattery,
-            criticalBattery: result.threshold ?? defaultCriticalBattery,
+            criticalBattery: confirmResult.threshold ?? defaultCriticalBattery,
             showCriticalWarning: true
           })
         } catch {
@@ -453,18 +579,27 @@ async function triggerRebuild() {
       }
 
       const forced = await handleRebuild({ force: true })
-      if (!forced?.success) {
-        throw new Error(forced?.error || 'Rebuild failed')
+      const forcedOutcome = resolveIndexRebuildOutcome(forced, getFileRebuildOutcomeMessages())
+      if (forcedOutcome.type === 'failure') {
+        throw new Error(forcedOutcome.message)
       }
+      if (forcedOutcome.type === 'confirm') {
+        throw new Error(
+          forcedOutcome.result.error ||
+            forcedOutcome.result.reason ||
+            getFileRebuildOutcomeMessages().failure
+        )
+      }
+      successMessage = forcedOutcome.message
     }
 
-    toast.success(t('settings.settingFileIndex.alertRebuildStarted'))
+    toast.success(successMessage || t('settings.settingFileIndex.alertRebuildStarted'))
     setTimeout(async () => {
       await checkStatus()
       isRebuilding.value = false
     }, 2000)
   } catch (error: unknown) {
-    console.error('[SettingFileIndex] Rebuild failed:', error)
+    settingFileIndexLog.error('Rebuild failed', error)
     isRebuilding.value = false
     const errorMsg = error instanceof Error ? error.message : String(error)
     toast.error(
@@ -642,13 +777,14 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleDeviceIdleBlur(blur)"
           />
@@ -667,14 +803,15 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
             max="100"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleDeviceIdleBlur(blur)"
           />
@@ -693,14 +830,15 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
             max="100"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleDeviceIdleBlur(blur)"
           />
@@ -729,13 +867,14 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleDeviceIdleBlur(blur)"
           />
@@ -743,6 +882,47 @@ async function triggerRebuild() {
         </div>
       </template>
     </TuffBlockInput>
+
+    <TuffBlockSlot
+      :title="t('settings.settingFileIndex.diagnosticTitle')"
+      :description="deviceIdleDiagnosticText"
+      default-icon="i-carbon-activity"
+      active-icon="i-carbon-activity"
+    >
+      <div class="diagnostic-panel">
+        <div class="diagnostic-status" :style="{ '--diagnostic-color': deviceIdleDiagnosticColor }">
+          {{ deviceIdleDiagnosticStatus }}
+        </div>
+
+        <div class="diagnostic-metrics">
+          <span>{{ t('settings.settingFileIndex.diagnosticIdleMetric') }}</span>
+          <strong>{{ deviceIdleDurationLabel }}</strong>
+          <span class="stat-divider">·</span>
+          <span>{{ t('settings.settingFileIndex.diagnosticBatteryMetric') }}</span>
+          <strong>{{ deviceIdleBattery.level }}</strong>
+          <span>{{ deviceIdleBatteryStateLabel }}</span>
+        </div>
+
+        <div class="diagnostic-actions">
+          <span v-if="deviceIdleDiagnosticCheckedAt" class="diagnostic-time">
+            {{
+              t('settings.settingFileIndex.diagnosticLastChecked', {
+                time: deviceIdleDiagnosticCheckedAt.toLocaleTimeString()
+              })
+            }}
+          </span>
+          <TxButton
+            variant="flat"
+            size="sm"
+            :disabled="deviceIdleDiagnosticLoading"
+            @click="loadDeviceIdleDiagnostic"
+          >
+            <div class="i-carbon-renew text-12px" />
+            <span>{{ t('settings.settingFileIndex.diagnosticRefresh') }}</span>
+          </TxButton>
+        </div>
+      </div>
+    </TuffBlockSlot>
   </TuffGroupBlock>
 
   <TuffGroupBlock
@@ -773,13 +953,14 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleAppIndexBlur(blur)"
           />
@@ -798,13 +979,14 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleAppIndexBlur(blur)"
           />
@@ -823,13 +1005,14 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleAppIndexBlur(blur)"
           />
@@ -858,13 +1041,14 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleAppIndexBlur(blur)"
           />
@@ -883,13 +1067,14 @@ async function triggerRebuild() {
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
         <div class="input-row">
-          <input
-            :value="modelValue"
+          <TxInput
+            :model-value="modelValue"
             type="number"
             min="0"
-            class="tuff-input flex-1"
+            inputmode="numeric"
+            class="tuff-number-input flex-1"
             :disabled="disabled"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @update:model-value="update(coerceNumberInput($event))"
             @focus="focus"
             @blur="handleAppIndexBlur(blur)"
           />
@@ -897,174 +1082,9 @@ async function triggerRebuild() {
         </div>
       </template>
     </TuffBlockInput>
+
+    <SettingFileIndexAppDiagnostic />
   </TuffGroupBlock>
 </template>
 
-<style scoped>
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 500;
-  background: color-mix(in srgb, var(--status-color) 15%, transparent);
-  color: var(--status-color);
-  border: 1px solid color-mix(in srgb, var(--status-color) 30%, transparent);
-}
-
-.progress-container {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.estimated-time {
-  font-size: 13px;
-  color: var(--tx-text-color-secondary);
-  font-weight: 500;
-}
-
-.stats-container {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  white-space: nowrap;
-}
-
-.stat-divider {
-  color: var(--tx-text-color-placeholder);
-  font-size: 12px;
-  margin: 0 2px;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-  font-weight: 400;
-}
-
-.stat-value {
-  font-size: 12px;
-  color: var(--tx-text-color-primary);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-value.failed {
-  color: #ff3b30;
-}
-
-.stat-value-btn {
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  padding: 1px 6px 1px 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.stat-value-btn.failed {
-  color: #ff3b30;
-}
-
-.stat-value-btn:hover {
-  background: rgba(255, 59, 48, 0.1);
-}
-
-.stat-value.skipped {
-  color: #ff9500;
-}
-
-.error-trigger {
-  width: fit-content;
-}
-
-.error-popover {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: 320px;
-}
-
-.error-popover-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--tx-text-color-primary);
-}
-
-.error-popover-desc {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-}
-
-.error-popover-content {
-  margin: 0;
-  padding: 8px 10px;
-  background: rgba(255, 59, 48, 0.08);
-  border-radius: 6px;
-  border: 1px solid rgba(255, 59, 48, 0.15);
-  font-size: 11px;
-  color: #ff3b30;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 200px;
-  overflow: auto;
-}
-
-.time-text {
-  font-size: 13px;
-  color: var(--tx-text-color-secondary);
-  font-family: monospace;
-  font-weight: 500;
-}
-
-.input-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.input-unit {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-  white-space: nowrap;
-}
-
-.tuff-input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--tx-border-color);
-  border-radius: 6px;
-  background: var(--tx-fill-color-blank);
-  color: var(--tx-text-color-primary);
-  font-size: 14px;
-  outline: none;
-  transition: all 0.2s;
-}
-
-.tuff-input:focus {
-  border-color: var(--tx-color-primary);
-}
-
-.tuff-input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.tuff-input::placeholder {
-  color: var(--tx-text-color-placeholder);
-}
-</style>
+<style scoped src="./SettingFileIndex.css"></style>

@@ -80,7 +80,7 @@ export function useSvgContent(
       },
       shouldRetry: () => {
         const targetUrl = normalizeSource(url.value)
-        return !(targetUrl && isLocalHttpSource(targetUrl))
+        return !(targetUrl && (isLocalHttpSource(targetUrl) || isApiSource(targetUrl)))
       }
     }
   )
@@ -444,19 +444,28 @@ export function useSvgContent(
 
     if (isApiSource(targetUrl) || !isElectronRenderer()) {
       resolvedUrl.value = targetUrl
-      if (networkSdk) {
-        const response = await networkSdk.request<string>({
-          method: 'GET',
-          url: targetUrl,
-          responseType: 'text'
-        })
-        return response.data
-      }
-      const response = await networkClient.request<string>({
+      const requestOptions = {
         method: 'GET',
         url: targetUrl,
         responseType: 'text'
-      })
+      } as const
+
+      if (isApiSource(targetUrl) && isElectronRenderer()) {
+        try {
+          const response = await networkClient.request<string>(requestOptions)
+          return response.data
+        } catch (rendererError) {
+          if (!networkSdk) {
+            throw rendererError
+          }
+        }
+      }
+
+      if (networkSdk) {
+        const response = await networkSdk.request<string>(requestOptions)
+        return response.data
+      }
+      const response = await networkClient.request<string>(requestOptions)
       return response.data
     }
 
@@ -517,7 +526,7 @@ export function useSvgContent(
     } catch (err) {
       error.value = err instanceof Error ? err : new Error(String(err))
       content.value = null // Ensure content is cleared on error
-      if (!isLocalHttpSource(targetUrl)) {
+      if (!isLocalHttpSource(targetUrl) && !isApiSource(targetUrl)) {
         console.error('fetchSvgContent failed after retries', url.value, err)
       }
     } finally {

@@ -3,6 +3,7 @@ import { preloadDebugStep, preloadLog, preloadState } from '@talex-touch/utils/p
 import { initStorageChannel, initStorageTransport, useChannel } from '@talex-touch/utils/renderer'
 import { isAssistantWindow, isCoreBox } from '@talex-touch/utils/renderer/hooks/arg-mapper'
 import type { IStorageChannel } from '@talex-touch/utils/renderer/storage'
+import { appSettings } from '@talex-touch/utils/renderer/storage'
 import { initStorageSubscription } from '@talex-touch/utils/renderer/storage/storage-subscription'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
@@ -13,14 +14,16 @@ import { createSharedElementDirective, SharedElementRouteGuard } from 'v-shared-
 import VWave from 'v-wave'
 import { createApp } from 'vue'
 import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
+import { appSetting } from '~/modules/storage/app-storage'
 import type { I18nInstance } from '~/modules/lang/i18n'
-import { setupI18n } from '~/modules/lang/i18n'
+import { resolveInitialLanguagePreference, setupI18n } from '~/modules/lang'
 import { registerBuildVerificationListener } from '~/modules/build-verification/register-build-verification'
 import { registerBatteryStatusListener } from '~/modules/hooks/useBatteryOptimizer'
 import { registerNotificationHub } from '~/modules/notification/notification-hub'
 import { registerPluginInstallListener } from '~/modules/plugin/plugin-install-listener'
 
 import { usePluginStore } from '~/stores/plugin'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 import App from './App.vue'
 
@@ -40,6 +43,7 @@ import 'virtual:unocss-devtools'
 setRuntimeEnv(import.meta.env as Record<string, string | undefined>)
 
 const transport = useTuffTransport()
+const mainLog = createRendererLogger('RendererMain')
 
 let router: Router | null = null
 let routerEventsRegistered = false
@@ -131,6 +135,7 @@ registerDefaultCustomRenderers()
  */
 async function bootstrap() {
   initializeRendererStorage()
+  await appSettings.whenHydrated()
   const router = await ensureRouter()
   const initialLanguage = resolveInitialLanguage()
   const i18n = await runBootStep('Loading localization resources...', 0.05, () =>
@@ -155,30 +160,16 @@ async function bootstrap() {
   preloadDebugStep('Renderer shell mounted', 0.02)
 }
 
-const DEFAULT_LOCALE = 'zh-CN'
-
 /**
  * Resolve the initial locale using persisted settings or sensible defaults.
  */
 function resolveInitialLanguage() {
-  const storedLanguage = localStorage.getItem('app-language')
-  if (storedLanguage) {
-    return storedLanguage
-  }
-
-  const followSystem = localStorage.getItem('app-follow-system-language') === 'true'
-  if (!followSystem) {
-    return DEFAULT_LOCALE
-  }
-
-  const systemLang = navigator.language || 'en-US'
-  if (systemLang.startsWith('zh')) {
-    return 'zh-CN'
-  }
-  if (systemLang.startsWith('en')) {
-    return 'en-US'
-  }
-  return DEFAULT_LOCALE
+  return resolveInitialLanguagePreference({
+    settingLocale: appSetting?.lang?.locale,
+    settingFollowSystem: appSetting?.lang?.followSystem,
+    browserLanguage: navigator.language,
+    intlLocale: Intl.DateTimeFormat().resolvedOptions().locale
+  }).locale
 }
 
 /**
@@ -212,5 +203,5 @@ async function runBootStep<T>(message: string, progress: number, task: () => T |
 }
 
 bootstrap().catch((error) => {
-  console.error('main.ts: Bootstrap process failed:', error)
+  mainLog.error('Bootstrap process failed', error)
 })

@@ -1,14 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { omniPanelFeatureToggleEvent } from '../../../shared/events/omni-panel'
 
-const { getTuffTransportMainMock, loggerWarnMock } = vi.hoisted(() => ({
+const {
+  getTuffTransportMainMock,
+  loggerWarnMock,
+  accessibilityClientMock,
+  ensureXdotoolAvailableMock,
+  isXdotoolAvailableMock,
+  getSelectionCaptureCapabilityPatchMock
+} = vi.hoisted(() => ({
   getTuffTransportMainMock: vi.fn(() => ({
     on: vi.fn(() => () => {}),
     broadcast: vi.fn(),
     sendTo: vi.fn(),
     sendToWindow: vi.fn()
   })),
-  loggerWarnMock: vi.fn()
+  loggerWarnMock: vi.fn(),
+  accessibilityClientMock: vi.fn(() => true),
+  ensureXdotoolAvailableMock: vi.fn(async () => undefined),
+  isXdotoolAvailableMock: vi.fn(async () => true),
+  getSelectionCaptureCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'supported' }))
 }))
 
 vi.mock('electron', () => ({
@@ -29,6 +39,9 @@ vi.mock('electron', () => ({
   },
   shell: {
     openExternal: vi.fn()
+  },
+  systemPreferences: {
+    isTrustedAccessibilityClient: accessibilityClientMock
   },
   ipcMain: {
     handle: vi.fn(),
@@ -97,6 +110,17 @@ vi.mock('../plugin/plugin-module', () => ({
   }
 }))
 
+vi.mock('../system/linux-desktop-tools', () => ({
+  ensureXdotoolAvailable: ensureXdotoolAvailableMock,
+  isXdotoolAvailable: isXdotoolAvailableMock,
+  getXdotoolUnavailableReason: () =>
+    'Linux desktop automation requires xdotool to be installed and available in PATH.'
+}))
+
+vi.mock('../platform/capability-adapter', () => ({
+  getSelectionCaptureCapabilityPatch: getSelectionCaptureCapabilityPatchMock
+}))
+
 vi.mock('../storage', () => ({
   getMainConfig: vi.fn(() => ({})),
   saveMainConfig: vi.fn()
@@ -135,10 +159,28 @@ vi.mock('../../utils/logger', () => ({
 
 import type { IFeatureOmniTransfer, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import { OmniPanelModule } from './index'
+import { getMainConfig } from '../storage'
 
 afterEach(() => {
   vi.clearAllMocks()
+  vi.mocked(getMainConfig).mockReturnValue({})
 })
+
+function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
+  const originalPlatform = process.platform
+  Object.defineProperty(process, 'platform', {
+    value: platform,
+    configurable: true
+  })
+  try {
+    return run()
+  } finally {
+    Object.defineProperty(process, 'platform', {
+      value: originalPlatform,
+      configurable: true
+    })
+  }
+}
 
 describe('OmniPanelModule registry initialization', () => {
   it('initializes builtin feature registry when empty', () => {
@@ -158,6 +200,53 @@ describe('OmniPanelModule registry initialization', () => {
       'builtin.corebox-search',
       'builtin.copy'
     ])
+  })
+})
+
+describe('OmniPanel settings normalization', () => {
+  it('reads custom mouse long press duration from settings snapshot', () => {
+    vi.mocked(getMainConfig).mockReturnValue({
+      omniPanel: {
+        enableShortcut: true,
+        enableMouseLongPress: true,
+        mouseLongPressDurationMs: '1000',
+        featureHub: {
+          items: []
+        }
+      }
+    } as unknown as ReturnType<typeof getMainConfig>)
+
+    const module = new OmniPanelModule() as unknown as {
+      getSettingsSnapshot: () => {
+        mouseLongPressDurationMs: number
+      }
+    }
+
+    expect(module.getSettingsSnapshot().mouseLongPressDurationMs).toBe(1000)
+  })
+
+  it('clamps custom mouse long press duration to supported bounds', () => {
+    vi.mocked(getMainConfig).mockReturnValue({
+      omniPanel: {
+        mouseLongPressDurationMs: 10
+      }
+    } as unknown as ReturnType<typeof getMainConfig>)
+    const minDurationModule = new OmniPanelModule() as unknown as {
+      getMouseLongPressDurationMs: () => number
+    }
+
+    expect(minDurationModule.getMouseLongPressDurationMs()).toBe(200)
+
+    vi.mocked(getMainConfig).mockReturnValue({
+      omniPanel: {
+        mouseLongPressDurationMs: 5000
+      }
+    } as unknown as ReturnType<typeof getMainConfig>)
+    const maxDurationModule = new OmniPanelModule() as unknown as {
+      getMouseLongPressDurationMs: () => number
+    }
+
+    expect(maxDurationModule.getMouseLongPressDurationMs()).toBe(3000)
   })
 })
 
@@ -221,7 +310,68 @@ describe('OmniPanelModule execute dispatch', () => {
   })
 })
 
+describe('OmniPanelModule selection capture diagnostics', () => {
+  it('reports unsupported Linux selection capture when xdotool is unavailable', async () => {
+    getSelectionCaptureCapabilityPatchMock.mockResolvedValue({
+      supportLevel: 'unsupported',
+      reason: 'Linux desktop automation requires xdotool to be installed and available in PATH.',
+      issueCode: 'XDTOOL_MISSING',
+      limitations: [
+        'Linux desktop automation requires xdotool to be installed and available in PATH.'
+      ]
+    } as never)
+
+    const result = await withPlatform('linux', async () => {
+      const module = new OmniPanelModule() as unknown as {
+        captureSelectionText: () => Promise<{
+          text: string
+          supportLevel: string
+          issueCode?: string
+          issueMessage?: string
+        }>
+      }
+      return await module.captureSelectionText()
+    })
+
+    expect(result).toMatchObject({
+      text: '',
+      supportLevel: 'unsupported',
+      issueCode: 'unsupported'
+    })
+    expect(result.issueMessage).toContain('xdotool')
+  })
+})
+
 describe('OmniPanelModule auto-mount', () => {
+  it('keeps the keyboard shortcut disabled by default', () => {
+    const module = new OmniPanelModule() as unknown as {
+      getSettingsSnapshot: (setting: Record<string, unknown>) => {
+        enableShortcut: boolean
+        enableMouseLongPress: boolean
+        autoMountFirstFeatureOnPluginInstall: boolean
+      }
+    }
+
+    expect(module.getSettingsSnapshot({})).toMatchObject({
+      enableShortcut: false,
+      enableMouseLongPress: true,
+      autoMountFirstFeatureOnPluginInstall: false
+    })
+    expect(
+      module.getSettingsSnapshot({
+        omniPanel: {
+          enableShortcut: true,
+          enableMouseLongPress: false,
+          autoMountFirstFeatureOnPluginInstall: true
+        }
+      })
+    ).toMatchObject({
+      enableShortcut: true,
+      enableMouseLongPress: false,
+      autoMountFirstFeatureOnPluginInstall: true
+    })
+  })
+
   it('prioritizes declared omniTransfer features and dedupes repeated install events', async () => {
     const module = new OmniPanelModule() as unknown as {
       featureRegistry: Array<Record<string, unknown>>
@@ -292,6 +442,7 @@ describe('OmniPanelModule auto-mount', () => {
 
 describe('OmniPanelModule hard-cut transport', () => {
   it('does not register legacy feature toggle handler', async () => {
+    const legacyEventName = 'omni-panel:feature:toggle'
     const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
     getTuffTransportMainMock.mockReturnValue({
       on: vi.fn(
@@ -311,7 +462,7 @@ describe('OmniPanelModule hard-cut transport', () => {
 
     await module.onInit({} as never)
 
-    expect(handlers.has(omniPanelFeatureToggleEvent.toEventName())).toBe(false)
+    expect(handlers.has(legacyEventName)).toBe(false)
   })
 })
 
@@ -500,20 +651,53 @@ describe('OmniPanel shortcut and input-hook guards', () => {
     const module = new OmniPanelModule() as unknown as {
       shortcutHoldEnabled: boolean
       inputHookKeys: null
+      inputHook: null
       handleShortcutPressed: () => void
       toggle: (options: { captureSelection: boolean; source: string }) => void
+      syncInputHookState: () => void
+      shouldCaptureSelection: () => boolean
     }
 
     const toggleMock = vi.fn()
     module.shortcutHoldEnabled = true
     module.inputHookKeys = null
+    module.inputHook = null
     module.toggle = toggleMock as unknown as (options: {
       captureSelection: boolean
       source: string
     }) => void
+    module.syncInputHookState = vi.fn()
+    module.shouldCaptureSelection = vi.fn(() => true)
 
     module.handleShortcutPressed()
     expect(toggleMock).toHaveBeenCalledWith({ captureSelection: true, source: 'shortcut' })
+  })
+
+  it('degrades shortcut capture when accessibility capture is unavailable', () => {
+    const module = new OmniPanelModule() as unknown as {
+      shortcutHoldEnabled: boolean
+      inputHookKeys: null
+      inputHook: null
+      handleShortcutPressed: () => void
+      toggle: (options: { captureSelection: boolean; source: string }) => void
+      syncInputHookState: () => void
+      shouldCaptureSelection: () => boolean
+    }
+
+    const toggleMock = vi.fn()
+    module.shortcutHoldEnabled = true
+    module.inputHookKeys = null
+    module.inputHook = null
+    module.toggle = toggleMock as unknown as (options: {
+      captureSelection: boolean
+      source: string
+    }) => void
+    module.syncInputHookState = vi.fn()
+    module.shouldCaptureSelection = vi.fn(() => false)
+
+    module.handleShortcutPressed()
+
+    expect(toggleMock).toHaveBeenCalledWith({ captureSelection: false, source: 'shortcut' })
   })
 
   it('re-arms and triggers shortcut when combo already active long enough', () => {
@@ -596,6 +780,47 @@ describe('OmniPanel shortcut and input-hook guards', () => {
 
     module.syncInputHookState()
 
+    expect(cleanupInputHook).toHaveBeenCalledTimes(1)
+    expect(setupInputHook).not.toHaveBeenCalled()
+  })
+
+  it('skips input hook setup when accessibility gate blocks it', () => {
+    const module = new OmniPanelModule() as unknown as {
+      mouseLongPressEnabled: boolean
+      shortcutHoldEnabled: boolean
+      syncInputHookState: () => void
+      clearLongPressTimer: () => void
+      clearShortcutHoldTimer: () => void
+      clearShortcutArmExpiryTimer: () => void
+      resetShortcutHoldState: () => void
+      cleanupInputHook: () => void
+      setupInputHook: () => void
+      canUseInputHook: () => boolean
+    }
+
+    const clearLongPressTimer = vi.fn()
+    const clearShortcutHoldTimer = vi.fn()
+    const clearShortcutArmExpiryTimer = vi.fn()
+    const resetShortcutHoldState = vi.fn()
+    const cleanupInputHook = vi.fn()
+    const setupInputHook = vi.fn()
+
+    module.mouseLongPressEnabled = true
+    module.shortcutHoldEnabled = true
+    module.clearLongPressTimer = clearLongPressTimer
+    module.clearShortcutHoldTimer = clearShortcutHoldTimer
+    module.clearShortcutArmExpiryTimer = clearShortcutArmExpiryTimer
+    module.resetShortcutHoldState = resetShortcutHoldState
+    module.cleanupInputHook = cleanupInputHook
+    module.setupInputHook = setupInputHook
+    module.canUseInputHook = vi.fn(() => false)
+
+    module.syncInputHookState()
+
+    expect(clearLongPressTimer).toHaveBeenCalledTimes(1)
+    expect(clearShortcutHoldTimer).toHaveBeenCalledTimes(1)
+    expect(clearShortcutArmExpiryTimer).toHaveBeenCalledTimes(1)
+    expect(resetShortcutHoldState).toHaveBeenCalledTimes(1)
     expect(cleanupInputHook).toHaveBeenCalledTimes(1)
     expect(setupInputHook).not.toHaveBeenCalled()
   })

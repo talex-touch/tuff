@@ -1,7 +1,7 @@
 # Tuff CLI 分包与迁移提案（执行回填版）
 
 > 更新时间: 2026-03-16  
-> 执行结论: Phase1 + Phase2 已完成（`tuff-cli` 主入口、`tuff-cli-core` 核心编排、`unplugin` 兼容 shim）
+> 执行结论: Phase1 + Phase2 已完成（`tuff-cli` 主入口、`tuff-cli-core` 内部核心编排、`unplugin` 兼容 shim）；独立 `@talex-touch/tuffcli` npm 兼容包已退场。
 
 ## 1. 背景与现状（历史）
 
@@ -17,7 +17,7 @@
 ## 2. 主要问题
 
 1. **职责混杂**：CLI 交互、构建引擎、发布逻辑、unplugin 集成都在一个包中。
-2. **命名不一致**：PRD 里有 `@talex-touch/tuffcli`，实际仅有 `@talex-touch/unplugin-export-plugin`。
+2. **命名不一致**：历史 PRD 里有 `@talex-touch/tuffcli`，但最终收敛为 `@talex-touch/tuff-cli` 对外发布包，并由该包继续提供 `tuffcli` bin。
 3. **复用困难**：其他系统想复用发布/构建逻辑只能引入完整 CLI 包。
 4. **模板版本不可控**：脚手架依赖 Git 远端模板，版本跟随主分支。
 
@@ -35,11 +35,10 @@
 | 包名 | 职责 | 现有来源建议 | 备注 |
 | --- | --- | --- | --- |
 | `@talex-touch/tuff-cli` | `tuff` 命令入口、参数解析、交互与 i18n | `src/bin` + `src/cli` | 仅 CLI UX，不做业务 |
-| `@talex-touch/tuff-cli-core` | 命令编排（create/build/dev/publish） | `src/core` + `src/types` | 纯逻辑，可供 CI/SDK 调用 |
+| `@talex-touch/tuff-cli-core` | 命令编排（create/build/dev/publish） | `src/core` + `src/types` | 内部 workspace 包，由 `tuff-cli` 构建打包，不单独发布 |
 | `@talex-touch/tuff-core` | 低层能力（exporter/压缩/签名/版本校验/manifest 解析） | `src/core/exporter.ts` 等 | `tuff-cli-core` 依赖 |
 | `@talex-touch/unplugin-export-plugin` | Vite/Webpack/Rollup/esbuild/nuxt 集成 | 现有包 | 依赖 `tuff-core` |
 | `@talex-touch/tuff-template` (可选) | 模板版本化与发布 | 外部仓库迁入/镜像 | CLI 指定版本或渠道 |
-| `@talex-touch/tuffcli` (兼容别名) | `defineConfig` 与类型导出 | 由 `tuff-cli-core` re-export | 对齐 PRD 文档 |
 
 ### 4.2 依赖关系（建议）
 
@@ -57,8 +56,8 @@ tuff-cli (bin + prompts)
    - `@talex-touch/unplugin-export-plugin` 继续发布，但 CLI/核心逻辑逐步迁移。
    - 添加 deprecate 提示：建议安装 `@talex-touch/tuff-cli`。
 3. **配置导出迁移**：
-   - `@talex-touch/tuffcli` 提供 `defineConfig` 与类型，内部转发到 `tuff-cli-core`。
-   - `@talex-touch/unplugin-export-plugin/types` 继续保留一段时间。
+   - 不再维护独立 `@talex-touch/tuffcli` npm 包，避免与 `@talex-touch/tuff-cli` 命名和发布职责重复。
+   - `@talex-touch/unplugin-export-plugin/types` 继续作为低层构建插件类型入口保留一段时间。
 4. **退场时间窗（锁定）**：
    - `2.4.x`：保留旧 CLI shim（仅转发 + 提示）。
    - `2.5.0`：移除 shim，旧入口不再承载 CLI 命令逻辑。
@@ -100,5 +99,5 @@ tuff-cli (bin + prompts)
 - [x] 新建 `packages/tuff-cli-core` 并迁移 `core/*` + `types.ts`（2026-03-15 已完成）
 - [x] 新建 `packages/tuff-cli` 并迁移 `bin` + `cli/*`（主入口已切换，兼容层保留）
 - [x] `unplugin-export-plugin` CLI 降级为 shim（deprecation + 转发），保留原 exports（2026-03-15）
-- [x] 文档与 PRD 修正：`@talex-touch/tuffcli` 指向新包（2026-03-15）
+- [x] 文档与 PRD 修正：独立 `@talex-touch/tuffcli` 兼容包退场，对外入口收敛为 `@talex-touch/tuff-cli`（2026-04-28）
 - [x] 增加回归测试：命令输出 + 核心流程 smoke test（`help/create/build/dev/publish/validate` 最小烟雾已验证）

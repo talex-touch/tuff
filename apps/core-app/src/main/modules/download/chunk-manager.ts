@@ -2,6 +2,7 @@ import type { ChunkInfo, DownloadTask } from '@talex-touch/utils'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { ChunkStatus } from '@talex-touch/utils'
+import { downloadChunkLog } from './logger'
 
 export class ChunkManager {
   private readonly chunkSize: number = 1024 * 1024 // 1MB per chunk
@@ -84,13 +85,16 @@ export class ChunkManager {
       try {
         const stats = await fs.stat(chunk.filePath)
         if (stats.size !== chunk.size) {
-          console.warn(
-            `Chunk ${chunk.index} size mismatch: expected ${chunk.size}, got ${stats.size}`
-          )
+          downloadChunkLog.warn('Chunk size mismatch', {
+            meta: { chunkIndex: chunk.index, expectedSize: chunk.size, actualSize: stats.size }
+          })
           return false
         }
       } catch (error) {
-        console.error(`Chunk ${chunk.index} file not found:`, error)
+        downloadChunkLog.error('Chunk file not found', {
+          error,
+          meta: { chunkIndex: chunk.index }
+        })
         return false
       }
     }
@@ -106,7 +110,10 @@ export class ChunkManager {
       } catch (error: unknown) {
         // 忽略文件不存在错误
         if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
-          console.error(`Failed to cleanup chunk file ${chunk.filePath}:`, error)
+          downloadChunkLog.error('Failed to cleanup chunk file', {
+            error,
+            meta: { chunkIndex: chunk.index, pathLength: chunk.filePath.length }
+          })
         }
       }
     }
@@ -177,10 +184,15 @@ export class ChunkManager {
     const tempDir = this.getTempDir(task, baseTempDir)
     try {
       await fs.rm(tempDir, { recursive: true, force: true })
-      console.log(`Cleaned up temp directory for task ${task.id}: ${tempDir}`)
+      downloadChunkLog.debug('Cleaned up task temp directory', {
+        meta: { taskId: task.id, pathLength: tempDir.length }
+      })
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
-        console.error(`Failed to cleanup temp directory ${tempDir}:`, error)
+        downloadChunkLog.error('Failed to cleanup task temp directory', {
+          error,
+          meta: { taskId: task.id, pathLength: tempDir.length }
+        })
       }
     }
   }

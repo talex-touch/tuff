@@ -17,10 +17,12 @@ import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 import { useAuth } from '~/modules/auth/useAuth'
-import { appSetting } from '~/modules/channel/storage'
+import { appSetting } from '~/modules/storage/app-storage'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
+const settingSentryLog = createRendererLogger('SettingSentry')
 
 interface TelemetryStats {
   searchCount: number
@@ -67,7 +69,7 @@ async function loadConfig() {
     enabled.value = config?.enabled ?? true
     anonymous.value = config?.anonymous ?? false
   } catch (error) {
-    console.error('Failed to load Sentry config', error)
+    settingSentryLog.error('Failed to load Sentry config', error)
   }
 }
 
@@ -86,7 +88,7 @@ async function refreshStats(options?: { silent?: boolean }) {
     }
   } catch (error) {
     if (!options?.silent) {
-      console.error('Failed to refresh telemetry stats', error)
+      settingSentryLog.error('Failed to refresh telemetry stats', error)
       toast.error(t('settingSentry.refreshError', '刷新统计信息失败'))
     }
   } finally {
@@ -119,7 +121,7 @@ async function saveConfig() {
     })
     toast.success(t('settingSentry.saveSuccess', '设置已保存'))
   } catch (error) {
-    console.error('Failed to save Sentry config', error)
+    settingSentryLog.error('Failed to save Sentry config', error)
     toast.error(t('settingSentry.saveError', '保存设置失败'))
   } finally {
     loading.value = false

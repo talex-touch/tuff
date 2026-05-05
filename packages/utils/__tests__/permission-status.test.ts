@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getPluginPermissionStatus } from '../permission'
+import { generatePermissionIssue, getPluginPermissionStatus, hasPermission } from '../permission'
 
 const ENFORCED_SDK = 251212
 
@@ -12,13 +12,13 @@ describe('permission status resolution', () => {
         required: ['clipboard.read'],
         optional: [],
       },
-      ['clipboard.read', 'fs.read', 'storage.plugin', 'legacy.removed.permission'],
+      ['clipboard.read', 'fs.read', 'storage.plugin', 'removed.permission'],
     )
 
     expect(status.granted).toEqual(['clipboard.read'])
-    expect(status.deprecatedGranted).toEqual(['fs.read', 'legacy.removed.permission'])
+    expect(status.deprecatedGranted).toEqual(['fs.read', 'removed.permission'])
     expect(status.outdatedByPluginChange).toEqual(['fs.read'])
-    expect(status.outdatedByAppUpdate).toEqual(['legacy.removed.permission'])
+    expect(status.outdatedByAppUpdate).toEqual(['removed.permission'])
     expect(status.missingRequired).toEqual([])
   })
 
@@ -38,5 +38,37 @@ describe('permission status resolution', () => {
     expect(status.outdatedByPluginChange).toEqual([])
     expect(status.outdatedByAppUpdate).toEqual([])
     expect(status.missingRequired).toEqual([])
+  })
+
+  it('does not keep pre-baseline sdkapi as a permission bypass path', () => {
+    const status = getPluginPermissionStatus(
+      'demo-plugin',
+      251111,
+      {
+        required: ['fs.read'],
+        optional: [],
+      },
+      [],
+    )
+
+    expect(status.enforcePermissions).toBe(false)
+    expect(generatePermissionIssue(status)).toBeNull()
+    expect(hasPermission(status, 'fs.read')).toBe(false)
+  })
+
+  it('enforces permissions for the historical 260421 sdk marker', () => {
+    const status = getPluginPermissionStatus(
+      'touch-dev-utils',
+      260421,
+      {
+        required: ['fs.read'],
+        optional: [],
+      },
+      [],
+    )
+
+    expect(status.enforcePermissions).toBe(true)
+    expect(status.missingRequired).toEqual(['fs.read'])
+    expect(generatePermissionIssue(status)?.code).toBe('PERMISSION_MISSING')
   })
 })

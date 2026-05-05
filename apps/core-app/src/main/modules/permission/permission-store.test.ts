@@ -27,7 +27,7 @@ describe('PermissionStore sqlite backend', () => {
     await fs.rm(tempDir, { recursive: true, force: true })
   })
 
-  it('migrates legacy JSON data to sqlite and keeps a backup', async () => {
+  it('initializes sqlite storage without importing legacy JSON snapshots', async () => {
     const legacyPath = path.join(tempDir, 'permissions.json')
     await fs.writeFile(
       legacyPath,
@@ -51,12 +51,12 @@ describe('PermissionStore sqlite backend', () => {
     await store.initialize()
 
     expect(store.getBackendMode()).toBe('sqlite')
-    expect(store.hasPermission('touch-demo', 'fs.read', 251212)).toBe(true)
+    expect(store.hasPermission('touch-demo', 'fs.read', 251212)).toBe(false)
     await store.shutdown()
 
     const files = await fs.readdir(tempDir)
-    expect(files.some((file) => file.startsWith('permissions.json.backup-'))).toBe(true)
     expect(files.includes('permissions.db')).toBe(true)
+    expect(files.includes('permissions.json')).toBe(true)
   })
 
   it('persists grants in sqlite across store restarts', async () => {
@@ -71,7 +71,7 @@ describe('PermissionStore sqlite backend', () => {
     await storeB.shutdown()
   })
 
-  it('blocks permission access when sdkapi is below enforcement threshold', async () => {
+  it('blocks permission access when sdkapi is missing or below threshold', async () => {
     const store = new PermissionStore(tempDir)
     await store.initialize()
     await store.grant('touch-demo', 'fs.read', 'user')
@@ -83,7 +83,7 @@ describe('PermissionStore sqlite backend', () => {
     await store.shutdown()
   })
 
-  it('enters degraded backend-unavailable mode and keeps loaded snapshot readable', async () => {
+  it('enters degraded backend-unavailable mode without reviving compat json fallback', async () => {
     const legacyPath = path.join(tempDir, 'permissions.json')
     await fs.writeFile(
       legacyPath,
@@ -115,7 +115,7 @@ describe('PermissionStore sqlite backend', () => {
         reason: 'sqlite offline'
       })
     )
-    expect(store.hasPermission('touch-demo', 'fs.read', 251212)).toBe(true)
+    expect(store.hasPermission('touch-demo', 'fs.read', 251212)).toBe(false)
     await store.shutdown()
   })
 

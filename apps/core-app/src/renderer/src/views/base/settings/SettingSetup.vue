@@ -24,24 +24,25 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 
 // Import storage and channel
-import { appSetting } from '~/modules/channel/storage/index'
-import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
+import { appSetting } from '~/modules/storage/app-storage'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import {
+  type SystemPermissionCheckResult,
+  type SystemPermissionStatus,
+  waitForPermissionGrant
+} from '~/modules/system/system-permission-refresh'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
 const settingsSdk = useSettingsSdk()
-const { startupInfo } = useStartupInfo()
-
-const platform = computed(() => startupInfo.value?.platform || process.platform)
-const isMacOS = computed(() => platform.value === 'darwin')
-const isWindows = computed(() => platform.value === 'win32')
-const isLinux = computed(() => platform.value === 'linux')
+const { isMac: isMacOS, isWindows, isLinux } = useRendererPlatform()
+const settingSetupLog = createRendererLogger('SettingSetup')
 const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 
-type SystemPermissionStatus = 'granted' | 'denied' | 'notDetermined' | 'unsupported'
-
-interface SystemPermissionCheckResult {
+interface PermissionState {
   status: SystemPermissionStatus
+  checked: boolean
   canRequest: boolean
   message?: string
 }
@@ -52,18 +53,28 @@ const systemPermissionCheck = defineRawEvent<string, SystemPermissionCheckResult
 const systemPermissionRequest = defineRawEvent<string, boolean>('system:permission:request')
 
 // Permission states
-const permissions = ref({
+const permissions = ref<{
+  accessibility: PermissionState
+  notifications: PermissionState
+  adminPrivileges: PermissionState
+}>({
   accessibility: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
-    checked: false
+    checked: false,
+    canRequest: false,
+    message: ''
   },
   notifications: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
-    checked: false
+    checked: false,
+    canRequest: false,
+    message: ''
   },
   adminPrivileges: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
-    checked: false
+    checked: false,
+    canRequest: false,
+    message: ''
   }
 })
 
@@ -82,6 +93,7 @@ const appIndexSettings = ref<AppIndexSettings | null>(null)
 const traySettingsAvailable = ref(false)
 
 const isLoading = ref(false)
+let permissionRequestRevision = 0
 
 function ensureWindowSettings(): void {
   if (!appSetting.window) {
@@ -107,8 +119,9 @@ function ensureWindowSettings(): void {
 function ensureOmniPanelSettings(): void {
   if (!appSetting.omniPanel || typeof appSetting.omniPanel !== 'object') {
     appSetting.omniPanel = {
-      enableShortcut: true,
+      enableShortcut: false,
       enableMouseLongPress: true,
+      mouseLongPressDurationMs: 600,
       autoMountFirstFeatureOnPluginInstall: false,
       featureHub: {
         items: []
@@ -118,10 +131,13 @@ function ensureOmniPanelSettings(): void {
   }
 
   if (appSetting.omniPanel.enableShortcut === undefined) {
-    appSetting.omniPanel.enableShortcut = true
+    appSetting.omniPanel.enableShortcut = false
   }
   if (appSetting.omniPanel.enableMouseLongPress === undefined) {
     appSetting.omniPanel.enableMouseLongPress = true
+  }
+  if (appSetting.omniPanel.mouseLongPressDurationMs === undefined) {
+    appSetting.omniPanel.mouseLongPressDurationMs = 600
   }
   if (appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall === undefined) {
     appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall = false
@@ -144,7 +160,6 @@ if (!appSetting.setup) {
     microphone: false,
     autoStart: false,
     showTray: true,
-    experimentalTray: false,
     adminPrivileges: false,
     hideDock: false,
     runAsAdmin: false,
@@ -167,38 +182,67 @@ onMounted(async () => {
   await loadSettings()
 })
 
+onBeforeUnmount(() => {
+  permissionRequestRevision += 1
+})
+
+function applyPermissionResult(type: string, result: SystemPermissionCheckResult): void {
+  if (type === 'accessibility') {
+    permissions.value.accessibility = {
+      status: result.status,
+      checked: true,
+      canRequest: result.canRequest,
+      message: result.message ?? ''
+    }
+    appSetting.setup.accessibility = result.status === 'granted'
+    return
+  }
+
+  if (type === 'notifications') {
+    permissions.value.notifications = {
+      status: result.status,
+      checked: true,
+      canRequest: result.canRequest,
+      message: result.message ?? ''
+    }
+    appSetting.setup.notifications = result.status === 'granted'
+    return
+  }
+
+  if (type === 'adminPrivileges') {
+    permissions.value.adminPrivileges = {
+      status: result.status,
+      checked: true,
+      canRequest: result.canRequest,
+      message: result.message ?? ''
+    }
+    appSetting.setup.adminPrivileges = result.status === 'granted'
+  }
+}
+
+async function checkPermission(type: string): Promise<SystemPermissionCheckResult> {
+  const result = await transport.send(systemPermissionCheck, type)
+  applyPermissionResult(type, result)
+  return result
+}
+
 async function checkAllPermissions(): Promise<void> {
   isLoading.value = true
   try {
     // Check accessibility permission (macOS)
     if (isMacOS.value) {
-      const accResult = await transport.send(systemPermissionCheck, 'accessibility')
-      permissions.value.accessibility = {
-        status: accResult.status,
-        checked: true
-      }
-      appSetting.setup.accessibility = accResult.status === 'granted'
+      await checkPermission('accessibility')
     }
 
     // Check notification permission
-    const notifResult = await transport.send(systemPermissionCheck, 'notifications')
-    permissions.value.notifications = {
-      status: notifResult.status,
-      checked: true
-    }
-    appSetting.setup.notifications = notifResult.status === 'granted'
+    await checkPermission('notifications')
 
     // Check admin privileges (Windows)
     if (isWindows.value) {
-      const adminResult = await transport.send(systemPermissionCheck, 'adminPrivileges')
-      permissions.value.adminPrivileges = {
-        status: adminResult.status,
-        checked: true
-      }
-      appSetting.setup.adminPrivileges = adminResult.status === 'granted'
+      await checkPermission('adminPrivileges')
     }
   } catch (error) {
-    console.error('[SettingSetup] Failed to check permissions:', error)
+    settingSetupLog.error('Failed to check permissions', error)
     toast.error(t('setupPermissions.checkFailed'))
   } finally {
     isLoading.value = false
@@ -222,7 +266,7 @@ async function loadSettings(): Promise<void> {
     const autoStartResult = await settingsSdk.system.getAutoStart()
     settings.value.autoStart = Boolean(autoStartResult)
   } catch (error) {
-    console.error('[SettingSetup] Failed to load autoStart:', error)
+    settingSetupLog.error('Failed to load autoStart', error)
   }
 
   try {
@@ -231,7 +275,7 @@ async function loadSettings(): Promise<void> {
     settings.value.showTray = traySettings.showTray !== false
     settings.value.hideDock = traySettings.hideDock === true
   } catch (error) {
-    console.error('[SettingSetup] Failed to load tray settings:', error)
+    settingSetupLog.error('Failed to load tray settings', error)
     traySettingsAvailable.value = false
   }
 
@@ -250,22 +294,36 @@ async function loadAppIndexSettings(): Promise<void> {
     settings.value.hideNoisySystemApps = loaded.hideNoisySystemApps
   } catch (error) {
     settings.value.hideNoisySystemApps = true
-    console.error('[SettingSetup] Failed to load app index settings:', error)
+    settingSetupLog.error('Failed to load app index settings', error)
   }
 }
 
 async function requestPermission(type: string): Promise<void> {
+  const requestRevision = (permissionRequestRevision += 1)
   try {
+    const current = await checkPermission(type)
+    if (current.status === 'granted') {
+      toast.success(t('common.success'))
+      return
+    }
+
     const opened = await transport.send(systemPermissionRequest, type)
     if (opened) {
       toast.info(t('setupPermissions.openSettings'))
     }
-    // Recheck after a delay to allow user to grant permission
-    setTimeout(async () => {
-      await checkAllPermissions()
+
+    if (type === 'accessibility') {
+      await waitForPermissionGrant(() => checkPermission(type), {
+        shouldContinue: () => requestRevision === permissionRequestRevision
+      })
+      return
+    }
+
+    setTimeout(() => {
+      void checkPermission(type)
     }, 2000)
   } catch (error) {
-    console.error(`[SettingSetup] Failed to request permission ${type}:`, error)
+    settingSetupLog.error(`Failed to request permission ${type}`, error)
     toast.error(t('setupPermissions.requestFailed'))
   }
 }
@@ -278,7 +336,7 @@ async function updateAutoStart(value: boolean): Promise<void> {
     settings.value.autoStart = Boolean(current)
     toast.success(t('common.success'))
   } catch (error) {
-    console.error('[SettingSetup] Failed to update autoStart:', error)
+    settingSetupLog.error('Failed to update autoStart', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -293,7 +351,7 @@ async function updateShowTray(value: boolean): Promise<void> {
     settings.value.hideDock = updated.hideDock === true
     toast.success(t('common.success'))
   } catch (error) {
-    console.error('[SettingSetup] Failed to update showTray:', error)
+    settingSetupLog.error('Failed to update showTray', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -308,7 +366,7 @@ async function updateHideDock(value: boolean): Promise<void> {
     settings.value.hideDock = updated.hideDock === true
     toast.success(t('common.success'))
   } catch (error) {
-    console.error('[SettingSetup] Failed to update hideDock:', error)
+    settingSetupLog.error('Failed to update hideDock', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -323,7 +381,7 @@ async function updateStartSilent(value: boolean): Promise<void> {
     settings.value.autoStart = Boolean(current)
     toast.success(t('common.success'))
   } catch (error) {
-    console.error('[SettingSetup] Failed to update startSilent:', error)
+    settingSetupLog.error('Failed to update startSilent', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -335,7 +393,7 @@ async function updateOmniAutoMountFeature(value: boolean): Promise<void> {
   try {
     toast.success(t('common.success'))
   } catch (error) {
-    console.error('[SettingSetup] Failed to update omni auto mount setting:', error)
+    settingSetupLog.error('Failed to update omni auto mount setting', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -346,7 +404,7 @@ async function updateRunAsAdmin(value: boolean): Promise<void> {
   try {
     toast.success(t('common.success'))
   } catch (error) {
-    console.error('[SettingSetup] Failed to update runAsAdmin:', error)
+    settingSetupLog.error('Failed to update runAsAdmin', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -357,7 +415,7 @@ async function updateCustomDesktop(value: boolean): Promise<void> {
   try {
     toast.success(t('common.success'))
   } catch (error) {
-    console.error('[SettingSetup] Failed to update customDesktop:', error)
+    settingSetupLog.error('Failed to update customDesktop', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -371,7 +429,7 @@ async function updateHideNoisySystemApps(value: boolean): Promise<void> {
     toast.success(t('common.success'))
   } catch (error) {
     settings.value.hideNoisySystemApps = appIndexSettings.value?.hideNoisySystemApps ?? true
-    console.error('[SettingSetup] Failed to update hideNoisySystemApps:', error)
+    settingSetupLog.error('Failed to update hideNoisySystemApps', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -419,7 +477,9 @@ function getStatusIconClass(status: string): string {
       :title="t('settings.setup.accessibility')"
       :description="t('settings.setup.accessibilityDesc')"
       :active="permissions.accessibility.status === 'granted'"
-      :disabled="permissions.accessibility.status === 'unsupported'"
+      :disabled="
+        permissions.accessibility.status === 'unsupported' && !permissions.accessibility.canRequest
+      "
       default-icon="i-carbon-screen"
       active-icon="i-carbon-screen"
     >
@@ -434,7 +494,9 @@ function getStatusIconClass(status: string): string {
           :text="getStatusText(permissions.accessibility.status)"
         />
         <TxButton
-          v-if="permissions.accessibility.status !== 'granted'"
+          v-if="
+            permissions.accessibility.status !== 'granted' && permissions.accessibility.canRequest
+          "
           variant="flat"
           type="primary"
           size="sm"
@@ -480,7 +542,9 @@ function getStatusIconClass(status: string): string {
       :title="t('settings.setup.notifications')"
       :description="t('settings.setup.notificationsDesc')"
       :active="permissions.notifications.status === 'granted'"
-      :disabled="permissions.notifications.status === 'unsupported'"
+      :disabled="
+        permissions.notifications.status === 'unsupported' && !permissions.notifications.canRequest
+      "
       default-icon="i-carbon-notification"
       active-icon="i-carbon-notification"
     >
@@ -492,7 +556,9 @@ function getStatusIconClass(status: string): string {
           :text="getStatusText(permissions.notifications.status)"
         />
         <TxButton
-          v-if="permissions.notifications.status !== 'granted'"
+          v-if="
+            permissions.notifications.status !== 'granted' && permissions.notifications.canRequest
+          "
           variant="flat"
           type="primary"
           size="sm"

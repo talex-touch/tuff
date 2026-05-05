@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { TranslationResult } from '../types/translation'
+import { computed } from 'vue'
 
 interface Props {
   providerId: string
+  providerName?: string
   result?: TranslationResult
   error?: Error
   isLoading?: boolean
@@ -28,6 +30,20 @@ async function copyResult() {
     }
   }
 }
+
+const providerTitle = computed(() => {
+  return props.providerName || props.result?.provider || props.providerId
+})
+
+const providerDetail = computed(() => {
+  if (!props.result?.provider) {
+    return ''
+  }
+  if (props.result.provider === providerTitle.value) {
+    return ''
+  }
+  return props.result.provider
+})
 </script>
 
 <template>
@@ -35,10 +51,13 @@ async function copyResult() {
     <div class="flex justify-between items-center mb-2">
       <div class="flex items-center gap-2">
         <h3 class="font-semibold text-md text-blue-500 dark:text-blue-400">
-          {{ result?.provider || providerId }}
+          {{ providerTitle }}
         </h3>
         <span v-if="result?.sourceLanguage && result.sourceLanguage !== 'auto'" class="text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
           {{ result.sourceLanguage }} → {{ result.targetLanguage }}
+        </span>
+        <span v-if="providerDetail" class="text-xs text-gray-500">
+          {{ providerDetail }}
         </span>
       </div>
       <div class="flex items-center gap-1">

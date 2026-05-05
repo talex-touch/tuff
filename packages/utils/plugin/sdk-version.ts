@@ -4,13 +4,15 @@ import type { SdkApiVersion } from './index'
  * Known SDK API versions (format: YYMMDD).
  *
  * Ranges (rough):
- * - < 251212: legacy mode (no permission enforcement, no category requirement)
+ * - < 251212: blocked by the current runtime baseline
  * - 251212 ~ 260113: permission enforcement + new input model baseline
  * - >= 260114: `manifest.json.category` is required for plugin grouping
  * - >= 260121: `tfileScope` is required when requesting tfile access
  * - >= 260215: plugin sqlite sdk is available
  * - >= 260225: OmniPanel declarative transfer is available
  * - >= 260228: plugin capability auth baseline is enabled
+ * - 260421: historical marker used by early bundled local plugins
+ * - >= 260428: current supported marker
  */
 export enum SdkApi {
   /**
@@ -37,13 +39,25 @@ export enum SdkApi {
    * 2026-02-28: capability auth baseline for plugin calls.
    */
   V260228 = 260228,
+  /**
+   * 2026-04-21: historical bundled-plugin marker.
+   * No additional runtime gate is introduced beyond the 260228 baseline.
+   */
+  V260421 = 260421,
+  /**
+   * 2026-04-28: current supported marker.
+   * No additional runtime gate is introduced beyond existing baselines.
+   */
+  V260428 = 260428,
 }
 
 /**
  * Supported SDK versions in descending order.
- * Used to gracefully fallback for unknown/invalid sdkapi values.
+ * This list is the canonical allowlist for plugin-declared sdkapi markers.
  */
 export const SUPPORTED_SDK_VERSIONS: readonly SdkApiVersion[] = [
+  SdkApi.V260428,
+  SdkApi.V260421,
   SdkApi.V260228,
   SdkApi.V260225,
   SdkApi.V260215,
@@ -54,13 +68,13 @@ export const SUPPORTED_SDK_VERSIONS: readonly SdkApiVersion[] = [
 
 /**
  * Current SDK API version.
- * Updated when breaking changes are introduced to plugin APIs.
+ * Updated when a new supported plugin SDK marker is introduced.
  */
-export const CURRENT_SDK_VERSION: SdkApiVersion = SdkApi.V260228
+export const CURRENT_SDK_VERSION: SdkApiVersion = SdkApi.V260428
 
 /**
  * Minimum SDK version required for permission enforcement.
- * Plugins below this version will bypass permission checks with a warning.
+ * Plugins below this version are blocked by the core-app runtime gate.
  */
 export const PERMISSION_ENFORCEMENT_MIN_VERSION: SdkApiVersion = SdkApi.V251212
 
@@ -105,90 +119,82 @@ export interface SdkCompatibilityResult {
  * @returns Compatibility check result
  */
 export function checkSdkCompatibility(
-  pluginSdkVersion: SdkApiVersion | undefined,
+  pluginSdkVersion: unknown,
   pluginName: string,
 ): SdkCompatibilityResult {
-  // No sdkapi declared - legacy plugin
+  // Missing sdkapi is no longer a soft-compat path.
   if (pluginSdkVersion === undefined) {
     return {
-      compatible: true,
+      compatible: false,
       enforcePermissions: false,
-      warning: `Plugin "${pluginName}" does not declare sdkapi version. Permission enforcement is disabled for compatibility.`,
-      suggestion: `Add "sdkapi": ${CURRENT_SDK_VERSION} to manifest.json to enable permission enforcement.`,
+      warning: `Plugin "${pluginName}" is blocked because manifest.json must declare sdkapi >= ${PERMISSION_ENFORCEMENT_MIN_VERSION}.`,
+      suggestion: `Add "sdkapi": ${CURRENT_SDK_VERSION} to manifest.json and republish the plugin.`,
     }
   }
 
-  const resolved = resolveSdkApiVersion(pluginSdkVersion)
-  const warningParts: string[] = []
-  const suggestionParts: string[] = []
+  const declared = parseSdkApiInput(pluginSdkVersion)
 
-  // Validate + normalize to a supported SDK version (graceful fallback)
-  if (resolved === undefined) {
+  if (declared === undefined) {
     return {
-      compatible: true,
+      compatible: false,
       enforcePermissions: false,
-      warning: `Plugin "${pluginName}" has invalid sdkapi value: ${pluginSdkVersion}. Falling back to legacy mode.`,
-      suggestion: `Use format YYMMDD (e.g., "sdkapi": ${CURRENT_SDK_VERSION}).`,
+      warning: `Plugin "${pluginName}" is blocked because sdkapi "${pluginSdkVersion}" is invalid. Use YYMMDD format and declare at least ${PERMISSION_ENFORCEMENT_MIN_VERSION}.`,
+      suggestion: `Use format YYMMDD (for example "sdkapi": ${CURRENT_SDK_VERSION}).`,
     }
   }
 
-  if (resolved !== pluginSdkVersion) {
-    warningParts.push(
-      `Plugin "${pluginName}" declares sdkapi ${pluginSdkVersion}, but it is not a supported SDK marker. Falling back to ${resolved}.`,
-    )
-    suggestionParts.push(`Use a supported sdkapi marker, e.g., ${CURRENT_SDK_VERSION}.`)
-  }
-
-  // Version too old - bypass permissions with warning
-  if (resolved < PERMISSION_ENFORCEMENT_MIN_VERSION) {
+  if (declared < PERMISSION_ENFORCEMENT_MIN_VERSION) {
     return {
-      compatible: true,
+      compatible: false,
       enforcePermissions: false,
-      warning: [
-        ...warningParts,
-        `Plugin "${pluginName}" uses legacy SDK version ${resolved}. Permission enforcement is disabled.`,
-      ].join(' '),
-      suggestion: [
-        ...suggestionParts,
-        `Update to sdkapi: ${CURRENT_SDK_VERSION} for full permission support.`,
-      ].join(' '),
+      warning: `Plugin "${pluginName}" is blocked because sdkapi ${declared} is below the minimum supported baseline ${PERMISSION_ENFORCEMENT_MIN_VERSION}.`,
+      suggestion: `Update to sdkapi: ${CURRENT_SDK_VERSION}.`,
     }
   }
 
-  // Version newer than current - might use unsupported features
-  if (pluginSdkVersion > CURRENT_SDK_VERSION) {
+  if (!isSupportedSdkVersion(declared)) {
     return {
-      compatible: true,
-      enforcePermissions: true,
-      warning: [
-        ...warningParts,
-        `Plugin "${pluginName}" requires SDK version ${pluginSdkVersion}, but current version is ${CURRENT_SDK_VERSION}. Some features may not work.`,
-      ].join(' '),
-      suggestion: [
-        ...suggestionParts,
-        `Update Tuff to the latest version for full compatibility.`,
-      ].join(' '),
+      compatible: false,
+      enforcePermissions: false,
+      warning: `Plugin "${pluginName}" is blocked because sdkapi ${declared} is not a supported SDK marker.`,
+      suggestion: `Use one of the supported sdkapi markers, preferably ${CURRENT_SDK_VERSION}.`,
     }
   }
 
-  // Perfect match or compatible older version
   return {
     compatible: true,
     enforcePermissions: true,
-    warning: warningParts.length ? warningParts.join(' ') : undefined,
-    suggestion: suggestionParts.length ? suggestionParts.join(' ') : undefined,
   }
 }
 
 /**
- * Resolve a plugin-declared sdkapi to the nearest supported SDK marker.
+ * Resolve a plugin-declared sdkapi to a supported SDK marker.
  *
  * Rules:
- * - Invalid values => undefined (legacy)
- * - Unknown future versions => fallback to the latest supported <= declared
+ * - Invalid values => undefined (blocked by runtime gate)
+ * - Valid versions below the first supported marker => keep raw value for explicit gate checks
  * - Known versions => keep as-is
+ * - Unknown current/future markers => undefined (blocked by runtime gate)
  */
 export function resolveSdkApiVersion(raw: unknown): SdkApiVersion | undefined {
+  const num = parseSdkApiInput(raw)
+
+  if (num === undefined) {
+    return undefined
+  }
+
+  if (isSupportedSdkVersion(num) || num < PERMISSION_ENFORCEMENT_MIN_VERSION) {
+    return num
+  }
+
+  return undefined
+}
+
+export function isSupportedSdkVersion(version: SdkApiVersion): boolean {
+  return SUPPORTED_SDK_VERSIONS.includes(version)
+}
+
+function parseSdkApiInput(raw: unknown): SdkApiVersion | undefined {
   const num
     = typeof raw === 'number'
       ? raw
@@ -200,13 +206,7 @@ export function resolveSdkApiVersion(raw: unknown): SdkApiVersion | undefined {
     return undefined
   }
 
-  for (const v of SUPPORTED_SDK_VERSIONS) {
-    if (num >= v) {
-      return v
-    }
-  }
-
-  return undefined
+  return num
 }
 
 /**

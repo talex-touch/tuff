@@ -70,7 +70,7 @@ function removeTask(_taskId: string) {
             {{ formatSpeed(currentDownloadSpeed) }}
           </div>
           <div class="stat-label">
-            {{ $t('download.current_speed') }}
+            {{ t('download.current_speed') }}
           </div>
         </div>
       </div>
@@ -83,7 +83,7 @@ function removeTask(_taskId: string) {
             {{ taskStats.downloading }}
           </div>
           <div class="stat-label">
-            {{ $t('download.active_downloads') }}
+            {{ t('download.active_downloads') }}
           </div>
         </div>
       </div>
@@ -96,7 +96,7 @@ function removeTask(_taskId: string) {
             {{ taskStats.completed }}
           </div>
           <div class="stat-label">
-            {{ $t('download.total_completed') }}
+            {{ t('download.total_completed') }}
           </div>
         </div>
       </div>
@@ -109,7 +109,7 @@ function removeTask(_taskId: string) {
             {{ taskStats.failed }}
           </div>
           <div class="stat-label">
-            {{ $t('download.total_failed') }}
+            {{ t('download.total_failed') }}
           </div>
         </div>
       </div>
@@ -121,7 +121,7 @@ function removeTask(_taskId: string) {
       <div v-if="tasksByStatus.downloading.length > 0" class="task-section">
         <div class="section-header">
           <i class="i-carbon-in-progress section-icon downloading" />
-          <span class="section-title">{{ $t('download.downloading') }}</span>
+          <span class="section-title">{{ t('download.downloading') }}</span>
           <span class="section-count">{{ tasksByStatus.downloading.length }}</span>
         </div>
         <div class="task-list">
@@ -139,7 +139,7 @@ function removeTask(_taskId: string) {
       <div v-if="tasksByStatus.pending.length > 0" class="task-section">
         <div class="section-header">
           <i class="i-carbon-time section-icon pending" />
-          <span class="section-title">{{ $t('download.waiting') }}</span>
+          <span class="section-title">{{ t('download.waiting') }}</span>
           <span class="section-count">{{ tasksByStatus.pending.length }}</span>
         </div>
         <div class="task-list">
@@ -157,7 +157,7 @@ function removeTask(_taskId: string) {
       <div v-if="tasksByStatus.completed.length > 0" class="task-section">
         <div class="section-header">
           <i class="i-carbon-checkmark-filled section-icon completed" />
-          <span class="section-title">{{ $t('download.completed') }}</span>
+          <span class="section-title">{{ t('download.completed') }}</span>
           <span class="section-count">{{ tasksByStatus.completed.length }}</span>
         </div>
         <div class="task-list">
@@ -174,7 +174,7 @@ function removeTask(_taskId: string) {
       <div v-if="tasksByStatus.failed.length > 0" class="task-section">
         <div class="section-header">
           <i class="i-carbon-warning-filled section-icon failed" />
-          <span class="section-title">{{ $t('download.failed') }}</span>
+          <span class="section-title">{{ t('download.failed') }}</span>
           <span class="section-count">{{ tasksByStatus.failed.length }}</span>
         </div>
         <div class="task-list">
@@ -194,10 +194,10 @@ function removeTask(_taskId: string) {
           <i class="i-carbon-cloud-download" />
         </div>
         <div class="empty-text">
-          {{ $t('download.no_tasks') }}
+          {{ t('download.no_tasks') }}
         </div>
         <div class="empty-hint">
-          {{ $t('download.no_tasks_hint') }}
+          {{ t('download.no_tasks_hint') }}
         </div>
       </div>
     </div>

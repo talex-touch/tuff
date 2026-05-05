@@ -3,13 +3,19 @@ import { computed } from 'vue'
 
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
 
+interface ComponentSyncRow {
+  title: string
+  path: string
+  syncStatus: SyncStatusKey
+  verified: boolean
+  locale: 'en' | 'zh'
+}
+
 const { locale } = useI18n()
 
-const { data: componentDocs, pending, error } = await useAsyncData(
-  'docs-components-sync',
-  () => queryCollection('docs')
-    .where('path', 'LIKE', '/docs/dev/components/%')
-    .all(),
+const { data: componentDocs, pending, error } = await useFetch<ComponentSyncRow[]>(
+  '/api/docs/component-sync',
+  { key: 'docs-components-sync' },
 )
 
 const STATUS_LABELS: Record<string, Record<SyncStatusKey, string>> = {
@@ -27,46 +33,14 @@ const STATUS_LABELS: Record<string, Record<SyncStatusKey, string>> = {
   },
 }
 
-const STATUS_ALIASES: Record<string, SyncStatusKey> = {
-  未迁移: 'not_started',
-  迁移中: 'in_progress',
-  已迁移: 'migrated',
-  已确认: 'verified',
-  not_started: 'not_started',
-  in_progress: 'in_progress',
-  migrated: 'migrated',
-  verified: 'verified',
-}
-
 const localeKey = computed(() => (locale.value === 'zh' ? 'zh' : 'en'))
 
-function resolveDocLocale(path?: string | null) {
-  if (!path)
-    return 'en'
-  if (path.endsWith('.zh'))
-    return 'zh'
-  if (path.endsWith('.en'))
-    return 'en'
-  return 'en'
-}
-
-function normalizeStatus(raw: unknown, verified: boolean): SyncStatusKey {
-  if (verified)
-    return 'verified'
-  const value = typeof raw === 'string' ? raw.trim() : ''
-  return STATUS_ALIASES[value] ?? 'not_started'
-}
-
 const rows = computed(() => {
-  const items = (componentDocs.value ?? []) as any[]
   const targetLocale = localeKey.value
-  return items
-    .filter(item => typeof item?.path === 'string')
-    .filter(item => item.path.includes('/docs/dev/components/'))
-    .filter(item => !item.path.endsWith('/index.zh') && !item.path.endsWith('/index.en'))
-    .filter(item => resolveDocLocale(item.path) === targetLocale)
+  return (componentDocs.value ?? [])
+    .filter(item => item.locale === targetLocale)
     .map((item) => {
-      const statusKey = normalizeStatus(item?.syncStatus, item?.verified === true)
+      const statusKey = item.syncStatus
       const labelMap = (STATUS_LABELS[targetLocale] ?? STATUS_LABELS.en ?? STATUS_LABELS.zh)!
       const statusLabel = labelMap[statusKey]
       const icon = statusKey === 'verified' || statusKey === 'migrated'
@@ -75,8 +49,8 @@ const rows = computed(() => {
           ? '🟡'
           : '—'
       return {
-        title: item?.title ? String(item.title) : String(item.path),
-        path: String(item.path),
+        title: item.title,
+        path: item.path,
         statusKey,
         statusDisplay: `${icon} ${statusLabel}`,
       }
@@ -86,43 +60,34 @@ const rows = computed(() => {
 </script>
 
 <template>
-  <ClientOnly>
-    <div class="docs-sync-table">
-      <div v-if="pending" class="docs-sync-table__hint">
-        {{ localeKey === 'zh' ? '加载中...' : 'Loading...' }}
-      </div>
-      <div v-else-if="error" class="docs-sync-table__hint">
-        {{ localeKey === 'zh' ? '同步状态加载失败' : 'Failed to load sync status.' }}
-      </div>
-      <table v-else class="docs-sync-table__table">
-        <thead>
-          <tr>
-            <th>{{ localeKey === 'zh' ? '组件' : 'Component' }}</th>
-            <th>{{ localeKey === 'zh' ? '同步状态' : 'Sync Status' }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in rows" :key="row.path">
-            <td>
-              <NuxtLink :to="row.path" class="docs-sync-table__link">
-                {{ row.title }}
-              </NuxtLink>
-            </td>
-            <td class="docs-sync-table__status" :data-status="row.statusKey">
-              {{ row.statusDisplay }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+  <div class="docs-sync-table">
+    <div v-if="pending" class="docs-sync-table__hint">
+      {{ localeKey === 'zh' ? '加载中...' : 'Loading...' }}
     </div>
-    <template #fallback>
-      <div class="docs-sync-table">
-        <div class="docs-sync-table__hint">
-          {{ localeKey === 'zh' ? '加载中...' : 'Loading...' }}
-        </div>
-      </div>
-    </template>
-  </ClientOnly>
+    <div v-else-if="error" class="docs-sync-table__hint">
+      {{ localeKey === 'zh' ? '同步状态加载失败' : 'Failed to load sync status.' }}
+    </div>
+    <table v-else class="docs-sync-table__table">
+      <thead>
+        <tr>
+          <th>{{ localeKey === 'zh' ? '组件' : 'Component' }}</th>
+          <th>{{ localeKey === 'zh' ? '同步状态' : 'Sync Status' }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="row in rows" :key="row.path">
+          <td>
+            <NuxtLink :to="row.path" class="docs-sync-table__link">
+              {{ row.title }}
+            </NuxtLink>
+          </td>
+          <td class="docs-sync-table__status" :data-status="row.statusKey">
+            {{ row.statusDisplay }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </template>
 
 <style scoped>

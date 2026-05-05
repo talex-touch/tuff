@@ -1,5 +1,4 @@
 import type { MaybePromise, ModuleInitContext } from '@talex-touch/utils'
-import type { TalexTouch } from '../types'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -10,10 +9,12 @@ import { APP_SCHEMA } from '../config/default'
 import type { DevPluginInstallResult } from '../modules/plugin/dev-plugin-installer'
 import { installDevPluginFromPath } from '../modules/plugin/dev-plugin-installer'
 import { PluginResolver, ResolverStatus } from '../modules/plugin/plugin-resolver'
+import type { AppSecondaryLaunch } from '../core/eventbus/touch-event'
 import { TalexEvents } from '../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../core/runtime-accessor'
 import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
+import { focusMainWindowIfAlive, registerMacOSOpenUrlHandler } from './addon-opener-handlers'
 import { applyExternalAuthCallback, applyStepUpToken } from './auth'
 
 type ChannelKeyManagerHolder = {
@@ -37,46 +38,6 @@ const installDevPluginEvent = defineRawEvent<
   DevPluginInstallResult
 >('plugin:install-dev')
 const dropPluginEvent = defineRawEvent<{ name: string; buffer: Buffer }, unknown>('drop:plugin')
-
-function windowsAdapter(
-  touchApp: TalexTouch.TouchApp,
-  registerDisposer: (disposer: () => void) => void
-): void {
-  const app = touchApp.app
-
-  const onSecondInstance = (_: unknown, argv: string[]) => {
-    const win = touchApp.window.window
-
-    if (win.isMinimized()) win.restore()
-    win.focus()
-
-    const url = argv.find((v) => v.startsWith(`${APP_SCHEMA}://`))
-    if (url) {
-      onSchema(url)
-    }
-  }
-
-  app.on('second-instance', onSecondInstance)
-  registerDisposer(() => {
-    app.off('second-instance', onSecondInstance)
-  })
-}
-
-function macOSAdapter(
-  touchApp: TalexTouch.TouchApp,
-  registerDisposer: (disposer: () => void) => void
-): void {
-  const app = touchApp.app
-
-  const onOpenUrl = (_: unknown, url: string) => {
-    onSchema(url)
-  }
-
-  app.on('open-url', onOpenUrl)
-  registerDisposer(() => {
-    app.off('open-url', onOpenUrl)
-  })
-}
 
 interface SchemaHandler {
   pattern: RegExp
@@ -193,17 +154,36 @@ export class AddonOpenerModule extends BaseModule {
     const touchApp = runtime.app
     const channel = runtime.channel
     const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
+    const app = touchApp.app
     const win = touchApp.window.window
 
-    windowsAdapter(touchApp, (disposer) => this.appDisposers.push(disposer))
-    macOSAdapter(touchApp, (disposer) => this.appDisposers.push(disposer))
+    this.appDisposers.push(
+      this.on(ctx, TalexEvents.APP_SECONDARY_LAUNCH, (event) => {
+        const secondaryLaunch = event as AppSecondaryLaunch
+        const focused = focusMainWindowIfAlive(touchApp.window.window)
+        if (!focused) {
+          addonOpenerLog.warn(
+            'Skip focusing main window for secondary launch because it is unavailable'
+          )
+        }
+
+        const url = secondaryLaunch.argv.find((value) => value.startsWith(`${APP_SCHEMA}://`))
+        if (url) {
+          onSchema(url)
+        }
+      })
+    )
+
+    if (process.platform === 'darwin') {
+      registerMacOSOpenUrlHandler(app, onSchema, (disposer) => this.appDisposers.push(disposer))
+    }
 
     // Register protocol handler
     // In dev mode, we need to register with the correct electron executable path
     const registerProtocol = () => {
-      if (touchApp.app.isPackaged) {
+      if (app.isPackaged) {
         // Production: register with bundled app
-        touchApp.app.setAsDefaultProtocolClient(APP_SCHEMA)
+        app.setAsDefaultProtocolClient(APP_SCHEMA)
       } else {
         // Development: need to use electron-vite's dev server path
         // On macOS, we need to pass the project path as argument
@@ -211,10 +191,10 @@ export class AddonOpenerModule extends BaseModule {
         const appPath = path.resolve(process.cwd())
 
         // Remove old registration first to ensure clean state
-        touchApp.app.removeAsDefaultProtocolClient(APP_SCHEMA)
+        app.removeAsDefaultProtocolClient(APP_SCHEMA)
 
         // Register with electron binary and project path
-        touchApp.app.setAsDefaultProtocolClient(APP_SCHEMA, electronPath, ['--inspect', appPath])
+        app.setAsDefaultProtocolClient(APP_SCHEMA, electronPath, ['--inspect', appPath])
 
         addonOpenerLog.debug('Dev mode protocol registration', {
           meta: {
@@ -226,7 +206,7 @@ export class AddonOpenerModule extends BaseModule {
       addonOpenerLog.debug(`Set as default protocol handler: ${APP_SCHEMA}`)
     }
 
-    if (!$app.app.isDefaultProtocolClient(APP_SCHEMA)) {
+    if (!app.isDefaultProtocolClient(APP_SCHEMA)) {
       registerProtocol()
     } else {
       addonOpenerLog.debug(`Already registered as protocol handler: ${APP_SCHEMA}`)
@@ -241,9 +221,9 @@ export class AddonOpenerModule extends BaseModule {
 
       void transport.sendTo(win.webContents, openPluginEvent, filePath)
     }
-    $app.app.on('open-file', onOpenFile)
+    app.on('open-file', onOpenFile)
     this.appDisposers.push(() => {
-      $app.app.off('open-file', onOpenFile)
+      app.off('open-file', onOpenFile)
     })
 
     this.transportDisposers.push(

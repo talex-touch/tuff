@@ -1,137 +1,52 @@
-# 兼容性/老旧代码分类清单（汇总）
+# 兼容性/老旧代码分类清单（当前汇总）
+
+更新时间：2026-05-01
+
+本文件是 `compatibility-legacy-scan.md` 的短汇总，用于避免历史扫描清单继续把已删除或已硬切的路径标为未处理风险。详细证据和分轮记录以 `compatibility-legacy-scan.md` 为准。
 
 风险等级说明：low（影响有限/可控）、medium（可能影响兼容或数据）、high（可能引发破坏性行为）。
 
-## A. Deprecated/不推荐但仍在使用
+## 当前结论
 
-- src/renderer/src/components/permission/PermissionStatusCard.vue; src/renderer/src/views/base/settings/SettingPermission.vue — trigger: legacy SDK 插件提示/统计; alternative: 升级插件 SDK; risk: low
-- src/main/modules/plugin/plugin.ts — trigger: deprecated Plugin API（clearItems/pushItems/getItems 等）被调用; alternative: plugin.feature API; risk: medium
-- src/main/modules/tray-holder.ts — trigger: legacy tray holder 模块使用; alternative: TrayManager; risk: medium
+- high：当前 CoreApp 生产路径未发现新的 silent success、假命令、伪持久化、旧 storage 业务消费或全局 i18n 入口回潮。
+- medium：跨平台能力仍有真实不对称，Windows/macOS 是 2.5.0 release-blocking 人工回归范围，Linux 继续按 `xdotool` / desktop environment 记录为 documented best-effort。
+- medium：插件 SDK hard-cut 已在 loader / installer / permission guard 阻断不兼容 `sdkapi`；旧 raw channel 仅保留为明确抛错边界，不再作为可用兼容通道。
+- low：普通 fallback 多为输入默认值、展示兜底、schema/runtime migration 或诊断面，不等价于未完成能力。
+- low：启动、平台和语言兼容层已进一步收口，但 Linux `best_effort`、分享/权限等真实能力不对称仍保留为 documented boundary。
 
-## B. 兼容性/过渡性代码
+## 已收口高信号项
 
-- resources/db/migrations/0003_exotic_human_robot.sql — trigger: 数据库迁移执行; alternative: 保持 schema 最新; risk: medium
-- scripts/build-target.js — trigger: 版本号解析失败时 fallback; alternative: 统一版本格式; risk: low
-- src/renderer/components.d.ts — trigger: 类型声明包含 Migration/Compatibility 组件名; alternative: 无需处理; risk: low
-- src/renderer/src/composables/market/useVersionCompare.ts — trigger: semver-compatible 版本比较; alternative: 统一 semver 库; risk: low
-- src/renderer/src/locales/zh-CN/download-migration.json — trigger: 下载迁移流程展示; alternative: 迁移完成后提示; risk: low
-- src/renderer/src/locales/en/download-migration.json — trigger: 下载迁移流程展示; alternative: 迁移完成后提示; risk: low
-- src/renderer/src/env.d.ts — trigger: 使用 vue-i18n legacy 类型; alternative: 新 API 类型; risk: low
-- src/renderer/src/components/intelligence/config/IntelligenceModelConfig.vue — trigger: 模型分组 fallback key/label; alternative: 统一 provider 前缀; risk: low
-- src/renderer/src/components/render/sourceMeta.ts — trigger: source label fallback; alternative: 补齐 source 名称; risk: low
-- src/renderer/src/components/render/BoxGrid.vue — trigger: 无分组时 fallback 渲染; alternative: 结构化 sections; risk: low
-- src/renderer/src/components/download/IMPLEMENTATION_SUMMARY.md — trigger: 文档引用 fallback 方案; alternative: 统一来源; risk: low
-- src/renderer/src/components/download/MigrationProgress.vue — trigger: 迁移进度流程运行; alternative: 迁移完成后移除; risk: medium
-- src/renderer/src/components/tuff/template/TuffAsideList.vue — trigger: item id 缺失时 fallback; alternative: 补齐 id; risk: low
-- src/renderer/src/components/tuff/tags/TuffWindowsTag.vue — trigger: label 缺失时 fallback; alternative: 补齐配置; risk: low
-- src/renderer/src/components/tuff/tags/TuffBetaTag.vue — trigger: label 缺失时 fallback; alternative: 补齐配置; risk: low
-- src/renderer/src/components/tuff/tags/TuffLinuxTag.vue — trigger: label 缺失时 fallback; alternative: 补齐配置; risk: low
-- src/renderer/src/components/tuff/tags/TuffMacOSTag.vue — trigger: label 缺失时 fallback; alternative: 补齐配置; risk: low
-- src/renderer/src/components/base/input/FlatMarkdown.vue — trigger: 类型兼容问题注释; alternative: 升级类型定义; risk: low
-- src/renderer/src/components/base/dialog/PlatformCompatibilityWarning.vue — trigger: 平台兼容提示 UI; alternative: 统一平台能力; risk: low
-- src/renderer/src/components/base/select/TSelectItem.vue — trigger: composedPath 缺失时 fallback legacy path; alternative: 统一标准 API; risk: low
-- src/renderer/src/modules/install/install-manager.ts — trigger: 旧索引结构兼容; alternative: 统一 providerId::pluginId 结构; risk: medium
-- src/renderer/src/modules/box/adapter/hooks/useResize.ts — trigger: legacy element wrap fallback; alternative: 统一结构; risk: low
-- src/renderer/src/modules/mousetrap-record.ts — trigger: Mousetrap 兼容注释; alternative: 升级依赖; risk: low
-- src/renderer/src/modules/layout/index.ts — trigger: legacy export 兼容; alternative: 使用新导出; risk: low
-- src/renderer/src/modules/layout/useSecondaryNavigation.ts — trigger: parent route fallback; alternative: 保证 route record; risk: low
-- src/renderer/src/modules/storage/README.md — trigger: 迁移文档指引; alternative: 完成迁移后清理; risk: low
-- src/renderer/src/modules/storage/intelligence-storage.ts — trigger: backward compatibility aliases; alternative: 统一新结构; risk: medium
-- src/renderer/src/modules/lang/i18n.ts — trigger: legacy 模式/locale fallback; alternative: 新 i18n 流程; risk: low
-- src/renderer/src/modules/lang/zh-CN.json — trigger: 兼容/compatible 文案; alternative: 文案整理; risk: low
-- src/renderer/src/modules/lang/en-US.json — trigger: compatible 文案; alternative: 文案整理; risk: low
-- src/renderer/src/modules/lang/I18N_IMPLEMENTATION.md — trigger: fallback 说明文档; alternative: 更新文档; risk: low
-- src/renderer/src/modules/tuffex/index.ts — trigger: 组件迁移阶段说明; alternative: 完成迁移; risk: low
-- src/renderer/src/modules/hooks/core-box.ts — trigger: 参数映射 fallback; alternative: 统一参数格式; risk: low
-- src/renderer/src/modules/hooks/useAppLifecycle.ts — trigger: 平台兼容提示触发; alternative: 统一平台能力; risk: low
-- src/renderer/src/modules/hooks/useSvgContent.ts — trigger: fallback URL 解析; alternative: 统一资源协议; risk: low
-- src/renderer/src/modules/mention/platform-warning.ts — trigger: 平台兼容提示组件引用; alternative: 统一提示入口; risk: low
-- src/renderer/src/modules/market/providers/nexus-store-provider.ts — trigger: legacy API 格式兼容; alternative: 统一新 API; risk: medium
-- src/renderer/src/modules/market/providers/repository-provider.ts — trigger: clone fallback; alternative: 统一拉取策略; risk: low
-- src/renderer/src/views/box/BoxInput.vue — trigger: placeholder fallback; alternative: 配置默认值; risk: low
-- src/renderer/src/views/box/tag/UnifiedFileTag.vue — trigger: icon fallback; alternative: 提供 icon; risk: low
-- src/renderer/src/views/box/tag/FileTag.vue — trigger: path 缺失时 fallback; alternative: 补齐路径; risk: low
-- src/renderer/src/views/box/tag/ClipboardFileTag.vue — trigger: icon fallback; alternative: 提供 icon; risk: low
-- src/renderer/src/views/base/settings/SettingFileIndex.vue — trigger: 数值解析 fallback; alternative: 输入校验; risk: low
-- src/renderer/src/views/base/styles/sub/ThemePreference.vue — trigger: theme key 缺失 fallback; alternative: 补齐配置; risk: low
-- src/renderer/src/views/base/styles/LayoutSection.vue — trigger: layout label fallback; alternative: 补齐文案; risk: low
-- src/renderer/src/assets/docs/license.md — trigger: license 文案包含 compatible; alternative: 无; risk: low
-- src/main/core/main-window-state.ts — trigger: layout 不匹配时 fallback; alternative: 更新 layout signature; risk: low
-- src/main/core/touch-window.ts — trigger: Mica/Vibrancy fallback; alternative: 保持平台能力一致; risk: low
-- src/main/core/module-manager.ts — trigger: legacy filePath 兼容; alternative: 使用新字段; risk: medium
-- src/main/utils/version-util.ts — trigger: 版本解析 fallback; alternative: 统一版本格式; risk: low
-- src/main/utils/common-util.ts — trigger: 平台兼容提示/分支; alternative: 统一平台能力; risk: low
-- src/main/channel/common.ts — trigger: 路径解析 fallback; alternative: 统一路径格式; risk: low
-- src/main/service/device-idle-service.ts — trigger: 参数 clamp fallback; alternative: 输入校验; risk: low
-- src/main/modules/database/index.ts — trigger: DB 迁移流程; alternative: 完成迁移后移除; risk: medium
-- src/main/modules/flow-bus/flow-bus.ts — trigger: fallback copy; alternative: 主路径可用; risk: low
-- src/main/modules/flow-bus/native-share.ts — trigger: 分享 fallback; alternative: 主平台 API 可用; risk: low
-- src/main/modules/abstract-base-module.ts — trigger: 配置读取 fallback; alternative: 补齐配置; risk: low
-- src/main/modules/clipboard.ts — trigger: legacy macOS clipboard 格式兼容; alternative: 新格式; risk: medium
-- src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts — trigger: fallback 推荐策略; alternative: 主策略可用; risk: low
-- src/main/modules/box-tool/search-engine/search-gather.ts — trigger: legacy 搜索模式; alternative: layered search; risk: medium
-- src/main/modules/box-tool/search-engine/search-core.ts — trigger: 搜索 fallback 路径; alternative: 主队列可用; risk: medium
-- src/main/modules/box-tool/search-engine/search-logger.ts — trigger: legacy setting fallback; alternative: 新配置项; risk: low
-- src/main/modules/box-tool/core-box/window.ts — trigger: Electron 输入兼容说明; alternative: 统一事件映射; risk: low
-- plugins/touch-system-actions/index.js — trigger: 字符匹配 fallback; alternative: 精准匹配; risk: low
-- src/main/modules/box-tool/addon/files/file-provider.ts — trigger: legacy 通道迁移说明/平台分支; alternative: transport 通道; risk: medium
-- src/main/modules/box-tool/addon/files/everything-provider.ts — trigger: compatible mapping 说明; alternative: 统一 map 输出; risk: low
-- src/main/modules/box-tool/addon/preview/providers/fx-rate-provider.ts — trigger: 备用 API fallback; alternative: 主 API 可用; risk: low
-- src/main/modules/box-tool/addon/apps/app-provider.ts — trigger: 数值 fallback clamp; alternative: 输入校验; risk: low
-- src/main/modules/box-tool/addon/apps/search-processing-service.ts — trigger: 高亮 fallback; alternative: 补齐 raw highlights; risk: low
-- src/main/modules/plugin/providers/utils.ts — trigger: 扩展名 fallback; alternative: 统一后缀解析; risk: low
-- src/main/modules/plugin/adapters/plugin-features-adapter.ts — trigger: fallback 文本匹配; alternative: 结构化匹配; risk: low
-- src/main/modules/plugin/plugin-loaders.ts — trigger: SDK 版本兼容/legacy fallback; alternative: 升级 sdkapi; risk: medium
-- src/main/modules/ocr/ocr-service.ts — trigger: 解析 fallback; alternative: 统一输入; risk: low
-- src/main/modules/tray/tray-icon-provider.ts — trigger: tray icon fallback; alternative: 统一资源; risk: low
-- src/main/modules/storage/index.ts — trigger: legacy 通道迁移说明; alternative: transport 通道; risk: medium
-- src/main/modules/storage/main-storage-registry.ts — trigger: normalize fallback; alternative: 输入校验; risk: low
-- src/main/modules/system/permission-checker.ts — trigger: 旧系统权限 fallback; alternative: 新权限检查; risk: medium
-- src/main/modules/download/migration-manager.test.ts — trigger: 迁移测试运行; alternative: 保持测试通过; risk: low
-- src/main/modules/download/migration-manager.ts — trigger: 下载中心迁移执行; alternative: 迁移完成后降级; risk: medium
-- src/main/modules/download/network-monitor.ts — trigger: 多 URL fallback; alternative: 主 URL 可用; risk: low
-- src/main/modules/download/API.md — trigger: 迁移 API 文档; alternative: 完成迁移后更新文档; risk: low
-- src/main/modules/download/migrations.ts — trigger: 迁移流程执行; alternative: 迁移完成后移除; risk: medium
-- src/main/modules/download/download-center.ts — trigger: 旧系统迁移入口; alternative: 新流程; risk: medium
-- src/main/modules/download/MIGRATION_GUIDE.md — trigger: 迁移指南引用; alternative: 完成迁移后更新; risk: low
-- src/main/modules/download/index.ts — trigger: 迁移导出; alternative: 迁移完成后更新; risk: low
-- src/main/modules/download/PERFORMANCE_OPTIMIZATIONS.md — trigger: 迁移相关记录; alternative: 更新文档; risk: low
-- src/main/modules/download/PERFORMANCE_QUICK_REFERENCE.md — trigger: 迁移相关记录; alternative: 更新文档; risk: low
-- src/main/modules/ai/intelligence-strategy-manager.ts — trigger: fallback providers; alternative: 主 provider 可用; risk: low
-- src/main/modules/ai/provider-models.ts — trigger: 模型列表 fallback; alternative: 主 API 返回; risk: low
-- src/main/modules/ai/runtime/base-provider.ts — trigger: incompatible 模型校验; alternative: 统一模型规范; risk: low
-- src/main/modules/ai/agents/agent-manager.ts — trigger: fallback 执行路径; alternative: 主执行路径; risk: low
-- src/main/modules/ai/intelligence-module.ts — trigger: OpenAI-compatible provider; alternative: 统一 provider 接口; risk: low
-- src/main/modules/ai/intelligence-sdk.ts — trigger: provider fallback; alternative: 主 provider; risk: medium
-- src/main/modules/ai/tuff-intelligence-storage-adapter.ts — trigger: JSON 解析 fallback; alternative: 统一数据格式; risk: low
-- src/main/modules/division-box/flow-trigger.ts — trigger: forward-compatible 注释; alternative: 统一 flow 入口; risk: low
-- src/main/modules/permission/permission-store.ts — trigger: 权限迁移/compat 检查; alternative: 新权限模型; risk: medium
-- src/main/modules/permission/permission-guard.ts — trigger: legacy SDK 兼容路径; alternative: 强制新 SDK; risk: medium
-- src/main/modules/permission/channel-guard.ts — trigger: allowLegacy 分支; alternative: 配置化开关; risk: low
-- src/main/modules/analytics/analytics-module.ts — trigger: 兼容旧事件处理; alternative: 新事件格式; risk: low
-- src/main/modules/analytics/README.md — trigger: legacy 搜索说明; alternative: 更新文档; risk: low
+- Flow Transfer：未注册 delivery handler 时返回 `TARGET_OFFLINE`，不再把未投递目标包装成成功。
+- DivisionBox：`division-box:show-active-sessions` 伪命令已删除，仅保留真实 shortcut mapping 搜索/执行路径。
+- ServiceCenter：无读取方的注册快照伪持久化路径已删除。
+- PluginStatus：插件状态按钮已改为 computed label/class/action，不再用命令式 DOM/`innerHTML` 回写状态。
+- Storage renderer：CoreApp renderer 入口已改为 `initializeRendererStorage(transport)` / `useStorageSdk()`，业务侧不再直接消费旧 `storage:get` / `storage:save` / `storage:update`。
+- Plugin system SDK：`getActiveAppSnapshot()` 不再在 typed transport 失败后回退到 raw `system:get-active-app`；主进程已停止注册该 raw handler，SDK 层失败会直接暴露。
+- Startup bridge：preload 以 typed `StartupContext` 暴露 `startupInfo/windowMode/metaOverlay`，renderer 不再读 `window.$startupInfo` / `window.$isMetaOverlay` 或额外请求 startup transport。
+- Language init：legacy `localStorage` 语言快照只在 hydration 后迁移一次，稳态语言解析只读 `appSetting.lang`。
+- Plugin runtime drift：移除 `touch-translation` 运行期目录修补；插件加载前统一执行 runtime drift 检查，命中后稳定返回 `PLUGIN_RUNTIME_DRIFT`。
+- DB write QoS：`DbWriteScheduler` 已删除 `droppable` 兼容选项，clipboard/OCR/usage-stats/query-completions 统一改为显式 `dropPolicy/maxQueueWaitMs`。
+- Update install：renderer 不再把 `update:install` 超时当作 started，而是提示等待系统接管确认。
+- Widget empty state：widget 容器已区分加载中、renderer 缺失和渲染失败，不再统一显示“暂未就绪”。
+- Runtime console guard：新增 `pnpm console:guard` 冻结 CoreApp runtime 的裸 `console.*` 边界；后续新增 raw console 或扩大命中数会直接失败。
+- Theme startup：仅剩测试引用的 `parseLegacyThemeStyle()` 已删除。
+- Application detail：旧应用详情页不再展示 open explorer / uninstall / save/spec 等无真实执行路径的假动作，对应无调用 i18n 文案键也已清理，保留 launch 与 help 两个真实动作。
+- Download center：未引用且含“功能待实现”按钮的旧 `DownloadSettings.vue` 已删除；下载组件目录内全局 `$t(...)` 与硬编码中文模块/优先级/时间文案已收口到 `useI18n()` 资源。
+- Plugin WebView：陈旧 debug 注释和硬编码加载/失败操作文案已清理，WebView 故障日志不再直接打印完整 plugin 对象。
+- Tray：旧 `src/main/modules/tray-holder.ts` 已不存在，当前实现是 `src/main/modules/tray/tray-manager.ts`。
 
-### 隐性兼容补充（未被关键词命中）
+## 仍保留但不判为假实现
 
-- src/renderer/src/components/render/CoreBoxFooter.vue — trigger: platform 分支 UI; alternative: 统一交互逻辑; risk: low
-- src/renderer/src/components/render/ActionPanel.vue — trigger: platform 分支 UI; alternative: 统一交互逻辑; risk: low
-- src/renderer/src/components/base/input/FlatKeyInput.vue — trigger: platform 分支按键处理; alternative: 统一事件映射; risk: low
-- src/renderer/src/views/box/DivisionBoxHeader.vue — trigger: platform 分支渲染; alternative: 统一渲染逻辑; risk: low
-- src/renderer/src/views/base/settings/SettingSetup.vue — trigger: platform 条件展示; alternative: 统一配置; risk: low
-- src/main/core/precore.ts — trigger: platform 分支初始化; alternative: 平台适配层; risk: low
-- src/main/modules/box-tool/file-system-watcher/file-system-watcher.ts — trigger: platform 分支监听; alternative: 统一 watcher; risk: medium
-- src/main/modules/box-tool/addon/app-addon.ts — trigger: 按平台动态加载模块; alternative: 抽象 provider; risk: medium
-- src/main/modules/box-tool/addon/apps/app-scanner.ts — trigger: 平台专属路径/扫描; alternative: 统一扫描层; risk: medium
-- src/main/modules/tray/tray-manager.ts — trigger: platform 分支 tray; alternative: 统一资源与流程; risk: medium
-- src/main/modules/terminal/terminal.manager.ts — trigger: platform 分支终端; alternative: 统一 shell 选择; risk: low
-- src/main/modules/build-verification/index.ts — trigger: platform 识别/校验; alternative: 统一构建校验; risk: low
-- src/renderer/src/modules/update/UpdateProvider.ts — trigger: 版本比较/平台识别; alternative: 统一 update provider; risk: medium
-- src/main/modules/update/update-system.ts — trigger: 版本比较门控; alternative: 统一 semver; risk: medium
-- src/renderer/src/modules/auth/auth-env.ts — trigger: DEV 环境开关; alternative: 配置化 feature flag; risk: low
-- src/renderer/src/modules/devtools/app-entrance-log.ts — trigger: DEV 环境开关; alternative: 配置化开关; risk: low
-- src/main/service/plugin-market.service.ts — trigger: NODE_ENV 分支; alternative: 配置化开关; risk: low
-- src/main/utils/logger.ts — trigger: NODE_ENV 分支; alternative: 统一日志配置; risk: low
+- `fake-background` / `--fake-*` 是视觉 token，不代表 mock 功能。
+- `placeholder` 主要是输入框、骨架屏或空图标语义；未发现把未完成能力伪装成完成入口的命中。
+- Plugin widget preview 的 `mockPayload` 是开发面板显式测试载荷，不是生产 runtime mock。
+- `preload` 的 debug console 仅由 `DEBUG` / `debug-preload` 显式打开；`SearchLogger`、logger 输出端、内部插件 logger、WebContents injected script 的 `console.*` 属于诊断/注入边界。
+- 数据库、下载、权限等 schema/runtime migration 是本地数据演进路径，不能按关键词直接删除。
+- 搜索、AI provider、i18n、icon 等 fallback 是真实兜底或错误恢复；后续只在出现 false-success 或隐藏降级时收口。
 
-## C. 其他老旧/风险项
+## 陈旧清单复核
 
-- docs/compatibility-legacy-scan.md — trigger: 扫描规范文档引用; alternative: 更新规范; risk: low
+- 旧汇总曾列 `src/main/modules/tray-holder.ts` 为 legacy tray holder；当前文件已不存在。
+- 旧汇总曾把 `clearItems/pushItems/getItems` 作为 deprecated Plugin API 风险；当前源码中的 `boxItems.pushItems/getItems` 是运行时 SDK 对 BoxItemManager 的正常封装，旧 raw channel `channel.raw` / `channel.sendSync` 已改为 hard-cut 抛错。
+- 旧文档曾把 active-app 映射写成 raw `system:get-active-app`；当前真实事件为 typed `app:system:get-active-app`，SDK 不再做 raw fallback。
+- 权限中心的 historical/deprecated grant 文案只表达历史授权记录被禁用，不代表旧 SDK bypass 仍可运行。

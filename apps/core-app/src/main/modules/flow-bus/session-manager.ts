@@ -11,6 +11,7 @@ import type {
   FlowSessionState,
   FlowSessionUpdate
 } from '@talex-touch/utils'
+import { flowBusSessionLog } from './logger'
 
 /**
  * Session state change listener
@@ -84,7 +85,13 @@ export class FlowSessionManager {
     }
 
     this.sessions.set(sessionId, session)
-    console.log(`[FlowSessionManager] Created session: ${sessionId}`)
+    flowBusSessionLog.debug('Created session', {
+      meta: {
+        sessionId,
+        senderId,
+        targetId: session.fullTargetId
+      }
+    })
 
     return session
   }
@@ -106,7 +113,12 @@ export class FlowSessionManager {
   ): boolean {
     const session = this.sessions.get(sessionId)
     if (!session) {
-      console.warn(`[FlowSessionManager] Session not found: ${sessionId}`)
+      flowBusSessionLog.warn('Session not found during state update', {
+        meta: {
+          sessionId,
+          state: newState
+        }
+      })
       return false
     }
 
@@ -132,7 +144,13 @@ export class FlowSessionManager {
 
     this.notifyListeners(sessionId, update)
 
-    console.log(`[FlowSessionManager] Session ${sessionId}: ${previousState} -> ${newState}`)
+    flowBusSessionLog.debug('Updated session state', {
+      meta: {
+        sessionId,
+        previousState,
+        state: newState
+      }
+    })
     return true
   }
 
@@ -164,7 +182,11 @@ export class FlowSessionManager {
     const removed = this.sessions.delete(sessionId)
     if (removed) {
       this.listeners.delete(sessionId)
-      console.log(`[FlowSessionManager] Removed session: ${sessionId}`)
+      flowBusSessionLog.debug('Removed session', {
+        meta: {
+          sessionId
+        }
+      })
     }
     return removed
   }
@@ -207,7 +229,13 @@ export class FlowSessionManager {
         try {
           listener(update)
         } catch (error) {
-          console.error('[FlowSessionManager] Error in session listener:', error)
+          flowBusSessionLog.error('Session listener threw during notification', {
+            meta: {
+              sessionId,
+              state: update.currentState
+            },
+            error
+          })
         }
       }
     }
@@ -217,7 +245,13 @@ export class FlowSessionManager {
       try {
         listener(update)
       } catch (error) {
-        console.error('[FlowSessionManager] Error in global listener:', error)
+        flowBusSessionLog.error('Global listener threw during notification', {
+          meta: {
+            sessionId,
+            state: update.currentState
+          },
+          error
+        })
       }
     }
   }
@@ -267,7 +301,11 @@ export class FlowSessionManager {
     }
 
     if (count > 0) {
-      console.log(`[FlowSessionManager] Cleaned up ${count} old sessions`)
+      flowBusSessionLog.debug('Cleaned up completed sessions', {
+        meta: {
+          count
+        }
+      })
     }
     return count
   }
@@ -279,7 +317,7 @@ export class FlowSessionManager {
     this.sessions.clear()
     this.listeners.clear()
     this.globalListeners.clear()
-    console.log('[FlowSessionManager] All sessions cleared')
+    flowBusSessionLog.info('Cleared all sessions')
   }
 
   /**

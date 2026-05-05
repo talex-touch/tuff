@@ -46,7 +46,7 @@ const mainDocs = [
   'docs/plan-prd/README.md',
   'docs/plan-prd/TODO.md',
   'docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md',
-  'docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md',
+  'docs/plan-prd/01-project/CHANGES.md',
   'docs/plan-prd/docs/PRD-QUALITY-BASELINE.md',
 ]
 const nextActionDocs = [
@@ -54,7 +54,7 @@ const nextActionDocs = [
   'docs/plan-prd/README.md',
   'docs/plan-prd/TODO.md',
   'docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md',
-  'docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md',
+  'docs/plan-prd/01-project/CHANGES.md',
 ]
 const activeDocsForStaleCheck = [...new Set([...mainDocs, '.github/workflows/README.md', 'apps/pilot/deploy/README.md', 'apps/pilot/deploy/README.zh-CN.md'])]
 
@@ -95,8 +95,8 @@ try {
     }
   }
 
-  // 2) Next-action consistency (must converge to Nexus device risk control)
-  const nextActionKeyword = 'Nexus 设备授权风控'
+  // 2) Next-action consistency
+  const nextActionKeyword = 'CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配'
   const missingNextAction = nextActionDocs.filter((file) => {
     const text = textByFile.get(file) ?? ''
     return !text.includes(nextActionKeyword)

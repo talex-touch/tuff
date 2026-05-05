@@ -38,6 +38,18 @@ interface TpexApiResponse {
 export class TpexApiProvider extends BaseStoreProvider {
   #cache: StorePlugin[] | null = null
 
+  private normalizeUrl(url: string | null | undefined, baseUrl: string | null): string | undefined {
+    if (!url || typeof url !== 'string') {
+      return undefined
+    }
+
+    if (!baseUrl || /^https?:\/\//i.test(url)) {
+      return url
+    }
+
+    return new URL(url.replace(/^\//, ''), `${baseUrl}/`).toString()
+  }
+
   private appendCompactQuery(url: string): string {
     try {
       const parsed = new URL(url)
@@ -69,7 +81,8 @@ export class TpexApiProvider extends BaseStoreProvider {
       throw new TypeError('STORE_TPEX_API_INVALID_RESPONSE')
     }
 
-    const plugins = response.data.plugins.map((entry) => this.normalizeEntry(entry))
+    const baseUrl = this.resolveBaseUrl()
+    const plugins = response.data.plugins.map((entry) => this.normalizeEntry(entry, baseUrl))
 
     this.#cache = plugins
 
@@ -89,8 +102,10 @@ export class TpexApiProvider extends BaseStoreProvider {
     return null
   }
 
-  private normalizeEntry(entry: TpexApiPlugin): StorePlugin {
-    const downloadUrl = entry.latestVersion?.packageUrl ?? ''
+  private normalizeEntry(entry: TpexApiPlugin, baseUrl: string | null): StorePlugin {
+    const downloadUrl = this.normalizeUrl(entry.latestVersion?.packageUrl, baseUrl) ?? ''
+    const readmeUrl = this.normalizeUrl(entry.readmeUrl, baseUrl)
+    const iconUrl = this.normalizeUrl(entry.iconUrl, baseUrl)
 
     return {
       id: entry.slug || entry.id,
@@ -100,14 +115,14 @@ export class TpexApiProvider extends BaseStoreProvider {
       description: entry.summary,
       category: entry.category,
       timestamp: entry.latestVersion?.createdAt || entry.updatedAt,
-      iconUrl: entry.iconUrl ?? undefined,
+      iconUrl,
       metadata: {
         installs: entry.installs,
         badges: entry.badges,
         isOfficial: entry.isOfficial,
         homepage: entry.homepage
       },
-      readmeUrl: entry.readmeUrl ?? undefined,
+      readmeUrl,
       homepage: entry.homepage ?? undefined,
       downloadUrl,
       install: downloadUrl
@@ -161,7 +176,7 @@ export class TpexApiProvider extends BaseStoreProvider {
       return []
     }
 
-    return response.data.plugins.map((entry) => this.normalizeEntry(entry))
+    return response.data.plugins.map((entry) => this.normalizeEntry(entry, baseUrl))
   }
 
   private resolveBaseUrl(): string | null {

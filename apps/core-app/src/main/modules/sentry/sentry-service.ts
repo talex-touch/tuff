@@ -4,7 +4,7 @@
  * Handles error reporting, analytics, and user tracking with privacy controls
  */
 
-import type { ModuleKey } from '@talex-touch/utils'
+import type { ModuleDestroyContext, ModuleKey } from '@talex-touch/utils'
 import type { TelemetryUploadStatsRecord } from './telemetry-upload-stats-store'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
@@ -18,7 +18,12 @@ import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-t
 import { getTuffTransportMain, SentryEvents } from '@talex-touch/utils/transport/main'
 import { app, BrowserWindow } from 'electron'
 import { innerRootPath } from '../../core/precore'
+import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { createLogger } from '../../utils/logger'
+import {
+  shouldDowngradeRemoteFailure,
+  summarizeRemoteFailurePayload
+} from '../../utils/network-log-noise'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { BaseModule } from '../abstract-base-module'
 import { getOrCreateTelemetryClientId } from '../analytics/telemetry-client'
@@ -72,6 +77,7 @@ const NEXUS_TELEMETRY_OUTBOX_MAX_COUNT = 2000
 const NEXUS_TELEMETRY_OUTBOX_BACKOFF_BASE_MS = 30_000
 const NEXUS_TELEMETRY_OUTBOX_BACKOFF_MAX_MS = 10 * 60_000
 const NEXUS_TELEMETRY_STARTUP_GRACE_MS = 45_000
+const SENTRY_SHUTDOWN_GRACE_MS = 1_500
 
 interface NexusTelemetryEvent {
   eventType: 'search' | 'visit' | 'error' | 'feature_use' | 'performance'
@@ -122,27 +128,12 @@ function toLogMeta(meta?: Record<string, unknown>): Record<string, LogMetaPrimit
 }
 
 function shouldDowngradeTelemetryFailure(message: string, meta?: Record<string, unknown>): boolean {
-  const parts = [message]
+  const parts: unknown[] = [message]
   const error = meta?.error
-  if (typeof error === 'string') {
-    parts.push(error)
-  } else if (error instanceof Error) {
-    parts.push(error.message)
-  }
+  parts.push(error)
   const url = meta?.url
-  if (typeof url === 'string') {
-    parts.push(url)
-  }
-  const combined = parts.join(' ').toLowerCase()
-  return (
-    combined.includes('err_connection_refused') ||
-    combined.includes('econnrefused') ||
-    combined.includes('network guard cooldown') ||
-    combined.includes('localhost:3200') ||
-    combined.includes('eai_again') ||
-    combined.includes('enotfound') ||
-    combined.includes('etimedout')
-  )
+  parts.push(url)
+  return shouldDowngradeRemoteFailure(...parts)
 }
 
 /**
@@ -336,12 +327,12 @@ export class SentryServiceModule extends BaseModule {
     })
   }
 
-  async onDestroy(): Promise<void> {
+  async onDestroy(ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
     if (this.isInitialized) {
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      await this.waitForShutdownGrace(ctx?.appClosing === true)
     }
 
-    await this.stopNexusTelemetryTimer()
+    await this.stopNexusTelemetryTimer({ uploadOutbox: ctx?.appClosing !== true })
     this.stopPerformanceMonitors()
     await this.flushTelemetryStats()
   }
@@ -403,6 +394,16 @@ export class SentryServiceModule extends BaseModule {
       NEXUS_TELEMETRY_OUTBOX_BACKOFF_MAX_MS,
       NEXUS_TELEMETRY_OUTBOX_BACKOFF_BASE_MS * 2 ** exponent
     )
+  }
+
+  private async waitForShutdownGrace(appClosing: boolean): Promise<void> {
+    if (!appClosing) {
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      return
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, SENTRY_SHUTDOWN_GRACE_MS))
+    this.shutdownSentry()
   }
 
   private isOutboxItemDue(item: { retryCount: number; lastAttemptAt?: number }): boolean {
@@ -1230,7 +1231,7 @@ export class SentryServiceModule extends BaseModule {
         })
 
         if (response.status < 200 || response.status >= 300) {
-          const errorText = response.data || 'Unknown error'
+          const errorText = summarizeRemoteFailurePayload(response.data) ?? 'Unknown error'
           if (response.status === 403) {
             this.telemetryCooldownUntil = Date.now() + 60 * 60_000
           } else if (response.status === 429) {
@@ -1290,10 +1291,12 @@ export class SentryServiceModule extends BaseModule {
   /**
    * Stop Nexus telemetry flush timer
    */
-  async stopNexusTelemetryTimer(): Promise<void> {
+  async stopNexusTelemetryTimer(options: { uploadOutbox?: boolean } = {}): Promise<void> {
     this.pollingService.unregister(SENTRY_NEXUS_TASK_ID)
     await this.flushNexusTelemetry()
-    await this.flushQueuedNexusTelemetryOutbox()
+    if (options.uploadOutbox !== false) {
+      await this.flushQueuedNexusTelemetryOutbox()
+    }
   }
 }
 

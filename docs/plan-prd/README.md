@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档入口（压缩版）
-> 更新时间: 2026-04-07
+> 更新时间: 2026-05-04
 
 ## 快速入口
 
@@ -9,7 +9,7 @@
 - [项目待办（2 周主清单）](./TODO.md)
 - [变更日志（近 30 天 + 历史归档）](./01-project/CHANGES.md)
 - [文档质量基线](./docs/PRD-QUALITY-BASELINE.md)
-- [文档盘点与下一步路线（2026-03-17）](./docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md)
+- [文档盘点历史快照（2026-03-17）](./docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md)
 - [一次性完整修复总方案（统一实施 PRD）](./02-architecture/UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md)
 - [Nexus 设备授权风控实施方案](./04-implementation/NexusDeviceAuthRiskControl-260316.md)
 - [v2.4.7 发版收口清单（historical）](./01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md)
@@ -17,7 +17,7 @@
 
 ---
 
-## 单一口径快照（2026-04-07）
+## 单一口径快照（2026-04-26）
 
 - 当前工作区基线：`2.4.9-beta.4`。
 - CoreApp 启动搜索卡顿治理已落地“平衡模式 + 双库隔离”：`database-aux.db` 分流非核心高频写、`DbWriteScheduler` QoS/熔断、索引热路径单写者化、启动期降载（120s）。
@@ -25,7 +25,10 @@
 - Legacy/兼容/结构治理已切换到“统一实施 PRD + 五工作包并行”口径（不再使用 Phase 1-3 决策叙事）。
 - 治理基线：`legacy 81/184`、`raw channel 13/46`、超长文件（主线）`47`。
 - `apps/core-app` 已完成“兼容债立即硬切”首轮并行治理：`window.$channel` 业务入口清零、legacy storage 事件协议清零、权限 `sdkapi` legacy 放行移除、更新/平台识别收敛为显式 `unsupported` 策略。
-- 当前下一动作：`Nexus 设备授权风控`。
+- CoreApp Sync payload 已从旧 `b64:` Base64 载荷升级为 main 侧 AES-GCM `enc:v1` 真密文；`payload_enc/payload_ref` wire shape 保持不变，`meta_plain` 仅保留非业务元数据，旧 `b64:` 只作为迁移读取 fallback。
+- Nexus Release Evidence API 已作为 `2.5.0` 回归证据入口，覆盖 CoreApp 平台回归、文档门禁与阻塞矩阵采集；CI 写入使用 `release:evidence` API key。
+- 当前下一动作：`CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`；Linux best-effort 口径复核继续作为非阻塞记录。
+- `2.5.0` 前置口径：先关闭或降权 CoreApp 剩余 legacy/compat 债务，再完成 Windows/macOS release-blocking 回归；Linux 保留 documented best-effort，不作为 `2.5.0` blocker。
 - `2.4.8` 主线：OmniPanel Gate 已完成（historical）。
 - `v2.4.7` Gate：A/B/C/D/E 已完成（historical），不重发版。
 - Pilot Runtime 主路径：Node Server + Postgres/Redis + JWT Cookie（Cloudflare 路径仅历史归档）。
@@ -42,10 +45,10 @@
 
 ## 当前主线（2 周）
 
-1. P0：`Nexus 设备授权风控` Phase 0/1 验收闭环（证据、回滚、发布前检查单）。
-2. P0：文档治理收尾（`TODO` 控制到 400 行内 + 第二批历史头标 + TL;DR 分层）。
-3. P1：达成 `docs:guard` 升级前置（5 次零告警 + 2 周口径稳定）。
-4. P1：推进 Wave A/B/C（三波次并行）并按波次同步 `CHANGES + TODO + 门禁命令`。
+1. P0：CoreApp legacy 清理闭环（清册中的 `2.5.0` 项关闭或显式降权，禁止新增 legacy/raw channel/旧 storage/旧 SDK bypass）。
+2. P0：Windows/macOS `2.5.0` 阻塞级适配回归（搜索、应用扫描、托盘、更新、插件权限、安装卸载、退出释放）。
+3. P1：文档治理收尾（`TODO` 控制到 400 行内 + 第二批历史头标 + TL;DR 分层）。
+4. P1：`Nexus 设备授权风控` 保留实施文档与验收入口，降为非当前主线。
 
 ---
 
@@ -66,11 +69,12 @@
 
 ### P0
 
-- Nexus 设备授权风控实施与验收闭环。
+- CoreApp legacy 清理与 Windows/macOS `2.5.0` 阻塞级适配。
 
 ### P1
 
 - Transport Wave A：MessagePort 高频通道迁移 + `sendSync` 清理。
+- Nexus 设备授权风控实施与验收闭环。
 - Pilot Wave B：存量 typecheck/lint 清理与渠道矩阵回归。
 - 架构 Wave C：`plugin-module/search-core/file-provider` SRP 拆分。
 
@@ -106,7 +110,7 @@
 - Pilot 合并升级 V2：`/` 统一入口、`/pilot` 兼容跳转、`Quota Auto` 自动路由与渠道评比。
 - CLI Phase1+2：`tuff-cli` 主入口、`tuff-cli-core` 核心迁移、`unplugin` shim 兼容。
 - Pilot Chat/Turn 新协议：`turns/stream/messages` 路由与会话级串行队列。
-- 文档治理门禁：`docs:guard` / `docs:guard:strict`。
+- 文档治理门禁：`docs:guard` / `docs:guard:strict`；2026-03-17 文档盘点仅保留历史统计口径，当前路线以本页、`TODO` 与 `CHANGES` 为准。
 
 详见：[CHANGES](./01-project/CHANGES.md)
 

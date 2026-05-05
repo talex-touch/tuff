@@ -477,9 +477,9 @@ export class RecommendationEngine {
   public registerPluginProvider(pluginName: string, provider: RecommendProvider): () => void {
     this.pluginProviders.set(provider.id, { pluginName, provider })
     this.invalidateCache()
-    console.debug(
-      `[RecommendationEngine] Registered plugin provider: ${provider.id} from ${pluginName}`
-    )
+    recommendationLog.debug('Registered plugin provider', {
+      meta: { providerId: provider.id, pluginName }
+    })
     return () => this.unregisterPluginProvider(provider.id)
   }
 
@@ -490,7 +490,9 @@ export class RecommendationEngine {
     const removed = this.pluginProviders.delete(providerId)
     if (removed) {
       this.invalidateCache()
-      console.debug(`[RecommendationEngine] Unregistered plugin provider: ${providerId}`)
+      recommendationLog.debug('Unregistered plugin provider', {
+        meta: { providerId }
+      })
     }
     return removed
   }
@@ -510,9 +512,9 @@ export class RecommendationEngine {
     }
     if (toRemove.length > 0) {
       this.invalidateCache()
-      console.debug(
-        `[RecommendationEngine] Unregistered ${toRemove.length} providers from plugin: ${pluginName}`
-      )
+      recommendationLog.debug('Unregistered plugin providers', {
+        meta: { pluginName, providerCount: toRemove.length }
+      })
     }
   }
 
@@ -538,7 +540,12 @@ export class RecommendationEngine {
     if (!options.forceRefresh && this.recommendationCache) {
       const cacheAge = Date.now() - this.recommendationCache.timestamp
       if (cacheAge < this.CACHE_DURATION_MS) {
-        console.debug('[RecommendationEngine] Cache hit, age:', (cacheAge / 1000).toFixed(1), 's')
+        recommendationLog.debug('Memory cache hit', {
+          meta: {
+            cacheAgeSeconds: Number((cacheAge / 1000).toFixed(1)),
+            itemCount: this.recommendationCache.items.length
+          }
+        })
         this.recordRecommendationPerf('recommendation.total', {
           cacheLayer: 'memory',
           durationMs: Math.round(performance.now() - startTime),
@@ -702,7 +709,9 @@ export class RecommendationEngine {
 
     await this.cacheRecommendations(context, combinedItems)
     const duration = performance.now() - startTime
-    console.debug('[RecommendationEngine] Generated in', duration.toFixed(0), 'ms')
+    recommendationLog.debug('Generated recommendations', {
+      meta: { durationMs: Math.round(duration), itemCount: combinedItems.length }
+    })
 
     this.recordRecommendationPerf('recommendation.total', {
       cacheLayer: 'none',
@@ -832,7 +841,7 @@ export class RecommendationEngine {
       const frequentItems = await this.getFrequentItems(limit * 2) // Get more to ensure we have enough after rebuild
 
       if (frequentItems.length === 0) {
-        console.debug('[DEBUG_REC_INIT] No frequent items found in database')
+        recommendationLog.debug('No frequent items found in database')
         return []
       }
 
@@ -873,7 +882,9 @@ export class RecommendationEngine {
 
     // 维度 1: 全局高频项目 (Top 30)
     const frequentItems = await this.getFrequentItems(30)
-    console.debug(`[RecommendationEngine] Frequent items: ${frequentItems.length}`)
+    recommendationLog.debug('Loaded frequent candidates', {
+      meta: { count: frequentItems.length }
+    })
     candidates.push(
       ...frequentItems.map((item) => ({
         ...item,
@@ -883,7 +894,9 @@ export class RecommendationEngine {
 
     // 维度 2: 最近使用 (Top 20)
     const recentItems = await this.getRecentItems(20)
-    console.debug(`[RecommendationEngine] Recent items: ${recentItems.length}`)
+    recommendationLog.debug('Loaded recent candidates', {
+      meta: { count: recentItems.length }
+    })
     candidates.push(
       ...recentItems.map((item) => ({
         ...item,
@@ -893,7 +906,9 @@ export class RecommendationEngine {
 
     // 维度 3: 时段热门 (Top 20)
     const timeBasedItems = await this.getTimeBasedTopItems(context.time, 20)
-    console.debug(`[RecommendationEngine] Time-based items: ${timeBasedItems.length}`)
+    recommendationLog.debug('Loaded time-based candidates', {
+      meta: { count: timeBasedItems.length }
+    })
     candidates.push(
       ...timeBasedItems.map((item) => ({
         ...item,
@@ -904,7 +919,13 @@ export class RecommendationEngine {
     // 维度 4: 趋势项目 (Top 15)
     const trending = await this.getTrendingItems(15)
     const trendingItems = trending.items
-    console.debug(`[RecommendationEngine] Trending items: ${trendingItems.length}`)
+    recommendationLog.debug('Loaded trending candidates', {
+      meta: {
+        count: trendingItems.length,
+        durationMs: Math.round(trending.perf.durationMs),
+        ready: trending.perf.ready
+      }
+    })
     candidates.push(
       ...trendingItems.map((item) => ({
         ...item,
@@ -914,14 +935,18 @@ export class RecommendationEngine {
 
     // 维度 5: 插件提供者
     const pluginCandidates = await this.getPluginCandidates(context)
-    console.debug(`[RecommendationEngine] Plugin candidates: ${pluginCandidates.length}`)
+    recommendationLog.debug('Loaded plugin candidates', {
+      meta: { count: pluginCandidates.length }
+    })
     candidates.push(...pluginCandidates)
 
     // 维度 6: 内置剪贴板 URL 推荐
     const clipboardUrlCandidates = this.getClipboardUrlCandidates(context)
     candidates.push(...clipboardUrlCandidates)
 
-    console.debug(`[RecommendationEngine] Total candidates before dedup: ${candidates.length}`)
+    recommendationLog.debug('Collected candidates before dedupe', {
+      meta: { count: candidates.length }
+    })
 
     const totalCandidates = candidates.length
 
@@ -939,10 +964,12 @@ export class RecommendationEngine {
       const key = item.sourceId
       sourceDistribution.set(key, (sourceDistribution.get(key) || 0) + 1)
     }
-    console.debug(
-      `[DEBUG_REC_INIT] After dedup and filter: ${filtered.length} items, distribution:`,
-      Object.fromEntries(sourceDistribution)
-    )
+    recommendationLog.debug('Filtered candidate distribution', {
+      meta: {
+        filteredCount: filtered.length,
+        sourceDistribution: JSON.stringify(Object.fromEntries(sourceDistribution))
+      }
+    })
 
     return {
       items: filtered,
@@ -1101,7 +1128,9 @@ export class RecommendationEngine {
           })
         }
       } catch (error) {
-        console.warn(`[RecommendationEngine] Plugin provider ${provider.id} error:`, error)
+        recommendationLog.warn('Plugin recommendation provider failed', {
+          meta: { providerId: provider.id, ...toErrorMeta(error) }
+        })
       }
     }
 

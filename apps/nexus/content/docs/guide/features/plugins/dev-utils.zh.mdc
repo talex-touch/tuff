@@ -1,0 +1,35 @@
+# 程序员工具（`touch-dev-utils`）
+
+## 适用场景
+
+- 在 CoreBox 里直接处理开发者常见文本，不切浏览器、不依赖在线服务。
+- 适合快速生成 UUID、解析 JWT、查看时间戳、转换命名风格、处理 Query String。
+
+## 触发方式
+
+- Feature ID：`dev-utils`
+- Commands：`dev-utils / uuid / jwt / ts / time / query / case / escape`
+
+## 核心能力
+
+- 纯本地工具：UUID、当前时间戳、ISO 时间。
+- 解析类：JWT Header / Payload、Unix 时间戳、Query String。
+- 转换类：`camelCase / PascalCase / snake_case / kebab-case`。
+- 字符串处理：代码字面量转义 / 反转义。
+
+## 配置与数据
+
+- 无额外配置文件。
+- 插件目录：`plugins/touch-dev-utils`
+
+## 权限说明
+
+- 必需：`clipboard.write`
+- 不请求 `network.internet`、`system.shell`、`fs.read`
+
+## 快速上手
+
+1. 在 CoreBox 输入 `uuid` 可直接复制随机 UUID。
+2. 粘贴一个 JWT，查看 Header / Payload 的格式化结果。
+3. 输入 `1690000000` 这类时间戳，快速换算 ISO / 本地时间。
+4. 输入变量名或查询串，直接复制命名转换或解析结果。

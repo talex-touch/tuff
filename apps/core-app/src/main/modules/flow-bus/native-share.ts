@@ -2,7 +2,7 @@
  * Native Share Service
  *
  * Provides platform-native share behavior where available.
- * macOS exposes real native targets; Windows/Linux currently fall back to mailto only.
+ * macOS exposes real native targets; Windows/Linux only expose an explicit mail target.
  */
 
 import type {
@@ -122,7 +122,7 @@ export class NativeShareService {
       targets.push({
         id: 'mail',
         name: 'Mail',
-        description: 'Mail-only fallback via mailto',
+        description: 'Share via the default mail client',
         supportedTypes: ['text'],
         icon: 'ri:mail-line'
       })
@@ -130,7 +130,7 @@ export class NativeShareService {
       targets.push({
         id: 'mail',
         name: 'Mail',
-        description: 'Mail-only fallback via mailto',
+        description: 'Share via the default mail client',
         supportedTypes: ['text'],
         icon: 'ri:mail-line'
       })
@@ -345,7 +345,7 @@ return item 1 of shareChoice
     const { clipboard } = await import('electron')
     clipboard.writeText(text)
 
-    return { success: true, target: 'messages' }
+    return { success: true, target: 'messages', requiresUserAction: true }
   }
 
   /**
@@ -358,7 +358,11 @@ return item 1 of shareChoice
       return await this.shareMail(options)
     }
 
-    return { success: false, error: `Target ${target} is unavailable on Windows` }
+    return {
+      success: false,
+      error:
+        'Windows does not provide a system share sheet in core-app; only the explicit mail target is available.'
+    }
   }
 
   /**
@@ -371,7 +375,11 @@ return item 1 of shareChoice
       return await this.shareMail(options)
     }
 
-    return { success: false, error: `Target ${target} is unavailable on Linux` }
+    return {
+      success: false,
+      error:
+        'Linux does not provide a system share sheet in core-app; only the explicit mail target is available.'
+    }
   }
 
   private async materializeImageDataUrl(options: NativeShareOptions): Promise<NativeShareOptions> {

@@ -1,16 +1,32 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { execFilePromiseMock, readlinkMock, withOSAdapterMock, getFileIconMock, activeAppWarnMock } =
-  vi.hoisted(() => ({
-    execFilePromiseMock: vi.fn(),
-    readlinkMock: vi.fn(),
-    withOSAdapterMock: vi.fn(),
-    activeAppWarnMock: vi.fn(),
-    getFileIconMock: vi.fn(async () => ({
-      isEmpty: () => false,
-      toDataURL: () => 'data:image/png;base64,icon'
+const {
+  execFilePromiseMock,
+  readlinkMock,
+  withOSAdapterMock,
+  getFileIconMock,
+  activeAppLoggerMock
+} = vi.hoisted(() => ({
+  execFilePromiseMock: vi.fn(),
+  readlinkMock: vi.fn(),
+  withOSAdapterMock: vi.fn(),
+  activeAppLoggerMock: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn(),
+    child: vi.fn(),
+    time: vi.fn(() => ({
+      end: vi.fn(),
+      split: vi.fn()
     }))
+  },
+  getFileIconMock: vi.fn(async () => ({
+    isEmpty: () => false,
+    toDataURL: () => 'data:image/png;base64,icon'
   }))
+}))
 
 vi.mock('node:child_process', () => {
   const execFile = vi.fn()
@@ -35,58 +51,49 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../../utils/logger', () => ({
-  createLogger: vi.fn(() => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: activeAppWarnMock,
-    error: vi.fn(),
-    success: vi.fn(),
-    child: vi.fn(),
-    time: vi.fn(() => ({
-      end: vi.fn(),
-      split: vi.fn()
-    }))
-  }))
+  createLogger: vi.fn(() => activeAppLoggerMock)
 }))
 
-import { activeAppService, isActiveAppCapabilityAvailable } from './active-app'
+import { activeAppService } from './active-app'
 
 function mockExecFileSuccess(stdout: string) {
   execFilePromiseMock.mockResolvedValueOnce({ stdout, stderr: '' })
 }
 
-function mockExecFileFailure(code: string, message = code) {
-  execFilePromiseMock.mockRejectedValueOnce(Object.assign(new Error(message), { code }))
-}
-
 afterEach(() => {
   vi.clearAllMocks()
-  const service = activeAppService as unknown as {
-    cacheWithIcon: unknown
-    cacheWithoutIcon: unknown
-    windowsResolveInFlight: unknown
-    windowsFailureBackoffUntil: number
-    windowsFailureLogCooldownUntil: number
-  }
-  service.cacheWithIcon = null
-  service.cacheWithoutIcon = null
-  service.windowsResolveInFlight = null
-  service.windowsFailureBackoffUntil = 0
-  service.windowsFailureLogCooldownUntil = 0
-})
-
-describe('active-app capability', () => {
-  it('linux capability probe returns true when xdotool is available', async () => {
-    mockExecFileSuccess('xdotool version 3.20211022.1')
-
-    await expect(isActiveAppCapabilityAvailable('linux')).resolves.toBe(true)
-  })
-
-  it('linux capability probe returns false when xdotool is missing', async () => {
-    mockExecFileFailure('ENOENT', 'xdotool missing')
-
-    await expect(isActiveAppCapabilityAvailable('linux')).resolves.toBe(false)
-  })
+  ;(
+    activeAppService as unknown as {
+      cacheWithIcon: unknown
+      cacheWithoutIcon: unknown
+      macosResolveInFlight: unknown
+      macosPermissionBackoffUntil: number
+    }
+  ).cacheWithIcon = null
+  ;(
+    activeAppService as unknown as {
+      cacheWithIcon: unknown
+      cacheWithoutIcon: unknown
+      macosResolveInFlight: unknown
+      macosPermissionBackoffUntil: number
+    }
+  ).cacheWithoutIcon = null
+  ;(
+    activeAppService as unknown as {
+      cacheWithIcon: unknown
+      cacheWithoutIcon: unknown
+      macosResolveInFlight: unknown
+      macosPermissionBackoffUntil: number
+    }
+  ).macosResolveInFlight = null
+  ;(
+    activeAppService as unknown as {
+      cacheWithIcon: unknown
+      cacheWithoutIcon: unknown
+      macosResolveInFlight: unknown
+      macosPermissionBackoffUntil: number
+    }
+  ).macosPermissionBackoffUntil = 0
 })
 
 describe('active-app resolution', () => {
@@ -107,8 +114,6 @@ describe('active-app resolution', () => {
 
     const result = await activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
 
-    const [, args] = execFilePromiseMock.mock.calls[0]
-    expect(args.join('\n')).toContain('[uint32]$processId = 0')
     expect(result).toMatchObject({
       displayName: 'Code',
       processId: 404,
@@ -119,7 +124,7 @@ describe('active-app resolution', () => {
     })
   })
 
-  it('parses Windows JSON when PowerShell prepends non-JSON output', async () => {
+  it('parses Windows foreground JSON when PowerShell emits warning lines first', async () => {
     withOSAdapterMock.mockImplementation(
       async (options: Record<string, () => Promise<unknown>>) => {
         return await options.win32()
@@ -127,25 +132,50 @@ describe('active-app resolution', () => {
     )
     mockExecFileSuccess(
       [
-        'WARNING: module already loaded',
+        'WARNING: native module already loaded',
         JSON.stringify({
-          processId: 808,
-          displayName: 'WeChat',
-          executablePath: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe',
-          windowTitle: '微信'
+          processId: 404,
+          displayName: 'Code',
+          executablePath: 'C:\\Program Files\\Code.exe',
+          windowTitle: 'workspace'
         })
-      ].join('\r\n')
+      ].join('\n')
     )
 
     const result = await activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
 
     expect(result).toMatchObject({
-      displayName: 'WeChat',
-      processId: 808,
-      executablePath: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe',
-      windowTitle: '微信',
-      platform: 'windows'
+      displayName: 'Code',
+      processId: 404,
+      executablePath: 'C:\\Program Files\\Code.exe'
     })
+  })
+
+  it('logs compact Windows command failure diagnostics', async () => {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.win32()
+      }
+    )
+    execFilePromiseMock.mockRejectedValueOnce(
+      Object.assign(new Error('Command failed: powershell -Command <script>'), {
+        code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+      })
+    )
+
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toBeNull()
+
+    expect(activeAppLoggerMock.warn).toHaveBeenCalledWith(
+      'Windows active-app resolution failed',
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER',
+          message: 'Command failed: powershell -Command <script>'
+        })
+      })
+    )
   })
 
   it('parses Linux foreground app info via xdotool + ps', async () => {
@@ -183,27 +213,17 @@ describe('active-app resolution', () => {
     await expect(
       activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
     ).resolves.toBeNull()
-    expect(activeAppWarnMock).toHaveBeenCalledWith(
-      'Windows active-app output did not contain JSON',
-      expect.objectContaining({
-        meta: expect.objectContaining({
-          stdout: '{ invalid json'
-        })
-      })
-    )
   })
 
-  it('logs Windows command failures as compact metadata', async () => {
+  it('backs off when macOS automation permission is missing', async () => {
     withOSAdapterMock.mockImplementation(
       async (options: Record<string, () => Promise<unknown>>) => {
-        return await options.win32()
+        return await options.darwin()
       }
     )
     execFilePromiseMock.mockRejectedValueOnce(
-      Object.assign(new Error('Command failed: powershell -NoProfile -Command <script>'), {
-        code: 1,
-        stderr: 'Cannot convert argument "processId"',
-        stdout: ''
+      Object.assign(new Error('Not authorized to send Apple events to System Events. (-1743)'), {
+        stderr: 'Not authorized to send Apple events to System Events. (-1743)\n'
       })
     )
 
@@ -211,15 +231,22 @@ describe('active-app resolution', () => {
       activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
     ).resolves.toBeNull()
 
-    expect(activeAppWarnMock).toHaveBeenCalledWith(
-      'Windows active-app resolution failed',
+    expect(activeAppLoggerMock.warn).toHaveBeenCalledWith(
+      'macOS automation permission missing, active-app lookup suspended briefly',
       expect.objectContaining({
-        meta: expect.objectContaining({
-          code: '1',
-          message: 'Command failed: powershell -NoProfile -Command <script>',
-          stderr: 'Cannot convert argument "processId"'
-        })
+        meta: expect.objectContaining({ backoffMs: 60_000 })
       })
     )
+    expect(activeAppLoggerMock.error).not.toHaveBeenCalled()
+
+    execFilePromiseMock.mockClear()
+    activeAppLoggerMock.warn.mockClear()
+
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toBeNull()
+
+    expect(execFilePromiseMock).not.toHaveBeenCalled()
+    expect(activeAppLoggerMock.warn).not.toHaveBeenCalled()
   })
 })

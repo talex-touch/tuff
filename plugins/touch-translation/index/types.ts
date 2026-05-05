@@ -1,3 +1,15 @@
+export interface TranslationPronunciation {
+  label?: string
+  text?: string
+  audioUrl?: string
+}
+
+export interface TranslationMeaning {
+  partOfSpeech?: string
+  terms?: string[]
+  definitions?: string[]
+}
+
 export interface TranslationResult {
   text: string
   from: string
@@ -5,6 +17,10 @@ export interface TranslationResult {
   service: string
   provider?: string
   model?: string
+  phonetic?: string
+  transliteration?: string
+  pronunciations?: TranslationPronunciation[]
+  meanings?: TranslationMeaning[]
   error?: string
 }
 
