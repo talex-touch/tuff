@@ -993,6 +993,8 @@ export interface TuffMeta {
    */
   app?: {
     /** 应用包标识符 */
+    bundleId?: string
+    /** @deprecated Use bundleId instead. */
     bundle_id?: string
     /** 应用版本 */
     version?: string

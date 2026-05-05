@@ -216,7 +216,8 @@ describe('tuffFactory', () => {
     expect(item.render.basic?.title).toBe('应用名称')
     expect(item.kind).toBe('app')
     expect(item.meta?.app?.path).toBe('/path/to/app')
-    expect(item.meta?.app?.bundle_id).toBe('app-id')
+    expect(item.meta?.app?.bundleId).toBe('app-id')
+    expect(item.meta?.app?.bundle_id).toBeUndefined()
   })
 
   it('应该创建命令项目', () => {

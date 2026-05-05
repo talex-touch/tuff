@@ -91,7 +91,7 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
     .setMeta({
       app: {
         path: app.path,
-        bundle_id: app.extensions.bundleId || '',
+        bundleId: app.extensions.bundleId || '',
         launchKind,
         launchTarget: app.extensions.launchTarget || app.path,
         launchArgs: app.extensions.launchArgs || '',

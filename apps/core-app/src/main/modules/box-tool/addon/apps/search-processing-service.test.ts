@@ -56,6 +56,8 @@ describe('search-processing-service', () => {
     expect((item.meta as any)?.app?.launchTarget).toBe(
       'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
     )
+    expect((item.meta as any)?.app?.bundleId).toBe('')
+    expect((item.meta as any)?.app?.bundle_id).toBeUndefined()
   })
 
   it('skips disabled managed launcher entries in recommendation mapping', () => {
