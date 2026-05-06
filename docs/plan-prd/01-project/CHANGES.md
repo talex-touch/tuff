@@ -3,6 +3,15 @@
 > 更新时间: 2026-05-04
 > 说明: 主文件仅保留近 30 天（2026-04-04 ~ 2026-05-04）详细记录；更早历史已按月归档。
 
+## 2026-05-06
+
+### feat(core-app/nexus): 更新检查统一走 Nexus 与 updates 信息架构调整
+
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `apps/nexus/app/pages/updates.vue`
+  - UpdateService 默认 source 从 GitHub Releases 切换为 Nexus Official（`getTuffBaseUrl()`），且官方源检查失败时不再回落到 GitHub，后续版本监测统一请求 Nexus。
+  - Nexus `updates` 页面将版本 channel 选择上移至要闻区之前；要闻区新增“更新 / 公告”tabs，公告改为单独分栏展示，并统一使用 `TxButton` 交互样式保持按钮规范一致。
+
 ## 2026-05-04
 
 ### ref(core-app): 清理残留兼容运行面

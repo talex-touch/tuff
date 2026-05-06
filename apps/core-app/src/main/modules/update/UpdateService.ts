@@ -1416,15 +1416,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     options?: { force?: boolean }
   ): Promise<UpdateFetchResult> {
     if (this.settings.source?.type === UpdateProviderType.OFFICIAL) {
-      try {
-        const officialResult = await this.fetchLatestReleaseFromOfficial(channel, options)
-        if (officialResult.result.hasUpdate || !officialResult.result.error) {
-          return officialResult
-        }
-      } catch (error) {
-        updateLog.warn('Official update source failed, falling back to GitHub', { error })
-      }
-      return this.fetchLatestReleaseFromGitHub(channel, options)
+      return this.fetchLatestReleaseFromOfficial(channel, options)
     }
 
     return this.fetchLatestReleaseFromGitHub(channel, options)
@@ -2049,9 +2041,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       enabled: true,
       frequency: 'everyday',
       source: {
-        type: UpdateProviderType.GITHUB,
-        name: 'GitHub Releases',
-        url: UPDATE_GITHUB_RELEASES_API,
+        type: UpdateProviderType.OFFICIAL,
+        name: 'Nexus Releases',
+        url: getTuffBaseUrl(),
         enabled: true,
         priority: 1
       },
