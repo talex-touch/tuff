@@ -2,6 +2,7 @@
 
 import type { IArgMapperOptions } from '@talex-touch/utils/electron'
 import type { PreloadAPI } from '@talex-touch/utils/preload'
+import type { ElectronAPI } from '@electron-toolkit/preload'
 import type { Router } from 'vue-router'
 
 declare module '*.vue' {
@@ -23,10 +24,7 @@ declare global {
     __VUE_ROUTER__?: Router
     __devAuthToken?: (token: string) => void
     api: PreloadAPI
-    ipcRenderer: {
-      send: (channel: string, data: unknown) => void
-      on: (channel: string, func: (...args: unknown[]) => void) => void
-    }
+    electron: ElectronAPI
   }
 }
 

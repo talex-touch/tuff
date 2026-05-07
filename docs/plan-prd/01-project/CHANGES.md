@@ -5,6 +5,25 @@
 
 ## 2026-05-04
 
+### ref(core-app): 收口 Electron runtime 与 raw IPC 边界
+
+- `apps/core-app/src/main/core/window-security-profile{,.test}.ts`
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/modules/{box-tool/core-box/{window,meta-overlay},division-box/session,plugin/plugin-module}.ts`
+- `apps/core-app/src/{preload/index,shared/ipc/raw-channel}.ts`
+- `apps/core-app/src/renderer/src/{modules/channel/channel-core,modules/preload/process-info,modules/platform/renderer-platform,modules/hooks/env-hooks,modules/sentry/sentry-renderer,components/Versions,views/base/settings/SettingUpdate}.ts`
+- `apps/core-app/src/main/modules/{platform/capability-runtime.test,sync/{index,sync-b64-repush.test}}.ts`
+- `scripts/check-coreapp-runtime-boundaries.mjs`
+- `apps/core-app/docs/compatibility-legacy-scan-summary.md`
+- `docs/plan-prd/{TODO.md,docs/PRD-QUALITY-BASELINE.md}`
+  - 新增 `WindowSecurityProfile` / `buildWindowWebPreferences()` 作为 CoreApp main 内部唯一窗口安全 profile 构造入口；主窗口、CoreBox、DivisionBox shell、Assistant、OmniPanel 与 MetaOverlay 不再散落 `webSecurity:false/nodeIntegration:true/contextIsolation:false/sandbox:false`。
+  - 主窗口因仍承载历史 `<webview>` 插件详情面，仅保留显式 `enableWebviewTag`；CoreBox 插件 UI 与 DivisionBox 插件 UI 暂走 `compat-plugin-view` profile，后续按插件 Surface 兼容验证逐步收紧。
+  - `@main-process-message` / `@plugin-process-message` 集中到 `shared/ipc/raw-channel.ts`，主/渲染 channel-core 改为内部 adapter 常量；renderer `window.touchChannel` 变为 deprecated bootstrap bridge，不再作为新增业务入口。
+  - renderer 不再直接依赖 Node 全局 `process` 读取平台/架构/versions/build type，改从 CoreApp preload 私有 `getProcessInfo()` 与 build-info 获取，支撑 app-grade `nodeIntegration:false/contextIsolation:true/sandbox:true` baseline。
+  - 新增 `runtime:guard` 并接入 `legacy:guard`，冻结宽松 WebPreferences、裸 `ipcRenderer/ipcMain`、raw IPC event string、`window.touchChannel`、`window.$t/window.$i18n` 与旧 `/api/sync/*`。
+  - 平台 capability 回归补强 macOS Automation、Windows PowerShell、Linux `xdotool`、native share mail-only、permission deep-link，确保 degraded/unsupported path 均带 `issueCode/reason/limitations`。
+  - sync `b64:` 旧 payload 仍只读迁移；命中后标记 dirty 并调度 encrypted repush，新增 focused test 固定该行为。
+
 ### ref(core-app): 清理残留兼容运行面
 
 - `apps/core-app/src/main/index.ts`
@@ -82,7 +101,7 @@
 - `apps/core-app/src/{main/modules/sync,renderer/src/modules/{storage,platform,lang}}/*.test.ts`
   - Sync 写入路径从旧 `b64:` Base64 payload 升级为 main 侧 AES-GCM `enc:v1:<base64-json-envelope>`；payload key 使用 secure-store 保护，不从 `deviceId` 派生。
   - `payload_enc` 与 blob 文本只写密文，服务端 wire shape 保持 `payload_enc/payload_ref` 不变；`meta_plain` 仅保留 `qualified_name/schema_version/payload_size/content_hash/crypto_version/key_id` 等非业务字段。
-  - pull 侧仅把旧 `b64:` 作为 migration fallback 解码；命中 legacy payload 后标记 dirty，下一次 push 自动升级为 `enc:v1`。
+  - pull 侧仅把旧 `b64:` 作为 migration fallback 解码；命中后标记 dirty，下一次 push 自动升级为 `enc:v1`。
   - renderer `sync-item-mapper` 退为拒写兼容壳，避免第二套 Base64 编解码重新接入生产同步。
   - `AccountStorage` 不再把 legacy token 字段写回 `account.ini`；renderer platform 测试锁定 `startup > electron > browser fallback` 优先级。
   - 定向回归覆盖 crypto 非确定性、解密、篡改失败、空 payload、blob 明文泄露回归、legacy fallback、账号 token 不落盘与平台/语言兼容迁移。

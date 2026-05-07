@@ -7,7 +7,6 @@
  */
 
 import type { DivisionBoxConfig, SessionMeta, StateChangeEvent } from '@talex-touch/utils'
-import type { WebPreferences } from 'electron'
 import type { TouchWindow } from '../../core/touch-window'
 import type { TouchPlugin } from '../plugin/plugin'
 import os from 'node:os'
@@ -18,6 +17,7 @@ import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelud
 import { app, WebContentsView } from 'electron'
 import fse from 'fs-extra'
 import { getRegisteredMainRuntime } from '../../core/runtime-accessor'
+import { buildWindowWebPreferences } from '../../core/window-security-profile'
 import { useAliveWebContents } from '../../hooks/use-electron-guard'
 import { createLogger } from '../../utils/logger'
 import { pluginModule } from '../plugin/plugin-module'
@@ -362,17 +362,11 @@ export class DivisionBoxSession {
 
     metrics.preload = performance.now() - startTime
 
-    const webPreferences: WebPreferences = {
+    const webPreferences = buildWindowWebPreferences('compat-plugin-view', {
       preload: preloadPath || undefined,
-      webSecurity: false,
-      nodeIntegration: true,
-      nodeIntegrationInSubFrames: true,
-      contextIsolation: false,
-      sandbox: false,
-      webviewTag: true,
       scrollBounce: true,
       transparent: true
-    }
+    })
 
     const viewCreateStart = performance.now()
     this.uiView = new WebContentsView({ webPreferences })

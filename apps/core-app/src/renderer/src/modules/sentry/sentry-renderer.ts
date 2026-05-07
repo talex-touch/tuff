@@ -48,7 +48,7 @@ export async function initSentryRenderer(): Promise<void> {
     }
 
     const buildInfo = getBuildInfo()
-    const buildType = process.env.BUILD_TYPE || (buildInfo.isRelease ? 'release' : 'dev')
+    const buildType = buildInfo.buildType || (buildInfo.isRelease ? 'release' : 'dev')
     const channel = buildInfo.isRelease ? 'release' : buildType
     const platform = getCurrentRendererPlatformState().platform
     const userAgent = getCurrentRendererUserAgent()

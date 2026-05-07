@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { buildWindowArgs } from '@talex-touch/utils/renderer/window-role'
+import { buildWindowWebPreferences } from '../core/window-security-profile'
 
 export const AppName = 'Tuff'
 
@@ -24,17 +25,15 @@ export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
     height: 35,
     symbolColor: 'white'
   },
-  webPreferences: {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
-    scrollBounce: true,
-    webSecurity: false,
-    nodeIntegration: true,
-    nodeIntegrationInSubFrames: true,
-    contextIsolation: false,
-    sandbox: false,
-    webviewTag: true,
-    additionalArguments: buildWindowArgs({ touchType: 'main' })
-  }
+  webPreferences: buildWindowWebPreferences(
+    'app',
+    {
+      preload: path.join(__dirname, '..', 'preload', 'index.js'),
+      scrollBounce: true,
+      additionalArguments: buildWindowArgs({ touchType: 'main' })
+    },
+    { enableWebviewTag: true }
+  )
 }
 
 export const BoxWindowOption: Electron.BrowserWindowConstructorOptions = {
@@ -49,17 +48,11 @@ export const BoxWindowOption: Electron.BrowserWindowConstructorOptions = {
   autoHideMenuBar: true,
   show: false,
   transparent: true,
-  webPreferences: {
+  webPreferences: buildWindowWebPreferences('app', {
     preload: path.join(__dirname, '..', 'preload', 'index.js'),
-    webSecurity: false,
-    nodeIntegration: true,
-    nodeIntegrationInSubFrames: true,
-    contextIsolation: false,
-    sandbox: false,
-    webviewTag: true,
     scrollBounce: true,
     additionalArguments: buildWindowArgs({ touchType: 'core-box' })
-  }
+  })
 }
 
 export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions = {
@@ -82,17 +75,11 @@ export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions =
     height: 60,
     symbolColor: 'white'
   },
-  webPreferences: {
+  webPreferences: buildWindowWebPreferences('app', {
     preload: path.join(__dirname, '..', 'preload', 'index.js'),
-    webSecurity: false,
-    nodeIntegration: true,
-    nodeIntegrationInSubFrames: true,
-    contextIsolation: false,
-    sandbox: false,
-    webviewTag: true,
     scrollBounce: true,
     additionalArguments: buildWindowArgs({ touchType: 'core-box', coreType: 'division-box' })
-  }
+  })
 }
 
 export const AssistantFloatingBallWindowOption: Electron.BrowserWindowConstructorOptions = {
@@ -111,20 +98,14 @@ export const AssistantFloatingBallWindowOption: Electron.BrowserWindowConstructo
   show: false,
   transparent: true,
   hasShadow: true,
-  webPreferences: {
+  webPreferences: buildWindowWebPreferences('app', {
     preload: path.join(__dirname, '..', 'preload', 'index.js'),
-    webSecurity: false,
-    nodeIntegration: true,
-    nodeIntegrationInSubFrames: true,
-    contextIsolation: false,
-    sandbox: false,
-    webviewTag: true,
     scrollBounce: true,
     additionalArguments: buildWindowArgs({
       touchType: 'assistant',
       assistantType: 'floating-ball'
     })
-  }
+  })
 }
 
 export const AssistantVoicePanelWindowOption: Electron.BrowserWindowConstructorOptions = {
@@ -141,20 +122,14 @@ export const AssistantVoicePanelWindowOption: Electron.BrowserWindowConstructorO
   show: false,
   transparent: true,
   hasShadow: true,
-  webPreferences: {
+  webPreferences: buildWindowWebPreferences('app', {
     preload: path.join(__dirname, '..', 'preload', 'index.js'),
-    webSecurity: false,
-    nodeIntegration: true,
-    nodeIntegrationInSubFrames: true,
-    contextIsolation: false,
-    sandbox: false,
-    webviewTag: true,
     scrollBounce: true,
     additionalArguments: buildWindowArgs({
       touchType: 'assistant',
       assistantType: 'voice-panel'
     })
-  }
+  })
 }
 export const OmniPanelWindowOption: Electron.BrowserWindowConstructorOptions = {
   title: `${AppName} OmniPanel`,
@@ -170,15 +145,9 @@ export const OmniPanelWindowOption: Electron.BrowserWindowConstructorOptions = {
   autoHideMenuBar: true,
   show: false,
   transparent: true,
-  webPreferences: {
+  webPreferences: buildWindowWebPreferences('app', {
     preload: path.join(__dirname, '..', 'preload', 'index.js'),
-    webSecurity: false,
-    nodeIntegration: true,
-    nodeIntegrationInSubFrames: true,
-    contextIsolation: false,
-    sandbox: false,
-    webviewTag: true,
     scrollBounce: true,
     additionalArguments: buildWindowArgs({ touchType: 'core-box', coreType: 'omni-panel' })
-  }
+  })
 }

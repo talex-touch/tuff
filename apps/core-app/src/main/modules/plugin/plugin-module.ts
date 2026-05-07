@@ -43,6 +43,7 @@ import {
 } from '../../core/eventbus/touch-event'
 import { registerMainRuntime, resolveMainRuntime } from '../../core/runtime-accessor'
 import { TouchWindow } from '../../core/touch-window'
+import { buildWindowWebPreferences } from '../../core/window-security-profile'
 import { createDbUtils } from '../../db/utils'
 import { useAliveTarget, useAliveWebContents } from '../../hooks/use-electron-guard'
 import { fileWatchService } from '../../service/file-watch.service'
@@ -1929,7 +1930,18 @@ export class PluginModule extends BaseModule {
           }
 
           const { file, url, ...windowOptions } = data
-          const win = new TouchWindow(windowOptions)
+          const obj = usePluginInjections(touchPlugin, 'plugin-module:window:new')
+          if (!obj) {
+            return { error: 'Failed to build plugin injections' }
+          }
+
+          const win = new TouchWindow({
+            ...windowOptions,
+            webPreferences: buildWindowWebPreferences('compat-plugin-view', {
+              ...(windowOptions.webPreferences ?? {}),
+              preload: obj._.preload ?? windowOptions.webPreferences?.preload
+            })
+          })
           let webContents: Electron.WebContents
           if (typeof file === 'string' && file.length > 0) {
             webContents = await win.loadFile(file)
@@ -1939,10 +1951,6 @@ export class PluginModule extends BaseModule {
             return { error: 'No file or url provided!' }
           }
 
-          const obj = usePluginInjections(touchPlugin, 'plugin-module:window:new')
-          if (!obj) {
-            return { error: 'Failed to build plugin injections' }
-          }
           await webContents.insertCSS(obj.styles)
           await webContents.executeJavaScript(obj.js)
 

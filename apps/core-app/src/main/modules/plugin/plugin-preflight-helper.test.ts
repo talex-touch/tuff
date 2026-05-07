@@ -96,7 +96,7 @@ describe('plugin preflight helper', () => {
   })
 
   it('keeps sdk gate issues as the canonical load_failed state', () => {
-    const plugin = createPluginStub('legacy-plugin')
+    const plugin = createPluginStub('sdk-blocked-plugin')
     plugin.issues.push({
       type: 'error',
       source: 'manifest.json',

@@ -13,7 +13,7 @@
     "network:guard": "node scripts/check-network-boundaries.mjs",
     "compat:registry:guard": "node scripts/check-compatibility-debt-registry.mjs",
     "size:guard": "node scripts/check-large-file-boundaries.mjs",
-    "legacy:guard": "node scripts/check-legacy-boundaries.mjs && pnpm compat:registry:guard && pnpm size:guard && pnpm console:guard",
+    "legacy:guard": "node scripts/check-legacy-boundaries.mjs && pnpm compat:registry:guard && pnpm size:guard && pnpm console:guard && pnpm -C \"apps/core-app\" run runtime:guard",
     "console:guard": "node scripts/check-runtime-console-boundaries.mjs",
     "guard:global-app": "node scripts/check-main-global-app-usage.mjs",
     "test:targeted": "pnpm -C \"packages/utils\" exec vitest run \"__tests__/plugin-sdk-lifecycle.test.ts\" \"__tests__/transport-domain-sdks.test.ts\" \"__tests__/transport/port-policy.test.ts\" && pnpm -C \"apps/core-app\" exec vitest run \"src/renderer/src/modules/auth/sync-preferences.test.ts\" \"src/main/modules/plugin/plugin-loaders.test.ts\" \"src/main/channel/common.test.ts\" && pnpm -C \"apps/nexus\" exec vitest run \"server/api/sync/__tests__/sync-routes-410.test.ts\"",

@@ -110,6 +110,28 @@ let syncEnabledWatcherCleanup: (() => void) | null = null
 let authStateCleanup: (() => void) | null = null
 let syncPayloadKeyRegistrationPromise: Promise<void> | null = null
 
+export const __syncMigrationTestHooks = {
+  resetDirtyStateForTest(): void {
+    if (process.env.NODE_ENV !== 'test') return
+    dirtyStorages.clear()
+    pendingBlobStorages.clear()
+    clearPushTimers()
+    setQueueDepthByBuffers()
+  },
+  markB64PayloadAppliedForTest(qualifiedName: string): void {
+    if (process.env.NODE_ENV !== 'test') return
+    markB64MigrationPayloadForRepush(qualifiedName)
+  },
+  isDirtyForTest(qualifiedName: string): boolean {
+    if (process.env.NODE_ENV !== 'test') return false
+    return dirtyStorages.has(qualifiedName)
+  },
+  hasScheduledPushForTest(): boolean {
+    if (process.env.NODE_ENV !== 'test') return false
+    return Boolean(pushTimer)
+  }
+}
+
 const syncStartEvent = defineRawEvent<{ reason?: string }, { success: boolean }>('sync:start')
 const syncStopEvent = defineRawEvent<{ reason?: string }, { success: boolean }>('sync:stop')
 const syncTriggerEvent = defineRawEvent<
@@ -419,6 +441,12 @@ function logDeviceEvicted(devices: EvictedDeviceInfo[]): void {
     })
     .filter((label) => label)
   syncLog.warn('Sync evicted device(s)', { meta: { count, devices: labels } })
+}
+
+function markB64MigrationPayloadForRepush(qualifiedName: string): void {
+  dirtyStorages.add(qualifiedName)
+  setQueueDepthByBuffers()
+  scheduleDebouncedPush()
 }
 
 function setQueueDepthByBuffers(): void {
@@ -958,10 +986,8 @@ async function applyPulledStorageItems(
         payload.rawText,
         extractContentHash(item)
       )
-      if (payload.legacy) {
-        dirtyStorages.add(qualifiedName)
-        setQueueDepthByBuffers()
-        scheduleDebouncedPush()
+      if (payload.requiresEncryptedRepush) {
+        markB64MigrationPayloadForRepush(qualifiedName)
       }
       if (applied) {
         appliedCount += 1
@@ -986,10 +1012,8 @@ async function applyPulledStorageItems(
       remoteApplyInFlight.delete(qualifiedName)
       if (result.success) {
         lastSyncedSnapshots.set(qualifiedName, cloneValue(merged))
-        if (patched || payload.legacy) {
-          dirtyStorages.add(qualifiedName)
-          setQueueDepthByBuffers()
-          scheduleDebouncedPush()
+        if (patched || payload.requiresEncryptedRepush) {
+          markB64MigrationPayloadForRepush(qualifiedName)
         } else {
           dirtyStorages.delete(qualifiedName)
           setQueueDepthByBuffers()

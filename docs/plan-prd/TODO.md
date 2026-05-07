@@ -78,9 +78,11 @@
   - 删除未被构建入口或窗口 runtime 引用的裸 IPC `preload-view.js`。
   - renderer `sync-item-mapper` 仅保留插件 storage qualified-name helper，retired sync payload API 由 main 侧真实实现承载。
 - [ ] CoreApp 后续兼容/跨平台专项：
-  - 旧 Channel 底座 hard-cut：继续压缩 `@main-process-message` / plugin-process bridge 的底层依赖，新增能力必须走 typed SDK/transport。
-  - Electron window security hardening：`webSecurity/nodeIntegration/contextIsolation/sandbox` 需要作为插件与 webview 兼容专项单独验证，不纳入本轮低风险清理。
-  - Linux documented best-effort：补齐 `xdotool` 依赖提示、desktop environment 限制说明与非阻塞 smoke 记录。
+  - [x] 2026-05-06 首轮 runtime 边界收口：新增 `WindowSecurityProfile`，主窗口/CoreBox/OmniPanel/Assistant/MetaOverlay 切到 app-grade baseline；插件 `WebContentsView` / DivisionBox 仅通过显式 `compat-plugin-view` 保留兼容。
+  - [x] 2026-05-06 raw IPC 底座冻结：`@main-process-message` / `@plugin-process-message` 集中到内部 adapter，renderer `window.touchChannel` 仅保留 deprecated bootstrap bridge；新增 `runtime:guard` 拦截裸 IPC、宽松 WebPreferences、旧 i18n 与旧 `/api/sync/*`。
+  - [x] 2026-05-06 跨平台 capability 合同补强：macOS Automation、Windows PowerShell、Linux `xdotool`、native share mail-only 与 permission deep-link degraded/unsupported path 均有 `issueCode/reason/limitations` 回归。
+  - [ ] 插件视图二阶段硬化：在插件 SDK/Surface 兼容验证后，把可迁移插件从 `compat-plugin-view` 逐步切到 `trusted-plugin-view`。
+  - [ ] Linux documented best-effort：补齐真机 smoke 与 `xdotool` / desktop environment 用户提示截图证据。
 - [ ] CoreBox 第三方 App 非阻塞启动 Windows 真机验证：
   - 验证 `shortcut` 保留 `launchArgs / workingDirectory` 并在 CoreBox 立即隐藏后后台启动。
   - 验证 `uwp` 继续通过 `explorer.exe shell:AppsFolder\\...` handoff，早期失败会触发系统通知。

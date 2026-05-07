@@ -18,6 +18,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAppState } from '~/modules/hooks/useAppStates'
 import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import { getPreloadProcessInfo } from '~/modules/preload/process-info'
 import { createRendererLogger } from '~/utils/renderer-log'
 import {
   normalizeStoredUpdateChannel,
@@ -149,7 +150,10 @@ const cachedAssets = computed(() => {
     return [] as DownloadAsset[]
   }
   const assets = githubProvider.getDownloadAssets(cachedRelease.value.release)
-  const arch = process.arch
+  const arch = getPreloadProcessInfo()?.arch
+  if (!arch) {
+    return [] as DownloadAsset[]
+  }
   return assets.filter((asset) => asset.platform === platform.value && asset.arch === arch)
 })
 

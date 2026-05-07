@@ -1,7 +1,6 @@
 import type {
   LoadingEvent,
   LoadingMode,
-  PreloadAPI,
   StartupContext
 } from '@talex-touch/utils/preload'
 import type { StartupInfo } from '../shared/types/startup-info'
@@ -17,6 +16,17 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 interface StartupHandshakePayload {
   rendererStartTime: number
+}
+
+interface CoreAppPreloadAPI {
+  sendPreloadEvent: (event: LoadingEvent) => void
+  getStartupContext: () => Promise<StartupContext | null>
+  getStartupContextSnapshot: () => StartupContext | null
+  getProcessInfo: () => {
+    arch: string
+    platform: string
+    versions: Partial<NodeJS.ProcessVersions>
+  }
 }
 
 /**
@@ -71,7 +81,7 @@ const startupContextPromise = requestStartupInfo().then((startupInfo) => {
 
 const isDebugMode = Boolean(process.env.DEBUG) || location.search.includes('debug-preload')
 
-const api: PreloadAPI = {
+const api: CoreAppPreloadAPI = {
   /**
    * Update loading overlay from renderer when needed.
    */
@@ -89,8 +99,15 @@ const api: PreloadAPI = {
   },
   getStartupContextSnapshot() {
     return startupContextSnapshot
+  },
+  getProcessInfo() {
+    return {
+      arch: process.arch,
+      platform: process.platform,
+      versions: { ...process.versions }
+    }
   }
-} satisfies PreloadAPI
+} satisfies CoreAppPreloadAPI
 
 if (process.contextIsolated) {
   try {

@@ -19,6 +19,7 @@ import { app, nativeTheme, screen, WebContentsView } from 'electron'
 import fse from 'fs-extra'
 import { BoxWindowOption } from '../../../config/default'
 import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
+import { buildWindowWebPreferences } from '../../../core/window-security-profile'
 import {
   CoreBoxWindowHiddenEvent,
   CoreBoxWindowShownEvent,
@@ -1193,17 +1194,11 @@ export class WindowManager {
 
     metrics.preload = performance.now() - startTime
 
-    const webPreferences: Electron.WebPreferences = {
+    const webPreferences = buildWindowWebPreferences('compat-plugin-view', {
       preload: preloadPath || undefined,
-      webSecurity: false,
-      nodeIntegration: true,
-      nodeIntegrationInSubFrames: true,
-      contextIsolation: false,
-      sandbox: false,
-      webviewTag: true,
       scrollBounce: true,
       transparent: true
-    }
+    })
 
     const viewCreateStart = performance.now()
     const view = (this.uiView = new WebContentsView({ webPreferences }))

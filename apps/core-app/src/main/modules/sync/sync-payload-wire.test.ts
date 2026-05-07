@@ -107,17 +107,17 @@ describe('sync payload wire format', () => {
 
     expect(resolved).toEqual({
       rawText,
-      legacy: false
+      requiresEncryptedRepush: false
     })
   })
 
-  it('marks legacy b64 payloads as migration fallback reads', async () => {
-    const rawText = JSON.stringify({ secret: 'legacy-business-value' })
-    const legacyPayload = `b64:${Buffer.from(rawText, 'utf-8').toString('base64')}`
+  it('marks b64 payloads as migration fallback reads', async () => {
+    const rawText = JSON.stringify({ secret: 'migration-business-value' })
+    const migrationPayload = `b64:${Buffer.from(rawText, 'utf-8').toString('base64')}`
     const crypto = new SyncPayloadCrypto(createMemoryStore())
 
     const resolved = await resolveEncryptedPayloadText(
-      buildOutput({ payload_enc: legacyPayload }),
+      buildOutput({ payload_enc: migrationPayload }),
       {
         downloadBlob: async () => ({ data: new ArrayBuffer(0) })
       },
@@ -126,7 +126,7 @@ describe('sync payload wire format', () => {
 
     expect(resolved).toEqual({
       rawText,
-      legacy: true
+      requiresEncryptedRepush: true
     })
   })
 })

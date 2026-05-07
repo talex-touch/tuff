@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { getPreloadProcessInfo } from '~/modules/preload/process-info'
 
 const { t } = useI18n()
 
-const versions = reactive({ ...window.electron.process.versions })
+const versions = reactive({ ...(getPreloadProcessInfo()?.versions ?? {}) })
 </script>
 
 <template>

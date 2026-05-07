@@ -18,7 +18,12 @@ vi.mock('../system/linux-desktop-tools', () => ({
   isXdotoolAvailable: isXdotoolAvailableMock
 }))
 
-import { getActiveAppCapabilityPatch } from './capability-adapter'
+import {
+  getActiveAppCapabilityPatch,
+  getAutoPasteCapabilityPatch,
+  getNativeShareCapabilityPatch,
+  getPermissionDeepLinkCapabilityPatch
+} from './capability-adapter'
 import {
   platformCapabilityRegistry,
   registerDefaultPlatformCapabilities
@@ -40,19 +45,30 @@ function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   }
 }
 
+function expectActionableCapabilityMetadata(
+  patch: { supportLevel: string; issueCode?: string; reason?: string; limitations?: string[] },
+  expectedIssueCode: string
+): void {
+  expect(patch.supportLevel === 'best_effort' || patch.supportLevel === 'unsupported').toBe(true)
+  expect(patch.issueCode).toBe(expectedIssueCode)
+  expect(patch.reason).toEqual(expect.any(String))
+  expect(patch.reason?.length).toBeGreaterThan(0)
+  expect(patch.limitations?.length).toBeGreaterThan(0)
+}
+
 describe('platform capability runtime patch', () => {
   it('reports macOS active-app as best-effort because Automation permission is runtime dependent', async () => {
     const patch = await withPlatform('darwin', () => getActiveAppCapabilityPatch())
 
     expect(patch.supportLevel).toBe('best_effort')
-    expect(patch.issueCode).toBe('AUTOMATION_PERMISSION')
+    expectActionableCapabilityMetadata(patch, 'AUTOMATION_PERMISSION')
   })
 
   it('reports Windows active-app as best-effort because PowerShell probing can fail at runtime', async () => {
     const patch = await withPlatform('win32', () => getActiveAppCapabilityPatch())
 
     expect(patch.supportLevel).toBe('best_effort')
-    expect(patch.issueCode).toBe('POWERSHELL_FOREGROUND_WINDOW')
+    expectActionableCapabilityMetadata(patch, 'POWERSHELL_FOREGROUND_WINDOW')
   })
 
   it('reports Linux active-app as unsupported when xdotool is missing', async () => {
@@ -61,7 +77,32 @@ describe('platform capability runtime patch', () => {
     const patch = await withPlatform('linux', () => getActiveAppCapabilityPatch())
 
     expect(patch.supportLevel).toBe('unsupported')
-    expect(patch.issueCode).toBe('XDTOOL_MISSING')
+    expectActionableCapabilityMetadata(patch, 'XDTOOL_MISSING')
+  })
+
+  it('reports Linux auto-paste as unsupported when xdotool is missing', async () => {
+    isXdotoolAvailableMock.mockResolvedValueOnce(false)
+
+    const patch = await withPlatform('linux', () => getAutoPasteCapabilityPatch())
+
+    expect(patch.supportLevel).toBe('unsupported')
+    expectActionableCapabilityMetadata(patch, 'XDTOOL_MISSING')
+  })
+
+  it('reports native share as explicit mail-only unsupported on Windows and Linux', () => {
+    for (const platform of ['win32', 'linux'] as const) {
+      const patch = withPlatform(platform, () => getNativeShareCapabilityPatch())
+
+      expect(patch.supportLevel).toBe('unsupported')
+      expectActionableCapabilityMetadata(patch, 'MAIL_ONLY')
+    }
+  })
+
+  it('reports Linux permission deep-link as desktop best-effort', () => {
+    const patch = withPlatform('linux', () => getPermissionDeepLinkCapabilityPatch())
+
+    expect(patch.supportLevel).toBe('best_effort')
+    expectActionableCapabilityMetadata(patch, 'DESKTOP_ENV')
   })
 })
 

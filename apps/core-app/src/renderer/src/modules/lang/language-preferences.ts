@@ -6,7 +6,7 @@ export const SUPPORTED_LANGUAGES = [
 ] as const
 
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]['key']
-export type LanguagePreferenceSource = 'settings' | 'legacy' | 'default'
+export type LanguagePreferenceSource = 'settings' | 'migration' | 'default'
 
 export interface InitialLanguagePreferenceInput {
   settingLocale?: string | null
@@ -90,7 +90,7 @@ export function resolveInitialLanguagePreference(
         ? resolveSystemLanguage(input.browserLanguage, input.intlLocale, legacyLocale)
         : (legacyLocale ?? settingLocale),
       followSystem,
-      source: 'legacy',
+      source: 'migration',
       shouldUseLegacySnapshot: true,
       shouldClearLegacySnapshot: true
     }

@@ -10,6 +10,11 @@ import { perfMonitor, registerPerfReportListener } from '../utils/perf-monitor'
 import { enterPerfContext } from '../utils/perf-context'
 import { appendWorkflowDebugLog } from '../utils/workflow-debug'
 import { resolveMissingHandlerPolicy } from './channel-missing-handler-policy'
+import {
+  RAW_MAIN_PROCESS_CHANNEL,
+  RAW_PLUGIN_PROCESS_CHANNEL,
+  resolveRawProcessChannel
+} from '../../shared/ipc/raw-channel'
 
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
 const ChannelType = {
@@ -126,8 +131,8 @@ class TouchChannel {
     this.channelMap.set(ChannelType.MAIN, new Map())
     this.channelMap.set(ChannelType.PLUGIN, new Map())
 
-    ipcMain.on('@main-process-message', this.__handle_main.bind(this))
-    ipcMain.on('@plugin-process-message', this.__handle_main.bind(this))
+    ipcMain.on(RAW_MAIN_PROCESS_CHANNEL, this.__handle_main.bind(this))
+    ipcMain.on(RAW_PLUGIN_PROCESS_CHANNEL, this.__handle_main.bind(this))
 
     perfMonitor.start()
     if (!perfReportListenerRegistered) {
@@ -542,7 +547,7 @@ class TouchChannel {
       }
     } as RawStandardChannelData
 
-    let _channelCategory = '@main-process-message'
+    let _channelCategory = RAW_MAIN_PROCESS_CHANNEL
 
     let finalData: RawStandardChannelData
     const disposeSerialize = enterPerfContext(`Channel.send.serialize:${eventName}`, {
@@ -578,7 +583,7 @@ class TouchChannel {
       if (argRecord.plugin === void 0) {
         throw new Error('Invalid plugin name!')
       }
-      _channelCategory = '@plugin-process-message'
+      _channelCategory = RAW_PLUGIN_PROCESS_CHANNEL
       if (webContents.isDestroyed()) {
         channelLog.error(
           `[Channel] Plugin process message for ${JSON.stringify(argRecord)} | ${JSON.stringify(header)} has been destroyed(webContentsView).`
@@ -735,8 +740,7 @@ class TouchChannel {
       disposeSerialize()
     }
 
-    const channel =
-      type === ChannelType.PLUGIN ? '@plugin-process-message' : '@main-process-message'
+    const channel = resolveRawProcessChannel(type)
 
     try {
       webContents.send(channel, finalData)
@@ -788,7 +792,7 @@ class TouchChannel {
     }
 
     try {
-      webContents.send('@plugin-process-message', finalData)
+      webContents.send(RAW_PLUGIN_PROCESS_CHANNEL, finalData)
     } catch {
       // Ignore send errors for broadcasts
     }

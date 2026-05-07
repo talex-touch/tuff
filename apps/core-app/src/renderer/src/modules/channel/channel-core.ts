@@ -6,6 +6,7 @@ import {
 } from '@talex-touch/utils/common/utils/clone-diagnostics'
 import { formatPayloadPreview } from '@talex-touch/utils/common/utils/payload-preview'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
+import { RAW_MAIN_PROCESS_CHANNEL } from '../../../../shared/ipc/raw-channel'
 
 // Use preload-exposed ipcRenderer via electron-toolkit
 const ipcRenderer = window.electron.ipcRenderer
@@ -67,7 +68,7 @@ class TouchChannel implements TouchClientChannelLike {
   pendingMap: Map<string, (data: RawStandardChannelData) => void> = new Map()
 
   constructor() {
-    ipcRenderer.on('@main-process-message', this.__handle_main.bind(this))
+    ipcRenderer.on(RAW_MAIN_PROCESS_CHANNEL, this.__handle_main.bind(this))
   }
 
   __parse_raw_data(e: IpcRendererEvent | null, arg: unknown): RawStandardChannelData | null {
@@ -116,7 +117,7 @@ class TouchChannel implements TouchClientChannelLike {
           if (replySent) return
           replySent = true
           e.sender.send(
-            '@main-process-message',
+            RAW_MAIN_PROCESS_CHANNEL,
             this.__parse_sender(code, rawData, data, rawData.sync)
           )
         },
@@ -226,7 +227,7 @@ class TouchChannel implements TouchClientChannelLike {
 
     return new Promise<TResponse>((resolve, reject) => {
       try {
-        ipcRenderer.send('@main-process-message', data)
+        ipcRenderer.send(RAW_MAIN_PROCESS_CHANNEL, data)
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
         const meta: Record<string, unknown> = {
@@ -353,5 +354,17 @@ class TouchChannel implements TouchClientChannelLike {
 }
 
 const rendererTouchChannel: TouchClientChannelLike = new TouchChannel()
-window.touchChannel = rendererTouchChannel
+
+Object.defineProperty(window, 'touchChannel', {
+  configurable: false,
+  enumerable: false,
+  get() {
+    return rendererTouchChannel
+  },
+  set() {
+    console.warn(
+      '[TouchChannel] window.touchChannel is a deprecated bootstrap bridge; use TuffTransport/domain SDKs.'
+    )
+  }
+})
 export const touchChannel: TouchClientChannelLike = rendererTouchChannel

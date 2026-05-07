@@ -24,6 +24,7 @@ import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-over
 import { app, WebContentsView } from 'electron'
 import { BoxWindowOption } from '../../../config/default'
 import { maybeGetRegisteredMainRuntime } from '../../../core/runtime-accessor'
+import { buildWindowWebPreferences } from '../../../core/window-security-profile'
 import { useAliveTarget, useAliveWebContents } from '../../../hooks/use-electron-guard'
 import { createLogger } from '../../../utils/logger'
 import { getCoreBoxWindow } from './window'
@@ -131,14 +132,10 @@ export class MetaOverlayManager {
       return
     }
 
-    const webPreferences: Electron.WebPreferences = {
+    const webPreferences = buildWindowWebPreferences('app', {
       preload: preloadPath,
-      webSecurity: false,
-      nodeIntegration: true,
-      contextIsolation: false,
-      sandbox: false,
       additionalArguments: buildWindowArgs({ touchType: 'core-box', metaOverlay: true })
-    }
+    })
 
     this.metaView = new WebContentsView({ webPreferences })
 

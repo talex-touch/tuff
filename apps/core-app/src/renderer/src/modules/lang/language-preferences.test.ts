@@ -43,7 +43,7 @@ describe('resolveInitialLanguagePreference', () => {
     })
   })
 
-  it('migrates legacy storage when settings still match defaults', () => {
+  it('migrates historical storage when settings still match defaults', () => {
     expect(
       resolvePreference({
         settingLocale: 'zh-CN',
@@ -54,13 +54,13 @@ describe('resolveInitialLanguagePreference', () => {
     ).toMatchObject({
       locale: 'en-US',
       followSystem: false,
-      source: 'legacy',
+      source: 'migration',
       shouldUseLegacySnapshot: true,
       shouldClearLegacySnapshot: true
     })
   })
 
-  it('clears invalid legacy storage without using it', () => {
+  it('clears invalid historical storage without using it', () => {
     expect(
       resolvePreference({
         legacyLocale: 'fr-FR',
@@ -75,7 +75,7 @@ describe('resolveInitialLanguagePreference', () => {
     })
   })
 
-  it('does not migrate legacy storage once settings only partially diverge from defaults', () => {
+  it('does not migrate historical storage once settings only partially diverge from defaults', () => {
     expect(
       resolvePreference({
         settingLocale: 'zh-CN',

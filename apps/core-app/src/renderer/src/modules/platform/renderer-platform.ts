@@ -1,6 +1,7 @@
 import { hasNavigator, hasWindow } from '@talex-touch/utils/env'
 import { computed } from 'vue'
 import { useStartupInfo } from '../hooks/useStartupInfo'
+import { getPreloadProcessInfo } from '../preload/process-info'
 
 export type RendererPlatform = 'darwin' | 'win32' | 'linux' | 'unknown'
 
@@ -115,13 +116,9 @@ export function resolveRendererPlatformState(
 }
 
 export function getCurrentRendererPlatformHints(): RendererRuntimePlatformHints {
+  const processInfo = getPreloadProcessInfo()
   return {
-    electronPlatform:
-      hasWindow() && window.electron?.process?.platform
-        ? window.electron.process.platform
-        : typeof process !== 'undefined'
-          ? process.platform
-          : null,
+    electronPlatform: processInfo?.platform ?? null,
     navigatorPlatform: hasNavigator() ? navigator.platform : null,
     userAgent: getCurrentRendererUserAgent()
   }

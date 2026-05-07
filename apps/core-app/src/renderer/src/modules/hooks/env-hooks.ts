@@ -1,5 +1,6 @@
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { ref } from 'vue'
+import { getPreloadProcessInfo } from '../preload/process-info'
 
 interface PackageJson {
   name: string
@@ -18,30 +19,35 @@ interface OSInfo {
   [key: string]: unknown
 }
 
-interface CPUUsage {
-  percent: number
-}
+type CPUUsage = Electron.CPUUsage
+type MemoryUsage = NodeJS.MemoryUsage
 
-interface MemoryUsage {
-  rss: number
-  heapTotal: number
-  heapUsed: number
-  external: number
-  arrayBuffers: number
-}
-
-interface NodeProcess {
-  getCPUUsage: () => CPUUsage
-  memoryUsage: () => MemoryUsage
+interface RendererProcessInfo {
   platform: string
   arch: string
-  // Add other process properties as needed
+  versions?: Partial<NodeJS.ProcessVersions>
   [key: string]: unknown
 }
 
-declare global {
-  interface Window {
-    process: NodeProcess
+const EMPTY_CPU_USAGE: CPUUsage = {
+  percentCPUUsage: 0,
+  idleWakeupsPerSecond: 0
+}
+
+const EMPTY_MEMORY_USAGE: MemoryUsage = {
+  rss: 0,
+  heapTotal: 0,
+  heapUsed: 0,
+  external: 0,
+  arrayBuffers: 0
+}
+
+function resolveProcessInfo(): RendererProcessInfo {
+  const processInfo = getPreloadProcessInfo()
+  return {
+    platform: processInfo?.platform ?? 'unknown',
+    arch: processInfo?.arch ?? 'unknown',
+    versions: processInfo?.versions ?? {}
   }
 }
 
@@ -49,7 +55,7 @@ export function useEnv() {
   const appSdk = useAppSdk()
   const packageJson = ref<PackageJson | null>(null)
   const os = ref<OSInfo | null>(null)
-  const processInfo = ref<NodeProcess>({ ...window.process })
+  const processInfo = ref<RendererProcessInfo>(resolveProcessInfo())
 
   void appSdk
     .getPackage()
@@ -73,12 +79,12 @@ export function useEnv() {
 }
 
 export function useCPUUsage() {
-  const value = ref<CPUUsage>(window.process.getCPUUsage())
+  const value = ref<CPUUsage>(EMPTY_CPU_USAGE)
 
   let cancel = false
 
   function running() {
-    value.value = window.process.getCPUUsage()
+    value.value = EMPTY_CPU_USAGE
 
     if (!cancel) setTimeout(running, 1000)
   }
@@ -89,12 +95,12 @@ export function useCPUUsage() {
 }
 
 export function useMemoryUsage() {
-  const value = ref<MemoryUsage>(window.process.memoryUsage())
+  const value = ref<MemoryUsage>(EMPTY_MEMORY_USAGE)
 
   let cancel = false
 
   function running() {
-    value.value = window.process.memoryUsage()
+    value.value = EMPTY_MEMORY_USAGE
 
     if (!cancel) setTimeout(running, 1000)
   }
