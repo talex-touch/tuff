@@ -5,6 +5,17 @@
 
 ## 2026-05-08
 
+### fix(core-app): hard-cut renderer storage bootstrap warnings
+
+- `apps/core-app/src/renderer/src/main.ts`
+- `packages/utils/renderer/hooks/use-channel.ts`
+- `apps/core-app/src/main/modules/storage/index.ts`
+- `apps/core-app/src/renderer/src/modules/storage/*`
+  - Renderer startup now initializes storage through typed `initializeRendererStorage(transport)` only, so startup no longer passes the retired TouchChannel storage path or triggers legacy storage subscription warnings.
+  - `useChannel()` now checks Vue injection context before calling `inject()`, keeping non-setup bootstrap/global-channel resolution free of Vue inject warnings.
+  - `account.ini` is represented by `StorageList.ACCOUNT`; main storage warms it during startup and renderer account hydration no longer writes the same snapshot back immediately.
+  - Added targeted regressions for renderer storage bootstrap boundaries, account hydration persistence control, channel resolution outside Vue setup, and main-side account cache warmup.
+
 ### fix(core-app): avoid readonly proxy writes in widget render patch
 
 - `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`

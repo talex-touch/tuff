@@ -36,6 +36,9 @@
 - [x] P1 renderer update runtime 调用方迁移到 update SDK 薄运行时层，runtime 页面不再依赖 `useApplicationUpgrade`。
 - [x] P2 fake prompt / DivisionBox settings 假入口清理完成。
 - [x] P2 production `src` 下 demo/test/doc 文件物理删除，并清理 `components.d.ts` 悬空声明。
+- [x] Renderer storage bootstrap warning 收口：
+  - CoreApp renderer startup 改为 typed `initializeRendererStorage(transport)` 单路径，不再传入 retired storage channel 或触发 Vue setup 外 `inject()` warning。
+  - Main storage 启动期预热 `StorageList.ACCOUNT`，renderer account hydration 使用 non-persist analyze，避免冷启动读取后立即回写同一快照。
 - [x] CoreApp compatibility 验收阻塞解除：
   - `pnpm -C "apps/core-app" run typecheck` 已通过。
   - `pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard.transport.test.ts" "src/main/modules/omni-panel/index.test.ts" "src/main/channel/common.test.ts"` 已通过（`3 files / 17 tests`）。
