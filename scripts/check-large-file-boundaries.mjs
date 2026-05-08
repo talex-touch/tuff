@@ -19,7 +19,7 @@ const registryPath = path.join(workspaceRoot, 'docs/plan-prd/docs/compatibility-
 const changesPath = path.join(workspaceRoot, 'docs/plan-prd/01-project/CHANGES.md')
 const shouldWriteBaseline = process.argv.includes('--write-baseline')
 const threshold = 1200
-const defaultExpiresVersion = '2.5.0'
+const defaultExpiresVersion = '2.4.11'
 
 const scanRoots = WORKSPACE_SCAN_ROOTS
 

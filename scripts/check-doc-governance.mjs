@@ -96,7 +96,7 @@ try {
   }
 
   // 2) Next-action consistency
-  const nextActionKeyword = 'CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配'
+  const nextActionKeyword = '2.4.10 Windows App 索引 + 基础 legacy/compat 收口'
   const missingNextAction = nextActionDocs.filter((file) => {
     const text = textByFile.get(file) ?? ''
     return !text.includes(nextActionKeyword)

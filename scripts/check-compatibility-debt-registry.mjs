@@ -19,7 +19,7 @@ const __dirname = path.dirname(__filename)
 const workspaceRoot = path.resolve(__dirname, '..')
 const registryPath = path.join(workspaceRoot, 'docs/plan-prd/docs/compatibility-debt-registry.csv')
 const writeBaseline = process.argv.includes('--write-baseline')
-const defaultExpiresVersion = '2.5.0'
+const defaultExpiresVersion = '2.4.11'
 
 const requiredColumns = [
   'domain',
