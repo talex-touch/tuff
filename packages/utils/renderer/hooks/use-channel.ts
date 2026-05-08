@@ -1,5 +1,5 @@
 import type { InjectionKey } from 'vue'
-import { inject } from 'vue'
+import { hasInjectionContext, inject } from 'vue'
 import { hasWindow } from '../../env'
 
 export interface TouchChannel {
@@ -46,13 +46,10 @@ declare global {
  */
 function resolveTouchChannel(): TouchChannel | null {
   // Try dependency injection first
-  try {
+  if (hasInjectionContext()) {
     const injectedChannel = inject(TouchChannelKey, null)
     if (injectedChannel)
       return injectedChannel
-  }
-  catch {
-    // Ignore injection errors outside of Vue context
   }
 
   // Try global variables

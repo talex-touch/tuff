@@ -1,3 +1,4 @@
+import { StorageList } from '@talex-touch/utils'
 import { useStorageSdk } from '@talex-touch/utils/renderer'
 
 const storageSdk = useStorageSdk()
@@ -50,6 +51,10 @@ interface AccountStorageData {
   token?: unknown
 }
 
+interface AccountStorageAnalyzeOptions {
+  persist?: boolean
+}
+
 export class AccountStorage {
   user?: User
   eller?: Eller
@@ -58,19 +63,21 @@ export class AccountStorage {
     this.analyzeFromObj(data)
   }
 
-  analyzeFromObj(data?: AccountStorageData): void {
+  analyzeFromObj(data?: AccountStorageData, options: AccountStorageAnalyzeOptions = {}): void {
     if (!data) return
     if (data.user) this.user = data.user
     if (data.eller) this.eller = data.eller
 
-    setTimeout(() => this.__save())
+    if (options.persist !== false) {
+      setTimeout(() => this.__save())
+    }
   }
 
   __save(): void {
     const { user, eller } = this
 
     void storageSdk.app.save({
-      key: 'account.ini',
+      key: StorageList.ACCOUNT,
       content: JSON.stringify({ user, eller }),
       clear: false
     })

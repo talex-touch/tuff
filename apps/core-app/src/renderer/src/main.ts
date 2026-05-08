@@ -1,11 +1,9 @@
 import '~/modules/channel/channel-core'
 import { setRuntimeEnv } from '@talex-touch/utils/env'
 import { preloadDebugStep, preloadLog, preloadState } from '@talex-touch/utils/preload'
-import { initStorageChannel, initStorageTransport, useChannel } from '@talex-touch/utils/renderer'
+import { initializeRendererStorage } from '@talex-touch/utils/renderer'
 import { isAssistantWindow, isCoreBox } from '@talex-touch/utils/renderer/hooks/arg-mapper'
-import type { IStorageChannel } from '@talex-touch/utils/renderer/storage'
 import { appSettings } from '@talex-touch/utils/renderer/storage'
-import { initStorageSubscription } from '@talex-touch/utils/renderer/storage/storage-subscription'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 
@@ -53,29 +51,6 @@ registerNotificationHub(transport)
 registerBuildVerificationListener(transport)
 registerBatteryStatusListener()
 registerLifecycleEvents()
-
-function initializeRendererStorage(): void {
-  const channel = resolveStorageChannel()
-  if (!channel) {
-    return
-  }
-
-  initStorageTransport(transport)
-  initStorageChannel(channel)
-  initStorageSubscription(channel, transport)
-}
-
-function resolveStorageChannel(): IStorageChannel | null {
-  try {
-    const channel = useChannel()
-    if (typeof channel.send === 'function' && typeof channel.unRegChannel === 'function') {
-      return channel as IStorageChannel
-    }
-  } catch {
-    // Storage channel can be unavailable during early renderer bootstrap.
-  }
-  return null
-}
 
 function registerRouterEvents(instance: Router): void {
   if (routerEventsRegistered) {
@@ -134,7 +109,7 @@ registerDefaultCustomRenderers()
  * Orchestrate renderer initialization and mount the Vue root.
  */
 async function bootstrap() {
-  initializeRendererStorage()
+  initializeRendererStorage(transport)
   await appSettings.whenHydrated()
   const router = await ensureRouter()
   const initialLanguage = resolveInitialLanguage()

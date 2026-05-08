@@ -1,3 +1,4 @@
+import { StorageList } from '@talex-touch/utils'
 import { storages, useStorageSdk } from '@talex-touch/utils/renderer'
 import { appSettingsData, openersData } from '@talex-touch/utils/renderer/storage'
 import { reactive, toRaw, unref } from 'vue'
@@ -22,12 +23,11 @@ export class StorageManager {
   private async loadAccountFromStorage(): Promise<void> {
     const startAt = performance.now()
     try {
-      const data =
-        await this.storageSdk.app.get<Parameters<typeof this.account.analyzeFromObj>[0]>(
-          'account.ini'
-        )
+      const data = await this.storageSdk.app.get<Parameters<typeof this.account.analyzeFromObj>[0]>(
+        StorageList.ACCOUNT
+      )
       if (data && typeof data === 'object') {
-        this.account.analyzeFromObj(data)
+        this.account.analyzeFromObj(data, { persist: false })
       }
     } catch (error) {
       console.warn('[StorageManager] Failed to load account storage:', error)

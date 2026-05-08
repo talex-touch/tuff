@@ -86,7 +86,11 @@ export class StorageModule extends BaseModule {
   private lruManager: StorageLRUManager
   private frequencyMonitor = new StorageFrequencyMonitor()
   private subscribers = new Map<string, Set<(data: object) => void>>()
-  private hotConfigs = new Set<string>([StorageList.APP_SETTING, StorageList.OPENERS])
+  private hotConfigs = new Set<string>([
+    StorageList.APP_SETTING,
+    StorageList.ACCOUNT,
+    StorageList.OPENERS
+  ])
   private persistedContent = new Map<string, string>()
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
@@ -150,6 +154,7 @@ export class StorageModule extends BaseModule {
     }
 
     await this.runStartupMigrations(file.dirPath!)
+    this.warmupConfig(StorageList.ACCOUNT)
   }
 
   async onDestroy(): Promise<void> {
@@ -252,6 +257,14 @@ export class StorageModule extends BaseModule {
         meta: { filePath }
       })
       return undefined
+    }
+  }
+
+  private warmupConfig(name: StorageList): void {
+    try {
+      this.getConfig(name)
+    } catch (error) {
+      storageLog.warn(`Failed to warm up config ${name}`, { error })
     }
   }
 

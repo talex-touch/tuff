@@ -1,5 +1,6 @@
 export enum StorageList {
   APP_SETTING = 'app-setting.ini',
+  ACCOUNT = 'account.ini',
   SHORTCUT_SETTING = 'shortcut-setting.ini',
   OPENERS = 'openers.json',
   FILE_INDEX_SETTINGS = 'file-index-settings.json',
