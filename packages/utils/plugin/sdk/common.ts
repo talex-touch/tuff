@@ -6,6 +6,8 @@
  */
 
 import { getLogger } from '../../common/logger'
+import { createPluginTuffTransport } from '../../transport'
+import { PluginEvents } from '../../transport/events'
 import { useChannel } from './channel'
 
 const sdkLog = getLogger('plugin-sdk')
@@ -34,10 +36,11 @@ export async function regShortcut(
   options: RegShortcutOptions = {},
 ): Promise<boolean> {
   const channel = useChannel('[Plugin SDK] Shortcut registration requires renderer channel.')
+  const transport = createPluginTuffTransport(channel as any)
   const shortcutId = normalizeOptionalText(options.id)
   const description = normalizeOptionalText(options.description ?? options.desc)
 
-  const res = await channel.send('shortcon:reg', {
+  const res = await transport.send(PluginEvents.shortcut.register, {
     key,
     ...(shortcutId ? { id: shortcutId } : {}),
     ...(description ? { description } : {}),
@@ -47,8 +50,7 @@ export async function regShortcut(
   if (res === false)
     return false
 
-  channel.regChannel('shortcon:trigger', ({ data }) => {
-    const payload = data as { key?: string, id?: string } | undefined
+  transport.on(PluginEvents.shortcut.trigger, (payload) => {
     const triggerKey = payload?.key ?? payload?.id
     if (triggerKey === key || (shortcutId && triggerKey === shortcutId))
       func()
@@ -68,9 +70,10 @@ export async function communicateWithPlugin(
   info: any = {},
 ): Promise<any> {
   const channel = useChannel('[Plugin SDK] Communication requires renderer channel.')
+  const transport = createPluginTuffTransport(channel as any)
 
   try {
-    return await channel.send('index:communicate', {
+    return await transport.send(PluginEvents.communicate.index, {
       key,
       info,
     })
@@ -89,9 +92,13 @@ export async function communicateWithPlugin(
  */
 export async function sendMessage(message: string, data: any = {}): Promise<any> {
   const channel = useChannel('[Plugin SDK] Messaging requires renderer channel.')
+  const transport = createPluginTuffTransport(channel as any)
 
   try {
-    return await channel.send(`plugin:${message}`, data)
+    return await transport.send(PluginEvents.communicate.index, {
+      key: message,
+      info: data,
+    })
   }
   catch (error) {
     sdkLog.error(`Failed to send message: ${message}`, { error })

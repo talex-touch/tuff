@@ -67,6 +67,25 @@ describe('plugin sdk lifecycle', () => {
     expect(onInput).toHaveBeenCalledTimes(1)
   })
 
+  it('feature sdk rejects retired plugin key event listener surface', () => {
+    const { channel, listenerCount } = createMockChannel()
+    const sdk = createFeatureSDK(
+      {
+        pushItems: vi.fn(),
+        update: vi.fn(),
+        remove: vi.fn(),
+        clear: vi.fn(),
+        getItems: vi.fn(() => []),
+      },
+      channel as any,
+    )
+
+    expect(() => sdk.onKeyEvent(vi.fn())).toThrow(
+      '[Feature SDK] onKeyEvent was removed by the hard-cut',
+    )
+    expect(listenerCount('core-box:key-event')).toBe(0)
+  })
+
   it('division box sdk removes state listener after dispose', async () => {
     const { channel, emit, listenerCount } = createMockChannel()
     const sdk = createDivisionBoxSDK(channel as any)

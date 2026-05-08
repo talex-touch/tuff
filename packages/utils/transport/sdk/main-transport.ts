@@ -21,26 +21,26 @@ import { isPortChannelEnabled } from './port-policy'
 import { createServerStreamRuntime } from './stream/server-runtime'
 
 const { ipcMain, MessageChannelMain } = electron
-const LEGACY_CHANNEL = {
+const BRIDGE_CHANNEL = {
   MAIN: 'main',
   PLUGIN: 'plugin',
 } as const
-const LEGACY_SUCCESS_CODE = 200
-type LegacyChannelType = (typeof LEGACY_CHANNEL)[keyof typeof LEGACY_CHANNEL]
-type LegacyChannelCallback = (data: any) => unknown
-type LegacyMainChannel = {
-  regChannel: (type: LegacyChannelType, eventName: string, callback: LegacyChannelCallback) => () => void
+const BRIDGE_SUCCESS_CODE = 200
+type BridgeChannelType = (typeof BRIDGE_CHANNEL)[keyof typeof BRIDGE_CHANNEL]
+type BridgeChannelCallback = (data: any) => unknown
+type MainChannelBridge = {
+  regChannel: (type: BridgeChannelType, eventName: string, callback: BridgeChannelCallback) => () => void
   sendTo: (
     win: Electron.BrowserWindow,
-    type: LegacyChannelType,
+    type: BridgeChannelType,
     eventName: string,
     arg: unknown,
   ) => Promise<any>
   sendPlugin: (pluginName: string, eventName: string, arg?: unknown) => Promise<any>
-  broadcast: (type: LegacyChannelType, eventName: string, arg?: unknown) => void
+  broadcast: (type: BridgeChannelType, eventName: string, arg?: unknown) => void
   broadcastTo: (
     win: Electron.BrowserWindow,
-    type: LegacyChannelType,
+    type: BridgeChannelType,
     eventName: string,
     arg?: unknown,
   ) => void
@@ -435,11 +435,11 @@ function registerPortHandlers(transport: TuffMainTransport): void {
 
 /**
  * Main process transport implementation.
- * Adapts the legacy TouchChannel to the new TuffTransportMain interface.
+ * Adapts the current TouchChannel bridge to the TuffTransportMain interface.
  */
 export class TuffMainTransport implements ITuffTransportMain {
   constructor(
-    private channel: LegacyMainChannel,
+    private channel: MainChannelBridge,
     public readonly keyManager: PluginKeyManager,
   ) {
     registerPortHandlers(this)
@@ -494,9 +494,9 @@ export class TuffMainTransport implements ITuffTransportMain {
       return baseHandler(payload, context)
     }
 
-    const unregisterMain = this.channel.regChannel(LEGACY_CHANNEL.MAIN, eventName, channelHandler)
+    const unregisterMain = this.channel.regChannel(BRIDGE_CHANNEL.MAIN, eventName, channelHandler)
     const unregisterPlugin = this.channel.regChannel(
-      LEGACY_CHANNEL.PLUGIN,
+      BRIDGE_CHANNEL.PLUGIN,
       eventName,
       channelHandler,
     )
@@ -565,10 +565,10 @@ export class TuffMainTransport implements ITuffTransportMain {
       sendFallback: (request, name, payload) => {
         try {
           request.sender.send('@main-process-message', {
-            code: LEGACY_SUCCESS_CODE,
+            code: BRIDGE_SUCCESS_CODE,
             data: payload,
             name,
-            header: { status: 'request', type: LEGACY_CHANNEL.MAIN },
+            header: { status: 'request', type: BRIDGE_CHANNEL.MAIN },
           })
         }
         catch {
@@ -613,22 +613,22 @@ export class TuffMainTransport implements ITuffTransportMain {
     }
 
     const startCleanupMain = this.channel.regChannel(
-      LEGACY_CHANNEL.MAIN,
+      BRIDGE_CHANNEL.MAIN,
       startEventName,
       startHandler,
     )
     const cancelCleanupMain = this.channel.regChannel(
-      LEGACY_CHANNEL.MAIN,
+      BRIDGE_CHANNEL.MAIN,
       cancelEventName,
       cancelHandler,
     )
     const startCleanupPlugin = this.channel.regChannel(
-      LEGACY_CHANNEL.PLUGIN,
+      BRIDGE_CHANNEL.PLUGIN,
       startEventName,
       startHandler,
     )
     const cancelCleanupPlugin = this.channel.regChannel(
-      LEGACY_CHANNEL.PLUGIN,
+      BRIDGE_CHANNEL.PLUGIN,
       cancelEventName,
       cancelHandler,
     )
@@ -702,7 +702,7 @@ export class TuffMainTransport implements ITuffTransportMain {
         }
       }
     }
-    return this.channel.sendTo(win, LEGACY_CHANNEL.MAIN, eventName, payload)
+    return this.channel.sendTo(win, BRIDGE_CHANNEL.MAIN, eventName, payload)
   }
 
   /**
@@ -720,7 +720,7 @@ export class TuffMainTransport implements ITuffTransportMain {
     if (!win) {
       throw new Error(`[TuffTransport] Cannot find BrowserWindow for id=${windowId}`)
     }
-    this.channel.broadcastTo(win, LEGACY_CHANNEL.MAIN, eventName, payload)
+    this.channel.broadcastTo(win, BRIDGE_CHANNEL.MAIN, eventName, payload)
   }
 
   /**
@@ -772,7 +772,7 @@ export class TuffMainTransport implements ITuffTransportMain {
 
     return this.channel.sendTo(
       { webContents: targetWebContents } as Electron.BrowserWindow,
-      LEGACY_CHANNEL.MAIN,
+      BRIDGE_CHANNEL.MAIN,
       eventName,
       payload,
     )
@@ -802,6 +802,6 @@ export class TuffMainTransport implements ITuffTransportMain {
     assertTuffEvent(event, 'TuffMainTransport.broadcast')
 
     const eventName = event.toEventName()
-    this.channel.broadcast(LEGACY_CHANNEL.MAIN, eventName, payload)
+    this.channel.broadcast(BRIDGE_CHANNEL.MAIN, eventName, payload)
   }
 }

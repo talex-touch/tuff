@@ -184,25 +184,10 @@ export function getPluginChannelPreludeCode(options: PluginChannelPreludeOptions
     }
 
     sendSync(eventName, arg) {
-      const data = {
-        code: DataCode.SUCCESS,
-        data: arg,
-        name: eventName,
-        header: {
-          uniqueKey,
-          status: 'request',
-          type: 'plugin'
-        }
-      };
-      try {
-        const res = this.__parse_raw_data(null, ipcRenderer.sendSync('@plugin-process-message', data));
-        if (res?.header?.status === 'reply') return res.data;
-        return res;
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('[Plugin] Failed to sendSync channel message', eventName, errorMessage);
-        throw new Error('Failed to sendSync plugin channel message "' + eventName + '": ' + errorMessage);
-      }
+      const error = new Error('Plugin channel sendSync was removed by the hard-cut. Migrate "' + eventName + '" to typed transport send/on APIs.');
+      error.code = 'plugin_channel_send_sync_removed';
+      console.error('[Plugin] Blocked removed sendSync channel call', eventName);
+      throw error;
     }
   }
 

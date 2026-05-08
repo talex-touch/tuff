@@ -37,6 +37,13 @@ export interface CoreMetrics {
     avgDuration?: number
     providerTimings?: Record<string, number>
   }
+  startup?: {
+    totalTimeMs?: number
+    mainProcessTimeMs?: number
+    rendererTimeMs?: number
+    moduleCount?: number
+    rating?: 'excellent' | 'good' | 'fair' | 'poor'
+  }
 }
 
 export interface AnalyticsSnapshot {

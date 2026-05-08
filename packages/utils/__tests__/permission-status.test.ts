@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { generatePermissionIssue, getPluginPermissionStatus, hasPermission } from '../permission'
+import {
+  generatePermissionIssue,
+  getPluginPermissionStatus,
+  hasPermission,
+  parseManifestPermissions
+} from '../permission'
 
 const ENFORCED_SDK = 251212
 
@@ -70,5 +75,14 @@ describe('permission status resolution', () => {
     expect(status.enforcePermissions).toBe(true)
     expect(status.missingRequired).toEqual(['fs.read'])
     expect(generatePermissionIssue(status)?.code).toBe('PERMISSION_MISSING')
+  })
+
+  it('ignores pre-object manifest permission arrays', () => {
+    const parsed = parseManifestPermissions({
+      permissions: ['fs.read', 'clipboard.read']
+    } as never)
+
+    expect(parsed.required).toEqual([])
+    expect(parsed.optional).toEqual([])
   })
 })

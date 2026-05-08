@@ -25,9 +25,6 @@ import type {
 import type {
   AnalyticsToggleRequest,
   AutoStartUpdateRequest,
-  CurrentMetrics,
-  PerformanceHistoryEntry,
-  PerformanceSummary,
   TraySettings,
   TraySettingsUpdateRequest,
 } from "../../events/types/app";
@@ -118,9 +115,6 @@ export interface SettingsSdk {
     toggleReporting: (
       payload: AnalyticsToggleRequest,
     ) => Promise<{ enabled: boolean }>;
-    getCurrent: () => Promise<CurrentMetrics>;
-    getHistory: () => Promise<PerformanceHistoryEntry[]>;
-    getSummary: () => Promise<PerformanceSummary>;
     messages: {
       list: (
         payload?: AnalyticsMessageListRequest,
@@ -184,9 +178,6 @@ export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
       export: (payload) => transport.send(AppEvents.analytics.export, payload),
       toggleReporting: (payload) =>
         transport.send(AppEvents.analytics.toggleReporting, payload),
-      getCurrent: () => transport.send(AppEvents.analytics.getCurrent),
-      getHistory: () => transport.send(AppEvents.analytics.getHistory),
-      getSummary: () => transport.send(AppEvents.analytics.getSummary),
       messages: {
         list: (payload) =>
           transport.send(AppEvents.analytics.messages.list, payload ?? {}),

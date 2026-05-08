@@ -83,8 +83,8 @@ function resolveTouchChannel(): TouchChannel | null {
  * Low-level composable for using TouchChannel communication.
  *
  * Prefer TuffTransport or a domain SDK for new renderer code. This helper is
- * kept for host bootstrap and legacy compatibility paths that still need the
- * raw TouchChannel bridge.
+ * kept for host bootstrap paths that still need the low-level TouchChannel
+ * bridge.
  *
  * @example
  * ```ts
@@ -123,7 +123,7 @@ export function useChannel(): TouchChannel {
 /**
  * Safe version of useChannel that returns null instead of throwing when
  * TouchChannel is not available. Prefer TuffTransport/domain SDKs for feature
- * code; use this only around explicit legacy fallback boundaries.
+ * code; use this only around explicit host bootstrap boundaries.
  *
  * @example
  * ```ts

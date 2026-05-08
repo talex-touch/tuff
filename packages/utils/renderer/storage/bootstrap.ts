@@ -5,9 +5,8 @@ import { initStorageSubscription } from './storage-subscription'
 
 export interface RendererStorageBootstrapOptions {
   /**
-   * Optional legacy channel fallback for hosts that have not completed the
-   * transport migration yet. New renderer code should initialize with transport
-   * only.
+   * Retired channel argument retained for source compatibility.
+   * Runtime storage ignores it and uses transport only.
    */
   legacyChannel?: IStorageChannel | null
 }
@@ -15,8 +14,7 @@ export interface RendererStorageBootstrapOptions {
 /**
  * Initialize renderer storage through the typed transport path.
  *
- * Legacy TouchChannel registration remains available as an explicit fallback,
- * but storage reads, writes, and update subscriptions prefer TuffTransport.
+ * Historical TouchChannel arguments are accepted but ignored by runtime storage.
  */
 export function initializeRendererStorage(
   transport: ITuffTransport,

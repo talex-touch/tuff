@@ -8,7 +8,7 @@
 
 import type { TuffItem } from '../../core-box/tuff'
 import { createPluginTuffTransport } from '../../transport'
-import { defineRawEvent } from '../../transport/event/builder'
+import { CoreBoxEvents } from '../../transport/events'
 import { createDisposableBag } from '../../transport/sdk'
 import { useBoxItems } from './box-items'
 import { ensureRendererChannel } from './channel'
@@ -36,8 +36,14 @@ export interface ForwardedKeyEvent {
  */
 export type KeyEventHandler = (event: ForwardedKeyEvent) => void
 
-const featureInputChangeEvent = defineRawEvent<unknown, unknown>('core-box:input-change')
-const featureKeyEvent = defineRawEvent<unknown, unknown>('core-box:key-event')
+function createRemovedKeyEventError(): Error {
+  return Object.assign(
+    new Error(
+      '[Feature SDK] onKeyEvent was removed by the hard-cut because core-box:key-event has no production sender. Use attached UI hostKeyEvent props for plugin UI keyboard handling.'
+    ),
+    { code: 'plugin_feature_key_event_removed' },
+  )
+}
 
 /**
  * Feature SDK interface for plugins
@@ -152,32 +158,11 @@ export interface FeatureSDK {
   onInputChange: (handler: InputChangeHandler) => () => void
 
   /**
-   * Registers a listener for keyboard events forwarded from CoreBox
+   * @deprecated Removed by the hard-cut. The old `core-box:key-event` channel
+   * has no production sender; handle keyboard events in the attached UI or via
+   * host-provided `hostKeyEvent` props.
    *
-   * When a plugin's UI view is attached to CoreBox, certain key events
-   * (Enter, Arrow keys, Meta+key combinations) are forwarded to the plugin.
-   *
-   * @param handler - Callback function invoked when a key event is forwarded
-   * @returns Unsubscribe function
-   *
-   * @example
-   * ```typescript
-   * const unsubscribe = plugin.feature.onKeyEvent((event) => {
-   *   if (event.key === 'Enter') {
-   *     // Handle enter key
-   *     submitSelection()
-   *   } else if (event.key === 'ArrowDown') {
-   *     // Navigate down in list
-   *     selectNext()
-   *   } else if (event.metaKey && event.key === 'k') {
-   *     // Handle Cmd+K
-   *     openSearch()
-   *   }
-   * })
-   *
-   * // Later, unsubscribe
-   * unsubscribe()
-   * ```
+   * Calling this method throws `plugin_feature_key_event_removed`.
    */
   onKeyEvent: (handler: KeyEventHandler) => () => void
 
@@ -198,7 +183,6 @@ export interface FeatureSDK {
  */
 export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
   const inputChangeHandlers: Set<InputChangeHandler> = new Set()
-  const keyEventHandlers: Set<KeyEventHandler> = new Set()
   const disposables = createDisposableBag()
   const transport = createPluginTuffTransport(channel)
   let disposed = false
@@ -211,22 +195,6 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
       }
       catch (error) {
         console.error('[Feature SDK] onInputChange handler error:', error)
-      }
-    }
-  }
-
-  const emitKeyEvent = (payload: any) => {
-    const keyEvent = payload as ForwardedKeyEvent
-    if (!keyEvent) {
-      return
-    }
-
-    for (const handler of keyEventHandlers) {
-      try {
-        handler(keyEvent)
-      }
-      catch (error) {
-        console.error('[Feature SDK] onKeyEvent handler error:', error)
       }
     }
   }
@@ -244,14 +212,12 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
 
     disposed = true
     inputChangeHandlers.clear()
-    keyEventHandlers.clear()
     disposables.dispose()
     transport.destroy()
   }
 
   disposables.add(
-    transport.on(featureInputChangeEvent, emitInput),
-    transport.on(featureKeyEvent, emitKeyEvent),
+    transport.on(CoreBoxEvents.input.change, emitInput),
   )
 
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
@@ -311,12 +277,9 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
     },
 
     onKeyEvent(handler: KeyEventHandler): () => void {
+      void handler
       ensureActive('onKeyEvent')
-      keyEventHandlers.add(handler)
-
-      return () => {
-        keyEventHandlers.delete(handler)
-      }
+      throw createRemovedKeyEventError()
     },
 
     dispose,

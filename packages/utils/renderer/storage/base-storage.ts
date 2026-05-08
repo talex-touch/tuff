@@ -12,9 +12,9 @@ import { isElectronRenderer } from '../../env'
 import { StorageEvents } from '../../transport/events'
 
 /**
- * Interface representing the external communication channel.
- * Kept for explicit legacy fallback paths. New renderer storage should be
- * initialized through `initializeRendererStorage()` with TuffTransport.
+ * Interface for hosts that still pass the retired storage channel.
+ * The hard-cut storage runtime ignores it; reads, writes, and subscriptions
+ * require `initializeRendererStorage()` with TuffTransport.
  */
 export interface IStorageChannel extends ITouchClientChannel {
   /**
@@ -31,23 +31,22 @@ export interface TouchStorageOptions {
   initMode?: StorageInitMode
 }
 
-let channel: IStorageChannel | null = null
 let transport: ITuffTransport | null = null
-let hasWarnedLegacyStorageChannel = false
+let hasWarnedStorageChannelIgnored = false
 
-function warnLegacyStorageChannelPath(): void {
-  if (hasWarnedLegacyStorageChannel) {
+function warnStorageChannelIgnored(): void {
+  if (hasWarnedStorageChannelIgnored) {
     return
   }
-  hasWarnedLegacyStorageChannel = true
+  hasWarnedStorageChannelIgnored = true
   console.warn(
-    '[TouchStorage] Legacy channel storage path is active. Migrate to StorageEvents.app transport before v2.5.0.',
+    '[TouchStorage] Channel storage path is ignored. Initialize renderer storage with StorageEvents.app transport.',
   )
 }
 
 /**
- * Initializes the legacy global channel fallback for communication.
- * Prefer `initializeRendererStorage()` with TuffTransport for new renderer code.
+ * Accepts a historical channel argument for source stability.
+ * Storage hard-cut mode ignores this channel and waits for TuffTransport.
  *
  * @example
  * ```ts
@@ -57,8 +56,8 @@ function warnLegacyStorageChannelPath(): void {
  * ```
  */
 export function initStorageChannel(c: IStorageChannel): void {
-  channel = c
-  initializeStorageInstances()
+  void c
+  warnStorageChannelIgnored()
 }
 
 /**
@@ -184,7 +183,7 @@ export class TouchStorage<T extends object> {
   #assigning = false
   readonly originalData: T
   private readonly _onUpdate: Array<() => void> = []
-  #channelInitialized = false
+  #transportInitialized = false
   #skipNextWatchTrigger = false
   #currentVersion = 0
   #isRemoteUpdate = false
@@ -194,7 +193,7 @@ export class TouchStorage<T extends object> {
   #pendingSave = false
   #localDirty = false
   #lastSyncedSnapshot: T | null = null
-  #updateListenerMode: 'transport' | 'channel' | null = null
+  #updateListenerMode: 'transport' | null = null
   #updateListenerToken = 0
   #updateStreamController: StreamController | null = null
   #updateChannelCleanup: (() => void) | null = null
@@ -212,13 +211,13 @@ export class TouchStorage<T extends object> {
   /**
    * Creates a new reactive storage instance.
    * NOTE: storage bootstrap can be called later; storage will sync once
-   * transport or an explicit legacy fallback channel is ready.
+   * transport is ready.
    *
    * @param qName Globally unique name for the instance
    * @param initData Initial data to populate the storage
    * @param onUpdate Optional callback when data is updated
    *
-   * @throws {Error} If channel is not initialized or if storage with same name already exists
+   * @throws {Error} If storage with same name already exists
    *
    * @example
    * ```ts
@@ -235,9 +234,9 @@ export class TouchStorage<T extends object> {
     onUpdate?: () => void,
     options?: TouchStorageOptions,
   ) {
-    if (!channel && !transport) {
+    if (!transport) {
       if (isElectronRenderer()) {
-        // Allow lazy initialization; channel/transport can be set later.
+        // Allow lazy initialization; transport can be set later.
       }
     }
     void options
@@ -260,20 +259,20 @@ export class TouchStorage<T extends object> {
     // Register to storages map immediately
     storages.set(qName, this)
 
-    if (channel || transport) {
-      // Initialize channel-dependent operations immediately when ready
+    if (transport) {
+      // Initialize transport-dependent operations immediately when ready
       this.#initializeChannel()
     }
   }
 
   /**
-   * Initialize channel-dependent operations.
-   * Called immediately in constructor after channel validation.
+   * Initialize transport-dependent operations.
+   * Called immediately in constructor after transport validation.
    */
   #initializeChannel(): void {
-    const firstInitialization = !this.#channelInitialized
+    const firstInitialization = !this.#transportInitialized
 
-    this.#channelInitialized = true
+    this.#transportInitialized = true
 
     if (firstInitialization) {
       void this.#loadFromRemoteWithVersion()
@@ -304,10 +303,7 @@ export class TouchStorage<T extends object> {
     if (transport) {
       return await transport.send(StorageEvents.app.getVersioned, { key: this.#qualifiedName })
     }
-    if (channel) {
-      warnLegacyStorageChannelPath()
-      return await channel.send('storage:get-versioned', this.#qualifiedName) as StorageGetVersionedResponse | null
-    }
+    warnStorageChannelIgnored()
     return null
   }
 
@@ -316,11 +312,7 @@ export class TouchStorage<T extends object> {
       const data = await transport.send(StorageEvents.app.get, { key: this.#qualifiedName })
       return (data as Partial<T>) ?? {}
     }
-    if (channel) {
-      warnLegacyStorageChannelPath()
-      const result = await channel.send('storage:get', this.#qualifiedName)
-      return result ? (result as Partial<T>) : {}
-    }
+    warnStorageChannelIgnored()
     return {}
   }
 
@@ -328,24 +320,15 @@ export class TouchStorage<T extends object> {
     if (transport) {
       return await transport.send(StorageEvents.app.save, request)
     }
-    if (channel) {
-      warnLegacyStorageChannelPath()
-      return await channel.send('storage:save', request) as SaveResult
-    }
+    warnStorageChannelIgnored()
+    void request
     return { success: false, version: 0 }
   }
 
   #registerUpdateListener(): void {
     if (transport) {
       this.#registerTransportUpdateListener()
-      return
     }
-
-    if (!channel) {
-      return
-    }
-
-    this.#registerChannelUpdateListener()
   }
 
   #registerTransportUpdateListener(): void {
@@ -375,25 +358,6 @@ export class TouchStorage<T extends object> {
       this.#updateListenerMode = null
       this.#updateStreamController = null
       console.error('[TouchStorage] Failed to subscribe to storage updates:', error)
-      if (channel) {
-        this.#registerChannelUpdateListener()
-      }
-    })
-  }
-
-  #registerChannelUpdateListener(): void {
-    if (!channel || this.#updateListenerMode) {
-      return
-    }
-
-    warnLegacyStorageChannelPath()
-    this.#updateListenerMode = 'channel'
-
-    // Register update listener - only triggered for OTHER windows' changes
-    // (source window is excluded by main process)
-    this.#updateChannelCleanup = channel.regChannel(StorageEvents.legacy.update.toEventName(), ({ data }) => {
-      const { name, version } = data as { name: string, version?: number }
-      this.#handleUpdateNotification(name, version)
     })
   }
 
@@ -422,7 +386,7 @@ export class TouchStorage<T extends object> {
    * @private
    */
   async #loadFromRemoteWithVersion(): Promise<void> {
-    if (!channel && !transport) {
+    if (!transport) {
       return
     }
     try {
@@ -526,10 +490,10 @@ export class TouchStorage<T extends object> {
    * ```
    */
   async #executeSave(options?: { force?: boolean }): Promise<void> {
-    if (!channel && !transport) {
-      console.warn(`[TouchStorage] #executeSave("${this.#qualifiedName}") SKIP: no channel/transport`)
+    if (!transport) {
+      console.warn(`[TouchStorage] #executeSave("${this.#qualifiedName}") SKIP: no transport`)
       if (isElectronRenderer()) {
-        throw new Error('TouchStorage: channel not initialized')
+        throw new Error('TouchStorage: transport not initialized')
       }
       return
     }
@@ -601,7 +565,7 @@ export class TouchStorage<T extends object> {
     this.#autoSaveStopHandle?.()
     this.#autoSaveStopHandle = undefined
 
-    if (autoSave && this.#channelInitialized) {
+    if (autoSave && this.#transportInitialized) {
       this.#startAutoSaveWatcher()
     }
 
@@ -790,8 +754,8 @@ export class TouchStorage<T extends object> {
    * ```
    */
   async reloadFromRemote(): Promise<this> {
-    if (!channel && !transport) {
-      throw new Error('TouchStorage: channel not initialized')
+    if (!transport) {
+      throw new Error('TouchStorage: transport not initialized')
     }
 
     const versionedResult = await this.#getVersionedAsync()
@@ -819,7 +783,7 @@ export class TouchStorage<T extends object> {
 
   /**
    * Loads data from remote storage and applies it.
-   * If channel is not initialized yet, this method will do nothing.
+   * If transport is not initialized yet, this method will do nothing.
    *
    * @returns The current instance
    *
@@ -829,8 +793,8 @@ export class TouchStorage<T extends object> {
    * ```
    */
   loadFromRemote(): this {
-    if (!channel && !transport) {
-      // Channel not initialized yet, data will be loaded when channel is ready
+    if (!transport) {
+      // Transport not initialized yet, data will be loaded when transport is ready
       return this
     }
 
@@ -851,7 +815,7 @@ export class TouchStorage<T extends object> {
    * This bypasses debouncing and saves immediately
    */
   saveSync(): void {
-    if (!channel && !transport)
+    if (!transport)
       return
     if (this.#isRemoteUpdate)
       return

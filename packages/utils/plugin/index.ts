@@ -562,7 +562,7 @@ export interface IManifest {
   /**
    * Optional permission declarations.
    */
-  permissions?: ManifestPermissions | string[]
+  permissions?: ManifestPermissions
   /**
    * Optional display reasons for declared permissions.
    */

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { initializeRendererStorage } from '../renderer/storage/bootstrap'
 import {
+  initStorageChannel,
+  TouchStorage,
+} from '../renderer/storage/base-storage'
+import {
   getSubscriptionManager,
   initStorageSubscription,
   subscribeStorage,
@@ -71,26 +75,26 @@ describe('renderer storage transport bootstrap', () => {
     expect(callback).toHaveBeenCalledWith({ dev: { advancedSettings: true } })
   })
 
-  it('upgrades an existing legacy storage subscription listener to transport', async () => {
-    const legacy = createLegacyChannelMock({
-      'app-setting.ini': { source: 'legacy' },
+  it('does not expose retired raw storage update namespace', () => {
+    const retiredNamespace = ['leg', 'acy'].join('')
+    expect(retiredNamespace in StorageEvents).toBe(false)
+  })
+
+  it('ignores compat storage subscription channels and uses transport', async () => {
+    const compat = createLegacyChannelMock({
+      'app-setting.ini': { source: 'compat' },
     })
     const transport = createTransportMock({
       'app-setting.ini': { source: 'transport' },
     })
     const callback = vi.fn()
 
-    initStorageSubscription(legacy.channel as any)
-    expect(legacy.channel.regChannel).toHaveBeenCalledWith(
-      StorageEvents.legacy.update.toEventName(),
-      expect.any(Function),
-    )
-
+    initStorageSubscription(compat.channel as any)
     initStorageSubscription(undefined, transport as any)
     subscribeStorage('app-setting.ini', callback)
     await vi.waitFor(() => expect(callback).toHaveBeenCalledTimes(1))
 
-    expect(legacy.cleanup).toHaveBeenCalledTimes(1)
+    expect(compat.channel.regChannel).not.toHaveBeenCalled()
     expect(transport.stream).toHaveBeenCalledWith(
       StorageEvents.app.updated,
       undefined,
@@ -99,7 +103,42 @@ describe('renderer storage transport bootstrap', () => {
     expect(transport.send).toHaveBeenCalledWith(StorageEvents.app.get, {
       key: 'app-setting.ini',
     })
-    expect(legacy.channel.send).not.toHaveBeenCalled()
+    expect(compat.channel.send).not.toHaveBeenCalled()
     expect(callback).toHaveBeenCalledWith({ source: 'transport' })
+  })
+
+  it('keeps TouchStorage reads and saves on transport when a compat channel is present', async () => {
+    const compat = createLegacyChannelMock({
+      'hard-cut.ini': { source: 'compat' },
+    })
+    const transport = createTransportMock({
+      'hard-cut.ini': { data: { source: 'transport' }, version: 7 },
+    })
+    transport.send.mockImplementation(async (event: unknown, payload?: { key?: string }) => {
+      if (event === StorageEvents.app.save) {
+        return { success: true, version: 8 }
+      }
+      if (payload?.key) {
+        return { data: { source: 'transport' }, version: 7 }
+      }
+      return null
+    })
+
+    initStorageChannel(compat.channel as any)
+    initializeRendererStorage(transport as any, { legacyChannel: compat.channel as any })
+    const storage = new TouchStorage('hard-cut.ini', { source: 'initial' })
+
+    await storage.whenHydrated()
+    await storage.saveToRemote({ force: true })
+
+    expect(storage.data.source).toBe('transport')
+    expect(transport.send).toHaveBeenCalledWith(StorageEvents.app.getVersioned, {
+      key: 'hard-cut.ini',
+    })
+    expect(transport.send).toHaveBeenCalledWith(
+      StorageEvents.app.save,
+      expect.objectContaining({ key: 'hard-cut.ini' }),
+    )
+    expect(compat.channel.send).not.toHaveBeenCalled()
   })
 })

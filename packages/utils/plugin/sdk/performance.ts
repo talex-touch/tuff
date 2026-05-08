@@ -5,8 +5,15 @@
  * and storage statistics.
  */
 import type { StorageStats } from '../../types/storage'
+import type {
+  PluginApiGetPathsResponse,
+  PluginPerformanceGetMetricsResponse
+} from '../../transport/events/types'
 import type { PluginChannelClient } from './channel-client'
+import { createPluginTuffTransport } from '../../transport'
+import { PluginEvents } from '../../transport/events'
 import { ensureRendererChannel } from './channel'
+import { usePluginName } from './plugin-info'
 
 /**
  * Performance metrics interface
@@ -100,17 +107,61 @@ export interface PerformanceSDK {
  * @internal
  */
 export function createPerformanceSDK(channel: PluginChannelClient): PerformanceSDK {
+  const transport = createPluginTuffTransport(channel)
+  const pluginName = usePluginName('[Plugin SDK] Cannot determine plugin name. Make sure this is called in a plugin context.')
+
+  const normalizeStorageStats = (result: unknown): StorageStats => {
+    const value = result && typeof result === 'object' && 'data' in result
+      ? (result as { data?: unknown }).data
+      : result
+    if (value && typeof value === 'object') {
+      return value as StorageStats
+    }
+    return {
+      totalSize: 0,
+      fileCount: 0,
+      dirCount: 0,
+      maxSize: 10 * 1024 * 1024,
+      usagePercent: 0,
+    }
+  }
+
+  const normalizeMetrics = (result: PluginPerformanceGetMetricsResponse): PerformanceMetrics => {
+    const value = result && typeof result === 'object' && 'data' in result
+      ? (result as { data?: unknown }).data
+      : result
+    if (value && typeof value === 'object') {
+      return value as PerformanceMetrics
+    }
+    return {
+      loadTime: 0,
+      memoryUsage: 0,
+      cpuUsage: 0,
+      lastActiveTime: 0,
+    }
+  }
+
+  const normalizePaths = (result: PluginApiGetPathsResponse): PluginPaths => {
+    const value = result && typeof result === 'object' && 'data' in result
+      ? (result as { data?: unknown }).data
+      : result
+    if (value && typeof value === 'object') {
+      return value as PluginPaths
+    }
+    return {
+      pluginPath: '',
+      dataPath: '',
+      configPath: '',
+      logsPath: '',
+      tempPath: '',
+    }
+  }
+
   return {
     async getStorageStats(): Promise<StorageStats> {
       try {
-        const result = await channel.send('plugin:storage:get-stats')
-        return result?.data || {
-          totalSize: 0,
-          fileCount: 0,
-          dirCount: 0,
-          maxSize: 10 * 1024 * 1024,
-          usagePercent: 0,
-        }
+        const result = await transport.send(PluginEvents.storage.getStats, { pluginName })
+        return normalizeStorageStats(result)
       }
       catch (error) {
         console.error('[Performance SDK] Failed to get storage stats:', error)
@@ -120,13 +171,8 @@ export function createPerformanceSDK(channel: PluginChannelClient): PerformanceS
 
     async getMetrics(): Promise<PerformanceMetrics> {
       try {
-        const result = await channel.send('plugin:performance:get-metrics')
-        return result?.data || {
-          loadTime: 0,
-          memoryUsage: 0,
-          cpuUsage: 0,
-          lastActiveTime: 0,
-        }
+        const result = await transport.send(PluginEvents.performance.getMetrics)
+        return normalizeMetrics(result)
       }
       catch (error) {
         console.error('[Performance SDK] Failed to get performance metrics:', error)
@@ -136,14 +182,8 @@ export function createPerformanceSDK(channel: PluginChannelClient): PerformanceS
 
     async getPaths(): Promise<PluginPaths> {
       try {
-        const result = await channel.send('plugin:performance:get-paths')
-        return result?.data || {
-          pluginPath: '',
-          dataPath: '',
-          configPath: '',
-          logsPath: '',
-          tempPath: '',
-        }
+        const result = await transport.send(PluginEvents.performance.getPaths)
+        return normalizePaths(result)
       }
       catch (error) {
         console.error('[Performance SDK] Failed to get plugin paths:', error)

@@ -27,18 +27,13 @@ export * from './types'
  * Parse permissions from manifest
  */
 export function parseManifestPermissions(manifest: {
-  permissions?: ManifestPermissions | string[]
+  permissions?: ManifestPermissions
   permissionReasons?: ManifestPermissionReasons
 }): { required: string[], optional: string[], reasons: ManifestPermissionReasons } {
   let required: string[] = []
   let optional: string[] = []
 
-  if (Array.isArray(manifest.permissions)) {
-    // Legacy format: string[]
-    required = manifest.permissions
-  }
-  else if (manifest.permissions) {
-    // New format: { required, optional }
+  if (manifest.permissions) {
     required = manifest.permissions.required || []
     optional = manifest.permissions.optional || []
   }

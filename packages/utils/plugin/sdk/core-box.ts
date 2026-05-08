@@ -1,3 +1,5 @@
+import { createPluginTuffTransport } from '../../transport'
+import { CoreBoxEvents } from '../../transport/events'
 import { useChannel } from './channel'
 import { usePluginName } from './plugin-info'
 
@@ -13,5 +15,6 @@ function ensurePluginContext(): { channel: ReturnType<typeof useChannel>, plugin
  */
 export async function clearCoreBoxItems(): Promise<void> {
   const { channel, pluginName } = ensurePluginContext()
-  await channel.send('core-box:clear-items', { pluginName })
+  const transport = createPluginTuffTransport(channel as any)
+  await transport.send(CoreBoxEvents.item.clear, { pluginName })
 }

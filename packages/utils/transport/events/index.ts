@@ -101,11 +101,17 @@ import type {
   CoreBoxClearItemsPayload,
   CoreBoxExecuteRequest,
   CoreBoxForwardKeyEvent,
+  CoreBoxGetBoundsResponse,
   CoreBoxInputChangeRequest,
+  CoreBoxInputVisibilityResponse,
   CoreBoxLayoutUpdateRequest,
   CoreBoxNoResultsPayload,
   CoreBoxSearchEndPayload,
   CoreBoxSearchUpdatePayload,
+  CoreBoxSetHeightRequest,
+  CoreBoxSetHeightResponse,
+  CoreBoxSetPositionOffsetRequest,
+  CoreBoxSetPositionOffsetResponse,
   CoreBoxTogglePinRequest,
   CoreBoxTogglePinResponse,
   CoreBoxTriggerPayload,
@@ -329,6 +335,8 @@ import type {
   PluginDevServerStatusResponse,
   PluginDisableRequest,
   PluginEnableRequest,
+  PluginIndexCommunicateRequest,
+  PluginIndexCommunicateResponse,
   PluginInfo,
   PluginInstallConfirmPayload,
   PluginInstallConfirmResponsePayload,
@@ -348,6 +356,8 @@ import type {
   PluginReconnectDevServerRequest,
   PluginReconnectDevServerResponse,
   PluginReloadRequest,
+  PluginShortcutRegisterRequest,
+  PluginShortcutTriggerPayload,
   PluginStorageClearRequest,
   PluginStorageApplySyncItemRequest,
   PluginStorageDeleteSyncItemRequest,
@@ -362,12 +372,24 @@ import type {
   PluginStorageStatsRequest,
   PluginStorageTreeRequest,
   PluginStorageUpdatePayload,
+  PluginServiceHandlePayload,
+  PluginServiceRequest,
+  PluginTempFileCreateRequest,
+  PluginTempFileCreateResponse,
+  PluginTempFileDeleteRequest,
+  PluginTempFileDeleteResponse,
   PluginSqliteExecuteRequest,
   PluginSqliteExecuteResponse,
   PluginSqliteQueryRequest,
   PluginSqliteQueryResponse,
   PluginSqliteTransactionRequest,
   PluginSqliteTransactionResponse,
+  PluginWindowNewRequest,
+  PluginWindowNewResponse,
+  PluginWindowPropertyRequest,
+  PluginWindowPropertyResponse,
+  PluginWindowVisibleRequest,
+  PluginWindowVisibleResponse,
   PluginUnloadRequest,
 } from "./types/plugin";
 
@@ -396,7 +418,6 @@ import type {
   StorageSaveRequest,
   StorageSaveResult,
   StorageSetRequest,
-  StorageLegacyUpdatePayload,
   StorageUpdateNotification,
 } from "./types/storage";
 
@@ -977,6 +998,20 @@ export const CoreBoxEvents = {
     uiModeExited: defineRawEvent<CoreBoxUIModeExitedPayload, void>(
       "core-box:ui-mode-exited",
     ),
+
+    /**
+     * Hide the CoreBox input field.
+     */
+    hideInput: defineRawEvent<void, CoreBoxInputVisibilityResponse>(
+      "core-box:hide-input",
+    ),
+
+    /**
+     * Show the CoreBox input field.
+     */
+    showInput: defineRawEvent<void, CoreBoxInputVisibilityResponse>(
+      "core-box:show-input",
+    ),
   },
 
   /**
@@ -996,6 +1031,28 @@ export const CoreBoxEvents = {
       .define<CoreBoxLayoutUpdateRequest, void>({
         batch: { enabled: true, windowMs: 16, mergeStrategy: "latest" },
       }),
+
+    /**
+     * Set the CoreBox window height.
+     */
+    setHeight: defineRawEvent<CoreBoxSetHeightRequest, CoreBoxSetHeightResponse>(
+      "core-box:set-height",
+    ),
+
+    /**
+     * Set the CoreBox vertical position offset.
+     */
+    setPositionOffset: defineRawEvent<
+      CoreBoxSetPositionOffsetRequest,
+      CoreBoxSetPositionOffsetResponse
+    >("core-box:set-position-offset"),
+
+    /**
+     * Get the current CoreBox window bounds.
+     */
+    getBounds: defineRawEvent<void, CoreBoxGetBoundsResponse>(
+      "core-box:get-bounds",
+    ),
   },
 
   /**
@@ -1305,15 +1362,6 @@ export const StorageEvents = {
       .define<PluginStorageDeleteRequest, void>(),
   },
 
-  /**
-   * Legacy storage events (raw channels).
-   */
-  legacy: {
-    /**
-     * Legacy storage update broadcast.
-     */
-    update: defineRawEvent<StorageLegacyUpdatePayload, void>("storage:update"),
-  },
 } as const;
 
 /**
@@ -1416,15 +1464,18 @@ export const PluginEvents = {
    * Plugin widget events.
    */
   widget: {
-    register: defineRawEvent<WidgetRegistrationPayload, void>(
-      "plugin:widget:register",
-    ),
-    update: defineRawEvent<WidgetRegistrationPayload, void>(
-      "plugin:widget:update",
-    ),
-    unregister: defineRawEvent<{ widgetId: string }, void>(
-      "plugin:widget:unregister",
-    ),
+    register: defineEvent("plugin")
+      .module("widget")
+      .event("register")
+      .define<WidgetRegistrationPayload, void>(),
+    update: defineEvent("plugin")
+      .module("widget")
+      .event("update")
+      .define<WidgetRegistrationPayload, void>(),
+    unregister: defineEvent("plugin")
+      .module("widget")
+      .event("unregister")
+      .define<{ widgetId: string }, void>(),
   },
 
   /**
@@ -1658,10 +1709,13 @@ export const PluginEvents = {
       .event("open-folder")
       .define<PluginStorageOpenFolderRequest, void>(),
 
-    openInEditor: defineRawEvent<
-      PluginStorageOpenInEditorRequest,
-      { success: boolean; error?: string }
-    >("plugin:storage:open-in-editor"),
+    openInEditor: defineEvent("plugin")
+      .module("storage")
+      .event("open-in-editor")
+      .define<
+        PluginStorageOpenInEditorRequest,
+        { success: boolean; error?: string }
+      >(),
 
     update: defineEvent("plugin")
       .module("storage")
@@ -1699,6 +1753,55 @@ export const PluginEvents = {
       .module("performance")
       .event("get-paths")
       .define<void, PluginPerformanceGetPathsResponse>(),
+  },
+
+  tempFile: {
+    create: defineRawEvent<
+      PluginTempFileCreateRequest,
+      PluginTempFileCreateResponse
+    >("temp-file:create"),
+    delete: defineRawEvent<
+      PluginTempFileDeleteRequest,
+      PluginTempFileDeleteResponse
+    >("temp-file:delete"),
+  },
+
+  window: {
+    new: defineRawEvent<PluginWindowNewRequest, PluginWindowNewResponse>(
+      "window:new",
+    ),
+    visible: defineRawEvent<
+      PluginWindowVisibleRequest,
+      PluginWindowVisibleResponse
+    >("window:visible"),
+    property: defineRawEvent<
+      PluginWindowPropertyRequest,
+      PluginWindowPropertyResponse
+    >("window:property"),
+  },
+
+  service: {
+    register: defineRawEvent<PluginServiceRequest, boolean>("service:reg"),
+    unregister: defineRawEvent<PluginServiceRequest, boolean>("service:unreg"),
+    handle: defineRawEvent<PluginServiceHandlePayload, unknown>(
+      "service:handle",
+    ),
+  },
+
+  shortcut: {
+    register: defineRawEvent<PluginShortcutRegisterRequest, boolean>(
+      "shortcon:reg",
+    ),
+    trigger: defineRawEvent<PluginShortcutTriggerPayload, void>(
+      "shortcon:trigger",
+    ),
+  },
+
+  communicate: {
+    index: defineRawEvent<
+      PluginIndexCommunicateRequest,
+      PluginIndexCommunicateResponse
+    >("index:communicate"),
   },
 
   /**
@@ -1951,28 +2054,42 @@ export const PlatformEvents = {
 
 export const AgentsEvents = {
   api: {
-    list: defineRawEvent<void, AgentsListResponse>("agents:list"),
-    listAll: defineRawEvent<void, AgentsListResponse>("agents:list-all"),
-    get: defineRawEvent<AgentsGetRequest, AgentsGetResponse>("agents:get"),
-    execute: defineRawEvent<AgentsExecuteRequest, AgentsExecuteResponse>(
-      "agents:execute",
-    ),
-    executeImmediate: defineRawEvent<
-      AgentsExecuteImmediateRequest,
-      AgentsExecuteImmediateResponse
-    >("agents:execute-immediate"),
-    cancel: defineRawEvent<AgentsCancelRequest, AgentsCancelResponse>(
-      "agents:cancel",
-    ),
-    taskStatus: defineRawEvent<
-      AgentsTaskStatusRequest,
-      AgentsTaskStatusResponse
-    >("agents:task-status"),
-    updatePriority: defineRawEvent<
-      AgentsUpdatePriorityRequest,
-      AgentsUpdatePriorityResponse
-    >("agents:update-priority"),
-    stats: defineRawEvent<void, AgentsStatsResponse>("agents:stats"),
+    list: defineEvent("agents")
+      .module("api")
+      .event("list")
+      .define<void, AgentsListResponse>(),
+    listAll: defineEvent("agents")
+      .module("api")
+      .event("list-all")
+      .define<void, AgentsListResponse>(),
+    get: defineEvent("agents")
+      .module("api")
+      .event("get")
+      .define<AgentsGetRequest, AgentsGetResponse>(),
+    execute: defineEvent("agents")
+      .module("api")
+      .event("execute")
+      .define<AgentsExecuteRequest, AgentsExecuteResponse>(),
+    executeImmediate: defineEvent("agents")
+      .module("api")
+      .event("execute-immediate")
+      .define<AgentsExecuteImmediateRequest, AgentsExecuteImmediateResponse>(),
+    cancel: defineEvent("agents")
+      .module("api")
+      .event("cancel")
+      .define<AgentsCancelRequest, AgentsCancelResponse>(),
+    taskStatus: defineEvent("agents")
+      .module("api")
+      .event("task-status")
+      .define<AgentsTaskStatusRequest, AgentsTaskStatusResponse>(),
+    updatePriority: defineEvent("agents")
+      .module("api")
+      .event("update-priority")
+      .define<AgentsUpdatePriorityRequest, AgentsUpdatePriorityResponse>(),
+    stats: defineEvent("agents")
+      .module("api")
+      .event("stats")
+      .define<void, AgentsStatsResponse>(),
 
     tools: {
       list: defineEvent("agents")
@@ -1988,21 +2105,26 @@ export const AgentsEvents = {
   },
 
   push: {
-    taskStarted: defineRawEvent<AgentsTaskStartedPayload, void>(
-      "agents:task-started",
-    ),
-    taskProgress: defineRawEvent<AgentsTaskProgressPayload, void>(
-      "agents:task-progress",
-    ),
-    taskCompleted: defineRawEvent<AgentsTaskCompletedPayload, void>(
-      "agents:task-completed",
-    ),
-    taskFailed: defineRawEvent<AgentsTaskFailedPayload, void>(
-      "agents:task-failed",
-    ),
-    taskCancelled: defineRawEvent<AgentsTaskCancelledPayload, void>(
-      "agents:task-cancelled",
-    ),
+    taskStarted: defineEvent("agents")
+      .module("push")
+      .event("task-started")
+      .define<AgentsTaskStartedPayload, void>(),
+    taskProgress: defineEvent("agents")
+      .module("push")
+      .event("task-progress")
+      .define<AgentsTaskProgressPayload, void>(),
+    taskCompleted: defineEvent("agents")
+      .module("push")
+      .event("task-completed")
+      .define<AgentsTaskCompletedPayload, void>(),
+    taskFailed: defineEvent("agents")
+      .module("push")
+      .event("task-failed")
+      .define<AgentsTaskFailedPayload, void>(),
+    taskCancelled: defineEvent("agents")
+      .module("push")
+      .event("task-cancelled")
+      .define<AgentsTaskCancelledPayload, void>(),
   },
 
   store: {
@@ -2205,14 +2327,11 @@ export const ClipboardEvents = {
 
   /**
    * Query clipboard history by metadata fields.
-   *
-   * @remarks
-   * Uses legacy-compatible event name for internal migration compatibility.
    */
-  queryMeta: defineRawEvent<
-    ClipboardMetaQueryRequest,
-    ClipboardMetaHistoryItem[]
-  >("clipboard:query"),
+  queryMeta: defineEvent("clipboard")
+    .module("history")
+    .event("query-meta")
+    .define<ClipboardMetaQueryRequest, ClipboardMetaHistoryItem[]>(),
 
   /**
    * Get the most recent clipboard item.

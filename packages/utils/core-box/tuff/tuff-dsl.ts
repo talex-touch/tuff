@@ -901,7 +901,7 @@ export interface TuffQuickAction {
  */
 export interface TuffMeta {
   /**
-   * Legacy icon identifier used by renderer fallbacks.
+   * Icon identifier used by renderer fallbacks.
    * @description Allows providers to pass through icon class names without building a full TuffIcon.
    */
   icon?: string

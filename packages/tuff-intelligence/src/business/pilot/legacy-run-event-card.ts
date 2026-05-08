@@ -1,7 +1,7 @@
 import { projectPilotSystemMessage, shouldHidePilotClientSystemMessage } from './projection'
 import { normalizePilotStreamSeq, shouldPilotStreamEventRequireSeq } from './trace'
 
-export type PilotLegacyRunEventCardType =
+export type PilotRunEventCardType =
   | 'intent'
   | 'routing'
   | 'memory'
@@ -9,9 +9,9 @@ export type PilotLegacyRunEventCardType =
   | 'planning'
   | 'thinking'
 
-export interface PilotLegacyRunEventCardPayload {
+export interface PilotRunEventCardPayload {
   sessionId: string
-  cardType: PilotLegacyRunEventCardType
+  cardType: PilotRunEventCardType
   cardKey?: string
   eventType: string
   status: 'running' | 'completed' | 'skipped' | 'failed'
@@ -23,7 +23,7 @@ export interface PilotLegacyRunEventCardPayload {
   detail: Record<string, unknown>
 }
 
-export interface PilotLegacyRunEventCardKeys {
+export interface PilotRunEventCardKeys {
   key: string
   pendingIntentKey: string
   fallbackKey?: string
@@ -45,7 +45,7 @@ function normalizeSeq(value: unknown): number {
   return normalizePilotStreamSeq(value)
 }
 
-function normalizeStatus(value: unknown): PilotLegacyRunEventCardPayload['status'] {
+function normalizeStatus(value: unknown): PilotRunEventCardPayload['status'] {
   const status = normalizeText(value).toLowerCase()
   if (status === 'running' || status === 'completed' || status === 'skipped' || status === 'failed') {
     return status
@@ -58,7 +58,7 @@ function normalizeThinkingTraceText(value: unknown): string {
   return text === '__end__' ? '' : text
 }
 
-function buildPilotLegacyWebsearchCardKey(turnId: unknown): string {
+function buildPilotWebsearchCardKey(turnId: unknown): string {
   const turn = normalizeText(turnId) || 'latest'
   return `websearch:${turn}`
 }
@@ -103,14 +103,14 @@ function buildProjectionPayload(
   return next
 }
 
-export function resolvePilotLegacyRunEventCardKeys(input: {
+export function resolvePilotRunEventCardKeys(input: {
   conversationId: string
   sessionId?: string
-  cardType: PilotLegacyRunEventCardType | string
+  cardType: PilotRunEventCardType | string
   cardKey?: string
   turnId?: string
   seq?: number
-}): PilotLegacyRunEventCardKeys {
+}): PilotRunEventCardKeys {
   const cardKey = normalizeText(input.cardKey)
   const sessionScope = normalizeText(input.sessionId || input.conversationId) || input.conversationId
   const cardType = normalizeText(input.cardType).toLowerCase()
@@ -125,7 +125,7 @@ export function resolvePilotLegacyRunEventCardKeys(input: {
         : `thinking:${sessionScope}`
     }
     else if (cardType === 'websearch') {
-      key = buildPilotLegacyWebsearchCardKey(turnId || sessionScope)
+      key = buildPilotWebsearchCardKey(turnId || sessionScope)
     }
     else if (cardType === 'intent') {
       key = turnId
@@ -160,11 +160,11 @@ export function resolvePilotLegacyRunEventCardKeys(input: {
   }
 }
 
-export function projectPilotLegacyRunEventCard(input: {
+export function projectPilotRunEventCard(input: {
   conversationId: string
   eventType: string
   eventPayload: Record<string, unknown>
-}): PilotLegacyRunEventCardPayload | null {
+}): PilotRunEventCardPayload | null {
   const eventType = normalizeText(input.eventType)
   if (!eventType) {
     return null
@@ -222,7 +222,7 @@ export function projectPilotLegacyRunEventCard(input: {
   const projectedDetail = toRecord(projected.metadata.detail)
   return {
     sessionId,
-    cardType: cardType as PilotLegacyRunEventCardType,
+    cardType: cardType as PilotRunEventCardType,
     cardKey: normalizeText(projected.metadata.cardKey) || undefined,
     eventType: normalizeText(projected.metadata.sourceEventType || projected.metadata.eventType) || eventType,
     status: normalizeStatus(projected.metadata.status),

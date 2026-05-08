@@ -17,9 +17,9 @@ function createTransport(send: ITuffTransport['send']): ITuffTransport {
 }
 
 describe('storage subscription', () => {
-  it('prefers typed storage transport over legacy channel snapshots', async () => {
+  it('prefers typed storage transport over retired channel snapshots', async () => {
     const channelSend = vi.fn(async () => {
-      throw new Error('legacy channel should not be used')
+      throw new Error('retired channel should not be used')
     })
     const channelReg = vi.fn()
     const channel = {

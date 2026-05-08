@@ -1,3 +1,5 @@
+import { createPluginTuffTransport } from '../../transport'
+import { PluginEvents } from '../../transport/events'
 import { useChannel } from './channel'
 
 export interface TempPluginFileCreateOptions {
@@ -14,16 +16,18 @@ export interface TempPluginFileCreateOptions {
 
 export interface TempPluginFileResult {
   url: string
+  path?: string
   sizeBytes: number
   createdAt: number
 }
 
 export function useTempPluginFiles() {
   const channel = useChannel('[Plugin SDK] Temp files require plugin renderer context with $channel available.')
+  const transport = createPluginTuffTransport(channel)
 
   return {
     async create(options: TempPluginFileCreateOptions): Promise<TempPluginFileResult> {
-      const res = await channel.send('temp-file:create', options ?? {})
+      const res = await transport.send(PluginEvents.tempFile.create, options ?? {})
       if (!res || typeof res !== 'object') {
         throw new Error('[Plugin SDK] temp-file:create returned invalid response')
       }
@@ -31,7 +35,7 @@ export function useTempPluginFiles() {
     },
 
     async delete(url: string): Promise<boolean> {
-      const res = await channel.send('temp-file:delete', { url })
+      const res = await transport.send(PluginEvents.tempFile.delete, { url })
       if (res && typeof res === 'object' && 'success' in res) {
         return Boolean((res as any).success)
       }

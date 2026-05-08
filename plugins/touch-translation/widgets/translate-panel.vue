@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getProviderOrderIndex } from '@talex-touch/utils/plugin'
 import {
+  CoreBoxEvents,
+  createPluginTuffTransport,
   tryUsePluginInfo,
   useChannel,
   useClipboard,
@@ -90,7 +92,7 @@ const hasRuntime = ref(Boolean(tryUsePluginInfo()?.name))
 let storage: ReturnType<typeof usePluginStorage> | null = null
 let channel: ReturnType<typeof useChannel> | null = null
 let clipboard: ReturnType<typeof useClipboard> | null = null
-let disposeKeyChannel: (() => void) | null = null
+let transport: ReturnType<typeof createPluginTuffTransport> | null = null
 
 try {
   storage = usePluginStorage()
@@ -100,9 +102,11 @@ try {
 
 try {
   channel = useChannel()
+  transport = createPluginTuffTransport(channel as any)
   clipboard = useClipboard()
 } catch {
   channel = null
+  transport = null
   clipboard = null
 }
 
@@ -867,10 +871,10 @@ async function useHistoryItem(text: string): Promise<void> {
   }
 
   try {
-    if (!channel) {
+    if (!transport) {
       return
     }
-    await channel.send('core-box:set-query', { value: text })
+    await transport.send(CoreBoxEvents.input.setQuery, { value: text })
   }
   catch (error) {
     void error
@@ -912,20 +916,12 @@ onMounted(() => {
   focusArea('providers')
   ensureProviderSelection()
 
-  if (channel) {
-    disposeKeyChannel = channel.regChannel('core-box:key-event', (eventData: any) => {
-      handleWidgetKeydown(eventData?.data || {})
-    })
-  }
-
   loadHistory().catch((err) => {
     void err
   })
 })
 
 onBeforeUnmount(() => {
-  disposeKeyChannel?.()
-  disposeKeyChannel = null
   stopAudioPlayback()
 })
 </script>
