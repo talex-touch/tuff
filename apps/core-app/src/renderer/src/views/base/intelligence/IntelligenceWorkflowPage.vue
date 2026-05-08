@@ -2,9 +2,12 @@
 import type { WorkflowStepKind } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex'
 import { computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import { useWorkflowEditor, WorkflowValidationError } from '~/modules/hooks/useWorkflowEditor'
+
+const { t } = useI18n()
 
 const {
   workflows,
@@ -42,17 +45,17 @@ const {
 const runStatusText = computed(() => {
   switch (currentRun.value?.status) {
     case 'completed':
-      return '已完成'
+      return t('intelligence.workflow.statusCompleted')
     case 'failed':
-      return '失败'
+      return t('intelligence.workflow.statusFailed')
     case 'waiting_approval':
-      return '等待审批'
+      return t('intelligence.workflow.statusWaitingApproval')
     case 'running':
-      return '运行中'
+      return t('intelligence.workflow.statusRunning')
     case 'cancelled':
-      return '已取消'
+      return t('intelligence.workflow.statusCancelled')
     default:
-      return '未运行'
+      return t('intelligence.workflow.statusNotRun')
   }
 })
 
@@ -98,6 +101,16 @@ function displayStepKind(kind?: string): string {
   return kindLabel(kind === 'tool' || kind === 'prompt' ? kind : 'agent')
 }
 
+function workflowStatusText(enabled: boolean): string {
+  return enabled === false
+    ? t('intelligence.workflow.workflowDisabled')
+    : t('intelligence.workflow.workflowEnabled')
+}
+
+function stepsCountText(count: number): string {
+  return t('intelligence.workflow.stepsCount', { count })
+}
+
 function resolveValidationMessage(error: unknown): string {
   if (!(error instanceof WorkflowValidationError)) {
     return error instanceof Error ? error.message : String(error)
@@ -108,7 +121,7 @@ function resolveValidationMessage(error: unknown): string {
 async function handleSave(): Promise<void> {
   try {
     const saved = await saveWorkflow()
-    toast.success(`工作流已保存：${saved.name}`)
+    toast.success(t('intelligence.workflow.toastSaved', { name: saved.name }))
   } catch (error) {
     toast.error(resolveValidationMessage(error))
   }
@@ -117,7 +130,7 @@ async function handleSave(): Promise<void> {
 async function handleDelete(): Promise<void> {
   try {
     await deleteWorkflow()
-    toast.success('工作流已删除')
+    toast.success(t('intelligence.workflow.toastDeleted'))
   } catch (error) {
     toast.error(resolveValidationMessage(error))
   }
@@ -127,10 +140,10 @@ async function handleRun(): Promise<void> {
   try {
     const result = await runWorkflow()
     if (result.status === 'waiting_approval') {
-      toast.info('工作流已暂停，等待工具审批')
+      toast.info(t('intelligence.workflow.toastWaitingApproval'))
       return
     }
-    toast.success('工作流执行完成')
+    toast.success(t('intelligence.workflow.toastRunCompleted'))
   } catch (error) {
     toast.error(resolveValidationMessage(error))
   }
@@ -140,14 +153,14 @@ async function handleResume(): Promise<void> {
   try {
     const result = await resumeCurrentRun()
     if (!result) {
-      toast.error('当前没有可恢复的运行')
+      toast.error(t('intelligence.workflow.toastNoResumableRun'))
       return
     }
     if (result.status === 'waiting_approval') {
-      toast.info('仍有工具等待审批')
+      toast.info(t('intelligence.workflow.toastStillWaitingApproval'))
       return
     }
-    toast.success('工作流已恢复')
+    toast.success(t('intelligence.workflow.toastResumed'))
   } catch (error) {
     toast.error(resolveValidationMessage(error))
   }
@@ -156,7 +169,11 @@ async function handleResume(): Promise<void> {
 async function handleApproval(ticketId: string, approved: boolean): Promise<void> {
   try {
     await approveTicket(ticketId, approved)
-    toast.success(approved ? '已批准工具调用' : '已拒绝工具调用')
+    toast.success(
+      approved
+        ? t('intelligence.workflow.toastToolApproved')
+        : t('intelligence.workflow.toastToolRejected')
+    )
   } catch (error) {
     toast.error(resolveValidationMessage(error))
   }
@@ -185,17 +202,17 @@ onMounted(async () => {
 </script>
 
 <template>
-  <ViewTemplate title="Tuff Intelligence Workflows">
+  <ViewTemplate :title="t('intelligence.workflow.pageTitle')">
     <div class="workflow-page">
       <section class="workflow-sidebar card-panel">
         <div class="section-head">
           <div>
-            <h2>模板与工作流</h2>
-            <p>内置模板、已保存工作流与当前编辑对象都在这里。</p>
+            <h2>{{ t('intelligence.workflow.libraryTitle') }}</h2>
+            <p>{{ t('intelligence.workflow.libraryDescription') }}</p>
           </div>
           <TxButton variant="flat" @click="createWorkflowFromScratch">
             <i class="i-carbon-add" />
-            <span>新建</span>
+            <span>{{ t('intelligence.workflow.newWorkflow') }}</span>
           </TxButton>
         </div>
 
@@ -209,19 +226,21 @@ onMounted(async () => {
           >
             <div class="workflow-list-item__title">
               <span>{{ workflow.name }}</span>
-              <span v-if="workflow.metadata?.template" class="mini-badge">模板</span>
-              <span v-if="workflow.metadata?.builtin" class="mini-badge mini-badge--ghost"
-                >内置</span
-              >
+              <span v-if="workflow.metadata?.template" class="mini-badge">
+                {{ t('intelligence.workflow.badgeTemplate') }}
+              </span>
+              <span v-if="workflow.metadata?.builtin" class="mini-badge mini-badge--ghost">
+                {{ t('intelligence.workflow.badgeBuiltin') }}
+              </span>
             </div>
             <div class="workflow-list-item__meta">
-              <span>{{ workflow.enabled === false ? '已停用' : '可用' }}</span>
-              <span>{{ workflow.steps.length }} 步</span>
+              <span>{{ workflowStatusText(workflow.enabled !== false) }}</span>
+              <span>{{ stepsCountText(workflow.steps.length) }}</span>
             </div>
           </button>
 
           <div v-if="!loading && workflows.length === 0" class="empty-state">
-            还没有可用工作流，先创建一个。
+            {{ t('intelligence.workflow.emptyWorkflowList') }}
           </div>
         </div>
       </section>
@@ -229,13 +248,19 @@ onMounted(async () => {
       <section class="workflow-main">
         <div class="workflow-toolbar card-panel">
           <div>
-            <h1>{{ workflowDraft.name || '新工作流' }}</h1>
-            <p>v1 范围固定为可保存工作流、MCP 工具桥和轻量桌面上下文。</p>
+            <h1>{{ workflowDraft.name || t('intelligence.workflow.defaults.workflowName') }}</h1>
+            <p>{{ t('intelligence.workflow.toolbarDescription') }}</p>
           </div>
           <div class="toolbar-actions">
             <TxButton variant="flat" :loading="saving" @click="handleSave">
               <i class="i-carbon-save" />
-              <span>{{ workflowDraft.isBuiltin ? '另存为副本' : '保存' }}</span>
+              <span>
+                {{
+                  workflowDraft.isBuiltin
+                    ? t('intelligence.workflow.saveAsCopy')
+                    : t('intelligence.workflow.save')
+                }}
+              </span>
             </TxButton>
             <TxButton
               variant="flat"
@@ -244,11 +269,11 @@ onMounted(async () => {
               @click="handleDelete"
             >
               <i class="i-carbon-trash-can" />
-              <span>删除</span>
+              <span>{{ t('intelligence.workflow.delete') }}</span>
             </TxButton>
             <TxButton type="primary" :loading="running" @click="handleRun">
               <i class="i-carbon-play" />
-              <span>运行</span>
+              <span>{{ t('intelligence.workflow.run') }}</span>
             </TxButton>
             <TxButton
               variant="flat"
@@ -256,7 +281,7 @@ onMounted(async () => {
               @click="handleResume"
             >
               <i class="i-carbon-play-filled-alt" />
-              <span>恢复</span>
+              <span>{{ t('intelligence.workflow.resume') }}</span>
             </TxButton>
           </div>
         </div>
@@ -265,37 +290,37 @@ onMounted(async () => {
           <section class="card-panel editor-panel">
             <div class="section-head">
               <div>
-                <h2>基础信息</h2>
-                <p>工作流定义、触发器、上下文源和工具源。</p>
+                <h2>{{ t('intelligence.workflow.basicInfoTitle') }}</h2>
+                <p>{{ t('intelligence.workflow.basicInfoDescription') }}</p>
               </div>
             </div>
 
             <div class="form-grid">
               <label class="field">
-                <span class="field-label">名称</span>
+                <span class="field-label">{{ t('intelligence.workflow.fieldName') }}</span>
                 <input
                   v-model="workflowDraft.name"
                   type="text"
-                  placeholder="例如：整理近期剪贴板"
+                  :placeholder="t('intelligence.workflow.namePlaceholder')"
                 />
               </label>
 
               <label class="field">
-                <span class="field-label">描述</span>
+                <span class="field-label">{{ t('intelligence.workflow.fieldDescription') }}</span>
                 <input
                   v-model="workflowDraft.description"
                   type="text"
-                  placeholder="描述这个工作流要完成什么"
+                  :placeholder="t('intelligence.workflow.descriptionPlaceholder')"
                 />
               </label>
 
               <label class="field field--checkbox">
                 <input v-model="workflowDraft.enabled" type="checkbox" />
-                <span>启用工作流</span>
+                <span>{{ t('intelligence.workflow.enableWorkflow') }}</span>
               </label>
 
               <label class="field">
-                <span class="field-label">审批阈值</span>
+                <span class="field-label">{{ t('intelligence.workflow.approvalThreshold') }}</span>
                 <select v-model="workflowDraft.approvalThreshold">
                   <option value="low">low</option>
                   <option value="medium">medium</option>
@@ -306,14 +331,14 @@ onMounted(async () => {
 
               <label class="field field--checkbox">
                 <input v-model="workflowDraft.autoApproveReadOnly" type="checkbox" />
-                <span>只读工具自动批准</span>
+                <span>{{ t('intelligence.workflow.autoApproveReadOnly') }}</span>
               </label>
             </div>
 
             <div class="subsection">
               <div class="subsection-head">
-                <h3>工具源</h3>
-                <p>builtin 负责轻量桌面/剪贴板/浏览器入口，深浏览器和云服务走 MCP。</p>
+                <h3>{{ t('intelligence.workflow.toolSourcesTitle') }}</h3>
+                <p>{{ t('intelligence.workflow.toolSourcesDescription') }}</p>
               </div>
               <div class="toggle-row">
                 <label class="pill-toggle">
@@ -337,13 +362,13 @@ onMounted(async () => {
 
             <div class="subsection">
               <div class="subsection-head">
-                <h3>触发器</h3>
+                <h3>{{ t('intelligence.workflow.triggersTitle') }}</h3>
                 <div class="subsection-actions">
                   <TxButton variant="flat" @click="addTrigger('manual')">
-                    <span>手动触发</span>
+                    <span>{{ t('intelligence.workflow.addManualTrigger') }}</span>
                   </TxButton>
                   <TxButton variant="flat" @click="addTrigger('clipboard.batch')">
-                    <span>剪贴板批处理</span>
+                    <span>{{ t('intelligence.workflow.addClipboardBatchTrigger') }}</span>
                   </TxButton>
                 </div>
               </div>
@@ -356,26 +381,30 @@ onMounted(async () => {
                 >
                   <div class="mini-grid">
                     <label class="field">
-                      <span class="field-label">类型</span>
+                      <span class="field-label">{{ t('intelligence.workflow.fieldType') }}</span>
                       <select v-model="trigger.type">
                         <option value="manual">manual</option>
                         <option value="clipboard.batch">clipboard.batch</option>
                       </select>
                     </label>
                     <label class="field">
-                      <span class="field-label">标签</span>
-                      <input v-model="trigger.label" type="text" placeholder="显示名称" />
+                      <span class="field-label">{{ t('intelligence.workflow.fieldLabel') }}</span>
+                      <input
+                        v-model="trigger.label"
+                        type="text"
+                        :placeholder="t('intelligence.workflow.labelPlaceholder')"
+                      />
                     </label>
                     <label class="field field--checkbox">
                       <input v-model="trigger.enabled" type="checkbox" />
-                      <span>启用</span>
+                      <span>{{ t('intelligence.workflow.enable') }}</span>
                     </label>
                     <TxButton variant="flat" @click="removeTrigger(trigger.uid)">
-                      <span>移除</span>
+                      <span>{{ t('intelligence.workflow.remove') }}</span>
                     </TxButton>
                   </div>
                   <label class="field">
-                    <span class="field-label">配置 JSON</span>
+                    <span class="field-label">{{ t('intelligence.workflow.configJson') }}</span>
                     <textarea v-model="trigger.config" rows="3" />
                   </label>
                 </article>
@@ -384,8 +413,8 @@ onMounted(async () => {
 
             <div class="subsection">
               <div class="subsection-head">
-                <h3>桌面上下文源</h3>
-                <p>默认启用轻量上下文，不做静默截图或全量桌面代理。</p>
+                <h3>{{ t('intelligence.workflow.contextSourcesTitle') }}</h3>
+                <p>{{ t('intelligence.workflow.contextSourcesDescription') }}</p>
               </div>
               <div class="stack-list">
                 <article
@@ -395,20 +424,20 @@ onMounted(async () => {
                 >
                   <div class="mini-grid">
                     <label class="field">
-                      <span class="field-label">类型</span>
+                      <span class="field-label">{{ t('intelligence.workflow.fieldType') }}</span>
                       <input v-model="source.type" type="text" />
                     </label>
                     <label class="field">
-                      <span class="field-label">标签</span>
+                      <span class="field-label">{{ t('intelligence.workflow.fieldLabel') }}</span>
                       <input v-model="source.label" type="text" />
                     </label>
                     <label class="field field--checkbox">
                       <input v-model="source.enabled" type="checkbox" />
-                      <span>启用</span>
+                      <span>{{ t('intelligence.workflow.enable') }}</span>
                     </label>
                   </div>
                   <label class="field">
-                    <span class="field-label">配置 JSON</span>
+                    <span class="field-label">{{ t('intelligence.workflow.configJson') }}</span>
                     <textarea v-model="source.config" rows="2" />
                   </label>
                 </article>
@@ -417,8 +446,8 @@ onMounted(async () => {
 
             <div class="subsection">
               <div class="subsection-head">
-                <h3>Metadata JSON</h3>
-                <p>MCP profile、分类、模板标记等高级信息可以放这里。</p>
+                <h3>{{ t('intelligence.workflow.metadataJsonTitle') }}</h3>
+                <p>{{ t('intelligence.workflow.metadataDescription') }}</p>
               </div>
               <label class="field">
                 <textarea v-model="workflowDraft.metadata" rows="6" />
@@ -429,18 +458,24 @@ onMounted(async () => {
           <section class="card-panel editor-panel">
             <div class="section-head">
               <div>
-                <h2>步骤编辑器</h2>
-                <p>{{ activeStepCount }} 个步骤，v1 仅支持 `prompt / tool / agent`。</p>
+                <h2>{{ t('intelligence.workflow.stepEditorTitle') }}</h2>
+                <p>
+                  {{
+                    t('intelligence.workflow.stepEditorDescription', {
+                      count: activeStepCount
+                    })
+                  }}
+                </p>
               </div>
               <div class="subsection-actions">
                 <TxButton variant="flat" @click="addStep('prompt')">
-                  <span>新增 Prompt</span>
+                  <span>{{ t('intelligence.workflow.addPromptStep') }}</span>
                 </TxButton>
                 <TxButton variant="flat" @click="addStep('tool')">
-                  <span>新增 Tool</span>
+                  <span>{{ t('intelligence.workflow.addToolStep') }}</span>
                 </TxButton>
                 <TxButton variant="flat" @click="addStep('agent')">
-                  <span>新增 Agent</span>
+                  <span>{{ t('intelligence.workflow.addAgentStep') }}</span>
                 </TxButton>
               </div>
             </div>
@@ -453,29 +488,31 @@ onMounted(async () => {
               >
                 <div class="step-card__header">
                   <div>
-                    <div class="step-card__index">Step {{ index + 1 }}</div>
+                    <div class="step-card__index">
+                      {{ t('intelligence.workflow.stepTitle', { index: index + 1 }) }}
+                    </div>
                     <div class="step-card__title">
-                      {{ step.name || `Step ${index + 1}` }}
+                      {{ step.name || t('intelligence.workflow.stepTitle', { index: index + 1 }) }}
                     </div>
                   </div>
                   <TxButton variant="flat" @click="removeStep(step.uid)">
-                    <span>移除</span>
+                    <span>{{ t('intelligence.workflow.remove') }}</span>
                   </TxButton>
                 </div>
 
                 <div class="form-grid">
                   <label class="field">
-                    <span class="field-label">Step ID</span>
+                    <span class="field-label">{{ t('intelligence.workflow.stepId') }}</span>
                     <input v-model="step.id" type="text" />
                   </label>
 
                   <label class="field">
-                    <span class="field-label">名称</span>
+                    <span class="field-label">{{ t('intelligence.workflow.fieldName') }}</span>
                     <input v-model="step.name" type="text" />
                   </label>
 
                   <label class="field">
-                    <span class="field-label">类型</span>
+                    <span class="field-label">{{ t('intelligence.workflow.fieldType') }}</span>
                     <select v-model="step.kind">
                       <option value="prompt">prompt</option>
                       <option value="tool">tool</option>
@@ -485,29 +522,31 @@ onMounted(async () => {
 
                   <label class="field field--checkbox">
                     <input v-model="step.continueOnError" type="checkbox" />
-                    <span>本步骤失败后继续</span>
+                    <span>{{ t('intelligence.workflow.continueOnError') }}</span>
                   </label>
                 </div>
 
                 <label class="field">
-                  <span class="field-label">说明 / Prompt</span>
+                  <span class="field-label">{{ t('intelligence.workflow.instructionPrompt') }}</span>
                   <textarea
                     v-model="step.instruction"
                     rows="4"
                     :placeholder="
-                      step.kind === 'prompt' ? '输入该步骤的 Prompt' : '输入该步骤的执行说明'
+                      step.kind === 'prompt'
+                        ? t('intelligence.workflow.promptPlaceholder')
+                        : t('intelligence.workflow.instructionPlaceholder')
                     "
                   />
                 </label>
 
                 <div v-if="step.kind === 'tool'" class="form-grid">
                   <label class="field">
-                    <span class="field-label">Tool ID</span>
+                    <span class="field-label">{{ t('intelligence.workflow.toolId') }}</span>
                     <input v-model="step.toolId" type="text" list="builtin-tool-options" />
                   </label>
 
                   <label class="field">
-                    <span class="field-label">Tool Source</span>
+                    <span class="field-label">{{ t('intelligence.workflow.toolSource') }}</span>
                     <select v-model="step.toolSource">
                       <option value="builtin">builtin</option>
                       <option value="mcp">mcp</option>
@@ -516,7 +555,7 @@ onMounted(async () => {
                 </div>
 
                 <label v-if="step.kind === 'agent'" class="field">
-                  <span class="field-label">Agent ID</span>
+                  <span class="field-label">{{ t('intelligence.workflow.agentId') }}</span>
                   <input
                     v-model="step.agentId"
                     type="text"
@@ -526,7 +565,7 @@ onMounted(async () => {
                 </label>
 
                 <label class="field">
-                  <span class="field-label">输入 JSON</span>
+                  <span class="field-label">{{ t('intelligence.workflow.inputJsonShort') }}</span>
                   <textarea v-model="step.input" rows="5" />
                 </label>
               </article>
@@ -550,27 +589,27 @@ onMounted(async () => {
       <section class="workflow-right card-panel">
         <div class="section-head">
           <div>
-            <h2>运行态</h2>
-            <p>展示当前运行、待审批工具和最近历史。</p>
+            <h2>{{ t('intelligence.workflow.runtimeTitle') }}</h2>
+            <p>{{ t('intelligence.workflow.runtimeDescription') }}</p>
           </div>
           <span :class="runStatusClass">{{ runStatusText }}</span>
         </div>
 
         <div class="runtime-block">
           <div class="runtime-kv">
-            <span>当前工作流</span>
+            <span>{{ t('intelligence.workflow.currentWorkflow') }}</span>
             <strong>{{ workflowDraft.name || '-' }}</strong>
           </div>
           <div class="runtime-kv">
-            <span>最近运行 ID</span>
+            <span>{{ t('intelligence.workflow.latestRunId') }}</span>
             <strong>{{ currentRun?.id || '-' }}</strong>
           </div>
           <div class="runtime-kv">
-            <span>开始时间</span>
+            <span>{{ t('intelligence.workflow.startedAt') }}</span>
             <strong>{{ formatDate(currentRun?.startedAt) }}</strong>
           </div>
           <div class="runtime-kv">
-            <span>结束时间</span>
+            <span>{{ t('intelligence.workflow.completedAt') }}</span>
             <strong>{{ formatDate(currentRun?.completedAt) }}</strong>
           </div>
           <div v-if="executionError" class="runtime-error">
@@ -580,11 +619,13 @@ onMounted(async () => {
 
         <div class="subsection">
           <div class="subsection-head">
-            <h3>审批面板</h3>
-            <p>high / critical 工具调用会在这里暂停并等待恢复。</p>
+            <h3>{{ t('intelligence.workflow.approvalPanelTitle') }}</h3>
+            <p>{{ t('intelligence.workflow.approvalPanelDescription') }}</p>
           </div>
 
-          <div v-if="pendingApprovals.length === 0" class="empty-state">当前没有待审批工具。</div>
+          <div v-if="pendingApprovals.length === 0" class="empty-state">
+            {{ t('intelligence.workflow.emptyApprovals') }}
+          </div>
 
           <article v-for="ticket in pendingApprovals" :key="ticket.id" class="small-card">
             <div class="approval-title">
@@ -596,10 +637,10 @@ onMounted(async () => {
             </div>
             <div class="approval-actions">
               <TxButton variant="flat" @click="handleApproval(ticket.id, false)">
-                <span>拒绝</span>
+                <span>{{ t('intelligence.workflow.reject') }}</span>
               </TxButton>
               <TxButton type="primary" @click="handleApproval(ticket.id, true)">
-                <span>批准并恢复</span>
+                <span>{{ t('intelligence.workflow.approveAndResume') }}</span>
               </TxButton>
             </div>
           </article>
@@ -607,8 +648,8 @@ onMounted(async () => {
 
         <div v-if="currentRun" class="subsection">
           <div class="subsection-head">
-            <h3>当前运行步骤</h3>
-            <p>直接查看每个 step 的状态和输出。</p>
+            <h3>{{ t('intelligence.workflow.currentRunStepsTitle') }}</h3>
+            <p>{{ t('intelligence.workflow.currentRunStepsDescription') }}</p>
           </div>
           <div class="stack-list">
             <article v-for="step in currentRun.steps" :key="step.id" class="small-card">
@@ -631,11 +672,13 @@ onMounted(async () => {
 
         <div class="subsection">
           <div class="subsection-head">
-            <h3>运行历史</h3>
-            <p>点击历史记录可以重新查看它的审批状态和输出。</p>
+            <h3>{{ t('intelligence.workflow.historyTitle') }}</h3>
+            <p>{{ t('intelligence.workflow.historyDescription') }}</p>
           </div>
 
-          <div v-if="history.length === 0" class="empty-state">还没有运行历史。</div>
+          <div v-if="history.length === 0" class="empty-state">
+            {{ t('intelligence.workflow.emptyHistory') }}
+          </div>
 
           <button
             v-for="run in history"
@@ -649,7 +692,7 @@ onMounted(async () => {
             </div>
             <div class="history-item__meta">
               <span>{{ formatDate(run.startedAt) }}</span>
-              <span>{{ run.steps.length }} 步</span>
+              <span>{{ stepsCountText(run.steps.length) }}</span>
             </div>
           </button>
         </div>

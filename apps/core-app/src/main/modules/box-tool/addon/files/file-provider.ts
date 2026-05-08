@@ -697,8 +697,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.searchIndexWorkerReady = this.createSearchIndexWorkerReady(this.databaseFilePath)
     await this.searchIndexWorkerReady
 
-    // 🔍 DEBUG: 确认 onLoad 被调用
-    this.logDebug('[DEBUG] FileProvider.onLoad called', {
+    this.logDebug('FileProvider.onLoad called', {
       watchPathsCount: this.watchPaths.length,
       watchPaths: JSON.stringify(this.watchPaths.slice(0, 3))
     })
@@ -2119,8 +2118,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const newPathsToScan = this.watchPaths.filter((p) => !completedScanPaths.has(p))
     const reconciliationPaths = this.watchPaths.filter((p) => completedScanPaths.has(p))
 
-    // 🔍 DEBUG: 详细输出扫描策略信息
-    this.logDebug('[DEBUG] File indexing scan strategy', {
+    this.logDebug('File indexing scan strategy', {
       totalWatchPaths: this.watchPaths.length,
       watchPaths: JSON.stringify(this.watchPaths),
       completedScansCount: completedScans.length,

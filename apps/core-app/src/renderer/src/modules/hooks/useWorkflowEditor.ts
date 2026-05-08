@@ -13,6 +13,8 @@ import type { AgentDescriptor } from '@talex-touch/utils'
 import { useAgentsSdk } from '@talex-touch/utils/renderer/hooks/use-agents-sdk'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer/hooks/use-intelligence-sdk'
 import { computed, ref } from 'vue'
+import type { Translate } from '~/modules/lang/useI18nText'
+import { useI18nText } from '~/modules/lang/useI18nText'
 
 export type WorkflowValidationErrorCode =
   | 'name_required'
@@ -105,36 +107,52 @@ const BUILTIN_TOOL_OPTIONS: BuiltinToolOption[] = [
 
 export const DEFAULT_WORKFLOW_AGENT_ID = 'builtin.workflow-agent'
 
-const DEFAULT_CONTEXT_SOURCES: WorkflowContextSource[] = [
+type DefaultContextSourceDefinition = Omit<WorkflowContextSource, 'label'> & {
+  labelKey: string
+}
+
+const WORKFLOW_I18N_PREFIX = 'intelligence.workflow'
+
+function workflowTextKey(key: string): string {
+  return `${WORKFLOW_I18N_PREFIX}.${key}`
+}
+
+const DEFAULT_CONTEXT_SOURCE_DEFINITIONS: DefaultContextSourceDefinition[] = [
   {
     id: 'clipboard.recent',
     type: 'clipboard.recent',
     enabled: true,
-    label: '最近剪贴板',
+    labelKey: 'defaults.context.clipboardRecent',
     config: { limit: 8 }
   },
   {
     id: 'desktop.active-app',
     type: 'desktop.active-app',
     enabled: true,
-    label: '前台应用',
+    labelKey: 'defaults.context.desktopActiveApp',
     config: {}
   },
   {
     id: 'desktop.recent-files',
     type: 'desktop.recent-files',
     enabled: true,
-    label: '最近文件',
+    labelKey: 'defaults.context.desktopRecentFiles',
     config: {}
   },
   {
     id: 'browser.recent-urls',
     type: 'browser.recent-urls',
     enabled: true,
-    label: '最近 URL',
+    labelKey: 'defaults.context.browserRecentUrls',
     config: {}
   },
-  { id: 'session.memory', type: 'session.memory', enabled: true, label: '当前会话记忆', config: {} }
+  {
+    id: 'session.memory',
+    type: 'session.memory',
+    enabled: true,
+    labelKey: 'defaults.context.sessionMemory',
+    config: {}
+  }
 ]
 
 function createUid(): string {
@@ -181,10 +199,30 @@ function createDefaultStep(index: number, kind: WorkflowStepKind = 'agent'): Wor
   }
 }
 
-function createDefaultWorkflowDraft(): WorkflowDraft {
+function getDefaultContextSources(t: Translate): WorkflowContextSource[] {
+  return DEFAULT_CONTEXT_SOURCE_DEFINITIONS.map((source) => ({
+    id: source.id,
+    type: source.type,
+    enabled: source.enabled,
+    label: t(workflowTextKey(source.labelKey)),
+    config: source.config
+  }))
+}
+
+function getDefaultTriggerLabel(type: WorkflowTriggerType, t: Translate): string {
+  return t(
+    workflowTextKey(
+      type === 'clipboard.batch'
+        ? 'defaults.trigger.clipboardBatch'
+        : 'defaults.trigger.manual'
+    )
+  )
+}
+
+function createDefaultWorkflowDraft(t: Translate): WorkflowDraft {
   return {
     id: '',
-    name: '新工作流',
+    name: t(workflowTextKey('defaults.workflowName')),
     description: '',
     enabled: true,
     toolSources: ['builtin'],
@@ -197,11 +235,11 @@ function createDefaultWorkflowDraft(): WorkflowDraft {
         id: 'manual',
         type: 'manual',
         enabled: true,
-        label: '手动运行',
+        label: getDefaultTriggerLabel('manual', t),
         config: '{}'
       }
     ],
-    contextSources: DEFAULT_CONTEXT_SOURCES.map((item) => ({
+    contextSources: getDefaultContextSources(t).map((item) => ({
       uid: createUid(),
       id: item.id || item.type || createUid(),
       type: item.type || '',
@@ -230,7 +268,7 @@ function mapStepToDraft(step: WorkflowDefinitionStep, index: number): WorkflowSt
   }
 }
 
-function mapWorkflowToDraft(workflow: WorkflowDefinition): WorkflowDraft {
+function mapWorkflowToDraft(workflow: WorkflowDefinition, t: Translate): WorkflowDraft {
   const metadata = workflow.metadata ?? {}
   return {
     id: workflow.id,
@@ -249,12 +287,12 @@ function mapWorkflowToDraft(workflow: WorkflowDefinition): WorkflowDraft {
       id: trigger.id || `trigger-${index + 1}`,
       type: trigger.type === 'clipboard.batch' ? 'clipboard.batch' : 'manual',
       enabled: trigger.enabled !== false,
-      label: trigger.label || (trigger.type === 'clipboard.batch' ? '剪贴板批处理' : '手动运行'),
+      label: trigger.label || getDefaultTriggerLabel(trigger.type, t),
       config: safeJsonStringify(trigger.config ?? {})
     })),
     contextSources: (workflow.contextSources?.length
       ? workflow.contextSources
-      : DEFAULT_CONTEXT_SOURCES
+      : getDefaultContextSources(t)
     ).map((source, index) => ({
       uid: createUid(),
       id: source.id || `context-${index + 1}`,
@@ -278,11 +316,12 @@ function extractSessionId(run: WorkflowRunRecord | null | undefined): string | u
 }
 
 export function useWorkflowEditor() {
+  const { t } = useI18nText()
   const intelligenceSdk = useIntelligenceSdk()
   const agentsSdk = useAgentsSdk()
 
   const workflows = ref<WorkflowDefinition[]>([])
-  const workflowDraft = ref<WorkflowDraft>(createDefaultWorkflowDraft())
+  const workflowDraft = ref<WorkflowDraft>(createDefaultWorkflowDraft(t))
   const selectedWorkflowId = ref<string>('')
   const loading = ref(false)
   const saving = ref(false)
@@ -317,7 +356,7 @@ export function useWorkflowEditor() {
         selectWorkflow(workflows.value[0]!.id)
       }
       if (workflows.value.length <= 0) {
-        workflowDraft.value = createDefaultWorkflowDraft()
+        workflowDraft.value = createDefaultWorkflowDraft(t)
       }
     } finally {
       loading.value = false
@@ -334,13 +373,13 @@ export function useWorkflowEditor() {
   function selectWorkflow(workflowId: string): void {
     selectedWorkflowId.value = workflowId
     const workflow = workflows.value.find((item) => item.id === workflowId)
-    workflowDraft.value = workflow ? mapWorkflowToDraft(workflow) : createDefaultWorkflowDraft()
+    workflowDraft.value = workflow ? mapWorkflowToDraft(workflow, t) : createDefaultWorkflowDraft(t)
     executionError.value = null
   }
 
   function createWorkflowFromScratch(): void {
     selectedWorkflowId.value = ''
-    workflowDraft.value = createDefaultWorkflowDraft()
+    workflowDraft.value = createDefaultWorkflowDraft(t)
     executionError.value = null
   }
 
@@ -363,7 +402,7 @@ export function useWorkflowEditor() {
         id: `trigger-${workflowDraft.value.triggers.length + 1}`,
         type,
         enabled: true,
-        label: type === 'clipboard.batch' ? '剪贴板批处理' : '手动运行',
+        label: getDefaultTriggerLabel(type, t),
         config: '{}'
       }
     ]
@@ -393,10 +432,10 @@ export function useWorkflowEditor() {
     const draft = workflowDraft.value
     const name = draft.name.trim()
     if (!name) {
-      throw new WorkflowValidationError('name_required', '工作流名称不能为空')
+      throw new WorkflowValidationError('name_required', t(workflowTextKey('validationNameRequired')))
     }
     if (draft.steps.length <= 0) {
-      throw new WorkflowValidationError('min_steps', '至少需要一个步骤')
+      throw new WorkflowValidationError('min_steps', t(workflowTextKey('validationMinSteps')))
     }
 
     const metadata = parseJson(draft.metadata, 'metadata_json')
@@ -419,15 +458,27 @@ export function useWorkflowEditor() {
     const steps: WorkflowDefinitionStep[] = draft.steps.map((step, index) => {
       const stepName = step.name.trim()
       if (!stepName) {
-        throw new WorkflowValidationError('step_name_required', '步骤名称不能为空', step.uid)
+        throw new WorkflowValidationError(
+          'step_name_required',
+          t(workflowTextKey('validationStepNameRequired')),
+          step.uid
+        )
       }
 
       const input = parseJson(step.input, 'input_json', step.uid)
       if (step.kind === 'tool' && !step.toolId.trim()) {
-        throw new WorkflowValidationError('tool_required', '工具步骤必须填写 toolId', step.uid)
+        throw new WorkflowValidationError(
+          'tool_required',
+          t(workflowTextKey('validationToolRequired')),
+          step.uid
+        )
       }
       if (step.kind === 'agent' && !step.agentId.trim()) {
-        throw new WorkflowValidationError('agent_required', 'Agent 步骤必须选择 agentId', step.uid)
+        throw new WorkflowValidationError(
+          'agent_required',
+          t(workflowTextKey('validationAgentStepRequired')),
+          step.uid
+        )
       }
 
       return {
