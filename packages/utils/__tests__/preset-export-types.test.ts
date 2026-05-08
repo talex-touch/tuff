@@ -26,20 +26,20 @@ const coreBoxConfig: CoreBoxThemeConfig = {
 }
 
 describe('preset-export-types', () => {
-  it('validates legacy v1 payloads (layout/coreBox only)', () => {
-    const legacyPayload = {
+  it('rejects retired v1 payloads', () => {
+    const retiredPayload = {
       version: 1,
       exportedAt: new Date().toISOString(),
       meta: {
-        name: 'Legacy Preset',
+        name: 'Retired Preset',
       },
       layout: layoutConfig,
       coreBox: coreBoxConfig,
     }
 
-    const result = validatePresetData(legacyPayload)
-    expect(result.valid).toBe(true)
-    expect(result.errors).toHaveLength(0)
+    const result = validatePresetData(retiredPayload)
+    expect(result.valid).toBe(false)
+    expect(result.errors).toContain(`Unsupported preset version (1); expected ${PRESET_EXPORT_VERSION}`)
   })
 
   it('validates v2 payload with theme and canvas fields', () => {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ButtonEmits, ButtonProps } from './types'
+import type { VNode } from 'vue'
 import VWave from 'v-wave'
 import { computed, nextTick, ref, useAttrs, useSlots, watch } from 'vue'
 import { useFlip } from '../../../../utils/animation/flip'
@@ -123,14 +124,14 @@ const showLoadingBar = computed(() => {
 })
 
 function hasDefaultContent(): boolean {
-  const vnodes = slots.default?.()
+  const vnodes = slots.default?.({})
   if (!vnodes || !vnodes.length)
     return false
-  return vnodes.some((node) => {
+  return vnodes.some((node: VNode) => {
     if (typeof node.children === 'string')
       return node.children.trim().length > 0
     if (Array.isArray(node.children))
-      return node.children.some((c: any) => typeof c === 'string' ? c.trim().length > 0 : !!c)
+      return node.children.some((child) => typeof child === 'string' ? child.trim().length > 0 : !!child)
     return !!node.children
   })
 }

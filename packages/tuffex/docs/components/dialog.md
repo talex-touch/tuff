@@ -292,6 +292,7 @@ interface DialogButton {
 
 这些对话框组件都支持：
 - **ESC 键** 关闭
-- 对话框内 **焦点捕获**
+- 打开时聚焦对话框容器或确认按钮
 - 关闭时 **焦点恢复**
-- 正确的 **ARIA 属性** 支持屏幕阅读器
+- `role="dialog"`、`aria-modal` 与实例级标题/描述 ARIA 关联
+- `DialogButton.onClick()` 返回 `true` 时关闭，返回 `false` 时保持打开

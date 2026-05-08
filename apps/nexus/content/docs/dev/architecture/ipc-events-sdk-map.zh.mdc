@@ -266,28 +266,29 @@
 | `shortcon:reg` | 插件进程（Prelude） | `ShortcutModule.setupIpcListeners -> registerRendererShortcut`（`apps/core-app/src/main/modules/global-shortcon.ts`） |
 | `shortcon:trigger` | `ShortcutModule.handleTrigger -> transport.sendToPlugin/sendToWindow`（`apps/core-app/src/main/modules/global-shortcon.ts`） | 渲染器/插件（快捷键订阅方） |
 
-### C8. Intelligence / Agents raw 事件
+### C8. Intelligence / Agents SDK 事件
 
 #### C8.1 Intelligence
 
 | 事件名 | 发送端 | 处理端 |
 | --- | --- | --- |
-| `intelligence:invoke` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> ai.invoke`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:chat-langchain` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> ai.invoke('text.chat')`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:test-provider` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> ai.testProvider`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:get-capability-test-meta` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> capabilityTesterRegistry.get`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:test-capability` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> tester.generateTestPayload + ai.invoke`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:fetch-models` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> fetchProviderModels`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:get-audit-logs` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> ai.queryAuditLogs`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:get-today-stats` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> ai.getTodayStats`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:get-month-stats` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> ai.getMonthStats`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:get-usage-stats` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> ai.getUsageStats`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:get-quota` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.getQuota`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:set-quota` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.setQuota`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:delete-quota` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.deleteQuota`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:get-all-quotas` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.getAllQuotas`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:check-quota` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.checkQuota`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
-| `intelligence:get-current-usage` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.getCurrentUsage`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:invoke` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> ai.invoke`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:chat-langchain` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> ai.invoke('text.chat')`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:test-provider` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> ai.testProvider`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:get-capability-test-meta` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> capabilityTesterRegistry.get`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:test-capability` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> tester.generateTestPayload + ai.invoke`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:fetch-models` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> fetchProviderModels`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:get-audit-logs` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> ai.queryAuditLogs`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:get-today-stats` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> ai.getTodayStats`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:get-month-stats` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> ai.getMonthStats`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:get-usage-stats` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> ai.getUsageStats`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:get-quota` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.getQuota`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:set-quota` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.setQuota`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:delete-quota` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.deleteQuota`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:get-all-quotas` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.getAllQuotas`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:check-quota` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.checkQuota`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:get-current-usage` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.getCurrentUsage`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:api:reload-config` | 调用方：渲染器/插件（Intelligence SDK typed event） | `IntelligenceModule.onInit -> reloadConfig`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
 
 #### C8.2 Agents
 

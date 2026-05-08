@@ -208,3 +208,10 @@ rows:
     default: '-'
 ---
 ::
+
+## 交互契约
+
+- Drawer 根节点暴露 `role="dialog"`、`aria-modal="true"`，并通过实例级 `aria-labelledby` 关联标题。
+- 打开时聚焦抽屉根节点；隐藏或卸载时恢复到打开前的焦点元素。
+- 关闭按钮、遮罩点击和 Escape 默认都会触发 `update:visible(false)` 与 `close`；`closeOnClickMask=false` 或 `closeOnPressEscape=false` 会分别阻断对应关闭路径。
+- `showClose=false` 会移除关闭按钮，但不影响遮罩和 Escape 的配置化关闭能力。

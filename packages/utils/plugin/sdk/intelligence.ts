@@ -1,21 +1,10 @@
 import type {
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
-  IntelligenceMessage,
 } from '../../types/intelligence'
 import { createIntelligenceClient } from '../../intelligence/client'
 import { ensureRendererChannel } from './channel'
 import { tryGetPluginSdkApi } from './plugin-info'
-
-export interface IntelligenceChatOptions {
-  messages: IntelligenceMessage[]
-  providerId?: string
-  model?: string
-  promptTemplate?: string
-  promptVariables?: Record<string, any>
-  stream?: boolean
-  metadata?: Record<string, any>
-}
 
 export interface IntelligenceSDK {
   invoke: <T = any>(
@@ -23,11 +12,6 @@ export interface IntelligenceSDK {
     payload: any,
     options?: IntelligenceInvokeOptions,
   ) => Promise<IntelligenceInvokeResult<T>>
-
-  /**
-   * @deprecated 请优先使用 invoke('text.chat', ...) 或 intelligence client 的 chatLangChain()。
-   */
-  chat: (options: IntelligenceChatOptions) => Promise<IntelligenceInvokeResult<string>>
 }
 
 function resolveSdkApi(): number | undefined {
@@ -66,22 +50,6 @@ async function invokeCapability<T = any>(
   return getClient().invoke<T>(capabilityId, payload, options)
 }
 
-/**
- * @deprecated 请优先使用 invoke('text.chat', ...) 或 intelligence client 的 chatLangChain()。
- */
-
-async function chat(options: IntelligenceChatOptions): Promise<IntelligenceInvokeResult<string>> {
-  return getClient().chatLangChain({
-    messages: options.messages,
-    providerId: options.providerId,
-    model: options.model,
-    promptTemplate: options.promptTemplate,
-    promptVariables: options.promptVariables,
-    metadata: options.metadata,
-  })
-}
-
 export const intelligence: IntelligenceSDK = {
   invoke: invokeCapability,
-  chat,
 }

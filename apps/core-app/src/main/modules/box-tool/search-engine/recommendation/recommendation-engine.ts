@@ -1717,8 +1717,8 @@ export class RecommendationEngine {
     const meta = item.meta
     const sourceId = item.source?.id || 'unknown'
     const appMeta = meta?.app
-    if (appMeta?.bundle_id) {
-      return `${sourceId}:bundle:${appMeta.bundle_id}`
+    if (appMeta?.bundleId) {
+      return `${sourceId}:bundle:${appMeta.bundleId}`
     }
     if (appMeta?.path) {
       return `${sourceId}:path:${appMeta.path}`

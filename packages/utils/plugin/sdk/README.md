@@ -67,22 +67,8 @@ const unsubscribe = plugin.feature.onInputChange((input) => {
 // 取消监听
 unsubscribe()
 
-// 监听键盘事件（UI View 模式下）
-const unsubscribeKey = plugin.feature.onKeyEvent((event) => {
-  if (event.key === 'Enter') {
-    // 处理回车键
-    submitSelection()
-  } else if (event.key === 'ArrowDown') {
-    // 向下导航
-    selectNext()
-  } else if (event.key === 'ArrowUp') {
-    // 向上导航
-    selectPrev()
-  } else if (event.metaKey && event.key === 'k') {
-    // 处理 Cmd+K
-    openSearch()
-  }
-})
+// 键盘交互在插件 UI 内使用组件本地 keydown 或宿主传入的 hostKeyEvent props。
+// feature.onKeyEvent() 已移除；旧 core-box:key-event 没有生产发送端。
 ```
 
 ### 3. 键盘事件自动处理
@@ -94,29 +80,10 @@ const unsubscribeKey = plugin.feature.onKeyEvent((event) => {
 - 插件无需手动处理 ESC 键的退出逻辑
 - 这与 CoreBox 主界面的 ESC 行为保持一致
 
-#### 键盘事件转发
-以下按键会从 CoreBox 主输入框转发到插件 UI View：
-- **Enter** - 确认/提交
-- **ArrowUp / ArrowDown** - 上下导航
-- **Meta/Ctrl + 任意键** - 快捷键组合（Cmd+V 除外，用于粘贴）
+#### 键盘事件
+插件 UI 内部的键盘交互应使用组件本地 `keydown` 或宿主传入的 `hostKeyEvent` props。
 
-当 CoreBox 输入框可见时，编辑类快捷键会保留给输入框，不再转发：
-- **Meta/Ctrl + A/C/V/X/Z/Y** - 输入框编辑（全选/复制/粘贴/剪切/撤销/重做）
-
-> **注意**：`ArrowLeft` 和 `ArrowRight` 不会被转发，因为它们用于输入框中的文本编辑。如果需要左右导航，请使用 `Meta/Ctrl + ArrowLeft/ArrowRight`。
-
-```typescript
-// 键盘事件数据结构
-interface ForwardedKeyEvent {
-  key: string       // 按键名称，如 'Enter', 'ArrowDown'
-  code: string      // 按键代码，如 'Enter', 'ArrowDown'
-  metaKey: boolean  // Cmd/Win 键是否按下
-  ctrlKey: boolean  // Ctrl 键是否按下
-  altKey: boolean   // Alt 键是否按下
-  shiftKey: boolean // Shift 键是否按下
-  repeat: boolean   // 是否为重复按键
-}
-```
+`feature.onKeyEvent()` 与 `core-box:key-event` 已硬裁切；旧事件没有生产发送端，调用会得到明确 migration error。
 
 ## 废弃的 API
 
@@ -277,7 +244,6 @@ export default {
 - `core-box:set-input` - 设置输入框内容
 - `core-box:clear-input` - 清空输入框
 - `core-box:input-change` - 输入变化广播（主进程 → 插件）
-- `core-box:key-event` - 键盘事件转发（主进程 → 插件 UI View）
 - `core-box:set-input-visibility` - 设置输入框可见性（主进程 → 渲染进程）
 - `core-box:request-input-value` - 请求输入值（主进程 → 渲染进程）
 

@@ -2,10 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   AgentsEvents,
   AppEvents,
+  ClipboardEvents,
   PermissionEvents,
+  PluginEvents,
   StorageEvents,
   UpdateEvents,
 } from '../transport/events'
+import { AssistantEvents } from '../transport/events/assistant'
 import { createAgentsSdk } from '../transport/sdk/domains/agents'
 import { createAgentStoreSdk } from '../transport/sdk/domains/agents-store'
 import { createAppSdk } from '../transport/sdk/domains/app'
@@ -88,6 +91,55 @@ describe('transport domain sdk mappings', () => {
     )
   })
 
+  it('assistant events use typed transport metadata without changing event names', () => {
+    expect(AssistantEvents.floatingBall.getRuntimeConfig.toEventName()).toBe(
+      'assistant:floating-ball:get-runtime-config',
+    )
+    expect(AssistantEvents.floatingBall.getRuntimeConfig).toMatchObject({
+      namespace: 'assistant',
+      module: 'floating-ball',
+      action: 'get-runtime-config',
+    })
+    expect(AssistantEvents.voice.submitText.toEventName()).toBe(
+      'assistant:voice-panel:submit',
+    )
+    expect(AssistantEvents.voice.submitText).toMatchObject({
+      namespace: 'assistant',
+      module: 'voice-panel',
+      action: 'submit',
+    })
+  })
+
+  it('plugin widget events use typed transport metadata without changing event names', () => {
+    expect(PluginEvents.widget.register.toEventName()).toBe(
+      'plugin:widget:register',
+    )
+    expect(PluginEvents.widget.register).toMatchObject({
+      namespace: 'plugin',
+      module: 'widget',
+      action: 'register',
+    })
+    expect(PluginEvents.widget.unregister.toEventName()).toBe(
+      'plugin:widget:unregister',
+    )
+    expect(PluginEvents.widget.unregister).toMatchObject({
+      namespace: 'plugin',
+      module: 'widget',
+      action: 'unregister',
+    })
+  })
+
+  it('plugin storage open-in-editor event uses typed transport metadata without changing event name', () => {
+    expect(PluginEvents.storage.openInEditor.toEventName()).toBe(
+      'plugin:storage:open-in-editor',
+    )
+    expect(PluginEvents.storage.openInEditor).toMatchObject({
+      namespace: 'plugin',
+      module: 'storage',
+      action: 'open-in-editor',
+    })
+  })
+
   it('storage sdk maps app storage operations to typed storage events', async () => {
     const transport = createTransportMock()
     transport.send.mockResolvedValueOnce({ theme: 'dark' })
@@ -112,6 +164,17 @@ describe('transport domain sdk mappings', () => {
       undefined,
       { onData },
     )
+  })
+
+  it('clipboard metadata query event uses typed transport naming', () => {
+    expect(ClipboardEvents.queryMeta.toEventName()).toBe(
+      'clipboard:history:query-meta',
+    )
+    expect(ClipboardEvents.queryMeta).toMatchObject({
+      namespace: 'clipboard',
+      module: 'history',
+      action: 'query-meta',
+    })
   })
 
   it('settings sdk maps device idle diagnostic event', async () => {
@@ -227,6 +290,37 @@ describe('transport domain sdk mappings', () => {
     )
   })
 
+  it('intelligence sdk maps core API calls through typed api events', async () => {
+    const transport = createTransportMock()
+    transport.send.mockResolvedValue({ ok: true, result: null })
+    const sdk = createIntelligenceSdk(transport as any)
+
+    await sdk.invoke('text.chat', { messages: [] })
+    await sdk.testProvider({
+      id: 'provider-1',
+      type: 'openai',
+      name: 'Provider 1',
+      enabled: true,
+      apiKey: 'test',
+    } as any)
+    await sdk.getQuota({ callerId: 'plugin.demo' })
+
+    expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:invoke',
+    )
+    expect(transport.send.mock.calls[0]?.[0]).toMatchObject({
+      namespace: 'intelligence',
+      module: 'api',
+      action: 'invoke',
+    })
+    expect(transport.send.mock.calls[1]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:test-provider',
+    )
+    expect(transport.send.mock.calls[2]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:get-quota',
+    )
+  })
+
   it('intelligence sdk maps session subscribe to typed transport stream', async () => {
     const transport = createTransportMock()
     const sdk = createIntelligenceSdk(transport as any)
@@ -240,8 +334,38 @@ describe('transport domain sdk mappings', () => {
     expect(transport.stream).toHaveBeenCalledTimes(1)
     const [event, payload, options] = transport.stream.mock.calls[0] || []
     expect(event?.toEventName?.()).toBe('intelligence:agent:session:subscribe')
+    expect(event).toMatchObject({
+      namespace: 'intelligence',
+      module: 'agent',
+      action: 'session:subscribe',
+    })
     expect(payload).toEqual({ sessionId: 'tis_1', fromSeq: 3 })
     expect(options).toEqual({ onData })
+  })
+
+  it('intelligence sdk maps agent tool approval through typed event builder', async () => {
+    const transport = createTransportMock()
+    transport.send.mockResolvedValue({ ok: true, result: null })
+    const sdk = createIntelligenceSdk(transport as any)
+
+    await sdk.agentToolApprove({
+      ticketId: 'ticket_1',
+      approved: true,
+      reason: 'reviewed',
+    })
+
+    const [event, payload] = transport.send.mock.calls[0] || []
+    expect(event?.toEventName?.()).toBe('intelligence:agent:tool:approve')
+    expect(event).toMatchObject({
+      namespace: 'intelligence',
+      module: 'agent',
+      action: 'tool:approve',
+    })
+    expect(payload).toEqual({
+      ticketId: 'ticket_1',
+      approved: true,
+      reason: 'reviewed',
+    })
   })
 
   it('intelligence sdk subscribe throws when stream transport is unavailable', async () => {
@@ -275,6 +399,11 @@ describe('transport domain sdk mappings', () => {
     expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe(
       'intelligence:workflow:list',
     )
+    expect(transport.send.mock.calls[0]?.[0]).toMatchObject({
+      namespace: 'intelligence',
+      module: 'workflow',
+      action: 'list',
+    })
     expect(transport.send.mock.calls[0]?.[1]).toEqual({
       includeTemplates: true,
     })
@@ -376,6 +505,13 @@ describe('transport domain sdk mappings', () => {
     })
     await sdk.updatePriority('task-1', 9)
 
+    expect(AgentsEvents.api.listAll.toEventName()).toBe('agents:api:list-all')
+    expect(AgentsEvents.api.executeImmediate.toEventName()).toBe(
+      'agents:api:execute-immediate',
+    )
+    expect(AgentsEvents.api.updatePriority.toEventName()).toBe(
+      'agents:api:update-priority',
+    )
     expect(transport.send).toHaveBeenNthCalledWith(1, AgentsEvents.api.listAll)
     expect(transport.send).toHaveBeenNthCalledWith(
       2,
@@ -405,6 +541,9 @@ describe('transport domain sdk mappings', () => {
     const unsubscribe = sdk.onTaskStarted(() => {})
     unsubscribe()
 
+    expect(AgentsEvents.push.taskStarted.toEventName()).toBe(
+      'agents:push:task-started',
+    )
     expect(transport.on).toHaveBeenCalledWith(
       AgentsEvents.push.taskStarted,
       expect.any(Function),

@@ -61,3 +61,11 @@ code: |
 
 - Keep border/radius styles on the wrapper; `TxEdgeFadeMask` handles scroll and mask.
 - For horizontal mode, prefer inner content with `display: flex` and `width: max-content`.
+
+## Interaction Contract
+
+- `as` controls the root element tag. Default slot content is rendered inside the internal viewport.
+- No `mask-image` is emitted when content is not scrollable, `disabled=true`, or the scroll range is less than or equal to `threshold`.
+- Vertical mode switches top/bottom fades from `scrollTop`; horizontal mode switches left/right fades from `scrollLeft`.
+- Numeric `size` values are converted to px. String `size` values are used as-is in gradient stops.
+- With `observeResize=true`, the component observes the viewport and first child. It disconnects the observer when disabled by prop or unmounted.

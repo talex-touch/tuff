@@ -53,7 +53,7 @@ export function toast(options: TxToastOptions): string {
   toastStore.items.push(item)
 
   if (duration > 0) {
-    window.setTimeout(() => {
+    globalThis.setTimeout(() => {
       dismissToast(id)
     }, duration)
   }

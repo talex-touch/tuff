@@ -16,7 +16,6 @@ import {
   updatePilotToolApprovalTicketResult,
 } from './pilot-tool-approvals'
 import {
-  createGatewayWebsearchConnector,
   createWebsearchProviderConnector,
   dedupeNormalizedDocuments,
   isAllowlistedDomain,
@@ -1061,16 +1060,11 @@ export async function executePilotWebsearchTool(
 
     for (const provider of enabledProviders) {
       const providerApiKey = resolveWebsearchProviderApiKey(provider, dataSource.apiKeyRef)
-      const connector = provider.id === 'legacy-gateway'
-        ? createGatewayWebsearchConnector({
-            gatewayBaseUrl: provider.baseUrl,
-            apiKey: providerApiKey,
-          })
-        : createWebsearchProviderConnector({
-            providerType: provider.type,
-            baseUrl: provider.baseUrl,
-            apiKey: providerApiKey,
-          })
+      const connector = createWebsearchProviderConnector({
+        providerType: provider.type,
+        baseUrl: provider.baseUrl,
+        apiKey: providerApiKey,
+      })
 
       const providerMaxResults = Math.min(
         Math.max(provider.maxResults, minPerProvider),

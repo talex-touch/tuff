@@ -23,6 +23,10 @@ code: |
   </template>
 ---
 :::
+## Contract
+
+`TxBadge` renders an inline pill or dot. The default slot replaces the badge content; it does not position the badge around a target element. Dot mode hides `value` text and renders only the visual dot.
+
 ## API (Lite)
 ::TuffPropsTable
 ---

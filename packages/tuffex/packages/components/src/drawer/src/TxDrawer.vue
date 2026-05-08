@@ -15,7 +15,7 @@ import type { DrawerEmits, DrawerProps } from './types'
  *
  * @component
  */
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import { getZIndex, nextZIndex, refreshZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({
@@ -35,6 +35,8 @@ const emit = defineEmits<DrawerEmits>()
 
 const drawerRef = ref<HTMLElement | null>(null)
 const internalZIndex = ref(getZIndex())
+const titleId = useId()
+let previouslyFocusedElement: HTMLElement | null = null
 
 /**
  * Internal display state for animation purposes.
@@ -82,7 +84,7 @@ function handleKeydown(event: KeyboardEvent): void {
 /**
  * Traps focus within the drawer when open.
  */
-function trapFocus(): void {
+function focusDrawer(): void {
   if (drawerRef.value) {
     drawerRef.value.focus()
   }
@@ -96,10 +98,18 @@ watch(
         refreshZIndex(props.zIndex, 'drawer(zIndex prop)')
       }
       internalZIndex.value = props.zIndex ?? nextZIndex()
+      previouslyFocusedElement = document.activeElement as HTMLElement
       emit('open')
-      trapFocus()
+      nextTick(() => {
+        focusDrawer()
+      })
+    }
+    else if (previouslyFocusedElement) {
+      previouslyFocusedElement.focus()
+      previouslyFocusedElement = null
     }
   },
+  { immediate: true },
 )
 
 onMounted(() => {
@@ -108,6 +118,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
+  if (previouslyFocusedElement) {
+    previouslyFocusedElement.focus()
+  }
 })
 </script>
 
@@ -123,6 +136,7 @@ onUnmounted(() => {
       :style="drawerStyle"
       role="dialog"
       aria-modal="true"
+      :aria-labelledby="titleId"
       :aria-hidden="!display"
       tabindex="-1"
     >
@@ -136,7 +150,7 @@ onUnmounted(() => {
       <div class="tx-drawer__panel">
         <!-- Header -->
         <header class="tx-drawer__header">
-          <h2 class="tx-drawer__title">
+          <h2 :id="titleId" class="tx-drawer__title">
             {{ title }}
           </h2>
           <button

@@ -3,14 +3,14 @@ import { join, relative, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const rendererRoot = join(process.cwd(), 'src/renderer/src')
-const legacyStorageImport = ['modules', 'channel', 'storage'].join('/')
+const retiredStorageImport = ['modules', 'channel', 'storage'].join('/')
 
-const allowedLegacyStorageFiles = new Set([
+const allowedRetiredStorageFiles = new Set([
   'modules/channel/storage/base.ts',
   'modules/channel/storage/index.ts'
 ])
-const legacyStorageImportPattern = new RegExp(
-  String.raw`(?:from|import\(|doMock\()\s*["'][^"']*${legacyStorageImport}`
+const retiredStorageImportPattern = new RegExp(
+  String.raw`(?:from|import\(|doMock\()\s*["'][^"']*${retiredStorageImport}`
 )
 
 const sourceExtensions = new Set(['.ts', '.tsx', '.vue'])
@@ -37,13 +37,13 @@ function collectSourceFiles(dir: string): string[] {
 }
 
 describe('renderer app storage boundary', () => {
-  it('keeps legacy channel storage imports inside the bootstrap shim', () => {
+  it('keeps retired channel storage imports inside the bootstrap shim', () => {
     const offenders = collectSourceFiles(rendererRoot)
       .map((file) => relative(rendererRoot, file).split(sep).join('/'))
-      .filter((file) => !allowedLegacyStorageFiles.has(file))
+      .filter((file) => !allowedRetiredStorageFiles.has(file))
       .filter((file) => {
         const source = readFileSync(join(rendererRoot, file), 'utf8')
-        return legacyStorageImportPattern.test(source)
+        return retiredStorageImportPattern.test(source)
       })
 
     expect(offenders).toEqual([])

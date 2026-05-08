@@ -40,3 +40,10 @@ import KeyframeStrokeTextZhDemoSource from '../.vitepress/theme/components/demos
 | `fontSize` | `string \| number` | `64` | 字号 |
 | `fontWeight` | `string \| number` | `700` | 字重 |
 | `fontFamily` | `string` | `inherit` | 字体族 |
+
+## 交互契约
+
+- 组件渲染一个 `role="img"` 的 SVG；`text` 非空时作为 `aria-label`。
+- `text` 为空时使用 non-breaking-space 保持 SVG 测量和占位，不输出 `aria-label`。
+- `fontSize` 为 number 时会转换为 px；`durationMs`、`strokeWidth`、颜色和字体参数通过 CSS 变量驱动动画。
+- 挂载后会同步测量文本尺寸，并在文本、字体或描边宽度变化时重新测量。

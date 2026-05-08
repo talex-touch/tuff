@@ -126,30 +126,30 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string` | `''` | Description for modelValue. |
-| `placeholder` | `string` | `'Search'` | Description for placeholder. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `clearable` | `boolean` | `true` | Description for clearable. |
-| `remote` | `boolean` | `false` | Description for remote. |
-| `searchDebounce` | `number` | `200` | Description for searchDebounce. |
+| `modelValue` | `string` | `''` | Input value used by `v-model`. |
+| `placeholder` | `string` | `'Search'` | Placeholder text shown when the input is empty. |
+| `disabled` | `boolean` | `false` | Disables typing, clearing, and remote search emission. |
+| `clearable` | `boolean` | `true` | Shows the clear control when the input has a value. |
+| `remote` | `boolean` | `false` | Emits debounced `search` events while typing. |
+| `searchDebounce` | `number` | `200` | Delay in milliseconds before emitting remote search. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(v: string)` | Description for update:modelValue. |
-| `input` | `(v: string)` | Description for input. |
-| `focus` | `(e: FocusEvent)` | Description for focus. |
-| `blur` | `(e: FocusEvent)` | Description for blur. |
-| `clear` | - | Description for clear. |
-| `search` | `(v: string)` | Description for search. |
+| `update:modelValue` | `(v: string)` | Emitted when the input value changes. |
+| `input` | `(v: string)` | Mirrors native input changes with the normalized string value. |
+| `focus` | `(e: FocusEvent)` | Emitted when the inner input receives focus. |
+| `blur` | `(e: FocusEvent)` | Emitted when the inner input loses focus. |
+| `clear` | - | Emitted after the clear control resets the value. |
+| `search` | `(v: string)` | Emitted on Enter, or after debounce when `remote` is enabled. |
 
 ### Expose
 
 | Name | Type | Description |
 |------|------|------|
-| `focus()` | `() => void` | Description for focus(). |
-| `blur()` | `() => void` | Description for blur(). |
-| `clear()` | `() => void` | Description for clear(). |
-| `setValue(v)` | `(v: string) => void` | Description for setValue(v). |
-| `getValue()` | `() => string` | Description for getValue(). |
+| `focus()` | `() => void` | Focuses the inner input. |
+| `blur()` | `() => void` | Blurs the inner input. |
+| `clear()` | `() => void` | Clears the current value and emits `clear`. |
+| `setValue(v)` | `(v: string) => void` | Sets the current input value. |
+| `getValue()` | `() => string` | Returns the current input value. |

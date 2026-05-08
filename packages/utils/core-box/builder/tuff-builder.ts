@@ -774,7 +774,7 @@ class TuffFactory {
       .setMeta({
         app: {
           path,
-          bundle_id: bundleId,
+          bundleId,
         },
       })
       .createAndAddAction('execute', 'execute', '启动')

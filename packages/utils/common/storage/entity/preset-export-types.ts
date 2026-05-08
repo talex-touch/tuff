@@ -143,8 +143,8 @@ export function validatePresetData(data: unknown): PresetValidationResult {
   // Check version
   if (typeof preset.version !== 'number') {
     errors.push('Missing or invalid version field')
-  } else if (preset.version > PRESET_EXPORT_VERSION) {
-    warnings.push(`Preset version (${preset.version}) is newer than supported (${PRESET_EXPORT_VERSION})`)
+  } else if (preset.version !== PRESET_EXPORT_VERSION) {
+    errors.push(`Unsupported preset version (${preset.version}); expected ${PRESET_EXPORT_VERSION}`)
   }
 
   // Check meta

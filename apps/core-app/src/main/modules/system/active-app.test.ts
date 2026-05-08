@@ -124,6 +124,60 @@ describe('active-app resolution', () => {
     })
   })
 
+  it('parses Windows foreground JSON when PowerShell emits warning lines first', async () => {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.win32()
+      }
+    )
+    mockExecFileSuccess(
+      [
+        'WARNING: native module already loaded',
+        JSON.stringify({
+          processId: 404,
+          displayName: 'Code',
+          executablePath: 'C:\\Program Files\\Code.exe',
+          windowTitle: 'workspace'
+        })
+      ].join('\n')
+    )
+
+    const result = await activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+
+    expect(result).toMatchObject({
+      displayName: 'Code',
+      processId: 404,
+      executablePath: 'C:\\Program Files\\Code.exe'
+    })
+  })
+
+  it('logs compact Windows command failure diagnostics', async () => {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.win32()
+      }
+    )
+    execFilePromiseMock.mockRejectedValueOnce(
+      Object.assign(new Error('Command failed: powershell -Command <script>'), {
+        code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+      })
+    )
+
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toBeNull()
+
+    expect(activeAppLoggerMock.warn).toHaveBeenCalledWith(
+      'Windows active-app resolution failed',
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER',
+          message: 'Command failed: powershell -Command <script>'
+        })
+      })
+    )
+  })
+
   it('parses Linux foreground app info via xdotool + ps', async () => {
     withOSAdapterMock.mockImplementation(
       async (options: Record<string, () => Promise<unknown>>) => {

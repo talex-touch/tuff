@@ -135,6 +135,10 @@ code: |
 ---
 ::
 
+## 契约说明
+
+Avatar fallback 优先级为图片、默认插槽、icon、name 首字母、默认 user 图标。图片加载失败后会进入同一套非图片 fallback 链路。`size` 支持预设、数字、数字字符串和 px 字符串。`TxAvatarGroup` 只会给未显式设置 size 的子头像注入统一尺寸，并在 `max` 隐藏额外头像时渲染 `+N`。
+
 ## API 参考
 
 ### Avatar Props
@@ -160,7 +164,7 @@ rows:
     default: '-'
   - name: size
     description: '头像尺寸'
-    type: "'small' | 'medium' | 'large' | 'xlarge'"
+    type: "'small' | 'medium' | 'large' | 'xlarge' | number | `${number}` | `${number}px`"
     default: "'medium'"
   - name: status
     description: '状态'

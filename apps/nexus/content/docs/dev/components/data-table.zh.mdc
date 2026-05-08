@@ -59,6 +59,10 @@ code: |
 ---
 ::
 
+## 排序交互
+
+可排序表头会暴露 `aria-sort` 状态，并支持鼠标点击、Enter 与 Space 在升序、降序、未排序之间切换。`sortOnClient=false` 时仍会触发 `sortChange`，但不会重排本地数据。
+
 ## API
 
 ### TxDataTable Props

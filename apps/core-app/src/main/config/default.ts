@@ -22,8 +22,8 @@ export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
   titleBarStyle: 'hidden',
   titleBarOverlay: {
     color: 'rgba(0,0,0,0)',
-    height: 35,
-    symbolColor: 'white'
+    height: 40,
+    symbolColor: '#1f2937'
   },
   webPreferences: buildWindowWebPreferences(
     'app',
@@ -73,7 +73,7 @@ export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions =
   titleBarOverlay: {
     color: 'rgba(0,0,0,0)',
     height: 60,
-    symbolColor: 'white'
+    symbolColor: '#1f2937'
   },
   webPreferences: buildWindowWebPreferences('app', {
     preload: path.join(__dirname, '..', 'preload', 'index.js'),

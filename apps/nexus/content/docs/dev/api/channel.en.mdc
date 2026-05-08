@@ -1,160 +1,86 @@
-# Channel API (Legacy)
+# Channel API (Retired)
 
 ::alert{type="warning"}
-**Deprecated:** The Channel API is deprecated in favor of [TuffTransport](./transport.en.md). While it continues to work, we recommend migrating to TuffTransport for new development. See the [Migration Guide](./transport.en.md#migration-from-legacy-channel).
+**Retired for new development:** This page exists only to identify old Channel code during migration. Current plugins must use [TuffTransport](./transport.en.md) and domain SDKs such as [Box SDK](./box.en.md), [Clipboard SDK](./clipboard.en.md), and [Bridge Hooks](./bridge-hooks.en.md).
 ::
 
-## Overview
+## Current Contract
 
-The Channel SDK provides IPC communication between plugins and the main process.
+The Channel API is not a supported extension surface for new plugin work.
 
-## Introduction
+| Old surface | Current replacement |
+|-------------|---------------------|
+| Raw string sends | `transport.send(TuffEvent, payload)` |
+| Raw string listeners | `transport.on(TuffEvent, handler)` or plugin bridge hooks |
+| CoreBox input listener | `onCoreBoxInputChange()` |
+| CoreBox clipboard listener | `onCoreBoxClipboardChange()` |
+| Synchronous sends | Removed by the hard-cut |
 
-**Quick Start**
+## Migration Pattern
 
-:::TuffCodeBlock{lang="ts"}
----
-code: |
-  import { useChannel, usePluginRendererChannel } from '@talex-touch/utils/plugin/sdk'
-
-  // Method 1: Get raw channel object
-  const channel = useChannel()
-  const result = await channel.send('some-event', { data: 'value' })
-
-  // Method 2: Use wrapped Plugin Channel
-  const pluginChannel = usePluginRendererChannel()
-  await pluginChannel.send('my-plugin:action', { payload: 'data' })
----
-:::
-
----
-
-## API Reference
-
-**useChannel()**
-
-Get the underlying IPC channel instance.
+Replace string event names with typed event objects in the same change. Do not keep dual Channel and TuffTransport paths.
 
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  import { useChannel } from '@talex-touch/utils/plugin/sdk'
+  import { useTuffTransport, CoreBoxEvents } from '@talex-touch/utils/transport'
 
-  const channel = useChannel()
+  const transport = useTuffTransport()
 
-  // Send message
-  const response = await channel.send('event-name', { key: 'value' })
-
-  // Register listener
-  const unsubscribe = channel.regChannel('event-name', (data) => {
-    console.log('Received:', data)
-  })
-
-  // Unsubscribe
-  unsubscribe()
----
-:::
-
-**usePluginRendererChannel()**
-
-Get plugin-specific channel instance with a friendlier API.
-
-:::TuffCodeBlock{lang="ts"}
----
-code: |
-  import { usePluginRendererChannel } from '@talex-touch/utils/plugin/sdk'
-
-  const channel = usePluginRendererChannel()
----
-:::
-
-**`send(eventName, payload)`**
-
-Async send message and wait for response.
-
-:::TuffCodeBlock{lang="ts"}
----
-code: |
-  const result = await channel.send('my-plugin:ping', { ts: Date.now() })
----
-:::
-
-**`on(eventName, handler)`**
-
-Register event listener.
-
-:::TuffCodeBlock{lang="ts"}
----
-code: |
-  const dispose = channel.on('core-box:input-change', (data) => {
-    console.log('Input changed:', data.input)
-  })
-
-  // Stop listening
-  dispose()
----
-:::
-
-**`once(eventName, handler)`**
-
-Register one-time listener, automatically removed after trigger.
-
-:::TuffCodeBlock{lang="ts"}
----
-code: |
-  channel.once('plugin:ready', () => {
-    console.log('Plugin ready')
+  const result = await transport.send(CoreBoxEvents.search.query, {
+    query: { text: 'hello' }
   })
 ---
 :::
 
----
+## Event Subscriptions
 
-## Built-in Events
-
-**CoreBox Related**
-
-| Event | Description | Data |
-|-------|-------------|------|
-| `core-box:input-change` | Search input changed | `{ input: string }` |
-| `core-box:key-event` | Keyboard event forwarded | `ForwardedKeyEvent` |
-| `core-box:clipboard-change` | Clipboard changed | `{ item: ClipboardItem }` |
-
-**Plugin Storage**
-
-| Event | Description | Data |
-|-------|-------------|------|
-| `plugin:storage:update` | Storage update broadcast | `{ name: string, fileName?: string }` |
-
----
-
-## Technical Notes
-
-- Channel requests are routed through the main process IPC layer with standardized error handling.
-- Keep event names and payload shapes stable to avoid breaking plugins.
-
-## Best Practices
-
-1. **Namespacing**: Use `pluginName:action` format to avoid conflicts
-2. **Cleanup**: Call `dispose()` when component unmounts
-3. **Error handling**: Always wrap send calls with try-catch
-4. **Type safety**: Define TypeScript interfaces for requests and responses
-
----
-
-## Type Definitions
+For CoreBox input and clipboard updates, prefer bridge hooks because they include startup event caching.
 
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  interface IPluginRendererChannel {
-    send(eventName: string, payload?: any): Promise<any>
-    sendSync(eventName: string, payload?: any): any
-    on(eventName: string, handler: PluginChannelHandler): () => void
-    once(eventName: string, handler: PluginChannelHandler): () => void
-    raw: ITouchClientChannel
+  import { onCoreBoxInputChange } from '@talex-touch/utils/plugin/sdk'
+
+  onCoreBoxInputChange(({ data, meta }) => {
+    console.log(data.query.text, meta.fromCache)
+  })
+---
+:::
+
+## Retired Built-In Names
+
+These names may appear in historical plugin code or migration notes. They are not the preferred API surface.
+
+| Retired name | Replacement |
+|--------------|-------------|
+| `core-box:input-change` | `onCoreBoxInputChange()` |
+| `core-box:clipboard-change` | `onCoreBoxClipboardChange()` |
+| `plugin:storage:update` | `PluginEvents.storage.update` through SDK / TuffTransport |
+
+`core-box:key-event` is fully retired. It had no production sender and must not be used for plugin keyboard handling.
+
+## Removed Sync Surface
+
+Synchronous sends were removed by the hard-cut. The plugin renderer SDK no longer exposes a synchronous channel method; old runtime calls fail with `plugin_channel_send_sync_removed`.
+
+## Type Shape
+
+Current renderer-side code should use `ITuffTransport` event APIs instead of Channel interfaces:
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface ITuffTransport {
+    send<TEvent extends TuffEvent<any, any>>(
+      event: TEvent,
+      payload: EventRequest<TEvent>
+    ): Promise<EventResponse<TEvent>>
+
+    on<TEvent extends TuffEvent<any, any>>(
+      event: TEvent,
+      handler: (payload: EventRequest<TEvent>) => EventResponse<TEvent> | Promise<EventResponse<TEvent>>
+    ): () => void
   }
-
-  type PluginChannelHandler = (event: any) => void
 ---
 :::

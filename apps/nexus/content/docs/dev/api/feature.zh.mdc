@@ -146,46 +146,9 @@ code: |
 ---
 :::
 
-**`onKeyEvent(handler)`**
+**键盘处理**
 
-监听键盘事件。当插件 UI 附加到 CoreBox 时，某些按键事件会被转发。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const unsubscribe = feature.onKeyEvent((event) => {
-    if (event.key === 'Enter') {
-      // 处理回车键
-      submitSelection()
-    } else if (event.key === 'ArrowDown') {
-      // 向下导航
-      selectNext()
-    } else if (event.metaKey && event.key === 'k') {
-      // 处理 Cmd+K
-      openSearch()
-    }
-  })
-  
-  unsubscribe()
----
-:::
-
-**ForwardedKeyEvent 结构**：
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  interface ForwardedKeyEvent {
-    key: string
-    code: string
-    metaKey: boolean
-    ctrlKey: boolean
-    altKey: boolean
-    shiftKey: boolean
-    repeat: boolean
-  }
----
-:::
+`feature.onKeyEvent()` 已移除。旧 `core-box:key-event` 通道没有生产发送端，插件 UI 键盘交互应使用本地 DOM/组件键盘事件或宿主传入的 `hostKeyEvent` props。
 
 ---
 
@@ -261,16 +224,7 @@ code: |
   // 监听输入
   feature.onInputChange(debouncedSearch)
   
-  // 监听键盘
-  feature.onKeyEvent((event) => {
-    if (event.key === 'Enter') {
-      const items = feature.getItems()
-      if (items.length > 0) {
-        openItem(items[0])
-        box.hide()
-      }
-    }
-  })
+  // 键盘交互在插件 UI 组件内使用本地 keydown 或 hostKeyEvent props 处理。
 ---
 :::
 
@@ -288,11 +242,9 @@ code: |
     clearItems(): void
     getItems(): TuffItem[]
     onInputChange(handler: InputChangeHandler): () => void
-    onKeyEvent(handler: KeyEventHandler): () => void
   }
   
   type InputChangeHandler = (input: string) => void
-  type KeyEventHandler = (event: ForwardedKeyEvent) => void
 ---
 :::
 

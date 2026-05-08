@@ -1,6 +1,6 @@
 ---
 title: "LoadingState"
-description: "Component documentation for LoadingState."
+description: "Shortcut empty-state component for loading placeholders, based on TxEmptyState with `variant=\"loading\"`."
 category: Feedback
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # LoadingState
 
-Component documentation for LoadingState.
+`TxLoadingState` is a shortcut wrapper around `TxEmptyState` with `variant="loading"` pre-set. Use it for loading placeholders while data, plugins, or remote resources are being fetched.
 
 ## Basic Usage
 
@@ -25,4 +25,10 @@ code: |
 
 ## API
 
-Props / Slots / Events follow `TxEmptyState`.
+`TxLoadingState` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
+
+## Interaction Contract
+
+- `TxLoadingState` always forwards `variant="loading"` to `TxEmptyState`.
+- The wrapper does not rewrite `title`, `description`, `loading`, or action config; explicit props are forwarded as-is.
+- `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.

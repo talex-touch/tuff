@@ -6,6 +6,7 @@ import {
   ShortcutType
 } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import ShortcutStorage from '@talex-touch/utils/common/storage/shortcut-storage'
+import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { BrowserWindow, globalShortcut } from 'electron'
@@ -25,11 +26,6 @@ const shortconUpdateEvent = defineRawEvent<
 const shortconDisableAllEvent = defineRawEvent<void, void>('shortcon:disable-all')
 const shortconEnableAllEvent = defineRawEvent<void, void>('shortcon:enable-all')
 const shortconGetAllEvent = defineRawEvent<void, ShortcutWithStatus[]>('shortcon:get-all')
-const shortconRegisterEvent = defineRawEvent<
-  { key: string; id?: string; description?: string; desc?: string },
-  boolean
->('shortcon:reg')
-const shortconTriggerEvent = defineRawEvent<{ id: string }, void>('shortcon:trigger')
 
 // A runtime map to hold callbacks for 'main' type shortcuts
 interface MainShortcutRegistration {
@@ -169,7 +165,7 @@ export class ShortcutModule extends BaseModule {
       return this.buildShortcutSnapshot()
     })
 
-    transport.on(shortconRegisterEvent, (payload, context) => {
+    transport.on(PluginEvents.shortcut.register, (payload, context) => {
       const key = payload?.key
       const pluginName = context.plugin?.name
       if (!key || !pluginName) {
@@ -701,13 +697,13 @@ export class ShortcutModule extends BaseModule {
         const pluginName = shortcut.meta?.author
         if (pluginName && pluginName !== SYSTEM_SHORTCUT_AUTHOR) {
           void transport
-            .sendToPlugin(pluginName, shortconTriggerEvent, { id: triggerId })
+            .sendToPlugin(pluginName, PluginEvents.shortcut.trigger, { id: triggerId })
             .catch(() => {})
           break
         }
         for (const win of allWindows) {
           void transport
-            .sendToWindow(win.id, shortconTriggerEvent, { id: triggerId })
+            .sendToWindow(win.id, PluginEvents.shortcut.trigger, { id: triggerId })
             .catch(() => {})
         }
         shortconLog.debug(`Forwarded trigger '${triggerId}' to all renderer processes`)

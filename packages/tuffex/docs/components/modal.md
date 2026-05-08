@@ -59,6 +59,8 @@ const visible = ref(false)
 - Entrance and exit animations use scale + opacity for a smooth, non-jarring transition.
 - The `#footer` slot is designed for action buttons. Place the primary action on the right.
 - Modal width defaults to `480px`. Override with the `width` prop for wider content.
+- The overlay exposes `role="dialog"` and `aria-modal="true"`, links to the title with an instance-scoped `aria-labelledby`, and supports backdrop, Escape, and close-button dismissal.
+- Opening focuses the overlay root; hiding or unmounting restores the previously focused element.
 
 ## API
 
@@ -73,7 +75,8 @@ const visible = ref(false)
 ### Events
 
 <ApiSpecTable title="Events" :rows="[
-  { name: 'close', description: 'Fires when the modal is closed (by backdrop click, escape key, or programmatically).' },
+  { name: 'update:modelValue', description: 'Fires when the visible state changes.', type: '(value: boolean) => void' },
+  { name: 'close', description: 'Fires when the modal is closed by backdrop click, Escape, or close button.' },
 ]" />
 
 ### Slots

@@ -238,6 +238,7 @@ code: |
 ### Accessibility
 
 - ESC to close
-- Focus trap inside dialog
+- Focus moves to the dialog container or confirm button on open
 - Focus restore on close
-- ARIA attributes by default
+- `role="dialog"`, `aria-modal`, and instance-scoped title/description ARIA links by default
+- `DialogButton.onClick()` closes the dialog when it returns `true` and keeps it open when it returns `false`

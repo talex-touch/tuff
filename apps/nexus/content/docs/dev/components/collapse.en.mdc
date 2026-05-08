@@ -38,6 +38,7 @@ code: |
 ::
 
 ## API (Lite)
+### TxCollapse Props
 ::TuffPropsTable
 ---
 rows:
@@ -51,6 +52,50 @@ rows:
     description: Single panel mode
 ---
 :::
+
+### TxCollapse Events
+::TuffPropsTable
+---
+rows:
+  - name: update:modelValue
+    type: "(value: string | string[]) => void"
+    default: '-'
+    description: v-model active panel update
+  - name: change
+    type: "(value: string | string[]) => void"
+    default: '-'
+    description: Active panel change
+---
+:::
+
+### TxCollapseItem Props
+::TuffPropsTable
+---
+rows:
+  - name: title
+    type: string
+    default: '-'
+    description: Header text
+  - name: name
+    type: string
+    default: '-'
+    description: Unique panel identifier
+  - name: disabled
+    type: boolean
+    default: 'false'
+    description: Disable panel toggling
+  - name: arrowIcon
+    type: string
+    default: "'chevron-down'"
+    description: Toggle arrow icon
+---
+:::
+
+## Interaction Contract
+
+- Panel headers expose `role="button"`, `tabindex="0"`, `aria-expanded`, and `aria-controls`.
+- Click, Enter, and Space use the same toggle path.
+- `disabled` panels expose `aria-disabled="true"` and ignore pointer and keyboard toggles.
 
 ## Source
 <TuffDocSourceLink />

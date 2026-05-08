@@ -107,6 +107,14 @@ import RadioDisabledDemoSource from '../.vitepress/theme/components/demos/RadioD
 | update:modelValue | 值更新时触发 | `(value: string \| number) => void` |
 | change | 值变化时触发 | `(value: string \| number) => void` |
 
+#### Keyboard
+
+| 按键 | 行为 |
+|--------|------|
+| ArrowRight / ArrowDown | 选择下一个可用单选项。 |
+| ArrowLeft / ArrowUp | 选择上一个可用单选项。 |
+| Home / End | 选择第一个 / 最后一个可用单选项。 |
+
 ### TxRadio
 
 #### Props

@@ -41,9 +41,7 @@ function toIcon(icon?: IconValue): TxIconSource | null {
 }
 
 const defaultIcon = computed(() => {
-  if (props.defaultIcon !== undefined)
-    return toIcon(props.defaultIcon)
-  return toIcon(props.icon)
+  return toIcon(props.defaultIcon)
 })
 
 const activeIcon = computed(() => {

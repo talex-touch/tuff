@@ -30,7 +30,6 @@ code: |
 | [RecommendSDK](./recommend.en.md) | `recommend` | Custom recommendation provider registration |
 | [**Account SDK**](./account.en.md) | `accountSDK` | **User info, subscription, quota** |
 | [**TuffTransport**](./transport.en.md) | `useTuffTransport()` | **Next-gen IPC (recommended)** |
-| [Channel SDK](./channel.en.md) | `useChannel()` | IPC communication (legacy) |
 | [Feature SDK](./feature.en.md) | `useFeature()` | Search result management |
 | [DivisionBox SDK](./division-box.en.md) | `useDivisionBox()` | Independent window management |
 | [Flow SDK](./flow-transfer.en.md) | `createFlowSDK()` | Inter-plugin data transfer |
@@ -52,17 +51,17 @@ code: |
     useClipboard,
     usePluginStorage,
     usePowerSDK,
-    useChannel,
     useFeature,
     useDivisionBox
   } from '@talex-touch/utils/plugin/sdk'
+  import { useTuffTransport } from '@talex-touch/utils/transport'
   
   // Initialize SDKs
   const box = useBox()
   const clipboard = useClipboard()
   const storage = usePluginStorage()
   const power = usePowerSDK()
-  const channel = useChannel()
+  const transport = useTuffTransport()
   const feature = useFeature()
   const divisionBox = useDivisionBox()
   

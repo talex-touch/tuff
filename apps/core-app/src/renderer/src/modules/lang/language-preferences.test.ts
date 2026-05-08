@@ -103,6 +103,7 @@ describe('resolveInitialLanguagePreference', () => {
     ).toMatchObject({
       locale: 'en-US',
       followSystem: true,
+      source: 'default',
       shouldUseLegacySnapshot: false,
       shouldClearLegacySnapshot: false
     })

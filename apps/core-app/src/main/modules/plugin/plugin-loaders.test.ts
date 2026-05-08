@@ -260,7 +260,7 @@ describe('createPluginLoader', () => {
     const pluginPath = await createPluginDir({
       name: 'touch-translation',
       version: '1.0.0',
-      description: 'legacy sdk plugin',
+      description: 'below-floor sdk plugin',
       icon: { type: 'emoji', value: 'x' },
       sdkapi: PERMISSION_ENFORCEMENT_MIN_VERSION - 1
     })

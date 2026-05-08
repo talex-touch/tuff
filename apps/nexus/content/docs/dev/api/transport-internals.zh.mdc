@@ -485,9 +485,9 @@ code: |
 
 ---
 
-## 7. 与传统 Channel 对比
+## 7. 与已退役 Channel 对比
 
-| 方面 | 传统 Channel | TuffTransport |
+| 方面 | 已退役 Channel | TuffTransport |
 |------|-------------|---------------|
 | 事件定义 | 字符串 | TuffEvent 对象 |
 | 类型安全 | 无 | 完整 TypeScript |
@@ -496,20 +496,18 @@ code: |
 | 流式传输 | 不支持 | MessagePort |
 | 错误类型 | 通用 Error | TuffTransportError |
 | 插件安全 | uniqueKey header | PluginKeyManager |
-| 向后兼容 | N/A | 完全兼容 |
+| 当前支持 | 仅历史参考 | 受支持入口 |
 
 **迁移路径**
 
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  // 传统代码继续工作
+  // 已退役 Channel 写法仅用于迁移审阅
   channel.send('event', data)
   
-  // 新代码使用 TuffTransport
+  // 当前代码使用 TuffTransport
   transport.send(TuffEvent, data)
-  
-  // 它们共享相同的 IPC 基础设施
 ---
 :::
 
@@ -529,4 +527,4 @@ TuffTransport 提供：
 3. **流式传输** - MessagePort 用于大/连续数据
 4. **安全** - 通过 key 机制进行插件隔离
 5. **人体工学** - 简洁 API 配合完整 IDE 支持
-6. **兼容性** - 与传统 Channel API 并行工作
+6. **当前 API** - 插件开发受支持的 IPC 面

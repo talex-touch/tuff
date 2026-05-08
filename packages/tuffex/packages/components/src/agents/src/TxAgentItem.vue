@@ -21,13 +21,23 @@ const rootClass = computed(() => {
     'tx-agent-item--disabled': !!props.disabled,
   }
 })
+
+const emit = defineEmits<{
+  select: [id: string]
+}>()
+
+function handleSelect() {
+  if (props.disabled)
+    return
+  emit('select', props.id)
+}
 </script>
 
 <template>
   <TxCardItem
     class="tx-agent-item"
     :class="rootClass"
-    role="button"
+    role="option"
     :clickable="!disabled"
     :disabled="disabled"
     :active="selected"
@@ -35,6 +45,8 @@ const rootClass = computed(() => {
     avatar-shape="rounded"
     :aria-selected="selected"
     :aria-disabled="disabled"
+    @click="handleSelect"
+    @keydown.space.prevent="handleSelect"
   >
     <template #avatar>
       <div class="tx-agent-item__icon" aria-hidden="true">

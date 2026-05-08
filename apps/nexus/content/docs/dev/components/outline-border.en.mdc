@@ -1,12 +1,12 @@
 ---
 title: "OutlineBorder"
-description: "`TxOutlineBorder` border/ring/ring-offsetoverflow/clipPath/mask slot"
+description: "Border and ring wrapper with optional clipping for avatars, thumbnails, and badges."
 category: Basic
 syncStatus: migrated
 ---
 # OutlineBorder
 
-`TxOutlineBorder` border/ring/ring-offsetoverflow/clipPath/mask slot
+Border and ring wrapper with optional clipping for avatars, thumbnails, and badges. It supports border, ring, ring-offset, and inset ring styles.
 
 ## Basic Usage
 
@@ -65,18 +65,17 @@ code: |
 
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
-| as | `string` | `div` | Description for as. |
-| variant | `'border' \| 'ring' \| 'ring-offset' \| 'ring-inset'` | `'ring-offset'` | Description for variant. |
-| shape | `'circle' \| 'rect' \| 'squircle'` | `'circle'` | DefaultText（TextDefaultText auto Text） |
-| borderRadius | `string \| number` | - | Text（Text px / CSS Text / `inherit`） |
-| borderWidth | `string \| number` | `1px` | border Text（variant=border） |
-| borderColor | `string` | `var(--tx-border-color)` | Description for borderColor. |
-| borderStyle | `'solid' \| 'dashed' \| 'dotted'` | `solid` | border Text |
-| ringWidth | `string \| number` | - | ring Text（DefaultText borderWidth） |
-| ringColor | `string` | - | Description for ringColor. |
-| offset | `string \| number` | `2px` | ring-offset Text（variant=ring-offset） |
-| offsetBg | `string` | `var(--tx-bg-color)` | Description for offsetBg. |
-| padding | `string \| number` | `0` | ContentText |
-| clipMode | `'none' \| 'overflow' \| 'clipPath' \| 'mask'` | `overflow` | Description for clipMode. |
-| clipShape | `'auto' \| 'circle' \| 'rounded' \| 'squircle' \| 'hexagon'` | `auto` | Description for clipShape. |
-
+| as | `string` | `div` | Root element tag rendered by the wrapper. |
+| variant | `'border' \| 'ring' \| 'ring-offset' \| 'ring-inset'` | `'ring-offset'` | Visual outline mode. |
+| shape | `'circle' \| 'rect' \| 'squircle'` | `'circle'` | Shape preset used for the default radius and automatic clipping shape. |
+| borderRadius | `string \| number` | - | Explicit radius; numeric values are normalized to pixels. |
+| borderWidth | `string \| number` | `1px` | Border width, also used as the default ring width. |
+| borderColor | `string` | `var(--tx-border-color)` | Border color, also used as the default ring color. |
+| borderStyle | `'solid' \| 'dashed' \| 'dotted'` | `solid` | CSS border style used by `variant="border"`. |
+| ringWidth | `string \| number` | - | Ring width; falls back to `borderWidth` when omitted. |
+| ringColor | `string` | - | Ring color; falls back to `borderColor` when omitted. |
+| offset | `string \| number` | `2px` | Ring-offset gap used by `variant="ring-offset"`. |
+| offsetBg | `string` | `var(--tx-bg-color)` | Background color used to paint the ring-offset gap. |
+| padding | `string \| number` | `0` | Padding applied inside the outline wrapper. |
+| clipMode | `'none' \| 'overflow' \| 'clipPath' \| 'mask'` | `overflow` | Clipping strategy applied to the content layer. |
+| clipShape | `'auto' \| 'circle' \| 'rounded' \| 'squircle' \| 'hexagon'` | `auto` | Clip shape; `auto` derives it from `shape`. |

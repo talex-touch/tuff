@@ -1,12 +1,12 @@
 ---
 title: "BlankSlate"
-description: "Component documentation for BlankSlate."
+description: "Large first-use empty state built on TxEmptyState."
 category: Feedback
 syncStatus: migrated
 ---
 # BlankSlate
 
-Component documentation for BlankSlate.
+Large first-use empty state built on `TxEmptyState`. Use it when a feature or section has no user-created content yet and needs an onboarding-style call to action.
 
 ## Basic Usage
 
@@ -28,3 +28,10 @@ code: |
 ## API
 
 Props / Slots / Events follow `TxEmptyState`.
+
+## Interaction Contract
+
+- `TxBlankSlate` always forwards `variant="blank-slate"` to `TxEmptyState`.
+- Defaults are optimized for onboarding: `size="large"`, `layout="vertical"`, and `surface="plain"`.
+- Explicit `size`, `layout`, and `surface` props override those defaults.
+- `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.

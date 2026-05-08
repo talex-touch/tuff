@@ -1,14 +1,14 @@
 ---
 title: "SearchSelect"
-description: "Select"
+description: "Searchable select input with local filtering, remote search events, and Popover-backed options panel."
 category: Form
 syncStatus: migrated
 ---
 # SearchSelect
 
-Select
+`TxSearchSelect` combines a text input, local option filtering, optional remote search, and a Popover-backed options panel. Disabled options stay visible but cannot be selected.
 
-The dropdown layer is now unified on the `TxPopover → TxTooltip → TxBaseAnchor` chain for consistent overlay behavior.
+The dropdown layer is hosted by `TxPopover` with full-width reference anchoring and no reference-click toggle.
 
 ## Basic Usage
 
@@ -103,32 +103,32 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string \| number` | `''` | TextValue（v-model） |
-| `placeholder` | `string` | `'Search'` | Description for placeholder. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `clearable` | `boolean` | `true` | Description for clearable. |
-| `options` | `TxSearchSelectOption[]` | `[]` | Description for options. |
-| `loading` | `boolean` | `false` | Description for loading. |
-| `remote` | `boolean` | `false` | Description for remote. |
-| `searchDebounce` | `number` | `200` | Description for searchDebounce. |
-| `dropdownMaxHeight` | `number` | `280` | Description for dropdownMaxHeight. |
-| `dropdownOffset` | `number` | `6` | Description for dropdownOffset. |
-| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Text（TxCard variant） |
+| `modelValue` | `string \| number` | `''` | Selected option value controlled by v-model. |
+| `placeholder` | `string` | `'Search'` | Placeholder forwarded to the search input. |
+| `disabled` | `boolean` | `false` | Disables the input, popover, focus open, and remote search emission. |
+| `clearable` | `boolean` | `true` | Shows the input clear affordance and allows clearing the selected value. |
+| `options` | `TxSearchSelectOption[]` | `[]` | Option records displayed in the dropdown; disabled options cannot be picked. |
+| `loading` | `boolean` | `false` | Shows a small spinner in the input suffix while results are loading. |
+| `remote` | `boolean` | `false` | Disables local filtering and emits `search` so the caller can provide external results. |
+| `searchDebounce` | `number` | `200` | Debounce delay in milliseconds before emitting remote `search` after input changes. |
+| `dropdownMaxHeight` | `number` | `280` | Maximum options panel height in pixels. |
+| `dropdownOffset` | `number` | `6` | Popover offset from the input reference. |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Popover panel surface variant. |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Card background style |
-| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Text（TxCard shadow） |
-| `panelRadius` | `number` | `18` | Description for panelRadius. |
-| `panelPadding` | `number` | `6` | Description for panelPadding. |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Popover panel shadow strength. |
+| `panelRadius` | `number` | `18` | Popover panel corner radius. |
+| `panelPadding` | `number` | `6` | Popover panel inner padding. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(v: string \| number)` | v-model Text |
-| `change` | `(v: string \| number)` | Description for change. |
-| `search` | `(q: string)` | Description for search. |
-| `select` | `(opt: TxSearchSelectOption)` | Description for select. |
-| `open` | - | Description for open. |
-| `close` | - | Description for close. |
+| `update:modelValue` | `(v: string \| number)` | v-model update emitted after selecting an enabled option or clearing. |
+| `change` | `(v: string \| number)` | Emitted with the same value after selection or clear. |
+| `search` | `(q: string)` | Emitted in remote mode after debounce, and immediately on Enter. |
+| `select` | `(opt: TxSearchSelectOption)` | Emitted with the picked enabled option before the dropdown closes. |
+| `open` | - | Emitted when the options panel opens. |
+| `close` | - | Emitted when the options panel closes; pending remote-search debounce is cleared. |
 
 ### Types
 

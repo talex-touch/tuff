@@ -60,7 +60,7 @@ describe('pilot-admin-routing-config', () => {
     settingsStore.clear()
   })
 
-  it('旧 routing policy 会从 legacy intent/image 字段派生 scenePolicies', async () => {
+  it('旧 routing policy 会从历史 intent/image 字段派生 scenePolicies', async () => {
     const { getPilotAdminRoutingConfig } = await loadTarget()
     const event = createEvent()
 
@@ -144,7 +144,7 @@ describe('pilot-admin-routing-config', () => {
     expect(ids).not.toContain('gemini-2.5-pro')
   })
 
-  it('保存 scenePolicies 时会同步回写 legacy intent/image 字段', async () => {
+  it('保存 scenePolicies 时会同步回写历史 intent/image 字段', async () => {
     const { updatePilotAdminRoutingConfig } = await loadTarget()
     const event = createEvent()
 
@@ -296,7 +296,7 @@ describe('pilot-admin-routing-config', () => {
     })).rejects.toThrow('Scene policy duplicated: intent_classification')
   })
 
-  it('legacy intent/image patch 仍可覆盖已保存的 scenePolicies', async () => {
+  it('历史 intent/image patch 仍可覆盖已保存的 scenePolicies', async () => {
     const { updatePilotAdminRoutingConfig } = await loadTarget()
     const event = createEvent()
 
@@ -334,18 +334,18 @@ describe('pilot-admin-routing-config', () => {
 
     const updated = await updatePilotAdminRoutingConfig(event, {
       routingPolicy: {
-        intentNanoModelId: 'legacy-intent-model',
-        intentRouteComboId: 'legacy-intent-combo',
+        intentNanoModelId: 'historical-intent-model',
+        intentRouteComboId: 'historical-intent-combo',
       },
     })
 
-    expect(updated.routingPolicy.intentNanoModelId).toBe('legacy-intent-model')
-    expect(updated.routingPolicy.intentRouteComboId).toBe('legacy-intent-combo')
+    expect(updated.routingPolicy.intentNanoModelId).toBe('historical-intent-model')
+    expect(updated.routingPolicy.intentRouteComboId).toBe('historical-intent-combo')
     expect(updated.routingPolicy.scenePolicies).toEqual([
       {
         scene: 'intent_classification',
-        modelId: 'legacy-intent-model',
-        routeComboId: 'legacy-intent-combo',
+        modelId: 'historical-intent-model',
+        routeComboId: 'historical-intent-combo',
       },
     ])
   })

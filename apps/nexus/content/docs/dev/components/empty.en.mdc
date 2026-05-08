@@ -1,6 +1,6 @@
 ---
 title: "Empty"
-description: "Component documentation for Empty."
+description: "A compact empty-state wrapper for empty lists, filtered results, and first-run placeholders."
 category: Feedback
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # Empty
 
-Component documentation for Empty.
+Use `Empty` when a panel, list, or query has no content to show. It wraps `EmptyState` with the standard empty variant, card surface, and vertical layout.
 
 ## Basic Usage
 
@@ -45,7 +45,7 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `title` | `string` | `'Nothing here'` | Description for title. |
-| `description` | `string` | `''` | Description for description. |
-| `iconClass` | `string` | `'i-carbon-incomplete'` | Description for iconClass. |
-| `compact` | `boolean` | `false` | Description for compact. |
+| `title` | `string` | `'Nothing here'` | Primary empty-state message. |
+| `description` | `string` | `''` | Supporting text shown below the title. |
+| `iconClass` | `string` | `'i-carbon-incomplete'` | Icon class forwarded to the wrapped `EmptyState`. |
+| `compact` | `boolean` | `false` | Uses the small empty-state size for dense panels. |

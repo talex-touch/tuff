@@ -1,6 +1,6 @@
 # Scroll 滚动
 
-基于 `@better-scroll/scroll-bar` 的滚动容器，提供更一致的滚动条体验，并兼容 `TouchScroll` 组件名。
+基于 `@better-scroll/scroll-bar` 的当前 `TxScroll` 滚动容器，提供更一致的滚动条体验。
 
 <script setup lang="ts">
 import scrollBasicSource from '../.vitepress/theme/components/demos/ScrollBasicDemo.vue?raw'

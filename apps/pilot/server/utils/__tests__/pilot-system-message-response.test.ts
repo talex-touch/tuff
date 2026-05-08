@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { listMessagesWithTraceProjection } from '../pilot-system-message-response'
 
 describe('pilot-system-message-response', () => {
-  it('始终以 trace projection 覆盖 legacy system row，且不会重复返回', async () => {
+  it('始终以 trace projection 覆盖 historical system row，且不会重复返回', async () => {
     const sessionId = 'session_projection'
     const systemId = buildPilotSystemMessageId(sessionId, 2, 'websearch.executed')
     const messages = await listMessagesWithTraceProjection({
@@ -20,7 +20,7 @@ describe('pilot-system-message-response', () => {
             id: systemId,
             sessionId,
             role: 'system',
-            content: 'legacy system row',
+            content: 'historical system row',
             createdAt: '2026-04-03T00:00:02.000Z',
             metadata: {
               seq: 2,
@@ -55,7 +55,7 @@ describe('pilot-system-message-response', () => {
     const systemMessages = messages.filter(item => item.role === 'system')
     expect(systemMessages).toHaveLength(1)
     expect(systemMessages[0]?.id).toBe(systemId)
-    expect(systemMessages[0]?.content).not.toBe('legacy system row')
+    expect(systemMessages[0]?.content).not.toBe('historical system row')
     expect(systemMessages[0]?.metadata).toMatchObject({
       seq: 2,
       sourceEventType: 'websearch.executed',
@@ -64,13 +64,13 @@ describe('pilot-system-message-response', () => {
     })
   })
 
-  it('无 trace 时仍保留 legacy system row 兼容历史会话', async () => {
-    const sessionId = 'session_legacy_only'
+  it('无 trace 时仍保留 historical system row 兼容历史会话', async () => {
+    const sessionId = 'session_historical_only'
     const messages = await listMessagesWithTraceProjection({
       async listMessages() {
         return [
           {
-            id: 'msg_system_legacy',
+            id: 'msg_system_historical',
             sessionId,
             role: 'system',
             content: '历史 system message',
@@ -90,8 +90,8 @@ describe('pilot-system-message-response', () => {
 
     expect(messages).toEqual([
       {
-        id: 'msg_system_legacy',
-        sessionId: 'session_legacy_only',
+        id: 'msg_system_historical',
+        sessionId: 'session_historical_only',
         role: 'system',
         content: '历史 system message',
         createdAt: '2026-04-03T00:00:01.000Z',
@@ -248,7 +248,7 @@ describe('pilot-system-message-response', () => {
         limit: 503,
       },
     ])
-    expect(messages.some((item) => String(item.metadata?.cardType || '').trim() === 'intent')).toBe(true)
-    expect(messages.some((item) => String(item.metadata?.cardType || '').trim() === 'tool')).toBe(true)
+    expect(messages.some(item => String(item.metadata?.cardType || '').trim() === 'intent')).toBe(true)
+    expect(messages.some(item => String(item.metadata?.cardType || '').trim() === 'tool')).toBe(true)
   })
 })

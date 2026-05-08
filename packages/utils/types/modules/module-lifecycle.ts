@@ -82,7 +82,7 @@ export interface ModuleBaseContext<E> {
 
   /**
    * Aggregated runtime context injected by the main process.
-   * Prefer using this over legacy global variables.
+   * Prefer this explicit context over process-wide globals.
    */
   runtime?: MainRuntimeContext<E>
 }

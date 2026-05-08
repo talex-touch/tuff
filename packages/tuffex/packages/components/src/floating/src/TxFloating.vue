@@ -27,6 +27,7 @@ const elementsMap = new Map<
 
 const mousePosition = { x: 0, y: 0 }
 let rafId: number | null = null
+let listenersStarted = false
 
 function updatePosition(x: number, y: number) {
   const container = containerRef.value
@@ -74,36 +75,36 @@ function resetPositions() {
 }
 
 function animate() {
-  if (!props.disabled) {
-    elementsMap.forEach((data) => {
-      const strength = (data.depth * props.sensitivity) / 20
-      const targetX = mousePosition.x * strength
-      const targetY = mousePosition.y * strength
+  elementsMap.forEach((data) => {
+    const strength = (data.depth * props.sensitivity) / 20
+    const targetX = mousePosition.x * strength
+    const targetY = mousePosition.y * strength
 
-      const dx = targetX - data.currentPosition.x
-      const dy = targetY - data.currentPosition.y
+    const dx = targetX - data.currentPosition.x
+    const dy = targetY - data.currentPosition.y
 
-      data.currentPosition.x += dx * props.easingFactor
-      data.currentPosition.y += dy * props.easingFactor
+    data.currentPosition.x += dx * props.easingFactor
+    data.currentPosition.y += dy * props.easingFactor
 
-      data.element.style.transform = `translate3d(${data.currentPosition.x}px, ${data.currentPosition.y}px, 0)`
-    })
-  }
+    data.element.style.transform = `translate3d(${data.currentPosition.x}px, ${data.currentPosition.y}px, 0)`
+  })
 
   rafId = requestAnimationFrame(animate)
 }
 
 function startListeners() {
-  if (!hasWindow())
+  if (!hasWindow() || listenersStarted || props.disabled)
     return
+  listenersStarted = true
   window.addEventListener('mousemove', handleMouseMove, { passive: true })
   window.addEventListener('touchmove', handleTouchMove, { passive: true })
   rafId = requestAnimationFrame(animate)
 }
 
 function stopListeners() {
-  if (!hasWindow())
+  if (!hasWindow() || !listenersStarted)
     return
+  listenersStarted = false
   window.removeEventListener('mousemove', handleMouseMove)
   window.removeEventListener('touchmove', handleTouchMove)
   if (rafId !== null) {
@@ -118,8 +119,12 @@ provide(TX_FLOATING_CONTEXT_KEY, {
 })
 
 watch(() => props.disabled, (disabled) => {
-  if (disabled)
+  if (disabled) {
+    stopListeners()
     resetPositions()
+    return
+  }
+  startListeners()
 })
 
 onMounted(startListeners)

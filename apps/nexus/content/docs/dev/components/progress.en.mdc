@@ -38,6 +38,10 @@ code: |
 ---
 ::
 
+## Interaction Contract
+
+`TuffProgress` is the lightweight entry for standard progress rows. It forwards percentage, status, stroke width, indeterminate state, and text formatting to the current `TxProgressBar` implementation. Determinate progress exposes `role="progressbar"` with `aria-valuenow`; indeterminate progress omits `aria-valuenow`.
+
 ## API (Lite)
 ::TuffPropsTable
 ---
@@ -54,6 +58,14 @@ rows:
     type: 'boolean'
     default: 'false'
     description: 'Indeterminate mode'
+  - name: strokeWidth
+    type: 'number'
+    default: '6'
+    description: 'Bar height in px'
+  - name: showText
+    type: 'boolean'
+    default: 'true'
+    description: 'Show outside percentage text'
 ---
 ::
 

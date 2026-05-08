@@ -9,7 +9,7 @@ The migration system handles:
 2. **Progress Tracking**: exposing real-time migration progress
 3. **Rollback Support**: rolling back to an earlier schema version when needed
 
-Legacy download database/config import has been removed from the runtime path. `DownloadCenter` now treats the current database as the only local source of truth.
+Historical download database/config import has been removed from the runtime path. `DownloadCenter` now treats the current database as the only local source of truth.
 
 ## Components
 

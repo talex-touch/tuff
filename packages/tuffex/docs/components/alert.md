@@ -89,6 +89,7 @@ Set `show-icon` to `false` to render a text-only alert.
 - Use `title` for a bold headline and `message` for the descriptive body. You can omit `title` for simpler, single-line alerts.
 - The `default` slot can be used instead of the `message` prop for rich content (links, formatted text).
 - Alerts should appear near the content they relate to — not stacked at the top of the page unless they are truly global.
+- Alerts render with `role="alert"` and use `TxIcon` for semantic leading icons.
 
 ## API
 

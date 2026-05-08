@@ -43,12 +43,32 @@ rows:
     type: "'success' | 'warning' | 'danger' | 'info' | 'muted'"
     default: 'info'
     description: '状态类型'
+  - name: statusKey
+    type: "'granted' | 'denied' | 'notDetermined' | 'unsupported' | string"
+    default: "''"
+    description: '映射到色调的权限/状态键'
+  - name: icon
+    type: 'string'
+    default: "''"
+    description: '自定义图标 class'
   - name: size
     type: "'sm' | 'md'"
     default: 'md'
     description: '尺寸'
+  - name: os
+    type: "'macos' | 'windows' | 'linux'"
+    default: '-'
+    description: '可选平台图标'
+  - name: osOnly
+    type: 'boolean'
+    default: 'false'
+    description: '仅渲染平台图标'
 ---
 ::
+
+## 契约说明
+
+显式 `status` 优先于 `statusKey`。`statusKey` 会把 `granted/denied/notDetermined/unsupported` 映射到 success/danger/warning/muted，未知 key 回退到 info。平台图标会渲染在状态图标前；`osOnly` 会隐藏状态图标。点击徽标会触发 `click` 事件。
 
 ## 组合示例
 ### 状态行

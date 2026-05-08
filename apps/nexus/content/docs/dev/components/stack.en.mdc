@@ -1,12 +1,12 @@
 ---
 title: "Stack"
-description: "Component documentation for Stack."
+description: "A direction-first Flexbox wrapper for evenly spaced vertical or horizontal layouts."
 category: Layout
 syncStatus: migrated
 ---
 # Stack
 
-Component documentation for Stack.
+Use `Stack` for simple one-dimensional layouts such as form sections, button groups, and compact panel content.
 
 ## Basic Usage
 
@@ -40,5 +40,5 @@ code: |
 | `gap` | `number \| string` | `12` | Gap |
 | `align` | `string` | `'stretch'` | align-items |
 | `justify` | `string` | `'flex-start'` | justify-content |
-| `wrap` | `boolean` | `false` | Description for wrap. |
-| `inline` | `boolean` | `false` | Description for inline. |
+| `wrap` | `boolean` | `false` | Allows children to wrap onto multiple lines. |
+| `inline` | `boolean` | `false` | Uses `inline-flex` instead of block-level `flex`. |

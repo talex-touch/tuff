@@ -238,6 +238,7 @@ code: |
 ### 无障碍支持
 
 - 支持 ESC 关闭
-- 对话框内焦点捕获
+- 打开时聚焦对话框容器或确认按钮
 - 关闭时焦点恢复
-- 自动补充 ARIA 属性
+- 自动补充 `role="dialog"`、`aria-modal` 与实例级标题/描述 ARIA 关联
+- `DialogButton.onClick()` 返回 `true` 时关闭，返回 `false` 时保持打开

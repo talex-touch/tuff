@@ -14,7 +14,7 @@ Clipboard SDK 提供插件访问系统剪贴板的能力，包括：
 
 - `useClipboard()` 已切换到 `ClipboardEvents.*` 事件域（如 `getHistory`、`read`、`copyAndPaste`）。
 - Clipboard SDK 不再依赖 `clipboard:*` raw channel 事件作为主通道。
-- 主进程仍保留 legacy 事件处理器用于兼容老调用方，建议新插件仅使用 SDK。
+- 插件代码必须使用 SDK / typed transport 入口。历史 `clipboard:*` raw channel 名称仅作为迁移参考，不再作为受支持的扩展面。
 
 ## 介绍
 

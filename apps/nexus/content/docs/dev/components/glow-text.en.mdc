@@ -1,12 +1,12 @@
 ---
 title: "GlowText"
-description: "/“”"
+description: "Animated shine overlay for text and compact UI surfaces."
 category: Basic
 syncStatus: migrated
 ---
 # GlowText
 
-/“”
+`TxGlowText` adds a sweep highlight over text, badges, image previews, and compact surfaces. Use `mode="text-clip"` when the shine should be clipped to glyphs; keep the default `adaptive` mode for container-level shimmer.
 
 > `adaptive` is enabled by default (container-level shimmer, good for images/cards); for text use `mode="text-clip"` so shimmer clips to glyphs.
 >
@@ -119,16 +119,16 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `tag` | `string` | `span` | Description for tag. |
-| `active` | `boolean` | `true` | Description for active. |
-| `repeat` | `boolean` | `true` | Description for repeat. |
-| `durationMs` | `number` | `1400` | Description for durationMs. |
-| `delayMs` | `number` | `0` | Description for delayMs. |
-| `angle` | `number` | `20` | Description for angle. |
-| `bandSize` | `number` | `38` | Description for bandSize. |
-| `color` | `string` | `rgba(255, 255, 255, 0.9)` | Description for color. |
-| `opacity` | `number` | `0.75` | Description for opacity. |
-| `blendMode` | `string` | `screen` | Description for blendMode. |
-| `mode` | `'classic' \| 'adaptive' \| 'text-clip'` | `adaptive` | Text（`text-clip` Text） |
-| `backdrop` | `string` | - | Description for backdrop. |
-| `radius` | `number` | `10` | Description for radius. |
+| `tag` | `string` | `span` | Root element used to wrap the default slot. |
+| `active` | `boolean` | `true` | Disables the shine overlay when set to `false`. |
+| `repeat` | `boolean` | `true` | Runs the sweep once when set to `false`. |
+| `durationMs` | `number` | `1400` | Sweep animation duration in milliseconds. |
+| `delayMs` | `number` | `0` | Delay before the sweep animation starts. |
+| `angle` | `number` | `20` | Gradient angle in degrees. |
+| `bandSize` | `number` | `38` | Highlight band width as a percentage of the gradient. |
+| `color` | `string` | `rgba(255, 255, 255, 0.9)` | Highlight color used in the sweep gradient. |
+| `opacity` | `number` | `0.75` | Overlay opacity during the visible part of the sweep. |
+| `blendMode` | `string` | - | Optional CSS `mix-blend-mode` override for the shine overlay. |
+| `mode` | `'classic' \| 'adaptive' \| 'text-clip'` | `adaptive` | `adaptive` uses a container overlay; `text-clip` mirrors slot text and clips the shine to glyphs. |
+| `backdrop` | `string` | - | Optional CSS backdrop filter override for the shine overlay. |
+| `radius` | `number` | `10` | Root border radius in pixels. |

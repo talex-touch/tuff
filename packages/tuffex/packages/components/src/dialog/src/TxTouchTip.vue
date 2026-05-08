@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PropType } from 'vue'
 import type { TouchTipButton } from './types'
-import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
+import { onMounted, onUnmounted, ref, useId, watchEffect } from 'vue'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({
@@ -37,6 +37,8 @@ interface ButtonState {
 const btnArray = ref<Array<{ value: ButtonState }>>([])
 const wholeDom = ref<HTMLElement | null>(null)
 const zIndex = ref(getZIndex())
+const titleId = useId()
+const messageId = useId()
 let previouslyFocusedElement: HTMLElement | null = null
 
 function sleep(ms: number): Promise<void> {
@@ -126,20 +128,22 @@ onUnmounted(() => {
 
 <template>
   <teleport to="body">
-    <div class="tx-touch-tip" role="dialog" aria-modal="true" :style="{ zIndex }">
+    <div class="tx-touch-tip" :style="{ zIndex }">
       <div
         ref="wholeDom"
         class="tx-touch-tip__container fake-background"
         :class="{ 'tx-touch-tip__container--loading': false }"
-        :aria-labelledby="title ? 'tx-touch-tip-title' : undefined"
-        :aria-describedby="message ? 'tx-touch-tip-message' : undefined"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="title ? titleId : undefined"
+        :aria-describedby="message ? messageId : undefined"
         @keydown.esc="forClose"
       >
-        <h1 v-if="title" id="tx-touch-tip-title" class="tx-touch-tip__title" v-text="title" />
+        <h1 v-if="title" :id="titleId" class="tx-touch-tip__title" v-text="title" />
 
         <span
           v-if="message"
-          id="tx-touch-tip-message"
+          :id="messageId"
           class="tx-touch-tip__content"
           v-html="message.replace('\n', '<br /><br />')"
         />

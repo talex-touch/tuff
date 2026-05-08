@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { Slots } from 'vue'
 import { computed, inject, onMounted, useSlots, watch } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import { SELECT_KEY } from './types'
@@ -19,7 +20,7 @@ const props = withDefaults(
 )
 
 const txSelect = inject(SELECT_KEY)
-const slots = useSlots()
+const slots: Slots = useSlots()
 
 function resolveChildrenText(children: unknown): string {
   if (children == null || typeof children === 'boolean')
@@ -48,7 +49,7 @@ const resolvedLabel = computed(() => {
   if (props.label)
     return props.label
 
-  const slotContent = slots.default?.()
+  const slotContent = slots.default?.({})
   const extracted = resolveChildrenText(slotContent).replace(/\s+/g, ' ').trim()
   if (extracted)
     return extracted

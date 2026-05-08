@@ -4,6 +4,7 @@
  *
  * 用于在文档中展示组件的实时预览效果
  */
+import type { Slots } from 'vue'
 import { computed, ref, useSlots } from 'vue'
 
 const props = defineProps<{
@@ -12,7 +13,7 @@ const props = defineProps<{
   codeLang?: string
 }>()
 
-const slots = useSlots()
+const slots: Slots = useSlots()
 
 const showCode = ref(false)
 
@@ -48,7 +49,7 @@ const codeContent = computed(() => {
       return raw
     return `\n\n\`\`\`${props.codeLang || 'vue'}\n${raw}\n\`\`\`\n`
   }
-  const vnodes = slots.code?.() ?? []
+  const vnodes = slots.code?.({}) ?? []
   const decoded = decodeEntities(toText(vnodes).trim())
   if (decoded) {
     if (decoded.includes('```'))

@@ -4,7 +4,7 @@ export interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning' | 'info' | 'flat' | 'bare'
   size?: 'sm' | 'md' | 'lg' | 'large' | 'small' | 'mini'
   block?: boolean
-  /** 按钮类型 */
+  /** 语义 tone 别名；未设置 variant 时用于推导视觉变体 */
   type?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'text'
   /** 按钮尺寸 */
   /** 是否朴素按钮 */

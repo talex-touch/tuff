@@ -1,12 +1,12 @@
 ---
 title: "StatCard"
-description: "Component documentation for StatCard."
+description: "Metric card for values, insights, and progress summaries."
 category: Data
 syncStatus: migrated
 ---
 # StatCard
 
-Component documentation for StatCard.
+`TxStatCard` displays a primary metric with optional icon decoration, insight comparison, or progress ring. Use the default variant for simple metrics, `insight` for trend deltas, and `variant="progress"` or `progress` for bounded percentage summaries.
 
 ## Basic Usage
 
@@ -175,8 +175,8 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `value` | `number \| string` | - | DisplayValue |
-| `label` | `string` | - | Description for label. |
+| `value` | `number \| string` | - | Primary value shown in the card; numeric values can animate through NumberFlow when available. |
+| `label` | `string` | - | Metric label shown below the value or at the top for insight/progress layouts. |
 | `iconClass` | `string` | `''` | Icon class (UnoCSS Icones). |
 | `clickable` | `boolean` | `false` | Enables hover/press states. |
 | `insight` | `StatCardInsight` | - | Change indicator object (moves label to top). |

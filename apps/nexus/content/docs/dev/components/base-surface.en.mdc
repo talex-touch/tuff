@@ -233,3 +233,12 @@ code: |
 |----------|-------------|---------------|--------------|
 | `--tx-surface-color` | Solid/mask background color | `var(--tx-fill-color-lighter)` (#fafafa) | #1d1d1d |
 | `--tx-surface-blur-bg` | Semi-transparent base for blur/glass | `rgba(255,255,255,0.6)` | `rgba(0,0,0,0.4)` |
+
+## Interaction Contract
+
+- `tag` controls the root element and the default slot is rendered above all material layers.
+- `pure` mode renders only the root background; `mask` renders the mask layer and clamps opacity to `0..1`.
+- `blur` and `glass` degrade while `moving=true` or auto-detected transform motion is active. `fallbackMode='mask'` uses `fallbackMaskOpacity` when provided; `fallbackMode='pure'` renders no mask layer.
+- `glass` and `refraction` forward normalized geometry and optical props to `TxGlassSurface`.
+- `refraction` adds glass, filter, mask, and edge layers, plus renderer/profile/tone classes and light/strength CSS variables.
+- `autoDetect` observes the root and ancestor style/transition changes and tears listeners/observers down on unmount.

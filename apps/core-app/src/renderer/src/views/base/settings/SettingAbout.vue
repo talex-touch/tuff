@@ -5,6 +5,7 @@
   Shows version, build information, system specs, and resource usage.
 -->
 <script setup lang="ts" name="SettingAbout">
+import type { AnalyticsSnapshot } from '@talex-touch/utils/analytics'
 import { AppPreviewChannel } from '@talex-touch/utils'
 import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { useAppSdk } from '@talex-touch/utils/renderer'
@@ -38,17 +39,14 @@ const settingAboutLog = createRendererLogger('SettingAbout')
 const appUpdate = computed(() => Boolean(startupInfo.value?.appUpdate))
 
 const dev = ref(false)
-interface PerformanceSummary {
+interface StartupPerformanceSummary {
   mainProcessTime?: number
   rendererTime?: number
   moduleCount?: number
   rating?: 'excellent' | 'good' | 'fair' | 'poor'
-  avgStartupTime?: number
-  avgMemoryUsage?: number
-  sampleCount?: number
 }
 
-const performanceSummary = ref<PerformanceSummary | null>(null)
+const analyticsSnapshot = ref<AnalyticsSnapshot | null>(null)
 const showPerformanceDetails = ref(false)
 const updateChannel = ref<AppPreviewChannel | null>(null)
 const termsOfServiceUrl = `${getTuffBaseUrl()}/license`
@@ -81,12 +79,10 @@ const advancedSettings = computed({
 onMounted(async () => {
   dev.value = import.meta.env.MODE === 'development'
 
-  // Load performance summary
   try {
-    const summary = (await transport.send(
-      AppEvents.analytics.getSummary
-    )) as PerformanceSummary | null
-    performanceSummary.value = summary
+    analyticsSnapshot.value = await transport.send(AppEvents.analytics.getSnapshot, {
+      windowType: '24h'
+    })
   } catch (error) {
     settingAboutLog.warn('Failed to load performance summary', error)
   }
@@ -103,6 +99,33 @@ const versionStr = computed(
 const startCosts = computed(() =>
   startupInfo.value ? (startupInfo.value.t.e - startupInfo.value.t.s) / 1000 : 0
 )
+
+const performanceSummary = computed<StartupPerformanceSummary | null>(() => {
+  const startup = analyticsSnapshot.value?.metrics?.startup
+  if (startup) {
+    return {
+      mainProcessTime:
+        typeof startup.mainProcessTimeMs === 'number'
+          ? startup.mainProcessTimeMs / 1000
+          : undefined,
+      rendererTime:
+        typeof startup.rendererTimeMs === 'number' ? startup.rendererTimeMs / 1000 : undefined,
+      moduleCount: startup.moduleCount,
+      rating: startup.rating
+    }
+  }
+
+  if (!startupInfo.value) return null
+
+  const totalTime = startupInfo.value.t.e - startupInfo.value.t.s
+  const rating =
+    totalTime < 1000 ? 'excellent' : totalTime < 2000 ? 'good' : totalTime < 5000 ? 'fair' : 'poor'
+
+  return {
+    rendererTime: totalTime / 1000,
+    rating
+  }
+})
 
 // Export performance data
 async function exportPerformanceData() {

@@ -66,6 +66,10 @@ code: |
 ---
 :::
 
+## 交互契约
+
+`TxFlatSelect` 会将触发器暴露为 combobox，将下拉面板暴露为 listbox。选项会暴露 option 选中状态；禁用选项不可选择；下拉打开时 ArrowUp/ArrowDown 会跳过禁用选项。
+
 ## 与 TxSelect 的对比
 
 | 特性 | TxSelect | TxFlatSelect |

@@ -85,3 +85,10 @@ BlankSlate shares the full API of [`TxEmptyState`](/components/empty-state) with
 | `surface` | `'plain'` |
 
 See [EmptyState API](/components/empty-state) for the complete list of props, events, and slots.
+
+## Interaction Contract
+
+- `TxBlankSlate` always forwards `variant="blank-slate"` to `TxEmptyState`.
+- Defaults are optimized for onboarding: `size="large"`, `layout="vertical"`, and `surface="plain"`.
+- Explicit `size`, `layout`, and `surface` props override those defaults.
+- `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.

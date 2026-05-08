@@ -2,6 +2,8 @@
 defineOptions({
   name: 'TxLayoutSkeleton',
 })
+
+const contentLineWidths = ['72%', '58%', '84%', '46%', '67%', '76%', '52%', '63%']
 </script>
 
 <template>
@@ -20,8 +22,8 @@ defineOptions({
         </div>
 
         <div class="tx-layout-skeleton__content">
-          <div v-for="i in 8" :key="i" class="tx-layout-skeleton__content-line">
-            <div class="tx-layout-skeleton__line" :style="{ width: `${Math.random() * 40 + 40}%` }" />
+          <div v-for="(width, i) in contentLineWidths" :key="i" class="tx-layout-skeleton__content-line">
+            <div class="tx-layout-skeleton__line" :style="{ width }" />
           </div>
         </div>
       </div>

@@ -1,4 +1,6 @@
 import { getLogger } from '../../../common/logger'
+import { createPluginTuffTransport } from '../../../transport'
+import { PluginEvents } from '../../../transport/events'
 import { ensureRendererChannel } from '../channel'
 import { useTouchSDK } from '../touch-sdk'
 
@@ -16,6 +18,14 @@ export enum LifecycleHooks {
 type LifecycleHook = (data: unknown) => void
 interface HookContext { data: unknown, reply: (result: boolean) => void }
 type HookProcessor = (context: HookContext) => void
+
+const lifecycleSignalEvents = {
+  [LifecycleHooks.ENABLE]: PluginEvents.lifecycleSignal.enabled,
+  [LifecycleHooks.DISABLE]: PluginEvents.lifecycleSignal.disabled,
+  [LifecycleHooks.ACTIVE]: PluginEvents.lifecycleSignal.active,
+  [LifecycleHooks.INACTIVE]: PluginEvents.lifecycleSignal.inactive,
+  [LifecycleHooks.CRASH]: PluginEvents.lifecycleSignal.crashed,
+} as const
 
 export function injectHook(
   type: LifecycleHooks,
@@ -39,8 +49,15 @@ export function injectHook(
 
   if (hooks.length === 0) {
     const channel = ensureRendererChannel('[Lifecycle Hook] Channel not available. Make sure hooks run in plugin renderer context.')
-    channel.regChannel(`@lifecycle:${type}`, (obj: any) => {
-      processFunc(obj)
+    const transport = createPluginTuffTransport(channel as any)
+    transport.on(lifecycleSignalEvents[type], (data) => {
+      processFunc({
+        data,
+        reply: (result) => {
+          if (!result)
+            sdkLog.warn(`[TouchSDK] ${type} hook requested a negative reply`, { data })
+        },
+      })
 
       if (sdk?.__hooks) {
         delete sdk.__hooks[type]

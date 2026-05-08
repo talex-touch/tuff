@@ -1,4 +1,6 @@
 import type { FileDetails, StorageStats, StorageTreeNode } from '../../types/storage'
+import { createPluginTuffTransport } from '../../transport'
+import { PluginEvents } from '../../transport/events'
 import { ensureRendererChannel } from './channel'
 import { usePluginName } from './plugin-info'
 
@@ -13,6 +15,7 @@ export function usePluginStorage() {
   const pluginName = usePluginName('[Plugin SDK] Cannot determine plugin name. Make sure this is called in a plugin context.')
 
   const channel = ensureRendererChannel('[Plugin Storage] Channel not available. Make sure this is called in a plugin context.')
+  const transport = createPluginTuffTransport(channel as any)
 
   return {
     /**
@@ -21,7 +24,7 @@ export function usePluginStorage() {
      * @returns A promise that resolves with the file content, or null if the file does not exist.
      */
     getFile: async (fileName: string): Promise<any> => {
-      return channel.send('plugin:storage:get-file', { pluginName, fileName })
+      return transport.send(PluginEvents.storage.getFile, { pluginName, fileName })
     },
 
     /**
@@ -31,7 +34,7 @@ export function usePluginStorage() {
      * @returns A promise that resolves when the file has been stored.
      */
     setFile: async (fileName: string, content: any): Promise<{ success: boolean, error?: string }> => {
-      return channel.send('plugin:storage:set-file', { pluginName, fileName, content: JSON.parse(JSON.stringify(content)) })
+      return transport.send(PluginEvents.storage.setFile, { pluginName, fileName, content: JSON.parse(JSON.stringify(content)) })
     },
 
     /**
@@ -40,7 +43,7 @@ export function usePluginStorage() {
      * @returns A promise that resolves when the file has been deleted.
      */
     deleteFile: async (fileName: string): Promise<{ success: boolean, error?: string }> => {
-      return channel.send('plugin:storage:delete-file', { pluginName, fileName })
+      return transport.send(PluginEvents.storage.deleteFile, { pluginName, fileName })
     },
 
     /**
@@ -48,7 +51,7 @@ export function usePluginStorage() {
      * @returns A promise that resolves with an array of file names.
      */
     listFiles: async (): Promise<string[]> => {
-      return channel.send('plugin:storage:list-files', { pluginName })
+      return transport.send(PluginEvents.storage.listFiles, { pluginName })
     },
 
     /**
@@ -56,7 +59,7 @@ export function usePluginStorage() {
      * @returns A promise that resolves with storage statistics.
      */
     getStats: async (): Promise<StorageStats> => {
-      return channel.send('plugin:storage:get-stats', { pluginName })
+      return transport.send(PluginEvents.storage.getStats, { pluginName }) as Promise<StorageStats>
     },
 
     /**
@@ -64,7 +67,7 @@ export function usePluginStorage() {
      * @returns A promise that resolves with the tree structure.
      */
     getTree: async (): Promise<StorageTreeNode[]> => {
-      return channel.send('plugin:storage:get-tree', { pluginName })
+      return transport.send(PluginEvents.storage.getTree, { pluginName }) as Promise<StorageTreeNode[]>
     },
 
     /**
@@ -73,7 +76,7 @@ export function usePluginStorage() {
      * @returns A promise that resolves with file details.
      */
     getFileDetails: async (fileName: string): Promise<FileDetails | null> => {
-      return channel.send('plugin:storage:get-file-details', { pluginName, fileName })
+      return transport.send(PluginEvents.storage.getFileDetails, { pluginName, fileName }) as Promise<FileDetails | null>
     },
 
     /**
@@ -81,7 +84,7 @@ export function usePluginStorage() {
      * @returns A promise that resolves with the operation result.
      */
     clearAll: async (): Promise<{ success: boolean, error?: string }> => {
-      return channel.send('plugin:storage:clear', { pluginName })
+      return transport.send(PluginEvents.storage.clear, { pluginName })
     },
 
     /**
@@ -89,7 +92,7 @@ export function usePluginStorage() {
      * @returns A promise that resolves when the folder is opened.
      */
     openFolder: async (): Promise<void> => {
-      await channel.send('plugin:storage:open-folder', { pluginName })
+      await transport.send(PluginEvents.storage.openFolder, { pluginName })
     },
 
     /**
@@ -106,11 +109,7 @@ export function usePluginStorage() {
         }
       }
 
-      channel.regChannel('plugin:storage:update', listener)
-
-      return () => {
-        channel.unRegChannel('plugin:storage:update', listener)
-      }
+      return transport.on(PluginEvents.storage.update, listener)
     },
   }
 }

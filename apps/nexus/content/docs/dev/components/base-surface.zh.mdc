@@ -233,3 +233,12 @@ code: |
 |------|------|---------|---------|
 | `--tx-surface-color` | 纯色/遮罩背景色 | `var(--tx-fill-color-lighter)` (#fafafa) | #1d1d1d |
 | `--tx-surface-blur-bg` | blur/glass 半透明底色 | `rgba(255,255,255,0.6)` | `rgba(0,0,0,0.4)` |
+
+## 交互契约
+
+- `tag` 控制根元素标签，默认插槽内容始终渲染在材质层之上。
+- `pure` 模式只渲染根背景；`mask` 模式渲染 mask 层并将透明度 clamp 到 `0..1`。
+- `blur` 与 `glass` 在 `moving=true` 或自动检测到 transform 运动时降级。`fallbackMode='mask'` 会优先使用 `fallbackMaskOpacity`；`fallbackMode='pure'` 不渲染 mask 层。
+- `glass` 与 `refraction` 会把归一化后的几何和光学参数透传给 `TxGlassSurface`。
+- `refraction` 会渲染 glass/filter/mask/edge 层，并暴露 renderer/profile/tone class 与 light/strength CSS 变量。
+- `autoDetect` 会监听根节点及祖先节点的 style/transition 变化，并在卸载时清理监听器与 observer。

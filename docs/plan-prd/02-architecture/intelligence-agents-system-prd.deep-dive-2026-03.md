@@ -302,16 +302,22 @@ class FileAgent implements AgentImpl {
 ### 5.1 智能体管理
 ```typescript
 // Renderer → Main
-'agents:list'              → AgentDescriptor[]
-'agents:get'               → AgentDescriptor | null
-'agents:execute'           → { taskId: string }
-'agents:cancel'            → { success: boolean }
+'agents:api:list'              → AgentDescriptor[]
+'agents:api:list-all'          → AgentDescriptor[]
+'agents:api:get'               → AgentDescriptor | null
+'agents:api:execute'           → { taskId: string }
+'agents:api:execute-immediate' → AgentResult
+'agents:api:cancel'            → { success: boolean }
+'agents:api:task-status'       → { status: string }
+'agents:api:update-priority'   → { success: boolean }
+'agents:api:stats'             → AgentStats
 
 // Main → Renderer
-'agents:task-started'      → { taskId, agentId }
-'agents:task-progress'     → { taskId, progress, step }
-'agents:task-completed'    → { taskId, result }
-'agents:task-failed'       → { taskId, error }
+'agents:push:task-started'     → { taskId, agentId }
+'agents:push:task-progress'    → { taskId, progress, step }
+'agents:push:task-completed'   → { taskId, result }
+'agents:push:task-failed'      → { taskId, error }
+'agents:push:task-cancelled'   → { taskId }
 ```
 
 ### 5.2 工具执行

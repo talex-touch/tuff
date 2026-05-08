@@ -986,7 +986,7 @@ async function applyPulledStorageItems(
         payload.rawText,
         extractContentHash(item)
       )
-      if (payload.requiresEncryptedRepush) {
+      if (payload.requiresMigrationRewrite) {
         markB64MigrationPayloadForRepush(qualifiedName)
       }
       if (applied) {
@@ -1012,7 +1012,7 @@ async function applyPulledStorageItems(
       remoteApplyInFlight.delete(qualifiedName)
       if (result.success) {
         lastSyncedSnapshots.set(qualifiedName, cloneValue(merged))
-        if (patched || payload.requiresEncryptedRepush) {
+        if (patched || payload.requiresMigrationRewrite) {
           markB64MigrationPayloadForRepush(qualifiedName)
         } else {
           dirtyStorages.delete(qualifiedName)

@@ -32,13 +32,13 @@ const emit = defineEmits<{
     @update:model-value="v => emit('update:modelValue', v)"
     @close="() => emit('close')"
   >
-    <template #header>
+    <template v-if="$slots.header" #header>
       <slot name="header" />
     </template>
 
     <slot />
 
-    <template #footer>
+    <template v-if="$slots.footer" #footer>
       <slot name="footer" />
     </template>
   </TxModal>

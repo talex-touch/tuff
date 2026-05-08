@@ -25,6 +25,7 @@ code: |
 ---
 :::
 ## API (Lite)
+### TxSteps Props
 ::TuffPropsTable
 ---
 rows:
@@ -42,6 +43,52 @@ rows:
     description: Step size
 ---
 :::
+
+### TxStep Props
+::TuffPropsTable
+---
+rows:
+  - name: title
+    type: string
+    default: '-'
+    description: Step title
+  - name: description
+    type: string
+    default: '-'
+    description: Step description
+  - name: step
+    type: "number | string"
+    default: 'child order'
+    description: Step identifier; child order index is used when omitted
+  - name: status
+    type: "'wait' | 'active' | 'completed' | 'error'"
+    default: "'wait'"
+    description: Manual status
+  - name: clickable
+    type: boolean
+    default: 'true'
+    description: Whether pointer/keyboard activation can switch to this step
+  - name: disabled
+    type: boolean
+    default: 'false'
+    description: Disable step interaction
+  - name: icon
+    type: string
+    default: '-'
+    description: Custom step icon
+  - name: completedIcon
+    type: string
+    default: "'check'"
+    description: Completed step icon
+---
+:::
+
+## Interaction Contract
+
+- When `step` is omitted, `TxStep` uses its child order as a zero-based index aligned with numeric `active`.
+- Clickable step heads expose `role="button"` and `tabindex="0"`; the current step exposes `aria-current="step"`.
+- Click, Enter, and Space switch the internal active step; disabled or `clickable=false` steps ignore interaction.
+- The last step does not render a connector line.
 
 ## Source
 <TuffDocSourceLink />

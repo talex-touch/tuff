@@ -34,7 +34,6 @@ const SDK_DOCS_MAP: Record<string, string> = {
   'download-sdk': 'download',
   'platform-capabilities-sdk': 'platform-capabilities',
   'account-sdk': 'account',
-  'channel-sdk': 'channel',
   'feature-sdk': 'feature',
   'divisionbox-sdk': 'division-box',
   'flow-sdk': 'flow-transfer',

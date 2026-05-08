@@ -19,12 +19,15 @@ marked.setOptions({
 })
 
 const sanitizer = ref<null | ((html: string) => string)>(null)
+const sanitizerReady = ref(false)
 const autoTheme = ref<'light' | 'dark'>('light')
 let themeObserver: MutationObserver | null = null
 
 onMounted(async () => {
-  if (!props.sanitize)
+  if (!props.sanitize) {
+    sanitizerReady.value = true
     return
+  }
 
   try {
     const mod = await import('dompurify')
@@ -33,6 +36,9 @@ onMounted(async () => {
   }
   catch {
     sanitizer.value = null
+  }
+  finally {
+    sanitizerReady.value = true
   }
 })
 
@@ -109,7 +115,9 @@ const rawHtml = computed(() => {
 const safeHtml = computed(() => {
   if (!props.sanitize)
     return rawHtml.value
-  return sanitizer.value ? sanitizer.value(rawHtml.value) : rawHtml.value
+  if (!sanitizerReady.value)
+    return ''
+  return sanitizer.value ? sanitizer.value(rawHtml.value) : ''
 })
 
 const resolvedTheme = computed<'light' | 'dark'>(() => {

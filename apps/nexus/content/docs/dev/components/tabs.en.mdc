@@ -441,56 +441,56 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string` | - | Description for modelValue. |
-| `defaultValue` | `string` | - | Description for defaultValue. |
-| `placement` | `'left' \| 'right' \| 'top' \| 'bottom'` | `'left'` | Tabs LayoutPosition |
-| `offset` | `number` | `0` | Description for offset. |
-| `navMinWidth` | `number` | `220` | Description for navMinWidth. |
-| `navMaxWidth` | `number` | `320` | Description for navMaxWidth. |
-| `contentPadding` | `number` | `12` | Description for contentPadding. |
-| `contentScrollable` | `boolean` | `true` | Description for contentScrollable. |
-| `autoHeight` | `boolean` | `false` | Description for autoHeight. |
-| `autoWidth` | `boolean` | `false` | Description for autoWidth. |
-| `indicatorVariant` | `'line' \| 'pill' \| 'block' \| 'dot' \| 'outline'` | `'line'` | Description for indicatorVariant. |
-| `indicatorMotion` | `'stretch' \| 'warp' \| 'glide' \| 'snap' \| 'spring'` | `'stretch'` | Description for indicatorMotion. |
-| `indicatorMotionStrength` | `number` | `1` | Description for indicatorMotionStrength. |
-| `animation` | `TabsAnimation` | - | Description for animation. |
-| `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | - | ContentTextSizeText（TextContent，Text `contentScrollable=false` Text）。Text `autoHeight*` |
-| `animation.nav` | `boolean \| { enabled?; durationMs?; easing? }` | - | TextContainerText（nav Text/LayoutText） |
-| `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | - | Description for animation.indicator. |
-| `animation.content` | `boolean \| { enabled? }` | - | ContentText（zoom Text） |
-| `autoHeight` | `boolean` | `false` | Description for autoHeight. |
-| `autoHeightDurationMs` | `number` | `250` | Description for autoHeightDurationMs. |
-| `autoHeightEasing` | `string` | `ease` | Description for autoHeightEasing. |
+| `modelValue` | `string` | - | Controlled active tab name. |
+| `defaultValue` | `string` | - | Initial active tab name when `modelValue` is not provided. |
+| `placement` | `'left' \| 'right' \| 'top' \| 'bottom'` | `'left'` | Navigation placement; invalid values fall back to `left`. |
+| `offset` | `number` | `0` | Extra indicator offset along the active tab axis. |
+| `navMinWidth` | `number` | `220` | Minimum navigation width for vertical placements. |
+| `navMaxWidth` | `number` | `320` | Maximum navigation width for vertical placements. |
+| `contentPadding` | `number` | `12` | Padding applied to the main content panel. |
+| `contentScrollable` | `boolean` | `true` | Wrap content in an internal scroll container unless size animation needs direct measurement. |
+| `borderless` | `boolean` | `false` | Remove the outer border/background for embedded layouts. |
+| `autoHeight` | `boolean` | `false` | Animate content height changes through AutoSizer. |
+| `autoWidth` | `boolean` | `false` | Animate content width changes through AutoSizer. |
+| `indicatorVariant` | `'line' \| 'pill' \| 'block' \| 'dot' \| 'outline'` | `'line'` | Indicator style; invalid values fall back to `line`. |
+| `indicatorMotion` | `'stretch' \| 'warp' \| 'glide' \| 'snap' \| 'spring'` | `'stretch'` | Indicator transition motion class; invalid values fall back to `stretch`. |
+| `indicatorMotionStrength` | `number` | `1` | Non-negative CSS variable controlling indicator motion strength. |
+| `animation` | `TabsAnimation` | - | Per-area animation configuration for size, nav, indicator, and content transitions. |
+| `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | - | Enable and configure AutoSizer size animation; defaults to `autoHeightDurationMs` / `autoHeightEasing`. |
+| `animation.nav` | `boolean \| { enabled?; durationMs?; easing? }` | - | Enable and configure nav transition CSS variables. |
+| `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | - | Enable and configure indicator transition CSS variables. |
+| `animation.content` | `boolean \| { enabled? }` | - | Enable or disable the content zoom class during tab switches. |
+| `autoHeightDurationMs` | `number` | `250` | Default size animation duration. |
+| `autoHeightEasing` | `string` | `ease` | Default size animation easing. |
 
 ### Slots
 
 | Name | Params | Description |
 |------|------|------|
-| `default` | - | Description for default. |
-| `nav-right` | - | Description for nav-right. |
+| `default` | - | Provide `TxTabItem`, optional `TxTabItemGroup`, and optional `TxTabHeader` nodes. |
+| `nav-right` | - | Render extra controls at the end of the nav bar. |
 
 ### Expose
 
 | Name | Type | Description |
 |------|------|------|
-| `refresh` | `() => void` | Description for refresh. |
-| `flip` | `(action: () => void \| Promise<void>) => Promise<void>` | TextUsage FLIP SizeText |
-| `action` | `(fn: (el: HTMLElement) => void \| Promise<void>, optionsOrDetect?: any) => Promise<any>` | AutoSizer Text action wrapper（Text） |
-| `size` | `() => { width: number; height: number } \| undefined` | TextSizeText |
+| `refresh` | `() => void` | Forward to the internal AutoSizer `refresh()`. |
+| `flip` | `(action: () => void \| Promise<void>) => Promise<void>` | Run an action inside the internal AutoSizer FLIP transition when available. |
+| `action` | `(fn: (el: HTMLElement) => void \| Promise<void>, optionsOrDetect?: any) => Promise<any>` | Forward to the internal AutoSizer action helper. |
+| `size` | `() => { width: number; height: number } \| undefined` | Return the latest measured AutoSizer size. |
 
 ### TxTabItem Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `name` | `string` | - | Description for name. |
-| `iconClass` | `string` | `''` | Description for iconClass. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `activation` | `boolean` | `false` | Description for activation. |
+| `name` | `string` | - | Unique tab name used as the active value. |
+| `iconClass` | `string` | `''` | Optional icon class rendered before the tab label. |
+| `disabled` | `boolean` | `false` | Block click/Enter activation and mark the tab disabled. |
+| `activation` | `boolean` | `false` | Mark this tab as the uncontrolled default when no `modelValue` or `defaultValue` is provided. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `change` | `string` | Description for change. |
-| `update:modelValue` | `string` | Description for update:modelValue. |
+| `change` | `string` | Emitted after user activation or uncontrolled default activation changes the active tab. |
+| `update:modelValue` | `string` | Emitted with the active tab name for `v-model` updates. |

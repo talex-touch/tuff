@@ -1,3 +1,5 @@
+import { createPluginTuffTransport } from '../../transport'
+import { PluginEvents } from '../../transport/events'
 import { ensureRendererChannel } from './channel'
 import { usePluginName } from './plugin-info'
 
@@ -35,6 +37,7 @@ export function usePluginSqlite() {
   const channel = ensureRendererChannel(
     '[Plugin SQLite SDK] Channel not available. Make sure this is called in a plugin context.'
   )
+  const transport = createPluginTuffTransport(channel as any)
 
   return {
     execute: async (
@@ -46,7 +49,7 @@ export function usePluginSqlite() {
         throw new Error('[Plugin SQLite SDK] SQL is required.')
       }
 
-      const response = await channel.send('plugin:sqlite:execute', {
+      const response = await transport.send(PluginEvents.sqlite.execute, {
         pluginName,
         sql: normalizedSql,
         params: normalizeParams(params)
@@ -78,7 +81,7 @@ export function usePluginSqlite() {
         throw new Error('[Plugin SQLite SDK] SQL is required.')
       }
 
-      const response = await channel.send('plugin:sqlite:query', {
+      const response = await transport.send(PluginEvents.sqlite.query, {
         pluginName,
         sql: normalizedSql,
         params: normalizeParams(params)
@@ -118,7 +121,7 @@ export function usePluginSqlite() {
         throw new Error('[Plugin SQLite SDK] Each transaction statement must include SQL.')
       }
 
-      const response = await channel.send('plugin:sqlite:transaction', {
+      const response = await transport.send(PluginEvents.sqlite.transaction, {
         pluginName,
         statements: payload
       })

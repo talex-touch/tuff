@@ -23,6 +23,10 @@ code: |
   </template>
 ---
 :::
+## 契约说明
+
+`TxBadge` 渲染内联 pill 或 dot。默认插槽会替换徽标内容，不负责把徽标定位到某个目标元素周围。点状模式会隐藏 `value` 文本，仅渲染视觉圆点。
+
 ## API（Lite）
 ::TuffPropsTable
 ---

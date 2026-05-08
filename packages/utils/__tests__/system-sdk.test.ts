@@ -53,7 +53,7 @@ describe('plugin sdk system.getActiveAppSnapshot', () => {
     })
   })
 
-  it('propagates typed transport failures instead of calling the legacy raw channel', async () => {
+  it('propagates typed transport failures instead of calling the retired raw channel', async () => {
     const channel = {
       send: vi.fn(),
     }

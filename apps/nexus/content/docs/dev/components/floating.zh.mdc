@@ -44,7 +44,7 @@ rows:
   - name: disabled
     type: boolean
     default: false
-    description: 禁用动画并重置子元素位置
+    description: 禁用动画、停止监听并重置子元素位置
   - name: className
     type: string
     default: "''"
@@ -55,6 +55,14 @@ rows:
     description: TxFloatingElement 的位移深度，支持负数反向移动
 ---
 ::
+
+## 交互契约
+
+- `TxFloating` 监听 window `mousemove` / `touchmove`，并以容器左上角为原点计算指针位置。
+- 每个元素位移目标为 `pointerPosition * (depth * sensitivity / 20)`，每帧按 `easingFactor` 缓动靠近。
+- `disabled=true` 时停止事件监听和 RAF，取消当前动画帧，并将已注册元素重置为 `translate3d(0px, 0px, 0)`。
+- `disabled=false` 后会重新启动事件监听和 RAF。
+- `TxFloatingElement` 挂载时注册，`depth` 变化时重新注册，卸载时注销。
 
 ## Source
 

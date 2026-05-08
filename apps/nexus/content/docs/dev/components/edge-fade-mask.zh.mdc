@@ -61,3 +61,11 @@ code: |
 
 - 外层容器负责边框和圆角，`TxEdgeFadeMask` 负责滚动和渐隐。
 - 横向场景建议内部内容使用 `display: flex` + `width: max-content`。
+
+## 交互契约
+
+- `as` 控制根元素标签；默认插槽内容渲染在内部 viewport 中。
+- 内容不可滚动、`disabled=true` 或滚动范围小于等于 `threshold` 时不输出 `mask-image`。
+- 纵向模式根据 `scrollTop` 切换顶部/底部渐隐；横向模式根据 `scrollLeft` 切换左右渐隐。
+- 数字 `size` 会转为 px，字符串 `size` 会原样用于渐变 stop。
+- `observeResize=true` 时会观察 viewport 与第一个子元素尺寸变化；切换为 `false` 或组件卸载时会断开 observer。

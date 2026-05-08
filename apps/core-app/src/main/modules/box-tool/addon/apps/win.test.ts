@@ -85,6 +85,19 @@ function createFileStat(mtime = new Date('2026-01-01T00:00:00.000Z')) {
   }
 }
 
+function mockPowerShellOutputs(options: { startApps?: unknown; registryApps?: unknown }): void {
+  execFileSafeMock.mockImplementation(async (_command: string, args: string[]) => {
+    const script = args[args.length - 1] || ''
+    if (script.includes('Get-StartApps')) {
+      return { stdout: JSON.stringify(options.startApps ?? []), stderr: '' }
+    }
+    if (script.includes('Get-ItemProperty')) {
+      return { stdout: JSON.stringify(options.registryApps ?? []), stderr: '' }
+    }
+    return { stdout: '[]', stderr: '' }
+  })
+}
+
 describe('win app scanner', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -156,6 +169,33 @@ describe('win app scanner', () => {
     })
   })
 
+  it('treats absolute Get-StartApps AppId values as desktop apps', async () => {
+    const appPath = 'D:\\Tools\\Codex\\Codex.exe'
+
+    readdirMock.mockResolvedValue([])
+    statMock.mockImplementation(async (target: string) => {
+      if (target === appPath) return createFileStat()
+      throw new Error(`Unexpected stat path: ${target}`)
+    })
+    execFileSafeMock.mockResolvedValue({
+      stdout: JSON.stringify([{ Name: 'Codex', AppId: appPath }]),
+      stderr: ''
+    })
+
+    const { getApps } = await import('./win')
+    const apps = await getApps()
+
+    expect(apps).toHaveLength(1)
+    expect(apps[0]).toMatchObject({
+      name: 'Codex',
+      path: appPath,
+      launchKind: 'path',
+      launchTarget: appPath,
+      displayPath: appPath,
+      stableId: 'd:\\tools\\codex\\codex.exe'
+    })
+  })
+
   it('enriches Windows Store apps with manifest metadata and logo variants', async () => {
     const installLocation = 'C:\\Program Files\\WindowsApps\\Microsoft.WindowsCalculator'
     const manifestPath = `${installLocation}\\AppxManifest.xml`
@@ -221,5 +261,174 @@ describe('win app scanner', () => {
       launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
     })
     expect(apps[0].icon).toBe('data:image/png;base64,3q2+7w==')
+  })
+
+  it('includes registry apps from DisplayIcon executable paths', async () => {
+    const targetPath = 'C:\\Program Files\\Foo\\Foo.exe'
+
+    readdirMock.mockImplementation(async (dir: string) => {
+      if (dir === 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs') return []
+      if (dir === 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs')
+        return []
+      return []
+    })
+    statMock.mockImplementation(async (target: string) => {
+      if (target === targetPath) return createFileStat()
+      throw new Error(`Unexpected stat path: ${target}`)
+    })
+    mockPowerShellOutputs({
+      registryApps: [
+        {
+          displayName: 'Foo',
+          displayIcon: `"${targetPath}",0`,
+          publisher: 'Foo Inc.',
+          systemComponent: 0
+        }
+      ]
+    })
+
+    const { getApps } = await import('./win')
+    const apps = await getApps()
+
+    expect(apps).toHaveLength(1)
+    expect(apps[0]).toMatchObject({
+      name: 'Foo',
+      displayName: 'Foo',
+      description: 'Foo Inc.',
+      path: targetPath,
+      launchKind: 'path',
+      launchTarget: targetPath,
+      stableId: 'registry:c:\\program files\\foo\\foo.exe'
+    })
+    expect(apps[0].icon).toBe('data:image/png;base64,AQID')
+  })
+
+  it('falls back to InstallLocation executables for registry apps', async () => {
+    const installLocation = 'C:\\Program Files\\Acme'
+    const targetPath = `${installLocation}\\AcmeApp.exe`
+
+    readdirMock.mockImplementation(async (dir: string) => {
+      if (dir === 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs') return []
+      if (dir === 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs')
+        return []
+      if (dir === installLocation) {
+        return ['setup.exe', 'AcmeApp.exe', 'AcmeUpdater.exe']
+      }
+      return []
+    })
+    statMock.mockImplementation(async (target: string) => {
+      if (target === targetPath) return createFileStat()
+      throw new Error(`Unexpected stat path: ${target}`)
+    })
+    mockPowerShellOutputs({
+      registryApps: [
+        {
+          displayName: 'Acme',
+          installLocation,
+          publisher: 'Acme Corp',
+          systemComponent: 0
+        }
+      ]
+    })
+
+    const { getApps } = await import('./win')
+    const apps = await getApps()
+
+    expect(apps).toHaveLength(1)
+    expect(apps[0]).toMatchObject({
+      name: 'Acme',
+      launchTarget: targetPath,
+      stableId: 'registry:c:\\program files\\acme\\acmeapp.exe'
+    })
+  })
+
+  it('filters registry system components and maintenance entries', async () => {
+    readdirMock.mockImplementation(async (dir: string) => {
+      if (dir === 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs') return []
+      if (dir === 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs')
+        return []
+      return []
+    })
+    statMock.mockImplementation(async (target: string) => {
+      throw new Error(`Unexpected stat path: ${target}`)
+    })
+    mockPowerShellOutputs({
+      registryApps: [
+        { displayIcon: 'C:\\Program Files\\Hidden\\Hidden.exe', systemComponent: 0 },
+        {
+          displayName: 'Driver System Component',
+          displayIcon: 'C:\\Program Files\\Driver\\Driver.exe',
+          systemComponent: 1
+        },
+        {
+          displayName: 'Foo Updater',
+          displayIcon: 'C:\\Program Files\\Foo\\Updater.exe',
+          systemComponent: 0
+        },
+        {
+          displayName: 'Bar',
+          displayIcon: 'C:\\Program Files\\Bar\\Bar.exe',
+          releaseType: 'Update',
+          systemComponent: 0
+        },
+        {
+          displayName: 'Baz',
+          displayIcon: 'C:\\Program Files\\Baz\\Baz.exe',
+          parentKeyName: 'BazSuite',
+          systemComponent: 0
+        }
+      ]
+    })
+
+    const { getApps } = await import('./win')
+    const apps = await getApps()
+
+    expect(apps).toHaveLength(0)
+    expect(statMock).not.toHaveBeenCalledWith(expect.stringContaining('.exe'))
+  })
+
+  it('prefers Start Menu entries over duplicate registry targets', async () => {
+    const startMenuPath = 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'
+    const userStartMenuPath =
+      'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
+    const shortcutPath = `${startMenuPath}\\Foo.lnk`
+    const targetPath = 'C:\\Program Files\\Foo\\Foo.exe'
+
+    readdirMock.mockImplementation(async (dir: string) => {
+      if (dir === startMenuPath) return ['Foo.lnk']
+      if (dir === userStartMenuPath) return []
+      return []
+    })
+    statMock.mockImplementation(async (target: string) => {
+      if (target === shortcutPath || target === targetPath) return createFileStat()
+      throw new Error(`Unexpected stat path: ${target}`)
+    })
+    readShortcutLinkMock.mockReturnValue({
+      target: targetPath,
+      args: '',
+      cwd: 'C:\\Program Files\\Foo'
+    })
+    mockPowerShellOutputs({
+      registryApps: [
+        {
+          displayName: 'Foo Registry',
+          displayIcon: `${targetPath},0`,
+          publisher: 'Foo Inc.',
+          systemComponent: 0
+        }
+      ]
+    })
+
+    const { getApps } = await import('./win')
+    const apps = await getApps()
+
+    expect(apps).toHaveLength(1)
+    expect(apps[0]).toMatchObject({
+      name: 'Foo',
+      path: shortcutPath,
+      launchKind: 'shortcut',
+      launchTarget: targetPath,
+      stableId: 'shortcut:c:\\program files\\foo\\foo.exe|'
+    })
   })
 })

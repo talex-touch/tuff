@@ -1,5 +1,5 @@
 import { createError, readBody } from 'h3'
-import { cancelDeviceAuthRequestByDeviceCode, getDeviceAuthByDeviceCode, isDeviceAuthExpired } from '../../../utils/authStore'
+import { cancelDeviceAuthRequestByDeviceCode, getDeviceAuthByDeviceCode, isDeviceAuthExpired, recordDeviceAuthAudit } from '../../../utils/authStore'
 
 interface AbortBody {
   deviceCode?: string
@@ -36,6 +36,16 @@ export default defineEventHandler(async (event) => {
       status: 'expired',
     }
   }
+
+  await recordDeviceAuthAudit(event, {
+    action: 'cancel',
+    status: 'success',
+    deviceId: cancelled.deviceId,
+    deviceCode: cancelled.deviceCode,
+    userCode: cancelled.userCode,
+    clientType: cancelled.clientType ?? null,
+    reason: 'device_aborted',
+  })
 
   return {
     ok: true,

@@ -538,7 +538,7 @@ onMounted(() => {
 
           <div class="plugin-content">
             <!-- Warning -->
-            <div v-if="plugin.blockedReason && plugin.blocked" class="legacy-warning">
+            <div v-if="plugin.blockedReason && plugin.blocked" class="sdk-blocked-warning">
               <i class="i-carbon-error" />
               <span>{{ plugin.blockedReason }}</span>
             </div>
@@ -787,7 +787,7 @@ onMounted(() => {
   padding: 0 8px;
 }
 
-.legacy-warning {
+.sdk-blocked-warning {
   display: flex;
   align-items: flex-start;
   gap: 8px;

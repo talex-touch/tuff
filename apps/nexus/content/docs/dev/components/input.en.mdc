@@ -27,7 +27,7 @@ code: |
 :::
 ## Input Types
 
-Supported: `text` / `password` / `textarea`.
+Supported: `text` / `password` / `textarea` / `date` / `email` / `number`.
 
 ### Input Types
 Text, password, and textarea.
@@ -96,7 +96,7 @@ code: |
 rows:
   - name: modelValue / v-model
     description: 'Bound value'
-    type: 'string'
+    type: 'string | number'
     default: "''"
   - name: placeholder
     description: 'Placeholder text'
@@ -104,7 +104,7 @@ rows:
     default: "''"
   - name: type
     description: 'Input type'
-    type: "'text' | 'password' | 'textarea'"
+    type: "'text' | 'password' | 'textarea' | 'date' | 'email' | 'number'"
     default: "'text'"
   - name: disabled
     description: 'Disabled state'
@@ -122,6 +122,14 @@ rows:
     description: 'Textarea rows (only textarea)'
     type: 'number'
     default: '3'
+  - name: prefixIcon
+    description: 'Prefix icon class'
+    type: 'string'
+    default: "''"
+  - name: suffixIcon
+    description: 'Suffix icon class'
+    type: 'string'
+    default: "''"
 ---
 :::
 
@@ -132,11 +140,11 @@ rows:
 rows:
   - name: update:modelValue
     description: 'v-model update'
-    type: '(value: string) => void'
+    type: '(value: string | number) => void'
     default: '-'
   - name: input
     description: 'Triggered on input'
-    type: '(value: string) => void'
+    type: '(value: string | number) => void'
     default: '-'
   - name: focus
     description: 'Focus event'
@@ -149,6 +157,34 @@ rows:
   - name: clear
     description: 'Clear action'
     type: '() => void'
+    default: '-'
+---
+:::
+
+### Exposes
+
+::TuffPropsTable
+---
+rows:
+  - name: focus
+    description: 'Focus the native input'
+    type: '() => void'
+    default: '-'
+  - name: blur
+    description: 'Blur the native input'
+    type: '() => void'
+    default: '-'
+  - name: clear
+    description: 'Clear when not disabled or readonly'
+    type: '() => void'
+    default: '-'
+  - name: setValue
+    description: 'Set value and emit input/model updates'
+    type: '(value: string) => void'
+    default: '-'
+  - name: getValue
+    description: 'Read current value'
+    type: '() => string | number'
     default: '-'
 ---
 :::
@@ -172,6 +208,8 @@ rows:
 ## Design Notes
 - Use subtle border/shadow shifts to express focus.  
 - Search states should feel lighter for toolbars and lists.
+- `type="number"` emits numbers for non-empty values and `''` when cleared.
+- The clear control is a keyboard-focusable button and is hidden for disabled or readonly input.
 
 ## Composite Patterns
 

@@ -11,7 +11,7 @@ export interface PilotCapabilityMeta {
   dependency?: PilotCapabilityId | 'thinkingSupported' | 'builtinTools.websearch'
 }
 
-export interface PilotCapabilityLegacyFlags {
+export interface PilotCapabilityHistoricalFields {
   allowWebsearch?: unknown
   allowImageGeneration?: unknown
   allowFileAnalysis?: unknown
@@ -122,7 +122,7 @@ export function createPilotDefaultCapabilities(enabled = true): PilotCapabilityS
 
 export function resolvePilotCapabilities(
   value: unknown,
-  legacy?: PilotCapabilityLegacyFlags,
+  historicalFields?: PilotCapabilityHistoricalFields,
   fallback?: Partial<PilotCapabilitySwitches>,
 ): PilotCapabilitySwitches {
   const row = value && typeof value === 'object' && !Array.isArray(value)
@@ -133,14 +133,17 @@ export function resolvePilotCapabilities(
     ...(fallback || {}),
   }
 
-  const allowWebsearch = toBoolean(row.websearch, toBoolean(legacy?.allowWebsearch, defaultValues.websearch))
+  const allowWebsearch = toBoolean(row.websearch, toBoolean(historicalFields?.allowWebsearch, defaultValues.websearch))
   const allowFileAnalysis = toBoolean(
     row['file.analyze'],
-    toBoolean(legacy?.allowFileAnalysis, toBoolean(legacy?.allowImageAnalysis, defaultValues['file.analyze'])),
+    toBoolean(
+      historicalFields?.allowFileAnalysis,
+      toBoolean(historicalFields?.allowImageAnalysis, defaultValues['file.analyze']),
+    ),
   )
   const allowImageGeneration = toBoolean(
     row['image.generate'],
-    toBoolean(legacy?.allowImageGeneration, defaultValues['image.generate']),
+    toBoolean(historicalFields?.allowImageGeneration, defaultValues['image.generate']),
   )
 
   return {

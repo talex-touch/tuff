@@ -41,7 +41,7 @@ export interface EncryptedSyncPayload {
 
 export interface DecryptedSyncPayload {
   rawText: string
-  requiresEncryptedRepush: boolean
+  requiresMigrationRewrite: boolean
 }
 
 export interface SyncPayloadKeyRegistration {
@@ -183,12 +183,12 @@ export class SyncPayloadCrypto {
   async decrypt(payloadEnc: string): Promise<DecryptedSyncPayload> {
     const normalized = payloadEnc.trim()
     if (!normalized) {
-      return { rawText: '', requiresEncryptedRepush: false }
+      return { rawText: '', requiresMigrationRewrite: false }
     }
 
     if (normalized.startsWith(LEGACY_SYNC_PAYLOAD_PREFIX)) {
       const base64 = normalized.slice(LEGACY_SYNC_PAYLOAD_PREFIX.length)
-      return { rawText: fromBase64(base64).toString('utf-8'), requiresEncryptedRepush: true }
+      return { rawText: fromBase64(base64).toString('utf-8'), requiresMigrationRewrite: true }
     }
 
     if (!normalized.startsWith(`${SYNC_PAYLOAD_CRYPTO_VERSION}:`)) {
@@ -222,7 +222,7 @@ export class SyncPayloadCrypto {
           decipher.update(fromBase64(envelope.c)),
           decipher.final()
         ]).toString('utf-8'),
-        requiresEncryptedRepush: false
+        requiresMigrationRewrite: false
       }
     } catch (error) {
       throw new SyncPayloadCryptoError(

@@ -24,6 +24,7 @@ const props = withDefaults(defineProps<PopoverProps>(), {
   closeDelay: 100,
   duration: 180,
   keepAliveContent: true,
+  toggleOnReferenceClick: undefined,
   panelVariant: 'solid',
   panelBackground: 'refraction',
   panelShadow: 'soft',

@@ -1,3 +1,9 @@
-import legacyHandler from '../auth/sign-in-token.post'
+import { issueAppSignInToken } from '../../utils/appAuthToken'
 
-export default legacyHandler
+/**
+ * Create a sign-in token for the desktop app using the current browser session
+ * or a refreshable app bearer token.
+ */
+export default defineEventHandler(async (event) => {
+  return await issueAppSignInToken(event)
+})

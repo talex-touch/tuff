@@ -109,12 +109,12 @@ describe('PollingService lanes and backpressure', () => {
     expect((task?.droppedCount ?? 0) + (task?.coalescedCount ?? 0)).toBeGreaterThan(0)
   })
 
-  it('keeps default registration on legacy_serial lane for compatibility', async () => {
+  it('keeps default registration on serial lane', async () => {
     const service = PollingService.getInstance()
     let runs = 0
 
     service.register(
-      'test.legacy.default',
+      'test.serial.default',
       () => {
         runs += 1
       },
@@ -129,9 +129,9 @@ describe('PollingService lanes and backpressure', () => {
     await vi.advanceTimersByTimeAsync(80)
 
     const diagnostics = service.getDiagnostics()
-    const task = diagnostics.recentTasks.find((item) => item.id === 'test.legacy.default')
+    const task = diagnostics.recentTasks.find((item) => item.id === 'test.serial.default')
 
     expect(runs).toBeGreaterThan(0)
-    expect(task?.lane).toBe('legacy_serial')
+    expect(task?.lane).toBe('serial')
   })
 })

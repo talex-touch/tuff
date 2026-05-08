@@ -140,7 +140,7 @@ interface BatchQueue<TRes> {
 
 /**
  * Renderer-side transport implementation.
- * Adapts the legacy TouchChannel to the new TuffTransport interface.
+ * Adapts the current TouchChannel bridge to the TuffTransport interface.
  */
 export class TuffRendererTransport implements ITuffTransport {
   private _channel: ReturnType<typeof useChannel> | null = null

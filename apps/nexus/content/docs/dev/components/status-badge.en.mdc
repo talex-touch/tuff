@@ -44,12 +44,32 @@ rows:
     type: "'success' | 'warning' | 'danger' | 'info' | 'muted'"
     default: 'info'
     description: 'Status type'
+  - name: statusKey
+    type: "'granted' | 'denied' | 'notDetermined' | 'unsupported' | string"
+    default: "''"
+    description: 'Permission/status key mapped to a tone'
+  - name: icon
+    type: 'string'
+    default: "''"
+    description: 'Custom icon class'
   - name: size
     type: "'sm' | 'md'"
     default: 'md'
     description: 'Size'
+  - name: os
+    type: "'macos' | 'windows' | 'linux'"
+    default: '-'
+    description: 'Optional platform icon'
+  - name: osOnly
+    type: 'boolean'
+    default: 'false'
+    description: 'Render only the platform icon'
 ---
 ::
+
+## Contract
+
+Explicit `status` takes precedence over `statusKey`. `statusKey` maps `granted/denied/notDetermined/unsupported` to success/danger/warning/muted, and unknown keys fall back to info. Platform icons render before the tone icon; `osOnly` hides the tone icon. The badge emits `click` when clicked.
 
 ## Composite Patterns
 

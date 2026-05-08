@@ -133,7 +133,7 @@ onMounted(async () => {
   await nextTick()
   updateIndicator(false)
 
-  if (containerRef.value) {
+  if (containerRef.value && typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(() => {
       updateIndicator(false)
     })

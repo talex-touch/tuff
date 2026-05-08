@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 
-const LEGACY_CLIPBOARD_EVENT_NAMES = [
+const RETIRED_CLIPBOARD_EVENT_NAMES = [
   'clipboard:get-latest',
   'clipboard:get-history',
   'clipboard:set-favorite',
@@ -15,15 +15,24 @@ const LEGACY_CLIPBOARD_EVENT_NAMES = [
   'clipboard:read-image',
   'clipboard:read-files',
   'clipboard:clear',
-  'clipboard:get-image-url'
+  'clipboard:get-image-url',
+  'clipboard:query'
 ] as const
 
 vi.mock('electron', () => ({
   app: {
     getPath: vi.fn(() => '/tmp'),
+    getVersion: vi.fn(() => '0.0.0-test'),
     isPackaged: false,
+    commandLine: {
+      appendSwitch: vi.fn()
+    },
+    addListener: vi.fn(),
     on: vi.fn(),
-    once: vi.fn()
+    once: vi.fn(),
+    quit: vi.fn(),
+    requestSingleInstanceLock: vi.fn(() => true),
+    setPath: vi.fn()
   },
   clipboard: {
     readText: vi.fn(() => ''),
@@ -41,6 +50,9 @@ vi.mock('electron', () => ({
     clear: vi.fn()
   },
   BrowserWindow: class BrowserWindow {},
+  crashReporter: {
+    start: vi.fn()
+  },
   ipcMain: {
     handle: vi.fn(),
     on: vi.fn(),
@@ -92,7 +104,109 @@ vi.mock('../utils/logger', () => ({
       end: vi.fn(),
       split: vi.fn()
     }))
-  }))
+  })),
+  mainLog: {
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  },
+  appLog: {
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  },
+  channelLog: {
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  },
+  moduleLog: {
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  },
+  pluginLog: {
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  },
+  windowLog: {
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  },
+  dbLog: {
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  },
+  eventLog: {
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  },
+  shortcutLog: {
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  },
+  storageLog: {
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  },
+  notificationLog: {
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  },
+  log: {
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  },
+  LogLevel: {
+    DEBUG: 0,
+    INFO: 1,
+    WARN: 2,
+    ERROR: 3,
+    NONE: 4
+  },
+  LogManager: {
+    getInstance: vi.fn(() => ({
+      getLogger: vi.fn(() => ({
+        info: vi.fn(),
+        debug: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        success: vi.fn()
+      }))
+    }))
+  }
 }))
 
 vi.mock('../utils/perf-context', () => ({
@@ -117,6 +231,23 @@ vi.mock('@talex-touch/utils/common/utils/polling', () => ({
       stop: vi.fn()
     }))
   }
+}))
+
+vi.mock('@sentry/electron/main', () => ({
+  init: vi.fn(),
+  close: vi.fn(),
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
+  setUser: vi.fn(),
+  setTag: vi.fn(),
+  setContext: vi.fn(),
+  addBreadcrumb: vi.fn(),
+  startSpan: vi.fn((_options, callback) => callback?.()),
+  getCurrentScope: vi.fn(() => ({
+    setUser: vi.fn(),
+    setTag: vi.fn(),
+    setContext: vi.fn()
+  }))
 }))
 
 vi.mock('../db/db-write-scheduler', () => ({
@@ -148,6 +279,12 @@ vi.mock('./permission', () => ({
   getPermissionModule: vi.fn(() => null)
 }))
 
+vi.mock('./platform/capability-adapter', () => ({
+  getAutoPasteCapabilityPatch: vi.fn(async () => ({
+    supportLevel: 'supported'
+  }))
+}))
+
 vi.mock('./plugin/plugin-module', () => ({
   pluginModule: {
     pluginManager: null
@@ -157,6 +294,7 @@ vi.mock('./plugin/plugin-module', () => ({
 vi.mock('./storage', () => ({
   getMainConfig: vi.fn(() => ({})),
   isMainStorageReady: vi.fn(() => true),
+  saveMainConfig: vi.fn(),
   subscribeMainConfig: vi.fn(() => () => {})
 }))
 
@@ -217,7 +355,7 @@ afterEach(() => {
 })
 
 describe('ClipboardModule transport registration', () => {
-  it('只注册 typed clipboard transport handlers，不再注册 legacy raw bridge', () => {
+  it('只注册 typed clipboard transport handlers，不再注册 retired raw bridge', () => {
     const on = vi.fn(() => () => {})
     const onStream = vi.fn(() => () => {})
     const module = new ClipboardModule() as unknown as ClipboardModuleTestHandle
@@ -249,15 +387,16 @@ describe('ClipboardModule transport registration', () => {
       ClipboardEvents.readFiles.toString(),
       ClipboardEvents.change.toString()
     ])
+    expect(ClipboardEvents.queryMeta.toString()).toBe('clipboard:history:query-meta')
 
-    for (const legacyEvent of LEGACY_CLIPBOARD_EVENT_NAMES) {
-      expect(registeredEvents).not.toContain(legacyEvent)
+    for (const retiredEvent of RETIRED_CLIPBOARD_EVENT_NAMES) {
+      expect(registeredEvents).not.toContain(retiredEvent)
     }
   })
 })
 
 describe('ClipboardModule image transport payload', () => {
-  it('列表继续走 thumbnail，详情主图改走原始 tfile URL', () => {
+  it('列表值继续走 thumbnail，同时在 meta 暴露原始 tfile URL', () => {
     const module = new ClipboardModule() as unknown as {
       toTransportItem: (item: Record<string, unknown>) => Record<string, unknown> | null
     }
@@ -275,18 +414,17 @@ describe('ClipboardModule image transport payload', () => {
     })
 
     expect(item).not.toBeNull()
-    expect(item?.value).toBe('tfile:///tmp/clipboard/images/original%20image.png')
+    expect(item?.value).toBe('data:image/png;base64,thumb')
     expect(item?.thumbnail).toBe('data:image/png;base64,thumb')
     expect(item?.meta).toMatchObject({
       image_original_url: 'tfile:///tmp/clipboard/images/original%20image.png',
-      image_preview_url: 'tfile:///tmp/clipboard/images/original%20image.png',
-      image_content_kind: 'original',
+      image_content_kind: 'preview',
       image_size: { width: 1920, height: 1080 },
       image_file_size: 12345
     })
   })
 
-  it('已有 preview url 时优先复用，避免详情回退到 thumbnail', () => {
+  it('已有 preview url 时保留原图地址并继续使用 thumbnail 作为列表值', () => {
     const module = new ClipboardModule() as unknown as {
       toTransportItem: (item: Record<string, unknown>) => Record<string, unknown> | null
     }
@@ -303,10 +441,9 @@ describe('ClipboardModule image transport payload', () => {
     })
 
     expect(item).not.toBeNull()
-    expect(item?.value).toBe('tfile:///tmp/clipboard/images/preview.png')
+    expect(item?.value).toBe('data:image/png;base64,thumb')
     expect(item?.meta).toMatchObject({
       image_original_url: 'tfile:///tmp/clipboard/images/original.png',
-      image_preview_url: 'tfile:///tmp/clipboard/images/preview.png',
       image_content_kind: 'preview'
     })
   })
@@ -329,7 +466,7 @@ describe('ClipboardModule image transport payload', () => {
     expect(item).not.toBeNull()
     expect(item?.value).toBe('data:image/png;base64,thumb')
     expect(item?.meta).toMatchObject({
-      image_content_kind: 'thumbnail'
+      image_content_kind: 'preview'
     })
     expect(item?.meta).not.toHaveProperty('image_original_url')
   })

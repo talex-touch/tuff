@@ -37,6 +37,24 @@ describe('txDataTable', () => {
     expect(firstRowText).toBe('Bob')
   })
 
+  it('exposes sortable headers to keyboard users', async () => {
+    const wrapper = mount(TxDataTable, {
+      props: { columns, data },
+    })
+
+    const header = wrapper.findAll('thead th')[1]
+    expect(header.attributes('tabindex')).toBe('0')
+    expect(header.attributes('aria-sort')).toBe('none')
+
+    await header.trigger('keydown', { key: 'Enter' })
+    expect(header.attributes('aria-sort')).toBe('ascending')
+    expect(wrapper.findAll('tbody tr')[0].findAll('td')[0].text()).toBe('Bob')
+
+    await header.trigger('keydown', { key: ' ' })
+    expect(header.attributes('aria-sort')).toBe('descending')
+    expect(wrapper.findAll('tbody tr')[0].findAll('td')[0].text()).toBe('Alice')
+  })
+
   it('emits selection changes', async () => {
     const wrapper = mount(TxDataTable, {
       props: {

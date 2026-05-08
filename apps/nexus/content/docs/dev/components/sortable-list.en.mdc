@@ -1,12 +1,12 @@
 ---
 title: "SortableList"
-description: "HTML5 Drag & Drop"
+description: "HTML5 drag-and-drop list reordering."
 category: Data
 syncStatus: migrated
 ---
 # SortableList
 
-HTML5 Drag & Drop
+`TxSortableList` renders a list of items and emits a reordered array when the user drags one item onto another. Use `handle` when only a dedicated drag handle should start reordering.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -41,13 +41,13 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `SortableListItem[]` | *Text* | Description for modelValue. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `handle` | `boolean` | `false` | Description for handle. |
+| `modelValue` | `SortableListItem[]` | - | Ordered list data. Every item must provide a stable `id`. |
+| `disabled` | `boolean` | `false` | Disables dragging and prevents reorder events. |
+| `handle` | `boolean` | `false` | Requires drag start targets to be inside `[data-tx-sort-handle="true"]`. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(value)` | Description for update:modelValue. |
-| `reorder` | `({ from, to, items })` | Description for reorder. |
+| `update:modelValue` | `(value: SortableListItem[])` | Emitted with the reordered item array after a valid drop. |
+| `reorder` | `({ from, to, items })` | Emitted with source index, target index, and reordered items. |

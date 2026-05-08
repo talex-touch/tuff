@@ -3,15 +3,15 @@ import type { StorageUpdateNotification } from '../../transport/events/types'
 import type { IStorageChannel } from './base-storage'
 import { StorageEvents } from '../../transport/events'
 
-let hasWarnedLegacyStorageSubscriptionChannel = false
+let hasWarnedStorageSubscriptionChannelIgnored = false
 
-function warnLegacyStorageSubscriptionChannelPath(): void {
-  if (hasWarnedLegacyStorageSubscriptionChannel) {
+function warnStorageSubscriptionChannelIgnored(): void {
+  if (hasWarnedStorageSubscriptionChannelIgnored) {
     return
   }
-  hasWarnedLegacyStorageSubscriptionChannel = true
+  hasWarnedStorageSubscriptionChannelIgnored = true
   console.warn(
-    '[StorageSubscription] Legacy storage channel path is active. Migrate to StorageEvents.app transport before v2.5.0.',
+    '[StorageSubscription] Channel storage path is ignored. Initialize subscriptions with StorageEvents.app transport.',
   )
 }
 
@@ -22,27 +22,24 @@ export type StorageSubscriptionCallback = (data: any) => void
 
 /**
  * Storage subscription manager for renderer process
- * Provides easy subscription to storage updates via TuffTransport, with an
- * explicit legacy channel fallback for hosts that have not migrated yet.
+ * Provides storage updates via TuffTransport.
  */
 class StorageSubscriptionManager {
-  private channel: IStorageChannel | null = null
   private transport: ITuffTransport | null = null
   private subscribers = new Map<string, Set<StorageSubscriptionCallback>>()
-  private listenerMode: 'transport' | 'channel' | null = null
+  private listenerMode: 'transport' | null = null
   private listenerToken = 0
   private transportStream: StreamController | null = null
-  private channelListenerCleanup: (() => void) | null = null
   private pendingUpdates = new Map<string, NodeJS.Timeout>()
   private configVersions = new Map<string, number>()
   private cachedData = new Map<string, unknown>()
 
   /**
-   * Initialize the subscription manager with transport and optional channel fallback.
+   * Initialize the subscription manager with transport.
    */
   init(channel?: IStorageChannel, transport?: ITuffTransport): void {
     if (channel) {
-      this.channel = channel
+      warnStorageSubscriptionChannelIgnored()
     }
     if (transport) {
       this.transport = transport
@@ -50,11 +47,6 @@ class StorageSubscriptionManager {
 
     if (this.transport) {
       this.registerTransportListener()
-      return
-    }
-
-    if (this.channel) {
-      this.registerChannelListener()
     }
   }
 
@@ -87,32 +79,11 @@ class StorageSubscriptionManager {
         this.listenerMode = null
         this.transportStream = null
         console.error('[StorageSubscription] Failed to subscribe to storage updates:', error)
-        if (this.channel) {
-          this.registerChannelListener()
-        }
       })
-  }
-
-  private registerChannelListener(): void {
-    if (!this.channel || this.listenerMode) {
-      return
-    }
-
-    warnLegacyStorageSubscriptionChannelPath()
-    this.listenerMode = 'channel'
-    this.channelListenerCleanup = this.channel.regChannel(
-      StorageEvents.legacy.update.toEventName(),
-      ({ data }) => {
-        const { name, version } = data as { name: string, version?: number }
-        this.handleVersionedUpdate(name, version)
-      },
-    )
   }
 
   private disposeUpdateListener(): void {
     this.listenerToken++
-    this.channelListenerCleanup?.()
-    this.channelListenerCleanup = null
     this.transportStream?.cancel()
     this.transportStream = null
     this.listenerMode = null
@@ -178,25 +149,6 @@ class StorageSubscriptionManager {
           console.error(`[StorageSubscription] Failed to load "${configName}":`, error)
         })
     }
-    else if (this.channel) {
-      warnLegacyStorageSubscriptionChannelPath()
-      this.channel
-        .send('storage:get', configName)
-        .then((data) => {
-          if (data === undefined || data === null)
-            return
-          this.cachedData.set(configName, data)
-          try {
-            callback(data)
-          }
-          catch (error) {
-            console.error(`[StorageSubscription] Callback error for "${configName}":`, error)
-          }
-        })
-        .catch((error) => {
-          console.error(`[StorageSubscription] Failed to load "${configName}":`, error)
-        })
-    }
 
     // Return unsubscribe function
     return () => {
@@ -230,7 +182,7 @@ class StorageSubscriptionManager {
       return
     }
 
-    if (!this.channel && !this.transport) {
+    if (!this.transport) {
       return
     }
 
@@ -243,14 +195,7 @@ class StorageSubscriptionManager {
     const timer = setTimeout(async () => {
       try {
         // Fetch latest data
-        let data: unknown
-        if (this.transport) {
-          data = await this.transport!.send(StorageEvents.app.get, { key: configName })
-        }
-        else {
-          warnLegacyStorageSubscriptionChannelPath()
-          data = await this.channel!.send('storage:get', configName)
-        }
+        const data = await this.transport!.send(StorageEvents.app.get, { key: configName })
 
         if (data === undefined || data === null) {
           this.pendingUpdates.delete(configName)
@@ -303,13 +248,12 @@ class StorageSubscriptionManager {
   }
 
   /**
-   * Dispose update transport/channel listeners.
+   * Dispose update transport listeners.
    * Intended for tests and renderer teardown.
    */
   dispose(): void {
     this.clear()
     this.disposeUpdateListener()
-    this.channel = null
     this.transport = null
   }
 }
@@ -318,10 +262,10 @@ class StorageSubscriptionManager {
 const subscriptionManager = new StorageSubscriptionManager()
 
 /**
- * Initialize storage subscription system with transport and optional legacy channel.
+ * Initialize storage subscription system with transport.
  * Must be called before using subscribeStorage
  *
- * @param channel - Optional legacy storage channel fallback
+ * @param channel - Retired channel parameter retained for source compatibility
  */
 export function initStorageSubscription(channel?: IStorageChannel, transport?: ITuffTransport): void {
   subscriptionManager.init(channel, transport)

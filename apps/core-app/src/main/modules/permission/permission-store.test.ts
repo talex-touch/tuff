@@ -27,10 +27,10 @@ describe('PermissionStore sqlite backend', () => {
     await fs.rm(tempDir, { recursive: true, force: true })
   })
 
-  it('initializes sqlite storage without importing legacy JSON snapshots', async () => {
-    const legacyPath = path.join(tempDir, 'permissions.json')
+  it('initializes sqlite storage without importing retired JSON snapshots', async () => {
+    const retiredJsonPath = path.join(tempDir, 'permissions.json')
     await fs.writeFile(
-      legacyPath,
+      retiredJsonPath,
       JSON.stringify({
         version: 1,
         grants: {
@@ -83,10 +83,10 @@ describe('PermissionStore sqlite backend', () => {
     await store.shutdown()
   })
 
-  it('enters degraded backend-unavailable mode without reviving compat json fallback', async () => {
-    const legacyPath = path.join(tempDir, 'permissions.json')
+  it('enters degraded backend-unavailable mode without reviving retired json fallback', async () => {
+    const retiredJsonPath = path.join(tempDir, 'permissions.json')
     await fs.writeFile(
-      legacyPath,
+      retiredJsonPath,
       JSON.stringify({
         version: 1,
         grants: {
@@ -119,9 +119,9 @@ describe('PermissionStore sqlite backend', () => {
     await store.shutdown()
   })
 
-  it('rejects permission mutations when backend is unavailable and does not rewrite json fallback', async () => {
-    const legacyPath = path.join(tempDir, 'permissions.json')
-    const legacyPayload = {
+  it('rejects permission mutations when backend is unavailable and does not rewrite retired json fallback', async () => {
+    const retiredJsonPath = path.join(tempDir, 'permissions.json')
+    const retiredJsonPayload = {
       version: 1,
       grants: {
         'touch-demo': {
@@ -134,7 +134,7 @@ describe('PermissionStore sqlite backend', () => {
         }
       }
     }
-    await fs.writeFile(legacyPath, JSON.stringify(legacyPayload), 'utf-8')
+    await fs.writeFile(retiredJsonPath, JSON.stringify(retiredJsonPayload), 'utf-8')
 
     const store = new PermissionStore(tempDir, {
       createBackend: () => createUnavailableBackend('sqlite init failed')
@@ -153,7 +153,7 @@ describe('PermissionStore sqlite backend', () => {
       code: 'PERMISSION_BACKEND_UNAVAILABLE'
     })
 
-    expect(JSON.parse(await fs.readFile(legacyPath, 'utf-8'))).toEqual(legacyPayload)
+    expect(JSON.parse(await fs.readFile(retiredJsonPath, 'utf-8'))).toEqual(retiredJsonPayload)
     await store.shutdown()
   })
 })

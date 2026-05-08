@@ -1,12 +1,12 @@
 ---
 title: "ImageGallery"
-description: "Modal"
+description: "Image grid with modal preview."
 category: Data
 syncStatus: migrated
 ---
 # ImageGallery
 
-Modal
+Image grid with modal preview. Clicking a thumbnail opens that image, and the modal footer provides bounded previous/next navigation.
 
 <script setup lang="ts">
 const items = [
@@ -27,3 +27,41 @@ code: |
   </template>
 ---
 :::
+
+## API (Lite)
+::TuffPropsTable
+---
+rows:
+  - name: items
+    type: 'ImageGalleryItem[]'
+    default: '[]'
+    description: Image list. Each item contains id, url, and optional name
+  - name: startIndex
+    type: 'number'
+    default: '0'
+    description: Current preview index; out-of-range values are clamped
+---
+::
+
+## Events
+::TuffPropsTable
+---
+rows:
+  - name: open
+    type: '(payload: { index: number, item: ImageGalleryItem }) => void'
+    default: '-'
+    description: Fired after clicking a thumbnail and opening the preview
+  - name: close
+    type: '() => void'
+    default: '-'
+    description: Fired when the modal closes
+---
+::
+
+## Interaction Contract
+
+- Thumbnail buttons expose readable `aria-label` values. Image `alt` text uses `name`; unnamed images keep empty alt text.
+- Empty `items` render no thumbnails and do not open the modal or emit `open`.
+- `startIndex` and list length changes are clamped to a valid index. Clearing the list closes the preview.
+- The modal inherits `TxModal` dialog semantics, title linkage, close button, backdrop close, and Escape close behavior.
+- Footer Prev / Next controls only navigate inside valid bounds. Prev is disabled on the first image; Next is disabled on the last image.

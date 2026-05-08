@@ -90,7 +90,7 @@ code: |
 ## 说明
 
 - 变量全部以 Tuffex 默认值为准。
-- 暗色模式兼容 `[data-theme='dark']` 与 `.dark`。
+- 暗色模式支持 `[data-theme='dark']` 与 `.dark` 两种选择器。
 
 <style scoped>
 .tuff-swatch {

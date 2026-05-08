@@ -42,6 +42,7 @@ code: |
 ## Usage Notes
 - The wrapper controls size and layout ratio.
 - Ideal for page-level loading with consistent rhythm.
+- Content line widths use a fixed sequence, keeping SSR, hydration, and tests deterministic.
 
 ## API (Brief)
 ::TuffPropsTable
@@ -53,6 +54,12 @@ rows:
     description: 'No extra props; size follows the container'
 ---
 ::
+
+## Interaction Contract
+
+- `TxLayoutSkeleton` has no props, events, or slots.
+- The component always renders a header, 6 sidebar items, and 8 content lines.
+- Content line widths are deterministic and do not depend on runtime randomness.
 
 ## Composite Patterns
 ### Panel Placeholder

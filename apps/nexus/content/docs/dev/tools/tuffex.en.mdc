@@ -92,7 +92,7 @@ code: |
 | Component | Description | Source |
 |-----------|-------------|--------|
 | `TuffModal` | Modal dialog with entrance animations | `base/dialog/` |
-| `TuffScroll` | Custom scrollbar with native feel | `base/TouchScroll` |
+| `TxScroll` | Custom scrollbar with native feel | `@talex-touch/tuffex` |
 | `TuffTabs` | Tab navigation with indicator animations | `tabs/` |
 | `TuffMenu` | Menu component | `menu/` |
 

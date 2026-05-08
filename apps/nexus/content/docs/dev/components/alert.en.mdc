@@ -23,6 +23,10 @@ code: |
   </template>
 ---
 :::
+## Interaction Contract
+
+Alert renders with `role="alert"`, uses the shared `TxIcon` renderer for semantic leading icons, and emits `close` only from the close button. Set `closable=false` for persistent alerts, or `showIcon=false` for text-only banners.
+
 ## API (Lite)
 ::TuffPropsTable
 ---

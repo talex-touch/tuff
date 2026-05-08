@@ -17,7 +17,6 @@ import type {
   BatteryStatusPayload,
   BuildVerificationStatus,
   CounterPayload,
-  CurrentMetrics,
   DevToolsOptions,
   ExecuteCommandRequest,
   ExecuteCommandResponse,
@@ -31,13 +30,9 @@ import type {
   OpenExternalRequest,
   OSInfo,
   PackageInfo,
-  PerformanceHistoryEntry,
-  PerformanceSummary,
   PluginStats,
   ReadFileRequest,
   RendererPerfReport,
-  ReportMetricsRequest,
-  ReportMetricsResponse,
   SecureValueGetRequest,
   SecureValueSetRequest,
   SetLocaleRequest,
@@ -510,7 +505,7 @@ export const AppEvents = {
       .define<void, BuildVerificationStatus>(),
 
     /**
-     * Legacy build verification status request.
+     * Historical build verification status request.
      */
     getVerificationStatusLegacy: defineRawEvent<void, BuildVerificationStatus>(
       "build:get-verification-status",
@@ -625,41 +620,6 @@ export const AppEvents = {
         .event("sdk.record-histogram")
         .define<HistogramPayload, { ok: true }>(),
     },
-
-    /**
-     * Get current performance metrics.
-     * @deprecated Use analytics.getSnapshot instead.
-     */
-    getCurrent: defineEvent("app")
-      .module("analytics")
-      .event("get-current")
-      .define<void, CurrentMetrics>(),
-
-    /**
-     * Get performance history.
-     */
-    getHistory: defineEvent("app")
-      .module("analytics")
-      .event("get-history")
-      .define<void, PerformanceHistoryEntry[]>(),
-
-    /**
-     * Get performance summary.
-     */
-    getSummary: defineEvent("app")
-      .module("analytics")
-      .event("get-summary")
-      .define<void, PerformanceSummary>(),
-
-    /**
-     * Report metrics to an endpoint (legacy).
-     * @deprecated Use analytics.export instead.
-     */
-    report: defineEvent("app")
-      .module("analytics")
-      .event("report")
-      .define<ReportMetricsRequest, ReportMetricsResponse>(),
-
     /**
      * Report renderer performance incidents.
      */

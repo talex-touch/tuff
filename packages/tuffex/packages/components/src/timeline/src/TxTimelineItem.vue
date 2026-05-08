@@ -26,8 +26,16 @@ const layout = timeline.layout
       `tx-timeline-item--${layout}`,
       { 'tx-timeline-item--active': active },
     ]"
+    role="listitem"
   >
-    <div class="tx-timeline-item__dot" :class="`tx-timeline-item__dot--${color}`">
+    <div
+      class="tx-timeline-item__dot"
+      :class="[
+        `tx-timeline-item__dot--${color}`,
+        { 'tx-timeline-item__dot--active': active },
+      ]"
+      aria-hidden="true"
+    >
       <TxIcon v-if="icon" :name="icon" class="tx-timeline-item__icon" />
     </div>
 

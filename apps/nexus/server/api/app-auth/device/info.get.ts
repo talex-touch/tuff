@@ -24,8 +24,8 @@ export default defineEventHandler(async (event) => {
     return { status: 'expired', expiresAt: request.expiresAt }
   }
 
-  const { userId } = await requireSessionAuth(event)
-  const policy = await evaluateDeviceAuthLongTermPolicy(event, userId, request.deviceId)
+  const { userId, sessionIssuedAt } = await requireSessionAuth(event)
+  const policy = await evaluateDeviceAuthLongTermPolicy(event, userId, request.deviceId, { sessionIssuedAt })
   const requestIp = request.requestIp
   const currentIp = readRequestIp(event)
   const ipMismatch = request.status === 'rejected'
@@ -40,6 +40,8 @@ export default defineEventHandler(async (event) => {
     expiresAt: request.expiresAt,
     longTermAllowed: policy.allowLongTerm,
     longTermReason: policy.reason,
+    longTermSessionFresh: policy.sessionFresh,
+    longTermSessionWindowSeconds: policy.sessionWindowSeconds,
     ipMismatch,
     rejectReason: request.rejectReason ?? null,
     rejectMessage: request.rejectMessage ?? null,

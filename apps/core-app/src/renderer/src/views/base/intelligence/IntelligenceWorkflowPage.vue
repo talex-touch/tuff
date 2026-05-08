@@ -521,7 +521,7 @@ onMounted(async () => {
                     v-model="step.agentId"
                     type="text"
                     list="agent-options"
-                    placeholder="deepagent.workflow"
+                    placeholder="builtin.workflow-agent"
                   />
                 </label>
 

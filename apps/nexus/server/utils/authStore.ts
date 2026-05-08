@@ -19,7 +19,16 @@ const DEVICES_TABLE = 'auth_devices'
 const LOGIN_HISTORY_TABLE = 'auth_login_history'
 const MERGE_LOGS_TABLE = 'auth_user_merges'
 const DEVICE_AUTH_TABLE = 'auth_device_auth_requests'
+const DEVICE_AUTH_AUDIT_TABLE = 'auth_device_auth_audits'
 const PILOT_OAUTH_CODE_TABLE = 'auth_pilot_oauth_codes'
+
+const DEVICE_AUTH_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
+const DEVICE_AUTH_RATE_LIMIT_MAX_BY_DEVICE = 6
+const DEVICE_AUTH_RATE_LIMIT_MAX_BY_IP = 12
+const DEVICE_AUTH_RATE_LIMIT_MAX_BY_USER = 20
+const DEVICE_AUTH_COOLDOWN_WINDOW_MS = 10 * 60 * 1000
+const DEVICE_AUTH_COOLDOWN_THRESHOLD = 3
+const DEVICE_AUTH_LONG_TERM_SESSION_WINDOW_MS = 10 * 60 * 1000
 
 let authSchemaInitialized = false
 
@@ -153,6 +162,25 @@ async function ensureAuthSchema(db: D1Database) {
   `).run()
 
   await db.prepare(`
+    CREATE TABLE IF NOT EXISTS ${DEVICE_AUTH_AUDIT_TABLE} (
+      id TEXT PRIMARY KEY,
+      action TEXT NOT NULL,
+      status TEXT NOT NULL,
+      user_id TEXT,
+      device_id TEXT,
+      device_code TEXT,
+      user_code TEXT,
+      client_type TEXT,
+      actor_user_id TEXT,
+      reason TEXT,
+      ip TEXT,
+      user_agent TEXT,
+      metadata TEXT,
+      created_at TEXT NOT NULL
+    );
+  `).run()
+
+  await db.prepare(`
     CREATE TABLE IF NOT EXISTS ${WEBAUTHN_CHALLENGE_TABLE} (
       challenge TEXT PRIMARY KEY,
       user_id TEXT,
@@ -169,6 +197,7 @@ async function ensureAuthSchema(db: D1Database) {
       device_name TEXT,
       platform TEXT,
       client_type TEXT,
+      trusted_at TEXT,
       user_agent TEXT,
       last_seen_at TEXT,
       created_at TEXT NOT NULL,
@@ -294,6 +323,26 @@ async function ensureAuthSchema(db: D1Database) {
   `).run()
 
   await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_auth_device_auth_audits_device
+    ON ${DEVICE_AUTH_AUDIT_TABLE}(device_id, created_at DESC);
+  `).run()
+
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_auth_device_auth_audits_user
+    ON ${DEVICE_AUTH_AUDIT_TABLE}(user_id, created_at DESC);
+  `).run()
+
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_auth_device_auth_audits_ip
+    ON ${DEVICE_AUTH_AUDIT_TABLE}(ip, created_at DESC);
+  `).run()
+
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_auth_device_auth_audits_action_status
+    ON ${DEVICE_AUTH_AUDIT_TABLE}(action, status, created_at DESC);
+  `).run()
+
+  await db.prepare(`
     CREATE INDEX IF NOT EXISTS idx_auth_login_history_user ON ${LOGIN_HISTORY_TABLE}(user_id);
   `).run()
 
@@ -310,6 +359,7 @@ async function ensureAuthSchema(db: D1Database) {
   }
 
   await addDeviceColumnIfMissing('client_type', 'client_type TEXT')
+  await addDeviceColumnIfMissing('trusted_at', 'trusted_at TEXT')
 
   const loginHistoryColumns = await db.prepare(`PRAGMA table_info(${LOGIN_HISTORY_TABLE});`).all<{ name: string }>()
   const addLoginHistoryColumnIfMissing = async (column: string, ddl: string) => {
@@ -358,6 +408,8 @@ export interface AuthDevice {
   deviceName: string | null
   platform: string | null
   clientType: AuthClientType | null
+  trustedAt: string | null
+  trusted: boolean
   userAgent: string | null
   lastSeenAt: string | null
   createdAt: string
@@ -421,13 +473,44 @@ export interface DeviceAuthLongTermPolicy {
   allowLongTerm: boolean
   deviceTrusted: boolean
   locationTrusted: boolean
-  reason: 'device' | 'location' | 'unknown' | null
+  sessionFresh: boolean
+  sessionWindowSeconds: number
+  reason: 'device' | 'location' | 'session_window' | 'unknown' | null
 }
 
 export type DeviceAuthStatus = 'pending' | 'approved' | 'cancelled' | 'rejected'
 export type DeviceAuthGrantType = 'short' | 'long'
-export type DeviceAuthRejectReason = 'ip_mismatch' | 'permission_denied' | 'unknown'
+export type DeviceAuthRejectReason = 'ip_mismatch' | 'permission_denied' | 'rate_limited' | 'cooldown' | 'unknown'
 export type DeviceAuthBrowserState = 'unknown' | 'opened' | 'closed'
+export type DeviceAuthAuditAction = 'request' | 'approve' | 'reject' | 'cancel' | 'revoke' | 'trust' | 'untrust'
+export type DeviceAuthAuditStatus = 'success' | 'blocked' | 'failed'
+
+export interface DeviceAuthAuditRecord {
+  id: string
+  action: DeviceAuthAuditAction
+  status: DeviceAuthAuditStatus
+  userId: string | null
+  deviceId: string | null
+  deviceCode: string | null
+  userCode: string | null
+  clientType: AuthClientType | null
+  actorUserId: string | null
+  reason: string | null
+  ip: string | null
+  ipMasked: string | null
+  userAgent: string | null
+  metadata: Record<string, any> | null
+  createdAt: string
+}
+
+export interface DeviceAuthRateLimitDecision {
+  allowed: boolean
+  retryAfterSeconds: number
+  reason: 'rate_limited' | 'cooldown' | null
+  scope: 'device' | 'ip' | 'user' | 'device_cooldown' | 'ip_cooldown' | 'user_cooldown' | null
+  limit: number
+  count: number
+}
 
 function toNullableNumber(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''))
@@ -526,6 +609,8 @@ function mapDevice(row: Record<string, any> | null): AuthDevice | null {
     deviceName: row.device_name ?? null,
     platform: row.platform ?? null,
     clientType: normalizeClientType(row.client_type),
+    trustedAt: row.trusted_at ?? null,
+    trusted: Boolean(row.trusted_at),
     userAgent: row.user_agent ?? null,
     lastSeenAt: row.last_seen_at ?? null,
     createdAt: row.created_at,
@@ -873,7 +958,7 @@ function normalizeDeviceAuthRejectReason(value: unknown): DeviceAuthRejectReason
   if (typeof value !== 'string')
     return null
   const normalized = value.trim().toLowerCase()
-  if (normalized === 'ip_mismatch' || normalized === 'permission_denied' || normalized === 'unknown')
+  if (normalized === 'ip_mismatch' || normalized === 'permission_denied' || normalized === 'rate_limited' || normalized === 'cooldown' || normalized === 'unknown')
     return normalized
   return null
 }
@@ -914,9 +999,303 @@ function mapDeviceAuthRow(row: Record<string, any>): DeviceAuthRequest {
   }
 }
 
+function normalizeDeviceAuthAuditAction(value: unknown): DeviceAuthAuditAction {
+  if (typeof value !== 'string')
+    return 'request'
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'request' || normalized === 'approve' || normalized === 'reject' || normalized === 'cancel' || normalized === 'revoke' || normalized === 'trust' || normalized === 'untrust')
+    return normalized
+  return 'request'
+}
+
+function normalizeDeviceAuthAuditStatus(value: unknown): DeviceAuthAuditStatus {
+  if (typeof value !== 'string')
+    return 'failed'
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'success' || normalized === 'blocked' || normalized === 'failed')
+    return normalized
+  return 'failed'
+}
+
+function safeParseAuditMetadata(value: unknown): Record<string, any> | null {
+  if (typeof value !== 'string' || !value.trim())
+    return null
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+  }
+  catch {
+    return null
+  }
+}
+
+function mapDeviceAuthAuditRow(row: Record<string, any>): DeviceAuthAuditRecord {
+  return {
+    id: row.id as string,
+    action: normalizeDeviceAuthAuditAction(row.action),
+    status: normalizeDeviceAuthAuditStatus(row.status),
+    userId: row.user_id ?? null,
+    deviceId: row.device_id ?? null,
+    deviceCode: row.device_code ?? null,
+    userCode: row.user_code ?? null,
+    clientType: normalizeClientType(row.client_type),
+    actorUserId: row.actor_user_id ?? null,
+    reason: row.reason ?? null,
+    ip: row.ip ?? null,
+    ipMasked: maskIpAddress(row.ip ?? null),
+    userAgent: row.user_agent ?? null,
+    metadata: safeParseAuditMetadata(row.metadata),
+    createdAt: row.created_at as string,
+  }
+}
+
 function isExpiredAt(expiresAt: string): boolean {
   const expires = Date.parse(expiresAt)
   return Number.isNaN(expires) || expires <= Date.now()
+}
+
+function secondsUntil(targetMs: number): number {
+  const remainingMs = targetMs - Date.now()
+  return Math.max(1, Math.ceil(remainingMs / 1000))
+}
+
+function newestAuditMs(row: { created_at?: string | null } | null | undefined): number | null {
+  if (!row?.created_at)
+    return null
+  const parsed = Date.parse(row.created_at)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function blockedDeviceAuthActions(): DeviceAuthAuditAction[] {
+  return ['reject', 'cancel']
+}
+
+async function countDeviceAuthAudits(
+  db: D1Database,
+  whereSql: string,
+  params: Array<string | number | null>,
+): Promise<number> {
+  const row = await db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM ${DEVICE_AUTH_AUDIT_TABLE}
+    WHERE ${whereSql}
+  `).bind(...params).first<{ total?: number | string }>()
+  return toSafeInteger(row?.total)
+}
+
+async function newestDeviceAuthAudit(
+  db: D1Database,
+  whereSql: string,
+  params: Array<string | number | null>,
+): Promise<number | null> {
+  const row = await db.prepare(`
+    SELECT created_at
+    FROM ${DEVICE_AUTH_AUDIT_TABLE}
+    WHERE ${whereSql}
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).bind(...params).first<{ created_at?: string | null }>()
+  return newestAuditMs(row)
+}
+
+export async function recordDeviceAuthAudit(event: H3Event, payload: {
+  action: DeviceAuthAuditAction
+  status: DeviceAuthAuditStatus
+  userId?: string | null
+  deviceId?: string | null
+  deviceCode?: string | null
+  userCode?: string | null
+  clientType?: AuthClientType | null
+  actorUserId?: string | null
+  reason?: string | null
+  metadata?: Record<string, any> | null
+}): Promise<DeviceAuthAuditRecord> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const record: DeviceAuthAuditRecord = {
+    id: crypto.randomUUID(),
+    action: payload.action,
+    status: payload.status,
+    userId: payload.userId ?? null,
+    deviceId: payload.deviceId ?? null,
+    deviceCode: payload.deviceCode ?? null,
+    userCode: payload.userCode ?? null,
+    clientType: payload.clientType ?? null,
+    actorUserId: payload.actorUserId ?? null,
+    reason: payload.reason ?? null,
+    ip: getRequestIp(event),
+    ipMasked: maskIpAddress(getRequestIp(event)),
+    userAgent: getUserAgent(event),
+    metadata: payload.metadata ?? null,
+    createdAt: new Date().toISOString(),
+  }
+
+  await db.prepare(`
+    INSERT INTO ${DEVICE_AUTH_AUDIT_TABLE} (
+      id, action, status, user_id, device_id, device_code, user_code,
+      client_type, actor_user_id, reason, ip, user_agent, metadata, created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    record.id,
+    record.action,
+    record.status,
+    record.userId,
+    record.deviceId,
+    record.deviceCode,
+    record.userCode,
+    record.clientType,
+    record.actorUserId,
+    record.reason,
+    record.ip,
+    record.userAgent,
+    record.metadata ? JSON.stringify(record.metadata) : null,
+    record.createdAt,
+  ).run()
+
+  return record
+}
+
+export async function listDeviceAuthAudits(
+  event: H3Event,
+  options: {
+    userId?: string | null
+    deviceId?: string | null
+    limit?: number
+  } = {},
+): Promise<DeviceAuthAuditRecord[]> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const clauses: string[] = []
+  const params: Array<string | number> = []
+  if (options.userId) {
+    clauses.push('user_id = ?')
+    params.push(options.userId)
+  }
+  if (options.deviceId) {
+    clauses.push('device_id = ?')
+    params.push(options.deviceId)
+  }
+  const limit = Math.max(1, Math.min(200, Math.floor(options.limit ?? 50)))
+  const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
+  const result = await db.prepare(`
+    SELECT *
+    FROM ${DEVICE_AUTH_AUDIT_TABLE}
+    ${whereSql}
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).bind(...params, limit).all<Record<string, any>>()
+  return (result.results ?? []).map(row => mapDeviceAuthAuditRow(row))
+}
+
+export async function evaluateDeviceAuthRateLimit(event: H3Event, payload: {
+  deviceId?: string | null
+  userId?: string | null
+}): Promise<DeviceAuthRateLimitDecision> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const ip = getRequestIp(event)
+  const since = new Date(Date.now() - DEVICE_AUTH_RATE_LIMIT_WINDOW_MS).toISOString()
+  const cooldownSince = new Date(Date.now() - DEVICE_AUTH_COOLDOWN_WINDOW_MS).toISOString()
+  const blockedActions = blockedDeviceAuthActions()
+  const actionParams = blockedActions.map(() => '?').join(', ')
+
+  const rateChecks: Array<{
+    scope: DeviceAuthRateLimitDecision['scope']
+    limit: number
+    whereSql: string
+    params: Array<string | number | null>
+  }> = []
+  if (payload.deviceId) {
+    rateChecks.push({
+      scope: 'device',
+      limit: DEVICE_AUTH_RATE_LIMIT_MAX_BY_DEVICE,
+      whereSql: 'action = ? AND device_id = ? AND created_at >= ?',
+      params: ['request', payload.deviceId, since],
+    })
+  }
+  if (ip) {
+    rateChecks.push({
+      scope: 'ip',
+      limit: DEVICE_AUTH_RATE_LIMIT_MAX_BY_IP,
+      whereSql: 'action = ? AND ip = ? AND created_at >= ?',
+      params: ['request', ip, since],
+    })
+  }
+  if (payload.userId) {
+    rateChecks.push({
+      scope: 'user',
+      limit: DEVICE_AUTH_RATE_LIMIT_MAX_BY_USER,
+      whereSql: 'action = ? AND user_id = ? AND created_at >= ?',
+      params: ['request', payload.userId, since],
+    })
+  }
+
+  for (const check of rateChecks) {
+    const count = await countDeviceAuthAudits(db, check.whereSql, check.params)
+    if (count >= check.limit) {
+      const newestMs = await newestDeviceAuthAudit(db, check.whereSql, check.params)
+      return {
+        allowed: false,
+        retryAfterSeconds: secondsUntil((newestMs ?? Date.now()) + DEVICE_AUTH_RATE_LIMIT_WINDOW_MS),
+        reason: 'rate_limited',
+        scope: check.scope,
+        limit: check.limit,
+        count,
+      }
+    }
+  }
+
+  const cooldownChecks: Array<{
+    scope: DeviceAuthRateLimitDecision['scope']
+    whereSql: string
+    params: Array<string | number | null>
+  }> = []
+  if (payload.deviceId) {
+    cooldownChecks.push({
+      scope: 'device_cooldown',
+      whereSql: `action IN (${actionParams}) AND status IN ('blocked', 'success') AND device_id = ? AND created_at >= ?`,
+      params: [...blockedActions, payload.deviceId, cooldownSince],
+    })
+  }
+  if (ip) {
+    cooldownChecks.push({
+      scope: 'ip_cooldown',
+      whereSql: `action IN (${actionParams}) AND status IN ('blocked', 'success') AND ip = ? AND created_at >= ?`,
+      params: [...blockedActions, ip, cooldownSince],
+    })
+  }
+  if (payload.userId) {
+    cooldownChecks.push({
+      scope: 'user_cooldown',
+      whereSql: `action IN (${actionParams}) AND status IN ('blocked', 'success') AND user_id = ? AND created_at >= ?`,
+      params: [...blockedActions, payload.userId, cooldownSince],
+    })
+  }
+
+  for (const check of cooldownChecks) {
+    const count = await countDeviceAuthAudits(db, check.whereSql, check.params)
+    if (count >= DEVICE_AUTH_COOLDOWN_THRESHOLD) {
+      const newestMs = await newestDeviceAuthAudit(db, check.whereSql, check.params)
+      return {
+        allowed: false,
+        retryAfterSeconds: secondsUntil((newestMs ?? Date.now()) + DEVICE_AUTH_COOLDOWN_WINDOW_MS),
+        reason: 'cooldown',
+        scope: check.scope,
+        limit: DEVICE_AUTH_COOLDOWN_THRESHOLD,
+        count,
+      }
+    }
+  }
+
+  return {
+    allowed: true,
+    retryAfterSeconds: 0,
+    reason: null,
+    scope: null,
+    limit: 0,
+    count: 0,
+  }
 }
 
 export async function createDeviceAuthRequest(
@@ -1965,6 +2344,17 @@ export async function revokeDevice(event: H3Event, userId: string, deviceId: str
   `).bind(now, deviceId, userId).run()
 }
 
+export async function setDeviceTrusted(event: H3Event, userId: string, deviceId: string, trusted: boolean): Promise<AuthDevice | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  await db.prepare(`
+    UPDATE ${DEVICES_TABLE}
+    SET trusted_at = ?
+    WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+  `).bind(trusted ? new Date().toISOString() : null, deviceId, userId).run()
+  return getDevice(event, userId, deviceId)
+}
+
 export async function logLoginAttempt(event: H3Event, payload: {
   userId?: string | null
   deviceId?: string | null
@@ -2045,18 +2435,24 @@ export async function listLoginHistory(event: H3Event, userId: string, days = 90
 export async function evaluateDeviceAuthLongTermPolicy(
   event: H3Event,
   userId: string,
-  deviceId: string
+  deviceId: string,
+  options: { sessionIssuedAt?: number | null } = {},
 ): Promise<DeviceAuthLongTermPolicy> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
+  const sessionIssuedAtMs = typeof options.sessionIssuedAt === 'number' && Number.isFinite(options.sessionIssuedAt)
+    ? options.sessionIssuedAt * 1000
+    : null
+  const sessionFresh = Boolean(sessionIssuedAtMs && Date.now() - sessionIssuedAtMs <= DEVICE_AUTH_LONG_TERM_SESSION_WINDOW_MS)
+  const sessionWindowSeconds = Math.floor(DEVICE_AUTH_LONG_TERM_SESSION_WINDOW_MS / 1000)
   const deviceRow = await db.prepare(`
-    SELECT revoked_at
+    SELECT revoked_at, trusted_at
     FROM ${DEVICES_TABLE}
     WHERE id = ? AND user_id = ?
     LIMIT 1
-  `).bind(deviceId, userId).first<{ revoked_at?: string | null }>()
+  `).bind(deviceId, userId).first<{ revoked_at?: string | null, trusted_at?: string | null }>()
 
-  const deviceTrusted = Boolean(deviceRow && !deviceRow.revoked_at)
+  const deviceTrusted = Boolean(deviceRow && !deviceRow.revoked_at && deviceRow.trusted_at)
   const geo = resolveRequestGeo(event)
   const hasGeo = Boolean(geo.countryCode || geo.regionCode || geo.city)
   if (!hasGeo) {
@@ -2064,7 +2460,9 @@ export async function evaluateDeviceAuthLongTermPolicy(
       allowLongTerm: false,
       deviceTrusted,
       locationTrusted: false,
-      reason: deviceTrusted ? 'location' : 'device',
+      sessionFresh,
+      sessionWindowSeconds,
+      reason: !deviceTrusted ? 'device' : !sessionFresh ? 'session_window' : 'location',
     }
   }
 
@@ -2087,17 +2485,21 @@ export async function evaluateDeviceAuthLongTermPolicy(
     return Boolean(row.country_code || row.region_code || row.city)
   })
 
-  const allowLongTerm = deviceTrusted && locationTrusted
+  const allowLongTerm = deviceTrusted && locationTrusted && sessionFresh
   let reason: DeviceAuthLongTermPolicy['reason'] = null
   if (!deviceTrusted)
     reason = 'device'
   else if (!locationTrusted)
     reason = 'location'
+  else if (!sessionFresh)
+    reason = 'session_window'
 
   return {
     allowLongTerm,
     deviceTrusted,
     locationTrusted,
+    sessionFresh,
+    sessionWindowSeconds,
     reason,
   }
 }

@@ -1,12 +1,12 @@
 ---
 title: "Scroll 滚动"
-description: "基于 `@better-scroll/scroll-bar` 的滚动容器，提供更一致的滚动条体验，并兼容 `TouchScroll` 组件名。"
+description: "基于 `@better-scroll/scroll-bar` 的当前 `TxScroll` 滚动容器，提供更一致的滚动条体验。"
 category: Layout
 syncStatus: migrated
 ---
 # Scroll 滚动
 
-基于 `@better-scroll/scroll-bar` 的滚动容器，提供更一致的滚动条体验，并兼容 `TouchScroll` 组件名。
+基于 `@better-scroll/scroll-bar` 的当前 `TxScroll` 滚动容器，提供更一致的滚动条体验。
 
 ## 行为说明
 
@@ -37,13 +37,13 @@ code: |
   <template>
     <div class="demo-container" style="height: 220px;">
       <div style="height: 100%;">
-        <TouchScroll style="height: 100%;">
+        <TxScroll style="height: 100%;">
           <div style="height: 1200px; display: flex; flex-direction: column; gap: 8px;">
             <div v-for="i in 60" :key="i" class="demo-scroll-item">
               Row {{ i }}
             </div>
           </div>
-        </TouchScroll>
+        </TxScroll>
       </div>
     </div>
   </template>

@@ -34,7 +34,7 @@ const withSuffix = ref('')
 
 ## 输入框类型
 
-目前支持：`text` / `password` / `textarea`。
+目前支持：`text` / `password` / `textarea` / `date` / `email` / `number`。
 
 <div class="demo-container">
   <div class="demo-container__row">
@@ -132,13 +132,15 @@ const withSuffix = ref('')
 
 | 属性名 | 说明 | 类型 | 默认值 |
 |------|------|------|--------|
-| modelValue / v-model | 绑定值 | `string` | `''` |
+| modelValue / v-model | 绑定值 | `string \| number` | `''` |
 | placeholder | 占位文本 | `string` | `''` |
-| type | 类型 | `'text' \| 'password' \| 'textarea'` | `'text'` |
+| type | 类型 | `'text' \| 'password' \| 'textarea' \| 'date' \| 'email' \| 'number'` | `'text'` |
 | disabled | 是否禁用 | `boolean` | `false` |
 | readonly | 是否只读 | `boolean` | `false` |
 | clearable | 是否可清空 | `boolean` | `false` |
 | rows | 文本域行数（仅 textarea） | `number` | `3` |
+| prefixIcon | 前缀图标类名 | `string` | `''` |
+| suffixIcon | 后缀图标类名 | `string` | `''` |
 
 ### Events
 
@@ -150,9 +152,25 @@ const withSuffix = ref('')
 | blur | 失焦 |
 | clear | 点击清空 |
 
+### Exposes
+
+| 方法名 | 说明 | 类型 |
+|------|------|------|
+| focus | 聚焦原生输入控件 | `() => void` |
+| blur | 让原生输入控件失焦 | `() => void` |
+| clear | 在非禁用且非只读时清空 | `() => void` |
+| setValue | 设置值并触发 input/model 更新 | `(value: string) => void` |
+| getValue | 读取当前值 | `() => string \| number` |
+
 ### Slots
 
 | 插槽名 | 说明 |
 |------|------|
 | prefix | 前缀内容 |
 | suffix | 后缀内容 |
+
+## 交互契约
+
+- `type="number"` 在非空输入时发出 number，清空时发出 `''`。
+- 清空控件是可键盘聚焦的 button，并会在禁用或只读状态下隐藏。
+- `class` / `style` 透传到外层容器，其余 attrs 透传到原生 input / textarea。

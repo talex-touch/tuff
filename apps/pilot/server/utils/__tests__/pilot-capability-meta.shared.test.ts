@@ -52,7 +52,7 @@ describe('pilot-capability-meta shared rules', () => {
     expect(tools).toEqual(['write_todos', 'ls'])
   })
 
-  it('显式 capabilities 优先于 legacy 回填', () => {
+  it('显式 capabilities 优先于历史字段回填', () => {
     const capabilities = resolvePilotCapabilities({
       'websearch': true,
       'audio.tts': false,
@@ -74,7 +74,7 @@ describe('pilot-capability-meta shared rules', () => {
     const routeComboIds = new Set(['default-auto', 'image-combo'])
     expect(isPilotRouteComboIdValid('', routeComboIds)).toBe(true)
     expect(isPilotRouteComboIdValid('default-auto', routeComboIds)).toBe(true)
-    expect(isPilotRouteComboIdValid('legacy-combo', routeComboIds)).toBe(false)
+    expect(isPilotRouteComboIdValid('retired-combo', routeComboIds)).toBe(false)
   })
 
   it('可通过 id 获取模板预设', () => {

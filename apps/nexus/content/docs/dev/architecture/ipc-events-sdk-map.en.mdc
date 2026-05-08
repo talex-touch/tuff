@@ -266,28 +266,29 @@ This page maps `packages/utils/transport/sdk/domains/*` to main-process handlers
 | `shortcon:reg` | Plugin process (Prelude) | `ShortcutModule.setupIpcListeners -> registerRendererShortcut` (`apps/core-app/src/main/modules/global-shortcon.ts`) |
 | `shortcon:trigger` | `ShortcutModule.handleTrigger -> transport.sendToPlugin/sendToWindow` (`apps/core-app/src/main/modules/global-shortcon.ts`) | Renderer/plugin (shortcut subscribers) |
 
-### C8. Intelligence / Agents raw events
+### C8. Intelligence / Agents SDK events
 
 #### C8.1 Intelligence
 
 | Event Name | Sender | Handler |
 | --- | --- | --- |
-| `intelligence:invoke` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> ai.invoke` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:chat-langchain` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> ai.invoke('text.chat')` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:test-provider` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> ai.testProvider` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:get-capability-test-meta` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> capabilityTesterRegistry.get` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:test-capability` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> tester.generateTestPayload + ai.invoke` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:fetch-models` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> fetchProviderModels` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:get-audit-logs` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> ai.queryAuditLogs` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:get-today-stats` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> ai.getTodayStats` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:get-month-stats` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> ai.getMonthStats` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:get-usage-stats` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> ai.getUsageStats` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:get-quota` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.getQuota` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:set-quota` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.setQuota` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:delete-quota` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.deleteQuota` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:get-all-quotas` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.getAllQuotas` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:check-quota` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.checkQuota` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
-| `intelligence:get-current-usage` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.getCurrentUsage` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:invoke` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> ai.invoke` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:chat-langchain` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> ai.invoke('text.chat')` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:test-provider` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> ai.testProvider` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:get-capability-test-meta` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> capabilityTesterRegistry.get` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:test-capability` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> tester.generateTestPayload + ai.invoke` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:fetch-models` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> fetchProviderModels` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:get-audit-logs` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> ai.queryAuditLogs` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:get-today-stats` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> ai.getTodayStats` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:get-month-stats` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> ai.getMonthStats` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:get-usage-stats` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> ai.getUsageStats` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:get-quota` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.getQuota` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:set-quota` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.setQuota` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:delete-quota` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.deleteQuota` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:get-all-quotas` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.getAllQuotas` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:check-quota` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.checkQuota` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:get-current-usage` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.getCurrentUsage` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:api:reload-config` | Caller: renderer/plugin (Intelligence SDK typed event) | `IntelligenceModule.onInit -> reloadConfig` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
 
 #### C8.2 Agents
 

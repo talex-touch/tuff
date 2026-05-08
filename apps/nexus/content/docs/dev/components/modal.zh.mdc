@@ -56,5 +56,46 @@ rows:
 ---
 :::
 
+## Events
+::TuffPropsTable
+---
+rows:
+  - name: update:modelValue
+    type: '(value: boolean) => void'
+    default: '-'
+    description: 可见状态更新
+  - name: close
+    type: '() => void'
+    default: '-'
+    description: 遮罩、Escape 或关闭按钮触发关闭
+---
+::
+
+## Slots
+::TuffPropsTable
+---
+rows:
+  - name: default
+    type: '-'
+    default: '-'
+    description: 主体内容
+  - name: header
+    type: '-'
+    default: '-'
+    description: 自定义头部，替换 title 渲染
+  - name: footer
+    type: '-'
+    default: '-'
+    description: 底部操作区
+---
+::
+
+## 交互契约
+
+- Modal 根遮罩暴露 `role="dialog"`、`aria-modal="true"`；有 `title` 时通过实例级 `aria-labelledby` 关联标题。
+- 打开时聚焦遮罩根节点；隐藏或卸载时恢复打开前焦点。
+- 点击遮罩空白、按 Escape 或点击关闭按钮都会触发 `update:modelValue(false)` 与 `close`。
+- `TModal` 是基于 `TxModal` 的当前轻量入口；未提供 `header/footer` slot 时不会覆盖 `title` 和 footer 默认行为。
+
 ## Source
 <TuffDocSourceLink />

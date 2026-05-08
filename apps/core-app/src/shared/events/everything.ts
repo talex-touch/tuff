@@ -18,6 +18,7 @@ export interface EverythingStatusResponse {
   error: string | null
   errorCode?: string | null
   lastBackendError: string | null
+  backendAttemptErrors: Record<string, string>
   fallbackChain: EverythingBackendType[]
   lastChecked: number | null
 }

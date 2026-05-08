@@ -8,7 +8,6 @@ import {
   createIntelligenceSdk,
   type IntelligenceAuditLogEntry,
   type IntelligenceAuditLogQueryOptions,
-  type IntelligenceChatRequest,
   type IntelligenceCurrentUsage,
   type IntelligenceQuotaCheckResult,
   type IntelligenceQuotaConfig,
@@ -56,12 +55,7 @@ export function resolveIntelligenceChannel(
   return null
 }
 
-export interface IntelligenceClient extends IntelligenceSdk {
-  /**
-   * @deprecated 请优先使用 chatLangChain() 或 invoke('text.chat', ...)。
-   */
-  chat: (payload: IntelligenceChatRequest) => Promise<IntelligenceInvokeResult<string>>
-}
+export type IntelligenceClient = IntelligenceSdk
 
 function isTuffTransport(
   channel: IntelligenceChannelLike | null | undefined,
@@ -72,13 +66,6 @@ function isTuffTransport(
 function createChannelTransport(channel: IntelligenceClientChannel): IntelligenceSdkTransport {
   return {
     send: (event: { toEventName: () => string }, payload?: unknown) => channel.send(event.toEventName(), payload),
-  }
-}
-
-function toClient(sdk: IntelligenceSdk): IntelligenceClient {
-  return {
-    ...sdk,
-    chat: payload => sdk.chatLangChain(payload),
   }
 }
 
@@ -95,10 +82,10 @@ export function createIntelligenceClient(
   }
 
   if (isTuffTransport(resolved)) {
-    return toClient(createIntelligenceSdk(resolved))
+    return createIntelligenceSdk(resolved)
   }
 
-  return toClient(createIntelligenceSdk(createChannelTransport(resolved)))
+  return createIntelligenceSdk(createChannelTransport(resolved))
 }
 
 export type {

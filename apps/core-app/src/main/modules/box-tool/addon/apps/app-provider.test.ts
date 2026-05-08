@@ -5,6 +5,7 @@ import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
+  addWatchPathMock,
   getAppsMock,
   getAppInfoByPathMock,
   getLoggerMock,
@@ -25,6 +26,7 @@ const {
   unregisterPollingMock,
   withSqliteRetryMock
 } = vi.hoisted(() => ({
+  addWatchPathMock: vi.fn(),
   getAppsMock: vi.fn(),
   getAppInfoByPathMock: vi.fn(),
   getLoggerMock: vi.fn(() => ({
@@ -34,7 +36,7 @@ const {
     debug: vi.fn()
   })),
   getMainConfigMock: vi.fn(),
-  getWatchPathsMock: vi.fn(() => []),
+  getWatchPathsMock: vi.fn((): string[] => []),
   registerPollingMock: vi.fn(),
   removeByProviderMock: vi.fn(),
   runAdaptiveTaskQueueMock: vi.fn(async (items, handler) => {
@@ -112,7 +114,13 @@ vi.mock('pinyin-pro', () => ({
 }))
 
 vi.mock('../../../../core/eventbus/touch-event', () => ({
-  TalexEvents: {},
+  TalexEvents: {
+    FILE_ADDED: 'FILE_ADDED',
+    FILE_CHANGED: 'FILE_CHANGED',
+    FILE_UNLINKED: 'FILE_UNLINKED',
+    DIRECTORY_ADDED: 'DIRECTORY_ADDED',
+    DIRECTORY_UNLINKED: 'DIRECTORY_UNLINKED'
+  },
   touchEventBus: {
     on: vi.fn(),
     off: vi.fn()
@@ -178,7 +186,7 @@ vi.mock('../../../../utils/i18n-helper', () => ({
 
 vi.mock('../../file-system-watcher', () => ({
   default: {
-    addPath: vi.fn()
+    addPath: addWatchPathMock
   }
 }))
 
@@ -198,11 +206,22 @@ vi.mock('./app-scanner', () => ({
 }))
 
 vi.mock('./display-name-sync-utils', () => ({
+  isProbablyCorruptedDisplayName: vi.fn((value: string | null | undefined) => {
+    return typeof value === 'string' && (value.includes('\uFFFD') || value.includes('\u25A1'))
+  }),
   normalizeDisplayName: vi.fn((value: string | null | undefined) => value ?? null),
+  resolveDisplayName: vi.fn((displayName: string | null | undefined, fallbackName: string) => {
+    if (typeof displayName === 'string' && displayName && !displayName.includes('\uFFFD')) {
+      return displayName
+    }
+    return fallbackName
+  }),
   shouldUpdateDisplayName: vi.fn(
     (current: string | null | undefined, next: string | null | undefined) => {
       const normalizedCurrent = current ?? null
       const normalizedNext = next ?? null
+      if (typeof normalizedNext === 'string' && normalizedNext.includes('\uFFFD')) return false
+      if (typeof normalizedCurrent === 'string' && normalizedCurrent.includes('\uFFFD')) return true
       return normalizedCurrent !== normalizedNext
     }
   )
@@ -280,6 +299,22 @@ async function flushPromises(): Promise<void> {
 
 async function loadSubject() {
   return await import('./app-provider')
+}
+
+async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T> | T): Promise<T> {
+  const originalPlatform = process.platform
+  Object.defineProperty(process, 'platform', {
+    value: platform,
+    configurable: true
+  })
+  try {
+    return await run()
+  } finally {
+    Object.defineProperty(process, 'platform', {
+      value: originalPlatform,
+      configurable: true
+    })
+  }
 }
 
 function upsertExtensionRows(
@@ -398,6 +433,7 @@ describe('appProvider rebuild maintenance', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    addWatchPathMock.mockResolvedValue(undefined)
     getWatchPathsMock.mockReturnValue([])
     getAppsMock.mockResolvedValue([])
     spawnSafeMock.mockReturnValue({ unref: vi.fn() })
@@ -412,6 +448,91 @@ describe('appProvider rebuild maintenance', () => {
         return value === '微信' ? 'WX' : value
       }
       return value === '微信' ? 'WEI XIN' : value
+    })
+  })
+
+  it('subscribes and watches Start Menu paths on Windows', async () => {
+    await withPlatform('win32', async () => {
+      const { appProvider } = await loadSubject()
+      const { touchEventBus, TalexEvents } = await import('../../../../core/eventbus/touch-event')
+      const watchPaths = [
+        'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs',
+        'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
+      ]
+      getWatchPathsMock.mockReturnValue(watchPaths)
+
+      await appProvider.onLoad({
+        databaseManager: { getDb: vi.fn() },
+        searchIndex: { indexItems: vi.fn() }
+      } as any)
+
+      expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_ADDED, expect.any(Function))
+      expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_CHANGED, expect.any(Function))
+      expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_UNLINKED, expect.any(Function))
+      expect(addWatchPathMock).toHaveBeenCalledWith(watchPaths[0], 4)
+      expect(addWatchPathMock).toHaveBeenCalledWith(watchPaths[1], 4)
+    })
+  })
+
+  it('processes Windows shortcut changes and ignores unrelated file events', async () => {
+    await withPlatform('win32', async () => {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      const shortcutPath =
+        'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk'
+      const appInfo = {
+        name: 'Foo',
+        displayName: 'Foo',
+        path: shortcutPath,
+        icon: '',
+        bundleId: '',
+        uniqueId: 'shortcut:c:\\program files\\foo\\foo.exe|',
+        stableId: 'shortcut:c:\\program files\\foo\\foo.exe|',
+        launchKind: 'shortcut' as const,
+        launchTarget: 'C:\\Program Files\\Foo\\Foo.exe',
+        lastModified: new Date('2026-05-08T00:00:00.000Z')
+      }
+      const insertedFile = {
+        id: 42,
+        path: shortcutPath,
+        name: 'Foo',
+        displayName: 'Foo',
+        type: 'app',
+        mtime: appInfo.lastModified,
+        ctime: appInfo.lastModified
+      }
+      const valuesMock = vi.fn(() => ({
+        returning: vi.fn(async () => [insertedFile])
+      }))
+
+      getAppInfoByPathMock.mockResolvedValue(appInfo)
+      ;(privateProvider as any)._waitForItemStable = vi.fn(async () => true)
+      privateProvider.dbUtils = {
+        getFileByPath: vi.fn(async () => null),
+        getDb: () => ({
+          insert: vi.fn(() => ({
+            values: valuesMock
+          }))
+        }),
+        addFileExtensions: vi.fn(async () => undefined)
+      }
+      privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
+
+      const processResult = await (privateProvider as any).handleItemAddedOrChanged({
+        filePath: shortcutPath
+      })
+      await processResult
+
+      expect(getAppInfoByPathMock).toHaveBeenCalledWith(shortcutPath)
+      expect(valuesMock).toHaveBeenCalled()
+
+      getAppInfoByPathMock.mockClear()
+      await (privateProvider as any).handleItemAddedOrChanged({
+        filePath:
+          'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\note.txt'
+      })
+
+      expect(getAppInfoByPathMock).not.toHaveBeenCalled()
     })
   })
 
@@ -644,6 +765,70 @@ describe('appProvider rebuild maintenance', () => {
     expect(initializeMock).toHaveBeenCalledWith({ forceRefresh: true })
   })
 
+  it('repairs corrupted display names during startup backfill', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const dbRow = {
+      id: 80,
+      path: 'D:\\Weixin\\Weixin.exe',
+      name: 'Weixin',
+      displayName: '\u03A2\uFFFD\uFFFD',
+      type: 'app',
+      mtime: new Date('2026-05-05T08:00:00Z'),
+      ctime: new Date('2026-05-05T08:00:00Z')
+    }
+    const scannedApp = {
+      name: 'WeChat',
+      displayName: 'WeChat',
+      path: 'D:\\Weixin\\Weixin.exe',
+      icon: '',
+      bundleId: '',
+      uniqueId: 'path:d:\\weixin\\weixin.exe',
+      stableId: 'path:d:\\weixin\\weixin.exe',
+      launchKind: 'path' as const,
+      launchTarget: 'D:\\Weixin\\Weixin.exe',
+      lastModified: new Date('2026-05-05T09:00:00Z')
+    }
+    let updatedDisplayName: string | null = dbRow.displayName
+
+    getAppsMock.mockResolvedValue([scannedApp])
+
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn().mockResolvedValue([dbRow]),
+      getDb: () => ({
+        insert: vi.fn(() => ({
+          values: vi.fn(() => ({
+            onConflictDoUpdate: vi.fn(() => ({
+              returning: vi.fn(async () => [])
+            }))
+          }))
+        })),
+        update: vi.fn(() => ({
+          set: vi.fn((values: { displayName?: string }) => ({
+            where: vi.fn(async () => {
+              if (values.displayName) {
+                updatedDisplayName = values.displayName
+              }
+            })
+          }))
+        }))
+      }),
+      addFileExtensions: vi.fn(async () => undefined)
+    }
+    privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async (files: unknown[]) =>
+      files.map((file) => ({
+        ...(file as typeof dbRow),
+        extensions: { appIdentity: 'path:d:\\weixin\\weixin.exe' }
+      }))
+    )
+    privateProvider._recordMissingIconApps = vi.fn().mockResolvedValue(undefined)
+
+    await privateProvider._performStartupBackfill()
+
+    expect(updatedDisplayName).toBe('WeChat')
+  })
+
   it('serializes rebuild, full sync, mdls scan and startup backfill tasks', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
@@ -863,7 +1048,7 @@ describe('appProvider rebuild maintenance', () => {
     ])
   })
 
-  it('does not keep removing legacy app item ids during steady-state keyword sync', async () => {
+  it('does not keep removing retired app item ids during steady-state keyword sync', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
     const indexItemsMock = vi.fn(async () => undefined)

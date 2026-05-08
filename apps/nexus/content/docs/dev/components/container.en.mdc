@@ -287,35 +287,32 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|--------|------|
-| fluid | `boolean` | `false` | Description for fluid. |
-| maxWidth | `string \| number` | - | Description for maxWidth. |
-| responsive | `boolean` | `false` | Description for responsive. |
-| padding | `'small' \| 'medium' \| 'large' \| number` | `'medium'` | Description for padding. |
-| margin | `'auto' \| string \| number` | - | Description for margin. |
+| fluid | `boolean` | `false` | Removes the max-width cap and lets the container fill its parent. |
+| maxWidth | `string` | `'1200px'` | Max width used when `fluid` is disabled. |
+| responsive | `boolean` | `false` | Enables the built-in responsive container width classes. |
+| padding | `'small' \| 'medium' \| 'large' \| number` | `'medium'` | Horizontal padding preset or pixel value. |
+| margin | `'auto' \| string \| number` | `'auto'` | Horizontal margin; `auto` centers the container. |
 
 ### Row Props
 
 | Prop | Type | Default | Description |
 |------|------|--------|------|
-| gutter | `number \| object` | `0` | TextGap |
-| align | `'top' \| 'middle' \| 'bottom'` | `'top'` | Description for align. |
-| justify | `'start' \| 'end' \| 'center' \| 'space-around' \| 'space-between'` | `'start'` | Description for justify. |
-| wrap | `boolean` | `true` | Description for wrap. |
+| gutter | `number \| Partial<Record<'xs' \| 'sm' \| 'md' \| 'lg' \| 'xl', number>>` | `0` | Column gutter in pixels, optionally selected by breakpoint. |
+| align | `'top' \| 'middle' \| 'bottom' \| 'stretch'` | `'stretch'` | Vertical alignment for row children. |
+| justify | `'start' \| 'end' \| 'center' \| 'space-around' \| 'space-between' \| 'space-evenly'` | `'start'` | Horizontal distribution for row children. |
+| wrap | `boolean` | `true` | Allows columns to wrap onto multiple lines. |
 
 ### Col Props
 
 | Prop | Type | Default | Description |
 |------|------|--------|------|
-| span | `number` | `24` | Description for span. |
-| offset | `number` | `0` | Description for offset. |
-| push | `number` | `0` | Description for push. |
-| pull | `number` | `0` | Description for pull. |
-| xs | `number \| object` | - | Text (<576px) |
-| sm | `number \| object` | - | Text (≥576px) |
-| md | `number \| object` | - | Text (≥768px) |
-| lg | `number \| object` | - | Text (≥992px) |
-| xl | `number \| object` | - | Text (≥1200px) |
-| xxl | `number \| object` | - | Text (≥1600px) |
+| span | `number` | `24` | Number of columns occupied in the 24-column grid. |
+| offset | `number` | `0` | Left offset in the 24-column grid. |
+| xs | `number` | - | Span used below 640px. |
+| sm | `number` | - | Span used from 640px to 767px. |
+| md | `number` | - | Span used from 768px to 1023px. |
+| lg | `number` | - | Span used from 1024px to 1279px. |
+| xl | `number` | - | Span used at 1280px and above. |
 
 ## Responsive Breakpoints
 
@@ -324,23 +321,20 @@ TouchX UI uses the following breakpoints:
 :::TuffCodeBlock{lang="css"}
 ---
 code: |
-  /* textSmall screens */
-  @media (max-width: 575px) { /* xs */ }
+  /* Extra small screens */
+  @media (max-width: 639px) { /* xs */ }
   
   /* Small screens */
-  @media (min-width: 576px) { /* sm */ }
+  @media (min-width: 640px) { /* sm */ }
   
   /* Medium screens */
   @media (min-width: 768px) { /* md */ }
   
   /* Large screens */
-  @media (min-width: 992px) { /* lg */ }
+  @media (min-width: 1024px) { /* lg */ }
   
   /* XL screens */
-  @media (min-width: 1200px) { /* xl */ }
-  
-  /* XXL screens */
-  @media (min-width: 1600px) { /* xxl */ }
+  @media (min-width: 1280px) { /* xl */ }
 ---
 :::
 
@@ -352,15 +346,9 @@ code: |
 ---
 code: |
   .custom-container {
-    --tx-container-max-width-sm: 540px;
-    --tx-container-max-width-md: 720px;
-    --tx-container-max-width-lg: 960px;
-    --tx-container-max-width-xl: 1140px;
-    --tx-container-max-width-xxl: 1320px;
-    
-    --tx-container-padding-small: 12px;
-    --tx-container-padding-medium: 24px;
-    --tx-container-padding-large: 48px;
+    --tx-container-max-width: 1200px;
+    --tx-container-padding: 16px;
+    --tx-row-gutter: 16px;
   }
 ---
 :::
@@ -380,25 +368,25 @@ code: |
 ---
 code: |
   <template>
-    <!-- TextLayout -->
+    <!-- Centered content -->
     <TxContainer max-width="800px" margin="auto">
-      <div class="content">TextContent</div>
+      <div class="content">Main content</div>
     </TxContainer>
     
-    <!-- TextLayout -->
+    <!-- Content with sidebar -->
     <TxContainer>
       <TxRow :gutter="32">
-        <TxCol :span="16">TextContent</TxCol>
+        <TxCol :span="16">Article content</TxCol>
         <TxCol :span="8">Sidebar</TxCol>
       </TxRow>
     </TxContainer>
     
-    <!-- TextLayout -->
+    <!-- Three-column layout -->
     <TxContainer>
       <TxRow :gutter="24">
-        <TxCol :span="6">Text</TxCol>
-        <TxCol :span="12">TextContent</TxCol>
-        <TxCol :span="6">Text</TxCol>
+        <TxCol :span="6">Navigation</TxCol>
+        <TxCol :span="12">Main content</TxCol>
+        <TxCol :span="6">Details</TxCol>
       </TxRow>
     </TxContainer>
   </template>

@@ -48,3 +48,11 @@ rows:
 
 ## Source
 <TuffDocSourceLink />
+
+## 交互契约
+
+- 根节点是原生 `<button type="button">`，默认不会提交外层表单。
+- `disabled` 与 `loading` 都会设置原生 `disabled` 属性，并阻断 `click` 事件。
+- `loading` 会渲染 spinner，同时保留按钮内容。
+- `primary` 只切换主色视觉；非 primary 默认带 `fake-background` hover 背景。
+- `mini` 切换紧凑尺寸，不改变按钮语义。

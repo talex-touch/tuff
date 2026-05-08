@@ -30,6 +30,10 @@ code: |
 ---
 ::
 
+## Interaction Contract
+
+Rating exposes the star group as a radio group. `disabled` and `readonly` both block updates; `readonly` is display-only and removes star button interaction while keeping the rating visible.
+
 ## API (Lite)
 ::TuffPropsTable
 ---
@@ -50,10 +54,14 @@ rows:
     type: boolean
     default: 'false'
     description: Show score text
+  - name: disabled
+    type: boolean
+    default: 'false'
+    description: Disable interaction
   - name: readonly
     type: boolean
     default: 'false'
-    description: Readonly mode
+    description: Display-only mode
 ---
 :::
 

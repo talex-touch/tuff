@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # SearchEmpty 搜索空态
 
-用于搜索无结果时的状态提示。
+`TxSearchEmpty` 是 `TxEmptyState` 的快捷封装，自动设置 `variant="search-empty"`，用于搜索无结果时的状态提示。
 
 ## 基础用法
 
@@ -25,4 +25,10 @@ code: |
 
 ## API
 
-Props / Slots / Events 同 `TxEmptyState`。
+`TxSearchEmpty` 继承 `TxEmptyState` 的全部 Props（除 `variant`）、Slots 和 Events，详见 [EmptyState](./empty-state.zh.md)。
+
+## 交互契约
+
+- `TxSearchEmpty` 始终向 `TxEmptyState` 透传 `variant="search-empty"`。
+- 组件不额外改写 `title`、`description`、`surface` 或 action 配置；显式 props 会原样透传。
+- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。

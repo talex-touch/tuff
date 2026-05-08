@@ -1,6 +1,6 @@
 ---
 title: "Select"
-description: "Floating UI"
+description: "Popover-backed select with optional local filtering, editable remote search, and panel styling controls."
 category: Form
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # Select
 
-Floating UI
+`TuffSelect` renders a Popover-backed dropdown for primitive string/number values. Options register their labels through `TuffSelectItem`, disabled options stay visible but cannot be selected, and remote editable mode emits search queries from the trigger input.
 
 
 ## Basic Usage
@@ -90,9 +90,9 @@ code: |
 code: |
   <template>
     <TuffSelect v-model="value" placeholder="Select an option">
-      <TuffSelectItem value="option1" label="TextOption 1" />
+      <TuffSelectItem value="option1" label="Option 1" />
       <TuffSelectItem value="option2" label="DisabledOption" disabled />
-      <TuffSelectItem value="option3" label="TextOption 2" />
+      <TuffSelectItem value="option3" label="Option 2" />
     </TuffSelect>
   </template>
 ---
@@ -118,28 +118,35 @@ code: |
 
 | Prop | Description | Type | Default |
 |--------|------|------|--------|
-| modelValue / v-model | Description for modelValue / v-model. | `string \| number` | `''` |
-| placeholder | Description for placeholder. | `string` | `'Text'` |
-| disabled | Description for disabled. | `boolean` | `false` |
-| searchable | Description for searchable. | `boolean` | `false` |
-| searchPlaceholder | Description for searchPlaceholder. | `string` | `'Search'` |
-| editable | Description for editable. | `boolean` | `false` |
-| remote | Description for remote. | `boolean` | `false` |
-| dropdownMaxHeight | Description for dropdownMaxHeight. | `number` | `280` |
-| dropdownOffset | Description for dropdownOffset. | `number` | `6` |
+| modelValue / v-model | Selected primitive value. | `string \| number` | `''` |
+| placeholder | Placeholder shown in the trigger input when no label is selected. | `string` | `'请选择'` |
+| disabled | Disables the trigger, closes the dropdown, and blocks option selection. | `boolean` | `false` |
+| eager | Eagerly mounts the Popover panel. | `boolean` | `false` |
+| searchable | Shows an internal search input for local option filtering when the select is not editable. | `boolean` | `false` |
+| searchPlaceholder | Placeholder for the internal local search input. | `string` | `'Search'` |
+| editable | Uses the trigger input as editable search text and opens on focus. | `boolean` | `false` |
+| remote | Enables editable remote mode and emits `search` while the dropdown is open. | `boolean` | `false` |
+| dropdownMaxHeight | Maximum dropdown list height in pixels. | `number` | `280` |
+| dropdownOffset | Popover offset from the trigger. | `number` | `6` |
+| panelVariant | Popover panel surface variant. | `'solid' \| 'dashed' \| 'plain'` | `'solid'` |
+| panelBackground | Popover panel background style. | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` |
+| panelShadow | Popover panel shadow strength. | `'none' \| 'soft' \| 'medium'` | `'soft'` |
+| panelRadius | Popover panel corner radius. | `number` | `18` |
+| panelPadding | Popover panel inner padding. | `number` | `4` |
+| panelCard | Optional panel card overrides forwarded to the Popover panel. | `BaseAnchorPanelCardProps` | - |
 
 ### TuffSelect Events
 
 | Event | Description | Params |
 |--------|------|----------|
-| change | Description for change. | `(value: string \| number) => void` |
-| update:modelValue | Description for update:modelValue. | `(value: string \| number) => void` |
-| search | Description for search. | `(query: string) => void` |
+| change | Emitted with the selected value after an enabled option is picked or the value is cleared. | `(value: string \| number) => void` |
+| update:modelValue | v-model update emitted with the selected value or empty string on clear. | `(value: string \| number) => void` |
+| search | Emitted in remote mode while the dropdown is open and editable text changes. | `(query: string) => void` |
 
 ### TuffSelectItem Props
 
 | Prop | Description | Type | Default |
 |--------|------|------|--------|
-| value | Description for value. | `string \| number` | - |
-| label | Description for label. | `string` | - |
-| disabled | Description for disabled. | `boolean` | `false` |
+| value | Primitive option value written to the parent select when picked. | `string \| number` | - |
+| label | Fallback visible label and registered selected-label text. | `string` | - |
+| disabled | Prevents picking this option while leaving it visible in the dropdown. | `boolean` | `false` |

@@ -4,12 +4,6 @@ export type CascaderKey = string | number
 export type CascaderPath = CascaderKey[]
 export type CascaderValue = CascaderPath | CascaderPath[] | undefined
 
-export interface CascaderSearchResult {
-  path: CascaderPath
-  label?: string
-  disabled?: boolean
-}
-
 export interface CascaderNode {
   value: CascaderKey
   label: string
@@ -25,10 +19,6 @@ export interface CascaderProps {
   disabled?: boolean
   placeholder?: string
   searchable?: boolean
-  remote?: boolean
-  searchLoading?: boolean
-  searchResults?: CascaderSearchResult[]
-  searchDebounce?: number
   clearable?: boolean
   placement?: PopoverPlacement
   dropdownOffset?: number
@@ -37,7 +27,6 @@ export interface CascaderProps {
   dropdownMaxHeight?: number
   expandTrigger?: 'click' | 'hover' | 'both'
   load?: (node: CascaderNode | null, level: number) => Promise<CascaderNode[]>
-  resolvePath?: (path: CascaderPath) => Promise<CascaderNode[]>
 }
 
 export interface CascaderEmits {
@@ -45,5 +34,4 @@ export interface CascaderEmits {
   (e: 'change', v: CascaderValue): void
   (e: 'open'): void
   (e: 'close'): void
-  (e: 'search', query: string): void
 }

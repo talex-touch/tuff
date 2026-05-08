@@ -1,12 +1,12 @@
 ---
 title: "NavBar"
-description: "Component documentation for NavBar."
+description: "Top navigation bar with a title, left/right slots, and an optional back button."
 category: Layout
 syncStatus: migrated
 ---
 # NavBar
 
-Component documentation for NavBar.
+Top navigation bar for compact app surfaces. It provides a centered title, safe-area padding, left/right action slots, and an optional default back button.
 
 ## Basic Usage
 
@@ -41,25 +41,25 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `title` | `string` | `''` | Description for title. |
-| `fixed` | `boolean` | `false` | Description for fixed. |
-| `safeAreaTop` | `boolean` | `true` | Description for safeAreaTop. |
-| `showBack` | `boolean` | `false` | Description for showBack. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `zIndex` | `number` | `2000` | z-index |
+| `title` | `string` | `''` | Text rendered in the default title area. |
+| `fixed` | `boolean` | `false` | Uses sticky positioning at the top of the viewport. |
+| `safeAreaTop` | `boolean` | `true` | Adds a safe-area spacer above the bar for notched displays. |
+| `showBack` | `boolean` | `false` | Shows the built-in back button when the `left` slot is not provided. |
+| `disabled` | `boolean` | `false` | Disables back/left/right click emissions and marks the back button disabled. |
+| `zIndex` | `number` | `2000` | CSS z-index exposed through `--tx-nav-bar-z-index`. |
 
 ### Slots
 
 | Name | Description |
 |------|------|
-| `left` | Description for left. |
-| `title` | Description for title. |
-| `right` | Description for right. |
+| `left` | Replaces the default left area and built-in back button. |
+| `title` | Replaces the centered title content. |
+| `right` | Renders right-aligned actions. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `back` | - | Description for back. |
-| `click-left` | - | Description for click-left. |
-| `click-right` | - | Description for click-right. |
+| `back` | - | Emitted when the built-in back button is clicked. |
+| `click-left` | - | Emitted when the left area is clicked; the built-in back button also emits it. |
+| `click-right` | - | Emitted when the right area is clicked. |

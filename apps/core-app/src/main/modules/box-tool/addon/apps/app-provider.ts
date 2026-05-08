@@ -68,7 +68,12 @@ import FileSystemWatcher from '../../file-system-watcher'
 import searchEngineCore from '../../search-engine/search-core'
 import { appScanner } from './app-scanner'
 import { scheduleAppLaunch } from './app-launcher'
-import { normalizeDisplayName, shouldUpdateDisplayName } from './display-name-sync-utils'
+import {
+  isProbablyCorruptedDisplayName,
+  normalizeDisplayName,
+  resolveDisplayName,
+  shouldUpdateDisplayName
+} from './display-name-sync-utils'
 import { matchNoisySystemAppRule } from './app-noise-filter'
 import { diagnoseAppSearch, reindexAppSearchTarget } from './app-provider-diagnostics'
 import {
@@ -273,6 +278,7 @@ const APP_ENTRY_ENABLED_EXTENSION_KEY = 'entryEnabled'
 const APP_ENTRY_SOURCE_MANUAL = 'manual'
 const APP_IDENTIFIER_EXTENSION_KEYS = ['bundleId', APP_IDENTITY_EXTENSION_KEY] as const
 const APP_IDENTIFIER_EXTENSION_KEY_SET = new Set<string>(APP_IDENTIFIER_EXTENSION_KEYS)
+const WINDOWS_REALTIME_APP_EXTENSIONS = new Set(['.lnk', '.exe'])
 
 function isAppIdentifierExtensionKey(
   value: string | null | undefined
@@ -330,6 +336,10 @@ function isManagedEntryEnabledExtensionMap(
 function normalizeOptionalString(value: string | undefined): string | undefined {
   const normalized = value?.trim()
   return normalized ? normalized : undefined
+}
+
+function resolveScannedDisplayName(app: Pick<ScannedAppInfo, 'displayName' | 'name'>): string {
+  return resolveDisplayName(app.displayName, app.name)
 }
 
 function inferManagedEntryLaunchKind(targetPath: string): AppLaunchKind {
@@ -600,7 +610,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return this.partitionDbApps(appsWithExtensions)
       .managedEntries.map((app) => this.mapManagedEntry(app))
       .sort((left, right) =>
-        (left.displayName || left.name).localeCompare(right.displayName || right.name)
+        resolveDisplayName(left.displayName, left.name).localeCompare(
+          resolveDisplayName(right.displayName, right.name)
+        )
       )
   }
 
@@ -617,6 +629,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     const { appInfo, enabled } = normalized
+    const cleanDisplayName = resolveScannedDisplayName(appInfo)
     const existingFile = await this.dbUtils.getFileByPath(appInfo.path)
     const db = this.dbUtils.getDb()
 
@@ -636,7 +649,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         .update(filesSchema)
         .set({
           name: appInfo.name,
-          displayName: normalizeDisplayName(appInfo.displayName),
+          displayName: cleanDisplayName,
           mtime: appInfo.lastModified
         })
         .where(eq(filesSchema.id, existingFile.id))
@@ -656,7 +669,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         entry: this.mapManagedEntry({
           ...existingFile,
           name: appInfo.name,
-          displayName: normalizeDisplayName(appInfo.displayName),
+          displayName: cleanDisplayName,
           mtime: appInfo.lastModified,
           extensions: {
             ...existingExtensions,
@@ -671,7 +684,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       .values({
         path: appInfo.path,
         name: appInfo.name,
-        displayName: normalizeDisplayName(appInfo.displayName),
+        displayName: cleanDisplayName,
         type: 'app' as const,
         mtime: appInfo.lastModified,
         ctime: new Date()
@@ -1294,10 +1307,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         const uniqueId = this.resolveDbAppKey(dbApp)
         const scannedApp = scannedAppsMap.get(uniqueId)
         if (!scannedApp) return null
-        const hasDisplayNameDrift = shouldUpdateDisplayName(
-          dbApp.displayName,
-          scannedApp.displayName
-        )
+        const nextDisplayName = resolveScannedDisplayName(scannedApp)
+        const hasDisplayNameDrift = shouldUpdateDisplayName(dbApp.displayName, nextDisplayName)
         const hasAlternateNamesDrift = hasStringListDrift(
           dbApp.extensions[APP_ALTERNATE_NAMES_EXTENSION_KEY],
           scannedApp.alternateNames
@@ -1331,12 +1342,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       await runAdaptiveTaskQueue(
         toAdd,
         async (app, index) => {
+          const cleanDisplayName = resolveScannedDisplayName(app)
           const [insertedFile] = await this.dbUtils!.getDb()
             .insert(filesSchema)
             .values({
               path: app.path,
               name: app.name,
-              displayName: app.displayName,
+              displayName: cleanDisplayName,
               type: 'app' as const,
               mtime: app.lastModified,
               ctime: new Date()
@@ -1353,7 +1365,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
           if (insertedFile) {
             await this.syncScannedAppExtensions(insertedFile.id, app)
-            await this._syncKeywordsForApp(app)
+            await this._syncKeywordsForApp({ ...app, displayName: cleanDisplayName })
           }
 
           if ((index + 1) % 50 === 0 || index === toAdd.length - 1) {
@@ -1389,7 +1401,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       await runAdaptiveTaskQueue(
         toUpdateMetadata,
         async ({ fileId, app, existingDisplayName }, index) => {
-          const nextDisplayName = normalizeDisplayName(app.displayName)
+          const nextDisplayName = normalizeDisplayName(resolveScannedDisplayName(app))
 
           try {
             if (shouldUpdateDisplayName(existingDisplayName, nextDisplayName)) {
@@ -1547,9 +1559,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private _mapDbAppToScannedInfo(app: DbAppWithExtensions): ScannedAppInfo {
+    const displayName = resolveDisplayName(app.displayName, app.name)
     return {
       name: app.name,
-      displayName: app.displayName || undefined,
+      displayName: displayName || undefined,
       fileName:
         app.extensions.displayPath ||
         (app.path.startsWith('shell:AppsFolder\\')
@@ -1587,16 +1600,23 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private async _syncKeywordsForApp(appInfo: ScannedAppInfo): Promise<void> {
     if (!this.searchIndex) return
 
-    const keywordsSet = await this._generateKeywordsForApp(appInfo)
-    const itemId = resolveAppItemId(appInfo)
+    const normalizedAppInfo: ScannedAppInfo = {
+      ...appInfo,
+      displayName: resolveScannedDisplayName(appInfo)
+    }
+    const keywordsSet = await this._generateKeywordsForApp(normalizedAppInfo)
+    const itemId = resolveAppItemId(normalizedAppInfo)
 
     const keywordEntries: SearchIndexKeyword[] = Array.from(keywordsSet).map((keyword) => ({
       value: keyword,
       priority:
-        this._isAcronymForApp(keyword, appInfo) || this._isAliasForApp(keyword, appInfo) ? 1.5 : 1.1
+        this._isAcronymForApp(keyword, normalizedAppInfo) ||
+        this._isAliasForApp(keyword, normalizedAppInfo)
+          ? 1.5
+          : 1.1
     }))
 
-    const aliasList = this._getAliasesForApp(appInfo)
+    const aliasList = this._getAliasesForApp(normalizedAppInfo)
     const aliasEntries: SearchIndexKeyword[] = aliasList.map((alias) => ({
       value: alias,
       priority: 1.5
@@ -1606,17 +1626,21 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       itemId,
       providerId: this.id,
       type: this.type,
-      name: appInfo.name,
-      displayName: appInfo.displayName || undefined,
-      description: appInfo.description || undefined,
-      path: appInfo.path,
+      name: normalizedAppInfo.name,
+      displayName: normalizedAppInfo.displayName || undefined,
+      description: normalizedAppInfo.description || undefined,
+      path: normalizedAppInfo.path,
       extension:
-        appInfo.launchKind === 'uwp'
+        normalizedAppInfo.launchKind === 'uwp'
           ? '.uwp'
-          : path.extname(appInfo.launchTarget || appInfo.path).toLowerCase(),
+          : path.extname(normalizedAppInfo.launchTarget || normalizedAppInfo.path).toLowerCase(),
       aliases: aliasEntries,
       keywords: keywordEntries,
-      tags: normalizeStringList([appInfo.bundleId, appInfo.stableId, appInfo.path])
+      tags: normalizeStringList([
+        normalizedAppInfo.bundleId,
+        normalizedAppInfo.stableId,
+        normalizedAppInfo.path
+      ])
     }
 
     await this.searchIndex.indexItems([indexItem])
@@ -1800,6 +1824,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       fileId: number
       app: ScannedAppInfo
       existingDisplayName: string | null
+      existingName: string
     }> = []
     const missingApps: Array<{ id: number; path: string; uniqueId: string }> = []
 
@@ -1816,10 +1841,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         toAdd.push(scannedApp)
       } else {
         const shouldRefreshIcon = invalidIconApps.has(uniqueId)
+        const resolvedScannedDisplayName = resolveScannedDisplayName(scannedApp)
         const hasDisplayNameDrift = shouldUpdateDisplayName(
           dbApp.displayName,
-          scannedApp.displayName
+          resolvedScannedDisplayName
         )
+        const hasNameDrift =
+          isProbablyCorruptedDisplayName(dbApp.name) ||
+          (normalizeDisplayName(dbApp.name) !== normalizeDisplayName(scannedApp.name) &&
+            !isProbablyCorruptedDisplayName(scannedApp.name))
         const hasAlternateNamesDrift = hasStringListDrift(
           dbApp.extensions[APP_ALTERNATE_NAMES_EXTENSION_KEY],
           scannedApp.alternateNames
@@ -1828,12 +1858,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           shouldRefreshIcon ||
           scannedApp.lastModified.getTime() > new Date(dbApp.mtime).getTime() ||
           hasDisplayNameDrift ||
+          hasNameDrift ||
           hasAlternateNamesDrift
         ) {
           toUpdate.push({
             fileId: dbApp.id,
             app: scannedApp,
-            existingDisplayName: dbApp.displayName
+            existingDisplayName: dbApp.displayName,
+            existingName: dbApp.name
           })
         }
         dbAppsMap.delete(uniqueId)
@@ -1866,12 +1898,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       await runAdaptiveTaskQueue(
         toAdd,
         async (app, index) => {
+          const cleanDisplayName = resolveScannedDisplayName(app)
           const [insertedFile] = await db
             .insert(filesSchema)
             .values({
               path: app.path,
               name: app.name,
-              displayName: app.displayName,
+              displayName: cleanDisplayName,
               type: 'app' as const,
               mtime: app.lastModified,
               ctime: new Date()
@@ -1888,7 +1921,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
           if (insertedFile) {
             await this.syncScannedAppExtensions(insertedFile.id, app)
-            await this._syncKeywordsForApp(app)
+            await this._syncKeywordsForApp({ ...app, displayName: cleanDisplayName })
           }
 
           if ((index + 1) % 50 === 0 || index === toAdd.length - 1) {
@@ -1918,13 +1951,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       await runAdaptiveTaskQueue(
         toUpdate,
-        async ({ fileId, app, existingDisplayName }, index) => {
+        async ({ fileId, app, existingDisplayName, existingName }, index) => {
+          const nextName = isProbablyCorruptedDisplayName(app.name) ? existingName : app.name
           const updateData: Partial<typeof filesSchema.$inferInsert> = {
-            name: app.name,
+            name: nextName,
             path: app.path,
             mtime: app.lastModified
           }
-          const nextDisplayName = normalizeDisplayName(app.displayName)
+          const nextDisplayName = normalizeDisplayName(resolveScannedDisplayName(app))
           if (shouldUpdateDisplayName(existingDisplayName, nextDisplayName)) {
             updateData.displayName = nextDisplayName
           }
@@ -1932,7 +1966,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, fileId))
 
           await this.syncScannedAppExtensions(fileId, app)
-          await this._syncKeywordsForApp(app)
+          await this._syncKeywordsForApp({
+            ...app,
+            name: nextName,
+            displayName: updateData.displayName ?? existingDisplayName ?? nextDisplayName
+          })
 
           // 改为每100个输出一次，但保持10个一组的处理
           if ((index + 1) % 100 === 0 || index === toUpdate.length - 1) {
@@ -2033,6 +2071,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         }
         return null
       }
+    } else if (process.platform === 'win32') {
+      const extension = path.extname(appPath).toLowerCase()
+      if (!WINDOWS_REALTIME_APP_EXTENSIONS.has(extension)) {
+        return null
+      }
     }
 
     return appPath
@@ -2046,11 +2089,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       logApp(`Updating existing app: ${chalk.cyan(appInfo.name)}`, LogStyle.process)
 
       const updateData: Partial<typeof filesSchema.$inferInsert> = {
-        name: appInfo.name,
+        name: isProbablyCorruptedDisplayName(appInfo.name) ? existingFile.name : appInfo.name,
         mtime: appInfo.lastModified
       }
 
-      const normalizedDisplayName = normalizeDisplayName(appInfo.displayName)
+      const normalizedDisplayName = normalizeDisplayName(resolveScannedDisplayName(appInfo))
       if (shouldUpdateDisplayName(existingFile.displayName, normalizedDisplayName)) {
         updateData.displayName = normalizedDisplayName
       }
@@ -2059,7 +2102,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       await this.syncScannedAppExtensions(existingFile.id, appInfo)
 
-      await this._syncKeywordsForApp(appInfo)
+      await this._syncKeywordsForApp({
+        ...appInfo,
+        name: updateData.name ?? appInfo.name,
+        displayName: updateData.displayName ?? existingFile.displayName ?? normalizedDisplayName
+      })
       logApp(`App ${chalk.cyan(appInfo.name)} updated successfully`, LogStyle.success)
       return 'updated'
     }
@@ -2071,7 +2118,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       .values({
         path: appInfo.path,
         name: appInfo.name,
-        displayName: appInfo.displayName,
+        displayName: resolveScannedDisplayName(appInfo),
         type: 'app' as const,
         mtime: appInfo.lastModified,
         ctime: new Date()
@@ -2141,6 +2188,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       if (appPath.includes('.app/')) appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
       if (!appPath.endsWith('.app')) return
       if (!this._isWatchPathCandidate(appPath)) {
+        return
+      }
+    } else if (process.platform === 'win32') {
+      const extension = path.extname(appPath).toLowerCase()
+      if (!WINDOWS_REALTIME_APP_EXTENSIONS.has(extension)) {
         return
       }
     }
@@ -2585,12 +2637,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private _subscribeToFSEvents(): void {
-    // Windows: 跳过文件系统事件订阅，避免权限问题
-    if (process.platform === 'win32') {
-      logApp('Skipping FS event subscription on Windows', LogStyle.info)
-      return
-    }
-
     logApp('Subscribing to file system events', LogStyle.info)
 
     if (this.isMac) {
@@ -2615,12 +2661,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private _registerWatchPaths(): void {
-    // Windows: 跳过目录监视，避免 EPERM 权限错误
-    if (process.platform === 'win32') {
-      logApp('Skipping watch path registration on Windows', LogStyle.info)
-      return
-    }
-
     const watchPaths = appScanner.getWatchPaths()
     logApp(`Registering watch paths: ${chalk.cyan(watchPaths.join(', '))}`, LogStyle.info)
 
@@ -3100,16 +3140,17 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         if (!dbApp) {
           continue
         }
+        const nextDisplayName = normalizeDisplayName(resolveScannedDisplayName(app))
         await runWithSqliteBusyRetry(() =>
           db
             .update(filesSchema)
-            .set({ displayName: app.displayName })
+            .set({ displayName: nextDisplayName })
             .where(eq(filesSchema.id, dbApp.id))
         )
 
         const appInfo = this._mapDbAppToScannedInfo({
           ...dbApp,
-          displayName: app.displayName ?? dbApp.displayName
+          displayName: nextDisplayName || dbApp.displayName
         })
 
         await this.removeIndexedAppItems(resolveAppItemIds(appInfo))

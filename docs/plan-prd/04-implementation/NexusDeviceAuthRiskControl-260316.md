@@ -95,11 +95,23 @@
 
 | 项目 | 当前状态 | 备注 |
 | --- | --- | --- |
-| 速率限制（`user_id/device_id/IP`） | ⏳ 待落地 | 进入本轮 P0-2 执行清单 |
-| 异常冷却（连续失败/取消） | ⏳ 待落地 | 默认冷却 10 分钟 |
-| 授权审计日志（批准/拒绝/撤销） | ⏳ 待落地 | 需补结构化存储与查询 |
-| 可信设备白名单策略 | ⏳ 待落地 | 现阶段为“设备 + 历史登录地”判定 |
-| 长期授权时间窗（登录后 N 分钟） | ⏳ 待落地 | 待与 reauth 策略合并上线 |
+| 速率限制（`user_id/device_id/IP`） | ✅ 已落地 | `evaluateDeviceAuthRateLimit()` 按 10 分钟窗口约束 `device/IP/user` 设备码申请；触发时返回 `429 + retryAfterSeconds` |
+| 异常冷却（连续失败/取消） | ✅ 已落地 | 连续 reject/cancel 达阈值后进入默认 10 分钟冷却，approve/start 均复用同一决策 |
+| 授权审计日志（批准/拒绝/撤销） | ✅ 已落地 | 新增 `auth_device_auth_audits`，记录 request/approve/reject/cancel/revoke/trust/untrust；`GET /api/devices/audits` 可查询当前用户时间线 |
+| 可信设备白名单策略 | ✅ 已落地 | `auth_devices.trusted_at` 作为显式白名单标记，Dashboard 设备页可信任/取消信任，长期授权必须命中未撤销且已信任设备 |
+| 长期授权时间窗（登录后 N 分钟） | ✅ 已落地 | 基于 NextAuth JWT `iat` 注入后端 session context，长期授权仅允许在签名 session 签发后 10 分钟内确认 |
+
+### 9.1 Phase 1 部分验收证据（2026-05-06）
+
+| 验收点 | 证据位置 | 结果 |
+| --- | --- | --- |
+| 设备码申请频控 | `apps/nexus/server/api/app-auth/device/start.post.ts` + `apps/nexus/server/utils/authStore.ts` | ✅ |
+| approve 前冷却/频控复核 | `apps/nexus/server/api/app-auth/device/approve.post.ts` | ✅ |
+| reject/cancel/revoke 审计打点 | `apps/nexus/server/api/app-auth/device/{approve,cancel,abort}.post.ts`、`apps/nexus/server/api/devices/revoke.post.ts` | ✅ |
+| 当前用户审计查询入口 | `apps/nexus/server/api/devices/audits.get.ts` | ✅ |
+| 长期授权后端时间窗 | `apps/nexus/server/utils/auth.ts` + `apps/nexus/server/api/auth/[...].ts` + `evaluateDeviceAuthLongTermPolicy()` | ✅ |
+| 决策回归测试 | `pnpm -C "apps/nexus" exec vitest run "server/utils/__tests__/device-auth-risk.test.ts"`（4 tests passed） | ✅ |
+| Nexus 类型检查 | `pnpm -C "apps/nexus" run typecheck`（通过；仅保留既有 Nuxt/Vue warning） | ✅ |
 
 ## 10. 回滚演练记录（2026-03-22）
 

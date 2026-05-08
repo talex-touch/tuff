@@ -66,3 +66,9 @@ code: |
 | secondaryAction | `EmptyStateAction` | - | Secondary action config |
 
 > Full Props reference: [EmptyState API](./empty-state.en.md#api)
+
+## Interaction Contract
+
+- `TxGuideState` always forwards `variant="guide"` to `TxEmptyState`.
+- The wrapper does not rewrite `title`, `description`, `surface`, `size`, or action config; explicit props are forwarded as-is.
+- `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.

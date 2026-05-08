@@ -20,6 +20,7 @@
 ## 单一口径快照（2026-04-26）
 
 - 当前工作区基线：`2.4.9-beta.4`。
+- Nexus 设备授权风控 Phase 1 已落地：设备码申请频控、连续 reject/cancel 冷却、request/approve/reject/cancel/revoke/trust/untrust 审计日志、长期授权后端时间窗与可信设备显式白名单已接入。
 - CoreApp 启动搜索卡顿治理已落地“平衡模式 + 双库隔离”：`database-aux.db` 分流非核心高频写、`DbWriteScheduler` QoS/熔断、索引热路径单写者化、启动期降载（120s）。
 - 发布开关已就位：`TUFF_DB_AUX_ENABLED`、`TUFF_DB_QOS_ENABLED`、`TUFF_STARTUP_DEGRADE_ENABLED`，支持灰度与快速回滚。
 - Legacy/兼容/结构治理已切换到“统一实施 PRD + 五工作包并行”口径（不再使用 Phase 1-3 决策叙事）。
@@ -48,7 +49,7 @@
 1. P0：CoreApp legacy 清理闭环（清册中的 `2.5.0` 项关闭或显式降权，禁止新增 legacy/raw channel/旧 storage/旧 SDK bypass）。
 2. P0：Windows/macOS `2.5.0` 阻塞级适配回归（搜索、应用扫描、托盘、更新、插件权限、安装卸载、退出释放）。
 3. P1：文档治理收尾（`TODO` 控制到 400 行内 + 第二批历史头标 + TL;DR 分层）。
-4. P1：`Nexus 设备授权风控` 保留实施文档与验收入口，降为非当前主线。
+4. P1：`Nexus 设备授权风控` 保留实施文档与验收入口，Phase 1 主体已完成。
 
 ---
 

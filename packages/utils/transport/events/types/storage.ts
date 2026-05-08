@@ -185,18 +185,6 @@ export interface StorageUpdateNotification {
   source?: 'local' | 'remote' | 'sync'
 }
 
-export interface StorageLegacyUpdatePayload {
-  /**
-   * Legacy storage key name.
-   */
-  name: string
-
-  /**
-   * Version number if available.
-   */
-  version?: number
-}
-
 /**
  * Plugin storage update notification.
  */

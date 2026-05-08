@@ -170,7 +170,7 @@ describe('PluginInstallQueue permission confirmation', () => {
         metadata: {}
       },
       manifest: {
-        name: 'touch-legacy',
+        name: 'touch-below-floor',
         version: '1.0.0'
       }
     } as unknown as PreparedPluginInstall
@@ -191,7 +191,7 @@ describe('PluginInstallQueue permission confirmation', () => {
     const queue = new PluginInstallQueue(installer, transport, 1, {
       resolvePermissionConfirmation: () => {
         throw new Error(
-          'Plugin "touch-legacy" is blocked because manifest.json must declare sdkapi >= 251212.'
+          'Plugin "touch-below-floor" is blocked because manifest.json must declare sdkapi >= 251212.'
         )
       }
     })

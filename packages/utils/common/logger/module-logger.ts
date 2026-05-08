@@ -52,6 +52,77 @@ const LEVEL_LABELS: Record<LogLevel, string> = {
   [LogLevel.NONE]: 'NONE ',
 }
 
+function serializeArg(arg: unknown): string {
+  if (arg instanceof Error)
+    return arg.stack || `${arg.name}: ${arg.message}`
+  if (typeof arg === 'string')
+    return arg
+  try {
+    return JSON.stringify(arg)
+  }
+  catch {
+    return String(arg)
+  }
+}
+
+type LogSink = {
+  debug: (...args: unknown[]) => void
+  info: (...args: unknown[]) => void
+  warn: (...args: unknown[]) => void
+  error: (...args: unknown[]) => void
+}
+
+type MainProcessGlobal = typeof globalThis & {
+  logger?: LogSink
+  errLogger?: LogSink
+}
+
+type NativeConsole = Console & {
+  _log?: Console['log']
+  _info?: Console['info']
+  _warn?: Console['warn']
+  _error?: Console['error']
+  _debug?: Console['debug']
+}
+
+function writeMainProcessLog(level: LogLevel, output: string, args: unknown[]): void {
+  const mainGlobal = globalThis as MainProcessGlobal
+  const log4jsLogger =
+    level === LogLevel.ERROR
+      ? mainGlobal.errLogger
+      : mainGlobal.logger
+  if (!log4jsLogger)
+    return
+
+  const payload = args.length > 0
+    ? `${output} ${args.map(serializeArg).join(' ')}`
+    : output
+
+  if (level === LogLevel.ERROR) {
+    log4jsLogger.error(payload)
+  }
+  else if (level === LogLevel.WARN) {
+    log4jsLogger.warn(payload)
+  }
+  else if (level === LogLevel.INFO) {
+    log4jsLogger.info(payload)
+  }
+  else {
+    log4jsLogger.debug(payload)
+  }
+}
+
+function getConsoleMethod(level: LogLevel): (...args: unknown[]) => void {
+  const nativeConsole = console as NativeConsole
+  if (level === LogLevel.ERROR)
+    return nativeConsole._error ?? console.error
+  if (level === LogLevel.WARN)
+    return nativeConsole._warn ?? console.warn
+  if (level === LogLevel.DEBUG)
+    return nativeConsole._debug ?? console.debug
+  return nativeConsole._info ?? nativeConsole._log ?? console.log
+}
+
 /**
  * ModuleLogger class
  *
@@ -236,24 +307,11 @@ export class ModuleLogger {
     const formattedMessage = `${indent}${message}`
 
     const output = `${COLORS.gray}[${timestamp}]${reset} ${formattedModule} ${formattedLevel} ${formattedMessage}`
+    const plainOutput = `[${timestamp}] [${this.module}] ${levelLabel.trim()} ${formattedMessage}`
 
-    // Use appropriate console method
-    switch (level) {
-      case LogLevel.DEBUG:
-        console.debug(output, ...args)
-        break
-      case LogLevel.INFO:
-        console.info(output, ...args)
-        break
-      case LogLevel.WARN:
-        console.warn(output, ...args)
-        break
-      case LogLevel.ERROR:
-        console.error(output, ...args)
-        break
-      default:
-        console.log(output, ...args)
-    }
+    writeMainProcessLog(level, plainOutput, args)
+
+    getConsoleMethod(level)(output, ...args)
   }
 
   /**

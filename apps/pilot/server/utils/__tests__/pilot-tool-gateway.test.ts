@@ -24,7 +24,6 @@ import {
   PILOT_MEDIA_VIDEO_NOT_IMPLEMENTED_CODE,
 } from '../pilot-tool-gateway'
 import {
-  createGatewayWebsearchConnector,
   createWebsearchProviderConnector,
 } from '../pilot-websearch-connector'
 
@@ -40,7 +39,6 @@ vi.mock('../pilot-tool-approvals', () => ({
 }))
 
 vi.mock('../pilot-websearch-connector', () => ({
-  createGatewayWebsearchConnector: vi.fn(),
   createWebsearchProviderConnector: vi.fn(),
   dedupeNormalizedDocuments: (docs: any[]) => docs,
   isAllowlistedDomain: (domain: string, allowlistDomains: string[]) => {
@@ -850,7 +848,7 @@ describe('pilot-tool-gateway', () => {
         baseUrl: 'https://api.example.com',
         apiKey: 'key',
         model: 'model-x',
-        adapter: 'legacy',
+        adapter: 'retired',
         transport: 'responses',
         timeoutMs: 30_000,
       },
@@ -862,15 +860,15 @@ describe('pilot-tool-gateway', () => {
     expect(audits).toEqual(['tool.call.started', 'tool.call.failed'])
   })
 
-  it('legacy provider 会走 gateway connector', async () => {
+  it('historical gateway provider uses current provider connector', async () => {
     vi.mocked(getPilotWebsearchDatasourceConfig).mockResolvedValue(createWebsearchDatasource({
       providers: [
         {
-          id: 'legacy-gateway',
+          id: 'searxng-main',
           type: 'searxng',
           enabled: true,
           priority: 5,
-          baseUrl: 'https://legacy-gateway.example.com',
+          baseUrl: 'https://gateway.example.com',
           apiKeyEncrypted: '',
           timeoutMs: 8_000,
           maxResults: 2,
@@ -886,30 +884,30 @@ describe('pilot-tool-gateway', () => {
       allowlistDomains: ['docs.openai.com'],
     }))
 
-    vi.mocked(createGatewayWebsearchConnector).mockReturnValue({
+    vi.mocked(createWebsearchProviderConnector).mockReturnValue({
       search: vi.fn().mockResolvedValue([
         {
-          url: 'https://docs.openai.com/legacy',
-          title: 'Legacy',
-          snippet: 'Legacy snippet',
+          url: 'https://docs.openai.com/retired',
+          title: 'Retired',
+          snippet: 'Retired snippet',
           domain: 'docs.openai.com',
         },
       ]),
       fetch: vi.fn().mockResolvedValue({
-        url: 'https://docs.openai.com/legacy',
-        title: 'Legacy',
-        snippet: 'Legacy snippet',
-        content: 'Legacy content',
+        url: 'https://docs.openai.com/retired',
+        title: 'Retired',
+        snippet: 'Retired snippet',
+        content: 'Retired content',
         contentType: 'text/plain',
       }),
       extract: vi.fn().mockResolvedValue({
-        url: 'https://docs.openai.com/legacy',
-        title: 'Legacy',
-        snippet: 'Legacy snippet',
-        content: 'Legacy content',
+        url: 'https://docs.openai.com/retired',
+        title: 'Retired',
+        snippet: 'Retired snippet',
+        content: 'Retired content',
         domain: 'docs.openai.com',
-        urlHash: 'u-legacy',
-        contentHash: 'c-legacy',
+        urlHash: 'u-retired',
+        contentHash: 'c-retired',
       }),
     } as any)
 
@@ -918,12 +916,16 @@ describe('pilot-tool-gateway', () => {
       userId: 'u1',
       sessionId: 's1',
       requestId: 'r1',
-      query: 'legacy gateway',
+      query: 'retired gateway',
     })
 
     expect(result).toBeTruthy()
-    expect(result?.providerUsed).toEqual(['legacy-gateway'])
-    expect(createGatewayWebsearchConnector).toHaveBeenCalledTimes(1)
+    expect(result?.providerUsed).toEqual(['searxng-main'])
+    expect(createWebsearchProviderConnector).toHaveBeenCalledWith({
+      providerType: 'searxng',
+      baseUrl: 'https://gateway.example.com',
+      apiKey: 'provider-key',
+    })
   })
 
   it('image.edit 支持 b64 输出并返回 URL-first 结果', async () => {

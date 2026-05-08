@@ -4,6 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { normalizeRelativePath, walk } from './lib/file-scan.mjs'
+import { countLegacyKeywordExceptions } from './lib/legacy-keyword-exceptions.mjs'
 import {
   DEFAULT_IGNORE_DIRS,
   LEGACY_SCAN_ROOTS,
@@ -96,6 +97,14 @@ function countMatches(content, matcher) {
   return count
 }
 
+function countRuleMatches(rule, relativePath, content) {
+  const count = countMatches(content, rule.matcher)
+  if (rule.id !== 'legacy-keyword') {
+    return count
+  }
+  return Math.max(0, count - countLegacyKeywordExceptions(relativePath, content))
+}
+
 function getScanScopeSummary() {
   return scanRoots.join(', ')
 }
@@ -147,7 +156,7 @@ function collectFindings() {
           }
           continue
         }
-        const count = countMatches(content, rule.matcher)
+        const count = countRuleMatches(rule, relativePath, content)
         if (count > 0) {
           findings[rule.id].set(relativePath, count)
         }

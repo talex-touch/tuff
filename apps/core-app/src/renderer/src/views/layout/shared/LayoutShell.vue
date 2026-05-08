@@ -122,8 +122,42 @@ const customCss = computed(() => sanitizeUserCss(props.atomConfig?.customCSS ?? 
 }
 
 .AppLayout-Container[data-variant='simple'].is-windows {
+  .AppLayout-Header {
+    --layout-window-controls-width: 138px;
+  }
+
+  :deep(.SimpleController-Head) {
+    padding-left: 10px;
+  }
+
   .AppLayout-Aside {
     padding-left: 8px;
+  }
+}
+
+.AppLayout-Container[data-variant='flat'].is-windows {
+  .AppLayout-Header {
+    --layout-window-controls-width: 138px;
+  }
+
+  :deep(.FlatLayout-Icon) {
+    padding-left: 12px;
+  }
+}
+
+.AppLayout-Container.is-windows {
+  .AppLayout-Header {
+    padding-right: var(--layout-window-controls-width, 138px);
+  }
+
+  .AppLayout-Header::after {
+    width: calc(
+      100% - var(--layout-header-side-width, var(--nav-width, 64px)) - var(
+          --layout-window-controls-width,
+          138px
+        )
+    );
+    border-radius: 0;
   }
 }
 

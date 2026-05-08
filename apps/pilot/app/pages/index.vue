@@ -11,7 +11,7 @@ import { $endApi } from '~/composables/api/base'
 import { $completion } from '~/composables/api/base/v1/aigc/completion'
 import { IChatItemStatus, PersistStatus } from '~/composables/api/base/v1/aigc/completion-types'
 import { calculateConversation } from '~/composables/api/base/v1/aigc/completion/entity'
-import { resolveLegacyConversationSeqCursor } from '~/composables/api/base/v1/aigc/completion/legacy-stream-contract'
+import { resolvePilotConversationSeqCursor } from '~/composables/api/base/v1/aigc/completion/legacy-stream-contract'
 import { $historyManager, IHistoryStatus } from '~/composables/api/base/v1/aigc/history'
 import { $event } from '~/composables/events'
 import { usePilotMemorySettings } from '~/composables/usePilotMemorySettings'
@@ -503,7 +503,7 @@ async function resumeConversationStreamIfNeeded(conversation: IChatConversation)
       : 0
     const completion = await innerSend(targetConversation, lastMessage, targetPage)
     pageOptions.sendState = 'sending_until_accepted'
-    const fromSeq = Math.max(1, resolveLegacyConversationSeqCursor(targetConversation.messages) + 1)
+    const fromSeq = Math.max(1, resolvePilotConversationSeqCursor(targetConversation.messages) + 1)
     curController = completion.send({
       fromSeq,
       follow: true,

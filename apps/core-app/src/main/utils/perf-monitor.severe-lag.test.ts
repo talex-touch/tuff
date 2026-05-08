@@ -49,11 +49,23 @@ vi.mock('./workflow-debug', () => ({
 
 import { inferEventLoopLagCause, perfMonitor } from './perf-monitor'
 
+type PerfMonitorTestAccess = {
+  severeLagWindowHits: number[]
+  lastSevereLagBurstAt: number
+  lastEventLoopLag: null
+  severeLagBurstListeners: Set<unknown>
+  recordEventLoopLag: (lagMs: number, severity: 'warn' | 'error') => void
+}
+
+function getPerfMonitorTestAccess(): PerfMonitorTestAccess {
+  return perfMonitor as unknown as PerfMonitorTestAccess
+}
+
 describe('perf-monitor severe lag burst', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-03-22T00:00:00.000Z'))
-    const monitor = perfMonitor as any
+    const monitor = getPerfMonitorTestAccess()
     monitor.severeLagWindowHits = []
     monitor.lastSevereLagBurstAt = 0
     monitor.lastEventLoopLag = null
@@ -66,7 +78,7 @@ describe('perf-monitor severe lag burst', () => {
 
   it('30s 内 2 次 >=2000ms 触发一次 burst，冷却期内不重复触发', () => {
     const recordLag = (lagMs: number, severity: 'warn' | 'error') =>
-      (perfMonitor as any).recordEventLoopLag(lagMs, severity)
+      getPerfMonitorTestAccess().recordEventLoopLag(lagMs, severity)
     const events: Array<{ latestLagMs: number }> = []
     const dispose = perfMonitor.onSevereLagBurst((event) => {
       events.push(event)
@@ -91,7 +103,7 @@ describe('perf-monitor severe lag burst', () => {
 
   it('可读取最近一次 event loop lag 快照', () => {
     const recordLag = (lagMs: number, severity: 'warn' | 'error') =>
-      (perfMonitor as any).recordEventLoopLag(lagMs, severity)
+      getPerfMonitorTestAccess().recordEventLoopLag(lagMs, severity)
 
     recordLag(512, 'warn')
     const snapshot = perfMonitor.getRecentEventLoopLagSnapshot()
@@ -110,7 +122,7 @@ describe('perf-monitor severe lag burst', () => {
         realtime: { queued: 0, inFlight: 0 },
         io: { queued: 0, inFlight: 0 },
         maintenance: { queued: 0, inFlight: 0 },
-        legacy_serial: { queued: 0, inFlight: 0 }
+        serial: { queued: 0, inFlight: 0 }
       },
       pollingRecentMaxDurationMs: 1,
       pollingRecentMaxSchedulerDelayMs: 0

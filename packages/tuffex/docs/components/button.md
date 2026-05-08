@@ -116,7 +116,7 @@ const buttonProps = [
   },
   {
     name: 'type',
-    description: '快捷语义类型（兼容旧用法）',
+    description: '语义 tone 别名；未设置 variant 时用于推导视觉变体，text 映射为 ghost',
     type: "'primary' | 'success' | 'warning' | 'danger' | 'info' | 'text'",
     default: '-',
   },

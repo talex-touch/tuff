@@ -215,25 +215,19 @@ code: |
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| cols | `number \| ResponsiveValue` | `1` | Columns |
-| rows | `number \| ResponsiveValue` | `auto` | Rows |
-| gap | `number \| string \| ResponsiveValue \| GapValue` | `0` | Grid gap |
+| cols | `number \| ResponsiveValue<number>` | `0` | Columns; 0 leaves the column template unset |
+| rows | `number` | `0` | Rows; 0 leaves the row template unset |
+| gap | `number \| string \| ResponsiveValue<number \| string> \| GapValue` | `16` | Grid gap |
 | minItemWidth | `string` | - | Min item width (auto-fit) |
 | justify | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Horizontal alignment |
 | align | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Vertical alignment |
-| autoRows | `string` | `'auto'` | Auto row height |
-| dense | `boolean` | `false` | Dense layout |
 
 ### GridItem Props
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| colSpan | `number \| ResponsiveValue` | `1` | Column span |
-| rowSpan | `number \| ResponsiveValue` | `1` | Row span |
-| colStart | `number` | - | Column start |
-| colEnd | `number` | - | Column end |
-| rowStart | `number` | - | Row start |
-| rowEnd | `number` | - | Row end |
+| colSpan | `number` | `1` | Column span, clamped to at least 1 |
+| rowSpan | `number` | `1` | Row span, clamped to at least 1 |
 | justifySelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | Item horizontal alignment |
 | alignSelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | Item vertical alignment |
 
@@ -242,13 +236,14 @@ code: |
 ::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  interface ResponsiveValue {
+  type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+
+  interface ResponsiveValue<T> {
     xs?: number
     sm?: number
     md?: number
     lg?: number
     xl?: number
-    xxl?: number
   }
 
   interface GapValue {
@@ -257,3 +252,10 @@ code: |
   }
 ---
 ::
+
+## Interaction Contract
+
+- `minItemWidth` takes precedence over `cols` and outputs `repeat(auto-fit, minmax(..., 1fr))`.
+- Responsive values are resolved from the current window width with breakpoints `xs < 640`, `sm < 768`, `md < 1024`, `lg < 1280`, and `xl` otherwise.
+- Numeric `gap` values are converted to px; `{ row, col }` controls row and column gaps separately.
+- `TxGridItem` clamps `colSpan` and `rowSpan` to at least 1.

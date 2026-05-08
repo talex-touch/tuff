@@ -89,9 +89,10 @@ const agents = [
 ## Design Notes
 
 - This is a **presentation-only** component — it does not include business logic for executing requests or managing agent sessions.
-- Each agent item supports `disabled` state, which grays out the item and prevents selection.
+- Each agent item supports `disabled` state, which grays out the item and prevents mouse or keyboard selection.
 - Use `badgeText` to show unread counts or status indicators alongside agent names.
 - The `loading` prop shows a loading indicator over the entire list — useful during initial data fetch.
+- Use `enabledTitle`, `disabledTitle`, and `emptyText` to localize the built-in section and empty-state labels.
 
 ## API
 
@@ -101,12 +102,15 @@ const agents = [
   { name: 'agents', description: 'Array of agent objects to display.', type: 'AgentItemProps[]' },
   { name: 'selectedId', description: 'ID of the currently selected agent.', type: 'string | null', default: 'null' },
   { name: 'loading', description: 'Show a loading overlay on the list.', type: 'boolean', default: 'false' },
+  { name: 'enabledTitle', description: 'Section title for enabled agents.', type: 'string', default: '\"Enabled\"' },
+  { name: 'disabledTitle', description: 'Section title for disabled agents.', type: 'string', default: '\"Disabled\"' },
+  { name: 'emptyText', description: 'Text shown when the list is empty.', type: 'string', default: '\"No agents\"' },
 ]" />
 
 ### TxAgentsList Events
 
 <ApiSpecTable title="Events" :rows="[
-  { name: 'select', description: 'Fires when an agent item is clicked.', type: '(id: string) => void' },
+  { name: 'select', description: 'Fires when an enabled agent item is clicked or activated with Enter/Space.', type: '(id: string) => void' },
 ]" />
 
 ### TxAgentItem Props

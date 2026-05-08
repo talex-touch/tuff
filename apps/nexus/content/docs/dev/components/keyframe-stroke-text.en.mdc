@@ -66,3 +66,10 @@ code: |
 | `fontSize` | `string \| number` | `64` | Font size |
 | `fontWeight` | `string \| number` | `700` | Font weight |
 | `fontFamily` | `string` | `inherit` | Font family |
+
+## Interaction Contract
+
+- The component renders a `role="img"` SVG; non-empty `text` is used as the `aria-label`.
+- Empty `text` uses a non-breaking-space fallback to keep SVG measurement and layout stable, without emitting an `aria-label`.
+- Numeric `fontSize` values are converted to px; `durationMs`, `strokeWidth`, colors, and font settings drive the animation through CSS variables.
+- Text metrics are synced after mount and recalculated when text, font, or stroke width inputs change.

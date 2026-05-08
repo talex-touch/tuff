@@ -30,7 +30,6 @@ code: |
 | [RecommendSDK](./recommend.zh.md) | `recommend` | 自定义推荐提供者注册 |
 | [**Account SDK**](./account.zh.md) | `accountSDK` | **用户信息、订阅、配额** |
 | [**TuffTransport**](./transport.zh.md) | `useTuffTransport()` | **新一代 IPC（推荐）** |
-| [Channel SDK](./channel.zh.md) | `useChannel()` | IPC 通信（传统） |
 | [Feature SDK](./feature.zh.md) | `useFeature()` | 搜索结果管理 |
 | [DivisionBox SDK](./division-box.zh.md) | `useDivisionBox()` | 独立窗口管理 |
 | [Flow SDK](./flow-transfer.zh.md) | `createFlowSDK()` | 插件间数据流转 |
@@ -52,17 +51,17 @@ code: |
     useClipboard,
     usePluginStorage,
     usePowerSDK,
-    useChannel,
     useFeature,
     useDivisionBox
   } from '@talex-touch/utils/plugin/sdk'
+  import { useTuffTransport } from '@talex-touch/utils/transport'
   
   // 初始化 SDK
   const box = useBox()
   const clipboard = useClipboard()
   const storage = usePluginStorage()
   const power = usePowerSDK()
-  const channel = useChannel()
+  const transport = useTuffTransport()
   const feature = useFeature()
   const divisionBox = useDivisionBox()
   

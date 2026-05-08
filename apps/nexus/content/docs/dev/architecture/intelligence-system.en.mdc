@@ -228,7 +228,7 @@ code: |
 
 Configuration is loaded:
 1. On module initialization
-2. When explicitly reloaded via `intelligence:reload-config` channel
+2. When explicitly reloaded through the `intelligence:api:reload-config` typed SDK event
 3. Real-time from storage on each invocation
 
 ## Invocation Flow
@@ -446,7 +446,7 @@ code: |
 ---
 code: |
   // Main process
-  channel.regChannel('intelligence:test-capability', async ({ data, reply }) => {
+  transport.on(intelligenceApiEvents.testCapability, async (data) => {
     const { capabilityId, providerId, userInput } = data
     
     // Get tester
@@ -463,7 +463,7 @@ code: |
     // Format result
     const formattedResult = tester.formatTestResult(result)
     
-    reply(DataCode.SUCCESS, { ok: true, result: formattedResult })
+    return { ok: true, result: formattedResult }
   })
 ---
 :::
@@ -516,11 +516,11 @@ code: |
 
 **Main Process Channels**
 
-- `intelligence:invoke` - Invoke capability
-- `intelligence:test-capability` - Test capability
-- `intelligence:test-provider` - Test provider connection
-- `intelligence:fetch-models` - Fetch available models
-- `intelligence:reload-config` - Reload configuration
+- `intelligence:api:invoke` - Invoke capability through the Intelligence SDK typed transport facade
+- `intelligence:api:test-capability` - Test capability through the Intelligence SDK typed transport facade
+- `intelligence:api:test-provider` - Test provider connection through the Intelligence SDK typed transport facade
+- `intelligence:api:fetch-models` - Fetch available models through the Intelligence SDK typed transport facade
+- `intelligence:api:reload-config` - Reload configuration through the Intelligence SDK typed transport facade
 
 **Renderer Process Hooks**
 

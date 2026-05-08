@@ -56,5 +56,46 @@ rows:
 ---
 :::
 
+## Events
+::TuffPropsTable
+---
+rows:
+  - name: update:modelValue
+    type: '(value: boolean) => void'
+    default: '-'
+    description: Visible state update
+  - name: close
+    type: '() => void'
+    default: '-'
+    description: Triggered by backdrop, Escape, or close button dismissal
+---
+::
+
+## Slots
+::TuffPropsTable
+---
+rows:
+  - name: default
+    type: '-'
+    default: '-'
+    description: Main content
+  - name: header
+    type: '-'
+    default: '-'
+    description: Custom header, replacing title rendering
+  - name: footer
+    type: '-'
+    default: '-'
+    description: Footer actions
+---
+::
+
+## Interaction Contract
+
+- The modal overlay exposes `role="dialog"` and `aria-modal="true"`; when `title` is provided, an instance-scoped `aria-labelledby` links to the title.
+- Opening focuses the overlay root; hiding or unmounting restores the previously focused element.
+- Backdrop click, Escape, and close button dismissal emit `update:modelValue(false)` and `close`.
+- `TModal` is the lightweight current entry backed by `TxModal`; when no `header/footer` slot is provided it does not override title or footer behavior.
+
 ## Source
 <TuffDocSourceLink />

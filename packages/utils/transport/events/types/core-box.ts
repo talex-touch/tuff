@@ -81,6 +81,38 @@ export interface FocusWindowResponse {
   focused: boolean
 }
 
+export interface CoreBoxInputVisibilityResponse {
+  hidden?: boolean
+  shown?: boolean
+}
+
+export interface CoreBoxSetHeightRequest {
+  height: number
+}
+
+export interface CoreBoxSetHeightResponse {
+  height: number
+}
+
+export interface CoreBoxSetPositionOffsetRequest {
+  topPercent?: number
+}
+
+export interface CoreBoxSetPositionOffsetResponse {
+  topPercent?: number
+}
+
+export interface CoreBoxBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface CoreBoxGetBoundsResponse {
+  bounds: CoreBoxBounds
+}
+
 /**
  * Push payload sent when CoreBox visibility or entrance mode changes.
  */

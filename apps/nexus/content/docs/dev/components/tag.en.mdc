@@ -39,13 +39,37 @@ rows:
   - name: color
     type: 'string'
     default: '-'
-    description: 'Background color'
+    description: 'Primary text/icon color'
+  - name: background
+    type: 'string'
+    default: "''"
+    description: 'Custom background color'
+  - name: border
+    type: 'string'
+    default: "''"
+    description: 'Custom border color'
+  - name: icon
+    type: 'string'
+    default: "''"
+    description: 'Leading icon class'
   - name: size
     type: "'sm' | 'md'"
-    default: 'md'
+    default: 'sm'
     description: 'Size'
+  - name: closable
+    type: 'boolean'
+    default: 'false'
+    description: 'Show close button'
+  - name: disabled
+    type: 'boolean'
+    default: 'false'
+    description: 'Disable click and close events'
 ---
 ::
+
+## Contract
+
+Tag renders with `role="status"`. The default slot replaces `label`. The close button stops propagation, so closing a tag does not also emit the tag `click` event. Disabled tags block both `click` and `close`.
 
 ## Composite Patterns
 ### Tag + Button

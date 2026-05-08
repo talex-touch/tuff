@@ -8,7 +8,7 @@ describe('pilot stream replay', () => {
 
     await runPilotConversationStream({
       runtime: {
-        async *onMessage(): AsyncIterable<AgentEnvelope> {},
+        async* onMessage(): AsyncIterable<AgentEnvelope> {},
       } as any,
       sessionId: 'session-replay',
       fromSeq: 5,
@@ -51,7 +51,7 @@ describe('pilot stream replay', () => {
             seq: 7,
             type: 'error',
             payload: {
-              message: 'legacy error',
+              message: 'retired error',
             },
             createdAt: '2026-04-03T00:00:07.000Z',
           },

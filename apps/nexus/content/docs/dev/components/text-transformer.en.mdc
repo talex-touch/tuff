@@ -419,8 +419,8 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `text` | `string \| number` | - | DisplayContent |
-| `durationMs` | `number` | `240` | Description for durationMs. |
-| `blurPx` | `number` | `8` | Description for blurPx. |
-| `tag` | `string` | `span` | Description for tag. |
-| `wrap` | `boolean` | `false` | Description for wrap. |
+| `text` | `string \| number` | - | Value rendered in the current layer and announced through the polite live region. |
+| `durationMs` | `number` | `240` | Transition duration in milliseconds; also controls when the previous layer is removed. |
+| `blurPx` | `number` | `8` | Blur distance applied to the outgoing and incoming layers during the transition. |
+| `tag` | `string` | `span` | Root HTML tag used for the transformer wrapper. |
+| `wrap` | `boolean` | `false` | Allows multi-line text by switching layer whitespace from ellipsis mode to `pre-line`. |

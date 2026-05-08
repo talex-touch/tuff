@@ -52,7 +52,7 @@ interface PluginManifest {
   /**
    * Permission declarations
    */
-  permissions?: ManifestPermissions | string[]
+  permissions?: ManifestPermissions
   /**
    * Permission reasons for user display
    */

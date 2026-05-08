@@ -22,7 +22,12 @@ const zIndex = computed(() => toastStore.zIndex)
             {{ t.description }}
           </div>
         </div>
-        <button class="tx-toast__close" type="button" @click="dismissToast(t.id)">
+        <button
+          class="tx-toast__close"
+          type="button"
+          aria-label="Dismiss notification"
+          @click="dismissToast(t.id)"
+        >
           <i class="i-carbon-close" />
         </button>
       </div>

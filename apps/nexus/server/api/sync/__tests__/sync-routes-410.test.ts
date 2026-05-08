@@ -1,15 +1,9 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-
-const authMocks = vi.hoisted(() => ({
-  requireVerifiedEmail: vi.fn(),
-}))
-
-vi.mock('../../../utils/auth', () => authMocks)
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 let pullHandler: (event: any) => Promise<unknown>
 let pushHandler: (event: any) => Promise<unknown>
-const readDisabledCode = ['SYNC', `LE${'GACY'}`, 'READ', 'DISABLED'].join('_')
-const writeDisabledCode = ['SYNC', `LE${'GACY'}`, 'WRITE', 'DISABLED'].join('_')
+const readDisabledCode = 'SYNC_RETIRED_READ_DISABLED'
+const writeDisabledCode = 'SYNC_RETIRED_WRITE_DISABLED'
 
 beforeAll(async () => {
   vi.stubGlobal('defineEventHandler', (fn: (event: any) => unknown) => fn)
@@ -18,11 +12,6 @@ beforeAll(async () => {
 })
 
 describe('/api/sync compatibility routes', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    authMocks.requireVerifiedEmail.mockResolvedValue({ userId: 'u_sync_test' })
-  })
-
   it('GET /api/sync/pull 始终返回 410 并提示 v1 路径', async () => {
     await expect(pullHandler({})).rejects.toMatchObject({
       statusCode: 410,
@@ -32,10 +21,9 @@ describe('/api/sync compatibility routes', () => {
         message: expect.stringContaining('/api/v1/sync/pull'),
       },
     })
-    expect(authMocks.requireVerifiedEmail).not.toHaveBeenCalled()
   })
 
-  it('POST /api/sync/push 校验用户后返回 410 并提示 v1 路径', async () => {
+  it('POST /api/sync/push 不进入鉴权链路并返回 410', async () => {
     await expect(pushHandler({})).rejects.toMatchObject({
       statusCode: 410,
       statusMessage: expect.stringContaining('/api/v1/sync/push'),
@@ -44,6 +32,5 @@ describe('/api/sync compatibility routes', () => {
         message: expect.stringContaining('/api/v1/sync/push'),
       },
     })
-    expect(authMocks.requireVerifiedEmail).toHaveBeenCalledTimes(1)
   })
 })

@@ -404,7 +404,7 @@ function createDefaultCapabilitiesForm(): PilotModelCapabilitiesForm {
 
 function normalizeCapabilitiesForm(
   rawCapabilities: unknown,
-  legacy: {
+  historicalFields: {
     allowWebsearch?: unknown
     allowFileAnalysis?: unknown
     allowImageAnalysis?: unknown
@@ -412,10 +412,10 @@ function normalizeCapabilitiesForm(
   },
 ): PilotModelCapabilitiesForm {
   return resolvePilotCapabilities(rawCapabilities, {
-    allowWebsearch: legacy.allowWebsearch,
-    allowFileAnalysis: legacy.allowFileAnalysis,
-    allowImageAnalysis: legacy.allowImageAnalysis,
-    allowImageGeneration: legacy.allowImageGeneration,
+    allowWebsearch: historicalFields.allowWebsearch,
+    allowFileAnalysis: historicalFields.allowFileAnalysis,
+    allowImageAnalysis: historicalFields.allowImageAnalysis,
+    allowImageGeneration: historicalFields.allowImageGeneration,
   })
 }
 

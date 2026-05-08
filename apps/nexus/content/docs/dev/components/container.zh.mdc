@@ -287,19 +287,19 @@ code: |
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| fluid | `boolean` | `false` | 是否为流体容器 |
-| maxWidth | `string \| number` | - | 最大宽度 |
-| responsive | `boolean` | `false` | 是否响应式 |
-| padding | `'small' \| 'medium' \| 'large' \| number` | `'medium'` | 内边距 |
-| margin | `'auto' \| string \| number` | - | 外边距 |
+| fluid | `boolean` | `false` | 移除最大宽度限制，填满父容器 |
+| maxWidth | `string` | `'1200px'` | 非流体模式下的最大宽度 |
+| responsive | `boolean` | `false` | 是否启用内置响应式容器宽度 |
+| padding | `'small' \| 'medium' \| 'large' \| number` | `'medium'` | 水平内边距预设或像素值 |
+| margin | `'auto' \| string \| number` | `'auto'` | 水平外边距；`auto` 表示居中 |
 
 ### Row Props
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| gutter | `number \| object` | `0` | 栅格间距 |
-| align | `'top' \| 'middle' \| 'bottom'` | `'top'` | 垂直对齐方式 |
-| justify | `'start' \| 'end' \| 'center' \| 'space-around' \| 'space-between'` | `'start'` | 水平对齐方式 |
+| gutter | `number \| Partial<Record<'xs' \| 'sm' \| 'md' \| 'lg' \| 'xl', number>>` | `0` | 栅格间距，可按断点设置 |
+| align | `'top' \| 'middle' \| 'bottom' \| 'stretch'` | `'stretch'` | 垂直对齐方式 |
+| justify | `'start' \| 'end' \| 'center' \| 'space-around' \| 'space-between' \| 'space-evenly'` | `'start'` | 水平分布方式 |
 | wrap | `boolean` | `true` | 是否换行 |
 
 ### Col Props
@@ -308,14 +308,11 @@ code: |
 |------|------|--------|------|
 | span | `number` | `24` | 栅格占据的列数 |
 | offset | `number` | `0` | 栅格左侧的间隔格数 |
-| push | `number` | `0` | 栅格向右移动格数 |
-| pull | `number` | `0` | 栅格向左移动格数 |
-| xs | `number \| object` | - | 超小屏幕 (<576px) |
-| sm | `number \| object` | - | 小屏幕 (≥576px) |
-| md | `number \| object` | - | 中等屏幕 (≥768px) |
-| lg | `number \| object` | - | 大屏幕 (≥992px) |
-| xl | `number \| object` | - | 超大屏幕 (≥1200px) |
-| xxl | `number \| object` | - | 超超大屏幕 (≥1600px) |
+| xs | `number` | - | 640px 以下使用的列数 |
+| sm | `number` | - | 640px 到 767px 使用的列数 |
+| md | `number` | - | 768px 到 1023px 使用的列数 |
+| lg | `number` | - | 1024px 到 1279px 使用的列数 |
+| xl | `number` | - | 1280px 及以上使用的列数 |
 
 ## 响应式断点
 
@@ -325,22 +322,19 @@ TouchX UI 使用以下断点：
 ---
 code: |
   /* 超小屏幕 */
-  @media (max-width: 575px) { /* xs */ }
+  @media (max-width: 639px) { /* xs */ }
   
   /* 小屏幕 */
-  @media (min-width: 576px) { /* sm */ }
+  @media (min-width: 640px) { /* sm */ }
   
   /* 中等屏幕 */
   @media (min-width: 768px) { /* md */ }
   
   /* 大屏幕 */
-  @media (min-width: 992px) { /* lg */ }
+  @media (min-width: 1024px) { /* lg */ }
   
   /* 超大屏幕 */
-  @media (min-width: 1200px) { /* xl */ }
-  
-  /* 超超大屏幕 */
-  @media (min-width: 1600px) { /* xxl */ }
+  @media (min-width: 1280px) { /* xl */ }
 ---
 :::
 
@@ -352,15 +346,9 @@ code: |
 ---
 code: |
   .custom-container {
-    --tx-container-max-width-sm: 540px;
-    --tx-container-max-width-md: 720px;
-    --tx-container-max-width-lg: 960px;
-    --tx-container-max-width-xl: 1140px;
-    --tx-container-max-width-xxl: 1320px;
-    
-    --tx-container-padding-small: 12px;
-    --tx-container-padding-medium: 24px;
-    --tx-container-padding-large: 48px;
+    --tx-container-max-width: 1200px;
+    --tx-container-padding: 16px;
+    --tx-row-gutter: 16px;
   }
 ---
 :::

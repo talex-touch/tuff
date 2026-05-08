@@ -240,7 +240,7 @@ export const defineEvent = TuffEventBuilder.namespace
  * Defines a TuffEvent using a raw event name string.
  *
  * @remarks
- * This is intended for incremental migrations from legacy IPC event names that
+ * This is reserved for retained IPC event names that
  * don't follow the `namespace:module:action` convention yet.
  *
  * Prefer `defineEvent(namespace).module(module).event(action)` for new code.

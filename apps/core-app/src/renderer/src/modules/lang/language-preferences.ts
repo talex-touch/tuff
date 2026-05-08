@@ -43,13 +43,6 @@ export function resolveSupportedLocale(locale?: string | null): SupportedLanguag
   return matched?.key ?? null
 }
 
-function normalizeFollowSystem(value: string | boolean | null | undefined): boolean | null {
-  if (typeof value === 'boolean') return value
-  if (value === 'true') return true
-  if (value === 'false') return false
-  return null
-}
-
 function resolveSystemLanguage(
   browserLanguage?: string | null,
   intlLocale?: string | null,
@@ -67,6 +60,13 @@ function resolveSystemLanguage(
 
 function usesDefaultLanguageSetting(locale: SupportedLanguage, followSystem: boolean): boolean {
   return locale === DEFAULT_LANGUAGE && followSystem === DEFAULT_FOLLOW_SYSTEM
+}
+
+function normalizeFollowSystem(value: string | boolean | null | undefined): boolean | null {
+  if (typeof value === 'boolean') return value
+  if (value === 'true') return true
+  if (value === 'false') return false
+  return null
 }
 
 export function resolveInitialLanguagePreference(

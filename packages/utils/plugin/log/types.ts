@@ -15,12 +15,6 @@ export const logLevelToString = baseLogLevelToString
 export const stringToLogLevel = baseStringToLogLevel
 
 /**
- * Legacy string-based log level type (for backward compatibility)
- * @deprecated Use LogLevel enum instead
- */
-export type LogLevelLegacy = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG'
-
-/**
  * Supported data types for logging arguments.
  */
 export type LogDataType = string | number | boolean | object
@@ -31,7 +25,7 @@ export type LogDataType = string | number | boolean | object
 export interface LogItem {
   /** ISO timestamp when the log was created */
   timestamp: string
-  /** Logging severity level (uppercase string for storage compatibility) */
+  /** Logging severity level persisted as an uppercase string */
   level: LogLevelString
   /** Plugin name */
   plugin: string

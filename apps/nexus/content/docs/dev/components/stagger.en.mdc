@@ -1,12 +1,12 @@
 ---
 title: "Stagger"
-description: "/enter/leave"
+description: "TransitionGroup wrapper for staggered enter and leave animations."
 category: Layout
 syncStatus: migrated
 ---
 # Stagger
 
-/enter/leave
+TransitionGroup wrapper for staggered enter and leave animations. It applies index-based delays to each rendered child.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -47,10 +47,10 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `tag` | `string` | `'div'` | Description for tag. |
-| `appear` | `boolean` | `true` | Description for appear. |
-| `name` | `string` | `'tx-stagger'` | TransitionGroup name |
-| `duration` | `number` | `180` | Description for duration. |
-| `delayStep` | `number` | `24` | Description for delayStep. |
-| `delayBase` | `number` | `0` | Description for delayBase. |
-| `easing` | `'ease'\| 'ease-in'\| 'ease-out'\| 'ease-in-out'\| 'linear'` | `'ease-out'` | Description for easing. |
+| `tag` | `string` | `'div'` | Root tag passed to `TransitionGroup`. |
+| `appear` | `boolean` | `true` | Enables the initial appear transition. |
+| `name` | `string` | `'tx-stagger'` | TransitionGroup class name prefix. |
+| `duration` | `number` | `180` | Enter and leave transition duration in milliseconds. |
+| `delayStep` | `number` | `24` | Extra delay added per rendered child index, in milliseconds. |
+| `delayBase` | `number` | `0` | Base delay applied before the per-child delay, in milliseconds. |
+| `easing` | `'ease'\| 'ease-in'\| 'ease-out'\| 'ease-in-out'\| 'linear'` | `'ease-out'` | CSS timing function used for opacity and transform transitions. |

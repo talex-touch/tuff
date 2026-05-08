@@ -49,7 +49,7 @@ describe('resolveDivisionBoxPermissionActor', () => {
     const resolvePluginSdkapi = vi.fn().mockReturnValue(251212)
     const actor = resolveDivisionBoxPermissionActor(
       createContext(),
-      { actorPluginId: 'corebox', pluginId: 'legacy-plugin-field' },
+      { actorPluginId: 'corebox', pluginId: 'ignored-plugin-field' },
       resolvePluginSdkapi
     )
 

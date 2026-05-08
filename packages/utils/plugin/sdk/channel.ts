@@ -11,12 +11,6 @@ type RendererWindowLike = Window & {
   $transport?: ITuffTransport
   $channel?: PluginChannelClient
 }
-function createLegacyChannelRemovedError(capability: 'channel.raw' | 'channel.sendSync'): Error {
-  return new Error(
-    `[Plugin SDK] ${capability} was removed by the core-app hard-cut. Migrate this plugin to typed transport send/on APIs.`
-  )
-}
-
 const ensureClientChannel = (): PluginChannelClient =>
   genChannel() as unknown as PluginChannelClient
 function resolvePluginName(): string | undefined {
@@ -45,10 +39,7 @@ function buildStandardChannelEvent(
     reply,
   }
 }
-function createTransportClientChannel(
-  transport: ITuffTransport,
-  fallback: PluginChannelClient | null
-): PluginChannelClient {
+function createTransportClientChannel(transport: ITuffTransport): PluginChannelClient {
   const handlerMap = new Map<string, Map<(data: PluginStandardChannelData) => any, () => void>>()
 
   return {
@@ -92,12 +83,6 @@ function createTransportClientChannel(
       return true
     },
     send: (eventName, arg) => transport.send(defineRawEvent(eventName), arg),
-    sendSync: () => {
-      if (fallback) {
-        throw createLegacyChannelRemovedError('channel.sendSync')
-      }
-      throw createLegacyChannelRemovedError('channel.sendSync')
-    },
   }
 }
 function resolveRendererTransport(): ITuffTransport | null {
@@ -120,9 +105,7 @@ export function ensureRendererChannel(errorMessage = DEFAULT_CHANNEL_ERROR): Plu
   const transport = globalWindow?.$transport ?? null
   if (transport) {
     if (!cachedTransportChannel) {
-      const fallback =
-        (globalWindow?.$channel as PluginChannelClient | undefined) ?? cachedWindowChannel ?? null
-      cachedTransportChannel = createTransportClientChannel(transport, fallback)
+      cachedTransportChannel = createTransportClientChannel(transport)
     }
     return cachedTransportChannel
   }

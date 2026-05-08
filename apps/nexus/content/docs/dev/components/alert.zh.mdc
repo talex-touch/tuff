@@ -23,6 +23,10 @@ code: |
   </template>
 ---
 :::
+## 交互契约
+
+Alert 会渲染 `role="alert"`，语义图标统一走共享 `TxIcon` 渲染器，并且只在点击关闭按钮时触发 `close`。需要常驻提示时设置 `closable=false`；需要纯文本提示时设置 `showIcon=false`。
+
 ## API（Lite）
 ::TuffPropsTable
 ---

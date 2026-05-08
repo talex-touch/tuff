@@ -1,13 +1,9 @@
-import type {
-  IntelligenceInvokeOptions,
-  IntelligenceInvokeResult,
-  IntelligenceProviderConfig
-} from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { intelligenceApiEvents } from '@talex-touch/utils/transport/sdk/domains/intelligence'
 import { createLogger } from '../../utils/logger'
 import { capabilityTesterRegistry } from './capability-testers'
+import type { CapabilityTestPayload } from './capability-testers/base-tester'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import {
   ensureIntelligenceConfigLoaded,
@@ -30,46 +26,14 @@ const logError = (...args: unknown[]) => intelligenceServiceLog.error(formatLogA
 
 type ApiResponse<T = undefined> = { ok: true; result?: T } | { ok: false; error: string }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
 const toErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 const ok = <T>(result?: T): ApiResponse<T> => ({ ok: true, result })
 const fail = (error: unknown): ApiResponse<never> => ({ ok: false, error: toErrorMessage(error) })
-
-type IntelligenceInvokePayload = {
-  capabilityId: string
-  payload: unknown
-  options?: IntelligenceInvokeOptions
-}
-
-type IntelligenceTestProviderPayload = { provider: IntelligenceProviderConfig }
-
-type IntelligenceTestCapabilityPayload = {
-  capabilityId: string
-  providerId?: string
-  userInput?: string
-} & Record<string, unknown>
-
-type IntelligenceFetchModelsPayload = { provider: IntelligenceProviderConfig }
-
-const intelligenceInvokeEvent = defineRawEvent<
-  IntelligenceInvokePayload,
-  ApiResponse<IntelligenceInvokeResult<unknown>>
->('intelligence:invoke')
-const intelligenceTestProviderEvent = defineRawEvent<
-  IntelligenceTestProviderPayload,
-  ApiResponse<unknown>
->('intelligence:test-provider')
-const intelligenceTestCapabilityEvent = defineRawEvent<
-  IntelligenceTestCapabilityPayload,
-  ApiResponse<unknown>
->('intelligence:test-capability')
-const intelligenceFetchModelsEvent = defineRawEvent<
-  IntelligenceFetchModelsPayload,
-  ApiResponse<{ success: boolean; models?: string[]; message?: string }>
->('intelligence:fetch-models')
-const intelligenceReloadConfigEvent = defineRawEvent<void, { ok: boolean; error?: string }>(
-  'intelligence:reload-config'
-)
 
 let initialized = false
 let runtimeTransport: ReturnType<typeof getTuffTransportMain> | null = null
@@ -114,7 +78,7 @@ export function initIntelligenceSdkService(): void {
   // Load initial config
   ensureIntelligenceConfigLoaded()
 
-  transport.on(intelligenceInvokeEvent, async (data, _context) => {
+  transport.on(intelligenceApiEvents.invoke, async (data, _context) => {
     try {
       if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
         throw new Error('Invalid invoke payload')
@@ -135,7 +99,7 @@ export function initIntelligenceSdkService(): void {
     }
   })
 
-  transport.on(intelligenceTestProviderEvent, async (data, _context) => {
+  transport.on(intelligenceApiEvents.testProvider, async (data, _context) => {
     try {
       if (!data || typeof data !== 'object' || !data.provider) {
         throw new Error('Missing provider payload')
@@ -154,7 +118,7 @@ export function initIntelligenceSdkService(): void {
     }
   })
 
-  transport.on(intelligenceTestCapabilityEvent, async (data, _context) => {
+  transport.on(intelligenceApiEvents.testCapability, async (data, _context) => {
     try {
       if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
         throw new Error('Invalid capability test payload')
@@ -174,17 +138,24 @@ export function initIntelligenceSdkService(): void {
 
       ensureIntelligenceConfigLoaded()
       const options = getCapabilityOptions(capabilityId)
-      const allowedProviderIds = providerId ? [providerId] : options.allowedProviderIds
+      let allowedProviderIds = options.allowedProviderIds
+      if (typeof providerId === 'string') {
+        allowedProviderIds = [providerId]
+      }
 
       logInfo(`Testing capability ${capabilityId}`)
 
       // 使用测试器生成 payload
-      const payload = await tester.generateTestPayload({ providerId, userInput, ...rest })
+      const payload = await tester.generateTestPayload({
+        ...rest,
+        providerId,
+        userInput
+      } as CapabilityTestPayload)
 
       // 执行测试
       const result = await tuffIntelligence.invoke(capabilityId, payload, {
         modelPreference: options.modelPreference,
-        allowedProviderIds
+        allowedProviderIds: isStringArray(allowedProviderIds) ? allowedProviderIds : undefined
       })
 
       // 格式化结果
@@ -201,7 +172,7 @@ export function initIntelligenceSdkService(): void {
     }
   })
 
-  transport.on(intelligenceFetchModelsEvent, async (data, _context) => {
+  transport.on(intelligenceApiEvents.fetchModels, async (data, _context) => {
     try {
       if (!data || typeof data !== 'object' || !data.provider) {
         throw new Error('Missing provider payload')
@@ -221,7 +192,7 @@ export function initIntelligenceSdkService(): void {
     }
   })
 
-  transport.on(intelligenceReloadConfigEvent, async () => {
+  transport.on(intelligenceApiEvents.reloadConfig, async () => {
     try {
       logInfo('Reloading config on demand')
       ensureIntelligenceConfigLoaded(true)

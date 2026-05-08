@@ -16,7 +16,11 @@ provide<TimelineContext>('timeline', {
 </script>
 
 <template>
-  <div class="tx-timeline" :class="[`tx-timeline--${layout}`]">
+  <div
+    class="tx-timeline"
+    :class="[`tx-timeline--${layout}`]"
+    role="list"
+  >
     <slot />
   </div>
 </template>

@@ -63,7 +63,7 @@ code: |
 
 **Why Not Strings?**
 
-The legacy Channel API used string-based event names:
+The retired Channel API used string-based event names:
 
 :::TuffCodeBlock{lang="ts"}
 ---
@@ -485,9 +485,9 @@ code: |
 
 ---
 
-## 7. Comparison with Legacy Channel
+## 7. Comparison with Retired Channel
 
-| Aspect | Legacy Channel | TuffTransport |
+| Aspect | Retired Channel | TuffTransport |
 |--------|---------------|---------------|
 | Event Definition | String | TuffEvent object |
 | Type Safety | None | Full TypeScript |
@@ -496,20 +496,18 @@ code: |
 | Streaming | Not supported | MessagePort |
 | Error Types | Generic Error | TuffTransportError |
 | Plugin Security | uniqueKey header | PluginKeyManager |
-| Backwards Compat | N/A | Full compatibility |
+| Current support | Historical reference only | Supported entry point |
 
 **Migration Path**
 
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  // Legacy code continues to work
+  // Retired Channel style kept here only for migration review
   channel.send('event', data)
   
-  // New code uses TuffTransport
+  // Current code uses TuffTransport
   transport.send(TuffEvent, data)
-  
-  // They share the same IPC infrastructure
 ---
 :::
 
@@ -529,4 +527,4 @@ TuffTransport provides:
 3. **Streaming** - MessagePort for large/continuous data
 4. **Security** - Plugin isolation via key mechanism
 5. **Ergonomics** - Clean API with full IDE support
-6. **Compatibility** - Works alongside legacy Channel API
+6. **Current API** - Supported IPC surface for plugin development

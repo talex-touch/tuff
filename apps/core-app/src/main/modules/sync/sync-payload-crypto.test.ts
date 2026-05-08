@@ -60,13 +60,13 @@ describe('SyncPayloadCrypto', () => {
     const encrypted = await crypto.encrypt('hello sync')
     await expect(crypto.decrypt(encrypted.payloadEnc)).resolves.toEqual({
       rawText: 'hello sync',
-      requiresEncryptedRepush: false
+      requiresMigrationRewrite: false
     })
 
     const empty = await crypto.encrypt('')
     await expect(crypto.decrypt(empty.payloadEnc)).resolves.toEqual({
       rawText: '',
-      requiresEncryptedRepush: false
+      requiresMigrationRewrite: false
     })
   })
 
@@ -104,7 +104,7 @@ describe('SyncPayloadCrypto', () => {
 
     await expect(crypto.decrypt(migrationPayload)).resolves.toEqual({
       rawText: 'migration text',
-      requiresEncryptedRepush: true
+      requiresMigrationRewrite: true
     })
   })
 

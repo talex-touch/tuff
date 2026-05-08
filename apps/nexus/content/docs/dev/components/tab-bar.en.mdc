@@ -1,12 +1,12 @@
 ---
 title: "TabBar"
-description: "TabBar badge"
+description: "Bottom tab navigation with icons, badges, and safe-area support."
 category: Layout
 syncStatus: migrated
 ---
 # TabBar
 
-TabBar badge
+`TxTabBar` renders app-style bottom navigation. It manages a `v-model` value, exposes tab semantics for each item, supports badges, and can reserve the device safe-area inset when it is fixed to the viewport bottom.
 
 ## Basic Usage
 
@@ -44,26 +44,26 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string \| number` | `''` | TextValue（v-model） |
-| `items` | `TabBarItem[]` | `[]` | Description for items. |
-| `fixed` | `boolean` | `true` | Description for fixed. |
-| `safeAreaBottom` | `boolean` | `true` | Description for safeAreaBottom. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `zIndex` | `number` | `2000` | z-index |
+| `modelValue` | `string \| number` | `''` | Active tab value used by `v-model`. |
+| `items` | `TabBarItem[]` | `[]` | Tabs rendered from left to right. |
+| `fixed` | `boolean` | `true` | Fixes the bar to the bottom of the viewport. Disable it when the bar lives inside a framed preview or custom layout. |
+| `safeAreaBottom` | `boolean` | `true` | Adds an `env(safe-area-inset-bottom)` spacer below the tab row. |
+| `disabled` | `boolean` | `false` | Disables all tab buttons and suppresses value updates. |
+| `zIndex` | `number` | `2000` | CSS z-index written to `--tx-tab-bar-z-index`. |
 
 ### TabBarItem
 
 | Field | Type | Description |
 |------|------|------|
-| `value` | `string \| number` | TextValue |
-| `label` | `string` | Description for label. |
-| `iconClass` | `string` | Description for iconClass. |
-| `badge` | `string \| number` | badge |
-| `disabled` | `boolean` | Description for disabled. |
+| `value` | `string \| number` | Value emitted when the tab is selected. |
+| `label` | `string` | Visible tab label. |
+| `iconClass` | `string` | Optional icon class rendered above the label. |
+| `badge` | `string \| number` | Optional badge displayed on the icon area. Empty values are hidden. |
+| `disabled` | `boolean` | Disables only this tab item. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(value)` | Description for update:modelValue. |
-| `change` | `(value)` | Description for change. |
+| `update:modelValue` | `(value)` | Emitted with the picked item value. |
+| `change` | `(value)` | Mirrors the picked value for change listeners. |

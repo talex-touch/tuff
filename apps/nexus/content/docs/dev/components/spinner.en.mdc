@@ -1,6 +1,6 @@
 ---
 title: "Spinner"
-description: "Loading"
+description: "A compact loading indicator for inline, overlay, and fallback loading states."
 category: Feedback
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # Spinner
 
-Loading
+Use `Spinner` for short loading states inside buttons, panels, overlays, or empty-state variants.
 
 ## Basic Usage
 
@@ -95,7 +95,7 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `size` | `number` | `16` | Description for size. |
-| `strokeWidth` | `number` | `2` | Description for strokeWidth. |
-| `fallback` | `boolean` | `false` | Description for fallback. |
-| `visible` | `boolean` | `true` | Description for visible. |
+| `size` | `number` | `16` | Spinner width and height in pixels. |
+| `strokeWidth` | `number` | `2` | Stroke width used by the ring and SVG fallback. |
+| `fallback` | `boolean` | `false` | Renders the SVG fallback spinner instead of the default animated shape. |
+| `visible` | `boolean` | `true` | Shows or hides the spinner with the built-in transition. |

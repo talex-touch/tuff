@@ -30,12 +30,22 @@ const progressPercent = computed(() => {
   return (currentIndex.value / (props.segments.length - 1)) * 100
 })
 
+const progressStyle = computed(() => {
+  const value = `${progressPercent.value}%`
+  return props.vertical ? { height: value } : { width: value }
+})
+
 const segmentDenom = computed(() => {
   return Math.max(1, props.segments.length - 1)
 })
 
 function segmentLeftPercent(index: number) {
   return (index / segmentDenom.value) * 100
+}
+
+function segmentStyle(index: number) {
+  const value = `${segmentLeftPercent(index)}%`
+  return props.vertical ? { bottom: value } : { left: value }
 }
 
 function handleSegmentClick(segment: SegmentedSliderSegment) {
@@ -73,7 +83,7 @@ onMounted(() => {
   >
     <!-- Track -->
     <div class="tx-segmented-slider__track">
-      <div class="tx-segmented-slider__progress" :style="{ width: `${progressPercent}%` }" />
+      <div class="tx-segmented-slider__progress" :style="progressStyle" />
 
       <!-- Segments -->
       <div
@@ -84,7 +94,7 @@ onMounted(() => {
           'is-active': segment.value === modelValue,
           'is-completed': index < currentIndex,
         }"
-        :style="{ left: `${segmentLeftPercent(index)}%` }"
+        :style="segmentStyle(index)"
         tabindex="0"
         role="button"
         :aria-pressed="segment.value === modelValue"

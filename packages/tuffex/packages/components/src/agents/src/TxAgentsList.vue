@@ -14,6 +14,9 @@ const props = withDefaults(defineProps<AgentsListProps & {
 }>(), {
   loading: false,
   selectedId: null,
+  enabledTitle: 'Enabled',
+  disabledTitle: 'Disabled',
+  emptyText: 'No agents',
 })
 
 const emit = defineEmits<{
@@ -29,7 +32,7 @@ const groups = computed<AgentsListGroup<AgentItemProps>[]>(() => {
   if (enabledAgents.value.length) {
     list.push({
       id: 'enabled',
-      title: 'Enabled',
+      title: props.enabledTitle,
       iconClass: 'i-carbon-checkmark-filled',
       items: enabledAgents.value,
       badgeText: enabledAgents.value.length,
@@ -39,7 +42,7 @@ const groups = computed<AgentsListGroup<AgentItemProps>[]>(() => {
   if (disabledAgents.value.length) {
     list.push({
       id: 'disabled',
-      title: 'Disabled',
+      title: props.disabledTitle,
       iconClass: 'i-carbon-close-filled',
       items: disabledAgents.value,
       badgeText: disabledAgents.value.length,
@@ -67,13 +70,13 @@ const groups = computed<AgentsListGroup<AgentItemProps>[]>(() => {
           <span class="tx-agents-list__group-badge">{{ group.badgeText }}</span>
         </div>
 
-        <div class="tx-agents-list__items">
+        <div class="tx-agents-list__items" role="listbox" :aria-label="group.title">
           <TxAgentItem
             v-for="agent in group.items"
             :key="agent.id"
             v-bind="agent"
             :selected="agent.id === selectedId"
-            @click="emit('select', agent.id)"
+            @select="emit('select', $event)"
           />
         </div>
       </div>
@@ -82,7 +85,7 @@ const groups = computed<AgentsListGroup<AgentItemProps>[]>(() => {
     <div v-else class="tx-agents-list__empty">
       <i class="i-carbon-bot" aria-hidden="true" />
       <div class="tx-agents-list__empty-text">
-        No agents
+        {{ emptyText }}
       </div>
     </div>
   </div>

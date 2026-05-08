@@ -163,6 +163,7 @@ When the container is focused:
 | `←` / `↑` | Select previous non-disabled item (wraps) |
 | `Home` | Select first non-disabled item |
 | `End` | Select last non-disabled item |
+| `Enter` / `Space` | In `multiple` mode, toggle the currently focused item |
 
 ## API
 
@@ -172,17 +173,18 @@ When the container is focused:
 
 | Prop | Description | Type | Default |
 |------|-------------|------|---------|
-| modelValue / v-model | Bound value | `string \| number` | - |
-| disabled | Disable entire group | `boolean` | `false` |
+| modelValue / v-model | Selected value in single mode, or selected value array in `multiple` mode. | `string \| number \| (string \| number)[]` | - |
+| multiple | Enables checkbox-like multi-select behavior. The sliding single-select indicator is hidden in this mode. | `boolean` | `false` |
+| disabled | Disables the entire group, removes focusability, and blocks keyboard changes. | `boolean` | `false` |
 | size | Size variant | `'sm' \| 'md' \| 'lg'` | `'md'` |
-| bordered | Show outer border | `boolean` | `false` |
+| bordered | Adds an outer border around the selector. | `boolean` | `false` |
 
 #### Events
 
 | Event | Description | Params |
 |-------|-------------|--------|
-| update:modelValue | Emitted when value updates | `(value: string \| number) => void` |
-| change | Emitted when value changes | `(value: string \| number) => void` |
+| update:modelValue | Emitted with the next selected value or selected value array. | `(value: string \| number \| (string \| number)[]) => void` |
+| change | Emitted with the same payload after a selection change. | `(value: string \| number \| (string \| number)[]) => void` |
 
 #### Slots
 
@@ -196,14 +198,14 @@ When the container is focused:
 
 | Prop | Description | Type | Default |
 |------|-------------|------|---------|
-| value | Item value | `string \| number` | - |
-| label | Display text | `string` | - |
-| icon | Icon CSS class | `string` | - |
-| disabled | Disable this item | `boolean` | `false` |
+| value | Item value used by the parent model. | `string \| number` | - |
+| label | Fallback visible text when no default slot is provided. | `string` | - |
+| icon | Fallback icon CSS class when no `icon` slot is provided. | `string` | - |
+| disabled | Disables this item and skips it during keyboard navigation. | `boolean` | `false` |
 
 #### Slots
 
 | Slot | Description |
 |------|-------------|
-| default | Custom content (overrides label) |
-| icon | Custom icon |
+| default | Custom visible item content, replacing `label`. |
+| icon | Custom icon content, replacing the `icon` class. |

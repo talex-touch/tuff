@@ -1,4 +1,4 @@
-import { defineRawEvent } from '../event/builder'
+import { defineEvent } from '../event/builder'
 
 export interface AssistantRuntimeConfig {
   enabled: boolean
@@ -26,21 +26,31 @@ export interface AssistantVoiceSubmitPayload {
 
 export const AssistantEvents = {
   floatingBall: {
-    getRuntimeConfig: defineRawEvent<void, AssistantRuntimeConfig>(
-      'assistant:floating-ball:get-runtime-config'
-    ),
-    openVoicePanel: defineRawEvent<AssistantOpenVoicePanelPayload, void>(
-      'assistant:floating-ball:open-voice-panel'
-    ),
-    updatePosition: defineRawEvent<AssistantFloatingBallPositionPayload, void>(
-      'assistant:floating-ball:update-position'
-    )
+    getRuntimeConfig: defineEvent('assistant')
+      .module('floating-ball')
+      .event('get-runtime-config')
+      .define<void, AssistantRuntimeConfig>(),
+    openVoicePanel: defineEvent('assistant')
+      .module('floating-ball')
+      .event('open-voice-panel')
+      .define<AssistantOpenVoicePanelPayload, void>(),
+    updatePosition: defineEvent('assistant')
+      .module('floating-ball')
+      .event('update-position')
+      .define<AssistantFloatingBallPositionPayload, void>()
   },
   voice: {
-    panelOpened: defineRawEvent<{ source?: string }, void>('assistant:voice-panel:opened'),
-    closePanel: defineRawEvent<void, void>('assistant:voice-panel:close'),
-    submitText: defineRawEvent<AssistantVoiceSubmitPayload, { accepted: boolean }>(
-      'assistant:voice-panel:submit'
-    )
+    panelOpened: defineEvent('assistant')
+      .module('voice-panel')
+      .event('opened')
+      .define<{ source?: string }, void>(),
+    closePanel: defineEvent('assistant')
+      .module('voice-panel')
+      .event('close')
+      .define<void, void>(),
+    submitText: defineEvent('assistant')
+      .module('voice-panel')
+      .event('submit')
+      .define<AssistantVoiceSubmitPayload, { accepted: boolean }>()
   }
 } as const

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AppEvents, PlatformEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, PlatformEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 
 const {
   fsReadFileMock,
@@ -11,6 +11,9 @@ const {
   deviceIdleUpdateSettingsMock,
   deviceIdleCanRunMock,
   activeAppGetActiveAppMock,
+  tempFileCreateFileMock,
+  tempFileDeleteFileMock,
+  tempFileRegisterNamespaceMock,
   platformCapabilityListMock,
   getActiveAppCapabilityPatchMock,
   getSelectionCaptureCapabilityPatchMock,
@@ -38,6 +41,9 @@ const {
   deviceIdleUpdateSettingsMock: vi.fn(),
   deviceIdleCanRunMock: vi.fn(),
   activeAppGetActiveAppMock: vi.fn<(forceRefresh?: unknown) => Promise<unknown>>(),
+  tempFileCreateFileMock: vi.fn(),
+  tempFileDeleteFileMock: vi.fn(),
+  tempFileRegisterNamespaceMock: vi.fn(),
   platformCapabilityListMock: vi.fn<() => Array<Record<string, unknown>>>(() => []),
   getActiveAppCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'unsupported' })),
   getSelectionCaptureCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'unsupported' })),
@@ -166,12 +172,13 @@ vi.mock('@sentry/electron/main', () => ({
   setTag: vi.fn(),
   setContext: vi.fn(),
   setUser: vi.fn(),
-  withScope: vi.fn((fn: (scope: any) => void) =>
-    fn({
-      setTag: vi.fn(),
-      setContext: vi.fn(),
-      setExtra: vi.fn()
-    })
+  withScope: vi.fn(
+    (fn: (scope: { setTag: unknown; setContext: unknown; setExtra: unknown }) => void) =>
+      fn({
+        setTag: vi.fn(),
+        setContext: vi.fn(),
+        setExtra: vi.fn()
+      })
   ),
   getCurrentScope: vi.fn(() => ({
     setTag: vi.fn(),
@@ -375,10 +382,10 @@ vi.mock('../service/storage-maintenance', () => ({
 
 vi.mock('../service/temp-file.service', () => ({
   tempFileService: {
-    registerNamespace: vi.fn(),
+    registerNamespace: tempFileRegisterNamespaceMock,
     startCleanup: vi.fn(),
-    create: vi.fn(),
-    remove: vi.fn()
+    createFile: tempFileCreateFileMock,
+    deleteFile: tempFileDeleteFileMock
   }
 }))
 
@@ -513,7 +520,7 @@ describe('CommonChannelModule private helpers', () => {
     ).resolves.toBe('')
   })
 
-  it('does not register legacy active-app event and capability list still includes dynamic entries', async () => {
+  it('does not register retired active-app event and capability list still includes dynamic entries', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', {
       value: 'darwin',
@@ -659,6 +666,79 @@ describe('CommonChannelModule private helpers', () => {
       settings
     })
     expect(deviceIdleCanRunMock).toHaveBeenCalledWith()
+  })
+
+  it('routes temp-file create/delete through shared plugin temp-file events', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+    tempFileCreateFileMock.mockResolvedValueOnce({
+      path: '/tmp/tuff-plugin-temp/example.txt',
+      sizeBytes: 5,
+      createdAt: 123
+    })
+    tempFileDeleteFileMock.mockResolvedValueOnce(true)
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const createHandler = handlers.get(PluginEvents.tempFile.create.toEventName())
+    const deleteHandler = handlers.get(PluginEvents.tempFile.delete.toEventName())
+
+    expect(createHandler).toBeTypeOf('function')
+    expect(deleteHandler).toBeTypeOf('function')
+
+    await expect(
+      createHandler?.(
+        {
+          namespace: 'icons/svg',
+          ext: 'svg',
+          text: 'hello',
+          prefix: 'tufficon',
+          retentionMs: 1000
+        },
+        {}
+      )
+    ).resolves.toEqual({
+      url: 'tfile:///tmp/tuff-plugin-temp/example.txt',
+      path: '/tmp/tuff-plugin-temp/example.txt',
+      sizeBytes: 5,
+      createdAt: 123
+    })
+    await expect(
+      deleteHandler?.({ url: 'tfile:///tmp/tuff-plugin-temp/example.txt' }, {})
+    ).resolves.toEqual({ success: true })
+
+    expect(tempFileRegisterNamespaceMock).toHaveBeenCalledWith({
+      namespace: 'icons/svg',
+      retentionMs: 1000
+    })
+    expect(tempFileCreateFileMock).toHaveBeenCalledWith({
+      namespace: 'icons/svg',
+      ext: 'svg',
+      text: 'hello',
+      base64: undefined,
+      prefix: 'tufficon'
+    })
+    expect(tempFileDeleteFileMock).toHaveBeenCalledWith('/tmp/tuff-plugin-temp/example.txt')
   })
 
   it('marks native-share as unsupported on Windows while keeping mail-only fallback out of capability support', async () => {

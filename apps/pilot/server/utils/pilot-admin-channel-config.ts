@@ -27,7 +27,6 @@ const MAX_TIMEOUT_MS = 10 * 60 * 1000
 const DEFAULT_PRIORITY = 100
 const MIN_PRIORITY = 1
 const MAX_PRIORITY = 9999
-const LEGACY_ADAPTER_REMOVED_REASON = 'LEGACY_ADAPTER_REMOVED'
 const SUPPORTED_BUILTIN_TOOLS: PilotBuiltinTool[] = [
   'write_todos',
   'read_file',
@@ -82,8 +81,15 @@ function normalizeText(value: unknown): string {
   return String(value ?? '').trim()
 }
 
-function normalizeAdapter(value: unknown): PilotChannelAdapter {
-  return normalizeText(value).toLowerCase() === 'coze' ? 'coze' : 'openai'
+function normalizeAdapter(value: unknown): PilotChannelAdapter | null {
+  const normalized = normalizeText(value).toLowerCase()
+  if (!normalized || normalized === 'openai') {
+    return 'openai'
+  }
+  if (normalized === 'coze') {
+    return 'coze'
+  }
+  return null
 }
 
 function normalizeTransport(value: unknown, adapter: PilotChannelAdapter): PilotChannelTransport {
@@ -318,9 +324,10 @@ function normalizeChannelRow(raw: unknown): PilotAdminChannelItem | null {
   }
   const row = raw as Record<string, unknown>
   const id = normalizeText(row.id)
-  const rawAdapter = normalizeText(row.adapter).toLowerCase()
   const adapter = normalizeAdapter(row.adapter)
-  const legacyMigrated = rawAdapter === 'legacy'
+  if (!adapter) {
+    return null
+  }
   const region = adapter === 'coze'
     ? normalizePilotChannelRegion(row.region)
     : undefined
@@ -380,12 +387,9 @@ function normalizeChannelRow(raw: unknown): PilotAdminChannelItem | null {
   const fallbackModel = normalizeText(row.model) || 'gpt-5.2'
   const models = normalizeChannelModels(row.models, fallbackModel, adapter)
   const defaultModelId = normalizeDefaultModelId(row.defaultModelId, models, fallbackModel, adapter)
-  const existingSyncError = typeof row.modelsSyncError === 'string'
+  const modelsSyncError = typeof row.modelsSyncError === 'string'
     ? normalizeText(row.modelsSyncError)
     : ''
-  const migratedSyncError = legacyMigrated
-    ? [existingSyncError, LEGACY_ADAPTER_REMOVED_REASON].filter(Boolean).join(' | ')
-    : existingSyncError
   return {
     id,
     name: normalizeText(row.name) || id,
@@ -410,7 +414,7 @@ function normalizeChannelRow(raw: unknown): PilotAdminChannelItem | null {
     builtinTools: normalizeTools(row.builtinTools, adapter),
     enabled: normalizeBoolean(row.enabled, true),
     modelsLastSyncedAt: normalizeText(row.modelsLastSyncedAt) || undefined,
-    modelsSyncError: migratedSyncError || undefined,
+    modelsSyncError: modelsSyncError || undefined,
   }
 }
 
@@ -514,6 +518,9 @@ export async function updatePilotAdminChannelCatalog(
       missing.push('baseUrl')
     }
     const adapter = normalizeAdapter(merged.adapter)
+    if (!adapter) {
+      missing.push('adapter')
+    }
     if (adapter === 'coze') {
       if (!normalizeText(merged.oauthTokenUrl)) {
         missing.push('oauthTokenUrl')

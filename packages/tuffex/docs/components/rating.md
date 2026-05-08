@@ -61,7 +61,8 @@ Set `readonly` to display a rating without interaction — useful for showing av
 
 - Use `precision` to control granularity: `1` for whole stars, `0.5` for half stars.
 - The `show-text` prop renders the numeric score next to the stars. Customize with the `#text` slot.
-- For accessibility, ensure the rating has a visible label nearby.
+- Rating exposes the star group as a radio group. Keep a visible label nearby.
+- `readonly` is display-only: it keeps the rating visible but removes star button interaction.
 
 ## API
 

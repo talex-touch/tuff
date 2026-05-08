@@ -57,6 +57,25 @@ function parseInteger(value: unknown): number | null {
   return Number.isFinite(normalized) ? normalized : null
 }
 
+function getCommandErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null
+  const value = (error as { code?: unknown }).code
+  return typeof value === 'string' ? value : null
+}
+
+function getCommandErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
+}
+
+function extractJsonObjectLine(output: string): string {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  return lines.reverse().find((line) => line.startsWith('{') && line.endsWith('}')) || output.trim()
+}
+
 // Platform type for consistency
 type Platform = 'macos' | 'windows' | 'linux'
 
@@ -236,7 +255,7 @@ $handle = [TuffForegroundWindow]::GetForegroundWindow()
 if ($handle -eq [IntPtr]::Zero) {
   return ''
 }
-$processId = 0
+$processId = [uint32]0
 [TuffForegroundWindow]::GetWindowThreadProcessId($handle, [ref]$processId) | Out-Null
 $titleBuilder = New-Object System.Text.StringBuilder 2048
 [TuffForegroundWindow]::GetWindowText($handle, $titleBuilder, $titleBuilder.Capacity) | Out-Null
@@ -267,7 +286,7 @@ try {
         ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
         { timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS, windowsHide: true, maxBuffer: 1024 * 1024 }
       )
-      const normalized = stdout.trim()
+      const normalized = extractJsonObjectLine(stdout)
       if (!normalized) {
         return null
       }
@@ -288,7 +307,12 @@ try {
       }
     } catch (error) {
       if (!isMissingCommandError(error)) {
-        activeAppLog.warn('Windows active-app resolution failed', { error })
+        activeAppLog.warn('Windows active-app resolution failed', {
+          meta: {
+            code: getCommandErrorCode(error) ?? undefined,
+            message: getCommandErrorMessage(error)
+          }
+        })
       }
       return null
     }

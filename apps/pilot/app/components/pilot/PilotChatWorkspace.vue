@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Experimental workspace-only UI. The production homepage keeps the legacy chat surface.
+// Experimental workspace-only UI. The production homepage keeps the current chat surface.
 import type { ChatMessageModel } from '@talex-touch/tuffex'
 import type { PilotComposerAttachment, PilotRuntimeStatusSnapshot, PilotToolCall, PilotTrace } from '../../composables/pilot-chat.types'
 import {

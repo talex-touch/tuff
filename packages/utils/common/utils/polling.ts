@@ -3,12 +3,9 @@
  * A high-precision, efficient, singleton polling service for scheduling periodic tasks.
  *
  * v2 capabilities:
- * - Lane-based concurrency isolation (`critical` / `realtime` / `io` / `maintenance` / `legacy_serial`)
+ * - Lane-based concurrency isolation (`critical` / `realtime` / `io` / `maintenance` / `serial`)
  * - Backpressure semantics (`strict_fifo` / `latest_wins` / `coalesce`)
  * - Optional timeout and jitter controls
- *
- * Backward compatibility:
- * - Existing callsites without new options keep legacy behavior (`legacy_serial` + `strict_fifo`)
  */
 
 type TimeUnit = 'milliseconds' | 'seconds' | 'minutes' | 'hours'
@@ -17,7 +14,7 @@ export type PollingTaskLane =
   | 'realtime'
   | 'io'
   | 'maintenance'
-  | 'legacy_serial'
+  | 'serial'
 
 export type PollingTaskBackpressure = 'strict_fifo' | 'latest_wins' | 'coalesce'
 
@@ -26,7 +23,7 @@ const DEFAULT_LANE_CONCURRENCY: Record<PollingTaskLane, number> = {
   realtime: 2,
   io: 4,
   maintenance: 2,
-  legacy_serial: 1
+  serial: 1
 }
 
 interface PollingTask {
@@ -114,7 +111,7 @@ export class PollingService {
     ['realtime', { queue: [], inFlight: 0, pendingByDedupe: new Map() }],
     ['io', { queue: [], inFlight: 0, pendingByDedupe: new Map() }],
     ['maintenance', { queue: [], inFlight: 0, pendingByDedupe: new Map() }],
-    ['legacy_serial', { queue: [], inFlight: 0, pendingByDedupe: new Map() }]
+    ['serial', { queue: [], inFlight: 0, pendingByDedupe: new Map() }]
   ])
 
   private constructor() {
@@ -149,11 +146,11 @@ export class PollingService {
       value === 'realtime' ||
       value === 'io' ||
       value === 'maintenance' ||
-      value === 'legacy_serial'
+      value === 'serial'
     ) {
       return value
     }
-    return 'legacy_serial'
+    return 'serial'
   }
 
   private sanitizeBackpressure(value: unknown): PollingTaskBackpressure {
@@ -178,7 +175,7 @@ export class PollingService {
   }
 
   private getLaneState(lane: PollingTaskLane): LaneState {
-    return this.laneStates.get(lane) ?? this.laneStates.get('legacy_serial')!
+    return this.laneStates.get(lane) ?? this.laneStates.get('serial')!
   }
 
   private ensureTaskStats(taskId: string): PollingTaskStats {
@@ -699,9 +696,9 @@ export class PollingService {
         queued: this.getLaneState('maintenance').queue.length,
         inFlight: this.getLaneState('maintenance').inFlight
       },
-      legacy_serial: {
-        queued: this.getLaneState('legacy_serial').queue.length,
-        inFlight: this.getLaneState('legacy_serial').inFlight
+      serial: {
+        queued: this.getLaneState('serial').queue.length,
+        inFlight: this.getLaneState('serial').inFlight
       }
     } satisfies Record<PollingTaskLane, { queued: number; inFlight: number }>
 

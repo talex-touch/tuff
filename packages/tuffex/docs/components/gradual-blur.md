@@ -117,4 +117,4 @@ import GradualBlurResponsiveDemoSource from '../.vitepress/theme/components/demo
 ## 使用建议
 
 - **[容器定位]** `target="parent"` 时父容器建议 `position: relative`，并配合 `overflow: hidden` 来裁切边缘。
-- **[兼容性]** 依赖 `backdrop-filter`，不同浏览器表现会略有差异。
+- **[浏览器支持]** 依赖 `backdrop-filter`，不同浏览器表现会略有差异。

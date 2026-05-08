@@ -44,9 +44,11 @@ const items = [
 ## Design Notes
 
 - Thumbnails are displayed in a responsive grid. Clicking a thumbnail opens the lightbox modal at that index.
-- Use `startIndex` to open the lightbox at a specific image programmatically.
-- Each item's `name` is displayed as a caption in the lightbox viewer.
-- The gallery handles keyboard navigation (arrow keys) and swipe gestures in the lightbox.
+- Use `startIndex` to control the current preview index. Out-of-range values are clamped to the available image list.
+- Each item's `name` is used for the modal title and image alt text. Unnamed images keep empty alt text.
+- Empty `items` render no thumbnails and do not open the modal or emit `open`.
+- The preview uses `TxModal`, so it inherits dialog semantics, title linkage, close button, backdrop close, Escape close, and focus restoration.
+- Footer Prev / Next controls are disabled at the first and last images.
 
 ## API
 
@@ -54,12 +56,12 @@ const items = [
 
 <ApiSpecTable :rows="[
   { name: 'items', description: 'Array of image objects to display.', type: 'Array<{ id: string, url: string, name?: string }>' },
-  { name: 'startIndex', description: 'Initial image index when opening the lightbox.', type: 'number', default: '0' },
+  { name: 'startIndex', description: 'Current preview index. Values outside the list bounds are clamped.', type: 'number', default: '0' },
 ]" />
 
 ### Events
 
 <ApiSpecTable title="Events" :rows="[
-  { name: 'open', description: 'Fires when the lightbox opens.', type: '(payload: { index: number, item: ImageGalleryItem }) => void' },
-  { name: 'close', description: 'Fires when the lightbox closes.' },
+  { name: 'open', description: 'Fires after a thumbnail opens the lightbox.', type: '(payload: { index: number, item: ImageGalleryItem }) => void' },
+  { name: 'close', description: 'Fires when the lightbox closes.', type: '() => void' },
 ]" />

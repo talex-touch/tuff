@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { StepsContext, StepStatus } from './types'
-import { computed, inject } from 'vue'
+import { computed, getCurrentInstance, inject, onBeforeUnmount } from 'vue'
 import { TxIcon } from '../../icon'
 
 interface Props {
@@ -23,19 +23,29 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const steps = inject<StepsContext>('steps')
+const instance = getCurrentInstance()
+const stepKey = `tx-step-${instance?.uid ?? props.step ?? props.title ?? 'item'}`
+
+steps?.registerStep(stepKey)
+
+onBeforeUnmount(() => {
+  steps?.unregisterStep(stepKey)
+})
 
 const direction = computed(() => steps?.direction || 'horizontal')
 const size = computed(() => steps?.size || 'medium')
+const orderIndex = computed(() => steps?.stepKeys.value.indexOf(stepKey) ?? 0)
+const effectiveStep = computed(() => props.step ?? orderIndex.value)
 
 const isActive = computed(() => {
-  return steps?.activeStep.value === props.step
+  return steps?.activeStep.value === effectiveStep.value
 })
 
 const isCompleted = computed(() => {
   return props.status === 'completed' || (steps?.activeStep.value !== undefined
-    && typeof props.step === 'number'
+    && typeof effectiveStep.value === 'number'
     && typeof steps.activeStep.value === 'number'
-    && props.step < steps.activeStep.value)
+    && effectiveStep.value < steps.activeStep.value)
 })
 
 const status = computed(() => {
@@ -47,20 +57,19 @@ const status = computed(() => {
 })
 
 const stepNumber = computed(() => {
-  if (typeof props.step === 'number') {
-    return props.step + 1
+  if (typeof effectiveStep.value === 'number') {
+    return effectiveStep.value + 1
   }
   return 1
 })
 
 const isLast = computed(() => {
-  return false
+  return orderIndex.value === (steps?.stepKeys.value.length ?? 1) - 1
 })
 
 function handleClick() {
   if (props.clickable && !props.disabled && steps) {
-    if (props.step !== undefined)
-      steps.setActiveStep(props.step)
+    steps.setActiveStep(effectiveStep.value)
   }
 }
 </script>
@@ -74,11 +83,21 @@ function handleClick() {
         'tx-step--active': isActive,
         'tx-step--completed': isCompleted,
         'tx-step--clickable': clickable && !disabled,
+        'tx-step--disabled': disabled,
       },
     ]"
+    role="listitem"
     @click="handleClick"
   >
-    <div class="tx-step__head">
+    <div
+      class="tx-step__head"
+      :role="clickable && !disabled ? 'button' : undefined"
+      :tabindex="clickable && !disabled ? 0 : undefined"
+      :aria-current="isActive ? 'step' : undefined"
+      :aria-disabled="disabled ? 'true' : undefined"
+      @keydown.enter.prevent="handleClick"
+      @keydown.space.prevent="handleClick"
+    >
       <div class="tx-step__icon" :class="`tx-step__icon--${status}`">
         <TxIcon v-if="status === 'completed'" :name="completedIcon" />
         <TxIcon v-else-if="icon" :name="icon" />

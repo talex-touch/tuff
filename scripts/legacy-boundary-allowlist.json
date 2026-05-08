@@ -8,11 +8,6 @@
       "defaultExpiresVersion": "2.5.0",
       "entries": [
         {
-          "file": "apps/core-app/src/main/channel/common.test.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/core-app/src/main/core/precore.ts",
           "maxCount": 1,
           "expiresVersion": "2.5.0"
@@ -33,37 +28,12 @@
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "apps/core-app/src/main/modules/ai/tuff-intelligence-runtime.test.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts",
           "maxCount": 1,
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/core-app/src/main/modules/box-tool/search-engine/search-logger.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/main/modules/clipboard.transport.test.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/main/modules/clipboard.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/main/modules/division-box/ipc.actor.test.ts",
           "maxCount": 1,
           "expiresVersion": "2.5.0"
         },
@@ -88,11 +58,6 @@
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "apps/core-app/src/main/modules/omni-panel/index.test.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/core-app/src/main/modules/omni-panel/index.ts",
           "maxCount": 2,
           "expiresVersion": "2.5.0"
@@ -108,37 +73,12 @@
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "apps/core-app/src/main/modules/permission/permission-store.test.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/core-app/src/main/modules/permission/permission-store.ts",
           "maxCount": 10,
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/core-app/src/main/modules/plugin/plugin-loaders.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/main/modules/plugin/install-queue.test.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/main/modules/plugin/runtime/plugin-runtime-repair.test.ts",
-          "maxCount": 3,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/main/modules/plugin/runtime/plugin-runtime-repair.ts",
           "maxCount": 1,
           "expiresVersion": "2.5.0"
         },
@@ -198,21 +138,6 @@
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "apps/core-app/src/renderer/src/modules/lang/language-preferences.test.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/renderer/src/modules/lang/language-preferences.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/renderer/src/modules/lang/i18n.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/core-app/src/renderer/src/modules/layout/index.ts",
           "maxCount": 1,
           "expiresVersion": "2.5.0"
@@ -220,21 +145,6 @@
         {
           "file": "apps/core-app/src/renderer/src/modules/startup/startup-migrations.ts",
           "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/renderer/src/modules/lang/useLanguage.ts",
-          "maxCount": 3,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/renderer/src/modules/storage/app-storage-boundary.test.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/renderer/src/modules/storage/app-storage.ts",
-          "maxCount": 1,
           "expiresVersion": "2.5.0"
         },
         {
@@ -248,68 +158,13 @@
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "apps/core-app/src/renderer/src/modules/tuffex/index.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue",
-          "maxCount": 6,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/core-app/src/shared/events/omni-panel.ts",
           "maxCount": 3,
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "apps/core-app/src/shared/update/channel.test.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/nexus/app/composables/useLocaleOrchestrator.ts",
-          "maxCount": 5,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/nexus/app/data/tuffSdkItems.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/nexus/app/i18n.config.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/nexus/i18n.config.ts",
           "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/nexus/server/api/sync/pull.get.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/nexus/server/api/sync/push.post.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/nexus/server/middleware/__tests__/intelligence-route-compat.test.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/nexus/server/utils/__tests__/team-context.test.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/nexus/server/utils/auth.ts",
-          "maxCount": 2,
           "expiresVersion": "2.5.0"
         },
         {
@@ -343,31 +198,6 @@
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "apps/pilot/app/composables/api/base/v1/aigc/history/index.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/pilot/app/composables/usePilotChatPage.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/pilot/app/composables/usePilotRoutingAdmin.ts",
-          "maxCount": 5,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/pilot/app/pages/admin/system/model-groups.vue",
-          "maxCount": 5,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/pilot/app/pages/admin/system/route-combos.vue",
-          "maxCount": 5,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/pilot/app/pages/cms/system/pilot-settings.vue",
           "maxCount": 6,
           "expiresVersion": "2.5.0"
@@ -395,11 +225,6 @@
         {
           "file": "apps/pilot/server/utils/__tests__/legacy-stream-input.test.ts",
           "maxCount": 7,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/pilot/server/utils/__tests__/pilot-admin-datasource-config.test.ts",
-          "maxCount": 8,
           "expiresVersion": "2.5.0"
         },
         {
@@ -443,28 +268,8 @@
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "apps/pilot/server/utils/__tests__/pilot-tool-gateway.test.ts",
-          "maxCount": 19,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts",
           "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/pilot/server/utils/pilot-admin-channel-config.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/pilot/server/utils/pilot-admin-datasource-config.ts",
-          "maxCount": 5,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/pilot/server/utils/pilot-admin-routing-config.ts",
-          "maxCount": 5,
           "expiresVersion": "2.5.0"
         },
         {
@@ -478,42 +283,7 @@
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "apps/pilot/server/utils/pilot-tool-gateway.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/pilot/server/utils/quota-history-store.ts",
-          "maxCount": 3,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "apps/pilot/shared/pilot-capability-meta.ts",
-          "maxCount": 5,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/tuff-intelligence/src/adapters/deepagent-engine.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "packages/tuff-intelligence/src/business/pilot/index.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/tuffex/packages/components/src/code-editor/src/TxCodeEditor.vue",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/tuffex/packages/components/src/group-block/src/types.ts",
-          "maxCount": 7,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/unplugin-export-plugin/src/__tests__/cli-shim.test.ts",
           "maxCount": 1,
           "expiresVersion": "2.5.0"
         },
@@ -523,47 +293,12 @@
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "packages/utils/__tests__/polling-service.test.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/__tests__/preset-export-types.test.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/__tests__/system-sdk.test.ts",
-          "maxCount": 8,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/common/utils/polling.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/eslint.config.js",
-          "maxCount": 13,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "packages/utils/index.ts",
           "maxCount": 1,
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "packages/utils/permission/index.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "packages/utils/plugin/index.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/plugin/log/types.ts",
           "maxCount": 1,
           "expiresVersion": "2.5.0"
         },
@@ -588,52 +323,7 @@
           "expiresVersion": "2.5.0"
         },
         {
-          "file": "packages/test/src/common/storage-subscription.test.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/__tests__/renderer-storage-transport.test.ts",
-          "maxCount": 8,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/renderer/hooks/use-channel.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/renderer/storage/base-storage.ts",
-          "maxCount": 5,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/renderer/storage/bootstrap.ts",
-          "maxCount": 2,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/renderer/storage/storage-subscription.ts",
-          "maxCount": 5,
-          "expiresVersion": "2.5.0"
-        },
-        {
           "file": "packages/utils/transport/event/builder.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/transport/events/app.ts",
-          "maxCount": 3,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/transport/events/index.ts",
-          "maxCount": 6,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/transport/events/types/storage.ts",
           "maxCount": 1,
           "expiresVersion": "2.5.0"
         },
@@ -649,16 +339,6 @@
         },
         {
           "file": "packages/utils/transport/sdk/renderer-transport.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/types/modules/module-lifecycle.ts",
-          "maxCount": 1,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "plugins/touch-image/src/main.ts",
           "maxCount": 1,
           "expiresVersion": "2.5.0"
         }
@@ -716,16 +396,6 @@
         {
           "file": "packages/utils/plugin/sdk/window/index.ts",
           "maxCount": 3,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/renderer/storage/base-storage.ts",
-          "maxCount": 3,
-          "expiresVersion": "2.5.0"
-        },
-        {
-          "file": "packages/utils/renderer/storage/storage-subscription.ts",
-          "maxCount": 1,
           "expiresVersion": "2.5.0"
         },
         {

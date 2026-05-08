@@ -3,6 +3,1922 @@
 > 更新时间: 2026-05-04
 > 说明: 主文件仅保留近 30 天（2026-04-04 ~ 2026-05-04）详细记录；更早历史已按月归档。
 
+## 2026-05-07
+
+### fix(core-app): improve Windows app discovery sources
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-scanner.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.test.ts`
+  - Windows app scanning now focuses watch paths on Start Menu directories and `LOCALAPPDATA\\Programs` instead of broad Program Files roots.
+  - Re-enabled Windows file system watch registration while filtering real-time changes to `.lnk` and `.exe` entries.
+  - Added registry uninstall-entry discovery as a fallback source, resolving candidate executable paths from `DisplayIcon` or install locations and deduping registry entries behind Start Menu results.
+  - Added regression coverage for Windows real-time Start Menu event handling, registry `DisplayIcon` parsing, `InstallLocation` executable fallback, noisy registry filtering, and Start Menu-over-registry dedupe priority.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/win.test.ts" "src/main/modules/box-tool/addon/apps/app-provider.test.ts"` 通过。
+
+### chore(governance): sync large-file guard for beta.14 release
+
+- `scripts/large-file-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+  - Synced large-file boundary metadata to current `2.4.10-beta.14` release gate.
+  - Raised existing governance exception caps to current measured line counts for:
+    - `SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER-TEST`: `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts` cap `1516`
+    - `SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER`: `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts` cap `3330`
+    - `SIZE-GROWTH-2026-04-26-CORE-APP-OCR-SERVICE`: `apps/core-app/src/main/modules/ocr/ocr-service.ts` cap `1629`
+    - `SIZE-GROWTH-2026-04-26-CORE-APP-SENTRY-SERVICE`: `apps/core-app/src/main/modules/sentry/sentry-service.ts` cap `1318`
+    - `SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-CLI-TUFF-CLI`: `packages/tuff-cli/src/bin/tuff.ts` cap `1318`
+  - Added traceable temporary growth exceptions for:
+    - `SIZE-GROWTH-2026-05-08-NEXUS-I18N-EN`: `apps/nexus/i18n/locales/en.ts` cap `2698`
+    - `SIZE-GROWTH-2026-05-08-NEXUS-I18N-ZH`: `apps/nexus/i18n/locales/zh.ts` cap `2683`
+    - `SIZE-GROWTH-2026-05-08-NEXUS-AUTH-STORE`: `apps/nexus/server/utils/authStore.ts` cap `2538`
+    - `SIZE-GROWTH-2026-05-08-TUFFEX-FLIP-OVERLAY`: `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue` cap `1345`
+    - `SIZE-GROWTH-2026-05-08-PLUGIN-TOUCH-TRANSLATION-INDEX`: `plugins/touch-translation/index.js` cap `1261`
+    - `SIZE-GROWTH-2026-05-08-PLUGIN-TOUCH-TRANSLATION-PANEL`: `plugins/touch-translation/widgets/translate-panel.vue` cap `1535`
+  - Follow-up remains unchanged: reduce or split these files below the 1200-line threshold before `2.5.0`.
+
+### docs(nexus): hard-cut browser support wording from compatibility
+
+- `packages/tuffex/docs/components/gradual-blur.md`
+- `apps/nexus/content/docs/dev/components/gradual-blur.en.mdc`
+- `apps/nexus/content/docs/dev/components/gradual-blur.zh.mdc`
+- `apps/nexus/content/docs/dev/components/foundations.zh.mdc`
+- `docs/plan-prd/TODO.md`
+  - GradualBlur docs now describe `backdrop-filter` as a browser-support constraint instead of compatibility wording.
+  - Foundations dark-mode selector docs now describe `[data-theme='dark']` and `.dark` as supported selectors, avoiding false compatibility-debt signals.
+
+### test(tuffex): hard-cut Scroll TouchScroll alias
+
+- `packages/tuffex/packages/components/src/index.ts`
+- `packages/tuffex/packages/components/src/scroll/__tests__/scroll-export.test.ts`
+- `packages/tuffex/docs/components/scroll.md`
+- `apps/nexus/content/docs/dev/components/scroll.en.mdc`
+- `apps/nexus/content/docs/dev/components/scroll.zh.mdc`
+- `apps/nexus/app/components/content/demos/ScrollBasicDemo.vue`
+- `apps/nexus/app/components/content/demos/ScrollScrollDemo.vue`
+- `docs/plan-prd/TODO.md`
+  - Tuffex top-level exports no longer expose the retired `TouchScroll` alias; `TxScroll` remains the single public component name.
+  - Added an export boundary regression test and updated Nexus/Tuffex docs plus demos to use `TxScroll`.
+
+### docs(tuffex): hard-cut Tabs autoHeight compatibility wording
+
+- `packages/tuffex/docs/components/tabs.md`
+- `apps/nexus/content/docs/dev/components/tabs.zh.mdc`
+- `docs/plan-prd/TODO.md`
+  - Tabs docs no longer describe `autoHeight*` as compatibility fields; they are documented as the current convenience props and default duration/easing source for `animation.size`.
+  - Runtime API is unchanged because `autoHeight`, `autoWidth`, `autoHeightDurationMs`, and `autoHeightEasing` are still used by current Nexus demos and component tests.
+
+### docs(nexus): hard-cut Modal TModal compatibility wording
+
+- `apps/nexus/content/docs/dev/components/modal.en.mdc`
+- `apps/nexus/content/docs/dev/components/modal.zh.mdc`
+- `docs/plan-prd/TODO.md`
+  - Nexus Modal docs now describe `TModal` as the current lightweight entry backed by `TxModal` instead of a compatibility entry.
+  - The documented contract still matches the existing wrapper behavior: no `header/footer` slot means `TModal` does not override the default title or footer behavior.
+
+### test(core-app): hard-cut inline workflow contract marker
+
+- `apps/core-app/src/main/modules/ai/intelligence-deepagent-orchestration.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-deepagent-orchestration.test.ts`
+- `docs/plan-prd/TODO.md`
+  - `normalizeInlineWorkflowPayload()` now marks the current `workflow.execute` inline chain with `contract: 'workflow.execute.inline'` instead of a compatibility metadata field.
+  - Added regression coverage for the normalized inline workflow description and metadata so the current contract does not drift back into compatibility-shell wording.
+
+### test(tuffex): cover ChatComposer contract and clear Nexus placeholders
+
+- `packages/tuffex/packages/components/src/chat/__tests__/chat-composer.test.ts`
+- `apps/nexus/content/docs/dev/components/chat-composer.zh.mdc`
+- `apps/nexus/content/docs/dev/components/chat-composer.en.mdc`
+- `apps/nexus/content/docs/dev/components/card.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added ChatComposer regression coverage for v-model, trimmed send payloads, keyboard send modes, disabled/submitting guards, attachment-only send, attachment action guards, scoped slots, textarea native events, and install registration.
+  - ChatComposer Nexus docs now include props/events/slots plus send, attachment, and keyboard interaction contracts.
+  - Card English docs now replace migration placeholder wording with the real surface-container contract.
+
+### docs(nexus): hard-cut AutoSizer and Slider English placeholders
+
+- `apps/nexus/content/docs/dev/components/auto-sizer.en.mdc`
+- `apps/nexus/content/docs/dev/components/slider.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - AutoSizer English docs now replace migration placeholder wording with the real resize/FLIP contract, including outer/inner wrappers, inline sizing, `flip()`, `action()`, and utility option forwarding.
+  - Slider English docs now replace migration placeholder wording with the real range input and elastic tooltip contract, including clamping, events, disabled behavior, formatter fallback, tooltip triggers, motion clamping, and listener cleanup.
+
+### test(tuffex): cover components utils re-export contract
+
+- `packages/tuffex/packages/components/src/utils/__tests__/utils.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Added a re-export contract test for `packages/components/src/utils`, covering env helpers, z-index utilities, `withInstall`, and vibrate helpers.
+  - The Tuffex component-source missing-test inventory now treats `utils` as covered even though the actual utility implementations live under `packages/tuffex/packages/utils`.
+
+### test(tuffex): hard-cut Floating disabled runtime
+
+- `packages/tuffex/packages/components/src/floating/src/TxFloating.vue`
+- `packages/tuffex/packages/components/src/floating/__tests__/floating.test.ts`
+- `apps/nexus/content/docs/dev/components/floating.zh.mdc`
+- `apps/nexus/content/docs/dev/components/floating.en.mdc`
+- `packages/tuffex/docs/components/floating.md`
+- `packages/tuffex/docs/components/index.md`
+- `docs/plan-prd/TODO.md`
+  - `TxFloating disabled=true` now stops window pointer listeners and RAF, cancels the current animation frame, and resets registered elements; re-enabling restarts listeners and RAF.
+  - Added Floating regression coverage for element registration, eased transforms, disabled stop/restart, initially disabled behavior, depth re-registration, unmount cleanup, className/slot rendering, and install registration.
+  - Tuffex docs now include a Floating page/index entry; Nexus bilingual docs document the disabled/RAF/register contract.
+
+### test(tuffex): hard-cut Grid docs to current API
+
+- `packages/tuffex/packages/components/src/grid/__tests__/grid.test.ts`
+- `apps/nexus/content/docs/dev/components/grid.zh.mdc`
+- `apps/nexus/content/docs/dev/components/grid.en.mdc`
+- `packages/tuffex/docs/components/grid.md`
+- `docs/plan-prd/TODO.md`
+  - Added Grid regression coverage for fixed columns/rows/gaps/alignment, `minItemWidth` precedence, responsive breakpoint resolution, resize listener cleanup, GridItem span clamping, and install registration.
+  - Nexus/Tuffex Grid docs now match the current implementation and no longer list unimplemented `autoRows`, `dense`, `colStart`, `colEnd`, `rowStart`, `rowEnd`, or `xxl` APIs.
+
+### test(tuffex): cover stroke animation component contracts
+
+- `packages/tuffex/packages/components/src/keyframe-stroke-text/src/TxKeyframeStrokeText.vue`
+- `packages/tuffex/packages/components/src/keyframe-stroke-text/__tests__/keyframe-stroke-text.test.ts`
+- `packages/tuffex/packages/components/src/tuff-logo-stroke/__tests__/tuff-logo-stroke.test.ts`
+- `apps/nexus/content/docs/dev/components/keyframe-stroke-text.zh.mdc`
+- `apps/nexus/content/docs/dev/components/keyframe-stroke-text.en.mdc`
+- `apps/nexus/content/docs/dev/components/tuff-logo-stroke.zh.mdc`
+- `apps/nexus/content/docs/dev/components/tuff-logo-stroke.en.mdc`
+- `packages/tuffex/docs/components/keyframe-stroke-text.md`
+- `packages/tuffex/docs/components/tuff-logo-stroke.md`
+- `docs/plan-prd/TODO.md`
+  - KeyframeStrokeText now syncs SVG metrics once after mount even when the Font Loading API is unavailable, avoiding a stale default viewBox in those environments.
+  - Added KeyframeStrokeText coverage for SVG accessibility, CSS variables, empty-text fallback, metric refresh, and install registration.
+  - Added TuffLogoStroke coverage for mode classes, `loop -> breathe`, size/duration variables, palette forwarding, instance-scoped gradient/filter ids, and install registration; Nexus/Tuffex docs now document both animation contracts.
+
+### test(tuffex): hard-cut deterministic skeleton contracts
+
+- `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue`
+- `packages/tuffex/packages/components/src/layout-skeleton/__tests__/layout-skeleton.test.ts`
+- `packages/tuffex/packages/components/src/skeleton/__tests__/skeleton.test.ts`
+- `apps/nexus/content/docs/dev/components/skeleton.zh.mdc`
+- `apps/nexus/content/docs/dev/components/skeleton.en.mdc`
+- `apps/nexus/content/docs/dev/components/layout-skeleton.zh.mdc`
+- `apps/nexus/content/docs/dev/components/layout-skeleton.en.mdc`
+- `packages/tuffex/docs/components/skeleton.md`
+- `packages/tuffex/docs/components/layout-skeleton.md`
+- `docs/plan-prd/TODO.md`
+  - LayoutSkeleton content widths now use a fixed sequence instead of runtime `Math.random()`, making SSR/hydration and tests deterministic.
+  - Added Skeleton regression coverage for loading slot fallback, line count clamp, CSS variables, circle radius, preset structures, and install registration.
+  - Added LayoutSkeleton coverage for fixed scaffold structure, deterministic content widths, and install registration; Nexus/Tuffex docs now document the actual skeleton contracts.
+
+### test(tuffex): cover OfflineState and PermissionState wrapper contracts
+
+- `packages/tuffex/packages/components/src/offline-state/__tests__/offline-state.test.ts`
+- `packages/tuffex/packages/components/src/permission-state/__tests__/permission-state.test.ts`
+- `apps/nexus/content/docs/dev/components/offline-state.zh.mdc`
+- `apps/nexus/content/docs/dev/components/offline-state.en.mdc`
+- `apps/nexus/content/docs/dev/components/permission-state.zh.mdc`
+- `apps/nexus/content/docs/dev/components/permission-state.en.mdc`
+- `packages/tuffex/docs/components/offline-state.md`
+- `packages/tuffex/docs/components/permission-state.md`
+- `docs/plan-prd/TODO.md`
+  - Added OfflineState and PermissionState regression coverage for forwarding fixed variants, props/actions, named slots, and install registration.
+  - Nexus English docs now replace placeholder wording with the real offline/network and permission/access state contracts.
+  - Nexus bilingual docs and Tuffex docs now document both wrapper behaviors.
+
+### test(tuffex): cover SearchEmpty wrapper contract
+
+- `packages/tuffex/packages/components/src/search-empty/__tests__/search-empty.test.ts`
+- `apps/nexus/content/docs/dev/components/search-empty.zh.mdc`
+- `apps/nexus/content/docs/dev/components/search-empty.en.mdc`
+- `packages/tuffex/docs/components/search-empty.md`
+- `docs/plan-prd/TODO.md`
+  - Added SearchEmpty regression coverage for forwarding `variant="search-empty"`, props/actions, named slots, and install registration.
+  - Nexus English docs now replace placeholder wording with the real empty search result contract; Nexus bilingual docs and Tuffex docs now document the wrapper behavior.
+
+### test(tuffex): cover NoSelection wrapper contract
+
+- `packages/tuffex/packages/components/src/no-selection/__tests__/no-selection.test.ts`
+- `apps/nexus/content/docs/dev/components/no-selection.zh.mdc`
+- `apps/nexus/content/docs/dev/components/no-selection.en.mdc`
+- `packages/tuffex/docs/components/no-selection.md`
+- `docs/plan-prd/TODO.md`
+  - Added NoSelection regression coverage for forwarding `variant="no-selection"`, props/actions, named slots, and install registration.
+  - Nexus English docs now replace placeholder wording with the real unselected detail-panel contract; Nexus bilingual docs and Tuffex docs now document the wrapper behavior.
+
+### test(tuffex): cover NoData wrapper contract
+
+- `packages/tuffex/packages/components/src/no-data/__tests__/no-data.test.ts`
+- `apps/nexus/content/docs/dev/components/no-data.zh.mdc`
+- `apps/nexus/content/docs/dev/components/no-data.en.mdc`
+- `packages/tuffex/docs/components/no-data.md`
+- `docs/plan-prd/TODO.md`
+  - Added NoData regression coverage for forwarding `variant="no-data"`, props/actions, named slots, and install registration.
+  - Nexus English docs now replace placeholder wording with the real empty dataset contract; Nexus bilingual docs and Tuffex docs now document the wrapper behavior.
+
+### test(tuffex): cover LoadingState wrapper contract
+
+- `packages/tuffex/packages/components/src/loading-state/__tests__/loading-state.test.ts`
+- `apps/nexus/content/docs/dev/components/loading-state.zh.mdc`
+- `apps/nexus/content/docs/dev/components/loading-state.en.mdc`
+- `packages/tuffex/docs/components/loading-state.md`
+- `docs/plan-prd/TODO.md`
+  - Added LoadingState regression coverage for forwarding `variant="loading"`, explicit loading/description/action props, named slots, and install registration.
+  - Nexus English docs now replace placeholder wording with the real loading placeholder contract; Nexus bilingual docs and Tuffex docs now document the wrapper behavior.
+
+### test(tuffex): cover GuideState wrapper contract
+
+- `packages/tuffex/packages/components/src/guide-state/__tests__/guide-state.test.ts`
+- `apps/nexus/content/docs/dev/components/guide-state.zh.mdc`
+- `apps/nexus/content/docs/dev/components/guide-state.en.mdc`
+- `packages/tuffex/docs/components/guide-state.md`
+- `packages/tuffex/docs/components/index.md`
+- `packages/tuffex/docs/components/empty-state.md`
+- `docs/plan-prd/TODO.md`
+  - Added GuideState regression coverage for forwarding `variant="guide"`, props/actions, named slots, and install registration.
+  - Tuffex docs now include a GuideState page/index entry and the EmptyState preset list includes `TxGuideState`.
+  - Nexus bilingual docs now document the wrapper contract.
+
+### test(tuffex): cover ErrorState wrapper contract
+
+- `packages/tuffex/packages/components/src/error-state/__tests__/error-state.test.ts`
+- `apps/nexus/content/docs/dev/components/error-state.zh.mdc`
+- `apps/nexus/content/docs/dev/components/error-state.en.mdc`
+- `packages/tuffex/docs/components/error-state.md`
+- `packages/tuffex/docs/components/index.md`
+- `packages/tuffex/docs/components/empty-state.md`
+- `docs/plan-prd/TODO.md`
+  - Added ErrorState regression coverage for forwarding `variant="error"`, props/actions, named slots, and install registration.
+  - Tuffex docs now include an ErrorState page/index entry and the EmptyState preset list includes `TxErrorState`.
+  - Nexus bilingual docs now document the wrapper contract.
+
+### test(tuffex): cover BlankSlate wrapper contract
+
+- `packages/tuffex/packages/components/src/blank-slate/__tests__/blank-slate.test.ts`
+- `apps/nexus/content/docs/dev/components/blank-slate.zh.mdc`
+- `apps/nexus/content/docs/dev/components/blank-slate.en.mdc`
+- `packages/tuffex/docs/components/blank-slate.md`
+- `docs/plan-prd/TODO.md`
+  - Added BlankSlate regression coverage for forwarding `variant="blank-slate"`, onboarding defaults, explicit layout overrides, named slot forwarding, and install registration.
+  - Nexus English docs now replace placeholder wording with the real first-use empty-state contract; Nexus bilingual docs and Tuffex docs now document the wrapper behavior.
+
+### test(tuffex): harden FlatInput prefix and focus contract
+
+- `packages/tuffex/packages/components/src/flat-input/src/FlatInput.vue`
+- `packages/tuffex/packages/components/src/flat-input/__tests__/flat-input.test.ts`
+- `apps/nexus/content/docs/dev/components/flat-input.zh.mdc`
+- `apps/nexus/content/docs/dev/components/flat-input.en.mdc`
+- `packages/tuffex/docs/components/flat-input.md`
+- `packages/tuffex/docs/components/index.md`
+- `docs/plan-prd/TODO.md`
+  - FlatInput `modelValue` now has a real empty-string default, `icon` renders without requiring a prefix slot, and the wrapper no longer adds an extra tab stop.
+  - Added FlatInput regression coverage for default value and placeholder, v-model updates, icon/slot precedence, textarea mode, nonWin class behavior, password Caps Lock hinting, and install registration.
+  - Nexus bilingual docs and Tuffex docs now document the modelValue/icon/slot/focus/password/area/nonWin interaction contract.
+
+### test(tuffex): hard-cut FlatButton to native button semantics
+
+- `packages/tuffex/packages/components/src/flat-button/src/TxFlatButton.vue`
+- `packages/tuffex/packages/components/src/flat-button/__tests__/flat-button.test.ts`
+- `apps/nexus/content/docs/dev/components/flat-button.zh.mdc`
+- `apps/nexus/content/docs/dev/components/flat-button.en.mdc`
+- `packages/tuffex/docs/components/flat-button.md`
+- `packages/tuffex/docs/components/index.md`
+- `docs/plan-prd/TODO.md`
+  - TuffFlatButton now renders a native `<button type="button">` instead of a `div role="button"`, removing the custom keyboard activation path and relying on native button semantics.
+  - Added FlatButton regression coverage for default/primary/mini/loading/disabled states, click blocking, default non-submit behavior, and install registration.
+  - Nexus bilingual docs and Tuffex docs now document the native button, loading/disabled, primary, and mini interaction contract.
+
+### test(tuffex): cover EdgeFadeMask scroll fade contract
+
+- `packages/tuffex/packages/components/src/edge-fade-mask/__tests__/edge-fade-mask.test.ts`
+- `apps/nexus/content/docs/dev/components/edge-fade-mask.zh.mdc`
+- `apps/nexus/content/docs/dev/components/edge-fade-mask.en.mdc`
+- `packages/tuffex/docs/components/edge-fade-mask.md`
+- `docs/plan-prd/TODO.md`
+  - Added EdgeFadeMask regression coverage for root tag and axis classes, non-scrollable mask suppression, vertical/horizontal fade stops, disabled blocking, size unit handling, and ResizeObserver lifecycle.
+  - Nexus bilingual docs and Tuffex docs now document the interaction contract for threshold, disabled state, scroll axis, size units, and `observeResize`.
+
+### test(tuffex): hard-cut BaseSurface fallback opacity contract
+
+- `packages/tuffex/packages/components/src/base-surface/src/TxBaseSurface.vue`
+- `packages/tuffex/packages/components/src/base-surface/__tests__/base-surface.test.ts`
+- `apps/nexus/content/docs/dev/components/base-surface.zh.mdc`
+- `apps/nexus/content/docs/dev/components/base-surface.en.mdc`
+- `packages/tuffex/docs/components/base-surface.md`
+- `packages/tuffex/docs/components/index.md`
+- `docs/plan-prd/TODO.md`
+  - BaseSurface `fallbackMaskOpacity` now implements the documented behavior and overrides mask opacity when blur/glass surfaces degrade to `fallbackMode='mask'` during motion.
+  - Added BaseSurface regression coverage for root tag/slot/CSS variables, mask opacity clamp, blur/glass motion fallback, pure fallback, GlassSurface prop forwarding, refraction classes/variables, and autoDetect cleanup.
+  - Nexus bilingual docs now include the BaseSurface interaction contract; Tuffex docs now include a BaseSurface component page and index entry.
+
+### test(tuffex): hard-cut BaseAnchor surface motion contract
+
+- `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`
+- `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts`
+- `apps/nexus/content/docs/dev/components/base-anchor.zh.mdc`
+- `apps/nexus/content/docs/dev/components/base-anchor.en.mdc`
+- `packages/tuffex/docs/components/base-anchor.md`
+- `packages/tuffex/docs/components/index.md`
+- `docs/plan-prd/TODO.md`
+  - BaseAnchor `surfaceMotionAdaptation` now implements the documented hard-cut strategy: `auto` follows internal anchor motion, `manual` reads `panelCard.surfaceMoving`, and `off` forces `surfaceMoving=false`.
+  - Added BaseAnchor regression coverage for uncontrolled reference-click toggling, disabled open/close behavior, controlled outside/Escape closing, close switches, floating attrs/reference classes, and surface motion modes.
+  - Nexus bilingual docs now include the BaseAnchor interaction contract; Tuffex docs now include a BaseAnchor component page and index entry.
+
+### test(tuffex): cover ImageGallery modal preview contract
+
+- `packages/tuffex/packages/components/src/image-gallery/src/TxImageGallery.vue`
+- `packages/tuffex/packages/components/src/image-gallery/__tests__/image-gallery.test.ts`
+- `apps/nexus/content/docs/dev/components/image-gallery.zh.mdc`
+- `apps/nexus/content/docs/dev/components/image-gallery.en.mdc`
+- `packages/tuffex/docs/components/image-gallery.md`
+- `docs/plan-prd/TODO.md`
+  - ImageGallery thumbnail and Prev/Next controls now expose readable ARIA labels.
+  - Empty image lists no longer open the modal or emit `open`; `startIndex` and list-length changes are clamped to a valid preview index, and clearing the list closes the preview.
+  - Added regression coverage for thumbnail alt/labels, open payload, modal title/viewer/count, boundary navigation, empty lists, and shrinking item lists; docs now describe the actual modal contract and remove unimplemented keyboard/swipe claims.
+
+### feat(tuffex): tighten DataTable sortable header accessibility
+
+- `packages/tuffex/packages/components/src/data-table/src/TxDataTable.vue`
+- `packages/tuffex/packages/components/src/data-table/__tests__/data-table.test.ts`
+- `apps/nexus/content/docs/dev/components/data-table.zh.mdc`
+- `apps/nexus/content/docs/dev/components/data-table.en.mdc`
+- `packages/tuffex/docs/components/data-table.md`
+- `docs/plan-prd/TODO.md`
+  - Sortable DataTable headers now expose `scope="col"`, `tabindex`, and `aria-sort`, and support Enter/Space keyboard sorting through the same sort state as pointer clicks.
+  - Added a regression for keyboard sorting and `aria-sort` state transitions.
+  - Nexus bilingual docs and Tuffex component docs now document the sorting interaction contract.
+
+### feat(tuffex): add FlatSelect interaction contract coverage
+
+- `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue`
+- `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelectItem.vue`
+- `packages/tuffex/packages/components/src/flat-select/__tests__/flat-select.test.ts`
+- `apps/nexus/content/docs/dev/components/flat-select.zh.mdc`
+- `apps/nexus/content/docs/dev/components/flat-select.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - FlatSelect now exposes combobox/listbox/option ARIA semantics, with trigger and dropdown state reflected through `aria-expanded` and `aria-hidden`.
+  - Added FlatSelect regression coverage for placeholder display, selected labels, enabled/disabled item selection, keyboard navigation that skips disabled items, and ARIA state.
+  - Nexus bilingual docs now document the FlatSelect interaction contract.
+
+### feat(tuffex): hard-cut Rating readonly interaction
+
+- `packages/tuffex/packages/components/src/rating/src/TxRating.vue`
+- `packages/tuffex/packages/components/src/rating/__tests__/rating.test.ts`
+- `apps/nexus/content/docs/dev/components/rating.zh.mdc`
+- `apps/nexus/content/docs/dev/components/rating.en.mdc`
+- `packages/tuffex/docs/components/rating.md`
+- `docs/plan-prd/TODO.md`
+  - `readonly` Rating is now display-only: stars are disabled and no longer expose an interactive button path.
+  - Rating now exposes radiogroup/radio ARIA state.
+  - Added regression coverage for click updates, half-star precision, disabled/readonly blocking, and text slot props; Nexus bilingual docs and Tuffex docs document the interaction contract.
+
+### test(tuffex): cover Progress and ProgressBar contracts
+
+- `packages/tuffex/packages/components/src/progress-bar/__tests__/progress-bar.test.ts`
+- `packages/tuffex/packages/components/src/progress/__tests__/progress.test.ts`
+- `apps/nexus/content/docs/dev/components/progress.zh.mdc`
+- `apps/nexus/content/docs/dev/components/progress.en.mdc`
+- `packages/tuffex/docs/components/progress.md`
+- `docs/plan-prd/TODO.md`
+  - Added ProgressBar regression coverage for percentage clamp, ARIA progressbar state, indeterminate mode, complete event cycles, and segment width normalization.
+  - Added TuffProgress wrapper coverage for percentage/status/strokeWidth/format/showText/indeterminate forwarding.
+  - Progress docs now describe `TuffProgress` as the current lightweight entry over `TxProgressBar`, removing compatibility-wrapper wording.
+
+### fix(tuffex): render Alert semantic icons through TxIcon
+
+- `packages/tuffex/packages/components/src/alert/src/TxAlert.vue`
+- `packages/tuffex/packages/components/src/alert/__tests__/alert.test.ts`
+- `apps/nexus/content/docs/dev/components/alert.zh.mdc`
+- `apps/nexus/content/docs/dev/components/alert.en.mdc`
+- `packages/tuffex/docs/components/alert.md`
+- `docs/plan-prd/TODO.md`
+  - Alert leading icons now render through shared `TxIcon`; the close affordance uses the built-in `close` icon instead of an unresolved `x` name.
+  - Added Alert regression coverage for semantic type/title/message/icon rendering, title/default slots, `showIcon`/`closable` switches, and `close` emission.
+  - Nexus bilingual docs and Tuffex docs now document the `role="alert"` / `TxIcon` / close contract.
+
+### docs(tuffex): hard-cut Badge positioning wording
+
+- `packages/tuffex/packages/components/src/badge/__tests__/badge.test.ts`
+- `apps/nexus/content/docs/dev/components/badge.zh.mdc`
+- `apps/nexus/content/docs/dev/components/badge.en.mdc`
+- `packages/tuffex/docs/components/badge.md`
+- `docs/plan-prd/TODO.md`
+  - Added Badge regression coverage for value/variant rendering, custom slot content, dot mode, and custom color CSS variables.
+  - Badge docs now describe the current inline pill/dot contract and no longer imply target-element positioning that the component does not implement.
+  - Nexus bilingual docs now document default slot content replacement and dot mode text hiding.
+
+### test(tuffex): cover StatusBadge tone and platform contracts
+
+- `packages/tuffex/packages/components/src/status-badge/__tests__/status-badge.test.ts`
+- `apps/nexus/content/docs/dev/components/status-badge.zh.mdc`
+- `apps/nexus/content/docs/dev/components/status-badge.en.mdc`
+- `packages/tuffex/docs/components/status-badge.md`
+- `docs/plan-prd/TODO.md`
+  - Added StatusBadge regression coverage for text/size/explicit status, statusKey mapping, explicit status precedence, OS icon/osOnly rendering, custom icons, and click emission.
+  - Nexus Lite docs now include `statusKey`, `icon`, `os`, and `osOnly`, plus the precedence/mapping contract.
+  - Tuffex docs now record the same statusKey and platform icon behavior.
+
+### test(tuffex): cover Avatar and AvatarGroup contracts
+
+- `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts`
+- `apps/nexus/content/docs/dev/components/avatar.zh.mdc`
+- `apps/nexus/content/docs/dev/components/avatar.en.mdc`
+- `packages/tuffex/docs/components/avatar.md`
+- `docs/plan-prd/TODO.md`
+  - Added Avatar regression coverage for name initials, custom colors, image error fallback, slot/icon/name fallback priority, custom size normalization, and clickable events.
+  - Added AvatarGroup coverage for `max`, injected child size, overlap CSS variable, and `+N` overflow rendering.
+  - Nexus bilingual docs and Tuffex docs now document fallback priority, image error fallback, expanded size types, and AvatarGroup max/size behavior.
+
+### test(tuffex): cover Tag interaction contracts
+
+- `packages/tuffex/packages/components/src/tag/__tests__/tag.test.ts`
+- `apps/nexus/content/docs/dev/components/tag.zh.mdc`
+- `apps/nexus/content/docs/dev/components/tag.en.mdc`
+- `packages/tuffex/docs/components/tag.md`
+- `docs/plan-prd/TODO.md`
+  - Added Tag regression coverage for label/icon/default size/style variables, default slot replacement, click and close events, close propagation blocking, and disabled state.
+  - Nexus Lite docs now match the current `size='sm'` default and include `icon/background/border/closable/disabled`.
+  - Tuffex docs now record `role="status"`, slot replacement, and click/close interaction boundaries.
+
+### test(tuffex): hard-cut Input clear interaction contract
+
+- `packages/tuffex/packages/components/src/input/src/TxInput.vue`
+- `packages/tuffex/packages/components/src/input/__tests__/input.test.ts`
+- `apps/nexus/content/docs/dev/components/input.zh.mdc`
+- `apps/nexus/content/docs/dev/components/input.en.mdc`
+- `packages/tuffex/docs/components/input.md`
+- `docs/plan-prd/TODO.md`
+  - Input clear affordance now renders as a keyboard-focusable button and the exposed `clear()` path is blocked for disabled or readonly inputs.
+  - Added Input regression coverage for text updates, number normalization, textarea attrs, clear emission, disabled/readonly clear blocking, and prefix/suffix slot precedence.
+  - Nexus bilingual docs and Tuffex docs now document the current input type union, icon props, exposes, number emit behavior, attrs forwarding, and clear interaction contract.
+
+### test(tuffex): implement Pagination first/last contract
+
+- `packages/tuffex/packages/components/src/pagination/src/TxPagination.vue`
+- `packages/tuffex/packages/components/src/pagination/__tests__/pagination.test.ts`
+- `apps/nexus/content/docs/dev/components/pagination.zh.mdc`
+- `apps/nexus/content/docs/dev/components/pagination.en.mdc`
+- `packages/tuffex/docs/components/pagination.md`
+- `docs/plan-prd/TODO.md`
+  - Pagination `showFirstLast` now renders real first/last page jump buttons instead of remaining a docs/type-only prop.
+  - Added Pagination regression coverage for page-count calculation, page-change emissions, out-of-range blocking, first/last controls, boundary disabled states, and custom info slot props.
+  - Nexus bilingual docs and Tuffex docs now document `totalPages`, icon props, v-model/pageChange events, info slot props, and ARIA/boundary interaction behavior.
+
+### test(tuffex): hard-cut Breadcrumb current and disabled items
+
+- `packages/tuffex/packages/components/src/breadcrumb/src/TxBreadcrumb.vue`
+- `packages/tuffex/packages/components/src/breadcrumb/__tests__/breadcrumb.test.ts`
+- `apps/nexus/content/docs/dev/components/breadcrumb.zh.mdc`
+- `apps/nexus/content/docs/dev/components/breadcrumb.en.mdc`
+- `packages/tuffex/docs/components/breadcrumb.md`
+- `docs/plan-prd/TODO.md`
+  - Breadcrumb current page handling is now deterministic: the last item renders as a non-link element with `aria-current="page"` even when an `href` is provided.
+  - Disabled breadcrumb items now render as non-link elements with `aria-disabled="true"` and do not emit click events.
+  - Added Breadcrumb regression coverage for nav semantics, icons/separators, current item rendering, SPA click emission, and disabled blocking; Nexus/Tuffex docs now describe the item/event contract.
+
+### test(tuffex): add Collapse keyboard accessibility contract
+
+- `packages/tuffex/packages/components/src/collapse/src/TxCollapseItem.vue`
+- `packages/tuffex/packages/components/src/collapse/__tests__/collapse.test.ts`
+- `apps/nexus/content/docs/dev/components/collapse.zh.mdc`
+- `apps/nexus/content/docs/dev/components/collapse.en.mdc`
+- `packages/tuffex/docs/components/collapse.md`
+- `docs/plan-prd/TODO.md`
+  - Collapse item headers now expose button semantics with `tabindex`, `aria-expanded`, and `aria-controls`, and Enter/Space use the same toggle path as pointer clicks.
+  - Disabled collapse items now expose `aria-disabled="true"` and block both pointer and keyboard toggles.
+  - Added Collapse regression coverage for multi-panel updates, accordion mode, keyboard toggling, disabled blocking, and content/header ARIA linkage; Nexus/Tuffex docs now describe the contract.
+
+### test(tuffex): hard-cut Steps child-order and keyboard contract
+
+- `packages/tuffex/packages/components/src/steps/src/TxSteps.vue`
+- `packages/tuffex/packages/components/src/steps/src/TxStep.vue`
+- `packages/tuffex/packages/components/src/steps/src/types.ts`
+- `packages/tuffex/packages/components/src/steps/__tests__/steps.test.ts`
+- `apps/nexus/content/docs/dev/components/steps.zh.mdc`
+- `apps/nexus/content/docs/dev/components/steps.en.mdc`
+- `packages/tuffex/docs/components/steps.md`
+- `docs/plan-prd/TODO.md`
+  - Steps now registers child order so `TxStep` without an explicit `step` uses the same zero-based index as the numeric `active` prop, matching the public docs examples.
+  - The final step no longer renders a connector line, and clickable step heads now expose button semantics, `aria-current="step"`, and Enter/Space activation.
+  - Added Steps regression coverage for implicit order, explicit string steps, connector line boundaries, pointer/keyboard activation, and disabled/non-clickable blocking; Nexus/Tuffex docs now describe the contract.
+
+### test(tuffex): fix Timeline active dot and list semantics
+
+- `packages/tuffex/packages/components/src/timeline/src/TxTimeline.vue`
+- `packages/tuffex/packages/components/src/timeline/src/TxTimelineItem.vue`
+- `packages/tuffex/packages/components/src/timeline/__tests__/timeline.test.ts`
+- `apps/nexus/content/docs/dev/components/timeline.zh.mdc`
+- `apps/nexus/content/docs/dev/components/timeline.en.mdc`
+- `packages/tuffex/docs/components/timeline.md`
+- `docs/plan-prd/TODO.md`
+  - Timeline now exposes list/listitem semantics for event streams.
+  - `active` now applies to the timeline dot as well as the item wrapper, so the documented current-event highlight is visible.
+  - Added Timeline regression coverage for default and horizontal layout, title/time/content/icon/color rendering, and active item/dot state; Nexus/Tuffex docs now describe the contract.
+
+### test(tuffex): harden Toast host and timer contract
+
+- `packages/tuffex/packages/utils/toast.ts`
+- `packages/tuffex/packages/components/src/toast/src/TxToastHost.vue`
+- `packages/tuffex/packages/components/src/toast/__tests__/toast.test.ts`
+- `apps/nexus/content/docs/dev/components/toast.zh.mdc`
+- `apps/nexus/content/docs/dev/components/toast.en.mdc`
+- `packages/tuffex/docs/components/toast.md`
+- `docs/plan-prd/TODO.md`
+  - Toast auto-dismiss now uses `globalThis.setTimeout` instead of browser-only `window.setTimeout`.
+  - Toast close buttons now expose the accessible name `Dismiss notification`, while host region semantics remain fixed.
+  - Added Toast regression coverage for id replacement, auto-dismiss, persistent toasts, dismiss/clear helpers, host rendering, and close-button dismissal; Nexus/Tuffex docs now document the contract.
+
+### test(tuffex): harden Icon source rendering contract
+
+- `packages/tuffex/packages/components/src/icon/src/TxIcon.vue`
+- `packages/tuffex/packages/components/src/icon/__tests__/icon.test.ts`
+- `apps/nexus/content/docs/dev/components/icon.zh.mdc`
+- `apps/nexus/content/docs/dev/components/icon.en.mdc`
+- `packages/tuffex/docs/components/icon.md`
+- `docs/plan-prd/TODO.md`
+  - Fixed malformed builtin SVG paths for `close`, `search`, and `star`.
+  - `TxIcon` now honors `icon.colorful=true` as well as the component-level `colorful` prop for SVG URL/file sources.
+  - Added Icon regression coverage for class/builtin shorthand, emoji/empty/loading/error states, file protocol resolution, SVG mask/colorful behavior, and `TxStatusIcon` indicator sizing; Nexus/Tuffex docs now describe the contract.
+
+### test(tuffex): hard-cut Dialog ARIA link contract
+
+- `packages/tuffex/packages/components/src/dialog/src/TxBottomDialog.vue`
+- `packages/tuffex/packages/components/src/dialog/src/TxTouchTip.vue`
+- `packages/tuffex/packages/components/src/dialog/__tests__/dialog.test.ts`
+- `apps/nexus/content/docs/dev/components/dialog.zh.mdc`
+- `apps/nexus/content/docs/dev/components/dialog.en.mdc`
+- `packages/tuffex/docs/components/dialog.md`
+- `docs/plan-prd/TODO.md`
+  - BottomDialog now uses instance-scoped title and description ids for ARIA links instead of fixed ids.
+  - TouchTip dialog semantics now live on the focused container that owns the title/description relationship, while the outer shell remains layout/backdrop only.
+  - Added Dialog regression coverage for BottomDialog/TouchTip ARIA links, Escape close, focus restore, and true/false button close behavior; docs now describe the actual focus behavior instead of claiming a full focus trap.
+
+### test(tuffex): harden Drawer ARIA and focus contract
+
+- `packages/tuffex/packages/components/src/drawer/src/TxDrawer.vue`
+- `packages/tuffex/packages/components/src/drawer/__tests__/drawer.test.ts`
+- `apps/nexus/content/docs/dev/components/drawer.zh.mdc`
+- `apps/nexus/content/docs/dev/components/drawer.en.mdc`
+- `packages/tuffex/docs/components/drawer.md`
+- `docs/plan-prd/TODO.md`
+  - Drawer now links the dialog title through an instance-scoped `aria-labelledby` id.
+  - Opening the drawer focuses the drawer root after render; hiding or unmounting restores the previously focused element.
+  - Added Drawer regression coverage for dialog semantics, direction/width/slots, open focus, close button/mask/Escape paths, close option guards, focus restore, custom z-index, and hidden close button; Nexus/Tuffex docs now describe the contract.
+
+### test(tuffex): harden Modal Escape and wrapper slot contract
+
+- `packages/tuffex/packages/components/src/modal/src/TxModal.vue`
+- `packages/tuffex/packages/components/src/modal/src/TModal.vue`
+- `packages/tuffex/packages/components/src/modal/__tests__/modal.test.ts`
+- `apps/nexus/content/docs/dev/components/modal.zh.mdc`
+- `apps/nexus/content/docs/dev/components/modal.en.mdc`
+- `packages/tuffex/docs/components/modal.md`
+- `docs/plan-prd/TODO.md`
+  - Modal now links the dialog title through an instance-scoped `aria-labelledby` id, focuses the overlay on open, restores previous focus on hide/unmount, and supports Escape dismissal.
+  - `TModal` no longer forwards empty `header` or `footer` slots, preserving the `TxModal` title fallback when wrappers do not provide custom slots.
+  - Added Modal regression coverage for dialog semantics, title link, width/slots, focus restore, backdrop/Escape/close button dismissal, custom header, and `TModal` title fallback; Nexus/Tuffex docs now describe the contract.
+
+### test(tuffex): harden ImageUploader disabled and object URL contract
+
+- `packages/tuffex/packages/components/src/image-uploader/src/TxImageUploader.vue`
+- `packages/tuffex/packages/components/src/image-uploader/__tests__/image-uploader.test.ts`
+- `apps/nexus/content/docs/dev/components/image-uploader.zh.mdc`
+- `apps/nexus/content/docs/dev/components/image-uploader.en.mdc`
+- `packages/tuffex/docs/components/image-uploader.md`
+- `docs/plan-prd/TODO.md`
+  - ImageUploader disabled state now blocks remove actions and disables remove buttons, matching disabled add/input behavior.
+  - Added ImageUploader regression coverage for input attributes, existing previews, max truncation, disabled add/remove blocking, object URL creation/revocation, remove/change events, and unmount cleanup.
+  - Nexus/Tuffex docs now describe the current click-to-pick contract and no longer imply drag-and-drop support that the component does not implement.
+
+### ref(pilot): hard-cut retired stream status compatibility
+
+- `apps/pilot/server/utils/pilot-executor-utils.ts`
+- `apps/pilot/server/utils/__tests__/pilot-executor-utils.test.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Title SSE responses no longer emit `status_updated`; they only send completion chunks and `[DONE]`.
+  - Pilot chat page removed the retained `status_updated` handler and the `error + TOOL_APPROVAL_REQUIRED` compatibility conversion; approval wait state now relies on the current `turn.approval_required` stream event.
+  - Added a title SSE regression that rejects `status_updated` output and removed the stale `usePilotChatPage.ts` legacy registry row.
+  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-executor-utils.test.ts" "server/utils/__tests__/legacy-completion-stream-contract.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/pilot-executor-utils.ts" "server/utils/__tests__/pilot-executor-utils.test.ts" "app/composables/usePilotChatPage.ts" "app/composables/api/base/v1/aigc/completion/index.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard` 通过。
+
+### ref(pilot): hard-cut websearch legacy gateway provider id
+
+- `apps/pilot/server/utils/pilot-admin-datasource-config.ts`
+- `apps/pilot/server/utils/pilot-tool-gateway.ts`
+- `apps/pilot/server/utils/__tests__/pilot-admin-datasource-config.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-tool-gateway.test.ts`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Historical `gatewayBaseUrl/apiKeyRef` datasource fields now hydrate into the current `searxng-main` provider id instead of emitting `legacy-gateway`.
+  - Websearch tool execution no longer branches on provider id to choose the gateway connector; providers execute through the current provider connector by `type`.
+  - Removed the 4 stale datasource/tool-gateway `legacy-keyword` allowlist / registry rows.
+
+### chore(governance): classify non-compat legacy keyword exceptions
+
+- `scripts/lib/legacy-keyword-exceptions.mjs`
+- `scripts/check-legacy-boundaries.mjs`
+- `scripts/check-compatibility-debt-registry.mjs`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - Legacy keyword scanning now excludes only documented non-compat branch cases: Vue I18n `legacy: false` framework API options, DeepAgent upstream `legacy protocol` error signatures, and negative lint restrictions for removed `/legacy` imports.
+  - Removed the corresponding 5 stale `legacy-keyword` allowlist / registry rows while keeping real production branch keys, migration reads, and filename debt registered.
+  - Official `legacy-keyword` count drops to `12 files / 18 hits`.
+
+### ref(tuff-intelligence): hard-cut DeepAgent direct Responses fallback naming
+
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - DeepAgent fallback function and audit event naming now use direct Responses fallback wording instead of compatibility/legacy wording.
+  - Runtime behavior is unchanged: upstream errors containing `legacy protocol` are still treated as provider protocol signatures and routed to direct `/v1/responses`.
+  - Registry row now documents the remaining keyword as upstream error text matching, not a project compatibility branch.
+  - 验证：`pnpm -C "packages/tuff-intelligence" exec eslint "src/adapters/deepagent-engine.ts"` 通过；`pnpm -C "packages/tuff-intelligence" exec vitest run "src/client.test.ts"` 通过；`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/deepagent-engine-message-shape.test.ts" "server/utils/__tests__/deepagent-engine-tools.test.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### ref(pilot): hard-cut removed channel adapter normalization
+
+- `apps/pilot/server/utils/pilot-admin-channel-config.ts`
+- `apps/pilot/server/utils/__tests__/pilot-admin-channel-config.test.ts`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Channel catalog normalization no longer silently maps removed/unknown adapter values to `openai`.
+  - Removed adapter rows are rejected as invalid channels with `missing: ["adapter"]`, so stale stored values are dropped instead of kept as usable runtime config.
+  - Removed the stale `legacy-keyword` allowlist and registry row for the file.
+  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-admin-channel-config.test.ts" "server/utils/__tests__/pilot-channel-model-sync.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/pilot-admin-channel-config.ts" "server/utils/__tests__/pilot-admin-channel-config.test.ts" "server/utils/__tests__/pilot-channel-model-sync.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard` 通过。
+
+### chore(packages-test): hard-cut tsconfig decorator comment legacy wording
+
+- `packages/test/tsconfig.json`
+- `docs/plan-prd/TODO.md`
+  - The TypeScript template comment for `experimentalDecorators` now uses current TypeScript wording instead of legacy wording.
+  - Compiler options are unchanged.
+
+### ref(core-app): hard-cut plugin runtime repair diagnostic legacy naming
+
+- `apps/core-app/src/main/modules/plugin/runtime/plugin-runtime-repair.ts`
+- `apps/core-app/src/main/modules/plugin/runtime/plugin-runtime-repair.test.ts`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Runtime repair drift detection now reports `retired-runtime-import` instead of `legacy-runtime-import`.
+  - The scanner still detects the retired `../shared/translation-shared.cjs` widget import path; no compatibility runtime is added.
+  - Removed the stale `legacy-keyword` registry and allowlist rows for the implementation and test.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/runtime/plugin-runtime-repair.test.ts"` 通过；`pnpm -C "apps/core-app" exec eslint "src/main/modules/plugin/runtime/plugin-runtime-repair.ts" "src/main/modules/plugin/runtime/plugin-runtime-repair.test.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### docs(core-app): hard-cut download migration guide legacy wording
+
+- `apps/core-app/src/main/modules/download/MIGRATION_GUIDE.md`
+- `docs/plan-prd/TODO.md`
+  - Download migration guide now describes the removed old database/config import path as historical instead of Legacy wording.
+  - Runtime behavior is unchanged: `DownloadCenter` still treats the current database as the only local source of truth.
+
+### ref(pilot): hard-cut quota history payload local legacy naming
+
+- `apps/pilot/server/utils/quota-history-store.ts`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - The base64 historical payload migration local variable now uses `historicalPayload` instead of legacy wording.
+  - Runtime behavior is unchanged: non-JSON historical payloads are still decoded through `decodeLegacyQuotaConversation()` and persisted back as normalized JSON.
+  - Removed the stale `legacy-keyword` registry and allowlist rows for the file.
+  - 验证：`pnpm -C "apps/pilot" exec eslint "server/utils/quota-history-store.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### ref(pilot): hard-cut capability historical field internal naming
+
+- `apps/pilot/shared/pilot-capability-meta.ts`
+- `apps/pilot/server/utils/pilot-admin-routing-config.ts`
+- `apps/pilot/app/composables/usePilotRoutingAdmin.ts`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Capability resolver internal parameter/type names now use `historicalFields` wording instead of legacy wording.
+  - External behavior is unchanged: current `capabilities` still take precedence, and historical `allowWebsearch` / `allowImageGeneration` / `allowFileAnalysis` / `allowImageAnalysis` fields remain fallback inputs during the migration window.
+  - Removed the stale `legacy-keyword` registry rows for the three files after keyword hits were eliminated.
+  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-capability-meta.shared.test.ts" "server/utils/__tests__/pilot-admin-routing-config.capabilities.test.ts" "server/utils/__tests__/pilot-admin-routing-config.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "shared/pilot-capability-meta.ts" "server/utils/pilot-admin-routing-config.ts" "app/composables/usePilotRoutingAdmin.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### ref(pilot): hard-cut datasource gateway non-branch legacy wording
+
+- `apps/pilot/server/utils/pilot-admin-datasource-config.ts`
+- `apps/pilot/server/utils/__tests__/pilot-admin-datasource-config.test.ts`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Datasource gateway comments and regression fixture text now use historical/retired wording for old gateway fields, sample base URLs, and test env keys.
+  - The `legacy-gateway` provider id remains unchanged because production code still uses it as an explicit branch key for mapped gateway providers.
+  - Allowlist counts are tightened from production `5 -> 2` and test `8 -> 2`; registry rows now describe the retained branch-key debt precisely.
+  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-admin-datasource-config.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/pilot-admin-datasource-config.ts" "server/utils/__tests__/pilot-admin-datasource-config.test.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### docs(core-app): hard-cut analytics search wording
+
+- `apps/core-app/src/main/modules/analytics/README.md`
+- `docs/analytics-data-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Analytics search performance docs now describe current Layered / fast-deferred provider timing collection instead of legacy search collection.
+  - Runtime behavior is unchanged: SearchCore still records `providerTimings` and `totalDuration` through `AnalyticsModule.recordSearchMetrics`.
+
+### docs(compat): clarify CoreApp and Nexus Vue I18n legacy=false registry entries
+
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - CoreApp renderer i18n and Nexus app i18n registry rows now document that `legacy: false` is the Vue I18n composition-mode API option, not a project compatibility branch.
+  - The rows remain registered because the current keyword guard cannot distinguish framework option names from project legacy debt.
+
+### docs(utils): hard-cut CoreBox DSL icon legacy wording
+
+- `packages/utils/core-box/tuff/tuff-dsl.ts`
+  - `docs/plan-prd/TODO.md`
+  - `TuffMeta.icon` TSDoc now describes the field as the current icon identifier used by renderer fallbacks instead of a legacy icon identifier.
+  - Runtime and type behavior are unchanged: providers can still pass lightweight icon class names without constructing a full `TuffIcon`.
+  - 验证：`pnpm -C "packages/utils" exec eslint "core-box/tuff/tuff-dsl.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### ref(pilot): hard-cut system message production variable wording
+
+- `apps/pilot/server/utils/pilot-system-message-response.ts`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/TODO.md`
+  - The persisted visible system message collection now uses current `persistedVisibleSystemMessages` naming instead of legacy wording.
+  - Runtime behavior is unchanged: visible persisted system messages are still merged with projected trace system messages by id and sorted by timeline.
+  - Removed the stale `history/index.ts` legacy allowlist entry left after the previous meta wording cleanup.
+  - 验证：`pnpm -C "apps/pilot" exec eslint "server/utils/pilot-system-message-response.ts"` 通过；`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-system-message-response.test.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### ref(pilot): hard-cut history invalid meta comment wording
+
+- `apps/pilot/app/composables/api/base/v1/aigc/history/index.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - History mapper comment now says invalid historical meta instead of invalid legacy meta.
+  - Runtime behavior is unchanged: invalid `row.meta` JSON still falls back to an empty meta object.
+  - Removed the stale `legacy-keyword` registry row for the file.
+  - 验证：`pnpm -C "apps/pilot" exec eslint "app/composables/api/base/v1/aigc/history/index.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### chore(utils): hard-cut eslint removed-entry diagnostics wording
+
+- `packages/utils/eslint.config.js`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - ESLint diagnostics now describe blocked old channel/transport/permission imports as removed entries instead of legacy APIs.
+  - The literal `/legacy` import strings remain in the guard as negative-match restrictions, so the registry row is retained with a precise no-compat-branch explanation.
+  - 验证：`pnpm -C "packages/utils" exec eslint "eslint.config.js"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### docs(compat): clarify touch-image Vue I18n legacy=false registry entry
+
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - `plugins/touch-image/src/main.ts` registry row now documents that `legacy: false` is the Vue I18n composition-mode API option, not a project compatibility branch.
+  - The row remains registered because the current keyword guard cannot distinguish framework option names from project legacy debt.
+  - 验证：`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### ref(utils): hard-cut transport index legacy section label
+
+- `packages/utils/transport/index.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Transport package barrel export section now labels the SDK exports as `Current SDK Surface` instead of `Legacy Compatibility (Deprecated)`.
+  - The exported SDK functions/types are unchanged; this only removes stale section wording from the current public entry.
+  - Removed the stale `legacy-keyword` registry row for `packages/utils/transport/index.ts`.
+  - 验证：`pnpm -C "packages/utils" exec eslint "transport/index.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### ref(pilot): clarify workspace chat current completion wording
+
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Workspace chat comment now says the production homepage uses current `$completion` instead of legacy `$completion`.
+  - The remaining `legacy` hits in `usePilotChatPage.ts` are real old event compatibility branches (`status_updated` / error compatibility), so the registry row remains with a precise retained-compatibility description.
+  - 验证：`pnpm -C "apps/pilot" exec eslint "app/composables/usePilotChatPage.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### ui(pilot): hard-cut admin side nav legacy wording
+
+- `apps/pilot/app/components/admin/AdminSideNav.vue`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Pilot admin sidebar status copy now says `历史 CMS 已下线` instead of `Legacy CMS 已下线`.
+  - Removed the stale `legacy-keyword` registry row for the component after the file no longer contains legacy wording.
+  - 验证：`pnpm -C "apps/pilot" exec eslint "app/components/admin/AdminSideNav.vue"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### test(pilot): hard-cut routing resolver intent historical wording
+
+- `apps/pilot/server/utils/__tests__/pilot-routing-resolver.intent.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Routing resolver intent tests now describe fallback intent/image routes as historical routes instead of legacy routes.
+  - The tests still prove `scenePolicies` take precedence and that historical image route fields remain a fallback when `scenePolicies` are missing; runtime behavior is unchanged.
+  - Removed the stale `legacy-keyword` registry row for the test file.
+  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-routing-resolver.intent.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/__tests__/pilot-routing-resolver.intent.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### test(pilot): hard-cut routing config historical fixture wording
+
+- `apps/pilot/server/utils/__tests__/pilot-admin-routing-config.capabilities.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-admin-routing-config.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Routing config tests now describe old intent/image and capability fallback fields as historical fields instead of legacy fields.
+  - The `intentNanoModelId` / `intentRouteComboId` compatibility field names remain covered, but sample values have moved from legacy-named values to historical-named values.
+  - Removed the two stale `legacy-keyword` registry rows after both test files no longer contain legacy wording.
+  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-admin-routing-config.capabilities.test.ts" "server/utils/__tests__/pilot-admin-routing-config.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/__tests__/pilot-admin-routing-config.capabilities.test.ts" "server/utils/__tests__/pilot-admin-routing-config.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### test(pilot): hard-cut capability meta test fixture wording
+
+- `apps/pilot/server/utils/__tests__/pilot-capability-meta.shared.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Capability meta shared tests no longer use legacy-named test text or invalid route combo sample values.
+  - The test still proves explicit `capabilities` values take precedence over historical fallback fields, while `pilot-capability-meta.ts` keeps its registered production fallback debt until implementation hard-cut.
+  - Removed the stale `legacy-keyword` registry row for the test file.
+  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-capability-meta.shared.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/__tests__/pilot-capability-meta.shared.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### test(pilot): hard-cut tool gateway retired fixture naming
+
+- `apps/pilot/server/utils/__tests__/pilot-tool-gateway.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Tool gateway regression fixtures now use `retired` adapter/document sample values instead of legacy-named samples where the name is not part of a production branch key.
+  - The `legacy-gateway` provider id remains in the test because `pilot-tool-gateway.ts` still uses that id to select `createGatewayWebsearchConnector`; the registry row is retained with a precise branch-key note.
+  - The tests still prove unsupported media adapters fail and provider-backed websearch uses the gateway connector; runtime behavior is unchanged.
+  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-tool-gateway.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/__tests__/pilot-tool-gateway.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### test(pilot): hard-cut system message historical fixture wording
+
+- `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - System message projection regression fixtures now use `historical system row` / `session_historical_only` / `msg_system_historical` instead of legacy-named sample values.
+  - The test still proves trace projection overrides historical system rows and preserves historical rows when no trace exists; runtime behavior is unchanged.
+  - Removed the stale `legacy-keyword` registry row for the test file.
+  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-system-message-response.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/__tests__/pilot-system-message-response.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### test(pilot): hard-cut channel model sync retired fixture naming
+
+- `apps/pilot/server/utils/__tests__/pilot-channel-model-sync.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Channel model sync regression fixture now uses `retired-model` instead of `legacy-model` for the pre-existing catalog model.
+  - The assertion still proves existing configured channel models are preserved while discovered models are appended; no runtime behavior changed.
+  - Removed the stale `legacy-keyword` registry row for the test file after the keyword scan stopped finding it.
+  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-channel-model-sync.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/__tests__/pilot-channel-model-sync.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### test(pilot): hard-cut workspace and replay fixture legacy wording
+
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `apps/pilot/app/components/pilot/PilotSidebarHeader.vue`
+- `apps/pilot/server/utils/__tests__/pilot-stream-replay.test.ts`
+- `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Pilot workspace-only component comments now describe the current chat surface instead of a legacy chat surface.
+  - Replay and quota snapshot regression fixtures now use `retired` sample payloads instead of `legacy` sample values; assertions and runtime behavior are unchanged.
+  - Removed the five stale `legacy-keyword` registry rows after these files no longer contain legacy wording.
+  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-stream-replay.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "app/components/pilot/PilotChatWorkspace.vue" "app/components/pilot/PilotSessionsPanel.vue" "app/components/pilot/PilotSidebarHeader.vue" "server/utils/__tests__/pilot-stream-replay.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### test(pilot): hard-cut auth retired header fixture wording
+
+- `apps/pilot/server/utils/__tests__/auth.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Pilot auth regression fixture now uses `retired_*` header/cookie/bearer values instead of `legacy_*` names while preserving the same assertion: retired direct identity inputs fall back to the device guest identity.
+  - Removed the stale `legacy-keyword` registry row for `auth.test.ts` after the file no longer contains legacy wording.
+  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/auth.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/__tests__/auth.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### ref(transport): hard-cut legacy wording in transport bridge adapters
+
+- `packages/utils/transport/sdk/main-transport.ts`
+- `packages/utils/transport/sdk/renderer-transport.ts`
+- `packages/utils/transport/event/builder.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Internal transport adapter names have been renamed from `LEGACY_CHANNEL` / `LEGACY_SUCCESS_CODE` / `LegacyMainChannel` to the current bridge terminology.
+  - Transport adapter TSDoc now describes the retained TouchChannel bridge instead of a legacy adapter surface; `defineRawEvent` docs now mark the helper as reserved for retained non-conforming event names, not an incremental legacy migration path.
+  - Removed the three stale `legacy-keyword` registry rows after the package transport files no longer contain legacy wording.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/main-transport-stream.test.ts" "__tests__/renderer-transport-stream.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过；`pnpm -C "packages/utils" exec eslint "transport/sdk/main-transport.ts" "transport/sdk/renderer-transport.ts" "transport/event/builder.ts" "__tests__/main-transport-stream.test.ts" "__tests__/renderer-transport-stream.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+
+### ref(pilot): hard-cut public completion stream legacy symbol names
+
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/legacy-stream-contract.ts`
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/legacy-stream-input.ts`
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/legacy-stream-sse.ts`
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/server/utils/__tests__/legacy-completion-stream-contract.test.ts`
+- `apps/pilot/server/utils/__tests__/legacy-stream-input.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Public Pilot completion stream symbols have been renamed from `buildLegacyCompletion*`, `resolveLegacyUiStreamInput`, `handleLegacyCompletionExecutorResult`, and `resolveLegacyConversationSeqCursor` to the current `buildPilotCompletion*`, `resolvePilotUiStreamInput`, `handlePilotCompletionExecutorResult`, and `resolvePilotConversationSeqCursor` names.
+  - Runtime stream request metadata now emits `pilot-ui-completion*` source markers instead of `legacy-ui-completion*`.
+  - Tests and UI call sites now use the current names; physical `legacy-stream-*` file names remain unchanged pending explicit confirmation for file moves.
+  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/legacy-completion-stream-contract.test.ts" "server/utils/__tests__/legacy-stream-input.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "app/composables/api/base/v1/aigc/completion/legacy-stream-contract.ts" "app/composables/api/base/v1/aigc/completion/legacy-stream-input.ts" "app/composables/api/base/v1/aigc/completion/legacy-stream-sse.ts" "app/composables/api/base/v1/aigc/completion/index.ts" "app/pages/index.vue" "server/utils/__tests__/legacy-completion-stream-contract.test.ts" "server/utils/__tests__/legacy-stream-input.test.ts"` 通过。
+
+### ref(pilot): hard-cut public run-event card legacy symbol names
+
+- `packages/tuff-intelligence/src/business/pilot/legacy-run-event-card.ts`
+- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `apps/pilot/server/utils/__tests__/pilot-legacy-run-event-card.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - Public Pilot run-event card exports have been renamed from `projectPilotLegacyRunEventCard` / `resolvePilotLegacyRunEventCardKeys` / `PilotLegacyRunEventCard*` to `projectPilotRunEventCard` / `resolvePilotRunEventCardKeys` / `PilotRunEventCard*`.
+  - Pilot server snapshot reconstruction and Pilot app stream card upsert now consume the current names, and the regression test wording no longer describes a legacy pending key or legacy timeline.
+  - The implementation file name remains unchanged for now because a physical move/delete requires explicit confirmation under the repository risk rules; the public API no longer exposes the Legacy-named symbols.
+  - Removed the stale `legacy-keyword` compatibility registry row for the Pilot run-event card test after the keyword scan stopped finding it; the `compat-file` row remains while the physical filename is unchanged.
+  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-legacy-run-event-card.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/quota-conversation-snapshot.ts" "app/composables/api/base/v1/aigc/completion/index.ts" "server/utils/__tests__/pilot-legacy-run-event-card.test.ts"` 通过。
+
+### ref(utils): remove retired intelligence chat aliases
+
+- `packages/tuff-intelligence/src/client.ts`
+- `packages/tuff-intelligence/src/client.test.ts`
+- `packages/utils/intelligence/client.ts`
+- `packages/utils/plugin/sdk/intelligence.ts`
+- `packages/utils/__tests__/intelligence-client-hard-cut.test.ts`
+- `docs/plan-prd/TODO.md`
+  - `createIntelligenceClient()` now returns the canonical `IntelligenceSdk` surface directly; the deprecated `client.chat(...)` alias has been removed from both `@talex-touch/tuff-intelligence` and `@talex-touch/utils`.
+  - Plugin `intelligence` SDK now exposes only `invoke(...)`; plugin chat calls must use `invoke('text.chat', ...)` or the client `chatLangChain(...)` path instead of the retired `intelligence.chat(...)` wrapper.
+  - Added hard-cut tests that assert the runtime objects no longer expose a `chat` property.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/intelligence-client-hard-cut.test.ts"` 通过；`pnpm -C "packages/utils" exec eslint "intelligence/client.ts" "plugin/sdk/intelligence.ts" "__tests__/intelligence-client-hard-cut.test.ts"` 通过；`pnpm -C "packages/tuff-intelligence" exec vitest run "src/client.test.ts"` 通过；`pnpm -C "packages/tuff-intelligence" exec eslint "src/client.ts" "src/client.test.ts"` 通过。
+
+### ref(tuff-intelligence): remove raw event builder from local transport facade
+
+- `packages/tuff-intelligence/src/transport/event/builder.ts`
+- `packages/tuff-intelligence/src/transport/event/builder.test.ts`
+- `apps/nexus/content/docs/dev/architecture/ipc-events-sdk-map.en.mdc`
+- `apps/nexus/content/docs/dev/architecture/ipc-events-sdk-map.zh.mdc`
+- `apps/nexus/content/docs/dev/architecture/intelligence-system.en.mdc`
+- `apps/nexus/content/docs/dev/architecture/intelligence-system.zh.mdc`
+- `docs/plan-prd/TODO.md`
+  - `@talex-touch/tuff-intelligence` local transport builder now only exposes the typed `defineEvent(namespace).module(...).event(...)` path; `defineRawEvent('intelligence:invoke')` is no longer exported or covered as a supported fallback.
+  - Nexus Intelligence IPC maps now document `intelligence:api:*` as the SDK typed transport facade instead of advertising the retired two-part `intelligence:*` raw API events.
+  - 验证：`pnpm -C "packages/tuff-intelligence" exec vitest run "src/transport/event/builder.test.ts"` 通过；`pnpm -C "packages/tuff-intelligence" exec eslint "src/transport/event/builder.ts" "src/transport/event/builder.test.ts"` 通过。
+
+### ref(utils): route plugin service and shortcut listeners through typed transport
+
+- `packages/utils/plugin/sdk/common.ts`
+- `packages/utils/plugin/sdk/channel.ts`
+- `packages/utils/plugin/sdk/channel-client.ts`
+- `packages/utils/plugin/sdk/service/index.ts`
+- `packages/utils/plugin/sdk/storage.ts`
+- `packages/utils/plugin/sdk/hooks/life-cycle.ts`
+- `packages/utils/plugin/sdk/hooks/bridge.ts`
+- `packages/utils/plugin/sdk/feature-sdk.ts`
+- `packages/utils/plugin/sdk/enum/bridge-event.ts`
+- `packages/utils/__tests__/plugin-common-sdk.test.ts`
+- `packages/utils/__tests__/plugin-service-sdk.test.ts`
+- `packages/utils/__tests__/plugin-channel-send-sync-hard-cut.test.ts`
+- `packages/utils/__tests__/plugin-storage-sdk.test.ts`
+- `packages/utils/__tests__/plugin-lifecycle-hook-sdk.test.ts`
+- `packages/utils/__tests__/plugin-bridge-hook-sdk.test.ts`
+- `packages/utils/__tests__/plugin-sdk-lifecycle.test.ts`
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `apps/nexus/content/docs/dev/api/bridge-hooks.en.mdc`
+- `apps/nexus/content/docs/dev/api/bridge-hooks.zh.mdc`
+- `apps/nexus/content/docs/dev/api/box.en.mdc`
+- `apps/nexus/content/docs/dev/api/box.zh.mdc`
+- `apps/nexus/content/docs/dev/api/channel.en.mdc`
+- `apps/nexus/content/docs/dev/api/channel.zh.mdc`
+- `apps/nexus/content/docs/dev/api/feature.en.mdc`
+- `apps/nexus/content/docs/dev/api/feature.zh.mdc`
+- `apps/nexus/content/docs/dev/api/keyboard.en.mdc`
+- `apps/nexus/content/docs/dev/api/keyboard.zh.mdc`
+- `docs/plan-prd/TODO.md`
+  - Plugin shortcut trigger callbacks now subscribe with `transport.on(PluginEvents.shortcut.trigger)` instead of `channel.regChannel('shortcon:trigger')`.
+  - Plugin renderer channel SDK types no longer expose `sendSync`; runtime prelude still throws `plugin_channel_send_sync_removed` for old callers, while `PluginChannelClient` / `IPluginRendererChannel` and Channel API docs stop advertising the synchronous surface.
+  - Nexus Channel docs are now retired migration maps instead of Channel quick starts; they no longer include copyable `useChannel()` / `usePluginRendererChannel()` tutorial snippets.
+  - Nexus Box SDK input monitoring examples now use `onCoreBoxInputChange()` instead of `useChannel().regChannel('core-box:input-change')`.
+  - Plugin service handlers now subscribe with `transport.on(PluginEvents.service.handle)` instead of `channel.regChannel('service:handle')`.
+  - Plugin storage `onDidChange()` now subscribes with `transport.on(PluginEvents.storage.update)` instead of `channel.regChannel('plugin:storage:update')`.
+  - Plugin lifecycle hooks now subscribe with `transport.on(PluginEvents.lifecycleSignal.*)` instead of private `@lifecycle:*` raw channel strings, preserving the boolean reply result through the typed listener return value.
+  - Plugin CoreBox bridge hooks now subscribe to input / clipboard updates through `CoreBoxEvents.input.change` and `CoreBoxEvents.clipboard.change`; `createFeatureSDK()` also uses `CoreBoxEvents.input.change` instead of a local raw `core-box:input-change` event.
+  - `core-box:key-event` is now hard-cut because no production sender exists: `onCoreBoxKeyEvent()` throws `plugin_bridge_key_event_removed`, `feature.onKeyEvent()` throws `plugin_feature_key_event_removed`, and the bridge auto-cache only registers input / clipboard typed events.
+  - Official `touch-translation` no longer registers `channel.regChannel('core-box:key-event')`; widget keyboard handling stays on host-provided `hostKeyEvent` props / local UI handlers.
+  - Nexus API docs now mark `core-box:key-event`, `feature.onKeyEvent()` and `onCoreBoxKeyEvent()` as retired instead of listing them as supported plugin keyboard surfaces.
+  - Event names remain `shortcon:trigger` / `service:handle`, but the SDK call sites now consume shared event objects and stop adding new arbitrary raw channel listener usage.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/plugin-common-sdk.test.ts" "__tests__/plugin-service-sdk.test.ts"` 通过；`pnpm -C "packages/utils" exec eslint "plugin/sdk/common.ts" "plugin/sdk/service/index.ts" "__tests__/plugin-common-sdk.test.ts" "__tests__/plugin-service-sdk.test.ts"` 通过。
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/plugin-storage-sdk.test.ts"` 通过；`pnpm -C "packages/utils" exec eslint "plugin/sdk/storage.ts" "__tests__/plugin-storage-sdk.test.ts"` 通过。
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/plugin-lifecycle-hook-sdk.test.ts"` 通过；`pnpm -C "packages/utils" exec eslint "plugin/sdk/hooks/life-cycle.ts" "__tests__/plugin-lifecycle-hook-sdk.test.ts"` 通过。
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/plugin-bridge-hook-sdk.test.ts" "__tests__/plugin-sdk-lifecycle.test.ts"` 通过；`pnpm -C "packages/utils" exec eslint "plugin/sdk/hooks/bridge.ts" "plugin/sdk/feature-sdk.ts" "__tests__/plugin-bridge-hook-sdk.test.ts" "__tests__/plugin-sdk-lifecycle.test.ts"` 通过。
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/plugin-channel-send-sync-hard-cut.test.ts"` 通过；`pnpm -C "packages/utils" exec eslint "plugin/sdk/channel.ts" "plugin/sdk/channel-client.ts" "plugin/sdk/types.ts" "__tests__/plugin-channel-send-sync-hard-cut.test.ts"` 通过。
+
+### docs(tuffex): clarify Button semantic tone contract
+
+- `packages/tuffex/packages/components/src/button/src/types.ts`
+- `packages/tuffex/packages/components/src/button/__tests__/button.test.ts`
+- `packages/tuffex/docs/components/button.md`
+- `apps/nexus/content/docs/dev/components/button.en.mdc`
+- `apps/nexus/content/docs/dev/components/button.zh.mdc`
+- `docs/plan-prd/TODO.md`
+  - Button `type` is documented as the current semantic tone alias instead of a legacy compatibility surface.
+  - Nexus and Tuffex docs now state that `variant` has priority and `type="text"` maps to the `ghost` visual variant.
+  - Added regression coverage for `type -> variant`, `text -> ghost`, and `variant` overriding `type`.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/button/__tests__/button.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/button/src/button.vue" "packages/components/src/button/src/types.ts" "packages/components/src/button/__tests__/button.test.ts"` 通过。
+
+### chore(tuffex): remove FlipOverlay compatibility wording noise
+
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `docs/plan-prd/TODO.md`
+  - Single-overlay mask behavior is now described as the current baseline instead of backward-compatible visuals/transitions.
+  - Runtime behavior is unchanged; existing stack layering and opacity behavior remains covered by `flip-overlay.test.ts`.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/flip-overlay/src/TxFlipOverlay.vue" "packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts"` 通过。
+
+### fix(core-app): require explicit inline workflow step kind
+
+- `apps/core-app/src/main/modules/ai/intelligence-deepagent-orchestration.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-deepagent-orchestration.test.ts`
+- `docs/plan-prd/TODO.md`
+  - `workflow.execute` inline payloads no longer infer step kind from `agentId` / `toolId`; each step must explicitly declare `kind='prompt'|'tool'|'agent'`.
+  - Inline workflow normalization now rejects missing kind, missing `toolId` for tool steps, and missing `agentId` for agent steps at the capability boundary.
+  - Inline workflow payloads now reject `capabilityId` routing, and historical workflow definition steps with non-`workflow.execute` `metadata.capabilityId` fail instead of delegating through the retired capability step path.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/ai/intelligence-deepagent-orchestration.test.ts"` 通过。
+
+### fix(core-app): reject empty workflow editor agent steps
+
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Workflow editor save now raises `agent_required` when an agent step has an empty `agentId`, instead of silently re-filling `builtin.workflow-agent`.
+  - New agent steps still default to `builtin.workflow-agent`, but user-cleared invalid drafts are blocked before reaching the main workflow service.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/hooks/useWorkflowEditor.test.ts"` 通过。
+
+### fix(core-app): hard-cut invalid workflow step identifiers
+
+- `apps/core-app/src/main/modules/ai/intelligence-workflow-service.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-workflow-service.test.ts`
+- `docs/plan-prd/TODO.md`
+  - `IntelligenceWorkflowService` now rejects `kind='tool'` steps without `toolId` and `kind='agent'` steps without `agentId` during workflow normalization.
+  - Workflow run normalization now rejects unsupported step kinds and tool run steps without `toolId`, preventing resume/history paths from silently downgrading invalid run steps to prompt.
+  - Workflow definition/run DB hydration now reuses the same strict normalizers, so stale invalid rows cannot bypass save-time hard-cut and re-enter editor or resume flows.
+  - Invalid workflow definitions fail at save/inline-run normalization time instead of being persisted and failing later in execution.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/ai/intelligence-workflow-service.test.ts"` 通过。
+
+### fix(tuffex): support controlled grouped Tabs
+
+- `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`
+- `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts`
+- `apps/nexus/content/docs/dev/components/tabs.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Fixed `TxTabs` controlled/default lookup so `modelValue` and `defaultValue` can select `TxTabItem` nodes inside `TxTabItemGroup`.
+  - Removed the watcher path that directly invoked the default slot outside render; tab lookup now uses render-time cached tab nodes.
+  - Added focused Tabs coverage for activation, grouped nav items, header and `nav-right` slots, enabled/disabled switching, controlled grouped tabs, visual prop normalization, AutoSizer expose methods, and animation prop forwarding.
+  - Replaced generated English Tabs API placeholders and duplicate `autoHeight` row with current `borderless`, animation, slot, expose, item, and event contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/tabs/__tests__/tabs.test.ts"` 通过。
+
+### test(tuffex): add GroupBlock contract coverage
+
+- `packages/tuffex/packages/components/src/group-block/__tests__/group-block.test.ts`
+- `apps/nexus/content/docs/dev/components/group-block.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused GroupBlock coverage for expansion, static group blocking, `memoryName` persistence, BlockLine link activation, BlockSlot slot/disabled behavior, and BlockSwitch switch/guidance/loading modes.
+  - Replaced generated English GroupBlock demo/API placeholders with the current group, line, slot, switch, icon, persistence, and event contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/group-block/__tests__/group-block.test.ts"` 通过。
+
+### test(tuffex): add Scroll native contract coverage
+
+- `packages/tuffex/packages/components/src/scroll/__tests__/scroll.test.ts`
+- `apps/nexus/content/docs/dev/components/scroll.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused Scroll native coverage for native mode rendering, `direction` overflow mapping, `noPadding`, `scrollChaining`, slots, `scrollTo()`, `getScrollInfo()`, scroll events, pull-up, pull-down, and finish reset gates.
+  - Replaced generated English Scroll API placeholders with the current native/BetterScroll runtime strategy, auto fallback, scrollbar, pull refresh/load, and event contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/scroll/__tests__/scroll.test.ts"` 通过。
+
+### test(tuffex): add Slider contract coverage
+
+- `packages/tuffex/packages/components/src/slider/__tests__/slider.test.ts`
+- `apps/nexus/content/docs/dev/components/slider.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused Slider coverage for value clamping, `formatValue` / `showValue`, input/change emits, disabled tooltip blocking, hover and always tooltip modes, `tooltipMotion='none'`, and global pointer listener cleanup.
+  - Replaced generated English Slider API placeholders with the current native range, tooltip trigger/formatter/placement, tilt/spring/motion/jelly parameter, and event contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/slider/__tests__/slider.test.ts"` 通过。
+
+### test(tuffex): add Card contract coverage
+
+- `packages/tuffex/packages/components/src/card/__tests__/card.test.ts`
+- `apps/nexus/content/docs/dev/components/card.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused Card coverage for the default `background='pure'` contract, structural slots, size/radius/padding mapping, clickable/disabled click behavior, loading spinner size, mask/glass/refraction surface prop forwarding, and pointer-light coupling.
+  - Corrected the English Card API table's stale `background` default/type and replaced generated placeholders with the current variant, shadow, size, loading, inertial, event, and slot contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/card/__tests__/card.test.ts"` 通过。
+
+### fix(tuffex): restore GradualBlur preset precedence
+
+- `packages/tuffex/packages/components/src/gradual-blur/src/TxGradualBlur.vue`
+- `packages/tuffex/packages/components/src/gradual-blur/__tests__/gradual-blur.test.ts`
+- `apps/nexus/content/docs/dev/components/gradual-blur.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Fixed GradualBlur config precedence to resolve as defaults < preset < explicitly provided props, so presets like `intense` are no longer overwritten by `withDefaults` values.
+  - Updated non-responsive sizing to read the current resolved config directly, while responsive mode still uses viewport breakpoint state.
+  - Added focused GradualBlur coverage for layer generation, page target/gpu/style/class behavior, preset and `divCount` clamp, hover intensity, and responsive breakpoint dimensions.
+  - Replaced generated English GradualBlur API placeholders with the current preset, positioning, responsive, scroll animation, GPU, class, and style contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/gradual-blur/__tests__/gradual-blur.test.ts"` 通过。
+
+### test(tuffex): add Fusion contract coverage
+
+- `packages/tuffex/packages/components/src/fusion/__tests__/fusion.test.ts`
+- `apps/nexus/content/docs/dev/components/fusion.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused Fusion coverage for slot rendering, direction class, CSS variable normalization, SVG gooey filter parameters, hover/click/manual triggers, controlled state, and disabled blocking.
+  - Replaced generated English Fusion API placeholders with the current controlled/uncontrolled active state, trigger, split-axis, gooey filter, and event contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/fusion/__tests__/fusion.test.ts"` 通过。
+
+### test(tuffex): hard-cut Cascader phantom remote search surface
+
+- `packages/tuffex/packages/components/src/cascader/src/types.ts`
+- `packages/tuffex/packages/components/src/cascader/__tests__/cascader.test.ts`
+- `apps/nexus/content/docs/dev/components/cascader.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Removed unimplemented Cascader type surface for `remote`, `searchLoading`, `searchResults`, `searchDebounce`, `resolvePath`, and the never-emitted `search` event.
+  - Expanded Cascader contract coverage for single selection, multiple selection, clear behavior, disabled blocking, async `load`, exposed helpers, and local-search empty state.
+  - Replaced generated English Cascader API placeholders with the current local search, lazy child loading, selection, event, and expose contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/cascader/__tests__/cascader.test.ts"` 通过。
+
+### test(tuffex): add GlassSurface contract coverage
+
+- `packages/tuffex/packages/components/src/glass-surface/__tests__/glass-surface.test.ts`
+- `apps/nexus/content/docs/dev/components/glass-surface.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused GlassSurface coverage for numeric dimension normalization, slot rendering, solid fallback styling when `backdrop-filter` support is unavailable, and RGB displacement map/channel selector forwarding.
+  - Replaced generated English GlassSurface API placeholders with the current SVG filter, backdrop-filter fallback, solid fallback, and displacement parameter contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/glass-surface/__tests__/glass-surface.test.ts"` 通过。
+
+### fix(tuffex): hard-cut MarkdownView unsafe sanitize fallback
+
+- `packages/tuffex/packages/components/src/markdown-view/src/TxMarkdownView.vue`
+- `packages/tuffex/packages/components/src/markdown-view/__tests__/markdown-view.test.ts`
+- `apps/nexus/content/docs/dev/components/markdown-view.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - `TxMarkdownView` no longer renders raw Markdown HTML while `sanitize=true` waits for DOMPurify or when sanitizer loading fails; raw HTML is only rendered when `sanitize=false`.
+  - Added focused MarkdownView coverage for pre-sanitizer empty output, sanitized rendering, explicit raw mode, light/dark themes, auto document theme resolution, and theme observer updates.
+  - Replaced generated English MarkdownView API placeholders with the current real sanitization and theme contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/markdown-view/__tests__/markdown-view.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/markdown-view/src/TxMarkdownView.vue" "packages/components/src/markdown-view/__tests__/markdown-view.test.ts"` 通过。
+
+### test(tuffex): add TextTransformer contract coverage
+
+- `packages/tuffex/packages/components/src/text-transformer/__tests__/text-transformer.test.ts`
+- `apps/nexus/content/docs/dev/components/text-transformer.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused TextTransformer coverage for default live-region rendering, root tag and CSS variable mapping, wrap mode, dual-layer text transitions, slot text props, and timer cleanup.
+  - Replaced generated English TextTransformer API placeholders with the current real text transition contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/text-transformer/__tests__/text-transformer.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/text-transformer/src/TxTextTransformer.vue" "packages/components/src/text-transformer/__tests__/text-transformer.test.ts"` 通过。
+
+### test(tuffex): add TypingIndicator contract coverage
+
+- `packages/tuffex/packages/components/src/chat/__tests__/typing-indicator.test.ts`
+- `apps/nexus/content/docs/dev/components/typing-indicator.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused TypingIndicator coverage for status semantics, dots/ai/pure/ring/circle-dash/bars variants, size CSS variables, text visibility, and SVG mask binding.
+  - Replaced generated English TypingIndicator API placeholders with the current real loading indicator contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/chat/__tests__/typing-indicator.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/chat/src/TxTypingIndicator.vue" "packages/components/src/chat/__tests__/typing-indicator.test.ts"` 通过。
+
+### test(tuffex): add CardItem contract coverage
+
+- `packages/tuffex/packages/components/src/card-item/__tests__/card-item.test.ts`
+- `apps/nexus/content/docs/dev/components/card-item.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused CardItem coverage for text rendering, avatar source priority, slot replacement, active/clickable/disabled states, Enter activation, and no-left layout.
+  - Replaced generated English CardItem API, slot, and event placeholders with the current real row contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/card-item/__tests__/card-item.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/card-item/src/TxCardItem.vue" "packages/components/src/card-item/__tests__/card-item.test.ts"` 通过。
+
+### test(tuffex): add AutoSizer contract coverage
+
+- `packages/tuffex/packages/components/src/auto-sizer/__tests__/auto-sizer.test.ts`
+- `apps/nexus/content/docs/dev/components/auto-sizer.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused AutoSizer coverage for outer/inner tags, attr/class/style merging, inline layout inference, utility option forwarding, exposed methods, and action snapshot detection.
+  - Replaced generated English AutoSizer API and expose placeholders with the current real sizing contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/auto-sizer/__tests__/auto-sizer.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/auto-sizer/src/TxAutoSizer.vue" "packages/components/src/auto-sizer/__tests__/auto-sizer.test.ts"` 通过。
+
+### test(tuffex): hard-cut Popover tests to BaseAnchor contract
+
+- `packages/tuffex/packages/components/src/popover/__tests__/popover.test.ts`
+- `apps/nexus/content/docs/dev/components/popover.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Replaced stale Tooltip-stub Popover tests with current BaseAnchor contract coverage for prop forwarding, offset derivation, hover delays, disabled close behavior, full-width reference classes, and side slot props.
+  - Fixed `toggleOnReferenceClick` default handling so an omitted prop stays `undefined` and the click/hover trigger-based default is applied correctly.
+  - Hard-cut the English Popover docs away from the retired `TxTooltip` wrapper description and updated event descriptions to the current state-change contract.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/popover/__tests__/popover.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/popover/src/TxPopover.vue" "packages/components/src/popover/__tests__/popover.test.ts"` 通过。
+
+### test(tuffex): add EmptyState contract coverage
+
+- `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`
+- `packages/tuffex/packages/components/src/empty-state/__tests__/empty-state.test.ts`
+- `apps/nexus/content/docs/dev/components/empty-state.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Fixed `TxEmptyState` `icon=null` handling so it explicitly suppresses preset illustrations instead of falling back to the variant default.
+  - Added focused EmptyState coverage for preset copy and illustrations, explicit title/description overrides, slot replacement, generated action emits and disabled blocking, loading spinner priority, and `icon=null` icon suppression.
+  - Replaced generated English EmptyState API, EmptyStateAction, slot, and event placeholders with current real feedback-state contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/empty-state/__tests__/empty-state.test.ts" "packages/components/src/empty-state/__tests__/empty-state-wrappers.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/empty-state/src/TxEmptyState.vue" "packages/components/src/empty-state/__tests__/empty-state.test.ts" "packages/components/src/empty-state/__tests__/empty-state-wrappers.test.ts"` 通过。
+
+### test(tuffex): add DatePicker contract coverage
+
+- `packages/tuffex/packages/components/src/date-picker/__tests__/date-picker.test.ts`
+- `apps/nexus/content/docs/dev/components/date-picker.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused DatePicker coverage for `YYYY-MM-DD` model normalization, min/max clamping, disabled month/day options, TxPicker prop forwarding, formatted confirm output, visibility updates, and cancel/open/close forwarding.
+  - Replaced generated English DatePicker API and event placeholders with current real picker wrapper contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/date-picker/__tests__/date-picker.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/date-picker/src/TxDatePicker.vue" "packages/components/src/date-picker/__tests__/date-picker.test.ts"` 通过。
+
+### test(tuffex): add TabBar contract coverage
+
+- `packages/tuffex/packages/components/src/tab-bar/__tests__/tab-bar.test.ts`
+- `apps/nexus/content/docs/dev/components/tab-bar.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused TabBar coverage for tablist/tab ARIA state, active item rendering, icon and badge output, fixed and safe-area layout classes, z-index CSS variable, enabled selection events, and bar/item disabled blocking.
+  - Replaced generated English TabBar API, TabBarItem, and event placeholders with current real bottom-navigation contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/tab-bar/__tests__/tab-bar.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/tab-bar/src/TxTabBar.vue" "packages/components/src/tab-bar/__tests__/tab-bar.test.ts"` 通过。
+
+### test(tuffex): add Transition contract coverage
+
+- `packages/tuffex/packages/components/src/transition/__tests__/transition.test.ts`
+- `apps/nexus/content/docs/dev/components/transition.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused Transition coverage for preset-to-name mapping, TransitionGroup tag forwarding, smooth-size delegation through AutoSizer, class/style/attrs forwarding boundaries, and semantic wrapper preset behavior.
+  - Replaced generated English Transition API placeholders with current real motion wrapper contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/transition/__tests__/transition.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/transition/src/TxTransition.vue" "packages/components/src/transition/src/TxTransitionSmoothSize.vue" "packages/components/src/transition/__tests__/transition.test.ts"` 通过。
+
+### test(tuffex): add SortableList contract coverage
+
+- `packages/tuffex/packages/components/src/sortable-list/__tests__/sortable-list.test.ts`
+- `apps/nexus/content/docs/dev/components/sortable-list.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused SortableList coverage for list/listitem semantics, item slot props, default id fallback, drag/drop reorder emits, same-item no-op, disabled blocking, handle-only drag start, and dragend cleanup.
+  - Replaced generated English SortableList API placeholders with the current real drag-and-drop contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/sortable-list/__tests__/sortable-list.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/sortable-list/src/TxSortableList.vue" "packages/components/src/sortable-list/__tests__/sortable-list.test.ts"` 通过。
+
+### test(tuffex): add StatCard contract coverage
+
+- `packages/tuffex/packages/components/src/stat-card/__tests__/stat-card.test.ts`
+- `apps/nexus/content/docs/dev/components/stat-card.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused StatCard coverage for default metric rendering, custom value/label slots, percent and delta insights, progress ring clamping, numeric progress fallback, and custom progress meta slot.
+  - Replaced generated English StatCard API placeholders with the current real metric and label contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/stat-card/__tests__/stat-card.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/stat-card/src/TxStatCard.vue" "packages/components/src/stat-card/__tests__/stat-card.test.ts"` 通过。
+
+### test(tuffex): add Splitter contract coverage
+
+- `packages/tuffex/packages/components/src/splitter/__tests__/splitter.test.ts`
+- `apps/nexus/content/docs/dev/components/splitter.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused Splitter coverage for horizontal/vertical pane rendering and separator ARIA, ratio and bar-size CSS variables, pointer drag clamp/snap behavior, keyboard resizing, disabled blocking, and ending active drag when disabled.
+  - Replaced generated English Splitter API placeholders with the current real ratio, slot, and event contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/splitter/__tests__/splitter.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/splitter/src/TxSplitter.vue" "packages/components/src/splitter/__tests__/splitter.test.ts"` 通过。
+
+### test(tuffex): add GlowText contract coverage
+
+- `packages/tuffex/packages/components/src/glow-text/__tests__/glow-text.test.ts`
+- `apps/nexus/content/docs/dev/components/glow-text.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused GlowText coverage for default adaptive shine rendering, custom root tag and CSS variable mapping, inactive and one-shot classes, text-clip mirrored text, and mode-switch cleanup.
+  - Replaced generated English GlowText API placeholders with the current real prop and mode contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/glow-text/__tests__/glow-text.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/glow-text/src/TxGlowText.vue" "packages/components/src/glow-text/__tests__/glow-text.test.ts"` 通过。
+
+### fix(tuffex): repair SegmentedSlider vertical layout and add contract coverage
+
+- `packages/tuffex/packages/components/src/segmented-slider/src/TxSegmentedSlider.vue`
+- `packages/tuffex/packages/components/src/segmented-slider/__tests__/segmented-slider.test.ts`
+- `apps/nexus/content/docs/dev/components/segmented-slider.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Fixed vertical SegmentedSlider layout by writing concrete `height` progress and `bottom` segment position styles instead of relying on unset `--height` / `--bottom` variables.
+  - Added focused SegmentedSlider coverage for horizontal/vertical progress and positions, click and keyboard selection, disabled blocking, label visibility, and null initial value auto-selection.
+  - Replaced generated English SegmentedSlider API placeholders with the current real segment and event contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/segmented-slider/__tests__/segmented-slider.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/segmented-slider/src/TxSegmentedSlider.vue" "packages/components/src/segmented-slider/__tests__/segmented-slider.test.ts"` 通过。
+
+### test(tuffex): add DropdownMenu contract coverage
+
+- `packages/tuffex/packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts`
+- `apps/nexus/content/docs/dev/components/dropdown-menu.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused DropdownMenu coverage for trigger/menu rendering, Popover prop forwarding, open/close model events, enabled item select/close behavior, `closeOnSelect=false`, and disabled item blocking.
+  - Replaced generated English DropdownMenu API placeholders with the current real menu and item contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/dropdown-menu/src/TxDropdownMenu.vue" "packages/components/src/dropdown-menu/src/TxDropdownItem.vue" "packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts"` 通过。
+
+## 2026-05-06
+
+### test(tuffex): add ContextMenu contract coverage
+
+- `packages/tuffex/packages/components/src/context-menu/__tests__/context-menu.test.ts`
+- `apps/nexus/content/docs/dev/components/context-menu.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused ContextMenu coverage for controlled and uncontrolled opening, right-click coordinates, controlled `x/y` payloads, panel width, Escape closing behavior, disabled Escape behavior, enabled item select/close, and disabled item blocking.
+  - Replaced generated English ContextMenu API placeholders with the current real menu and item contracts.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/context-menu/__tests__/context-menu.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/context-menu/src/TxContextMenu.vue" "packages/components/src/context-menu/src/TxContextMenuItem.vue" "packages/components/src/context-menu/__tests__/context-menu.test.ts"` 通过。
+
+### test(tuffex): add OutlineBorder contract coverage
+
+- `packages/tuffex/packages/components/src/outline-border/__tests__/outline-border.test.ts`
+- `apps/nexus/content/docs/dev/components/outline-border.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused OutlineBorder coverage for root element/slot rendering, border/ring/ring-offset/ring-inset visual styles, numeric unit normalization, default overflow clipping, clip-path hexagon clipping, mask clipping, and disabled clipping.
+  - Replaced generated English OutlineBorder API placeholders with the current real prop contract.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/outline-border/__tests__/outline-border.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/outline-border/src/TxOutlineBorder.vue" "packages/components/src/outline-border/__tests__/outline-border.test.ts"` 通过。
+
+### test(tuffex): add Stagger contract coverage
+
+- `packages/tuffex/packages/components/src/stagger/__tests__/stagger.test.ts`
+- `apps/nexus/content/docs/dev/components/stagger.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused Stagger coverage for TransitionGroup root tag rendering, timing CSS variables, transition name/appear forwarding, child index variables, and comment-node filtering.
+  - Replaced generated English Stagger API placeholders with the current real prop contract.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/stagger/__tests__/stagger.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/stagger/src/TxStagger.vue" "packages/components/src/stagger/__tests__/stagger.test.ts"` 通过。
+
+### test(tuffex): add CornerOverlay contract coverage
+
+- `packages/tuffex/packages/components/src/corner-overlay/__tests__/corner-overlay.test.ts`
+- `apps/nexus/content/docs/dev/components/corner-overlay.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused CornerOverlay coverage for default content rendering, optional overlay slot rendering, aria-hidden overlay layer, all four placement styles, numeric offset normalization, string offset passthrough, and `overlayPointerEvents`.
+  - Replaced generated English CornerOverlay wording with the current real prop and slot contract.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/corner-overlay/__tests__/corner-overlay.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/corner-overlay/src/TxCornerOverlay.vue" "packages/components/src/corner-overlay/__tests__/corner-overlay.test.ts"` 通过。
+
+### test(tuffex): add GradientBorder contract coverage
+
+- `packages/tuffex/packages/components/src/gradient-border/__tests__/gradient-border.test.ts`
+- `apps/nexus/content/docs/dev/components/gradient-border.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused GradientBorder coverage for default/custom root elements, slot wrapping, numeric-to-px CSS variable normalization, duration seconds, and string CSS unit passthrough.
+  - Replaced generated English GradientBorder API placeholders with the current real prop contract.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/gradient-border/__tests__/gradient-border.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/gradient-border/src/TxGradientBorder.vue" "packages/components/src/gradient-border/__tests__/gradient-border.test.ts"` 通过。
+
+### test(tuffex): add NavBar contract coverage
+
+- `packages/tuffex/packages/components/src/nav-bar/__tests__/nav-bar.test.ts`
+- `apps/nexus/content/docs/dev/components/nav-bar.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused NavBar component coverage for title rendering, safe-area spacer, z-index CSS variable, fixed/disabled classes, built-in back button events, custom left/title/right slots, and disabled event suppression.
+  - Replaced generated English NavBar API placeholders with the current real prop, slot, and event contract.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/nav-bar/__tests__/nav-bar.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/nav-bar/src/TxNavBar.vue" "packages/components/src/nav-bar/__tests__/nav-bar.test.ts"` 通过。
+
+### test(core-app): restore clipboard and OmniPanel transport regressions
+
+- `apps/core-app/src/main/modules/clipboard.transport.test.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Clipboard image transport tests now match the current payload contract: list `value` remains the thumbnail, while the original tfile URL is exposed via `meta.image_original_url`; paths outside the clipboard image base no longer assert a synthetic original URL.
+  - OmniPanel shortcut-hold regression now covers the current trigger contract: a long-active combo invokes the shortcut path and resets `shortcutTriggerArmed`; the TouchWindow mock includes the BrowserWindow methods used by `ensureWindow()`.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard.transport.test.ts"` 通过（`1 file / 4 tests`）；`pnpm -C "apps/core-app" exec eslint "src/main/modules/clipboard.transport.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/omni-panel/index.test.ts"` 通过（`1 file / 18 tests`）；`pnpm -C "apps/core-app" exec eslint "src/main/modules/omni-panel/index.test.ts"` 通过。
+
+### docs(nexus): hard-cut transport migration example
+
+- `apps/nexus/content/docs/dev/api/transport.en.mdc`
+- `apps/nexus/content/docs/dev/api/transport.zh.mdc`
+- `docs/plan-prd/TODO.md`
+  - Transport API migration docs no longer present Channel and TuffTransport as simultaneously usable paths for new plugin code.
+  - The migration example now shows a direct hard-cut from string-based Channel sends to typed TuffTransport events, removing the `Legacy (still works)` / `传统方式（仍然有效）` sample.
+  - 验证：`rg -n "still works|仍可|仍然可用|继续可用|Legacy \\(still works\\)|旧.*可用|compatibility path|backward compatibility" "apps/nexus/content/docs/dev/api"` 无命中。
+
+### ref(nexus): hard-cut locale-prefixed route rewrite
+
+- `apps/nexus/app/app.vue`
+- `docs/plan-prd/TODO.md`
+  - Removed the client-side watcher that silently rewrote `/en/*` and `/zh/*` paths to non-prefixed routes.
+  - Nexus locale selection remains profile / cookie / browser / manual driven; route prefixes no longer act as a second locale source or compatibility redirect path.
+  - 验证：`rg -n "旧的语言前缀|移除语言前缀|/en/\\*|/zh/\\*" "apps/nexus/app/app.vue"` 无命中；`pnpm -C "apps/nexus" run typecheck` 通过。
+
+### ref(nexus): retire auth sign-in-token alias
+
+- `apps/nexus/server/api/app-auth/sign-in-token.post.ts`
+- `apps/nexus/server/api/auth/sign-in-token.post.ts`
+- `apps/nexus/server/utils/appAuthToken.ts`
+- `apps/nexus/server/api/app-auth/__tests__/sign-in-token.post.test.ts`
+- `apps/nexus/server/api/auth/__tests__/sign-in-token-retired.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Desktop app sign-in token issuance now has `/api/app-auth/sign-in-token` as the canonical route; the shared issuance logic lives in `server/utils/appAuthToken.ts`.
+  - The old `/api/auth/sign-in-token` route no longer forwards to the app-auth handler. It returns `410 AUTH_SIGN_IN_TOKEN_RETIRED` with `/api/app-auth/sign-in-token` as the replacement path.
+  - 验证：`pnpm -C "apps/nexus" exec vitest run "server/api/app-auth/__tests__/sign-in-token.post.test.ts" "server/api/auth/__tests__/sign-in-token-retired.test.ts"` 通过（`2 files / 3 tests`）；`pnpm -C "apps/nexus" run typecheck` 通过。
+
+### chore(governance): clear Nexus team context fixture wording
+
+- `apps/nexus/server/utils/__tests__/team-context.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/TODO.md`
+  - Organization team fixture naming now uses `Standalone Org` instead of legacy wording while preserving the assertion that an organization owner can disband the team even without a collaboration plan.
+  - Removed the stale `legacy-keyword` allowlist and compatibility registry entries for `team-context.test.ts`.
+  - 验证：`pnpm -C "apps/nexus" exec vitest run "server/utils/__tests__/team-context.test.ts"` 通过（`1 file / 5 tests`）；`node "scripts/check-legacy-boundaries.mjs"` 与 `pnpm compat:registry:guard` 通过。
+
+### chore(governance): clear Utils system SDK fixture wording
+
+- `packages/utils/__tests__/system-sdk.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/TODO.md`
+  - The system SDK failure regression still asserts that typed transport errors propagate and do not fall back to raw channel sends, but the test title now uses `retired raw channel` wording.
+  - Removed the stale `legacy-keyword` allowlist and compatibility registry entries for `system-sdk.test.ts`.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/system-sdk.test.ts"` 通过（`1 file / 3 tests`）；`node "scripts/check-legacy-boundaries.mjs"` 与 `pnpm compat:registry:guard` 通过。
+
+### chore(governance): clear plugin install queue sdkapi fixture wording
+
+- `apps/core-app/src/main/modules/plugin/install-queue.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/TODO.md`
+  - The below-floor sdkapi fixture now uses `touch-below-floor` instead of legacy wording while preserving the assertion that installation fails before finalize when `sdkapi >= 251212` is not declared.
+  - Removed the stale `legacy-keyword` allowlist and compatibility registry entries for `install-queue.test.ts`.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/install-queue.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"` 与 `pnpm compat:registry:guard` 通过。
+
+### chore(governance): clear app provider keyword sync fixture wording
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/TODO.md`
+  - The app keyword sync steady-state regression now uses `retired app item ids` wording while preserving the assertion that `removeItems()` is not called during normal keyword sync.
+  - Removed the stale `legacy-keyword` allowlist and compatibility registry entries for `app-provider.test.ts`.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/app-provider.test.ts" -t "does not keep removing retired app item ids during steady-state keyword sync"` 通过；`node "scripts/check-legacy-boundaries.mjs"` 与 `pnpm compat:registry:guard` 通过。
+
+### chore(governance): clear storage subscription fixture wording
+
+- `packages/test/src/common/storage-subscription.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/TODO.md`
+  - The storage subscription boundary regression now uses `retired channel` wording while preserving the assertion that typed storage transport is preferred and old channel snapshots are not used.
+  - Removed the stale `legacy-keyword` allowlist and compatibility registry entries for `storage-subscription.test.ts`.
+  - 验证：`pnpm -C "packages/test" exec vitest run "src/common/storage-subscription.test.ts"` 通过（`1 file / 1 test`）；`node "scripts/check-legacy-boundaries.mjs"` 与 `pnpm compat:registry:guard` 通过。
+
+### ref(utils): hard-cut preset export version validation
+
+- `packages/utils/common/storage/entity/preset-export-types.ts`
+- `packages/utils/__tests__/preset-export-types.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/TODO.md`
+  - `validatePresetData()` now accepts only the current `PRESET_EXPORT_VERSION=2`; older v1 preset payloads and future unknown versions fail validation instead of being accepted or downgraded to warnings.
+  - The preset export regression now asserts v1 payload rejection and no longer carries legacy wording; related allowlist and compatibility registry rows were removed.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/preset-export-types.test.ts"` 通过（`1 file / 3 tests`）；`node "scripts/check-legacy-boundaries.mjs"` 与 `pnpm compat:registry:guard` 通过。
+
+### chore(governance): clear storage boundary and cli shim wording noise
+
+- `apps/core-app/src/renderer/src/modules/storage/app-storage-boundary.test.ts`
+- `packages/unplugin-export-plugin/src/__tests__/cli-shim.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/TODO.md`
+  - Renderer storage boundary regression now uses `retired` naming while preserving the assertion that old storage channel imports remain restricted to bootstrap shim files.
+  - Unplugin CLI shim regression now uses `retired cli shim` wording while preserving the deprecated wrapper forwarding assertion; the compat-file registry row remains until the 2.5.0 shim removal window.
+  - Removed the stale `legacy-keyword` allowlist and compatibility registry rows for both tests.
+
+### chore(pilot): clear route/model admin retired option wording
+
+- `apps/pilot/app/pages/admin/system/route-combos.vue`
+- `apps/pilot/app/pages/admin/system/model-groups.vue`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/TODO.md`
+  - Disabled placeholder options for persisted-but-disabled or missing provider models now use `retiredStatus` naming while preserving the existing labels and disabled selection behavior.
+  - Removed the stale `legacy-keyword` allowlist and compatibility registry rows for both Pilot admin pages.
+
+### chore(core-app): clear PermissionStore sqlite fixture wording noise
+
+- `apps/core-app/src/main/modules/permission/permission-store.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/TODO.md`
+  - PermissionStore SQLite backend regression now uses `retired` JSON fixture naming while preserving assertions that SQLite initialization does not import old JSON snapshots and backend-unavailable mode does not revive JSON fallback writes.
+  - Removed the stale `legacy-keyword` allowlist and compatibility registry row for the test file; the production read-once migration exception remains tracked separately for `permission-store.ts`.
+
+### ref(utils): hard-cut plugin channel sendSync
+
+- `packages/utils/plugin/channel.ts`
+- `packages/utils/transport/prelude.ts`
+- `packages/utils/__tests__/plugin-channel-send-sync-hard-cut.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Plugin channel `sendSync` no longer calls `ipcRenderer.sendSync('@plugin-process-message', ...)`; the retained method surface now throws `plugin_channel_send_sync_removed` with a typed transport migration message.
+  - Generated plugin preludes also block `sendSync` directly and no longer contain a physical synchronous IPC call.
+  - Added a regression test that fixes the generated prelude contract.
+
+### feat(tuffex): strengthen Radio keyboard contract
+
+- `packages/tuffex/packages/components/src/radio/src/TxRadioGroup.vue`
+- `packages/tuffex/packages/components/src/radio/__tests__/radio.test.ts`
+- `apps/nexus/content/docs/dev/components/radio.en.mdc`
+- `apps/nexus/content/docs/dev/components/radio.zh.mdc`
+- `packages/tuffex/docs/components/radio.md`
+- `docs/plan-prd/TODO.md`
+  - `TxRadioGroup` now handles ArrowLeft/ArrowUp/ArrowRight/ArrowDown plus Home/End at the radiogroup level, skips disabled radio items, and respects disabled group state.
+  - Added component tests for ARIA state, keyboard selection, disabled item skipping, Home/End, and disabled group behavior.
+  - Nexus and Tuffex Radio component docs now state the keyboard contract.
+
+### docs(nexus): clear Radio component API placeholders
+
+- `apps/nexus/content/docs/dev/components/radio.en.mdc`
+- `packages/tuffex/packages/components/src/radio/__tests__/radio.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Replaced generated Radio API placeholders with the current group/item contract: selected value, disabled group blocking, type/direction resolution, indicator variant shortcuts, `updateOnSettled`, spring/blur motion props, keyboard navigation, and child radio selection events.
+  - Reused existing focused Radio component coverage for radiogroup semantics, selected state, Arrow/Home/End keyboard selection, disabled item skip, and disabled group behavior.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/radio/__tests__/radio.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/radio/src/TxRadioGroup.vue" "packages/components/src/radio/src/TxRadio.vue" "packages/components/src/radio/__tests__/radio.test.ts"` 通过。
+
+### docs(nexus): complete FlatRadio multi-select docs contract
+
+- `apps/nexus/content/docs/dev/components/flat-radio.en.mdc`
+- `packages/tuffex/packages/components/src/flat-radio/__tests__/flat-radio.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Completed the FlatRadio API docs for the current implementation: `multiple`, single vs array model payloads, disabled group/item behavior, item slot/icon fallbacks, and Enter/Space toggling for the focused item in multiple mode.
+  - Reused existing focused FlatRadio component coverage for single/multiple ARIA semantics, disabled item skip, Home/End, disabled group blocking, and multi-select keyboard toggles.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/flat-radio/__tests__/flat-radio.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/flat-radio/src/TxFlatRadio.vue" "packages/components/src/flat-radio/src/TxFlatRadioItem.vue" "packages/components/src/flat-radio/__tests__/flat-radio.test.ts"` 通过。
+
+### docs(nexus): clear SearchSelect placeholders and retired overlay wording
+
+- `apps/nexus/content/docs/dev/components/search-select.en.mdc`
+- `packages/tuffex/packages/components/src/search-select/__tests__/search-select.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Replaced generated SearchSelect API placeholders with the current searchable-select contract: selected value, local filtering, remote debounced search, disabled option blocking, loading suffix, dropdown sizing, Popover panel styling, and open/close lifecycle events.
+  - Hard-cut the stale public wording that described the dropdown as a `TxPopover -> TxTooltip -> TxBaseAnchor` chain; the page now documents the supported `TxPopover` surface.
+  - Reused existing focused SearchSelect component coverage for local filtering and selection, remote debounce search, and empty result rendering.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/search-select/__tests__/search-select.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/search-select/src/TxSearchSelect.vue" "packages/components/src/search-select/__tests__/search-select.test.ts"` 通过。
+
+### docs(nexus): clear TreeSelect component API placeholders
+
+- `apps/nexus/content/docs/dev/components/tree-select.en.mdc`
+- `packages/tuffex/packages/components/src/tree-select/__tests__/tree-select.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Replaced generated TreeSelect docs placeholders with the current combobox/tree contract: single and multiple model values, searchable tree filtering, clear semantics, Popover dropdown sizing/placement, node slot props, exposed methods, and `TreeSelectNode` fields.
+  - Reused existing focused TreeSelect component coverage for tree selection, empty-state rendering, and clear button behavior.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/tree-select/__tests__/tree-select.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/tree-select/src/TxTreeSelect.vue" "packages/components/src/tree-select/__tests__/tree-select.test.ts"` 通过。
+
+### test(tuffex): add Picker contract coverage
+
+- `packages/tuffex/packages/components/src/picker/__tests__/picker.test.ts`
+- `apps/nexus/content/docs/dev/components/picker.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added focused Picker coverage for value normalization to the first enabled option, toolbar confirm/cancel lifecycle, disabled toolbar/item state, and itemHeight/visibleItemCount CSS variable normalization.
+  - Replaced generated English Picker API placeholders with the current column picker contract for popup/inline rendering, toolbar actions, disabled options, normalized values, and events.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/picker/__tests__/picker.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/picker/src/TxPicker.vue" "packages/components/src/picker/__tests__/picker.test.ts"` 通过。
+
+### test(tuffex): add Select contract coverage and cut slot fallback warning
+
+- `packages/tuffex/packages/components/src/select/src/TxSelect.vue`
+- `packages/tuffex/packages/components/src/select/__tests__/select.test.ts`
+- `apps/nexus/content/docs/dev/components/select.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Removed the setup-time default slot label fallback from `TxSelect`; selected labels now come from `TxSelectItem` registration, avoiding Vue slot dependency tracking warnings.
+  - Added focused Select coverage for enabled option selection, disabled option blocking, local searchable filtering, and remote editable `search` events.
+  - Replaced generated English Select API placeholders with the current Popover-backed select contract, including eager mounting, panel surface props, local/remote search modes, disabled options, and item props.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/select/__tests__/select.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/select/src/TxSelect.vue" "packages/components/src/select/src/TxSelectItem.vue" "packages/components/src/select/__tests__/select.test.ts"` 通过。
+
+### docs(nexus): clear Agents component API placeholders
+
+- `apps/nexus/content/docs/dev/components/agents.en.mdc`
+- `packages/tuffex/packages/components/src/agents/__tests__/agents.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Replaced generated Agents API placeholders with the current list contract: enabled/disabled grouping, loading skeletons, configurable empty text, selected state, disabled selection blocking, and badge slot behavior.
+  - Reused existing focused Agents component coverage for group titles, empty text, enabled-only selection, and click/Enter/Space activation.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/agents/__tests__/agents.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/agents/src/TxAgentsList.vue" "packages/components/src/agents/src/TxAgentItem.vue" "packages/components/src/agents/__tests__/agents.test.ts"` 通过。
+
+### test(tuffex): lock FlatRadio keyboard contract
+
+- `packages/tuffex/packages/components/src/flat-radio/__tests__/flat-radio.test.ts`
+- `packages/tuffex/packages/components/src/flat-radio/src/TxFlatRadio.vue`
+- `docs/plan-prd/TODO.md`
+  - Added regression coverage for the existing `TxFlatRadio` keyboard contract documented on Nexus: single-select radiogroup ARIA, arrow-key wrapping, disabled item skipping, Home/End selection, disabled group behavior, and Enter/Space toggling in multiple mode.
+  - `TxFlatRadio` now guards `ResizeObserver` usage so non-browser/test runtimes without the API still mount cleanly and keep keyboard selection usable.
+
+### test(tuffex): lock SearchInput behavior and docs contract
+
+- `packages/tuffex/packages/components/src/search-input/__tests__/search-input.test.ts`
+- `apps/nexus/content/docs/dev/components/search-input.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added SearchInput regression coverage for input updates, Enter-triggered search, remote debounce, disabled remote search blocking, clear forwarding, and exposed value helpers.
+  - Nexus English SearchInput API docs now use concrete prop/event/expose descriptions instead of generated `Description for ...` placeholders.
+
+### test(tuffex): lock Empty wrapper contract and docs wording
+
+- `packages/tuffex/packages/components/src/empty/__tests__/empty.test.ts`
+- `apps/nexus/content/docs/dev/components/empty.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added Empty wrapper regression coverage for the forwarded `EmptyState` variant/surface/layout contract, compact sizing, icon/title/description props, and icon/title/description/action slot mapping.
+  - Nexus English Empty docs now describe real usage and props instead of generated `Description for ...` placeholders.
+
+### test(tuffex): lock LoadingOverlay behavior and docs wording
+
+- `packages/tuffex/packages/components/src/loading-overlay/__tests__/loading-overlay.test.ts`
+- `apps/nexus/content/docs/dev/components/loading-overlay.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added LoadingOverlay regression coverage for in-container overlays, closed state, fullscreen teleport rendering, and spinner/text/background prop forwarding.
+  - Nexus English LoadingOverlay docs now describe real usage and props instead of generated `Description for ...` placeholders.
+
+### test(tuffex): lock Spinner behavior and docs wording
+
+- `packages/tuffex/packages/components/src/spinner/__tests__/spinner.test.ts`
+- `apps/nexus/content/docs/dev/components/spinner.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added Spinner regression coverage for accessibility attributes, CSS variable sizing, SVG fallback rendering, and `visible=false` non-rendering.
+  - Nexus English Spinner docs now describe real usage and props instead of generated `Description for ...` placeholders.
+
+### test(tuffex): lock Stack layout variables and docs wording
+
+- `packages/tuffex/packages/components/src/stack/__tests__/stack.test.ts`
+- `apps/nexus/content/docs/dev/components/stack.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added Stack regression coverage for default and horizontal CSS variable mapping, numeric gap normalization, and slot rendering.
+  - Nexus English Stack docs now describe real usage and no longer keep generated placeholder text for `wrap` / `inline`.
+
+### test(tuffex): lock Flex layout variables and docs wording
+
+- `packages/tuffex/packages/components/src/flex/__tests__/flex.test.ts`
+- `apps/nexus/content/docs/dev/components/flex.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added Flex regression coverage for default and custom CSS variable mapping, numeric gap normalization, and slot rendering.
+  - Nexus English Flex docs now describe real usage and no longer keep generated placeholder text for `inline`.
+
+### fix(tuffex): make GridLayout variables reactive and document contract
+
+- `packages/tuffex/packages/components/src/grid-layout/src/TxGridLayout.vue`
+- `packages/tuffex/packages/components/src/grid-layout/__tests__/grid-layout.test.ts`
+- `apps/nexus/content/docs/dev/components/grid-layout.en.mdc`
+- `docs/plan-prd/TODO.md`
+  - `TxGridLayout` root CSS variables now derive from a computed style object so `gap`, `minItemWidth`, and `maxColumns` prop updates are reflected after mount.
+  - Added GridLayout regression coverage for default CSS variables, prop updates, hover spotlight variables, and `interactive=false` blocking.
+  - Nexus English GridLayout docs now describe real usage and props instead of `hover` / generated placeholder text.
+
+### docs(tuffex): hard-cut Container grid docs to real props
+
+- `packages/tuffex/packages/components/src/container/__tests__/container.test.ts`
+- `apps/nexus/content/docs/dev/components/container.en.mdc`
+- `apps/nexus/content/docs/dev/components/container.zh.mdc`
+- `docs/plan-prd/TODO.md`
+  - Added Container/Row/Col regression coverage for container CSS variables and classes, row gutter/alignment/justification/wrap styles, responsive gutter resolution, and responsive column span/offset styles.
+  - Nexus Container docs now match the real implementation: `push`, `pull`, `xxl`, object-valued column breakpoints, stale Bootstrap-style breakpoints, and non-existent CSS variables were removed from both English and Chinese docs.
+
+### chore(governance): clear retired-entry test wording noise
+
+- `apps/core-app/src/main/channel/common.test.ts`
+- `apps/core-app/src/main/modules/clipboard.transport.test.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- `apps/core-app/src/shared/update/channel.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/TODO.md`
+  - Test descriptions and local constants that assert retired raw handlers are not registered now use `retired` wording instead of `legacy`; sdkapi floor fixture wording now uses `below-floor sdk plugin`.
+  - Removed 5 stale `legacy-keyword` allowlist / compatibility registry rows; `legacy-keyword` dropped to `53 files / 167 hits`.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/channel/common.test.ts" "src/main/modules/plugin/plugin-loaders.test.ts" "src/shared/update/channel.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard.transport.test.ts" -t "只注册 typed clipboard transport handlers"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/omni-panel/index.test.ts" -t "does not register retired feature toggle handler"` 通过；`pnpm -C "apps/core-app" exec eslint "src/main/channel/common.test.ts" "src/main/modules/clipboard.transport.test.ts" "src/main/modules/omni-panel/index.test.ts" "src/main/modules/plugin/plugin-loaders.test.ts" "src/shared/update/channel.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"` 与 `pnpm compat:registry:guard` 通过。
+  - 已知无关阻塞：`clipboard.transport.test.ts` 全文件仍有 3 个图片 URL 期望与当前 `toClientItem()` thumbnail 行为不一致；`omni-panel/index.test.ts` 全文件仍有窗口 mock 缺少 `setVisibleOnAllWorkspaces` 导致的 shortcut 用例失败。本次仅验证改名触达的 retired handler 断言。
+
+### chore(governance): clear DivisionBox actor fixture legacy noise
+
+- `apps/core-app/src/main/modules/division-box/ipc.actor.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/TODO.md`
+  - DivisionBox actor regression still verifies that `actorPluginId=corebox` does not infer permissions from the unrelated `pluginId` payload field, but the fixture value now uses neutral `ignored-plugin-field` wording.
+  - Removed the stale `legacy-keyword` allowlist and compatibility registry entries for `ipc.actor.test.ts`; `legacy-keyword` dropped to `58 files / 172 hits`.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/division-box/ipc.actor.test.ts"` 通过（`1 file / 4 tests`）；`pnpm -C "apps/core-app" exec eslint "src/main/modules/division-box/ipc.actor.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"` 与 `pnpm compat:registry:guard` 通过。
+
+### fix(core-app): hard-cut workflow step normalization
+
+- `apps/core-app/src/main/modules/ai/intelligence-workflow-service.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-workflow-service.test.ts`
+- `docs/plan-prd/TODO.md`
+  - `IntelligenceWorkflowService` now accepts only `prompt/tool/agent` workflow step kinds; unsupported values fail fast instead of being silently coerced to prompt.
+  - Workflow-level and tool-step `toolSource` now accept only `builtin/mcp`; unsupported values fail fast. Prompt and agent steps strip tool-only fields during normalization so stale tool metadata cannot leak into persisted workflow definitions.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/ai/intelligence-workflow-service.test.ts"` 通过（`1 file / 3 tests`）；`pnpm -C "apps/core-app" exec eslint "src/main/modules/ai/intelligence-workflow-service.ts" "src/main/modules/ai/intelligence-workflow-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过。
+
+### fix(core-app): strengthen workflow editor mixed-step contract
+
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Existing workflow definitions with agent steps missing `agentId` now map back to the editor draft as `builtin.workflow-agent`, matching new-step creation and save-time normalization.
+  - Prompt/tool mixed workflow save coverage now asserts prompt steps keep prompt/input without agent fallback, while tool steps keep `toolId/toolSource/input` and do not inherit the workflow agent default.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/hooks/useWorkflowEditor.test.ts"` 通过（`1 file / 4 tests`）；`pnpm -C "apps/core-app" exec eslint "src/renderer/src/modules/hooks/useWorkflowEditor.ts" "src/renderer/src/modules/hooks/useWorkflowEditor.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过。
+
+### docs(nexus): hard-cut public IPC API wording
+
+- `apps/nexus/content/docs/dev/api/transport.{en,zh}.mdc`
+- `apps/nexus/content/docs/dev/api/transport-internals.{en,zh}.mdc`
+- `apps/nexus/content/docs/dev/api/channel.{en,zh}.mdc`
+- `apps/nexus/content/docs/dev/api/clipboard.{en,zh}.mdc`
+- `docs/plan-prd/TODO.md`
+  - Nexus public API docs no longer state that the old Channel API remains functional, works alongside TuffTransport, or is a continued compatibility path for new plugin development.
+  - Channel docs are now explicitly framed as historical migration reference; TuffTransport is the supported IPC entry point for current plugins.
+  - Clipboard docs no longer tell plugin authors that main-process legacy handlers remain available; historical `clipboard:*` raw channel names are documented only as migration review material, not a supported extension surface.
+  - 验证：`rg -n "old API remains functional|continues to work|still keeps legacy handlers|backward compatibility|Backwards Compat|Full compatibility|Works alongside legacy|旧 API 仍可使用|仍然可用|仍保留 legacy|兼容老调用方|完全兼容|并行工作|传统代码继续工作" "apps/nexus/content/docs/dev/api"` 无命中。
+
+### ref(utils): Plugin Storage SDK 文件操作改用 typed transport
+
+- `packages/utils/plugin/sdk/storage.ts`
+- `packages/utils/__tests__/plugin-storage-sdk.test.ts`
+- `packages/utils/plugin/sdk/performance.ts`
+- `packages/utils/__tests__/plugin-performance-sdk.test.ts`
+- `packages/utils/plugin/sdk/sqlite.ts`
+- `packages/utils/__tests__/plugin-sqlite-sdk.test.ts`
+- `packages/utils/plugin/sdk/box-sdk.ts`
+- `packages/utils/__tests__/plugin-box-sdk.test.ts`
+- `packages/utils/transport/events/types/core-box.ts`
+- `packages/utils/plugin/sdk/core-box.ts`
+- `packages/utils/__tests__/plugin-core-box-sdk.test.ts`
+- `packages/utils/plugin/sdk/window/index.ts`
+- `packages/utils/__tests__/plugin-window-sdk.test.ts`
+- `packages/utils/plugin/sdk/service/index.ts`
+- `packages/utils/__tests__/plugin-service-sdk.test.ts`
+- `packages/utils/plugin/sdk/common.ts`
+- `packages/utils/__tests__/plugin-common-sdk.test.ts`
+- `packages/utils/plugin/sdk/temp-files.ts`
+- `packages/utils/__tests__/plugin-temp-files-sdk.test.ts`
+- `apps/core-app/src/main/channel/{common.ts,common.test.ts}`
+- `apps/core-app/src/renderer/src/modules/hooks/useSvgContent.ts`
+- `packages/utils/renderer/storage/base-storage.ts`
+- `packages/utils/renderer/storage/{bootstrap.ts,storage-subscription.ts}`
+- `packages/utils/__tests__/renderer-storage-transport.test.ts`
+- `apps/core-app/src/main/service/service-center.ts`
+- `apps/core-app/src/main/modules/global-shortcon.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `packages/utils/transport/events/{index.ts,types/plugin.ts}`
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+  - `usePluginStorage()` 的 `getFile/setFile/deleteFile/listFiles/getStats/getTree/getFileDetails/clearAll/openFolder` 统一改为 `createPluginTuffTransport(...).send(PluginEvents.storage.*)`，对外事件名保持 `plugin:storage:*` 不变。
+  - `createPerformanceSDK()` 的 `getStorageStats/getMetrics/getPaths` 统一改为 `PluginEvents.storage.getStats` / `PluginEvents.performance.*` typed event，保留既有 `{ data }` 包装响应解包语义。
+  - `usePluginSqlite()` 的 `execute/query/transaction` 统一改为 `PluginEvents.sqlite.*` typed event，保留 SQL trim、params 归一化与失败响应抛错语义。
+  - `createBoxSDK()` 中已有 shared `CoreBoxEvents` 覆盖的 show/hide/expand/getInput/setInput/clearInput/allowInput/allowClipboard 调用改走 typed event 对象；CoreBox 插件专属的 `hide-input/show-input/set-height/set-position-offset/get-bounds` 已补 shared event 对象并同步切换 SDK 与 main handler，`packages/utils/plugin/sdk/box-sdk.ts` 的 raw channel 命中清零。
+  - `clearCoreBoxItems()` 改为 `CoreBoxEvents.item.clear` typed event，`packages/utils/plugin/sdk/core-box.ts` 不再直接发送 `core-box:clear-items`。
+  - 新增 `PluginEvents.window.new/visible/property` shared event 对象，保持 `window:new` / `window:visible` / `window:property` 事件名不变；CoreApp main handler 与 plugin window SDK 共用该事件定义。
+  - 新增 `PluginEvents.service.register/unregister/handle` shared event 对象，保持 `service:reg` / `service:unreg` / `service:handle` 事件名不变；ServiceCenter 与 plugin service SDK 共用该事件定义。
+  - 新增 `PluginEvents.shortcut.register/trigger` 与 `PluginEvents.communicate.index` shared event 对象，保持 `shortcon:*` / `index:communicate` 事件名不变；GlobalShortcon、PluginModule 与 plugin common SDK 共用该事件定义，`sendMessage()` 兼容 wrapper 已改为转发 `PluginEvents.communicate.index`，不再动态发送 `plugin:${message}` raw channel。
+  - 新增 `PluginEvents.tempFile.create/delete` shared event 对象，保持 `temp-file:create/delete` 事件名不变；`useTempPluginFiles()` 与 renderer `useSvgContent()` 改用 shared event，CommonChannel 补齐对应 main handler 并返回 `tfile://` URL。
+  - Renderer `TouchStorage` 与 `StorageSubscription` 硬切为 `StorageEvents.app.*` transport-only，移除旧 channel 的 `storage:get-versioned/get/save` raw fallback 与 update listener fallback；历史 channel 参数仅保留无副作用入口，避免基础存储继续依赖旧 IPC。
+  - 官方 `touch-translation` widget 的历史项回填 CoreBox 输入动作改为 `createPluginTuffTransport(...).send(CoreBoxEvents.input.setQuery)`，不再直接 `channel.send('core-box:set-query')`。
+  - `onDidChange()` 暂保留现有 `plugin:storage:update` 订阅桥接，避免在回调语义未专项验证前扩大改动面。
+  - `packages/utils/renderer/hooks/use-channel.ts` 的公开注释已收口为 host bootstrap 专用低层 TouchChannel 说明，不再登记 renderer storage warning-only 债务。
+  - Nexus 官网 locale 初始化硬切为 profile/cookie/browser/manual 来源，不再读取或清理旧 `?lang=` query 参数；`app.vue` 移除对应路由监听，`useLocaleOrchestrator` 删除 query cleanup 分支。
+  - Nexus API key release scope 硬切为精确匹配模型：新 key 不再允许 `release:sync`，授权检查不再让该旧 scope 覆盖 `release:write/assets/publish/news/evidence`。
+  - Nexus intelligence provider dot-route 410 回归测试标题改为 deprecated wording，继续保留 hard-cut 断言但不再占用 legacy keyword 清册。
+  - Nexus 官网 SDK 入口硬切为 TuffTransport-only：`tuffSdkItems` 删除 `Channel SDK / useChannel()` 首页卡片，全局功能搜索不再映射旧 Channel 文档；API 总索引 quick start 删除 `useChannel()` 初始化，只保留 `useTuffTransport()` 作为 IPC 主入口。
+  - Manifest permissions 旧数组格式硬切：`parseManifestPermissions()`、CoreApp plugin manifest 类型与 shared plugin manifest 类型不再接受 `permissions: string[]` 作为 required 权限声明，只支持当前 `{ required, optional }` 结构；旧数组输入会被解析为空权限。
+  - Tuffex GroupBlock 旧 `icon/expandFill/shrink` prop 与旧 `tx-group-block-storage-*` localStorage key fallback 已硬切，Slot/Switch/Input/Select 子组件同步只接受 `defaultIcon/activeIcon`，并移除 `group-block/src/types.ts` 清册行；`TxCodeEditor` 已移除 `@codemirror/legacy-modes` direct dependency，TOML/INI 改用本地 stream parser，并通过 `@lezer/common` 版本收敛修复 CodeMirror 高亮崩溃。
+  - Intelligence API 调用、能力测试、模型拉取、审计统计、配额与 reloadConfig 从旧两段 `intelligence:*` raw event 硬切为 `intelligence:api:*` typed event；CoreApp main handler、旁路 service、`packages/utils` SDK 与 `packages/tuff-intelligence` SDK 已统一命名口径，运行代码中旧两段 API 字符串清零。
+  - CoreApp `tuff-intelligence-runtime` trace replay 已硬切为 v3 seq-only：`queryTrace(fromSeq)` 不再为缺失 `seq` 的 pre-v3 trace 自动合成序号，只返回具备真实 `seq` 的 trace event；新增 trace 仍基于当前最大真实 `seq` 单调递增，并移除对应 legacy registry / allowlist 行。
+  - Nexus `/api/sync/pull|push` 退役路由文案与错误码改为 `SYNC_RETIRED_*`，`push` 不再先进入 `requireVerifiedEmail()`，旧同步入口只做无鉴权 410 拒绝。
+  - 新增 plugin storage/performance/sqlite/box/core-box/window/service/temp-files/common SDK 定向测试，固定文件操作、诊断操作、performance API、SQLite API、临时文件 API 与已覆盖 Box/CoreBox/Window/Service/Common API 均走 shared event 对象，并从 compatibility registry 移除已清零文件的 `raw-channel-send` 债务行。
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/plugin-common-sdk.test.ts" "__tests__/transport-domain-sdks.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过（`3 files / 25 tests`）；`pnpm -C "packages/utils" exec vitest run "__tests__/plugin-temp-files-sdk.test.ts" "__tests__/transport-domain-sdks.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过（`3 files / 22 tests`）；`pnpm -C "apps/core-app" exec vitest run "src/main/channel/common.test.ts"` 通过（`1 file / 10 tests`）；`pnpm -C "packages/utils" exec vitest run "__tests__/renderer-storage-transport.test.ts"` 通过（`1 file / 3 tests`）；`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/code-editor/__tests__/code-editor.test.ts"` 通过（`1 file / 4 tests`）；`pnpm -C "packages/tuff-intelligence" exec vitest run "src/transport/event/builder.test.ts"` 通过（`1 file / 3 tests`）；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/ai/tuff-intelligence-runtime.test.ts"` 通过（`1 file / 3 tests`）；`pnpm -C "packages/utils" exec vitest run "__tests__/permission-status.test.ts"` 通过（`1 file / 5 tests`）；`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/nexus" run typecheck` 通过；`ClipboardEvents.queryMeta` 已从 `clipboard:query` raw event 硬切为 `clipboard:history:query-meta` typed builder；`PollingService` 默认 lane 已从旧 `legacy_serial` 硬切为 `serial`，诊断结构不再暴露旧 lane；插件日志类型已删除 `LogLevelLegacy` 旧 alias，统一只导出 base `LogLevel` / `LogLevelString`；`ModuleBaseContext.runtime` 说明已硬切为显式 runtime context，不再登记旧 global wording；`node scripts/check-legacy-boundaries.mjs` 显示 `raw-channel-send` 降为 `0 files / 0 hits`，`legacy-keyword` 降为 `61 files / 176 hits`。
+
+### ref(core-app): 收敛 Sync payload 迁移标记与兼容门禁噪声
+
+- `apps/core-app/src/main/modules/sync/{index.ts,sync-payload-crypto.ts,sync-payload-crypto.test.ts,sync-payload-wire.test.ts}`
+- `apps/core-app/src/main/modules/plugin/plugin-preflight-helper.test.ts`
+- `apps/core-app/src/renderer/src/modules/{lang/language-preferences.test.ts,storage/account-storage.test.ts}`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+  - Sync payload 解密结果内部字段从 `legacy` 改为 `requiresMigrationRewrite`，语义明确为“读到 b64 迁移载荷后需要重写为 `enc:v1`”，b64 只读迁移读取能力保持不变。
+  - 清理测试标题/fixture 中不必要的 `legacy` 关键词，避免测试文案污染 `legacy-boundary` 与 compatibility registry 统计。
+  - Language localStorage snapshot 迁移读取路径已硬切，初始化只读取 typed app settings / browser / Intl；旧 `app-language` 与 `app-follow-system-language` 仅保留 retired key cleanup，不再作为偏好来源。
+  - CoreApp renderer storage facade、Tuffex 集成策略与权限页 SDK blocked warning 的兼容命名噪声已清理，不改变运行时行为。
+  - Shared `StorageEvents` 已物理删除旧 raw storage update namespace 与对应 payload 类型；`renderer-storage-transport.test.ts` 固定不再暴露该旧 namespace。
+  - 移除 compatibility registry 中已无当前命中的 stale cleanup candidate 行，保留仍由扫描命中的 migration exception、size exception 与测试 fixture 登记。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/sync/sync-payload-crypto.test.ts" "src/main/modules/sync/sync-payload-wire.test.ts"` 通过（`2 files / 8 tests`）；`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/lang/language-preferences.test.ts" "src/main/modules/plugin/plugin-preflight-helper.test.ts" "src/renderer/src/modules/storage/account-storage.test.ts"` 通过（`3 files / 11 tests`）；`node scripts/check-legacy-boundaries.mjs` 与 `pnpm compat:registry:guard` 通过，其中 `compat:registry:guard` 已无 cleanup warning。
+
+### test(core-app): 补强 inline workflow 多 step hard-cut 回归
+
+- `apps/core-app/src/main/modules/ai/intelligence-deepagent-orchestration.test.ts`
+- `packages/tuff-intelligence/src/transport/event/builder.ts`
+- `packages/tuff-intelligence/src/transport/event/builder.test.ts`
+  - 新增 inline `workflow.execute` 测试，覆盖 prompt step 与 direct tool step 混排执行。
+  - 固化 inline `capabilityId` step 会被入口拒绝，direct tool step 会保留 `toolSource`、`workingDirectory` 与 workflow approval context。
+  - 断言 inline workflow 归一化结果使用 `inline.workflow`，避免回退到历史不存在的 legacy workflow agent ID。
+  - 补齐 `@talex-touch/tuff-intelligence` 包内轻量 `defineEvent` builder，修复包内 SDK typed builder 迁移后 `defineEvent is not a function` 的运行时漏口，保持依赖方向不反向引用 `packages/utils`。
+  - 新增包内 builder 直接测试，覆盖 typed event name、legacy two-part raw event 保留，以及 `agentToolApprove` / `workflowGet` SDK 方法使用 typed event names。
+  - 验证：`pnpm -C "packages/tuff-intelligence" exec vitest run "src/transport/event/builder.test.ts"` 通过（`1 file / 3 tests`）；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/ai/intelligence-deepagent-orchestration.test.ts" "src/main/modules/ai/intelligence-sdk.test.ts" "src/renderer/src/modules/hooks/useWorkflowEditor.test.ts"` 通过（`3 files / 8 tests`）。
+
+### test(nexus): 固化 Release Evidence 平台阻塞矩阵口径
+
+- `apps/nexus/server/api/admin/release-evidence/releaseEvidence.api.test.ts`
+  - 补充 Release Evidence matrix 契约测试，覆盖 Windows required case 失败时进入 blockers、macOS required case 通过时平台为 `passed`。
+  - 固化 Linux `linux-best-effort-smoke` 必须以 `requiredForRelease=false + best_effort` 计入，确保 Linux smoke 不会被误算成 `2.5.0` release blocker。
+  - 验证：`pnpm -C "apps/nexus" exec vitest run "server/api/admin/release-evidence/releaseEvidence.api.test.ts"` 通过（`1 file / 8 tests`）。
+
+### test(tuffex): 补齐 Switch 基础交互契约
+
+- `packages/tuffex/packages/components/src/switch/__tests__/switch.test.ts`
+  - 新增 `TxSwitch` 组件契约测试，覆盖 `role=switch`、`aria-checked`、`aria-disabled`、`tabindex`、active 状态与 size class。
+  - 固化 click / Enter / Space 的 `update:modelValue` 与 `change` 事件行为，并覆盖 disabled 状态下不触发交互。
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/switch/__tests__/switch.test.ts"` 通过（`1 file / 3 tests`）。
+
+### docs(nexus): hard-cut Switch docs to current contract
+
+- `apps/nexus/content/docs/dev/components/switch.en.mdc`
+- `packages/tuffex/packages/components/src/switch/__tests__/switch.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Removed stale Switch docs references to unsupported `loading` state and `medium` size.
+  - Updated the API to the current implementation contract: `small/default/large` size values, default size behavior, disabled focus/toggle blocking, and `update:modelValue` / `change` events.
+  - Reused existing focused Switch component coverage for ARIA state, size class, click/Enter/Space toggles, and disabled behavior.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/switch/__tests__/switch.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/switch/src/TxSwitch.vue" "packages/components/src/switch/__tests__/switch.test.ts"` 通过。
+
+### test(tuffex): 补齐 Checkbox 基础交互契约
+
+- `packages/tuffex/packages/components/src/checkbox/__tests__/checkbox.test.ts`
+  - 新增 `TxCheckbox` 组件契约测试，覆盖 label 渲染、ARIA 状态、无可见 label 时的 `aria-label`、`labelPlacement=start` 顺序。
+  - 固化 click / Enter / Space 的 `update:modelValue` 与 `change` 事件行为，并覆盖 disabled 状态下不触发交互、`aria-disabled` 与 `tabindex=-1`。
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/checkbox/__tests__/checkbox.test.ts"` 通过（`1 file / 5 tests`）。
+
+### docs(nexus): clear Checkbox component API placeholders
+
+- `apps/nexus/content/docs/dev/components/checkbox.en.mdc`
+- `packages/tuffex/packages/components/src/checkbox/__tests__/checkbox.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Replaced generated Checkbox API placeholders with the current boolean-control contract: checked state, disabled toggle blocking, label placement, conditional `aria-label`, change events, and default label slot behavior.
+  - Reused existing focused Checkbox component coverage for label rendering, ARIA state, label order, click/Enter/Space toggles, and disabled behavior.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/checkbox/__tests__/checkbox.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/checkbox/src/TxCheckbox.vue" "packages/components/src/checkbox/__tests__/checkbox.test.ts"` 通过。
+
+### test(utils): 固化三段 raw event 防回退门禁
+
+- `packages/utils/__tests__/transport-event-boundary.test.ts`
+  - 新增 transport event boundary 测试，扫描 `transport/events/index.ts`、`transport/events/app.ts` 与 `transport/events/assistant.ts`。
+  - 对事件名已经符合 `namespace:module:action` 或更深层形态的定义，禁止继续使用 `defineRawEvent`；确需保留 raw 的两段 legacy 协议仍不在本门禁范围内，避免隐式改名。
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-event-boundary.test.ts" "__tests__/transport-domain-sdks.test.ts"` 通过（`2 files / 21 tests`）；`pnpm -C "packages/utils" exec eslint "__tests__/transport-event-boundary.test.ts" "__tests__/transport-domain-sdks.test.ts" "transport/events/index.ts" "transport/events/assistant.ts"` 通过。
+
+### ref(utils): Plugin storage open-in-editor 事件改用 typed builder
+
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+  - `PluginEvents.storage.openInEditor` 保持既有对外事件名 `plugin:storage:open-in-editor` 不变，内部从 `defineRawEvent` 收口为 `defineEvent('plugin').module('storage').event('open-in-editor')`。
+  - 补充 storage event metadata 回归断言，固定 `namespace=plugin / module=storage / action=open-in-editor`，完成 shared `events/index.ts` 中三段 raw event 的无损 typed 化清零。
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts"` 通过（`1 file / 20 tests`）；`pnpm -C "packages/utils" exec eslint "transport/events/index.ts" "transport/events/assistant.ts" "__tests__/transport-domain-sdks.test.ts"` 通过；脚本扫描 `packages/utils/transport/events/{index,app}.ts` 确认三段 `defineRawEvent` 已清零。
+
+### ref(utils): Plugin widget transport 事件改用 typed builder
+
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+  - `PluginEvents.widget.register/update/unregister` 保持既有对外事件名 `plugin:widget:*` 不变，内部从 `defineRawEvent` 收口为 `defineEvent('plugin').module('widget')...`。
+  - 补充 widget event metadata 回归断言，固定 `namespace=plugin / module=widget`，继续压缩 plugin 链路 raw event 构造面。
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts"` 通过（`1 file / 19 tests`）；`pnpm -C "packages/utils" exec eslint "transport/events/index.ts" "transport/events/assistant.ts" "__tests__/transport-domain-sdks.test.ts"` 通过。
+
+### ref(utils): Assistant transport 事件改用 typed builder
+
+- `packages/utils/transport/events/assistant.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+  - Assistant floating-ball 与 voice-panel 事件保持既有对外事件名 `assistant:floating-ball:*` / `assistant:voice-panel:*` 不变，内部从 `defineRawEvent` 收口为 `defineEvent('assistant').module(...).event(...)`。
+  - 补充 typed event metadata 回归断言，固定 `namespace/module/action`，避免 Assistant 链路后续回退到 raw event 构造。
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts"` 通过（`1 file / 18 tests`）；`pnpm -C "packages/utils" exec eslint "transport/events/assistant.ts" "__tests__/transport-domain-sdks.test.ts"` 通过。
+
+### ref(tuff-intelligence): 包内 Intelligence SDK 同步 typed builder
+
+- `packages/tuff-intelligence/src/transport/sdk/domains/intelligence.ts`
+  - `@talex-touch/tuff-intelligence` 自带的 `agentSession*`、`agentTool*` 与 `workflow*` SDK 事件同步从 `defineRawEvent` 收口到 typed builder。
+  - 对外事件名继续保持 `intelligence:agent:*` / `intelligence:workflow:*`，与 `packages/utils` shared SDK 和 CoreApp main handler 的 typed event 语义对齐。
+  - 验证：`pnpm -C "packages/tuff-intelligence" exec eslint "src/transport/sdk/domains/intelligence.ts"` 通过。
+
+### ref(core-app): Intelligence main handler 事件改用 typed builder
+
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+  - 主进程 `intelligence:agent:*` 与 `intelligence:workflow:*` handler 注册事件保持对外名称不变，内部构造从 `defineRawEvent` 收口为 `defineEvent('intelligence').module('agent|workflow')...`。
+  - 与 renderer/shared SDK 的 typed builder 事件对象语义对齐，继续压缩 agent/workflow 链路 raw event 依赖。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/ai/intelligence-sdk.test.ts" "src/main/modules/ai/intelligence-deepagent-orchestration.test.ts" "src/main/channel/common.test.ts"` 通过（`3 files / 14 tests`）；`pnpm -C "apps/core-app" exec eslint "src/main/modules/ai/intelligence-module.ts"` 通过。
+
+### ref(utils): Agent session/tool SDK 事件改用 typed builder
+
+- `packages/utils/transport/sdk/domains/intelligence.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+  - `agentSession*`、`agentPlan/Execute/Reflect` 与 `agentTool*` SDK 事件保持 `intelligence:agent:*` 对外事件名不变，内部从 `defineRawEvent` 收口为 `defineEvent('intelligence').module('agent')...`。
+  - `agentSessionSubscribe` 与 `agentToolApprove` 回归测试补充 `namespace/module/action` 断言，固定 agent 链路不再依赖 raw event 构造。
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts"` 通过（`1 file / 17 tests`）；`pnpm -C "packages/utils" exec eslint "transport/sdk/domains/intelligence.ts" "__tests__/transport-domain-sdks.test.ts"` 通过。
+
+### ref(utils): Workflow SDK 事件改用 typed builder
+
+- `packages/utils/transport/sdk/domains/intelligence.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+  - `workflowList/get/save/delete/run/history` 继续保持对外事件名 `intelligence:workflow:*`，但内部定义从 `defineRawEvent` 收口为 `defineEvent('intelligence').module('workflow')...`。
+  - 回归测试在字符串 event name 外增加 `namespace/module/action` 断言，确认 Workflow SDK 不再依赖 raw event 构造。
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts"` 通过（`1 file / 16 tests`）；`pnpm -C "packages/utils" exec eslint "transport/sdk/domains/intelligence.ts" "__tests__/transport-domain-sdks.test.ts"` 通过。
+
+### breaking(utils/core-app): Agent API 事件硬切为 typed transport 命名
+
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+- `apps/core-app/src/main/modules/ai/agents/agent-channels.ts`
+- `docs/plan-prd/02-architecture/intelligence-agents-system-prd.deep-dive-2026-03.md`
+  - Agent management API 与 task push 事件从历史 raw 名称（如 `agents:list-all`、`agents:execute-immediate`、`agents:task-started`）硬切为 typed transport 命名：`agents:api:*` / `agents:push:*`。
+  - 主进程注册与 renderer SDK 共用 `AgentsEvents` typed event 对象，不再注册旧 raw agent 管理事件。
+  - `transport-domain-sdks.test.ts` 增加具体 event name 断言，防止 SDK 后续回退到 raw 名称。
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts"` 通过（`1 file / 16 tests`）；`pnpm -C "apps/core-app" exec vitest run "src/main/channel/common.test.ts" "src/main/modules/ai/intelligence-deepagent-orchestration.test.ts" "src/renderer/src/modules/hooks/useWorkflowEditor.test.ts"` 通过（`3 files / 13 tests`）。
+
+### fix(core-app): 统一 Workflow Editor 默认 Agent ID
+
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceWorkflowPage.vue`
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.test.ts`
+  - Workflow Editor 新建 agent step 与保存空 `agentId` 的兜底值从历史 `deepagent.workflow` 硬切为真实已注册内置 Agent：`builtin.workflow-agent`。
+  - 页面 Agent ID placeholder 同步为 `builtin.workflow-agent`，避免用户按旧提示保存后指向不存在的 Agent。
+  - 新增 hook 回归测试，覆盖默认新建步骤与保存 payload 兜底，防止 agent/workflow 链路再次回退到旧兼容 ID。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/hooks/useWorkflowEditor.test.ts"` 通过（`1 file / 2 tests`）。
+
+### fix(tuffex): 补强 Agents 列表文案与键盘选择契约
+
+- `packages/tuffex/packages/components/src/agents/`
+- `packages/tuffex/docs/components/agents.md`
+  - `TxAgentsList` 新增 `enabledTitle`、`disabledTitle`、`emptyText` 覆盖项，默认文案保持兼容，便于 Nexus/CoreApp 侧按场景本地化 section 与空态。
+  - `TxAgentItem` 显式以 `select` 事件承载选择语义，disabled item 不再通过父级透传 click 触发选择；Enter 与 Space 键可触发 enabled item。
+  - 新增 `agents.test.ts` 覆盖分组文案、空态文案、enabled/disabled click 与键盘选择行为。
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/agents/__tests__/agents.test.ts"` 通过（`1 file / 5 tests`）。
+
+### feat(nexus): 落地设备授权 Phase 1 风控首批闭环
+
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/api/app-auth/device/{start,approve,cancel,abort}.post.ts`
+- `apps/nexus/server/api/devices/{revoke.post,audits.get}.ts`
+- `apps/nexus/server/utils/__tests__/device-auth-risk.test.ts`
+- `docs/plan-prd/{TODO.md,04-implementation/NexusDeviceAuthRiskControl-260316.md}`
+  - 新增 `auth_device_auth_audits` 结构化审计表，记录设备授权 `request/approve/reject/cancel/revoke/trust/untrust` 的时间、来源、操作者、原因、安全元数据；当前用户可通过 `GET /api/devices/audits` 查询授权时间线。
+  - `start` 与 `approve` 统一复用 `evaluateDeviceAuthRateLimit()`：按 10 分钟窗口约束 `device/IP/user` 设备码申请频率，连续 reject/cancel 达阈值后进入默认 10 分钟冷却，并返回 `429 + retryAfterSeconds`。
+  - `approve` 的 IP mismatch、长期授权策略拒绝、频控/冷却拒绝都会写入审计；`cancel`、设备端 `abort` 与设备撤销也补齐审计打点。
+  - 长期授权时间窗改为后端判定：NextAuth JWT `iat` 注入 session context，`evaluateDeviceAuthLongTermPolicy()` 只允许签名 session 签发后 10 分钟内确认长期授权；前端 `reauth=1` 仅作为交互态，不作为信任依据。
+  - 可信设备白名单落到 `auth_devices.trusted_at`，Dashboard 设备页可对未撤销设备执行信任/取消信任；长期授权必须同时满足可信设备、常用登录地与 session 时间窗。
+  - 验证：`pnpm -C "apps/nexus" exec vitest run "server/utils/__tests__/device-auth-risk.test.ts"` 通过（`1 file / 4 tests`）；`pnpm -C "apps/nexus" run typecheck` 通过（仅保留既有 Nuxt/Vue duplicated imports 与 vue-router volar subpath warning）。
+
 ## 2026-05-04
 
 ### ref(core-app): 收口 Electron runtime 与 raw IPC 边界
@@ -285,6 +2201,55 @@
   - 插件创建脚手架更新既有 manifest 时也会重写 unsupported / future marker，避免模板保留一个随后被运行时阻断的 `sdkapi`。
   - 明确列入支持列表的历史 marker 仍可通过校验，但继续提示升级到当前 `260428`，保持“runtime allowlist hard-cut + developer guidance recommend current”的分层语义。
   - loader dev-source 回归补齐当前 `sdkapi` manifest，避免测试场景把 dev-source fallback 与 SDK 阻断混在一起。
+
+### ref(core-app): hard-cut analytics startup metric legacy events
+
+- `packages/utils/transport/events/app.ts`
+- `packages/utils/transport/events/types/app.ts`
+- `packages/utils/transport/sdk/domains/settings.ts`
+- `packages/utils/analytics/types.ts`
+- `apps/core-app/src/main/modules/analytics/{analytics-module.ts,core/analytics-core.ts,README.md}`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`
+- `docs/plan-prd/{TODO.md,docs/compatibility-debt-registry.csv}`
+- `scripts/legacy-boundary-allowlist.json`
+  - 删除 `AppEvents.analytics.getCurrent/getHistory/getSummary/report`、settings SDK 同名方法与主进程 handler，不再通过旧 StartupAnalytics 输出面提供启动指标兼容事件。
+  - `AnalyticsSnapshot.metrics.startup` 成为当前启动摘要出口，包含总耗时、主进程模块耗时、renderer handshake 耗时、模块数与评级；设置 About 页改为读取 `analytics.getSnapshot`。
+  - 移除 `packages/utils/transport/events/app.ts` 的 compatibility debt registry / legacy allowlist 项，避免 app event 定义继续保留 analytics legacy alias。
+
+### test(core-app): restore workflow/everything web typecheck gate
+
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/setting-everything-state.test.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `docs/plan-prd/{TODO.md,docs/compatibility-debt-registry.csv}`
+- `scripts/legacy-boundary-allowlist.json`
+  - Workflow editor 回归测试把 `workflowSave` 捕获 payload 显式收窄为 `WorkflowDefinition`，避免保存断言被 `{}` 推断挡住 `typecheck:web`；行为仍固定空 `agentId` 保存时回填 `builtin.workflow-agent`。
+  - Everything 设置状态 fixture 补齐当前 `EverythingStatusResponse.backendAttemptErrors` 必填字段，恢复 renderer web typecheck 对 Everything 状态契约的覆盖。
+  - Clipboard 模块注释里的 `NSFilenamesPboardType` 描述从 legacy wording 改为 older macOS format；该文件不再登记 legacy keyword debt。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/hooks/useWorkflowEditor.test.ts" "src/renderer/src/views/base/settings/setting-everything-state.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（Tuffex dts 插件仍打印既有声明生成诊断，但命令退出码为 0）。
+
+### fix(tuffex): expose alert/avatar/badge props for dts generation
+
+- `packages/tuffex/packages/components/src/alert/src/TxAlert.vue`
+- `packages/tuffex/packages/components/src/avatar/src/TxAvatar.vue`
+- `packages/tuffex/packages/components/src/badge/src/TxBadge.vue`
+  - `TxAlert` / `TxAvatar` / `TxBadge` 的 `defineProps` 直接复用已导出的 `AlertProps` / `AvatarProps` / `BadgeProps`，避免 `withInstall()` 导出的组件类型引用 SFC 内部私有 `Props` 导致 `TS4023`。
+  - `defineEmits` 维持本地接口，避免 Vue SFC 编译器无法解析导入 emits 类型。
+  - 验证：`pnpm -C "packages/tuffex/packages/components" run build` 通过；首批 `TxAlert` / `TxAvatar` / `TxBadge` `TS4023` 诊断不再出现，剩余 dts 诊断集中在 slot 调用/slot 类型注解。
+
+### fix(tuffex): clear remaining slot dts diagnostics
+
+- `packages/tuffex/packages/components/src/button/src/button.vue`
+- `packages/tuffex/packages/components/src/empty/src/TxEmpty.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `packages/tuffex/packages/components/src/select/src/TxSelect.vue`
+- `packages/tuffex/packages/components/src/select/src/TxSelectItem.vue`
+- `packages/tuffex/packages/components/src/stagger/src/TxStagger.vue`
+- `packages/tuffex/packages/components/src/tooltip/src/TxTooltip.vue`
+- `packages/tuffex/docs/.vitepress/theme/components/DemoBlock.vue`
+  - Slot 读取统一显式标注为 Vue `Slots`，默认/具名 slot 调用改为带空 props 的调用形式，避免声明生成阶段把内部 slot 函数签名推断为不可命名类型。
+  - `button` / `stagger` 的 VNode 处理补充显式 `VNode` 类型，`tooltip` 的 max height 字符串值同步收窄，保持运行行为不变。
+  - 验证：`pnpm -C "packages/tuffex" exec eslint "packages/components/src/flip-overlay/src/TxFlipOverlay.vue" "packages/components/src/select/src/TxSelect.vue" "packages/components/src/select/src/TxSelectItem.vue" "docs/.vitepress/theme/components/DemoBlock.vue"` 通过（`DemoBlock.vue` 被当前 eslint ignore 规则跳过）；`pnpm -C "packages/tuffex/packages/components" run build` 通过且不再输出 dts 诊断。
 
 ### fix(core-app): 阻断 unsupported sdkapi marker
 
@@ -1755,6 +3720,22 @@
 - 当前主线：`2.4.9-beta.4` 基线下，下一动作统一为 `Nexus 设备授权风控`。
 - 历史主线：`2.4.8 OmniPanel Gate`、`v2.4.7 Gate A/B/C/D/E` 均已收口（historical）。
 - 旧记录入口：见文末“历史索引导航”。
+
+## 2026-05-05
+
+### fix(core-app): Windows crash diagnostics, app launch, Store indexing and titlebar fixes
+
+- `createLogger` / module logger now persist main-process diagnostics to log4js file appenders, including error stacks and app launch context.
+- Windows app scanning preserves `.lnk` shortcut path, args and cwd, and indexes Store/UWP apps from `Get-StartApps` with AppsFolder AUMID launch metadata.
+- Store/UWP scanning now reads StartApps/Appx metadata as UTF-8, resolves package manifest icon assets, and treats URL/PWA Start menu entries as `openExternal` URLs instead of fake AppsFolder AUMIDs.
+- App execution now logs `item.id`, path, launch kind, shortcut target, `shell.openPath` result and stack traces; shortcut launch is tried before target fallback, and Store apps launch through `shell:AppsFolder\\AUMID`.
+- App startup maintenance now defers heavy backfill/full-sync work during recent search activity to reduce dev/startup lag.
+- Everything status records per-backend attempt errors while keeping `sdk-napi -> cli -> unavailable` fallback.
+- Windows main titlebar reserves native caption control space, improves button contrast, and adds Simple/Flat logo left spacing.
+- Windows active-app detection now uses a typed UInt32 foreground-window process id, parses noisy PowerShell output from the final JSON line, and rate-limits compact failure diagnostics.
+- Corrupted Windows app `display_name` values from stale index data, such as `U+FFFD` replacement characters or square glyphs, now fall back to clean app `name` values and are repaired by app backfill/full sync.
+- Diagnostic report: `docs/plan-prd/report/windows-search-diagnostics-2026-05-05.md`.
+- Verification: `pnpm -C "apps/core-app" run typecheck:node` passed; targeted app-provider/display-name/search-processing Vitest passed; Web typecheck/database snapshot/dev launch were not rerun in this commit.
 
 ## 2026-04-09
 
@@ -3689,13 +5670,13 @@
   - `pilotToolApprovalAutoResume`（默认 `true`）
   - `pilotToolApprovalPollIntervalMs`（默认 `1500`）
   - `pilotToolApprovalPollTimeoutMs`（默认 `600000`）
-  - `pilotEnableLegacyExecutorEventCompat`（默认 `false`）
+  - `pilotEnableExecutorEventCompat`（默认 `false`）
 - 补充审批自动续跑回归测试：
   - 新增 completion flow 单测，覆盖 `request_id` 复用（跳过 turn 创建）与审批 `approved/rejected/timeout` 三条分支状态映射。
 - Legacy Phase 2（工具提示相关）：
   - `$completion` 默认关闭 legacy `completion/verbose/status_updated(tool)` 兼容分支；
   - 主链路统一为 `turn.* + run.audit`；
-  - 通过 `NUXT_PUBLIC_PILOT_ENABLE_LEGACY_EXECUTOR_EVENT_COMPAT=true` 可回滚兼容旧事件解析。
+  - 通过 `NUXT_PUBLIC_PILOT_ENABLE_EXECUTOR_EVENT_COMPAT=true` 可按需启用旧事件解析窗口。
 
 ### feat(pilot-intent-image): Intent 图像路由 + image.generate 工具闭环（V1）
 

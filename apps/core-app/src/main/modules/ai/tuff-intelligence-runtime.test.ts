@@ -113,14 +113,14 @@ describe('TuffIntelligenceRuntime trace sequence', () => {
     )
   })
 
-  it('backfills legacy trace seq for old sessions', async () => {
+  it('excludes pre-v3 trace events without seq from replay', async () => {
     const runtime = new TuffIntelligenceRuntimeCtor() as any
-    const stored = createStoredSession('session_legacy')
+    const stored = createStoredSession('session_pre_v3')
 
     stored.trace = [
       {
         id: 'trace_1',
-        sessionId: 'session_legacy',
+        sessionId: 'session_pre_v3',
         type: 'session.started',
         level: 'info',
         message: 'started',
@@ -128,7 +128,7 @@ describe('TuffIntelligenceRuntime trace sequence', () => {
       },
       {
         id: 'trace_2',
-        sessionId: 'session_legacy',
+        sessionId: 'session_pre_v3',
         type: 'plan.created',
         level: 'info',
         message: 'planned',
@@ -136,7 +136,7 @@ describe('TuffIntelligenceRuntime trace sequence', () => {
       },
       {
         id: 'trace_3',
-        sessionId: 'session_legacy',
+        sessionId: 'session_pre_v3',
         type: 'execution.started',
         level: 'info',
         message: 'executing',
@@ -147,14 +147,14 @@ describe('TuffIntelligenceRuntime trace sequence', () => {
     runtime.loadSession = vi.fn().mockResolvedValue(stored)
 
     const replay = await runtime.queryTrace({
-      sessionId: 'session_legacy',
+      sessionId: 'session_pre_v3',
       fromSeq: 2,
       limit: 10
     })
 
-    expect(stored.trace.map((event) => event.seq)).toEqual([1, 2, 3])
-    expect(stored.session.lastEventSeq).toBe(3)
-    expect(replay.map((event) => event.seq)).toEqual([2, 3])
+    expect(stored.trace.map((event) => event.seq)).toEqual([undefined, undefined, undefined])
+    expect(stored.session.lastEventSeq).toBeUndefined()
+    expect(replay).toEqual([])
   })
 
   it('releases session trace subscribers after unsubscribe', () => {

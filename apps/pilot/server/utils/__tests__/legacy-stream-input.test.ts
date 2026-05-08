@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolveLegacyUiStreamInput } from '../../../app/composables/api/base/v1/aigc/completion/legacy-stream-input'
+import { resolvePilotUiStreamInput } from '../../../app/composables/api/base/v1/aigc/completion/legacy-stream-input'
 
-describe('legacy stream input payload', () => {
+describe('pilot stream input payload', () => {
   it('text + attachment 出站时拆分为 message 与 attachments', async () => {
-    const payload = await resolveLegacyUiStreamInput('session_a', [
+    const payload = await resolvePilotUiStreamInput('session_a', [
       {
         role: 'user',
         page: 0,
@@ -39,7 +39,7 @@ describe('legacy stream input payload', () => {
   })
 
   it('仅附件时允许 message 为空并透传 attachments', async () => {
-    const payload = await resolveLegacyUiStreamInput('session_b', [
+    const payload = await resolvePilotUiStreamInput('session_b', [
       {
         role: 'user',
         page: 0,
@@ -73,12 +73,12 @@ describe('legacy stream input payload', () => {
     ])
   })
 
-  it('历史 dataURL 附件会先上传并回填 attachmentId', async () => {
+  it('dataURL 附件会先上传并回填 attachmentId', async () => {
     const uploadDataUrlAttachment = vi.fn().mockResolvedValue({
       id: 'att_from_dataurl',
       type: 'image',
       ref: 'https://pilot.example.com/api/chat/sessions/s1/attachments/att_from_dataurl/content?exp=1&sig=2',
-      name: 'legacy.png',
+      name: 'current.png',
       mimeType: 'image/png',
       previewUrl: 'https://pilot.example.com/api/chat/sessions/s1/attachments/att_from_dataurl/content?exp=1&sig=2',
     })
@@ -95,7 +95,7 @@ describe('legacy stream input payload', () => {
                 type: 'image',
                 value: 'data:image/png;base64,QUJD',
                 data: 'data:image/png;base64,QUJD',
-                name: 'legacy.png',
+                name: 'current.png',
               },
             ],
           },
@@ -103,14 +103,14 @@ describe('legacy stream input payload', () => {
       },
     ]
 
-    const payload = await resolveLegacyUiStreamInput('session_c', messages, {
+    const payload = await resolvePilotUiStreamInput('session_c', messages, {
       uploadDataUrlAttachment,
     })
 
     expect(uploadDataUrlAttachment).toHaveBeenCalledTimes(1)
     expect(uploadDataUrlAttachment).toHaveBeenCalledWith('session_c', {
       type: 'image',
-      name: 'legacy.png',
+      name: 'current.png',
       mimeType: 'image/png',
       dataUrl: 'data:image/png;base64,QUJD',
     })
@@ -120,7 +120,7 @@ describe('legacy stream input payload', () => {
         id: 'att_from_dataurl',
         type: 'image',
         ref: 'https://pilot.example.com/api/chat/sessions/s1/attachments/att_from_dataurl/content?exp=1&sig=2',
-        name: 'legacy.png',
+        name: 'current.png',
         mimeType: 'image/png',
         previewUrl: 'https://pilot.example.com/api/chat/sessions/s1/attachments/att_from_dataurl/content?exp=1&sig=2',
       },
@@ -133,7 +133,7 @@ describe('legacy stream input payload', () => {
   })
 
   it('attachmentId 存在但 value 是 dataURL 时不会直接出站 dataURL', async () => {
-    const payload = await resolveLegacyUiStreamInput('session_fallback', [
+    const payload = await resolvePilotUiStreamInput('session_current_ref', [
       {
         role: 'user',
         page: 0,
@@ -146,7 +146,7 @@ describe('legacy stream input payload', () => {
                 value: 'data:image/png;base64,QUJD',
                 data: 'image/png',
                 name: 'old.png',
-                attachmentId: 'att_image_legacy',
+                attachmentId: 'att_image_current',
               },
             ],
           },
@@ -157,9 +157,9 @@ describe('legacy stream input payload', () => {
     expect(payload.message).toBe('')
     expect(payload.attachments).toEqual([
       {
-        id: 'att_image_legacy',
+        id: 'att_image_current',
         type: 'image',
-        ref: 'attachment://att_image_legacy',
+        ref: 'attachment://att_image_current',
         name: 'old.png',
         mimeType: 'image/png',
         previewUrl: undefined,
@@ -167,8 +167,8 @@ describe('legacy stream input payload', () => {
     ])
   })
 
-  it('非 dataURL 且无 attachmentId 的历史附件会提示重新上传', async () => {
-    await expect(resolveLegacyUiStreamInput('session_d', [
+  it('非 dataURL 且无 attachmentId 的附件会提示重新上传', async () => {
+    await expect(resolvePilotUiStreamInput('session_d', [
       {
         role: 'user',
         page: 0,
@@ -178,7 +178,7 @@ describe('legacy stream input payload', () => {
             value: [
               {
                 type: 'image',
-                value: 'https://legacy.example.com/old.png',
+                value: 'https://pilot.example.com/current.png',
                 data: 'image/png',
                 name: 'old.png',
               },

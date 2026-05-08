@@ -96,7 +96,7 @@ const selectedKeys = ref([])
 
 ## Design Notes
 
-- Click a sortable column header to cycle through ascending, descending, and unsorted states.
+- Click a sortable column header, or focus it and press Enter/Space, to cycle through ascending, descending, and unsorted states. Sortable headers expose `aria-sort`.
 - Use the `#cell-<columnKey>` slot to render custom content (buttons, badges, avatars) in any column.
 - For large datasets (1000+ rows), consider using [VirtualList](/components/virtual-list) with a custom row template instead.
 - Set `sortOnClient` to `false` when sorting is handled server-side — the table will emit `sortChange` without reordering data.

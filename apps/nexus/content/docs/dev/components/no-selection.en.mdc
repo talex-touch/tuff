@@ -1,12 +1,12 @@
 ---
 title: "NoSelection"
-description: "Component documentation for NoSelection."
+description: "Shortcut empty-state component for unselected detail panels, based on TxEmptyState with `variant=\"no-selection\"`."
 category: Feedback
 syncStatus: migrated
 ---
 # NoSelection
 
-Component documentation for NoSelection.
+`TxNoSelection` is a shortcut wrapper around `TxEmptyState` with `variant="no-selection"` pre-set. Use it when a detail panel, inspector, or split view has no selected item.
 
 ## Basic Usage
 
@@ -22,4 +22,10 @@ code: |
 
 ## API
 
-Props / Slots / Events follow `TxEmptyState`.
+`TxNoSelection` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
+
+## Interaction Contract
+
+- `TxNoSelection` always forwards `variant="no-selection"` to `TxEmptyState`.
+- The wrapper does not rewrite `title`, `description`, `surface`, or action config; explicit props are forwarded as-is.
+- `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.

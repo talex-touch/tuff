@@ -46,11 +46,11 @@ const builtinIcons = {
   },
   'close': {
     viewBox: '0 0 24 24',
-    path: 'M12 10.586l4.95-4.95 1.414 1.414-4.95 4.95 4.95 4.95-1.414 1.414-4.95-4.95-4.954.95-1.414-1.414 4.95-4.95-4.95-4.95 1.414-1.414z',
+    path: 'M12 10.586l4.95-4.95 1.414 1.414-4.95 4.95 4.95 4.95-1.414 1.414-4.95-4.95-4.95 4.95-1.414-1.414 4.95-4.95-4.95-4.95L7.05 5.636z',
   },
   'search': {
     viewBox: '0 0 24 24',
-    path: 'M10 2a8 8 0 105.293 14.293l4.7074.707 1.414-1.414-4.707-4.707A8 8 0 0010 2zm0 2a6 6 0 11012 6 6 0 010-12z',
+    path: 'M10 2a8 8 0 105.293 14.293l4.707 4.707 1.414-1.414-4.707-4.707A8 8 0 0010 2zm0 2a6 6 0 110 12 6 6 0 010-12z',
   },
   'user': {
     viewBox: '0 0 24 24',
@@ -58,7 +58,7 @@ const builtinIcons = {
   },
   'star': {
     viewBox: '0 0 24 24',
-    path: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.62L12 29.19 8.6229.24l5.46 4.73L5.82 21z',
+    path: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.62L12 2 9.19 8.62 2 9.24l5.46 4.73L5.82 21z',
   },
   'star-half': {
     viewBox: '0 0 24 24',
@@ -121,7 +121,8 @@ const isSvg = computed(() => {
 // colorful logic aligned with core-app:
 // colorful=true -> render as <img> (preserve original colors)
 // colorful=false -> render as mask (use currentColor)
-const shouldUseMask = computed(() => isSvg.value && !props.colorful)
+const shouldPreserveColor = computed(() => props.colorful || safeIcon.value.colorful === true)
+const shouldUseMask = computed(() => isSvg.value && !shouldPreserveColor.value)
 
 const builtin = computed(() => {
   if (safeIcon.value.type !== 'builtin')

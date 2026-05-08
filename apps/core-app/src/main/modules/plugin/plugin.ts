@@ -78,7 +78,7 @@ interface FeatureEventUtil {
   offFeatureLifeCycle: (id: string, callback: ITargetFeatureLifeCycle) => void
 }
 
-function createLegacyChannelRemovedError(capability: 'channel.raw' | 'channel.sendSync'): Error {
+function createRemovedChannelError(capability: 'channel.raw' | 'channel.sendSync'): Error {
   return new Error(
     `[Plugin API] ${capability} was removed by the core-app hard-cut. Migrate this plugin to typed transport send/on APIs.`
   )
@@ -1413,7 +1413,7 @@ export class TouchPlugin implements ITouchPlugin {
       configurable: true,
       enumerable: false,
       get() {
-        throw createLegacyChannelRemovedError('channel.raw')
+        throw createRemovedChannelError('channel.raw')
       }
     })
 
@@ -1453,10 +1453,7 @@ export class TouchPlugin implements ITouchPlugin {
         boxChannelHandlers.get(eventName)?.delete(callback)
         return true
       },
-      send: (eventName, arg) => channelBridge.sendToMain(eventName, arg),
-      sendSync: () => {
-        throw createLegacyChannelRemovedError('channel.sendSync')
-      }
+      send: (eventName, arg) => channelBridge.sendToMain(eventName, arg)
     }
 
     const boxItemManager = getBoxItemManager()

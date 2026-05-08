@@ -18,17 +18,11 @@ import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type {
   AnalyticsRangeRequest,
   AnalyticsSnapshotRequest,
-  AnalyticsToggleRequest,
-  CurrentMetrics,
-  PerformanceHistoryEntry,
-  PerformanceSummary,
-  ReportMetricsRequest,
-  ReportMetricsResponse
+  AnalyticsToggleRequest
 } from '@talex-touch/utils/transport/events/types'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { PerfSummary } from '../../utils/perf-monitor'
 import type { AnalyticsMessageStore } from './message-store'
-import type { StartupHistory, StartupMetrics } from './types'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -418,81 +412,6 @@ export class AnalyticsModule extends BaseModule {
         }
       )
     )
-
-    const startupAnalytics = getStartupAnalytics()
-
-    this.disposers.push(
-      this.transport.on<void, CurrentMetrics>(AppEvents.analytics.getCurrent, () =>
-        this.toCurrentMetrics(startupAnalytics.getCurrentMetrics())
-      )
-    )
-
-    this.disposers.push(
-      this.transport.on<void, PerformanceHistoryEntry[]>(AppEvents.analytics.getHistory, () =>
-        this.toHistory(startupAnalytics.getHistory())
-      )
-    )
-
-    this.disposers.push(
-      this.transport.on<void, PerformanceSummary>(AppEvents.analytics.getSummary, () =>
-        this.toSummary(startupAnalytics.getHistory())
-      )
-    )
-
-    this.disposers.push(
-      this.transport.on<ReportMetricsRequest, ReportMetricsResponse>(
-        AppEvents.analytics.report,
-        async ({ endpoint }) => {
-          try {
-            await startupAnalytics.reportMetrics(endpoint)
-            return { success: true }
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            analyticsLog.error('Failed to report startup metrics', { error: message })
-            return { success: false }
-          }
-        }
-      )
-    )
-  }
-
-  private toCurrentMetrics(startup: StartupMetrics | null): CurrentMetrics {
-    if (!startup) return {}
-
-    return {
-      startupTime: startup.totalStartupTime,
-      memoryUsage: startup.renderer?.domContentLoaded,
-      cpuUsage: undefined
-    }
-  }
-
-  private toHistory(history: StartupHistory): PerformanceHistoryEntry[] {
-    const entries = history?.entries ?? []
-    return entries.map((item) => ({
-      timestamp: item.timestamp,
-      metrics: {
-        startupTime: item.totalStartupTime
-      }
-    }))
-  }
-
-  private toSummary(history: StartupHistory): PerformanceSummary {
-    const entries = history?.entries ?? []
-    if (!entries.length) {
-      return { sampleCount: 0 }
-    }
-
-    const total = entries.reduce((acc, cur) => acc + (cur.totalStartupTime || 0), 0)
-    const timestamps = entries.map((item) => item.timestamp)
-
-    return {
-      sampleCount: entries.length,
-      avgStartupTime: total / entries.length,
-      timeRange: {
-        start: Math.min(...timestamps),
-        end: Math.max(...timestamps)
-      }
-    }
   }
 
   private resolvePluginName(

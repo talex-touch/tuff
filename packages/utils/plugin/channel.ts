@@ -101,6 +101,15 @@ function ensureIpcRenderer(): IpcRenderer {
   return cachedIpcRenderer
 }
 
+function createRemovedSendSyncError(eventName: string): Error {
+  return Object.assign(
+    new Error(
+      `Plugin channel sendSync was removed by the hard-cut. Migrate "${eventName}" to typed transport send/on APIs.`
+    ),
+    { code: 'plugin_channel_send_sync_removed' },
+  )
+}
+
 type ChannelListener = (data: StandardChannelData) => unknown
 type PendingCallback = (data: RawStandardChannelData) => void
 
@@ -331,44 +340,13 @@ class TouchChannel implements ITouchClientChannel {
   }
 
   sendSync(eventName: string, arg?: any): any {
-    const data = {
-      code: DataCode.SUCCESS,
-      data: arg,
-      name: eventName,
-      plugin: this.plugin,
-      header: {
-        status: 'request',
-        type: ChannelType.PLUGIN,
-      },
-    } as RawStandardChannelData
-
-    try {
-      const res = this.__parse_raw_data(
-        void 0,
-        this.ipcRenderer.sendSync('@plugin-process-message', data),
-      )!
-
-      if (res.header.status === 'reply')
-        return res.data
-
-      return res
-    }
-    catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      const meta: Record<string, unknown> = {
+    channelLog.error('Blocked removed sendSync plugin channel call', {
+      meta: {
         eventName,
         payloadPreview: this.formatPayloadPreview(arg),
-      }
-      if (isCloneError(error)) {
-        meta.cloneIssue = findCloneIssue(arg)
-        meta.payloadSummary = summarizeClonePayload(arg)
-      }
-      channelLog.error('Failed to sendSync message', {
-        meta,
-        error,
-      })
-      throw new Error(`Failed to sendSync plugin channel message \"${eventName}\": ${errorMessage}`)
-    }
+      },
+    })
+    throw createRemovedSendSyncError(eventName)
   }
 }
 

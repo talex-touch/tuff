@@ -215,25 +215,19 @@ code: |
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| cols | `number \| ResponsiveValue` | `1` | 列数 |
-| rows | `number \| ResponsiveValue` | `auto` | 行数 |
-| gap | `number \| string \| ResponsiveValue \| GapValue` | `0` | 网格间距 |
+| cols | `number \| ResponsiveValue<number>` | `0` | 列数；为 0 时不输出固定列模板 |
+| rows | `number` | `0` | 行数；为 0 时不输出固定行模板 |
+| gap | `number \| string \| ResponsiveValue<number \| string> \| GapValue` | `16` | 网格间距 |
 | minItemWidth | `string` | - | 项目最小宽度（自适应模式） |
 | justify | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | 水平对齐 |
 | align | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | 垂直对齐 |
-| autoRows | `string` | `'auto'` | 自动行高 |
-| dense | `boolean` | `false` | 是否使用密集布局 |
 
 ### GridItem Props
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| colSpan | `number \| ResponsiveValue` | `1` | 跨列数 |
-| rowSpan | `number \| ResponsiveValue` | `1` | 跨行数 |
-| colStart | `number` | - | 起始列 |
-| colEnd | `number` | - | 结束列 |
-| rowStart | `number` | - | 起始行 |
-| rowEnd | `number` | - | 结束行 |
+| colSpan | `number` | `1` | 跨列数，最小按 1 处理 |
+| rowSpan | `number` | `1` | 跨行数，最小按 1 处理 |
 | justifySelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | 自身水平对齐 |
 | alignSelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | 自身垂直对齐 |
 
@@ -242,13 +236,14 @@ code: |
 ::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  interface ResponsiveValue {
+  type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+
+  interface ResponsiveValue<T> {
     xs?: number
     sm?: number
     md?: number
     lg?: number
     xl?: number
-    xxl?: number
   }
 
   interface GapValue {
@@ -257,3 +252,10 @@ code: |
   }
 ---
 ::
+
+## 交互契约
+
+- `minItemWidth` 优先于 `cols`，会输出 `repeat(auto-fit, minmax(..., 1fr))`。
+- 响应式值按当前窗口宽度解析，断点为 `xs < 640`、`sm < 768`、`md < 1024`、`lg < 1280`、其余为 `xl`。
+- `gap` 数字会转为 px；`{ row, col }` 可分别控制行列间距。
+- `TxGridItem` 的 `colSpan` / `rowSpan` 最小按 1 处理。

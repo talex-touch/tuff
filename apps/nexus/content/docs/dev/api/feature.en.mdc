@@ -146,46 +146,9 @@ code: |
 ---
 :::
 
-**`onKeyEvent(handler)`**
+**Keyboard handling**
 
-Listen to keyboard events. When plugin UI is attached to CoreBox, certain key events are forwarded.
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const unsubscribe = feature.onKeyEvent((event) => {
-    if (event.key === 'Enter') {
-      // Handle Enter key
-      submitSelection()
-    } else if (event.key === 'ArrowDown') {
-      // Navigate down
-      selectNext()
-    } else if (event.metaKey && event.key === 'k') {
-      // Handle Cmd+K
-      openSearch()
-    }
-  })
-  
-  unsubscribe()
----
-:::
-
-**ForwardedKeyEvent structure**:
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  interface ForwardedKeyEvent {
-    key: string
-    code: string
-    metaKey: boolean
-    ctrlKey: boolean
-    altKey: boolean
-    shiftKey: boolean
-    repeat: boolean
-  }
----
-:::
+`feature.onKeyEvent()` has been removed. The old `core-box:key-event` channel has no production sender, so plugin UI keyboard interactions should use local DOM/component keyboard handlers or host-provided `hostKeyEvent` props.
 
 ---
 
@@ -235,11 +198,9 @@ code: |
     clearItems(): void
     getItems(): TuffItem[]
     onInputChange(handler: InputChangeHandler): () => void
-    onKeyEvent(handler: KeyEventHandler): () => void
   }
   
   type InputChangeHandler = (input: string) => void
-  type KeyEventHandler = (event: ForwardedKeyEvent) => void
 ---
 :::
 

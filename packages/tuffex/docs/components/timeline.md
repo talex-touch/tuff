@@ -51,6 +51,8 @@ Place `TxTimelineItem` components inside a `TxTimeline` container. Each item can
 
 - Use the `active` prop to highlight the current step in a process.
 - The `color` prop maps to semantic colors: `primary`, `success`, `warning`, `error`, and `default`.
+- The timeline container exposes `role="list"` and items expose `role="listitem"`.
+- Active items apply state to both the item and dot, so the current event is visually distinct.
 - For process flows with defined steps, consider using [Steps](/components/steps) instead.
 
 ## API

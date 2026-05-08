@@ -1,6 +1,6 @@
 ---
 title: "OfflineState"
-description: "Component documentation for OfflineState."
+description: "Shortcut empty-state component for offline or unavailable network states, based on TxEmptyState with `variant=\"offline\"`."
 category: Feedback
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # OfflineState
 
-Component documentation for OfflineState.
+`TxOfflineState` is a shortcut wrapper around `TxEmptyState` with `variant="offline"` pre-set. Use it when the app is offline or a network-backed view is unavailable.
 
 ## Basic Usage
 
@@ -28,4 +28,10 @@ code: |
 
 ## API
 
-Props / Slots / Events follow `TxEmptyState`.
+`TxOfflineState` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
+
+## Interaction Contract
+
+- `TxOfflineState` always forwards `variant="offline"` to `TxEmptyState`.
+- The wrapper does not rewrite `title`, `description`, `surface`, or action config; explicit props are forwarded as-is.
+- `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.

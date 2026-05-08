@@ -2,6 +2,33 @@ import { describe, expect, it } from 'vitest'
 import { mapAppsToRecommendationItems, processSearchResults } from './search-processing-service'
 
 describe('search-processing-service', () => {
+  it('falls back to clean app name when displayName contains replacement chars', async () => {
+    const items = await processSearchResults(
+      [
+        {
+          name: '\u5FAE\u4FE1',
+          displayName: '\u03A2\uFFFD\uFFFD',
+          path: 'D:\\Weixin\\Weixin.exe',
+          extensions: {
+            appIdentity: 'path:d:\\weixin\\weixin.exe',
+            launchKind: 'path',
+            launchTarget: 'D:\\Weixin\\Weixin.exe'
+          }
+        }
+      ] as any,
+      { text: '\u5FAE', inputs: [] } as any,
+      false,
+      {}
+    )
+
+    expect(items).toHaveLength(1)
+    expect(items[0]?.render).toMatchObject({
+      basic: {
+        title: '\u5FAE\u4FE1'
+      }
+    })
+  })
+
   it('prefers displayPath as subtitle for Windows Store apps', () => {
     const [item] = mapAppsToRecommendationItems([
       {
@@ -29,6 +56,8 @@ describe('search-processing-service', () => {
     expect((item.meta as any)?.app?.launchTarget).toBe(
       'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
     )
+    expect((item.meta as any)?.app?.bundleId).toBe('')
+    expect((item.meta as any)?.app?.bundle_id).toBeUndefined()
   })
 
   it('skips disabled managed launcher entries in recommendation mapping', () => {

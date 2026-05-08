@@ -41,6 +41,7 @@ code: |
 ---
 code: |
   toast({
+    id?: string
     title?: string
     description?: string
     variant?: 'default' | 'success' | 'warning' | 'danger'
@@ -48,6 +49,13 @@ code: |
   })
 ---
 ::
+
+## Interaction Contract
+
+- `<TxToastHost />` renders a notification region with `role="region"` and `aria-label="Notifications"`.
+- Each toast includes a keyboard-focusable close button named `Dismiss notification`.
+- `duration > 0` auto-dismisses the toast; `duration: 0` keeps it visible until `dismissToast(id)` or `clearToasts()` is called.
+- Passing the same `id` replaces the existing toast, preventing duplicate stacked notifications for the same operation.
 
 ### dismissToast / clearToasts
 

@@ -329,6 +329,88 @@ describe('/api/admin/release-evidence', () => {
     expect(matrix.docsGuard?.status).toBe('passed')
   })
 
+  it('matrix 区分 Windows/macOS 阻塞项与 Linux best-effort 证据', async () => {
+    readBodyMock.mockResolvedValue({
+      version: '2.5.0',
+      platform: 'windows',
+      scope: 'core-app',
+    })
+    const windowsRun = await createRunHandler(makeEvent())
+
+    readBodyMock.mockResolvedValue({
+      category: 'platform-regression',
+      caseId: 'windows-everything-file-search',
+      status: 'failed',
+      requiredForRelease: true,
+      evidence: { command: 'manual-smoke', platform: 'windows' },
+    })
+    await upsertItemHandler(makeEvent('/api/admin/release-evidence/runs/run/items', { runId: windowsRun.run.id }))
+
+    readBodyMock.mockResolvedValue({
+      version: '2.5.0',
+      platform: 'macos',
+      scope: 'core-app',
+    })
+    const macosRun = await createRunHandler(makeEvent())
+
+    readBodyMock.mockResolvedValue({
+      category: 'platform-regression',
+      caseId: 'macos-first-run-permissions',
+      status: 'passed',
+      requiredForRelease: true,
+      evidence: { command: 'manual-smoke', platform: 'macos' },
+    })
+    await upsertItemHandler(makeEvent('/api/admin/release-evidence/runs/run/items', { runId: macosRun.run.id }))
+
+    readBodyMock.mockResolvedValue({
+      version: '2.5.0',
+      platform: 'linux',
+      scope: 'core-app',
+    })
+    const linuxRun = await createRunHandler(makeEvent())
+
+    readBodyMock.mockResolvedValue({
+      category: 'platform-regression',
+      caseId: 'linux-best-effort-smoke',
+      status: 'best_effort',
+      requiredForRelease: false,
+      evidence: { command: 'manual-smoke', platform: 'linux' },
+    })
+    await upsertItemHandler(makeEvent('/api/admin/release-evidence/runs/run/items', { runId: linuxRun.run.id }))
+
+    const matrix = await matrixHandler(makeEvent('/api/admin/release-evidence/matrix?version=2.5.0'))
+
+    expect(matrix.platforms.windows).toMatchObject({
+      status: 'blocked',
+      required: 1,
+      failed: 1,
+    })
+    expect(matrix.platforms.windows.blockingItems).toHaveLength(1)
+    expect(matrix.platforms.windows.blockingItems[0]).toMatchObject({
+      caseId: 'windows-everything-file-search',
+      requiredForRelease: true,
+    })
+    expect(matrix.platforms.macos).toMatchObject({
+      status: 'passed',
+      required: 1,
+      passed: 1,
+    })
+    expect(matrix.platforms.linux).toMatchObject({
+      status: 'best_effort',
+      required: 0,
+      bestEffort: 1,
+    })
+    expect(matrix.blockers.map((entry: any) => entry.caseId)).toEqual([
+      'windows-everything-file-search',
+    ])
+    expect(matrix.summary).toMatchObject({
+      required: 2,
+      failed: 1,
+      bestEffort: 1,
+      blocking: 1,
+    })
+  })
+
   it('doc-guard item 输入非法时不会留下 run', async () => {
     readBodyMock.mockResolvedValue({
       version: '2.5.0',

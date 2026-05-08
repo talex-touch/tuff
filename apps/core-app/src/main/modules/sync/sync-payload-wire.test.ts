@@ -107,7 +107,7 @@ describe('sync payload wire format', () => {
 
     expect(resolved).toEqual({
       rawText,
-      requiresEncryptedRepush: false
+      requiresMigrationRewrite: false
     })
   })
 
@@ -126,7 +126,7 @@ describe('sync payload wire format', () => {
 
     expect(resolved).toEqual({
       rawText,
-      requiresEncryptedRepush: true
+      requiresMigrationRewrite: true
     })
   })
 })

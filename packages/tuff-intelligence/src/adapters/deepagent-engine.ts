@@ -1319,7 +1319,7 @@ async function invokeWithRetry<T>(
   throw (lastError instanceof Error ? lastError : new Error('invoke retry failed'))
 }
 
-function shouldUseResponsesCompatibilityFallback(error: unknown): boolean {
+function shouldUseDirectResponsesFallback(error: unknown): boolean {
   const message = errorMessageOf(error).toLowerCase()
   return message.includes('unsupported legacy protocol')
     || message.includes('/v1/chat/completions is not supported')
@@ -1355,7 +1355,7 @@ function resolveResponsesEndpoint(
   return `${trimmed}/v1/responses`
 }
 
-async function invokeResponsesCompatibilityFallback(params: {
+async function invokeDirectResponsesFallback(params: {
   state: TurnState
   options: DeepAgentEngineOptions
   relayBaseUrl: string
@@ -1368,9 +1368,9 @@ async function invokeResponsesCompatibilityFallback(params: {
   const timeoutMs = resolveTimeoutMs(options)
 
   await options.onAudit?.({
-    type: 'upstream.compat_fallback',
+    type: 'upstream.direct_responses_fallback',
     payload: {
-      reason: 'legacy_chat_completions_not_supported',
+      reason: 'chat_completions_not_supported',
       endpoint,
       model,
       strategy: 'responses.direct',
@@ -1561,7 +1561,7 @@ async function invokeDeepAgentWithTransport(
   })
 
   if (useResponsesApi && UNSUPPORTED_CHAT_COMPLETIONS_BASE_URLS.has(relayBaseUrl)) {
-    return await invokeResponsesCompatibilityFallback({
+    return await invokeDirectResponsesFallback({
       state,
       options,
       relayBaseUrl,
@@ -1624,9 +1624,9 @@ async function invokeDeepAgentWithTransport(
     }, retryCount)
   }
   catch (error) {
-    if (useResponsesApi && shouldUseResponsesCompatibilityFallback(error)) {
+    if (useResponsesApi && shouldUseDirectResponsesFallback(error)) {
       UNSUPPORTED_CHAT_COMPLETIONS_BASE_URLS.add(relayBaseUrl)
-      return await invokeResponsesCompatibilityFallback({
+      return await invokeDirectResponsesFallback({
         state,
         options,
         relayBaseUrl,

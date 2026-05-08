@@ -41,5 +41,47 @@ rows:
 ---
 :::
 
+## Item Contract
+
+::TuffPropsTable
+---
+rows:
+  - name: label
+    type: string
+    default: '-'
+    description: Breadcrumb text
+  - name: href
+    type: string
+    default: '-'
+    description: Link target; current and disabled items do not render as links
+  - name: icon
+    type: string
+    default: '-'
+    description: Leading icon
+  - name: disabled
+    type: boolean
+    default: 'false'
+    description: Disable navigation and click events for the item
+---
+:::
+
+## Events
+
+::TuffPropsTable
+---
+rows:
+  - name: click
+    type: '(item: BreadcrumbItem, index: number) => void'
+    default: '-'
+    description: Triggered when users click a non-current, non-disabled item without href
+---
+:::
+
+## Interaction Contract
+
+- The last item always represents the current page, renders as a non-link element, and exposes `aria-current="page"`.
+- Non-current, non-disabled items with `href` render as native links.
+- `disabled` items render as non-link elements, expose `aria-disabled="true"`, and do not emit `click`.
+
 ## Source
 <TuffDocSourceLink />

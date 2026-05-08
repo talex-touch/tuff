@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { resolvePilotModelCapabilities } from '../pilot-admin-routing-config'
 
 describe('pilot-admin-routing-config capabilities', () => {
-  it('会对历史 legacy 字段做能力回填', () => {
+  it('会对历史字段做能力回填', () => {
     const capabilities = resolvePilotModelCapabilities(undefined, {
       allowWebsearch: false,
       allowImageGeneration: false,
@@ -20,7 +20,7 @@ describe('pilot-admin-routing-config capabilities', () => {
     expect(capabilities['video.generate']).toBe(true)
   })
 
-  it('显式 capabilities 优先于 legacy 值', () => {
+  it('显式 capabilities 优先于历史字段值', () => {
     const capabilities = resolvePilotModelCapabilities({
       'websearch': true,
       'audio.tts': false,

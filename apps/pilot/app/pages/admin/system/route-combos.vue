@@ -113,7 +113,7 @@ function resolveProviderModelOptionLabel(input: {
   label?: string
   format?: string
   targetType?: string
-  legacyStatus?: 'disabled' | 'missing'
+  retiredStatus?: 'disabled' | 'missing'
 }): string {
   const baseLabel = normalizeText(input.label) || normalizeText(input.modelId)
   const format = normalizeText(input.format)
@@ -122,10 +122,10 @@ function resolveProviderModelOptionLabel(input: {
     ? `${resolveTargetTypeLabel(targetType)} / ${baseLabel}`
     : baseLabel
   const withFormat = format ? `${withTarget} (${format})` : withTarget
-  if (input.legacyStatus === 'disabled') {
+  if (input.retiredStatus === 'disabled') {
     return `${withFormat}（已禁用）`
   }
-  if (input.legacyStatus === 'missing') {
+  if (input.retiredStatus === 'missing') {
     return `${withFormat}（不存在）`
   }
   return withFormat
@@ -161,15 +161,15 @@ function resolveRouteProviderModelOptions(row: RouteComboRouteFormItem): RoutePr
     return options
   }
 
-  const legacy = allOptions.find(item => item.modelId === currentModelId && item.targetType === row.providerTargetType)
+  const retiredOption = allOptions.find(item => item.modelId === currentModelId && item.targetType === row.providerTargetType)
   options.unshift({
     value: currentModelId,
     label: resolveProviderModelOptionLabel({
       modelId: currentModelId,
-      label: legacy?.label || currentModelId,
-      format: legacy?.format,
-      targetType: legacy?.targetType || row.providerTargetType,
-      legacyStatus: legacy ? 'disabled' : 'missing',
+      label: retiredOption?.label || currentModelId,
+      format: retiredOption?.format,
+      targetType: retiredOption?.targetType || row.providerTargetType,
+      retiredStatus: retiredOption ? 'disabled' : 'missing',
     }),
     disabled: true,
   })

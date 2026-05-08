@@ -60,7 +60,7 @@ describe('quota-conversation-snapshot', () => {
       ],
       runtimeTraces: [
         { seq: 1, type: 'turn.started', payload: {} },
-        { seq: 2, type: 'intent.completed', payload: { intentType: 'legacy' } },
+        { seq: 2, type: 'intent.completed', payload: { intentType: 'retired' } },
       ],
       assistantReply: '',
       topicHint: 'message-first',

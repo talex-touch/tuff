@@ -79,6 +79,7 @@ interface MutableEverythingProvider {
   isSearchReady: () => boolean
   initializationError: Error | null
   lastBackendError: string | null
+  backendAttemptErrors: Record<string, string>
   sdkAddon: unknown
   esPath: string | null
   iconCache: Map<string, string>
@@ -154,6 +155,7 @@ afterEach(() => {
   provider.isEnabled = true
   provider.initializationError = null
   provider.lastBackendError = null
+  provider.backendAttemptErrors = {}
   provider.sdkAddon = null
   provider.esPath = null
   provider.iconCache.clear()

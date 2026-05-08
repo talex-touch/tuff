@@ -27,19 +27,12 @@ function handleClick(event: MouseEvent) {
     return
   emit('click', event)
 }
-
-function handleKeyActivate(event: KeyboardEvent) {
-  if (props.disabled || props.loading) {
-    return
-  }(event.currentTarget as HTMLElement | null)?.click()
-}
 </script>
 
 <template>
-  <div
-    role="button"
-    :tabindex="disabled || loading ? -1 : 0"
-    :aria-disabled="disabled || loading || undefined"
+  <button
+    type="button"
+    :disabled="disabled || loading"
     class="tuff-flat-button" :class="[
       {
         'is-primary': primary,
@@ -50,8 +43,6 @@ function handleKeyActivate(event: KeyboardEvent) {
       },
     ]"
     @click="handleClick"
-    @keydown.enter.prevent="handleKeyActivate"
-    @keydown.space.prevent="handleKeyActivate"
   >
     <span v-if="loading" class="tx-flat-button__loading">
       <svg class="tx-flat-button__spinner" viewBox="0 0 24 24">
@@ -61,7 +52,7 @@ function handleKeyActivate(event: KeyboardEvent) {
     <span class="tx-flat-button__content">
       <slot />
     </span>
-  </div>
+  </button>
 </template>
 
 <style lang="scss" scoped>
@@ -79,6 +70,7 @@ function handleKeyActivate(event: KeyboardEvent) {
   border-radius: 8px;
   border: 1px solid var(--tx-border-color, #dcdfe6);
   background-color: transparent;
+  font-family: inherit;
   color: var(--tx-text-color-regular, #606266);
   font-size: var(--tx-font-size-base, 14px);
   transition: all 0.25s ease-in-out;

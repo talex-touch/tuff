@@ -1,12 +1,12 @@
 ---
 title: "DatePicker"
-description: "`TxPicker` `YYYY-MM-DD`"
+description: "Date selector built on TxPicker with a YYYY-MM-DD model."
 category: Form
 syncStatus: migrated
 ---
 # DatePicker
 
-`TxPicker` `YYYY-MM-DD`
+`TxDatePicker` wraps `TxPicker` with year, month, and day columns and exposes a `YYYY-MM-DD` string model. Use it when the UI needs a compact date selector with optional popup behavior and simple min/max bounds.
 
 ## Basic Usage
 
@@ -50,26 +50,26 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string` | `''` | Description for modelValue. |
-| `visible` | `boolean` | `false` | Description for visible. |
-| `popup` | `boolean` | `true` | Description for popup. |
-| `title` | `string` | `'Select date'` | Description for title. |
-| `min` | `string` | - | Description for min. |
-| `max` | `string` | - | Description for max. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `showToolbar` | `boolean` | `true` | Description for showToolbar. |
-| `confirmText` | `string` | `'Confirm'` | Description for confirmText. |
-| `cancelText` | `string` | `'Cancel'` | Description for cancelText. |
-| `closeOnClickMask` | `boolean` | `true` | Description for closeOnClickMask. |
+| `modelValue` | `string` | `''` | Selected date in `YYYY-MM-DD` format. Invalid or empty values initialize from today and are clamped by `min` / `max` when provided. |
+| `visible` | `boolean` | `false` | Controls popup visibility via `v-model:visible`. |
+| `popup` | `boolean` | `true` | Renders through the picker popup surface when enabled. |
+| `title` | `string` | `'Select date'` | Toolbar title forwarded to `TxPicker`. |
+| `min` | `string` | - | Earliest selectable date in `YYYY-MM-DD` format. Earlier year/month/day options are disabled or clamped. |
+| `max` | `string` | - | Latest selectable date in `YYYY-MM-DD` format. Later year/month/day options are disabled or clamped. |
+| `disabled` | `boolean` | `false` | Disables picker interaction. |
+| `showToolbar` | `boolean` | `true` | Shows or hides the picker toolbar. |
+| `confirmText` | `string` | `'Confirm'` | Confirm button label forwarded to `TxPicker`. |
+| `cancelText` | `string` | `'Cancel'` | Cancel button label forwarded to `TxPicker`. |
+| `closeOnClickMask` | `boolean` | `true` | Allows the popup mask to close the picker when clicked. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(value: string)` | Description for update:modelValue. |
-| `change` | `(value: string)` | Description for change. |
-| `update:visible` | `(visible: boolean)` | Description for update:visible. |
-| `confirm` | `(value: string)` | Description for confirm. |
-| `cancel` | - | Description for cancel. |
-| `open` | - | Description for open. |
-| `close` | - | Description for close. |
+| `update:modelValue` | `(value: string)` | Emitted with a formatted `YYYY-MM-DD` value when the picker columns change. |
+| `change` | `(value: string)` | Mirrors picker value changes with the same formatted date. |
+| `update:visible` | `(visible: boolean)` | Emitted when the inner picker requests a visibility change. |
+| `confirm` | `(value: string)` | Emitted with the current formatted date when the user confirms. |
+| `cancel` | - | Emitted when the picker cancel action fires. |
+| `open` | - | Forwarded when the picker opens. |
+| `close` | - | Forwarded when the picker closes. |

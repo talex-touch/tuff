@@ -8,19 +8,17 @@ defineOptions({
   name: 'TxAvatar',
 })
 
-const props = withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<AvatarProps>(), {
   size: 'medium',
   shape: 'circle',
   clickable: false,
 })
 
-const emit = defineEmits<Emits>()
-
-interface Props extends AvatarProps {}
-
 interface Emits {
   click: []
 }
+
+const emit = defineEmits<Emits>()
 
 const imageError = ref(false)
 

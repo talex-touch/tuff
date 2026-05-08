@@ -1,12 +1,12 @@
 ---
 title: "Picker"
-description: "Component documentation for Picker."
+description: "Column picker with popup or inline rendering, toolbar actions, disabled options, and normalized values."
 category: Form
 syncStatus: migrated
 ---
 # Picker
 
-Component documentation for Picker.
+`TxPicker` renders one or more scrollable option columns. It can be used inline or as a bottom popup, normalizes missing values to the first enabled option in each column, and emits both live changes and toolbar confirm/cancel actions.
 
 ## Basic Usage
 
@@ -64,43 +64,43 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `(string \| number)[]` | `[]` | TextValue（Text） |
-| `columns` | `PickerColumn[]` | `[]` | Description for columns. |
-| `visible` | `boolean` | `false` | Description for visible. |
-| `popup` | `boolean` | `true` | Description for popup. |
-| `title` | `string` | `''` | Description for title. |
-| `showToolbar` | `boolean` | `true` | Description for showToolbar. |
-| `confirmText` | `string` | `'Confirm'` | Description for confirmText. |
-| `cancelText` | `string` | `'Cancel'` | Description for cancelText. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `itemHeight` | `number` | `36` | Description for itemHeight. |
-| `visibleItemCount` | `number` | `5` | Description for visibleItemCount. |
-| `closeOnClickMask` | `boolean` | `true` | Description for closeOnClickMask. |
-| `lazyMount` | `boolean` | `true` | Description for lazyMount. |
+| `modelValue` | `(string \| number)[]` | `[]` | Selected value per column. Missing or invalid entries normalize to the first enabled option. |
+| `columns` | `PickerColumn[]` | `[]` | Column definitions rendered from left to right. |
+| `visible` | `boolean` | `false` | Popup open state controlled by `v-model:visible`. |
+| `popup` | `boolean` | `true` | Renders as a Teleport bottom popup when true; renders inline when false. |
+| `title` | `string` | `''` | Center title shown in the toolbar. |
+| `showToolbar` | `boolean` | `true` | Shows cancel/title/confirm toolbar actions. |
+| `confirmText` | `string` | `'Confirm'` | Text for the confirm button. |
+| `cancelText` | `string` | `'Cancel'` | Text for the cancel button. |
+| `disabled` | `boolean` | `false` | Disables toolbar buttons, option buttons, and drag state updates. |
+| `itemHeight` | `number` | `36` | Option row height in pixels; values below 24 are clamped to 24. |
+| `visibleItemCount` | `number` | `5` | Number of visible rows. Even values are rounded up to the next odd count. |
+| `closeOnClickMask` | `boolean` | `true` | Closes the popup when the mask is clicked. |
+| `lazyMount` | `boolean` | `true` | Delays popup body rendering until the picker has opened once. |
 
 ### PickerColumn
 
 | Field | Type | Description |
 |------|------|------|
-| `key` | `string` | Description for key. |
-| `options` | `PickerOption[]` | Description for options. |
+| `key` | `string` | Optional stable key for the column. |
+| `options` | `PickerOption[]` | Options available in this column. |
 
 ### PickerOption
 
 | Field | Type | Description |
 |------|------|------|
-| `value` | `string \| number` | Value |
-| `label` | `string` | Description for label. |
-| `disabled` | `boolean` | Description for disabled. |
+| `value` | `string \| number` | Primitive value emitted for the column. |
+| `label` | `string` | Visible option label. |
+| `disabled` | `boolean` | Prevents selecting this option and skips it during normalization fallback. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(value)` | Description for update:modelValue. |
-| `change` | `(value)` | Description for change. |
-| `update:visible` | `(visible)` | Description for update:visible. |
-| `confirm` | `(value)` | Description for confirm. |
-| `cancel` | - | Description for cancel. |
-| `open` | - | Description for open. |
-| `close` | - | Description for close. |
+| `update:modelValue` | `(value: PickerValue)` | Emitted when scrolling changes a column value. |
+| `change` | `(value: PickerValue)` | Emitted with the same normalized value after a live column change. |
+| `update:visible` | `(visible: boolean)` | Popup visibility update emitted by open/close actions. |
+| `confirm` | `(value: PickerValue)` | Emitted with the current local value when confirm is clicked, then closes. |
+| `cancel` | - | Emitted when cancel is clicked, then closes. |
+| `open` | - | Emitted when the picker opens. |
+| `close` | - | Emitted when the picker closes. |

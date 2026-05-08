@@ -1,6 +1,6 @@
 ---
 title: "Checkbox"
-description: "SVG"
+description: "Accessible boolean selection control with label placement, keyboard toggling, and SVG tick motion."
 category: Form
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # Checkbox
 
-SVG
+`TxCheckbox` is a compact boolean control for settings, filters, and form rows. It exposes checkbox ARIA state, supports click/Enter/Space toggling, and only uses `aria-label` when no visible label or default slot is present.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -91,21 +91,21 @@ code: |
 
 | Prop | Description | Type | Default |
 |--------|------|------|--------|
-| modelValue / v-model | Description for modelValue / v-model. | `boolean` | `false` |
-| disabled | Description for disabled. | `boolean` | `false` |
-| label | Description for label. | `string` | - |
-| labelPlacement | Description for labelPlacement. | `'start' \| 'end'` | `'end'` |
-| ariaLabel | Description for ariaLabel. | `string` | - |
+| modelValue / v-model | Checked state. Updates through click, Enter, or Space when enabled. | `boolean` | `false` |
+| disabled | Disables focus and prevents click or keyboard toggles. | `boolean` | `false` |
+| label | Visible text label rendered next to the checkbox. | `string` | - |
+| labelPlacement | Places the visible label before or after the checkbox box. | `'start' \| 'end'` | `'end'` |
+| ariaLabel | Accessible label used only when neither `label` nor the default slot is visible. | `string` | - |
 
 ### Events
 
 | Event | Description | Params |
 |--------|------|----------|
-| change | Description for change. | `(value: boolean) => void` |
-| update:modelValue | Description for update:modelValue. | `(value: boolean) => void` |
+| change | Emitted with the next checked state after an enabled toggle. | `(value: boolean) => void` |
+| update:modelValue | v-model update emitted with the next checked state after an enabled toggle. | `(value: boolean) => void` |
 
 ### Slots
 
 | Column | Description |
 |--------|------|
-| default | Description for default. |
+| default | Replaces `label` with custom visible label content. |

@@ -27,19 +27,19 @@ module.exports = antfu(
         paths: [
           {
             name: '@talex-touch/utils/channel',
-            message: 'Legacy channel API is restricted. Use @talex-touch/utils/transport or local legacy wrappers.'
+            message: 'Removed channel API is restricted. Use @talex-touch/utils/transport or local migration wrappers.'
           },
           {
             name: 'packages/utils/channel',
-            message: 'Legacy channel API is restricted. Use @talex-touch/utils/transport or local legacy wrappers.'
+            message: 'Removed channel API is restricted. Use @talex-touch/utils/transport or local migration wrappers.'
           },
           {
             name: '@talex-touch/utils/transport/legacy',
-            message: 'Legacy transport API has been removed. Use @talex-touch/utils/transport.'
+            message: 'Removed transport API entry is blocked. Use @talex-touch/utils/transport.'
           },
           {
             name: '@talex-touch/utils/permission/legacy',
-            message: 'Legacy permission API has been removed. Use @talex-touch/utils/permission.'
+            message: 'Removed permission API entry is blocked. Use @talex-touch/utils/permission.'
           },
           {
             name: 'axios',
@@ -75,13 +75,13 @@ module.exports = antfu(
     rules: {
       'no-restricted-syntax': ['error', {
         selector: "Literal[value='@talex-touch/utils/channel']",
-        message: 'Legacy channel entry has been removed. Use @talex-touch/utils/transport.'
+        message: 'Removed channel entry is blocked. Use @talex-touch/utils/transport.'
       }, {
         selector: "Literal[value='@talex-touch/utils/transport/legacy']",
-        message: 'Legacy transport entry has been removed. Use @talex-touch/utils/transport.'
+        message: 'Removed transport entry is blocked. Use @talex-touch/utils/transport.'
       }, {
         selector: "Literal[value='@talex-touch/utils/permission/legacy']",
-        message: 'Legacy permission entry has been removed. Use @talex-touch/utils/permission.'
+        message: 'Removed permission entry is blocked. Use @talex-touch/utils/permission.'
       }, {
         selector: "CallExpression[callee.type='Identifier'][callee.name='fetch']",
         message: 'Direct fetch is restricted. Use @talex-touch/utils/network.'

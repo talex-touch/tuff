@@ -1,9 +1,11 @@
 import type {
   ToolApprovalPolicy,
+  ToolSource,
   WorkflowDefinition,
   WorkflowDefinitionStep,
   WorkflowRunRecord,
   WorkflowRunStatus,
+  WorkflowStepKind,
   WorkflowTriggerType
 } from '@talex-touch/tuff-intelligence'
 import type { SQL } from 'drizzle-orm'
@@ -92,6 +94,23 @@ function normalizeRunStatus(value: unknown): WorkflowRunStatus {
     return value
   }
   return 'pending'
+}
+
+function normalizeWorkflowStepKind(value: unknown): WorkflowStepKind {
+  if (value === 'prompt' || value === 'tool' || value === 'agent') {
+    return value
+  }
+  throw new Error(`Unsupported workflow step kind: ${String(value || '')}`)
+}
+
+function normalizeToolSource(value: unknown): ToolSource {
+  if (value === 'mcp') {
+    return 'mcp'
+  }
+  if (value === 'builtin' || value == null || value === '') {
+    return 'builtin'
+  }
+  throw new Error(`Unsupported workflow tool source: ${String(value)}`)
 }
 
 function createClipboardOrganizerTemplate(): WorkflowDefinition {
@@ -789,8 +808,10 @@ export class IntelligenceWorkflowService {
         config: source.config ?? {}
       })),
       toolSources: Array.from(
-        new Set((workflow.toolSources ?? existing?.toolSources ?? ['builtin']).filter(Boolean))
-      ) as WorkflowDefinition['toolSources'],
+        new Set(
+          (workflow.toolSources ?? existing?.toolSources ?? ['builtin']).map(normalizeToolSource)
+        )
+      ),
       approvalPolicy,
       steps,
       metadata: workflow.metadata ?? existing?.metadata ?? {},
@@ -804,18 +825,27 @@ export class IntelligenceWorkflowService {
     workflowId: string,
     index: number
   ): WorkflowDefinitionStep {
-    const normalizedKind = step.kind === 'tool' || step.kind === 'agent' ? step.kind : 'prompt'
+    const normalizedKind = normalizeWorkflowStepKind(step.kind ?? 'prompt')
+    const stepId = String(step.id || `${workflowId}_step_${index + 1}`).trim()
+    const toolId = normalizedKind === 'tool' ? String(step.toolId || '').trim() : ''
+    const agentId = normalizedKind === 'agent' ? String(step.agentId || '').trim() : ''
+
+    if (normalizedKind === 'tool' && !toolId) {
+      throw new Error(`Workflow tool step ${stepId} requires toolId`)
+    }
+    if (normalizedKind === 'agent' && !agentId) {
+      throw new Error(`Workflow agent step ${stepId} requires agentId`)
+    }
+
     return {
       ...step,
-      id: String(step.id || `${workflowId}_step_${index + 1}`).trim(),
+      id: stepId,
       name: String(step.name || `${normalizedKind}-${index + 1}`).trim(),
       kind: normalizedKind,
-      toolSource:
-        step.toolSource === 'mcp'
-          ? 'mcp'
-          : normalizedKind === 'tool'
-            ? (step.toolSource ?? 'builtin')
-            : step.toolSource,
+      toolSource: normalizedKind === 'tool' ? normalizeToolSource(step.toolSource) : undefined,
+      toolId: normalizedKind === 'tool' ? toolId : undefined,
+      agentId: normalizedKind === 'agent' ? agentId : undefined,
+      prompt: normalizedKind === 'prompt' ? step.prompt : undefined,
       input: step.input ?? {},
       continueOnError: step.continueOnError === true,
       metadata: step.metadata ?? {}
@@ -834,25 +864,43 @@ export class IntelligenceWorkflowService {
       inputs: run.inputs ?? {},
       outputs: run.outputs ?? {},
       contextSnapshot: run.contextSnapshot,
-      steps: (run.steps ?? []).map((step, index) => ({
-        ...step,
-        id: String(step.id || `${runId}_step_${index + 1}`).trim(),
-        workflowStepId: String(step.workflowStepId || `step_${index + 1}`).trim(),
-        kind: step.kind === 'tool' || step.kind === 'agent' ? step.kind : 'prompt',
-        name: String(step.name || `Step ${index + 1}`).trim(),
-        status:
-          step.status === 'running' ||
-          step.status === 'waiting_approval' ||
-          step.status === 'completed' ||
-          step.status === 'failed' ||
-          step.status === 'skipped'
-            ? step.status
-            : 'pending',
-        input: step.input ?? {},
-        metadata: step.metadata ?? {}
-      })),
+      steps: (run.steps ?? []).map((step, index) => this.normalizeRunStep(step, runId, index)),
       startedAt: run.startedAt ?? now(),
       metadata: run.metadata ?? {}
+    }
+  }
+
+  private normalizeRunStep(
+    step: WorkflowRunRecord['steps'][number],
+    runId: string,
+    index: number
+  ): WorkflowRunRecord['steps'][number] {
+    const stepId = String(step.id || `${runId}_step_${index + 1}`).trim()
+    const kind = normalizeWorkflowStepKind(step.kind ?? 'prompt')
+    const toolId = kind === 'tool' ? String(step.toolId || '').trim() : ''
+
+    if (kind === 'tool' && !toolId) {
+      throw new Error(`Workflow run tool step ${stepId} requires toolId`)
+    }
+
+    return {
+      ...step,
+      id: stepId,
+      workflowStepId: String(step.workflowStepId || `step_${index + 1}`).trim(),
+      kind,
+      name: String(step.name || `Step ${index + 1}`).trim(),
+      status:
+        step.status === 'running' ||
+        step.status === 'waiting_approval' ||
+        step.status === 'completed' ||
+        step.status === 'failed' ||
+        step.status === 'skipped'
+          ? step.status
+          : 'pending',
+      toolId: kind === 'tool' ? toolId : undefined,
+      toolSource: kind === 'tool' ? normalizeToolSource(step.toolSource) : undefined,
+      input: step.input ?? {},
+      metadata: step.metadata ?? {}
     }
   }
 
@@ -880,19 +928,25 @@ export class IntelligenceWorkflowService {
       metadata: parseJson(row.metadata, {}),
       createdAt: row.createdAt ? new Date(row.createdAt).getTime() : undefined,
       updatedAt: row.updatedAt ? new Date(row.updatedAt).getTime() : undefined,
-      steps: (stepMap.get(row.id) ?? []).map((step) => ({
-        id: step.id,
-        name: step.name,
-        kind: step.kind,
-        description: step.description ?? undefined,
-        prompt: step.prompt ?? undefined,
-        toolId: step.toolId ?? undefined,
-        toolSource: step.toolSource ?? undefined,
-        agentId: step.agentId ?? undefined,
-        input: parseJson(step.input, {}),
-        continueOnError: step.continueOnError,
-        metadata: parseJson(step.metadata, {})
-      }))
+      steps: (stepMap.get(row.id) ?? []).map((step, index) =>
+        this.normalizeWorkflowStep(
+          {
+            id: step.id,
+            name: step.name,
+            kind: step.kind,
+            description: step.description ?? undefined,
+            prompt: step.prompt ?? undefined,
+            toolId: step.toolId ?? undefined,
+            toolSource: step.toolSource ?? undefined,
+            agentId: step.agentId ?? undefined,
+            input: parseJson(step.input, {}),
+            continueOnError: step.continueOnError,
+            metadata: parseJson(step.metadata, {})
+          },
+          row.id,
+          index
+        )
+      )
     }))
   }
 
@@ -920,21 +974,27 @@ export class IntelligenceWorkflowService {
       metadata: parseJson(row.metadata, {}),
       startedAt: row.startedAt ? new Date(row.startedAt).getTime() : now(),
       completedAt: row.completedAt ? new Date(row.completedAt).getTime() : undefined,
-      steps: (stepMap.get(row.id) ?? []).map((step) => ({
-        id: step.id,
-        workflowStepId: step.workflowStepId,
-        kind: step.kind,
-        name: step.name,
-        status: step.status,
-        toolId: step.toolId ?? undefined,
-        toolSource: step.toolSource ?? undefined,
-        input: parseJson(step.input, {}),
-        output: parseJson(step.output, undefined),
-        error: step.error ?? undefined,
-        metadata: parseJson(step.metadata, {}),
-        startedAt: step.startedAt ? new Date(step.startedAt).getTime() : undefined,
-        completedAt: step.completedAt ? new Date(step.completedAt).getTime() : undefined
-      }))
+      steps: (stepMap.get(row.id) ?? []).map((step, index) =>
+        this.normalizeRunStep(
+          {
+            id: step.id,
+            workflowStepId: step.workflowStepId,
+            kind: step.kind,
+            name: step.name,
+            status: step.status,
+            toolId: step.toolId ?? undefined,
+            toolSource: step.toolSource ?? undefined,
+            input: parseJson(step.input, {}),
+            output: parseJson(step.output, undefined),
+            error: step.error ?? undefined,
+            metadata: parseJson(step.metadata, {}),
+            startedAt: step.startedAt ? new Date(step.startedAt).getTime() : undefined,
+            completedAt: step.completedAt ? new Date(step.completedAt).getTime() : undefined
+          },
+          row.id,
+          index
+        )
+      )
     }))
   }
 }

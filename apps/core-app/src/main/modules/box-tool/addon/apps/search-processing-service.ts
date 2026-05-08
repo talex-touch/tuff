@@ -11,6 +11,7 @@ import chalk from 'chalk'
 import { pinyin } from 'pinyin-pro'
 import type { AppLaunchKind } from './app-types'
 import { formatLog, generateAcronym, LogStyle, parseStringList } from './app-utils'
+import { resolveDisplayName } from './display-name-sync-utils'
 import { calculateHighlights } from './highlighting-service'
 import { createLogger } from '../../../../utils/logger'
 
@@ -58,7 +59,7 @@ export function isSearchableAppRow(app: AppSearchRow): boolean {
 function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): ProcessedTuffItem {
   const uniqueId = app.extensions.appIdentity || app.path || app.extensions.bundleId || ''
   const name = app.name
-  const displayName = app.displayName || app.name
+  const displayName = resolveDisplayName(app.displayName, app.name)
   const subtitle = app.extensions.displayPath || app.path
   const rawIconValue = app.extensions.icon ?? ''
   const iconValue = rawIconValue && !isValidBase64DataUrl(rawIconValue) ? '' : rawIconValue
@@ -90,7 +91,7 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
     .setMeta({
       app: {
         path: app.path,
-        bundle_id: app.extensions.bundleId || '',
+        bundleId: app.extensions.bundleId || '',
         launchKind,
         launchTarget: app.extensions.launchTarget || app.path,
         launchArgs: app.extensions.launchArgs || '',
@@ -101,7 +102,12 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
         matchResult: match.highlights,
         source: match.source,
         keyWords: [
-          ...new Set([name, ...alternateNames, path.basename(keywordPath).split('.')[0] || ''])
+          ...new Set([
+            displayName,
+            name,
+            ...alternateNames,
+            path.basename(keywordPath).split('.')[0] || ''
+          ])
         ].filter(Boolean)
       }
     })
@@ -138,8 +144,8 @@ export async function processSearchResults(
       continue
     }
     const name = app.name
-    const displayName = app.displayName || app.name
-    const potentialTitles = [displayName, name].filter(Boolean) as string[]
+    const displayName = resolveDisplayName(app.displayName, app.name)
+    const potentialTitles = Array.from(new Set([displayName, name].filter(Boolean))) as string[]
     const alternateNames = parseStringList(app.extensions[ALTERNATE_NAMES_EXTENSION_KEY])
     const uniqueId = app.extensions.appIdentity || app.path || app.extensions.bundleId || ''
 

@@ -30,11 +30,13 @@ type UwpManifestMetadata = {
 
 const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons-win')
 const APPX_MANIFEST_NAME = 'AppxManifest.xml'
-const START_MENU_PATHS = [
+export const START_MENU_PATHS = [
   path.resolve('C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'),
   path.join(os.homedir(), 'AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs')
 ]
 const WINDOWS_STORE_DISPLAY_PATH = 'Windows Store'
+const REGISTRY_DISPLAY_ICON_EXE_PATTERN = /"([^"]+\.exe)"|([^",]+\.exe)/i
+const REGISTRY_EXE_PRIORITY = ['app', 'launcher', 'client', 'desktop']
 const UWP_LOGO_ATTRIBUTE_CANDIDATES = [
   'Square44x44Logo',
   'SmallLogo',
@@ -66,6 +68,10 @@ function buildUwpShellPath(appId: string): string {
   return `shell:AppsFolder\\${appId}`
 }
 
+function isWindowsAbsolutePath(value: string): boolean {
+  return /^[a-z]:[\\/]/i.test(value) || value.startsWith('\\\\')
+}
+
 function buildIconCacheKey(value: string): string {
   return Buffer.from(value).toString('base64url')
 }
@@ -80,6 +86,49 @@ function shouldSkipAppTarget(targetPath: string, args?: string): boolean {
   const normalizedTarget = targetPath.toLowerCase()
   const normalizedArgs = (args || '').toLowerCase()
   return normalizedTarget.includes('uninstall') || normalizedArgs.includes('uninstall')
+}
+
+function shouldSkipRegistryAppName(displayName: string): boolean {
+  const normalized = displayName.toLowerCase()
+  return (
+    normalized.includes('uninstall') ||
+    normalized.includes('updater') ||
+    normalized.includes('update helper') ||
+    normalized.includes('maintenance service')
+  )
+}
+
+function parseRegistryExePath(value?: string): string | null {
+  if (!value) return null
+  const match = value.match(REGISTRY_DISPLAY_ICON_EXE_PATTERN)
+  const candidate = match?.[1] || match?.[2]
+  if (!candidate) return null
+  return candidate.trim().replace(/^["']|["']$/g, '')
+}
+
+async function findExecutableInInstallLocation(installLocation?: string): Promise<string | null> {
+  if (!installLocation) return null
+  try {
+    const entries = await fs.readdir(installLocation)
+    const exeFiles = entries
+      .filter((entry) => entry.toLowerCase().endsWith('.exe'))
+      .filter((entry) => !shouldSkipAppTarget(entry))
+    if (exeFiles.length === 0) return null
+
+    exeFiles.sort((left, right) => {
+      const leftName = path.basename(left, '.exe').toLowerCase()
+      const rightName = path.basename(right, '.exe').toLowerCase()
+      const leftPriority = REGISTRY_EXE_PRIORITY.findIndex((token) => leftName.includes(token))
+      const rightPriority = REGISTRY_EXE_PRIORITY.findIndex((token) => rightName.includes(token))
+      const normalizedLeftPriority = leftPriority === -1 ? Number.MAX_SAFE_INTEGER : leftPriority
+      const normalizedRightPriority = rightPriority === -1 ? Number.MAX_SAFE_INTEGER : rightPriority
+      return normalizedLeftPriority - normalizedRightPriority || left.length - right.length
+    })
+
+    return path.join(installLocation, exeFiles[0])
+  } catch {
+    return null
+  }
 }
 
 function escapeRegExp(value: string): string {
@@ -332,6 +381,14 @@ async function listWindowsStoreApps(): Promise<AppInfo[]> {
       const name = parseStartAppField(entry, ['name', 'Name'])
       if (!appId || !name) return null
 
+      if (isWindowsAbsolutePath(appId)) {
+        const stats = await fs.stat(appId).catch(() => null)
+        if (!stats?.isFile()) {
+          return null
+        }
+        return await buildDesktopAppInfo(appId, path.basename(appId), stats)
+      }
+
       return await buildUwpAppInfo(appId, {
         fallbackName: name,
         lastModified: new Date(0),
@@ -340,6 +397,102 @@ async function listWindowsStoreApps(): Promise<AppInfo[]> {
     })
   )
 
+  return apps.filter(Boolean) as AppInfo[]
+}
+
+type RegistryAppRecord = {
+  displayName?: string
+  displayIcon?: string
+  installLocation?: string
+  publisher?: string
+  systemComponent?: number
+  releaseType?: string
+  parentKeyName?: string
+}
+
+async function getRegistryAppRecords(): Promise<RegistryAppRecord[]> {
+  try {
+    const script = [
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+      '$paths = @(',
+      "  'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',",
+      "  'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',",
+      "  'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'",
+      ')',
+      '$apps = foreach ($path in $paths) {',
+      '  Get-ItemProperty -Path $path -ErrorAction SilentlyContinue | ForEach-Object {',
+      '    if (-not $_.DisplayName) { return }',
+      '    [PSCustomObject]@{',
+      '      DisplayName = [string]$_.DisplayName',
+      '      DisplayIcon = [string]$_.DisplayIcon',
+      '      InstallLocation = [string]$_.InstallLocation',
+      '      Publisher = [string]$_.Publisher',
+      '      SystemComponent = [int]($_.SystemComponent -as [int])',
+      '      ReleaseType = [string]$_.ReleaseType',
+      '      ParentKeyName = [string]$_.ParentKeyName',
+      '    }',
+      '  }',
+      '}',
+      '$apps | ConvertTo-Json -Compress'
+    ].join('; ')
+
+    const { stdout } = await execFileSafe(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      { windowsHide: true }
+    )
+    const raw = stdout.trim()
+    if (!raw) return []
+
+    const parsed = JSON.parse(raw) as RegistryAppRecord | RegistryAppRecord[]
+    return Array.isArray(parsed) ? parsed : [parsed]
+  } catch (error) {
+    const code =
+      error && typeof error === 'object' && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : ''
+    if (code !== 'ENOENT') {
+      windowsAppLog.warn('Failed to enumerate registry apps', { error })
+    }
+    return []
+  }
+}
+
+async function buildRegistryAppInfo(record: RegistryAppRecord): Promise<AppInfo | null> {
+  const displayName = record.displayName?.trim()
+  if (!displayName || shouldSkipRegistryAppName(displayName)) return null
+  if (record.systemComponent === 1 || record.releaseType || record.parentKeyName) return null
+
+  const iconExePath = parseRegistryExePath(record.displayIcon)
+  const installExePath = await findExecutableInInstallLocation(record.installLocation?.trim())
+  const targetPath = iconExePath || installExePath
+  if (!targetPath || shouldSkipAppTarget(targetPath)) return null
+
+  const stats = await fs.stat(targetPath).catch(() => null)
+  if (!stats?.isFile()) return null
+
+  const stableId = `registry:${buildPathStableId(targetPath)}`
+  const icon = await getAppIcon(targetPath, stableId)
+
+  return {
+    name: displayName,
+    displayName,
+    description: record.publisher?.trim() || undefined,
+    path: targetPath,
+    icon,
+    bundleId: '',
+    uniqueId: stableId,
+    stableId,
+    launchKind: 'path',
+    launchTarget: targetPath,
+    displayPath: targetPath,
+    lastModified: stats.mtime
+  }
+}
+
+async function listRegistryApps(): Promise<AppInfo[]> {
+  const records = await getRegistryAppRecords()
+  const apps = await Promise.all(records.map((record) => buildRegistryAppInfo(record)))
   return apps.filter(Boolean) as AppInfo[]
 }
 
@@ -460,7 +613,8 @@ async function fileDisplay(filePath: string): Promise<AppInfo[]> {
 export async function getApps(): Promise<AppInfo[]> {
   const allAppsPromises = [
     ...START_MENU_PATHS.map((item) => fileDisplay(item)),
-    listWindowsStoreApps()
+    listWindowsStoreApps(),
+    listRegistryApps()
   ]
 
   const results = await Promise.allSettled(allAppsPromises)
@@ -472,9 +626,27 @@ export async function getApps(): Promise<AppInfo[]> {
     }
   })
 
-  const uniqueApps = Array.from(
-    new Map(allApps.map((app) => [app.stableId || app.uniqueId, app])).values()
-  )
+  const uniqueByStableId = new Map<string, AppInfo>()
+  const claimedLaunchTargets = new Set<string>()
+
+  for (const app of allApps) {
+    const launchTarget = app.launchTarget ? buildPathStableId(app.launchTarget) : ''
+    if (
+      app.stableId?.startsWith('registry:') &&
+      launchTarget &&
+      claimedLaunchTargets.has(launchTarget)
+    ) {
+      continue
+    }
+    const key = app.stableId || app.uniqueId
+    if (!key || uniqueByStableId.has(key)) continue
+    uniqueByStableId.set(key, app)
+    if (!app.stableId?.startsWith('registry:') && launchTarget) {
+      claimedLaunchTargets.add(launchTarget)
+    }
+  }
+
+  const uniqueApps = Array.from(uniqueByStableId.values())
 
   return uniqueApps
 }

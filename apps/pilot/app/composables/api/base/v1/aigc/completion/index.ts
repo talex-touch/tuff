@@ -5,18 +5,18 @@ import {
   normalizePilotStreamSeq,
   normalizePilotWebsearchReason,
   PILOT_WEBSEARCH_CARD_TITLE,
-  projectPilotLegacyRunEventCard,
-  resolvePilotLegacyRunEventCardKeys,
+  projectPilotRunEventCard,
+  resolvePilotRunEventCardKeys,
 } from '@talex-touch/tuff-intelligence/pilot'
 import { endHttp } from '~/composables/api/axios'
 import { IChatItemStatus, IChatRole, PersistStatus, QuotaModel } from '~/composables/api/base/v1/aigc/completion-types'
 import {
-  buildLegacyCompletionExecutorBody,
-  buildLegacyCompletionStreamRequestPayload,
-  shouldDropLegacyCompletionStreamEvent,
+  buildPilotCompletionExecutorBody,
+  buildPilotCompletionStreamRequestPayload,
+  shouldDropPilotCompletionStreamEvent,
 } from './legacy-stream-contract'
-import { resolveLegacyUiStreamInput } from './legacy-stream-input'
-import { handleLegacyCompletionExecutorResult } from './legacy-stream-sse'
+import { resolvePilotUiStreamInput } from './legacy-stream-input'
+import { handlePilotCompletionExecutorResult } from './legacy-stream-sse'
 
 function parseJsonSafe<T>(value: string): T | null {
   try {
@@ -376,7 +376,7 @@ function toFiniteSeq(value: unknown): number {
   return normalizePilotStreamSeq(value)
 }
 
-async function uploadLegacyDataUrlAttachment(
+async function uploadPilotDataUrlAttachment(
   sessionId: string,
   payload: {
     type: 'image' | 'file'
@@ -400,7 +400,7 @@ async function uploadLegacyDataUrlAttachment(
     : null
   const attachmentId = String(attachment?.id || '').trim()
   if (!attachmentId) {
-    throw new Error('历史附件转换失败：未返回有效 attachmentId。')
+    throw new Error('附件转换失败：未返回有效 attachmentId。')
   }
 
   const typeRaw = String(attachment?.type || attachment?.kind || '').trim().toLowerCase()
@@ -507,7 +507,7 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
 
       let requestPayload: Record<string, unknown>
       if (followOnly) {
-        requestPayload = buildLegacyCompletionStreamRequestPayload({
+        requestPayload = buildPilotCompletionStreamRequestPayload({
           body: {
             ...body,
             fromSeq,
@@ -517,14 +517,14 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
         })
       }
       else {
-        const latestTurn = await resolveLegacyUiStreamInput(sessionId, body.messages || [], {
-          uploadDataUrlAttachment: uploadLegacyDataUrlAttachment,
+        const latestTurn = await resolvePilotUiStreamInput(sessionId, body.messages || [], {
+          uploadDataUrlAttachment: uploadPilotDataUrlAttachment,
         })
         if (!latestTurn.message && latestTurn.attachments.length <= 0) {
           throw new Error('latest user turn is empty')
         }
 
-        requestPayload = buildLegacyCompletionStreamRequestPayload({
+        requestPayload = buildPilotCompletionStreamRequestPayload({
           body,
           followOnly: false,
           latestTurn,
@@ -545,7 +545,7 @@ async function useCompletionExecutor(body: IChatBody, callback: (data: any) => v
 
       const reader = res.pipeThrough(new TextDecoderStream()).getReader()
 
-      await handleLegacyCompletionExecutorResult(
+      await handlePilotCompletionExecutorResult(
         reader,
         wrappedCallback,
         normalizeExecutorErrorMessage,
@@ -692,7 +692,7 @@ export const $completion = {
      */
     function handleEndToolParser() {
       const runtimePublic = useRuntimeConfig().public as Record<string, unknown>
-      if (!normalizeBoolean(runtimePublic.pilotEnableLegacyExecutorEventCompat, false)) {
+      if (!normalizeBoolean(runtimePublic.pilotEnableExecutorEventCompat, false)) {
         return
       }
       innerMsg.value.forEach((item) => {
@@ -788,16 +788,15 @@ export const $completion = {
         let waitingToolApproval = false
         let requestAccepted = false
         let activeExecutorStreams = 0
-        const legacyIgnoredEvents = new Set([
+        const ignoredCurrentStreamEvents = new Set([
           'turn.delta',
           'turn.completed',
           'turn.failed',
-          'status_updated',
           'completion',
           'verbose',
           'session_bound',
         ])
-        const legacyWarnedEvents = new Set<string>()
+        const warnedCurrentStreamEvents = new Set<string>()
 
         function clearMarkdownFlushTimer() {
           if (!markdownFlushTimer)
@@ -1379,7 +1378,7 @@ export const $completion = {
             pendingIntentKey,
             fallbackKey,
             shouldPromotePendingIntent,
-          } = resolvePilotLegacyRunEventCardKeys({
+          } = resolvePilotRunEventCardKeys({
             conversationId: conversation.id,
             sessionId: payload.sessionId,
             cardType: payload.cardType,
@@ -1553,7 +1552,7 @@ export const $completion = {
         }
 
         function buildExecutorBody(requestId = ''): IChatBody & { requestId?: string } {
-          return buildLegacyCompletionExecutorBody({
+          return buildPilotCompletionExecutorBody({
             options: requestId ? { ...(options || {}), requestId } : options,
             conversation,
             index,
@@ -1577,7 +1576,7 @@ export const $completion = {
         }
 
         function pushRunEventCardFromStream(eventType: string, payload: Record<string, any>) {
-          const projected = projectPilotLegacyRunEventCard({
+          const projected = projectPilotRunEventCard({
             conversationId: conversation.id,
             eventType,
             eventPayload: payload,
@@ -1668,7 +1667,7 @@ export const $completion = {
             return
           }
           const eventSeq = toFiniteSeq(res.seq)
-          if (shouldDropLegacyCompletionStreamEvent(eventType, res.seq)) {
+          if (shouldDropPilotCompletionStreamEvent(eventType, res.seq)) {
             console.warn('[pilot-completion] dropped seq-required event without valid seq', {
               eventType,
               rawSeq: res.seq,
@@ -1878,10 +1877,10 @@ export const $completion = {
             return
           }
 
-          if (legacyIgnoredEvents.has(eventType)) {
-            if (!legacyWarnedEvents.has(eventType)) {
-              legacyWarnedEvents.add(eventType)
-              console.warn('[completion] ignored legacy stream event', eventType)
+          if (ignoredCurrentStreamEvents.has(eventType)) {
+            if (!warnedCurrentStreamEvents.has(eventType)) {
+              warnedCurrentStreamEvents.add(eventType)
+              console.warn('[completion] ignored pilot stream event', eventType)
             }
           }
         }

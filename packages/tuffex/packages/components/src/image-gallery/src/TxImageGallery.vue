@@ -21,17 +21,41 @@ const list = computed(() => props.items ?? [])
 watch(
   () => props.startIndex,
   (v) => {
-    index.value = Math.min(Math.max(0, v ?? 0), Math.max(0, list.value.length - 1))
+    index.value = clampIndex(v ?? 0)
   },
   { immediate: true },
+)
+
+watch(
+  () => list.value.length,
+  (length) => {
+    if (length <= 0) {
+      index.value = 0
+      visible.value = false
+      return
+    }
+
+    index.value = clampIndex(index.value)
+  },
 )
 
 const current = computed<ImageGalleryItem | null>(() => {
   return list.value[index.value] ?? null
 })
 
+function clampIndex(value: number): number {
+  return Math.min(Math.max(0, value), Math.max(0, list.value.length - 1))
+}
+
+function getItemLabel(item: ImageGalleryItem, i: number): string {
+  return item.name || `Image ${i + 1}`
+}
+
 function openAt(i: number): void {
-  index.value = Math.min(Math.max(0, i), Math.max(0, list.value.length - 1))
+  if (list.value.length <= 0)
+    return
+
+  index.value = clampIndex(i)
   visible.value = true
   const item = list.value[index.value]
   if (item)
@@ -62,6 +86,7 @@ function next(): void {
         :key="item.id"
         type="button"
         class="tx-image-gallery__thumb"
+        :aria-label="`Open ${getItemLabel(item, i)} preview`"
         @click="openAt(i)"
       >
         <img :src="item.url" :alt="item.name || ''" loading="lazy">
@@ -75,13 +100,13 @@ function next(): void {
 
       <template #footer>
         <div class="tx-image-gallery__footer">
-          <button type="button" class="tx-image-gallery__nav" :disabled="index <= 0" @click="prev">
+          <button type="button" class="tx-image-gallery__nav" aria-label="Previous image" :disabled="index <= 0" @click="prev">
             Prev
           </button>
           <div class="tx-image-gallery__count">
             {{ index + 1 }} / {{ list.length }}
           </div>
-          <button type="button" class="tx-image-gallery__nav" :disabled="index >= list.length - 1" @click="next">
+          <button type="button" class="tx-image-gallery__nav" aria-label="Next image" :disabled="index >= list.length - 1" @click="next">
             Next
           </button>
         </div>

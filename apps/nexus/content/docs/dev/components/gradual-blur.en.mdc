@@ -1,12 +1,12 @@
 ---
 title: "GradualBlur"
-description: "`backdrop-filter: blur(...)`"
+description: "Layered backdrop blur overlay for soft edge fades, presets, hover intensity, and responsive dimensions."
 category: Layout
 syncStatus: migrated
 ---
 # GradualBlur
 
-`backdrop-filter: blur(...)`
+`TxGradualBlur` stacks masked `backdrop-filter` layers to create a directional edge fade. Presets provide common edge strengths, while explicit props override preset values for precise parent or page overlays.
 
 ## Basic Usage
 
@@ -318,34 +318,34 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `position` | `'top' \| 'bottom' \| 'left' \| 'right'` | `'bottom'` | TextDirection |
-| `strength` | `number` | `2` | Description for strength. |
-| `height` | `string` | `'6rem'` | Description for height. |
-| `width` | `string` | - | Description for width. |
-| `divCount` | `number` | `5` | Description for divCount. |
-| `exponential` | `boolean` | `false` | Description for exponential. |
-| `curve` | `'linear' \| 'bezier' \| 'ease-in' \| 'ease-out' \| 'ease-in-out'` | `'linear'` | Description for curve. |
-| `opacity` | `number` | `1` | Description for opacity. |
-| `animated` | `boolean \| 'scroll'` | `false` | Text/TextTrigger |
-| `duration` | `string` | `'0.3s'` | Description for duration. |
-| `easing` | `string` | `'ease-out'` | Description for easing. |
-| `zIndex` | `number` | `1000` | Description for zIndex. |
-| `target` | `'parent' \| 'page'` | `'parent'` | Text：TextContainer/Text |
-| `hoverIntensity` | `number` | - | Description for hoverIntensity. |
-| `responsive` | `boolean` | `false` | Description for responsive. |
-| `mobileHeight` | `string` | - | Description for mobileHeight. |
-| `tabletHeight` | `string` | - | Description for tabletHeight. |
-| `desktopHeight` | `string` | - | Description for desktopHeight. |
-| `mobileWidth` | `string` | - | Description for mobileWidth. |
-| `tabletWidth` | `string` | - | Description for tabletWidth. |
-| `desktopWidth` | `string` | - | Description for desktopWidth. |
-| `preset` | `'top' \| 'bottom' \| 'left' \| 'right' \| 'subtle' \| 'intense' \| 'smooth' \| 'sharp' \| 'header' \| 'footer' \| 'sidebar' \| 'page-header' \| 'page-footer'` | - | Description for preset. |
-| `gpuOptimized` | `boolean` | `false` | Description for gpuOptimized. |
-| `onAnimationComplete` | `() => void` | - | Description for onAnimationComplete. |
-| `className` | `string` | `''` | Description for className. |
-| `style` | `CSSProperties` | `{}` | Description for style. |
+| `position` | `'top' \| 'bottom' \| 'left' \| 'right'` | `'bottom'` | Edge where the blur overlay is anchored and the mask gradient direction is derived. |
+| `strength` | `number` | `2` | Multiplier used to calculate each layer's blur radius. |
+| `height` | `string` | `'6rem'` | Overlay thickness for top/bottom positions; also used as fallback width for left/right positions. |
+| `width` | `string` | - | Overlay width. Top/bottom default to `100%`; left/right fall back to `height` when omitted. |
+| `divCount` | `number` | `5` | Number of masked blur layers; values below `1` are clamped to one layer. |
+| `exponential` | `boolean` | `false` | Uses exponential blur scaling instead of linear per-layer blur scaling. |
+| `curve` | `'linear' \| 'bezier' \| 'ease-in' \| 'ease-out' \| 'ease-in-out'` | `'linear'` | Curve used to distribute blur progression across layers. |
+| `opacity` | `number` | `1` | Opacity applied to every blur layer. |
+| `animated` | `boolean \| 'scroll'` | `false` | Enables opacity/filter transitions; `'scroll'` waits for intersection visibility before fading in. |
+| `duration` | `string` | `'0.3s'` | CSS duration used by opacity and blur transitions. |
+| `easing` | `string` | `'ease-out'` | CSS easing used by opacity and blur transitions. |
+| `zIndex` | `number` | `1000` | Base z-index. Page-target overlays add `100` to this value. |
+| `target` | `'parent' \| 'page'` | `'parent'` | `parent` renders absolute positioning; `page` renders fixed positioning. |
+| `hoverIntensity` | `number` | - | Multiplies blur strength while hovered and enables pointer events on the overlay. |
+| `responsive` | `boolean` | `false` | Enables viewport-width based height/width overrides and installs a debounced resize listener. |
+| `mobileHeight` | `string` | - | Height used at viewport widths `<= 480px` when `responsive` is enabled. |
+| `tabletHeight` | `string` | - | Height used at viewport widths `<= 768px` when `responsive` is enabled. |
+| `desktopHeight` | `string` | - | Height used at viewport widths `<= 1024px` when `responsive` is enabled. |
+| `mobileWidth` | `string` | - | Width used at viewport widths `<= 480px` when `responsive` is enabled. |
+| `tabletWidth` | `string` | - | Width used at viewport widths `<= 768px` when `responsive` is enabled. |
+| `desktopWidth` | `string` | - | Width used at viewport widths `<= 1024px` when `responsive` is enabled. |
+| `preset` | `'top' \| 'bottom' \| 'left' \| 'right' \| 'subtle' \| 'intense' \| 'smooth' \| 'sharp' \| 'header' \| 'footer' \| 'sidebar' \| 'page-header' \| 'page-footer'` | - | Applies a preset config first; explicitly provided props still override preset values. |
+| `gpuOptimized` | `boolean` | `false` | Adds `will-change: backdrop-filter, opacity` and `translateZ(0)` to the overlay. |
+| `onAnimationComplete` | `() => void` | - | Called after a scroll-triggered overlay becomes visible and the configured duration elapses. |
+| `className` | `string` | `''` | Extra class appended to the root element. |
+| `style` | `CSSProperties` | `{}` | Extra inline style merged into the root style after generated positioning styles. |
 
 ## Usage Tips
 
 - **[Container positioning]** When `target="parent"`, set parent `position: relative` and use `overflow: hidden` to clip edges.
-- **[Compatibility]** Depends on `backdrop-filter`; browser support may vary.
+- **[Browser support]** Depends on `backdrop-filter`; rendering may vary across engines.

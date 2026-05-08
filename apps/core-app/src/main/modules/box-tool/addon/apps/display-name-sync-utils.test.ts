@@ -1,17 +1,33 @@
 import { describe, expect, it } from 'vitest'
-import { shouldUpdateDisplayName } from './display-name-sync-utils'
+import {
+  isProbablyCorruptedDisplayName,
+  resolveDisplayName,
+  shouldUpdateDisplayName
+} from './display-name-sync-utils'
 
 describe('display-name-sync-utils', () => {
-  it('英文旧值 + 中文新值时应更新', () => {
-    expect(shouldUpdateDisplayName('NeteaseMusic', '网易云音乐')).toBe(true)
+  it('updates when an English old value receives a better localized value', () => {
+    expect(shouldUpdateDisplayName('NeteaseMusic', 'NetEase Cloud Music')).toBe(true)
   })
 
-  it('新旧值相同（含空白）时不更新', () => {
-    expect(shouldUpdateDisplayName('网易云音乐', '  网易云音乐  ')).toBe(false)
+  it('does not update when values are equal after trimming', () => {
+    expect(shouldUpdateDisplayName('NetEase Cloud Music', '  NetEase Cloud Music  ')).toBe(false)
   })
 
-  it('新值为空时不更新', () => {
-    expect(shouldUpdateDisplayName('网易云音乐', '  ')).toBe(false)
-    expect(shouldUpdateDisplayName('网易云音乐', undefined)).toBe(false)
+  it('does not update when the incoming value is empty', () => {
+    expect(shouldUpdateDisplayName('NetEase Cloud Music', '  ')).toBe(false)
+    expect(shouldUpdateDisplayName('NetEase Cloud Music', undefined)).toBe(false)
+  })
+
+  it('detects replacement-character display names from broken decoding', () => {
+    expect(isProbablyCorruptedDisplayName('\u03A2\uFFFD\uFFFD')).toBe(true)
+    expect(isProbablyCorruptedDisplayName('\u25A1\u25A1\u25A1')).toBe(true)
+    expect(isProbablyCorruptedDisplayName('WeChat')).toBe(false)
+  })
+
+  it('repairs corrupted display names with a clean fallback name', () => {
+    expect(resolveDisplayName('\u03A2\uFFFD\uFFFD', 'WeChat')).toBe('WeChat')
+    expect(shouldUpdateDisplayName('\u03A2\uFFFD\uFFFD', 'WeChat')).toBe(true)
+    expect(shouldUpdateDisplayName('WeChat', '\u03A2\uFFFD\uFFFD')).toBe(false)
   })
 })

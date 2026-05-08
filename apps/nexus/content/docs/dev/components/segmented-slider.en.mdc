@@ -1,6 +1,6 @@
 ---
 title: "SegmentedSlider"
-description: "Component documentation for SegmentedSlider."
+description: "Discrete slider for choosing one value from a fixed set."
 category: Form
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # SegmentedSlider
 
-Component documentation for SegmentedSlider.
+`TxSegmentedSlider` maps a finite list of values onto a slider-like track. Use it when the available values are discrete and should remain visible while the user changes selection.
 
 ## Basic Usage
 
@@ -101,22 +101,22 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `number \| string` | `0` | TextValue |
-| `segments` | `SegmentedSliderSegment[]` | `[]` | Description for segments. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `showLabels` | `boolean` | `true` | Description for showLabels. |
-| `vertical` | `boolean` | `false` | Description for vertical. |
+| `modelValue` | `number \| string` | `0` | Currently selected segment value. |
+| `segments` | `SegmentedSliderSegment[]` | `[]` | Ordered segment definitions rendered along the track. |
+| `disabled` | `boolean` | `false` | Prevents click and keyboard selection changes. |
+| `showLabels` | `boolean` | `true` | Shows each segment label when a label is provided. |
+| `vertical` | `boolean` | `false` | Renders a vertical track with bottom-to-top progress. |
 
 ### SegmentedSliderSegment
 
 | Prop | Type | Description |
 |------|------|------|
-| `value` | `number \| string` | OptionsValue |
-| `label` | `string` | Description for label. |
+| `value` | `number \| string` | Value emitted when the segment is selected. |
+| `label` | `string` | Optional text rendered next to the segment marker. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(value: number \| string)` | ValueTextTrigger |
-| `change` | `(value: number \| string)` | ValueTextTrigger |
+| `update:modelValue` | `(value: number \| string)` | Emitted when an enabled segment requests a new value. |
+| `change` | `(value: number \| string)` | Emitted with the same selected value for change listeners. |

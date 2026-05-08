@@ -33,7 +33,7 @@ async function handleExecutorItem(item: string, callback: (data: any) => void) {
   }
 }
 
-export function parseLegacyCompletionSseFrame(frame: string): { event: string, data: string } | null {
+export function parsePilotCompletionSseFrame(frame: string): { event: string, data: string } | null {
   const lines = frame.split('\n')
   let event = 'message'
   const dataLines: string[] = []
@@ -65,7 +65,7 @@ export function parseLegacyCompletionSseFrame(frame: string): { event: string, d
   }
 }
 
-export async function handleLegacyCompletionExecutorResult(
+export async function handlePilotCompletionExecutorResult(
   reader: ReadableStreamDefaultReader<string>,
   callback: (data: any) => void,
   normalizeErrorMessage: (value: unknown) => string,
@@ -82,7 +82,7 @@ export async function handleLegacyCompletionExecutorResult(
       const frame = buffer.slice(0, frameEndIndex)
       buffer = buffer.slice(frameEndIndex + 2)
 
-      const parsed = parseLegacyCompletionSseFrame(frame)
+      const parsed = parsePilotCompletionSseFrame(frame)
       if (!parsed) {
         frameEndIndex = buffer.indexOf('\n\n')
         continue
@@ -125,7 +125,7 @@ export async function handleLegacyCompletionExecutorResult(
 
     if (done) {
       if (buffer.trim().length) {
-        const parsed = parseLegacyCompletionSseFrame(buffer)
+        const parsed = parsePilotCompletionSseFrame(buffer)
         if (parsed) {
           await handleExecutorItem(parsed.data, callback)
         }

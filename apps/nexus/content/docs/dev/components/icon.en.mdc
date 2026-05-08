@@ -44,6 +44,7 @@ code: |
     <TuffIcon name="i-ri-home-line" />
     <TuffIcon name="chevron-down" />
     <TuffIcon :icon="{ type: 'emoji', value: '🚀' }" />
+    <TuffIcon :icon="{ type: 'url', value: '/app.svg', colorful: true }" />
   </template>
 ---
 ::
@@ -178,6 +179,7 @@ code: |
 - `emoji`: lightweight emphasis.
 - `file` / `url`: local or remote icons.
 - `builtin`: built-in common icons.
+- `colorful` can be declared on the component prop or on `icon.colorful`; SVG uses a currentColor mask by default and preserves original colors when colorful is true.
 
 ## API (Lite)
 ::TuffPropsTable
@@ -199,8 +201,42 @@ rows:
     type: 'boolean'
     default: 'false'
     description: 'Keep original colors'
+  - name: urlResolver
+    type: "(url: string, type: 'url' | 'file') => string"
+    default: '-'
+    description: 'Override URL/file path resolution'
+  - name: svgFetcher
+    type: '(url: string) => Promise<string>'
+    default: '-'
+    description: 'Override SVG content fetching'
 ---
 ::
+
+## TxStatusIcon API (Lite)
+::TuffPropsTable
+---
+rows:
+  - name: tone
+    type: "'none' | 'loading' | 'warning' | 'success' | 'error' | 'info'"
+    default: "'none'"
+    description: 'Status indicator'
+  - name: indicatorSize
+    type: 'number'
+    default: 'auto'
+    description: 'Indicator size'
+  - name: indicatorOffset
+    type: 'number'
+    default: '0'
+    description: 'Indicator offset'
+---
+::
+
+## Rendering Contract
+
+- `name` values starting with `i-` render as icon classes; known built-in names render as `builtin` SVG.
+- `file` and local absolute `url` values can be transformed by injected `fileProtocol` or `urlResolver`.
+- SVG uses a `currentColor` mask when `colorful=false`; `colorful=true` or `icon.colorful=true` renders the original image.
+- `status='loading' | 'error'` takes precedence over normal icon rendering.
 
 ## Icon sets
 

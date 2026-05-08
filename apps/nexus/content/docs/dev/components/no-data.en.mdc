@@ -1,6 +1,6 @@
 ---
 title: "NoData"
-description: "Component documentation for NoData."
+description: "Shortcut empty-state component for empty datasets, based on TxEmptyState with `variant=\"no-data\"`."
 category: Feedback
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # NoData
 
-Component documentation for NoData.
+`TxNoData` is a shortcut wrapper around `TxEmptyState` with `variant="no-data"` pre-set. Use it for empty lists, tables, charts, or other dataset views.
 
 ## Basic Usage
 
@@ -28,4 +28,10 @@ code: |
 
 ## API
 
-Props / Slots / Events follow `TxEmptyState`.
+`TxNoData` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
+
+## Interaction Contract
+
+- `TxNoData` always forwards `variant="no-data"` to `TxEmptyState`.
+- The wrapper does not rewrite `title`, `description`, `surface`, or action config; explicit props are forwarded as-is.
+- `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.

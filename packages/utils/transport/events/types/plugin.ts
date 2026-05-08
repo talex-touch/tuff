@@ -429,6 +429,30 @@ export interface PluginApiOpenPathRequest {
   pathType: 'plugin' | 'data' | 'config' | 'logs' | 'temp'
 }
 
+export interface PluginTempFileCreateRequest {
+  namespace?: string
+  ext?: string
+  text?: string
+  base64?: string
+  prefix?: string
+  retentionMs?: number
+}
+
+export interface PluginTempFileCreateResponse {
+  url: string
+  path?: string
+  sizeBytes: number
+  createdAt: number
+}
+
+export interface PluginTempFileDeleteRequest {
+  url: string
+}
+
+export interface PluginTempFileDeleteResponse {
+  success: boolean
+}
+
 export interface PluginApiOpenPathResponse {
   success: boolean
   path?: string
@@ -629,3 +653,66 @@ export interface PluginSqliteTransactionResponse {
 export type PluginPerformanceGetMetricsResponse = unknown
 
 export type PluginPerformanceGetPathsResponse = PluginApiGetPathsResponse
+
+export interface PluginWindowNewRequest {
+  file?: string
+  url?: string
+  [key: string]: unknown
+}
+
+export interface PluginWindowNewResponse {
+  id?: number
+  error?: string
+}
+
+export interface PluginWindowVisibleRequest {
+  id: number
+  visible?: boolean
+}
+
+export interface PluginWindowVisibleResponse {
+  visible?: boolean
+  error?: string
+}
+
+export interface PluginWindowPropertyRequest {
+  id: number
+  property: {
+    window?: Record<string, unknown>
+    webContents?: Record<string, unknown>
+  }
+}
+
+export interface PluginWindowPropertyResponse {
+  success?: boolean
+  error?: string
+}
+
+export interface PluginServiceRequest {
+  service: string
+}
+
+export interface PluginServiceHandlePayload {
+  data: Record<string, unknown>
+}
+
+export interface PluginShortcutRegisterRequest {
+  key: string
+  id?: string
+  description?: string
+  desc?: string
+}
+
+export interface PluginShortcutTriggerPayload {
+  id: string
+}
+
+export interface PluginIndexCommunicateRequest {
+  key: string
+  info?: unknown
+}
+
+export interface PluginIndexCommunicateResponse {
+  status?: string
+  error?: string
+}

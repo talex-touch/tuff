@@ -1,13 +1,5 @@
-import type {
-  IntelligenceInvokeResult,
-} from './types/intelligence'
-import {
-  createIntelligenceSdk
-  
-  
-  
-} from './transport/sdk/domains/intelligence'
-import type {IntelligenceChatRequest, IntelligenceSdk, IntelligenceSdkTransport} from './transport/sdk/domains/intelligence';
+import { createIntelligenceSdk } from './transport/sdk/domains/intelligence'
+import type { IntelligenceSdk, IntelligenceSdkTransport } from './transport/sdk/domains/intelligence'
 
 export interface IntelligenceClientChannel {
   send: (eventName: string, payload?: unknown) => Promise<any>
@@ -53,12 +45,7 @@ export function resolveIntelligenceChannel(
   return null
 }
 
-export interface IntelligenceClient extends IntelligenceSdk {
-  /**
-   * @deprecated 请优先使用 chatLangChain() 或 invoke('text.chat', ...)。
-   */
-  chat: (payload: IntelligenceChatRequest) => Promise<IntelligenceInvokeResult<string>>
-}
+export type IntelligenceClient = IntelligenceSdk
 
 function isTuffTransport(
   channel: IntelligenceChannelLike | null | undefined,
@@ -76,13 +63,6 @@ function createChannelTransport(channel: IntelligenceClientChannel): Intelligenc
   }
 }
 
-function toClient(sdk: IntelligenceSdk): IntelligenceClient {
-  return {
-    ...sdk,
-    chat: payload => sdk.chatLangChain(payload),
-  }
-}
-
 export function createIntelligenceClient(
   channel?: IntelligenceChannelLike,
   resolvers?: IntelligenceChannelResolver[],
@@ -96,8 +76,8 @@ export function createIntelligenceClient(
   }
 
   if (isTuffTransport(resolved)) {
-    return toClient(createIntelligenceSdk(resolved as IntelligenceSdkTransport))
+    return createIntelligenceSdk(resolved as IntelligenceSdkTransport)
   }
 
-  return toClient(createIntelligenceSdk(createChannelTransport(resolved)))
+  return createIntelligenceSdk(createChannelTransport(resolved))
 }
