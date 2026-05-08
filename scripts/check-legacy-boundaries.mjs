@@ -22,7 +22,7 @@ const writeBaseline = process.argv.includes('--write-baseline')
 const scanRoots = LEGACY_SCAN_ROOTS
 const scopeRoots = SCOPE_GUARD_ROOTS
 const scopeExemptFiles = SCOPE_GUARD_EXEMPT_FILES
-const defaultExpiresVersion = '2.5.0'
+const defaultExpiresVersion = '2.4.11'
 
 const ruleDefs = [
   {

@@ -1,17 +1,18 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-05-04
+> 更新时间: 2026-05-08
 
 ---
 
-## 🧭 单一口径矩阵（2.4.9）
+## 🧭 单一口径矩阵（2.4.10 -> 2.4.11）
 
 | 主题 | 当前事实 | 下一动作 | 强制同步文档 |
 | --- | --- | --- | --- |
-| 版本主线 | 当前工作区基线为 `2.4.9-beta.4` | 推进 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配` | `TODO` / `README` / `INDEX` / `CHANGES` |
-| Legacy/兼容/结构治理 | 已锁定统一实施 PRD（五工作包并行），CoreApp 剩余兼容债务进入 `2.5.0` 前置清理窗口 | 清册中的 core-app `2.5.0` 项必须关闭或显式降权，不再新增 legacy 分支/raw channel/旧 storage protocol/旧 SDK bypass | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
-| CoreApp 平台适配 | `2.5.0` 前 Windows/macOS 为 release-blocking；Linux 保留 documented best-effort | Windows/macOS 完成阻塞级人工回归；Linux 仅记录 `xdotool` / desktop environment 限制与非阻塞 smoke | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
+| 版本主线 | 当前工作区基线为 `2.4.10-beta.14` | `2.4.10` 优先解决 Windows App 索引与基础 legacy/compat；剩余未闭环项进入 `2.4.11` 必解清单 | `TODO` / `README` / `INDEX` / `CHANGES` |
+| Windows App 索引 | Start Menu、UWP、registry uninstall 与 `launchArgs/workingDirectory` 已有回归覆盖，但仍缺真实 Windows 设备体验证据 | `2.4.10` 完成微信/Codex/Apple Music 等真实应用搜索与启动验证，并记录失败证据 | `TODO` / `README` / `INDEX` / `CHANGES` |
+| Legacy/兼容/结构治理 | 已锁定统一实施 PRD（五工作包并行），清册退场目标统一前移到 `2.4.11` | 清册中的 `2.4.11` 项必须关闭或显式降权，不再新增 legacy 分支/raw channel/旧 storage protocol/旧 SDK bypass | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
+| CoreApp 平台适配 | `2.4.11` 前 Windows/macOS 为 release-blocking；Linux 保留 documented best-effort | Windows/macOS 完成阻塞级人工回归；Linux 仅记录 `xdotool` / desktop environment 限制与非阻塞 smoke | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | 2.4.8 Gate | OmniPanel 稳定版 MVP 已完成（historical） | 保留历史验收证据，不再作为当前开发主线 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | v2.4.7 Gate | A/B/C/D/E 全部完成（D/E historical） | 保留 run/manifest/sha256 证据链 | `TODO` / `README` / `Roadmap` / `Release Checklist` / `Quality Baseline` / `INDEX` |
 | Pilot Runtime | Node Server + Postgres/Redis + JWT Cookie 主路径；首页默认 DeepAgent，legacy `$completion` 已收口为唯一前端主消费链 | 继续补齐 SSE 反向代理部署烟测与矩阵回归 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
@@ -380,7 +381,7 @@
   - 移除对应 legacy allowlist / compatibility registry 行。
 - [x] Unplugin CLI shim 测试清册噪声清理：
   - `cli-shim.test.ts` 的测试描述改为 `retired cli shim`，继续固定 deprecated wrapper 只输出弃用提示并转发到 `tuff-cli`。
-  - 移除对应 legacy-keyword allowlist / compatibility registry 行；文件名自身仍作为 compat-file 清册项保留，等待 2.5.0 退场窗口处理。
+  - 移除对应 legacy-keyword allowlist / compatibility registry 行；文件名自身仍作为 compat-file 清册项保留，等待 `2.4.11` 退场窗口处理。
 - [x] Pilot route/model admin UI 清册噪声清理：
   - `route-combos.vue` 与 `model-groups.vue` 中“当前保存值已禁用/不存在”的临时选项状态从 `legacyStatus` 改为 `retiredStatus`，保留 disabled placeholder 展示逻辑。
   - 移除对应 legacy allowlist / compatibility registry 行。
@@ -651,16 +652,32 @@
   - 2026-04-22 本地回归已补：`app-provider.test.ts` 覆盖 `shortcut` / `uwp` `onExecute` 异步 handoff，不等待后台观察窗口即可返回；仍需 Windows 真机补“窗口已隐藏 + 实际启动体验”。
   - 2026-05-05 合并回归：Windows 应用索引补坏 `display_name` 回退、`Get-StartApps` 绝对路径桌面应用识别、Everything 后端尝试错误与 active-app 精简错误日志；仍需真机验证微信/Codex/Apple Music 搜索与启动。
 
-### 2.5.0 CoreApp Release Blockers（当前优先）
+### 2.4.10 当前优先：Windows App 索引 + 基础 legacy/compat
 
-- [x] Legacy 清理阻塞：清册中的 core-app `2.5.0` 项已关闭或显式降权；不得新增 `legacy` 分支、raw channel、旧 storage protocol、旧 SDK bypass。
+- [x] 基础 legacy 清理阻塞：清册中的 core-app `2.4.11` 项已关闭或显式降权；不得新增 `legacy` 分支、raw channel、旧 storage protocol、旧 SDK bypass。
   - 已将 `apps/core-app/scripts` 与 `apps/pilot/scripts` 纳入 `legacy/compat` 显式扫描范围，并手工补齐 allowlist / registry。
   - 插件 channel bridge 移除 legacy header 语义；DivisionBox dead `flow-trigger` 事件面已物理删除；Nexus store 旧 manifest/path fallback 已改为结构化错误。
   - permission JSON->SQLite、dev data root migration、theme localStorage migration 与 download legacy migration manager 已从启动/runtime 主路径移除，不再保留 migration exception。
+- [ ] Windows App 索引真实设备验收：Everything/文件搜索、Start Menu `.lnk`、UWP/Store、registry uninstall fallback、坏 `display_name` 回退、`launchArgs/workingDirectory` 启动语义。
+- [ ] Windows 常见应用搜索启动验证：微信、Codex、Apple Music 至少三类真实应用完成“可搜索、可显示正确名称/图标、可启动、CoreBox 可立即隐藏”验证。
+- [ ] Windows App 诊断证据导出：使用 app-index diagnostic evidence 记录命中路径、关键词、FTS/N-gram/subsequence 命中情况与失败原因。
+- [ ] `2.4.10` 文档证据闭环：每轮清理同步 `CHANGES + TODO + compatibility registry`，并优先保留本地可复现命令；Release Evidence 凭证缺失时不伪造远端写入。
+
+### 2.4.11 必须解决的问题
+
 - [ ] Windows 阻塞级回归：Everything/文件搜索、应用扫描/UWP、托盘状态、更新包匹配、插件权限拦截、安装/卸载、退出资源释放。
 - [ ] macOS 阻塞级回归：首次引导权限、OmniPanel Accessibility 门控、native-share 标记、托盘/dock 行为、更新安装、插件权限拦截、退出资源释放。
-- [ ] Linux 非阻塞观察：记录 `xdotool` / desktop environment 限制与 smoke 结果；不作为 `2.5.0` release blocker。
-- [ ] 证据闭环：每轮清理同步 `CHANGES + TODO + compatibility registry`，并通过 Nexus Release Evidence API 采集 `docs:guard` / `legacy:guard` / 定向回归结果。
+- [ ] Linux 非阻塞观察：记录 `xdotool` / desktop environment 限制与 smoke 结果；不作为 `2.4.11` release blocker。
+- [ ] Release Evidence 写入闭环：具备 `release:evidence` API key 或管理员登录态后，将 docs guard、平台 matrix 与 CoreApp 定向回归结果写入 Nexus。
+- [ ] Legacy/compat/size 清册退场：`scripts/legacy-boundary-allowlist.json`、`scripts/large-file-boundary-allowlist.json` 与 `compatibility-debt-registry.csv` 中 `2.4.11` 退场项必须关闭或显式降权。
+- [ ] 超长文件治理：对仍高于 1200 行的 `growthExceptions` 文件给出拆分计划或降低到阈值以下。
+- [ ] CoreApp 验证收口：补跑 `typecheck:node` / `typecheck:web` / 定向测试并记录证据。
+- [ ] 搜索性能验收：按 `search-trace` 采样 200 次真实查询，确认 `first.result/session.end` P95 与慢查询占比达标。
+- [ ] 启动搜索压测：执行“全量索引 + 高频推荐 + 剪贴板图像轮询”，产出 2 分钟窗口内 lag/P95 证据。
+- [ ] 文档治理：第二批历史文档统一加“历史/待重写”头标，Telemetry/Search/Transport/DivisionBox 长文档改造为 TL;DR 分层模板。
+- [ ] Transport Wave A：MessagePort 高频通道迁移 + `sendSync` 清理。
+- [ ] Pilot Wave B：存量 typecheck/lint 清理 + SSE/鉴权矩阵回归。
+- [ ] 架构 Wave C：`plugin-module/search-core/file-provider` SRP 拆分。
   - 2026-04-26 Nexus 证据入口：新增 `/api/admin/release-evidence/*`，支持 run 创建/分页/详情、item upsert、平台阻塞 matrix 与 `doc-guard` 快速写入；管理员登录态或 `release:evidence` API key 可写入，CI 默认走 API key。
   - 2026-04-27 写入阻塞：当前本地环境未提供 `release:evidence` API key 或管理员登录态，只能先把 docs guard、Nexus build/smoke 与本机 CoreApp 验证结果同步到 `CHANGES`；拿到凭证后按同一证据载荷写入 `/api/admin/release-evidence/doc-guard` 与 matrix。
   - 2026-04-27 matrix caseId 固化：Windows required 使用 `windows-everything-file-search` / `windows-app-scan-uwp` / `windows-third-party-app-launch` / `windows-shortcut-launch-args` / `windows-tray-update-plugin-install-exit`；macOS required 使用 `macos-first-run-permissions` / `macos-omnipanel-accessibility` / `macos-native-share-tray-dock-update` / `macos-plugin-permission-install-update` / `macos-exit-resource-release`；Linux 仅写 `linux-best-effort-smoke` 且 `requiredForRelease=false`。
@@ -673,12 +690,12 @@
 
 ### A. 文档治理（本轮）
 
-- [x] 六主文档日期统一到 `2026-03-16`。
-- [x] 六主文档“下一动作”统一为 `Nexus 设备授权风控`。
+- [x] 六主文档日期统一到 `2026-05-08`。
+- [x] 六主文档“下一动作”统一为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`，剩余未闭环项进入 `2.4.11` 必解清单。
 - [x] `CHANGES` 完成“近 30 天主文件 + 历史月度归档”拆分。
 - [x] `README/INDEX` 入口压缩为高价值快照。
 - [x] Phase 0：新增 `legacy:guard`（冻结新增 `legacy` 分支与 `channel.send('x:y')` raw event）。
-- [x] Phase 0：建立 `scripts/legacy-boundary-allowlist.json`，存量兼容债务全部附 `expiresVersion=2.5.0`。
+- [x] Phase 0：建立 `scripts/legacy-boundary-allowlist.json`，存量兼容债务全部附 `expiresVersion=2.4.11`。
 - [x] 统一治理 SoT：新增 `docs/plan-prd/docs/compatibility-debt-registry.csv`（固定字段与 owner/expires/test_case）。
 - [x] 统一治理门禁：新增 `pnpm compat:registry:guard` + `pnpm size:guard`，并并入 `pnpm legacy:guard`。
 - [x] 统一主线验收入口：新增 `pnpm quality:gate` 聚合命令（`legacy/network/test:targeted/typecheck/docs`）。
@@ -687,10 +704,10 @@
 - [x] Sync 兼容壳行为固化：补充 `/api/sync/pull|push` 返回 410 的自动化测试断言。
 - [x] 债务扫描口径显式化：主线改为显式白名单 + 漏扫报错 + `scanScope` 摘要输出。
 - [x] 超长文件防漂移：`--write-baseline` 禁止自动上调，新增 `growthExceptions` 显式豁免机制。
-- [x] `TODO` 主文件压缩到 400 行以内并稳定维护。
+- [x] `TODO` 主文件完成入口重排，当前优先级与 `2.4.11` 必解问题独立维护。
 - [ ] 第二批历史文档统一加“历史/待重写”头标。
 
-### B. Nexus 风控主线（下一开发动作）
+### B. Nexus 风控（已降权历史入口）
 
 - [x] Phase 0：补齐设备授权风控验收证据（含回滚演练记录）。
 - [x] Nexus 组件文档页卡死收口：组件同步表改走服务端轻量数据源，`TuffDemoWrapper` 改为按文档引用 demo 懒加载，`/docs/dev/components` 加入 prerender。
@@ -730,7 +747,7 @@
   - `pnpm legacy:guard`
   - `pnpm quality:gate`
 
-### E. Transport Legacy 清退清单（启动项，目标 v2.5.0）
+### E. Transport Legacy 清退清单（启动项，目标 2.4.11）
 
 - 清单文档：`docs/plan-prd/docs/TRANSPORT-LEGACY-RETIREMENT-CHECKLIST-2026-03.md`
 - [x] 第一轮入口收口完成：`legacy-transport-import` 从 `4 files / 4 hits` 降到 `0 files / 0 hits`。
@@ -745,7 +762,7 @@
   - [x] `packages/utils/plugin/preload.ts` 与 `packages/utils/renderer/storage/base-storage.ts`（内部调用侧）。
   - [x] `apps/core-app/.../widget-registry.ts`（renderer 暴露面）。
   - [x] `packages/utils/index.ts`（统一出口重导向）。
-  - [x] `v2.5.0` 前移除 transport 中 legacy 兼容符号对外转出（本轮已提前完成）。
+  - [x] `2.4.11` 前移除 transport 中 legacy 兼容符号对外转出（本轮已提前完成）。
 - 验收口径：
   - [x] `legacy-transport-import` = `0 files / 0 hits`。
   - [x] CoreApp renderer storage consumer import boundary 已由 `app-storage-boundary.test.ts` 固化。
@@ -809,7 +826,7 @@
 - [x] 占位能力补齐：`OfficialUpdateProvider` 改为真实接口探测，后端不可用返回 `unavailable + reason`；`AgentStore` 实装远端目录/下载/校验/解包/回滚/真实更新比对；`ExtensionLoader` 补齐 unload 生命周期。
 - [x] 自动化验证：`typecheck` 通过；定向 `vitest`（权限门禁、平台识别、AgentStore、Extension unload）通过。
 - [ ] Windows/macOS 阻塞级人工回归：首次引导权限、更新包匹配、插件权限拦截、Agent 安装升级卸载、退出资源释放。
-- [ ] Linux 非阻塞 smoke：记录 `xdotool` / desktop environment 限制与 smoke 结果，不阻塞 `2.5.0`。
+- [ ] Linux 非阻塞 smoke：记录 `xdotool` / desktop environment 限制与 smoke 结果，不阻塞 `2.4.11`。
 
 ### Q. CoreBox 搜索性能优化（2026-03-23）
 
@@ -871,7 +888,7 @@
 - [x] `v2.4.7 Gate D`：历史资产回填已完成（run `23091014958`）。
 - [x] `v2.4.7 Gate E`：按 historical done 关闭，不重发版。
 - [x] `2.4.9-beta.4`：发布基线与 CI 证据已固化。
-- [x] CLI Phase1+2：迁移完成，`2.4.x` shim 保留、`2.5.0` 退场。
+- [x] CLI Phase1+2：迁移完成，`2.4.x` shim 保留、`2.4.11` 退场。
 - [x] Pilot Chat/Turn 协议硬切：`/api/chat/sessions/:sessionId/stream` 为唯一主入口，`/api/v1/chat/sessions/:sessionId/{stream,turns}` 已物理删除；历史 `pilot_quota_history.value` 已完成 base64 -> JSON 迁移并统一 JSON 读写。
 - [x] Pilot run-event card 公共符号硬裁切：
   - `projectPilotLegacyRunEventCard` / `resolvePilotLegacyRunEventCardKeys` / `PilotLegacyRunEventCard*` 公共导出已改为 `projectPilotRunEventCard` / `resolvePilotRunEventCardKeys` / `PilotRunEventCard*`。
@@ -896,17 +913,17 @@
 | 统计项 | 数值 |
 | --- | --- |
 | 已完成 (`- [x]`) | 262 |
-| 未完成 (`- [ ]`) | 24 |
-| 总计 | 286 |
-| 完成率 | 92% |
+| 未完成 (`- [ ]`) | 37 |
+| 总计 | 299 |
+| 完成率 | 88% |
 
-> 统计时间: 2026-05-07（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-05-08（按本文件实时 checkbox 计数）。
 
 ---
 
 ## 🎯 下一步（锁定）
 
-1. 完成 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配` 文档化与清册闭环。
+1. 完成 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口` 文档化与清册闭环。
 2. 按 Windows/macOS 阻塞级回归清单补齐人工证据；Linux 仅记录 best-effort smoke。
 3. `Nexus 设备授权风控` 保留实施文档与历史入口，降为非当前主线。
 4. `docs:guard` 连续零告警后，再升级 strict 阻塞策略。

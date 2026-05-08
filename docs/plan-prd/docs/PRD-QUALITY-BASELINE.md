@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-05-04
+> 更新时间：2026-05-08
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -12,7 +12,7 @@
 
 - 文档盘点历史快照参考：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`；当前优先级路线以六主文档、`TODO` 与 `CHANGES` 为准。
 - 主线动作必须同步六文档：`INDEX / README / TODO / CHANGES / Roadmap / Quality Baseline`。
-- 当前主线动作为 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`；`Nexus 设备授权风控` 保留实施文档与历史入口，Phase 1 频控/冷却/审计/长期授权时间窗/可信设备白名单已完成，非当前主线。
+- 当前主线动作为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`；`Nexus 设备授权风控` 保留实施文档与历史入口，Phase 1 频控/冷却/审计/长期授权时间窗/可信设备白名单已完成，非当前主线。
 - 文档门禁升级前置保持不变：连续 5 次 `pnpm docs:guard` 零告警 + 连续 2 周无口径漂移。
 
 ## 2. 每个活跃 PRD 必须包含的章节（MUST）
@@ -41,7 +41,7 @@
 ### 3.1 类型与调用约束
 - 不得新增未类型化的跨层通信。
 - 优先复用 domain SDK，禁止新增 raw event 字符串分发。
-- 强制启用 `legacy:guard`：禁止新增 `channel.send('x:y')` 与新增 `legacy` 分支命中；新增兼容债务必须进入白名单并附退场版本（当前基线 `2.5.0`）。
+- 强制启用 `legacy:guard`：禁止新增 `channel.send('x:y')` 与新增 `legacy` 分支命中；新增兼容债务必须进入白名单并附退场版本（当前退场目标 `2.4.11`）。
 - `legacy:guard` 仅允许在 `scripts/lib/legacy-keyword-exceptions.mjs` 中登记非兼容分支例外（框架固定 API 字段、上游错误文本签名、负向 lint 禁止项）；真实生产分支 key、迁移读取路径与文件名债务仍必须进入 allowlist + compatibility registry。
 - 强制启用 `compat:registry:guard`：兼容债务清册（`docs/plan-prd/docs/compatibility-debt-registry.csv`）必须完整覆盖存量命中，缺字段/缺条目/过期未清理均失败。
 - 强制启用 `size:guard`：超长文件阈值 `>=1200` 基线冻结，禁止新增和增长；仅允许通过 `growthExceptions` 临时豁免，并要求同步 `CHANGES + compatibility registry`。
@@ -49,7 +49,7 @@
 - 强制启用 CoreApp runtime console 门禁：`pnpm console:guard` 冻结 `apps/core-app` main/preload/renderer 现存 `console.*` 边界，新增 raw console 或扩散命中数量一律失败；logger sink、显式 debug gate 与专项诊断器只能通过 allowlist 承载。
 - 强制启用 CoreApp runtime boundary 门禁：`pnpm -C "apps/core-app" run runtime:guard` 冻结宽松 Electron WebPreferences、裸 `ipcRenderer/ipcMain`、raw IPC event string、`window.touchChannel`、`window.$t/window.$i18n` 与旧 `/api/sync/*`；允许项只能落在命名 window security profile、preload 或内部 channel adapter。
 - CoreApp 硬切补充门禁：业务层 `window.$channel` 调用、legacy storage 旧协议（`storage:get/save/reload/save-sync/saveall`）与 legacy `sdkapi` 放行路径必须保持为 `0`；占位能力必须返回真实状态或显式 `unavailable + reason`，禁止固定假值“成功”。
-- CoreApp `2.5.0` 前置门禁：清册中的 core-app `2.5.0` 兼容债务必须关闭或显式降权；Windows/macOS 回归为 release-blocking，Linux 仅作为 documented best-effort 与非阻塞 smoke。
+- CoreApp `2.4.11` 前置门禁：清册中的 `2.4.11` 兼容债务必须关闭或显式降权；Windows/macOS 回归为 release-blocking，Linux 仅作为 documented best-effort 与非阻塞 smoke。
 
 ### 3.2 可靠性约束
 - 关键路径需有显式错误处理与用户可见反馈。
@@ -218,7 +218,7 @@
 - 安装失败路径必须可见（拒绝授权、异常、超时均不得 silent failure）。
 - 事件/类型变更仅允许可选字段追加，禁止破坏既有语义与兼容性。
 - `@talex-touch/tuff-cli` 为命令主入口，旧入口仅兼容 shim + deprecation，不承载新命令逻辑。
-- 下一动作已统一为 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`，不再把 CLI 分包迁移视为待办主线。
+- 下一动作已统一为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`，不再把 CLI 分包迁移视为待办主线。
 
 ### 6.8 Nexus 设备授权风控文档化（2026-03-16）
 
@@ -227,20 +227,20 @@
 | --- | --- | --- |
 | 正式实施文档 | `docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` | 已入库 |
 | 文档结构 | 目标 / 范围与非目标 / 分期 / 验收 / 回滚 / 风险与豁免边界 | 已对齐 |
-| 六主文档口径 | `Nexus 设备授权风控` 保留实施入口，当前主线已切换到 CoreApp `2.5.0` 前置治理 | 已降权 |
-| CLI 兼容策略 | `2.4.x` 保留 shim，`2.5.0` 退场 | 已固化 |
+| 六主文档口径 | `Nexus 设备授权风控` 保留实施入口，当前主线已切换到 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`，剩余项进入 `2.4.11` 必解清单 | 已降权 |
+| CLI 兼容策略 | `2.4.x` 保留 shim，`2.4.11` 退场 | 已固化 |
 
 **质量约束落地**
 - 风控策略调整必须同时更新实施文档与 `CHANGES`，形成同日证据闭环。
 - 豁免必须具备责任人、时间窗和原因，不允许全局无限期豁免。
 - 文档门禁仍保持 `docs:guard` report-only，strict 升级需满足连续零告警前置条件。
 
-### 6.9 CoreApp 2.5.0 前置治理（2026-04-20）
+### 6.9 CoreApp 2.4.10 / 2.4.11 前置治理（2026-05-08）
 
 **现状指标**
 | 项目 | 结果 | 结论 |
 | --- | --- | --- |
-| 当前主线 | `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配` | 已锁定 |
+| 当前主线 | `2.4.10 Windows App 索引 + 基础 legacy/compat 收口` | 已锁定 |
 | Legacy 清理 | channel/fallback/placeholder blocker 已关闭；数据迁移项降权为 `core-app-migration-exception` | Guarded |
 | Windows 回归 | 搜索、应用扫描/UWP、托盘、更新、插件权限、安装卸载、退出释放 | Release-blocking |
 | macOS 回归 | 权限引导、OmniPanel Accessibility、native-share、托盘/dock、更新、插件权限、退出释放 | Release-blocking |
@@ -250,7 +250,7 @@
 - 新增能力不得通过 legacy 分支、raw channel、旧 storage protocol 或旧 SDK bypass 承载。
 - `apps/core-app/scripts` 与 `apps/pilot/scripts` 必须纳入 legacy/compat 显式扫描；不得用 scope exemption 掩盖脚本债务。
 - 数据迁移例外必须保持 one-shot / marker-gated / read-once，不得重新成为业务写入 SoT。
-- Windows/macOS 阻塞级回归必须在 `CHANGES + TODO` 留证；Linux 失败必须记录限制原因，但不阻塞 `2.5.0`。
+- Windows/macOS 阻塞级回归必须在 `CHANGES + TODO` 留证；Linux 失败必须记录限制原因，但不阻塞 `2.4.11`。
 - `Nexus 设备授权风控` 保留实施文档，不得从历史记录中删除。
 
 ### 6.10 Pilot 路由 V2（2026-03-17）
