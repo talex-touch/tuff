@@ -280,14 +280,19 @@ function mapWorkflowToDraft(workflow: WorkflowDefinition, t: Translate): Workflo
     triggers: (workflow.triggers?.length
       ? workflow.triggers
       : [{ type: 'manual', enabled: true }]
-    ).map((trigger, index) => ({
-      uid: createUid(),
-      id: trigger.id || `trigger-${index + 1}`,
-      type: trigger.type === 'clipboard.batch' ? 'clipboard.batch' : 'manual',
-      enabled: trigger.enabled !== false,
-      label: trigger.label || getDefaultTriggerLabel(trigger.type, t),
-      config: safeJsonStringify(trigger.config ?? {})
-    })),
+    ).map((trigger, index) => {
+      const type: WorkflowTriggerType =
+        trigger.type === 'clipboard.batch' ? 'clipboard.batch' : 'manual'
+
+      return {
+        uid: createUid(),
+        id: trigger.id || `trigger-${index + 1}`,
+        type,
+        enabled: trigger.enabled !== false,
+        label: trigger.label || getDefaultTriggerLabel(type, t),
+        config: safeJsonStringify(trigger.config ?? {})
+      }
+    }),
     contextSources: (workflow.contextSources?.length
       ? workflow.contextSources
       : getDefaultContextSources(t)
