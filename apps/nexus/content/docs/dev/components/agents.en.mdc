@@ -1,12 +1,12 @@
 ---
 title: "Agents"
-description: "loadingbadge/"
+description: "Agent picker list with loading, enabled/disabled grouping, selection, and badges."
 category: Data
 syncStatus: migrated
 ---
 # Agents
 
-loadingbadge/
+`TxAgentsList` renders a selectable agent list for workflows and AI entry points. Enabled and disabled agents are grouped separately, loading and empty states are built in, and disabled items never emit selection events.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -82,15 +82,18 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `agents` | `AgentItemProps[]` | - | Description for agents. |
-| `selectedId` | `string \| null` | `null` | Description for selectedId. |
-| `loading` | `boolean` | `false` | Description for loading. |
+| `agents` | `AgentItemProps[]` | - | Agent records to render. Enabled items are listed before disabled items. |
+| `selectedId` | `string \| null` | `null` | Marks the matching agent as selected. |
+| `loading` | `boolean` | `false` | Shows list item skeletons instead of agent rows. |
+| `enabledTitle` | `string` | `'Enabled'` | Section title for agents where `disabled` is not set. |
+| `disabledTitle` | `string` | `'Disabled'` | Section title for agents where `disabled=true`. |
+| `emptyText` | `string` | `'No agents'` | Message shown when `agents` is empty and the list is not loading. |
 
 #### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `select` | `(id: string)` | Description for select. |
+| `select` | `(id: string)` | Emitted with the selected agent id when an enabled item is clicked or activated from the keyboard. |
 
 ### TxAgentItem
 
@@ -98,10 +101,22 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `id` | `string` | - | Description for id. |
-| `name` | `string` | - | Description for name. |
-| `description` | `string` | `''` | Description for description. |
-| `iconClass` | `string` | `'i-carbon-bot'` | Description for iconClass. |
-| `selected` | `boolean` | `false` | Description for selected. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `badgeText` | `string \| number` | `''` | badge Text |
+| `id` | `string` | - | Stable id emitted by `select`. |
+| `name` | `string` | - | Primary agent label. |
+| `description` | `string` | `''` | Optional secondary text below the name. |
+| `iconClass` | `string` | `'i-carbon-bot'` | Icon class rendered in the avatar area. |
+| `selected` | `boolean` | `false` | Applies active styling and `aria-selected=true`. |
+| `disabled` | `boolean` | `false` | Disables pointer and keyboard selection and applies `aria-disabled=true`. |
+| `badgeText` | `string \| number` | `''` | Optional right-side badge content; empty, `null`, or `undefined` hides the badge. |
+
+#### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `select` | `(id: string)` | Emitted only when the item is enabled and activated by click, Enter, or Space. |
+
+#### Slots
+
+| Slot | Description |
+|------|------|
+| `badge` | Replaces the default right-side badge content when `badgeText` is present. |

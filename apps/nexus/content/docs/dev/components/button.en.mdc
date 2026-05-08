@@ -168,7 +168,7 @@ rows:
       kind: enum
       enums: [primary, success, warning, danger, info, text]
     default: '-'
-    description: 'Shortcut semantic type (legacy)'
+    description: 'Semantic tone alias. Used only when `variant` is not set; `text` maps to `ghost`.'
   - parameter: size
     type:
       kind: enum

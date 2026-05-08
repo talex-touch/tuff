@@ -25,3 +25,56 @@ code: |
   </template>
 ---
 :::
+
+## API（Lite）
+::TuffPropsTable
+---
+rows:
+  - name: modelValue
+    type: 'ImageUploaderFile[]'
+    default: '[]'
+    description: 当前图片列表
+  - name: multiple
+    type: 'boolean'
+    default: 'true'
+    description: 是否允许一次选择多个文件
+  - name: accept
+    type: 'string'
+    default: "'image/*'"
+    description: 原生文件输入 accept 属性
+  - name: disabled
+    type: 'boolean'
+    default: 'false'
+    description: 禁用选择和移除
+  - name: max
+    type: 'number'
+    default: '9'
+    description: 最大图片数量
+---
+::
+
+## Events
+::TuffPropsTable
+---
+rows:
+  - name: update:modelValue
+    type: '(value: ImageUploaderFile[]) => void'
+    default: '-'
+    description: 图片列表更新
+  - name: change
+    type: '(value: ImageUploaderFile[]) => void'
+    default: '-'
+    description: 图片列表变化
+  - name: remove
+    type: '(payload: { id: string, value: ImageUploaderFile[] }) => void'
+    default: '-'
+    description: 移除图片后触发
+---
+::
+
+## 交互契约
+
+- 当前组件通过点击添加按钮打开原生文件选择器；不提供拖拽上传入口。
+- 新选择的文件会生成 object URL 作为预览，并在移除或组件卸载时释放。
+- `max` 会限制新增文件数量；超过上限的文件会被忽略。
+- `disabled` 会同时禁用添加按钮、文件输入与移除按钮。

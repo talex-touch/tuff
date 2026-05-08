@@ -1,12 +1,12 @@
 ---
 title: "GlassSurface"
-description: "Component documentation for GlassSurface."
+description: "Refractive glass container with SVG displacement, backdrop-filter, and solid fallback rendering paths."
 category: Layout
 syncStatus: migrated
 ---
 # GlassSurface
 
-Component documentation for GlassSurface.
+`TxGlassSurface` renders a bounded glass layer for translucent panels and optical distortion previews. It prefers the SVG displacement filter path, falls back to native `backdrop-filter` blur when SVG filters are unavailable, and finally uses a solid translucent surface when neither capability is supported.
 
 ## Basic Usage
 
@@ -358,22 +358,22 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `width` | `string \| number` | `'200px'` | Description for width. |
-| `height` | `string \| number` | `'200px'` | Description for height. |
-| `borderRadius` | `number` | `20` | Description for borderRadius. |
-| `borderWidth` | `number` | `0.07` | Description for borderWidth. |
-| `brightness` | `number` | `70` | Description for brightness. |
-| `opacity` | `number` | `0.93` | Description for opacity. |
-| `blur` | `number` | `11` | Description for blur. |
-| `displace` | `number` | `0.5` | Description for displace. |
-| `backgroundOpacity` | `number` | `0` | Description for backgroundOpacity. |
-| `saturation` | `number` | `1` | Description for saturation. |
-| `distortionScale` | `number` | `-180` | Description for distortionScale. |
-| `redOffset` | `number` | `0` | Description for redOffset. |
-| `greenOffset` | `number` | `10` | Description for greenOffset. |
-| `blueOffset` | `number` | `20` | Description for blueOffset. |
-| `xChannel` | `'R' \| 'G' \| 'B'` | `'R'` | X Text |
-| `yChannel` | `'R' \| 'G' \| 'B'` | `'G'` | Y Text |
-| `mixBlendMode` | `string` | `'difference'` | Description for mixBlendMode. |
+| `width` | `string \| number` | `'200px'` | Surface width. Numeric values are normalized to px; strings are passed through. |
+| `height` | `string \| number` | `'200px'` | Surface height. Numeric values are normalized to px; strings are passed through. |
+| `borderRadius` | `number` | `20` | Outer radius in px, also applied to the generated displacement map rectangles. |
+| `borderWidth` | `number` | `0.07` | Edge-size multiplier used when generating the displacement map mask. |
+| `brightness` | `number` | `70` | Lightness percentage for the generated inner displacement mask. |
+| `opacity` | `number` | `0.93` | Alpha value for the generated inner displacement mask. |
+| `blur` | `number` | `11` | Blur radius for the generated displacement mask; also drives the backdrop-filter fallback blur. |
+| `displace` | `number` | `0.5` | Final SVG `feGaussianBlur.stdDeviation` applied after the RGB displacement maps are blended. |
+| `backgroundOpacity` | `number` | `0` | Background alpha used on the SVG-filter rendering path. |
+| `saturation` | `number` | `1` | Saturation value appended to the SVG-filter `backdrop-filter` chain. |
+| `distortionScale` | `number` | `-180` | Base SVG displacement scale applied to the red, green, and blue maps. |
+| `redOffset` | `number` | `0` | Offset added to `distortionScale` for the red displacement map. |
+| `greenOffset` | `number` | `10` | Offset added to `distortionScale` for the green displacement map. |
+| `blueOffset` | `number` | `20` | Offset added to `distortionScale` for the blue displacement map. |
+| `xChannel` | `'R' \| 'G' \| 'B'` | `'R'` | SVG displacement X channel selector forwarded to all RGB maps. |
+| `yChannel` | `'R' \| 'G' \| 'B'` | `'G'` | SVG displacement Y channel selector forwarded to all RGB maps. |
+| `mixBlendMode` | `string` | `'difference'` | CSS `mix-blend-mode` used by the generated blue gradient rectangle in the displacement map. |
 
 > This component degrades based on browser capabilities (when SVG filter/backdrop-filter is unsupported).

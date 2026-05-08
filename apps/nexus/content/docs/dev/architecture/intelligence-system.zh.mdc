@@ -228,7 +228,7 @@ code: |
 
 配置加载时机：
 1. 模块初始化时
-2. 通过 `intelligence:reload-config` 通道显式重新加载时
+2. 通过 `intelligence:api:reload-config` typed SDK 事件显式重新加载时
 3. 每次调用时从存储实时读取
 
 ## 调用流程
@@ -446,7 +446,7 @@ code: |
 ---
 code: |
   // 主进程
-  channel.regChannel('intelligence:test-capability', async ({ data, reply }) => {
+  transport.on(intelligenceApiEvents.testCapability, async (data) => {
     const { capabilityId, providerId, userInput } = data
     
     // 获取测试器
@@ -463,7 +463,7 @@ code: |
     // 格式化结果
     const formattedResult = tester.formatTestResult(result)
     
-    reply(DataCode.SUCCESS, { ok: true, result: formattedResult })
+    return { ok: true, result: formattedResult }
   })
 ---
 :::
@@ -516,11 +516,11 @@ code: |
 
 **主进程通道**
 
-- `intelligence:invoke` - 调用能力
-- `intelligence:test-capability` - 测试能力
-- `intelligence:test-provider` - 测试提供商连接
-- `intelligence:fetch-models` - 获取可用模型
-- `intelligence:reload-config` - 重新加载配置
+- `intelligence:api:invoke` - 通过 Intelligence SDK typed transport facade 调用能力
+- `intelligence:api:test-capability` - 通过 Intelligence SDK typed transport facade 测试能力
+- `intelligence:api:test-provider` - 通过 Intelligence SDK typed transport facade 测试提供商连接
+- `intelligence:api:fetch-models` - 通过 Intelligence SDK typed transport facade 获取可用模型
+- `intelligence:api:reload-config` - 通过 Intelligence SDK typed transport facade 重新加载配置
 
 **渲染进程钩子**
 

@@ -1,12 +1,12 @@
 ---
 title: "TypingIndicator"
-description: "Component documentation for TypingIndicator."
+description: "Inline typing and loading status indicators for chat surfaces."
 category: Feedback
 syncStatus: migrated
 ---
 # TypingIndicator
 
-Component documentation for TypingIndicator.
+`TxTypingIndicator` renders a polite status region with a compact animated indicator. Use `variant` to match the chat surface density and set `showText=false` when surrounding UI already labels the pending state.
 
 ### TypingIndicator
 :::TuffDemoWrapper{demo="TypingIndicatorTypingIndicatorDemo" code-lang="vue"}
@@ -80,17 +80,17 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `variant` | `'dots' \| 'ai' \| 'pure' \| 'ring' \| 'circle-dash' \| 'bars'` | `'dots'` | Description for variant. |
-| `text` | `string` | `'Typing…'` | Description for text. |
-| `showText` | `boolean` | `true` | Description for showText. |
-| `size` | `number` | `6` | Description for size. |
-| `gap` | `number` | `5` | Description for gap. |
-| `loaderSize` | `number` | `44` | Description for loaderSize. |
-| `pureSize` | `number` | `14` | Description for pureSize. |
-| `ringSize` | `number` | `18` | Description for ringSize. |
-| `ringThickness` | `number` | `2` | Description for ringThickness. |
-| `circleDashSize` | `number` | `18` | Description for circleDashSize. |
-| `circleDashThickness` | `number` | `2` | Description for circleDashThickness. |
-| `circleDashDashDeg` | `number` | `12` | Description for circleDashDashDeg. |
-| `circleDashGapDeg` | `number` | `12` | Description for circleDashGapDeg. |
-| `barsSize` | `number` | `12` | Description for barsSize. |
+| `variant` | `'dots' \| 'ai' \| 'pure' \| 'ring' \| 'circle-dash' \| 'bars'` | `'dots'` | Visual loader style rendered inside the status region. |
+| `text` | `string` | `'Typing…'` | Visible status label shown when `showText` is enabled. |
+| `showText` | `boolean` | `true` | Controls whether the text label is rendered next to the indicator. |
+| `size` | `number` | `6` | Dot diameter in pixels for the `dots` variant. |
+| `gap` | `number` | `5` | Gap in pixels between dots in the `dots` variant. |
+| `loaderSize` | `number` | `44` | Outer size in pixels for the `ai` loader. |
+| `pureSize` | `number` | `14` | Diameter in pixels for the `pure` spinner. |
+| `ringSize` | `number` | `18` | Diameter in pixels for the `ring` spinner. |
+| `ringThickness` | `number` | `2` | Stroke thickness in pixels for the `ring` spinner. |
+| `circleDashSize` | `number` | `18` | Diameter in pixels for the `circle-dash` spinner. |
+| `circleDashThickness` | `number` | `2` | Stroke thickness in pixels for the `circle-dash` spinner. |
+| `circleDashDashDeg` | `number` | `12` | Dash angle in degrees for the repeating conic pattern. |
+| `circleDashGapDeg` | `number` | `12` | Gap angle in degrees for the repeating conic pattern. |
+| `barsSize` | `number` | `12` | Height in pixels for the `bars` loader. |

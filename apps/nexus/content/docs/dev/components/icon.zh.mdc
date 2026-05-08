@@ -44,6 +44,7 @@ code: |
     <TuffIcon name="i-ri-home-line" />
     <TuffIcon name="chevron-down" />
     <TuffIcon :icon="{ type: 'emoji', value: '🚀' }" />
+    <TuffIcon :icon="{ type: 'url', value: '/app.svg', colorful: true }" />
   </template>
 ---
 ::
@@ -178,6 +179,7 @@ code: |
 - `emoji`：用于轻量强调。
 - `file` / `url`：本地或远程图标。
 - `builtin`：内置常用图标。
+- `colorful` 可在组件 prop 或 `icon.colorful` 中声明；SVG 默认使用 currentColor mask，`colorful=true` 时保留原色。
 
 ## API（简版）
 ::TuffPropsTable
@@ -199,8 +201,42 @@ rows:
     type: 'boolean'
     default: 'false'
     description: '是否保留原色'
+  - name: urlResolver
+    type: "(url: string, type: 'url' | 'file') => string"
+    default: '-'
+    description: '覆盖 URL/file 路径解析'
+  - name: svgFetcher
+    type: '(url: string) => Promise<string>'
+    default: '-'
+    description: '覆盖 SVG 内容获取逻辑'
 ---
 ::
+
+## TxStatusIcon API（简版）
+::TuffPropsTable
+---
+rows:
+  - name: tone
+    type: "'none' | 'loading' | 'warning' | 'success' | 'error' | 'info'"
+    default: "'none'"
+    description: '状态角标'
+  - name: indicatorSize
+    type: 'number'
+    default: '自动'
+    description: '角标尺寸'
+  - name: indicatorOffset
+    type: 'number'
+    default: '0'
+    description: '角标偏移'
+---
+::
+
+## 渲染契约
+
+- `name` 以 `i-` 开头时按图标 class 渲染；命中内置名时按 `builtin` SVG 渲染。
+- `file` 与本地绝对 `url` 可通过注入的 `fileProtocol` 或 `urlResolver` 转换。
+- SVG 在 `colorful=false` 时通过 mask 使用 `currentColor`；`colorful=true` 或 `icon.colorful=true` 时渲染为原图。
+- `status='loading' | 'error'` 会优先展示加载或错误状态。
 
 ## 图标集
 

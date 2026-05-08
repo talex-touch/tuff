@@ -14,7 +14,7 @@ const route = useRoute()
 const router = useRouter()
 const isProtectedRoute = computed(() => route.meta.requiresAuth === true)
 const { showInvisibleWatermark } = useWatermarkDisplayPolicy()
-const { initLocale, applyLegacyLangQueryOnce, syncFromProfileOnAuth } = useLocaleOrchestrator()
+const { initLocale, syncFromProfileOnAuth } = useLocaleOrchestrator()
 const { status, getSession } = useAuth()
 const { user, pending: authUserPending } = useAuthUser()
 const sessionErrorCookie = useCookie<string | null>('nexus_auth_error')
@@ -26,14 +26,6 @@ await initLocale({
   isAuthenticated: status.value === 'authenticated',
   profileLocale: user.value?.locale ?? null,
 })
-
-watch(
-  () => route.fullPath,
-  () => {
-    void applyLegacyLangQueryOnce()
-  },
-  { immediate: true },
-)
 
 watch(
   () => [status.value, user.value?.id ?? null, user.value?.locale ?? null] as const,
@@ -226,30 +218,6 @@ watchEffect(() => {
       reason: 'reauth',
     },
   })
-})
-
-watchEffect(() => {
-  // 避免在初始化时立即重定向，等待路由完全加载
-  if (!route.path)
-    return
-
-  // 仅当访问旧的语言前缀路径（如 /en/*、/zh/*）时进行兼容处理。
-  // 对于仅包含语言前缀的路径（/en、/en/、/zh、/zh/），避免被自动重定向到首页。
-  if (/^\/(?:en|zh)\/?$/i.test(route.path))
-    return
-
-  // 移除语言前缀 /en 或 /zh
-  const trimmed = route.path.replace(/^\/(?:en|zh)(?=\/|$)/i, '')
-
-  // 只在路径实际不同且 trimmed 非空时才重定向
-  // 避免 /en 或 /zh 被错误重定向到首页
-  if (trimmed && trimmed !== route.path) {
-    router.replace({
-      path: trimmed,
-      query: route.query,
-      hash: route.hash,
-    })
-  }
 })
 
 watchEffect(() => {

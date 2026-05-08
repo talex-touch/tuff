@@ -176,17 +176,16 @@ Enable input monitoring, allowing plugin to receive input change events.
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
-  import { useBox, useChannel } from '@talex-touch/utils/plugin/sdk'
+  import { onCoreBoxInputChange, useBox } from '@talex-touch/utils/plugin/sdk'
   
   const box = useBox()
-  const channel = useChannel()
   
   // Enable input monitoring
   await box.allowInput()
   
   // Listen to input changes
-  channel.regChannel('core-box:input-change', ({ data }) => {
-    console.log('Input changed:', data.input)
+  onCoreBoxInputChange(({ data }) => {
+    console.log('Input changed:', data.query.text)
   })
 ---
 :::

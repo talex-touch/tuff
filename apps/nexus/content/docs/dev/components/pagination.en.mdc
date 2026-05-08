@@ -54,6 +54,18 @@ rows:
     type: number
     default: '0'
     description: Total items
+  - name: totalPages
+    type: number
+    default: '-'
+    description: Explicit total page count; used when total is not provided
+  - name: prevIcon
+    type: string
+    default: "'chevron-left'"
+    description: Previous page icon
+  - name: nextIcon
+    type: string
+    default: "'chevron-right'"
+    description: Next page icon
   - name: showInfo
     type: boolean
     default: 'false'
@@ -64,6 +76,38 @@ rows:
     description: Show first/last buttons
 ---
 :::
+
+## Events
+::TuffPropsTable
+---
+rows:
+  - name: update:currentPage
+    type: '(page: number) => void'
+    default: '-'
+    description: v-model current page update
+  - name: pageChange
+    type: '(page: number) => void'
+    default: '-'
+    description: Triggered when users navigate to another page
+---
+:::
+
+## Slots
+::TuffPropsTable
+---
+rows:
+  - name: info
+    type: '{ currentPage: number, totalPages: number, total?: number }'
+    default: '-'
+    description: Custom page info area
+---
+:::
+
+## Interaction Contract
+
+- `total` takes precedence for page-count calculation with `pageSize`; `totalPages` is used when `total` is not provided.
+- `showFirstLast` renders first/last page jump buttons, and boundary pages disable first/previous or next/last controls.
+- The active page button exposes `aria-current="page"`; previous/next/first/last controls expose readable `aria-label` values.
 
 ## Source
 <TuffDocSourceLink />

@@ -474,24 +474,33 @@ code: |
 
 | Prop | Description | Type | Default |
 |--------|------|------|--------|
-| modelValue / v-model | Description for modelValue / v-model. | `string \| number` | - |
-| disabled | Description for disabled. | `boolean` | `false` |
-| type | Description for type. | `'button' \| 'standard' \| 'card'` | `'button'` |
-| direction | Description for direction. | `'row' \| 'column'` | - |
-| indicatorVariant | Description for indicatorVariant. | `'solid' \| 'outline' \| 'glass' \| 'blur'` | - |
-| glass | Description for glass. | `boolean` | `false` |
-| blur | Description for blur. | `boolean` | `false` |
-| stiffness | Description for stiffness. | `number` | `110` |
-| damping | Description for damping. | `number` | `12` |
-| blurAmount | Description for blurAmount. | `number` | `1` |
-| elastic | Description for elastic. | `boolean` | `true` |
+| modelValue / v-model | Selected radio value. | `string \| number` | - |
+| disabled | Disables all radios in the group and blocks keyboard selection. | `boolean` | `false` |
+| type | Visual style shared by child radios. | `'button' \| 'standard' \| 'card'` | `'button'` |
+| direction | Layout direction. `button` always resolves to row, `standard` defaults to row, and `card` defaults to column. | `'row' \| 'column'` | - |
+| indicatorVariant | Button-group indicator style. When omitted, `glass` maps to `glass`, `blur` maps to `blur`, otherwise `solid` is used. | `'solid' \| 'outline' \| 'glass' \| 'blur'` | - |
+| glass | Shortcut for the `glass` button indicator variant. | `boolean` | `false` |
+| blur | Shortcut for the `blur` button indicator variant. | `boolean` | `false` |
+| updateOnSettled | For button groups, delays v-model/change emission until the animated indicator settles. Defaults to enabled for `glass` or `blur` indicators. | `boolean` | - |
+| stiffness | Spring stiffness for button indicator motion. Higher values settle faster. | `number` | `110` |
+| damping | Spring damping for button indicator motion. Lower values feel more elastic. | `number` | `12` |
+| blurAmount | Backdrop blur strength for the `blur` indicator. | `number` | `1` |
+| elastic | Enables stretch/impact motion on the button indicator. | `boolean` | `true` |
 
 #### Events
 
 | Event | Description | Params |
 |--------|------|----------|
-| update:modelValue | Description for update:modelValue. | `(value: string \| number) => void` |
-| change | Description for change. | `(value: string \| number) => void` |
+| update:modelValue | v-model update emitted when an enabled child radio selects a new value. | `(value: string \| number) => void` |
+| change | Emitted with the selected value after an enabled selection. | `(value: string \| number) => void` |
+
+#### Keyboard
+
+| Key | Behavior |
+|--------|------|
+| ArrowRight / ArrowDown | Select the next enabled radio. |
+| ArrowLeft / ArrowUp | Select the previous enabled radio. |
+| Home / End | Select the first / last enabled radio. |
 
 ### TxRadio
 
@@ -499,13 +508,13 @@ code: |
 
 | Prop | Description | Type | Default |
 |--------|------|------|--------|
-| value | Description for value. | `string \| number` | - |
-| label | Description for label. | `string` | `''` |
-| disabled | Description for disabled. | `boolean` | `false` |
-| type | Description for type. | `'button' \| 'standard' \| 'card'` | `'button'` |
+| value | Value written to the parent `TxRadioGroup` when selected. | `string \| number` | - |
+| label | Fallback visible label when no default slot is provided. | `string` | `''` |
+| disabled | Disables this radio and removes it from group keyboard navigation. | `boolean` | `false` |
+| type | Standalone visual style when the radio is not controlled by a group; grouped radios inherit the group type. | `'button' \| 'standard' \| 'card'` | `'button'` |
 
 #### Events
 
 | Event | Description | Params |
 |--------|------|----------|
-| click | Description for click. | `(value: string \| number) => void` |
+| click | Emitted after an enabled, unchecked radio selects itself through the parent group. | `(value: string \| number) => void` |

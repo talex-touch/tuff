@@ -1,12 +1,12 @@
 ---
 title: "GridLayout"
-description: "hover"
+description: "A responsive CSS Grid helper with an optional cursor-following hover spotlight."
 category: Layout
 syncStatus: migrated
 ---
 # GridLayout
 
-hover
+Use `GridLayout` to arrange repeated cards or panels into an auto-fitting responsive grid. Add `tx-grid-layout__item` to children when the hover spotlight should be enabled.
 
 ## Basic Usage
 
@@ -30,10 +30,10 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `minItemWidth` | `string` | `'300px'` | Description for minItemWidth. |
-| `gap` | `string` | `'1.5rem'` | Description for gap. |
-| `maxColumns` | `number` | `4` | Description for maxColumns. |
-| `interactive` | `boolean` | `true` | Description for interactive. |
+| `minItemWidth` | `string` | `'300px'` | Minimum width used by the auto-fit grid columns. |
+| `gap` | `string` | `'1.5rem'` | Gap between grid items. |
+| `maxColumns` | `number` | `4` | Fixed column count used on wide screens (`>= 1400px`). |
+| `interactive` | `boolean` | `true` | Enables the cursor-following hover spotlight for `.tx-grid-layout__item` children. |
 
 ## Notes
 

@@ -1,12 +1,12 @@
 ---
 title: "MarkdownView Markdown"
-description: "Markdown HTML sanitize"
+description: "Markdown renderer with explicit sanitization and theme modes."
 category: Data
 syncStatus: migrated
 ---
 # MarkdownView Markdown
 
-Markdown HTML sanitize
+`TxMarkdownView` renders GitHub-flavored Markdown through `marked`. Sanitization is enabled by default and the component withholds generated HTML until DOMPurify is ready; set `sanitize=false` only for trusted content.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -98,6 +98,6 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `content` | `string` | *Text* | Description for content. |
-| `sanitize` | `boolean` | `true` | Description for sanitize. |
-| `theme` | `auto \| light \| dark` | `auto` | Text（auto Text data-theme/class，TextDefault light） |
+| `content` | `string` | - | Markdown source rendered into the `.markdown-body` container. |
+| `sanitize` | `boolean` | `true` | Sanitizes generated HTML with DOMPurify before rendering; when disabled, raw HTML from Markdown is allowed. |
+| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | `auto` follows document `data-theme` / theme classes and falls back to light. |

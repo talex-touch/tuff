@@ -1,6 +1,6 @@
 ---
 title: "LoadingOverlay"
-description: "Component documentation for LoadingOverlay."
+description: "A loading mask for blocking a container or the full screen while async work is running."
 category: Feedback
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # LoadingOverlay
 
-Component documentation for LoadingOverlay.
+Use `LoadingOverlay` when content should stay visible but temporarily blocked during loading, saving, syncing, or long-running actions.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -51,8 +51,8 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `loading` | `boolean` | `false` | Description for loading. |
-| `fullscreen` | `boolean` | `false` | Description for fullscreen. |
-| `text` | `string` | `''` | Description for text. |
-| `spinnerSize` | `number` | `18` | Description for spinnerSize. |
-| `background` | `string` | - | Description for background. |
+| `loading` | `boolean` | `false` | Shows or hides the overlay. |
+| `fullscreen` | `boolean` | `false` | Teleports the overlay to `body` and covers the viewport. |
+| `text` | `string` | `''` | Optional message displayed below the spinner. |
+| `spinnerSize` | `number` | `18` | Spinner size in pixels. |
+| `background` | `string` | - | CSS background used for the overlay mask. |

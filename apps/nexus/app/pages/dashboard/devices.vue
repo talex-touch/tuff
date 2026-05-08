@@ -14,6 +14,8 @@ interface DeviceItem {
   deviceName: string | null
   platform: string | null
   clientType: string | null
+  trusted: boolean
+  trustedAt: string | null
   userAgent: string | null
   lastSeenAt: string | null
   createdAt: string
@@ -154,6 +156,23 @@ async function revokeDevice(device: DeviceItem) {
     actionLoading.value = false
   }
 }
+
+async function setTrusted(device: DeviceItem, trusted: boolean) {
+  actionLoading.value = true
+  try {
+    await $fetch('/api/devices/trust', {
+      method: 'POST',
+      body: { deviceId: device.id, trusted },
+    })
+    await refresh()
+  }
+  catch (error) {
+    console.error('Failed to update trusted device:', error)
+  }
+  finally {
+    actionLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -207,6 +226,12 @@ async function revokeDevice(device: DeviceItem) {
                 >
                   {{ t('dashboard.devices.revoked', '已撤销') }}
                 </span>
+                <span
+                  v-else-if="device.trusted"
+                  class="ml-2 rounded-full bg-cyan-500/15 px-2 py-0.5 text-xs text-cyan-700 dark:text-cyan-300"
+                >
+                  {{ t('dashboard.devices.trusted', '可信设备') }}
+                </span>
               </p>
               <p class="mt-0.5 text-xs text-black/50 dark:text-white/50">
                 {{ device.platform || 'Web' }} · {{ formatLastActive(device.lastSeenAt) }} · {{ formatClientType(device.clientType) }}
@@ -230,6 +255,14 @@ async function revokeDevice(device: DeviceItem) {
               </TxButton>
               <TxButton v-if="editingId !== device.id" size="small" variant="secondary" @click="startRename(device)">
                 {{ t('dashboard.devices.rename', '重命名') }}
+              </TxButton>
+              <TxButton
+                size="small"
+                variant="secondary"
+                :disabled="actionLoading || Boolean(device.revokedAt)"
+                @click="setTrusted(device, !device.trusted)"
+              >
+                {{ device.trusted ? t('dashboard.devices.untrust', '取消信任') : t('dashboard.devices.trust', '信任') }}
               </TxButton>
               <TxButton size="small" variant="secondary" :disabled="actionLoading || isCurrent(device) || Boolean(device.revokedAt)" @click="revokeDevice(device)">
                 {{ t('dashboard.devices.revoke', '踢出') }}

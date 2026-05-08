@@ -1,12 +1,12 @@
 ---
 title: "CornerOverlay"
-description: "`TxCornerOverlay` ///overlay slot"
+description: "Position a small overlay badge on one corner of inline content."
 category: Basic
 syncStatus: migrated
 ---
 # CornerOverlay
 
-`TxCornerOverlay` ///overlay slot
+Position a small overlay badge on one corner of inline content, such as status dots, verification icons, or action affordances.
 
 ## Basic Usage
 
@@ -40,7 +40,7 @@ code: |
 
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
-| placement | `'top-left' \| 'top-right' \| 'bottom-left' \| 'bottom-right'` | `bottom-right` | TextPosition |
-| offsetX | `string \| number` | `0` | X Text |
-| offsetY | `string \| number` | `0` | Y Text |
-| overlayPointerEvents | `'none' \| 'auto'` | `none` | overlay Text pointer-events |
+| placement | `'top-left' \| 'top-right' \| 'bottom-left' \| 'bottom-right'` | `bottom-right` | Corner used to anchor the overlay layer. |
+| offsetX | `string \| number` | `0` | Horizontal offset from the selected corner; numeric values are normalized to pixels. |
+| offsetY | `string \| number` | `0` | Vertical offset from the selected corner; numeric values are normalized to pixels. |
+| overlayPointerEvents | `'none' \| 'auto'` | `none` | Pointer-events mode for the overlay layer. |

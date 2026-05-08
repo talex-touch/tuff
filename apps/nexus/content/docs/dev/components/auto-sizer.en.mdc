@@ -1,12 +1,12 @@
 ---
 title: "AutoSizer"
-description: "Component documentation for AutoSizer."
+description: "Automatically follows content width and height changes with resize and FLIP transitions."
 category: Layout
 syncStatus: migrated
 ---
 # AutoSizer
 
-Component documentation for AutoSizer.
+Automatically follows content width and height changes with resize and FLIP transitions.
 
 Typical scenarios:
 
@@ -411,24 +411,32 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `as` | `string` | `div` | Description for as. |
-| `innerAs` | `string` | `div` | Description for innerAs. |
-| `width` | `boolean` | `true` | Description for width. |
-| `height` | `boolean` | `true` | Description for height. |
-| `inline` | `boolean` | - | Description for inline. |
-| `durationMs` | `number` | `200` | Description for durationMs. |
-| `easing` | `string` | `ease` | Description for easing. |
-| `outerClass` | `string` | `overflow-hidden` | outer class |
-| `innerClass` | `string` | - | inner class |
-| `rounding` | `'none' \| 'round' \| 'floor' \| 'ceil'` | `ceil` | TextValueText |
-| `immediate` | `boolean` | `true` | Description for immediate. |
-| `rafBatch` | `boolean` | `true` | Description for rafBatch. |
+| `as` | `string` | `div` | Root element tag used for the measured outer wrapper. |
+| `innerAs` | `string` | `div` | Inner element tag that wraps slot content. |
+| `width` | `boolean` | `true` | Enables width measurement and style application. |
+| `height` | `boolean` | `true` | Enables height measurement and style application. |
+| `inline` | `boolean` | - | Forces inline sizing; when omitted, width-only mode uses inline layout automatically. |
+| `durationMs` | `number` | `200` | Resize / FLIP transition duration in milliseconds. |
+| `easing` | `string` | `ease` | CSS timing function used for resize / FLIP transitions. |
+| `outerClass` | `string` | `overflow-hidden` | Class applied to the outer wrapper before forwarded attrs classes. |
+| `innerClass` | `string` | - | Class applied to the inner content wrapper. |
+| `rounding` | `'none' \| 'round' \| 'floor' \| 'ceil'` | `ceil` | Rounding strategy for measured width and height values. |
+| `immediate` | `boolean` | `true` | Measures immediately after mount when enabled. |
+| `rafBatch` | `boolean` | `true` | Batches resize measurement through requestAnimationFrame when available. |
 
 ### Expose
 
 | Name | Type | Description |
 |------|------|------|
-| `refresh()` | `() => Promise<void>` | Description for refresh(). |
-| `flip(action)` | `(action: () => void \| Promise<void>) => Promise<void>` | Text action TriggerTextSizeText（Text Tabs Text/Text） |
-| `action(fn, options?)` | `(fn: (el: HTMLElement) => void \| Promise<void>, options?: AutoSizerActionOptions \| detect) => Promise<any>` | Text“Text”，TextTriggerText（Text demo/Text） |
-| `size` | `Ref<{ width: number; height: number } \| null>` | Description for size. |
+| `refresh()` | `() => Promise<void>` | Manually remeasures the configured target. |
+| `flip(action)` | `(action: () => void \| Promise<void>) => Promise<void>` | Runs an action while auto-resize is paused, then performs a size FLIP transition and remeasures. |
+| `action(fn, options?)` | `(fn: (el: HTMLElement) => void \| Promise<void>, options?: AutoSizerActionOptions \| detect) => Promise<any>` | Runs a mutation against the inner or outer element and returns before / after snapshots with changed keys. |
+| `size` | `Ref<{ width: number; height: number } \| null>` | Latest measured size from the auto-resize utility. |
+
+## Interaction Contract
+
+- The outer wrapper receives forwarded attrs, merged class/style, and auto-resize styles; the inner wrapper owns the measured content with `display: flow-root`.
+- Width-only mode uses inline layout automatically unless `inline=false` is set explicitly.
+- `flip(action)` pauses auto-resize while the action runs, performs a size FLIP transition, then re-enables measurement.
+- `action(fn, options?)` snapshots the selected target before and after mutation and returns detected change keys.
+- `observeTarget`, `rounding`, `immediate`, `rafBatch`, `durationMs`, and `easing` are forwarded to the underlying resize/FLIP utilities.

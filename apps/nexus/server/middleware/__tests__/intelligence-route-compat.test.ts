@@ -20,7 +20,7 @@ function run(url: string) {
 }
 
 describe('intelligence-route-compat', () => {
-  it('legacy dot 路由返回 410', () => {
+  it('deprecated dot 路由返回 410', () => {
     expect(run('/api/dashboard/intelligence/providers/prov_1.probe')).toThrowError(/Deprecated endpoint/)
     expect(run('/api/dashboard/intelligence/providers/prov_1.test')).toThrowError(/Deprecated endpoint/)
   })

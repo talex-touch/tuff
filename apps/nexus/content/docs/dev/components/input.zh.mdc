@@ -27,7 +27,7 @@ code: |
 :::
 ## 输入框类型
 
-目前支持：`text` / `password` / `textarea`。
+目前支持：`text` / `password` / `textarea` / `date` / `email` / `number`。
 
 ### Input Types
 文本、密码与多行文本。
@@ -96,7 +96,7 @@ code: |
 rows:
   - name: modelValue / v-model
     description: '绑定值'
-    type: 'string'
+    type: 'string | number'
     default: "''"
   - name: placeholder
     description: '占位文本'
@@ -104,7 +104,7 @@ rows:
     default: "''"
   - name: type
     description: '类型'
-    type: "'text' | 'password' | 'textarea'"
+    type: "'text' | 'password' | 'textarea' | 'date' | 'email' | 'number'"
     default: "'text'"
   - name: disabled
     description: '是否禁用'
@@ -122,6 +122,14 @@ rows:
     description: '文本域行数（仅 textarea）'
     type: 'number'
     default: '3'
+  - name: prefixIcon
+    description: '前缀图标类名'
+    type: 'string'
+    default: "''"
+  - name: suffixIcon
+    description: '后缀图标类名'
+    type: 'string'
+    default: "''"
 ---
 :::
 
@@ -132,11 +140,11 @@ rows:
 rows:
   - name: update:modelValue
     description: 'v-model 更新'
-    type: '(value: string) => void'
+    type: '(value: string | number) => void'
     default: '-'
   - name: input
     description: '输入时触发'
-    type: '(value: string) => void'
+    type: '(value: string | number) => void'
     default: '-'
   - name: focus
     description: '聚焦'
@@ -149,6 +157,34 @@ rows:
   - name: clear
     description: '点击清空'
     type: '() => void'
+    default: '-'
+---
+:::
+
+### Exposes
+
+::TuffPropsTable
+---
+rows:
+  - name: focus
+    description: '聚焦原生输入控件'
+    type: '() => void'
+    default: '-'
+  - name: blur
+    description: '让原生输入控件失焦'
+    type: '() => void'
+    default: '-'
+  - name: clear
+    description: '在非禁用且非只读时清空'
+    type: '() => void'
+    default: '-'
+  - name: setValue
+    description: '设置值并触发 input/model 更新'
+    type: '(value: string) => void'
+    default: '-'
+  - name: getValue
+    description: '读取当前值'
+    type: '() => string | number'
     default: '-'
 ---
 :::
@@ -172,6 +208,8 @@ rows:
 ## Design Notes
 - 聚焦态优先通过边框与阴影的细微变化体现。  
 - 搜索态更轻，适合工具栏与列表筛选。
+- `type="number"` 在非空输入时发出 number，清空时发出 `''`。
+- 清空控件是可键盘聚焦的 button，并会在禁用或只读状态下隐藏。
 
 ## 组合示例
 

@@ -42,12 +42,10 @@ code: |
 ---
 rows:
   - name: disabled
-    description: 'Disabled state'
-  - name: loading
-    description: 'Loading state'
+    description: 'Removes focusability and blocks click, Enter, and Space toggles.'
   - name: size
-    values: ['small', 'medium', 'large']
-    description: 'Size variants'
+    values: ['small', 'default', 'large']
+    description: 'Visual size variant. The default size does not add a size modifier class.'
 ---
 ::
 
@@ -58,17 +56,24 @@ rows:
   - name: modelValue
     type: 'boolean'
     default: 'false'
-    description: 'Switch value'
+    description: 'Checked state controlled by v-model.'
   - name: size
-    type: "'small' | 'medium' | 'large'"
-    default: "'medium'"
-    description: 'Size'
+    type: "'small' | 'default' | 'large'"
+    default: "'default'"
+    description: 'Visual size variant.'
   - name: disabled
     type: 'boolean'
     default: 'false'
-    description: 'Disabled state'
+    description: 'Disables focus and prevents pointer or keyboard toggles.'
 ---
 ::
+
+## Events
+
+| Event | Params | Description |
+|------|------|------|
+| `update:modelValue` | `(value: boolean) => void` | v-model update emitted after an enabled click, Enter, or Space toggle. |
+| `change` | `(value: boolean) => void` | Emitted with the next checked state after an enabled toggle. |
 
 ## Design Notes
 - Movement and color should sync.  

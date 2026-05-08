@@ -1,12 +1,12 @@
 ---
 title: "DropdownMenu"
-description: "Popover Windows"
+description: "Compact menu surface built on Popover"
 category: Form
 syncStatus: migrated
 ---
 # DropdownMenu
 
-Popover Windows
+`TxDropdownMenu` renders a compact action menu from a trigger slot. It is controlled with `v-model` and uses `TxDropdownItem` for selectable menu rows.
 
 
 ## Basic Usage
@@ -48,10 +48,10 @@ code: |
             style="display: inline-flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--tx-border-color); border-radius: 12px; user-select: none; cursor: pointer;"
           >
             <div style="font-weight: 600;">
-              Text
+              Repository
             </div>
             <div style="color: var(--tx-text-color-secondary); font-weight: 600;">
-              Text
+              main
             </div>
             <TxIcon name="chevron-down" style="opacity: 0.65;" />
           </div>
@@ -85,27 +85,40 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `boolean` | `false` | Description for modelValue. |
-| `placement` | `DropdownPlacement` | `'bottom-start'` | Description for placement. |
-| `offset` | `number` | `6` | Description for offset. |
-| `closeOnSelect` | `boolean` | `true` | Description for closeOnSelect. |
-| `minWidth` | `number` | `220` | Description for minWidth. |
-| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Text（TxCard variant） |
-| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'glass'` | Text（TxCard background） |
-| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Text（TxCard shadow） |
-| `panelRadius` | `number` | `18` | Description for panelRadius. |
-| `panelPadding` | `number` | `8` | Description for panelPadding. |
+| `modelValue` | `boolean` | `false` | Controls whether the dropdown is open. |
+| `placement` | `DropdownPlacement` | `'bottom-start'` | Positions the panel relative to the trigger. |
+| `offset` | `number` | `6` | Distance in pixels between the trigger and panel. |
+| `closeOnSelect` | `boolean` | `true` | Closes the menu after an enabled item emits `select`. |
+| `duration` | `number` | `180` | Popover transition duration in milliseconds. |
+| `minWidth` | `number` | `220` | Minimum panel width in pixels. |
+| `maxHeight` | `number` | `420` | Maximum scrollable panel height in pixels. |
+| `unlimitedHeight` | `boolean` | `false` | Disables the panel max-height constraint. |
+| `referenceClass` | `BaseAnchorClassValue` | - | Extra class value forwarded to the trigger anchor. |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | Low-level card props forwarded to the popover panel. |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Visual border variant forwarded to the popover panel. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Background treatment forwarded to the popover panel. |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Shadow strength forwarded to the popover panel. |
+| `panelRadius` | `number` | `18` | Panel corner radius in pixels. |
+| `panelPadding` | `number` | `8` | Panel padding in pixels. |
 
 ### TxDropdownItem Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `danger` | `boolean` | `false` | Description for danger. |
-| `arrow` | `boolean` | `false` | Description for arrow. |
+| `disabled` | `boolean` | `false` | Prevents selection and renders the item as disabled. |
+| `danger` | `boolean` | `false` | Applies danger text styling for destructive actions. |
+| `arrow` | `boolean` | `false` | Shows a trailing chevron when no `right` slot is provided. |
 
-### Events
+### TxDropdownMenu Events
 
 | Event | Params | Description |
 |------|------|------|
-| `select` | - | Description for select. |
+| `update:modelValue` | `(value: boolean)` | Emitted when the menu requests an open-state change. |
+| `open` | - | Emitted when the menu requests opening. |
+| `close` | - | Emitted when the menu requests closing. |
+
+### TxDropdownItem Events
+
+| Event | Params | Description |
+|------|------|------|
+| `select` | - | Emitted when an enabled item is clicked. |

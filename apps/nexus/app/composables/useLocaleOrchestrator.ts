@@ -1,7 +1,7 @@
 import { fetchCurrentUserProfile } from '~/composables/useCurrentUserApi'
 
 export type SupportedLocale = 'en' | 'zh'
-type LocaleSource = 'profile' | 'cookie' | 'browser' | 'legacy-query' | 'manual'
+type LocaleSource = 'profile' | 'cookie' | 'browser' | 'manual'
 
 const LOCALE_SYNC_STORAGE_KEY = 'tuff_locale_sync'
 const LOG_PREFIX = '[i18n/orchestrator]'
@@ -44,12 +44,9 @@ function resolveBrowserLocale(): SupportedLocale {
 }
 
 export function useLocaleOrchestrator() {
-  const route = useRoute()
-  const router = useRouter()
   const { locale, setLocale } = useI18n()
   const { getPreferredLocale, persistPreferredLocale } = useLocalePreference()
   const initDone = useState<boolean>('nexus-locale-init-done', () => false)
-  const legacyCleanupPending = useState<boolean>('nexus-locale-legacy-cleanup-pending', () => false)
   const profileSyncKey = useState<string | null>('nexus-locale-profile-sync-key', () => null)
   const profileSyncPending = useState<boolean>('nexus-locale-profile-sync-pending', () => false)
   const normalizeHits = useState<Record<SupportedLocale, number>>('nexus-locale-normalize-hits', () => ({
@@ -162,38 +159,6 @@ export function useLocaleOrchestrator() {
     }
   }
 
-  const applyLegacyLangQueryOnce = async () => {
-    if (import.meta.server || legacyCleanupPending.value)
-      return false
-
-    const raw = route.query.lang
-    if (!raw)
-      return false
-
-    const value = Array.isArray(raw) ? raw[0] : raw
-    const normalized = normalizeLocaleWithMetrics(value, 'legacy-query')
-    if (normalized) {
-      await setLocaleSerial(normalized, 'legacy-query')
-      persistLocale(normalized, 'legacy-query')
-    }
-
-    const nextQuery = { ...route.query } as Record<string, string | string[] | undefined>
-    delete nextQuery.lang
-
-    legacyCleanupPending.value = true
-    try {
-      await router.replace({
-        path: route.path,
-        query: nextQuery,
-        hash: route.hash,
-      })
-      return true
-    }
-    finally {
-      legacyCleanupPending.value = false
-    }
-  }
-
   const syncFromProfileOnAuth = async (input: {
     status: string
     userId?: string | null
@@ -244,7 +209,6 @@ export function useLocaleOrchestrator() {
     initLocale,
     persistLocale,
     setLocaleSerial,
-    applyLegacyLangQueryOnce,
     syncFromProfileOnAuth,
   }
 }

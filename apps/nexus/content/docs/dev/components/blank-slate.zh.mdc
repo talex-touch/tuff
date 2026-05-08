@@ -28,3 +28,10 @@ code: |
 ## API
 
 Props / Slots / Events 同 `TxEmptyState`。
+
+## 交互契约
+
+- `TxBlankSlate` 始终向 `TxEmptyState` 透传 `variant="blank-slate"`。
+- 默认值面向首次引导场景：`size="large"`、`layout="vertical"`、`surface="plain"`。
+- 显式传入 `size`、`layout`、`surface` 时会覆盖这些默认值。
+- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。

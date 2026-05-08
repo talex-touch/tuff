@@ -646,6 +646,10 @@ function getAuthOptions(): AuthOptions {
         return token
       },
       async session({ session, token }: { session: Session, token: JWT }) {
+        const issuedAt = typeof (token as { iat?: unknown }).iat === 'number'
+          ? (token as { iat: number }).iat
+          : null
+        ;(session as { issuedAt?: number | null }).issuedAt = issuedAt
         if (session.user) {
           const resolvedUserId =
             typeof token.userId === 'string' && token.userId

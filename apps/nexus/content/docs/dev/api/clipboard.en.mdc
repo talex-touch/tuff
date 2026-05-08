@@ -14,7 +14,7 @@ All operations are executed in the main process via TuffTransport to avoid WebCo
 
 - `useClipboard()` now uses `ClipboardEvents.*` as the primary transport domain (`getHistory`, `read`, `copyAndPaste`, etc.).
 - Clipboard SDK no longer relies on `clipboard:*` raw channel events as the main path.
-- Main process still keeps legacy handlers for backward compatibility, but new plugins should use SDK APIs only.
+- Plugin code must use the SDK/typed transport entry points. Historical raw `clipboard:*` channel names are migration references only, not a supported extension surface.
 
 ## Introduction
 

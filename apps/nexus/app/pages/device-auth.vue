@@ -22,6 +22,15 @@ const grantType = ref<'short' | 'long'>('short')
 const longTermAvailable = ref(false)
 const longTermAllowed = ref(true)
 const longTermReason = ref<string | null>(null)
+const longTermReasonText = computed(() => {
+  if (longTermReason.value === 'session_window')
+    return t('auth.deviceAuthLongSessionWindow', '长期授权需要在重新登录后的 10 分钟内确认。')
+  if (longTermReason.value === 'device')
+    return t('auth.deviceAuthLongDeviceBlocked', '当前设备不在常用设备范围，暂不允许长期授权。')
+  if (longTermReason.value === 'location')
+    return t('auth.deviceAuthLongLocationBlocked', '当前登录地不在常用范围，暂不允许长期授权。')
+  return t('auth.deviceAuthLongBlocked', '当前设备或登录地不在常用范围，暂不允许长期授权。')
+})
 const autoCloseRequested = ref(false)
 const longTermOptionEnabled = computed(() => longTermAvailable.value && longTermAllowed.value)
 const reauthRequired = computed(() => grantType.value === 'long' && longTermOptionEnabled.value)
@@ -355,7 +364,7 @@ onUnmounted(() => {
           {{ t('auth.deviceAuthLongHint', '长期授权需要二次验证（密码 / Passkey / OAuth）') }}
         </p>
         <p v-else-if="longTermAvailable" class="text-xs text-yellow-200/90">
-          {{ longTermReason || t('auth.deviceAuthLongBlocked', '当前设备或登录地不在常用范围，暂不允许长期授权。') }}
+          {{ longTermReasonText }}
         </p>
         <div class="flex w-full gap-3">
           <TxButton variant="primary" size="lg" block @click="approve">

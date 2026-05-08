@@ -70,3 +70,10 @@ code: |
 | `fillEndColor` | `string` | `#810DC6` | 中心图形渐变结束色 |
 | `outerStartColor` | `string` | `#D73E4D` | 外圈渐变起始色 |
 | `outerEndColor` | `string` | `#7F007F` | 外圈渐变结束色 |
+
+## 交互契约
+
+- 组件渲染一个 `role="img"` 的 SVG，默认可访问名称为 `Tuff logo stroke animation`。
+- `size` 为 number 时会同时转换为宽高 px；string 会原样作为宽高。
+- `mode="loop"` 会映射为 `breathe` class；`once`、`breathe`、`hover` 分别输出对应状态 class。
+- 渐变和滤镜 id 使用组件实例级前缀，多个 logo 同屏渲染时不会互相冲突。

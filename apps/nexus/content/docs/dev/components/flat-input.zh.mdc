@@ -64,3 +64,11 @@ rows:
 
 ## Source
 <TuffDocSourceLink />
+
+## 交互契约
+
+- `modelValue` 可省略，默认空字符串；输入时只触发 `update:modelValue`。
+- `icon` 会在没有 prefix slot 时渲染为前缀图标；传入默认 slot 时由 slot 完全替换前缀内容。
+- 根容器不产生额外 tab stop，键盘焦点停留在原生 `input` 或 `textarea` 上。
+- `password=true` 会使用原生 password input，并仅在密码模式下显示 Caps Lock 提示。
+- `area=true` 渲染 `textarea`；`nonWin=true` 移除 Windows 风格 class。

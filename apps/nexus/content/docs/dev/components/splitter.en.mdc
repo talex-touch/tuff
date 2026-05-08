@@ -1,12 +1,12 @@
 ---
 title: "Splitter"
-description: "Component documentation for Splitter."
+description: "Resizable two-pane layout with pointer and keyboard controls."
 category: Layout
 syncStatus: migrated
 ---
 # Splitter
 
-Component documentation for Splitter.
+`TxSplitter` divides a container into two resizable panes. It exposes a ratio through `v-model`, supports horizontal and vertical layouts, and keeps pointer and keyboard resizing on the same clamped ratio contract.
 
 ## Basic Usage
 
@@ -45,26 +45,26 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `number` | `0.5` | Description for modelValue. |
-| `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | TextDirection |
-| `min` | `number` | `0.1` | Description for min. |
-| `max` | `number` | `0.9` | Description for max. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `barSize` | `number` | `10` | Description for barSize. |
-| `snap` | `number` | `0` | Description for snap. |
+| `modelValue` | `number` | `0.5` | Current pane A ratio, clamped between `0` and `1` before rendering. |
+| `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | `horizontal` splits left/right; `vertical` splits top/bottom. |
+| `min` | `number` | `0.1` | Minimum ratio emitted while resizing. |
+| `max` | `number` | `0.9` | Maximum ratio emitted while resizing. |
+| `disabled` | `boolean` | `false` | Disables pointer and keyboard resizing and ends any active drag. |
+| `barSize` | `number` | `10` | Separator size in pixels, with a runtime floor of `6px`. |
+| `snap` | `number` | `0` | Optional ratio interval used to snap emitted values. |
 
 ### Slots
 
 | Name | Description |
 |------|------|
-| `a` | Description for a. |
-| `b` | Description for b. |
+| `a` | Content rendered in the first pane. |
+| `b` | Content rendered in the second pane. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(ratio)` | Description for update:modelValue. |
-| `change` | `(ratio)` | Description for change. |
-| `drag-start` | - | Description for drag-start. |
-| `drag-end` | - | Description for drag-end. |
+| `update:modelValue` | `(ratio: number)` | Emitted whenever pointer or keyboard resizing requests a new ratio. |
+| `change` | `(ratio: number)` | Emitted with the same clamped and snapped ratio for change listeners. |
+| `drag-start` | - | Emitted when pointer resizing starts. |
+| `drag-end` | - | Emitted when pointer resizing ends or is cancelled by disabling. |

@@ -1,6 +1,6 @@
 ---
 title: "PermissionState"
-description: "Component documentation for PermissionState."
+description: "Shortcut empty-state component for missing permission or unauthorized states, based on TxEmptyState with `variant=\"permission\"`."
 category: Feedback
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # PermissionState
 
-Component documentation for PermissionState.
+`TxPermissionState` is a shortcut wrapper around `TxEmptyState` with `variant="permission"` pre-set. Use it when a user lacks permission, authorization, or required access.
 
 ## Basic Usage
 
@@ -28,4 +28,10 @@ code: |
 
 ## API
 
-Props / Slots / Events follow `TxEmptyState`.
+`TxPermissionState` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
+
+## Interaction Contract
+
+- `TxPermissionState` always forwards `variant="permission"` to `TxEmptyState`.
+- The wrapper does not rewrite `title`, `description`, `surface`, or action config; explicit props are forwarded as-is.
+- `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.

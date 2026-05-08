@@ -48,3 +48,11 @@ rows:
 
 ## Source
 <TuffDocSourceLink />
+
+## Interaction Contract
+
+- The root is a native `<button type="button">`, so it does not submit parent forms by default.
+- `disabled` and `loading` both set the native `disabled` attribute and block `click` emission.
+- `loading` renders a spinner while preserving button content.
+- `primary` only changes the visual style. Non-primary buttons keep the `fake-background` hover layer.
+- `mini` switches to the compact size without changing button semantics.

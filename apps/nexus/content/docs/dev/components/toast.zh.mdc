@@ -41,6 +41,7 @@ code: |
 ---
 code: |
   toast({
+    id?: string
     title?: string
     description?: string
     variant?: 'default' | 'success' | 'warning' | 'danger'
@@ -48,6 +49,13 @@ code: |
   })
 ---
 ::
+
+## 交互契约
+
+- `<TxToastHost />` 渲染为 `role="region"`、`aria-label="Notifications"` 的通知区域。
+- 每条 toast 都带可键盘聚焦的关闭按钮，按钮名称为 `Dismiss notification`。
+- `duration > 0` 时自动关闭，`duration: 0` 时保持显示直到调用 `dismissToast(id)` 或 `clearToasts()`。
+- 传入相同 `id` 会替换现有 toast，避免重复堆叠同一业务提示。
 
 ### dismissToast / clearToasts
 

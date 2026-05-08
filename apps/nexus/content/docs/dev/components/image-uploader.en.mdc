@@ -1,12 +1,12 @@
 ---
 title: "ImageUploader"
-description: "Component documentation for ImageUploader."
+description: "Image picker with previews and remove controls."
 category: Form
 syncStatus: migrated
 ---
 # ImageUploader
 
-Component documentation for ImageUploader.
+Image picker with previews and remove controls.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -25,3 +25,56 @@ code: |
   </template>
 ---
 :::
+
+## API (Lite)
+::TuffPropsTable
+---
+rows:
+  - name: modelValue
+    type: 'ImageUploaderFile[]'
+    default: '[]'
+    description: Current image list
+  - name: multiple
+    type: 'boolean'
+    default: 'true'
+    description: Allow selecting multiple files at once
+  - name: accept
+    type: 'string'
+    default: "'image/*'"
+    description: Native file input accept attribute
+  - name: disabled
+    type: 'boolean'
+    default: 'false'
+    description: Disable adding and removing images
+  - name: max
+    type: 'number'
+    default: '9'
+    description: Maximum image count
+---
+::
+
+## Events
+::TuffPropsTable
+---
+rows:
+  - name: update:modelValue
+    type: '(value: ImageUploaderFile[]) => void'
+    default: '-'
+    description: Image list update
+  - name: change
+    type: '(value: ImageUploaderFile[]) => void'
+    default: '-'
+    description: Image list change
+  - name: remove
+    type: '(payload: { id: string, value: ImageUploaderFile[] }) => void'
+    default: '-'
+    description: Triggered after removing an image
+---
+::
+
+## Interaction Contract
+
+- The current component opens the native file picker from the add button; it does not provide a drag-and-drop upload target.
+- Newly selected files create object URLs for preview and revoke them on remove or component unmount.
+- `max` limits newly added files; files beyond the remaining capacity are ignored.
+- `disabled` disables the add button, file input, and remove buttons.

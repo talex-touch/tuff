@@ -1,12 +1,12 @@
 ---
 title: "Transition"
-description: "Component documentation for Transition."
+description: "Preset transition wrapper for content switches, list motion, and smooth size changes."
 category: Layout
 syncStatus: migrated
 ---
 # Transition
 
-Component documentation for Transition.
+`TxTransition` centralizes the motion presets used by Tuffex components. It wraps Vue `Transition` / `TransitionGroup`, maps timing props to CSS variables, and switches to `TxTransitionSmoothSize` for size-aware content changes.
 
 ## Content Switch (X)
 
@@ -178,13 +178,13 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'smooth-size'` | `'fade'` | Description for preset. |
-| `group` | `boolean` | `false` | Description for group. |
-| `tag` | `string` | `'div'` | Description for tag. |
-| `appear` | `boolean` | `true` | Description for appear. |
-| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | ContentText（Text group） |
-| `duration` | `number` | `180` | Description for duration. |
-| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | Description for easing. |
+| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'smooth-size'` | `'fade'` | Selects the transition name. `smooth-size` uses `TxTransitionSmoothSize` when `group=false`. |
+| `group` | `boolean` | `false` | Uses Vue `TransitionGroup` for keyed lists. |
+| `tag` | `string` | `'div'` | Root tag forwarded to `TransitionGroup` when `group=true`. |
+| `appear` | `boolean` | `true` | Enables enter motion on initial render. |
+| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | Vue `Transition` mode for single-child transitions; ignored by `TransitionGroup`. |
+| `duration` | `number` | `180` | Motion duration in milliseconds, written to `--tx-transition-duration`. |
+| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | CSS timing function written to `--tx-transition-easing`. |
 
 ### Semantic Components
 

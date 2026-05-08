@@ -38,6 +38,7 @@ code: |
 ::
 
 ## API（Lite）
+### TxCollapse Props
 ::TuffPropsTable
 ---
 rows:
@@ -51,6 +52,50 @@ rows:
     description: 是否手风琴模式
 ---
 :::
+
+### TxCollapse Events
+::TuffPropsTable
+---
+rows:
+  - name: update:modelValue
+    type: "(value: string | string[]) => void"
+    default: '-'
+    description: v-model 展开项更新
+  - name: change
+    type: "(value: string | string[]) => void"
+    default: '-'
+    description: 展开项变化
+---
+:::
+
+### TxCollapseItem Props
+::TuffPropsTable
+---
+rows:
+  - name: title
+    type: string
+    default: '-'
+    description: 标题文本
+  - name: name
+    type: string
+    default: '-'
+    description: 面板唯一标识
+  - name: disabled
+    type: boolean
+    default: 'false'
+    description: 禁用面板切换
+  - name: arrowIcon
+    type: string
+    default: "'chevron-down'"
+    description: 展开箭头图标
+---
+:::
+
+## 交互契约
+
+- 面板标题暴露 `role="button"`、`tabindex="0"`、`aria-expanded` 与 `aria-controls`。
+- 点击、Enter 与 Space 共用同一切换逻辑。
+- `disabled` 面板带 `aria-disabled="true"`，不会响应鼠标或键盘切换。
 
 ## Source
 <TuffDocSourceLink />

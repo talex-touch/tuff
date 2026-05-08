@@ -135,6 +135,10 @@ code: |
 ---
 ::
 
+## Contract
+
+Avatar fallback priority is image, default slot, icon, name initials, then the default user icon. Image load errors fall back to the same non-image chain. `size` accepts presets, numbers, numeric strings, and px strings. `TxAvatarGroup` injects `size` only into child avatars that do not already set one, and renders `+N` when `max` hides extra avatars.
+
 ## API Reference
 
 ### Avatar Props
@@ -160,7 +164,7 @@ rows:
     default: '-'
   - name: size
     description: 'Avatar size'
-    type: "'small' | 'medium' | 'large' | 'xlarge'"
+    type: "'small' | 'medium' | 'large' | 'xlarge' | number | `${number}` | `${number}px`"
     default: "'medium'"
   - name: status
     description: 'Status'

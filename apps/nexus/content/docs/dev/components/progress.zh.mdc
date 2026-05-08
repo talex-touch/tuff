@@ -38,6 +38,10 @@ code: |
 ---
 ::
 
+## 交互契约
+
+`TuffProgress` 是标准进度行的轻量入口，会把 percentage、status、stroke width、不确定进度和文本格式透传到当前 `TxProgressBar` 实现。确定进度会暴露 `role="progressbar"` 与 `aria-valuenow`；不确定进度不会暴露 `aria-valuenow`。
+
 ## API（简版）
 ::TuffPropsTable
 ---
@@ -54,6 +58,14 @@ rows:
     type: 'boolean'
     default: 'false'
     description: '不确定进度'
+  - name: strokeWidth
+    type: 'number'
+    default: '6'
+    description: '进度条高度 px'
+  - name: showText
+    type: 'boolean'
+    default: 'true'
+    description: '显示外部百分比文本'
 ---
 ::
 

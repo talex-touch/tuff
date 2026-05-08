@@ -1,12 +1,12 @@
 ---
 title: "GroupBlock"
-description: "Component documentation for GroupBlock."
+description: "Collapsible settings groups and block rows for preference surfaces."
 category: Layout
 syncStatus: migrated
 ---
 # GroupBlock
 
-Component documentation for GroupBlock.
+Use GroupBlock to organize settings, account options, and compact preference rows with a consistent icon, label, and control layout.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -26,22 +26,22 @@ const dummy = ref(false)
 code: |
   <template>
     <TxGroupBlock
-      name="Text"
+      name="Preferences"
       default-icon="i-ri-settings-3-line"
       active-icon="i-ri-settings-3-fill"
-      description="TextOption"
+      description="Application options"
     >
       <TxBlockSwitch
         v-model="notifications"
-        title="notification"
-        description="Textnotification"
+        title="Notifications"
+        description="Enable desktop notifications"
         default-icon="i-ri-notification-line"
         active-icon="i-ri-notification-fill"
       />
-      <TxBlockSlot title="Text" description="TextDisplayText" default-icon="i-carbon-translate">
+      <TxBlockSlot title="Language" description="Display language" default-icon="i-carbon-translate">
         <select v-model="language">
           <option value="en">English</option>
-          <option value="zh">Text</option>
+          <option value="zh">Chinese</option>
         </select>
       </TxBlockSlot>
     </TxGroupBlock>
@@ -59,13 +59,13 @@ Use `default-expand` or `collapsed` to control initial expansion.
 code: |
   <template>
     <TxGroupBlock
-      name="Text"
-      description="TextContent"
+      name="Project files"
+      description="Collapsed by default"
       default-icon="i-ri-folder-line"
       active-icon="i-ri-folder-open-line"
       :default-expand="false"
     >
-      <p>TextContent</p>
+      <p>Hidden content is still mounted, but the group body starts collapsed.</p>
     </TxGroupBlock>
   </template>
 ---
@@ -81,8 +81,8 @@ Provide a unique key for `memory-name` to persist expansion state.
 code: |
   <template>
     <TxGroupBlock
-      name="Text"
-      description="Text"
+      name="Updates"
+      description="Remember the expanded state"
       default-icon="i-ri-refresh-line"
       active-icon="i-ri-refresh-line"
       memory-name="tx-group-block-demo"
@@ -90,7 +90,7 @@ code: |
       <TxBlockSwitch
         v-model="autoUpdate"
         title="Auto update"
-        description="Text"
+        description="Install updates when the app restarts"
         default-icon="i-ri-refresh-line"
         active-icon="i-ri-refresh-line"
       />
@@ -109,15 +109,15 @@ Use the `header-extra` slot for actions.
 code: |
   <template>
     <TxGroupBlock
-      name="Text"
-      description="TextTriggerText"
+      name="Sync"
+      description="Header actions stay visible"
       default-icon="i-ri-loop-left-line"
       :collapsible="false"
     >
       <template #header-extra>
-        <button>Text</button>
+        <button>Run now</button>
       </template>
-      <TxBlockLine title="Text" description="Text" />
+      <TxBlockLine title="Status" description="Ready" />
     </TxGroupBlock>
   </template>
 ---
@@ -135,8 +135,8 @@ A simple row item for displaying title and description.
 ---
 code: |
   <template>
-    <TxBlockLine title="Text" description="1.0.0" />
-    <TxBlockLine title="Text" description="2024.01.15" />
+    <TxBlockLine title="Version" description="1.0.0" />
+    <TxBlockLine title="Updated" description="2026.05.07" />
   </template>
 ---
 :::
@@ -149,7 +149,11 @@ Displayed as a clickable link.
 ---
 code: |
   <template>
-    <TxBlockLine title="Text" link @click="openDocs" />
+    <TxBlockLine title="Documentation" link @click="openDocs">
+      <template #description>
+        Open developer docs
+      </template>
+    </TxBlockLine>
   </template>
 ---
 :::
@@ -167,14 +171,14 @@ A block container with icon, title, description, and a custom control slot.
 code: |
   <template>
     <TxBlockSlot
-      title="Text"
-      description="Text"
+      title="Theme"
+      description="Choose the interface appearance"
       default-icon="i-ri-palette-line"
     >
       <select v-model="theme">
-        <option value="light">Text</option>
-        <option value="dark">Text</option>
-        <option value="auto">Text</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+        <option value="auto">System</option>
       </select>
     </TxBlockSlot>
   </template>
@@ -188,14 +192,14 @@ code: |
 code: |
   <template>
     <TxBlockSlot
-      title="Text"
-      description="Text"
+      title="Pinned workspace"
+      description="Show this workspace first"
       default-icon="i-ri-star-line"
       active-icon="i-ri-star-fill"
       :active="true"
     >
       <template #tags>
-        <span style="font-size: 12px; padding: 2px 6px; border-radius: 6px; background: var(--tx-fill-color);">Text</span>
+        <span style="font-size: 12px; padding: 2px 6px; border-radius: 6px; background: var(--tx-fill-color);">Active</span>
       </template>
     </TxBlockSlot>
   </template>
@@ -210,8 +214,8 @@ code: |
   <template>
     <TxBlockSlot>
       <template #label>
-        <h3>CustomTitle <span style="color: red">*</span></h3>
-        <p>Text</p>
+        <h3>Profile name <span style="color: red">*</span></h3>
+        <p>Shown in shared workspaces.</p>
       </template>
       <input type="text" />
     </TxBlockSlot>
@@ -235,7 +239,7 @@ code: |
     <TxBlockSwitch
       v-model="autoUpdate"
       title="Auto update"
-      description="Text"
+      description="Install updates when the app restarts"
       default-icon="i-ri-refresh-line"
       active-icon="i-ri-refresh-line"
     />
@@ -252,8 +256,8 @@ code: |
   <template>
     <TxBlockSwitch
       v-model="loading"
-      title="Text"
-      description="Text"
+      title="Sync status"
+      description="Waiting for the latest state"
       default-icon="i-ri-loader-4-line"
       active-icon="i-ri-loader-4-line"
       :loading="true"
@@ -270,8 +274,8 @@ code: |
   <template>
     <TxBlockSwitch
       v-model="value"
-      title="Text"
-      description="Text"
+      title="Locked setting"
+      description="Managed by your organization"
       default-icon="i-ri-lock-line"
       active-icon="i-ri-lock-fill"
       disabled
@@ -291,8 +295,8 @@ code: |
   <template>
     <TxBlockSwitch
       v-model="dummy"
-      title="Text"
-      description="TextOption"
+      title="Security settings"
+      description="Open the security preferences page"
       default-icon="i-ri-shield-keyhole-line"
       guidance
       @click="handleClick"
@@ -309,60 +313,60 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `name` | `string` | *Text* | Description for name. |
-| `description` | `string` | `''` | Description for description. |
-| `defaultIcon` | `TxIconSource \| string` | - | DefaultIcon |
-| `activeIcon` | `TxIconSource \| string` | - | TextIcon |
-| `iconSize` | `number` | `22` | Description for iconSize. |
-| `collapsible` | `boolean` | `true` | Description for collapsible. |
-| `collapsed` | `boolean` | `false` | Description for collapsed. |
-| `defaultExpand` | `boolean` | `true` | Description for defaultExpand. |
-| `memoryName` | `string` | - | Description for memoryName. |
+| `name` | `string` | - | Header title for the group. |
+| `description` | `string` | `''` | Supporting text displayed below the group title. |
+| `defaultIcon` | `TxIconSource \| string` | - | Icon shown when the group is collapsed or when no active icon is provided. |
+| `activeIcon` | `TxIconSource \| string` | - | Icon shown while the group is expanded; falls back to `defaultIcon`. |
+| `iconSize` | `number` | `22` | Header icon size in pixels. |
+| `collapsible` | `boolean` | `true` | Allow the header to toggle the group body. |
+| `collapsed` | `boolean` | `false` | External initial collapsed state, ignored after stored state or user interaction takes over. |
+| `defaultExpand` | `boolean` | `true` | Initial expanded state used when no stored state is available. |
+| `memoryName` | `string` | - | Persist expanded state in `localStorage` under the `tuff-block-storage-` prefix. |
 
 ### TxGroupBlock Events
 
 | Event | Params | Description |
 |------|------------|-------------|
-| `update:expanded` | `expanded: boolean` | Description for update:expanded. |
-| `toggle` | `expanded: boolean` | Description for toggle. |
+| `update:expanded` | `expanded: boolean` | Emitted after a collapsible group changes expansion state. |
+| `toggle` | `expanded: boolean` | Emitted with the same state when the header toggles the group. |
 
 ### TxBlockLine Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `title` | `string` | `''` | Description for title. |
-| `description` | `string` | `''` | Description for description. |
-| `link` | `boolean` | `false` | Description for link. |
+| `title` | `string` | `''` | Row label. |
+| `description` | `string` | `''` | Row value text when `link=false`; can be replaced with the `description` slot. |
+| `link` | `boolean` | `false` | Use link styling and emit click/Enter activation events. |
 
 ### TxBlockSlot Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `title` | `string` | `''` | Description for title. |
-| `description` | `string` | `''` | Description for description. |
-| `defaultIcon` | `TxIconSource \| string` | - | DefaultIcon |
-| `activeIcon` | `TxIconSource \| string` | - | TextIcon |
-| `iconSize` | `number` | `20` | Description for iconSize. |
-| `active` | `boolean` | `false` | Description for active. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
+| `title` | `string` | `''` | Default label title, replaced when the `label` slot is provided. |
+| `description` | `string` | `''` | Default label description, replaced when the `label` slot is provided. |
+| `defaultIcon` | `TxIconSource \| string` | - | Icon shown when `active=false` or when no active icon is provided. |
+| `activeIcon` | `TxIconSource \| string` | - | Icon shown when `active=true`; falls back to `defaultIcon`. |
+| `iconSize` | `number` | `20` | Icon size in pixels. |
+| `active` | `boolean` | `false` | Switch the slot row into active visual/icon state. |
+| `disabled` | `boolean` | `false` | Apply disabled styling and block row click emits. |
 
 ### TxBlockSwitch Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `modelValue` | `boolean` | *Text* | Description for modelValue. |
-| `title` | `string` | *Text* | Description for title. |
-| `description` | `string` | *Text* | Description for description. |
-| `defaultIcon` | `TxIconSource \| string` | - | DefaultIcon |
-| `activeIcon` | `TxIconSource \| string` | - | TextIcon |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `guidance` | `boolean` | `false` | Description for guidance. |
-| `loading` | `boolean` | `false` | Description for loading. |
+| `modelValue` | `boolean` | - | Current switch value for `v-model`. |
+| `title` | `string` | - | Switch row title. |
+| `description` | `string` | - | Switch row description. |
+| `defaultIcon` | `TxIconSource \| string` | - | Icon shown when the switch is off or when no active icon is provided. |
+| `activeIcon` | `TxIconSource \| string` | - | Icon shown when the switch is on; falls back to `defaultIcon`. |
+| `disabled` | `boolean` | `false` | Disable the row and underlying switch. |
+| `guidance` | `boolean` | `false` | Render as a navigation row with a chevron instead of a switch. |
+| `loading` | `boolean` | `false` | Show a loader and temporarily disable switch interaction. |
 
 ### TxBlockSwitch Events
 
 | Event | Params | Description |
 |------|------------|-------------|
-| `update:modelValue` | `value: boolean` | Description for update:modelValue. |
-| `change` | `value: boolean` | Description for change. |
-| `click` | `event: MouseEvent` | Description for click. |
+| `update:modelValue` | `value: boolean` | Emitted by the underlying switch when the value changes. |
+| `change` | `value: boolean` | Mirrors the switch `change` event after user interaction. |
+| `click` | `event: MouseEvent` | Emitted only in `guidance` mode. |

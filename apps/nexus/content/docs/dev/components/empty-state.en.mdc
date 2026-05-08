@@ -1,6 +1,6 @@
 ---
 title: "EmptyState"
-description: "Component documentation for EmptyState."
+description: "Feedback component for empty, loading, error, offline, and setup states."
 category: Feedback
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # EmptyState
 
-Component documentation for EmptyState.
+`TxEmptyState` renders a compact feedback panel for pages, tables, detail panes, and onboarding steps that do not have content to show yet. Use a preset `variant` for common states, then override the text, icon, or actions only when the local context needs more specific copy.
 
 ## Basic Usage
 
@@ -89,43 +89,43 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `variant` | `EmptyStateVariant` | `'empty'` | Description for variant. |
-| `title` | `string` | - | Description for title. |
-| `description` | `string` | - | Description for description. |
-| `icon` | `TxIconSource \| string \| null` | - | Icon（string Text class/name） |
-| `iconSize` | `number` | - | Description for iconSize. |
-| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | LayoutDirection |
-| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Description for align. |
-| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | SizeText |
-| `surface` | `'plain' \| 'card'` | `'plain'` | Description for surface. |
-| `primaryAction` | `EmptyStateAction` | - | Description for primaryAction. |
-| `secondaryAction` | `EmptyStateAction` | - | Description for secondaryAction. |
-| `actionSize` | `TxButtonProps['size']` | `'small'` | Description for actionSize. |
-| `loading` | `boolean` | `false` | Description for loading. |
+| `variant` | `EmptyStateVariant` | `'empty'` | Selects the preset title, description, and illustration for common states. |
+| `title` | `string` | - | Overrides the preset title. |
+| `description` | `string` | - | Overrides the preset supporting text. |
+| `icon` | `TxIconSource \| string \| null` | - | Replaces the preset illustration with a Tuff icon source, icon class/name, or `null` to hide the icon area. |
+| `iconSize` | `number` | - | Sets the custom icon or spinner size in pixels; presets use the size scale when omitted. |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Controls whether icon and content stack vertically or sit side by side. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Aligns the icon, copy, and actions within the empty-state panel. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Adjusts spacing, text scale, and preset illustration size. |
+| `surface` | `'plain' \| 'card'` | `'plain'` | Adds a bordered card surface when the empty state needs visual containment. |
+| `primaryAction` | `EmptyStateAction` | - | Renders the primary action button and emits `primary` when clicked. |
+| `secondaryAction` | `EmptyStateAction` | - | Renders the secondary action button before the primary action and emits `secondary` when clicked. |
+| `actionSize` | `TxButtonProps['size']` | `'small'` | Default button size used by actions that do not set their own size. |
+| `loading` | `boolean` | `false` | Shows a spinner when no custom icon slot or icon prop is provided. |
 
 ### EmptyStateAction
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `label` | `string` | - | Description for label. |
-| `type` | `TxButtonProps['type']` | - | Description for type. |
-| `variant` | `TxButtonProps['variant']` | - | Description for variant. |
-| `size` | `TxButtonProps['size']` | - | Description for size. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `icon` | `string` | - | Description for icon. |
+| `label` | `string` | - | Button text. |
+| `type` | `TxButtonProps['type']` | - | Button tone shortcut forwarded to `TxButton`. |
+| `variant` | `TxButtonProps['variant']` | - | Explicit `TxButton` visual variant. |
+| `size` | `TxButtonProps['size']` | - | Per-action size override. |
+| `disabled` | `boolean` | `false` | Disables the action button and suppresses its event. |
+| `icon` | `string` | - | Optional icon class rendered inside the action button. |
 
 ### Slots
 
 | Name | Description |
 |------|------|
-| `icon` | Description for icon. |
-| `title` | Description for title. |
-| `description` | Description for description. |
-| `actions` | Description for actions. |
+| `icon` | Replaces the preset illustration, spinner, or icon prop. |
+| `title` | Replaces the resolved title content. |
+| `description` | Replaces the resolved description content. |
+| `actions` | Replaces generated primary and secondary action buttons. |
 
 ### Events
 
 | Event | Description |
 |------|------|
-| `primary` | Description for primary. |
-| `secondary` | Description for secondary. |
+| `primary` | Emitted when the generated primary action button is clicked. |
+| `secondary` | Emitted when the generated secondary action button is clicked. |

@@ -65,14 +65,6 @@ export const tuffSdkItems: TuffSdkItem[] = [
     icon: 'i-carbon-user-avatar',
   },
   {
-    id: 'channel-sdk',
-    title: 'Channel SDK',
-    description: 'Legacy IPC channel.',
-    tag: 'useChannel()',
-    color: '#c084fc',
-    icon: 'i-carbon-connection-signal',
-  },
-  {
     id: 'feature-sdk',
     title: 'Feature SDK',
     description: 'Search result management.',

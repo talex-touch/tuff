@@ -5,7 +5,7 @@
 Bridge Hooks 提供了插件渲染进程与 CoreBox 主进程之间的事件订阅机制。系统自动处理事件缓存与回放，确保插件不会错过初始化时的早期事件。
 
 ## 介绍
-适合需要感知输入、剪贴板、按键等 CoreBox 行为的插件，使用独立 hooks 免去手动注册 Channel。
+适合需要感知输入、剪贴板等 CoreBox 行为的插件，使用独立 hooks 免去手动注册 Channel。
 
 ## 核心 Hooks
 
@@ -64,42 +64,7 @@ code: |
 
 **onCoreBoxKeyEvent**
 
-监听从 CoreBox 转发的键盘事件。
-
-:::TuffCodeBlock{lang="ts"}
----
-code: |
-  import { onCoreBoxKeyEvent } from '@talex-touch/utils/plugin/sdk/hooks'
-  
-  onCoreBoxKeyEvent(({ data, meta }) => {
-    if (data.key === 'Enter' && !data.metaKey) {
-      // 处理回车
-    }
-  })
----
-:::
-
-**Payload 类型**:
-:::TuffCodeBlock{lang="ts"}
----
-code: |
-  interface BridgeEventPayload<CoreBoxKeyEventData> {
-    data: {
-      key: string
-      code: string
-      metaKey: boolean
-      ctrlKey: boolean
-      altKey: boolean
-      shiftKey: boolean
-      repeat: boolean
-    }
-    meta: {
-      timestamp: number
-      fromCache: boolean
-    }
-  }
----
-:::
+已由 hard-cut 退役。旧 `core-box:key-event` 通道没有生产发送端，调用 `onCoreBoxKeyEvent()` 会抛出 `plugin_bridge_key_event_removed`。键盘交互应在插件 UI 组件内处理，或在附加型 widget 宿主提供 `hostKeyEvent` props 时使用该 prop。
 
 ## 自动事件缓存
 

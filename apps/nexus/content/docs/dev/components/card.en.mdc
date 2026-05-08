@@ -1,12 +1,12 @@
 ---
 title: "Card"
-description: "Component documentation for Card."
+description: "Surface container with slots, material backgrounds, loading, clickable, inertial, and refraction modes."
 category: Layout
 syncStatus: migrated
 ---
 # Card
 
-Component documentation for Card.
+Surface container with slots, material backgrounds, loading, clickable, inertial, and refraction modes.
 
 ## Basic Usage
 
@@ -1647,12 +1647,12 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|--------|------|
-| variant | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Description for variant. |
-| background | `'blur' \| 'glass' \| 'refraction' \| 'mask'` | `'refraction'` | Background style mapping: `blur`=filter layer, `glass`=glass layer, `refraction`=glass+filter (default recommended), `mask`=mask layer |
-| shadow | `'none' \| 'soft' \| 'medium'` | `'none'` | Description for shadow. |
-| size | `'small' \| 'medium' \| 'large'` | `'medium'` | TextSize |
-| radius | `number` | `18` | Description for radius. |
-| padding | `number` | - | Description for padding. |
+| variant | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Border treatment and interaction shape. `plain` removes the standard border. |
+| background | `'pure' \| 'blur' \| 'glass' \| 'refraction' \| 'mask'` | `'pure'` | Surface mode forwarded to `TxBaseSurface`; `mask` applies card color/opacity, `glass` and `refraction` enable optical layers. |
+| shadow | `'none' \| 'soft' \| 'medium'` | `'none'` | Elevation shadow strength applied by the card wrapper. |
+| size | `'small' \| 'medium' \| 'large'` | `'medium'` | Built-in padding preset used when `padding` is not provided. |
+| radius | `number` | `18` | Border radius in px, forwarded to the visual surface and root CSS variable. |
+| padding | `number` | - | Explicit padding in px. Defaults to `10`, `12`, or `16` by size. |
 | glassBlur | `boolean` | `true` | Applies when `background='glass' \| 'refraction'`: enables blur. |
 | glassBlurAmount | `number` | `22` | Applies when `background='glass' \| 'refraction'`: blur strength (px). |
 | glassOverlay | `boolean` | `true` | Applies when `background='glass' \| 'refraction'`: enables highlight overlay. |
@@ -1667,28 +1667,28 @@ code: |
 | refractionLightSpring | `boolean` | `true` | Applies when `background='refraction'`: enables spring interpolation for pointer light tracking. |
 | refractionLightSpringStiffness | `number` | `0.18` | Applies when `background='refraction'`: pointer-light spring stiffness (recommended 0.01-0.55). |
 | refractionLightSpringDamping | `number` | `0.84` | Applies when `background='refraction'`: pointer-light spring damping (recommended 0.55-0.99). |
-| clickable | `boolean` | `false` | Description for clickable. |
-| loading | `boolean` | `false` | Description for loading. |
-| loadingSpinnerSize | `number` | - | Description for loadingSpinnerSize. |
-| disabled | `boolean` | `false` | Description for disabled. |
-| inertial | `boolean` | `false` | Description for inertial. |
-| inertialMaxOffset | `number` | `22` | Description for inertialMaxOffset. |
-| inertialRebound | `number` | `0.12` | Description for inertialRebound. |
+| clickable | `boolean` | `false` | Enables hover feedback and allows the card to emit `click` when not disabled. |
+| loading | `boolean` | `false` | Shows a loading overlay with `TxSpinner`. |
+| loadingSpinnerSize | `number` | - | Spinner size in px. Defaults to `12` when omitted. |
+| disabled | `boolean` | `false` | Applies disabled styling and blocks card click emission and pointer-driven motion updates. |
+| inertial | `boolean` | `false` | Enables pointer-follow transform with spring-like return motion. |
+| inertialMaxOffset | `number` | `22` | Maximum pointer-follow offset in px. |
+| inertialRebound | `number` | `0.12` | Return rebound factor clamped to `0..1`; higher values feel more elastic. |
 
 ### Events
 
 | Event | Params | Description |
 |--------|------|------|
-| click | `(event: MouseEvent)` | Description for click. |
+| click | `(event: MouseEvent)` | Emitted only when `clickable=true` and `disabled=false`. |
 
 ### Slots
 
 | Column | Description |
 |--------|------|
-| default | Description for default. |
-| header | Description for header. |
-| footer | Description for footer. |
-| cover | Description for cover. |
+| default | Main card body content. |
+| header | Optional header region rendered above the body. |
+| footer | Optional footer region rendered below the body. |
+| cover | Optional cover region rendered before the header and body. |
 
 ## Style Customization
 
@@ -1760,14 +1760,12 @@ code: |
         
         <template #footer>
           <div class="card-actions">
-            <TxButton size="small" variant="text">Text</TxButton>
-            <TxButton size="small" variant="text">Text</TxButton>
+            <TxButton size="small" variant="text">Edit</TxButton>
+            <TxButton size="small" variant="text">Delete</TxButton>
           </div>
         </template>
       </TxCard>
     </div>
   </template>
-  
-  TouchX UI Text Card TextContentText，Text。
 ---
 :::

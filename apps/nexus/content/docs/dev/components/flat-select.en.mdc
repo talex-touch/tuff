@@ -66,6 +66,10 @@ code: |
 ---
 :::
 
+## Interaction Contract
+
+`TxFlatSelect` exposes the trigger as a combobox and the dropdown as a listbox. Items expose option selection state, disabled items cannot be selected, and ArrowUp/ArrowDown navigation skips disabled options while the dropdown is open.
+
 ## Comparison with TxSelect
 
 | Feature | TxSelect | TxFlatSelect |

@@ -1,12 +1,12 @@
 ---
 title: "ChatComposer"
-description: "Component documentation for ChatComposer."
+description: "Message composer for AI chat input, attachments, keyboard send, and custom toolbars."
 category: Form
 syncStatus: migrated
 ---
 # ChatComposer
 
-Component documentation for ChatComposer.
+Message composer for AI chat input, attachments, keyboard send, and custom toolbars.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -31,3 +31,54 @@ code: |
   </template>
 ---
 :::
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `string` | `''` | Textarea value for `v-model`. |
+| `placeholder` | `string` | `'Message…'` | Textarea placeholder. |
+| `disabled` | `boolean` | `false` | Disables input, send, and attachment actions. |
+| `submitting` | `boolean` | `false` | Marks the composer as submitting and blocks send. |
+| `allowAttachmentWhileSubmitting` | `boolean` | `false` | Allows attachment action while submitting. |
+| `minRows` | `number` | `3` | Textarea rows. |
+| `maxRows` | `number` | `6` | Reserved maximum rows value for consumers. |
+| `sendOnEnter` | `boolean` | `true` | Enables keyboard send behavior. |
+| `sendOnMetaEnter` | `boolean` | `true` | Requires Meta/Ctrl+Enter when sending from keyboard. |
+| `allowEmptySend` | `boolean` | `false` | Allows attachment-only send when text is empty. |
+| `sendButtonText` | `string` | `'Send'` | Default send button text. |
+| `showAttachmentButton` | `boolean` | `false` | Shows the default attachment button. |
+| `attachmentButtonText` | `string` | `'Attach'` | Default attachment button text. |
+| `attachments` | `ChatComposerAttachment[]` | `[]` | Attachment chips rendered above the textarea. |
+
+### Events
+
+| Event | Params | Description |
+|------|------|-------------|
+| `update:modelValue` | `string` | Emitted from textarea input. |
+| `send` | `{ text: string }` | Emitted with trimmed text when send is allowed. |
+| `attachmentClick` | - | Emitted when the attachment action is allowed. |
+| `paste` | `ClipboardEvent` | Forwarded from textarea paste. |
+| `focus` | `FocusEvent` | Forwarded from textarea focus. |
+| `blur` | `FocusEvent` | Forwarded from textarea blur. |
+
+### Slots
+
+| Slot | Scope | Description |
+|------|-------|-------------|
+| `attachments` | `{ attachments }` | Replaces the default attachment chips. |
+| `toolbar` | `{ send, disabled, attachmentClick }` | Replaces the default action row. |
+| `toolbar-left` | `{ disabled }` | Adds content to the left side of the default action row. |
+| `actions` | `{ send, disabled }` | Adds content before the default send button. |
+| `footer` | - | Renders footer content below the action row. |
+
+## Interaction Contract
+
+- Send payload text is trimmed.
+- Empty text is blocked unless `allowEmptySend=true` and at least one attachment exists.
+- `disabled` and `submitting` block send; `disabled` also blocks attachment actions.
+- Attachment actions are blocked while submitting unless `allowAttachmentWhileSubmitting=true`.
+- With `sendOnMetaEnter=true`, keyboard send requires Meta/Ctrl+Enter; with it disabled, Enter sends and Shift+Enter inserts a newline.
+- Custom `toolbar` receives callable `send` and `attachmentClick` functions and replaces the default action row.

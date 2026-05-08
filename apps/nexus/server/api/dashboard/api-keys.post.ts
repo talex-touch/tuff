@@ -1,5 +1,6 @@
 import { createError, readBody } from 'h3'
 import { createApiKey } from '../../utils/apiKeyStore'
+import { isApiKeyScope } from '../../utils/apiKeyScopes'
 import { requireAdmin } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
@@ -12,19 +13,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid key name' })
   }
 
-  const validScopes = [
-    'plugin:publish',
-    'plugin:read',
-    'account:read',
-    'release:sync',
-    'release:write',
-    'release:publish',
-    'release:assets',
-    'release:news',
-    'release:evidence',
-  ]
   const keyScopes = Array.isArray(scopes)
-    ? scopes.filter(s => validScopes.includes(s))
+    ? scopes.filter(isApiKeyScope)
     : ['plugin:publish']
 
   const expiryDays = typeof expiresInDays === 'number' && expiresInDays > 0

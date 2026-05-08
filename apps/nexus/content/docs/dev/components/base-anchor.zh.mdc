@@ -219,3 +219,12 @@ code: |
 |------|------|------|
 | `close` | - | 编程式关闭 |
 | `toggle` | - | 编程式切换 |
+
+## 交互契约
+
+- `modelValue` 支持受控与非受控用法。点击 reference 会触发 `update:modelValue`，状态变化时同步触发 `open` 或 `close`。
+- `disabled` 会阻断打开；已打开的非受控 Anchor 在切换为 disabled 后会关闭。
+- `closeOnClickOutside` 与 `closeOnEsc` 分别控制外部指针事件和 Escape 关闭。
+- `toggleOnReferenceClick=false` 会阻断 reference 点击切换，适合输入框等自行处理点击行为的 reference。
+- `class`、`style` 与非 class attrs 会透传到浮层面板；reference 包装层样式使用 `referenceClass`。
+- `surfaceMotionAdaptation` 是真实策略：`auto` 使用 Anchor 内部运动态，`manual` 读取 `panelCard.surfaceMoving`，`off` 强制 `surfaceMoving=false`。

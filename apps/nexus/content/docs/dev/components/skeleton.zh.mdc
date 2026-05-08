@@ -39,11 +39,29 @@ rows:
     default: '3'
     description: '文本行数'
   - name: variant
-    type: "'line' | 'circle'"
-    default: 'line'
-    description: '形状'
+    type: "'text' | 'rect' | 'circle'"
+    default: 'text'
+    description: '形态'
+  - name: width
+    type: 'string | number'
+    default: '100%'
+    description: '宽度，number 会转换为 px'
+  - name: height
+    type: 'string | number'
+    default: '12'
+    description: '高度，number 会转换为 px'
+  - name: gap
+    type: 'string | number'
+    default: '10'
+    description: '多行间距，number 会转换为 px'
 ---
 ::
+
+## 交互契约
+
+- `loading=false` 时不渲染骨架，直接渲染默认 slot。
+- `lines` 最小渲染 1 行，避免空骨架。
+- `variant="circle"` 固定使用圆形半径，忽略 `radius`。
 
 ## 组合示例
 ### 卡片占位

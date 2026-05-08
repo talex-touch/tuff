@@ -64,3 +64,11 @@ rows:
 
 ## Source
 <TuffDocSourceLink />
+
+## Interaction Contract
+
+- `modelValue` is optional and defaults to an empty string. Input changes only emit `update:modelValue`.
+- `icon` renders as the prefix icon when no prefix slot is provided. The default slot fully replaces prefix content.
+- The root wrapper does not create an extra tab stop; keyboard focus stays on the native `input` or `textarea`.
+- `password=true` uses a native password input and shows the Caps Lock hint only in password mode.
+- `area=true` renders a `textarea`; `nonWin=true` removes the Windows-style class.

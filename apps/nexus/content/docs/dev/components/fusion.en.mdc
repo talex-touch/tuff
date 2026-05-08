@@ -1,12 +1,12 @@
 ---
 title: "Fusion"
-description: "Component documentation for Fusion."
+description: "Gooey two-slot fusion effect with hover, click, or manual active control."
 category: Basic
 syncStatus: migrated
 ---
 # Fusion
 
-Component documentation for Fusion.
+`TxFusion` renders two overlapping slots through an SVG gooey filter. It can manage its own active state on hover or click, or be driven entirely by `v-model` in manual mode.
 
 ## Basic Usage
 
@@ -1444,20 +1444,20 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `boolean \| undefined` | `undefined` | Text（v-model）；`undefined` Text |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `trigger` | `'hover' \| 'click' \| 'manual'` | `'hover'` | TriggerText；`manual` Text v-model Text |
-| `direction` | `'x' \| 'y'` | `'x'` | TextDirection |
-| `gap` | `number` | `40` | Description for gap. |
-| `duration` | `number` | `260` | Description for duration. |
-| `easing` | `string` | `'cubic-bezier(0.2, 0.8, 0.2, 1)'` | easing |
-| `blur` | `number` | `19` | Description for blur. |
-| `alpha` | `number` | `29` | Description for alpha. |
-| `alphaOffset` | `number` | `-10` | Description for alphaOffset. |
+| `modelValue` | `boolean \| undefined` | `undefined` | Controlled active state. When omitted, the component stores its own active state. |
+| `disabled` | `boolean` | `false` | Disables pointer-triggered state changes and applies the disabled visual state. |
+| `trigger` | `'hover' \| 'click' \| 'manual'` | `'hover'` | Interaction mode. `manual` ignores pointer events and expects external `v-model` control. |
+| `direction` | `'x' \| 'y'` | `'x'` | Axis used to separate the two blobs before they fuse. |
+| `gap` | `number` | `40` | Distance in px between the two blobs while inactive. |
+| `duration` | `number` | `260` | Transition duration in ms; negative values are clamped to `0ms`. |
+| `easing` | `string` | `'cubic-bezier(0.2, 0.8, 0.2, 1)'` | CSS easing used by the blob transform transition. |
+| `blur` | `number` | `19` | SVG `feGaussianBlur.stdDeviation` used by the gooey filter. |
+| `alpha` | `number` | `29` | Alpha multiplier in the SVG color matrix; larger values make the blobs feel stickier. |
+| `alphaOffset` | `number` | `-10` | Alpha offset in the SVG color matrix. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `change` | `(v: boolean)` | Description for change. |
-| `update:modelValue` | `(v: boolean)` | v-model |
+| `change` | `(v: boolean)` | Emitted whenever a non-disabled trigger requests a new active state. |
+| `update:modelValue` | `(v: boolean)` | Emitted for `v-model` updates; controlled consumers must write the value back. |

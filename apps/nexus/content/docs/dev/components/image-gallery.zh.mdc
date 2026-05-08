@@ -1,12 +1,12 @@
 ---
 title: "ImageGallery 图片预览"
-description: "用于图片网格与 Modal 预览。"
+description: "图片网格与 Modal 预览。"
 category: Data
 syncStatus: migrated
 ---
 # ImageGallery 图片预览
 
-用于图片网格与 Modal 预览。
+用于图片网格与 Modal 预览。点击缩略图会打开当前图片，Modal 内提供上一张/下一张边界导航。
 
 <script setup lang="ts">
 const items = [
@@ -27,3 +27,41 @@ code: |
   </template>
 ---
 :::
+
+## API（Lite）
+::TuffPropsTable
+---
+rows:
+  - name: items
+    type: 'ImageGalleryItem[]'
+    default: '[]'
+    description: 图片列表，每项包含 id、url 与可选 name
+  - name: startIndex
+    type: 'number'
+    default: '0'
+    description: 当前预览索引；越界时会收敛到可用范围
+---
+::
+
+## Events
+::TuffPropsTable
+---
+rows:
+  - name: open
+    type: '(payload: { index: number, item: ImageGalleryItem }) => void'
+    default: '-'
+    description: 点击缩略图并打开预览后触发
+  - name: close
+    type: '() => void'
+    default: '-'
+    description: Modal 关闭时触发
+---
+::
+
+## 交互契约
+
+- 缩略图按钮带有可读 `aria-label`，图片 `alt` 使用 `name`，未命名图片保持空 alt。
+- `items` 为空时不渲染缩略图，也不会打开 Modal 或触发 `open`。
+- `startIndex` 与列表长度变化都会被 clamp 到有效索引；列表清空时会关闭预览。
+- Modal 继承 `TxModal` 的 dialog 语义、标题关联、关闭按钮、遮罩关闭和 Escape 关闭能力。
+- 底部 Prev / Next 只在有效边界内切换图片，首图禁用 Prev，末图禁用 Next。

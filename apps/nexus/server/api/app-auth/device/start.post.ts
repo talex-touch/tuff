@@ -1,5 +1,5 @@
 import { createError, getRequestURL, readBody } from 'h3'
-import { createDeviceAuthRequest } from '../../../utils/authStore'
+import { createDeviceAuthRequest, evaluateDeviceAuthRateLimit, recordDeviceAuthAudit } from '../../../utils/authStore'
 
 interface StartBody {
   deviceId?: string
@@ -24,13 +24,55 @@ export default defineEventHandler(async (event) => {
   const deviceName = typeof body?.deviceName === 'string' ? body.deviceName.trim() : undefined
   const devicePlatform = typeof body?.devicePlatform === 'string' ? body.devicePlatform.trim() : undefined
   const clientType = typeof body?.clientType === 'string' ? body.clientType.trim() : undefined
+  const normalizedClientType = clientType === 'app' || clientType === 'cli' || clientType === 'external' ? clientType : 'external'
+
+  const rateLimit = await evaluateDeviceAuthRateLimit(event, { deviceId })
+  if (!rateLimit.allowed) {
+    await recordDeviceAuthAudit(event, {
+      action: 'request',
+      status: 'blocked',
+      deviceId,
+      clientType: normalizedClientType,
+      reason: rateLimit.reason ?? 'rate_limited',
+      metadata: {
+        scope: rateLimit.scope,
+        limit: rateLimit.limit,
+        count: rateLimit.count,
+        retryAfterSeconds: rateLimit.retryAfterSeconds,
+      },
+    })
+    throw createError({
+      statusCode: 429,
+      statusMessage: rateLimit.reason === 'cooldown'
+        ? 'Device authorization is temporarily cooled down'
+        : 'Device authorization rate limit exceeded',
+      data: {
+        reason: rateLimit.reason,
+        scope: rateLimit.scope,
+        retryAfterSeconds: rateLimit.retryAfterSeconds,
+      },
+    })
+  }
 
   const request = await createDeviceAuthRequest(event, {
     deviceId,
     deviceName,
     devicePlatform,
-    clientType: clientType === 'app' || clientType === 'cli' || clientType === 'external' ? clientType : 'external',
+    clientType: normalizedClientType,
     ttlMs: DEVICE_AUTH_TTL_MS,
+  })
+
+  await recordDeviceAuthAudit(event, {
+    action: 'request',
+    status: 'success',
+    deviceId,
+    deviceCode: request.deviceCode,
+    userCode: request.userCode,
+    clientType: normalizedClientType,
+    metadata: {
+      devicePlatform: devicePlatform ?? null,
+      ttlMs: DEVICE_AUTH_TTL_MS,
+    },
   })
 
   const origin = getRequestURL(event).origin

@@ -5,7 +5,7 @@
 TuffTransport is the next-generation IPC communication system for Tuff plugins, providing type-safe, high-performance messaging with built-in support for batching and streaming.
 
 ::alert{type="info"}
-TuffTransport replaces the legacy Channel API. While the old API remains functional, we recommend migrating to TuffTransport for new development.
+TuffTransport is the supported IPC entry point for current plugin development. The old Channel API is retained only as a historical migration reference.
 ::
 
 ## Why TuffTransport?
@@ -58,7 +58,7 @@ Every communication in TuffTransport uses a `TuffEvent` - a type-safe event defi
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  // ❌ Legacy: String-based, no type safety
+  // ❌ Retired: string-based, no type safety
   channel.send('core-box:search:query', { text: 'hello' })
   
   // ✅ TuffTransport: Type-safe, autocomplete
@@ -541,17 +541,13 @@ code: |
 ---
 :::
 
-**Gradual Migration**
+**Hard-Cut Migration**
 
-Both APIs work simultaneously - migrate at your own pace:
+Do not keep new plugin code on the Channel path. Replace string-based sends with typed TuffTransport events in the same change:
 
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  // Legacy (still works)
-  await channel.send('storage:app:get', { key: 'theme' })
-  
-  // New (recommended)
   await transport.send(StorageEvents.app.get, { key: 'theme' })
 ---
 :::

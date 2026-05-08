@@ -5,7 +5,7 @@
 Bridge Hooks provide event subscription between plugin renderer and CoreBox main process. The SDK automatically handles event caching and replay to ensure plugins don't miss early initialization events.
 
 ## Introduction
-Use these hooks when you need CoreBox input, clipboard, or key events without managing raw channels.
+Use these hooks when you need CoreBox input or clipboard events without managing raw channels.
 
 ## Core Hooks
 
@@ -64,42 +64,7 @@ code: |
 
 **onCoreBoxKeyEvent**
 
-Listen to keyboard events forwarded from CoreBox.
-
-:::TuffCodeBlock{lang="ts"}
----
-code: |
-  import { onCoreBoxKeyEvent } from '@talex-touch/utils/plugin/sdk/hooks'
-  
-  onCoreBoxKeyEvent(({ data, meta }) => {
-    if (data.key === 'Enter' && !data.metaKey) {
-      // Handle enter
-    }
-  })
----
-:::
-
-**Payload Type**:
-:::TuffCodeBlock{lang="ts"}
----
-code: |
-  interface BridgeEventPayload<CoreBoxKeyEventData> {
-    data: {
-      key: string
-      code: string
-      metaKey: boolean
-      ctrlKey: boolean
-      altKey: boolean
-      shiftKey: boolean
-      repeat: boolean
-    }
-    meta: {
-      timestamp: number
-      fromCache: boolean
-    }
-  }
----
-:::
+Retired by the hard-cut. The old `core-box:key-event` channel had no production sender, so calling `onCoreBoxKeyEvent()` throws `plugin_bridge_key_event_removed`. Handle keyboard interactions inside the plugin UI component, or use host-provided `hostKeyEvent` props when the attached widget host supplies them.
 
 ## Auto Event Caching
 

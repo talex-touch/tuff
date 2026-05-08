@@ -219,3 +219,12 @@ code: |
 |--------|--------|-------------|
 | `close` | - | Programmatically close. |
 | `toggle` | - | Programmatically toggle. |
+
+## Interaction Contract
+
+- `modelValue` may be controlled or uncontrolled. Reference clicks emit `update:modelValue`, plus `open` or `close` when the state changes.
+- `disabled` blocks opening and closes an already open uncontrolled anchor.
+- `closeOnClickOutside` and `closeOnEsc` independently control outside pointer and Escape closing.
+- `toggleOnReferenceClick=false` keeps reference clicks from changing open state; use it for editable references that own their click behavior.
+- `class`, `style`, and non-class attrs are applied to the floating panel. Use `referenceClass` for the reference wrapper.
+- `surfaceMotionAdaptation` is an active hard-cut strategy: `auto` uses anchor motion state, `manual` forwards `panelCard.surfaceMoving`, and `off` forces `surfaceMoving=false`.

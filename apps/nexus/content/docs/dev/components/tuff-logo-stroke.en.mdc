@@ -70,3 +70,10 @@ code: |
 | `fillEndColor` | `string` | `#810DC6` | End color of core gradient |
 | `outerStartColor` | `string` | `#D73E4D` | Start color of outer ring gradient |
 | `outerEndColor` | `string` | `#7F007F` | End color of outer ring gradient |
+
+## Interaction Contract
+
+- The component renders a `role="img"` SVG with the default accessible name `Tuff logo stroke animation`.
+- Numeric `size` values are converted to width and height in px; string values are used as-is.
+- `mode="loop"` maps to the `breathe` class; `once`, `breathe`, and `hover` emit their matching state classes.
+- Gradient and filter ids use an instance-scoped prefix, so multiple logos can render on the same page without collisions.

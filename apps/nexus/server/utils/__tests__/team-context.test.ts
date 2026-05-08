@@ -118,7 +118,7 @@ describe('resolveActiveTeamContext', () => {
   it('组织团队 owner 即使非协作套餐也可解散团队', async () => {
     const team: TeamRecord = {
       id: 'org_789',
-      name: 'Legacy Org',
+      name: 'Standalone Org',
       type: 'organization',
       ownerUserId: 'owner-3',
       createdAt: '2026-01-01T00:00:00.000Z',

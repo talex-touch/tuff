@@ -42,6 +42,7 @@ code: |
 ## 使用建议
 - 外层容器决定骨架尺寸与布局比例。
 - 适合页面级加载，占位期间保持节奏感。
+- 内容区行宽使用固定序列，保证 SSR、hydration 与测试输出稳定。
 
 ## API（简版）
 ::TuffPropsTable
@@ -53,6 +54,12 @@ rows:
     description: '无额外 props，尺寸由容器决定'
 ---
 ::
+
+## 交互契约
+
+- `TxLayoutSkeleton` 无 props、events 或 slots。
+- 组件固定渲染 header、6 个 sidebar item 与 8 条内容行。
+- 内容行宽度是确定性的，不依赖运行时随机数。
 
 ## 组合示例
 ### 面板占位

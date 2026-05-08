@@ -1,6 +1,6 @@
 ---
 title: "Slider"
-description: "Component documentation for Slider."
+description: "Range input with value display and optional elastic tooltip feedback."
 category: Form
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # Slider
 
-Component documentation for Slider.
+Range input with value display and optional elastic tooltip feedback.
 
 ## Basic Usage
 
@@ -324,27 +324,27 @@ code: |
           <div style="flex: 1; min-width: 0;">
             <TxRadioGroup v-model="preset" type="button" :indicator-variant="indicatorVariant">
               <TxRadio value="current">
-                Text
+                Current
               </TxRadio>
               <TxRadio value="tofu">
-                Text
+                Tofu
               </TxRadio>
               <TxRadio value="jelly">
-                TextQ
+                Jelly
               </TxRadio>
               <TxRadio value="soft">
-                Text
+                Soft
               </TxRadio>
               <TxRadio value="snappy">
-                Text
+                Snappy
               </TxRadio>
               <TxRadio value="extreme">
-                Text
+                Extreme
               </TxRadio>
             </TxRadioGroup>
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            TextParams
+            Preset values
           </div>
         </div>
 
@@ -407,7 +407,7 @@ code: |
             </TxRadioGroup>
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            TextPosition
+            Tooltip placement
           </div>
         </div>
 
@@ -484,7 +484,7 @@ code: |
             <TxSlider v-model="tiltMaxDeg" :min="0" :max="24" :step="1" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            Text
+            Squash ratio
           </div>
         </div>
 
@@ -640,7 +640,7 @@ code: |
             <TxSlider v-model="tooltipJellyTriggerAccel" :min="600" :max="6000" :step="100" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            TriggerTextValue（Text）
+            Acceleration threshold
           </div>
         </div>
       </div>
@@ -688,38 +688,48 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `number` | `0` | Description for modelValue. |
-| `min` | `number` | `0` | Description for min. |
-| `max` | `number` | `100` | Description for max. |
-| `step` | `number` | `1` | Description for step. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `showValue` | `boolean` | `false` | Description for showValue. |
-| `formatValue` | `(value: number) => string` | - | Description for formatValue. |
-| `showTooltip` | `boolean` | `true` | Description for showTooltip. |
-| `tooltipTrigger` | `'drag' \| 'hover' \| 'always'` | `'drag'` | tooltip DisplayTriggerText |
-| `tooltipFormatter` | `(value: number) => string` | - | Description for tooltipFormatter. |
-| `tooltipPlacement` | `'top' \| 'bottom'` | `'top'` | tooltip Position |
-| `tooltipTilt` | `boolean` | `false` | Description for tooltipTilt. |
-| `tooltipTiltMaxDeg` | `number` | `18` | Description for tooltipTiltMaxDeg. |
-| `tooltipOffsetMaxPx` | `number` | `28` | Description for tooltipOffsetMaxPx. |
-| `tooltipAccelBoost` | `number` | `0.65` | Description for tooltipAccelBoost. |
-| `tooltipSpringStiffness` | `number` | `320` | Description for tooltipSpringStiffness. |
-| `tooltipSpringDamping` | `number` | `24` | Description for tooltipSpringDamping. |
-| `tooltipMotion` | `'blur' \| 'fade' \| 'none'` | `'blur'` | tooltip Display/HiddenText |
-| `tooltipMotionDuration` | `number` | `160` | Description for tooltipMotionDuration. |
-| `tooltipMotionBlurPx` | `number` | `10` | Description for tooltipMotionBlurPx. |
-| `tooltipDistortSkewDeg` | `number` | `8` | Description for tooltipDistortSkewDeg. |
-| `tooltipJelly` | `boolean` | `true` | Description for tooltipJelly. |
-| `tooltipJellyFrequency` | `number` | `8.5` | Description for tooltipJellyFrequency. |
-| `tooltipJellyDecay` | `number` | `10` | Description for tooltipJellyDecay. |
-| `tooltipJellyRotateDeg` | `number` | `10` | Description for tooltipJellyRotateDeg. |
-| `tooltipJellySkewDeg` | `number` | `12` | Description for tooltipJellySkewDeg. |
-| `tooltipJellySquash` | `number` | `0.16` | Description for tooltipJellySquash. |
-| `tooltipJellyTriggerAccel` | `number` | `2800` | Description for tooltipJellyTriggerAccel. |
+| `modelValue` | `number` | `0` | Current slider value. The rendered input clamps it to the `min..max` range. |
+| `min` | `number` | `0` | Minimum range value forwarded to the native range input. |
+| `max` | `number` | `100` | Maximum range value forwarded to the native range input. |
+| `step` | `number` | `1` | Step size forwarded to the native range input. |
+| `disabled` | `boolean` | `false` | Disables the native range input and suppresses tooltip display. |
+| `showValue` | `boolean` | `false` | Renders the formatted current value beside the slider. |
+| `formatValue` | `(value: number) => string` | - | Formats the visible side value; also feeds tooltip text when `tooltipFormatter` is absent. |
+| `showTooltip` | `boolean` | `true` | Enables tooltip rendering when the trigger condition is met. |
+| `tooltipTrigger` | `'drag' \| 'hover' \| 'always'` | `'drag'` | Controls when the tooltip is visible: while dragging, on hover/drag, or always. |
+| `tooltipFormatter` | `(value: number) => string` | - | Formats tooltip text independently from `formatValue`. |
+| `tooltipPlacement` | `'top' \| 'bottom'` | `'top'` | Places the tooltip above or below the thumb. |
+| `tooltipTilt` | `boolean` | `false` | Enables velocity-based tooltip follow, tilt, offset, squash, and skew motion. |
+| `tooltipTiltMaxDeg` | `number` | `18` | Maximum tilt angle used by the velocity response. |
+| `tooltipOffsetMaxPx` | `number` | `28` | Maximum horizontal tooltip offset used by the velocity response. |
+| `tooltipAccelBoost` | `number` | `0.65` | Multiplier for acceleration contribution when calculating elastic tooltip intensity. |
+| `tooltipSpringStiffness` | `number` | `320` | Spring stiffness for tooltip follow, offset, and tilt interpolation. |
+| `tooltipSpringDamping` | `number` | `24` | Spring damping for tooltip follow, offset, and tilt interpolation. |
+| `tooltipMotion` | `'blur' \| 'fade' \| 'none'` | `'blur'` | Tooltip enter/leave motion. `none` renders without the transition wrapper. |
+| `tooltipMotionDuration` | `number` | `160` | Tooltip enter/leave duration in ms; negative values are clamped to `0ms`. |
+| `tooltipMotionBlurPx` | `number` | `10` | Blur radius for the `blur` tooltip motion; negative values are clamped to `0px`. |
+| `tooltipDistortSkewDeg` | `number` | `8` | Maximum skew used by tooltip distortion while moving. |
+| `tooltipJelly` | `boolean` | `true` | Enables acceleration-triggered wobble on top of the tilt motion. |
+| `tooltipJellyFrequency` | `number` | `8.5` | Wobble frequency in hertz. |
+| `tooltipJellyDecay` | `number` | `10` | Wobble decay rate; larger values settle faster. |
+| `tooltipJellyRotateDeg` | `number` | `10` | Maximum wobble rotation contribution. |
+| `tooltipJellySkewDeg` | `number` | `12` | Maximum wobble skew contribution. |
+| `tooltipJellySquash` | `number` | `0.16` | Maximum wobble squash contribution. |
+| `tooltipJellyTriggerAccel` | `number` | `2800` | Acceleration threshold used to kick jelly wobble. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `number` | Description for update:modelValue. |
-| `change` | `number` | Description for change. |
+| `update:modelValue` | `number` | Emitted on native input with the next clamped value. |
+| `change` | `number` | Emitted on native change with the input's current numeric value. |
+
+## Interaction Contract
+
+- The rendered native range input clamps `modelValue` into the `min..max` range.
+- Native `input` emits `update:modelValue` with the clamped value; native `change` emits `change`.
+- `disabled` blocks value updates and suppresses tooltip rendering.
+- `formatValue` controls the visible side value and is also used for tooltip text when `tooltipFormatter` is absent.
+- Tooltip visibility follows `tooltipTrigger`: `drag`, `hover`, or `always`; `showTooltip=false` disables it.
+- Negative `tooltipMotionDuration` and `tooltipMotionBlurPx` values are clamped to `0ms` and `0px`.
+- Global pointer listeners are cleaned up on unmount.

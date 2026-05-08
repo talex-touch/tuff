@@ -25,6 +25,7 @@ code: |
 ---
 :::
 ## API（Lite）
+### TxSteps Props
 ::TuffPropsTable
 ---
 rows:
@@ -42,6 +43,52 @@ rows:
     description: 尺寸
 ---
 :::
+
+### TxStep Props
+::TuffPropsTable
+---
+rows:
+  - name: title
+    type: string
+    default: '-'
+    description: 步骤标题
+  - name: description
+    type: string
+    default: '-'
+    description: 步骤描述
+  - name: step
+    type: "number | string"
+    default: '顺序索引'
+    description: 步骤标识；未提供时使用子项顺序索引
+  - name: status
+    type: "'wait' | 'active' | 'completed' | 'error'"
+    default: "'wait'"
+    description: 手动状态
+  - name: clickable
+    type: boolean
+    default: 'true'
+    description: 是否允许点击/键盘切换到该步骤
+  - name: disabled
+    type: boolean
+    default: 'false'
+    description: 禁用该步骤交互
+  - name: icon
+    type: string
+    default: '-'
+    description: 自定义步骤图标
+  - name: completedIcon
+    type: string
+    default: "'check'"
+    description: 已完成图标
+---
+:::
+
+## 交互契约
+
+- `TxStep` 未传 `step` 时按子项顺序自动使用 `0` 起始索引，与 `active` 数字索引对齐。
+- 可点击步骤的头部暴露 `role="button"`、`tabindex="0"`；当前步骤暴露 `aria-current="step"`。
+- 点击、Enter 与 Space 会切换内部 active step；`disabled` 或 `clickable=false` 的步骤不会响应交互。
+- 最后一项不会渲染连接线。
 
 ## Source
 <TuffDocSourceLink />

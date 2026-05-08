@@ -1,12 +1,12 @@
 ---
 title: "GradientBorder"
-description: "Component documentation for GradientBorder."
+description: "Animated gradient border wrapper for highlighting content containers."
 category: Basic
 syncStatus: migrated
 ---
 # GradientBorder
 
-Component documentation for GradientBorder.
+Animated gradient border wrapper for highlighting content containers while keeping the inner content layout under your control.
 
 ## Basic Usage
 
@@ -30,8 +30,8 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `as` | `string` | `'div'` | Description for as. |
-| `borderWidth` | `string \| number` | `'2px'` | Description for borderWidth. |
-| `borderRadius` | `string \| number` | `'12px'` | Description for borderRadius. |
-| `padding` | `string \| number` | `'12px'` | Description for padding. |
-| `animationDuration` | `number` | `4` | Description for animationDuration. |
+| `as` | `string` | `'div'` | Root element tag rendered by the wrapper. |
+| `borderWidth` | `string \| number` | `'2px'` | Gradient border width; numeric values are normalized to pixels. |
+| `borderRadius` | `string \| number` | `'12px'` | Border radius applied to the wrapper and gradient layer. |
+| `padding` | `string \| number` | `'12px'` | Inner content padding; numeric values are normalized to pixels. |
+| `animationDuration` | `number` | `4` | Rotation animation duration in seconds. |

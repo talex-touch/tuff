@@ -1,12 +1,12 @@
 ---
 title: "CardItem"
-description: "Component documentation for CardItem."
+description: "Compact list row with avatar, text, right-side actions, and clickable states."
 category: Layout
 syncStatus: migrated
 ---
 # CardItem
 
-Component documentation for CardItem.
+`TxCardItem` is a compact row primitive for settings, command lists, and lightweight navigation. It renders optional avatar content, primary text, supporting copy, and right-side controls while keeping click handling explicit through `clickable`.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -37,31 +37,31 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `role` | `string` | `'button'` | Description for role. |
-| `title` | `string` | `''` | Description for title. |
-| `subtitle` | `string` | `''` | Description for subtitle. |
-| `description` | `string` | `''` | Description for description. |
-| `iconClass` | `string` | `''` | Description for iconClass. |
-| `avatarText` | `string` | `''` | Description for avatarText. |
-| `avatarUrl` | `string` | `''` | Description for avatarUrl. |
-| `avatarSize` | `number` | `36` | Description for avatarSize. |
-| `avatarShape` | `'circle' \| 'rounded'` | `'circle'` | Description for avatarShape. |
-| `clickable` | `boolean` | `false` | Description for clickable. |
-| `active` | `boolean` | `false` | Description for active. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
+| `role` | `string` | `'button'` | ARIA role applied to the root element. |
+| `title` | `string` | `''` | Primary single-line label when the `title` slot is not used. |
+| `subtitle` | `string` | `''` | Secondary single-line label rendered below the title. |
+| `description` | `string` | `''` | Supporting copy rendered below the top row. |
+| `iconClass` | `string` | `''` | Icon class rendered in the avatar area when no avatar URL is provided. |
+| `avatarText` | `string` | `''` | Text fallback rendered in the avatar area. |
+| `avatarUrl` | `string` | `''` | Image URL rendered before icon or text avatar fallbacks. |
+| `avatarSize` | `number` | `36` | Avatar size in pixels. |
+| `avatarShape` | `'circle' \| 'rounded'` | `'circle'` | Avatar corner style. |
+| `clickable` | `boolean` | `false` | Enables pointer cursor, focusability, and click / Enter emits. |
+| `active` | `boolean` | `false` | Applies the selected visual state. |
+| `disabled` | `boolean` | `false` | Disables focus and click / keyboard emits. |
 
 ### Slots
 
 | Name | Description |
 |------|------|
-| `avatar` | Description for avatar. |
-| `title` | Description for title. |
-| `subtitle` | Description for subtitle. |
-| `description` | Description for description. |
-| `right` | Description for right. |
+| `avatar` | Replaces the generated avatar area. |
+| `title` | Replaces the primary title content. |
+| `subtitle` | Replaces the subtitle content. |
+| `description` | Replaces the supporting description content. |
+| `right` | Renders actions or trailing metadata on the right side of the top row. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `click` | `MouseEvent` | Description for click. |
+| `click` | `MouseEvent` | Emitted from mouse click or Enter when `clickable=true` and not disabled. |

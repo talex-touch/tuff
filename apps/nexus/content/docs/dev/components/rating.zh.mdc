@@ -30,6 +30,10 @@ code: |
 ---
 ::
 
+## 交互契约
+
+Rating 会将星级组暴露为 radio group。`disabled` 与 `readonly` 都会阻止评分更新；`readonly` 是只展示模式，会移除星级按钮交互入口但保留评分展示。
+
 ## API（Lite）
 ::TuffPropsTable
 ---
@@ -50,10 +54,14 @@ rows:
     type: boolean
     default: 'false'
     description: 显示分数文本
+  - name: disabled
+    type: boolean
+    default: 'false'
+    description: 禁用交互
   - name: readonly
     type: boolean
     default: 'false'
-    description: 只读模式
+    description: 只展示模式
 ---
 :::
 

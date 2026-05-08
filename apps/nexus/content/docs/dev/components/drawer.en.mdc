@@ -208,3 +208,10 @@ rows:
     default: '-'
 ---
 ::
+
+## Interaction Contract
+
+- The drawer root exposes `role="dialog"` and `aria-modal="true"`, with an instance-scoped `aria-labelledby` link to the title.
+- Opening the drawer focuses the drawer root; hiding or unmounting restores focus to the element that was active before opening.
+- The close button, mask click, and Escape close paths emit `update:visible(false)` and `close` by default; `closeOnClickMask=false` and `closeOnPressEscape=false` block their respective paths.
+- `showClose=false` removes the close button without changing mask or Escape behavior.

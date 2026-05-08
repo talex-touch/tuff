@@ -44,7 +44,7 @@ rows:
   - name: disabled
     type: boolean
     default: false
-    description: Disable animation and reset child element positions
+    description: Disable animation, stop listeners, and reset child element positions
   - name: className
     type: string
     default: "''"
@@ -55,6 +55,14 @@ rows:
     description: TxFloatingElement movement depth; negative values move in the opposite direction
 ---
 ::
+
+## Interaction Contract
+
+- `TxFloating` listens to window `mousemove` / `touchmove` and computes pointer position relative to the container's top-left corner.
+- Each element target offset is `pointerPosition * (depth * sensitivity / 20)`, then each frame approaches it by `easingFactor`.
+- `disabled=true` stops event listeners and RAF, cancels the current frame, and resets registered elements to `translate3d(0px, 0px, 0)`.
+- `disabled=false` restarts event listeners and RAF.
+- `TxFloatingElement` registers on mount, re-registers when `depth` changes, and unregisters on unmount.
 
 ## Source
 

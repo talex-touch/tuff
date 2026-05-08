@@ -1,6 +1,6 @@
 ---
 title: Flex
-description: Generic flex container
+description: A low-level Flexbox container with explicit direction, alignment, wrapping, and gap controls.
 category: Layout
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # Flex
 
-Generic flex container
+Use `Flex` when you need direct Flexbox semantics for rows, columns, wrapping groups, and inline layout surfaces.
 
 ## Basic Usage
 
@@ -41,4 +41,4 @@ code: |
 | `align` | `string` | `'stretch'` | align-items |
 | `justify` | `string` | `'flex-start'` | justify-content |
 | `wrap` | `'nowrap' \| 'wrap' \| 'wrap-reverse'` | `'nowrap'` | flex-wrap |
-| `inline` | `boolean` | `false` | Description for inline. |
+| `inline` | `boolean` | `false` | Uses `inline-flex` instead of block-level `flex`. |

@@ -1,12 +1,12 @@
 ---
 title: "Scroll"
-description: "`@better-scroll/scroll-bar` `TouchScroll`"
+description: "`@better-scroll/scroll-bar` powered `TxScroll` container."
 category: Layout
 syncStatus: migrated
 ---
 # Scroll
 
-`@better-scroll/scroll-bar` `TouchScroll`
+`TxScroll` is the current scroll container powered by `@better-scroll/scroll-bar`, with native-mode fallbacks for platform-specific scrolling behavior.
 
 ## Behavior Notes
 
@@ -37,13 +37,13 @@ code: |
   <template>
     <div class="demo-container" style="height: 220px;">
       <div style="height: 100%;">
-        <TouchScroll style="height: 100%;">
+        <TxScroll style="height: 100%;">
           <div style="height: 1200px; display: flex; flex-direction: column; gap: 8px;">
             <div v-for="i in 60" :key="i" class="demo-scroll-item">
               Row {{ i }}
             </div>
           </div>
-        </TouchScroll>
+        </TxScroll>
       </div>
     </div>
   </template>
@@ -251,33 +251,33 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `native` | `boolean` | `false` | Description for native. |
+| `native` | `boolean` | `false` | Force native browser scrolling and skip BetterScroll initialization. |
 | `unified` | `boolean` | `false` | Force BetterScroll takeover for consistent cross-environment behavior (overrides Safari/Chromium auto-native; `native=true` still wins). |
 | `nativeAutoFallback` | `boolean` | `true` | Controls auto-native fallback on macOS + Chromium `145+`; does not affect the macOS Safari native-first rule. |
-| `noPadding` | `boolean` | `false` | Description for noPadding. |
+| `noPadding` | `boolean` | `false` | Remove the default content padding; horizontal and both-axis modes also set content width to `max-content`. |
 | `scrollChaining` | `boolean` | `false` | Allow parent scroll handoff at boundaries; not recommended by default, enable only when nested handoff is explicitly needed. |
-| `direction` | `'vertical' \| 'horizontal' \| 'both'` | `'vertical'` | TextDirection |
-| `scrollbar` | `boolean` | `true` | Description for scrollbar. |
-| `scrollbarFade` | `boolean` | `true` | Description for scrollbarFade. |
-| `scrollbarInteractive` | `boolean` | `true` | Description for scrollbarInteractive. |
-| `scrollbarAlwaysVisible` | `boolean` | `false` | Description for scrollbarAlwaysVisible. |
-| `scrollbarMinSize` | `number` | `18` | Description for scrollbarMinSize. |
+| `direction` | `'vertical' \| 'horizontal' \| 'both'` | `'vertical'` | Select the scroll axes; native mode maps this to `overflow-x/y`, BetterScroll maps it to `scrollX`, `scrollY`, and `freeScroll`. |
+| `scrollbar` | `boolean` | `true` | Enable the BetterScroll scrollbar plugin; native mode uses browser scrollbars. |
+| `scrollbarFade` | `boolean` | `true` | Pass BetterScroll scrollbar fade behavior through when `scrollbar` is enabled. |
+| `scrollbarInteractive` | `boolean` | `true` | Allow BetterScroll scrollbar dragging when `scrollbar` is enabled. |
+| `scrollbarAlwaysVisible` | `boolean` | `false` | Keep the BetterScroll wrapper in always-visible scrollbar state. |
+| `scrollbarMinSize` | `number` | `18` | Set the minimum BetterScroll scrollbar thumb size via `--tx-scrollbar-min-size`. |
 | `probeType` | `0 \| 1 \| 2 \| 3` | `3` | BetterScroll `probeType` |
-| `bounce` | `boolean` | `true` | Description for bounce. |
-| `click` | `boolean` | `true` | Description for click. |
-| `wheel` | `boolean` | `true` | Description for wheel. |
-| `refreshOnContentChange` | `boolean` | `true` | Description for refreshOnContentChange. |
-| `pullDownRefresh` | `boolean \| Record<string, unknown>` | `false` | Text（BetterScroll Text；native TextTrigger） |
-| `pullDownThreshold` | `number` | `70` | Description for pullDownThreshold. |
-| `pullDownStop` | `number` | `56` | Description for pullDownStop. |
-| `pullUpLoad` | `boolean \| Record<string, unknown>` | `false` | TextLoadingText（BetterScroll Text；native TextTrigger） |
-| `pullUpThreshold` | `number` | `0` | Description for pullUpThreshold. |
-| `options` | `Record<string, unknown>` | `{}` | Description for options. |
+| `bounce` | `boolean` | `true` | Enable BetterScroll boundary bounce and the local wheel overshoot behavior. |
+| `click` | `boolean` | `true` | Pass BetterScroll click handling through. |
+| `wheel` | `boolean` | `true` | Enable the local wheel bridge for BetterScroll mode; `ctrl` wheel gestures are ignored. |
+| `refreshOnContentChange` | `boolean` | `true` | Observe content mutations and call BetterScroll `refresh()` after changes. |
+| `pullDownRefresh` | `boolean \| Record<string, unknown>` | `false` | Enable pull-down refresh; BetterScroll receives plugin options, native mode emits a threshold-based trigger. |
+| `pullDownThreshold` | `number` | `70` | Minimum native touch delta and BetterScroll plugin threshold for `pulling-down`. |
+| `pullDownStop` | `number` | `56` | BetterScroll pull-down stop position; native mode does not use this value. |
+| `pullUpLoad` | `boolean \| Record<string, unknown>` | `false` | Enable pull-up load; BetterScroll receives plugin options, native mode emits when the bottom threshold is reached. |
+| `pullUpThreshold` | `number` | `0` | Native distance-to-bottom threshold and BetterScroll plugin threshold for `pulling-up`. |
+| `options` | `Record<string, unknown>` | `{}` | Extra BetterScroll options; `wheelOvershoot` is consumed locally before options are passed through. |
 
 ### Events
 
 | Event | Params | Description |
 |------|------|------|
-| `scroll` | `{ scrollTop: number; scrollLeft: number }` | Description for scroll. |
-| `pulling-down` | - | Description for pulling-down. |
-| `pulling-up` | - | Description for pulling-up. |
+| `scroll` | `{ scrollTop: number; scrollLeft: number }` | Emits absolute scroll offsets from native mode or BetterScroll position updates. |
+| `pulling-down` | - | Emits once per pull-down cycle until `finishPullDown()` is called. |
+| `pulling-up` | - | Emits once per pull-up cycle until `finishPullUp()` is called. |

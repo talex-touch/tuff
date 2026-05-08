@@ -66,3 +66,9 @@ code: |
 | secondaryAction | `EmptyStateAction` | - | 次操作配置 |
 
 > 完整 Props 参考 [EmptyState API](./empty-state.zh.md#api)
+
+## 交互契约
+
+- `TxGuideState` 始终向 `TxEmptyState` 透传 `variant="guide"`。
+- 组件不额外改写 `title`、`description`、`surface`、`size` 或 action 配置；显式 props 会原样透传。
+- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。

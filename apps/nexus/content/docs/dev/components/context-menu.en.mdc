@@ -1,12 +1,12 @@
 ---
 title: "ContextMenu"
-description: "Floating UI"
+description: "Right-click and controlled floating menu built on Floating UI."
 category: Feedback
 syncStatus: migrated
 ---
 # ContextMenu
 
-Floating UI
+Right-click and controlled floating menu built on Floating UI. It supports uncontrolled context-menu triggers and controlled coordinates through `v-model`, `x`, and `y`.
 
 ## Basic Usage
 
@@ -96,29 +96,29 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `boolean \| undefined` | `undefined` | Text（v-model）；`undefined` Text |
-| `x` | `number` | `0` | Description for x. |
-| `y` | `number` | `0` | Description for y. |
-| `width` | `number` | `220` | Description for width. |
-| `closeOnEsc` | `boolean` | `true` | Description for closeOnEsc. |
-| `closeOnClickOutside` | `boolean` | `true` | Description for closeOnClickOutside. |
+| `modelValue` | `boolean \| undefined` | `undefined` | Controlled open state; leave undefined for internal uncontrolled state. |
+| `x` | `number` | `0` | Controlled menu anchor X coordinate. |
+| `y` | `number` | `0` | Controlled menu anchor Y coordinate. |
+| `width` | `number` | `220` | Menu panel width in pixels. |
+| `closeOnEsc` | `boolean` | `true` | Closes the menu when Escape is pressed. |
+| `closeOnClickOutside` | `boolean` | `true` | Closes the menu on pointer events outside the trigger and menu. |
 
 ### TxContextMenu Events
 
 | Event | Params | Description |
 |------|------|------|
-| `open` | `{ x: number; y: number }` | Description for open. |
-| `close` | - | Description for close. |
+| `open` | `{ x: number; y: number }` | Emitted when the menu opens with the active anchor coordinates. |
+| `close` | - | Emitted when the menu closes. |
 
 ### TxContextMenuItem Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `danger` | `boolean` | `false` | Description for danger. |
+| `disabled` | `boolean` | `false` | Disables selection and item clickability. |
+| `danger` | `boolean` | `false` | Applies danger styling to the item label. |
 
 ### TxContextMenuItem Events
 
 | Event | Params | Description |
 |------|------|------|
-| `select` | - | Description for select. |
+| `select` | - | Emitted when an enabled item is selected; the parent context menu then closes. |

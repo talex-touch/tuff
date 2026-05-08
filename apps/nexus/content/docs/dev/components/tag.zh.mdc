@@ -39,13 +39,37 @@ rows:
   - name: color
     type: 'string'
     default: '-'
-    description: '背景色'
+    description: '主文字/图标色'
+  - name: background
+    type: 'string'
+    default: "''"
+    description: '自定义背景色'
+  - name: border
+    type: 'string'
+    default: "''"
+    description: '自定义边框色'
+  - name: icon
+    type: 'string'
+    default: "''"
+    description: '前置图标 class'
   - name: size
     type: "'sm' | 'md'"
-    default: 'md'
+    default: 'sm'
     description: '尺寸'
+  - name: closable
+    type: 'boolean'
+    default: 'false'
+    description: '显示关闭按钮'
+  - name: disabled
+    type: 'boolean'
+    default: 'false'
+    description: '禁用 click 与 close 事件'
 ---
 ::
+
+## 契约说明
+
+Tag 渲染 `role="status"`。默认插槽会替换 `label`。关闭按钮会阻止事件冒泡，因此关闭标签不会同时触发标签自身的 `click` 事件。禁用状态会阻断 `click` 与 `close`。
 
 ## 组合示例
 ### 标签 + 按钮

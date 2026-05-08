@@ -59,6 +59,10 @@ code: |
 ---
 ::
 
+## Sorting Interaction
+
+Sortable headers expose `aria-sort` and support pointer click, Enter, and Space to cycle through ascending, descending, and unsorted states. When `sortOnClient=false`, the table still emits `sortChange` without reordering local rows.
+
 ## API
 
 ### TxDataTable Props

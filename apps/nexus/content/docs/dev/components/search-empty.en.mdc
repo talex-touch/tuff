@@ -1,6 +1,6 @@
 ---
 title: "SearchEmpty"
-description: "Component documentation for SearchEmpty."
+description: "Shortcut empty-state component for empty search results, based on TxEmptyState with `variant=\"search-empty\"`."
 category: Feedback
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # SearchEmpty
 
-Component documentation for SearchEmpty.
+`TxSearchEmpty` is a shortcut wrapper around `TxEmptyState` with `variant="search-empty"` pre-set. Use it when a query returns no results or filters exclude every item.
 
 ## Basic Usage
 
@@ -25,4 +25,10 @@ code: |
 
 ## API
 
-Props / Slots / Events follow `TxEmptyState`.
+`TxSearchEmpty` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
+
+## Interaction Contract
+
+- `TxSearchEmpty` always forwards `variant="search-empty"` to `TxEmptyState`.
+- The wrapper does not rewrite `title`, `description`, `surface`, or action config; explicit props are forwarded as-is.
+- `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.

@@ -54,6 +54,18 @@ rows:
     type: number
     default: '0'
     description: 总数量
+  - name: totalPages
+    type: number
+    default: '-'
+    description: 显式总页数；未提供 total 时使用
+  - name: prevIcon
+    type: string
+    default: "'chevron-left'"
+    description: 上一页图标
+  - name: nextIcon
+    type: string
+    default: "'chevron-right'"
+    description: 下一页图标
   - name: showInfo
     type: boolean
     default: 'false'
@@ -64,6 +76,38 @@ rows:
     description: 显示首末页按钮
 ---
 :::
+
+## Events
+::TuffPropsTable
+---
+rows:
+  - name: update:currentPage
+    type: '(page: number) => void'
+    default: '-'
+    description: v-model 当前页更新
+  - name: pageChange
+    type: '(page: number) => void'
+    default: '-'
+    description: 用户切换页码时触发
+---
+:::
+
+## Slots
+::TuffPropsTable
+---
+rows:
+  - name: info
+    type: '{ currentPage: number, totalPages: number, total?: number }'
+    default: '-'
+    description: 自定义页码信息区域
+---
+:::
+
+## 交互契约
+
+- `total` 优先用于按 `pageSize` 计算总页数；未提供 `total` 时使用 `totalPages`。
+- `showFirstLast` 会渲染首末页跳转按钮，边界页会禁用首/上一页或下一页/末页。
+- 当前页按钮带 `aria-current="page"`，上一页/下一页/首末页按钮带可读 `aria-label`。
 
 ## Source
 <TuffDocSourceLink />

@@ -25,6 +25,7 @@ code: |
 ---
 :::
 ## API (Lite)
+### TxTimeline Props
 ::TuffPropsTable
 ---
 rows:
@@ -32,6 +33,13 @@ rows:
     type: "'vertical' | 'horizontal'"
     default: "'vertical'"
     description: Layout direction
+---
+:::
+
+### TxTimelineItem Props
+::TuffPropsTable
+---
+rows:
   - name: title
     type: string
     default: "''"
@@ -44,8 +52,22 @@ rows:
     type: "'default' | 'primary' | 'success' | 'warning' | 'error'"
     default: "'default'"
     description: Dot color
+  - name: icon
+    type: string
+    default: '-'
+    description: Dot icon
+  - name: active
+    type: boolean
+    default: 'false'
+    description: Highlight the current event item
 ---
 :::
+
+## Interaction Contract
+
+- `TxTimeline` exposes `role="list"` and each `TxTimelineItem` exposes `role="listitem"`.
+- `active` applies to both the item and dot, highlighting the current event.
+- `layout="horizontal"` is provided to child items through context, switching the event stream to a horizontal layout.
 
 ## Source
 <TuffDocSourceLink />

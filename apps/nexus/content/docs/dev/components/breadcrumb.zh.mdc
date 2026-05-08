@@ -41,5 +41,47 @@ rows:
 ---
 :::
 
+## Item Contract
+
+::TuffPropsTable
+---
+rows:
+  - name: label
+    type: string
+    default: '-'
+    description: 面包屑文本
+  - name: href
+    type: string
+    default: '-'
+    description: 链接地址；当前页和禁用项不会渲染为链接
+  - name: icon
+    type: string
+    default: '-'
+    description: 项目前置图标
+  - name: disabled
+    type: boolean
+    default: 'false'
+    description: 禁用该项导航与点击事件
+---
+:::
+
+## Events
+
+::TuffPropsTable
+---
+rows:
+  - name: click
+    type: '(item: BreadcrumbItem, index: number) => void'
+    default: '-'
+    description: 点击没有 href、非当前且非禁用的项目时触发
+---
+:::
+
+## 交互契约
+
+- 最后一项始终代表当前页，渲染为非链接元素并带 `aria-current="page"`。
+- 带 `href` 的非当前、非禁用项渲染为原生链接。
+- `disabled` 项渲染为非链接元素，带 `aria-disabled="true"`，且不会触发 `click`。
+
 ## Source
 <TuffDocSourceLink />

@@ -1,6 +1,6 @@
 ---
 title: "Popover"
-description: "Semantic popover built on Tooltip and Anchor"
+description: "Semantic popover built directly on BaseAnchor."
 category: Feedback
 status: beta
 since: 1.0.0
@@ -9,7 +9,7 @@ syncStatus: migrated
 ---
 # Popover
 
-`TxPopover` wraps `TxTooltip` for trigger semantics while `TxBaseAnchor` handles positioning, collision, and motion.
+`TxPopover` builds trigger semantics directly on `TxBaseAnchor`, which owns positioning, collision handling, outside click / Escape closing, and motion.
 
 Popover panels use `TxCard`; use `panelVariant/panelBackground/panelShadow/panelRadius/panelPadding` to control border, background, and shadow. `keepAliveContent` controls whether inner state is preserved after close.
 
@@ -163,6 +163,6 @@ code: |
 
 | Event | Params | Description |
 |------|------|------|
-| `open` | - | Description for open. |
-| `close` | - | Description for close. |
-| `update:modelValue` | `boolean` | Description for update:modelValue. |
+| `open` | - | Emitted when uncontrolled or internal state opens. |
+| `close` | - | Emitted when uncontrolled or internal state closes. |
+| `update:modelValue` | `boolean` | Emitted whenever Popover requests a controlled or uncontrolled open state change. |

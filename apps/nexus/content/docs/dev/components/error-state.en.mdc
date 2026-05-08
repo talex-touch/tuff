@@ -65,3 +65,9 @@ code: |
 | secondaryAction | `EmptyStateAction` | - | Secondary action config |
 
 > Full Props reference: [EmptyState API](./empty-state.en.md#api)
+
+## Interaction Contract
+
+- `TxErrorState` always forwards `variant="error"` to `TxEmptyState`.
+- The wrapper does not rewrite `title`, `description`, `surface`, or action config; explicit props are forwarded as-is.
+- `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.

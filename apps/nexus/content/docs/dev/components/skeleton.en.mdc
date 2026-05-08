@@ -39,11 +39,29 @@ rows:
     default: '3'
     description: 'Text lines'
   - name: variant
-    type: "'line' | 'circle'"
-    default: 'line'
-    description: 'Shape'
+    type: "'text' | 'rect' | 'circle'"
+    default: 'text'
+    description: 'Shape variant'
+  - name: width
+    type: 'string | number'
+    default: '100%'
+    description: 'Width; numbers are converted to px'
+  - name: height
+    type: 'string | number'
+    default: '12'
+    description: 'Height; numbers are converted to px'
+  - name: gap
+    type: 'string | number'
+    default: '10'
+    description: 'Gap between multiple lines; numbers are converted to px'
 ---
 ::
+
+## Interaction Contract
+
+- `loading=false` renders the default slot instead of the skeleton.
+- `lines` always renders at least one item, preventing empty skeleton output.
+- `variant="circle"` always uses a circular radius and ignores `radius`.
 
 ## Composite Patterns
 ### Card Placeholder

@@ -25,6 +25,7 @@ code: |
 ---
 :::
 ## API（Lite）
+### TxTimeline Props
 ::TuffPropsTable
 ---
 rows:
@@ -32,6 +33,13 @@ rows:
     type: "'vertical' | 'horizontal'"
     default: "'vertical'"
     description: 布局方向
+---
+:::
+
+### TxTimelineItem Props
+::TuffPropsTable
+---
+rows:
   - name: title
     type: string
     default: "''"
@@ -44,8 +52,22 @@ rows:
     type: "'default' | 'primary' | 'success' | 'warning' | 'error'"
     default: "'default'"
     description: 节点颜色
+  - name: icon
+    type: string
+    default: '-'
+    description: 节点图标
+  - name: active
+    type: boolean
+    default: 'false'
+    description: 高亮当前事件节点
 ---
 :::
+
+## 交互契约
+
+- `TxTimeline` 暴露 `role="list"`，每个 `TxTimelineItem` 暴露 `role="listitem"`。
+- `active` 会同时作用于条目和节点圆点，用于突出当前事件。
+- `layout="horizontal"` 会通过 provide/inject 同步到子项，切换为横向事件流布局。
 
 ## Source
 <TuffDocSourceLink />

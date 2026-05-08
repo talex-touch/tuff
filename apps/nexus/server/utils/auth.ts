@@ -6,6 +6,7 @@ import { getServerSession } from '#auth'
 import { createError, getHeader } from 'h3'
 import { consumeLoginToken, createUser, ensureDeviceForRequest, getDevice, getUserByEmail, getUserById, readDeviceId, readDeviceMetadata, upsertDevice } from './authStore'
 import { validateApiKey } from './apiKeyStore'
+import { hasRequiredScope } from './apiKeyScopes'
 import { ensurePersonalTeam } from './creditsStore'
 
 const APP_TOKEN_ISSUER = 'tuff-nexus'
@@ -110,36 +111,6 @@ function parseBearerToken(event: H3Event): string | null {
     return null
   }
   return value.trim()
-}
-
-const LEGACY_RELEASE_SCOPE = 'release:sync'
-const RELEASE_SCOPE_COMPAT = new Set([
-  'release:write',
-  'release:assets',
-  'release:publish',
-  'release:news',
-  'release:evidence',
-])
-
-function hasRequiredScope(scopes: string[], requiredScope: string): boolean {
-  if (scopes.includes(requiredScope)) {
-    return true
-  }
-
-  // Backward compatibility: legacy scope can access all release sub-scopes.
-  if (requiredScope.startsWith('release:') && scopes.includes(LEGACY_RELEASE_SCOPE)) {
-    return true
-  }
-
-  // Forward compatibility: granular release scopes also satisfy legacy scope checks.
-  if (
-    requiredScope === LEGACY_RELEASE_SCOPE
-    && scopes.some(scope => RELEASE_SCOPE_COMPAT.has(scope))
-  ) {
-    return true
-  }
-
-  return false
 }
 
 export async function requireApiKey(event: H3Event, requiredScopes: string[] = []) {
@@ -278,6 +249,7 @@ export interface AuthContext {
   deviceId?: string | null
   authSource: 'session' | 'app'
   tokenGrantType?: 'short' | 'long' | null
+  sessionIssuedAt?: number | null
 }
 
 async function resolveAppTokenContext(event: H3Event, payload: AppTokenPayload): Promise<AuthContext> {
@@ -321,6 +293,10 @@ export async function requireAppAuth(event: H3Event): Promise<AuthContext> {
 export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
   const session = await getServerSession(event)
   const sessionUser = session?.user as { id?: string, email?: string, name?: string } | undefined
+  const sessionMeta = session as { issuedAt?: unknown } | null
+  const sessionIssuedAt = typeof sessionMeta?.issuedAt === 'number'
+    ? sessionMeta.issuedAt
+    : null
 
   const directUserId = typeof sessionUser?.id === 'string' ? sessionUser.id.trim() : ''
   let user = directUserId ? await getUserById(event, directUserId) : null
@@ -359,6 +335,7 @@ export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
     userId: user.id,
     authSource: 'session',
     tokenGrantType: null,
+    sessionIssuedAt,
   }
 }
 

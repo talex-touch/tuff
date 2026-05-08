@@ -92,7 +92,7 @@ code: |
 | 组件 | 描述 | 来源 |
 |------|------|------|
 | `TuffModal` | 带入场动画的模态对话框 | `base/dialog/` |
-| `TuffScroll` | 原生体验的自定义滚动条 | `base/TouchScroll` |
+| `TxScroll` | 原生体验的自定义滚动条 | `@talex-touch/tuffex` |
 | `TuffTabs` | 带指示器动画的标签页 | `tabs/` |
 | `TuffMenu` | 菜单组件 | `menu/` |
 

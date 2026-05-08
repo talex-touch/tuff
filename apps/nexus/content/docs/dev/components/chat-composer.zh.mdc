@@ -31,3 +31,54 @@ code: |
   </template>
 ---
 :::
+
+## API
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `modelValue` | `string` | `''` | textarea 的 `v-model` 值 |
+| `placeholder` | `string` | `'Message…'` | textarea 占位文本 |
+| `disabled` | `boolean` | `false` | 禁用输入、发送与附件操作 |
+| `submitting` | `boolean` | `false` | 提交中状态，阻断发送 |
+| `allowAttachmentWhileSubmitting` | `boolean` | `false` | 提交中仍允许附件操作 |
+| `minRows` | `number` | `3` | textarea 行数 |
+| `maxRows` | `number` | `6` | 预留给使用方的最大行数 |
+| `sendOnEnter` | `boolean` | `true` | 启用键盘发送行为 |
+| `sendOnMetaEnter` | `boolean` | `true` | 键盘发送是否需要 Meta/Ctrl+Enter |
+| `allowEmptySend` | `boolean` | `false` | 文本为空时允许仅凭附件发送 |
+| `sendButtonText` | `string` | `'Send'` | 默认发送按钮文本 |
+| `showAttachmentButton` | `boolean` | `false` | 显示默认附件按钮 |
+| `attachmentButtonText` | `string` | `'Attach'` | 默认附件按钮文本 |
+| `attachments` | `ChatComposerAttachment[]` | `[]` | textarea 上方的附件 chips |
+
+### Events
+
+| 事件 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `string` | textarea 输入时触发 |
+| `send` | `{ text: string }` | 允许发送时触发，文本已 trim |
+| `attachmentClick` | - | 允许附件操作时触发 |
+| `paste` | `ClipboardEvent` | 透传 textarea paste |
+| `focus` | `FocusEvent` | 透传 textarea focus |
+| `blur` | `FocusEvent` | 透传 textarea blur |
+
+### Slots
+
+| 插槽 | 作用域 | 说明 |
+|------|--------|------|
+| `attachments` | `{ attachments }` | 替换默认附件 chips |
+| `toolbar` | `{ send, disabled, attachmentClick }` | 替换默认操作行 |
+| `toolbar-left` | `{ disabled }` | 添加到默认操作行左侧 |
+| `actions` | `{ send, disabled }` | 添加到默认发送按钮前 |
+| `footer` | - | 渲染在操作行下方 |
+
+## 交互契约
+
+- `send` payload 的 text 会先 trim。
+- 文本为空时默认阻断发送；只有 `allowEmptySend=true` 且存在附件时才允许仅附件发送。
+- `disabled` 与 `submitting` 会阻断发送；`disabled` 也会阻断附件操作。
+- 提交中默认阻断附件操作，除非 `allowAttachmentWhileSubmitting=true`。
+- `sendOnMetaEnter=true` 时键盘发送需要 Meta/Ctrl+Enter；关闭后 Enter 发送，Shift+Enter 保留换行。
+- 自定义 `toolbar` 会收到可调用的 `send` / `attachmentClick`，并替换默认操作行。
