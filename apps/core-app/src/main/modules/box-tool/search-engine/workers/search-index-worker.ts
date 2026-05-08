@@ -23,7 +23,7 @@ import { drizzle } from 'drizzle-orm/libsql'
 import * as schema from '../../../../db/schema'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
 import { createLogger } from '../../../../utils/logger'
-import { SearchIndexService } from '../search-index-service'
+import { noopSearchIndexRuntimeLogger, SearchIndexService } from '../search-index-service'
 
 const searchIndexWorkerLog = createLogger('SearchIndex').child('Worker')
 
@@ -271,7 +271,10 @@ async function handleInit(message: InitMessage): Promise<void> {
   const workerDb = drizzle(client, { schema })
 
   db = workerDb
-  searchIndex = new SearchIndexService(workerDb, { directMode: true })
+  searchIndex = new SearchIndexService(workerDb, {
+    directMode: true,
+    logger: noopSearchIndexRuntimeLogger
+  })
   initialized = true
 
   searchIndexWorkerLog.info('Initialized', {

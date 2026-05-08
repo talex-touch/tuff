@@ -141,4 +141,60 @@ describe('renderer storage transport bootstrap', () => {
     )
     expect(compat.channel.send).not.toHaveBeenCalled()
   })
+
+  it('keeps TouchStorage save stable when transport returns undefined', async () => {
+    const transport = createTransportMock({
+      'unstable-save.ini': { data: { source: 'transport' }, version: 3 },
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    transport.send.mockImplementation(async (event: unknown, payload?: { key?: string }) => {
+      if (event === StorageEvents.app.save) {
+        return undefined as unknown as null
+      }
+      if (payload?.key) {
+        return { data: { source: 'transport' }, version: 3 }
+      }
+      return null
+    })
+
+    initializeRendererStorage(transport as any)
+    const storage = new TouchStorage('unstable-save.ini', { source: 'initial' })
+
+    await storage.whenHydrated()
+    await expect(storage.saveToRemote({ force: true })).resolves.toBeUndefined()
+
+    expect(storage.savingState.value).toBe(false)
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('#executeSave("unstable-save.ini") received invalid save result'),
+      expect.objectContaining({ resultType: 'undefined' }),
+    )
+  })
+
+  it('keeps TouchStorage save stable when transport returns a malformed result', async () => {
+    const transport = createTransportMock({
+      'malformed-save.ini': { data: { source: 'transport' }, version: 4 },
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    transport.send.mockImplementation(async (event: unknown, payload?: { key?: string }) => {
+      if (event === StorageEvents.app.save) {
+        return { version: 5 }
+      }
+      if (payload?.key) {
+        return { data: { source: 'transport' }, version: 4 }
+      }
+      return null
+    })
+
+    initializeRendererStorage(transport as any)
+    const storage = new TouchStorage('malformed-save.ini', { source: 'initial' })
+
+    await storage.whenHydrated()
+    await expect(storage.saveToRemote({ force: true })).resolves.toBeUndefined()
+
+    expect(storage.savingState.value).toBe(false)
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('#executeSave("malformed-save.ini") received invalid save result'),
+      expect.objectContaining({ resultType: 'object' }),
+    )
+  })
 })

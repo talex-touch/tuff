@@ -9,6 +9,7 @@
  * Clipboard item interface (matches main process definition)
  */
 import type { Ref } from 'vue'
+import type { ClipboardCaptureSource } from '@talex-touch/utils/transport/events/types'
 
 export interface IClipboardItem {
   id?: number
@@ -21,6 +22,10 @@ export interface IClipboardItem {
   isFavorite?: boolean | null
   metadata?: string | null
   meta?: Record<string, unknown> | null
+  captureSource?: ClipboardCaptureSource
+  observedAt?: number
+  freshnessBaseAt?: number
+  autoPasteEligible?: boolean
 }
 
 /**

@@ -32,7 +32,22 @@ describe('TuffIconImpl dev source behavior', () => {
     expect(pathExistsMock).toHaveBeenCalledTimes(1)
   })
 
-  it('uses dev server URL only when dev.source is true', async () => {
+  it('uses existing local files before dev server URL', async () => {
+    const icon = new TuffIconImpl('/tmp/plugin', 'file', 'icons/logo.svg', {
+      enable: true,
+      source: true,
+      address: 'http://localhost:3733'
+    })
+
+    await icon.init()
+
+    expect(icon.type).toBe('file')
+    expect(icon.value).toBe(path.resolve('/tmp/plugin', 'icons/logo.svg'))
+    expect(pathExistsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses dev server URL only when dev.source is true and local file is missing', async () => {
+    pathExistsMock.mockResolvedValue(false)
     const icon = new TuffIconImpl('/tmp/plugin', 'file', 'icons/logo.svg', {
       enable: true,
       source: true,
@@ -43,6 +58,40 @@ describe('TuffIconImpl dev source behavior', () => {
 
     expect(icon.type).toBe('url')
     expect(icon.value).toBe('http://localhost:3733/icons/logo.svg')
+    expect(pathExistsMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('resolves Vite source asset paths from src when manifest points to assets', async () => {
+    pathExistsMock.mockImplementation(async (candidate: string) => {
+      return candidate === path.resolve('/tmp/plugin', 'src/assets/logo.svg')
+    })
+
+    const icon = new TuffIconImpl('/tmp/plugin', 'file', 'assets/logo.svg')
+
+    await icon.init()
+
+    expect(icon.value).toBe(path.resolve('/tmp/plugin', 'src/assets/logo.svg'))
+    expect(icon.status).toBe('normal')
+  })
+
+  it('rejects path traversal values without probing the filesystem', async () => {
+    const icon = new TuffIconImpl('/tmp/plugin', 'file', '../logo.svg')
+
+    await icon.init()
+
+    expect(icon.value).toBe('')
+    expect(icon.status).toBe('error')
     expect(pathExistsMock).not.toHaveBeenCalled()
+  })
+
+  it('marks missing local non-dev icons as errors', async () => {
+    pathExistsMock.mockResolvedValue(false)
+    const icon = new TuffIconImpl('/tmp/plugin', 'file', 'assets/missing.svg')
+
+    await icon.init()
+
+    expect(icon.value).toBe('')
+    expect(icon.status).toBe('error')
+    expect(pathExistsMock).toHaveBeenCalledTimes(3)
   })
 })

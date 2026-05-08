@@ -67,11 +67,18 @@ const {
 
 const effectiveUrl = computed(() => svgResolvedUrl.value || url.value)
 const isSvg = computed(() => url.value?.endsWith('.svg'))
+const shouldPreserveColor = computed(
+  () => props.colorful === true || safeIcon.value.colorful === true
+)
+const shouldUseSvgMask = computed(() => isSvg.value && !shouldPreserveColor.value)
 const canFallbackToDirectSvg = computed(
   () => addressable.value && isSvg.value && !!effectiveUrl.value
 )
 const useInlineSvgMask = computed(
-  () => isSvg.value && props.colorful === true && !!svgContent.value && !svgError.value
+  () => shouldUseSvgMask.value && !!svgContent.value && !svgError.value
+)
+const allowDirectRender = computed(
+  () => addressable.value && !!effectiveUrl.value && (!isSvg.value || canFallbackToDirectSvg.value)
 )
 
 // Track runtime image load failures (e.g. tfile:// 404, broken path)
@@ -79,7 +86,7 @@ const imgError = ref(false)
 
 // Combine icon status error with SVG fetch error and runtime img error
 const combinedError = computed(
-  () => error.value || imgError.value || (!!svgError.value && !canFallbackToDirectSvg.value)
+  () => error.value || imgError.value || (!allowDirectRender.value && !!svgError.value)
 )
 const combinedLoading = computed(() => loading.value || svgLoading.value)
 
@@ -88,10 +95,10 @@ const dataurl = computed(() => {
 })
 
 watch(
-  () => url.value,
-  (nextUrl) => {
+  () => ({ nextUrl: url.value, shouldUseSvgMask: shouldUseSvgMask.value }),
+  ({ nextUrl, shouldUseSvgMask }) => {
     imgError.value = false
-    if (nextUrl && nextUrl.endsWith('.svg')) {
+    if (nextUrl && shouldUseSvgMask) {
       setUrl(nextUrl)
       return
     }
@@ -135,7 +142,7 @@ watch(
       <i :class="safeIcon.value" />
     </span>
 
-    <template v-else-if="addressable && effectiveUrl && !combinedError && !combinedLoading">
+    <template v-else-if="allowDirectRender && !combinedError && !combinedLoading">
       <template v-if="useInlineSvgMask">
         <i class="TuffIcon-Svg colorful" :alt="alt" :style="{ '--un-icon': `url('${dataurl}')` }" />
       </template>

@@ -92,27 +92,16 @@ export function useVisibility(options: UseVisibilityOptions) {
     if (limit === -1) return false
 
     const clipboard = (await getLatestClipboard()) ?? clipboardOptions.last
-    if (!clipboard?.timestamp) return false
+    if (!clipboard || clipboard.autoPasteEligible !== true) return false
 
-    const copiedTime = new Date(clipboard.timestamp).getTime()
-    if (!Number.isFinite(copiedTime)) return false
-
-    const lastTimestamp = clipboardOptions.last?.timestamp
-      ? new Date(clipboardOptions.last.timestamp).getTime()
-      : null
-    const sameItem =
-      Boolean(
-        clipboardOptions.last?.id && clipboard.id && clipboardOptions.last.id === clipboard.id
-      ) ||
-      (typeof lastTimestamp === 'number' && lastTimestamp === copiedTime)
-    const detectedAt =
-      sameItem && typeof clipboardOptions.detectedAt === 'number'
-        ? clipboardOptions.detectedAt
-        : null
     const baseTime =
-      typeof detectedAt === 'number' && Number.isFinite(detectedAt)
-        ? Math.min(copiedTime, detectedAt)
-        : copiedTime
+      typeof clipboard.freshnessBaseAt === 'number' && Number.isFinite(clipboard.freshnessBaseAt)
+        ? clipboard.freshnessBaseAt
+        : typeof clipboard.observedAt === 'number' && Number.isFinite(clipboard.observedAt)
+          ? clipboard.observedAt
+          : null
+    if (baseTime === null) return false
+
     const clipboardAge = Date.now() - baseTime
     const effectiveLimit = limit === 0 ? Number.POSITIVE_INFINITY : limit * 1000
     return clipboardAge <= effectiveLimit

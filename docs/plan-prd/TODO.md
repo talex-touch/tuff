@@ -50,6 +50,10 @@
 - [x] Clipboard 自动粘贴失败诊断收口：
   - `copyAndPaste` / `applyToActiveApp` 失败结果保留 message/code，插件 UI 不再只显示泛化失败。
   - 主进程自动粘贴失败日志只记录安全元数据；macOS System Events 权限错误映射为可读授权提示。
+- [x] Clipboard AutoPaste freshness 机制重构：
+  - AutoPaste 从历史 `createdAt/timestamp` 推断切换为主进程捕获事件资格：`native-watch` / `background-poll` / `visible-poll` 才可授予 `autoPasteEligible`。
+  - `COREBOX_WINDOW_SHOWN` 补扫统一标记为 `corebox-show-baseline`，只更新历史/标签/搜索上下文，不再把旧剪贴板当作 5s 内新复制自动填入。
+  - Transport 扩展 `captureSource / observedAt / freshnessBaseAt / autoPasteEligible` 可选字段，旧插件只读历史字段不受影响。
 - [x] Intelligence workflow / app-index 本地回归补强：
   - `workflow` shared SDK 与主进程 handler 已接通，`intelligence-module -> workflow service -> deepagent orchestration` 闭环可用；内置剪贴板整理模板改为 prompt step，避免不存在的 `deepagent.workflow` agent id 让默认模板即刻失败。
   - `tuff-intelligence-runtime` 的 tool trace / approval 现在会携带 `toolSource / approvalContext / contextSources`，方便 workflow 与 MCP 工具审批回放。
@@ -658,6 +662,10 @@
   - 已将 `apps/core-app/scripts` 与 `apps/pilot/scripts` 纳入 `legacy/compat` 显式扫描范围，并手工补齐 allowlist / registry。
   - 插件 channel bridge 移除 legacy header 语义；DivisionBox dead `flow-trigger` 事件面已物理删除；Nexus store 旧 manifest/path fallback 已改为结构化错误。
   - permission JSON->SQLite、dev data root migration、theme localStorage migration 与 download legacy migration manager 已从启动/runtime 主路径移除，不再保留 migration exception。
+- [x] Auth secure storage 默认关闭：`useSecureStorage` 新配置与缺失字段均保持 session-only，冷启动和 session-only 清 token 不触发 Electron `safeStorage` / macOS Keychain。
+- [x] Plugin icon 基础兼容修复：插件 manifest `file` 图标优先从插件目录解析，补 `src/assets` / `public` source-layout 候选；CoreApp `TuffIcon colorful=true` 直接保留 SVG 原色渲染，避免本地 SVG 读取失败导致破图。
+- [x] Plugin channel sandbox 兼容修复：旧插件 channel/prelude 与 renderer channel reply 统一用 `ipcRenderer.send(...)`，避免 sandbox 事件对象缺少 `sender.send`。
+- [x] CoreApp node typecheck 当前阻塞解除：renderer storage transport 测试 typing 与 Windows file-provider index runtime service 未使用类字段已收口。
 - [ ] Windows App 索引真实设备验收：Everything/文件搜索、Start Menu `.lnk`、UWP/Store、registry uninstall fallback、坏 `display_name` 回退、`launchArgs/workingDirectory` 启动语义。
 - [ ] Windows 常见应用搜索启动验证：微信、Codex、Apple Music 至少三类真实应用完成“可搜索、可显示正确名称/图标、可启动、CoreBox 可立即隐藏”验证。
 - [ ] Windows App 诊断证据导出：使用 app-index diagnostic evidence 记录命中路径、关键词、FTS/N-gram/subsequence 命中情况与失败原因。
@@ -912,9 +920,9 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 262 |
+| 已完成 (`- [x]`) | 267 |
 | 未完成 (`- [ ]`) | 37 |
-| 总计 | 299 |
+| 总计 | 304 |
 | 完成率 | 88% |
 
 > 统计时间: 2026-05-08（按本文件实时 checkbox 计数）。

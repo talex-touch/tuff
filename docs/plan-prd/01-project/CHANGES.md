@@ -5,6 +5,51 @@
 
 ## 2026-05-08
 
+### fix(core-app): harden Sentry storage and search index regressions
+
+- `packages/utils/renderer/storage/base-storage.ts`
+- `packages/utils/__tests__/renderer-storage-transport.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-client.ts`
+  - `TUFF-1P`: renderer storage save now normalizes malformed transport responses and treats `undefined/null/non-StorageSaveResult` as failed saves without reading `result.success`.
+  - `TUFF-16`: file-provider search index writes now share one worker readiness gate; init failures are logged and write batches are rolled back/retried instead of throwing unhandled `SearchIndexWorkerClient not initialized`.
+  - `TUFF-1D`: `SearchIndexService` now receives runtime logging via explicit injection; the worker path uses a noop logger and no longer implicitly loads `search-logger`/storage-related main-process dependencies.
+  - Added targeted regression coverage for storage malformed save results, worker readiness gating, init retry behavior, and search-index runtime logger injection.
+
+### fix(core-app): gate clipboard autopaste by captured freshness
+
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useClipboard.ts`
+- `packages/utils/transport/events/types/clipboard.ts`
+  - Clipboard transport now carries optional `captureSource / observedAt / freshnessBaseAt / autoPasteEligible` freshness fields.
+  - CoreBox show-triggered clipboard scans are treated as `corebox-show-baseline`, so old clipboard content can update history/tags without being auto-filled.
+  - Renderer AutoPaste no longer uses history `createdAt/timestamp` as copy freshness; it requires main-process eligibility and uses `freshnessBaseAt ?? observedAt` for TTL.
+
+### fix(core-app): restore opt-in secure storage and plugin icons
+
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `apps/core-app/src/main/core/tuff-icon.ts`
+- `apps/core-app/src/renderer/src/components/base/TuffIcon.vue`
+- `packages/utils/env/index.ts`
+- `packages/utils/plugin/channel.ts`
+- `packages/utils/transport/prelude.ts`
+- `apps/core-app/src/renderer/src/modules/channel/channel-core.ts`
+- `packages/utils/__tests__/renderer-storage-transport.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.ts`
+  - Auth `useSecureStorage` now defaults to `false`; missing settings stay in session-only mode and no longer touch Electron `safeStorage` during cold startup or session-only token clear.
+  - Plugin `file` icons now resolve from plugin root first, then `src/...` and `public/<filename>` for source-layout plugins; dev-server URLs are only used after local candidates miss.
+  - CoreApp icon rendering now preserves SVG color with direct `<img>` when `colorful=true`, and SVG text fetch failure no longer forces an error state when a direct local `tfile` render is available.
+  - Electron sandbox renderer detection now recognizes preload-exposed `window.electron.ipcRenderer`, allowing local SVG reads through the network SDK in sandboxed renderer contexts.
+  - Legacy plugin/renderer channel replies now use `ipcRenderer.send(...)` instead of `e.sender.send(...)`, fixing sandbox `e.sender.send is not a function` regressions.
+  - Cleared current `typecheck:node` blockers from renderer storage transport test typing and the Windows file-provider index runtime service dependency surface.
+  - Verified targeted regression: `auth/index.test.ts`, `tuff-icon.test.ts`, `plugin-channel-send-sync-hard-cut.test.ts`, `env-electron-renderer.test.ts`, and `renderer-storage-transport.test.ts`.
+
 ### fix(core-app): remove installed plugin detail edge blur
 
 - `apps/core-app/src/renderer/src/components/tuff/template/TuffAsideTemplate.vue`

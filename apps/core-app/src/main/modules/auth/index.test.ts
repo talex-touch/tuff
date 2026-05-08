@@ -119,11 +119,11 @@ vi.mock('../storage', () => ({
 }))
 
 type MockAppSetting = {
-  auth: {
+  auth?: {
     deviceId: string
     deviceName: string
     devicePlatform: string
-    useSecureStorage: boolean
+    useSecureStorage?: boolean
     secureStorageReminderShown: boolean
     secureStorageUnavailable: boolean
   }
@@ -185,8 +185,39 @@ describe('auth secure storage preference', () => {
     authModule.__test__.resetState()
   })
 
+  it('defaults missing secure storage preference to session-only mode', async () => {
+    delete appSettingState.auth?.useSecureStorage
+
+    const authModule = await import('./index')
+    authModule.__test__.resetState()
+    authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+    await authModule.__test__.loadAuthToken()
+
+    expect(isSecureStoreAvailableMock).not.toHaveBeenCalled()
+    expect(getSecureStoreValueMock).not.toHaveBeenCalled()
+    expect(setSecureStoreValueMock).not.toHaveBeenCalled()
+    expect(appSettingState.auth?.useSecureStorage).toBe(false)
+    expect(authModule.getAuthToken()).toBeNull()
+  })
+
+  it('does not touch secure storage when clearing a session-only token', async () => {
+    const authModule = await import('./index')
+    authModule.__test__.resetState()
+    authModule.__test__.setState({
+      appRootPath: '/tmp/tuff',
+      authToken: 'memory-token',
+      authUseSecureStorage: false
+    })
+
+    await authModule.__test__.clearAuthToken()
+
+    expect(setSecureStoreValueMock).not.toHaveBeenCalled()
+    expect(authModule.getAuthToken()).toBeNull()
+  })
+
   it('does not touch secure storage during cold startup when session-only mode is enabled', async () => {
-    appSettingState.auth.useSecureStorage = false
+    appSettingState.auth!.useSecureStorage = false
 
     const authModule = await import('./index')
     authModule.__test__.resetState()
@@ -229,7 +260,7 @@ describe('auth secure storage preference', () => {
     await authModule.__test__.handleAuthStoragePreferenceChanged({
       ...appSettingState,
       auth: {
-        ...appSettingState.auth,
+        ...appSettingState.auth!,
         useSecureStorage: false
       }
     } as any)
@@ -255,7 +286,7 @@ describe('auth secure storage preference', () => {
     await authModule.__test__.handleAuthStoragePreferenceChanged({
       ...appSettingState,
       auth: {
-        ...appSettingState.auth,
+        ...appSettingState.auth!,
         useSecureStorage: true
       }
     } as any)
@@ -281,7 +312,7 @@ describe('auth secure storage preference', () => {
     await authModule.__test__.handleAuthStoragePreferenceChanged({
       ...appSettingState,
       auth: {
-        ...appSettingState.auth,
+        ...appSettingState.auth!,
         useSecureStorage: true
       }
     } as any)

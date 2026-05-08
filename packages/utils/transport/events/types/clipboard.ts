@@ -16,6 +16,15 @@ export interface ClipboardSdkApiPayload {
 /**
  * Represents a single item in the clipboard history.
  */
+export type ClipboardCaptureSource =
+  | 'native-watch'
+  | 'background-poll'
+  | 'visible-poll'
+  | 'corebox-show-baseline'
+  | 'startup-bootstrap'
+  | 'manual-write'
+  | 'history-apply'
+
 export interface ClipboardItem {
   id: number
   type: TuffInputType
@@ -28,6 +37,10 @@ export interface ClipboardItem {
   metadata?: string | null
   meta?: Record<string, unknown> | null
   createdAt: number
+  captureSource?: ClipboardCaptureSource
+  observedAt?: number
+  freshnessBaseAt?: number
+  autoPasteEligible?: boolean
   isFavorite?: boolean
 }
 

@@ -30,7 +30,11 @@ function convertClipboardItem(item: ClipboardItem | null): IClipboardItem | null
     timestamp: new Date(item.createdAt),
     isFavorite: item.isFavorite || false,
     metadata: undefined, // Metadata is stored separately
-    meta: item.tags?.length ? { tags: item.tags } : undefined
+    meta: item.tags?.length ? { tags: item.tags } : undefined,
+    captureSource: item.captureSource,
+    observedAt: item.observedAt,
+    freshnessBaseAt: item.freshnessBaseAt,
+    autoPasteEligible: item.autoPasteEligible
   }
 }
 

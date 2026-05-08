@@ -21,7 +21,7 @@ const PRIORITY_EPSILON = 0.0001
 const ZERO_RESULT_DIAGNOSTIC_THROTTLE_MS = 30_000
 const searchIndexLog = createLogger('SearchIndex')
 
-interface SearchIndexRuntimeLogger {
+export interface SearchIndexRuntimeLogger {
   logSearchPhase: (phase: string, detail?: string) => void
   indexSearchStart: (providerId: string, query: string, limit: number) => void
   indexSearchEmpty: () => void
@@ -29,31 +29,12 @@ interface SearchIndexRuntimeLogger {
   indexSearchComplete: (resultCount: number, durationMs: number) => void
 }
 
-const noopSearchLogger: SearchIndexRuntimeLogger = {
+export const noopSearchIndexRuntimeLogger: SearchIndexRuntimeLogger = {
   logSearchPhase: () => {},
   indexSearchStart: () => {},
   indexSearchEmpty: () => {},
   indexSearchExecuting: () => {},
   indexSearchComplete: () => {}
-}
-
-let cachedSearchLogger: SearchIndexRuntimeLogger | null = null
-
-function getSearchLogger(): SearchIndexRuntimeLogger {
-  if (cachedSearchLogger) {
-    return cachedSearchLogger
-  }
-
-  try {
-    const { searchLogger } = require('./search-logger') as {
-      searchLogger?: SearchIndexRuntimeLogger
-    }
-    cachedSearchLogger = searchLogger ?? noopSearchLogger
-  } catch {
-    cachedSearchLogger = noopSearchLogger
-  }
-
-  return cachedSearchLogger
 }
 
 /**
@@ -127,6 +108,7 @@ export interface SearchIndexServiceOptions {
    * and there is no event loop contention.
    */
   directMode?: boolean
+  logger?: SearchIndexRuntimeLogger
 }
 
 export class SearchIndexService {
@@ -134,6 +116,7 @@ export class SearchIndexService {
   private pinyinModule: typeof import('pinyin-pro') | null = null
   private pinyinPromise: Promise<typeof import('pinyin-pro')> | null = null
   private readonly directMode: boolean
+  private readonly runtimeLogger: SearchIndexRuntimeLogger
   private readonly zeroResultDiagnosticAt = new Map<string, number>()
   private readonly logWindowMs = 12_000
   private readonly slowLogThresholdMs = 1_500
@@ -158,6 +141,7 @@ export class SearchIndexService {
     options?: SearchIndexServiceOptions
   ) {
     this.directMode = options?.directMode ?? false
+    this.runtimeLogger = options?.logger ?? noopSearchIndexRuntimeLogger
   }
 
   async warmup(): Promise<void> {
@@ -403,7 +387,7 @@ export class SearchIndexService {
     ftsQuery: string,
     limit = 50
   ): Promise<Array<{ itemId: string; score: number }>> {
-    const searchLogger = getSearchLogger()
+    const searchLogger = this.runtimeLogger
     searchLogger.logSearchPhase('FTS Search', `Provider: ${providerId}, Query: "${ftsQuery}"`)
     searchLogger.indexSearchStart(providerId, ftsQuery, limit)
     const start = performance.now()

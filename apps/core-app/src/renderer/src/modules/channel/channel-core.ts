@@ -116,7 +116,7 @@ class TouchChannel implements TouchClientChannelLike {
         reply: (code: ChannelDataCode, data: unknown) => {
           if (replySent) return
           replySent = true
-          e.sender.send(
+          ipcRenderer.send(
             RAW_MAIN_PROCESS_CHANNEL,
             this.__parse_sender(code, rawData, data, rawData.sync)
           )

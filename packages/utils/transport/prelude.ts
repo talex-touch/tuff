@@ -80,7 +80,7 @@ export function getPluginChannelPreludeCode(options: PluginChannelPreludeOptions
       listeners.forEach((func) => {
         const handInData = {
           reply: (code, data) => {
-            e.sender.send(
+            ipcRenderer.send(
               '@plugin-process-message',
               this.__parse_sender(code, rawData, data, rawData.sync)
             );

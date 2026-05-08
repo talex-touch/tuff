@@ -17,15 +17,13 @@ export interface FileProviderIndexRuntimeServiceDeps {
   getSearchIndex: () => unknown | null
   getPendingResults: () => Map<number, IndexWorkerFileResult>
   getInflightResults: () => Map<number, IndexWorkerFileResult>
-  getDatabaseFilePath: () => string | null
+  ensureSearchIndexWorkerReady: (reason: string) => Promise<boolean>
   getSearchIndexWorker: () => {
-    init: (databaseFilePath: string) => Promise<void>
     persistAndIndex: (entries: PersistEntry[]) => Promise<void>
   }
   buildPersistEntries: (entries: IndexWorkerFileResult[]) => PersistEntry[]
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
-  logError: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
   config?: {
     baseDelayMs?: number
     backlogDelayMs?: number
@@ -42,12 +40,11 @@ export class FileProviderIndexRuntimeService {
   private readonly getSearchIndex: FileProviderIndexRuntimeServiceDeps['getSearchIndex']
   private readonly getPendingResults: FileProviderIndexRuntimeServiceDeps['getPendingResults']
   private readonly getInflightResults: FileProviderIndexRuntimeServiceDeps['getInflightResults']
-  private readonly getDatabaseFilePath: FileProviderIndexRuntimeServiceDeps['getDatabaseFilePath']
+  private readonly ensureSearchIndexWorkerReady: FileProviderIndexRuntimeServiceDeps['ensureSearchIndexWorkerReady']
   private readonly getSearchIndexWorker: FileProviderIndexRuntimeServiceDeps['getSearchIndexWorker']
   private readonly buildPersistEntries: FileProviderIndexRuntimeServiceDeps['buildPersistEntries']
   private readonly logDebug: FileProviderIndexRuntimeServiceDeps['logDebug']
   private readonly logWarn: FileProviderIndexRuntimeServiceDeps['logWarn']
-  private readonly logError: FileProviderIndexRuntimeServiceDeps['logError']
   private readonly config: Required<NonNullable<FileProviderIndexRuntimeServiceDeps['config']>>
 
   private indexWorkerFlushTimer: NodeJS.Timeout | null = null
@@ -60,12 +57,11 @@ export class FileProviderIndexRuntimeService {
     this.getSearchIndex = deps.getSearchIndex
     this.getPendingResults = deps.getPendingResults
     this.getInflightResults = deps.getInflightResults
-    this.getDatabaseFilePath = deps.getDatabaseFilePath
+    this.ensureSearchIndexWorkerReady = deps.ensureSearchIndexWorkerReady
     this.getSearchIndexWorker = deps.getSearchIndexWorker
     this.buildPersistEntries = deps.buildPersistEntries
     this.logDebug = deps.logDebug
     this.logWarn = deps.logWarn
-    this.logError = deps.logError
     this.config = {
       baseDelayMs: deps.config?.baseDelayMs ?? 250,
       backlogDelayMs: deps.config?.backlogDelayMs ?? 500,
@@ -77,16 +73,7 @@ export class FileProviderIndexRuntimeService {
   }
 
   async initWorker(): Promise<void> {
-    const databaseFilePath = this.getDatabaseFilePath()
-    if (!databaseFilePath) {
-      return
-    }
-
-    try {
-      await this.getSearchIndexWorker().init(databaseFilePath)
-    } catch (error) {
-      this.logError('SearchIndexWorkerClient init failed', error)
-    }
+    await this.ensureSearchIndexWorkerReady('index-runtime.init')
   }
 
   handleIndexWorkerFile(payload: IndexWorkerFileResult): void {
@@ -197,6 +184,17 @@ export class FileProviderIndexRuntimeService {
 
     const persistEntries = this.buildPersistEntries(entries)
     try {
+      const workerReady = await this.ensureSearchIndexWorkerReady('index-runtime.flush')
+      if (!workerReady) {
+        rollbackIndexWorkerFlushBatch(pending, inflight, keys)
+        this.logWarn('Index worker flush skipped: worker init unavailable', undefined, {
+          pending: pending.size,
+          inflight: inflight.size
+        })
+        this.scheduleFlush(this.config.backlogDelayMs, 'worker-not-ready')
+        return
+      }
+
       await dbWriteScheduler.waitForCapacity(this.config.dbBackpressureMaxQueued)
       const flushStart = performance.now()
       await this.getSearchIndexWorker().persistAndIndex(persistEntries)

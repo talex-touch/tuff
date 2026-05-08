@@ -105,7 +105,10 @@ export class SearchIndexWorkerClient {
     if (this.initPromise) {
       return this.initPromise
     }
-    this.initPromise = this.doInit(dbPath)
+    this.initPromise = this.doInit(dbPath).catch((error) => {
+      this.initPromise = null
+      throw error
+    })
     return this.initPromise
   }
 

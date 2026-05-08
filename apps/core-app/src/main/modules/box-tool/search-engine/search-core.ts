@@ -2414,7 +2414,7 @@ export class SearchEngineCore
     const db = databaseModule.getDb()
     const auxDb = databaseModule.getAuxDb()
     instance.dbUtils = createDbUtils(db, auxDb)
-    instance.searchIndexService = new SearchIndexService(db)
+    instance.searchIndexService = new SearchIndexService(db, { logger: searchLogger })
     void instance.searchIndexService.warmup().catch((error) => {
       searchEngineLog.warn('Search index warmup failed', { error })
     })

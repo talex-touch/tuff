@@ -175,7 +175,7 @@ class TouchChannel implements ITouchClientChannel {
     this.channelMap.get(rawData.name)?.forEach((func) => {
       const handInData: StandardChannelData = {
         reply: (code: DataCode, data: any) => {
-          e.sender.send(
+          this.ipcRenderer.send(
             '@plugin-process-message',
             this.__parse_sender(code, rawData, data, rawData.sync),
           )

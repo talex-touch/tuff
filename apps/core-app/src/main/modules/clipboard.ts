@@ -2,6 +2,7 @@ import type { AppSetting, MaybePromise, ModuleInitContext, ModuleKey } from '@ta
 import type {
   ClipboardActionResult,
   ClipboardApplyRequest,
+  ClipboardCaptureSource,
   ClipboardChangePayload,
   ClipboardCopyAndPasteRequest,
   ClipboardDeleteRequest,
@@ -66,6 +67,11 @@ import {
   normalizeClipboardActionError,
   summarizeClipboardApplyPayload
 } from './clipboard/clipboard-action-diagnostics'
+import {
+  createClipboardFreshnessState,
+  createIneligibleClipboardFreshnessState,
+  type ClipboardFreshnessState
+} from './clipboard/clipboard-freshness'
 import { sendPlatformShortcut } from './system/desktop-shortcut'
 import {
   buildPhaseDiagnostics,
@@ -172,6 +178,16 @@ interface ClipboardStageBJob {
   clipboardId: number
   item: IClipboardItem
   formats: string[]
+}
+
+interface ClipboardMonitorOptions {
+  bypassCooldown?: boolean
+  source?: ClipboardCaptureSource
+}
+
+interface ClipboardCheckOptions {
+  bypassCooldown?: boolean
+  source: ClipboardCaptureSource
 }
 
 function isOnBatteryPowerSafe(): boolean {
@@ -608,6 +624,7 @@ export class ClipboardModule extends BaseModule {
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
   private transportChangeListeners = new Set<() => void>()
+  private clipboardFreshness = new Map<number, ClipboardFreshnessState>()
 
   private memoryCache: IClipboardItem[] = []
   private initialCacheLoaded = false
@@ -629,6 +646,7 @@ export class ClipboardModule extends BaseModule {
   private lastMetaQueuePressureLogAt = 0
   private coreBoxVisible = false
   private currentPollIntervalMs = CLIPBOARD_DEFAULT_POLL_INTERVAL_MS
+  private lastSuccessfulClipboardScanAt: number | null = null
   private appSettingSnapshot: AppSetting | null = null
   private unsubscribeAppSetting: (() => void) | null = null
   private pollingSubscriptionsSetup = false
@@ -649,7 +667,7 @@ export class ClipboardModule extends BaseModule {
     this.coreBoxVisible = true
     this.updateClipboardPolling()
     setImmediate(() => {
-      void this.runClipboardMonitor()
+      void this.runClipboardMonitor({ source: 'corebox-show-baseline' })
     })
   }
 
@@ -783,12 +801,14 @@ export class ClipboardModule extends BaseModule {
       return
     }
 
-    const initialDelayMs = this.coreBoxVisible ? 0 : 1000
+    const initialDelayMs = this.coreBoxVisible ? CLIPBOARD_VISIBLE_POLL_INTERVAL_MS : 1000
     pollingService.register(
       CLIPBOARD_POLL_TASK_ID,
       () => {
         setImmediate(() => {
-          void this.runClipboardMonitor()
+          void this.runClipboardMonitor({
+            source: this.coreBoxVisible ? 'visible-poll' : 'background-poll'
+          })
         })
       },
       {
@@ -896,7 +916,7 @@ export class ClipboardModule extends BaseModule {
       const watcher = watcherModule.startWatch(() => {
         if (this.isDestroyed) return
         setImmediate(() => {
-          void this.runClipboardMonitor({ bypassCooldown: true })
+          void this.runClipboardMonitor({ bypassCooldown: true, source: 'native-watch' })
         })
       })
 
@@ -1083,19 +1103,42 @@ export class ClipboardModule extends BaseModule {
   private updateMemoryCache(item: IClipboardItem) {
     this.memoryCache.unshift(item)
     if (this.memoryCache.length > CACHE_MAX_COUNT) {
-      this.memoryCache.pop()
+      const removed = this.memoryCache.pop()
+      if (typeof removed?.id === 'number') {
+        this.clipboardFreshness.delete(removed.id)
+      }
     }
     const oneHourAgo = Date.now() - CACHE_MAX_AGE_MS
     this.memoryCache = this.memoryCache.filter((i) => {
       const ts = i.timestamp
       if (!ts) return false
       const timeValue = ts instanceof Date ? ts.getTime() : new Date(ts).getTime()
-      return Number.isFinite(timeValue) && timeValue > oneHourAgo
+      const keep = Number.isFinite(timeValue) && timeValue > oneHourAgo
+      if (!keep && typeof i.id === 'number') {
+        this.clipboardFreshness.delete(i.id)
+      }
+      return keep
     })
   }
 
   public getLatestItem(): IClipboardItem | undefined {
     return this.memoryCache[0]
+  }
+
+  private rememberClipboardFreshness(
+    item: IClipboardItem,
+    freshness: ClipboardFreshnessState
+  ): void {
+    if (typeof item.id !== 'number') return
+    this.clipboardFreshness.set(item.id, freshness)
+  }
+
+  private resolveClipboardFreshness(item: IClipboardItem): ClipboardFreshnessState {
+    if (typeof item.id === 'number') {
+      const state = this.clipboardFreshness.get(item.id)
+      if (state) return state
+    }
+    return createIneligibleClipboardFreshnessState('startup-bootstrap')
   }
 
   public async getItemById(id: number): Promise<IClipboardItem | null> {
@@ -1284,6 +1327,13 @@ export class ClipboardModule extends BaseModule {
 
     await this.db.delete(clipboardHistory).where(whereClause)
     this.memoryCache = this.memoryCache.filter((item) => {
+      const forget = (): false => {
+        if (typeof item.id === 'number') {
+          this.clipboardFreshness.delete(item.id)
+        }
+        return false
+      }
+
       if (itemType !== 'all' && item.type !== itemType) return true
       if (options?.beforeDays && item.timestamp) {
         const ts =
@@ -1291,9 +1341,9 @@ export class ClipboardModule extends BaseModule {
             ? item.timestamp.getTime()
             : new Date(item.timestamp).getTime()
         const cutoff = Date.now() - options.beforeDays * 24 * 60 * 60 * 1000
-        return ts >= cutoff
+        return ts >= cutoff ? true : forget()
       }
-      return false
+      return forget()
     })
     this.notifyTransportChange()
 
@@ -1304,6 +1354,7 @@ export class ClipboardModule extends BaseModule {
     if (!item || typeof item.id !== 'number') return null
 
     const clientItem = item.type === 'image' ? (this.toClientItem(item) ?? item) : item
+    const freshness = this.resolveClipboardFreshness(item)
 
     const createdAt = item.timestamp
       ? item.timestamp instanceof Date
@@ -1343,6 +1394,10 @@ export class ClipboardModule extends BaseModule {
       html: item.type === 'text' ? (item.rawContent ?? undefined) : undefined,
       source: item.sourceApp ?? undefined,
       createdAt,
+      captureSource: freshness.captureSource,
+      observedAt: freshness.observedAt,
+      freshnessBaseAt: freshness.freshnessBaseAt,
+      autoPasteEligible: freshness.eligible,
       isFavorite: item.isFavorite ?? undefined,
       tags,
       meta: Object.keys(meta).length > 0 ? meta : undefined
@@ -1867,6 +1922,12 @@ export class ClipboardModule extends BaseModule {
   private async applyToActiveApp(payload: ClipboardApplyPayload): Promise<void> {
     const item = this.normalizeApplyPayload(payload)
 
+    if (typeof item.id === 'number') {
+      this.rememberClipboardFreshness(
+        item,
+        createIneligibleClipboardFreshnessState('history-apply')
+      )
+    }
     this.writeItemToClipboard(item, payload)
 
     if (payload.hideCoreBox !== false) {
@@ -2207,6 +2268,10 @@ export class ClipboardModule extends BaseModule {
 
     const persisted = inserted[0] as IClipboardItem
     persisted.meta = mergedMeta
+    this.rememberClipboardFreshness(
+      persisted,
+      createIneligibleClipboardFreshnessState('manual-write')
+    )
 
     if (persisted.id) {
       const queueStats = dbWriteScheduler.getStats()
@@ -2270,18 +2335,19 @@ export class ClipboardModule extends BaseModule {
     pollingService.start()
   }
 
-  private async runClipboardMonitor(options?: { bypassCooldown?: boolean }): Promise<void> {
+  private async runClipboardMonitor(options?: ClipboardMonitorOptions): Promise<void> {
     if (this.clipboardCheckInFlight) {
       this.clipboardCheckPending = true
       return
     }
     this.clipboardCheckInFlight = true
     let bypassCooldown = options?.bypassCooldown ?? false
+    const source = options?.source ?? (this.coreBoxVisible ? 'visible-poll' : 'background-poll')
     try {
       do {
         this.clipboardCheckPending = false
         try {
-          await this.checkClipboard({ bypassCooldown })
+          await this.checkClipboard({ bypassCooldown, source })
         } catch (error) {
           clipboardLog.warn('Clipboard check failed', { error })
         }
@@ -2293,7 +2359,7 @@ export class ClipboardModule extends BaseModule {
     }
   }
 
-  private async checkClipboard(options?: { bypassCooldown?: boolean }): Promise<void> {
+  private async checkClipboard(options: ClipboardCheckOptions): Promise<void> {
     if (this.isDestroyed || !this.clipboardHelper || !this.db) {
       return
     }
@@ -2318,13 +2384,13 @@ export class ClipboardModule extends BaseModule {
       }
       return
     }
-    if (!options?.bypassCooldown && now < this.clipboardCheckCooldownUntil) {
+    if (!options.bypassCooldown && now < this.clipboardCheckCooldownUntil) {
       return
     }
-    await this.checkClipboardInternal()
+    await this.checkClipboardInternal(options.source)
   }
 
-  private async checkClipboardInternal(): Promise<void> {
+  private async checkClipboardInternal(source: ClipboardCaptureSource): Promise<void> {
     if (this.isDestroyed || !this.clipboardHelper || !this.db) {
       return
     }
@@ -2332,6 +2398,8 @@ export class ClipboardModule extends BaseModule {
     const dispose = enterPerfContext('Clipboard.check', { task: 'poll' })
     const startAt = performance.now()
     const phaseDurations: ClipboardPhaseDurations = {}
+    const observedAt = Date.now()
+    const previousScanAt = this.lastSuccessfulClipboardScanAt
     try {
       const helper = this.clipboardHelper
       trackPhase(phaseDurations, 'helper.bootstrap', () => {
@@ -2417,6 +2485,8 @@ export class ClipboardModule extends BaseModule {
       helper.lastChangeHash = quickHash
 
       const metaEntries: ClipboardMetaEntry[] = [{ key: 'formats', value: formats }]
+      metaEntries.push({ key: 'capture_source', value: source })
+      metaEntries.push({ key: 'observed_at', value: observedAt })
       let item: Omit<IClipboardItem, 'timestamp' | 'id' | 'metadata' | 'meta'> | null = null
 
       // Read image once and cache to avoid duplicate clipboard.readImage() calls.
@@ -2565,6 +2635,14 @@ export class ClipboardModule extends BaseModule {
         metaObject[key] = value
       }
 
+      const freshness = createClipboardFreshnessState({
+        source,
+        observedAt,
+        previousScanAt
+      })
+      metaObject.auto_paste_eligible = freshness.eligible
+      metaEntries.push({ key: 'auto_paste_eligible', value: freshness.eligible })
+
       const metadataPayload = trackPhase(phaseDurations, 'meta.stringify', () => {
         return Object.keys(metaObject).length > 0 ? JSON.stringify(metaObject) : null
       })
@@ -2626,6 +2704,7 @@ export class ClipboardModule extends BaseModule {
 
       const persisted = inserted[0] as IClipboardItem
       persisted.meta = metaObject
+      this.rememberClipboardFreshness(persisted, freshness)
       if (persisted.type === 'image') {
         this.lastImagePersistAt = Date.now()
       }
@@ -2668,6 +2747,7 @@ export class ClipboardModule extends BaseModule {
           })
       }
     } finally {
+      this.lastSuccessfulClipboardScanAt = observedAt
       const duration = performance.now() - startAt
       const roundedDurationMs = Math.round(duration)
       const phaseSummaryMap = summarizePhaseDurations(phaseDurations)
@@ -2831,6 +2911,7 @@ export class ClipboardModule extends BaseModule {
     }
     await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, request.id))
     this.memoryCache = this.memoryCache.filter((item) => item.id !== request.id)
+    this.clipboardFreshness.delete(request.id)
     this.notifyTransportChange()
   }
 
@@ -2982,6 +3063,7 @@ export class ClipboardModule extends BaseModule {
         if (!img.isEmpty()) {
           clipboard.writeImage(img)
           this.clipboardHelper?.primeImage(img)
+          this.lastSuccessfulClipboardScanAt = Date.now()
         }
         return
       }
@@ -3003,11 +3085,13 @@ export class ClipboardModule extends BaseModule {
         }
         clipboard.write({ text: resolvedPaths[0] ?? '' })
         this.clipboardHelper?.primeFiles(resolvedPaths)
+        this.lastSuccessfulClipboardScanAt = Date.now()
         return
       }
 
       clipboard.write({ text: text ?? '', html: html ?? undefined })
       this.clipboardHelper?.markText(text ?? '')
+      this.lastSuccessfulClipboardScanAt = Date.now()
     }
 
     this.registerTypedClipboardQueryHandlers()
@@ -3229,6 +3313,7 @@ export class ClipboardModule extends BaseModule {
     }
     this.transportDisposers = []
     this.transportChangeListeners.clear()
+    this.clipboardFreshness.clear()
     this.transport = null
     this.monitoringStarted = false
     this.activeAppCache = null
@@ -3244,6 +3329,7 @@ export class ClipboardModule extends BaseModule {
     this.initialCacheLoaded = false
     this.initialCacheLoadingPromise = null
     this.lastLagSkipLogAt = 0
+    this.lastSuccessfulClipboardScanAt = null
     this.coreBoxVisible = false
     this.currentPollIntervalMs = CLIPBOARD_DEFAULT_POLL_INTERVAL_MS
   }

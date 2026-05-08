@@ -171,6 +171,10 @@ export function createStorageDataProxy<TData extends object>(
  */
 export type SaveResult = StorageSaveResult
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 /**
  * A reactive storage utility with optional auto-save and update subscriptions.
  *
@@ -318,11 +322,27 @@ export class TouchStorage<T extends object> {
 
   async #saveRemote(request: StorageSaveRequest): Promise<SaveResult> {
     if (transport) {
-      return await transport.send(StorageEvents.app.save, request)
+      const result = await transport.send(StorageEvents.app.save, request)
+      return this.#normalizeSaveResult(result)
     }
     warnStorageChannelIgnored()
     void request
     return { success: false, version: 0 }
+  }
+
+  #normalizeSaveResult(result: unknown): SaveResult {
+    if (isRecord(result) && typeof result.success === 'boolean') {
+      return {
+        success: result.success,
+        version: typeof result.version === 'number' ? result.version : this.#currentVersion,
+        conflict: result.conflict === true ? true : undefined,
+      }
+    }
+
+    console.warn(`[TouchStorage] #executeSave("${this.#qualifiedName}") received invalid save result`, {
+      resultType: result === null ? 'null' : typeof result,
+    })
+    return { success: false, version: this.#currentVersion }
   }
 
   #registerUpdateListener(): void {

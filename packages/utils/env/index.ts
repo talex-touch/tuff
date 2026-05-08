@@ -101,8 +101,13 @@ export function isElectronRuntime(): boolean {
 
 export function isElectronRenderer(): boolean {
   const proc: any = getProcess()
-  return Boolean(proc?.versions?.electron)
-    && proc?.type === 'renderer'
+  if (Boolean(proc?.versions?.electron) && proc?.type === 'renderer') {
+    return true
+  }
+
+  const g: any = globalThis as any
+  const maybeWindow = g.window
+  return Boolean(maybeWindow?.electron?.ipcRenderer || g.electron?.ipcRenderer)
 }
 
 export function isElectronMain(): boolean {

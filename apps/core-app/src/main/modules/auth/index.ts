@@ -264,6 +264,9 @@ async function setAuthToken(nextToken: string): Promise<void> {
 
 async function clearAuthToken(): Promise<void> {
   authToken = null
+  if (!authUseSecureStorage) {
+    return
+  }
   await setSecureValue(AUTH_TOKEN_KEY, null)
 }
 
@@ -282,7 +285,7 @@ function ensureAuthSettings(appSettings: AppSetting): void {
       deviceId: '',
       deviceName: '',
       devicePlatform: '',
-      useSecureStorage: true,
+      useSecureStorage: false,
       secureStorageReminderShown: false,
       secureStorageUnavailable: false
     }
@@ -296,7 +299,7 @@ function ensureAuthSettings(appSettings: AppSetting): void {
   }
 
   if (typeof authSettings.useSecureStorage !== 'boolean') {
-    authSettings.useSecureStorage = true
+    authSettings.useSecureStorage = false
   }
   if (typeof authSettings.secureStorageReminderShown !== 'boolean') {
     authSettings.secureStorageReminderShown = false
@@ -852,6 +855,7 @@ function setAuthModuleTestState(nextState: AuthModuleTestState): void {
 
 export const __test__ = {
   loadAuthToken,
+  clearAuthToken,
   handleAuthStoragePreferenceChanged,
   resetState: resetAuthModuleTestState,
   setState: setAuthModuleTestState

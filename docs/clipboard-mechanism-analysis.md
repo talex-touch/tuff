@@ -276,7 +276,7 @@ interface IClipboardOptions {
 // 自动粘贴相关常量
 const AUTOFILL_INPUT_TEXT_LIMIT = 80    // 自动填充到输入框的文本长度限制
 const AUTOFILL_TIMESTAMP_TTL = 60 * 60 * 1000  // 1小时过期
-const autoPastedTimestamps = new Set<number>()  // 已自动粘贴的时间戳
+const autoPastedClipboardIdentities = new Set<string>()  // 已自动粘贴的条目身份
 
 // 核心函数
 function useClipboard(
@@ -290,9 +290,10 @@ function useClipboard(
     if (!clipboardOptions.last?.timestamp) return false
     if (!appSetting.tools.autoPaste.enable) return false
     if (appSetting.tools.autoPaste.time === -1) return false
-    // 检查是否已经自动粘贴过
-    const timestamp = normalizeTimestamp(clipboardOptions.last.timestamp)
-    return timestamp && !autoPastedTimestamps.has(timestamp)
+    if (clipboardOptions.last.autoPasteEligible !== true) return false
+    const baseAt = clipboardOptions.last.freshnessBaseAt ?? clipboardOptions.last.observedAt
+    if (!Number.isFinite(baseAt)) return false
+    return Date.now() - baseAt <= appSetting.tools.autoPaste.time * 1000
   }
 
   // 自动填充文件
@@ -338,6 +339,13 @@ function useClipboard(
   }
 }
 ```
+
+#### AutoPaste freshness 语义
+
+- `clipboard_history.timestamp` / transport `ClipboardItem.createdAt` 只表示历史记录排序时间，不表示用户真实复制时间，也不能作为 AutoPaste 新鲜度来源。
+- AutoPaste 只响应本进程捕获到的新剪贴板事件：`native-watch`、`background-poll`、`visible-poll`。
+- `COREBOX_WINDOW_SHOWN` 触发的补扫被标记为 `corebox-show-baseline`，只更新历史/标签/搜索上下文，不能自动填入 CoreBox。
+- Transport 会附带 `autoPasteEligible`、`captureSource`、`observedAt`、`freshnessBaseAt`；渲染侧必须先确认 `autoPasteEligible === true`，再用 `freshnessBaseAt ?? observedAt` 做 TTL 判断。
 
 #### 2.4.2 `useClipboardChannel.ts` - 通道通信
 

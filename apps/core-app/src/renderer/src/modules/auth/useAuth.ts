@@ -191,14 +191,14 @@ function ensureAuthPreferenceSettings(): void {
       deviceId: '',
       deviceName: '',
       devicePlatform: '',
-      useSecureStorage: true,
+      useSecureStorage: false,
       secureStorageReminderShown: false,
       secureStorageUnavailable: false
     }
     return
   }
   if (typeof appSetting.auth.useSecureStorage !== 'boolean') {
-    appSetting.auth.useSecureStorage = true
+    appSetting.auth.useSecureStorage = false
   }
   if (typeof appSetting.auth.secureStorageReminderShown !== 'boolean') {
     appSetting.auth.secureStorageReminderShown = false

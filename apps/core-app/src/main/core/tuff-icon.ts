@@ -28,6 +28,41 @@ export class TuffIconImpl implements ITuffIcon {
     this.devConfig = devConfig
   }
 
+  private hasPathTraversal(iconPath: string): boolean {
+    return iconPath.split(/[\\/]+/).includes('..')
+  }
+
+  private getLocalFileCandidates(iconPath: string): string[] {
+    const normalizedIconPath = iconPath.trim()
+    if (!normalizedIconPath) {
+      return []
+    }
+
+    if (path.isAbsolute(normalizedIconPath) || path.win32.isAbsolute(normalizedIconPath)) {
+      return [normalizedIconPath]
+    }
+
+    const candidates = [
+      path.resolve(this.rootPath, normalizedIconPath),
+      path.resolve(this.rootPath, 'src', normalizedIconPath)
+    ]
+    const fileName = path.basename(normalizedIconPath)
+    if (fileName) {
+      candidates.push(path.resolve(this.rootPath, 'public', fileName))
+    }
+
+    return [...new Set(candidates)]
+  }
+
+  private async resolveLocalFilePath(iconPath: string): Promise<string | null> {
+    for (const candidate of this.getLocalFileCandidates(iconPath)) {
+      if (await fse.pathExists(candidate)) {
+        return candidate
+      }
+    }
+    return null
+  }
+
   /**
    * Initialize icon
    *
@@ -42,17 +77,26 @@ export class TuffIconImpl implements ITuffIcon {
       return
     }
 
+    const iconPath = this.value.trim()
+
     // Security check: prevent path traversal
-    if (this.value.includes('..')) {
+    if (!iconPath || this.hasPathTraversal(iconPath)) {
       this.status = 'error'
       this.value = ''
       return
     }
 
-    // Dev mode: use dev server URL for icons
+    const localIconPath = await this.resolveLocalFilePath(iconPath)
+    if (localIconPath) {
+      this.value = localIconPath
+      this.status = 'normal'
+      return
+    }
+
+    // Dev mode: use dev server URL for icons when the file is not available locally
     if (this.devConfig?.enable && this.devConfig?.source && this.devConfig?.address) {
       try {
-        const devIconUrl = new URL(this.value, this.devConfig.address).toString()
+        const devIconUrl = new URL(iconPath, this.devConfig.address).toString()
         this.type = 'url'
         this.value = devIconUrl
         this.status = 'normal'
@@ -65,14 +109,7 @@ export class TuffIconImpl implements ITuffIcon {
       }
     }
 
-    const iconPath = path.resolve(this.rootPath, this.value)
-
-    if (!(await fse.pathExists(iconPath))) {
-      this.status = 'error'
-      this.value = ''
-    } else {
-      this.value = iconPath
-      this.status = 'normal'
-    }
+    this.status = 'error'
+    this.value = ''
   }
 }

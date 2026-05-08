@@ -10,6 +10,13 @@ describe('plugin channel sendSync hard-cut', () => {
     expect(source).toContain('plugin_channel_send_sync_removed')
   })
 
+  it('replies through ipcRenderer.send instead of renderer event sender', () => {
+    const source = getPluginChannelPreludeCode({ uniqueKey: 'test-key' })
+
+    expect(source).toContain("ipcRenderer.send(\n              '@plugin-process-message'")
+    expect(source).not.toContain('e.sender.send')
+  })
+
   it('does not expose sendSync on renderer SDK channel types', () => {
     const channelClientSource = readFileSync('plugin/sdk/channel-client.ts', 'utf8')
     const rendererTypesSource = readFileSync('plugin/sdk/types.ts', 'utf8')

@@ -285,6 +285,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private readonly iconWorker = new IconWorkerClient()
   private readonly searchIndexWorker = new SearchIndexWorkerClient()
+  private searchIndexWorkerReady: Promise<boolean> | null = null
   private readonly pendingIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
   private readonly inflightIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
 
@@ -371,12 +372,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getSearchIndex: () => this.searchIndex,
       getPendingResults: () => this.pendingIndexWorkerResults,
       getInflightResults: () => this.inflightIndexWorkerResults,
-      getDatabaseFilePath: () => this.databaseFilePath,
+      ensureSearchIndexWorkerReady: (reason) => this.ensureSearchIndexWorkerReady(reason),
       getSearchIndexWorker: () => this.searchIndexWorker,
       buildPersistEntries: (entries) => this.buildIndexWorkerPersistEntries(entries),
       logDebug: (message, meta) => this.logDebug(message, meta),
-      logWarn: (message, error, meta) => this.logWarn(message, error, meta),
-      logError: (message, error, meta) => this.logError(message, error, meta)
+      logWarn: (message, error, meta) => this.logWarn(message, error, meta)
     })
     this.fileIndexWorker = new FileIndexWorkerClient((payload) =>
       this.indexRuntimeService.handleIndexWorkerFile(payload)
@@ -432,6 +432,80 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return
     }
     fileProviderLog.error(message)
+  }
+
+  private createSearchIndexWorkerReady(databaseFilePath: string): Promise<boolean> {
+    return this.searchIndexWorker
+      .init(databaseFilePath)
+      .then(() => true)
+      .catch((error) => {
+        this.logError('SearchIndexWorkerClient init failed', error)
+        if (this.searchIndexWorkerReady) {
+          this.searchIndexWorkerReady = null
+        }
+        return false
+      })
+  }
+
+  private async ensureSearchIndexWorkerReady(reason: string): Promise<boolean> {
+    if (!this.searchIndexWorkerReady) {
+      if (!this.databaseFilePath) {
+        this.logWarn('SearchIndexWorkerClient init skipped: database path unavailable', undefined, {
+          reason
+        })
+        return false
+      }
+      this.searchIndexWorkerReady = this.createSearchIndexWorkerReady(this.databaseFilePath)
+    }
+
+    const ready = await this.searchIndexWorkerReady
+    if (!ready) {
+      this.logWarn(
+        'SearchIndexWorkerClient operation skipped: worker init unavailable',
+        undefined,
+        {
+          reason
+        }
+      )
+    }
+    return ready
+  }
+
+  private async removeSearchIndexItems(itemIds: string[], reason: string): Promise<void> {
+    if (itemIds.length === 0) return
+    if (!(await this.ensureSearchIndexWorkerReady(reason))) return
+    await this.searchIndexWorker.removeItems(itemIds)
+  }
+
+  private async removeSearchIndexByProvider(providerId: string, reason: string): Promise<void> {
+    if (!(await this.ensureSearchIndexWorkerReady(reason))) return
+    await this.searchIndexWorker.removeByProvider(providerId)
+  }
+
+  private async countSearchIndexByProvider(providerId: string, reason: string): Promise<number> {
+    if (!(await this.ensureSearchIndexWorkerReady(reason))) return 0
+    return this.searchIndexWorker.countByProvider(providerId)
+  }
+
+  private async upsertSearchIndexFiles(
+    records: UpsertFileRecord[],
+    reason: string
+  ): Promise<Array<typeof filesSchema.$inferSelect>> {
+    if (records.length === 0) return []
+    if (!(await this.ensureSearchIndexWorkerReady(reason))) return []
+    return (await this.searchIndexWorker.upsertFiles(records)) as unknown as Array<
+      typeof filesSchema.$inferSelect
+    >
+  }
+
+  private async upsertSearchIndexScanProgress(
+    paths: string[],
+    lastScanned: string,
+    reason: string
+  ): Promise<void> {
+    if (paths.length === 0) return
+    if (!(await this.ensureSearchIndexWorkerReady(reason))) return
+    await this.searchIndexWorker.upsertScanProgress(paths, lastScanned)
   }
 
   private syncWatchServiceState(): void {
@@ -620,9 +694,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     // Initialize the search index worker with the database path so that
     // all FTS5 + keyword_mappings write operations run off the main thread.
-    void this.searchIndexWorker.init(this.databaseFilePath).catch((error) => {
-      this.logError('SearchIndexWorkerClient init failed', error)
-    })
+    this.searchIndexWorkerReady = this.createSearchIndexWorkerReady(this.databaseFilePath)
+    await this.searchIndexWorkerReady
 
     // 🔍 DEBUG: 确认 onLoad 被调用
     this.logDebug('[DEBUG] FileProvider.onLoad called', {
@@ -1603,7 +1676,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await this.deleteEmbeddingsByFileIds(db, idsToDelete)
     })
     // Remove from FTS5 via worker thread to avoid blocking main thread
-    await this.searchIndexWorker.removeItems(pathsToDelete)
+    await this.removeSearchIndexItems(pathsToDelete, 'incremental.delete')
     this.logDebug('Incremental remove completed', {
       removed: existing.length
     })
@@ -1890,7 +1963,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // 1. Compare FTS5 row count vs files table count
     // Each query is a synchronous SQLite operation — yield between them
     // to keep the event loop responsive.
-    const ftsCount = await this.searchIndexWorker.countByProvider(this.id)
+    const ftsCount = await this.countSearchIndexByProvider(this.id, 'integrity.count')
     await yieldToEventLoop()
 
     const fileCountResult = await db
@@ -1915,7 +1988,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
       // Clear stale FTS5 entries so the re-scan writes fresh data
       if (ftsCount > 0) {
-        await this.searchIndexWorker.removeByProvider(this.id)
+        await this.removeSearchIndexByProvider(this.id, 'integrity.remove-by-provider')
         this.logInfo('Cleared stale FTS5 entries')
       }
 
@@ -2026,7 +2099,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         const removeChunkSize = 50
         for (let i = 0; i < pathsToRemove.length; i += removeChunkSize) {
           const chunk = pathsToRemove.slice(i, i + removeChunkSize)
-          await this.searchIndexWorker.removeItems(chunk)
+          await this.removeSearchIndexItems(chunk, 'cleanup.remove-stale')
         }
       }
     }
@@ -2125,9 +2198,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
               await appTaskGate.waitForIdle()
               const chunkStart = performance.now()
-              const inserted = (await this.searchIndexWorker.upsertFiles(
-                chunk as UpsertFileRecord[]
-              )) as unknown as (typeof filesSchema.$inferSelect)[]
+              const inserted = await this.upsertSearchIndexFiles(
+                chunk as UpsertFileRecord[],
+                'full-scan.upsert'
+              )
               this.upsertBatchScheduler.recordDuration(performance.now() - chunkStart)
               this.logDebug('Full scan chunk inserted', {
                 path: newPath,
@@ -2290,7 +2364,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             }
             for (const chunk of pathChunks) {
               await appTaskGate.waitForIdle()
-              await this.searchIndexWorker.removeItems(chunk)
+              await this.removeSearchIndexItems(chunk, 'reconciliation.remove-deleted')
             }
           }
         }
@@ -2325,9 +2399,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             async (chunk, chunkIndex) => {
               await appTaskGate.waitForIdle()
               const chunkStart = performance.now()
-              const inserted = (await this.searchIndexWorker.upsertFiles(
-                chunk as UpsertFileRecord[]
-              )) as unknown as (typeof filesSchema.$inferSelect)[]
+              const inserted = await this.upsertSearchIndexFiles(
+                chunk as UpsertFileRecord[],
+                'reconciliation.upsert'
+              )
               this.logDebug('Reconciliation chunk inserted', {
                 chunk: `${chunkIndex + 1}/${chunks.length}`,
                 size: chunk.length,
@@ -2364,9 +2439,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     if (completedScanProgressPaths.size > 0) {
       const scanTime = new Date()
-      await this.searchIndexWorker.upsertScanProgress(
+      await this.upsertSearchIndexScanProgress(
         Array.from(completedScanProgressPaths),
-        scanTime.toISOString()
+        scanTime.toISOString(),
+        'scan-progress.upsert'
       )
     }
 
@@ -3228,7 +3304,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const staleIds = candidatePaths.filter((path) => !filesMap.has(path))
     if (staleIds.length > 0) {
-      await this.searchIndexWorker.removeItems(staleIds)
+      await this.removeSearchIndexItems(staleIds, 'search.remove-stale-candidates')
     }
 
     if (filesMap.size === 0) {
