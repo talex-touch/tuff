@@ -24,7 +24,7 @@
 1) IPC：channel-core 已接入耗时/成功率。
 1.1) 性能：主进程 EventLoop lag、IPC send/handler slow（按 eventName/channelType/direction 聚合）。
 2) 系统资源：SystemSampler 周期采样 CPU/内存/堆。
-3) 搜索：fast/deferred/legacy 搜索完成时汇总 providerTimings + totalDuration。
+3) 搜索：fast/deferred 搜索完成时汇总 providerTimings + totalDuration。
 4) 插件：analytics.sdk.*（事件/耗时/计数/直方图/Top features）；plugin_analytics 表落盘。
 5) 模块：待接入 ModuleTracer（生命周期耗时、错误率、慢调用 >100ms）。
 6) 权限/安全：在 PermissionModule/PermissionGuard 中埋点通过/拒绝/超时。

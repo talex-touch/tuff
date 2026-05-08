@@ -46,6 +46,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 新增模块必须提供最小可回归验证（lint/typecheck/test 至少 1 项）。
 - 不得通过“关闭规则/降级配置”绕过质量问题（除非有明确豁免文档）。
 - 兼容债务冻结门禁：`legacy:guard` 必须通过，禁止新增 `channel.send('x:y')` 与新增 `legacy` 分支；存量债务仅允许白名单承载并附 `expiresVersion`（当前收口版本 `2.5.0`）。`2.5.0` 前 CoreApp 清册项必须关闭或显式降权，不得保留未说明的旧 storage protocol、旧 SDK bypass 或伪成功兼容分支。
+- legacy 关键词例外只允许登记框架 API 固定字段、上游错误文本签名与负向 lint 禁止项；真实运行兼容分支、迁移读取路径和文件名债务仍必须由 allowlist + compatibility registry 承载。
 - runtime console 冻结门禁：`pnpm console:guard` 必须通过，CoreApp `main/preload/renderer` 新增裸 `console.*` 或扩大现有命中数视为质量回退；仅允许 logger sink、显式 debug gate、专项诊断器通过 allowlist 保留。
 - 兼容债务清册门禁：`compatibility-debt-registry.csv` 必须覆盖全部存量兼容债务；新增债务无登记禁止合入。
 - CoreApp 平台适配门禁：`2.5.0` 前 Windows/macOS 为 release-blocking，必须完成搜索、应用扫描、托盘、更新、插件权限、安装卸载、退出释放回归；Linux 保留 `xdotool` / desktop environment documented best-effort，不作为 `2.5.0` blocker。
@@ -191,7 +192,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 ## 4.2 CoreApp 2.5.0 前置治理（当前主线）
 
 - **状态（2026-04-20）**：插件完善主线已收口；当前主线切换为 `CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`。
-- **Nexus 风控状态**：`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` 保留为实施入口与历史证据，不再作为当前主线。
+- **Nexus 风控状态**：`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` 保留为实施入口与历史证据；Phase 1 频控、冷却、审计日志、长期授权后端时间窗与可信设备显式白名单已完成，不再作为当前主线。
 - **完成项**：
   - 权限中心 Phase 5：`PermissionStore` 切换 SQLite 主存储，支持 `JSON -> SQLite` 一次性迁移与失败只读回退；
   - 安装链路权限确认：安装阶段支持 `always/session/deny` 三分支并显式失败反馈；
