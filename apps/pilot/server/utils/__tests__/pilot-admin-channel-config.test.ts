@@ -307,4 +307,47 @@ describe('pilot-admin-channel-config', () => {
     const reloaded = await getPilotAdminChannelCatalog(event)
     expect(reloaded.channels[0]?.models).toHaveLength(2)
   })
+
+  it('removed adapter value is rejected instead of normalized to openai', async () => {
+    const { getPilotAdminChannelCatalog, updatePilotAdminChannelCatalog } = await loadTarget()
+    const event = createEvent()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const updated = await updatePilotAdminChannelCatalog(event, {
+        channels: [
+          {
+            id: 'channel-removed',
+            name: 'Removed',
+            adapter: 'retired' as any,
+            baseUrl: 'https://api.example.com/v1',
+            apiKey: 'sk-test',
+            model: 'gpt-5.2',
+          },
+        ],
+        defaultChannelId: 'channel-removed',
+      })
+
+      expect(updated.channels).toEqual([])
+      expect(updated.defaultChannelId).toBe('')
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[pilot][channel] ignored invalid channels when saving catalog',
+        {
+          rejectedChannels: [
+            {
+              id: 'channel-removed',
+              missing: ['adapter'],
+            },
+          ],
+        },
+      )
+
+      const reloaded = await getPilotAdminChannelCatalog(event)
+      expect(reloaded.channels).toEqual([])
+      expect(reloaded.defaultChannelId).toBe('')
+    }
+    finally {
+      warnSpy.mockRestore()
+    }
+  })
 })

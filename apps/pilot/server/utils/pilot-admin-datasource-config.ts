@@ -72,7 +72,7 @@ export interface PilotWebsearchDatasourceConfig {
   allowlistDomains: string[]
   ttlMinutes: number
   builtinSources: PilotBuiltinSourceRule[]
-  // legacy fields for backward compatibility only
+  // Historical gateway fields retained for the migration window.
   gatewayBaseUrl: string
   apiKeyRef: string
   timeoutMs: number
@@ -126,7 +126,7 @@ export interface UpdatePilotWebsearchDatasourceInput {
   allowlistDomains?: string[]
   ttlMinutes?: number
   builtinSources?: PilotBuiltinSourceRule[]
-  // legacy patch compatibility
+  // Historical gateway patch fields.
   gatewayBaseUrl?: string
   apiKeyRef?: string
   timeoutMs?: number
@@ -459,8 +459,9 @@ function normalizeCrawlConfig(value: unknown, fallback: PilotWebsearchCrawlConfi
   }
 }
 
-function mapLegacyGatewayProvider(input: {
+function mapHistoricalGatewayProvider(input: {
   gatewayBaseUrl: string
+  apiKeyRef: string
   timeoutMs: number
   maxResults: number
 }): PilotWebsearchProviderConfig | null {
@@ -469,12 +470,12 @@ function mapLegacyGatewayProvider(input: {
     return null
   }
   return {
-    id: 'legacy-gateway',
+    id: 'searxng-main',
     type: 'searxng',
     enabled: true,
     priority: 5,
     baseUrl,
-    apiKeyEncrypted: '',
+    apiKeyEncrypted: maybeEncryptConfigValue(resolveDatasourceApiKey(input.apiKeyRef)),
     timeoutMs: normalizeNumber(input.timeoutMs, DEFAULT_TIMEOUT_MS, MIN_TIMEOUT_MS, MAX_TIMEOUT_MS),
     maxResults: normalizeNumber(input.maxResults, DEFAULT_MAX_RESULTS, MIN_RESULTS, MAX_RESULTS),
   }
@@ -508,16 +509,17 @@ function normalizeWebsearchDatasourceConfig(raw: unknown): PilotWebsearchDatasou
   const crawlEnabled = normalizeBoolean(row.crawlEnabled, defaults.crawlEnabled)
 
   const normalizedProviders = normalizeProviderConfigs(row.providers)
-  const legacyProvider = mapLegacyGatewayProvider({
+  const historicalGatewayProvider = mapHistoricalGatewayProvider({
     gatewayBaseUrl,
+    apiKeyRef,
     timeoutMs,
     maxResults,
   })
 
   const providers = normalizedProviders.length > 0
     ? normalizedProviders
-    : legacyProvider
-      ? [legacyProvider]
+    : historicalGatewayProvider
+      ? [historicalGatewayProvider]
       : getDefaultProviders()
 
   const aggregation = normalizeAggregationConfig(row.aggregation, defaults.aggregation)
@@ -635,23 +637,20 @@ export function resolveDatasourceApiKey(apiKeyRef: string): string {
 
 export function resolveWebsearchProviderApiKey(
   provider: Pick<PilotWebsearchProviderConfig, 'id' | 'apiKeyEncrypted'>,
-  legacyApiKeyRef = '',
+  _historicalApiKeyRef = '',
 ): string {
   const encrypted = normalizeText(provider.apiKeyEncrypted)
   if (encrypted) {
     return maybeDecryptConfigValue(encrypted)
-  }
-  if (provider.id === 'legacy-gateway') {
-    return resolveDatasourceApiKey(legacyApiKeyRef)
   }
   return ''
 }
 
 function toProviderView(
   provider: PilotWebsearchProviderConfig,
-  legacyApiKeyRef: string,
+  historicalApiKeyRef: string,
 ): PilotWebsearchProviderViewConfig {
-  const plainApiKey = resolveWebsearchProviderApiKey(provider, legacyApiKeyRef)
+  const plainApiKey = resolveWebsearchProviderApiKey(provider, historicalApiKeyRef)
   const hasApiKey = Boolean(plainApiKey)
   return {
     id: provider.id,
@@ -744,7 +743,7 @@ export async function updatePilotWebsearchDatasourceConfig(
       ...current.crawl,
       ...(patch.crawl || {}),
     },
-    // once new providers are persisted, stop depending on legacy gateway fields
+    // Once new providers are persisted, stop depending on historical gateway fields.
     gatewayBaseUrl: '',
     apiKeyRef: '',
   })

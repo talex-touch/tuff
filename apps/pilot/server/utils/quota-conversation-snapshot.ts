@@ -1,12 +1,12 @@
 import {
   buildPilotConversationSnapshot,
-  projectPilotLegacyRunEventCard,
+  projectPilotRunEventCard,
   projectPilotSystemMessagesFromTraces,
   shouldHidePilotClientRuntimeEvent,
   shouldPilotPersistTraceEvent,
+  sortPilotChatBlocksByTimeline,
 } from '@talex-touch/tuff-intelligence/pilot'
 import { buildPilotCardBlocksFromSystemMessages } from '../../shared/pilot-system-card-blocks'
-import { sortPilotChatBlocksByTimeline } from '@talex-touch/tuff-intelligence/pilot'
 
 const MAX_CARD_BLOCKS_PER_TURN = 48
 
@@ -89,7 +89,7 @@ function buildLegacyThinkingCardBlocks(chatId: string, traces: RuntimeTraceLike[
     if (trace.type !== 'thinking.delta' && trace.type !== 'thinking.final') {
       continue
     }
-    const projected = projectPilotLegacyRunEventCard({
+    const projected = projectPilotRunEventCard({
       conversationId: chatId,
       eventType: trace.type,
       eventPayload: {

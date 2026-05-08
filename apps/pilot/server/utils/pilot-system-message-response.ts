@@ -65,7 +65,7 @@ export async function listMessagesWithTraceProjection(
   const persistedMessages = await store.listMessages(sessionId)
   const messages = persistedMessages
     .filter(item => item.role !== 'system')
-  const legacySystemMessages = persistedMessages
+  const persistedVisibleSystemMessages = persistedMessages
     .filter(item => item.role === 'system' && !shouldHidePilotClientSystemMessage(item.metadata))
 
   const session = typeof store.getSession === 'function'
@@ -84,7 +84,7 @@ export async function listMessagesWithTraceProjection(
   for (const item of messages) {
     map.set(item.id, item)
   }
-  for (const item of legacySystemMessages) {
+  for (const item of persistedVisibleSystemMessages) {
     map.set(item.id, item)
   }
   for (const item of synthetic) {

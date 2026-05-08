@@ -172,9 +172,7 @@ export function createTitleSseResponse(title: string): Response {
   const chunks = splitTextIntoChunks(value, TITLE_STREAM_CHUNK_SIZE)
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'status_updated', status: 'start', id: 'assistant' })}\n\n`))
       for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'status_updated', status: 'progress', id: 'assistant' })}\n\n`))
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({
           event: 'completion',
           id: 'assistant',
@@ -190,7 +188,6 @@ export function createTitleSseResponse(title: string): Response {
         content: '',
         completed: true,
       })}\n\n`))
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'status_updated', status: 'end', id: 'assistant' })}\n\n`))
       controller.enqueue(encoder.encode('data: [DONE]\\n\\n'))
       controller.close()
     },

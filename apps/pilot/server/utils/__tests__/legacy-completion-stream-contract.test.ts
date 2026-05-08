@@ -2,17 +2,17 @@ import type { IChatBody, IChatConversation } from '../../../app/composables/api/
 import { describe, expect, it } from 'vitest'
 import { PersistStatus } from '../../../app/composables/api/base/v1/aigc/completion-types'
 import {
-  buildLegacyCompletionExecutorBody,
-  buildLegacyCompletionStreamRequestPayload,
-  resolveLegacyConversationSeqCursor,
-  shouldDropLegacyCompletionStreamEvent,
+  buildPilotCompletionExecutorBody,
+  buildPilotCompletionStreamRequestPayload,
+  resolvePilotConversationSeqCursor,
+  shouldDropPilotCompletionStreamEvent,
 } from '../../../app/composables/api/base/v1/aigc/completion/legacy-stream-contract'
-import { handleLegacyCompletionExecutorResult } from '../../../app/composables/api/base/v1/aigc/completion/legacy-stream-sse'
+import { handlePilotCompletionExecutorResult } from '../../../app/composables/api/base/v1/aigc/completion/legacy-stream-sse'
 
 function createConversation(): IChatConversation {
   return {
-    id: 'chat_legacy',
-    topic: 'legacy',
+    id: 'chat_current',
+    topic: 'current',
     messages: [],
     lastUpdate: Date.now(),
     sync: PersistStatus.SUCCESS,
@@ -22,7 +22,7 @@ function createConversation(): IChatConversation {
 
 function createBody(overrides: Partial<IChatBody> = {}): IChatBody {
   return {
-    chat_id: 'chat_legacy',
+    chat_id: 'chat_current',
     index: 0,
     model: 'quota-auto',
     messages: [],
@@ -44,9 +44,9 @@ function createReader(chunks: string[]): ReadableStreamDefaultReader<string> {
   return stream.getReader()
 }
 
-describe('legacy completion stream contract', () => {
+describe('pilot completion stream contract', () => {
   it('默认 DeepAgent 主链不会从会话回填 pilotMode', () => {
-    const body = buildLegacyCompletionExecutorBody({
+    const body = buildPilotCompletionExecutorBody({
       conversation: createConversation(),
       index: 0,
       model: 'quota-auto',
@@ -62,7 +62,7 @@ describe('legacy completion stream contract', () => {
   })
 
   it('显式实验开关仍可按需透传 pilotMode=true', () => {
-    const body = buildLegacyCompletionExecutorBody({
+    const body = buildPilotCompletionExecutorBody({
       conversation: createConversation(),
       index: 0,
       model: 'quota-auto',
@@ -76,7 +76,7 @@ describe('legacy completion stream contract', () => {
   })
 
   it('follow/replay 请求会保留 fromSeq 但默认不透传 pilotMode', () => {
-    const payload = buildLegacyCompletionStreamRequestPayload({
+    const payload = buildPilotCompletionStreamRequestPayload({
       body: createBody({
         fromSeq: 42,
         follow: true,
@@ -88,14 +88,14 @@ describe('legacy completion stream contract', () => {
       fromSeq: 42,
       follow: true,
       metadata: {
-        source: 'legacy-ui-completion-follow',
+        source: 'pilot-ui-completion-follow',
       },
     })
     expect(payload).not.toHaveProperty('pilotMode')
   })
 
   it('会从 markdown block extra.seq 与 card data.seq 中取最大游标', () => {
-    const cursor = resolveLegacyConversationSeqCursor([
+    const cursor = resolvePilotConversationSeqCursor([
       {
         id: 'msg_1',
         page: 0,
@@ -130,16 +130,16 @@ describe('legacy completion stream contract', () => {
   })
 
   it('只丢弃缺少 seq 的必需事件，保留 done/replay.started 豁免事件', () => {
-    expect(shouldDropLegacyCompletionStreamEvent('assistant.delta', undefined)).toBe(true)
-    expect(shouldDropLegacyCompletionStreamEvent('assistant.final', 0)).toBe(true)
-    expect(shouldDropLegacyCompletionStreamEvent('done', undefined)).toBe(false)
-    expect(shouldDropLegacyCompletionStreamEvent('replay.started', undefined)).toBe(false)
+    expect(shouldDropPilotCompletionStreamEvent('assistant.delta', undefined)).toBe(true)
+    expect(shouldDropPilotCompletionStreamEvent('assistant.final', 0)).toBe(true)
+    expect(shouldDropPilotCompletionStreamEvent('done', undefined)).toBe(false)
+    expect(shouldDropPilotCompletionStreamEvent('replay.started', undefined)).toBe(false)
   })
 
   it('会按 SSE 分块持续解析 assistant.delta，而不是等到流结束再一次性返回', async () => {
     const events: Array<Record<string, unknown>> = []
 
-    await handleLegacyCompletionExecutorResult(createReader([
+    await handlePilotCompletionExecutorResult(createReader([
       'data: {"type":"assistant.delta","seq":1,"delta":"Hel"}\n\n',
       'data: {"type":"assistant.delta","seq":2,"delta":"lo"}\n\ndata: {"type":"assistant.final","seq":3,"message":"Hello"}\n\n',
     ]), (data) => {
@@ -174,7 +174,7 @@ describe('legacy completion stream contract', () => {
   it('会保留 replay、run.audit、approval_required 与 done 事件形状', async () => {
     const events: Array<Record<string, unknown>> = []
 
-    await handleLegacyCompletionExecutorResult(createReader([
+    await handlePilotCompletionExecutorResult(createReader([
       'data: {"type":"replay.started","fromSeq":8}\n\n',
       'data: {"type":"run.audit","seq":8,"auditType":"tool.call.started","toolName":"web_search"}\n\n',
       'data: {"type":"turn.approval_required","seq":9,"ticket":{"id":"ticket_1"}}\n\n',
@@ -225,7 +225,7 @@ describe('legacy completion stream contract', () => {
   it('会按 error frame 解析错误事件并走错误归一化', async () => {
     const events: Array<Record<string, unknown>> = []
 
-    await handleLegacyCompletionExecutorResult(createReader([
+    await handlePilotCompletionExecutorResult(createReader([
       'event: error\ndata: {"message":"raw failure","status":"failed","event":"error","data":{"reason":"network"}}\n\n',
       'event: error\ndata: plain-text-error\n\n',
     ]), (data) => {

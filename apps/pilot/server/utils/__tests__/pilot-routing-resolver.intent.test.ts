@@ -156,7 +156,7 @@ describe('pilot-routing-resolver intent routing', () => {
     } as any)
   })
 
-  it('prefers scenePolicies over legacy intent route for intent_classification', async () => {
+  it('prefers scenePolicies over historical intent route for intent_classification', async () => {
     vi.mocked(getPilotAdminRoutingConfig).mockResolvedValueOnce({
       modelCatalog: [
         {
@@ -256,7 +256,7 @@ describe('pilot-routing-resolver intent routing', () => {
     expect(result.intentType).toBe('intent_classification')
   })
 
-  it('scenePolicies 缺失时会回退到 legacy image route', async () => {
+  it('scenePolicies 缺失时会回退到 historical image route', async () => {
     const result = await resolvePilotRoutingSelection({} as any, {
       requestedModelId: 'chat-model',
       intentType: 'image_generate',

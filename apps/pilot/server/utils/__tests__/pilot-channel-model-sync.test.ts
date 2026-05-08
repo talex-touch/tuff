@@ -36,15 +36,15 @@ describe('pilot-channel-model-sync', () => {
           name: 'OpenAI Main',
           baseUrl: 'https://api.openai.com',
           apiKey: 'sk-test',
-          model: 'legacy-model',
+          model: 'retired-model',
           defaultModelId: '',
           timeoutMs: 90_000,
           transport: 'responses',
           enabled: true,
           models: [
             {
-              id: 'legacy-model',
-              label: 'legacy-model',
+              id: 'retired-model',
+              label: 'retired-model',
               enabled: true,
               priority: 10,
               thinkingSupported: true,
@@ -95,7 +95,7 @@ describe('pilot-channel-model-sync', () => {
     )
     expect(syncedChannel).toBeTruthy()
     expect(syncedChannel.models.map((item: { id: string }) => item.id)).toEqual(
-      expect.arrayContaining(['legacy-model', 'gpt-4o', 'gpt-4o-mini']),
+      expect.arrayContaining(['retired-model', 'gpt-4o', 'gpt-4o-mini']),
     )
 
     expect(mergeDiscoveredModelsIntoCatalog).not.toHaveBeenCalled()

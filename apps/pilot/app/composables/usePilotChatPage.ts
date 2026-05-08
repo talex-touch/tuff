@@ -15,7 +15,7 @@ import type {
   StreamEvent,
 } from './pilot-chat.types'
 
-// Experimental workspace-only chat surface. The production homepage keeps using legacy $completion.
+// Experimental workspace-only chat surface. The production homepage keeps using current $completion.
 import {
   appendPilotTraceSorted,
   buildPilotSystemMessageId,
@@ -225,11 +225,6 @@ export function usePilotChatPage() {
     }
     thinkingText.value = ''
     thinkingStreaming.value = false
-  }
-
-  function includesToolApprovalRequired(value: unknown): boolean {
-    const text = String(value || '').trim().toUpperCase()
-    return text === 'TOOL_APPROVAL_REQUIRED' || text.includes('TOOL_APPROVAL_REQUIRED')
   }
 
   function normalizeWebsearchReason(value: unknown, phase: 'decision' | 'skipped' | 'executed'): string {
@@ -1557,24 +1552,6 @@ export function usePilotChatPage() {
       return
     }
 
-    if (eventType === 'status_updated') {
-      if (!isActiveSessionEvent) {
-        return
-      }
-      console.warn('[pilot-chat] legacy event ignored', {
-        eventType,
-        sessionId: eventSessionId,
-      })
-      if (hasSeq) {
-        appendTrace(mapTrace('status_updated', normalizedSeq, {
-          status: item.status,
-          name: item.name,
-          data: item.data,
-        }))
-      }
-      return
-    }
-
     if (eventType === 'assistant.delta') {
       if (!isActiveSessionEvent) {
         return
@@ -1664,38 +1641,6 @@ export function usePilotChatPage() {
       const detail = item.detail && typeof item.detail === 'object'
         ? item.detail
         : {}
-      const errorCode = String(item.code || (detail as Record<string, unknown>).code || '').trim()
-      if (includesToolApprovalRequired(errorCode)) {
-        flushAssistantDeltaBuffer()
-        const message = String(item.message || '工具调用需要审批，请审批后重试。').trim()
-        const toolName = String((detail as Record<string, unknown>).tool_name || (detail as Record<string, unknown>).toolName || 'tool').trim() || 'tool'
-        const callId = String((detail as Record<string, unknown>).call_id || '').trim() || makeId(`approval_${toolName}`)
-        handleRunAuditToolPayload({
-          auditType: 'tool.call.approval_required',
-          callId,
-          toolId: String((detail as Record<string, unknown>).tool_id || (detail as Record<string, unknown>).toolId || '').trim() || 'tool.unknown',
-          toolName,
-          status: 'approval_required',
-          riskLevel: String((detail as Record<string, unknown>).risk_level || (detail as Record<string, unknown>).riskLevel || 'high').trim(),
-          ticketId: String((detail as Record<string, unknown>).ticket_id || (detail as Record<string, unknown>).ticketId || '').trim(),
-          errorCode,
-          errorMessage: message,
-        })
-        reconnectHint.value = message || '检测到高风险工具调用，等待审批后可继续。'
-        if (hasSeq) {
-          appendTrace(mapTrace('turn.approval_required', normalizedSeq, {
-            request_id: item.request_id,
-            turn_id: item.turn_id || item.turnId,
-            queue_pos: item.queue_pos,
-            phase: item.phase,
-            code: item.code,
-            message,
-            detail,
-            legacy_error_compat: true,
-          }))
-        }
-        return
-      }
       applyRuntimeStateByEvent('error', item.payload || {}, '', String(item.message || ''))
       flushAssistantDeltaBuffer()
       streamError.value = toPrettyErrorMessage(String(item.message || 'Stream error'), detail)

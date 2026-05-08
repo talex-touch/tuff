@@ -100,8 +100,8 @@ async function migrateQuotaHistoryPayloadToJson(event: H3Event): Promise<void> {
       continue
     }
 
-    const legacy = decodeLegacyQuotaConversation(rawValue)
-    if (!legacy) {
+    const historicalPayload = decodeLegacyQuotaConversation(rawValue)
+    if (!historicalPayload) {
       continue
     }
 
@@ -109,7 +109,7 @@ async function migrateQuotaHistoryPayloadToJson(event: H3Event): Promise<void> {
       UPDATE ${QUOTA_HISTORY_TABLE}
       SET value = ?1
       WHERE chat_id = ?2 AND user_id = ?3
-    `).bind(JSON.stringify(legacy), row.chat_id, row.user_id).run()
+    `).bind(JSON.stringify(historicalPayload), row.chat_id, row.user_id).run()
   }
 }
 

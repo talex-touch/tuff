@@ -187,7 +187,7 @@ function normalizeFloat(value: unknown, fallback: number, min: number, max: numb
 
 export function resolvePilotModelCapabilities(
   value: unknown,
-  legacy?: {
+  historicalFields?: {
     allowWebsearch?: unknown
     allowImageGeneration?: unknown
     allowFileAnalysis?: unknown
@@ -195,10 +195,10 @@ export function resolvePilotModelCapabilities(
   },
 ): PilotModelCapabilities {
   return resolvePilotCapabilities(value, {
-    allowWebsearch: legacy?.allowWebsearch,
-    allowImageGeneration: legacy?.allowImageGeneration,
-    allowFileAnalysis: legacy?.allowFileAnalysis,
-    allowImageAnalysis: legacy?.allowImageAnalysis,
+    allowWebsearch: historicalFields?.allowWebsearch,
+    allowImageGeneration: historicalFields?.allowImageGeneration,
+    allowFileAnalysis: historicalFields?.allowFileAnalysis,
+    allowImageAnalysis: historicalFields?.allowImageAnalysis,
   }, DEFAULT_MODEL_CAPABILITIES)
 }
 

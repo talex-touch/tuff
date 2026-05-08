@@ -46,12 +46,12 @@ vi.mock('../pilot-store', () => ({
   requirePilotDatabase: vi.fn(() => mockDb as any),
 }))
 
-import {
+const {
   getPilotWebsearchDatasourceConfig,
   resolveWebsearchProviderApiKey,
   toPilotWebsearchDatasourceView,
   updatePilotWebsearchDatasourceConfig,
-} from '../pilot-admin-datasource-config'
+} = await import('../pilot-admin-datasource-config')
 
 const ENV_KEY = 'PILOT_CONFIG_ENCRYPTION_KEY'
 const ENV_SNAPSHOT = process.env[ENV_KEY]
@@ -66,7 +66,7 @@ describe('pilot-admin-datasource-config', () => {
   beforeEach(() => {
     settingsStore.clear()
     process.env[ENV_KEY] = '0123456789abcdef0123456789abcdef'
-    delete process.env.PILOT_WEBSARCH_LEGACY_KEY
+    delete process.env.PILOT_WEBSARCH_RETIRED_KEY
   })
 
   afterEach(() => {
@@ -76,13 +76,13 @@ describe('pilot-admin-datasource-config', () => {
     else {
       process.env[ENV_KEY] = ENV_SNAPSHOT
     }
-    delete process.env.PILOT_WEBSARCH_LEGACY_KEY
+    delete process.env.PILOT_WEBSARCH_RETIRED_KEY
   })
 
-  it('providers 为空时会从 legacy gateway 字段自动映射', async () => {
+  it('providers 为空时会从 historical gateway 字段自动映射', async () => {
     settingsStore.set('datasource.websearch', JSON.stringify({
       providers: [],
-      gatewayBaseUrl: 'https://legacy-gateway.example.com/',
+      gatewayBaseUrl: 'https://historical-gateway.example.com/',
       timeoutMs: 9_000,
       maxResults: 5,
       crawlEnabled: false,
@@ -91,9 +91,9 @@ describe('pilot-admin-datasource-config', () => {
     const config = await getPilotWebsearchDatasourceConfig(createEvent())
 
     expect(config.providers).toHaveLength(1)
-    expect(config.providers[0]?.id).toBe('legacy-gateway')
+    expect(config.providers[0]?.id).toBe('searxng-main')
     expect(config.providers[0]?.type).toBe('searxng')
-    expect(config.providers[0]?.baseUrl).toBe('https://legacy-gateway.example.com')
+    expect(config.providers[0]?.baseUrl).toBe('https://historical-gateway.example.com')
     expect(config.providers[0]?.timeoutMs).toBe(9_000)
     expect(config.providers[0]?.maxResults).toBe(5)
   })
@@ -229,22 +229,22 @@ describe('pilot-admin-datasource-config', () => {
     expect(updated.providers[0]?.maxResults).toBe(7)
   })
 
-  it('legacy provider 仍支持通过 apiKeyRef 环境变量解析 key', async () => {
-    process.env.PILOT_WEBSARCH_LEGACY_KEY = 'legacy-secret-key'
+  it('historical provider 仍支持通过 apiKeyRef 环境变量解析 key', async () => {
+    process.env.PILOT_WEBSARCH_RETIRED_KEY = 'retired-secret-key'
     settingsStore.set('datasource.websearch', JSON.stringify({
       providers: [],
-      gatewayBaseUrl: 'https://legacy-gateway.example.com',
-      apiKeyRef: 'env:PILOT_WEBSARCH_LEGACY_KEY',
+      gatewayBaseUrl: 'https://historical-gateway.example.com',
+      apiKeyRef: 'env:PILOT_WEBSARCH_RETIRED_KEY',
       timeoutMs: 8_000,
       maxResults: 6,
       crawlEnabled: true,
     }))
 
     const config = await getPilotWebsearchDatasourceConfig(createEvent())
-    expect(config.providers[0]?.id).toBe('legacy-gateway')
+    expect(config.providers[0]?.id).toBe('searxng-main')
 
     const view = toPilotWebsearchDatasourceView(config)
     expect(view.providers[0]?.hasApiKey).toBe(true)
-    expect(view.providers[0]?.apiKeyMasked).toBe('lega...-key')
+    expect(view.providers[0]?.apiKeyMasked).toBe('reti...-key')
   })
 })

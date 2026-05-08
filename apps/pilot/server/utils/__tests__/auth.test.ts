@@ -65,16 +65,16 @@ describe('requirePilotAuth', () => {
     })
   })
 
-  it('legacy header/cookie/bearer 输入会回落到设备访客身份', async () => {
+  it('retired header/cookie/bearer 输入会回落到设备访客身份', async () => {
     const { requirePilotAuth } = await import('../auth')
 
     const result = requirePilotAuth(createEvent(
       {
         'host': 'localhost:3200',
-        'x-pilot-user-id': 'legacy_header_user',
-        'x-user-id': 'legacy_user',
-        'cookie': 'pilot_user_id=legacy_cookie_user',
-        'authorization': 'Bearer legacy-token-abc',
+        'x-pilot-user-id': 'retired_header_user',
+        'x-user-id': 'retired_user',
+        'cookie': 'pilot_user_id=retired_cookie_user',
+        'authorization': 'Bearer retired-token-abc',
       },
     ))
 

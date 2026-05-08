@@ -75,7 +75,7 @@ function isActive(path: string): boolean {
       <img src="/logo.png" alt="Pilot">
       <div>
         <strong>Pilot Admin</strong>
-        <p>Legacy CMS 已下线</p>
+        <p>历史 CMS 已下线</p>
       </div>
     </div>
 

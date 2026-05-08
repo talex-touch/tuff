@@ -1,31 +1,31 @@
 import type { IChatBody } from '../completion-types'
 
-export type LegacyUiStreamAttachment = NonNullable<IChatBody['attachments']>[number]
+export type PilotUiStreamAttachment = NonNullable<IChatBody['attachments']>[number]
 
-export interface LegacyUiStreamInputPayload {
+export interface PilotUiStreamInputPayload {
   message: string
-  attachments: LegacyUiStreamAttachment[]
+  attachments: PilotUiStreamAttachment[]
 }
 
-interface UploadLegacyDataUrlPayload {
+interface UploadPilotDataUrlPayload {
   type: 'image' | 'file'
   name: string
   mimeType: string
   dataUrl: string
 }
 
-interface ResolveLegacyUiStreamInputOptions {
+interface ResolvePilotUiStreamInputOptions {
   uploadDataUrlAttachment?: (
     sessionId: string,
-    payload: UploadLegacyDataUrlPayload,
-  ) => Promise<LegacyUiStreamAttachment>
+    payload: UploadPilotDataUrlPayload,
+  ) => Promise<PilotUiStreamAttachment>
 }
 
-function normalizeLegacyText(value: unknown): string {
+function normalizePilotUiText(value: unknown): string {
   return String(value || '').trim()
 }
 
-function normalizeLegacyBlocks(value: unknown): Array<Record<string, unknown>> {
+function normalizePilotUiBlocks(value: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(value)) {
     return []
   }
@@ -33,7 +33,7 @@ function normalizeLegacyBlocks(value: unknown): Array<Record<string, unknown>> {
   const blocks: Array<Record<string, unknown>> = []
   for (const item of value) {
     if (typeof item === 'string') {
-      const text = normalizeLegacyText(item)
+      const text = normalizePilotUiText(item)
       if (text) {
         blocks.push({
           type: 'text',
@@ -51,7 +51,7 @@ function normalizeLegacyBlocks(value: unknown): Array<Record<string, unknown>> {
   return blocks
 }
 
-function resolveLegacyUserBlocks(messages: unknown): Array<Record<string, unknown>> {
+function resolvePilotUserBlocks(messages: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(messages)) {
     return []
   }
@@ -62,7 +62,7 @@ function resolveLegacyUserBlocks(messages: unknown): Array<Record<string, unknow
       continue
     }
     const row = item as Record<string, unknown>
-    const role = normalizeLegacyText(row.role).toLowerCase()
+    const role = normalizePilotUiText(row.role).toLowerCase()
     if (role !== 'user') {
       continue
     }
@@ -76,7 +76,7 @@ function resolveLegacyUserBlocks(messages: unknown): Array<Record<string, unknow
     })
 
     if (!hasInnerList) {
-      return normalizeLegacyBlocks(content)
+      return normalizePilotUiBlocks(content)
     }
 
     const pageRaw = Number(row.page)
@@ -108,17 +108,17 @@ function resolveLegacyUserBlocks(messages: unknown): Array<Record<string, unknow
       return []
     }
 
-    return normalizeLegacyBlocks(picked.value)
+    return normalizePilotUiBlocks(picked.value)
   }
 
   return []
 }
 
-function isLegacyAttachmentType(type: string): type is 'image' | 'file' {
+function isPilotAttachmentType(type: string): type is 'image' | 'file' {
   return type === 'image' || type === 'file'
 }
 
-function isLegacySkippedTextType(type: string): boolean {
+function isPilotSkippedTextType(type: string): boolean {
   return type === 'card' || type === 'tool' || type === 'error'
 }
 
@@ -128,11 +128,11 @@ function isDataUrl(value: string): boolean {
 
 function parseDataUrlMimeType(value: string): string {
   const matched = value.match(/^data:([^;,]+)(?:;charset=[^;,]+)?;base64,/i)
-  return normalizeLegacyText(matched?.[1] || '')
+  return normalizePilotUiText(matched?.[1] || '')
 }
 
-function resolveLegacyMimeType(rawData: string, attachmentType: 'image' | 'file'): string {
-  const data = normalizeLegacyText(rawData)
+function resolvePilotMimeType(rawData: string, attachmentType: 'image' | 'file'): string {
+  const data = normalizePilotUiText(rawData)
   if (data && !isDataUrl(data)) {
     return data
   }
@@ -149,8 +149,8 @@ function buildAttachmentFallbackRef(attachmentId: string): string {
   return `attachment://${attachmentId}`
 }
 
-function normalizeLegacyAttachmentRef(value: string, attachmentId: string): { ref: string, previewUrl?: string } {
-  const normalized = normalizeLegacyText(value)
+function normalizePilotAttachmentRef(value: string, attachmentId: string): { ref: string, previewUrl?: string } {
+  const normalized = normalizePilotUiText(value)
   if (!normalized || isDataUrl(normalized)) {
     return {
       ref: buildAttachmentFallbackRef(attachmentId),
@@ -163,21 +163,21 @@ function normalizeLegacyAttachmentRef(value: string, attachmentId: string): { re
   }
 }
 
-async function resolveLegacyAttachmentPayload(
+async function resolvePilotAttachmentPayload(
   sessionId: string,
   blockRow: Record<string, unknown>,
-  options?: ResolveLegacyUiStreamInputOptions,
-): Promise<{ attachment: LegacyUiStreamAttachment | null, warning: string | null }> {
-  const typeRaw = normalizeLegacyText(blockRow.type).toLowerCase()
+  options?: ResolvePilotUiStreamInputOptions,
+): Promise<{ attachment: PilotUiStreamAttachment | null, warning: string | null }> {
+  const typeRaw = normalizePilotUiText(blockRow.type).toLowerCase()
   const type: 'image' | 'file' = typeRaw === 'image' ? 'image' : 'file'
-  const name = normalizeLegacyText(blockRow.name) || 'unnamed'
-  const attachmentId = normalizeLegacyText(blockRow.attachmentId)
-  const value = normalizeLegacyText(blockRow.value)
-  const data = normalizeLegacyText(blockRow.data)
-  const mimeType = resolveLegacyMimeType(data, type)
+  const name = normalizePilotUiText(blockRow.name) || 'unnamed'
+  const attachmentId = normalizePilotUiText(blockRow.attachmentId)
+  const value = normalizePilotUiText(blockRow.value)
+  const data = normalizePilotUiText(blockRow.data)
+  const mimeType = resolvePilotMimeType(data, type)
 
   if (attachmentId) {
-    const normalizedRef = normalizeLegacyAttachmentRef(value, attachmentId)
+    const normalizedRef = normalizePilotAttachmentRef(value, attachmentId)
     return {
       attachment: {
         id: attachmentId,
@@ -204,7 +204,7 @@ async function resolveLegacyAttachmentPayload(
     const uploadedAttachment = await uploader(sessionId, {
       type,
       name,
-      mimeType: resolveLegacyMimeType(dataUrl, type),
+      mimeType: resolvePilotMimeType(dataUrl, type),
       dataUrl,
     })
 
@@ -226,12 +226,12 @@ async function resolveLegacyAttachmentPayload(
   }
 }
 
-export async function resolveLegacyUiStreamInput(
+export async function resolvePilotUiStreamInput(
   sessionId: string,
   messages: unknown,
-  options?: ResolveLegacyUiStreamInputOptions,
-): Promise<LegacyUiStreamInputPayload> {
-  const contentBlocks = resolveLegacyUserBlocks(messages)
+  options?: ResolvePilotUiStreamInputOptions,
+): Promise<PilotUiStreamInputPayload> {
+  const contentBlocks = resolvePilotUserBlocks(messages)
   if (contentBlocks.length <= 0) {
     return {
       message: '',
@@ -240,15 +240,15 @@ export async function resolveLegacyUiStreamInput(
   }
 
   const textParts: string[] = []
-  const attachments: LegacyUiStreamAttachment[] = []
+  const attachments: PilotUiStreamAttachment[] = []
   const attachmentWarnings: string[] = []
 
   for (const blockRow of contentBlocks) {
-    const type = normalizeLegacyText(blockRow.type).toLowerCase()
-    const value = normalizeLegacyText(blockRow.value)
+    const type = normalizePilotUiText(blockRow.type).toLowerCase()
+    const value = normalizePilotUiText(blockRow.value)
 
-    if (isLegacyAttachmentType(type)) {
-      const resolved = await resolveLegacyAttachmentPayload(sessionId, blockRow, options)
+    if (isPilotAttachmentType(type)) {
+      const resolved = await resolvePilotAttachmentPayload(sessionId, blockRow, options)
       if (resolved.attachment) {
         attachments.push(resolved.attachment)
       }
@@ -258,7 +258,7 @@ export async function resolveLegacyUiStreamInput(
       continue
     }
 
-    if (!value || isLegacySkippedTextType(type)) {
+    if (!value || isPilotSkippedTextType(type)) {
       continue
     }
     textParts.push(value)

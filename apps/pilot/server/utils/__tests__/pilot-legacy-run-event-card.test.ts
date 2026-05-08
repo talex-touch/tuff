@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
 import {
-  projectPilotLegacyRunEventCard,
-  resolvePilotLegacyRunEventCardKeys,
+  projectPilotRunEventCard,
+  resolvePilotRunEventCardKeys,
   sortPilotChatBlocksByTimeline,
 } from '@talex-touch/tuff-intelligence/pilot'
+import { describe, expect, it } from 'vitest'
 
 function mergePlanningTodos(
   current: Record<string, unknown>,
@@ -23,10 +23,10 @@ function mergePlanningTodos(
   }
 }
 
-describe('pilot-legacy-run-event-card', () => {
+describe('pilot-run-event-card', () => {
   it('planning started/updated/finished 复用 shared projector 且保持同一张卡', () => {
-    const started = projectPilotLegacyRunEventCard({
-      conversationId: 'chat-legacy-plan',
+    const started = projectPilotRunEventCard({
+      conversationId: 'chat-current-plan',
       eventType: 'planning.started',
       eventPayload: {
         seq: 2,
@@ -35,8 +35,8 @@ describe('pilot-legacy-run-event-card', () => {
         },
       },
     })
-    const updated = projectPilotLegacyRunEventCard({
-      conversationId: 'chat-legacy-plan',
+    const updated = projectPilotRunEventCard({
+      conversationId: 'chat-current-plan',
       eventType: 'planning.updated',
       eventPayload: {
         seq: 3,
@@ -45,8 +45,8 @@ describe('pilot-legacy-run-event-card', () => {
         },
       },
     })
-    const finished = projectPilotLegacyRunEventCard({
-      conversationId: 'chat-legacy-plan',
+    const finished = projectPilotRunEventCard({
+      conversationId: 'chat-current-plan',
       eventType: 'planning.finished',
       eventPayload: {
         seq: 4,
@@ -67,9 +67,9 @@ describe('pilot-legacy-run-event-card', () => {
     expect(updated?.cardKey).toBe(finished?.cardKey)
   })
 
-  it('intent 真实卡即使没有 turnId 也会回收 legacy pending key', () => {
-    const keys = resolvePilotLegacyRunEventCardKeys({
-      conversationId: 'chat-legacy-intent',
+  it('intent 真实卡即使没有 turnId 也会回收 pending intent key', () => {
+    const keys = resolvePilotRunEventCardKeys({
+      conversationId: 'chat-current-intent',
       cardType: 'intent',
       cardKey: 'intent:latest',
       turnId: '',
@@ -77,14 +77,14 @@ describe('pilot-legacy-run-event-card', () => {
     })
 
     expect(keys.key).toBe('intent:latest')
-    expect(keys.pendingIntentKey).toBe('intent:chat-legacy-intent:pending')
-    expect(keys.fallbackKey).toBe('intent:chat-legacy-intent:pending')
+    expect(keys.pendingIntentKey).toBe('intent:chat-current-intent:pending')
+    expect(keys.fallbackKey).toBe('intent:chat-current-intent:pending')
     expect(keys.shouldPromotePendingIntent).toBe(true)
   })
 
-  it('缺失 seq 的可恢复 legacy 事件不会生成运行卡', () => {
-    const projected = projectPilotLegacyRunEventCard({
-      conversationId: 'chat-legacy-invalid-seq',
+  it('缺失 seq 的可恢复事件不会生成运行卡', () => {
+    const projected = projectPilotRunEventCard({
+      conversationId: 'chat-current-invalid-seq',
       eventType: 'planning.updated',
       eventPayload: {
         payload: {
@@ -96,7 +96,7 @@ describe('pilot-legacy-run-event-card', () => {
     expect(projected).toBeNull()
   })
 
-  it('legacy 时间线会按 seq 保持 intent -> planning -> assistant 顺序', () => {
+  it('运行卡时间线会按 seq 保持 intent -> planning -> assistant 顺序', () => {
     const events = [
       {
         eventType: 'intent.started',
@@ -138,8 +138,8 @@ describe('pilot-legacy-run-event-card', () => {
 
     const blocks = new Map<string, { payload: Record<string, unknown>, streamOrder: number }>()
     for (const [index, event] of events.entries()) {
-      const projected = projectPilotLegacyRunEventCard({
-        conversationId: 'chat-legacy-order',
+      const projected = projectPilotRunEventCard({
+        conversationId: 'chat-current-order',
         eventType: event.eventType,
         eventPayload: event.eventPayload,
       })

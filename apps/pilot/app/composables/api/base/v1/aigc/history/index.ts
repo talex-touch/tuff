@@ -131,7 +131,7 @@ export class HistoryManager implements IHistoryManager {
           return parsed as Record<string, unknown>
       }
       catch {
-        // ignore invalid legacy meta
+        // ignore invalid historical meta
       }
       return {} as Record<string, unknown>
     })()

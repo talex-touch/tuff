@@ -332,7 +332,7 @@ export default defineNuxtConfig({
       pilotToolApprovalAutoResume: envBoolean(['NUXT_PUBLIC_PILOT_TOOL_APPROVAL_AUTO_RESUME'], true),
       pilotToolApprovalPollIntervalMs: envNumber(['NUXT_PUBLIC_PILOT_TOOL_APPROVAL_POLL_INTERVAL_MS'], 1_500, 500, 15_000),
       pilotToolApprovalPollTimeoutMs: envNumber(['NUXT_PUBLIC_PILOT_TOOL_APPROVAL_POLL_TIMEOUT_MS'], 10 * 60_000, 5_000, 60 * 60_000),
-      pilotEnableLegacyExecutorEventCompat: envBoolean(['NUXT_PUBLIC_PILOT_ENABLE_LEGACY_EXECUTOR_EVENT_COMPAT'], false),
+      pilotEnableExecutorEventCompat: envBoolean(['NUXT_PUBLIC_PILOT_ENABLE_EXECUTOR_EVENT_COMPAT'], false),
     },
   },
   devServer: {

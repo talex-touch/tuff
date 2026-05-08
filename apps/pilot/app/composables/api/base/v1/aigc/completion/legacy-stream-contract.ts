@@ -1,5 +1,5 @@
 import type { IChatBody, IChatConversation, IChatInnerItemMeta, IChatItem, IInnerItemMeta } from '../completion-types'
-import type { LegacyUiStreamInputPayload } from './legacy-stream-input'
+import type { PilotUiStreamInputPayload } from './legacy-stream-input'
 import { normalizePilotStreamSeq, shouldPilotStreamEventRequireSeq } from '@talex-touch/tuff-intelligence/pilot'
 
 function parseJsonSafe<T>(value: string): T | null {
@@ -19,7 +19,7 @@ function resolveExperimentalPilotMode(value: unknown): true | undefined {
   return value === true ? true : undefined
 }
 
-function buildLegacyStreamBasePayload(body: IChatBody): Record<string, unknown> {
+function buildPilotStreamBasePayload(body: IChatBody): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     modelId: normalizeText(body.modelId || body.model) || undefined,
     routeComboId: normalizeText(body.routeComboId) || undefined,
@@ -34,7 +34,7 @@ function buildLegacyStreamBasePayload(body: IChatBody): Record<string, unknown> 
   return payload
 }
 
-export function buildLegacyCompletionExecutorBody(input: {
+export function buildPilotCompletionExecutorBody(input: {
   options?: Record<string, unknown> & { requestId?: string }
   conversation: IChatConversation
   index: number
@@ -72,15 +72,15 @@ export function buildLegacyCompletionExecutorBody(input: {
   return payload
 }
 
-export function buildLegacyCompletionStreamRequestPayload(input: {
+export function buildPilotCompletionStreamRequestPayload(input: {
   body: IChatBody
   followOnly: boolean
-  latestTurn?: LegacyUiStreamInputPayload
+  latestTurn?: PilotUiStreamInputPayload
 }): Record<string, unknown> {
   const payload: Record<string, unknown> = {
-    ...buildLegacyStreamBasePayload(input.body),
+    ...buildPilotStreamBasePayload(input.body),
     metadata: {
-      source: input.followOnly ? 'legacy-ui-completion-follow' : 'legacy-ui-completion',
+      source: input.followOnly ? 'pilot-ui-completion-follow' : 'pilot-ui-completion',
       index: input.body.index,
     },
   }
@@ -104,7 +104,7 @@ export function buildLegacyCompletionStreamRequestPayload(input: {
   return payload
 }
 
-export function shouldDropLegacyCompletionStreamEvent(eventType: unknown, seq: unknown): boolean {
+export function shouldDropPilotCompletionStreamEvent(eventType: unknown, seq: unknown): boolean {
   const normalizedType = normalizeText(eventType)
   if (!normalizedType) {
     return false
@@ -115,7 +115,7 @@ export function shouldDropLegacyCompletionStreamEvent(eventType: unknown, seq: u
   return normalizePilotStreamSeq(seq) <= 0
 }
 
-export function resolveLegacyConversationSeqCursor(messages: IChatItem[] | undefined | null): number {
+export function resolvePilotConversationSeqCursor(messages: IChatItem[] | undefined | null): number {
   let maxSeq = 0
   for (const message of messages || []) {
     if (!message || !Array.isArray(message.content)) {
