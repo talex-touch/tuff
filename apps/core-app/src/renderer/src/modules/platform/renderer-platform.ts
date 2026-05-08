@@ -1,4 +1,4 @@
-import { hasNavigator, hasWindow } from '@talex-touch/utils/env'
+import { hasNavigator } from '@talex-touch/utils/env'
 import { computed } from 'vue'
 import { useStartupInfo } from '../hooks/useStartupInfo'
 import { getPreloadProcessInfo } from '../preload/process-info'
