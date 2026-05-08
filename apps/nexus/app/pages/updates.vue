@@ -156,8 +156,11 @@ const latestReleaseNotes = computed(() => {
 })
 
 const updateItems = computed(() => updatesPayload.value?.updates ?? [])
-const updateList = computed(() => updateItems.value.slice(0, 6))
-const hasUpdateList = computed(() => updateList.value.length > 0)
+const selectedNewsTab = ref<'release' | 'announcement'>('release')
+const releaseUpdates = computed(() => updateItems.value.filter(update => update.type !== 'announcement').slice(0, 6))
+const announcementUpdates = computed(() => updateItems.value.filter(update => update.type === 'announcement').slice(0, 6))
+const activeNewsList = computed(() => selectedNewsTab.value === 'announcement' ? announcementUpdates.value : releaseUpdates.value)
+const hasUpdateList = computed(() => activeNewsList.value.length > 0)
 const isZh = computed(() => locale.value.startsWith('zh'))
 const UPDATE_RELEASE_TAG_COLOR = 'var(--tx-color-primary)'
 const UPDATE_NEWS_TAG_COLOR = 'var(--tx-text-color-secondary)'
@@ -269,7 +272,16 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
       </p>
     </header>
 
-    <section class="mx-auto max-w-4xl w-full animate-fade-in-up" style="animation-delay: 60ms;">
+    <div class="mx-auto max-w-2xl w-full animate-fade-in-up" style="animation-delay: 60ms;">
+      <div class="flex gap-2 rounded-xl bg-gray-100 p-1.5 dark:bg-gray-800/80">
+        <TxButton v-for="option in channelOptions" :key="option.id" variant="bare" native-type="button" class="channel-tab flex-1 flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-all duration-300" :class="selectedChannel === option.id ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'" @click="selectedChannel = option.id">
+          <span :class="option.icon" class="text-base" />
+          <span>{{ option.badge }}</span>
+        </TxButton>
+      </div>
+    </div>
+
+    <section class="mx-auto max-w-4xl w-full animate-fade-in-up" style="animation-delay: 100ms;">
       <div class="UpdateNewsSection">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -285,9 +297,18 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
           </span>
         </div>
 
+        <div class="mt-3 flex items-center gap-2">
+          <TxButton variant="bare" native-type="button" class="news-tab-btn" :class="{ 'news-tab-btn--active': selectedNewsTab === 'release' }" @click="selectedNewsTab = 'release'">
+            {{ t('updates.news.typeNews') }}
+          </TxButton>
+          <TxButton variant="bare" native-type="button" class="news-tab-btn" :class="{ 'news-tab-btn--active': selectedNewsTab === 'announcement' }" @click="selectedNewsTab = 'announcement'">
+            {{ t('updates.news.typeAnnouncement') }}
+          </TxButton>
+        </div>
+
         <div v-if="hasUpdateList" class="UpdateNewsList mt-4">
           <TxCardItem
-            v-for="update in updateList"
+            v-for="update in activeNewsList"
             :key="update.id"
             class="UpdateNewsItem"
             :title="resolveUpdateText(update.title)"
@@ -328,16 +349,6 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
         />
       </div>
     </section>
-
-    <!-- Channel Selector -->
-    <div class="mx-auto max-w-2xl w-full animate-fade-in-up" style="animation-delay: 100ms;">
-      <div class="flex gap-2 rounded-xl bg-gray-100 p-1.5 dark:bg-gray-800/80">
-        <TxButton v-for="option in channelOptions" :key="option.id" variant="bare" native-type="button" class="channel-tab flex-1 flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-all duration-300" :class="selectedChannel === option.id ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'" @click="selectedChannel = option.id">
-          <span :class="option.icon" class="text-base" />
-          <span>{{ option.badge }}</span>
-        </TxButton>
-      </div>
-    </div>
 
     <!-- Loading State -->
     <Transition name="fade" mode="out-in">
@@ -637,6 +648,19 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
 /* Channel tab indicator animation */
 .channel-tab {
   position: relative;
+}
+.news-tab-btn {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--tx-text-color-secondary, rgb(107, 114, 128));
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+}
+.news-tab-btn--active {
+  background: color-mix(in srgb, var(--tx-color-primary, rgb(59, 130, 246)) 14%, transparent);
+  border-color: color-mix(in srgb, var(--tx-color-primary, rgb(59, 130, 246)) 32%, transparent);
+  color: var(--tx-color-primary, rgb(59, 130, 246));
 }
 
 /* Release card hover effect */

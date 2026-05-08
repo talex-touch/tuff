@@ -1290,6 +1290,13 @@
 
 ## 2026-05-06
 
+### feat(core-app/nexus): 更新检查统一走 Nexus 与 updates 信息架构调整
+
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `apps/nexus/app/pages/updates.vue`
+  - UpdateService 默认 source 从 GitHub Releases 切换为 Nexus Official（`getTuffBaseUrl()`），且官方源检查失败时不再回落到 GitHub，后续版本监测统一请求 Nexus。
+  - Nexus `updates` 页面将版本 channel 选择上移至要闻区之前；要闻区新增“更新 / 公告”tabs，公告改为单独分栏展示，并统一使用 `TxButton` 交互样式保持按钮规范一致。
+
 ### test(tuffex): add ContextMenu contract coverage
 
 - `packages/tuffex/packages/components/src/context-menu/__tests__/context-menu.test.ts`
@@ -1918,7 +1925,6 @@
   - 长期授权时间窗改为后端判定：NextAuth JWT `iat` 注入 session context，`evaluateDeviceAuthLongTermPolicy()` 只允许签名 session 签发后 10 分钟内确认长期授权；前端 `reauth=1` 仅作为交互态，不作为信任依据。
   - 可信设备白名单落到 `auth_devices.trusted_at`，Dashboard 设备页可对未撤销设备执行信任/取消信任；长期授权必须同时满足可信设备、常用登录地与 session 时间窗。
   - 验证：`pnpm -C "apps/nexus" exec vitest run "server/utils/__tests__/device-auth-risk.test.ts"` 通过（`1 file / 4 tests`）；`pnpm -C "apps/nexus" run typecheck` 通过（仅保留既有 Nuxt/Vue duplicated imports 与 vue-router volar subpath warning）。
-
 ## 2026-05-04
 
 ### ref(core-app): 收口 Electron runtime 与 raw IPC 边界
