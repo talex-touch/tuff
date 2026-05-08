@@ -5,7 +5,6 @@ import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import TouchScroll from '~/components/base/TouchScroll.vue'
 import PluginEmptyState from '~/components/plugin/layout/PluginEmptyState.vue'
 import PluginListModule from '~/components/plugin/layout/PluginListModule.vue'
 import PluginInfo from '~/components/plugin/PluginInfo.vue'
@@ -103,6 +102,7 @@ async function handleOpenPluginFolder(): Promise<void> {
     class="plugin-shell flex-1"
     search-id="plugin-search"
     :search-placeholder="t('plugin.searchPlaceholder')"
+    :main-edge-blur="false"
   >
     <!-- Plugin List -->
     <PluginListModule
@@ -144,10 +144,8 @@ async function handleOpenPluginFolder(): Promise<void> {
 
     <!-- Main Content -->
     <template #main>
-      <div v-if="curSelect" :key="curSelect.name" class="h-full flex flex-col">
-        <TouchScroll no-padding class="flex-1">
-          <PluginInfo :plugin="curSelect" />
-        </TouchScroll>
+      <div v-if="curSelect" :key="curSelect.name" class="h-full min-h-0 flex flex-col">
+        <PluginInfo :plugin="curSelect" />
       </div>
       <PluginEmptyState v-else />
     </template>

@@ -12,6 +12,7 @@ const props = withDefaults(
     searchable?: boolean
     clearLabel?: string
     mainAriaLive?: 'off' | 'polite' | 'assertive' | undefined
+    mainEdgeBlur?: boolean
   }>(),
   {
     modelValue: '',
@@ -20,7 +21,8 @@ const props = withDefaults(
     searchId: 'tuff-aside-template-search',
     searchable: true,
     clearLabel: 'Clear search',
-    mainAriaLive: 'polite' as const
+    mainAriaLive: 'polite' as const,
+    mainEdgeBlur: true
   }
 )
 
@@ -73,8 +75,16 @@ const emit = defineEmits<{
     </aside>
 
     <section class="TuffAsideTemplate-Main" :aria-live="props.mainAriaLive">
-      <TxGradualBlur position="top" height="72px" :strength="1.4" :opacity="0.9" :z-index="20" />
-      <TxGradualBlur position="bottom" height="72px" :strength="1.4" :opacity="0.9" :z-index="20" />
+      <template v-if="props.mainEdgeBlur">
+        <TxGradualBlur position="top" height="72px" :strength="1.4" :opacity="0.9" :z-index="20" />
+        <TxGradualBlur
+          position="bottom"
+          height="72px"
+          :strength="1.4"
+          :opacity="0.9"
+          :z-index="20"
+        />
+      </template>
       <Transition name="fade-slide" mode="out-in">
         <slot name="main" />
       </Transition>

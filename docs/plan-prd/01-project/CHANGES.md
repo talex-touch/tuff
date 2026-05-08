@@ -5,6 +5,14 @@
 
 ## 2026-05-08
 
+### fix(core-app): remove installed plugin detail edge blur
+
+- `apps/core-app/src/renderer/src/components/tuff/template/TuffAsideTemplate.vue`
+- `apps/core-app/src/renderer/src/views/base/Plugin.vue`
+  - `TuffAsideTemplate` now exposes `mainEdgeBlur` to control the main content top/bottom `TxGradualBlur` overlays.
+  - Installed plugin page disables the overlays so plugin detail content is no longer blurred at the top and bottom edges.
+  - Installed plugin detail now avoids nested `TouchScroll`, leaving tab content scrolling to the inner tabs container.
+
 ### fix(core-app): prevent packaged renderer blank screen
 
 - `apps/core-app/electron.vite.config.ts`
