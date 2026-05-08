@@ -8,12 +8,17 @@
 
 // ==================== 平台检测 ====================
 
+const runtimePlatform =
+  typeof globalThis !== 'undefined'
+    ? (globalThis as { process?: { platform?: string } }).process?.platform
+    : undefined
+
 /** 当前操作系统平台 */
 export const PLATFORM = {
-  IS_WINDOWS: process.platform === 'win32',
-  IS_MACOS: process.platform === 'darwin',
-  IS_LINUX: process.platform === 'linux',
-  IS_UNIX: process.platform !== 'win32',
+  IS_WINDOWS: runtimePlatform === 'win32',
+  IS_MACOS: runtimePlatform === 'darwin',
+  IS_LINUX: runtimePlatform === 'linux',
+  IS_UNIX: runtimePlatform !== 'win32',
 } as const
 
 // ==================== 基础黑名单 ====================

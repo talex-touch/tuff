@@ -1,6 +1,7 @@
 <script lang="ts" name="AppLayoutFlat" setup>
 import { computed } from 'vue'
 import { useLayoutAtoms } from '~/modules/layout/atoms'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import LayoutShell from '../shared/LayoutShell.vue'
 import FlatController from './FlatController.vue'
 import FlatNavBar from './FlatNavBar.vue'
@@ -17,10 +18,10 @@ const props = withDefaults(
 )
 
 const { atomConfig } = useLayoutAtoms()
+const { isWindows } = useRendererPlatform()
 const isDisplayMode = computed(() => props.display)
 const isPreviewMode = computed(() => props.preview)
 const shouldRenderSlots = computed(() => !isDisplayMode.value || isPreviewMode.value)
-const isWindows = process.platform === 'win32'
 </script>
 
 <template>

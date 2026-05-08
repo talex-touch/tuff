@@ -184,6 +184,7 @@ export default defineConfig(async () => {
       plugins: [
         externalizeDepsPlugin({
           exclude: [
+            '@electron-toolkit/preload',
             '@talex-touch/utils', // workspace 包必须打包
             '@talex-touch/tuff-intelligence'
           ]

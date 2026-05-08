@@ -55,7 +55,15 @@ function detectArchByText(text: string): DetectedUpdateAssetArch {
   return 'unsupported'
 }
 
-export function resolveRuntimeUpdatePlatform(runtimePlatform = process.platform): UpdatePlatform {
+function getRuntimeProcess(): { platform?: string; arch?: string } | undefined {
+  return typeof globalThis !== 'undefined'
+    ? (globalThis as { process?: { platform?: string; arch?: string } }).process
+    : undefined
+}
+
+export function resolveRuntimeUpdatePlatform(
+  runtimePlatform = getRuntimeProcess()?.platform
+): UpdatePlatform {
   switch (runtimePlatform) {
     case 'win32':
       return 'win32'
@@ -68,7 +76,7 @@ export function resolveRuntimeUpdatePlatform(runtimePlatform = process.platform)
   }
 }
 
-export function resolveRuntimeUpdateArch(runtimeArch = process.arch): UpdateArch {
+export function resolveRuntimeUpdateArch(runtimeArch = getRuntimeProcess()?.arch): UpdateArch {
   switch (runtimeArch) {
     case 'x64':
       return 'x64'
