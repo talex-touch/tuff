@@ -10,12 +10,14 @@ const props = withDefaults(
     display?: boolean
     preview?: boolean
     variant: 'simple' | 'flat'
+    isMac?: boolean
     isWindows?: boolean
     atomConfig?: LayoutAtomConfig | null
   }>(),
   {
     display: false,
     preview: false,
+    isMac: false,
     isWindows: false,
     atomConfig: undefined
   }
@@ -24,6 +26,7 @@ const props = withDefaults(
 const isDisplayMode = computed(() => props.display)
 const isPreviewMode = computed(() => props.preview)
 const shouldRenderSlots = computed(() => !isDisplayMode.value || isPreviewMode.value)
+const isMac = computed(() => props.isMac)
 const isWindows = computed(() => props.isWindows)
 const variantClass = computed(() => (props.variant === 'simple' ? 'Simple' : 'Flat'))
 
@@ -45,7 +48,12 @@ const customCss = computed(() => sanitizeUserCss(props.atomConfig?.customCSS ?? 
   <div
     class="AppLayout-Container"
     :class="[
-      { 'is-display': isDisplayMode, 'is-preview': isPreviewMode, 'is-windows': isWindows },
+      {
+        'is-display': isDisplayMode,
+        'is-preview': isPreviewMode,
+        'is-mac': isMac,
+        'is-windows': isWindows
+      },
       variantClass,
       {
         'aside-hidden': !asideVisible,
@@ -142,6 +150,26 @@ const customCss = computed(() => sanitizeUserCss(props.atomConfig?.customCSS ?? 
 
   :deep(.FlatLayout-Icon) {
     padding-left: 12px;
+  }
+}
+
+.AppLayout-Container.is-mac {
+  .AppLayout-Header {
+    --layout-macos-titlebar-safe-width: 84px;
+    flex-direction: row-reverse;
+    justify-content: center;
+  }
+
+  :deep(.SimpleController-Head) {
+    padding-left: var(--layout-macos-titlebar-safe-width);
+    padding-right: 0.5rem;
+    justify-content: flex-end;
+  }
+
+  :deep(.FlatLayout-Icon) {
+    padding-left: var(--layout-macos-titlebar-safe-width);
+    padding-right: 4px;
+    flex-direction: row-reverse;
   }
 }
 

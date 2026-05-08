@@ -23,7 +23,7 @@ const props = withDefaults(
 )
 
 const { atomConfig } = useLayoutAtoms()
-const { isWindows } = useRendererPlatform()
+const { isMac, isWindows } = useRendererPlatform()
 const isDisplayMode = computed(() => props.display)
 const isPreviewMode = computed(() => props.preview)
 const shouldRenderSlots = computed(() => !isDisplayMode.value || isPreviewMode.value)
@@ -145,6 +145,7 @@ const customCss = computed(() => {
     :atom-config="atomConfig"
     :display="isDisplayMode"
     :preview="isPreviewMode"
+    :is-mac="isMac"
     :is-windows="isWindows"
   >
     <template #header>
@@ -176,7 +177,12 @@ const customCss = computed(() => {
   <div
     v-else
     class="AppLayout-Container CustomLayout-Container"
-    :class="{ 'is-display': isDisplayMode, 'is-preview': isPreviewMode, 'is-windows': isWindows }"
+    :class="{
+      'is-display': isDisplayMode,
+      'is-preview': isPreviewMode,
+      'is-mac': isMac,
+      'is-windows': isWindows
+    }"
     data-variant="custom"
     :style="wrapperStyle"
   >

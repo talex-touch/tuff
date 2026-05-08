@@ -17,7 +17,7 @@ const props = withDefaults(
 )
 
 const { atomConfig } = useLayoutAtoms()
-const { isWindows } = useRendererPlatform()
+const { isMac, isWindows } = useRendererPlatform()
 const isDisplayMode = computed(() => props.display)
 const isPreviewMode = computed(() => props.preview)
 </script>
@@ -28,6 +28,7 @@ const isPreviewMode = computed(() => props.preview)
     :atom-config="atomConfig"
     :display="isDisplayMode"
     :preview="isPreviewMode"
+    :is-mac="isMac"
     :is-windows="isWindows"
   >
     <template #header>

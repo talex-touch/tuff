@@ -44,6 +44,15 @@
   - Store providers now normalize icon values consistently, including URL paths, Iconify aliases, and manifest-style `{ type, value }` objects, without coercing arbitrary strings such as `json` into invalid `i-*` classes.
   - Added targeted regression coverage for SVG theme-mask detection and store icon normalization.
 
+### fix(core-app): reserve macOS titlebar space for layout logo
+
+- `apps/core-app/src/renderer/src/views/layout/shared/LayoutShell.vue`
+- `apps/core-app/src/renderer/src/views/layout/*Layout.vue`
+  - Layout containers now receive explicit renderer macOS state and add an `is-mac` class instead of relying on the async `body.darwin` preload class.
+  - All `LayoutShell`-based main layout headers now reserve a macOS titlebar safe width before the app logo area.
+  - Header background and side divider keep their original layout width while the logo/title content is inset inside that region.
+  - This keeps the app logo and title away from native traffic-light controls without changing Windows/Linux layout spacing.
+
 ### fix(core-app): avoid readonly proxy writes in widget render patch
 
 - `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`

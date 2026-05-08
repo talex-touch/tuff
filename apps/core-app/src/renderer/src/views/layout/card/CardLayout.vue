@@ -1,6 +1,7 @@
 <script lang="ts" name="AppLayoutCard" setup>
 import { computed } from 'vue'
 import { useLayoutAtoms } from '~/modules/layout/atoms'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import LayoutShell from '../shared/LayoutShell.vue'
 import FlatController from '../flat/FlatController.vue'
 import FlatNavBar from '../flat/FlatNavBar.vue'
@@ -17,6 +18,7 @@ const props = withDefaults(
 )
 
 const { atomConfig } = useLayoutAtoms()
+const { isMac, isWindows } = useRendererPlatform()
 const isDisplayMode = computed(() => props.display)
 const isPreviewMode = computed(() => props.preview)
 const shouldRenderSlots = computed(() => !isDisplayMode.value || isPreviewMode.value)
@@ -28,6 +30,8 @@ const shouldRenderSlots = computed(() => !isDisplayMode.value || isPreviewMode.v
     :atom-config="atomConfig"
     :display="isDisplayMode"
     :preview="isPreviewMode"
+    :is-mac="isMac"
+    :is-windows="isWindows"
   >
     <template #header>
       <FlatController>
