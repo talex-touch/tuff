@@ -5,6 +5,16 @@
 
 ## 2026-05-08
 
+### fix(core-app): prevent packaged renderer blank screen
+
+- `apps/core-app/electron.vite.config.ts`
+- `apps/core-app/src/renderer/src/views/layout/flat/FlatLayout.vue`
+- `apps/core-app/src/shared/update/platform-target.ts`
+- `packages/utils/common/file-scan-constants.ts`
+  - Packaged preload now bundles `@electron-toolkit/preload`, avoiding sandbox preload resolution failures after macOS snapshot packaging.
+  - Renderer/shared runtime platform detection no longer reads bare `process.platform` / `process.arch` at module evaluation time.
+  - Verified `2.4.10-beta.15` macOS snapshot packaging and packaged app startup; `#app` mounts successfully and the previous preload/module-not-found/process-is-not-defined errors are gone.
+
 ### docs(governance): sync 2.4.10 current line and 2.4.11 blockers
 
 - `docs/INDEX.md`
