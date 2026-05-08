@@ -4,6 +4,7 @@ import type {
   StoreProviderListOptions
 } from '@talex-touch/utils/store'
 import { BaseStoreProvider } from './base-provider'
+import { normalizeStoreIcon } from './store-icon-normalizer'
 
 /**
  * Repository type detection
@@ -56,7 +57,7 @@ interface PluginManifest {
   version?: string
   description?: string
   author?: string
-  icon?: string
+  icon?: unknown
   homepage?: string
   category?: string
   tags?: string[]
@@ -285,6 +286,7 @@ export class RepositoryProvider extends BaseStoreProvider {
 
     const pluginId = `${this.repoType}:${this.owner}/${this.repo}`
     const pluginName = manifest?.name || this.repo
+    const normalizedIcon = normalizeStoreIcon(manifest?.icon)
 
     const plugin: StorePlugin = {
       id: pluginId,
@@ -294,7 +296,8 @@ export class RepositoryProvider extends BaseStoreProvider {
       category: manifest?.category || 'community',
       tags: manifest?.tags || [],
       author: manifest?.author || this.owner,
-      icon: manifest?.icon,
+      icon: normalizedIcon.icon,
+      iconUrl: normalizedIcon.iconUrl,
       homepage: manifest?.homepage || latestRelease.html_url,
       downloadUrl: asset?.browser_download_url,
       install,

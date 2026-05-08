@@ -6,6 +6,15 @@ vi.mock('~/utils/dev-log', () => ({
   devLog: vi.fn()
 }))
 
+vi.mock('~/utils/renderer-log', () => ({
+  createRendererLogger: () => ({
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn()
+  })
+}))
+
 function createProvider(
   data: unknown,
   definition: Partial<StoreProviderDefinition> = {}

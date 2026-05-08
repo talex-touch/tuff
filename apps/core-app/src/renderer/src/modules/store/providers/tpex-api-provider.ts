@@ -1,6 +1,7 @@
 import type { StorePlugin, StoreProviderListOptions } from '@talex-touch/utils/store'
 import { requestNexusWithAuth } from '../nexus-auth-client'
 import { BaseStoreProvider } from './base-provider'
+import { normalizeStoreIcon } from './store-icon-normalizer'
 
 interface TpexApiPlugin {
   id: string
@@ -13,6 +14,7 @@ interface TpexApiPlugin {
   isOfficial: boolean
   badges: string[]
   author?: { name: string; avatarColor?: string } | null
+  icon?: unknown
   iconUrl?: string | null
   readmeMarkdown?: string | null
   readmeUrl?: string | null
@@ -105,7 +107,7 @@ export class TpexApiProvider extends BaseStoreProvider {
   private normalizeEntry(entry: TpexApiPlugin, baseUrl: string | null): StorePlugin {
     const downloadUrl = this.normalizeUrl(entry.latestVersion?.packageUrl, baseUrl) ?? ''
     const readmeUrl = this.normalizeUrl(entry.readmeUrl, baseUrl)
-    const iconUrl = this.normalizeUrl(entry.iconUrl, baseUrl)
+    const normalizedIcon = normalizeStoreIcon(entry.iconUrl ?? entry.icon, baseUrl)
 
     return {
       id: entry.slug || entry.id,
@@ -115,7 +117,8 @@ export class TpexApiProvider extends BaseStoreProvider {
       description: entry.summary,
       category: entry.category,
       timestamp: entry.latestVersion?.createdAt || entry.updatedAt,
-      iconUrl,
+      icon: normalizedIcon.icon,
+      iconUrl: normalizedIcon.iconUrl,
       metadata: {
         installs: entry.installs,
         badges: entry.badges,

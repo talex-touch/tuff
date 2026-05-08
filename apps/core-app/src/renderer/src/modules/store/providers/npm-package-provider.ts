@@ -4,6 +4,7 @@ import type {
   StoreProviderListOptions
 } from '@talex-touch/utils/store'
 import { BaseStoreProvider } from './base-provider'
+import { normalizeStoreIcon } from './store-icon-normalizer'
 
 /**
  * NPM package metadata from registry
@@ -38,7 +39,7 @@ interface NpmVersionMetadata {
   homepage?: string
   tuffPlugin?: {
     category?: string
-    icon?: string
+    icon?: unknown
     tags?: string[]
   }
   dist: {
@@ -197,6 +198,7 @@ export class NpmPackageProvider extends BaseStoreProvider {
 
     // Get tuff-specific metadata
     const tuffMeta = versionData.tuffPlugin || {}
+    const normalizedIcon = normalizeStoreIcon(tuffMeta.icon)
 
     const plugin: StorePlugin = {
       id: `npm:${metadata.name}`,
@@ -206,7 +208,8 @@ export class NpmPackageProvider extends BaseStoreProvider {
       category: tuffMeta.category || 'npm',
       tags: tuffMeta.tags || metadata.keywords || [],
       author: authorName,
-      icon: tuffMeta.icon,
+      icon: normalizedIcon.icon,
+      iconUrl: normalizedIcon.iconUrl,
       homepage: metadata.homepage,
       downloadUrl: versionData.dist.tarball,
       install,

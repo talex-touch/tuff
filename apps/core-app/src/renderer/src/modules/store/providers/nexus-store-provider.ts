@@ -1,5 +1,6 @@
 import type { StorePlugin, StoreProviderListOptions } from '@talex-touch/utils/store'
 import { BaseStoreProvider } from './base-provider'
+import { normalizeStoreIcon } from './store-icon-normalizer'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
 
@@ -14,6 +15,7 @@ interface NexusManifestEntry {
   timestamp?: string | number
   metadata?: Record<string, unknown>
   slug?: string
+  icon?: unknown
   iconUrl?: string | null
   isOfficial?: boolean
   latestVersion?: {
@@ -184,25 +186,12 @@ export class NexusStoreProvider extends BaseStoreProvider {
       }
     }
 
-    // Handle icon - always construct full URL at source
-    let icon: string | undefined
-    let iconUrl: string | undefined
     const rawIconUrl =
       entry.iconUrl || (typeof metadata.icon_url === 'string' ? metadata.icon_url : undefined)
-    if (rawIconUrl && typeof rawIconUrl === 'string') {
-      iconUrl = rawIconUrl.startsWith('http')
-        ? rawIconUrl
-        : new URL(rawIconUrl.replace(/^\//, ''), baseUrl).toString()
-    } else {
-      const iconClass = typeof metadata.icon_class === 'string' ? metadata.icon_class.trim() : ''
-      const iconValue = typeof metadata.icon === 'string' ? metadata.icon.trim() : ''
-      if (iconClass.length > 0) {
-        icon = iconClass
-      } else if (iconValue.length > 0) {
-        const trimmed = iconValue
-        icon = trimmed.startsWith('i-') ? trimmed : `i-${trimmed}`
-      }
-    }
+    const normalizedIcon = normalizeStoreIcon(
+      rawIconUrl ?? metadata.icon_class ?? entry.icon ?? metadata.icon,
+      baseUrl
+    )
 
     // Handle author
     const author =
@@ -221,8 +210,8 @@ export class NexusStoreProvider extends BaseStoreProvider {
       description,
       category: entry.category,
       timestamp: entry.updatedAt || entry.createdAt || entry.timestamp,
-      icon,
-      iconUrl,
+      icon: normalizedIcon.icon,
+      iconUrl: normalizedIcon.iconUrl,
       metadata,
       readmeUrl,
       downloadUrl,

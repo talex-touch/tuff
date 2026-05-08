@@ -3,6 +3,7 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import { isElectronRenderer } from '@talex-touch/utils/env'
 import { toTfileUrl } from '@talex-touch/utils/network'
 import { useSvgContent } from '~/modules/hooks/useSvgContent'
+import { shouldRenderSvgAsMask } from './tuff-icon-rendering'
 
 const props = defineProps<{
   icon?: ITuffIcon | null
@@ -71,11 +72,15 @@ const shouldPreserveColor = computed(
   () => props.colorful === true || safeIcon.value.colorful === true
 )
 const shouldUseSvgMask = computed(() => isSvg.value && !shouldPreserveColor.value)
+const shouldUseThemeSvgMask = computed(
+  () => isSvg.value && shouldPreserveColor.value && shouldRenderSvgAsMask(svgContent.value)
+)
 const canFallbackToDirectSvg = computed(
   () => addressable.value && isSvg.value && !!effectiveUrl.value
 )
 const useInlineSvgMask = computed(
-  () => shouldUseSvgMask.value && !!svgContent.value && !svgError.value
+  () =>
+    (shouldUseSvgMask.value || shouldUseThemeSvgMask.value) && !!svgContent.value && !svgError.value
 )
 const allowDirectRender = computed(
   () => addressable.value && !!effectiveUrl.value && (!isSvg.value || canFallbackToDirectSvg.value)
@@ -98,7 +103,7 @@ watch(
   () => ({ nextUrl: url.value, shouldUseSvgMask: shouldUseSvgMask.value }),
   ({ nextUrl, shouldUseSvgMask }) => {
     imgError.value = false
-    if (nextUrl && shouldUseSvgMask) {
+    if (nextUrl && (shouldUseSvgMask || isSvg.value)) {
       setUrl(nextUrl)
       return
     }

@@ -33,6 +33,17 @@
   - 入口按关键词/别名命中并参与 `@file` 搜索，不进入空查询默认结果，也不依赖 Everything 或写入文件索引。
   - 执行路径统一通过 `explorer.exe shell:*` 打开，避免把 Shell 虚拟入口当普通文件路径处理。
 
+### fix(core-app): restore store and plugin navigation icons
+
+- `apps/core-app/src/renderer/src/components/base/TuffIcon.vue`
+- `apps/core-app/src/renderer/src/components/base/tuff-icon-rendering.ts`
+- `apps/core-app/src/renderer/src/components/store/StoreIcon.vue`
+- `apps/core-app/src/renderer/src/modules/store/providers/store-icon-normalizer.ts`
+- `apps/core-app/src/renderer/src/modules/store/providers/*`
+  - `TuffIcon` now reads SVG content for addressable SVG icons and renders monochrome/default-black SVGs through the theme-color mask path while preserving explicitly colorful SVGs as direct images.
+  - Store providers now normalize icon values consistently, including URL paths, Iconify aliases, and manifest-style `{ type, value }` objects, without coercing arbitrary strings such as `json` into invalid `i-*` classes.
+  - Added targeted regression coverage for SVG theme-mask detection and store icon normalization.
+
 ### fix(core-app): avoid readonly proxy writes in widget render patch
 
 - `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`

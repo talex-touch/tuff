@@ -2,6 +2,7 @@
 import type { ITuffIcon } from '@talex-touch/utils'
 import { computed } from 'vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
+import { normalizeStoreIcon } from '~/modules/store/providers/store-icon-normalizer'
 
 interface StoreIconProps {
   item?: {
@@ -21,8 +22,8 @@ const iconUrl = computed(() => {
   const fromProp = typeof props.item.iconUrl === 'string' ? props.item.iconUrl.trim() : ''
   if (fromProp) return fromProp
 
-  const icon = typeof props.item.icon === 'string' ? props.item.icon.trim() : ''
-  if (/^https?:\/\//i.test(icon)) return icon
+  const normalizedIcon = normalizeStoreIcon(props.item.icon)
+  if (normalizedIcon.iconUrl) return normalizedIcon.iconUrl
 
   return null
 })
@@ -32,15 +33,15 @@ const iconClass = computed(() => {
 
   const metadata = props.item.metadata as Record<string, unknown> | undefined
   if (metadata) {
-    const metaIconClass = typeof metadata.icon_class === 'string' ? metadata.icon_class.trim() : ''
-    if (metaIconClass) return metaIconClass
+    const normalizedMetaIconClass = normalizeStoreIcon(metadata.icon_class)
+    if (normalizedMetaIconClass.icon) return normalizedMetaIconClass.icon
 
-    const metaIcon = typeof metadata.icon === 'string' ? metadata.icon.trim() : ''
-    if (metaIcon) return metaIcon.startsWith('i-') ? metaIcon : `i-${metaIcon}`
+    const normalizedMetaIcon = normalizeStoreIcon(metadata.icon)
+    if (normalizedMetaIcon.icon) return normalizedMetaIcon.icon
   }
 
-  const fromProp = typeof props.item.icon === 'string' ? props.item.icon.trim() : ''
-  if (fromProp) return fromProp.startsWith('i-') ? fromProp : `i-${fromProp}`
+  const normalizedIcon = normalizeStoreIcon(props.item.icon)
+  if (normalizedIcon.icon) return normalizedIcon.icon
 
   return ''
 })
