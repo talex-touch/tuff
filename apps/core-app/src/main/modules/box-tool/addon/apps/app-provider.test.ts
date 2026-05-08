@@ -1448,7 +1448,6 @@ describe('appProvider rebuild maintenance', () => {
       ])
     )
     expect(indexItemsMock).toHaveBeenCalledTimes(1)
-
     const disabled = await appProvider.setManagedEntryEnabled(scriptPath, false)
 
     expect(disabled).toMatchObject({
