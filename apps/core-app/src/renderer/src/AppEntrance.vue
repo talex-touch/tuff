@@ -48,6 +48,12 @@ async function initializeEntrance(): Promise<void> {
 onMounted(() => {
   void initializeEntrance()
 })
+
+watchEffect(() => {
+  const mode = appEntranceMode.value
+  document.body.classList.toggle('core-box', mode === 'CoreBox' || mode === 'DivisionBox')
+  document.body.classList.toggle('division-box', mode === 'DivisionBox')
+})
 </script>
 
 <template>

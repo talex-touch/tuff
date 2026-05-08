@@ -687,6 +687,24 @@ function normalizeWidgetExport(exported: unknown, renderExport?: unknown): unkno
   })
 }
 
+function copyEnumerableRenderContext(
+  target: Record<PropertyKey, unknown>,
+  source: Record<PropertyKey, unknown>
+): void {
+  for (const key of Reflect.ownKeys(source)) {
+    if (!Object.prototype.propertyIsEnumerable.call(source, key)) {
+      continue
+    }
+
+    Object.defineProperty(target, key, {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: Reflect.get(source, key, source)
+    })
+  }
+}
+
 function wrapRenderWithSetupState(component: Record<string, unknown>, debugLabel?: string): void {
   if (component.__renderPatched) {
     return
@@ -726,9 +744,9 @@ function wrapRenderWithSetupState(component: Record<string, unknown>, debugLabel
         }
         const merged = Object.create(
           instance && typeof instance === 'object' ? (instance as unknown as object) : null
-        ) as Record<string, unknown>
+        ) as Record<PropertyKey, unknown>
 
-        Object.assign(merged, ctxObject)
+        copyEnumerableRenderContext(merged, ctxObject)
 
         for (const key of Object.keys(setupState)) {
           if (key in merged) {

@@ -5,6 +5,19 @@
 
 ## 2026-05-08
 
+### fix(core-app): avoid readonly proxy writes in widget render patch
+
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+  - Widget render setup-state patching now copies enumerable render context fields through property definitions instead of `Object.assign`.
+  - This avoids writing through Vue readonly public-instance proxies for props such as `item`, fixing `set on proxy: trap returned falsish for property 'item'` in widget renders.
+
+### fix(core-app): restore CoreBox renderer visibility
+
+- `apps/core-app/src/renderer/src/main.ts`
+- `apps/core-app/src/renderer/src/AppEntrance.vue`
+  - Renderer now initializes the legacy `TouchChannel` bridge before transport-dependent side-effect modules bind listeners.
+  - CoreBox and DivisionBox entries now synchronously maintain `body.core-box` / `body.division-box`, so CSS no longer hides the CoreBox shell when the early `ui.trigger` event is missed.
+
 ### fix(core-app): harden Sentry storage and search index regressions
 
 - `packages/utils/renderer/storage/base-storage.ts`

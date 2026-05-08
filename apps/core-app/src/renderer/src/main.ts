@@ -1,3 +1,4 @@
+import '~/modules/channel/channel-core'
 import { setRuntimeEnv } from '@talex-touch/utils/env'
 import { preloadDebugStep, preloadLog, preloadState } from '@talex-touch/utils/preload'
 import { initStorageChannel, initStorageTransport, useChannel } from '@talex-touch/utils/renderer'
@@ -27,7 +28,6 @@ import { createRendererLogger } from '~/utils/renderer-log'
 
 import App from './App.vue'
 
-import '~/modules/channel/channel-core'
 import '~/modules/auth/account-channel'
 import '~/modules/plugin/widget-registry'
 import './assets/main.css'
