@@ -661,7 +661,9 @@
 - [x] 基础 legacy 清理阻塞：清册中的 core-app `2.4.11` 项已关闭或显式降权；不得新增 `legacy` 分支、raw channel、旧 storage protocol、旧 SDK bypass。
   - 已将 `apps/core-app/scripts` 与 `apps/pilot/scripts` 纳入 `legacy/compat` 显式扫描范围，并手工补齐 allowlist / registry。
   - 插件 channel bridge 移除 legacy header 语义；DivisionBox dead `flow-trigger` 事件面已物理删除；Nexus store 旧 manifest/path fallback 已改为结构化错误。
-  - permission JSON->SQLite、dev data root migration、theme localStorage migration 与 download legacy migration manager 已从启动/runtime 主路径移除，不再保留 migration exception。
+  - permission JSON->SQLite、dev data root migration、theme localStorage migration 仍作为 read-once / marker-gated migration exception 保留；2026-05-08 已补明确退场条件与回归证据要求，禁止扩散为新的 runtime storage 依赖。
+  - 2026-05-08 Intelligence Workflow 页面与 `useWorkflowEditor()` 硬编码文案已迁移到 `zh-CN/en-US` i18n；FileProvider 两处 `[DEBUG]` 日志前缀和 DEBUG 注释已清理，索引调度逻辑不变。
+  - 2026-05-08 `compat-plugin-view`、raw IPC adapter 与 `window.touchChannel` 仅维持现有白名单边界；本轮未新增 legacy/raw channel 消费方。
 - [x] Auth secure storage 默认关闭：`useSecureStorage` 新配置与缺失字段均保持 session-only，冷启动和 session-only 清 token 不触发 Electron `safeStorage` / macOS Keychain。
 - [x] Plugin icon 基础兼容修复：插件 manifest `file` 图标优先从插件目录解析，补 `src/assets` / `public` source-layout 候选；CoreApp `TuffIcon colorful=true` 直接保留 SVG 原色渲染，避免本地 SVG 读取失败导致破图。
 - [x] Plugin channel sandbox 兼容修复：旧插件 channel/prelude 与 renderer channel reply 统一用 `ipcRenderer.send(...)`，避免 sandbox 事件对象缺少 `sender.send`。
@@ -679,6 +681,7 @@
 - [ ] Release Evidence 写入闭环：具备 `release:evidence` API key 或管理员登录态后，将 docs guard、平台 matrix 与 CoreApp 定向回归结果写入 Nexus。
 - [ ] Legacy/compat/size 清册退场：`scripts/legacy-boundary-allowlist.json`、`scripts/large-file-boundary-allowlist.json` 与 `compatibility-debt-registry.csv` 中 `2.4.11` 退场项必须关闭或显式降权。
 - [ ] 超长文件治理：对仍高于 1200 行的 `growthExceptions` 文件给出拆分计划或降低到阈值以下。
+  - 2026-05-08 已将 core-app 13 个 `size-growth-exception` 收敛为后续小任务口径；优先拆分候选为 `clipboard.ts`（capture/history/transport/autopaste）、`search-core.ts`（routing/provider orchestration/cache-result merge）、`plugin-module.ts`（lifecycle/runtime repair/surface wiring/registry）。
 - [ ] CoreApp 验证收口：补跑 `typecheck:node` / `typecheck:web` / 定向测试并记录证据。
 - [ ] 搜索性能验收：按 `search-trace` 采样 200 次真实查询，确认 `first.result/session.end` P95 与慢查询占比达标。
 - [ ] 启动搜索压测：执行“全量索引 + 高频推荐 + 剪贴板图像轮询”，产出 2 分钟窗口内 lag/P95 证据。

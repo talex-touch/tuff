@@ -18,6 +18,21 @@
   - Renderer now initializes the legacy `TouchChannel` bridge before transport-dependent side-effect modules bind listeners.
   - CoreBox and DivisionBox entries now synchronously maintain `body.core-box` / `body.division-box`, so CSS no longer hides the CoreBox shell when the early `ui.trigger` event is missed.
 
+### fix(core-app): localize workflow editor and tighten compat debt tracking
+
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceWorkflowPage.vue`
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `apps/core-app/docs/compatibility-legacy-scan-summary.md`
+- `docs/plan-prd/TODO.md`
+  - Intelligence Workflow 页面、toast、按钮、校验错误、默认 trigger/context label 统一迁移到 renderer i18n 资源；Workflow list/save/delete/run/resume/approve 仍走 `useIntelligenceSdk` / `useAgentsSdk`。
+  - FileProvider 移除两处 `[DEBUG]` 日志前缀和 DEBUG 注释，保留 `logDebug` 诊断语义且不改变索引调度。
+  - CoreApp 3 个 migration exception 保留为 read-once / marker-gated 迁移路径，registry 补齐退场条件与回归证据要求。
+  - CoreApp 13 个 size-growth exception 改为后续小任务口径，优先拆分候选锁定 `clipboard.ts`、`search-core.ts`、`plugin-module.ts`。
+
 ### fix(core-app): harden Sentry storage and search index regressions
 
 - `packages/utils/renderer/storage/base-storage.ts`

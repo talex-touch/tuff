@@ -1,6 +1,6 @@
 # 兼容性/老旧代码分类清单（当前汇总）
 
-更新时间：2026-05-06
+更新时间：2026-05-08
 
 本文件是 `compatibility-legacy-scan.md` 的短汇总，用于避免历史扫描清单继续把已删除或已硬切的路径标为未处理风险。详细证据和分轮记录以 `compatibility-legacy-scan.md` 为准。
 
@@ -12,6 +12,7 @@
 - medium：跨平台能力仍有真实不对称，Windows/macOS 是 2.5.0 release-blocking 人工回归范围，Linux 继续按 `xdotool` / desktop environment 记录为 documented best-effort。
 - medium：Electron 宽松运行时边界已收口为命名 `WindowSecurityProfile`；主窗口/CoreBox/OmniPanel/Assistant/MetaOverlay 进入 app-grade baseline，插件 `WebContentsView` / DivisionBox 仍保留显式 `compat-plugin-view` 兼容 profile。
 - medium：插件 SDK hard-cut 已在 loader / installer / permission guard 阻断不兼容 `sdkapi`；旧 raw channel 仅保留为明确抛错边界，不再作为可用兼容通道。`@main-process-message` / `@plugin-process-message` 已集中到内部 raw IPC adapter，业务侧新增裸 IPC 由 `runtime:guard` 拦截。
+- medium：`compat-plugin-view`、raw IPC adapter 与 `window.touchChannel` 仍是显式白名单边界；本轮不做行为删除，只通过 `runtime:guard` / legacy boundary 防止新增业务消费方。
 - low：普通 fallback 多为输入默认值、展示兜底、schema/runtime migration 或诊断面，不等价于未完成能力。
 - low：启动、平台和语言兼容层已进一步收口；renderer 不再依赖 Node 全局 `process`，Linux `best_effort`、分享/权限等真实能力不对称仍保留为 documented boundary 且带 `issueCode/reason/limitations`。
 
@@ -33,6 +34,8 @@
 - Runtime boundary guard：新增 `pnpm -C "apps/core-app" run runtime:guard`，冻结宽松 WebPreferences、裸 `ipcRenderer/ipcMain`、raw IPC event string、`window.touchChannel`、`window.$t/window.$i18n` 与旧 `/api/sync/*`。
 - Window security profile：`apps/core-app/src/main/core/window-security-profile.ts` 成为窗口安全配置唯一 profile 构造入口；插件 UI 与 DivisionBox 的宽松配置只能通过 `compat-plugin-view` 显式声明。
 - Raw IPC substrate：`@main-process-message` / `@plugin-process-message` 已集中到 `apps/core-app/src/shared/ipc/raw-channel.ts`，renderer `window.touchChannel` 仅作为 deprecated bootstrap bridge 暴露。
+- Intelligence Workflow i18n：`IntelligenceWorkflowPage.vue` 与 `useWorkflowEditor.ts` 的用户可见中文 toast、按钮、校验错误和默认 trigger/context label 已迁移到 `zh-CN/en-US` 资源，业务调用仍走 `useIntelligenceSdk` / `useAgentsSdk`。
+- FileProvider diagnostics：两处临时 `[DEBUG]` 日志前缀和 DEBUG 注释已清理，保留 `logDebug` 诊断语义且不改变索引调度。
 - Platform capability：macOS Automation、Windows PowerShell、Linux `xdotool`、native share mail-only 与 permission deep-link 均有 focused regression，确保 degraded/unsupported path 必带可读原因和限制说明。
 - Sync b64 migration payload：`b64:` pull fallback 仍只读迁移；命中后通过 dirty queue 触发下一次 encrypted repush，测试固定该行为。
 - Theme startup：仅剩测试引用的 `parseLegacyThemeStyle()` 已删除。
@@ -49,6 +52,8 @@
 - 插件 `compat-plugin-view` 与 DivisionBox `compat-plugin-view` 是当前兼容 profile，不代表恢复 legacy SDK channel；`channel.raw` / `channel.sendSync` 仍保持 hard-cut 抛错。
 - `preload` 的 debug console 仅由 `DEBUG` / `debug-preload` 显式打开；`SearchLogger`、logger 输出端、内部插件 logger、WebContents injected script 的 `console.*` 属于诊断/注入边界。
 - 数据库、下载、权限等 schema/runtime migration 是本地数据演进路径，不能按关键词直接删除。
+- 当前仍登记 3 个 core-app migration exception：`permission-store.ts` 的 JSON->SQLite read-once migration、`app-root-path.ts` 的 marker-gated dev root migration、`theme-style.ts` 的 localStorage read-once cleanup。退场前必须有 targeted regression 与 retained-user upgrade evidence，且不得扩散为新的 writable SoT。
+- 13 个 core-app size-growth exception 不在本轮做大重构；优先后续小任务为 `clipboard.ts`、`search-core.ts`、`plugin-module.ts` 的职责边界拆分。
 - 搜索、AI provider、i18n、icon 等 fallback 是真实兜底或错误恢复；后续只在出现 false-success 或隐藏降级时收口。
 
 ## 陈旧清单复核
