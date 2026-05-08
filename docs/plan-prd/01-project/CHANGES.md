@@ -25,6 +25,14 @@
   - 文件搜索主路径失效时不再返回该结果，并异步清理 stale index；失效 thumbnail/icon 降级为 class fallback 并触发缓存清理与重生成。
   - Recommendation rebuild 与剪贴板图片输出不再暴露失效本地 image URL，避免历史路径继续触发 `tfile://... 404`。
 
+### feat(core-app): expose Windows shell folders in CoreBox file search
+
+- `apps/core-app/src/main/modules/box-tool/addon/system/windows-shell-file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+  - Windows CoreBox 文件搜索新增 Shell namespace 入口命中，覆盖此电脑、回收站、网络、控制面板、用户文件夹及常用库目录。
+  - 入口按关键词/别名命中并参与 `@file` 搜索，不进入空查询默认结果，也不依赖 Everything 或写入文件索引。
+  - 执行路径统一通过 `explorer.exe shell:*` 打开，避免把 Shell 虚拟入口当普通文件路径处理。
+
 ### fix(core-app): avoid readonly proxy writes in widget render patch
 
 - `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`

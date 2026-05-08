@@ -123,6 +123,15 @@ vi.mock('../addon/system/system-actions-provider', () => ({
   }
 }))
 
+vi.mock('../addon/system/windows-shell-file-provider', () => ({
+  windowsShellFileProvider: {
+    id: 'windows-shell-file-provider',
+    type: 'file',
+    supportedInputTypes: [TuffInputType.Text],
+    onSearch: vi.fn()
+  }
+}))
+
 vi.mock('../core-box/window', () => ({
   windowManager: {
     current: null
@@ -204,6 +213,12 @@ const MOCK_PROVIDERS = [
     id: 'everything-provider',
     type: 'file',
     supportedInputTypes: [TuffInputType.Text, TuffInputType.Files],
+    onSearch: vi.fn()
+  },
+  {
+    id: 'windows-shell-file-provider',
+    type: 'file',
+    supportedInputTypes: [TuffInputType.Text],
     onSearch: vi.fn()
   },
   {
@@ -363,6 +378,7 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
       expect(result.providers.map((provider) => provider.id)).toEqual([
         'app-provider',
         'everything-provider',
+        'windows-shell-file-provider',
         'plugin-features'
       ])
     })
@@ -384,7 +400,10 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
         { text: 'ext:pdf report', inputs: [] } as TuffQuery,
         { providerFilter: 'file' }
       )
-      expect(filtered.providers.map((provider) => provider.id)).toEqual(['file-provider'])
+      expect(filtered.providers.map((provider) => provider.id)).toEqual([
+        'file-provider',
+        'windows-shell-file-provider'
+      ])
 
       everythingReadyMock.mockReturnValue(true)
       fileHasSearchFiltersMock.mockReturnValue(false)
@@ -393,7 +412,10 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
         { text: 'report', inputs: [] } as TuffQuery,
         { providerFilter: 'file' }
       )
-      expect(fileCategory.providers.map((provider) => provider.id)).toEqual(['everything-provider'])
+      expect(fileCategory.providers.map((provider) => provider.id)).toEqual([
+        'everything-provider',
+        'windows-shell-file-provider'
+      ])
 
       fileHasSearchFiltersMock.mockReturnValue(false)
       everythingReadyMock.mockReturnValue(false)
@@ -405,8 +427,58 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
       expect(fallback.providers.map((provider) => provider.id)).toEqual([
         'app-provider',
         'file-provider',
+        'windows-shell-file-provider',
         'plugin-features'
       ])
+    })
+  })
+
+  it('keeps Windows shell file entries available for @file queries', async () => {
+    const core = SearchEngineCore.getInstance() as unknown as {
+      orchestrateSearchQuery: (
+        query: TuffQuery
+      ) => Promise<{ providerFilter?: string; cacheKey: string; durationMs: number }>
+      aggregateProvidersForQuery: (
+        providers: typeof MOCK_PROVIDERS,
+        query: TuffQuery,
+        options: { providerFilter?: string }
+      ) => { providers: typeof MOCK_PROVIDERS; durationMs: number }
+    }
+
+    await withPlatform('win32', async () => {
+      everythingReadyMock.mockReturnValue(true)
+      const query = { text: '@file 回收站', inputs: [] } as TuffQuery
+      const parsed = await core.orchestrateSearchQuery(query)
+      const result = core.aggregateProvidersForQuery(MOCK_PROVIDERS, query, {
+        providerFilter: parsed.providerFilter
+      })
+
+      expect(parsed.providerFilter).toBe('file')
+      expect(query.text).toBe('回收站')
+      expect(result.providers.map((provider) => provider.id)).toEqual([
+        'everything-provider',
+        'windows-shell-file-provider'
+      ])
+    })
+  })
+
+  it('does not add Windows shell entries to explicit @file-provider queries', async () => {
+    const core = SearchEngineCore.getInstance() as unknown as {
+      aggregateProvidersForQuery: (
+        providers: typeof MOCK_PROVIDERS,
+        query: TuffQuery,
+        options: { providerFilter?: string }
+      ) => { providers: typeof MOCK_PROVIDERS; durationMs: number }
+    }
+
+    await withPlatform('win32', async () => {
+      const result = core.aggregateProvidersForQuery(
+        MOCK_PROVIDERS,
+        { text: '回收站', inputs: [] } as TuffQuery,
+        { providerFilter: 'file-provider' }
+      )
+
+      expect(result.providers.map((provider) => provider.id)).toEqual(['file-provider'])
     })
   })
 

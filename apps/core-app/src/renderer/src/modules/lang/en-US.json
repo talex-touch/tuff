@@ -3254,6 +3254,53 @@
       "addAppIndexSubtitle": "Path: {path}",
       "addFileIndexTitle": "Add to File Index: {name}",
       "addFileIndexSubtitle": "Path: {path}"
+    },
+    "windowsShell": {
+      "open": "Open",
+      "thisPc": {
+        "title": "This PC",
+        "subtitle": "Open Windows This PC"
+      },
+      "recycleBin": {
+        "title": "Recycle Bin",
+        "subtitle": "Open Windows Recycle Bin"
+      },
+      "network": {
+        "title": "Network",
+        "subtitle": "Open Windows network locations"
+      },
+      "controlPanel": {
+        "title": "Control Panel",
+        "subtitle": "Open Windows Control Panel"
+      },
+      "userFolder": {
+        "title": "User Folder",
+        "subtitle": "Open the current user folder"
+      },
+      "desktop": {
+        "title": "Desktop",
+        "subtitle": "Open the Desktop folder"
+      },
+      "downloads": {
+        "title": "Downloads",
+        "subtitle": "Open the Downloads folder"
+      },
+      "documents": {
+        "title": "Documents",
+        "subtitle": "Open the Documents folder"
+      },
+      "pictures": {
+        "title": "Pictures",
+        "subtitle": "Open the Pictures folder"
+      },
+      "music": {
+        "title": "Music",
+        "subtitle": "Open the Music folder"
+      },
+      "videos": {
+        "title": "Videos",
+        "subtitle": "Open the Videos folder"
+      }
     }
   }
 }

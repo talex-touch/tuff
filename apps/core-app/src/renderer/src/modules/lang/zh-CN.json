@@ -3246,6 +3246,53 @@
       "addAppIndexSubtitle": "路径：{path}",
       "addFileIndexTitle": "加入文件索引：{name}",
       "addFileIndexSubtitle": "路径：{path}"
+    },
+    "windowsShell": {
+      "open": "打开",
+      "thisPc": {
+        "title": "此电脑",
+        "subtitle": "打开 Windows 此电脑"
+      },
+      "recycleBin": {
+        "title": "回收站",
+        "subtitle": "打开 Windows 回收站"
+      },
+      "network": {
+        "title": "网络",
+        "subtitle": "打开 Windows 网络位置"
+      },
+      "controlPanel": {
+        "title": "控制面板",
+        "subtitle": "打开 Windows 控制面板"
+      },
+      "userFolder": {
+        "title": "用户文件夹",
+        "subtitle": "打开当前用户文件夹"
+      },
+      "desktop": {
+        "title": "桌面",
+        "subtitle": "打开桌面文件夹"
+      },
+      "downloads": {
+        "title": "下载",
+        "subtitle": "打开下载文件夹"
+      },
+      "documents": {
+        "title": "文档",
+        "subtitle": "打开文档文件夹"
+      },
+      "pictures": {
+        "title": "图片",
+        "subtitle": "打开图片文件夹"
+      },
+      "music": {
+        "title": "音乐",
+        "subtitle": "打开音乐文件夹"
+      },
+      "videos": {
+        "title": "视频",
+        "subtitle": "打开视频文件夹"
+      }
     }
   }
 }

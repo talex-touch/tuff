@@ -46,6 +46,7 @@ import { fileProvider } from '../addon/files/file-provider'
 import { previewProvider } from '../addon/preview'
 import { mainWindowProvider } from '../addon/system/main-window-provider'
 import { systemActionsProvider } from '../addon/system/system-actions-provider'
+import { windowsShellFileProvider } from '../addon/system/windows-shell-file-provider'
 import { resolveClipboardInputs } from './utils/resolve-clipboard-inputs'
 import { windowManager } from '../core-box/window'
 import { QueryCompletionService } from './query-completion-service'
@@ -421,6 +422,7 @@ export class SearchEngineCore
     // Windows: Use Everything for fast file search, fallback to file-provider for indexing
     // macOS/Linux: Use file-provider with full indexing
     if (process.platform === 'win32') {
+      this.registerProvider(windowsShellFileProvider)
       this.registerProvider(everythingProvider)
     }
     this.registerProvider(fileProvider)
@@ -973,6 +975,9 @@ export class SearchEngineCore
 
     const everything = providers.find((provider) => provider.id === 'everything-provider')
     const file = providers.find((provider) => provider.id === 'file-provider')
+    const windowsShellFile = providers.find(
+      (provider) => provider.id === 'windows-shell-file-provider'
+    )
     if (!everything && !file) {
       return providers
     }
@@ -999,7 +1004,13 @@ export class SearchEngineCore
       selectedFileProviderId = file ? 'file-provider' : null
     }
 
+    const shouldKeepWindowsShellFileProvider =
+      providerFilter === undefined || isExplicitFileCategoryFilter(providerFilter)
+
     return providers.filter((provider) => {
+      if (provider.id === 'windows-shell-file-provider') {
+        return Boolean(windowsShellFile && shouldKeepWindowsShellFileProvider)
+      }
       if (provider.id !== 'everything-provider' && provider.id !== 'file-provider') {
         return true
       }
