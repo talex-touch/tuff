@@ -26,11 +26,12 @@ export function onHandleService(service: IService, handler: ServiceHandler) {
   const channel = useChannel('[Plugin SDK] Service handling requires renderer channel.')
   const transport = createPluginTuffTransport(channel as any)
   transport.on(PluginEvents.service.handle, (data) => {
+    const payload = data.data
 
     // console.log('service:handle', data, service)
 
-    if (data.service === service.name) {
-      return handler(data)
+    if (payload.service === service.name) {
+      return handler(payload)
     }
 
     return false

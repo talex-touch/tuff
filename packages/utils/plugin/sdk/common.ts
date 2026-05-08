@@ -51,7 +51,7 @@ export async function regShortcut(
     return false
 
   transport.on(PluginEvents.shortcut.trigger, (payload) => {
-    const triggerKey = payload?.key ?? payload?.id
+    const triggerKey = payload.id
     if (triggerKey === key || (shortcutId && triggerKey === shortcutId))
       func()
   })

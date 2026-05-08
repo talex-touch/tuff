@@ -1453,10 +1453,7 @@ export class TouchPlugin implements ITouchPlugin {
         boxChannelHandlers.get(eventName)?.delete(callback)
         return true
       },
-      send: (eventName, arg) => channelBridge.sendToMain(eventName, arg),
-      sendSync: () => {
-        throw createRemovedChannelError('channel.sendSync')
-      }
+      send: (eventName, arg) => channelBridge.sendToMain(eventName, arg)
     }
 
     const boxItemManager = getBoxItemManager()

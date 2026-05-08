@@ -51,19 +51,17 @@ export function injectHook(
     const channel = ensureRendererChannel('[Lifecycle Hook] Channel not available. Make sure hooks run in plugin renderer context.')
     const transport = createPluginTuffTransport(channel as any)
     transport.on(lifecycleSignalEvents[type], (data) => {
-      let replyResult = true
       processFunc({
         data,
         reply: (result) => {
-          replyResult = result
+          if (!result)
+            sdkLog.warn(`[TouchSDK] ${type} hook requested a negative reply`, { data })
         },
       })
 
       if (sdk?.__hooks) {
         delete sdk.__hooks[type]
       }
-
-      return replyResult
     })
   }
 

@@ -47,6 +47,24 @@ const bridgeEventCatalog = {
   [BridgeEventForCoreBox.CORE_BOX_CLIPBOARD_CHANGE]: CoreBoxEvents.clipboard.change,
 } satisfies Record<SupportedBridgeEvent, TuffEvent<any, any>>
 
+function handleBridgeEvent(type: SupportedBridgeEvent, data: unknown): void {
+  const timestamp = Date.now()
+  const hooks = __hooks[type]
+
+  if (hooks && hooks.length > 0) {
+    hooks.forEach(h => invokeHook(h, data, false, timestamp))
+  }
+  else {
+    if (!__eventCache.has(type))
+      __eventCache.set(type, [])
+    const cache = __eventCache.get(type)!
+    const maxSize = CACHE_MAX_SIZE[type] ?? 1
+    cache.push({ data, timestamp })
+    while (cache.length > maxSize) cache.shift()
+    bridgeLog.debug(`[TouchSDK] ${type} cached, size: ${cache.length}`)
+  }
+}
+
 function createRemovedBridgeKeyEventError(): Error {
   return Object.assign(
     new Error(
@@ -68,28 +86,15 @@ function invokeHook<T>(hook: BridgeHook<T>, data: T, fromCache: boolean, timesta
 function registerEarlyListener(type: SupportedBridgeEvent): void {
   if (__channelRegistered.has(type))
     return
-  const event = bridgeEventCatalog[type]
-
   try {
     const channel = ensureRendererChannel()
     const transport = createPluginTuffTransport(channel as any)
-    transport.on(event, (data) => {
-      const timestamp = Date.now()
-      const hooks = __hooks[type]
-
-      if (hooks && hooks.length > 0) {
-        hooks.forEach(h => invokeHook(h, data, false, timestamp))
-      }
-      else {
-        if (!__eventCache.has(type))
-          __eventCache.set(type, [])
-        const cache = __eventCache.get(type)!
-        const maxSize = CACHE_MAX_SIZE[type] ?? 1
-        cache.push({ data, timestamp })
-        while (cache.length > maxSize) cache.shift()
-        bridgeLog.debug(`[TouchSDK] ${type} cached, size: ${cache.length}`)
-      }
-    })
+    if (type === BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE) {
+      transport.on(bridgeEventCatalog[type], data => handleBridgeEvent(type, data))
+    }
+    else {
+      transport.on(bridgeEventCatalog[type], data => handleBridgeEvent(type, data))
+    }
     __channelRegistered.add(type)
   }
   catch {
