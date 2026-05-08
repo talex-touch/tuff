@@ -40,7 +40,7 @@ await analytics.getStats()
 - 持久化窗口：15m、1h、24h 自动落盘并按保留策略清理。
 
 ## 搜索性能接入
-- Layered 与 Legacy 搜索完成时，汇总 providerTimings 与 totalDuration，调用 AnalyticsModule.recordSearchMetrics。
+- Layered 搜索完成时，汇总 providerTimings 与 totalDuration，调用 AnalyticsModule.recordSearchMetrics。
 - providerTimings 格式：{ providerId/providerName: durationMs }，同步更新 search.totalSearches、avgDuration、providerTimings。
 
 ## 汇报/导出流程
@@ -50,13 +50,13 @@ await analytics.getStats()
 4) 查询：TuffTransport `analytics.get-snapshot/get-range/export` 提供窗口数据。
 5) SDK：插件/渲染通过 `analytics.sdk.*` 上报事件/耗时/计数/直方图等。
 6) 导出：`analytics.export` 支持 json/csv，返回 { format, content, payload, exportedAt }。
-7) 上报：保留 legacy `analytics.report`（StartupAnalytics），后续可插入 batch reporter 调用 Nexus。
+7) 上报：StartupAnalytics payload `metadata` 追加启动摘要，后续可插入 batch reporter 调用 Nexus。
    - StartupAnalytics 上报 payload `metadata` 追加：
      - `startupSummary`: { samples, avgTotalStartupTime, avgModulesLoadTime, avgRendererReadyTime }
      - `moduleSummary`: { [moduleName]: { avgLoadTime, count } }
 
 ## 兼容性
-- 保留 StartupAnalytics 输出（getCurrent/getHistory/getSummary/report）供旧通道使用。
+- StartupAnalytics 启动摘要已并入 `AnalyticsSnapshot.metrics.startup`，设置页不再消费旧启动指标事件。
 - IPC 耗时通过 channel-core 注入 tracer 统计。
 
 ## 待办/扩展

@@ -1,18 +1,14 @@
-import { hasWindow } from '@talex-touch/utils/env'
-
 export const SUPPORTED_LANGUAGES = [
   { key: 'zh-CN', name: '简体中文' },
   { key: 'en-US', name: 'English' }
 ] as const
 
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]['key']
-export type LanguagePreferenceSource = 'settings' | 'legacy' | 'default'
+export type LanguagePreferenceSource = 'settings' | 'default'
 
 export interface InitialLanguagePreferenceInput {
   settingLocale?: string | null
   settingFollowSystem?: boolean | null
-  legacyLocale?: string | null
-  legacyFollowSystem?: string | boolean | null
   browserLanguage?: string | null
   intlLocale?: string | null
 }
@@ -21,13 +17,6 @@ export interface InitialLanguagePreference {
   locale: SupportedLanguage
   followSystem: boolean
   source: LanguagePreferenceSource
-  shouldUseLegacySnapshot: boolean
-  shouldClearLegacySnapshot: boolean
-}
-
-export interface LegacyLanguagePreferenceSnapshot {
-  locale: string | null
-  followSystem: string | null
 }
 
 const DEFAULT_LANGUAGE: SupportedLanguage = 'zh-CN'
@@ -41,13 +30,6 @@ export function resolveSupportedLocale(locale?: string | null): SupportedLanguag
     return normalized === langKey || normalized.startsWith(langKey.split('-')[0])
   })
   return matched?.key ?? null
-}
-
-function normalizeFollowSystem(value: string | boolean | null | undefined): boolean | null {
-  if (typeof value === 'boolean') return value
-  if (value === 'true') return true
-  if (value === 'false') return false
-  return null
 }
 
 function resolveSystemLanguage(
@@ -78,46 +60,12 @@ export function resolveInitialLanguagePreference(
       ? input.settingFollowSystem
       : DEFAULT_FOLLOW_SYSTEM
 
-  const hasLegacySnapshot = input.legacyLocale != null || input.legacyFollowSystem != null
-  const legacyLocale = resolveSupportedLocale(input.legacyLocale)
-  const legacyFollowSystem = normalizeFollowSystem(input.legacyFollowSystem)
-  const hasUsableLegacySnapshot = legacyLocale !== null || legacyFollowSystem !== null
-
-  if (hasUsableLegacySnapshot && usesDefaultLanguageSetting(settingLocale, settingFollowSystem)) {
-    const followSystem = legacyFollowSystem ?? DEFAULT_FOLLOW_SYSTEM
-    return {
-      locale: followSystem
-        ? resolveSystemLanguage(input.browserLanguage, input.intlLocale, legacyLocale)
-        : (legacyLocale ?? settingLocale),
-      followSystem,
-      source: 'legacy',
-      shouldUseLegacySnapshot: true,
-      shouldClearLegacySnapshot: true
-    }
-  }
-
   const followSystem = settingFollowSystem
   return {
     locale: followSystem
       ? resolveSystemLanguage(input.browserLanguage, input.intlLocale, settingLocale)
       : settingLocale,
     followSystem,
-    source: usesDefaultLanguageSetting(settingLocale, settingFollowSystem) ? 'default' : 'settings',
-    shouldUseLegacySnapshot: false,
-    shouldClearLegacySnapshot: hasLegacySnapshot
-  }
-}
-
-export function readLegacyLanguagePreferenceSnapshot(): LegacyLanguagePreferenceSnapshot {
-  if (!hasWindow()) {
-    return {
-      locale: null,
-      followSystem: null
-    }
-  }
-
-  return {
-    locale: localStorage.getItem('app-language'),
-    followSystem: localStorage.getItem('app-follow-system-language')
+    source: usesDefaultLanguageSetting(settingLocale, settingFollowSystem) ? 'default' : 'settings'
   }
 }

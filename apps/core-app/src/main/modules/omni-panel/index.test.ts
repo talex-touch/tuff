@@ -77,11 +77,15 @@ vi.mock('../../core/touch-window', () => ({
       on: vi.fn(),
       hide: vi.fn(),
       show: vi.fn(),
+      showInactive: vi.fn(),
       focus: vi.fn(),
+      isVisible: () => false,
       isDestroyed: () => false,
       close: vi.fn(),
       getBounds: () => ({ width: 460, height: 420 }),
       setPosition: vi.fn(),
+      setVisibleOnAllWorkspaces: vi.fn(),
+      setAlwaysOnTop: vi.fn(),
       webContents: {}
     }
 
@@ -441,8 +445,8 @@ describe('OmniPanelModule auto-mount', () => {
 })
 
 describe('OmniPanelModule hard-cut transport', () => {
-  it('does not register legacy feature toggle handler', async () => {
-    const legacyEventName = 'omni-panel:feature:toggle'
+  it('does not register retired feature toggle handler', async () => {
+    const retiredEventName = 'omni-panel:feature:toggle'
     const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
     getTuffTransportMainMock.mockReturnValue({
       on: vi.fn(
@@ -462,7 +466,7 @@ describe('OmniPanelModule hard-cut transport', () => {
 
     await module.onInit({} as never)
 
-    expect(handlers.has(legacyEventName)).toBe(false)
+    expect(handlers.has(retiredEventName)).toBe(false)
   })
 })
 
@@ -708,7 +712,7 @@ describe('OmniPanel shortcut and input-hook guards', () => {
       shortcutComboStartedAt: number | null
       shortcutTriggerArmed: boolean
       handleShortcutPressed: () => void
-      triggerArmedShortcut: () => void
+      toggle: (options: { captureSelection: boolean; source: string }) => void
     }
 
     const triggerMock = vi.fn()
@@ -717,12 +721,16 @@ describe('OmniPanel shortcut and input-hook guards', () => {
     module.shortcutComboActive = true
     module.shortcutComboStartedAt = Date.now() - 500
     module.shortcutTriggerArmed = false
-    module.triggerArmedShortcut = triggerMock as unknown as () => void
+    module.toggle = triggerMock as unknown as (options: {
+      captureSelection: boolean
+      source: string
+    }) => void
 
     module.handleShortcutPressed()
 
-    expect(module.shortcutTriggerArmed).toBe(true)
+    expect(module.shortcutTriggerArmed).toBe(false)
     expect(triggerMock).toHaveBeenCalledTimes(1)
+    expect(triggerMock).toHaveBeenCalledWith({ captureSelection: true, source: 'shortcut' })
   })
 
   it('cleans up input hook when both mouse long press and shortcut hold are disabled', () => {

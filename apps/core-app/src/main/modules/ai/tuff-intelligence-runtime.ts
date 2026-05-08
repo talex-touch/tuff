@@ -864,9 +864,7 @@ export class TuffIntelligenceRuntime {
     const stored = await this.loadSession(payload.sessionId)
     if (!stored) return []
 
-    this.ensureTraceSeq(stored)
-
-    let trace = [...stored.trace]
+    let trace = stored.trace.filter((event) => typeof toSafeSeq(event.seq) === 'number')
     if (typeof payload.fromSeq === 'number' && Number.isFinite(payload.fromSeq)) {
       const fromSeq = Math.max(1, Math.floor(payload.fromSeq))
       trace = trace.filter((event) => (toSafeSeq(event.seq) ?? 0) >= fromSeq)
@@ -1384,13 +1382,9 @@ export class TuffIntelligenceRuntime {
     let seqCursor = toSafeSeq(stored.session.lastEventSeq) ?? 0
     for (const event of stored.trace) {
       const seq = toSafeSeq(event.seq)
-      if (seq) {
+      if (seq !== null) {
         seqCursor = Math.max(seqCursor, seq)
-        event.seq = seq
-        continue
       }
-      seqCursor += 1
-      event.seq = seqCursor
     }
     stored.session.lastEventSeq = seqCursor > 0 ? seqCursor : undefined
   }

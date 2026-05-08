@@ -27,7 +27,6 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { generatePermissionIssue, parseManifestPermissions } from '@talex-touch/utils/permission'
 import { PluginStatus, SdkApi } from '@talex-touch/utils/plugin'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
   CoreBoxEvents,
   StoreEvents,
@@ -1917,96 +1916,86 @@ export class PluginModule extends BaseModule {
     )
 
     this.transportDisposers.push(
-      transport.on(
-        defineRawEvent<WindowNewPayload, { id?: number; error?: string }>('window:new'),
-        async (data, context) => {
-          const pluginName = context.plugin?.name
-          const touchPlugin = pluginName
-            ? (manager.plugins.get(pluginName) as TouchPlugin)
-            : undefined
-          if (!touchPlugin) {
-            return { error: 'Plugin not found!' }
-          }
-
-          const { file, url, ...windowOptions } = data
-          const win = new TouchWindow(windowOptions)
-          let webContents: Electron.WebContents
-          if (typeof file === 'string' && file.length > 0) {
-            webContents = await win.loadFile(file)
-          } else if (typeof url === 'string' && url.length > 0) {
-            webContents = await win.loadURL(url)
-          } else {
-            return { error: 'No file or url provided!' }
-          }
-
-          const obj = usePluginInjections(touchPlugin, 'plugin-module:window:new')
-          if (!obj) {
-            return { error: 'Failed to build plugin injections' }
-          }
-          await webContents.insertCSS(obj.styles)
-          await webContents.executeJavaScript(obj.js)
-
-          webContents.send('@loaded', {
-            id: webContents.id,
-            plugin: pluginName,
-            type: 'intend'
-          })
-
-          touchPlugin._windows.set(webContents.id, win)
-          win.window.on('closed', () => {
-            win.window.removeAllListeners()
-            touchPlugin._windows.delete(webContents.id)
-          })
-
-          return { id: webContents.id }
+      transport.on(PluginEvents.window.new, async (data: WindowNewPayload, context) => {
+        const pluginName = context.plugin?.name
+        const touchPlugin = pluginName
+          ? (manager.plugins.get(pluginName) as TouchPlugin)
+          : undefined
+        if (!touchPlugin) {
+          return { error: 'Plugin not found!' }
         }
-      ),
 
-      transport.on(
-        defineRawEvent<WindowVisiblePayload, { visible?: boolean; error?: string }>(
-          'window:visible'
-        ),
-        async (payload, context) => {
-          const pluginName = context.plugin?.name
-          const touchPlugin = pluginName
-            ? (manager.plugins.get(pluginName) as TouchPlugin)
-            : undefined
-          if (!touchPlugin) {
-            return { error: 'Plugin not found!' }
-          }
+        const { file, url, ...windowOptions } = data
+        const win = new TouchWindow(windowOptions)
+        let webContents: Electron.WebContents
+        if (typeof file === 'string' && file.length > 0) {
+          webContents = await win.loadFile(file)
+        } else if (typeof url === 'string' && url.length > 0) {
+          webContents = await win.loadURL(url)
+        } else {
+          return { error: 'No file or url provided!' }
+        }
 
-          const id = payload?.id
-          if (typeof id !== 'number') {
-            return { error: 'Window id is required' }
-          }
+        const obj = usePluginInjections(touchPlugin, 'plugin-module:window:new')
+        if (!obj) {
+          return { error: 'Failed to build plugin injections' }
+        }
+        await webContents.insertCSS(obj.styles)
+        await webContents.executeJavaScript(obj.js)
 
-          const win = touchPlugin._windows.get(id)
-          const browserWindow = useAliveTarget(win?.window)
-          if (!win || !browserWindow) {
-            return { error: 'Window not found' }
-          }
+        webContents.send('@loaded', {
+          id: webContents.id,
+          plugin: pluginName,
+          type: 'intend'
+        })
 
-          if (payload?.visible === undefined) {
-            if (browserWindow.isVisible()) {
-              browserWindow.hide()
-            } else {
-              browserWindow.show()
-            }
-          } else if (payload.visible) {
-            browserWindow.show()
-          } else {
+        touchPlugin._windows.set(webContents.id, win)
+        win.window.on('closed', () => {
+          win.window.removeAllListeners()
+          touchPlugin._windows.delete(webContents.id)
+        })
+
+        return { id: webContents.id }
+      }),
+
+      transport.on(PluginEvents.window.visible, async (payload: WindowVisiblePayload, context) => {
+        const pluginName = context.plugin?.name
+        const touchPlugin = pluginName
+          ? (manager.plugins.get(pluginName) as TouchPlugin)
+          : undefined
+        if (!touchPlugin) {
+          return { error: 'Plugin not found!' }
+        }
+
+        const id = payload?.id
+        if (typeof id !== 'number') {
+          return { error: 'Window id is required' }
+        }
+
+        const win = touchPlugin._windows.get(id)
+        const browserWindow = useAliveTarget(win?.window)
+        if (!win || !browserWindow) {
+          return { error: 'Window not found' }
+        }
+
+        if (payload?.visible === undefined) {
+          if (browserWindow.isVisible()) {
             browserWindow.hide()
+          } else {
+            browserWindow.show()
           }
-
-          return { visible: browserWindow.isVisible() }
+        } else if (payload.visible) {
+          browserWindow.show()
+        } else {
+          browserWindow.hide()
         }
-      ),
+
+        return { visible: browserWindow.isVisible() }
+      }),
 
       transport.on(
-        defineRawEvent<WindowPropertyPayload, { success?: boolean; error?: string }>(
-          'window:property'
-        ),
-        async (payload, context) => {
+        PluginEvents.window.property,
+        async (payload: WindowPropertyPayload, context) => {
           const pluginName = context.plugin?.name
           const touchPlugin = pluginName
             ? (manager.plugins.get(pluginName) as TouchPlugin)
@@ -2074,10 +2063,8 @@ export class PluginModule extends BaseModule {
       ),
 
       transport.on(
-        defineRawEvent<IndexCommunicatePayload, { status?: string; error?: string }>(
-          'index:communicate'
-        ),
-        async (data, context) => {
+        PluginEvents.communicate.index,
+        async (data: IndexCommunicatePayload, context) => {
           try {
             const pluginName = context.plugin?.name
             const key = typeof data?.key === 'string' ? data.key : ''

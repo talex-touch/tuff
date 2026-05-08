@@ -11,7 +11,7 @@ vi.mock('@talex-touch/utils/renderer', () => ({
 }))
 
 describe('AccountStorage', () => {
-  it('does not persist legacy token payloads to account.ini', async () => {
+  it('does not persist retired token payloads to account.ini', async () => {
     vi.useFakeTimers()
     save.mockClear()
     const { AccountStorage } = await import('./account-storage')

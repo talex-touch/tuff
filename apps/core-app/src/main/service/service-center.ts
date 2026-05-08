@@ -8,8 +8,8 @@ import type { ModuleInitContext } from '@talex-touch/utils'
 import type { TalexTouch } from '../types'
 import path from 'node:path'
 import { suffix2Service } from '@talex-touch/utils/service/protocol'
+import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { dialog } from 'electron'
 import fse from 'fs-extra'
 import { TalexEvents, touchEventBus, type AppSecondaryLaunch } from '../core/eventbus/touch-event'
@@ -77,12 +77,6 @@ class ServiceCenter implements IServiceCenter {
 }
 
 let serviceCenter: ServiceCenter
-
-const serviceRegisterEvent = defineRawEvent<{ service: string }, boolean>('service:reg')
-const serviceUnregisterEvent = defineRawEvent<{ service: string }, boolean>('service:unreg')
-const serviceHandleEvent = defineRawEvent<{ data: Record<string, unknown> }, unknown>(
-  'service:handle'
-)
 
 type ServiceCenterModuleState = {
   transport: ReturnType<typeof getTuffTransportMain> | null
@@ -167,7 +161,7 @@ export default {
     if (!transport) return
 
     moduleState.listeners.push(
-      transport.on(serviceRegisterEvent, async (payload, context) => {
+      transport.on(PluginEvents.service.register, async (payload, context) => {
         const { service } = payload || {}
         const plugin = context.plugin?.name
 
@@ -197,7 +191,7 @@ export default {
               service: event.service.name
             }
 
-            const res = await transport.sendToPlugin(plugin, serviceHandleEvent, { data })
+            const res = await transport.sendToPlugin(plugin, PluginEvents.service.handle, { data })
             event.setCancelled(res === true)
             return res
           }
@@ -208,7 +202,7 @@ export default {
     )
 
     moduleState.listeners.push(
-      transport.on(serviceUnregisterEvent, (payload, context) => {
+      transport.on(PluginEvents.service.unregister, (payload, context) => {
         const { service } = payload || {}
         const plugin = context.plugin?.name
 

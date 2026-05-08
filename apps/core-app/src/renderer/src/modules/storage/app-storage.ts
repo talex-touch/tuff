@@ -6,7 +6,7 @@ import { AccountStorage } from './account-storage'
 /**
  * Renderer app storage facade.
  *
- * Feature code should import from this module instead of the legacy channel
+ * Feature code should import from this module instead of the low-level channel
  * storage bootstrap namespace.
  */
 export class StorageManager {

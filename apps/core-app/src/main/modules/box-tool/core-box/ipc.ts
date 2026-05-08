@@ -37,19 +37,7 @@ import { getCoreBoxWindow, windowManager } from './window'
 const metaOverlayIpcLog = createLogger('CoreBox').child('MetaOverlayIpc')
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-const coreBoxHideInputEvent = defineRawEvent<void, { hidden: boolean }>('core-box:hide-input')
-const coreBoxShowInputEvent = defineRawEvent<void, { shown: boolean }>('core-box:show-input')
 const coreBoxAllowInputEvent = defineRawEvent<void, { enabled: boolean }>('core-box:allow-input')
-const coreBoxSetHeightEvent = defineRawEvent<{ height: number }, { height: number }>(
-  'core-box:set-height'
-)
-const coreBoxGetBoundsEvent = defineRawEvent<void, { bounds: Electron.Rectangle }>(
-  'core-box:get-bounds'
-)
-const coreBoxSetPositionOffsetEvent = defineRawEvent<
-  { topPercent?: number },
-  { topPercent?: number }
->('core-box:set-position-offset')
 
 /**
  * @class IpcManager
@@ -395,14 +383,14 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
-      transport.on(coreBoxHideInputEvent, async () => {
+      transport.on(CoreBoxEvents.ui.hideInput, async () => {
         await this.setInputVisibility(false)
         return { hidden: true }
       })
     )
 
     this.transportDisposers.push(
-      transport.on(coreBoxShowInputEvent, async () => {
+      transport.on(CoreBoxEvents.ui.showInput, async () => {
         await this.setInputVisibility(true)
         return { shown: true }
       })
@@ -416,7 +404,7 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
-      transport.on(coreBoxSetHeightEvent, (payload) => {
+      transport.on(CoreBoxEvents.layout.setHeight, (payload) => {
         const { height } = payload
         if (typeof height !== 'number' || height < 60 || height > 650) {
           throw new Error('Invalid height (must be 60-650)')
@@ -432,7 +420,7 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
-      transport.on(coreBoxGetBoundsEvent, () => {
+      transport.on(CoreBoxEvents.layout.getBounds, () => {
         const win = windowManager.current?.window
         if (!win || win.isDestroyed()) {
           throw new Error('No window available')
@@ -442,7 +430,7 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
-      transport.on(coreBoxSetPositionOffsetEvent, (payload) => {
+      transport.on(CoreBoxEvents.layout.setPositionOffset, (payload) => {
         const { topPercent } = payload
         if (typeof topPercent === 'number') {
           windowManager.setPositionOffset(topPercent)

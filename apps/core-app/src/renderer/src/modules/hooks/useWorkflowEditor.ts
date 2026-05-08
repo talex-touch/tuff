@@ -19,6 +19,7 @@ export type WorkflowValidationErrorCode =
   | 'min_steps'
   | 'step_name_required'
   | 'tool_required'
+  | 'agent_required'
   | 'input_json'
   | 'metadata_json'
   | 'trigger_config_json'
@@ -102,6 +103,8 @@ const BUILTIN_TOOL_OPTIONS: BuiltinToolOption[] = [
   { id: 'browser.extract', label: 'browser.extract', toolSource: 'builtin' }
 ]
 
+export const DEFAULT_WORKFLOW_AGENT_ID = 'builtin.workflow-agent'
+
 const DEFAULT_CONTEXT_SOURCES: WorkflowContextSource[] = [
   {
     id: 'clipboard.recent',
@@ -172,7 +175,7 @@ function createDefaultStep(index: number, kind: WorkflowStepKind = 'agent'): Wor
     instruction: '',
     toolId: '',
     toolSource: 'builtin',
-    agentId: kind === 'agent' ? 'deepagent.workflow' : '',
+    agentId: kind === 'agent' ? DEFAULT_WORKFLOW_AGENT_ID : '',
     input: '{\n  "outputFormat": "markdown"\n}',
     continueOnError: false
   }
@@ -212,15 +215,16 @@ function createDefaultWorkflowDraft(): WorkflowDraft {
 }
 
 function mapStepToDraft(step: WorkflowDefinitionStep, index: number): WorkflowStepDraft {
+  const kind = step.kind === 'tool' || step.kind === 'prompt' ? step.kind : 'agent'
   return {
     uid: createUid(),
     id: step.id || `step-${index + 1}`,
     name: step.name || `Step ${index + 1}`,
-    kind: step.kind === 'tool' || step.kind === 'prompt' ? step.kind : 'agent',
+    kind,
     instruction: step.prompt || step.description || '',
     toolId: step.toolId || '',
     toolSource: step.toolSource === 'mcp' ? 'mcp' : 'builtin',
-    agentId: step.agentId || '',
+    agentId: kind === 'agent' ? step.agentId || DEFAULT_WORKFLOW_AGENT_ID : '',
     input: safeJsonStringify(step.input ?? {}),
     continueOnError: step.continueOnError === true
   }
@@ -422,6 +426,9 @@ export function useWorkflowEditor() {
       if (step.kind === 'tool' && !step.toolId.trim()) {
         throw new WorkflowValidationError('tool_required', '工具步骤必须填写 toolId', step.uid)
       }
+      if (step.kind === 'agent' && !step.agentId.trim()) {
+        throw new WorkflowValidationError('agent_required', 'Agent 步骤必须选择 agentId', step.uid)
+      }
 
       return {
         id: step.id.trim() || `step-${index + 1}`,
@@ -431,7 +438,7 @@ export function useWorkflowEditor() {
         prompt: step.kind === 'prompt' ? step.instruction.trim() || undefined : undefined,
         toolId: step.kind === 'tool' ? step.toolId.trim() || undefined : undefined,
         toolSource: step.kind === 'tool' ? step.toolSource : undefined,
-        agentId: step.kind === 'agent' ? step.agentId.trim() || 'deepagent.workflow' : undefined,
+        agentId: step.kind === 'agent' ? step.agentId.trim() : undefined,
         input,
         continueOnError: step.continueOnError,
         metadata: {}

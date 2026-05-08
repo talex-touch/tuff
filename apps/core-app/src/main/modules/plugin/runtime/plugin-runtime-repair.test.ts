@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   inspectPluginRuntimeDrift,
-  LEGACY_TRANSLATION_WIDGET_IMPORT,
+  RETIRED_TRANSLATION_WIDGET_IMPORT,
   PLUGIN_RUNTIME_DRIFT_CODE
 } from './plugin-runtime-repair'
 
@@ -47,7 +47,7 @@ async function createRuntimePlugin(
   await ensureFile(
     path.join(pluginDir, 'widgets/translate-panel.vue'),
     options.includeLegacyWidgetImport
-      ? `<script setup lang="ts">\nimport legacy from '${LEGACY_TRANSLATION_WIDGET_IMPORT}'\n</script>\n`
+      ? `<script setup lang="ts">\nimport retiredRuntimeImport from '${RETIRED_TRANSLATION_WIDGET_IMPORT}'\n</script>\n`
       : `<script setup lang="ts">\nimport { useChannel } from '@talex-touch/utils/plugin/sdk'\n</script>\n`
   )
 
@@ -77,7 +77,7 @@ describe('plugin-runtime-repair', () => {
     )
   })
 
-  it('detects runtime drift when legacy imports are still present', async () => {
+  it('detects runtime drift when retired imports are still present', async () => {
     const root = await fs.mkdtemp(path.join(tmpdir(), 'touch-translation-runtime-'))
     createdRoots.push(root)
 
@@ -91,7 +91,7 @@ describe('plugin-runtime-repair', () => {
 
     expect(PLUGIN_RUNTIME_DRIFT_CODE).toBe('PLUGIN_RUNTIME_DRIFT')
     expect(result.status).toBe('drifted')
-    expect(result.driftReasons).toContain('legacy-runtime-import')
+    expect(result.driftReasons).toContain('retired-runtime-import')
     expect(result.driftReasons).toContain('package-version:1.0.3<1.0.4')
   })
 

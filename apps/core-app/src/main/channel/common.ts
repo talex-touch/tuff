@@ -50,7 +50,8 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
-import { AppEvents, PlatformEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, PlatformEvents, PluginEvents } from '@talex-touch/utils/transport/events'
+import { toTfileUrl } from '@talex-touch/utils/network'
 import {
   BrowserWindow,
   app,
@@ -105,6 +106,7 @@ import {
   isSecureStoreAvailable,
   setSecureStoreValue
 } from '../utils/secure-store'
+import { tempFileService } from '../service/temp-file.service'
 
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
 const pollingService = PollingService.getInstance()
@@ -116,6 +118,8 @@ const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
 const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
 const DIALOG_APPROVED_TTL_MS = 10 * 60 * 1000
 const DIALOG_APPROVED_MAX = 200
+const PLUGIN_TEMP_NAMESPACE = 'plugins/runtime'
+const PLUGIN_TEMP_RETENTION_MS = 24 * 60 * 60 * 1000
 const TUFF_CLI_CAPABILITY: PlatformCapability = {
   id: 'platform.tuff-cli',
   name: 'Tuff CLI',
@@ -200,6 +204,14 @@ function normalizeSafeNamespaceSegment(value: string): string {
     .replace(/-+/g, '-')
     .replace(/^[-.]+|[-.]+$/g, '')
   return normalized || 'unknown'
+}
+
+function normalizeSafeNamespacePath(value: string): string {
+  return value
+    .split(/[\\/]+/)
+    .map((segment) => normalizeSafeNamespaceSegment(segment))
+    .filter(Boolean)
+    .join('/')
 }
 
 // Preset import/export events
@@ -1134,7 +1146,44 @@ export class CommonChannelModule extends BaseModule {
 
     this.registerSystemTransportHandlers(transport, touchApp, registerSafeHandler)
     this.registerIndexSettingsTransportHandlers(transport)
+    this.registerPluginTempFileTransportHandlers(transport)
     this.registerPresetTransportHandlers(transport, registerSafeHandler)
+  }
+
+  private registerPluginTempFileTransportHandlers(
+    transport: NonNullable<CommonChannelModule['transport']>
+  ): void {
+    this.transportDisposers.push(
+      transport.on(PluginEvents.tempFile.create, async (payload) => {
+        const retentionMs =
+          typeof payload?.retentionMs === 'number' && Number.isFinite(payload.retentionMs)
+            ? Math.max(0, Math.trunc(payload.retentionMs))
+            : PLUGIN_TEMP_RETENTION_MS
+        const namespace = normalizeSafeNamespacePath(payload?.namespace ?? PLUGIN_TEMP_NAMESPACE)
+
+        tempFileService.registerNamespace({ namespace, retentionMs })
+
+        const result = await tempFileService.createFile({
+          namespace,
+          ext: payload?.ext,
+          text: payload?.text,
+          base64: payload?.base64,
+          prefix: payload?.prefix
+        })
+
+        return {
+          url: toTfileUrl(result.path),
+          path: result.path,
+          sizeBytes: result.sizeBytes,
+          createdAt: result.createdAt
+        }
+      }),
+      transport.on(PluginEvents.tempFile.delete, async (payload) => {
+        const target = resolveTfilePath(payload?.url ?? '')
+        const success = target ? await tempFileService.deleteFile(target) : false
+        return { success }
+      })
+    )
   }
 
   private createSafeOperationHandler(transport: NonNullable<CommonChannelModule['transport']>) {

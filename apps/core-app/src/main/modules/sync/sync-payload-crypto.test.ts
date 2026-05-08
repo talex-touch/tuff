@@ -60,13 +60,13 @@ describe('SyncPayloadCrypto', () => {
     const encrypted = await crypto.encrypt('hello sync')
     await expect(crypto.decrypt(encrypted.payloadEnc)).resolves.toEqual({
       rawText: 'hello sync',
-      legacy: false
+      requiresMigrationRewrite: false
     })
 
     const empty = await crypto.encrypt('')
     await expect(crypto.decrypt(empty.payloadEnc)).resolves.toEqual({
       rawText: '',
-      legacy: false
+      requiresMigrationRewrite: false
     })
   })
 
@@ -98,13 +98,13 @@ describe('SyncPayloadCrypto', () => {
     )
   })
 
-  it('keeps b64 as a legacy read-only fallback', async () => {
+  it('keeps b64 as a read-only migration fallback', async () => {
     const crypto = new SyncPayloadCrypto(createMemoryStore())
-    const legacyPayload = `b64:${Buffer.from('legacy text', 'utf-8').toString('base64')}`
+    const retiredPayload = `b64:${Buffer.from('retired text', 'utf-8').toString('base64')}`
 
-    await expect(crypto.decrypt(legacyPayload)).resolves.toEqual({
-      rawText: 'legacy text',
-      legacy: true
+    await expect(crypto.decrypt(retiredPayload)).resolves.toEqual({
+      rawText: 'retired text',
+      requiresMigrationRewrite: true
     })
   })
 

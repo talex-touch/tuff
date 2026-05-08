@@ -10,7 +10,7 @@ describe('update channel compatibility', () => {
     expect(normalizeStoredUpdateChannel('snapshot')).toBe(AppPreviewChannel.SNAPSHOT)
   })
 
-  it('drops legacy aliases and unsupported values to fallback channel', () => {
+  it('drops retired aliases and unsupported values to fallback channel', () => {
     expect(normalizeStoredUpdateChannel(2)).toBeUndefined()
     expect(normalizeStoredUpdateChannel('1')).toBeUndefined()
     expect(normalizeStoredUpdateChannel('alpha')).toBeUndefined()

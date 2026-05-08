@@ -147,29 +147,31 @@ if (!result.allowed) {
 
 | 通道 | 说明 |
 |------|------|
-| `intelligence:invoke` | 调用 AI 能力 |
-| `intelligence:invoke-stream` | 流式调用 |
-| `intelligence:test-provider` | 测试供应商连接 |
+| `intelligence:api:invoke` | 调用 AI 能力 |
+| `intelligence:api:chat-langchain` | LangChain 聊天调用 |
+| `intelligence:api:test-provider` | 测试供应商连接 |
+| `intelligence:api:test-capability` | 测试能力 |
+| `intelligence:api:fetch-models` | 拉取供应商模型列表 |
 
 ### 审计 & 统计
 
 | 通道 | 说明 |
 |------|------|
-| `intelligence:get-audit-logs` | 查询审计日志 |
-| `intelligence:get-today-stats` | 获取今日统计 |
-| `intelligence:get-month-stats` | 获取本月统计 |
-| `intelligence:get-usage-stats` | 获取历史统计 |
+| `intelligence:api:get-audit-logs` | 查询审计日志 |
+| `intelligence:api:get-today-stats` | 获取今日统计 |
+| `intelligence:api:get-month-stats` | 获取本月统计 |
+| `intelligence:api:get-usage-stats` | 获取历史统计 |
 
 ### 配额管理
 
 | 通道 | 说明 |
 |------|------|
-| `intelligence:get-quota` | 获取配额配置 |
-| `intelligence:set-quota` | 设置配额 |
-| `intelligence:delete-quota` | 删除配额 |
-| `intelligence:get-all-quotas` | 获取所有配额 |
-| `intelligence:check-quota` | 检查配额 |
-| `intelligence:get-current-usage` | 获取当前用量 |
+| `intelligence:api:get-quota` | 获取配额配置 |
+| `intelligence:api:set-quota` | 设置配额 |
+| `intelligence:api:delete-quota` | 删除配额 |
+| `intelligence:api:get-all-quotas` | 获取所有配额 |
+| `intelligence:api:check-quota` | 检查配额 |
+| `intelligence:api:get-current-usage` | 获取当前用量 |
 
 ## 调用选项
 

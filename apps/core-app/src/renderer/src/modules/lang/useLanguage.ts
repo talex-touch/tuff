@@ -6,7 +6,6 @@ import { createRendererLogger } from '~/utils/renderer-log'
 import { devLog } from '~/utils/dev-log'
 import { getGlobalI18nInstance, loadLocaleMessages, setI18nLanguage } from './i18n'
 import {
-  readLegacyLanguagePreferenceSnapshot,
   resolveInitialLanguagePreference,
   SUPPORTED_LANGUAGES,
   type SupportedLanguage
@@ -53,7 +52,7 @@ function persistLanguagePreference(lang: SupportedLanguage, followSystem: boolea
   }
 }
 
-function clearLegacyLanguageSnapshot(): void {
+function clearRetiredLanguageSnapshot(): void {
   if (!hasWindow()) {
     return
   }
@@ -93,7 +92,7 @@ export function useLanguage() {
       persistLanguagePreference(lang, followSystemLanguage.value)
 
       if (!followSystemLanguage.value) {
-        clearLegacyLanguageSnapshot()
+        clearRetiredLanguageSnapshot()
       }
 
       devLog(`[useLanguage] Language switched to: ${lang}`)
@@ -116,7 +115,7 @@ export function useLanguage() {
       return
     }
 
-    clearLegacyLanguageSnapshot()
+    clearRetiredLanguageSnapshot()
   }
 
   /**
@@ -125,12 +124,9 @@ export function useLanguage() {
   async function initializeLanguage() {
     await appSettings.whenHydrated()
 
-    const legacy = readLegacyLanguagePreferenceSnapshot()
     const preference = resolveInitialLanguagePreference({
       settingLocale: appSetting?.lang?.locale,
       settingFollowSystem: appSetting?.lang?.followSystem,
-      legacyLocale: legacy.locale,
-      legacyFollowSystem: legacy.followSystem,
       browserLanguage: hasNavigator() ? navigator.language : null,
       intlLocale:
         typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().locale : null
@@ -139,10 +135,7 @@ export function useLanguage() {
     followSystemLanguage.value = preference.followSystem
     currentLanguage.value = preference.locale
     persistLanguagePreference(preference.locale, preference.followSystem)
-
-    if (preference.shouldClearLegacySnapshot) {
-      clearLegacyLanguageSnapshot()
-    }
+    clearRetiredLanguageSnapshot()
 
     await switchLanguage(preference.locale)
   }

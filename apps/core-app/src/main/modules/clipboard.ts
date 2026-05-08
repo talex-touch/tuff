@@ -410,7 +410,7 @@ class ClipboardHelper {
    * @remarks
    * Tries multiple clipboard formats in priority order:
    * 1. public.file-url - Standard macOS file URLs
-   * 2. NSFilenamesPboardType - Legacy macOS format
+   * 2. NSFilenamesPboardType - Older macOS format
    * 3. text/uri-list - Cross-platform format
    *
    * Filters out invalid entries like file IDs, placeholders, or malformed URLs
@@ -1133,7 +1133,7 @@ export class ClipboardModule extends BaseModule {
     const limit = Math.min(Math.max(requestedLimit ?? 5, 1), 50)
     const metaFilterPreview = metaFilter ? JSON.stringify(metaFilter) : undefined
 
-    clipboardLog.debug('[clipboard:query] Request', {
+    clipboardLog.debug('[clipboard:history:query-meta] Request', {
       meta: { source, category, metaFilter: metaFilterPreview, limit }
     })
 
@@ -1161,7 +1161,7 @@ export class ClipboardModule extends BaseModule {
 
     if (category) {
       const categoryValue = JSON.stringify(category)
-      clipboardLog.debug('[clipboard:query] Searching for category', {
+      clipboardLog.debug('[clipboard:history:query-meta] Searching for category', {
         meta: { category, categoryValue }
       })
       conditions.push(
@@ -1197,15 +1197,17 @@ export class ClipboardModule extends BaseModule {
       .orderBy(desc(clipboardHistoryMeta.createdAt))
       .limit(limit)
 
-    clipboardLog.debug('[clipboard:query] Found meta rows', { meta: { count: idRows.length } })
+    clipboardLog.debug('[clipboard:history:query-meta] Found meta rows', {
+      meta: { count: idRows.length }
+    })
 
     const ids = idRows.map((row) => row.clipboardId).filter((id): id is number => !!id)
     if (ids.length === 0) {
-      clipboardLog.debug('[clipboard:query] No matching IDs found')
+      clipboardLog.debug('[clipboard:history:query-meta] No matching IDs found')
       return []
     }
 
-    clipboardLog.debug('[clipboard:query] Fetching clipboard entries', {
+    clipboardLog.debug('[clipboard:history:query-meta] Fetching clipboard entries', {
       meta: { count: ids.length, sampleIds: ids.slice(0, 5).join(',') }
     })
 
@@ -1217,7 +1219,7 @@ export class ClipboardModule extends BaseModule {
 
     const history = await this.hydrateWithMeta(rows)
     const normalized = history.map((item) => this.toClientItem(item) ?? item)
-    clipboardLog.debug('[clipboard:query] Returning results', {
+    clipboardLog.debug('[clipboard:history:query-meta] Returning results', {
       meta: { count: history.length }
     })
 

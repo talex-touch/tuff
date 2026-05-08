@@ -19,6 +19,7 @@ function buildStatus(overrides: Partial<EverythingStatusResponse> = {}): Everyth
     error: null,
     errorCode: null,
     lastBackendError: null,
+    backendAttemptErrors: {},
     fallbackChain: ['sdk-napi', 'cli', 'unavailable'],
     lastChecked: Date.now(),
     ...overrides

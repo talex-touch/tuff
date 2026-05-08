@@ -2,7 +2,7 @@ import path from 'node:path'
 import fse from 'fs-extra'
 
 export const PLUGIN_RUNTIME_DRIFT_CODE = 'PLUGIN_RUNTIME_DRIFT'
-export const LEGACY_TRANSLATION_WIDGET_IMPORT = '../shared/translation-shared.cjs'
+export const RETIRED_TRANSLATION_WIDGET_IMPORT = '../shared/translation-shared.cjs'
 
 type VersionedRecord = {
   version?: unknown
@@ -21,10 +21,10 @@ export interface PluginRuntimeDriftResult {
 }
 
 const SCANNABLE_TEXT_EXTENSIONS = new Set(['.js', '.cjs', '.mjs', '.ts', '.tsx', '.vue'])
-const LEGACY_RUNTIME_PATTERNS = [
+const RETIRED_RUNTIME_PATTERNS = [
   {
-    code: 'legacy-runtime-import',
-    needle: LEGACY_TRANSLATION_WIDGET_IMPORT
+    code: 'retired-runtime-import',
+    needle: RETIRED_TRANSLATION_WIDGET_IMPORT
   }
 ] as const
 
@@ -143,7 +143,7 @@ async function collectRuntimeTextFiles(rootDir: string): Promise<string[]> {
   return files
 }
 
-async function collectLegacyImportReasons(pluginDir: string): Promise<string[]> {
+async function collectRetiredImportReasons(pluginDir: string): Promise<string[]> {
   const files = await collectRuntimeTextFiles(pluginDir)
   if (files.length === 0) {
     return []
@@ -154,7 +154,7 @@ async function collectLegacyImportReasons(pluginDir: string): Promise<string[]> 
     const source = await fse.readFile(filePath, 'utf-8').catch(() => '')
     if (!source) continue
 
-    for (const pattern of LEGACY_RUNTIME_PATTERNS) {
+    for (const pattern of RETIRED_RUNTIME_PATTERNS) {
       if (source.includes(pattern.needle)) {
         reasons.add(pattern.code)
       }
@@ -193,7 +193,7 @@ export async function inspectPluginRuntimeDrift(
     driftReasons.push(`package-version:${targetPackageVersion}<${targetManifestVersion}`)
   }
 
-  driftReasons.push(...(await collectLegacyImportReasons(targetDir)))
+  driftReasons.push(...(await collectRetiredImportReasons(targetDir)))
 
   return {
     status: driftReasons.length > 0 ? 'drifted' : 'healthy',

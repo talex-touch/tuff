@@ -86,9 +86,27 @@ export class AnalyticsCore {
         errorCount: 0
       }
     }
+    const totalTime = startup.totalStartupTime
+    const rendererTime = startup.renderer.readyTime - startup.renderer.startTime
+    const mainProcessTime = startup.mainProcess.modulesLoadTime
+    const rating =
+      totalTime < 1000
+        ? 'excellent'
+        : totalTime < 2000
+          ? 'good'
+          : totalTime < 5000
+            ? 'fair'
+            : 'poor'
 
     this.currentMetrics = {
       ...this.currentMetrics,
+      startup: {
+        totalTimeMs: totalTime,
+        mainProcessTimeMs: mainProcessTime,
+        rendererTimeMs: rendererTime,
+        moduleCount: startup.mainProcess.totalModules,
+        rating
+      },
       modules
     }
 

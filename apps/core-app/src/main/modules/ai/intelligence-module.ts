@@ -2,7 +2,6 @@ import type {
   IntelligenceAgentStreamEvent,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
-  IntelligenceMessage,
   IntelligenceProviderConfig,
   TuffIntelligenceAgentSession,
   TuffIntelligenceAgentTraceEvent,
@@ -18,12 +17,12 @@ import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
 import type { getTuffTransportMain, HandlerContext } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { ApiResponse } from '../../utils/safe-handler'
-import type { QuotaConfig } from './intelligence-quota-manager'
 import {
   IntelligenceCapabilityType,
   IntelligenceProviderType
 } from '@talex-touch/tuff-intelligence'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { defineEvent } from '@talex-touch/utils/transport/event/builder'
+import { intelligenceApiEvents } from '@talex-touch/utils/transport/sdk/domains/intelligence'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
 import { safeApiHandler, withPermissionSafeApi } from '../../utils/safe-handler'
@@ -56,73 +55,20 @@ import { OpenAIProvider } from './providers/openai-provider'
 import { SiliconflowProvider } from './providers/siliconflow-provider'
 import { IntelligenceProviderManager } from './runtime/provider-manager'
 import { tuffIntelligenceRuntime } from './tuff-intelligence-runtime'
+import type { CapabilityTestPayload } from './capability-testers/base-tester'
 
 const intelligenceLog = createLogger('Intelligence')
 const TUFF_NEXUS_PROVIDER_ID = 'tuff-nexus-default'
 const INTELLIGENCE_STREAM_KEEPALIVE_MS = 10_000
 const INTELLIGENCE_STREAM_REPLAY_LIMIT = 1_000
 
-interface IntelligenceInvokePayload {
-  capabilityId: string
-  payload: unknown
-  options?: IntelligenceInvokeOptions
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
 }
 
-interface IntelligenceChatLangchainPayload {
-  messages: IntelligenceMessage[]
-  providerId?: string
-  model?: string
-  promptTemplate?: string
-  promptVariables?: Record<string, unknown>
-  metadata?: Record<string, unknown>
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined
 }
-
-interface IntelligenceTestProviderPayload {
-  provider: IntelligenceProviderConfig
-}
-
-interface IntelligenceGetCapabilityTestMetaPayload {
-  capabilityId: string
-}
-
-type IntelligenceTestCapabilityPayload = {
-  capabilityId: string
-  providerId?: string
-  userInput?: string
-  model?: string
-  promptTemplate?: string
-  promptVariables?: Record<string, unknown>
-} & Record<string, unknown>
-
-interface IntelligenceFetchModelsPayload {
-  provider: IntelligenceProviderConfig
-}
-
-interface IntelligenceAuditLogQuery {
-  caller?: string
-  capabilityId?: string
-  startTime?: number
-  endTime?: number
-  limit?: number
-}
-
-interface IntelligenceStatsPayload {
-  callerId?: string
-}
-
-interface IntelligenceUsageStatsPayload {
-  callerId: string
-  periodType: 'day' | 'month'
-  startPeriod?: string
-  endPeriod?: string
-}
-
-interface QuotaLookupPayload {
-  callerId?: string
-  callerType?: QuotaConfig['callerType']
-}
-
-type QuotaCheckPayload = QuotaLookupPayload & { estimatedTokens?: number }
 
 interface IntelligenceSessionStartPayload {
   sessionId?: string
@@ -353,166 +299,146 @@ function normalizeCapabilityInvokeError(capabilityId: string, error: unknown): E
   return normalized
 }
 
-const intelligenceInvokeEvent = defineRawEvent<
-  IntelligenceInvokePayload,
-  ApiResponse<IntelligenceInvokeResult<unknown>>
->('intelligence:invoke')
-const intelligenceChatLangchainEvent = defineRawEvent<
-  IntelligenceChatLangchainPayload,
-  ApiResponse<IntelligenceInvokeResult<string>>
->('intelligence:chat-langchain')
-const intelligenceTestProviderEvent = defineRawEvent<
-  IntelligenceTestProviderPayload,
-  ApiResponse<unknown>
->('intelligence:test-provider')
-const intelligenceGetCapabilityTestMetaEvent = defineRawEvent<
-  IntelligenceGetCapabilityTestMetaPayload,
-  ApiResponse<{ requiresUserInput: boolean; inputHint: string }>
->('intelligence:get-capability-test-meta')
-const intelligenceTestCapabilityEvent = defineRawEvent<
-  IntelligenceTestCapabilityPayload,
-  ApiResponse<unknown>
->('intelligence:test-capability')
-const intelligenceFetchModelsEvent = defineRawEvent<
-  IntelligenceFetchModelsPayload,
-  ApiResponse<{ success: boolean; models?: string[]; message?: string }>
->('intelligence:fetch-models')
-const intelligenceGetAuditLogsEvent = defineRawEvent<
-  IntelligenceAuditLogQuery | undefined,
-  ApiResponse<unknown>
->('intelligence:get-audit-logs')
-const intelligenceGetTodayStatsEvent = defineRawEvent<
-  IntelligenceStatsPayload | undefined,
-  ApiResponse<unknown>
->('intelligence:get-today-stats')
-const intelligenceGetMonthStatsEvent = defineRawEvent<
-  IntelligenceStatsPayload | undefined,
-  ApiResponse<unknown>
->('intelligence:get-month-stats')
-const intelligenceGetUsageStatsEvent = defineRawEvent<
-  IntelligenceUsageStatsPayload,
-  ApiResponse<unknown>
->('intelligence:get-usage-stats')
-const intelligenceGetQuotaEvent = defineRawEvent<QuotaLookupPayload, ApiResponse<unknown>>(
-  'intelligence:get-quota'
-)
-const intelligenceSetQuotaEvent = defineRawEvent<QuotaConfig, ApiResponse<unknown>>(
-  'intelligence:set-quota'
-)
-const intelligenceDeleteQuotaEvent = defineRawEvent<QuotaLookupPayload, ApiResponse<unknown>>(
-  'intelligence:delete-quota'
-)
-const intelligenceGetAllQuotasEvent = defineRawEvent<void, ApiResponse<unknown>>(
-  'intelligence:get-all-quotas'
-)
-const intelligenceCheckQuotaEvent = defineRawEvent<QuotaCheckPayload, ApiResponse<unknown>>(
-  'intelligence:check-quota'
-)
-const intelligenceGetCurrentUsageEvent = defineRawEvent<QuotaLookupPayload, ApiResponse<unknown>>(
-  'intelligence:get-current-usage'
-)
-const intelligenceSessionStartEvent = defineRawEvent<
-  IntelligenceSessionStartPayload,
-  ApiResponse<TuffIntelligenceAgentSession>
->('intelligence:agent:session:start')
-const intelligenceSessionHeartbeatEvent = defineRawEvent<
-  IntelligenceSessionHeartbeatPayload,
-  ApiResponse<{ sessionId: string; heartbeatAt: string }>
->('intelligence:agent:session:heartbeat')
-const intelligenceSessionPauseEvent = defineRawEvent<
-  IntelligenceSessionPausePayload,
-  ApiResponse<TuffIntelligenceAgentSession | null>
->('intelligence:agent:session:pause')
-const intelligenceSessionRecoverableEvent = defineRawEvent<
-  void,
-  ApiResponse<TuffIntelligenceAgentSession | null>
->('intelligence:agent:session:recoverable')
-const intelligenceSessionResumeEvent = defineRawEvent<
-  IntelligenceSessionResumePayload,
-  ApiResponse<TuffIntelligenceAgentSession | null>
->('intelligence:agent:session:resume')
-const intelligenceSessionCancelEvent = defineRawEvent<
-  IntelligenceSessionCancelPayload,
-  ApiResponse<TuffIntelligenceStateSnapshot | null>
->('intelligence:agent:session:cancel')
-const intelligenceSessionGetStateEvent = defineRawEvent<
-  IntelligenceSessionStatePayload,
-  ApiResponse<TuffIntelligenceStateSnapshot | null>
->('intelligence:agent:session:get-state')
-const intelligenceOrchestratorPlanEvent = defineRawEvent<
-  IntelligenceOrchestratorPlanPayload,
-  ApiResponse<TuffIntelligenceTurn>
->('intelligence:agent:plan')
-const intelligenceOrchestratorExecuteEvent = defineRawEvent<
-  IntelligenceOrchestratorExecutePayload,
-  ApiResponse<TuffIntelligenceTurn>
->('intelligence:agent:execute')
-const intelligenceOrchestratorReflectEvent = defineRawEvent<
-  IntelligenceOrchestratorReflectPayload,
-  ApiResponse<TuffIntelligenceTurn>
->('intelligence:agent:reflect')
-const intelligenceToolCallEvent = defineRawEvent<
-  IntelligenceToolCallPayload,
-  ApiResponse<{
-    success: boolean
-    output?: unknown
-    error?: string
-    approvalTicket?: TuffIntelligenceApprovalTicket
-    traceEvent: TuffIntelligenceAgentTraceEvent
-  }>
->('intelligence:agent:tool:call')
-const intelligenceToolResultEvent = defineRawEvent<
-  IntelligenceToolResultPayload,
-  ApiResponse<{ accepted: boolean }>
->('intelligence:agent:tool:result')
-const intelligenceToolApproveEvent = defineRawEvent<
-  IntelligenceToolApprovePayload,
-  ApiResponse<TuffIntelligenceApprovalTicket | null>
->('intelligence:agent:tool:approve')
-const intelligenceSessionStreamEvent = defineRawEvent<
-  IntelligenceTraceQueryPayload,
-  ApiResponse<TuffIntelligenceAgentTraceEvent[]>
->('intelligence:agent:session:stream')
-const intelligenceSessionSubscribeEvent = defineRawEvent<
-  IntelligenceTraceQueryPayload,
-  AsyncIterable<IntelligenceAgentStreamEvent>
->('intelligence:agent:session:subscribe')
-const intelligenceSessionHistoryEvent = defineRawEvent<
-  IntelligenceSessionHistoryPayload | undefined,
-  ApiResponse<TuffIntelligenceAgentSession[]>
->('intelligence:agent:session:history')
-const intelligenceSessionTraceEvent = defineRawEvent<
-  IntelligenceTraceQueryPayload,
-  ApiResponse<TuffIntelligenceAgentTraceEvent[]>
->('intelligence:agent:session:trace')
-const intelligenceSessionTraceExportEvent = defineRawEvent<
-  IntelligenceTraceExportPayload,
-  ApiResponse<{ format: 'json' | 'jsonl'; content: string }>
->('intelligence:agent:session:trace:export')
-const intelligenceWorkflowListEvent = defineRawEvent<
-  IntelligenceWorkflowListPayload | undefined,
-  ApiResponse<WorkflowDefinition[]>
->('intelligence:workflow:list')
-const intelligenceWorkflowGetEvent = defineRawEvent<
-  IntelligenceWorkflowGetPayload,
-  ApiResponse<WorkflowDefinition | null>
->('intelligence:workflow:get')
-const intelligenceWorkflowSaveEvent = defineRawEvent<
-  WorkflowDefinition,
-  ApiResponse<WorkflowDefinition>
->('intelligence:workflow:save')
-const intelligenceWorkflowDeleteEvent = defineRawEvent<
-  IntelligenceWorkflowDeletePayload,
-  ApiResponse<{ deleted: boolean }>
->('intelligence:workflow:delete')
-const intelligenceWorkflowRunEvent = defineRawEvent<
-  IntelligenceWorkflowRunPayload,
-  ApiResponse<WorkflowRunRecord>
->('intelligence:workflow:run')
-const intelligenceWorkflowHistoryEvent = defineRawEvent<
-  IntelligenceWorkflowHistoryPayload | undefined,
-  ApiResponse<WorkflowRunRecord[]>
->('intelligence:workflow:history')
+const intelligenceAgentEvents = {
+  sessionStart: defineEvent('intelligence')
+    .module('agent')
+    .event('session:start')
+    .define<IntelligenceSessionStartPayload, ApiResponse<TuffIntelligenceAgentSession>>(),
+  sessionHeartbeat: defineEvent('intelligence')
+    .module('agent')
+    .event('session:heartbeat')
+    .define<
+      IntelligenceSessionHeartbeatPayload,
+      ApiResponse<{ sessionId: string; heartbeatAt: string }>
+    >(),
+  sessionPause: defineEvent('intelligence')
+    .module('agent')
+    .event('session:pause')
+    .define<IntelligenceSessionPausePayload, ApiResponse<TuffIntelligenceAgentSession | null>>(),
+  sessionRecoverable: defineEvent('intelligence')
+    .module('agent')
+    .event('session:recoverable')
+    .define<void, ApiResponse<TuffIntelligenceAgentSession | null>>(),
+  sessionResume: defineEvent('intelligence')
+    .module('agent')
+    .event('session:resume')
+    .define<IntelligenceSessionResumePayload, ApiResponse<TuffIntelligenceAgentSession | null>>(),
+  sessionCancel: defineEvent('intelligence')
+    .module('agent')
+    .event('session:cancel')
+    .define<IntelligenceSessionCancelPayload, ApiResponse<TuffIntelligenceStateSnapshot | null>>(),
+  sessionGetState: defineEvent('intelligence')
+    .module('agent')
+    .event('session:get-state')
+    .define<IntelligenceSessionStatePayload, ApiResponse<TuffIntelligenceStateSnapshot | null>>(),
+  plan: defineEvent('intelligence')
+    .module('agent')
+    .event('plan')
+    .define<IntelligenceOrchestratorPlanPayload, ApiResponse<TuffIntelligenceTurn>>(),
+  execute: defineEvent('intelligence')
+    .module('agent')
+    .event('execute')
+    .define<IntelligenceOrchestratorExecutePayload, ApiResponse<TuffIntelligenceTurn>>(),
+  reflect: defineEvent('intelligence')
+    .module('agent')
+    .event('reflect')
+    .define<IntelligenceOrchestratorReflectPayload, ApiResponse<TuffIntelligenceTurn>>(),
+  toolCall: defineEvent('intelligence').module('agent').event('tool:call').define<
+    IntelligenceToolCallPayload,
+    ApiResponse<{
+      success: boolean
+      output?: unknown
+      error?: string
+      approvalTicket?: TuffIntelligenceApprovalTicket
+      traceEvent: TuffIntelligenceAgentTraceEvent
+    }>
+  >(),
+  toolResult: defineEvent('intelligence')
+    .module('agent')
+    .event('tool:result')
+    .define<IntelligenceToolResultPayload, ApiResponse<{ accepted: boolean }>>(),
+  toolApprove: defineEvent('intelligence')
+    .module('agent')
+    .event('tool:approve')
+    .define<IntelligenceToolApprovePayload, ApiResponse<TuffIntelligenceApprovalTicket | null>>(),
+  sessionStream: defineEvent('intelligence')
+    .module('agent')
+    .event('session:stream')
+    .define<IntelligenceTraceQueryPayload, ApiResponse<TuffIntelligenceAgentTraceEvent[]>>(),
+  sessionSubscribe: defineEvent('intelligence')
+    .module('agent')
+    .event('session:subscribe')
+    .define<IntelligenceTraceQueryPayload, AsyncIterable<IntelligenceAgentStreamEvent>>(),
+  sessionHistory: defineEvent('intelligence')
+    .module('agent')
+    .event('session:history')
+    .define<
+      IntelligenceSessionHistoryPayload | undefined,
+      ApiResponse<TuffIntelligenceAgentSession[]>
+    >(),
+  sessionTrace: defineEvent('intelligence')
+    .module('agent')
+    .event('session:trace')
+    .define<IntelligenceTraceQueryPayload, ApiResponse<TuffIntelligenceAgentTraceEvent[]>>(),
+  sessionTraceExport: defineEvent('intelligence')
+    .module('agent')
+    .event('session:trace:export')
+    .define<
+      IntelligenceTraceExportPayload,
+      ApiResponse<{ format: 'json' | 'jsonl'; content: string }>
+    >()
+} as const
+const intelligenceWorkflowEvents = {
+  list: defineEvent('intelligence')
+    .module('workflow')
+    .event('list')
+    .define<IntelligenceWorkflowListPayload | undefined, ApiResponse<WorkflowDefinition[]>>(),
+  get: defineEvent('intelligence')
+    .module('workflow')
+    .event('get')
+    .define<IntelligenceWorkflowGetPayload, ApiResponse<WorkflowDefinition | null>>(),
+  save: defineEvent('intelligence')
+    .module('workflow')
+    .event('save')
+    .define<WorkflowDefinition, ApiResponse<WorkflowDefinition>>(),
+  delete: defineEvent('intelligence')
+    .module('workflow')
+    .event('delete')
+    .define<IntelligenceWorkflowDeletePayload, ApiResponse<{ deleted: boolean }>>(),
+  run: defineEvent('intelligence')
+    .module('workflow')
+    .event('run')
+    .define<IntelligenceWorkflowRunPayload, ApiResponse<WorkflowRunRecord>>(),
+  history: defineEvent('intelligence')
+    .module('workflow')
+    .event('history')
+    .define<IntelligenceWorkflowHistoryPayload | undefined, ApiResponse<WorkflowRunRecord[]>>()
+} as const
+
+const intelligenceSessionStartEvent = intelligenceAgentEvents.sessionStart
+const intelligenceSessionHeartbeatEvent = intelligenceAgentEvents.sessionHeartbeat
+const intelligenceSessionPauseEvent = intelligenceAgentEvents.sessionPause
+const intelligenceSessionRecoverableEvent = intelligenceAgentEvents.sessionRecoverable
+const intelligenceSessionResumeEvent = intelligenceAgentEvents.sessionResume
+const intelligenceSessionCancelEvent = intelligenceAgentEvents.sessionCancel
+const intelligenceSessionGetStateEvent = intelligenceAgentEvents.sessionGetState
+const intelligenceOrchestratorPlanEvent = intelligenceAgentEvents.plan
+const intelligenceOrchestratorExecuteEvent = intelligenceAgentEvents.execute
+const intelligenceOrchestratorReflectEvent = intelligenceAgentEvents.reflect
+const intelligenceToolCallEvent = intelligenceAgentEvents.toolCall
+const intelligenceToolResultEvent = intelligenceAgentEvents.toolResult
+const intelligenceToolApproveEvent = intelligenceAgentEvents.toolApprove
+const intelligenceSessionStreamEvent = intelligenceAgentEvents.sessionStream
+const intelligenceSessionSubscribeEvent = intelligenceAgentEvents.sessionSubscribe
+const intelligenceSessionHistoryEvent = intelligenceAgentEvents.sessionHistory
+const intelligenceSessionTraceEvent = intelligenceAgentEvents.sessionTrace
+const intelligenceSessionTraceExportEvent = intelligenceAgentEvents.sessionTraceExport
+const intelligenceWorkflowListEvent = intelligenceWorkflowEvents.list
+const intelligenceWorkflowGetEvent = intelligenceWorkflowEvents.get
+const intelligenceWorkflowSaveEvent = intelligenceWorkflowEvents.save
+const intelligenceWorkflowDeleteEvent = intelligenceWorkflowEvents.delete
+const intelligenceWorkflowRunEvent = intelligenceWorkflowEvents.run
+const intelligenceWorkflowHistoryEvent = intelligenceWorkflowEvents.history
 
 /**
  * Intelligence Module - Manages AI capabilities and providers.
@@ -1069,7 +995,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     ) => void
   ): void {
     registerProtectedSafe(
-      intelligenceInvokeEvent,
+      intelligenceApiEvents.invoke,
       'Invoke capability',
       'intelligence.basic',
       async (data) => {
@@ -1094,7 +1020,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     )
 
     registerProtectedSafe(
-      intelligenceChatLangchainEvent,
+      intelligenceApiEvents.chatLangChain,
       'LangChain chat',
       'intelligence.basic',
       async (data) => {
@@ -1132,7 +1058,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => void
   ): void {
-    registerSafe(intelligenceTestProviderEvent, 'Provider test', async (data) => {
+    registerSafe(intelligenceApiEvents.testProvider, 'Provider test', async (data) => {
       if (!data || typeof data !== 'object' || !data.provider) {
         throw new Error('Missing provider payload')
       }
@@ -1146,7 +1072,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     })
 
     registerSafe(
-      intelligenceGetCapabilityTestMetaEvent,
+      intelligenceApiEvents.getCapabilityTestMeta,
       'Get capability test metadata',
       async (data) => {
         if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
@@ -1170,7 +1096,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerSafe(intelligenceTestCapabilityEvent, 'Capability test', async (data) => {
+    registerSafe(intelligenceApiEvents.testCapability, 'Capability test', async (data) => {
       if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
         throw new Error('Invalid capability test payload')
       }
@@ -1200,15 +1126,21 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       const allowedProviderIds = providerId ? [providerId] : options.allowedProviderIds
 
       intelligenceLog.info(`Testing capability: ${capabilityId}`)
-      const payload = await tester.generateTestPayload({ providerId, userInput, ...rest })
+      const payload = await tester.generateTestPayload({
+        ...rest,
+        providerId,
+        userInput
+      } as CapabilityTestPayload)
 
       let result: IntelligenceInvokeResult<unknown>
       try {
+        const requestedModel = optionalString(model)
+        const modelPreference = requestedModel ? [requestedModel] : options.modelPreference
         result = await tuffIntelligence.invoke(capabilityId, payload, {
-          modelPreference: model ? [model] : options.modelPreference,
-          allowedProviderIds,
+          modelPreference,
+          allowedProviderIds: isStringArray(allowedProviderIds) ? allowedProviderIds : undefined,
           metadata: {
-            promptTemplate,
+            promptTemplate: optionalString(promptTemplate),
             promptVariables,
             caller: 'system'
           }
@@ -1226,7 +1158,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       return formattedResult
     })
 
-    registerSafe(intelligenceFetchModelsEvent, 'Fetch provider models', async (data) => {
+    registerSafe(intelligenceApiEvents.fetchModels, 'Fetch provider models', async (data) => {
       if (!data || typeof data !== 'object' || !data.provider) {
         throw new Error('Missing provider payload')
       }
@@ -1252,22 +1184,22 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => void
   ): void {
-    registerSafe(intelligenceGetAuditLogsEvent, 'Get audit logs', async (data) => {
+    registerSafe(intelligenceApiEvents.getAuditLogs, 'Get audit logs', async (data) => {
       const options = data ?? {}
       return await tuffIntelligence.queryAuditLogs(options)
     })
 
-    registerSafe(intelligenceGetTodayStatsEvent, 'Get today stats', async (data) => {
+    registerSafe(intelligenceApiEvents.getTodayStats, 'Get today stats', async (data) => {
       const { callerId } = data ?? {}
       return await tuffIntelligence.getTodayStats(callerId)
     })
 
-    registerSafe(intelligenceGetMonthStatsEvent, 'Get month stats', async (data) => {
+    registerSafe(intelligenceApiEvents.getMonthStats, 'Get month stats', async (data) => {
       const { callerId } = data ?? {}
       return await tuffIntelligence.getMonthStats(callerId)
     })
 
-    registerSafe(intelligenceGetUsageStatsEvent, 'Get usage stats', async (data) => {
+    registerSafe(intelligenceApiEvents.getUsageStats, 'Get usage stats', async (data) => {
       if (!data || typeof data !== 'object') {
         throw new Error('Invalid payload')
       }
@@ -1804,7 +1736,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => void
   ): void {
-    registerSafe(intelligenceGetQuotaEvent, 'Get quota', async (data) => {
+    registerSafe(intelligenceApiEvents.getQuota, 'Get quota', async (data) => {
       const { callerId, callerType } = data
       if (!callerId) {
         throw new Error('callerId is required')
@@ -1813,7 +1745,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       return await intelligenceQuotaManager.getQuota(callerId, callerType || 'plugin')
     })
 
-    registerSafe(intelligenceSetQuotaEvent, 'Set quota', async (data) => {
+    registerSafe(intelligenceApiEvents.setQuota, 'Set quota', async (data) => {
       if (!data || typeof data !== 'object') {
         throw new Error('Invalid quota config')
       }
@@ -1821,7 +1753,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       await intelligenceQuotaManager.setQuota(data)
     })
 
-    registerSafe(intelligenceDeleteQuotaEvent, 'Delete quota', async (data) => {
+    registerSafe(intelligenceApiEvents.deleteQuota, 'Delete quota', async (data) => {
       const { callerId, callerType } = data
       if (!callerId) {
         throw new Error('callerId is required')
@@ -1830,12 +1762,12 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       await intelligenceQuotaManager.deleteQuota(callerId, callerType || 'plugin')
     })
 
-    registerSafe(intelligenceGetAllQuotasEvent, 'Get all quotas', async () => {
+    registerSafe(intelligenceApiEvents.getAllQuotas, 'Get all quotas', async () => {
       const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
       return await intelligenceQuotaManager.getAllQuotas()
     })
 
-    registerSafe(intelligenceCheckQuotaEvent, 'Check quota', async (data) => {
+    registerSafe(intelligenceApiEvents.checkQuota, 'Check quota', async (data) => {
       const { callerId, callerType, estimatedTokens } = data
       if (!callerId) {
         throw new Error('callerId is required')
@@ -1848,7 +1780,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       )
     })
 
-    registerSafe(intelligenceGetCurrentUsageEvent, 'Get current usage', async (data) => {
+    registerSafe(intelligenceApiEvents.getCurrentUsage, 'Get current usage', async (data) => {
       const { callerId, callerType } = data
       if (!callerId) {
         throw new Error('callerId is required')

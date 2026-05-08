@@ -9,8 +9,6 @@ function resolvePreference(overrides: Partial<InitialLanguagePreferenceInput> = 
   return resolveInitialLanguagePreference({
     settingLocale: 'zh-CN',
     settingFollowSystem: true,
-    legacyLocale: null,
-    legacyFollowSystem: null,
     browserLanguage: 'en-US',
     intlLocale: 'en-US',
     ...overrides
@@ -30,65 +28,25 @@ describe('resolveInitialLanguagePreference', () => {
     expect(
       resolvePreference({
         settingLocale: 'en-US',
-        settingFollowSystem: false,
-        legacyLocale: 'zh-CN',
-        legacyFollowSystem: 'true'
+        settingFollowSystem: false
       })
     ).toMatchObject({
       locale: 'en-US',
       followSystem: false,
-      source: 'settings',
-      shouldUseLegacySnapshot: false,
-      shouldClearLegacySnapshot: true
+      source: 'settings'
     })
   })
 
-  it('migrates legacy storage when settings still match defaults', () => {
+  it('uses app settings once they only partially diverge from defaults', () => {
     expect(
       resolvePreference({
         settingLocale: 'zh-CN',
-        settingFollowSystem: true,
-        legacyLocale: 'en-US',
-        legacyFollowSystem: 'false'
-      })
-    ).toMatchObject({
-      locale: 'en-US',
-      followSystem: false,
-      source: 'legacy',
-      shouldUseLegacySnapshot: true,
-      shouldClearLegacySnapshot: true
-    })
-  })
-
-  it('clears invalid legacy storage without using it', () => {
-    expect(
-      resolvePreference({
-        legacyLocale: 'fr-FR',
-        legacyFollowSystem: 'maybe'
-      })
-    ).toMatchObject({
-      locale: 'en-US',
-      followSystem: true,
-      source: 'default',
-      shouldUseLegacySnapshot: false,
-      shouldClearLegacySnapshot: true
-    })
-  })
-
-  it('does not migrate legacy storage once settings only partially diverge from defaults', () => {
-    expect(
-      resolvePreference({
-        settingLocale: 'zh-CN',
-        settingFollowSystem: false,
-        legacyLocale: 'en-US',
-        legacyFollowSystem: 'true'
+        settingFollowSystem: false
       })
     ).toMatchObject({
       locale: 'zh-CN',
       followSystem: false,
-      source: 'settings',
-      shouldUseLegacySnapshot: false,
-      shouldClearLegacySnapshot: true
+      source: 'settings'
     })
   })
 
@@ -103,8 +61,7 @@ describe('resolveInitialLanguagePreference', () => {
     ).toMatchObject({
       locale: 'en-US',
       followSystem: true,
-      shouldUseLegacySnapshot: false,
-      shouldClearLegacySnapshot: false
+      source: 'default'
     })
   })
 })

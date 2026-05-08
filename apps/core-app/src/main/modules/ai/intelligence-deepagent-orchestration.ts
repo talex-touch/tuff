@@ -525,16 +525,11 @@ export class IntelligenceDeepAgentOrchestrationService {
       previousOutputs: Record<string, unknown>
     }
   ): Promise<unknown> {
-    const compatCapabilityId = String(definitionStep.metadata?.capabilityId || '').trim()
-    if (compatCapabilityId && compatCapabilityId !== 'workflow.execute') {
-      const intelligence = await getIntelligenceSdk()
-      const result = await intelligence.invoke(compatCapabilityId, definitionStep.input ?? {}, {
-        metadata: {
-          ...(executionContext.metadata ?? {}),
-          sessionId: executionContext.sessionId
-        }
-      })
-      return result.result
+    const metadataCapabilityId = String(definitionStep.metadata?.capabilityId || '').trim()
+    if (metadataCapabilityId && metadataCapabilityId !== 'workflow.execute') {
+      throw new Error(
+        `[Intelligence] workflow step ${definitionStep.id} uses retired capabilityId routing`
+      )
     }
 
     if (definitionStep.kind === 'tool') {
@@ -921,33 +916,50 @@ export class IntelligenceDeepAgentOrchestrationService {
 
     const steps: WorkflowDefinition['steps'] = rawSteps.map((item, index) => {
       const step = toRecord(item)
+      const kind = String(step.kind || '').trim()
       const agentId = String(step.agentId || '').trim()
       const toolId = String(step.toolId || '').trim()
       const capabilityId = String(step.capabilityId || '').trim()
-      const inferredKind = agentId ? 'agent' : toolId ? 'tool' : 'prompt'
+      if (capabilityId) {
+        throw new Error(
+          `[Intelligence] workflow.execute step ${String(step.id || index + 1)} rejects capabilityId`
+        )
+      }
+      if (kind !== 'prompt' && kind !== 'tool' && kind !== 'agent') {
+        throw new Error(
+          `[Intelligence] workflow.execute step ${String(step.id || index + 1)} requires explicit kind`
+        )
+      }
+      if (kind === 'tool' && !toolId) {
+        throw new Error(
+          `[Intelligence] workflow.execute tool step ${String(step.id || index + 1)} requires toolId`
+        )
+      }
+      if (kind === 'agent' && !agentId) {
+        throw new Error(
+          `[Intelligence] workflow.execute agent step ${String(step.id || index + 1)} requires agentId`
+        )
+      }
 
       return {
         id: String(step.id || `inline-step-${index + 1}`),
         name: String(step.name || `step-${index + 1}`),
         description: typeof step.description === 'string' ? step.description : undefined,
-        kind: inferredKind,
+        kind,
         prompt: typeof step.prompt === 'string' ? step.prompt : undefined,
-        toolId: toolId || undefined,
-        toolSource: step.toolSource === 'mcp' ? 'mcp' : 'builtin',
-        agentId: agentId || undefined,
+        toolId: kind === 'tool' ? toolId : undefined,
+        toolSource: kind === 'tool' ? (step.toolSource === 'mcp' ? 'mcp' : 'builtin') : undefined,
+        agentId: kind === 'agent' ? agentId : undefined,
         input: toRecord(step.input),
         continueOnError: step.continueOnError === true,
-        metadata: {
-          ...toRecord(step.metadata),
-          capabilityId: capabilityId || undefined
-        }
+        metadata: toRecord(step.metadata)
       } satisfies WorkflowDefinitionStep
     })
 
     return {
       id: 'inline.workflow',
       name: 'Inline Workflow',
-      description: 'Compatibility workflow normalized from workflow.execute payload.',
+      description: 'Inline workflow contract normalized from workflow.execute payload.',
       version: '1',
       enabled: true,
       triggers: [{ type: 'manual', enabled: true, label: '手动运行' }],
@@ -959,7 +971,7 @@ export class IntelligenceDeepAgentOrchestrationService {
       },
       steps,
       metadata: {
-        compatibility: 'workflow.execute.inline'
+        contract: 'workflow.execute.inline'
       }
     }
   }

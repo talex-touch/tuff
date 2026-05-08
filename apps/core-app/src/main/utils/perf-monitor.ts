@@ -780,7 +780,7 @@ export class PerfMonitor {
         realtime: { queued: 0, inFlight: 0 },
         io: { queued: 0, inFlight: 0 },
         maintenance: { queued: 0, inFlight: 0 },
-        legacy_serial: { queued: 0, inFlight: 0 }
+        serial: { queued: 0, inFlight: 0 }
       }
       const pollingActive = pollingDiagnostics.activeTasks.slice(0, 4).map((task) => ({
         id: task.id,

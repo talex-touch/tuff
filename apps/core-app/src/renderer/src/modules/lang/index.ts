@@ -2,7 +2,6 @@ export { loadLocaleMessages, setI18nLanguage, setupI18n } from './i18n'
 export { useLanguage } from './useLanguage'
 export type { I18nInstance } from './i18n'
 export {
-  readLegacyLanguagePreferenceSnapshot,
   resolveInitialLanguagePreference,
   resolveSupportedLocale,
   SUPPORTED_LANGUAGES,

@@ -8,6 +8,7 @@ const {
   mockCallTool,
   mockGetAllTools,
   mockGetTool,
+  mockInvoke,
   mockListStructuredTools,
   mockQueryTrace,
   mockRegisterProfiles,
@@ -21,6 +22,7 @@ const {
   mockCallTool: vi.fn(),
   mockGetAllTools: vi.fn(() => []),
   mockGetTool: vi.fn(),
+  mockInvoke: vi.fn(),
   mockListStructuredTools: vi.fn(async () => []),
   mockQueryTrace: vi.fn(async () => []),
   mockRegisterProfiles: vi.fn(),
@@ -53,7 +55,7 @@ vi.mock('@talex-touch/tuff-intelligence', () => ({
 vi.mock('./intelligence-sdk', () => ({
   tuffIntelligence: {
     resolveDeepAgentRuntimeConfig: mockResolveDeepAgentRuntimeConfig,
-    invoke: vi.fn()
+    invoke: mockInvoke
   }
 }))
 
@@ -99,6 +101,7 @@ describe('IntelligenceDeepAgentOrchestrationService', () => {
     mockQueryTrace.mockResolvedValue([])
     mockGetAllTools.mockReturnValue([])
     mockListStructuredTools.mockResolvedValue([])
+    mockInvoke.mockResolvedValue({ result: undefined })
   })
 
   it('executes prompt workflow capability through DeepAgent runtime config', async () => {
@@ -133,6 +136,7 @@ describe('IntelligenceDeepAgentOrchestrationService', () => {
           {
             id: 'step-1',
             name: '整理剪贴板',
+            kind: 'prompt',
             prompt: '请把剪贴板内容整理成 Markdown',
             input: {
               outputFormat: 'markdown'
@@ -186,6 +190,181 @@ describe('IntelligenceDeepAgentOrchestrationService', () => {
     })
     expect(adapterPayload.messages[0].content).toContain('工作流输入')
     expect(adapterPayload.messages[0].content).toContain('clipboard')
+  })
+
+  it('normalizes inline prompt and tool workflow steps without retired workflow ids', async () => {
+    mockAdapterRun.mockResolvedValueOnce({
+      text: 'prompt done',
+      metadata: {
+        provider: 'openai',
+        model: 'gpt-4.1-mini'
+      }
+    })
+    mockGetTool.mockReturnValue({
+      id: 'clipboard.read',
+      name: 'Read Clipboard',
+      description: 'Read clipboard history',
+      permissions: [],
+      inputSchema: {
+        type: 'object',
+        properties: {}
+      }
+    })
+    mockCallTool.mockResolvedValue({
+      success: true,
+      output: {
+        text: 'clipboard data'
+      }
+    })
+
+    const { IntelligenceDeepAgentOrchestrationService } =
+      await import('./intelligence-deepagent-orchestration')
+    const service = new IntelligenceDeepAgentOrchestrationService()
+
+    const result = await service.executeWorkflowCapability(
+      {
+        steps: [
+          {
+            id: 'prompt-step',
+            kind: 'prompt',
+            prompt: 'Summarize the text',
+            input: {
+              text: 'hello'
+            }
+          },
+          {
+            id: 'tool-step',
+            kind: 'tool',
+            toolId: 'clipboard.read',
+            toolSource: 'mcp',
+            input: {
+              limit: 3
+            }
+          }
+        ]
+      },
+      {
+        metadata: {
+          sessionId: 'sess-inline',
+          workingDirectory: '/tmp/workflow'
+        }
+      }
+    )
+
+    expect(result.result.status).toBe('completed')
+    expect(result.result.workflowId).toBe('inline.workflow')
+    expect(result.result.outputs).toMatchObject({
+      'prompt-step': {
+        text: 'prompt done'
+      },
+      'tool-step': {
+        text: 'clipboard data'
+      }
+    })
+    expect(mockInvoke).not.toHaveBeenCalled()
+    expect(mockCallTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'sess-inline',
+        toolId: 'clipboard.read',
+        input: {
+          limit: 3
+        },
+        metadata: expect.objectContaining({
+          toolSource: 'mcp',
+          workingDirectory: '/tmp/workflow',
+          approvalContext: expect.objectContaining({
+            workflowId: 'inline.workflow',
+            stepId: 'tool-step'
+          })
+        })
+      })
+    )
+  })
+
+  it('marks inline workflow as current workflow.execute contract', async () => {
+    const { IntelligenceDeepAgentOrchestrationService } =
+      await import('./intelligence-deepagent-orchestration')
+    const service = new IntelligenceDeepAgentOrchestrationService()
+    const normalized = (
+      service as unknown as {
+        normalizeInlineWorkflowPayload: (payload: unknown) => {
+          description?: string
+          metadata?: Record<string, unknown>
+        }
+      }
+    ).normalizeInlineWorkflowPayload({
+      steps: [
+        {
+          id: 'prompt-step',
+          kind: 'prompt',
+          prompt: 'Summarize'
+        }
+      ]
+    })
+
+    expect(normalized.description).toBe(
+      'Inline workflow contract normalized from workflow.execute payload.'
+    )
+    expect(normalized.metadata).toEqual({
+      contract: 'workflow.execute.inline'
+    })
+  })
+
+  it('rejects inline workflow capabilityId routing', async () => {
+    const { IntelligenceDeepAgentOrchestrationService } =
+      await import('./intelligence-deepagent-orchestration')
+    const service = new IntelligenceDeepAgentOrchestrationService()
+
+    await expect(
+      service.executeWorkflowCapability(
+        {
+          steps: [
+            {
+              id: 'capability-step',
+              kind: 'prompt',
+              capabilityId: 'text.summarize',
+              input: {
+                text: 'hello'
+              }
+            }
+          ]
+        },
+        {
+          metadata: {
+            sessionId: 'sess-inline-reject-capability'
+          }
+        }
+      )
+    ).rejects.toThrow('[Intelligence] workflow.execute step capability-step rejects capabilityId')
+  })
+
+  it('rejects inline workflow steps without explicit kind', async () => {
+    const { IntelligenceDeepAgentOrchestrationService } =
+      await import('./intelligence-deepagent-orchestration')
+    const service = new IntelligenceDeepAgentOrchestrationService()
+
+    await expect(
+      service.executeWorkflowCapability(
+        {
+          steps: [
+            {
+              id: 'implicit-tool-step',
+              toolId: 'clipboard.read',
+              input: {
+                limit: 3
+              }
+            }
+          ]
+        },
+        {
+          metadata: {
+            sessionId: 'sess-inline-invalid'
+          }
+        }
+      )
+    ).rejects.toThrow(
+      '[Intelligence] workflow.execute step implicit-tool-step requires explicit kind'
+    )
   })
 
   it('returns waiting approval when direct tool step requires approval', async () => {

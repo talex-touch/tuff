@@ -958,7 +958,7 @@ async function applyPulledStorageItems(
         payload.rawText,
         extractContentHash(item)
       )
-      if (payload.legacy) {
+      if (payload.requiresMigrationRewrite) {
         dirtyStorages.add(qualifiedName)
         setQueueDepthByBuffers()
         scheduleDebouncedPush()
@@ -986,7 +986,7 @@ async function applyPulledStorageItems(
       remoteApplyInFlight.delete(qualifiedName)
       if (result.success) {
         lastSyncedSnapshots.set(qualifiedName, cloneValue(merged))
-        if (patched || payload.legacy) {
+        if (patched || payload.requiresMigrationRewrite) {
           dirtyStorages.add(qualifiedName)
           setQueueDepthByBuffers()
           scheduleDebouncedPush()

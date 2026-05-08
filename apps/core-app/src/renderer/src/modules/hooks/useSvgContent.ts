@@ -15,8 +15,7 @@ import {
 } from '@talex-touch/utils/network'
 import { useDownloadSdk, useNetworkSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { AppEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 
 const svgFileCache = new Map<string, string>()
 const svgContentCache = new Map<string, string>()
@@ -37,17 +36,6 @@ const pendingTasks = new Map<
 let downloadListenerRegistered = false
 const downloadDisposers: Array<() => void> = []
 
-type TempFileCreateRequest = {
-  namespace: string
-  ext: string
-  prefix: string
-  retentionMs?: number
-}
-
-type TempFileCreateResponse = {
-  url: string
-}
-
 export function useSvgContent(
   tempUrl: string = '',
   autoFetch = true,
@@ -59,9 +47,6 @@ export function useSvgContent(
   const loading = ref(false)
   const error = ref<Error | null>(null)
   const transport = useTuffTransport()
-  const tempFileCreateEvent = defineRawEvent<TempFileCreateRequest, TempFileCreateResponse>(
-    'temp-file:create'
-  )
   const downloadSdk = isElectronRenderer() ? useDownloadSdk() : null
   const networkSdk = isElectronRenderer() ? useNetworkSdk() : null
   let remoteSvgCacheDirPromise: Promise<string | null> | null = null
@@ -361,7 +346,7 @@ export function useSvgContent(
           destination = cacheDir
           fileUrl = toTfileUrl(joinPath(destination, filename))
         } else {
-          const temp = await transport.send(tempFileCreateEvent, {
+          const temp = await transport.send(PluginEvents.tempFile.create, {
             namespace: 'icons/svg',
             ext: 'svg',
             prefix: 'tufficon',
