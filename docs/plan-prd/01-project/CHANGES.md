@@ -20,7 +20,7 @@
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
   - Synced large-file boundary metadata to current `2.4.10-beta.14` release gate.
   - Raised existing governance exception caps to current measured line counts for:
-    - `SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER-TEST`: `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts` cap `1407`
+    - `SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER-TEST`: `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts` cap `1516`
     - `SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER`: `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts` cap `3330`
     - `SIZE-GROWTH-2026-04-26-CORE-APP-OCR-SERVICE`: `apps/core-app/src/main/modules/ocr/ocr-service.ts` cap `1629`
     - `SIZE-GROWTH-2026-04-26-CORE-APP-SENTRY-SERVICE`: `apps/core-app/src/main/modules/sentry/sentry-service.ts` cap `1318`
