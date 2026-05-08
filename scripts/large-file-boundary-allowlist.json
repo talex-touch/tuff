@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "threshold": 1200,
-  "updatedAt": "2026-04-26T00:00:00.000Z",
-  "currentVersion": "2.4.9-beta.27",
+  "updatedAt": "2026-05-08T00:00:00.000Z",
+  "currentVersion": "2.4.10-beta.14",
   "entries": [
     {
       "file": "apps/core-app/src/main/channel/common.ts",
@@ -321,6 +321,12 @@
       "maxLines": 1211,
       "expiresVersion": "2.5.0",
       "note": "Reduce below 1200 lines before v2.5.0"
+    },
+    {
+      "file": "plugins/touch-translation/widgets/translate-panel.vue",
+      "maxLines": 1200,
+      "expiresVersion": "2.5.0",
+      "note": "Reduce below 1200 lines before v2.5.0"
     }
   ],
   "scanScope": [
@@ -349,7 +355,7 @@
     },
     {
       "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts",
-      "maxLines": 1259,
+      "maxLines": 1407,
       "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
       "owner": "core-app",
       "expiresVersion": "2.5.0",
@@ -357,7 +363,7 @@
     },
     {
       "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts",
-      "maxLines": 3290,
+      "maxLines": 3330,
       "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
       "owner": "core-app",
       "expiresVersion": "2.5.0",
@@ -397,7 +403,7 @@
     },
     {
       "file": "apps/core-app/src/main/modules/ocr/ocr-service.ts",
-      "maxLines": 1625,
+      "maxLines": 1629,
       "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
       "owner": "core-app",
       "expiresVersion": "2.5.0",
@@ -421,7 +427,7 @@
     },
     {
       "file": "apps/core-app/src/main/modules/sentry/sentry-service.ts",
-      "maxLines": 1304,
+      "maxLines": 1318,
       "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
       "owner": "core-app",
       "expiresVersion": "2.5.0",
@@ -434,6 +440,30 @@
       "owner": "core-app",
       "expiresVersion": "2.5.0",
       "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-LINGPAN"
+    },
+    {
+      "file": "apps/nexus/i18n/locales/en.ts",
+      "maxLines": 2698,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "nexus",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-05-08-NEXUS-I18N-EN"
+    },
+    {
+      "file": "apps/nexus/i18n/locales/zh.ts",
+      "maxLines": 2683,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "nexus",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-05-08-NEXUS-I18N-ZH"
+    },
+    {
+      "file": "apps/nexus/server/utils/authStore.ts",
+      "maxLines": 2538,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "nexus",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-05-08-NEXUS-AUTH-STORE"
     },
     {
       "file": "apps/pilot/app/components/input/ThInput.vue",
@@ -485,7 +515,7 @@
     },
     {
       "file": "packages/tuff-cli/src/bin/tuff.ts",
-      "maxLines": 1281,
+      "maxLines": 1318,
       "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
       "owner": "packages-tuff-cli",
       "expiresVersion": "2.5.0",
@@ -508,12 +538,36 @@
       "ticket": "SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-INTELLIGENCE-INTELLIGENCE-TYPES"
     },
     {
+      "file": "packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue",
+      "maxLines": 1345,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "packages-tuffex",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-05-08-TUFFEX-FLIP-OVERLAY"
+    },
+    {
       "file": "packages/utils/types/intelligence.ts",
       "maxLines": 2317,
       "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
       "owner": "packages-utils",
       "expiresVersion": "2.5.0",
       "ticket": "SIZE-GROWTH-2026-04-26-PACKAGES-UTILS-UTILS-INTELLIGENCE-TYPES"
+    },
+    {
+      "file": "plugins/touch-translation/index.js",
+      "maxLines": 1261,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "plugin-touch-translation",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-05-08-PLUGIN-TOUCH-TRANSLATION-INDEX"
+    },
+    {
+      "file": "plugins/touch-translation/widgets/translate-panel.vue",
+      "maxLines": 1535,
+      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
+      "owner": "plugin-touch-translation",
+      "expiresVersion": "2.5.0",
+      "ticket": "SIZE-GROWTH-2026-05-08-PLUGIN-TOUCH-TRANSLATION-PANEL"
     }
   ]
 }

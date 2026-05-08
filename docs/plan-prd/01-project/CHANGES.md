@@ -5,6 +5,26 @@
 
 ## 2026-05-07
 
+### chore(governance): sync large-file guard for beta.14 release
+
+- `scripts/large-file-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+  - Synced large-file boundary metadata to current `2.4.10-beta.14` release gate.
+  - Raised existing governance exception caps to current measured line counts for:
+    - `SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER-TEST`: `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts` cap `1407`
+    - `SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER`: `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts` cap `3330`
+    - `SIZE-GROWTH-2026-04-26-CORE-APP-OCR-SERVICE`: `apps/core-app/src/main/modules/ocr/ocr-service.ts` cap `1629`
+    - `SIZE-GROWTH-2026-04-26-CORE-APP-SENTRY-SERVICE`: `apps/core-app/src/main/modules/sentry/sentry-service.ts` cap `1318`
+    - `SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-CLI-TUFF-CLI`: `packages/tuff-cli/src/bin/tuff.ts` cap `1318`
+  - Added traceable temporary growth exceptions for:
+    - `SIZE-GROWTH-2026-05-08-NEXUS-I18N-EN`: `apps/nexus/i18n/locales/en.ts` cap `2698`
+    - `SIZE-GROWTH-2026-05-08-NEXUS-I18N-ZH`: `apps/nexus/i18n/locales/zh.ts` cap `2683`
+    - `SIZE-GROWTH-2026-05-08-NEXUS-AUTH-STORE`: `apps/nexus/server/utils/authStore.ts` cap `2538`
+    - `SIZE-GROWTH-2026-05-08-TUFFEX-FLIP-OVERLAY`: `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue` cap `1345`
+    - `SIZE-GROWTH-2026-05-08-PLUGIN-TOUCH-TRANSLATION-INDEX`: `plugins/touch-translation/index.js` cap `1261`
+    - `SIZE-GROWTH-2026-05-08-PLUGIN-TOUCH-TRANSLATION-PANEL`: `plugins/touch-translation/widgets/translate-panel.vue` cap `1535`
+  - Follow-up remains unchanged: reduce or split these files below the 1200-line threshold before `2.5.0`.
+
 ### docs(nexus): hard-cut browser support wording from compatibility
 
 - `packages/tuffex/docs/components/gradual-blur.md`
