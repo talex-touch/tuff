@@ -346,6 +346,7 @@ function useClipboard(
 - AutoPaste 只响应本进程捕获到的新剪贴板事件：`native-watch`、`background-poll`、`visible-poll`。
 - `COREBOX_WINDOW_SHOWN` 触发的补扫被标记为 `corebox-show-baseline`，只更新历史/标签/搜索上下文，不能自动填入 CoreBox。
 - Transport 会附带 `autoPasteEligible`、`captureSource`、`observedAt`、`freshnessBaseAt`；渲染侧必须先确认 `autoPasteEligible === true`，再用 `freshnessBaseAt ?? observedAt` 做 TTL 判断。
+- `autoPaste.time = 0` 只表示不按 TTL 衰减，仍必须满足 `autoPasteEligible === true`；`-1` 继续表示禁用 AutoPaste。
 
 #### 2.4.2 `useClipboardChannel.ts` - 通道通信
 

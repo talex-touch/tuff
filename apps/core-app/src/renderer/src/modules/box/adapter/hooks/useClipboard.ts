@@ -41,6 +41,15 @@ function resolveFreshnessBaseTimestamp(item: IClipboardItem): number | null {
     : null
 }
 
+function hashClipboardIdentityPart(value: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(36)
+}
+
 function resolveContentIdentity(item: IClipboardItem): string | null {
   const type = item.type ?? 'unknown'
   const content = item.content ?? ''
@@ -52,8 +61,9 @@ function resolveContentIdentity(item: IClipboardItem): string | null {
   const edgeLength = 64
   const head = content.slice(0, edgeLength)
   const tail = content.length > edgeLength ? content.slice(-edgeLength) : ''
+  const contentHash = hashClipboardIdentityPart(`${head}\0${tail}`)
   const observedAt = resolveFreshnessBaseTimestamp(item)
-  return `content:${type}:${content.length}:${head}:${tail}:${observedAt ?? 'unknown'}`
+  return `content:${type}:${content.length}:${contentHash}:${observedAt ?? 'unknown'}`
 }
 
 function extractIdentityTimestamp(identity: string): number | null {
