@@ -16,6 +16,15 @@
   - `account.ini` is represented by `StorageList.ACCOUNT`; main storage warms it during startup and renderer account hydration no longer writes the same snapshot back immediately.
   - Added targeted regressions for renderer storage bootstrap boundaries, account hydration persistence control, channel resolution outside Vue setup, and main-side account cache warmup.
 
+### fix(core-app): normalize local assets before rendering search results
+
+- `apps/core-app/src/main/utils/local-renderable-assets.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/*`
+- `apps/core-app/src/main/modules/clipboard.ts`
+  - CoreBox 搜索结果新增 main-side 本地资源规范化管线，`file://` / `tfile://` / 绝对路径统一校验后转为规范 `tfile://`。
+  - 文件搜索主路径失效时不再返回该结果，并异步清理 stale index；失效 thumbnail/icon 降级为 class fallback 并触发缓存清理与重生成。
+  - Recommendation rebuild 与剪贴板图片输出不再暴露失效本地 image URL，避免历史路径继续触发 `tfile://... 404`。
+
 ### fix(core-app): avoid readonly proxy writes in widget render patch
 
 - `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`

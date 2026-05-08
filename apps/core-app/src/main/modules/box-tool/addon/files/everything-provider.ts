@@ -32,6 +32,7 @@ import {
   type EverythingBackendType
 } from '../../../../../shared/events/everything'
 import { appTaskGate } from '../../../../service/app-task-gate'
+import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable-assets'
 import { formatDuration } from '../../../../utils/logger'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
@@ -1114,7 +1115,19 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           }
         }
 
-        return tuffItem
+        const normalized = normalizeTuffItemLocalAssets(tuffItem, {
+          dropMissingFile: false,
+          fallbackKind: result.isDir ? 'folder' : 'file'
+        })
+        if (cachedIcon && normalized.missingPaths.length > 0) {
+          this.iconCache.delete(result.path)
+          if (!result.isDir && scheduledIconWarmups < EVERYTHING_ICON_WARMUP_LIMIT) {
+            scheduledIconWarmups += 1
+            void this.ensureResultIcon(result.path)
+          }
+        }
+
+        return normalized.item ?? tuffItem
       })
 
       const result = new TuffSearchResultBuilder(query).setItems(items).build()

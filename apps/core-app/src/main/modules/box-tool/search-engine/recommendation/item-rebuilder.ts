@@ -1,6 +1,11 @@
 import type { TuffItem, TuffRender } from '@talex-touch/utils'
 import type { DbUtils } from '../../../../db/utils'
 import type { ScoredItem } from './recommendation-engine'
+import {
+  normalizeRenderableIcon,
+  normalizeRenderablePreviewImage,
+  normalizeTuffItemLocalAssets
+} from '../../../../utils/local-renderable-assets'
 import { createLogger } from '../../../../utils/logger'
 
 const itemRebuilderLog = createLogger('RecommendationEngine').child('ItemRebuilder')
@@ -123,7 +128,14 @@ export class ItemRebuilder {
       if (files.length === 0) return []
 
       const { mapFileToTuffItem } = await import('../../addon/files/utils')
-      return files.map((file) => mapFileToTuffItem(file, {}, 'file-provider', 'File Provider'))
+      return files.flatMap((file) => {
+        const item = mapFileToTuffItem(file, {}, 'file-provider', 'File Provider')
+        const normalized = normalizeTuffItemLocalAssets(item, {
+          dropMissingFile: true,
+          fallbackKind: file.isDir ? 'folder' : 'file'
+        })
+        return normalized.item ? [normalized.item] : []
+      })
     } catch (error) {
       itemRebuilderLog.error('Failed to rebuild file items', {
         error,
@@ -240,19 +252,18 @@ export class ItemRebuilder {
             kind = 'image'
             if (render.basic) {
               render.basic.title = `Image from ${record.sourceApp || 'Unknown'}`
-              render.basic.icon = record.thumbnail
-                ? {
-                    type: 'url',
-                    value: record.thumbnail
-                  }
-                : {
-                    type: 'emoji',
-                    value: '🖼️'
-                  }
+              const thumbnailIcon = record.thumbnail
+                ? normalizeRenderableIcon({ type: 'url', value: record.thumbnail }, 'image').icon
+                : null
+              render.basic.icon = thumbnailIcon ?? {
+                type: 'emoji',
+                value: '🖼️'
+              }
             }
+            const previewImage = normalizeRenderablePreviewImage(record.content)
             render.preview = {
               type: 'panel',
-              image: record.content
+              image: previewImage.image
             }
           } else if (record.type === 'files') {
             kind = 'file'

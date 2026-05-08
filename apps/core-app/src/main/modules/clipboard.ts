@@ -35,6 +35,7 @@ import { performance } from 'node:perf_hooks'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { isHttpSource, resolveLocalFilePath, toTfileUrl } from '@talex-touch/utils/network'
 import { CAPABILITY_AUTH_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { TuffInputType } from '@talex-touch/utils/transport/events/types'
@@ -48,6 +49,7 @@ import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
 import { withSqliteRetry } from '../db/sqlite-retry'
 import { appTaskGate } from '../service/app-task-gate'
 import { tempFileService } from '../service/temp-file.service'
+import { normalizeRenderableSource } from '../utils/local-renderable-assets'
 import { createLogger } from '../utils/logger'
 import { enterPerfContext } from '../utils/perf-context'
 import { perfMonitor } from '../utils/perf-monitor'
@@ -242,79 +244,6 @@ const CLIPBOARD_META_QUEUE_LIMIT = 6
 const CLIPBOARD_META_LOG_THROTTLE_MS = 5_000
 const CLIPBOARD_STAGE_B_LOG_THROTTLE_MS = 5_000
 
-function toTfileUrl(filePath: string): string {
-  const raw = filePath?.trim()
-  if (!raw) return ''
-
-  const decodeStable = (value: string): string => {
-    let decoded = value
-    for (let i = 0; i < 3; i++) {
-      try {
-        const next = decodeURIComponent(decoded)
-        if (next === decoded) break
-        decoded = next
-      } catch {
-        break
-      }
-    }
-    return decoded
-  }
-
-  const normalizeAbsolutePath = (value: string): string => {
-    const normalized = value.replace(/\\/g, '/')
-    if (/^\/[a-z]:\//i.test(normalized)) {
-      return normalized.slice(1)
-    }
-    if (/^[a-z]:\//i.test(normalized)) {
-      return normalized
-    }
-    return normalized.startsWith('/') ? normalized : `/${normalized}`
-  }
-
-  let resolvedPath = raw
-  if (/^tfile:\/\//i.test(raw)) {
-    const tail = raw.replace(/^tfile:\/\//i, '')
-    const tailIndex = tail.search(/[?#]/)
-    const body = tailIndex >= 0 ? tail.slice(0, tailIndex) : tail
-    resolvedPath = decodeStable(body.startsWith('/') ? body : `/${body}`)
-  } else if (raw.startsWith('tfile:')) {
-    try {
-      const parsed = new URL(raw)
-      if (parsed.hostname && /^[a-z]$/i.test(parsed.hostname) && parsed.pathname.startsWith('/')) {
-        resolvedPath = decodeStable(`${parsed.hostname}:${parsed.pathname}`)
-      } else {
-        const merged = parsed.hostname ? `/${parsed.hostname}${parsed.pathname}` : parsed.pathname
-        resolvedPath = decodeStable(merged)
-      }
-    } catch {
-      const fallback = raw.replace(/^tfile:\/\//i, '').split(/[?#]/)[0] ?? ''
-      resolvedPath = decodeStable(fallback)
-    }
-  } else if (raw.startsWith('file:')) {
-    try {
-      resolvedPath = fileURLToPath(raw)
-    } catch {
-      resolvedPath = raw
-    }
-  } else {
-    resolvedPath = decodeStable(raw)
-  }
-
-  const absolutePath = normalizeAbsolutePath(resolvedPath)
-  const encoded = absolutePath
-    .split('/')
-    .map((segment) => {
-      try {
-        return encodeURIComponent(decodeURIComponent(segment))
-      } catch {
-        return encodeURIComponent(segment)
-      }
-    })
-    .join('/')
-
-  return `tfile://${encoded}`
-}
-
 function isDataUrl(value: string): boolean {
   return typeof value === 'string' && value.startsWith('data:')
 }
@@ -324,8 +253,7 @@ function isLikelyLocalPath(value: string): boolean {
     typeof value === 'string' &&
     value.length > 0 &&
     !value.startsWith('data:') &&
-    !value.startsWith('http:') &&
-    !value.startsWith('https:')
+    !isHttpSource(value)
   )
 }
 
@@ -1375,6 +1303,7 @@ export class ClipboardModule extends BaseModule {
     if (clientItem.meta && typeof clientItem.meta === 'object') {
       for (const key of [
         'image_original_url',
+        'image_preview_url',
         'image_content_kind',
         'image_size',
         'image_file_size'
@@ -1414,14 +1343,27 @@ export class ClipboardModule extends BaseModule {
     const meta = { ...(item.meta ?? {}) } as Record<string, unknown>
     const rawContent = typeof item.content === 'string' ? item.content : ''
 
+    const localContentPath = isLikelyLocalPath(rawContent) ? resolveLocalFilePath(rawContent) : null
     const originalPath =
-      isLikelyLocalPath(rawContent) && tempFileService.isWithinBaseDir(rawContent)
-        ? rawContent
+      localContentPath && tempFileService.isWithinBaseDir(localContentPath)
+        ? localContentPath
         : undefined
-    const originalUrl = originalPath ? toTfileUrl(originalPath) : undefined
+    const originalAsset = originalPath ? normalizeRenderableSource(originalPath) : null
+    const originalUrl =
+      originalAsset && !('missing' in originalAsset) ? originalAsset.value : undefined
 
     meta.image_original_url = originalUrl ?? meta.image_original_url
     meta.image_content_kind = 'preview'
+    for (const key of ['image_original_url', 'image_preview_url']) {
+      const value = meta[key]
+      if (typeof value !== 'string' || !value.trim()) continue
+      const normalized = normalizeRenderableSource(value)
+      if ('missing' in normalized) {
+        delete meta[key]
+        continue
+      }
+      meta[key] = normalized.value
+    }
 
     const content =
       typeof item.thumbnail === 'string' && item.thumbnail.length > 0

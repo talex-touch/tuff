@@ -4,6 +4,7 @@ import type {
   ISearchProvider,
   ITouchEvent,
   OpenerInfo,
+  TuffItem,
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
@@ -58,6 +59,11 @@ import { createDbUtils } from '../../../../db/utils'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../service/device-idle-service'
 import { FILE_TIMING_BASE_OPTIONS } from '../../../../utils/file-indexing-utils'
+import {
+  normalizeRenderableSource,
+  normalizeTuffItemLocalAssets,
+  type LocalAssetFallbackKind
+} from '../../../../utils/local-renderable-assets'
 import { formatDuration } from '../../../../utils/logger'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { getMainConfig, saveMainConfig } from '../../../storage'
@@ -475,6 +481,101 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (itemIds.length === 0) return
     if (!(await this.ensureSearchIndexWorkerReady(reason))) return
     await this.searchIndexWorker.removeItems(itemIds)
+  }
+
+  private cleanupStaleFileResult(file: typeof filesSchema.$inferSelect, reason: string): void {
+    void this.withDbWrite(`file-index.${reason}.remove-file`, () =>
+      this.dbUtils!.removeFile(file.path)
+    )
+      .then(() => this.removeSearchIndexItems([file.path], `file-index.${reason}.remove-search`))
+      .catch((error) => {
+        this.logWarn('Failed to cleanup stale file result', error, { path: file.path, reason })
+      })
+  }
+
+  private cleanupStaleFileAsset(
+    file: typeof filesSchema.$inferSelect,
+    keys: string[],
+    reason: string
+  ): void {
+    if (typeof file.id !== 'number' || keys.length === 0) return
+    void this.withDbWrite(`file-index.${reason}.remove-asset-cache`, () =>
+      this.dbUtils!.removeFileExtensions(file.id as number, keys)
+    ).catch((error) => {
+      this.logWarn('Failed to cleanup stale file asset cache', error, {
+        path: file.path,
+        keys,
+        reason
+      })
+    })
+  }
+
+  private inferAssetCacheKeys(
+    extensions: Record<string, string>,
+    missingPaths: string[]
+  ): string[] {
+    const keys = new Set<string>()
+    const referencesMissingPath = (value: string | undefined): boolean => {
+      if (!value) return false
+      const normalized = normalizeRenderableSource(value)
+      return (
+        'missing' in normalized &&
+        typeof normalized.localPath === 'string' &&
+        missingPaths.includes(normalized.localPath)
+      )
+    }
+    for (const missingPath of missingPaths) {
+      if (extensions.thumbnail && extensions.thumbnail.includes(missingPath)) {
+        keys.add('thumbnail')
+      }
+      if (extensions.icon && extensions.icon.includes(missingPath)) {
+        keys.add('icon')
+      }
+    }
+    if (referencesMissingPath(extensions.thumbnail)) {
+      keys.add('thumbnail')
+    }
+    if (referencesMissingPath(extensions.icon)) {
+      keys.add('icon')
+    }
+    return Array.from(keys)
+  }
+
+  private normalizeFileSearchItem(
+    item: TuffItem,
+    file: typeof filesSchema.$inferSelect,
+    extensions: Record<string, string>,
+    options: {
+      reason: string
+      fallbackKind?: LocalAssetFallbackKind
+    }
+  ): TuffItem | null {
+    const normalized = normalizeTuffItemLocalAssets(item, {
+      dropMissingFile: true,
+      fallbackKind: options.fallbackKind ?? (file.isDir ? 'folder' : 'file')
+    })
+
+    if (!normalized.item) {
+      this.cleanupStaleFileResult(file, options.reason)
+      return null
+    }
+
+    if (normalized.missingPaths.length > 0) {
+      const staleKeys = this.inferAssetCacheKeys(extensions, normalized.missingPaths)
+      this.cleanupStaleFileAsset(file, staleKeys, options.reason)
+      if (staleKeys.includes('thumbnail') && typeof file.id === 'number') {
+        void this.ensureFileThumbnail(file.id, file.path, file).catch((error) => {
+          this.logWarn('Failed to regenerate stale thumbnail', error, { path: file.path })
+        })
+      }
+      if (staleKeys.includes('icon') && typeof file.id === 'number') {
+        void this.ensureFileIcon(file.id, file.path, file).catch((error) => {
+          this.logWarn('Failed to regenerate stale icon', error, { path: file.path })
+        })
+      }
+    }
+
+    return normalized.item
   }
 
   private async removeSearchIndexByProvider(providerId: string, reason: string): Promise<void> {
@@ -2683,21 +2784,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private sanitizeFileExtensions(extensions: Record<string, string>): Record<string, string> {
-    const iconValue = extensions.icon
-    const thumbnailValue = extensions.thumbnail
-    if (
-      (!iconValue || isValidBase64DataUrl(iconValue)) &&
-      (!thumbnailValue || isValidBase64DataUrl(thumbnailValue))
-    ) {
-      return extensions
-    }
-
     const sanitized = { ...extensions }
-    if (iconValue && !isValidBase64DataUrl(iconValue)) {
-      delete sanitized.icon
-    }
-    if (thumbnailValue && !isValidBase64DataUrl(thumbnailValue)) {
-      delete sanitized.thumbnail
+    for (const key of ['icon', 'thumbnail'] as const) {
+      const value = sanitized[key]
+      if (!value) continue
+      if (value.startsWith('data:')) {
+        if (!isValidBase64DataUrl(value)) {
+          delete sanitized[key]
+        }
+        continue
+      }
+      const normalized = normalizeRenderableSource(value)
+      if ('missing' in normalized) {
+        continue
+      }
+      sanitized[key] = normalized.value
     }
     return sanitized
   }
@@ -2877,7 +2978,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
-    const items = Array.from(filesMap.values()).map(({ file, extensions }) => {
+    const items = Array.from(filesMap.values()).flatMap(({ file, extensions }) => {
       const sanitizedExtensions = this.sanitizeFileExtensions(extensions)
       const tuffItem = mapFileToTuffItem(
         file,
@@ -2913,7 +3014,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           ...tuffItem.meta?.file
         }
       }
-      return tuffItem
+      const normalizedItem = this.normalizeFileSearchItem(tuffItem, file, sanitizedExtensions, {
+        reason: 'type-only-result',
+        fallbackKind: file.isDir ? 'folder' : 'file'
+      })
+      if (!normalizedItem) return []
+      return [normalizedItem]
     })
 
     return new TuffSearchResultBuilder(query).setItems(items).build()
@@ -2955,7 +3061,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
-    const items = Array.from(filesMap.values()).map(({ file, extensions }) => {
+    const items = Array.from(filesMap.values()).flatMap(({ file, extensions }) => {
       const sanitizedExtensions = this.sanitizeFileExtensions(extensions)
       const tuffItem = mapFileToTuffItem(
         file,
@@ -2991,7 +3097,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           ...tuffItem.meta?.file
         }
       }
-      return tuffItem
+      const normalizedItem = this.normalizeFileSearchItem(tuffItem, file, sanitizedExtensions, {
+        reason: 'extension-only-result',
+        fallbackKind: file.isDir ? 'folder' : 'file'
+      })
+      if (!normalizedItem) return []
+      return [normalizedItem]
     })
 
     return new TuffSearchResultBuilder(query).setItems(items).build()
@@ -3459,8 +3570,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           // }
         }
 
-        return tuffItem
+        return this.normalizeFileSearchItem(tuffItem, file, sanitizedExtensions, {
+          reason: 'search-result',
+          fallbackKind: file.isDir ? 'folder' : 'file'
+        })
       })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
       .sort((a, b) => (b.scoring?.final || 0) - (a.scoring?.final || 0))
       .slice(0, 50)
 

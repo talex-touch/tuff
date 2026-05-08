@@ -152,6 +152,14 @@ function createDbUtilsInternal(
     async getFileExtensions(fileId: number) {
       return db.select().from(schema.fileExtensions).where(eq(schema.fileExtensions.fileId, fileId))
     },
+    async removeFileExtensions(fileId: number, keys: string[]) {
+      if (keys.length === 0) return
+      return db
+        .delete(schema.fileExtensions)
+        .where(
+          and(eq(schema.fileExtensions.fileId, fileId), inArray(schema.fileExtensions.key, keys))
+        )
+    },
 
     async setFileIndexProgress(
       fileId: number,
