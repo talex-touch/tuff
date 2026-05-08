@@ -506,6 +506,7 @@ describe('appProvider rebuild maintenance', () => {
       }))
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
+      ;(privateProvider as any)._waitForItemStable = vi.fn(async () => true)
       privateProvider.dbUtils = {
         getFileByPath: vi.fn(async () => null),
         getDb: () => ({
