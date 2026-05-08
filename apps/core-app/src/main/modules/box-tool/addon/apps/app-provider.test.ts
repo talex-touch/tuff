@@ -36,7 +36,7 @@ const {
     debug: vi.fn()
   })),
   getMainConfigMock: vi.fn(),
-  getWatchPathsMock: vi.fn(() => []),
+  getWatchPathsMock: vi.fn((): string[] => []),
   registerPollingMock: vi.fn(),
   removeByProviderMock: vi.fn(),
   runAdaptiveTaskQueueMock: vi.fn(async (items, handler) => {
