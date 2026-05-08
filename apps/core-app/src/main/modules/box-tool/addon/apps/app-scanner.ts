@@ -11,6 +11,10 @@ import { formatLog, LogStyle } from './app-utils'
 import type { ScannedAppInfo } from './app-types'
 
 const appScannerLog = createLogger('AppScanner')
+const WINDOWS_START_MENU_PATHS = [
+  path.resolve('C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'),
+  path.join(os.homedir(), 'AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs')
+]
 
 /**
  * Service for scanning applications, responsible for app discovery and information retrieval.
@@ -31,8 +35,7 @@ export class AppScanner {
     withOSAdapter({
       darwin: () => ['/Applications', path.join(process.env.HOME || '', 'Applications')],
       win32: () => [
-        path.join(process.env.PROGRAMFILES || '', '.'),
-        path.join(process.env['PROGRAMFILES(X86)'] || '', '.'),
+        ...WINDOWS_START_MENU_PATHS,
         path.join(process.env.LOCALAPPDATA || '', 'Programs')
       ],
       linux: () => [

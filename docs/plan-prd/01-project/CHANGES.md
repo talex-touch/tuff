@@ -5,6 +5,15 @@
 
 ## 2026-05-07
 
+### fix(core-app): improve Windows app discovery sources
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-scanner.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.ts`
+  - Windows app scanning now focuses watch paths on Start Menu directories and `LOCALAPPDATA\\Programs` instead of broad Program Files roots.
+  - Re-enabled Windows file system watch registration while filtering real-time changes to `.lnk` and `.exe` entries.
+  - Added registry uninstall-entry discovery as a fallback source, resolving candidate executable paths from `DisplayIcon` or install locations and deduping registry entries behind Start Menu results.
+
 ### chore(governance): sync large-file guard for beta.14 release
 
 - `scripts/large-file-boundary-allowlist.json`

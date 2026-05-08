@@ -5,6 +5,7 @@ import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
+  addWatchPathMock,
   getAppsMock,
   getAppInfoByPathMock,
   getLoggerMock,
@@ -25,6 +26,7 @@ const {
   unregisterPollingMock,
   withSqliteRetryMock
 } = vi.hoisted(() => ({
+  addWatchPathMock: vi.fn(),
   getAppsMock: vi.fn(),
   getAppInfoByPathMock: vi.fn(),
   getLoggerMock: vi.fn(() => ({
@@ -112,7 +114,13 @@ vi.mock('pinyin-pro', () => ({
 }))
 
 vi.mock('../../../../core/eventbus/touch-event', () => ({
-  TalexEvents: {},
+  TalexEvents: {
+    FILE_ADDED: 'FILE_ADDED',
+    FILE_CHANGED: 'FILE_CHANGED',
+    FILE_UNLINKED: 'FILE_UNLINKED',
+    DIRECTORY_ADDED: 'DIRECTORY_ADDED',
+    DIRECTORY_UNLINKED: 'DIRECTORY_UNLINKED'
+  },
   touchEventBus: {
     on: vi.fn(),
     off: vi.fn()
@@ -178,7 +186,7 @@ vi.mock('../../../../utils/i18n-helper', () => ({
 
 vi.mock('../../file-system-watcher', () => ({
   default: {
-    addPath: vi.fn()
+    addPath: addWatchPathMock
   }
 }))
 
@@ -291,6 +299,22 @@ async function flushPromises(): Promise<void> {
 
 async function loadSubject() {
   return await import('./app-provider')
+}
+
+async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T> | T): Promise<T> {
+  const originalPlatform = process.platform
+  Object.defineProperty(process, 'platform', {
+    value: platform,
+    configurable: true
+  })
+  try {
+    return await run()
+  } finally {
+    Object.defineProperty(process, 'platform', {
+      value: originalPlatform,
+      configurable: true
+    })
+  }
 }
 
 function upsertExtensionRows(
@@ -409,6 +433,7 @@ describe('appProvider rebuild maintenance', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    addWatchPathMock.mockResolvedValue(undefined)
     getWatchPathsMock.mockReturnValue([])
     getAppsMock.mockResolvedValue([])
     spawnSafeMock.mockReturnValue({ unref: vi.fn() })
@@ -423,6 +448,90 @@ describe('appProvider rebuild maintenance', () => {
         return value === '微信' ? 'WX' : value
       }
       return value === '微信' ? 'WEI XIN' : value
+    })
+  })
+
+  it('subscribes and watches Start Menu paths on Windows', async () => {
+    await withPlatform('win32', async () => {
+      const { appProvider } = await loadSubject()
+      const { touchEventBus, TalexEvents } = await import('../../../../core/eventbus/touch-event')
+      const watchPaths = [
+        'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs',
+        'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
+      ]
+      getWatchPathsMock.mockReturnValue(watchPaths)
+
+      await appProvider.onLoad({
+        databaseManager: { getDb: vi.fn() },
+        searchIndex: { indexItems: vi.fn() }
+      } as any)
+
+      expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_ADDED, expect.any(Function))
+      expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_CHANGED, expect.any(Function))
+      expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_UNLINKED, expect.any(Function))
+      expect(addWatchPathMock).toHaveBeenCalledWith(watchPaths[0], 4)
+      expect(addWatchPathMock).toHaveBeenCalledWith(watchPaths[1], 4)
+    })
+  })
+
+  it('processes Windows shortcut changes and ignores unrelated file events', async () => {
+    await withPlatform('win32', async () => {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      const shortcutPath =
+        'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk'
+      const appInfo = {
+        name: 'Foo',
+        displayName: 'Foo',
+        path: shortcutPath,
+        icon: '',
+        bundleId: '',
+        uniqueId: 'shortcut:c:\\program files\\foo\\foo.exe|',
+        stableId: 'shortcut:c:\\program files\\foo\\foo.exe|',
+        launchKind: 'shortcut' as const,
+        launchTarget: 'C:\\Program Files\\Foo\\Foo.exe',
+        lastModified: new Date('2026-05-08T00:00:00.000Z')
+      }
+      const insertedFile = {
+        id: 42,
+        path: shortcutPath,
+        name: 'Foo',
+        displayName: 'Foo',
+        type: 'app',
+        mtime: appInfo.lastModified,
+        ctime: appInfo.lastModified
+      }
+      const valuesMock = vi.fn(() => ({
+        returning: vi.fn(async () => [insertedFile])
+      }))
+
+      getAppInfoByPathMock.mockResolvedValue(appInfo)
+      privateProvider.dbUtils = {
+        getFileByPath: vi.fn(async () => null),
+        getDb: () => ({
+          insert: vi.fn(() => ({
+            values: valuesMock
+          }))
+        }),
+        addFileExtensions: vi.fn(async () => undefined)
+      }
+      privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
+
+      const processResult = await (privateProvider as any).handleItemAddedOrChanged({
+        filePath: shortcutPath
+      })
+      await processResult
+
+      expect(getAppInfoByPathMock).toHaveBeenCalledWith(shortcutPath)
+      expect(valuesMock).toHaveBeenCalled()
+
+      getAppInfoByPathMock.mockClear()
+      await (privateProvider as any).handleItemAddedOrChanged({
+        filePath:
+          'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\note.txt'
+      })
+
+      expect(getAppInfoByPathMock).not.toHaveBeenCalled()
     })
   })
 

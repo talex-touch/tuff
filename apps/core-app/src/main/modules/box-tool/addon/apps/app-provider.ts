@@ -278,6 +278,7 @@ const APP_ENTRY_ENABLED_EXTENSION_KEY = 'entryEnabled'
 const APP_ENTRY_SOURCE_MANUAL = 'manual'
 const APP_IDENTIFIER_EXTENSION_KEYS = ['bundleId', APP_IDENTITY_EXTENSION_KEY] as const
 const APP_IDENTIFIER_EXTENSION_KEY_SET = new Set<string>(APP_IDENTIFIER_EXTENSION_KEYS)
+const WINDOWS_REALTIME_APP_EXTENSIONS = new Set(['.lnk', '.exe'])
 
 function isAppIdentifierExtensionKey(
   value: string | null | undefined
@@ -2070,6 +2071,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         }
         return null
       }
+    } else if (process.platform === 'win32') {
+      const extension = path.extname(appPath).toLowerCase()
+      if (!WINDOWS_REALTIME_APP_EXTENSIONS.has(extension)) {
+        return null
+      }
     }
 
     return appPath
@@ -2182,6 +2188,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       if (appPath.includes('.app/')) appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
       if (!appPath.endsWith('.app')) return
       if (!this._isWatchPathCandidate(appPath)) {
+        return
+      }
+    } else if (process.platform === 'win32') {
+      const extension = path.extname(appPath).toLowerCase()
+      if (!WINDOWS_REALTIME_APP_EXTENSIONS.has(extension)) {
         return
       }
     }
@@ -2626,12 +2637,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private _subscribeToFSEvents(): void {
-    // Windows: 跳过文件系统事件订阅，避免权限问题
-    if (process.platform === 'win32') {
-      logApp('Skipping FS event subscription on Windows', LogStyle.info)
-      return
-    }
-
     logApp('Subscribing to file system events', LogStyle.info)
 
     if (this.isMac) {
@@ -2656,12 +2661,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private _registerWatchPaths(): void {
-    // Windows: 跳过目录监视，避免 EPERM 权限错误
-    if (process.platform === 'win32') {
-      logApp('Skipping watch path registration on Windows', LogStyle.info)
-      return
-    }
-
     const watchPaths = appScanner.getWatchPaths()
     logApp(`Registering watch paths: ${chalk.cyan(watchPaths.join(', '))}`, LogStyle.info)
 
