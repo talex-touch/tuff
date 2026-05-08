@@ -116,7 +116,7 @@ const hasIconProp = computed(() => {
   return true
 })
 const showSpinner = computed(() => props.loading && !hasIconSlot.value && !hasIconProp.value)
-const useIllustration = computed(() => !hasIconSlot.value && !hasIconProp.value && !showSpinner.value && illustrationVariants.has(props.variant))
+const useIllustration = computed(() => props.icon !== null && !hasIconSlot.value && !hasIconProp.value && !showSpinner.value && illustrationVariants.has(props.variant))
 const illustrationVariant = computed(() => (useIllustration.value ? props.variant : ''))
 
 const sizeMap: Record<EmptyStateSize, number> = {

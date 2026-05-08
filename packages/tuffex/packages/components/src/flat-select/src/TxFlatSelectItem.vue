@@ -45,6 +45,8 @@ onBeforeUnmount(() => {
     ref="itemRef"
     type="button"
     class="tx-flat-select-item"
+    role="option"
+    :aria-selected="isSelected"
     :class="{
       'is-selected': isSelected,
       'is-disabled': disabled,

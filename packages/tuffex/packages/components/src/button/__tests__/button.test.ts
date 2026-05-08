@@ -14,7 +14,7 @@ describe('txButton', () => {
     expect(wrapper.classes()).toContain('tx-button')
   })
 
-  it('renders different types', () => {
+  it('maps semantic type to variant when variant is not set', () => {
     const wrapper = mount(Button, {
       props: {
         type: 'primary',
@@ -22,6 +22,30 @@ describe('txButton', () => {
     })
 
     expect(wrapper.classes()).toContain('variant-primary')
+  })
+
+  it('maps text type to ghost variant', () => {
+    const wrapper = mount(Button, {
+      props: {
+        type: 'text',
+      },
+    })
+
+    expect(wrapper.classes()).toContain('variant-ghost')
+    expect(wrapper.classes()).toContain('tone-text')
+  })
+
+  it('lets variant override semantic type', () => {
+    const wrapper = mount(Button, {
+      props: {
+        variant: 'flat',
+        type: 'danger',
+      },
+    })
+
+    expect(wrapper.classes()).toContain('variant-flat')
+    expect(wrapper.classes()).toContain('tone-danger')
+    expect(wrapper.classes()).not.toContain('variant-danger')
   })
 
   it('renders different sizes', () => {

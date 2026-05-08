@@ -508,7 +508,11 @@ const layerMaskOpacity = computed(() => {
     const triggeredByFallback = (fallbackActive.value || (props.mode === 'refraction' && isMoving.value))
       && props.fallbackMode === 'mask'
     if (triggeredByFallback) {
-      return REFRACTION_MASK_PEAK_OPACITY
+      return clamp(
+        toFinite(props.fallbackMaskOpacity, REFRACTION_MASK_PEAK_OPACITY, ['fallback-mask-opacity', 'fallbackMaskOpacity']),
+        0,
+        1,
+      )
     }
     return clamp(toFinite(props.opacity, 0.75, ['opacity']), 0, 1)
   }

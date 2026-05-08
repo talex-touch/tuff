@@ -83,6 +83,18 @@ function toggleSort(column: DataTableColumn) {
     setSort({ key: column.key, order: 'asc' })
 }
 
+function getColumnAriaSort(column: DataTableColumn): 'ascending' | 'descending' | 'none' | undefined {
+  if (!column.sortable)
+    return undefined
+  const current = sortState.value
+  if (current?.key !== column.key)
+    return 'none'
+  const order = normalizeSortOrder(current.order)
+  if (!order)
+    return 'none'
+  return order === 'desc' ? 'descending' : 'ascending'
+}
+
 function getCellValue(row: any, column: DataTableColumn) {
   const key = column.dataIndex ?? column.key
   return row?.[key]
@@ -176,7 +188,7 @@ function emitRowClick(row: any, index: number) {
     <table class="tx-data-table__table" :aria-busy="loading">
       <thead>
         <tr>
-          <th v-if="selectable" class="tx-data-table__th tx-data-table__th--select">
+          <th v-if="selectable" class="tx-data-table__th tx-data-table__th--select" scope="col">
             <TxCheckbox
               :model-value="allSelected"
               aria-label="Select all"
@@ -187,12 +199,17 @@ function emitRowClick(row: any, index: number) {
             v-for="column in columns"
             :key="column.key"
             class="tx-data-table__th"
+            scope="col"
             :class="[
               column.headerClass,
               { 'is-sortable': column.sortable, 'is-sorted': sortState?.key === column.key },
             ]"
             :style="columnStyle(column)"
+            :tabindex="column.sortable ? 0 : undefined"
+            :aria-sort="getColumnAriaSort(column)"
             @click="toggleSort(column)"
+            @keydown.enter.prevent="toggleSort(column)"
+            @keydown.space.prevent="toggleSort(column)"
           >
             <slot :name="`header-${column.key}`" :column="column">
               {{ column.title }}
@@ -297,6 +314,11 @@ function emitRowClick(row: any, index: number) {
 
 .tx-data-table__th.is-sortable {
   cursor: pointer;
+}
+
+.tx-data-table__th.is-sortable:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: -2px;
 }
 
 .tx-data-table__sort {

@@ -72,7 +72,7 @@ function applySharedGlobalMaskState(): void {
   const visibleEntries = getVisibleOverlayStackEntries()
   const bounds = resolveVisibleStackBounds(visibleEntries)
 
-  // Single overlay keeps its local mask behavior for backward-compatible visuals/transitions.
+  // Single-overlay baseline keeps the local mask transition owned by the overlay instance.
   if (!bounds || visibleEntries.length <= 1 || !bounds.topEntry.globalMask) {
     removeSharedGlobalMaskElement()
     return
@@ -150,6 +150,7 @@ function nextOverlayOpenSequence(): number {
 <script setup lang="ts">
 import type { BaseSurfaceMode } from '../../base-surface/src/types'
 import type { FlipOverlayEmits, FlipOverlayProps, FlipOverlaySlotProps } from './types'
+import type { Slots } from 'vue'
 import TxButton from '../../button/src/button.vue'
 import gsap from 'gsap'
 import { computed, nextTick, onBeforeUnmount, ref, useSlots, watch } from 'vue'
@@ -194,7 +195,7 @@ const props = withDefaults(defineProps<FlipOverlayProps>(), {
 })
 
 const emit = defineEmits<FlipOverlayEmits>()
-const slots = useSlots()
+const slots: Slots = useSlots()
 const instanceId = nextOverlayInstanceId()
 
 const cardRef = ref<HTMLElement | null>(null)
@@ -392,9 +393,9 @@ const useMaskCssTransition = computed(() => {
     return false
   return true
 })
-const hasCustomHeaderSlot = computed(() => Boolean(slots.header))
-const hasHeaderDisplaySlot = computed(() => Boolean(slots['header-display']))
-const hasHeaderActionsSlot = computed(() => Boolean(slots['header-actions']))
+const hasCustomHeaderSlot = computed<boolean>(() => Boolean(slots.header))
+const hasHeaderDisplaySlot = computed<boolean>(() => Boolean(slots['header-display']))
+const hasHeaderActionsSlot = computed<boolean>(() => Boolean(slots['header-actions']))
 const hasHeaderContent = computed(() => Boolean(props.headerTitle || props.headerDesc))
 const shouldRenderBuiltInHeader = computed(() => {
   if (hasCustomHeaderSlot.value || !props.header)

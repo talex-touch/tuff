@@ -190,3 +190,10 @@ const visible4 = ref(false)
 |------|-------------|
 | `default` | 抽屉主内容 |
 | `footer` | 底部内容区域 |
+
+## 交互契约
+
+- Drawer 根节点暴露 `role="dialog"`、`aria-modal="true"`，并通过实例级 `aria-labelledby` 关联标题。
+- 打开时聚焦抽屉根节点；隐藏或卸载时恢复到打开前的焦点元素。
+- 关闭按钮、遮罩点击和 Escape 默认都会触发 `update:visible(false)` 与 `close`。
+- `closeOnClickMask=false` / `closeOnPressEscape=false` 分别阻断遮罩或 Escape 关闭；`showClose=false` 仅移除关闭按钮。

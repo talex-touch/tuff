@@ -32,10 +32,9 @@ import { lintGutter, lintKeymap, linter } from '@codemirror/lint'
 import { json, jsonParseLinter } from '@codemirror/lang-json'
 import { javascript } from '@codemirror/lang-javascript'
 import { yaml } from '@codemirror/lang-yaml'
-import { properties } from '@codemirror/legacy-modes/mode/properties'
-import { toml } from '@codemirror/legacy-modes/mode/toml'
 import { parse as parseYaml, parseDocument, stringify as stringifyYaml } from 'yaml'
 import { hasDocument, hasNavigator } from '@talex-touch/utils/env'
+import { iniParser, tomlParser } from './stream-parsers'
 
 defineOptions({
   name: 'TxCodeEditor',
@@ -370,9 +369,9 @@ function getLanguageExtension(language: NormalizedLanguage): Extension {
   if (language === 'yaml')
     return yaml()
   if (language === 'toml')
-    return StreamLanguage.define(toml)
+    return StreamLanguage.define(tomlParser)
   if (language === 'ini')
-    return StreamLanguage.define(properties)
+    return StreamLanguage.define(iniParser)
   if (language === 'javascript')
     return javascript()
   return json()

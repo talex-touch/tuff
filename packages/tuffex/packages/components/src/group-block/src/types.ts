@@ -59,23 +59,6 @@ export interface GroupBlockProps {
    */
   memoryName?: string
 
-  /**
-   * Legacy icon class name (alias for defaultIcon).
-   * @deprecated Use defaultIcon instead.
-   */
-  icon?: string
-
-  /**
-   * Legacy filled icon toggle (kept for compatibility).
-   * @deprecated Use activeIcon instead.
-   */
-  expandFill?: boolean
-
-  /**
-   * Legacy collapsed state (alias for collapsed).
-   * @deprecated Use collapsed/defaultExpand instead.
-   */
-  shrink?: boolean
 }
 
 /**
@@ -178,11 +161,6 @@ export interface BlockSlotProps {
    */
   disabled?: boolean
 
-  /**
-   * Legacy icon class name (alias for defaultIcon).
-   * @deprecated Use defaultIcon instead.
-   */
-  icon?: string
 }
 
 /**
@@ -247,11 +225,6 @@ export interface BlockSwitchProps {
    */
   loading?: boolean
 
-  /**
-   * Legacy icon class name (alias for defaultIcon).
-   * @deprecated Use defaultIcon instead.
-   */
-  icon?: string
 }
 
 /**
@@ -334,11 +307,6 @@ export interface BlockInputProps {
    */
   inputType?: 'text' | 'password' | 'number' | 'email'
 
-  /**
-   * Legacy icon class name (alias for defaultIcon).
-   * @deprecated Use defaultIcon instead.
-   */
-  icon?: string
 }
 
 /**
@@ -415,11 +383,6 @@ export interface BlockSelectProps {
    */
   placeholder?: string
 
-  /**
-   * Legacy icon class name (alias for defaultIcon).
-   * @deprecated Use defaultIcon instead.
-   */
-  icon?: string
 }
 
 /**

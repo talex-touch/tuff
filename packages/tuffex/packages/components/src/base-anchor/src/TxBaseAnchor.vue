@@ -34,6 +34,7 @@ const props = withDefaults(defineProps<BaseAnchorProps>(), {
   showArrow: false,
   arrowSize: 10,
   keepAliveContent: false,
+  surfaceMotionAdaptation: 'auto',
   closeOnClickOutside: true,
   closeOnEsc: true,
   toggleOnReferenceClick: true,
@@ -151,7 +152,11 @@ const floatingAttrs = computed(() => {
 })
 
 const panelCardProps = computed<Partial<TxCardProps>>(() => {
-  const shouldFallbackSurface = panelSurfaceMoving.value
+  const shouldFallbackSurface = props.surfaceMotionAdaptation === 'auto'
+    ? panelSurfaceMoving.value
+    : props.surfaceMotionAdaptation === 'manual'
+      ? props.panelCard?.surfaceMoving
+      : false
   const refractionSurfaceDefaults = props.panelBackground === 'refraction'
     ? {
         glassOverlayOpacity: 0.15,

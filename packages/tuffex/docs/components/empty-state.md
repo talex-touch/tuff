@@ -107,6 +107,8 @@
 ## 预设组件
 
 - `TxBlankSlate`：大尺寸空白页（默认 `size="large"`）
+- `TxGuideState`：引导状态（默认 `variant="guide"`）
+- `TxErrorState`：错误状态（默认 `variant="error"`）
 - `TxLoadingState`：加载态占位（默认 `variant="loading"`）
 - `TxNoSelection`：未选择占位（默认 `variant="no-selection"`）
 - `TxNoData`：无数据占位（默认 `variant="no-data"`）

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onUnmounted, ref, useId, watch } from 'vue'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({
@@ -29,12 +29,24 @@ const visible = computed({
 })
 
 const zIndex = ref(getZIndex())
+const overlayRef = ref<HTMLElement | null>(null)
+const titleId = useId()
+let previouslyFocusedElement: HTMLElement | null = null
 
 watch(
   visible,
   (v) => {
-    if (v)
+    if (v) {
       zIndex.value = nextZIndex()
+      previouslyFocusedElement = document.activeElement as HTMLElement
+      nextTick(() => {
+        overlayRef.value?.focus()
+      })
+    }
+    else if (previouslyFocusedElement) {
+      previouslyFocusedElement.focus()
+      previouslyFocusedElement = null
+    }
   },
   { flush: 'sync' },
 )
@@ -43,16 +55,33 @@ function close() {
   visible.value = false
   emit('close')
 }
+
+onUnmounted(() => {
+  if (previouslyFocusedElement) {
+    previouslyFocusedElement.focus()
+  }
+})
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="tx-modal">
-      <div v-if="visible" class="tx-modal__overlay" role="dialog" aria-modal="true" :style="{ zIndex }" @click.self="close">
+      <div
+        v-if="visible"
+        ref="overlayRef"
+        class="tx-modal__overlay"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        :aria-labelledby="title ? titleId : undefined"
+        :style="{ zIndex }"
+        @click.self="close"
+        @keydown.esc="close"
+      >
         <div class="tx-modal__content" :style="{ width }">
           <header v-if="title || $slots.header" class="tx-modal__header">
             <slot name="header">
-              <h3 class="tx-modal__title">
+              <h3 :id="titleId" class="tx-modal__title">
                 {{ title }}
               </h3>
             </slot>

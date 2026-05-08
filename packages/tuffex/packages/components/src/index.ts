@@ -3,7 +3,6 @@ import * as components from './components'
 import '../style/index.scss'
 
 export * from './components'
-export { TxScroll as TouchScroll } from './scroll'
 export * from './utils'
 
 function install(app: App) {

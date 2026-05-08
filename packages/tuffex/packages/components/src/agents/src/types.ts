@@ -18,4 +18,7 @@ export interface AgentsListGroup<T> {
 
 export interface AgentsListProps {
   loading?: boolean
+  enabledTitle?: string
+  disabledTitle?: string
+  emptyText?: string
 }

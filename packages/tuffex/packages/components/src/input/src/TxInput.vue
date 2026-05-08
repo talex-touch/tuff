@@ -73,6 +73,8 @@ const showCapsLock = computed(() => {
 })
 
 function handleClear() {
+  if (props.disabled || props.readonly)
+    return
   inputValue.value = ''
   emit('clear')
 }
@@ -156,11 +158,17 @@ defineExpose({
       </svg>
     </span>
 
-    <span v-if="showClear" class="tx-input__clear" @click="handleClear">
+    <button
+      v-if="showClear"
+      type="button"
+      class="tx-input__clear"
+      aria-label="Clear input"
+      @click="handleClear"
+    >
       <svg viewBox="0 0 24 24" width="16" height="16">
         <path fill="currentColor" d="M12 10.586l4.95-4.95 1.414 1.414-4.95 4.95 4.95 4.95-1.414 1.414-4.95-4.95-4.95 4.95-1.414-1.414 4.95-4.95-4.95-4.95 1.414-1.414z" />
       </svg>
-    </span>
+    </button>
 
     <slot name="suffix">
       <i v-if="suffixIcon" class="tx-input__icon tx-input__icon--suffix" :class="suffixIcon" />
@@ -244,6 +252,9 @@ defineExpose({
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 0;
+    border: none;
+    background: transparent;
     cursor: pointer;
     color: var(--tx-text-color-placeholder, #a8abb2);
     transition: color 0.2s;

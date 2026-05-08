@@ -8,7 +8,7 @@ defineOptions({
 
 const props = withDefaults(
   defineProps<{
-    modelValue: string
+    modelValue?: string
     placeholder?: string
     icon?: string
     password?: boolean
@@ -16,6 +16,7 @@ const props = withDefaults(
     area?: boolean
   }>(),
   {
+    modelValue: '',
     placeholder: '',
     icon: '',
     password: false,
@@ -49,12 +50,11 @@ function onKeyDown(e: KeyboardEvent) {
 
 <template>
   <div
-    tabindex="0"
     class="flat-input fake-background"
-    :class="{ 'none-prefix': !$slots?.default, 'win': nonWin !== true, area }"
+    :class="{ 'none-prefix': !$slots?.default && !icon, 'win': nonWin !== true, area }"
     @keydown="onKeyDown"
   >
-    <span v-if="$slots.default" class="flat-input__prefix">
+    <span v-if="$slots.default || icon" class="flat-input__prefix">
       <slot>
         <i v-if="icon" :class="icon" />
       </slot>

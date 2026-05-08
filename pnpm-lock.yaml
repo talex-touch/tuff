@@ -125,6 +125,7 @@ overrides:
   '@panva/hkdf': 1.0.2
   '@types/node': 24.1.0
   '@isaacs/brace-expansion': 5.0.1
+  '@lezer/common': 1.5.2
   '@xmldom/xmldom': 0.8.13
   ajv@^6.0.0: 6.14.0
   ajv@^8.0.0: 8.18.0
@@ -1226,9 +1227,6 @@ importers:
       '@codemirror/language':
         specifier: ^6.12.3
         version: 6.12.3
-      '@codemirror/legacy-modes':
-        specifier: ^6.5.2
-        version: 6.5.2
       '@codemirror/lint':
         specifier: ^6.9.5
         version: 6.9.5
@@ -4139,9 +4137,6 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       '@langchain/core': '>=0.3.39 <0.4.0'
-
-  '@lezer/common@1.5.0':
-    resolution: {integrity: sha512-PNGcolp9hr4PJdXR4ix7XtixDrClScvtSCYW3rQG106oVMOOI+jFb+0+J3mbeL/53g1Zd6s0kJzaw6Ri68GmAA==}
 
   '@lezer/common@1.5.2':
     resolution: {integrity: sha512-sxQE460fPZyU3sdc8lafxiPwJHBzZRy/udNFynGQky1SePYBdhkBl1kOagA9uT3pxR8K09bOrmTUqA9wb/PjSQ==}
@@ -17350,14 +17345,14 @@ snapshots:
       '@codemirror/language': 6.12.3
       '@codemirror/state': 6.6.0
       '@codemirror/view': 6.41.1
-      '@lezer/common': 1.5.0
+      '@lezer/common': 1.5.2
 
   '@codemirror/commands@6.10.3':
     dependencies:
       '@codemirror/language': 6.12.3
       '@codemirror/state': 6.6.0
       '@codemirror/view': 6.41.1
-      '@lezer/common': 1.5.0
+      '@lezer/common': 1.5.2
 
   '@codemirror/lang-angular@0.1.4':
     dependencies:
@@ -17413,7 +17408,7 @@ snapshots:
       '@codemirror/lint': 6.9.5
       '@codemirror/state': 6.6.0
       '@codemirror/view': 6.41.1
-      '@lezer/common': 1.5.0
+      '@lezer/common': 1.5.2
       '@lezer/javascript': 1.5.4
 
   '@codemirror/lang-jinja@6.0.1':
@@ -18893,8 +18888,6 @@ snapshots:
       - encoding
       - ws
 
-  '@lezer/common@1.5.0': {}
-
   '@lezer/common@1.5.2': {}
 
   '@lezer/cpp@1.1.5':
@@ -18917,7 +18910,7 @@ snapshots:
 
   '@lezer/highlight@1.2.3':
     dependencies:
-      '@lezer/common': 1.5.0
+      '@lezer/common': 1.5.2
 
   '@lezer/html@1.3.13':
     dependencies:
@@ -18933,13 +18926,13 @@ snapshots:
 
   '@lezer/javascript@1.5.4':
     dependencies:
-      '@lezer/common': 1.5.0
+      '@lezer/common': 1.5.2
       '@lezer/highlight': 1.2.3
       '@lezer/lr': 1.4.8
 
   '@lezer/json@1.0.3':
     dependencies:
-      '@lezer/common': 1.5.0
+      '@lezer/common': 1.5.2
       '@lezer/highlight': 1.2.3
       '@lezer/lr': 1.4.8
 
@@ -18949,7 +18942,7 @@ snapshots:
 
   '@lezer/lr@1.4.8':
     dependencies:
-      '@lezer/common': 1.5.0
+      '@lezer/common': 1.5.2
 
   '@lezer/markdown@1.6.3':
     dependencies:

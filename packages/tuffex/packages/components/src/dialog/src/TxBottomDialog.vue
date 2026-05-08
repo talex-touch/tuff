@@ -21,7 +21,7 @@ import type { BottomDialogProps, DialogButton } from './types'
  *
  * @component
  */
-import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
+import { computed, onMounted, onUnmounted, ref, useId, watchEffect } from 'vue'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({
@@ -52,6 +52,8 @@ const wholeDom = ref<HTMLElement | null>(null)
 const btnArray = ref<Array<{ value: ButtonState }>>([])
 const baseZIndex = ref(getZIndex())
 const zIndex = computed(() => baseZIndex.value + (props.index ?? 0))
+const titleId = useId()
+const messageId = useId()
 let previouslyFocusedElement: HTMLElement | null = null
 
 /**
@@ -173,15 +175,16 @@ async function forClose(): Promise<void> {
       :style="{ zIndex }"
       role="dialog"
       aria-modal="true"
-      :aria-labelledby="title ? 'tx-dialog-title' : undefined"
-      :aria-describedby="message ? 'tx-dialog-message' : undefined"
+      tabindex="-1"
+      :aria-labelledby="title ? titleId : undefined"
+      :aria-describedby="message ? messageId : undefined"
       @keydown.esc="forClose"
     >
       <div class="tx-bottom-dialog__container">
-        <p v-if="title" id="tx-dialog-title" class="tx-bottom-dialog__title">
+        <p v-if="title" :id="titleId" class="tx-bottom-dialog__title">
           {{ title }}
         </p>
-        <div v-if="message" id="tx-dialog-message" class="tx-bottom-dialog__content">
+        <div v-if="message" :id="messageId" class="tx-bottom-dialog__content">
           {{ message }}
         </div>
 

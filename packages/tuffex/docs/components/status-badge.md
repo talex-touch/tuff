@@ -202,3 +202,9 @@ type StatusKey = 'granted' | 'denied' | 'notDetermined' | 'unsupported' | string
 | 事件名 | 参数 | 说明 |
 |------|------------|-------------|
 | `click` | `event: MouseEvent` | 点击徽标时触发 |
+
+## 契约说明
+
+- 显式 `status` 优先于 `statusKey`。
+- `statusKey` 的 `granted/denied/notDetermined/unsupported` 分别映射到 success/danger/warning/muted，未知 key 回退到 info。
+- 设置 `os` 时平台图标会渲染在状态图标前；`osOnly` 会隐藏状态图标。

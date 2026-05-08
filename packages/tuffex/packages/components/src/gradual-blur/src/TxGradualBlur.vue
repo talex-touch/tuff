@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CSSProperties, StyleValue } from 'vue'
 import type { GradualBlurProps } from './types'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, getCurrentInstance, onMounted, onUnmounted, ref, watch } from 'vue'
 import { hasWindow } from '../../../../utils/env'
 
 defineOptions({
@@ -89,6 +89,15 @@ const PRESETS: Record<NonNullable<GradualBlurProps['preset']>, Partial<GradualBl
   },
 }
 
+const instance = getCurrentInstance()
+const providedPropKeys = new Set(
+  Object.keys(instance?.vnode.props ?? {}).map(key => key.replace(/-/g, '').toLowerCase()),
+)
+
+function isPropProvided(key: keyof GradualBlurProps) {
+  return providedPropKeys.has(String(key).toLowerCase())
+}
+
 const CURVE_FUNCTIONS: Record<NonNullable<GradualBlurProps['curve']>, (p: number) => number> = {
   'linear': p => p,
   'bezier': p => p * p * (3 - 2 * p),
@@ -105,11 +114,18 @@ const responsiveWidth = ref(props.width)
 
 const config = computed(() => {
   const presetConfig = props.preset ? (PRESETS[props.preset] || {}) : {}
-  return {
+  const resolved = {
     ...DEFAULT_CONFIG,
     ...presetConfig,
-    ...props,
-  } as Required<GradualBlurProps>
+  } as GradualBlurProps
+
+  for (const key of Object.keys(props) as Array<keyof GradualBlurProps>) {
+    if (isPropProvided(key) && props[key] !== undefined) {
+      ;(resolved as Record<string, unknown>)[key] = props[key]
+    }
+  }
+
+  return resolved as Required<GradualBlurProps>
 })
 
 function getGradientDirection(position: GradualBlurProps['position']): string {
@@ -257,14 +273,14 @@ const containerStyle = computed((): StyleValue => {
   }
 
   if (isVertical) {
-    baseStyle.height = responsiveHeight.value
-    baseStyle.width = responsiveWidth.value || '100%'
+    baseStyle.height = config.value.responsive ? responsiveHeight.value : config.value.height
+    baseStyle.width = (config.value.responsive ? responsiveWidth.value : config.value.width) || '100%'
     baseStyle[config.value.position] = '0'
     baseStyle.left = '0'
     baseStyle.right = '0'
   }
   else if (isHorizontal) {
-    baseStyle.width = responsiveWidth.value || responsiveHeight.value
+    baseStyle.width = (config.value.responsive ? responsiveWidth.value : config.value.width) || config.value.height
     baseStyle.height = '100%'
     baseStyle[config.value.position] = '0'
     baseStyle.top = '0'

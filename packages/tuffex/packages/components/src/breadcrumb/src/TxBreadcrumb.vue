@@ -14,10 +14,20 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>()
 
+function isCurrent(index: number) {
+  return index === props.items.length - 1
+}
+
+function isInteractive(item: BreadcrumbItem, index: number) {
+  return Boolean(item.href) && !item.disabled && !isCurrent(index)
+}
+
 function handleClick(item: BreadcrumbItem, index: number) {
-  if (!item.href) {
+  if (item.disabled || isCurrent(index))
+    return
+
+  if (!item.href)
     emit('click', item, index)
-  }
 }
 </script>
 
@@ -30,11 +40,15 @@ function handleClick(item: BreadcrumbItem, index: number) {
         class="tx-breadcrumb__item"
       >
         <component
-          :is="item.href ? 'a' : 'span'"
-          :href="item.href"
+          :is="isInteractive(item, index) ? 'a' : 'span'"
+          :href="isInteractive(item, index) ? item.href : undefined"
           class="tx-breadcrumb__link"
-          :class="{ 'tx-breadcrumb__link--current': index === items.length - 1 }"
-          :aria-current="index === items.length - 1 ? 'page' : undefined"
+          :class="{
+            'tx-breadcrumb__link--current': isCurrent(index),
+            'tx-breadcrumb__link--disabled': item.disabled,
+          }"
+          :aria-current="isCurrent(index) ? 'page' : undefined"
+          :aria-disabled="item.disabled ? 'true' : undefined"
           @click="handleClick(item, index)"
         >
           <TxIcon v-if="item.icon" :name="item.icon" class="tx-breadcrumb__icon" />
@@ -92,6 +106,12 @@ function handleClick(item: BreadcrumbItem, index: number) {
   color: var(--tx-breadcrumb-current, #111827);
   font-weight: 500;
   cursor: default;
+}
+
+.tx-breadcrumb__link--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .tx-breadcrumb__icon {

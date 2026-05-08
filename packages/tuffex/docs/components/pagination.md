@@ -39,6 +39,7 @@ const page = ref(1)
 - Pagination is best placed below or above the data it controls, with consistent positioning across views.
 - Use `show-info` to display a summary like "Page 3 of 10".
 - Set `show-first-last` to add first/last page jump buttons for datasets with many pages.
+- Boundary controls are disabled at the first or last page, and the active page uses `aria-current="page"`.
 
 ## API
 
@@ -49,6 +50,8 @@ const page = ref(1)
   { name: 'pageSize', description: 'Items per page, used to calculate total pages.', type: 'number', default: '10' },
   { name: 'total', description: 'Total number of items.', type: 'number' },
   { name: 'totalPages', description: 'Explicit total page count. Overrides total/pageSize calculation.', type: 'number' },
+  { name: 'prevIcon', description: 'Icon name for the previous page button.', type: 'string', default: 'chevron-left' },
+  { name: 'nextIcon', description: 'Icon name for the next page button.', type: 'string', default: 'chevron-right' },
   { name: 'showInfo', description: 'Whether to display page info text.', type: 'boolean', default: 'false' },
   { name: 'showFirstLast', description: 'Whether to show first/last page buttons.', type: 'boolean', default: 'false' },
 ]" />
@@ -56,6 +59,7 @@ const page = ref(1)
 ### Events
 
 <ApiSpecTable title="Events" :rows="[
+  { name: 'update:currentPage', description: 'Fires for v-model current page updates.', type: '(page: number) => void' },
   { name: 'pageChange', description: 'Fires when the user navigates to a different page.', type: '(page: number) => void' },
 ]" />
 

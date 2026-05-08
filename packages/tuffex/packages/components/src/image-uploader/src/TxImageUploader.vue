@@ -64,6 +64,9 @@ function onInputChange(e: Event): void {
 }
 
 function remove(id: string): void {
+  if (props.disabled)
+    return
+
   const cur = value.value
   const idx = cur.findIndex(i => i.id === id)
   if (idx < 0)
@@ -122,6 +125,7 @@ onBeforeUnmount(() => {
           type="button"
           class="tx-image-uploader__remove"
           :aria-label="`Remove ${item.name || 'image'}`"
+          :disabled="disabled"
           @click="remove(item.id)"
         >
           <i class="i-carbon-close" aria-hidden="true" />
@@ -208,6 +212,10 @@ onBeforeUnmount(() => {
 
 .tx-image-uploader__item:hover .tx-image-uploader__remove {
   opacity: 1;
+}
+
+.tx-image-uploader__remove:disabled {
+  cursor: not-allowed;
 }
 
 .tx-image-uploader--disabled {

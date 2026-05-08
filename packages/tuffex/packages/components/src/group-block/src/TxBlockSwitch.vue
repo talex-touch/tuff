@@ -44,9 +44,7 @@ const value = computed({
 const isActive = computed(() => !!value.value)
 
 const resolvedDefaultIcon = computed(() => {
-  if (props.defaultIcon !== undefined)
-    return props.defaultIcon
-  return props.icon
+  return props.defaultIcon
 })
 
 const resolvedActiveIcon = computed(() => {

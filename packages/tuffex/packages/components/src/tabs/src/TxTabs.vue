@@ -205,9 +205,10 @@ export default defineComponent({
       size: () => autoSizerRef.value?.size?.value,
     })
 
+    const tabNodeCache = ref<any[]>([])
+
     function findByName(name: string): any {
-      const nodes = slots.default?.() ?? []
-      return nodes.find(n => n?.props?.name === name)
+      return tabNodeCache.value.find(node => node?.props?.name === name)
     }
 
     const pointerElRef = ref<HTMLElement | null>(null)
@@ -370,7 +371,7 @@ export default defineComponent({
       })
 
       const isDefault = !!vnode.props?.activation
-      if (!activeNode.value && isDefault) {
+      if (!activeNode.value && isDefault && !props.modelValue && !props.defaultValue) {
         setActive(vnode)
         nextTick(() => applyPointerFor(tab))
       }
@@ -381,6 +382,36 @@ export default defineComponent({
     function renderTabs(): any[] {
       let tabHeader: any = null
       const nodes = slots.default?.() ?? []
+      const collectTabNodes = () => {
+        const collected: any[] = []
+        for (const child of nodes) {
+          const childName = (child?.type as any)?.name
+          if (childName === 'TxTabItem') {
+            collected.push(child)
+            continue
+          }
+          if (childName !== 'TxTabItemGroup')
+            continue
+
+          const childNodes = child.children && typeof child.children === 'object' && 'default' in child.children && typeof child.children.default === 'function'
+            ? child.children.default?.() ?? []
+            : []
+          collected.push(...childNodes)
+        }
+        return collected
+      }
+
+      tabNodeCache.value = collectTabNodes()
+
+      const modelNode = props.modelValue ? findByName(props.modelValue) : null
+      if (modelNode && activeNode.value?.props?.name !== props.modelValue) {
+        activeNode.value = modelNode
+      }
+      else if (!props.modelValue && props.defaultValue && !activeNode.value) {
+        const defaultNode = findByName(props.defaultValue)
+        if (defaultNode)
+          setActive(defaultNode)
+      }
 
       const filtered = nodes
         .filter((slot) => {
@@ -395,11 +426,12 @@ export default defineComponent({
             return null
           }
           if (childName === 'TxTabItemGroup') {
+            const childNodes = child.children && typeof child.children === 'object' && 'default' in child.children && typeof child.children.default === 'function'
+              ? child.children.default?.() ?? []
+              : []
             return h('div', { class: 'tx-tabs__group' }, [
               h('div', { class: 'tx-tabs__group-name' }, child.props?.name),
-              child.children && typeof child.children === 'object' && 'default' in child.children && typeof child.children.default === 'function'
-                ? child.children.default?.()?.map(createTab)
-                : [],
+              childNodes.map(createTab),
             ])
           }
           return createTab(child)

@@ -2,6 +2,8 @@
 
 TuffEx 使用 UnoCSS preset-icons 方案，提供丰富的图标支持。
 
+`TuffIcon` 同时支持 class、emoji、builtin、file 与 url 来源；SVG 默认通过 mask 使用 `currentColor`，`colorful=true` 或 `icon.colorful=true` 时保留原图颜色。
+
 ## 基础用法
 
 使用 UnoCSS 图标类名直接渲染图标：
@@ -144,6 +146,13 @@ import { TuffIcons } from '@talex-touch/utils'
 ```
 
 :::
+
+## TuffIcon 渲染契约
+
+- `name` 以 `i-` 开头时按图标 class 渲染；命中 `chevron-down`、`close`、`search`、`user`、`star`、`star-half` 等内置名时按 builtin SVG 渲染。
+- `file` 与本地绝对 `url` 可通过注入的 `fileProtocol` 或 `urlResolver` 转换。
+- SVG 在 `colorful=false` 时通过 mask 使用 `currentColor`；`colorful=true` 或 `icon.colorful=true` 时渲染为原图。
+- `status='loading' | 'error'` 会优先展示加载或错误状态。
 
 ## 图标集
 

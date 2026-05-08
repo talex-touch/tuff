@@ -66,7 +66,10 @@ watch(
   { immediate: true },
 )
 
-onMounted(() => {
+onMounted(async () => {
+  await nextTick()
+  syncMetrics()
+
   if ('fonts' in document) {
     void document.fonts.ready.then(() => {
       syncMetrics()

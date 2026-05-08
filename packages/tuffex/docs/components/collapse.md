@@ -94,6 +94,8 @@ Set `accordion` to allow only one item to be open at a time.
 - Use Collapse for FAQ sections, settings panels, or any content that benefits from progressive disclosure.
 - The expand/collapse animation is handled internally with smooth height transitions.
 - In accordion mode, `v-model` binds to a single string. In multi mode, it binds to a string array.
+- Headers expose button semantics with `aria-expanded`/`aria-controls` and support click, Enter, and Space toggles.
+- Disabled items expose `aria-disabled="true"` and ignore pointer and keyboard toggles.
 
 ## API
 
@@ -107,6 +109,7 @@ Set `accordion` to allow only one item to be open at a time.
 ### TxCollapse Events
 
 <ApiSpecTable title="Events" :rows="[
+  { name: 'update:modelValue', description: 'Fires for v-model active panel updates.', type: '(value: string | string[]) => void' },
   { name: 'change', description: 'Fires when the active panel changes.', type: '(value: string | string[]) => void' },
 ]" />
 
@@ -116,6 +119,7 @@ Set `accordion` to allow only one item to be open at a time.
   { name: 'title', description: 'The header text.', type: 'string' },
   { name: 'name', description: 'Unique identifier for this panel.', type: 'string' },
   { name: 'disabled', description: 'Prevents the panel from being toggled.', type: 'boolean', default: 'false' },
+  { name: 'arrowIcon', description: 'Icon name for the disclosure arrow.', type: 'string', default: 'chevron-down' },
 ]" />
 
 ### TxCollapseItem Slots

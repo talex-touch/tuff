@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
 import type { GridLayoutProps } from '../index'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 defineOptions({
   name: 'TxGridLayout',
@@ -51,14 +51,13 @@ function cancelColor() {
   })
 }
 
-const rootStyle = (() => {
-  const s: CSSProperties = {
+const rootStyle = computed<CSSProperties>(() => {
+  return {
     '--tx-grid-gap': props.gap,
     '--tx-grid-min-width': props.minItemWidth,
     '--tx-grid-max-columns': String(props.maxColumns),
   } as CSSProperties
-  return s
-})()
+})
 </script>
 
 <template>

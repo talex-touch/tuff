@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { TxSelectProps } from './types'
-import { computed, nextTick, onMounted, provide, ref, useSlots, watch } from 'vue'
+import { computed, nextTick, onMounted, provide, ref, watch } from 'vue'
 import TuffInput from '../../input/src/TxInput.vue'
 import TxPopover from '../../popover/src/TxPopover.vue'
 import TxSearchInput from '../../search-input/src/TxSearchInput.vue'
@@ -45,7 +45,6 @@ const searchQuery = ref('')
 
 const triggerInputRef = ref<any>(null)
 const panelRef = ref<HTMLElement | null>(null)
-const slots = useSlots()
 
 const isEditable = computed(() => props.editable || props.remote)
 
@@ -91,85 +90,6 @@ function resolveLabelByValue(value: unknown): string | undefined {
   for (const [optionValue, optionLabel] of optionLabelMap.value.entries()) {
     if (isSelectValueEqual(optionValue, value))
       return optionLabel
-  }
-
-  const slotLabel = resolveLabelFromSlot(value)
-  if (slotLabel !== undefined)
-    return slotLabel
-
-  return undefined
-}
-
-function resolveChildrenText(children: unknown): string {
-  if (children == null || typeof children === 'boolean')
-    return ''
-
-  if (typeof children === 'string' || typeof children === 'number')
-    return String(children)
-
-  if (Array.isArray(children))
-    return children.map(item => resolveChildrenText(item)).join('')
-
-  if (typeof children === 'object') {
-    if ('children' in (children as Record<string, unknown>)) {
-      return resolveChildrenText((children as { children?: unknown }).children)
-    }
-    if ('default' in (children as Record<string, unknown>)) {
-      const maybeSlot = (children as { default?: unknown }).default
-      if (typeof maybeSlot === 'function')
-        return resolveChildrenText((maybeSlot as () => unknown)())
-    }
-  }
-
-  return ''
-}
-
-function resolveLabelFromSlot(value: unknown): string | undefined {
-  const queue: unknown[] = [...(slots.default?.() ?? [])]
-
-  while (queue.length > 0) {
-    const node = queue.shift()
-    if (!node)
-      continue
-
-    if (Array.isArray(node)) {
-      queue.push(...node)
-      continue
-    }
-
-    if (typeof node !== 'object')
-      continue
-
-    const vnode = node as {
-      props?: Record<string, unknown>
-      children?: unknown
-    }
-    const props = vnode.props
-
-    if (props && Object.prototype.hasOwnProperty.call(props, 'value')) {
-      const optionValue = props.value as string | number
-      if (isSelectValueEqual(optionValue, value)) {
-        const rawLabel = typeof props.label === 'string'
-          ? props.label
-          : resolveChildrenText(vnode.children)
-        const normalizedLabel = rawLabel.replace(/\s+/g, ' ').trim()
-        return normalizedLabel || String(optionValue)
-      }
-    }
-
-    if (Array.isArray(vnode.children)) {
-      queue.push(...vnode.children)
-      continue
-    }
-
-    if (typeof vnode.children === 'object' && vnode.children !== null) {
-      const defaultSlot = (vnode.children as { default?: unknown }).default
-      if (typeof defaultSlot === 'function') {
-        const slotNodes = defaultSlot()
-        if (Array.isArray(slotNodes))
-          queue.push(...slotNodes)
-      }
-    }
   }
 
   return undefined

@@ -1,21 +1,13 @@
 <script setup lang="ts">
-import type { AlertType } from './types'
+import type { AlertProps } from './types'
 import { computed } from 'vue'
 import { TxIcon } from '../../icon'
-
-interface Props {
-  type?: AlertType
-  title?: string
-  message?: string
-  closable?: boolean
-  showIcon?: boolean
-}
 
 interface Emits {
   close: []
 }
 
-const props = withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<AlertProps>(), {
   type: 'info',
   closable: true,
   showIcon: true,
@@ -47,7 +39,7 @@ function handleClose() {
     role="alert"
   >
     <div v-if="showIcon" class="tx-alert__icon">
-      <component :is="iconComponent" />
+      <TxIcon :name="iconComponent" />
     </div>
 
     <div class="tx-alert__content">
@@ -67,7 +59,7 @@ function handleClose() {
       aria-label="Close"
       @click="handleClose"
     >
-      <TxIcon name="x" />
+      <TxIcon name="close" />
     </button>
   </div>
 </template>

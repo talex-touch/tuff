@@ -100,3 +100,10 @@ const loading = ref(true)
 | `radius` | `string \| number` | `8` | 圆角（circle 忽略） |
 | `lines` | `number` | `1` | 行数 |
 | `gap` | `string \| number` | `10` | 行间距 |
+
+## 交互契约
+
+- `loading=false` 时不渲染骨架，直接渲染默认 slot。
+- `lines` 最小渲染 1 行，避免空骨架。
+- number 类型的 `width`、`height`、`radius`、`gap` 会转换为 px。
+- `variant="circle"` 固定使用圆形半径，忽略 `radius`。

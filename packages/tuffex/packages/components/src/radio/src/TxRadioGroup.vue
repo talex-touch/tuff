@@ -819,6 +819,62 @@ function onPointerDown(e: PointerEvent) {
   startMotion()
 }
 
+function getEnabledRadios(): HTMLButtonElement[] {
+  const root = groupRef.value
+  if (!root) {
+    return []
+  }
+  return Array.from(root.querySelectorAll<HTMLButtonElement>('button.tx-radio[role="radio"]:not([disabled])'))
+}
+
+function resolveKeyboardTargetIndex(key: string, currentIndex: number, count: number): number {
+  if (count <= 0) {
+    return -1
+  }
+  if (key === 'Home') {
+    return 0
+  }
+  if (key === 'End') {
+    return count - 1
+  }
+  if (key === 'ArrowRight' || key === 'ArrowDown') {
+    return currentIndex >= 0 ? (currentIndex + 1) % count : 0
+  }
+  if (key === 'ArrowLeft' || key === 'ArrowUp') {
+    return currentIndex >= 0 ? (currentIndex - 1 + count) % count : count - 1
+  }
+  return -1
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (disabled.value) {
+    return
+  }
+
+  if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+    return
+  }
+
+  const radios = getEnabledRadios()
+  if (radios.length <= 0) {
+    return
+  }
+
+  e.preventDefault()
+  const activeElement = document.activeElement
+  const currentIndex = radios.findIndex((radio) => {
+    return radio.getAttribute('aria-checked') === 'true' || radio === activeElement
+  })
+  const nextIndex = resolveKeyboardTargetIndex(e.key, currentIndex, radios.length)
+  const next = nextIndex >= 0 ? radios[nextIndex] : undefined
+  if (!next) {
+    return
+  }
+
+  next.focus()
+  next.click()
+}
+
 const ctx = {
   model,
   disabled: computed(() => disabled.value),
@@ -878,6 +934,7 @@ watch(
       `tx-radio-group--indicator-${resolvedIndicatorVariant}`,
       { 'is-motion': motionActive },
     ]"
+    @keydown="onKeydown"
   >
     <span v-if="type === 'button'" class="tx-radio-group__indicator-outline" :style="outlineStyle" aria-hidden="true" />
 

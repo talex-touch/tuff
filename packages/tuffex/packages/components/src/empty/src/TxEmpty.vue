@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { EmptyProps } from './types'
+import type { Slots } from 'vue'
 import { computed, useSlots } from 'vue'
 import { TxEmptyState } from '../../empty-state'
 
@@ -12,7 +13,7 @@ const props = withDefaults(defineProps<EmptyProps>(), {
   compact: false,
 })
 
-const slots = useSlots()
+const slots: Slots = useSlots()
 
 const emptyStateSize = computed(() => (props.compact ? 'small' : 'medium'))
 </script>

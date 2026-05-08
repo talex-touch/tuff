@@ -45,4 +45,22 @@ describe('txCodeEditor', () => {
     expect(value).toContain('a: 1')
     expect(value).toContain('b: 2')
   })
+
+  it('mounts toml and ini language modes with local stream parsers', () => {
+    const tomlWrapper = mount(TxCodeEditor, {
+      props: {
+        modelValue: '[server]\nport = 8080',
+        language: 'toml',
+      },
+    })
+    const iniWrapper = mount(TxCodeEditor, {
+      props: {
+        modelValue: '[server]\nport=8080',
+        language: 'ini',
+      },
+    })
+
+    expect((tomlWrapper.vm as { getValue: () => string }).getValue()).toContain('port')
+    expect((iniWrapper.vm as { getValue: () => string }).getValue()).toContain('port')
+  })
 })

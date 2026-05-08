@@ -2,7 +2,7 @@
 
 进度条组件，用于展示操作进度，支持多种状态。
 
-> `Progress` 是对 `ProgressBar` 的兼容封装（内部复用同一实现）。
+> `Progress` 是面向常规表单和状态行的轻量入口，内部复用 `ProgressBar` 的当前实现。
 > 
 > 如果你需要多段多色、渐变、tooltip、glass/blur mask 等高级能力，请使用 `ProgressBar`。
 
@@ -124,4 +124,3 @@ const format = (percentage: number) => `进度 ${percentage}%`
 | showText | 是否显示文本 | `boolean` | `true` |
 | indeterminate | 是否为不确定进度 | `boolean` | `false` |
 | format | 自定义文本格式 | `(percentage: number) => string` | - |
-

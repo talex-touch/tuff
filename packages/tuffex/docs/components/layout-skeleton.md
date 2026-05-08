@@ -50,10 +50,16 @@ Use LayoutSkeleton as a `v-if` / `v-else` pair with your actual page content. On
 - LayoutSkeleton renders a fixed layout shape — it is not configurable. If you need skeleton placeholders for individual sections (cards, lists, text), use `TxSkeleton`, `TxCardSkeleton`, or `TxListItemSkeleton` instead.
 - The shimmer animation uses CSS `@keyframes` and `background-position` for zero-JavaScript overhead.
 - Place LayoutSkeleton in a container with a defined height. It uses `height: 100%` to fill its parent.
+- Content line widths use a fixed sequence rather than runtime randomness, so SSR, hydration, and tests stay deterministic.
 
 ## API
 
 LayoutSkeleton has no props, events, or slots. It renders a self-contained layout wireframe.
+
+## Interaction Contract
+
+- `TxLayoutSkeleton` always renders a header, 6 sidebar items, and 8 content lines.
+- Content line widths are deterministic and do not depend on `Math.random()`.
 
 ### Related Components
 

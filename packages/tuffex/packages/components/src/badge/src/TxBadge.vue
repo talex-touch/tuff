@@ -2,9 +2,7 @@
 import type { BadgeProps } from './types'
 import { computed } from 'vue'
 
-interface Props extends BadgeProps {}
-
-const props = withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<BadgeProps>(), {
   variant: 'default',
   value: 0,
 })

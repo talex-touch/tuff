@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, provide, ref, useId, watch } from 'vue'
 import { FLAT_SELECT_KEY } from './types'
 import type { TxFlatSelectValue } from './types'
 
@@ -28,6 +28,7 @@ const isAnimating = ref(false)
 const selectRef = ref<HTMLElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const selectedLabel = ref('')
+const dropdownId = `tx-flat-select-${useId()}`
 
 // --- Item registration ---
 interface ItemEntry {
@@ -218,6 +219,9 @@ onBeforeUnmount(() => {
     <button
       type="button"
       class="tx-flat-select__trigger"
+      role="combobox"
+      :aria-expanded="isOpen"
+      :aria-controls="dropdownId"
       :disabled="disabled"
       @click="toggle"
     >
@@ -236,8 +240,10 @@ onBeforeUnmount(() => {
 
     <!-- ComboBox dropdown: always rendered, clip-path controls visibility -->
     <div
+      :id="dropdownId"
       ref="dropdownRef"
       class="tx-flat-select__dropdown"
+      role="listbox"
       :class="{
         'is-visible': isOpen,
         'is-animating': isAnimating,

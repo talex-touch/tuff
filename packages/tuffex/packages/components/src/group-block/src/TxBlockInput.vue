@@ -39,8 +39,6 @@ const props = withDefaults(defineProps<{
   placeholder?: string
   clearable?: boolean
   inputType?: 'text' | 'password' | 'number' | 'email'
-  /** @deprecated Use defaultIcon instead. */
-  icon?: string
 }>(), {
   title: '',
   description: '',
@@ -68,9 +66,7 @@ const isFocused = ref(false)
 const isActive = computed(() => isFocused.value)
 
 const resolvedDefaultIcon = computed(() => {
-  if (props.defaultIcon !== undefined)
-    return props.defaultIcon
-  return props.icon
+  return props.defaultIcon
 })
 
 const resolvedActiveIcon = computed(() => {

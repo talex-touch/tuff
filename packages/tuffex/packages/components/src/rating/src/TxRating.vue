@@ -25,6 +25,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<Emits>()
 
 const rating = computed(() => props.modelValue ?? 0)
+const isInteractive = computed(() => !props.disabled && !props.readonly)
 
 const precisionDigits = computed(() => {
   const p = props.precision ?? 1
@@ -58,8 +59,12 @@ function getStarIcon(star: number) {
   }
 }
 
+function getStarAriaChecked(star: number) {
+  return rating.value >= star
+}
+
 function handleClick(star: number) {
-  if (props.disabled || props.readonly)
+  if (!isInteractive.value)
     return
 
   let newValue = star
@@ -72,31 +77,34 @@ function handleClick(star: number) {
 }
 
 function handleMouseEnter(star: number) {
-  if (props.disabled || props.readonly)
+  if (!isInteractive.value)
     return
   hoverValue.value = star
 }
 
 function handleMouseLeave() {
-  if (props.disabled || props.readonly)
+  if (!isInteractive.value)
     return
   hoverValue.value = props.modelValue
 }
 </script>
 
 <template>
-  <div class="tx-rating">
-    <div class="tx-rating__stars">
+  <div class="tx-rating" :aria-disabled="disabled || undefined" :aria-readonly="readonly || undefined">
+    <div class="tx-rating__stars" role="radiogroup">
       <button
         v-for="star in maxStars"
         :key="star"
+        type="button"
         class="tx-rating__star"
         :class="{
           'tx-rating__star--filled': star <= filledStars,
           'tx-rating__star--half': star === filledStars + 0.5,
-          'tx-rating__star--disabled': disabled,
+          'tx-rating__star--disabled': disabled || readonly,
         }"
-        :disabled="disabled"
+        role="radio"
+        :aria-checked="getStarAriaChecked(star)"
+        :disabled="disabled || readonly"
         :aria-label="`Rate ${star} star${star !== 1 ? 's' : ''}`"
         @click="handleClick(star)"
         @mouseenter="handleMouseEnter(star)"

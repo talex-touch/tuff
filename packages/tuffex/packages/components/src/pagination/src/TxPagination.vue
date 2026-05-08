@@ -79,6 +79,19 @@ function handlePageChange(page: number) {
 <template>
   <nav class="tx-pagination" aria-label="Pagination">
     <ul class="tx-pagination__list">
+      <!-- First button -->
+      <li v-if="showFirstLast" class="tx-pagination__item">
+        <button
+          class="tx-pagination__button"
+          :class="{ 'tx-pagination__button--disabled': currentPage <= 1 }"
+          :disabled="currentPage <= 1"
+          aria-label="First page"
+          @click="handlePageChange(1)"
+        >
+          &laquo;
+        </button>
+      </li>
+
       <!-- Previous button -->
       <li class="tx-pagination__item">
         <button
@@ -94,8 +107,8 @@ function handlePageChange(page: number) {
 
       <!-- Page numbers -->
       <li
-        v-for="page in visiblePages"
-        :key="page"
+        v-for="(page, index) in visiblePages"
+        :key="`${page}-${index}`"
         class="tx-pagination__item"
       >
         <button
@@ -120,6 +133,19 @@ function handlePageChange(page: number) {
           @click="handlePageChange(currentPage + 1)"
         >
           <TxIcon :name="nextIcon" />
+        </button>
+      </li>
+
+      <!-- Last button -->
+      <li v-if="showFirstLast" class="tx-pagination__item">
+        <button
+          class="tx-pagination__button"
+          :class="{ 'tx-pagination__button--disabled': currentPage >= totalPages }"
+          :disabled="currentPage >= totalPages"
+          aria-label="Last page"
+          @click="handlePageChange(totalPages)"
+        >
+          &raquo;
         </button>
       </li>
     </ul>

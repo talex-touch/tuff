@@ -15,6 +15,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const activeStep = ref(props.active)
+const stepKeys = ref<string[]>([])
 
 watch(() => props.active, (newValue) => {
   activeStep.value = newValue
@@ -24,6 +25,14 @@ provide<StepsContext>('steps', {
   direction: props.direction,
   size: props.size,
   activeStep,
+  stepKeys,
+  registerStep: (key: string) => {
+    if (!stepKeys.value.includes(key))
+      stepKeys.value = [...stepKeys.value, key]
+  },
+  unregisterStep: (key: string) => {
+    stepKeys.value = stepKeys.value.filter(item => item !== key)
+  },
   setActiveStep: (step: number | string) => {
     activeStep.value = step
   },
@@ -36,6 +45,7 @@ provide<StepsContext>('steps', {
       `tx-steps--${direction}`,
       `tx-steps--${size}`,
     ]"
+    role="list"
   >
     <slot />
   </div>

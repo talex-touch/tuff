@@ -17,9 +17,6 @@ const props = withDefaults(defineProps<GroupBlockProps>(), {
   collapsed: false,
   defaultExpand: true,
   memoryName: '',
-  icon: '',
-  expandFill: false,
-  shrink: false,
 })
 
 const emit = defineEmits<GroupBlockEmits>()
@@ -27,7 +24,6 @@ const emit = defineEmits<GroupBlockEmits>()
 type IconValue = TxIconSource | string | null | undefined
 
 const STORAGE_PREFIX = 'tuff-block-storage-'
-const LEGACY_STORAGE_PREFIX = 'tx-group-block-storage-'
 
 const storedExpand = ref<boolean | null>(readStoredExpand())
 
@@ -36,8 +32,7 @@ function readStoredExpand(): boolean | null {
     return null
   try {
     const key = `${STORAGE_PREFIX}${props.memoryName}`
-    const legacyKey = `${LEGACY_STORAGE_PREFIX}${props.memoryName}`
-    const raw = localStorage.getItem(key) ?? localStorage.getItem(legacyKey)
+    const raw = localStorage.getItem(key)
     if (!raw)
       return null
     const parsed = JSON.parse(raw)
@@ -56,7 +51,6 @@ function persistState(state: boolean): void {
   try {
     const payload = JSON.stringify({ expand: state })
     localStorage.setItem(`${STORAGE_PREFIX}${props.memoryName}`, payload)
-    localStorage.setItem(`${LEGACY_STORAGE_PREFIX}${props.memoryName}`, payload)
     storedExpand.value = state
   }
   catch (error) {
@@ -71,7 +65,7 @@ function resolveDefaultExpand(): boolean {
 }
 
 const hasUserInteracted = ref(false)
-const expanded = ref(storedExpand.value ?? (props.shrink ? false : resolveDefaultExpand()))
+const expanded = ref(storedExpand.value ?? resolveDefaultExpand())
 
 const contentRef = ref<HTMLElement | null>(null)
 const isMounted = ref(false)
@@ -85,9 +79,7 @@ function toIcon(icon?: IconValue): TxIconSource | null {
 }
 
 const defaultIcon = computed(() => {
-  if (props.defaultIcon !== undefined)
-    return toIcon(props.defaultIcon)
-  return toIcon(props.icon)
+  return toIcon(props.defaultIcon)
 })
 
 const activeIcon = computed(() => {
@@ -177,15 +169,6 @@ function toggle(): void {
   emit('update:expanded', expanded.value)
   emit('toggle', expanded.value)
 }
-
-watch(
-  () => props.shrink,
-  (newVal) => {
-    if (storedExpand.value !== null || hasUserInteracted.value)
-      return
-    expanded.value = !newVal
-  },
-)
 
 watch(
   () => props.collapsed,

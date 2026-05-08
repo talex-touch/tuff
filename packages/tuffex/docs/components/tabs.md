@@ -90,13 +90,12 @@ import TabsDisableAnimDemoSource from '../.vitepress/theme/components/demos/Tabs
 | `indicatorMotion` | `'stretch' \| 'warp' \| 'glide' \| 'snap' \| 'spring'` | `'stretch'` | 指示器动效风格 |
 | `indicatorMotionStrength` | `number` | `1` | 指示器动效强度（数值越大越“Q弹”，`0` 基本关闭 scale 弹性） |
 | `animation` | `TabsAnimation` | - | 动画配置（size/nav/indicator/content） |
-| `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | - | 内容区尺寸动画（高度跟随内容，仅在 `contentScrollable=false` 时生效）。未传时兼容 `autoHeight*` |
+| `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | - | 内容区尺寸动画（高度跟随内容，仅在 `contentScrollable=false` 时生效）。未传时使用 `autoHeight/autoWidth` 启用状态与 `autoHeightDurationMs/autoHeightEasing` 默认值 |
 | `animation.nav` | `boolean \| { enabled?; durationMs?; easing? }` | - | 导航容器动画（nav 宽度/布局变化过渡） |
 | `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | - | 指示条动画 |
 | `animation.content` | `boolean \| { enabled? }` | - | 内容切换过渡（zoom 动画） |
-| `autoHeight` | `boolean` | `false` | 兼容字段：等价于 `animation.size` |
-| `autoHeightDurationMs` | `number` | `250` | 兼容字段：`animation.size.durationMs` |
-| `autoHeightEasing` | `string` | `ease` | 兼容字段：`animation.size.easing` |
+| `autoHeightDurationMs` | `number` | `250` | `animation.size.durationMs` 未指定时的默认时长 |
+| `autoHeightEasing` | `string` | `ease` | `animation.size.easing` 未指定时的默认缓动 |
 
 ### Slots
 

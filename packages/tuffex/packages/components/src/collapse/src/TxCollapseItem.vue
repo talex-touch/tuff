@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CollapseContext } from './types'
-import { computed, inject } from 'vue'
+import { computed, inject, useId } from 'vue'
 import { TxIcon } from '../../icon'
 
 interface Props {
@@ -15,6 +15,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const collapse = inject<CollapseContext>('collapse')
+const contentId = useId()
 
 const itemName = computed(() => props.name || props.title || '')
 
@@ -33,8 +34,18 @@ function handleHeaderClick() {
   <div class="tx-collapse-item">
     <div
       class="tx-collapse-item__header"
-      :class="{ 'tx-collapse-item__header--active': isActive }"
+      :class="{
+        'tx-collapse-item__header--active': isActive,
+        'tx-collapse-item__header--disabled': disabled,
+      }"
+      role="button"
+      tabindex="0"
+      :aria-expanded="isActive"
+      :aria-controls="contentId"
+      :aria-disabled="disabled ? 'true' : undefined"
       @click="handleHeaderClick"
+      @keydown.enter.prevent="handleHeaderClick"
+      @keydown.space.prevent="handleHeaderClick"
     >
       <TxIcon
         :name="arrowIcon"
@@ -47,7 +58,11 @@ function handleHeaderClick() {
     </div>
 
     <Transition name="tx-collapse">
-      <div v-show="isActive" class="tx-collapse-item__content">
+      <div
+        v-show="isActive"
+        :id="contentId"
+        class="tx-collapse-item__content"
+      >
         <div class="tx-collapse-item__content-inner">
           <slot />
         </div>
@@ -84,6 +99,11 @@ function handleHeaderClick() {
 .tx-collapse-item__header--active {
   background: var(--tx-collapse-header-active-bg, #f3f4f6);
   color: var(--tx-collapse-header-active-text, #111827);
+}
+
+.tx-collapse-item__header--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .tx-collapse-item__arrow {

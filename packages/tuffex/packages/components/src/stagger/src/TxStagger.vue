@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { StaggerProps } from './types'
+import type { Slots, VNode } from 'vue'
 import { Comment, computed, useSlots } from 'vue'
 
 defineOptions({
@@ -16,7 +17,7 @@ const props = withDefaults(defineProps<StaggerProps>(), {
   easing: 'ease-out',
 })
 
-const slots = useSlots()
+const slots: Slots = useSlots()
 
 const rootStyle = computed(() => {
   return {
@@ -27,9 +28,9 @@ const rootStyle = computed(() => {
   } as Record<string, string>
 })
 
-const normalizedChildren = computed(() => {
-  const vnodes = slots.default?.() ?? []
-  return vnodes.filter(v => v.type !== Comment)
+const normalizedChildren = computed<VNode[]>(() => {
+  const vnodes = slots.default?.({}) ?? []
+  return vnodes.filter((v: VNode) => v.type !== Comment)
 })
 </script>
 

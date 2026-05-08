@@ -52,6 +52,8 @@ const active = ref(1)
 - Steps automatically marks completed items (those before the active index) with a check icon.
 - Use `direction="vertical"` for sidebar-style step navigation in forms or wizards.
 - Each step can be individually `disabled` to prevent skipping ahead.
+- When `step` is omitted, child order is used as a zero-based index, matching the numeric `active` prop.
+- Clickable step heads expose button semantics, support Enter/Space, and the current step uses `aria-current="step"`.
 - For historical event sequences without active state, use [Timeline](/components/timeline) instead.
 
 ## API
@@ -70,7 +72,10 @@ const active = ref(1)
   { name: 'title', description: 'Step title text.', type: 'string' },
   { name: 'description', description: 'Step description or subtitle.', type: 'string' },
   { name: 'icon', description: 'Custom icon class for the step circle.', type: 'string' },
-  { name: 'status', description: 'Override the automatic status.', type: '\"wait\" | \"completed\"', default: '\"wait\"' },
+  { name: 'status', description: 'Override the automatic status.', type: '\"wait\" | \"active\" | \"completed\" | \"error\"', default: '\"wait\"' },
+  { name: 'step', description: 'Step identifier. Defaults to the child order index when omitted.', type: 'number | string' },
   { name: 'clickable', description: 'Whether the step can be clicked to navigate.', type: 'boolean', default: 'true' },
   { name: 'disabled', description: 'Prevents interaction with this step.', type: 'boolean', default: 'false' },
+  { name: 'showLine', description: 'Whether to render the connector line after this step. The last step never renders a line.', type: 'boolean', default: 'true' },
+  { name: 'completedIcon', description: 'Icon name used for completed steps.', type: 'string', default: 'check' },
 ]" />
