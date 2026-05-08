@@ -1,3 +1,4 @@
+import { StorageList } from '@talex-touch/utils'
 import { describe, expect, it, vi } from 'vitest'
 
 const save = vi.fn()
@@ -35,10 +36,35 @@ describe('AccountStorage', () => {
     expect(storage.saveToStr()).not.toContain('refresh-secret')
     expect(save).toHaveBeenCalledWith(
       expect.objectContaining({
-        key: 'account.ini',
+        key: StorageList.ACCOUNT,
         content: expect.not.stringContaining('access-secret')
       })
     )
+    vi.useRealTimers()
+  })
+
+  it('can analyze account snapshots without persisting during startup hydration', async () => {
+    vi.useFakeTimers()
+    save.mockClear()
+    const { AccountStorage } = await import('./account-storage')
+    const storage = new AccountStorage()
+
+    storage.analyzeFromObj(
+      {
+        user: {
+          id: 1,
+          username: 'demo',
+          email: 'demo@example.test',
+          createdAt: '2026-05-03T00:00:00.000Z',
+          updatedAt: '2026-05-03T00:00:00.000Z'
+        }
+      },
+      { persist: false }
+    )
+    vi.runAllTimers()
+
+    expect(storage.saveToStr()).toContain('demo@example.test')
+    expect(save).not.toHaveBeenCalled()
     vi.useRealTimers()
   })
 })

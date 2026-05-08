@@ -48,4 +48,15 @@ describe('renderer app storage boundary', () => {
 
     expect(offenders).toEqual([])
   })
+
+  it('keeps renderer main storage bootstrap on typed transport only', () => {
+    const source = readFileSync(join(rendererRoot, 'main.ts'), 'utf8')
+
+    expect(source).toContain('initializeRendererStorage(transport)')
+    expect(source).not.toContain('initStorageChannel')
+    expect(source).not.toContain('initStorageTransport')
+    expect(source).not.toContain('initStorageSubscription')
+    expect(source).not.toContain('resolveStorageChannel')
+    expect(source).not.toMatch(/\buseChannel\b/)
+  })
 })
