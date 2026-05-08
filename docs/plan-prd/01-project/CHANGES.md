@@ -1,7 +1,34 @@
 # 变更日志
 
-> 更新时间: 2026-05-04
-> 说明: 主文件仅保留近 30 天（2026-04-04 ~ 2026-05-04）详细记录；更早历史已按月归档。
+> 更新时间: 2026-05-08
+> 说明: 主文件仅保留近 30 天（2026-04-08 ~ 2026-05-08）详细记录；更早历史已按月归档。
+
+## 2026-05-08
+
+### docs(governance): sync 2.4.10 current line and 2.4.11 blockers
+
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `scripts/check-doc-governance.mjs`
+  - 当前主线统一为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`。
+  - 剩余未闭环项集中进入 `2.4.11` 必须解决的问题：Windows/macOS 阻塞级回归、Linux documented best-effort、Release Evidence 写入闭环、legacy/compat/size 清册退场、CoreApp 验证、搜索性能与启动搜索压测。
+  - 六主文档日期同步到 `2026-05-08`，`docs:guard` 的 next-action 关键字同步为当前主线。
+  - 删除候选本轮不物理删除，仅在入口文档继续标注 `next-edit` 草稿池与 `05-archive` 历史归档的降权状态。
+
+### chore(governance): move cleanup target to 2.4.11
+
+- `scripts/legacy-boundary-allowlist.json`
+- `scripts/large-file-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `scripts/check-legacy-boundaries.mjs`
+- `scripts/check-large-file-boundaries.mjs`
+- `scripts/check-compatibility-debt-registry.mjs`
+  - `currentVersion` 同步到 `2.4.10-beta.14`。
+  - legacy boundary、large-file boundary 与 compatibility registry 的默认退场目标统一改为 `2.4.11`。
+  - `2.4.11` 前仍需关闭或显式降权所有未退场的 legacy/compat/size 清册项。
 
 ## 2026-05-07
 
@@ -24,7 +51,7 @@
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
   - Synced large-file boundary metadata to current `2.4.10-beta.14` release gate.
   - Raised existing governance exception caps to current measured line counts for:
-    - `SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER-TEST`: `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts` cap `1516`
+    - `SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER-TEST`: `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts` cap `1517`
     - `SIZE-GROWTH-2026-04-26-CORE-APP-APP-PROVIDER`: `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts` cap `3330`
     - `SIZE-GROWTH-2026-04-26-CORE-APP-OCR-SERVICE`: `apps/core-app/src/main/modules/ocr/ocr-service.ts` cap `1629`
     - `SIZE-GROWTH-2026-04-26-CORE-APP-SENTRY-SERVICE`: `apps/core-app/src/main/modules/sentry/sentry-service.ts` cap `1318`
@@ -36,7 +63,7 @@
     - `SIZE-GROWTH-2026-05-08-TUFFEX-FLIP-OVERLAY`: `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue` cap `1345`
     - `SIZE-GROWTH-2026-05-08-PLUGIN-TOUCH-TRANSLATION-INDEX`: `plugins/touch-translation/index.js` cap `1261`
     - `SIZE-GROWTH-2026-05-08-PLUGIN-TOUCH-TRANSLATION-PANEL`: `plugins/touch-translation/widgets/translate-panel.vue` cap `1535`
-  - Follow-up remains unchanged: reduce or split these files below the 1200-line threshold before `2.5.0`.
+  - Follow-up remains unchanged: reduce or split these files below the 1200-line threshold before `2.4.11`.
 
 ### docs(nexus): hard-cut browser support wording from compatibility
 

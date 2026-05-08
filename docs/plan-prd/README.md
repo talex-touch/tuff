@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档入口（压缩版）
-> 更新时间: 2026-05-04
+> 更新时间: 2026-05-08
 
 ## 快速入口
 
@@ -17,9 +17,11 @@
 
 ---
 
-## 单一口径快照（2026-04-26）
+## 单一口径快照（2026-05-08）
 
-- 当前工作区基线：`2.4.9-beta.4`。
+- 当前工作区基线：`2.4.10-beta.14`。
+- 当前主线：`2.4.10` 优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口。
+- 下一版本门槛：`2.4.11` 必须关闭剩余未闭环项；清册内 legacy/compat/size 债务退场目标统一前移到 `2.4.11`。
 - Nexus 设备授权风控 Phase 1 已落地：设备码申请频控、连续 reject/cancel 冷却、request/approve/reject/cancel/revoke/trust/untrust 审计日志、长期授权后端时间窗与可信设备显式白名单已接入。
 - CoreApp 启动搜索卡顿治理已落地“平衡模式 + 双库隔离”：`database-aux.db` 分流非核心高频写、`DbWriteScheduler` QoS/熔断、索引热路径单写者化、启动期降载（120s）。
 - 发布开关已就位：`TUFF_DB_AUX_ENABLED`、`TUFF_DB_QOS_ENABLED`、`TUFF_STARTUP_DEGRADE_ENABLED`，支持灰度与快速回滚。
@@ -27,9 +29,9 @@
 - 治理基线：`legacy 81/184`、`raw channel 13/46`、超长文件（主线）`47`。
 - `apps/core-app` 已完成“兼容债立即硬切”首轮并行治理：`window.$channel` 业务入口清零、legacy storage 事件协议清零、权限 `sdkapi` legacy 放行移除、更新/平台识别收敛为显式 `unsupported` 策略。
 - CoreApp Sync payload 已从旧 `b64:` Base64 载荷升级为 main 侧 AES-GCM `enc:v1` 真密文；`payload_enc/payload_ref` wire shape 保持不变，`meta_plain` 仅保留非业务元数据，旧 `b64:` 只作为迁移读取 fallback。
-- Nexus Release Evidence API 已作为 `2.5.0` 回归证据入口，覆盖 CoreApp 平台回归、文档门禁与阻塞矩阵采集；CI 写入使用 `release:evidence` API key。
-- 当前下一动作：`CoreApp legacy 清理 + Windows/macOS 2.5.0 阻塞级适配`；Linux best-effort 口径复核继续作为非阻塞记录。
-- `2.5.0` 前置口径：先关闭或降权 CoreApp 剩余 legacy/compat 债务，再完成 Windows/macOS release-blocking 回归；Linux 保留 documented best-effort，不作为 `2.5.0` blocker。
+- Nexus Release Evidence API 继续作为平台回归、文档门禁与阻塞矩阵采集入口；CI 写入使用 `release:evidence` API key。
+- 当前下一动作：`2.4.10 Windows App 索引 + 基础 legacy/compat 收口`；Linux best-effort 口径复核继续作为非阻塞记录。
+- `2.4.11` 前置口径：关闭或降权 CoreApp 剩余 legacy/compat 债务，补齐 Windows/macOS release-blocking 回归证据；Linux 保留 documented best-effort，不作为 `2.4.10` blocker。
 - `2.4.8` 主线：OmniPanel Gate 已完成（historical）。
 - `v2.4.7` Gate：A/B/C/D/E 已完成（historical），不重发版。
 - Pilot Runtime 主路径：Node Server + Postgres/Redis + JWT Cookie（Cloudflare 路径仅历史归档）。
@@ -46,9 +48,9 @@
 
 ## 当前主线（2 周）
 
-1. P0：CoreApp legacy 清理闭环（清册中的 `2.5.0` 项关闭或显式降权，禁止新增 legacy/raw channel/旧 storage/旧 SDK bypass）。
-2. P0：Windows/macOS `2.5.0` 阻塞级适配回归（搜索、应用扫描、托盘、更新、插件权限、安装卸载、退出释放）。
-3. P1：文档治理收尾（`TODO` 控制到 400 行内 + 第二批历史头标 + TL;DR 分层）。
+1. P0：Windows App 索引与启动体验收口（Start Menu、UWP、registry uninstall、`launchArgs/workingDirectory`、真实 Windows 设备验证）。
+2. P0：基础 legacy/compat 收口（清册退场目标统一为 `2.4.11`，禁止新增 legacy/raw channel/旧 storage/旧 SDK bypass）。
+3. P1：文档治理收尾（TODO 按版本分层、第二批历史头标 + TL;DR 分层）。
 4. P1：`Nexus 设备授权风控` 保留实施文档与验收入口，Phase 1 主体已完成。
 
 ---
@@ -68,14 +70,17 @@
 
 ## 未闭环能力（按优先级）
 
-### P0
+### P0（2.4.10）
 
-- CoreApp legacy 清理与 Windows/macOS `2.5.0` 阻塞级适配。
+- 2.4.10 Windows App 索引与基础 legacy/compat 收口。
 
-### P1
+### P1（2.4.11 必须解决）
 
+- Windows/macOS 阻塞级人工回归证据闭环。
+- Linux documented best-effort smoke 与限制说明。
+- Release Evidence 写入凭证/CI 证据闭环。
+- `legacy/compat/size` 清册中过期到 `2.4.11` 的条目关闭或显式降权。
 - Transport Wave A：MessagePort 高频通道迁移 + `sendSync` 清理。
-- Nexus 设备授权风控实施与验收闭环。
 - Pilot Wave B：存量 typecheck/lint 清理与渠道矩阵回归。
 - 架构 Wave C：`plugin-module/search-core/file-provider` SRP 拆分。
 
@@ -107,7 +112,7 @@
 
 - Core App 性能诊断增强：`Clipboard` 慢路径新增 phase 级别分解、告警分级与原因码，并接入 `Perf summary`/`polling diagnostics` 聚合视图。
 - Core App 性能链路降载：`file-index progress stream` 增加发送节流（latest-wins + 阶段优先），`Perf summary` 新增 `phaseAlertCode TopN` 聚合口径。
-- `2.4.9-beta.4` 基线快照固化与 CI 证据回填。
+- `2.4.10-beta.14` 当前基线与 Windows App 索引回归推进。
 - Pilot 合并升级 V2：`/` 统一入口、`/pilot` 兼容跳转、`Quota Auto` 自动路由与渠道评比。
 - CLI Phase1+2：`tuff-cli` 主入口、`tuff-cli-core` 核心迁移、`unplugin` shim 兼容。
 - Pilot Chat/Turn 新协议：`turns/stream/messages` 路由与会话级串行队列。
