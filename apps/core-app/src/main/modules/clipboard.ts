@@ -65,10 +65,12 @@ import { pluginModule } from './plugin/plugin-module'
 import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storage'
 import { activeAppService } from './system/active-app'
 import {
+  AUTO_PASTE_FAILED_MESSAGE,
   ClipboardActionRuntimeError,
   normalizeClipboardActionError,
   summarizeClipboardApplyPayload
 } from './clipboard/clipboard-action-diagnostics'
+import { notificationModule } from './notification'
 import {
   createClipboardFreshnessState,
   createIneligibleClipboardFreshnessState,
@@ -1572,7 +1574,8 @@ export class ClipboardModule extends BaseModule {
     error: unknown,
     logMessage: string,
     meta: Record<string, unknown> = {},
-    fallbackMessage = '自动粘贴失败'
+    fallbackMessage?: string,
+    options: { notify?: boolean } = {}
   ): ClipboardActionResult {
     const failure = normalizeClipboardActionError(error, fallbackMessage)
     clipboardLog.warn(logMessage, {
@@ -1584,11 +1587,30 @@ export class ClipboardModule extends BaseModule {
       }
     })
 
+    if (options.notify) {
+      this.notifyAutoPasteFailure(failure)
+    }
+
     return {
       success: false,
       message: failure.message,
       code: failure.code
     }
+  }
+
+  private notifyAutoPasteFailure(failure: {
+    code: ClipboardActionResult['code']
+    message: string
+  }): void {
+    const code = failure.code ?? 'AUTO_PASTE_FAILED'
+    notificationModule.showInternalSystemNotification({
+      id: `clipboard-auto-paste-failed:${code}`,
+      title: '自动粘贴失败',
+      message: failure.message,
+      level: 'error',
+      dedupeKey: `clipboard-auto-paste-failed:${code}`,
+      system: { silent: false }
+    })
   }
 
   private normalizeApplyPayload(payload: ClipboardApplyPayload): IClipboardItem {
@@ -1848,7 +1870,7 @@ export class ClipboardModule extends BaseModule {
 
       await sendPlatformShortcut('paste')
     } catch (error) {
-      const failure = normalizeClipboardActionError(error)
+      const failure = normalizeClipboardActionError(error, AUTO_PASTE_FAILED_MESSAGE)
       clipboardLog.error('Failed to simulate paste command', {
         error: failure.originalError,
         meta: {
@@ -2954,11 +2976,17 @@ export class ClipboardModule extends BaseModule {
       await this.applyToActiveApp(applyPayload)
       return { success: true }
     } catch (error) {
-      return this.toActionFailureResult(error, 'Clipboard apply failed', {
-        ...summarizeClipboardApplyPayload(applyPayload),
-        pluginName: context.plugin?.name ?? null,
-        autoPaste: request?.autoPaste !== false
-      })
+      return this.toActionFailureResult(
+        error,
+        'Clipboard apply failed',
+        {
+          ...summarizeClipboardApplyPayload(applyPayload),
+          pluginName: context.plugin?.name ?? null,
+          autoPaste: request?.autoPaste !== false
+        },
+        AUTO_PASTE_FAILED_MESSAGE,
+        { notify: true }
+      )
     }
   }
 
@@ -2971,10 +2999,16 @@ export class ClipboardModule extends BaseModule {
       await this.applyToActiveApp(applyPayload)
       return { success: true }
     } catch (error) {
-      return this.toActionFailureResult(error, 'Clipboard copy-and-paste failed', {
-        ...summarizeClipboardApplyPayload(applyPayload),
-        pluginName: context.plugin?.name ?? null
-      })
+      return this.toActionFailureResult(
+        error,
+        'Clipboard copy-and-paste failed',
+        {
+          ...summarizeClipboardApplyPayload(applyPayload),
+          pluginName: context.plugin?.name ?? null
+        },
+        AUTO_PASTE_FAILED_MESSAGE,
+        { notify: true }
+      )
     }
   }
 

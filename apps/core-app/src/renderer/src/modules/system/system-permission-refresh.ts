@@ -1,4 +1,9 @@
-export type SystemPermissionStatus = 'granted' | 'denied' | 'notDetermined' | 'unsupported'
+export type SystemPermissionStatus =
+  | 'granted'
+  | 'denied'
+  | 'notDetermined'
+  | 'unsupported'
+  | 'unverifiable'
 
 export interface SystemPermissionCheckResult {
   status: SystemPermissionStatus

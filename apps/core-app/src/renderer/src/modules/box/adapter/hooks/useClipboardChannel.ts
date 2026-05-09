@@ -1,4 +1,8 @@
-import type { ClipboardChangePayload, ClipboardItem } from '@talex-touch/utils/transport/events'
+import type {
+  ClipboardActionResult,
+  ClipboardChangePayload,
+  ClipboardItem
+} from '@talex-touch/utils/transport/events'
 import type { IClipboardItem } from './types'
 import { TuffInputType } from '@talex-touch/utils'
 import {
@@ -94,8 +98,8 @@ export async function applyClipboardToActiveApp(item: IClipboardItem): Promise<b
   }
 
   try {
-    await applyClipboardItem(item.id)
-    return true
+    const result = (await applyClipboardItem(item.id)) as ClipboardActionResult | undefined
+    return result?.success !== false
   } catch (error) {
     console.error('[useClipboardChannel] Failed to apply clipboard item:', error)
     return false

@@ -59,19 +59,19 @@ const permissions = ref<{
   adminPrivileges: PermissionState
 }>({
   accessibility: {
-    status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
+    status: 'notDetermined' as SystemPermissionStatus,
     checked: false,
     canRequest: false,
     message: ''
   },
   notifications: {
-    status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
+    status: 'notDetermined' as SystemPermissionStatus,
     checked: false,
     canRequest: false,
     message: ''
   },
   adminPrivileges: {
-    status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
+    status: 'notDetermined' as SystemPermissionStatus,
     checked: false,
     canRequest: false,
     message: ''
@@ -442,6 +442,8 @@ function getStatusText(status: string): string {
       return t('setupPermissions.statusDenied')
     case 'notDetermined':
       return t('setupPermissions.statusNotDetermined')
+    case 'unverifiable':
+      return t('setupPermissions.statusUnverifiable')
     case 'unsupported':
       return t('setupPermissions.statusUnsupported')
     default:
@@ -457,6 +459,8 @@ function getStatusIconClass(status: string): string {
       return 'i-carbon-close-outline'
     case 'notDetermined':
       return 'i-carbon-help'
+    case 'unverifiable':
+      return 'i-carbon-information'
     default:
       return 'i-carbon-information'
   }

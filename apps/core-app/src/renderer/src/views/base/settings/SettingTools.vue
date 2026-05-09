@@ -52,7 +52,12 @@ const LOW_BATTERY_POLLING_INTERVAL_OPTIONS = [10, 15] as const
 const OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_OPTIONS = [300, 450, 600, 800, 1000, 1200, 1500] as const
 const DEFAULT_OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_MS = 600
 
-type SystemPermissionStatus = 'granted' | 'denied' | 'notDetermined' | 'unsupported'
+type SystemPermissionStatus =
+  | 'granted'
+  | 'denied'
+  | 'notDetermined'
+  | 'unsupported'
+  | 'unverifiable'
 
 interface SystemPermissionCheckResult {
   status: SystemPermissionStatus

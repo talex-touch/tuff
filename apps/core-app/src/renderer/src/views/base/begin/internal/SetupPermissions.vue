@@ -15,6 +15,7 @@ import { appSetting } from '~/modules/storage/app-storage'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import {
   type SystemPermissionCheckResult,
+  type SystemPermissionStatus,
   waitForPermissionGrant
 } from '~/modules/system/system-permission-refresh'
 import Done from './Done.vue'
@@ -37,22 +38,22 @@ const systemPermissionRequest = defineRawEvent<string, boolean>('system:permissi
 // Permission states
 const permissions = ref({
   fileAccess: {
-    status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
+    status: 'notDetermined' as SystemPermissionStatus,
     checked: false,
     required: true // File access is required
   },
   accessibility: {
-    status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
+    status: 'notDetermined' as SystemPermissionStatus,
     checked: false,
     required: false // Optional
   },
   notifications: {
-    status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
+    status: 'notDetermined' as SystemPermissionStatus,
     checked: false,
     required: false // Optional
   },
   adminPrivileges: {
-    status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
+    status: 'notDetermined' as SystemPermissionStatus,
     checked: false,
     required: false // Optional
   }
@@ -333,6 +334,8 @@ function getStatusText(status: string): string {
       return t('setupPermissions.statusDenied')
     case 'notDetermined':
       return t('setupPermissions.statusNotDetermined')
+    case 'unverifiable':
+      return t('setupPermissions.statusUnverifiable')
     case 'unsupported':
       return t('setupPermissions.statusUnsupported')
     default:
@@ -348,6 +351,8 @@ function getStatusIconClass(status: string): string {
       return 'i-carbon-close-outline'
     case 'notDetermined':
       return 'i-carbon-help'
+    case 'unverifiable':
+      return 'i-carbon-information'
     case 'unsupported':
       return 'i-carbon-minimize'
     default:
