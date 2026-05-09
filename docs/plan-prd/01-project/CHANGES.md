@@ -3,6 +3,17 @@
 > 更新时间: 2026-05-08
 > 说明: 主文件仅保留近 30 天（2026-04-08 ~ 2026-05-08）详细记录；更早历史已按月归档。
 
+## 2026-05-09
+
+### fix(core-app): restore Windows app discovery for WeChat and Codex
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+  - Windows `Get-StartApps` desktop AppIDs that use known-folder GUID prefixes now resolve to real filesystem paths before app classification, so WeChat is indexed and launched as a desktop app instead of being misclassified as UWP.
+  - Start Menu shortcuts keep priority over duplicate desktop entries discovered through `Get-StartApps`; registry entries remain fallback-only when a target is already claimed.
+  - Codex/MSIX entries remain UWP apps with stable `uwp:*` identities, `.uwp` search-index extension metadata, and keyword coverage for `codex`.
+
 ## 2026-05-08
 
 ### fix(core-app): hard-cut renderer storage bootstrap warnings
