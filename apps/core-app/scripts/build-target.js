@@ -10,7 +10,8 @@ const {
   collectPackagedRuntimeModuleEntries,
   collectResourceModuleClosure,
   collectResourceResolvableRuntimeModuleEntries,
-  findPackagedResourcesDir: resolvePackagedResourcesDir
+  findPackagedResourcesDir: resolvePackagedResourcesDir,
+  verifyPackagedEsbuildBinaries
 } = require('./build-target/runtime-modules');
 
 const projectRoot = path.join(__dirname, '..');
@@ -1010,6 +1011,7 @@ function build() {
   }
 
   verifyPackagedRuntimeModules(distDir, PACKAGED_RUNTIME_MODULES);
+  verifyPackagedEsbuildBinaries(distDir, normalizedTarget, arch, { logPrefix: '[build-target]' });
 
   console.log('\n✓ Build completed successfully.');
   } finally {

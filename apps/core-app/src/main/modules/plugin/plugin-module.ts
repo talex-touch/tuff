@@ -160,14 +160,19 @@ async function precompilePluginWidgets(plugin: TouchPlugin): Promise<void> {
     try {
       const result = await widgetManager.registerWidget(plugin, feature)
       if (!result) {
-        plugin.issues.push({
-          type: 'warning',
-          message: `Widget compile skipped for feature "${feature.id}" (${feature.interaction?.path ?? 'unknown'})`,
-          source: `feature:${feature.id}`,
-          code: 'WIDGET_COMPILE_SKIPPED',
-          suggestion: 'Check widget interaction.path and widget source file.',
-          timestamp: Date.now()
-        })
+        const hasWidgetIssue = plugin.issues.some(
+          (issue) => issue.source === `feature:${feature.id}` && issue.code?.startsWith('WIDGET_')
+        )
+        if (!hasWidgetIssue) {
+          plugin.issues.push({
+            type: 'warning',
+            message: `Widget compile skipped for feature "${feature.id}" (${feature.interaction?.path ?? 'unknown'})`,
+            source: `feature:${feature.id}`,
+            code: 'WIDGET_COMPILE_SKIPPED',
+            suggestion: 'Check widget interaction.path and widget source file.',
+            timestamp: Date.now()
+          })
+        }
         plugin.logger.debug(
           `[Widget] Compile skipped for feature "${feature.id}" (${feature.interaction?.path})`
         )

@@ -15,7 +15,7 @@ import {
 } from 'vue'
 import { getCustomRenderer, getCustomRendererVersion } from '~/modules/box/custom-render'
 import { useWidgetHostKeyEvent } from '~/modules/plugin/widget-host-key-bridge'
-import { getWidgetRuntimeSnippet } from '~/modules/plugin/widget-registry'
+import { getWidgetFailure, getWidgetRuntimeSnippet } from '~/modules/plugin/widget-registry'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
 
@@ -82,15 +82,24 @@ const hostKeyEvent = useWidgetHostKeyEvent(widgetItemId)
 const useShadowHost = computed(() => props.renderMode === 'shadow')
 const canRenderShadow = computed(() => useShadowHost.value && Boolean(renderer.value))
 const renderModeLabel = computed(() => (useShadowHost.value ? 'shadow' : 'light'))
+const widgetFailure = computed(() => getWidgetFailure(props.rendererId))
 const emptyStateLabel = computed(() => {
+  if (widgetFailure.value) return 'Widget compile failed'
   if (!props.rendererId) return 'Widget renderer missing'
   if (rendererState.value === 'loading') return 'Widget renderer loading'
   return 'Widget renderer unavailable'
 })
 const emptyStateText = computed(() => {
+  if (widgetFailure.value) return 'Widget 编译失败'
   if (rendererState.value === 'loading') return 'Widget 加载中'
   if (!props.rendererId) return 'Widget renderer 缺失'
   return 'Widget renderer 未注册'
+})
+const emptyStateMessage = computed(() => {
+  if (widgetFailure.value) return widgetFailure.value.message
+  if (!props.rendererId) return '缺少 rendererId'
+  if (rendererState.value === 'loading') return ''
+  return props.rendererId
 })
 
 function clearMissingRendererTimer(): void {
@@ -394,10 +403,14 @@ onBeforeUnmount(() => {
     <div
       v-else
       class="WidgetFrame-Empty text-xs text-[var(--tx-text-color-secondary)]"
+      :class="{ 'is-failed': !!widgetFailure }"
       :data-state="rendererState"
       :aria-label="emptyStateLabel"
     >
-      {{ emptyStateText }}
+      <div class="WidgetFrame-EmptyTitle">{{ emptyStateText }}</div>
+      <div v-if="emptyStateMessage" class="WidgetFrame-EmptyMessage">
+        {{ emptyStateMessage }}
+      </div>
     </div>
   </div>
 </template>
@@ -416,9 +429,28 @@ onBeforeUnmount(() => {
   height: 100%;
   min-height: 120px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  padding: 16px;
   background: var(--tx-bg-color-page);
+}
+
+.WidgetFrame-Empty.is-failed {
+  background: var(--tx-color-danger-light-9);
+  color: var(--tx-color-danger);
+}
+
+.WidgetFrame-EmptyTitle {
+  font-weight: 600;
+}
+
+.WidgetFrame-EmptyMessage {
+  max-width: 100%;
+  color: var(--tx-text-color-secondary);
+  text-align: center;
+  word-break: break-word;
 }
 
 .WidgetFrame-ShadowHost {

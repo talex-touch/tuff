@@ -393,7 +393,10 @@ import type {
   PluginUnloadRequest,
 } from "./types/plugin";
 
-import type { WidgetRegistrationPayload } from "../../plugin/widget";
+import type {
+  WidgetFailurePayload,
+  WidgetRegistrationPayload,
+} from "../../plugin/widget";
 
 // ============================================================================
 // Sentry Events
@@ -1472,6 +1475,10 @@ export const PluginEvents = {
       .module("widget")
       .event("update")
       .define<WidgetRegistrationPayload, void>(),
+    failed: defineEvent("plugin")
+      .module("widget")
+      .event("failed")
+      .define<WidgetFailurePayload, void>(),
     unregister: defineEvent("plugin")
       .module("widget")
       .event("unregister")

@@ -15,6 +15,7 @@ Widgets 是插件在 CoreBox 或 DivisionBox 中渲染的轻量 UI 组件。
 | `.jsx` | JavaScript JSX | WidgetTsxProcessor |
 | `.ts` | 纯 TypeScript | WidgetScriptProcessor |
 | `.js` | 纯 JavaScript | WidgetScriptProcessor |
+| `.cjs` | 预编译 CommonJS | WidgetScriptProcessor |
 
 ## Widget 类型
 | 类型 | 使用场景 |
@@ -127,6 +128,17 @@ Widgets 运行在受控环境，仅允许以下包：
 - 使用 TuffTransport 进行类型安全的 IPC 通信
 - `ctx.widget.send` 与宿主交换尺寸、主题等信息
 - 可通过 `ctx.storage` 访问插件存储
+
+## 失败态与诊断
+
+Widget 注册失败时，CoreBox 会在原位置显示明确状态，不再只显示空白或调试文本。常见状态包括：
+
+- `Widget 加载中`：renderer 正在等待注册。
+- `Widget renderer 未注册`：宿主尚未收到可用 renderer。
+- `Widget 编译失败`：源码编译或运行时编译器不可用，消息中会展示失败原因。
+- `Widget 渲染失败`：组件已注册但渲染阶段抛错。
+
+主进程会将 widget 失败写入插件 issue，并附带 `pluginName`、`featureId`、`widgetId`、`filePath`、`hash`、`causeCode` 诊断字段。`WIDGET_COMPILER_BINARY_UNAVAILABLE` 表示运行时 esbuild 平台二进制缺失、位于 `app.asar` 内或不可执行；普通源码语法、依赖与编译错误仍使用 `WIDGET_COMPILE_FAILED` 或对应的依赖/路径 issue code。
 
 ## 最佳实践
 

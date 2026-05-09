@@ -57,6 +57,10 @@
   - AutoPaste 从历史 `createdAt/timestamp` 推断切换为主进程捕获事件资格：`native-watch` / `background-poll` / `visible-poll` 才可授予 `autoPasteEligible`。
   - `COREBOX_WINDOW_SHOWN` 补扫统一标记为 `corebox-show-baseline`，只更新历史/标签/搜索上下文，不再把旧剪贴板当作 5s 内新复制自动填入。
   - Transport 扩展 `captureSource / observedAt / freshnessBaseAt / autoPasteEligible` 可选字段，旧插件只读历史字段不受影响。
+- [x] Widget 编译链路生产稳定化：
+  - `.vue/.ts/.tsx/.js/.cjs` widget processor 统一走懒加载 `transformWidgetSource()`，生产包显式解析 `resources/node_modules/@esbuild/*` / `app.asar.unpacked` 中的真实 esbuild 二进制。
+  - Runtime module manifest 把 `esbuild` 标为 resources 依赖，并声明 macOS/Linux/Windows x64/arm64 的 `@esbuild/*` 平台包；打包后缺失或不可执行二进制直接 fail-fast。
+  - `WidgetManager` 保持已编译缓存优先，新增 `widgetId + hash` 短期失败缓存、结构化 issue meta 与 `plugin:widget:failed` 广播，CoreBox `WidgetFrame` 可见展示加载中、未注册、编译失败、渲染失败状态。
 - [x] Intelligence workflow / app-index 本地回归补强：
   - `workflow` shared SDK 与主进程 handler 已接通，`intelligence-module -> workflow service -> deepagent orchestration` 闭环可用；内置剪贴板整理模板改为 prompt step，避免不存在的 `deepagent.workflow` agent id 让默认模板即刻失败。
   - `tuff-intelligence-runtime` 的 tool trace / approval 现在会携带 `toolSource / approvalContext / contextSources`，方便 workflow 与 MCP 工具审批回放。

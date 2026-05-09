@@ -5,6 +5,18 @@
 
 ## 2026-05-08
 
+### fix(core-app): stabilize packaged widget compile pipeline
+
+- `apps/core-app/src/main/modules/plugin/widget/widget-transform.ts`
+- `apps/core-app/src/main/modules/plugin/widget/{widget-manager.ts,processors/*}`
+- `apps/core-app/scripts/build-target/{runtime-modules.js,build-target.js}`
+- `apps/core-app/src/renderer/src/{modules/plugin/widget-registry.ts,components/render/{CoreBoxRender,WidgetFrame}.vue}`
+- `packages/utils/{plugin/widget.ts,transport/events/index.ts}`
+  - Widget processor 统一改走懒加载 transform helper，生产包优先解析 `resources/node_modules/@esbuild/*` 与 `app.asar.unpacked` 中的真实二进制，`spawn ENOTDIR/ENOENT/EACCES` 归类为 `WIDGET_COMPILER_BINARY_UNAVAILABLE`。
+  - Runtime module manifest 将 `esbuild` 提升为 resources 运行时依赖，并显式声明 macOS/Linux/Windows x64/arm64 的 `@esbuild/*` 平台包；打包后校验缺失或不可执行二进制时 fail-fast。
+  - `WidgetManager` 保持已编译缓存优先，新增 `widgetId + hash` 短期失败缓存、结构化 issue meta 与 `plugin:widget:failed` payload，避免同一源码重复 transform 和刷屏日志。
+  - CoreBox custom renderer 未注册时仍进入 `WidgetFrame`，renderer 可见展示加载中、未注册、编译失败与渲染失败状态，不再只落到 debug `<pre>` 或空白。
+
 ### fix(core-app): hard-cut renderer storage bootstrap warnings
 
 - `apps/core-app/src/renderer/src/main.ts`
