@@ -20,7 +20,10 @@ function createMemoryStore(): SyncPayloadCryptoStore {
       }
       return true
     },
-    wrapValue: (value) => `wrapped:${Buffer.from(value, 'utf-8').toString('base64')}`
+    wrapValue: (value) => ({
+      backend: 'test-backend',
+      value: `wrapped:${Buffer.from(value, 'utf-8').toString('base64')}`
+    })
   }
 }
 
@@ -117,5 +120,18 @@ describe('SyncPayloadCrypto', () => {
     await expect(crypto.decrypt('{"secret":"plain"}')).rejects.toMatchObject({
       code: 'SYNC_PAYLOAD_UNSUPPORTED_FORMAT'
     })
+  })
+
+  it('registers payload keys with the wrapping backend marker', async () => {
+    const crypto = new SyncPayloadCrypto(createMemoryStore())
+
+    const registration = await crypto.getRegistration()
+
+    expect(registration).toMatchObject({
+      keyType: 'sync-payload.v1',
+      encryptedKey: expect.stringMatching(/^enc:v1:test-backend:wrapped:/)
+    })
+    await crypto.markRegistered(registration!.keyId)
+    await expect(crypto.getRegistration()).resolves.toBeNull()
   })
 })

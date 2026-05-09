@@ -128,6 +128,24 @@
   - CoreBox show-triggered clipboard scans are treated as `corebox-show-baseline`, so old clipboard content can update history/tags without being auto-filled.
   - Renderer AutoPaste no longer uses history `createdAt/timestamp` as copy freshness; it requires main-process eligibility and uses `freshnessBaseAt ?? observedAt` for TTL.
 
+### fix(core-app): add local encrypted fallback for secure store
+
+- `apps/core-app/src/main/utils/secure-store.ts`
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/main/modules/sync/sync-payload-crypto.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-mcp-registry.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `packages/utils/transport/events/app.ts`
+- `packages/utils/transport/events/types/app.ts`
+- `packages/utils/transport/sdk/domains/app.ts`
+  - Secure store now treats Electron `safeStorage` as the preferred backend and falls back to a per-runtime `config/local-secret.v1.key` local AES-256-GCM backend when the system credential store is unavailable.
+  - Auth token, sync payload key, and machine seed storage now pass explicit purposes (`auth-token`, `sync-payload-key`, `machine-seed`) and no longer enter reboot-losing session mode just because `safeStorage` is unavailable.
+  - Credential persistence now defaults to enabled; old default-disabled settings migrate to persistent protection unless the user has explicitly overridden the setting.
+  - Sync payload encryption continues to emit only `payload_enc` / `payload_ref`; legacy `b64:` payloads remain read-only migration input and encrypted key registration now records the actual wrapping backend.
+  - Settings/transport diagnostics expose secure-store health (`safe-storage`, `local-secret`, or `unavailable`) so local encrypted fallback is visible without pretending it is equivalent to the system credential store.
+
 ### fix(core-app): restore opt-in secure storage and plugin icons
 
 - `packages/utils/common/storage/entity/app-settings.ts`
@@ -142,7 +160,7 @@
 - `apps/core-app/src/renderer/src/modules/channel/channel-core.ts`
 - `packages/utils/__tests__/renderer-storage-transport.test.ts`
 - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.ts`
-  - Auth `useSecureStorage` now defaults to `false`; missing settings stay in session-only mode and no longer touch Electron `safeStorage` during cold startup or session-only token clear.
+  - Superseded by the 2026-05-09 secure-store backend split: credential persistence now defaults to enabled and `safeStorage` unavailability falls back to local encrypted storage instead of session-only mode.
   - Plugin `file` icons now resolve from plugin root first, then `src/...` and `public/<filename>` for source-layout plugins; dev-server URLs are only used after local candidates miss.
   - CoreApp icon rendering now preserves SVG color with direct `<img>` when `colorful=true`, and SVG text fetch failure no longer forces an error state when a direct local `tfile` render is available.
   - Electron sandbox renderer detection now recognizes preload-exposed `window.electron.ipcRenderer`, allowing local SVG reads through the network SDK in sandboxed renderer contexts.

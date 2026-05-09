@@ -671,7 +671,8 @@
   - permission JSON->SQLite、dev data root migration、theme localStorage migration 仍作为 read-once / marker-gated migration exception 保留；2026-05-08 已补明确退场条件与回归证据要求，禁止扩散为新的 runtime storage 依赖。
   - 2026-05-08 Intelligence Workflow 页面与 `useWorkflowEditor()` 硬编码文案已迁移到 `zh-CN/en-US` i18n；FileProvider 两处 `[DEBUG]` 日志前缀和 DEBUG 注释已清理，索引调度逻辑不变。
   - 2026-05-08 `compat-plugin-view`、raw IPC adapter 与 `window.touchChannel` 仅维持现有白名单边界；本轮未新增 legacy/raw channel 消费方。
-- [x] Auth secure storage 默认关闭：`useSecureStorage` 新配置与缺失字段均保持 session-only，冷启动和 session-only 清 token 不触发 Electron `safeStorage` / macOS Keychain。
+- [x] Auth secure store 分层降级：`useSecureStorage` 缺省启用凭证持久保护，旧默认关闭配置会迁移到开启（用户显式关闭除外）；Electron `safeStorage` 不可用时使用 `config/local-secret.v1.key` 本地 AES-GCM fallback，只有 `unavailable` 才进入 session-only。
+- [x] Sync secure payload key 降级兼容：`sync-payload-key` 通过 secure-store 分层持久化，注册包装记录真实 backend，旧 `b64:` 仍只作为 decrypt + rewrite 迁移输入。
 - [x] Plugin icon 基础兼容修复：插件 manifest `file` 图标优先从插件目录解析，补 `src/assets` / `public` source-layout 候选；CoreApp `TuffIcon colorful=true` 直接保留 SVG 原色渲染，避免本地 SVG 读取失败导致破图。
 - [x] Plugin channel sandbox 兼容修复：旧插件 channel/prelude 与 renderer channel reply 统一用 `ipcRenderer.send(...)`，避免 sandbox 事件对象缺少 `sender.send`。
 - [x] CoreApp node typecheck 当前阻塞解除：renderer storage transport 测试 typing 与 Windows file-provider index runtime service 未使用类字段已收口。

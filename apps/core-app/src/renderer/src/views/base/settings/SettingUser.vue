@@ -1,5 +1,8 @@
 <script setup lang="ts" name="SettingUser">
 import { TxButton } from '@talex-touch/tuffex'
+import type { SecureStoreHealthResponse } from '@talex-touch/utils/transport/events/types'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AppEvents } from '@talex-touch/utils/transport/events'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import UserProfileEditor from '~/components/base/UserProfileEditor.vue'
@@ -13,6 +16,7 @@ import { triggerManualSync } from '~/modules/sync'
 import { appSetting } from '~/modules/storage/app-storage'
 
 const { t } = useI18n()
+const transport = useTuffTransport()
 const {
   isLoggedIn,
   user,
@@ -26,6 +30,7 @@ const {
 
 const profileEditorVisible = ref(false)
 const syncSubmitting = ref(false)
+const secureStoreHealth = ref<SecureStoreHealthResponse | null>(null)
 
 function ensureSecuritySettings() {
   if (!appSetting.security) {
@@ -42,15 +47,24 @@ function ensureAuthSettings() {
       deviceId: '',
       deviceName: '',
       devicePlatform: '',
-      useSecureStorage: false,
+      useSecureStorage: true,
+      secureStorageUserOverridden: false,
       secureStorageReminderShown: false,
       secureStorageUnavailable: false
     }
     return
   }
 
+  if (typeof appSetting.auth.secureStorageUserOverridden !== 'boolean') {
+    appSetting.auth.secureStorageUserOverridden = false
+  }
   if (typeof appSetting.auth.useSecureStorage !== 'boolean') {
-    appSetting.auth.useSecureStorage = false
+    appSetting.auth.useSecureStorage = true
+  } else if (
+    appSetting.auth.useSecureStorage === false &&
+    appSetting.auth.secureStorageUserOverridden === false
+  ) {
+    appSetting.auth.useSecureStorage = true
   }
   if (typeof appSetting.auth.secureStorageReminderShown !== 'boolean') {
     appSetting.auth.secureStorageReminderShown = false
@@ -147,8 +161,10 @@ const secureStorageEnabled = computed({
     ensureAuthSettings()
     const enabled = Boolean(val)
     appSetting.auth.useSecureStorage = enabled
+    appSetting.auth.secureStorageUserOverridden = true
     if (enabled) {
-      toast.success('已启用系统安全存储（推荐）')
+      toast.success('已启用登录凭证持久保护')
+      void refreshSecureStoreHealth()
       return
     }
     toast.info('已切换为会话模式：登录凭证仅在本次运行有效')
@@ -156,16 +172,27 @@ const secureStorageEnabled = computed({
 })
 
 const secureStorageDescription = computed(() => {
-  if (appSetting.auth?.secureStorageUnavailable === true) {
-    return '系统安全存储当前不可用，登录凭证仅在本次运行内保持。'
+  if (!secureStorageEnabled.value) {
+    if (isLoggedIn.value) {
+      return '你已关闭凭证持久保护：当前为会话模式，重启后需要重新登录。'
+    }
+    return '你已关闭凭证持久保护：下次登录仅在本次会话有效。'
   }
-  if (secureStorageEnabled.value) {
-    return '已启用系统安全存储（推荐）：登录凭证将安全保存，重启后可保持登录状态。'
+
+  const health = secureStoreHealth.value
+  if (!health) {
+    return '正在检测本地凭证保护后端。'
   }
-  if (isLoggedIn.value) {
-    return '你已关闭系统安全存储：当前为会话模式，重启后需要重新登录。'
+  if (!health.available || appSetting.auth?.secureStorageUnavailable === true) {
+    return '本地安全上下文不可用，登录凭证仅在本次运行内保持。'
   }
-  return '你已关闭系统安全存储：下次登录仅在本次会话有效。'
+  if (health.backend === 'local-secret') {
+    return '本地加密保护已启用，安全性低于系统凭证库；重启后仍可保持登录状态。'
+  }
+  if (health.backend === 'safe-storage') {
+    return '系统安全存储已启用：登录凭证将保存到系统加密凭证库，重启后可保持登录状态。'
+  }
+  return '本地安全上下文不可用，登录凭证仅在本次运行内保持。'
 })
 
 const canTriggerManualSync = computed(
@@ -227,6 +254,23 @@ async function handleSyncNow() {
     syncSubmitting.value = false
   }
 }
+
+async function refreshSecureStoreHealth() {
+  try {
+    secureStoreHealth.value = await transport.send(AppEvents.system.getSecureStoreHealth)
+  } catch {
+    secureStoreHealth.value = {
+      backend: 'unavailable',
+      available: false,
+      degraded: true,
+      reason: 'Failed to query secure store health'
+    }
+  }
+}
+
+onMounted(() => {
+  void refreshSecureStoreHealth()
+})
 </script>
 
 <template>
@@ -287,7 +331,7 @@ async function handleSyncNow() {
 
     <TuffBlockSwitch
       v-model="secureStorageEnabled"
-      :title="t('settingUser.secureStorageTitle', '系统安全存储（登录凭证）')"
+      :title="t('settingUser.secureStorageTitle', '登录凭证保护')"
       :description="secureStorageDescription"
       default-icon="i-carbon-locked"
       active-icon="i-carbon-locked"

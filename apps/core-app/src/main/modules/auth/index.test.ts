@@ -4,7 +4,7 @@ const {
   getMainConfigMock,
   saveMainConfigMock,
   subscribeMainConfigMock,
-  isSecureStoreAvailableMock,
+  getSecureStoreHealthMock,
   getSecureStoreValueMock,
   setSecureStoreValueMock,
   networkRequestMock,
@@ -16,7 +16,7 @@ const {
   getMainConfigMock: vi.fn(),
   saveMainConfigMock: vi.fn(),
   subscribeMainConfigMock: vi.fn(() => vi.fn()),
-  isSecureStoreAvailableMock: vi.fn(),
+  getSecureStoreHealthMock: vi.fn(),
   getSecureStoreValueMock: vi.fn(),
   setSecureStoreValueMock: vi.fn(),
   networkRequestMock: vi.fn(),
@@ -95,7 +95,7 @@ vi.mock('../../core/runtime-accessor', () => ({
 }))
 
 vi.mock('../../utils/secure-store', () => ({
-  isSecureStoreAvailable: isSecureStoreAvailableMock,
+  getSecureStoreHealth: getSecureStoreHealthMock,
   getSecureStoreValue: getSecureStoreValueMock,
   setSecureStoreValue: setSecureStoreValueMock
 }))
@@ -124,6 +124,7 @@ type MockAppSetting = {
     deviceName: string
     devicePlatform: string
     useSecureStorage?: boolean
+    secureStorageUserOverridden?: boolean
     secureStorageReminderShown: boolean
     secureStorageUnavailable: boolean
   }
@@ -146,6 +147,7 @@ function createAppSetting(): MockAppSetting {
       deviceName: '',
       devicePlatform: '',
       useSecureStorage: true,
+      secureStorageUserOverridden: false,
       secureStorageReminderShown: false,
       secureStorageUnavailable: false
     },
@@ -175,7 +177,11 @@ describe('auth secure storage preference', () => {
       appSettingState = nextValue
     })
     subscribeMainConfigMock.mockReturnValue(vi.fn())
-    isSecureStoreAvailableMock.mockReturnValue(true)
+    getSecureStoreHealthMock.mockResolvedValue({
+      backend: 'safe-storage',
+      available: true,
+      degraded: false
+    })
     getSecureStoreValueMock.mockResolvedValue(null)
     setSecureStoreValueMock.mockResolvedValue(true)
   })
@@ -185,7 +191,7 @@ describe('auth secure storage preference', () => {
     authModule.__test__.resetState()
   })
 
-  it('defaults missing secure storage preference to session-only mode', async () => {
+  it('defaults missing secure storage preference to persistent protection mode', async () => {
     delete appSettingState.auth?.useSecureStorage
 
     const authModule = await import('./index')
@@ -194,10 +200,15 @@ describe('auth secure storage preference', () => {
 
     await authModule.__test__.loadAuthToken()
 
-    expect(isSecureStoreAvailableMock).not.toHaveBeenCalled()
-    expect(getSecureStoreValueMock).not.toHaveBeenCalled()
+    expect(getSecureStoreHealthMock).toHaveBeenCalledWith('/tmp/tuff')
+    expect(getSecureStoreValueMock).toHaveBeenCalledWith(
+      '/tmp/tuff',
+      'auth.token',
+      'auth-token',
+      expect.any(Function)
+    )
     expect(setSecureStoreValueMock).not.toHaveBeenCalled()
-    expect(appSettingState.auth?.useSecureStorage).toBe(false)
+    expect(appSettingState.auth?.useSecureStorage).toBe(true)
     expect(authModule.getAuthToken()).toBeNull()
   })
 
@@ -218,6 +229,7 @@ describe('auth secure storage preference', () => {
 
   it('does not touch secure storage during cold startup when session-only mode is enabled', async () => {
     appSettingState.auth!.useSecureStorage = false
+    appSettingState.auth!.secureStorageUserOverridden = true
 
     const authModule = await import('./index')
     authModule.__test__.resetState()
@@ -225,7 +237,7 @@ describe('auth secure storage preference', () => {
 
     await authModule.__test__.loadAuthToken()
 
-    expect(isSecureStoreAvailableMock).not.toHaveBeenCalled()
+    expect(getSecureStoreHealthMock).not.toHaveBeenCalled()
     expect(getSecureStoreValueMock).not.toHaveBeenCalled()
     expect(setSecureStoreValueMock).not.toHaveBeenCalled()
     expect(authModule.getAuthToken()).toBeNull()
@@ -240,10 +252,11 @@ describe('auth secure storage preference', () => {
 
     await authModule.__test__.loadAuthToken()
 
-    expect(isSecureStoreAvailableMock).toHaveBeenCalledTimes(2)
+    expect(getSecureStoreHealthMock).toHaveBeenCalledTimes(1)
     expect(getSecureStoreValueMock).toHaveBeenCalledWith(
       '/tmp/tuff',
       'auth.token',
+      'auth-token',
       expect.any(Function)
     )
     expect(authModule.getAuthToken()).toBe('persisted-token')
@@ -261,7 +274,8 @@ describe('auth secure storage preference', () => {
       ...appSettingState,
       auth: {
         ...appSettingState.auth!,
-        useSecureStorage: false
+        useSecureStorage: false,
+        secureStorageUserOverridden: true
       }
     } as any)
 
@@ -269,9 +283,25 @@ describe('auth secure storage preference', () => {
       '/tmp/tuff',
       'auth.token',
       null,
+      'auth-token',
       expect.any(Function)
     )
-    expect(isSecureStoreAvailableMock).toHaveBeenCalledTimes(1)
+    expect(getSecureStoreHealthMock).not.toHaveBeenCalled()
+  })
+
+  it('migrates old default-disabled secure storage to persistent protection', async () => {
+    appSettingState.auth!.useSecureStorage = false
+    appSettingState.auth!.secureStorageUserOverridden = false
+    getSecureStoreValueMock.mockResolvedValue('migrated-token')
+
+    const authModule = await import('./index')
+    authModule.__test__.resetState()
+    authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+    await authModule.__test__.loadAuthToken()
+
+    expect(appSettingState.auth?.useSecureStorage).toBe(true)
+    expect(authModule.getAuthToken()).toBe('migrated-token')
   })
 
   it('persists in-memory token when user explicitly re-enables secure storage', async () => {
@@ -291,11 +321,12 @@ describe('auth secure storage preference', () => {
       }
     } as any)
 
-    expect(isSecureStoreAvailableMock).toHaveBeenCalledTimes(2)
+    expect(getSecureStoreHealthMock).toHaveBeenCalledTimes(1)
     expect(setSecureStoreValueMock).toHaveBeenCalledWith(
       '/tmp/tuff',
       'auth.token',
       'memory-token',
+      'auth-token',
       expect.any(Function)
     )
   })
@@ -317,7 +348,26 @@ describe('auth secure storage preference', () => {
       }
     } as any)
 
-    expect(isSecureStoreAvailableMock).toHaveBeenCalledTimes(1)
+    expect(getSecureStoreHealthMock).toHaveBeenCalledTimes(1)
     expect(setSecureStoreValueMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps persistent auth token when system safeStorage falls back to local secret', async () => {
+    getSecureStoreHealthMock.mockResolvedValue({
+      backend: 'local-secret',
+      available: true,
+      degraded: true,
+      reason: 'System safeStorage is unavailable'
+    })
+    getSecureStoreValueMock.mockResolvedValue('fallback-token')
+
+    const authModule = await import('./index')
+    authModule.__test__.resetState()
+    authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+    await authModule.__test__.loadAuthToken()
+
+    expect(appSettingState.auth?.secureStorageUnavailable).toBe(false)
+    expect(authModule.getAuthToken()).toBe('fallback-token')
   })
 })
