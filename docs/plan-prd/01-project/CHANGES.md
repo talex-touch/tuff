@@ -15,6 +15,38 @@
   - macOS 通知权限检查不再把不可读取状态显示为“未检查”，改为 `unverifiable` 并在设置页提示需到系统设置确认。
   - CoreBox clipboard apply 渲染侧开始识别 `{ success:false }` 返回值，避免 transport 正常返回失败结果时仍被当成成功。
 
+### fix(nexus): alias next-auth core for nitro builds
+
+- `apps/nexus/nuxt.config.ts`
+  - 为 Nitro 与 Vite resolve 增加 `next-auth/core` 到本地包入口的 alias，避免 Cloudflare / node-server 构建解析到不兼容入口。
+
+### fix(core-app): constrain DivisionBox detach to active features
+
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts`
+- `apps/core-app/src/renderer/src/views/box/{ActivatedProviders.vue,DivisionBoxHeader.vue}`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN.json,en-US.json}`
+  - CoreBox `Command/Ctrl+D` 不再对普通搜索结果创建 detached item，只有进入插件 feature 或已附加插件 UI view 后才允许分离窗口。
+  - DivisionBox header 的 active provider pill 关闭入口改为不可见，避免在分离窗口内误退出当前插件上下文。
+  - DivisionBox 分离成功后若 provider 状态清理失败，仅记录 warning，不再把已创建窗口误报为“分离失败”。
+  - DivisionBox 顶栏控制按钮改为固定点击区并通过 `TuffIcon size` 显式控制图标尺寸。
+  - Widget feature 分离恢复 `detachedPayload` 状态传递，独立窗口继续走 CoreBox widget renderer；DivisionBox icon contract 放宽为 `string | ITuffIcon`，避免 file/url 插件图标在分离后丢失。
+
+### docs(nexus): define provider aggregation and scene orchestration plan
+
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 新增 Nexus Provider 聚合与 Scene 编排重构权威 PRD，统一 `Provider / Capability / Scene / Strategy / Metering` 模型。
+  - 明确 `exchangeRateService` 后续迁移为 `fx.rate.latest/fx.convert` capability，Nexus dashboard AI providers 迁移为通用 Provider registry 的 `ai.*` / `chat.*` 能力域。
+  - 将文本翻译、图片翻译、截图翻译纳入同一 Provider registry，不再为每个场景维护孤立供应商配置。
+  - 以腾讯云机器翻译作为示例 Provider：同一 Provider 暴露 `text.translate`、`image.translate`、`image.translate.e2e` 等 capability，计量规则进入 Metering 而非 Scene 私有逻辑。
+  - 补齐范围/非目标、业务目标/工程目标、迁移映射、兼容边界、建议数据表、错误码基线、风险待决项与验收清单。
+  - 同步 README、INDEX、TODO、路线图与质量基线入口；Phase 1 文档化任务已标记完成，后续实现仍需补最近路径 typecheck/test/docs guard 证据。
+
 ## 2026-05-08
 
 ### fix(core-app): stabilize packaged widget compile pipeline
@@ -28,6 +60,13 @@
   - Runtime module manifest 将 `esbuild` 提升为 resources 运行时依赖，并显式声明 macOS/Linux/Windows x64/arm64 的 `@esbuild/*` 平台包；打包后校验缺失或不可执行二进制时 fail-fast。
   - `WidgetManager` 保持已编译缓存优先，新增 `widgetId + hash` 短期失败缓存、结构化 issue meta 与 `plugin:widget:failed` payload，避免同一源码重复 transform 和刷屏日志。
   - CoreBox custom renderer 未注册时仍进入 `WidgetFrame`，renderer 可见展示加载中、未注册、编译失败与渲染失败状态，不再只落到 debug `<pre>` 或空白。
+
+### fix(core-app): restore plugin issue dialog scrolling
+
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginIssues.vue`
+  - 插件问题弹层改为使用 `FlipDialog` body 的内建滚动边界，避免内容超过弹层高度时被外层 `overflow: hidden` 截断。
+  - `PluginIssues` 移除内嵌 `TouchScroll` 百分比高度依赖，问题列表随弹层内容自然撑开并由父级滚动。
 
 ### fix(core-app): hard-cut renderer storage bootstrap warnings
 

@@ -1,6 +1,6 @@
 # Tuff 产品总览与 8 周路线图（2026-Q1）
 
-> 更新时间：2026-05-08
+> 更新时间：2026-05-09
 > 适用范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`
 
 ## 1. 产品总览（是什么）
@@ -39,6 +39,12 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 面向 Node Server 运行时提供长会话能力：SSE、checkpoint、pause/resume、`fromSeq` 补播。
 - Pilot 路由 V2（模型目录 + 路由组合 + 渠道负载均衡）进入可观测运行态：可记录 `queue/ttft/total/success` 并驱动 `Quota Auto` 自动选路。
 
+### G6. Nexus Provider 目标（可聚合）
+- Nexus 升级为统一 Provider 聚合中心，Provider 独立声明 `Capability`，Scene 按使用场景自由组合能力与路由策略。
+- 首版覆盖汇率、AI 大模型、文本翻译、图片/截图翻译；`exchangeRateService` 与 Nexus dashboard AI providers 后续迁移到通用 Provider registry。
+- 截图翻译、划词翻译、CoreBox 汇率换算、AI Chat 与图片翻译 pin window 统一通过 Scene 编排、Strategy fallback、Metering 与 Audit 记录执行。
+- Provider registry 只保存结构化元数据与 `authRef`，密钥留在系统安全存储；Usage Ledger / Audit Trace 不保存原始截图、图片、完整 prompt 或完整模型响应。
+
 ## 3. 质量约束（全项目强制）
 
 ### 3.1 代码质量门禁
@@ -74,9 +80,10 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 功能行为变化需同步 `README.md` / `plan-prd` / `docs/INDEX.md` 至少一处。
 - 活跃 PRD 必须包含“最终目标、验收标准、质量约束、回滚策略”。
 
-### 3.5 文档治理执行锚点（2026-05-08）
+### 3.5 文档治理执行锚点（2026-05-09）
 - 文档盘点历史快照保留在 `docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`；当前下一步路线以六主文档、`TODO` 与 `CHANGES` 为准。
 - 当前执行优先级调整为：先完成 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`，再在 `2.4.11` 关闭剩余 Windows/macOS 阻塞级回归、Release Evidence 与清册退场项；`Nexus 设备授权风控` 保留实施文档与历史入口，降为非当前主线。
+- Nexus Provider 聚合与 Scene 编排已进入架构蓝图；后续实现必须遵守 Provider/Scene 解耦、typed transport/domain SDK、Storage/Sync 与 Metering/Audit 边界。
 - 升级 strict 前置条件固定：连续 5 次 `docs:guard` 零告警 + 连续 2 周无口径漂移。
 
 ## 4. 8 周路线图（建议执行窗口：2026-02-23 ~ 2026-04-19）
@@ -193,6 +200,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 - **状态（2026-04-20）**：插件完善主线已收口；当前主线切换为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`。
 - **Nexus 风控状态**：`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` 保留为实施入口与历史证据；Phase 1 频控、冷却、审计日志、长期授权后端时间窗与可信设备显式白名单已完成，不再作为当前主线。
+- **Nexus Provider 聚合状态**：`docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` 已作为架构蓝图入口；Phase 1 文档化已固定 Provider / Capability / Scene / Strategy / Metering、迁移映射、错误码、数据表草案、质量约束与验收清单。后续不再为汇率、AI、翻译分别建立孤立供应商模型，而是统一进入 Provider registry 并由 Scene 编排消费。
 - **完成项**：
   - 权限中心 Phase 5：`PermissionStore` 切换 SQLite 主存储，支持 `JSON -> SQLite` 一次性迁移与失败只读回退；
   - 安装链路权限确认：安装阶段支持 `always/session/deny` 三分支并显式失败反馈；

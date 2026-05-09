@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档入口（压缩版）
-> 更新时间: 2026-05-08
+> 更新时间: 2026-05-09
 
 ## 快速入口
 
@@ -12,17 +12,19 @@
 - [文档盘点历史快照（2026-03-17）](./docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md)
 - [一次性完整修复总方案（统一实施 PRD）](./02-architecture/UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md)
 - [Nexus 设备授权风控实施方案](./04-implementation/NexusDeviceAuthRiskControl-260316.md)
+- [Nexus Provider 聚合与 Scene 编排重构 PRD](./02-architecture/nexus-provider-scene-aggregation-prd.md)
 - [v2.4.7 发版收口清单（historical）](./01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md)
 - [长期债务池](./docs/TODO-BACKLOG-LONG-TERM.md)
 
 ---
 
-## 单一口径快照（2026-05-08）
+## 单一口径快照（2026-05-09）
 
 - 当前工作区基线：`2.4.10-beta.14`。
 - 当前主线：`2.4.10` 优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口。
 - 下一版本门槛：`2.4.11` 必须关闭剩余未闭环项；清册内 legacy/compat/size 债务退场目标统一前移到 `2.4.11`。
 - Nexus 设备授权风控 Phase 1 已落地：设备码申请频控、连续 reject/cancel 冷却、request/approve/reject/cancel/revoke/trust/untrust 审计日志、长期授权后端时间窗与可信设备显式白名单已接入。
+- Nexus Provider 聚合与 Scene 编排进入架构蓝图：后续汇率、AI 大模型、文本翻译、图片/截图翻译统一进入 Provider registry，Scene 按 capability 自由组合与路由。
 - CoreApp 启动搜索卡顿治理已落地“平衡模式 + 双库隔离”：`database-aux.db` 分流非核心高频写、`DbWriteScheduler` QoS/熔断、索引热路径单写者化、启动期降载（120s）。
 - 发布开关已就位：`TUFF_DB_AUX_ENABLED`、`TUFF_DB_QOS_ENABLED`、`TUFF_STARTUP_DEGRADE_ENABLED`，支持灰度与快速回滚。
 - Legacy/兼容/结构治理已切换到“统一实施 PRD + 五工作包并行”口径（不再使用 Phase 1-3 决策叙事）。
@@ -89,6 +91,7 @@
 - AttachUIView 深化（Warm/Cold 分层、Score 模型、可视化调试）。
 - Multi Attach View 并行视图能力。
 - Widget Sandbox 扩展拦截与审计。
+- Nexus Provider 聚合与 Scene 编排（Provider registry、Capability、Scene、Strategy、Metering），首版覆盖汇率、AI 大模型、文本翻译、图片/截图翻译。
 
 ---
 

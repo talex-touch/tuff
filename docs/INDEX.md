@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-05-08
+> 更新时间：2026-05-09
 > 本页仅保留入口与高价值快照；历史细节以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主要入口
@@ -14,6 +14,7 @@
 - `docs/plan-prd/02-architecture/UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md` - Legacy/兼容/结构治理统一实施 PRD（单一蓝图）
 - `docs/plan-prd/02-architecture/pilot-single-stream-runtime.md` - Pilot / DeepAgent 单流运行时权威说明（含完整流程图、seq 合同、审计结论）
 - `docs/plan-prd/02-architecture/intelligence-power-generic-api-prd.md` - Intelligence 能力路由与 Provider 抽象入口
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` - Nexus Provider 聚合与 Scene 编排重构 PRD
 - `docs/plan-prd/01-project/CHANGES.md` - 全历史变更记录（唯一历史源）
 
 ## 文档盘点快照（2026-03-19）
@@ -23,7 +24,7 @@
 - `plan-prd` 子域：`03-features 32`、`docs 20`、`04-implementation 17`、`01-project 12`、`05-archive 11`、`02-architecture 8`、`06-ecosystem 4`。
 - 统计口径历史快照：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`；当前路线以六主文档与 `TODO/CHANGES` 为准。
 
-## 状态快照（2026-05-08，统一口径）
+## 状态快照（2026-05-09，统一口径）
 
 - **当前工作区基线**：`2.4.10-beta.14`（根包与 CoreApp 对齐）。
 - **2.4.10 当前主线**：优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口；不把全部跨平台回归压进 `2.4.10`。
@@ -43,6 +44,7 @@
 - **治理执行口径**：Legacy/兼容/结构治理切换为“统一实施 PRD + 五工作包并行验收”，不再按 Phase 1-3 分段决策。
 - **CoreApp 兼容硬切（2026-03-23）**：`window.$channel` 业务调用为 `0`、legacy storage 事件协议（`storage:get/save/reload/save-sync/saveall`）为 `0`；插件权限 `sdkapi` 缺失/低版本改为阻断执行（`SDKAPI_BLOCKED`）。
 - **Nexus 设备授权风控（2026-05-06）**：Phase 1 已接入设备码申请频控、连续失败/取消冷却、授权审计日志、长期授权后端时间窗与可信设备显式白名单。
+- **Nexus Provider 聚合与 Scene 编排（2026-05-09）**：新增权威 PRD，后续汇率、AI 大模型、文本翻译、图片/截图翻译统一进入 Provider registry；Scene 通过 Capability、Strategy 与 Metering 组合能力，不再为每个场景维护孤立供应商模型。
 - **CoreApp 启动搜索卡顿治理（2026-03-24）**：已落地双库隔离（aux DB）、写入 QoS（priority/drop/circuit）、索引热路径 worker 单写者与启动期降载；可通过 `TUFF_DB_AUX_ENABLED/TUFF_DB_QOS_ENABLED/TUFF_STARTUP_DEGRADE_ENABLED` 灰度与回滚。
 - **治理基线（主线代码域）**：`legacy 81/184`、raw `channel.send('x:y') 13/46`、超长文件（>=1200）`47`。
 - **发布快照证据**：见 `CHANGES` 中 `v2.4.9-beta.4` 基线条目（含 commit/tag/CI run 链接）。
@@ -85,12 +87,12 @@
 
 | 文档 | 当前状态 | 下一动作 |
 | --- | --- | --- |
-| `docs/plan-prd/TODO.md` | 已同步到 2026-05-08 | 推进 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`，并维护 `2.4.11` 必解清单 |
-| `docs/plan-prd/README.md` | 已同步到 2026-05-08 | 维护 `2.4.10` 当前主线与 `2.4.11` 未闭环能力口径 |
-| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步到 2026-05-08 | 按锁定顺序推进 Windows App 索引、基础兼容治理与后续跨平台回归 |
+| `docs/plan-prd/TODO.md` | 已同步到 2026-05-09 | 推进 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`，并维护 `2.4.11` 必解清单与 Nexus Provider 后续阶段 |
+| `docs/plan-prd/README.md` | 已同步到 2026-05-09 | 维护 `2.4.10` 当前主线、`2.4.11` 未闭环能力与 Nexus Provider 架构蓝图口径 |
+| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步到 2026-05-09 | 按锁定顺序推进 Windows App 索引、基础兼容治理、后续跨平台回归与 Provider 聚合规划 |
 | `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md` | Gate A/B/C/D/E 已完成（D/E historical，2026-03-16 已复核） | 保留证据链并切换到 `2.4.9` 后续主线 |
-| `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` | 已同步到 2026-05-08 | `2.4.11` 前关闭或降权 legacy/compat/size 债务，Windows/macOS 为 release-blocking |
-| `docs/plan-prd/01-project/CHANGES.md` | 已同步到 2026-05-08 | 持续记录 `2.4.10` 主线与 `2.4.11` 必解清单证据 |
+| `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` | 已同步到 2026-05-09 | `2.4.11` 前关闭或降权 legacy/compat/size 债务，Windows/macOS 为 release-blocking；活跃 PRD 保持目标/验收/质量/回滚结构 |
+| `docs/plan-prd/01-project/CHANGES.md` | 已同步到 2026-05-09 | 持续记录 `2.4.10` 主线、`2.4.11` 必解清单与 Nexus Provider PRD 证据 |
 | `docs/INDEX.md` | 本页（入口+快照）已压缩 | 仅维护导航与高价值快照 |
 
 ## 归档与降权
@@ -102,6 +104,7 @@
 
 - `docs/plan-prd/03-features/omni-panel/OMNIPANEL-FEATURE-HUB-PRD.md` - OmniPanel Feature Hub PRD
 - `docs/plan-prd/02-architecture/intelligence-power-generic-api-prd.md` - Intelligence 能力路由与 Provider 架构 PRD
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` - Nexus Provider 聚合与 Scene 编排重构 PRD
 - `docs/plan-prd/04-implementation/LegacyChannelCleanup-2408.md` - Legacy Channel Cleanup 2.4.8
 - `docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` - Nexus 设备授权风控实施方案（非当前主线，保留入口）
 - `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md` - `v2.4.9` Gate D 发布资产核对（严格签名）

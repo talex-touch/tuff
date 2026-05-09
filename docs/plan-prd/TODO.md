@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-05-08
+> 更新时间: 2026-05-09
 
 ---
 
@@ -708,7 +708,7 @@
 
 ### A. 文档治理（本轮）
 
-- [x] 六主文档日期统一到 `2026-05-08`。
+- [x] 六主文档日期统一到 `2026-05-09`。
 - [x] 六主文档“下一动作”统一为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`，剩余未闭环项进入 `2.4.11` 必解清单。
 - [x] `CHANGES` 完成“近 30 天主文件 + 历史月度归档”拆分。
 - [x] `README/INDEX` 入口压缩为高价值快照。
@@ -791,6 +791,15 @@
 - [x] Pilot 附件、管理配置、路由 V2、工具审计、Websearch、旧 UI 卡片流、多模态与模型组能力治理的历史完成事实已下沉到 `CHANGES` 与长期债务池，主清单不再展开逐项历史。
 - [ ] Pilot strict 错误码端到端回归、SSE 反向代理部署烟测、`video.generate` 真实运行时与严格模式线上观测继续由长期债务池承载。
 - 入口：`docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`
+
+### G. Nexus Provider 聚合与 Scene 编排（规划中）
+
+- 权威 PRD：`docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
+- 核心原则：Provider 与 Scene 解耦；汇率、AI 大模型、文本翻译、图片/截图翻译统一进入 Provider registry，不再按场景维护孤立供应商模型。
+- [x] Phase 1：类型模型与 registry 文档化，固定 Provider、Capability、Scene、Strategy、Metering 类型、迁移边界、错误码、数据表草案、质量约束与验收清单。
+- [ ] Phase 2：迁移汇率与 AI providers，将 `exchangeRateService` 映射为 `fx.rate.latest/fx.convert` capability，并把 Nexus dashboard AI providers 归入通用 Provider registry 的 `ai.*` / `chat.*` 能力域。
+- [ ] Phase 3：接入翻译/图片翻译 provider，首版覆盖 `text.translate`、`image.translate`、`image.translate.e2e`、`vision.ocr` 与本地 `overlay.render`。
+- [ ] Phase 4：Scene 配置、路由、审计、计费统一，覆盖截图翻译、划词翻译、CoreBox 汇率换算、AI Chat 与图片翻译 pin window。
 
 ### N. Core Main 修理进展（2026-03-23）
 
@@ -930,12 +939,12 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 267 |
-| 未完成 (`- [ ]`) | 37 |
-| 总计 | 304 |
-| 完成率 | 88% |
+| 已完成 (`- [x]`) | 270 |
+| 未完成 (`- [ ]`) | 40 |
+| 总计 | 310 |
+| 完成率 | 87% |
 
-> 统计时间: 2026-05-08（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-05-09（按本文件实时 checkbox 计数）。
 
 ---
 
