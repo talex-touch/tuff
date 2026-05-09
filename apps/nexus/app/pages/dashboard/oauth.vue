@@ -364,10 +364,12 @@ async function copySecret() {
           <p class="text-sm font-medium text-black/75 dark:text-white/75">
             {{ t('dashboard.sections.oauth.form.redirectUris', 'Redirect URIs') }}
           </p>
-          <textarea
+          <TuffInput
             v-model="formRedirectUris"
-            class="min-h-[120px] w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-primary dark:border-white/[0.15] dark:bg-white/[0.03] dark:text-white"
+            type="textarea"
+            :rows="5"
             :placeholder="t('dashboard.sections.oauth.form.redirectUrisPlaceholder', 'One URI per line, or comma separated')"
+            class="w-full"
           />
         </div>
 
@@ -507,9 +509,11 @@ async function copySecret() {
                 <p class="text-xs font-medium text-black/70 dark:text-white/70">
                   {{ t('dashboard.sections.oauth.form.redirectUris', 'Redirect URIs') }}
                 </p>
-                <textarea
+                <TuffInput
                   v-model="editingRedirectUris"
-                  class="min-h-[88px] w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-xs text-black outline-none transition focus:border-primary dark:border-white/[0.15] dark:bg-white/[0.03] dark:text-white"
+                  type="textarea"
+                  :rows="4"
+                  class="w-full"
                 />
               </div>
               <div class="mt-3 flex items-center gap-2">

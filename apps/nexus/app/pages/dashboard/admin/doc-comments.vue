@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
+import { TuffInput, TxButton, TxSkeleton, TxSpinner } from '@talex-touch/tuffex'
 
 definePageMeta({
   pageTransition: {
@@ -236,12 +236,12 @@ onMounted(() => {
       </div>
 
       <div class="mt-3 flex flex-wrap items-center gap-3">
-        <input
+        <TuffInput
           v-model="pathFilter"
           type="text"
           :placeholder="t('dashboard.sections.docComments.filterPlaceholder', 'Filter by doc path…')"
-          class="h-8 w-48 rounded-lg border border-black/10 bg-transparent px-3 text-xs text-black outline-none transition dark:border-white/10 dark:text-white focus:border-primary/50"
-        >
+          class="w-48"
+        />
         <TxButton size="small" type="info" :disabled="loading" @click="refreshComments">
           <TxSpinner v-if="loading" :size="14" />
           <span class="ml-2">

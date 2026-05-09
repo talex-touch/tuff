@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxCheckbox, TxSpinner } from '@talex-touch/tuffex'
 import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
 import type { DocAnalyticsResponse } from '~/types/docs-engagement'
 
@@ -1409,26 +1410,17 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </div>
 
         <div class="flex flex-wrap items-center gap-3 rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <input
+          <TuffInput
             v-model="docsPath"
             type="text"
             placeholder="Filter path (e.g. docs/dev/components/button)"
-            class="h-8 w-72 rounded-lg border border-black/10 bg-transparent px-3 text-xs text-black outline-none transition focus:border-primary/50 dark:border-white/10 dark:text-white"
-          >
-          <select
-            v-model="docsSource"
-            class="h-8 rounded-lg border border-black/10 bg-transparent px-3 text-xs text-black outline-none transition focus:border-primary/50 dark:border-white/10 dark:text-white"
-          >
-            <option value="all">
-              All sources
-            </option>
-            <option value="docs_page">
-              Docs page
-            </option>
-            <option value="doc_comments_admin">
-              Doc comments admin
-            </option>
-          </select>
+            class="w-72"
+          />
+          <TuffSelect v-model="docsSource" class="w-44">
+            <TuffSelectItem value="all" label="All sources" />
+            <TuffSelectItem value="docs_page" label="Docs page" />
+            <TuffSelectItem value="doc_comments_admin" label="Doc comments admin" />
+          </TuffSelect>
           <TxButton variant="bare" size="small" native-type="button" class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70" @click="fetchDocsAnalytics">
             Refresh
           </TxButton>
@@ -1461,10 +1453,12 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
                 No docs data in current range.
               </div>
               <div v-else class="space-y-2">
-                <button
+                <TxButton
                   v-for="item in docsSummaryRows"
                   :key="item.path"
-                  type="button"
+                  variant="bare"
+                  block
+                  native-type="button"
                   class="w-full flex items-center justify-between rounded-xl bg-black/[0.04] px-3 py-2 text-left text-sm transition hover:bg-black/[0.08] dark:bg-white/[0.05] dark:hover:bg-white/[0.09]"
                   @click="openDocAnalyticsPath(item.path)"
                 >
@@ -1480,7 +1474,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
                     <p>{{ formatNumber(item.views) }} views</p>
                     <p>{{ formatDuration(item.activeMs) }}</p>
                   </div>
-                </button>
+                </TxButton>
               </div>
             </div>
 
@@ -1652,10 +1646,12 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               </div>
               <div v-else class="space-y-2">
                 <template v-if="selectedGeoCountry">
-                  <button
+                  <TxButton
                     v-for="item in geoSubdivisions.slice(0, 12)"
                     :key="`${item.countryCode}:${item.regionCode || item.regionName || 'unknown'}`"
-                    type="button"
+                    variant="bare"
+                    block
+                    native-type="button"
                     class="w-full flex items-center justify-between rounded-xl bg-black/[0.04] px-3 py-2 text-left text-sm transition hover:bg-black/[0.08] dark:bg-white/[0.05] dark:hover:bg-white/[0.09]"
                   >
                     <span class="truncate text-black/75 dark:text-white/75">
@@ -1664,13 +1660,15 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
                     <span class="text-xs text-black/45 dark:text-white/50">
                       {{ formatNumber(item.count) }}
                     </span>
-                  </button>
+                  </TxButton>
                 </template>
                 <template v-else>
-                  <button
+                  <TxButton
                     v-for="item in geoCountries.slice(0, 12)"
                     :key="item.countryCode"
-                    type="button"
+                    variant="bare"
+                    block
+                    native-type="button"
                     class="w-full flex items-center justify-between rounded-xl bg-black/[0.04] px-3 py-2 text-left text-sm transition hover:bg-black/[0.08] dark:bg-white/[0.05] dark:hover:bg-white/[0.09]"
                     @click="drilldownCountry(item.countryCode)"
                   >
@@ -1680,7 +1678,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
                     <span class="text-xs text-black/45 dark:text-white/50">
                       {{ formatNumber(item.count) }}
                     </span>
-                  </button>
+                  </TxButton>
                 </template>
               </div>
             </div>
@@ -1785,29 +1783,25 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           </TxButton>
         </div>
         <div class="mb-4 flex flex-wrap items-center gap-3 rounded-2xl bg-black/[0.02] p-4 text-xs dark:bg-white/[0.03]">
-          <select v-model="exchangeView" class="h-8 rounded-lg border border-black/10 bg-transparent px-3 text-xs text-black outline-none transition focus:border-primary/50 dark:border-white/10 dark:text-white">
-            <option value="history">
-              Target history
-            </option>
-            <option value="snapshots">
-              Snapshots
-            </option>
-          </select>
-          <input
+          <TuffSelect v-model="exchangeView" class="w-40">
+            <TuffSelectItem value="history" label="Target history" />
+            <TuffSelectItem value="snapshots" label="Snapshots" />
+          </TuffSelect>
+          <TuffInput
             v-model="exchangeTarget"
             type="text"
             placeholder="Target (e.g. CNY)"
-            class="h-8 w-28 rounded-lg border border-black/10 bg-transparent px-3 text-xs uppercase text-black outline-none transition focus:border-primary/50 dark:border-white/10 dark:text-white"
-          >
-          <input
+            class="w-28 uppercase"
+          />
+          <TuffInput
             v-model.number="exchangeLimit"
             type="number"
             min="1"
             max="200"
-            class="h-8 w-20 rounded-lg border border-black/10 bg-transparent px-3 text-xs text-black outline-none transition focus:border-primary/50 dark:border-white/10 dark:text-white"
-          >
+            class="w-20"
+          />
           <label class="flex items-center gap-2 text-xs text-black/60 dark:text-white/60">
-            <input v-model="exchangeIncludePayload" type="checkbox" class="h-3 w-3 rounded border-black/20">
+            <TxCheckbox v-model="exchangeIncludePayload" />
             Include payload (admin)
           </label>
         </div>
