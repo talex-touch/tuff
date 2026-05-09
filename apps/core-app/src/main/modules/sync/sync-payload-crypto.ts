@@ -1,9 +1,10 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import {
-  encryptSecureStoreString,
   getSecureStoreValue,
   isSecureStoreAvailable,
-  setSecureStoreValue
+  setSecureStoreValue,
+  wrapSecureStoreValue,
+  type SecureStoreBackend
 } from '../../utils/secure-store'
 
 export const SYNC_PAYLOAD_CRYPTO_VERSION = 'enc:v1'
@@ -11,6 +12,7 @@ export const SYNC_PAYLOAD_KEY_TYPE = 'sync-payload.v1'
 
 const SYNC_PAYLOAD_KEY_SECURE_KEY = 'sync.payload-key.v1'
 const SYNC_PAYLOAD_REGISTERED_KEY_SECURE_KEY = 'sync.payload-key.v1.registered'
+const SYNC_PAYLOAD_KEY_PURPOSE = 'sync-payload-key'
 const LEGACY_SYNC_PAYLOAD_PREFIX = 'b64:'
 const AES_256_KEY_BYTES = 32
 const AES_GCM_NONCE_BYTES = 12
@@ -30,7 +32,12 @@ export interface SyncPayloadCryptoStore {
   isAvailable: () => boolean
   getValue: (key: string) => Promise<string | null>
   setValue: (key: string, value: string | null) => Promise<boolean>
-  wrapValue?: (value: string) => string | null
+  wrapValue?: (
+    value: string
+  ) =>
+    | { backend: Exclude<SecureStoreBackend, 'unavailable'> | string; value: string }
+    | null
+    | Promise<{ backend: Exclude<SecureStoreBackend, 'unavailable'> | string; value: string } | null>
 }
 
 export interface EncryptedSyncPayload {
@@ -239,15 +246,15 @@ export class SyncPayloadCrypto {
       return null
     }
 
-    const encryptedKey = this.store.wrapValue?.(raw)
-    if (!encryptedKey) {
+    const wrappedKey = await this.store.wrapValue?.(raw)
+    if (!wrappedKey) {
       return null
     }
 
     return {
       keyType: SYNC_PAYLOAD_KEY_TYPE,
       keyId,
-      encryptedKey: `${SYNC_PAYLOAD_CRYPTO_VERSION}:safe-storage:${encryptedKey}`
+      encryptedKey: `${SYNC_PAYLOAD_CRYPTO_VERSION}:${wrappedKey.backend}:${wrappedKey.value}`
     }
   }
 
@@ -259,7 +266,8 @@ export class SyncPayloadCrypto {
 let syncPayloadCryptoRootPath = ''
 
 const runtimeSyncPayloadCrypto = new SyncPayloadCrypto({
-  isAvailable: () => isSecureStoreAvailable(),
+  isAvailable: () =>
+    Boolean(syncPayloadCryptoRootPath) && isSecureStoreAvailable(syncPayloadCryptoRootPath),
   getValue: async (key) => {
     if (!syncPayloadCryptoRootPath) {
       throw new SyncPayloadCryptoError(
@@ -267,7 +275,7 @@ const runtimeSyncPayloadCrypto = new SyncPayloadCrypto({
         'Sync crypto root path is not ready'
       )
     }
-    return getSecureStoreValue(syncPayloadCryptoRootPath, key)
+    return getSecureStoreValue(syncPayloadCryptoRootPath, key, SYNC_PAYLOAD_KEY_PURPOSE)
   },
   setValue: async (key, value) => {
     if (!syncPayloadCryptoRootPath) {
@@ -276,9 +284,22 @@ const runtimeSyncPayloadCrypto = new SyncPayloadCrypto({
         'Sync crypto root path is not ready'
       )
     }
-    return setSecureStoreValue(syncPayloadCryptoRootPath, key, value)
+    return setSecureStoreValue(syncPayloadCryptoRootPath, key, value, SYNC_PAYLOAD_KEY_PURPOSE)
   },
-  wrapValue: (value) => encryptSecureStoreString(value)
+  wrapValue: async (value) => {
+    if (!syncPayloadCryptoRootPath) {
+      throw new SyncPayloadCryptoError(
+        'SYNC_CRYPTO_ROOT_UNAVAILABLE',
+        'Sync crypto root path is not ready'
+      )
+    }
+    return await wrapSecureStoreValue(
+      syncPayloadCryptoRootPath,
+      SYNC_PAYLOAD_KEY_SECURE_KEY,
+      value,
+      SYNC_PAYLOAD_KEY_PURPOSE
+    )
+  }
 })
 
 export function setSyncPayloadCryptoRootPath(rootPath: string): void {

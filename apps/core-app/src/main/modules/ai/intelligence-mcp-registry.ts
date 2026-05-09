@@ -260,7 +260,7 @@ export class IntelligenceMcpRegistry {
     if (!tokenKey || headers.Authorization) {
       return headers
     }
-    if (!isSecureStoreAvailable()) {
+    if (!isSecureStoreAvailable(resolveSecureStoreRootPath())) {
       return headers
     }
 

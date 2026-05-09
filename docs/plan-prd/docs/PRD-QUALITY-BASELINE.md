@@ -66,6 +66,9 @@
 ### 3.4 安全与数据约束
 - 遵守 Storage/Sync 规则：SQLite 本地 SoT，JSON 仅同步载荷。
 - 禁止敏感信息明文落地到 localStorage/JSON/日志。
+- CoreApp secure-store 必须优先使用系统安全存储；系统后端不可用时只允许使用本机随机 `local-secret` 派生密钥的本地密文 fallback，禁止因降级写入明文 token/key/seed。
+- `deviceId` 只能作为设备标识或可选 AAD，不得作为密钥材料；local secret 损坏或丢失且已有本地密文时必须进入 `unavailable`，不得静默生成新 secret 覆盖旧数据。
+- Sync 输出仍必须只包含 `payload_enc` / `payload_ref` 等密文引用，旧 `b64:` 仅保留只读迁移语义并触发重写，禁止重新引入明文业务 JSON 同步。
 
 ### 3.5 文档约束
 - PRD 状态变化（进行中/完成/归档）必须同步 `README.md` 与 `TODO.md`。

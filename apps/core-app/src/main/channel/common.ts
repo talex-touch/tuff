@@ -25,6 +25,7 @@ import type {
   FileIndexAddPathResult,
   PlatformCapabilityListRequest,
   ReadFileRequest,
+  SecureStoreHealthResponse,
   SecureValueGetRequest,
   SecureValueSetRequest,
   StartupRequest,
@@ -102,6 +103,7 @@ import {
   type StorageUsageReport
 } from '../utils/storage-usage'
 import {
+  getSecureStoreHealth,
   getSecureStoreValue,
   isSecureStoreAvailable,
   setSecureStoreValue
@@ -1406,6 +1408,9 @@ export class CommonChannelModule extends BaseModule {
           await this.setSecureValue(key, payload?.value ?? null)
         }
       ),
+      transport.on<void, SecureStoreHealthResponse>(AppEvents.system.getSecureStoreHealth, () =>
+        getSecureStoreHealth(this.getSecureStoreRootPath())
+      ),
       transport.on(AppEvents.system.openExternal, (payload) => {
         const url = typeof payload?.url === 'string' ? payload.url : ''
         if (url) {
@@ -1720,7 +1725,7 @@ export class CommonChannelModule extends BaseModule {
   }
 
   private async getSecureValue(rawKey: string): Promise<string | null> {
-    if (!isSecureStoreAvailable()) {
+    if (!isSecureStoreAvailable(this.getSecureStoreRootPath())) {
       return null
     }
 
@@ -1732,7 +1737,7 @@ export class CommonChannelModule extends BaseModule {
   }
 
   private async setSecureValue(rawKey: string, value: string | null): Promise<void> {
-    if (!isSecureStoreAvailable()) {
+    if (!isSecureStoreAvailable(this.getSecureStoreRootPath())) {
       throw new Error('Secure storage is unavailable')
     }
 

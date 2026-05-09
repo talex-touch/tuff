@@ -241,6 +241,15 @@ export type AutoStartGetResponse = boolean
 export type AutoStartUpdateRequest = boolean
 export type AutoStartUpdateResponse = boolean
 
+export type SecureStoreBackend = 'safe-storage' | 'local-secret' | 'unavailable'
+
+export interface SecureStoreHealthResponse {
+  backend: SecureStoreBackend
+  available: boolean
+  degraded: boolean
+  reason?: string
+}
+
 export interface TraySettings {
   showTray: boolean
   hideDock: boolean
