@@ -1,7 +1,19 @@
 # 变更日志
 
-> 更新时间: 2026-05-08
-> 说明: 主文件仅保留近 30 天（2026-04-08 ~ 2026-05-08）详细记录；更早历史已按月归档。
+> 更新时间: 2026-05-09
+> 说明: 主文件仅保留近 30 天（2026-04-09 ~ 2026-05-09）详细记录；更早历史已按月归档。
+
+## 2026-05-09
+
+### fix(core-app): clarify clipboard auto-paste and permission prompts
+
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/system/permission-checker.ts`
+- `apps/core-app/src/renderer/src/views/base/{settings/SettingSetup.vue,begin/internal/SetupPermissions.vue}`
+  - Clipboard 自动粘贴失败改由主进程统一发送 system notification，并使用稳定 `clipboard-auto-paste-failed:*` ID/dedupeKey 避免重复通知。
+  - macOS `System Events` 自动化权限失败文案从辅助功能中拆出，明确提示前往“系统设置 -> 隐私与安全性 -> 自动化”允许 Tuff 控制 System Events。
+  - macOS 通知权限检查不再把不可读取状态显示为“未检查”，改为 `unverifiable` 并在设置页提示需到系统设置确认。
+  - CoreBox clipboard apply 渲染侧开始识别 `{ success:false }` 返回值，避免 transport 正常返回失败结果时仍被当成成功。
 
 ## 2026-05-08
 

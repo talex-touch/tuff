@@ -92,15 +92,16 @@ describe('permission-checker', () => {
     expect(linux.status).toBe(PermissionStatus.UNSUPPORTED)
   })
 
-  it('keeps macOS notification permission undetermined when native notifications are supported', () => {
+  it('marks macOS notification permission as unverifiable when native notifications are supported', () => {
     notificationIsSupportedMock.mockReturnValue(true)
 
     const result = withPlatform('darwin', () =>
       PermissionChecker.getInstance().checkNotifications()
     )
 
-    expect(result.status).toBe(PermissionStatus.NOT_DETERMINED)
+    expect(result.status).toBe(PermissionStatus.UNVERIFIABLE)
     expect(result.canRequest).toBe(true)
+    expect(result.message).toContain('not readable')
     expect(notificationIsSupportedMock).toHaveBeenCalled()
   })
 

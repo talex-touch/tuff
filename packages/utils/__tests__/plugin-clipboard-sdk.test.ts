@@ -50,12 +50,14 @@ describe('Plugin Clipboard SDK', () => {
   it('preserves failed copy-and-paste message as a thrown SDK error', async () => {
     mocks.send.mockResolvedValueOnce({
       success: false,
-      message: '需要在“系统设置 -> 隐私与安全性 -> 自动化/辅助功能”允许 Tuff 控制 System Events。',
+      message:
+        '自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 自动化”中允许 Tuff 控制 System Events。',
       code: 'MACOS_AUTOMATION_PERMISSION_DENIED',
     })
 
     await expect(useClipboard().copyAndPaste({ text: 'secret text' })).rejects.toMatchObject({
-      message: '需要在“系统设置 -> 隐私与安全性 -> 自动化/辅助功能”允许 Tuff 控制 System Events。',
+      message:
+        '自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 自动化”中允许 Tuff 控制 System Events。',
       code: 'MACOS_AUTOMATION_PERMISSION_DENIED',
     })
 
