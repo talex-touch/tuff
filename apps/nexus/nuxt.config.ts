@@ -22,6 +22,7 @@ const tuffexSourceEntry = resolve(currentDir, '../../packages/tuffex/packages/co
 const tuffexStyleEntry = resolve(currentDir, '../../packages/tuffex/packages/components/style/index.scss')
 const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
 const hkdfCompatEntry = resolve(workspaceRoot, 'node_modules/@panva/hkdf/dist/node/cjs/index.js')
+const nextAuthCoreEntry = resolve(currentDir, 'node_modules/next-auth/core/index.js')
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
 const disableSentry = process.env.NUXT_DISABLE_SENTRY === 'true'
 const enableSentrySourceMaps = Boolean(sentryAuthToken)
@@ -234,6 +235,7 @@ export default defineNuxtConfig({
     sourceMap: !disableNitroSourceMap,
     alias: {
       '@panva/hkdf': hkdfCompatEntry,
+      'next-auth/core': nextAuthCoreEntry,
     },
     preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',
     ...(useCloudflareDev
@@ -267,6 +269,7 @@ export default defineNuxtConfig({
     resolve: {
       alias: [
         { find: /^@panva\/hkdf$/, replacement: hkdfCompatEntry },
+        { find: /^next-auth\/core$/, replacement: nextAuthCoreEntry },
         { find: /^@talex-touch\/tuff-business$/, replacement: tuffBusinessSourceEntry },
         { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexUtilsEntry },
         ...(useWorkspaceSource
