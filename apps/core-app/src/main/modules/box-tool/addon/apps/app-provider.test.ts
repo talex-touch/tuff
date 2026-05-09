@@ -1048,6 +1048,40 @@ describe('appProvider rebuild maintenance', () => {
     ])
   })
 
+  it('indexes Windows Store app keywords by UWP stable id', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const indexItemsMock = vi.fn(async () => undefined)
+    privateProvider.searchIndex = { indexItems: indexItemsMock }
+
+    await privateProvider._syncKeywordsForApp({
+      name: 'Codex',
+      displayName: 'Codex',
+      fileName: 'Codex',
+      bundleId: 'OpenAI.Codex_2p2nqsd0c76g0',
+      path: 'shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App',
+      launchKind: 'uwp',
+      launchTarget: 'OpenAI.Codex_2p2nqsd0c76g0!App',
+      stableId: 'uwp:openai.codex_2p2nqsd0c76g0!app',
+      icon: '',
+      lastModified: new Date(0)
+    })
+
+    expect(indexItemsMock).toHaveBeenCalledWith([
+      expect.objectContaining({
+        itemId: 'uwp:openai.codex_2p2nqsd0c76g0!app',
+        extension: '.uwp',
+        path: 'shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App',
+        tags: expect.arrayContaining([
+          'OpenAI.Codex_2p2nqsd0c76g0',
+          'uwp:openai.codex_2p2nqsd0c76g0!app',
+          'shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App'
+        ]),
+        keywords: expect.arrayContaining([expect.objectContaining({ value: 'codex' })])
+      })
+    ])
+  })
+
   it('does not keep removing retired app item ids during steady-state keyword sync', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
