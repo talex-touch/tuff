@@ -234,10 +234,7 @@ const divisionBoxProviders = computed<IProviderActivate[]>(() => {
     if (typeof iconValue === 'string') {
       icon = { type: 'class', value: iconValue }
     } else if (typeof iconValue === 'object' && 'value' in iconValue) {
-      icon = {
-        type: (iconValue as ITuffIcon).type ?? 'class',
-        value: (iconValue as ITuffIcon).value
-      }
+      icon = iconValue as ITuffIcon
     }
   }
 

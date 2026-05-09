@@ -89,6 +89,7 @@ async function handleDebug(): Promise<void> {
     <ActivatedProviders
       v-if="providers && providers.length > 0"
       :providers="providers"
+      :closable="false"
       @deactivate-provider="emit('deactivate-provider', $event)"
     />
 
@@ -107,25 +108,25 @@ async function handleDebug(): Promise<void> {
 
     <!-- Window Controls -->
     <div class="DivisionBox-Controls">
-      <TuffIcon
-        :icon="{ type: 'class', value: opacityIcon }"
-        alt="透明度"
-        class="control-btn"
-        @click="handleOpacity"
-      />
-      <TuffIcon
-        :icon="{ type: 'class', value: 'i-carbon-debug' }"
-        alt="调试"
-        class="control-btn"
-        @click="handleDebug"
-      />
-      <TuffIcon
-        :icon="{ type: 'class', value: pinned ? 'i-ri-pushpin-2-line' : 'i-ri-pushpin-2-fill' }"
-        alt="置顶"
+      <button type="button" class="control-btn" title="透明度" @click="handleOpacity">
+        <TuffIcon :icon="{ type: 'class', value: opacityIcon }" alt="透明度" :size="18" />
+      </button>
+      <button type="button" class="control-btn" title="调试" @click="handleDebug">
+        <TuffIcon :icon="{ type: 'class', value: 'i-carbon-debug' }" alt="调试" :size="18" />
+      </button>
+      <button
+        type="button"
         class="control-btn"
         :class="{ active: pinned }"
+        title="置顶"
         @click="handlePin"
-      />
+      >
+        <TuffIcon
+          :icon="{ type: 'class', value: pinned ? 'i-ri-pushpin-2-line' : 'i-ri-pushpin-2-fill' }"
+          alt="置顶"
+          :size="18"
+        />
+      </button>
     </div>
 
     <!-- Windows: Right window controls padding -->
@@ -146,7 +147,7 @@ async function handleDebug(): Promise<void> {
 }
 
 .DivisionBox-TrafficLight {
-  width: 62px; // macOS traffic lights ~= 70px, minus some padding
+  width: 92px; // Traffic lights plus a small visual gap; DivisionBox has no logo
   flex-shrink: 0;
   -webkit-app-region: no-drag;
 }
@@ -186,9 +187,12 @@ async function handleDebug(): Promise<void> {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0.35rem;
-    font-size: 1.1rem;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
     color: var(--tx-text-color-regular);
+    background: transparent;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.15s ease;

@@ -1,3 +1,5 @@
+import type { ITuffIcon } from './icon'
+
 /**
  * DivisionBox Type Definitions
  *
@@ -84,7 +86,7 @@ export interface HeaderAction {
 export interface HeaderConfig {
   show: boolean
   title?: string
-  icon?: string
+  icon?: string | ITuffIcon
   actions?: HeaderAction[]
 }
 
@@ -124,7 +126,7 @@ export interface DivisionBoxConfig {
   title: string
 
   /** Icon (supports iconify format) */
-  icon?: string
+  icon?: string | ITuffIcon
 
   /** Size preset */
   size?: DivisionBoxSize
@@ -153,7 +155,7 @@ export interface SessionMeta {
   title: string
 
   /** Icon */
-  icon?: string
+  icon?: string | ITuffIcon
 
   /** Size preset */
   size: DivisionBoxSize

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DivisionBoxSize } from '@talex-touch/utils'
+import type { DivisionBoxSize, ITuffIcon } from '@talex-touch/utils'
 import type { DivisionBoxStateChangedPayload } from '@talex-touch/utils/transport/events/types/division-box'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
@@ -22,8 +22,8 @@ interface Props {
   /** Display title */
   title: string
 
-  /** Icon (iconify format) */
-  icon?: string
+  /** Icon (iconify format, class, or TuffIcon object) */
+  icon?: string | ITuffIcon
 
   /** Size preset */
   size?: DivisionBoxSize
