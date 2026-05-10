@@ -51,6 +51,25 @@ export interface ProviderCheckResult {
   }
 }
 
+export interface TencentTextTranslateInput {
+  text: unknown
+  sourceLang?: unknown
+  targetLang: unknown
+  projectId?: unknown
+}
+
+export interface TencentTextTranslateResult {
+  translatedText: string
+  providerRequestId?: string
+  latencyMs: number
+  usage: {
+    unit: 'character'
+    quantity: number
+    billable: boolean
+    estimated: boolean
+  }
+}
+
 function sha256Hex(value: string) {
   return createHash('sha256').update(value, 'utf-8').digest('hex')
 }
@@ -106,6 +125,30 @@ function buildTencentAuthorization(input: {
   return `TC3-HMAC-SHA256 Credential=${input.secretId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
 }
 
+function buildTencentTextTranslateHeaders(input: {
+  credentials: { secretId: string, secretKey: string }
+  endpoint: string
+  region: string
+  payload: string
+  timestamp: number
+}) {
+  const host = resolveEndpointHost(input.endpoint)
+  return {
+    Authorization: buildTencentAuthorization({
+      secretId: input.credentials.secretId,
+      secretKey: input.credentials.secretKey,
+      host,
+      timestamp: input.timestamp,
+      payload: input.payload,
+    }),
+    'Content-Type': 'application/json; charset=utf-8',
+    'X-TC-Action': TENCENT_TMT_ACTION,
+    'X-TC-Timestamp': String(input.timestamp),
+    'X-TC-Version': TENCENT_TMT_VERSION,
+    'X-TC-Region': input.region,
+  }
+}
+
 function hasCapability(provider: ProviderRegistryRecord, capability: string) {
   return provider.capabilities.some(item => item.capability === capability)
 }
@@ -115,6 +158,132 @@ function mapTencentError(error: TencentCloudError | undefined) {
   return {
     code: error?.Code,
     message,
+  }
+}
+
+function parseTencentTextTranslateResponse(data: TencentTextTranslateResponse | string): TencentTextTranslateResponse {
+  return typeof data === 'string'
+    ? JSON.parse(data) as TencentTextTranslateResponse
+    : data
+}
+
+function normalizeTranslateText(value: unknown): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw createError({ statusCode: 400, statusMessage: 'input.text is required.' })
+  }
+  return value
+}
+
+function normalizeLanguageCode(value: unknown, field: string, fallback?: string): string {
+  if (value == null || value === '') {
+    if (fallback)
+      return fallback
+    throw createError({ statusCode: 400, statusMessage: `${field} is required.` })
+  }
+  if (typeof value !== 'string' || value.trim().length === 0 || value.trim().length > 32) {
+    throw createError({ statusCode: 400, statusMessage: `${field} is invalid.` })
+  }
+  return value.trim()
+}
+
+function normalizeProjectId(value: unknown): number {
+  if (value == null || value === '')
+    return 0
+  const numeric = Number(value)
+  if (!Number.isInteger(numeric) || numeric < 0) {
+    throw createError({ statusCode: 400, statusMessage: 'input.projectId is invalid.' })
+  }
+  return numeric
+}
+
+async function resolveSecretPairCredential(event: H3Event, provider: ProviderRegistryRecord) {
+  if (!provider.authRef) {
+    throw createError({ statusCode: 401, statusMessage: 'Provider authRef is missing.' })
+  }
+
+  try {
+    return assertSecretPairCredential(await getProviderCredential(event, provider.authRef))
+  }
+  catch {
+    throw createError({ statusCode: 401, statusMessage: 'Provider secret_pair credential is missing.' })
+  }
+}
+
+function createProviderRequestError(message: string, status?: number) {
+  return createError({
+    statusCode: 502,
+    statusMessage: message,
+    data: {
+      code: 'PROVIDER_REQUEST_FAILED',
+      message,
+      status,
+    },
+  })
+}
+
+export async function invokeTencentTextTranslate(
+  event: H3Event,
+  provider: ProviderRegistryRecord,
+  input: TencentTextTranslateInput,
+): Promise<TencentTextTranslateResult> {
+  if (provider.vendor !== 'tencent-cloud' || provider.authType !== 'secret_pair') {
+    throw createError({ statusCode: 400, statusMessage: 'Tencent Cloud Machine Translation adapter requires a tencent-cloud secret_pair provider.' })
+  }
+  if (!hasCapability(provider, DEFAULT_CHECK_CAPABILITY)) {
+    throw createError({ statusCode: 409, statusMessage: 'Provider capability is not supported.' })
+  }
+
+  const endpoint = trimEndpoint(provider.endpoint)
+  const credentials = await resolveSecretPairCredential(event, provider)
+  const region = provider.region || TENCENT_TMT_DEFAULT_REGION
+  const text = normalizeTranslateText(input.text)
+  const requestedSourceLang = normalizeLanguageCode(input.sourceLang, 'input.sourceLang', 'auto')
+  const targetLang = normalizeLanguageCode(input.targetLang, 'input.targetLang')
+  const sourceLang = requestedSourceLang === 'auto' ? 'auto' : requestedSourceLang
+  const payload = JSON.stringify({
+    SourceText: text,
+    Source: sourceLang,
+    Target: targetLang,
+    ProjectId: normalizeProjectId(input.projectId),
+  })
+  const startedAt = Date.now()
+  const response = await networkClient.request<TencentTextTranslateResponse | string>({
+    method: 'POST',
+    url: endpoint,
+    headers: buildTencentTextTranslateHeaders({
+      credentials,
+      endpoint,
+      region,
+      payload,
+      timestamp: Math.floor(Date.now() / 1000),
+    }),
+    body: payload,
+    timeoutMs: 15000,
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+  })
+  const latencyMs = Date.now() - startedAt
+  const data = parseTencentTextTranslateResponse(response.data)
+  const tencentResponse = data.Response
+
+  if (response.status < 200 || response.status >= 300 || tencentResponse?.Error) {
+    const mapped = mapTencentError(tencentResponse?.Error)
+    throw createProviderRequestError(mapped.message, response.status)
+  }
+
+  if (typeof tencentResponse?.TargetText !== 'string') {
+    throw createProviderRequestError('Tencent Cloud Machine Translation response is missing TargetText.', response.status)
+  }
+
+  return {
+    translatedText: tencentResponse.TargetText,
+    providerRequestId: tencentResponse.RequestId,
+    latencyMs,
+    usage: {
+      unit: 'character',
+      quantity: text.length,
+      billable: true,
+      estimated: true,
+    },
   }
 }
 
@@ -187,8 +356,9 @@ export async function checkTencentMachineTranslationProvider(
     }
   }
 
+  let credentials: ReturnType<typeof assertSecretPairCredential>
   try {
-    assertSecretPairCredential(credentialPayload)
+    credentials = assertSecretPairCredential(credentialPayload)
   }
   catch {
     return {
@@ -202,7 +372,6 @@ export async function checkTencentMachineTranslationProvider(
     }
   }
 
-  const credentials = credentialPayload
   const region = provider.region || TENCENT_TMT_DEFAULT_REGION
   const host = resolveEndpointHost(endpoint)
   const payload = JSON.stringify(DEFAULT_CHECK_PAYLOAD)
