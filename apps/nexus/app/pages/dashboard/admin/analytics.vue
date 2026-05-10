@@ -36,6 +36,8 @@ interface AnalyticsData {
     avgQueryLength: number
     avgSortingDuration: number
     avgResultCount: number
+    avgFirstResultMs: number
+    searchSlowCount: number
     avgExecuteLatency: number
     performance: {
       longTaskCount: number
@@ -67,6 +69,18 @@ interface AnalyticsData {
     searchProviderDistribution: Record<string, number>
     searchProviderResultDistribution: Record<string, number>
     searchResultCategoryDistribution: Record<string, number>
+    providerMetrics: Array<{
+      provider: string
+      calls: number
+      avgDuration: number
+      p95Duration: number
+      maxDuration: number
+      resultCount: number
+      errorCount: number
+      timeoutCount: number
+      slowCount: number
+      slowRate: number
+    }>
     featureUseSourceTypeDistribution: Record<string, number>
     featureUseItemKindDistribution: Record<string, number>
     featureUsePluginDistribution: Record<string, number>
@@ -300,6 +314,13 @@ const versionSegments = computed(() => {
     .join(', ')
 
   return { total, segments: mapped, gradient: gradient ? `conic-gradient(${gradient})` : '' }
+})
+const topProviderMetrics = computed(() => analytics.value?.summary.providerMetrics.slice(0, 12) ?? [])
+const searchSlowRate = computed(() => {
+  const searches = analytics.value?.summary.totalSearches ?? 0
+  if (!searches)
+    return 0
+  return Number((((analytics.value?.summary.searchSlowCount ?? 0) / searches) * 100).toFixed(1))
 })
 const geoMapPoints = computed<GeoMapPoint[]>(() => {
   if (!geoAnalytics.value) {
@@ -802,18 +823,19 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <div v-if="activeSection === 'search'" class="grid gap-4 lg:grid-cols-4">
         <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
           <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
-            Avg Query Length
+            First Result
           </h3>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-            {{ analytics.summary.avgQueryLength }}
+            {{ analytics.summary.avgFirstResultMs }}ms
           </p>
         </div>
         <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
           <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
-            Avg Sorting
+            Slow Searches
           </h3>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-            {{ analytics.summary.avgSortingDuration }}ms
+            {{ formatNumber(analytics.summary.searchSlowCount) }}
+            <span class="text-sm font-medium text-black/45 dark:text-white/45">{{ searchSlowRate }}%</span>
           </p>
         </div>
         <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
@@ -826,10 +848,10 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </div>
         <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
           <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
-            Avg Execute Latency
+            Avg Sorting
           </h3>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-            {{ analytics.summary.avgExecuteLatency }}ms
+            {{ analytics.summary.avgSortingDuration }}ms
           </p>
         </div>
       </div>
@@ -1102,6 +1124,96 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         <p class="text-sm text-black/50 dark:text-white/50">
           Disabled by privacy policy. Only length, type, and timing metrics are recorded.
         </p>
+      </div>
+
+      <div v-if="activeSection === 'search'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+        <div class="mb-4 flex items-center justify-between">
+          <div>
+            <h3 class="font-semibold text-black dark:text-white">
+              Provider Performance
+            </h3>
+            <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+              Anonymous timings grouped by provider. P95 is computed from recent search events.
+            </p>
+          </div>
+          <span class="text-xs text-black/40 dark:text-white/40">
+            {{ selectedDays }}d
+          </span>
+        </div>
+        <div v-if="topProviderMetrics.length === 0" class="py-4 text-sm text-black/40 dark:text-white/40">
+          No provider telemetry yet
+        </div>
+        <div v-else class="overflow-x-auto">
+          <table class="w-full min-w-[760px] text-left text-sm">
+            <thead class="text-xs uppercase text-black/40 dark:text-white/40">
+              <tr>
+                <th class="py-2 pr-4 font-medium">
+Provider
+</th>
+                <th class="py-2 pr-4 text-right font-medium">
+Calls
+</th>
+                <th class="py-2 pr-4 text-right font-medium">
+Avg
+</th>
+                <th class="py-2 pr-4 text-right font-medium">
+P95
+</th>
+                <th class="py-2 pr-4 text-right font-medium">
+Max
+</th>
+                <th class="py-2 pr-4 text-right font-medium">
+Results
+</th>
+                <th class="py-2 pr-4 text-right font-medium">
+Errors
+</th>
+                <th class="py-2 pr-4 text-right font-medium">
+Timeouts
+</th>
+                <th class="py-2 text-right font-medium">
+Slow
+</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="provider in topProviderMetrics"
+                :key="provider.provider"
+                class="border-t border-black/[0.06] text-black/70 dark:border-white/[0.08] dark:text-white/70"
+              >
+                <td class="max-w-[220px] truncate py-3 pr-4 font-medium text-black dark:text-white">
+                  {{ provider.provider }}
+                </td>
+                <td class="py-3 pr-4 text-right">
+{{ formatNumber(provider.calls) }}
+</td>
+                <td class="py-3 pr-4 text-right">
+{{ provider.avgDuration }}ms
+</td>
+                <td class="py-3 pr-4 text-right" :class="provider.p95Duration > 300 ? 'text-amber-600 dark:text-amber-300' : ''">
+                  {{ provider.p95Duration }}ms
+                </td>
+                <td class="py-3 pr-4 text-right">
+{{ provider.maxDuration }}ms
+</td>
+                <td class="py-3 pr-4 text-right">
+{{ formatNumber(provider.resultCount) }}
+</td>
+                <td class="py-3 pr-4 text-right" :class="provider.errorCount > 0 ? 'text-red-600 dark:text-red-300' : ''">
+                  {{ formatNumber(provider.errorCount) }}
+                </td>
+                <td class="py-3 pr-4 text-right" :class="provider.timeoutCount > 0 ? 'text-red-600 dark:text-red-300' : ''">
+                  {{ formatNumber(provider.timeoutCount) }}
+                </td>
+                <td class="py-3 text-right">
+                  {{ formatNumber(provider.slowCount) }}
+                  <span class="text-xs text-black/35 dark:text-white/35">{{ provider.slowRate }}%</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- Secondary Insights -->

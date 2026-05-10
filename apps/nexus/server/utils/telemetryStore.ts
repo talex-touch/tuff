@@ -29,6 +29,9 @@ const MAX_PROVIDER_TIMINGS = 50
 const MAX_SEARCH_DURATION_MS = 5 * 60 * 1000
 const MAX_PROVIDER_DURATION_MS = 5 * 60 * 1000
 const MAX_SEARCH_RESULT_COUNT = 100_000
+const SEARCH_FIRST_RESULT_SLOW_THRESHOLD_MS = 300
+const SEARCH_TOTAL_SLOW_THRESHOLD_MS = 800
+const PROVIDER_STATUS_VALUES = new Set(['success', 'timeout', 'error', 'aborted'])
 
 const REDACTED_METADATA_KEYS = new Set([
   'query',
@@ -100,6 +103,39 @@ function sanitizeProviderTimings(
   if (!sanitizedEntries.length)
     return undefined
   return Object.fromEntries(sanitizedEntries)
+}
+
+function sanitizeProviderNumberMap(
+  value: unknown,
+  options: { max?: number, limit?: number } = {},
+): Record<string, number> | undefined {
+  if (!isPlainObject(value))
+    return undefined
+  const limit = options.limit ?? MAX_PROVIDER_TIMINGS
+  const max = options.max ?? MAX_SEARCH_RESULT_COUNT
+  const sanitizedEntries: Array<[string, number]> = []
+  for (const [key, raw] of Object.entries(value).slice(0, limit)) {
+    const normalizedKey = normalizeString(key, MAX_METADATA_KEY_LENGTH)
+    const numberValue = normalizeNumber(raw, { min: 0, max })
+    if (!normalizedKey || typeof numberValue !== 'number')
+      continue
+    sanitizedEntries.push([normalizedKey, Math.round(numberValue)])
+  }
+  return sanitizedEntries.length ? Object.fromEntries(sanitizedEntries) : undefined
+}
+
+function sanitizeProviderStatusMap(value: unknown): Record<string, string> | undefined {
+  if (!isPlainObject(value))
+    return undefined
+  const sanitizedEntries: Array<[string, string]> = []
+  for (const [key, raw] of Object.entries(value).slice(0, MAX_PROVIDER_TIMINGS)) {
+    const normalizedKey = normalizeString(key, MAX_METADATA_KEY_LENGTH)
+    const status = normalizeString(raw, 16)
+    if (!normalizedKey || !status || !PROVIDER_STATUS_VALUES.has(status))
+      continue
+    sanitizedEntries.push([normalizedKey, status])
+  }
+  return sanitizedEntries.length ? Object.fromEntries(sanitizedEntries) : undefined
 }
 
 function sanitizeMetadataValue(value: unknown, depth = 0): unknown {
@@ -496,6 +532,79 @@ function sanitizeFeatureUseMetadata(value: Record<string, unknown> | undefined):
   return Object.keys(metadata).length ? metadata : undefined
 }
 
+function sanitizeSearchMetadata(value: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!value)
+    return undefined
+
+  const metadata: Record<string, unknown> = {}
+
+  const stringFields: Array<[key: string, maxLength?: number]> = [
+    ['sessionId', 64],
+    ['queryType', 32],
+    ['searchScene', 48],
+    ['providerFilter', 64],
+  ]
+
+  for (const [field, maxLength] of stringFields) {
+    const normalized = normalizeString(value[field], maxLength)
+    if (normalized)
+      metadata[field] = normalized
+  }
+
+  const booleanFields = ['hasFilters']
+  for (const field of booleanFields) {
+    if (typeof value[field] === 'boolean')
+      metadata[field] = value[field]
+  }
+
+  const durationFields = [
+    'firstResultMs',
+    'totalDurationMs',
+    'sortingDuration',
+    'usageStatsDuration',
+    'completionDuration',
+    'parseDuration',
+    'providerAggregationDuration',
+    'mergeRankDuration',
+  ]
+  for (const field of durationFields) {
+    const normalized = normalizeNumber(value[field], { min: 0, max: MAX_SEARCH_DURATION_MS })
+    if (typeof normalized === 'number')
+      metadata[field] = Math.round(normalized)
+  }
+
+  const countFields = [
+    'firstResultCount',
+    'queryLength',
+    'providerErrorCount',
+    'providerTimeoutCount',
+  ]
+  for (const field of countFields) {
+    const normalized = normalizeNumber(value[field], { min: 0, max: MAX_SEARCH_RESULT_COUNT })
+    if (typeof normalized === 'number')
+      metadata[field] = Math.round(normalized)
+  }
+
+  const filterKinds = sanitizeStringArray(value.filterKinds, 20)
+  if (filterKinds)
+    metadata.filterKinds = filterKinds
+  const filterSources = sanitizeStringArray(value.filterSources, 20)
+  if (filterSources)
+    metadata.filterSources = filterSources
+
+  const providerResults = sanitizeProviderNumberMap(value.providerResults)
+  if (providerResults)
+    metadata.providerResults = providerResults
+  const resultCategories = sanitizeProviderNumberMap(value.resultCategories)
+  if (resultCategories)
+    metadata.resultCategories = resultCategories
+  const providerStatus = sanitizeProviderStatusMap(value.providerStatus)
+  if (providerStatus)
+    metadata.providerStatus = providerStatus
+
+  return Object.keys(metadata).length ? metadata : undefined
+}
+
 function normalizeTelemetryInput(input: TelemetryEventInput): NormalizedTelemetryResult {
   if (!input || typeof input !== 'object')
     return { telemetry: null, reason: 'invalid_payload' }
@@ -507,7 +616,9 @@ function normalizeTelemetryInput(input: TelemetryEventInput): NormalizedTelemetr
   const metadata = sanitizeMetadata(input.metadata)
   const normalizedMetadata = input.eventType === 'feature_use'
     ? sanitizeFeatureUseMetadata(metadata)
-    : metadata
+    : input.eventType === 'search'
+      ? sanitizeSearchMetadata(metadata)
+      : metadata
 
   return {
     telemetry: {
@@ -747,6 +858,42 @@ export async function recordTelemetryEvent(
           }
         }
       }
+      if (meta.providerStatus && typeof meta.providerStatus === 'object') {
+        for (const [key, value] of Object.entries(meta.providerStatus as Record<string, unknown>)) {
+          const status = normalizeString(value, 16)
+          if (status && PROVIDER_STATUS_VALUES.has(status)) {
+            await incrementDailyStat(db, today, 'search_provider_status', `${key}:${status}`, 1)
+            if (status === 'error') {
+              await incrementDailyStat(db, today, 'search_provider_error', key, 1)
+            }
+            if (status === 'timeout') {
+              await incrementDailyStat(db, today, 'search_provider_timeout', key, 1)
+            }
+          }
+        }
+      }
+      const firstResultMs = normalizeNumber(meta.firstResultMs, { min: 0, max: MAX_SEARCH_DURATION_MS })
+      if (typeof firstResultMs === 'number') {
+        await incrementDailyStat(db, today, 'search_first_result_total', '', firstResultMs)
+        await incrementDailyStat(db, today, 'search_first_result_count', '', 1)
+        await updateDailyStatMax(db, today, 'search_first_result_max', '', firstResultMs)
+        await updateDailyStatMin(db, today, 'search_first_result_min', '', firstResultMs)
+      }
+      const slowByFirstResult =
+        typeof firstResultMs === 'number' && firstResultMs > SEARCH_FIRST_RESULT_SLOW_THRESHOLD_MS
+      const slowByTotal =
+        typeof sanitized.searchDurationMs === 'number' &&
+        sanitized.searchDurationMs > SEARCH_TOTAL_SLOW_THRESHOLD_MS
+      if (slowByFirstResult || slowByTotal) {
+        await incrementDailyStat(db, today, 'search_slow_count', '', 1)
+        if (sanitized.providerTimings) {
+          for (const [providerId, duration] of Object.entries(sanitized.providerTimings)) {
+            if (duration > SEARCH_FIRST_RESULT_SLOW_THRESHOLD_MS) {
+              await incrementDailyStat(db, today, 'search_provider_slow', providerId, 1)
+            }
+          }
+        }
+      }
     }
   }
 
@@ -909,6 +1056,57 @@ async function updateDailyStatMin(
   `).bind(date, statType, statKey, value).run()
 }
 
+function percentile(values: number[], ratio: number): number {
+  if (!values.length)
+    return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * ratio) - 1))
+  return Math.round(sorted[index] || 0)
+}
+
+async function getSearchProviderP95Durations(
+  db: D1Database,
+  startTime: string,
+): Promise<Record<string, number>> {
+  const { results } = await db.prepare(`
+    SELECT provider_timings
+    FROM ${TELEMETRY_TABLE}
+    WHERE event_type = 'search'
+      AND created_at >= ?1
+      AND provider_timings IS NOT NULL
+    ORDER BY created_at DESC
+    LIMIT 5000;
+  `).bind(startTime).all<{ provider_timings?: string | null }>()
+
+  const buckets = new Map<string, number[]>()
+  for (const row of results ?? []) {
+    if (!row.provider_timings)
+      continue
+    try {
+      const parsed = JSON.parse(row.provider_timings) as Record<string, unknown>
+      if (!isPlainObject(parsed))
+        continue
+      for (const [provider, rawDuration] of Object.entries(parsed)) {
+        const duration = normalizeNumber(rawDuration, { min: 0, max: MAX_PROVIDER_DURATION_MS })
+        if (typeof duration !== 'number')
+          continue
+        const list = buckets.get(provider) ?? []
+        list.push(duration)
+        buckets.set(provider, list)
+      }
+    }
+    catch {
+      // Ignore malformed historical rows.
+    }
+  }
+
+  const result: Record<string, number> = {}
+  for (const [provider, durations] of buckets.entries()) {
+    result[provider] = percentile(durations, 0.95)
+  }
+  return result
+}
+
 /**
  * Get analytics summary for admin dashboard
  */
@@ -954,6 +1152,20 @@ export async function getAnalyticsSummary(
   searchProviderDistribution: Record<string, number>
   searchProviderResultDistribution: Record<string, number>
   searchResultCategoryDistribution: Record<string, number>
+  searchSlowCount: number
+  avgFirstResultMs: number
+  providerMetrics: Array<{
+    provider: string
+    calls: number
+    avgDuration: number
+    p95Duration: number
+    maxDuration: number
+    resultCount: number
+    errorCount: number
+    timeoutCount: number
+    slowCount: number
+    slowRate: number
+  }>
   featureUseSourceTypeDistribution: Record<string, number>
   featureUseItemKindDistribution: Record<string, number>
   featureUsePluginDistribution: Record<string, number>
@@ -1004,6 +1216,12 @@ export async function getAnalyticsSummary(
   const searchProviderDist: Record<string, number> = {}
   const searchProviderResultDist: Record<string, number> = {}
   const searchResultCategoryDist: Record<string, number> = {}
+  const searchProviderTimeTotals: Record<string, number> = {}
+  const searchProviderTimeCounts: Record<string, number> = {}
+  const searchProviderTimeMax: Record<string, number> = {}
+  const searchProviderErrorCounts: Record<string, number> = {}
+  const searchProviderTimeoutCounts: Record<string, number> = {}
+  const searchProviderSlowCounts: Record<string, number> = {}
   const featureUseSourceTypeDist: Record<string, number> = {}
   const featureUseItemKindDist: Record<string, number> = {}
   const featureUsePluginDist: Record<string, number> = {}
@@ -1029,6 +1247,9 @@ export async function getAnalyticsSummary(
   let sortingTotal = 0
   let resultTotal = 0
   let resultCount = 0
+  let firstResultTotal = 0
+  let firstResultCount = 0
+  let searchSlowCount = 0
   let executeLatencyTotal = 0
   let executeLatencyCount = 0
   let perfLongTaskTotalMs = 0
@@ -1101,11 +1322,46 @@ export async function getAnalyticsSummary(
       case 'search_provider':
         searchProviderDist[row.stat_key] = (searchProviderDist[row.stat_key] || 0) + row.value
         break
+      case 'search_provider_time_total':
+        searchProviderTimeTotals[row.stat_key] =
+          (searchProviderTimeTotals[row.stat_key] || 0) + row.value
+        break
+      case 'search_provider_time_count':
+        searchProviderTimeCounts[row.stat_key] =
+          (searchProviderTimeCounts[row.stat_key] || 0) + row.value
+        break
+      case 'search_provider_time_max':
+        searchProviderTimeMax[row.stat_key] = Math.max(
+          searchProviderTimeMax[row.stat_key] || 0,
+          row.value,
+        )
+        break
+      case 'search_provider_error':
+        searchProviderErrorCounts[row.stat_key] =
+          (searchProviderErrorCounts[row.stat_key] || 0) + row.value
+        break
+      case 'search_provider_timeout':
+        searchProviderTimeoutCounts[row.stat_key] =
+          (searchProviderTimeoutCounts[row.stat_key] || 0) + row.value
+        break
+      case 'search_provider_slow':
+        searchProviderSlowCounts[row.stat_key] =
+          (searchProviderSlowCounts[row.stat_key] || 0) + row.value
+        break
       case 'search_provider_result':
         searchProviderResultDist[row.stat_key] = (searchProviderResultDist[row.stat_key] || 0) + row.value
         break
       case 'search_result_category':
         searchResultCategoryDist[row.stat_key] = (searchResultCategoryDist[row.stat_key] || 0) + row.value
+        break
+      case 'search_first_result_total':
+        firstResultTotal += row.value
+        break
+      case 'search_first_result_count':
+        firstResultCount += row.value
+        break
+      case 'search_slow_count':
+        searchSlowCount += row.value
         break
       case 'feature_use_source_type':
         featureUseSourceTypeDist[row.stat_key] = (featureUseSourceTypeDist[row.stat_key] || 0) + row.value
@@ -1257,6 +1513,38 @@ export async function getAnalyticsSummary(
     versionDistribution[row.version] = Number(row.users) || 0
   }
 
+  const providerIds = new Set([
+    ...Object.keys(searchProviderDist),
+    ...Object.keys(searchProviderTimeTotals),
+    ...Object.keys(searchProviderTimeCounts),
+    ...Object.keys(searchProviderResultDist),
+    ...Object.keys(searchProviderErrorCounts),
+    ...Object.keys(searchProviderTimeoutCounts),
+    ...Object.keys(searchProviderSlowCounts),
+  ])
+  const providerP95 = await getSearchProviderP95Durations(db, startTime)
+  const providerMetrics = Array.from(providerIds)
+    .map((provider) => {
+      const calls = searchProviderDist[provider] || searchProviderTimeCounts[provider] || 0
+      const timeCount = searchProviderTimeCounts[provider] || calls
+      const totalTime = searchProviderTimeTotals[provider] || 0
+      const avgDuration = timeCount > 0 ? Math.round(totalTime / timeCount) : 0
+      const slowCount = searchProviderSlowCounts[provider] || 0
+      return {
+        provider,
+        calls,
+        avgDuration,
+        p95Duration: providerP95[provider] || 0,
+        maxDuration: Math.round(searchProviderTimeMax[provider] || 0),
+        resultCount: searchProviderResultDist[provider] || 0,
+        errorCount: searchProviderErrorCounts[provider] || 0,
+        timeoutCount: searchProviderTimeoutCounts[provider] || 0,
+        slowCount,
+        slowRate: calls > 0 ? Number(((slowCount / calls) * 100).toFixed(1)) : 0,
+      }
+    })
+    .sort((a, b) => b.slowRate - a.slowRate || b.p95Duration - a.p95Duration || b.calls - a.calls)
+
   return {
     totalEvents,
     totalUsers,
@@ -1265,6 +1553,8 @@ export async function getAnalyticsSummary(
     avgQueryLength: queryLengthCount > 0 ? Math.round(queryLengthTotal / queryLengthCount) : 0,
     avgSortingDuration: totalSearches > 0 ? Math.round(sortingTotal / totalSearches) : 0,
     avgResultCount: resultCount > 0 ? Math.round(resultTotal / resultCount) : 0,
+    avgFirstResultMs: firstResultCount > 0 ? Math.round(firstResultTotal / firstResultCount) : 0,
+    searchSlowCount,
     avgExecuteLatency: executeLatencyCount > 0 ? Math.round(executeLatencyTotal / executeLatencyCount) : 0,
     performance: {
       longTaskCount: perfLongTaskCount,
@@ -1291,6 +1581,7 @@ export async function getAnalyticsSummary(
     searchProviderDistribution: searchProviderDist,
     searchProviderResultDistribution: searchProviderResultDist,
     searchResultCategoryDistribution: searchResultCategoryDist,
+    providerMetrics,
     featureUseSourceTypeDistribution: featureUseSourceTypeDist,
     featureUseItemKindDistribution: featureUseItemKindDist,
     featureUsePluginDistribution: featureUsePluginDist,
