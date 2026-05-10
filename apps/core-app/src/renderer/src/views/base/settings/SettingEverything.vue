@@ -18,6 +18,11 @@ import {
   shouldShowEverythingInstallGuide,
   shouldShowEverythingToggle
 } from './setting-everything-state'
+import {
+  buildEverythingDiagnosticEvidenceFilename,
+  buildEverythingDiagnosticEvidencePayload,
+  formatEverythingDiagnosticEvidenceJson
+} from './everything-diagnostic-evidence'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -129,6 +134,49 @@ function openEverythingDownload() {
 
 function openCLIDownload() {
   window.open('https://www.voidtools.com/support/everything/command_line_interface/', '_blank')
+}
+
+function buildCurrentEverythingEvidence() {
+  if (!everythingStatus.value) return null
+
+  return buildEverythingDiagnosticEvidencePayload({
+    status: everythingStatus.value
+  })
+}
+
+async function copyEverythingEvidence() {
+  const payload = buildCurrentEverythingEvidence()
+  if (!payload) {
+    toast.error(t('settings.settingEverything.evidenceMissing'))
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(formatEverythingDiagnosticEvidenceJson(payload))
+    toast.success(t('settings.settingEverything.evidenceCopied'))
+  } catch (error) {
+    settingEverythingLog.error('Failed to copy Everything diagnostic evidence', error)
+    toast.error(t('settings.settingEverything.evidenceCopyFailed'))
+  }
+}
+
+function saveEverythingEvidence() {
+  const payload = buildCurrentEverythingEvidence()
+  if (!payload) {
+    toast.error(t('settings.settingEverything.evidenceMissing'))
+    return
+  }
+
+  const blob = new Blob([formatEverythingDiagnosticEvidenceJson(payload)], {
+    type: 'application/json;charset=utf-8'
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = buildEverythingDiagnosticEvidenceFilename(payload)
+  link.click()
+  URL.revokeObjectURL(url)
+  toast.success(t('settings.settingEverything.evidenceSaved'))
 }
 
 const statusText = computed(() => {
@@ -356,6 +404,23 @@ onUnmounted(() => {
             : t('settings.settingEverything.checkNow')
         }}
       </TxButton>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="everythingStatus"
+      :title="t('settings.settingEverything.evidenceTitle')"
+      :description="t('settings.settingEverything.evidenceDesc')"
+      default-icon="i-carbon-document-export"
+      active-icon="i-carbon-document-export"
+    >
+      <div class="install-buttons">
+        <TxButton variant="flat" @click="copyEverythingEvidence">
+          {{ t('settings.settingEverything.copyEvidence') }}
+        </TxButton>
+        <TxButton variant="flat" @click="saveEverythingEvidence">
+          {{ t('settings.settingEverything.saveEvidence') }}
+        </TxButton>
+      </div>
     </TuffBlockSlot>
   </TuffGroupBlock>
 </template>

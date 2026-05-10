@@ -26,7 +26,6 @@ import type { FileTypeTag } from './constants'
 import type { FileIndexSettings, ScannedFileInfo } from './types'
 import type { IndexWorkerFile, IndexWorkerFileResult } from './workers/file-index-worker-client'
 import type { ReconcileDbFile, ReconcileDiskFile } from './workers/file-reconcile-worker-client'
-import type { WorkerStatusSnapshot } from './workers/worker-status'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -92,6 +91,10 @@ import {
   shouldEmitProgressStreamImmediately
 } from './services/file-provider-progress-stream-service'
 import {
+  FileProviderWorkerStatusService,
+  type FileProviderWorkerStatusSnapshot
+} from './services/file-provider-worker-status-service'
+import {
   getWatchDepthForPath as resolveWatchDepthForPath,
   normalizeWatchPath
 } from './services/file-provider-path-service'
@@ -116,6 +119,7 @@ const SEMANTIC_TRIGGER_MAX_CANDIDATES = 20
 const SEMANTIC_SEARCH_TIMEOUT_MS = 120
 const BASE64_MARKER = 'base64,'
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
+
 function isValidBase64DataUrl(value: string): boolean {
   const markerIndex = value.indexOf(BASE64_MARKER)
   if (markerIndex === -1) {
@@ -292,6 +296,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly iconWorker = new IconWorkerClient()
   private readonly searchIndexWorker = new SearchIndexWorkerClient()
   private searchIndexWorkerReady: Promise<boolean> | null = null
+  private readonly workerStatusService = new FileProviderWorkerStatusService()
   private readonly pendingIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
   private readonly inflightIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
 
@@ -3174,35 +3179,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return { summary, entries }
   }
 
-  public async getWorkerStatusSnapshot(): Promise<{
-    summary: { total: number; busy: number; idle: number; offline: number }
-    workers: WorkerStatusSnapshot[]
-  }> {
-    const workers = await Promise.all([
-      this.fileScanWorker.getStatus(),
-      this.fileIndexWorker.getStatus(),
-      this.reconcileWorker.getStatus(),
-      this.iconWorker.getStatus(),
-      this.thumbnailWorker.getStatus(),
-      this.searchIndexWorker.getStatus()
-    ])
-
-    const summary = workers.reduce(
-      (acc, worker) => {
-        acc.total += 1
-        if (worker.state === 'busy') {
-          acc.busy += 1
-        } else if (worker.state === 'idle') {
-          acc.idle += 1
-        } else {
-          acc.offline += 1
-        }
-        return acc
-      },
-      { total: 0, busy: 0, idle: 0, offline: 0 }
+  public async getWorkerStatusSnapshot(): Promise<FileProviderWorkerStatusSnapshot> {
+    return this.workerStatusService.getSnapshot(() =>
+      Promise.all([
+        this.fileScanWorker.getStatus(),
+        this.fileIndexWorker.getStatus(),
+        this.reconcileWorker.getStatus(),
+        this.iconWorker.getStatus(),
+        this.thumbnailWorker.getStatus(),
+        this.searchIndexWorker.getStatus()
+      ])
     )
-
-    return { summary, workers }
   }
 
   async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {

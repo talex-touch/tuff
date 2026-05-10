@@ -56,6 +56,8 @@ const requireFromCurrentModule = createRequire(import.meta.url)
 const fileProviderLog = getLogger('file-provider')
 const EVERYTHING_ICON_CACHE_LIMIT = 256
 const EVERYTHING_ICON_WARMUP_LIMIT = 12
+const EVERYTHING_ICON_EXTRACTION_LIMIT = 4
+const EVERYTHING_ICON_IDLE_WAIT_TIMEOUT_MS = 250
 
 class EverythingSearchAbortedError extends Error {
   readonly code = 'ABORT_ERR'
@@ -306,8 +308,15 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private async extractResultIcon(filePath: string): Promise<string | null> {
-    await appTaskGate.waitForIdle()
+  private async extractResultIcon(filePath: string, signal?: AbortSignal): Promise<string | null> {
+    if (signal?.aborted) {
+      return null
+    }
+
+    const idle = await appTaskGate.waitForIdle(EVERYTHING_ICON_IDLE_WAIT_TIMEOUT_MS)
+    if (!idle || signal?.aborted) {
+      return null
+    }
 
     const icon = await this.iconWorker.extract(filePath)
     if (!icon || icon.length === 0) {
@@ -317,7 +326,32 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     return `data:image/png;base64,${Buffer.from(icon).toString('base64')}`
   }
 
-  private async ensureResultIcon(filePath: string): Promise<string | null> {
+  private canScheduleResultIconWarmup(filePath: string, signal?: AbortSignal): boolean {
+    if (signal?.aborted || this.getCachedIcon(filePath)) {
+      return false
+    }
+
+    if (this.iconExtractions.has(filePath)) {
+      return true
+    }
+
+    if (appTaskGate.isActive()) {
+      return false
+    }
+
+    return this.iconExtractions.size < EVERYTHING_ICON_EXTRACTION_LIMIT
+  }
+
+  private scheduleResultIconWarmup(filePath: string, signal?: AbortSignal): boolean {
+    if (!this.canScheduleResultIconWarmup(filePath, signal)) {
+      return false
+    }
+
+    void this.ensureResultIcon(filePath, signal)
+    return true
+  }
+
+  private async ensureResultIcon(filePath: string, signal?: AbortSignal): Promise<string | null> {
     const cached = this.getCachedIcon(filePath)
     if (cached) {
       return cached
@@ -328,7 +362,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       return pending
     }
 
-    const task = this.extractResultIcon(filePath)
+    const task = this.extractResultIcon(filePath, signal)
       .then((iconValue) => {
         if (iconValue) {
           this.setCachedIcon(filePath, iconValue)
@@ -1084,8 +1118,9 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           cachedIcon || result.isDir || scheduledIconWarmups >= EVERYTHING_ICON_WARMUP_LIMIT
             ? undefined
             : (file) => {
-                scheduledIconWarmups += 1
-                void this.ensureResultIcon(file.path)
+                if (this.scheduleResultIconWarmup(file.path, signal)) {
+                  scheduledIconWarmups += 1
+                }
               }
         )
         tuffItem.meta = {
@@ -1122,8 +1157,9 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         if (cachedIcon && normalized.missingPaths.length > 0) {
           this.iconCache.delete(result.path)
           if (!result.isDir && scheduledIconWarmups < EVERYTHING_ICON_WARMUP_LIMIT) {
-            scheduledIconWarmups += 1
-            void this.ensureResultIcon(result.path)
+            if (this.scheduleResultIconWarmup(result.path, signal)) {
+              scheduledIconWarmups += 1
+            }
           }
         }
 
