@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearSceneCapabilityAdaptersForTest,
   registerSceneCapabilityAdapter,
+  resetSceneCapabilityAdaptersForTest,
   runSceneOrchestrator,
 } from './sceneOrchestrator'
 
@@ -133,6 +134,8 @@ describe('runSceneOrchestrator', () => {
   })
 
   it('真实执行但缺少 provider adapter 时返回标准 adapter unavailable 错误', async () => {
+    storeMocks.getProviderRegistryEntry.mockResolvedValue(provider({ vendor: 'custom' }))
+
     await expect(runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
       input: { text: 'hello' },
     })).rejects.toMatchObject({
@@ -193,6 +196,44 @@ describe('runSceneOrchestrator', () => {
         metadata: expect.objectContaining({ providerRequestId: 'req_tencent_1', latencyMs: 42 }),
       }),
     ]))
+  })
+
+  it('默认腾讯云 text.translate adapter 可执行并返回标准 output/usage', async () => {
+    resetSceneCapabilityAdaptersForTest()
+    const tencentMocks = await import('./tencentMachineTranslationProvider')
+    const spy = vi.spyOn(tencentMocks, 'invokeTencentTextTranslate').mockResolvedValueOnce({
+      translatedText: '你好',
+      providerRequestId: 'req-tencent-translate',
+      latencyMs: 38,
+      usage: {
+        unit: 'character',
+        quantity: 5,
+        billable: true,
+        estimated: true,
+      },
+    })
+
+    const run = await runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
+      input: { text: 'hello', sourceLang: 'en', targetLang: 'zh' },
+    })
+
+    expect(spy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'prv_tencent_cloud_mt' }),
+      { text: 'hello', sourceLang: 'en', targetLang: 'zh' },
+    )
+    expect(run).toMatchObject({
+      status: 'completed',
+      output: { translatedText: '你好' },
+      usage: [
+        expect.objectContaining({
+          unit: 'character',
+          quantity: 5,
+          providerId: 'prv_tencent_cloud_mt',
+          capability: 'text.translate',
+        }),
+      ],
+    })
   })
 
   it('scene disabled 时拒绝执行', async () => {

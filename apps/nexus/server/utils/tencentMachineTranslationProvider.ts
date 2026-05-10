@@ -201,8 +201,9 @@ async function resolveSecretPairCredential(event: H3Event, provider: ProviderReg
     throw createError({ statusCode: 401, statusMessage: 'Provider authRef is missing.' })
   }
 
+  const credentialPayload = await getProviderCredential(event, provider.authRef)
   try {
-    return assertSecretPairCredential(await getProviderCredential(event, provider.authRef))
+    return assertSecretPairCredential(credentialPayload)
   }
   catch {
     throw createError({ statusCode: 401, statusMessage: 'Provider secret_pair credential is missing.' })
