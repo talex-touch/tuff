@@ -33,7 +33,7 @@ const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSet
 
       <SettingTools />
 
-      <SettingFileIndex />
+      <SettingFileIndex v-if="showAdvancedSettings" />
 
       <SettingEverything v-if="isWindows" />
 
@@ -41,9 +41,9 @@ const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSet
 
       <SettingUpdate />
 
-      <SettingSentry />
+      <SettingSentry v-if="showAdvancedSettings" />
 
-      <SettingStorage />
+      <SettingStorage v-if="showAdvancedSettings" />
 
       <SettingAbout />
     </div>

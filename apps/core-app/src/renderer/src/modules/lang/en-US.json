@@ -109,7 +109,7 @@
     "developerMode": "Developer Mode",
     "developerModeDesc": "Show internal plugins and advanced options (use with care)",
     "advancedSettings": "Advanced Settings",
-    "advancedSettingsDesc": "Show background indexing policy, app index scheduling, download, analytics, and storage settings",
+    "advancedSettingsDesc": "Show file indexing, app index scheduling, download, analytics, and storage settings",
     "systemInfoPlaceholder": "System information is only available in development mode"
   },
   "settingLanguage": {
