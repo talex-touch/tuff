@@ -40,6 +40,7 @@ const shortcutsLoading = computed(() => shortcuts.value === null)
 const shortcutsDialogVisible = ref(false)
 const shortcutsDialogSource = ref<HTMLElement | null>(null)
 const shortcutSearch = ref('')
+const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 const saveStateMap = reactive(new Map<string, SaveState>())
 const saveRunIdMap = new Map<string, number>()
 const saveTimers = new Map<string, number>()
@@ -627,6 +628,7 @@ watch(shortcutsDialogVisible, (visible) => {
     </TuffBlockSlot>
 
     <TuffBlockSelect
+      v-if="showAdvancedSettings"
       v-model="appSetting.omniPanel.mouseLongPressDurationMs"
       :title="t('settingTools.omniPanelMouseLongPressDuration')"
       :description="t('settingTools.omniPanelMouseLongPressDurationDesc')"
@@ -696,6 +698,7 @@ watch(shortcutsDialogVisible, (visible) => {
     </TuffBlockSelect>
 
     <TuffBlockSelect
+      v-if="showAdvancedSettings"
       v-model="appSetting.tools.clipboardPolling.interval"
       :title="t('settingTools.clipboardPollingInterval')"
       :description="t('settingTools.clipboardPollingIntervalDesc')"
@@ -710,7 +713,7 @@ watch(shortcutsDialogVisible, (visible) => {
       <TxSelectItem :value="-1">{{ t('settingTools.never') }}</TxSelectItem>
     </TuffBlockSelect>
 
-    <template v-if="appSetting?.dev?.advancedSettings">
+    <template v-if="showAdvancedSettings">
       <TuffBlockSwitch
         v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.enable"
         :title="t('settingTools.clipboardPollingLowBattery')"
@@ -761,6 +764,7 @@ watch(shortcutsDialogVisible, (visible) => {
 
     <!-- Recommendation Max Items select -->
     <TuffBlockSelect
+      v-if="showAdvancedSettings"
       v-model="appSetting.recommendation.maxItems"
       :title="t('settingTools.recommendationMaxItems')"
       :description="t('settingTools.recommendationMaxItemsDesc')"
