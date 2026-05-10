@@ -43,6 +43,10 @@ import { getMainConfig, storageModule, subscribeMainConfig } from '../../storage
 import { appProvider } from '../addon/apps/app-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
 import { fileProvider } from '../addon/files/file-provider'
+import {
+  linuxNativeFileProvider,
+  macSpotlightFileProvider
+} from '../addon/files/native-file-search-provider'
 import { previewProvider } from '../addon/preview'
 import { mainWindowProvider } from '../addon/system/main-window-provider'
 import { systemActionsProvider } from '../addon/system/system-actions-provider'
@@ -94,6 +98,8 @@ const PROVIDER_ALIASES: Record<string, string[]> = {
   file: [
     'file-provider',
     'file-index',
+    'macos-spotlight-provider',
+    'linux-native-file-provider',
     'files',
     'fs',
     'document',
@@ -109,12 +115,19 @@ const PROVIDER_CATEGORY_MAP: Record<string, string> = {
   'app-provider': 'app',
   'file-provider': 'file',
   'everything-provider': 'file',
+  'macos-spotlight-provider': 'file',
+  'linux-native-file-provider': 'file',
   'plugin-features': 'plugin',
   'preview-provider': 'preview'
 }
 
 const EVERYTHING_PROVIDER_FILTERS = new Set(['everything', 'everything-provider'])
-const FILE_PROVIDER_FILTERS = new Set(['file-provider', 'file-index'])
+const FILE_PROVIDER_FILTERS = new Set([
+  'file-provider',
+  'file-index',
+  'macos-spotlight-provider',
+  'linux-native-file-provider'
+])
 const FILE_CATEGORY_FILTERS = new Set(['file', 'files', 'fs', 'document'])
 
 const PROVIDER_REFRACTORY_THRESHOLD = 2
@@ -473,11 +486,14 @@ export class SearchEngineCore
     this.registerProvider(systemActionsProvider)
     this.registerProvider(appProvider)
 
-    // Windows: Use Everything for fast file search, fallback to file-provider for indexing
-    // macOS/Linux: Use file-provider with full indexing
+    // Native providers provide fast first-frame candidates; file-provider remains the index/enrichment layer.
     if (process.platform === 'win32') {
       this.registerProvider(windowsShellFileProvider)
       this.registerProvider(everythingProvider)
+    } else if (process.platform === 'darwin') {
+      this.registerProvider(macSpotlightFileProvider)
+    } else if (process.platform === 'linux') {
+      this.registerProvider(linuxNativeFileProvider)
     }
     this.registerProvider(fileProvider)
 
@@ -1098,13 +1114,15 @@ export class SearchEngineCore
     query,
     items,
     signal,
-    includeCompletion
+    includeCompletion,
+    enrichmentMode = 'full'
   }: {
     sessionId: string
     query: TuffQuery
     items: TuffItem[]
     signal: AbortSignal
     includeCompletion: boolean
+    enrichmentMode?: 'base' | 'full'
   }): Promise<{
     sortedItems: TuffItem[]
     sortingDuration: number
@@ -1116,14 +1134,15 @@ export class SearchEngineCore
     const mergeRankContext = enterPerfContext('Search.pipeline.merge-rank', {
       sessionId,
       itemCount: items.length,
-      includeCompletion
+      includeCompletion,
+      enrichmentMode
     })
 
     try {
       let usageStatsDuration = 0
       let completionDuration = 0
 
-      if (includeCompletion) {
+      if (enrichmentMode === 'full' && includeCompletion) {
         const usageStatsStartedAt = performance.now()
         const usageStatsContext = enterPerfContext('Search.usageStats', {
           sessionId,
@@ -1158,7 +1177,7 @@ export class SearchEngineCore
         }
 
         await Promise.all([usageStatsPromise, pinnedPromise, completionPromise])
-      } else {
+      } else if (enrichmentMode === 'full') {
         const usageStatsStartedAt = performance.now()
         const usageStatsContext = enterPerfContext('Search.usageStats', {
           sessionId,
@@ -1176,10 +1195,15 @@ export class SearchEngineCore
         pinnedContext()
       }
 
-      const sortingContext = enterPerfContext('Search.sort', {
-        sessionId,
-        itemCount: items.length
-      })
+      const sortingContext = enterPerfContext(
+        'Search.sort',
+        {
+          sessionId,
+          itemCount: items.length,
+          enrichmentMode
+        },
+        { mode: 'blocking' }
+      )
       const sortingStartedAt = performance.now()
       let sortedItems: TuffItem[] = []
       try {
@@ -1199,6 +1223,39 @@ export class SearchEngineCore
     } finally {
       mergeRankContext()
     }
+  }
+
+  private enrichAndPushSearchItems(
+    sessionId: string,
+    query: TuffQuery,
+    items: TuffItem[],
+    signal: AbortSignal,
+    sendUpdateToFrontend: (itemsToSend: TuffItem[]) => void
+  ): void {
+    if (items.length === 0 || signal.aborted) {
+      return
+    }
+
+    void this.mergeAndRankItems({
+      sessionId,
+      query,
+      items,
+      signal,
+      includeCompletion: true,
+      enrichmentMode: 'full'
+    })
+      .then(({ sortedItems }) => {
+        if (signal.aborted || this.latestSessionId !== sessionId) {
+          return
+        }
+        sendUpdateToFrontend(sortedItems)
+      })
+      .catch((error) => {
+        searchEngineLog.debug('Search enrichment skipped', {
+          error,
+          meta: { sessionId, itemCount: items.length }
+        })
+      })
   }
 
   async search(query: TuffQuery): Promise<TuffSearchResult> {
@@ -1534,7 +1591,8 @@ export class SearchEngineCore
                   query,
                   items: initialItems,
                   signal: gatherController!.signal,
-                  includeCompletion: true
+                  includeCompletion: false,
+                  enrichmentMode: 'base'
                 })
                 pipelineDurations.mergeRankDuration = mergeRankDuration
                 const sortedItems = this.appendCompatibilityNotice(
@@ -1566,6 +1624,13 @@ export class SearchEngineCore
                 this._recordSearchResults(sessionId, sortedItems).catch((error) => {
                   searchEngineLog.error('Failed to record search results', { error })
                 })
+                this.enrichAndPushSearchItems(
+                  sessionId,
+                  query,
+                  sortedItems,
+                  gatherController!.signal,
+                  sendUpdateToFrontend
+                )
                 this.logSearchTrace({
                   event: 'first.result',
                   sessionId,
@@ -1682,7 +1747,8 @@ export class SearchEngineCore
               query,
               items: initialItems,
               signal: gatherController!.signal,
-              includeCompletion: true
+              includeCompletion: false,
+              enrichmentMode: 'base'
             })
             pipelineDurations.mergeRankDuration = mergeRankDuration
             const sortedItems = this.appendCompatibilityNotice(
@@ -1715,6 +1781,13 @@ export class SearchEngineCore
             this._recordSearchResults(sessionId, sortedItems).catch((error) => {
               searchEngineLog.error('Failed to record search results', { error })
             })
+            this.enrichAndPushSearchItems(
+              sessionId,
+              query,
+              sortedItems,
+              gatherController!.signal,
+              sendUpdateToFrontend
+            )
             this.logSearchTrace({
               event: 'first.result',
               sessionId,
@@ -1758,10 +1831,18 @@ export class SearchEngineCore
               query,
               items: subsequentItems,
               signal: gatherController!.signal,
-              includeCompletion: false
+              includeCompletion: false,
+              enrichmentMode: 'base'
             })
             this._updateActivationState(update.newResults)
             sendUpdateToFrontend(sortedItems)
+            this.enrichAndPushSearchItems(
+              sessionId,
+              query,
+              sortedItems,
+              gatherController!.signal,
+              sendUpdateToFrontend
+            )
           }
         } catch (error) {
           finalizeWithError(error)
