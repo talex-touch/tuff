@@ -321,6 +321,7 @@ let listProvidersHandler: (event: any) => Promise<any>
 let patchProviderHandler: (event: any) => Promise<any>
 let deleteProviderHandler: (event: any) => Promise<any>
 let listCapabilitiesHandler: (event: any) => Promise<any>
+let tencentProviderUtils: typeof import('../../../utils/tencentMachineTranslationProvider')
 
 beforeAll(async () => {
   ;(globalThis as any).defineEventHandler = (fn: any) => fn
@@ -331,6 +332,7 @@ beforeAll(async () => {
   patchProviderHandler = (await import('./providers/[id].patch')).default as (event: any) => Promise<any>
   deleteProviderHandler = (await import('./providers/[id].delete')).default as (event: any) => Promise<any>
   listCapabilitiesHandler = (await import('./capabilities.get')).default as (event: any) => Promise<any>
+  tencentProviderUtils = await import('../../../utils/tencentMachineTranslationProvider')
 })
 
 function makeEvent() {
@@ -442,6 +444,20 @@ describe('/api/dashboard/provider-registry', () => {
     expect(state.db?.providers.size).toBe(0)
   })
 
+  it('Provider CRUD 只接受 secure://providers/<slug> authRef', async () => {
+    h3Mocks.readBody.mockResolvedValue({
+      ...tencentTranslateProviderBody(),
+      authRef: 'secure://other/tencent-cloud-mt-main',
+    })
+
+    await expect(createProviderHandler(makeEvent())).rejects.toMatchObject({
+      statusCode: 400,
+      statusMessage: expect.stringContaining('secure://providers'),
+    })
+
+    expect(state.db?.providers.size).toBe(0)
+  })
+
   it('凭证绑定接口将 secret_pair 写入 D1 密文 secure store', async () => {
     h3Mocks.readBody.mockResolvedValue({
       authRef: 'secure://providers/tencent-cloud-mt-main',
@@ -497,25 +513,34 @@ describe('/api/dashboard/provider-registry', () => {
 
   it('生产环境缺少 secure-store master key 时拒绝绑定', async () => {
     const originalNodeEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'production'
-    importsMocks.useRuntimeConfig.mockReturnValue({
-      providerRegistry: {},
-    })
-    h3Mocks.readBody.mockResolvedValue({
-      authRef: 'secure://providers/tencent-cloud-mt-main',
-      authType: 'secret_pair',
-      credentials: {
-        secretId: 'AKID-unit-test',
-        secretKey: 'secret-key-unit-test',
-      },
-    })
+    const originalSecureStoreKey = process.env.PROVIDER_REGISTRY_SECURE_STORE_KEY
+    try {
+      process.env.NODE_ENV = 'production'
+      delete process.env.PROVIDER_REGISTRY_SECURE_STORE_KEY
+      importsMocks.useRuntimeConfig.mockReturnValue({
+        providerRegistry: {},
+      })
+      h3Mocks.readBody.mockResolvedValue({
+        authRef: 'secure://providers/tencent-cloud-mt-main',
+        authType: 'secret_pair',
+        credentials: {
+          secretId: 'AKID-unit-test',
+          secretKey: 'secret-key-unit-test',
+        },
+      })
 
-    await expect(storeCredentialHandler(makeEvent())).rejects.toMatchObject({
-      statusCode: 500,
-      statusMessage: expect.stringContaining('secure store key'),
-    })
-
-    process.env.NODE_ENV = originalNodeEnv
+      await expect(storeCredentialHandler(makeEvent())).rejects.toMatchObject({
+        statusCode: 500,
+        statusMessage: expect.stringContaining('secure store key'),
+      })
+    }
+    finally {
+      process.env.NODE_ENV = originalNodeEnv
+      if (originalSecureStoreKey == null)
+        delete process.env.PROVIDER_REGISTRY_SECURE_STORE_KEY
+      else
+        process.env.PROVIDER_REGISTRY_SECURE_STORE_KEY = originalSecureStoreKey
+    }
   })
 
   it('非生产环境缺少 secure-store master key 时允许降级 fallback', async () => {
@@ -637,6 +662,46 @@ describe('/api/dashboard/provider-registry', () => {
     expect(request.body).toContain('"SourceText":"hello"')
   })
 
+  it('生产环境缺少 secure-store master key 时 provider check 拒绝解析凭证', async () => {
+    h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
+    const created = await createProviderHandler(makeEvent())
+
+    h3Mocks.readBody.mockResolvedValue({
+      authRef: 'secure://providers/tencent-cloud-mt-main',
+      authType: 'secret_pair',
+      credentials: {
+        secretId: 'AKID-unit-test',
+        secretKey: 'secret-key-unit-test',
+      },
+    })
+    await storeCredentialHandler(makeEvent())
+
+    const originalNodeEnv = process.env.NODE_ENV
+    const originalSecureStoreKey = process.env.PROVIDER_REGISTRY_SECURE_STORE_KEY
+    try {
+      process.env.NODE_ENV = 'production'
+      delete process.env.PROVIDER_REGISTRY_SECURE_STORE_KEY
+      importsMocks.useRuntimeConfig.mockReturnValue({
+        providerRegistry: {},
+      })
+      h3Mocks.getRouterParam.mockReturnValue(created.provider.id)
+      h3Mocks.readBody.mockResolvedValue({ capability: 'text.translate' })
+
+      await expect(checkProviderHandler(makeEvent())).rejects.toMatchObject({
+        statusCode: 500,
+        statusMessage: expect.stringContaining('secure store key'),
+      })
+      expect(networkMocks.request).not.toHaveBeenCalled()
+    }
+    finally {
+      process.env.NODE_ENV = originalNodeEnv
+      if (originalSecureStoreKey == null)
+        delete process.env.PROVIDER_REGISTRY_SECURE_STORE_KEY
+      else
+        process.env.PROVIDER_REGISTRY_SECURE_STORE_KEY = originalSecureStoreKey
+    }
+  })
+
   it('腾讯云 provider check 缺失 secure credential 时返回 AUTH_REQUIRED 失败结果', async () => {
     h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
     const created = await createProviderHandler(makeEvent())
@@ -697,6 +762,74 @@ describe('/api/dashboard/provider-registry', () => {
         message: 'secret id not found',
       }),
     })
+  })
+
+  it('腾讯云图片翻译 adapter 将标准 payload 转换为 ImageTranslateLLM 请求', async () => {
+    networkMocks.request.mockResolvedValueOnce({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      data: {
+        Response: {
+          Data: 'translated-image-base64',
+          Source: 'auto',
+          Target: 'zh',
+          SourceText: 'hello',
+          TargetText: '你好',
+          Angle: 0,
+          TransDetails: [{ source: 'hello', target: '你好' }],
+          RequestId: 'req-image-translate',
+        },
+      },
+      url: 'https://tmt.tencentcloudapi.com',
+      ok: true,
+    })
+    h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
+    const created = await createProviderHandler(makeEvent())
+
+    h3Mocks.readBody.mockResolvedValue({
+      authRef: 'secure://providers/tencent-cloud-mt-main',
+      authType: 'secret_pair',
+      credentials: {
+        secretId: 'AKID-unit-test',
+        secretKey: 'secret-key-unit-test',
+      },
+    })
+    await storeCredentialHandler(makeEvent())
+
+    const result = await tencentProviderUtils.invokeTencentImageTranslate(makeEvent() as any, created.provider, {
+      imageBase64: 'source-image-base64',
+      targetLang: 'zh',
+    }, 'image.translate.e2e')
+    const request = networkMocks.request.mock.calls.at(-1)?.[0]
+
+    expect(result).toMatchObject({
+      translatedImageBase64: 'translated-image-base64',
+      sourceLang: 'auto',
+      targetLang: 'zh',
+      sourceText: 'hello',
+      targetText: '你好',
+      providerRequestId: 'req-image-translate',
+      usage: {
+        unit: 'image',
+        quantity: 1,
+        billable: true,
+        estimated: true,
+      },
+    })
+    expect(JSON.stringify(result)).not.toContain('secret-key-unit-test')
+    expect(request).toMatchObject({
+      method: 'POST',
+      url: 'https://tmt.tencentcloudapi.com',
+      headers: expect.objectContaining({
+        Authorization: expect.stringContaining('TC3-HMAC-SHA256'),
+        'X-TC-Action': 'ImageTranslateLLM',
+        'X-TC-Version': '2018-03-21',
+        'X-TC-Region': 'ap-shanghai',
+      }),
+    })
+    expect(request.body).toContain('"Data":"source-image-base64"')
+    expect(request.body).toContain('"Target":"zh"')
   })
 
   it('删除 provider 时同步删除 capabilities', async () => {
