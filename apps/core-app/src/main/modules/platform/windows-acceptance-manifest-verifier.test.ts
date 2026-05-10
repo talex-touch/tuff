@@ -175,7 +175,7 @@ describe('windows-acceptance-manifest-verifier', () => {
             {
               path: 'evidence/windows-app-scan-uwp-app-index.json',
               verifierCommand:
-                'pnpm -C "apps/core-app" run app-index:diagnostic:verify -- --input evidence/windows-app-scan-uwp-app-index.json --requireSuccess --requireQueryHit --requireLaunchKind uwp --requireLaunchTarget --requireBundleOrIdentity --requireCleanDisplayName --requireReindex --requireCaseIds windows-app-scan-uwp'
+                'pnpm -C "apps/core-app" run app-index:diagnostic:verify -- --input evidence/windows-app-scan-uwp-app-index.json --requireSuccess --requireQueryHit --requireLaunchKind uwp --requireLaunchTarget --requireBundleOrIdentity --requireCleanDisplayName --requireIcon --requireReindex --requireCaseIds windows-app-scan-uwp'
             }
           ]
         }
