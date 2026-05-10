@@ -7,11 +7,26 @@ export interface SentryUpdateUserRequest {
   user: unknown | null
 }
 
-export type SentryGetConfigResponse = unknown
+export interface SentryGetConfigResponse {
+  enabled: boolean
+  anonymous: boolean
+}
 
-export type SentryGetSearchCountResponse = unknown
+export type SentryGetSearchCountResponse = number
 
-export type SentryGetTelemetryStatsResponse = unknown
+export interface SentryGetTelemetryStatsResponse {
+  searchCount: number
+  bufferSize: number
+  lastUploadTime: number | null
+  totalUploads: number
+  failedUploads: number
+  lastFailureAt: number | null
+  lastFailureMessage: string | null
+  apiBase: string
+  isEnabled: boolean
+  isAnonymous: boolean
+}
+
 
 export type SentryRecordPerformanceRequest = unknown
 
