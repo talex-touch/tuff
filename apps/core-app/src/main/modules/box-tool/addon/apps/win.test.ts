@@ -235,6 +235,68 @@ describe('win app scanner', () => {
     expect(readShortcutLinkMock).not.toHaveBeenCalled()
   })
 
+  it('treats known-folder Get-StartApps AppId values as desktop apps', async () => {
+    const appPath = 'C:\\Program Files\\Tencent\\Weixin\\Weixin.exe'
+
+    readdirMock.mockResolvedValue([])
+    statMock.mockImplementation(async (target: string) => {
+      if (target === appPath) return createFileStat()
+      throw new Error(`Unexpected stat path: ${target}`)
+    })
+    mockPowerShellOutputs({
+      startApps: [
+        {
+          Name: '微信',
+          AppId: '{6D809377-6AF0-444B-8957-A3773F02200E}\\Tencent\\Weixin\\Weixin.exe'
+        },
+        {
+          Name: '卸载微信',
+          AppId: '{6D809377-6AF0-444B-8957-A3773F02200E}\\Tencent\\Weixin\\Uninstall.exe'
+        }
+      ]
+    })
+
+    const { getApps } = await import('./win')
+    const apps = await getApps()
+
+    expect(apps).toHaveLength(1)
+    expect(apps[0]).toMatchObject({
+      name: 'Weixin',
+      path: appPath,
+      launchKind: 'path',
+      launchTarget: appPath,
+      displayPath: appPath,
+      stableId: 'c:\\program files\\tencent\\weixin\\weixin.exe'
+    })
+  })
+
+  it('keeps Codex as a UWP app from Get-StartApps output', async () => {
+    readdirMock.mockResolvedValue([])
+    mockPowerShellOutputs({
+      startApps: [
+        {
+          Name: 'Codex',
+          AppId: 'OpenAI.Codex_2p2nqsd0c76g0!App',
+          PackageFamilyName: 'OpenAI.Codex_2p2nqsd0c76g0'
+        }
+      ]
+    })
+
+    const { getApps } = await import('./win')
+    const apps = await getApps()
+
+    expect(apps).toHaveLength(1)
+    expect(apps[0]).toMatchObject({
+      name: 'Codex',
+      displayName: 'Codex',
+      path: 'shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App',
+      launchKind: 'uwp',
+      launchTarget: 'OpenAI.Codex_2p2nqsd0c76g0!App',
+      bundleId: 'OpenAI.Codex_2p2nqsd0c76g0',
+      stableId: 'uwp:openai.codex_2p2nqsd0c76g0!app'
+    })
+  })
+
   it('enriches Windows Store apps with manifest metadata and logo variants', async () => {
     const installLocation = 'C:\\Program Files\\WindowsApps\\Microsoft.WindowsCalculator'
     const manifestPath = `${installLocation}\\AppxManifest.xml`
@@ -424,6 +486,50 @@ describe('win app scanner', () => {
 
     expect(apps).toHaveLength(0)
     expect(statMock).not.toHaveBeenCalledWith(expect.stringContaining('.exe'))
+  })
+
+  it('prefers Start Menu shortcuts over duplicate Get-StartApps desktop targets', async () => {
+    const startMenuPath = 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'
+    const userStartMenuPath =
+      'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
+    const shortcutPath = `${startMenuPath}\\微信.lnk`
+    const targetPath = 'C:\\Program Files\\Tencent\\Weixin\\Weixin.exe'
+
+    readdirMock.mockImplementation(async (dir: string) => {
+      if (dir === startMenuPath) return ['微信.lnk']
+      if (dir === userStartMenuPath) return []
+      return []
+    })
+    statMock.mockImplementation(async (target: string) => {
+      if (target === shortcutPath || target === targetPath) return createFileStat()
+      throw new Error(`Unexpected stat path: ${target}`)
+    })
+    readShortcutLinkMock.mockReturnValue({
+      target: targetPath,
+      args: '',
+      cwd: 'C:\\Program Files\\Tencent\\Weixin'
+    })
+    mockPowerShellOutputs({
+      startApps: [
+        {
+          Name: '微信',
+          AppId: '{6D809377-6AF0-444B-8957-A3773F02200E}\\Tencent\\Weixin\\Weixin.exe'
+        }
+      ]
+    })
+
+    const { getApps } = await import('./win')
+    const apps = await getApps()
+
+    expect(apps).toHaveLength(1)
+    expect(apps[0]).toMatchObject({
+      name: '微信',
+      path: shortcutPath,
+      launchKind: 'shortcut',
+      launchTarget: targetPath,
+      workingDirectory: 'C:\\Program Files\\Tencent\\Weixin',
+      stableId: 'shortcut:c:\\program files\\tencent\\weixin\\weixin.exe|'
+    })
   })
 
   it('prefers Start Menu entries over duplicate registry targets', async () => {

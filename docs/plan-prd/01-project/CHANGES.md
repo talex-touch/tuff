@@ -454,6 +454,17 @@
   - Nexus telemetry 聚合新增 first-result、慢查询、provider error/timeout/slow 与 provider P95 近似查询；Admin Analytics 的 Search 页新增 Provider Performance 表，展示 calls/avg/P95/max/results/errors/timeouts/slow rate。
   - 新增 CoreApp search telemetry 与 Nexus provider 聚合定向测试；当前环境缺少已安装依赖，`vitest` 命令因 `Command "vitest" not found` 未能执行。
 
+## 2026-05-09
+
+### fix(core-app): restore Windows app discovery for WeChat and Codex
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+  - Windows `Get-StartApps` desktop AppIDs that use known-folder GUID prefixes now resolve to real filesystem paths before app classification, so WeChat is indexed and launched as a desktop app instead of being misclassified as UWP.
+  - Start Menu shortcuts keep priority over duplicate desktop entries discovered through `Get-StartApps`; registry entries remain fallback-only when a target is already claimed.
+  - Codex/MSIX entries remain UWP apps with stable `uwp:*` identities, `.uwp` search-index extension metadata, and keyword coverage for `codex`.
+
 ## 2026-05-08
 
 ### fix(core-app): stabilize packaged widget compile pipeline

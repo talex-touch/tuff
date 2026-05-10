@@ -38,6 +38,19 @@ const WINDOWS_STORE_DISPLAY_PATH = 'Windows Store'
 const WINDOWS_DESKTOP_APP_EXTENSIONS = new Set(['.lnk', '.exe', '.appref-ms'])
 const REGISTRY_DISPLAY_ICON_EXE_PATTERN = /"([^"]+\.exe)"|([^",]+\.exe)/i
 const REGISTRY_EXE_PRIORITY = ['app', 'launcher', 'client', 'desktop']
+const KNOWN_FOLDER_GUID_PATH_PATTERN = /^\{([0-9a-f-]{36})\}[\\/](.+)$/i
+const KNOWN_FOLDER_PATH_RESOLVERS: Record<string, () => string> = {
+  '6d809377-6af0-444b-8957-a3773f02200e': () =>
+    process.env.ProgramW6432 || process.env.ProgramFiles || 'C:\\Program Files',
+  '905e63b6-c1bf-494e-b29c-65b732d3d21a': () => process.env.ProgramFiles || 'C:\\Program Files',
+  '7c5a40ef-a0fb-4bfc-874a-c0f2e0b9fa8e': () =>
+    process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
+  'f1b32785-6fba-4fcf-9d55-7b8e7f157091': () =>
+    process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData\\Local'),
+  '3eb685db-65f9-4cf6-a03a-e3ef65729f3d': () =>
+    process.env.APPDATA || path.join(os.homedir(), 'AppData\\Roaming'),
+  '62ab5d82-fdc1-4dc3-a9dd-070d1d495d97': () => process.env.ProgramData || 'C:\\ProgramData'
+}
 const UWP_LOGO_ATTRIBUTE_CANDIDATES = [
   'Square44x44Logo',
   'SmallLogo',
@@ -71,6 +84,27 @@ function buildUwpShellPath(appId: string): string {
 
 function isWindowsAbsolutePath(value: string): boolean {
   return /^[a-z]:[\\/]/i.test(value) || value.startsWith('\\\\')
+}
+
+function normalizeWindowsQuotedPath(value?: string): string {
+  return (value || '').trim().replace(/^["']|["']$/g, '')
+}
+
+function resolveKnownFolderGuidPath(value: string): string | null {
+  const match = value.match(KNOWN_FOLDER_GUID_PATH_PATTERN)
+  if (!match) return null
+
+  const resolver = KNOWN_FOLDER_PATH_RESOLVERS[match[1].toLowerCase()]
+  if (!resolver) return null
+
+  return path.join(resolver(), match[2])
+}
+
+function resolveStartAppDesktopPath(appId: string): string | null {
+  const normalized = normalizeWindowsQuotedPath(appId)
+  if (!normalized) return null
+  if (isWindowsAbsolutePath(normalized)) return normalized
+  return resolveKnownFolderGuidPath(normalized)
 }
 
 function buildIconCacheKey(value: string): string {
@@ -382,13 +416,16 @@ async function listWindowsStoreApps(): Promise<AppInfo[]> {
       const name = parseStartAppField(entry, ['name', 'Name'])
       if (!appId || !name) return null
 
-      if (isWindowsAbsolutePath(appId)) {
-        const stats = await fs.stat(appId).catch(() => null)
+      const desktopPath = resolveStartAppDesktopPath(appId)
+      if (desktopPath) {
+        const stats = await fs.stat(desktopPath).catch(() => null)
         if (!stats?.isFile()) {
           return null
         }
-        return await buildDesktopAppInfo(appId, path.basename(appId), stats)
+        return await buildDesktopAppInfo(desktopPath, path.basename(desktopPath), stats)
       }
+
+      if (!appId.includes('!')) return null
 
       return await buildUwpAppInfo(appId, {
         fallbackName: name,
@@ -465,7 +502,9 @@ async function buildRegistryAppInfo(record: RegistryAppRecord): Promise<AppInfo 
   if (record.systemComponent === 1 || record.releaseType || record.parentKeyName) return null
 
   const iconExePath = parseRegistryExePath(record.displayIcon)
-  const installExePath = await findExecutableInInstallLocation(record.installLocation?.trim())
+  const installExePath = await findExecutableInInstallLocation(
+    normalizeWindowsQuotedPath(record.installLocation)
+  )
   const targetPath = iconExePath || installExePath
   if (!targetPath || shouldSkipAppTarget(targetPath)) return null
 
@@ -635,8 +674,13 @@ export async function getApps(): Promise<AppInfo[]> {
 
   for (const app of allApps) {
     const launchTarget = app.launchTarget ? buildPathStableId(app.launchTarget) : ''
+    const isDirectPathDuplicate =
+      app.launchKind === 'path' &&
+      launchTarget &&
+      claimedLaunchTargets.has(launchTarget) &&
+      app.stableId === launchTarget
     if (
-      app.stableId?.startsWith('registry:') &&
+      (app.stableId?.startsWith('registry:') || isDirectPathDuplicate) &&
       launchTarget &&
       claimedLaunchTargets.has(launchTarget)
     ) {
@@ -671,16 +715,17 @@ export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
       })
     }
 
-    const stats = await fs.stat(filePath)
+    const appPath = resolveStartAppDesktopPath(filePath) || filePath
+    const stats = await fs.stat(appPath)
     if (!stats.isFile()) return null
 
-    const fileName = path.basename(filePath)
+    const fileName = path.basename(appPath)
     if (!WINDOWS_DESKTOP_APP_EXTENSIONS.has(path.extname(fileName).toLowerCase())) {
       return null
     }
 
-    const appDetail = fileName.endsWith('.lnk') ? shell.readShortcutLink(filePath) : undefined
-    return await buildDesktopAppInfo(filePath, fileName, stats, appDetail)
+    const appDetail = fileName.endsWith('.lnk') ? shell.readShortcutLink(appPath) : undefined
+    return await buildDesktopAppInfo(appPath, fileName, stats, appDetail)
   } catch (error) {
     windowsAppLog.warn('Failed to get app info', {
       error,
