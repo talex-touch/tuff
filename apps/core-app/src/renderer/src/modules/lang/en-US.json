@@ -109,7 +109,7 @@
     "developerMode": "Developer Mode",
     "developerModeDesc": "Show internal plugins and advanced options (use with care)",
     "advancedSettings": "Advanced Settings",
-    "advancedSettingsDesc": "Show background indexing policy, app index scheduling, and download settings",
+    "advancedSettingsDesc": "Show background indexing policy, app index scheduling, download, analytics, and storage settings",
     "systemInfoPlaceholder": "System information is only available in development mode"
   },
   "settingLanguage": {
@@ -2105,7 +2105,15 @@
       "oneHourAgo": "1 hour ago",
       "hoursAgo": "{hours} hours ago",
       "checkNow": "Check Now",
-      "checking": "Checking..."
+      "checking": "Checking...",
+      "evidenceTitle": "Diagnostic Evidence",
+      "evidenceDesc": "Export the current Everything backend, health, fallback chain, and errors for Windows regression records",
+      "copyEvidence": "Copy Evidence",
+      "saveEvidence": "Save Evidence",
+      "evidenceMissing": "Read Everything status first",
+      "evidenceCopied": "Everything diagnostic evidence copied",
+      "evidenceCopyFailed": "Failed to copy Everything diagnostic evidence",
+      "evidenceSaved": "Everything diagnostic evidence saved"
     },
     "intelligence": {
       "pageTitle": "TaTa Intelligence",
@@ -2357,7 +2365,7 @@
     },
     "settingUpdate": {
       "groupTitle": "Application Updates",
-      "groupDesc": "Choose your update channel and how often to check for new builds.",
+      "groupDesc": "Manage update downloads, status, and checks.",
       "channelTitle": "Update Channel",
       "channelDesc": "Preview channels receive builds earlier but may be less stable.",
       "channelSnapshotLocked": "Snapshot builds receive updates through the Beta channel.",
@@ -2408,6 +2416,14 @@
       "assetsEmpty": "No cached release yet. Run a manual check first.",
       "assetsOpen": "View packages",
       "assetsCount": "{count} assets",
+      "evidenceTitle": "Diagnostic Evidence",
+      "evidenceDesc": "Export current update settings, download-ready status, cached release, target platform, and installer handoff mode for Windows regression records",
+      "copyEvidence": "Copy Evidence",
+      "saveEvidence": "Save Evidence",
+      "evidenceMissing": "Load update status first",
+      "evidenceCopied": "Update diagnostic evidence copied",
+      "evidenceCopyFailed": "Failed to copy update diagnostic evidence",
+      "evidenceSaved": "Update diagnostic evidence saved",
       "assets": {
         "download": "Download",
         "copyLink": "Copy Link",

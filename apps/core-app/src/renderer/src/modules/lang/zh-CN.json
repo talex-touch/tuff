@@ -109,7 +109,7 @@
     "developerMode": "开发者模式",
     "developerModeDesc": "显示内部插件与高级选项（谨慎使用）",
     "advancedSettings": "高级设置",
-    "advancedSettingsDesc": "启用后显示后台索引策略、应用索引调度与下载设置",
+    "advancedSettingsDesc": "启用后显示后台索引策略、应用索引调度、下载、数据分析与存储设置",
     "systemInfoPlaceholder": "系统信息仅在开发模式下可用"
   },
   "settingLanguage": {
@@ -2101,7 +2101,15 @@
       "oneHourAgo": "1 小时前",
       "hoursAgo": "{hours} 小时前",
       "checkNow": "立即检查",
-      "checking": "检查中..."
+      "checking": "检查中...",
+      "evidenceTitle": "诊断证据",
+      "evidenceDesc": "导出当前 Everything 后端、健康状态、回退链路与错误信息，供 Windows 真机回归记录使用",
+      "copyEvidence": "复制证据",
+      "saveEvidence": "保存证据",
+      "evidenceMissing": "请先读取 Everything 状态",
+      "evidenceCopied": "Everything 诊断证据已复制",
+      "evidenceCopyFailed": "复制 Everything 诊断证据失败",
+      "evidenceSaved": "Everything 诊断证据已保存"
     },
     "intelligence": {
       "pageTitle": "塔塔智能",
@@ -2349,7 +2357,7 @@
     },
     "settingUpdate": {
       "groupTitle": "应用更新",
-      "groupDesc": "选择更新渠道并设置自动检查频率。",
+      "groupDesc": "管理应用更新下载、状态与检查操作。",
       "channelTitle": "更新渠道",
       "channelDesc": "预览渠道能更早体验新版本，但可能不够稳定。",
       "channelSnapshotLocked": "Snapshot 构建会按 Beta 渠道接收更新。",
@@ -2400,6 +2408,14 @@
       "assetsEmpty": "暂无缓存版本，请先检查更新。",
       "assetsOpen": "查看下载包",
       "assetsCount": "共 {count} 个",
+      "evidenceTitle": "诊断证据",
+      "evidenceDesc": "导出当前更新设置、下载就绪状态、缓存版本、目标平台与安装接管模式，供 Windows 真机回归记录使用",
+      "copyEvidence": "复制证据",
+      "saveEvidence": "保存证据",
+      "evidenceMissing": "请先加载更新状态",
+      "evidenceCopied": "更新诊断证据已复制",
+      "evidenceCopyFailed": "复制更新诊断证据失败",
+      "evidenceSaved": "更新诊断证据已保存",
       "assets": {
         "download": "下载",
         "copyLink": "复制链接",

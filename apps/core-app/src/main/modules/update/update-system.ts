@@ -42,6 +42,7 @@ import { getAppVersionSafe } from '../../utils/version-util'
 import { databaseModule } from '../database'
 import { getAnalyticsMessageStore } from '../analytics/message-store'
 import { getNetworkService } from '../network'
+import { launchWindowsInstaller } from './services/windows-installer-strategy'
 
 /**
  * Version information interface
@@ -154,7 +155,7 @@ export class UpdateSystem {
     this.currentVersion = this.parseVersion(getAppVersionSafe())
     this.storageRoot = config?.storageRoot ?? app.getPath('userData')
     this.config = {
-      autoDownload: false,
+      autoDownload: true,
       autoCheck: true,
       checkFrequency: 'startup',
       ignoredVersions: [],
@@ -1483,6 +1484,22 @@ export class UpdateSystem {
     const filePath = path.join(destination, filename)
     if (process.platform === 'darwin' && (await this.tryInstallMacAppBundle(filePath))) {
       return
+    }
+    if (process.platform === 'win32') {
+      const launchResult = launchWindowsInstaller(filePath, {
+        spawn,
+        requestAppQuit: (reason) => this.requestAppQuit(reason)
+      })
+      if (launchResult.launched) {
+        updateSystemLog.info('Started Windows installer', {
+          meta: {
+            path: filePath,
+            type: launchResult.command?.type,
+            command: launchResult.command?.command
+          }
+        })
+        return
+      }
     }
     await shell.openPath(filePath)
     updateSystemLog.info('Opened installer', { meta: { path: filePath } })
