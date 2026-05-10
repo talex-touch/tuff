@@ -98,6 +98,21 @@ interface BindingFormRow {
   priority: number
 }
 
+interface ProviderCheckResult {
+  success: boolean
+  providerId: string
+  capability: string
+  latency: number
+  endpoint: string
+  requestId?: string
+  message: string
+  error?: {
+    code?: string
+    message: string
+    status?: number
+  }
+}
+
 const { t } = useI18n()
 const { user } = useAuthUser()
 const toast = useToast()
@@ -118,6 +133,7 @@ const loading = ref(false)
 const savingProvider = ref(false)
 const savingScene = ref(false)
 const actionPending = ref<string | null>(null)
+const providerCheckResults = ref<Record<string, ProviderCheckResult>>({})
 const error = ref<string | null>(null)
 
 const providerForm = reactive({
@@ -130,6 +146,8 @@ const providerForm = reactive({
   ownerScope: 'system' as OwnerScope,
   endpoint: 'https://tmt.tencentcloudapi.com',
   region: 'ap-shanghai',
+  secretId: '',
+  secretKey: '',
 })
 
 const capabilityRows = ref<CapabilityFormRow[]>([
@@ -262,11 +280,15 @@ async function createProvider() {
   savingProvider.value = true
   error.value = null
   try {
+    const targetStatus = providerForm.status
+    const hasCredentialInput = providerForm.authType === 'secret_pair'
+      && providerForm.secretId.trim()
+      && providerForm.secretKey.trim()
     const body = {
       name: providerForm.name.trim(),
       displayName: providerForm.displayName.trim(),
       vendor: providerForm.vendor,
-      status: providerForm.status,
+      status: hasCredentialInput ? 'disabled' : providerForm.status,
       authType: providerForm.authType,
       authRef: providerForm.authType === 'none' ? undefined : providerForm.authRef.trim(),
       ownerScope: providerForm.ownerScope,
@@ -285,6 +307,35 @@ async function createProvider() {
       method: 'POST',
       body,
     })
+
+    if (hasCredentialInput) {
+      await $fetch('/api/dashboard/provider-registry/credentials', {
+        method: 'POST',
+        body: {
+          authRef: providerForm.authRef.trim(),
+          authType: providerForm.authType,
+          credentials: {
+            secretId: providerForm.secretId.trim(),
+            secretKey: providerForm.secretKey,
+          },
+        },
+      })
+      providerForm.secretId = ''
+      providerForm.secretKey = ''
+
+      if (targetStatus !== 'disabled') {
+        const providerResult = await $fetch<{ providers: ProviderRegistryRecord[] }>('/api/dashboard/provider-registry/providers', {
+          query: { vendor: providerForm.vendor },
+        })
+        const provider = (providerResult.providers ?? []).find(item => item.authRef === providerForm.authRef.trim())
+        if (provider) {
+          await $fetch(`/api/dashboard/provider-registry/providers/${provider.id}`, {
+            method: 'PATCH',
+            body: { status: targetStatus },
+          })
+        }
+      }
+    }
     toast.success(t('dashboard.providerRegistry.providers.created', 'Provider created.'))
     await fetchRegistry()
   }
@@ -294,6 +345,47 @@ async function createProvider() {
   }
   finally {
     savingProvider.value = false
+  }
+}
+
+async function checkProvider(provider: ProviderRegistryRecord) {
+  actionPending.value = `provider:${provider.id}:check`
+  error.value = null
+  try {
+    const result = await $fetch<ProviderCheckResult>(`/api/dashboard/provider-registry/providers/${provider.id}/check`, {
+      method: 'POST',
+      body: { capability: 'text.translate' },
+    })
+    providerCheckResults.value = {
+      ...providerCheckResults.value,
+      [provider.id]: result,
+    }
+    if (result.success) {
+      toast.success(result.message || t('dashboard.providerRegistry.providers.checkSucceeded', 'Provider check succeeded.'))
+    }
+    else {
+      toast.warning(result.message || t('dashboard.providerRegistry.providers.checkFailed', 'Provider check failed.'))
+    }
+  }
+  catch (err: any) {
+    const message = normalizeError(err, t('dashboard.providerRegistry.errors.checkProviderFailed', 'Failed to check provider.'))
+    error.value = message
+    providerCheckResults.value = {
+      ...providerCheckResults.value,
+      [provider.id]: {
+        success: false,
+        providerId: provider.id,
+        capability: 'text.translate',
+        latency: 0,
+        endpoint: provider.endpoint || '',
+        message,
+        error: { message },
+      },
+    }
+    toast.warning(message)
+  }
+  finally {
+    actionPending.value = null
   }
 }
 
@@ -541,6 +633,14 @@ onMounted(() => {
                   <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.region', 'Region') }}</label>
                   <TuffInput v-model="providerForm.region" class="w-full" />
                 </div>
+                <div v-if="providerForm.authType === 'secret_pair'">
+                  <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.secretId', 'SecretId') }}</label>
+                  <TuffInput v-model="providerForm.secretId" class="w-full" autocomplete="off" />
+                </div>
+                <div v-if="providerForm.authType === 'secret_pair'">
+                  <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.secretKey', 'SecretKey') }}</label>
+                  <TuffInput v-model="providerForm.secretKey" class="w-full" type="password" autocomplete="new-password" />
+                </div>
               </div>
 
               <div class="mt-4 space-y-2">
@@ -598,6 +698,10 @@ onMounted(() => {
                       </p>
                     </div>
                     <div class="flex flex-wrap gap-2">
+                      <TxButton variant="secondary" size="mini" :disabled="actionPending !== null" @click="checkProvider(provider)">
+                        <TxSpinner v-if="actionPending === `provider:${provider.id}:check`" :size="12" />
+                        <span :class="actionPending === `provider:${provider.id}:check` ? 'ml-1' : ''">{{ t('dashboard.providerRegistry.actions.check', 'Check') }}</span>
+                      </TxButton>
                       <TxButton variant="secondary" size="mini" :disabled="actionPending !== null || provider.status === 'enabled'" @click="updateProviderStatus(provider, 'enabled')">
                         {{ t('dashboard.providerRegistry.actions.enable', 'Enable') }}
                       </TxButton>
@@ -617,6 +721,23 @@ onMounted(() => {
                     >
                       {{ capability.capability }}
                     </span>
+                  </div>
+                  <div
+                    v-if="providerCheckResults[provider.id]"
+                    class="mt-3 rounded-xl px-3 py-2 text-xs"
+                    :class="providerCheckResults[provider.id].success ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-200' : 'bg-amber-500/10 text-amber-700 dark:text-amber-200'"
+                  >
+                    <div class="flex flex-wrap items-center gap-2">
+                      <TxStatusBadge
+                        :text="providerCheckResults[provider.id].success ? 'success' : 'failed'"
+                        :status="providerCheckResults[provider.id].success ? 'success' : 'warning'"
+                        size="sm"
+                      />
+                      <span>{{ providerCheckResults[provider.id].message }}</span>
+                    </div>
+                    <p class="mt-1 text-black/45 dark:text-white/45">
+                      {{ providerCheckResults[provider.id].capability }} · {{ providerCheckResults[provider.id].latency }}ms · {{ providerCheckResults[provider.id].requestId || providerCheckResults[provider.id].error?.code || '-' }}
+                    </p>
                   </div>
                 </article>
               </div>

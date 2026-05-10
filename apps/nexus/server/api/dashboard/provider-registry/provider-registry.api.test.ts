@@ -649,7 +649,7 @@ describe('/api/dashboard/provider-registry', () => {
     expect(result).toMatchObject({
       success: false,
       error: expect.objectContaining({
-        code: 'PROVIDER_REQUEST_FAILED',
+        code: 'AUTH_REQUIRED',
       }),
     })
     expect(networkMocks.request).not.toHaveBeenCalled()
