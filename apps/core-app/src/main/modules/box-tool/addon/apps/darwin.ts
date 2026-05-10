@@ -2,7 +2,6 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { createRetrier } from '@talex-touch/utils'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { readFile as readPlist } from 'simple-plist'
 import { reportAppScanError } from './app-error-reporter'
@@ -12,93 +11,6 @@ import { createLogger } from '../../../../utils/logger'
 
 const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons')
 const darwinAppLog = createLogger('AppScanner').child('Darwin')
-async function convertIcnsToPng(icnsPath: string, pngPath: string): Promise<string> {
-  try {
-    await execFileSafe('sips', [
-      '-s',
-      'format',
-      'png',
-      icnsPath,
-      '--out',
-      pngPath,
-      '--resampleHeightWidth',
-      '64',
-      '64'
-    ])
-    return pngPath
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`sips command failed for ${icnsPath}: ${message}`)
-  }
-}
-
-async function getAppIcon(app: { path: string; name: string }): Promise<string | null> {
-  const safeName = app.name.replace(/[/\\?%*:|"<>]/g, '-')
-  const cachedIconPath = path.join(ICON_CACHE_DIR, `${safeName}.png`)
-  const noneMarkerPath = path.join(ICON_CACHE_DIR, `${safeName}.none`)
-
-  try {
-    // 1. Check for cached PNG
-    if (await fs.stat(cachedIconPath).catch(() => false)) {
-      const buffer = await fs.readFile(cachedIconPath)
-      return buffer.toString('base64')
-    }
-
-    // 2. Check for "none" marker
-    if (await fs.stat(noneMarkerPath).catch(() => false)) {
-      return null
-    }
-
-    // 3. Find .icns file
-    const plistPath = path.join(app.path, 'Contents', 'Info.plist')
-    const resourcesPath = path.join(app.path, 'Contents', 'Resources')
-    let icnsFile: string | undefined
-
-    try {
-      const plistContent = await fs.readFile(plistPath, 'utf-8')
-      const iconNameMatch = plistContent.match(
-        /<key>CFBundleIconFile<\/key>\s*<string>(.*?)<\/string>/
-      )
-      if (iconNameMatch?.[1]) {
-        let iconFile = iconNameMatch[1]
-        if (!iconFile.endsWith('.icns')) {
-          iconFile += '.icns'
-        }
-        const potentialPath = path.join(resourcesPath, iconFile)
-        if (await fs.stat(potentialPath).catch(() => false)) {
-          icnsFile = potentialPath
-        }
-      }
-    } catch {
-      // Plist might not exist or be readable, continue to scan directory
-    }
-
-    if (!icnsFile) {
-      const files = await fs.readdir(resourcesPath).catch(() => [])
-      const found = files.find((f) => f.endsWith('.icns'))
-      if (found) {
-        icnsFile = path.join(resourcesPath, found)
-      }
-    }
-
-    if (!icnsFile) {
-      await fs.writeFile(noneMarkerPath, '')
-      return null
-    }
-
-    // 4. Convert .icns to .png
-    await convertIcnsToPng(icnsFile, cachedIconPath)
-    const buffer = await fs.readFile(cachedIconPath)
-    return buffer.toString('base64')
-  } catch (error) {
-    darwinAppLog.warn('Failed to get app icon', {
-      error,
-      meta: { appName: app.name, pathLength: app.path.length }
-    })
-    await fs.writeFile(noneMarkerPath, '').catch(() => {})
-    return null
-  }
-}
 
 export async function getApps(): Promise<ScannedAppInfo[]> {
   await fs.mkdir(ICON_CACHE_DIR, { recursive: true })
@@ -176,15 +88,6 @@ function collectAlternateDisplayNames(
   return alternateNames
 }
 
-async function getSpotlightDisplayName(appPath: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileSafe('mdls', ['-name', 'kMDItemDisplayName', '-raw', appPath])
-    return normalizeDisplayNameCandidate(stdout)
-  } catch {
-    return null
-  }
-}
-
 // Helper to get localized display name from .lproj directories
 async function getLocalizedDisplayName(appPath: string): Promise<string | null> {
   const resourcesPath = path.join(appPath, 'Contents', 'Resources')
@@ -256,14 +159,11 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
   const bundleName = getValueFromPlist(plistContent, 'CFBundleName')
   const fileName = path.basename(appPath, '.app')
 
-  const spotlightName = await getSpotlightDisplayName(appPath)
-
   // Try to get localized display name (e.g., "微信" for WeChat)
   const localizedName = await getLocalizedDisplayName(appPath)
 
-  // Priority: Spotlight > localized strings > plist display name > bundle name
+  // mdls display-name corrections are handled by the background mdls scan.
   const displayName =
-    spotlightName ||
     localizedName ||
     normalizeDisplayNameCandidate(plistDisplayName) ||
     normalizeDisplayNameCandidate(bundleName)
@@ -279,8 +179,12 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
 
   const bundleId = getValueFromPlist(plistContent, 'CFBundleIdentifier') || ''
 
-  // Use the most definitive name for the icon cache to avoid collisions
-  const icon = await getAppIcon({ name: displayName || name, path: appPath })
+  const safeIconName = (displayName || name).replace(/[/\\?%*:|"<>]/g, '-')
+  const cachedIconPath = path.join(ICON_CACHE_DIR, `${safeIconName}.png`)
+  const icon = await fs
+    .stat(cachedIconPath)
+    .then(() => cachedIconPath)
+    .catch(() => '')
 
   return {
     name,
@@ -288,7 +192,7 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
     fileName,
     alternateNames: alternateNames.length > 0 ? alternateNames : undefined,
     path: appPath,
-    icon: icon ? `data:image/png;base64,${icon}` : '',
+    icon,
     bundleId,
     uniqueId: bundleId || appPath,
     stableId: appPath,
@@ -299,20 +203,6 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
   }
 }
 
-// Create a retrier instance to handle transient errors like ENOENT
-const getAppInfoRetrier = createRetrier({
-  maxRetries: 2, // Total of 3 attempts
-  timeoutMs: 5000, // 5-second timeout for each attempt
-  shouldRetry: (error: unknown) =>
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: string }).code === 'ENOENT' // Only retry if Info.plist is not found
-})
-
-// Wrap the unstable function with the retry logic
-const reliableGetAppInfo: typeof getAppInfoUnstable = getAppInfoRetrier(getAppInfoUnstable)
-
 export async function getAppInfo(appPath: string): Promise<ScannedAppInfo | null> {
   // Pre-condition check, no need to retry this
   if (!appPath || !appPath.endsWith('.app')) {
@@ -320,16 +210,24 @@ export async function getAppInfo(appPath: string): Promise<ScannedAppInfo | null
   }
 
   try {
-    // Call the reliable, wrapped function
-    return await reliableGetAppInfo(appPath)
+    return await getAppInfoUnstable(appPath)
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : typeof error === 'string' ? error : String(error)
-    // This block will execute if all retry attempts fail
-    darwinAppLog.warn('Failed to get app info after retries', {
-      error,
-      meta: { pathLength: appPath.length, message: errorMessage }
-    })
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? (error as { code?: string }).code
+        : undefined
+    if (code === 'ENOENT') {
+      darwinAppLog.debug('Skipping invalid app bundle without Info.plist', {
+        meta: { pathLength: appPath.length, message: errorMessage, code }
+      })
+    } else {
+      darwinAppLog.warn('Failed to get app info', {
+        error,
+        meta: { pathLength: appPath.length, message: errorMessage, code }
+      })
+    }
     reportAppScanError({
       platform: process.platform,
       path: appPath,

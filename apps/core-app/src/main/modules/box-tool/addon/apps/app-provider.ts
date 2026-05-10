@@ -88,20 +88,6 @@ import type { AppLaunchKind, ScannedAppInfo } from './app-types'
 
 const SLOW_SEARCH_THRESHOLD_MS = 400
 const appProviderLog = getLogger('app-provider')
-const BASE64_MARKER = 'base64,'
-const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
-
-function isValidBase64DataUrl(value: string): boolean {
-  const markerIndex = value.indexOf(BASE64_MARKER)
-  if (markerIndex === -1) {
-    return true
-  }
-  const payload = value.slice(markerIndex + BASE64_MARKER.length)
-  if (!payload) {
-    return false
-  }
-  return BASE64_PAYLOAD_PATTERN.test(payload)
-}
 
 type AppTimingMeta = TimingMeta & {
   label?: string
@@ -1809,20 +1795,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       unit: 's',
       precision: 2
     })
-    const invalidIconApps = new Set<string>()
-    for (const app of dbScannedAppsWithExtensions) {
-      const icon = app.extensions.icon
-      if (icon && !isValidBase64DataUrl(icon)) {
-        const uniqueId = this.resolveDbAppKey(app)
-        if (uniqueId) invalidIconApps.add(uniqueId)
-      }
-    }
-    if (invalidIconApps.size > 0) {
-      logApp(
-        `Detected ${chalk.yellow(invalidIconApps.size)} invalid app icons, will refresh`,
-        LogStyle.warning
-      )
-    }
     const dbAppsMap = new Map(
       dbScannedAppsWithExtensions.map((app) => [this.resolveDbAppKey(app), app])
     )
@@ -1848,7 +1820,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       if (!dbApp) {
         toAdd.push(scannedApp)
       } else {
-        const shouldRefreshIcon = invalidIconApps.has(uniqueId)
         const resolvedScannedDisplayName = resolveScannedDisplayName(scannedApp)
         const hasDisplayNameDrift = shouldUpdateDisplayName(
           dbApp.displayName,
@@ -1863,7 +1834,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           scannedApp.alternateNames
         )
         if (
-          shouldRefreshIcon ||
           scannedApp.lastModified.getTime() > new Date(dbApp.mtime).getTime() ||
           hasDisplayNameDrift ||
           hasNameDrift ||
@@ -2849,7 +2819,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           )
         }
       },
-      { interval: 10, unit: 'minutes' }
+      {
+        interval: 10,
+        unit: 'minutes',
+        lane: 'maintenance',
+        backpressure: 'latest_wins',
+        dedupeKey: 'app_provider_mdls_update_scan',
+        maxInFlight: 1
+      }
     )
   }
 
