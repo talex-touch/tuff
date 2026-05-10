@@ -205,6 +205,30 @@ describe('windows-acceptance-manifest-verifier', () => {
     )
   })
 
+  it('requires clipboard stress verifier commands to enforce schema strictness', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        performance: {
+          searchTraceStatsPath: 'evidence/search-trace-stats.json',
+          searchTraceVerifierCommand:
+            'pnpm -C "apps/core-app" run search:trace:verify -- --input evidence/search-trace-stats.json --minSamples 200 --maxFirstResultP95Ms 800 --maxSessionEndP95Ms 1200 --maxSlowRatio 0.1 --strict',
+          clipboardStressSummaryPath: 'evidence/clipboard-stress-summary.json',
+          clipboardStressVerifierCommand:
+            'pnpm -C "apps/core-app" run clipboard:stress:verify -- --input evidence/clipboard-stress-summary.json --minDurationMs 120000 --requireIntervals 500,250 --maxP95SchedulerDelayMs 100 --maxSchedulerDelayMs 300 --maxRealtimeQueuedPeak 2 --maxDroppedCount 0'
+        }
+      }),
+      {
+        requireSearchTrace: true,
+        requireClipboardStress: true,
+        requireVerifierCommandGateFlags: true
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'clipboard stress verifier command is missing release gate flags'
+    ])
+  })
+
   it('requires verifier commands to be replayable through explicit input files', () => {
     const manifest = buildManifest({
       cases: [
@@ -551,5 +575,67 @@ describe('windows-acceptance-manifest-verifier', () => {
       'interval 500ms realtime queue peak 3 > 2',
       'interval 500ms dropped count 1 > 0'
     ])
+  })
+
+  it('rejects clipboard stress evidence without the strict schema marker', () => {
+    const result = validateWindowsAcceptancePerformanceEvidence('clipboard-stress-summary', {
+      generatedAt: '2026-05-10T10:00:00.000Z',
+      results: [
+        {
+          intervalMs: 500,
+          durationMs: 120_000,
+          queueDepthPeak: {
+            realtime: { queued: 1, inFlight: 1 }
+          },
+          clipboard: {
+            count: 240,
+            schedulerDelaySampleCount: 240,
+            avgSchedulerDelayMs: 20,
+            p95SchedulerDelayMs: 60,
+            lastSchedulerDelayMs: 10,
+            maxSchedulerDelayMs: 100,
+            lastDurationMs: 10,
+            maxDurationMs: 40,
+            droppedCount: 0,
+            coalescedCount: 0,
+            timeoutCount: 0,
+            errorCount: 0
+          }
+        },
+        {
+          intervalMs: 250,
+          durationMs: 120_000,
+          queueDepthPeak: {
+            realtime: { queued: 1, inFlight: 1 }
+          },
+          clipboard: {
+            count: 480,
+            schedulerDelaySampleCount: 480,
+            avgSchedulerDelayMs: 20,
+            p95SchedulerDelayMs: 60,
+            lastSchedulerDelayMs: 10,
+            maxSchedulerDelayMs: 100,
+            lastDurationMs: 10,
+            maxDurationMs: 40,
+            droppedCount: 0,
+            coalescedCount: 0,
+            timeoutCount: 0,
+            errorCount: 0
+          }
+        }
+      ],
+      gate: {
+        passed: true,
+        failures: []
+      }
+    })
+
+    expect(result).toMatchObject({
+      schemaKey: null,
+      schemaMismatch: true,
+      embeddedGatePassed: true,
+      recomputedGatePassed: true,
+      gateFailures: []
+    })
   })
 })
