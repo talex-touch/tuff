@@ -104,6 +104,22 @@ export interface SceneAdapterResult {
 
 export type SceneCapabilityAdapter = (context: SceneAdapterContext) => Promise<SceneAdapterResult>
 
+interface ResolvedSceneCandidate {
+  candidate: SceneRunCandidate
+  provider: ProviderRegistryRecord
+}
+
+interface CapabilityExecutionPlan {
+  capability: string
+  candidates: ResolvedSceneCandidate[]
+}
+
+interface SceneRunFailure {
+  statusCode: number
+  code: SceneRunErrorCode
+  message: string
+}
+
 const sceneCapabilityAdapters = new Map<string, SceneCapabilityAdapter>()
 
 function normalizeTencentTranslateInput(input: unknown) {
@@ -267,8 +283,8 @@ async function resolveCandidatesForCapability(
   providerCache: Map<string, ProviderRegistryRecord | null>,
   trace: SceneRunTraceStep[],
   fallbackTrail: SceneRunFallbackTrailItem[],
-): Promise<Array<{ candidate: SceneRunCandidate, provider: ProviderRegistryRecord }>> {
-  const resolved: Array<{ candidate: SceneRunCandidate, provider: ProviderRegistryRecord }> = []
+): Promise<ResolvedSceneCandidate[]> {
+  const resolved: ResolvedSceneCandidate[] = []
   const bindings = scene.bindings.filter(binding => binding.capability === capability)
 
   for (const binding of bindings) {
@@ -342,6 +358,22 @@ function toSelection(candidate: SceneRunCandidate, provider: ProviderRegistryRec
   }
 }
 
+function createFailedRun(
+  baseRun: Omit<SceneRunResult, 'status' | 'output'>,
+  outputs: Record<string, unknown>,
+  failure: SceneRunFailure,
+): SceneRunResult {
+  return {
+    ...baseRun,
+    status: 'failed',
+    output: Object.keys(outputs).length === 0 ? null : outputs,
+    error: {
+      code: failure.code,
+      message: failure.message,
+    },
+  }
+}
+
 export async function runSceneOrchestrator(
   event: H3Event,
   sceneId: string,
@@ -351,8 +383,8 @@ export async function runSceneOrchestrator(
   const trace: SceneRunTraceStep[] = []
   const fallbackTrail: SceneRunFallbackTrailItem[] = []
   const selected: SceneRunSelection[] = []
-  const selectedProviders: ProviderRegistryRecord[] = []
   const candidates: SceneRunCandidate[] = []
+  const capabilityPlans: CapabilityExecutionPlan[] = []
   const usage: SceneRunUsage[] = []
   const dryRun = readDryRun(request.dryRun)
   const mode: SceneRunMode = dryRun ? 'dry_run' : 'execute'
@@ -443,18 +475,21 @@ export async function runSceneOrchestrator(
       throw createRunError(409, 'CAPABILITY_UNSUPPORTED', `No enabled provider capability is available for ${capability}.`, run)
     }
 
-    selected.push(toSelection(picked.candidate, picked.provider))
-    selectedProviders.push(picked.provider)
-    fallbackTrail.push({
-      providerId: picked.provider.id,
-      capability,
-      status: 'selected',
-    })
+    if (dryRun) {
+      selected.push(toSelection(picked.candidate, picked.provider))
+      fallbackTrail.push({
+        providerId: picked.provider.id,
+        capability,
+        status: 'selected',
+      })
+    }
+    capabilityPlans.push({ capability, candidates: scopedCandidates })
   }
 
-  addTrace(trace, 'strategy.select', 'success', `Selected ${selected.length} provider capability path(s).`, {
+  const plannedSelectionCount = capabilityPlans.length
+  addTrace(trace, 'strategy.select', 'success', `Selected ${plannedSelectionCount} provider capability path(s).`, {
     strategyMode: scene.strategyMode,
-    selected: selected.length,
+    selected: plannedSelectionCount,
   })
 
   if (dryRun) {
@@ -467,87 +502,101 @@ export async function runSceneOrchestrator(
   }
 
   const outputs: Record<string, unknown> = {}
-  for (let index = 0; index < selected.length; index += 1) {
-    const selection = selected[index]
-    const provider = selectedProviders[index]
-    if (!selection || !provider) {
-      const run: SceneRunResult = {
-        ...baseRun,
-        status: 'failed',
-        output: Object.keys(outputs).length === 0 ? null : outputs,
-        error: {
-          code: 'PROVIDER_UNAVAILABLE',
-          message: 'Selected provider path is incomplete.',
-        },
-      }
-      addTrace(trace, 'adapter.dispatch', 'failed', 'Selected provider path is incomplete.')
-      throw createRunError(500, 'PROVIDER_UNAVAILABLE', 'Selected provider path is incomplete.', run)
-    }
-    const adapter = resolveAdapter(provider, selection.capability)
-
-    if (!adapter) {
-      const run: SceneRunResult = {
-        ...baseRun,
-        status: 'failed',
-        output: Object.keys(outputs).length === 0 ? null : outputs,
-        error: {
-          code: 'PROVIDER_ADAPTER_UNAVAILABLE',
-          message: `No provider adapter registered for ${provider.vendor}:${selection.capability}.`,
-        },
-      }
-      addTrace(trace, 'adapter.dispatch', 'failed', `No provider adapter registered for ${provider.vendor}:${selection.capability}.`, {
-        providerId: provider.id,
-        capability: selection.capability,
-      })
-      throw createRunError(501, 'PROVIDER_ADAPTER_UNAVAILABLE', `No provider adapter registered for ${provider.vendor}:${selection.capability}.`, run)
+  for (const plan of capabilityPlans) {
+    let completed = false
+    let selectedPlan: SceneRunSelection | null = null
+    let lastFailure: SceneRunFailure = {
+      statusCode: 500,
+      code: 'PROVIDER_UNAVAILABLE',
+      message: 'Selected provider path is incomplete.',
     }
 
-    try {
-      const result = await adapter({
-        event,
-        runId,
-        scene,
-        provider,
-        capability: selection.capability,
-        input: request.input,
-      })
-      outputs[selection.capability] = result.output
-      usage.push(...(result.usage ?? []))
-      addTrace(trace, 'adapter.dispatch', 'success', `Provider adapter completed ${selection.capability}.`, {
-        providerId: provider.id,
-        capability: selection.capability,
-        providerRequestId: result.providerRequestId ?? null,
-        latencyMs: result.latencyMs ?? null,
-      })
-    }
-    catch (error) {
+    for (const { candidate, provider } of plan.candidates) {
+      const selection = toSelection(candidate, provider)
+      const adapter = resolveAdapter(provider, plan.capability)
       fallbackTrail.push({
         providerId: provider.id,
-        capability: selection.capability,
-        status: 'failed',
-        reason: error instanceof Error ? error.message : 'adapter_failed',
+        capability: plan.capability,
+        status: 'selected',
       })
-      const run: SceneRunResult = {
-        ...baseRun,
-        status: 'failed',
-        output: Object.keys(outputs).length === 0 ? null : outputs,
-        error: {
-          code: 'PROVIDER_ADAPTER_FAILED',
-          message: error instanceof Error ? error.message : 'Provider adapter failed.',
-        },
+
+      if (!adapter) {
+        const message = `No provider adapter registered for ${provider.vendor}:${plan.capability}.`
+        lastFailure = {
+          statusCode: 501,
+          code: 'PROVIDER_ADAPTER_UNAVAILABLE',
+          message,
+        }
+        fallbackTrail.push({
+          providerId: provider.id,
+          capability: plan.capability,
+          status: 'failed',
+          reason: 'provider_adapter_unavailable',
+        })
+        addTrace(trace, 'adapter.dispatch', 'failed', message, {
+          providerId: provider.id,
+          capability: plan.capability,
+        })
+        if (scene.fallback !== 'enabled')
+          break
+        continue
       }
-      addTrace(trace, 'adapter.dispatch', 'failed', `Provider adapter failed ${selection.capability}.`, {
-        providerId: provider.id,
-        capability: selection.capability,
-      })
-      throw createRunError(502, 'PROVIDER_ADAPTER_FAILED', run.error?.message ?? 'Provider adapter failed.', run)
+
+      try {
+        const result = await adapter({
+          event,
+          runId,
+          scene,
+          provider,
+          capability: plan.capability,
+          input: request.input,
+        })
+        outputs[plan.capability] = result.output
+        usage.push(...(result.usage ?? []))
+        addTrace(trace, 'adapter.dispatch', 'success', `Provider adapter completed ${plan.capability}.`, {
+          providerId: provider.id,
+          capability: plan.capability,
+          providerRequestId: result.providerRequestId ?? null,
+          latencyMs: result.latencyMs ?? null,
+        })
+        selectedPlan = selection
+        completed = true
+        break
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Provider adapter failed.'
+        lastFailure = {
+          statusCode: 502,
+          code: 'PROVIDER_ADAPTER_FAILED',
+          message,
+        }
+        fallbackTrail.push({
+          providerId: provider.id,
+          capability: plan.capability,
+          status: 'failed',
+          reason: message,
+        })
+        addTrace(trace, 'adapter.dispatch', 'failed', `Provider adapter failed ${plan.capability}.`, {
+          providerId: provider.id,
+          capability: plan.capability,
+        })
+        if (scene.fallback !== 'enabled')
+          break
+      }
     }
+
+    if (!completed) {
+      const run = createFailedRun(baseRun, outputs, lastFailure)
+      throw createRunError(lastFailure.statusCode, lastFailure.code, lastFailure.message, run)
+    }
+    if (selectedPlan)
+      selected.push(selectedPlan)
   }
 
-  const firstSelection = selected[0]
+  const firstCapability = requestedCapabilities[0]
   return {
     ...baseRun,
     status: 'completed',
-    output: selected.length === 1 && firstSelection ? outputs[firstSelection.capability] : outputs,
+    output: requestedCapabilities.length === 1 && firstCapability ? outputs[firstCapability] : outputs,
   }
 }
