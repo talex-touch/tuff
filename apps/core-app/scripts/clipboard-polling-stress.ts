@@ -5,6 +5,7 @@ import process from 'node:process'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { CLIPBOARD_STRESS_SCHEMA } from '../src/main/modules/platform/clipboard-stress-verifier'
 
 type QueueDepthSnapshot = Record<string, { queued: number; inFlight: number }>
 
@@ -338,6 +339,7 @@ async function persistReport(results: ScenarioResult[], outputDir?: string): Pro
     reportPath,
     `${JSON.stringify(
       {
+        schema: CLIPBOARD_STRESS_SCHEMA,
         generatedAt: new Date().toISOString(),
         results
       },
