@@ -43,6 +43,9 @@ const systemActionsLog = getLogger('system-actions-provider')
 const WINDOWS_APP_EXTENSIONS = new Set(['.exe', '.lnk', '.appref-ms'])
 const LINUX_APP_EXTENSIONS = new Set(['.desktop', '.appimage'])
 const FILE_URL_PATTERN = /\b(?:file|tfile):\/\/[^\s"'<>]+/gi
+const WINDOWS_SHELL_APP_PATTERN = /\bshell:AppsFolder\\[^\s"'<>]+/gi
+const WINDOWS_UWP_APP_ID_PATTERN = /\b[A-Za-z0-9][A-Za-z0-9._-]+_[A-Za-z0-9]+![A-Za-z0-9._-]+\b/g
+const WINDOWS_DRIVE_PATH_START_PATTERN = /[a-zA-Z]:\\/g
 const QUOTED_PATH_PATTERN = /(['"])(\/[^'"]+|[a-zA-Z]:\\[^'"]+)\1/g
 const UNQUOTED_PATH_PATTERN = /(?:~\/|\/|[a-zA-Z]:\\)[^\s'"]+/g
 
@@ -134,6 +137,14 @@ function normalizeCandidatePath(raw: string): string | null {
   const trimmed = stripOuterQuotes(raw.trim())
   if (!trimmed) return null
 
+  if (isWindowsShellAppPath(trimmed)) {
+    return process.platform === 'win32' ? trimmed : null
+  }
+
+  if (isWindowsUwpAppId(trimmed)) {
+    return process.platform === 'win32' ? `shell:AppsFolder\\${trimmed}` : null
+  }
+
   let candidate = trimmed
   if (/^tfile:/i.test(candidate)) {
     const resolved = resolveTfilePath(candidate)
@@ -148,8 +159,19 @@ function normalizeCandidatePath(raw: string): string | null {
   }
 
   candidate = expandHome(candidate)
+  if (process.platform === 'win32' && /^[a-zA-Z]:[\\/]/.test(candidate)) {
+    return path.win32.normalize(candidate)
+  }
   if (!path.isAbsolute(candidate)) return null
   return path.normalize(candidate)
+}
+
+function isWindowsShellAppPath(value: string): boolean {
+  return /^shell:AppsFolder\\[^\s"'<>]+$/i.test(value)
+}
+
+function isWindowsUwpAppId(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]+_[A-Za-z0-9]+![A-Za-z0-9._-]+$/.test(value)
 }
 
 function splitLines(value: string): string[] {
@@ -157,6 +179,28 @@ function splitLines(value: string): string[] {
     .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+async function extractExistingWindowsAppPath(raw: string): Promise<string | null> {
+  if (process.platform !== 'win32') return null
+
+  const trimmed = stripOuterQuotes(raw.trim())
+  if (!/^[a-zA-Z]:\\/.test(trimmed)) return null
+
+  const lower = trimmed.toLowerCase()
+  const extensionMatches = [...lower.matchAll(/\.(?:exe|lnk|appref-ms)\b/g)]
+  for (const match of extensionMatches) {
+    if (match.index === undefined) continue
+    const candidate = trimmed.slice(0, match.index + match[0].length)
+    try {
+      const stats = await fs.stat(candidate)
+      if (stats.isFile()) return path.win32.normalize(candidate)
+    } catch {
+      // Continue probing shorter executable-looking prefixes.
+    }
+  }
+
+  return null
 }
 
 function extractTextCandidates(value: string): string[] {
@@ -175,6 +219,23 @@ function extractTextCandidates(value: string): string[] {
     pushCandidate(match[0])
   }
 
+  for (const match of trimmed.matchAll(WINDOWS_SHELL_APP_PATTERN)) {
+    pushCandidate(match[0])
+  }
+
+  for (const match of trimmed.matchAll(WINDOWS_UWP_APP_ID_PATTERN)) {
+    pushCandidate(match[0])
+  }
+
+  if (process.platform === 'win32') {
+    for (const line of splitLines(value)) {
+      for (const match of line.matchAll(WINDOWS_DRIVE_PATH_START_PATTERN)) {
+        if (match.index === undefined) continue
+        pushCandidate(line.slice(match.index))
+      }
+    }
+  }
+
   for (const match of trimmed.matchAll(QUOTED_PATH_PATTERN)) {
     pushCandidate(match[2])
   }
@@ -188,6 +249,21 @@ function extractTextCandidates(value: string): string[] {
   }
 
   return results
+}
+
+async function expandWindowsCommandLineCandidates(candidates: string[]): Promise<string[]> {
+  if (process.platform !== 'win32') return candidates
+
+  const expanded: string[] = []
+  for (const candidate of candidates) {
+    expanded.push(candidate)
+    const appPath = await extractExistingWindowsAppPath(candidate)
+    if (appPath) {
+      expanded.push(appPath)
+    }
+  }
+
+  return expanded
 }
 
 function parseFilesInput(raw: string): string[] {
@@ -254,7 +330,7 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
       return this.createEmptyResult(query, startTime)
     }
 
-    const candidates = this.collectCandidatePaths(query)
+    const candidates = await this.collectCandidatePaths(query)
     if (candidates.length === 0) {
       return this.createEmptyResult(query, startTime)
     }
@@ -360,7 +436,24 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
     return null
   }
 
-  private collectCandidatePaths(query: TuffQuery): string[] {
+  private async collectCandidatePaths(query: TuffQuery): Promise<string[]> {
+    const candidates = await expandWindowsCommandLineCandidates(this.collectRawCandidates(query))
+
+    const normalized: string[] = []
+    const seen = new Set<string>()
+    for (const candidate of candidates) {
+      const normalizedPath = normalizeCandidatePath(candidate)
+      if (!normalizedPath) continue
+      const key = process.platform === 'win32' ? normalizedPath.toLowerCase() : normalizedPath
+      if (seen.has(key)) continue
+      seen.add(key)
+      normalized.push(normalizedPath)
+    }
+
+    return normalized.slice(0, MAX_ACTION_ITEMS)
+  }
+
+  private collectRawCandidates(query: TuffQuery): string[] {
     const candidates: string[] = []
     const inputs = query.inputs ?? []
 
@@ -377,21 +470,20 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
       candidates.push(...extractTextCandidates(query.text))
     }
 
-    const normalized: string[] = []
-    const seen = new Set<string>()
-    for (const candidate of candidates) {
-      const normalizedPath = normalizeCandidatePath(candidate)
-      if (!normalizedPath) continue
-      const key = process.platform === 'win32' ? normalizedPath.toLowerCase() : normalizedPath
-      if (seen.has(key)) continue
-      seen.add(key)
-      normalized.push(normalizedPath)
-    }
-
-    return normalized.slice(0, MAX_ACTION_ITEMS)
+    return candidates
   }
 
   private async resolveAction(candidate: string): Promise<ResolvedAction | null> {
+    if (isWindowsShellAppPath(candidate)) {
+      const displayName = candidate.replace(/^shell:AppsFolder\\/i, '')
+      return {
+        type: 'app-index',
+        path: candidate,
+        displayName,
+        displayPath: candidate
+      }
+    }
+
     let stats: Awaited<ReturnType<typeof fs.stat>> | null = null
     try {
       stats = await fs.stat(candidate)

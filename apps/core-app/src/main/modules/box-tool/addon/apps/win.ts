@@ -35,6 +35,7 @@ export const START_MENU_PATHS = [
   path.join(os.homedir(), 'AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs')
 ]
 const WINDOWS_STORE_DISPLAY_PATH = 'Windows Store'
+const WINDOWS_DESKTOP_APP_EXTENSIONS = new Set(['.lnk', '.exe', '.appref-ms'])
 const REGISTRY_DISPLAY_ICON_EXE_PATTERN = /"([^"]+\.exe)"|([^",]+\.exe)/i
 const REGISTRY_EXE_PRIORITY = ['app', 'launcher', 'client', 'desktop']
 const UWP_LOGO_ATTRIBUTE_CANDIDATES = [
@@ -581,7 +582,10 @@ async function fileDisplay(filePath: string): Promise<AppInfo[]> {
       const fileDir = path.join(filePath, fileName)
       try {
         const stats = await fs.stat(fileDir)
-        if (stats.isFile() && (fileName.endsWith('.lnk') || fileName.endsWith('.exe'))) {
+        if (
+          stats.isFile() &&
+          WINDOWS_DESKTOP_APP_EXTENSIONS.has(path.extname(fileName).toLowerCase())
+        ) {
           let appDetail: ShortcutDetails | undefined
           if (fileName.endsWith('.lnk')) {
             try {
@@ -671,7 +675,7 @@ export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
     if (!stats.isFile()) return null
 
     const fileName = path.basename(filePath)
-    if (!fileName.endsWith('.lnk') && !fileName.endsWith('.exe')) {
+    if (!WINDOWS_DESKTOP_APP_EXTENSIONS.has(path.extname(fileName).toLowerCase())) {
       return null
     }
 

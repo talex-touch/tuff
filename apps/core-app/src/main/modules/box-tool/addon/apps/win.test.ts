@@ -196,6 +196,45 @@ describe('win app scanner', () => {
     })
   })
 
+  it('includes ClickOnce appref-ms entries from Start Menu', async () => {
+    const startMenuPath = 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'
+    const userStartMenuPath =
+      'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
+    const apprefPath = `${startMenuPath}\\Work Tool.appref-ms`
+
+    readdirMock.mockImplementation(async (dir: string) => {
+      if (dir === startMenuPath) return ['Work Tool.appref-ms']
+      if (dir === userStartMenuPath) return []
+      return []
+    })
+    statMock.mockImplementation(async (target: string) => {
+      if (target === apprefPath) return createFileStat()
+      throw new Error(`Unexpected stat path: ${target}`)
+    })
+    execFileSafeMock.mockResolvedValue({ stdout: '[]', stderr: '' })
+
+    const { getApps, getAppInfo } = await import('./win')
+    const apps = await getApps()
+    const appInfo = await getAppInfo(apprefPath)
+
+    expect(apps).toHaveLength(1)
+    expect(apps[0]).toMatchObject({
+      name: 'Work Tool',
+      path: apprefPath,
+      launchKind: 'path',
+      launchTarget: apprefPath,
+      displayPath: apprefPath,
+      stableId: 'c:\\programdata\\microsoft\\windows\\start menu\\programs\\work tool.appref-ms'
+    })
+    expect(appInfo).toMatchObject({
+      name: 'Work Tool',
+      path: apprefPath,
+      launchKind: 'path',
+      launchTarget: apprefPath
+    })
+    expect(readShortcutLinkMock).not.toHaveBeenCalled()
+  })
+
   it('enriches Windows Store apps with manifest metadata and logo variants', async () => {
     const installLocation = 'C:\\Program Files\\WindowsApps\\Microsoft.WindowsCalculator'
     const manifestPath = `${installLocation}\\AppxManifest.xml`

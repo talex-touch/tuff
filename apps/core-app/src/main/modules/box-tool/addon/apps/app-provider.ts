@@ -152,6 +152,14 @@ const APP_TIMING_BASE_OPTIONS: TimingOptions = {
   }
 }
 
+function isWindowsUwpShellPath(value: string): boolean {
+  return /^shell:AppsFolder\\[^\s"'<>]+$/i.test(value)
+}
+
+function isWindowsUwpAppId(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]+_[A-Za-z0-9]+![A-Za-z0-9._-]+$/.test(value)
+}
+
 type DbAppRecord = typeof filesSchema.$inferSelect
 type DbAppWithExtensions = DbAppRecord & { extensions: Record<string, string | null> }
 type FileExtensionInsert = { fileId: number; key: string; value: string }
@@ -278,7 +286,7 @@ const APP_ENTRY_ENABLED_EXTENSION_KEY = 'entryEnabled'
 const APP_ENTRY_SOURCE_MANUAL = 'manual'
 const APP_IDENTIFIER_EXTENSION_KEYS = ['bundleId', APP_IDENTITY_EXTENSION_KEY] as const
 const APP_IDENTIFIER_EXTENSION_KEY_SET = new Set<string>(APP_IDENTIFIER_EXTENSION_KEYS)
-const WINDOWS_REALTIME_APP_EXTENSIONS = new Set(['.lnk', '.exe'])
+const WINDOWS_REALTIME_APP_EXTENSIONS = new Set(['.lnk', '.exe', '.appref-ms'])
 
 function isAppIdentifierExtensionKey(
   value: string | null | undefined
@@ -2058,6 +2066,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (!rawPath) return null
     let appPath = rawPath
 
+    if (process.platform === 'win32') {
+      if (isWindowsUwpShellPath(appPath)) {
+        return appPath
+      }
+      if (isWindowsUwpAppId(appPath)) {
+        return `shell:AppsFolder\\${appPath}`
+      }
+    }
+
     if (this.isMac) {
       if (appPath.includes('.app/')) {
         appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
@@ -2145,7 +2162,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this.processingPaths.add(appPath)
 
     try {
-      if (!(await this._waitForItemStable(appPath))) {
+      const isVirtualWindowsApp = process.platform === 'win32' && isWindowsUwpShellPath(appPath)
+      if (!isVirtualWindowsApp && !(await this._waitForItemStable(appPath))) {
         logApp(`Item is unstable, skipping: ${chalk.yellow(appPath)}`, LogStyle.warning)
         return { success: false, status: 'invalid', reason: 'unstable' }
       }

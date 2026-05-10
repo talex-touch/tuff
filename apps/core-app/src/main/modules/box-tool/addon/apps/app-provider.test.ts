@@ -536,6 +536,182 @@ describe('appProvider rebuild maintenance', () => {
     })
   })
 
+  it('processes Windows ClickOnce appref-ms changes as app index entries', async () => {
+    await withPlatform('win32', async () => {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      const apprefPath =
+        'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Work Tool.appref-ms'
+      const appInfo = {
+        name: 'Work Tool',
+        displayName: 'Work Tool',
+        path: apprefPath,
+        icon: '',
+        bundleId: '',
+        uniqueId: apprefPath.toLowerCase(),
+        stableId: apprefPath.toLowerCase(),
+        launchKind: 'path' as const,
+        launchTarget: apprefPath,
+        lastModified: new Date('2026-05-08T00:00:00.000Z')
+      }
+      const insertedFile = {
+        id: 43,
+        path: apprefPath,
+        name: 'Work Tool',
+        displayName: 'Work Tool',
+        type: 'app',
+        mtime: appInfo.lastModified,
+        ctime: appInfo.lastModified
+      }
+      const valuesMock = vi.fn(() => ({
+        returning: vi.fn(async () => [insertedFile])
+      }))
+
+      getAppInfoByPathMock.mockResolvedValue(appInfo)
+      ;(privateProvider as any)._waitForItemStable = vi.fn(async () => true)
+      privateProvider.dbUtils = {
+        getFileByPath: vi.fn(async () => null),
+        getDb: () => ({
+          insert: vi.fn(() => ({
+            values: valuesMock
+          }))
+        }),
+        addFileExtensions: vi.fn(async () => undefined)
+      }
+      privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
+
+      await (privateProvider as any).handleItemAddedOrChanged({
+        filePath: apprefPath
+      })
+
+      expect(getAppInfoByPathMock).toHaveBeenCalledWith(apprefPath)
+      expect(valuesMock).toHaveBeenCalled()
+    })
+  })
+
+  it('adds copied Windows UWP shell paths without file stability checks', async () => {
+    await withPlatform('win32', async () => {
+      vi.resetModules()
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      const shellPath = 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
+      const appInfo = {
+        name: 'Calculator',
+        displayName: 'Calculator',
+        path: shellPath,
+        icon: '',
+        bundleId: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe',
+        appIdentity: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+        uniqueId: 'uwp:microsoft.windowscalculator_8wekyb3d8bbwe!app',
+        stableId: 'uwp:microsoft.windowscalculator_8wekyb3d8bbwe!app',
+        launchKind: 'uwp' as const,
+        launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+        lastModified: new Date(0)
+      }
+      const insertedFile = {
+        id: 44,
+        path: shellPath,
+        name: 'Calculator',
+        displayName: 'Calculator',
+        type: 'app',
+        mtime: appInfo.lastModified,
+        ctime: appInfo.lastModified
+      }
+      const valuesMock = vi.fn(() => ({
+        returning: vi.fn(async () => [insertedFile])
+      }))
+      const insertMock = vi.fn(() => ({
+        values: valuesMock
+      }))
+      const deleteMock = vi.fn(() => ({
+        where: vi.fn(async () => undefined)
+      }))
+      const indexItemsMock = vi.fn(async () => undefined)
+      const waitForItemStable = vi.fn(async () => true)
+
+      getAppInfoByPathMock.mockResolvedValue(appInfo)
+      ;(privateProvider as any)._waitForItemStable = waitForItemStable
+      privateProvider.dbUtils = {
+        getFileByPath: vi.fn(async () => null),
+        getDb: () => ({
+          insert: insertMock,
+          delete: deleteMock
+        }),
+        addFileExtensions: vi.fn(async () => undefined)
+      }
+      privateProvider.searchIndex = { indexItems: indexItemsMock }
+
+      const result = await appProvider.addAppByPath(shellPath)
+
+      expect(result).toEqual({ success: true, status: 'added', path: shellPath })
+      expect(waitForItemStable).not.toHaveBeenCalled()
+      expect(getAppInfoByPathMock).toHaveBeenCalledWith(shellPath)
+      expect(valuesMock).toHaveBeenCalled()
+      expect(indexItemsMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('normalizes copied Windows UWP app ids before app indexing', async () => {
+    await withPlatform('win32', async () => {
+      vi.resetModules()
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      const appId = 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
+      const shellPath = `shell:AppsFolder\\${appId}`
+      const appInfo = {
+        name: 'Calculator',
+        displayName: 'Calculator',
+        path: shellPath,
+        icon: '',
+        bundleId: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe',
+        appIdentity: appId,
+        uniqueId: 'uwp:microsoft.windowscalculator_8wekyb3d8bbwe!app',
+        stableId: 'uwp:microsoft.windowscalculator_8wekyb3d8bbwe!app',
+        launchKind: 'uwp' as const,
+        launchTarget: appId,
+        lastModified: new Date(0)
+      }
+      const insertedFile = {
+        id: 45,
+        path: shellPath,
+        name: 'Calculator',
+        displayName: 'Calculator',
+        type: 'app',
+        mtime: appInfo.lastModified,
+        ctime: appInfo.lastModified
+      }
+      const valuesMock = vi.fn(() => ({
+        returning: vi.fn(async () => [insertedFile])
+      }))
+      const insertMock = vi.fn(() => ({
+        values: valuesMock
+      }))
+      const indexItemsMock = vi.fn(async () => undefined)
+      const waitForItemStable = vi.fn(async () => true)
+
+      getAppInfoByPathMock.mockResolvedValue(appInfo)
+      ;(privateProvider as any)._waitForItemStable = waitForItemStable
+      privateProvider.dbUtils = {
+        getFileByPath: vi.fn(async () => null),
+        getDb: () => ({
+          insert: insertMock,
+          delete: vi.fn(() => ({
+            where: vi.fn(async () => undefined)
+          }))
+        }),
+        addFileExtensions: vi.fn(async () => undefined)
+      }
+      privateProvider.searchIndex = { indexItems: indexItemsMock }
+
+      const result = await appProvider.addAppByPath(appId)
+
+      expect(result).toEqual({ success: true, status: 'added', path: shellPath })
+      expect(waitForItemStable).not.toHaveBeenCalled()
+      expect(getAppInfoByPathMock).toHaveBeenCalledWith(shellPath)
+      expect(indexItemsMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
   it('returns immediately while path launch is still pending in the background', async () => {
     const { appProvider } = await loadSubject()
     const launchDeferred = createDeferred<string>()
@@ -1170,6 +1346,8 @@ describe('appProvider rebuild maintenance', () => {
       app: {
         path: '/Applications/NeteaseMusic 2.app',
         displayName: 'NeteaseMusic 2',
+        rawDisplayName: 'NeteaseMusic 2',
+        displayNameStatus: 'clean',
         bundleId: 'com.netease.163music',
         alternateNames: ['网易云音乐']
       },
@@ -1193,6 +1371,64 @@ describe('appProvider rebuild maintenance', () => {
     expect(result).not.toMatchObject({
       index: {
         storedKeywords: expect.arrayContaining(['ng:wy'])
+      }
+    })
+  })
+
+  it('diagnoses corrupted displayName fallback status for app index evidence', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const appRow = {
+      id: 8,
+      path: 'D:\\Weixin\\Weixin.exe',
+      name: 'WeChat',
+      displayName: '\u03A2\uFFFD\uFFFD',
+      type: 'app',
+      mtime: new Date(0),
+      ctime: new Date(0),
+      extensions: {
+        appIdentity: 'path:d:\\weixin\\weixin.exe',
+        launchKind: 'path',
+        launchTarget: 'D:\\Weixin\\Weixin.exe'
+      }
+    }
+
+    privateProvider.dbUtils = {
+      getDb: () => ({
+        select: vi.fn(() => ({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => [])
+            }))
+          }))
+        }))
+      }),
+      getFilesByType: vi.fn(async () => [appRow])
+    }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async () => [appRow])
+    privateProvider.searchIndex = {
+      lookupByKeywords: vi.fn(async () => new Map()),
+      lookupByKeywordPrefix: vi.fn(async () => []),
+      search: vi.fn(async () => []),
+      lookupByNgrams: vi.fn(async () => []),
+      lookupBySubsequence: vi.fn(async () => [])
+    }
+
+    const result = await appProvider.diagnoseAppSearch({
+      target: 'WeChat',
+      query: 'wechat'
+    })
+
+    expect(result).toMatchObject({
+      success: true,
+      status: 'found',
+      app: {
+        name: 'WeChat',
+        displayName: 'WeChat',
+        rawDisplayName: '\u03A2\uFFFD\uFFFD',
+        displayNameStatus: 'fallback',
+        launchKind: 'path',
+        launchTarget: 'D:\\Weixin\\Weixin.exe'
       }
     })
   })
