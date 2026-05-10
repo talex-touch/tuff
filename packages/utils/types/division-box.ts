@@ -140,6 +140,9 @@ export interface DivisionBoxConfig {
   /** UI configuration for CoreBox header display */
   ui?: DivisionBoxUIConfig
 
+  /** Initial session state available before the renderer reads session keys */
+  initialState?: Record<string, unknown>
+
   /** WebContentsView preferences (main process only) */
   webPreferences?: any
 }

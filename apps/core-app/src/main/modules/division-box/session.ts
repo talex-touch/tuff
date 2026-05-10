@@ -86,6 +86,9 @@ export class DivisionBoxSession {
   constructor(sessionId: string, config: DivisionBoxConfig) {
     this.sessionId = sessionId
     this.config = config
+    for (const [key, value] of Object.entries(config.initialState ?? {})) {
+      this.sessionState.set(key, value)
+    }
 
     const now = Date.now()
     this.meta = {

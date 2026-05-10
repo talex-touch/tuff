@@ -1,10 +1,18 @@
-import type { FlowPayload, IProviderActivate, ITuffIcon, TuffItem } from '@talex-touch/utils'
+import type {
+  DivisionBoxConfig,
+  FlowPayload,
+  IProviderActivate,
+  ITuffIcon,
+  TuffItem
+} from '@talex-touch/utils'
 import type { ComputedRef, Ref } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents, FlowEvents } from '@talex-touch/utils/transport/events'
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+
+const DETACHED_PAYLOAD_STATE_KEY = 'detachedPayload'
 
 interface UseDetachOptions {
   searchVal: Ref<string>
@@ -30,6 +38,57 @@ function buildDetachedFeatureUrl(item: TuffItem, query: string): string {
     source: item.source?.id || ''
   })
   return `tuff://detached?${params.toString()}`
+}
+
+function resolveFeaturePluginId(item: TuffItem): string | undefined {
+  const pluginName = item.meta?.pluginName
+  if (typeof pluginName === 'string' && pluginName.trim()) {
+    return pluginName
+  }
+  if (item.source?.type === 'plugin' && item.source.id !== 'plugin-features') {
+    return item.source.id
+  }
+  return undefined
+}
+
+function buildDetachedPayload(item: TuffItem, query: string): { item: TuffItem; query: string } {
+  return {
+    item: JSON.parse(JSON.stringify(item)) as TuffItem,
+    query
+  }
+}
+
+export function buildDetachedFeatureConfig(
+  item: TuffItem,
+  query: string
+): { config: DivisionBoxConfig; isWidget: boolean } | null {
+  const interaction = item.meta?.interaction
+  const showInput = interaction?.type !== 'widget'
+  const pluginId = resolveFeaturePluginId(item)
+  if (!pluginId) {
+    return null
+  }
+
+  const isWidget = interaction?.type === 'widget'
+  const path =
+    interaction?.type === 'webcontent' && interaction.path ? interaction.path : 'index.html'
+  const initialState = isWidget
+    ? { [DETACHED_PAYLOAD_STATE_KEY]: buildDetachedPayload(item, query) }
+    : undefined
+
+  return {
+    isWidget,
+    config: {
+      url: isWidget ? buildDetachedFeatureUrl(item, query) : `plugin://${pluginId}/${path}`,
+      title: item.render?.basic?.title || 'Detached Item',
+      icon: resolveIcon(item),
+      size: 'medium',
+      keepAlive: true,
+      pluginId,
+      ui: { showInput, initialInput: showInput ? query : '' },
+      initialState
+    }
+  }
 }
 
 function resolveActorPluginId(payload: FlowPayload | null): string | undefined {
@@ -92,39 +151,20 @@ export function useDetach(options: UseDetachOptions) {
 
   async function detachFeature(item: TuffItem): Promise<void> {
     try {
-      const interaction = item.meta?.interaction
-      const showInput = interaction?.type !== 'widget'
-      const pluginId = item.source?.type === 'plugin' ? item.source.id : undefined
-      if (!pluginId) {
+      const detached = buildDetachedFeatureConfig(item, searchVal.value)
+      if (!detached) {
         return
       }
-      const isWidget = interaction?.type === 'widget'
-      const path =
-        interaction?.type === 'webcontent' && interaction.path ? interaction.path : 'index.html'
-
-      const config = {
-        url: isWidget
-          ? buildDetachedFeatureUrl(item, searchVal.value)
-          : `plugin://${pluginId}/${path}`,
-        title: item.render?.basic?.title || 'Detached Item',
-        icon: resolveIcon(item),
-        size: 'medium' as const,
-        keepAlive: true,
-        pluginId,
-        ui: { showInput, initialInput: showInput ? searchVal.value : '' }
-      }
-      const response = await transport.send(DivisionBoxEvents.open, config)
+      const response = await transport.send(DivisionBoxEvents.open, detached.config)
       if (response?.success) {
         const sessionId = response.data?.sessionId
-        if (sessionId && isWidget) {
+        if (sessionId && detached.isWidget) {
+          const detachedPayload = detached.config.initialState?.[DETACHED_PAYLOAD_STATE_KEY]
           await transport
             .send(DivisionBoxEvents.updateState, {
               sessionId,
-              key: 'detachedPayload',
-              value: {
-                item: JSON.parse(JSON.stringify(item)) as TuffItem,
-                query: searchVal.value
-              }
+              key: DETACHED_PAYLOAD_STATE_KEY,
+              value: detachedPayload
             })
             .catch((error) => {
               console.warn('[useDetach] Failed to persist widget payload:', error)
