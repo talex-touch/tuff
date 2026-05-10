@@ -56,6 +56,20 @@ function provider(overrides: Partial<ProviderRegistryRecord> = {}): ProviderRegi
   }
 }
 
+function textTranslateCapability(providerId: string) {
+  return {
+    id: `cap_text_translate_${providerId}`,
+    providerId,
+    capability: 'text.translate',
+    schemaRef: 'nexus://schemas/provider/text-translate.v1',
+    metering: { unit: 'character' },
+    constraints: null,
+    metadata: null,
+    createdAt: '2026-05-10T00:00:00.000Z',
+    updatedAt: '2026-05-10T00:00:00.000Z',
+  }
+}
+
 function scene(overrides: Partial<SceneRegistryRecord> = {}): SceneRegistryRecord {
   return {
     id: 'corebox.selection.translate',
@@ -145,9 +159,14 @@ describe('runSceneOrchestrator', () => {
         run: expect.objectContaining({
           status: 'failed',
           error: expect.objectContaining({ code: 'PROVIDER_ADAPTER_UNAVAILABLE' }),
-          selected: [
-            expect.objectContaining({ providerId: 'prv_tencent_cloud_mt' }),
-          ],
+          selected: [],
+          fallbackTrail: expect.arrayContaining([
+            expect.objectContaining({
+              providerId: 'prv_tencent_cloud_mt',
+              status: 'failed',
+              reason: 'provider_adapter_unavailable',
+            }),
+          ]),
         }),
       },
     })
@@ -196,6 +215,172 @@ describe('runSceneOrchestrator', () => {
         metadata: expect.objectContaining({ providerRequestId: 'req_tencent_1', latencyMs: 42 }),
       }),
     ]))
+  })
+
+  it('adapter 失败且 fallback enabled 时继续尝试下一个候选 provider', async () => {
+    const primary = provider({
+      id: 'prv_primary',
+      name: 'primary',
+      displayName: 'Primary Provider',
+      capabilities: [textTranslateCapability('prv_primary')],
+    })
+    const secondary = provider({
+      id: 'prv_secondary',
+      name: 'secondary',
+      displayName: 'Secondary Provider',
+      capabilities: [textTranslateCapability('prv_secondary')],
+    })
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene({
+      fallback: 'enabled',
+      bindings: [
+        {
+          id: 'binding_primary',
+          sceneId: 'corebox.selection.translate',
+          providerId: 'prv_primary',
+          capability: 'text.translate',
+          priority: 10,
+          weight: null,
+          status: 'enabled',
+          constraints: null,
+          metadata: null,
+          createdAt: '2026-05-10T00:00:00.000Z',
+          updatedAt: '2026-05-10T00:00:00.000Z',
+        },
+        {
+          id: 'binding_secondary',
+          sceneId: 'corebox.selection.translate',
+          providerId: 'prv_secondary',
+          capability: 'text.translate',
+          priority: 20,
+          weight: null,
+          status: 'enabled',
+          constraints: null,
+          metadata: null,
+          createdAt: '2026-05-10T00:00:00.000Z',
+          updatedAt: '2026-05-10T00:00:00.000Z',
+        },
+      ],
+    }))
+    storeMocks.getProviderRegistryEntry.mockImplementation(async (_event, providerId: string) => {
+      if (providerId === 'prv_primary')
+        return primary
+      if (providerId === 'prv_secondary')
+        return secondary
+      return null
+    })
+
+    registerSceneCapabilityAdapter('tencent-cloud:text.translate', async ({ provider }) => {
+      if (provider.id === 'prv_primary')
+        throw new Error('primary unavailable')
+      return {
+        output: { translatedText: 'fallback result' },
+        providerRequestId: 'req_secondary',
+        latencyMs: 64,
+        usage: [
+          {
+            unit: 'character',
+            quantity: 5,
+            billable: true,
+            providerId: provider.id,
+            capability: 'text.translate',
+            estimated: true,
+          },
+        ],
+      }
+    })
+
+    const run = await runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
+      input: { text: 'hello' },
+    })
+
+    expect(run).toMatchObject({
+      status: 'completed',
+      output: { translatedText: 'fallback result' },
+      selected: [
+        expect.objectContaining({ providerId: 'prv_secondary' }),
+      ],
+      fallbackTrail: expect.arrayContaining([
+        expect.objectContaining({ providerId: 'prv_primary', status: 'failed', reason: 'primary unavailable' }),
+        expect.objectContaining({ providerId: 'prv_secondary', status: 'selected' }),
+      ]),
+      usage: [
+        expect.objectContaining({ providerId: 'prv_secondary', quantity: 5 }),
+      ],
+    })
+  })
+
+  it('adapter 失败且 fallback disabled 时不再尝试下一个候选 provider', async () => {
+    const primary = provider({
+      id: 'prv_primary',
+      name: 'primary',
+      displayName: 'Primary Provider',
+      capabilities: [textTranslateCapability('prv_primary')],
+    })
+    const secondary = provider({
+      id: 'prv_secondary',
+      name: 'secondary',
+      displayName: 'Secondary Provider',
+      capabilities: [textTranslateCapability('prv_secondary')],
+    })
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene({
+      fallback: 'disabled',
+      bindings: [
+        {
+          id: 'binding_primary',
+          sceneId: 'corebox.selection.translate',
+          providerId: 'prv_primary',
+          capability: 'text.translate',
+          priority: 10,
+          weight: null,
+          status: 'enabled',
+          constraints: null,
+          metadata: null,
+          createdAt: '2026-05-10T00:00:00.000Z',
+          updatedAt: '2026-05-10T00:00:00.000Z',
+        },
+        {
+          id: 'binding_secondary',
+          sceneId: 'corebox.selection.translate',
+          providerId: 'prv_secondary',
+          capability: 'text.translate',
+          priority: 20,
+          weight: null,
+          status: 'enabled',
+          constraints: null,
+          metadata: null,
+          createdAt: '2026-05-10T00:00:00.000Z',
+          updatedAt: '2026-05-10T00:00:00.000Z',
+        },
+      ],
+    }))
+    storeMocks.getProviderRegistryEntry.mockImplementation(async (_event, providerId: string) => {
+      if (providerId === 'prv_primary')
+        return primary
+      if (providerId === 'prv_secondary')
+        return secondary
+      return null
+    })
+    const adapter = vi.fn(async () => {
+      throw new Error('primary unavailable')
+    })
+    registerSceneCapabilityAdapter('tencent-cloud:text.translate', adapter)
+
+    await expect(runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
+      input: { text: 'hello' },
+    })).rejects.toMatchObject({
+      statusCode: 502,
+      data: {
+        code: 'PROVIDER_ADAPTER_FAILED',
+        run: expect.objectContaining({
+          status: 'failed',
+          selected: [],
+          fallbackTrail: expect.arrayContaining([
+            expect.objectContaining({ providerId: 'prv_primary', status: 'failed', reason: 'primary unavailable' }),
+          ]),
+        }),
+      },
+    })
+    expect(adapter).toHaveBeenCalledTimes(1)
   })
 
   it('默认腾讯云 text.translate adapter 可执行并返回标准 output/usage', async () => {
