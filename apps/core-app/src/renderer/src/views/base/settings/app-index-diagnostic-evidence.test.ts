@@ -114,6 +114,7 @@ describe('app index diagnostic evidence', () => {
         displayName: 'Calculator',
         rawDisplayName: 'Calculator',
         displayNameStatus: 'clean',
+        iconPresent: true,
         launchKind: 'uwp',
         launchTarget: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
         appIdentity: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
@@ -136,6 +137,7 @@ describe('app index diagnostic evidence', () => {
           launchKind: 'uwp',
           launchTarget: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
           displayNameStatus: 'clean',
+          iconPresent: true,
           matchedStages: ['phrase', 'fts'],
           reindexStatus: 'updated'
         }
@@ -208,6 +210,7 @@ describe('app index diagnostic evidence', () => {
         displayName: 'Work Tool',
         rawDisplayName: 'Work Tool',
         displayNameStatus: 'clean',
+        iconPresent: true,
         launchKind: 'shortcut',
         launchTarget: 'C:\\Program Files\\Work Tool\\tool.exe',
         launchArgs: '--profile default',
@@ -235,7 +238,8 @@ describe('app index diagnostic evidence', () => {
         launchTarget: 'C:\\Program Files\\Work Tool\\tool.exe',
         launchArgs: '--profile default',
         workingDirectory: 'C:\\Program Files\\Work Tool',
-        displayNameStatus: 'clean'
+        displayNameStatus: 'clean',
+        iconPresent: true
       }
     })
   })

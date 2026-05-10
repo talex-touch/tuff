@@ -29,6 +29,7 @@ function buildEvidence(
       displayName: 'Calculator',
       rawDisplayName: 'Calculator',
       displayNameStatus: 'clean',
+      iconPresent: true,
       bundleId: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe',
       appIdentity: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
       launchKind: 'uwp',
@@ -62,6 +63,7 @@ function buildEvidence(
         launchTarget: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
         bundleOrIdentity: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe',
         displayNameStatus: 'clean',
+        iconPresent: true,
         matchedStages: ['phrase', 'fts'],
         reindexStatus: 'updated'
       }
@@ -79,6 +81,7 @@ describe('app-index-diagnostic-verifier', () => {
       requireLaunchTarget: true,
       requireBundleOrIdentity: true,
       requireCleanDisplayName: true,
+      requireIcon: true,
       requireReindex: true,
       requireCaseIds: [
         'windows-app-scan-uwp',
@@ -129,6 +132,7 @@ describe('app-index-diagnostic-verifier', () => {
         requireWorkingDirectory: true,
         requireBundleOrIdentity: true,
         requireCleanDisplayName: true,
+        requireIcon: true,
         requireReindex: true,
         requireCaseIds: ['windows-app-scan-uwp']
       }).failures
@@ -141,6 +145,7 @@ describe('app-index-diagnostic-verifier', () => {
       'diagnostic workingDirectory is missing',
       'diagnostic bundleId/appIdentity is missing',
       'diagnostic displayName is not clean: missing',
+      'diagnostic icon is missing',
       'diagnostic reindex did not succeed: not-found',
       'diagnostic reusable case ids missing: windows-app-scan-uwp'
     ])
@@ -186,6 +191,7 @@ describe('app-index-diagnostic-verifier', () => {
           displayName: 'Work Tool',
           rawDisplayName: 'Work Tool',
           displayNameStatus: 'clean',
+          iconPresent: true,
           launchKind: 'shortcut',
           launchTarget: 'C:\\Program Files\\Work Tool\\tool.exe',
           launchArgs: '--profile default',
@@ -220,6 +226,7 @@ describe('app-index-diagnostic-verifier', () => {
           displayName: 'WeChat',
           rawDisplayName: '\u03A2\uFFFD\uFFFD',
           displayNameStatus: 'fallback',
+          iconPresent: true,
           launchKind: 'path',
           launchTarget: 'D:\\Weixin\\Weixin.exe',
           alternateNames: ['微信'],
@@ -268,5 +275,28 @@ describe('app-index-diagnostic-verifier', () => {
         { requireCleanDisplayName: true }
       ).failures
     ).toEqual(['diagnostic displayName is not clean: missing'])
+  })
+
+  it('fails icon gate when diagnostic evidence lacks indexed icon metadata', () => {
+    expect(
+      evaluateAppIndexDiagnosticEvidence(
+        buildEvidence({
+          app: {
+            id: 9,
+            path: 'D:\\Weixin\\Weixin.exe',
+            name: 'WeChat',
+            displayName: 'WeChat',
+            rawDisplayName: 'WeChat',
+            displayNameStatus: 'clean',
+            iconPresent: false,
+            launchKind: 'path',
+            launchTarget: 'D:\\Weixin\\Weixin.exe',
+            alternateNames: [],
+            entryEnabled: true
+          }
+        }),
+        { requireIcon: true }
+      ).failures
+    ).toEqual(['diagnostic icon is missing'])
   })
 })
