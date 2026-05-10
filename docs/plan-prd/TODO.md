@@ -54,6 +54,10 @@
   - Settings Everything 页新增 `everything-diagnostic-evidence` 复制/保存入口，记录 backend、health、fallbackChain、backendAttemptErrors、errorCode 与 lastBackendError；`everything:diagnostic:verify` 可离线复核 ready/enabled/available/backend/health/version/esPath/fallbackChain/caseId 门禁，并校验 `verdict` / suggested fields 与 `status` 一致，供 Windows 真机回归补证使用。
   - Windows App 索引补齐 ClickOnce `.appref-ms` 入口：Start Menu 扫描、实时变更、复制路径加入应用索引与执行 `addAppByPath()` 均走 app 索引链路。
   - 已补 targeted regression：Everything provider 与 SearchCore baseline。
+- [x] 搜索索引服务性能治理 V1：
+  - FileProvider 明确拆为平台原生快速候选层与自建索引增强层；macOS 新增 Spotlight/mdfind fast provider，Linux 以 locate/Tracker/Baloo 探测接入，Windows 保持 Everything。
+  - CoreBox 首帧搜索不等待 usage/pinned/completion/semantic；后处理通过 enrichment update 异步推送。
+  - macOS fresh app scan 不再跑 `mdls` 或生成 base64 图标，`mdls` 进入 maintenance lane 后台修正；搜索 payload 图标/缩略图改为 `tfile://`/路径懒加载。
 - [x] Clipboard 插件预览链路收口：
   - Clipboard SDK `history.onDidChange()` 对旧版 plugin transport stream 同步抛错做 non-fatal 降级。
   - clipboard-history 详情页优先解析 `meta.image_original_url` / `getHistoryImageUrl(id)`，原图不可用时显式展示缩略图降级状态。
@@ -974,9 +978,9 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 287 |
+| 已完成 (`- [x]`) | 288 |
 | 未完成 (`- [ ]`) | 43 |
-| 总计 | 330 |
+| 总计 | 331 |
 | 完成率 | 87% |
 
 > 统计时间: 2026-05-10（按本文件实时 checkbox 计数）。

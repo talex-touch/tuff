@@ -28,7 +28,8 @@
 - Nexus Provider 聚合与 Scene 编排进入架构蓝图：后续汇率、AI 大模型、文本翻译、图片/截图翻译统一进入 Provider registry，Scene 按 capability 自由组合与路由。
 - Nexus Provider Registry 已接入 D1 密文 secure store 与腾讯云机器翻译 `text.translate` live check；生产需配置 `PROVIDER_REGISTRY_SECURE_STORE_KEY`，首版仍不包含 Scene runtime、图片翻译和 Metering ledger。
 - Tuff 2.5.0 AI 板块已锁定 Plan PRD：定位为桌面 AI 入口收口版本，优先收口 CoreBox / OmniPanel 的用户可感知 AI 场景；Stable 只承诺文本 + OCR，Workflow / Pilot 联动进入 Beta，Assistant、多模态生成与 Nexus Scene runtime 编排列为 Experimental / 2.5.x 后续。
-- CoreApp 启动搜索卡顿治理已落地“平衡模式 + 双库隔离”：`database-aux.db` 分流非核心高频写、`DbWriteScheduler` QoS/熔断、索引热路径单写者化、启动期降载（120s）。
+- CoreApp 启动搜索卡顿治理已落地“平衡模式 + 双库隔离”：`database-aux.db` 分流非核心高频写、`DbWriteScheduler` QoS/熔断、索引热路径单写者化、启动期降载（120s）；CoreBox 可见期间会短时压低后台 polling lane 频率/并发，减少搜索交互窗口内的后台争用。
+- 搜索索引服务已切到“平台原生快速层 + 自建索引增强层”口径：Windows Everything、macOS Spotlight/mdfind、Linux locate/Tracker/Baloo 负责首帧候选，自建 FileProvider 负责 FTS、内容解析、语义和后台修正；搜索 payload 禁止内联 base64 图标/缩略图，大资源通过 `tfile://`/本地路径懒加载。
 - 发布开关已就位：`TUFF_DB_AUX_ENABLED`、`TUFF_DB_QOS_ENABLED`、`TUFF_STARTUP_DEGRADE_ENABLED`，支持灰度与快速回滚。
 - Legacy/兼容/结构治理已切换到“统一实施 PRD + 五工作包并行”口径（不再使用 Phase 1-3 决策叙事）。
 - 治理基线：`legacy 81/184`、`raw channel 13/46`、超长文件（主线）`47`。

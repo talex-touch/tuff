@@ -5,6 +5,35 @@
 
 ## 2026-05-10
 
+### perf(core-app): layer native file search and slim search payloads
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/native-file-search-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/utils.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/search-processing-service.ts`
+  - 文件搜索改为平台原生 fast layer + 自建索引 enrichment layer：Windows 保持 Everything，macOS 新增 Spotlight/mdfind provider，Linux 按 locate/Tracker/Baloo 可用性探测接入，FileProvider 保留 FTS/内容索引慢层。
+  - CoreBox 首帧搜索只做基础排序，usage/pinned/completion/semantic 后处理改为异步 enrichment 推送，避免首帧被行为统计和补全权重拖慢。
+  - macOS AppScanner fresh scan 不再调用 `mdls` 或生成 base64 图标；`mdls` 保留后台 maintenance lane 修正 displayName，缺失 `Info.plist` 的无效 `.app` 直接跳过。
+  - 搜索结果图标/缩略图不再内联 base64，大字段统一瘦身为 `tfile://`/本地路径引用并由 renderer 懒加载。
+
+### perf(core-app): apply CoreBox active polling pressure
+
+- `packages/utils/common/utils/polling.ts`
+- `packages/utils/__tests__/polling-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/manager.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/manager.test.ts`
+- `apps/core-app/src/main/utils/perf-context.ts`
+- `apps/core-app/src/main/utils/perf-monitor.ts`
+- `apps/core-app/src/main/utils/perf-context.test.ts`
+- `apps/core-app/src/main/core/channel-core.ts`
+  - `PollingService` 新增带 reason/TTL 的全局 pressure，可按 lane 放大轮询间隔并压低并发上限，诊断快照会暴露当前 pressure 便于排查后台争用。
+  - CoreBox 展示期间短时设置 `corebox-active` pressure，隐藏时清理；搜索交互窗口内会降低 realtime/io/maintenance/serial 后台 polling lane 的频率与并发，减少启动搜索和剪贴板/索引轮询竞争。
+  - `PerfContext` 慢上下文告警改为只在 `blocking` 模式或近期 event-loop lag 存在时输出，普通异步耗时不再单独刷慢上下文 warn，并把最近 lag 信息写入告警 meta；IPC 序列化增加大 payload warning。
+
 ### test(core-app): require detailed common app launch acceptance
 
 - `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
