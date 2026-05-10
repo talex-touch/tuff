@@ -37,7 +37,7 @@ import {
   SUMMARY_INTERVAL_MS,
   SYSTEM_SLEEP_THRESHOLD_MS
 } from './perf-monitor-config'
-import { getPerfContextSnapshot } from './perf-context'
+import { getPerfContextSnapshot, markPerfEventLoopLag } from './perf-context'
 import { appendWorkflowDebugLog } from './workflow-debug'
 import { getHeapStatistics } from 'node:v8'
 
@@ -748,6 +748,7 @@ export class PerfMonitor {
       severity,
       at: now
     }
+    markPerfEventLoopLag(this.lastEventLoopLag)
     this.evaluateSevereLagBurst(lagMs, now)
     this.loopLagAggregate.count += 1
     this.loopLagAggregate.lastAt = now
