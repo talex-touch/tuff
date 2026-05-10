@@ -137,14 +137,14 @@ function buildCaseTemplate(caseId: WindowsRequiredCaseId, evidenceDir: string): 
 
 function buildAppIndexVerifierCommand(caseId: WindowsRequiredCaseId): string {
   if (caseId === 'windows-app-scan-uwp') {
-    return 'pnpm -C "apps/core-app" run app-index:diagnostic:verify -- --input "<app-index-evidence.json>" --requireSuccess --requireQueryHit --requireLaunchKind uwp --requireLaunchTarget --requireBundleOrIdentity --requireCleanDisplayName --requireReindex --requireCaseIds windows-app-scan-uwp'
+    return 'pnpm -C "apps/core-app" run app-index:diagnostic:verify -- --input "<app-index-evidence.json>" --requireSuccess --requireQueryHit --requireLaunchKind uwp --requireLaunchTarget --requireBundleOrIdentity --requireCleanDisplayName --requireIcon --requireReindex --requireCaseIds windows-app-scan-uwp'
   }
 
   if (caseId === 'windows-shortcut-launch-args') {
-    return 'pnpm -C "apps/core-app" run app-index:diagnostic:verify -- --input "<app-index-evidence.json>" --requireSuccess --requireQueryHit --requireLaunchKind shortcut --requireLaunchTarget --requireLaunchArgs --requireWorkingDirectory --requireCleanDisplayName --requireReindex --requireCaseIds windows-shortcut-launch-args'
+    return 'pnpm -C "apps/core-app" run app-index:diagnostic:verify -- --input "<app-index-evidence.json>" --requireSuccess --requireQueryHit --requireLaunchKind shortcut --requireLaunchTarget --requireLaunchArgs --requireWorkingDirectory --requireCleanDisplayName --requireIcon --requireReindex --requireCaseIds windows-shortcut-launch-args'
   }
 
-  return 'pnpm -C "apps/core-app" run app-index:diagnostic:verify -- --input "<app-index-evidence.json>" --requireSuccess --requireQueryHit --requireLaunchKind path,shortcut,uwp --requireLaunchTarget --requireCleanDisplayName --requireReindex --requireCaseIds windows-third-party-app-launch'
+  return 'pnpm -C "apps/core-app" run app-index:diagnostic:verify -- --input "<app-index-evidence.json>" --requireSuccess --requireQueryHit --requireLaunchKind path,shortcut,uwp --requireLaunchTarget --requireCleanDisplayName --requireIcon --requireReindex --requireCaseIds windows-third-party-app-launch'
 }
 
 function buildAppIndexCapabilityVerifierCommand(caseId: WindowsRequiredCaseId): string {

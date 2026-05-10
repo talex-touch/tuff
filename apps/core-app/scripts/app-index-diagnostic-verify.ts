@@ -31,6 +31,7 @@ Options:
   --requireWorkingDirectory   Require app.workingDirectory.
   --requireBundleOrIdentity   Require app.bundleId or app.appIdentity.
   --requireCleanDisplayName   Require clean or fallback displayName status.
+  --requireIcon               Require app.iconPresent=true.
   --requireReindex            Require successful reindex summary.
   --requireCaseIds <csv>      Require reusable manual regression case ids.
   --compact                   Print single-line JSON.
@@ -106,6 +107,10 @@ function parseArgs(argv: string[]): CliOptions | null {
     }
     if (arg === '--requireCleanDisplayName') {
       options.requireCleanDisplayName = true
+      continue
+    }
+    if (arg === '--requireIcon') {
+      options.requireIcon = true
       continue
     }
     if (arg === '--requireReindex') {

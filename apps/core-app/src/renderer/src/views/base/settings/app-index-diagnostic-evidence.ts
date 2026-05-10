@@ -61,6 +61,7 @@ export interface AppIndexDiagnosticEvidencePayload {
       workingDirectory?: string
       bundleOrIdentity?: string
       displayNameStatus?: string
+      iconPresent?: boolean
       matchedStages: AppIndexDiagnosticStageKey[]
       reindexStatus?: AppIndexReindexResult['status']
     }
@@ -110,6 +111,7 @@ export function buildAppIndexDiagnosticEvidencePayload(options: {
         workingDirectory: options.diagnosis.app?.workingDirectory,
         bundleOrIdentity: options.diagnosis.app?.bundleId || options.diagnosis.app?.appIdentity,
         displayNameStatus: options.diagnosis.app?.displayNameStatus,
+        iconPresent: options.diagnosis.app?.iconPresent,
         matchedStages,
         reindexStatus: options.reindex?.status
       }

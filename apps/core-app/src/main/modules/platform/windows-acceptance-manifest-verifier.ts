@@ -228,6 +228,7 @@ const APP_INDEX_GATE_OPTIONS_BY_CASE_ID: Partial<
     requireLaunchTarget: true,
     requireBundleOrIdentity: true,
     requireCleanDisplayName: true,
+    requireIcon: true,
     requireReindex: true,
     requireCaseIds: ['windows-app-scan-uwp']
   },
@@ -237,6 +238,7 @@ const APP_INDEX_GATE_OPTIONS_BY_CASE_ID: Partial<
     requireLaunchKind: ['path', 'shortcut', 'uwp'],
     requireLaunchTarget: true,
     requireCleanDisplayName: true,
+    requireIcon: true,
     requireReindex: true,
     requireCaseIds: ['windows-third-party-app-launch']
   },
@@ -248,6 +250,7 @@ const APP_INDEX_GATE_OPTIONS_BY_CASE_ID: Partial<
     requireLaunchArgs: true,
     requireWorkingDirectory: true,
     requireCleanDisplayName: true,
+    requireIcon: true,
     requireReindex: true,
     requireCaseIds: ['windows-shortcut-launch-args']
   }
@@ -333,6 +336,7 @@ const WINDOWS_ACCEPTANCE_CASE_VERIFIER_COMMAND_REQUIREMENTS: Record<
         '--requireLaunchTarget',
         '--requireBundleOrIdentity',
         '--requireCleanDisplayName',
+        '--requireIcon',
         '--requireReindex',
         '--requireCaseIds windows-app-scan-uwp'
       ]
@@ -360,6 +364,7 @@ const WINDOWS_ACCEPTANCE_CASE_VERIFIER_COMMAND_REQUIREMENTS: Record<
         '--requireLaunchKind path,shortcut,uwp',
         '--requireLaunchTarget',
         '--requireCleanDisplayName',
+        '--requireIcon',
         '--requireReindex',
         '--requireCaseIds windows-third-party-app-launch'
       ]
@@ -390,6 +395,7 @@ const WINDOWS_ACCEPTANCE_CASE_VERIFIER_COMMAND_REQUIREMENTS: Record<
         '--requireLaunchArgs',
         '--requireWorkingDirectory',
         '--requireCleanDisplayName',
+        '--requireIcon',
         '--requireReindex',
         '--requireCaseIds windows-shortcut-launch-args'
       ]

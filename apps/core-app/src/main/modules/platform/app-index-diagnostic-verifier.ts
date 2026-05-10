@@ -55,6 +55,7 @@ export interface AppIndexDiagnosticEvidencePayload {
       workingDirectory?: string
       bundleOrIdentity?: string
       displayNameStatus?: string
+      iconPresent?: boolean
       matchedStages: AppIndexDiagnosticStageKey[]
       reindexStatus?: AppIndexReindexResult['status']
     }
@@ -70,6 +71,7 @@ export interface AppIndexDiagnosticGateOptions {
   requireWorkingDirectory?: boolean
   requireBundleOrIdentity?: boolean
   requireCleanDisplayName?: boolean
+  requireIcon?: boolean
   requireReindex?: boolean
   requireCaseIds?: string[]
 }
@@ -146,6 +148,10 @@ export function evaluateAppIndexDiagnosticEvidence(
     failures.push(
       `diagnostic displayName is not clean: ${evidence.app?.displayNameStatus || 'missing'}`
     )
+  }
+
+  if (options.requireIcon && evidence.app?.iconPresent !== true) {
+    failures.push('diagnostic icon is missing')
   }
 
   if (options.requireReindex && !evidence.reindex?.success) {

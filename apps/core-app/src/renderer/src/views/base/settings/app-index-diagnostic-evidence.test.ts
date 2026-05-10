@@ -22,6 +22,7 @@ describe('app index diagnostic evidence', () => {
         displayName: 'Calculator',
         rawDisplayName: 'Calculator',
         displayNameStatus: 'clean',
+        iconPresent: true,
         fileName: 'Calculator.lnk',
         bundleId: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe',
         appIdentity: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
@@ -251,6 +252,7 @@ describe('app index diagnostic evidence', () => {
         displayName: 'WeChat',
         rawDisplayName: '\u03A2\uFFFD\uFFFD',
         displayNameStatus: 'fallback',
+        iconPresent: true,
         launchKind: 'path',
         launchTarget: 'D:\\Weixin\\Weixin.exe',
         alternateNames: ['微信'],
@@ -271,7 +273,8 @@ describe('app index diagnostic evidence', () => {
       displayNameStatus: 'fallback'
     })
     expect(payload.manualRegression.suggestedEvidenceFields).toMatchObject({
-      displayNameStatus: 'fallback'
+      displayNameStatus: 'fallback',
+      iconPresent: true
     })
   })
 })
