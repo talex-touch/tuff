@@ -327,8 +327,9 @@ export async function getProviderCredential(
   if (!row?.encrypted_value)
     return null
 
+  const masterKey = resolveMasterKey(event)
   try {
-    return decryptCredential(normalizedAuthRef, row.encrypted_value, resolveMasterKey(event))
+    return decryptCredential(normalizedAuthRef, row.encrypted_value, masterKey)
   }
   catch {
     return null

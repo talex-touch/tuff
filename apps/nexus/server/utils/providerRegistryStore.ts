@@ -3,6 +3,7 @@ import type { H3Event } from 'h3'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { normalizeProviderAuthRef } from './providerCredentialStore'
 
 const PROVIDERS_TABLE = 'provider_registry'
 const CAPABILITIES_TABLE = 'provider_capabilities'
@@ -358,7 +359,8 @@ function normalizeProviderInput(input: CreateProviderRegistryInput): NormalizedP
     ? 'disabled'
     : assertEnum(input.status, 'status', PROVIDER_REGISTRY_STATUSES)
   const authType = assertEnum(input.authType, 'authType', PROVIDER_REGISTRY_AUTH_TYPES)
-  const authRef = normalizeOptionalString(input.authRef, 'authRef', 255)
+  const rawAuthRef = normalizeOptionalString(input.authRef, 'authRef', 255)
+  const authRef = rawAuthRef ? normalizeProviderAuthRef(rawAuthRef) : null
 
   if (authType !== 'none' && !authRef) {
     throw createError({ statusCode: 400, statusMessage: 'authRef is required for credentialed providers.' })
