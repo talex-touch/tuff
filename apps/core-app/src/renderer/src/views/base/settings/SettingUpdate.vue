@@ -619,6 +619,7 @@ function openAssetsDialog(): void {
     </TuffBlockSlot>
 
     <TuffBlockSlot
+      v-if="showAdvancedSettings"
       :title="t('settings.settingUpdate.evidenceTitle')"
       :description="t('settings.settingUpdate.evidenceDesc')"
       default-icon="i-carbon-document-export"
