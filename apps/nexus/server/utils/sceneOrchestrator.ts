@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { getProviderRegistryEntry } from './providerRegistryStore'
 import { getSceneRegistryEntry } from './sceneRegistryStore'
+import { invokeTencentTextTranslate } from './tencentMachineTranslationProvider'
 
 export type SceneRunStatus = 'planned' | 'completed' | 'failed'
 export type SceneRunMode = 'dry_run' | 'execute'
@@ -105,6 +106,30 @@ export type SceneCapabilityAdapter = (context: SceneAdapterContext) => Promise<S
 
 const sceneCapabilityAdapters = new Map<string, SceneCapabilityAdapter>()
 
+const tencentTextTranslateAdapter: SceneCapabilityAdapter = async ({ event, provider, input }) => {
+  const result = await invokeTencentTextTranslate(event, provider, input as { text?: unknown, sourceLang?: unknown, targetLang?: unknown, projectId?: unknown })
+  return {
+    output: {
+      translatedText: result.translatedText,
+    },
+    providerRequestId: result.providerRequestId,
+    latencyMs: result.latencyMs,
+    usage: [
+      {
+        ...result.usage,
+        providerId: provider.id,
+        capability: 'text.translate',
+      },
+    ],
+  }
+}
+
+function registerDefaultSceneCapabilityAdapters() {
+  registerSceneCapabilityAdapter('tencent-cloud:text.translate', tencentTextTranslateAdapter)
+}
+
+registerDefaultSceneCapabilityAdapters()
+
 export function registerSceneCapabilityAdapter(key: string, adapter: SceneCapabilityAdapter): () => void {
   const normalizedKey = normalizeAdapterKey(key)
   sceneCapabilityAdapters.set(normalizedKey, adapter)
@@ -116,6 +141,11 @@ export function registerSceneCapabilityAdapter(key: string, adapter: SceneCapabi
 
 export function clearSceneCapabilityAdaptersForTest() {
   sceneCapabilityAdapters.clear()
+}
+
+export function resetSceneCapabilityAdaptersForTest() {
+  sceneCapabilityAdapters.clear()
+  registerDefaultSceneCapabilityAdapters()
 }
 
 function nowIso() {
