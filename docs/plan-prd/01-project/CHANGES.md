@@ -5,6 +5,17 @@
 
 ## 2026-05-10
 
+### test(core-app): require detailed common app launch acceptance
+
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/scripts/windows-acceptance-verify.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+  - Windows acceptance manifest 的 `manualChecks.commonAppLaunch` 新增 `checks[]` 详情字段，可对 WeChat / Codex / Apple Music 等样本分别记录 `searchHit`、`displayNameCorrect`、`iconCorrect`、`launchSucceeded` 与 `coreBoxHiddenAfterLaunch`。
+  - `windows:acceptance:verify` 新增 `--requireCommonAppLaunchDetails`，最终强门禁会要求每个 common app target 都完成五项确认；`windows:acceptance:template` 会生成对应占位并把该参数写入 `verification.recommendedCommand`，避免只填 `passedTargets` 就绕过真实启动体验验收。
+
 ### test(core-app): require strict clipboard stress evidence in Windows acceptance
 
 - `apps/core-app/src/main/modules/platform/clipboard-stress-verifier.ts`
@@ -403,6 +414,16 @@
   - 明确 Nexus 当前没有截图翻译/图片翻译/腾讯云机器翻译的现成配置页；腾讯云机器翻译是新增 Provider 配置面的首个候选样例，同一 Provider 暴露 `text.translate`、`image.translate`、`image.translate.e2e` 等 capability，计量规则进入 Metering 而非 Scene 私有逻辑。
   - 补齐范围/非目标、业务目标/工程目标、迁移映射、兼容边界、建议数据表、错误码基线、风险待决项与验收清单。
   - 同步 README、INDEX、TODO、路线图与质量基线入口；Phase 1 文档化任务已标记完成，后续实现仍需补最近路径 typecheck/test/docs guard 证据。
+
+### feat(core-app/nexus): collect provider-level search performance telemetry
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/*`
+- `apps/nexus/server/utils/telemetryStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/analytics.vue`
+  - CoreBox 搜索 telemetry 改为在最终 `session.end` 聚合上报一次，补齐 `firstResultMs/firstResultCount`、provider timing/result/status、error/timeout 计数与匿名 query length 场景字段；继续禁止上传搜索明文。
+  - `search-gather` 纯 fast provider 完成路径也会记录 provider timing，避免本地 analytics 对 fast-only 搜索漏采。
+  - Nexus telemetry 聚合新增 first-result、慢查询、provider error/timeout/slow 与 provider P95 近似查询；Admin Analytics 的 Search 页新增 Provider Performance 表，展示 calls/avg/P95/max/results/errors/timeouts/slow rate。
+  - 新增 CoreApp search telemetry 与 Nexus provider 聚合定向测试；当前环境缺少已安装依赖，`vitest` 命令因 `Command "vitest" not found` 未能执行。
 
 ## 2026-05-08
 
