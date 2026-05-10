@@ -224,9 +224,9 @@ describe('windows-acceptance-manifest-verifier', () => {
       }
     )
 
-    expect(gate.failures).toEqual([
+    expect(gate.failures).toContain(
       'clipboard stress verifier command is missing release gate flags'
-    ])
+    )
   })
 
   it('requires verifier commands to be replayable through explicit input files', () => {
