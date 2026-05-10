@@ -25,6 +25,8 @@ const RECOMMENDATION_TELEMETRY_INTERVAL_MS = 10 * 60 * 1000
 const RECOMMENDATION_QUERY_BUDGET_MS = 50
 const RECOMMENDATION_PERF_PLUGIN = 'core'
 const PLUGIN_PROVIDER_TIMEOUT_MS = 200
+const TIME_CONTEXT_SLOT_BOOST = 1.35
+const TIME_CONTEXT_DAY_BOOST = 1.15
 const recommendationLog = createLogger('RecommendationEngine')
 
 type LogMeta = Record<string, string | number | boolean | null | undefined>
@@ -60,6 +62,40 @@ function toDayBucket(timestampMs: number): number {
   return Math.floor(timestampMs / DAY_MS)
 }
 
+export function calculateTimeContextBoost(
+  itemTimeStats: ParsedItemTimeStats,
+  currentTime: TimePattern
+): number {
+  let boost = 1
+
+  if ((itemTimeStats.timeSlotDistribution[currentTime.timeSlot] ?? 0) > 0) {
+    boost *= TIME_CONTEXT_SLOT_BOOST
+  }
+
+  if ((itemTimeStats.dayOfWeekDistribution[currentTime.dayOfWeek] ?? 0) > 0) {
+    boost *= TIME_CONTEXT_DAY_BOOST
+  }
+
+  return boost
+}
+
+export function calculateTimeRelevanceScore(
+  itemTimeStats: ParsedItemTimeStats,
+  currentTime: TimePattern
+): number {
+  const slotUsage = itemTimeStats.timeSlotDistribution[currentTime.timeSlot] ?? 0
+  const totalUsage = Object.values(itemTimeStats.timeSlotDistribution).reduce((a, b) => a + b, 0)
+
+  if (totalUsage === 0) return 0
+
+  const slotRatio = slotUsage / totalUsage
+  const dayUsage = itemTimeStats.dayOfWeekDistribution[currentTime.dayOfWeek] ?? 0
+  const avgDayUsage = itemTimeStats.dayOfWeekDistribution.reduce((a, b) => a + b, 0) / 7
+  const dayFactor = dayUsage / (avgDayUsage || 1)
+
+  return slotRatio * 100 * dayFactor * calculateTimeContextBoost(itemTimeStats, currentTime)
+}
+
 export class RecommendationEngine {
   private contextProvider: ContextProvider
   private itemRebuilder: ItemRebuilder
@@ -68,6 +104,7 @@ export class RecommendationEngine {
     items: TuffItem[]
     timestamp: number
     context: ContextSignal
+    cacheKey: string
   } | null = null
 
   private readonly CACHE_DURATION_MS = 30 * 60 * 1000
@@ -535,11 +572,15 @@ export class RecommendationEngine {
 
     const contextStartedAt = performance.now()
     const context = await this.contextProvider.getCurrentContext()
+    const contextCacheKey = this.contextProvider.generateCacheKey(context)
     const contextDuration = performance.now() - contextStartedAt
 
     if (!options.forceRefresh && this.recommendationCache) {
       const cacheAge = Date.now() - this.recommendationCache.timestamp
-      if (cacheAge < this.CACHE_DURATION_MS) {
+      if (
+        cacheAge < this.CACHE_DURATION_MS &&
+        this.recommendationCache.cacheKey === contextCacheKey
+      ) {
         recommendationLog.debug('Memory cache hit', {
           meta: {
             cacheAgeSeconds: Number((cacheAge / 1000).toFixed(1)),
@@ -613,7 +654,8 @@ export class RecommendationEngine {
       this.recommendationCache = {
         items: finalItems,
         timestamp: Date.now(),
-        context
+        context,
+        cacheKey: contextCacheKey
       }
 
       this.recordRecommendationPerf('recommendation.total', {
@@ -656,7 +698,8 @@ export class RecommendationEngine {
       this.recommendationCache = {
         items: finalItems,
         timestamp: Date.now(),
-        context
+        context,
+        cacheKey: contextCacheKey
       }
 
       this.recordRecommendationPerf('recommendation.total', {
@@ -731,7 +774,8 @@ export class RecommendationEngine {
     this.recommendationCache = {
       items: combinedItems,
       timestamp: Date.now(),
-      context
+      context,
+      cacheKey: contextCacheKey
     }
 
     const containerLayout = this.buildContainerLayout(options, combinedItems)
@@ -1277,20 +1321,7 @@ export class RecommendationEngine {
     itemTimeStats: ParsedItemTimeStats,
     currentTime: TimePattern
   ): number {
-    const slotUsage = itemTimeStats.timeSlotDistribution[currentTime.timeSlot]
-    const totalUsage = Object.values(itemTimeStats.timeSlotDistribution).reduce((a, b) => a + b, 0)
-
-    if (totalUsage === 0) return 0
-
-    // 当前时段的使用占比
-    const slotRatio = slotUsage / totalUsage
-
-    // 星期几的加权
-    const dayUsage = itemTimeStats.dayOfWeekDistribution[currentTime.dayOfWeek]
-    const avgDayUsage = itemTimeStats.dayOfWeekDistribution.reduce((a, b) => a + b, 0) / 7
-    const dayFactor = dayUsage / (avgDayUsage || 1)
-
-    return slotRatio * 100 * dayFactor
+    return calculateTimeRelevanceScore(itemTimeStats, currentTime)
   }
 
   /**
@@ -1699,14 +1730,20 @@ export class RecommendationEngine {
    * 去重候选项
    */
   private deduplicateCandidates(candidates: CandidateItem[]): CandidateItem[] {
-    const seen = new Set<string>()
+    const seen = new Map<string, CandidateItem>()
     const result: CandidateItem[] = []
 
     for (const candidate of candidates) {
       const key = `${candidate.sourceId}:${candidate.itemId}`
-      if (!seen.has(key)) {
-        seen.add(key)
+      const existing = seen.get(key)
+      if (!existing) {
+        seen.set(key, candidate)
         result.push(candidate)
+        continue
+      }
+
+      if (!existing.timeStats && candidate.timeStats) {
+        existing.timeStats = candidate.timeStats
       }
     }
 

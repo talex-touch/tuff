@@ -336,7 +336,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   public createTuffItem(
     plugin: ITouchPlugin,
     feature: IPluginFeature,
-    matchResult?: MatchRange[]
+    matchResult?: MatchRange[],
+    matchSource?: string
   ): TuffItem {
     const searchTokens = feature.searchTokens ?? buildFeatureSearchTokens(feature)
     feature.searchTokens = searchTokens
@@ -389,6 +390,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           searchTokens,
           // Match result for UI highlighting
           matchResult,
+          source: matchSource,
           // Include acceptedInputTypes for frontend UI decisions
           acceptedInputTypes: feature.acceptedInputTypes
         }
@@ -485,6 +487,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
         let matchResult: MatchRange[] | undefined
         let matchScore = 0
+        let matchSource: string | undefined
 
         if (queryText) {
           const result = matchFeature({
@@ -498,13 +501,27 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           if (result.matched) {
             matchResult = result.matchRanges
             matchScore = result.score
+            matchSource = result.matchedToken
+              ? result.matchType === 'fuzzy'
+                ? 'fuzzy-token'
+                : 'token'
+              : result.matchRanges.length > 0
+                ? result.matchType === 'fuzzy'
+                  ? 'name-fuzzy'
+                  : 'name'
+                : 'description'
           }
         }
 
         // Show feature if: command matches, OR feature accepts the input types (e.g., image)
         if (matchesCommand || matchesClipboardCommand || featureAcceptsInputs) {
           matchedItems.push({
-            item: this.createTuffItem(plugin, feature, matchResult),
+            item: this.createTuffItem(
+              plugin,
+              feature,
+              matchResult,
+              matchSource || (matchesCommand || matchesClipboardCommand ? 'command' : 'input')
+            ),
             matchScore: 1000 + (feature.priority ?? 0)
           })
           continue
@@ -513,7 +530,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         // Fuzzy text match fallback
         if (matchResult && matchScore > 0) {
           matchedItems.push({
-            item: this.createTuffItem(plugin, feature, matchResult),
+            item: this.createTuffItem(plugin, feature, matchResult, matchSource),
             matchScore: matchScore + (feature.priority ?? 0)
           })
         }
