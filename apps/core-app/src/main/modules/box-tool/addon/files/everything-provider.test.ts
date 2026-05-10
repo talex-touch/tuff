@@ -1,17 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  transportOn,
-  appTaskIsActive,
-  appTaskWaitForIdle,
-  iconWorkerExtract,
-  execFileMock,
-  fileProviderOnSearch
-} = vi.hoisted(() => ({
+const { transportOn, execFileMock, fileProviderOnSearch } = vi.hoisted(() => ({
   transportOn: vi.fn(),
-  appTaskIsActive: vi.fn(() => false),
-  appTaskWaitForIdle: vi.fn(() => Promise.resolve(true)),
-  iconWorkerExtract: vi.fn(() => Promise.resolve<Buffer | null>(null)),
   execFileMock: vi.fn(),
   fileProviderOnSearch: vi.fn(() => Promise.resolve({ items: [] as Array<unknown> }))
 }))
@@ -52,21 +42,6 @@ vi.mock('../../search-engine/search-logger', () => ({
   }
 }))
 
-vi.mock('../../../../service/app-task-gate', () => ({
-  appTaskGate: {
-    isActive: appTaskIsActive,
-    waitForIdle: appTaskWaitForIdle
-  }
-}))
-
-vi.mock('./workers/icon-worker-client', () => ({
-  IconWorkerClient: vi.fn(() => ({
-    extract: iconWorkerExtract,
-    getStatus: vi.fn(),
-    shutdown: vi.fn()
-  }))
-}))
-
 vi.mock('./file-provider', () => ({
   fileProvider: {
     onSearch: fileProviderOnSearch
@@ -90,8 +65,6 @@ interface MutableEverythingProvider {
   backendAttemptErrors: Record<string, string>
   sdkAddon: unknown
   esPath: string | null
-  iconCache: Map<string, string>
-  iconExtractions: Map<string, Promise<string | null>>
   searchEverything: (query: string, maxResults: number, signal?: AbortSignal) => Promise<unknown[]>
   searchEverythingWithSdk: (
     query: string,
@@ -166,16 +139,8 @@ afterEach(() => {
   provider.backendAttemptErrors = {}
   provider.sdkAddon = null
   provider.esPath = null
-  provider.iconCache.clear()
-  provider.iconExtractions.clear()
 
   transportOn.mockReset()
-  appTaskIsActive.mockReset()
-  appTaskIsActive.mockReturnValue(false)
-  appTaskWaitForIdle.mockReset()
-  appTaskWaitForIdle.mockResolvedValue(true)
-  iconWorkerExtract.mockReset()
-  iconWorkerExtract.mockResolvedValue(null)
   execFileMock.mockReset()
   fileProviderOnSearch.mockReset()
   fileProviderOnSearch.mockResolvedValue({ items: [] as Array<unknown> })
@@ -294,78 +259,24 @@ describe('everything-provider fallback chain', () => {
     ])
   })
 
-  it('warms and reuses cached icons for Everything results across searches', async () => {
+  it('returns slim Everything results without inline icon payloads', async () => {
     const provider = everythingProvider as unknown as MutableEverythingProvider
     provider.backend = 'cli'
     provider.isAvailable = true
     provider.isEnabled = true
 
     vi.spyOn(provider, 'searchEverything').mockResolvedValue([buildResult('C:/demo.txt')])
-    iconWorkerExtract.mockResolvedValue(Buffer.from('icon-bytes'))
-
-    const first = await withPlatform('win32', () =>
-      provider.onSearch({ text: 'demo', inputs: [] }, new AbortController().signal)
-    )
-
-    expect(first.items?.[0]?.render?.basic?.icon).toEqual({
-      type: 'class',
-      value: 'i-ri-file-line'
-    })
-
-    await Promise.resolve()
-    await Promise.resolve()
-
-    const second = await withPlatform('win32', () =>
-      provider.onSearch({ text: 'demo', inputs: [] }, new AbortController().signal)
-    )
-
-    expect(second.items?.[0]?.render?.basic?.icon?.type).toBe('url')
-    expect(second.items?.[0]?.render?.basic?.icon?.value).toBe(
-      'data:image/png;base64,aWNvbi1ieXRlcw=='
-    )
-    expect(iconWorkerExtract).toHaveBeenCalledTimes(1)
-    expect(appTaskWaitForIdle).toHaveBeenCalledTimes(1)
-    expect(appTaskWaitForIdle).toHaveBeenCalledWith(250)
-  })
-
-  it('skips Everything icon warmup while app tasks are active', async () => {
-    const provider = everythingProvider as unknown as MutableEverythingProvider
-    provider.backend = 'cli'
-    provider.isAvailable = true
-    provider.isEnabled = true
-
-    vi.spyOn(provider, 'searchEverything').mockResolvedValue([buildResult('C:/busy.txt')])
-    appTaskIsActive.mockReturnValue(true)
 
     const result = await withPlatform('win32', () =>
-      provider.onSearch({ text: 'busy', inputs: [] }, new AbortController().signal)
-    )
-
-    expect(result.items?.[0]?.render?.basic?.icon).toEqual({
-      type: 'class',
-      value: 'i-ri-file-line'
-    })
-    expect(iconWorkerExtract).not.toHaveBeenCalled()
-    expect(appTaskWaitForIdle).not.toHaveBeenCalled()
-  })
-
-  it('caps concurrent Everything icon warmups', async () => {
-    const provider = everythingProvider as unknown as MutableEverythingProvider
-    provider.backend = 'cli'
-    provider.isAvailable = true
-    provider.isEnabled = true
-
-    vi.spyOn(provider, 'searchEverything').mockResolvedValue(
-      Array.from({ length: 8 }, (_, index) => buildResult(`C:/demo-${index}.txt`))
-    )
-    appTaskWaitForIdle.mockReturnValue(new Promise(() => {}) as never)
-
-    await withPlatform('win32', () =>
       provider.onSearch({ text: 'demo', inputs: [] }, new AbortController().signal)
     )
 
-    expect(appTaskWaitForIdle).toHaveBeenCalledTimes(4)
-    expect(provider.iconExtractions.size).toBe(4)
+    const icon = result.items?.[0]?.render?.basic?.icon
+    expect(icon).toEqual({
+      type: 'class',
+      value: 'i-ri-file-line'
+    })
+    expect(icon?.value?.startsWith('data:')).toBe(false)
   })
 
   it('aborts SDK search without switching backend state', async () => {

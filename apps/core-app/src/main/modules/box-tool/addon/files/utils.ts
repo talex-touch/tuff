@@ -3,6 +3,7 @@ import type { FileScanOptions } from '@talex-touch/utils/common/file-scan-consta
 import type { files as filesSchema } from '../../../../db/schema'
 import type { ScannedFileInfo } from './types'
 import path from 'node:path'
+import { toTfileUrl } from '@talex-touch/utils/network'
 import {
   isIndexableFile as globalIsIndexableFile,
   scanDirectory as globalScanDirectory
@@ -62,11 +63,11 @@ export function mapFileToTuffItem(
 
   let icon: { type: 'file' | 'url' | 'class' | 'emoji'; value: string }
 
-  if (_extensions.thumbnail) {
+  if (_extensions.thumbnail && !_extensions.thumbnail.startsWith('data:')) {
     // Use pre-generated thumbnail for fast display
     icon = {
       type: 'url',
-      value: _extensions.thumbnail
+      value: toTfileUrl(_extensions.thumbnail)
     }
   } else if (
     DIRECT_IMAGE_EXTENSIONS.has(extension) &&
@@ -84,10 +85,10 @@ export function mapFileToTuffItem(
       type: 'file',
       value: file.path
     }
-  } else if (_extensions.icon) {
+  } else if (_extensions.icon && !_extensions.icon.startsWith('data:')) {
     icon = {
       type: 'url',
-      value: _extensions.icon
+      value: toTfileUrl(_extensions.icon)
     }
   } else {
     // Trigger lazy load if callback provided
