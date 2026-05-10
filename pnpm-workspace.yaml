@@ -84,3 +84,5 @@ catalogs:
   icons:
     '@iconify-json/carbon': ^1.2.20
     '@iconify-json/twemoji': ^1.2.5
+  conflicts_next-auth_t4_24_14:
+    next-auth: ~4.24.14
