@@ -171,6 +171,7 @@ function toDiagnosticApp(
     displayName: resolvedDisplayName || undefined,
     rawDisplayName: rawDisplayName || undefined,
     displayNameStatus,
+    iconPresent: Boolean(appInfo.icon?.trim()),
     fileName: appInfo.fileName,
     bundleId: app.extensions.bundleId || undefined,
     appIdentity: app.extensions[APP_IDENTITY_EXTENSION_KEY] || undefined,
