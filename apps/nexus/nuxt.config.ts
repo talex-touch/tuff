@@ -163,6 +163,9 @@ export default defineNuxtConfig({
       historyRetentionDays: Number(process.env.EXCHANGE_RATE_HISTORY_RETENTION_DAYS || 0),
       storeRateRows: process.env.EXCHANGE_RATE_STORE_RATE_ROWS !== 'false',
     },
+    providerRegistry: {
+      secureStoreKey: process.env.PROVIDER_REGISTRY_SECURE_STORE_KEY,
+    },
     releaseDownload: {
       secret: process.env.RELEASE_DOWNLOAD_SIGNING_SECRET || authSecret,
       signedTtlSeconds: Number(process.env.RELEASE_DOWNLOAD_SIGNED_TTL_SECONDS || 15 * 60),
