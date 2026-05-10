@@ -15,6 +15,11 @@ import type { createDbUtils } from '../../../../db/utils'
 import { files as filesSchema, keywordMappings } from '../../../../db/schema'
 import type { ScannedAppInfo } from './app-types'
 import { normalizeStringList } from './app-utils'
+import {
+  isProbablyCorruptedDisplayName,
+  normalizeDisplayName,
+  resolveDisplayName
+} from './display-name-sync-utils'
 
 type DbAppRecord = typeof filesSchema.$inferSelect
 type DbAppWithExtensions = DbAppRecord & { extensions: Record<string, string | null> }
@@ -155,11 +160,17 @@ function toDiagnosticApp(
   app: DbAppWithExtensions
 ): AppIndexDiagnosticApp {
   const appInfo = context.mapDbAppToScannedInfo(app)
+  const rawDisplayName = normalizeDisplayName(app.displayName)
+  const resolvedDisplayName = resolveDisplayName(app.displayName, app.name)
+  const displayNameStatus = resolveDisplayNameStatus(app.displayName, app.name, resolvedDisplayName)
+
   return {
     id: app.id,
     path: app.path,
     name: app.name,
-    displayName: app.displayName || undefined,
+    displayName: resolvedDisplayName || undefined,
+    rawDisplayName: rawDisplayName || undefined,
+    displayNameStatus,
     fileName: appInfo.fileName,
     bundleId: app.extensions.bundleId || undefined,
     appIdentity: app.extensions[APP_IDENTITY_EXTENSION_KEY] || undefined,
@@ -173,6 +184,21 @@ function toDiagnosticApp(
     entrySource: app.extensions[APP_ENTRY_SOURCE_EXTENSION_KEY] || undefined,
     entryEnabled: isManagedEntryEnabledExtensionMap(app.extensions)
   }
+}
+
+function resolveDisplayNameStatus(
+  displayName: string | null | undefined,
+  fallbackName: string | null | undefined,
+  resolvedDisplayName: string
+): AppIndexDiagnosticApp['displayNameStatus'] {
+  const normalizedDisplayName = normalizeDisplayName(displayName)
+  if (normalizedDisplayName && normalizedDisplayName === resolvedDisplayName) {
+    return 'clean'
+  }
+  if (isProbablyCorruptedDisplayName(normalizedDisplayName) && normalizeDisplayName(fallbackName)) {
+    return 'fallback'
+  }
+  return normalizedDisplayName ? 'fallback' : 'missing'
 }
 
 async function loadStoredKeywordEntries(

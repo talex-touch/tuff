@@ -77,6 +77,8 @@ export interface AppIndexDiagnosticApp {
   path: string;
   name: string;
   displayName?: string;
+  rawDisplayName?: string;
+  displayNameStatus?: "clean" | "fallback" | "missing";
   fileName?: string;
   bundleId?: string;
   appIdentity?: string;
