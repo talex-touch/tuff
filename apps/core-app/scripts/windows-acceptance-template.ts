@@ -168,7 +168,7 @@ function buildManifest(options: CliOptions): WindowsAcceptanceManifest {
     generatedAt: new Date().toISOString(),
     platform: 'win32',
     verification: {
-      recommendedCommand: `pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "${manifestPath}" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireCommonAppTargets WeChat,Codex,"Apple Music"`
+      recommendedCommand: `pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "${manifestPath}" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCommonAppTargets WeChat,Codex,"Apple Music"`
     },
     cases: WINDOWS_REQUIRED_CASE_IDS.map((caseId) => {
       const template = buildCaseTemplate(caseId, evidenceDir)
@@ -201,7 +201,17 @@ function buildManifest(options: CliOptions): WindowsAcceptanceManifest {
     manualChecks: {
       commonAppLaunch: {
         targets: ['WeChat', 'Codex', 'Apple Music'],
-        passedTargets: []
+        passedTargets: [],
+        checks: ['WeChat', 'Codex', 'Apple Music'].map((target) => ({
+          target,
+          searchHit: false,
+          displayNameCorrect: false,
+          iconCorrect: false,
+          launchSucceeded: false,
+          coreBoxHiddenAfterLaunch: false,
+          notes:
+            'Set all booleans to true only after verifying the app is searchable, has the expected display name and icon, launches successfully, and hides CoreBox immediately after launch.'
+        }))
       }
     }
   }

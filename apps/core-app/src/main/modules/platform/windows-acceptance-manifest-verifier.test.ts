@@ -19,7 +19,7 @@ function buildManifest(
     platform: 'win32',
     verification: {
       recommendedCommand:
-        'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "evidence/windows-acceptance.json" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireSearchTrace --requireClipboardStress --requireCommonAppTargets WeChat,Codex,"Apple Music"'
+        'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "evidence/windows-acceptance.json" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCommonAppTargets WeChat,Codex,"Apple Music"'
     },
     cases: WINDOWS_REQUIRED_CASE_IDS.map((caseId) => ({
       caseId,
@@ -43,7 +43,15 @@ function buildManifest(
     manualChecks: {
       commonAppLaunch: {
         targets: ['WeChat', 'Codex', 'Apple Music'],
-        passedTargets: ['WeChat', 'Codex', 'Apple Music']
+        passedTargets: ['WeChat', 'Codex', 'Apple Music'],
+        checks: ['WeChat', 'Codex', 'Apple Music'].map((target) => ({
+          target,
+          searchHit: true,
+          displayNameCorrect: true,
+          iconCorrect: true,
+          launchSucceeded: true,
+          coreBoxHiddenAfterLaunch: true
+        }))
       }
     },
     ...overrides
@@ -57,6 +65,7 @@ describe('windows-acceptance-manifest-verifier', () => {
       requireVerifierCommand: true,
       requireSearchTrace: true,
       requireClipboardStress: true,
+      requireCommonAppLaunchDetails: true,
       requireCommonAppTargets: ['WeChat', 'Codex', 'Apple Music']
     })
 
@@ -282,6 +291,40 @@ describe('windows-acceptance-manifest-verifier', () => {
     })
 
     expect(gate.failures).toEqual([])
+  })
+
+  it('requires common app launch details when requested', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: {
+            targets: ['WeChat', 'Codex', 'Apple Music'],
+            passedTargets: ['WeChat', 'Codex', 'Apple Music'],
+            checks: [
+              {
+                target: 'WeChat',
+                searchHit: true,
+                displayNameCorrect: false,
+                iconCorrect: true,
+                launchSucceeded: true,
+                coreBoxHiddenAfterLaunch: false
+              }
+            ]
+          }
+        }
+      }),
+      {
+        requireCommonAppLaunchDetails: true,
+        requireCommonAppTargets: ['WeChat', 'Codex', 'Apple Music']
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'common app launch display name not verified: WeChat',
+      'common app launch did not hide CoreBox: WeChat',
+      'common app launch detail is missing: Codex',
+      'common app launch detail is missing: Apple Music'
+    ])
   })
 
   it('recomputes case-specific app-index gates instead of trusting embedded gate status', () => {
