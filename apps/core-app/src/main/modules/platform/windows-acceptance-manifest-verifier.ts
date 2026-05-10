@@ -93,6 +93,16 @@ export interface WindowsAcceptanceCase {
   evidence?: WindowsAcceptanceEvidenceRef[]
 }
 
+export interface WindowsAcceptanceCommonAppLaunchCheck {
+  target: string
+  searchHit: boolean
+  displayNameCorrect: boolean
+  iconCorrect: boolean
+  launchSucceeded: boolean
+  coreBoxHiddenAfterLaunch: boolean
+  notes?: string
+}
+
 export interface WindowsAcceptanceManifest {
   schema: typeof WINDOWS_ACCEPTANCE_MANIFEST_SCHEMA
   generatedAt: string
@@ -111,6 +121,7 @@ export interface WindowsAcceptanceManifest {
     commonAppLaunch?: {
       targets: string[]
       passedTargets: string[]
+      checks?: WindowsAcceptanceCommonAppLaunchCheck[]
     }
   }
 }
@@ -124,6 +135,7 @@ export interface WindowsAcceptanceGateOptions {
   requireSearchTrace?: boolean
   requireClipboardStress?: boolean
   requireCommonAppTargets?: string[]
+  requireCommonAppLaunchDetails?: boolean
 }
 
 export interface WindowsAcceptanceGate {
@@ -451,6 +463,7 @@ const ACCEPTANCE_RECOMMENDED_COMMAND_REQUIREMENT: VerifierCommandRequirement = {
     '--requireRecommendedCommandGateFlags',
     '--requireSearchTrace',
     '--requireClipboardStress',
+    '--requireCommonAppLaunchDetails',
     '--requireCommonAppTargets',
     'WeChat',
     'Codex',
@@ -502,6 +515,44 @@ function findMissingCaseVerifierCommandRequirements(testCase: WindowsAcceptanceC
     item.verifierCommand ? [item.verifierCommand] : []
   )
   return findMissingVerifierCommandRequirements(commands, requirements)
+}
+
+function findCommonAppLaunchDetailFailures(
+  manifest: WindowsAcceptanceManifest,
+  requiredTargets: string[] = []
+): string[] {
+  const commonAppLaunch = manifest.manualChecks?.commonAppLaunch
+  const targets = requiredTargets.length > 0 ? requiredTargets : (commonAppLaunch?.targets ?? [])
+  const checksByTarget = new Map(
+    (commonAppLaunch?.checks ?? []).map((check) => [check.target, check])
+  )
+  const failures: string[] = []
+
+  for (const target of targets) {
+    const check = checksByTarget.get(target)
+    if (!check) {
+      failures.push(`common app launch detail is missing: ${target}`)
+      continue
+    }
+
+    if (check.searchHit !== true) {
+      failures.push(`common app launch search hit missing: ${target}`)
+    }
+    if (check.displayNameCorrect !== true) {
+      failures.push(`common app launch display name not verified: ${target}`)
+    }
+    if (check.iconCorrect !== true) {
+      failures.push(`common app launch icon not verified: ${target}`)
+    }
+    if (check.launchSucceeded !== true) {
+      failures.push(`common app launch did not succeed: ${target}`)
+    }
+    if (check.coreBoxHiddenAfterLaunch !== true) {
+      failures.push(`common app launch did not hide CoreBox: ${target}`)
+    }
+  }
+
+  return failures
 }
 
 export function getWindowsAcceptanceEvidenceSchemaKey(
@@ -746,6 +797,10 @@ export function evaluateWindowsAcceptanceManifest(
     if (missingTargets.length > 0) {
       failures.push(`common app launch targets missing: ${missingTargets.join(', ')}`)
     }
+  }
+
+  if (options.requireCommonAppLaunchDetails) {
+    failures.push(...findCommonAppLaunchDetailFailures(manifest, options.requireCommonAppTargets))
   }
 
   return { passed: failures.length === 0, failures, warnings }

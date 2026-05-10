@@ -249,6 +249,10 @@ function parseRequiredCapabilities() {
     .filter(Boolean)
 }
 
+function getProviderCheckResult(providerId: string): ProviderCheckResult | null {
+  return providerCheckResults.value[providerId] ?? null
+}
+
 async function fetchRegistry() {
   loading.value = true
   error.value = null
@@ -723,20 +727,20 @@ onMounted(() => {
                     </span>
                   </div>
                   <div
-                    v-if="providerCheckResults[provider.id]"
+                    v-if="getProviderCheckResult(provider.id)"
                     class="mt-3 rounded-xl px-3 py-2 text-xs"
-                    :class="providerCheckResults[provider.id].success ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-200' : 'bg-amber-500/10 text-amber-700 dark:text-amber-200'"
+                    :class="getProviderCheckResult(provider.id)?.success ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-200' : 'bg-amber-500/10 text-amber-700 dark:text-amber-200'"
                   >
                     <div class="flex flex-wrap items-center gap-2">
                       <TxStatusBadge
-                        :text="providerCheckResults[provider.id].success ? 'success' : 'failed'"
-                        :status="providerCheckResults[provider.id].success ? 'success' : 'warning'"
+                        :text="getProviderCheckResult(provider.id)?.success ? 'success' : 'failed'"
+                        :status="getProviderCheckResult(provider.id)?.success ? 'success' : 'warning'"
                         size="sm"
                       />
-                      <span>{{ providerCheckResults[provider.id].message }}</span>
+                      <span>{{ getProviderCheckResult(provider.id)?.message }}</span>
                     </div>
                     <p class="mt-1 text-black/45 dark:text-white/45">
-                      {{ providerCheckResults[provider.id].capability }} · {{ providerCheckResults[provider.id].latency }}ms · {{ providerCheckResults[provider.id].requestId || providerCheckResults[provider.id].error?.code || '-' }}
+                      {{ getProviderCheckResult(provider.id)?.capability }} · {{ getProviderCheckResult(provider.id)?.latency }}ms · {{ getProviderCheckResult(provider.id)?.requestId || getProviderCheckResult(provider.id)?.error?.code || '-' }}
                     </p>
                   </div>
                 </article>

@@ -458,6 +458,19 @@ export async function runSceneOrchestrator(
   for (let index = 0; index < selected.length; index += 1) {
     const selection = selected[index]
     const provider = selectedProviders[index]
+    if (!selection || !provider) {
+      const run: SceneRunResult = {
+        ...baseRun,
+        status: 'failed',
+        output: Object.keys(outputs).length === 0 ? null : outputs,
+        error: {
+          code: 'PROVIDER_UNAVAILABLE',
+          message: 'Selected provider path is incomplete.',
+        },
+      }
+      addTrace(trace, 'adapter.dispatch', 'failed', 'Selected provider path is incomplete.')
+      throw createRunError(500, 'PROVIDER_UNAVAILABLE', 'Selected provider path is incomplete.', run)
+    }
     const adapter = resolveAdapter(provider, selection.capability)
 
     if (!adapter) {
@@ -515,13 +528,14 @@ export async function runSceneOrchestrator(
         providerId: provider.id,
         capability: selection.capability,
       })
-      throw createRunError(502, 'PROVIDER_ADAPTER_FAILED', run.error.message, run)
+      throw createRunError(502, 'PROVIDER_ADAPTER_FAILED', run.error?.message ?? 'Provider adapter failed.', run)
     }
   }
 
+  const firstSelection = selected[0]
   return {
     ...baseRun,
     status: 'completed',
-    output: selected.length === 1 ? outputs[selected[0].capability] : outputs,
+    output: selected.length === 1 && firstSelection ? outputs[firstSelection.capability] : outputs,
   }
 }

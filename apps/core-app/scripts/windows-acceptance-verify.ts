@@ -72,6 +72,8 @@ Options:
                                  Require verification.recommendedCommand --input to match the current manifest path.
   --requireSearchTrace           Require search trace stats path and verifier command.
   --requireClipboardStress       Require clipboard stress summary path and verifier command.
+  --requireCommonAppLaunchDetails
+                                 Require each common app target to verify search/name/icon/launch/CoreBox hide.
   --requireCommonAppTargets <csv>
                                  Require launched app targets, e.g. WeChat,Codex,Apple Music.
   --compact                      Print single-line JSON.
@@ -155,6 +157,10 @@ function parseArgs(argv: string[]): CliOptions | null {
     }
     if (arg === '--requireClipboardStress') {
       options.requireClipboardStress = true
+      continue
+    }
+    if (arg === '--requireCommonAppLaunchDetails') {
+      options.requireCommonAppLaunchDetails = true
       continue
     }
     if (arg === '--requireCommonAppTargets' && argv[i + 1]) {
