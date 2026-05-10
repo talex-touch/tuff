@@ -106,8 +106,20 @@ export type SceneCapabilityAdapter = (context: SceneAdapterContext) => Promise<S
 
 const sceneCapabilityAdapters = new Map<string, SceneCapabilityAdapter>()
 
+function normalizeTencentTranslateInput(input: unknown) {
+  const record = input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : {}
+  return {
+    text: record.text,
+    sourceLang: record.sourceLang,
+    targetLang: record.targetLang,
+    projectId: record.projectId,
+  }
+}
+
 const tencentTextTranslateAdapter: SceneCapabilityAdapter = async ({ event, provider, input }) => {
-  const result = await invokeTencentTextTranslate(event, provider, input as { text?: unknown, sourceLang?: unknown, targetLang?: unknown, projectId?: unknown })
+  const result = await invokeTencentTextTranslate(event, provider, normalizeTencentTranslateInput(input))
   return {
     output: {
       translatedText: result.translatedText,
