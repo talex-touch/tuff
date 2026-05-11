@@ -1,5 +1,6 @@
 #!/usr/bin/env tsx
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import process from 'node:process'
 import {
   evaluateSearchTracePerformance,
@@ -8,6 +9,7 @@ import {
 
 interface CliOptions {
   input?: string
+  output?: string
   minSamples?: number
   slowThresholdMs?: number
   maxFirstResultP95Ms?: number
@@ -30,6 +32,7 @@ function printUsage(): void {
 
 Options:
   --input <path>                 Read search-trace logs from a file. Defaults to stdin.
+  --output <path>                Write search-trace-stats JSON to a file in addition to stdout.
   --minSamples <count>           Minimum paired session count. Default: 200.
   --slowThresholdMs <ms>         Slow query threshold. Default: 800.
   --maxFirstResultP95Ms <ms>     Fail when first.result P95 is above this value.
@@ -60,6 +63,10 @@ function parseArgs(argv: string[]): CliOptions | null {
 
     if (arg === '--input' && argv[i + 1]) {
       options.input = argv[++i]
+      continue
+    }
+    if (arg === '--output' && argv[i + 1]) {
+      options.output = argv[++i]
       continue
     }
     if (arg === '--minSamples' && argv[i + 1]) {
@@ -132,8 +139,14 @@ async function main(): Promise<void> {
     ...summary,
     gate
   }
+  const serialized = `${JSON.stringify(output, null, options.pretty ? 2 : 0)}\n`
 
-  console.log(JSON.stringify(output, null, options.pretty ? 2 : 0))
+  if (options.output) {
+    await mkdir(path.dirname(path.resolve(options.output)), { recursive: true })
+    await writeFile(options.output, serialized, 'utf8')
+  }
+
+  process.stdout.write(serialized)
   if (!gate.passed) {
     process.exitCode = 1
   }

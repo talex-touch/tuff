@@ -14,8 +14,15 @@ import { ContextProvider } from './context-provider'
 import { ItemRebuilder } from './item-rebuilder'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { createLogger } from '../../../../utils/logger'
+import {
+  DAY_MS,
+  calculateTimeRelevanceScore,
+  toDayBucket,
+  toErrorMeta
+} from './recommendation-utils'
 
-const DAY_MS = 86_400_000
+export { calculateTimeContextBoost, calculateTimeRelevanceScore } from './recommendation-utils'
+
 const TREND_HISTORY_DAYS = 30
 const TREND_RECENT_DAYS = 7
 const TREND_BACKFILL_INTERVAL_SECONDS = 2
@@ -25,76 +32,7 @@ const RECOMMENDATION_TELEMETRY_INTERVAL_MS = 10 * 60 * 1000
 const RECOMMENDATION_QUERY_BUDGET_MS = 50
 const RECOMMENDATION_PERF_PLUGIN = 'core'
 const PLUGIN_PROVIDER_TIMEOUT_MS = 200
-const TIME_CONTEXT_SLOT_BOOST = 1.35
-const TIME_CONTEXT_DAY_BOOST = 1.15
 const recommendationLog = createLogger('RecommendationEngine')
-
-type LogMeta = Record<string, string | number | boolean | null | undefined>
-
-function toPrimitive(value: unknown): string | number | boolean | null | undefined {
-  if (value == null) return value
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return value
-  }
-  return String(value)
-}
-
-function toErrorMeta(error: unknown): LogMeta {
-  if (error instanceof Error) {
-    const node = error as Error & { code?: unknown; cause?: unknown }
-    const cause =
-      node.cause && typeof node.cause === 'object'
-        ? (node.cause as { code?: unknown; rawCode?: unknown; message?: unknown })
-        : null
-    return {
-      name: node.name,
-      message: node.message,
-      code: toPrimitive(node.code),
-      causeCode: toPrimitive(cause?.code),
-      causeRawCode: toPrimitive(cause?.rawCode),
-      causeMessage: toPrimitive(cause?.message)
-    }
-  }
-  return { message: String(error) }
-}
-
-function toDayBucket(timestampMs: number): number {
-  return Math.floor(timestampMs / DAY_MS)
-}
-
-export function calculateTimeContextBoost(
-  itemTimeStats: ParsedItemTimeStats,
-  currentTime: TimePattern
-): number {
-  let boost = 1
-
-  if ((itemTimeStats.timeSlotDistribution[currentTime.timeSlot] ?? 0) > 0) {
-    boost *= TIME_CONTEXT_SLOT_BOOST
-  }
-
-  if ((itemTimeStats.dayOfWeekDistribution[currentTime.dayOfWeek] ?? 0) > 0) {
-    boost *= TIME_CONTEXT_DAY_BOOST
-  }
-
-  return boost
-}
-
-export function calculateTimeRelevanceScore(
-  itemTimeStats: ParsedItemTimeStats,
-  currentTime: TimePattern
-): number {
-  const slotUsage = itemTimeStats.timeSlotDistribution[currentTime.timeSlot] ?? 0
-  const totalUsage = Object.values(itemTimeStats.timeSlotDistribution).reduce((a, b) => a + b, 0)
-
-  if (totalUsage === 0) return 0
-
-  const slotRatio = slotUsage / totalUsage
-  const dayUsage = itemTimeStats.dayOfWeekDistribution[currentTime.dayOfWeek] ?? 0
-  const avgDayUsage = itemTimeStats.dayOfWeekDistribution.reduce((a, b) => a + b, 0) / 7
-  const dayFactor = dayUsage / (avgDayUsage || 1)
-
-  return slotRatio * 100 * dayFactor * calculateTimeContextBoost(itemTimeStats, currentTime)
-}
 
 export class RecommendationEngine {
   private contextProvider: ContextProvider
@@ -1744,6 +1682,9 @@ export class RecommendationEngine {
 
       if (!existing.timeStats && candidate.timeStats) {
         existing.timeStats = candidate.timeStats
+      }
+      if (candidate.source === 'time-based') {
+        existing.source = 'time-based'
       }
     }
 

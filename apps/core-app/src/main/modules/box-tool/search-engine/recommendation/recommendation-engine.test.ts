@@ -1,4 +1,4 @@
-import type { ContextSignal } from './context-provider'
+import { ContextProvider, type ContextSignal } from './context-provider'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@talex-touch/utils/common/utils/polling', () => ({
@@ -93,6 +93,13 @@ const afternoonContext: ContextSignal = {
   }
 }
 
+type RecommendationCacheRecord = {
+  cacheKey: string
+  recommendedItems: string
+  createdAt: Date
+  expiresAt: Date
+}
+
 function createDbUtils() {
   return {
     getAuxDb: vi.fn(() => ({
@@ -101,7 +108,9 @@ function createDbUtils() {
       }))
     })),
     getDb: vi.fn(() => ({})),
-    getRecommendationCache: vi.fn(async () => null),
+    getRecommendationCache: vi.fn(
+      async (_cacheKey: string): Promise<RecommendationCacheRecord | null> => null
+    ),
     setRecommendationCache: vi.fn(async () => undefined)
   }
 }
@@ -176,6 +185,21 @@ describe('RecommendationEngine', () => {
     vi.clearAllMocks()
   })
 
+  it('includes time slot and weekday in the production recommendation cache key', () => {
+    const provider = new ContextProvider()
+    const tuesdayMorningContext: ContextSignal = {
+      ...morningContext,
+      time: {
+        ...morningContext.time,
+        dayOfWeek: 2
+      }
+    }
+
+    expect(provider.generateCacheKey(morningContext)).toBe('morning|1')
+    expect(provider.generateCacheKey(afternoonContext)).toBe('afternoon|1')
+    expect(provider.generateCacheKey(tuesdayMorningContext)).toBe('morning|2')
+  })
+
   it('does not reuse memory cache when the time context changes', async () => {
     const dbUtils = createDbUtils()
     const engine = new RecommendationEngine(dbUtils as never)
@@ -231,6 +255,63 @@ describe('RecommendationEngine', () => {
     expect(getCandidates).toHaveBeenCalledTimes(2)
   })
 
+  it('does not reuse persisted recommendation cache across time slots', async () => {
+    const dbUtils = createDbUtils()
+    dbUtils.getRecommendationCache.mockImplementation(async (cacheKey: string) => {
+      if (cacheKey !== 'morning|1') return null
+
+      return {
+        cacheKey,
+        recommendedItems: JSON.stringify([
+          {
+            id: 'cached-morning-app',
+            source: { id: 'app-provider', type: 'app', name: 'app-provider' },
+            kind: 'app',
+            render: { mode: 'default', basic: { title: 'cached-morning-app' } },
+            meta: { recommendation: { source: 'frequent' } }
+          }
+        ]),
+        createdAt: new Date('2026-05-04T09:00:00.000Z'),
+        expiresAt: new Date(Date.now() + 60_000)
+      }
+    })
+
+    const engine = new RecommendationEngine(dbUtils as never)
+    const contexts = [morningContext, afternoonContext]
+    const getCandidates = vi.fn(async () => ({
+      items: [
+        {
+          sourceId: 'app-provider',
+          itemId: 'fresh-afternoon-app',
+          sourceType: 'app',
+          source: 'frequent',
+          usageStats: createUsageStats('fresh-afternoon-app', { executeCount: 2 })
+        }
+      ],
+      perf: candidatePerf(1)
+    }))
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => contexts.shift() ?? afternoonContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}|${context.time.dayOfWeek}`
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates
+    })
+
+    const morning = await engine.recommend({ limit: 1 })
+    const afternoon = await engine.recommend({ limit: 1 })
+
+    expect(morning.items[0]?.id).toBe('cached-morning-app')
+    expect(afternoon.items[0]?.id).toBe('fresh-afternoon-app')
+    expect(dbUtils.getRecommendationCache).toHaveBeenNthCalledWith(1, 'morning|1')
+    expect(dbUtils.getRecommendationCache).toHaveBeenNthCalledWith(2, 'afternoon|1')
+    expect(getCandidates).toHaveBeenCalledTimes(1)
+  })
+
   it('boosts candidates that match the current time slot and weekday', () => {
     const matchingStats = createTimeStats({
       itemId: 'morning-app',
@@ -250,6 +331,18 @@ describe('RecommendationEngine', () => {
     expect(calculateTimeRelevanceScore(matchingStats, morningContext.time)).toBeGreaterThan(
       calculateTimeRelevanceScore(baselineStats, morningContext.time)
     )
+  })
+
+  it('keeps time-slot relevance even when the current weekday has no history yet', () => {
+    const slotOnlyStats = createTimeStats({
+      itemId: 'weekday-missing-app',
+      morning: 8,
+      afternoon: 2,
+      monday: 0,
+      tuesday: 10
+    })
+
+    expect(calculateTimeRelevanceScore(slotOnlyStats, morningContext.time)).toBeGreaterThan(0)
   })
 
   it('keeps time stats when duplicate frequent candidates are also time-based', async () => {
@@ -304,6 +397,7 @@ describe('RecommendationEngine', () => {
     const result = await engine.recommend({ limit: 5 })
 
     expect(result.items.map((item) => item.id).slice(0, 2)).toEqual(['morning-app', 'plain-app'])
+    expect(result.items[0]?.meta?.recommendation).toMatchObject({ source: 'time-based' })
   })
 
   it('ranks different apps first when the active time slot changes', async () => {

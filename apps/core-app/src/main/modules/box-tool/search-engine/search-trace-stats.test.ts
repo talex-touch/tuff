@@ -211,4 +211,97 @@ describe('search-trace-stats', () => {
       failures: ['paired sessions 2 < minSamples 3']
     })
   })
+
+  it('rejects internally inconsistent archived performance summaries', () => {
+    const summary = summarizeSearchTracePerformance(
+      [
+        traceLine('first.result', 's1', 30),
+        traceLine('session.end', 's1', 70)
+      ],
+      {
+        minSamples: 200,
+        slowThresholdMs: 800
+      }
+    )
+
+    expect(
+      evaluateSearchTracePerformance(
+        {
+          ...summary,
+          enoughSamples: true,
+          sessionCount: 1,
+          pairedSessionCount: 200,
+          firstResult: {
+            ...summary.firstResult,
+            sampleCount: 1,
+            slowCount: 2
+          },
+          sessionEnd: {
+            ...summary.sessionEnd,
+            sampleCount: 1
+          }
+        },
+        {
+          strict: true,
+          minSamples: 200
+        }
+      )
+    ).toEqual({
+      passed: false,
+      failures: [
+        'search trace paired sessions exceed session count',
+        'search trace paired sessions exceed first.result samples',
+        'search trace paired sessions exceed session.end samples',
+        'search trace session count 1 does not match paired/missing sessions 200',
+        'search trace first.result slow count exceeds samples',
+        'search trace first.result slowRatio does not match slow count'
+      ]
+    })
+  })
+
+  it('rejects internally inconsistent archived metric ratios and percentiles', () => {
+    const summary = summarizeSearchTracePerformance(
+      [
+        traceLine('first.result', 's1', 30),
+        traceLine('session.end', 's1', 70),
+        traceLine('first.result', 's2', 900),
+        traceLine('session.end', 's2', 950)
+      ],
+      {
+        minSamples: 1,
+        slowThresholdMs: 800
+      }
+    )
+
+    expect(
+      evaluateSearchTracePerformance(
+        {
+          ...summary,
+          firstResult: {
+            ...summary.firstResult,
+            slowRatio: 0,
+            p50Ms: 900,
+            p95Ms: 30
+          },
+          sessionEnd: {
+            ...summary.sessionEnd,
+            slowRatio: 1,
+            p95Ms: 950,
+            p99Ms: 70
+          }
+        },
+        {
+          strict: true
+        }
+      )
+    ).toEqual({
+      passed: false,
+      failures: [
+        'search trace first.result slowRatio does not match slow count',
+        'search trace first.result p95 is less than p50',
+        'search trace session.end slowRatio does not match slow count',
+        'search trace session.end p99 is less than p95'
+      ]
+    })
+  })
 })

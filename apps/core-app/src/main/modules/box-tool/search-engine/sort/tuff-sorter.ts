@@ -17,6 +17,10 @@ const MATCH_SCORE_MULTIPLIER = 20_000
 const FREQUENCY_SCORE_MULTIPLIER = 120_000
 const RECENCY_SCORE_MULTIPLIER = 500
 const KIND_SCORE_MULTIPLIER = 300
+const APP_TITLE_PREFIX_INTENT_BONUS = 480_000
+const APP_TITLE_SUBSTRING_INTENT_BONUS = 180_000
+const APP_EXACT_TOKEN_INTENT_BONUS = 6_200_000
+const APP_PREFIX_TOKEN_INTENT_BONUS = 5_700_000
 const LOW_CONFIDENCE_FEATURE_FREQUENCY_CAP = 18
 const LOW_CONFIDENCE_FEATURE_RECENCY_CAP = 1
 
@@ -61,6 +65,36 @@ function hasSearchTokenMatch(item: TuffItem, normalizedKey: string): boolean {
   })
 }
 
+function hasExactSearchTokenMatch(item: TuffItem, normalizedKey: string): boolean {
+  const rawTokens = item.meta?.extension?.searchTokens
+  if (!Array.isArray(rawTokens)) return false
+
+  return rawTokens.some((token) => {
+    if (typeof token !== 'string') return false
+    return token.toLowerCase() === normalizedKey
+  })
+}
+
+function hasSearchTokenPrefixMatch(item: TuffItem, normalizedKey: string): boolean {
+  const rawTokens = item.meta?.extension?.searchTokens
+  if (!Array.isArray(rawTokens)) return false
+
+  return rawTokens.some((token) => {
+    if (typeof token !== 'string') return false
+    const lowerToken = token.toLowerCase()
+    return lowerToken !== normalizedKey && lowerToken.startsWith(normalizedKey)
+  })
+}
+
+function hasTitleWordPrefixMatch(titleLower: string, normalizedKey: string): boolean {
+  if (normalizedKey.length < 2) return false
+
+  return titleLower
+    .split(/[\s._/\\()[\]{}:+-]+/)
+    .filter(Boolean)
+    .some((word) => word.startsWith(normalizedKey))
+}
+
 function isLowConfidenceFeatureRecall(item: TuffItem, searchKey?: string): boolean {
   if (item.kind !== 'feature') return false
 
@@ -76,6 +110,36 @@ function isLowConfidenceFeatureRecall(item: TuffItem, searchKey?: string): boole
 
   const sourceIdLower = item.source?.id?.toLowerCase()
   return Boolean(sourceIdLower?.includes(normalizedKey))
+}
+
+function getAppTitleIntentBonus(item: TuffItem, searchKey?: string): number {
+  if (item.kind !== 'app') return 0
+
+  const normalizedKey = searchKey?.trim().toLowerCase()
+  if (!normalizedKey || normalizedKey.length < 2) return 0
+
+  const titleLower = item.render.basic?.title?.toLowerCase() || ''
+  if (!titleLower.includes(normalizedKey)) return 0
+
+  if (titleLower.startsWith(normalizedKey)) return APP_TITLE_PREFIX_INTENT_BONUS
+  if (hasTitleWordPrefixMatch(titleLower, normalizedKey)) return APP_TITLE_PREFIX_INTENT_BONUS
+  return APP_TITLE_SUBSTRING_INTENT_BONUS
+}
+
+function getAppAliasIntentBonus(item: TuffItem, searchKey?: string): number {
+  if (item.kind !== 'app') return 0
+
+  const normalizedKey = searchKey?.trim().toLowerCase()
+  if (!normalizedKey || normalizedKey.length < 2) return 0
+
+  if (hasExactSearchTokenMatch(item, normalizedKey)) {
+    return APP_EXACT_TOKEN_INTENT_BONUS
+  }
+
+  const titleLower = item.render.basic?.title?.toLowerCase() || ''
+  if (titleLower.includes(normalizedKey)) return 0
+
+  return hasSearchTokenPrefixMatch(item, normalizedKey) ? APP_PREFIX_TOKEN_INTENT_BONUS : 0
 }
 
 /**
@@ -146,6 +210,7 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
 
   if (titleLength > 0 && titleLower.includes(normalizedKey)) {
     if (titleLower.startsWith(normalizedKey)) return 500
+    if (hasTitleWordPrefixMatch(titleLower, normalizedKey)) return 500
     return 300
   }
 
@@ -184,6 +249,8 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
 export function calculateSortScore(item: TuffItem, searchKey?: string): number {
   const matchScore = calculateMatchScore(item, searchKey)
   const kindBias = getKindBias(item)
+  const appTitleIntentBonus = getAppTitleIntentBonus(item, searchKey)
+  const appAliasIntentBonus = getAppAliasIntentBonus(item, searchKey)
   let recency = item.scoring?.recency || 0
 
   // 使用增强的频率计算（从 meta.usageStats 读取）
@@ -224,7 +291,9 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
     matchScore * MATCH_SCORE_MULTIPLIER +
     frequencyWeighted * FREQUENCY_SCORE_MULTIPLIER +
     recency * RECENCY_SCORE_MULTIPLIER +
-    kindBias * KIND_SCORE_MULTIPLIER
+    kindBias * KIND_SCORE_MULTIPLIER +
+    appTitleIntentBonus +
+    appAliasIntentBonus
 
   return finalScore
 }
