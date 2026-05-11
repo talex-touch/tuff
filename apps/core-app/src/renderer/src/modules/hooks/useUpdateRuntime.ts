@@ -50,6 +50,7 @@ type UpdateStatusInfo = {
   downloadReady?: boolean
   downloadReadyVersion?: string | null
   downloadTaskId?: string | null
+  autoInstallDownloadedUpdates?: boolean
 }
 
 type UpdateAvailablePayload = {
@@ -212,6 +213,7 @@ function getDefaultSettings(channel: AppPreviewChannel): UpdateSettings {
     ignoredVersions: [],
     customSources: [],
     autoDownload: true,
+    autoInstallDownloadedUpdates: false,
     rendererOverrideEnabled: false,
     cacheEnabled: true,
     cacheTTL: 30,
@@ -283,6 +285,9 @@ export function useUpdateRuntime() {
           normalizeStoredUpdateChannel(nextSettings.updateChannel) ?? settingsCache.updateChannel
         if (typeof nextSettings.rendererOverrideEnabled !== 'boolean') {
           nextSettings.rendererOverrideEnabled = false
+        }
+        if (typeof nextSettings.autoInstallDownloadedUpdates !== 'boolean') {
+          nextSettings.autoInstallDownloadedUpdates = false
         }
         settingsCache = nextSettings
       }

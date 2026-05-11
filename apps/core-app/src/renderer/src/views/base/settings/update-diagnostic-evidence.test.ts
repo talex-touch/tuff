@@ -22,6 +22,7 @@ function buildSettings(overrides: Partial<UpdateSettings> = {}): UpdateSettings 
     ignoredVersions: [],
     customSources: [],
     autoDownload: true,
+    autoInstallDownloadedUpdates: false,
     rendererOverrideEnabled: false,
     lastCheckedAt: 1_700_000_000_000,
     ...overrides
@@ -73,6 +74,7 @@ describe('update diagnostic evidence', () => {
       platform: 'win32',
       arch: 'x64',
       isMacAutoInstallPlatform: false,
+      currentVersion: '2.4.10',
       createdAt: '2026-05-10T08:00:00.000Z'
     })
 
@@ -85,12 +87,18 @@ describe('update diagnostic evidence', () => {
         channel: AppPreviewChannel.RELEASE,
         frequency: 'everyday',
         autoDownload: true,
+        autoInstallDownloadedUpdates: false,
         rendererOverrideEnabled: false
       },
       status: {
         downloadReady: true,
         downloadReadyVersion: 'v2.4.10',
         downloadTaskId: 'task-update-1'
+      },
+      installedVersion: {
+        current: '2.4.10',
+        expected: 'v2.4.10',
+        matchesExpected: true
       },
       runtimeTarget: {
         platform: 'win32',
@@ -114,6 +122,7 @@ describe('update diagnostic evidence', () => {
         readyToInstall: true,
         installMode: 'windows-installer-handoff',
         requiresUserConfirmation: true,
+        autoInstallDownloadedUpdates: false,
         unattendedAutoInstallEnabled: false
       },
       manualRegression: {
@@ -121,6 +130,7 @@ describe('update diagnostic evidence', () => {
         suggestedEvidenceFields: {
           channel: AppPreviewChannel.RELEASE,
           autoDownload: true,
+          autoInstallDownloadedUpdates: false,
           downloadReadyVersion: 'v2.4.10',
           downloadTaskId: 'task-update-1',
           platform: 'win32',
@@ -163,6 +173,7 @@ describe('update diagnostic evidence', () => {
         readyToInstall: false,
         installMode: 'not-ready',
         requiresUserConfirmation: false,
+        autoInstallDownloadedUpdates: false,
         unattendedAutoInstallEnabled: false,
         blocker: 'no-download-ready'
       }
@@ -195,6 +206,50 @@ describe('update diagnostic evidence', () => {
         installMode: 'not-ready',
         requiresUserConfirmation: false,
         blocker: 'no-matching-asset'
+      }
+    })
+  })
+
+  it('builds Windows automatic installer handoff evidence when explicitly enabled', () => {
+    const cachedAssets = [buildAsset()]
+    const payload = buildUpdateDiagnosticEvidencePayload({
+      settings: buildSettings({ autoInstallDownloadedUpdates: true }),
+      status: {
+        lastCheck: 1_700_000_000_000,
+        downloadReady: true,
+        downloadReadyVersion: 'v2.4.10',
+        downloadTaskId: 'task-update-1'
+      },
+      cachedRelease: buildCachedRelease(cachedAssets),
+      cachedAssets,
+      platform: 'win32',
+      arch: 'x64',
+      isMacAutoInstallPlatform: false,
+      currentVersion: '2.4.9',
+      createdAt: '2026-05-10T08:00:00.000Z'
+    })
+
+    expect(payload).toMatchObject({
+      settings: {
+        autoInstallDownloadedUpdates: true
+      },
+      verdict: {
+        readyToInstall: true,
+        installMode: 'windows-auto-installer-handoff',
+        requiresUserConfirmation: false,
+        autoInstallDownloadedUpdates: true,
+        unattendedAutoInstallEnabled: true
+      },
+      installedVersion: {
+        current: '2.4.9',
+        expected: 'v2.4.10',
+        matchesExpected: false
+      },
+      manualRegression: {
+        suggestedEvidenceFields: {
+          autoInstallDownloadedUpdates: true,
+          installMode: 'windows-auto-installer-handoff'
+        }
       }
     })
   })

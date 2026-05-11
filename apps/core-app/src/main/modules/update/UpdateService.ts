@@ -66,6 +66,7 @@ const UPDATE_POLL_TASK_ID = 'update-service.check'
  */
 type UpdateSettings = SharedUpdateSettings & {
   autoDownload: boolean
+  autoInstallDownloadedUpdates: boolean
   cacheEnabled: boolean
   cacheTTL: number // Cache TTL in minutes
   rateLimitEnabled: boolean
@@ -213,6 +214,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
     this.updateSystem = new UpdateSystem(downloadCenterModule as DownloadCenterModule, {
       autoDownload: this.settings.autoDownload,
+      autoInstallDownloadedUpdates: this.settings.autoInstallDownloadedUpdates,
       autoCheck: this.settings.enabled,
       checkFrequency: this.mapFrequencyToCheckFrequency(this.settings.frequency),
       ignoredVersions: this.settings.ignoredVersions,
@@ -410,6 +412,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
               if (typeof sanitizedSettings.autoDownload === 'boolean') {
                 this.updateSystem.setAutoDownload(sanitizedSettings.autoDownload)
               }
+              if (typeof sanitizedSettings.autoInstallDownloadedUpdates === 'boolean') {
+                this.updateSystem.updateConfig({
+                  autoInstallDownloadedUpdates: sanitizedSettings.autoInstallDownloadedUpdates
+                })
+              }
               if (typeof sanitizedSettings.enabled === 'boolean') {
                 this.updateSystem.setAutoCheck(sanitizedSettings.enabled)
               }
@@ -480,7 +487,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
             lastCheck: this.settings.lastCheckedAt ?? null,
             downloadReady: readyStatus.downloadReady,
             downloadReadyVersion: readyStatus.version,
-            downloadTaskId: readyStatus.taskId
+            downloadTaskId: readyStatus.taskId,
+            autoInstallDownloadedUpdates: this.settings.autoInstallDownloadedUpdates
           }
         }
       }),
@@ -997,7 +1005,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
 
     try {
-      const taskId = await this.updateSystem.downloadUpdate(release)
+      const taskId = await this.updateSystem.downloadUpdate(release, {
+        autoInstallOnComplete: this.shouldAutoInstallDownloadedUpdate()
+      })
       this.autoDownloadTasks.set(tag, taskId)
       updateLog.info(`Auto download started for ${tag}`, { meta: { taskId } })
       this.reportUpdateTelemetry('download_started', {
@@ -1054,6 +1064,15 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
 
     return null
+  }
+
+  private shouldAutoInstallDownloadedUpdate(): boolean {
+    return (
+      app.isPackaged &&
+      process.platform === 'win32' &&
+      this.settings.autoDownload === true &&
+      this.settings.autoInstallDownloadedUpdates === true
+    )
   }
 
   private async resolveReadyUpdateStatus(): Promise<{
@@ -2051,6 +2070,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       ignoredVersions: [],
       customSources: [],
       autoDownload: true,
+      autoInstallDownloadedUpdates: false,
       rendererOverrideEnabled: false,
       cacheEnabled: true,
       cacheTTL: 30, // 30 minutes cache TTL
@@ -2426,6 +2446,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         }
         if (typeof this.settings.autoDownload !== 'boolean') {
           this.settings.autoDownload = defaults.autoDownload
+        }
+        if (typeof this.settings.autoInstallDownloadedUpdates !== 'boolean') {
+          this.settings.autoInstallDownloadedUpdates = defaults.autoInstallDownloadedUpdates
         }
         if (typeof this.settings.rendererOverrideEnabled !== 'boolean') {
           this.settings.rendererOverrideEnabled = defaults.rendererOverrideEnabled

@@ -60,6 +60,7 @@ interface VersionInfo {
  */
 interface UpdateSystemConfig {
   autoDownload: boolean
+  autoInstallDownloadedUpdates: boolean
   autoCheck: boolean
   checkFrequency: 'startup' | 'daily' | 'weekly' | 'never'
   ignoredVersions: string[]
@@ -82,6 +83,10 @@ interface RendererOverrideState {
   lastError?: string
   sourceTag?: string
   sha256?: string
+}
+
+interface UpdateDownloadOptions {
+  autoInstallOnComplete?: boolean
 }
 
 /**
@@ -136,6 +141,7 @@ export class UpdateSystem {
   private readonly signatureVerifier = new SignatureVerifier()
   private readonly storageRoot: string
   private readonly messageStore = getAnalyticsMessageStore()
+  private readonly autoInstallOnCompleteTaskIds = new Set<string>()
 
   /** Channel priority for version comparison (lower = more stable) */
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
@@ -156,6 +162,7 @@ export class UpdateSystem {
     this.storageRoot = config?.storageRoot ?? app.getPath('userData')
     this.config = {
       autoDownload: true,
+      autoInstallDownloadedUpdates: false,
       autoCheck: true,
       checkFrequency: 'startup',
       ignoredVersions: [],
@@ -245,13 +252,16 @@ export class UpdateSystem {
    * @param release - GitHub release to download
    * @returns Task ID of the download
    */
-  async downloadUpdate(release: GitHubRelease): Promise<string> {
+  async downloadUpdate(
+    release: GitHubRelease,
+    options: UpdateDownloadOptions = {}
+  ): Promise<string> {
     try {
       const { release: resolvedRelease, manifest } = await this.attachReleaseManifest(release)
 
       const reusableTaskId = await this.findReusableUpdateTaskId(resolvedRelease.tag_name)
       if (reusableTaskId) {
-        this.setupDownloadCompletionListener(reusableTaskId, resolvedRelease.tag_name)
+        this.setupDownloadCompletionListener(reusableTaskId, resolvedRelease.tag_name, options)
         updateSystemLog.info('Reusing existing update task', {
           meta: {
             tag: resolvedRelease.tag_name,
@@ -289,7 +299,7 @@ export class UpdateSystem {
       const taskId = await this.downloadCenterModule.addTask(request)
 
       // Set up listener for download completion
-      this.setupDownloadCompletionListener(taskId, resolvedRelease.tag_name)
+      this.setupDownloadCompletionListener(taskId, resolvedRelease.tag_name, options)
 
       void this.maybeScheduleRendererOverrideDownload(resolvedRelease, manifest).catch((error) => {
         updateSystemLog.warn('Renderer override background scheduling failed', {
@@ -381,9 +391,16 @@ export class UpdateSystem {
    * Set up listener for download completion to show notification
    * @private
    */
-  private setupDownloadCompletionListener(taskId: string, version: string): void {
+  private setupDownloadCompletionListener(
+    taskId: string,
+    version: string,
+    options: UpdateDownloadOptions = {}
+  ): void {
     // Listen for download completion event
     const pollTaskId = `update-system.download.${taskId}`
+    if (this.shouldAutoInstallOnComplete(options)) {
+      this.autoInstallOnCompleteTaskIds.add(taskId)
+    }
     if (this.pollingService.isRegistered(pollTaskId)) {
       this.pollingService.unregister(pollTaskId)
     }
@@ -395,11 +412,29 @@ export class UpdateSystem {
 
         if (!task) {
           this.pollingService.unregister(pollTaskId)
+          this.autoInstallOnCompleteTaskIds.delete(taskId)
           return
         }
 
         if (task.status === 'completed') {
           this.pollingService.unregister(pollTaskId)
+
+          if (this.autoInstallOnCompleteTaskIds.delete(taskId)) {
+            void this.installUpdate(taskId).catch((error) => {
+              updateSystemLog.warn('Automatic Windows installer handoff failed', {
+                error,
+                meta: { taskId, version }
+              })
+              this.messageStore.add({
+                source: 'update',
+                severity: 'error',
+                title: 'Automatic update install failed',
+                message: error instanceof Error ? error.message : String(error),
+                meta: { taskId, version }
+              })
+            })
+            return
+          }
 
           // Show update download complete notification
           if (this.notificationService) {
@@ -407,11 +442,20 @@ export class UpdateSystem {
           }
         } else if (task.status === 'failed' || task.status === 'cancelled') {
           this.pollingService.unregister(pollTaskId)
+          this.autoInstallOnCompleteTaskIds.delete(taskId)
         }
       },
       { interval: 1, unit: 'seconds' }
     )
     this.pollingService.start()
+  }
+
+  private shouldAutoInstallOnComplete(options: UpdateDownloadOptions): boolean {
+    return (
+      options.autoInstallOnComplete === true &&
+      this.config.autoInstallDownloadedUpdates === true &&
+      process.platform === 'win32'
+    )
   }
 
   private async maybeScheduleRendererOverrideDownload(

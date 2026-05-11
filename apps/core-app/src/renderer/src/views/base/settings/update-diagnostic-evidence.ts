@@ -3,6 +3,7 @@ import type { CachedUpdateRecord, DownloadAsset, UpdateSettings } from '@talex-t
 export type UpdateDiagnosticInstallMode =
   | 'mac-auto-updater'
   | 'windows-installer-handoff'
+  | 'windows-auto-installer-handoff'
   | 'manual-installer'
   | 'not-ready'
 
@@ -44,9 +45,15 @@ export interface UpdateDiagnosticEvidencePayload {
     channel: UpdateSettings['updateChannel'] | null
     frequency: UpdateSettings['frequency'] | null
     autoDownload: boolean | null
+    autoInstallDownloadedUpdates: boolean | null
     rendererOverrideEnabled: boolean | null
   }
   status: UpdateDiagnosticStatusInput
+  installedVersion?: {
+    current: string | null
+    expected: string | null
+    matchesExpected: boolean | null
+  }
   runtimeTarget: {
     platform: string
     arch: string | null
@@ -68,7 +75,8 @@ export interface UpdateDiagnosticEvidencePayload {
     readyToInstall: boolean
     installMode: UpdateDiagnosticInstallMode
     requiresUserConfirmation: boolean
-    unattendedAutoInstallEnabled: false
+    autoInstallDownloadedUpdates: boolean
+    unattendedAutoInstallEnabled: boolean
     blocker?: UpdateDiagnosticBlocker
   }
   manualRegression: {
@@ -76,6 +84,7 @@ export interface UpdateDiagnosticEvidencePayload {
     suggestedEvidenceFields: {
       channel: UpdateSettings['updateChannel'] | null
       autoDownload: boolean | null
+      autoInstallDownloadedUpdates: boolean | null
       downloadReadyVersion: string | null
       downloadTaskId: string | null
       platform: string
@@ -95,13 +104,15 @@ export function buildUpdateDiagnosticEvidencePayload(options: {
   platform: string
   arch: string | null
   isMacAutoInstallPlatform: boolean
+  currentVersion?: string | null
   createdAt?: string
 }): UpdateDiagnosticEvidencePayload {
   const blocker = resolveUpdateDiagnosticBlocker(options)
   const installMode = resolveInstallMode({
     blocker,
     platform: options.platform,
-    isMacAutoInstallPlatform: options.isMacAutoInstallPlatform
+    isMacAutoInstallPlatform: options.isMacAutoInstallPlatform,
+    autoInstallDownloadedUpdates: options.settings?.autoInstallDownloadedUpdates === true
   })
 
   return {
@@ -110,6 +121,14 @@ export function buildUpdateDiagnosticEvidencePayload(options: {
     createdAt: options.createdAt || new Date().toISOString(),
     settings: summarizeSettings(options.settings),
     status: options.status,
+    installedVersion: summarizeInstalledVersion({
+      currentVersion: options.currentVersion ?? null,
+      expectedVersion:
+        options.status.downloadReadyVersion ??
+        options.cachedRelease?.tag ??
+        options.cachedRelease?.release.tag_name ??
+        null
+    }),
     runtimeTarget: {
       platform: options.platform,
       arch: options.arch,
@@ -122,7 +141,8 @@ export function buildUpdateDiagnosticEvidencePayload(options: {
       installMode,
       requiresUserConfirmation:
         installMode === 'windows-installer-handoff' || installMode === 'manual-installer',
-      unattendedAutoInstallEnabled: false,
+      autoInstallDownloadedUpdates: options.settings?.autoInstallDownloadedUpdates === true,
+      unattendedAutoInstallEnabled: installMode === 'windows-auto-installer-handoff',
       blocker
     },
     manualRegression: {
@@ -130,6 +150,7 @@ export function buildUpdateDiagnosticEvidencePayload(options: {
       suggestedEvidenceFields: {
         channel: options.settings?.updateChannel ?? null,
         autoDownload: options.settings?.autoDownload ?? null,
+        autoInstallDownloadedUpdates: options.settings?.autoInstallDownloadedUpdates ?? null,
         downloadReadyVersion: options.status.downloadReadyVersion,
         downloadTaskId: options.status.downloadTaskId,
         platform: options.platform,
@@ -168,6 +189,28 @@ export function buildUpdateDiagnosticEvidenceFilename(
   return `update-diagnostic-${platform}-${arch}-${safeVersion || 'unknown'}-${safeTimestamp}.json`
 }
 
+function summarizeInstalledVersion(options: {
+  currentVersion: string | null
+  expectedVersion: string | null
+}): UpdateDiagnosticEvidencePayload['installedVersion'] {
+  const current = options.currentVersion?.trim() || null
+  const expected = options.expectedVersion?.trim() || null
+  if (!current && !expected) return undefined
+
+  return {
+    current,
+    expected,
+    matchesExpected:
+      current && expected
+        ? normalizeVersionForEvidence(current) === normalizeVersionForEvidence(expected)
+        : null
+  }
+}
+
+function normalizeVersionForEvidence(version: string): string {
+  return version.trim().replace(/^v/i, '')
+}
+
 function resolveUpdateDiagnosticBlocker(options: {
   status: UpdateDiagnosticStatusInput
   cachedRelease: CachedUpdateRecord | null
@@ -183,9 +226,13 @@ function resolveInstallMode(options: {
   blocker: UpdateDiagnosticBlocker | undefined
   platform: string
   isMacAutoInstallPlatform: boolean
+  autoInstallDownloadedUpdates: boolean
 }): UpdateDiagnosticInstallMode {
   if (options.blocker) return 'not-ready'
   if (options.isMacAutoInstallPlatform) return 'mac-auto-updater'
+  if (options.platform === 'win32' && options.autoInstallDownloadedUpdates) {
+    return 'windows-auto-installer-handoff'
+  }
   if (options.platform === 'win32') return 'windows-installer-handoff'
   return 'manual-installer'
 }
@@ -201,6 +248,7 @@ function summarizeSettings(
     channel: settings?.updateChannel ?? null,
     frequency: settings?.frequency ?? null,
     autoDownload: settings?.autoDownload ?? null,
+    autoInstallDownloadedUpdates: settings?.autoInstallDownloadedUpdates ?? null,
     rendererOverrideEnabled: settings?.rendererOverrideEnabled ?? null
   }
 }
