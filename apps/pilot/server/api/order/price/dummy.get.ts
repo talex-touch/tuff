@@ -1,5 +1,10 @@
 import { requirePilotAuth } from '../../../utils/auth'
-import { calcDummyPrice } from '../../../utils/pilot-compat-payment'
+import {
+  calcDummyPrice,
+  getPaymentProviderUnavailablePayload,
+  isPilotPaymentMockEnabled,
+  PAYMENT_PROVIDER_UNAVAILABLE,
+} from '../../../utils/pilot-payment-service'
 import { quotaError, quotaOk } from '../../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {
@@ -9,6 +14,9 @@ export default defineEventHandler(async (event) => {
 
   if (!Number.isFinite(value) || value <= 0) {
     return quotaError(400, 'value must be a positive number', null)
+  }
+  if (!isPilotPaymentMockEnabled()) {
+    return quotaError(503, PAYMENT_PROVIDER_UNAVAILABLE, getPaymentProviderUnavailablePayload())
   }
 
   const priced = await calcDummyPrice(event, {

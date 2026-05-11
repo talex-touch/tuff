@@ -1,4 +1,4 @@
-import { getPromptById } from '../../../utils/pilot-compat-aigc'
+import { getPromptById } from '../../../utils/pilot-aigc-service'
 import { quotaError, quotaOk } from '../../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {

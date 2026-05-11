@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3'
-import { randomUUID } from 'node:crypto'
 import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
+import process from 'node:process'
 import {
   deletePilotEntity,
   ensurePilotEntitySeed,
@@ -16,6 +17,7 @@ const SUBSCRIPTION_DOMAIN = 'order.subscriptions'
 
 const AUTO_SETTLE_MS = 3000
 const ORDER_EXPIRE_MS = 5 * 60 * 1000
+export const PAYMENT_PROVIDER_UNAVAILABLE = 'PAYMENT_PROVIDER_UNAVAILABLE'
 
 type SubscriptionType = 'STANDARD' | 'ULTIMATE'
 type SubscriptionTime = 'TRIAL' | 'TRIAL_WEEK' | 'MONTH_TRIAL' | 'MONTH' | 'QUARTER' | 'YEAR'
@@ -161,6 +163,28 @@ function nowIso(): string {
 
 function normalizeText(value: unknown): string {
   return String(value || '').trim()
+}
+
+export function isPilotPaymentMockEnabled(): boolean {
+  return normalizeText(process.env.PILOT_PAYMENT_MODE).toLowerCase() === 'mock'
+}
+
+export function getPaymentProviderUnavailablePayload(): {
+  code: typeof PAYMENT_PROVIDER_UNAVAILABLE
+  reason: string
+  requiredEnv: 'PILOT_PAYMENT_MODE=mock'
+} {
+  return {
+    code: PAYMENT_PROVIDER_UNAVAILABLE,
+    reason: 'pilot payment mock is disabled and no payment provider is configured',
+    requiredEnv: 'PILOT_PAYMENT_MODE=mock',
+  }
+}
+
+function ensurePilotPaymentMockEnabled(): void {
+  if (!isPilotPaymentMockEnabled()) {
+    throw new Error(PAYMENT_PROVIDER_UNAVAILABLE)
+  }
 }
 
 function normalizeCouponCode(value: unknown): string {
@@ -416,6 +440,8 @@ export async function createSubscriptionOrder(
     paymentMethod?: number
   },
 ): Promise<{ order: MockOrder, code_url: string }> {
+  ensurePilotPaymentMockEnabled()
+
   const priced = await calcSubscriptionPrice(event, input)
   const createdAt = nowIso()
   const order: MockOrder = {
@@ -461,6 +487,8 @@ export async function createDummyOrder(
     paymentMethod?: number
   },
 ): Promise<{ order: MockOrder, code_url: string, meta: PriceInfo['meta'] }> {
+  ensurePilotPaymentMockEnabled()
+
   const priced = await calcDummyPrice(event, {
     value: input.value,
     couponCode: input.couponCode,
@@ -505,6 +533,8 @@ export async function getLatestPendingOrder(
   event: H3Event,
   userId: string,
 ): Promise<{ order: MockOrder, code_url: string } | null> {
+  ensurePilotPaymentMockEnabled()
+
   const orders = await refreshOrdersByUser(event, userId)
   const pending = orders.find(item => item.status === 0)
   if (!pending) {

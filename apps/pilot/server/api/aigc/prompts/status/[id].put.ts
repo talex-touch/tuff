@@ -1,5 +1,5 @@
 import { requirePilotAuth } from '../../../../utils/auth'
-import { publishPrompt } from '../../../../utils/pilot-compat-aigc'
+import { publishPrompt } from '../../../../utils/pilot-aigc-service'
 import { quotaError, quotaOk } from '../../../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolvePilotUiStreamInput } from '../../../app/composables/api/base/v1/aigc/completion/legacy-stream-input'
+import { resolvePilotUiStreamInput } from '../../../app/composables/api/base/v1/aigc/completion/pilot-stream-input'
 
 describe('pilot stream input payload', () => {
   it('text + attachment 出站时拆分为 message 与 attachments', async () => {

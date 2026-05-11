@@ -1,4 +1,4 @@
-import { assignPromptTags } from '../../../../../utils/pilot-compat-aigc'
+import { assignPromptTags } from '../../../../../utils/pilot-aigc-service'
 import { quotaError, quotaOk } from '../../../../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {

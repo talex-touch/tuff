@@ -1,4 +1,4 @@
-import { ensureSubscribePlanSeed } from '../../utils/pilot-compat-seeds'
+import { ensureSubscribePlanSeed } from '../../utils/pilot-system-seeds'
 import { listPilotEntities } from '../../utils/pilot-entity-store'
 import { quotaOk } from '../../utils/quota-api'
 

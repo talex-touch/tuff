@@ -6,8 +6,8 @@ import {
   buildPilotCompletionStreamRequestPayload,
   resolvePilotConversationSeqCursor,
   shouldDropPilotCompletionStreamEvent,
-} from '../../../app/composables/api/base/v1/aigc/completion/legacy-stream-contract'
-import { handlePilotCompletionExecutorResult } from '../../../app/composables/api/base/v1/aigc/completion/legacy-stream-sse'
+} from '../../../app/composables/api/base/v1/aigc/completion/pilot-stream-contract'
+import { handlePilotCompletionExecutorResult } from '../../../app/composables/api/base/v1/aigc/completion/pilot-stream-sse'
 
 function createConversation(): IChatConversation {
   return {

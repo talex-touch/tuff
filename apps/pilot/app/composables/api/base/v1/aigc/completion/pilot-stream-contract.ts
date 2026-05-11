@@ -1,5 +1,5 @@
 import type { IChatBody, IChatConversation, IChatInnerItemMeta, IChatItem, IInnerItemMeta } from '../completion-types'
-import type { PilotUiStreamInputPayload } from './legacy-stream-input'
+import type { PilotUiStreamInputPayload } from './pilot-stream-input'
 import { normalizePilotStreamSeq, shouldPilotStreamEventRequireSeq } from '@talex-touch/tuff-intelligence/pilot'
 
 function parseJsonSafe<T>(value: string): T | null {

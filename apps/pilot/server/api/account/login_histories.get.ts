@@ -1,5 +1,5 @@
 import { requirePilotAuth } from '../../utils/auth'
-import { ensureAccountHistorySeed } from '../../utils/pilot-compat-seeds'
+import { ensureAccountHistorySeed } from '../../utils/pilot-system-seeds'
 import { listPilotEntities } from '../../utils/pilot-entity-store'
 import { quotaOk } from '../../utils/quota-api'
 

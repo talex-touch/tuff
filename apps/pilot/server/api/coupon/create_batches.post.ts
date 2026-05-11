@@ -1,4 +1,4 @@
-import { createCouponBatches } from '../../utils/pilot-compat-payment'
+import { createCouponBatches } from '../../utils/pilot-payment-service'
 import { quotaOk } from '../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {
