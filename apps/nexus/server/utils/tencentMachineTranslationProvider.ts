@@ -3,13 +3,15 @@ import type { Buffer } from 'node:buffer'
 import { createError } from 'h3'
 import { createHash, createHmac } from 'node:crypto'
 import { networkClient } from '@talex-touch/utils/network'
+import type { ProviderCheckOptions, ProviderCheckResult } from './providerCheck'
 import type { ProviderRegistryRecord } from './providerRegistryStore'
 import { assertSecretPairCredential, getProviderCredential } from './providerCredentialStore'
 
 const TENCENT_TMT_DEFAULT_ENDPOINT = 'https://tmt.tencentcloudapi.com'
 const TENCENT_TMT_SERVICE = 'tmt'
 const TENCENT_TMT_VERSION = '2018-03-21'
-const TENCENT_TMT_ACTION = 'TextTranslate'
+const TENCENT_TMT_TEXT_TRANSLATE_ACTION = 'TextTranslate'
+const TENCENT_TMT_IMAGE_TRANSLATE_LLM_ACTION = 'ImageTranslateLLM'
 const TENCENT_TMT_DEFAULT_REGION = 'ap-shanghai'
 const DEFAULT_CHECK_CAPABILITY = 'text.translate'
 const DEFAULT_CHECK_PAYLOAD = {
@@ -32,22 +34,17 @@ interface TencentTextTranslateResponse {
   }
 }
 
-export interface ProviderCheckOptions {
-  capability?: string
-}
-
-export interface ProviderCheckResult {
-  success: boolean
-  providerId: string
-  capability: string
-  latency: number
-  endpoint: string
-  requestId?: string
-  message: string
-  error?: {
-    code?: string
-    message: string
-    status?: number
+interface TencentImageTranslateResponse {
+  Response?: {
+    Data?: string
+    Source?: string
+    Target?: string
+    SourceText?: string
+    TargetText?: string
+    Angle?: number
+    TransDetails?: unknown[]
+    RequestId?: string
+    Error?: TencentCloudError
   }
 }
 
@@ -64,6 +61,32 @@ export interface TencentTextTranslateResult {
   latencyMs: number
   usage: {
     unit: 'character'
+    quantity: number
+    billable: boolean
+    estimated: boolean
+  }
+}
+
+export interface TencentImageTranslateInput {
+  data?: unknown
+  imageBase64?: unknown
+  url?: unknown
+  imageUrl?: unknown
+  targetLang: unknown
+}
+
+export interface TencentImageTranslateResult {
+  translatedImageBase64: string
+  sourceLang?: string
+  targetLang?: string
+  sourceText?: string
+  targetText?: string
+  angle?: number
+  transDetails?: unknown[]
+  providerRequestId?: string
+  latencyMs: number
+  usage: {
+    unit: 'image'
     quantity: number
     billable: boolean
     estimated: boolean
@@ -131,6 +154,7 @@ function buildTencentTextTranslateHeaders(input: {
   region: string
   payload: string
   timestamp: number
+  action?: string
 }) {
   const host = resolveEndpointHost(input.endpoint)
   return {
@@ -142,7 +166,7 @@ function buildTencentTextTranslateHeaders(input: {
       payload: input.payload,
     }),
     'Content-Type': 'application/json; charset=utf-8',
-    'X-TC-Action': TENCENT_TMT_ACTION,
+    'X-TC-Action': input.action ?? TENCENT_TMT_TEXT_TRANSLATE_ACTION,
     'X-TC-Timestamp': String(input.timestamp),
     'X-TC-Version': TENCENT_TMT_VERSION,
     'X-TC-Region': input.region,
@@ -167,6 +191,12 @@ function parseTencentTextTranslateResponse(data: TencentTextTranslateResponse | 
     : data
 }
 
+function parseTencentImageTranslateResponse(data: TencentImageTranslateResponse | string): TencentImageTranslateResponse {
+  return typeof data === 'string'
+    ? JSON.parse(data) as TencentImageTranslateResponse
+    : data
+}
+
 function normalizeTranslateText(value: unknown): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw createError({ statusCode: 400, statusMessage: 'input.text is required.' })
@@ -181,6 +211,15 @@ function normalizeLanguageCode(value: unknown, field: string, fallback?: string)
     throw createError({ statusCode: 400, statusMessage: `${field} is required.` })
   }
   if (typeof value !== 'string' || value.trim().length === 0 || value.trim().length > 32) {
+    throw createError({ statusCode: 400, statusMessage: `${field} is invalid.` })
+  }
+  return value.trim()
+}
+
+function normalizeOptionalPayloadString(value: unknown, field: string, maxLength = 12 * 1024 * 1024): string {
+  if (value == null)
+    return ''
+  if (typeof value !== 'string' || value.trim().length > maxLength) {
     throw createError({ statusCode: 400, statusMessage: `${field} is invalid.` })
   }
   return value.trim()
@@ -288,6 +327,85 @@ export async function invokeTencentTextTranslate(
   }
 }
 
+export async function invokeTencentImageTranslate(
+  event: H3Event,
+  provider: ProviderRegistryRecord,
+  input: TencentImageTranslateInput,
+  capability: 'image.translate' | 'image.translate.e2e' = 'image.translate.e2e',
+): Promise<TencentImageTranslateResult> {
+  if (provider.vendor !== 'tencent-cloud' || provider.authType !== 'secret_pair') {
+    throw createError({ statusCode: 400, statusMessage: 'Tencent Cloud Machine Translation adapter requires a tencent-cloud secret_pair provider.' })
+  }
+  if (!hasCapability(provider, capability)) {
+    throw createError({ statusCode: 409, statusMessage: 'Provider capability is not supported.' })
+  }
+
+  const endpoint = trimEndpoint(provider.endpoint)
+  const credentials = await resolveSecretPairCredential(event, provider)
+  const region = provider.region || TENCENT_TMT_DEFAULT_REGION
+  const targetLang = normalizeLanguageCode(input.targetLang, 'input.targetLang')
+  const data = normalizeOptionalPayloadString(input.data ?? input.imageBase64, 'input.data')
+  const url = normalizeOptionalPayloadString(input.url ?? input.imageUrl, 'input.url', 4096)
+
+  if (!data && !url) {
+    throw createError({ statusCode: 400, statusMessage: 'input.data or input.url is required.' })
+  }
+
+  const payloadObject: Record<string, string> = { Target: targetLang }
+  if (data)
+    payloadObject.Data = data
+  if (url)
+    payloadObject.Url = url
+
+  const payload = JSON.stringify(payloadObject)
+  const startedAt = Date.now()
+  const response = await networkClient.request<TencentImageTranslateResponse | string>({
+    method: 'POST',
+    url: endpoint,
+    headers: buildTencentTextTranslateHeaders({
+      credentials,
+      endpoint,
+      region,
+      payload,
+      timestamp: Math.floor(Date.now() / 1000),
+      action: TENCENT_TMT_IMAGE_TRANSLATE_LLM_ACTION,
+    }),
+    body: payload,
+    timeoutMs: 30000,
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+  })
+  const latencyMs = Date.now() - startedAt
+  const dataBody = parseTencentImageTranslateResponse(response.data)
+  const tencentResponse = dataBody.Response
+
+  if (response.status < 200 || response.status >= 300 || tencentResponse?.Error) {
+    const mapped = mapTencentError(tencentResponse?.Error)
+    throw createProviderRequestError(mapped.message, response.status)
+  }
+
+  if (typeof tencentResponse?.Data !== 'string') {
+    throw createProviderRequestError('Tencent Cloud Machine Translation response is missing Data.', response.status)
+  }
+
+  return {
+    translatedImageBase64: tencentResponse.Data,
+    sourceLang: tencentResponse.Source,
+    targetLang: tencentResponse.Target,
+    sourceText: tencentResponse.SourceText,
+    targetText: tencentResponse.TargetText,
+    angle: tencentResponse.Angle,
+    transDetails: tencentResponse.TransDetails,
+    providerRequestId: tencentResponse.RequestId,
+    latencyMs,
+    usage: {
+      unit: 'image',
+      quantity: 1,
+      billable: true,
+      estimated: true,
+    },
+  }
+}
+
 export async function checkTencentMachineTranslationProvider(
   event: H3Event,
   provider: ProviderRegistryRecord,
@@ -386,7 +504,7 @@ export async function checkTencentMachineTranslationProvider(
       payload,
     }),
     'Content-Type': 'application/json; charset=utf-8',
-    'X-TC-Action': TENCENT_TMT_ACTION,
+    'X-TC-Action': TENCENT_TMT_TEXT_TRANSLATE_ACTION,
     'X-TC-Timestamp': String(timestamp),
     'X-TC-Version': TENCENT_TMT_VERSION,
     'X-TC-Region': region,

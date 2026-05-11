@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxSkeleton, TxSpinner, TxStatusBadge, TxTabItem, TxTabs } from '@talex-touch/tuffex'
-import { useToast } from '~/composables/useToast'
 
 definePageMeta({
   pageTransition: {
@@ -12,506 +10,72 @@ definePageMeta({
 
 defineI18nRoute(false)
 
-type ProviderVendor = 'tencent-cloud' | 'openai' | 'deepseek' | 'exchange-rate' | 'custom'
-type ProviderStatus = 'enabled' | 'disabled' | 'degraded'
-type ProviderAuthType = 'api_key' | 'secret_pair' | 'oauth' | 'none'
-type OwnerScope = 'system' | 'workspace' | 'user'
-type SceneOwner = 'nexus' | 'core-app' | 'pilot' | 'plugin'
-type SceneStrategyMode = 'priority' | 'least_cost' | 'lowest_latency' | 'balanced' | 'manual'
-type SceneFallback = 'enabled' | 'disabled'
-type BindingStatus = 'enabled' | 'disabled'
-
-interface ProviderCapabilityRecord {
-  id: string
-  providerId: string
-  capability: string
-  schemaRef: string | null
-  metering: Record<string, unknown> | null
-  constraints: Record<string, unknown> | null
-  metadata: Record<string, unknown> | null
-  createdAt: string
-  updatedAt: string
-}
-
-interface ProviderRegistryRecord {
-  id: string
-  name: string
-  displayName: string
-  vendor: ProviderVendor
-  status: ProviderStatus
-  authType: ProviderAuthType
-  authRef: string | null
-  ownerScope: OwnerScope
-  ownerId: string | null
-  description: string | null
-  endpoint: string | null
-  region: string | null
-  metadata: Record<string, unknown> | null
-  capabilities: ProviderCapabilityRecord[]
-  createdBy: string
-  createdAt: string
-  updatedAt: string
-}
-
-interface SceneStrategyBindingRecord {
-  id: string
-  sceneId: string
-  providerId: string
-  capability: string
-  priority: number
-  weight: number | null
-  status: BindingStatus
-  constraints: Record<string, unknown> | null
-  metadata: Record<string, unknown> | null
-  createdAt: string
-  updatedAt: string
-}
-
-interface SceneRegistryRecord {
-  id: string
-  displayName: string
-  owner: SceneOwner
-  ownerScope: OwnerScope
-  ownerId: string | null
-  status: BindingStatus
-  requiredCapabilities: string[]
-  strategyMode: SceneStrategyMode
-  fallback: SceneFallback
-  meteringPolicy: Record<string, unknown> | null
-  auditPolicy: Record<string, unknown> | null
-  metadata: Record<string, unknown> | null
-  bindings: SceneStrategyBindingRecord[]
-  createdBy: string
-  createdAt: string
-  updatedAt: string
-}
-
-interface CapabilityFormRow {
-  capability: string
-  schemaRef: string
-  meteringUnit: string
-}
-
-interface BindingFormRow {
-  providerId: string
-  capability: string
-  priority: number
-}
-
-interface ProviderCheckResult {
-  success: boolean
-  providerId: string
-  capability: string
-  latency: number
-  endpoint: string
-  requestId?: string
-  message: string
-  error?: {
-    code?: string
-    message: string
-    status?: number
-  }
-}
-
 const { t } = useI18n()
-const { user } = useAuthUser()
-const toast = useToast()
-
-const isAdmin = computed(() => user.value?.role === 'admin')
-
-watch(isAdmin, (admin) => {
-  if (user.value && !admin) {
-    navigateTo('/dashboard/overview')
-  }
-}, { immediate: true })
-
-const activeTab = ref('providers')
-const providers = ref<ProviderRegistryRecord[]>([])
-const capabilities = ref<ProviderCapabilityRecord[]>([])
-const scenes = ref<SceneRegistryRecord[]>([])
-const loading = ref(false)
-const savingProvider = ref(false)
-const savingScene = ref(false)
-const actionPending = ref<string | null>(null)
-const providerCheckResults = ref<Record<string, ProviderCheckResult>>({})
-const error = ref<string | null>(null)
-
-const providerForm = reactive({
-  name: 'tencent-cloud-mt-main',
-  displayName: 'Tencent Cloud Machine Translation',
-  vendor: 'tencent-cloud' as ProviderVendor,
-  status: 'disabled' as ProviderStatus,
-  authType: 'secret_pair' as ProviderAuthType,
-  authRef: 'secure://providers/tencent-cloud-mt-main',
-  ownerScope: 'system' as OwnerScope,
-  endpoint: 'https://tmt.tencentcloudapi.com',
-  region: 'ap-shanghai',
-  secretId: '',
-  secretKey: '',
-})
-
-const capabilityRows = ref<CapabilityFormRow[]>([
-  {
-    capability: 'text.translate',
-    schemaRef: 'nexus://schemas/provider/text-translate.v1',
-    meteringUnit: 'character',
-  },
-  {
-    capability: 'image.translate',
-    schemaRef: 'nexus://schemas/provider/image-translate.v1',
-    meteringUnit: 'image',
-  },
-  {
-    capability: 'image.translate.e2e',
-    schemaRef: 'nexus://schemas/provider/image-translate-e2e.v1',
-    meteringUnit: 'image',
-  },
-])
-
-const sceneForm = reactive({
-  id: 'corebox.screenshot.translate',
-  displayName: 'CoreBox Screenshot Translate',
-  owner: 'core-app' as SceneOwner,
-  ownerScope: 'system' as OwnerScope,
-  status: 'enabled' as BindingStatus,
-  requiredCapabilitiesText: 'image.translate.e2e',
-  strategyMode: 'priority' as SceneStrategyMode,
-  fallback: 'enabled' as SceneFallback,
-})
-
-const bindingRows = ref<BindingFormRow[]>([
-  {
-    providerId: '',
-    capability: 'image.translate.e2e',
-    priority: 10,
-  },
-])
-
-const providerVendorOptions: ProviderVendor[] = ['tencent-cloud', 'openai', 'deepseek', 'exchange-rate', 'custom']
-const providerStatusOptions: ProviderStatus[] = ['enabled', 'disabled', 'degraded']
-const authTypeOptions: ProviderAuthType[] = ['secret_pair', 'api_key', 'oauth', 'none']
-const ownerScopeOptions: OwnerScope[] = ['system', 'workspace', 'user']
-const sceneOwnerOptions: SceneOwner[] = ['nexus', 'core-app', 'pilot', 'plugin']
-const strategyOptions: SceneStrategyMode[] = ['priority', 'least_cost', 'lowest_latency', 'balanced', 'manual']
-const fallbackOptions: SceneFallback[] = ['enabled', 'disabled']
-
-const enabledProviders = computed(() => providers.value.filter(item => item.status === 'enabled').length)
-const capabilityCount = computed(() => capabilities.value.length)
-const sceneCount = computed(() => scenes.value.length)
-const providerOptions = computed(() => providers.value.map(provider => ({
-  value: provider.id,
-  label: `${provider.displayName} · ${provider.vendor}`,
-})))
-
-function statusTone(status: string) {
-  if (status === 'enabled')
-    return 'success'
-  if (status === 'degraded')
-    return 'warning'
-  return 'muted'
-}
-
-function normalizeError(err: any, fallback: string) {
-  return err?.data?.message || err?.data?.statusMessage || err?.message || fallback
-}
-
-function formatJson(value: Record<string, unknown> | null) {
-  if (!value)
-    return '-'
-  return JSON.stringify(value)
-}
-
-function formatDate(value: string) {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
-}
-
-function addCapabilityRow() {
-  capabilityRows.value.push({ capability: '', schemaRef: '', meteringUnit: 'request' })
-}
-
-function removeCapabilityRow(index: number) {
-  capabilityRows.value.splice(index, 1)
-}
-
-function addBindingRow() {
-  bindingRows.value.push({ providerId: providers.value[0]?.id ?? '', capability: '', priority: 100 })
-}
-
-function removeBindingRow(index: number) {
-  bindingRows.value.splice(index, 1)
-}
-
-function parseRequiredCapabilities() {
-  return sceneForm.requiredCapabilitiesText
-    .split(',')
-    .map(item => item.trim())
-    .filter(Boolean)
-}
-
-function getProviderCheckResult(providerId: string): ProviderCheckResult | null {
-  return providerCheckResults.value[providerId] ?? null
-}
-
-async function fetchRegistry() {
-  loading.value = true
-  error.value = null
-  try {
-    const [providerResult, capabilityResult, sceneResult] = await Promise.all([
-      $fetch<{ providers: ProviderRegistryRecord[] }>('/api/dashboard/provider-registry/providers'),
-      $fetch<{ capabilities: ProviderCapabilityRecord[] }>('/api/dashboard/provider-registry/capabilities'),
-      $fetch<{ scenes: SceneRegistryRecord[] }>('/api/dashboard/provider-registry/scenes'),
-    ])
-    providers.value = providerResult.providers ?? []
-    capabilities.value = capabilityResult.capabilities ?? []
-    scenes.value = sceneResult.scenes ?? []
-
-    const firstBinding = bindingRows.value[0]
-    const firstProvider = providers.value[0]
-    if (firstBinding && !firstBinding.providerId && firstProvider) {
-      firstBinding.providerId = firstProvider.id
-    }
-  }
-  catch (err: any) {
-    error.value = normalizeError(err, t('dashboard.providerRegistry.errors.loadFailed', 'Failed to load provider registry.'))
-  }
-  finally {
-    loading.value = false
-  }
-}
-
-async function createProvider() {
-  savingProvider.value = true
-  error.value = null
-  try {
-    const targetStatus = providerForm.status
-    const hasCredentialInput = providerForm.authType === 'secret_pair'
-      && providerForm.secretId.trim()
-      && providerForm.secretKey.trim()
-    const body = {
-      name: providerForm.name.trim(),
-      displayName: providerForm.displayName.trim(),
-      vendor: providerForm.vendor,
-      status: hasCredentialInput ? 'disabled' : providerForm.status,
-      authType: providerForm.authType,
-      authRef: providerForm.authType === 'none' ? undefined : providerForm.authRef.trim(),
-      ownerScope: providerForm.ownerScope,
-      endpoint: providerForm.endpoint.trim() || undefined,
-      region: providerForm.region.trim() || undefined,
-      capabilities: capabilityRows.value
-        .filter(row => row.capability.trim())
-        .map(row => ({
-          capability: row.capability.trim(),
-          schemaRef: row.schemaRef.trim() || undefined,
-          metering: row.meteringUnit.trim() ? { unit: row.meteringUnit.trim() } : undefined,
-        })),
-    }
-
-    await $fetch('/api/dashboard/provider-registry/providers', {
-      method: 'POST',
-      body,
-    })
-
-    if (hasCredentialInput) {
-      await $fetch('/api/dashboard/provider-registry/credentials', {
-        method: 'POST',
-        body: {
-          authRef: providerForm.authRef.trim(),
-          authType: providerForm.authType,
-          credentials: {
-            secretId: providerForm.secretId.trim(),
-            secretKey: providerForm.secretKey,
-          },
-        },
-      })
-      providerForm.secretId = ''
-      providerForm.secretKey = ''
-
-      if (targetStatus !== 'disabled') {
-        const providerResult = await $fetch<{ providers: ProviderRegistryRecord[] }>('/api/dashboard/provider-registry/providers', {
-          query: { vendor: providerForm.vendor },
-        })
-        const provider = (providerResult.providers ?? []).find(item => item.authRef === providerForm.authRef.trim())
-        if (provider) {
-          await $fetch(`/api/dashboard/provider-registry/providers/${provider.id}`, {
-            method: 'PATCH',
-            body: { status: targetStatus },
-          })
-        }
-      }
-    }
-    toast.success(t('dashboard.providerRegistry.providers.created', 'Provider created.'))
-    await fetchRegistry()
-  }
-  catch (err: any) {
-    error.value = normalizeError(err, t('dashboard.providerRegistry.errors.createProviderFailed', 'Failed to create provider.'))
-    toast.warning(error.value || t('dashboard.providerRegistry.errors.createProviderFailed', 'Failed to create provider.'))
-  }
-  finally {
-    savingProvider.value = false
-  }
-}
-
-async function checkProvider(provider: ProviderRegistryRecord) {
-  actionPending.value = `provider:${provider.id}:check`
-  error.value = null
-  try {
-    const result = await $fetch<ProviderCheckResult>(`/api/dashboard/provider-registry/providers/${provider.id}/check`, {
-      method: 'POST',
-      body: { capability: 'text.translate' },
-    })
-    providerCheckResults.value = {
-      ...providerCheckResults.value,
-      [provider.id]: result,
-    }
-    if (result.success) {
-      toast.success(result.message || t('dashboard.providerRegistry.providers.checkSucceeded', 'Provider check succeeded.'))
-    }
-    else {
-      toast.warning(result.message || t('dashboard.providerRegistry.providers.checkFailed', 'Provider check failed.'))
-    }
-  }
-  catch (err: any) {
-    const message = normalizeError(err, t('dashboard.providerRegistry.errors.checkProviderFailed', 'Failed to check provider.'))
-    error.value = message
-    providerCheckResults.value = {
-      ...providerCheckResults.value,
-      [provider.id]: {
-        success: false,
-        providerId: provider.id,
-        capability: 'text.translate',
-        latency: 0,
-        endpoint: provider.endpoint || '',
-        message,
-        error: { message },
-      },
-    }
-    toast.warning(message)
-  }
-  finally {
-    actionPending.value = null
-  }
-}
-
-async function updateProviderStatus(provider: ProviderRegistryRecord, status: ProviderStatus) {
-  actionPending.value = `provider:${provider.id}:${status}`
-  error.value = null
-  try {
-    await $fetch(`/api/dashboard/provider-registry/providers/${provider.id}`, {
-      method: 'PATCH',
-      body: { status },
-    })
-    await fetchRegistry()
-  }
-  catch (err: any) {
-    error.value = normalizeError(err, t('dashboard.providerRegistry.errors.updateProviderFailed', 'Failed to update provider.'))
-    toast.warning(error.value || t('dashboard.providerRegistry.errors.updateProviderFailed', 'Failed to update provider.'))
-  }
-  finally {
-    actionPending.value = null
-  }
-}
-
-async function deleteProvider(provider: ProviderRegistryRecord) {
-  actionPending.value = `provider:${provider.id}:delete`
-  error.value = null
-  try {
-    await $fetch(`/api/dashboard/provider-registry/providers/${provider.id}`, {
-      method: 'DELETE',
-    })
-    await fetchRegistry()
-  }
-  catch (err: any) {
-    error.value = normalizeError(err, t('dashboard.providerRegistry.errors.deleteProviderFailed', 'Failed to delete provider.'))
-    toast.warning(error.value || t('dashboard.providerRegistry.errors.deleteProviderFailed', 'Failed to delete provider.'))
-  }
-  finally {
-    actionPending.value = null
-  }
-}
-
-async function createScene() {
-  savingScene.value = true
-  error.value = null
-  try {
-    const body = {
-      id: sceneForm.id.trim(),
-      displayName: sceneForm.displayName.trim(),
-      owner: sceneForm.owner,
-      ownerScope: sceneForm.ownerScope,
-      status: sceneForm.status,
-      requiredCapabilities: parseRequiredCapabilities(),
-      strategyMode: sceneForm.strategyMode,
-      fallback: sceneForm.fallback,
-      auditPolicy: {
-        persistInput: false,
-        persistOutput: false,
-      },
-      bindings: bindingRows.value
-        .filter(row => row.providerId && row.capability.trim())
-        .map(row => ({
-          providerId: row.providerId,
-          capability: row.capability.trim(),
-          priority: Number(row.priority) || 100,
-        })),
-    }
-
-    await $fetch('/api/dashboard/provider-registry/scenes', {
-      method: 'POST',
-      body,
-    })
-    toast.success(t('dashboard.providerRegistry.scenes.created', 'Scene created.'))
-    await fetchRegistry()
-  }
-  catch (err: any) {
-    error.value = normalizeError(err, t('dashboard.providerRegistry.errors.createSceneFailed', 'Failed to create scene.'))
-    toast.warning(error.value || t('dashboard.providerRegistry.errors.createSceneFailed', 'Failed to create scene.'))
-  }
-  finally {
-    savingScene.value = false
-  }
-}
-
-async function updateSceneStatus(scene: SceneRegistryRecord, status: BindingStatus) {
-  actionPending.value = `scene:${scene.id}:${status}`
-  error.value = null
-  try {
-    await $fetch(`/api/dashboard/provider-registry/scenes/${scene.id}`, {
-      method: 'PATCH',
-      body: { status },
-    })
-    await fetchRegistry()
-  }
-  catch (err: any) {
-    error.value = normalizeError(err, t('dashboard.providerRegistry.errors.updateSceneFailed', 'Failed to update scene.'))
-    toast.warning(error.value || t('dashboard.providerRegistry.errors.updateSceneFailed', 'Failed to update scene.'))
-  }
-  finally {
-    actionPending.value = null
-  }
-}
-
-async function deleteScene(scene: SceneRegistryRecord) {
-  actionPending.value = `scene:${scene.id}:delete`
-  error.value = null
-  try {
-    await $fetch(`/api/dashboard/provider-registry/scenes/${scene.id}`, {
-      method: 'DELETE',
-    })
-    await fetchRegistry()
-  }
-  catch (err: any) {
-    error.value = normalizeError(err, t('dashboard.providerRegistry.errors.deleteSceneFailed', 'Failed to delete scene.'))
-    toast.warning(error.value || t('dashboard.providerRegistry.errors.deleteSceneFailed', 'Failed to delete scene.'))
-  }
-  finally {
-    actionPending.value = null
-  }
-}
-
-onMounted(() => {
-  fetchRegistry()
-})
+const {
+  activeTab,
+  actionPending,
+  addBindingRow,
+  addCapabilityRow,
+  addProviderCapabilityEditRow,
+  addSceneBindingEditRow,
+  authTypeOptions,
+  bindingRows,
+  bindingStatusOptions,
+  capabilities,
+  capabilityCount,
+  capabilityRows,
+  checkProvider,
+  createProvider,
+  createScene,
+  deleteProvider,
+  deleteScene,
+  enabledProviders,
+  error,
+  fallbackOptions,
+  fetchRegistry,
+  formatDate,
+  formatJson,
+  formatRunJson,
+  getProviderCheckResult,
+  getProviderEditPanel,
+  getSceneEditPanel,
+  getSceneRunPanel,
+  healthEntries,
+  isAdmin,
+  loading,
+  ownerScopeOptions,
+  providerEditPanels,
+  providerForm,
+  providerOptions,
+  providerStatusOptions,
+  providers,
+  providerVendorOptions,
+  removeBindingRow,
+  removeCapabilityRow,
+  removeProviderCapabilityEditRow,
+  removeSceneBindingEditRow,
+  runScene,
+  saveProviderEdit,
+  saveSceneEdit,
+  sceneCapabilities,
+  sceneCount,
+  sceneEditPanels,
+  sceneForm,
+  sceneOwnerOptions,
+  sceneProviderOptions,
+  scenes,
+  savingProvider,
+  savingScene,
+  statusTone,
+  strategyOptions,
+  toggleProviderEdit,
+  toggleSceneEdit,
+  unhealthyCount,
+  updateProviderStatus,
+  updateSceneStatus,
+  usageCount,
+  usageEntries,
+} = useProviderRegistryAdmin()
 </script>
 
 <template>
@@ -539,7 +103,7 @@ onMounted(() => {
       {{ error }}
     </div>
 
-    <section class="grid gap-4 md:grid-cols-3">
+    <section class="grid gap-4 md:grid-cols-5">
       <div class="apple-card-lg p-5">
         <p class="apple-section-title">
           {{ t('dashboard.providerRegistry.summary.providers', 'Providers') }}
@@ -571,6 +135,28 @@ onMounted(() => {
         </p>
         <p class="mt-1 text-xs text-black/45 dark:text-white/45">
           {{ t('dashboard.providerRegistry.summary.scenesHint', 'Strategy bindings configured') }}
+        </p>
+      </div>
+      <div class="apple-card-lg p-5">
+        <p class="apple-section-title">
+          {{ t('dashboard.providerRegistry.summary.usage', 'Usage') }}
+        </p>
+        <p class="mt-2 text-3xl font-semibold text-black dark:text-white">
+          {{ usageCount }}
+        </p>
+        <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+          {{ t('dashboard.providerRegistry.summary.usageHint', 'Recent run ledger rows') }}
+        </p>
+      </div>
+      <div class="apple-card-lg p-5">
+        <p class="apple-section-title">
+          {{ t('dashboard.providerRegistry.summary.health', 'Health') }}
+        </p>
+        <p class="mt-2 text-3xl font-semibold text-black dark:text-white">
+          {{ unhealthyCount }}
+        </p>
+        <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+          {{ t('dashboard.providerRegistry.summary.healthHint', 'Non-healthy recent checks') }}
         </p>
       </div>
     </section>
@@ -706,6 +292,9 @@ onMounted(() => {
                         <TxSpinner v-if="actionPending === `provider:${provider.id}:check`" :size="12" />
                         <span :class="actionPending === `provider:${provider.id}:check` ? 'ml-1' : ''">{{ t('dashboard.providerRegistry.actions.check', 'Check') }}</span>
                       </TxButton>
+                      <TxButton variant="secondary" size="mini" :disabled="actionPending !== null" @click="toggleProviderEdit(provider)">
+                        {{ providerEditPanels[provider.id]?.expanded ? t('dashboard.providerRegistry.actions.hideEdit', 'Hide edit') : t('dashboard.providerRegistry.actions.edit', 'Edit') }}
+                      </TxButton>
                       <TxButton variant="secondary" size="mini" :disabled="actionPending !== null || provider.status === 'enabled'" @click="updateProviderStatus(provider, 'enabled')">
                         {{ t('dashboard.providerRegistry.actions.enable', 'Enable') }}
                       </TxButton>
@@ -742,6 +331,123 @@ onMounted(() => {
                     <p class="mt-1 text-black/45 dark:text-white/45">
                       {{ getProviderCheckResult(provider.id)?.capability }} · {{ getProviderCheckResult(provider.id)?.latency }}ms · {{ getProviderCheckResult(provider.id)?.requestId || getProviderCheckResult(provider.id)?.error?.code || '-' }}
                     </p>
+                  </div>
+                  <div
+                    v-if="getProviderEditPanel(provider).expanded"
+                    class="mt-4 space-y-4 rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]"
+                  >
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                      <h4 class="text-sm font-semibold text-black dark:text-white">
+                        {{ t('dashboard.providerRegistry.providers.editTitle', 'Edit provider') }}
+                      </h4>
+                      <div class="flex flex-wrap gap-2">
+                        <TxButton variant="secondary" size="mini" :disabled="getProviderEditPanel(provider).saving" @click="toggleProviderEdit(provider)">
+                          {{ t('common.cancel', 'Cancel') }}
+                        </TxButton>
+                        <TxButton variant="primary" size="mini" :disabled="getProviderEditPanel(provider).saving" @click="saveProviderEdit(provider)">
+                          <TxSpinner v-if="getProviderEditPanel(provider).saving" :size="12" />
+                          <span :class="getProviderEditPanel(provider).saving ? 'ml-1' : ''">{{ t('common.save', 'Save') }}</span>
+                        </TxButton>
+                      </div>
+                    </div>
+                    <div v-if="getProviderEditPanel(provider).error" class="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-200">
+                      {{ getProviderEditPanel(provider).error }}
+                    </div>
+                    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.name', 'Name') }}</label>
+                        <TuffInput v-model="getProviderEditPanel(provider).name" class="w-full" />
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.displayName', 'Display name') }}</label>
+                        <TuffInput v-model="getProviderEditPanel(provider).displayName" class="w-full" />
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.vendor', 'Vendor') }}</label>
+                        <TuffSelect v-model="getProviderEditPanel(provider).vendor" class="w-full">
+                          <TuffSelectItem v-for="vendor in providerVendorOptions" :key="vendor" :value="vendor" :label="vendor" />
+                        </TuffSelect>
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.status', 'Status') }}</label>
+                        <TuffSelect v-model="getProviderEditPanel(provider).status" class="w-full">
+                          <TuffSelectItem v-for="status in providerStatusOptions" :key="status" :value="status" :label="status" />
+                        </TuffSelect>
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.authType', 'Auth type') }}</label>
+                        <TuffSelect v-model="getProviderEditPanel(provider).authType" class="w-full">
+                          <TuffSelectItem v-for="type in authTypeOptions" :key="type" :value="type" :label="type" />
+                        </TuffSelect>
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.authRef', 'Auth ref') }}</label>
+                        <TuffInput v-model="getProviderEditPanel(provider).authRef" class="w-full" />
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.ownerScope', 'Owner scope') }}</label>
+                        <TuffSelect v-model="getProviderEditPanel(provider).ownerScope" class="w-full">
+                          <TuffSelectItem v-for="scope in ownerScopeOptions" :key="scope" :value="scope" :label="scope" />
+                        </TuffSelect>
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.ownerId', 'Owner ID') }}</label>
+                        <TuffInput v-model="getProviderEditPanel(provider).ownerId" class="w-full" />
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.endpoint', 'Endpoint') }}</label>
+                        <TuffInput v-model="getProviderEditPanel(provider).endpoint" class="w-full" />
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.region', 'Region') }}</label>
+                        <TuffInput v-model="getProviderEditPanel(provider).region" class="w-full" />
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.description', 'Description') }}</label>
+                        <TuffInput v-model="getProviderEditPanel(provider).description" class="w-full" />
+                      </div>
+                      <div class="md:col-span-2 xl:col-span-4">
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.metadataJson', 'Metadata JSON') }}</label>
+                        <TuffInput v-model="getProviderEditPanel(provider).metadataText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ }" />
+                      </div>
+                    </div>
+                    <div class="space-y-3">
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <h5 class="text-sm font-medium text-black dark:text-white">
+                          {{ t('dashboard.providerRegistry.providers.capabilitiesTitle', 'Capabilities') }}
+                        </h5>
+                        <TxButton variant="secondary" size="mini" @click="addProviderCapabilityEditRow(provider)">
+                          {{ t('dashboard.providerRegistry.actions.addCapability', 'Add capability') }}
+                        </TxButton>
+                      </div>
+                      <div
+                        v-for="(row, index) in getProviderEditPanel(provider).capabilities"
+                        :key="index"
+                        class="space-y-2 rounded-lg bg-white/70 p-3 dark:bg-black/15"
+                      >
+                        <div class="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                          <TuffInput v-model="row.capability" placeholder="text.translate" />
+                          <TuffInput v-model="row.schemaRef" placeholder="schema ref" />
+                          <TxButton variant="secondary" size="mini" @click="removeProviderCapabilityEditRow(provider, index)">
+                            {{ t('common.remove', 'Remove') }}
+                          </TxButton>
+                        </div>
+                        <div class="grid gap-2 lg:grid-cols-3">
+                          <div>
+                            <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.meteringJson', 'Metering JSON') }}</label>
+                            <TuffInput v-model="row.meteringText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ &quot;unit&quot;: &quot;request&quot; }" />
+                          </div>
+                          <div>
+                            <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.constraintsJson', 'Constraints JSON') }}</label>
+                            <TuffInput v-model="row.constraintsText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ }" />
+                          </div>
+                          <div>
+                            <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.metadataJson', 'Metadata JSON') }}</label>
+                            <TuffInput v-model="row.metadataText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ }" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </article>
               </div>
@@ -903,6 +609,12 @@ onMounted(() => {
                       </p>
                     </div>
                     <div class="flex flex-wrap gap-2">
+                      <TxButton variant="secondary" size="mini" :disabled="actionPending !== null" @click="getSceneRunPanel(scene).expanded = !getSceneRunPanel(scene).expanded">
+                        {{ getSceneRunPanel(scene).expanded ? t('dashboard.providerRegistry.actions.hideRun', 'Hide run') : t('dashboard.providerRegistry.actions.run', 'Run') }}
+                      </TxButton>
+                      <TxButton variant="secondary" size="mini" :disabled="actionPending !== null" @click="toggleSceneEdit(scene)">
+                        {{ sceneEditPanels[scene.id]?.expanded ? t('dashboard.providerRegistry.actions.hideEdit', 'Hide edit') : t('dashboard.providerRegistry.actions.edit', 'Edit') }}
+                      </TxButton>
                       <TxButton variant="secondary" size="mini" :disabled="actionPending !== null || scene.status === 'enabled'" @click="updateSceneStatus(scene, 'enabled')">
                         {{ t('dashboard.providerRegistry.actions.enable', 'Enable') }}
                       </TxButton>
@@ -924,9 +636,361 @@ onMounted(() => {
                       </span>
                     </p>
                   </div>
+                  <div
+                    v-if="getSceneEditPanel(scene).expanded"
+                    class="mt-4 space-y-4 rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]"
+                  >
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                      <h4 class="text-sm font-semibold text-black dark:text-white">
+                        {{ t('dashboard.providerRegistry.scenes.editTitle', 'Edit scene') }}
+                      </h4>
+                      <div class="flex flex-wrap gap-2">
+                        <TxButton variant="secondary" size="mini" :disabled="getSceneEditPanel(scene).saving" @click="toggleSceneEdit(scene)">
+                          {{ t('common.cancel', 'Cancel') }}
+                        </TxButton>
+                        <TxButton variant="primary" size="mini" :disabled="getSceneEditPanel(scene).saving" @click="saveSceneEdit(scene)">
+                          <TxSpinner v-if="getSceneEditPanel(scene).saving" :size="12" />
+                          <span :class="getSceneEditPanel(scene).saving ? 'ml-1' : ''">{{ t('common.save', 'Save') }}</span>
+                        </TxButton>
+                      </div>
+                    </div>
+                    <div v-if="getSceneEditPanel(scene).error" class="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-200">
+                      {{ getSceneEditPanel(scene).error }}
+                    </div>
+                    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.displayName', 'Display name') }}</label>
+                        <TuffInput v-model="getSceneEditPanel(scene).displayName" class="w-full" />
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.owner', 'Owner') }}</label>
+                        <TuffSelect v-model="getSceneEditPanel(scene).owner" class="w-full">
+                          <TuffSelectItem v-for="owner in sceneOwnerOptions" :key="owner" :value="owner" :label="owner" />
+                        </TuffSelect>
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.ownerScope', 'Owner scope') }}</label>
+                        <TuffSelect v-model="getSceneEditPanel(scene).ownerScope" class="w-full">
+                          <TuffSelectItem v-for="scope in ownerScopeOptions" :key="scope" :value="scope" :label="scope" />
+                        </TuffSelect>
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.ownerId', 'Owner ID') }}</label>
+                        <TuffInput v-model="getSceneEditPanel(scene).ownerId" class="w-full" />
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.status', 'Status') }}</label>
+                        <TuffSelect v-model="getSceneEditPanel(scene).status" class="w-full">
+                          <TuffSelectItem v-for="status in bindingStatusOptions" :key="status" :value="status" :label="status" />
+                        </TuffSelect>
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.strategy', 'Strategy') }}</label>
+                        <TuffSelect v-model="getSceneEditPanel(scene).strategyMode" class="w-full">
+                          <TuffSelectItem v-for="strategy in strategyOptions" :key="strategy" :value="strategy" :label="strategy" />
+                        </TuffSelect>
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.fallback', 'Fallback') }}</label>
+                        <TuffSelect v-model="getSceneEditPanel(scene).fallback" class="w-full">
+                          <TuffSelectItem v-for="fallback in fallbackOptions" :key="fallback" :value="fallback" :label="fallback" />
+                        </TuffSelect>
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.requiredCapabilities', 'Required capabilities') }}</label>
+                        <TuffInput v-model="getSceneEditPanel(scene).requiredCapabilitiesText" class="w-full" placeholder="image.translate.e2e, text.translate" />
+                      </div>
+                      <div class="md:col-span-2 xl:col-span-4">
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.meteringPolicyJson', 'Metering policy JSON') }}</label>
+                        <TuffInput v-model="getSceneEditPanel(scene).meteringPolicyText" type="textarea" :rows="3" class="w-full font-mono text-xs" placeholder="{ }" />
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.auditPolicyJson', 'Audit policy JSON') }}</label>
+                        <TuffInput v-model="getSceneEditPanel(scene).auditPolicyText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ &quot;persistInput&quot;: false, &quot;persistOutput&quot;: false }" />
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.metadataJson', 'Metadata JSON') }}</label>
+                        <TuffInput v-model="getSceneEditPanel(scene).metadataText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ }" />
+                      </div>
+                    </div>
+                    <div class="space-y-3">
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <h5 class="text-sm font-medium text-black dark:text-white">
+                          {{ t('dashboard.providerRegistry.scenes.bindingsTitle', 'Strategy bindings') }}
+                        </h5>
+                        <TxButton variant="secondary" size="mini" :disabled="!providers.length" @click="addSceneBindingEditRow(scene)">
+                          {{ t('dashboard.providerRegistry.actions.addBinding', 'Add binding') }}
+                        </TxButton>
+                      </div>
+                      <div
+                        v-for="(row, index) in getSceneEditPanel(scene).bindings"
+                        :key="index"
+                        class="space-y-2 rounded-lg bg-white/70 p-3 dark:bg-black/15"
+                      >
+                        <div class="grid gap-2 md:grid-cols-[1fr_1fr_100px_100px_120px_auto]">
+                          <TuffSelect v-model="row.providerId" class="w-full">
+                            <TuffSelectItem v-for="providerOption in providerOptions" :key="providerOption.value" :value="providerOption.value" :label="providerOption.label" />
+                          </TuffSelect>
+                          <TuffInput v-model="row.capability" placeholder="image.translate.e2e" />
+                          <TuffInput v-model="row.priority" type="number" placeholder="100" />
+                          <TuffInput v-model="row.weightText" type="number" placeholder="weight" />
+                          <TuffSelect v-model="row.status" class="w-full">
+                            <TuffSelectItem v-for="status in bindingStatusOptions" :key="status" :value="status" :label="status" />
+                          </TuffSelect>
+                          <TxButton variant="secondary" size="mini" @click="removeSceneBindingEditRow(scene, index)">
+                            {{ t('common.remove', 'Remove') }}
+                          </TxButton>
+                        </div>
+                        <div class="grid gap-2 lg:grid-cols-2">
+                          <div>
+                            <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.constraintsJson', 'Constraints JSON') }}</label>
+                            <TuffInput v-model="row.constraintsText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ &quot;cost&quot;: 0.01 }" />
+                          </div>
+                          <div>
+                            <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.metadataJson', 'Metadata JSON') }}</label>
+                            <TuffInput v-model="row.metadataText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ }" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    v-if="getSceneRunPanel(scene).expanded"
+                    class="mt-4 space-y-3 rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]"
+                  >
+                    <div class="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.capability', 'Capability') }}</label>
+                        <TuffSelect v-model="getSceneRunPanel(scene).capability" class="w-full">
+                          <TuffSelectItem value="" :label="t('dashboard.providerRegistry.scenes.defaultCapability', 'Scene default')" />
+                          <TuffSelectItem v-for="capability in sceneCapabilities(scene)" :key="capability" :value="capability" :label="capability" />
+                        </TuffSelect>
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.provider', 'Provider') }}</label>
+                        <TuffSelect v-model="getSceneRunPanel(scene).providerId" class="w-full">
+                          <TuffSelectItem value="" :label="t('dashboard.providerRegistry.scenes.defaultProvider', 'Strategy default')" />
+                          <TuffSelectItem v-for="provider in sceneProviderOptions(scene)" :key="provider.value" :value="provider.value" :label="provider.label" />
+                        </TuffSelect>
+                      </div>
+                      <div class="flex items-end">
+                        <TxButton variant="secondary" size="small" :disabled="actionPending !== null" @click="runScene(scene, true)">
+                          <TxSpinner v-if="actionPending === `scene:${scene.id}:run:dry`" :size="12" />
+                          <span :class="actionPending === `scene:${scene.id}:run:dry` ? 'ml-1' : ''">{{ t('dashboard.providerRegistry.actions.dryRun', 'Dry run') }}</span>
+                        </TxButton>
+                      </div>
+                      <div class="flex items-end">
+                        <TxButton variant="primary" size="small" :disabled="actionPending !== null || scene.status !== 'enabled'" @click="runScene(scene, false)">
+                          <TxSpinner v-if="actionPending === `scene:${scene.id}:run:execute`" :size="12" />
+                          <span :class="actionPending === `scene:${scene.id}:run:execute` ? 'ml-1' : ''">{{ t('dashboard.providerRegistry.actions.execute', 'Execute') }}</span>
+                        </TxButton>
+                      </div>
+                    </div>
+                    <div>
+                      <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.scenes.inputJson', 'Input JSON') }}</label>
+                      <TuffInput
+                        v-model="getSceneRunPanel(scene).inputText"
+                        type="textarea"
+                        :rows="6"
+                        class="w-full font-mono text-xs"
+                        placeholder="{&quot;text&quot;:&quot;Hello&quot;,&quot;targetLang&quot;:&quot;zh&quot;}"
+                      />
+                    </div>
+                    <div v-if="getSceneRunPanel(scene).error" class="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-200">
+                      {{ getSceneRunPanel(scene).error }}
+                    </div>
+                    <div v-if="getSceneRunPanel(scene).result" class="space-y-3">
+                      <div class="flex flex-wrap items-center gap-2 text-xs text-black/55 dark:text-white/55">
+                        <TxStatusBadge :text="getSceneRunPanel(scene).result?.status || '-'" :status="statusTone(getSceneRunPanel(scene).result?.status || '')" size="sm" />
+                        <span>{{ getSceneRunPanel(scene).result?.runId }}</span>
+                        <span>{{ getSceneRunPanel(scene).result?.mode }}</span>
+                      </div>
+                      <div class="grid gap-3 lg:grid-cols-2">
+                        <div class="rounded-lg bg-white/70 p-3 dark:bg-black/15">
+                          <p class="apple-section-title mb-2">
+                            {{ t('dashboard.providerRegistry.scenes.trace', 'Trace') }}
+                          </p>
+                          <div class="space-y-2">
+                            <div v-for="step in getSceneRunPanel(scene).result?.trace || []" :key="`${step.phase}-${step.at}`" class="text-xs">
+                              <div class="flex flex-wrap items-center gap-2">
+                                <TxStatusBadge :text="step.status" :status="statusTone(step.status)" size="sm" />
+                                <span class="font-medium text-black dark:text-white">{{ step.phase }}</span>
+                              </div>
+                              <p class="mt-1 text-black/50 dark:text-white/50">
+                                {{ step.message }}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="rounded-lg bg-white/70 p-3 dark:bg-black/15">
+                          <p class="apple-section-title mb-2">
+                            {{ t('dashboard.providerRegistry.scenes.output', 'Output') }}
+                          </p>
+                          <pre class="max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs text-black/60 dark:text-white/60">{{ formatRunJson(getSceneRunPanel(scene).result?.output ?? null) }}</pre>
+                        </div>
+                      </div>
+                      <div class="grid gap-3 lg:grid-cols-2">
+                        <div class="rounded-lg bg-white/70 p-3 dark:bg-black/15">
+                          <p class="apple-section-title mb-2">
+                            {{ t('dashboard.providerRegistry.scenes.selection', 'Selection') }}
+                          </p>
+                          <pre class="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-black/60 dark:text-white/60">{{ formatRunJson(getSceneRunPanel(scene).result?.selected ?? []) }}</pre>
+                        </div>
+                        <div class="rounded-lg bg-white/70 p-3 dark:bg-black/15">
+                          <p class="apple-section-title mb-2">
+                            {{ t('dashboard.providerRegistry.scenes.fallbackTrail', 'Fallback trail') }}
+                          </p>
+                          <pre class="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-black/60 dark:text-white/60">{{ formatRunJson(getSceneRunPanel(scene).result?.fallbackTrail ?? []) }}</pre>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </article>
               </div>
             </section>
+          </div>
+        </TxTabItem>
+
+        <TxTabItem name="usage" icon-class="i-carbon-data-check">
+          <template #name>
+            {{ t('dashboard.providerRegistry.tabs.usage', 'Usage') }}
+          </template>
+
+          <div class="space-y-3">
+            <div v-if="loading && !usageEntries.length" class="space-y-3">
+              <TxSkeleton :loading="true" :lines="3" />
+            </div>
+            <div v-else-if="!usageEntries.length" class="rounded-xl bg-black/[0.02] p-4 text-sm text-black/50 dark:bg-white/[0.03] dark:text-white/50">
+              {{ t('dashboard.providerRegistry.usage.empty', 'No scene run usage recorded yet.') }}
+            </div>
+            <article
+              v-for="entry in usageEntries"
+              v-else
+              :key="entry.id"
+              class="rounded-2xl bg-black/[0.02] p-4 text-sm dark:bg-white/[0.03]"
+            >
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <TxStatusBadge :text="entry.status" :status="statusTone(entry.status)" size="sm" />
+                    <span class="font-semibold text-black dark:text-white">{{ entry.sceneId }}</span>
+                    <span class="text-xs text-black/45 dark:text-white/45">{{ entry.mode }}</span>
+                  </div>
+                  <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                    {{ entry.runId }} · {{ entry.providerId || '-' }} · {{ entry.capability || '-' }}
+                  </p>
+                </div>
+                <span class="text-xs text-black/45 dark:text-white/45">
+                  {{ formatDate(entry.createdAt) }}
+                </span>
+              </div>
+              <div class="mt-3 grid gap-3 md:grid-cols-3">
+                <div class="rounded-lg bg-white/70 p-3 dark:bg-black/15">
+                  <p class="apple-section-title mb-1">
+                    {{ t('dashboard.providerRegistry.usage.metering', 'Metering') }}
+                  </p>
+                  <p class="text-xs text-black/60 dark:text-white/60">
+                    {{ entry.quantity }} {{ entry.unit }} · billable={{ entry.billable }} · estimated={{ entry.estimated }}
+                  </p>
+                </div>
+                <div class="rounded-lg bg-white/70 p-3 dark:bg-black/15">
+                  <p class="apple-section-title mb-1">
+                    {{ t('dashboard.providerRegistry.usage.error', 'Error') }}
+                  </p>
+                  <p class="text-xs text-black/60 dark:text-white/60">
+                    {{ entry.errorCode || '-' }}{{ entry.errorMessage ? ` · ${entry.errorMessage}` : '' }}
+                  </p>
+                </div>
+                <div class="rounded-lg bg-white/70 p-3 dark:bg-black/15">
+                  <p class="apple-section-title mb-1">
+                    {{ t('dashboard.providerRegistry.usage.providerRef', 'Provider ref') }}
+                  </p>
+                  <p class="text-xs text-black/60 dark:text-white/60">
+                    {{ entry.providerUsageRef || entry.pricingRef || '-' }}
+                  </p>
+                </div>
+              </div>
+              <div class="mt-3 grid gap-3 lg:grid-cols-2">
+                <div class="rounded-lg bg-white/70 p-3 dark:bg-black/15">
+                  <p class="apple-section-title mb-2">
+                    {{ t('dashboard.providerRegistry.scenes.trace', 'Trace') }}
+                  </p>
+                  <pre class="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-black/60 dark:text-white/60">{{ formatRunJson(entry.trace) }}</pre>
+                </div>
+                <div class="rounded-lg bg-white/70 p-3 dark:bg-black/15">
+                  <p class="apple-section-title mb-2">
+                    {{ t('dashboard.providerRegistry.scenes.fallbackTrail', 'Fallback trail') }}
+                  </p>
+                  <pre class="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-black/60 dark:text-white/60">{{ formatRunJson(entry.fallbackTrail) }}</pre>
+                </div>
+              </div>
+            </article>
+          </div>
+        </TxTabItem>
+
+        <TxTabItem name="health" icon-class="i-carbon-pulse">
+          <template #name>
+            {{ t('dashboard.providerRegistry.tabs.health', 'Health') }}
+          </template>
+
+          <div class="space-y-3">
+            <div v-if="loading && !healthEntries.length" class="space-y-3">
+              <TxSkeleton :loading="true" :lines="3" />
+            </div>
+            <div v-else-if="!healthEntries.length" class="rounded-xl bg-black/[0.02] p-4 text-sm text-black/50 dark:bg-white/[0.03] dark:text-white/50">
+              {{ t('dashboard.providerRegistry.health.empty', 'No provider health checks recorded yet.') }}
+            </div>
+            <article
+              v-for="entry in healthEntries"
+              v-else
+              :key="entry.id"
+              class="rounded-2xl bg-black/[0.02] p-4 text-sm dark:bg-white/[0.03]"
+            >
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <TxStatusBadge :text="entry.status" :status="statusTone(entry.status === 'healthy' ? 'success' : entry.status === 'degraded' ? 'degraded' : 'failed')" size="sm" />
+                    <span class="font-semibold text-black dark:text-white">{{ entry.providerName }}</span>
+                    <span class="text-xs text-black/45 dark:text-white/45">{{ entry.capability }}</span>
+                  </div>
+                  <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                    {{ entry.providerId }} · {{ entry.vendor }} · {{ entry.endpoint }}
+                  </p>
+                </div>
+                <span class="text-xs text-black/45 dark:text-white/45">
+                  {{ formatDate(entry.checkedAt) }}
+                </span>
+              </div>
+              <div class="mt-3 grid gap-3 md:grid-cols-3">
+                <div class="rounded-lg bg-white/70 p-3 dark:bg-black/15">
+                  <p class="apple-section-title mb-1">
+                    {{ t('dashboard.providerRegistry.health.latency', 'Latency') }}
+                  </p>
+                  <p class="text-xs text-black/60 dark:text-white/60">
+                    {{ entry.latencyMs }}ms
+                  </p>
+                </div>
+                <div class="rounded-lg bg-white/70 p-3 dark:bg-black/15">
+                  <p class="apple-section-title mb-1">
+                    {{ t('dashboard.providerRegistry.health.reason', 'Reason') }}
+                  </p>
+                  <p class="text-xs text-black/60 dark:text-white/60">
+                    {{ entry.degradedReason || '-' }}
+                  </p>
+                </div>
+                <div class="rounded-lg bg-white/70 p-3 dark:bg-black/15">
+                  <p class="apple-section-title mb-1">
+                    {{ t('dashboard.providerRegistry.health.request', 'Request') }}
+                  </p>
+                  <p class="text-xs text-black/60 dark:text-white/60">
+                    {{ entry.requestId || entry.errorCode || '-' }}
+                  </p>
+                </div>
+              </div>
+              <p v-if="entry.errorMessage" class="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200">
+                {{ entry.errorMessage }}
+              </p>
+            </article>
           </div>
         </TxTabItem>
       </TxTabs>

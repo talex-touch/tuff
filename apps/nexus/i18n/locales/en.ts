@@ -1510,6 +1510,17 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           testing: 'Testing…',
           testSuccess: 'Connected successfully. Found {count} model(s)',
           testFailed: 'Connection failed',
+          migration: {
+            title: 'Provider Registry Migration',
+            subtitle: 'Mirror legacy intelligence_providers into the shared Provider Registry and secure store. The legacy table is not deleted.',
+            dryRun: 'Dry run',
+            execute: 'Migrate',
+            running: 'Checking migration…',
+            mode: 'Mode',
+            total: 'Total',
+            migrated: 'Migrated',
+            failed: 'Failed',
+          },
           probe: {
             title: 'Provider Probe',
             subtitle: 'Current provider: {name}',

@@ -3,9 +3,13 @@ import type { ProviderRegistryRecord } from './providerRegistryStore'
 import type { SceneRegistryRecord, SceneStrategyBindingRecord } from './sceneRegistryStore'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
+import { getLatestProviderHealthChecks, type ProviderHealthCheckEntry } from './providerHealthStore'
 import { getProviderRegistryEntry } from './providerRegistryStore'
+import { recordProviderUsageLedger } from './providerUsageLedgerStore'
 import { getSceneRegistryEntry } from './sceneRegistryStore'
-import { invokeTencentTextTranslate } from './tencentMachineTranslationProvider'
+import { invokeIntelligenceVisionOcr } from './intelligenceVisionOcrProvider'
+import { invokeTencentImageTranslate, invokeTencentTextTranslate } from './tencentMachineTranslationProvider'
+import { convertUsd, getUsdRates } from './exchangeRateService'
 
 export type SceneRunStatus = 'planned' | 'completed' | 'failed'
 export type SceneRunMode = 'dry_run' | 'execute'
@@ -93,6 +97,8 @@ export interface SceneAdapterContext {
   provider: ProviderRegistryRecord
   capability: string
   input: unknown
+  originalInput: unknown
+  outputs: Readonly<Record<string, unknown>>
 }
 
 export interface SceneAdapterResult {
@@ -107,6 +113,7 @@ export type SceneCapabilityAdapter = (context: SceneAdapterContext) => Promise<S
 interface ResolvedSceneCandidate {
   candidate: SceneRunCandidate
   provider: ProviderRegistryRecord
+  binding: SceneStrategyBindingRecord
 }
 
 interface CapabilityExecutionPlan {
@@ -134,6 +141,19 @@ function normalizeTencentTranslateInput(input: unknown) {
   }
 }
 
+function normalizeTencentImageTranslateInput(input: unknown) {
+  const record = input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : {}
+  return {
+    data: record.data,
+    imageBase64: record.imageBase64,
+    url: record.url,
+    imageUrl: record.imageUrl,
+    targetLang: record.targetLang,
+  }
+}
+
 const tencentTextTranslateAdapter: SceneCapabilityAdapter = async ({ event, provider, input }) => {
   const result = await invokeTencentTextTranslate(event, provider, normalizeTencentTranslateInput(input))
   return {
@@ -152,8 +172,327 @@ const tencentTextTranslateAdapter: SceneCapabilityAdapter = async ({ event, prov
   }
 }
 
+const tencentImageTranslateAdapter: SceneCapabilityAdapter = async ({ event, provider, input, capability }) => {
+  const imageCapability = capability === 'image.translate' ? 'image.translate' : 'image.translate.e2e'
+  const result = await invokeTencentImageTranslate(event, provider, normalizeTencentImageTranslateInput(input), imageCapability)
+  return {
+    output: {
+      translatedImageBase64: result.translatedImageBase64,
+      sourceLang: result.sourceLang,
+      targetLang: result.targetLang,
+      sourceText: result.sourceText,
+      targetText: result.targetText,
+      angle: result.angle,
+      transDetails: result.transDetails,
+    },
+    providerRequestId: result.providerRequestId,
+    latencyMs: result.latencyMs,
+    usage: [
+      {
+        ...result.usage,
+        providerId: provider.id,
+        capability: imageCapability,
+      },
+    ],
+  }
+}
+
+const intelligenceVisionOcrAdapter: SceneCapabilityAdapter = async ({ event, provider, input, capability }) => {
+  const result = await invokeIntelligenceVisionOcr(event, provider, input)
+  return {
+    output: result.output,
+    providerRequestId: result.providerRequestId,
+    latencyMs: result.latencyMs,
+    usage: [
+      {
+        ...result.usage,
+        providerId: provider.id,
+        capability,
+      },
+    ],
+  }
+}
+
+function normalizeFxConvertInput(input: unknown) {
+  const record = input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : {}
+  return {
+    base: typeof record.base === 'string' ? record.base.trim().toUpperCase() : 'USD',
+    target: typeof record.target === 'string' ? record.target.trim().toUpperCase() : '',
+    amount: Number(record.amount),
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function readString(value: unknown): string | null {
+  if (typeof value !== 'string')
+    return null
+  const trimmed = value.trim()
+  return trimmed || null
+}
+
+function stripDataUrlPrefix(value: string): { base64: string, mimeType: string | null } {
+  const matched = /^data:([^;,]+);base64,(.+)$/i.exec(value.trim())
+  if (!matched)
+    return { base64: value.trim(), mimeType: null }
+
+  return {
+    base64: matched[2]?.trim() ?? '',
+    mimeType: matched[1]?.trim().toLowerCase() ?? null,
+  }
+}
+
+function readImagePayload(input: Record<string, unknown>): { imageBase64: string | null, imageMimeType: string | null } {
+  const mimeType = readString(input.imageMimeType) ?? readString(input.mimeType)
+  const rawCandidates = [input.imageBase64, input.data]
+
+  for (const candidate of rawCandidates) {
+    const value = readString(candidate)
+    if (!value)
+      continue
+
+    const parsed = stripDataUrlPrefix(value)
+    if (parsed.base64) {
+      return {
+        imageBase64: parsed.base64,
+        imageMimeType: parsed.mimeType ?? mimeType,
+      }
+    }
+  }
+
+  const urlCandidates = [input.url, input.imageUrl]
+  for (const candidate of urlCandidates) {
+    const value = readString(candidate)
+    if (!value?.startsWith('data:image/'))
+      continue
+
+    const parsed = stripDataUrlPrefix(value)
+    if (parsed.base64) {
+      return {
+        imageBase64: parsed.base64,
+        imageMimeType: parsed.mimeType ?? mimeType,
+      }
+    }
+  }
+
+  return { imageBase64: null, imageMimeType: mimeType }
+}
+
+function toIso(value?: number | null): string | null {
+  if (!value)
+    return null
+  return new Date(value).toISOString()
+}
+
+const fxRateLatestAdapter: SceneCapabilityAdapter = async ({ event, provider, capability }) => {
+  const startedAt = Date.now()
+  const { snapshot, source } = await getUsdRates(event)
+  const latencyMs = Date.now() - startedAt
+  const fetchedAt = toIso(snapshot.fetchedAt) ?? new Date().toISOString()
+  const providerUpdatedAt = toIso(snapshot.providerUpdatedAt)
+  return {
+    output: {
+      base: snapshot.baseCurrency,
+      asOf: providerUpdatedAt ?? fetchedAt,
+      providerUpdatedAt,
+      fetchedAt,
+      providerNextUpdateAt: toIso(snapshot.providerNextUpdateAt),
+      source,
+      rates: snapshot.rates,
+    },
+    providerRequestId: snapshot.id,
+    latencyMs,
+    usage: [
+      {
+        unit: 'fx_quote',
+        quantity: 1,
+        billable: true,
+        providerId: provider.id,
+        capability,
+        estimated: source === 'cache',
+      },
+    ],
+  }
+}
+
+const fxConvertAdapter: SceneCapabilityAdapter = async ({ event, provider, input, capability }) => {
+  const normalized = normalizeFxConvertInput(input)
+  if (normalized.base && normalized.base !== 'USD') {
+    throw createError({ statusCode: 400, statusMessage: 'Only USD base is supported.' })
+  }
+  if (!/^[A-Z]{3}$/.test(normalized.target)) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid target currency code.' })
+  }
+  if (!Number.isFinite(normalized.amount) || normalized.amount <= 0) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid amount.' })
+  }
+
+  const startedAt = Date.now()
+  const result = await convertUsd(event, {
+    target: normalized.target,
+    amount: normalized.amount,
+  })
+  return {
+    output: {
+      base: 'USD',
+      target: normalized.target,
+      amount: normalized.amount,
+      rate: result.rate,
+      converted: result.converted,
+      source: result.source,
+      updatedAt: result.updatedAt,
+      providerUpdatedAt: result.providerUpdatedAt,
+      fetchedAt: result.fetchedAt,
+      providerNextUpdateAt: result.providerNextUpdateAt,
+    },
+    providerRequestId: `${normalized.target}:${result.fetchedAt}`,
+    latencyMs: Date.now() - startedAt,
+    usage: [
+      {
+        unit: 'fx_quote',
+        quantity: 1,
+        billable: true,
+        providerId: provider.id,
+        capability,
+        estimated: result.source === 'cache',
+      },
+    ],
+  }
+}
+
+function readOutputRecord(outputs: Record<string, unknown>, capability: string): Record<string, unknown> | null {
+  const output = outputs[capability]
+  return isRecord(output) ? output : null
+}
+
+function resolveOcrText(outputs: Record<string, unknown>): string | null {
+  const ocrOutput = readOutputRecord(outputs, 'vision.ocr')
+  return readString(ocrOutput?.text)
+    ?? readString(ocrOutput?.sourceText)
+    ?? readString(ocrOutput?.detectedText)
+}
+
+function resolveTranslatedText(outputs: Record<string, unknown>): string | null {
+  const translateOutput = readOutputRecord(outputs, 'text.translate')
+  return readString(translateOutput?.translatedText)
+    ?? readString(translateOutput?.targetText)
+    ?? readString(translateOutput?.text)
+}
+
+function buildCapabilityInput(
+  capability: string,
+  originalInput: unknown,
+  outputs: Record<string, unknown>,
+): unknown {
+  if (!isRecord(originalInput))
+    return originalInput
+
+  if (capability === 'vision.ocr') {
+    const { imageBase64, imageMimeType } = readImagePayload(originalInput)
+    return {
+      ...originalInput,
+      source: imageBase64
+        ? {
+            type: 'data-url',
+            dataUrl: `data:${imageMimeType ?? 'image/png'};base64,${imageBase64}`,
+          }
+        : originalInput.source,
+      includeLayout: originalInput.includeLayout ?? true,
+      includeKeywords: originalInput.includeKeywords ?? true,
+    }
+  }
+
+  if (capability === 'text.translate') {
+    return {
+      ...originalInput,
+      text: resolveOcrText(outputs) ?? originalInput.text,
+      sourceLang: readOutputRecord(outputs, 'vision.ocr')?.language ?? originalInput.sourceLang,
+    }
+  }
+
+  if (capability === 'overlay.render') {
+    const { imageBase64, imageMimeType } = readImagePayload(originalInput)
+    const ocrOutput = readOutputRecord(outputs, 'vision.ocr')
+    const sourceText = resolveOcrText(outputs) ?? readString(originalInput.sourceText)
+    const targetText = resolveTranslatedText(outputs) ?? readString(originalInput.targetText)
+    return {
+      ...originalInput,
+      imageBase64,
+      imageMimeType,
+      sourceText,
+      targetText,
+      blocks: ocrOutput?.blocks,
+      ocr: ocrOutput,
+      translation: readOutputRecord(outputs, 'text.translate'),
+    }
+  }
+
+  return {
+    ...originalInput,
+    previousOutputs: outputs,
+  }
+}
+
+const localOverlayRenderAdapter: SceneCapabilityAdapter = async ({ input, originalInput, outputs, provider, capability, runId }) => {
+  if (!isRecord(input))
+    throw createError({ statusCode: 400, statusMessage: 'overlay.render input is invalid.' })
+
+  const targetText = readString(input.targetText)
+  if (!targetText)
+    throw createError({ statusCode: 400, statusMessage: 'overlay.render requires targetText.' })
+
+  const imageBase64 = readString(input.imageBase64)
+  if (!imageBase64)
+    throw createError({ statusCode: 400, statusMessage: 'overlay.render requires imageBase64.' })
+
+  const output = {
+    translatedImageBase64: imageBase64,
+    imageBase64,
+    imageMimeType: readString(input.imageMimeType) ?? 'image/png',
+    sourceText: readString(input.sourceText) ?? undefined,
+    targetText,
+    overlay: {
+      mode: 'client-render',
+      blocks: Array.isArray(input.blocks) ? input.blocks : undefined,
+      sourceCapability: 'overlay.render',
+    },
+    composed: {
+      inputCapabilities: Object.keys(outputs),
+      originalInputPreserved: Boolean(originalInput),
+    },
+  }
+
+  return {
+    output,
+    providerRequestId: `local-overlay:${runId}`,
+    latencyMs: 0,
+    usage: [
+      {
+        unit: 'image',
+        quantity: 1,
+        billable: false,
+        providerId: provider.id,
+        capability,
+        estimated: true,
+      },
+    ],
+  }
+}
+
 function registerDefaultSceneCapabilityAdapters() {
   registerSceneCapabilityAdapter('tencent-cloud:text.translate', tencentTextTranslateAdapter)
+  registerSceneCapabilityAdapter('tencent-cloud:image.translate', tencentImageTranslateAdapter)
+  registerSceneCapabilityAdapter('tencent-cloud:image.translate.e2e', tencentImageTranslateAdapter)
+  registerSceneCapabilityAdapter('openai:vision.ocr', intelligenceVisionOcrAdapter)
+  registerSceneCapabilityAdapter('deepseek:vision.ocr', intelligenceVisionOcrAdapter)
+  registerSceneCapabilityAdapter('custom:vision.ocr', intelligenceVisionOcrAdapter)
+  registerSceneCapabilityAdapter('custom:overlay.render', localOverlayRenderAdapter)
+  registerSceneCapabilityAdapter('exchange-rate:fx.rate.latest', fxRateLatestAdapter)
+  registerSceneCapabilityAdapter('exchange-rate:fx.convert', fxConvertAdapter)
 }
 
 registerDefaultSceneCapabilityAdapters()
@@ -244,7 +583,7 @@ function providerHasCapability(provider: ProviderRegistryRecord, capability: str
   return provider.capabilities.some(item => item.capability === capability)
 }
 
-function compareCandidates(a: SceneRunCandidate, b: SceneRunCandidate) {
+function comparePriorityCandidates(a: SceneRunCandidate, b: SceneRunCandidate) {
   if (a.priority !== b.priority)
     return a.priority - b.priority
   const weightA = a.weight ?? 0
@@ -252,6 +591,139 @@ function compareCandidates(a: SceneRunCandidate, b: SceneRunCandidate) {
   if (weightA !== weightB)
     return weightB - weightA
   return a.providerId.localeCompare(b.providerId)
+}
+
+function readNumber(value: unknown): number | null {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function readNestedNumber(record: Record<string, unknown> | null | undefined, paths: string[][]): number | null {
+  if (!record)
+    return null
+
+  for (const path of paths) {
+    let current: unknown = record
+    for (const part of path) {
+      if (!current || typeof current !== 'object' || Array.isArray(current)) {
+        current = undefined
+        break
+      }
+      current = (current as Record<string, unknown>)[part]
+    }
+    const numeric = readNumber(current)
+    if (numeric != null)
+      return numeric
+  }
+  return null
+}
+
+function resolveCandidateCost(candidate: ResolvedSceneCandidate): number | null {
+  const capability = candidate.provider.capabilities.find(item => item.capability === candidate.candidate.capability)
+  return readNestedNumber(candidate.binding.constraints, [
+    ['cost'],
+    ['estimatedCost'],
+    ['unitCost'],
+    ['price'],
+    ['pricing', 'unitCost'],
+    ['pricing', 'estimatedCost'],
+  ]) ?? readNestedNumber(capability?.metering, [
+    ['cost'],
+    ['estimatedCost'],
+    ['unitCost'],
+    ['price'],
+    ['unitPrice'],
+    ['pricing', 'unitCost'],
+    ['pricing', 'estimatedCost'],
+  ]) ?? readNestedNumber(capability?.metadata, [
+    ['cost'],
+    ['estimatedCost'],
+    ['unitCost'],
+    ['price'],
+    ['pricing', 'unitCost'],
+    ['pricing', 'estimatedCost'],
+  ])
+}
+
+function resolveCandidateLatency(
+  candidate: ResolvedSceneCandidate,
+  healthByProviderId: Map<string, ProviderHealthCheckEntry>,
+): number | null {
+  const health = healthByProviderId.get(candidate.provider.id)
+  if (health?.status === 'healthy' || health?.status === 'degraded')
+    return health.latencyMs
+
+  return readNestedNumber(candidate.binding.constraints, [
+    ['latencyMs'],
+    ['expectedLatencyMs'],
+    ['p50LatencyMs'],
+  ]) ?? readNestedNumber(candidate.provider.metadata, [
+    ['latencyMs'],
+    ['expectedLatencyMs'],
+    ['p50LatencyMs'],
+  ])
+}
+
+function compareNullableNumber(a: number | null, b: number | null) {
+  if (a == null && b == null)
+    return 0
+  if (a == null)
+    return 1
+  if (b == null)
+    return -1
+  return a - b
+}
+
+function compareStrategyCandidates(
+  strategyMode: SceneRegistryRecord['strategyMode'],
+  healthByProviderId: Map<string, ProviderHealthCheckEntry>,
+  a: ResolvedSceneCandidate,
+  b: ResolvedSceneCandidate,
+) {
+  if (strategyMode === 'least_cost') {
+    const costCompare = compareNullableNumber(resolveCandidateCost(a), resolveCandidateCost(b))
+    if (costCompare !== 0)
+      return costCompare
+  }
+  else if (strategyMode === 'lowest_latency') {
+    const latencyCompare = compareNullableNumber(resolveCandidateLatency(a, healthByProviderId), resolveCandidateLatency(b, healthByProviderId))
+    if (latencyCompare !== 0)
+      return latencyCompare
+  }
+  else if (strategyMode === 'balanced') {
+    const costCompare = compareNullableNumber(resolveCandidateCost(a), resolveCandidateCost(b))
+    const latencyCompare = compareNullableNumber(resolveCandidateLatency(a, healthByProviderId), resolveCandidateLatency(b, healthByProviderId))
+    const weightCompare = (b.candidate.weight ?? 0) - (a.candidate.weight ?? 0)
+    const balancedCompare = Math.sign(costCompare) + Math.sign(latencyCompare) + Math.sign(weightCompare)
+    if (balancedCompare !== 0)
+      return balancedCompare
+  }
+
+  return comparePriorityCandidates(a.candidate, b.candidate)
+}
+
+async function sortCandidatesByStrategy(
+  event: H3Event,
+  scene: SceneRegistryRecord,
+  capability: string,
+  candidates: ResolvedSceneCandidate[],
+  trace: SceneRunTraceStep[],
+): Promise<ResolvedSceneCandidate[]> {
+  const healthByProviderId = ['lowest_latency', 'balanced'].includes(scene.strategyMode)
+    ? await getLatestProviderHealthChecks(event, {
+        providerIds: candidates.map(item => item.provider.id),
+        capability,
+      })
+    : new Map<string, ProviderHealthCheckEntry>()
+
+  const sorted = [...candidates].sort((a, b) => compareStrategyCandidates(scene.strategyMode, healthByProviderId, a, b))
+  addTrace(trace, 'strategy.select', 'success', `Applied ${scene.strategyMode} strategy for ${capability}.`, {
+    capability,
+    strategyMode: scene.strategyMode,
+    candidates: sorted.length,
+    healthSamples: healthByProviderId.size,
+  })
+  return sorted
 }
 
 async function resolveProvider(
@@ -319,7 +791,7 @@ async function resolveCandidatesForCapability(
       weight: binding.weight,
       bindingId: binding.id,
     }
-    resolved.push({ candidate, provider })
+    resolved.push({ candidate, provider, binding })
     fallbackTrail.push({
       providerId: provider.id,
       capability,
@@ -332,7 +804,7 @@ async function resolveCandidatesForCapability(
     candidates: resolved.length,
   })
 
-  return resolved.sort((a, b) => compareCandidates(a.candidate, b.candidate))
+  return await sortCandidatesByStrategy(event, scene, capability, resolved, trace)
 }
 
 function resolveBindingRejectReason(
@@ -372,6 +844,27 @@ function createFailedRun(
       message: failure.message,
     },
   }
+}
+
+async function finalizeSceneRun(event: H3Event, run: SceneRunResult): Promise<SceneRunResult> {
+  try {
+    await recordProviderUsageLedger(event, run)
+  }
+  catch (error) {
+    console.warn('[sceneOrchestrator] Failed to record provider usage ledger', error)
+  }
+  return run
+}
+
+async function throwRunError(
+  event: H3Event,
+  statusCode: number,
+  code: SceneRunErrorCode,
+  message: string,
+  run: SceneRunResult,
+): Promise<never> {
+  await finalizeSceneRun(event, run)
+  throw createRunError(statusCode, code, message, run)
 }
 
 export async function runSceneOrchestrator(
@@ -429,7 +922,7 @@ export async function runSceneOrchestrator(
       },
     }
     addTrace(trace, 'strategy.select', 'failed', 'Scene is disabled.')
-    throw createRunError(409, 'SCENE_DISABLED', 'Scene is disabled.', run)
+    await throwRunError(event, 409, 'SCENE_DISABLED', 'Scene is disabled.', run)
   }
 
   if (requestedCapabilities.length === 0) {
@@ -443,7 +936,7 @@ export async function runSceneOrchestrator(
       },
     }
     addTrace(trace, 'strategy.select', 'failed', 'Scene has no required capability or binding.')
-    throw createRunError(400, 'CAPABILITY_UNSUPPORTED', 'Scene has no required capability or binding.', run)
+    await throwRunError(event, 400, 'CAPABILITY_UNSUPPORTED', 'Scene has no required capability or binding.', run)
   }
 
   const providerCache = new Map<string, ProviderRegistryRecord | null>()
@@ -472,7 +965,8 @@ export async function runSceneOrchestrator(
         capability,
         requestedProviderId,
       })
-      throw createRunError(409, 'CAPABILITY_UNSUPPORTED', `No enabled provider capability is available for ${capability}.`, run)
+      await throwRunError(event, 409, 'CAPABILITY_UNSUPPORTED', `No enabled provider capability is available for ${capability}.`, run)
+      continue
     }
 
     if (dryRun) {
@@ -494,11 +988,11 @@ export async function runSceneOrchestrator(
 
   if (dryRun) {
     addTrace(trace, 'adapter.dispatch', 'skipped', 'Dry run requested; provider adapters were not invoked.')
-    return {
+    return await finalizeSceneRun(event, {
       ...baseRun,
       status: 'planned',
       output: null,
-    }
+    })
   }
 
   const outputs: Record<string, unknown> = {}
@@ -543,13 +1037,16 @@ export async function runSceneOrchestrator(
       }
 
       try {
+        const adapterInput = buildCapabilityInput(plan.capability, request.input, outputs)
         const result = await adapter({
           event,
           runId,
           scene,
           provider,
           capability: plan.capability,
-          input: request.input,
+          input: adapterInput,
+          originalInput: request.input,
+          outputs,
         })
         outputs[plan.capability] = result.output
         usage.push(...(result.usage ?? []))
@@ -587,16 +1084,16 @@ export async function runSceneOrchestrator(
 
     if (!completed) {
       const run = createFailedRun(baseRun, outputs, lastFailure)
-      throw createRunError(lastFailure.statusCode, lastFailure.code, lastFailure.message, run)
+      await throwRunError(event, lastFailure.statusCode, lastFailure.code, lastFailure.message, run)
     }
     if (selectedPlan)
       selected.push(selectedPlan)
   }
 
   const firstCapability = requestedCapabilities[0]
-  return {
+  return await finalizeSceneRun(event, {
     ...baseRun,
     status: 'completed',
     output: requestedCapabilities.length === 1 && firstCapability ? outputs[firstCapability] : outputs,
-  }
+  })
 }

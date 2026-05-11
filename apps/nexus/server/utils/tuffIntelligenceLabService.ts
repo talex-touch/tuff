@@ -10,10 +10,12 @@ import { getUserById, updateUserProfile } from './authStore'
 import { getCreditSummary } from './creditsStore'
 import { resolveProviderBaseUrl } from './intelligenceModels'
 import {
+  getIntelligenceProviderApiKeyWithRegistryFallback,
+  listIntelligenceProvidersWithRegistryMirrors,
+} from './intelligenceProviderRegistryBridge'
+import {
   createAudit,
-  getProviderApiKey,
   getSettings,
-  listProviders,
   resolveCapabilityPromptTemplate as resolvePromptTemplateFromRegistry,
   savePromptBinding,
   savePromptRecord,
@@ -687,7 +689,7 @@ async function resolveProviderCandidates(
     timeoutMs?: number
   } = {},
 ): Promise<ResolvedProviderContext[]> {
-  const providers = await listProviders(event, userId)
+  const providers = await listIntelligenceProvidersWithRegistryMirrors(event, userId)
   const enabledProviders = providers.filter(provider => provider.enabled)
   if (enabledProviders.length <= 0)
     throw new Error('No enabled intelligence providers.')
@@ -713,7 +715,7 @@ async function resolveProviderCandidates(
     const timeoutMs = Math.max(DEFAULT_TIMEOUT_MS, options.timeoutMs ?? provider.timeout ?? DEFAULT_TIMEOUT_MS)
     const apiKey = provider.type === IntelligenceProviderType.LOCAL
       ? null
-      : await getProviderApiKey(event, userId, provider.id)
+      : await getIntelligenceProviderApiKeyWithRegistryFallback(event, userId, provider.id)
     if (provider.type !== IntelligenceProviderType.LOCAL && !apiKey) {
       skippedErrors.push(`Provider "${provider.name}" API key is missing.`)
       continue
@@ -1595,7 +1597,7 @@ export async function listIntelligenceLabProviders(event: H3Event, userId: strin
   defaultStrategy: string
 }> {
   const [providers, settings] = await Promise.all([
-    listProviders(event, userId),
+    listIntelligenceProvidersWithRegistryMirrors(event, userId),
     getSettings(event, userId),
   ])
   return {

@@ -336,6 +336,22 @@ export async function getProviderCredential(
   }
 }
 
+export async function deleteProviderCredential(
+  event: H3Event,
+  authRef: string,
+): Promise<boolean> {
+  const db = getD1Database(event)
+  await ensureProviderCredentialSchema(db)
+
+  const normalizedAuthRef = normalizeAuthRef(authRef)
+  const result = await db.prepare(`
+    DELETE FROM ${CREDENTIALS_TABLE}
+    WHERE auth_ref = ? AND purpose = ?;
+  `).bind(normalizedAuthRef, PROVIDER_CREDENTIAL_PURPOSE).run()
+
+  return (result.meta?.changes ?? 0) > 0
+}
+
 export function assertSecretPairCredential(value: ProviderCredentialPayload | null): ProviderSecretPairCredential {
   if (!value || !('secretId' in value) || !('secretKey' in value)) {
     throw createError({ statusCode: 400, statusMessage: 'Provider secret_pair credential is missing.' })
