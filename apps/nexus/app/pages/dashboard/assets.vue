@@ -14,6 +14,7 @@ import { TxButton, TxDataTable, TxStatusBadge, TxTag, TxTooltip } from '@talex-t
 import VersionDrawer from '~/components/VersionDrawer.vue'
 import { useDashboardPluginsData } from '~/composables/useDashboardData'
 import { isPluginCategoryId, PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
+import { requestJson } from '~/utils/request'
 
 type PendingReviewItem = ReviewItem
 
@@ -188,7 +189,7 @@ const PACKAGE_CHANNELS: PluginChannel[] = ['SNAPSHOT', 'BETA', 'RELEASE']
 async function requestPackagePreview(file: File): Promise<PackagePreviewResult> {
   const formData = new FormData()
   formData.append('package', file)
-  return await $fetch<PackagePreviewResult>(PACKAGE_PREVIEW_ENDPOINT, {
+  return await requestJson<PackagePreviewResult>(PACKAGE_PREVIEW_ENDPOINT, {
     method: 'POST',
     body: formData,
   })
@@ -408,7 +409,7 @@ async function loadPluginTimeline(pluginId: string) {
   pluginTimelineLoading.value = true
   pluginTimelineError.value = null
   try {
-    const result = await $fetch<{ timeline: DashboardPluginTimelineEvent[] }>(`/api/dashboard/plugins/${pluginId}/timeline`)
+    const result = await requestJson<{ timeline: DashboardPluginTimelineEvent[] }>(`/api/dashboard/plugins/${pluginId}/timeline`)
     if (selectedPlugin.value?.id === pluginId)
       pluginTimeline.value = result.timeline ?? []
   }
@@ -608,7 +609,7 @@ async function handleCreatePluginSubmit(data: PluginFormData) {
     else if (isAdmin.value)
       formData.append('isOfficial', 'false')
 
-    const result = await $fetch<{ plugin: { id: string } }>('/api/dashboard/plugins', {
+    const result = await requestJson<{ plugin: { id: string } }>('/api/dashboard/plugins', {
       method: 'POST',
       body: formData,
     })
@@ -625,7 +626,7 @@ async function handleCreatePluginSubmit(data: PluginFormData) {
         if (homepage.length)
           versionFormData.append('homepage', homepage)
 
-        await $fetch(`/api/dashboard/plugins/${result.plugin.id}/versions`, {
+        await requestJson(`/api/dashboard/plugins/${result.plugin.id}/versions`, {
           method: 'POST',
           body: versionFormData,
         })
@@ -750,7 +751,7 @@ async function updatePluginStatusAction(plugin: DashboardPlugin, status: Dashboa
   pluginStatusUpdating.value = plugin.id
   pluginActionError.value = null
   try {
-    await $fetch(`/api/dashboard/plugins/${plugin.id}/status`, {
+    await requestJson(`/api/dashboard/plugins/${plugin.id}/status`, {
       method: 'PATCH',
       body: {
         status,
@@ -792,7 +793,7 @@ async function updateVersionStatus(
   versionStatusUpdating.value = version.id
   versionActionError.value = null
   try {
-    await $fetch(`/api/dashboard/plugins/${plugin.id}/versions/${version.id}`, {
+    await requestJson(`/api/dashboard/plugins/${plugin.id}/versions/${version.id}`, {
       method: 'PATCH',
       body: {
         status,
@@ -886,7 +887,7 @@ async function submitPluginForm() {
       : '/api/dashboard/plugins'
     const method = editingPluginId.value ? 'PATCH' : 'POST'
 
-    await $fetch(endpoint, {
+    await requestJson(endpoint, {
       method,
       body: formData,
     })
@@ -935,7 +936,7 @@ async function deletePluginItem(plugin: DashboardPlugin) {
     async () => {
       try {
         pluginActionError.value = null
-        await $fetch(`/api/dashboard/plugins/${plugin.id}`, {
+        await requestJson(`/api/dashboard/plugins/${plugin.id}`, {
           method: 'DELETE',
         })
         await refreshPlugins()
@@ -1010,13 +1011,13 @@ async function submitVersionForm(data: VersionFormData) {
     if (versionForm.mode === 'reedit') {
       if (!versionForm.versionId)
         throw new Error(t('dashboard.sections.plugins.errors.missingVersion'))
-      await $fetch(`/api/dashboard/plugins/${versionForm.pluginId}/versions/${versionForm.versionId}/reedit`, {
+      await requestJson(`/api/dashboard/plugins/${versionForm.pluginId}/versions/${versionForm.versionId}/reedit`, {
         method: 'PATCH',
         body: formData,
       })
     }
     else {
-      await $fetch(`/api/dashboard/plugins/${versionForm.pluginId}/versions`, {
+      await requestJson(`/api/dashboard/plugins/${versionForm.pluginId}/versions`, {
         method: 'POST',
         body: formData,
       })
@@ -1039,7 +1040,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
     t('dashboard.sections.plugins.confirmDeleteVersion', { version: version.version }),
     async () => {
       try {
-        await $fetch(`/api/dashboard/plugins/${plugin.id}/versions/${version.id}`, {
+        await requestJson(`/api/dashboard/plugins/${plugin.id}/versions/${version.id}`, {
           method: 'DELETE',
         })
         await refreshPlugins()

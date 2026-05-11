@@ -25,6 +25,7 @@ import Tag from '~/components/ui/Tag.vue'
 import { useStoreCategories } from '~/composables/useStoreCategories'
 import { useStoreFormatters } from '~/composables/useStoreFormatters'
 import { useToast } from '~/composables/useToast'
+import { requestJson } from '~/utils/request'
 
 definePageMeta({
   layout: 'store',
@@ -92,7 +93,7 @@ const {
   data: pluginsPayload,
   pending: pluginsPending,
 } = await useAsyncData('store-plugins', () =>
-  $fetch<{ plugins: StorePluginSummary[] }>('/api/store/plugins', {
+  requestJson<{ plugins: StorePluginSummary[] }>('/api/store/plugins', {
     query: { compact: 1 },
   }))
 
@@ -157,13 +158,13 @@ async function loadPluginCommunity(slug: string) {
   reviewsError.value = null
   try {
     const [reviewsResponse, ratingResponse] = await Promise.all([
-      $fetch<StorePluginReviewListResponse>(`/api/store/plugins/${slug}/reviews`, {
+      requestJson<StorePluginReviewListResponse>(`/api/store/plugins/${slug}/reviews`, {
         query: {
           limit: reviewsMeta.limit,
           offset: 0,
         },
       }),
-      $fetch<StorePluginRatingResponse>(`/api/store/plugins/${slug}/rating`),
+      requestJson<StorePluginRatingResponse>(`/api/store/plugins/${slug}/rating`),
     ])
     reviews.value = reviewsResponse.reviews ?? []
     reviewsMeta.total = reviewsResponse.total ?? 0
@@ -185,7 +186,7 @@ async function loadMoreReviews() {
 
   reviewsLoadingMore.value = true
   try {
-    const response = await $fetch<StorePluginReviewListResponse>(`/api/store/plugins/${selectedSlug.value}/reviews`, {
+    const response = await requestJson<StorePluginReviewListResponse>(`/api/store/plugins/${selectedSlug.value}/reviews`, {
       query: {
         limit: reviewsMeta.limit,
         offset: reviews.value.length,
@@ -227,7 +228,7 @@ async function submitReview() {
 
   reviewSubmitting.value = true
   try {
-    const response = await $fetch<StorePluginReviewSubmitResponse>(
+    const response = await requestJson<StorePluginReviewSubmitResponse>(
       `/api/store/plugins/${selectedSlug.value}/reviews`,
       {
         method: 'POST',
@@ -269,7 +270,7 @@ async function openPluginDetail(plugin: StorePluginSummary, source: HTMLElement 
   detailTab.value = 'overview'
   resetReviewState()
   try {
-    const response = await $fetch<{ plugin: StorePluginDetail }>(`/api/store/plugins/${plugin.slug}`)
+    const response = await requestJson<{ plugin: StorePluginDetail }>(`/api/store/plugins/${plugin.slug}`)
     selectedPlugin.value = response.plugin
     void loadPluginCommunity(plugin.slug)
   }

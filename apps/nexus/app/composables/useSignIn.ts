@@ -13,7 +13,9 @@ import {
   type OauthContext,
   type OauthProvider,
 } from '~/composables/useOauthContext'
+import { pickFirstQueryValue, sanitizeOauthRedirectTarget } from '~/composables/sign-in-redirect-utils'
 import { useAuthLoadingState } from '~/composables/useAuthState'
+import { requestJson } from '~/utils/request'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
 import { fetchCurrentUserProfile } from '~/composables/useCurrentUserApi'
@@ -26,16 +28,6 @@ const LAST_LOGIN_METHOD_KEY = 'tuff_last_login_method'
 const LOGIN_METHODS: LoginMethod[] = ['passkey', 'password', 'magic', 'github', 'linuxdo']
 const TURNSTILE_SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
 const CALLBACK_FEEDBACK_MIN_MS = 800
-const OAUTH_REDIRECT_NOISE_KEYS = [
-  'callbackUrl',
-  'callback_url',
-  'oauth',
-  'oauth_relay',
-  'flow',
-  'provider',
-  'error',
-  'error_description',
-]
 
 type TurnstileWidgetId = string | number
 interface TurnstileRenderOptions {
@@ -62,42 +54,6 @@ function isValidEmail(value: string) {
   return value.includes('@')
 }
 
-function pickFirstQueryValue(input: unknown) {
-  if (!input)
-    return null
-  if (Array.isArray(input))
-    return typeof input[0] === 'string' ? input[0] : null
-  return typeof input === 'string' ? input : null
-}
-
-function parseUrlLike(value: string) {
-  try {
-    const base = hasWindow() ? window.location.origin : 'http://localhost'
-    return value.startsWith('/') ? new URL(value, base) : new URL(value)
-  }
-  catch {
-    return null
-  }
-}
-
-function sanitizeOauthRedirectTarget(redirect: string | null | undefined, fallback: string) {
-  const normalized = sanitizeRedirect(redirect, fallback)
-  if (normalized !== '/')
-    return normalized
-  if (!redirect)
-    return normalized
-
-  const parsed = parseUrlLike(redirect)
-  if (!parsed)
-    return normalized
-
-  const hasAuthNoise = OAUTH_REDIRECT_NOISE_KEYS.some(key => parsed.searchParams.has(key))
-  if (!hasAuthNoise)
-    return normalized
-
-  return fallback
-}
-
 function waitForCallbackFeedback(ms: number) {
   return new Promise<void>(resolve => setTimeout(resolve, ms))
 }
@@ -105,7 +61,7 @@ function waitForCallbackFeedback(ms: number) {
 async function waitForLinkedProvider(provider: OauthProvider, maxAttempts = 6, intervalMs = 250) {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      const profile = await $fetch<{ linkedAccounts?: Array<{ provider?: string }> }>('/api/user/me', {
+      const profile = await requestJson<{ linkedAccounts?: Array<{ provider?: string }> }>('/api/user/me', {
         query: { _oauthCheckAt: Date.now() },
         cache: 'no-store',
         headers: {
@@ -1224,7 +1180,7 @@ export function useSignIn() {
     }
     emailCheckLoading.value = true
     try {
-      const result = await $fetch<{ exists: boolean, status: string }>('/api/auth/email-status', {
+      const result = await requestJson<{ exists: boolean, status: string }>('/api/auth/email-status', {
         query: { email: emailPreview.value },
       })
       if (result.status !== 'active') {
@@ -1338,7 +1294,7 @@ export function useSignIn() {
 
     signupLoading.value = true
     try {
-      await $fetch('/api/auth/register', {
+      await requestJson('/api/auth/register', {
         method: 'POST',
         body: {
           email: emailPreview.value,
@@ -1367,7 +1323,7 @@ export function useSignIn() {
     }
     bindLoading.value = true
     try {
-      await $fetch('/api/auth/bind-email', {
+      await requestJson('/api/auth/bind-email', {
         method: 'POST',
         body: {
           email: bindEmail.value.trim().toLowerCase(),
@@ -1386,7 +1342,7 @@ export function useSignIn() {
   async function handleSkipBind() {
     bindLoading.value = true
     try {
-      await $fetch('/api/auth/bind-email', {
+      await requestJson('/api/auth/bind-email', {
         method: 'POST',
         body: {
           skip: true,
@@ -1475,7 +1431,7 @@ export function useSignIn() {
     passkeyPhase.value = 'verifying'
 
     try {
-      const options = await $fetch<any>(
+      const options = await requestJson<any>(
         '/api/passkeys/options',
         emailPreview.value ? { query: { email: emailPreview.value } } : undefined,
       )
@@ -1502,7 +1458,7 @@ export function useSignIn() {
       }
 
       const payload = serializeCredential(credential)
-      const { token } = await $fetch<{ token: string }>('/api/passkeys/verify', {
+      const { token } = await requestJson<{ token: string }>('/api/passkeys/verify', {
         method: 'POST',
         body: { credential: payload },
       })

@@ -4,6 +4,7 @@ import type { ReleaseChannelId } from '~/data/updates'
 import { computed, ref, watch } from 'vue'
 import { detectArch, detectPlatform, findAssetForPlatform, formatFileSize, getArchLabel, getPlatformLabel, resolveReleaseNotesHtml } from '~/composables/useReleases'
 import { mapApiChannelToLocal, mapLocalChannelToApi, releaseChannels } from '~/data/updates'
+import { requestJson } from '~/utils/request'
 
 interface LocalizedText {
   zh: string
@@ -37,7 +38,7 @@ const router = useRouter()
 
 const { releases, loading, fetchReleases } = useReleases()
 const { data: updatesPayload } = await useAsyncData('public-updates', () =>
-  $fetch<{ updates: DashboardUpdate[] }>('/api/updates'),
+  requestJson<{ updates: DashboardUpdate[] }>('/api/updates'),
 )
 const channelIds = releaseChannels.map(channel => channel.id)
 
@@ -155,7 +156,7 @@ const latestReleaseNotes = computed(() => {
   )
 })
 
-const updateItems = computed(() => updatesPayload.value?.updates ?? [])
+const updateItems = computed<DashboardUpdate[]>(() => updatesPayload.value?.updates ?? [])
 const selectedNewsTab = ref<'release' | 'announcement'>('release')
 const releaseUpdates = computed(() => updateItems.value.filter(update => update.type !== 'announcement').slice(0, 6))
 const announcementUpdates = computed(() => updateItems.value.filter(update => update.type === 'announcement').slice(0, 6))

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue'
+import { useTypedFetch } from '~/utils/request'
 
 const { t } = useI18n()
 const route = useRoute()
 const { user, refresh, isAuthenticated } = useAuthUser()
 const runtimeConfig = useRuntimeConfig()
-const { data: teamData, refresh: refreshTeamData } = useFetch<{
+const { data: teamData, refresh: refreshTeamData } = useTypedFetch<{
   team?: {
     type?: string
     role?: string

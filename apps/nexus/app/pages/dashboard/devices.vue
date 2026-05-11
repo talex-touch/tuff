@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { TuffInput, TxButton } from '@talex-touch/tuffex'
 import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
+import { requestJson, useTypedFetch } from '~/utils/request'
 
 defineI18nRoute(false)
 
@@ -31,7 +32,7 @@ interface DeviceItem {
   lastLoginIpMasked?: string | null
 }
 
-const { data, pending, refresh } = useFetch<DeviceItem[]>('/api/devices')
+const { data, pending, refresh } = useTypedFetch<DeviceItem[]>('/api/devices')
 const actionLoading = ref(false)
 const editingId = ref<string | null>(null)
 const renameValue = ref('')
@@ -120,7 +121,7 @@ async function saveRename(device: DeviceItem) {
     return
   actionLoading.value = true
   try {
-    await $fetch('/api/devices/rename', {
+    await requestJson('/api/devices/rename', {
       method: 'POST',
       body: { deviceId: device.id, name: renameValue.value.trim() },
     })
@@ -142,7 +143,7 @@ async function revokeDevice(device: DeviceItem) {
     return
   actionLoading.value = true
   try {
-    await $fetch('/api/devices/revoke', {
+    await requestJson('/api/devices/revoke', {
       method: 'POST',
       body: { deviceId: device.id },
     })
@@ -159,7 +160,7 @@ async function revokeDevice(device: DeviceItem) {
 async function setTrusted(device: DeviceItem, trusted: boolean) {
   actionLoading.value = true
   try {
-    await $fetch('/api/devices/trust', {
+    await requestJson('/api/devices/trust', {
       method: 'POST',
       body: { deviceId: device.id, trusted },
     })

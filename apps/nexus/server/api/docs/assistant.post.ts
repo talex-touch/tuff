@@ -1,4 +1,4 @@
-import { getRequestHeader, getRequestIP, setResponseStatus } from 'h3'
+import { setResponseStatus } from 'h3'
 import crypto from 'node:crypto'
 import type { IntelligenceMessage } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
@@ -6,8 +6,13 @@ import { networkClient } from '@talex-touch/utils/network'
 import { requireAuth } from '../../utils/auth'
 import { consumeCredits } from '../../utils/creditsStore'
 import { createAssistantMessage, createAssistantSession, getAssistantSession, getLatestAssistantSessionByDoc, updateAssistantSession } from '../../utils/docAssistantStore'
-import { createAudit, getProviderApiKey, getSettings, isIpBanned, listProviders } from '../../utils/intelligenceStore'
+import {
+  getIntelligenceProviderApiKeyWithRegistryFallback,
+  listIntelligenceProvidersWithRegistryMirrors,
+} from '../../utils/intelligenceProviderRegistryBridge'
+import { createAudit, getSettings, isIpBanned } from '../../utils/intelligenceStore'
 import { buildOpenAiCompatBaseUrls, resolveProviderBaseUrl } from '../../utils/intelligenceModels'
+import { resolveAuditMeta } from '../../utils/requestAuditMeta'
 
 interface AssistantMessage { role: 'user' | 'assistant'; content: string }
 interface AssistantDoc { title?: string; path?: string; context?: string }
@@ -91,7 +96,7 @@ export default defineEventHandler(async (event) => {
         ? body.providerId.trim()
         : null
 
-    const providers = await listProviders(event, userId)
+    const providers = await listIntelligenceProvidersWithRegistryMirrors(event, userId)
     const enabledProviders = providers.filter(provider => provider.enabled)
     if (!enabledProviders.length) {
       return fail(event, 'No enabled intelligence providers.')
@@ -106,7 +111,7 @@ export default defineEventHandler(async (event) => {
     const apiKey =
       provider.type === IntelligenceProviderType.LOCAL
         ? null
-        : await getProviderApiKey(event, userId, provider.id)
+        : await getIntelligenceProviderApiKeyWithRegistryFallback(event, userId, provider.id)
 
     if (!apiKey && provider.type !== IntelligenceProviderType.LOCAL) {
       return fail(event, 'Provider API key is missing.')
@@ -262,37 +267,6 @@ function sanitizeClientError(message: string): string {
   sanitized = sanitized.replace(/https?:\/\/\S+/g, '[redacted]')
   sanitized = sanitized.replace(/\s+/g, ' ').trim()
   return sanitized || 'Request failed.'
-}
-
-function resolveClientIp(event: any): string | null {
-  const direct = getRequestIP(event, { xForwardedFor: true })
-  if (direct)
-    return direct
-  const forwarded = getRequestHeader(event, 'x-forwarded-for')
-  if (forwarded) {
-    const value = forwarded.split(',')[0]?.trim()
-    return value || null
-  }
-  const cf = getRequestHeader(event, 'cf-connecting-ip')
-  return cf?.trim() || null
-}
-
-function resolveClientCountry(event: any): string | null {
-  const country = getRequestHeader(event, 'cf-ipcountry')
-    || getRequestHeader(event, 'x-vercel-ip-country')
-    || getRequestHeader(event, 'x-country')
-  return typeof country === 'string' && country.trim() ? country.trim() : null
-}
-
-function resolveAuditMeta(event: any): Record<string, string> {
-  const meta: Record<string, string> = {}
-  const ip = resolveClientIp(event)
-  if (ip)
-    meta.ip = ip
-  const country = resolveClientCountry(event)
-  if (country)
-    meta.country = country
-  return meta
 }
 
 function normalizeMessages(raw: unknown): AssistantMessage[] {

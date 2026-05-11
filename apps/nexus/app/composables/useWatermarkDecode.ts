@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { requestJson } from '~/utils/request'
 
 interface ResolveResult {
   matched: boolean
@@ -47,7 +48,7 @@ export function useWatermarkDecode() {
       ctx.drawImage(bitmap, 0, 0)
       const data = ctx.getImageData(0, 0, canvas.width, canvas.height)
       const luma = toLuma(data.data)
-      result.value = await $fetch<ResolveResult>('/api/watermark/resolve', {
+      result.value = await requestJson<ResolveResult>('/api/watermark/resolve', {
         method: 'POST',
         body: {
           width: canvas.width,

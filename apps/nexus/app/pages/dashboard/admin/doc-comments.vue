@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { TuffInput, TxButton, TxSkeleton, TxSpinner } from '@talex-touch/tuffex'
+import { requestJson } from '~/utils/request'
 
 definePageMeta({
   pageTransition: {
@@ -85,7 +86,7 @@ async function loadComments(options: { reset?: boolean } = {}) {
     if (pathFilter.value.trim())
       query.path = pathFilter.value.trim()
 
-    const response = await $fetch<DocCommentListResponse>('/api/admin/doc-comments', { query })
+    const response = await requestJson<DocCommentListResponse>('/api/admin/doc-comments', { query })
 
     total.value = response.total ?? 0
     if (reset)
@@ -132,7 +133,7 @@ async function handleDelete(comment: DocComment) {
   actionPendingId.value = comment.id
 
   try {
-    await $fetch(`/api/admin/doc-comments/${comment.id}`, { method: 'DELETE' })
+    await requestJson(`/api/admin/doc-comments/${comment.id}`, { method: 'DELETE' })
     toast.success(t('dashboard.sections.docComments.deleteSuccess', 'Comment deleted.'))
     void commentsTracker.recordAction({
       type: 'delete',

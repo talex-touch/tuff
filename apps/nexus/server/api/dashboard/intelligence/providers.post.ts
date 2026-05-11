@@ -1,5 +1,6 @@
 import { createError } from 'h3'
 import { requireAdmin } from '../../../utils/auth'
+import { syncIntelligenceProviderToRegistry } from '../../../utils/intelligenceProviderRegistryBridge'
 import { createProvider } from '../../../utils/intelligenceStore'
 
 const VALID_TYPES = ['openai', 'anthropic', 'deepseek', 'siliconflow', 'local', 'custom']
@@ -48,6 +49,9 @@ export default defineEventHandler(async (event) => {
     rateLimit: rateLimit && typeof rateLimit === 'object' ? rateLimit : undefined,
     capabilities: Array.isArray(capabilities) ? capabilities : undefined,
     metadata: metadata && typeof metadata === 'object' ? metadata : undefined,
+  })
+  await syncIntelligenceProviderToRegistry(event, provider, userId, {
+    apiKey: typeof apiKey === 'string' ? apiKey : undefined,
   })
 
   return { provider }

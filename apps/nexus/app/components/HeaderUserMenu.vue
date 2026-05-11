@@ -4,6 +4,7 @@ import { hasWindow } from '@talex-touch/utils/env'
 import { useSubscriptionData } from '~/composables/useDashboardData'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 import { useTheme } from '~/composables/useTheme'
+import { useTypedFetch } from '~/utils/request'
 
 const { data: session, signOut } = useAuth()
 const { t, te, locale } = useI18n()
@@ -12,7 +13,7 @@ const { setLocaleSerial, persistLocale } = useLocaleOrchestrator()
 const { color, toggleDark } = useTheme()
 
 const { plan } = useSubscriptionData()
-const { data: creditsSummary } = useFetch<any>('/api/credits/summary')
+const { data: creditsSummary } = useTypedFetch<any>('/api/credits/summary')
 const userMenuPanelCard = {
   glassOverlayOpacity: 0.16,
   refractionStrength: 74,

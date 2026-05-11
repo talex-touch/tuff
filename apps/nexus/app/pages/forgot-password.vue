@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
 import Input from '~/components/ui/Input.vue'
+import { requestJson } from '~/utils/request'
 
 definePageMeta({
   layout: false,
@@ -24,7 +25,7 @@ async function handleSubmit() {
   }
   loading.value = true
   try {
-    await $fetch('/api/auth/password/forgot', {
+    await requestJson('/api/auth/password/forgot', {
       method: 'POST',
       body: { email: email.value.trim().toLowerCase() },
     })

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { $fetch as rawFetch } from 'ofetch'
 import { TuffInput, TuffSelect, TuffSelectItem, TxButton } from '@talex-touch/tuffex'
 
 definePageMeta({
@@ -45,7 +46,7 @@ function setOutput(value: unknown) {
 async function callRiskModeOverride() {
   busy.value = true
   try {
-    const data = await $fetch('/api/admin/risk/mode.override', {
+    const data = await rawFetch('/api/admin/risk/mode.override', {
       method: 'POST',
       headers: authHeaders(),
       body: {
@@ -70,7 +71,7 @@ async function callRiskActorUnblock() {
       .split('\n')
       .map(item => item.trim())
       .filter(Boolean)
-    const data = await $fetch('/api/admin/risk/actor.unblock', {
+    const data = await rawFetch('/api/admin/risk/actor.unblock', {
       method: 'POST',
       headers: authHeaders(),
       body: {
@@ -91,7 +92,7 @@ async function callRiskActorUnblock() {
 async function callRiskCaseReview() {
   busy.value = true
   try {
-    const data = await $fetch('/api/admin/risk/case.review', {
+    const data = await rawFetch('/api/admin/risk/case.review', {
       method: 'POST',
       headers: authHeaders(),
       body: {
@@ -115,7 +116,7 @@ async function callRiskCaseReview() {
 async function confirmPendingOperation() {
   busy.value = true
   try {
-    const data = await $fetch('/api/admin/risk/dual-control/confirm', {
+    const data = await rawFetch('/api/admin/risk/dual-control/confirm', {
       method: 'POST',
       headers: authHeaders(),
       body: {

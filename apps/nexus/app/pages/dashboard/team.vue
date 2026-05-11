@@ -2,6 +2,7 @@
 import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxPagination, TxSkeleton, TxSpinner, TxTabItem, TxTabs } from '@talex-touch/tuffex'
 import { computed, reactive, ref, watch } from 'vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import { requestJson, useTypedFetch } from '~/utils/request'
 
 defineI18nRoute(false)
 
@@ -102,7 +103,7 @@ interface InvitePreview {
 }
 
 const { t } = useI18n()
-const { data, pending, refresh } = useFetch<{ team: DashboardTeam }>('/api/dashboard/team')
+const { data, pending, refresh } = useTypedFetch<{ team: DashboardTeam }>('/api/dashboard/team')
 
 const team = computed(() => data.value?.team)
 const canInvite = computed(() => Boolean(team.value?.permissions.canInvite))
@@ -259,7 +260,7 @@ async function handleCreateTeam(close?: () => void) {
   resetMessages()
 
   try {
-    await $fetch('/api/dashboard/team/create', {
+    await requestJson('/api/dashboard/team/create', {
       method: 'POST',
       body: {
         name: createTeamName.value.trim() || undefined,
@@ -288,7 +289,7 @@ async function handleCreateInvite(close?: () => void) {
   resetMessages()
 
   try {
-    await $fetch('/api/dashboard/team/invites', {
+    await requestJson('/api/dashboard/team/invites', {
       method: 'POST',
       body: {
         email: inviteEmail.value.trim() || undefined,
@@ -321,7 +322,7 @@ async function handleDeleteInvite(id: string) {
   resetMessages()
 
   try {
-    await $fetch(`/api/dashboard/team/invites/${encodeURIComponent(id)}`, {
+    await requestJson(`/api/dashboard/team/invites/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     })
 
@@ -344,7 +345,7 @@ async function handleDisband(close?: () => void) {
   resetMessages()
 
   try {
-    await $fetch('/api/dashboard/team/disband', {
+    await requestJson('/api/dashboard/team/disband', {
       method: 'POST',
     })
 
@@ -373,7 +374,7 @@ async function previewInvite() {
   resetMessages()
 
   try {
-    const result = await $fetch<InvitePreview>(`/api/team/invite/${encodeURIComponent(code)}`)
+    const result = await requestJson<InvitePreview>(`/api/team/invite/${encodeURIComponent(code)}`)
     invitePreview.value = result
     joinPreviewMessage.value = resolveJoinReason(result.validation.reason)
   }
@@ -406,7 +407,7 @@ async function handleJoinTeam(close?: () => void) {
   resetMessages()
 
   try {
-    await $fetch('/api/team/join', {
+    await requestJson('/api/team/join', {
       method: 'POST',
       body: { code },
     })
@@ -437,7 +438,7 @@ async function handleActivateCode() {
   resetMessages()
 
   try {
-    const result = await $fetch<{ plan: string, expiresAt: string | null }>('/api/subscription/activate', {
+    const result = await requestJson<{ plan: string, expiresAt: string | null }>('/api/subscription/activate', {
       method: 'POST',
       body: { code },
     })
@@ -463,7 +464,7 @@ async function fetchTeamCreditUsage(options: { resetPage?: boolean } = {}) {
   creditUsageLoading.value = true
   creditUsageError.value = ''
   try {
-    const result = await $fetch<{
+    const result = await requestJson<{
       month: string
       totalUsed: number
       totalQuota: number
@@ -502,7 +503,7 @@ async function fetchTeamCreditLedger(options: { resetPage?: boolean } = {}) {
   creditLedgerLoading.value = true
   creditLedgerError.value = ''
   try {
-    const result = await $fetch<{
+    const result = await requestJson<{
       entries: CreditLedgerItem[]
       pagination: Pagination
     }>('/api/dashboard/team/credits/ledger', {
@@ -533,7 +534,7 @@ async function fetchTeamCreditTrend() {
   creditTrendLoading.value = true
   creditTrendError.value = ''
   try {
-    const result = await $fetch<CreditTrendData>('/api/dashboard/team/credits/trend')
+    const result = await requestJson<CreditTrendData>('/api/dashboard/team/credits/trend')
     creditTrend.value = result
   }
   catch (error: any) {

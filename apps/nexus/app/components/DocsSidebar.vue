@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DocSection from './docs/DocSection.vue'
+import { useTypedFetch } from '~/utils/request'
 
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
 
@@ -24,14 +25,14 @@ const COMPONENT_SYNC_STATUS_ALIASES: Record<string, SyncStatusKey> = {
   verified: 'verified',
 }
 
-const { data: navigationTree, pending, error } = await useFetch<any[]>(
+const { data: navigationTree, pending, error } = await useTypedFetch<any[]>(
   '/api/docs/navigation',
   {
     key: 'docs-navigation',
     default: () => [],
   },
 )
-const { data: componentDocs, pending: componentDocsPending } = await useFetch<SidebarComponentDoc[]>(
+const { data: componentDocs, pending: componentDocsPending } = await useTypedFetch<SidebarComponentDoc[]>(
   '/api/docs/sidebar-components',
   {
     key: 'docs-components-meta',

@@ -1,5 +1,5 @@
 import { requireVerifiedEmail } from '../../utils/auth'
-import { listProviders } from '../../utils/intelligenceStore'
+import { listIntelligenceProvidersWithRegistryMirrors } from '../../utils/intelligenceProviderRegistryBridge'
 import { resolveRequestGeo } from '../../utils/requestGeo'
 
 const DOMESTIC_PROVIDER_TYPES = new Set(['deepseek', 'siliconflow', 'local'])
@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   const { userId } = await requireVerifiedEmail(event)
   const geo = resolveRequestGeo(event)
   const isChina = geo.countryCode === 'CN'
-  const providers = await listProviders(event, userId)
+  const providers = await listIntelligenceProvidersWithRegistryMirrors(event, userId)
 
   const models: Array<{
     id: string

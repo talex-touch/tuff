@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { TuffInput, TxButton, TxPagination, TxSkeleton, TxSpinner } from '@talex-touch/tuffex'
+import { requestJson } from '~/utils/request'
 
 definePageMeta({
   pageTransition: {
@@ -104,7 +105,7 @@ async function fetchUsage(options: { resetPage?: boolean } = {}) {
   usageLoading.value = true
   usageError.value = null
   try {
-    const result = await $fetch<{
+    const result = await requestJson<{
       month: string
       totalUsed: number
       totalQuota: number
@@ -140,7 +141,7 @@ async function fetchLedger(options: { resetPage?: boolean } = {}) {
   ledgerLoading.value = true
   ledgerError.value = null
   try {
-    const result = await $fetch<{
+    const result = await requestJson<{
       entries: CreditLedgerItem[]
       pagination: Pagination
     }>('/api/admin/credits/ledger', {

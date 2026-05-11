@@ -2,6 +2,7 @@ import { createError, getQuery } from 'h3'
 import { requireAuth } from '../../utils/auth'
 import { consumeCredits } from '../../utils/creditsStore'
 import { convertUsd } from '../../utils/exchangeRateService'
+import { runExchangeConvertScene } from '../../utils/exchangeSceneBridge'
 
 const CURRENCY_RE = /^[A-Z]{3}$/
 const CONVERT_CREDIT_COST = 0.1
@@ -27,7 +28,29 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid amount.' })
   }
 
-  const result = await convertUsd(event, { target: targetRaw, amount: amountRaw })
+  const sceneResult = await runExchangeConvertScene(event, {
+    base: 'USD',
+    target: targetRaw,
+    amount: amountRaw,
+  })
+  let response = sceneResult.response
+
+  if (!response) {
+    const result = await convertUsd(event, { target: targetRaw, amount: amountRaw })
+    response = {
+      base: 'USD',
+      target: targetRaw,
+      amount: amountRaw,
+      rate: result.rate,
+      converted: result.converted,
+      source: result.source,
+      updatedAt: result.updatedAt,
+      providerUpdatedAt: result.providerUpdatedAt,
+      fetchedAt: result.fetchedAt,
+      providerNextUpdateAt: result.providerNextUpdateAt,
+      sceneRunId: '',
+    }
+  }
 
   try {
     await consumeCredits(event, userId, CONVERT_CREDIT_COST, 'exchange-convert', {
@@ -42,15 +65,17 @@ export default defineEventHandler(async (event) => {
   }
 
   return {
-    base: 'USD',
-    target: targetRaw,
-    amount: amountRaw,
-    rate: result.rate,
-    converted: result.converted,
-    source: result.source,
-    updatedAt: result.updatedAt,
-    providerUpdatedAt: result.providerUpdatedAt,
-    fetchedAt: result.fetchedAt,
-    providerNextUpdateAt: result.providerNextUpdateAt,
+    base: response.base,
+    target: response.target,
+    amount: response.amount,
+    rate: response.rate,
+    converted: response.converted,
+    source: response.source,
+    updatedAt: response.updatedAt,
+    providerUpdatedAt: response.providerUpdatedAt,
+    fetchedAt: response.fetchedAt,
+    providerNextUpdateAt: response.providerNextUpdateAt,
+    sceneRunId: response.sceneRunId || undefined,
+    degradedReason: response.sceneRunId ? undefined : sceneResult.degradedReason,
   }
 })
