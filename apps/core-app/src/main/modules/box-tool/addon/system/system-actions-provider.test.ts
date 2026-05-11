@@ -8,6 +8,20 @@ import { TuffInputType } from '@talex-touch/utils'
 const mocks = vi.hoisted(() => ({
   addAppByPath: vi.fn(async () => ({ success: true, status: 'added' })),
   addWatchPath: vi.fn(async () => ({ success: true, status: 'added' })),
+  captureScreenshot: vi.fn(async () => ({
+    tfileUrl: 'tfile:///tmp/native/screenshots/screenshot.png',
+    mimeType: 'image/png',
+    width: 100,
+    height: 100,
+    displayId: '1',
+    displayName: 'Display',
+    x: 0,
+    y: 0,
+    scaleFactor: 1,
+    durationMs: 1,
+    sizeBytes: 12,
+    wroteClipboard: true
+  })),
   getLogger: vi.fn(() => ({
     info: vi.fn(),
     warn: vi.fn(),
@@ -36,6 +50,12 @@ vi.mock('../../../plugin/plugin-module', () => ({
       installFromSource: mocks.installFromSource
     }
   }
+}))
+
+vi.mock('../../../native-capabilities/screenshot-service', () => ({
+  getNativeScreenshotService: vi.fn(() => ({
+    capture: mocks.captureScreenshot
+  }))
 }))
 
 vi.mock('../apps/app-provider', () => ({
@@ -167,6 +187,32 @@ describe('SystemActionsProvider app index actions', () => {
     expect(mocks.addWatchPath).not.toHaveBeenCalled()
   })
 
+  it('creates and executes a screenshot copy action from keyword query', async () => {
+    const { SystemActionsProvider } = await import('./system-actions-provider')
+    const provider = new SystemActionsProvider()
+    const result = await provider.onSearch(
+      {
+        text: '截图',
+        inputs: []
+      },
+      new AbortController().signal
+    )
+
+    const item = expectFirstItem(result.items)
+    expect(getSystemAction(item)).toEqual({
+      action: 'screenshot-cursor-display',
+      path: 'native:screenshot:cursor-display:copy'
+    })
+
+    await provider.onExecute({ item } satisfies IExecuteArgs)
+
+    expect(mocks.captureScreenshot).toHaveBeenCalledWith({
+      target: 'cursor-display',
+      output: 'tfile',
+      writeClipboard: true
+    })
+  })
+
   it('extracts unquoted Windows app command lines with spaces and arguments', async () => {
     const commandPath = 'C:\\Program Files\\Demo App\\Demo Tool.exe'
     const statSpy = vi.spyOn(fs, 'stat').mockImplementation(async (target) => {
@@ -185,6 +231,128 @@ describe('SystemActionsProvider app index actions', () => {
       provider.onSearch(
         {
           text: `${commandPath} --profile "Work"`,
+          inputs: []
+        },
+        new AbortController().signal
+      )
+    )
+
+    const item = expectFirstItem(result.items)
+    expect(getSystemAction(item)).toEqual({
+      action: 'app-index',
+      path: commandPath
+    })
+    expect(statSpy).toHaveBeenCalledWith(commandPath)
+  })
+
+  it('expands Windows env var app command lines before app-index actions', async () => {
+    const originalLocalAppData = process.env.LOCALAPPDATA
+    process.env.LOCALAPPDATA = 'C:\\Users\\demo\\AppData\\Local'
+
+    const commandPath = 'C:\\Users\\demo\\AppData\\Local\\Programs\\Demo App\\Demo Tool.exe'
+    const statSpy = vi.spyOn(fs, 'stat').mockImplementation(async (target) => {
+      if (target === commandPath) {
+        return {
+          isFile: () => true,
+          isDirectory: () => false
+        } as Awaited<ReturnType<typeof fs.stat>>
+      }
+      throw new Error(`unexpected stat: ${String(target)}`)
+    })
+
+    try {
+      const { SystemActionsProvider } = await import('./system-actions-provider')
+      const provider = new SystemActionsProvider()
+      const result = await withPlatform('win32', () =>
+        provider.onSearch(
+          {
+            text: '%LOCALAPPDATA%\\Programs\\Demo App\\Demo Tool.exe --profile work',
+            inputs: []
+          },
+          new AbortController().signal
+        )
+      )
+
+      const item = expectFirstItem(result.items)
+      expect(getSystemAction(item)).toEqual({
+        action: 'app-index',
+        path: commandPath
+      })
+      expect(statSpy).toHaveBeenCalledWith(commandPath)
+    } finally {
+      if (originalLocalAppData === undefined) {
+        delete process.env.LOCALAPPDATA
+      } else {
+        process.env.LOCALAPPDATA = originalLocalAppData
+      }
+    }
+  })
+
+  it('extracts quoted Windows env var app command lines before app-index actions', async () => {
+    const originalLocalAppData = process.env.LOCALAPPDATA
+    process.env.LOCALAPPDATA = 'C:\\Users\\demo\\AppData\\Local'
+
+    const commandPath = 'C:\\Users\\demo\\AppData\\Local\\Programs\\Demo App\\Demo Tool.exe'
+    const statSpy = vi.spyOn(fs, 'stat').mockImplementation(async (target) => {
+      if (target === commandPath) {
+        return {
+          isFile: () => true,
+          isDirectory: () => false
+        } as Awaited<ReturnType<typeof fs.stat>>
+      }
+      throw new Error(`unexpected stat: ${String(target)}`)
+    })
+
+    try {
+      const { SystemActionsProvider } = await import('./system-actions-provider')
+      const provider = new SystemActionsProvider()
+      const result = await withPlatform('win32', () =>
+        provider.onSearch(
+          {
+            text: '"%LOCALAPPDATA%\\Programs\\Demo App\\Demo Tool.exe" --profile work',
+            inputs: []
+          },
+          new AbortController().signal
+        )
+      )
+
+      const item = expectFirstItem(result.items)
+      expect(getSystemAction(item)).toEqual({
+        action: 'app-index',
+        path: commandPath
+      })
+      expect(statSpy).toHaveBeenCalledWith(commandPath)
+    } finally {
+      if (originalLocalAppData === undefined) {
+        delete process.env.LOCALAPPDATA
+      } else {
+        process.env.LOCALAPPDATA = originalLocalAppData
+      }
+    }
+  })
+
+  it('extracts Windows shortcut property target text before app-index actions', async () => {
+    const commandPath = 'C:\\Program Files\\Demo App\\Demo Tool.exe'
+    const statSpy = vi.spyOn(fs, 'stat').mockImplementation(async (target) => {
+      if (target === commandPath) {
+        return {
+          isFile: () => true,
+          isDirectory: () => false
+        } as Awaited<ReturnType<typeof fs.stat>>
+      }
+      throw new Error(`unexpected stat: ${String(target)}`)
+    })
+
+    const { SystemActionsProvider } = await import('./system-actions-provider')
+    const provider = new SystemActionsProvider()
+    const result = await withPlatform('win32', () =>
+      provider.onSearch(
+        {
+          text: [
+            'Name: Demo Tool',
+            `Target: "${commandPath}" --profile work`,
+            'Start in: C:\\Program Files\\Demo App'
+          ].join('\n'),
           inputs: []
         },
         new AbortController().signal

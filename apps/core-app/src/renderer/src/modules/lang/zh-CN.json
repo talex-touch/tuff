@@ -3273,7 +3273,9 @@
       "addAppIndexTitle": "加入应用索引：{name}",
       "addAppIndexSubtitle": "路径：{path}",
       "addFileIndexTitle": "加入文件索引：{name}",
-      "addFileIndexSubtitle": "路径：{path}"
+      "addFileIndexSubtitle": "路径：{path}",
+      "screenshotCursorDisplayTitle": "截图并复制",
+      "screenshotCursorDisplaySubtitle": "捕获当前光标所在显示器"
     },
     "windowsShell": {
       "open": "打开",

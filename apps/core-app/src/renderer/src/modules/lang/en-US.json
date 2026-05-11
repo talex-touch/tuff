@@ -3281,7 +3281,9 @@
       "addAppIndexTitle": "Add to App Index: {name}",
       "addAppIndexSubtitle": "Path: {path}",
       "addFileIndexTitle": "Add to File Index: {name}",
-      "addFileIndexSubtitle": "Path: {path}"
+      "addFileIndexSubtitle": "Path: {path}",
+      "screenshotCursorDisplayTitle": "Capture and Copy Screenshot",
+      "screenshotCursorDisplaySubtitle": "Capture the display under the cursor"
     },
     "windowsShell": {
       "open": "Open",
