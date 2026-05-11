@@ -29,7 +29,6 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { CAPABILITY_AUTH_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { TuffInputType } from '@talex-touch/utils/transport/events/types'
-import { eq } from 'drizzle-orm'
 import { clipboard, powerMonitor } from 'electron'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { dbWriteScheduler } from '../db/db-write-scheduler'
@@ -95,6 +94,10 @@ import {
   resolveClipboardTargetPollingIntervalMs,
   type ClipboardPollingSettings
 } from './clipboard/clipboard-polling-policy'
+import {
+  ClipboardStageBEnrichment,
+  type ClipboardStageBJob
+} from './clipboard/clipboard-stage-b-enrichment'
 
 export type { IClipboardItem } from './clipboard/clipboard-history-persistence'
 
@@ -112,13 +115,6 @@ const CLIPBOARD_COOLDOWN_BASE_MS = 800
 const CLIPBOARD_COOLDOWN_MAX_MS = 3000
 const CLIPBOARD_IMAGE_PERSIST_DEBOUNCE_MS = 2000
 const pollingService = PollingService.getInstance()
-
-interface ClipboardStageBJob {
-  generation: number
-  clipboardId: number
-  item: IClipboardItem
-  formats: string[]
-}
 
 interface ClipboardMonitorOptions {
   bypassCooldown?: boolean
@@ -210,6 +206,28 @@ export class ClipboardModule extends BaseModule {
     },
     logWarn: (message, data?: LogOptions) => {
       clipboardLog.warn(message, data)
+    }
+  })
+  private readonly stageBEnrichment = new ClipboardStageBEnrichment({
+    getDatabase: () => this.db,
+    getCachedItemById: (clipboardId) => this.historyPersistence.getCachedItemById(clipboardId),
+    getActiveAppSnapshot: () => this.getActiveAppSnapshot(),
+    getLatestGeneration: () => this.clipboardStageBGeneration,
+    enqueueOcr: async (job) => {
+      await ocrService.enqueueFromClipboard(job)
+    },
+    patchCachedMeta: (clipboardId, patch) => {
+      this.handleMetaPatch(clipboardId, patch)
+    },
+    updateCachedSource: (clipboardId, sourceApp) => {
+      this.historyPersistence.updateCachedSource(clipboardId, sourceApp)
+    },
+    metaPersistence: this.metaPersistence,
+    logWarn: (message, data?: LogOptions) => {
+      clipboardLog.warn(message, data)
+    },
+    logDebug: (message, data?: LogOptions) => {
+      clipboardLog.debug(message, data)
     }
   })
   private historyPersistence = new ClipboardHistoryPersistence({
@@ -641,83 +659,7 @@ export class ClipboardModule extends BaseModule {
   }
 
   private async processClipboardStageBJob(job: ClipboardStageBJob): Promise<void> {
-    const latestGeneration = this.clipboardStageBGeneration
-    if (job.generation < latestGeneration) {
-      return
-    }
-
-    if (!job.item.id) return
-
-    try {
-      await ocrService.enqueueFromClipboard({
-        clipboardId: job.item.id,
-        item: job.item,
-        formats: job.formats
-      })
-    } catch (error) {
-      clipboardLog.warn('Failed to enqueue clipboard OCR', { error })
-    }
-
-    const activeApp = this.getActiveAppSnapshot()
-    if (!activeApp) {
-      return
-    }
-
-    if (job.generation < this.clipboardStageBGeneration) {
-      return
-    }
-
-    const sourceApp =
-      activeApp.bundleId ||
-      activeApp.identifier ||
-      activeApp.displayName ||
-      job.item.sourceApp ||
-      null
-    const sourceMeta = {
-      bundleId: activeApp.bundleId ?? null,
-      displayName: activeApp.displayName ?? null,
-      processId: activeApp.processId ?? null,
-      executablePath: activeApp.executablePath ?? null,
-      icon: activeApp.icon ?? null
-    }
-    const patch: Record<string, unknown> = {
-      source: sourceMeta
-    }
-    for (const [key, value] of Object.entries(sourceMeta)) {
-      if (value !== null && value !== undefined) {
-        patch[`source_${key}`] = value
-      }
-    }
-
-    if (this.db) {
-      try {
-        const current = this.historyPersistence.getCachedItemById(job.clipboardId)
-        const nextMetadata = mergeClipboardMetadataString(current?.metadata, patch)
-        await this.metaPersistence.withDbWrite(
-          'clipboard.stage-b.source',
-          () =>
-            this.db!.update(clipboardHistory)
-              .set({
-                sourceApp,
-                metadata: nextMetadata
-              })
-              .where(eq(clipboardHistory.id, job.clipboardId)),
-          { dropPolicy: 'drop', maxQueueWaitMs: 10_000 }
-        )
-      } catch (error) {
-        clipboardLog.debug('Clipboard stage-b source update skipped', { error })
-      }
-    }
-
-    this.handleMetaPatch(job.clipboardId, patch)
-    this.historyPersistence.updateCachedSource(job.clipboardId, sourceApp)
-
-    this.metaPersistence.persistMetaEntriesSafely(
-      job.clipboardId,
-      patch,
-      Object.entries(patch).map(([key, value]) => ({ key, value })),
-      { dropPolicy: 'drop', maxQueueWaitMs: 10_000 }
-    )
+    await this.stageBEnrichment.process(job)
   }
 
   private shouldLogMetaQueuePressure(now: number): boolean {
