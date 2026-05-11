@@ -351,7 +351,7 @@
     },
     {
       "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts",
-      "maxLines": 3330,
+      "maxLines": 3306,
       "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
       "owner": "core-app",
       "expiresVersion": "2.4.11",

@@ -68,6 +68,7 @@ import FileSystemWatcher from '../../file-system-watcher'
 import searchEngineCore from '../../search-engine/search-core'
 import { appScanner } from './app-scanner'
 import { scheduleAppLaunch } from './app-launcher'
+import { AppProviderSourceScanner } from './app-provider-source-scanner'
 import {
   isProbablyCorruptedDisplayName,
   normalizeDisplayName,
@@ -390,6 +391,17 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private volatileLastFullSyncTime: number | null = null
   private maintenanceTaskQueue: Promise<void> = Promise.resolve()
   private maintenanceTaskMap = new Map<string, Promise<unknown>>()
+  private readonly sourceScanner = new AppProviderSourceScanner({
+    resolveScannedAppKey: (app) => this.resolveScannedAppKey(app),
+    isManagedEntry: (extensions) => isManagedEntryExtensionMap(extensions),
+    logApp: (message, style) => {
+      logApp(message, style)
+    },
+    getKnownMissingIconApps: async () => await this._getKnownMissingIconApps(),
+    saveKnownMissingIconApps: async (knownMissingIconApps) => {
+      await this._saveKnownMissingIconApps(knownMissingIconApps)
+    }
+  })
 
   constructor() {
     logApp('Initializing AppProvider service', LogStyle.info)
@@ -978,18 +990,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     scannedApps: DbAppWithExtensions[]
     managedEntries: DbAppWithExtensions[]
   } {
-    const scannedApps: DbAppWithExtensions[] = []
-    const managedEntries: DbAppWithExtensions[] = []
-
-    for (const app of apps) {
-      if (isManagedEntryExtensionMap(app.extensions)) {
-        managedEntries.push(app)
-      } else {
-        scannedApps.push(app)
-      }
-    }
-
-    return { scannedApps, managedEntries }
+    return this.sourceScanner.partitionDbApps(apps)
   }
 
   private async reindexManagedEntries(): Promise<void> {
@@ -1089,15 +1090,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private buildScannedAppsMap(scannedApps: ScannedAppInfo[]): Map<string, ScannedAppInfo> {
-    return new Map(
-      scannedApps
-        .map((app) => [this.resolveScannedAppKey(app), app] as const)
-        .filter(([key]) => Boolean(key))
-    )
+    return this.sourceScanner.buildScannedAppsMap(scannedApps)
   }
 
   private async loadScannedApps(options?: { forceRefresh?: boolean }): Promise<ScannedAppInfo[]> {
-    return await appScanner.getApps({ forceRefresh: options?.forceRefresh === true })
+    return await this.sourceScanner.loadScannedApps(options)
   }
 
   private runMaintenanceTask<T>(taskKey: string, task: () => Promise<T>): Promise<T> {
@@ -1660,23 +1657,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async _recordMissingIconApps(scannedApps: ScannedAppInfo[]): Promise<void> {
-    const knownMissingIconApps = await this._getKnownMissingIconApps()
-    let missingIconConfigUpdated = false
-
-    for (const app of scannedApps) {
-      if (app.icon) continue
-
-      const uniqueId = this.resolveScannedAppKey(app)
-      if (!uniqueId || knownMissingIconApps.has(uniqueId)) continue
-
-      logApp(`Icon not found for app: ${chalk.yellow(app.name)}`, LogStyle.warning)
-      knownMissingIconApps.add(uniqueId)
-      missingIconConfigUpdated = true
-    }
-
-    if (missingIconConfigUpdated) {
-      await this._saveKnownMissingIconApps(knownMissingIconApps)
-    }
+    await this.sourceScanner.recordMissingIconApps(scannedApps)
   }
 
   private async _generateKeywordsForApp(appInfo: ScannedAppInfo): Promise<Set<string>> {

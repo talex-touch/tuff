@@ -14,6 +14,7 @@ import {
   normalizeString,
   normalizeTelemetryInput,
   normalizeUsageCategoryPart,
+  resolveAppCategory,
   safeStringify,
   type TelemetryEventInput,
 } from './telemetrySanitizer'

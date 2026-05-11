@@ -5,19 +5,34 @@
 
 ## 2026-05-11
 
+### refactor(core-app): split app provider source scanner
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-source-scanner.ts`
+- `scripts/large-file-boundary-allowlist.json`
+  - 将 AppProvider 的 scanned app 加载、scanned app key map、DB app scanned/manual partition 与 missing icon 记录编排迁出到 `AppProviderSourceScanner`。
+  - 保持 AppProvider search result shape、launch 行为、缓存 key、索引 schema 与外部 provider id 不变；本轮不触碰 launch resolver 与 metadata enrichment。
+  - `app-provider.ts` 从 `3324` 行降到 `3305` 行，growth exception cap 从 `3330` 收紧到 `3306`，继续阻断回涨。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/app-provider.test.ts"` 通过（`28 tests`）；CoreApp node typecheck、定向 ESLint 与 `size:guard --changed` 通过。
+
 ### refactor(core-app): extract clipboard capture pipeline
 
 - `apps/core-app/src/main/modules/clipboard.ts`
 - `apps/core-app/src/main/modules/clipboard/clipboard-capture-pipeline.ts`
 - `apps/core-app/src/main/modules/clipboard/clipboard-capture-pipeline.test.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-polling-policy.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-native-watcher.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-meta-persistence.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-stage-b-enrichment.ts`
 - `apps/nexus/i18n/locales/{en,zh}.ts`
 - `apps/nexus/i18n/locales/legal/{en,zh}.ts`
 - `scripts/large-file-boundary-allowlist.json`
   - 将 clipboard capture/persist 主流程迁出到 `ClipboardCapturePipeline`，`ClipboardModule` 保留模块生命周期、调度、transport 与服务编排。
+  - 同轮完成 polling policy、native watcher、meta persistence 与 stage-B enrichment helper 接入，保持 `ClipboardEvents.*` 外部事件名、payload、action result 与 history DB schema 不变。
   - 补充 capture pipeline 文本剪贴板持久化、meta、Stage-B 队列与 plugin forward 回归测试。
   - Nexus legal i18n 从主 locale 文件拆到 `locales/legal/*`，降低 locale 主文件体积并保持 `license/privacy/protocol` key 不变。
   - `clipboard.ts` 已降到 `1143` 行，低于 `1200` 阈值，并从 size allowlist 与 growth exception 中清退。
-  - 验证：pre-commit `lint-staged` 中 CoreApp/Nexus 定向 ESLint 与 `size:guard:changed` 通过。
+  - 验证：11 个 Clipboard 定向测试（`37 tests`）、CoreApp node typecheck、定向 ESLint、`size:guard --changed` 与 `size:guard --report` 通过。
 
 ### refactor(nexus): split sign-in redirect helpers and docs assistant audit meta
 
@@ -29,10 +44,16 @@
 - `apps/nexus/server/utils/tuffIntelligenceLabTools.ts`
 - `apps/nexus/server/utils/telemetryStore.ts`
 - `apps/nexus/server/utils/telemetrySanitizer.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/legal/en.ts`
+- `apps/nexus/i18n/locales/legal/zh.ts`
+- `scripts/lib/scan-config.mjs`
   - 将登录 composable 中 OAuth redirect 查询值读取、URL-like 解析与 auth-noise redirect fallback 归一迁出到 `sign-in-redirect-utils.ts`，`useSignIn.ts` 保留登录/注册/OAuth/Turnstile/passkey 编排职责。
   - 将 docs assistant API 中 request IP/country audit metadata 解析迁出到 `requestAuditMeta.ts`，handler 保留认证、session、provider 调用、credit 与 audit 编排职责。
   - 将 Intelligence Lab 的工具常量、支持工具列表、account/credits/subscription/language/theme 工具执行与输入归一迁出到 `tuffIntelligenceLabTools.ts`，Lab service 保留 orchestration、checkpoint、stream 与审批编排。
   - 将 telemetry input/type/sanitizer、provider status/value 归一、feature/search metadata 清洗和 quarantine stringify 迁出到 `telemetrySanitizer.ts`，`telemetryStore.ts` 保留 D1 schema、写入、daily stat 与 analytics 查询职责。
+  - 将 Nexus `license/privacy/protocol` 静态法律文案迁出到 `locales/legal/*` shard，原 `license.*` / `privacy.*` / `protocol.*` key 通过 `...legal` 保持不变；scope guard 对这两个 i18n shard 按现有 locale 文件同类豁免。
   - `useSignIn.ts` 从 `1584` 行降到 `1538` 行，`assistant.post.ts` 从 `1792` 行降到 `1762` 行，`tuffIntelligenceLabService.ts` 从 `3658` 行降到 `3408` 行，`telemetryStore.ts` 从 `1985` 行降到 `1502` 行；四者均退出 `grownOversizedFiles`，当前 `node scripts/check-large-file-boundaries.mjs --report` 显示 `newOversizedFiles=0`、`grownOversizedFiles=2`。
   - 验证：Nexus 定向 ESLint、`telemetryStore.test.ts`、`vue-tsc --noEmit --pretty false` 通过；`node scripts/check-large-file-boundaries.mjs --report` 通过。
 
