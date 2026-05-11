@@ -115,6 +115,75 @@ describe('clipboard-stress-verifier', () => {
     })
   })
 
+  it('rejects internally inconsistent clipboard counters', () => {
+    expect(
+      evaluateClipboardStressSummary(
+        summary([
+          scenario({
+            clipboard: {
+              ...scenario().clipboard,
+              count: 0,
+              schedulerDelaySampleCount: 0
+            }
+          }),
+          scenario({
+            intervalMs: 250,
+            clipboard: {
+              ...scenario().clipboard,
+              count: 10,
+              schedulerDelaySampleCount: 11,
+              droppedCount: -1
+            }
+          })
+        ])
+      )
+    ).toEqual({
+      passed: false,
+      failures: [
+        'interval 500ms clipboard count is zero',
+        'interval 500ms scheduler delay sample count is zero',
+        'interval 250ms dropped count is not a non-negative integer',
+        'interval 250ms scheduler delay samples exceed clipboard count'
+      ]
+    })
+  })
+
+  it('rejects internally inconsistent scheduler and duration metrics', () => {
+    expect(
+      evaluateClipboardStressSummary(
+        summary([
+          scenario({
+            clipboard: {
+              ...scenario().clipboard,
+              avgSchedulerDelayMs: 120,
+              p95SchedulerDelayMs: 130,
+              lastSchedulerDelayMs: 140,
+              maxSchedulerDelayMs: 100,
+              lastDurationMs: 160,
+              maxDurationMs: 150
+            }
+          }),
+          scenario({
+            intervalMs: 250,
+            clipboard: {
+              ...scenario().clipboard,
+              avgSchedulerDelayMs: -1
+            }
+          })
+        ])
+      )
+    ).toEqual({
+      passed: false,
+      failures: [
+        'interval 500ms avg scheduler delay exceeds max scheduler delay',
+        'interval 500ms p95 scheduler delay exceeds max scheduler delay',
+        'interval 500ms last scheduler delay exceeds max scheduler delay',
+        'interval 500ms last duration exceeds max duration',
+        'interval 250ms avg scheduler delay is not a non-negative number'
+      ]
+    })
+  })
+
   it('requires the clipboard stress schema when strict mode is enabled', () => {
     expect(
       evaluateClipboardStressSummary(

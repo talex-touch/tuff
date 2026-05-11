@@ -52,6 +52,10 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+function isNonNegativeInteger(value: unknown): value is number {
+  return isFiniteNumber(value) && Number.isInteger(value) && value >= 0
+}
+
 function getRealtimeQueuedPeak(result: ClipboardStressScenario): number {
   const realtime = result.queueDepthPeak.realtime
   return isFiniteNumber(realtime?.queued) ? Math.max(0, Math.round(realtime.queued)) : 0
@@ -85,6 +89,82 @@ export function evaluateClipboardStressSummary(
 
   for (const result of results) {
     const label = `interval ${result.intervalMs}ms`
+    const counters: Array<[string, unknown]> = [
+      ['count', result.clipboard.count],
+      ['scheduler delay sample count', result.clipboard.schedulerDelaySampleCount],
+      ['dropped count', result.clipboard.droppedCount],
+      ['coalesced count', result.clipboard.coalescedCount],
+      ['timeout count', result.clipboard.timeoutCount],
+      ['error count', result.clipboard.errorCount]
+    ]
+
+    for (const [counterLabel, value] of counters) {
+      if (!isNonNegativeInteger(value)) {
+        failures.push(`${label} ${counterLabel} is not a non-negative integer`)
+      }
+    }
+
+    if (
+      isNonNegativeInteger(result.clipboard.count) &&
+      isNonNegativeInteger(result.clipboard.schedulerDelaySampleCount)
+    ) {
+      if (result.clipboard.count === 0) {
+        failures.push(`${label} clipboard count is zero`)
+      }
+      if (result.clipboard.schedulerDelaySampleCount === 0) {
+        failures.push(`${label} scheduler delay sample count is zero`)
+      }
+      if (result.clipboard.schedulerDelaySampleCount > result.clipboard.count) {
+        failures.push(`${label} scheduler delay samples exceed clipboard count`)
+      }
+    }
+
+    const schedulerMetrics: Array<[string, unknown]> = [
+      ['avg scheduler delay', result.clipboard.avgSchedulerDelayMs],
+      ['p95 scheduler delay', result.clipboard.p95SchedulerDelayMs],
+      ['last scheduler delay', result.clipboard.lastSchedulerDelayMs],
+      ['max scheduler delay', result.clipboard.maxSchedulerDelayMs],
+      ['last duration', result.clipboard.lastDurationMs],
+      ['max duration', result.clipboard.maxDurationMs]
+    ]
+    for (const [metricLabel, value] of schedulerMetrics) {
+      if (!isFiniteNumber(value) || value < 0) {
+        failures.push(`${label} ${metricLabel} is not a non-negative number`)
+      }
+    }
+
+    if (
+      isFiniteNumber(result.clipboard.avgSchedulerDelayMs) &&
+      isFiniteNumber(result.clipboard.maxSchedulerDelayMs) &&
+      result.clipboard.avgSchedulerDelayMs > result.clipboard.maxSchedulerDelayMs
+    ) {
+      failures.push(`${label} avg scheduler delay exceeds max scheduler delay`)
+    }
+
+    if (
+      isFiniteNumber(result.clipboard.p95SchedulerDelayMs) &&
+      isFiniteNumber(result.clipboard.maxSchedulerDelayMs) &&
+      result.clipboard.p95SchedulerDelayMs > result.clipboard.maxSchedulerDelayMs
+    ) {
+      failures.push(`${label} p95 scheduler delay exceeds max scheduler delay`)
+    }
+
+    if (
+      isFiniteNumber(result.clipboard.lastSchedulerDelayMs) &&
+      isFiniteNumber(result.clipboard.maxSchedulerDelayMs) &&
+      result.clipboard.lastSchedulerDelayMs > result.clipboard.maxSchedulerDelayMs
+    ) {
+      failures.push(`${label} last scheduler delay exceeds max scheduler delay`)
+    }
+
+    if (
+      isFiniteNumber(result.clipboard.lastDurationMs) &&
+      isFiniteNumber(result.clipboard.maxDurationMs) &&
+      result.clipboard.lastDurationMs > result.clipboard.maxDurationMs
+    ) {
+      failures.push(`${label} last duration exceeds max duration`)
+    }
+
     if (isFiniteNumber(options.minDurationMs) && result.durationMs < options.minDurationMs) {
       failures.push(`${label} duration ${result.durationMs} < ${options.minDurationMs}`)
     }

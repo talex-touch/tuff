@@ -21,7 +21,6 @@ import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/tran
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { NativeImage } from 'electron'
 import type * as schema from '../db/schema'
-import type { ScheduleOptions } from '../db/db-write-scheduler'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
@@ -35,8 +34,7 @@ import { clipboard, powerMonitor } from 'electron'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { dbWriteScheduler } from '../db/db-write-scheduler'
 import { isStartupDegradeActive } from '../db/startup-degrade'
-import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
-import { withSqliteRetry } from '../db/sqlite-retry'
+import { clipboardHistory } from '../db/schema'
 import { appTaskGate } from '../service/app-task-gate'
 import { normalizeRenderableSource } from '../utils/local-renderable-assets'
 import { createLogger, type LogOptions } from '../utils/logger'
@@ -87,6 +85,16 @@ import {
 } from './clipboard/clipboard-history-persistence'
 import { ClipboardImagePersistence } from './clipboard/clipboard-image-persistence'
 import { ClipboardAutopasteAutomation } from './clipboard/clipboard-autopaste-automation'
+import { ClipboardNativeWatcher } from './clipboard/clipboard-native-watcher'
+import {
+  ClipboardMetaPersistence,
+  type ClipboardMetaEntry
+} from './clipboard/clipboard-meta-persistence'
+import {
+  resolveClipboardPollingSettings,
+  resolveClipboardTargetPollingIntervalMs,
+  type ClipboardPollingSettings
+} from './clipboard/clipboard-polling-policy'
 
 export type { IClipboardItem } from './clipboard/clipboard-history-persistence'
 
@@ -94,49 +102,16 @@ const clipboardLog = createLogger('Clipboard')
 const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
 const CLIPBOARD_ACTIVE_APP_REFRESH_TASK_ID = 'clipboard.active-app.refresh'
 const CLIPBOARD_ACTIVE_APP_REFRESH_INTERVAL_MS = 1500
-const CLIPBOARD_VISIBLE_POLL_INTERVAL_MS = 500
 const CLIPBOARD_DEFAULT_POLL_INTERVAL_MS = 3000
-const CLIPBOARD_PRESSURE_POLL_INTERVAL_MS = 10_000
-const CLIPBOARD_PRESSURE_QUEUE_HIGH_WATER = 10
 const CLIPBOARD_LAG_ADAPT_WINDOW_MS = 8000
-const CLIPBOARD_LAG_ADAPT_WARN_MS = 350
 const CLIPBOARD_LAG_ADAPT_ERROR_MS = 1000
-const CLIPBOARD_LAG_ADAPT_WARN_INTERVAL_MS = 1500
-const CLIPBOARD_LAG_ADAPT_ERROR_INTERVAL_MS = 5000
 const CLIPBOARD_LAG_SKIP_LOG_THROTTLE_MS = 5000
 const CLIPBOARD_SLOW_THRESHOLD_MS = 200
 const CLIPBOARD_COOLDOWN_TRIGGER_MS = 500
 const CLIPBOARD_COOLDOWN_BASE_MS = 800
 const CLIPBOARD_COOLDOWN_MAX_MS = 3000
 const CLIPBOARD_IMAGE_PERSIST_DEBOUNCE_MS = 2000
-const CLIPBOARD_NATIVE_WATCH_ENV = 'TUFF_CLIPBOARD_NATIVE_WATCH'
 const pollingService = PollingService.getInstance()
-
-interface ClipboardMetaEntry {
-  key: string
-  value: unknown
-}
-
-type ClipboardPollingIntervalOption = 1 | 3 | 5 | 10 | 15 | -1
-
-interface ClipboardPollingLowBatteryPolicy {
-  enable?: boolean
-  interval?: 10 | 15
-}
-
-interface ClipboardPollingSettings {
-  interval?: ClipboardPollingIntervalOption
-  lowBatteryPolicy?: ClipboardPollingLowBatteryPolicy
-}
-
-interface ClipboardWatcherHandle {
-  stop: () => void
-  readonly isRunning?: boolean
-}
-
-interface ClipboardWatcherModule {
-  startWatch?: (callback: () => void) => ClipboardWatcherHandle
-}
 
 interface ClipboardStageBJob {
   generation: number
@@ -212,6 +187,31 @@ export class ClipboardModule extends BaseModule {
       clipboardLog.warn(message, data)
     }
   })
+  private readonly nativeWatcher = new ClipboardNativeWatcher({
+    isDestroyed: () => this.isDestroyed,
+    scheduleMonitor: (options) => {
+      void this.runClipboardMonitor(options)
+    },
+    logInfo: (message, data?: LogOptions) => {
+      clipboardLog.info(message, data)
+    },
+    logWarn: (message, data?: LogOptions) => {
+      clipboardLog.warn(message, data)
+    },
+    logDebug: (message, data?: LogOptions) => {
+      clipboardLog.debug(message, data)
+    }
+  })
+  private readonly metaPersistence = new ClipboardMetaPersistence({
+    getDatabase: () => this.db,
+    isDestroyed: () => this.isDestroyed,
+    logDebug: (message, data?: LogOptions) => {
+      clipboardLog.debug(message, data)
+    },
+    logWarn: (message, data?: LogOptions) => {
+      clipboardLog.warn(message, data)
+    }
+  })
   private historyPersistence = new ClipboardHistoryPersistence({
     onForgetFreshness: (id) => {
       this.clipboardFreshness.delete(id)
@@ -240,8 +240,6 @@ export class ClipboardModule extends BaseModule {
   private clipboardStageBGeneration = 0
   private activeAppRefreshInFlight = false
   private lastStageBLogAt = 0
-  private clipboardNativeWatcher: ClipboardWatcherHandle | null = null
-  private clipboardNativeWatchInitTried = false
   private lastMetaQueuePressureLogAt = 0
   private coreBoxVisible = false
   private currentPollIntervalMs = CLIPBOARD_DEFAULT_POLL_INTERVAL_MS
@@ -298,92 +296,25 @@ export class ClipboardModule extends BaseModule {
     })
   }
 
-  private parsePollingInterval(value: unknown): ClipboardPollingIntervalOption {
-    const num = typeof value === 'number' ? value : Number.NaN
-    if (num === -1 || num === 1 || num === 3 || num === 5 || num === 10 || num === 15) {
-      return num
-    }
-    return 3
-  }
-
-  private parseLowBatteryInterval(value: unknown): 10 | 15 {
-    return value === 15 ? 15 : 10
-  }
-
   private resolvePollingSettings(): ClipboardPollingSettings {
     const appSetting = this.appSettingSnapshot
     const raw = appSetting?.tools?.clipboardPolling
-
-    const interval = this.parsePollingInterval(
-      (raw as ClipboardPollingSettings | undefined)?.interval
-    )
-    const rawLowBattery = (raw as ClipboardPollingSettings | undefined)?.lowBatteryPolicy
-    const lowBatteryPolicy: ClipboardPollingLowBatteryPolicy = {
-      enable: rawLowBattery?.enable !== false,
-      interval: this.parseLowBatteryInterval(rawLowBattery?.interval)
-    }
-
-    return {
-      interval,
-      lowBatteryPolicy
-    }
+    return resolveClipboardPollingSettings(raw)
   }
 
   private isLowBatteryState(): boolean {
     return isOnBatteryPowerSafe()
   }
 
-  private resolveNormalPollingIntervalMs(): number {
-    const settings = this.resolvePollingSettings()
-    const interval = settings.interval ?? 3
-
-    if (interval === -1) {
-      return -1
-    }
-
-    const lowBatteryPolicy = settings.lowBatteryPolicy
-    if (this.isLowBatteryState() && (lowBatteryPolicy?.enable ?? true)) {
-      return this.parseLowBatteryInterval(lowBatteryPolicy?.interval) * 1000
-    }
-
-    return interval * 1000
-  }
-
   private resolveTargetPollingIntervalMs(): number {
-    const baseIntervalMs = this.coreBoxVisible
-      ? CLIPBOARD_VISIBLE_POLL_INTERVAL_MS
-      : this.resolveNormalPollingIntervalMs()
-    if (baseIntervalMs < 0) {
-      return baseIntervalMs
-    }
-
-    const lagSnapshot = perfMonitor.getRecentEventLoopLagSnapshot()
-    if (lagSnapshot && Date.now() - lagSnapshot.at <= CLIPBOARD_LAG_ADAPT_WINDOW_MS) {
-      if (lagSnapshot.lagMs >= CLIPBOARD_LAG_ADAPT_ERROR_MS) {
-        return Math.max(baseIntervalMs, CLIPBOARD_LAG_ADAPT_ERROR_INTERVAL_MS)
-      }
-      if (lagSnapshot.lagMs >= CLIPBOARD_LAG_ADAPT_WARN_MS) {
-        return Math.max(baseIntervalMs, CLIPBOARD_LAG_ADAPT_WARN_INTERVAL_MS)
-      }
-    }
-
-    if (this.coreBoxVisible) {
-      return baseIntervalMs
-    }
-    const normalIntervalMs = baseIntervalMs
-    if (!isStartupDegradeActive()) {
-      return normalIntervalMs
-    }
-
-    const queueStats = dbWriteScheduler.getStats()
-    const queueHigh = queueStats.queued >= CLIPBOARD_PRESSURE_QUEUE_HIGH_WATER
-    const activeLabel = queueStats.currentTaskLabel ?? ''
-    const indexPressureActive =
-      activeLabel.startsWith('file-index.') || activeLabel.startsWith('search-index.')
-    if (queueHigh && indexPressureActive) {
-      return Math.max(normalIntervalMs, CLIPBOARD_PRESSURE_POLL_INTERVAL_MS)
-    }
-    return normalIntervalMs
+    return resolveClipboardTargetPollingIntervalMs({
+      settings: this.resolvePollingSettings(),
+      coreBoxVisible: this.coreBoxVisible,
+      onBattery: this.isLowBatteryState(),
+      startupDegradeActive: isStartupDegradeActive(),
+      queueStats: dbWriteScheduler.getStats(),
+      lagSnapshot: perfMonitor.getRecentEventLoopLagSnapshot()
+    })
   }
 
   private restartClipboardPolling(intervalMs: number): void {
@@ -400,7 +331,7 @@ export class ClipboardModule extends BaseModule {
       return
     }
 
-    const initialDelayMs = this.coreBoxVisible ? CLIPBOARD_VISIBLE_POLL_INTERVAL_MS : 1000
+    const initialDelayMs = this.coreBoxVisible ? 500 : 1000
     pollingService.register(
       CLIPBOARD_POLL_TASK_ID,
       () => {
@@ -433,110 +364,12 @@ export class ClipboardModule extends BaseModule {
     this.restartClipboardPolling(targetIntervalMs)
   }
 
-  private isNativeClipboardWatcherEnabled(): boolean {
-    const raw = process.env[CLIPBOARD_NATIVE_WATCH_ENV]
-    if (!raw) return true
-    const normalized = raw.trim().toLowerCase()
-    return normalized !== '0' && normalized !== 'false' && normalized !== 'off'
-  }
-
-  private resolveClipboardWatcherModule(value: unknown): ClipboardWatcherModule | null {
-    if (!value || typeof value !== 'object') {
-      return null
-    }
-    const pushCandidate = (target: unknown, list: unknown[]): void => {
-      if (!target || typeof target !== 'object') return
-      if (!list.includes(target)) {
-        list.push(target)
-      }
-    }
-
-    const source = value as {
-      default?: unknown
-      ['module.exports']?: unknown
-    }
-    const candidates: unknown[] = []
-
-    pushCandidate(source, candidates)
-    pushCandidate(source.default, candidates)
-    pushCandidate(source['module.exports'], candidates)
-
-    const nestedDefault = source.default as { default?: unknown; ['module.exports']?: unknown }
-    if (nestedDefault && typeof nestedDefault === 'object') {
-      pushCandidate(nestedDefault.default, candidates)
-      pushCandidate(nestedDefault['module.exports'], candidates)
-    }
-
-    const nestedModuleExports = source['module.exports'] as {
-      default?: unknown
-      ['module.exports']?: unknown
-    }
-    if (nestedModuleExports && typeof nestedModuleExports === 'object') {
-      pushCandidate(nestedModuleExports.default, candidates)
-      pushCandidate(nestedModuleExports['module.exports'], candidates)
-    }
-
-    for (const candidate of candidates) {
-      const watcherModule = candidate as ClipboardWatcherModule
-      if (typeof watcherModule.startWatch === 'function') {
-        return watcherModule
-      }
-    }
-
-    return null
-  }
-
   private async startNativeClipboardWatcher(): Promise<void> {
-    if (this.isDestroyed) return
-    if (this.clipboardNativeWatcher) return
-    if (this.clipboardNativeWatchInitTried) return
-
-    this.clipboardNativeWatchInitTried = true
-
-    if (!this.isNativeClipboardWatcherEnabled()) {
-      clipboardLog.info('Clipboard native watcher disabled by env', {
-        meta: { env: CLIPBOARD_NATIVE_WATCH_ENV }
-      })
-      return
-    }
-
-    try {
-      const rawModule = await import('@crosscopy/clipboard')
-      const watcherModule = this.resolveClipboardWatcherModule(rawModule)
-      if (!watcherModule || typeof watcherModule.startWatch !== 'function') {
-        const exportKeys =
-          rawModule && typeof rawModule === 'object' ? Object.keys(rawModule as object) : []
-        clipboardLog.warn('Clipboard native watcher module has no startWatch API', {
-          meta: { exportKeys: exportKeys.join(',') }
-        })
-        return
-      }
-
-      const watcher = watcherModule.startWatch(() => {
-        if (this.isDestroyed) return
-        setImmediate(() => {
-          void this.runClipboardMonitor({ bypassCooldown: true, source: 'native-watch' })
-        })
-      })
-
-      this.clipboardNativeWatcher = watcher
-      clipboardLog.info('Clipboard native watcher started', {
-        meta: { running: watcher.isRunning ?? true }
-      })
-    } catch (error) {
-      clipboardLog.warn('Clipboard native watcher unavailable, fallback to polling only', { error })
-    }
+    await this.nativeWatcher.start()
   }
 
   private stopNativeClipboardWatcher(): void {
-    if (!this.clipboardNativeWatcher) return
-    const watcher = this.clipboardNativeWatcher
-    this.clipboardNativeWatcher = null
-    try {
-      watcher.stop()
-    } catch (error) {
-      clipboardLog.debug('Failed to stop clipboard native watcher', { error })
-    }
+    this.nativeWatcher.stop()
   }
 
   private ensureAppSettingSubscription(): void {
@@ -860,7 +693,7 @@ export class ClipboardModule extends BaseModule {
       try {
         const current = this.historyPersistence.getCachedItemById(job.clipboardId)
         const nextMetadata = mergeClipboardMetadataString(current?.metadata, patch)
-        await this.withDbWrite(
+        await this.metaPersistence.withDbWrite(
           'clipboard.stage-b.source',
           () =>
             this.db!.update(clipboardHistory)
@@ -879,7 +712,7 @@ export class ClipboardModule extends BaseModule {
     this.handleMetaPatch(job.clipboardId, patch)
     this.historyPersistence.updateCachedSource(job.clipboardId, sourceApp)
 
-    this.persistMetaEntriesSafely(
+    this.metaPersistence.persistMetaEntriesSafely(
       job.clipboardId,
       patch,
       Object.entries(patch).map(([key, value]) => ({ key, value })),
@@ -887,83 +720,10 @@ export class ClipboardModule extends BaseModule {
     )
   }
 
-  private async withDbWrite<T>(
-    label: string,
-    operation: () => Promise<T>,
-    options?: ScheduleOptions
-  ): Promise<T> {
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), options)
-  }
-
   private shouldLogMetaQueuePressure(now: number): boolean {
     if (now - this.lastMetaQueuePressureLogAt < CLIPBOARD_META_LOG_THROTTLE_MS) return false
     this.lastMetaQueuePressureLogAt = now
     return true
-  }
-
-  private async persistMetaEntries(
-    clipboardId: number,
-    meta: Record<string, unknown>,
-    entries?: ClipboardMetaEntry[],
-    options?: ScheduleOptions
-  ): Promise<void> {
-    if (!this.db) return
-    const resolvedEntries =
-      entries && entries.length > 0
-        ? entries
-        : Object.entries(meta).map(([key, value]) => ({ key, value }))
-    const values = resolvedEntries
-      .filter((entry) => entry.value !== undefined)
-      .map((entry) => ({
-        clipboardId,
-        key: entry.key,
-        value: JSON.stringify(entry.value ?? null)
-      }))
-
-    if (values.length === 0) return
-
-    await this.withDbWrite(
-      'clipboard.meta',
-      () => this.db!.insert(clipboardHistoryMeta).values(values),
-      options
-    )
-  }
-
-  private isForeignKeyConstraintError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error)
-    return /foreign key constraint failed/i.test(message)
-  }
-
-  private isDroppedDbWriteTaskError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error)
-    return message.includes('DB write task dropped')
-  }
-
-  private persistMetaEntriesSafely(
-    clipboardId: number,
-    meta: Record<string, unknown>,
-    entries?: ClipboardMetaEntry[],
-    options?: ScheduleOptions
-  ): void {
-    void this.persistMetaEntries(clipboardId, meta, entries, options).catch((error) => {
-      if (this.isDestroyed) return
-
-      if (this.isDroppedDbWriteTaskError(error)) {
-        clipboardLog.debug('Clipboard meta write dropped due to queue pressure', {
-          meta: { clipboardId }
-        })
-        return
-      }
-
-      if (this.isForeignKeyConstraintError(error)) {
-        clipboardLog.warn('Clipboard meta write skipped because parent entry is missing', {
-          meta: { clipboardId }
-        })
-        return
-      }
-
-      clipboardLog.warn('Clipboard meta write failed', { error, meta: { clipboardId } })
-    })
   }
 
   /**
@@ -1011,7 +771,7 @@ export class ClipboardModule extends BaseModule {
       metadata
     }
 
-    const inserted = await this.withDbWrite('clipboard.custom.persist', () =>
+    const inserted = await this.metaPersistence.withDbWrite('clipboard.custom.persist', () =>
       this.db!.insert(clipboardHistory).values(record).returning()
     )
     if (inserted.length === 0) {
@@ -1035,7 +795,7 @@ export class ClipboardModule extends BaseModule {
           })
         }
       } else {
-        this.persistMetaEntriesSafely(persisted.id, mergedMeta, undefined, {
+        this.metaPersistence.persistMetaEntriesSafely(persisted.id, mergedMeta, undefined, {
           dropPolicy: 'drop',
           maxQueueWaitMs: 10_000
         })
@@ -1422,7 +1182,7 @@ export class ClipboardModule extends BaseModule {
       try {
         const queueStats = dbWriteScheduler.getStats()
         inserted = await trackPhaseAsync(phaseDurations, 'db.persistInsert', async () => {
-          return await this.withDbWrite('clipboard.persist', () =>
+          return await this.metaPersistence.withDbWrite('clipboard.persist', () =>
             this.db!.insert(clipboardHistory).values(record).returning()
           )
         })
@@ -1466,7 +1226,7 @@ export class ClipboardModule extends BaseModule {
             })
           }
         } else {
-          this.persistMetaEntriesSafely(persisted.id, metaObject, metaEntries, {
+          this.metaPersistence.persistMetaEntriesSafely(persisted.id, metaObject, metaEntries, {
             dropPolicy: 'drop',
             maxQueueWaitMs: 10_000
           })
@@ -1782,7 +1542,7 @@ export class ClipboardModule extends BaseModule {
     this.clipboardStageBGeneration = 0
     this.activeAppRefreshInFlight = false
     this.clipboardCheckCooldownUntil = 0
-    this.clipboardNativeWatchInitTried = false
+    this.nativeWatcher.reset()
     this.historyPersistence.reset()
     this.lastLagSkipLogAt = 0
     this.lastSuccessfulClipboardScanAt = null
