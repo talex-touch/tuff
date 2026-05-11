@@ -29,6 +29,7 @@ import { shortcutModule } from './modules/global-shortcon'
 import { notificationModule } from './modules/notification'
 import { omniPanelModule } from './modules/omni-panel'
 import { networkModule } from './modules/network'
+import { nativeCapabilitiesModule } from './modules/native-capabilities'
 import { PermissionModule } from './modules/permission'
 import { pluginModule } from './modules/plugin/plugin-module'
 import { sentryModule } from './modules/sentry'
@@ -156,6 +157,7 @@ const modulesToLoad = [
   shortcutModule,
   extensionLoaderModule,
   commonChannelModule,
+  nativeCapabilitiesModule,
   networkModule,
   analyticsModule,
   permissionCheckerModule,
