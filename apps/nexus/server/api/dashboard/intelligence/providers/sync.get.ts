@@ -3,7 +3,8 @@ import {
   TUFF_INTELLIGENCE_PROVIDER_SYNC_SCHEMA_VERSION,
 } from '@talex-touch/tuff-intelligence'
 import { requireAuth } from '../../../../utils/auth'
-import { listProviders, type IntelligenceProviderRecord } from '../../../../utils/intelligenceStore'
+import { listIntelligenceProvidersWithRegistryMirrors } from '../../../../utils/intelligenceProviderRegistryBridge'
+import type { IntelligenceProviderRecord } from '../../../../utils/intelligenceStore'
 
 function toSyncRecord(provider: IntelligenceProviderRecord): IntelligenceProviderSyncRecord {
   return {
@@ -27,7 +28,7 @@ function toSyncRecord(provider: IntelligenceProviderRecord): IntelligenceProvide
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)
-  const providers = await listProviders(event, userId)
+  const providers = await listIntelligenceProvidersWithRegistryMirrors(event, userId)
   const payload: IntelligenceProviderSyncPayload = {
     schemaVersion: TUFF_INTELLIGENCE_PROVIDER_SYNC_SCHEMA_VERSION,
     source: 'nexus',

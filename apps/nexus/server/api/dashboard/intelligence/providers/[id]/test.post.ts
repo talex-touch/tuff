@@ -1,6 +1,7 @@
 import { createError } from 'h3'
 import { requireAdmin } from '../../../../../utils/auth'
-import { getProvider, getProviderApiKey } from '../../../../../utils/intelligenceStore'
+import { getIntelligenceProviderApiKeyWithRegistryFallback, getIntelligenceProviderRegistryMirror } from '../../../../../utils/intelligenceProviderRegistryBridge'
+import { getProvider } from '../../../../../utils/intelligenceStore'
 import { fetchProviderModels } from '../../../../../utils/intelligenceModels'
 
 export default defineEventHandler(async (event) => {
@@ -12,6 +13,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const provider = await getProvider(event, userId, id)
+    ?? await getIntelligenceProviderRegistryMirror(event, userId, id)
   if (!provider) {
     throw createError({ statusCode: 404, statusMessage: 'Provider not found.' })
   }
@@ -21,7 +23,7 @@ export default defineEventHandler(async (event) => {
 
   const apiKey = typeof overrideApiKey === 'string'
     ? overrideApiKey
-    : await getProviderApiKey(event, userId, id)
+    : await getIntelligenceProviderApiKeyWithRegistryFallback(event, userId, id)
 
   const baseUrl = typeof overrideBaseUrl === 'string'
     ? overrideBaseUrl
