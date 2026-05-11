@@ -24,12 +24,14 @@ import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { createLogger } from '../../../utils/logger'
+import { coreBoxImageTranslateEvent } from '../../../../shared/events/corebox-scenes'
 import { pluginModule } from '../../plugin/plugin-module'
 import { getBoxItemManager } from '../item-sdk'
 import searchEngineCore from '../search-engine/search-core'
 import { searchLogger } from '../search-engine/search-logger'
 import { coreBoxInputTransport } from './input-transport'
 import { coreBoxKeyTransport } from './key-transport'
+import { translateCoreBoxImageItem } from './image-translate'
 import { coreBoxManager } from './manager'
 import { metaOverlayManager } from './meta-overlay'
 import { getCoreBoxWindow, windowManager } from './window'
@@ -252,6 +254,22 @@ export class IpcManager {
       transport.on(CoreBoxEvents.input.get, async () => {
         const input = await this.requestInputValue()
         return { input }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(coreBoxImageTranslateEvent, async (request) => {
+        const payload = request as { item?: TuffItem; targetLang?: string; openPinWindow?: boolean }
+        if (!payload?.item) {
+          return {
+            success: false,
+            code: 'INVALID_ITEM',
+            error: 'Image item is required.'
+          }
+        }
+        return await translateCoreBoxImageItem(payload.item, payload.targetLang, {
+          openPinWindow: payload.openPinWindow
+        })
       })
     )
 

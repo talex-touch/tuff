@@ -3211,6 +3211,9 @@
     "copied": "已复制",
     "flowSent": "已发送到目标插件",
     "flowFailed": "流转失败",
+    "imageTranslated": "图片翻译已写入剪贴板",
+    "imageTranslatePinned": "图片翻译已置顶",
+    "imageTranslateFailed": "图片翻译失败",
     "detached": "已分离到独立窗口",
     "detachFailed": "分离失败",
     "omniPanel": {
@@ -3254,6 +3257,8 @@
       "unpin": "取消固定",
       "copyTitle": "复制名称",
       "revealInFinder": "在文件管理器中显示",
+      "translateImage": "翻译图片",
+      "translateImagePin": "翻译并置顶",
       "flowTransfer": "流转到其他插件"
     },
     "systemActions": {

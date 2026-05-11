@@ -3219,6 +3219,9 @@
     "copied": "Copied",
     "flowSent": "Sent to target plugin",
     "flowFailed": "Flow transfer failed",
+    "imageTranslated": "Translated image copied to clipboard",
+    "imageTranslatePinned": "Translated image pinned",
+    "imageTranslateFailed": "Image translation failed",
     "detached": "Detached to separate window",
     "detachFailed": "Detach failed",
     "omniPanel": {
@@ -3262,6 +3265,8 @@
       "unpin": "Unpin",
       "copyTitle": "Copy Title",
       "revealInFinder": "Reveal in File Manager",
+      "translateImage": "Translate Image",
+      "translateImagePin": "Translate and Pin",
       "flowTransfer": "Transfer to Plugin"
     },
     "systemActions": {
