@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+async function waitForSafePersistenceCatch(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve)
+  })
+}
+
 const mocks = vi.hoisted(() => ({
   schedule: vi.fn(async (_label: string, operation: () => Promise<unknown>) => await operation()),
   withSqliteRetry: vi.fn(async (operation: () => Promise<unknown>) => await operation()),
@@ -73,7 +79,7 @@ describe('clipboard-meta-persistence', () => {
     })
 
     persistence.persistMetaEntriesSafely(8, { tag: 'url' })
-    await Promise.resolve()
+    await waitForSafePersistenceCatch()
 
     expect(mocks.logDebug).toHaveBeenCalledWith(
       'Clipboard meta write dropped due to queue pressure',

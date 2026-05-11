@@ -4,9 +4,16 @@ import type { LogOptions } from '../../utils/logger'
 import type { IClipboardItem } from './clipboard-history-persistence'
 import { eq } from 'drizzle-orm'
 import { clipboardHistory } from '../../db/schema'
-import { activeAppService } from '../system/active-app'
-import { mergeClipboardMetadataString } from './clipboard-history-persistence'
 import type { ClipboardMetaEntry, ClipboardMetaPersistence } from './clipboard-meta-persistence'
+
+export interface ClipboardActiveAppSnapshot {
+  bundleId?: string | null
+  identifier?: string | null
+  displayName?: string | null
+  processId?: number | null
+  executablePath?: string | null
+  icon?: unknown | null
+}
 
 export interface ClipboardStageBJob {
   generation: number
@@ -18,7 +25,7 @@ export interface ClipboardStageBJob {
 export interface ClipboardStageBEnrichmentOptions {
   getDatabase: () => LibSQLDatabase<typeof schema> | undefined
   getCachedItemById: (clipboardId: number) => IClipboardItem | undefined
-  getActiveAppSnapshot: () => Awaited<ReturnType<typeof activeAppService.getActiveApp>> | null
+  getActiveAppSnapshot: () => ClipboardActiveAppSnapshot | null
   getLatestGeneration: () => number
   enqueueOcr: (job: {
     clipboardId: number
@@ -32,8 +39,23 @@ export interface ClipboardStageBEnrichmentOptions {
   logDebug: (message: string, data?: LogOptions) => void
 }
 
+function mergeMetadataString(
+  original: string | null | undefined,
+  patch: Record<string, unknown>
+): string {
+  let base: Record<string, unknown> = {}
+  if (original) {
+    try {
+      base = JSON.parse(original)
+    } catch {
+      base = {}
+    }
+  }
+  return JSON.stringify({ ...base, ...patch })
+}
+
 export function buildActiveAppSourcePatch(
-  activeApp: Awaited<ReturnType<typeof activeAppService.getActiveApp>>,
+  activeApp: ClipboardActiveAppSnapshot,
   fallbackSourceApp?: string | null
 ): {
   sourceApp: string | null
@@ -98,7 +120,7 @@ export class ClipboardStageBEnrichment {
     if (db) {
       try {
         const current = this.options.getCachedItemById(job.clipboardId)
-        const nextMetadata = mergeClipboardMetadataString(current?.metadata, patch)
+        const nextMetadata = mergeMetadataString(current?.metadata, patch)
         await this.options.metaPersistence.withDbWrite(
           'clipboard.stage-b.source',
           () =>
