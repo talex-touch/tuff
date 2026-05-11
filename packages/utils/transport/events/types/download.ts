@@ -98,6 +98,23 @@ export type DownloadMigrationStatusResponse = DownloadOpResponse & {
   appliedMigrations?: unknown[]
 }
 
+export interface DownloadMigrationProgressPayload {
+  phase: 'scanning' | 'migrating' | 'validating' | 'complete' | 'error'
+  current: number
+  total: number
+  message: string
+  percentage: number
+}
+
+export interface DownloadMigrationResultPayload {
+  success: boolean
+  migratedTasks: number
+  migratedHistory: number
+  migratedConfig: boolean
+  errors: string[]
+  duration: number
+}
+
 export type DownloadMigrationNeededResponse = DownloadOpResponse & {
   needed?: boolean
 }

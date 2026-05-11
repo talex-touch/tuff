@@ -79,6 +79,8 @@ export const PermissionKeys = {
   FS_EXECUTE_DESC: 'permission.fs.execute.desc',
   FS_TFILE_NAME: 'permission.fs.tfile.name',
   FS_TFILE_DESC: 'permission.fs.tfile.desc',
+  FS_INDEX_NAME: 'permission.fs.index.name',
+  FS_INDEX_DESC: 'permission.fs.index.desc',
 
   // Clipboard permissions
   CLIPBOARD_READ_NAME: 'permission.clipboard.read.name',
@@ -123,6 +125,10 @@ export const PermissionKeys = {
   WINDOW_CREATE_DESC: 'permission.window.create.desc',
   WINDOW_CAPTURE_NAME: 'permission.window.capture.name',
   WINDOW_CAPTURE_DESC: 'permission.window.capture.desc',
+
+  // Media permissions
+  MEDIA_READ_NAME: 'permission.media.read.name',
+  MEDIA_READ_DESC: 'permission.media.read.desc',
 
   // UI messages
   GRANT: 'permission.grant',

@@ -44,6 +44,14 @@ export const PERMISSIONS: PermissionDefinition[] = [
     descKey: 'permission.fs.tfile.desc',
     icon: 'FileText',
   },
+  {
+    id: 'fs.index',
+    category: PermissionCategory.FILESYSTEM,
+    risk: PermissionRiskLevel.MEDIUM,
+    nameKey: 'permission.fs.index.name',
+    descKey: 'permission.fs.index.desc',
+    icon: 'FolderSearch',
+  },
 
   // Clipboard permissions
   {
@@ -184,6 +192,16 @@ export const PERMISSIONS: PermissionDefinition[] = [
     descKey: 'permission.window.capture.desc',
     icon: 'Camera',
   },
+
+  // Media permissions
+  {
+    id: 'media.read',
+    category: PermissionCategory.MEDIA,
+    risk: PermissionRiskLevel.MEDIUM,
+    nameKey: 'permission.media.read.name',
+    descKey: 'permission.media.read.desc',
+    icon: 'Images',
+  },
 ]
 
 export function normalizePermissionId(id: string): string {
@@ -262,6 +280,7 @@ export const PermissionIds = {
   FS_WRITE: 'fs.write',
   FS_EXECUTE: 'fs.execute',
   FS_TFILE: 'fs.tfile',
+  FS_INDEX: 'fs.index',
 
   // Clipboard
   CLIPBOARD_READ: 'clipboard.read',
@@ -290,6 +309,9 @@ export const PermissionIds = {
   // Window
   WINDOW_CREATE: 'window.create',
   WINDOW_CAPTURE: 'window.capture',
+
+  // Media
+  MEDIA_READ: 'media.read',
 } as const
 
 export type PermissionId = (typeof PermissionIds)[keyof typeof PermissionIds]
