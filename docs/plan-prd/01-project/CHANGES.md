@@ -5,6 +5,17 @@
 
 ## 2026-05-11
 
+### refactor(tuff-intelligence): split DeepAgent input builders
+
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `packages/tuff-intelligence/src/adapters/deepagent-input.ts`
+- `packages/tuff-intelligence/src/adapters/deepagent-input.test.ts`
+- `scripts/large-file-boundary-allowlist.json`
+  - 将 DeepAgent 的 TurnState 附件归一、chat message content 构造、Responses input 构造与模型上下文消息过滤迁出到 `deepagent-input.ts`，engine 保留 transport fallback、SSE 解析、LangChain/DeepAgent 调用与错误封装职责。
+  - 保持 `deepagent-engine.ts` 的 `buildChatMessageContent`、`buildResponsesInput`、`resolveAttachmentImageUrl` 导出路径不变，避免影响现有 `pilot-server` 入口与服务端调用。
+  - `deepagent-engine.ts` 从 `2137` 行降到 `1791` 行，DeepAgent growth exception cap 从 `2138` 收紧到 `1792`，继续阻断回涨。
+  - 验证：`pnpm -C "packages/tuff-intelligence" exec vitest run "src/adapters/deepagent-input.test.ts"` 通过（`3 tests`）；Pilot message shape 回归、定向 ESLint、`size:guard --changed` 与 `pnpm -C "packages/tuff-intelligence" run build` 通过。
+
 ### refactor(core-app): split app provider source scanner
 
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`

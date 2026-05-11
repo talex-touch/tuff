@@ -282,7 +282,7 @@
     },
     {
       "file": "packages/tuff-intelligence/src/adapters/deepagent-engine.ts",
-      "maxLines": 1797,
+      "maxLines": 1792,
       "expiresVersion": "2.4.11",
       "note": "Reduce below 1200 lines before v2.4.11"
     },
@@ -503,7 +503,7 @@
     },
     {
       "file": "packages/tuff-intelligence/src/adapters/deepagent-engine.ts",
-      "maxLines": 2138,
+      "maxLines": 1792,
       "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
       "owner": "packages-tuff-intelligence",
       "expiresVersion": "2.4.11",
