@@ -80,7 +80,7 @@ import { LocalPluginProvider } from './providers/local-provider'
 import { usePluginInjections } from './runtime/plugin-injections'
 import { inspectPluginRuntimeDrift } from './runtime/plugin-runtime-repair'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
-import { getPluginSdkCompatibilityGate } from './sdk-compat'
+import { getPluginSdkHardCutGate } from './sdkapi-hard-cut-gate'
 import { resolvePluginModuleIoRuntime } from './services/plugin-io-service'
 import { buildPluginManagerRuntime } from './services/plugin-manager-orchestrator'
 
@@ -816,7 +816,7 @@ function createPluginModuleInternal(
     },
     resolvePermissionConfirmation: async ({ request, manifest, clientMetadata }) => {
       if (!manifest?.name) return null
-      const sdkGate = getPluginSdkCompatibilityGate(manifest.name, manifest.sdkapi)
+      const sdkGate = getPluginSdkHardCutGate(manifest.name, manifest.sdkapi)
       if (sdkGate.blocked) {
         throw new Error(sdkGate.message)
       }

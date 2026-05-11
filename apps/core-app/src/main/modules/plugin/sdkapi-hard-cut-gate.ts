@@ -17,7 +17,7 @@ export type PluginSdkBlockReason =
   | 'outdated-sdkapi'
   | 'unsupported-sdkapi'
 
-export interface PluginSdkCompatibilityGate {
+export interface PluginSdkHardCutGate {
   blocked: boolean
   reason?: PluginSdkBlockReason
   message?: string
@@ -29,10 +29,10 @@ function buildUpgradeSuggestion(): string {
   return `Update manifest.json with "sdkapi": ${CURRENT_SDK_VERSION} and republish the plugin.`
 }
 
-export function getPluginSdkCompatibilityGate(
+export function getPluginSdkHardCutGate(
   pluginName: string,
   declaredSdkapi: unknown
-): PluginSdkCompatibilityGate {
+): PluginSdkHardCutGate {
   if (declaredSdkapi === undefined) {
     return {
       blocked: true,

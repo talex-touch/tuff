@@ -12,7 +12,7 @@ import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron'
 import fse from 'fs-extra'
 import { createLogger } from '../../utils/logger'
 import { ensureDefaultProvidersRegistered, installFromRegistry } from './providers'
-import { getPluginSdkCompatibilityGate, SDKAPI_BLOCKED_CODE } from './sdk-compat'
+import { getPluginSdkHardCutGate, SDKAPI_BLOCKED_CODE } from './sdkapi-hard-cut-gate'
 
 const pluginInstallerLog = createLogger('PluginSystem').child('Installer')
 
@@ -90,11 +90,11 @@ function assertManifestSdkCompatibility(manifest?: IManifest): void {
     typeof manifest.name === 'string' && manifest.name.trim().length > 0
       ? manifest.name.trim()
       : 'unknown'
-  const gate = getPluginSdkCompatibilityGate(pluginName, manifest.sdkapi)
+  const gate = getPluginSdkHardCutGate(pluginName, manifest.sdkapi)
   if (!gate.blocked) return
 
   const error = new Error(
-    gate.message || `Plugin "${pluginName}" is blocked by the sdkapi compatibility gate.`
+    gate.message || `Plugin "${pluginName}" is blocked by the sdkapi hard-cut gate.`
   ) as Error & { code?: string }
   error.name = SDKAPI_BLOCKED_CODE
   error.code = SDKAPI_BLOCKED_CODE

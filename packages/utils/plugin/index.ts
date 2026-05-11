@@ -90,7 +90,7 @@ export interface IPluginDev {
 export type IPluginWebview<TWindow = unknown> = Map<number, TWindow>
 
 /**
- * SDK API version for plugin compatibility checking.
+ * SDK API version for plugin hard-cut runtime gating.
  * Format: YYMMDD (e.g., 251212 = 2025-12-12)
  *
  * Rules:
@@ -114,7 +114,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   divisionBoxConfig?: import('../types/division-box').ManifestDivisionBoxConfig
   /**
    * SDK API version declared by the plugin.
-   * Used for compatibility checking and permission enforcement.
+   * Used for hard-cut runtime gating and permission enforcement.
    * Format: YYMMDD (e.g., 251212)
    */
   sdkapi?: SdkApiVersion
@@ -519,7 +519,7 @@ export interface IManifest {
    */
   version: string
   /**
-   * SDK API version for compatibility checking.
+   * SDK API version for hard-cut runtime gating.
    * Format: YYMMDD (e.g., 251212 = 2025-12-12)
    * Plugins without this field, with invalid markers, or with version < 251212 are blocked by runtime.
    */

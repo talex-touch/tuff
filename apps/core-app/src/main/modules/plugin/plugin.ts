@@ -299,7 +299,7 @@ export class TouchPlugin implements ITouchPlugin {
   _uniqueChannelKey: string
   /**
    * SDK API version declared by the plugin.
-   * Used for compatibility checking and permission enforcement.
+   * Used for hard-cut runtime gating and permission enforcement.
    */
   sdkapi?: number
 
