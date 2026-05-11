@@ -22,12 +22,10 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { NativeImage } from 'electron'
 import type * as schema from '../db/schema'
 import path from 'node:path'
-import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { CAPABILITY_AUTH_MIN_VERSION } from '@talex-touch/utils/plugin'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { TuffInputType } from '@talex-touch/utils/transport/events/types'
 import { clipboard, powerMonitor } from 'electron'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
@@ -37,11 +35,8 @@ import { clipboardHistory } from '../db/schema'
 import { appTaskGate } from '../service/app-task-gate'
 import { normalizeRenderableSource } from '../utils/local-renderable-assets'
 import { createLogger, type LogOptions } from '../utils/logger'
-import { enterPerfContext } from '../utils/perf-context'
 import { perfMonitor } from '../utils/perf-monitor'
 import { BaseModule } from './abstract-base-module'
-import { windowManager } from './box-tool/core-box/window'
-import { detectClipboardTags } from './clipboard-tagging'
 import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
 import { getPermissionModule } from './permission'
@@ -49,26 +44,11 @@ import { pluginModule } from './plugin/plugin-module'
 import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storage'
 import { activeAppService } from './system/active-app'
 import {
-  createClipboardFreshnessState,
   createIneligibleClipboardFreshnessState,
   type ClipboardFreshnessState
 } from './clipboard/clipboard-freshness'
-import {
-  CLIPBOARD_HTML_FORMATS,
-  CLIPBOARD_IMAGE_FORMATS,
-  CLIPBOARD_TEXT_FORMATS,
-  ClipboardFreshnessStore,
-  ClipboardHelper,
-  includesAnyClipboardFormat
-} from './clipboard/clipboard-capture-freshness'
-import {
-  buildPhaseDiagnostics,
-  summarizePhaseDurations,
-  toPerfSeverity,
-  trackPhase,
-  trackPhaseAsync,
-  type ClipboardPhaseDurations
-} from './clipboard/clipboard-phase-diagnostics'
+import { ClipboardFreshnessStore, ClipboardHelper } from './clipboard/clipboard-capture-freshness'
+import { ClipboardCapturePipeline } from './clipboard/clipboard-capture-pipeline'
 import {
   normalizeClipboardWritePayload,
   type ClipboardHistoryQueryInput
@@ -109,11 +89,6 @@ const CLIPBOARD_DEFAULT_POLL_INTERVAL_MS = 3000
 const CLIPBOARD_LAG_ADAPT_WINDOW_MS = 8000
 const CLIPBOARD_LAG_ADAPT_ERROR_MS = 1000
 const CLIPBOARD_LAG_SKIP_LOG_THROTTLE_MS = 5000
-const CLIPBOARD_SLOW_THRESHOLD_MS = 200
-const CLIPBOARD_COOLDOWN_TRIGGER_MS = 500
-const CLIPBOARD_COOLDOWN_BASE_MS = 800
-const CLIPBOARD_COOLDOWN_MAX_MS = 3000
-const CLIPBOARD_IMAGE_PERSIST_DEBOUNCE_MS = 2000
 const pollingService = PollingService.getInstance()
 
 interface ClipboardMonitorOptions {
@@ -208,6 +183,21 @@ export class ClipboardModule extends BaseModule {
       clipboardLog.warn(message, data)
     }
   })
+  private historyPersistence = new ClipboardHistoryPersistence({
+    onForgetFreshness: (id) => {
+      this.clipboardFreshness.delete(id)
+    },
+    onChange: () => {
+      this.notifyTransportChange()
+    },
+    deleteImageFile: (filePath) => {
+      void this.imagePersistence.deleteImageFile(filePath)
+    },
+    isWithinTempBaseDir: (filePath) => this.imagePersistence.isWithinTempBaseDir(filePath),
+    normalizeRenderableSource: (source) => {
+      return normalizeRenderableSource(source)
+    }
+  })
   private readonly stageBEnrichment = new ClipboardStageBEnrichment({
     getDatabase: () => this.db,
     getCachedItemById: (clipboardId) => this.historyPersistence.getCachedItemById(clipboardId),
@@ -230,19 +220,44 @@ export class ClipboardModule extends BaseModule {
       clipboardLog.debug(message, data)
     }
   })
-  private historyPersistence = new ClipboardHistoryPersistence({
-    onForgetFreshness: (id) => {
-      this.clipboardFreshness.delete(id)
+  private readonly capturePipeline = new ClipboardCapturePipeline({
+    getDatabase: () => this.db,
+    getClipboardHelper: () => this.clipboardHelper,
+    getLastSuccessfulScanAt: () => this.lastSuccessfulClipboardScanAt,
+    getLastImagePersistAt: () => this.lastImagePersistAt,
+    getTransport: () => this.transport,
+    imagePersistence: this.imagePersistence,
+    metaPersistence: this.metaPersistence,
+    rememberFreshness: (item, freshness) => {
+      this.rememberClipboardFreshness(item, freshness)
     },
-    onChange: () => {
+    updateMemoryCache: (item) => {
+      this.updateMemoryCache(item)
+    },
+    notifyTransportChange: () => {
       this.notifyTransportChange()
     },
-    deleteImageFile: (filePath) => {
-      void this.imagePersistence.deleteImageFile(filePath)
+    enqueueStageB: (job) => {
+      this.enqueueClipboardStageB(job)
     },
-    isWithinTempBaseDir: (filePath) => this.imagePersistence.isWithinTempBaseDir(filePath),
-    normalizeRenderableSource: (source) => {
-      return normalizeRenderableSource(source)
+    shouldLogMetaQueuePressure: (now) => this.shouldLogMetaQueuePressure(now),
+    setLastSuccessfulScanAt: (value) => {
+      this.lastSuccessfulClipboardScanAt = value
+    },
+    setLastImagePersistAt: (value) => {
+      this.lastImagePersistAt = value
+    },
+    setCooldownUntil: (value) => {
+      this.clipboardCheckCooldownUntil = value
+    },
+    setTaskMeta: (meta) => {
+      pollingService.setTaskMeta(CLIPBOARD_POLL_TASK_ID, meta)
+    },
+    logInfo: (message, data?: LogOptions) => {
+      clipboardLog.info(message, data)
+    },
+    logWarn: (message, data?: LogOptions) => {
+      clipboardLog.warn(message, data)
     }
   })
 
@@ -849,405 +864,7 @@ export class ClipboardModule extends BaseModule {
       return
     }
 
-    const dispose = enterPerfContext('Clipboard.check', { task: 'poll' })
-    const startAt = performance.now()
-    const phaseDurations: ClipboardPhaseDurations = {}
-    const observedAt = Date.now()
-    const previousScanAt = this.lastSuccessfulClipboardScanAt
-    try {
-      const helper = this.clipboardHelper
-      trackPhase(phaseDurations, 'helper.bootstrap', () => {
-        helper.bootstrap()
-      })
-
-      const formats = trackPhase(phaseDurations, 'clipboard.availableFormats', () => {
-        return clipboard.availableFormats()
-      })
-      if (formats.length === 0) {
-        return
-      }
-
-      // Fast-path change detection: Skip processing if nothing changed
-      const sortedFormats = trackPhase(phaseDurations, 'signature.sortFormats', () => {
-        return [...formats].sort()
-      })
-      const formatsKey = trackPhase(phaseDurations, 'signature.formatsKey', () => {
-        return sortedFormats.join(',')
-      })
-      const hasFileFormats = helper.hasFileFormats(formats)
-      const hasImageFormats = includesAnyClipboardFormat(formats, CLIPBOARD_IMAGE_FORMATS)
-      const hasTextFormats = includesAnyClipboardFormat(formats, CLIPBOARD_TEXT_FORMATS)
-      const hasHtmlFormats = includesAnyClipboardFormat(formats, CLIPBOARD_HTML_FORMATS)
-      let prefetchedText: string | undefined
-      let prefetchedFiles: string[] | undefined
-      let prefetchedImage: NativeImage | null | undefined
-
-      const readPrefetchedText = (): string => {
-        if (prefetchedText !== undefined) return prefetchedText
-        prefetchedText = trackPhase(phaseDurations, 'clipboard.readText', () =>
-          clipboard.readText()
-        )
-        return prefetchedText
-      }
-
-      const readPrefetchedFiles = (): string[] => {
-        if (prefetchedFiles !== undefined) return prefetchedFiles
-        prefetchedFiles = trackPhase(phaseDurations, 'clipboard.readFiles', () =>
-          helper.readClipboardFiles()
-        )
-        return prefetchedFiles
-      }
-
-      const readPrefetchedImage = (): NativeImage | null => {
-        if (prefetchedImage !== undefined) return prefetchedImage
-        if (!hasImageFormats) {
-          prefetchedImage = null
-          return prefetchedImage
-        }
-        const image = trackPhase(phaseDurations, 'clipboard.readImage', () => clipboard.readImage())
-        prefetchedImage = image.isEmpty() ? null : image
-        return prefetchedImage
-      }
-
-      const quickTextSignature = hasTextFormats
-        ? trackPhase(phaseDurations, 'signature.textQuick', () =>
-            helper.getTextQuickSignature(readPrefetchedText())
-          )
-        : '0:0'
-      const quickFilesSignature = hasFileFormats
-        ? trackPhase(phaseDurations, 'signature.filesQuick', () =>
-            helper.getFilesQuickSignature(readPrefetchedFiles())
-          )
-        : '0:0'
-      const quickImageSignature = hasImageFormats
-        ? trackPhase(phaseDurations, 'signature.imageQuick', () =>
-            helper.getImageQuickSignature(readPrefetchedImage())
-          )
-        : ''
-      const quickHash = trackPhase(phaseDurations, 'signature.hashBuild', () => {
-        return `${formatsKey}|t:${quickTextSignature}|f:${quickFilesSignature}|i:${quickImageSignature}`
-      })
-
-      const lastFormatsKey = helper.lastFormatsKey
-      const sameFormats = helper.lastFormats.length > 0 && lastFormatsKey === formatsKey
-      if (sameFormats && helper.lastChangeHash === quickHash) {
-        return
-      }
-
-      helper.lastFormats = sortedFormats
-      helper.lastFormatsKey = formatsKey
-      helper.lastChangeHash = quickHash
-
-      const metaEntries: ClipboardMetaEntry[] = [{ key: 'formats', value: formats }]
-      metaEntries.push({ key: 'capture_source', value: source })
-      metaEntries.push({ key: 'observed_at', value: observedAt })
-      let item: Omit<IClipboardItem, 'timestamp' | 'id' | 'metadata' | 'meta'> | null = null
-
-      // Read image once and cache to avoid duplicate clipboard.readImage() calls.
-      // Each readImage() call is synchronous and can cost 20-100ms for large images.
-      let cachedImage: NativeImage | null = hasImageFormats ? readPrefetchedImage() : null
-
-      // Priority: FILES (with image) > IMAGE > FILES (no image) > TEXT
-      // Check for files first to handle video files with thumbnails correctly
-      if (hasFileFormats) {
-        const files = readPrefetchedFiles()
-        if (trackPhase(phaseDurations, 'diff.files', () => helper.didFilesChange(files))) {
-          const serialized = trackPhase(phaseDurations, 'files.serialize', () =>
-            JSON.stringify(files)
-          )
-          let thumbnail: string | undefined
-          let imageSize: { width: number; height: number } | undefined
-
-          // Check if there's an associated image (e.g., video thumbnail)
-          if (cachedImage) {
-            const currentImage = cachedImage
-            trackPhase(phaseDurations, 'image.prime', () => {
-              helper.primeImage(currentImage)
-            })
-            imageSize = trackPhase(phaseDurations, 'image.size', () => currentImage.getSize())
-            thumbnail = trackPhase(phaseDurations, 'image.thumbnail', () => {
-              return currentImage.resize({ width: 128 }).toDataURL()
-            })
-            clipboardLog.info('File with thumbnail detected', {
-              meta: { width: imageSize.width, height: imageSize.height }
-            })
-          } else {
-            trackPhase(phaseDurations, 'image.prime', () => {
-              helper.primeImage(null)
-            })
-          }
-
-          trackPhase(phaseDurations, 'text.markEmpty', () => {
-            helper.markText('')
-          })
-          metaEntries.push({ key: 'file_count', value: files.length })
-          metaEntries.push({ key: 'has_sidecar_image', value: Boolean(thumbnail) })
-          if (imageSize) {
-            metaEntries.push({ key: 'image_size', value: imageSize })
-          }
-          item = {
-            type: 'files',
-            content: serialized,
-            thumbnail
-          }
-        }
-      }
-
-      // Check for standalone image (only if no files detected)
-      if (!item && cachedImage) {
-        const currentImage = cachedImage
-        if (trackPhase(phaseDurations, 'diff.image', () => helper.didImageChange(currentImage))) {
-          trackPhase(phaseDurations, 'text.markEmpty', () => {
-            helper.markText('')
-          })
-          const size = trackPhase(phaseDurations, 'image.size', () => currentImage.getSize())
-          metaEntries.push({ key: 'image_size', value: size })
-
-          // Generate thumbnail synchronously (lightweight, ~128px)
-          const thumbnail = trackPhase(phaseDurations, 'image.thumbnail', () => {
-            return currentImage.resize({ width: 128 }).toDataURL()
-          })
-
-          // Yield to event loop before heavy PNG encoding + file I/O
-          await trackPhaseAsync(
-            phaseDurations,
-            'eventLoop.yieldBeforeImageEncode',
-            async () =>
-              await new Promise<void>((resolve) => {
-                setImmediate(resolve)
-              })
-          )
-
-          const png = trackPhase(phaseDurations, 'image.encodePng', () => currentImage.toPNG())
-
-          // Release the cached image reference before async file I/O
-          // to allow GC to reclaim the NativeImage and PNG buffer sooner
-          cachedImage = null
-
-          const stored = await trackPhaseAsync(
-            phaseDurations,
-            'image.persistTempFile',
-            async () => {
-              return await this.imagePersistence.createClipboardImageFile(png)
-            }
-          )
-          metaEntries.push({ key: 'image_file_path', value: stored.path })
-          metaEntries.push({ key: 'image_file_size', value: stored.sizeBytes })
-          item = {
-            type: 'image',
-            content: stored.path,
-            thumbnail
-          }
-        }
-      }
-
-      if (!item && hasTextFormats) {
-        const text = readPrefetchedText()
-        if (trackPhase(phaseDurations, 'diff.text', () => helper.didTextChange(text))) {
-          const html = hasHtmlFormats
-            ? trackPhase(phaseDurations, 'clipboard.readHTML', () => clipboard.readHTML())
-            : ''
-          metaEntries.push({ key: 'text_length', value: text.length })
-          if (html) {
-            metaEntries.push({ key: 'html_length', value: html.length })
-          }
-          item = {
-            type: 'text',
-            content: text,
-            rawContent: html || null
-          }
-        }
-      }
-
-      if (!item) {
-        return
-      }
-
-      const tags = trackPhase(phaseDurations, 'tags.detect', () =>
-        detectClipboardTags({
-          type: item.type,
-          content: item.content,
-          rawContent: item.rawContent ?? null
-        })
-      )
-      if (tags.length > 0) {
-        metaEntries.push({ key: 'tags', value: tags })
-        for (const tag of tags) {
-          metaEntries.push({ key: 'tag', value: tag })
-        }
-      }
-
-      const metaObject: Record<string, unknown> = {}
-      for (const { key, value } of metaEntries) {
-        if (value === undefined) continue
-        if (key === 'tag') continue
-        metaObject[key] = value
-      }
-
-      const freshness = createClipboardFreshnessState({
-        source,
-        observedAt,
-        previousScanAt
-      })
-      metaObject.auto_paste_eligible = freshness.eligible
-      metaEntries.push({ key: 'auto_paste_eligible', value: freshness.eligible })
-
-      const metadataPayload = trackPhase(phaseDurations, 'meta.stringify', () => {
-        return Object.keys(metaObject).length > 0 ? JSON.stringify(metaObject) : null
-      })
-      const record = {
-        ...item,
-        metadata: metadataPayload,
-        timestamp: new Date()
-      }
-
-      if (
-        item.type === 'image' &&
-        Date.now() - this.lastImagePersistAt < CLIPBOARD_IMAGE_PERSIST_DEBOUNCE_MS
-      ) {
-        return
-      }
-
-      // Yield before DB write to avoid stacking all heavy work in one tick
-      await trackPhaseAsync(
-        phaseDurations,
-        'eventLoop.yieldBeforePersist',
-        async () =>
-          await new Promise<void>((resolve) => {
-            setImmediate(resolve)
-          })
-      )
-
-      const persistContext = enterPerfContext('Clipboard.persist', { type: item.type })
-      const persistStart = performance.now()
-      let inserted: IClipboardItem[] = []
-      try {
-        const queueStats = dbWriteScheduler.getStats()
-        inserted = await trackPhaseAsync(phaseDurations, 'db.persistInsert', async () => {
-          return await this.metaPersistence.withDbWrite('clipboard.persist', () =>
-            this.db!.insert(clipboardHistory).values(record).returning()
-          )
-        })
-        const persistDuration = performance.now() - persistStart
-        if (persistDuration > 200) {
-          const contentLength = typeof item.content === 'string' ? item.content.length : 0
-          const thumbnailLength = typeof item.thumbnail === 'string' ? item.thumbnail.length : 0
-          clipboardLog.warn('Clipboard persist slow', {
-            meta: {
-              durationMs: Math.round(persistDuration),
-              type: item.type,
-              queued: queueStats.queued,
-              processing: queueStats.processing,
-              currentTaskLabel: queueStats.currentTaskLabel,
-              contentLength,
-              thumbnailLength
-            }
-          })
-        }
-      } finally {
-        persistContext()
-      }
-      if (inserted.length === 0) {
-        return
-      }
-
-      const persisted = inserted[0] as IClipboardItem
-      persisted.meta = metaObject
-      this.rememberClipboardFreshness(persisted, freshness)
-      if (persisted.type === 'image') {
-        this.lastImagePersistAt = Date.now()
-      }
-
-      if (persisted.id) {
-        const queueStats = dbWriteScheduler.getStats()
-        if (queueStats.queued >= CLIPBOARD_META_QUEUE_LIMIT) {
-          const now = Date.now()
-          if (this.shouldLogMetaQueuePressure(now)) {
-            clipboardLog.warn('Clipboard meta skipped (queue pressure)', {
-              meta: { queued: queueStats.queued }
-            })
-          }
-        } else {
-          this.metaPersistence.persistMetaEntriesSafely(persisted.id, metaObject, metaEntries, {
-            dropPolicy: 'drop',
-            maxQueueWaitMs: 10_000
-          })
-        }
-        this.enqueueClipboardStageB({
-          clipboardId: persisted.id!,
-          item: persisted,
-          formats
-        })
-      }
-
-      this.updateMemoryCache(persisted)
-      this.notifyTransportChange()
-
-      const activePlugin = windowManager.getAttachedPlugin()
-      if (
-        activePlugin?._uniqueChannelKey &&
-        windowManager.shouldForwardClipboardChange(persisted.type)
-      ) {
-        this.transport
-          ?.sendToPlugin(activePlugin.name, CoreBoxEvents.clipboard.change, { item: persisted })
-          .catch(() => {})
-          .catch((error) => {
-            clipboardLog.warn('Failed to notify plugin UI view about clipboard change', { error })
-          })
-      }
-    } finally {
-      this.lastSuccessfulClipboardScanAt = observedAt
-      const duration = performance.now() - startAt
-      const roundedDurationMs = Math.round(duration)
-      const phaseSummaryMap = summarizePhaseDurations(phaseDurations)
-      const phaseDiagnostics = buildPhaseDiagnostics(phaseDurations, roundedDurationMs)
-      let cooldownMs = 0
-      if (duration > CLIPBOARD_COOLDOWN_TRIGGER_MS) {
-        cooldownMs = Math.min(
-          CLIPBOARD_COOLDOWN_MAX_MS,
-          Math.max(CLIPBOARD_COOLDOWN_BASE_MS, Math.round(duration))
-        )
-        this.clipboardCheckCooldownUntil = Date.now() + cooldownMs
-      } else {
-        this.clipboardCheckCooldownUntil = 0
-      }
-
-      pollingService.setTaskMeta(CLIPBOARD_POLL_TASK_ID, {
-        durationMs: roundedDurationMs,
-        cooldownMs,
-        slowestPhase: phaseDiagnostics.slowestPhase ?? 'none',
-        slowestPhaseMs: phaseDiagnostics.slowestPhaseMs,
-        phaseAlertLevel: phaseDiagnostics.phaseAlertLevel,
-        phaseAlertCode: phaseDiagnostics.phaseAlertCode,
-        phaseDurations: phaseSummaryMap
-      })
-
-      if (duration > CLIPBOARD_SLOW_THRESHOLD_MS) {
-        const severity = toPerfSeverity(phaseDiagnostics.phaseAlertLevel)
-        if (severity) {
-          perfMonitor.recordMainReport({
-            kind: 'clipboard.check.slow',
-            eventName: phaseDiagnostics.phaseAlertCode,
-            durationMs: roundedDurationMs,
-            level: severity,
-            meta: {
-              cooldownMs,
-              phaseAlertLevel: phaseDiagnostics.phaseAlertLevel,
-              slowestPhase: phaseDiagnostics.slowestPhase ?? 'none',
-              slowestPhaseMs: phaseDiagnostics.slowestPhaseMs
-            }
-          })
-        }
-        clipboardLog.warn('Clipboard check slow', {
-          meta: {
-            durationMs: roundedDurationMs,
-            cooldownMs,
-            ...phaseDiagnostics
-          }
-        })
-      }
-      dispose()
-    }
+    await this.capturePipeline.process(source)
   }
 
   private extractPayloadSdkApi(payload: unknown): number | undefined {
