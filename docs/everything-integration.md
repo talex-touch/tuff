@@ -36,6 +36,8 @@ Tuff now integrates with [Everything](https://www.voidtools.com/) search engine 
 - **Low Resource Usage**: Minimal CPU and memory footprint
 - **NTFS Integration**: Leverages NTFS USN Journal for instant updates
 - **Powerful Syntax**: Support for wildcards, regex, and advanced filters
+- **Backend Diagnostics**: Settings and IPC report SDK load, SDK query, CLI detect, and CLI query stages.
+- **AI Context Metadata**: Everything results include safe file metadata for Flow/Intelligence without reading file contents.
 
 ## Installation
 
@@ -159,8 +161,20 @@ set TALEX_EVERYTHING_SDK_PATH=C:\path\to\everything.node
 - `fallbackChain`: backend downgrade order
 - `lastBackendError`: latest backend initialization/search error
 - `version`: SDK/CLI version when available
+- `diagnostics`: per-stage backend diagnostics keyed by `sdk-load`, `sdk-query`, `cli-detect`, and `cli-query`
 
-`everything:test` also returns `backend`, `health`, and `errorCode` to indicate which backend handled the probe query and where failures occurred.
+`everything:test` also returns `backend`, `health`, `query`, `errorCode`, `sample`, `backendAttempts`, and `durationByStage` to indicate which backend handled the probe query and where failures occurred.
+
+### Result Context Metadata
+
+Everything file results expose `meta.fileSearchContext` as an in-memory candidate for AI/Flow consumers:
+
+- `path`, `name`, `extension`, `size`, `mtime`, `isDir`
+- `source: "everything"`
+- `backend`: active backend (`sdk-napi` or `cli`)
+- `score`: current search ranking score
+
+This metadata is not a sync payload and does not read or persist file contents.
 
 ### SDK Self-check (Windows)
 
@@ -173,8 +187,11 @@ pnpm -C "packages/tuff-native" run check:everything -- --query "*.txt" --max 10
 Expected output is a JSON summary with:
 
 - `ok`: whether SDK query succeeded
+- `backend`: currently `sdk-napi`
 - `version`: Everything SDK version (or `null` if unavailable)
+- `durationMs` and `durationByStage`: query timing
 - `resultCount`: number of results returned
+- `errorCode`: low-level failure code when available
 - `sample`: first normalized result (when available)
 
 ### Search Limits

@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-05-08
+> 更新时间：2026-05-10
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -13,6 +13,7 @@
 - 文档盘点历史快照参考：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`；当前优先级路线以六主文档、`TODO` 与 `CHANGES` 为准。
 - 主线动作必须同步六文档：`INDEX / README / TODO / CHANGES / Roadmap / Quality Baseline`。
 - 当前主线动作为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`；`Nexus 设备授权风控` 保留实施文档与历史入口，Phase 1 频控/冷却/审计/长期授权时间窗/可信设备白名单已完成，非当前主线。
+- 2026-05-10 跨平台兼容与占位实现审计已新增：`docs/plan-prd/report/cross-platform-compat-placeholder-audit-2026-05-10.md`，后续 PRD 必须区分真实 unavailable、开发 mock 与生产假值成功。
 - 文档门禁升级前置保持不变：连续 5 次 `pnpm docs:guard` 零告警 + 连续 2 周无口径漂移。
 
 ## 2. 每个活跃 PRD 必须包含的章节（MUST）
@@ -50,6 +51,10 @@
 - 强制启用 CoreApp runtime boundary 门禁：`pnpm -C "apps/core-app" run runtime:guard` 冻结宽松 Electron WebPreferences、裸 `ipcRenderer/ipcMain`、raw IPC event string、`window.touchChannel`、`window.$t/window.$i18n` 与旧 `/api/sync/*`；允许项只能落在命名 window security profile、preload 或内部 channel adapter。
 - CoreApp 硬切补充门禁：业务层 `window.$channel` 调用、legacy storage 旧协议（`storage:get/save/reload/save-sync/saveall`）与 legacy `sdkapi` 放行路径必须保持为 `0`；占位能力必须返回真实状态或显式 `unavailable + reason`，禁止固定假值“成功”。
 - CoreApp `2.4.11` 前置门禁：清册中的 `2.4.11` 兼容债务必须关闭或显式降权；Windows/macOS 回归为 release-blocking，Linux 仅作为 documented best-effort 与非阻塞 smoke。
+- Nexus Provider / Scene 类 PRD 必须保持 Provider 与 Scene 解耦：新增供应商只进入 Provider registry，新增使用场景只进入 Scene，不允许新增孤立 provider model 或绕过 typed transport/domain SDK。
+- 2.5.0 AI 类 PRD 必须保持桌面入口收口边界：Stable 能力只承诺文本 + OCR；Workflow / Pilot 联动必须标为 Beta；Assistant、多模态生成编辑与 Nexus Scene runtime orchestration 必须标为 Experimental 或 2.5.x 后续，禁止作为 2.5.0 稳定承诺。
+- 假值治理门禁：生产 API / dashboard / runtime 不得默认返回 Mock CPU、固定磁盘/内存、mock 支付 URL、伪成功空结果；开发 mock 必须由显式环境变量或配置开关启用，关闭时返回明确错误码与 reason。
+- Transport 统计门禁：文档和 guard 必须区分 raw send violation 与 retained raw event definition；新增符合 `namespace/module/action` 结构的事件必须使用 typed builder。
 
 ### 3.2 可靠性约束
 - 关键路径需有显式错误处理与用户可见反馈。
@@ -65,6 +70,11 @@
 ### 3.4 安全与数据约束
 - 遵守 Storage/Sync 规则：SQLite 本地 SoT，JSON 仅同步载荷。
 - 禁止敏感信息明文落地到 localStorage/JSON/日志。
+- AI Provider 配置中，provider metadata 可进入普通配置，API Key / secret 必须进入 secure-store 或以 `authRef` 表示；审计默认不得保存完整 prompt / response。
+- 插件侧本地文件路径历史、图片路径、token、key 等敏感元数据不得长期保存在 renderer `localStorage`；必须使用插件 storage SDK、SQLite SoT 或加密引用，并提供清理策略。
+- CoreApp secure-store 必须优先使用系统安全存储；系统后端不可用时只允许使用本机随机 `local-secret` 派生密钥的本地密文 fallback，禁止因降级写入明文 token/key/seed。
+- `deviceId` 只能作为设备标识或可选 AAD，不得作为密钥材料；local secret 损坏或丢失且已有本地密文时必须进入 `unavailable`，不得静默生成新 secret 覆盖旧数据。
+- Sync 输出仍必须只包含 `payload_enc` / `payload_ref` 等密文引用，旧 `b64:` 仅保留只读迁移语义并触发重写，禁止重新引入明文业务 JSON 同步。
 
 ### 3.5 文档约束
 - PRD 状态变化（进行中/完成/归档）必须同步 `README.md` 与 `TODO.md`。
@@ -253,7 +263,45 @@
 - Windows/macOS 阻塞级回归必须在 `CHANGES + TODO` 留证；Linux 失败必须记录限制原因，但不阻塞 `2.4.11`。
 - `Nexus 设备授权风控` 保留实施文档，不得从历史记录中删除。
 
-### 6.10 Pilot 路由 V2（2026-03-17）
+### 6.10 Nexus Provider 聚合与 Scene 编排 PRD（2026-05-09）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 权威 PRD | `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` | 已入库 |
+| 核心模型 | `Provider / Capability / Scene / Strategy / Metering` | 已固定 |
+| 首版范围 | 汇率、AI 大模型、文本翻译、图片/截图翻译 | 已定义 |
+| 迁移映射 | `exchangeRateService`、Nexus dashboard AI providers、CoreBox 划词/截图翻译、图片 pin window | 已列入 |
+| 安全边界 | Provider credential 只保存 `authRef`；usage/audit 不保存原始内容 | 已固化 |
+
+**质量约束落地**
+- 新增供应商必须注册到 Provider registry，不允许为截图翻译、划词翻译、图片翻译、汇率或 AI Chat 新建孤立供应商模型。
+- Scene 只声明业务意图、capability path、strategy、meteringPolicy 与 auditPolicy；不得硬编码供应商价格、密钥、endpoint 或特殊鉴权逻辑。
+- Provider adapter 只做标准 capability payload 与供应商 API 的协议转换，并标准化错误码、usage、latency 与 providerRequestId。
+- Metering / Audit 必须记录 fallback trail、usage、错误码与 degraded reason，但不得保存原始截图、图片、完整 prompt、完整翻译文本或模型响应。
+- 后续实现变更必须同步 `README / TODO / CHANGES / INDEX / Roadmap / Quality Baseline` 至少对应入口，并补最近路径 typecheck/test/docs guard 证据。
+
+### 6.10.1 Tuff 2.5.0 AI 桌面入口收口 PRD（2026-05-10）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 权威 PRD | `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md` | 已入库 |
+| 版本定位 | 桌面 AI 入口收口 | 已锁定 |
+| 主入口 | CoreBox / OmniPanel | 已定义 |
+| Stable 能力 | 文本 + OCR | 已收窄 |
+| Beta 能力 | Workflow 模板 + Pilot 高级 Chat / DeepAgent 联动 | 已定义 |
+| Experimental 能力 | Assistant、多模态生成编辑、Nexus Scene runtime orchestration | 已降级 |
+| 安全边界 | API Key / secret 使用 secure-store 或 `authRef`；审计不保存完整 prompt / response | 已固化 |
+
+**质量约束落地**
+- 2.5.0 AI 实现不得新增 raw event 字符串分发，必须复用 `intelligence.invoke()` 与 typed transport/domain SDK。
+- Provider 普通配置只允许保存 metadata、enabled、models、baseUrl、priority 等非敏感字段；BYOK secret 必须迁移到 secure-store 或 `authRef`。
+- CoreBox / OmniPanel AI 入口必须有用户可见错误原因，provider 不可用、quota 不足、权限拒绝与模型不支持不得 silent failure。
+- Stable 只承诺 `text.chat`、`text.translate`、`text.summarize`、`text.rewrite`、`code.explain`、`code.review`、`vision.ocr`；未完成 runtime adapter 的多模态能力不得宣传为稳定可用。
+- Nexus Provider / Scene 在 2.5.0 只作为架构约束，不作为稳定执行链路；Scene runtime 编排进入后续 2.5.x。
+
+### 6.11 Pilot 路由 V2（2026-03-17）
 
 **现状指标**
 | 项目 | 结果 | 结论 |
@@ -269,7 +317,7 @@
 - 模型开关必须可控：`internet`、`thinking` 均需透传至后端执行链路。
 - 路由异常必须自动回退：LangGraph Local Server 不可用时回退 deepagent，不得阻断主对话链路。
 
-### 6.11 Core Main 生命周期止血（2026-03-23）
+### 6.12 Core Main 生命周期止血（2026-03-23）
 
 **现状指标**
 | 项目 | 结果 | 结论 |

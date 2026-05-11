@@ -25,6 +25,17 @@ export interface WidgetRegistrationPayload {
   dependencies?: string[]
 }
 
+export interface WidgetFailurePayload {
+  widgetId: string
+  pluginName: string
+  featureId: string
+  code: string
+  message: string
+  filePath?: string
+  hash?: string
+  cause?: string
+}
+
 export function makeWidgetId(pluginName: string, featureId: string): string {
   return `${pluginName}::${featureId}`
 }

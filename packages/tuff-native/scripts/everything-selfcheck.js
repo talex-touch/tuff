@@ -72,12 +72,17 @@ async function main() {
 
     printSummary({
       ok: true,
+      backend: 'sdk-napi',
       platform: process.platform,
       version,
       query: options.query,
       maxResults: options.maxResults,
       durationMs,
+      durationByStage: {
+        sdkQuery: durationMs,
+      },
       resultCount: Array.isArray(results) ? results.length : 0,
+      errorCode: null,
       sample: first
         ? {
             fullPath: first.fullPath || null,
@@ -94,12 +99,16 @@ async function main() {
 
     printSummary({
       ok: false,
+      backend: 'sdk-napi',
       platform: process.platform,
       version,
       query: options.query,
       maxResults: options.maxResults,
+      resultCount: 0,
+      durationMs: null,
       error: message,
-      code: typeof code === 'string' ? code : null,
+      errorCode: typeof code === 'string' ? code : null,
+      sample: null,
     })
     process.exitCode = 1
   }

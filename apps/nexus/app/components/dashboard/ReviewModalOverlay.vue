@@ -5,7 +5,6 @@ import type {
   DashboardPluginVersion as PluginVersion,
 } from '~/types/dashboard-plugin'
 import { TxButton } from '@talex-touch/tuffex'
-import FlatButton from '~/components/ui/FlatButton.vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import PluginMetaHeader from '~/components/dashboard/PluginMetaHeader.vue'
 
@@ -277,9 +276,9 @@ const reviewHeaderPlugin = computed(() => {
               </TxButton>
             </template>
             <template v-else>
-              <FlatButton @click="toggleRejectForm">
+              <TxButton variant="secondary" @click="toggleRejectForm">
                 {{ t('dashboard.sections.plugins.assetCreate.back') }}
-              </FlatButton>
+              </TxButton>
               <TxButton type="danger" :disabled="loading" @click="handleReject">
                 <span v-if="loading" class="i-carbon-circle-dash animate-spin" />
                 <span v-else class="i-carbon-close" />

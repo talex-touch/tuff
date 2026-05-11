@@ -41,7 +41,17 @@
     "runtime:guard": "node \"../../scripts/check-coreapp-runtime-boundaries.mjs\"",
     "startup:bench:dev": "node \"scripts/startup-benchmark-dev.mjs\" --mode run --runs 30 --continueOnFail",
     "startup:bench:analyze": "node \"scripts/startup-benchmark-dev.mjs\" --mode analyze",
-    "clipboard:stress": "pnpm exec tsx \"scripts/clipboard-polling-stress.ts\""
+    "clipboard:stress": "pnpm exec tsx \"scripts/clipboard-polling-stress.ts\"",
+    "clipboard:stress:verify": "pnpm exec tsx \"scripts/clipboard-stress-verify.ts\"",
+    "app-index:diagnostic:verify": "pnpm exec tsx \"scripts/app-index-diagnostic-verify.ts\"",
+    "everything:diagnostic:verify": "pnpm exec tsx \"scripts/everything-diagnostic-verify.ts\"",
+    "update:diagnostic:verify": "pnpm exec tsx \"scripts/update-diagnostic-verify.ts\"",
+    "search:trace:stats": "pnpm exec tsx \"scripts/search-trace-stats.ts\"",
+    "search:trace:verify": "pnpm exec tsx \"scripts/search-trace-verify.ts\"",
+    "windows:capability:evidence": "pnpm exec tsx \"scripts/windows-capability-evidence.ts\"",
+    "windows:capability:verify": "pnpm exec tsx \"scripts/windows-capability-verify.ts\"",
+    "windows:acceptance:template": "pnpm exec tsx \"scripts/windows-acceptance-template.ts\"",
+    "windows:acceptance:verify": "pnpm exec tsx \"scripts/windows-acceptance-verify.ts\""
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

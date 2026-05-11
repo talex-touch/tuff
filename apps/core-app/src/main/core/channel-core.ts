@@ -17,6 +17,7 @@ import {
 } from '../../shared/ipc/raw-channel'
 
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
+const CHANNEL_PAYLOAD_WARN_BYTES = 256 * 1024
 const ChannelType = {
   MAIN: 'main',
   PLUGIN: 'plugin'
@@ -75,6 +76,14 @@ function traceIpc(eventName: string, startedAt: number, success: boolean): void 
   if (!ipcTracer) return
   const duration = performance.now() - startedAt
   ipcTracer(eventName, duration, success)
+}
+
+function logLargePayload(eventName: string, direction: string, encoded: string): void {
+  const bytes = Buffer.byteLength(encoded, 'utf8')
+  if (bytes < CHANNEL_PAYLOAD_WARN_BYTES) return
+  channelLog.warn(`[Channel] Large IPC payload for ${eventName}`, {
+    meta: { eventName, direction, bytes }
+  })
 }
 
 const getWebContents = (
@@ -341,13 +350,19 @@ class TouchChannel {
               }
             })
           } else {
-            const disposeSerialize = enterPerfContext(`Channel.reply.serialize:${rawData.name}`, {
-              code,
-              sync: Boolean(rawData.sync),
-              channelType: rawData.header.type
-            })
+            const disposeSerialize = enterPerfContext(
+              `Channel.reply.serialize:${rawData.name}`,
+              {
+                code,
+                sync: Boolean(rawData.sync),
+                channelType: rawData.header.type
+              },
+              { mode: 'blocking' }
+            )
             try {
-              finalData = JSON.parse(structuredStrictStringify(rData))
+              const encoded = structuredStrictStringify(rData)
+              logLargePayload(rawData.name, 'reply', encoded)
+              finalData = JSON.parse(encoded)
             } finally {
               disposeSerialize()
             }
@@ -550,11 +565,17 @@ class TouchChannel {
     let _channelCategory = RAW_MAIN_PROCESS_CHANNEL
 
     let finalData: RawStandardChannelData
-    const disposeSerialize = enterPerfContext(`Channel.send.serialize:${eventName}`, {
-      channelType: type
-    })
+    const disposeSerialize = enterPerfContext(
+      `Channel.send.serialize:${eventName}`,
+      {
+        channelType: type
+      },
+      { mode: 'blocking' }
+    )
     try {
-      finalData = JSON.parse(structuredStrictStringify(data))
+      const encoded = structuredStrictStringify(data)
+      logLargePayload(eventName, 'send', encoded)
+      finalData = JSON.parse(encoded)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       channelLog.error(
@@ -725,11 +746,17 @@ class TouchChannel {
     } as RawStandardChannelData
 
     let finalData: RawStandardChannelData
-    const disposeSerialize = enterPerfContext(`Channel.broadcast.serialize:${eventName}`, {
-      channelType: type
-    })
+    const disposeSerialize = enterPerfContext(
+      `Channel.broadcast.serialize:${eventName}`,
+      {
+        channelType: type
+      },
+      { mode: 'blocking' }
+    )
     try {
-      finalData = JSON.parse(structuredStrictStringify(data))
+      const encoded = structuredStrictStringify(data)
+      logLargePayload(eventName, 'broadcast', encoded)
+      finalData = JSON.parse(encoded)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       channelLog.error(
@@ -780,11 +807,17 @@ class TouchChannel {
     } as RawStandardChannelData
 
     let finalData: RawStandardChannelData
-    const disposeSerialize = enterPerfContext(`Channel.broadcast.serialize:${eventName}`, {
-      channelType: ChannelType.PLUGIN
-    })
+    const disposeSerialize = enterPerfContext(
+      `Channel.broadcast.serialize:${eventName}`,
+      {
+        channelType: ChannelType.PLUGIN
+      },
+      { mode: 'blocking' }
+    )
     try {
-      finalData = JSON.parse(structuredStrictStringify(data))
+      const encoded = structuredStrictStringify(data)
+      logLargePayload(eventName, 'plugin-broadcast', encoded)
+      finalData = JSON.parse(encoded)
     } catch {
       return
     } finally {

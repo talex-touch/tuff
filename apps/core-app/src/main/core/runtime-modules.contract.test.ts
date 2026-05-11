@@ -1,4 +1,12 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -13,7 +21,8 @@ const {
   copyRuntimeModuleToNodeModules,
   resolvePlatformRuntimeModules,
   resolveRuntimeModuleTargetDir,
-  syncMissingPackagedRuntimeModules
+  syncMissingPackagedRuntimeModules,
+  verifyPackagedEsbuildBinaries
 } = require('../../../scripts/build-target/runtime-modules.js')
 
 const tempRoots: string[] = []
@@ -152,6 +161,67 @@ describe('runtime module manifest contract', () => {
       'base-runtime',
       'native-runtime'
     ])
+  })
+
+  it('keeps esbuild and platform binaries in packaged runtime resources', () => {
+    const resourceNames = collectResourceResolvableRuntimeModuleEntries([
+      { name: 'esbuild', location: 'resources' }
+    ]).map((entry: { name: string }) => entry.name)
+
+    expect(resourceNames).toContain('esbuild')
+    expect(resourceNames.some((name: string) => name.startsWith('@esbuild/'))).toBe(true)
+
+    expect(resolvePlatformRuntimeModules('mac', 'arm64').rootModules).toContain(
+      '@esbuild/darwin-arm64'
+    )
+    expect(resolvePlatformRuntimeModules('mac', 'x64').rootModules).toContain('@esbuild/darwin-x64')
+    expect(resolvePlatformRuntimeModules('linux', 'x64').rootModules).toContain(
+      '@esbuild/linux-x64'
+    )
+    expect(resolvePlatformRuntimeModules('linux', 'arm64').rootModules).toContain(
+      '@esbuild/linux-arm64'
+    )
+    expect(resolvePlatformRuntimeModules('win', 'x64').rootModules).toContain('@esbuild/win32-x64')
+    expect(resolvePlatformRuntimeModules('win', 'arm64').rootModules).toContain(
+      '@esbuild/win32-arm64'
+    )
+  })
+
+  it('fails fast when the target esbuild binary is missing from packaged resources', () => {
+    const paths = createTempWorkspace()
+    const resourcesDir = path.join(paths.root, 'dist/mac-arm64/tuff.app/Contents/Resources')
+    mkdirSync(resourcesDir, { recursive: true })
+
+    expect(() =>
+      verifyPackagedEsbuildBinaries(paths.root, 'mac', 'arm64', {
+        resourcesDir,
+        logPrefix: '[test]'
+      })
+    ).toThrow(/@esbuild\/darwin-arm64\/bin\/esbuild/)
+  })
+
+  it('accepts the target esbuild binary only when the packaged file is executable', () => {
+    const paths = createTempWorkspace()
+    const resourcesDir = path.join(paths.root, 'dist/mac-arm64/tuff.app/Contents/Resources')
+    const binaryPath = path.join(resourcesDir, 'node_modules/@esbuild/darwin-arm64/bin/esbuild')
+    mkdirSync(path.dirname(binaryPath), { recursive: true })
+    writeFileSync(binaryPath, '')
+
+    expect(() =>
+      verifyPackagedEsbuildBinaries(paths.root, 'mac', 'arm64', {
+        resourcesDir,
+        logPrefix: '[test]'
+      })
+    ).toThrow(/not executable/)
+
+    chmodSync(binaryPath, 0o755)
+
+    expect(
+      verifyPackagedEsbuildBinaries(paths.root, 'mac', 'arm64', {
+        resourcesDir,
+        logPrefix: '[test]'
+      })
+    ).toEqual(['@esbuild/darwin-arm64'])
   })
 
   it('keeps promoted resource modules resolvable through resources node_modules', async () => {

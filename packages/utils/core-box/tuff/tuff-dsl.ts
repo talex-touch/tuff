@@ -969,6 +969,11 @@ export interface TuffMeta {
   }
 
   /**
+   * Minimal local file context that AI/Flow consumers may use without reading file contents.
+   */
+  fileSearchContext?: FileSearchContextCandidate
+
+  /**
    * 网络信息
    * @description 适用于链接类型的元数据
    */
@@ -1137,6 +1142,18 @@ export interface TuffMeta {
    * @description 控制 CoreBox 底部快捷键提示的显示和行为
    */
   footerHints?: TuffFooterHints
+}
+
+export interface FileSearchContextCandidate {
+  path: string
+  name: string
+  extension: string
+  size: number
+  mtime: string
+  isDir: boolean
+  source: 'everything' | 'file-provider'
+  backend?: string
+  score?: number
 }
 
 // ==================== 前端展示结构 ====================

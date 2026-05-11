@@ -6,6 +6,7 @@ import type { TouchPlugin } from '../../plugin/plugin'
 import type { TuffQuery, TuffSearchResult } from '../search-engine/types'
 import { TuffSearchResultBuilder } from '@talex-touch/utils'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { maybeGetRegisteredMainRuntime } from '../../../core/runtime-accessor'
@@ -18,6 +19,8 @@ import { ipcManager } from './ipc'
 import { windowManager } from './window'
 
 const coreBoxManagerLog = createLogger('CoreBox').child('Manager')
+const COREBOX_PRESSURE_REASON = 'corebox-active'
+const COREBOX_PRESSURE_TTL_MS = 30_000
 
 const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
   channel.keyManager ?? channel
@@ -46,6 +49,7 @@ export class CoreBoxManager {
   private lastTrigger: number = -1
   private _isUIMode: boolean = false // Rename to private property
   private currentFeature: IPluginFeature | null = null
+  private readonly pollingService = PollingService.getInstance()
 
   private constructor() {
     // Lazy initialization to avoid circular dependency
@@ -149,6 +153,7 @@ export class CoreBoxManager {
     this._show = show
 
     if (show) {
+      this.applyActivePressure()
       this.applyExpandState()
       windowManager.show(options?.triggeredByShortcut ?? false)
     } else {
@@ -157,7 +162,27 @@ export class CoreBoxManager {
         this._expandState = {}
       }
       windowManager.hide()
+      this.pollingService.clearGlobalPressure(COREBOX_PRESSURE_REASON)
     }
+  }
+
+  private applyActivePressure(): void {
+    this.pollingService.setGlobalPressure({
+      reason: COREBOX_PRESSURE_REASON,
+      until: Date.now() + COREBOX_PRESSURE_TTL_MS,
+      laneMultipliers: {
+        realtime: 2,
+        io: 4,
+        maintenance: 8,
+        serial: 6
+      },
+      concurrencyCaps: {
+        realtime: 1,
+        io: 1,
+        maintenance: 1,
+        serial: 1
+      }
+    })
   }
 
   public expand(options: ExpandOptions = {}): void {

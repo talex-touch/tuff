@@ -29,7 +29,11 @@ import {
   everythingTestEvent,
   everythingToggleEvent,
   type EverythingStatusResponse,
-  type EverythingBackendType
+  type EverythingBackendType,
+  type EverythingDiagnosticStage,
+  type EverythingDiagnosticStatus,
+  type EverythingDiagnostics,
+  type EverythingResultSample
 } from '../../../../../shared/events/everything'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable-assets'
@@ -142,6 +146,8 @@ interface EverythingSdkAddon {
   getVersion?: () => string
 }
 
+const EVERYTHING_TEST_QUERY = '*.txt'
+
 /**
  * Everything Provider for Windows
  *
@@ -176,6 +182,10 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private everythingVersion: string | null = null
   private sdkAddon: EverythingSdkAddon | null = null
   private lastChecked: number | null = null
+  private diagnostics: EverythingDiagnostics = {
+    stages: {},
+    lastUpdated: null
+  }
   private readonly iconWorker = new IconWorkerClient()
   private readonly iconCache = new Map<string, string>()
   private readonly iconExtractions = new Map<string, Promise<string | null>>()
@@ -226,6 +236,78 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       return
     }
     fileProviderLog.error(`[Everything] ${message}`)
+  }
+
+  private recordDiagnosticStage({
+    stage,
+    status,
+    backend,
+    startedAt,
+    target = null,
+    error = null,
+    errorCode = null,
+    attempts
+  }: {
+    stage: EverythingDiagnosticStage
+    status: EverythingDiagnosticStatus
+    backend: EverythingBackendType
+    startedAt: number
+    target?: string | null
+    error?: string | null
+    errorCode?: string | null
+    attempts?: number
+  }): void {
+    const timestamp = Date.now()
+    this.diagnostics = {
+      stages: {
+        ...this.diagnostics.stages,
+        [stage]: {
+          stage,
+          status,
+          backend,
+          target,
+          error,
+          errorCode,
+          duration: Math.round(performance.now() - startedAt),
+          attempts,
+          timestamp
+        }
+      },
+      lastUpdated: timestamp
+    }
+  }
+
+  private getDiagnosticsSnapshot(): EverythingDiagnostics {
+    return {
+      stages: { ...this.diagnostics.stages },
+      lastUpdated: this.diagnostics.lastUpdated
+    }
+  }
+
+  private getDurationByStage(): Partial<Record<EverythingDiagnosticStage, number>> {
+    const durationByStage: Partial<Record<EverythingDiagnosticStage, number>> = {}
+    for (const [stage, summary] of Object.entries(this.diagnostics.stages) as Array<
+      [EverythingDiagnosticStage, EverythingDiagnostics['stages'][EverythingDiagnosticStage]]
+    >) {
+      if (typeof summary?.duration === 'number') {
+        durationByStage[stage] = summary.duration
+      }
+    }
+    return durationByStage
+  }
+
+  private toResultSample(result: EverythingSearchResult | null): EverythingResultSample | null {
+    if (!result) {
+      return null
+    }
+    return {
+      path: result.path,
+      name: result.name,
+      extension: result.extension,
+      size: result.size,
+      mtime: result.mtime.toISOString(),
+      isDir: result.isDir
+    }
   }
 
   private async refreshBackendState(reason: 'startup' | 'manual-check' | 'toggle-enable') {
@@ -435,7 +517,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       lastBackendError: this.lastBackendError,
       backendAttemptErrors: this.backendAttemptErrors,
       fallbackChain: this.fallbackChain,
-      lastChecked: this.lastChecked
+      lastChecked: this.lastChecked,
+      diagnostics: this.getDiagnosticsSnapshot()
     }
   }
 
@@ -502,29 +585,40 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         return {
           success: false,
           backend: this.backend,
-          error: 'Everything is not available or disabled'
+          health: this.getHealthStatus().health,
+          query: EVERYTHING_TEST_QUERY,
+          error: 'Everything is not available or disabled',
+          backendAttempts: this.getDiagnosticsSnapshot(),
+          durationByStage: this.getDurationByStage()
         }
       }
 
       const testStart = performance.now()
       try {
-        const results = await this.searchEverything('*.txt', 10)
+        const results = await this.searchEverything(EVERYTHING_TEST_QUERY, 10)
         const duration = performance.now() - testStart
 
         return {
           success: true,
           backend: this.backend,
           health: this.getHealthStatus().health,
+          query: EVERYTHING_TEST_QUERY,
           resultCount: results.length,
-          duration: Math.round(duration)
+          duration: Math.round(duration),
+          sample: this.toResultSample(results[0] ?? null),
+          backendAttempts: this.getDiagnosticsSnapshot(),
+          durationByStage: this.getDurationByStage()
         }
       } catch (error: unknown) {
         return {
           success: false,
           backend: this.backend,
           health: this.getHealthStatus().health,
+          query: EVERYTHING_TEST_QUERY,
           errorCode: getErrorCode(error) || (isAbortError(error) ? 'ABORT_ERR' : null),
-          error: getErrorMessage(error)
+          error: getErrorMessage(error),
+          backendAttempts: this.getDiagnosticsSnapshot(),
+          durationByStage: this.getDurationByStage()
         }
       }
     })
@@ -536,6 +630,10 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     this.lastBackendError = null
     this.lastBackendErrorCode = null
     this.backendAttemptErrors = {}
+    this.diagnostics = {
+      stages: {},
+      lastUpdated: null
+    }
     this.esPath = null
     this.everythingVersion = null
     this.sdkAddon = null
@@ -552,6 +650,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async tryInitializeSdkBackend(): Promise<boolean> {
+    const startedAt = performance.now()
     const envPath = process.env.TALEX_EVERYTHING_SDK_PATH?.trim()
     const resourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
     const candidates = [
@@ -572,6 +671,15 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       const supportsSearch = typeof addon.search === 'function' || typeof addon.query === 'function'
       if (!supportsSearch) {
+        this.recordDiagnosticStage({
+          stage: 'sdk-load',
+          status: 'failed',
+          backend: 'sdk-napi',
+          startedAt,
+          target: candidate,
+          error: 'Everything SDK loaded but search method is missing',
+          attempts: candidates.length
+        })
         this.logWarn('Everything SDK loaded but search method is missing', undefined, {
           candidate
         })
@@ -584,6 +692,14 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       this.esPath = candidate
       this.everythingVersion =
         typeof addon.getVersion === 'function' ? addon.getVersion() : this.everythingVersion
+      this.recordDiagnosticStage({
+        stage: 'sdk-load',
+        status: 'success',
+        backend: 'sdk-napi',
+        startedAt,
+        target: candidate,
+        attempts: candidates.length
+      })
 
       this.logInfo('Everything SDK backend ready', {
         backend: this.backend,
@@ -593,6 +709,15 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       return true
     }
 
+    this.recordDiagnosticStage({
+      stage: 'sdk-load',
+      status: 'failed',
+      backend: 'sdk-napi',
+      startedAt,
+      error: this.lastBackendError || 'No loadable Everything SDK candidate found',
+      errorCode: this.lastBackendErrorCode,
+      attempts: candidates.length
+    })
     return false
   }
 
@@ -630,16 +755,32 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async tryInitializeCliBackend(): Promise<boolean> {
+    const startedAt = performance.now()
     try {
       await this.detectEverything()
       this.backend = 'cli'
       this.isAvailable = true
       this.lastBackendError = null
+      this.recordDiagnosticStage({
+        stage: 'cli-detect',
+        status: 'success',
+        backend: 'cli',
+        startedAt,
+        target: this.esPath
+      })
       return true
     } catch (error) {
       this.lastBackendError = getErrorMessage(error)
       this.lastBackendErrorCode = getErrorCode(error) ?? null
       this.backendAttemptErrors.cli = this.lastBackendError
+      this.recordDiagnosticStage({
+        stage: 'cli-detect',
+        status: 'failed',
+        backend: 'cli',
+        startedAt,
+        error: this.lastBackendError,
+        errorCode: this.lastBackendErrorCode
+      })
       this.logWarn('Everything CLI backend unavailable', error)
       return false
     }
@@ -743,20 +884,41 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       throw new TypeError('Everything SDK search method is not available')
     }
 
-    const searchPromise = Promise.resolve(
-      searchFn.call(this.sdkAddon, query, {
-        maxResults
-      })
-    )
-    const abortPromise = createAbortPromise<unknown>(signal)
-    const rawResults = await (abortPromise
-      ? Promise.race([searchPromise, abortPromise])
-      : searchPromise)
+    let rawResults: unknown
+    try {
+      const searchPromise = Promise.resolve(
+        searchFn.call(this.sdkAddon, query, {
+          maxResults
+        })
+      )
+      const abortPromise = createAbortPromise<unknown>(signal)
+      rawResults = await (abortPromise ? Promise.race([searchPromise, abortPromise]) : searchPromise)
+    } catch (error) {
+      if (!isAbortError(error)) {
+        this.recordDiagnosticStage({
+          stage: 'sdk-query',
+          status: 'failed',
+          backend: 'sdk-napi',
+          startedAt: searchStart,
+          target: query,
+          error: getErrorMessage(error),
+          errorCode: getErrorCode(error) ?? null
+        })
+      }
+      throw error
+    }
 
     throwIfAborted(signal)
 
     const results = this.parseEverythingSdkOutput(rawResults)
 
+    this.recordDiagnosticStage({
+      stage: 'sdk-query',
+      status: 'success',
+      backend: 'sdk-napi',
+      startedAt: searchStart,
+      target: query
+    })
     this.logDebug('Everything SDK search completed', {
       query,
       results: results.length,
@@ -892,6 +1054,13 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       throwIfAborted(signal)
       const results = this.parseEverythingOutput(stdout)
 
+      this.recordDiagnosticStage({
+        stage: 'cli-query',
+        status: 'success',
+        backend: 'cli',
+        startedAt: searchStart,
+        target: query
+      })
       this.logDebug('Everything CLI search completed', {
         query,
         results: results.length,
@@ -908,6 +1077,15 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       this.lastBackendError = errorMessage
       this.lastBackendErrorCode = errorCode
+      this.recordDiagnosticStage({
+        stage: 'cli-query',
+        status: 'failed',
+        backend: 'cli',
+        startedAt: searchStart,
+        target: query,
+        error: errorMessage,
+        errorCode
+      })
 
       if (errorCode === 'ETIMEDOUT') {
         this.logWarn('Everything CLI search timed out', error, { query })
@@ -1114,6 +1292,20 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
             query: searchText
           }
         }
+        tuffItem.meta = {
+          ...tuffItem.meta,
+          fileSearchContext: {
+            path: result.path,
+            name: result.name,
+            extension: result.extension,
+            size: result.size,
+            mtime: result.mtime.toISOString(),
+            isDir: result.isDir,
+            source: 'everything',
+            backend: this.backend,
+            score: finalScore
+          }
+        }
 
         const normalized = normalizeTuffItemLocalAssets(tuffItem, {
           dropMissingFile: false,
@@ -1126,7 +1318,6 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
             void this.ensureResultIcon(result.path)
           }
         }
-
         return normalized.item ?? tuffItem
       })
 

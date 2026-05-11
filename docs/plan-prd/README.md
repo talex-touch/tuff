@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档入口（压缩版）
-> 更新时间: 2026-05-08
+> 更新时间: 2026-05-10
 
 ## 快速入口
 
@@ -12,21 +12,28 @@
 - [文档盘点历史快照（2026-03-17）](./docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md)
 - [一次性完整修复总方案（统一实施 PRD）](./02-architecture/UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md)
 - [Nexus 设备授权风控实施方案](./04-implementation/NexusDeviceAuthRiskControl-260316.md)
+- [Nexus Provider 聚合与 Scene 编排重构 PRD](./02-architecture/nexus-provider-scene-aggregation-prd.md)
+- [跨平台兼容与占位实现审计报告（2026-05-10）](./report/cross-platform-compat-placeholder-audit-2026-05-10.md)
 - [v2.4.7 发版收口清单（historical）](./01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md)
 - [长期债务池](./docs/TODO-BACKLOG-LONG-TERM.md)
 
 ---
 
-## 单一口径快照（2026-05-08）
+## 单一口径快照（2026-05-09）
 
-- 当前工作区基线：`2.4.10-beta.14`。
+- 当前工作区基线：`2.4.10-beta.18`。
 - 当前主线：`2.4.10` 优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口。
 - 下一版本门槛：`2.4.11` 必须关闭剩余未闭环项；清册内 legacy/compat/size 债务退场目标统一前移到 `2.4.11`。
 - Nexus 设备授权风控 Phase 1 已落地：设备码申请频控、连续 reject/cancel 冷却、request/approve/reject/cancel/revoke/trust/untrust 审计日志、长期授权后端时间窗与可信设备显式白名单已接入。
-- CoreApp 启动搜索卡顿治理已落地“平衡模式 + 双库隔离”：`database-aux.db` 分流非核心高频写、`DbWriteScheduler` QoS/熔断、索引热路径单写者化、启动期降载（120s）。
+- Nexus Provider 聚合与 Scene 编排进入架构蓝图：后续汇率、AI 大模型、文本翻译、图片/截图翻译统一进入 Provider registry，Scene 按 capability 自由组合与路由。
+- Nexus Provider Registry 已接入 D1 密文 secure store 与腾讯云机器翻译 `text.translate` live check；生产需配置 `PROVIDER_REGISTRY_SECURE_STORE_KEY`，首版仍不包含 Scene runtime、图片翻译和 Metering ledger。
+- Tuff 2.5.0 AI 板块已锁定 Plan PRD：定位为桌面 AI 入口收口版本，优先收口 CoreBox / OmniPanel 的用户可感知 AI 场景；Stable 只承诺文本 + OCR，Workflow / Pilot 联动进入 Beta，Assistant、多模态生成与 Nexus Scene runtime 编排列为 Experimental / 2.5.x 后续。
+- CoreApp 启动搜索卡顿治理已落地“平衡模式 + 双库隔离”：`database-aux.db` 分流非核心高频写、`DbWriteScheduler` QoS/熔断、索引热路径单写者化、启动期降载（120s）；CoreBox 可见期间会短时压低后台 polling lane 频率/并发，减少搜索交互窗口内的后台争用。
+- 搜索索引服务已切到“平台原生快速层 + 自建索引增强层”口径：Windows Everything、macOS Spotlight/mdfind、Linux locate/Tracker/Baloo 负责首帧候选，自建 FileProvider 负责 FTS、内容解析、语义和后台修正；搜索 payload 禁止内联 base64 图标/缩略图，大资源通过 `tfile://`/本地路径懒加载。
 - 发布开关已就位：`TUFF_DB_AUX_ENABLED`、`TUFF_DB_QOS_ENABLED`、`TUFF_STARTUP_DEGRADE_ENABLED`，支持灰度与快速回滚。
 - Legacy/兼容/结构治理已切换到“统一实施 PRD + 五工作包并行”口径（不再使用 Phase 1-3 决策叙事）。
 - 治理基线：`legacy 81/184`、`raw channel 13/46`、超长文件（主线）`47`。
+- 跨平台兼容审计（2026-05-10）：CoreApp 平台能力已具备显式 degraded/unsupported 合同；真实风险集中在 Windows/macOS 人工证据、Linux best-effort 记录、Pilot 假值接口/支付 mock、插件 localStorage 路径持久化、retained `defineRawEvent` 统计口径与超长多职责模块。
 - `apps/core-app` 已完成“兼容债立即硬切”首轮并行治理：`window.$channel` 业务入口清零、legacy storage 事件协议清零、权限 `sdkapi` legacy 放行移除、更新/平台识别收敛为显式 `unsupported` 策略。
 - CoreApp Sync payload 已从旧 `b64:` Base64 载荷升级为 main 侧 AES-GCM `enc:v1` 真密文；`payload_enc/payload_ref` wire shape 保持不变，`meta_plain` 仅保留非业务元数据，旧 `b64:` 只作为迁移读取 fallback。
 - Nexus Release Evidence API 继续作为平台回归、文档门禁与阻塞矩阵采集入口；CI 写入使用 `release:evidence` API key。
@@ -89,6 +96,8 @@
 - AttachUIView 深化（Warm/Cold 分层、Score 模型、可视化调试）。
 - Multi Attach View 并行视图能力。
 - Widget Sandbox 扩展拦截与审计。
+- Nexus Provider 聚合与 Scene 编排（Provider registry、Capability、Scene、Strategy、Metering）；Provider registry 已有 D1 密文 `authRef` 凭证绑定与腾讯云 `text.translate` check，后续继续补汇率、AI 大模型、图片/截图翻译与 Scene runtime。
+- Tuff 2.5.0 AI 桌面入口收口：PRD 已锁定版本定位与验收口径；后续实现不得扩大到全量多模态、Assistant 默认启用或 Nexus Scene runtime 编排。
 
 ---
 
@@ -112,7 +121,7 @@
 
 - Core App 性能诊断增强：`Clipboard` 慢路径新增 phase 级别分解、告警分级与原因码，并接入 `Perf summary`/`polling diagnostics` 聚合视图。
 - Core App 性能链路降载：`file-index progress stream` 增加发送节流（latest-wins + 阶段优先），`Perf summary` 新增 `phaseAlertCode TopN` 聚合口径。
-- `2.4.10-beta.14` 当前基线与 Windows App 索引回归推进。
+- `2.4.10-beta.18` 当前基线与 Windows App 索引回归推进。
 - Pilot 合并升级 V2：`/` 统一入口、`/pilot` 兼容跳转、`Quota Auto` 自动路由与渠道评比。
 - CLI Phase1+2：`tuff-cli` 主入口、`tuff-cli-core` 核心迁移、`unplugin` shim 兼容。
 - Pilot Chat/Turn 新协议：`turns/stream/messages` 路由与会话级串行队列。

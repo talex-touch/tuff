@@ -191,14 +191,23 @@ function ensureAuthPreferenceSettings(): void {
       deviceId: '',
       deviceName: '',
       devicePlatform: '',
-      useSecureStorage: false,
+      useSecureStorage: true,
+      secureStorageUserOverridden: false,
       secureStorageReminderShown: false,
       secureStorageUnavailable: false
     }
     return
   }
+  if (typeof appSetting.auth.secureStorageUserOverridden !== 'boolean') {
+    appSetting.auth.secureStorageUserOverridden = false
+  }
   if (typeof appSetting.auth.useSecureStorage !== 'boolean') {
-    appSetting.auth.useSecureStorage = false
+    appSetting.auth.useSecureStorage = true
+  } else if (
+    appSetting.auth.useSecureStorage === false &&
+    appSetting.auth.secureStorageUserOverridden === false
+  ) {
+    appSetting.auth.useSecureStorage = true
   }
   if (typeof appSetting.auth.secureStorageReminderShown !== 'boolean') {
     appSetting.auth.secureStorageReminderShown = false
@@ -217,7 +226,7 @@ function remindSecureStoragePreferenceOnce(): void {
     return
   }
   appSetting.auth.secureStorageReminderShown = true
-  toast.info('当前登录凭证为会话模式。可在“用户设置”中启用系统安全存储。')
+  toast.info('当前登录凭证为会话模式。可在“用户设置”中启用登录凭证持久保护。')
 }
 
 function syncSentryUser(nextUser: AuthUser | null): void {

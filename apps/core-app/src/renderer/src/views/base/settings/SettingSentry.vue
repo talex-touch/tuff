@@ -8,6 +8,7 @@ import { TxButton, TxTooltip } from '@talex-touch/tuffex'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { SentryEvents, StorageEvents } from '@talex-touch/utils/transport/events'
+import type { SentryGetTelemetryStatsResponse } from '@talex-touch/utils/transport/events/types'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -24,18 +25,7 @@ import { createRendererLogger } from '~/utils/renderer-log'
 const { t } = useI18n()
 const settingSentryLog = createRendererLogger('SettingSentry')
 
-interface TelemetryStats {
-  searchCount: number
-  bufferSize: number
-  lastUploadTime: number | null
-  totalUploads: number
-  failedUploads: number
-  lastFailureAt: number | null
-  lastFailureMessage: string | null
-  apiBase: string
-  isEnabled: boolean
-  isAnonymous: boolean
-}
+type TelemetryStats = SentryGetTelemetryStatsResponse
 
 const enabled = ref(false)
 const anonymous = ref(false)
@@ -43,7 +33,6 @@ const loading = ref(false)
 const statsLoading = ref(false)
 const searchCount = ref(0)
 const telemetryStats = ref<TelemetryStats | null>(null)
-const isDev = import.meta.env.DEV
 const autoRefreshTimer = ref<number | null>(null)
 const transport = useTuffTransport()
 const appSdk = useAppSdk()
@@ -80,12 +69,7 @@ async function refreshStats(options?: { silent?: boolean }) {
   try {
     const count = await transport.send(SentryEvents.api.getSearchCount)
     searchCount.value = typeof count === 'number' ? count : 0
-
-    if (isDev) {
-      telemetryStats.value = (await transport.send(
-        SentryEvents.api.getTelemetryStats
-      )) as TelemetryStats
-    }
+    telemetryStats.value = await transport.send(SentryEvents.api.getTelemetryStats)
   } catch (error) {
     if (!options?.silent) {
       settingSentryLog.error('Failed to refresh telemetry stats', error)
@@ -269,7 +253,7 @@ onBeforeUnmount(() => {
       </template>
     </TuffBlockLine>
 
-    <template v-if="isDev && enabled && showAdvancedSettings && telemetryStats">
+    <template v-if="enabled && showAdvancedSettings && telemetryStats">
       <TuffBlockLine :title="t('settingSentry.bufferSize', 'Buffer 大小')">
         <template #description>
           <span class="font-mono text-base text-[var(--tx-text-color-primary)]">

@@ -761,6 +761,7 @@ async function triggerRebuild() {
   </TuffGroupBlock>
 
   <TuffGroupBlock
+    v-if="showAdvancedSettings"
     :name="t('settings.settingFileIndex.policyGroupTitle')"
     :description="t('settings.settingFileIndex.policyGroupDesc')"
     default-icon="i-carbon-timer"

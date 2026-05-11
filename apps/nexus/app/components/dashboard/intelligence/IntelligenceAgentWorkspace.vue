@@ -1339,8 +1339,9 @@ onBeforeUnmount(() => {
               class="ti-lab__chat-item"
             >
               <template v-if="item.role === 'system'">
-                <button
-                  type="button"
+                <TxButton
+                  variant="bare"
+                  native-type="button"
                   class="ti-lab__system-line-toggle"
                   @click="toggleSystemDetail(item.id)"
                 >
@@ -1362,7 +1363,7 @@ onBeforeUnmount(() => {
                     class="ti-lab__system-expand-icon"
                     :class="{ 'ti-lab__system-expand-icon--visible': isSystemDetailExpanded(item.id) }"
                   >{{ isSystemDetailExpanded(item.id) ? '▾' : '▸' }}</span>
-                </button>
+                </TxButton>
                 <div v-if="isSystemDetailExpanded(item.id)" class="ti-lab__system-detail">
                   <p class="ti-lab__system-detail-summary">
                     {{ resolveConversationText(item) }}
@@ -1608,9 +1609,10 @@ onBeforeUnmount(() => {
                       :key="item.seq"
                       class="ti-lab__trace-node"
                     >
-                      <button
+                      <TxButton
                         class="ti-lab__trace-node-button"
-                        type="button"
+                        variant="bare"
+                        native-type="button"
                         @click="selectTraceEvent(item)"
                       >
                         <TxTimelineItem
@@ -1623,7 +1625,7 @@ onBeforeUnmount(() => {
                             {{ item.message || '-' }}
                           </div>
                         </TxTimelineItem>
-                      </button>
+                      </TxButton>
                     </div>
                   </TxTimeline>
                 </div>
@@ -1682,9 +1684,11 @@ onBeforeUnmount(() => {
                   :key="item.sessionId"
                   class="ti-lab__history-item rounded-xl px-3 py-3"
                 >
-                  <button
+                  <TxButton
                     class="w-full text-left"
-                    type="button"
+                    variant="bare"
+                    block
+                    native-type="button"
                     @click="() => void selectHistorySession(item)"
                   >
                     <p class="text-xs font-medium">
@@ -1696,7 +1700,7 @@ onBeforeUnmount(() => {
                     <p class="ti-lab__muted text-[11px]">
                       {{ t('dashboard.intelligenceLab.history.counts', { pending: item.pendingActions, completed: item.completedActions, failed: item.failedActions }) }}
                     </p>
-                  </button>
+                  </TxButton>
                 </li>
               </ul>
             </div>
@@ -1739,10 +1743,11 @@ onBeforeUnmount(() => {
                     <TuffInput v-model="promptForm.status" type="text" placeholder="status: active/deprecated" />
                     <TuffInput v-model="promptForm.channel" type="text" placeholder="channel: stable/latest" />
                   </div>
-                  <textarea
+                  <TuffInput
                     v-model="promptForm.template"
+                    type="textarea"
                     class="ti-lab__prompt-textarea"
-                    rows="6"
+                    :rows="6"
                     placeholder="Prompt template (supports mustache variables)"
                   />
                   <div class="flex items-center gap-2">

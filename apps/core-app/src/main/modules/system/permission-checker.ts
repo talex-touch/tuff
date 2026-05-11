@@ -21,7 +21,8 @@ export enum PermissionStatus {
   GRANTED = 'granted',
   DENIED = 'denied',
   NOT_DETERMINED = 'notDetermined',
-  UNSUPPORTED = 'unsupported'
+  UNSUPPORTED = 'unsupported',
+  UNVERIFIABLE = 'unverifiable'
 }
 
 const systemPermissionCheckEvent = defineRawEvent<string, PermissionCheckResult>(
@@ -128,10 +129,10 @@ export class PermissionChecker {
     if (process.platform === 'darwin') {
       if (Notification.isSupported()) {
         return {
-          status: PermissionStatus.NOT_DETERMINED,
+          status: PermissionStatus.UNVERIFIABLE,
           canRequest: true,
           message:
-            'Native notifications are supported, but macOS notification permission cannot be verified programmatically.'
+            'Native notifications are supported, but macOS notification permission is not readable from Electron. Please confirm it in System Settings.'
         }
       }
       return {

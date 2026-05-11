@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
+import type { DataTableColumn } from '@talex-touch/tuffex'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxDataTable, TxSkeleton, TxSpinner } from '@talex-touch/tuffex'
 import { hasWindow } from '@talex-touch/utils/env'
 
 definePageMeta({
@@ -82,6 +83,14 @@ const actionLabels: Record<string, string> = {
   'activation_code.revoke': t('dashboard.sections.audits.actions.codeRevoke', 'Activation code revoked'),
   'audit.export': t('dashboard.sections.audits.actions.auditExport', 'Audit exported'),
 }
+
+const auditColumns = computed<DataTableColumn<AdminAudit>[]>(() => [
+  { key: 'time', title: t('dashboard.sections.audits.table.time', 'Time'), width: 180 },
+  { key: 'admin', title: t('dashboard.sections.audits.table.admin', 'Admin'), width: '24%' },
+  { key: 'action', title: t('dashboard.sections.audits.table.action', 'Action'), width: 180 },
+  { key: 'target', title: t('dashboard.sections.audits.table.target', 'Target'), width: 180 },
+  { key: 'detail', title: t('dashboard.sections.audits.table.detail', 'Detail') },
+])
 
 function buildQuery() {
   const query: Record<string, string | number> = {
@@ -266,7 +275,7 @@ onMounted(() => {
           <label class="apple-section-title mb-1 block">
             {{ t('dashboard.sections.audits.filters.searchLabel', 'Search') }}
           </label>
-          <Input
+          <TuffInput
             v-model="filters.q"
             type="text"
             autocomplete="off"
@@ -329,53 +338,32 @@ onMounted(() => {
       </div>
 
       <div v-else class="overflow-x-auto">
-        <table class="w-full min-w-[860px]">
-          <thead class="bg-black/5 dark:bg-white/[0.04]">
-            <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.audits.table.time', 'Time') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.audits.table.admin', 'Admin') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.audits.table.action', 'Action') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.audits.table.target', 'Target') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.audits.table.detail', 'Detail') }}
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
-            <tr v-for="entry in audits" :key="entry.id" class="transition hover:bg-black/[0.04] dark:hover:bg-white/[0.04]">
-              <td class="px-4 py-3 text-sm text-black/60 dark:text-white/60">
-                {{ formatTime(entry.createdAt) }}
-              </td>
-              <td class="px-4 py-3">
-                <div class="space-y-1">
-                  <p class="font-medium text-black dark:text-white">
-                    {{ formatAdmin(entry) }}
-                  </p>
-                  <p v-if="entry.adminEmail" class="text-xs text-black/60 dark:text-white/60">
-                    {{ entry.adminEmail }}
-                  </p>
-                </div>
-              </td>
-              <td class="px-4 py-3 text-sm text-black/70 dark:text-white/70">
-                {{ actionLabels[entry.action] || entry.action }}
-              </td>
-              <td class="px-4 py-3 text-sm text-black/70 dark:text-white/70">
-                {{ formatTarget(entry) }}
-              </td>
-              <td class="px-4 py-3 text-xs text-black/50 dark:text-white/50">
-                {{ formatDetail(entry) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <TxDataTable :columns="auditColumns" :data="audits" row-key="id" class="min-w-[860px]">
+          <template #cell-time="{ row: entry }">
+            <span class="text-sm text-black/60 dark:text-white/60">{{ formatTime(entry.createdAt) }}</span>
+          </template>
+          <template #cell-admin="{ row: entry }">
+            <div class="space-y-1">
+              <p class="font-medium text-black dark:text-white">
+                {{ formatAdmin(entry) }}
+              </p>
+              <p v-if="entry.adminEmail" class="text-xs text-black/60 dark:text-white/60">
+                {{ entry.adminEmail }}
+              </p>
+            </div>
+          </template>
+          <template #cell-action="{ row: entry }">
+            <span class="text-sm text-black/70 dark:text-white/70">
+              {{ actionLabels[entry.action] || entry.action }}
+            </span>
+          </template>
+          <template #cell-target="{ row: entry }">
+            <span class="text-sm text-black/70 dark:text-white/70">{{ formatTarget(entry) }}</span>
+          </template>
+          <template #cell-detail="{ row: entry }">
+            <span class="text-xs text-black/50 dark:text-white/50">{{ formatDetail(entry) }}</span>
+          </template>
+        </TxDataTable>
       </div>
 
       <div class="flex items-center justify-end gap-2 border-t border-black/[0.04] p-4 dark:border-white/[0.06]">

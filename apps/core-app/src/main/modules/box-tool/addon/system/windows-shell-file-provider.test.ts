@@ -65,7 +65,11 @@ describe('windows-shell-file-provider', () => {
     ['回收站', 'recycle-bin', 'shell:RecycleBinFolder'],
     ['recycle', 'recycle-bin', 'shell:RecycleBinFolder'],
     ['此电脑', 'this-pc', 'shell:MyComputerFolder'],
-    ['this pc', 'this-pc', 'shell:MyComputerFolder']
+    ['this pc', 'this-pc', 'shell:MyComputerFolder'],
+    ['hsz', 'recycle-bin', 'shell:RecycleBinFolder'],
+    ['huishouzhan', 'recycle-bin', 'shell:RecycleBinFolder'],
+    ['wdn', 'this-pc', 'shell:MyComputerFolder'],
+    ['wodediannao', 'this-pc', 'shell:MyComputerFolder']
   ])('matches %s to the expected shell entry', async (query, id, target) => {
     await withPlatform('win32', async () => {
       const result = await windowsShellFileProvider.onSearch(
@@ -86,6 +90,26 @@ describe('windows-shell-file-provider', () => {
           id,
           target
         }
+      })
+    })
+  })
+
+  it('adds title highlight ranges for direct and pinyin matches', async () => {
+    await withPlatform('win32', async () => {
+      const direct = await windowsShellFileProvider.onSearch(
+        { text: '回收', inputs: [] },
+        new AbortController().signal
+      )
+      const pinyin = await windowsShellFileProvider.onSearch(
+        { text: 'hsz', inputs: [] },
+        new AbortController().signal
+      )
+
+      expect(direct.items[0].meta?.extension).toMatchObject({
+        matchResult: [{ start: 0, end: 2 }]
+      })
+      expect(pinyin.items[0].meta?.extension).toMatchObject({
+        matchResult: [{ start: 0, end: 3 }]
       })
     })
   })

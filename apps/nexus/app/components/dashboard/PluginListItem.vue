@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DashboardPlugin as Plugin, DashboardPluginVersion as PluginVersion } from '~/types/dashboard-plugin'
 import { TxPluginMetaHeader } from '@talex-touch/tuff-business'
-import StatusBadge from '~/components/ui/StatusBadge.vue'
+import { TxStatusBadge } from '@talex-touch/tuffex'
 
 interface Props {
   plugin: Plugin
@@ -69,7 +69,7 @@ function resolveArtifactTypeLabel(type: Plugin['artifactType']) {
 
     <!-- Status -->
     <div class="hidden shrink-0 sm:block">
-      <StatusBadge
+      <TxStatusBadge
         :text="t(`dashboard.sections.plugins.statuses.${plugin.status}`)"
         :status="statusTone(plugin.status)"
         size="sm"
@@ -79,7 +79,7 @@ function resolveArtifactTypeLabel(type: Plugin['artifactType']) {
     <!-- Version -->
     <div class="hidden shrink-0 md:block">
       <template v-if="plugin.latestVersion">
-        <StatusBadge
+        <TxStatusBadge
           :text="`v${plugin.latestVersion.version}`"
           :status="channelTone(plugin.latestVersion.channel)"
           size="sm"

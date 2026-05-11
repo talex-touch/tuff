@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 
 type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'muted'
-type StatusKey = 'granted' | 'denied' | 'notDetermined' | 'unsupported' | string
+type StatusKey = 'granted' | 'denied' | 'notDetermined' | 'unsupported' | 'unverifiable' | string
 
 const props = withDefaults(
   defineProps<{
@@ -37,6 +37,8 @@ const resolvedTone = computed<StatusTone>(() => {
       return 'danger'
     case 'notDetermined':
       return 'warning'
+    case 'unverifiable':
+      return 'info'
     case 'unsupported':
       return 'muted'
     default:

@@ -13,7 +13,33 @@ describe('clipboard-action-diagnostics', () => {
 
     expect(normalizeClipboardActionError(error)).toEqual({
       code: 'MACOS_AUTOMATION_PERMISSION_DENIED',
-      message: '需要在“系统设置 -> 隐私与安全性 -> 自动化/辅助功能”允许 Tuff 控制 System Events。',
+      message:
+        '自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 自动化”中允许 Tuff 控制 System Events。',
+      originalError: error
+    })
+  })
+
+  it('preserves raw command errors unless an auto-paste fallback is provided', () => {
+    const error = new Error('Command failed: osascript')
+
+    expect(normalizeClipboardActionError(error)).toEqual({
+      code: 'AUTO_PASTE_FAILED',
+      message: 'Command failed: osascript',
+      originalError: error
+    })
+  })
+
+  it('uses a safe generic auto-paste message when provided by the caller', () => {
+    const error = new Error('Command failed: osascript')
+
+    expect(
+      normalizeClipboardActionError(
+        error,
+        '已写入剪贴板，但自动粘贴失败。请确认目标应用仍在前台，或手动按 Cmd/Ctrl+V。'
+      )
+    ).toEqual({
+      code: 'AUTO_PASTE_FAILED',
+      message: '已写入剪贴板，但自动粘贴失败。请确认目标应用仍在前台，或手动按 Cmd/Ctrl+V。',
       originalError: error
     })
   })

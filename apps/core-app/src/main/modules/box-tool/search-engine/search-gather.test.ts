@@ -1,12 +1,16 @@
 import type { ISearchProvider, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
 import type { ProviderContext } from './types'
 import { TuffSearchResultBuilder } from '@talex-touch/utils'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createGatherAggregator } from './search-gather'
+
+const analyticsModuleMock = vi.hoisted(() => ({
+  recordSearchMetrics: vi.fn()
+}))
 
 vi.mock('../../analytics', () => ({
   analyticsModule: {
-    recordSearchMetrics: vi.fn()
+    recordSearchMetrics: analyticsModuleMock.recordSearchMetrics
   }
 }))
 
@@ -45,6 +49,10 @@ function buildResult(query: TuffQuery, id: string): TuffSearchResult {
 }
 
 describe('search gather fast layer timeout', () => {
+  beforeEach(() => {
+    analyticsModuleMock.recordSearchMetrics.mockClear()
+  })
+
   it('should emit late fast results and keep final total count correct', async () => {
     const query: TuffQuery = { text: 'report', inputs: [] }
     const updates: Array<{ newResults: TuffSearchResult[]; totalCount: number; isDone: boolean }> =
@@ -88,5 +96,42 @@ describe('search gather fast layer timeout', () => {
     expect(updates[2].newResults.length).toBe(0)
     expect(updates[2].isDone).toBe(true)
     expect(updates[2].totalCount).toBe(1)
+  })
+
+  it('records provider timing metrics for analytics after search completes', async () => {
+    const query: TuffQuery = { text: 'provider metrics', inputs: [] }
+
+    const okProvider: ISearchProvider<ProviderContext> = {
+      id: 'provider-ok',
+      name: 'Provider OK',
+      type: 'application',
+      priority: 'fast',
+      onSearch: async (inputQuery) => buildResult(inputQuery, 'ok-app')
+    }
+    const failingProvider: ISearchProvider<ProviderContext> = {
+      id: 'provider-fail',
+      name: 'Provider Fail',
+      type: 'file',
+      priority: 'fast',
+      onSearch: async () => {
+        throw new Error('provider failed')
+      }
+    }
+
+    const gather = createGatherAggregator({
+      fastLayerTimeoutMs: 80,
+      deferredLayerDelayMs: 0,
+      fastLayerConcurrency: 2,
+      deferredLayerConcurrency: 1,
+      taskTimeoutMs: 500
+    })
+
+    const controller = gather([okProvider, failingProvider], query, () => {})
+    await controller.promise
+
+    expect(analyticsModuleMock.recordSearchMetrics).toHaveBeenCalledTimes(1)
+    const [, providerTimings] = analyticsModuleMock.recordSearchMetrics.mock.calls[0]
+    expect(providerTimings['provider-ok']).toEqual(expect.any(Number))
+    expect(providerTimings['provider-fail']).toEqual(expect.any(Number))
   })
 })

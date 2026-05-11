@@ -13,6 +13,7 @@ function createItem(input: {
   matchResult?: Array<{ start: number; end: number }>
   matchSource?: string
   usageStats?: UsageStats
+  recency?: number
 }): TuffItem {
   return {
     id: input.id,
@@ -35,7 +36,13 @@ function createItem(input: {
         source: input.matchSource
       },
       usageStats: input.usageStats
-    }
+    },
+    scoring:
+      input.recency === undefined
+        ? undefined
+        : {
+            recency: input.recency
+          }
   }
 }
 
@@ -74,7 +81,7 @@ describe('tuff-sorter ranking strategy', () => {
     const featureItem = createItem({
       id: 'feature-clipboard-history',
       kind: 'feature',
-      title: '剪贴板历史记录',
+      title: 'Clipboard History',
       sourceId: 'plugin-features',
       searchTokens: ['clipboard-history'],
       usageStats: {
@@ -125,6 +132,119 @@ describe('tuff-sorter ranking strategy', () => {
       signal
     )
     expect(sorted[0]?.id).toBe('app-clipboard')
+  })
+
+  it('app 标题前缀命中应优先于 plugin feature 的隐藏 token 命中', () => {
+    const appItem = createItem({
+      id: 'app-claude',
+      kind: 'app',
+      title: 'Claude',
+      sourceId: 'app-provider'
+    })
+
+    const featureItem = createItem({
+      id: 'feature-claude-chat',
+      kind: 'feature',
+      title: 'AI Chat',
+      sourceId: 'plugin-features',
+      searchTokens: ['claude', 'claude-chat', 'chat'],
+      matchResult: [{ start: 0, end: 'AI Chat'.length }],
+      matchSource: 'token',
+      usageStats: {
+        executeCount: 20,
+        searchCount: 12,
+        cancelCount: 0,
+        lastExecuted: new Date().toISOString(),
+        lastSearched: new Date().toISOString(),
+        lastCancelled: null
+      }
+    })
+
+    const sorted = tuffSorter.sort([featureItem, appItem], { text: 'clau' } as TuffQuery, signal)
+    expect(sorted[0]?.id).toBe('app-claude')
+  })
+
+  it('app 标题子串命中也应优先于 plugin feature 的隐藏 token 命中', () => {
+    const appItem = createItem({
+      id: 'app-visual-studio-code',
+      kind: 'app',
+      title: 'Visual Studio Code',
+      sourceId: 'app-provider'
+    })
+
+    const featureItem = createItem({
+      id: 'feature-code-helper',
+      kind: 'feature',
+      title: 'Developer Assistant',
+      sourceId: 'plugin-features',
+      searchTokens: ['code', 'code-helper'],
+      matchResult: [{ start: 0, end: 'Developer Assistant'.length }],
+      matchSource: 'token',
+      usageStats: {
+        executeCount: 120,
+        searchCount: 40,
+        cancelCount: 0,
+        lastExecuted: new Date().toISOString(),
+        lastSearched: new Date().toISOString(),
+        lastCancelled: null
+      }
+    })
+
+    const sorted = tuffSorter.sort([featureItem, appItem], { text: 'code' } as TuffQuery, signal)
+    expect(sorted[0]?.id).toBe('app-visual-studio-code')
+  })
+
+  it('极高频 plugin feature 隐藏 token 召回不应压过 app 标题命中', () => {
+    const appItem = createItem({
+      id: 'app-linear',
+      kind: 'app',
+      title: 'Linear',
+      sourceId: 'app-provider'
+    })
+
+    const featureItem = createItem({
+      id: 'feature-linear-helper',
+      kind: 'feature',
+      title: 'Issue Assistant',
+      sourceId: 'plugin-features',
+      searchTokens: ['linear', 'linear-helper'],
+      matchResult: [{ start: 0, end: 'Issue Assistant'.length }],
+      matchSource: 'token',
+      usageStats: {
+        executeCount: 10000,
+        searchCount: 5000,
+        cancelCount: 0,
+        lastExecuted: new Date().toISOString(),
+        lastSearched: new Date().toISOString(),
+        lastCancelled: null
+      }
+    })
+
+    const sorted = tuffSorter.sort([featureItem, appItem], { text: 'linear' } as TuffQuery, signal)
+    expect(sorted[0]?.id).toBe('app-linear')
+  })
+
+  it('极高 recency 的 plugin feature 隐藏 token 召回不应压过 app 标题命中', () => {
+    const appItem = createItem({
+      id: 'app-raycast',
+      kind: 'app',
+      title: 'Raycast',
+      sourceId: 'app-provider'
+    })
+
+    const featureItem = createItem({
+      id: 'feature-raycast-helper',
+      kind: 'feature',
+      title: 'Launcher Assistant',
+      sourceId: 'plugin-features',
+      searchTokens: ['raycast', 'raycast-helper'],
+      matchResult: [{ start: 0, end: 'Launcher Assistant'.length }],
+      matchSource: 'token',
+      recency: 10000
+    })
+
+    const sorted = tuffSorter.sort([featureItem, appItem], { text: 'raycast' } as TuffQuery, signal)
+    expect(sorted[0]?.id).toBe('app-raycast')
   })
 
   it('别名/tag 伪高亮不应压过真实标题命中', () => {

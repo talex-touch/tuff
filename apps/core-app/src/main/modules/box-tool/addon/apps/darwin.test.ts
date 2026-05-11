@@ -7,14 +7,6 @@ const { execFileSafeMock } = vi.hoisted(() => ({
   execFileSafeMock: vi.fn()
 }))
 
-vi.mock('@talex-touch/utils', () => ({
-  createRetrier: vi.fn(() => {
-    return <TArgs extends unknown[], TResult>(task: (...args: TArgs) => Promise<TResult>) => {
-      return async (...args: TArgs) => await task(...args)
-    }
-  })
-}))
-
 vi.mock('@talex-touch/utils/common/utils/safe-shell', () => ({
   execFileSafe: execFileSafeMock
 }))
@@ -81,19 +73,10 @@ describe('darwin app info', () => {
     )
   })
 
-  it('prefers Spotlight displayName during fresh app info scan and uses safe mdls args', async () => {
+  it('does not call mdls during fresh app info scan', async () => {
     const tempRoot = await createTempAppBundle('WeChat', 'WeChat')
     tempRoots.push(tempRoot)
     const appPath = path.join(tempRoot, 'WeChat.app')
-
-    execFileSafeMock.mockImplementation(async (command: string, args: string[]) => {
-      if (command === 'mdls') {
-        expect(args).toEqual(['-name', 'kMDItemDisplayName', '-raw', appPath])
-        return { stdout: '微信.app\n', stderr: '' }
-      }
-
-      throw new Error(`unexpected command: ${command}`)
-    })
 
     const { getAppInfo } = await loadSubject()
     const appInfo = await getAppInfo(appPath)
@@ -101,34 +84,21 @@ describe('darwin app info', () => {
     expect(appInfo).toEqual(
       expect.objectContaining({
         name: 'WeChat',
-        displayName: '微信',
+        displayName: 'WeChat',
         bundleId: 'com.example.wechat',
         path: appPath
       })
     )
-    expect(execFileSafeMock).toHaveBeenCalledWith('mdls', [
-      '-name',
-      'kMDItemDisplayName',
-      '-raw',
-      appPath
-    ])
+    expect(execFileSafeMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to localized strings when Spotlight display name is unavailable', async () => {
+  it('prefers localized strings without calling mdls during fresh scan', async () => {
     const tempRoot = await createTempAppBundle('WeChat', 'WeChat', {
       localizedDisplayName: '微信'
     })
     tempRoots.push(tempRoot)
     const appPath = path.join(tempRoot, 'WeChat.app')
 
-    execFileSafeMock.mockImplementation(async (command: string) => {
-      if (command === 'mdls') {
-        return { stdout: '(null)\n', stderr: '' }
-      }
-
-      throw new Error(`unexpected command: ${command}`)
-    })
-
     const { getAppInfo } = await loadSubject()
     const appInfo = await getAppInfo(appPath)
 
@@ -140,22 +110,15 @@ describe('darwin app info', () => {
         path: appPath
       })
     )
+    expect(execFileSafeMock).not.toHaveBeenCalled()
   })
 
-  it('keeps localized display name as an alternate name when Spotlight wins', async () => {
+  it('keeps plist and file names as alternate names when localized name wins', async () => {
     const tempRoot = await createTempAppBundle('NeteaseMusic 2', 'NeteaseMusic', {
       localizedDisplayName: '网易云音乐'
     })
     tempRoots.push(tempRoot)
     const appPath = path.join(tempRoot, 'NeteaseMusic 2.app')
-
-    execFileSafeMock.mockImplementation(async (command: string) => {
-      if (command === 'mdls') {
-        return { stdout: 'NeteaseMusic 2.app\n', stderr: '' }
-      }
-
-      throw new Error(`unexpected command: ${command}`)
-    })
 
     const { getAppInfo } = await loadSubject()
     const appInfo = await getAppInfo(appPath)
@@ -163,9 +126,10 @@ describe('darwin app info', () => {
     expect(appInfo).toEqual(
       expect.objectContaining({
         name: 'NeteaseMusic 2',
-        displayName: 'NeteaseMusic 2',
-        alternateNames: expect.arrayContaining(['网易云音乐'])
+        displayName: '网易云音乐',
+        alternateNames: expect.arrayContaining(['NeteaseMusic', 'NeteaseMusic 2'])
       })
     )
+    expect(execFileSafeMock).not.toHaveBeenCalled()
   })
 })

@@ -100,15 +100,18 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
         basic: {
           title: config.title,
           subtitle: `Open DivisionBox · ${defaultAccelerator}`,
-          icon: config.icon
-            ? {
-                type: 'class',
-                value: config.icon
-              }
-            : {
-                type: 'emoji',
-                value: '📦'
-              }
+          icon:
+            config.icon && typeof config.icon === 'object'
+              ? config.icon
+              : config.icon
+                ? {
+                    type: 'class',
+                    value: config.icon
+                  }
+                : {
+                    type: 'emoji',
+                    value: '📦'
+                  }
         }
       },
       actions: [

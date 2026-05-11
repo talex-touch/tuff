@@ -194,6 +194,7 @@ type StageSample = {
   providersMs: number
   mergeRankMs: number
   providersMatched: number
+  providerIds: string[]
 }
 
 const MOCK_PROVIDERS = [
@@ -328,7 +329,8 @@ async function measureScenario(scenario: StageSample['scenario']): Promise<Stage
     parseMs: Number(parseResult.durationMs.toFixed(3)),
     providersMs: Number(providerResult.durationMs.toFixed(3)),
     mergeRankMs: Number(mergeResult.mergeRankDuration.toFixed(3)),
-    providersMatched: providerResult.providers.length
+    providersMatched: providerResult.providers.length,
+    providerIds: providerResult.providers.map((provider) => provider.id)
   }
 }
 
@@ -344,10 +346,15 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
     const provider = samples.find((item) => item.scenario === 'provider-filter')
     const clipboard = samples.find((item) => item.scenario === 'clipboard-input')
 
-    expect(plain?.providersMatched).toBe(MOCK_PROVIDERS.length)
+    expect(plain?.providerIds).toEqual([
+      'app-provider',
+      'file-provider',
+      'windows-shell-file-provider',
+      'plugin-features'
+    ])
     expect(provider?.providersMatched).toBeGreaterThan(0)
     expect(provider?.providersMatched).toBeLessThan(MOCK_PROVIDERS.length)
-    expect(clipboard?.providersMatched).toBe(3)
+    expect(clipboard?.providerIds).toEqual(['file-provider', 'plugin-features'])
 
     for (const sample of samples) {
       expect(sample.parseMs).toBeGreaterThanOrEqual(0)

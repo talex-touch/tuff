@@ -17,6 +17,8 @@ const MATCH_SCORE_MULTIPLIER = 20_000
 const FREQUENCY_SCORE_MULTIPLIER = 120_000
 const RECENCY_SCORE_MULTIPLIER = 500
 const KIND_SCORE_MULTIPLIER = 300
+const LOW_CONFIDENCE_FEATURE_FREQUENCY_CAP = 18
+const LOW_CONFIDENCE_FEATURE_RECENCY_CAP = 1
 
 function getKindBias(item: TuffItem): number {
   const kind = item.kind || 'unknown'
@@ -44,6 +46,38 @@ function getMatchSource(item: TuffItem): string | null {
   return typeof source === 'string' && source ? source : null
 }
 
+function hasSearchTokenMatch(item: TuffItem, normalizedKey: string): boolean {
+  const rawTokens = item.meta?.extension?.searchTokens
+  if (!Array.isArray(rawTokens)) return false
+
+  return rawTokens.some((token) => {
+    if (typeof token !== 'string') return false
+    const lowerToken = token.toLowerCase()
+    return (
+      lowerToken === normalizedKey ||
+      lowerToken.startsWith(normalizedKey) ||
+      lowerToken.includes(normalizedKey)
+    )
+  })
+}
+
+function isLowConfidenceFeatureRecall(item: TuffItem, searchKey?: string): boolean {
+  if (item.kind !== 'feature') return false
+
+  const normalizedKey = searchKey?.trim().toLowerCase()
+  if (!normalizedKey) return false
+
+  const titleLower = item.render.basic?.title?.toLowerCase() || ''
+  if (titleLower.includes(normalizedKey)) return false
+
+  const matchSource = getMatchSource(item)
+  if (matchSource === 'token' || matchSource === 'fuzzy-token') return true
+  if (hasSearchTokenMatch(item, normalizedKey)) return true
+
+  const sourceIdLower = item.source?.id?.toLowerCase()
+  return Boolean(sourceIdLower?.includes(normalizedKey))
+}
+
 /**
  * Calculate match score based on title and source.id matching
  * @param item - TuffItem to calculate score for
@@ -64,49 +98,16 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
   const searchTokens = Array.isArray(rawTokens)
     ? rawTokens.filter((t): t is string => typeof t === 'string' && Boolean(t))
     : []
+  const isTokenBackedMatch = matchSource === 'token' || matchSource === 'fuzzy-token'
 
-  // Perfect title match
+  // Visible title matches should beat hidden token/source matches. This keeps
+  // application searches from being displaced by plugin feature aliases.
   if (titleLower === normalizedKey) return 1000
-
-  // Token match (keywords/pinyin/initials generated at registration)
-  if (searchTokens.length > 0) {
-    for (const token of searchTokens) {
-      const lowerToken = token.toLowerCase()
-      if (!lowerToken) continue
-
-      if (lowerToken === normalizedKey) return 950
-      if (lowerToken.startsWith(normalizedKey)) return 800
-      if (lowerToken.includes(normalizedKey)) return 650
-    }
-  }
-
-  // Check source.id match for features (e.g., 'clipboard' matches 'clipboard-history')
-  // This is especially useful for English searches matching features with Chinese titles
-  if (item.kind === 'feature' && item.source?.id) {
-    const sourceIdLower = item.source.id.toLowerCase()
-
-    // Exact source.id match
-    if (sourceIdLower === normalizedKey) {
-      return 900
-    }
-
-    // Source.id contains search key (e.g., 'clipboard-history' contains 'clipboard')
-    if (sourceIdLower.includes(normalizedKey)) {
-      // Higher score if search key is at the start
-      if (sourceIdLower.startsWith(normalizedKey)) {
-        return 850
-      }
-      return 800
-    }
-  }
-
-  // Title-based matching (original logic)
-  if (titleLength === 0) return 0
 
   const matchRanges = item.meta?.extension?.matchResult as
     | { start: number; end: number }[]
     | undefined
-  if (matchRanges && matchRanges.length > 0) {
+  if (titleLength > 0 && matchRanges && matchRanges.length > 0 && !isTokenBackedMatch) {
     // Using the first match range to calculate the score
     const { start, end } = matchRanges[0]
     const matchLength = end - start
@@ -143,9 +144,38 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
     return Math.round(score)
   }
 
-  if (titleLower.includes(normalizedKey)) {
+  if (titleLength > 0 && titleLower.includes(normalizedKey)) {
     if (titleLower.startsWith(normalizedKey)) return 500
     return 300
+  }
+
+  // Token match (keywords/pinyin/initials generated at registration). Tokens
+  // are recall signals, so they stay below visible title matches.
+  if (searchTokens.length > 0) {
+    for (const token of searchTokens) {
+      const lowerToken = token.toLowerCase()
+      if (!lowerToken) continue
+
+      if (lowerToken === normalizedKey) return 260
+      if (lowerToken.startsWith(normalizedKey)) return 240
+      if (lowerToken.includes(normalizedKey)) return 180
+    }
+  }
+
+  // Check source.id match for features as a low-confidence fallback.
+  if (item.kind === 'feature' && item.source?.id) {
+    const sourceIdLower = item.source.id.toLowerCase()
+
+    if (sourceIdLower === normalizedKey) {
+      return 250
+    }
+
+    if (sourceIdLower.includes(normalizedKey)) {
+      if (sourceIdLower.startsWith(normalizedKey)) {
+        return 230
+      }
+      return 170
+    }
   }
 
   return 0
@@ -154,7 +184,7 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
 export function calculateSortScore(item: TuffItem, searchKey?: string): number {
   const matchScore = calculateMatchScore(item, searchKey)
   const kindBias = getKindBias(item)
-  const recency = item.scoring?.recency || 0
+  let recency = item.scoring?.recency || 0
 
   // 使用增强的频率计算（从 meta.usageStats 读取）
   let frequency = item.scoring?.frequency || 0
@@ -176,6 +206,11 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
       lastCancelled,
       0.1
     )
+  }
+
+  if (isLowConfidenceFeatureRecall(item, searchKey)) {
+    frequency = Math.min(frequency, LOW_CONFIDENCE_FEATURE_FREQUENCY_CAP)
+    recency = Math.min(recency, LOW_CONFIDENCE_FEATURE_RECENCY_CAP)
   }
 
   // Scoring formula:

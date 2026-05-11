@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FileUploaderFile } from '@talex-touch/tuffex'
+import type { DataTableColumn, FileUploaderFile } from '@talex-touch/tuffex'
 import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
 import PluginMetadataOverlay from '~/components/dashboard/PluginMetadataOverlay.vue'
 import type { ReviewItem } from '~/components/dashboard/ReviewModalOverlay.vue'
@@ -10,7 +10,7 @@ import { computed, ref } from 'vue'
 import AssetCreateOverlay from '~/components/assets/create/AssetCreateOverlay.vue'
 import PluginDetailDrawer from '~/components/dashboard/PluginDetailDrawer.vue'
 import ReviewOverlayDialog from '~/components/dashboard/ReviewModalOverlay.vue'
-import { TxButton, TxTooltip } from '@talex-touch/tuffex'
+import { TxButton, TxDataTable, TxStatusBadge, TxTag, TxTooltip } from '@talex-touch/tuffex'
 import VersionDrawer from '~/components/VersionDrawer.vue'
 import { useDashboardPluginsData } from '~/composables/useDashboardData'
 import { isPluginCategoryId, PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
@@ -117,16 +117,6 @@ function resolveArtifactTypeLabel(type: DashboardPlugin['artifactType']) {
   return t(`dashboard.sections.plugins.form.artifactTypes.${artifactType}`, artifactType)
 }
 
-function resolvePluginStatusClass(status: DashboardPlugin['status']) {
-  if (status === 'approved')
-    return 'bg-emerald-500/12 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300'
-  if (status === 'pending')
-    return 'bg-amber-500/12 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300'
-  if (status === 'rejected')
-    return 'bg-rose-500/12 text-rose-600 dark:bg-rose-500/20 dark:text-rose-300'
-  return 'bg-black/8 text-black/60 dark:bg-white/10 dark:text-white/60'
-}
-
 function hasPluginPendingReview(plugin: DashboardPlugin) {
   if (plugin.hasPendingReview)
     return true
@@ -139,14 +129,28 @@ function hasPluginPendingReview(plugin: DashboardPlugin) {
   return plugin.versions?.some(version => version.status === 'pending') ?? false
 }
 
-function resolveChannelClass(channel?: DashboardPluginVersion['channel']) {
+function resolvePluginStatus(status: DashboardPlugin['status']): 'success' | 'warning' | 'danger' | 'info' | 'muted' {
+  if (status === 'approved')
+    return 'success'
+  if (status === 'pending')
+    return 'warning'
+  if (status === 'rejected')
+    return 'danger'
+  return 'muted'
+}
+
+function resolveChannelStatus(channel?: DashboardPluginVersion['channel']): 'success' | 'warning' | 'danger' | 'info' | 'muted' {
   if (channel === 'RELEASE')
-    return 'bg-primary/12 text-primary'
+    return 'info'
   if (channel === 'BETA')
-    return 'bg-amber-500/12 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300'
-  if (channel === 'SNAPSHOT')
-    return 'bg-black/8 text-black/60 dark:bg-white/10 dark:text-white/60'
-  return 'bg-black/8 text-black/55 dark:bg-white/10 dark:text-white/55'
+    return 'warning'
+  return 'muted'
+}
+
+function resolvePendingReviewStatus(item: PendingReviewItem): 'success' | 'warning' | 'danger' | 'info' | 'muted' {
+  if (item.type === 'version')
+    return 'info'
+  return resolvePluginStatus(item.plugin.status)
 }
 
 const PLUGIN_IDENTIFIER_PATTERN = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/
@@ -342,10 +346,28 @@ const pluginsWithPendingReview = computed(() =>
   new Set(pendingReviewItems.value.map(item => item.plugin.id)),
 )
 
+const pendingReviewColumns = computed<DataTableColumn<PendingReviewItem>[]>(() => [
+  { key: 'asset', title: isZh.value ? '发布物' : 'Asset', width: '34%' },
+  { key: 'reviewType', title: isZh.value ? '审核类型' : 'Review Type', width: 150 },
+  { key: 'submission', title: isZh.value ? '提交信息' : 'Submission', width: 180 },
+  { key: 'updatedAt', title: isZh.value ? '更新时间' : 'Updated', width: 130 },
+  { key: 'actions', title: isZh.value ? '操作' : 'Actions', width: 120, align: 'right' },
+])
+
 // Computed: my plugins (owned by current user)
 const myPlugins = computed(() =>
   plugins.value.filter(p => p.userId === currentUserId.value),
 )
+
+const myPluginColumns = computed<DataTableColumn<DashboardPlugin>[]>(() => [
+  { key: 'asset', title: isZh.value ? '发布物' : 'Asset', width: '30%' },
+  { key: 'typeCategory', title: isZh.value ? '类型 / 分类' : 'Type / Category', width: 150 },
+  { key: 'status', title: isZh.value ? '状态' : 'Status', width: 130 },
+  { key: 'latestVersion', title: isZh.value ? '最新版本' : 'Latest Version', width: 140 },
+  { key: 'installs', title: isZh.value ? '安装量' : 'Installs', width: 100 },
+  { key: 'updatedAt', title: isZh.value ? '更新时间' : 'Updated', width: 130 },
+  { key: 'actions', title: isZh.value ? '操作' : 'Actions', width: 110, align: 'right' },
+])
 
 const pluginsInitialLoading = computed(() =>
   pluginsPending.value && !plugins.value.length && !pluginsLoadError.value,
@@ -367,6 +389,10 @@ function openPluginDetail(plugin: DashboardPlugin, event?: MouseEvent) {
     : null
   showDetailDrawer.value = true
   void loadPluginTimeline(plugin.id)
+}
+
+function handlePluginRowClick(payload: { row: DashboardPlugin }, event?: MouseEvent) {
+  openPluginDetail(payload.row, event)
 }
 
 function closePluginDetail() {
@@ -402,6 +428,10 @@ function openReviewModal(item: PendingReviewItem, event?: MouseEvent) {
     ? event.currentTarget
     : null
   showReviewModal.value = true
+}
+
+function handlePendingReviewRowClick(payload: { row: PendingReviewItem }, event?: MouseEvent) {
+  openReviewModal(payload.row, event)
 }
 
 function closeReviewModal() {
@@ -1048,91 +1078,68 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
         </div>
       </div>
 
-      <div v-if="pendingReviewItems.length" class="overflow-x-auto rounded-2xl border border-black/[0.04] dark:border-white/[0.06]">
-        <table class="w-full min-w-[860px]">
-          <thead class="bg-black/[0.03] dark:bg-white/[0.03]">
-            <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
-                {{ isZh ? '发布物' : 'Asset' }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
-                {{ isZh ? '审核类型' : 'Review Type' }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
-                {{ isZh ? '提交信息' : 'Submission' }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
-                {{ isZh ? '更新时间' : 'Updated' }}
-              </th>
-              <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
-                {{ isZh ? '操作' : 'Actions' }}
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
-            <tr
-              v-for="item in pendingReviewItems"
-              :key="resolvePendingReviewKey(item)"
-              class="cursor-pointer transition hover:bg-black/[0.025] dark:hover:bg-white/[0.03]"
-              @click="openReviewModal(item, $event)"
+      <div v-if="pendingReviewItems.length" class="overflow-x-auto">
+        <TxDataTable
+          :columns="pendingReviewColumns"
+          :data="pendingReviewItems"
+          :row-key="resolvePendingReviewKey"
+          class="min-w-[860px]"
+          @row-click="handlePendingReviewRowClick"
+        >
+          <template #cell-asset="{ row: item }">
+            <TxPluginMetaHeader
+              class="DashboardAssetMetaHeader"
+              :title="item.plugin.name"
+              :description="item.plugin.summary || item.plugin.slug"
+              :icon-url="item.plugin.iconUrl"
+              :icon-alt="item.plugin.name"
+              :official="false"
             >
-              <td class="px-4 py-3">
-                <TxPluginMetaHeader
-                  class="DashboardAssetMetaHeader"
-                  :title="item.plugin.name"
-                  :description="item.plugin.summary || item.plugin.slug"
-                  :icon-url="item.plugin.iconUrl"
-                  :icon-alt="item.plugin.name"
-                  :official="false"
-                >
-                  <template #title-extra>
-                    <span
-                      v-if="item.plugin.isOfficial"
-                      class="DashboardAssetMetaHeader-OfficialMark i-carbon-certificate shrink-0 text-sm"
-                      :title="t('dashboard.sections.plugins.officialBadge')"
-                    />
-                  </template>
-                </TxPluginMetaHeader>
-              </td>
-              <td class="px-4 py-3 text-sm text-black/65 dark:text-white/65">
-                <p>{{ resolvePendingReviewType(item) }}</p>
-                <p class="mt-0.5 text-xs text-black/45 dark:text-white/45">
-                  {{ resolvePluginCategory(item.plugin.category) }}
-                </p>
-              </td>
-              <td class="px-4 py-3 text-sm text-black/65 dark:text-white/65">
-                <template v-if="item.type === 'version' && item.version">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium" :class="resolveChannelClass(item.version.channel)">
-                      {{ `v${item.version.version}` }}
-                    </span>
-                    <span class="inline-flex rounded-full bg-black/8 px-2 py-1 text-xs font-medium text-black/60 dark:bg-white/10 dark:text-white/60">
-                      {{ item.version.channel }}
-                    </span>
-                  </div>
-                </template>
-                <template v-else>
-                  <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium" :class="resolvePluginStatusClass(item.plugin.status)">
-                    {{ t(`dashboard.sections.plugins.statuses.${item.plugin.status}`) }}
-                  </span>
-                </template>
-              </td>
-              <td class="px-4 py-3 text-sm text-black/55 dark:text-white/55">
-                {{ formatDate(resolvePendingReviewUpdatedAt(item)) }}
-              </td>
-              <td class="px-4 py-3 text-right">
-                <TxButton
-                  variant="secondary"
-                  size="mini"
-                  native-type="button"
-                  @click.stop="openReviewModal(item, $event)"
-                >
-                  {{ t('dashboard.sections.plugins.viewDetails') }}
-                </TxButton>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              <template #title-extra>
+                <span
+                  v-if="item.plugin.isOfficial"
+                  class="DashboardAssetMetaHeader-OfficialMark i-carbon-certificate shrink-0 text-sm"
+                  :title="t('dashboard.sections.plugins.officialBadge')"
+                />
+              </template>
+            </TxPluginMetaHeader>
+          </template>
+          <template #cell-reviewType="{ row: item }">
+            <div class="text-sm text-black/65 dark:text-white/65">
+              <p>{{ resolvePendingReviewType(item) }}</p>
+              <p class="mt-0.5 text-xs text-black/45 dark:text-white/45">
+                {{ resolvePluginCategory(item.plugin.category) }}
+              </p>
+            </div>
+          </template>
+          <template #cell-submission="{ row: item }">
+            <div v-if="item.type === 'version' && item.version" class="flex flex-wrap items-center gap-2">
+              <TxTag :text="`v${item.version.version}`" :type="resolveChannelStatus(item.version.channel)" size="sm" />
+              <TxTag :text="item.version.channel" type="muted" size="sm" />
+            </div>
+            <TxStatusBadge
+              v-else
+              :text="t(`dashboard.sections.plugins.statuses.${item.plugin.status}`)"
+              :status="resolvePendingReviewStatus(item)"
+              size="sm"
+            />
+          </template>
+          <template #cell-updatedAt="{ row: item }">
+            <span class="text-sm text-black/55 dark:text-white/55">
+              {{ formatDate(resolvePendingReviewUpdatedAt(item)) }}
+            </span>
+          </template>
+          <template #cell-actions="{ row: item }">
+            <TxButton
+              variant="secondary"
+              size="mini"
+              native-type="button"
+              @click.stop="openReviewModal(item, $event)"
+            >
+              {{ t('dashboard.sections.plugins.viewDetails') }}
+            </TxButton>
+          </template>
+        </TxDataTable>
       </div>
       <div v-else class="py-6 text-center text-sm text-black/45 dark:text-white/45">
         {{ t('dashboard.sections.reviews.empty', 'No pending reviews yet.') }}
@@ -1233,119 +1240,91 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
           <TxSpinner :size="14" />
           {{ t('common.refresh', '刷新') }}...
         </div>
-        <div class="overflow-x-auto rounded-2xl border border-black/[0.04] dark:border-white/[0.06]">
-          <table class="w-full min-w-[980px]">
-            <thead class="bg-black/[0.03] dark:bg-white/[0.03]">
-              <tr>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
-                  {{ isZh ? '发布物' : 'Asset' }}
-                </th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
-                  {{ isZh ? '类型 / 分类' : 'Type / Category' }}
-                </th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
-                  {{ isZh ? '状态' : 'Status' }}
-                </th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
-                  {{ isZh ? '最新版本' : 'Latest Version' }}
-                </th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
-                  {{ isZh ? '安装量' : 'Installs' }}
-                </th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
-                  {{ isZh ? '更新时间' : 'Updated' }}
-                </th>
-                <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
-                  {{ isZh ? '操作' : 'Actions' }}
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
-              <tr
-                v-for="plugin in myPlugins"
-                :key="plugin.id"
-                class="cursor-pointer transition hover:bg-black/[0.025] dark:hover:bg-white/[0.03]"
-                @click="openPluginDetail(plugin, $event)"
+        <div class="overflow-x-auto">
+          <TxDataTable
+            :columns="myPluginColumns"
+            :data="myPlugins"
+            row-key="id"
+            class="min-w-[980px]"
+            @row-click="handlePluginRowClick"
+          >
+            <template #cell-asset="{ row: plugin }">
+              <TxPluginMetaHeader
+                class="DashboardAssetMetaHeader"
+                :title="plugin.name"
+                :description="plugin.summary || plugin.slug"
+                :icon-url="plugin.iconUrl"
+                :icon-alt="plugin.name"
+                :official="false"
               >
-                <td class="px-4 py-3">
-                  <TxPluginMetaHeader
-                    class="DashboardAssetMetaHeader"
-                    :title="plugin.name"
-                    :description="plugin.summary || plugin.slug"
-                    :icon-url="plugin.iconUrl"
-                    :icon-alt="plugin.name"
-                    :official="false"
-                  >
-                    <template #title-extra>
-                      <span
-                        v-if="plugin.isOfficial"
-                        class="DashboardAssetMetaHeader-OfficialMark i-carbon-certificate shrink-0 text-sm"
-                        :title="t('dashboard.sections.plugins.officialBadge')"
-                      />
-                    </template>
-                  </TxPluginMetaHeader>
-                </td>
-                <td class="px-4 py-3 text-sm text-black/65 dark:text-white/65">
-                  <p>{{ resolveArtifactTypeLabel(plugin.artifactType) }}</p>
-                  <p class="mt-0.5 text-xs text-black/45 dark:text-white/45">
-                    {{ resolvePluginCategory(plugin.category) }}
-                  </p>
-                </td>
-                <td class="px-4 py-3">
-                  <TxTooltip
-                    :content="t('dashboard.sections.plugins.reviewingHint')"
-                    :disabled="!hasPluginPendingReview(plugin)"
-                    :open-delay="0"
-                    :close-delay="0"
-                    :anchor="{ placement: 'top', showArrow: true }"
-                  >
-                    <span
-                      class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
-                      :class="resolvePluginStatusClass(plugin.status)"
-                      :title="hasPluginPendingReview(plugin) ? t('dashboard.sections.plugins.reviewingHint') : undefined"
-                    >
-                      {{ t(`dashboard.sections.plugins.statuses.${plugin.status}`) }}
-                    </span>
-                  </TxTooltip>
-                </td>
-                <td class="px-4 py-3 text-sm text-black/65 dark:text-white/65">
-                  <TxTooltip
-                    v-if="plugin.latestVersion"
-                    :content="t('dashboard.sections.plugins.reviewingHint')"
-                    :disabled="!hasPluginPendingReview(plugin)"
-                    :open-delay="0"
-                    :close-delay="0"
-                    :anchor="{ placement: 'top', showArrow: true }"
-                  >
-                    <span
-                      class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
-                      :class="resolveChannelClass(plugin.latestVersion.channel)"
-                      :title="hasPluginPendingReview(plugin) ? t('dashboard.sections.plugins.reviewingHint') : undefined"
-                    >
-                      {{ `v${plugin.latestVersion.version}` }}
-                    </span>
-                  </TxTooltip>
-                  <span v-else class="text-xs text-black/35 dark:text-white/35">—</span>
-                </td>
-                <td class="px-4 py-3 text-sm text-black/65 dark:text-white/65">
-                  {{ formatInstalls(plugin.installs) }}
-                </td>
-                <td class="px-4 py-3 text-sm text-black/55 dark:text-white/55">
-                  {{ formatDate(plugin.updatedAt) }}
-                </td>
-                <td class="px-4 py-3 text-right">
-                  <TxButton
-                    variant="secondary"
-                    size="mini"
-                    native-type="button"
-                    @click.stop="openPluginDetail(plugin, $event)"
-                  >
-                    {{ isZh ? '详情' : 'Details' }}
-                  </TxButton>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                <template #title-extra>
+                  <span
+                    v-if="plugin.isOfficial"
+                    class="DashboardAssetMetaHeader-OfficialMark i-carbon-certificate shrink-0 text-sm"
+                    :title="t('dashboard.sections.plugins.officialBadge')"
+                  />
+                </template>
+              </TxPluginMetaHeader>
+            </template>
+            <template #cell-typeCategory="{ row: plugin }">
+              <div class="text-sm text-black/65 dark:text-white/65">
+                <p>{{ resolveArtifactTypeLabel(plugin.artifactType) }}</p>
+                <p class="mt-0.5 text-xs text-black/45 dark:text-white/45">
+                  {{ resolvePluginCategory(plugin.category) }}
+                </p>
+              </div>
+            </template>
+            <template #cell-status="{ row: plugin }">
+              <TxTooltip
+                :content="t('dashboard.sections.plugins.reviewingHint')"
+                :disabled="!hasPluginPendingReview(plugin)"
+                :open-delay="0"
+                :close-delay="0"
+                :anchor="{ placement: 'top', showArrow: true }"
+              >
+                <TxStatusBadge
+                  :text="t(`dashboard.sections.plugins.statuses.${plugin.status}`)"
+                  :status="resolvePluginStatus(plugin.status)"
+                  :title="hasPluginPendingReview(plugin) ? t('dashboard.sections.plugins.reviewingHint') : undefined"
+                  size="sm"
+                />
+              </TxTooltip>
+            </template>
+            <template #cell-latestVersion="{ row: plugin }">
+              <TxTooltip
+                v-if="plugin.latestVersion"
+                :content="t('dashboard.sections.plugins.reviewingHint')"
+                :disabled="!hasPluginPendingReview(plugin)"
+                :open-delay="0"
+                :close-delay="0"
+                :anchor="{ placement: 'top', showArrow: true }"
+              >
+                <TxTag
+                  :text="`v${plugin.latestVersion.version}`"
+                  :type="resolveChannelStatus(plugin.latestVersion.channel)"
+                  :title="hasPluginPendingReview(plugin) ? t('dashboard.sections.plugins.reviewingHint') : undefined"
+                  size="sm"
+                />
+              </TxTooltip>
+              <span v-else class="text-xs text-black/35 dark:text-white/35">—</span>
+            </template>
+            <template #cell-installs="{ row: plugin }">
+              <span class="text-sm text-black/65 dark:text-white/65">{{ formatInstalls(plugin.installs) }}</span>
+            </template>
+            <template #cell-updatedAt="{ row: plugin }">
+              <span class="text-sm text-black/55 dark:text-white/55">{{ formatDate(plugin.updatedAt) }}</span>
+            </template>
+            <template #cell-actions="{ row: plugin }">
+              <TxButton
+                variant="secondary"
+                size="mini"
+                native-type="button"
+                @click.stop="openPluginDetail(plugin, $event)"
+              >
+                {{ isZh ? '详情' : 'Details' }}
+              </TxButton>
+            </template>
+          </TxDataTable>
         </div>
       </div>
     </div>

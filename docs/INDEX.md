@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-05-08
+> 更新时间：2026-05-10
 > 本页仅保留入口与高价值快照；历史细节以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主要入口
@@ -14,6 +14,9 @@
 - `docs/plan-prd/02-architecture/UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md` - Legacy/兼容/结构治理统一实施 PRD（单一蓝图）
 - `docs/plan-prd/02-architecture/pilot-single-stream-runtime.md` - Pilot / DeepAgent 单流运行时权威说明（含完整流程图、seq 合同、审计结论）
 - `docs/plan-prd/02-architecture/intelligence-power-generic-api-prd.md` - Intelligence 能力路由与 Provider 抽象入口
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` - Nexus Provider 聚合与 Scene 编排重构 PRD
+- `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md` - Tuff 2.5.0 AI 桌面入口收口 Plan PRD
+- `docs/plan-prd/report/cross-platform-compat-placeholder-audit-2026-05-10.md` - 跨平台兼容与占位/假实现审计报告
 - `docs/plan-prd/01-project/CHANGES.md` - 全历史变更记录（唯一历史源）
 
 ## 文档盘点快照（2026-03-19）
@@ -23,9 +26,9 @@
 - `plan-prd` 子域：`03-features 32`、`docs 20`、`04-implementation 17`、`01-project 12`、`05-archive 11`、`02-architecture 8`、`06-ecosystem 4`。
 - 统计口径历史快照：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`；当前路线以六主文档与 `TODO/CHANGES` 为准。
 
-## 状态快照（2026-05-08，统一口径）
+## 状态快照（2026-05-09，统一口径）
 
-- **当前工作区基线**：`2.4.10-beta.14`（根包与 CoreApp 对齐）。
+- **当前工作区基线**：`2.4.10-beta.18`（根包与 CoreApp 对齐）。
 - **2.4.10 当前主线**：优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口；不把全部跨平台回归压进 `2.4.10`。
 - **2.4.11 必解门槛**：剩余 Windows/macOS 阻塞级人工回归、Linux best-effort 记录、Release Evidence 写入闭环、legacy/compat/size 清册退场项必须关闭或显式降权。
 - **User-managed launcher foundation（2026-04-22）**：`appIndex` typed domain 已新增 `listEntries / upsertEntry / removeEntry / setEntryEnabled`，settings SDK 与 main channel handler 全链路接通；`app-provider` 复用现有 `files + file_extensions` 支持 user-managed launcher entry，并继续走搜索与启动链路。
@@ -33,6 +36,25 @@
 - **Release Evidence API（2026-04-26）**：Nexus 新增 `/api/admin/release-evidence/*`，作为 CoreApp 回归、文档门禁与平台阻塞矩阵的 D1 证据入口；管理员登录态或 `release:evidence` API key 可写入。
 - **macOS 中文应用名召回修复（2026-04-26）**：应用扫描会保留本地化名称为 `alternateNames`，关键词同步与搜索后处理都会使用中文、全拼与首字母，避免 Spotlight 英文显示名优先时漏召回“网易云音乐”等应用。
 - **CoreApp 2.4.11 前置口径（2026-05-08）**：当前主线切换为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`；剩余跨平台回归与清册退场项统一列入 `2.4.11` 必解清单。
+- **CoreBox App 搜索排序修复（2026-05-10）**：跨 provider 排序优先可见标题命中，plugin feature 的隐藏 token/source 命中降为低置信召回信号；隐藏 token/fuzzy-token/source fallback 召回会限制 frequency/recency 行为信号上限，App 标题前缀/子串命中不再被极高频或异常 recency 的 feature token 抢占首位，同时保留可见标题命中的 feature 自学习前置能力。
+- **Tuff 2.5.0 AI Plan PRD（2026-05-10）**：新增 AI 桌面入口收口 PRD，明确 2.5.0 主线不是大规模实现或单纯 Provider/Scene 底座，而是收口 CoreBox / OmniPanel 的用户可感知 AI 入口；Stable 只承诺文本 + OCR，Workflow / Pilot 联动为 Beta，Assistant、多模态生成与 Nexus Scene runtime 编排列为 Experimental / 2.5.x 后续。
+- **复制 app path 加入应用索引回归（2026-05-10）**：SystemActionsProvider 覆盖 Files/text/file URL 中的 `.exe/.lnk/.appref-ms/.app` 路径识别，并支持复制未加引号、含空格且带参数的 Windows app 命令行、Windows UWP `shell:AppsFolder\\...` 虚拟路径或裸 `PackageFamily!App` AppID；动作执行会调用 `appProvider.addAppByPath()` 并进入应用索引链路，ClickOnce `.appref-ms` 已补 Start Menu 扫描、实时变更和单项解析回归。
+- **Windows App 诊断证据导出（2026-05-10）**：Settings App Index diagnostic 可复制/保存 `app-index-diagnostic-evidence` JSON，记录路径、关键词、FTS/N-gram/subsequence 命中、reindex 状态、shortcut launchArgs/workingDirectory、`rawDisplayName/displayNameStatus` 与失败原因；新增 `app-index:diagnostic:verify` 可离线复核 target 命中、query stage、launchKind、launchTarget、launchArgs、workingDirectory、bundle/appIdentity、clean/fallback displayName、reindex 与 reusable caseId 门禁，Windows 真机应用验收仍需使用该证据入口补样本。
+- **Windows 能力证据 CLI（2026-05-10）**：新增 `windows-capability-evidence/v1` 与 `pnpm -C "apps/core-app" run windows:capability:evidence`，可在 Windows 真机采集 PowerShell、Everything CLI、Everything 目标关键词查询、`Get-StartApps`、registry uninstall fallback、Start Menu `.lnk/.appref-ms/.exe`、`.lnk` target/arguments/workingDirectory 与目标应用命中摘要；`--installer <path>` 只输出 NSIS/MSI handoff dry-run 命令并保持 `unattendedAutoInstallEnabled: false`，`windows:capability:verify` 可把 Everything/UWP/registry/shortcut/`.appref-ms`/shortcut args/shortcut cwd/target/installer 要求升级为硬门禁，非 Windows 明确输出 `skipped`。
+- **Windows 验收 Manifest 复核（2026-05-10）**：新增 `windows-acceptance-manifest/v1`、`windows:acceptance:template` 与 `windows:acceptance:verify`，用于生成 blocked 初始清单并汇总复核 Windows required caseId、单项 evidence path/verifier command、search trace、clipboard stress 与微信/Codex/Apple Music 启动样本；模板会写入 `verification.recommendedCommand`，便于真机证据补齐后直接跑最终强门禁；CLI 可用 `--requireExistingEvidenceFiles` 校验 case 与性能证据文件真实存在，并用 `--requireEvidenceGatePassed` 要求 case evidence、search trace stats 与 clipboard stress summary JSON 的 `gate.passed=true`，同时按 caseId 校验允许的 evidence schema/kind；acceptance 复核会按 case 重新执行 Windows capability、App Index、Everything、Update、search trace 与 clipboard stress 的关键硬门禁，search trace 固定 200 样本、first.result P95 ≤ 800ms、session.end P95 ≤ 1200ms、slowRatio ≤ 0.1，clipboard stress 固定 2 分钟 500/250ms、P95 ≤ 100ms、max scheduler ≤ 300ms、realtime queue peak ≤ 2、drop=0，且 `clipboard:stress:verify` 最终命令必须携带 `--strict` 强制 `clipboard-stress-summary/v1` schema，避免子证据用弱参数或非标准 schema 跑出 `gate.passed=true` 后被 manifest 误收；`--requireEvidenceGatePassed` 的失败项会带出具体复算原因，便于定位 launchKind、bundle/appIdentity、reindex、checksum 或性能阈值缺口；`--requireCaseEvidenceSchemas` 可进一步要求每个 required case 同时具备 Windows capability evidence 与对应专项 diagnostic evidence，`--requireVerifierCommandGateFlags` 会校验 manifest 内 verifier command 本身也携带 `--input` 与 release 固定门禁参数，`--requireRecommendedCommandGateFlags` 会校验 `verification.recommendedCommand` 也携带最终强门禁参数，`--requireRecommendedCommandInputMatch` 会校验 recommended command 的 `--input` 指回当前 manifest 文件；`--requireCommonAppLaunchDetails` 会要求微信/Codex/Apple Music 等 common app 样本逐项确认可搜索、显示名正确、图标正确、可启动且启动后 CoreBox 立即隐藏，避免命令字段漂移、漏项或弱证据假通过。
+- **CoreBox 展示期 polling pressure 降载（2026-05-10）**：`PollingService` 新增 reason/TTL 型全局 pressure，可按 lane 放大轮询间隔并限制并发；CoreBox 可见期间短时降低 realtime/io/maintenance/serial 后台 polling lane 频率与并发，隐藏后清理；`PerfContext` 慢上下文告警仅在 blocking 或近期 event-loop lag 下输出，减少搜索交互窗口内的后台争用与误报。
+- **CoreBox 分时推荐加权修复（2026-05-10）**：推荐内存缓存开始校验 `timeSlot/dayOfWeek` 等 context cache key，跨早上/下午等不同上下文会重新计算推荐；同一 App 在当前时间段/星期有历史使用记录时会获得额外加权，候选去重会保留后续 time-based 统计，并已固定同一候选集在不同 `timeSlot` 下首位不同的回归。
+- **DivisionBox detached widget 恢复链路修复（2026-05-10）**：插件 feature 分离窗口的 `pluginId` 改为真实 `meta.pluginName`，避免 `plugin-features` provider id 污染 session 元数据；widget 继续通过 `tuff://detached` 与 `detachedPayload` 恢复，并把 `detachedPayload` 前移到 `DivisionBoxConfig.initialState`，避免窗口启动时先读到空 session state 再回退搜索。
+- **Windows 更新安装 handoff（2026-05-10）**：用户触发安装后，NSIS `*-setup.exe` 走 `/S`，MSI 走 `msiexec.exe /i ... /passive /norestart`，安装器启动后退出当前应用；下载完成后无人值守自动安装仍需确认权限提升和回滚策略。
+- **更新自动下载默认开启（2026-05-10）**：UpdateService / UpdateSystem / renderer runtime / shared defaults 统一为 `autoDownload: true`；Windows 当前仍为下载完成后打开安装器，静默自动安装需另行确认安装器参数、权限提升与回滚策略。
+- **Windows 更新诊断证据导出（2026-05-10）**：Settings Update 页可复制/保存 `update-diagnostic-evidence` JSON，记录更新设置、下载就绪状态、缓存版本、目标平台与安装接管模式；新增 `update:diagnostic:verify` 可离线复核 autoDownload、downloadReady、Windows installer handoff、用户确认、无人值守未开启、匹配资产与 checksum 门禁，并校验 `verdict` / suggested fields 与源状态一致；无人值守自动安装仍保持未开启。
+- **Everything 图标预热背压（2026-05-10）**：Windows Everything 搜索结果图标预热在 app task 活跃时跳过，并将后台 icon worker 预热并发限制为 4、空闲等待限制为 250ms；搜索命中与排序不变，仍缺真实 Windows 设备体验证据。
+- **Everything 诊断证据导出（2026-05-10）**：Settings Everything 页可复制/保存 `everything-diagnostic-evidence` JSON，记录 backend、health、fallbackChain、backendAttemptErrors 与错误码；新增 `everything:diagnostic:verify` 可离线复核 ready/enabled/available/backend/health/version/esPath/fallbackChain/caseId 门禁，并校验 `verdict` / suggested fields 与 `status` 一致，供 Windows 真机 Everything/文件搜索回归补证使用。
+- **周期任务 idle gate 降载（2026-05-10）**：DeviceIdleService 先判断系统 idle，再按需读取电量；not-idle 时不再触发 Windows PowerShell 电量探测，并以 30 秒短 TTL 与 in-flight 去重复用电量状态，供电状态变化时立即重读，降低后台索引/同步轮询的额外进程开销。
+- **DivisionBox 空闲轮询降载（2026-05-10）**：DivisionBoxManager 不再在单例创建时常驻注册 `division-box.memory-pressure`；仅在存在 active/cached session 时启用内存压力轮询，最后一个 session 销毁或缓存清空后注销任务，降低无 DivisionBox 窗口时的后台调度成本。
+- **FileProvider worker snapshot 降载（2026-05-10）**：TuffDashboard 读取文件索引 worker 状态时新增 1 秒短 TTL 缓存与 in-flight 去重，短时间重复或并发刷新不会向 scan/index/reconcile/icon/thumbnail/search-index worker 重复发送 metrics 请求。
+- **Search trace 性能统计口径（2026-05-10）**：新增 `search-trace-stats/v1`、`search:trace:stats` 与 `search:trace:verify` 本地脚本，可从现有 `search-trace/v1` 日志行聚合 `first.result/session.end` 的样本量、P50/P95/P99、慢查询数量、慢查询占比与 provider 慢源归因，并支持对归档 stats JSON 重新执行 200 样本/P95/slowRatio 硬门禁；真实 200 次 Windows 查询采样仍需单独产出证据。
+- **Clipboard stress 复核口径（2026-05-10）**：新增 `clipboard:stress:verify`，可对 `clipboard:stress` 生成的 summary JSON 执行 2 分钟窗口、500/250ms interval、scheduler delay P95/max、realtime queue peak、drop/timeout/error 硬门禁；真实“全量索引 + 高频推荐 + 剪贴板图像轮询”压测仍需在目标设备产出证据。
 - **Tray 运行态真实回显（2026-04-19）**：托盘初始化现在会同步主窗口真实可见性，并通过 transport snapshot 暴露 `trayReady / windowVisible`；静默启动和 macOS `hideDock + showTray` 组合不再回显错误首态。
 - **Windows Store 元数据增强（2026-04-19）**：Windows `Get-StartApps` 扫描已补齐 UWP manifest `DisplayName / Description / logo` 富化，应用搜索结果继续保留 `Windows Store` 副标题，同时可展示真实标题、描述与图标。
 - **下载中心视图模式持久化（2026-04-19）**：下载中心 `detailed / compact` 模式已统一走 `appSetting.downloadCenter.viewMode` 持久化，关闭页面与重启应用后都会按上次选择正确回显。
@@ -43,6 +65,8 @@
 - **治理执行口径**：Legacy/兼容/结构治理切换为“统一实施 PRD + 五工作包并行验收”，不再按 Phase 1-3 分段决策。
 - **CoreApp 兼容硬切（2026-03-23）**：`window.$channel` 业务调用为 `0`、legacy storage 事件协议（`storage:get/save/reload/save-sync/saveall`）为 `0`；插件权限 `sdkapi` 缺失/低版本改为阻断执行（`SDKAPI_BLOCKED`）。
 - **Nexus 设备授权风控（2026-05-06）**：Phase 1 已接入设备码申请频控、连续失败/取消冷却、授权审计日志、长期授权后端时间窗与可信设备显式白名单。
+- **Nexus Provider 聚合与 Scene 编排（2026-05-09）**：新增权威 PRD，后续汇率、AI 大模型、文本翻译、图片/截图翻译统一进入 Provider registry；Scene 通过 Capability、Strategy 与 Metering 组合能力，不再为每个场景维护孤立供应商模型。
+- **跨平台兼容与占位实现审计（2026-05-10）**：新增报告并锁定下一步：Windows/macOS 人工证据、Linux best-effort 记录、Pilot 假值/支付 mock 门控、插件 localStorage 路径迁移、retained raw event definition 指标拆分与超长模块 SRP 拆分。
 - **CoreApp 启动搜索卡顿治理（2026-03-24）**：已落地双库隔离（aux DB）、写入 QoS（priority/drop/circuit）、索引热路径 worker 单写者与启动期降载；可通过 `TUFF_DB_AUX_ENABLED/TUFF_DB_QOS_ENABLED/TUFF_STARTUP_DEGRADE_ENABLED` 灰度与回滚。
 - **治理基线（主线代码域）**：`legacy 81/184`、raw `channel.send('x:y') 13/46`、超长文件（>=1200）`47`。
 - **发布快照证据**：见 `CHANGES` 中 `v2.4.9-beta.4` 基线条目（含 commit/tag/CI run 链接）。
@@ -85,12 +109,12 @@
 
 | 文档 | 当前状态 | 下一动作 |
 | --- | --- | --- |
-| `docs/plan-prd/TODO.md` | 已同步到 2026-05-08 | 推进 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`，并维护 `2.4.11` 必解清单 |
-| `docs/plan-prd/README.md` | 已同步到 2026-05-08 | 维护 `2.4.10` 当前主线与 `2.4.11` 未闭环能力口径 |
-| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步到 2026-05-08 | 按锁定顺序推进 Windows App 索引、基础兼容治理与后续跨平台回归 |
+| `docs/plan-prd/TODO.md` | 已同步到 2026-05-09 | 推进 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`，并维护 `2.4.11` 必解清单与 Nexus Provider 后续阶段 |
+| `docs/plan-prd/README.md` | 已同步到 2026-05-09 | 维护 `2.4.10` 当前主线、`2.4.11` 未闭环能力与 Nexus Provider 架构蓝图口径 |
+| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步到 2026-05-09 | 按锁定顺序推进 Windows App 索引、基础兼容治理、后续跨平台回归与 Provider 聚合规划 |
 | `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md` | Gate A/B/C/D/E 已完成（D/E historical，2026-03-16 已复核） | 保留证据链并切换到 `2.4.9` 后续主线 |
-| `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` | 已同步到 2026-05-08 | `2.4.11` 前关闭或降权 legacy/compat/size 债务，Windows/macOS 为 release-blocking |
-| `docs/plan-prd/01-project/CHANGES.md` | 已同步到 2026-05-08 | 持续记录 `2.4.10` 主线与 `2.4.11` 必解清单证据 |
+| `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` | 已同步到 2026-05-09 | `2.4.11` 前关闭或降权 legacy/compat/size 债务，Windows/macOS 为 release-blocking；活跃 PRD 保持目标/验收/质量/回滚结构 |
+| `docs/plan-prd/01-project/CHANGES.md` | 已同步到 2026-05-09 | 持续记录 `2.4.10` 主线、`2.4.11` 必解清单与 Nexus Provider PRD 证据 |
 | `docs/INDEX.md` | 本页（入口+快照）已压缩 | 仅维护导航与高价值快照 |
 
 ## 归档与降权
@@ -101,7 +125,9 @@
 ## 高价值专题入口
 
 - `docs/plan-prd/03-features/omni-panel/OMNIPANEL-FEATURE-HUB-PRD.md` - OmniPanel Feature Hub PRD
+- `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md` - Tuff 2.5.0 AI 桌面入口收口 Plan PRD
 - `docs/plan-prd/02-architecture/intelligence-power-generic-api-prd.md` - Intelligence 能力路由与 Provider 架构 PRD
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` - Nexus Provider 聚合与 Scene 编排重构 PRD
 - `docs/plan-prd/04-implementation/LegacyChannelCleanup-2408.md` - Legacy Channel Cleanup 2.4.8
 - `docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` - Nexus 设备授权风控实施方案（非当前主线，保留入口）
 - `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md` - `v2.4.9` Gate D 发布资产核对（严格签名）

@@ -2050,7 +2050,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       updateChannel: this.enforceChannelPreference(this.currentChannel),
       ignoredVersions: [],
       customSources: [],
-      autoDownload: false,
+      autoDownload: true,
       rendererOverrideEnabled: false,
       cacheEnabled: true,
       cacheTTL: 30, // 30 minutes cache TTL

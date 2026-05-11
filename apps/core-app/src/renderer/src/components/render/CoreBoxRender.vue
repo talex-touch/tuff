@@ -2,7 +2,6 @@
 import type { TuffItem } from '@talex-touch/utils'
 import type { PreviewCardPayload } from '@talex-touch/utils/core-box'
 import { computed } from 'vue'
-import { getCustomRenderer } from '~/modules/box/custom-render'
 import BoxItem from './BoxItem.vue'
 import WidgetFrame from './WidgetFrame.vue'
 
@@ -36,11 +35,6 @@ const customRendererId = computed(() => {
   return custom.content
 })
 
-const hasCustomRenderer = computed(() => {
-  if (!customRendererId.value) return false
-  return Boolean(getCustomRenderer(customRendererId.value))
-})
-
 const customPayload = computed<PreviewCardPayload | undefined>(() => {
   return render.value?.custom?.data as PreviewCardPayload | undefined
 })
@@ -65,7 +59,7 @@ function handleCopyPrimary(): void {
     <template v-if="render?.mode === 'default'">
       <BoxItem :item="item" :active="active" :render="render" :quick-key="quickKey" />
     </template>
-    <template v-else-if="render?.mode === 'custom' && hasCustomRenderer">
+    <template v-else-if="render?.mode === 'custom' && customRendererId">
       <div class="CoreBoxRender-Custom" :class="{ active }">
         <WidgetFrame
           :renderer-id="customRendererId!"

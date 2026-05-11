@@ -1,5 +1,8 @@
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
-import type { WidgetRegistrationPayload } from '@talex-touch/utils/plugin/widget'
+import type {
+  WidgetFailurePayload,
+  WidgetRegistrationPayload
+} from '@talex-touch/utils/plugin/widget'
 import type { FSWatcher } from 'chokidar'
 import type { WidgetCompilationContext } from './widget-processor'
 import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
@@ -14,8 +17,11 @@ import { getCoreBoxWindow } from '../../box-tool/core-box/window'
 import { compileWidgetSource } from './widget-compiler'
 import { pushWidgetFeatureIssue } from './widget-issue'
 import { pluginWidgetLoader, resolveWidgetFilePath } from './widget-loader'
+import { classifyWidgetCompileError, resolveWidgetCompileCauseCode } from './widget-transform'
 
 type WidgetEvent = 'register' | 'update'
+
+const WIDGET_FAILURE_CACHE_TTL_MS = 30_000
 
 type WidgetCompiledMeta = {
   hash: string
@@ -38,6 +44,11 @@ type WidgetCompiledCache = {
   dependencies: string[]
   filePath: string
   hash: string
+}
+
+type WidgetCompileFailureCache = {
+  expiresAt: number
+  payload: WidgetFailurePayload
 }
 
 function resolveWidgetCompiledOutputPath(plugin: ITouchPlugin, widgetId: string): string | null {
@@ -159,6 +170,7 @@ async function loadCompiledWidgetCache(
 const pluginWidgetRegisterEvent = PluginEvents.widget.register
 const pluginWidgetUpdateEvent = PluginEvents.widget.update
 const pluginWidgetUnregisterEvent = PluginEvents.widget.unregister
+const pluginWidgetFailedEvent = PluginEvents.widget.failed
 
 const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
   channel.keyManager ?? channel
@@ -166,6 +178,7 @@ const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
 export class WidgetManager {
   private readonly cache = new Map<string, WidgetRegistrationPayload>()
   private readonly watchers = new Map<string, FSWatcher>()
+  private readonly compileFailures = new Map<string, WidgetCompileFailureCache>()
 
   private get transport() {
     const channel = getRegisteredMainRuntime('plugin-module').channel
@@ -236,12 +249,15 @@ export class WidgetManager {
             await this.emitPayload(options?.emitAsUpdate ? 'update' : 'register', payload)
           } catch (error) {
             plugin.logger.error('[WidgetManager] 发送 widget 注册事件失败：', error as Error)
-            this.pushIssue(
-              plugin,
-              feature,
-              'WIDGET_REGISTER_FAILED',
-              `${(error as Error).message ?? 'send failed'}`
-            )
+            const failure = this.buildFailurePayload(plugin, feature, {
+              widgetId,
+              code: 'WIDGET_REGISTER_FAILED',
+              message: `${(error as Error).message ?? 'send failed'}`,
+              filePath: compiledCache.filePath,
+              hash: compiledCache.hash
+            })
+            this.pushFailureIssue(plugin, feature, failure)
+            await this.emitFailure(failure)
             return null
           }
 
@@ -265,6 +281,16 @@ export class WidgetManager {
       if (isDev) {
         plugin.logger.warn(`[WidgetManager] Widget source missing for feature \"${feature.id}\"`)
       }
+      await this.emitFailure(
+        this.buildAndPushFailure(plugin, feature, {
+          widgetId,
+          code: 'WIDGET_SOURCE_MISSING',
+          message: `Widget source missing for feature "${feature.id}".`,
+          filePath: interactionPath
+            ? resolveWidgetFilePath(plugin.pluginPath, interactionPath)
+            : undefined
+        })
+      )
       return null
     }
 
@@ -300,12 +326,15 @@ export class WidgetManager {
         await this.emitPayload(options?.emitAsUpdate ? 'update' : 'register', payload)
       } catch (error) {
         plugin.logger.error('[WidgetManager] 发送 widget 注册事件失败：', error as Error)
-        this.pushIssue(
-          plugin,
-          feature,
-          'WIDGET_REGISTER_FAILED',
-          `${(error as Error).message ?? 'send failed'}`
-        )
+        const failure = this.buildFailurePayload(plugin, feature, {
+          widgetId: source.widgetId,
+          code: 'WIDGET_REGISTER_FAILED',
+          message: `${(error as Error).message ?? 'send failed'}`,
+          filePath: compiledCache.filePath,
+          hash: compiledCache.hash
+        })
+        this.pushFailureIssue(plugin, feature, failure)
+        await this.emitFailure(failure)
         return null
       }
 
@@ -317,6 +346,18 @@ export class WidgetManager {
         )
       }
       return payload
+    }
+
+    const failureCacheKey = this.getFailureCacheKey(source.widgetId, source.hash)
+    const cachedFailure = this.getCachedFailure(failureCacheKey)
+    if (cachedFailure) {
+      await this.emitFailure(cachedFailure)
+      if (isDev) {
+        plugin.logger.debug(
+          `[WidgetManager] Widget compile failure cache hit for "${source.widgetId}" (${cachedFailure.code})`
+        )
+      }
+      return null
     }
 
     // Prepare compilation context
@@ -331,17 +372,29 @@ export class WidgetManager {
       compiled = await compileWidgetSource(source, context)
     } catch (error) {
       plugin.logger.debug('[WidgetManager] 编译 widget 失败：', error as Error)
-      this.pushIssue(
-        plugin,
-        feature,
-        'WIDGET_COMPILE_FAILED',
-        `${(error as Error).message ?? 'unknown error'}`
-      )
+      const failure = this.buildFailurePayload(plugin, feature, {
+        widgetId: source.widgetId,
+        code: classifyWidgetCompileError(error),
+        message: `${(error as Error).message ?? 'unknown error'}`,
+        filePath: source.filePath,
+        hash: source.hash,
+        cause: resolveWidgetCompileCauseCode(error)
+      })
+      this.pushFailureIssue(plugin, feature, failure)
+      this.cacheFailure(failureCacheKey, failure)
+      await this.emitFailure(failure)
       return null
     }
 
     // Check if compilation returned null (validation failed)
     if (!compiled) {
+      const failure = this.buildFailurePayloadFromLatestIssue(plugin, feature, {
+        widgetId: source.widgetId,
+        filePath: source.filePath,
+        hash: source.hash
+      })
+      this.cacheFailure(failureCacheKey, failure)
+      await this.emitFailure(failure)
       return null
     }
 
@@ -398,16 +451,20 @@ export class WidgetManager {
       await this.emitPayload(options?.emitAsUpdate ? 'update' : 'register', payload)
     } catch (error) {
       plugin.logger.error('[WidgetManager] 发送 widget 注册事件失败：', error as Error)
-      this.pushIssue(
-        plugin,
-        feature,
-        'WIDGET_REGISTER_FAILED',
-        `${(error as Error).message ?? 'send failed'}`
-      )
+      const failure = this.buildFailurePayload(plugin, feature, {
+        widgetId: source.widgetId,
+        code: 'WIDGET_REGISTER_FAILED',
+        message: `${(error as Error).message ?? 'send failed'}`,
+        filePath: source.filePath,
+        hash: source.hash
+      })
+      this.pushFailureIssue(plugin, feature, failure)
+      await this.emitFailure(failure)
       return null
     }
 
     this.cache.set(source.widgetId, payload)
+    this.compileFailures.delete(failureCacheKey)
     this.watchWidgetFile(plugin, feature, source.filePath)
     if (isDev) {
       plugin.logger.info(
@@ -439,6 +496,11 @@ export class WidgetManager {
       const payload = this.cache.get(id)
       return payload?.pluginName === pluginName
     })
+    Array.from(this.compileFailures.entries()).forEach(([key, failure]) => {
+      if (failure.payload.pluginName === pluginName) {
+        this.compileFailures.delete(key)
+      }
+    })
 
     await Promise.all(
       widgetIds.map(async (widgetId) => {
@@ -456,16 +518,114 @@ export class WidgetManager {
     })
   }
 
-  private pushIssue(
+  private async emitFailure(payload: WidgetFailurePayload): Promise<void> {
+    const targets = this.getWidgetWindowIds()
+    targets.forEach((windowId) => {
+      this.transport.broadcastToWindow(windowId, pluginWidgetFailedEvent, payload)
+    })
+  }
+
+  private getFailureCacheKey(widgetId: string, hash: string): string {
+    return `${widgetId}:${hash}`
+  }
+
+  private getCachedFailure(cacheKey: string): WidgetFailurePayload | null {
+    const cached = this.compileFailures.get(cacheKey)
+    if (!cached) return null
+    if (cached.expiresAt <= Date.now()) {
+      this.compileFailures.delete(cacheKey)
+      return null
+    }
+    return cached.payload
+  }
+
+  private cacheFailure(cacheKey: string, payload: WidgetFailurePayload): void {
+    this.compileFailures.set(cacheKey, {
+      expiresAt: Date.now() + WIDGET_FAILURE_CACHE_TTL_MS,
+      payload
+    })
+  }
+
+  private buildFailurePayload(
     plugin: ITouchPlugin,
     feature: IPluginFeature,
-    code: string,
-    message: string
+    failure: {
+      widgetId: string
+      code: string
+      message: string
+      filePath?: string | null
+      hash?: string
+      cause?: string
+    }
+  ): WidgetFailurePayload {
+    return {
+      widgetId: failure.widgetId,
+      pluginName: plugin.name,
+      featureId: feature.id,
+      code: failure.code,
+      message: failure.message,
+      filePath: failure.filePath ?? undefined,
+      hash: failure.hash,
+      cause: failure.cause
+    }
+  }
+
+  private buildFailurePayloadFromLatestIssue(
+    plugin: ITouchPlugin,
+    feature: IPluginFeature,
+    context: {
+      widgetId: string
+      filePath?: string
+      hash?: string
+    }
+  ): WidgetFailurePayload {
+    const source = `feature:${feature.id}`
+    const issue = [...plugin.issues]
+      .reverse()
+      .find((item) => item.source === source && item.code?.startsWith('WIDGET_'))
+
+    return this.buildFailurePayload(plugin, feature, {
+      ...context,
+      code: issue?.code ?? 'WIDGET_COMPILE_FAILED',
+      message: issue?.message ?? `Widget compile failed for feature "${feature.id}".`,
+      cause: typeof issue?.meta?.causeCode === 'string' ? issue.meta.causeCode : undefined
+    })
+  }
+
+  private pushFailureIssue(
+    plugin: ITouchPlugin,
+    feature: IPluginFeature,
+    failure: WidgetFailurePayload
   ): void {
     pushWidgetFeatureIssue(plugin, feature, {
-      code,
-      message
+      code: failure.code,
+      message: failure.message,
+      meta: {
+        pluginName: failure.pluginName,
+        featureId: failure.featureId,
+        widgetId: failure.widgetId,
+        filePath: failure.filePath,
+        hash: failure.hash,
+        causeCode: failure.cause
+      }
     })
+  }
+
+  private buildAndPushFailure(
+    plugin: ITouchPlugin,
+    feature: IPluginFeature,
+    failure: {
+      widgetId: string
+      code: string
+      message: string
+      filePath?: string | null
+      hash?: string
+      cause?: string
+    }
+  ): WidgetFailurePayload {
+    const payload = this.buildFailurePayload(plugin, feature, failure)
+    this.pushFailureIssue(plugin, feature, payload)
+    return payload
   }
 
   private watchWidgetFile(plugin: ITouchPlugin, feature: IPluginFeature, filePath: string): void {

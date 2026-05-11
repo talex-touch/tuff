@@ -152,7 +152,7 @@ export const defaultUpdateSettings: UpdateSettings = {
   updateChannel: AppPreviewChannel.RELEASE,
   ignoredVersions: [],
   customSources: [],
-  autoDownload: false,
+  autoDownload: true,
   rendererOverrideEnabled: false,
   lastCheckedAt: null,
   cacheEnabled: true,

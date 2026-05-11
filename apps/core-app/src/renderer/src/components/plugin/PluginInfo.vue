@@ -447,6 +447,7 @@ async function handlePrimaryAction(): Promise<void> {
       v-model:animating="issuesOverlayAnimating"
       :reference="issueFabRef"
       :header-title="t('plugin.tabs.issues')"
+      scrollable
       size="lg"
     >
       <template #default>
@@ -545,7 +546,7 @@ async function handlePrimaryAction(): Promise<void> {
 .PluginInfo-IssuesDialog {
   position: relative;
   width: 100%;
-  height: 100%;
+  min-height: 100%;
 }
 
 .PluginInfo-IssuesDialog :deep(.p-4) {

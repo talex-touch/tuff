@@ -88,20 +88,6 @@ import type { AppLaunchKind, ScannedAppInfo } from './app-types'
 
 const SLOW_SEARCH_THRESHOLD_MS = 400
 const appProviderLog = getLogger('app-provider')
-const BASE64_MARKER = 'base64,'
-const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
-
-function isValidBase64DataUrl(value: string): boolean {
-  const markerIndex = value.indexOf(BASE64_MARKER)
-  if (markerIndex === -1) {
-    return true
-  }
-  const payload = value.slice(markerIndex + BASE64_MARKER.length)
-  if (!payload) {
-    return false
-  }
-  return BASE64_PAYLOAD_PATTERN.test(payload)
-}
 
 type AppTimingMeta = TimingMeta & {
   label?: string
@@ -150,6 +136,14 @@ const APP_TIMING_BASE_OPTIONS: TimingOptions = {
     const styleFn = LogStyle[styleKey] ?? LogStyle.info
     return formatLog('AppProvider', `${message} in ${durationText}${suffix}`, styleFn)
   }
+}
+
+function isWindowsUwpShellPath(value: string): boolean {
+  return /^shell:AppsFolder\\[^\s"'<>]+$/i.test(value)
+}
+
+function isWindowsUwpAppId(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]+_[A-Za-z0-9]+![A-Za-z0-9._-]+$/.test(value)
 }
 
 type DbAppRecord = typeof filesSchema.$inferSelect
@@ -278,7 +272,7 @@ const APP_ENTRY_ENABLED_EXTENSION_KEY = 'entryEnabled'
 const APP_ENTRY_SOURCE_MANUAL = 'manual'
 const APP_IDENTIFIER_EXTENSION_KEYS = ['bundleId', APP_IDENTITY_EXTENSION_KEY] as const
 const APP_IDENTIFIER_EXTENSION_KEY_SET = new Set<string>(APP_IDENTIFIER_EXTENSION_KEYS)
-const WINDOWS_REALTIME_APP_EXTENSIONS = new Set(['.lnk', '.exe'])
+const WINDOWS_REALTIME_APP_EXTENSIONS = new Set(['.lnk', '.exe', '.appref-ms'])
 
 function isAppIdentifierExtensionKey(
   value: string | null | undefined
@@ -1801,20 +1795,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       unit: 's',
       precision: 2
     })
-    const invalidIconApps = new Set<string>()
-    for (const app of dbScannedAppsWithExtensions) {
-      const icon = app.extensions.icon
-      if (icon && !isValidBase64DataUrl(icon)) {
-        const uniqueId = this.resolveDbAppKey(app)
-        if (uniqueId) invalidIconApps.add(uniqueId)
-      }
-    }
-    if (invalidIconApps.size > 0) {
-      logApp(
-        `Detected ${chalk.yellow(invalidIconApps.size)} invalid app icons, will refresh`,
-        LogStyle.warning
-      )
-    }
     const dbAppsMap = new Map(
       dbScannedAppsWithExtensions.map((app) => [this.resolveDbAppKey(app), app])
     )
@@ -1840,7 +1820,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       if (!dbApp) {
         toAdd.push(scannedApp)
       } else {
-        const shouldRefreshIcon = invalidIconApps.has(uniqueId)
         const resolvedScannedDisplayName = resolveScannedDisplayName(scannedApp)
         const hasDisplayNameDrift = shouldUpdateDisplayName(
           dbApp.displayName,
@@ -1855,7 +1834,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           scannedApp.alternateNames
         )
         if (
-          shouldRefreshIcon ||
           scannedApp.lastModified.getTime() > new Date(dbApp.mtime).getTime() ||
           hasDisplayNameDrift ||
           hasNameDrift ||
@@ -2058,6 +2036,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (!rawPath) return null
     let appPath = rawPath
 
+    if (process.platform === 'win32') {
+      if (isWindowsUwpShellPath(appPath)) {
+        return appPath
+      }
+      if (isWindowsUwpAppId(appPath)) {
+        return `shell:AppsFolder\\${appPath}`
+      }
+    }
+
     if (this.isMac) {
       if (appPath.includes('.app/')) {
         appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
@@ -2145,7 +2132,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this.processingPaths.add(appPath)
 
     try {
-      if (!(await this._waitForItemStable(appPath))) {
+      const isVirtualWindowsApp = process.platform === 'win32' && isWindowsUwpShellPath(appPath)
+      if (!isVirtualWindowsApp && !(await this._waitForItemStable(appPath))) {
         logApp(`Item is unstable, skipping: ${chalk.yellow(appPath)}`, LogStyle.warning)
         return { success: false, status: 'invalid', reason: 'unstable' }
       }
@@ -2831,7 +2819,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           )
         }
       },
-      { interval: 10, unit: 'minutes' }
+      {
+        interval: 10,
+        unit: 'minutes',
+        lane: 'maintenance',
+        backpressure: 'latest_wins',
+        dedupeKey: 'app_provider_mdls_update_scan',
+        maxInFlight: 1
+      }
     )
   }
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DashboardArtifactType, PluginChannel, PluginStatus } from '~/types/dashboard-plugin'
 import { TxPluginMetaHeader } from '@talex-touch/tuff-business'
-import StatusBadge from '~/components/ui/StatusBadge.vue'
+import { TxStatusBadge } from '@talex-touch/tuffex'
 
 interface PluginMetaHeaderVersion {
   channel: PluginChannel
@@ -126,13 +126,13 @@ const metaItems = computed(() => {
       />
     </template>
     <template #badges>
-      <StatusBadge
+      <TxStatusBadge
         v-if="plugin.status"
         :text="t(`dashboard.sections.plugins.statuses.${plugin.status}`)"
         :status="statusTone(plugin.status as PluginStatus)"
         size="sm"
       />
-      <StatusBadge
+      <TxStatusBadge
         v-if="plugin.latestVersion"
         :text="`v${plugin.latestVersion.version}`"
         :status="channelTone(plugin.latestVersion.channel)"

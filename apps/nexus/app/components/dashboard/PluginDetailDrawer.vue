@@ -6,12 +6,9 @@ import type {
   DashboardPluginVersion as PluginVersion,
   VersionStatus,
 } from '~/types/dashboard-plugin'
-import { TxButton } from '@talex-touch/tuffex'
-import FlatButton from '~/components/ui/FlatButton.vue'
+import { TxButton, TxStatusBadge, TxTag } from '@talex-touch/tuffex'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import PluginMetaHeader from '~/components/dashboard/PluginMetaHeader.vue'
-import StatusBadge from '~/components/ui/StatusBadge.vue'
-import Tag from '~/components/ui/Tag.vue'
 
 interface Props {
   isOpen: boolean
@@ -239,7 +236,7 @@ function resolveTimelineEventLabel(event: DashboardPluginTimelineEvent) {
                 {{ t('dashboard.sections.plugins.form.badges') }}
               </p>
               <div class="flex flex-wrap gap-2">
-                <Tag v-for="badge in plugin.badges" :key="badge" :label="badge" />
+                <TxTag v-for="badge in plugin.badges" :key="badge" :label="badge" />
               </div>
             </div>
 
@@ -267,12 +264,12 @@ function resolveTimelineEventLabel(event: DashboardPluginTimelineEvent) {
                         <span class="text-sm font-medium text-black dark:text-white">
                           v{{ version.version }}
                         </span>
-                        <StatusBadge
+                        <TxStatusBadge
                           :text="version.channel"
                           :status="channelTone(version.channel)"
                           size="sm"
                         />
-                        <StatusBadge
+                        <TxStatusBadge
                           :text="t(`dashboard.sections.plugins.versionStatuses.${version.status}`)"
                           :status="versionStatusTone(version.status)"
                           size="sm"
@@ -298,19 +295,23 @@ function resolveTimelineEventLabel(event: DashboardPluginTimelineEvent) {
                       >
                         <span class="i-carbon-download text-sm" />
                       </a>
-                      <FlatButton
+                      <TxButton
                         v-if="canEdit && version.status === 'rejected'"
+                        variant="secondary"
+                        size="mini"
                         :title="t('dashboard.sections.plugins.reeditVersion')"
                         @click="emit('reeditVersion', plugin, version)"
                       >
                         <span class="i-carbon-edit text-sm" />
-                      </FlatButton>
-                      <FlatButton
+                      </TxButton>
+                      <TxButton
                         v-if="canDelete"
+                        variant="secondary"
+                        size="mini"
                         @click="emit('deleteVersion', plugin, version)"
                       >
                         <span class="i-carbon-trash-can text-sm" />
-                      </FlatButton>
+                      </TxButton>
                     </div>
                   </div>
                 </div>

@@ -5,7 +5,7 @@
 - 范围：`apps/core-app` 的 Everything 搜索后端、`packages/tuff-native` 原生能力、设置页状态展示与文档。
 - 目标：Windows 平台优先走 SDK（N-API），异常时自动回退 CLI（`es.exe`），不可用时优雅降级。
 
-## 状态快照（截至 2026-04-20）
+## 状态快照（截至 2026-05-10）
 
 ### 已完成（Done）
 
@@ -16,6 +16,7 @@
 2. **设置页与多语言文案**
    - Settings 页面已展示当前后端、回退链路、后端错误信息。
    - `backendErrorTitle` 文案键位已归位到 `settings.settingEverything`。
+   - Settings 页面已展示 `sdk-load`、`sdk-query`、`cli-detect`、`cli-query` 四类诊断阶段与耗时。
 
 3. **Native 包与构建**
    - `packages/tuff-native` 已新增 `everything` 导出与类型声明。
@@ -27,14 +28,19 @@
    - 新增 Windows 自检脚本：`check:everything`，可直接验证 SDK 是否生效。
    - Everything provider 已补齐多词查询透传、CLI CSV 解析、SDK 目录元数据、AbortSignal 取消回归。
    - SearchCore 已固化 `@everything` / `@file` Windows 路由语义，并将 inputs/filter 纳入搜索缓存 key。
+   - `everything:test` 与 Windows 自检脚本输出已扩展 `query`、`sample`、`backendAttempts`、`durationByStage`、`errorCode`。
+
+5. **AI/Flow 上下文桥接（第 1 步）**
+   - Everything 搜索结果已写入 `meta.fileSearchContext`，仅包含路径、名称、扩展名、大小、修改时间、目录标记、来源、后端与评分。
+   - 该字段只作为本地内存搜索上下文候选，不读取文件内容，不作为 JSON 明文同步载荷。
 
 ### 进行中（In Progress）
 
 1. **Windows 真机回归**
    - 需要在 Windows 环境跑自检并留存样例结果（版本号、结果条数、耗时）。
 
-2. **与 AI 能力联动（第 1 步）**
-   - 计划将 Everything 的检索结果作为 AI 能力的上下文输入源之一（当前未完成）。
+2. **与 AI 能力联动（第 2 步）**
+   - 需要在 Intelligence/Flow 消费侧选择并接入 `meta.fileSearchContext` 候选。
 
 ### 待办（Todo）
 
@@ -42,7 +48,7 @@
    - 输出固定模板（环境、命令、结果 JSON、截图/日志路径）。
 
 2. **异常分层可观测性**
-   - Settings 与 IPC 已返回基础 `errorCode`；仍需在 Windows 真机日志中沉淀 SDK DLL、SDK query、CLI detect、CLI query 四类错误码样例。
+   - Settings 与 IPC 已返回分阶段诊断；仍需在 Windows 真机日志中沉淀 SDK DLL、SDK query、CLI detect、CLI query 四类错误码样例。
 
 3. **性能对照基线**
    - 建立 SDK / CLI 在同一查询集上的耗时对照报表。
@@ -79,7 +85,7 @@ pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/e
 pnpm -C "packages/tuff-native" run check:everything -- --query "*.txt" --max 10
 ```
 
-期望输出字段：`ok`、`version`、`resultCount`、`sample`。
+期望输出字段：`ok`、`backend`、`version`、`query`、`durationMs`、`durationByStage`、`resultCount`、`errorCode`、`sample`。
 
 ## 风险与回滚
 
@@ -98,5 +104,5 @@ pnpm -C "packages/tuff-native" run check:everything -- --query "*.txt" --max 10
 ## 后续优先级建议
 
 - P0：完成 Windows 真机自检留档与回归。
-- P1：完成 AI 能力联动第 1 步（检索上下文接入）。
+- P1：完成 AI 能力联动第 2 步（消费侧接入 `meta.fileSearchContext`）。
 - P2：补性能基线报表与错误码统计面板。

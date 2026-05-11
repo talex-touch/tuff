@@ -191,11 +191,6 @@ const INPUT_EDIT_SHORTCUT_KEYS = new Set(['a', 'c', 'v', 'x', 'z', 'y'])
  */
 const COREBOX_DETACH_EVENT = 'corebox:detach-item'
 
-/**
- * Event name for triggering Flow transfer
- */
-const COREBOX_FLOW_EVENT = 'corebox:flow-item'
-
 // Helper functions for MetaOverlay
 const isMac = rendererPlatformState.isMac
 
@@ -341,6 +336,12 @@ function resolveQuickActionsItem(
       featureId
     }
   }
+}
+
+function resolveActiveFeatureItem(activations: IProviderActivate[] | null): TuffItem | null {
+  const feature = activations?.find((activation) => activation?.id === 'plugin-features')?.meta
+    ?.feature
+  return feature && typeof feature === 'object' ? (feature as TuffItem) : null
 }
 
 function isInputEditingShortcut(event: KeyboardEvent): boolean {
@@ -706,24 +707,29 @@ export function useKeyboard(
        * With Shift: Opens Flow selector to transfer data to another plugin
        */
       if ((event.metaKey || event.ctrlKey) && !event.altKey) {
-        const currentItem = res.value[boxOptions.focus]
-        if (!currentItem) {
-          event.preventDefault()
-          return
-        }
+        const activeFeature = resolveActiveFeatureItem(activeActivations.value)
+        const currentItem = activeFeature ?? res.value[boxOptions.focus]
 
         if (event.shiftKey) {
+          if (!currentItem) {
+            event.preventDefault()
+            return
+          }
           // Command+Shift+D: Flow transfer to another plugin
           window.dispatchEvent(
-            new CustomEvent(COREBOX_FLOW_EVENT, {
+            new CustomEvent('corebox:flow-item', {
               detail: { item: currentItem, query: searchVal.value }
             })
           )
         } else {
           // Command+D: Detach to DivisionBox
+          if (!activeFeature) {
+            event.preventDefault()
+            return
+          }
           window.dispatchEvent(
             new CustomEvent(COREBOX_DETACH_EVENT, {
-              detail: { item: currentItem, query: searchVal.value }
+              detail: { item: activeFeature, query: searchVal.value }
             })
           )
         }

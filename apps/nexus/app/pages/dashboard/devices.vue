@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
-import Input from '~/components/ui/Input.vue'
+import { TuffInput, TxButton } from '@talex-touch/tuffex'
 import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
 
 defineI18nRoute(false)
@@ -284,7 +283,7 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
           </div>
 
           <div v-if="editingId === device.id" class="flex flex-wrap items-center gap-2">
-            <Input v-model="renameValue" type="text" :placeholder="t('dashboard.devices.renamePlaceholder', '输入设备名称')" />
+            <TuffInput v-model="renameValue" type="text" :placeholder="t('dashboard.devices.renamePlaceholder', '输入设备名称')" />
             <TxButton size="small" :loading="actionLoading" @click="saveRename(device)">
               {{ t('common.save', '保存') }}
             </TxButton>

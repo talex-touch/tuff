@@ -10,14 +10,22 @@ import {
   everythingTestEvent,
   everythingToggleEvent,
   type EverythingBackendType,
+  type EverythingDiagnosticStage,
   type EverythingStatusResponse
 } from '../../../../../shared/events/everything'
 import {
+  getEverythingDiagnosticStages,
   resolveEverythingStatusColor,
   resolveEverythingStatusTextKey,
   shouldShowEverythingInstallGuide,
+  shouldShowEverythingDiagnostics,
   shouldShowEverythingToggle
 } from './setting-everything-state'
+import {
+  buildEverythingDiagnosticEvidenceFilename,
+  buildEverythingDiagnosticEvidencePayload,
+  formatEverythingDiagnosticEvidenceJson
+} from './everything-diagnostic-evidence'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -40,6 +48,13 @@ function mapHealthLabel(health: EverythingHealthState): string {
   if (health === 'healthy') return t('settings.settingEverything.healthHealthy')
   if (health === 'degraded') return t('settings.settingEverything.healthDegraded')
   return t('settings.settingEverything.healthUnsupported')
+}
+
+function mapDiagnosticStageLabel(stage: EverythingDiagnosticStage): string {
+  if (stage === 'sdk-load') return t('settings.settingEverything.diagnosticSdkLoad')
+  if (stage === 'sdk-query') return t('settings.settingEverything.diagnosticSdkQuery')
+  if (stage === 'cli-detect') return t('settings.settingEverything.diagnosticCliDetect')
+  return t('settings.settingEverything.diagnosticCliQuery')
 }
 
 let statusCheckInterval: NodeJS.Timeout | null = null
@@ -131,6 +146,49 @@ function openCLIDownload() {
   window.open('https://www.voidtools.com/support/everything/command_line_interface/', '_blank')
 }
 
+function buildCurrentEverythingEvidence() {
+  if (!everythingStatus.value) return null
+
+  return buildEverythingDiagnosticEvidencePayload({
+    status: everythingStatus.value
+  })
+}
+
+async function copyEverythingEvidence() {
+  const payload = buildCurrentEverythingEvidence()
+  if (!payload) {
+    toast.error(t('settings.settingEverything.evidenceMissing'))
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(formatEverythingDiagnosticEvidenceJson(payload))
+    toast.success(t('settings.settingEverything.evidenceCopied'))
+  } catch (error) {
+    settingEverythingLog.error('Failed to copy Everything diagnostic evidence', error)
+    toast.error(t('settings.settingEverything.evidenceCopyFailed'))
+  }
+}
+
+function saveEverythingEvidence() {
+  const payload = buildCurrentEverythingEvidence()
+  if (!payload) {
+    toast.error(t('settings.settingEverything.evidenceMissing'))
+    return
+  }
+
+  const blob = new Blob([formatEverythingDiagnosticEvidenceJson(payload)], {
+    type: 'application/json;charset=utf-8'
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = buildEverythingDiagnosticEvidenceFilename(payload)
+  link.click()
+  URL.revokeObjectURL(url)
+  toast.success(t('settings.settingEverything.evidenceSaved'))
+}
+
 const statusText = computed(() => {
   return t(resolveEverythingStatusTextKey(everythingStatus.value))
 })
@@ -145,6 +203,14 @@ const showInstallGuide = computed(() => {
 
 const showToggle = computed(() => {
   return shouldShowEverythingToggle(everythingStatus.value)
+})
+
+const showDiagnostics = computed(() => {
+  return shouldShowEverythingDiagnostics(everythingStatus.value)
+})
+
+const diagnosticStages = computed(() => {
+  return getEverythingDiagnosticStages(everythingStatus.value)
 })
 
 const backendText = computed(() => {
@@ -162,6 +228,19 @@ const fallbackChainText = computed(() => {
 const healthText = computed(() => {
   if (!everythingStatus.value) return '-'
   return mapHealthLabel(everythingStatus.value.health)
+})
+
+const diagnosticSummary = computed(() => {
+  const stages = diagnosticStages.value
+  if (stages.length === 0) return t('settings.settingEverything.diagnosticsEmpty')
+
+  const failedCount = stages.filter((stage) => {
+    return everythingStatus.value?.diagnostics?.stages[stage]?.status === 'failed'
+  }).length
+
+  return failedCount > 0
+    ? t('settings.settingEverything.diagnosticsFailed', { count: failedCount })
+    : t('settings.settingEverything.diagnosticsHealthy')
 })
 
 const lastCheckedText = computed(() => {
@@ -266,6 +345,33 @@ onUnmounted(() => {
     </TuffBlockSlot>
 
     <TuffBlockSlot
+      v-if="showDiagnostics"
+      :title="t('settings.settingEverything.diagnosticsTitle')"
+      :description="diagnosticSummary"
+      default-icon="i-carbon-debug"
+      active-icon="i-carbon-debug"
+    >
+      <div class="diagnostics-list">
+        <div v-for="stage in diagnosticStages" :key="stage" class="diagnostic-row">
+          <span class="diagnostic-stage">{{ mapDiagnosticStageLabel(stage) }}</span>
+          <span
+            class="diagnostic-status"
+            :class="[
+              everythingStatus?.diagnostics?.stages[stage]?.status === 'success'
+                ? 'text-green-500'
+                : 'text-red-500'
+            ]"
+          >
+            {{ everythingStatus?.diagnostics?.stages[stage]?.status || '-' }}
+          </span>
+          <span class="diagnostic-duration">
+            {{ everythingStatus?.diagnostics?.stages[stage]?.duration ?? '-' }}ms
+          </span>
+        </div>
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
       v-if="showToggle"
       :title="t('settings.settingEverything.enableTitle')"
       :description="t('settings.settingEverything.enableDesc')"
@@ -357,6 +463,23 @@ onUnmounted(() => {
         }}
       </TxButton>
     </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="everythingStatus"
+      :title="t('settings.settingEverything.evidenceTitle')"
+      :description="t('settings.settingEverything.evidenceDesc')"
+      default-icon="i-carbon-document-export"
+      active-icon="i-carbon-document-export"
+    >
+      <div class="install-buttons">
+        <TxButton variant="flat" @click="copyEverythingEvidence">
+          {{ t('settings.settingEverything.copyEvidence') }}
+        </TxButton>
+        <TxButton variant="flat" @click="saveEverythingEvidence">
+          {{ t('settings.settingEverything.saveEvidence') }}
+        </TxButton>
+      </div>
+    </TuffBlockSlot>
   </TuffGroupBlock>
 </template>
 
@@ -379,6 +502,30 @@ onUnmounted(() => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.diagnostics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.diagnostic-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.diagnostic-stage,
+.diagnostic-duration {
+  color: var(--tuff-text-secondary);
+}
+
+.diagnostic-status {
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .error-message {

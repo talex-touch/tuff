@@ -1842,11 +1842,12 @@ function formatEndpointCandidates(list?: string[]) {
                     {{ fetchingFormModels ? t('dashboard.sections.intelligence.form.fetchingModels') : t('dashboard.sections.intelligence.form.fetchModels') }}
                   </TxButton>
                 </div>
-                <textarea
+                <TuffInput
                   v-model="form.models"
+                  type="textarea"
                   :placeholder="t('dashboard.sections.intelligence.form.modelsPlaceholder')"
-                  rows="4"
-                  class="w-full rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 py-2 text-sm text-black outline-none transition focus:border-primary dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white"
+                  :rows="4"
+                  class="w-full"
                 />
                 <p class="text-[11px] text-black/30 dark:text-white/30">
                   {{ t('dashboard.sections.intelligence.form.modelsHint') }}
@@ -1874,11 +1875,12 @@ function formatEndpointCandidates(list?: string[]) {
                 <label class="text-xs text-black/60 dark:text-white/60">
                   {{ t('dashboard.sections.intelligence.form.instructions') }}
                 </label>
-                <textarea
+                <TuffInput
                   v-model="form.instructions"
+                  type="textarea"
                   :placeholder="t('dashboard.sections.intelligence.form.instructionsPlaceholder')"
-                  rows="2"
-                  class="w-full rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 py-2 text-sm text-black outline-none transition focus:border-primary dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white"
+                  :rows="2"
+                  class="w-full"
                 />
               </div>
 
@@ -1979,11 +1981,12 @@ function formatEndpointCandidates(list?: string[]) {
                 <label class="text-xs text-black/60 dark:text-white/60">
                   {{ t('dashboard.sections.intelligence.providers.probe.prompt') }}
                 </label>
-                <textarea
+                <TuffInput
                   v-model="probePrompt"
+                  type="textarea"
                   :placeholder="t('dashboard.sections.intelligence.providers.probe.promptPlaceholder')"
-                  rows="4"
-                  class="w-full rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 py-2 text-sm text-black outline-none transition focus:border-primary dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white"
+                  :rows="4"
+                  class="w-full"
                 />
               </div>
 

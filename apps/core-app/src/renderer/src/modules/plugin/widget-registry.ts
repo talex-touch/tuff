@@ -1,4 +1,7 @@
-import type { WidgetRegistrationPayload } from '@talex-touch/utils/plugin/widget'
+import type {
+  WidgetFailurePayload,
+  WidgetRegistrationPayload
+} from '@talex-touch/utils/plugin/widget'
 import type { Component, ComponentPublicInstance, SetupContext } from 'vue'
 import * as TalexUtils from '@talex-touch/utils'
 import * as TalexUtilsCommon from '@talex-touch/utils/common'
@@ -11,11 +14,14 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import * as TalexUtilsTypes from '@talex-touch/utils/types'
 import * as Vue from 'vue'
+import { shallowRef } from 'vue'
 import { registerCustomRenderer, unregisterCustomRenderer } from '~/modules/box/custom-render'
 import { devLog } from '~/utils/dev-log'
 
 const injectedStyles = new Map<string, HTMLStyleElement>()
 const widgetRuntimeSources = new Map<string, string[]>()
+const widgetFailures = new Map<string, WidgetFailurePayload>()
+const widgetFailureVersion = shallowRef(0)
 const widgetSetupStatePatchLogCache = new Set<string>()
 
 function cacheWidgetRuntimeSource(widgetId: string | undefined, code: string): void {
@@ -46,10 +52,21 @@ export function getWidgetRuntimeSnippet(
   }
   return result
 }
+
+export function getWidgetFailure(widgetId: string | undefined): WidgetFailurePayload | null {
+  void widgetFailureVersion.value
+  if (!widgetId) return null
+  return widgetFailures.get(widgetId) ?? null
+}
+
+function touchWidgetFailureVersion(): void {
+  widgetFailureVersion.value += 1
+}
 const transport = useTuffTransport()
 const widgetRegisterEvent = PluginEvents.widget.register
 const widgetUpdateEvent = PluginEvents.widget.update
 const widgetUnregisterEvent = PluginEvents.widget.unregister
+const widgetFailedEvent = PluginEvents.widget.failed
 const isDev = import.meta.env?.DEV ?? false
 const pollingService = PollingService.getInstance()
 let transportBindingsReady = false
@@ -1023,6 +1040,8 @@ function injectStyles(widgetId: string, styles: string): void {
 
 async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise<void> {
   try {
+    widgetFailures.delete(payload.widgetId)
+    touchWidgetFailureVersion()
     if (isDev) {
       devLog(
         `[WidgetRegistry] register widget ${payload.widgetId} (${payload.pluginName}:${payload.featureId})`
@@ -1059,6 +1078,8 @@ async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise
 
 async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Promise<void> {
   try {
+    widgetFailures.delete(payload.widgetId)
+    touchWidgetFailureVersion()
     if (isDev) {
       devLog(
         `[WidgetRegistry] update widget ${payload.widgetId} (${payload.pluginName}:${payload.featureId})`
@@ -1099,6 +1120,8 @@ function handleWidgetUnregister({ widgetId }: { widgetId: string }): void {
       devLog(`[WidgetRegistry] unregister widget ${widgetId}`)
     }
     clearWidgetRuntimeSource(widgetId)
+    widgetFailures.delete(widgetId)
+    touchWidgetFailureVersion()
     unregisterCustomRenderer(widgetId)
     const style = injectedStyles.get(widgetId)
     if (style) {
@@ -1111,12 +1134,23 @@ function handleWidgetUnregister({ widgetId }: { widgetId: string }): void {
   }
 }
 
+function handleWidgetFailed(payload: WidgetFailurePayload): void {
+  widgetFailures.set(payload.widgetId, payload)
+  touchWidgetFailureVersion()
+  clearWidgetRuntimeSource(payload.widgetId)
+  unregisterCustomRenderer(payload.widgetId)
+  if (isDev) {
+    devLog(`[WidgetRegistry] widget failed ${payload.widgetId} (${payload.code})`, payload)
+  }
+}
+
 function bindTransportHandlers(): boolean {
   if (transportBindingsReady) return true
   const disposers: Array<() => void> = []
   try {
     disposers.push(transport.on(widgetRegisterEvent, handleWidgetRegister))
     disposers.push(transport.on(widgetUpdateEvent, handleWidgetUpdate))
+    disposers.push(transport.on(widgetFailedEvent, handleWidgetFailed))
     disposers.push(transport.on(widgetUnregisterEvent, handleWidgetUnregister))
     transportBindingsReady = true
     return true

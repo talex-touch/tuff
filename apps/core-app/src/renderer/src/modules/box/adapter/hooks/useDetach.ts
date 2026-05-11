@@ -1,33 +1,37 @@
-import type { FlowPayload, IProviderActivate, TuffItem } from '@talex-touch/utils'
+import type {
+  DivisionBoxConfig,
+  FlowPayload,
+  IProviderActivate,
+  ITuffIcon,
+  TuffItem
+} from '@talex-touch/utils'
 import type { ComputedRef, Ref } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents, FlowEvents } from '@talex-touch/utils/transport/events'
-import { onBeforeUnmount, reactive, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+
+const DETACHED_PAYLOAD_STATE_KEY = 'detachedPayload'
 
 interface UseDetachOptions {
   searchVal: Ref<string>
   res: Ref<TuffItem[]>
-  boxOptions: { focus: number }
+  boxOptions: { focus: number; data?: unknown }
   isUIMode: ComputedRef<boolean>
   activeActivations: ComputedRef<IProviderActivate[] | undefined>
   deactivateProvider: (id?: string) => Promise<void>
 }
 
-function buildUrl(item: TuffItem, query: string): string {
-  if (item.meta?.interaction?.type === 'webcontent' && item.meta.interaction.path) {
-    return `plugin://${item.source?.id}/${item.meta.interaction.path}`
-  }
-  if (item.meta?.interaction?.type === 'index') {
-    return `plugin://${item.source?.id}/index.html`
-  }
-  if (item.kind === 'url' && item.meta?.web?.url) {
-    return item.meta.web.url
-  }
-  if (item.kind === 'file' && item.meta?.file?.path) {
-    return `file://${item.meta.file.path}`
-  }
+function resolveIcon(item: TuffItem): string | ITuffIcon | undefined {
+  const icon = item.render?.basic?.icon
+  if (!icon) return undefined
+  if (typeof icon === 'string') return { type: 'class', value: icon }
+  if (typeof icon === 'object' && 'value' in icon) return icon
+  return undefined
+}
+
+function buildDetachedFeatureUrl(item: TuffItem, query: string): string {
   const params = new URLSearchParams({
     itemId: item.id,
     query: query || '',
@@ -36,16 +40,55 @@ function buildUrl(item: TuffItem, query: string): string {
   return `tuff://detached?${params.toString()}`
 }
 
-function isDetachedConfigUrl(url: string): boolean {
-  return url.startsWith('tuff://detached')
+function resolveFeaturePluginId(item: TuffItem): string | undefined {
+  const pluginName = item.meta?.pluginName
+  if (typeof pluginName === 'string' && pluginName.trim()) {
+    return pluginName
+  }
+  if (item.source?.type === 'plugin' && item.source.id !== 'plugin-features') {
+    return item.source.id
+  }
+  return undefined
 }
 
-function resolveIcon(item: TuffItem): string | undefined {
-  const icon = item.render?.basic?.icon
-  if (!icon) return undefined
-  if (typeof icon === 'string') return icon
-  if (typeof icon === 'object' && 'value' in icon) return icon.value
-  return undefined
+function buildDetachedPayload(item: TuffItem, query: string): { item: TuffItem; query: string } {
+  return {
+    item: JSON.parse(JSON.stringify(item)) as TuffItem,
+    query
+  }
+}
+
+export function buildDetachedFeatureConfig(
+  item: TuffItem,
+  query: string
+): { config: DivisionBoxConfig; isWidget: boolean } | null {
+  const interaction = item.meta?.interaction
+  const showInput = interaction?.type !== 'widget'
+  const pluginId = resolveFeaturePluginId(item)
+  if (!pluginId) {
+    return null
+  }
+
+  const isWidget = interaction?.type === 'widget'
+  const path =
+    interaction?.type === 'webcontent' && interaction.path ? interaction.path : 'index.html'
+  const initialState = isWidget
+    ? { [DETACHED_PAYLOAD_STATE_KEY]: buildDetachedPayload(item, query) }
+    : undefined
+
+  return {
+    isWidget,
+    config: {
+      url: isWidget ? buildDetachedFeatureUrl(item, query) : `plugin://${pluginId}/${path}`,
+      title: item.render?.basic?.title || 'Detached Item',
+      icon: resolveIcon(item),
+      size: 'medium',
+      keepAlive: true,
+      pluginId,
+      ui: { showInput, initialInput: showInput ? query : '' },
+      initialState
+    }
+  }
 }
 
 function resolveActorPluginId(payload: FlowPayload | null): string | undefined {
@@ -78,6 +121,25 @@ function getFlowPermissionMessage(
   return t('systemPermission.requiredPermission', { permission: permissionId })
 }
 
+function getActiveFeature(
+  activations: IProviderActivate[] | undefined,
+  boxData?: unknown
+): TuffItem | null {
+  const feature = activations?.find((activation) => activation?.id === 'plugin-features')?.meta
+    ?.feature
+  if (feature && typeof feature === 'object') {
+    return (feature as TuffItem).source?.type === 'plugin' ? (feature as TuffItem) : null
+  }
+
+  const cachedFeature =
+    boxData && typeof boxData === 'object' ? (boxData as { feature?: unknown }).feature : null
+  if (!cachedFeature || typeof cachedFeature !== 'object') {
+    return null
+  }
+  const item = cachedFeature as TuffItem
+  return item.source?.type === 'plugin' ? item : null
+}
+
 export function useDetach(options: UseDetachOptions) {
   const { searchVal, res, boxOptions, isUIMode, activeActivations, deactivateProvider } = options
   const { t } = useI18n()
@@ -87,37 +149,25 @@ export function useDetach(options: UseDetachOptions) {
   const flowPayload = ref<FlowPayload | null>(null)
   const flowSessionId = ref('')
 
-  async function detachItem(item: TuffItem): Promise<void> {
+  async function detachFeature(item: TuffItem): Promise<void> {
     try {
-      const interaction = item.meta?.interaction
-      const showInput = interaction?.type !== 'widget'
-      const url = buildUrl(item, searchVal.value)
-
-      const config = {
-        url,
-        title: item.render?.basic?.title || 'Detached Item',
-        icon: resolveIcon(item),
-        size: 'medium' as const,
-        keepAlive: true,
-        pluginId: item.source?.type === 'plugin' ? item.source.id : undefined,
-        ui: { showInput, initialInput: showInput ? searchVal.value : '' }
+      const detached = buildDetachedFeatureConfig(item, searchVal.value)
+      if (!detached) {
+        return
       }
-      const response = await transport.send(DivisionBoxEvents.open, config)
+      const response = await transport.send(DivisionBoxEvents.open, detached.config)
       if (response?.success) {
         const sessionId = response.data?.sessionId
-        if (sessionId && isDetachedConfigUrl(url)) {
-          const detachedPayload = {
-            item: JSON.parse(JSON.stringify(item)) as TuffItem,
-            query: searchVal.value
-          }
+        if (sessionId && detached.isWidget) {
+          const detachedPayload = detached.config.initialState?.[DETACHED_PAYLOAD_STATE_KEY]
           await transport
             .send(DivisionBoxEvents.updateState, {
               sessionId,
-              key: 'detachedPayload',
+              key: DETACHED_PAYLOAD_STATE_KEY,
               value: detachedPayload
             })
             .catch((error) => {
-              console.warn('[useDetach] Failed to persist detached payload:', error)
+              console.warn('[useDetach] Failed to persist widget payload:', error)
             })
         }
         toast.success(t('corebox.detached', '已分离到独立窗口'))
@@ -135,7 +185,7 @@ export function useDetach(options: UseDetachOptions) {
       const config = {
         url: `plugin://${activation.id}/index.html`,
         title: activation.name || activation.id,
-        icon: activation.icon?.value,
+        icon: activation.icon,
         size: 'medium' as const,
         keepAlive: true,
         pluginId: activation.id,
@@ -143,7 +193,9 @@ export function useDetach(options: UseDetachOptions) {
       }
       const response = await transport.send(DivisionBoxEvents.open, config)
       if (response?.success) {
-        await deactivateProvider(activation.id)
+        await deactivateProvider(activation.id).catch((error) => {
+          console.warn('[useDetach] Detached UI view, but failed to deactivate provider:', error)
+        })
         toast.success(t('corebox.detached', '已分离到独立窗口'))
       } else {
         throw new Error(response?.error?.message || 'Failed')
@@ -204,28 +256,58 @@ export function useDetach(options: UseDetachOptions) {
   // Channel listeners
   const unregDetach = transport.on(FlowEvents.triggerDetach, () => {
     if (isUIMode.value && activeActivations.value?.length) {
-      detachUIMode(activeActivations.value[0])
+      void detachUIMode(activeActivations.value[0])
       return
     }
-    const currentItem = res.value[boxOptions.focus]
-    if (currentItem) detachItem(currentItem)
+    const activeFeature = getActiveFeature(activeActivations.value, boxOptions.data)
+    if (activeFeature) {
+      void detachFeature(activeFeature)
+    }
   })
 
   const unregFlow = transport.on(FlowEvents.triggerTransfer, () => {
-    const currentItem = res.value[boxOptions.focus]
+    const currentItem =
+      getActiveFeature(activeActivations.value, boxOptions.data) ?? res.value[boxOptions.focus]
     if (currentItem) openFlowSelector(currentItem)
+  })
+
+  function handleDetachShortcut(): void {
+    if (isUIMode.value && activeActivations.value?.length) {
+      void detachUIMode(activeActivations.value[0])
+      return
+    }
+    const activeFeature = getActiveFeature(activeActivations.value, boxOptions.data)
+    if (activeFeature) {
+      void detachFeature(activeFeature)
+    }
+  }
+
+  function handleFlowShortcut(event: Event): void {
+    const detail = (event as CustomEvent<{ item?: TuffItem }>).detail
+    const currentItem =
+      getActiveFeature(activeActivations.value, boxOptions.data) ??
+      detail?.item ??
+      res.value[boxOptions.focus]
+    if (currentItem) openFlowSelector(currentItem)
+  }
+
+  onMounted(() => {
+    window.addEventListener('corebox:detach-item', handleDetachShortcut)
+    window.addEventListener('corebox:flow-item', handleFlowShortcut)
   })
 
   onBeforeUnmount(() => {
     unregDetach()
     unregFlow()
+    window.removeEventListener('corebox:detach-item', handleDetachShortcut)
+    window.removeEventListener('corebox:flow-item', handleFlowShortcut)
   })
 
   return reactive({
     flowVisible,
     flowPayload,
     flowSessionId,
-    detachItem,
+    detachFeature,
     detachUIMode,
     openFlowSelector,
     closeFlowSelector,

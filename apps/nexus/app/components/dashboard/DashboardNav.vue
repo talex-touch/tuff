@@ -68,6 +68,7 @@ const sectionPaths: Record<string, string> = {
   plugins: '/dashboard/assets',
   intelligence: '/dashboard/admin/intelligence',
   'intelligence-agent': '/dashboard/admin/intelligence-agent',
+  'provider-registry': '/dashboard/admin/provider-registry',
   risk: '/dashboard/admin/risk',
   users: '/dashboard/admin/users',
   subscriptions: '/dashboard/admin/subscriptions',
@@ -181,6 +182,11 @@ const adminMenuItems = computed(() => {
       icon: 'i-carbon-machine-learning-model',
     },
     {
+      id: 'provider-registry',
+      label: t('dashboard.sections.menu.providerRegistry', 'Provider Registry'),
+      icon: 'i-carbon-cloud-service-management',
+    },
+    {
       id: 'adminCredits',
       label: t('dashboard.sections.menu.adminCredits', 'AI 积分'),
       icon: 'i-carbon-currency',
@@ -262,6 +268,8 @@ const activeSection = computed(() => {
     return 'adminCredits'
   if (route.path.startsWith('/dashboard/admin/intelligence-agent'))
     return 'intelligence-agent'
+  if (route.path.startsWith('/dashboard/admin/provider-registry'))
+    return 'provider-registry'
   if (route.path.startsWith('/dashboard/admin/intelligence'))
     return 'intelligence'
   if (route.path.startsWith('/dashboard/admin/risk'))

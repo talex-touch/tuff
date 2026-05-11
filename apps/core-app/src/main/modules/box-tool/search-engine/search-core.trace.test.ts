@@ -7,6 +7,13 @@ const { infoSpy, warnSpy } = vi.hoisted(() => ({
   warnSpy: vi.fn()
 }))
 
+const sentryServiceMock = vi.hoisted(() => ({
+  isTelemetryEnabled: vi.fn(() => false),
+  isEnabled: vi.fn(() => false),
+  queueNexusTelemetry: vi.fn(),
+  recordSearchMetrics: vi.fn()
+}))
+
 vi.mock('@talex-touch/utils/common/logger', () => ({
   getLogger: vi.fn(() => ({
     debug: vi.fn(),
@@ -82,12 +89,7 @@ vi.mock('../../plugin/adapters/plugin-features-adapter', () => ({
 }))
 
 vi.mock('../../sentry', () => ({
-  getSentryService: () => ({
-    isTelemetryEnabled: () => false,
-    isEnabled: () => false,
-    queueNexusTelemetry: vi.fn(),
-    recordSearchMetrics: vi.fn()
-  })
+  getSentryService: () => sentryServiceMock
 }))
 
 vi.mock('../../storage', () => ({
@@ -178,6 +180,10 @@ describe('search-core search-trace', () => {
   beforeEach(() => {
     infoSpy.mockClear()
     warnSpy.mockClear()
+    sentryServiceMock.isTelemetryEnabled.mockReturnValue(false)
+    sentryServiceMock.isEnabled.mockReturnValue(false)
+    sentryServiceMock.queueNexusTelemetry.mockClear()
+    sentryServiceMock.recordSearchMetrics.mockClear()
   })
 
   it('结构化日志不输出 query 明文并包含争用快照字段', () => {
@@ -212,5 +218,70 @@ describe('search-core search-trace', () => {
     expect(line).toContain('"dbQueue"')
     expect(line).toContain('"loopLag"')
     expect(line).toContain('"appTaskGate"')
+  })
+
+  it('搜索 telemetry 上报 provider 状态与首屏耗时且不包含 query 明文', () => {
+    sentryServiceMock.isTelemetryEnabled.mockReturnValue(true)
+    const core = SearchEngineCore.getInstance() as any
+    const query: TuffQuery = {
+      text: 'private search text',
+      inputs: [{ type: TuffInputType.Text, content: 'clipboard payload' }]
+    }
+
+    core._recordSearchMetrics({
+      sessionId: 'session-telemetry-test',
+      query,
+      totalDuration: 950,
+      firstResultMs: 120,
+      firstResultCount: 2,
+      sortingDuration: 17,
+      usageStatsDuration: 9,
+      completionDuration: 4,
+      stageDurations: {
+        parseDuration: 3,
+        providerAggregationDuration: 28,
+        mergeRankDuration: 17
+      },
+      sourceStats: [
+        {
+          providerId: 'app-provider',
+          status: 'success',
+          duration: 44,
+          resultCount: 2
+        },
+        {
+          providerId: 'everything-provider',
+          status: 'timeout',
+          duration: 500,
+          resultCount: 0
+        }
+      ],
+      resultCount: 3,
+      providerFilter: 'app'
+    })
+
+    expect(sentryServiceMock.queueNexusTelemetry).toHaveBeenCalledTimes(1)
+    const payload = sentryServiceMock.queueNexusTelemetry.mock.calls[0][0]
+    expect(JSON.stringify(payload)).not.toContain('private search text')
+    expect(payload).toMatchObject({
+      eventType: 'search',
+      searchQuery: undefined,
+      searchDurationMs: 950,
+      searchResultCount: 3,
+      providerTimings: {
+        'app-provider': 44,
+        'everything-provider': 500
+      },
+      metadata: {
+        firstResultMs: 120,
+        firstResultCount: 2,
+        providerTimeoutCount: 1,
+        providerFilter: 'app',
+        providerStatus: {
+          'app-provider': 'success',
+          'everything-provider': 'timeout'
+        }
+      }
+    })
   })
 })

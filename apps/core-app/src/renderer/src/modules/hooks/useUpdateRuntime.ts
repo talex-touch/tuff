@@ -211,7 +211,7 @@ function getDefaultSettings(channel: AppPreviewChannel): UpdateSettings {
     updateChannel: normalizeSupportedUpdateChannel(channel),
     ignoredVersions: [],
     customSources: [],
-    autoDownload: false,
+    autoDownload: true,
     rendererOverrideEnabled: false,
     cacheEnabled: true,
     cacheTTL: 30,

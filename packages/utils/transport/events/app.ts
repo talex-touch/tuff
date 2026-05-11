@@ -35,6 +35,7 @@ import type {
   RendererPerfReport,
   SecureValueGetRequest,
   SecureValueSetRequest,
+  SecureStoreHealthResponse,
   SetLocaleRequest,
   ShowInFolderRequest,
   StartupRequest,
@@ -280,6 +281,14 @@ export const AppEvents = {
       .module("system")
       .event("set-secure-value")
       .define<SecureValueSetRequest, void>(),
+
+    /**
+     * Get current secure storage backend health.
+     */
+    getSecureStoreHealth: defineEvent("app")
+      .module("system")
+      .event("get-secure-store-health")
+      .define<void, SecureStoreHealthResponse>(),
 
     /**
      * Read a local file as text.

@@ -15,8 +15,8 @@ import os from 'node:os'
 import { shell } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import {
+  getSecureStoreHealth,
   getSecureStoreValue,
-  isSecureStoreAvailable,
   setSecureStoreValue
 } from '../../utils/secure-store'
 import { BaseModule } from '../abstract-base-module'
@@ -27,6 +27,8 @@ const authLog = getLogger('auth')
 
 const AUTH_TOKEN_KEY = 'auth.token'
 const MACHINE_SEED_SECURE_KEY = 'sync.machine-seed.v1'
+const AUTH_TOKEN_PURPOSE = 'auth-token'
+const MACHINE_SEED_PURPOSE = 'machine-seed'
 const MACHINE_CODE_VERSION = 'mc_v1'
 const STEP_UP_TOKEN_TTL_MS = 10 * 60 * 1000
 const AUTH_PROFILE_REQUEST_TIMEOUT_MS = 4_000
@@ -204,28 +206,38 @@ function normalizeBearerToken(token: string): string {
   return trimmed.startsWith('Bearer ') ? trimmed : `Bearer ${trimmed}`
 }
 
+function getSecureValuePurpose(key: string): string {
+  if (key === AUTH_TOKEN_KEY) {
+    return AUTH_TOKEN_PURPOSE
+  }
+  if (key === MACHINE_SEED_SECURE_KEY) {
+    return MACHINE_SEED_PURPOSE
+  }
+  return 'default'
+}
+
 async function getSecureValue(key: string): Promise<string | null> {
   if (!appRootPath) {
     throw new Error('[AuthModule] App root path is not ready')
   }
-  if (!isSecureStoreAvailable()) {
-    return null
-  }
-  return await getSecureStoreValue(appRootPath, key, (message, error) => {
+  return await getSecureStoreValue(appRootPath, key, getSecureValuePurpose(key), (message, error) =>
     authLog.warn(message, { error })
-  })
+  )
 }
 
 async function setSecureValue(key: string, value: string | null): Promise<boolean> {
   if (!appRootPath) {
     throw new Error('[AuthModule] App root path is not ready')
   }
-  if (!isSecureStoreAvailable()) {
-    return false
-  }
-  return await setSecureStoreValue(appRootPath, key, value, (message, error) => {
-    authLog.warn(message, { error })
-  })
+  return await setSecureStoreValue(
+    appRootPath,
+    key,
+    value,
+    getSecureValuePurpose(key),
+    (message, error) => {
+      authLog.warn(message, { error })
+    }
+  )
 }
 
 function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): void {
@@ -246,11 +258,18 @@ async function loadAuthToken(): Promise<void> {
     return
   }
 
-  const secureStoreAvailable = isSecureStoreAvailable()
-  setSecureStorageDegradedState(!secureStoreAvailable)
+  const secureStoreHealth = await getSecureStoreHealth(appRootPath)
+  setSecureStorageDegradedState(!secureStoreHealth.available)
   authToken = await getSecureValue(AUTH_TOKEN_KEY)
-  if (!secureStoreAvailable) {
-    authLog.warn('Secure storage unavailable; auth entered degraded session mode')
+  if (!secureStoreHealth.available) {
+    authLog.warn('Secure storage unavailable; auth entered session-only mode', {
+      reason: secureStoreHealth.reason
+    })
+  } else if (secureStoreHealth.degraded) {
+    authLog.warn('System safeStorage unavailable; auth uses local encrypted fallback', {
+      backend: secureStoreHealth.backend,
+      reason: secureStoreHealth.reason
+    })
   }
 }
 
@@ -285,7 +304,8 @@ function ensureAuthSettings(appSettings: AppSetting): void {
       deviceId: '',
       deviceName: '',
       devicePlatform: '',
-      useSecureStorage: false,
+      useSecureStorage: true,
+      secureStorageUserOverridden: false,
       secureStorageReminderShown: false,
       secureStorageUnavailable: false
     }
@@ -294,12 +314,21 @@ function ensureAuthSettings(appSettings: AppSetting): void {
 
   const authSettings = appSettings.auth as {
     useSecureStorage?: unknown
+    secureStorageUserOverridden?: unknown
     secureStorageReminderShown?: unknown
     secureStorageUnavailable?: unknown
   }
 
+  if (typeof authSettings.secureStorageUserOverridden !== 'boolean') {
+    authSettings.secureStorageUserOverridden = false
+  }
   if (typeof authSettings.useSecureStorage !== 'boolean') {
-    authSettings.useSecureStorage = false
+    authSettings.useSecureStorage = true
+  } else if (
+    authSettings.useSecureStorage === false &&
+    authSettings.secureStorageUserOverridden === false
+  ) {
+    authSettings.useSecureStorage = true
   }
   if (typeof authSettings.secureStorageReminderShown !== 'boolean') {
     authSettings.secureStorageReminderShown = false
@@ -319,34 +348,54 @@ function isAuthTokenSecureStorageEnabled(appSettings?: AppSetting): boolean {
 async function handleAuthStoragePreferenceChanged(nextAppSetting: AppSetting): Promise<void> {
   const nextEnabled = isAuthTokenSecureStorageEnabled(nextAppSetting)
   if (nextEnabled === authUseSecureStorage) {
-    setSecureStorageDegradedState(nextEnabled && !isSecureStoreAvailable())
+    if (nextEnabled) {
+      const secureStoreHealth = await getSecureStoreHealth(appRootPath)
+      setSecureStorageDegradedState(!secureStoreHealth.available)
+    } else {
+      setSecureStorageDegradedState(false)
+    }
     return
   }
 
   authUseSecureStorage = nextEnabled
   if (!authUseSecureStorage) {
+    markSecureStorageUserOverridden(true)
     setSecureStorageDegradedState(false)
     await setSecureValue(AUTH_TOKEN_KEY, null)
     authLog.info('Auth secure storage disabled by user preference; using session-only token mode')
     return
   }
 
-  const secureStoreAvailable = isSecureStoreAvailable()
-  setSecureStorageDegradedState(!secureStoreAvailable)
+  markSecureStorageUserOverridden(true)
+  const secureStoreHealth = await getSecureStoreHealth(appRootPath)
+  setSecureStorageDegradedState(!secureStoreHealth.available)
 
   if (!authToken) {
-    if (!secureStoreAvailable) {
-      authLog.warn('Secure storage unavailable; auth entered degraded session mode')
+    if (!secureStoreHealth.available) {
+      authLog.warn('Secure storage unavailable; auth entered session-only mode', {
+        reason: secureStoreHealth.reason
+      })
     }
     return
   }
 
   const persisted = await setSecureValue(AUTH_TOKEN_KEY, authToken)
   if (!persisted) {
-    authLog.warn('Secure storage unavailable; auth entered degraded session mode')
+    authLog.warn('Secure storage unavailable; auth entered session-only mode')
     return
   }
   authLog.info('Auth secure storage enabled by user preference')
+}
+
+function markSecureStorageUserOverridden(overridden: boolean): void {
+  const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
+  ensureAuthSettings(appSettings)
+  const authSettings = appSettings.auth as { secureStorageUserOverridden?: boolean }
+  if (authSettings.secureStorageUserOverridden === overridden) {
+    return
+  }
+  authSettings.secureStorageUserOverridden = overridden
+  saveMainConfig(StorageList.APP_SETTING, appSettings)
 }
 
 function setSecureStorageDegradedState(unavailable: boolean): void {

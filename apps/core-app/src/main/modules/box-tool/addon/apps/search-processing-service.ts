@@ -4,6 +4,7 @@ import type { Range } from './highlighting-service'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { startTiming, timingLogger } from '@talex-touch/utils'
+import { toTfileUrl } from '@talex-touch/utils/network'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { fuzzyMatch, indicesToRanges } from '@talex-touch/utils/search/fuzzy-match'
 import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils'
@@ -17,24 +18,10 @@ import { createLogger } from '../../../../utils/logger'
 
 const SLOW_PROCESS_THRESHOLD_MS = 300
 const searchProcessingLog = createLogger('AppScanner').child('SearchProcessing')
-const BASE64_MARKER = 'base64,'
-const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
 const MANAGED_ENTRY_SOURCE_KEY = 'entrySource'
 const MANAGED_ENTRY_ENABLED_KEY = 'entryEnabled'
 const MANAGED_ENTRY_SOURCE_VALUE = 'manual'
 const ALTERNATE_NAMES_EXTENSION_KEY = 'alternateNames'
-
-function isValidBase64DataUrl(value: string): boolean {
-  const markerIndex = value.indexOf(BASE64_MARKER)
-  if (markerIndex === -1) {
-    return true
-  }
-  const payload = value.slice(markerIndex + BASE64_MARKER.length)
-  if (!payload) {
-    return false
-  }
-  return BASE64_PAYLOAD_PATTERN.test(payload)
-}
 
 interface ProcessedTuffItem extends TuffItem {
   score: number // 用于排序的内部评分
@@ -62,7 +49,7 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
   const displayName = resolveDisplayName(app.displayName, app.name)
   const subtitle = app.extensions.displayPath || app.path
   const rawIconValue = app.extensions.icon ?? ''
-  const iconValue = rawIconValue && !isValidBase64DataUrl(rawIconValue) ? '' : rawIconValue
+  const iconValue = rawIconValue.startsWith('data:') ? '' : toTfileUrl(rawIconValue)
   const keywordPath = app.extensions.displayPath || app.path
   const launchKind = (app.extensions.launchKind as AppLaunchKind | null) || 'path'
   const description = app.extensions.description || ''
@@ -74,7 +61,7 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
     .setSubtitle(subtitle)
     .setDescription(description)
     .setIcon({
-      type: iconValue.startsWith('data:') ? 'url' : 'file',
+      type: iconValue ? 'url' : 'file',
       value: iconValue
     })
     .setActions([

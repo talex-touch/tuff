@@ -15,6 +15,7 @@ Declare widgets in the manifest, then provide the renderer entry in your plugin 
 | `.jsx` | JavaScript JSX | WidgetTsxProcessor |
 | `.ts` | Plain TypeScript | WidgetScriptProcessor |
 | `.js` | Plain JavaScript | WidgetScriptProcessor |
+| `.cjs` | Precompiled CommonJS | WidgetScriptProcessor |
 
 ## Widget Types
 
@@ -149,6 +150,17 @@ Widgets run in a sandboxed environment. Only these packages are allowed:
 - Use TuffTransport for type-safe IPC communication
 - `ctx.widget.send` exchanges size, theme, or focus signals
 - Access plugin storage via `ctx.storage`
+
+## Failure States And Diagnostics
+
+When widget registration fails, CoreBox renders an explicit state in place instead of showing a blank area or debug-only text. Common states are:
+
+- `Widget renderer loading`: the host is waiting for registration.
+- `Widget renderer unavailable`: no renderer has been registered yet.
+- `Widget compile failed`: source compilation failed or the runtime compiler is unavailable.
+- `Widget render failed`: the component registered successfully but threw during rendering.
+
+The main process also records a plugin issue with `pluginName`, `featureId`, `widgetId`, `filePath`, `hash`, and `causeCode`. `WIDGET_COMPILER_BINARY_UNAVAILABLE` means the packaged esbuild platform binary is missing, trapped inside `app.asar`, or not executable; ordinary source syntax, dependency, or compile errors continue to use `WIDGET_COMPILE_FAILED` or the matching dependency/path issue code.
 
 ## Best Practices
 

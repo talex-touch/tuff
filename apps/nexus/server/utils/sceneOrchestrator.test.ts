@@ -1,0 +1,462 @@
+import type { ProviderRegistryRecord } from './providerRegistryStore'
+import type { SceneRegistryRecord } from './sceneRegistryStore'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  clearSceneCapabilityAdaptersForTest,
+  registerSceneCapabilityAdapter,
+  resetSceneCapabilityAdaptersForTest,
+  runSceneOrchestrator,
+} from './sceneOrchestrator'
+
+const storeMocks = vi.hoisted(() => ({
+  getProviderRegistryEntry: vi.fn(),
+  getSceneRegistryEntry: vi.fn(),
+}))
+
+vi.mock('./providerRegistryStore', () => ({
+  getProviderRegistryEntry: storeMocks.getProviderRegistryEntry,
+}))
+
+vi.mock('./sceneRegistryStore', () => ({
+  getSceneRegistryEntry: storeMocks.getSceneRegistryEntry,
+}))
+
+function provider(overrides: Partial<ProviderRegistryRecord> = {}): ProviderRegistryRecord {
+  return {
+    id: 'prv_tencent_cloud_mt',
+    name: 'tencent-cloud-mt-main',
+    displayName: 'Tencent Cloud Machine Translation',
+    vendor: 'tencent-cloud',
+    status: 'enabled',
+    authType: 'secret_pair',
+    authRef: 'secure://providers/tencent-cloud-mt-main',
+    ownerScope: 'system',
+    ownerId: null,
+    description: null,
+    endpoint: 'https://tmt.tencentcloudapi.com',
+    region: 'ap-shanghai',
+    metadata: null,
+    capabilities: [
+      {
+        id: 'cap_text_translate',
+        providerId: 'prv_tencent_cloud_mt',
+        capability: 'text.translate',
+        schemaRef: 'nexus://schemas/provider/text-translate.v1',
+        metering: { unit: 'character' },
+        constraints: null,
+        metadata: null,
+        createdAt: '2026-05-10T00:00:00.000Z',
+        updatedAt: '2026-05-10T00:00:00.000Z',
+      },
+    ],
+    createdBy: 'admin_1',
+    createdAt: '2026-05-10T00:00:00.000Z',
+    updatedAt: '2026-05-10T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function textTranslateCapability(providerId: string) {
+  return {
+    id: `cap_text_translate_${providerId}`,
+    providerId,
+    capability: 'text.translate',
+    schemaRef: 'nexus://schemas/provider/text-translate.v1',
+    metering: { unit: 'character' },
+    constraints: null,
+    metadata: null,
+    createdAt: '2026-05-10T00:00:00.000Z',
+    updatedAt: '2026-05-10T00:00:00.000Z',
+  }
+}
+
+function scene(overrides: Partial<SceneRegistryRecord> = {}): SceneRegistryRecord {
+  return {
+    id: 'corebox.selection.translate',
+    displayName: 'CoreBox Selection Translate',
+    owner: 'core-app',
+    ownerScope: 'system',
+    ownerId: null,
+    status: 'enabled',
+    requiredCapabilities: ['text.translate'],
+    strategyMode: 'priority',
+    fallback: 'enabled',
+    meteringPolicy: null,
+    auditPolicy: { persistInput: false, persistOutput: false },
+    metadata: null,
+    bindings: [
+      {
+        id: 'binding_text_translate',
+        sceneId: 'corebox.selection.translate',
+        providerId: 'prv_tencent_cloud_mt',
+        capability: 'text.translate',
+        priority: 10,
+        weight: null,
+        status: 'enabled',
+        constraints: null,
+        metadata: null,
+        createdAt: '2026-05-10T00:00:00.000Z',
+        updatedAt: '2026-05-10T00:00:00.000Z',
+      },
+    ],
+    createdBy: 'admin_1',
+    createdAt: '2026-05-10T00:00:00.000Z',
+    updatedAt: '2026-05-10T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function makeEvent() {
+  return {
+    path: '/api/dashboard/provider-registry/scenes/corebox.selection.translate/run',
+    node: { req: { url: '/api/dashboard/provider-registry/scenes/corebox.selection.translate/run' } },
+    context: { params: {} },
+  } as any
+}
+
+describe('runSceneOrchestrator', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    clearSceneCapabilityAdaptersForTest()
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene())
+    storeMocks.getProviderRegistryEntry.mockResolvedValue(provider())
+  })
+
+  it('dry run 只解析 scene、provider 与 strategy，不调用 adapter', async () => {
+    const run = await runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
+      input: { text: 'hello' },
+      dryRun: true,
+    })
+
+    expect(run).toMatchObject({
+      sceneId: 'corebox.selection.translate',
+      status: 'planned',
+      mode: 'dry_run',
+      strategyMode: 'priority',
+      requestedCapabilities: ['text.translate'],
+      selected: [
+        expect.objectContaining({
+          providerId: 'prv_tencent_cloud_mt',
+          capability: 'text.translate',
+          authRef: 'secure://providers/tencent-cloud-mt-main',
+        }),
+      ],
+      output: null,
+    })
+    expect(run.trace.map(item => item.phase)).toContain('adapter.dispatch')
+    expect(storeMocks.getProviderRegistryEntry).toHaveBeenCalledWith(expect.anything(), 'prv_tencent_cloud_mt')
+  })
+
+  it('真实执行但缺少 provider adapter 时返回标准 adapter unavailable 错误', async () => {
+    storeMocks.getProviderRegistryEntry.mockResolvedValue(provider({ vendor: 'custom' }))
+
+    await expect(runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
+      input: { text: 'hello' },
+    })).rejects.toMatchObject({
+      statusCode: 501,
+      data: {
+        code: 'PROVIDER_ADAPTER_UNAVAILABLE',
+        run: expect.objectContaining({
+          status: 'failed',
+          error: expect.objectContaining({ code: 'PROVIDER_ADAPTER_UNAVAILABLE' }),
+          selected: [],
+          fallbackTrail: expect.arrayContaining([
+            expect.objectContaining({
+              providerId: 'prv_tencent_cloud_mt',
+              status: 'failed',
+              reason: 'provider_adapter_unavailable',
+            }),
+          ]),
+        }),
+      },
+    })
+  })
+
+  it('有 adapter 时返回 output、usage 与 trace', async () => {
+    registerSceneCapabilityAdapter('tencent-cloud:text.translate', async ({ input, provider, capability }) => ({
+      output: {
+        translatedText: `translated:${(input as any).text}`,
+      },
+      providerRequestId: 'req_tencent_1',
+      latencyMs: 42,
+      usage: [
+        {
+          unit: 'character',
+          quantity: String((input as any).text).length,
+          billable: true,
+          providerId: provider.id,
+          capability,
+          estimated: true,
+        },
+      ],
+    }))
+
+    const run = await runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
+      input: { text: 'hello' },
+    })
+
+    expect(run).toMatchObject({
+      status: 'completed',
+      mode: 'execute',
+      output: { translatedText: 'translated:hello' },
+      usage: [
+        expect.objectContaining({
+          unit: 'character',
+          quantity: 5,
+          providerId: 'prv_tencent_cloud_mt',
+          capability: 'text.translate',
+        }),
+      ],
+    })
+    expect(run.trace).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        phase: 'adapter.dispatch',
+        status: 'success',
+        metadata: expect.objectContaining({ providerRequestId: 'req_tencent_1', latencyMs: 42 }),
+      }),
+    ]))
+  })
+
+  it('adapter 失败且 fallback enabled 时继续尝试下一个候选 provider', async () => {
+    const primary = provider({
+      id: 'prv_primary',
+      name: 'primary',
+      displayName: 'Primary Provider',
+      capabilities: [textTranslateCapability('prv_primary')],
+    })
+    const secondary = provider({
+      id: 'prv_secondary',
+      name: 'secondary',
+      displayName: 'Secondary Provider',
+      capabilities: [textTranslateCapability('prv_secondary')],
+    })
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene({
+      fallback: 'enabled',
+      bindings: [
+        {
+          id: 'binding_primary',
+          sceneId: 'corebox.selection.translate',
+          providerId: 'prv_primary',
+          capability: 'text.translate',
+          priority: 10,
+          weight: null,
+          status: 'enabled',
+          constraints: null,
+          metadata: null,
+          createdAt: '2026-05-10T00:00:00.000Z',
+          updatedAt: '2026-05-10T00:00:00.000Z',
+        },
+        {
+          id: 'binding_secondary',
+          sceneId: 'corebox.selection.translate',
+          providerId: 'prv_secondary',
+          capability: 'text.translate',
+          priority: 20,
+          weight: null,
+          status: 'enabled',
+          constraints: null,
+          metadata: null,
+          createdAt: '2026-05-10T00:00:00.000Z',
+          updatedAt: '2026-05-10T00:00:00.000Z',
+        },
+      ],
+    }))
+    storeMocks.getProviderRegistryEntry.mockImplementation(async (_event, providerId: string) => {
+      if (providerId === 'prv_primary')
+        return primary
+      if (providerId === 'prv_secondary')
+        return secondary
+      return null
+    })
+
+    registerSceneCapabilityAdapter('tencent-cloud:text.translate', async ({ provider }) => {
+      if (provider.id === 'prv_primary')
+        throw new Error('primary unavailable')
+      return {
+        output: { translatedText: 'fallback result' },
+        providerRequestId: 'req_secondary',
+        latencyMs: 64,
+        usage: [
+          {
+            unit: 'character',
+            quantity: 5,
+            billable: true,
+            providerId: provider.id,
+            capability: 'text.translate',
+            estimated: true,
+          },
+        ],
+      }
+    })
+
+    const run = await runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
+      input: { text: 'hello' },
+    })
+
+    expect(run).toMatchObject({
+      status: 'completed',
+      output: { translatedText: 'fallback result' },
+      selected: [
+        expect.objectContaining({ providerId: 'prv_secondary' }),
+      ],
+      fallbackTrail: expect.arrayContaining([
+        expect.objectContaining({ providerId: 'prv_primary', status: 'failed', reason: 'primary unavailable' }),
+        expect.objectContaining({ providerId: 'prv_secondary', status: 'selected' }),
+      ]),
+      usage: [
+        expect.objectContaining({ providerId: 'prv_secondary', quantity: 5 }),
+      ],
+    })
+  })
+
+  it('adapter 失败且 fallback disabled 时不再尝试下一个候选 provider', async () => {
+    const primary = provider({
+      id: 'prv_primary',
+      name: 'primary',
+      displayName: 'Primary Provider',
+      capabilities: [textTranslateCapability('prv_primary')],
+    })
+    const secondary = provider({
+      id: 'prv_secondary',
+      name: 'secondary',
+      displayName: 'Secondary Provider',
+      capabilities: [textTranslateCapability('prv_secondary')],
+    })
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene({
+      fallback: 'disabled',
+      bindings: [
+        {
+          id: 'binding_primary',
+          sceneId: 'corebox.selection.translate',
+          providerId: 'prv_primary',
+          capability: 'text.translate',
+          priority: 10,
+          weight: null,
+          status: 'enabled',
+          constraints: null,
+          metadata: null,
+          createdAt: '2026-05-10T00:00:00.000Z',
+          updatedAt: '2026-05-10T00:00:00.000Z',
+        },
+        {
+          id: 'binding_secondary',
+          sceneId: 'corebox.selection.translate',
+          providerId: 'prv_secondary',
+          capability: 'text.translate',
+          priority: 20,
+          weight: null,
+          status: 'enabled',
+          constraints: null,
+          metadata: null,
+          createdAt: '2026-05-10T00:00:00.000Z',
+          updatedAt: '2026-05-10T00:00:00.000Z',
+        },
+      ],
+    }))
+    storeMocks.getProviderRegistryEntry.mockImplementation(async (_event, providerId: string) => {
+      if (providerId === 'prv_primary')
+        return primary
+      if (providerId === 'prv_secondary')
+        return secondary
+      return null
+    })
+    const adapter = vi.fn(async () => {
+      throw new Error('primary unavailable')
+    })
+    registerSceneCapabilityAdapter('tencent-cloud:text.translate', adapter)
+
+    await expect(runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
+      input: { text: 'hello' },
+    })).rejects.toMatchObject({
+      statusCode: 502,
+      data: {
+        code: 'PROVIDER_ADAPTER_FAILED',
+        run: expect.objectContaining({
+          status: 'failed',
+          selected: [],
+          fallbackTrail: expect.arrayContaining([
+            expect.objectContaining({ providerId: 'prv_primary', status: 'failed', reason: 'primary unavailable' }),
+          ]),
+        }),
+      },
+    })
+    expect(adapter).toHaveBeenCalledTimes(1)
+  })
+
+  it('默认腾讯云 text.translate adapter 可执行并返回标准 output/usage', async () => {
+    resetSceneCapabilityAdaptersForTest()
+    const tencentMocks = await import('./tencentMachineTranslationProvider')
+    const spy = vi.spyOn(tencentMocks, 'invokeTencentTextTranslate').mockResolvedValueOnce({
+      translatedText: '你好',
+      providerRequestId: 'req-tencent-translate',
+      latencyMs: 38,
+      usage: {
+        unit: 'character',
+        quantity: 5,
+        billable: true,
+        estimated: true,
+      },
+    })
+
+    const run = await runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
+      input: { text: 'hello', sourceLang: 'en', targetLang: 'zh' },
+    })
+
+    expect(spy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'prv_tencent_cloud_mt' }),
+      { text: 'hello', sourceLang: 'en', targetLang: 'zh' },
+    )
+    expect(run).toMatchObject({
+      status: 'completed',
+      output: { translatedText: '你好' },
+      usage: [
+        expect.objectContaining({
+          unit: 'character',
+          quantity: 5,
+          providerId: 'prv_tencent_cloud_mt',
+          capability: 'text.translate',
+        }),
+      ],
+    })
+  })
+
+  it('scene disabled 时拒绝执行', async () => {
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene({ status: 'disabled' }))
+
+    await expect(runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
+      dryRun: true,
+    })).rejects.toMatchObject({
+      statusCode: 409,
+      data: {
+        code: 'SCENE_DISABLED',
+        run: expect.objectContaining({
+          status: 'failed',
+          error: expect.objectContaining({ code: 'SCENE_DISABLED' }),
+        }),
+      },
+    })
+  })
+
+  it('provider 没有声明 scene 所需 capability 时返回 unsupported', async () => {
+    storeMocks.getProviderRegistryEntry.mockResolvedValue(provider({ capabilities: [] }))
+
+    await expect(runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
+      dryRun: true,
+    })).rejects.toMatchObject({
+      statusCode: 409,
+      data: {
+        code: 'CAPABILITY_UNSUPPORTED',
+        run: expect.objectContaining({
+          fallbackTrail: [
+            expect.objectContaining({
+              providerId: 'prv_tencent_cloud_mt',
+              status: 'rejected',
+              reason: 'provider_capability_missing',
+            }),
+          ],
+        }),
+      },
+    })
+  })
+})
