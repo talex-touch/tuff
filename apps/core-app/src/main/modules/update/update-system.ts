@@ -43,6 +43,16 @@ import { databaseModule } from '../database'
 import { getAnalyticsMessageStore } from '../analytics/message-store'
 import { getNetworkService } from '../network'
 import { launchWindowsInstaller } from './services/windows-installer-strategy'
+import {
+  calculateUpdateAssetScore,
+  isAuxiliaryUpdateComponentAsset,
+  isUpdateChecksumAsset,
+  isUpdateManifestAsset,
+  isUpdateMetadataAsset,
+  isUpdateSignatureAsset,
+  normalizeUpdateAssetKey,
+  stripUpdateSignatureSuffix
+} from './update-asset-utils'
 
 /**
  * Version information interface
@@ -607,8 +617,10 @@ export class UpdateSystem {
   }
 
   private resolveAssetByName(assets: ReleaseAsset[], name: string): ReleaseAsset | null {
-    const key = this.normalizeAssetKey(name)
-    return assets.find((asset) => this.normalizeAssetKey(String(asset?.name || '')) === key) ?? null
+    const key = normalizeUpdateAssetKey(name)
+    return (
+      assets.find((asset) => normalizeUpdateAssetKey(String(asset?.name || '')) === key) ?? null
+    )
   }
 
   private resolveAssetUrl(asset: ReleaseAsset): string | null {
@@ -1088,14 +1100,14 @@ export class UpdateSystem {
     for (const asset of release.assets as ReleaseAsset[]) {
       const name = String(asset?.name || '')
       if (name) {
-        assetMap.set(this.normalizeAssetKey(name), asset)
+        assetMap.set(normalizeUpdateAssetKey(name), asset)
       }
     }
 
     const manifestMap = new Map<string, UpdateReleaseArtifact>()
     for (const artifact of manifest.artifacts) {
       if (artifact?.name) {
-        manifestMap.set(this.normalizeAssetKey(artifact.name), artifact)
+        manifestMap.set(normalizeUpdateAssetKey(artifact.name), artifact)
       }
     }
 
@@ -1104,7 +1116,7 @@ export class UpdateSystem {
       if (!name) {
         continue
       }
-      const manifestEntry = manifestMap.get(this.normalizeAssetKey(name))
+      const manifestEntry = manifestMap.get(normalizeUpdateAssetKey(name))
       if (!manifestEntry) {
         continue
       }
@@ -1115,7 +1127,7 @@ export class UpdateSystem {
       asset.coreRange = manifestEntry.coreRange
 
       if (manifestEntry.signature) {
-        const signatureAsset = assetMap.get(this.normalizeAssetKey(manifestEntry.signature))
+        const signatureAsset = assetMap.get(normalizeUpdateAssetKey(manifestEntry.signature))
         const signatureUrl = signatureAsset?.browser_download_url || signatureAsset?.url
         if (signatureUrl) {
           asset.signatureUrl = signatureUrl
@@ -1123,7 +1135,7 @@ export class UpdateSystem {
       }
 
       if (manifestEntry.signatureKey) {
-        const signatureKeyAsset = assetMap.get(this.normalizeAssetKey(manifestEntry.signatureKey))
+        const signatureKeyAsset = assetMap.get(normalizeUpdateAssetKey(manifestEntry.signatureKey))
         const signatureKeyUrl = signatureKeyAsset?.browser_download_url || signatureKeyAsset?.url
         if (signatureKeyUrl) {
           asset.signatureKeyUrl = signatureKeyUrl
@@ -1138,7 +1150,7 @@ export class UpdateSystem {
     assets: ReleaseAsset[]
   ): Promise<UpdateReleaseManifest | null> {
     const manifestAsset = assets.find(
-      (asset) => this.normalizeAssetKey(String(asset?.name || '')) === UPDATE_RELEASE_MANIFEST_NAME
+      (asset) => normalizeUpdateAssetKey(String(asset?.name || '')) === UPDATE_RELEASE_MANIFEST_NAME
     )
     if (!manifestAsset) {
       return null
@@ -1289,10 +1301,10 @@ export class UpdateSystem {
         continue
       }
 
-      if (this.isSignatureAsset(name)) {
+      if (isUpdateSignatureAsset(name)) {
         const url = asset.browser_download_url || asset.url
         if (url) {
-          signatureMap.set(this.normalizeAssetKey(this.stripSignatureSuffix(name)), url)
+          signatureMap.set(normalizeUpdateAssetKey(stripUpdateSignatureSuffix(name)), url)
         }
       }
     }
@@ -1306,10 +1318,10 @@ export class UpdateSystem {
       }
 
       if (
-        this.isSignatureAsset(name) ||
-        this.isChecksumAsset(name) ||
-        this.isManifestAsset(name) ||
-        this.isMetadataAsset(name)
+        isUpdateSignatureAsset(name) ||
+        isUpdateChecksumAsset(name) ||
+        isUpdateManifestAsset(name) ||
+        isUpdateMetadataAsset(name)
       ) {
         continue
       }
@@ -1320,7 +1332,7 @@ export class UpdateSystem {
         continue
       }
 
-      if (!asset.component && this.isAuxiliaryComponentAsset(normalizedName)) {
+      if (!asset.component && isAuxiliaryUpdateComponentAsset(normalizedName)) {
         continue
       }
 
@@ -1344,7 +1356,7 @@ export class UpdateSystem {
         continue
       }
 
-      const signatureUrl = asset.signatureUrl || signatureMap.get(this.normalizeAssetKey(name))
+      const signatureUrl = asset.signatureUrl || signatureMap.get(normalizeUpdateAssetKey(name))
       const signatureKeyUrl = asset.signatureKeyUrl
       const checksum =
         typeof asset.sha256 === 'string'
@@ -1368,7 +1380,7 @@ export class UpdateSystem {
 
       candidates.push({
         asset: candidate,
-        score: target.priority * 1000 + this.calculateAssetScore(normalizedName, asset, platform)
+        score: target.priority * 1000 + calculateUpdateAssetScore(normalizedName, asset, platform)
       })
     }
 
@@ -1384,103 +1396,6 @@ export class UpdateSystem {
     })
 
     return candidates[0].asset
-  }
-
-  private calculateAssetScore(filename: string, asset: ReleaseAsset, platform: string): number {
-    let score = 0
-
-    if (asset.component === 'core') {
-      score += 200
-    }
-
-    if (filename.includes('tuff')) {
-      score += 20
-    }
-
-    if (filename.includes('latest-release')) {
-      score += 10
-    }
-
-    score += this.getInstallerExtensionScore(filename, platform)
-
-    return score
-  }
-
-  private getInstallerExtensionScore(filename: string, platform: string): number {
-    if (platform === 'darwin') {
-      if (filename.endsWith('.app.zip')) return 180
-      if (filename.endsWith('.dmg')) return 140
-      if (filename.endsWith('.pkg')) return 130
-      if (filename.endsWith('.zip')) return 90
-      return 0
-    }
-
-    if (platform === 'win32') {
-      if (filename.endsWith('.exe')) return 140
-      if (filename.endsWith('.msi')) return 130
-      if (filename.endsWith('.zip')) return 90
-      if (filename.endsWith('.7z')) return 80
-      return 0
-    }
-
-    if (filename.endsWith('.appimage')) return 140
-    if (filename.endsWith('.deb')) return 130
-    if (filename.endsWith('.rpm')) return 120
-    if (filename.endsWith('.tar.gz') || filename.endsWith('.tgz')) return 100
-    if (filename.endsWith('.zip')) return 80
-    return 0
-  }
-
-  private isManifestAsset(filename: string): boolean {
-    return this.normalizeAssetKey(filename) === UPDATE_RELEASE_MANIFEST_NAME
-  }
-
-  private isMetadataAsset(filename: string): boolean {
-    const lower = filename.toLowerCase()
-
-    return (
-      lower.endsWith('.yml') ||
-      lower.endsWith('.yaml') ||
-      lower.endsWith('.json') ||
-      lower.endsWith('.blockmap') ||
-      lower.includes('builder-debug')
-    )
-  }
-
-  private isAuxiliaryComponentAsset(filename: string): boolean {
-    return (
-      filename.includes('renderer') ||
-      filename.includes('extensions') ||
-      filename.includes('extension')
-    )
-  }
-
-  private isSignatureAsset(filename: string): boolean {
-    const lower = filename.toLowerCase()
-    return lower.endsWith('.sig') || lower.endsWith('.sig.txt') || lower.endsWith('.asc')
-  }
-
-  private stripSignatureSuffix(filename: string): string {
-    return filename.replace(/\.(sig|asc)(\.txt)?$/i, '')
-  }
-
-  private isChecksumAsset(filename: string): boolean {
-    const lower = filename.toLowerCase()
-    return (
-      lower.endsWith('.sha256') ||
-      lower.endsWith('.sha1') ||
-      lower.endsWith('.md5') ||
-      lower.endsWith('.sha256.txt') ||
-      lower.endsWith('.sha1.txt') ||
-      lower.endsWith('.md5.txt') ||
-      lower.endsWith('.sha256sum') ||
-      lower.endsWith('.sha1sum') ||
-      lower.endsWith('.md5sum')
-    )
-  }
-
-  private normalizeAssetKey(filename: string): string {
-    return filename.toLowerCase()
   }
 
   /**

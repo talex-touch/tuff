@@ -1,7 +1,8 @@
 #!/usr/bin/env tsx
-import { access, readFile } from 'node:fs/promises'
+import { access, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { pathToFileURL } from 'node:url'
 import {
   WINDOWS_ACCEPTANCE_CASE_EVIDENCE_SCHEMA_BY_CASE_ID,
   WINDOWS_ACCEPTANCE_EVIDENCE_SCHEMA_DESCRIPTIONS,
@@ -10,6 +11,7 @@ import {
   validateWindowsAcceptancePerformanceEvidence,
   verifyWindowsAcceptanceManifest
 } from '../src/main/modules/platform/windows-acceptance-manifest-verifier'
+import { WINDOWS_ACCEPTANCE_MANUAL_EVIDENCE_LABELS } from './windows-acceptance-manual-evidence'
 import type {
   WindowsAcceptanceEvidenceSchemaKey,
   WindowsAcceptanceGateOptions,
@@ -20,6 +22,8 @@ import type {
 interface CliOptions extends WindowsAcceptanceGateOptions {
   input?: string
   requireExistingEvidenceFiles?: boolean
+  requireNonEmptyEvidenceFiles?: boolean
+  requireCompletedManualEvidence?: boolean
   requireEvidenceGatePassed?: boolean
   requireCaseEvidenceSchemas?: boolean
   requireRecommendedCommandInputMatch?: boolean
@@ -52,6 +56,21 @@ interface EvidenceGateFailure {
   reasons: string[]
 }
 
+interface ManualEvidenceRequirement {
+  path: string
+  requiredEvidenceLabels: string[]
+}
+
+interface ManualEvidenceCompletionResult {
+  complete: boolean
+  failures: string[]
+}
+
+interface ManualEvidenceCompletionFailure {
+  path: string
+  failures: string[]
+}
+
 function printUsage(): void {
   console.log(`Usage:
   pnpm -C "apps/core-app" run windows:acceptance:verify -- --input <manifest.json> [options]
@@ -60,12 +79,15 @@ Options:
   --input <path>                 Read Windows acceptance manifest JSON. Defaults to stdin.
   --strict                       Fail non-win32 manifests.
   --requireEvidencePath          Require evidence path for every required Windows case.
-  --requireExistingEvidenceFiles Require case and performance evidence paths to exist on disk.
+  --requireExistingEvidenceFiles Require case, performance, and manual evidence files to exist on disk.
+  --requireNonEmptyEvidenceFiles Require case, performance, and manual evidence paths to be non-empty files.
+  --requireCompletedManualEvidence
+                                 Require manual evidence Markdown checklists to be checked and evidence fields to be filled.
   --requireEvidenceGatePassed    Require case/performance evidence JSON files to contain gate.passed=true and known schemas.
   --requireCaseEvidenceSchemas   Require every required case to include all case-specific evidence schemas.
   --requireVerifierCommand       Require verifier command for every required Windows case.
   --requireVerifierCommandGateFlags
-                                 Require verifier commands to include release gate flags.
+                                 Require case verifier commands and performance sampling/verifier commands to include release gate flags.
   --requireRecommendedCommandGateFlags
                                  Require verification.recommendedCommand to include release gate flags.
   --requireRecommendedCommandInputMatch
@@ -74,6 +96,14 @@ Options:
   --requireClipboardStress       Require clipboard stress summary path and verifier command.
   --requireCommonAppLaunchDetails
                                  Require each common app target to verify search/name/icon/launch/CoreBox hide.
+  --requireCopiedAppPathManualChecks
+                                 Require copied app path add-to-local-launch-area/index manual checks.
+  --requireUpdateInstallManualChecks
+                                 Require Windows update UAC/installer exit/relaunch/rollback manual checks.
+  --requireDivisionBoxDetachedWidgetManualChecks
+                                 Require DivisionBox detached widget restore manual checks.
+  --requireTimeAwareRecommendationManualChecks
+                                 Require time-aware recommendation manual checks.
   --requireCommonAppTargets <csv>
                                  Require launched app targets, e.g. WeChat,Codex,Apple Music.
   --compact                      Print single-line JSON.
@@ -120,6 +150,19 @@ function parseArgs(argv: string[]): CliOptions | null {
       options.requireEvidencePath = true
       continue
     }
+    if (arg === '--requireNonEmptyEvidenceFiles') {
+      options.requireNonEmptyEvidenceFiles = true
+      options.requireExistingEvidenceFiles = true
+      options.requireEvidencePath = true
+      continue
+    }
+    if (arg === '--requireCompletedManualEvidence') {
+      options.requireCompletedManualEvidence = true
+      options.requireNonEmptyEvidenceFiles = true
+      options.requireExistingEvidenceFiles = true
+      options.requireEvidencePath = true
+      continue
+    }
     if (arg === '--requireEvidenceGatePassed') {
       options.requireEvidenceGatePassed = true
       options.requireExistingEvidenceFiles = true
@@ -161,6 +204,22 @@ function parseArgs(argv: string[]): CliOptions | null {
     }
     if (arg === '--requireCommonAppLaunchDetails') {
       options.requireCommonAppLaunchDetails = true
+      continue
+    }
+    if (arg === '--requireCopiedAppPathManualChecks') {
+      options.requireCopiedAppPathManualChecks = true
+      continue
+    }
+    if (arg === '--requireUpdateInstallManualChecks') {
+      options.requireUpdateInstallManualChecks = true
+      continue
+    }
+    if (arg === '--requireDivisionBoxDetachedWidgetManualChecks') {
+      options.requireDivisionBoxDetachedWidgetManualChecks = true
+      continue
+    }
+    if (arg === '--requireTimeAwareRecommendationManualChecks') {
+      options.requireTimeAwareRecommendationManualChecks = true
       continue
     }
     if (arg === '--requireCommonAppTargets' && argv[i + 1]) {
@@ -287,10 +346,7 @@ async function readEvidenceJson(
   return JSON.parse(raw) as ParsedGateEvidence
 }
 
-async function findMissingEvidenceFiles(
-  manifest: WindowsAcceptanceManifest,
-  baseDir: string
-): Promise<string[]> {
+function collectEvidencePaths(manifest: WindowsAcceptanceManifest): string[] {
   const paths = manifest.cases.flatMap((testCase) =>
     (testCase.evidence ?? []).flatMap((item) => (item.path ? [item.path] : []))
   )
@@ -300,6 +356,84 @@ async function findMissingEvidenceFiles(
   if (manifest.performance?.clipboardStressSummaryPath) {
     paths.push(manifest.performance.clipboardStressSummaryPath)
   }
+  for (const check of manifest.manualChecks?.commonAppLaunch?.checks ?? []) {
+    if (check.evidencePath) {
+      paths.push(check.evidencePath)
+    }
+  }
+  if (manifest.manualChecks?.copiedAppPath?.evidencePath) {
+    paths.push(manifest.manualChecks.copiedAppPath.evidencePath)
+  }
+  if (manifest.manualChecks?.updateInstall?.evidencePath) {
+    paths.push(manifest.manualChecks.updateInstall.evidencePath)
+  }
+  if (manifest.manualChecks?.divisionBoxDetachedWidget?.evidencePath) {
+    paths.push(manifest.manualChecks.divisionBoxDetachedWidget.evidencePath)
+  }
+  if (manifest.manualChecks?.timeAwareRecommendation?.evidencePath) {
+    paths.push(manifest.manualChecks.timeAwareRecommendation.evidencePath)
+  }
+
+  return paths
+}
+
+function appendManualEvidenceRequirement(
+  requirements: ManualEvidenceRequirement[],
+  path: string | undefined,
+  requiredEvidenceLabels: string[]
+): void {
+  if (!path) return
+
+  const existing = requirements.find((requirement) => requirement.path === path)
+  if (existing) {
+    existing.requiredEvidenceLabels = Array.from(
+      new Set([...existing.requiredEvidenceLabels, ...requiredEvidenceLabels])
+    )
+    return
+  }
+
+  requirements.push({ path, requiredEvidenceLabels })
+}
+
+function collectManualEvidenceRequirements(
+  manifest: WindowsAcceptanceManifest
+): ManualEvidenceRequirement[] {
+  const requirements: ManualEvidenceRequirement[] = []
+
+  for (const check of manifest.manualChecks?.commonAppLaunch?.checks ?? []) {
+    appendManualEvidenceRequirement(requirements, check.evidencePath, [
+      ...WINDOWS_ACCEPTANCE_MANUAL_EVIDENCE_LABELS.commonAppLaunch
+    ])
+  }
+  appendManualEvidenceRequirement(
+    requirements,
+    manifest.manualChecks?.copiedAppPath?.evidencePath,
+    [...WINDOWS_ACCEPTANCE_MANUAL_EVIDENCE_LABELS.copiedAppPath]
+  )
+  appendManualEvidenceRequirement(
+    requirements,
+    manifest.manualChecks?.updateInstall?.evidencePath,
+    [...WINDOWS_ACCEPTANCE_MANUAL_EVIDENCE_LABELS.updateInstall]
+  )
+  appendManualEvidenceRequirement(
+    requirements,
+    manifest.manualChecks?.divisionBoxDetachedWidget?.evidencePath,
+    [...WINDOWS_ACCEPTANCE_MANUAL_EVIDENCE_LABELS.divisionBoxDetachedWidget]
+  )
+  appendManualEvidenceRequirement(
+    requirements,
+    manifest.manualChecks?.timeAwareRecommendation?.evidencePath,
+    [...WINDOWS_ACCEPTANCE_MANUAL_EVIDENCE_LABELS.timeAwareRecommendation]
+  )
+
+  return requirements
+}
+
+async function findMissingEvidenceFiles(
+  manifest: WindowsAcceptanceManifest,
+  baseDir: string
+): Promise<string[]> {
+  const paths = collectEvidencePaths(manifest)
   const missing: string[] = []
 
   for (const evidencePath of Array.from(new Set(paths))) {
@@ -312,6 +446,136 @@ async function findMissingEvidenceFiles(
   }
 
   return missing
+}
+
+async function findEmptyEvidenceFiles(
+  manifest: WindowsAcceptanceManifest,
+  baseDir: string,
+  missingEvidencePaths = new Set<string>()
+): Promise<string[]> {
+  const paths = collectEvidencePaths(manifest).filter(
+    (evidencePath) => !missingEvidencePaths.has(evidencePath)
+  )
+  const empty: string[] = []
+
+  for (const evidencePath of Array.from(new Set(paths))) {
+    const resolvedPath = resolveEvidencePath(evidencePath, baseDir)
+    const evidenceStat = await stat(resolvedPath)
+    if (!evidenceStat.isFile() || evidenceStat.size === 0) {
+      empty.push(evidencePath)
+    }
+  }
+
+  return empty
+}
+
+async function findIncompleteManualEvidenceFiles(
+  manifest: WindowsAcceptanceManifest,
+  baseDir: string,
+  missingEvidencePaths = new Set<string>()
+): Promise<ManualEvidenceCompletionFailure[]> {
+  const incomplete: ManualEvidenceCompletionFailure[] = []
+
+  for (const requirement of collectManualEvidenceRequirements(manifest)) {
+    const evidencePath = requirement.path
+    if (missingEvidencePaths.has(evidencePath)) continue
+
+    const raw = await readFile(resolveEvidencePath(evidencePath, baseDir), 'utf8')
+    const result = evaluateManualEvidenceCompletion(raw, requirement.requiredEvidenceLabels)
+    if (!result.complete) {
+      incomplete.push({ path: evidencePath, failures: result.failures })
+    }
+  }
+
+  return incomplete
+}
+
+export function isManualEvidenceComplete(
+  raw: string,
+  requiredEvidenceLabels: string[] = []
+): boolean {
+  return evaluateManualEvidenceCompletion(raw, requiredEvidenceLabels).complete
+}
+
+export function evaluateManualEvidenceCompletion(
+  raw: string,
+  requiredEvidenceLabels: string[] = []
+): ManualEvidenceCompletionResult {
+  const failures: string[] = []
+  const checklistFailures = findChecklistCompletionFailures(raw)
+  if (checklistFailures.length > 0) {
+    failures.push(...checklistFailures)
+  }
+
+  const missingEvidenceLabels = findMissingEvidenceLabels(raw, requiredEvidenceLabels)
+  if (missingEvidenceLabels.length > 0) {
+    failures.push(`missing evidence fields: ${missingEvidenceLabels.join(', ')}`)
+  }
+
+  return { complete: failures.length === 0, failures }
+}
+
+function findChecklistCompletionFailures(raw: string): string[] {
+  const checklistLines = raw.split(/\r?\n/).filter((line) => /^-\s+\[[ xX]\]\s+/.test(line))
+  if (checklistLines.length === 0) return ['missing completed checklist']
+
+  const incompleteCount = checklistLines.filter((line) => !/^-\s+\[[xX]\]\s+/.test(line)).length
+  return incompleteCount > 0 ? [`unchecked checklist items: ${incompleteCount}`] : []
+}
+
+function findMissingEvidenceLabels(raw: string, requiredEvidenceLabels: string[]): string[] {
+  const filledLabels = collectFilledEvidenceLabels(raw)
+
+  if (requiredEvidenceLabels.length === 0) {
+    return filledLabels.size > 0 ? [] : ['non-notes evidence value']
+  }
+
+  return requiredEvidenceLabels.filter((label) => !filledLabels.has(normalizeEvidenceLabel(label)))
+}
+
+function collectFilledEvidenceLabels(raw: string): Set<string> {
+  const evidenceLines = extractEvidenceSectionLines(raw)
+  const labels = new Set<string>()
+
+  for (const line of evidenceLines) {
+    const match = line.match(/^-\s+([^:]+):\s*(.+)$/)
+    if (!match) continue
+
+    const label = match[1].trim().toLowerCase()
+    const value = match[2].trim()
+    if (label !== 'notes' && value.length > 0 && !isPlaceholderEvidenceValue(value)) {
+      labels.add(normalizeEvidenceLabel(label))
+    }
+  }
+
+  return labels
+}
+
+function normalizeEvidenceLabel(label: string): string {
+  return label.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function extractEvidenceSectionLines(raw: string): string[] {
+  const lines = raw.split(/\r?\n/)
+  const evidenceLines: string[] = []
+  let inEvidenceSection = false
+
+  for (const line of lines) {
+    if (/^##\s+Evidence\b/i.test(line)) {
+      inEvidenceSection = true
+      continue
+    }
+    if (inEvidenceSection && /^##\s+/.test(line)) break
+    if (inEvidenceSection) evidenceLines.push(line)
+  }
+
+  return evidenceLines
+}
+
+function isPlaceholderEvidenceValue(value: string): boolean {
+  const trimmed = value.trim()
+  if (/^<[^<>]+>$/.test(trimmed)) return true
+  return /^(n\/a|na|none|todo|tbd|-|待补|无)$/i.test(trimmed)
 }
 
 async function findFailedEvidenceGates(
@@ -450,6 +714,31 @@ async function main(): Promise<void> {
     }
     verified.gate.passed = verified.gate.failures.length === 0
 
+    if (options.requireNonEmptyEvidenceFiles) {
+      const empty = await findEmptyEvidenceFiles(manifest, baseDir, missingEvidencePaths)
+      for (const evidencePath of empty) {
+        verified.gate.failures.push(`Windows acceptance evidence file is empty: ${evidencePath}`)
+      }
+      verified.gate.passed = verified.gate.failures.length === 0
+    }
+
+    if (options.requireCompletedManualEvidence) {
+      const incomplete = await findIncompleteManualEvidenceFiles(
+        manifest,
+        baseDir,
+        missingEvidencePaths
+      )
+      for (const failure of incomplete) {
+        verified.gate.failures.push(
+          `Windows acceptance manual evidence checklist or fields are incomplete: ${formatGateFailure(
+            failure.path,
+            failure.failures
+          )}`
+        )
+      }
+      verified.gate.passed = verified.gate.failures.length === 0
+    }
+
     if (options.requireEvidenceGatePassed) {
       const { failedGates, schemaMismatches, coverage } = await findFailedEvidenceGates(
         manifest,
@@ -498,7 +787,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error))
-  process.exitCode = 1
-})
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  })
+}

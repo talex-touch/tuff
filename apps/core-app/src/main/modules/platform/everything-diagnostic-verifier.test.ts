@@ -85,6 +85,9 @@ describe('everything-diagnostic-verifier', () => {
         esPath: null,
         errorCode: 'CLI_NOT_FOUND',
         lastBackendError: 'es.exe not found',
+        backendAttemptErrors: {
+          cli: 'es.exe not found'
+        },
         fallbackChain: ['unavailable']
       },
       verdict: {
@@ -124,6 +127,7 @@ describe('everything-diagnostic-verifier', () => {
         requireCaseIds: ['windows-everything-file-search']
       }).failures
     ).toEqual([
+      'Everything backend attempt error is outside fallback chain: cli',
       'Everything diagnostic is not ready: disabled',
       'Everything integration is disabled',
       'Everything backend is unavailable',
@@ -141,9 +145,13 @@ describe('everything-diagnostic-verifier', () => {
       buildEvidence({
         status: {
           ...buildEvidence().status,
+          available: false,
           backend: 'unavailable',
           health: 'degraded',
-          errorCode: 'CLI_NOT_FOUND'
+          errorCode: 'CLI_NOT_FOUND',
+          backendAttemptErrors: {
+            cli: 'es.exe not found'
+          }
         },
         verdict: {
           ready: false,
@@ -158,7 +166,7 @@ describe('everything-diagnostic-verifier', () => {
           reusableCaseIds: ['windows-everything-file-search', 'windows-file-search-fallback'],
           suggestedEvidenceFields: {
             enabled: true,
-            available: true,
+            available: false,
             backend: 'unavailable',
             health: 'degraded',
             version: '1.5.0',
@@ -179,6 +187,12 @@ describe('everything-diagnostic-verifier', () => {
 
   it('rejects evidence when verdict or suggested fields drift from status', () => {
     const evidence = buildEvidence({
+      status: {
+        ...buildEvidence().status,
+        backendAttemptErrors: {
+          'sdk-napi': 'Cannot find module'
+        }
+      },
       verdict: {
         ready: true,
         backend: 'sdk-napi',
@@ -206,6 +220,7 @@ describe('everything-diagnostic-verifier', () => {
       'Everything verdict backend mismatch: expected cli, got sdk-napi',
       'Everything verdict health mismatch: expected healthy, got degraded',
       'Everything verdict errorCode mismatch: expected null, got STALE_ERROR',
+      'Everything verdict backend attempt error flag does not match status',
       'Everything suggested enabled field does not match status',
       'Everything suggested available field does not match status',
       'Everything suggested backend field does not match status',
@@ -214,6 +229,173 @@ describe('everything-diagnostic-verifier', () => {
       'Everything suggested esPath field does not match status',
       'Everything suggested errorCode field does not match status',
       'Everything suggested lastBackendError field does not match status'
+    ])
+  })
+
+  it('rejects internally inconsistent Everything readiness and backend state', () => {
+    expect(
+      evaluateEverythingDiagnosticEvidence(
+        buildEvidence({
+          status: {
+            ...buildEvidence().status,
+            enabled: true,
+            available: true,
+            backend: 'unavailable',
+            fallbackChain: ['sdk-napi', 'cli', 'unavailable']
+          },
+          verdict: {
+            ...buildEvidence().verdict,
+            ready: true,
+            backend: 'unavailable'
+          },
+          manualRegression: {
+            ...buildEvidence().manualRegression,
+            suggestedEvidenceFields: {
+              ...buildEvidence().manualRegression.suggestedEvidenceFields,
+              backend: 'unavailable'
+            }
+          }
+        })
+      ).failures
+    ).toEqual(['Everything status is available with unavailable backend'])
+
+    expect(
+      evaluateEverythingDiagnosticEvidence(
+        buildEvidence({
+          status: {
+            ...buildEvidence().status,
+            fallbackChain: ['sdk-napi', 'unavailable']
+          }
+        })
+      ).failures
+    ).toEqual(['Everything active backend is missing from fallback chain'])
+
+    expect(
+      evaluateEverythingDiagnosticEvidence(
+        buildEvidence({
+          status: {
+            ...buildEvidence().status,
+            available: false,
+            health: 'healthy'
+          },
+          verdict: {
+            ...buildEvidence().verdict,
+            ready: true
+          },
+          manualRegression: {
+            ...buildEvidence().manualRegression,
+            suggestedEvidenceFields: {
+              ...buildEvidence().manualRegression.suggestedEvidenceFields,
+              available: false
+            }
+          }
+        })
+      ).failures
+    ).toEqual([
+      'Everything verdict ready does not match status',
+      'Everything health is healthy while backend is unavailable'
+    ])
+  })
+
+  it('rejects available Everything evidence with stale backend error fields', () => {
+    expect(
+      evaluateEverythingDiagnosticEvidence(
+        buildEvidence({
+          status: {
+            ...buildEvidence().status,
+            errorCode: 'STALE_CLI_ERROR',
+            lastBackendError: 'previous CLI failure',
+            backendAttemptErrors: {
+              cli: 'previous CLI failure'
+            }
+          },
+          verdict: {
+            ...buildEvidence().verdict,
+            errorCode: 'STALE_CLI_ERROR',
+            hasBackendAttemptErrors: true
+          },
+          manualRegression: {
+            ...buildEvidence().manualRegression,
+            suggestedEvidenceFields: {
+              ...buildEvidence().manualRegression.suggestedEvidenceFields,
+              errorCode: 'STALE_CLI_ERROR',
+              lastBackendError: 'previous CLI failure'
+            }
+          }
+        })
+      ).failures
+    ).toEqual([
+      'Everything available status still has an errorCode',
+      'Everything available status still has a backend error',
+      'Everything active backend has a recorded attempt error'
+    ])
+  })
+
+  it('rejects malformed backend attempt error evidence', () => {
+    expect(
+      evaluateEverythingDiagnosticEvidence(
+        buildEvidence({
+          status: {
+            ...buildEvidence().status,
+            available: false,
+            backend: 'unavailable',
+            health: 'degraded',
+            errorCode: 'BACKEND_UNAVAILABLE',
+            backendAttemptErrors: {
+              cli: '',
+              'retired-sdk': 'retired backend failed'
+            },
+            fallbackChain: ['sdk-napi', 'cli', 'unavailable']
+          },
+          verdict: {
+            ready: false,
+            blocker: 'backend-unavailable',
+            backend: 'unavailable',
+            health: 'degraded',
+            healthReason: 'No Everything backend',
+            errorCode: 'BACKEND_UNAVAILABLE',
+            hasBackendAttemptErrors: true
+          },
+          manualRegression: {
+            ...buildEvidence().manualRegression,
+            suggestedEvidenceFields: {
+              ...buildEvidence().manualRegression.suggestedEvidenceFields,
+              available: false,
+              backend: 'unavailable',
+              health: 'degraded',
+              errorCode: 'BACKEND_UNAVAILABLE'
+            }
+          }
+        })
+      ).failures
+    ).toEqual([
+      'Everything backend attempt error message is empty: cli',
+      'Everything backend attempt error is outside fallback chain: retired-sdk'
+    ])
+  })
+
+  it('rejects available CLI backend evidence without CLI path or version', () => {
+    expect(
+      evaluateEverythingDiagnosticEvidence(
+        buildEvidence({
+          status: {
+            ...buildEvidence().status,
+            version: null,
+            esPath: null
+          },
+          manualRegression: {
+            ...buildEvidence().manualRegression,
+            suggestedEvidenceFields: {
+              ...buildEvidence().manualRegression.suggestedEvidenceFields,
+              version: null,
+              esPath: null
+            }
+          }
+        })
+      ).failures
+    ).toEqual([
+      'Everything CLI backend is missing esPath',
+      'Everything CLI backend is missing version'
     ])
   })
 

@@ -78,7 +78,7 @@ describe('windows-capability-evidence', () => {
               target: 'Calculator',
               found: true,
               matchCount: 1,
-              samples: ['C:\\Windows\\System32\\calc.exe']
+              samples: ['C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Calculator.lnk']
             },
             {
               target: 'Codex',
@@ -188,12 +188,16 @@ describe('windows-capability-evidence', () => {
       everything: {
         cliPaths: ['C:\\Tools\\es.exe'],
         where: commandResult({ command: 'where es.exe' }),
+        query: {
+          ...commandResult({ command: 'es.exe -n 5 .exe' }),
+          resultCount: 5
+        },
         targets: [
           {
             target: 'Calculator',
             found: true,
             matchCount: 1,
-            samples: ['C:\\Windows\\System32\\calc.exe']
+            samples: ['C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Calculator.lnk']
           }
         ]
       },
@@ -279,12 +283,16 @@ describe('windows-capability-evidence', () => {
       everything: {
         cliPaths: ['C:\\Tools\\es.exe'],
         where: commandResult({ command: 'where es.exe' }),
+        query: {
+          ...commandResult({ command: 'es.exe -n 5 .exe' }),
+          resultCount: 5
+        },
         targets: [
           {
             target: 'Calculator',
             found: true,
             matchCount: 1,
-            samples: ['C:\\Windows\\System32\\calc.exe']
+            samples: ['C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Calculator.lnk']
           }
         ]
       },
@@ -406,10 +414,112 @@ describe('windows-capability-evidence', () => {
       'Start Menu shortcut workingDirectory was not resolved',
       'registry uninstall fallback produced no executable candidates',
       'Everything CLI es.exe was not found',
+      'Everything query evidence did not return results',
       'Everything targets not found: WeChat',
       'targets not found: WeChat',
       'installer dry-run evidence does not support detached handoff'
     ])
+  })
+
+  it('requires Everything query output and concrete target samples when target gate is enabled', () => {
+    const evidence = buildWindowsCapabilityEvidence({
+      generatedAt: '2026-05-10T00:00:00.000Z',
+      platform: 'win32',
+      arch: 'x64',
+      targets: ['WeChat'],
+      powershell: commandResult(),
+      everything: {
+        cliPaths: ['C:\\Tools\\es.exe'],
+        where: commandResult({ command: 'where es.exe' }),
+        query: {
+          ...commandResult({ command: 'es.exe -n 5 .exe' }),
+          resultCount: 0
+        },
+        targets: [
+          {
+            target: 'WeChat',
+            found: true,
+            matchCount: 1,
+            samples: []
+          }
+        ]
+      },
+      startApps: [{ name: 'WeChat', appId: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe' }],
+      registryApps: [
+        {
+          displayName: 'WeChat',
+          displayIcon: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe,0'
+        }
+      ],
+      startMenuEntries: [
+        {
+          path: 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\WeChat.lnk',
+          name: 'WeChat',
+          extension: '.lnk',
+          target: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe'
+        }
+      ]
+    })
+
+    expect(
+      verifyWindowsCapabilityEvidence(evidence, {
+        requireEverything: true,
+        requireEverythingTargets: true,
+        requireTargets: true
+      }).gate.failures
+    ).toEqual([
+      'Everything query evidence did not return results',
+      'Everything targets not found: WeChat'
+    ])
+  })
+
+  it('rejects Everything target probes whose samples do not match the target', () => {
+    const evidence = buildWindowsCapabilityEvidence({
+      generatedAt: '2026-05-10T00:00:00.000Z',
+      platform: 'win32',
+      arch: 'x64',
+      targets: ['WeChat'],
+      powershell: commandResult(),
+      everything: {
+        cliPaths: ['C:\\Tools\\es.exe'],
+        where: commandResult({ command: 'where es.exe' }),
+        query: {
+          ...commandResult({ command: 'es.exe -n 5 .exe' }),
+          resultCount: 5
+        },
+        targets: [
+          {
+            target: 'WeChat',
+            found: true,
+            matchCount: 1,
+            samples: ['C:\\Tools\\Other.exe']
+          }
+        ]
+      },
+      startApps: [{ name: 'WeChat', appId: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe' }],
+      registryApps: [
+        {
+          displayName: 'WeChat',
+          displayIcon: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe,0'
+        }
+      ],
+      startMenuEntries: [
+        {
+          path: 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\WeChat.lnk',
+          name: 'WeChat',
+          extension: '.lnk',
+          target: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe'
+        }
+      ]
+    })
+
+    expect(
+      verifyWindowsCapabilityEvidence(evidence, {
+        requireEverything: true,
+        requireEverythingTargets: true,
+        requireTargets: true
+      }).gate.failures
+    ).toEqual(['Everything targets not found: WeChat'])
   })
 
   it('marks non-Windows evidence as skipped unless strict mode is requested', () => {

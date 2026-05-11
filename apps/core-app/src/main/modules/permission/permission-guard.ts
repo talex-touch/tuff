@@ -56,6 +56,7 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
   { pattern: 'fs:execute', permissions: ['fs.execute'] },
   { pattern: 'fs:delete', permissions: ['fs.write'] },
   { pattern: 'fs:watch', permissions: ['fs.read'] },
+  { pattern: 'fs:index', permissions: ['fs.index'] },
 
   // Clipboard APIs
   { pattern: 'clipboard:read', permissions: ['clipboard.read'] },
@@ -96,6 +97,12 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
   { pattern: 'window:open', permissions: ['window.create'] },
   { pattern: 'window:capture', permissions: ['window.capture'] },
   { pattern: 'screen:capture', permissions: ['window.capture'] },
+
+  // Native APIs
+  { pattern: 'native:screenshot:*', permissions: ['window.capture'] },
+  { pattern: 'native:file-index:*', permissions: ['fs.index'] },
+  { pattern: 'native:file:*', permissions: ['fs.read'] },
+  { pattern: 'native:media:*', permissions: ['media.read'] },
 
   // Flow Transfer APIs
   { pattern: 'flow:native:*', permissions: ['network.internet'] },

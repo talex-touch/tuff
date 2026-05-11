@@ -9,7 +9,7 @@ import type { AppIndexSettings } from '@talex-touch/utils/transport/events/types
 import { TxButton } from '@talex-touch/tuffex'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { useI18n } from 'vue-i18n'
 
 import { toast } from 'vue-sonner'
@@ -47,10 +47,14 @@ interface PermissionState {
   message?: string
 }
 
-const systemPermissionCheck = defineRawEvent<string, SystemPermissionCheckResult>(
-  'system:permission:check'
-)
-const systemPermissionRequest = defineRawEvent<string, boolean>('system:permission:request')
+const systemPermissionCheck = defineEvent('system')
+  .module('permission')
+  .event('check')
+  .define<string, SystemPermissionCheckResult>()
+const systemPermissionRequest = defineEvent('system')
+  .module('permission')
+  .event('request')
+  .define<string, boolean>()
 
 // Permission states
 const permissions = ref<{

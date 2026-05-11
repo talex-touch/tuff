@@ -35,5 +35,16 @@
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": ["electron.vite.config.*", "src/main/**/*", "src/preload/**/*", "generator-information.ts", "../../packages/utils/**/*", "../../packages/tuff-intelligence/**/*"]
+  "include": [
+    "electron.vite.config.*",
+    "scripts/windows-acceptance-*.ts",
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/shared/**/*",
+    "generator-information.ts",
+    "../../packages/utils/**/*.d.ts",
+    "../../packages/utils/**/*.ts",
+    "../../packages/utils/**/*.json",
+    "../../packages/tuff-intelligence/src/**/*.ts"
+  ]
 }
