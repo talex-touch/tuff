@@ -1,7 +1,23 @@
 # 变更日志
 
-> 更新时间: 2026-05-10
-> 说明: 主文件仅保留近 30 天（2026-04-10 ~ 2026-05-10）详细记录；更早历史已按月归档。
+> 更新时间: 2026-05-11
+> 说明: 主文件仅保留近 30 天（2026-04-11 ~ 2026-05-11）详细记录；更早历史已按月归档。
+
+## 2026-05-11
+
+### test(intelligence-uikit): hard-cut pilot mapping test filename
+
+- `packages/intelligence-uikit/src/__tests__/pilot-mapping.test.ts`
+- `packages/intelligence-uikit/README.md`
+  - 将新增 Pilot UI Kit 映射测试从 `pilot-adapter.test.ts` 物理重命名为 `pilot-mapping.test.ts`，避免把纯模型映射测试登记为 compat-file 债务。
+  - README 当前章节同步改为 `Pilot mapping 边界`，保持包入口语义聚焦在数据映射而非兼容 adapter。
+
+### feat(intelligence-uikit): add AI UI Kit workspace package
+
+- `packages/intelligence-uikit` 新增 `@talex-touch/intelligence-uikit` 私有 workspace 包。
+- 首批落地 `TxAi*` 组件骨架，覆盖 Foundation / Conversation / Content / Tool-Agent 四层。
+- 增加 `@talex-touch/intelligence-uikit/pilot` 子入口，提供 Pilot block/message 到 AI UI Kit 模型的映射。
+- README 固化组件矩阵、迁移阶段、动效扩展规范与 Pilot 替换边界。
 
 ## 2026-05-10
 
