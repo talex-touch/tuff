@@ -7,6 +7,10 @@ import type {
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import {
+  FILE_WORKER_IDLE_SHUTDOWN_MS,
+  IdleWorkerShutdownController
+} from './idle-worker-shutdown'
 
 interface PendingThumbnail {
   resolve: (value: string | null) => void
@@ -35,6 +39,11 @@ export class ThumbnailWorkerClient {
   private workerStartedAt: number | null = null
   private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null =
     null
+  private readonly idleShutdown = new IdleWorkerShutdownController({
+    timeoutMs: FILE_WORKER_IDLE_SHUTDOWN_MS,
+    shouldShutdown: () => this.pending.size === 0 && this.metricsPending.size === 0,
+    shutdown: () => this.terminateWorker()
+  })
 
   async generate(filePath: string): Promise<string | null> {
     const taskId = `thumbnail-${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -53,9 +62,11 @@ export class ThumbnailWorkerClient {
   }
 
   async getStatus(): Promise<WorkerStatusSnapshot> {
+    this.idleShutdown.cancel()
     const worker = this.worker
     const pendingCount = this.pending.size
     const metrics = worker ? await this.requestMetrics() : null
+    this.scheduleIdleShutdown()
     return {
       name: 'thumbnail',
       threadId: worker?.threadId ?? null,
@@ -69,12 +80,11 @@ export class ThumbnailWorkerClient {
   }
 
   shutdown(): void {
-    this.worker?.terminate()
-    this.worker = null
-    this.workerStartedAt = null
+    this.terminateWorker()
   }
 
   private ensureWorker(): Worker {
+    this.idleShutdown.cancel()
     if (this.worker) return this.worker
 
     const workerPath = path.join(__dirname, 'thumbnail-worker.js')
@@ -83,7 +93,7 @@ export class ThumbnailWorkerClient {
     worker.on('message', (message: WorkerMessage) => this.handleMessage(message))
     worker.on('error', (error) => this.handleWorkerError(error))
     worker.on('exit', (code) => {
-      if (code !== 0) {
+      if (this.worker === worker && code !== 0) {
         this.handleWorkerError(new Error(`ThumbnailWorker exited with code ${code}`))
       }
     })
@@ -100,6 +110,7 @@ export class ThumbnailWorkerClient {
       clearTimeout(pending.timeout)
       pending.resolve(message.metrics)
       this.metricsPending.delete(message.requestId)
+      this.scheduleIdleShutdown()
       return
     }
 
@@ -116,6 +127,7 @@ export class ThumbnailWorkerClient {
         durationMs: Date.now() - pending.startedAt,
         error: null
       }
+      this.scheduleIdleShutdown()
       return
     }
 
@@ -130,6 +142,7 @@ export class ThumbnailWorkerClient {
         error: message.error
       }
       pending.reject(new Error(message.error))
+      this.scheduleIdleShutdown()
     }
   }
 
@@ -147,9 +160,7 @@ export class ThumbnailWorkerClient {
       }
       this.metricsPending.clear()
     }
-    this.worker?.terminate()
-    this.worker = null
-    this.workerStartedAt = null
+    this.terminateWorker()
     this.lastError = error.message
     fileProviderLog.warn('[ThumbnailWorker] Worker failed, will restart on demand', {
       error
@@ -164,6 +175,7 @@ export class ThumbnailWorkerClient {
       const timeout = setTimeout(() => {
         this.metricsPending.delete(requestId)
         resolve(null)
+        this.scheduleIdleShutdown()
       }, 300)
       this.metricsPending.set(requestId, { resolve, timeout })
       worker.postMessage({
@@ -201,5 +213,21 @@ export class ThumbnailWorkerClient {
     const deltaMs = (deltaUser + deltaSystem) / 1000
     const percent = (deltaMs / elapsedMs) * 100
     return Number.isFinite(percent) ? Math.max(0, percent) : null
+  }
+
+  private scheduleIdleShutdown(): void {
+    if (!this.worker || this.pending.size > 0 || this.metricsPending.size > 0) {
+      return
+    }
+
+    this.idleShutdown.schedule()
+  }
+
+  private terminateWorker(): void {
+    this.idleShutdown.cancel()
+    this.worker?.terminate()
+    this.worker = null
+    this.workerStartedAt = null
+    this.lastMetricsSample = null
   }
 }
