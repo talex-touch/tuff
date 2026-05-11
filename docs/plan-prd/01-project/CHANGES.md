@@ -11,10 +11,16 @@
 - `apps/nexus/app/composables/sign-in-redirect-utils.ts`
 - `apps/nexus/server/api/docs/assistant.post.ts`
 - `apps/nexus/server/utils/requestAuditMeta.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabTools.ts`
+- `apps/nexus/server/utils/telemetryStore.ts`
+- `apps/nexus/server/utils/telemetrySanitizer.ts`
   - 将登录 composable 中 OAuth redirect 查询值读取、URL-like 解析与 auth-noise redirect fallback 归一迁出到 `sign-in-redirect-utils.ts`，`useSignIn.ts` 保留登录/注册/OAuth/Turnstile/passkey 编排职责。
   - 将 docs assistant API 中 request IP/country audit metadata 解析迁出到 `requestAuditMeta.ts`，handler 保留认证、session、provider 调用、credit 与 audit 编排职责。
-  - `useSignIn.ts` 从 `1584` 行降到 `1538` 行，`assistant.post.ts` 从 `1792` 行降到 `1762` 行；两者均退出 `grownOversizedFiles`，当前 `node scripts/check-large-file-boundaries.mjs --report` 显示 `newOversizedFiles=0`、`grownOversizedFiles=7`。
-  - 验证：Nexus 定向 ESLint 通过；`node scripts/check-large-file-boundaries.mjs --report` 通过。
+  - 将 Intelligence Lab 的工具常量、支持工具列表、account/credits/subscription/language/theme 工具执行与输入归一迁出到 `tuffIntelligenceLabTools.ts`，Lab service 保留 orchestration、checkpoint、stream 与审批编排。
+  - 将 telemetry input/type/sanitizer、provider status/value 归一、feature/search metadata 清洗和 quarantine stringify 迁出到 `telemetrySanitizer.ts`，`telemetryStore.ts` 保留 D1 schema、写入、daily stat 与 analytics 查询职责。
+  - `useSignIn.ts` 从 `1584` 行降到 `1538` 行，`assistant.post.ts` 从 `1792` 行降到 `1762` 行，`tuffIntelligenceLabService.ts` 从 `3658` 行降到 `3408` 行，`telemetryStore.ts` 从 `1985` 行降到 `1502` 行；四者均退出 `grownOversizedFiles`，当前 `node scripts/check-large-file-boundaries.mjs --report` 显示 `newOversizedFiles=0`、`grownOversizedFiles=2`。
+  - 验证：Nexus 定向 ESLint、`telemetryStore.test.ts`、`vue-tsc --noEmit --pretty false` 通过；`node scripts/check-large-file-boundaries.mjs --report` 通过。
 
 ### refactor(core-app): split OmniPanel builtin definitions
 

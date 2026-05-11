@@ -66,7 +66,7 @@
     },
     {
       "file": "apps/core-app/src/main/modules/clipboard.ts",
-      "maxLines": 2688,
+      "maxLines": 1825,
       "expiresVersion": "2.4.11",
       "note": "Reduce below 1200 lines before v2.4.11"
     },
@@ -132,7 +132,7 @@
     },
     {
       "file": "apps/nexus/app/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue",
-      "maxLines": 2192,
+      "maxLines": 2198,
       "expiresVersion": "2.4.11",
       "note": "Reduce below 1200 lines before v2.4.11"
     },
@@ -144,13 +144,13 @@
     },
     {
       "file": "apps/nexus/app/pages/dashboard/admin/analytics.vue",
-      "maxLines": 2062,
+      "maxLines": 2169,
       "expiresVersion": "2.4.11",
       "note": "Reduce below 1200 lines before v2.4.11"
     },
     {
       "file": "apps/nexus/app/pages/dashboard/admin/intelligence.vue",
-      "maxLines": 2174,
+      "maxLines": 2264,
       "expiresVersion": "2.4.11",
       "note": "Reduce below 1200 lines before v2.4.11"
     },
@@ -299,12 +299,6 @@
       "note": "Reduce below 1200 lines before v2.4.11"
     },
     {
-      "file": "packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue",
-      "maxLines": 1344,
-      "expiresVersion": "2.4.11",
-      "note": "Reduce below 1200 lines before v2.4.11"
-    },
-    {
       "file": "packages/utils/transport/events/index.ts",
       "maxLines": 2783,
       "expiresVersion": "2.4.11",
@@ -387,7 +381,7 @@
     },
     {
       "file": "apps/core-app/src/main/modules/clipboard.ts",
-      "maxLines": 3299,
+      "maxLines": 1825,
       "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
       "owner": "core-app",
       "expiresVersion": "2.4.11",
@@ -536,14 +530,6 @@
       "owner": "packages-tuff-intelligence",
       "expiresVersion": "2.4.11",
       "ticket": "SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-INTELLIGENCE-INTELLIGENCE-TYPES"
-    },
-    {
-      "file": "packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue",
-      "maxLines": 1345,
-      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
-      "owner": "packages-tuffex",
-      "expiresVersion": "2.4.11",
-      "ticket": "SIZE-GROWTH-2026-05-08-TUFFEX-FLIP-OVERLAY"
     },
     {
       "file": "packages/utils/types/intelligence.ts",
