@@ -5,6 +5,20 @@
 
 ## 2026-05-11
 
+### refactor(core-app): extract clipboard capture pipeline
+
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-capture-pipeline.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-capture-pipeline.test.ts`
+- `apps/nexus/i18n/locales/{en,zh}.ts`
+- `apps/nexus/i18n/locales/legal/{en,zh}.ts`
+- `scripts/large-file-boundary-allowlist.json`
+  - 将 clipboard capture/persist 主流程迁出到 `ClipboardCapturePipeline`，`ClipboardModule` 保留模块生命周期、调度、transport 与服务编排。
+  - 补充 capture pipeline 文本剪贴板持久化、meta、Stage-B 队列与 plugin forward 回归测试。
+  - Nexus legal i18n 从主 locale 文件拆到 `locales/legal/*`，降低 locale 主文件体积并保持 `license/privacy/protocol` key 不变。
+  - `clipboard.ts` 已降到 `1143` 行，低于 `1200` 阈值，并从 size allowlist 与 growth exception 中清退。
+  - 验证：pre-commit `lint-staged` 中 CoreApp/Nexus 定向 ESLint 与 `size:guard:changed` 通过。
+
 ### refactor(nexus): split sign-in redirect helpers and docs assistant audit meta
 
 - `apps/nexus/app/composables/useSignIn.ts`

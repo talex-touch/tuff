@@ -65,12 +65,6 @@
       "note": "Reduce below 1200 lines before v2.4.11"
     },
     {
-      "file": "apps/core-app/src/main/modules/clipboard.ts",
-      "maxLines": 1825,
-      "expiresVersion": "2.4.11",
-      "note": "Reduce below 1200 lines before v2.4.11"
-    },
-    {
       "file": "apps/core-app/src/main/modules/download/download-center.ts",
       "maxLines": 1508,
       "expiresVersion": "2.4.11",
@@ -378,14 +372,6 @@
       "owner": "core-app",
       "expiresVersion": "2.4.11",
       "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-SEARCH-CORE"
-    },
-    {
-      "file": "apps/core-app/src/main/modules/clipboard.ts",
-      "maxLines": 1825,
-      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
-      "owner": "core-app",
-      "expiresVersion": "2.4.11",
-      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-CLIPBOARD"
     },
     {
       "file": "apps/core-app/src/main/modules/download/download-center.ts",
