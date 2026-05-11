@@ -7,6 +7,32 @@ const { infoSpy, warnSpy } = vi.hoisted(() => ({
   warnSpy: vi.fn()
 }))
 
+type SearchCoreTraceHarness = {
+  logSearchTrace(params: {
+    event: string
+    sessionId: string
+    query: TuffQuery
+    timings: Record<string, number>
+    result: Record<string, number>
+    sourceStats: Array<Record<string, unknown>>
+    includeDetails: boolean
+  }): void
+  _recordSearchMetrics(params: {
+    sessionId: string
+    query: TuffQuery
+    totalDuration: number
+    firstResultMs: number
+    firstResultCount: number
+    sortingDuration: number
+    usageStatsDuration: number
+    completionDuration: number
+    stageDurations: Record<string, number>
+    sourceStats: Array<Record<string, unknown>>
+    resultCount: number
+    providerFilter?: string
+  }): void
+}
+
 const sentryServiceMock = vi.hoisted(() => ({
   isTelemetryEnabled: vi.fn(() => false),
   isEnabled: vi.fn(() => false),
@@ -19,7 +45,13 @@ vi.mock('@talex-touch/utils/common/logger', () => ({
     debug: vi.fn(),
     info: infoSpy,
     warn: warnSpy,
-    error: vi.fn()
+    error: vi.fn(),
+    child: vi.fn(() => ({
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn()
+    }))
   }))
 }))
 
@@ -192,7 +224,7 @@ describe('search-core search-trace', () => {
       inputs: [{ type: TuffInputType.Text, content: 'clipboard payload' }]
     }
 
-    const core = SearchEngineCore.getInstance() as any
+    const core = SearchEngineCore.getInstance() as unknown as SearchCoreTraceHarness
     core.logSearchTrace({
       event: 'session.start',
       sessionId: 'session-trace-test',
@@ -222,7 +254,7 @@ describe('search-core search-trace', () => {
 
   it('搜索 telemetry 上报 provider 状态与首屏耗时且不包含 query 明文', () => {
     sentryServiceMock.isTelemetryEnabled.mockReturnValue(true)
-    const core = SearchEngineCore.getInstance() as any
+    const core = SearchEngineCore.getInstance() as unknown as SearchCoreTraceHarness
     const query: TuffQuery = {
       text: 'private search text',
       inputs: [{ type: TuffInputType.Text, content: 'clipboard payload' }]

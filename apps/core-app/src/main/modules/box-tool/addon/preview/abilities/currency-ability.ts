@@ -3,6 +3,15 @@ import type { PreviewAbilityContext } from '../preview-ability'
 import { performance } from 'node:perf_hooks'
 import { BasePreviewAbility } from '../preview-ability'
 import { fxRateProvider } from '../providers'
+import {
+  COREBOX_FX_CONVERT_SCENE_ID,
+  COREBOX_FX_LATEST_SCENE_ID
+} from '../../../../../../shared/events/corebox-scenes'
+import {
+  extractFxConvertFromSceneRun,
+  extractFxRateSnapshotFromSceneRun,
+  runNexusScene
+} from '../../../../nexus/scene-client'
 
 // 货币名称映射
 const CURRENCY_NAMES: Record<string, string> = {
@@ -27,6 +36,34 @@ const CURRENCY_NAMES: Record<string, string> = {
 
 const CURRENCY_PATTERN =
   /^\s*(?:([$€¥£₩₫฿₿Ξ]|[a-z]{3})\s*)?([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*(?:([a-z]{3})\s*)?(?:to|in|[=转换]|->)\s*([a-z\u4E00-\u9FA5]{2,})\s*$/i
+const NEXUS_FX_TIMEOUT_MS = 2_500
+
+type CurrencyConversionResult = {
+  result: number
+  rate: {
+    base: string
+    quote: string
+    rate: number
+    updatedAt: number
+    source: string
+  }
+  sourceLabel: string
+  isStale: boolean
+}
+
+function parseSceneTimestamp(value?: string | null): number {
+  if (!value) return Date.now()
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? timestamp : Date.now()
+}
+
+function normalizeCurrencyInput(input: string): string | null {
+  const normalized = fxRateProvider.normalizeCurrency(input)
+  if (normalized) return normalized
+
+  const code = input.trim().toUpperCase()
+  return /^[A-Z]{3}$/.test(code) ? code : null
+}
 
 export class CurrencyPreviewAbility extends BasePreviewAbility {
   readonly id = 'preview.currency'
@@ -49,8 +86,8 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
 
     // Normalize currencies using FxRateProvider
     const sourceInput = sourceCode || symbol || 'USD'
-    const source = fxRateProvider.normalizeCurrency(sourceInput)
-    const target = fxRateProvider.normalizeCurrency(targetCodeRaw)
+    const source = normalizeCurrencyInput(sourceInput)
+    const target = normalizeCurrencyInput(targetCodeRaw)
 
     if (!source || !target) {
       return null
@@ -58,14 +95,17 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
 
     this.throwIfAborted(context.signal)
 
-    // Get conversion result from provider
-    const conversion = fxRateProvider.convert(amount, source, target)
-    if (!conversion || !conversion.rate) {
+    const conversion = await this.convertWithNexusFallback(amount, source, target)
+    if (!conversion) {
       return null
     }
 
     const { result: converted, rate } = conversion
-    const status = fxRateProvider.getStatus()
+    const status = {
+      lastRefresh: rate.updatedAt,
+      source: rate.source,
+      isStale: conversion.isStale
+    }
 
     // Get USD equivalent
     const usdConversion = fxRateProvider.convert(amount, source, 'USD')
@@ -77,7 +117,8 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
     // Format update time
     const updateTime = new Date(status.lastRefresh).toLocaleString('zh-CN')
     const sourceLabel =
-      status.source === 'nexus' ? 'Nexus' : status.source === 'ecb' ? 'ECB' : '内置'
+      conversion.sourceLabel ||
+      (status.source === 'nexus' ? 'Nexus' : status.source === 'ecb' ? 'ECB' : '内置')
     const subtitle = status.isStale
       ? `汇率换算 ⚠️ 数据较旧 (${updateTime})`
       : `汇率换算 · ${sourceLabel} · ${updateTime}`
@@ -110,5 +151,89 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
       payload,
       durationMs: performance.now() - startedAt
     }
+  }
+
+  private async convertWithNexusFallback(
+    amount: number,
+    source: string,
+    target: string
+  ): Promise<CurrencyConversionResult | null> {
+    if (source === 'USD') {
+      const nexusConversion = await this.tryNexusConvert(amount, target)
+      if (nexusConversion) {
+        return nexusConversion
+      }
+    } else {
+      await this.tryApplyNexusLatestRates()
+    }
+
+    const localConversion = fxRateProvider.convert(amount, source, target)
+    if (!localConversion?.rate) {
+      return null
+    }
+    const status = fxRateProvider.getStatus()
+    return {
+      result: localConversion.result,
+      rate: localConversion.rate,
+      sourceLabel: status.source === 'nexus' ? 'Nexus' : status.source === 'ecb' ? 'ECB' : '内置',
+      isStale: status.isStale
+    }
+  }
+
+  private async tryNexusConvert(
+    amount: number,
+    target: string
+  ): Promise<CurrencyConversionResult | null> {
+    const fx = await runNexusScene(COREBOX_FX_CONVERT_SCENE_ID, {
+      input: {
+        base: 'USD',
+        target,
+        amount
+      },
+      capability: 'fx.convert',
+      timeoutMs: NEXUS_FX_TIMEOUT_MS
+    })
+      .then(extractFxConvertFromSceneRun)
+      .catch(() => null)
+    if (!fx) {
+      return null
+    }
+
+    const updatedAt = parseSceneTimestamp(fx.providerUpdatedAt ?? fx.updatedAt ?? fx.fetchedAt)
+    return {
+      result: fx.converted,
+      rate: {
+        base: fx.base,
+        quote: fx.target,
+        rate: fx.rate,
+        updatedAt,
+        source: 'nexus'
+      },
+      sourceLabel: 'Nexus',
+      isStale: false
+    }
+  }
+
+  private async tryApplyNexusLatestRates(): Promise<void> {
+    const snapshot = await runNexusScene(COREBOX_FX_LATEST_SCENE_ID, {
+      capability: 'fx.rate.latest',
+      timeoutMs: NEXUS_FX_TIMEOUT_MS
+    })
+      .then(extractFxRateSnapshotFromSceneRun)
+      .catch(() => null)
+    if (!snapshot) {
+      return
+    }
+
+    fxRateProvider.applyExternalRates({
+      base: snapshot.base,
+      rates: snapshot.rates,
+      fetchedAt: parseSceneTimestamp(snapshot.fetchedAt ?? snapshot.asOf),
+      providerUpdatedAt:
+        snapshot.providerUpdatedAt === null
+          ? null
+          : parseSceneTimestamp(snapshot.providerUpdatedAt ?? snapshot.asOf),
+      source: 'nexus'
+    })
   }
 }

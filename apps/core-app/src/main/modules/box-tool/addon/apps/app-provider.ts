@@ -77,6 +77,12 @@ import {
 import { matchNoisySystemAppRule } from './app-noise-filter'
 import { diagnoseAppSearch, reindexAppSearchTarget } from './app-provider-diagnostics'
 import {
+  inferManagedEntryLaunchKind,
+  isWindowsUwpAppId,
+  isWindowsUwpShellPath,
+  normalizeOptionalString
+} from './app-provider-path-utils'
+import {
   formatLog,
   LogStyle,
   normalizeStringList,
@@ -136,14 +142,6 @@ const APP_TIMING_BASE_OPTIONS: TimingOptions = {
     const styleFn = LogStyle[styleKey] ?? LogStyle.info
     return formatLog('AppProvider', `${message} in ${durationText}${suffix}`, styleFn)
   }
-}
-
-function isWindowsUwpShellPath(value: string): boolean {
-  return /^shell:AppsFolder\\[^\s"'<>]+$/i.test(value)
-}
-
-function isWindowsUwpAppId(value: string): boolean {
-  return /^[A-Za-z0-9][A-Za-z0-9._-]+_[A-Za-z0-9]+![A-Za-z0-9._-]+$/.test(value)
 }
 
 type DbAppRecord = typeof filesSchema.$inferSelect
@@ -327,23 +325,8 @@ function isManagedEntryEnabledExtensionMap(
   return raw !== '0' && raw !== 'false'
 }
 
-function normalizeOptionalString(value: string | undefined): string | undefined {
-  const normalized = value?.trim()
-  return normalized ? normalized : undefined
-}
-
 function resolveScannedDisplayName(app: Pick<ScannedAppInfo, 'displayName' | 'name'>): string {
   return resolveDisplayName(app.displayName, app.name)
-}
-
-function inferManagedEntryLaunchKind(targetPath: string): AppLaunchKind {
-  if (process.platform === 'darwin' && targetPath.endsWith('.app')) {
-    return 'path'
-  }
-  if (process.platform === 'win32') {
-    return /\.(lnk|exe|cmd|bat|com|ps1)$/i.test(targetPath) ? 'shortcut' : 'path'
-  }
-  return /\.(sh|bash|zsh|command|py|js|mjs|cjs)$/i.test(targetPath) ? 'shortcut' : 'path'
 }
 
 export interface AppIndexSettings {
@@ -567,7 +550,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (!appPath) {
       return { success: false, status: 'invalid', reason: 'invalid-path' }
     }
-    return this.processAppPath(appPath)
+    return this.processAppPath(appPath, { managedEntry: true })
   }
 
   public async diagnoseAppSearch(request: AppIndexDiagnoseRequest) {
@@ -2068,7 +2051,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return appPath
   }
 
-  private async upsertAppInfo(appInfo: ScannedAppInfo): Promise<'added' | 'updated'> {
+  private async upsertAppInfo(
+    appInfo: ScannedAppInfo,
+    options: { managedEntry?: boolean } = {}
+  ): Promise<'added' | 'updated'> {
     const existingFile = await this.dbUtils!.getFileByPath(appInfo.path)
     const db = this.dbUtils!.getDb()
 
@@ -2087,7 +2073,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, existingFile.id))
 
-      await this.syncScannedAppExtensions(existingFile.id, appInfo)
+      if (options.managedEntry === true) {
+        await this.dbUtils!.addFileExtensions(
+          this.buildManagedEntryExtensions(existingFile.id, appInfo, true)
+        )
+      } else {
+        await this.syncScannedAppExtensions(existingFile.id, appInfo)
+      }
 
       await this._syncKeywordsForApp({
         ...appInfo,
@@ -2113,7 +2105,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       .returning()
 
     if (insertedFile) {
-      await this.syncScannedAppExtensions(insertedFile.id, appInfo)
+      if (options.managedEntry === true) {
+        await this.dbUtils!.addFileExtensions(
+          this.buildManagedEntryExtensions(insertedFile.id, appInfo, true)
+        )
+      } else {
+        await this.syncScannedAppExtensions(insertedFile.id, appInfo)
+      }
       await this._syncKeywordsForApp(appInfo)
       logApp(`New app ${chalk.cyan(appInfo.name)} added successfully`, LogStyle.success)
     }
@@ -2121,7 +2119,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return 'added'
   }
 
-  private async processAppPath(appPath: string): Promise<AppIndexAddPathResult> {
+  private async processAppPath(
+    appPath: string,
+    options: { managedEntry?: boolean } = {}
+  ): Promise<AppIndexAddPathResult> {
     if (this.processingPaths.has(appPath)) {
       return { success: false, status: 'invalid', reason: 'processing' }
     }
@@ -2145,7 +2146,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         return { success: false, status: 'invalid', reason: 'not-app' }
       }
 
-      const status = await this.upsertAppInfo(appInfo)
+      const status = await this.upsertAppInfo(appInfo, options)
       return { success: true, status, path: appInfo.path }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

@@ -60,6 +60,47 @@ describe('search-processing-service', () => {
     expect((item.meta as any)?.app?.bundle_id).toBeUndefined()
   })
 
+  it('normalizes local app icon paths to tfile URLs', () => {
+    const [item] = mapAppsToRecommendationItems([
+      {
+        name: 'Preview',
+        displayName: 'Preview',
+        path: '/Applications/Preview.app',
+        extensions: {
+          appIdentity: '/Applications/Preview.app',
+          icon: '/Applications/Preview.app/Contents/Resources/AppIcon.icns',
+          launchKind: 'path',
+          launchTarget: '/Applications/Preview.app'
+        }
+      }
+    ] as any)
+
+    expect((item.render as any)?.basic?.icon).toMatchObject({
+      type: 'url',
+      value: 'tfile:///Applications/Preview.app/Contents/Resources/AppIcon.icns'
+    })
+  })
+
+  it('keeps empty app icons on the existing file fallback path', () => {
+    const [item] = mapAppsToRecommendationItems([
+      {
+        name: 'No Icon',
+        displayName: 'No Icon',
+        path: '/Applications/No Icon.app',
+        extensions: {
+          appIdentity: '/Applications/No Icon.app',
+          launchKind: 'path',
+          launchTarget: '/Applications/No Icon.app'
+        }
+      }
+    ] as any)
+
+    expect((item.render as any)?.basic?.icon).toMatchObject({
+      type: 'file',
+      value: ''
+    })
+  })
+
   it('skips disabled managed launcher entries in recommendation mapping', () => {
     const items = mapAppsToRecommendationItems([
       {

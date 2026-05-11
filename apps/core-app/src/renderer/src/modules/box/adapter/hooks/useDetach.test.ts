@@ -1,5 +1,6 @@
 import type { TuffItem } from '@talex-touch/utils'
 import { describe, expect, it } from 'vitest'
+import { isDetachedDivisionItemMatch, parseDetachedDivisionConfig } from './detached-division'
 import { buildDetachedFeatureConfig } from './useDetach'
 
 function createFeatureItem(overrides: Partial<TuffItem> = {}): TuffItem {
@@ -52,7 +53,26 @@ describe('buildDetachedFeatureConfig', () => {
     expect(url.hostname).toBe('detached')
     expect(url.searchParams.get('itemId')).toBe('demo-plugin/widget-clock')
     expect(url.searchParams.get('query')).toBe('time now')
-    expect(url.searchParams.get('source')).toBe('plugin-features')
+    expect(url.searchParams.get('source')).toBe('demo-plugin')
+    expect(url.searchParams.get('providerSource')).toBe('plugin-features')
+  })
+
+  it('preserves widget query with special characters and snapshots the detached item payload', () => {
+    const item = createFeatureItem()
+    const query = 'time zone: Asia/Shanghai + reminders? now & next'
+    const detached = buildDetachedFeatureConfig(item, query)
+
+    item.render.basic!.title = 'Mutated Widget'
+
+    const payload = detached?.config.initialState?.detachedPayload as
+      | { item?: TuffItem; query?: string }
+      | undefined
+
+    expect(payload?.query).toBe(query)
+    expect(payload?.item?.render.basic?.title).toBe('Clock Widget')
+
+    const url = new URL(detached?.config.url ?? '')
+    expect(url.searchParams.get('query')).toBe(query)
   })
 
   it('builds webcontent url from the real plugin id instead of plugin-features provider id', () => {
@@ -96,5 +116,55 @@ describe('buildDetachedFeatureConfig', () => {
     )
 
     expect(detached).toBeNull()
+  })
+})
+
+describe('detached widget fallback filter', () => {
+  it('keeps provider source separate from the real plugin id', () => {
+    const item = createFeatureItem()
+    const config = parseDetachedDivisionConfig(
+      'tuff://detached?itemId=demo-plugin%2Fwidget-clock&source=demo-plugin&providerSource=plugin-features'
+    )
+
+    expect(config).toEqual({
+      itemId: 'demo-plugin/widget-clock',
+      sourceId: 'demo-plugin',
+      providerSourceId: 'plugin-features',
+      query: undefined
+    })
+    expect(isDetachedDivisionItemMatch(item, config)).toBe(true)
+    expect(
+      isDetachedDivisionItemMatch(
+        createFeatureItem({
+          source: {
+            type: 'plugin',
+            id: 'other-provider',
+            name: 'Other Provider'
+          }
+        }),
+        config
+      )
+    ).toBe(false)
+  })
+
+  it('supports old provider-source urls and new plugin-source urls without providerSource', () => {
+    const item = createFeatureItem()
+
+    expect(
+      isDetachedDivisionItemMatch(
+        item,
+        parseDetachedDivisionConfig(
+          'tuff://detached?itemId=demo-plugin%2Fwidget-clock&source=plugin-features'
+        )
+      )
+    ).toBe(true)
+    expect(
+      isDetachedDivisionItemMatch(
+        item,
+        parseDetachedDivisionConfig(
+          'tuff://detached?itemId=demo-plugin%2Fwidget-clock&source=demo-plugin'
+        )
+      )
+    ).toBe(true)
   })
 })

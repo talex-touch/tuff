@@ -26,7 +26,7 @@ function resolveSdkBlockedReason(message: string, t: StoreTranslate): string | n
     })
   }
 
-  if (message.includes('sdkapi compatibility gate')) {
+  if (message.includes('sdkapi hard-cut gate')) {
     return t('store.installation.reasons.sdkapiBlocked')
   }
 

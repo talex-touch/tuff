@@ -49,7 +49,7 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
   const displayName = resolveDisplayName(app.displayName, app.name)
   const subtitle = app.extensions.displayPath || app.path
   const rawIconValue = app.extensions.icon ?? ''
-  const iconValue = rawIconValue.startsWith('data:') ? '' : toTfileUrl(rawIconValue)
+  const iconValue = rawIconValue.startsWith('data:') ? rawIconValue : toTfileUrl(rawIconValue)
   const keywordPath = app.extensions.displayPath || app.path
   const launchKind = (app.extensions.launchKind as AppLaunchKind | null) || 'path'
   const description = app.extensions.description || ''

@@ -14,54 +14,19 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import * as TalexUtilsTypes from '@talex-touch/utils/types'
 import * as Vue from 'vue'
-import { shallowRef } from 'vue'
 import { registerCustomRenderer, unregisterCustomRenderer } from '~/modules/box/custom-render'
 import { devLog } from '~/utils/dev-log'
+import {
+  cacheWidgetRuntimeSource,
+  clearWidgetFailure,
+  clearWidgetRuntimeSource,
+  recordWidgetFailure
+} from './widget-diagnostics'
+
+export { getWidgetFailure, getWidgetRuntimeSnippet } from './widget-diagnostics'
 
 const injectedStyles = new Map<string, HTMLStyleElement>()
-const widgetRuntimeSources = new Map<string, string[]>()
-const widgetFailures = new Map<string, WidgetFailurePayload>()
-const widgetFailureVersion = shallowRef(0)
 const widgetSetupStatePatchLogCache = new Set<string>()
-
-function cacheWidgetRuntimeSource(widgetId: string | undefined, code: string): void {
-  if (!widgetId) return
-  widgetRuntimeSources.set(widgetId, code.split('\n'))
-}
-
-function clearWidgetRuntimeSource(widgetId?: string): void {
-  if (!widgetId) return
-  widgetRuntimeSources.delete(widgetId)
-}
-
-export function getWidgetRuntimeSnippet(
-  widgetId: string,
-  line: number,
-  radius = 2
-): Array<{ line: number; text: string }> {
-  const lines = widgetRuntimeSources.get(widgetId)
-  if (!lines || !Number.isFinite(line) || line <= 0) return []
-  const start = Math.max(1, line - radius)
-  const end = Math.min(lines.length, line + radius)
-  const result: Array<{ line: number; text: string }> = []
-  for (let current = start; current <= end; current += 1) {
-    result.push({
-      line: current,
-      text: lines[current - 1] ?? ''
-    })
-  }
-  return result
-}
-
-export function getWidgetFailure(widgetId: string | undefined): WidgetFailurePayload | null {
-  void widgetFailureVersion.value
-  if (!widgetId) return null
-  return widgetFailures.get(widgetId) ?? null
-}
-
-function touchWidgetFailureVersion(): void {
-  widgetFailureVersion.value += 1
-}
 const transport = useTuffTransport()
 const widgetRegisterEvent = PluginEvents.widget.register
 const widgetUpdateEvent = PluginEvents.widget.update
@@ -1040,8 +1005,7 @@ function injectStyles(widgetId: string, styles: string): void {
 
 async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise<void> {
   try {
-    widgetFailures.delete(payload.widgetId)
-    touchWidgetFailureVersion()
+    clearWidgetFailure(payload.widgetId)
     if (isDev) {
       devLog(
         `[WidgetRegistry] register widget ${payload.widgetId} (${payload.pluginName}:${payload.featureId})`
@@ -1078,8 +1042,7 @@ async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise
 
 async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Promise<void> {
   try {
-    widgetFailures.delete(payload.widgetId)
-    touchWidgetFailureVersion()
+    clearWidgetFailure(payload.widgetId)
     if (isDev) {
       devLog(
         `[WidgetRegistry] update widget ${payload.widgetId} (${payload.pluginName}:${payload.featureId})`
@@ -1120,8 +1083,7 @@ function handleWidgetUnregister({ widgetId }: { widgetId: string }): void {
       devLog(`[WidgetRegistry] unregister widget ${widgetId}`)
     }
     clearWidgetRuntimeSource(widgetId)
-    widgetFailures.delete(widgetId)
-    touchWidgetFailureVersion()
+    clearWidgetFailure(widgetId)
     unregisterCustomRenderer(widgetId)
     const style = injectedStyles.get(widgetId)
     if (style) {
@@ -1135,8 +1097,7 @@ function handleWidgetUnregister({ widgetId }: { widgetId: string }): void {
 }
 
 function handleWidgetFailed(payload: WidgetFailurePayload): void {
-  widgetFailures.set(payload.widgetId, payload)
-  touchWidgetFailureVersion()
+  recordWidgetFailure(payload)
   clearWidgetRuntimeSource(payload.widgetId)
   unregisterCustomRenderer(payload.widgetId)
   if (isDev) {

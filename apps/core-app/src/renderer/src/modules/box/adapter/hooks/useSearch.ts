@@ -8,6 +8,7 @@ import type {
 import type { ActivationState } from '@talex-touch/utils/transport/events/types'
 import type { IBoxOptions } from '..'
 import type { IUseSearch } from '../types'
+import type { DetachedDivisionConfig } from './detached-division'
 import type { IClipboardOptions } from './types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -19,6 +20,7 @@ import { appSetting } from '~/modules/storage/app-storage'
 import { devLog } from '~/utils/dev-log'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 import { BoxMode } from '..'
+import { isDetachedDivisionItemMatch, parseDetachedDivisionConfig } from './detached-division'
 import { createCoreBoxInputTransport } from '../transport/input-transport'
 import { isBackgroundAppLaunchItem } from './app-launch-item'
 import { buildClipboardQueryInputs } from './clipboard-query-inputs'
@@ -48,31 +50,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object'
 }
 
-interface DetachedDivisionConfig {
-  itemId?: string
-  sourceId?: string
-  query?: string
-}
-
 interface DetachedDivisionPayload {
   item: TuffItem
   query?: string
-}
-
-function parseDetachedDivisionConfig(url: string | undefined): DetachedDivisionConfig | null {
-  if (!url || !url.startsWith('tuff://detached')) {
-    return null
-  }
-  try {
-    const parsed = new URL(url)
-    return {
-      itemId: parsed.searchParams.get('itemId') || undefined,
-      sourceId: parsed.searchParams.get('source') || undefined,
-      query: parsed.searchParams.get('query') || undefined
-    }
-  } catch {
-    return null
-  }
 }
 
 export function useSearch(
@@ -92,11 +72,7 @@ export function useSearch(
   const isDetachedDivisionMode = (): boolean => isDivisionBoxMode() && !!getDetachedDivisionConfig()
 
   const isDetachedItemMatch = (item: TuffItem): boolean => {
-    const config = getDetachedDivisionConfig()
-    if (!config?.itemId) return true
-    if (item.id !== config.itemId) return false
-    if (config.sourceId && item.source?.id !== config.sourceId) return false
-    return true
+    return isDetachedDivisionItemMatch(item, getDetachedDivisionConfig())
   }
 
   const filterDetachedItems = (items: TuffItem[]): TuffItem[] => {
