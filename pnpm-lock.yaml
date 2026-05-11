@@ -1004,9 +1004,15 @@ importers:
 
   packages/intelligence-uikit:
     dependencies:
+      '@talex-touch/tuff-intelligence':
+        specifier: workspace:*
+        version: link:../tuff-intelligence
       '@talex-touch/tuffex':
         specifier: workspace:*
         version: link:../tuffex
+      '@talex-touch/utils':
+        specifier: workspace:*
+        version: link:../utils
     devDependencies:
       '@antfu/eslint-config':
         specifier: catalog:dev

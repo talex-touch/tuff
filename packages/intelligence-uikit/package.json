@@ -37,7 +37,9 @@
     "vue": "^3.5.27"
   },
   "dependencies": {
-    "@talex-touch/tuffex": "workspace:*"
+    "@talex-touch/tuff-intelligence": "workspace:*",
+    "@talex-touch/tuffex": "workspace:*",
+    "@talex-touch/utils": "workspace:*"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:dev",
