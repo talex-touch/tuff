@@ -23,7 +23,7 @@
     {
       "id": "intelligence-ask",
       "name": "智能问答",
-      "desc": "输入问题后直接调用 AI 回答",
+      "desc": "输入问题或复制图片后直接调用 AI 回答",
       "icon": {
         "type": "file",
         "value": "assets/logo.svg"
@@ -31,7 +31,7 @@
       "keywords": ["ai", "@ai", "/ai", "智能", "问答", "chat", "助手"],
       "push": true,
       "priority": 200,
-      "acceptedInputTypes": ["text"],
+      "acceptedInputTypes": ["text", "image"],
       "platform": {
         "win32": true,
         "darwin": true,
