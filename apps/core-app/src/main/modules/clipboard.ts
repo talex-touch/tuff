@@ -11,72 +11,59 @@ import type {
   ClipboardItem,
   ClipboardMetaQueryRequest,
   ClipboardQueryRequest,
-  ClipboardQueryResponse,
   ClipboardReadImageRequest,
   ClipboardReadImageResponse,
   ClipboardReadResponse,
   ClipboardSetFavoriteRequest,
   ClipboardWriteRequest
 } from '@talex-touch/utils/transport/events/types'
-import type {
-  HandlerContext,
-  ITuffTransportMain,
-  StreamContext
-} from '@talex-touch/utils/transport/main'
-import type { SQL } from 'drizzle-orm'
+import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { NativeImage } from 'electron'
 import type * as schema from '../db/schema'
 import type { ScheduleOptions } from '../db/db-write-scheduler'
-import crypto from 'node:crypto'
-import fs from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { isHttpSource, resolveLocalFilePath, toTfileUrl } from '@talex-touch/utils/network'
 import { CAPABILITY_AUTH_MIN_VERSION } from '@talex-touch/utils/plugin'
-import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { TuffInputType } from '@talex-touch/utils/transport/events/types'
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm'
-import { clipboard, nativeImage, powerMonitor } from 'electron'
+import { eq } from 'drizzle-orm'
+import { clipboard, powerMonitor } from 'electron'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { dbWriteScheduler } from '../db/db-write-scheduler'
 import { isStartupDegradeActive } from '../db/startup-degrade'
 import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
 import { withSqliteRetry } from '../db/sqlite-retry'
 import { appTaskGate } from '../service/app-task-gate'
-import { tempFileService } from '../service/temp-file.service'
 import { normalizeRenderableSource } from '../utils/local-renderable-assets'
-import { createLogger } from '../utils/logger'
+import { createLogger, type LogOptions } from '../utils/logger'
 import { enterPerfContext } from '../utils/perf-context'
 import { perfMonitor } from '../utils/perf-monitor'
 import { BaseModule } from './abstract-base-module'
-import { coreBoxManager } from './box-tool/core-box/manager'
 import { windowManager } from './box-tool/core-box/window'
 import { detectClipboardTags } from './clipboard-tagging'
 import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
-import { getAutoPasteCapabilityPatch } from './platform/capability-adapter'
 import { getPermissionModule } from './permission'
 import { pluginModule } from './plugin/plugin-module'
 import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storage'
 import { activeAppService } from './system/active-app'
 import {
-  AUTO_PASTE_FAILED_MESSAGE,
-  ClipboardActionRuntimeError,
-  normalizeClipboardActionError,
-  summarizeClipboardApplyPayload
-} from './clipboard/clipboard-action-diagnostics'
-import { notificationModule } from './notification'
-import {
   createClipboardFreshnessState,
   createIneligibleClipboardFreshnessState,
   type ClipboardFreshnessState
 } from './clipboard/clipboard-freshness'
-import { sendPlatformShortcut } from './system/desktop-shortcut'
+import {
+  CLIPBOARD_HTML_FORMATS,
+  CLIPBOARD_IMAGE_FORMATS,
+  CLIPBOARD_TEXT_FORMATS,
+  ClipboardFreshnessStore,
+  ClipboardHelper,
+  includesAnyClipboardFormat
+} from './clipboard/clipboard-capture-freshness'
 import {
   buildPhaseDiagnostics,
   summarizePhaseDurations,
@@ -86,10 +73,22 @@ import {
   type ClipboardPhaseDurations
 } from './clipboard/clipboard-phase-diagnostics'
 import {
-  buildApplyPayloadFromCopyAndPaste,
-  type ClipboardHistoryQueryInput,
-  normalizeClipboardWritePayload
+  normalizeClipboardWritePayload,
+  type ClipboardHistoryQueryInput
 } from './clipboard/clipboard-request-normalizer'
+import {
+  ClipboardTransportHandlersRegistry,
+  type ClipboardWritePayload
+} from './clipboard/clipboard-transport-handlers'
+import {
+  ClipboardHistoryPersistence,
+  mergeClipboardMetadataString,
+  type IClipboardItem
+} from './clipboard/clipboard-history-persistence'
+import { ClipboardImagePersistence } from './clipboard/clipboard-image-persistence'
+import { ClipboardAutopasteAutomation } from './clipboard/clipboard-autopaste-automation'
+
+export type { IClipboardItem } from './clipboard/clipboard-history-persistence'
 
 const clipboardLog = createLogger('Clipboard')
 const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
@@ -113,47 +112,9 @@ const CLIPBOARD_IMAGE_PERSIST_DEBOUNCE_MS = 2000
 const CLIPBOARD_NATIVE_WATCH_ENV = 'TUFF_CLIPBOARD_NATIVE_WATCH'
 const pollingService = PollingService.getInstance()
 
-const FILE_URL_FORMATS = new Set([
-  'public.file-url',
-  'public.file-url-multiple',
-  'text/uri-list',
-  'text/x-moz-url',
-  'NSFilenamesPboardType',
-  'com.apple.pasteboard.promised-file-url'
-])
-
-const IMAGE_FORMATS = new Set([
-  'public.tiff',
-  'public.png',
-  'public.jpeg',
-  'public.heic',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'NSTIFFPboardType'
-])
-
-const TEXT_FORMATS = new Set([
-  'public.utf8-plain-text',
-  'public.utf16-plain-text',
-  'text/plain',
-  'text/html',
-  'public.html',
-  'NSStringPboardType'
-])
-
-const HTML_FORMATS = new Set(['text/html', 'public.html'])
-
 interface ClipboardMetaEntry {
   key: string
   value: unknown
-}
-
-interface ClipboardWritePayload {
-  text?: string
-  html?: string
-  image?: string
-  files?: string[]
 }
 
 type ClipboardPollingIntervalOption = 1 | 3 | 5 | 10 | 15 | -1
@@ -206,359 +167,67 @@ function isOnBatteryPowerSafe(): boolean {
   }
 }
 
-function includesAny(formats: string[], candidates: Set<string>): boolean {
-  return formats.some((format) => candidates.has(format))
-}
-
-export interface IClipboardItem {
-  id?: number
-  type: 'text' | 'image' | 'files'
-  content: string
-  thumbnail?: string | null
-  rawContent?: string | null
-  sourceApp?: string | null
-  timestamp?: Date
-  isFavorite?: boolean | null
-  metadata?: string | null
-  meta?: Record<string, unknown> | null
-}
-
-interface ClipboardApplyPayload {
-  item?: Partial<IClipboardItem> & { type?: IClipboardItem['type'] }
-  text?: string
-  html?: string | null
-  type?: IClipboardItem['type']
-  files?: string[]
-  delayMs?: number
-  hideCoreBox?: boolean
-}
-
-const PAGE_SIZE = 20
-const CACHE_MAX_COUNT = 20
-const CACHE_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour
-
-const CLIPBOARD_IMAGE_NAMESPACE = 'clipboard/images'
-const CLIPBOARD_LIVE_IMAGE_NAMESPACE = 'clipboard/live-images'
-const CLIPBOARD_IMAGE_ORPHAN_CLEANUP_TASK_ID = 'clipboard.temp-images.cleanup'
-const CLIPBOARD_IMAGE_ORPHAN_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000
-const CLIPBOARD_IMAGE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000
 const CLIPBOARD_META_QUEUE_LIMIT = 6
 const CLIPBOARD_META_LOG_THROTTLE_MS = 5_000
 const CLIPBOARD_STAGE_B_LOG_THROTTLE_MS = 5_000
 
-function isDataUrl(value: string): boolean {
-  return typeof value === 'string' && value.startsWith('data:')
-}
-
-function isLikelyLocalPath(value: string): boolean {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    !value.startsWith('data:') &&
-    !isHttpSource(value)
-  )
-}
-
-class ClipboardHelper {
-  private lastText: string = ''
-  public lastFormats: string[] = []
-  public lastFormatsKey: string = ''
-  public lastChangeHash: string = ''
-  private lastImageHash: string = ''
-  private lastFiles: string[] = []
-  private bootstrapped = false
-
-  public bootstrap(): void {
-    if (this.bootstrapped) {
-      return
-    }
-    this.bootstrapped = true
-    try {
-      this.lastText = clipboard.readText()
-    } catch {
-      this.lastText = ''
-    }
-    try {
-      this.lastFormats = clipboard.availableFormats()
-    } catch {
-      this.lastFormats = []
-    }
-    this.lastFormats = [...this.lastFormats].sort()
-    this.lastFormatsKey = this.lastFormats.join(',')
-    const formatsKey = this.lastFormatsKey
-    const textSignature = this.getTextQuickSignature(this.lastText)
-
-    let filesSignature = '0:0'
-    if (includesAny(this.lastFormats, FILE_URL_FORMATS)) {
-      try {
-        this.lastFiles = this.readClipboardFiles()
-      } catch {
-        this.lastFiles = []
-      }
-      filesSignature = this.getFilesQuickSignature(this.lastFiles)
-    } else {
-      this.lastFiles = []
-    }
-
-    if (includesAny(this.lastFormats, IMAGE_FORMATS)) {
-      try {
-        const image = clipboard.readImage()
-        this.lastImageHash = this.getImageQuickSignature(image.isEmpty() ? null : image)
-      } catch {
-        this.lastImageHash = ''
-      }
-    } else {
-      this.lastImageHash = ''
-    }
-
-    this.lastChangeHash = `${formatsKey}|t:${textSignature}|f:${filesSignature}|i:${this.lastImageHash}`
-  }
-
-  private getImageHash(image: NativeImage): string {
-    if (!image || image.isEmpty()) return ''
-
-    const size = image.getSize()
-    // Use a tiny resize + dataURL for fast fingerprinting.
-    // Avoids image.toBitmap() which allocates a full RGBA buffer
-    // (e.g. 33MB for 4K images) just to sample 1KB.
-    const tiny = image.resize({ width: 16, height: 16 })
-    const fingerprint = tiny.toDataURL().substring(0, 200)
-    return `${size.width}x${size.height}:${crypto.createHash('sha1').update(fingerprint).digest('hex')}`
-  }
-
-  public getTextQuickSignature(text: string): string {
-    if (!text) return '0:0'
-    const edgeLength = 160
-    const head = text.slice(0, edgeLength)
-    const tail = text.length > edgeLength ? text.slice(-edgeLength) : ''
-    const digest = crypto.createHash('sha1').update(head).update('\0').update(tail).digest('hex')
-    return `${text.length}:${digest}`
-  }
-
-  public getFilesQuickSignature(files: string[]): string {
-    if (files.length === 0) return '0:0'
-    const digest = crypto.createHash('sha1')
-    for (const filePath of files) {
-      digest.update(filePath)
-      digest.update('\n')
-    }
-    return `${files.length}:${digest.digest('hex')}`
-  }
-
-  public getImageQuickSignature(image: NativeImage | null | undefined): string {
-    if (!image || image.isEmpty()) return ''
-    return this.getImageHash(image)
-  }
-
-  /**
-   * Read file paths from clipboard
-   *
-   * @remarks
-   * Tries multiple clipboard formats in priority order:
-   * 1. public.file-url - Standard macOS file URLs
-   * 2. NSFilenamesPboardType - Older macOS format
-   * 3. text/uri-list - Cross-platform format
-   *
-   * Filters out invalid entries like file IDs, placeholders, or malformed URLs
-   *
-   * Special handling: When file IDs are detected (e.g., for large video files),
-   * attempts to read the actual file path from clipboard text as a fallback
-   */
-  public readClipboardFiles(): string[] {
-    // Try multiple formats in priority order
-    const formats = ['public.file-url', 'NSFilenamesPboardType', 'text/uri-list']
-
-    let hasFileIDPlaceholder = false
-
-    for (const format of formats) {
-      try {
-        const raw = clipboard.read(format).toString()
-        if (!raw) continue
-
-        clipboardLog.debug(`Raw clipboard data from ${format}`, {
-          meta: { sample: raw.substring(0, 200) }
-        })
-
-        // Special handling: Check if this is plist XML format (macOS clipboard)
-        if (raw.includes('<?xml') && raw.includes('<plist') && raw.includes('<string>')) {
-          clipboardLog.debug('Detected plist XML format, parsing')
-          const stringMatches = raw.match(/<string>([^<]+)<\/string>/g)
-          if (stringMatches && stringMatches.length > 0) {
-            const paths = stringMatches
-              .map((match) => {
-                const path = match.replace(/<string>|<\/string>/g, '').trim()
-                // Validate it's a file path
-                if ((path.startsWith('/') || path.includes(':\\')) && !path.includes('/id=')) {
-                  clipboardLog.debug('Extracted file path from plist', { meta: { path } })
-                  return path
-                }
-                return null
-              })
-              .filter((p): p is string => p !== null)
-
-            if (paths.length > 0) {
-              clipboardLog.info(`Read ${paths.length} file(s) from plist XML`)
-              return paths
-            }
-          }
-          clipboardLog.debug('No valid paths found in plist XML')
-          continue
-        }
-
-        // Regular URL format processing
-        const paths = raw
-          .split(/\r\n|\n|\r/)
-          .filter(Boolean)
-          .map((url) => {
-            try {
-              // Skip entries that look like file IDs or placeholders
-              // e.g., "file/id=65713367.75131581"
-              if (url.includes('file/id=') || url.includes('/.file/id=')) {
-                clipboardLog.debug('Detected file ID placeholder', { meta: { url } })
-                hasFileIDPlaceholder = true
-                return ''
-              }
-
-              // Try to parse as URL
-              const parsedUrl = new URL(url)
-              const pathname = decodeURI(parsedUrl.pathname)
-
-              // Validate it's an actual file path
-              if (!pathname || pathname === '/' || pathname.includes('/id=')) {
-                clipboardLog.debug('Invalid file path from URL', { meta: { url } })
-                return ''
-              }
-
-              clipboardLog.debug('Extracted file path', { meta: { pathname } })
-              return pathname
-            } catch {
-              // If not a URL, treat as direct file path
-              const trimmed = url.trim()
-              // Accept paths that start with / (Unix) or contain :\ (Windows)
-              const looksLikePath = trimmed.startsWith('/') || trimmed.includes(':\\')
-              const isNotID = !trimmed.includes('/id=')
-
-              if (looksLikePath && isNotID) {
-                clipboardLog.debug('Using direct path', { meta: { path: trimmed } })
-                return trimmed
-              }
-
-              clipboardLog.debug('Rejected as not a valid path', { meta: { value: trimmed } })
-              return ''
-            }
-          })
-          .filter(Boolean)
-
-        if (paths.length > 0) {
-          clipboardLog.info(`Read ${paths.length} file(s) from format: ${format}`)
-          return paths
-        } else if (hasFileIDPlaceholder) {
-          clipboardLog.debug(
-            'File ID placeholders detected but no valid paths - files may still be preparing'
-          )
-        } else {
-          clipboardLog.debug(`No valid paths extracted from ${format}`)
-        }
-      } catch (error) {
-        clipboardLog.debug(`Failed to read format ${format}`, { error })
-      }
-    }
-
-    // Fallback: If file IDs detected, try to read file path from text
-    if (hasFileIDPlaceholder) {
-      clipboardLog.debug('Attempting to read file path from clipboard text as fallback')
-      try {
-        const text = clipboard.readText().trim()
-        if (text && text.length > 0 && text.length < 10000) {
-          // Check if text looks like a direct file path
-          if (text.startsWith('/') && !text.includes('<')) {
-            clipboardLog.info('Found file path in fallback text')
-            return [text]
-          }
-
-          // Check if text is plist XML format (macOS clipboard format)
-          if (text.includes('<plist') && text.includes('<string>')) {
-            clipboardLog.debug('Detected plist XML in fallback text, parsing')
-            const stringMatches = text.match(/<string>([^<]+)<\/string>/g)
-            if (stringMatches && stringMatches.length > 0) {
-              const paths = stringMatches
-                .map((match) => {
-                  const path = match.replace(/<string>|<\/string>/g, '').trim()
-                  // Validate it's a file path
-                  if (path.startsWith('/') || path.includes(':\\')) {
-                    return path
-                  }
-                  return null
-                })
-                .filter((p): p is string => p !== null)
-
-              if (paths.length > 0) {
-                clipboardLog.info('Extracted file paths from fallback plist')
-                return paths
-              }
-            }
-          }
-        }
-      } catch (error) {
-        clipboardLog.debug('Failed to read fallback text', { error })
-      }
-      clipboardLog.info('Files contain ID placeholders - skipping to avoid treating as text')
-    }
-    return []
-  }
-
-  public didFilesChange(nextFiles: string[]): boolean {
-    if (nextFiles.length === 0) return false
-    if (
-      nextFiles.length === this.lastFiles.length &&
-      nextFiles.every((file, index) => file === this.lastFiles[index])
-    ) {
-      return false
-    }
-    this.lastFiles = [...nextFiles]
-    return true
-  }
-
-  public getLastFilesSnapshot(): string[] {
-    return [...this.lastFiles]
-  }
-
-  public didImageChange(image: NativeImage): boolean {
-    if (image.isEmpty()) return false
-    const hash = this.getImageHash(image)
-    if (hash === this.lastImageHash) return false
-    this.lastImageHash = hash
-    return true
-  }
-
-  public primeImage(image: NativeImage | null): void {
-    this.lastImageHash = image && !image.isEmpty() ? this.getImageHash(image) : ''
-  }
-
-  public primeFiles(files: string[]): void {
-    this.lastFiles = [...files]
-  }
-
-  public didTextChange(text: string): boolean {
-    if (!text || text === this.lastText) return false
-    this.lastText = text
-    return true
-  }
-
-  public markText(text: string): void {
-    this.lastText = text
-  }
-}
-
 export class ClipboardModule extends BaseModule {
   private transport: ITuffTransportMain | null = null
-  private transportDisposers: Array<() => void> = []
-  private transportChangeListeners = new Set<() => void>()
-  private clipboardFreshness = new Map<number, ClipboardFreshnessState>()
+  private readonly transportHandlers = new ClipboardTransportHandlersRegistry()
+  private clipboardFreshness = new ClipboardFreshnessStore()
+  private readonly autopasteAutomation = new ClipboardAutopasteAutomation({
+    hasDatabase: () => Boolean(this.db),
+    getItemById: async (id) => await this.getItemById(id),
+    rememberFreshness: (item) => {
+      this.rememberClipboardFreshness(
+        item,
+        createIneligibleClipboardFreshnessState('history-apply')
+      )
+    },
+    primeImage: (image) => {
+      this.clipboardHelper?.primeImage(image)
+    },
+    primeFiles: (files) => {
+      this.clipboardHelper?.primeFiles(files)
+    },
+    markText: (text) => {
+      this.clipboardHelper?.markText(text)
+    },
+    logWarn: (message, data?: LogOptions) => {
+      clipboardLog.warn(message, data)
+    },
+    logError: (message, data?: LogOptions) => {
+      clipboardLog.error(message, data)
+    },
+    logDebug: (message, data?: LogOptions) => {
+      clipboardLog.debug(message, data)
+    }
+  })
+  private readonly imagePersistence = new ClipboardImagePersistence({
+    getDatabase: () => this.db,
+    logInfo: (message, data?: LogOptions) => {
+      clipboardLog.info(message, data)
+    },
+    logWarn: (message, data?: LogOptions) => {
+      clipboardLog.warn(message, data)
+    }
+  })
+  private historyPersistence = new ClipboardHistoryPersistence({
+    onForgetFreshness: (id) => {
+      this.clipboardFreshness.delete(id)
+    },
+    onChange: () => {
+      this.notifyTransportChange()
+    },
+    deleteImageFile: (filePath) => {
+      void this.imagePersistence.deleteImageFile(filePath)
+    },
+    isWithinTempBaseDir: (filePath) => this.imagePersistence.isWithinTempBaseDir(filePath),
+    normalizeRenderableSource: (source) => {
+      return normalizeRenderableSource(source)
+    }
+  })
 
-  private memoryCache: IClipboardItem[] = []
-  private initialCacheLoaded = false
-  private initialCacheLoadingPromise: Promise<void> | null = null
   private isDestroyed = false
   private clipboardHelper?: ClipboardHelper
   private db?: LibSQLDatabase<typeof schema>
@@ -899,160 +568,16 @@ export class ClipboardModule extends BaseModule {
     powerMonitor.on('on-battery', this.handlePowerStateChanged)
   }
 
-  private async hydrateWithMeta<T extends { id?: number | null; metadata?: string | null }>(
-    rows: readonly T[]
-  ): Promise<Array<T & { meta: Record<string, unknown> | null }>> {
-    if (!this.db || rows.length === 0) {
-      return rows.map((row) => ({ ...row, meta: null }))
-    }
-
-    const ids = rows.map((item) => item.id).filter((id): id is number => typeof id === 'number')
-
-    const metaMap = new Map<number, Record<string, unknown>>()
-
-    if (ids.length > 0) {
-      const metaRows = await this.db
-        .select()
-        .from(clipboardHistoryMeta)
-        .where(inArray(clipboardHistoryMeta.clipboardId, ids))
-
-      for (const metaRow of metaRows) {
-        if (typeof metaRow.clipboardId !== 'number') continue
-        const existing = metaMap.get(metaRow.clipboardId) ?? {}
-        try {
-          existing[metaRow.key] = metaRow.value ? JSON.parse(metaRow.value) : null
-        } catch {
-          existing[metaRow.key] = metaRow.value
-        }
-        metaMap.set(metaRow.clipboardId, existing)
-      }
-    }
-
-    return rows.map((row) => {
-      let fallback: Record<string, unknown> | null = null
-      if (typeof row.metadata === 'string' && row.metadata.trim().length > 0) {
-        try {
-          fallback = JSON.parse(row.metadata)
-        } catch {
-          fallback = null
-        }
-      }
-
-      const meta = row.id ? (metaMap.get(row.id) ?? fallback) : fallback
-      return {
-        ...row,
-        meta: meta ?? null
-      }
-    })
-  }
-
-  private async loadInitialCache(options?: { waitForIdle?: boolean }) {
-    if (!this.db) return
-
-    const waitForIdle = options?.waitForIdle !== false
-    const dispose = enterPerfContext('Clipboard.loadInitialCache', {
-      limit: CACHE_MAX_COUNT,
-      waitForIdle
-    })
-    const startAt = performance.now()
-    const phaseDurations: ClipboardPhaseDurations = {}
-    try {
-      if (waitForIdle) {
-        await trackPhaseAsync(phaseDurations, 'gate.waitForIdle', async () => {
-          await appTaskGate.waitForIdle()
-        })
-      }
-
-      const rows = await trackPhaseAsync(phaseDurations, 'db.queryRecentRows', async () => {
-        return await this.db!.select()
-          .from(clipboardHistory)
-          .orderBy(desc(clipboardHistory.timestamp))
-          .limit(CACHE_MAX_COUNT)
-      })
-
-      this.memoryCache = await trackPhaseAsync(phaseDurations, 'meta.hydrate', async () => {
-        return await this.hydrateWithMeta(rows)
-      })
-    } finally {
-      const duration = performance.now() - startAt
-      const gateWaitMs = Math.round(phaseDurations['gate.waitForIdle'] ?? 0)
-      const effectiveWorkMs = Math.max(0, Math.round(duration) - gateWaitMs)
-      const phaseDiagnostics = buildPhaseDiagnostics(phaseDurations, effectiveWorkMs)
-      if (duration > 200) {
-        const severity = toPerfSeverity(phaseDiagnostics.phaseAlertLevel)
-        if (severity) {
-          perfMonitor.recordMainReport({
-            kind: 'clipboard.cache.hydrate.slow',
-            eventName: phaseDiagnostics.phaseAlertCode,
-            durationMs: Math.round(duration),
-            level: severity,
-            meta: {
-              effectiveWorkMs,
-              phaseAlertLevel: phaseDiagnostics.phaseAlertLevel,
-              slowestPhase: phaseDiagnostics.slowestPhase ?? 'none',
-              slowestPhaseMs: phaseDiagnostics.slowestPhaseMs
-            }
-          })
-        }
-        clipboardLog.warn('Clipboard cache hydrate slow', {
-          meta: {
-            durationMs: Math.round(duration),
-            effectiveWorkMs,
-            ...phaseDiagnostics
-          }
-        })
-      }
-      dispose()
-    }
-  }
-
   private async ensureInitialCacheLoaded(): Promise<void> {
-    if (this.initialCacheLoaded || !this.db) {
-      return
-    }
-    if (this.initialCacheLoadingPromise) {
-      await this.initialCacheLoadingPromise
-      return
-    }
-
-    this.initialCacheLoadingPromise = this.loadInitialCache({ waitForIdle: false })
-      .then(() => {
-        this.initialCacheLoaded = true
-      })
-      .catch((error) => {
-        this.initialCacheLoaded = false
-        clipboardLog.warn('Clipboard initial cache lazy load failed', { error })
-      })
-      .finally(() => {
-        this.initialCacheLoadingPromise = null
-      })
-
-    await this.initialCacheLoadingPromise
+    await this.historyPersistence.ensureInitialCacheLoaded()
   }
 
   private updateMemoryCache(item: IClipboardItem) {
-    this.memoryCache.unshift(item)
-    if (this.memoryCache.length > CACHE_MAX_COUNT) {
-      const removed = this.memoryCache.pop()
-      if (typeof removed?.id === 'number') {
-        this.clipboardFreshness.delete(removed.id)
-      }
-    }
-    const oneHourAgo = Date.now() - CACHE_MAX_AGE_MS
-    this.memoryCache = this.memoryCache.filter((i) => {
-      const ts = i.timestamp
-      if (!ts) return false
-      const timeValue = ts instanceof Date ? ts.getTime() : new Date(ts).getTime()
-      const keep = Number.isFinite(timeValue) && timeValue > oneHourAgo
-      if (!keep && typeof i.id === 'number') {
-        this.clipboardFreshness.delete(i.id)
-      }
-      return keep
-    })
+    this.historyPersistence.updateMemoryCache(item)
   }
 
   public getLatestItem(): IClipboardItem | undefined {
-    return this.memoryCache[0]
+    return this.historyPersistence.getLatestItem()
   }
 
   private rememberClipboardFreshness(
@@ -1060,224 +585,39 @@ export class ClipboardModule extends BaseModule {
     freshness: ClipboardFreshnessState
   ): void {
     if (typeof item.id !== 'number') return
-    this.clipboardFreshness.set(item.id, freshness)
+    this.clipboardFreshness.remember(item, freshness)
   }
 
   private resolveClipboardFreshness(item: IClipboardItem): ClipboardFreshnessState {
-    if (typeof item.id === 'number') {
-      const state = this.clipboardFreshness.get(item.id)
-      if (state) return state
-    }
-    return createIneligibleClipboardFreshnessState('startup-bootstrap')
+    return this.clipboardFreshness.resolve(item)
   }
 
   public async getItemById(id: number): Promise<IClipboardItem | null> {
-    if (!this.db || !Number.isFinite(id)) {
-      return null
-    }
-
-    const cached = this.memoryCache.find((item) => item.id === id)
-    if (cached) {
-      return cached
-    }
-
-    const rows = await this.db
-      .select()
-      .from(clipboardHistory)
-      .where(eq(clipboardHistory.id, id))
-      .limit(1)
-
-    if (rows.length === 0) {
-      return null
-    }
-
-    const [hydrated] = await this.hydrateWithMeta(rows)
-    return (hydrated as IClipboardItem) ?? null
+    return await this.historyPersistence.getItemById(id)
   }
 
   public async queryHistoryByMeta(
     request: ClipboardMetaQueryRequest = {}
   ): Promise<IClipboardItem[]> {
-    if (!this.db) {
-      return []
-    }
-
-    const { source, category, metaFilter, limit: requestedLimit } = request ?? {}
-    const limit = Math.min(Math.max(requestedLimit ?? 5, 1), 50)
-    const metaFilterPreview = metaFilter ? JSON.stringify(metaFilter) : undefined
-
-    clipboardLog.debug('[clipboard:history:query-meta] Request', {
-      meta: { source, category, metaFilter: metaFilterPreview, limit }
-    })
-
-    // 如果没有任何筛选条件，返回最近的记录
-    if (!source && !category && !metaFilter) {
-      const rows = await this.db
-        .select()
-        .from(clipboardHistory)
-        .orderBy(desc(clipboardHistory.timestamp))
-        .limit(limit)
-      const history = await this.hydrateWithMeta(rows)
-      return history.map((item) => this.toClientItem(item) ?? item)
-    }
-
-    const conditions: ReturnType<typeof and>[] = []
-
-    if (source) {
-      conditions.push(
-        and(
-          eq(clipboardHistoryMeta.key, 'source'),
-          eq(clipboardHistoryMeta.value, JSON.stringify('custom'))
-        )!
-      )
-    }
-
-    if (category) {
-      const categoryValue = JSON.stringify(category)
-      clipboardLog.debug('[clipboard:history:query-meta] Searching for category', {
-        meta: { category, categoryValue }
-      })
-      conditions.push(
-        and(
-          eq(clipboardHistoryMeta.key, 'category'),
-          eq(clipboardHistoryMeta.value, categoryValue)
-        )!
-      )
-    }
-
-    if (metaFilter) {
-      const { key, value } = metaFilter
-      if (key) {
-        const condition =
-          value !== undefined
-            ? and(
-                eq(clipboardHistoryMeta.key, key),
-                eq(clipboardHistoryMeta.value, JSON.stringify(value))
-              )
-            : and(eq(clipboardHistoryMeta.key, key))
-        if (condition) conditions.push(condition)
-      }
-    }
-
-    if (conditions.length === 0) {
-      return []
-    }
-
-    const idRows = await this.db
-      .select({ clipboardId: clipboardHistoryMeta.clipboardId })
-      .from(clipboardHistoryMeta)
-      .where(conditions.length === 1 ? conditions[0] : or(...conditions))
-      .orderBy(desc(clipboardHistoryMeta.createdAt))
-      .limit(limit)
-
-    clipboardLog.debug('[clipboard:history:query-meta] Found meta rows', {
-      meta: { count: idRows.length }
-    })
-
-    const ids = idRows.map((row) => row.clipboardId).filter((id): id is number => !!id)
-    if (ids.length === 0) {
-      clipboardLog.debug('[clipboard:history:query-meta] No matching IDs found')
-      return []
-    }
-
-    clipboardLog.debug('[clipboard:history:query-meta] Fetching clipboard entries', {
-      meta: { count: ids.length, sampleIds: ids.slice(0, 5).join(',') }
-    })
-
-    const rows = await this.db
-      .select()
-      .from(clipboardHistory)
-      .where(inArray(clipboardHistory.id, ids))
-      .orderBy(desc(clipboardHistory.timestamp))
-
-    const history = await this.hydrateWithMeta(rows)
-    const normalized = history.map((item) => this.toClientItem(item) ?? item)
-    clipboardLog.debug('[clipboard:history:query-meta] Returning results', {
-      meta: { count: history.length }
-    })
-
-    return normalized
+    return await this.historyPersistence.queryHistoryByMeta(request)
   }
 
   public getCacheStats(): { memoryItems: number; activeAppCached: boolean } {
     return {
-      memoryItems: this.memoryCache.length,
+      memoryItems: this.historyPersistence.getMemoryItemsCount(),
       activeAppCached: Boolean(this.activeAppCache?.value)
     }
   }
 
   private extractTags(item: IClipboardItem): string[] | undefined {
-    const metaTags = item.meta?.tags
-    if (Array.isArray(metaTags) && metaTags.every((tag) => typeof tag === 'string')) {
-      return metaTags
-    }
-
-    if (typeof item.metadata === 'string' && item.metadata.trim().length > 0) {
-      try {
-        const parsed = JSON.parse(item.metadata) as { tags?: unknown }
-        const tags = parsed?.tags
-        if (Array.isArray(tags) && tags.every((tag) => typeof tag === 'string')) {
-          return tags
-        }
-      } catch {}
-    }
-
-    return undefined
+    return this.historyPersistence.extractTags(item)
   }
 
   public async cleanupHistory(options?: {
     beforeDays?: number
     type?: 'all' | 'text' | 'image' | 'files'
   }): Promise<{ removedCount: number }> {
-    if (!this.db) return { removedCount: 0 }
-
-    const conditions: Array<ReturnType<typeof and>> = []
-    const itemType = options?.type ?? 'all'
-    if (itemType !== 'all') {
-      conditions.push(eq(clipboardHistory.type, itemType))
-    }
-
-    if (options?.beforeDays && Number.isFinite(options.beforeDays) && options.beforeDays > 0) {
-      const cutoff = new Date(Date.now() - options.beforeDays * 24 * 60 * 60 * 1000)
-      conditions.push(lt(clipboardHistory.timestamp, cutoff))
-    }
-
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined
-    const rows = await this.db.select().from(clipboardHistory).where(whereClause)
-    for (const row of rows) {
-      const item = row as unknown as IClipboardItem
-      if (
-        item.type === 'image' &&
-        typeof item.content === 'string' &&
-        isLikelyLocalPath(item.content)
-      ) {
-        void tempFileService.deleteFile(item.content)
-      }
-    }
-
-    await this.db.delete(clipboardHistory).where(whereClause)
-    this.memoryCache = this.memoryCache.filter((item) => {
-      const forget = (): false => {
-        if (typeof item.id === 'number') {
-          this.clipboardFreshness.delete(item.id)
-        }
-        return false
-      }
-
-      if (itemType !== 'all' && item.type !== itemType) return true
-      if (options?.beforeDays && item.timestamp) {
-        const ts =
-          item.timestamp instanceof Date
-            ? item.timestamp.getTime()
-            : new Date(item.timestamp).getTime()
-        const cutoff = Date.now() - options.beforeDays * 24 * 60 * 60 * 1000
-        return ts >= cutoff ? true : forget()
-      }
-      return forget()
-    })
-    this.notifyTransportChange()
-
-    return { removedCount: rows.length }
+    return await this.historyPersistence.cleanupHistory(options)
   }
 
   private toTransportItem(item: IClipboardItem): ClipboardItem | null {
@@ -1336,72 +676,7 @@ export class ClipboardModule extends BaseModule {
   }
 
   private toClientItem(item: IClipboardItem | null): IClipboardItem | null {
-    if (!item) return null
-
-    if (item.type !== 'image') {
-      return { ...item }
-    }
-
-    const meta = { ...(item.meta ?? {}) } as Record<string, unknown>
-    const rawContent = typeof item.content === 'string' ? item.content : ''
-
-    const localContentPath = isLikelyLocalPath(rawContent) ? resolveLocalFilePath(rawContent) : null
-    const originalPath =
-      localContentPath && tempFileService.isWithinBaseDir(localContentPath)
-        ? localContentPath
-        : undefined
-    const originalAsset = originalPath ? normalizeRenderableSource(originalPath) : null
-    const originalUrl =
-      originalAsset && !('missing' in originalAsset) ? originalAsset.value : undefined
-
-    meta.image_original_url = originalUrl ?? meta.image_original_url
-    meta.image_content_kind = 'preview'
-    for (const key of ['image_original_url', 'image_preview_url']) {
-      const value = meta[key]
-      if (typeof value !== 'string' || !value.trim()) continue
-      const normalized = normalizeRenderableSource(value)
-      if ('missing' in normalized) {
-        delete meta[key]
-        continue
-      }
-      meta[key] = normalized.value
-    }
-
-    const content =
-      typeof item.thumbnail === 'string' && item.thumbnail.length > 0
-        ? item.thumbnail
-        : (originalUrl ?? (isDataUrl(rawContent) ? rawContent : ''))
-
-    return {
-      ...item,
-      content,
-      meta
-    }
-  }
-
-  private toClipboardQueryRequest(
-    request: ClipboardQueryRequest | null | undefined
-  ): ClipboardQueryRequest {
-    return {
-      page: Number.isFinite(request?.page) ? Number(request?.page) : undefined,
-      pageSize: Number.isFinite(request?.pageSize) ? Number(request?.pageSize) : undefined,
-      limit: Number.isFinite(request?.limit) ? Number(request?.limit) : undefined,
-      keyword: typeof request?.keyword === 'string' ? request.keyword : undefined,
-      startTime: typeof request?.startTime === 'number' ? request.startTime : undefined,
-      endTime: typeof request?.endTime === 'number' ? request.endTime : undefined,
-      type:
-        request?.type === 'all' ||
-        request?.type === 'favorite' ||
-        request?.type === 'text' ||
-        request?.type === 'image' ||
-        request?.type === 'files'
-          ? request.type
-          : undefined,
-      isFavorite: typeof request?.isFavorite === 'boolean' ? request.isFavorite : undefined,
-      sourceApp: typeof request?.sourceApp === 'string' ? request.sourceApp : undefined,
-      sortOrder:
-        request?.sortOrder === 'asc' ? 'asc' : request?.sortOrder === 'desc' ? 'desc' : undefined
-    }
+    return this.historyPersistence.toClientItem(item)
   }
 
   private async queryClipboardHistory(
@@ -1412,85 +687,7 @@ export class ClipboardModule extends BaseModule {
     page: number
     limit: number
   }> {
-    const normalized = this.toClipboardQueryRequest(request)
-    const page = Number.isFinite(normalized.page) ? Math.max(1, Number(normalized.page)) : 1
-    const requestedLimit = Number.isFinite(normalized.pageSize)
-      ? Number(normalized.pageSize)
-      : Number.isFinite(normalized.limit)
-        ? Number(normalized.limit)
-        : PAGE_SIZE
-    const limit = Math.min(Math.max(requestedLimit, 1), 100)
-
-    if (!this.db) {
-      return {
-        rows: [],
-        total: 0,
-        page,
-        limit
-      }
-    }
-
-    const offset = (page - 1) * limit
-    const conditions: SQL<unknown>[] = []
-
-    if (normalized.keyword && normalized.keyword.trim().length > 0) {
-      const keywordPattern = `%${normalized.keyword.trim()}%`
-      const keywordCondition = or(
-        sql`${clipboardHistory.content} LIKE ${keywordPattern}`,
-        sql`COALESCE(${clipboardHistory.rawContent}, '') LIKE ${keywordPattern}`,
-        sql`COALESCE(${clipboardHistory.metadata}, '') LIKE ${keywordPattern}`
-      )
-      if (keywordCondition) {
-        conditions.push(keywordCondition)
-      }
-    }
-
-    if (typeof normalized.startTime === 'number') {
-      conditions.push(sql`${clipboardHistory.timestamp} >= ${new Date(normalized.startTime)}`)
-    }
-
-    if (typeof normalized.endTime === 'number') {
-      conditions.push(sql`${clipboardHistory.timestamp} <= ${new Date(normalized.endTime)}`)
-    }
-
-    if (normalized.type === 'favorite') {
-      conditions.push(eq(clipboardHistory.isFavorite, true))
-    } else if (
-      normalized.type === 'text' ||
-      normalized.type === 'image' ||
-      normalized.type === 'files'
-    ) {
-      conditions.push(eq(clipboardHistory.type, normalized.type))
-    }
-
-    if (typeof normalized.isFavorite === 'boolean') {
-      conditions.push(eq(clipboardHistory.isFavorite, normalized.isFavorite))
-    }
-
-    if (typeof normalized.sourceApp === 'string') {
-      conditions.push(eq(clipboardHistory.sourceApp, normalized.sourceApp))
-    }
-
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined
-    const orderClause =
-      normalized.sortOrder === 'asc' ? clipboardHistory.timestamp : desc(clipboardHistory.timestamp)
-
-    const selectedRows = await this.db
-      .select()
-      .from(clipboardHistory)
-      .where(whereClause)
-      .orderBy(orderClause)
-      .limit(limit)
-      .offset(offset)
-
-    const rows = (await this.hydrateWithMeta(selectedRows)) as IClipboardItem[]
-    const totalResult = await this.db
-      .select({ count: sql<number>`count(*)` })
-      .from(clipboardHistory)
-      .where(whereClause)
-    const total = totalResult[0]?.count ?? 0
-
-    return { rows, total, page, limit }
+    return await this.historyPersistence.queryClipboardHistory(request)
   }
 
   private readClipboardSnapshot(): ClipboardReadResponse {
@@ -1507,37 +704,12 @@ export class ClipboardModule extends BaseModule {
   private async readClipboardImage(
     request: ClipboardReadImageRequest
   ): Promise<ClipboardReadImageResponse | null> {
-    const image = clipboard.readImage()
-    if (image.isEmpty()) {
-      return null
-    }
-    const size = image.getSize()
-    const preview = request?.preview ?? true
-    const previewDataUrl = image.resize({ width: 256 }).toDataURL()
-    if (preview) {
-      return {
-        dataUrl: previewDataUrl,
-        width: size.width,
-        height: size.height
-      }
-    }
-
-    const stored = await tempFileService.createFile({
-      namespace: CLIPBOARD_LIVE_IMAGE_NAMESPACE,
-      ext: 'png',
-      buffer: image.toPNG(),
-      prefix: 'clipboard-read'
-    })
-    return {
-      dataUrl: previewDataUrl,
-      width: size.width,
-      height: size.height,
-      tfileUrl: toTfileUrl(stored.path)
-    }
+    return await this.imagePersistence.readClipboardImage(request)
   }
 
   private buildTransportChangePayload(): ClipboardChangePayload {
-    const history = this.memoryCache
+    const history = this.historyPersistence
+      .getCachedItems()
       .map((item) => this.toTransportItem(item))
       .filter((item): item is ClipboardItem => !!item)
     const latest = history.length > 0 ? history[0] : null
@@ -1545,382 +717,15 @@ export class ClipboardModule extends BaseModule {
   }
 
   private notifyTransportChange(): void {
-    const listeners = Array.from(this.transportChangeListeners)
-    for (const listener of listeners) {
-      try {
-        listener()
-      } catch {
-        // ignore listener errors
-      }
-    }
-  }
-
-  private parseFileList(content?: string | null): string[] {
-    if (!content) return []
-    try {
-      const parsed = JSON.parse(content)
-      if (Array.isArray(parsed)) {
-        return parsed.filter(
-          (entry): entry is string => typeof entry === 'string' && entry.length > 0
-        )
-      }
-    } catch (error) {
-      clipboardLog.debug('Failed to parse file list from clipboard item', { error })
-    }
-    return []
-  }
-
-  private toActionFailureResult(
-    error: unknown,
-    logMessage: string,
-    meta: Record<string, unknown> = {},
-    fallbackMessage?: string,
-    options: { notify?: boolean } = {}
-  ): ClipboardActionResult {
-    const failure = normalizeClipboardActionError(error, fallbackMessage)
-    clipboardLog.warn(logMessage, {
-      error: failure.originalError,
-      meta: {
-        ...meta,
-        code: failure.code,
-        message: failure.message
-      }
-    })
-
-    if (options.notify) {
-      this.notifyAutoPasteFailure(failure)
-    }
-
-    return {
-      success: false,
-      message: failure.message,
-      code: failure.code
-    }
-  }
-
-  private notifyAutoPasteFailure(failure: {
-    code: ClipboardActionResult['code']
-    message: string
-  }): void {
-    const code = failure.code ?? 'AUTO_PASTE_FAILED'
-    notificationModule.showInternalSystemNotification({
-      id: `clipboard-auto-paste-failed:${code}`,
-      title: '自动粘贴失败',
-      message: failure.message,
-      level: 'error',
-      dedupeKey: `clipboard-auto-paste-failed:${code}`,
-      system: { silent: false }
-    })
-  }
-
-  private normalizeApplyPayload(payload: ClipboardApplyPayload): IClipboardItem {
-    if (!payload) {
-      throw new Error('Clipboard apply payload is missing.')
-    }
-
-    const base = payload.item ?? {}
-    const derivedType = payload.type ?? base.type ?? (payload.files ? 'files' : undefined)
-    let resolvedType: IClipboardItem['type'] | null = derivedType ?? null
-
-    if (!resolvedType) {
-      if (payload.text !== undefined || payload.html !== undefined) {
-        resolvedType = 'text'
-      }
-    }
-
-    if (!resolvedType) {
-      throw new Error('Unable to resolve clipboard content type for auto paste.')
-    }
-
-    if (resolvedType === 'text') {
-      const content = payload.text ?? base.content ?? ''
-      const rawContent = payload.html ?? base.rawContent ?? null
-      return {
-        type: 'text',
-        content,
-        rawContent
-      }
-    }
-
-    if (resolvedType === 'image') {
-      const content = base.content ?? payload.text
-      if (!content) {
-        throw new Error('Image clipboard item is missing data URL content.')
-      }
-      return {
-        type: 'image',
-        content
-      }
-    }
-
-    const files = payload.files ?? this.parseFileList(base.content)
-    if (!files.length) {
-      throw new Error('File clipboard item has no file paths to apply.')
-    }
-
-    return {
-      type: 'files',
-      content: JSON.stringify(files)
-    }
+    this.transportHandlers.notifyChange()
   }
 
   private createNativeImageFromSource(source: string): NativeImage {
-    if (!source) {
-      return nativeImage.createEmpty()
-    }
-
-    if (isDataUrl(source)) {
-      return nativeImage.createFromDataURL(source)
-    }
-
-    if (source.startsWith('tfile:')) {
-      const normalizedUrl = toTfileUrl(source)
-      const rawPath = normalizedUrl.slice('tfile://'.length)
-      try {
-        return nativeImage.createFromPath(decodeURIComponent(rawPath))
-      } catch {
-        return nativeImage.createFromPath(rawPath)
-      }
-    }
-
-    if (source.startsWith('file://')) {
-      try {
-        return nativeImage.createFromPath(fileURLToPath(source))
-      } catch {
-        return nativeImage.createEmpty()
-      }
-    }
-
-    return nativeImage.createFromPath(source)
-  }
-
-  private writeItemToClipboard(item: IClipboardItem, payload: ClipboardApplyPayload): void {
-    if (item.type === 'text') {
-      const html = item.rawContent ?? payload.html ?? undefined
-      clipboard.write({
-        text: item.content ?? '',
-        html: html ?? undefined
-      })
-      this.clipboardHelper?.markText(item.content ?? '')
-      return
-    }
-
-    if (item.type === 'image') {
-      const source = item.content ?? ''
-      const image = this.createNativeImageFromSource(source)
-      if (image.isEmpty()) {
-        throw new Error('Image clipboard item could not be reconstructed.')
-      }
-      clipboard.writeImage(image)
-      this.clipboardHelper?.primeImage(image)
-      return
-    }
-
-    const files = this.parseFileList(item.content)
-    if (!files.length) {
-      throw new Error('File clipboard item is empty.')
-    }
-
-    const resolvedPaths = files.map((filePath) => {
-      try {
-        return path.isAbsolute(filePath) ? filePath : path.resolve(filePath)
-      } catch {
-        return filePath
-      }
-    })
-
-    const fileUrlContent = resolvedPaths
-      .map((filePath) => pathToFileURL(filePath).toString())
-      .join('\n')
-    const buffer = Buffer.from(fileUrlContent, 'utf8')
-
-    try {
-      for (const format of ['public.file-url', 'public.file-url-multiple', 'text/uri-list']) {
-        clipboard.writeBuffer(format, buffer)
-      }
-    } catch (error) {
-      clipboardLog.warn('Failed to populate file clipboard formats', { error })
-    }
-
-    // Ensure at least the path text is available as a fallback.
-    clipboard.write({ text: resolvedPaths[0] ?? '' })
-    this.clipboardHelper?.primeFiles(resolvedPaths)
+    return this.imagePersistence.createNativeImageFromSource(source)
   }
 
   private startTempCleanupTasks(): void {
-    tempFileService.registerNamespace({ namespace: CLIPBOARD_IMAGE_NAMESPACE, retentionMs: null })
-    tempFileService.registerNamespace({
-      namespace: CLIPBOARD_LIVE_IMAGE_NAMESPACE,
-      retentionMs: 24 * 60 * 60 * 1000
-    })
-    tempFileService.startCleanup()
-
-    if (!pollingService.isRegistered(CLIPBOARD_IMAGE_ORPHAN_CLEANUP_TASK_ID)) {
-      pollingService.register(
-        CLIPBOARD_IMAGE_ORPHAN_CLEANUP_TASK_ID,
-        () => {
-          void this.cleanupOrphanClipboardImages().catch((error) => {
-            clipboardLog.warn('Clipboard temp image cleanup failed', { error })
-          })
-        },
-        {
-          interval: CLIPBOARD_IMAGE_ORPHAN_CLEANUP_INTERVAL_MS,
-          unit: 'milliseconds',
-          lane: 'maintenance',
-          backpressure: 'coalesce',
-          dedupeKey: CLIPBOARD_IMAGE_ORPHAN_CLEANUP_TASK_ID,
-          maxInFlight: 1,
-          timeoutMs: 60_000,
-          jitterMs: 2000
-        }
-      )
-      pollingService.start()
-    }
-  }
-
-  private async cleanupOrphanClipboardImages(): Promise<void> {
-    if (!this.db) return
-
-    const dirPath = tempFileService.resolveNamespaceDir(CLIPBOARD_IMAGE_NAMESPACE)
-    const now = Date.now()
-    const cutoff = now - CLIPBOARD_IMAGE_ORPHAN_MIN_AGE_MS
-
-    const referenced = new Set<string>()
-    try {
-      const rows = await this.db
-        .select({ content: clipboardHistory.content })
-        .from(clipboardHistory)
-        .where(eq(clipboardHistory.type, 'image'))
-
-      for (const row of rows) {
-        const content = row.content ?? ''
-        if (!isLikelyLocalPath(content)) continue
-        if (!tempFileService.isWithinBaseDir(content)) continue
-        referenced.add(path.resolve(content))
-      }
-    } catch (error) {
-      clipboardLog.warn('Failed to load referenced clipboard image paths', { error })
-      return
-    }
-
-    const collectFiles = async (root: string): Promise<string[]> => {
-      const files: string[] = []
-      let entries: Array<import('node:fs').Dirent>
-      try {
-        entries = await fs.readdir(root, { withFileTypes: true })
-      } catch {
-        return files
-      }
-
-      for (const entry of entries) {
-        const fullPath = path.join(root, entry.name)
-        if (entry.isDirectory()) {
-          files.push(...(await collectFiles(fullPath)))
-          continue
-        }
-        if (entry.isFile()) {
-          files.push(fullPath)
-        }
-      }
-      return files
-    }
-
-    const candidates = await collectFiles(dirPath)
-    let cleanedCount = 0
-    let cleanedBytes = 0
-
-    for (const filePath of candidates) {
-      const resolved = path.resolve(filePath)
-      if (referenced.has(resolved)) continue
-
-      try {
-        const stat = await fs.stat(resolved)
-        if (!Number.isFinite(stat.mtimeMs) || stat.mtimeMs > cutoff) continue
-        const ok = await tempFileService.deleteFile(resolved)
-        if (ok) {
-          cleanedCount += 1
-          cleanedBytes += stat.size
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    if (cleanedCount > 0) {
-      clipboardLog.info('Cleaned orphaned clipboard images', {
-        meta: { cleanedCount, cleanedBytes }
-      })
-    }
-  }
-
-  private async wait(ms: number): Promise<void> {
-    if (!ms || ms <= 0) return
-    await new Promise((resolve) => setTimeout(resolve, ms))
-  }
-
-  private async simulatePasteCommand(): Promise<void> {
-    try {
-      const autoPasteCapability = await getAutoPasteCapabilityPatch()
-      if (autoPasteCapability.supportLevel === 'unsupported') {
-        throw new Error(
-          autoPasteCapability.reason ||
-            `Auto paste is not supported on platform: ${process.platform}`
-        )
-      }
-
-      await sendPlatformShortcut('paste')
-    } catch (error) {
-      const failure = normalizeClipboardActionError(error, AUTO_PASTE_FAILED_MESSAGE)
-      clipboardLog.error('Failed to simulate paste command', {
-        error: failure.originalError,
-        meta: {
-          code: failure.code,
-          message: failure.message,
-          platform: process.platform
-        }
-      })
-      throw new ClipboardActionRuntimeError(failure.code, failure.message, failure.originalError)
-    }
-  }
-
-  private async applyToActiveApp(payload: ClipboardApplyPayload): Promise<void> {
-    const item = this.normalizeApplyPayload(payload)
-
-    if (typeof item.id === 'number') {
-      this.rememberClipboardFreshness(
-        item,
-        createIneligibleClipboardFreshnessState('history-apply')
-      )
-    }
-    this.writeItemToClipboard(item, payload)
-
-    if (payload.hideCoreBox !== false) {
-      try {
-        coreBoxManager.trigger(false)
-      } catch (error) {
-        clipboardLog.debug('Failed to hide CoreBox before auto paste', { error })
-      }
-    }
-
-    const delay = Number.isFinite(payload.delayMs) ? Math.max(0, Number(payload.delayMs)) : 150
-    await this.wait(delay)
-
-    await this.simulatePasteCommand()
-  }
-
-  private mergeMetadataString(
-    original: string | null | undefined,
-    patch: Record<string, unknown>
-  ): string {
-    let base: Record<string, unknown> = {}
-    if (original) {
-      try {
-        base = JSON.parse(original)
-      } catch {
-        base = {}
-      }
-    }
-    return JSON.stringify({ ...base, ...patch })
+    this.imagePersistence.startTempCleanupTasks()
   }
 
   private getActiveAppSnapshot(): Awaited<ReturnType<typeof activeAppService.getActiveApp>> | null {
@@ -1957,18 +762,7 @@ export class ClipboardModule extends BaseModule {
   }
 
   private handleMetaPatch = (clipboardId: number, patch: Record<string, unknown>): void => {
-    const index = this.memoryCache.findIndex((entry) => entry.id === clipboardId)
-    if (index === -1) return
-
-    const current = this.memoryCache[index]
-    const nextMeta = { ...(current.meta ?? {}), ...patch }
-    const metadata = this.mergeMetadataString(current.metadata, patch)
-
-    this.memoryCache[index] = {
-      ...current,
-      meta: nextMeta,
-      metadata
-    }
+    this.historyPersistence.patchCachedMeta(clipboardId, patch)
   }
 
   private shouldLogStageB(now: number): boolean {
@@ -2064,8 +858,8 @@ export class ClipboardModule extends BaseModule {
 
     if (this.db) {
       try {
-        const current = this.memoryCache.find((entry) => entry.id === job.clipboardId)
-        const nextMetadata = this.mergeMetadataString(current?.metadata, patch)
+        const current = this.historyPersistence.getCachedItemById(job.clipboardId)
+        const nextMetadata = mergeClipboardMetadataString(current?.metadata, patch)
         await this.withDbWrite(
           'clipboard.stage-b.source',
           () =>
@@ -2083,13 +877,7 @@ export class ClipboardModule extends BaseModule {
     }
 
     this.handleMetaPatch(job.clipboardId, patch)
-    const index = this.memoryCache.findIndex((entry) => entry.id === job.clipboardId)
-    if (index >= 0) {
-      this.memoryCache[index] = {
-        ...this.memoryCache[index],
-        sourceApp
-      }
-    }
+    this.historyPersistence.updateCachedSource(job.clipboardId, sourceApp)
 
     this.persistMetaEntriesSafely(
       job.clipboardId,
@@ -2211,7 +999,7 @@ export class ClipboardModule extends BaseModule {
       mergedMeta[entry.key] = entry.value
     }
 
-    const metadata = this.mergeMetadataString(null, mergedMeta)
+    const metadata = mergeClipboardMetadataString(null, mergedMeta)
     const record = {
       type: 'text' as const,
       content,
@@ -2384,10 +1172,10 @@ export class ClipboardModule extends BaseModule {
       const formatsKey = trackPhase(phaseDurations, 'signature.formatsKey', () => {
         return sortedFormats.join(',')
       })
-      const hasFileFormats = includesAny(formats, FILE_URL_FORMATS)
-      const hasImageFormats = includesAny(formats, IMAGE_FORMATS)
-      const hasTextFormats = includesAny(formats, TEXT_FORMATS)
-      const hasHtmlFormats = includesAny(formats, HTML_FORMATS)
+      const hasFileFormats = helper.hasFileFormats(formats)
+      const hasImageFormats = includesAnyClipboardFormat(formats, CLIPBOARD_IMAGE_FORMATS)
+      const hasTextFormats = includesAnyClipboardFormat(formats, CLIPBOARD_TEXT_FORMATS)
+      const hasHtmlFormats = includesAnyClipboardFormat(formats, CLIPBOARD_HTML_FORMATS)
       let prefetchedText: string | undefined
       let prefetchedFiles: string[] | undefined
       let prefetchedImage: NativeImage | null | undefined
@@ -2538,12 +1326,7 @@ export class ClipboardModule extends BaseModule {
             phaseDurations,
             'image.persistTempFile',
             async () => {
-              return await tempFileService.createFile({
-                namespace: CLIPBOARD_IMAGE_NAMESPACE,
-                ext: 'png',
-                buffer: png,
-                prefix: 'clipboard-image'
-              })
+              return await this.imagePersistence.createClipboardImageFile(png)
             }
           )
           metaEntries.push({ key: 'image_file_path', value: stored.path })
@@ -2841,175 +1624,31 @@ export class ClipboardModule extends BaseModule {
   }
 
   private async handleSetFavoriteRequest(request: ClipboardSetFavoriteRequest): Promise<void> {
-    if (!this.db || !Number.isFinite(request?.id)) return
-    await this.db
-      .update(clipboardHistory)
-      .set({ isFavorite: request.isFavorite })
-      .where(eq(clipboardHistory.id, request.id))
-
-    const cached = this.memoryCache.find((item) => item.id === request.id)
-    if (cached) {
-      cached.isFavorite = request.isFavorite
-      this.notifyTransportChange()
-    }
+    await this.historyPersistence.setFavorite(request)
   }
 
   private async handleDeleteRequest(request: ClipboardDeleteRequest): Promise<void> {
-    if (!this.db || !Number.isFinite(request?.id)) return
-    try {
-      const [row] = await this.db
-        .select()
-        .from(clipboardHistory)
-        .where(eq(clipboardHistory.id, request.id))
-        .limit(1)
-      const item = row as unknown as IClipboardItem | undefined
-      if (
-        item?.type === 'image' &&
-        typeof item.content === 'string' &&
-        isLikelyLocalPath(item.content)
-      ) {
-        void tempFileService.deleteFile(item.content)
-      }
-    } catch (error) {
-      clipboardLog.warn('Failed to delete clipboard image file before record removal', { error })
-    }
-    await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, request.id))
-    this.memoryCache = this.memoryCache.filter((item) => item.id !== request.id)
-    this.clipboardFreshness.delete(request.id)
-    this.notifyTransportChange()
+    await this.historyPersistence.deleteItem(request)
   }
 
   private async handleGetImageUrlRequest(
     request: ClipboardGetImageUrlRequest
   ): Promise<ClipboardGetImageUrlResponse> {
-    const id = Number(request?.id)
-    if (!Number.isFinite(id)) {
-      return { url: null }
-    }
-
-    const item = await this.getItemById(id)
-    if (!item || item.type !== 'image') {
-      return { url: null }
-    }
-
-    const normalized = this.toClientItem(item) ?? item
-    const meta = normalized.meta
-    if (meta && typeof meta === 'object') {
-      const imageUrl = (meta as Record<string, unknown>).image_original_url
-      if (typeof imageUrl === 'string' && imageUrl.trim().length > 0) {
-        return { url: imageUrl.trim() }
-      }
-    }
-
-    const content = typeof normalized.content === 'string' ? normalized.content : ''
-    if (content.startsWith('tfile://')) {
-      return { url: content }
-    }
-
-    return { url: null }
+    return await this.historyPersistence.getImageUrl(request)
   }
 
   private async handleApplyRequest(
     request: ClipboardApplyRequest,
     context: HandlerContext
   ): Promise<ClipboardActionResult> {
-    if (!this.db) {
-      return this.toActionFailureResult(
-        new ClipboardActionRuntimeError(
-          'CLIPBOARD_DATABASE_UNAVAILABLE',
-          'Clipboard database is not ready.'
-        ),
-        'Clipboard apply failed',
-        {
-          platform: process.platform,
-          itemId: request?.id,
-          pluginName: context.plugin?.name ?? null,
-          autoPaste: request?.autoPaste !== false
-        },
-        'Clipboard database is not ready.'
-      )
-    }
-
-    let row: unknown
-    try {
-      const [nextRow] = await this.db
-        .select()
-        .from(clipboardHistory)
-        .where(eq(clipboardHistory.id, request.id))
-        .limit(1)
-      row = nextRow
-    } catch (error) {
-      return this.toActionFailureResult(error, 'Clipboard apply lookup failed', {
-        platform: process.platform,
-        itemId: request?.id,
-        pluginName: context.plugin?.name ?? null,
-        autoPaste: request?.autoPaste !== false
-      })
-    }
-
-    if (!row) {
-      return this.toActionFailureResult(
-        new ClipboardActionRuntimeError(
-          'CLIPBOARD_ITEM_NOT_FOUND',
-          `Clipboard history item not found: ${request.id}`
-        ),
-        'Clipboard apply failed',
-        {
-          platform: process.platform,
-          itemId: request?.id,
-          pluginName: context.plugin?.name ?? null,
-          autoPaste: request?.autoPaste !== false
-        },
-        'Clipboard history item not found.'
-      )
-    }
-
-    const item = row as unknown as IClipboardItem
-    const applyPayload: ClipboardApplyPayload = { item }
-
-    try {
-      if (request.autoPaste === false) {
-        this.writeItemToClipboard(item, applyPayload)
-        return { success: true }
-      }
-
-      await this.applyToActiveApp(applyPayload)
-      return { success: true }
-    } catch (error) {
-      return this.toActionFailureResult(
-        error,
-        'Clipboard apply failed',
-        {
-          ...summarizeClipboardApplyPayload(applyPayload),
-          pluginName: context.plugin?.name ?? null,
-          autoPaste: request?.autoPaste !== false
-        },
-        AUTO_PASTE_FAILED_MESSAGE,
-        { notify: true }
-      )
-    }
+    return await this.autopasteAutomation.handleApplyRequest(request, context)
   }
 
   private async handleCopyAndPasteRequest(
     request: ClipboardCopyAndPasteRequest,
     context: HandlerContext
   ): Promise<ClipboardActionResult> {
-    const applyPayload: ClipboardApplyPayload = buildApplyPayloadFromCopyAndPaste(request)
-    try {
-      await this.applyToActiveApp(applyPayload)
-      return { success: true }
-    } catch (error) {
-      return this.toActionFailureResult(
-        error,
-        'Clipboard copy-and-paste failed',
-        {
-          ...summarizeClipboardApplyPayload(applyPayload),
-          pluginName: context.plugin?.name ?? null
-        },
-        AUTO_PASTE_FAILED_MESSAGE,
-        { notify: true }
-      )
-    }
+    return await this.autopasteAutomation.handleCopyAndPasteRequest(request, context)
   }
 
   private async handleWriteRequest(
@@ -3027,9 +1666,6 @@ export class ClipboardModule extends BaseModule {
       clipboardLog.warn('Clipboard transport channel unavailable during init')
       return
     }
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    this.transport = getTuffTransportMain(channel, keyManager)
 
     const writePayload = async (payload: ClipboardWritePayload): Promise<void> => {
       const { text, html, image, files } = payload ?? {}
@@ -3070,188 +1706,41 @@ export class ClipboardModule extends BaseModule {
       this.lastSuccessfulClipboardScanAt = Date.now()
     }
 
-    this.registerTypedClipboardQueryHandlers()
-    this.registerTypedClipboardMutationHandlers(writePayload)
-    this.registerTypedClipboardReadHandlers()
-    this.registerTypedClipboardStreamHandlers()
-  }
-
-  private registerTypedClipboardQueryHandlers(): void {
-    if (!this.transport) {
-      return
-    }
-
-    this.transportDisposers.push(
-      this.transport.on(
-        ClipboardEvents.getLatest,
-        async (_request: void, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
-          await this.ensureInitialCacheLoaded()
-          const latest = this.getLatestItem()
-          return latest ? this.toTransportItem(latest) : null
-        }
-      )
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(
-        ClipboardEvents.getHistory,
-        async (request: ClipboardQueryRequest, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', request)
-          const { rows, total, page, limit } = await this.queryClipboardHistory(request)
-          const items = rows
-            .map((row) => this.toTransportItem(row))
-            .filter((item): item is ClipboardItem => !!item)
-
-          return { items, total, page, limit, pageSize: limit } satisfies ClipboardQueryResponse
-        }
-      )
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(
-        ClipboardEvents.getImageUrl,
-        async (
-          request: ClipboardGetImageUrlRequest,
-          context: HandlerContext
-        ): Promise<ClipboardGetImageUrlResponse> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', request)
-          return await this.handleGetImageUrlRequest(request)
-        }
-      )
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(ClipboardEvents.queryMeta, async (payload, context) => {
-        this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', payload)
-        return await this.queryHistoryByMeta(payload ?? {})
-      })
-    )
-  }
-
-  private registerTypedClipboardMutationHandlers(
-    writePayload: (payload: ClipboardWritePayload) => Promise<void>
-  ): void {
-    if (!this.transport) {
-      return
-    }
-
-    this.transportDisposers.push(
-      this.transport.on(
-        ClipboardEvents.apply,
-        async (request: ClipboardApplyRequest, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          return await this.handleApplyRequest(request, context)
-        }
-      ),
-      this.transport.on(
-        ClipboardEvents.delete,
-        async (request: ClipboardDeleteRequest, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          await this.handleDeleteRequest(request)
-        }
-      ),
-      this.transport.on(
-        ClipboardEvents.setFavorite,
-        async (request: ClipboardSetFavoriteRequest, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          await this.handleSetFavoriteRequest(request)
-        }
-      ),
-      this.transport.on(
-        ClipboardEvents.clearHistory,
-        async (_request: void, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', undefined)
-          if (!this.db) {
-            return
-          }
-          await this.cleanupHistory({ type: 'all' })
-        }
-      ),
-      this.transport.on(
-        ClipboardEvents.write,
-        async (request: ClipboardWriteRequest, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          await this.handleWriteRequest(request, writePayload)
-        }
-      ),
-      this.transport.on(ClipboardEvents.clear, async (_request: void, context: HandlerContext) => {
-        this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', undefined)
+    this.transport = this.transportHandlers.register(channel, {
+      enforcePermission: (pluginName, permission, payload) => {
+        this.enforceClipboardPermission(pluginName, permission, payload)
+      },
+      ensureInitialCacheLoaded: async () => {
+        await this.ensureInitialCacheLoaded()
+      },
+      getLatestItem: () => this.getLatestItem(),
+      toTransportItem: (item) => this.toTransportItem(item),
+      queryClipboardHistory: async (request) => await this.queryClipboardHistory(request),
+      getImageUrl: async (request) => await this.handleGetImageUrlRequest(request),
+      queryHistoryByMeta: async (request) => await this.queryHistoryByMeta(request),
+      apply: async (request, context) => await this.handleApplyRequest(request, context),
+      deleteItem: async (request) => {
+        await this.handleDeleteRequest(request)
+      },
+      setFavorite: async (request) => {
+        await this.handleSetFavoriteRequest(request)
+      },
+      clearHistory: async () => {
+        await this.cleanupHistory({ type: 'all' })
+      },
+      write: async (request) => {
+        await this.handleWriteRequest(request, writePayload)
+      },
+      clearClipboard: () => {
         clipboard.clear()
-      }),
-      this.transport.on(
-        ClipboardEvents.copyAndPaste,
-        async (
-          request: ClipboardCopyAndPasteRequest,
-          context: HandlerContext
-        ): Promise<ClipboardActionResult> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:write', request)
-          return await this.handleCopyAndPasteRequest(request, context)
-        }
-      )
-    )
-  }
-
-  private registerTypedClipboardReadHandlers(): void {
-    if (!this.transport) {
-      return
-    }
-
-    this.transportDisposers.push(
-      this.transport.on(
-        ClipboardEvents.read,
-        async (_request: void, context: HandlerContext): Promise<ClipboardReadResponse> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
-          return this.readClipboardSnapshot()
-        }
-      ),
-      this.transport.on(
-        ClipboardEvents.readImage,
-        async (
-          request: ClipboardReadImageRequest,
-          context: HandlerContext
-        ): Promise<ClipboardReadImageResponse | null> => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', request)
-          return await this.readClipboardImage(request)
-        }
-      ),
-      this.transport.on(
-        ClipboardEvents.readFiles,
-        async (_request: void, context: HandlerContext) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
-          return this.clipboardHelper?.readClipboardFiles() ?? []
-        }
-      )
-    )
-  }
-
-  private registerTypedClipboardStreamHandlers(): void {
-    if (!this.transport) {
-      return
-    }
-
-    this.transportDisposers.push(
-      this.transport.onStream(
-        ClipboardEvents.change,
-        (_request: void, context: StreamContext<ClipboardChangePayload>) => {
-          this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', undefined)
-          const listener = () => {
-            if (context.isCancelled()) {
-              this.transportChangeListeners.delete(listener)
-              return
-            }
-            context.emit(this.buildTransportChangePayload())
-          }
-
-          this.transportChangeListeners.add(listener)
-          void this.ensureInitialCacheLoaded().finally(() => {
-            if (!context.isCancelled()) {
-              listener()
-            }
-          })
-        }
-      )
-    )
+      },
+      copyAndPaste: async (request, context) =>
+        await this.handleCopyAndPasteRequest(request, context),
+      readClipboard: () => this.readClipboardSnapshot(),
+      readImage: async (request) => await this.readClipboardImage(request),
+      readFiles: () => this.clipboardHelper?.readClipboardFiles() ?? [],
+      buildChangePayload: () => this.buildTransportChangePayload()
+    })
   }
 
   public destroy(): void {
@@ -3280,15 +1769,7 @@ export class ClipboardModule extends BaseModule {
       this.powerListenersSetup = false
     }
 
-    for (const dispose of this.transportDisposers) {
-      try {
-        dispose()
-      } catch {
-        // ignore cleanup errors
-      }
-    }
-    this.transportDisposers = []
-    this.transportChangeListeners.clear()
+    this.transportHandlers.dispose()
     this.clipboardFreshness.clear()
     this.transport = null
     this.monitoringStarted = false
@@ -3302,8 +1783,7 @@ export class ClipboardModule extends BaseModule {
     this.activeAppRefreshInFlight = false
     this.clipboardCheckCooldownUntil = 0
     this.clipboardNativeWatchInitTried = false
-    this.initialCacheLoaded = false
-    this.initialCacheLoadingPromise = null
+    this.historyPersistence.reset()
     this.lastLagSkipLogAt = 0
     this.lastSuccessfulClipboardScanAt = null
     this.coreBoxVisible = false
@@ -3312,6 +1792,7 @@ export class ClipboardModule extends BaseModule {
 
   onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     this.db = databaseModule.getAuxDb()
+    this.historyPersistence.setDatabase(this.db)
     this.transportChannel =
       ctx.runtime?.channel ?? (ctx.app as { channel?: unknown } | null | undefined)?.channel
     ocrService.setTransportChannel(this.transportChannel)
