@@ -17,20 +17,20 @@
 
 | 主题 | 分组 | 标签 | 来源 |
 | --- | --- | --- | --- |
-| 配置存储 SQLite/JSON 同步 | core-app-main | migration,compatibility,observability | plan/2026-01-20_18-47-54-config-storage-sqlite-json-sync.md |
-| TouchSDK hooks 迁移 | plugin-sdk | migration,compatibility | plan/2026-01-20_18-50-26-touchsdk-window-hooks-migration.md |
-| 插件 CLI 精炼（tuff） | tooling-cli | build,docs | plan/2026-01-20_18-48-52-plugin-cli-refine.md |
-| Tuffex 组件 3/4/5/7/8 | tuffex-ui | docs,ux | plan/2026-01-20_21-16-53-tuffex-components-34578.md |
-| IPC 卡顿与资源加载排查 | core-app-main | performance,observability | plan/2026-01-19_11-10-40-perf-log-analysis.md |
-| Transport 全量迁移与异步 | transport | migration,compatibility | plan/2026-01-21_01-29-05-transport-migration-async.md |
-| Transport MessagePort 升级 | transport | migration,performance | plan/2026-01-21_03-01-57-transport-message-port.md |
-| Nexus examples 统一入口 | nexus-docs | docs | plan/2026-01-21_13-22-14-nexus-examples-section.md |
-| Nexus 官网首页整改 | nexus-web | docs,ux | plan/2026-01-21_13-25-00-nexus-homepage-revamp.md |
-| 内部下载可见性控制 | core-app-main | ux,permission | plan/2026-01-21_13-25-11-download-internal-visibility.md |
-| SearchLogger 生命周期分析 | core-app-main | compatibility,observability | plan/2026-01-21_13-39-30-basemodule-lifecycle-analysis.md |
-| 自动发布与 Nexus 同步 | devops-ci | build,security | plan/planprd-release-pipeline.md |
-| App Indexing 周期对比 | core-app-main | performance,compatibility | plan/planprd-app-indexing.md |
-| stash 弹出恢复 | ops-git | ops,compatibility | plan/2026-01-20_21-17-14-stash-pop-recovery.md |
+| 配置存储 SQLite/JSON 同步 | core-app-main | migration,compatibility,observability | docs/engineering/plans/2026-01-20_18-47-54-config-storage-sqlite-json-sync.md |
+| TouchSDK hooks 迁移 | plugin-sdk | migration,compatibility | docs/engineering/plans/2026-01-20_18-50-26-touchsdk-window-hooks-migration.md |
+| 插件 CLI 精炼（tuff） | tooling-cli | build,docs | docs/engineering/plans/2026-01-20_18-48-52-plugin-cli-refine.md |
+| Tuffex 组件 3/4/5/7/8 | tuffex-ui | docs,ux | docs/engineering/plans/2026-01-20_21-16-53-tuffex-components-34578.md |
+| IPC 卡顿与资源加载排查 | core-app-main | performance,observability | docs/engineering/plans/2026-01-19_11-10-40-perf-log-analysis.md |
+| Transport 全量迁移与异步 | transport | migration,compatibility | docs/engineering/plans/2026-01-21_01-29-05-transport-migration-async.md |
+| Transport MessagePort 升级 | transport | migration,performance | docs/engineering/plans/2026-01-21_03-01-57-transport-message-port.md |
+| Nexus examples 统一入口 | nexus-docs | docs | docs/engineering/plans/2026-01-21_13-22-14-nexus-examples-section.md |
+| Nexus 官网首页整改 | nexus-web | docs,ux | docs/engineering/plans/2026-01-21_13-25-00-nexus-homepage-revamp.md |
+| 内部下载可见性控制 | core-app-main | ux,permission | docs/engineering/plans/2026-01-21_13-25-11-download-internal-visibility.md |
+| SearchLogger 生命周期分析 | core-app-main | compatibility,observability | docs/engineering/plans/2026-01-21_13-39-30-basemodule-lifecycle-analysis.md |
+| 自动发布与 Nexus 同步 | devops-ci | build,security | docs/engineering/plans/planprd-release-pipeline.md |
+| App Indexing 周期对比 | core-app-main | performance,compatibility | docs/engineering/plans/planprd-app-indexing.md |
+| stash 弹出恢复 | ops-git | ops,compatibility | docs/engineering/plans/2026-01-20_21-17-14-stash-pop-recovery.md |
 
 ## 4. 现状与缺口
 

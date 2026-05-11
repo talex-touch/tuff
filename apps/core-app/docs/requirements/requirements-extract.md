@@ -4,22 +4,22 @@
 
 ## Plan 来源
 
-- 日志中的 IPC 卡顿与资源加载失败问题排查与优化方案（来源：`plan/2026-01-19_11-10-40-perf-log-analysis.md:4`）
-- Config storage SQLite/JSON sync strategy (implementation plan)（来源：`plan/2026-01-20_18-47-35-config-storage-sqlite-json-sync.md:4`）
-- Config storage strategy (SQLite vs JSON) + progress doc for related items（来源：`plan/2026-01-20_18-47-54-config-storage-sqlite-json-sync.md:4`）
-- Refine plugin development CLI (tuff) and close feature gaps（来源：`plan/2026-01-20_18-48-52-plugin-cli-refine.md:4`）
-- 扫描并迁移 $touchSDK / window 全局访问到 hooks（来源：`plan/2026-01-20_18-50-26-touchsdk-window-hooks-migration.md:4`）
-- 整理 config storage（SQLite/JSON 同步）上下文与需求（来源：`plan/2026-01-20_18-55-03-context-requirements.md:4`）
-- Tuffex components 3/4/5/7/8 plan and Vitest projects include（来源：`plan/2026-01-20_21-16-53-tuffex-components-34578.md:4`）
-- 处理 stash 弹出冲突并恢复工作区（来源：`plan/2026-01-20_21-17-14-stash-pop-recovery.md:4`）
-- 全量迁移到 TuffTransport，并补齐渲染器-主进程异步双向 IPC/任务能力（来源：`plan/2026-01-21_01-29-05-transport-migration-async.md:4`）
-- transport 引入 MessagePort 升级与流式通道迁移（来源：`plan/2026-01-21_03-01-57-transport-message-port.md:4`）
-- Nexus 融合根目录 examples 常用代码板块（来源：`plan/2026-01-21_13-22-14-nexus-examples-section.md:4`）
-- Nexus 官网首页内容整改（现状梳理与补全）（来源：`plan/2026-01-21_13-25-00-nexus-homepage-revamp.md:4`）
-- 内部下载任务隐藏与通知抑制（SVG 下载等）（来源：`plan/2026-01-21_13-25-11-download-internal-visibility.md:4`）
-- 分析 SearchLogger 未走 BaseModule 生命周期导致 StorageModule 未就绪的问题并给出修复方案（来源：`plan/2026-01-21_13-39-30-basemodule-lifecycle-analysis.md:4`）
-- PRD: App Indexing 补漏与周期全量对比（来源：`plan/planprd-app-indexing.md:1`）
-- PRD: 自动发布与 Nexus 同步（OIDC + RSA + Notes/Assets）（来源：`plan/planprd-release-pipeline.md:1`）
+- 日志中的 IPC 卡顿与资源加载失败问题排查与优化方案（来源：`docs/engineering/plans/2026-01-19_11-10-40-perf-log-analysis.md:4`）
+- Config storage SQLite/JSON sync strategy (implementation plan)（来源：`docs/engineering/plans/2026-01-20_18-47-35-config-storage-sqlite-json-sync.md:4`）
+- Config storage strategy (SQLite vs JSON) + progress doc for related items（来源：`docs/engineering/plans/2026-01-20_18-47-54-config-storage-sqlite-json-sync.md:4`）
+- Refine plugin development CLI (tuff) and close feature gaps（来源：`docs/engineering/plans/2026-01-20_18-48-52-plugin-cli-refine.md:4`）
+- 扫描并迁移 $touchSDK / window 全局访问到 hooks（来源：`docs/engineering/plans/2026-01-20_18-50-26-touchsdk-window-hooks-migration.md:4`）
+- 整理 config storage（SQLite/JSON 同步）上下文与需求（来源：`docs/engineering/plans/2026-01-20_18-55-03-context-requirements.md:4`）
+- Tuffex components 3/4/5/7/8 plan and Vitest projects include（来源：`docs/engineering/plans/2026-01-20_21-16-53-tuffex-components-34578.md:4`）
+- 处理 stash 弹出冲突并恢复工作区（来源：`docs/engineering/plans/2026-01-20_21-17-14-stash-pop-recovery.md:4`）
+- 全量迁移到 TuffTransport，并补齐渲染器-主进程异步双向 IPC/任务能力（来源：`docs/engineering/plans/2026-01-21_01-29-05-transport-migration-async.md:4`）
+- transport 引入 MessagePort 升级与流式通道迁移（来源：`docs/engineering/plans/2026-01-21_03-01-57-transport-message-port.md:4`）
+- Nexus 融合根目录 examples 常用代码板块（来源：`docs/engineering/plans/2026-01-21_13-22-14-nexus-examples-section.md:4`）
+- Nexus 官网首页内容整改（现状梳理与补全）（来源：`docs/engineering/plans/2026-01-21_13-25-00-nexus-homepage-revamp.md:4`）
+- 内部下载任务隐藏与通知抑制（SVG 下载等）（来源：`docs/engineering/plans/2026-01-21_13-25-11-download-internal-visibility.md:4`）
+- 分析 SearchLogger 未走 BaseModule 生命周期导致 StorageModule 未就绪的问题并给出修复方案（来源：`docs/engineering/plans/2026-01-21_13-39-30-basemodule-lifecycle-analysis.md:4`）
+- PRD: App Indexing 补漏与周期全量对比（来源：`docs/engineering/plans/planprd-app-indexing.md:1`）
+- PRD: 自动发布与 Nexus 同步（OIDC + RSA + Notes/Assets）（来源：`docs/engineering/plans/planprd-release-pipeline.md:1`）
 - Provide script and native capability support (Python + DLL) with a cross-platform design（来源：`apps/core-app/plan/2026-01-21_13-21-43-script-python-dll-cross-platform.md:4`）
 - 重新梳理自动更新方案并形成可执行计划（来源：`apps/core-app/plan/2026-01-21_13-31-08-auto-update-plan.md:4`）
 - 整理所有相关需求并生成统一执行顺序文档（来源：`apps/core-app/plan/2026-01-21_14-50-21-requirements-consolidation.md:4`）
@@ -97,17 +97,17 @@
 
 ## Issues CSV 来源
 
-- 2026-01-20_18-52-04-plugin-cli-refine.csv（来源：`issues/2026-01-20_18-52-04-plugin-cli-refine.csv:1`）
-- 2026-01-20_18-52-09-config-storage-sqlite-json-sync.csv（来源：`issues/2026-01-20_18-52-09-config-storage-sqlite-json-sync.csv:1`）
-- 2026-01-20_18-56-53-touchsdk-window-hooks-migration.csv（来源：`issues/2026-01-20_18-56-53-touchsdk-window-hooks-migration.csv:1`）
-- 2026-01-20_19-01-23-context-requirements.csv（来源：`issues/2026-01-20_19-01-23-context-requirements.csv:1`）
-- 2026-01-20_21-19-32-stash-pop-recovery.csv（来源：`issues/2026-01-20_21-19-32-stash-pop-recovery.csv:1`）
-- 2026-01-20_21-20-03-tuffex-components-34578.csv（来源：`issues/2026-01-20_21-20-03-tuffex-components-34578.csv:1`）
-- 2026-01-21_03-07-24-transport-message-port.csv（来源：`issues/2026-01-21_03-07-24-transport-message-port.csv:1`）
-- 2026-01-21_13-25-58-nexus-examples-section.csv（来源：`issues/2026-01-21_13-25-58-nexus-examples-section.csv:1`）
-- 2026-01-21_13-31-52-nexus-homepage-revamp.csv（来源：`issues/2026-01-21_13-31-52-nexus-homepage-revamp.csv:1`）
-- 2026-01-21_13-32-17-download-internal-visibility.csv（来源：`issues/2026-01-21_13-32-17-download-internal-visibility.csv:1`）
-- 2026-01-21_13-43-27-basemodule-lifecycle-analysis.csv（来源：`issues/2026-01-21_13-43-27-basemodule-lifecycle-analysis.csv:1`）
+- 2026-01-20_18-52-04-plugin-cli-refine.csv（来源：`docs/engineering/issues/2026-01-20_18-52-04-plugin-cli-refine.csv:1`）
+- 2026-01-20_18-52-09-config-storage-sqlite-json-sync.csv（来源：`docs/engineering/issues/2026-01-20_18-52-09-config-storage-sqlite-json-sync.csv:1`）
+- 2026-01-20_18-56-53-touchsdk-window-hooks-migration.csv（来源：`docs/engineering/issues/2026-01-20_18-56-53-touchsdk-window-hooks-migration.csv:1`）
+- 2026-01-20_19-01-23-context-requirements.csv（来源：`docs/engineering/issues/2026-01-20_19-01-23-context-requirements.csv:1`）
+- 2026-01-20_21-19-32-stash-pop-recovery.csv（来源：`docs/engineering/issues/2026-01-20_21-19-32-stash-pop-recovery.csv:1`）
+- 2026-01-20_21-20-03-tuffex-components-34578.csv（来源：`docs/engineering/issues/2026-01-20_21-20-03-tuffex-components-34578.csv:1`）
+- 2026-01-21_03-07-24-transport-message-port.csv（来源：`docs/engineering/issues/2026-01-21_03-07-24-transport-message-port.csv:1`）
+- 2026-01-21_13-25-58-nexus-examples-section.csv（来源：`docs/engineering/issues/2026-01-21_13-25-58-nexus-examples-section.csv:1`）
+- 2026-01-21_13-31-52-nexus-homepage-revamp.csv（来源：`docs/engineering/issues/2026-01-21_13-31-52-nexus-homepage-revamp.csv:1`）
+- 2026-01-21_13-32-17-download-internal-visibility.csv（来源：`docs/engineering/issues/2026-01-21_13-32-17-download-internal-visibility.csv:1`）
+- 2026-01-21_13-43-27-basemodule-lifecycle-analysis.csv（来源：`docs/engineering/issues/2026-01-21_13-43-27-basemodule-lifecycle-analysis.csv:1`）
 - 2026-01-21_13-24-48-script-python-dll-cross-platform.csv（来源：`apps/core-app/issues/2026-01-21_13-24-48-script-python-dll-cross-platform.csv:1`）
 - 2026-01-21_13-34-51-auto-update-plan.csv（来源：`apps/core-app/issues/2026-01-21_13-34-51-auto-update-plan.csv:1`）
 - 2026-01-21_15-00-02-requirements-consolidation.csv（来源：`apps/core-app/issues/2026-01-21_15-00-02-requirements-consolidation.csv:1`）

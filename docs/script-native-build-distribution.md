@@ -11,7 +11,7 @@
 
 ## References
 - docs/updates-module.md
-- plan/planprd-release-pipeline.md
+- docs/engineering/plans/planprd-release-pipeline.md
 - apps/core-app/electron-builder.yml
 - apps/core-app/scripts/build-target.js
 - apps/core-app/src/main/modules/update/UpdateService.ts
