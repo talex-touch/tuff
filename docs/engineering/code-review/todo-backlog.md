@@ -131,5 +131,5 @@
 - `.github/docs/contribution/CONTRIBUTING_zh.md:60`  
   使用 `XXX` 作为示例（非任务）
 
-- `issues/2026-01-20_18-52-09-config-storage-sqlite-json-sync.csv:7`  
+- `docs/engineering/issues/2026-01-20_18-52-09-config-storage-sqlite-json-sync.csv:7`  
   文档同步记录中包含 TODO 字样（非任务）

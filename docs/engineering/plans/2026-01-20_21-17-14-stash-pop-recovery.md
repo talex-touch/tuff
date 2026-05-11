@@ -26,5 +26,5 @@ created_at: 2026-01-20T21:17:20+0800
 - 若冲突广泛，需逐个文件手动处理并确认保留版本。
 
 📎 参考
-- `issues/2026-01-20_18-52-09-config-storage-sqlite-json-sync.csv:9`
+- `docs/engineering/issues/2026-01-20_18-52-09-config-storage-sqlite-json-sync.csv:9`
 - `apps/core-app/src/main/modules/storage/index.ts:213`

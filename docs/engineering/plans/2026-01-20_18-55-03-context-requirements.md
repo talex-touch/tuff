@@ -62,7 +62,7 @@ created_at: 2026-01-20T18:55:06+08:00
 - 明确主进程配置入口与 JSON 存储路径/生命周期，保证读写/订阅/广播链路可追溯（`apps/core-app/src/main/modules/storage/index.ts:121`）
 - 明确 SQLite config 表结构、写入点与 pilot 范围，标注与 JSON 重叠的 key（`apps/core-app/src/main/db/schema.ts:278` / `apps/core-app/src/main/modules/storage/index.ts:60`）
 - 明确 main/renderer/plugin 调用链与一致性要求，覆盖跨窗口同步与版本策略（`apps/core-app/src/main/modules/storage/index.ts:283` / `packages/utils/renderer/storage/base-storage.ts:278` / `packages/utils/plugin/sdk/storage.ts:24`）
-- 明确 5 类同步口径与策略，作为后续实现评审的统一边界（`plan/2026-01-20_18-55-03-context-requirements.md:54`）
+- 明确 5 类同步口径与策略，作为后续实现评审的统一边界（`docs/engineering/plans/2026-01-20_18-55-03-context-requirements.md:54`）
 - 保持 legacy IPC 与 JSON 存储的向后兼容，不引入破坏性改动（`apps/core-app/src/main/modules/storage/index.ts:283`）
 
 ⚠️ 风险清单（草案）
@@ -79,13 +79,13 @@ created_at: 2026-01-20T18:55:06+08:00
 - 风险清单不少于 3 条，且与同步/迁移/广播相关
 
 ✅ 已决事项
-- 本阶段仅做上下文与需求整理，目标是形成后续工作输入（来源: `plan/2026-01-20_18-55-03-context-requirements.md:14`）
+- 本阶段仅做上下文与需求整理，目标是形成后续工作输入（来源: `docs/engineering/plans/2026-01-20_18-55-03-context-requirements.md:14`）
 
 ❓ 未决问题
-- 同步方向、时序/冲突策略、迁移/回滚方式仍需明确（来源: `plan/2026-01-20_18-55-03-context-requirements.md:21`）
+- 同步方向、时序/冲突策略、迁移/回滚方式仍需明确（来源: `docs/engineering/plans/2026-01-20_18-55-03-context-requirements.md:21`）
 
 🧩 假设前提
-- 当前存在 SQLite 与 JSON 双配置存储并需统一梳理（来源: `plan/2026-01-20_18-55-03-context-requirements.md:13`）
+- 当前存在 SQLite 与 JSON 双配置存储并需统一梳理（来源: `docs/engineering/plans/2026-01-20_18-55-03-context-requirements.md:13`）
 
 ⚠️ 风险与注意事项
 - SQLite/JSON 双写或迁移策略不清晰可能引入数据不一致与回滚困难。
@@ -93,7 +93,7 @@ created_at: 2026-01-20T18:55:06+08:00
 - 需避免在 renderer 侧引入 main-only 依赖（Electron/Node）。
 
 📎 参考
-- `plan/2026-01-20_18-47-54-config-storage-sqlite-json-sync.md:10`
+- `docs/engineering/plans/2026-01-20_18-47-54-config-storage-sqlite-json-sync.md:10`
 - `apps/core-app/src/main/modules/storage/index.ts:84`
 - `apps/core-app/src/main/db/schema.ts:279`
 - `packages/utils/common/storage/index.ts:1`

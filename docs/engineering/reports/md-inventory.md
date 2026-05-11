@@ -212,25 +212,25 @@ Generated: 2026-01-31
 - docs/plan-prd/next-edit/next-edit-2.md
 - docs/plan-prd/next-edit/需求汇总-PRD状态梳理-下载链路统一-SDK优先-文档落地.md
 
-## plan
-- plan/2026-01-19_11-10-40-perf-log-analysis.md
-- plan/2026-01-20_18-47-35-config-storage-sqlite-json-sync.md
-- plan/2026-01-20_18-47-54-config-storage-sqlite-json-sync.md
-- plan/2026-01-20_18-48-52-plugin-cli-refine.md
-- plan/2026-01-20_18-50-26-touchsdk-window-hooks-migration.md
-- plan/2026-01-20_18-55-03-context-requirements.md
-- plan/2026-01-20_21-16-53-tuffex-components-34578.md
-- plan/2026-01-20_21-17-14-stash-pop-recovery.md
-- plan/2026-01-21_01-29-05-transport-migration-async.md
-- plan/2026-01-21_03-01-57-transport-message-port.md
-- plan/2026-01-21_13-22-14-nexus-examples-section.md
-- plan/2026-01-21_13-25-00-nexus-homepage-revamp.md
-- plan/2026-01-21_13-25-11-download-internal-visibility.md
-- plan/2026-01-21_13-39-30-basemodule-lifecycle-analysis.md
-- plan/2026-01-22_10-00-00-file-search-scope-permission.md
-- plan/planprd-app-indexing.md
-- plan/planprd-net-sdk-proxy.md
-- plan/planprd-release-pipeline.md
+## docs/engineering/plans
+- docs/engineering/plans/2026-01-19_11-10-40-perf-log-analysis.md
+- docs/engineering/plans/2026-01-20_18-47-35-config-storage-sqlite-json-sync.md
+- docs/engineering/plans/2026-01-20_18-47-54-config-storage-sqlite-json-sync.md
+- docs/engineering/plans/2026-01-20_18-48-52-plugin-cli-refine.md
+- docs/engineering/plans/2026-01-20_18-50-26-touchsdk-window-hooks-migration.md
+- docs/engineering/plans/2026-01-20_18-55-03-context-requirements.md
+- docs/engineering/plans/2026-01-20_21-16-53-tuffex-components-34578.md
+- docs/engineering/plans/2026-01-20_21-17-14-stash-pop-recovery.md
+- docs/engineering/plans/2026-01-21_01-29-05-transport-migration-async.md
+- docs/engineering/plans/2026-01-21_03-01-57-transport-message-port.md
+- docs/engineering/plans/2026-01-21_13-22-14-nexus-examples-section.md
+- docs/engineering/plans/2026-01-21_13-25-00-nexus-homepage-revamp.md
+- docs/engineering/plans/2026-01-21_13-25-11-download-internal-visibility.md
+- docs/engineering/plans/2026-01-21_13-39-30-basemodule-lifecycle-analysis.md
+- docs/engineering/plans/2026-01-22_10-00-00-file-search-scope-permission.md
+- docs/engineering/plans/planprd-app-indexing.md
+- docs/engineering/plans/planprd-net-sdk-proxy.md
+- docs/engineering/plans/planprd-release-pipeline.md
 
 ## examples
 - examples/README.md
@@ -369,5 +369,5 @@ Generated: 2026-01-31
 - plugins/touch-translation/src/components/README.md
 - plugins/touch-translation/src/pages/README.md
 
-## reports
-- reports/coreapp-button-migration.md
+## docs/engineering/reports
+- docs/engineering/reports/coreapp-button-migration.md

@@ -2,7 +2,7 @@
 
 ## 扫描范围
 - 覆盖：`apps/`、`packages/`、`plugins/`、`docs/`、`scripts/`、`.github/`
-- 排除：`node_modules/`、`dist/`、`build/`、`coverage/`、`.git/`、`.cache/`、`reports/`、`shots/`、`.venv/`
+- 排除：`node_modules/`、`dist/`、`build/`、`coverage/`、`.git/`、`.cache/`、`docs/engineering/reports/`、`shots/`、`.venv/`
 
 ## 方法
 - 全仓模式检索：`TODO/FIXME/XXX/HACK/WIP/TBD/NOT_IMPLEMENTED`、`@ts-ignore/@ts-expect-error`、`as any`、`console.log`
@@ -28,7 +28,7 @@
 10. **P2** - CI 对部分包默认关闭 lint/test/typecheck（`package-tuffex-ci.yml:25-27`；`package-utils-ci.yml:23-25`），根脚本缺 test
 
 ## 高收益低成本清单
-- 抽取 Intelligence 统计读取为 composable/service（见 `codereview/apps-core-app.md`）
+- 抽取 Intelligence 统计读取为 composable/service（见 `docs/engineering/code-review/apps-core-app.md`）
 - 主进程日志统一为 ModuleLogger + env gating（FlowBus/DivisionBox/Download/Update）
 - 统一 `globalThis` 访问为 typed runtime accessor（`packages/utils/renderer/hooks/use-channel.ts` 等）
 - 为 `apps/nexus` 补最小测试入口（API/utils 快速覆盖）
@@ -39,10 +39,10 @@
 - 模块生命周期日志：`flow-bus/*`、`division-box/*`、`update/*` 多处 `console.log` → 统一 ModuleLogger + 级别开关
 
 ## 报告索引
-- `codereview/todo-backlog.md`
-- `codereview/tooling-and-config.md`
-- `codereview/docs-and-process.md`
-- `codereview/apps-core-app.md`
-- `codereview/apps-nexus.md`
-- `codereview/packages-*.md`
-- `codereview/plugins-*.md`
+- `docs/engineering/code-review/todo-backlog.md`
+- `docs/engineering/code-review/tooling-and-config.md`
+- `docs/engineering/code-review/docs-and-process.md`
+- `docs/engineering/code-review/apps-core-app.md`
+- `docs/engineering/code-review/apps-nexus.md`
+- `docs/engineering/code-review/packages-*.md`
+- `docs/engineering/code-review/plugins-*.md`
