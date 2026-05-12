@@ -23,7 +23,7 @@ jobs:
     steps:
 
       - name: Check Not Allowed File Changes
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v4
         id: filter_not_allowed
         with:
           list-files: json
@@ -42,7 +42,7 @@ jobs:
 
       - name: Check Not Linted Markdown
         if: ${{ always() }}
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v4
         id: filter_markdown
         with:
           list-files: shell
@@ -57,7 +57,7 @@ jobs:
     if: ${{ always() && needs.job1.outputs.markdown_change == 'true' }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Lint markdown
         run: npx markdownlint-cli ${{ needs.job1.outputs.markdown_files }} --ignore node_modules
@@ -68,15 +68,15 @@ jobs:
     needs: job1
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup PNPM
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 10.32.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22.16.0
           cache: pnpm

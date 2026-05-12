@@ -166,6 +166,7 @@ jobs:
 3. **Conditional Steps**: Only enable steps (lint, test, build) that your package actually supports
 4. **Custom Commands**: Override default commands if your package uses different script names
 5. **Node Version**: Keep Node.js version consistent with the main app (currently 22.16.0)
+6. **Action Runtime**: Keep JavaScript actions on Node 24-compatible major versions; this is separate from the project `node-version` and must not be handled by changing the app runtime away from 22.16.0
 
 ## Workflow Execution Order
 
@@ -192,5 +193,6 @@ For package workflows:
 When updating:
 - Keep Node.js version in sync with Volta configuration
 - Update PNPM version when upgrading in the project
+- Review all `uses:` action majors against the current GitHub Actions runtime baseline; avoid `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` and do not use `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` as a long-term fix
 - Review and update path filters when restructuring packages
 - Test workflow changes in a feature branch first
