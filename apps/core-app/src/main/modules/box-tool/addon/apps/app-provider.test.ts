@@ -1173,7 +1173,7 @@ describe('appProvider rebuild maintenance', () => {
     expect(getAppInfoByPathMock).not.toHaveBeenCalled()
   })
 
-  it('clears stale alternate localized names when a later scan has none', async () => {
+  it('clears stale optional app extensions when a later scan has none', async () => {
     const { appProvider } = await loadSubject()
     const { fileExtensions } = await import('../../../../db/schema')
     const privateProvider = asPrivateProvider(appProvider)
@@ -1208,7 +1208,86 @@ describe('appProvider rebuild maintenance', () => {
       ])
     )
     expect(extensions.some((extension) => extension.key === 'alternateNames')).toBe(false)
+    expect(extensions.some((extension) => extension.key === 'icon')).toBe(false)
     expect(deleteWhereMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('updates app extensions when the stored icon path is missing', async () => {
+    const { appProvider } = await loadSubject()
+    const { files, fileExtensions } = await import('../../../../db/schema')
+    const privateProvider = asPrivateProvider(appProvider)
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'app-provider-icon-drift-'))
+    const nextIconPath = path.join(tempDir, 'next-icon.png')
+    const missingIconPath = path.join(tempDir, 'missing-icon.png')
+    await fs.writeFile(nextIconPath, 'png')
+
+    const scannedApp = {
+      name: 'Icon Drift',
+      displayName: 'Icon Drift',
+      path: '/Applications/Icon Drift.app',
+      icon: nextIconPath,
+      bundleId: 'com.example.icondrift',
+      uniqueId: 'com.example.icondrift',
+      stableId: 'com.example.icondrift',
+      launchKind: 'path' as const,
+      launchTarget: '/Applications/Icon Drift.app',
+      lastModified: new Date('2026-05-01T00:00:00Z')
+    }
+    const dbApp = {
+      id: 91,
+      path: scannedApp.path,
+      name: scannedApp.name,
+      displayName: scannedApp.displayName,
+      type: 'app',
+      mtime: scannedApp.lastModified,
+      ctime: scannedApp.lastModified,
+      extensions: {
+        bundleId: scannedApp.bundleId,
+        appIdentity: scannedApp.stableId,
+        icon: missingIconPath,
+        launchKind: 'path',
+        launchTarget: scannedApp.launchTarget
+      }
+    }
+    const updateSetMock = vi.fn(() => ({ where: vi.fn(async () => undefined) }))
+    const updateMock = vi.fn((table: unknown) => {
+      expect(table).toBe(files)
+      return { set: updateSetMock }
+    })
+    const deleteWhereMock = vi.fn(async () => undefined)
+    const deleteMock = vi.fn((table: unknown) => {
+      expect(table).toBe(fileExtensions)
+      return { where: deleteWhereMock }
+    })
+    const addFileExtensionsMock = vi.fn(
+      async (_rows: Array<{ fileId: number; key: string; value: string }>) => undefined
+    )
+    const indexItemsMock = vi.fn(async () => undefined)
+
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn(async () => [dbApp]),
+      getDb: () => ({
+        update: updateMock,
+        delete: deleteMock
+      }),
+      addFileExtensions: addFileExtensionsMock
+    }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async () => [dbApp])
+    privateProvider.loadScannedApps = vi.fn(async () => [scannedApp])
+    privateProvider._recordMissingIconApps = vi.fn(async () => undefined)
+    privateProvider._processAppsForDeletion = vi.fn(async () => [])
+    privateProvider.searchIndex = { indexItems: indexItemsMock }
+
+    try {
+      await privateProvider._initialize({ forceRefresh: true })
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true })
+    }
+
+    expect(addFileExtensionsMock).toHaveBeenCalledWith(
+      expect.arrayContaining([{ fileId: 91, key: 'icon', value: nextIconPath }])
+    )
+    expect(indexItemsMock).toHaveBeenCalledTimes(1)
   })
 
   it('upserts managed launcher entries with manual extension flags', async () => {

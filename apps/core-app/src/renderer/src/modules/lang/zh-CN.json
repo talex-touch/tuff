@@ -327,7 +327,7 @@
     "deviceManagement": "设备管理",
     "logoutSuccess": "已登出",
     "logoutFailed": "登出失败",
-    "devAuthServer": "本地服务器"
+    "runtimeApiServer": "运行时 API 服务器"
   },
   "userProfile": {
     "title": "账户",
@@ -1998,8 +1998,8 @@
       "fullSyncCheckIntervalTitle": "全量检查频率",
       "fullSyncCheckIntervalDesc": "检查是否需要全量同步的频率",
       "appDiagnosticTitle": "应用搜索诊断",
-      "appDiagnosticDesc": "按路径、bundleId 或名称检查单个应用的索引内容与查询命中阶段",
-      "appDiagnosticTargetPlaceholder": "应用路径 / bundleId / 显示名",
+      "appDiagnosticDesc": "输入应用路径、bundleId、显示名或搜索词，检查单个应用的索引内容与查询命中阶段",
+      "appDiagnosticTargetPlaceholder": "应用路径 / bundleId / 显示名 / 搜索词，例如 weixin",
       "appDiagnosticQueryPlaceholder": "可选：搜索词，例如 网易云",
       "appDiagnosticRun": "诊断",
       "appDiagnosticReindexKeywords": "重建关键词",
@@ -2029,8 +2029,9 @@
       "appDiagnosticStageMiss": "未命中目标",
       "appDiagnosticStageNotRun": "未执行",
       "appDiagnosticStageMatches": "{count} 个候选",
+      "appDiagnosticStageDetailTitle": "{stage} 候选详情",
       "appDiagnosticNotFound": "未找到目标（{status}）：{reason}",
-      "appDiagnosticTargetRequired": "请先输入应用路径、bundleId 或名称",
+      "appDiagnosticTargetRequired": "请先输入应用路径、bundleId、名称或搜索词",
       "appDiagnosticFailed": "应用搜索诊断失败",
       "appDiagnosticReindexFailed": "单项重建失败",
       "appDiagnosticReindexSuccess": "单项重建已完成",

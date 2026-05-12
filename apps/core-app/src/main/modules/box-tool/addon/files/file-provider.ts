@@ -103,6 +103,11 @@ import {
   resolveExtensionsForTypeFilters as resolveFileProviderExtensionsForTypeFilters,
   resolveTypeTag as resolveFileProviderTypeTag
 } from './services/file-provider-search-service'
+import {
+  FILE_ICON_META_EXTENSION_KEY,
+  persistFileIconCache,
+  type FileIconCacheMeta
+} from './services/file-provider-icon-cache-service'
 import { FileProviderWatchService } from './services/file-provider-watch-service'
 import {
   FileProviderOpenerService,
@@ -112,7 +117,6 @@ import { FileProviderIndexRuntimeService } from './services/file-provider-index-
 import { type PersistEntry } from '../../search-engine/workers/search-index-worker-client'
 import FileSystemWatcher from '../../file-system-watcher'
 
-const ICON_META_EXTENSION_KEY = 'iconMeta'
 const fileProviderLog = getLogger('file-provider')
 const SEMANTIC_TRIGGER_MIN_QUERY_LENGTH = 3
 const SEMANTIC_TRIGGER_MAX_CANDIDATES = 20
@@ -141,14 +145,9 @@ interface IncrementalUpdatePayload {
   manual?: boolean
 }
 
-interface IconCacheMeta {
-  mtime: number | null
-  size: number | null
-}
-
 interface IconCacheEntry {
   icon?: string | null
-  meta?: IconCacheMeta
+  meta?: FileIconCacheMeta
 }
 
 interface FileUpdateRecord {
@@ -1526,40 +1525,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         return
       }
 
-      const meta: IconCacheMeta = {
+      const meta: FileIconCacheMeta = {
         mtime: file ? this.toTimestamp(file.mtime) : Date.now(),
         size: file && typeof file.size === 'number' ? file.size : null
       }
 
       if (this.dbUtils) {
-        const db = this.dbUtils.getDb()
-        await db.transaction(async (tx) => {
-          // Insert icon
-          await tx
-            .insert(fileExtensions)
-            .values({
-              fileId,
-              key: 'icon',
-              value: iconValue
-            })
-            .onConflictDoUpdate({
-              target: [fileExtensions.fileId, fileExtensions.key],
-              set: { value: iconValue }
-            })
-
-          // Insert meta
-          await tx
-            .insert(fileExtensions)
-            .values({
-              fileId,
-              key: ICON_META_EXTENSION_KEY,
-              value: JSON.stringify(meta)
-            })
-            .onConflictDoUpdate({
-              target: [fileExtensions.fileId, fileExtensions.key],
-              set: { value: JSON.stringify(meta) }
-            })
-        })
+        await persistFileIconCache(
+          {
+            dbUtils: this.dbUtils,
+            withDbWrite: (label, operation) => this.withDbWrite(label, operation)
+          },
+          fileId,
+          iconValue,
+          meta
+        )
       }
     } catch (error) {
       this.logWarn('Failed to extract icon', error, { path: filePath })
@@ -2770,7 +2750,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const rows = await this.dbUtils.getFileExtensionsByFileIds(fileIds, [
       'icon',
-      ICON_META_EXTENSION_KEY
+      FILE_ICON_META_EXTENSION_KEY
     ])
     const invalidIconFileIds: number[] = []
 
@@ -2782,9 +2762,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         } else {
           entry.icon = row.value
         }
-      } else if (row.key === ICON_META_EXTENSION_KEY && row.value) {
+      } else if (row.key === FILE_ICON_META_EXTENSION_KEY && row.value) {
         try {
-          const parsed = JSON.parse(row.value) as IconCacheMeta
+          const parsed = JSON.parse(row.value) as FileIconCacheMeta
           entry.meta = {
             mtime: typeof parsed?.mtime === 'number' ? parsed.mtime : null,
             size: typeof parsed?.size === 'number' ? parsed.size : null

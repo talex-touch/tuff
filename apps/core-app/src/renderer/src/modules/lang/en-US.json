@@ -327,7 +327,7 @@
     "deviceManagement": "Device management",
     "logoutSuccess": "Signed out",
     "logoutFailed": "Failed to sign out",
-    "devAuthServer": "Local auth server"
+    "runtimeApiServer": "Runtime API server"
   },
   "userProfile": {
     "title": "Account",
@@ -2002,8 +2002,8 @@
       "fullSyncCheckIntervalTitle": "Full Sync Check Frequency",
       "fullSyncCheckIntervalDesc": "How often to check if a full sync is due",
       "appDiagnosticTitle": "App Search Diagnostic",
-      "appDiagnosticDesc": "Inspect one app by path, bundleId, or name, including indexed fields and query recall stages",
-      "appDiagnosticTargetPlaceholder": "App path / bundleId / display name",
+      "appDiagnosticDesc": "Enter an app path, bundleId, display name, or search query to inspect indexed fields and query recall stages",
+      "appDiagnosticTargetPlaceholder": "App path / bundleId / display name / query, e.g. weixin",
       "appDiagnosticQueryPlaceholder": "Optional query, e.g. NetEase Cloud",
       "appDiagnosticRun": "Diagnose",
       "appDiagnosticReindexKeywords": "Rebuild Keywords",
@@ -2033,8 +2033,9 @@
       "appDiagnosticStageMiss": "Target missed",
       "appDiagnosticStageNotRun": "Not run",
       "appDiagnosticStageMatches": "{count} matches",
+      "appDiagnosticStageDetailTitle": "{stage} match details",
       "appDiagnosticNotFound": "Target not found ({status}): {reason}",
-      "appDiagnosticTargetRequired": "Enter an app path, bundleId, or name first",
+      "appDiagnosticTargetRequired": "Enter an app path, bundleId, name, or search query first",
       "appDiagnosticFailed": "Failed to diagnose app search",
       "appDiagnosticReindexFailed": "Single-app reindex failed",
       "appDiagnosticReindexSuccess": "Single-app reindex completed",

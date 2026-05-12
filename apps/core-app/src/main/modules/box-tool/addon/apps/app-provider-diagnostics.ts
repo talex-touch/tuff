@@ -98,6 +98,20 @@ async function findDiagnosticApp(
     .filter((match): match is DiagnosticAppMatch => match.score > 0)
     .sort((left, right) => right.score - left.score)
 
+  if (matches.length === 0) {
+    const keywordMatches = await findDiagnosticAppByStoredKeyword(
+      context,
+      target,
+      appsWithExtensions
+    )
+    matches.push(...keywordMatches)
+  }
+
+  if (matches.length === 0) {
+    const searchMatches = await findDiagnosticAppBySearchIndex(context, target, appsWithExtensions)
+    matches.push(...searchMatches)
+  }
+
   const best = matches[0]
   if (!best) return null
 
@@ -105,6 +119,80 @@ async function findDiagnosticApp(
     app: best.app,
     candidates: matches.slice(0, 8).map((match) => match.app)
   }
+}
+
+async function findDiagnosticAppByStoredKeyword(
+  context: AppProviderDiagnosticsContext,
+  target: string,
+  apps: DbAppWithExtensions[]
+): Promise<DiagnosticAppMatch[]> {
+  if (!context.dbUtils) return []
+
+  const raw = normalizeOptionalString(target)
+  if (!raw) return []
+
+  const keywords = normalizeStringList([raw, raw.toLowerCase()])
+  if (keywords.length === 0) return []
+
+  const db = context.dbUtils.getDb()
+  const rows = await db
+    .select({
+      itemId: keywordMappings.itemId,
+      priority: keywordMappings.priority
+    })
+    .from(keywordMappings)
+    .where(
+      and(eq(keywordMappings.providerId, context.id), inArray(keywordMappings.keyword, keywords))
+    )
+    .limit(100)
+
+  const candidateScores = new Map<string, number>()
+  for (const row of rows) {
+    candidateScores.set(
+      row.itemId,
+      Math.max(candidateScores.get(row.itemId) ?? 0, 76 + row.priority)
+    )
+  }
+
+  return matchDiagnosticAppsByItemScore(context, apps, candidateScores)
+}
+
+async function findDiagnosticAppBySearchIndex(
+  context: AppProviderDiagnosticsContext,
+  target: string,
+  apps: DbAppWithExtensions[]
+): Promise<DiagnosticAppMatch[]> {
+  const raw = normalizeOptionalString(target)
+  if (!raw || !context.searchIndex) return []
+
+  const stages = await diagnoseAppQuery(context, raw, [])
+  const candidateItemIds = stages?.candidateItemIds ?? []
+  const candidateScores = new Map<string, number>()
+
+  candidateItemIds.forEach((itemId, index) => {
+    candidateScores.set(itemId, Math.max(candidateScores.get(itemId) ?? 0, 58 - index))
+  })
+
+  for (const match of stages?.stages.precise.matches ?? []) {
+    candidateScores.set(match.itemId, Math.max(candidateScores.get(match.itemId) ?? 0, 72))
+  }
+
+  return matchDiagnosticAppsByItemScore(context, apps, candidateScores)
+}
+
+function matchDiagnosticAppsByItemScore(
+  context: AppProviderDiagnosticsContext,
+  apps: DbAppWithExtensions[],
+  candidateScores: Map<string, number>
+): DiagnosticAppMatch[] {
+  return apps
+    .map((app) => {
+      const itemIds = resolveAppItemIds(context.mapDbAppToScannedInfo(app))
+      const score = Math.max(0, ...itemIds.map((itemId) => candidateScores.get(itemId) ?? 0))
+      return { app, score }
+    })
+    .filter((match): match is DiagnosticAppMatch => match.score > 0)
+    .sort((left, right) => right.score - left.score)
 }
 
 function scoreDiagnosticTarget(

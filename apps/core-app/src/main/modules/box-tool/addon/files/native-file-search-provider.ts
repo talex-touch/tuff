@@ -43,6 +43,13 @@ const nativeFileSearchLog = getLogger('file-provider').child('Native')
 const execFileAsync = promisify(execFile)
 const NATIVE_SEARCH_MAX_RESULTS = 50
 
+function isMacApplicationBundlePath(filePath: string): boolean {
+  return filePath
+    .replace(/\\/g, '/')
+    .split('/')
+    .some((segment) => segment.toLowerCase().endsWith('.app'))
+}
+
 function emptyResult(query: TuffQuery): TuffSearchResult {
   return new TuffSearchResultBuilder(query).build()
 }
@@ -250,6 +257,7 @@ class MacSpotlightFileProvider extends BaseNativeFileSearchProvider {
           .split('\0')
           .map((entry) => entry.trim())
           .filter(Boolean)
+          .filter((entry) => !isMacApplicationBundlePath(entry))
       )
     ).slice(0, NATIVE_SEARCH_MAX_RESULTS)
     const results = await Promise.all(paths.map((filePath) => toNativeResult(filePath)))
@@ -338,3 +346,7 @@ class LinuxNativeFileProvider extends BaseNativeFileSearchProvider {
 
 export const macSpotlightFileProvider = new MacSpotlightFileProvider()
 export const linuxNativeFileProvider = new LinuxNativeFileProvider()
+
+export const __test__ = {
+  isMacApplicationBundlePath
+}

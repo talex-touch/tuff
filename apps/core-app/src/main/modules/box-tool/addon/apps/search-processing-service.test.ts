@@ -1,5 +1,38 @@
+import type { TuffItem } from '@talex-touch/utils/core-box'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { mapAppsToRecommendationItems, processSearchResults } from './search-processing-service'
+
+type AppSearchTestRow = Parameters<typeof mapAppsToRecommendationItems>[0][number]
+
+function getBasicIcon(item: TuffItem): unknown {
+  return item.render.basic?.icon
+}
+
+function createAppSearchRow(
+  overrides: Partial<AppSearchTestRow> & Pick<AppSearchTestRow, 'name' | 'path' | 'extensions'>
+): AppSearchTestRow {
+  const { name, path: filePath, extensions, ...rest } = overrides
+  return {
+    id: 1,
+    name,
+    path: filePath,
+    displayName: rest.displayName ?? name,
+    extension: null,
+    size: null,
+    mtime: new Date(0),
+    ctime: new Date(0),
+    lastIndexedAt: new Date(0),
+    isDir: false,
+    type: 'app',
+    content: null,
+    embeddingStatus: 'none',
+    ...rest,
+    extensions
+  }
+}
 
 describe('search-processing-service', () => {
   it('falls back to clean app name when displayName contains replacement chars', async () => {
@@ -60,24 +93,52 @@ describe('search-processing-service', () => {
     expect((item.meta as any)?.app?.bundle_id).toBeUndefined()
   })
 
-  it('normalizes local app icon paths to tfile URLs', () => {
+  it('normalizes existing local app icon paths to tfile URLs', () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'app-search-icon-'))
+    const iconPath = path.join(tempDir, 'AppIcon.png')
+    fs.writeFileSync(iconPath, 'png')
     const [item] = mapAppsToRecommendationItems([
-      {
+      createAppSearchRow({
         name: 'Preview',
         displayName: 'Preview',
         path: '/Applications/Preview.app',
         extensions: {
           appIdentity: '/Applications/Preview.app',
-          icon: '/Applications/Preview.app/Contents/Resources/AppIcon.icns',
+          icon: iconPath,
           launchKind: 'path',
           launchTarget: '/Applications/Preview.app'
         }
-      }
-    ] as any)
+      })
+    ])
 
-    expect((item.render as any)?.basic?.icon).toMatchObject({
-      type: 'url',
-      value: 'tfile:///Applications/Preview.app/Contents/Resources/AppIcon.icns'
+    try {
+      expect(getBasicIcon(item)).toMatchObject({
+        type: 'url',
+        value: `tfile://${iconPath}`
+      })
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back when local app icon path is missing', () => {
+    const [item] = mapAppsToRecommendationItems([
+      createAppSearchRow({
+        name: 'Preview',
+        displayName: 'Preview',
+        path: '/Applications/Preview.app',
+        extensions: {
+          appIdentity: '/Applications/Preview.app',
+          icon: '/tmp/talex-touch-missing-app-icon.png',
+          launchKind: 'path',
+          launchTarget: '/Applications/Preview.app'
+        }
+      })
+    ])
+
+    expect(getBasicIcon(item)).toMatchObject({
+      type: 'class',
+      value: 'i-ri-apps-line'
     })
   })
 

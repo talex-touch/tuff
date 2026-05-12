@@ -1,6 +1,7 @@
 import type { TuffItem, TuffQuery } from '@talex-touch/utils/core-box'
 import type { files as filesSchema } from '../../../../db/schema'
 import type { Range } from './highlighting-service'
+import fs from 'node:fs'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { startTiming, timingLogger } from '@talex-touch/utils'
@@ -22,6 +23,7 @@ const MANAGED_ENTRY_SOURCE_KEY = 'entrySource'
 const MANAGED_ENTRY_ENABLED_KEY = 'entryEnabled'
 const MANAGED_ENTRY_SOURCE_VALUE = 'manual'
 const ALTERNATE_NAMES_EXTENSION_KEY = 'alternateNames'
+const APP_FALLBACK_ICON = 'i-ri-apps-line'
 
 interface ProcessedTuffItem extends TuffItem {
   score: number // 用于排序的内部评分
@@ -49,21 +51,18 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
   const displayName = resolveDisplayName(app.displayName, app.name)
   const subtitle = app.extensions.displayPath || app.path
   const rawIconValue = app.extensions.icon ?? ''
-  const iconValue = rawIconValue.startsWith('data:') ? rawIconValue : toTfileUrl(rawIconValue)
   const keywordPath = app.extensions.displayPath || app.path
   const launchKind = (app.extensions.launchKind as AppLaunchKind | null) || 'path'
   const description = app.extensions.description || ''
   const alternateNames = parseStringList(app.extensions[ALTERNATE_NAMES_EXTENSION_KEY])
+  const icon = resolveAppIcon(rawIconValue)
 
   const tuffItem = new TuffItemBuilder(uniqueId, 'application', 'app-provider')
     .setKind('app')
     .setTitle(displayName)
     .setSubtitle(subtitle)
     .setDescription(description)
-    .setIcon({
-      type: iconValue ? 'url' : 'file',
-      value: iconValue
-    })
+    .setIcon(icon)
     .setActions([
       {
         id: 'open-app',
@@ -104,6 +103,30 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
     .build()
 
   return { ...tuffItem, score: match.score }
+}
+
+function localFileExists(filePath: string): boolean {
+  try {
+    return fs.existsSync(filePath)
+  } catch {
+    return false
+  }
+}
+
+function resolveAppIcon(rawIconValue: string): { type: 'url' | 'file' | 'class'; value: string } {
+  if (!rawIconValue) {
+    return { type: 'file', value: '' }
+  }
+
+  if (rawIconValue.startsWith('data:')) {
+    return { type: 'url', value: rawIconValue }
+  }
+
+  if (!localFileExists(rawIconValue)) {
+    return { type: 'class', value: APP_FALLBACK_ICON }
+  }
+
+  return { type: 'url', value: toTfileUrl(rawIconValue) }
 }
 
 export function mapAppsToRecommendationItems(apps: AppSearchRow[]): ProcessedTuffItem[] {

@@ -78,6 +78,11 @@ import {
 import { matchNoisySystemAppRule } from './app-noise-filter'
 import { diagnoseAppSearch, reindexAppSearchTarget } from './app-provider-diagnostics'
 import {
+  hasAppIconDrift,
+  hasStringListDrift,
+  resolveMissingScannedExtensionKeys
+} from './app-provider-metadata-sync'
+import {
   inferManagedEntryLaunchKind,
   isWindowsUwpAppId,
   isWindowsUwpShellPath,
@@ -286,13 +291,6 @@ function resolveAppItemId(value: {
   path: string
 }): string {
   return value.appIdentity || value.stableId || value.path || value.bundleId || ''
-}
-
-function hasStringListDrift(
-  currentValue: string | null | undefined,
-  nextValues: string[] | undefined
-): boolean {
-  return serializeStringList(parseStringList(currentValue)) !== serializeStringList(nextValues)
 }
 
 function resolveAppItemIds(value: {
@@ -962,17 +960,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       await this.dbUtils!.addFileExtensions(extensions)
     }
 
-    const hasAlternateNames = extensions.some(
-      (extension) => extension.key === APP_ALTERNATE_NAMES_EXTENSION_KEY
-    )
-    if (!hasAlternateNames) {
+    const staleExtensionKeys = resolveMissingScannedExtensionKeys(extensions, [
+      APP_ALTERNATE_NAMES_EXTENSION_KEY,
+      'icon'
+    ])
+
+    if (staleExtensionKeys.length > 0) {
       await this.dbUtils!.getDb()
         .delete(fileExtensions)
         .where(
-          and(
-            eq(fileExtensions.fileId, fileId),
-            eq(fileExtensions.key, APP_ALTERNATE_NAMES_EXTENSION_KEY)
-          )
+          and(eq(fileExtensions.fileId, fileId), inArray(fileExtensions.key, staleExtensionKeys))
         )
     }
   }
@@ -1287,7 +1284,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           dbApp.extensions[APP_ALTERNATE_NAMES_EXTENSION_KEY],
           scannedApp.alternateNames
         )
-        if (!hasDisplayNameDrift && !hasAlternateNamesDrift) {
+        const hasIconDrift = hasAppIconDrift(dbApp.extensions.icon, scannedApp.icon)
+        if (!hasDisplayNameDrift && !hasAlternateNamesDrift && !hasIconDrift) {
           return null
         }
         return { fileId: dbApp.id, app: scannedApp, existingDisplayName: dbApp.displayName }
@@ -1797,11 +1795,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           dbApp.extensions[APP_ALTERNATE_NAMES_EXTENSION_KEY],
           scannedApp.alternateNames
         )
+        const hasIconDrift = hasAppIconDrift(dbApp.extensions.icon, scannedApp.icon)
         if (
           scannedApp.lastModified.getTime() > new Date(dbApp.mtime).getTime() ||
           hasDisplayNameDrift ||
           hasNameDrift ||
-          hasAlternateNamesDrift
+          hasAlternateNamesDrift ||
+          hasIconDrift
         ) {
           toUpdate.push({
             fileId: dbApp.id,
